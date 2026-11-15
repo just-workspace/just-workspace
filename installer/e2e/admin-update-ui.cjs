@@ -181,7 +181,8 @@ const text = async page => (await page.locator('body').innerText().catch(() => '
     await admin.waitForTimeout(3000)
     hist = await text(admin)
   }
-  expect('기록에 이번 업데이트가 있다', hist.includes(String(target)) && hist.includes(String(from)), hist.slice(0, 300))
+  // 기록의 줄은 올라간 버전과 결과를 보여 준다(이전 버전은 줄을 펼쳐야 나온다)
+  expect('기록에 이번 업데이트가 있다', hist.includes(String(target)) && /성공/.test(hist), hist.slice(0, 300))
   await snap(admin, 'history')
   const health = await call(admin, 'GET', '/api/health')
   expect(`/api/health 의 버전이 ${target}`, health.body && health.body.version === target, JSON.stringify(health.body && health.body.version))

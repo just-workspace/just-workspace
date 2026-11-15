@@ -92,7 +92,7 @@ const want = name => !opt.only || opt.only === name
     await page.getByText('코드 저장소').first().waitFor({ state: 'visible', timeout: 60000 })
     const zones = (await api('/api/admin/system/zones')).body
     const git = zones && [...(zones.zones || []), ...(zones.addons || [])].find(z => z.id === 'git')
-    const body = await page.locator('main').innerText()
+    const body = await page.locator('body').innerText()
     if (git && git.pending) {
       expect('코드 저장소 행에 "연결 보류"가 보인다', /연결 보류/.test(body))
       expect('"다시 연결" 버튼이 있다', await page.getByRole('button', { name: /다시 연결/ }).count() >= 1)
@@ -100,7 +100,7 @@ const want = name => !opt.only || opt.only === name
       await page.getByRole('button', { name: /다시 연결/ }).first().click()
       await page.getByText(/다시 연결 중|연결 실패|다시 연결했습니다|연결하지 못했습니다/).first().waitFor({ state: 'visible', timeout: 120000 }).catch(() => {})
       await page.waitForTimeout(8000)
-      const again = await page.locator('main').innerText()
+      const again = await page.locator('body').innerText()
       expect(`다시 연결 결과가 화면에 보인다(${opt['expect-pending'] === 'yes' ? '아직 연결하지 못함' : '연결됨'})`,
         opt['expect-pending'] === 'yes' ? /연결하지 못했습니다|연결 실패|연결 보류/.test(again) : /다시 연결했습니다/.test(again) || !/연결 보류/.test(again), again.slice(0, 300))
       await snap('zones-reconnect')

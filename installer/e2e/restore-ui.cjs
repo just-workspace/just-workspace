@@ -85,6 +85,7 @@ async function main() {
   if (opt.path) {
     await page.getByText('서버에 있는 파일 경로', { exact: true }).click()
     await page.getByLabel('서버에 있는 백업 파일 경로').fill(opt.path)
+    await snap('file-path')
     await press('파일 확인')
   } else {
     const size = fs.statSync(opt.backup).size
@@ -140,13 +141,15 @@ async function main() {
   if (opt.nfs) {
     const [server, exportPath] = [opt.nfs.slice(0, opt.nfs.indexOf(':')), opt.nfs.slice(opt.nfs.indexOf(':') + 1)]
     if (!fromNfs) await page.getByRole('radio', { name: /네트워크 저장소/ }).click()
-    const inputs = page.locator('main input[type=text], main input:not([type])')
-    const serverInput = page.getByLabel(/서버 주소|NAS 주소/).first()
-    const exportInput = page.getByLabel(/공유 경로|내보내기 경로/).first()
-    if (await serverInput.count()) { await serverInput.fill(server); await exportInput.fill(exportPath) }
-    else { await inputs.nth(0).fill(server); await inputs.nth(1).fill(exportPath) }
-    await page.keyboard.press('Tab')
-    await page.getByText(/연결을 확인했습니다|연결됨|같은 저장소/).first().waitFor({ state: 'visible', timeout: 120000 }).catch(() => {})
+    const fields = page.locator('main input')
+    // 서버 주소·공유 경로는 접속 주소 칸보다 앞에 있다. 백업이 NFS 였으면 원래 값이 채워져 있다
+    if ((await fields.nth(0).inputValue()) !== server) await fields.nth(0).fill(server)
+    if ((await fields.nth(1).inputValue()) !== exportPath) await fields.nth(1).fill(exportPath)
+    await press('연결 확인')
+    await page.getByText('확인됨', { exact: true }).first().waitFor({ state: 'visible', timeout: 120000 })
+      .then(() => ok('NFS 연결 확인(다섯 항목 + 표식)')).catch(() => bad('NFS 연결 확인'))
+    const probe = await page.evaluate(async ([sv, ex]) => (await fetch('/api/probe/nfs', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ server: sv, export: ex }) })).json(), [server, exportPath])
+    expect('표식의 설치 id 가 백업과 같다(match)', probe.ok === true && probe.marker && probe.marker.status === 'match', JSON.stringify(probe.marker))
   }
   if (opt.domain) {
     await address.fill(opt.domain)

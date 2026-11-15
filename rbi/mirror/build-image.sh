@@ -7,5 +7,6 @@ set -eu
 cd "$(dirname "$0")"
 TARGET="${TARGET:-prod}"
 TAG="${TAG:-${JW_REGISTRY:-localhost}/just-workspace-rbi-mirror:${JW_VERSION:-latest}}"
-docker build --target "$TARGET" -t "$TAG" ${BUILD_ARGS:-} .
+# licenses: 리포 루트의 LICENSE · THIRD_PARTY_LICENSES.md 를 이미지의 /licenses/ 에 넣는다(compose 의 additional_contexts 와 같다)
+docker build --target "$TARGET" --build-context licenses=../.. -t "$TAG" ${BUILD_ARGS:-} .
 docker image inspect "$TAG" --format '{{.Id}} {{.Size}}'

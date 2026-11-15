@@ -2,6 +2,8 @@
 # 번들 원본(installer/app/bundle.py 의 MANIFEST)이 늘면 여기도 늘린다(tests/test_validators_env.py 가 지킨다).
 *
 !VERSION
+!LICENSE
+!THIRD_PARTY_LICENSES.md
 !docker-compose.yml
 !backend/app/zones.json
 !backend/app/security_defaults.py

@@ -32,6 +32,11 @@ RUN groupadd -g 1001 docker || true \
     && mkdir -p /storage /backups /plugins-data /run/rbi-allow && chown appuser:appuser /storage /backups /plugins-data /run/rbi-allow
 # /storage 를 appuser 소유로 만들어 둠 → 신규 named volume 첫 마운트 시 이 소유권을 상속(루트 소유로 생기는 권한오류 방지)
 
+# 라이선스 고지 — 이미지를 배포하면 고지도 함께 가야 한다. 두 파일은 빌드 문맥 밖(리포 루트)에 있어
+# 이름 붙인 문맥 `licenses` 로 받는다: compose 의 build.additional_contexts, 직접 빌드할 때는
+# `docker build --build-context licenses=<리포 루트> …`.
+COPY --from=licenses --chmod=0644 LICENSE THIRD_PARTY_LICENSES.md /licenses/
+
 # 루트로 시작 → entrypoint가 docker.sock gid 정렬 후 gosu로 appuser 강등
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

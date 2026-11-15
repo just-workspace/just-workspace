@@ -129,7 +129,7 @@ LGPL 은 라이브러리를 **쓰는** 프로그램에 자기 조건을 요구�
 
 이미지를 공개 레지스트리에 올리기 전에 사람이 결정하거나 확인해야 하는 것이다. 지금 리포에는 아래를 처리하는 장치가 없다.
 
-1. **이미지에 고지를 넣는가.** Dockerfile 들은 `LICENSE` 와 `THIRD_PARTY_LICENSES.md` 를 이미지에 복사하지 않는다. pip·npm 으로 넣은 패키지의 라이선스 파일은 `site-packages`·`node_modules` 에 남지만(파이썬 이미지, rbi-mirror), 웹 번들(frontend-react)은 빌드 과정에서 라이선스 주석이 빠질 수 있다. MIT·BSD·Apache-2.0·ISC·OFL 도 고지 동봉을 요구한다.
+1. **이미지 안의 고지가 충분한가.** 우리가 빌드하는 이미지는 모두 `LICENSE` 와 `THIRD_PARTY_LICENSES.md` 를 `/licenses/` 에 담는다(rbi-mirror 는 `THIRD_PARTY-rbi-mirror.md` 도). pip·npm 으로 넣은 패키지의 라이선스 파일은 `site-packages`·`node_modules` 에 남는다(파이썬 이미지, rbi-mirror). 다만 `THIRD_PARTY_LICENSES.md` 는 목록이지 **라이선스 전문 모음이 아니고**, 웹 번들(frontend-react)은 빌드 과정에서 라이선스 주석이 빠질 수 있다. MIT·BSD·Apache-2.0·ISC·OFL 도 저작권 고지와 라이선스 전문의 동봉을 요구하므로, 전문까지 이미지에 넣을지는 정해야 한다.
 2. **GPL·LGPL 구성 요소의 소스 제공 방법.** 대상: aioimaplib, ldap3, psycopg, H2Orestart, pandoc, ffmpeg, iptables·iproute2·procps, libvips, OpenJDK, mailserver 이미지 안의 GPL 프로그램, 베이스 OS. 상위 배포처(PyPI·데비안·GitHub) 주소를 안내하는 것으로 충분한지, 해당 버전의 소스를 직접 보관·제공해야 하는지, 서면 제공 약속을 둘지 정해야 한다.
 3. **aioimaplib 을 유지할지.** 유지하면 backend 이미지가 GPL-3.0 조건으로 배포된다는 점을 README 와 이 문서에 계속 밝혀야 한다. 바꾸면 3.3 이 없어진다.
 4. **H2Orestart(GPL-3.0)를 docconv 이미지에 넣어 배포할지.** 빌드 인자 `H2ORESTART_VERSION` 을 비우면 넣지 않고 빌드된다(HWP 변환을 잃는다).

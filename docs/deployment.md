@@ -30,7 +30,7 @@ cp .env.example .env
 # 2) backend 이미지를 빌드한다 — 비밀값 생성기가 그 안에 있다.
 #    비밀값이 아직 비어 있는 동안에는 `docker compose build` 가 필수 변수 검사(DB_PASSWORD · SECRET_KEY)에 걸리므로
 #    docker build 로 직접 빌드한다.
-docker build -t localhost/just-workspace-backend:latest ./backend
+docker build --build-context licenses=. -t localhost/just-workspace-backend:latest ./backend
 
 # 3) 비어 있는 비밀값을 채운다(이미 값이 있는 줄은 건드리지 않는다).
 docker run --rm -v "$PWD/.env:/work/.env" localhost/just-workspace-backend:latest \

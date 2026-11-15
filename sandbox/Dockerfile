@@ -18,6 +18,11 @@ RUN pip install --no-cache-dir -r /opt/sandbox/requirements.txt \
 COPY matplotlibrc /opt/sandbox/matplotlibrc
 COPY server.py helpers.py /opt/sandbox/
 
+# 라이선스 고지 — 이미지를 배포하면 고지도 함께 가야 한다. 두 파일은 빌드 문맥 밖(리포 루트)에 있어
+# 이름 붙인 문맥 `licenses` 로 받는다: compose 의 build.additional_contexts, 직접 빌드할 때는
+# `docker build --build-context licenses=<리포 루트> …`.
+COPY --from=licenses --chmod=0644 LICENSE THIRD_PARTY_LICENSES.md /licenses/
+
 # 슬롯별 실행 계정(로그인 없음). 글꼴 캐시는 이미지에 미리 만들어 두고 작업마다 복사한다.
 RUN set -eux; \
     for i in 0 1 2 3 4 5 6 7; do uid=$((20001 + i)); \

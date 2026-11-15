@@ -1,5 +1,5 @@
 #!/bin/sh
-# 실행(도커 호스트에서): tar 로 backend/app → $B/backend/app, deploy/rbi-netfilter → $B/nf 를 풀고 `sh test-propagation.sh`. 운영 이름은 RBI_TEST_STACK=1 이 거부한다.
+# 실행(도커 호스트에서): tar 로 backend/app → $B/backend/app, deploy/rbi-netfilter → $B/nf, 리포 루트의 LICENSE·THIRD_PARTY_LICENSES.md → $B/ 를 풀고 `sh test-propagation.sh`. 운영 이름은 RBI_TEST_STACK=1 이 거부한다.
 # 동적 허용 목록 전파 시험(임시 컨테이너만 — 이름 r22-*, 체인 R22-RBI, 브리지 br-r22rbi. WS-RBI·ws-* 는 건드리지 않는다)
 #   1) 백엔드 코드(app.rbi.egress)가 대상에서 allow.txt 를 쓴다 → 2) 사이드카가 한 주기 안에 체인에 건다 → 실제 트래픽 통과
 #   3) 대상 제거 → 한 주기 안에 규칙이 사라지고 트래픽이 막힌다 · 4) 잘못된 줄·자기 주소(force 없음)·도커 대역·상한 밖은 rejected
@@ -16,7 +16,7 @@ cleanup() {
 trap cleanup EXIT
 fail() { echo "FAIL: $*"; exit 1; }
 
-docker build -q -t $IMG $B/nf >/dev/null || fail build
+docker build -q --build-context licenses=$B -t $IMG $B/nf >/dev/null || fail build
 ipt -S WS-RBI >/dev/null 2>&1 && echo "(운영 체인 WS-RBI 있음 — 읽기만 함)"
 docker network create --driver bridge --subnet 172.31.222.0/24 --opt com.docker.network.bridge.name=br-r22rbi \
   --opt com.docker.network.bridge.enable_icc=false r22-rbi-net >/dev/null || fail net

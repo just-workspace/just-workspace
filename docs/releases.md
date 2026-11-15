@@ -282,6 +282,7 @@ python -m jwrelease bundle verify just-workspace-1.1.0-offline.tar --pubkey rele
 - 서명·채널 갱신 단계는 없다. 비공개 키도 없다.
 - 액션은 커밋 SHA 로 고정했다.
 - 빌드 컨텍스트·Dockerfile·target 은 compose 의 `build` 설정과 같아야 한다. `release/tests/test_workflow.py` 가 대조한다.
+- 모든 이미지에 라이선스 고지(`LICENSE`, `THIRD_PARTY_LICENSES.md`)가 `/licenses/` 로 들어간다. 두 파일은 각 이미지의 빌드 컨텍스트 밖(리포 루트)에 있어 **이름 붙인 컨텍스트 `licenses`** 로 받는다 — compose 는 `build.additional_contexts`, 워크플로는 `build-contexts: licenses=.`, 손으로 빌드할 때는 `docker build --build-context licenses=<리포 루트> …`. 리포 루트의 `.dockerignore` 가 그 컨텍스트로 두 파일만 보낸다. 설치 관리자 이미지는 컨텍스트가 리포 루트라 바로 복사한다.
 
 `digests.json`:
 

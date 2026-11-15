@@ -97,6 +97,8 @@ services:
     image: ${JW_REGISTRY:-localhost}/just-workspace-backend:${JW_VERSION:-latest}
     build:
       context: ./backend
+      additional_contexts:
+        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
       args:
         # 제품 버전(리포 루트 VERSION). 예: JW_APP_VERSION="$(cat VERSION)" docker compose build backend
@@ -185,6 +187,8 @@ services:
     image: ${JW_REGISTRY:-localhost}/just-workspace-frontend-react:${JW_VERSION:-latest}
     build:
       context: ./frontend-react
+      additional_contexts:
+        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
     container_name: ws-frontend-react
     logging: *default-logging
@@ -280,6 +284,8 @@ services:
     image: ${JW_REGISTRY:-localhost}/just-workspace-mailserver:${JW_VERSION:-latest}
     build:
       context: ./mailserver/image
+      additional_contexts:
+        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
     container_name: ws-mailserver
     logging: *default-logging
     security_opt: ["no-new-privileges:true"]
@@ -391,6 +397,8 @@ services:
     image: ${JW_REGISTRY:-localhost}/just-workspace-sso:${JW_VERSION:-latest}
     build:
       context: ./sso
+      additional_contexts:
+        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
     container_name: ws-sso
     logging: *default-logging
@@ -437,6 +445,8 @@ services:
     image: ${JW_REGISTRY:-localhost}/just-workspace-ldap:${JW_VERSION:-latest}
     build:
       context: ./ldap
+      additional_contexts:
+        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
     container_name: ws-ldap
     logging: *default-logging
@@ -533,6 +543,8 @@ services:
     image: ${JW_REGISTRY:-localhost}/just-workspace-audiorelay:${JW_VERSION:-latest}
     build:
       context: ./audiorelay
+      additional_contexts:
+        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
     container_name: ws-audiorelay
     logging: *default-logging
@@ -587,6 +599,8 @@ services:
     image: ${JW_REGISTRY:-localhost}/just-workspace-rbi-netfilter:${JW_VERSION:-latest}
     build:
       context: ./deploy/rbi-netfilter
+      additional_contexts:
+        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
     container_name: ws-rbi-netfilter
     logging: *default-logging
     profiles: ["rbi"]
@@ -627,6 +641,8 @@ services:
     image: ${JW_REGISTRY:-localhost}/just-workspace-rbi-mirror:${JW_VERSION:-latest}
     build:
       context: ./rbi/mirror
+      additional_contexts:
+        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       target: prod
     profiles: ["rbi-build"]
     logging: *default-logging
@@ -757,6 +773,8 @@ services:
     image: ${JW_REGISTRY:-localhost}/just-workspace-docconv:${JW_VERSION:-latest}
     build:
       context: ./docconv
+      additional_contexts:
+        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
     container_name: ws-docconv
     logging: *default-logging
@@ -791,6 +809,8 @@ services:
     image: ${JW_REGISTRY:-localhost}/just-workspace-sandbox:${JW_VERSION:-latest}
     build:
       context: ./sandbox
+      additional_contexts:
+        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
     container_name: ws-sandbox
     logging: *default-logging

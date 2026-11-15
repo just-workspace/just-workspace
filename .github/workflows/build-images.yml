@@ -80,7 +80,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # context / dockerfile / target 은 docker-compose.yml 의 build 설정과 같아야 한다
+        # context / dockerfile / target 은 docker-compose.yml 의 build 설정과 같아야 한다. 이름 붙인 문맥 licenses 는
+        # 모든 이미지에 같은 값(리포 루트)이라 매트릭스가 아니라 빌드 단계에 한 번 적는다
         # (release/tests/test_workflow.py 가 대조한다). name 은 compose 의 서비스 이름.
         include:
           - name: backend
@@ -185,6 +186,9 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
+          # 라이선스 고지(LICENSE · THIRD_PARTY_LICENSES.md)를 이미지의 /licenses/ 에 넣는다 — compose 의
+          # build.additional_contexts 와 같은 이름. 리포 루트의 .dockerignore 가 그 두 파일만 보낸다.
+          build-contexts: licenses=.
           target: ${{ matrix.target || '' }}
           build-args: ${{ steps.args.outputs.list }}
           platforms: linux/amd64

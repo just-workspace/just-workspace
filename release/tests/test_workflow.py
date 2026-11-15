@@ -105,3 +105,25 @@ def test_no_untrusted_input_interpolated_into_scripts(workflow):
         for step in job["steps"]:
             run = step.get("run", "")
             assert "${{" not in run, step.get("name")
+
+
+def test_every_image_carries_the_license_notices(workflow, matrix, compose_text):
+    """우리가 빌드하는 이미지는 모두 LICENSE · THIRD_PARTY_LICENSES.md 를 /licenses/ 에 담는다.
+
+    두 파일은 리포 루트에 있다 — compose·워크플로·Dockerfile 이 같은 이름의 문맥(licenses)을 쓰는지 본다.
+    """
+    services = yaml.safe_load(compose_text)["services"]
+    own = {name: svc["build"] for name, svc in services.items() if "build" in svc}
+    assert set(own) == set(matrix) - {"installer"}
+    for name, build in own.items():
+        assert build.get("additional_contexts") == {"licenses": "."}, name
+    step = next(s for s in workflow["jobs"]["build"]["steps"] if s.get("id") == "build")
+    assert step["with"]["build-contexts"] == "licenses=."
+    copy = re.compile(r"^COPY (--from=licenses )?(--chmod=\d+ )?LICENSE THIRD_PARTY_LICENSES\.md /licenses/$", re.MULTILINE)
+    for name, item in matrix.items():
+        found = copy.search((REPO_ROOT / item["dockerfile"]).read_text(encoding="utf-8"))
+        assert found, name
+        assert bool(found.group(1)) == (item["context"] != "."), name        # 문맥이 리포 루트면 바로 복사한다
+    # 이름 붙인 문맥으로는 두 파일만 간다
+    ignore = (REPO_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+    assert [line for line in ignore if line and not line.startswith("#")] == ["*", "!LICENSE", "!THIRD_PARTY_LICENSES.md"]

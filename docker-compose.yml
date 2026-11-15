@@ -12,6 +12,13 @@
 ##   최소:        COMPOSE_PROFILES= (코어만)
 ## ===========================================
 
+# 컨테이너 로그 로테이션 — 기본(json-file)은 상한이 없어 디스크가 찰 때까지 쌓인다. 서비스당 최대 10MB × 5개.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   # ─── 1. PostgreSQL 16 (workspace + gitea 공유) ───
   postgres:
@@ -29,6 +36,7 @@ services:
       - "-c"
       - "random_page_cost=1.1"
     container_name: ws-postgres
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     environment:
       POSTGRES_USER: ${DB_USER:-workspace}
@@ -61,6 +69,7 @@ services:
   redis:
     image: redis:8.8.4-alpine   # 7.4 RDB/AOF 를 그대로 읽지만 8 에서 저장한 뒤엔 7 로 못 돌아간다(롤백=백업 복원)
     container_name: ws-redis
+    logging: *default-logging
     command: redis-server --appendonly yes --appendfsync everysec
     security_opt: ["no-new-privileges:true"]
     volumes:
@@ -90,6 +99,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: ws-backend
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     # Multi-worker so a long-running plugin request can't starve /api/health
     # --proxy-headers: X-Forwarded-For 는 ws-nginx(172.28.0.2 고정, 아래 nginx 서비스) 연결에서 온 것만 믿는다.
@@ -97,11 +107,16 @@ services:
     # 메일(.30)·healthprobe(.74) 처럼 직접 부르는 연결은 연결 주소 그대로 남는다(R7 A2).
     # --timeout-graceful-shutdown: 재시작 때 열린 SSE(내장 AI 이어 받기 구독)를 5초만 기다리고 닫아, docker stop(10초)
     # 안에 종료 훅이 돌아 생성 중 답변을 interrupted 로 저장하게 한다(app/ai/runs.py).
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "8",
+    # 워커 수는 entrypoint 가 붙인다: BACKEND_WORKERS, 없으면 CPU 수 기준 min(8, max(2, nproc)).
+    # 기동 전에 entrypoint 가 비밀값을 검사해 약한·기본 값이면 뜨지 않는다(python -m app.cli check-secrets).
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
               "--proxy-headers", "--forwarded-allow-ips", "172.28.0.2", "--timeout-graceful-shutdown", "5"]
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0
+      # .env 에 DATABASE_URL 이 없거나 비어 있으면 DB_USER·DB_PASSWORD·DB_NAME 으로 조립한다(비밀번호를 두 곳에 적지 않게).
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${DB_USER:-workspace}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-workspace}}
+      BACKEND_WORKERS: ${BACKEND_WORKERS:-}
       # 설치된 구역(쉼표 구분 id, backend/app/zones.json). 비우면 전부 — 미설치 구역의 API·백그라운드 작업은 올라오지 않는다.
       JW_ZONES: ${JW_ZONES:-}
       # 브랜드 APK 자동빌드 — 호스트의 리포 경로(docker -v 마운트용). 미설정 시 빌드 비활성.
@@ -148,7 +163,8 @@ services:
       resources:
         limits:
           memory: 4G
-          cpus: '4.0'
+          # 비우면(0) CPU 제한 없음. 고정값을 두면 코어가 그보다 적은 서버에서 컨테이너 생성이 거부된다.
+          cpus: '${BACKEND_CPUS:-0}'
         reservations:
           memory: 512M
     networks:
@@ -166,6 +182,7 @@ services:
       context: ./frontend-react
       dockerfile: Dockerfile
     container_name: ws-frontend-react
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     expose:
       - "3000"   # 워크스페이스 앱
@@ -186,6 +203,7 @@ services:
   nginx:
     image: nginx:1.31.8-alpine
     container_name: ws-nginx
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     ports:
       - "80:80"
@@ -217,6 +235,7 @@ services:
   certbot:
     image: certbot/certbot@sha256:c5698da859429ccee0fcc299a8000368198222d1f9e789ab6e388b491e8ce06d  # v5.10.0
     container_name: ws-certbot
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     profiles: ["certbot"]
     volumes:
@@ -251,6 +270,7 @@ services:
     build:
       context: ./mailserver/image
     container_name: ws-mailserver
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     hostname: mail.${DOMAIN:-localhost}
     profiles: ["mailserver"]
@@ -286,8 +306,8 @@ services:
       PERMIT_DOCKER: none
       ONE_DIR: 1
       OVERRIDE_HOSTNAME: mail.${DOMAIN:-localhost}
-    cap_add:
-      - NET_ADMIN
+    # NET_ADMIN 은 주지 않는다 — fail2ban(ENABLE_FAIL2BAN)이 방화벽 규칙을 걸 때만 필요한 권한이다.
+    # fail2ban 을 켜려면 여기에 cap_add: [NET_ADMIN] 을 함께 넣는다.
     deploy:
       resources:
         limits:
@@ -304,6 +324,7 @@ services:
   gitea:
     image: gitea/gitea@sha256:8967bf9deaf3c5c4adae13519436dc1b20c646ac83fe37ae810c933a1045227d  # 28.3.0 (1.27.3 에서 DB 마이그레이션 343~357 — 다운그레이드 불가, 되돌리려면 백업 복원)
     container_name: ws-gitea
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     profiles: ["gitea"]
     ports:
@@ -359,6 +380,7 @@ services:
       context: ./sso
       dockerfile: Dockerfile
     container_name: ws-sso
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     profiles: ["sso"]
     env_file: .env
@@ -404,17 +426,21 @@ services:
       context: ./ldap
       dockerfile: Dockerfile
     container_name: ws-ldap
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     profiles: ["sso"]
     env_file: .env
     environment:
       DATABASE_URL: postgresql://${DB_USER:-workspace}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-workspace}
       BACKEND_URL: http://backend:8000
-      # 비밀번호 검증을 backend 에 위임할 때 쓰는 키. 없으면 기동을 거부한다.
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY is required for ws-ldap}
+      # 비밀번호 검증을 backend 에 위임할 때 쓰는 키. 없거나 약하면 ws-ldap 이 기동을 거부한다(로그).
+      # :? 를 쓰지 않는다 — compose 는 꺼진 프로파일의 필수 변수도 검사한다.
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
     ports:
       # 컨테이너 안에서는 비루트라 1389/1636 으로 듣고, 밖으로 표준 포트로 낸다.
-      - "389:1389"
+      # 밖으로 여는 것은 LDAPS(636)뿐이다. 평문 389 는 비밀번호가 그대로 지나가므로 기본은 이 서버 자신(루프백)에만 연다.
+      # 평문만 되는 장비가 같은 내부망에 있으면 LDAP_PLAIN_BIND 에 그 망의 서버 주소를 적는다(예: 192.168.10.20).
+      - "${LDAP_PLAIN_BIND:-127.0.0.1}:389:1389"
       - "636:1636"
     depends_on:
       postgres:
@@ -444,6 +470,7 @@ services:
   vector:
     image: timberio/vector:0.61.0-alpine
     container_name: ws-vector
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     profiles: ["logging"]
     volumes:
@@ -471,6 +498,7 @@ services:
   loki:
     image: grafana/loki:3.7.10
     container_name: ws-loki
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     profiles: ["logging"]
     command: -config.file=/etc/loki/loki.yaml
@@ -493,6 +521,7 @@ services:
   grafana:
     image: grafana/grafana:13.2.6
     container_name: ws-grafana
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     profiles: ["logging"]
     volumes:
@@ -506,9 +535,22 @@ services:
       #   않는다. nginx(공인 경로)로는 서빙하지 않는다 — 관제 화면을 공인망에
       #   두면 인증 하나에만 의존하게 된다.
       - "${GRAFANA_BIND:-127.0.0.1}:3001:3000"
+    # 관리자 비밀번호가 비어 있거나 짧으면 뜨지 않는다 — 비워 두면 널리 알려진 기본 계정으로 열린다.
+    # (:? 를 쓰지 않는다 — compose 는 꺼진 프로파일의 필수 변수도 검사한다.)
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        p="$${GF_SECURITY_ADMIN_PASSWORD:-}"
+        if [ "$${#p}" -lt 16 ] || [ "$$p" = "admin" ]; then
+          echo "[grafana] GRAFANA_ADMIN_PASSWORD 가 비어 있거나 짧습니다(16자 이상) - 시작하지 않습니다" >&2
+          exit 1
+        fi
+        exec /run.sh "$$@"
+      - grafana
     environment:
       GF_SERVER_ROOT_URL: http://${GRAFANA_BIND:-127.0.0.1}:3001/
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
       # 익명 접근·가입 차단. 관제 화면이 인증 없이 열리면 안 된다.
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_USERS_ALLOW_SIGN_UP: "false"
@@ -545,6 +587,7 @@ services:
   loki-gw:
     image: nginx:1.31.8-alpine
     container_name: ws-loki-gw
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     profiles: ["logging"]
     volumes:
@@ -576,6 +619,7 @@ services:
   healthprobe:
     image: alpine:3.24.4
     container_name: ws-healthprobe
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     profiles: ["logging"]
     command:
@@ -619,6 +663,7 @@ services:
   livekit:
     image: livekit/livekit-server@sha256:25cd902de7cacbd5f1f779f6a6ac1eae20ba8f56b0935934ce6b0ab80d1e3d20  # v1.13.11
     container_name: ws-livekit
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     profiles: ["livekit"]
     ports:
@@ -632,9 +677,24 @@ services:
       - "${LIVEKIT_TURN_TLS_PUBLISH:-443}:443/tcp"
     expose:
       - "7880"
-    command: --config /etc/livekit.yaml
+    # 기본 키(devkey/secret)·빈 값·짧은 비밀값으로는 뜨지 않는다 — 그 키를 아는 누구나 회의 토큰을 만들 수 있다.
+    # (:? 를 쓰지 않는다 — compose 는 꺼진 프로파일의 필수 변수도 검사한다.)
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        k="$${LIVEKIT_API_KEY:-}"; s="$${LIVEKIT_API_SECRET:-}"
+        if [ -z "$$k" ] || [ -z "$$s" ] || [ "$$k" = "devkey" ] || [ "$$s" = "secret" ] || [ "$${#s}" -lt 32 ]; then
+          echo "[livekit] LIVEKIT_API_KEY / LIVEKIT_API_SECRET 이 비어 있거나 기본값이거나 짧습니다(비밀값 32자 이상) - 시작하지 않습니다" >&2
+          exit 1
+        fi
+        export LIVEKIT_KEYS="$$k: $$s"
+        exec /livekit-server "$$@"
+      - livekit
+    command: ["--config", "/etc/livekit.yaml"]
     environment:
-      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-secret}"
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
     volumes:
       - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
       # TURN/TLS 용 인증서. 갱신되면 컨테이너를 재시작해야 새 인증서를 읽는다.
@@ -662,6 +722,7 @@ services:
       context: ./audiorelay
       dockerfile: Dockerfile
     container_name: ws-audiorelay
+    logging: *default-logging
     profiles: ["audiorelay"]
     security_opt: ["no-new-privileges:true"]
     read_only: true
@@ -712,6 +773,7 @@ services:
     build:
       context: ./deploy/rbi-netfilter
     container_name: ws-rbi-netfilter
+    logging: *default-logging
     profiles: ["rbi"]
     network_mode: host
     cap_add:
@@ -752,6 +814,7 @@ services:
       context: ./rbi/mirror
       target: prod
     profiles: ["rbi-build"]
+    logging: *default-logging
     entrypoint: ["true"]
     network_mode: none
     restart: "no"
@@ -762,6 +825,7 @@ services:
   egress:
     image: livekit/egress:v1.15.0   # v1.14.x 는 크롬 V8 원격 실행 취약점 — 1.15.0 이상
     container_name: ws-egress
+    logging: *default-logging
     profiles: ["egress"]
     restart: unless-stopped
     environment:
@@ -769,8 +833,8 @@ services:
         redis:
           address: redis:6379
           db: 0
-        api_key: ${LIVEKIT_API_KEY:-devkey}
-        api_secret: ${LIVEKIT_API_SECRET:-secret}
+        api_key: ${LIVEKIT_API_KEY:-}
+        api_secret: ${LIVEKIT_API_SECRET:-}
         ws_url: ws://livekit:7880
         insecure: true
         log_level: info
@@ -799,6 +863,7 @@ services:
     # 되돌리기: 9.4.0.1 = sha256:3ab6ebc7c605e5a32b7ae3ff19daed4925090245acc8100ce2230bd766c88212
     image: onlyoffice/documentserver@sha256:ca17889f10b11141cc6441836aebdd2835cf3e1b49681b2fd6e155c94b7850b3
     container_name: ws-onlyoffice
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     profiles: ["onlyoffice"]
     expose:
@@ -810,7 +875,8 @@ services:
       - "${DOMAIN_ALIAS:-alias.invalid}:${RP_LAN_IP:-127.0.0.1}"
     environment:
       JWT_ENABLED: "true"
-      JWT_SECRET: ${ONLYOFFICE_JWT_SECRET:-change-me-onlyoffice}
+      # 비어 있으면 편집기가 스스로 난수 비밀값을 만든다 — 그 경우 백엔드와 값이 달라 편집기가 붙지 않는다(안전한 쪽).
+      JWT_SECRET: ${ONLYOFFICE_JWT_SECRET:-}
       JWT_HEADER: Authorization
       WOPI_ENABLED: "true"
       # 10.0 부터 WOPI 되가져오기(checkFileInfo·GetFile·PutFile)는 사설 주소로 갈 때 그 주소가
@@ -837,13 +903,25 @@ services:
   searxng:
     image: searxng/searxng@sha256:048e613ce4a7ddc35dfb05a0b8ede795a054187b3c3b89518adc37d5e03a8297  # 2026.11.13-219b63b20
     container_name: ws-searxng
+    logging: *default-logging
     security_opt: ["no-new-privileges:true"]
     profiles: ["aitools"]
     expose:
       - "8080"
+    # 비밀값이 비어 있으면 뜨지 않는다(알려진 기본값으로 뜨는 일이 없게).
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -z "$${SEARXNG_SECRET:-}" ]; then
+          echo "[searxng] SEARXNG_SECRET 이 비어 있습니다 - 시작하지 않습니다" >&2
+          exit 1
+        fi
+        exec /usr/local/searxng/entrypoint.sh "$$@"
+      - searxng
     environment:
       SEARXNG_BASE_URL: http://searxng:8080/
-      SEARXNG_SECRET: ${SEARXNG_SECRET:-please-change-this-secret-key-32chars}
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-}
     volumes:
       - searxng-config:/etc/searxng
     deploy:
@@ -866,6 +944,7 @@ services:
       context: ./docconv
       dockerfile: Dockerfile
     container_name: ws-docconv
+    logging: *default-logging
     profiles: ["aitools"]
     network_mode: none
     read_only: true
@@ -899,6 +978,7 @@ services:
       context: ./sandbox
       dockerfile: Dockerfile
     container_name: ws-sandbox
+    logging: *default-logging
     profiles: ["aitools"]
     network_mode: none
     read_only: true

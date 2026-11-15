@@ -42,6 +42,6 @@ room:
 # 참가자 입·퇴장 웹훅 — 채팅 채널의 "통화 중 N명" 표시. api_key 는 LIVEKIT_API_KEY 와 같게
 # (시크릿은 LIVEKIT_KEYS 에서 찾아 서명한다). 백엔드가 서명을 검증한다.
 webhook:
-  api_key: devkey
+  api_key: REPLACE_WITH_LIVEKIT_API_KEY   # .env 의 LIVEKIT_API_KEY 값으로 바꾼다
   urls:
     - http://backend:8000/api/meetings/livekit/webhook

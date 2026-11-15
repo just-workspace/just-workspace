@@ -404,7 +404,8 @@ class UpdateManager:
             except rel.verify.VerifyError as e:
                 raise rel.CheckError("unconfigured") from None
             result = rel.check_channel(current=current, channel_name=channel_name, keys=keys,
-                                       last_sequence=chk["sequence"].get(channel_name), now=self.now(), fetch=self.fetch)
+                                       last_sequence=chk["sequence"].get(channel_name), now=self.now(), fetch=self.fetch,
+                                       base_url=rel.channel_base_url(self.store.dir))
         except rel.CheckError as e:
             chk.update(last_at=self.iso(), ok=False, error=e.as_dict())
             if e.code == "unconfigured":
@@ -1180,11 +1181,12 @@ class UpdateManager:
         log("데이터베이스 스키마를 새 버전에 맞췄습니다")
 
     def _backend_run(self, argv: list[str], *, version: str | None = None, user: str | None = None,
-                     timeout: float = 600, on_line=None):
+                     timeout: float = 600, on_line=None, run_args: list[str] | None = None):
         """backend 이미지의 일회용 컨테이너(`compose run`)로 명령을 돌린다. version 을 주면 그 버전의 이미지로.
 
         compose 의 backend 서비스는 내부망의 고정 주소를 쓴다. 돌고 있는 backend 가 그 주소를 쥐고 있으므로
         일회용 컨테이너에서는 고정 주소를 뺀다(compose 조각을 하나 덧붙인다) — 아니면 "Address already in use" 다.
+        run_args 는 `compose run` 에 더 줄 옵션(붙일 파일 등)이다.
         """
         tmp = self.dir / "tmp"
         tmp.mkdir(parents=True, exist_ok=True)
@@ -1197,7 +1199,8 @@ class UpdateManager:
             prefix += ["--env-file", override.as_posix()]
         try:
             return self.docker.run([*prefix, "run", "--rm", "--no-deps", "-T", *(["--user", user] if user else []),
-                                    "--entrypoint", "python", "backend", *argv], timeout=timeout, on_line=on_line)
+                                    *(run_args or []), "--entrypoint", "python", "backend", *argv],
+                                   timeout=timeout, on_line=on_line)
         finally:
             override.unlink(missing_ok=True)
 

@@ -9,7 +9,7 @@
 
 | 이름 | 뜻 | 기본 |
 |---|---|---|
-| `JW_UPDATE_CHANNEL_URL` | 채널 파일·manifest 의 기준 주소 | 릴리스 도구의 `channel_base_url` |
+| `JW_UPDATE_CHANNEL_URL` | 채널 파일·manifest 의 기준 주소. 설치 뒤에 `jw update-channel <주소>` 로 정한 값(상태 폴더의 `update/channel-url`)이 있으면 그것이 우선한다 | 릴리스 도구의 `channel_base_url` |
 | `JW_UPDATE_PUBKEY_DIR` | 이미지에 내장한 공개 키 폴더(`*.pub`) | `/app/keys` |
 | `JW_UPDATE_OFFLINE_URL` | 오프라인 묶음을 받는 주소 틀(`{version}`·`{filename}`) | 릴리스 도구의 `download_url_template` |
 
@@ -46,8 +46,22 @@ FETCH_LIMIT = 8 * 1024 * 1024      # 채널 파일·manifest 의 상한(정상 �
 SIG = ".sig"
 
 
-def channel_base_url() -> str:
-    return (os.environ.get("JW_UPDATE_CHANNEL_URL") or ReleaseSettings().channel_base_url).rstrip("/")
+CHANNEL_URL_FILE = "update/channel-url"     # 상태 폴더 기준 — `jw update-channel <주소>` 가 쓴다
+
+
+def channel_url_override(state_dir: Path) -> str | None:
+    """설치 뒤에 `jw update-channel` 로 정한 채널 주소(없으면 None)."""
+    try:
+        text = (state_dir / CHANNEL_URL_FILE).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return text.rstrip("/") or None
+
+
+def channel_base_url(state_dir: Path | None = None) -> str:
+    """채널 파일의 기준 주소 — 설치 뒤에 정한 것 → 환경변수 → 릴리스 도구의 기본값."""
+    override = channel_url_override(state_dir) if state_dir is not None else None
+    return override or (os.environ.get("JW_UPDATE_CHANNEL_URL") or ReleaseSettings().channel_base_url).rstrip("/")
 
 
 def offline_download_url(version: str) -> str | None:

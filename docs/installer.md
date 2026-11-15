@@ -137,7 +137,7 @@ docker compose -p just-workspace
 
 | 항목 | 값 |
 |---|---|
-| `mode` | `new` · `quick`(구역을 안 고르면 협업 묶음, 메모리가 모자라면 최소 묶음으로 내리고 사유를 남긴다) · `restore`(이번 단계에는 없음) |
+| `mode` | `new` · `quick`(구역을 안 고르면 협업 묶음, 메모리가 모자라면 최소 묶음으로 내리고 사유를 남긴다) · `restore`(백업에서 복원 — §14) |
 | `access.domain` | 접속 주소(도메인 이름, 또는 임시 인증서와 함께 IP 주소) |
 | `access.network` | `direct`(이 서버가 직접 받는다) · `router`(공유기 뒤 — 포트 넘김 안내) · `proxy`(앞단 프록시 뒤) |
 | `access.proxy_addresses` | `proxy` 일 때 프록시 주소(IPv4 또는 CIDR) 목록 |
@@ -151,6 +151,7 @@ docker compose -p just-workspace
 | `git.version` | `verified`(compose 에 고정한 이미지) · `latest` · 이미지 태그 |
 | `advanced.subnet` | 내부 대역(사설 IPv4 /24, 기본 `172.28.0.0/24`) |
 | `admin` | `name` · `username` · `password`(12자 이상) |
+| `restore` | `mode: restore` 에서만 — `path`(서버에 있는 백업 파일·폴더의 절대 경로) · `password_file`(설정이 암호로 보호된 백업의 암호가 든 파일, `/data/` 아래) |
 
 - 비밀(`admin.password`, `mail.password`, `ai.api_key`)은 저장할 때 따로 떼어 `answers.secret.json`(600)에 둔다. 관리자 비밀번호와 AI 키는 쓰고 나면 지운다.
 - 무인 설치에서 비밀은 파일에 적거나 환경변수로 준다: `JW_ADMIN_PASSWORD`, `JW_MAIL_PASSWORD`, `JW_AI_API_KEY`.
@@ -196,7 +197,7 @@ docker compose -p just-workspace
 | `GET /api/apply/stream` | 같은 내용의 SSE(`event: status`, 끝나면 `event: end`) |
 | `POST /api/apply/retry` `{"use_temporary_cert"?}` | 실패한 단계부터 다시 |
 | `GET /api/apply/log?step=&tail=` | 단계 로그 |
-| `POST /api/restore…` | 501(이번 단계 범위 밖) |
+| `/api/restore/*` | 백업에서 복원 — §14 |
 
 `GET /api/state` 의 `facts` 와 `info`:
 
@@ -243,6 +244,9 @@ docker compose -p just-workspace
 | `GET /internal/probe/public-ip[?refresh=true]` | 공인 주소(기억해 둔 값, `refresh` 면 다시 감지) |
 | `GET /internal/jobs` | 구역 작업 목록 — 진행 중인 것과 최근 것(새것부터, 20개) |
 | `GET /internal/storage` | 파일 저장소: `{"kind": local\|nfs, "location", "volume", "install_id"}` |
+| `GET /internal/cert` | 지금 쓰는 인증서 — §15 |
+| `POST /internal/cert/reissue` | 인증서 다시 발급 / 올린 인증서로 교체(202 + 작업) — §15 |
+| `POST /internal/zones/<id>/reconnect` | 보류된 구역 연결을 다시 시도(202 + 작업) — §15 |
 
 구역별 `settings`:
 
@@ -254,7 +258,9 @@ docker compose -p just-workspace
 | `git` | `version`: `tested`/`latest`/`custom` + `custom_version` |
 | 그 밖 | 없음 |
 
-작업은 `{"id", "kind": enable|disable|update, "zone", "status": running|done|failed, "stages": [{"id", "status"}], "ports", "error", "warnings"}`. 켜기의 단계는 `pull`(받기) → `configure`(설정) → `connect`(연결). 실패하면 답변·`.env`·컨테이너를 되돌려 **꺼진 채**로 둔다. 성공하면 `.env` 의 `JW_ZONES`·`COMPOSE_PROFILES` 가 바뀌고 backend 가 다시 뜬다. 한 번에 한 작업만 돈다(`409 busy`).
+`GET /internal/zones` 의 구역 행에는 `pending`(켜져 있지만 연결이 보류됨)·`pending_reason` 이 붙는다(§15).
+
+작업은 `{"id", "kind": enable|disable|update|reconnect|cert, "zone", "status": running|done|failed, "stages": [{"id", "status"}], "ports", "error", "warnings"}`. 켜기의 단계는 `pull`(받기) → `configure`(설정) → `connect`(연결). 실패하면 답변·`.env`·컨테이너를 되돌려 **꺼진 채**로 둔다. 성공하면 `.env` 의 `JW_ZONES`·`COMPOSE_PROFILES` 가 바뀌고 backend 가 다시 뜬다. 한 번에 한 작업만 돈다(`409 busy`).
 
 ### 명령(`docker exec jw-installer jw …`)
 
@@ -460,7 +466,7 @@ def remove(ctx, zone_id):       # 연결을 끊고 멈춘다(데이터 볼륨은
 | 7 | Gitea 의 로그인 원본 `workspace`(OpenID Connect, `APP_URL/oauth/.well-known/openid-configuration`) |
 | 8 | 앞단 경로 `/git/` 확인 |
 
-7 은 Gitea 가 접속 주소로 되돌아가 설정 문서를 읽으므로 **신뢰되는 인증서**가 필요하다. 임시 인증서에서는 실패하고, 설치는 주의(`git_sso_pending`)를 남기고 계속한다. 끌 때는 로그인 원본을 지우고 토큰·클라이언트를 설정에서 뺀 뒤 컨테이너를 멈춘다. 데이터 볼륨(`ws-gitea-data`)은 남는다.
+7 은 Gitea 가 접속 주소로 되돌아가 설정 문서를 읽으므로 **신뢰되는 인증서**가 필요하다. 임시 인증서에서는 실패하고, 설치는 주의(`git_sso_pending`)를 남기고 계속한다 — 그 구역은 "연결 보류"로 적히고(`state/pending.json`), 인증서를 바꾸면 다시 건다(§15). 로그인 원본이 이미 있으면 지금 주소로 고쳐 쓴다(`update-oauth` — 서버를 옮겨 접속 주소가 바뀐 경우). 끌 때는 로그인 원본을 지우고 토큰·클라이언트를 설정에서 뺀 뒤 컨테이너를 멈춘다. 데이터 볼륨(`ws-gitea-data`)은 남는다.
 
 ## 11. 테스트
 
@@ -474,10 +480,8 @@ docker 없이 돈다. docker·DNS·HTTP·SMTP 는 가짜로 바꾼다(`tests/fak
 
 ## 12. 알려진 한계
 
-- **복원**(`mode: restore`)은 없다(501) — §14.
 - **backend 쪽 호출부**는 `backend/app/system/` 이다. 관리자 권한을 확인하고 내부 API 를 대신 부르며(`/api/admin/system/zones…`, `/jobs/<id>`, `/probe/…`), 켜기·끄기·설정 변경을 감사 로그에 남긴다. 화면은 관리 › 구역(`/admin/zones`). `JW_INSTALLER_URL`·`JW_INSTALLER_KEY` 가 비어 있으면(설치 관리자 없이 구성한 설치) 목록은 읽기 전용이고 나머지는 `503 installer_unavailable` 이다.
-- **내부 API 에는 있지만 backend·화면이 아직 쓰지 않는 것**: 작업 목록(`GET /internal/jobs` — backend 는 자신이 시작한 작업 id 를 기억하는 방식을 그대로 쓴다), 저장소 정보(`GET /internal/storage` — 관리 › 저장소는 backend 컨테이너의 마운트 정보에서 종류·위치를 읽는다), 코드 저장소의 검증한 버전 글자(`verified_version` — 응답에는 실리지만 화면에 표시하는 자리는 없다), 구역 확인(`check`)의 `cautions`(아래 표의 키 — 화면이 문구로 바꿔 보여 주는 일이 남았다).
-- **코드 저장소의 로그인 연동**(Gitea 의 OpenID Connect 로그인 원본)은 접속 주소의 인증서를 Gitea 가 믿을 수 있어야 걸린다. 임시 인증서로 설치하면 주의(`git_sso_pending`)를 남기고 건너뛰며, 나중에 다시 거는 길(인증서를 바꾼 뒤 자동으로 다시 시도)은 아직 없다 — 구역을 껐다 켜면 다시 시도한다.
+- **코드 저장소의 로그인 연동**(Gitea 의 OpenID Connect 로그인 원본)은 접속 주소의 인증서를 **Gitea 컨테이너가** 믿을 수 있어야 걸린다. 임시 인증서로 설치하면 "연결 보류"로 남고, 신뢰되는 인증서로 바꾸면(§15) 다시 건다. 공개 CA 가 아닌 **사설 CA** 가 내준 인증서는 올려도 Gitea 가 믿지 못해 보류로 남는다 — Gitea 컨테이너의 신뢰 저장소에 그 CA 를 넣는 일은 설치 관리자가 하지 않는다.
 - **인증서 자동 발급(Let's Encrypt)의 실제 발급**은 밖에서 80 으로 닿는 서버에서만 된다. 발급이 실패했을 때의 흐름(실패 → 임시 인증서로 계속)만 실서버에서 확인했다.
 - **TURN/TLS**: 직접 받는 구성에서는 5349 에 게시되므로, 443 을 넘겨 주는 장치가 없으면 쓰이지 않는다(§8).
 - **앞단 프록시 구성**: 프록시는 클라이언트 주소를 `X-Real-IP` 로 넘겨야 한다(`X-Forwarded-For` 만으로는 클라이언트 주소로 쓰지 않는다). 메일·회의 인증서는 자체 서명이다 — 신뢰되는 인증서가 필요하면 지금은 손으로 넣어야 한다.
@@ -486,7 +490,9 @@ docker 없이 돈다. docker·DNS·HTTP·SMTP 는 가짜로 바꾼다(`tests/fak
 - **NFS** 는 v4.1 만 쓴다(잠금이 프로토콜에 든 버전). v3 만 되는 서버는 붙지 않는다. `hard` 로 붙이므로 서버가 끊긴 동안 저장소를 **읽는** 요청(파일 목록·내려받기)은 돌아올 때까지 기다린다 — 쓰기만 503 으로 바로 거부한다. 끊긴 것을 알아채기 전(표식 확인 결과를 5초 재사용한다)에 시작된 쓰기도 서버가 돌아올 때까지 기다렸다가 끝난다.
 - **저장소 표식**은 `/api/files`·`/api/wopi/files` 의 쓰기만 막는다. 채팅 첨부·메일 보관처럼 다른 경로로 저장소에 쓰는 기능은 아직 막지 않는다.
 - **받을 이미지 용량**은 알려 주지 않는다(레지스트리에 묻지 않는다) — 요약의 그 줄은 보이지 않는다.
-- **인증서 방식 바꾸기**(임시 → 자동 등)를 설치 뒤에 하는 API 는 없다.
+- **인증서 방식 바꾸기**는 임시 → 자동·올리기, 자동 → 올리기만 된다(§15). 앞단 프록시가 맡는 설치의 메일·회의용 인증서는 여전히 자체 서명이다.
+- **복원에서 파일 저장소의 두 번 읽기**: 데이터 되돌리기(backend CLI)는 백업 묶음을 작업 폴더(백업 볼륨)에 통째로 푼 뒤 올린다 — 백업 크기만큼의 여유 공간이 도커 데이터 폴더에 더 필요하다. 올린 백업은 설치 폴더에 한 벌 더 놓인다(끝나면 지운다). 큰 백업은 서버에 먼저 옮겨 두고 경로를 알려 주는 편이 낫다.
+- **복원에서 다시 정하지 않는 것**: 지정 폴더 저장소(화면은 도커 볼륨·NFS 만 묻는다 — 답변 파일로는 `storage.path` 를 줄 수 있다), 인증서 올리기(화면에서는 자동·임시만 — 복원 뒤 관리 화면에서 올린다).
 - **업데이트**(이미지 교체·채널 검증)는 다음 단계다.
 
 ### 주의(`cautions`)의 키
@@ -509,7 +515,7 @@ docker 없이 돈다. docker·DNS·HTTP·SMTP 는 가짜로 바꾼다(`tests/fak
 | `rbi_needs_dns` | `name` | 격리 브라우저의 전용 이름도 이 서버를 가리켜야 한다 |
 | `dns_mismatch_cert_will_fail` | `domain` | 접속 주소가 이 서버를 가리키지 않아 자동 발급이 실패한다 |
 
-적용·구역 작업이 남기는 주의(`warnings`): `git_sso_pending`, `git_front_path_unverified`, `side_certs_self_signed`, `image_not_refreshed`, `installer_not_on_network`, `backend_settings_not_applied`.
+적용·구역 작업이 남기는 주의(`warnings`): `git_sso_pending`, `git_front_path_unverified`, `side_certs_self_signed`, `image_not_refreshed`, `installer_not_on_network`, `backend_settings_not_applied`. 복원이 남기는 것: `restore_dkim_regenerated`(백업에 메일 서명 키가 없어 새로 만들었다), `restore_front_unverified`, `restore_users_mismatch`, `restore_check_skipped`.
 
 ## 13. 실서버 검수
 
@@ -541,15 +547,119 @@ node installer/e2e/admin-zones-ui.cjs --url https://<접속 주소> --addr <서�
 
 확인하지 못한 것: 실제 Let's Encrypt 발급과 갱신, 신뢰되는 인증서에서의 Gitea 로그인 연동, 격리 브라우저 애드온(`rbi`), 무손실 오디오, 외부 SMTP·AI 제공자 연결, 지정 폴더 저장소, 공유기 뒤·실제 앞단 프록시, x86_64 가 아닌 서버, SELinux 가 켜진 배포판.
 
-## 14. 예정 — 복원
+## 14. 백업에서 복원
 
-`mode: restore` 는 아직 없고 `POST /api/restore…` 는 501 을 준다. 마법사 화면(`frontend-react/src/installer-app/api/client.ts`)은 아래 경로를 전제로 만들어져 있다 — 구현할 때 이 모양에 맞춘다(응답 형태는 같은 폴더 `types.ts` 의 `RestoreFileInfo`·`RestoreReview`·`RestoreTarget`·`ApplyState`).
+다른 서버에서 만든 백업(`.jwbak` 또는 백업 폴더 — [data-safety.md](data-safety.md))으로 이 서버에 그대로 옮긴다. 마법사의 시작 방식 "백업에서 복원", 또는 답변 파일의 `"mode": "restore"`. 코드는 `installer/app/restore.py`(흐름·단계), `restore_config.py`(설정 병합), `api_restore.py`(경로).
 
-| 메서드·경로 | 하는 일 | 응답 |
+설치 관리자는 백업을 직접 열지 않는다. backend 이미지의 일회용 컨테이너에 **읽기 전용으로 붙여** `python -m app.cli backup inspect|verify|extract-config` 와 `restore` 를 부른다 — 형식의 단일 출처는 backend 다. 이미지가 아직 없으면 그 이미지 하나만 먼저 받는다.
+
+### 백업 받기
+
+| 길 | 어떻게 |
+|---|---|
+| 올리기 | 브라우저가 보낸 본문을 `/data/state/restore/upload/backup.jwbak` 에 바로 흘려 쓴다(메모리·임시 파일에 모으지 않는다). 시작할 때 `Content-Length` 와 여유 공간을 견주고, 올리다 끊기면 반쪽 파일을 지운다. 이어 올리기는 없다 |
+| 서버 경로 | 호스트의 절대 경로를 받는다(설치 폴더 아래든 다른 곳이든). 복사하지 않고 그 경로를 일회용 컨테이너에 `--mount type=bind,…,readonly` 로 붙여 읽는다. 경로 검증은 저장 폴더와 같다(절대 경로, `..`·셸 문자·시스템 폴더 거부) |
+
+확인은 세 단계다: 형식(`inspect`) → 손상(`verify` — 모든 파일의 크기·SHA-256) → 설정 꺼내기(`extract-config` → `/data/state/restore/config/`, 600). 결과(`status`):
+
+| `status` | 뜻 |
+|---|---|
+| `ok` | 복원할 수 있다 |
+| `invalid` | `reason`: `not_a_backup`(백업 파일이 아님) · `format_unsupported`(모르는 형식 버전) · `no_config`(설정 항목이 없어 새 서버로 옮길 수 없다) · `path_invalid` |
+| `corrupt` | 옮기는 중 손상(해시 불일치·중간에 끊김) |
+| `password_required` · `password_wrong` | 설정이 암호로 보호된 백업 — 암호는 `/data/state/restore/password`(600)에 두고 파일로 넘긴다(명령 인자·환경에 싣지 않는다) |
+| `not_found` | 그 경로에 파일이 없다 |
+| `none` | 받은 백업이 없다 |
+
+`state` 는 `none`·`uploading`·`checking`·`ready`·`failed`.
+
+### API (8443, 세션 필요)
+
+| 메서드·경로 | 하는 일 |
+|---|---|
+| `POST /api/restore/upload` (multipart `file`) | 올리고 확인까지 한 뒤 답한다(큰 파일은 수 분). `507 no_space`, `409 apply_running`, `400 upload_invalid` |
+| `POST /api/restore/path` `{"path"}` | 서버에 있는 백업 |
+| `POST /api/restore/password` `{"password"}` | 암호를 넣고 다시 확인(해시는 다시 세지 않는다) |
+| `GET` · `DELETE /api/restore/file` | 받은 백업의 상태 · 버리기(서버 경로의 원본은 건드리지 않는다) |
+| `GET /api/restore/review` | 내용 확인(아래). 준비된 백업이 없으면 `409 restore_no_backup` |
+| `POST /api/restore/apply` `{"domain", "storage", "network"?, "proxy_addresses"?, "cert"?, "subnet"?}` | 복원 시작(202). 문제가 있으면 `422 restore_invalid` + `vars.errors` |
+| `GET /api/restore/apply` · `/apply/stream` · `POST /api/restore/apply/retry` | 진행·재시도 — 설치 적용과 같은 엔진·같은 형태. 로그는 `GET /api/apply/log?step=` |
+
+`review`: `source_url`·`created_at`(만든 서버·시각), `backup_version`·`schema_version` 과 `installer_version`·`installer_schema_version`, `version_status`(`ok`/`newer`)·`version_reason`(`schema`/`product`), `zones`, `users`, `data_bytes`, `storage`(원래 저장소 — `local` 또는 `nfs` + `server`·`export`), `files_included`·`files_bytes`, `domain`(접속 주소 기본값), `mail_domain`, `install_id`, `network`·`subnet`(기본값), `blockers`(막는 사유).
+
+**버전 판정**: 백업의 스키마 버전(또는 제품 버전)이 이 설치 관리자의 것보다 **높으면 막는다**(`version_newer`). 낮거나 같으면 진행하고, 복원 뒤 스키마 변경 단계가 차이를 메운다. 이 설치 관리자의 스키마 버전은 backend 이미지에 묻는다(`schema-version`). 백업의 구역이 서버 메모리에 안 들어가도 막는다(`memory_insufficient`).
+
+### 새 서버에서 다시 정하는 것
+
+| 항목 | 규칙 |
+|---|---|
+| 접속 주소 | 기본값은 백업의 주소. DNS 가 아직 원래 서버를 가리켜도 **막지 않는다** — 인증서를 정하지 않았으면 그 경우 임시 인증서로 간다(가리키면 자동 발급) |
+| 연결 형태·프록시 주소·인증서 | 설치와 같다. `cert` 를 비우면 프록시 → `proxy`, 주소가 IP → `temporary`, DNS 일치 → `auto`, 그 밖 → `temporary` |
+| 파일 저장 위치 | 백업이 **NFS** 였으면 NFS 만(`storage_must_be_nfs`) — 파일은 백업에 없고 그 공유에 있다. 연결 확인 다섯 항목에 더해 **표식 파일의 설치 id 가 백업의 것과 같은지** 본다: 표식이 없으면 `marker_missing`(다른 공유이거나 빈 공유), 다른 설치의 것이면 `other_install`. 백업이 로컬이고 파일이 들어 있으면 도커 볼륨·NFS 어느 쪽이든 된다. 로컬인데 파일이 없으면 파일 없이 복원한다(화면이 경고) |
+| 내부 대역 | 기본값은 백업의 대역 |
+
+구역·메일·회의·코드 저장소 버전·관리자 계정은 **묻지 않는다** — 백업의 설정(`config` 항목의 `.env`)에서 온다.
+
+### 설정 병합 규칙
+
+| 갈래 | 무엇 |
+|---|---|
+| **백업에서 가져온다** | 비밀값 전부 — 암호화 키 `SECRET_KEY`(바뀌면 DB 안의 암호화된 값을 풀 수 없다), `INTERNAL_API_KEY`, `DB_PASSWORD`(코드 저장소의 설정 파일에도 적혀 있다), 구역별 키·토큰, `SMTP_PASSWORD`, `GITEA_TOKEN`, `OAUTH_CLIENTS_JSON`. **설치 id**(`JW_INSTALL_ID` — 저장소 표식과 맞아야 한다. 설치 관리자의 `install.json` 도 이 값으로 바꾼다). 구역 목록, 메일 종류·메일 도메인(`DOMAIN` — 계정의 메일 주소), 외부 SMTP, 코드 저장소 이미지, `ADMIN_EMAILS`, `APP_NAME`, 인증서 연락처. 그리고 설치 관리자가 다루지 않는 변수(브랜드·기능 플래그·상한 등)는 `.env` 끝의 "백업에서 옮겨 온 설정"에 그대로 |
+| **새 답변으로 덮는다** | `APP_URL`, `GITEA_EXTERNAL_URL`, `GIT_SSH_DOMAIN`, `RBI_PUBLIC_ORIGIN`, `ACME_DOMAINS`, `DEPLOY_MODE`, `COMPOSE_PROFILES`, `HAIRPIN_HOST`·`RP_LAN_IP`, `JW_NET_PREFIX`, `BACKEND_WORKERS`, `JW_REGISTRY`·`JW_VERSION`, nginx `site.d`, 회의 서버 설정(새 서버의 공인 주소), 저장소 볼륨. 원래 서버에 딸린 값(`GPU_HOST_IP`, `JW_HOST_REPO`, `BACKUP_VOLUME`, `GITEA_DATA_PATH`, `MCP_PUBLIC_URL`, `DOMAIN_ALIAS`, `DATABASE_URL` 등)은 옮기지 않는다 |
+| **새로 만든다** | 설치 관리자 내부 API 키(`JW_INSTALLER_KEY`), 설치 토큰·세션·설치 관리자의 인증서, 백업에 없던 비밀값 |
+
+메일 서명 키(DKIM)는 데이터와 함께 돌아온 것을 이어 쓴다(등록해 둔 DNS 레코드와 맞아야 한다).
+
+### 단계
+
+| 단계 | 하는 일 | 대표 실패 원인 |
 |---|---|---|
-| `POST /api/restore/upload` (multipart `file`) | 백업 파일 올리기(진행률은 브라우저가 잰다) | `{"status": "ok"\|"invalid"\|"not_found", "name", "size_bytes"}` |
-| `POST /api/restore/path` `{"path"}` | 서버에 이미 있는 백업 파일 확인 | 위와 같음 |
-| `GET /api/restore/review` | 백업의 내용 — 만든 때, 버전(`version_status`: `ok`/`newer`), 구역, 계정 수, 용량, 저장소, 파일 포함 여부, 접속 주소 | `RestoreReview` |
-| `POST /api/restore/apply` `{"domain", "storage"}` | 복원 시작(바꿀 접속 주소·저장소) | 202 |
-| `GET /api/restore/apply` · `/apply/stream` | 진행(적용과 같은 형태, SSE 는 `status`·`end`) | `ApplyState` |
-| `POST /api/restore/apply/retry` | 실패한 단계부터 다시 | 202 |
+| `unpack` | 백업 설정 + 새 답변으로 스택 파일 쓰기(위 병합), `compose config -q`. 도커 볼륨 저장소면 볼륨·표식까지 | `restore_backup_missing`, `restore_config_failed`, `compose_invalid` |
+| `storage` | (NFS·지정 폴더일 때만) 표식 대조 → 볼륨 만들기 | `storage_marker_missing`, `storage_other_install`, NFS 원인들 |
+| `pull` | 이미지 받기 | `image_pull_failed` |
+| `database` | postgres·redis 시작(빈 DB) → 메일·코드 저장소 컨테이너를 **만들기만** 하고(볼륨이 생긴다) → `compose run backend python -m app.cli restore <백업> --yes --json --items db,mail,gitea,plugins-data,app-signing[,certs]` → 메일 서명 키 이어 쓰기, 스택 파일 다시 쓰기 → `migrate` | `database_not_ready`, `restore_database_failed`(`stage`·`detail`·`state` — backend 의 복원 단계 이름과 그 뒤 DB 상태), `database_migrate_failed` |
+| `files` | (백업에 파일이 있을 때만) 백업 안의 `files.tar` 를 저장소에 푼다 — 보조 컨테이너가 root 로 백업을 연 뒤 backend 의 사용자(1000:1000)로 권한을 내려 쓴다(root 를 낮추는 NFS 내보내기에도 된다). 저장소의 기존 내용은 비운다 | `restore_files_failed` |
+| `cert` | 인증서(설치와 같다) | `cert_issue_failed`(대안: 임시 인증서) |
+| `zones` | 구역 시작·연결(코드 저장소의 로그인 원본·OAuth 클라이언트를 새 주소로 다시 등록) → 확인(앞단으로 `/api/health`, 계정 수 = 백업의 계정 수) → 잠금 → 꺼내 둔 설정·암호·올린 사본 지우기 | `service_not_ready`, `git_*` |
+
+- 인증서 항목(`certs`)은 접속 주소가 백업과 같고 자동 발급일 때만 되돌린다(받아 둔 인증서를 이어 쓴다). 주소가 바뀌었거나 임시 인증서면 건너뛴다.
+- 관리자 계정은 만들지 않는다. DB 에 저장되는 설정(외부 SMTP 의 보안 방식·AI 제공자)도 덮어쓰지 않는다 — 백업과 함께 온다.
+- 실패하면 그 단계부터 다시(`retry`). 상태에는 `mode: "restore"` 와 완료 화면용 `restore: {"files": restored|not_included|nfs, "storage_kind", "cert", "domain_changed"}` 가 붙는다.
+
+### 무인(답변 파일)
+
+```json
+{
+  "version": 1,
+  "mode": "restore",
+  "restore": { "path": "/srv/backups/20260101_030000-full.jwbak" },
+  "access": { "domain": "ws.example.com", "network": "direct", "cert": "temporary" },
+  "storage": { "kind": "local" }
+}
+```
+
+```bash
+docker exec jw-installer jw apply --answers /data/restore.json --dry-run   # 백업 확인·검증·단계 목록(아무것도 남기지 않는다)
+docker exec jw-installer jw apply --answers /data/restore.json
+```
+
+`access.domain` 을 비우면 백업의 주소, `advanced.subnet` 을 안 적으면 기본 대역이다. 접속 주소가 아직 이 서버를 가리키지 않으면 `"cert": "temporary"` 로 적는다. 암호 보호 백업은 `restore.password_file` 또는 `-e JW_BACKUP_PASSWORD`.
+
+### 끝난 뒤
+
+접속 주소의 레코드를 이 서버로 옮기고, 임시 인증서였으면 관리 › 보안의 인증서 카드에서 발급하고(§15), 확인한 뒤 원래 서버를 끈다(두 서버를 같이 쓰면 데이터가 갈라진다). 세션은 백업에 없다 — 모두 다시 로그인한다.
+
+## 15. 인증서 다시 발급 · 보류된 구역 연결
+
+임시(자체 서명) 인증서로 설치·복원한 서버를 신뢰되는 인증서로 바꾸는 길이다. 화면은 관리 › 보안의 "인증서" 카드, backend 는 `/api/admin/system/cert…` 가 아래를 대신 부른다. 코드는 `installer/app/certctl.py`.
+
+| 메서드·경로 | 하는 일 |
+|---|---|
+| `GET /internal/cert` | `{"managed"(이 서버가 TLS 를 끝내는가), "mode": auto\|upload\|temporary\|proxy, "temporary", "domain", "names", "wanted_names", "not_after", "days_left", "issuer", "self_signed", "pending": [구역 id], "job"}` |
+| `POST /internal/cert/reissue` `{"mode": "auto"}` | Let's Encrypt 에 다시 요청한다(접속 주소가 이 서버를 가리키고 80 이 밖에서 닿아야 한다) |
+| `POST /internal/cert/reissue` `{"mode": "upload", "cert", "key"}` | 가진 인증서로 바꾼다. 검증은 마법사의 인증서 확인과 같고, 걸리면 `422 cert_invalid` + `checks` |
+| `POST /internal/zones/<id>/reconnect` | 보류된 연결을 다시 시도. 여전히 안 되면 작업이 `failed`(`connection_still_pending`) |
+
+작업(`kind: "cert"`, `zone: null`)의 단계는 `issue`(답변·설정을 바꾸고 발급·배치) → `reload`(nginx 재시작, 회의 서버 재시작, 자동 발급이면 갱신 컨테이너 시작, backend 다시 만들기) → `reconnect`(보류된 구역의 `connect` 훅 — 코드 저장소의 로그인 연동). `issue` 가 실패하면 답변·설정을 되돌리고 **쓰던 인증서를 다시 놓는다**(자동 발급을 시도하며 임시 인증서의 링크를 뗐을 수 있다). 거부: `409 cert_managed_by_proxy`(앞단 프록시가 맡는 설치), `422 cert_auto_needs_domain`, `409 busy`.
+
+구역 연결이 보류되는 경우는 지금 하나다: 코드 저장소의 로그인 원본 등록(Gitea 가 접속 주소의 인증서를 믿지 못할 때). `GET /internal/zones` 의 그 구역 행에 `pending: true` 가 붙고, 관리 › 구역에 "연결 보류"와 "다시 연결"이 보인다.

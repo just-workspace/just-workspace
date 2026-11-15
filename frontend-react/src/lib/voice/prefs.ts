@@ -30,7 +30,6 @@ export interface VoicePrefs extends VoiceSendConfig {
 export const DEFAULT_VOICE_PREFS: VoicePrefs = {
   tier: 'voice',
   musicBitrate: MUSIC_BITRATE_DEFAULT,
-  krisp: true,
   echoCancellation: true,
   noiseSuppression: true,
   autoGainControl: true,
@@ -53,7 +52,6 @@ export function normalizeVoicePrefs(raw: unknown): VoicePrefs {
   return {
     tier,
     musicBitrate: clampMusicBitrate(Number(o.musicBitrate ?? MUSIC_BITRATE_DEFAULT)),
-    krisp: o.krisp !== false,
     echoCancellation: o.echoCancellation !== false,
     noiseSuppression: o.noiseSuppression !== false,
     autoGainControl: o.autoGainControl !== false,

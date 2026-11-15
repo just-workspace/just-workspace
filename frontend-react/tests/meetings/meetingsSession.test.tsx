@@ -60,7 +60,6 @@ vi.mock('livekit-client', () => {
     DisconnectReason: { CLIENT_INITIATED: 1, DUPLICATE_IDENTITY: 2, PARTICIPANT_REMOVED: 4, ROOM_DELETED: 5 },
   }
 })
-vi.mock('@livekit/krisp-noise-filter', () => ({ KrispNoiseFilter: () => ({}), isKrispNoiseFilterSupported: () => false }))
 vi.mock('~/lib/api', async (orig) => {
   const mod = await orig<typeof import('~/lib/api')>()
   return { ...mod, $fetch: vi.fn() }
@@ -92,7 +91,6 @@ beforeEach(async () => {
   rooms.length = 0
   vi.mocked($fetch).mockReset()
   tokenOk()
-  m.meetingsStore.setState({ noiseEnabled: false, noiseSupported: false })
 })
 
 describe('접속 세대 번호', () => {

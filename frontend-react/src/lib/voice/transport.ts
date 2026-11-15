@@ -20,8 +20,6 @@ export interface VoiceSendConfig {
   musicBitrate: number
   /** 마이크 장치. 비우면 기본 */
   micDeviceId?: string
-  /** Krisp 잡음 제거(Opus 단계 + noiseSuppression 켬일 때만) */
-  krisp: boolean
   /**
    * 음성 처리 — 음질 단계와 별개(디스코드처럼). 비우면 켬. Opus 단계(voice·music)만 읽는다.
    * 무손실·하이레조는 비트 그대로가 목적이라 늘 끔. 음악 단계에서 에코 제거를 켜면 브라우저가 모노로 합치므로 모노로 보낸다.

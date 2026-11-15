@@ -8,12 +8,12 @@
  *    (마이크가 음성 단계라도 그동안 DTX·FEC 가 꺼진다 — encodings.maxBitrate 32k 는 그대로).
  *  · 받은 소리는 자체 숨은 <div> 안 <audio> 로 낸다(회의 화면이 없어도 소리가 나야 한다). 듣기 끔 = 요소 muted.
  *  · 통계는 송신 트랙 getRTCStatsReport(sender.getStats) + 수신 트랙 것 → lib/voice/stats.summarizeStats.
- *  · 레벨 미터는 publish 중인 MediaStreamTrack(Krisp 가 붙었으면 처리 뒤 트랙)을 AudioContext 로 갈라 L/R RMS.
+ *  · 레벨 미터는 publish 중인 MediaStreamTrack 을 AudioContext 로 갈라 L/R RMS.
  */
 import type {
   LocalAudioTrack, LocalTrack, Participant, RemoteTrack, RemoteTrackPublication, Room as RoomT, Track as TrackT,
 } from 'livekit-client'
-import { captureFor, fmtpFor, isOpusTier, musicStereo, processingOf, publishFor, screenAudioConfig } from '../opus'
+import { captureFor, fmtpFor, isOpusTier, musicStereo, publishFor, screenAudioConfig } from '../opus'
 import { installSdpMunger, setActiveOpusFmtp } from '../sdp'
 import { EMPTY_STATS, rms, rmsToDb, summarizeStats, type StatsSnapshot } from '../stats'
 import type {
@@ -28,15 +28,6 @@ function loadLk(): Promise<LK> {
   if (_lk) return Promise.resolve(_lk)
   _lkLoading ??= import('livekit-client').then((m) => { _lk = m; return m }, (e) => { _lkLoading = null; throw e })
   return _lkLoading
-}
-
-/** useMeetings 와 같은 키 — 이 탭에서 Krisp 가 이미 실패했으면 다시 시도하지 않는다 */
-const KRISP_OFF_KEY = 'meet.krisp.unavailable'
-function krispKnownUnavailable(): boolean {
-  try { return sessionStorage.getItem(KRISP_OFF_KEY) === '1' } catch { return false }
-}
-function markKrispUnavailable() {
-  try { sessionStorage.setItem(KRISP_OFF_KEY, '1') } catch { /* noop */ }
 }
 
 type Listeners = { [K in keyof VoiceTransportEvents]: Set<VoiceTransportEvents[K]> }
@@ -57,7 +48,6 @@ export class LiveKitVoiceTransport implements VoiceTransport {
   private screenAudio: LocalAudioTrack | null = null
   private muted = false
   private deafened = false
-  private krispActive = false
   private sink: HTMLDivElement | null = null
   private attached = new Map<string, HTMLMediaElement[]>()
   private listeners: Listeners = { state: new Set(), peers: new Set(), ended: new Set() }
@@ -167,7 +157,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
       dynacast: false,
       // 캡처·publish 기본값은 트랙을 직접 만들어 넘기므로 여기선 보조(화면 공유 등)
       publishDefaults: { ...publishFor(this.cfg), videoCodec: 'vp9' },
-      audioCaptureDefaults: captureFor(this.cfg, false),
+      audioCaptureDefaults: captureFor(this.cfg),
       ...(this.speakerId() ? { audioOutput: { deviceId: this.speakerId()! } } : {}),
     })
     this.room = room
@@ -257,7 +247,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
         const prev = this.micCfg
         const now = this.cfg ?? next
         const changed = !prev || prev.tier !== now.tier || prev.musicBitrate !== now.musicBitrate
-          || prev.micDeviceId !== now.micDeviceId || prev.krisp !== now.krisp
+          || prev.micDeviceId !== now.micDeviceId
           || prev.echoCancellation !== now.echoCancellation || prev.noiseSuppression !== now.noiseSuppression || prev.autoGainControl !== now.autoGainControl
         // 마이크 권한이 없어 듣기만이면 [다시 시도] = setSend — 바뀐 게 없어도 다시 만든다
         if (changed || this.micDenied) await this.publishMic()
@@ -288,30 +278,15 @@ export class LiveKitVoiceTransport implements VoiceTransport {
     if (old) {
       try { await room.localParticipant.unpublishTrack(old, true) } catch { /* noop */ }
     }
-    this.krispActive = false
-    // 스테레오로 보낼 때는 Krisp 를 붙이지 않는다 — 모노 처리기라 한 채널만 채울 수 있다(브라우저 잡음 제거는 그대로)
-    const stereo = musicStereo(cfg) && !this.monoFallback
-    const wantKrisp = isOpusTier(cfg.tier) && cfg.krisp && processingOf(cfg).ns && !stereo && !krispKnownUnavailable()
     let track: LocalAudioTrack
     try {
       // 한 채널만 쓰는 2채널 장치로 판정됐으면(monoFallback) 모노로 잡는다 — 브라우저가 두 채널을 합쳐 양쪽 귀에 난다
-      track = await lk.createLocalAudioTrack({ ...captureFor(cfg, false), ...(this.monoFallback ? { channelCount: 1 } : {}) })
+      track = await lk.createLocalAudioTrack({ ...captureFor(cfg), ...(this.monoFallback ? { channelCount: 1 } : {}) })
       this.micDenied = false
     } catch (e) {
       // 권한 없음·장치 없음 — 들어가는 건 막지 않는다("권한 없음": 듣기만으로 접속). 그 밖의 오류는 그대로 던진다
       if (isMicUnavailable(e)) { this.micDenied = true; this.emit('peers', this.peers()); return }
       throw e
-    }
-    if (wantKrisp) {
-      try {
-        const { KrispNoiseFilter, isKrispNoiseFilterSupported } = await import('@livekit/krisp-noise-filter')
-        if (isKrispNoiseFilterSupported()) {
-          await track.setProcessor(KrispNoiseFilter())
-          this.krispActive = true
-          // Krisp 가 붙었으니 브라우저 NS 는 끈다(이중 처리)
-          try { await track.mediaStreamTrack.applyConstraints({ noiseSuppression: false }) } catch { /* noop */ }
-        } else markKrispUnavailable()
-      } catch { markKrispUnavailable() }
     }
     try {
       if (gone()) { track.stop(); return }

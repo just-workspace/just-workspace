@@ -136,7 +136,7 @@ export async function applyMicGate(): Promise<void> {
 /** 송신 설정(prefs → 전송에 주는 모양) — 고급(샘플레이트·비트심도·버퍼 목표)도 함께 넘긴다(무손실 전송이 읽는다) */
 export function sendConfigOf(p: VoicePrefs): VoiceSendConfig & { speakerDeviceId?: string } {
   return {
-    tier: p.tier, musicBitrate: p.musicBitrate, micDeviceId: p.micDeviceId, krisp: p.krisp, speakerDeviceId: p.speakerDeviceId,
+    tier: p.tier, musicBitrate: p.musicBitrate, micDeviceId: p.micDeviceId, speakerDeviceId: p.speakerDeviceId,
     echoCancellation: p.echoCancellation, noiseSuppression: p.noiseSuppression, autoGainControl: p.autoGainControl,
     sampleRate: p.sampleRate, bitDepth: p.bitDepth, bufferTarget: p.bufferTarget,
   }
@@ -373,7 +373,7 @@ export async function setVoicePrefs(patch: Partial<VoicePrefs>): Promise<void> {
     if (ch) await joinVoice(ch)
     return
   }
-  const live = ['tier', 'musicBitrate', 'micDeviceId', 'krisp', 'speakerDeviceId', 'sampleRate', 'bitDepth', 'bufferTarget',
+  const live = ['tier', 'musicBitrate', 'micDeviceId', 'speakerDeviceId', 'sampleRate', 'bitDepth', 'bufferTarget',
     'echoCancellation', 'noiseSuppression', 'autoGainControl'].some(k => k in patch)
   if (!live) return
   await applySend(prefs)

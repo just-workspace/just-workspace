@@ -112,18 +112,9 @@ LGPL 은 라이브러리를 **쓰는** 프로그램에 자기 조건을 요구�
 
 ## 4. 오픈소스가 아닌 의존성
 
-| 구성 요소 | 라이선스 | 들어가는 곳 |
-|---|---|---|
-| `@livekit/krisp-noise-filter` 0.4.6 | LiveKit 이용약관(`package.json` 의 `license` 가 약관 주소를 가리킨다. 패키지에 라이선스 파일이 없고 배포물은 난독화되어 있다) | frontend-react 이미지의 웹 번들 |
+웹·서버 이미지에는 오픈소스가 아닌 의존성이 없다.
 
-사실:
-
-- 회의와 음성 채널의 잡음 제거에 쓴다. `frontend-react/src/composables/useMeetings.ts` 와 `frontend-react/src/lib/voice/transports/livekit.ts` 가 필요할 때 동적으로 불러온다. 지연 로드 조각으로 번들에 들어가 이미지와 함께 배포된다.
-- LiveKit Cloud 에 접속했을 때만 동작한다. 함께 배포하는 자체 운영 livekit-server 에서는 인증·모델 주소를 받지 못해 실패하고, 화면은 브라우저 기본 잡음 억제로 넘어간다. 즉 **기본 구성에서는 쓰이지 않는 코드가 배포물에 들어 있다.**
-
-해석이 필요한 것: 이 패키지를 MIT 프로젝트의 공개 이미지에 담아 **재배포해도 되는지**는 LiveKit 이용약관을 읽고 판단해야 한다. 확인하지 못했다 — 5절.
-
-모바일 앱의 Android 푸시(Firebase·Google Play 서비스)와 Android SDK 도 Google 약관을 따르는 비오픈소스 부분이 있다. `google-services.json` 을 넣어 빌드할 때만 해당한다.
+모바일 앱의 Android 푸시(Firebase·Google Play 서비스)와 Android SDK 에는 Google 약관을 따르는 비오픈소스 부분이 있다. `google-services.json` 을 넣어 빌드할 때만 해당한다.
 
 ## 5. 배포 전 확인 필요
 
@@ -133,11 +124,10 @@ LGPL 은 라이브러리를 **쓰는** 프로그램에 자기 조건을 요구�
 2. **GPL·LGPL 구성 요소의 소스 제공 방법.** 대상: aioimaplib, ldap3, psycopg, H2Orestart, pandoc, ffmpeg, iptables·iproute2·procps, libvips, OpenJDK, mailserver 이미지 안의 GPL 프로그램, 베이스 OS. 상위 배포처(PyPI·데비안·GitHub) 주소를 안내하는 것으로 충분한지, 해당 버전의 소스를 직접 보관·제공해야 하는지, 서면 제공 약속을 둘지 정해야 한다.
 3. **aioimaplib 을 유지할지.** 유지하면 backend 이미지가 GPL-3.0 조건으로 배포된다는 점을 README 와 이 문서에 계속 밝혀야 한다. 바꾸면 3.3 이 없어진다.
 4. **H2Orestart(GPL-3.0)를 docconv 이미지에 넣어 배포할지.** 빌드 인자 `H2ORESTART_VERSION` 을 비우면 넣지 않고 빌드된다(HWP 변환을 잃는다).
-5. **`@livekit/krisp-noise-filter` 의 재배포 가능 여부.** 약관 확인 전에는 공개 이미지에 넣지 않는 편이 안전하다. 자체 운영 서버에서는 동작하지 않으므로 빼도 기본 구성의 기능은 줄지 않는다.
-6. **오프라인 묶음에 남의 이미지를 담을지.** 담으면 OnlyOffice·SearXNG(AGPL-3.0), Redis(삼중 라이선스), kasmweb/chromium(GPL-2.0 인 KasmVNC 포함) 등을 우리가 재배포하는 것이 되고, 각 라이선스의 배포 의무와 상표 사용 조건이 우리에게 생긴다.
-7. **mailserver 파생 이미지.** 원 이미지를 그대로 받게 하고 보안 갱신은 다른 방법으로 할지, 파생 이미지를 계속 배포하면서 2번을 처리할지.
-8. **버전이 고정되지 않은 데비안 패키지.** pandoc, ffmpeg, LibreOffice 등은 빌드 시점의 판이 들어가므로, 배포한 이미지에 들어간 정확한 버전(소스 제공의 기준)을 빌드 때 기록해 둘 필요가 있다.
-9. **아이콘 고지.** `frontend-react/src/utils/icons.ts` 에 Lucide(ISC)에서 옮긴 SVG 경로가 있다. ISC 는 저작권 고지 유지를 요구한다.
+5. **오프라인 묶음에 남의 이미지를 담을지.** 담으면 OnlyOffice·SearXNG(AGPL-3.0), Redis(삼중 라이선스), kasmweb/chromium(GPL-2.0 인 KasmVNC 포함) 등을 우리가 재배포하는 것이 되고, 각 라이선스의 배포 의무와 상표 사용 조건이 우리에게 생긴다.
+6. **mailserver 파생 이미지.** 원 이미지를 그대로 받게 하고 보안 갱신은 다른 방법으로 할지, 파생 이미지를 계속 배포하면서 2번을 처리할지.
+7. **버전이 고정되지 않은 데비안 패키지.** pandoc, ffmpeg, LibreOffice 등은 빌드 시점의 판이 들어가므로, 배포한 이미지에 들어간 정확한 버전(소스 제공의 기준)을 빌드 때 기록해 둘 필요가 있다.
+8. **아이콘 고지.** `frontend-react/src/utils/icons.ts` 에 Lucide(ISC)에서 옮긴 SVG 경로가 있다. ISC 는 저작권 고지 유지를 요구한다.
 10. **데스크톱·모바일 앱.** Electron 설치 파일에는 Chromium 과 FFmpeg(LGPL-2.1+)이 들어간다. 설치 파일에 제3자 고지를 넣는지 확인한다.
 
 ## 6. 운영자가 알아 둘 것

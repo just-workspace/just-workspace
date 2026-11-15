@@ -75,7 +75,7 @@ function fakeInner() {
   return { inner: inner as unknown as ConstructorParameters<typeof HiresVoiceTransport>[1], calls }
 }
 
-const join = { token: 'h.' + btoa(JSON.stringify({ video: { room: 'voice-c1' } })).replace(/=+$/, '') + '.s', url: 'wss://lk', identity: 'lk-me', muted: false, send: { tier: 'hires' as const, musicBitrate: 320_000, krisp: false } }
+const join = { token: 'h.' + btoa(JSON.stringify({ video: { room: 'voice-c1' } })).replace(/=+$/, '') + '.s', url: 'wss://lk', identity: 'lk-me', muted: false, send: { tier: 'hires' as const, musicBitrate: 320_000 } }
 
 describe('HiresVoiceTransport', () => {
   beforeEach(() => { setHiresUiHooks(null) })
@@ -165,7 +165,7 @@ describe('HiresVoiceTransport', () => {
     setHiresUiHooks({ confirmExclusive: async () => true, reportExclusiveError: () => {} })
     const t = new HiresVoiceTransport(b.bridge, li.inner)
     await t.join(join)
-    await t.setSend({ tier: 'music', musicBitrate: 256_000, krisp: false })
+    await t.setSend({ tier: 'music', musicBitrate: 256_000 })
     expect(b.calls.close.length).toBe(1)
     expect(li.calls.setSend.at(-1)?.tier).toBe('music')
     expect(t.effectiveTier()).toBe('music')

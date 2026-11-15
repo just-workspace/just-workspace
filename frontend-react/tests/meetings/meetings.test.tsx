@@ -198,12 +198,6 @@ describe('MeetingsControls', () => {
     fireEvent.click(screen.getByTitle(t('meetings.controls.vbg')))
     expect(onSetBackground).toHaveBeenCalledWith(null)
   })
-
-  it('노이즈 제거 미지원이면 비활성 + 안내 툴팁', () => {
-    render(<MeetingsControls cameraEnabled micEnabled screenShareEnabled={false} noiseSupported={false} />)
-    const b = screen.getByTitle(t('meetings.controls.noiseUnsupported')) as HTMLButtonElement
-    expect(b.disabled).toBe(true)
-  })
 })
 
 describe('MeetingsSidebar', () => {

@@ -131,7 +131,6 @@ The source in this repository is [MIT](LICENSE). Some of what it is used with is
 
 - **Copyleft components inside our images** — the IMAP client `aioimaplib` (GPL-3.0) plus pandoc and ffmpeg (GPL) in the backend image, LibreOffice and the HWP extension H2Orestart (GPL-3.0) in the document conversion image, the mail server image (derived from docker-mailserver, which contains GPL programs), and others. Distributing an image is distribution, so those licenses' obligations apply.
 - **Components pulled from their original publishers** — OnlyOffice Document Server and SearXNG (AGPL-3.0), Redis 8 (your choice of RSALv2, SSPLv1 or AGPL-3.0) and others. They are not included in our images.
-- **A dependency that is not open source** — `@livekit/krisp-noise-filter`, used for noise suppression in meetings, is not under an open-source license (it is governed by LiveKit's terms) and is part of the web app bundle.
 
 What goes into which image and which obligations follow is described in [docs/licensing.md](docs/licensing.md) (Korean); the full list is in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 

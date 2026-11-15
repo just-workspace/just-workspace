@@ -1,5 +1,5 @@
 /**
- * 회의 컨트롤 바 — 카메라·마이크·녹화(호스트)·노이즈 제거(Krisp)·화면 공유·배경 블러·가상 배경·참가자·채팅·장치 + 나가기.
+ * 회의 컨트롤 바 — 카메라·마이크·녹화(호스트)·화면 공유·배경 블러·가상 배경·참가자·채팅·장치 + 나가기.
  */
 import { useRef, type ChangeEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -18,10 +18,6 @@ export interface MeetingsControlsProps {
   vbgEnabled?: boolean
   /** 배경 처리 중(블러·가상 배경 공용) */
   blurBusy?: boolean
-  noiseEnabled?: boolean
-  noiseBusy?: boolean
-  /** false 면 노이즈 제거 버튼 비활성 + "미지원" 툴팁 */
-  noiseSupported?: boolean
   deviceMenuOpen?: boolean
   /** 호스트만 녹화 버튼 */
   isHost?: boolean
@@ -33,7 +29,6 @@ export interface MeetingsControlsProps {
   onToggleMic?: () => void
   onToggleScreen?: () => void
   onToggleBlur?: () => void
-  onToggleNoise?: () => void
   onToggleDeviceMenu?: () => void
   /** 가상 배경 이미지(null = 해제) */
   onSetBackground?: (file: File | null) => void
@@ -47,7 +42,7 @@ const btn = 'inline-flex items-center justify-center h-14 w-14 sm:h-[52px] sm:w-
 /** 회의 컨트롤 바 */
 export function MeetingsControls(props: MeetingsControlsProps) {
   const {
-    cameraEnabled, micEnabled, screenShareEnabled, blurEnabled, vbgEnabled, blurBusy, noiseEnabled, noiseBusy, noiseSupported,
+    cameraEnabled, micEnabled, screenShareEnabled, blurEnabled, vbgEnabled, blurBusy,
     deviceMenuOpen, isHost, recording, recordingBusy, sidebarOpen, sidebarTab,
   } = props
   const { t } = useI18n()
@@ -112,21 +107,6 @@ export function MeetingsControls(props: MeetingsControlsProps) {
             <span className={cn('text-[11px] font-medium', recording ? 'text-danger' : 'text-muted-foreground')}>{recording ? t('meetings.controls.recStop') : t('meetings.controls.recStart')}</span>
           </div>
         )}
-
-        {/* 노이즈 제거(Krisp) 토글 — 마이크 켜져 있을 때만 */}
-        <div className="flex flex-col items-center gap-1">
-          <button
-            onClick={() => props.onToggleNoise?.()}
-            disabled={!micEnabled || noiseBusy || noiseSupported === false}
-            title={noiseSupported === false ? t('meetings.controls.noiseUnsupported') : t('meetings.controls.noise')}
-            className={cn(btn, 'disabled:opacity-40', noiseEnabled ? 'bg-primary/15 text-primary hover:bg-primary/25' : 'bg-muted hover:bg-muted/80')}
-          >
-            {noiseBusy
-              ? <UiIcon name="loader" strokeWidth={2.4} className="h-5 w-5 animate-spin" />
-              : <UiIcon name="audio-lines" className="h-5 w-5" />}
-          </button>
-          <span className="text-[11px] font-medium text-muted-foreground">{t('meetings.controls.noise')}</span>
-        </div>
 
         {/* 화면공유 토글 */}
         <div className="flex flex-col items-center gap-1">

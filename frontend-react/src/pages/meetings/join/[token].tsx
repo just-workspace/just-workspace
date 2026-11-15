@@ -24,7 +24,7 @@ import { authStore, useAuth } from '~/composables/useAuth'
 import { addToast } from '~/composables/useToast'
 import {
   meetingsStore, useMeetings, reacquireMic, joinRoomWithToken, leaveRoom, cancelPendingJoin, isJoinCancelled,
-  runMediaToggle, toggleBackgroundBlur, setVirtualBackground, toggleNoiseCancellation,
+  runMediaToggle, toggleBackgroundBlur, setVirtualBackground,
   loadLivekit,
 } from '~/composables/useMeetings'
 import { useMeetingSessionStats } from '~/composables/useMeetingSessionStats'
@@ -75,7 +75,7 @@ function MeetingJoin() {
 
   const {
     connected, connectionState, rejoinAttempt, micInterrupted, remoteEnded, currentRoom, currentRoomName, participants,
-    cameraEnabled, micEnabled, screenShareEnabled, blurEnabled, vbgEnabled, blurBusy, noiseEnabled, noiseBusy, noiseSupported,
+    cameraEnabled, micEnabled, screenShareEnabled, blurEnabled, vbgEnabled, blurBusy,
   } = useMeetings()
   const { appName } = useSiteConfig()
   const { user } = useAuth()
@@ -551,9 +551,6 @@ function MeetingJoin() {
             blurEnabled={blurEnabled}
             vbgEnabled={vbgEnabled}
             blurBusy={blurBusy}
-            noiseEnabled={noiseEnabled}
-            noiseBusy={noiseBusy}
-            noiseSupported={noiseSupported}
             deviceMenuOpen={deviceMenuOpen}
             sidebarOpen={sidebarOpen}
             sidebarTab={sidebarTab}
@@ -561,7 +558,6 @@ function MeetingJoin() {
             onToggleMic={() => void runMediaToggle('mic')}
             onToggleScreen={() => void runMediaToggle('screen')}
             onToggleBlur={() => void toggleBackgroundBlur()}
-            onToggleNoise={() => void toggleNoiseCancellation()}
             onSetBackground={f => void setVirtualBackground(f)}
             onLeave={() => void handleLeave()}
             onToggleSidebar={handleSidebarToggle}

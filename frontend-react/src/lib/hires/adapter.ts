@@ -288,7 +288,7 @@ export class HiresVoiceTransport implements VoiceTransport {
     }
     if (this.hiresUp) {
       if (prev?.bufferTarget !== cfg.bufferTarget && cfg.bufferTarget) await this.bridge?.setBufferPreset(cfg.bufferTarget)
-      // LiveKit 쪽(장치·Krisp 등)은 그대로 전달 — 음악 레시피 유지
+      // LiveKit 쪽(장치 등)은 그대로 전달 — 음악 레시피 유지
       await this.inner.setSend({ ...cfg, tier: 'music' })
       return
     }

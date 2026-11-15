@@ -1,7 +1,7 @@
 /**
  * Opus 레시피 — 순수 함수. 단위 테스트 대상(tests/voice/opus.test.ts).
  *
- *  음성: 48k mono ~32 kbps, AEC/NS/AGC 켬(Krisp 가 붙으면 브라우저 NS 는 끔), DTX 켬, RED 켬, 인밴드 FEC 켬.
+ *  음성: 48k mono ~32 kbps, AEC/NS/AGC 켬, DTX 켬, RED 켬, 인밴드 FEC 켬.
  *  음악: 48k stereo 256~510 kbps, CBR, DTX 끔, RED 끔, FEC 끔(CELT 엔 인밴드 FEC 가 없다 — RFC 6716),
  *        forceStereo(stereo=1;sprop-stereo=1). Chrome 155 실측: maxaveragebitrate=510000;cbr=1 → ≈509 kbps.
  *
@@ -71,11 +71,10 @@ export function musicStereo(cfg: VoiceSendConfig): boolean {
   return cfg.tier === 'music' && !processingOf(cfg).aec
 }
 
-export function captureFor(cfg: VoiceSendConfig, krispActive: boolean): OpusCapture {
+export function captureFor(cfg: VoiceSendConfig): OpusCapture {
   const dev = cfg.micDeviceId ? { deviceId: cfg.micDeviceId } : {}
   const p = processingOf(cfg)
-  // Krisp 가 붙으면 브라우저 NS 는 이중 처리라 끈다(useMeetings 와 같은 규칙)
-  return { echoCancellation: p.aec, noiseSuppression: p.ns && !krispActive, autoGainControl: p.agc, channelCount: musicStereo(cfg) ? 2 : 1, sampleRate: 48_000, ...dev }
+  return { echoCancellation: p.aec, noiseSuppression: p.ns, autoGainControl: p.agc, channelCount: musicStereo(cfg) ? 2 : 1, sampleRate: 48_000, ...dev }
 }
 
 export function publishFor(cfg: VoiceSendConfig): OpusPublish {
@@ -94,7 +93,7 @@ export function fmtpFor(cfg: VoiceSendConfig): OpusFmtp {
 
 /** 화면 공유 소리(음악 공유)는 늘 음악 레시피 — 비트레이트는 음악 설정값 */
 export function screenAudioConfig(cfg: VoiceSendConfig): VoiceSendConfig {
-  return { ...cfg, tier: 'music', micDeviceId: undefined, krisp: false, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+  return { ...cfg, tier: 'music', micDeviceId: undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
 }
 
 /**

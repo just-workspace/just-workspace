@@ -155,10 +155,6 @@ export interface MeetingsState {
   vbgEnabled: boolean
   /** 배경 처리 중(공용) */
   blurBusy: boolean
-  /** Krisp 노이즈 제거 — 기본 켬. 미지원 브라우저면 접속 시 자동으로 꺼진다. */
-  noiseEnabled: boolean
-  noiseBusy: boolean
-  noiseSupported: boolean
   /** Egress 녹화 중 */
   recording: boolean
   recordingBusy: boolean
@@ -176,12 +172,6 @@ export interface MeetingsState {
 }
 
 /** 앱 전역 회의 상태 */
-/** 이 탭에서 Krisp 가 이미 실패했나(_markKrispUnavailable) — 스토어 초기값보다 먼저 정의 */
-const KRISP_OFF_KEY = 'meet.krisp.unavailable'
-function _krispKnownUnavailable(): boolean {
-  try { return sessionStorage.getItem(KRISP_OFF_KEY) === '1' } catch { return false }
-}
-
 export const meetingsStore = createStore<MeetingsState>()(() => ({
   rooms: [],
   loading: false,
@@ -201,9 +191,6 @@ export const meetingsStore = createStore<MeetingsState>()(() => ({
   blurEnabled: false,
   vbgEnabled: false,
   blurBusy: false,
-  noiseEnabled: !_krispKnownUnavailable(),
-  noiseBusy: false,
-  noiseSupported: !_krispKnownUnavailable(),
   recording: false,
   recordingBusy: false,
   inCall: false,
@@ -493,7 +480,7 @@ export function clearUnreadChat() {
 }
 
 // 오디오 상한. 요청대로 320k 를 넣지만 실효는 그보다 훨씬 낮다:
-//  (a) echoCancellation 을 켜면 크롬이 모노로 다운믹스하고 Krisp 도 모노다.
+//  (a) echoCancellation 을 켜면 크롬이 모노로 다운믹스한다.
 //      모노 Opus 는 128k 근처에서 이미 투명해서 320k 는 헤드룸일 뿐이고,
 //      크롬이 SDP maxaveragebitrate 로 다시 클램프한다.
 //  (b) RED 를 켜면 이전 패킷을 함께 실어 업링크가 사실상 2배가 된다.
@@ -573,42 +560,6 @@ function _onUnloadLeave() {
   if (S().connected) void leaveRoom()
 }
 
-/**
- * Krisp(@livekit/krisp-noise-filter)는 LiveKit Cloud 전용 — 접속한 서버의 /settings 로 인증·모델 주소를 받는다.
- * 셀프호스팅 livekit-server 엔 그게 없어 늘 실패한다(404). 예전엔 실패를 삼켜 버튼이 계속 살아 있고,
- * 입장마다 기본 켬으로 같은 실패를 반복했으며, 브라우저 잡음 억제까지 꺼 둔 채였다.
- * 한 번 실패하면 이 탭(세션) 동안 "쓸 수 없음"으로 두고 브라우저 기본 잡음 억제로 돌린다.
- */
-function _markKrispUnavailable(track: any) {
-  const first = S().noiseSupported !== false
-  try { sessionStorage.setItem(KRISP_OFF_KEY, '1') } catch { /* 저장소 막힘 — 이번 화면만 */ }
-  set({ noiseSupported: false, noiseEnabled: false })
-  // Krisp 를 전제로 꺼 둔 브라우저 잡음 억제를 다시 켠다
-  try { void track?.mediaStreamTrack?.applyConstraints?.({ noiseSuppression: true }) } catch { /* noop */ }
-  if (first) addToast('info', t('meetings.controls.noiseUnsupported'))
-}
-
-/** Krisp 노이즈 필터를 현재 마이크 트랙에 건다. 성공 여부를 돌려준다. */
-async function _applyKrisp(): Promise<boolean> {
-  if (S().noiseSupported === false) return false
-  let track: any = null
-  try {
-    track = await _localMicTrack()
-    if (!track) return false
-    const { KrispNoiseFilter, isKrispNoiseFilterSupported } = await import('@livekit/krisp-noise-filter')
-    if (!isKrispNoiseFilterSupported()) {
-      _markKrispUnavailable(track)
-      return false
-    }
-    await track.setProcessor(KrispNoiseFilter())
-    return true
-  } catch (e) {
-    console.warn('[meet] Krisp 적용 실패', e)
-    _markKrispUnavailable(track)
-    return false
-  }
-}
-
 async function connectToRoom(wsUrl: string, token: string, opts: ConnectOptions | undefined, my: number) {
   const { Room, RoomEvent, VideoPresets } = await loadLivekit()
   if (my !== _connSeq) throw new JoinCancelledError()
@@ -627,8 +578,8 @@ async function connectToRoom(wsUrl: string, token: string, opts: ConnectOptions 
       ...(opts?.selectedMicId ? { deviceId: opts.selectedMicId } : {}),
       echoCancellation: true,
       autoGainControl: true,
-      // Krisp 가 붙으면 브라우저 NS 는 이중 처리라 끈다. 못 쓰는 브라우저면 폴백.
-      noiseSuppression: !S().noiseSupported,
+      // 잡음 제거는 브라우저 기본 억제를 쓴다
+      noiseSuppression: true,
     },
     // 장치 설정에서 고른 스피커. 예전엔 emit 까지 왔다가 여기서 버려졌다.
     ...(opts?.selectedSpeakerId ? { audioOutput: { deviceId: opts.selectedSpeakerId } } : {}),
@@ -755,17 +706,6 @@ async function connectToRoom(wsUrl: string, token: string, opts: ConnectOptions 
   // (카메라가 꺼져 있으면 켤 때 toggleCamera 가 건다).
   if (S().cameraEnabled) await _restoreBg()
 
-  // 마이크가 켜져 있으면 노이즈 제거를 바로 건다(기본 켬). 실패하면 조용히 끈다.
-  if (S().micEnabled && S().noiseEnabled) {
-    set({ noiseBusy: true })
-    try {
-      const ok = await _applyKrisp()
-      if (!ok) set({ noiseEnabled: false })
-    } finally {
-      set({ noiseBusy: false })
-    }
-  }
-
   set({ screenShareEnabled: false, micInterrupted: false })
   if (S().micEnabled) void _watchMicTrack()
   void deviceList.refresh()
@@ -805,7 +745,6 @@ export const reacquireMic = async () => {
       await room.localParticipant.setMicrophoneEnabled(false)
       await room.localParticipant.setMicrophoneEnabled(true)
     }
-    if (S().noiseEnabled) { try { await _applyKrisp() } catch { /* noop */ } }
     await _watchMicTrack()
     set({ micInterrupted: false })
     refreshParticipants()
@@ -816,7 +755,6 @@ export const reacquireMic = async () => {
 
 /**
  * 회의 중 장치 전환. LiveKit 이 트랙을 새로 잡아 publish 까지 해 준다.
- * 마이크를 바꾸면 트랙이 갈리므로 Krisp 를 다시 건다.
  */
 export const switchActiveDevice = async (kind: MediaDeviceKind, deviceId: string) => {
   const room = S().currentRoom
@@ -827,12 +765,7 @@ export const switchActiveDevice = async (kind: MediaDeviceKind, deviceId: string
     const key = kind === 'videoinput' ? 'selectedCameraId' : kind === 'audioinput' ? 'selectedMicId' : 'selectedSpeakerId'
     _lastConn = { ..._lastConn, opts: { ..._lastConn.opts, [key]: deviceId } }
   }
-  if (kind === 'audioinput') {
-    if (S().noiseEnabled && S().micEnabled) {
-      try { await _applyKrisp() } catch { /* noop */ }
-    }
-    await _watchMicTrack()
-  }
+  if (kind === 'audioinput') await _watchMicTrack()
   if (kind === 'videoinput') await _restoreBg()
   refreshParticipants()
 }
@@ -1035,7 +968,7 @@ export const setVirtualBackground = async (file: File | null) => {
   }
 }
 
-// ─── 노이즈 제거(Krisp, 마이크 트랙 오디오 프로세서, WASM) ───
+// ─── 내 마이크 트랙 ───
 async function _localMicTrack(): Promise<any | null> {
   const room = S().currentRoom
   if (!room) return null
@@ -1076,27 +1009,6 @@ export const fetchRecordingStatus = async () => {
   } catch { /* noop */ }
 }
 
-export const toggleNoiseCancellation = async () => {
-  if (S().noiseBusy) return
-  const next = !S().noiseEnabled
-  set({ noiseBusy: true })
-  try {
-    if (next) {
-      const ok = await _applyKrisp()
-      if (!ok) return
-    } else {
-      const track = await _localMicTrack()
-      if (!track) return
-      try { await track.stopProcessor() } catch { /* noop */ }
-    }
-    set({ noiseEnabled: next })
-  } catch (e) {
-    console.error('[meet] 노이즈 제거 토글 실패', e)
-  } finally {
-    set({ noiseBusy: false })
-  }
-}
-
 export const toggleCamera = async () => {
   const room = S().currentRoom
   if (!room) return
@@ -1114,9 +1026,7 @@ export const toggleMic = async () => {
   const enabled = !S().micEnabled
   await room.localParticipant.setMicrophoneEnabled(enabled)
   set({ micEnabled: enabled })
-  // 마이크 재활성 시 노이즈 필터 재적용
   if (enabled) {
-    if (S().noiseEnabled) { try { await _applyKrisp() } catch { /* noop */ } }
     await _watchMicTrack()
     set({ micInterrupted: false })
   }
@@ -1223,9 +1133,6 @@ export const useMeetings = () => {
     get blurEnabled() { return track('blurEnabled') },
     get vbgEnabled() { return track('vbgEnabled') },
     get blurBusy() { return track('blurBusy') },
-    get noiseEnabled() { return track('noiseEnabled') },
-    get noiseBusy() { return track('noiseBusy') },
-    get noiseSupported() { return track('noiseSupported') },
     get recording() { return track('recording') },
     get recordingBusy() { return track('recordingBusy') },
     get pendingRequests() { return track('pendingRequests') },
@@ -1236,7 +1143,7 @@ export const useMeetings = () => {
     getMeeting, updateRoom, endRoom, rsvpMeeting,
     getToken, joinRoom, joinRoomWithToken, leaveRoom,
     toggleCamera, toggleMic, toggleScreenShare,
-    toggleBackgroundBlur, setVirtualBackground, toggleNoiseCancellation,
+    toggleBackgroundBlur, setVirtualBackground,
     switchActiveDevice, getActiveDevice,
     toggleRecording, fetchRecordingStatus,
     sendChatMessage, clearUnreadChat,

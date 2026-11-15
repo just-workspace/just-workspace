@@ -13,32 +13,30 @@ const words = { mono: '모노', stereo: '스테레오' }
 
 describe('Opus 레시피(음성·음악)', () => {
   it('음성 — 모노 32k, AEC/NS/AGC 켬, DTX·RED 켬, FEC 켬', () => {
-    const cfg = { tier: 'voice' as const, musicBitrate: 256_000, krisp: true }
-    expect(captureFor(cfg, false)).toMatchObject({ echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48_000 })
-    // Krisp 가 붙으면 브라우저 NS 는 끈다
-    expect(captureFor(cfg, true).noiseSuppression).toBe(false)
+    const cfg = { tier: 'voice' as const, musicBitrate: 256_000 }
+    expect(captureFor(cfg)).toMatchObject({ echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48_000 })
     expect(publishFor(cfg)).toEqual({ audioPreset: { maxBitrate: VOICE_BITRATE }, dtx: true, red: true, forceStereo: false, preConnectBuffer: false })
     expect(fmtpFor(cfg)).toEqual({ maxaveragebitrate: 32_000, stereo: 0, cbr: 0, usedtx: 1, useinbandfec: 1 })
   })
   it('음악 + 음성 처리 기본(켬) — 에코 제거 때문에 모노, 처리 켬, CBR 유지', () => {
-    const cfg = { tier: 'music' as const, musicBitrate: 320_000, krisp: false, micDeviceId: 'mic1' }
-    expect(captureFor(cfg, false)).toEqual({ echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48_000, deviceId: 'mic1' })
+    const cfg = { tier: 'music' as const, musicBitrate: 320_000, micDeviceId: 'mic1' }
+    expect(captureFor(cfg)).toEqual({ echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48_000, deviceId: 'mic1' })
     expect(publishFor(cfg)).toEqual({ audioPreset: { maxBitrate: 320_000 }, dtx: false, red: false, forceStereo: false, preConnectBuffer: false })
     expect(fmtpFor(cfg)).toEqual({ maxaveragebitrate: 320_000, stereo: 0, cbr: 1, usedtx: 0, useinbandfec: 0 })
   })
   it('음성 단계도 처리를 끌 수 있다(단계와 별개)', () => {
-    const cfg = { tier: 'voice' as const, musicBitrate: 256_000, krisp: false, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-    expect(captureFor(cfg, false)).toMatchObject({ echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 })
+    const cfg = { tier: 'voice' as const, musicBitrate: 256_000, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    expect(captureFor(cfg)).toMatchObject({ echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 })
   })
   it('음악 + 처리 끔 — 스테레오, CBR, DTX·RED·FEC 끔, forceStereo', () => {
-    const cfg = { tier: 'music' as const, musicBitrate: 510_000, krisp: true, micDeviceId: 'mic1', echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-    expect(captureFor(cfg, true)).toEqual({ echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2, sampleRate: 48_000, deviceId: 'mic1' })
+    const cfg = { tier: 'music' as const, musicBitrate: 510_000, micDeviceId: 'mic1', echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    expect(captureFor(cfg)).toEqual({ echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2, sampleRate: 48_000, deviceId: 'mic1' })
     expect(publishFor(cfg)).toEqual({ audioPreset: { maxBitrate: 510_000 }, dtx: false, red: false, forceStereo: true, preConnectBuffer: false })
     expect(fmtpFor(cfg)).toEqual({ maxaveragebitrate: 510_000, stereo: 1, cbr: 1, usedtx: 0, useinbandfec: 0 })
-    // 화면 공유 소리는 늘 음악 레시피, 장치·Krisp 는 빼고
-    expect(screenAudioConfig({ tier: 'voice', musicBitrate: 320_000, krisp: true, micDeviceId: 'x' })).toEqual({ tier: 'music', musicBitrate: 320_000, krisp: false, micDeviceId: undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false })
+    // 화면 공유 소리는 늘 음악 레시피, 장치는 빼고
+    expect(screenAudioConfig({ tier: 'voice', musicBitrate: 320_000, micDeviceId: 'x' })).toEqual({ tier: 'music', musicBitrate: 320_000, micDeviceId: undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false })
     // 음악 공유는 마이크 처리 설정과 상관없이 늘 스테레오·처리 끔
-    expect(fmtpFor(screenAudioConfig({ tier: 'voice', musicBitrate: 320_000, krisp: false, echoCancellation: true }))).toMatchObject({ stereo: 1 })
+    expect(fmtpFor(screenAudioConfig({ tier: 'voice', musicBitrate: 320_000, echoCancellation: true }))).toMatchObject({ stereo: 1 })
   })
   it('비트레이트 범위·2k 단위·표기', () => {
     expect(clampMusicBitrate(1)).toBe(MUSIC_BITRATE_MIN)
@@ -93,7 +91,7 @@ describe('SDP 손질(answer opus fmtp)', () => {
   })
   it('opus 가 없는 SDP 는 그대로', () => {
     const sdp = 'v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=rtpmap:96 VP9/90000\r\n'
-    expect(mungeOpusAnswer(sdp, fmtpFor({ tier: 'music', musicBitrate: 256_000, krisp: false }))).toBe(sdp)
+    expect(mungeOpusAnswer(sdp, fmtpFor({ tier: 'music', musicBitrate: 256_000 }))).toBe(sdp)
     expect(parseFmtpLine(null)).toBeNull()
   })
 })
@@ -148,9 +146,9 @@ describe('통계 요약(getStats → 패널 값)', () => {
 
 describe('로컬 설정(voice.quality)', () => {
   beforeEach(() => { localStorage.clear() })
-  it('없으면 기본(음성 · 256k · Krisp 켬), 깨진 값은 바로잡는다', () => {
+  it('없으면 기본(음성 · 256k), 깨진 값은 바로잡는다', () => {
     expect(loadVoicePrefs()).toEqual(DEFAULT_VOICE_PREFS)
-    expect(normalizeVoicePrefs({ tier: 'bogus', musicBitrate: '9999999', krisp: false, micDeviceId: '' })).toMatchObject({ tier: 'voice', musicBitrate: MUSIC_BITRATE_MAX, krisp: false, micDeviceId: undefined })
+    expect(normalizeVoicePrefs({ tier: 'bogus', musicBitrate: '9999999', micDeviceId: '' })).toMatchObject({ tier: 'voice', musicBitrate: MUSIC_BITRATE_MAX, micDeviceId: undefined })
     localStorage.setItem(VOICE_PREFS_KEY, '{not json')
     expect(loadVoicePrefs()).toEqual(DEFAULT_VOICE_PREFS)
   })

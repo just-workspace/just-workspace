@@ -34,9 +34,7 @@ Just Workspace 의 소스는 [MIT](LICENSE) 다. 이 문서는 함께 쓰이는 
 
 ### 1.2 오픈소스가 아닌 것
 
-| 구성 요소 | 버전 | 라이선스 | 들어가는 곳 | 사실 |
-|---|---|---|---|---|
-| `@livekit/krisp-noise-filter` | 0.4.6 | `SEE LICENSE IN https://livekit.io/legal/terms-of-service` (패키지에 LICENSE 파일 없음, 난독화된 배포물) | frontend-react 이미지의 웹 번들(지연 로드 조각) | 회의·음성 채널의 잡음 제거. `frontend-react/src/composables/useMeetings.ts`, `frontend-react/src/lib/voice/transports/livekit.ts` 가 동적으로 불러온다. LiveKit Cloud 에 접속했을 때만 동작하고, 함께 배포하는 자체 운영 livekit-server 에서는 실패해 브라우저 기본 잡음 억제로 넘어간다 |
+웹·서버 이미지에 들어가는 의존성 가운데 오픈소스가 아닌 것은 없다. 모바일 앱의 Android 푸시(Firebase·Google Play 서비스)만 Google 약관을 따른다(`google-services.json` 을 넣어 빌드할 때).
 
 ### 1.3 받아 쓰는 남의 이미지 가운데
 
@@ -181,7 +179,6 @@ apt: `docker-ce-cli` · `docker-compose-plugin`(Apache-2.0), `ca-certificates`. 
 | @tiptap/y-tiptap | 3.3.0 | MIT | 공동 편집 바인딩 |
 | yjs · y-websocket · y-protocols | 13.6.33 · 3.1.0 · 1.0.7 | MIT | 공동 편집 |
 | livekit-client · @livekit/track-processors | 2.24.0 · 0.8.3 | Apache-2.0 | 회의·배경 처리 |
-| **@livekit/krisp-noise-filter** | 0.4.6 | **오픈소스 아님**(LiveKit 이용약관) | 잡음 제거 — 1.2 |
 | chart.js · react-chartjs-2 | 4.6.1 · 5.3.1 | MIT | 차트 |
 | dompurify | 3.4.17 | MPL-2.0 OR Apache-2.0 | HTML 정화 |
 | markdown-it | 15.0.3 | MIT | 마크다운(+ argparse 3.0.4 Python-2.0) |
@@ -203,7 +200,7 @@ apt: `docker-ce-cli` · `docker-compose-plugin`(Apache-2.0), `ca-certificates`. 
 | @testing-library/dom · react · user-event · happy-dom · @types/* | 10.4.2 · 16.3.3 · 14.6.10 · 21.0.4 | MIT |
 | lightningcss (전이) | 1.33.0 | MPL-2.0 — 빌드 도구, 배포물에 없음 |
 
-`package-lock.json` 의 775개 항목을 훑은 결과 GPL·LGPL·AGPL·SSPL 은 없다. permissive 가 아닌 것은 위에 적은 krisp-noise-filter, dompurify, lightningcss, 글꼴 둘뿐이다.
+`package-lock.json` 의 774개 항목을 훑은 결과 GPL·LGPL·AGPL·SSPL 은 없다. permissive 가 아닌 것은 dompurify, lightningcss, 글꼴 둘뿐이다.
 
 ### 2.9 rbi-mirror — 격리 브라우저 미러 모드 세션 이미지 (`rbi/mirror/`)
 
@@ -328,4 +325,3 @@ marked 18.1.1 · vite ^8.3.4 · vue ^3.5.44 · @vitejs/plugin-vue ^6.0.10 — �
 - 데비안 패키지의 정확한 버전과 패키지별 저작권 파일. Dockerfile 이 버전을 고정하지 않은 것(pandoc, ffmpeg, LibreOffice, OpenJDK, iptables 등)은 빌드 시점의 배포판 판이 들어간다.
 - 남의 이미지 안의 패키지 목록(docker-mailserver, OnlyOffice, SearXNG, LiveKit Egress, kasmweb/chromium). 이미지를 열어 대조하지 않았다.
 - 파이썬 전이 의존성은 리눅스 x86-64 휠 기준으로 풀어 확인했다. 다른 아키텍처에서 달라지는 것은 보지 않았다.
-- `@livekit/krisp-noise-filter` 가 가리키는 이용약관의 재배포 조건.

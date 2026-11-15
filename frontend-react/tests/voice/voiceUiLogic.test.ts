@@ -126,8 +126,8 @@ describe('표기 · 미터 · 고급값', () => {
   })
   it('무손실 어댑터 — 송신 설정의 고급값을 세션 옵션(format·bufferPreset)으로', () => {
     expect(advancedOf(null)).toEqual({ format: {}, bufferPreset: undefined })
-    expect(advancedOf({ tier: 'lossless', musicBitrate: 0, krisp: false, sampleRate: 96000, bitDepth: 16, bufferTarget: 120 }))
+    expect(advancedOf({ tier: 'lossless', musicBitrate: 0, sampleRate: 96000, bitDepth: 16, bufferTarget: 120 }))
       .toEqual({ format: { sampleRate: 96000, bits: 16, codec: 'pcm_s16' }, bufferPreset: 120 })
-    expect(advancedOf({ tier: 'lossless', musicBitrate: 0, krisp: false, bitDepth: 24, bufferTarget: 'auto' }).format).toEqual({ bits: 24, codec: 'pcm_s24' })
+    expect(advancedOf({ tier: 'lossless', musicBitrate: 0, bitDepth: 24, bufferTarget: 'auto' }).format).toEqual({ bits: 24, codec: 'pcm_s24' })
   })
 })

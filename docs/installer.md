@@ -450,7 +450,7 @@ docker 없이 돈다. docker·DNS·HTTP·SMTP 는 가짜로 바꾼다(`tests/fak
 
 ## 12. 알려진 한계
 
-- **마법사 화면이 없다.** `/` 는 안내 문구만 낸다.
+- **마법사 화면이 없다.** `/` 는 안내 문구만 낸다. 화면(브라우저 SPA)은 `frontend-react/` 에서 따로 빌드한다 — `cd frontend-react && npm run build:installer` → `frontend-react/dist-installer/`(`installer.html` · `assets/` · `icon.svg`, 자산 주소는 상대 경로). 이 폴더를 이미지에 넣어 `/` 에서 내주는 일이 남았다.
 - **복원**(`mode: restore`)은 없다(501).
 - **backend 쪽 호출부가 없다.** 내부 API 는 준비돼 있지만 워크스페이스 관리 화면이 그것을 부르는 코드는 다음 단계다. backend 에는 `JW_INSTALLER_URL`·`JW_INSTALLER_KEY` 만 전달된다.
 - **TURN/TLS**: 직접 받는 구성에서는 5349 에 게시되므로, 443 을 넘겨 주는 장치가 없으면 쓰이지 않는다(§8).

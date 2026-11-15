@@ -1,5 +1,6 @@
 /**
  * 관리 › 설정 › 저장소·백업 — Vue pages/admin/storage.vue. 폼 720.
+ *  ⓪ 저장소 상태 = AdminStorageStatus(종류·위치·연결·여유 공간, 끊겼을 때의 경고).
  *  ① 저장소 — 행(min 52): 전체 사용량 "사용 / 전체 · n%" + 상태 배지, 사용자 기본 할당 [바꾸기], 휴지통 보관 [바꾸기](작은 모달).
  *  ② 자동 백업 = AdminBackup(#backup).
  *  ③ 외부 저장소(파일 시스템 / S3·MinIO) — 백업 카드 아래 별도 카드.
@@ -15,6 +16,7 @@ import { useSiteConfig } from '~/composables/useSiteConfig'
 import { addToast } from '~/composables/useToast'
 import { AdminPageShell } from '~/components/admin/AdminPageShell'
 import { AdminBackup } from '~/components/admin/AdminBackup'
+import { AdminStorageStatus } from '~/components/admin/AdminStorageStatus'
 import { SettingsCard } from '~/components/settings/SettingsCard'
 import { UiTrans } from '~/components/ui/Trans'
 import { UiErrorTile } from '~/components/ui/ErrorTile'
@@ -131,6 +133,9 @@ export default function AdminStoragePage() {
   if (!user?.is_admin) return null
   return (
     <AdminPageShell title={t('admin.storage.pageTitle')} subtitle={t('admin.storage.subtitle')} width="form">
+      {/* ⓪ 저장소 상태 */}
+      <AdminStorageStatus />
+
       {/* ① 저장소 */}
       <SettingsCard title={t('admin.storageSummary.title')} description={t('admin.storageSummary.desc')} saved={sumSaved} flush>
         {sumError ? (

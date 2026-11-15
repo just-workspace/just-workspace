@@ -14,7 +14,7 @@
 import { useMemo } from 'react'
 import { createStore, useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
-import { $fetch, apiRawFetch } from '~/lib/api'
+import { $fetch, apiRawFetch, notifyStorageDown } from '~/lib/api'
 import { apiUrl, bundledAuthHeaders } from '~/lib/runtimeConfig'
 import { i18n, useI18n } from '~/i18n'
 import { formatSize } from '~/lib/files'
@@ -404,7 +404,11 @@ function xhrUpload(file: File, path: string, existing?: Transfer): Promise<{ nam
         resolve({ name: file.name, ok: true })
       } else {
         let detail: any = `HTTP ${xhr.status}`
-        try { detail = JSON.parse(xhr.responseText)?.detail || detail } catch { /* noop */ }
+        try {
+          const parsed = JSON.parse(xhr.responseText)
+          detail = parsed?.detail || detail
+          notifyStorageDown(xhr.status, parsed)      // 저장소가 끊겨 거부된 올리기 — 파일 탭이 끊김 안내로 바뀐다
+        } catch { /* noop */ }
         if (xhr.status === 413) {
           // 서버 상한(general.upload_max_size_mb) — "File exceeds 2048MB limit" 에서 숫자를 읽어 "파일당 2 GB까지"
           const mb = Number(/(\d+)\s*MB/i.exec(String(detail))?.[1] || 0)

@@ -25,6 +25,7 @@ import { confirmBox, promptBox } from '~/composables/useDialog'
 import { useSiteConfig, useZoneInstalled } from '~/composables/useSiteConfig'
 import { useDesktopShell } from '~/composables/useDesktopShell'
 import { useBreadcrumb } from '~/composables/useBreadcrumb'
+import { useStorageStatus, useStorageWatch } from '~/composables/useStorageStatus'
 import { UiIcon } from '~/components/ui/Icon'
 import { UiFab } from '~/components/ui/Fab'
 import { UiActionSheet } from '~/components/ui/ActionSheet'
@@ -46,6 +47,7 @@ import { FilesFilePreviewModal } from '~/components/files/FilePreviewModal'
 import { FilesFileShareModal } from '~/components/files/FileShareModal'
 import { FilesFileMoveDialog } from '~/components/files/FileMoveDialog'
 import { FilesFileTypeIcon } from '~/components/files/FileTypeIcon'
+import { FilesFileStorageDown } from '~/components/files/FileStorageDown'
 import { getUiZoom } from '~/composables/useViewport'
 
 const SHELL_VIEWS = ['trash', 'links', 'shared-with-me', 'recent', 'starred'] as const
@@ -103,6 +105,19 @@ export default function FilesPage() {
   } = useFiles()
   const { transfers } = useTransfers()
   const { user } = useAuth()
+  // 저장소가 끊기면 목록·올리기 대신 끊김 안내만 보인다(돌아오면 스스로 풀린다)
+  useStorageWatch(true)
+  const { down: storageDown } = useStorageStatus()
+  const wasStorageDown = useRef(false)
+  useEffect(() => {
+    if (storageDown) { wasStorageDown.current = true; return }
+    if (!wasStorageDown.current) return
+    wasStorageDown.current = false
+    // 끊긴 동안 못 읽은 목록·사용량을 새로 받는다
+    void fetchFiles()
+    void fetchStorageInfo()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageDown])
   const route = useRoute()
   const isMobile = useIsMobile()
   const { toast, addToast } = useToast()
@@ -409,6 +424,7 @@ export default function FilesPage() {
     if (!hasFiles(e)) return
     e.preventDefault()
     setIsDragOver(false)
+    if (storageDown) return
     // 폴더는 끌어다 놓아 올릴 수 없다(파일 목록에 폴더가 크기 0짜리로 섞여 "네트워크 오류"로 실패했다) — 빼고 알린다.
     // 항목 판정(webkitGetAsEntry)은 이 이벤트 안에서만 읽을 수 있어 먼저 다 읽어 둔다.
     const items = Array.from(e.dataTransfer?.items || [])
@@ -478,6 +494,8 @@ export default function FilesPage() {
 
   const openDetail = (i: FileItem) => { setDetailItem(i); setDetailTab('info') }
   const openShareFor = (i: FileItem) => { setShareTab(null); setShareTargets([i]) }
+
+  if (storageDown) return <FilesFileStorageDown admin={!!user?.is_admin} />
 
   return (
     <div

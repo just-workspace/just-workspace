@@ -45,6 +45,7 @@ import { VoiceConnectedBar } from '~/components/voice/VoiceConnectedBar'
 import { VoiceHiresDialog } from '~/components/voice/VoiceHiresDialog'
 import { useVoice } from '~/composables/useVoice'
 import { PwaInstallBanner } from '~/components/pwa/InstallBanner'
+import { LayoutStorageDownBanner } from '~/components/layout/StorageDownBanner'
 import { CommandPalette } from '~/components/CommandPalette'
 import { connectDesktopBridge } from '~/lib/desktopBridge'
 import { ensureAiArtifacts } from '~/composables/useAiArtifacts'
@@ -254,6 +255,9 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
             <span className="ml-auto"><UiIconButton label={t('common.close')} icon="close" className="-my-1 h-7 w-7 text-current hover:bg-transparent hover:opacity-70" onClick={() => setModuleError(false)} /></span>
           </div>
         )}
+
+        {/* 파일 저장소 끊김 — 관리자에게만 */}
+        {user && <LayoutStorageDownBanner />}
 
         <main className="min-h-0 flex-1 overflow-hidden">
           <AppErrorBoundary scope="layout">

@@ -48,6 +48,18 @@ function notifyAuthLost(request: string, resp?: Response) {
   try { window.dispatchEvent(new CustomEvent(AUTH_LOST_EVENT, { detail: { kind, request } })) } catch { /* ignore */ }
 }
 
+/**
+ * 파일 저장소가 끊겨 쓰기가 거부됐다는 신호(503 + code `storage_unavailable`) — composables/useStorageStatus 가 듣는다.
+ * 파일 탭은 이 신호로 끊김 안내로 바뀌고, 저장소가 돌아오면 스스로 풀린다.
+ */
+export const STORAGE_DOWN_EVENT = 'jw:storage-down'
+export const STORAGE_DOWN_CODE = 'storage_unavailable'
+export function notifyStorageDown(status: number | undefined, data: unknown) {
+  if (status !== 503 || typeof window === 'undefined') return
+  if ((data as { code?: unknown } | null)?.code !== STORAGE_DOWN_CODE) return
+  try { window.dispatchEvent(new CustomEvent(STORAGE_DOWN_EVENT)) } catch { /* ignore */ }
+}
+
 const base$fetch: $Fetch = ofetch.create({})
 
 async function call<T>(request: string, opts: FetchOptions<'json'> = {}): Promise<T> {
@@ -82,6 +94,7 @@ async function call<T>(request: string, opts: FetchOptions<'json'> = {}): Promis
     attachRequestId({ response: resp, error: e })
     // 번들 앱은 위 onResponseError 가 맡는다 — 웹만
     if (!base && isApi(request)) notifyAuthLost(request, resp)
+    if (isApi(request)) notifyStorageDown(resp?.status, (e as { data?: unknown })?.data)
     throw e
   }
 }

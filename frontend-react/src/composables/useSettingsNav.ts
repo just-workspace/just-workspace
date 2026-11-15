@@ -88,6 +88,7 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
         { to: '/admin/users', ...L('shell.adminNav', 'users'), ...pendingMeta },
         { to: '/admin/groups', ...L('shell.adminNav', 'groups') },
         { to: '/admin/modules', ...L('shell.adminNav', 'modules') },
+        { to: '/admin/zones', ...L('shell.adminNav', 'zones') },
         { to: '/admin/ai-ops', ...L('shell.adminNav', 'aiOps'), zone: 'ai' },
       ] },
       { label: t('shell.adminNav.group.settings'), items: [

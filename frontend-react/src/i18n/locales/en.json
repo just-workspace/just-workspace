@@ -1442,6 +1442,264 @@
         "key_mismatch": "This key doesn't match the certificate",
         "read_failed": "Couldn't read the file"
       }
+    },
+    "zones": {
+      "title": "Zones",
+      "loadError": "Could not load the zone list",
+      "reconnecting": "The server is restarting. Reconnecting…",
+      "memory": {
+        "label": "Recommended memory total · based on enabled zones and add-ons",
+        "aria": "Recommended memory"
+      },
+      "zonesTitle": "Zones",
+      "addonsTitle": "Optional add-ons",
+      "cost": "+{n} GB",
+      "costNone": "No extra",
+      "status": {
+        "on": "On",
+        "off": "Off",
+        "enabling": "Turning on",
+        "disabling": "Turning off",
+        "updating": "Applying",
+        "enableFailed": "Failed to turn on",
+        "disableFailed": "Failed to turn off",
+        "updateFailed": "Settings failed",
+        "reconnecting": "Reconnecting"
+      },
+      "toggleAria": "Turn on {name}",
+      "settings": "Settings",
+      "settingsAria": "{name} settings",
+      "verify": "Test connection",
+      "verifying": "Checking",
+      "footnote": "Data of zones and add-ons you turn off is not deleted. Turn them back on and it is all still there. Third-party components are downloaded from their original publisher when you turn a zone on.",
+      "noInstaller": {
+        "title": "This installation was set up without the installer, so zones cannot be changed here.",
+        "body": "Only the zones that are currently on are shown."
+      },
+      "unreachable": {
+        "title": "Could not reach the installer.",
+        "body": "The installer must be running to turn zones on or off. Only the zones that are currently on are shown.",
+        "retry": "Check again"
+      },
+      "stage": {
+        "pull": "Download",
+        "configure": "Configure",
+        "connect": "Connect to workspace",
+        "disconnect": "Disconnect"
+      },
+      "stageStatus": {
+        "done": "Done",
+        "running": "Running",
+        "pending": "Waiting",
+        "failed": "Failed"
+      },
+      "offing": "Closing open screens and stopping the zone. Data is kept.",
+      "fresh": {
+        "on": "Just turned on.",
+        "menu": "It was added to the left menu.",
+        "ports": " — make sure these ports are open on your router or firewall.",
+        "off": "Turned off. Data is kept and will be there when you turn it back on.",
+        "updated": "Settings updated."
+      },
+      "fail": {
+        "pull": "Could not download the images {name} needs.",
+        "configure": "Could not apply the {name} settings.",
+        "connect": "Could not connect {name} to the workspace.",
+        "generic": "Could not turn on {name}.",
+        "disable": "Could not turn off {name}.",
+        "update": "Could not change the {name} settings; the previous values were restored.",
+        "stayOff": "This zone stays off and the other zones keep working.",
+        "stayOn": "This zone stays on.",
+        "checkInternet": "Check that the server can reach the internet, then try again.",
+        "seeLog": "Check the log, then try again.",
+        "retry": "Try again",
+        "leaveOff": "Leave it off",
+        "showLog": "View log",
+        "downloadLog": "Download log",
+        "logEmpty": "No log entries",
+        "logError": "Could not load the log"
+      },
+      "dialog": {
+        "titleForm": "Turn on {name} · 1/3 Settings",
+        "titleConfirm3": "Turn on {name} · 2/3 Memory and ports",
+        "titleConfirm2": "Turn on {name} · 1/2 Memory and ports",
+        "titleSettings": "{name} settings",
+        "next": "Next",
+        "prev": "Back",
+        "enable": "Turn on",
+        "memory": "Memory",
+        "ports": "Ports to open",
+        "progress": "Steps",
+        "memOk": "{before} GB → {after} GB · fits within the {server} GB of this server",
+        "memBad": "{after} GB once on · exceeds the {server} GB of memory on this server, so it cannot be turned on",
+        "memShort": "Not enough server memory to turn this on.",
+        "portsNone": "None",
+        "portsNote": "Open these yourself on your router or firewall. They are not checked from here",
+        "portsNoneNote": "No new ports to open",
+        "steps": "Downloads the required images, configures them, and connects them to the workspace",
+        "invalid": "Check the settings.",
+        "busy": "Another task is in progress. Try again when it finishes.",
+        "failed": "Could not process the request. Try again.",
+        "unchanged": "Nothing has changed."
+      },
+      "off": {
+        "title": "Turn off {name}?",
+        "menu": "Its screens disappear from the menu.",
+        "memoryBefore": "This frees ",
+        "memoryAfter": " of memory.",
+        "data": "Data is kept and will be there when you turn it back on.",
+        "confirm": "Turn off"
+      },
+      "mail": {
+        "wayAria": "Mail mode",
+        "builtin": {
+          "title": "Built-in mail server",
+          "desc": "This server sends and receives mail itself"
+        },
+        "external": {
+          "title": "External relay",
+          "desc": "Send through an SMTP server you already use"
+        },
+        "domain": "Mail domain",
+        "domainHint": "Addresses will look like name{'@'}{domain}.",
+        "recordsTitle": "Records to add to the mail domain",
+        "recheck": "Check again",
+        "col": {
+          "type": "Type",
+          "name": "Name",
+          "value": "Value",
+          "status": "Status"
+        },
+        "copy": "Copy value of {name}",
+        "rec": {
+          "ok": "Verified",
+          "missing": "Not found yet",
+          "different": "Different value",
+          "unknown": "Cannot check"
+        },
+        "recordsNote": "If you turn mail on with records missing, mail you send may be marked as spam. You can check again here after turning it on.",
+        "recordsUnsupported": "This installer cannot check records from here.",
+        "recordsError": "Could not check the records.",
+        "recordsEmpty": "Press Check again to see the records to add and their current state.",
+        "host": "Server address",
+        "port": "Port",
+        "security": "Security",
+        "secNone": "None",
+        "username": "Account",
+        "password": "Password",
+        "passwordPh": "App password",
+        "passwordSaved": "Uses the saved password",
+        "needVerify": "The relay connection must be verified before you can continue.",
+        "needDomain": "Enter a mail domain to continue.",
+        "verified": "Relay connection verified",
+        "fail": {
+          "auth_failed": "The account or password is wrong.",
+          "unreachable": "Could not connect to the server. Check the address and port.",
+          "tls_failed": "Could not establish a secure connection. Check the security setting.",
+          "error": "Could not verify the connection."
+        }
+      },
+      "meet": {
+        "ipOk": "Public address detected",
+        "ipOkBefore": "Participants send video to ",
+        "ipOkAfter": ".",
+        "ipUnknown": "Could not detect the public address.",
+        "ipUnknownBody": "Enter the public address of this server that participants will send video to.",
+        "ipLabel": "Public address",
+        "redetect": "Detect again",
+        "needIp": "A public address is required to continue.",
+        "relayTitle": "Relay server",
+        "relayOn": {
+          "title": "Use the built-in relay",
+          "desc": "Participants who cannot connect directly can still join"
+        },
+        "relayOff": {
+          "title": "Do not use",
+          "desc": "Only participants who can connect directly can join"
+        },
+        "hifi": "Lossless audio",
+        "hifiDesc": "For meetings where sound quality matters. Opens one more UDP port"
+      },
+      "ai": {
+        "whenAria": "When to connect",
+        "now": {
+          "title": "Connect now",
+          "desc": "Enter a key and verify it"
+        },
+        "later": {
+          "title": "Later",
+          "desc": "The AI assistant stays off until connected"
+        },
+        "provider": "Provider",
+        "key": "API key",
+        "keyPh": "Key copied from the provider console",
+        "keyHint": "The key is stored only on this server.",
+        "keySaved": "Uses the saved key",
+        "needVerify": "The key must be verified before you can continue.",
+        "verified": "Key verified",
+        "fail": {
+          "auth_failed": "The key is not valid.",
+          "unreachable": "Could not reach the provider.",
+          "error": "Could not verify the key."
+        }
+      },
+      "git": {
+        "aria": "Version choice",
+        "tested": {
+          "title": "Tested version",
+          "desc": "The version verified to work with this workspace release"
+        },
+        "latest": {
+          "title": "Latest",
+          "desc": "Downloads the newest version from the original publisher"
+        },
+        "custom": {
+          "title": "Custom",
+          "desc": "Type the version to download"
+        },
+        "version": "Version",
+        "needVersion": "Enter the version to download to continue.",
+        "untested": {
+          "badge": "Version not verified with this workspace",
+          "body": "Sign-in integration or the repository list may not work correctly. If something breaks, you can switch back to the tested version here."
+        }
+      }
+    },
+    "storageStatus": {
+      "loadError": "Could not load the storage status",
+      "kind": "Type",
+      "kindLocal": "Disk on this server",
+      "kindNfs": "Network storage (NFS)",
+      "location": "Location",
+      "connLabel": "Connection",
+      "conn": {
+        "ok": "OK",
+        "okNfs": "Connected · writes and file locking OK",
+        "down": "Disconnected · file reads and writes stopped",
+        "noWrite": "Connected · cannot write",
+        "noLock": "Connected · file locking does not work"
+      },
+      "free": "Free space",
+      "freeUnknown": "Unavailable",
+      "usedAria": "Space used",
+      "checkedAt": "Last checked",
+      "recheck": "Check again",
+      "checking": "Checking",
+      "note": "This holds documents from the Files tab, chat attachments and archived mail attachments. The database and mailboxes stay on the disk of this server regardless of the storage type.",
+      "down": {
+        "title": "The file storage is disconnected and file writes have stopped.",
+        "since": " onward",
+        "effect": "Users cannot open or upload files in the Files tab. Chat and mail text keep working, but attachments will not open.",
+        "checkNfs": "Check that the NAS is powered on and that the network between this server and the NAS is up.",
+        "checkLocal": "Check that the storage disk is attached to this server.",
+        "auto": "It reconnects automatically once the storage is back."
+      },
+      "reason": {
+        "missing": "The storage marker is not visible.",
+        "unreadable": "The storage marker could not be read.",
+        "mismatch": "Storage from a different installation is attached.",
+        "unresponsive": "The storage is not responding."
+      }
     }
   },
   "mail": {
@@ -4782,6 +5040,15 @@
       "logBy": "Sent by {name}",
       "remaining": "You can send to {n} more people this hour",
       "inactive": "Expired or used-up links can't be sent"
+    },
+    "storageDown": {
+      "title": "Files cannot be opened right now",
+      "detail": "The file storage is disconnected. The administrators have been notified. Your files will be there once it reconnects.",
+      "detailAdmin": "The file storage is disconnected. Check its state on the storage screen. Files will be there once it reconnects.",
+      "recheck": "Check again",
+      "checking": "Checking",
+      "toAdmin": "View storage status",
+      "note": "File lists, previews, uploads and downloads are all paused. Attachments in chat and mail will not open for the same reason."
     }
   },
   "git": {
@@ -7113,7 +7380,8 @@
         "dashLayout": "Dashboard",
         "system": "Service status",
         "logs": "Access logs",
-        "aiOps": "AI operations"
+        "aiOps": "AI operations",
+        "zones": "Zones"
       },
       "kw": {
         "dashboard": "dashboard,analytics,visits,stats,ops summary",
@@ -7123,7 +7391,7 @@
         "settings": "sign-in method,auth order,LDAP,SSO,announcement,greeting,dashboard text,slow threshold,sign-up,sessions,upload,trash,retention",
         "branding": "logo,color,site name,favicon,theme",
         "mail": "SMTP,mail mode,built-in mail server,OAuth,Gmail,Microsoft",
-        "storage": "storage,S3,MinIO,backup,schedule",
+        "storage": "storage,S3,MinIO,backup,schedule,storage status,NFS,NAS,connection,free space",
         "security": "certificate,SSL,TLS,expiry",
         "ai": "models,providers",
         "appBuild": "APK,Android,mobile app",
@@ -7131,7 +7399,8 @@
         "dashLayout": "home,cards,layout,default layout,pinned card,lock",
         "system": "services,restart,response time",
         "logs": "logs,IP,requests,audit",
-        "aiOps": "AI usage,audit log,feedback,PII masking,writes,tool calls"
+        "aiOps": "AI usage,audit log,feedback,PII masking,writes,tool calls",
+        "zones": "zones,install,enable,disable,mail,meetings,AI,code hosting,add-on,SSO,LDAP,isolated browser,memory,ports"
       }
     },
     "shortcuts": {
@@ -7221,6 +7490,10 @@
       "toggleTheme": "Switch theme",
       "openSettings": "Open settings",
       "loggedOut": "Signed out"
+    },
+    "storageDown": {
+      "message": "The file storage is disconnected and file writes have stopped.",
+      "link": "View storage status"
     }
   },
   "adminParts": {

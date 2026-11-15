@@ -5,7 +5,6 @@
 // 기능 선택 = 토글 목록 한 화면(스위치 즉시 저장 — 실패하면 되돌림).
 import { useState, type FormEvent } from 'react'
 import { $fetch } from '~/lib/api'
-import { navigateTo } from '~/lib/router'
 import { useHead } from '~/lib/head'
 import { setSharedState } from '~/lib/state'
 import { useI18n } from '~/i18n'

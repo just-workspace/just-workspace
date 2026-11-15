@@ -26,6 +26,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.files.service import is_hidden_name as _files_hidden
+from app.modules.registry import is_module_enabled
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
@@ -58,6 +59,17 @@ def _escape_like(q: str) -> str:
     return q.replace("%", "\\%").replace("_", "\\_")
 
 
+def searchable_modules(modules: str) -> set[str]:
+    """요청한 검색 대상(쉼표 구분) 중 실제로 찾을 것 — 아는 이름이 없으면 전부.
+
+    꺼졌거나 설치하지 않은 구역의 모듈은 요청에 적혀 있어도 뺀다.
+    """
+    requested = {m.strip() for m in modules.split(",") if m.strip() in VALID_MODULES}
+    if not requested:
+        requested = set(VALID_MODULES)
+    return {m for m in requested if is_module_enabled(m)}
+
+
 @router.get("")
 async def global_search(
     q: str = Query(..., min_length=1, max_length=200),
@@ -74,9 +86,7 @@ async def global_search(
     Returns:
         {results: [{type, id, title, snippet, url}], total}
     """
-    requested = {m.strip() for m in modules.split(",") if m.strip() in VALID_MODULES}
-    if not requested:
-        requested = VALID_MODULES
+    requested = searchable_modules(modules)
 
     results: list[dict] = []
 

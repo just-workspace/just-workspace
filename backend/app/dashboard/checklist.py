@@ -30,6 +30,7 @@ from app.db.models import (
     UserDevice, UserInvite,
 )
 from app.db.session import get_db
+from app.modules.registry import is_module_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -58,22 +59,51 @@ async def _exists(db: AsyncSession, stmt) -> bool:
         return False
 
 
+def visible_items(user: User) -> list[tuple[str, str, str]]:
+    """이 설치·이 사용자에게 보일 항목 — 꺼졌거나 설치하지 않은 구역의 모듈에 기대는 항목은 뺀다."""
+    chat, meetings = is_module_enabled("chat"), is_module_enabled("meetings")
+    out: list[tuple[str, str, str]] = []
+    for item_id, label, link in ITEMS:
+        if item_id == "first_message" and not chat:
+            continue
+        if item_id == "upload_file" and not is_module_enabled("files"):
+            continue
+        if item_id == "invite_colleague":
+            # 회의 초대 · 채널 초대 · (관리자) 계정 초대 중 하나 — 셋 다 할 수 없으면 항목을 뺀다
+            if meetings:
+                pass
+            elif chat:
+                link = "/chat"
+            elif getattr(user, "is_admin", False):
+                link = "/admin/users"
+            else:
+                continue
+        out.append((item_id, label, link))
+    return out
+
+
 async def compute(db: AsyncSession, user: User) -> dict[str, bool]:
+    """항목별 완료 여부. 꺼졌거나 설치하지 않은 구역의 테이블은 읽지 않는다(그 항목은 결과에 없다)."""
     uid = str(user.id)
+    chat, meetings = is_module_enabled("chat"), is_module_enabled("meetings")
     done: dict[str, bool] = {}
     done["profile_photo"] = bool(user.avatar_url)
-    done["first_message"] = await _exists(db, select(Message.id).join(Channel, Channel.id == Message.channel_id).where(
-        Message.sender_id == uid, Channel.type != "dm"))
-    invited = await _exists(db, select(MeetingInvitee.id).join(MeetingDB, MeetingDB.id == MeetingInvitee.meeting_id)
-                            .where(MeetingDB.host_user_id == uid, MeetingInvitee.user_id.is_distinct_from(uid)))
-    if not invited:
+    if chat:
+        done["first_message"] = await _exists(db, select(Message.id).join(Channel, Channel.id == Message.channel_id).where(
+            Message.sender_id == uid, Channel.type != "dm"))
+    invited = False
+    if meetings:
+        invited = await _exists(db, select(MeetingInvitee.id).join(MeetingDB, MeetingDB.id == MeetingInvitee.meeting_id)
+                                .where(MeetingDB.host_user_id == uid, MeetingInvitee.user_id.is_distinct_from(uid)))
+    if not invited and chat:
         invited = await _exists(db, select(ChannelMember.channel_id)
                                 .join(Channel, Channel.id == ChannelMember.channel_id)
                                 .where(Channel.created_by == uid, Channel.type != "dm", ChannelMember.user_id != uid))
     if not invited:
         invited = await _exists(db, select(UserInvite.id).where(UserInvite.invited_by == uid))
     done["invite_colleague"] = invited
-    done["upload_file"] = await _exists(db, select(FileIndex.id).where(FileIndex.scope == uid, FileIndex.is_dir == False))  # noqa: E712
+    if is_module_enabled("files"):
+        done["upload_file"] = await _exists(db, select(FileIndex.id).where(FileIndex.scope == uid, FileIndex.is_dir == False))  # noqa: E712
     done["install_app"] = await _exists(db, select(UserDevice.id).where(UserDevice.user_id == uid, UserDevice.revoked_at.is_(None)))
     done["enable_push"] = await _exists(db, select(PushSubscription.id).where(PushSubscription.user_id == uid))
     done["enable_2fa"] = bool(user.totp_secret)
@@ -93,7 +123,7 @@ async def _dismissed_at(db: AsyncSession, uid: str) -> str | None:
 async def get_checklist(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """시작 체크리스트 — 항목별 done 은 서버 판정. 다 했거나 닫았으면 프런트가 숨기면 된다."""
     done = await compute(db, user)
-    items = [{"id": i, "label": label, "link": link, "done": done.get(i, False)} for i, label, link in ITEMS]
+    items = [{"id": i, "label": label, "link": link, "done": done.get(i, False)} for i, label, link in visible_items(user)]
     n = sum(1 for x in items if x["done"])
     dismissed_at = await _dismissed_at(db, str(user.id))
     return {

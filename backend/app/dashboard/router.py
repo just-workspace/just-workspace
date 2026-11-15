@@ -22,6 +22,7 @@ from app.db.models import (
     CalendarEventDB, CalendarDB,
 )
 from app.db.session import get_db
+from app.modules.registry import is_module_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -104,24 +105,38 @@ async def dashboard_summary(
         )
     ) or 0
 
+    # 아래 모듈별 값은 그 모듈이 켜져 있을 때만 읽고 응답에 넣는다 — 꺼졌거나 설치하지 않은 구역의
+    # 값은 0 이 아니라 키 자체가 없다.
+    out: dict = {"status": "ok", "unread_notifications": unread_notifs}
+
     # Tasks by status
-    task_rows = (await db.execute(
-        select(TaskDB.status, func.count(TaskDB.id))
-        .where(TaskDB.user_id == uid)
-        .group_by(TaskDB.status)
-    )).all()
-    tasks = {row[0]: row[1] for row in task_rows}
-    due_today, overdue = await sources.task_counts(db, uid, s, e)
+    if is_module_enabled("tasks"):
+        task_rows = (await db.execute(
+            select(TaskDB.status, func.count(TaskDB.id))
+            .where(TaskDB.user_id == uid)
+            .group_by(TaskDB.status)
+        )).all()
+        tasks = {row[0]: row[1] for row in task_rows}
+        due_today, overdue = await sources.task_counts(db, uid, s, e)
+        out["tasks"] = {
+            "todo": tasks.get("todo", 0),
+            "in_progress": tasks.get("in_progress", 0),
+            "done": tasks.get("done", 0),
+        }
+        out["tasks_due_today"] = due_today
+        out["tasks_overdue"] = overdue
 
     # Recent posts (last 7 days)
-    recent_posts = await db.scalar(
-        select(func.count(Post.id)).where(Post.created_at >= week_ago)
-    ) or 0
+    if is_module_enabled("board"):
+        out["recent_posts_7d"] = await db.scalar(
+            select(func.count(Post.id)).where(Post.created_at >= week_ago)
+        ) or 0
 
     # Recent chat messages (last 7 days)
-    recent_messages = await db.scalar(
-        select(func.count(Message.id)).where(Message.created_at >= week_ago)
-    ) or 0
+    if is_module_enabled("chat"):
+        out["recent_messages_7d"] = await db.scalar(
+            select(func.count(Message.id)).where(Message.created_at >= week_ago)
+        ) or 0
 
     # Active share links
     active_shares = await db.scalar(
@@ -133,42 +148,32 @@ async def dashboard_summary(
         )
     ) or 0
 
+    if is_module_enabled("files"):
+        out["active_share_links"] = active_shares
+
     # Upcoming events (next 7 days)
-    next_week = now + timedelta(days=7)
-    my_calendars = (await db.execute(
-        select(CalendarDB.id).where(CalendarDB.user_id == uid)
-    )).scalars().all()
-    upcoming_events = 0
-    if my_calendars:
-        upcoming_events = await db.scalar(
-            select(func.count(CalendarEventDB.id)).where(
-                CalendarEventDB.calendar_id.in_(my_calendars),
-                CalendarEventDB.start >= now,
-                CalendarEventDB.start <= next_week,
-            )
-        ) or 0
+    if is_module_enabled("calendar"):
+        next_week = now + timedelta(days=7)
+        my_calendars = (await db.execute(
+            select(CalendarDB.id).where(CalendarDB.user_id == uid)
+        )).scalars().all()
+        upcoming_events = 0
+        if my_calendars:
+            upcoming_events = await db.scalar(
+                select(func.count(CalendarEventDB.id)).where(
+                    CalendarEventDB.calendar_id.in_(my_calendars),
+                    CalendarEventDB.start >= now,
+                    CalendarEventDB.start <= next_week,
+                )
+            ) or 0
+        events = await sources.today_events(db, uid, s, e)
+        out["upcoming_events_7d"] = upcoming_events
+        out["today_events"] = len(events)
+        out["next_meeting"] = sources.next_meeting(events, now)
 
-    events = await sources.today_events(db, uid, s, e)
-
-    out = {
-        "status": "ok",
-        "unread_notifications": unread_notifs,
-        "tasks": {
-            "todo": tasks.get("todo", 0),
-            "in_progress": tasks.get("in_progress", 0),
-            "done": tasks.get("done", 0),
-        },
-        "recent_posts_7d": recent_posts,
-        "recent_messages_7d": recent_messages,
-        "active_share_links": active_shares,
-        "upcoming_events_7d": upcoming_events,
-        # ── 오늘 브리핑 줄(handover 17) ──
-        "mail_unread": await sources.mail_unread(db, user),
-        "mentions_unread": int(mentions_unread),
-        "tasks_due_today": due_today,
-        "tasks_overdue": overdue,
-        "today_events": len(events),
-        "next_meeting": sources.next_meeting(events, now),
-        "admin": await _admin_block(db) if getattr(user, "is_admin", False) else None,
-    }
+    # ── 오늘 브리핑 줄 ──
+    if is_module_enabled("mail"):
+        out["mail_unread"] = await sources.mail_unread(db, user)
+    out["mentions_unread"] = int(mentions_unread)
+    out["admin"] = await _admin_block(db) if getattr(user, "is_admin", False) else None
     return out

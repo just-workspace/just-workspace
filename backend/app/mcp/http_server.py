@@ -253,7 +253,7 @@ async def authenticate(request: Request, endpoint: MCPEndpoint) -> McpContext | 
         )
 
     # OAuth Bearer: verify signature + exp + aud + iss.
-    # 서명은 RS256(JWKS) 우선, 전환기 동안 기존 HS256 폴백 — 검증 로직은
+    # 서명은 RS256(JWKS) — 검증 로직은
     # oauth_provider.verify_access_token 하나로 모은다. 여기서 알고리즘을
     # 따로 들고 있으면 provider 와 어긋난다.
     from app.auth.oauth_provider import verify_access_token

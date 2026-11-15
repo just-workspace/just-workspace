@@ -1,4 +1,4 @@
-"""이메일 인증 의무화 — 로그인 차단·재발송 쿨다운·백필 조건.
+"""이메일 인증 의무화 — 로그인 차단·재발송 쿨다운.
 
 로그인 전체 경로는 DB/Redis 의존이 커서, 여기서는 분기 조건 자체를 본다.
 """
@@ -7,19 +7,18 @@ import pytest
 from datetime import datetime, timedelta, timezone
 
 
-def test_backfill_sql_only_touches_old_active_accounts():
-    """백필 SQL 이 '가입 후' 계정을 건드리면 인증 의무화가 무력화된다."""
-    from app.db.session import _run_legacy_migrations  # noqa: F401
+def test_startup_never_marks_accounts_verified():
+    """기동 때 도는 문장이 미인증 계정을 인증됨으로 올리면 인증 의무화가 무력화된다.
+
+    날짜를 박아 둔 소급 처리도 두지 않는다 — 새 설치에는 그 날짜 이전 계정이 없다.
+    """
     import inspect
+    import re
     from app.db import session as sess
 
     src = inspect.getsource(sess._run_legacy_migrations)
-    stmt = [line for line in src.splitlines() if "UPDATE users" in line]
-    assert stmt, "백필 문이 사라졌다"
-    # 세 조건이 모두 있어야 안전하다: 미인증만 / 활성만 / 컷오프 이전만
-    assert "email_verified = false" in src
-    assert "is_active = true" in src
-    assert "created_at <" in src
+    assert "email_verified = true" not in src
+    assert not re.search(r"TIMESTAMPTZ '20\d\d-", src)
 
 
 @pytest.mark.asyncio

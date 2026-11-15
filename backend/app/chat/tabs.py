@@ -35,8 +35,6 @@ router = APIRouter(prefix="/api/chat/channels", tags=["chat-tabs"])
 
 _FILES_LIMIT = 200
 LINK_ORIGIN = "channel_folder"
-# 채널 폴더 연결 기능이 처음 들어간 시각(2026-10-16 20:10 KST). 이보다 먼저 생긴 공유는 연결이 만들 수 없었다.
-_LINK_FEATURE_SINCE = datetime(2026, 10, 16, 11, 10, tzinfo=timezone.utc)
 _ACTIVE_MEETINGS = ("scheduled", "live")
 _PAST_LIMIT = 10
 # 메시지 뒤에 오는 탭(기본 순서). 메시지는 고정이라 여기 없다.
@@ -108,26 +106,11 @@ async def _channel_share(db: AsyncSession, ch: Channel) -> FileShare | None:
 
 
 def _made_by_link(row: FileShare) -> bool:
-    """이 채널 공유를 폴더 연결이 만들었나.
+    """이 채널 공유를 폴더 연결이 만들었나 — 연결은 origin='channel_folder' 로 표시해 둔다.
 
-    - origin='channel_folder' → 예.
-    - origin 이 비어 있는 예전 행(이 표시 도입 전)은 연결이 만든 행과 모양이 똑같을 때만 예로 추정한다:
-      만든 사람 기록 없음(created_by NULL — 공유 창은 늘 채운다) · 보기 권한(연결은 보기로 건다, 바뀌었으면 사람이 손댄 것)
-      · 연결 기능이 생긴 뒤에 만들어짐. 하나라도 어긋나면 사람이 건 공유로 보고 남긴다(회수보다 남기는 쪽이 안전).
+    표시가 없는 공유는 사람이 건 것으로 보고 남긴다(회수보다 남기는 쪽이 안전).
     """
-    if row.origin == LINK_ORIGIN:
-        return True
-    if row.origin is not None or row.created_by is not None:
-        return False
-    if row.role not in (None, "view") or row.can_write:
-        return False
-    made = row.created_at
-    if made is not None:
-        if made.tzinfo is None:
-            made = made.replace(tzinfo=timezone.utc)
-        if made < _LINK_FEATURE_SINCE:
-            return False
-    return True
+    return row.origin == LINK_ORIGIN
 
 
 async def _revoke_link_share(db: AsyncSession, ch: Channel) -> bool:

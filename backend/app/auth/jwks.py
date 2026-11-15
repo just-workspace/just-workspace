@@ -5,11 +5,8 @@ OpenID Connect Discovery 1.0 은 ``jwks_uri`` 를 REQUIRED 로, 그리고
 이전 구현은 HS256(대칭키) 단독이라 두 조건을 모두 위반했고, 표준 OIDC 클라이언트는
 서명을 검증할 수단이 없었다.
 
-전환 정책:
-  * 새로 발급하는 토큰은 **RS256** 으로 서명하고 헤더에 ``kid`` 를 넣는다.
-  * 검증은 RS256 을 먼저 시도하고, 실패하면 기존 HS256 으로 폴백한다.
-    이미 발급된 HS256 토큰(최대 1시간 수명)이 만료될 때까지 무중단으로 넘어간다.
-  * 폴백은 한시적이다. 전환이 끝나면 ``ALLOW_HS256_FALLBACK`` 을 끈다.
+토큰은 **RS256** 으로 서명하고 헤더에 ``kid`` 를 넣는다. 검증도 발행한 RSA 키로만 한다 —
+대칭키(SECRET_KEY)로 서명한 토큰은 받지 않는다(그 키만 있으면 토큰을 만들 수 있게 되므로).
 """
 
 from __future__ import annotations
@@ -32,10 +29,6 @@ logger = logging.getLogger(__name__)
 ALGORITHM = "RS256"
 KEY_SIZE = 2048
 PURPOSE = "oidc"
-
-# 기존 HS256 토큰을 계속 받아줄지. 전환기(2026-08-31, 토큰 수명 1시간)는 끝났다 — 끈다.
-# 켜 두면 SECRET_KEY 만 있으면 토큰을 만들 수 있고, 실제 거절 사유(aud 등)가 폴백 오류에 묻힌다.
-ALLOW_HS256_FALLBACK = False
 
 # 프로세스 내 캐시 — 워커마다 하나씩 뜬다. 키는 거의 바뀌지 않으므로 단순 캐시로 충분.
 _lock = threading.Lock()

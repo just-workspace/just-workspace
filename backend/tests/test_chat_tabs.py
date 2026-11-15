@@ -301,14 +301,14 @@ async def test_switch_folder_revokes_old_and_relink_same_keeps(env):
 
 @pytest.mark.asyncio
 async def test_legacy_rows_inferred_safely(env):
-    """origin 이 없는 예전 행: 연결이 만든 모양(created_by 없음·보기·기능 도입 후)만 회수."""
+    """연결 표시(origin)가 없는 공유는 모양이 어떻든 사람이 건 것으로 보고 남긴다 — 회수는 표시된 것만."""
     ch = await env.db.get(Channel, "dev")
     cases = [
-        (dict(created_by=None, role="view"), True),                          # 예전 연결이 만든 행(마이그레이션이 role=view 로 채움)
-        (dict(created_by=None, role=None), True),
+        (dict(created_by=None, role="view"), False),
+        (dict(created_by=None, role=None), False),
         (dict(created_by="alice", role="view"), False),                      # 공유 창이 만든 행
-        (dict(created_by=None, role="edit", can_write=True), False),         # 권한을 바꿨다 = 사람이 손댄 것
-        (dict(created_by=None, role="view", created_at=datetime(2026, 10, 1, tzinfo=timezone.utc)), False),  # 기능 전
+        (dict(created_by=None, role="edit", can_write=True), False),
+        (dict(created_by=None, role="view", origin=tabs.LINK_ORIGIN), True),  # 연결이 만든 행
     ]
     for kw, revoked in cases:
         row = FileShare(owner_id="alice", file_path="my/프로젝트/개발", shared_with_channel_id="dev", **kw)

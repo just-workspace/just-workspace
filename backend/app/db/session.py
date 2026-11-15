@@ -174,15 +174,6 @@ async def _run_legacy_migrations():
         "CREATE INDEX IF NOT EXISTS ix_file_index_content_trgm "
         "ON file_index USING gin (lower(content) gin_trgm_ops)",
 
-        # ── 이메일 인증 의무화 이전에 만들어진 계정 소급 처리 ──
-        # 2026-09-26 부터 미인증 계정은 로그인이 막힌다. 그 전에 관리자가
-        # 사람을 보고 승인해 실제로 쓰고 있던 계정까지 잠기면 안 되므로
-        # 한 번만 인증됨으로 올린다. 날짜 컷오프가 있어 이후 가입자는
-        # 재실행돼도 절대 걸리지 않는다(= 매 기동 돌아도 안전).
-        "UPDATE users SET email_verified = true "
-        "WHERE email_verified = false AND is_active = true "
-        "AND created_at < TIMESTAMPTZ '2026-09-26 00:00:00+00'",
-
         # ── 문자열 기본값 소급 ──
         # auto-migrate 가 문자열 server_default 를 빼고 컬럼만 더해서, 컬럼 추가 전에 있던 행은 NULL,
         # DB 기본값도 없었다. NULL 인 행만 채우므로 매 기동 돌아도 안전(LDAP 계정은 "ldap" 이 들어 있다).

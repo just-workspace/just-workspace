@@ -49,11 +49,9 @@ root_router = APIRouter(tags=["oauth-discovery"])
 
 # 서명 알고리즘.
 #   OIDC Discovery 1.0 이 id_token_signing_alg_values_supported 에 RS256 을
-#   MUST 로 규정한다. 이전에는 HS256(대칭키) 단독이라 표준 RP 가 서명을 검증할
-#   방법이 없었다. 이제 RS256 으로 서명하고, 기존 HS256 토큰은 만료될 때까지만
-#   검증을 받아준다(app/auth/jwks.py ALLOW_HS256_FALLBACK).
+#   MUST 로 규정한다. 대칭키(HS256)로는 표준 RP 가 서명을 검증할 방법이 없다.
+#   서명·검증 모두 RS256(app/auth/jwks.py 의 키)만 쓴다.
 JWT_ALGORITHM = "RS256"
-LEGACY_ALGORITHM = "HS256"
 ACCESS_TOKEN_TTL = 3600  # 1 hour
 
 # Scopes the provider advertises / recognises.
@@ -95,7 +93,6 @@ def _authorization_server_metadata() -> dict:
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "subject_types_supported": ["public"],
         # OIDC Discovery 1.0: jwks_uri 는 REQUIRED, RS256 은 MUST.
-        # HS256 은 전환기 동안만 함께 광고한다(기존 발급분 검증용).
         "jwks_uri": f"{base}/oauth/jwks.json",
         "id_token_signing_alg_values_supported": [JWT_ALGORITHM],
         "scopes_supported": SUPPORTED_SCOPES,
@@ -266,27 +263,15 @@ async def _create_access_token(
 
 
 async def verify_access_token(db: AsyncSession, token: str, **kw) -> dict:
-    """RS256 우선, 기존 HS256 폴백.
-
-    전환기에만 폴백을 둔다 — 이미 발급된 HS256 토큰(최대 1시간)이 만료되면
-    jwks.ALLOW_HS256_FALLBACK 을 끄면 된다.
-    """
-    try:
-        keys = await jwks_mod.get_all_keys(db)
-        last: Exception | None = None
-        for k in keys:
-            try:
-                return jwt.decode(token, k.public_pem, algorithms=[k.algorithm], **kw)
-            except JWTError as e:
-                last = e
-        if not jwks_mod.ALLOW_HS256_FALLBACK:
-            raise last or JWTError("no usable key")
-    except JWTError:
-        if not jwks_mod.ALLOW_HS256_FALLBACK:
-            raise
-    return jwt.decode(
-        token, settings.secret_key, algorithms=[LEGACY_ALGORITHM], **kw
-    )
+    """발행한 서명 키(RS256, 교체 중이면 여러 개)로 검증한다. 맞는 키가 없으면 JWTError."""
+    keys = await jwks_mod.get_all_keys(db)
+    last: Exception | None = None
+    for k in keys:
+        try:
+            return jwt.decode(token, k.public_pem, algorithms=[k.algorithm], **kw)
+        except JWTError as e:
+            last = e
+    raise last or JWTError("no usable key")
 
 
 def _parse_basic_auth(header: str) -> tuple[str, str] | None:

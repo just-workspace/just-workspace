@@ -57,6 +57,23 @@ export function useRoute(): Route {
  * 주소에 실려 온 설치 토큰을 꺼내고 주소에서 지운다(방문 기록·화면에 남기지 않는다).
  * 돌려준 값은 세션을 만드는 데 한 번 쓰고 버린다.
  */
+/**
+ * 서버가 주소의 토큰을 확인하고 토큰 없는 주소로 넘기면서 실어 준 결과(`?token_status=wrong|expired|locked`).
+ * 꺼내고 주소에서 지운다. 없으면 null.
+ */
+export function takeTokenStatusFromUrl(): { status: 'wrong' | 'expired' | 'locked'; retry_after?: number } | null {
+  const params = new URLSearchParams(window.location.search)
+  const status = params.get('token_status')
+  if (status == null) return null
+  const retry = Number(params.get('retry_after')) || undefined
+  params.delete('token_status')
+  params.delete('retry_after')
+  const query = params.toString()
+  window.history.replaceState(window.history.state, '', window.location.pathname + (query ? `?${query}` : '') + window.location.hash)
+  if (status !== 'wrong' && status !== 'expired' && status !== 'locked') return null
+  return { status, retry_after: retry }
+}
+
 export function takeTokenFromUrl(): string | null {
   const params = new URLSearchParams(window.location.search)
   const token = params.get('token')

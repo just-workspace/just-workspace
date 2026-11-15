@@ -68,8 +68,9 @@ describe('들어오기', () => {
     open('locked')
     await heading('설치가 이미 끝났습니다')
     expect(screen.getByRole('link', { name: '로그인 화면으로' }).getAttribute('href')).toBe('https://workspace.example.com')
-    // 다시 설치하는 명령은 서버가 알려 줄 때만 보인다
-    expect(screen.queryByText(/처음부터 다시 설치하려면/)).toBeNull()
+    // 다시 설치하는 명령은 서버가 알려 준 글자 그대로 보인다
+    expect(screen.getByText(/처음부터 다시 설치하려면/)).toBeTruthy()
+    expect(screen.getByText('docker exec jw-installer jw reinstall --yes')).toBeTruthy()
   })
 
   it('입력하던 것이 있으면 이어 하기 — 이어서 하면 그 단계로', async () => {
@@ -440,7 +441,7 @@ describe('요약', () => {
     expect(within(screen.getByRole('main')).getByText('AI 도우미')).toBeTruthy()
     expect(within(screen.getByRole('main')).queryByText('AI')).toBeNull()
     expect(screen.getAllByText('고르지 않음')).toHaveLength(3)
-    expect(screen.getByRole('heading', { name: /넘어온 주의 사항\s*2\s*건/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /넘어온 주의 사항\s*3\s*건/ })).toBeTruthy()
     expect(screen.getByRole('link', { name: '사전 점검 보기' }).getAttribute('href')).toBe('#/check?fix=1')
     expect(screen.getByRole('link', { name: '답변 파일 내려받기' }).getAttribute('download')).toBe('answers.json')
     expect(button('설치').disabled).toBe(false)

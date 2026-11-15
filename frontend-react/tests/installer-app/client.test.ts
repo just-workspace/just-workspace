@@ -43,8 +43,23 @@ describe('상태와 세션', () => {
     expect(s).toMatchObject({ session: 'ok', phase: 'applying', locked: false })
     expect(s.info.version).toBe('1.4.0')
     expect(s.facts).toEqual({})
-    expect(s.info.commands?.reissue_token).toBe('docker exec jw-installer jw token')
+    expect(s.info.commands).toEqual({})          // 명령은 서버가 준 글자만 쓴다 — 화면에 박아 둔 값이 없다
     expect(s.info.default_storage_path).toBeUndefined()
+  })
+
+  it('서버가 준 이어 할 단계 · 감지값 · 명령을 그대로 넘긴다', async () => {
+    replies['GET /api/state'] = { body: {
+      version: '1.4.0', phase: 'wizard', locked: false, step: 'zones',
+      facts: { memory_mb: 7900, public_ip: '203.0.113.10', lan_ip: '192.168.10.20', detected_network: 'router', disk_free_gb: 41.5 },
+      info: { git_verified_version: '28.3.0', default_storage_path: '/var/lib/docker/volumes/ws-storage-data/_data',
+              commands: { reissue_token: 'docker exec my-installer jw token', reinstall: 'docker exec my-installer jw reinstall --yes' } },
+    } }
+    const s = await createHttpApi().getState()
+    expect(s.step).toBe('zones')
+    expect(s.facts).toMatchObject({ lan_ip: '192.168.10.20', detected_network: 'router', disk_free_gb: 41.5 })
+    expect(s.info).toMatchObject({ version: '1.4.0', git_verified_version: '28.3.0' })
+    expect(s.info.commands?.reissue_token).toBe('docker exec my-installer jw token')
+    expect(s.info.commands?.reinstall).toBe('docker exec my-installer jw reinstall --yes')
   })
 
   it('잠긴 뒤에는 워크스페이스 주소만 온다', () => {

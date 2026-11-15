@@ -3,7 +3,8 @@
  * (토큰을 저장하거나 요청마다 싣지 않는다).
  *
  * 서버 응답을 화면이 쓰는 꼴(types.ts)로 맞추는 일도 여기서 한다 — 경로·본문·응답 모양이 서버와 달라지면 이 파일만 고친다.
- *  - `GET /api/state`: 세션이 없으면 401 → `session: 'none'` 인 상태로 바꾼다. 잠긴 뒤에는 `{phase, locked, url}` 만 온다.
+ *  - `GET /api/state`: 세션이 없으면 401 → `session: 'none'` 인 상태로 바꾼다. 잠긴 뒤에는 `{phase, locked, url, info.commands}` 만 온다.
+ *    서버 터미널에서 치는 명령(`info.commands`)은 서버가 준 글자를 그대로 보여 준다 — 세션이 없을 때는 명령을 모른다(그 줄을 숨긴다).
  *  - `POST /api/session`: 성공은 `{ok}`, 실패는 401(token_wrong · token_expired) · 429(token_locked) → `SessionResponse`.
  *  - `POST /api/apply` · `/retry`: `{started}` 만 온다 → 바로 상태를 읽어 돌려준다.
  *  - `GET /api/summary`: 구역이 `{id, name}` 목록으로 온다 → id 목록으로.
@@ -20,14 +21,6 @@ import {
 } from './types'
 
 const POLL_MS = 2000
-
-/** 서버 터미널에서 치는 명령 — 설치 관리자 컨테이너의 `jw` 명령(문서: docs/installer.md) */
-export const COMMANDS = {
-  reissue_token: 'docker exec jw-installer jw token',
-  reset_admin: 'docker exec jw-installer jw reset-admin',
-  install_from_answers: 'docker exec jw-installer jw apply --answers /data/answers.json',
-  reinstall: null,
-}
 
 async function parse(res: Response): Promise<unknown> {
   const text = await res.text()
@@ -55,16 +48,19 @@ function errorVars(body: unknown): Record<string, unknown> {
 export function normalizeState(raw: Record<string, unknown> | null, session: StateResponse['session']): StateResponse {
   const r = raw ?? {}
   const phase = (r.phase === 'applying' || r.phase === 'installed' ? r.phase : 'wizard') as StateResponse['phase']
+  const facts = (r.facts && typeof r.facts === 'object' ? r.facts : {}) as StateResponse['facts']
+  const info = (r.info && typeof r.info === 'object' ? r.info : {}) as StateResponse['info']
   return {
     session,
     phase,
     locked: r.locked === true || phase === 'installed',
     step: typeof r.step === 'string' ? r.step : null,
-    facts: {},
+    facts,
     info: {
+      ...info,
       version: typeof r.version === 'string' ? r.version : null,
       app_url: typeof r.url === 'string' ? r.url : null,
-      commands: COMMANDS,
+      commands: info.commands ?? {},
     },
   }
 }

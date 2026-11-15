@@ -5,6 +5,7 @@
     jw apply --answers <파일> [--dry-run]      답변 파일로 무인 설치(dry-run 은 검증·렌더링까지만)
     jw render --answers <파일> --out <폴더>    산출물을 폴더에 써 본다(비밀값은 견본)
     jw reset-admin <계정> [--disable-2fa]      관리자 임시 비밀번호 발급
+    jw reinstall [--yes]                       처음부터 다시 설치할 수 있게 지운다(--yes 없이는 지울 목록만 보여 준다)
 
 답변 파일은 JSON 이다(화면의 "답변 파일 내려받기"와 같은 형식). 비밀은 파일에 적거나 환경변수로 준다:
 JW_ADMIN_PASSWORD · JW_MAIL_PASSWORD · JW_AI_API_KEY
@@ -224,6 +225,79 @@ def cmd_reset_admin(args) -> int:
     return r.rc
 
 
+REINSTALL_KEEP = ("tls",)        # 설치 관리자 자신의 인증서 — 지문이 바뀌지 않게 남긴다
+
+
+def reinstall_targets(svc: api.Services) -> dict:
+    """다시 설치하려면 지워야 하는 것 — 워크스페이스의 컨테이너·볼륨·내부망. 이름으로 돌려준다."""
+    from app.engine import CERT_VOLUME
+    from app.paths import NETWORK_NAME, PROJECT_NAME
+
+    docker = svc.docker
+    label = f"label=com.docker.compose.project={PROJECT_NAME}"
+    r = docker.run(["ps", "-a", "--filter", label, "--format", "{{.Names}}"], timeout=30)
+    containers = sorted(n for n in r.out.split() if n) if r.ok else []
+    r = docker.run(["volume", "ls", "-q", "--filter", label], timeout=30)
+    volumes = {n for n in r.out.split() if n} if r.ok else set()
+    for extra in (render.STORAGE_VOLUME, CERT_VOLUME):          # compose 밖에서 만든 볼륨
+        if docker.volume_inspect(extra) is not None:
+            volumes.add(extra)
+    network = NETWORK_NAME if docker.inspect("network", NETWORK_NAME) is not None else None
+    storage = docker.volume_inspect(render.STORAGE_VOLUME) or {}
+    external = bool((storage.get("Options") or {}).get("type"))  # NFS·지정 폴더 — 볼륨을 지워도 파일은 남는다
+    return {"containers": containers, "volumes": sorted(volumes), "network": network, "storage_external": external}
+
+
+def cmd_reinstall(args) -> int:
+    """워크스페이스를 지우고 설치 관리자를 처음 상태로 돌린다. **데이터가 지워진다.**"""
+    import shutil
+
+    svc = _services(args)
+    if svc.engine.status().get("status") == "running":
+        print("적용이 돌고 있습니다 — 끝난 뒤에 다시 실행하세요.")
+        return 1
+    found = reinstall_targets(svc)
+    print("다시 설치하려면 아래를 지웁니다. 워크스페이스의 데이터(계정·파일·메일·대화)가 모두 사라집니다.")
+    print(f"  컨테이너 {len(found['containers'])}개: {' '.join(found['containers']) or '(없음)'}")
+    print(f"  볼륨 {len(found['volumes'])}개: {' '.join(found['volumes']) or '(없음)'}")
+    print(f"  내부망: {found['network'] or '(없음)'}")
+    print("  설치 폴더의 설정(stack)과 설치 상태(state) — 설치 관리자의 인증서는 남깁니다")
+    if found["storage_external"]:
+        print("  파일 저장소가 네트워크 저장소·지정 폴더입니다 — 그 안의 파일은 지우지 않고, 저장소 표식만 지웁니다.")
+    if not args.yes:
+        print("지우려면 --yes 를 붙여 다시 실행하세요. (아무것도 지우지 않았습니다)")
+        return 1
+
+    docker = svc.docker
+    from app.helper import MARKER_NAME
+
+    if found["storage_external"]:
+        # 표식이 남아 있으면 다음 설치가 "다른 설치의 저장소"로 보고 멈춘다
+        docker.run(["run", "--rm", "--network", "none", "--entrypoint", "rm", "-v",
+                    f"{render.STORAGE_VOLUME}:/storage:nocopy", docker.self_image(), "-f", f"/storage/{MARKER_NAME}"],
+                   timeout=120)
+    failed = False
+    if found["containers"]:
+        failed |= not docker.run(["rm", "-f", "-v", *found["containers"]], timeout=300).ok
+    if found["network"]:
+        docker.run(["network", "disconnect", "-f", found["network"], docker.self_ref], timeout=60)
+        failed |= not docker.run(["network", "rm", found["network"]], timeout=60).ok
+    for name in found["volumes"]:
+        failed |= not docker.volume_rm(name).ok
+    if failed:
+        print("일부를 지우지 못했습니다 — `docker ps -a`, `docker volume ls` 로 남은 것을 확인하고 다시 실행하세요.")
+        return 1
+    shutil.rmtree(svc.paths.stack, ignore_errors=True)
+    for entry in svc.paths.state.iterdir():
+        if entry.name in REINSTALL_KEEP:
+            continue
+        shutil.rmtree(entry, ignore_errors=True) if entry.is_dir() else entry.unlink(missing_ok=True)
+    print("지웠습니다. 설치 관리자를 다시 시작합니다 — 새 설치 토큰은 `docker logs` 의 맨 끝에 나옵니다.")
+    sys.stdout.flush()
+    docker.run(["restart", docker.self_ref], timeout=120)       # 이 명령도 여기서 함께 끝난다
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="jw", description="Just Workspace 설치 관리자")
     sub = p.add_subparsers(dest="command")
@@ -243,6 +317,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("username")
     s.add_argument("--disable-2fa", action="store_true")
     s.set_defaults(func=cmd_reset_admin)
+    s = sub.add_parser("reinstall", help="처음부터 다시 설치할 수 있게 지운다(데이터 삭제)")
+    s.add_argument("--yes", action="store_true", help="목록을 확인했고 지운다")
+    s.set_defaults(func=cmd_reinstall)
     return p
 
 

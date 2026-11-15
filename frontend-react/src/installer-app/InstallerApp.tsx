@@ -53,13 +53,15 @@ export interface InstallerAppProps {
   api: InstallerApi
   /** 주소에 실려 온 설치 토큰(한 번 쓰고 버린다) */
   token?: string | null
+  /** 서버가 주소의 토큰을 이미 확인하고 알려 준 결과(틀림 · 만료 · 잠시 받지 않음) */
+  tokenStatus?: { status: 'wrong' | 'expired' | 'locked'; retry_after?: number } | null
   /** 테스트에서 만든 저장소를 그대로 쓸 때 */
   store?: WizardStore
 }
 
-export function InstallerApp({ api, token = null, store: given }: InstallerAppProps) {
+export function InstallerApp({ api, token = null, tokenStatus = null, store: given }: InstallerAppProps) {
   const [store] = useState(() => given ?? createWizardStore(api))
-  useEffect(() => { void store.getState().init(token) }, [store, token])
+  useEffect(() => { void store.getState().init(token, tokenStatus) }, [store, token, tokenStatus])
   return (
     <WizardContext.Provider value={store}>
       <Root />

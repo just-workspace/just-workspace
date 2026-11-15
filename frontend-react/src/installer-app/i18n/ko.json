@@ -675,7 +675,12 @@
       "no_system_mail": "메일 구역을 고르지 않아 초대와 비밀번호 재설정 메일을 보내지 못합니다.",
       "meetings_public_ip_unknown": "회의에 쓸 공인 주소를 모릅니다. 밖에서 회의에 들어오지 못할 수 있습니다.",
       "rbi_needs_dns": "격리 브라우저는 {m}{name}{/m} 주소도 이 서버를 가리켜야 열립니다.",
-      "dns_mismatch_cert_will_fail": "접속 주소가 이 서버를 가리키지 않아 인증서 자동 발급이 실패합니다."
+      "dns_mismatch_cert_will_fail": "접속 주소가 이 서버를 가리키지 않아 인증서 자동 발급이 실패합니다.",
+      "router_port_forward": "공유기에서 이 서버로 포트를 넘겨야 밖에서 접속됩니다: {m}{ports}{/m}",
+      "lossless_needs_udp_4433": "무손실 오디오는 UDP {m}4433{/m} 포트가 밖에서 닿아야 씁니다. 닿지 않으면 일반 음질로 연결됩니다.",
+      "mail_needs_dns_and_port25": "내장 메일 서버는 {m}{mail_domain}{/m} 의 메일 레코드와, 밖에서 들어오는 {m}25{/m}번 포트가 있어야 메일을 받습니다.",
+      "account_domain_is_mail_domain": "계정의 메일 주소는 {m}아이디@{mail_domain}{/m} 꼴이 됩니다.",
+      "side_certs_self_signed": "프록시를 거치지 않는 이름({m}{names}{/m})에는 자체 서명 인증서를 놓았습니다."
     },
     "seeCheck": "사전 점검 보기",
     "seeMail": "메일 보기",

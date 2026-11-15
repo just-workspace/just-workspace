@@ -2,12 +2,20 @@
 #
 # 빌드 — 문맥은 **리포 루트**다(번들에 실을 파일이 리포 여기저기에 있다):
 #   docker build -f installer/Dockerfile -t just-workspace-installer:$(cat VERSION) .
-# 무엇이 문맥에 들어가는지는 installer/Dockerfile.dockerignore 가 정한다(번들 원본과 installer/ 만).
+# 무엇이 문맥에 들어가는지는 installer/Dockerfile.dockerignore 가 정한다(번들 원본, installer/, 마법사 화면의 원본 frontend-react/).
 #
 # 실행 — docs/installer.md:
 #   docker run -d --name jw-installer --restart unless-stopped -p 8443:8443 \
 #     -v /var/run/docker.sock:/var/run/docker.sock -v /opt/just-workspace:/data \
 #     -e JW_HOST_DIR=/opt/just-workspace just-workspace-installer:<버전>
+
+# ─── 마법사 화면 — frontend-react 의 독립 번들(본 앱 이미지와 같은 Node·같은 lock) ───
+FROM node:26.13.1-alpine AS ui
+WORKDIR /ui
+COPY frontend-react/package.json frontend-react/package-lock.json ./
+RUN npm ci
+COPY frontend-react/ ./
+RUN npm run build:installer
 
 FROM python:3.14-slim
 WORKDIR /app
@@ -26,6 +34,9 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY installer/app/ /app/app/
 
+# 마법사 화면(installer.html · assets/ · icon.svg) — 설치 관리자가 8443 의 / 에서 내준다
+COPY --from=ui /ui/dist-installer/ /app/ui/
+
 # 번들 — compose·설정 템플릿·구역 선언·비밀값 표·버전을 리포에서 복사한다(목록은 app/bundle.py 의 MANIFEST).
 COPY . /src
 RUN python -m app.bundle build /src /app/bundle && rm -rf /src
@@ -36,6 +47,7 @@ ARG JW_REGISTRY=ghcr.io/just-workspace
 ENV JW_REGISTRY=${JW_REGISTRY} \
     JW_DATA_DIR=/data \
     JW_BUNDLE_DIR=/app/bundle \
+    JW_UI_DIR=/app/ui \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 

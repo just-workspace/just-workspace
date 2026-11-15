@@ -675,7 +675,12 @@
       "no_system_mail": "The mail zone is not selected, so invitations and password reset mail cannot be sent.",
       "meetings_public_ip_unknown": "The public address for meetings is unknown. People outside may not be able to join meetings.",
       "rbi_needs_dns": "The isolated browser also needs {m}{name}{/m} to point to this server.",
-      "dns_mismatch_cert_will_fail": "The address does not point to this server, so automatic certificate issuance will fail."
+      "dns_mismatch_cert_will_fail": "The address does not point to this server, so automatic certificate issuance will fail.",
+      "router_port_forward": "Forward these ports on your router to this server so it can be reached from outside: {m}{ports}{/m}",
+      "lossless_needs_udp_4433": "Lossless audio needs UDP port {m}4433{/m} reachable from outside. Otherwise calls fall back to standard quality.",
+      "mail_needs_dns_and_port25": "The built-in mail server needs the mail records of {m}{mail_domain}{/m} and inbound port {m}25{/m} to receive mail.",
+      "account_domain_is_mail_domain": "Account mail addresses will look like {m}name@{mail_domain}{/m}.",
+      "side_certs_self_signed": "Names that bypass the proxy ({m}{names}{/m}) got a self-signed certificate."
     },
     "seeCheck": "See server check",
     "seeMail": "See mail",

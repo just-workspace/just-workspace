@@ -92,8 +92,15 @@ def test_sessions(tok):
 def wizard(tmp_path):
     host = Host(tmp_path)
     resolver = FakeResolver({("ws.example.com", "A"): ["203.0.113.10"], ("example.com", "MX"): ["10 mail.example.com"]})
+    ui = tmp_path / "ui"
+    (ui / "assets").mkdir(parents=True)
+    (ui / "installer.html").write_text('<!doctype html><div id="app"></div><script type="module" src="./assets/app-abc123.js"></script>',
+                                       encoding="utf-8")
+    (ui / "assets" / "app-abc123.js").write_text("console.log(1)", encoding="utf-8")
+    (ui / "icon.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8")
+    (tmp_path / "secret.txt").write_text("outside", encoding="utf-8")
     svc = host.services_obj(resolver=resolver, ip_fetchers=[lambda: "203.0.113.10", lambda: "203.0.113.10"],
-                            ai_get=lambda u, h: (200, {"data": [{"id": "m1"}]}))
+                            ai_get=lambda u, h: (200, {"data": [{"id": "m1"}]}), ui_dir=ui)
     client = TestClient(api.create_wizard_app(svc), base_url="https://testserver")
     return host, svc, client
 
@@ -101,10 +108,62 @@ def wizard(tmp_path):
 def login(svc, client):
     token = svc.tokens.ensure()
     r = client.get("/", params={"token": token}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/"
+    assert r.status_code == 302 and r.headers["location"] == "/"            # 토큰 없는 주소로 넘긴다
     cookie = r.headers["set-cookie"].lower()
     assert "httponly" in cookie and "secure" in cookie and "samesite=strict" in cookie
     return token
+
+
+def test_ui_is_served_without_session(wizard):
+    _, svc, client = wizard
+    r = client.get("/")
+    assert r.status_code == 200 and 'id="app"' in r.text and r.headers["cache-control"] == "no-cache"
+    csp = r.headers["content-security-policy"]
+    assert "script-src 'self'" in csp and "frame-ancestors 'none'" in csp and "unsafe-eval" not in csp
+    assert "script-src 'self' 'unsafe-inline'" not in csp
+    assert r.headers["x-content-type-options"] == "nosniff" and r.headers["referrer-policy"] == "no-referrer"
+    a = client.get("/assets/app-abc123.js")
+    assert a.status_code == 200 and "immutable" in a.headers["cache-control"]
+    assert "javascript" in a.headers["content-type"] and a.headers["x-content-type-options"] == "nosniff"
+    assert client.get("/icon.svg").headers["content-type"].startswith("image/svg+xml")
+    assert client.get("/assets/nope.js").status_code == 404
+    for escape in ("/assets/../../secret.txt", "/assets/%2e%2e/%2e%2e/secret.txt", "/assets/..%2f..%2fsecret.txt"):
+        assert client.get(escape).status_code == 404, escape
+    assert client.get("/api/state").headers["cache-control"] == "no-store"      # API 응답은 저장하지 않는다
+    assert client.get("/api/answers").status_code == 401                         # 화면만 열려 있고 API 는 세션이 있어야 한다
+
+
+def test_ui_missing_bundle_does_not_break_api(tmp_path):
+    host = Host(tmp_path)
+    svc = host.services_obj(ui_dir=tmp_path / "no-ui")
+    client = TestClient(api.create_wizard_app(svc), base_url="https://testserver")
+    assert client.get("/").status_code == 503 and client.get("/healthz").status_code == 200
+
+
+def test_state_carries_step_facts_and_commands(wizard):
+    host, svc, client = wizard
+    login(svc, client)
+    st = client.get("/api/state").json()
+    assert st["step"] is None
+    assert st["info"]["commands"] == {
+        "reissue_token": "docker exec jw-installer jw token",
+        "reset_admin": "docker exec jw-installer jw reset-admin",
+        "install_from_answers": "docker exec -e JW_ADMIN_PASSWORD jw-installer jw apply --answers /data/answers.json",
+        "reinstall": "docker exec jw-installer jw reinstall --yes",
+    }
+    assert st["info"]["git_verified_version"] and st["info"]["git_verified_version"][0].isdigit()
+    assert st["facts"]["detected_network"] is None and st["facts"]["lan_ip"] is None      # 사전 점검 전에는 모른다
+    # 이어 할 단계
+    r = client.put("/api/answers", params={"step": "zones"}, json={"access": {"domain": "ws.example.com"}})
+    assert r.status_code == 200 and client.get("/api/state").json()["step"] == "zones"
+    assert client.put("/api/answers", params={"step": "../x"}, json={}).status_code == 422
+    assert client.put("/api/answers", json={}).status_code == 200 and client.get("/api/state").json()["step"] == "zones"
+    # 연결 형태 — 나가는 주소가 사설이면 router, 공인이면 direct
+    for address, expected in (("192.168.10.20", "router"), ("203.0.113.10", "router"), ("8.8.8.8", "direct")):
+        svc.store.write("preflight.json", {"ok": True, "items": [{"id": "disk", "value": {"free_gb": 41.5}}],
+                                           "facts": {"outbound_address": address}})
+        facts = client.get("/api/state").json()["facts"]
+        assert (facts["lan_ip"], facts["detected_network"], facts["disk_free_gb"]) == (address, expected, 41.5), address
 
 
 def test_api_requires_session(wizard):
@@ -121,7 +180,9 @@ def test_token_login_wrong_expired_locked(wizard):
     svc.tokens.ensure()
     r = client.post("/api/session", json={"token": "WRONGWRONG22"})
     assert r.status_code == 401 and r.json()["code"] == "token_wrong"
-    assert client.get("/", params={"token": "WRONGWRONG22"}).status_code == 401
+    # 주소에 실린 토큰이 틀리면 사유만 실어 토큰 없는 주소로 넘긴다(쿠키 없음) — 화면이 사유를 알린다
+    r = client.get("/", params={"token": "WRONGWRONG22"}, follow_redirects=False)
+    assert r.status_code == 302 and r.headers["location"] == "/?token_status=wrong" and "set-cookie" not in r.headers
     for _ in range(3):
         client.post("/api/session", json={"token": "WRONGWRONG22"})
     r = client.post("/api/session", json={"token": svc.tokens.current()})
@@ -211,14 +272,19 @@ def test_apply_via_api_then_locked(wizard):
     assert client.post("/api/apply").status_code == 202
     svc.engine._thread.join(30)
     # 끝나면 잠긴다 — 상태 조회만 남고, 세션도 토큰도 없다
-    assert client.get("/api/state").json() == {"phase": "installed", "locked": True,
-                                               "version": svc.bundle.version, "url": "https://ws.example.com"}
+    locked = client.get("/api/state").json()
+    assert {k: locked[k] for k in ("phase", "locked", "version", "url")} == {
+        "phase": "installed", "locked": True, "version": svc.bundle.version, "url": "https://ws.example.com"}
+    assert locked["info"]["commands"]["reinstall"] == "docker exec jw-installer jw reinstall --yes"
     for method, path in (("get", "/api/answers"), ("put", "/api/answers"), ("post", "/api/apply"),
                          ("get", "/api/apply"), ("post", "/api/preflight"), ("post", "/api/session")):
         kwargs = {"json": {}} if method != "get" else {}
         r = getattr(client, method)(path, **kwargs)
         assert r.status_code == 423 and r.json()["code"] == "locked", path
-    assert "설치가 끝났습니다" in client.get("/").text
+    # 잠긴 뒤에도 화면은 내준다(잠김 안내를 화면이 그린다). 토큰이 실린 주소는 그냥 넘긴다.
+    assert client.get("/").status_code == 200 and 'id="app"' in client.get("/").text
+    r = client.get("/", params={"token": "WRONGWRONG22"}, follow_redirects=False)
+    assert r.status_code == 302 and r.headers["location"] == "/"
 
 
 def test_apply_status_log_and_retry_api(wizard):
@@ -340,3 +406,35 @@ def test_jw_render_and_reset_admin(jw, capsys, tmp_path, monkeypatch):
     call = host.runner.find("exec", "ws-backend", "reset-admin")[0]
     assert call[-2:] == ["admin", "--disable-2fa"] and "abc123" in capsys.readouterr().out
     assert cli.main(["reset-admin", "admin; rm -rf /"]) == 2
+
+
+def test_jw_reinstall_lists_first_then_wipes(jw, capsys, monkeypatch):
+    host, svc, answers = jw
+    monkeypatch.setenv("JW_ADMIN_PASSWORD", "correct-horse-battery")
+    assert cli.main(["apply", "--answers", str(answers)]) == 0
+    assert svc.store.locked and (svc.paths.stack / ".env").exists()
+    (svc.paths.state / "tls").mkdir(exist_ok=True)
+    (svc.paths.state / "tls" / "cert.pem").write_text("cert", encoding="utf-8")
+    host.runner.on("ps", "-a", "--filter", out="ws-backend\nws-nginx\nws-postgres\n")
+    host.runner.on("volume", "ls", "-q", out="ws-postgres-data\nws-redis-data\n")
+    host.runner.on("network", "inspect", out=json.dumps([{"Name": "just-workspace_workspace"}]))
+    host.volumes.setdefault("ws-certbot-data", {"Name": "ws-certbot-data", "Options": None})
+    capsys.readouterr()
+
+    # --yes 없이는 목록만 보여 주고 아무것도 지우지 않는다
+    assert cli.main(["reinstall"]) == 1
+    out = capsys.readouterr().out
+    assert "ws-backend" in out and "ws-postgres-data" in out and "ws-storage-data" in out and "--yes" in out
+    assert not host.runner.find("rm", "-f") and not host.runner.find("volume", "rm")
+    assert svc.store.locked and (svc.paths.stack / ".env").exists()
+
+    assert cli.main(["reinstall", "--yes"]) == 0
+    removed = host.runner.find("rm", "-f", "-v")[0]
+    assert {"ws-backend", "ws-nginx", "ws-postgres"} <= set(removed)
+    gone = {c[-1] for c in host.runner.find("volume", "rm")}
+    assert {"ws-postgres-data", "ws-redis-data", "ws-storage-data", "ws-certbot-data"} <= gone
+    assert host.runner.find("network", "rm", "just-workspace_workspace")
+    assert host.runner.find("restart", "jw-self")
+    assert not (svc.paths.stack / ".env").exists()
+    assert not svc.store.locked and svc.store.install()["phase"] == "wizard"      # 처음 상태 — 새 토큰으로 다시 시작한다
+    assert (svc.paths.state / "tls" / "cert.pem").exists()                        # 설치 관리자의 인증서는 남는다

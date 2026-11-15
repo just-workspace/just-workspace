@@ -19,11 +19,6 @@ import { recordsPending } from './MailScreen'
 
 /** 사전 점검의 주의 가운데 요약에 다시 모아 보여 줄 것(해결 방법 키) */
 const PREFLIGHT_CAUTIONS = ['port_25_in_use', 'disk_low', 'time_not_synchronized', 'internet_unreachable', 'registry_unreachable']
-/**
- * 서버가 주는 주의 가운데 요약의 주의 목록에 넣지 않는 것 — 이미 제 화면에서 안내했거나(포트 포워딩 · 무손실 오디오 포트),
- * 더 구체적인 주의(메일 레코드 · 포트 25)로 대신 보여 주거나, 주의가 아닌 알림(계정 메일 주소의 도메인)이다.
- */
-const NOT_LISTED = ['router_port_forward', 'lossless_needs_udp_4433', 'mail_needs_dns_and_port25', 'account_domain_is_mail_domain']
 
 /** 주의 사항 → 보러 갈 화면과 그 이름 */
 function cautionLink(key: string): { to: RouteId; label: string } | null {
@@ -100,7 +95,7 @@ export function SummaryScreen() {
       .filter(i => i.status === 'warn' && i.fix && PREFLIGHT_CAUTIONS.includes(i.fix.key) && (i.fix.key !== 'port_25_in_use' || mailBuiltin))
       .map(i => ({ key: i.fix!.key, vars: i.fix!.vars })),
     ...(pending && pending.total > 0 ? [{ key: 'mail_records_pending', vars: { ...pending } }] : []),
-    ...(summary?.cautions ?? []).filter(c => !NOT_LISTED.includes(c.key)),
+    ...(summary?.cautions ?? []),
     ...(summary?.notes ?? []),
   ]
   const errors: FieldError[] = summary?.errors ?? []
@@ -116,6 +111,7 @@ export function SummaryScreen() {
       else vars.n = vars.n ?? missing + different
     }
     if (Array.isArray(vars.names)) vars.names = vars.names.join(', ')
+    if (Array.isArray(vars.ports)) vars.ports = vars.ports.join(', ')
     return has(`summary.caution.${key}`) ? <M k={`summary.caution.${key}`} v={vars} /> : t('summary.caution.other', { key: c.key })
   }
   const errorText = (e: FieldError) => {

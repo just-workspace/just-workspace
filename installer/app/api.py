@@ -13,11 +13,13 @@ import hmac
 import ipaddress
 import json
 import os
+import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable
 
 from fastapi import Body, Depends, FastAPI, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 
 from app import answers as ans
 from app import certs, dkim, preflight, probes, render
@@ -60,6 +62,8 @@ class Services:
     smtp_factory: Callable | None = None
     ai_get: Callable | None = None
     preflight_kwargs: dict = field(default_factory=dict)
+    ui_dir: Path | None = None                      # 마법사 화면 번들(installer.html · assets/ · icon.svg)
+    cache: dict = field(default_factory=dict)       # 바뀌지 않는 조회값(자기 컨테이너 이름, 도커 데이터 폴더)
 
     def local_key(self) -> str:
         """같은 컨테이너의 `jw` 명령이 서버에 일을 시킬 때 쓰는 키(상태 폴더의 파일)."""
@@ -81,6 +85,7 @@ def build_services(paths: Paths, *, runner: Runner | None = None, registry: str 
     docker = Docker(runner or SubprocessRunner(), paths)
     registry = registry or os.environ.get("JW_REGISTRY") or DEFAULT_REGISTRY
     image_tag = image_tag or os.environ.get("JW_IMAGE_TAG") or None
+    overrides.setdefault("ui_dir", Path(os.environ.get("JW_UI_DIR") or "/app/ui"))
     engine_kwargs = {k: overrides.pop(k) for k in ("http", "sleep") if k in overrides}
     preflight_kwargs = overrides.pop("preflight_kwargs", {})
     engine = Engine(paths, docker, bundle, registry=registry, image_tag=image_tag,
@@ -161,6 +166,56 @@ def summary(svc: Services) -> dict:
     }
 
 
+STEP_ID = re.compile(r"[a-z][a-z0-9_-]{0,31}")
+
+
+def self_name(svc: Services) -> str:
+    """설치 관리자 컨테이너의 이름 — 화면에 보여 줄 명령에 쓴다(못 알아내면 문서의 기본 이름)."""
+    if "self_name" not in svc.cache:
+        data = svc.docker.inspect("container", svc.docker.self_ref) or {}
+        name = str(data.get("Name") or "").lstrip("/")
+        svc.cache["self_name"] = name if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name) else "jw-installer"
+    return svc.cache["self_name"]
+
+
+def commands(svc: Services) -> dict:
+    """서버 터미널에서 치는 명령 — 화면은 이 글자를 그대로 보여 준다."""
+    name = self_name(svc)
+    return {
+        "reissue_token": f"docker exec {name} jw token",
+        "reset_admin": f"docker exec {name} jw reset-admin",
+        # 비밀번호는 명령에 적지 않는다 — 셸 변수 JW_ADMIN_PASSWORD 를 그대로 넘긴다(답변 파일은 설치 폴더에 둔다)
+        "install_from_answers": f"docker exec -e JW_ADMIN_PASSWORD {name} jw apply --answers /data/answers.json",
+        "reinstall": f"docker exec {name} jw reinstall --yes",
+    }
+
+
+def detected_facts(svc: Services, pre: dict | None) -> dict:
+    """감지값 — 모르는 것은 null. 연결 형태: 나가는 주소가 공인이면 direct, 사설이면 router(프록시 뒤인지는 알 수 없다)."""
+    facts = svc.store.facts()
+    lan = ((pre or {}).get("facts") or {}).get("outbound_address") or None
+    detected = None
+    if lan:
+        try:
+            detected = "direct" if ipaddress.ip_address(lan).is_global else "router"
+        except ValueError:
+            detected = None
+    disk = next((i.get("value") for i in (pre or {}).get("items", []) if i.get("id") == "disk"), None)
+    free = None
+    if isinstance(disk, dict):
+        free = disk.get("free_gb") if isinstance(disk.get("free_gb"), (int, float)) else None
+    return {"memory_mb": facts.memory_mb, "public_ip": facts.public_ip, "lan_ip": lan,
+            "detected_network": detected, "disk_free_gb": free}
+
+
+def default_storage_path(svc: Services) -> str | None:
+    """기본 저장소(도커 볼륨)가 호스트의 어디에 놓이는지 — 도커 데이터 폴더 아래."""
+    if "docker_root" not in svc.cache:
+        svc.cache["docker_root"] = str(svc.docker.info().get("DockerRootDir") or "")
+    root = svc.cache["docker_root"]
+    return f"{root.rstrip('/')}/volumes/{render.STORAGE_VOLUME}/_data" if root else None
+
+
 def state(svc: Services) -> dict:
     install = svc.store.install()
     apply = svc.engine.status()
@@ -173,21 +228,45 @@ def state(svc: Services) -> dict:
         "install_id": install["install_id"],
         "has_answers": bool(public),
         "mode": public.get("mode"),
+        "step": (svc.store.read("wizard.json") or {}).get("step"),
         "preflight": {"checked": bool(pre), "ok": bool(pre and pre.get("ok"))},
         "apply": {"status": apply.get("status"), "current": apply.get("current"),
                   "error": apply.get("error"), "alternatives": apply.get("alternatives", [])},
         "token_expires_at": svc.tokens.expires_at(),
+        "facts": detected_facts(svc, pre),
+        "info": {
+            "git_verified_version": svc.bundle.gitea_verified_version,
+            "default_storage_path": default_storage_path(svc),
+            "commands": commands(svc),
+        },
     }
 
 
-LANDING = """<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Just Workspace 설치 관리자</title>
-<body style="font-family:system-ui,sans-serif;max-width:36rem;margin:4rem auto;padding:0 1rem;line-height:1.6">
-<h1 style="font-size:1.25rem">Just Workspace 설치 관리자</h1>
-<p>__MESSAGE__</p>
-<p style="color:#666">설치 토큰은 서버에서 <code>docker logs jw-installer</code> 로 확인하고,
-만료됐으면 <code>docker exec jw-installer jw token</code> 으로 다시 받습니다.</p>
-</body></html>"""
+# ─── 화면 번들(정적 파일) ───
+
+# 화면은 인라인 스크립트 없이 돈다. 스타일은 속성(style="…")만 인라인을 허용한다(React 가 쓴다).
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; "
+       "img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; "
+       "base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+SECURITY_HEADERS = {
+    "Content-Security-Policy": CSP,
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",            # 주소에 설치 토큰이 실려 올 수 있다
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
+NO_UI = "설치 화면 번들이 이 이미지에 없습니다(개발 실행). API 는 그대로 동작합니다.\n"
+
+
+def ui_file(svc: Services, relative: str) -> Path | None:
+    """화면 번들 안의 파일(폴더 밖을 가리키면 None)."""
+    if svc.ui_dir is None:
+        return None
+    root = svc.ui_dir.resolve()
+    target = (root / relative).resolve()
+    if target != root and root not in target.parents:
+        return None
+    return target if target.is_file() else None
 
 
 # ─── 마법사 앱 ───
@@ -197,6 +276,15 @@ def create_wizard_app(svc: Services) -> FastAPI:
     app = FastAPI(title="Just Workspace installer", version=svc.bundle.version, docs_url=None, redoc_url=None,
                   openapi_url=None)
     _error_handlers(app)
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        for key, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(key, value)
+        if request.url.path.startswith("/api/"):
+            response.headers.setdefault("Cache-Control", "no-store")
+        return response
 
     def set_cookie(response, sid: str) -> None:
         response.set_cookie(COOKIE_NAME, sid, max_age=SESSION_TTL, httponly=True, secure=True, samesite="strict", path="/")
@@ -226,23 +314,50 @@ def create_wizard_app(svc: Services) -> FastAPI:
     def healthz():
         return {"ok": True}
 
-    @app.get("/", response_class=HTMLResponse)
-    def landing(request: Request, token: str | None = Query(default=None)):
+    def page():
+        """화면(SPA) — 세션이 없어도 내준다. 토큰 입력·잠김 안내도 이 화면이 그린다."""
+        path = ui_file(svc, "installer.html")
+        if path is None:
+            return PlainTextResponse(NO_UI, status_code=503)
+        return FileResponse(path, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/")
+    def landing(token: str | None = Query(default=None)):
+        if token is None:
+            return page()
+        # 토큰이 실린 주소 — 확인하고 토큰 없는 주소로 넘긴다(주소창·방문 기록에 남지 않게).
+        # 맞으면 세션 쿠키를 준다. 틀리면 화면이 사유를 알리도록 상태만 실어 넘긴다(화면이 같은 토큰으로 또 묻지 않게).
         if svc.store.locked:
-            return HTMLResponse(LANDING.replace("__MESSAGE__", "설치가 끝났습니다. 이제 워크스페이스 주소로 접속하세요."))
-        if token is not None:
-            try:
-                sid = check_token(token)
-            except ApiError as e:
-                message = {"token_expired": "설치 토큰이 만료됐습니다.", "token_locked": "잠시 뒤 다시 시도하세요.",
-                           }.get(e.code, "설치 토큰이 맞지 않습니다.")
-                return HTMLResponse(LANDING.replace("__MESSAGE__", message), status_code=e.status)
-            response = RedirectResponse("/", status_code=303)     # 토큰이 주소창·기록에 남지 않게
-            set_cookie(response, sid)
-            return response
-        if svc.tokens.session_valid(request.cookies.get(COOKIE_NAME)):
-            return HTMLResponse(LANDING.replace("__MESSAGE__", "설치 토큰을 확인했습니다. 설치 화면은 다음 단계에서 이 자리에 들어옵니다(지금은 API 만 있습니다)."))
-        return HTMLResponse(LANDING.replace("__MESSAGE__", "설치 토큰이 붙은 주소로 접속하세요."), status_code=401)
+            return RedirectResponse("/", status_code=302)
+        try:
+            sid = check_token(token)
+        except ApiError as e:
+            status = {"token_expired": "expired", "token_locked": "locked"}.get(e.code, "wrong")
+            retry = e.vars.get("retry_after")
+            return RedirectResponse(f"/?token_status={status}" + (f"&retry_after={int(retry)}" if retry else ""),
+                                    status_code=302)
+        response = RedirectResponse("/", status_code=302)
+        set_cookie(response, sid)
+        return response
+
+    @app.get("/installer.html")
+    def page_alias():
+        return page()
+
+    @app.get("/icon.svg")
+    def icon():
+        path = ui_file(svc, "icon.svg")
+        if path is None:
+            raise ApiError(404, "not_found")
+        return FileResponse(path, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
+
+    @app.get("/assets/{name:path}")
+    def asset(name: str):
+        path = ui_file(svc, f"assets/{name}")
+        if path is None:
+            raise ApiError(404, "not_found")
+        # 자산 파일 이름에는 내용 해시가 들어 있다 — 바뀌면 이름이 바뀐다
+        return FileResponse(path, headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
     @app.post("/api/session")
     def create_session(body: dict = Body(...)):
@@ -256,8 +371,10 @@ def create_wizard_app(svc: Services) -> FastAPI:
         if svc.store.locked:
             answers = svc.store.answers_public()
             domain = (answers.get("access") or {}).get("domain")
+            cmds = commands(svc)
             return {"phase": "installed", "locked": True, "version": svc.bundle.version,
-                    "url": f"https://{domain}" if domain else None}
+                    "url": f"https://{domain}" if domain else None,
+                    "info": {"commands": {"reinstall": cmds["reinstall"], "reset_admin": cmds["reset_admin"]}}}
         session(request)
         return state(svc)
 
@@ -275,12 +392,16 @@ def create_wizard_app(svc: Services) -> FastAPI:
         return answers_view()
 
     @app.put("/api/answers", dependencies=[Depends(unlocked)])
-    def put_answers(patch: dict = Body(...)):
+    def put_answers(patch: dict = Body(...), step: str | None = Query(default=None)):
         if svc.engine.running:
             raise ApiError(409, "apply_running")
+        if step is not None and not STEP_ID.fullmatch(step):
+            raise ApiError(422, "step_invalid")
         current, _ = ans.split(svc.store.load_answers())
         merged = ans.load(ans.merge_patch(current, patch))        # 비밀은 patch 에 든 것만 새로 저장된다
         svc.store.save_answers(merged)
+        if step is not None:
+            svc.store.write("wizard.json", {"step": step})        # 이어 할 화면 — GET /api/state 의 step
         return answers_view()
 
     @app.get("/api/answers/export", dependencies=[Depends(unlocked)])

@@ -111,6 +111,14 @@ class Bundle:
             raise BundleError("compose 에서 Gitea 고정 이미지를 찾지 못했습니다")
         return m.group(1)
 
+    @cached_property
+    def gitea_verified_version(self) -> str | None:
+        """그 고정 이미지의 버전 글자 — compose 의 같은 줄 주석(`# 28.3.0 (…)`)에서 읽는다. 없으면 None."""
+        import re
+
+        m = re.search(r"\$\{GITEA_IMAGE:-[^}\s]+\}\s*#\s*v?(\d+(?:\.\d+){1,3})", self.read("docker-compose.yml"))
+        return m.group(1) if m else None
+
 
 def build(repo: Path, dest: Path) -> list[str]:
     """리포에서 번들 폴더를 만든다(이미지 빌드 때 한 번)."""

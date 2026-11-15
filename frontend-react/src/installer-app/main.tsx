@@ -14,7 +14,7 @@ import { createHttpApi } from './api/client'
 import type { InstallerApi } from './api/types'
 import { initInstallerI18n } from './i18n'
 import { InstallerApp } from './InstallerApp'
-import { takeTokenFromUrl } from './router'
+import { takeTokenFromUrl, takeTokenStatusFromUrl } from './router'
 import { applyTheme } from './shell/ShellTools'
 
 declare const __INSTALLER_MOCK__: boolean
@@ -35,8 +35,9 @@ async function boot() {
     applyTheme(window.localStorage.getItem('jw-installer-theme') === 'light' ? 'light' : 'dark')
   } catch { /* 기억해 둔 값이 없으면 기본(다크) */ }
   const token = takeTokenFromUrl()
+  const tokenStatus = takeTokenStatusFromUrl()
   const [api] = await Promise.all([pickApi(), initInstallerI18n()])
-  createRoot(document.getElementById('app')!).render(<InstallerApp api={api} token={token} />)
+  createRoot(document.getElementById('app')!).render(<InstallerApp api={api} token={token} tokenStatus={tokenStatus} />)
 }
 
 void boot()

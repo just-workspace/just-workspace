@@ -14,5 +14,11 @@
 !mailserver/config/dovecot.cf
 !installer/requirements.txt
 !installer/app/**
+# 마법사 화면의 원본(빌드 산출물·의존성 폴더는 빼고)
+!frontend-react/**
+frontend-react/node_modules
+frontend-react/dist
+frontend-react/dist-*
+frontend-react/.env*
 **/__pycache__
 **/*.pyc

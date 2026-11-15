@@ -29,7 +29,7 @@ export function DoneScreen() {
   const pending = records && zoneOn(answers, catalog, 'mail') && answers.mail.kind === 'builtin' ? recordsPending(records).total : 0
 
   const todos: Todo[] = []
-  if (temporary) todos.push({ icon: 'shield', title: t('done.certTitle'), desc: t('done.certDesc'), href: at('/admin/security'), caution: true })
+  if (temporary) todos.push({ icon: 'shield', title: t('done.certTitle'), desc: t('done.certDesc'), caution: true })
   if (restore) {
     todos.push(
       { icon: 'globe', title: t('restore.moveTitle'), desc: t('restore.moveDesc') },

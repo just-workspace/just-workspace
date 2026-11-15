@@ -63,7 +63,7 @@ export interface WizardState {
   /** 이 창에서 설치를 끝냈다 — 잠긴 뒤에도 완료 화면을 보여 준다 */
   finishedHere: boolean
 
-  init(token?: string | null): Promise<void>
+  init(token?: string | null, tokenStatus?: { status: 'wrong' | 'expired' | 'locked'; retry_after?: number } | null): Promise<void>
   refreshState(): Promise<void>
   submitToken(token: string): Promise<StateResponse['session']>
   save(patch: AnswersPatch, step?: string): Promise<boolean>
@@ -193,7 +193,7 @@ export function createWizardStore(api: InstallerApi): WizardStore {
       saveFailed: false,
       finishedHere: false,
 
-      async init(token) {
+      async init(token, tokenStatus) {
         set({ boot: 'loading' })
         try {
           let server = await api.getState()
@@ -202,6 +202,10 @@ export function createWizardStore(api: InstallerApi): WizardStore {
             const made = await api.createSession(token)
             server = await api.getState()
             if (server.session !== 'ok') server = { ...server, session: made.status, retry_after: made.retry_after }
+          }
+          // 서버가 주소의 토큰을 이미 확인했는데 맞지 않았다 — 그 사유를 토큰 화면에 알린다
+          if (tokenStatus && server.session !== 'ok' && !server.locked) {
+            server = { ...server, session: tokenStatus.status, retry_after: tokenStatus.retry_after }
           }
           await loadWizard(server)
           set({ server, boot: 'ready' })

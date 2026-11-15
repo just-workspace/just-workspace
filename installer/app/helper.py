@@ -307,6 +307,15 @@ def cmd_read_cert(args) -> int:
         return _out({"cert": None})
 
 
+def cmd_unlink_cert(args) -> int:
+    """올린 파일·임시 인증서를 가리키던 링크를 뗀다(자동 발급으로 바꿀 때). certbot 폴더는 건드리지 않는다."""
+    path = os.path.join(args.root, "live", _safe_name(args.name))
+    if os.path.islink(path):
+        os.unlink(path)
+        return _out({"status": "unlinked"})
+    return _out({"status": "kept"})
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="app.helper")
     sub = p.add_subparsers(dest="command", required=True)
@@ -319,6 +328,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("place-cert"); s.add_argument("--root", default=LE_ROOT); s.add_argument("--name", required=True)
     s.add_argument("--aliases", default=""); s.add_argument("--link-only", action="store_true")
     s.set_defaults(func=cmd_place_cert)
+    s = sub.add_parser("unlink-cert"); s.add_argument("--root", default=LE_ROOT); s.add_argument("--name", required=True)
+    s.set_defaults(func=cmd_unlink_cert)
     s = sub.add_parser("read-cert"); s.add_argument("--root", default=LE_ROOT); s.add_argument("--name", required=True)
     s.set_defaults(func=cmd_read_cert)
     return p

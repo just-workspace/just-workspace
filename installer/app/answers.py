@@ -353,7 +353,7 @@ def validate(answers: Answers, catalog: Catalog, facts: Facts | None = None, *, 
         elif ai.provider not in AI_PROVIDERS:
             errors.append(FieldError("ai.provider", "provider_unknown", {"provider": ai.provider}))
         else:
-            _check(errors, "ai.model", v.model_name, ai.model, required=need)
+            _check(errors, "ai.model", v.model_name, ai.model, required=False)   # 모델은 나중에 관리 화면에서 골라도 된다
             _check(errors, "ai.base_url", v.http_url, ai.base_url, required=need and ai.provider in AI_NEEDS_BASE_URL)
             if need and not ai.api_key and ai.provider not in AI_KEYLESS:
                 errors.append(FieldError("ai.api_key", "required"))

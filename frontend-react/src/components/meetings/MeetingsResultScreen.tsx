@@ -1,6 +1,5 @@
 /**
  * 회의 결과 화면 1틀.
- * Vue 판 components/meetings/MeetingsResultScreen.vue 그대로.
  *  모바일: 회의 머리 56(제목 17/600 "회의", 비밀번호 틀림만 "회의 입장") + 본문이 세로 가운데(패딩 24 · 간격 14)
  *          아이콘 타일 40(반지름 10) → 제목 22/700 → 설명 15/1.6 muted → (children: 입력·[1차 48][2차 48 outline]).
  *  데스크톱(lg↑): 같은 내용을 왼쪽 패널(520) 자리에 — 입장 화면(MeetingsDeviceSetup)과 같은 520 패널

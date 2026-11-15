@@ -1,5 +1,5 @@
 /**
- * 연락처 상세 — Vue 판 components/contacts/ContactsDetail.vue.
+ * 연락처 상세.
  * 데스크톱: 본문 패딩 28/40, 폭 680. 머리 = 이니셜 72 · 이름 24/700(-0.02em) · 보조 13.5 muted · [편집] 36 outline · ⋯ 36.
  *   행동 줄 4칸(64, rounded-lg card, 아이콘 18 primary + 12/600): 메일 쓰기 · 채팅 · 통화 · 일정 잡기 — mailto 폐지.
  *   정보 카드(rounded-lg card): 행 48 = 라벨 100(12 muted) | 값 13.5 | 행동(복사 12/600 primary).
@@ -10,7 +10,7 @@
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { $fetch } from '~/lib/api'
 import { navigateTo } from '~/lib/router'
@@ -54,7 +54,7 @@ export function ContactsDetail() {
     if (direct || !primaryEmail) return
     setLookingUp(true)
     void findWorkspaceUserId(primaryEmail).then((id) => {
-      // Vue: if (email === primaryEmail.value) — 그 사이 다른 연락처로 바뀌었으면 버린다
+      // 그 사이 다른 연락처로 바뀌었으면 버린다
       if (alive) setWsUserId(id)
       setLookingUp(false)
     })

@@ -160,7 +160,7 @@ export interface AiProjectFormValue {
 
 interface PickedFile { path: string; name: string; size?: number | null }
 
-/** J1 — 프로젝트 만들기·편집(이름 · 지침 · 지식 파일). 피커는 같은 자리에서 열린다(창 하나) */
+/** 프로젝트 만들기·편집(이름 · 지침 · 지식 파일). 피커는 같은 자리에서 열린다(창 하나) */
 export function AiProjectFormModal({ initial, title, onSubmit, onClose, startPicking }: {
   initial?: { name: string; instructions: string; files?: AiProjectFile[] }
   title: string
@@ -337,7 +337,7 @@ export function AiProjectShareModal({ project, onSubmit, onClose }: {
 
 interface FileItem { name: string; path: string; is_dir: boolean; size?: number }
 
-/** J1 피커 — 내 파일·팀 폴더를 걸어 들어가 파일을 고른다(/api/files/list). 한 번에 20개, 프로젝트 전체 50개 */
+/** 피커 — 내 파일·팀 폴더를 걸어 들어가 파일을 고른다(/api/files/list). 한 번에 20개, 프로젝트 전체 50개 */
 export function AiProjectFilePicker({ onSubmit, onClose, existingPaths = [], total = 0 }: {
   onSubmit: (items: PickedFile[]) => Promise<void> | void
   onClose: () => void

@@ -1,6 +1,5 @@
 /**
  * 내 상태(사용자 메뉴) — 상단바 아바타 점·사용자 메뉴·Ctrl+K 명령이 같은 값을 본다.
- * Vue 판 composables/useMyStatus.ts 그대로.
  *
  * 기준은 서버(GET/PUT /api/chat/me/status — useChat 이 앱 시작 때 받아 둔다).
  *  - 상태 3칸: 온라인(auto) · 자리 비움(away) · 방해 금지(dnd)
@@ -9,7 +8,7 @@
  *  - 상태 메시지: custom_text/emoji/expires_at
  * 채팅 모듈이 꺼져 있거나 아직 못 받았으면 예전처럼 기기 저장(useUserPrefs)으로 동작한다.
  *
- * React: const { server, presence, dot, invisible, dndUntil, message, setPresence, ... } = useMyStatus()  (값은 .value 없이)
+ * React: const { server, presence, dot, invisible, dndUntil, message, setPresence, ... } = useMyStatus()
  * 컴포넌트 밖: myStatusSnapshot() 으로 같은 계산 값, set* 함수는 그대로 import
  */
 import { createStore, useStore } from 'zustand'
@@ -38,7 +37,7 @@ export interface MyStatusView {
   message: MyStatusMessage
 }
 
-/** Vue 판 computed 들을 한 번에 — 입력(채팅 모듈 켜짐·내 상태·기기 설정·시계)이 같으면 같은 결과 */
+/** 파생 값들을 한 번에 — 입력(채팅 모듈 켜짐·내 상태·기기 설정·시계)이 같으면 같은 결과 */
 function computeView(chatEnabled: boolean, myStatus: MyStatus | null, prefsPresence: Presence, prefsMessage: string, now: number): MyStatusView {
   const server = chatEnabled && !!myStatus
   const invisible = server && myStatus!.mode === 'invisible'

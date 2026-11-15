@@ -1,5 +1,5 @@
 /**
- * 라디오(시안 F): 18 원, 선택 = inset ring 1.5 primary + 안쪽 9px 점. 네이티브 input 유지(그룹은 같은 name).
+ * 라디오: 18 원, 선택 = inset ring 1.5 primary + 안쪽 9px 점. 네이티브 input 유지(그룹은 같은 name).
  * 그룹의 각 라디오에 같은 modelValue/onUpdateModelValue 와 자기 value 를 준다.
  * className 은 바깥 <label> 에, 나머지 속성은 안쪽 <input> 에. ref 는 안쪽 <input>.
  */
@@ -10,7 +10,7 @@ import { useModel, useUid } from './internal'
 type RadioValue = string | number | boolean
 
 export interface UiRadioProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'checked' | 'defaultChecked' | 'name' | 'disabled'> {
-  /** 그룹에서 고른 값(Vue v-model) */
+  /** 그룹에서 고른 값 */
   modelValue?: RadioValue | null
   /** 이 라디오를 골랐을 때 — 이 라디오의 value 로 불린다 */
   onUpdateModelValue?: (v: RadioValue | null) => void

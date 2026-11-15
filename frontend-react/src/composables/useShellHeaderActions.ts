@@ -1,6 +1,5 @@
 /**
  * 호스트 상단바 확장 자리 — 플러그인 페이지가 상단바 오른쪽(데스크톱 TopBar · 모바일 머리)에 버튼·칩을 넣는다.
- * (Vue 판 composables/useShellHeaderActions.ts 그대로)
  *
  * 플러그인 번들은 별도 빌드라 호스트 모듈을 import 할 수 없다. 같은 기능을 두 길로 연다(같은 상태를 바꾼다):
  *   ① 전역:   window.__WS_SHELL__.setHeaderActions(actions, owner?) → 해제 함수

@@ -1,4 +1,4 @@
-/* 위키 전역 스타일 — Vue pages/wiki.vue · components/wiki/WikiCollabEditor.vue 의 <style>(scoped 아님) 그대로 */
+/* 위키 전역 스타일(pages/wiki · WikiCollabEditor) */
 
 /* 기록 미리보기 변경 표시: 추가 = success 밑줄+틴트, 삭제 = danger 취소선+틴트 */
 .wiki-diff ins { text-decoration: underline; text-decoration-color: hsl(var(--success)); background: hsl(var(--success) / 0.15); }
@@ -9,7 +9,7 @@
   min-height: 240px;
   outline: none;
 }
-/* Vue 는 v-bind(emptyPlaceholderCss) — React 는 루트의 --wiki-collab-placeholder(따옴표 붙은 문자열) */
+/* 빈 문단 자리표시 글은 루트의 --wiki-collab-placeholder(따옴표 붙은 문자열) */
 .wiki-collab-editor .ProseMirror p.is-editor-empty:first-child::before {
   content: var(--wiki-collab-placeholder);
   float: left;

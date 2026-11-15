@@ -22,7 +22,7 @@ export type UiTriValue = 'deny' | 'inherit' | 'allow'
 export const UI_TRI_VALUES: readonly UiTriValue[] = ['deny', 'inherit', 'allow'] as const
 
 export interface UiTriToggleProps extends Omit<HTMLAttributes<HTMLDivElement>, 'role'> {
-  /** 고른 값(Vue v-model). 안 주면 부품이 가진다(처음 = inherit) */
+  /** 고른 값. 안 주면 부품이 가진다(처음 = inherit) */
   modelValue?: UiTriValue
   /** 값 바뀜 */
   onUpdateModelValue?: (v: UiTriValue) => void

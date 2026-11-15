@@ -10,7 +10,6 @@ export interface AdminOpsTileProps {
 
 /**
  * 운영 요약 한 칸 — 틴트 아이콘 36 · 이름 12 · 값 15/600(hint 를 title 로) · 오른쪽 바로 가기 글자 링크.
- * Vue 판 dashboard.vue 의 tiles v-for 한 칸.
  */
 export function AdminOpsTile({ tile }: AdminOpsTileProps) {
   return (

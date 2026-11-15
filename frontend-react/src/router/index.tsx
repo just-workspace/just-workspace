@@ -1,5 +1,5 @@
 /**
- * 라우터 — Vue `pages/**` 와 같은 URL(routes.ts 표) + 레이아웃 + 전역 가드.
+ * 라우터 — routes.ts 표의 URL + 레이아웃 + 전역 가드.
  *
  * 구조:
  *   root(App, loader = 전역 가드)
@@ -10,8 +10,8 @@
  *     │    └─ SettingsLayout(pathless) → layout:'settings' 화면들
  *     └─ *  → 404(AuthErrorScreen)
  *
- * 페이지 파일은 src/pages/<file> 에서 지연 로드(import.meta.glob). 이식은 그 파일만 바꾸면 된다.
- * Vue 와 달리 admin/settings 레이아웃이 기본 셸 안에 중첩돼 있어, 셸 사이를 오갈 때 사이드바가 다시 마운트되지 않는다.
+ * 페이지 파일은 src/pages/<file> 에서 지연 로드(import.meta.glob).
+ * admin/settings 레이아웃이 기본 셸 안에 중첩돼 있어, 셸 사이를 오갈 때 사이드바가 다시 마운트되지 않는다.
  */
 import type { ComponentType } from 'react'
 import { isChunkLoadError, isReloading, reloadOnce } from '~/lib/chunkReload'
@@ -45,17 +45,17 @@ function pageRoute(def: AppRouteDef): RouteObject {
     handle,
     lazy: async () => ({ Component: (await load()).default }),
   }
-  // Vue redirect 메타: 쿼리 없이 그 주소로
+  // redirect 메타: 쿼리 없이 그 주소로
   if (def.redirect) r.loader = () => redirect(def.redirect!)
   return r
 }
 
 function NotFound() {
-  // Nuxt 의 라우트 없음 오류처럼 url 은 비워 둔다 — 화면이 현재 경로(route.fullPath)를 보여 준다
+  // 라우트 없음 오류의 url 은 비워 둔다 — 화면이 현재 경로(route.fullPath)를 보여 준다
   return <AuthErrorScreen error={{ statusCode: 404 }} />
 }
 
-/** 라우터 오류(로더 실패·렌더 실패) — Nuxt error.vue 와 같은 화면 */
+/** 라우터 오류(로더 실패·렌더 실패) 화면 */
 function RouteError() {
   const err = useRouteError()
   // 재배포 뒤 옛 화면 조각을 못 불러온 것 — 오류 화면 대신 새로고침(30초 안 되풀이면 오류 화면)

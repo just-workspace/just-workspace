@@ -1,5 +1,5 @@
 /**
- * 채널 탭 — 위키. Vue 원본: frontend/components/chat/ChannelWikiTab.vue (ChatChannelWikiTab)
+ * 채널 탭 — 위키.
  *  왼쪽 300 = 머리 h-11 "연결된 위키 · {스페이스}" + [+](이 채널에 새 페이지) · 페이지 행 h-12(제목 13 · 작성자 · 날짜 11 muted), 고른 행 bg-accent + 600.
  *  오른쪽 = 읽기 전용 본문(px-10 py-8, 최대 680): 제목 2xl bold + [위키에서 열기](outline xs) · 작성자 · 시각 mono · v버전 · "채널 탭에서는 읽기만".
  * [+]: 누르면 pressed, 목록 위에 UiInput "새 페이지 제목" + 안내 11 muted

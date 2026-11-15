@@ -1,4 +1,3 @@
-// Vue 원본: frontend/pages/settings/account.vue
 // 설정 › 계정: 아바타 64 + 이름·가입 정보 + [사진 바꾸기], 표시 이름·복구 이메일 2열, CalDAV/CardDAV 읽기 전용 + 복사,
 // 카드 푸터 [되돌리기][저장]. 아래 로그인된 기기 카드(SettingsDevices — 내 세션 목록·개별 로그아웃).
 // 복구 이메일은 저장 즉시 바뀌지 않는다(비밀번호 재설정 링크가 가는 주소 — 세션 탈취만으로 바뀌면 안 된다):
@@ -42,7 +41,7 @@ export default function SettingsAccountPage() {
     finally { setAvatarUploading(false); target.value = '' }
   }
 
-  // 프로필 폼(변경 감지) — watch(user, immediate): 사용자 정보가 바뀌면 원본·폼을 다시 채운다
+  // 프로필 폼(변경 감지) — 사용자 정보가 바뀌면 원본·폼을 다시 채운다(처음에도)
   const [original, setOriginal] = useState<ProfileForm>({ display_name: '', recovery_email: '' })
   const [form, setForm] = useState<ProfileForm>({ display_name: '', recovery_email: '' })
   useEffect(() => {
@@ -171,7 +170,7 @@ export default function SettingsAccountPage() {
           <UiInput modelValue={user?.primary_email || user?.email || null} label={t('fields.email')} disabled />
           <UiInput modelValue={caldav} label={t('profile.caldavLabel')} readonly mono className="sm:col-span-2" />
           <UiInput modelValue={carddav} label={t('profile.carddavLabel')} readonly mono className="sm:col-span-2" />
-          <p className="text-xs text-muted-foreground sm:col-span-2">{/* Vue 처럼 한 텍스트 노드로(노드가 갈리면 글자 배치가 1px 어긋남) */}{`${t('profile.syncDescription')} ${t('profile.syncPasswordHint')}`}</p>
+          <p className="text-xs text-muted-foreground sm:col-span-2">{/* 한 텍스트 노드로(노드가 갈리면 글자 배치가 1px 어긋남) */}{`${t('profile.syncDescription')} ${t('profile.syncPasswordHint')}`}</p>
           {error && <UiErrorTile title={error} noRetry className="sm:col-span-2" />}
         </form>
       </SettingsCard>

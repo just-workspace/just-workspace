@@ -1,6 +1,5 @@
 /**
  * 개인 설정 — 서버(/api/me/prefs)와 동기화.
- * Vue 판 composables/useUserPrefs.ts 그대로.
  *
  * - 로그인하면 서버 값을 받아 적용한다(서버에 있는 키가 이긴다). 받기 전에 바꾼 키는 내 변경을 지킨다.
  * - 바꾸면 이 기기(localStorage)에 바로 쓰고, 600ms 모아서 PATCH 한다. 실패·오프라인이면 로컬 값으로 계속 쓰고
@@ -19,7 +18,7 @@
  *
  * 프레즌스(온라인·자리 비움·방해 금지)·상태 메시지는 기기 상태라 로컬에만 둔다(서버 프레즌스는 채팅 소켓 담당).
  *
- * React: const { prefs, density, setDensity, ... } = useUserPrefs()  (값은 .value 없이)
+ * React: const { prefs, density, setDensity, ... } = useUserPrefs()
  * 컴포넌트 밖: userPrefsStore.getState().prefs, setPref 계열 함수 import
  */
 import { createStore, useStore } from 'zustand'
@@ -344,8 +343,8 @@ async function pull(uid: string) {
 
 /**
  * 처음 쓰는 곳(기본 레이아웃)에서 한 번 — 로그인 감시·테마/언어 감시·온라인 복귀 재전송.
- * Vue 판은 컴포넌트 setup 안에서만 시작했다(getCurrentInstance). React 판은 useUserPrefs() 첫 호출 때 시작한다.
- * 감시는 앱 수명 동안 산다(Vue 의 떼어 낸 effectScope 와 같음).
+ * useUserPrefs() 첫 호출 때 시작한다.
+ * 감시는 앱 수명 동안 산다.
  */
 function startSync() {
   if (_syncStarted) return
@@ -436,7 +435,7 @@ export function pushStatusEmojiRecent(emoji: string) {
   setPref('statusEmojiRecent', next)
 }
 
-/** 컴포넌트 밖에서 설정을 읽기 전에(로컬 값 적재 + 동기화 시작) — Vue 의 useUserPrefs() 를 store 안에서 부르던 자리 */
+/** 컴포넌트 밖에서 설정을 읽기 전에(로컬 값 적재 + 동기화 시작) — store 안에서 부른다 */
 export function ensureUserPrefs() {
   load()
   startSync()

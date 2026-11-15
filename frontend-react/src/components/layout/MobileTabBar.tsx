@@ -1,5 +1,5 @@
 /**
- * 모바일 하단 탭바(Vue components/layout/MobileTabBar.vue): 홈 · 채팅 · 활동 · 메일 · 전체.
+ * 모바일 하단 탭바: 홈 · 채팅 · 활동 · 메일 · 전체.
  * 64 + safe-area, 활성 = primary 글자 + 32 타일 primary/16.
  * 배지: 채팅 = 나를 부른 것(멘션+DM), 활동 = 안 읽은 알림. 메일 = 7px 점(안 읽은 메일이 있을 때 — useMailUnread:
  *   기존 /api/mail/mailboxes 받은편지함 unread_count. 데이터가 오기 전·계정 없음이면 점 없음).

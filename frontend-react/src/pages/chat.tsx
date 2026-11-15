@@ -1,10 +1,10 @@
 /**
- * 채팅 화면. Vue 원본: frontend/pages/chat.vue
+ * 채팅 화면.
  * 데스크톱(22 셸, 디스코드식 4열): 레일 64(셸) · 채널 목록(기본 298, 드래그 199–367 · 더블클릭 298, 레일 채팅 아이콘을 다시 누르면 접힘)
  *   · 대화 1fr · 오른쪽 자리 하나(멤버 264 / 스레드 400 / 스레드 목록 400 / 검색 결과 400 / 고정 400 / 음성 글 채팅 340 — 서로 배타,
  *   새로 연 것이 바꿔 낀다, utils/chatRightColumn). 실효 폭 1180 미만이면 오른쪽 자리는 대화 위 덮개.
  *   채팅 화면엔 데스크톱 전역 상단바가 없다(routes.ts noDesktopTopbar) — 위쪽 크롬 = 채널 머리 49.
- *   세로 화면(실효 높이 > 폭): 채널 목록을 접고 머리 왼쪽 ☰ 로 여는 서랍(260), 채널을 고르기 전에는 260 으로 붙여 둔다(답 4).
+ *   세로 화면(실효 높이 > 폭): 채널 목록을 접고 머리 왼쪽 ☰ 로 여는 서랍(260), 채널을 고르기 전에는 260 으로 붙여 둔다.
  *   채팅 설정(useChatUi.settings)이 열리면 대화 영역 위 전체(레일 제외)를 덮는다 — ChatSettingsScreen(SETTINGS 담당, lazy).
  * 모바일(390): 한 번에 한 화면 — 목록 → 대화 → (스레드 · 스레드 목록 · 검색 · 멤버 · 고정 전체 화면). 대화 이상에서는 탭바를 숨긴다.
  *   목록으로 돌아가기: 상단 ‹(44) 또는 화면 왼쪽 가장자리에서 밀기. 단계는 주소에 싣는다(utils/chatStage).
@@ -14,7 +14,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ComponentType, type TouchEvent } from 'react'
 import { useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
-// Vue :class 처럼 이어 붙이기만 한다(tailwind-merge 없이 — 원본과 같은 CSS 순서 규칙)
+// class 를 이어 붙이기만 한다(tailwind-merge 없이 — 뒤에 온 클래스를 지우지 않는다)
 import { clsx as cn } from 'clsx'
 import { useI18n } from '~/i18n'
 import { useHead } from '~/lib/head'
@@ -86,7 +86,7 @@ export default function ChatPage() {
   const { appName } = useSiteConfig()
   useHead({ title: `${t('nav.chat')} | ${appName}` })
 
-  // 렌더에 쓰는 값만 구독(Vue 의 useChat() 구조 분해)
+  // 렌더에 쓰는 값만 구독
   const selectedChannelId = useStore(chatStore, s => s.selectedChannelId)
   const selectedChannel = useStore(chatStore, s => selectSelectedChannel(s))
   useStore(chatStore, s => s.allUsers)   // DM 이름(경로 표시)
@@ -225,14 +225,14 @@ export default function ChatPage() {
         if (q.panel === 'members') setShowMemberPanel(true)
         if (q.panel === 'pins') setShowPinsPanel(true)
       } finally {
-        // Vue nextTick — 이번 변경으로 다시 그린 뒤(상태 → 주소 effect 가 돈 뒤)에 푼다
+        // 이번 변경으로 다시 그린 뒤(상태 → 주소 effect 가 돈 뒤)에 푼다
         await new Promise(res => setTimeout(res, 0))
         applyingRoute.current = false
       }
     })()
   }, [route.fullPath])
 
-  // 왼쪽 가장자리에서 밀어 뒤로(M2 노트)
+  // 왼쪽 가장자리에서 밀어 뒤로
   const edgeX = useRef<number | null>(null)
   const edgeY = useRef(0)
   function onTouchStart(e: TouchEvent) {
@@ -256,7 +256,7 @@ export default function ChatPage() {
     setShowSearchPanel(true)
   }
 
-  // ─── 단축키(D8 · 실제 키는 여기 정의) ───
+  // ─── 단축키(실제 키는 여기 정의) ───
   // Alt+↑↓ 이전/다음 채널 · Alt+Shift+↑↓ 안 읽은 채널로 · Ctrl+Shift+T 전체 스레드 · Esc 패널 닫기
   useEffect(() => {
     function moveChannel(dir: 1 | -1, unreadOnly: boolean) {

@@ -1,5 +1,5 @@
 /**
- * 게시판 만들기(관리자) — Vue 판 components/board/BoardCreateModal.vue 이식.
+ * 게시판 만들기(관리자).
  * 이름 → 주소(slug) 자동 생성, 카테고리는 쉼표로 구분, 쓰기 권한(모두/관리자).
  */
 import { useState } from 'react'
@@ -34,7 +34,7 @@ export function BoardCreateModal({ onClose }: BoardCreateModalProps) {
   const [writePermission, setWritePermission] = useState('all')
   const [submitting, setSubmitting] = useState(false)
 
-  // Auto-generate slug from name (Vue watch(name) — 새 값 기준으로 "한 글자 전 이름"의 slug 와 비교)
+  // Auto-generate slug from name (새 값 기준으로 "한 글자 전 이름"의 slug 와 비교)
   function setName(val: string) {
     setNameState(val)
     if (val === name) return

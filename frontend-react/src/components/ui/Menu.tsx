@@ -3,11 +3,11 @@
  *  데스크톱 — 팝오버: rounded-lg · border · bg-popover · shadow-md · p-1 · 폭 224 · 항목 36(dense 32) · 아이콘 16 · 13px.
  *  모바일   — UiActionSheet(바닥 시트, 항목 48). sheet={false} 면 모바일에서도 팝오버.
  * 두 가지로 연다.
- *  ① 트리거형: trigger({ toggle, open, controls }) 함수(Vue #trigger 스코프 슬롯) 또는 기본 ⋯ 아이콘 버튼. 열림 상태는 이 부품이 가진다.
+ *  ① 트리거형: trigger({ toggle, open, controls }) 함수 또는 기본 ⋯ 아이콘 버튼. 열림 상태는 이 부품이 가진다.
  *  ② 기준형: anchor(DOMRect·요소)를 주고 부모가 조건부로 붙였다 뗀다(우클릭·트리 노드 ⋯). 마운트 = 열림, 닫힘은 onClose.
  * 키보드: ↑↓ Home End 이동 · Enter/Space 실행 · Esc 닫고 트리거로 포커스 · Tab 닫기 · 글자 입력 = 타입어헤드(앞글자 일치).
  * 바깥 클릭: 트리거형은 문서 pointerdown(클릭이 밑 요소까지 간다), 기준형은 투명 막(우클릭도 닫음).
- * ref 로 { toggle, open, close } 를 쓸 수 있다(Vue defineExpose 와 같음).
+ * ref 로 { toggle, open, close } 를 쓸 수 있다.
  *
  * 확장:
  *  ① 항목 description — 이름 아래 한 줄(12 muted, truncate). 비활성 이유 등.
@@ -91,7 +91,7 @@ export interface UiMenuItem {
   panelWidth?: number
 }
 
-/** trigger 함수가 받는 것(Vue #trigger 슬롯 스코프) */
+/** trigger 함수가 받는 것 */
 export interface UiMenuTriggerScope {
   /** 열기/닫기 */
   toggle: () => void
@@ -101,7 +101,7 @@ export interface UiMenuTriggerScope {
   controls: string
 }
 
-/** ref 로 쓰는 것(Vue defineExpose) */
+/** ref 로 쓰는 것 */
 export interface UiMenuHandle {
   toggle: () => void
   open: () => void
@@ -137,9 +137,9 @@ export interface UiMenuProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title
   onClose?: () => void
   /** 열림 */
   onOpen?: () => void
-  /** 트리거 직접 그리기(Vue #trigger 스코프 슬롯) */
+  /** 트리거 직접 그리기 */
   trigger?: (scope: UiMenuTriggerScope) => ReactNode
-  /** 모바일 시트 머리글 아이콘 자리(Vue #sheet-header 슬롯) */
+  /** 모바일 시트 머리글 아이콘 자리 */
   sheetHeader?: ReactNode
   /** 메뉴 위쪽 자유 내용(입력 등) — 항목 앞에 그린다. 함수면 { close, back } */
   content?: ReactNode | ((api: UiMenuPanelApi) => ReactNode)
@@ -238,10 +238,10 @@ export function UiMenu({
     L.current.onOpen?.()
   }
 
-  // Vue nextTick(show 뒤): 자리 잡기 → 체크된 항목(현재 값)이 있으면 그리로, 없으면 첫 항목에 포커스
+  // 열린 다음 렌더 뒤: 자리 잡기 → 체크된 항목(현재 값)이 있으면 그리로, 없으면 첫 항목에 포커스
   // (content 에 data-autofocus 가 있으면 그것 — 입력이 들어간 메뉴)
   // 포커스는 자리가 잡혀 패널이 보인 뒤(pos 가 생긴 렌더)에 준다 — visibility:hidden 인 요소는 focus() 가 무시돼
-  // 마우스로 연 메뉴에서 Esc·↑↓ 가 메뉴에 닿지 않던 문제(플러그인 검수에서 발견)
+  // 마우스로 연 메뉴에서 Esc·↑↓ 가 메뉴에 닿지 않던 문제
   const pendingFocus = useRef(false)
   useLayoutEffect(() => {
     if (!open || !pendingShow.current) return
@@ -257,7 +257,7 @@ export function UiMenu({
     ;(auto ?? menuItems().find(el => el.getAttribute('aria-checked') === 'true') ?? menuItems()[0])?.focus()
   }, [open, pos])
 
-  // ── 하위 메뉴·펼침 패널(C6) ──
+  // ── 하위 메뉴·펼침 패널 ──
   const [sub, setSub] = useState<{ key: string; focus: boolean } | null>(null)
   const [subPos, setSubPos] = useState<{ left: number; top: number } | null>(null)
   const subRef = useRef<HTMLDivElement | null>(null)
@@ -453,7 +453,7 @@ export function UiMenu({
     }
   }, [])
 
-  // 항목 수가 바뀌면 자리 다시(Vue watch items.length → nextTick(place))
+  // 항목 수가 바뀌면 자리 다시
   const firstLen = useRef(true)
   useLayoutEffect(() => {
     if (firstLen.current) { firstLen.current = false; return }

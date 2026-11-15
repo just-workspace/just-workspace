@@ -1,4 +1,4 @@
-// 문서 제목 쌓임 — 첫 마운트(직접 진입·새로고침)에도 페이지 제목이 App 의 앱 이름을 이겨야 한다(Vue unhead 와 같음).
+// 문서 제목 쌓임 — 첫 마운트(직접 진입·새로고침)에도 페이지 제목이 App 의 앱 이름을 이겨야 한다.
 import { describe, it, expect, beforeEach } from 'vitest'
 import { render, act } from '@testing-library/react'
 import { useState, type ReactNode } from 'react'

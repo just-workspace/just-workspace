@@ -48,7 +48,7 @@ beforeEach(() => {
   userPrefsStore.setState({ prefs: { ...userPrefsStore.getState().prefs, chatLinkPreview: true, statusEmojiRecent: [] } })
 })
 
-describe('링크 미리보기 카드(B12 · R13 #link)', () => {
+describe('링크 미리보기 카드', () => {
   it('사이트 → 제목 → 설명 → 서버 프록시 썸네일, 카드는 새 창 링크', () => {
     renderInRouter(<ChatMessage message={msg() as any} grouped={false} isOwn={false} />)
     const card = screen.getByRole('group', { name: t('chat.message.linkPreview') })
@@ -139,7 +139,7 @@ describe('링크 미리보기 카드(B12 · R13 #link)', () => {
   })
 })
 
-describe('상태 메시지 이모지 8×2(A4 · R13 #emoji)', () => {
+describe('상태 메시지 이모지 8×2', () => {
   it('최근 쓴 것이 앞, 남은 칸은 기본 추천으로 채워 16칸', () => {
     expect(statusEmojiCells([])).toEqual(STATUS_EMOJIS.slice(0, 16))
     const cells = statusEmojiCells(['🧪', '🎧'])
@@ -181,7 +181,7 @@ describe('상태 메시지 이모지 8×2(A4 · R13 #emoji)', () => {
   })
 })
 
-describe('탭바 메일 안 읽음 점(B24)', () => {
+describe('탭바 메일 안 읽음 점', () => {
   it('받은편지함 unread_count 합', () => {
     expect(inboxUnread([{ role: 'inbox', unread_count: 3 }, { role: 'sent', unread_count: 9 }, { role: 'inbox', unread_count: 2 }])).toBe(5)
     expect(inboxUnread([])).toBe(0)

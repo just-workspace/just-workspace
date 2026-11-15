@@ -1,5 +1,5 @@
 /**
- * 관리 › 설정 › 앱 빌드 — Vue pages/admin/app-build.vue.
+ * 관리 › 설정 › 앱 빌드.
  * 배포 채널 · 빌드 = AdminAppBuild.
  */
 import { useEffect } from 'react'

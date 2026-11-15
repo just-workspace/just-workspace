@@ -1,9 +1,9 @@
 /**
- * 모바일 상세 화면 상단 바(Vue components/layout/MobileDetailBar.vue):
+ * 모바일 상세 화면 상단 바:
  * 56, ‹(44) · 제목 16/600(+보조 12 mono/muted) · 액션 ≤2(44, ⋯ 로 접기).
  * 상세(본문·문서·작업·연락처·게시글·미리보기)에서는 탭바를 숨긴다 — hideTabbar 가 셸의 mobile-detail-open 을 켠다.
  * 데스크톱(md↑)에서는 렌더하지 않는다(md:hidden). 1차 행동은 하단 고정 바로.
- * 오른쪽 액션은 actions(UiIconButton size="lg" ≤2, 글자 버튼 h-11). 제목 자리를 바꾸려면 titleSlot(Vue #title).
+ * 오른쪽 액션은 actions(UiIconButton size="lg" ≤2, 글자 버튼 h-11). 제목 자리를 바꾸려면 titleSlot.
  * 뒤로: 기본은 onBack 후 backTo → router.back → '/'. navigate=false 면 onBack 만 부른다
  *       (같은 라우트 안에서 판을 닫는 상세 — 파일 상세 패널·연락처 상세 등).
  */
@@ -32,9 +32,9 @@ export interface LayoutMobileDetailBarProps {
   replaceTopbar?: boolean
   /** 뒤로 버튼을 눌렀을 때 */
   onBack?: () => void
-  /** 제목 자리 전체를 바꾼다(Vue 슬롯 #title) */
+  /** 제목 자리 전체를 바꾼다 */
   titleSlot?: ReactNode
-  /** 오른쪽 액션 ≤2 (UiIconButton size="lg") — Vue 슬롯 #actions */
+  /** 오른쪽 액션 ≤2 (UiIconButton size="lg") */
   actions?: ReactNode
 }
 

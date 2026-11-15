@@ -1,6 +1,6 @@
 /**
- * 셸 내부용 — Vue `<Transition enter-*-class leave-*-class>` 를 같은 Tailwind 클래스로 흉내 낸다(새 애니메이션 라이브러리 없이).
- * Vue 와 같은 순서: 들어올 때 [enterActive + enterFrom] → 다음 프레임 [enterActive + enterTo] → 끝나면 클래스 없음.
+ * 셸 내부용 — 들어올 때·나갈 때 클래스를 바꿔 끼우는 전환을 Tailwind 클래스로 만든다(새 애니메이션 라이브러리 없이).
+ * 순서: 들어올 때 [enterActive + enterFrom] → 다음 프레임 [enterActive + enterTo] → 끝나면 클래스 없음.
  *                  나갈 때 [leaveActive + leaveFrom] → 다음 프레임 [leaveActive + leaveTo] → duration 뒤 언마운트.
  * children 은 지금 붙일 전환 클래스를 받아 요소 하나를 그리는 함수.
  */

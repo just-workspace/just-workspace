@@ -117,7 +117,7 @@ describe('2단계 인증', () => {
   })
 })
 
-describe('세션(답변서 B7 · TM1)', () => {
+describe('세션', () => {
   it('접속 주소 = 호스트 이름, 없으면 IP', () => {
     expect(sessionAddress('host-203-0-113-9.isp.example', '203.0.113.9')).toBe('host-203-0-113-9.isp.example')
     expect(sessionAddress('', '198.51.100.80')).toBe('198.51.100.80')
@@ -136,7 +136,7 @@ describe('세션(답변서 B7 · TM1)', () => {
   })
 })
 
-describe('비밀번호 체크 목록(답변서 B6)', () => {
+describe('비밀번호 체크 목록', () => {
   const ctx = ['alice', 'alice@x.io']
   const ok = (rs: ReturnType<typeof settingsPasswordRules>) => rs.map(r => `${r.key}:${r.ok ? 1 : 0}`).join(' ')
   it('흔한 비밀번호는 서버 응답 뒤에만 통과', () => {
@@ -151,7 +151,7 @@ describe('비밀번호 체크 목록(답변서 B6)', () => {
   })
 })
 
-describe('브랜딩 로그인 배경 순서(답변서 B5)', () => {
+describe('브랜딩 로그인 배경 순서', () => {
   it('끌어 놓기 순서', () => {
     expect(WALLPAPER_MAX).toBe(4)
     expect(moveItem(['a', 'b', 'c'], 2, 0)).toEqual(['c', 'a', 'b'])

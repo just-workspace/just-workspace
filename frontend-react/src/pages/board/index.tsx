@@ -1,10 +1,9 @@
 /**
  * 게시판 인덱스 + 보조 보기(필독 · 북마크 · 검색 결과).
- * Vue 원본: frontend/pages/board/index.vue
  *  커맨드 바 44: "전체 게시판" | 검색(모든 게시판) + 글쓰기(게시판 고르기)
  *  2열 카드(rounded 12 · card): 머리(이름 14/600 · 전체 보기) + 최근 글 행 48(안 읽음 굵게 / 읽음 foreground·80 · 작성자 · 날짜 mono)
  *  검색은 커맨드 바 입력 → ?view=search&q=(&board=) 로 결과를 같은 행 규격(56)으로 보여 준다.
- *  모바일 인덱스는 시안 그림이 없어 같은 카드를 1열로 쌓았다(보고서).
+ *  모바일 인덱스는 같은 카드를 1열로 쌓는다.
  * "새 글 N"(카드 머리 메타) = GET /unread-counts. 카드 행 굵게 = boards-with-posts 의 is_read.
  * 보조 보기 "내가 쓴 글"(?view=mine) = GET /my-posts.
  */

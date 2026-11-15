@@ -45,7 +45,7 @@ beforeEach(() => {
   setUser({ id: 'u1', username: 'haneul', display_name: '정하늘', email: null, primary_email: null, avatar_url: null, recovery_email: null, is_admin: false, last_login_at: null } as any)
 })
 
-describe('탭 관리 — 위키 스페이스 바꾸기(#tabWiki)', () => {
+describe('탭 관리 — 위키 스페이스 바꾸기', () => {
   it('‹ 제목 · 검색 · 지금 것 ✓ · 고르고 [이 스페이스로] = wiki_space_id 저장', async () => {
     api.handler = (url, opts) => {
       if (url === '/api/wiki/spaces') {
@@ -114,7 +114,7 @@ describe('탭 관리 — 연결 해제(핸드오프 15-7)', () => {
   })
 })
 
-describe('탭 관리 — 파일 폴더 연결(#tabFolder)', () => {
+describe('탭 관리 — 파일 폴더 연결', () => {
   it('행 = 고르기("이름" 연결), › = 들어가기(경로 줄 갱신), 연결 = folder_path 저장', async () => {
     const dirs: Record<string, any[]> = {
       my: [{ name: '개발팀', path: 'my/개발팀', is_dir: true, size: 0, modified_at: null, mime_type: null }],
@@ -153,7 +153,7 @@ describe('탭 관리 — 파일 폴더 연결(#tabFolder)', () => {
   })
 })
 
-describe('위키 탭 [+](#wikiNew)', () => {
+describe('위키 탭 [+]', () => {
   it('[+] = pressed + 제목 입력 + 안내(어디에 생기는지), Esc = 취소', async () => {
     api.handler = (url) => (url === '/api/wiki/spaces/sp1/pages' ? [] : {})
     renderIn(<ChatChannelWikiTab space={{ id: 'sp1', name: '개발 팀 스페이스' }} canManage />)
@@ -192,7 +192,7 @@ describe('위키 탭 [+](#wikiNew)', () => {
   })
 })
 
-describe('모바일 파일 상세 — 정보 탭 활동 묶음(B3)', () => {
+describe('모바일 파일 상세 — 정보 탭 활동 묶음', () => {
   const item = { name: '보고서.docx', path: 'my/보고서.docx', is_dir: false, size: 10, modified_at: '2026-10-14T09:00:00Z', mime_type: null } as any
   const acts = Array.from({ length: 7 }, (_, i) => ({
     id: `a${i}`, action: 'edit', user: { id: 'u2', name: `사람${i}` }, sub_path: null, detail: null, created_at: '2026-10-14T09:00:00Z',

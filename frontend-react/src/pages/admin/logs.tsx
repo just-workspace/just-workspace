@@ -1,7 +1,7 @@
 /**
- * 관리 › 시스템 › 접근 로그 — Vue 원본: frontend/pages/admin/logs.vue ("접근 로그").
+ * 관리 › 시스템 › 접근 로그.
  * 디자인 그림 없는 화면 → 공용 표 규격(th 11/600 0.06em, 행 40 조밀 로그, 하단 바 48 mono 범위 + 32 버튼)과
- * 커맨드 바 필터(서비스 선택)로 구성(디자이너 확인 필요).
+ * 커맨드 바 필터(서비스 선택)로 구성.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'

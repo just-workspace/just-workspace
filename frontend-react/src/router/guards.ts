@@ -1,7 +1,7 @@
 /**
- * 전역 라우트 가드 — Vue 판 middleware/*.global.ts + plugins/auth.ts 대응.
- * Nuxt 는 전역 미들웨어를 파일 이름 순으로 돌린다: auth.global → module-guard.global → setup.global.
- * 여기서도 같은 순서로 판정하고, 첫 리다이렉트에서 멈춘다(리다이렉트된 곳에서 다시 처음부터).
+ * 전역 라우트 가드.
+ * 순서: 인증(auth) → 모듈 켜짐(module-guard) → 초기 설정(setup).
+ * 이 순서로 판정하고, 첫 리다이렉트에서 멈춘다(리다이렉트된 곳에서 다시 처음부터).
  *
  * 루트 라우트 loader 가 매 이동마다 부른다(router/index.tsx).
  */
@@ -13,11 +13,11 @@ import { getSharedState, setSharedState } from '~/lib/state'
 
 export interface GuardTarget {
   path: string
-  /** 알려진 라우트에 맞았는가(Vue to.matched.length > 0) */
+  /** 알려진 라우트에 맞았는가 */
   matched: boolean
 }
 
-/** 앱 시작 시 한 번 — Vue plugins/auth.ts(사용자 정보를 먼저 읽고 첫 화면) */
+/** 앱 시작 시 한 번 — 사용자 정보를 먼저 읽고 첫 화면 */
 let _booted: Promise<void> | null = null
 export function bootAuth(): Promise<void> {
   if (!_booted) _booted = fetchUser()
@@ -159,7 +159,7 @@ export async function setupGuard(to: GuardTarget): Promise<string | null> {
   return null
 }
 
-/** 세 가드를 Nuxt 순서대로. 리다이렉트할 주소 또는 null */
+/** 세 가드를 순서대로. 리다이렉트할 주소 또는 null */
 export async function runGuards(to: GuardTarget): Promise<string | null> {
   await bootAuth()
   const a = await authGuard(to)

@@ -1,5 +1,5 @@
 /**
- * 캘린더 공유 대화 상자(Vue components/calendar/CalendarShareModal.vue — 시안 반영 전 예전 마크업 그대로).
+ * 캘린더 공유 대화 상자(시안 반영 전 예전 마크업 그대로).
  * 이메일 + "쓰기 허용" 으로 추가, 현재 공유 목록에서 권한 토글·해제. showShareModal 이 켜지면 공유 목록을 읽는다.
  */
 import { useEffect, useRef, useState } from 'react'

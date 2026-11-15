@@ -1,4 +1,4 @@
-// 메일 작성 창 store — 열기·중복 방지·펼침 한도·닫기·로그아웃 시 비움(Vue app.vue watch 대응)
+// 메일 작성 창 store — 열기·중복 방지·펼침 한도·닫기·로그아웃 시 비움
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 

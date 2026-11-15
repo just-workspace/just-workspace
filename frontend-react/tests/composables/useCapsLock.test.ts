@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { useCapsLock } from '~/composables/useCapsLock'
 
-// React 판 useCapsLock 은 hook 이라 renderHook 으로 부르고, result.current.capsLock 이 Vue 판 capsLock.value 와 같은 값이다.
+// useCapsLock 은 hook 이라 renderHook 으로 부르고, result.current.capsLock 을 본다.
 function key(caps: boolean): KeyboardEvent {
   return { getModifierState: (k: string) => k === 'CapsLock' && caps } as unknown as KeyboardEvent
 }

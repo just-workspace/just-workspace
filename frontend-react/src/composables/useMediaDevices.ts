@@ -1,5 +1,5 @@
 /**
- * 미디어 장치 목록 — 열거·정리·짝짓기. Vue 판 composables/useMediaDevices.ts 그대로.
+ * 미디어 장치 목록 — 열거·정리·짝짓기.
  *
  * 브라우저가 주는 목록은 그대로 쓰기 어렵다. Windows 는 같은 장치를
  * "Default - ...", "Communications - ...", 그리고 실제 항목까지 세 번 내놓고,
@@ -72,7 +72,7 @@ export function normalizeDeviceList(devices: MediaDeviceInfo[], fallbackName: st
   return out
 }
 
-/** Vue 판 useState('media-cameras' | 'media-mics' | 'media-speakers') */
+/** 앱 전역 장치 목록: 카메라 · 마이크 · 스피커 */
 export const mediaDevicesStore = createStore<{ cameras: NormalizedDevice[]; microphones: NormalizedDevice[]; speakers: NormalizedDevice[] }>()(() => ({
   cameras: [],
   microphones: [],
@@ -110,8 +110,8 @@ export function pairedSpeakerFor(micId: string): NormalizedDevice | null {
 }
 
 /**
- * devicechange 감시. Vue 판은 useMediaDevices() 를 부를 때마다 따로 `listening` 을 가졌다(인스턴스별).
- * React 도 같게 — 인스턴스(hook 하나·mediaDevicesApi() 하나)마다 자기 시작/중지.
+ * devicechange 감시. `listening` 은 인스턴스별이다 —
+ * 인스턴스(hook 하나·mediaDevicesApi() 하나)마다 자기 시작/중지.
  */
 function makeListener() {
   let listening = false
@@ -128,7 +128,7 @@ function makeListener() {
   return { startListening, stopListening }
 }
 
-/** 컴포넌트 밖(useMeetings 등)에서 Vue 의 useMediaDevices() 처럼 쓰는 객체(목록은 mediaDevicesStore) */
+/** 컴포넌트 밖(useMeetings 등)에서 쓰는 객체(목록은 mediaDevicesStore) */
 export function mediaDevicesApi() {
   return { refresh: refreshMediaDevices, pairedSpeakerFor, ...makeListener() }
 }

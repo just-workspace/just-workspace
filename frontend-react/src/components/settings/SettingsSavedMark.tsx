@@ -1,6 +1,6 @@
 /**
  * "저장됨 ✓" 표시(12/600 success, role=status) — 카드 머리 밖에서 즉시 저장 행 옆에 붙일 때.
- * (카드 머리에는 SettingsCard 의 saved prop 을 쓴다.) Vue 원본 알림·메일 설정의 같은 인라인 마크업을 이름 붙여 뺀 것.
+ * (카드 머리에는 SettingsCard 의 saved prop 을 쓴다.)
  *
  * @example {saved && <SettingsSavedMark />}
  */

@@ -1,7 +1,6 @@
 /**
  * 페이지(또는 화면 단계)가 모바일에서 자체 머리(상단 바)를 쓴다고 셸에 알린다 → 셸이 모바일 공용 상단바(LayoutTopBar)를 숨긴다.
- * Vue 판 composables/useOwnMobileHeader.ts 그대로.
- *  · 정적: routes.ts 의 ownMobileHeader: true (Vue definePageMeta) — 그 페이지는 모바일에서 늘 자체 머리
+ *  · 정적: routes.ts 의 ownMobileHeader: true — 그 페이지는 모바일에서 늘 자체 머리
  *  · 동적: useOwnMobileHeader(조건) — 화면 단계에 따라(채팅: 목록은 공용 상단바, 대화 이상은 자체 머리)
  *  · LayoutMobileDetailBar 는 붙어 있는 동안 스스로 선언한다(replaceTopbar=false 로 끔).
  * 여러 곳이 동시에 선언할 수 있어(라우트 전환 중 새 페이지가 먼저 붙는다) 수를 센다.

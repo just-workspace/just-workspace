@@ -1,11 +1,11 @@
 /**
- * 인증 — Vue 판 composables/useAuth.ts 그대로(세션 쿠키 + 번들 앱 ws_token + 2단계 인증).
+ * 인증(세션 쿠키 + 번들 앱 ws_token + 2단계 인증).
  *
  * React: const { user, loading, fetchUser, nativeLogin, verify2fa, logout, ... } = useAuth()
- *   user 는 값(User | null) — Vue 의 user.value
+ *   user 는 값(User | null)
  * 컴포넌트 밖: authStore.getState().user, 또는 아래 함수들을 직접 import
  *
- * 앱 시작 때 main.tsx 가 fetchUser() 를 await 한 뒤 라우터를 띄운다(Vue plugins/auth.ts 와 같음).
+ * 앱 시작 때 main.tsx 가 fetchUser() 를 await 한 뒤 라우터를 띄운다.
  */
 import { createStore, useStore } from 'zustand'
 import { $fetch } from '~/lib/api'

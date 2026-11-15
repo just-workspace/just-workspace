@@ -62,7 +62,7 @@ export const ROLE_COLOR_OPTIONS: UiColorSwatchOption[] = ROLE_COLOR_KEYS.map((va
 }))
 
 export interface UiColorSwatchesProps extends Omit<HTMLAttributes<HTMLDivElement>, 'role'> {
-  /** 고른 값(Vue v-model). null = 색 없음 */
+  /** 고른 값. null = 색 없음 */
   modelValue?: string | null
   /** 값 바뀜 */
   onUpdateModelValue?: (v: string | null) => void

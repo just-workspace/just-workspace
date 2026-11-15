@@ -1,5 +1,5 @@
 /**
- * 떠 있는 메일 작성 창 — Vue 판 composables/useMailCompose.ts 그대로.
+ * 떠 있는 메일 작성 창.
  *
  * - 데스크톱: 앱 안 오른쪽 아래 580×640 창. 여러 개 열 수 있고 각자 최소화(제목 줄만)·크게 보기 가능.
  *   팝업(window.open) 은 폐지.
@@ -12,10 +12,10 @@
  * 상태는 모듈 싱글턴(mailComposeStore).
  * React: const { windows, hasWindows, open, close, ... } = useMailCompose()
  * 컴포넌트 밖: import { openCompose, closeCompose, ... } from '~/composables/useMailCompose'
- *   (모듈 수준 이름은 다른 모듈과 겹치지 않게 Compose 를 붙였다 — hook 멤버 이름은 Vue 와 같다)
+ *   (모듈 수준 이름은 다른 모듈과 겹치지 않게 Compose 를 붙였다)
  *
- * 로그아웃(user → null) 때 창을 비운다 — Vue app.vue 의 `watch(user, u => { if (!u) useMailCompose().reset() })` 를
- * 이 모듈이 authStore 구독으로 대신한다.
+ * 로그아웃(user → null) 때 창을 비운다 —
+ * 이 모듈이 authStore 구독으로 한다.
  */
 import { createStore, useStore } from 'zustand'
 import type { ComposeMode, MessageDetail } from '~/composables/useMail'
@@ -213,12 +213,12 @@ export function setComposeDraftId(id: string, draftId: string | null) {
 /** 로그아웃 때 — 다음 사용자에게 창이 남지 않게 */
 export function resetCompose() { setWindows([]) }
 
-// Vue app.vue: watch(user, (u) => { if (!u) useMailCompose().reset() }) — user 가 바뀌어 null 이 될 때만
+// user 가 바뀌어 null 이 될 때만 창을 비운다
 authStore.subscribe((s, prev) => {
   if (s.user !== prev.user && !s.user) resetCompose()
 })
 
-/** Vue useMailCompose() 와 같은 멤버 */
+/** 상태 + 동작 */
 export function useMailCompose() {
   const windows = useStore(mailComposeStore, s => s.windows)
   return {

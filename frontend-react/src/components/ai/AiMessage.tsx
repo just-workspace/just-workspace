@@ -1,7 +1,7 @@
 /**
- * AI 답변 본문(Vue components/ai/AiMessage.vue) — markdown-it(html 끔·linkify·breaks) + DOMPurify.
+ * AI 답변 본문 — markdown-it(html 끔·linkify·breaks) + DOMPurify.
  * 코드펜스는 머리(언어 + 복사) + shiki 하이라이트(로드되면, 다크/라이트 테마 따라).
- * 스트리밍 중에는 60ms 간격으로 다시 그린다. 스타일은 AiMessage.css(Vue 전역 <style> 그대로).
+ * 스트리밍 중에는 60ms 간격으로 다시 그린다. 스타일은 AiMessage.css(전역).
  */
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import MarkdownIt from 'markdown-it'
@@ -30,7 +30,7 @@ export function AiMessage({ content, streaming, citations, onCite }: AiMessagePr
   const colorMode = useColorMode()
   const isDark = colorMode.value === 'dark'
 
-  // 렌더러가 읽는 "지금" 값(Vue 는 클로저가 반응형 값을 읽었다)
+  // 렌더러가 읽는 "지금" 값
   const citeKey = (citations ?? []).join(',')
   const live = useRef({ content, isDark, t, nums: new Set(citations ?? []) as ReadonlySet<number> })
   live.current = { content, isDark, t, nums: new Set(citations ?? []) }
@@ -88,7 +88,7 @@ export function AiMessage({ content, streaming, citations, onCite }: AiMessagePr
     }
   }, [doRender])
 
-  // Vue watch(() => props.content, schedule) — 첫 실행 없음
+  // 내용이 바뀌면 다시 그리기를 예약한다 — 첫 실행 없음
   const seen = useRef({ content: false, streaming: false, dark: false, cites: false })
   useEffect(() => {
     if (!seen.current.content) { seen.current.content = true; return }
@@ -99,7 +99,7 @@ export function AiMessage({ content, streaming, citations, onCite }: AiMessagePr
       if (timer.current) { clearTimeout(timer.current); timer.current = null }
       doRender()
     }
-    // 내용이 바뀔 때만(Vue watch 소스와 같게)
+    // 내용이 바뀔 때만
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content])
   // watch(() => props.streaming, s => { if (!s) doRender() })

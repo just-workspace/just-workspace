@@ -1,5 +1,5 @@
 /**
- * 설정 페이지 머리(헤더형, 시안 A) — Vue components/settings/SettingsHeader.vue.
+ * 설정 페이지 머리(헤더형).
  * h1 24/700 −0.02em + 부제 13.5. 모바일(md 미만)에서는 상세 상단 바가 제목을 맡으므로 통째로 숨긴다.
  *
  * @example <SettingsHeader title="계정" subtitle="프로필과 로그인 정보" />

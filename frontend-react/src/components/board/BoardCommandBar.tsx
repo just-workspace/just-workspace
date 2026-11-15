@@ -1,5 +1,5 @@
 /**
- * 게시판 커맨드 바 44("파일과 같은 h-11 bg-card") — Vue 판 components/board/BoardCommandBar.vue 이식.
+ * 게시판 커맨드 바 44("파일과 같은 h-11 bg-card").
  *  왼쪽(children: 이름+설명 / 경로 / "새 글 · 게시판" + 임시 저장), 오른쪽(actions: 검색 200 + 글쓰기 / 편집 ⋯ / 취소 올리기).
  *  searchPlaceholder 를 주면 검색 입력(시안 200×32, Enter 로 결과 화면)을 그린다.
  */
@@ -12,9 +12,9 @@ export interface BoardCommandBarProps {
   searchValue?: string
   /** Enter — 다듬은 검색어 */
   onSearch?: (q: string) => void
-  /** 왼쪽 내용(Vue 기본 슬롯) */
+  /** 왼쪽 내용 */
   children?: ReactNode
-  /** 오른쪽 끝(Vue #actions) */
+  /** 오른쪽 끝 */
   actions?: ReactNode
 }
 

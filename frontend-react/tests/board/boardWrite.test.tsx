@@ -1,4 +1,4 @@
-// 게시판 글쓰기 화면 — 본문 편집기가 실제로 그려져야 한다(Vue 시절 "편집기 미해석" 재현 스위치가 남아 글을 못 올리던 회귀)
+// 게시판 글쓰기 화면 — 본문 편집기가 실제로 그려져야 한다("편집기 미해석" 재현 스위치가 남아 글을 못 올리던 회귀)
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'

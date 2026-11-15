@@ -1,10 +1,10 @@
 /**
- * 기본 셸 — Vue layouts/default.vue 그대로.
+ * 기본 셸.
  * 사이드바(데스크톱) · 상단바 · 공지/모듈 오류 배너 · 본문 · 하단 탭바(모바일) · 활동 패널 · 미니 통화 창 · PWA 배너 · Ctrl K 팰릿 · 단축키 도움말.
  *
  * 규약: children 이 있으면 그것을, 없으면 라우터 <Outlet/> 을 본문에 그린다(AuthErrorScreen 의 셸 안 404 가 children 으로 쓴다).
  * 라우터에서 Admin/Settings 레이아웃은 이 레이아웃의 자식(pathless)이다.
- * Vue onErrorCaptured → 본문을 <AppErrorBoundary scope="layout"> 로 감싼다(같은 토스트).
+ * 본문을 <AppErrorBoundary scope="layout"> 로 감싼다(렌더 오류 → 토스트).
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Outlet } from 'react-router'
@@ -102,7 +102,7 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
       if (!isMeetingRoomPath(route.path)) addToast('info', t('meetings.mini.ended'))
       setCallReturnPath(null)
     }
-    // 통화 상태가 바뀔 때만(Vue watch(callActive))
+    // 통화 상태가 바뀔 때만
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callActive])
   // 로그아웃은 새로 고침 없이 /login 으로 간다 — 미니 창으로 내려 둔 통화가 화면 없이 남지 않게 끊는다
@@ -111,7 +111,7 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
   useEffect(() => {
     if (firstUser.current) { firstUser.current = false; return }
     if (!user && callActive) { setCallReturnPath(null); void leaveCall() }
-    // Vue watch(user)
+    // user 가 바뀔 때
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
   // 페이지가 모바일 자체 머리를 선언하면(useOwnMobileHeader · routes.ts ownMobileHeader · LayoutMobileDetailBar)
@@ -122,7 +122,7 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
   const showTopBar = !!user && !hideChrome && !(isMobile && ownMobileHeader) && !noDesktopTopbar
 
   const [moduleError, setModuleError] = useState(false)
-  // 공지 닫음 기억(키에 공지 문구를 담아 문구가 바뀌면 다시 보인다) — Vue watchEffect(localStorage) 대응
+  // 공지 닫음 기억(키에 공지 문구를 담아 문구가 바뀌면 다시 보인다)
   const [dismissedText, setDismissedText] = useState<string | null>(readDismissed)
   const announcementDismissed = dismissedText === announcement
 
@@ -136,7 +136,7 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
   })
 
   // 라우트가 바뀌면: 3단 경로의 "위치" 비움 · 활동 패널 닫기(모바일) · 최근 방문에 모듈 기록
-  // (layout effect — 새 화면의 useBreadcrumb(일반 effect)가 그 뒤에 위치를 올린다. Vue 는 부모 watch 가 먼저 돈다)
+  // (layout effect — 새 화면의 useBreadcrumb(일반 effect)가 그 뒤에 위치를 올린다)
   const firstPath = useRef(true)
   const navRef = useRef({ flat, isMobile, t })
   navRef.current = { flat, isMobile, t }
@@ -192,7 +192,7 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
         ensureAiArtifacts()
       }
     })()
-    // 마운트 한 번(Vue onMounted)
+    // 마운트 한 번
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

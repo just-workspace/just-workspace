@@ -1,7 +1,7 @@
 /**
  * 참가자 비디오 영역. 호스트 룸 페이지와 게스트 참여 페이지가 같은 마크업을
  * 각자 들고 있던 것을 하나로 모았다. 화면공유 중이면 공유 화면을 크게, 나머지는
- * 아래 썸네일 스트립으로. Vue 판 components/meetings/MeetingsVideoGrid.vue 그대로.
+ * 아래 썸네일 스트립으로.
  */
 import { useState } from 'react'
 import type { ParticipantTrack } from '~/composables/useMeetings'

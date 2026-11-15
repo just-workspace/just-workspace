@@ -1,5 +1,5 @@
 /**
- * 셸 사이드바(Vue components/layout/Sidebar.vue) — wide 하나로 rail(64) ↔ 확장(236) 두 모습을 만든다.
+ * 셸 사이드바 — wide 하나로 rail(64) ↔ 확장(236) 두 모습을 만든다.
  * 폭·덮기/밀기 판단은 layouts/default(spacer+panel)와 useSidebar 가 한다.
  * 겉모습은 키트 UiAppRail — 이 파일은 스토어(네비·채팅 멘션·통화·내 상태·고정)를 항목 데이터로 잇기만 한다.
  */
@@ -59,7 +59,7 @@ export function LayoutSidebar({ wide, onNavigate, className, footerSlot }: Layou
 
   const displayName = user?.display_name ?? user?.username ?? ''
   const initial = (displayName || 'U').charAt(0).toUpperCase()
-  // 태그라인은 로그인 화면과 같은 설정값(brand.tagline) — 하드코딩 제거(8-1-6)
+  // 태그라인은 로그인 화면과 같은 설정값(brand.tagline) — 하드코딩 제거
   const tagline = (config?.['brand.tagline'] ?? '').trim() || 'self-hosted workspace'
   const emit = () => onNavigate?.()
   // 사이드바 하단에 내 계정 패널이 있는 화면(채팅)은 레일 아바타를 뺀다. 채널 목록을 접으면 다시 레일에.

@@ -1,11 +1,10 @@
 /**
- * 컬러 모드 — Vue 판 @nuxtjs/color-mode(classSuffix '') 와 같은 동작.
+ * 컬러 모드 — @nuxtjs/color-mode(classSuffix '') 와 같은 동작.
  * - 저장 키 `nuxt-color-mode`(localStorage) — 기존 사용자 설정을 그대로 읽는다.
  * - preference: 'system' | 'light' | 'dark' (기본 system) · value: 실제 적용값(system 이면 OS 설정, 판별 불가 light)
  * - <html> 에 value 이름의 class('dark' | 'light')를 단다. 첫 적용은 index.html 의 머리 스크립트가 한다(깜빡임 방지).
  *
  * React: const colorMode = useColorMode(); colorMode.preference; colorMode.value; colorMode.setPreference('dark')
- * (Vue 의 `colorMode.preference = 'dark'` 대입은 setPreference 호출로)
  */
 import { createStore, useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'

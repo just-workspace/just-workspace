@@ -4,7 +4,7 @@
  *  손님:        참가 · 시각 · 아바타 줄만(버튼 없음).
  * 값이 없는 줄·버튼은 그리지 않는다(채팅 채널이 없는 회의면 [회의 채팅 보기] 없음 — 회의 안 채팅은 나가면 사라진다).
  * 참가·채팅 수는 이 화면이 본 값(useMeetingSessionStats), 호스트·채널·캘린더는 /api/meetings/rooms/{name}/summary.
- *   ※ 시안의 "파일 2" 는 회의 채팅에 파일이 없어 뺐다(디자이너 확인 필요).
+ *   ※ 시안의 "파일 2" 는 회의 채팅에 파일이 없어 뺐다.
  */
 import type { ReactNode } from 'react'
 import { useI18n } from '~/i18n'

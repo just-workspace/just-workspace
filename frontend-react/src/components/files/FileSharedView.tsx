@@ -1,11 +1,11 @@
 /**
- * 공유받음 뷰(Vue components/files/FileSharedView.vue) — 다른 사람이 나에게 공유한 파일·폴더(/api/files/shared-with-me).
+ * 공유받음 뷰 — 다른 사람이 나에게 공유한 파일·폴더(/api/files/shared-with-me).
  * 시안 그림 없음 → 공통 규격(조밀 40 / 모바일 56). 열: 이름 · 소유자 · 수정 · 크기 · 다운로드.
  * 공유받은 폴더는 안으로 들어가 탐색한다(GET /shared-with-me/{id}/list?path=). 위 줄 36 에 경로(공유받음 › 폴더 › 하위),
  * 파일 클릭은 부모(openItem)가 연다 — 미리보기·오피스(권한대로 보기/편집), 다운로드 버튼은 그대로.
  * 권한 4단계: 이름 옆 배지 = 내 권한(댓글·편집·공동 소유, 보기는 배지 없음 — 예전 "편집 가능" 배지 자리). 행 끝 ⋮ 열(40)·우클릭 =
  *   파일 메뉴(부모 FileContextMenu — 권한에 맞는 항목만: 공동 소유면 공유·이동·이름 바꾸기·휴지통). 시안 그림 없음 → 내 파일 목록 ⋮ 규격.
- * ref → { reload }(Vue defineExpose).
+ * ref → { reload }.
  * 첫 목록 데스크톱 열 = 아이콘 40 · 이름 · 공유한 사람(아바타 20) 120 · 내 권한(틴트 배지 18 —
  *   보기 neutral · 댓글 primary · 편집 success · 공동 소유 warning) 128 · 받은 날 mono 110 · ⋮(more-horizontal) 40. 머리 36 · 행 40.
  *   내려받기는 ⋮ 메뉴로(시안에 열 없음).

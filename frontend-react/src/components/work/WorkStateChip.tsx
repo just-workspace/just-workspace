@@ -1,5 +1,5 @@
 /**
- * P6 상태 칩(Vue components/work/WorkStateChip.vue · "상태 칩 — 아이콘 + 글자, Git·작업·회의 공용"):
+ * 상태 칩("상태 칩 — 아이콘 + 글자, Git·작업·회의 공용"):
  * 각진 22(6px) 틴트 + 12/600 + 아이콘 12. 열림 success · 닫힘 중립 · 병합 primary · 진행 중 warning.
  * 아이콘(원+점 · 원+체크 · 병합 가지 · 반원)은 WorkStateIcon.
  */

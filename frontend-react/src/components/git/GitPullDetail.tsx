@@ -1,8 +1,7 @@
-// Vue 원본: frontend/components/git/GitPullDetail.vue
 /**
  * PR 상세(읽기 전용, 리뷰·머지·diff 는 "Gitea에서 열기").
  * 이슈 상세와 같은 틀: 제목 20/700 + #n → 상태 칩(열림 success · 병합 primary · 닫힘 중립) + 작성 + head → base
- * → 라벨 → 본문 카드 → Gitea 안내 카드(primary 버튼). 시안에 PR 화면이 없어 이슈 상세 규격으로 구성(디자이너 확인 필요).
+ * → 라벨 → 본문 카드 → Gitea 안내 카드(primary 버튼). 시안에 PR 화면이 없어 이슈 상세 규격으로 구성.
  */
 import { useI18n } from '~/i18n'
 import { timeAgo } from '~/lib/date'

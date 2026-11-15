@@ -1,11 +1,11 @@
 /**
- * 작업 상세(Vue components/tasks/TasksDetail.vue).
+ * 작업 상세.
  *  데스크톱 패널: 머리 44(작업 · 링크 복사 · ⋯ 복제·삭제 · ✕) → 제목 17/600 → 속성 격자(80 | 1fr) → 설명 상자 → 하위 작업.
  *  모바일 상세: 제목 20/700 → 상태 세그먼트(40, 균등) → 속성 카드(행 52 + ›) → 하위 작업. 머리 막대는 페이지가 그린다.
  * 상태는 할 일·진행 중·검토·완료(검토 = primary). 우선순위 긴급(↑↑ danger)·높음·보통·낮음.
  * 담당 = "아바타 이름 · 배정 만든 사람"(시안), 누르면 사람 고르기(나에게 배정 · 담당 없음 · 사람들). 바꾸기는 만든 사람만(서버 규칙).
- * 태그 = TasksTagEditor(자동완성 facets). 프로젝트 = 입력 + 자동완성(시안 격자에 없는 행 — 같은 격자 규격으로 덧붙임, 보고서).
- * 페이지는 작업마다 key 로 다시 만든다(Vue :key="selected.id").
+ * 태그 = TasksTagEditor(자동완성 facets). 프로젝트 = 입력 + 자동완성(같은 격자 규격으로 덧붙인 행).
+ * 페이지는 작업마다 key 로 다시 만든다.
  */
 import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -260,7 +260,7 @@ export function TasksDetail({ task, className, onPatch, onClose, onDuplicate, on
     } catch (err: any) { addToast('error', err?.data?.detail || t('tasks.toast.subAddFailed')) }
   }
   function startEditSub(s: Task) { setEditingSub(s.id); setEditSubTitle(s.title) }
-  // Enter 로 저장한 뒤 따라오는 blur 가 두 번 저장하지 않게(Vue 는 editingSub=null 로 입력이 사라져 blur 가 안 온다)
+  // Enter 로 저장한 뒤 따라오는 blur 가 두 번 저장하지 않게
   const savingSub = useRef<string | null>(null)
   async function saveSub(s: Task) {
     if (savingSub.current === s.id) return

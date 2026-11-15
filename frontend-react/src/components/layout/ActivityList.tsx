@@ -1,5 +1,5 @@
 /**
- * 활동 수신함 목록(Vue components/layout/ActivityList.vue):
+ * 활동 수신함 목록:
  * 필터 칩 + 날짜 그룹 + 행(아바타 32/40 + 종류 아이콘 배지, 안 읽음 = 굵게, 읽음 = muted).
  * 데스크톱 패널(400)과 모바일 /activity 페이지가 같은 목록을 쓴다.
  *
@@ -9,7 +9,7 @@
  *   서버가 "이미 응답했는지"를 알림에 남기지 않아, 이번 화면에서 누른 것만 "완료"로 바뀐다.
  * - 행을 누르면 action_url(없으면 link)로 이동.
  *
- * Vue defineExpose({ markAllAsRead, reload }) → ref 로 같은 두 함수(ActivityListHandle).
+ * ref 로 markAllAsRead · reload 두 함수를 내놓는다(ActivityListHandle).
  */
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react'
 import { cn } from '~/lib/utils'

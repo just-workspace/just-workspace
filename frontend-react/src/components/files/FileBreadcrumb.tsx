@@ -1,5 +1,5 @@
 /**
- * 커맨드 바 안 경로(Vue components/files/FileBreadcrumb.vue, "경로는 바 안"):
+ * 커맨드 바 안 경로("경로는 바 안"):
  * 상위 조각 muted + ›, 현재 600. 상위 조각은 끌어다 놓기(이동) 대상.
  */
 import { Fragment, useState, type DragEvent } from 'react'

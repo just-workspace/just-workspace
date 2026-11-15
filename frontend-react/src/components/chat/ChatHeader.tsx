@@ -1,5 +1,5 @@
 /**
- * 채널 머리. Vue 원본: frontend/components/chat/ChatHeader.vue
+ * 채널 머리.
  * 데스크톱 48 + 아래 1px(= 49, 디스코드 실측): 아이콘 20 · 채널 이름 16/600(누르면 채널 메뉴) · 구분선 · 주제(13 muted 말줄임)
  *   · 세그먼트 sm(메시지·파일·회의·작업 — 포럼 채널은 글 목록/갤러리) · 구분선 · 통화 · 스레드 목록 · 고정 · 멤버 토글(각 32, aria-pressed)
  *   · 검색칸 160(포커스 360 — ChatSearchBox, RIGHT). 검색칸이 펼쳐지면 세그먼트는 숨긴다(시안 #search-*).
@@ -120,7 +120,7 @@ export function ChatHeader({ onBack, onOpenChannels, className, tabs, tab, onTab
   })()
   const topic = isDm ? presenceLine : (ch?.description || '')
 
-  // ‹ 옆 숫자 — 지금 채널을 뺀 내 멘션 + DM 합계(01-1 올라가는 규칙)
+  // ‹ 옆 숫자 — 지금 채널을 뺀 내 멘션 + DM 합계
   const otherMentions = Math.max(0, totalMentions - (ch ? channelMentionCount(ch) : 0))
   const backLabel = otherMentions > 0
     ? t('chat.header.backToListMentions', { n: otherMentions })

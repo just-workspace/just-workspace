@@ -1,5 +1,5 @@
 /**
- * 멤버 열. Vue 원본: frontend/components/chat/ChatMemberPanel.vue
+ * 멤버 열.
  *  묶음 = hoist 역할(계층순) → 온라인 → 오프라인(utils/chatMemberGroups — by-role 이 없으면 온라인/오프라인만).
  *  묶음 제목: 위 20 · 아래 4, 12/600 muted "역할 — 인원"(button, aria-expanded — 1,000명 넘는 묶음만 접기 화살표).
  *  행 42 · 아바타 32 + 상태 점 10 · 이름 16(역할 색 text-role-N, 500) · 상태 한 줄 12 muted. 호버 bg-overlay-hover.

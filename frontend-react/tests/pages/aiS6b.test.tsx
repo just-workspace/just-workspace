@@ -105,7 +105,7 @@ async function openC1() {
   await waitFor(() => expect(api.calls.some(c => c.url === '/api/ai/conversations/c1/messages')).toBe(true))
 }
 
-describe('S6b 답변 버전', () => {
+describe('답변 버전', () => {
   it('◀ 2/2 ▶ — 이전 버전을 누르면 그 가지 메시지로 바뀌고, 다시 다음으로 돌아올 수 있다', async () => {
     api.messages.c1 = [
       { id: 'q1b', role: 'user', content: '고친 질문', created_at: T0, versions: [{ id: 'q1', created_at: T0 }, { id: 'q1b', created_at: T0 }], active_version: 2, attachments: [] },
@@ -151,7 +151,7 @@ describe('S6b 답변 버전', () => {
   })
 })
 
-describe('S6b 임시 대화', () => {
+describe('임시 대화', () => {
   it('사이드바 "임시 대화"(창 닫으면 삭제)·스위치를 켜면 배너, 보내면 temporary 대화를 만든다', async () => {
     api.temporary = [{ id: 't1', title: '급여 규정 질문', temporary: true, tools_enabled: false }]
     const fetchMock = vi.fn(async () => sseResponse([ev('done', { message_id: null, status: 'complete' })]))
@@ -183,7 +183,7 @@ describe('S6b 임시 대화', () => {
   })
 })
 
-describe('S6b 프로젝트', () => {
+describe('프로젝트', () => {
   const owner = { id: 'p1', name: '인프라 운영', instructions: '답은 개조식으로', role: 'owner', editable: true, shared: false, conversation_count: 0, files: [{ id: 'f1', name: '장비 목록.xlsx', path: 'my/장비 목록.xlsx', size: 1024 }], files_size: 1024 }
 
   it('주인: 카드에 지침·지식 파일·편집 단추, 새 대화는 project_id 로', async () => {
@@ -217,7 +217,7 @@ describe('S6b 프로젝트', () => {
   })
 })
 
-describe('S6b 메모리', () => {
+describe('메모리', () => {
   it('답변 중 저장 알림 → [취소] = DELETE /api/ai/memory/{id}', async () => {
     const fetchMock = vi.fn(async () => sseResponse([
       ev('meta', { message_id: 'a1', model: 'm', parent_id: 'q1' }),
@@ -259,7 +259,7 @@ describe('S6b 메모리', () => {
   })
 })
 
-describe('S6b 첨부', () => {
+describe('첨부', () => {
   it('단계 칩: 올리는 중·변환 중·완료·실패 코드 문구, 이미지인데 모델이 못 읽으면 경고', () => {
     render(<AiAttachments vision={false} onRemove={() => {}} items={[
       { key: '1', id: null, name: 'a.hwp', size: 2048, status: 'uploading' },
@@ -316,7 +316,7 @@ describe('S6b 첨부', () => {
   })
 })
 
-describe('S6b 대화 검색', () => {
+describe('대화 검색', () => {
   it('입력하면 서버 검색(제목+본문) 결과에 일치 부분 강조 · 임시 대화 안내', async () => {
     api.search = [{ id: 'c1', title: 'VPN 장애 보고서 초안', snippet: '…본사 게이트웨이의 IKE 재협상 주기와…', match: 'message', message_id: 'm1', updated_at: T0 }]
     await openC1()

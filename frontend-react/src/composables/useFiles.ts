@@ -1,15 +1,15 @@
 /**
- * 파일 — Vue 판 composables/useFiles.ts 그대로(모듈 싱글턴 상태 + 동작). 요청 주소·순서·본문·동시 업로드 3개·폴링 600ms 동일.
+ * 파일(모듈 싱글턴 상태 + 동작). 요청 주소·순서·본문·동시 업로드 3개·폴링 600ms 동일.
  *
  * React: const { items, sortedItems, breadcrumbs, fetchFiles, uploadFiles, navigateTo, ... } = useFiles()
- *   값은 .value 없이. Vue 에서 바깥이 대입하던 상태는 setter 를 같이 낸다:
+ *   바깥에서 바꾸는 상태는 setter 를 같이 낸다:
  *     viewMode → setViewMode(v) · selectedItems → setSelectedItems(v) · inlineEdit → setInlineEdit(v)
- *   hook 멤버 `navigateTo` 는 Vue 와 같은 이름(폴더 이동). 모듈 수준 이름은 라우터 navigateTo 와 겹치지 않게 navigateToPath.
+ *   hook 멤버 `navigateTo` 는 폴더 이동. 모듈 수준 이름은 라우터 navigateTo 와 겹치지 않게 navigateToPath.
  * 컴포넌트 밖(채팅 등): import { uploadFiles } from '~/composables/useFiles'
  *
- * 전송 행(useTransfers)은 Vue 처럼 객체를 손에 들고 고치지 않고 patchTransfer/getTransfer 로 다룬다(그쪽 주석 참고).
- * 내려받기·업로드는 Vue 처럼 $fetch 가 아닌 fetch/XHR 를 쓴다. 웹은 '/api/…' 그대로, 번들 앱(VITE_API_BASE)은
- * apiBase + Bearer(apiRawFetch·apiUrl·bundledAuthHeaders) — Vue 판은 앱 자신의 주소로 가서 실패했다(원본 버그, 여기서 수정).
+ * 전송 행(useTransfers)은 객체를 손에 들고 고치지 않고 patchTransfer/getTransfer 로 다룬다(그쪽 주석 참고).
+ * 내려받기·업로드는 $fetch 가 아닌 fetch/XHR 를 쓴다. 웹은 '/api/…' 그대로, 번들 앱(VITE_API_BASE)은
+ * apiBase + Bearer(apiRawFetch·apiUrl·bundledAuthHeaders).
  */
 import { useMemo } from 'react'
 import { createStore, useStore } from 'zustand'
@@ -105,7 +105,7 @@ export interface ShareLinkListEntry extends ShareLinkItem {
   allow_download?: boolean
   /** 묶음 링크의 항목들(하나짜리면 [file_path]) */
   paths?: string[]
-  /** 이메일로 보낸 받는 사람 수(성공만, R7) */
+  /** 이메일로 보낸 받는 사람 수(성공만) */
   email_count?: number
   /** 폴더 하나짜리 링크 */
   is_folder?: boolean
@@ -309,7 +309,7 @@ export function _resetFilesStore() {
 /** 루트 이름 i18n 키 */
 const ROOT_LABELS: Record<string, string> = { my: 'files.sidebar.myFiles', shared: 'files.sidebar.sharedFiles', users: 'files.sidebar.allUsers' }
 
-// ─── 바깥 대입 대응(Vue 에서 x.value = v 하던 것) ───
+// ─── 바깥에서 바꾸는 상태의 setter ───
 
 export function setViewMode(v: ViewMode) {
   set({ viewMode: v })
@@ -716,7 +716,7 @@ export function enterFolder(item: FileItem) {
   fetchFiles(item.path)
 }
 
-/** 정렬된 목록(검색 중이면 검색 결과) — Vue computed sortedItems */
+/** 정렬된 목록(검색 중이면 검색 결과) */
 export function filesSortedItems(s: Pick<FilesState, 'searchActive' | 'searchResults' | 'items' | 'sortField' | 'sortDir'> = get()): FileItem[] {
   const source = s.searchActive ? s.searchResults : s.items
   const arr = [...source]
@@ -749,7 +749,7 @@ export function toggleSort(field: SortField) {
   }
 }
 
-/** 경로 조각(루트는 i18n 이름) — Vue computed breadcrumbs */
+/** 경로 조각(루트는 i18n 이름) */
 export function filesBreadcrumbs(currentPath: string = get().currentPath, t: (k: string) => string = k => tr(k)) {
   const parts = currentPath.split('/').filter(Boolean)
   const crumbs: { label: string; path: string }[] = []
@@ -872,7 +872,7 @@ export async function updateShareLink(id: string, patch: ShareLinkPatch) {
   return row
 }
 
-/** 공유 링크를 이메일로 보내기(R7) — 시스템 메일. 메일 언어 = 지금 화면 언어, 만료 시각 = 이 브라우저 시간대. */
+/** 공유 링크를 이메일로 보내기 — 시스템 메일. 메일 언어 = 지금 화면 언어, 만료 시각 = 이 브라우저 시간대. */
 export async function emailShareLink(id: string, emails: string[], message?: string) {
   let tz: string | undefined
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone } catch { tz = undefined }
@@ -1189,7 +1189,7 @@ const actions = {
 }
 
 /**
- * Vue useFiles() 와 같은 멤버. Vue 가 내보내지 않던 내부 상태(searchResults·shareCounts)는 hook 에서도 뺐다.
+ * 상태 + 동작. 내부 상태(searchResults·shareCounts)는 hook 으로 내보내지 않는다.
  * isShared 는 shareCounts·currentPath 를 읽으므로 그 둘도 구독해 둔다(바뀌면 다시 그림).
  */
 export function useFiles() {

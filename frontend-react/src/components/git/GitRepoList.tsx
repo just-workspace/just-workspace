@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitRepoList.vue
 /**
  * 저장소 목록: 커맨드 바 44(bg-card) — "저장소 n개" · 찾기 220×32 · Gitea에서 새 저장소 ↗
  * → 카드 그리드 3열(gap 14, 패딩 20/24). 모바일 1열 · 찾기는 줄 아래 전체 폭.

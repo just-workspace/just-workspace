@@ -1,5 +1,5 @@
 /**
- * 관리 개요 › Git 활동 카드 — Vue components/admin/AdminAnalyticsGitActivity.vue.
+ * 관리 개요 › Git 활동 카드.
  * 머리 오른쪽에 저장소·이슈·PR 수, 본문은 최근 10건(종류 칩 · 저장소 / 제목 · 사람 · 상대 시각).
  */
 import { useI18n } from '~/i18n'

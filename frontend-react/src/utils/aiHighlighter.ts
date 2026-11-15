@@ -1,4 +1,3 @@
-// Vue 원본: frontend/utils/aiHighlighter.ts (내용 그대로)
 // 공유 shiki 하이라이터 (코드블록 신택스 하이라이트). 최초 1회만 로드.
 let _p: Promise<any> | null = null
 

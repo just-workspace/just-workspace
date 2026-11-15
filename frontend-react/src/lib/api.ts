@@ -1,12 +1,11 @@
 /**
- * API 클라이언트 — Vue 판 Nuxt 전역 `$fetch`(ofetch) 와 같은 동작.
+ * API 클라이언트 — 전역 `$fetch`(ofetch).
  *
  * - 같은 ofetch 를 쓴다: `body` 객체는 JSON 직렬화, `query`, 응답 자동 파싱, 실패 시 `FetchError`(`.data`·`.status`·`.statusCode`).
- *   Vue 쪽 `$fetch<T>(url, { method, body, query, headers, credentials })` 호출을 **글자 그대로** 옮기면 된다.
- * - 웹(same-origin): 아무것도 덧붙이지 않는다(쿠키 세션). Vue 판과 같다 — credentials 는 호출부가 준 대로.
+ *   호출 형태: `$fetch<T>(url, { method, body, query, headers, credentials })`.
+ * - 웹(same-origin): 아무것도 덧붙이지 않는다(쿠키 세션) — credentials 는 호출부가 준 대로.
  * - 번들 SPA 앱(VITE_API_BASE): `/api`·`/oauth` 만 apiBase 로 + `Authorization: Bearer <ws_token>`.
  *   호출부가 onResponseError 를 안 줬으면 401 에서 토큰을 지우고 /login 으로(공유 링크 손님 제외).
- *   (Vue `plugins/app-api.client.ts` 그대로)
  * - X-Request-ID: 백엔드가 모든 응답에 붙이는 요청 번호를 실패한 FetchError 에 `requestId` 로 실어 둔다
  *   (오류 화면 "요청 번호" 표시용. 본문 `request_id` 가 있으면 그쪽이 우선 — ServerErrorScreen 참조).
  */
@@ -123,7 +122,7 @@ export interface AppFetch {
 }
 
 /**
- * 전역 `$fetch` — Vue 판과 같은 이름·같은 시그니처.
+ * 전역 `$fetch`.
  * @example const data = await $fetch<{ items: Item[] }>('/api/x', { query: { page: 1 } })
  */
 export const $fetch: AppFetch = Object.assign(
@@ -132,7 +131,7 @@ export const $fetch: AppFetch = Object.assign(
     raw: ((request: string, opts: FetchOptions<any> = {}) => {
       const base = apiBaseUrl()
       if (!base || !isApi(request)) return base$fetch.raw(request, opts)
-      // 번들 앱: 주소만이 아니라 Bearer 도 붙인다(Vue 판 wrapped.raw 는 주소만 바꿔 인증이 빠졌다 — utils/apiDownload 가 401)
+      // 번들 앱: 주소만이 아니라 Bearer 도 붙인다(인증이 빠지면 utils/apiDownload 가 401)
       const auth = bundledAuthHeaders()
       const headers = Object.keys(auth).length ? { ...(opts.headers as Record<string, string> || {}), ...auth } : opts.headers
       return base$fetch.raw(base + request, { ...opts, headers })

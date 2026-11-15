@@ -1,5 +1,5 @@
 /**
- * 연락처 목록 — Vue 판 components/contacts/ContactsList.vue.
+ * 연락처 목록.
  * 데스크톱: 커맨드 바 44 bg-card(검색 32 "이름·회사·이메일" + "이름순 ▾"), 초성 헤더 28(sticky, 11/700 muted, bg-background),
  *   행 56(이니셜 36 · 이름 14/600 · 보조 12 muted), 선택 = primary/13.
  * 모바일: 범위 줄(주소록 ▾ · 개수 mono · 검색 · ⋯), 헤더 28 bg-card 12/700, 행 60(이니셜 40 · 15/600 · 13), 오른쪽 초성 색인 바.
@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { useIsMobile } from '~/composables/useIsMobile'
 import { useContacts, type Contact } from '~/composables/useContacts'
@@ -42,7 +42,7 @@ export function ContactsList() {
   } = useContacts()
 
   const [localSearch, setLocalSearch] = useState(searchQuery)
-  // watch(localSearch) — 첫 실행은 건너뛴다(Vue watch 는 immediate 아님)
+  // localSearch 가 바뀔 때 — 첫 실행은 건너뛴다
   const firstSearch = useRef(true)
   useEffect(() => {
     if (firstSearch.current) { firstSearch.current = false; return }

@@ -1,5 +1,5 @@
 /**
- * 앱 빌드 — Vue components/admin/AdminAppBuild.vue. 관리 › 설정 › 앱 빌드.
+ * 앱 빌드. 관리 › 설정 › 앱 빌드.
  *  ① 배포 채널 — 서버 주소(읽기 전용 점선 + [복사]) · 앱 이름(글자). 카드 푸터 저장.
  *  ② 빌드 — 행(min 52): Android · Windows(데스크톱) = "MM/DD · 크기" + [내려받기], iOS = "지원 안 함" 배지,
  *     "새 빌드 만들기" = 설명 + [빌드 시작](POST /api/admin/apps/build, 확인 모달 → 5초 간격 상태 폴링).

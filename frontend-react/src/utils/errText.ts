@@ -3,7 +3,7 @@
  *
  * 422(검증 실패)의 detail 은 배열이라 그대로 렌더하면 [object Object] 가 뜬다.
  * 예전에는 배열 항목의 input 필드에 사용자가 입력한 값(비밀번호 포함)이 실려
- * 화면에 그대로 노출됐다. 백엔드에서 input 을 제거했지만(2026-08-27),
+ * 화면에 그대로 노출됐다. 백엔드가 input 을 빼고 보내지만,
  * 여기서도 msg 만 뽑아 쓴다.
  */
 export function errText(e: any, fallback: string): string {

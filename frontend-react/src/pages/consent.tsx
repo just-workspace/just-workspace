@@ -1,4 +1,3 @@
-// Vue 원본: frontend/pages/consent.vue
 // OAuth 동의 화면.
 //
 // /oauth/authorize 는 세션이 있어도 곧바로 code 를 내주지 않고, 신뢰되지 않은 클라이언트면 여기로 보낸다.
@@ -6,7 +5,7 @@
 //
 // 경로가 /oauth/consent 가 아니라 /consent 인 이유: nginx 가 /oauth/ 전체를 백엔드로 프록시하므로 그 아래에 프론트 라우트를 둘 수 없다.
 // API 는 백엔드의 /oauth/consent/{info,decide} 를 그대로 쓴다(/api 접두어 없음).
-// rq·info·decide·리다이렉트 로직은 Vue 그대로(OAuth 표준 준수).
+// rq·info·decide·리다이렉트 로직은 OAuth 표준을 따른다.
 import { useEffect, useState } from 'react'
 import { $fetch } from '~/lib/api'
 import { navigateTo, useRoute } from '~/lib/router'
@@ -63,7 +62,7 @@ export default function Page() {
         setError(e?.data?.detail || t('consent.loadFailed'))
       }
     })()
-    // Vue onMounted
+    // 마운트 때 한 번
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

@@ -254,7 +254,7 @@ describe('UiMentionList 슬롯(trailing · disabled · disabledReason · leading
   })
 })
 
-describe('아이콘(handover-22)', () => {
+describe('아이콘', () => {
   it('새 이름은 고유 경로, messages-square 는 chat 별칭이 아니다', () => {
     for (const n of ['smile-plus', 'messages-square', 'grip-vertical', 'play', 'pause', 'slash']) expect(ICON_PATHS[n]).toBeTruthy()
     expect(iconPaths('messages-square')).not.toBe(ICON_PATHS.chat)

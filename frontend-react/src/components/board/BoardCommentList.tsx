@@ -1,5 +1,5 @@
 /**
- * 댓글 목록 — Vue 판 components/board/BoardCommentList.vue 이식.
+ * 댓글 목록.
  */
 import { useI18n } from '~/i18n'
 import type { CommentInfo } from '~/composables/useBoard'

@@ -1,4 +1,3 @@
-// Vue 원본: frontend/pages/index.vue.
 // 판 전체는 components/dashboard/DashboardHome(관리 › 설정 › 대시보드도 같은 판을 mode="admin" 으로 쓴다).
 import { useI18n } from '~/i18n'
 import { useRoute } from '~/lib/router'

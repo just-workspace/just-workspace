@@ -1,5 +1,5 @@
 /**
- * 500(Vue components/auth/ServerErrorScreen.vue) — 셸 없음, 가운데 480 열 하나.
+ * 500 — 셸 없음, 가운데 480 열 하나.
  *  브랜드(타일 28 + 이름 15/600) → mono 500 · 제목 24/700 · 설명 14 → 요청 번호(UiInput readonly mono · 복사) →
  *  [다시 시도(refresh)][서비스 상태 ▴/▾ outline] → 펼치면 UiCard: 머리 "서비스 상태 · 확인 10:42:08 · 새로 확인",
  *  행 40 = StatusDot · 서비스 · 상태 글자 · 응답 시간(mono, 오른쪽 64).
@@ -8,8 +8,6 @@
  * 서비스 상태는 공개 헬스 체크만(GET /api/services/public-status — 로그인 전에도, 내부 주소·버전 없음).
  *   "웹·API" 줄은 그 요청 자체로 잰다(응답이 없으면 중단, 나머지 줄은 알 수 없으니 그리지 않는다).
  *   확인 시각은 서버 점검 시각(없으면 받은 시각). 로그인 전이라 관리 화면 링크는 두지 않는다.
- *
- * Nuxt 이름 그대로 AuthServerErrorScreen.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -38,7 +36,7 @@ function shortId() {
 
 /**
  * 오류 객체 어디엔가 실린 서버 요청 번호(본문 request_id · 응답 헤더).
- * Vue 는 NuxtError(e.data = 본문, e.cause = FetchError)를 봤다. React 라우터 오류는 원래 FetchError 를 data 에 담아 오므로
+ * React 라우터 오류는 원래 FetchError 를 data 에 담아 오므로
  * 그 안(lib/api 의 errorRequestId — 본문 request_id → X-Request-ID)까지 본다.
  */
 function serverRequestId(e: any): string {
@@ -94,7 +92,7 @@ export function AuthServerErrorScreen({ error }: AuthServerErrorScreenProps) {
 
   const brandInitial = (appName || 'W').trim().charAt(0).toUpperCase()
 
-  // Nuxt clearError({ redirect }) = 오류를 지우고 그 주소로 replace
+  // 오류를 지우고 그 주소로 replace
   function retry() { void navigateTo(route.fullPath, { replace: true }) }
 
   // ── 서비스 상태 ──

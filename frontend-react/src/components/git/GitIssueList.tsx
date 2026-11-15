@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitIssueList.vue
 /**
  * 이슈 목록.
  *  머리 52: 열림 n / 닫힘 세그먼트 · 라벨 ▾(GitLabelPicker 필터 — 기존 기능 유지) · 담당 ▾ · 새 이슈(primary 32)

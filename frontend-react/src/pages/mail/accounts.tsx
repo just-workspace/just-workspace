@@ -1,8 +1,7 @@
-// Vue 원본: frontend/pages/mail/accounts.vue
 // 메일 계정 관리 — 계정 목록(연결 시험·아카이브·편집·삭제) + 추가/편집 폼(제공자 자동 감지·IMAP/POP3·OAuth 빠른 연결).
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { $fetch } from '~/lib/api'
 import { useHead } from '~/lib/head'
@@ -60,7 +59,7 @@ export default function MailAccountsPage() {
   const hasBuiltin = accounts.some(a => a.is_builtin)
 
   const [form, setFormState] = useState<AccountForm>(emptyForm)
-  // 처리기·타이머가 "지금" 폼을 읽는다(Vue form.value)
+  // 처리기·타이머가 "지금" 폼을 읽는다
   const formRef = useRef(form)
   formRef.current = form
   function setForm(p: Partial<AccountForm>) {
@@ -175,7 +174,7 @@ export default function MailAccountsPage() {
       await $fetch(`/api/mail/accounts/${acct.id}`, {
         method: 'PATCH', body: { archive_enabled: next },
       })
-      // Vue 원본은 여기서 acct.archive_enabled = next 를 했지만 readonly 목록이라 반영되지 않았다(원본 그대로 — 보고서 참고)
+      // 주의: 목록의 acct.archive_enabled 는 여기서 갱신하지 않는다(목록을 다시 읽기 전까지 화면 값은 그대로)
       addToast('success', next
         ? t('mail.archive.enabled')
         : t('mail.archive.disabled'))

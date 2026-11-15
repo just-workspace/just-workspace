@@ -1,5 +1,5 @@
 /**
- * 파일 유형 아이콘(Vue components/files/FileTypeIcon.vue): 모양 + 색 토큰, aria-label = 유형 이름.
+ * 파일 유형 아이콘: 모양 + 색 토큰, aria-label = 유형 이름.
  * 목록·그리드·상세·시트 공용. 모양은 공용 아이콘 세트(utils/icons: file-sheet·file-slide·file-pdf·file-zip …).
  * UiIcon 은 aria-hidden 이라 role=img 로 직접 그린다. 크기는 className(h-/w-)으로.
  */

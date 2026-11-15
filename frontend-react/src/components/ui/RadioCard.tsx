@@ -10,7 +10,7 @@ import { cn } from '~/lib/utils'
 import { useModel } from './internal'
 
 export interface UiRadioCardProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'value' | 'title' | 'type' | 'role' | 'disabled' | 'name'> {
-  /** 그룹에서 고른 값(Vue v-model) */
+  /** 그룹에서 고른 값 */
   modelValue?: string | number | null
   /** 이 카드를 골랐을 때 — 이 카드의 value 로 불린다 */
   onUpdateModelValue?: (v: string | number | null) => void
@@ -27,7 +27,7 @@ export interface UiRadioCardProps extends Omit<ButtonHTMLAttributes<HTMLButtonEl
   /** card(기본) — 미리보기 그림 + 제목 세로 카드 · row — 높이 56 가로형(점 18 · 제목 · 설명 한 줄 · 오른쪽 meta) */
   layout?: 'card' | 'row'
   disabled?: boolean
-  /** (Vue 판에 있던 prop — 그려지지 않는다) */
+  /** (그려지지 않는다 — 호환용 prop) */
   name?: string
   /** card 전용 — 제목 위 미리보기 그림 */
   children?: ReactNode

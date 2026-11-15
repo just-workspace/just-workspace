@@ -1,5 +1,5 @@
 /**
- * 모바일 상단 ⋯ 시트(Vue components/calendar/CalendarMobileMenu.vue · 시안 캘2 "캘린더 목록 시트"):
+ * 모바일 상단 ⋯ 시트("캘린더 목록 시트"):
  * 사이드바 대신 캘린더 표시 토글 + 새 캘린더 + CalDAV 주소 복사.
  * 가져오기·내보내기(.ics)는 시트를 닫고 CalendarIcsModal 을 연다.
  */

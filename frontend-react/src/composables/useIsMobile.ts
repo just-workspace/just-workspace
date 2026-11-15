@@ -1,8 +1,8 @@
 /**
- * 적응형 모바일 셸 — 화면폭 ≤767px 여부(Vue 판 plugins/mobile.client.ts + useIsMobile).
+ * 적응형 모바일 셸 — 화면폭 ≤767px 여부.
  * 리스너는 앱 전체에 1회만 등록한다.
  *
- * React: const isMobile = useIsMobile()   (boolean — Vue 의 isMobile.value)
+ * React: const isMobile = useIsMobile()   (boolean)
  * 컴포넌트 밖: isMobileNow()
  */
 import { createStore, useStore } from 'zustand'

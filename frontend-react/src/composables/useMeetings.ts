@@ -1,16 +1,16 @@
 /**
- * 회의(LiveKit) — 방 목록 REST + 앱 수준 통화 세션. Vue 판 composables/useMeetings.ts 그대로.
+ * 회의(LiveKit) — 방 목록 REST + 앱 수준 통화 세션.
  *
- * Vue 판은 모든 상태가 Nuxt useState('meetings-*') 였다(앱 전역). React 판은 그 키들을 meetingsStore 한 곳에 모았다.
- * 접속 정보·재입장 타이머·화면 꺼짐 방지·문서 리스너는 모듈 수준(Vue 판과 같음) — 회의 화면을 떠나도(미니 창) 통화가 계속 돈다.
+ * 모든 상태는 앱 전역 — meetingsStore 한 곳에 모았다.
+ * 접속 정보·재입장 타이머·화면 꺼짐 방지·문서 리스너는 모듈 수준 — 회의 화면을 떠나도(미니 창) 통화가 계속 돈다.
  *
  * React: const { rooms, participants, connectionState, joinRoom, leaveRoom, toggleMic, ... } = useMeetings()
- *   - 멤버 이름은 Vue 판과 같다. 값은 .value 없이(렌더 시점 값). 읽은 필드만 구독한다(useTrackedStore).
- *   - Vue 에서 바깥이 대입하던 상태: setIsHost(v)(회의 화면), setMeetingsError(v). 그 밖은 setMeetingsState({ … }).
+ *   - 값은 렌더 시점 값. 읽은 필드만 구독한다(useTrackedStore).
+ *   - 바깥에서 바꾸는 상태: setIsHost(v)(회의 화면), setMeetingsError(v). 그 밖은 setMeetingsState({ … }).
  * 컴포넌트 밖: meetingsStore.getState() / joinRoom()·leaveRoom() 등 export 함수
  */
-// livekit-client 는 무거워서(메인 번들의 1/3) 통화를 시작할 때 지연 로드한다(Vue 판은 Nuxt 가 청크를 나눠
-// 메인에 없었다). 타입만 정적으로 가져오고, 값은 loadLivekit() 뒤에 lk() 로 쓴다. 방(Room)이 있는 경로는
+// livekit-client 는 무거워서(메인 번들의 1/3) 통화를 시작할 때 지연 로드한다.
+// 타입만 정적으로 가져오고, 값은 loadLivekit() 뒤에 lk() 로 쓴다. 방(Room)이 있는 경로는
 // 반드시 connectToRoom 을 거쳤으므로 lk() 가 이미 채워져 있다.
 import type { DisconnectReason, Participant, Room } from 'livekit-client'
 import { createStore } from 'zustand'
@@ -175,7 +175,7 @@ export interface MeetingsState {
   unreadChat: number
 }
 
-/** Vue 판 useState('meetings-*') 들 */
+/** 앱 전역 회의 상태 */
 /** 이 탭에서 Krisp 가 이미 실패했나(_markKrispUnavailable) — 스토어 초기값보다 먼저 정의 */
 const KRISP_OFF_KEY = 'meet.krisp.unavailable'
 function _krispKnownUnavailable(): boolean {
@@ -216,7 +216,7 @@ export const meetingsStore = createStore<MeetingsState>()(() => ({
 const S = () => meetingsStore.getState()
 const set = (p: Partial<MeetingsState>) => meetingsStore.setState(p)
 
-/** Vue 에서 바깥이 `x.value = v` 하던 자리(Nuxt useState 는 어디서나 쓸 수 있었다) */
+/** 바깥에서 상태를 바꾸는 자리 */
 export const setMeetingsState = (p: Partial<MeetingsState>) => set(p)
 export const setIsHost = (v: boolean) => set({ isHost: v })
 export const setMeetingsError = (v: string | null) => set({ error: v })

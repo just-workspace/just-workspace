@@ -1,5 +1,5 @@
 /**
- * 관리 › 그룹 — Vue pages/admin/groups.vue. 최대 1100, 2단: 왼쪽 320 목록 + 오른쪽 상세.
+ * 관리 › 그룹. 최대 1100, 2단: 왼쪽 320 목록 + 오른쪽 상세.
  *  목록 카드: "그룹 찾기"(32) · 행 48(이름 600 + 설명 12 muted, 오른쪽 멤버 수, 선택 = primary/13 바탕).
  *  상세 ① 멤버 카드: 이름 15/600 + "설명 · 멤버 N", [이름 바꾸기] [멤버 추가], 행 48 = 아바타 28 + 이름·이메일 + 역할 + 빼기.
  *  상세 ② "이 그룹이 쓸 수 있는 모듈" — 토글 칩. 누르면 바로 저장.
@@ -84,7 +84,7 @@ export default function AdminGroupsPage() {
   const [membersError, setMembersError] = useState(false)
   async function loadMembers() {
     const gid = selIdRef.current
-    // Vue: if (!sel.value) — 지금 선택이 목록에 있는 그룹일 때만
+    // 지금 선택이 목록에 있는 그룹일 때만
     if (!gid || !groups.some(g => g.id === gid)) { setMembers([]); return }
     setMembersLoading(true); setMembersError(false)
     try { setMembers((await $fetch<{ members: Member[] }>(`/api/admin/groups/${gid}/members`, { credentials: 'include' })).members || []) }

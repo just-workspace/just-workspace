@@ -1,11 +1,11 @@
 /**
- * 반복 일정 범위 확인(Vue components/calendar/CalendarScopeModal.vue).
+ * 반복 일정 범위 확인.
  *  삭제: alertdialog 400, 패딩 20 —
  *    제목 15/600 "반복 일정을 삭제할까요?" + 설명 13 '"제목" · 매주 목요일 15:00. 참석자 n명에게 취소 메일이 갑니다.' →
  *    라디오 행 40(테두리 카드, 고르면 1.5px primary + primary/0.08): 이 일정만 (날짜) / 이 일정과 이후 모두 / 반복 전체 →
  *    체크 "참석자에게 취소 알림 보내기"(참석자가 있을 때만) → [취소][삭제 danger].
  *  수정: 시안 그림이 없어 예전 확인형 그대로(라디오 3 + [취소][저장]).
- * "이 일정만" = 회차 예외(삭제는 EXDATE, 수정은 RECURRENCE-ID 행). 가장 좁은 범위라 기본 선택. 포커스는 [취소]부터(시안 G).
+ * "이 일정만" = 회차 예외(삭제는 EXDATE, 수정은 RECURRENCE-ID 행). 가장 좁은 범위라 기본 선택. 포커스는 [취소]부터.
  */
 import { eventRange, zp } from '~/utils/calTz'
 import { useState, type KeyboardEvent } from 'react'

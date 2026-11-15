@@ -1,10 +1,10 @@
 /**
- * AI 시스템 설정(Vue components/ai/AiAdminSettings.vue) — 관리 › 설정 › AI(/admin/ai). 자기완결, 이 화면에서만 쓴다.
+ * AI 시스템 설정 — 관리 › 설정 › AI(/admin/ai). 자기완결, 이 화면에서만 쓴다.
  *  ① 워크스페이스 모델 — 행(min 52): 워크스페이스 기본 · 워크스페이스 고급(이름 600 + "로컬/외부 · 모델" 12 muted, 상태 배지
  *     정상 success · 느림 n.ns warning · 연결 안 됨 danger — POST /api/ai/config/test 로 잼), 개인 API 키 허용 스위치.
- *     제공자·키·주소·모델을 고치는 폼은 시안에 없어 행 ⋮ 메뉴의 첫 항목 "설정" 모달로 둔다(폼은 디자이너 확인 필요).
+ *     제공자·키·주소·모델을 고치는 폼은 시안에 없어 행 ⋮ 메뉴의 첫 항목 "설정" 모달로 둔다.
  *  ② 도구 허용 — 스위치 행: 메일·파일·캘린더 검색(웹 검색 밖의 데이터 도구 전부) · 웹 검색. 즉시 저장 + "저장됨 ✓".
- *     외부 AI 개인데이터 접근 허용 스위치와 도구별 체크(자세히)는 기존 기능이라 같은 카드 아래에 유지(디자이너 확인 필요).
+ *     외부 AI 개인데이터 접근 허용 스위치와 도구별 체크(자세히)는 기존 기능이라 같은 카드 아래에 유지.
  *  ③ 한도 — 사용자당 하루 요청(0 = 제한 없음)·대화 보관(선택), 카드 푸터 저장.
  * 모듈 켜기/끄기는 '모듈 관리'에서만 — 여기선 상태 표시와 링크만.
  */
@@ -38,7 +38,7 @@ const PROVIDERS = [
 ]
 const providerOptions = PROVIDERS.map(p => ({ value: p.kind, label: p.label }))
 
-/** Vue v-model 이 type="number" 입력에 하는 변환(looseToNumber) — 숫자가 아니면 문자열 그대로 */
+/** type="number" 입력 값 변환 — 숫자가 아니면 문자열 그대로 */
 function looseToNumber(v: string): number | string {
   const n = parseFloat(v)
   return Number.isNaN(n) ? v : n
@@ -69,7 +69,7 @@ export function AiAdminSettings() {
   const [loadError, setLoadError] = useState('')
   const [moduleEnabled, setModuleEnabled] = useState(false)
   const [cfg, setCfgState] = useState<Cfg>(EMPTY_CFG)
-  // 이벤트 처리기에서 "지금" 값(Vue reactive 는 늘 최신)
+  // 이벤트 처리기에서 "지금" 값
   const cfgRef = useRef(cfg)
   const setCfg = (next: Cfg) => { cfgRef.current = next; setCfgState(next) }
 

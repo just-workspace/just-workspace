@@ -42,7 +42,7 @@
   /* 시안 상태색 — text-success / bg-warning/10 / text-danger 등으로 직접 사용 */
   --color-success: hsl(var(--success));
   --color-warning: hsl(var(--warning));
-  /* 빨강은 danger 하나(시안 J). destructive 는 CSS 변수 별칭으로만 남아 있다 — 새 코드는 danger. */
+  /* 빨강은 danger 하나. destructive 는 CSS 변수 별칭으로만 남아 있다 — 새 코드는 danger. */
   --color-danger: hsl(var(--danger));
   --color-danger-foreground: hsl(var(--danger-foreground));
   --color-scrim: hsl(var(--scrim) / 0.62);
@@ -72,7 +72,7 @@
   --color-paper: hsl(var(--paper));
   --color-paper-foreground: hsl(var(--paper-foreground));
 
-  /* 그림자 — 종류당 1단(시안 J). 팝오버·드롭다운 md / 드로어·패널 lg / 모달 xl. 스크림 색 기반. */
+  /* 그림자 — 종류당 1단. 팝오버·드롭다운 md / 드로어·패널 lg / 모달 xl. 스크림 색 기반. */
   --shadow-md: 0 12px 32px hsl(var(--scrim) / 0.55);
   --shadow-lg: 0 16px 40px hsl(var(--scrim) / 0.55);
   --shadow-xl: 0 20px 48px hsl(var(--scrim) / 0.6);
@@ -211,7 +211,7 @@
     --card-foreground: 216 28% 14%;
     --primary: 218 88% 52%;
     --primary-foreground: 0 0% 100%;
-    /* 반전색 토스트(bg-foreground) 위 행동 글자(C8): 어두운 토스트 위라 다크 강조색 — 대비 5.0:1 */
+    /* 반전색 토스트(bg-foreground) 위 행동 글자: 어두운 토스트 위라 다크 강조색 — 대비 5.0:1 */
     --primary-inverse: 218 100% 65%;
     --secondary: 216 20% 95%;
     --secondary-foreground: 216 25% 20%;
@@ -229,7 +229,7 @@
     --scrim: 6 8% 4%;
     --radius: 0.75rem;
 
-    /* ── 시안 J(토큰 결정) 반영 ──
+    /* ── 토큰 결정 ──
        - 빨강은 danger 하나. destructive 는 danger 의 별칭(기존 화면 호환용) — 새 코드에서는 쓰지 않는다.
        - --popover = --card. 떠 있는 것은 색이 아니라 그림자로 구분한다.
        - --stage: 통화(회의) 화면 바탕. 라이트 220 20% 93% / 다크 220 30% 4%. */
@@ -422,7 +422,7 @@
 *::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); }
 *::-webkit-scrollbar-corner { background: transparent; }
 
-/* 스켈레톤 — 300ms 뒤에만 보인다(시안 H: 짧은 로딩은 아무것도 안 보여 깜빡임 방지) */
+/* 스켈레톤 — 300ms 뒤에만 보인다(짧은 로딩은 아무것도 안 보여 깜빡임 방지) */
 @keyframes skeleton-reveal {
   from { opacity: 0; }
   to { opacity: 1; }

@@ -89,7 +89,7 @@ describe('BoardCreateModal', () => {
     fireEvent.change(name, { target: { value: 'D' } })
     fireEvent.change(name, { target: { value: 'De' } })
     fireEvent.change(name, { target: { value: 'Dev Notes' } })
-    // 한 글자씩이 아니라 한 번에 바뀌면 Vue 와 같이 "한 글자 전" 비교가 어긋나 멈춘다
+    // 한 글자씩이 아니라 한 번에 바뀌면 "한 글자 전" 비교가 어긋나 멈춘다
     expect(slug.value).toBe('de')
     fireEvent.change(name, { target: { value: 'Dev Notes!' } })
     expect(slug.value).toBe('de')

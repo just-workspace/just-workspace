@@ -1,5 +1,5 @@
 /**
- * 메일 작성 글 도우미 — Vue 판 components/mail/MailComposer.vue <script> 안의 순수 함수(주소·인용·전달·제목 접두)를 그대로 떼어 낸 것.
+ * 메일 작성 글 도우미 — 순수 함수(주소·인용·전달·제목 접두).
  * React 컴포넌트 파일에 컴포넌트 아닌 export 를 섞지 않으려고 따로 둔다(동작·문자열 동일). 테스트: tests/mail/composeText.test.ts
  */
 import type { EmailAddress, MessageDetail } from '~/composables/useMail'

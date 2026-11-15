@@ -1,4 +1,4 @@
-// 라우트 표(옛 주소 57개 + 전환 뒤 새 화면)가 온전하고, 각각 렌더(자리 표시 포함)되는지.
+// 라우트 표(기존 주소 57개 + 나중에 더한 화면)가 온전하고, 각각 렌더(자리 표시 포함)되는지.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, waitFor, act } from '@testing-library/react'
 import { RouterProvider } from 'react-router'
@@ -25,7 +25,7 @@ vi.mock('~/lib/api', async (orig) => {
     if (url === '/api/chat/drafts' || url === '/api/chat/saved') return { items: [] }
     if (url === '/api/notifications/') return { notifications: [], total: 0 }
     if (url === '/api/notifications/unread-count') return { count: 0 }
-    // /code/owner/repo — 저장소 상세는 owner.login 이 있어야 한다(Vue 와 같게 없으면 던짐)
+    // /code/owner/repo — 저장소 상세는 owner.login 이 있어야 한다(없으면 던짐)
     if (url === '/api/git/repos/owner/repo') return { name: 'repo', full_name: 'owner/repo', owner: { login: 'owner' }, default_branch: 'main' }
     // 파일 모듈(r1/files-office): 목록은 { path, items } 모양
     if (url === '/api/files/list') return { path: 'my', items: [] }
@@ -48,11 +48,11 @@ function samplePath(path: string) {
 const pagesDir = join(__dirname, '..', '..', 'src', 'pages')
 
 describe('라우트 표', () => {
-  it('옛 주소 57개(Vue 시절부터 이어 온 URL) + 전환 뒤 새로 만든 화면', () => {
-    // 옛 Vue pages/** 와 1:1 이던 주소 — 북마크·링크가 걸려 있어 수가 줄면 안 된다(Vue 소스는 2026-11-14 삭제)
+  it('기존 주소 57개 + 나중에 더한 화면', () => {
+    // 기존 주소 — 북마크·링크가 걸려 있어 수가 줄면 안 된다
     const shared = ROUTES.filter(r => !r.reactOnly)
     expect(shared.length).toBe(57)
-    // 전환 뒤 새로 만든 화면
+    // 나중에 더한 화면
     expect(ROUTES.filter(r => r.reactOnly).map(r => r.path).sort()).toEqual(['/admin/ai-ops/*', '/admin/dashboard-layout', '/admin/rbi', '/admin/update/*', '/admin/zones', '/approvals', '/rbi', '/settings/ai/mcp', '/settings/ai/memory', '/settings/calendar', '/settings/chat'])
     // 경로는 겹치지 않는다
     expect(new Set(ROUTES.map(r => r.path)).size).toBe(ROUTES.length)

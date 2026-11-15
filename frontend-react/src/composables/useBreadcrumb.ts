@@ -1,10 +1,10 @@
 /**
- * 상단바 3단 경로: 워크스페이스 / 모듈 / 위치. Vue 판 composables/useBreadcrumb.ts 그대로.
+ * 상단바 3단 경로: 워크스페이스 / 모듈 / 위치.
  * 모듈 이름은 셸(useNav)이 알고, 세 번째 "위치"(메일 폴더·파일 경로·위키 페이지·게시판 이름)는 각 페이지가
  * useBreadcrumb('받은편지함') 으로 올린다. 라우트가 바뀌면 셸(DefaultLayout)이 비운다.
  *
  * React:
- *   useBreadcrumb(folderName)        // 값이 바뀌면 갱신, 언마운트 때 비움 (Vue: useBreadcrumb(() => x))
+ *   useBreadcrumb(folderName)        // 값이 바뀌면 갱신, 언마운트 때 비움
  *   const { location, set, clear } = useBreadcrumb()   // 읽기·직접 설정
  * 컴포넌트 밖: setBreadcrumb(v) / clearBreadcrumb()
  */

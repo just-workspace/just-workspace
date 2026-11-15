@@ -50,7 +50,7 @@ beforeEach(() => {
   setUser({ id: 'u1', username: 'me', display_name: '나', email: 'me@example.com', primary_email: null } as any)
 })
 
-describe('composeText — Vue MailComposer 순수 함수 그대로', () => {
+describe('composeText — 순수 함수', () => {
   it('parseAddresses: 이름<주소>·맨 주소, 틀린 형식은 버림', () => {
     expect(text.parseAddresses('"홍 길동" <hong@a.io>, b@c.io, nope')).toEqual([
       { name: '홍 길동', email: 'hong@a.io' }, { name: null, email: 'b@c.io' },
@@ -101,7 +101,7 @@ describe('MailBody 3경로', () => {
 })
 
 describe('MailComposer', () => {
-  it('새 메일: to 미리 채움 → 보내기는 POST /api/mail/send(가짜) 에 Vue 와 같은 본문', async () => {
+  it('새 메일: to 미리 채움 → 보내기는 POST /api/mail/send(가짜) 에 보내는 본문', async () => {
     const onClose = vi.fn()
     renderInRouter(<MailComposer variant="window" mode="new" to="kim@ext.io" onClose={onClose} />)
     await waitFor(() => expect(screen.getByLabelText('제목')).toBeTruthy())

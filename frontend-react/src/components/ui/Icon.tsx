@@ -1,5 +1,5 @@
 /**
- * 공용 선 아이콘(시안 J: 24 격자 1세트). 이름은 utils/icons.ts ICON_PATHS 키.
+ * 공용 선 아이콘(24 격자 1세트). 이름은 utils/icons.ts ICON_PATHS 키.
  * 글리프(✕ ▾ ⋯ ⋮ ‹ › ★)를 쓰던 자리에 `<UiIcon name="close" className="h-4 w-4" />` 로 대체한다.
  * 크기는 바깥 className(h-/w-)으로 준다. 모르는 이름은 점(dot)으로 그린다.
  * width·height 속성(size, 기본 16)도 함께 낸다 — CSS(Tailwind 클래스·부모 [&>svg] 규칙)가 표현 속성보다 우선하므로

@@ -1,10 +1,9 @@
 /**
  * 게시글 보기.
- * Vue 원본: frontend/pages/board/[boardId]/[postId].vue
  *  폭 680 하나 — 배지(필독 솔리드 warning 22) · 제목 26/700 · 메타(아바타 24 · 작성자 · 시각 mono · 조회 N · 오른쪽 북마크)
  *  · 본문 15/1.75 · 첨부 카드 · 리액션 · 댓글 N(1단 답글, @언급 칩) · 댓글 입력.
  *  커맨드 바: 경로(게시판 › 제목) · 편집 · ⋯(삭제·고정·링크 복사). 모바일: 상단 바(북마크 44 · ⋯ 44) + 하단 고정 댓글 바.
- * Nuxt 는 경로 매개변수가 바뀌면 페이지를 새로 만든다 — 같은 효과로 boardId·postId 를 key 로 다시 마운트한다.
+ * 경로 매개변수가 바뀌면 화면을 새로 만든다 — boardId·postId 를 key 로 다시 마운트한다.
  */
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import DOMPurify from 'dompurify'

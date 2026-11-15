@@ -134,7 +134,7 @@ function useSave<T>(run: () => Promise<T>, onDone: (r: T) => void): [SaveState, 
   return [st, go]
 }
 
-// ── 파일 하나(C1) ────────────────────────────────────────────
+// ── 파일 하나 ────────────────────────────────────────────
 export function AiArtifactFileCard({ initial }: { initial: AiArtifact }) {
   const { t, locale } = useI18n()
   const isMobile = useIsMobile()
@@ -215,7 +215,7 @@ export function AiArtifactFileCard({ initial }: { initial: AiArtifact }) {
   )
 }
 
-// ── 묶음(L1) ─────────────────────────────────────────────────
+// ── 묶음 ─────────────────────────────────────────────────
 export function AiArtifactBundleCard({ initial }: { initial: AiArtifactJob }) {
   const { t } = useI18n()
   const isMobile = useIsMobile()

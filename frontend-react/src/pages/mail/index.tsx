@@ -1,4 +1,3 @@
-// Vue 원본: frontend/pages/mail/index.vue
 /**
  * 메일.
  * 데스크톱: 사이드바 236 | 목록 clamp(320, 본문 폭 × 24%, 440) | 읽기 판(끝까지, 본문 760 가운데) | 보낸 사람 360(상세 칸 ≥ 1400 일 때만 펼친 채)
@@ -9,7 +8,7 @@
  */
 import { useEffect, useRef, useState, type TouchEvent as RTouchEvent } from 'react'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { useHead } from '~/lib/head'
 import { useRoute, navigateTo, queryString } from '~/lib/router'
@@ -169,7 +168,7 @@ export default function MailPage() {
     document.addEventListener('keydown', h)
     void loadAll()
     return () => document.removeEventListener('keydown', h)
-    // 마운트 때 한 번(Vue onMounted — demoMode 는 그 시점 값)
+    // 마운트 때 한 번(demoMode 는 그 시점 값)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -223,7 +222,7 @@ export default function MailPage() {
       </div>
     )
   }
-  // 계정 목록을 못 받음 — 빈 상태(온보딩)로 보이면 안 된다(P5)
+  // 계정 목록을 못 받음 — 빈 상태(온보딩)로 보이면 안 된다
   if (accountsError) {
     return (
       <div className="flex h-full flex-col">

@@ -1,5 +1,5 @@
 /**
- * 데스크톱 커맨드 바(Vue components/files/FileCommandBar.vue): 44 · bg-card · border-b,
+ * 데스크톱 커맨드 바: 44 · bg-card · border-b,
  * 순서 경로 → 검색(180) → 보기 세그먼트 → 업로드(outline 32) → 새로 만들기 ▾(primary 32).
  * 선택 모드: 하나라도 고르면 바가 바뀐다 — primary/10 바탕 + primary/35 밑줄, ✕(선택 해제 Esc) · "N개 선택" ·
  * 공유 · 이동 · 다운로드 · 삭제(32, 12px) · 오른쪽 "모두 선택".

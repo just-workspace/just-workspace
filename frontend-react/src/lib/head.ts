@@ -1,15 +1,14 @@
 /**
- * 문서 머리 — Vue 판 `useHead({ title })` 대응(최소: 제목·link).
+ * 문서 머리 — `useHead({ title })`(최소: 제목·link).
  *
- * Vue:   useHead({ title: computed(() => `${t('nav.chat')} | ${appName.value}`) })
- * React: useHead({ title: `${t('nav.chat')} | ${appName}` })
+ * 사용: useHead({ title: `${t('nav.chat')} | ${appName}` })
  *
  * 제목은 가장 늦게 렌더된(가장 안쪽·가장 최근) 호출이 이긴다. 그 화면이 내려가면 바깥 호출의 제목으로
  * 돌아간다(unhead 와 같은 쌓임 규칙). 제목을 정하지 않은 화면은 App 이 런타임 브랜딩 이름을 쓴다.
  *
  * 순서는 effect 실행 순서가 아니라 **첫 렌더 순서(id)** 로 정한다. React 는 자식 effect 를 부모보다 먼저
  * 돌리므로, effect 순서로 쌓으면 첫 마운트(직접 진입·새로고침) 때 App 의 앱 이름이 페이지 제목을 덮는다.
- * 렌더는 부모 → 자식 순이고 나중에 마운트된 화면은 더 큰 id 를 받으므로 id 가 곧 Vue(unhead) 의 순서다.
+ * 렌더는 부모 → 자식 순이고 나중에 마운트된 화면은 더 큰 id 를 받으므로 id 가 곧 쌓임 순서다.
  * link 도 같은 순서로 <head> 안에 줄 세운다(같은 rel 이면 뒤의 것이 이김 — 예: 배지 파비콘).
  */
 import { useEffect, useRef } from 'react'

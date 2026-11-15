@@ -1,5 +1,5 @@
 /**
- * Vue 판 composables/useDocMeta.ts 그대로(현재 호출처 없음 — 자체 오피스 폐기 후 남은 것, MIGRATION 4 표).
+ * 문서 메타(현재 호출처 없음).
  * React: const { meta, bind, patch } = useDocMeta()  — meta 는 렌더 시점 값(바뀌면 다시 그린다).
  *
  * 문서의 페이지 설정 — 용지·여백·단·테마·워터마크.

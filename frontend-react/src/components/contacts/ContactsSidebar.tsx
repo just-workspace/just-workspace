@@ -1,5 +1,5 @@
 /**
- * 연락처 사이드바 — Vue 판 components/contacts/ContactsSidebar.vue.
+ * 연락처 사이드바.
  * 236 bg-card, [+ 새 연락처] 40 primary,
  * 범위 행 34(선택 = primary/13 + 600, 개수 mono 12) — 모든 연락처 · 즐겨찾기 · 워크스페이스 사용자 /
  * 주소록(섹션 11/600 트래킹) / 그룹(점 8 + 이름) / "가져오기 · 내보내기 (vCard)".
@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { useContacts } from '~/composables/useContacts'
 import { addToast } from '~/composables/useToast'

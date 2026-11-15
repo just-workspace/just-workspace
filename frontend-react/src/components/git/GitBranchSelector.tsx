@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitBranchSelector.vue
 // 브랜치 선택("⑂ main ▾"). 고르면 ?ref= 로 라우트를 바꾼다(코드·커밋 탭이 따라 다시 불린다).
 // 브랜치 검색·만들기·태그는 ★백엔드 갭(브랜치 목록만 있음).
 import { useState, type MouseEvent } from 'react'

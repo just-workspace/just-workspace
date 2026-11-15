@@ -1,4 +1,3 @@
-// Vue 원본: frontend/pages/settings/apps.vue
 // 설정 › 연결된 앱.
 //  ① 연결된 앱 — OAuth 동의로 내 계정에 접근하는 앱(GET /api/auth/me/apps).
 //  ② 앱 비밀번호 — 메일 앱·CalDAV 처럼 로그인 화면이 없는 프로그램용(GET/POST/DELETE /api/auth/me/app-passwords).

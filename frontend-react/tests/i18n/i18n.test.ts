@@ -1,4 +1,4 @@
-// vue-i18n 문법 어댑터 — 기존 locales JSON 을 그대로 쓸 때 vue-i18n 과 같은 결과인지.
+// vue-i18n 문법 어댑터 — locales JSON 을 그대로 쓸 때 vue-i18n 과 같은 결과인지.
 import { describe, it, expect } from 'vitest'
 import { format, pluralDefault } from '~/i18n/compile'
 import { act, renderHook } from '@testing-library/react'

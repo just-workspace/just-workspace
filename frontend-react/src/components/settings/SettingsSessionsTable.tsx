@@ -1,5 +1,5 @@
 /**
- * 설정 › 보안 "내 세션" — Vue components/settings/SettingsSessionsTable.vue
+ * 설정 › 보안 "내 세션"
  * + 모바일 카드 스택.
  * 데스크톱: 카드 머리 = 제목 + "로그인된 기기 N대 · …" + 오른쪽 [이 기기 빼고 모두 로그아웃](32, danger 테두리 0.6).
  *   표 머리 36(11/600 0.06em muted) + 행 SettingsSessionRow. "접속 주소" 칸 = 호스트 이름(없으면 IP), mono.

@@ -1,11 +1,10 @@
 /**
  * 게시판 글 목록.
- * Vue 원본: frontend/pages/board/[boardId]/index.vue
  *  커맨드 바 44: 게시판명 600 + 설명 muted | 검색(이 게시판) + 글쓰기
  *  카테고리 밑줄 탭 40 + "최신순 ▾" → 글 행 56(아바타 28 · 필독 솔리드 · 고정 틴트 · 안 읽음 굵게) → 숫자 페이지네이션 48
  *  모바일: 상단 바(‹ 게시판 목록 · 이름 / 설명 · 필독 N · 검색 44) + 행 + FAB 글쓰기(탭바 유지).
  *  "모두 읽음"(POST /boards/{id}/read-all): 안 읽은 글이 있을 때만, 활동 패널 머리의 "모두 읽음" 글자 버튼 규격(primary 600).
- * Nuxt 는 경로 매개변수가 바뀌면 페이지를 새로 만든다 — 같은 효과로 boardId 를 key 로 다시 마운트한다.
+ * 경로 매개변수가 바뀌면 화면을 새로 만든다 — boardId 를 key 로 다시 마운트한다.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'

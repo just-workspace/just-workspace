@@ -1,12 +1,12 @@
 /**
  * 채팅 화면 전용 UI 상태 — 컴포넌트끼리 주고받는 "화면" 상태만 둔다(네트워크·실시간은 useChat).
- * Vue 원본: frontend/composables/useChatUi.ts (Nuxt useState 키 chat-ui-* 묶음 → zustand store 하나)
+ * 앱 전역 상태 묶음(zustand store 하나).
  *
  * useChat 을 키우지 않으려고 따로 뺐다: 모아보기(스레드·임시 저장·저장한 메시지) 화면, 알림 설정 시트,
  * "안 읽음으로 표시" 로 옮긴 새 메시지 구분선, ↑ 로 마지막 내 메시지 수정, 파일 선택 창 열기 요청.
  *
  * React: const { collection, setCollection, notifySheetChannelId, ... } = useChatUi()
- *   Vue 의 `x.value = v` 대입은 setter(setCollection·setNotifySheetChannelId·setInviteOpen·setUnreadAnchor·
+ *   값을 바꿀 때는 setter(setCollection·setNotifySheetChannelId·setInviteOpen·setUnreadAnchor·
  *   setEditRequest·setThreadWide)로. 이벤트 처리기 안에서 "지금" 값은 chatUiStore.getState().
  */
 import { createStore, useStore } from 'zustand'
@@ -19,9 +19,9 @@ export type ChatCollection = 'threads' | 'drafts' | 'saved'
 export interface ChatUiState {
   /** 사이드바 고정 항목으로 연 모아보기. 채널을 열면 비운다(pages/chat). */
   collection: ChatCollection | null
-  /** 채널 알림 설정 시트(D6 모달 / M4 바텀시트)를 연 채널 id */
+  /** 채널 알림 설정 시트(데스크톱 모달 / 모바일 바텀시트)를 연 채널 id */
   notifySheetChannelId: string | null
-  /** 멤버 초대 모달(D7 "멤버 초대") */
+  /** 멤버 초대 모달 */
   inviteOpen: boolean
   /** "안 읽음으로 표시" 한 메시지 — 목록이 새 메시지 구분선을 그 위로 옮긴다 */
   unreadAnchor: { channelId: string; messageId: string } | null
@@ -29,7 +29,7 @@ export interface ChatUiState {
   editRequest: string | null
   /** 컴포저의 파일 선택 창 열기 요청(채널 소개 "파일 올리기" · Ctrl+U). 값이 바뀌면 연다 */
   filePickerTick: number
-  /** 스레드 패널 넓게 보기(2-1-1) */
+  /** 스레드 패널 넓게 보기 */
   threadWide: boolean
   /** 채널 목록 접힘(데스크톱) — 레일의 채팅 아이콘을 다시 누르면 접고 편다 */
   listCollapsed: boolean
@@ -48,7 +48,7 @@ export interface ChatUiState {
   jumpTarget: { channelId: string; messageId: string; nonce: number } | null
   /** 오른쪽 자리 "스레드 목록"(400) — 다른 오른쪽 패널과 배타 */
   threadListOpen: boolean
-  /** 채팅 안 전체 화면 설정(§5.4). section = 'roles'|'role-perm'|'channel-perm'|'category-perm'|'emoji'|'voice'… */
+  /** 채팅 안 전체 화면 설정. section = 'roles'|'role-perm'|'channel-perm'|'category-perm'|'emoji'|'voice'… */
   settings: { section: string; targetId?: string | null } | null
   /** 프로필 팝아웃 — 붙일 기준 사각형 */
   profilePopout: { userId: string; anchor: { x: number; y: number; w: number; h: number } } | null
@@ -133,7 +133,7 @@ export function initialOf(name: string | null | undefined): string {
   return (name || '?').charAt(0).toUpperCase()
 }
 
-/** Vue useChatUi() 와 같은 멤버(값은 .value 없이) + setter */
+/** 상태 + setter */
 export function useChatUi() {
   const s = useStore(chatUiStore, useShallow((x: ChatUiState) => x))
   const allUsers = useStore(chatStore, x => x.allUsers)
@@ -153,7 +153,7 @@ export function useChatUi() {
   }
 }
 
-/** 시각 표시(HH:MM, mono). 오늘이 아니면 "어제" 또는 M월 D일 — 모바일 목록 오른쪽 위(M1) */
+/** 시각 표시(HH:MM, mono). 오늘이 아니면 "어제" 또는 M월 D일 — 모바일 목록 오른쪽 위 */
 export function chatListTime(iso: string | null | undefined, t: (k: string) => string): string {
   if (!iso) return ''
   const d = new Date(iso)

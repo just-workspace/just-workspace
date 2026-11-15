@@ -4,7 +4,7 @@
  *  "예정" · "지난 회의" 묶음 = 머리 12/600 muted + UiCard 안 행 min-h-14:
  *    w-24 mono(굵은 일시 / muted 길이) · 제목 14/600 + 보조 12 muted(호스트) · [링크 복사](outline xs) · UiMenu(캘린더에서 보기 · 링크 복사 · 수정)
  *  아래 [+ 이 채널로 회의 예약](outline sm) → 회의 예약 창(MeetingsInviteModal), 만들면 이 채널에 묶인다(channel_id).
- * 디자이너 확인 필요: 지난 회의 [회의록] 버튼 — 회의록 기능이 없어 빼 두었다. 지난 회의 "참가 n"도 기록이 없어 호스트만 보인다.
+ * 지난 회의 [회의록] 버튼 — 회의록 기능이 없어 빼 두었다. 지난 회의 "참가 n"도 기록이 없어 호스트만 보인다.
  * 서버: GET /api/chat/channels/{id}/meetings (items = 예정·진행 중, past = 지난 회의 10개)
  */
 import { useCallback, useEffect, useState } from 'react'

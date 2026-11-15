@@ -225,7 +225,7 @@ describe('대시보드 "오늘"', () => {
   })
 })
 
-describe('일정 폼 시간대 고르기(handover 18 답 16)', () => {
+describe('일정 폼 시간대 고르기', () => {
   async function openMore() {
     calendarStore.setState({ ...initial, calendars: cals as any, editingEvent: ev('회의', '2026-07-01T16:00:00Z', '2026-07-01T17:00:00Z') }, true)
     renderInRouter(<CalendarEventModal />)

@@ -1,5 +1,5 @@
 /**
- * 대화 영역(머리 · 연결 끊김 띠 · 메시지 목록 · 컴포저 · 드롭 오버레이). Vue 원본: frontend/components/chat/ChatConversation.vue
+ * 대화 영역(머리 · 연결 끊김 띠 · 메시지 목록 · 컴포저 · 드롭 오버레이).
  * 채널을 안 골랐으면(데스크톱) 빈 상태.
  * 채널 탭(메시지·파일·회의·작업)은 머리 안 세그먼트 sm 로 옮겼다(탭 줄 없음, 탭 관리는 머리 채널 메뉴).
  *   포럼 채널(forum_board_id)은 탭 대신 글 목록/갤러리 전환 — 본문은 ChatForumView(RIGHT 담당, 파일이 생기면 자동으로 붙는다).
@@ -198,7 +198,7 @@ export function ChatConversation({ onBack, onOpenChannels }: ChatConversationPro
               onLoadMore={loadMore}
               onOpenThread={openThread}
             />
-            {/* 모바일: 입력 중 표시는 컴포저 위 / 데스크톱: 컴포저 아래(D1) */}
+            {/* 모바일: 입력 중 표시는 컴포저 위 / 데스크톱: 컴포저 아래 */}
             <ChatTypingIndicator typingUsers={typingUsers} className="md:hidden" />
             {/* 대화 열 전체 폭 */}
             <div className="w-full">
@@ -241,7 +241,7 @@ export function ChatConversation({ onBack, onOpenChannels }: ChatConversationPro
         />
       )}
 
-      {/* 드롭 오버레이(D2) — 헤더~컴포저 전체 scrim/72 + 점선 primary */}
+      {/* 드롭 오버레이 — 헤더~컴포저 전체 scrim/72 + 점선 primary */}
       {dropActive && (
         <div
           className="absolute inset-0 z-30 flex bg-[hsl(var(--scrim)/0.72)] p-4"

@@ -1,9 +1,9 @@
 /**
- * 개인 설정 셸 — Vue layouts/settings.vue 그대로:
+ * 개인 설정 셸:
  * 기본 셸 안에 좌 내비 240 + 본문 max-w 720(헤더형 h1 24/700 + 부제 13.5).
  * 모바일(md 미만): /settings 는 섹션 목록, 하위 페이지는 상세 상단 바(‹ 설정 목록으로 · 제목)로 2단. 프로필 흡수.
  *
- * 라우터에서 DefaultLayout 의 자식(pathless)으로 붙는다 → Vue 의 <NuxtLayout name="default"> 감싸기 없이 안쪽만 그린다.
+ * 라우터에서 DefaultLayout 의 자식(pathless)으로 붙는다 → 안쪽만 그린다.
  * 규약: children 이 있으면 그것을, 없으면 <Outlet/>.
  */
 import type { ReactNode } from 'react'

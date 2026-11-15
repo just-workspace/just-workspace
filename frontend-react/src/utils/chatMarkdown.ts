@@ -1,4 +1,3 @@
-// Vue 원본: frontend/utils/chatMarkdown.ts (내용 그대로)
 // 채팅 본문 mrkdwn 렌더 (Slack식): **굵게** *기울임* ~~취소선~~ `코드` ```블록``` > 인용 링크 @멘션
 // 코드영역을 먼저 추출(placeholder) → 나머지 포맷 적용 → 복원. 최종 DOMPurify 새니타이즈.
 import DOMPurify from 'dompurify'

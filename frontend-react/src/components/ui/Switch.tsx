@@ -1,5 +1,5 @@
 /**
- * 스위치(시안 F): 36×20, 손잡이 16. 켬 = primary 트랙 + primary-foreground 손잡이,
+ * 스위치: 36×20, 손잡이 16. 켬 = primary 트랙 + primary-foreground 손잡이,
  * 끔 = muted 트랙 + inset 1px 테두리 + muted-foreground 손잡이(끔 상태도 손잡이 색으로 구분). role=switch aria-checked.
  * 히트 영역 40(min-h-10 라벨). 스위치만 있는 행은 즉시 저장 + "저장됨 ✓" 가 규칙(UiSettingsRow 쪽 몫).
  * className 은 바깥 묶음에, 나머지 속성은 스위치 <button> 에. ref 는 <button>.
@@ -9,7 +9,7 @@ import { cn } from '~/lib/utils'
 import { useModel, useUid } from './internal'
 
 export interface UiSwitchProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type' | 'role' | 'disabled' | 'aria-label'> {
-  /** 켬 여부(Vue v-model) */
+  /** 켬 여부 */
   modelValue?: boolean
   /** 켬 바뀜 */
   onUpdateModelValue?: (v: boolean) => void

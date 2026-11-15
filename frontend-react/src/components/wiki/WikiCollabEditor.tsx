@@ -1,5 +1,5 @@
 /**
- * 위키 실시간 공동 편집 (Yjs + 서버 릴레이 app/collab/relay.py) — Vue 판 components/wiki/WikiCollabEditor.vue 이식.
+ * 위키 실시간 공동 편집 (Yjs + 서버 릴레이 app/collab/relay.py).
  *
  * 릴레이는 바이트를 그대로 중계할 뿐이라 동기화 규칙은 여기서 정한다. 프레임 첫 바이트가 종류:
  *   0 UPDATE        — 편집 변경분
@@ -17,11 +17,10 @@
  * 먼저 온 사람이 시드 뒤 타이핑한 내용은 그 사람 clientID 항목이라, 그게 저장된 HTML 로 다시 시드하면
  * 같은 글이 다른 항목으로 두 벌이 된다(늦게 합류한 쪽 본문 중복·편집 유실 회귀). 그래서 접속 직후
  * SYNC_WAIT_MS 동안 응답을 기다리고, 본문이 담긴 응답이 오면 시드를 건너뛴다. 기다리는 동안은 편집을 막는다.
- * (Vue 판과 바이트 단위로 같은 프로토콜 — 두 판이 한 방에서 같이 편집된다.)
  *
  * 툴바·저장 표시는 호스트(pages/wiki)가 그린다.
- *  - Vue defineExpose({ getContent, save, editor, connected, peers, scrollToHeading }) → ref 핸들(같은 이름).
- *  - Vue 는 노출한 editor·connected·peers 가 반응형이라 호스트가 그대로 그렸다 — React 는 onUpdateState 로 알린다.
+ *  - ref 핸들: getContent · save · editor · connected · peers · scrollToHeading.
+ *  - editor·connected·peers 가 바뀌면 onUpdateState 로 알린다(호스트가 그린다).
  *  - 내 손으로 바꾼 변경은 onChange 로 올려 호스트가 자동 저장한다.
  */
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
@@ -84,7 +83,7 @@ export function peerTokenHex(i: number): string {
 }
 
 /**
- * 상대가 보낸 색을 안전한 #rrggbb 로. 옛(Vue) 클라이언트는 토큰 문자열(hsl(var(--success)))을 보내므로
+ * 상대가 보낸 색을 안전한 #rrggbb 로. 옛 클라이언트는 토큰 문자열(hsl(var(--success)))을 보내므로
  * 같은 토큰을 내 쪽에서 풀어 쓴다. 그 밖의 값(임의 문자열)은 첫 색으로 — 스타일에 그대로 들어가지 않는다.
  */
 export function safePeerColor(color: unknown): string {
@@ -117,7 +116,7 @@ export function renderPeerSelection(user: { color?: unknown }): { class: string;
 
 export interface WikiPeer { id: string; name: string; color: string; initial: string }
 
-/** ref 로 쓰는 것(Vue defineExpose). editor·connected·peers 는 읽는 시점의 값 */
+/** ref 로 쓰는 것. editor·connected·peers 는 읽는 시점의 값 */
 export interface WikiCollabEditorHandle {
   getContent: () => string
   save: () => void
@@ -127,7 +126,7 @@ export interface WikiCollabEditorHandle {
   readonly peers: WikiPeer[]
 }
 
-/** onUpdateState 로 알리는 반응형 값(Vue 판에서 호스트가 editorRef.value?.x 로 읽던 것) */
+/** onUpdateState 로 알리는 값(호스트가 그릴 때 읽는다) */
 export interface WikiCollabState { editor: Editor | null; connected: boolean; peers: WikiPeer[] }
 
 export interface WikiCollabEditorProps {
@@ -191,7 +190,7 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
   function setEd(v: Editor | null) { editorRef.current = v; setEditor(v) }
 
   function getWsUrl(): string {
-    // 웹은 현재 창 주소 기준(Vue 판과 같다), 번들 앱은 apiBase 호스트 — lib/runtimeConfig wsUrl
+    // 웹은 현재 창 주소 기준, 번들 앱은 apiBase 호스트 — lib/runtimeConfig wsUrl
     return wsUrl(`/ws/wiki/collab?page_id=${latest.current.pageId}`)
   }
 
@@ -343,7 +342,7 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
     }
     const awarenessAtConnect = awarenessRef.current
     awarenessAtConnect?.on('update', awarenessHandler)
-    // Vue 판은 close 때 그 시점의 awareness 에서 off — 같은 객체(재접속은 같은 문서·같은 awareness)
+    // close 때 그 시점의 awareness 에서 off — 같은 객체(재접속은 같은 문서·같은 awareness)
     socket.addEventListener('close', () => { doc.off('update', updateHandler); awarenessRef.current?.off('update', awarenessHandler) })
   }
 

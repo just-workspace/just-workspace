@@ -1,5 +1,5 @@
 /**
- * 메일 읽기 — Vue 판 components/mail/MailReader.vue.
+ * 메일 읽기.
  * 데스크톱 오른쪽 판(variant="pane")과 모바일 /mail/:id 본문(variant="page")이 같은 컴포넌트.
  *  pane : 액션 줄 44(답장·전체 답장·전달 | 보관·삭제·안 읽음·더보기 … n / N) + 본문 카드 + 인라인 답장
  *  page : 상단 바는 페이지(LayoutMobileDetailBar)가, 하단 고정 답장·전체 답장·전달 줄은 여기서
@@ -12,7 +12,7 @@
  */
 import { Fragment, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { useMail, mailStore, mailIsPop3, type MessageDetail, type MessageSummary } from '~/composables/useMail'
 import { useAuth } from '~/composables/useAuth'

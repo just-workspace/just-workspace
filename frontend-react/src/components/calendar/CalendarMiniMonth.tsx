@@ -1,5 +1,5 @@
 /**
- * 사이드바 미니 달력(Vue components/calendar/CalendarMiniMonth.vue):
+ * 사이드바 미니 달력:
  * 머리 13/600 + ‹ › 28, 요일 24 muted, 날짜 28 mono 11.
  * 오늘 = primary 원(700) · 선택한 주(주 보기) 또는 선택한 날 = primary/13 · 다른 달 = muted/60.
  * ‹ › 는 시각 28 유지, 히트 영역은 40.
@@ -21,7 +21,7 @@ export interface CalendarMiniMonthProps {
 
 interface Cell { date: Date; inMonth: boolean; today: boolean; inWeek: boolean; selected: boolean }
 
-// Vue 는 컴포넌트 setup 시점의 오늘을 쓴다
+// 컴포넌트가 처음 만들어진 시점의 오늘을 쓴다
 const mountedToday = () => zNow()
 
 /** 사이드바 미니 달력 */

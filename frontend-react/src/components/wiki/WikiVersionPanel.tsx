@@ -1,5 +1,5 @@
 /**
- * 위키 버전 기록 패널 — Vue 판 components/wiki/WikiVersionPanel.vue 이식.
+ * 위키 버전 기록 패널.
  *  행: v번호 34 mono · 작성자(맨 위는 "· 현재") / 시각 mono · +추가(success) −삭제(danger) 단어 수. 선택 = primary/13 바탕.
  *  모바일은 전체 화면("모바일은 전체 화면").
  */

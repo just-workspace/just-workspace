@@ -1,10 +1,10 @@
 /**
- * 통합 알림 센터 — Vue 판 composables/useNotifications.ts 그대로(모듈 싱글턴).
+ * 통합 알림 센터(모듈 싱글턴).
  * /api/notifications 의 안 읽은 수를 느리게(5분) 보정 폴링하고, 실시간은 채팅 소켓의 notification 이벤트(useChat)가 맡는다.
  * 목록·읽음 상태·브라우저 Notification API 를 관리한다.
  *
  * React: const { notifications, unreadCount, showDropdown, setShowDropdown, fetchNotifications, ... } = useNotifications()
- *   Vue 의 `showDropdown.value = x` 대입은 setShowDropdown(x)
+ *   드롭다운 열림은 setShowDropdown(x)
  * 컴포넌트 밖: notificationsStore.getState() / fetchNotifications() 등 함수 import
  */
 import { createStore } from 'zustand'

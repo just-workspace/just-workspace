@@ -5,7 +5,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { UiRadioCard } from '~/components/ui/RadioCard'
 import { UiModal } from '~/components/ui/Modal'
 
-describe('UiRadioCard layout="row" (C1)', () => {
+describe('UiRadioCard layout="row"', () => {
   it('점 · 제목 · 설명 · meta 를 한 줄로 그리고 선택 시 border-primary bg-primary/5', () => {
     const onUpdate = vi.fn()
     render(<UiRadioCard layout="row" value="a" title="이 일정만" description="다른 반복은 그대로" meta="10/17" modelValue="b" onUpdateModelValue={onUpdate} />)
@@ -29,7 +29,7 @@ describe('UiRadioCard layout="row" (C1)', () => {
   })
 })
 
-describe('UiModal confirm size (C2)', () => {
+describe('UiModal confirm size', () => {
   it('확인형 기본은 384(max-w-sm)', () => {
     render(<UiModal confirm title="삭제" onClose={() => {}}>본문</UiModal>)
     expect(screen.getByRole('dialog').className).toContain('sm:max-w-sm')
@@ -56,7 +56,7 @@ import { UiButton } from '~/components/ui/Button'
 import { setMessages } from '~/i18n'
 import ko from '~/i18n/locales/ko.json'
 
-describe('UiTrans (C3)', () => {
+describe('UiTrans', () => {
   const fmt = (msg: string) => (named: Record<string, string>) => msg.replace(/\{(\/?\w+)\}/g, (_, k) => named[k] ?? '')
 
   it('{open}…{/open} 감싸는 태그에 함수 슬롯을 안쪽 글자로 부른다', () => {
@@ -101,7 +101,7 @@ import { UiTopbar } from '~/components/ui/Topbar'
 import { UiTabbar } from '~/components/ui/Tabbar'
 import { renderInRouter } from './helpers'
 
-describe('UiAppRail (C4)', () => {
+describe('UiAppRail', () => {
   const groups = [
     { key: 'h', items: [{ id: 'home', label: '홈', icon: 'home', to: '/', active: true }] },
     { key: 'talk', label: '소통', items: [
@@ -157,7 +157,7 @@ describe('UiAppRail (C4)', () => {
   })
 })
 
-describe('UiTopbar (C4)', () => {
+describe('UiTopbar', () => {
   it('경로 3단·검색·벨 배지·아바타', () => {
     const onSearch = vi.fn(), onBell = vi.fn(), onAvatar = vi.fn(), onPin = vi.fn()
     render(<UiTopbar crumbs={['워크스페이스', '메일', '받은편지함']} onTogglePin={onPin} onSearch={onSearch} onBell={onBell} bellCount={7}
@@ -181,7 +181,7 @@ describe('UiTopbar (C4)', () => {
   })
 })
 
-describe('UiTabbar (C4)', () => {
+describe('UiTabbar', () => {
   it('활성·배지·점, 누르면 onSelect(id)', () => {
     const onSelect = vi.fn()
     render(<UiTabbar onSelect={onSelect} tabs={[
@@ -204,7 +204,7 @@ import { toast as pushToast, toastStore } from '~/composables/useToast'
 import { act } from '@testing-library/react'
 import { cn } from '~/lib/utils'
 
-describe('토스트 행동 버튼 (C8) · 빗금 유틸 (B1)', () => {
+describe('토스트 행동 버튼 · 빗금 유틸', () => {
   it('행동형 토스트: 6초 기본, 반전 강조색 링크 버튼', () => {
     toastStore.setState({ toasts: [] })
     const onClick = vi.fn()
@@ -223,7 +223,7 @@ describe('토스트 행동 버튼 (C8) · 빗금 유틸 (B1)', () => {
 })
 
 import { UiInput } from '~/components/ui/Input'
-describe('UiInput readonly 복사 (C7)', () => {
+describe('UiInput readonly 복사', () => {
   it('복사 버튼은 한 줄 고정 + 최소 폭', () => {
     render(<div style={{ width: 260 }}><UiInput readonly modelValue="https://example.test/very/long/address" label="서버 주소" /></div>)
     const btn = screen.getByRole('button', { name: '복사' })
@@ -244,7 +244,7 @@ describe('UiChip surface="raised"', () => {
 })
 
 import { UiMenu } from '~/components/ui/Menu'
-describe('UiMenu 확장 (C6)', () => {
+describe('UiMenu 확장', () => {
   const open = () => fireEvent.click(screen.getByRole('button', { name: '메뉴' }))
 
   it('description 한 줄', () => {
@@ -354,7 +354,7 @@ describe('UiMenu 모바일 시트 하위 메뉴', () => {
 
 import { UiMentionList, useUiMentionList } from '~/components/ui/MentionList'
 import { useState as useStateT } from 'react'
-describe('UiMentionList (C5)', () => {
+describe('UiMentionList', () => {
   const people = [
     { id: '1', label: '김민지', secondary: 'minji@x.test' },
     { id: '2', label: '박서준', secondary: '댓글' },
@@ -441,7 +441,7 @@ describe('플러그인용 호스트 키트 window.__WS_UI__', () => {
   })
 })
 
-describe('UiButton icon · iconRight (handover 18 답 10)', () => {
+describe('UiButton icon · iconRight', () => {
   it('icon 은 글자 왼쪽, iconRight 는 오른쪽 — 16, 간격 gap-1.5', () => {
     render(<UiButton icon="plus" iconRight="chevron-down">일정</UiButton>)
     const b = screen.getByRole('button', { name: '일정' })

@@ -1,4 +1,3 @@
-// Vue 원본: frontend/tests/lib/channelTabs.test.ts (그대로)
 import { describe, it, expect } from 'vitest'
 import { fileKindLabel } from '~/composables/useChannelTabs'
 

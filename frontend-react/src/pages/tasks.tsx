@@ -1,5 +1,5 @@
 /**
- * 작업(Vue 원본: frontend/pages/tasks.vue).
+ * 작업
  *  데스크톱: 머리(작업 24/700 + 집계 · 목록/보드 세그먼트) → 칩 줄(진행 중 · 우선순위 높음 · + 필터 · 묶기/정렬 ▾)
  *            → 빠른 입력 44 → 마감 묶음 목록(행 48) + 오른쪽 상세 패널 360(작업을 고르면).
  *  모바일: 칩 줄(36) + ⋯(묶기·정렬) → 목록(행 60, 묶음 머리 32) + FAB(새 작업 시트) / 작업을 고르면 전체 화면 상세(탭바 숨김).
@@ -7,7 +7,7 @@
  * 선택한 작업은 ?task=<id> 로 URL 에 남겨 링크 복사·뒤로 가기가 된다.
  * 필터는 서버로(GET /api/tasks/?assignee=&tag=&project=&status=&priority=) — "마감 지남"만 화면에서 거른다.
  * 칩 줄: [나에게 배정](assignee=me) · 진행 중 · 우선순위 높음↑ · + 필터(상태·우선순위·담당자·태그·프로젝트).
- *  "나에게 배정" 칩은 기본 꺼짐 — 담당 기능 전에 만든 작업은 담당자가 비어 있어 켜 두면 안 보이기 때문(보고서).
+ *  "나에게 배정" 칩은 기본 꺼짐 — 담당 기능 전에 만든 작업은 담당자가 비어 있어 켜 두면 안 보이기 때문.
  * 빠른 입력 @담당 → 사용자(resolveAssignee)로 저장. @ 가 없으면 나에게 배정. 못 찾으면 @글자를 제목에 남기고 알린다.
  * 보드 보기는 토글 자리만(다음 단계).
  * 모바일 머리: 목록 = 이 페이지 header, 상세 = LayoutMobileDetailBar — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader).
@@ -74,7 +74,7 @@ export default function TasksPage() {
   routeRef.current = route
 
   // ── 필터(칩 줄) ──
-  // 데스크톱 셸(Electron) 스마트 목록이 고른 값은 쿼리로 넘어온다(Vue watch immediate → 첫 값은 초기 상태로)
+  // 데스크톱 셸(Electron) 스마트 목록이 고른 값은 쿼리로 넘어온다(첫 값은 초기 상태로)
   const init = (() => {
     const s = route.query.status, p = route.query.priority
     if (s === undefined && p === undefined) return null

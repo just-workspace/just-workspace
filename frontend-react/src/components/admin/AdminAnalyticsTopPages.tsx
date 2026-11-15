@@ -1,5 +1,5 @@
 /**
- * 관리 개요 › 상위 페이지 가로 막대 — Vue components/admin/AdminAnalyticsTopPages.vue.
+ * 관리 개요 › 상위 페이지 가로 막대.
  * 경로는 30자 넘으면 잘라 '...'. 색 success, 높이 240.
  */
 import { useMemo } from 'react'

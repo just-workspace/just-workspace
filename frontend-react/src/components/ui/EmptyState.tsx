@@ -1,10 +1,10 @@
 /**
- * 빈 상태 3변형(시안 H).
+ * 빈 상태 3변형.
  *  full  — 페이지·목록 영역: 카드 틀, 아이콘 타일 40, 제목 15/600, 설명 13, 1차 버튼 36
  *  panel — 카드·사이드 패널 안: 테두리 없음, 타일 32, 제목 13/600, 텍스트 버튼
  *  inline— 트리·하위 목록·댓글 한 줄: 32 행, muted 글자 + primary 텍스트 버튼
  * 행동은 actionTo(링크) 또는 onAction(클릭) 둘 다 받는다. 기능 아이콘은 icon(이름) 또는 iconSlot(그림).
- * 아이콘 타일 반지름: 시안의 11px/9px 는 사용 중지한 값 → 10px/8px 로 둠(디자이너 확인 필요).
+ * 아이콘 타일 반지름: 시안의 11px/9px 는 사용 중지한 값 → 10px/8px 로 둠.
  */
 import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -28,9 +28,9 @@ export interface UiEmptyStateProps extends Omit<HTMLAttributes<HTMLDivElement>, 
   inset?: boolean
   /** 행동 버튼 클릭(actionTo 가 없을 때) */
   onAction?: () => void
-  /** 아이콘 타일 자리 통째 바꾸기(Vue #icon 슬롯) — panel·full */
+  /** 아이콘 타일 자리 통째 바꾸기 — panel·full */
   iconSlot?: ReactNode
-  /** 카드 안 맨 아래 추가 내용(Vue #extra 슬롯) — full 전용 */
+  /** 카드 안 맨 아래 추가 내용 — full 전용 */
   extra?: ReactNode
 }
 

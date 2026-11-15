@@ -1,6 +1,6 @@
 /**
  * 컴포저.
- * Vue 원본: frontend/components/chat/ChatInput.vue → 디스코드식 한 줄 카드로 바꿨다.
+ * 디스코드식 한 줄 카드.
  *
  * 데스크톱: 한 줄 카드 56(입력 16/22, 위아래 17) · 좌우 인셋 8 · radius 8 · 1px · 최대 50vh 후 스크롤.
  *   왼쪽 ⊕(첨부 메뉴) · 오른쪽 버튼 32 간격 8(Aa · 이모지) · 전송 버튼 없음(Enter).
@@ -128,7 +128,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
   const [altText, setAltText] = useState('')
   const pickerOpen = useStore(chatUiStore, s => s.emojiPicker?.mode === 'compose')
 
-  // Vue nextTick — 다음 렌더가 DOM 에 반영된 뒤 실행할 일
+  // 다음 렌더가 DOM 에 반영된 뒤 실행할 일
   const afterRender = useRef<Array<() => void>>([])
   const [, bump] = useState(0)
   function nextTick(fn: () => void) { afterRender.current.push(fn); bump(n => n + 1) }

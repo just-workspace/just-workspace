@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitCreateIssueModal.vue
 // 새 이슈("이슈 쓰기"): 수제 rounded-xl 중앙 모달 → UiModal(데스크톱 중앙 · 모바일 바텀시트, G 규격).
 // 제목 · 본문(마크다운) · 라벨(GitLabelPicker — 기존 기능 유지). 실패는 토스트(예전엔 console.error 만).
 import { useEffect, useState } from 'react'

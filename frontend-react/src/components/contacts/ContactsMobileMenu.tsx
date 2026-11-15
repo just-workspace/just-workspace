@@ -1,12 +1,12 @@
 /**
- * 모바일 ⋯ 시트 — Vue 판 components/contacts/ContactsMobileMenu.vue ("주소록·그룹·가져오기·내보내기"): 항목 48.
+ * 모바일 ⋯ 시트 ("주소록·그룹·가져오기·내보내기"): 항목 48.
  * 범위(모든 연락처 · 즐겨찾기 · 워크스페이스 사용자 · 주소록 · 그룹) 선택 + 새 주소록 + vCard 가져오기/내보내기 + 연동 계정.
  * 페이지가 mobileMenuOpen 일 때만 마운트한다(닫기 = setMobileMenuOpen(false)).
  */
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { useContacts, type ContactScope } from '~/composables/useContacts'
 import { addToast } from '~/composables/useToast'

@@ -1,5 +1,5 @@
 /**
- * 초대 링크 입장. Vue 판 pages/meetings/join/[token].vue 그대로.
+ * 초대 링크 입장.
  *  setup   — 참가 전 화면(MeetingsDeviceSetup): 왼쪽 미리보기 + 장치 바, 오른쪽 방 정보 · 표시 이름(기억) · 비밀번호(보기 토글) → [참가 신청]
  *            버튼은 이름이 비었을 때만 잠기고(guestJoinLock) 이유를 버튼 아래에 쓴다.
  *  waiting — [참가 신청] 자리의 primary 띠(스피너 · 경과 · 취소 — 설정 화면이 그린다). 미리보기·장치는 살아 있다(승인 즉시 그대로 입장).
@@ -61,7 +61,7 @@ function remainingFrom(e: any): number | null {
   } catch { return null }
 }
 
-/** 초대 링크 입장. Nuxt 는 매개변수가 바뀌면 페이지를 새로 만든다(라우트 키) — 같게 토큰으로 key. */
+/** 초대 링크 입장. 매개변수가 바뀌면 화면을 새로 만든다 — 토큰으로 key. */
 export default function MeetingJoinPage() {
   const route = useRoute()
   // 회의 화면 진입 때 livekit-client 청크를 미리 받아 둔다(메인 번들에서 뺀 것 — 입장 버튼 대기 줄이기)

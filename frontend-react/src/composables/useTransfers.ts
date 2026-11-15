@@ -1,12 +1,12 @@
 /**
  * 업로드/다운로드 전송 상태 전역 스토어 — 진행률/속도/취소를 파일 UI 전반에서 공유.
- * Vue 판 composables/useTransfers.ts 그대로(속도 평활·정리 타이머·문구 동일).
+ * 속도 평활·정리 타이머 포함.
  *
  * React: const { transfers, addTransfer, cancelTransfer, cancelAll, removeTransfer, clearFinished, activeCount, ... } = useTransfers()
  * 컴포넌트 밖: transfersStore.getState().transfers, 또는 동작 함수 직접 import.
  *
- * Vue 와 다른 점: Vue 는 addTransfer 가 돌려준 객체를 호출부가 제자리에서 고쳤다(t.folder = …, t._abort = …, t.status 읽기).
- * 여기서는 객체를 바꿀 때마다 새 객체로 갈아 끼우므로(React 가 변화를 알게) 손에 든 객체는 낡는다.
+ * 주의: addTransfer 가 돌려준 객체를 호출부가 제자리에서 고치면 안 된다(t.folder = …, t._abort = …, t.status 읽기).
+ * 객체를 바꿀 때마다 새 객체로 갈아 끼우므로(React 가 변화를 알게) 손에 든 객체는 낡는다.
  * 그래서 patchTransfer(id, patch) 로 고치고 getTransfer(id) 로 지금 값을 읽는다.
  */
 import { createStore, useStore } from 'zustand'
@@ -53,7 +53,7 @@ export function getTransfer(id: string): Transfer | undefined {
   return list().find(x => x.id === id)
 }
 
-/** 한 행 고치기(Vue 의 t.x = v 대입 대응) */
+/** 한 행 고치기 */
 export function patchTransfer(id: string, patch: Partial<Transfer>) {
   if (!getTransfer(id)) return
   setList(list().map(x => (x.id === id ? { ...x, ...patch } : x)))
@@ -160,7 +160,7 @@ export function transfersActiveCount(transfers: Transfer[] = list()) {
   return transfers.filter(t => t.status === 'active' || t.status === 'queued').length
 }
 
-/** Vue useTransfers() 와 같은 멤버(+ getTransfer·patchTransfer) */
+/** 상태 + 동작(getTransfer·patchTransfer 포함) */
 export function useTransfers() {
   const transfers = useStore(transfersStore, s => s.transfers)
   return {

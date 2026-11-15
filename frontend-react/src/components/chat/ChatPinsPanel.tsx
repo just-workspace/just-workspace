@@ -1,6 +1,6 @@
 /**
- * 고정 메시지 패널 — 채널 ⋯ "고정 메시지"에서 연다. Vue 원본: frontend/components/chat/ChatPinsPanel.vue
- * 시안에 그림이 없어 스레드 패널(400, 머리 53) 골격 + 빈 상태(EmptyState panel) 규격으로 구성했다(디자이너 확인 필요).
+ * 고정 메시지 패널 — 채널 ⋯ "고정 메시지"에서 연다.
+ * 시안에 그림이 없어 스레드 패널(400, 머리 53) 골격 + 빈 상태(EmptyState panel) 규격으로 구성했다.
  */
 import { useEffect } from 'react'
 import { useStore } from 'zustand'

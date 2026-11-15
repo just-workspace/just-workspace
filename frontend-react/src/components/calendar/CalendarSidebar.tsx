@@ -1,8 +1,8 @@
 /**
- * 데스크톱 캘린더 사이드바(Vue components/calendar/CalendarSidebar.vue): 236 bg-card · [+ 새 일정] 40 primary · 미니 달력 ·
+ * 데스크톱 캘린더 사이드바: 236 bg-card · [+ 새 일정] 40 primary · 미니 달력 ·
  * "내 캘린더" / "구독"(끝에 "+ 구독 추가" 줄) / "공유받은 캘린더" 34 행(체크 16 + 색 견본 10 + 이름). 공유·삭제는 hover/포커스에만(데스크톱 규칙 C).
  * 구독 행은 hover 에 ⋮ 하나만 — 메뉴 = 지금 새로 고침 · 색 바꾸기 · 공유 · ─ · 구독 해제(설정 › 캘린더와 같은 한 벌).
- * 모바일(<md)에서는 페이지가 이 사이드바를 그리지 않고 FAB + 상단 ⋯ 시트를 쓴다(시안 캘2).
+ * 모바일(<md)에서는 페이지가 이 사이드바를 그리지 않고 FAB + 상단 ⋯ 시트를 쓴다.
  */
 import { useEffect, useState } from 'react'
 import { cn } from '~/lib/utils'

@@ -92,8 +92,8 @@ export const DASH_TWO_COL_BELOW = 1280
 
 /**
  * 열 = clamp(3, floor((본문 폭 − 56 + 20) / 400), 6). 세로 화면 2.
- * 공식 예외(디자이너 확정): 가로 화면이고 실효 폭(effectiveWidth) < 1280 이면 2열.
- * @param effectiveWidth 화면 실효 폭(레일 포함). 생략하면 예외를 보지 않는다(R14 표 계산용)
+ * 공식 예외: 가로 화면이고 실효 폭(effectiveWidth) < 1280 이면 2열.
+ * @param effectiveWidth 화면 실효 폭(레일 포함). 생략하면 예외를 보지 않는다(표 계산용)
  */
 export function dashColumns(mainWidth: number, portrait: boolean, effectiveWidth?: number): number {
   if (portrait) return 2
@@ -124,8 +124,8 @@ export function mailSideOpen(paneWidth: number, portrait: boolean): boolean {
 // 디스코드식 4열 셸부터 채팅 화면은 아래 유동 폭 대신 고정 폭을 쓴다:
 //   채널 목록 = 개인 설정 chatSidebarWidth(useUserPrefs CHAT_LIST_WIDTH 기본 298 · 199–367 드래그),
 //   오른쪽 자리 = utils/chatRightColumn RIGHT_COLUMN_WIDTH(멤버 264 · 400 · 음성 글 340), 1180 미만 덮개.
-// chatSideWidth · chatThreadDocked 는 R14 표 테스트(tests/lib/fluid)와 옛 화면 계산을 위해 남긴다.
-/** (옛 R14) 채팅 채널 목록 = clamp(240, 본문 폭 × 16%, 320) */
+// chatSideWidth · chatThreadDocked 는 표 테스트(tests/lib/fluid)와 옛 화면 계산을 위해 남긴다.
+/** (옛 계산) 채팅 채널 목록 = clamp(240, 본문 폭 × 16%, 320) */
 export function chatSideWidth(mainWidth: number): number {
   return Math.round(clamp(240, mainWidth * 0.16, 320))
 }

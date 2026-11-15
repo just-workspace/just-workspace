@@ -1,7 +1,7 @@
 /**
- * 런타임 설정 — Vue 판 `useRuntimeConfig().public` 대응.
+ * 런타임 설정.
  *
- * apiBase: 번들 SPA 앱(Tauri/Capacitor) 빌드에서만 값이 있다(`VITE_API_BASE`, Vue 판 `NUXT_PUBLIC_API_BASE`).
+ * apiBase: 번들 SPA 앱(Tauri/Capacitor) 빌드에서만 값이 있다(`VITE_API_BASE`).
  * 웹(빈값)은 same-origin 프록시(/api·/oauth·/ws 를 nginx 가 백엔드로)를 그대로 쓴다.
  */
 export const runtimeConfig = {
@@ -24,7 +24,7 @@ export function apiBaseUrl(): string {
 
 /**
  * /api·/oauth 경로를 실제 요청 주소로. 웹은 그대로, 번들 앱은 apiBase 를 붙인다.
- * 이미지 src·다운로드 링크처럼 $fetch 를 거치지 않는 주소에 쓴다(Vue 판에서 직접 쓰던 곳과 같은 규칙).
+ * 이미지 src·다운로드 링크처럼 $fetch 를 거치지 않는 주소에 쓴다.
  */
 export function apiUrl(path: string): string {
   const base = apiBaseUrl()
@@ -66,7 +66,7 @@ export function bundledAuthHeaders(): Record<string, string> {
 
 /**
  * 웹소켓 주소(`/ws/...` 경로 → ws(s)://호스트/경로).
- * 웹은 현재 창 주소 기준(Vue 판과 같다). 번들 앱은 apiBase 의 호스트로 간다.
+ * 웹은 현재 창 주소 기준. 번들 앱은 apiBase 의 호스트로 간다.
  * 토큰은 주소에 붙이지 않는다 — 쿼리에 실리면 nginx error_log 에 평문으로 남는다. wsProtocols() 로 보낸다.
  */
 export function wsUrl(path: string): string {

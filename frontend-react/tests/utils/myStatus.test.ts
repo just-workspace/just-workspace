@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { menuPresence } from '~/utils/myStatus'
 
-describe('내 상태 → 상태 3칸(11-B3)', () => {
+describe('내 상태 → 상태 3칸', () => {
   const now = Date.parse('2026-10-16T09:00:00Z')
   it('모드 그대로', () => {
     expect(menuPresence({ mode: 'auto', dnd_until: null }, now)).toBe('online')

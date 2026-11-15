@@ -1,6 +1,6 @@
 /**
- * 일정 목록(agenda) 보기(Vue components/calendar/CalendarAgendaView.vue): 날짜 머리 36 bg-card 13/600 + "오늘" 틴트 배지, 행 56.
- * 선택한 날짜부터 60일. 빈 상태는 여기(와 날짜 시트)에서만 띄운다(시안 캘6) — 그리드 위에는 안 띄움.
+ * 일정 목록(agenda) 보기: 날짜 머리 36 bg-card 13/600 + "오늘" 틴트 배지, 행 56.
+ * 선택한 날짜부터 60일. 빈 상태는 여기(와 날짜 시트)에서만 띄운다 — 그리드 위에는 안 띄움.
  */
 import { Fragment, useMemo, useState } from 'react'
 import { useI18n } from '~/i18n'

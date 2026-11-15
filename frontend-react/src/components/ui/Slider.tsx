@@ -15,7 +15,7 @@ import { cn } from '~/lib/utils'
 import { useModel } from './internal'
 
 export interface UiSliderProps extends Omit<HTMLAttributes<HTMLDivElement>, 'role' | 'defaultValue' | 'onChange'> {
-  /** 값(Vue v-model). 안 주면 부품이 가진다(처음 = min) */
+  /** 값. 안 주면 부품이 가진다(처음 = min) */
   modelValue?: number
   /** 값 바뀜(끄는 동안 계속) */
   onUpdateModelValue?: (v: number) => void

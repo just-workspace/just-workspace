@@ -1,5 +1,5 @@
 /**
- * 주·일 보기(Vue components/calendar/CalendarWeekView.vue): 시간 열 56, 1시간 48,
+ * 주·일 보기: 시간 열 56, 1시간 48,
  * 일정은 시작·길이 기준 절대 배치 + 겹침 열, 현재 시각 선(danger 2px + 점 10) + 시간 열 배지, 종일 줄은 날짜를 가로질러 span.
  * 날짜·시각은 전부 캘린더 시간대(utils/calTz) 벽시계 — 서머타임 날도 칸 위치는 벽시계 분, 종일은 날짜 그대로.
  * days=7 이면 주, days=1 이면 일. 빈 칸 클릭 = 그 시각에 새 일정, 일정 클릭 = 읽기 팝오버, 더블클릭 = 편집.
@@ -138,7 +138,7 @@ export function CalendarWeekView({ days = 7 }: CalendarWeekViewProps) {
     openPopover(ev, e.currentTarget)
   }
 
-  // 처음 열면 현재 시각(오늘이 보일 때) 또는 07:00 으로 스크롤 — 마운트·days 변경 때만(Vue onMounted + watch(days))
+  // 처음 열면 현재 시각(오늘이 보일 때) 또는 07:00 으로 스크롤 — 마운트·days 변경 때만
   const scroller = useRef<HTMLDivElement | null>(null)
   const todayIdxRef = useRef(todayIndex)
   todayIdxRef.current = todayIndex

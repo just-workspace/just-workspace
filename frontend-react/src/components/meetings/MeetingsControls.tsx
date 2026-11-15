@@ -1,6 +1,5 @@
 /**
  * 회의 컨트롤 바 — 카메라·마이크·녹화(호스트)·노이즈 제거(Krisp)·화면 공유·배경 블러·가상 배경·참가자·채팅·장치 + 나가기.
- * Vue 판 components/meetings/MeetingsControls.vue 그대로.
  */
 import { useRef, type ChangeEvent } from 'react'
 import { cn } from '~/lib/utils'

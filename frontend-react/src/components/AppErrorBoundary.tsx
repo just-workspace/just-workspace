@@ -1,11 +1,11 @@
 /**
- * 렌더 오류 경계 — Vue 판 app.vue / layouts/default.vue 의 onErrorCaptured 대응.
+ * 렌더 오류 경계.
  * 오류를 콘솔에 남기고 토스트로 알린다. 경계 안쪽 자리에는 오류 타일([다시 시도]·[홈으로])을 그린다 —
  * 예전에는 비워 두기만 해서 빈 화면에 토스트 하나만 남았고, 셸에서 나면 메뉴도 없어 새로고침뿐이었다.
  * 주소(경로·쿼리)가 바뀌면 경계를 다시 연다 — resetKey. 원문 오류 메시지는 콘솔에만(사용자에겐 우리 문구).
  *
- *   scope="app"    → 문구 error.unexpectedError (app.vue)
- *   scope="layout" → 문구 error.renderError (layouts/default.vue)
+ *   scope="app"    → 문구 error.unexpectedError (앱 루트)
+ *   scope="layout" → 문구 error.renderError (기본 레이아웃)
  */
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { useLocation } from 'react-router'

@@ -1,5 +1,5 @@
 /**
- * 사용자 초대 모달(관리 › 사용자 머리 [사용자 초대]) — Vue components/admin/AdminInviteModal.vue.
+ * 사용자 초대 모달(관리 › 사용자 머리 [사용자 초대]).
  * 디자인에 화면이 없어 기존 폼·표 규격으로 구성.
  * 탭 두 개: 새 초대(POST /api/admin/invites) · 보낸 초대(GET /api/admin/invites, 열린 초대 회수 DELETE /invites/{id}).
  * 새 초대: 이메일 여러 개(쉼표·줄바꿈) — 비우면 메일 없이 링크만 n개. 만료 일수 · 넣을 그룹 · 초대 메일 보내기.

@@ -1,5 +1,5 @@
 /**
- * 관리 개요 › 최근 로그인 카드 — Vue components/admin/AdminAnalyticsRecentLogins.vue.
+ * 관리 개요 › 최근 로그인 카드.
  * 최근 10건: 이름 · 가린 IP(a.b.x.x) · 상대 시각.
  */
 import { useI18n } from '~/i18n'

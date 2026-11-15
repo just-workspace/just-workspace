@@ -1,5 +1,5 @@
 /**
- * 설정 › 연결된 앱 화면 조각 — Vue pages/settings/apps.vue 의 인라인 마크업을 이름 붙여 뺀 것.
+ * 설정 › 연결된 앱 화면 조각.
  *  · SettingsConnectedAppRow — 연결된 앱 행(min 64): 글자 타일 36 + 이름 14/600 + 권한 + "연결 · 마지막 사용" + [연결 끊기]
  *  · SettingsAppPasswordRow — 앱 비밀번호 행(min 52): 이름 600 + "메일 · 캘린더 · 만든 날" + "삭제"
  *  · SettingsPatRow — 개인 액세스 토큰 행(min 48): 이름(+ 폐기됨 배지) + 만든·쓴 시각 + "폐기"

@@ -1,7 +1,7 @@
 /**
- * 필터 칩(시안 D): 32 알약, 선택 = primary/13 + border primary/50 + ✓(색만 아님), 카운트 mono.
+ * 필터 칩: 32 알약, 선택 = primary/13 + border primary/50 + ✓(색만 아님), 카운트 mono.
  * 모바일은 36(size="lg"). 점선 "+ 필터" 는 variant="add". aria-pressed 토글 버튼.
- * 켜짐 값은 modelValue/onUpdateModelValue(Vue v-model). 안 주면 칩이 스스로 토글 상태를 가진다.
+ * 켜짐 값은 modelValue/onUpdateModelValue. 안 주면 칩이 스스로 토글 상태를 가진다.
  * surface="raised": 팝오버·시트·모달(card 바탕 + 그림자) 위에 놓일 때 — 꺼진 칩·✕ 테두리를 border-muted-foreground/35 로(border 토큰은 card 위에서 거의 안 보인다).
  */
 import type { HTMLAttributes, MouseEvent } from 'react'
@@ -11,7 +11,7 @@ import { UiIcon } from './Icon'
 import { useModel } from './internal'
 
 export interface UiChipProps extends Omit<HTMLAttributes<HTMLSpanElement>, 'onClick'> {
-  /** 켜짐(토글형). Vue v-model */
+  /** 켜짐(토글형) */
   modelValue?: boolean
   /** 켜짐 바뀜 */
   onUpdateModelValue?: (v: boolean) => void
@@ -94,7 +94,7 @@ export function UiChip({
         <span>{label}</span>
         {count !== undefined && <span className="font-mono font-medium text-muted-foreground">{count}</span>}
       </button>
-      {/* 제거 버튼은 별도 버튼(히트 영역 분리). 시안 메일 받는이 칩 ✕ 28 → 규칙 P7 40 히트 확장은 before 로 */}
+      {/* 제거 버튼은 별도 버튼(히트 영역 분리). ✕ 28 → 히트 40 확장은 before 로 */}
       {removable && (
         <button
           type="button"

@@ -1,7 +1,6 @@
 /**
  * /settings/* (개인) 와 /admin/* (관리) 좌측 내비 정의 + "설정 찾기" 검색 색인.
  * 색인은 클라이언트 전용 — 항목 이름·키워드로 걸러 해당 페이지로 보낸다. 서버 검색 없음.
- * (Vue 판 composables/useSettingsNav.ts 그대로)
  *
  * React: const { groups, flat, find, labelFor } = useSettingsNav('settings' | 'admin')   — groups·flat 은 배열 값
  */
@@ -37,7 +36,7 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
   const { ops, ensure } = useAdminOps()
   const { t } = useI18n()
 
-  // 관리 내비 보조 글자(승인 대기·SSL·서비스) — 관리자만 부른다(비관리자는 403 소음). Vue 는 setup 에서 한 번.
+  // 관리 내비 보조 글자(승인 대기·SSL·서비스) — 관리자만 부른다(비관리자는 403 소음). 마운트 때 한 번.
   useEffect(() => {
     if (scope === 'admin' && authStore.getState().user?.is_admin) ensure()
     // eslint-disable-next-line react-hooks/exhaustive-deps

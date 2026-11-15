@@ -1,5 +1,5 @@
 /**
- * 설정 카드 — Vue 판 components/settings/SettingsCard.vue.
+ * 설정 카드.
  * 개인 설정·관리·AI·메일 설정 화면이 같이 쓴다(토대 공용).
  *
  * 제목 13/600 + 설명 13 muted, 본문, 푸터 [되돌리기][저장](변경 있을 때만 활성).
@@ -41,7 +41,7 @@ export interface SettingsCardProps extends Omit<HTMLAttributes<HTMLElement>, 'ti
   saveLabel?: string
   /** 모바일 하단 고정 저장 바 — 'save' · 'full' */
   mobileBar?: 'save' | 'full'
-  /** 머리 오른쪽 슬롯(Vue #header) */
+  /** 머리 오른쪽 슬롯 */
   header?: ReactNode
   /** [저장] */
   onSave?: () => void

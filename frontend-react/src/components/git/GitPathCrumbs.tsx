@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitPathCrumbs.vue
 // 코드 경로(저장소 이름 / 폴더 / … / 현재). 앞 조각은 tree 링크, 마지막은 글자. 가로로 넘치면 스크롤.
 import { Fragment } from 'react'
 import { useI18n } from '~/i18n'

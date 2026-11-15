@@ -1,6 +1,6 @@
 /**
- * 멤버 초대(채널 소개 D7 "멤버 초대"). Vue 원본: frontend/components/chat/ChatInviteModal.vue
- * 시안에 화면이 없어 공용 Modal(md) + 입력 + 체크 목록(P4 폼 규격)으로 구성.
+ * 멤버 초대(채널 소개의 "멤버 초대").
+ * 공용 Modal(md) + 입력 + 체크 목록(폼 규격)으로 구성.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'

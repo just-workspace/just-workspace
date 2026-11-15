@@ -1,5 +1,5 @@
 /**
- * 공유 모달(Vue components/files/FileShareModal.vue): UiModal 안 "사람·채널 / 링크" 두 탭.
+ * 공유 모달: UiModal 안 "사람·채널 / 링크" 두 탭.
  * 링크 탭: 이 항목(들)의 링크 여러 개(복사 · ⋮ 수정·회수) + 점선 "새 링크" 카드(권한 · 만료 · 비밀번호 · 1회용) → [링크 만들고 복사].
  *   권한 = 보기만·다운로드 허용 / 보기만·다운로드 막음(미리보기만) / 편집 가능(오피스 하나). 만료는 서버 범위(없음·1시간·1일·7일).
  *   여러 항목(같은 루트)은 zip 묶음 링크 1개. 폴더 하나만은 서버가 링크를 못 만든다 → 안내.
@@ -13,13 +13,13 @@
  *   → [✓ 채팅으로 알리고 메시지 남기기](사람은 DM, 채널은 그 채널) → 바닥 "권한: 보기 · 편집" + [닫기][공유 2명·채널 1].
  *   채널 공유 = 그 채널 멤버 전원(가입·탈퇴 즉시 반영, POST /share-user channel_ids). 예전 "채널로 보내기(파일 복사 첨부)" 칸은
  *   채널 칩 + 채팅 알림으로 대신한다(⋮ "채널로 보내기"는 이 탭을 연다).
- *   남길 말 입력은 시안에 그림이 없어 체크 아래 한 줄 입력으로 — 디자이너 확인 필요.
+ *   남길 말 입력은 시안에 그림이 없어 체크 아래 한 줄 입력으로.
  * 권한 4단계(시안 바닥 "권한: 보기 · 댓글 · 편집 · 공동 소유"): 새 사람 권한 120 · 행 권한 드롭다운 모두 4단계.
  *   공동 소유 지정·해제는 원 소유자만(다른 사람에겐 그 항목이 비활성 + 이유). 공동 소유자는 공유받은 항목(shared-with-me/..)을
  *   여기서 재공유·권한 변경할 수 있고, 원 소유자가 준 공유·공동 소유 행은 드롭다운이 잠긴다(can_manage=false — 원 소유자 보호).
  *   공동 소유자 화면의 "소유자" 줄은 원 소유자. 공유받은 항목은 공개 링크를 만들 수 없다(링크 탭 = 빈 상태).
  *
- * 이메일로 보내기(시안 없음 — 디자이너 확인 필요): 새 링크 카드 아래 "받는 사람 이메일(선택)" 칩 입력 + 메시지 →
+ * 이메일로 보내기(시안 없음): 새 링크 카드 아래 "받는 사람 이메일(선택)" 칩 입력 + 메시지 →
  *   받는 사람이 있으면 1차 버튼이 [링크 만들고 보내기 · n명]. 기존 링크는 ⋮ "이메일로 보내기" → 행 아래 펼침(칩·메시지·보내기 + 보낸 기록).
  *   비밀번호는 메일에 안 들어간다(안내 문구). 외부 주소는 칩·기록에 "외부". 한도 20명/회 · 50명/시간(서버).
  *
@@ -70,7 +70,7 @@ type Pick =
 const isRole = (v: unknown): v is ShareRole => typeof v === 'string' && (SHARE_ROLES as readonly string[]).includes(v)
 const initial = (s: string) => (s || '?').trim().slice(0, 1).toUpperCase()
 
-/** 링크 행 ⋮ 메뉴(Vue 의 v-click-outside 묶음) */
+/** 링크 행 ⋮ 메뉴(바깥 클릭으로 닫힌다) */
 function LinkMenu({ open, onToggle, onDismiss, children, label }: { open: boolean; onToggle: () => void; onDismiss: () => void; children: ReactNode; label: string }) {
   const wrap = useRef<HTMLDivElement | null>(null)
   useClickOutside(wrap, () => { if (open) onDismiss() })
@@ -144,7 +144,7 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
     return shareUrl(window.location.origin, l.token, !!l.can_edit, { hasPassword: l.has_password, allowDownload: l.allow_download, isFolder: l.is_folder })
   }
 
-  // ── 이메일로 보내기(R7) ──
+  // ── 이메일로 보내기 ──
   const [newEmails, setNewEmails] = useState<string[]>([])
   const [newEmailMsg, setNewEmailMsg] = useState('')
   const [newEmailPending, setNewEmailPending] = useState(false)
@@ -603,7 +603,7 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
                         </div>
                       </form>
                     )}
-                    {/* 이메일로 보내기 + 보낸 기록(R7) — 수정 폼과 같은 펼침 문법 */}
+                    {/* 이메일로 보내기 + 보낸 기록 — 수정 폼과 같은 펼침 문법 */}
                     {mailing === l.id && (
                       <form className="flex flex-col gap-3 border-t border-border p-3.5" onSubmit={e => sendMail(l, e)} aria-label={t('files.shareEmail.panelTitle')}>
                         {linkInactive(l)
@@ -699,7 +699,7 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
                     )}
                     <UiSwitch modelValue={oneTime} onUpdateModelValue={setOneTime} label={t('files.linkMeta.oneTime')} labelFirst={false} className="sm:ml-auto" />
                   </div>
-                  {/* 받는 사람 이메일(선택, R7) */}
+                  {/* 받는 사람 이메일(선택) */}
                   <FilesShareEmailInput
                     modelValue={newEmails}
                     onUpdateModelValue={setNewEmails}

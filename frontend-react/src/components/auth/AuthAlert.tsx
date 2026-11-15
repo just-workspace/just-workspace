@@ -1,5 +1,5 @@
 /**
- * 인증 폼 상단 타일(Vue components/auth/AuthAlert.vue):
+ * 인증 폼 상단 타일:
  * 서버 오류 = danger(무엇 + 다음에 일어날 일), 성공 = success, 경고 = warning.
  * 아이콘 16 + 13px/1.5, 제목 600 + 설명 muted. 형식 오류는 여기가 아니라 입력 아래(UiInput error).
  */
@@ -12,9 +12,9 @@ export interface AuthAlertProps {
   tone?: 'danger' | 'success' | 'warning' | 'info'
   title?: string
   description?: string
-  /** 설명 자리(Vue 기본 슬롯) — description 대신 */
+  /** 설명 자리 — description 대신 */
   children?: ReactNode
-  /** 설명 뒤 행동(Vue 슬롯 #action) */
+  /** 설명 뒤 행동 */
   action?: ReactNode
 }
 

@@ -10,7 +10,6 @@
  *     미러는 연결이 끊기는 순간 바로 상태를 다시 읽는다(핑 주기를 기다리지 않는다).
  * 키보드: 세션이 열리면 포커스는 격리 화면. Ctrl+Alt+B = 상단 줄로(격리 화면으로는 보내지 않는다), 상단 줄에서 Esc = 격리 화면으로.
  * 높이는 dvh(모바일 하단 가려짐 — h-screen 금지).
- * TODO: 로그인 넘어가는 중·오류·로그아웃 화면의 시각은 디자인 확정 뒤에.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'

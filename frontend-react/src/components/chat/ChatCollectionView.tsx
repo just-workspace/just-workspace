@@ -1,12 +1,11 @@
 /**
- * 사이드바 고정 항목(2-1-3)의 모아보기 — 스레드 · 임시 저장 · 저장한 메시지. 대화 영역 자리에 뜬다.
- * Vue 원본: frontend/components/chat/ChatCollectionView.vue
- * 시안에는 빈 상태만 있고 목록 화면이 없어 목록 행(2줄, min-h-row-2) 규격으로 구성했다(디자이너 확인 필요).
- * 표시 규칙은 01-1 과 같다: 새 답글 = 굵게, 개수는 글자로.
+ * 사이드바 고정 항목의 모아보기 — 스레드 · 임시 저장 · 저장한 메시지. 대화 영역 자리에 뜬다.
+ * 시안에는 빈 상태만 있고 목록 화면이 없어 목록 행(2줄, min-h-row-2) 규격으로 구성했다.
+ * 표시 규칙: 새 답글 = 굵게, 개수는 글자로.
  */
 import { useEffect } from 'react'
 import { useStore } from 'zustand'
-// Vue :class 처럼 이어 붙이기만 한다(tailwind-merge 없이 — 원본과 같은 CSS 순서 규칙)
+// class 를 이어 붙이기만 한다(tailwind-merge 없이 — 뒤에 온 클래스를 지우지 않는다)
 import { clsx as cn } from 'clsx'
 import { useI18n } from '~/i18n'
 import { authStore } from '~/composables/useAuth'
@@ -91,7 +90,7 @@ export function ChatCollectionView({ kind, onBack }: ChatCollectionViewProps) {
           ? <UiSkeleton preset="list" rows={5} className="p-4" />
           : empty
             ? (
-              /* 빈 상태(B1) */
+              /* 빈 상태 */
               kind === 'threads'
                 ? (
                   <UiEmptyState

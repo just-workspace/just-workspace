@@ -1,11 +1,11 @@
 /**
- * vCard 가져오기·내보내기 + 연동 계정 주소록 가져오기 — Vue 판 components/contacts/ContactsTransferPanel.vue.
+ * vCard 가져오기·내보내기 + 연동 계정 주소록 가져오기.
  * 사이드바 링크·모바일 ⋯ 시트 공용. 항목 36(모바일 48).
  * 가져오기/내보내기 대상은 지금 고른 주소록(없으면 첫 주소록).
  */
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { useContacts, type ExternalAccount } from '~/composables/useContacts'
 import { addToast } from '~/composables/useToast'

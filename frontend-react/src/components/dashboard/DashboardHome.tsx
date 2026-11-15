@@ -241,7 +241,7 @@ export function DashboardHome({ mode = 'user' }: { mode?: 'user' | 'admin' }) {
         <div
           ref={measure}
           className="h-full overflow-auto"
-          // 편집 중 데스크톱은 오른쪽 320 패널이 카드·편집 띠([완료])를 덮지 않게 그만큼 비운다(디자이너 확인 필요 — 시안은 덮음)
+          // 편집 중 데스크톱은 오른쪽 320 패널이 카드·편집 띠([완료])를 덮지 않게 그만큼 비운다
           // 축약형 padding 과 paddingRight:undefined 를 섞으면 React 가 paddingRight 를 '' 로 지워 오른쪽 여백이 0 이 된다 — 문자열 하나로
           style={{ padding: dashPadding(isMobile, editing) }}
         >

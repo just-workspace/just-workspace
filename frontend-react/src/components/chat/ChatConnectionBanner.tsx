@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/chat/ChatConnectionBanner.vue
 // 연결 끊김 띠(머리 바로 아래 전체 폭 40, warning/10 + 아래 선 warning/60). 3초 넘게 끊겼을 때만 보인다:
 // 짧은 끊김(서버 재시작·네트워크 전환)마다 깜빡이지 않게.
 import { useEffect, useState } from 'react'

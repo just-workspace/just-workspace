@@ -1,5 +1,5 @@
 /**
- * 미니 통화 창 — 회의 화면과 셸 사이의 길잡이. Vue 판 composables/useMeetingCall.ts 그대로.
+ * 미니 통화 창 — 회의 화면과 셸 사이의 길잡이.
  *
  * LiveKit 접속 자체는 useMeetings 의 앱 수준 세션이 쥐고 있다(회의 화면을 떠나도 끊기지 않음).
  * 여기는 "어디로 돌아가나·창이 어디 붙나·누구를 비추나" 같은 셸 쪽 상태만 둔다.
@@ -8,8 +8,8 @@
  *  - 손님(로그인 안 함)은 셸이 없으므로 돌아갈 경로를 올리지 않는다 → 미니 창이 뜨지 않고 예전처럼 떠나면 퇴장
  *
  * React: const { inCall, returnPath, setReturnPath, corner, setCorner, lastSpeaker, setLastSpeaker, visible, ... } = useMeetingCall()
- *   Vue 의 `returnPath.value = x` → setReturnPath(x), `corner.value = c` → setCorner(c), `lastSpeaker.value = id` → setLastSpeaker(id)
- *   inCall 은 useMeetings 와 같은 값(meetingsStore.inCall — Vue 판도 같은 useState 키 'meetings-in-call')
+ *   값을 바꿀 때는 setReturnPath(x) · setCorner(c) · setLastSpeaker(id)
+ *   inCall 은 useMeetings 와 같은 값(meetingsStore.inCall)
  * 컴포넌트 밖: meetingCallStore.getState() / openRoom()·expand()·leaveRoomPage() 등
  */
 import { createStore, useStore } from 'zustand'
@@ -28,7 +28,7 @@ export interface MeetingCallState {
   roomPanel: 'participants' | null
 }
 
-/** Vue 판 useState('meetings-call-return' | 'meetings-mini-corner' | 'meetings-mini-last-speaker') */
+/** 앱 전역 상태: 돌아갈 경로 · 미니 창 귀퉁이 · 마지막 화자 */
 export const meetingCallStore = createStore<MeetingCallState>()(() => ({
   returnPath: null,
   corner: 'br',
@@ -70,7 +70,7 @@ export function isPopup(): boolean {
 
 /** 회의 화면을 떠나 직전 화면(없으면 회의 목록)으로 — "작게 보기"·장치 확인 취소 */
 export function leaveRoomPage() {
-  // Vue Router 의 history.state.back 자리
+  // 브라우저 히스토리에서 직전 경로
   const back = historyBackPath() ?? null
   const target = miniCallBackTarget(typeof back === 'string' ? back : null)
   if (target === 'back') routerApi.back()

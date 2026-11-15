@@ -1,5 +1,5 @@
 /**
- * PWA — 설치 안내 + 푸시 구독(Vue 판 composables/usePwa.ts 그대로).
+ * PWA — 설치 안내 + 푸시 구독.
  *
  * React: const { canInstall, isInstalled, pushSupported, pushSubscribed, init, promptInstall, subscribePush, ... } = usePwa()
  * 컴포넌트 밖: pwaStore.getState(), subscribePush()

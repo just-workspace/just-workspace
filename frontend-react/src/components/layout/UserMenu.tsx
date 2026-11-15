@@ -1,5 +1,5 @@
 /**
- * 사용자 메뉴(Vue components/layout/UserMenu.vue): 288, bg-popover rounded-lg shadow-md p-1, z-dropdown.
+ * 사용자 메뉴: 288, bg-popover rounded-lg shadow-md p-1, z-dropdown.
  * 머리(아바타 40 + 상태점 12) → 상태 메시지 줄 → 상태 세그먼트(온라인·자리 비움·방해 금지) → 프로필·설정
  * → 테마 세그먼트·언어 → 단축키 도움말(Ctrl /)·관리 콘솔 → 로그아웃. 메뉴 행 36(아이콘 16 + 글자).
  * 상태는 서버(/api/chat/me/status) 기준 — useMyStatus.

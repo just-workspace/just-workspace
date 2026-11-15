@@ -99,7 +99,7 @@ const hasBadge = (b: number | string | undefined) => b !== undefined && b !== ''
  * 맨 위 브랜드(로고 타일 26 + wide 일 때 이름·태그라인), 맨 아래 아바타 슬롯(+ wide 일 때 이름·footerAction).
  *
  * 데이터·스토어 연결(현재 경로로 active 정하기, 채팅 멘션 수, 통화 상태 등)은 쓰는 쪽(layout/Sidebar)이 한다.
- * 링크: 라우터 안이면 앱 링크(NuxtLink), 라우터 밖(디자인 툴 등)이면 일반 <a href>.
+ * 링크: 라우터 안이면 앱 링크, 라우터 밖(디자인 툴 등)이면 일반 <a href>.
  *
  * @example
  * <UiAppRail

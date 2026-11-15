@@ -1,5 +1,5 @@
 /**
- * 리액션 칩 줄(디스코드 수치). Vue 원본: frontend/components/chat/ChatReactions.vue
+ * 리액션 칩 줄(디스코드 수치).
  * 칩: radius 8 · 패딩 2×6 · 간격 4 · 1px · 이모지 + 수(mono 12). 내가 누른 칩 = primary 테두리 + primary/15.
  * 커스텀 이모지 리액션(`:name:`)은 이미지 16. 툴팁 = 누른 사람 이름(최대 5 + "외 N명").
  * 줄 끝 smile-plus = 이모지 피커(리액션 모드 — useChatUi.setEmojiPicker, 고르면 ChatEmojiPicker 가 toggleReaction).

@@ -49,7 +49,7 @@ describe('UiSwitch', () => {
     expect(onUpdate).not.toHaveBeenCalled()
   })
 
-  it('modelValue 를 안 주면 스스로 토글한다(Vue 로컬 모드)', () => {
+  it('modelValue 를 안 주면 스스로 토글한다', () => {
     render(<UiSwitch ariaLabel="알림" />)
     const sw = screen.getByRole('switch')
     fireEvent.click(sw)

@@ -1,5 +1,5 @@
 /**
- * 설정 › 알림 화면 조각 — Vue pages/settings/notifications.vue 의 인라인 마크업을 이름 붙여 뺀 것.
+ * 설정 › 알림 화면 조각.
  *  · SettingsBrowserPermissionRow — 브라우저 알림 권한 행(상태 점 + "브라우저 알림: 허용됨 · Chrome" + [허용]/[시험 알림])
  *  · SettingsDndRow — 방해 금지 일정 행(요약 + [바꾸기] + 지금 적용 중 배지 + 저장됨 + 스위치)
  *  · SettingsNotifyMatrix — 종류 × 앱 안·푸시·이메일 체크 표(머리 36 + 행 min 48, 좁으면 열 56)

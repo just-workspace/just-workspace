@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitCodeView.vue
 /**
  * 코드 탭 — 폴더 보기.
  *  본문: 브랜치 ▾ + "브랜치 n" → 경로 → 파일 표 카드(최신 커밋 줄 44 + 행 40) → README 카드

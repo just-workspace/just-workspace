@@ -13,7 +13,7 @@ export type VoiceTone = 'neutral' | 'primary' | 'success'
 
 export const TIER_TONE: Record<VoiceTier, VoiceTone> = { voice: 'neutral', music: 'primary', lossless: 'success', hires: 'success' }
 
-/** 접속 바 음질 버튼의 점(시안 T[*].dotS) */
+/** 접속 바 음질 버튼의 점 */
 export function tierDotClass(tier: VoiceTier): string {
   switch (tier) {
     case 'music': return 'h-2 w-2 rounded-full bg-primary'

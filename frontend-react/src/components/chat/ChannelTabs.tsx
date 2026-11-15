@@ -1,5 +1,5 @@
 /**
- * 채널 탭 줄. Vue 원본: frontend/components/chat/ChannelTabs.vue (Nuxt 이름 ChatChannelTabs)
+ * 채널 탭 줄.
  * UiTabs(밑줄 탭, 40) + trailing 톱니(탭 관리 — 관리 권한이 있을 때만).
  *  메시지 · 파일 n · 위키 n(스페이스 페이지 수) · 회의 n(예정) · 작업 n(열림) — 순서·끄기는 채널 설정(layout)을 따른다.
  *  모듈이 꺼진 탭과 스페이스가 연결 안 된 위키 탭은 줄에서 뺀다(탭 관리 창에서는 흐리게 보인다).
@@ -13,7 +13,7 @@ import { UiIconButton } from '~/components/ui/IconButton'
 export interface ChatChannelTabsProps {
   /** 탭 요약(파일 수·위키·회의·작업·순서·관리 권한). 읽기 전 null */
   summary: ChannelTabsSummary | null
-  /** 고른 탭(Vue v-model) */
+  /** 고른 탭 */
   modelValue: ChannelTabKey
   onUpdateModelValue?: (v: ChannelTabKey) => void
   /** 톱니 › 탭 관리 */

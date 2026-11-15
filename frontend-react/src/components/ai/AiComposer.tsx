@@ -1,5 +1,5 @@
 /**
- * AI 입력(Vue components/ai/AiComposer.vue).
+ * AI 입력.
  *  데스크톱: 10 24 18 여백 · 폭 680 카드(r12) · [첨부 칩] · 입력 15px · 도구 줄 [첨부][화면 캡처] | [임시 대화] … [■ 36] 또는 [보내기 36].
  *  모바일: 위 선 · 8 8 28 여백 · 한 줄 카드 [입력][첨부 44][보내기 44] — 첨부 칩은 카드 위.
  * 첨부: 끌어다 놓기(놓을 곳 표시 "놓으면 첨부됩니다") · 붙여넣기 · 파일 고르기 · 화면 캡처(getDisplayMedia 한 장).
@@ -27,7 +27,7 @@ export interface AiComposerHandle {
 }
 
 export interface AiComposerProps {
-  /** 입력 값(Vue v-model, 필수) */
+  /** 입력 값(필수) */
   modelValue: string
   /** 입력 값 바뀜 */
   onUpdateModelValue: (v: string) => void
@@ -54,9 +54,9 @@ export interface AiComposerProps {
   placeholder?: string
   /** 지금 모델 이름(이미지 못 읽음 안내) */
   modelName?: string
-  /** K1 — 이미지 읽는 모델로 바꾸기(고를 수 있는 vision 모델이 있을 때만 준다) */
+  /** 이미지 읽는 모델로 바꾸기(고를 수 있는 vision 모델이 있을 때만 준다) */
   onSwitchVisionModel?: () => void
-  /** K1 — 첨부한 이미지 모두 빼기 */
+  /** 첨부한 이미지 모두 빼기 */
   onRemoveImages?: () => void
   /** 권한 모드 칩 + Shift+Tab 순환(Claude Code 권한 모드) */
   permissionMode?: boolean
@@ -113,7 +113,7 @@ export function AiComposer({
     ta.style.height = 'auto'
     ta.style.height = Math.min(ta.scrollHeight, 200) + 'px'
   }, [])
-  // Vue watch(model, () => nextTick(autoGrow)) — 첫 실행 없음
+  // 입력 값이 바뀌면 높이를 다시 맞춘다 — 첫 실행 없음
   const first = useRef(true)
   useEffect(() => {
     if (first.current) { first.current = false; return }

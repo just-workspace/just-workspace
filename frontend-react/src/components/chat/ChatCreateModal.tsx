@@ -1,6 +1,6 @@
 /**
- * 새 채널 만들기 모달(이름 · 종류 · 공개/비공개 · 설명 · 멤버). Vue 원본: frontend/components/chat/ChatCreateModal.vue
- * 원본이 공용 UiModal 이 아닌 자체 오버레이라 그대로 옮긴다.
+ * 새 채널 만들기 모달(이름 · 종류 · 공개/비공개 · 설명 · 멤버).
+ * 공용 UiModal 이 아닌 자체 오버레이를 쓴다.
  * 종류: 텍스트 · 음성 · 포럼(= 게시판 데이터의 채팅 보기 — 같은 이름 새 게시판 / 기존 게시판 연결,
  *   chatApi22.createForumChannel). categoryId 를 주면 만든 뒤 그 카테고리 맨 아래로 옮긴다(PATCH /layout — useChatLayout).
  */
@@ -42,7 +42,7 @@ export function ChatCreateModal({ onClose, categoryId = null }: ChatCreateModalP
   }, [kind, boards.length])
   const [description, setDescription] = useState('')
   const [memberQuery, setMemberQueryState] = useState('')
-  // 디바운스 타이머는 "그 순간" 값을 읽는다(Vue memberQuery.value)
+  // 디바운스 타이머는 "그 순간" 값을 읽는다
   const queryRef = useRef('')
   const setMemberQuery = (v: string) => { queryRef.current = v; setMemberQueryState(v) }
   const [memberResults, setMemberResults] = useState<Array<{ id: string; username: string; display_name: string | null; avatar_url: string | null }>>([])

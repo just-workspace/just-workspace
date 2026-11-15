@@ -1,10 +1,10 @@
 /**
- * 내 로그인 기기(세션) — Vue composables/useMySessions.ts 그대로.
+ * 내 로그인 기기(세션).
  * 설정 › 보안 "내 세션" 표와 설정 › 계정 "로그인된 기기" 카드가 같이 쓴다.
  * GET /api/auth/me/sessions · DELETE …/{id} · POST …/revoke-others. 본인 세션만 다룬다(서버가 호출자로 묶음).
  * 끊은 세션이 지금 이 기기였으면(was_current) 로컬도 정리하고 로그인 화면으로.
  *
- * Vue 판은 호출마다 새 ref 를 만드는(싱글턴 아닌) composable 이라 React 도 컴포넌트 지역 상태 hook 이다.
+ * 싱글턴이 아니다 — 컴포넌트 지역 상태 hook.
  * 이름·시각 꾸미기는 순수 함수(sessionBaseName 등)로도 내보낸다(테스트용).
  */
 import { useCallback, useMemo, useState } from 'react'

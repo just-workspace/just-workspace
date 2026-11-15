@@ -1,5 +1,5 @@
 /**
- * LiveKit 트랙 하나를 <video>/<audio> 하나에 붙인다(미니 통화 창). Vue 판 components/meetings/MeetingsTrackMedia.vue 그대로.
+ * LiveKit 트랙 하나를 <video>/<audio> 하나에 붙인다(미니 통화 창).
  * 회의 화면(MeetingsParticipant)이 내려가면 거기 붙어 있던 요소가 떨어지므로, 미니 창은 이걸로 따로 붙인다.
  * 같은 트랙을 요소 여러 개에 붙여도 된다(LiveKit attach 는 요소마다 따로 관리).
  */
@@ -21,7 +21,7 @@ export interface MeetingsTrackMediaProps {
 export function MeetingsTrackMedia({ track, kind, muted, contain }: MeetingsTrackMediaProps) {
   const el = useRef<HTMLMediaElement | null>(null)
 
-  // Vue: watch(track, (n, o) => { detach(o); attach(n) }) + onMounted(attach) + onBeforeUnmount(detach)
+  // track 이 바뀌면 옛 트랙을 떼고 새 트랙을 붙인다. 마운트 때 붙이고 언마운트 때 뗀다.
   useEffect(() => {
     const node = el.current
     if (track && node) { try { track.attach(node) } catch { /* noop */ } }

@@ -1,7 +1,7 @@
 /**
- * 게시판 — Vue 판 composables/useBoard.ts 그대로(모듈 싱글턴 상태 + API 호출).
+ * 게시판(모듈 싱글턴 상태 + API 호출).
  *
- * React: const { boards, posts, fetchPost, ... } = useBoard()   — 값은 .value 없이(Vue 는 readonly 로 내보냈다)
+ * React: const { boards, posts, fetchPost, ... } = useBoard()   — 값은 렌더 시점 값
  * 컴포넌트 밖: boardStore.getState().posts, 동작 함수는 모듈 export 를 직접 import.
  */
 import { createStore, useStore } from 'zustand'
@@ -555,7 +555,7 @@ const actions = {
   setSort,
 }
 
-/** Vue useBoard() 와 같은 멤버(상태 + 동작). 상태는 얕은 비교로 전부 구독한다. */
+/** 상태 + 동작. 상태는 얕은 비교로 전부 구독한다. */
 export function useBoard() {
   const state = useStore(boardStore, useShallow((s: BoardState) => s))
   return { ...state, ...actions }

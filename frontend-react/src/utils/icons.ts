@@ -1,4 +1,4 @@
-// 공용 선 아이콘 1세트(시안 J: 24 격자, stroke 1.9~2, 글리프·이모지 아이콘 전부 교체).
+// 공용 선 아이콘 1세트(24 격자, stroke 1.9~2, 글리프·이모지 아이콘 전부 교체).
 // 값은 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"> 안에 들어가는 조각 문자열.
 // 모듈 레일(LayoutNavIcon)과 공용 부품(UiIcon)이 같은 표를 쓴다 — 아이콘 세트를 두 벌 두지 않는다.
 export const ICON_PATHS: Record<string, string> = {
@@ -97,7 +97,7 @@ export const ICON_PATHS: Record<string, string> = {
   database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
   'zap': '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
   'moon-off': '<circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/>',
-  // ── 메일·편집·파일 유형(모듈 임시 아이콘 MailGlyph·FileTypeIcon·EditorToolbar 의 시안 path 를 공용으로 올림) ──
+  // ── 메일·편집·파일 유형(MailGlyph·FileTypeIcon·EditorToolbar 가 함께 쓰는 path) ──
   paperclip: '<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
   reply: '<path d="M9 17 4 12l5-5M20 18v-2a4 4 0 0 0-4-4H4"/>',
   'reply-all': '<path d="M7 17l-5-5 5-5M12 17l-5-5 5-5M22 18v-2a4 4 0 0 0-4-4H7"/>',

@@ -92,7 +92,7 @@ async function openWith(messages: any[]) {
   await waitFor(() => expect(api.calls.some(c => c.url === '/api/ai/conversations/c1/messages')).toBe(true))
 }
 
-describe('S6a 진행 단계', () => {
+describe('진행 단계', () => {
   it('저장된 답변: 접힌 요약("2단계 완료 · … · 18초"), 누르면 펼침', async () => {
     await openWith([savedAnswer()])
     const head = await screen.findByRole('button', { expanded: false, name: /단계 완료/ })
@@ -157,7 +157,7 @@ describe('S6a 진행 단계', () => {
   })
 })
 
-describe('S6a 출처', () => {
+describe('출처', () => {
   it('출처 칩 + 본문 [n] 버튼(없는 번호는 글자 그대로) → 누르면 미리보기·앱 안 링크', async () => {
     await openWith([savedAnswer()])
     await waitFor(() => expect(document.querySelectorAll('.ai-cite').length).toBe(2))
@@ -182,7 +182,7 @@ describe('S6a 출처', () => {
   })
 })
 
-describe('S6a 피드백', () => {
+describe('피드백', () => {
   it('👍 바로 저장 · 👎 이유 카드 — 대화 첨부는 기본 꺼짐, 켜야 include_conversation=true', async () => {
     await openWith([savedAnswer()])
     const up = await screen.findByRole('button', { name: '좋아요' })
@@ -216,7 +216,7 @@ describe('S6a 피드백', () => {
   })
 })
 
-describe('S6a 이어서 받기', () => {
+describe('이어서 받기', () => {
   it('끊긴 답변: 타일 [이어서 받기] → /continue 스트림이 같은 메시지 뒤에 붙인다', async () => {
     const fetchMock = vi.fn(async () => sseResponse([
       ev('meta', { message_id: 'a1', model: 'qwen-27b', ai_generated: true, mode: 'continue' }),
@@ -276,7 +276,7 @@ describe('S6a 이어서 받기', () => {
   })
 })
 
-describe('S6a 수식·출처 표식 렌더(markdown-it 플러그인)', () => {
+describe('수식·출처 표식 렌더(markdown-it 플러그인)', () => {
   function mdWith(nums: number[] = []) {
     const m = new MarkdownIt({ html: false, linkify: true, breaks: true })
     aiMathPlugin(m, aiKatexLoaded)
@@ -329,7 +329,7 @@ describe('S6a 수식·출처 표식 렌더(markdown-it 플러그인)', () => {
   })
 })
 
-describe('S6a 순수 함수', () => {
+describe('순수 함수', () => {
   it('aiApplyStep 은 같은 id 를 바꿔 끼우고 aiStepsSummary 는 실패·초를 센다', () => {
     let list = aiApplyStep([], { id: 'st1', kind: 'search', label: 'a', status: 'running', started_at: T0 })
     list = aiApplyStep(list, { id: 'st1', kind: 'search', label: 'a', status: 'failed', detail: 'x', started_at: T0, ended_at: T18 })

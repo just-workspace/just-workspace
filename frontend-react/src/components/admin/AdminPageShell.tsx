@@ -1,5 +1,5 @@
 /**
- * 관리 페이지 틀 — Vue components/admin/AdminPageShell.vue.
+ * 관리 페이지 틀.
  * 본문 패딩 24/28, 헤더형(h1 24/700 −0.02em + 부제 13.5 + 오른쪽 행동),
  * 표·분석은 끝까지 채움(옛 max-w-content 1400 왼쪽 정렬은 폐기), 설정 폼은 720, 모듈 목록은 960.
  * 모바일은 셸의 상세 상단 바가 제목을 맡으므로 h1 은 숨기고 부제·행동만 한 줄로.
@@ -16,7 +16,7 @@ export interface AdminPageShellProps {
   subtitle?: string
   /** content = 표·분석(끝까지) · form = 설정 폼 720 · wide = 모듈 목록 960 (기본 content) */
   width?: 'content' | 'form' | 'wide'
-  /** 머리 오른쪽 행동 버튼들(Vue 슬롯 #actions) */
+  /** 머리 오른쪽 행동 버튼들 */
   actions?: ReactNode
   /** 본문 */
   children?: ReactNode

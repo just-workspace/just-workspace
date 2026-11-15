@@ -1,5 +1,5 @@
 /**
- * 관리 › 개요 — Vue 원본: frontend/pages/admin/dashboard.vue.
+ * 관리 › 개요 —
  * 헤더형 + 기간 세그먼트(24시간·7일·30일),
  * 운영 요약 4칸(승인 대기 · 마지막 백업 · SSL D-n · 서비스, 칸마다 바로 가는 행동) — GET /api/admin/ops-summary 한 번(useAdminOps)
  * → 일별 활동(1.6fr) + 서비스 상태(1fr) → 나머지 분석. 접근 로그는 시스템 › 접근 로그(/admin/logs)로 옮겼다.

@@ -4,7 +4,7 @@
  *  mobile  — 48 높이, 키보드 위 한 줄: Aa(펼침) + mobileTools(44) … end(서명 등). Aa 를 누르면 위에 나머지 한 줄(블록 형식 + 나머지 도구).
  * 위키(실시간 공동 편집)·게시판(단독 편집)·메일 작성이 같은 툴바를 쓴다. 편집기에 없는 확장(표·밑줄 등)은 tools 에서 빼면 된다.
  * ※ 시안의 "할 일 목록"·"@언급" 버튼은 편집기 확장(task-list·mention)이 없어 뺐다.
- * 편집기 상태(굵게 켜짐 등)는 편집기 transaction 마다 다시 그린다(Vue 판 반응형 편집기와 같은 효과).
+ * 편집기 상태(굵게 켜짐 등)는 편집기 transaction 마다 다시 그린다.
  */
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type HTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -41,7 +41,7 @@ export interface UiEditorToolbarProps extends HTMLAttributes<HTMLDivElement> {
   labels?: Partial<Record<EditorToolKey, string>>
   /** 이미지 도구 클릭 — 부르는 쪽이 파일 고르기·업로드를 한다 */
   onImage?: () => void
-  /** 모바일 한 줄 오른쪽 끝 내용(Vue #end 슬롯, 서명 등) */
+  /** 모바일 한 줄 오른쪽 끝 내용(서명 등) */
   end?: ReactNode
 }
 
@@ -246,7 +246,7 @@ export function UiEditorToolbar({
   )
 }
 
-/** 데스크톱 [본문 ▾] 블록 형식 고르기 — 바깥 클릭으로 닫힌다(Vue v-click-outside) */
+/** 데스크톱 [본문 ▾] 블록 형식 고르기 — 바깥 클릭으로 닫힌다 */
 function BlockSelect({ open, setOpen, disabled, blocks, current, label, onPick }: {
   open: boolean
   setOpen: (v: boolean) => void

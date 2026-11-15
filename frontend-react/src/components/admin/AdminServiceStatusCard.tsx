@@ -17,7 +17,7 @@ export interface AdminServiceStatusCardProps {
 
 /**
  * 서비스 상태 카드 — 머리(제목 + [관리] 링크) · 서비스마다 40 행(상태 점 · 이름 · 상태 글자 · 응답 ms).
- * Vue 판 dashboard.vue 의 오른쪽 section.
+ * 관리 › 개요의 오른쪽 구역.
  */
 export function AdminServiceStatusCard({ services, loading, latencyWarnMs }: AdminServiceStatusCardProps) {
   const { t } = useI18n()

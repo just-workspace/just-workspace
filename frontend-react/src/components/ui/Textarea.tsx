@@ -1,5 +1,5 @@
 /**
- * 여러 줄 입력(시안 F): 패딩 10/12, 테두리·포커스·오류 규격은 UiInput 과 같다.
+ * 여러 줄 입력: 패딩 10/12, 테두리·포커스·오류 규격은 UiInput 과 같다.
  * className 은 바깥 묶음에, 나머지 속성(name·maxLength·onKeyDown 등)은 안쪽 <textarea> 에 붙는다. ref 는 <textarea>.
  *
  * autoGrow(프롬프트 입력): 높이 = 내용 높이(1~maxRows줄, 기본 6), 포커스와 무관 — 포커스만으로 펼치지 않는다.
@@ -16,7 +16,7 @@ const COLLAPSED_H = 44
 const num = (v: string, d: number) => { const n = parseFloat(v); return Number.isFinite(n) ? n : d }
 
 export interface UiTextareaProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'defaultValue' | 'placeholder' | 'rows' | 'disabled' | 'readOnly' | 'required'> {
-  /** 값(Vue v-model). 안 주면 스스로 값을 가진다 */
+  /** 값. 안 주면 스스로 값을 가진다 */
   modelValue?: string
   /** 값 바뀜 */
   onUpdateModelValue?: (v: string) => void

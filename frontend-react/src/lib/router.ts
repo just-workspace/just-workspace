@@ -1,12 +1,11 @@
 /**
- * 라우터 도우미 — Vue 판 `useRoute()`·`useRouter()`·`navigateTo()` 와 같은 모양.
+ * 라우터 도우미 — `useRoute()`·`useRouter()`·`navigateTo()`.
  *
- * Vue:   const route = useRoute(); route.path / route.query.tab / route.params.id;  navigateTo('/x')
- * React: const route = useRoute(); route.path / route.query.tab / route.params.id;  navigateTo('/x')
- * (React 판 route 는 렌더 시점 값이다. Vue 의 watch(() => route.path) 는 useEffect(..., [route.path]) 로.)
+ * 사용: const route = useRoute(); route.path / route.query.tab / route.params.id;  navigateTo('/x')
+ * (route 는 렌더 시점 값이다. 경로가 바뀔 때 할 일은 useEffect(..., [route.path]) 로.)
  *
  * navigateTo 는 컴포넌트 밖(store·이벤트 처리기)에서도 부를 수 있다.
- * Vue Router 의 `history.state.back` 을 읽던 코드는 `historyBackPath()` 를 쓴다.
+ * 직전 기록의 주소는 `historyBackPath()` 로 읽는다.
  */
 import { useContext, useMemo } from 'react'
 import { UNSAFE_DataRouterStateContext, useLocation, useParams, type createBrowserRouter } from 'react-router'
@@ -16,7 +15,7 @@ export type AppRouter = ReturnType<typeof createBrowserRouter>
 export type LocationQueryValue = string | null
 export type LocationQuery = Record<string, LocationQueryValue | LocationQueryValue[]>
 
-/** 라우트 메타(Vue definePageMeta 대응) — routes.ts 의 handle 에 둔다 */
+/** 라우트 메타 — routes.ts 의 handle 에 둔다 */
 export interface RouteMeta {
   /** 'default' | 'admin' | 'settings' | false */
   layout?: 'default' | 'admin' | 'settings' | false
@@ -26,9 +25,9 @@ export interface RouteMeta {
   noDesktopTopbar?: boolean
   /** 페이지 사이드바 하단에 내 계정 패널 — 레일 아바타를 뺀다 */
   sidebarAccount?: boolean
-  /** Vue 원본 페이지 경로(frontend/pages/…) */
+  /** 옛 페이지 파일 경로(표시용) */
   vuePath?: string
-  /** catch-all 파라미터 이름(Vue [...slug]) */
+  /** catch-all 파라미터 이름([...slug]) */
   catchAll?: string
   [k: string]: unknown
 }
@@ -83,7 +82,7 @@ function normalizeUrlBar(r: AppRouter) {
   try { window.history.replaceState(window.history.state, '', w.pathname + norm + w.hash) } catch { /* ignore */ }
 }
 
-/** 직전 기록의 주소(Vue Router history.state.back 대응). 없으면 undefined */
+/** 직전 기록의 주소. 없으면 undefined */
 export function historyBackPath(): string | undefined {
   if (typeof window === 'undefined') return undefined
   const idx = window.history.state?.idx as number | undefined
@@ -115,7 +114,7 @@ function decode(s: string): string {
 
 // ── vue-router(4.x) encoding.ts 와 같은 쿼리 인코딩 ─────────────────────────
 // encodeURIComponent 와 달리 `/`·`=`·`?`·`:`·`@`·`,` 등은 그대로 두고, 쿼리 구분에 쓰이는
-// `&`·`#`·`+`(공백은 `+`)만 인코딩한다. 주소창 모양이 Vue 판과 1:1 이 되게 하려는 것.
+// `&`·`#`·`+`(공백은 `+`)만 인코딩한다. 기존 링크·북마크와 주소창 모양이 같게 하려는 것.
 function commonEncode(text: string): string {
   let out: string
   try { out = encodeURI(text) } catch { out = encodeURIComponent(text) } // 짝 없는 서로게이트
@@ -187,7 +186,7 @@ export interface NavigateOptions {
   open?: { target?: string }
 }
 
-/** Vue 판 navigateTo 와 같은 쓰임 — 컴포넌트 안팎 어디서나 */
+/** 이동 — 컴포넌트 안팎 어디서나 */
 export async function navigateTo(to: RouteLocationRaw, opts: NavigateOptions = {}): Promise<void> {
   const target = resolve(to).fullPath
   const isExternal = typeof to === 'string' && /^[a-z][a-z0-9+.-]*:/i.test(to)
@@ -202,7 +201,7 @@ export async function navigateTo(to: RouteLocationRaw, opts: NavigateOptions = {
   await _router.navigate(target, { replace: !!opts.replace })
 }
 
-/** Vue 판 useRouter() 대응 */
+/** 라우터 객체(push·replace·back 등) */
 export function useRouter() {
   return useMemo(() => routerApi, [])
 }
@@ -216,7 +215,7 @@ export const routerApi = {
   resolve,
 }
 
-/** 현재 라우트(Vue 판 useRoute() 대응) */
+/** 현재 라우트 */
 export function useRoute(): RouteLocation {
   const loc = useLocation()
   const rawParams = useParams()
@@ -253,7 +252,7 @@ export function currentPath(): string {
   return _router?.state.location.pathname ?? (typeof location !== 'undefined' ? location.pathname : '/')
 }
 
-/** 쿼리 값 하나를 문자열로(배열이면 첫 값). Vue 쪽 `route.query.x as string` 을 옮길 때 */
+/** 쿼리 값 하나를 문자열로(배열이면 첫 값) */
 export function queryString(v: LocationQueryValue | LocationQueryValue[] | undefined): string | undefined {
   if (Array.isArray(v)) return v[0] ?? undefined
   return v ?? undefined

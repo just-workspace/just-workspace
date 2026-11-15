@@ -1,9 +1,9 @@
 /**
  * 아직 React 로 옮기지 않은 화면의 자리 표시. 라우트·레이아웃·가드는 이미 진짜로 동작한다.
- * 모듈 이식 에이전트가 src/pages/<경로>.tsx 를 실제 화면으로 바꾸면 사라진다.
+ * src/pages/<경로>.tsx 가 실제 화면으로 바뀌면 사라진다.
  */
 export interface NotPortedYetProps {
-  /** Vue 원본 경로(frontend/ 기준). 예: "pages/mail/index.vue" */
+  /** 옮기지 않은 화면의 옛 파일 경로(표시용). 예: "pages/mail/index.vue" */
   vuePath: string
 }
 

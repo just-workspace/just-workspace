@@ -155,6 +155,6 @@ export type LosslessEvent =
 export type LosslessListener = (ev: LosslessEvent) => void
 
 /*
- * 티어 공통 어댑터 규격은 lib/voice/transport.ts(`VoiceTransport`)가 정본이다 — Phase 1(r17/voice)에서 정해졌다.
+ * 티어 공통 어댑터 규격은 lib/voice/transport.ts(`VoiceTransport`)가 정본이다.
  * 이 라이브러리는 adapter.ts 에서 그 인터페이스를 구현하고 register.ts 로 'lossless' 단계에 등록한다.
  */

@@ -1,7 +1,7 @@
 /**
  * 격리 브라우저 미러 뷰 — DOM 미러 모드 세션의 화면(헤드리스: 미러 iframe + 숨은 입력칸만).
  * 신뢰 크롬(주소·정책·연결/지연·방식 전환·끝내기)은 단독 앱의 상단 줄(src/rbi-app/RbiTrustedBar)이 그린다 — 이 부품은 상태를 콜백으로 올린다.
- * 화면 디자인은 아직 없다(TODO): 기존 키트·토큰만 쓰고 새 시각 요소를 만들지 않는다.
+ * 기존 키트·토큰만 쓰고 새 시각 요소를 만들지 않는다.
  *
  * 구조(보안 모델 docs/rbi.md §6·§7)
  *  - 미러 iframe: src=/rbi/<sid>/view, sandbox="allow-same-origin"(allow-scripts 없음) — 문서 CSP 가 script-src 'none'.

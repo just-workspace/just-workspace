@@ -1,11 +1,11 @@
 /**
- * 떠 있는 작성 창 하나 — Vue 판 components/mail/MailComposeWindow.vue: 580×640, 위 모서리 12, 아래 테두리 없음, 그림자 0 -8 40 scrim/55.
+ * 떠 있는 작성 창 하나: 580×640, 위 모서리 12, 아래 테두리 없음, 그림자 0 -8 40 scrim/55.
  * 제목 줄 44(secondary): 제목 · 최소화(—) · 크게 보기 · 닫기(임시보관함에 저장). 최소화하면 제목 줄만.
- * 최소화해도 작성기는 살아 있다(Vue v-show → MailComposer show=false).
+ * 최소화해도 작성기는 살아 있다(MailComposer show=false).
  */
 import { useRef, type KeyboardEvent } from 'react'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { closeCompose, setComposeMinimized, toggleComposeMaximized, setComposeTitle, type ComposeWindow } from '~/composables/useMailCompose'
 import { UiIconButton } from '~/components/ui/IconButton'

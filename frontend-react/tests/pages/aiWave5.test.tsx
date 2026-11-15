@@ -133,7 +133,7 @@ async function openC1() {
   await waitFor(() => expect(api.calls.some(c => c.url === '/api/ai/conversations/c1/messages')).toBe(true))
 }
 
-describe('J1 프로젝트 편집·피커', () => {
+describe('프로젝트 편집·피커', () => {
   it('지침 글자 수(4,000 넘으면 오류·저장 막힘) · 피커(이미 들어 있음·20개 안내) · 저장 = PATCH + 파일 연결', async () => {
     api.projects = [owner]
     api.project = { p1: owner }
@@ -181,7 +181,7 @@ describe('J1 프로젝트 편집·피커', () => {
   })
 })
 
-describe('J2 공유 상태', () => {
+describe('공유 상태', () => {
   it('공유 창: 그룹(구성원 수) 여러 개 · 못 읽는 파일 경고 · 공유 = PATCH share_group_ids', async () => {
     api.projects = [owner]
     api.project = { p1: owner }
@@ -256,7 +256,7 @@ describe('J2 공유 상태', () => {
   })
 })
 
-describe('K1 첨부', () => {
+describe('첨부', () => {
   it('이미지 썸네일 · 못 읽는 모델이면 오류 줄 + 보내기 막힘 · [이미지 읽는 모델로 바꾸기] = PUT my-settings', async () => {
     api.status.vision = false
     api.choices = [
@@ -324,7 +324,7 @@ describe('K1 첨부', () => {
   })
 })
 
-describe('C2-10 길이 초과 안내', () => {
+describe('길이 초과 안내', () => {
   it('context_trimmed → 대화 맨 위 안내 + 앞 메시지 흐리게 + 새 대화로 이어가기', async () => {
     api.messages.c1 = [
       { id: 'q1', role: 'user', content: '옛 질문', created_at: T0, versions: [{ id: 'q1' }], active_version: 1, attachments: [] },
@@ -349,7 +349,7 @@ describe('C2-10 길이 초과 안내', () => {
   })
 })
 
-describe('H 설정 › AI 연동(MCP)', () => {
+describe('설정 › AI 연동(MCP)', () => {
   it('주소 두 개(:8443) · 연결된 앱 · 연결 해제 확인(대기 n건 거부 안내) · 개인 토큰 만들기 → 한 번 보기', async () => {
     api.apps = [
       { key: 'dcr_claude', kind: 'oauth', name: 'Claude', token_name: null, can_write: true, connected_at: '2026-10-02T01:00:00Z', last_used_at: '2026-11-05T02:48:00Z', pending: 2 },

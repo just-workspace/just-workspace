@@ -1,13 +1,13 @@
 /**
- * 회의 한 번의 통계(회의 종료 화면 "'회의' · 58분 · 참가 6명" · "이번 회의"). Vue 판에서 출발.
+ * 회의 한 번의 통계(회의 종료 화면 "'회의' · 58분 · 참가 6명" · "이번 회의").
  * 들어간 시각부터 나온 시각까지의 분, 그동안 본 최대 참가자 수(나 포함), 본 사람(이름·손님 여부), 회의 채팅 수.
  * 서버 기록이 아니라 이 화면이 본 값이다(서버에는 참석 기록이 없다).
- * key 를 주면 값이 앱 수준(useSharedState — Vue 의 useState)에 남는다 — 회의 화면을 미니 창으로 내렸다 돌아와도 통계가 이어진다.
+ * key 를 주면 값이 앱 수준(useSharedState)에 남는다 — 회의 화면을 미니 창으로 내렸다 돌아와도 통계가 이어진다.
  * 이 경우 참가자 감시는 이 함수를 부른 화면마다 돈다(회의 화면·미니 창 둘 다 부른다).
  *
  * React: const stats = useMeetingSessionStats(() => participants.length, 'meetings-call-stats')
  *   stats.start() / stats.stop() / stats.result(값)
- *   participantCount 는 렌더 때마다 불러 값이 바뀌면 최대값을 올린다(Vue 의 watch(getter) — 첫 값에는 안 돈다).
+ *   participantCount 는 렌더 때마다 불러 값이 바뀌면 최대값을 올린다(첫 값에는 안 돈다).
  *   stop() 은 leaveRoom 전에 부른다(채팅 수는 그때의 회의 채팅 목록에서 센다).
  */
 import { useEffect, useRef, useState } from 'react'
@@ -52,7 +52,7 @@ export function mergeSeenPeople(
 let _localSeq = 0
 
 export function useMeetingSessionStats(participantCount: () => number, key?: string) {
-  // key 가 없으면 이 컴포넌트만의 키(Vue 의 지역 ref)
+  // key 가 없으면 이 컴포넌트만의 키
   const [localKey] = useState(() => `__meeting-session-stats-${++_localSeq}`)
   const base = key ?? localKey
   const kJoined = `${base}-joined`

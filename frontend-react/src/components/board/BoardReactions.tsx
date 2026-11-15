@@ -1,5 +1,5 @@
 /**
- * 글 리액션 — Vue 판 components/board/BoardReactions.vue 이식.
+ * 글 리액션.
  * 알약 높이 28(모바일 32) · 테두리 · 내가 누른 것 = primary/60 테두리 + primary/10 바탕 + 수 primary 600.
  * + 알약 → 프리셋 이모지 고르기(시안 그림 없음 — 기존 6종 유지, 히트 40).
  */

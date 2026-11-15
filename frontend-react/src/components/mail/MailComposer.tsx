@@ -1,5 +1,5 @@
 /**
- * 메일 작성 본체 — Vue 판 components/mail/MailComposer.vue. 세 자리에서 같은 로직을 쓴다.
+ * 메일 작성 본체. 세 자리에서 같은 로직을 쓴다.
  *  variant="window" : 데스크톱 떠 있는 작성 창 580×640 안(MailComposeWindow 가 제목 줄을 그림)
  *  variant="page"   : 모바일 전체 화면 /mail/compose
  *  variant="inline" : 읽기 화면 본문 아래 인라인 답장
@@ -16,7 +16,7 @@
 import { useEffect, useImperativeHandle, useRef, useState, type DragEvent, type KeyboardEvent, type Ref } from 'react'
 import DOMPurify from 'dompurify'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { $fetch } from '~/lib/api'
 import { useAuth } from '~/composables/useAuth'
@@ -78,9 +78,9 @@ export interface MailComposerProps {
   onSent?: () => void
   /** 제목 줄 문구(제목 입력 또는 모드 이름) */
   onTitle?: (title: string) => void
-  /** 인라인 답장의 답장 ↔ 전체 답장 전환(Vue update:mode) */
+  /** 인라인 답장의 답장 ↔ 전체 답장 전환 */
   onUpdateMode?: (mode: ComposeMode) => void
-  /** false 면 숨긴다(살아 있는 채로 — Vue v-show, 최소화한 작성 창) */
+  /** false 면 숨긴다(살아 있는 채로 — 최소화한 작성 창) */
   show?: boolean
   /** { close, send, saveDraft, setReplyAll, focus } */
   ref?: Ref<MailComposerHandle | null>
@@ -346,11 +346,11 @@ export function MailComposer({
       if (alive) setReady(true)
     })()
     return () => { alive = false }
-    // 마운트 때 한 번(Vue onMounted)
+    // 마운트 때 한 번
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ready 직후(Vue: ready=true → nextTick → lastSaved·타이머·포커스)
+  // ready 직후(다음 렌더 뒤 lastSaved·타이머·포커스)
   useEffect(() => {
     if (!ready) return
     lastSaved.current = snapshot()

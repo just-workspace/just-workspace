@@ -1,8 +1,8 @@
 /**
- * 작업 목록·쓰기 — Vue 판 composables/useTasks.ts 그대로.
+ * 작업 목록·쓰기.
  *
- * Vue 판은 부를 때마다 목록 상태(tasks·total·loading·error)를 새로 만들고, 담당자 후보·프로젝트/태그 목록만 모듈 싱글턴이다.
- * React 도 같다: 목록 상태는 hook 을 부른 컴포넌트의 지역 상태, 후보·facets 는 tasksStore(전역).
+ * 부를 때마다 목록 상태(tasks·total·loading·error)를 새로 만들고, 담당자 후보·프로젝트/태그 목록만 모듈 싱글턴이다:
+ * 목록 상태는 hook 을 부른 컴포넌트의 지역 상태, 후보·facets 는 tasksStore(전역).
  *
  * React: const { tasks, total, loading, error, fetchTasks, upsertLocal, removeLocal, createTask, …, taskUsers, facets } = useTasks()
  * 컴포넌트 밖: tasksStore.getState() · loadUsers() · loadFacets() · rememberFacets() · createTask() 등 직접 import.
@@ -141,7 +141,7 @@ export async function toggleTask(id: string): Promise<Task> {
 
 interface ListState { tasks: Task[]; total: number; loading: boolean; error: boolean }
 
-/** 목록 상태 변경 규칙(순수 — 테스트 대상). Vue 판 upsertLocal·removeLocal 과 같다 */
+/** 목록 상태 변경 규칙(순수 — 테스트 대상): upsertLocal·removeLocal */
 export function upsertInto(s: ListState, task: Task): ListState {
   const i = s.tasks.findIndex(x => x.id === task.id)
   if (i >= 0) { const tasks = [...s.tasks]; tasks.splice(i, 1, task); return { ...s, tasks } }
@@ -183,7 +183,7 @@ export function useTasks() {
       setList(s => ({ ...s, tasks: data.tasks, total: data.total, loading: false }))
     } catch {
       if (my !== fetchSeq.current) return
-      // 목록 실패를 빈 목록과 구분한다(시안 H: 실패는 절대 "비어 있음"으로 보이지 않게)
+      // 목록 실패를 빈 목록과 구분한다(실패는 절대 "비어 있음"으로 보이지 않게)
       setList(s => ({ ...s, tasks: [], total: 0, error: true, loading: false }))
     }
   }, [])

@@ -26,7 +26,7 @@ describe('useMySessions 꾸미기', () => {
     expect(sessionBaseName(t, { ...base, app: 'desktop', os: null })).toBe(t('settings.devices.desktopApp'))
     expect(sessionBaseName(t, { ...base, browser: null, os: null })).toBe(t('settings.account.browserFallback'))
     expect(sessionName(t, { ...base, current: true })).toBe(t('settings.devices.thisDevice', { name: 'Chrome on macOS' }))
-    // 데스크톱 앱은 현재여도 "이 기기" 를 붙이지 않는다(Vue 와 같음)
+    // 데스크톱 앱은 현재여도 "이 기기" 를 붙이지 않는다
     expect(sessionName(t, { ...base, current: true, app: 'desktop' })).toBe(t('settings.devices.desktopAppOs', { os: 'macOS' }))
   })
 

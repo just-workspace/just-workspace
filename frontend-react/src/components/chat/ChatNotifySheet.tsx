@@ -1,6 +1,5 @@
 /**
- * 채널 알림 설정(2-3-2) — 데스크톱 Modal md 448(D6), 모바일 바텀시트(M4). UiModal 이 sm 미만에서 시트로 바뀐다.
- * Vue 원본: frontend/components/chat/ChatNotifySheet.vue
+ * 채널 알림 설정 — 데스크톱 Modal md 448, 모바일 바텀시트. UiModal 이 sm 미만에서 시트로 바뀐다.
  * 라디오 카드 3개: 모든 새 메시지 / 멘션만(기본) / 끄기(음소거 — notify_level none + muted).
  * "기기별 세부 설정"(데스크톱·모바일 푸시·이메일·따라가는 스레드 답글) — GET/PATCH /channels/{id}/prefs 의 기기 필드.
  * 데스크톱·모바일 푸시: 위 설정 따름 / 끄기. 이메일은 서버가 값만 저장하고 아직 보내지 않아 현재 값만 보인다(바꿀 수 없음).
@@ -8,7 +7,7 @@
  */
 import { useEffect, useState, type KeyboardEvent } from 'react'
 import { useStore } from 'zustand'
-// Vue :class 처럼 이어 붙이기만 한다(tailwind-merge 없이 — 원본과 같은 CSS 순서 규칙)
+// class 를 이어 붙이기만 한다(tailwind-merge 없이 — 뒤에 온 클래스를 지우지 않는다)
 import { clsx as cn } from 'clsx'
 import { useI18n } from '~/i18n'
 import { addToast } from '~/composables/useToast'
@@ -209,7 +208,7 @@ export function ChatNotifySheet() {
                   {o.title}
                   {o.isDefault && <>{' '}<span className="text-xs font-medium text-muted-foreground">{t('chat.notify.default')}</span></>}
                 </span>
-                {/* 데스크톱은 셋 다 설명, 모바일은 선택된 "멘션만"의 짧은 설명만(M4) */}
+                {/* 데스크톱은 셋 다 설명, 모바일은 선택된 "멘션만"의 짧은 설명만 */}
                 <span className="hidden text-[13px] text-muted-foreground sm:block">{o.desc}</span>
                 {o.descShort && level === o.value && <span className="block text-[13px] text-muted-foreground sm:hidden">{o.descShort}</span>}
               </span>

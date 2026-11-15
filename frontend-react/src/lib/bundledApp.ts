@@ -1,5 +1,5 @@
 /**
- * 번들 SPA 앱(Tauri/Capacitor) 분기 지점 — Vue 판 plugins/app-api.client.ts 의 부팅 부분.
+ * 번들 SPA 앱(Tauri/Capacitor) 분기 지점 — 부팅 부분.
  * apiBase 가 있는 빌드에서만: 잔존 서비스워커/캐시 정리(옛 PWA SW 가 구번들을 precache 해 영구 서빙하는 사고 방지).
  * (요청 쪽 분기 — /api·/oauth 를 apiBase 로 + Bearer — 는 lib/api.ts 가 한다.)
  */

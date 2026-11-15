@@ -1,7 +1,7 @@
 /**
- * 미리보기 모달(Vue components/files/FilePreviewModal.vue): 이미지 · PDF(iframe) · 텍스트(GET /api/files/preview) · 오피스(편집기로 열기) ·
- * 그 밖은 "미리 볼 수 없음 + 다운로드". Esc 닫기 + 열릴 때 포커스, 닫으면 연 요소로 복귀(시안 G 규칙).
- * 마운트 = 열림. Vue 와 같이 포털 없이 페이지 안에 fixed 로 그린다.
+ * 미리보기 모달: 이미지 · PDF(iframe) · 텍스트(GET /api/files/preview) · 오피스(편집기로 열기) ·
+ * 그 밖은 "미리 볼 수 없음 + 다운로드". Esc 닫기 + 열릴 때 포커스, 닫으면 연 요소로 복귀.
+ * 마운트 = 열림. 포털 없이 페이지 안에 fixed 로 그린다.
  */
 import { useZoneInstalled } from '~/composables/useSiteConfig'
 import { useEffect, useRef, useState } from 'react'
@@ -43,7 +43,7 @@ export function FilesFilePreviewModal({ item, onClose, onOpenEditor }: FilesFile
     }
   }
 
-  // 미리보기 모달: Esc 닫기 + 열릴 때 포커스, 닫으면 연 요소로 복귀(시안 G 규칙)
+  // 미리보기 모달: Esc 닫기 + 열릴 때 포커스, 닫으면 연 요소로 복귀
   const panel = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null

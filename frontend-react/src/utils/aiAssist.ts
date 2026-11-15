@@ -1,4 +1,3 @@
-// Vue 원본: frontend/utils/aiAssist.ts (내용 그대로)
 // AI 화면 순수 함수 — 대화 날짜 묶음 · 도구 묶음 · SSE 조각 해석 · 내보내기(테스트: tests/utils/aiAssist.test.ts).
 // 모델·도구 이름은 전부 서버 응답에서 온다. 여기에는 이름을 박아 두지 않는다.
 
@@ -6,7 +5,7 @@ export type AiConvGroup = 'today' | 'week' | 'earlier'
 
 const WEEK_MS = 7 * 24 * 3600 * 1000
 
-/** 대화 목록 묶음(시안 AI 3: 오늘 · 이번 주 · 이전). 시각이 없으면 이전 */
+/** 대화 목록 묶음(오늘 · 이번 주 · 이전). 시각이 없으면 이전 */
 import type { ApprovalRequest } from '~/utils/approvals'
 import type { AiArtifactPayload } from '~/utils/aiArtifacts'
 export function aiConvGroup(updatedAt: string | null | undefined, now: Date = new Date()): AiConvGroup {

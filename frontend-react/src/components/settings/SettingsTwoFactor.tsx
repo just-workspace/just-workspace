@@ -98,7 +98,7 @@ export function SettingsTwoFactor({ autoEnroll }: SettingsTwoFactorProps) {
       const s = await load()
       if (autoRef.current && s && !s.enabled) void openSetup()
     })()
-    // 마운트 때 한 번(Vue onMounted)
+    // 마운트 때 한 번
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

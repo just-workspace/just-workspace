@@ -1,5 +1,5 @@
 /**
- * 게시판 왼쪽 패널 236 — Vue 판 components/board/BoardSidebar.vue 이식.
+ * 게시판 왼쪽 패널 236.
  *  필독 콜아웃(warning 틴트 · "필독 N" + 제목 12.5/600) → 전체 게시판 + 게시판 행 34(선택 primary/13 600 · 안 읽음 600 · 읽음 muted)
  *  → 바닥 "내 북마크 N".
  * 안 읽음 굵게 = 안 읽은 글이 있는 게시판(GET /unread-counts). 숫자 배지는 쓰지 않는다(나를 부른 게 아니므로).
@@ -19,7 +19,7 @@ import { UiIcon } from '~/components/ui/Icon'
 
 export interface BoardSidebarProps {
   className?: string
-  /** 링크를 눌렀을 때(Vue emit navigate) */
+  /** 링크를 눌렀을 때 */
   onNavigate?: () => void
 }
 

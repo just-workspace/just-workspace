@@ -12,7 +12,7 @@ vi.mock('~/lib/api', async (orig) => {
 const { chatStore, sendThreadReply } = await import('~/composables/useChat')
 const { ChatPinsPanel } = await import('~/components/chat/ChatPinsPanel')
 
-describe('채팅 P3', () => {
+describe('채팅 스레드·고정 패널', () => {
   it('답글을 보내면 activeThreadState.followed=true(서버 자동 팔로우와 맞춤)', () => {
     chatStore.setState({ selectedChannelId: 'c1', activeThreadId: 'p1', activeThreadState: { followed: false, unread_replies: 0, last_read_seq: null } as any })
     sendThreadReply('답', 'p1')

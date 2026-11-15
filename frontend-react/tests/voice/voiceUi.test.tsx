@@ -248,7 +248,7 @@ describe('접속 바 · 본문 · 음질 패널(접속 중)', () => {
   })
 })
 
-describe('상태(handover-20 답 "상태")', () => {
+describe('상태', () => {
   beforeEach(async () => {
     api.handler = (url) => url.endsWith('/voice/token') ? { token: 'jwt', livekit_url: 'ws://x', room: 'voice-v1', identity: 'me-1' } : url.includes('/messages') ? { messages: [], has_more: false } : {}
     fakeTransport.peers.mockReturnValue([{ identity: 'me-1', name: '김서연', isLocal: true, isSpeaking: false, micMuted: false, sharingAudio: false }] as any)

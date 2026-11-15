@@ -1,5 +1,5 @@
 /**
- * 오피스 편집기 틀(Vue components/files/FileOfficeEditor.vue): 머리(뒤로 · 파일 이름 · 편집기 이름) + 편집기 iframe.
+ * 오피스 편집기 틀: 머리(뒤로 · 파일 이름 · 편집기 이름) + 편집기 iframe.
  * 공유 링크 손님 화면(pages/s/[token])이 쓴다.
  * OnlyOffice 는 WOPI 표준대로 access_token 을 **POST 폼 본문**으로만 받는다 — 숨은 폼을 iframe 을 target 으로 제출한다.
  * 편집기가 postMessage 로 UI_Close/close 를 보내면 닫는다.

@@ -1,12 +1,12 @@
 /**
- * 인증·셋업·손님 진입 공통 틀(Vue components/auth/AuthShell.vue).
- * (예전 layouts/auth.vue 는 이 셸로 모두 옮겨져 삭제했다 — 인증·셋업·동의·손님 화면은 layout: false + AuthShell.)
+ * 인증·셋업·손님 진입 공통 틀.
+ * 인증·셋업·동의·손님 화면은 layout: false + AuthShell.
  *  데스크톱(lg↑): 왼쪽 월페이퍼(관리자 업로드 이미지·영상/그라디언트/그리드) + 좌하단 브랜드(타일 40 · 28/700 · 태그라인 15)
  *                + 오른쪽 520 단색 패널(48/60 패딩, border-left) 안 400 폼.
  *  모바일: 상단 브랜드 띠 160(월페이퍼 + 하단 스크림, 타일 32 · 18/700) → 키보드가 올라오면 72 한 줄(타일 28 · 15/600)
  *          + 단색 폼(24 패딩). 카드 없음. 100vh 금지 → dvh.
  * 브랜딩(앱 이름·로고·태그라인·월페이퍼)은 useSiteConfig 그대로.
- * 스타일(월페이퍼 구슬·그리드·켄번스·스크림)은 AuthShell.css(Vue scoped 스타일 그대로).
+ * 스타일(월페이퍼 구슬·그리드·켄번스·스크림)은 AuthShell.css.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -50,7 +50,7 @@ export function AuthShell({ children }: AuthShellProps) {
       }
     })()
     return () => { alive = false }
-    // Vue onMounted — 첫 마운트 때의 설정으로 한 번
+    // 첫 마운트 때의 설정으로 한 번
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const effWallpaper = wallpaper === 'image' && !picked ? 'gradient' : wallpaper

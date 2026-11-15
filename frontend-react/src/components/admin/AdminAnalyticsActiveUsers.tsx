@@ -1,5 +1,5 @@
 /**
- * 관리 개요 › 지금 활동 중인 사용자 카드 — Vue components/admin/AdminAnalyticsActiveUsers.vue.
+ * 관리 개요 › 지금 활동 중인 사용자 카드.
  * 이름(표시 이름 없으면 사용자명) · 보고 있는 경로 · 마지막 활동(방금/n분 전). 비면 빈 상태.
  */
 import { useI18n } from '~/i18n'

@@ -38,7 +38,7 @@ export interface MeetingGroup<T> { key: string; label: string; items: MeetingVie
 
 const JOIN_EARLY_MS = 10 * 60 * 1000
 
-/** 번역 함수 — 기본은 Nuxt i18n(앱 안), Nuxt 밖(단위 테스트)에서는 한국어 원문으로 떨어진다. */
+/** 번역 함수 — 기본은 앱의 i18n, 앱 밖(단위 테스트)에서는 한국어 원문으로 떨어진다. */
 type Tr = (key: string, params?: Record<string, unknown>) => string
 const KO_FALLBACK: Record<string, string> = {
   'meetings.time.dow.sun': '일',
@@ -68,7 +68,7 @@ const koFallback: Tr = (key, params) => {
   const raw = KO_FALLBACK[key] ?? key
   return raw.replace(/\{(\w+)\}/g, (_, k: string) => String(params?.[k] ?? ''))
 }
-// React 판: Vue 의 useNuxtApp().$i18n 대신 전역 i18n. 메시지가 아직 안 실렸으면(키가 그대로 돌아오면) 한국어 원문으로.
+// 전역 i18n 을 쓴다. 메시지가 아직 안 실렸으면(키가 그대로 돌아오면) 한국어 원문으로.
 const defaultT: Tr = (key, params) => {
   try {
     const out = String(i18n.t(key, (params ?? {}) as Record<string, unknown>))

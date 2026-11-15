@@ -1,5 +1,5 @@
 /**
- * 모달 하나(시안 G): 제목 15/600 · 헤더 48 · 푸터 56 · 버튼 h-9 [취소][확인] 오른쪽 · ✕ 는 아이콘 버튼 aria-label="닫기".
+ * 모달 하나: 제목 15/600 · 헤더 48 · 푸터 56 · 버튼 h-9 [취소][확인] 오른쪽 · ✕ 는 아이콘 버튼 aria-label="닫기".
  * confirm 변형 = 헤더 없는 소형(max-w-sm, p-5) — UiDialogHost 가 쓴다.
  * 모바일(sm 미만)은 바텀시트: rounded-sheet 상단 + 핸들 36×4. Esc 닫기, 포커스 트랩, 닫으면 연 요소로 포커스 복귀.
  * 폭: sm 384 · md 448 · lg 512 · '440'(확인형 넓게 — 회의 "예약됨") · '480'(이동) · '520'(일정·연락처·공유 폼) ·
@@ -39,11 +39,11 @@ export interface UiModalProps {
   ariaLabel?: string
   /** 닫기(✕ · Esc · 바깥 클릭) */
   onClose?: () => void
-  /** 제목 자리 내용(Vue #title 슬롯) — title 이 없을 때 */
+  /** 제목 자리 내용 — title 이 없을 때 */
   titleSlot?: ReactNode
-  /** 헤더 오른쪽 닫기 앞 버튼들(Vue #actions 슬롯) — 폼형만 */
+  /** 헤더 오른쪽 닫기 앞 버튼들 — 폼형만 */
   actions?: ReactNode
-  /** 푸터(Vue #footer 슬롯) — 버튼 h-9 [취소][확인] 오른쪽 정렬 */
+  /** 푸터 — 버튼 h-9 [취소][확인] 오른쪽 정렬 */
   footer?: ReactNode
   /** 본문 */
   children?: ReactNode
@@ -88,7 +88,7 @@ export function UiModal({ size, mobile = 'sheet', flush = false, title, confirm 
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null
-    // 확인형은 [취소]부터(시안 G). data-autofocus 가 있으면 그것, 없으면 첫 포커스 가능 요소.
+    // 확인형은 [취소]부터. data-autofocus 가 있으면 그것, 없으면 첫 포커스 가능 요소.
     const pref = panelRef.current?.querySelector<HTMLElement>('[data-autofocus]')
     ;(pref ?? focusables()[0] ?? panelRef.current)?.focus()
     return () => { opener?.focus?.() }

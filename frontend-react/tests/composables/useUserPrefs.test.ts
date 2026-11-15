@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-// React 판은 Vue 반응성 전역(ref·readonly·computed)이 필요 없다 — 순수 함수만 바로 가져온다
+// 순수 함수만 바로 가져온다
 const { fromServer, toServer } = await import('~/composables/useUserPrefs')
 
 describe('개인 설정 서버 키 변환', () => {

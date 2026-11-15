@@ -1,4 +1,3 @@
-// Vue 원본: frontend/composables/useChannelTabs.ts
 // 채널 탭 — 메시지 · 파일 · 위키 + 더보기(회의 · 작업 · 탭 관리).
 // 서버: /api/chat/channels/{id}/tabs|files|meetings|tasks (backend app/chat/tabs.py). 채팅 상태(useChat)와는 따로 둔다.
 // 상태 없는 요청 묶음이라 store 없이 모듈 함수 + 같은 이름의 hook(useChannelTabs)으로 둔다.
@@ -127,7 +126,7 @@ export function orderedTabs(summary: ChannelTabsSummary | null): ChannelTabLayou
 
 const api = { fetchSummary, updateTabs, fetchFiles, fetchMeetings, fetchMeetingGroups, fetchTasks, fetchTaskList, createTask }
 
-/** Vue useChannelTabs() 와 같은 멤버 */
+/** 상태 + 동작 */
 export function useChannelTabs() {
   return api
 }

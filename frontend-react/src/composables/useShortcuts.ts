@@ -1,11 +1,11 @@
 /**
- * 단축키 도움말(Ctrl /) 의 모듈별 묶음 등록. (Vue 판 composables/useShortcuts.ts 대응)
+ * 단축키 도움말(Ctrl /) 의 모듈별 묶음 등록.
  *
  * 페이지(모듈 화면)가 `usePageShortcuts('메일', [...])` 를 부르면 그 화면이 떠 있는 동안
  * LayoutShortcutsModal 의 "어디서나 · 목록" 위에 해당 모듈 묶음이 붙는다. 화면을 떠나면(언마운트) 빠진다.
  * 실제 키 처리는 각 페이지가 그대로 한다 — 여기는 표시용 목록만.
  *
- * React(페이지 — Vue 의 getter/ref 목록 대신 렌더마다 지금 목록을 넘긴다. 내용이 바뀌면 갱신, 언마운트 때 해제):
+ * React(페이지 — 렌더마다 지금 목록을 넘긴다. 내용이 바뀌면 갱신, 언마운트 때 해제):
  *   usePageShortcuts(t('nav.mail'), isMobile ? [] : [{ keys: ['C'], label: t('mail.compose') }])
  * 컴포넌트 밖·조건부 등록: const off = registerPageShortcuts(title, items | () => items); off()
  * 읽기: usePageShortcutGroups() (hook, 배열 값) / getPageShortcutGroups() (밖, getter 를 지금 읽음)

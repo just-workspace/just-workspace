@@ -1,5 +1,5 @@
 /**
- * 메일 작성 본문 에디터 — Vue 판 components/mail/MailComposeEditor.vue (하단 툴바 · 인라인 답장 Aa).
+ * 메일 작성 본문 에디터 (하단 툴바 · 인라인 답장 Aa).
  *  toolbar="desktop" : 본문 위 40 줄 — 굵게·기울임·밑줄 | 글머리·번호 | 링크·인용·코드·이미지 (32 버튼)
  *  toolbar="mobile"  : 본문 아래 48 줄 — Aa · B · I · 글머리 · 링크 … toolbarEnd(서명)
  *  toolbar="none"    : 툴바 없음(인라인 답장 — Aa 로 desktop 툴바를 펼친다)
@@ -13,7 +13,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import { Placeholder } from '@tiptap/extensions'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { $fetch } from '~/lib/api'
 import { addToast } from '~/composables/useToast'
@@ -40,13 +40,13 @@ export interface MailComposeEditorProps {
   placeholder?: string
   /** 본문 글자 크기·줄 간격(데스크톱 14/1.7, 모바일 15/1.65) */
   bodyClass?: string
-  /** 본문 HTML 바뀜(비면 null) — Vue v-model:html */
+  /** 본문 HTML 바뀜(비면 null) */
   onUpdateHtml?: (v: string | null) => void
-  /** 본문 텍스트 바뀜 — Vue v-model:text */
+  /** 본문 텍스트 바뀜 */
   onUpdateText?: (v: string) => void
-  /** 본문 아래 붙는 것(서명·첨부·오류) — 모바일 하단 툴바보다 위(Vue #below 슬롯) */
+  /** 본문 아래 붙는 것(서명·첨부·오류) — 모바일 하단 툴바보다 위 */
   below?: ReactNode
-  /** 모바일 툴바 오른쪽 끝(Vue #toolbar-end 슬롯) */
+  /** 모바일 툴바 오른쪽 끝 */
   toolbarEnd?: ReactNode
   /** 루트에 덧붙일 클래스 */
   className?: string
@@ -77,7 +77,7 @@ export function MailComposeEditor({
     },
   }, [])
 
-  // 원문 인용 등 비동기로 늦게 오는 초기값 — 아직 아무것도 안 썼을 때만 채운다(Vue watch: 첫 값은 건너뜀)
+  // 원문 인용 등 비동기로 늦게 오는 초기값 — 아직 아무것도 안 썼을 때만 채운다(첫 값은 건너뜀)
   const firstInit = useRef(true)
   useEffect(() => {
     if (firstInit.current) { firstInit.current = false; return }
@@ -114,7 +114,7 @@ export function MailComposeEditor({
     setContent: (v: string) => { editor?.commands.setContent(v, { emitUpdate: true }) },
   }), [editor])
 
-  // 언마운트 때 편집기 해제는 @tiptap/react useEditor 가 한다(Vue 판의 onBeforeUnmount destroy 와 같은 효과)
+  // 언마운트 때 편집기 해제는 @tiptap/react useEditor 가 한다
 
   return (
     <div className={cx('flex min-h-0 flex-col', className ?? '')}>

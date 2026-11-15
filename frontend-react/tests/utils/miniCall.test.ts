@@ -44,7 +44,7 @@ describe('네 귀퉁이 스냅', () => {
   })
 })
 
-describe('메일 작성 창 비켜 서기 폭(11-C11)', () => {
+describe('메일 작성 창 비켜 서기 폭', () => {
   it('데스크톱 오른쪽 아래에 떠 있을 때만 320', () => {
     expect(miniCallReservedWidth({ visible: true, mobile: false, corner: 'br' })).toBe(MINI_CALL_WIDTH)
     expect(miniCallReservedWidth({ visible: true, mobile: false, corner: 'bl' })).toBe(0)

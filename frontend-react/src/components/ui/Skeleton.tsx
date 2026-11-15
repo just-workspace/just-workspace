@@ -1,5 +1,5 @@
 /**
- * 스켈레톤(시안 H): 프리셋 5종 — list(목록 행) · card · table(표 행) · grid(타일) · text(본문 문단).
+ * 스켈레톤: 프리셋 5종 — list(목록 행) · card · table(표 행) · grid(타일) · text(본문 문단).
  * 프리셋 없이 className 만 주면 예전처럼 막대 하나(기존 대시보드 사용처 호환).
  * 300ms 안에 끝나는 로딩은 보이지 않게(.skeleton-delay). 즉시 보여야 하면 delay={false}.
  */

@@ -1,7 +1,7 @@
 /**
  * 탭: 밑줄형 40(상세 패널은 안쪽 36), 선택 = 글자 600 + 2px primary 밑줄, 카운트 mono,
  * ←→ 이동, 모바일은 가로 스크롤 + 선택 탭이 보이도록 자동 스크롤. 포커스는 inset ring.
- * 항목에 to 가 있으면 라우터 링크(설정·관리 탭), 없으면 modelValue/onUpdateModelValue(Vue v-model)로 전환.
+ * 항목에 to 가 있으면 라우터 링크(설정·관리 탭), 없으면 modelValue/onUpdateModelValue로 전환.
  * to 탭의 선택 판정: 기본은 경로 앞부분 일치(/a 는 /a/b 에서도 선택). exact(부품 전체 또는 항목별)면 경로가 같을 때만.
  * 정확 일치 탭이 하위 경로 일부에서도 선택돼야 하면 activeOn 에 그 앞부분들을 준다(Git 코드 탭 = 루트 + /tree·/blob).
  * to 의 ?쿼리·#해시는 판정에서 뺀다(이동할 때는 그대로 붙는다).
@@ -30,7 +30,7 @@ export interface TabItem {
 }
 
 export interface UiTabsProps extends Omit<HTMLAttributes<HTMLDivElement>, 'role'> {
-  /** 고른 탭 key(Vue v-model, to 없는 탭) */
+  /** 고른 탭 key(to 없는 탭) */
   modelValue?: string | null
   /** 탭 바뀜 */
   onUpdateModelValue?: (v: string | null) => void
@@ -44,7 +44,7 @@ export interface UiTabsProps extends Omit<HTMLAttributes<HTMLDivElement>, 'role'
   flush?: boolean
   /** to 탭 전체를 정확 일치로 판정 */
   exact?: boolean
-  /** 탭 줄 오른쪽 끝 내용(Vue #trailing 슬롯) */
+  /** 탭 줄 오른쪽 끝 내용 */
   trailing?: ReactNode
 }
 

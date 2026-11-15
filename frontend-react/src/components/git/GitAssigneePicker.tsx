@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitAssigneePicker.vue
 // 이슈 담당자 고르기 — GitLabelPicker 와 같은 겉모습(점선 ghost 칩 트리거 + 212 드롭다운, 체크 행 34).
 // 후보는 워크스페이스 사용자 검색(GET /api/chat/users?q=) — Gitea 로그인 이름 = 워크스페이스 아이디.
 // 닫을 때 한 번만 commit 한다(체크마다 요청하지 않는다).

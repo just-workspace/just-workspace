@@ -1,5 +1,5 @@
 /**
- * 계정 카드 맨 위 아바타 줄 — Vue pages/settings/account.vue 의 인라인 마크업을 이름 붙여 뺀 것.
+ * 계정 카드 맨 위 아바타 줄.
  * 아바타 64 + 이름 15/600 + 역할 12 muted(+ 오류 12 danger), 오른쪽 [사진 바꾸기](32 테두리) — 숨은 파일 입력을 연다.
  * 카드 본문 패딩을 음수 여백으로 상쇄해 카드 폭 전체에 아래 선을 긋는다(SettingsCard 본문 첫 자식으로 쓴다).
  *
@@ -25,7 +25,7 @@ export interface SettingsAvatarRowProps {
   error?: string
   /** 업로드 중 — 버튼 비활성 + "올리는 중" */
   uploading?: boolean
-  /** 파일 입력 change(파일 고른 뒤). 처리 후 input.value 를 비우는 것은 부모 몫(Vue 와 같음) */
+  /** 파일 입력 change(파일 고른 뒤). 처리 후 input.value 를 비우는 것은 부모 몫 */
   onFileChange: (e: ChangeEvent<HTMLInputElement>) => void
 }
 

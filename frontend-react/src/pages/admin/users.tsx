@@ -1,5 +1,5 @@
 /**
- * 관리 › 사용자 — Vue 원본: frontend/pages/admin/users.vue.
+ * 관리 › 사용자 —
  * 헤더 [전체 강제 로그아웃][사용자 초대], 표 위 검색 260 + 상태 칩(승인 대기 n = warning) + 그룹 선택,
  * 선택하면 표 머리에 붙는 일괄 바(AdminUsersBulkBar), 표(AdminUsersTable), 모바일은 카드 스택(AdminUserCard).
  *
@@ -108,7 +108,7 @@ export default function AdminUsersPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void reloadAll() }, [])
 
-  // 거르는 조건이 바뀌면 1쪽부터 / 쪽이 바뀌면 다시 읽기 (둘 다 첫 실행은 건너뜀 — Vue watch 와 같음)
+  // 거르는 조건이 바뀌면 1쪽부터 / 쪽이 바뀌면 다시 읽기 (둘 다 첫 실행은 건너뜀)
   const filterKey = JSON.stringify([qDebounced, fPending, fAdmin, fSuspended, fGroup, sortParam])
   const prevFilterKey = useRef(filterKey)
   const prevPage = useRef(page)

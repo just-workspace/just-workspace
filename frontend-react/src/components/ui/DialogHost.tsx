@@ -1,6 +1,6 @@
 /**
  * 인앱 다이얼로그 호스트 — useDialog() 의 current 를 그린다. App.tsx 루트에 1회 마운트.
- * 시안 G 확인형: UiModal confirm 변형(헤더 없는 소형 max-w-sm), 파괴적은 bg-danger, 포커스는 [취소]에서 시작.
+ * 확인형: UiModal confirm 변형(헤더 없는 소형 max-w-sm), 파괴적은 bg-danger, 포커스는 [취소]에서 시작.
  * 다이얼로그 내기는 alertBox / confirmBox / promptBox / choose(~/composables/useDialog).
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
@@ -21,7 +21,7 @@ export function UiDialogHost() {
   const [inputValue, setInputValue] = useState('')
   const inputRef = useRef<HTMLInputElement | null>(null)
 
-  // 프롬프트가 뜨면 기본값을 넣고 입력에 포커스·전체 선택(Vue watch(current) → nextTick)
+  // 프롬프트가 뜨면 기본값을 넣고 입력에 포커스·전체 선택
   const curId = current?.id
   const curKind = current?.kind
   const curDefault = current?.defaultValue

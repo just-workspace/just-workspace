@@ -1,6 +1,6 @@
 /**
  * TanStack Query 클라이언트 — 서버 상태(화면별 목록·상세)용.
- * Vue 판은 $fetch 로 직접 읽고 재시도·포커스 재조회를 하지 않았다 → 같은 동작이 기본값이 되게 둘 다 끈다.
+ * 재시도·포커스 재조회는 기본으로 끈다(화면이 직접 다시 읽는다).
  *
  * 쿼리 키 규칙: [모듈, 자원, ...매개변수]  예) ['mail', 'messages', { folder, page }] · ['admin', 'users']
  * 같은 데이터를 여러 화면이 쓰면 키 팩토리를 그 모듈 composable 파일에 둔다(예: mailKeys.messages(folder)).

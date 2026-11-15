@@ -1,4 +1,3 @@
-// Vue 원본: frontend/pages/login.vue
 // 로그인. 모듈 셸(AuthShell)로 감싼다.
 // 서버 오류 = 폼 상단 danger 타일, Caps Lock = 비밀번호 아래 warning 힌트, 보조 진입 = "또는" 아래.
 // 2단계 인증 계정이면 같은 자리에서 코드 입력 단계로 넘어간다(/api/auth/2fa/verify).
@@ -84,7 +83,7 @@ export default function Page() {
     }
   }
 
-  // 이미 로그인돼 있으면 이동(Vue watch(user, immediate))
+  // 이미 로그인돼 있으면 이동(처음에도 본다)
   useEffect(() => {
     if (user) goAfterLogin()
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,4 +1,4 @@
-// Vue frontend/tests/composables/useAdminOps.test.ts 이식 — 검증 내용 그대로(순수 함수라 바뀐 것 없음).
+// 관리 운영 요약 — 순수 함수 검증.
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 const { daysUntil, RUN_STATUS_LABEL, RUN_STATUS_TONE } = await import('~/composables/useAdminOps')

@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { uiScaleAllowed, UI_SCALE_MIN_WIDTH } from '~/lib/fluid'
 import { tzCity, tzMatches, tzSearchNames } from '~/utils/timezoneBand'
 
-describe('화면 크기 — 실효 폭 1280 미만이 되는 배율은 못 고름(답 9)', () => {
+describe('화면 크기 — 실효 폭 1280 미만이 되는 배율은 못 고름', () => {
   it('자동은 늘 가능', () => { expect(uiScaleAllowed('auto', 1300)).toBe(true) })
   it('FHD 1920: 150%(1280)까지 가능, 200%(960)·300%(640) 막힘', () => {
     expect(uiScaleAllowed(100, 1920)).toBe(true)
@@ -16,7 +16,7 @@ describe('화면 크기 — 실효 폭 1280 미만이 되는 배율은 못 고�
   it('하한 = 1280', () => { expect(UI_SCALE_MIN_WIDTH).toBe(1280) })
 })
 
-describe('수도 이름(답 12)', () => {
+describe('수도 이름', () => {
   it('ko 표시는 베이징·하노이·뉴델리', () => {
     expect(tzCity('Asia/Shanghai', 'ko')).toBe('베이징')
     expect(tzCity('Asia/Ho_Chi_Minh', 'ko')).toBe('하노이')

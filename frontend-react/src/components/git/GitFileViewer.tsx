@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitFileViewer.vue
 /**
  * 코드 뷰어.
  *  위: 브랜치 32 + 경로 브레드크럼(저장소 / 폴더 / … / 파일).

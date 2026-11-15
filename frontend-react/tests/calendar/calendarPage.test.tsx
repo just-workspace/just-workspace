@@ -94,7 +94,7 @@ describe('캘린더 화면', () => {
     expect(await screen.findByText(t('calendar.agenda.dayLabel', { m: 10, d: 15, w: '목' }))).toBeTruthy()
   })
 
-  it('시간대 불일치 띠(R13 #tz): 설정 ≠ 기기면 띠 + 툴바 mono 표시, "그대로" 는 닫고 그 조합을 기억', async () => {
+  it('시간대 불일치 띠: 설정 ≠ 기기면 띠 + 툴바 mono 표시, "그대로" 는 닫고 그 조합을 기억', async () => {
     const { userPrefsStore } = await import('~/composables/useUserPrefs')
     const prev = userPrefsStore.getState().prefs
     localStorage.removeItem('jw:calendar:tzBandKept')

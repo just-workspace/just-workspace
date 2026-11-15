@@ -1,5 +1,5 @@
 /**
- * 큰 zustand store 를 "읽은 필드만" 구독하는 hook — Vue 의 반응성(읽은 ref 만 추적)과 같은 효과.
+ * 큰 zustand store 를 "읽은 필드만" 구독하는 hook.
  *
  * useChat()·useMeetings() 처럼 멤버가 수십 개인 hook 이 store 전체를 구독하면 타이핑 이벤트 하나에
  * 상단바·레일까지 다시 그려진다. 이 hook 은 렌더(와 그 뒤)에서 실제로 읽은 키만 기억해 두고,

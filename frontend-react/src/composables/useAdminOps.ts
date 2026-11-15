@@ -1,5 +1,5 @@
 /**
- * 관리 운영 요약("운영 요약 4칸" + 좌 내비 보조 글자). Vue 판 composables/useAdminOps.ts 그대로.
+ * 관리 운영 요약("운영 요약 4칸" + 좌 내비 보조 글자).
  * 승인 대기 n · 마지막 백업 · SSL D-n · 서비스 n/n 을 GET /api/admin/ops-summary 한 번으로 받는다.
  * 그 엔드포인트가 없는 예전 서버면 예전처럼 API 4개를 병렬로 부른다.
  *
@@ -76,7 +76,7 @@ export const RUN_STATUS_TONE: Record<string, 'success' | 'warning' | 'primary' |
   success: 'success', partial: 'warning', running: 'primary', building: 'primary', idle: 'neutral', failed: 'danger',
 }
 
-/** Vue useState('admin-ops') · useState('admin-ops-at') */
+/** 앱 전역 상태: 운영 요약 값 · 받은 시각 */
 export const adminOpsStore = createStore<{ ops: AdminOps; fetchedAt: number }>()(() => ({ ops: { ...EMPTY }, fetchedAt: 0 }))
 
 /** 예전 서버(ops-summary 없음) — 기존 API 4개를 병렬로 */

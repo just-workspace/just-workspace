@@ -1,5 +1,5 @@
 /**
- * 일정 목록 행(Vue components/calendar/CalendarAgendaRow.vue):
+ * 일정 목록 행:
  * 56, 시각 열 48 mono 12(시작 600 / 끝 muted), 색 바 3, 제목 15/600, 메타 12 muted.
  */
 import { useI18n } from '~/i18n'

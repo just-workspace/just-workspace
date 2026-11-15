@@ -1,15 +1,15 @@
 /**
- * 스레드 패널(D4·M3, 2-1). Vue 원본: frontend/components/chat/ChatThreadPanel.vue
+ * 스레드 패널.
  * 데스크톱 400(넓게 = 대화 영역의 50% 까지, 대화 폭 480 보장), 모바일 전체 화면.
  * 머리: [따라가는 중] 알약 토글 · 넓게 · 새 창 · 닫기(Esc). 모바일: ‹ #채널로 돌아가기 · 알약 · ⋯.
- * 컴포저는 본 컴포저와 같은 도구 + "#채널에도 보내기"(기본 꺼짐, 보낸 뒤 다시 꺼짐 — 2-1-2).
+ * 컴포저는 본 컴포저와 같은 도구 + "#채널에도 보내기"(기본 꺼짐, 보낸 뒤 다시 꺼짐).
  * 혼합형: 머리 = threads 20 · 스레드 이름 15/600(없으면 “원문 첫 40자” 기울임) + 채널 11
  *   · 이름 바꾸기(edit-2 → 그 자리 입력, Enter 저장 · Esc 취소) · 보관/보관 해제(archive, aria-pressed) — 루트 작성자 또는 MANAGE_THREADS.
  *   머리 48+1(디스코드 49). 보관된 스레드는 컴포저 위 안내 한 줄. 스레드 안 인라인 답장은 컴포저(ChatInput mode=thread · parentId)가 받는다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
-// Vue :class 처럼 이어 붙이기만 한다(tailwind-merge 없이 — 원본과 같은 CSS 순서 규칙)
+// class 를 이어 붙이기만 한다(tailwind-merge 없이 — 뒤에 온 클래스를 지우지 않는다)
 import { clsx as cn } from 'clsx'
 import { useI18n } from '~/i18n'
 import { authStore } from '~/composables/useAuth'

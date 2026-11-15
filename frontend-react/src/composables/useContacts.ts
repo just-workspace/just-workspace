@@ -1,8 +1,8 @@
 /**
- * 연락처 — Vue 판 composables/useContacts.ts 그대로(모듈 싱글턴 상태 + 동작). 요청 주소·순서·본문 동일.
+ * 연락처(모듈 싱글턴 상태 + 동작). 요청 주소·순서·본문 동일.
  *
  * React: const { contacts, selectedContact, scope, scopeLabel, selectScope, ... } = useContacts()
- *   값은 .value 없이. Vue 에서 바깥이 대입하던 상태는 setter 를 같이 낸다:
+ *   바깥에서 바꾸는 상태는 setter 를 같이 낸다:
  *     selectedContact → setSelectedContact(v) · selectedBookId → setSelectedBookId(v) · sortBy → setSortBy(v)
  *     mobileMenuOpen → setMobileMenuOpen(v) · showEditModal → setShowEditModal(v)
  * 컴포넌트 밖: contactsStore.getState(), 또는 아래 동작 함수를 직접 import.
@@ -110,7 +110,7 @@ export interface ContactsState {
   loadingContacts: boolean
   showEditModal: boolean
   editingContact: Contact | null
-  /** 목록 불러오기 실패(시안 H: 실패를 "비어 있음"으로 보이지 않게) */
+  /** 목록 불러오기 실패(실패를 "비어 있음"으로 보이지 않게) */
   contactsError: string
   /** 목록 정렬("이름순 ▾") — 현재 페이지 안에서만 정렬한다(서버는 이름순) */
   sortBy: 'name' | 'org'
@@ -158,7 +158,7 @@ export function _resetContactsStore() {
   contactsStore.setState(initialState(), true)
 }
 
-// ─── 바깥 대입 대응(Vue 에서 x.value = v 하던 것) ───
+// ─── 바깥에서 바꾸는 상태의 setter ───
 
 export function setSelectedContact(c: Contact | null) { set({ selectedContact: c }) }
 export function setSelectedBookId(id: string | null) { set({ selectedBookId: id }) }
@@ -514,7 +514,7 @@ const actions = {
 }
 
 /**
- * Vue useContacts() 과 같은 멤버. 상태 전체를 얕게 구독한다.
+ * 상태 + 동작. 상태 전체를 얕게 구독한다.
  * 상태 + computed(scope·scopeLabel·totalPages·hasNextPage·hasPrevPage) + 동작.
  */
 export function useContacts() {

@@ -105,7 +105,7 @@ export function UiTooltip({ text, keys = [], side = 'top', block = false, disabl
     setOpen(false)
   }
 
-  // 열린 직후 측정해 정확한 자리로(Vue nextTick → place)
+  // 열린 직후 측정해 정확한 자리로
   useLayoutEffect(() => {
     if (open) place()
     // eslint-disable-next-line react-hooks/exhaustive-deps

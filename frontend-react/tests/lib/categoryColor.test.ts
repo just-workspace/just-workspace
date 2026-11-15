@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CAT_HEX, catColor, catForIndex, catOf, hatchedIds } from '~/utils/categoryColor'
 
-describe('범주 색(11-A1)', () => {
+describe('범주 색', () => {
   it('저장 hex·토큰 이름·옛 팔레트를 범주 번호로', () => {
     expect(catOf(CAT_HEX[0])).toBe(1)
     expect(catOf('#8B6C18')).toBe(8)

@@ -75,7 +75,7 @@ describe('도우미', () => {
   })
 })
 
-describe('파일 카드(C1)', () => {
+describe('파일 카드', () => {
   it('이름·메타·세 버튼, 저장 → 저장 위치 줄', async () => {
     api.respond = (url) => {
       if (url.endsWith('/save')) return { folder: 'my/AI 결과물/2026-11-05 VPN', files: [], artifact: art({ saved_path: 'my/AI 결과물/2026-11-05 VPN/x.docx', saved_folder: 'my/AI 결과물/2026-11-05 VPN', saved_label: '내 파일 › AI 결과물 › 2026-11-05 VPN' }) }
@@ -129,7 +129,7 @@ describe('파일 카드(C1)', () => {
   })
 })
 
-describe('묶음 카드(L1)', () => {
+describe('묶음 카드', () => {
   it('머리(개수·크기·만료·zip) + 항목 + 부분 실패 [이것만 다시]', async () => {
     api.respond = (url) => {
       if (url.includes('/items/1/retry')) return job({ status: 'done', ok: 3, failed: 0, items: job().items.map(i => ({ ...i, status: 'ready' as const })) })
@@ -170,7 +170,7 @@ describe('묶음 카드(L1)', () => {
   })
 })
 
-describe('완료 토스트(L1-4)', () => {
+describe('완료 토스트', () => {
   it('카드가 없을 때만 뜨고, 대화로 가기·zip 받기', () => {
     A.handleArtifactEvent({ type: 'ai.artifact_job', finished: true, job: job({ status: 'done', ok: 3, failed: 0 }) })
     const [tj] = A.aiArtifactToastStore.getState().toasts

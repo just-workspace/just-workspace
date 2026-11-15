@@ -1,10 +1,10 @@
 /**
- * Vue 지시자·내장 기능 대응 hook 모음.
+ * DOM hook 모음.
  *
- * - useClickOutside(ref, handler)  ← v-click-outside (Vue plugins/click-outside.ts 와 같은 동작:
+ * - useClickOutside(ref, handler)  ← 바깥 클릭 감지(
  *   마운트 다음 프레임부터 document click 을 듣고, 요소 밖 클릭이면 handler)
- * - useEventListener(target, type, handler)  ← onMounted/onBeforeUnmount 짝으로 붙이던 리스너
- * - useMounted()  ← onMounted 이후 true (Vue <ClientOnly> 가 필요한 드문 경우)
+ * - useEventListener(target, type, handler)  ← 마운트·언마운트 짝으로 붙이는 리스너
+ * - useMounted()  ← 마운트 이후 true (클라이언트에서만 그려야 하는 드문 경우)
  */
 import { useEffect, useRef, useState, type RefObject } from 'react'
 

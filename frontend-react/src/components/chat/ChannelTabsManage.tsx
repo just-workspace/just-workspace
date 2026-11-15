@@ -1,5 +1,5 @@
 /**
- * 탭 관리. Vue 원본: frontend/components/chat/ChannelTabsManage.vue (ChatChannelTabsManage)
+ * 탭 관리.
  * UiModal 480 "#채널 탭 관리":
  *  안내 13 muted → 목록(rounded-md border, 행 min-h-12):
  *    메시지 = lock 고정(옮기기·끄기 없음) · 나머지 = 끌기 손잡이(UiIconButton grip) + 아이콘 + 이름·설명 + UiSwitch.
@@ -8,7 +8,7 @@
  *  → 아래 안내 12 muted. 바닥 [취소][저장] — 순서·끄기는 저장을 눌러야 채널 멤버 모두에게 적용된다.
  * 순서 바꾸기: 손잡이를 끌어 놓기(마우스) 또는 손잡이에서 ↑↓(키보드).
  * [바꾸기]·[폴더 연결]은 같은 창 안 하위 화면으로 들어가고, 거기서 연결하면 바로 저장된다(기존 동작).
- * 하위 화면(#tabFolder): 제목 자리 = ‹(탭 관리로) + 제목(titleSlot).
+ * 하위 화면: 제목 자리 = ‹(탭 관리로) + 제목(titleSlot).
  *  위키: UiInput 검색 → 스페이스 행 h-14(book-open · 이름 13 · "페이지 n · 공개범위|소유자" 12 muted), 고른 것 = primary 틴트 + 600 + ✓ →
  *        안내 12 muted "지금: …". 푸터 [뒤로][이 스페이스로].
  *  폴더: 경로 한 줄(13, 앞 칸 muted · › · 지금 칸 600) → 폴더 행 h-11(행 = 고르기, › = 들어가기; 더블클릭도 들어가기) → 안내.

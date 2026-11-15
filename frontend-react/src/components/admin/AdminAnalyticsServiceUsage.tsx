@@ -1,5 +1,5 @@
 /**
- * 관리 개요 › 서비스별 사용 도넛 — Vue components/admin/AdminAnalyticsServiceUsage.vue.
+ * 관리 개요 › 서비스별 사용 도넛.
  * 범주 색 = --cat-1…8 순서(useChartTokens.category), 범례 오른쪽. 높이 240.
  */
 import { useMemo } from 'react'

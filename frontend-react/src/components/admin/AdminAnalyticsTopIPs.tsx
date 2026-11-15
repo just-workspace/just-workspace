@@ -1,5 +1,5 @@
 /**
- * 관리 개요 › 상위 IP 가로 막대 — Vue components/admin/AdminAnalyticsTopIPs.vue. 색 primary, 높이 240.
+ * 관리 개요 › 상위 IP 가로 막대. 색 primary, 높이 240.
  */
 import { useMemo } from 'react'
 import { Bar } from 'react-chartjs-2'

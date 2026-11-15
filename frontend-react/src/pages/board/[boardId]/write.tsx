@@ -1,11 +1,10 @@
 /**
  * 글쓰기·고치기("전체 페이지 + 공용 편집기 툴바 + 첨부 끌어다 놓기").
- * Vue 원본: frontend/pages/board/[boardId]/write.vue
  *  데스크톱: 커맨드 바(새 글 · 게시판 + 임시 저장됨 HH:MM | 취소 · 올리기) → 680 폭
  *    [카테고리 160×40][필독으로 표시][맨 위 고정] / 제목 52(20/700) / 편집기 카드(툴바 40 + 본문 260) / 첨부 드롭 영역 64.
  *  모바일: 56 헤더(✕ 닫기 — 임시 저장 · 새 글 · 게시판 · 올리기 36) / 카테고리·필독 52 / 제목 52 / 본문 / 키보드 위 툴바 48.
- * 임시 저장은 이 브라우저에만(localStorage, 새 글일 때) — 서버 임시글 API 가 없다(보고서).
- * Nuxt 는 경로 매개변수가 바뀌면 페이지를 새로 만든다 — 같은 효과로 boardId 를 key 로 다시 마운트한다.
+ * 임시 저장은 이 브라우저에만(localStorage, 새 글일 때) — 서버 임시글 API 가 없다.
+ * 경로 매개변수가 바뀌면 화면을 새로 만든다 — boardId 를 key 로 다시 마운트한다.
  */
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import type { Editor } from '@tiptap/react'
@@ -37,7 +36,7 @@ type Attachment = { name: string; url: string; size?: number }
 function WritePage({ boardId }: { boardId: string }) {
   const { t } = useI18n()
   const route = useRoute()
-  // Vue 는 setup 때 한 번 읽는다(같은 경로에서 ?edit 만 바뀌면 다시 읽지 않음) — 마운트 때 값으로 고정
+  // 마운트 때 한 번 읽는다(같은 경로에서 ?edit 만 바뀌면 다시 읽지 않음) — 마운트 때 값으로 고정
   const [editPostId] = useState(() => queryString(route.query.edit))
   const { appName } = useSiteConfig()
   const router = routerApi

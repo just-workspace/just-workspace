@@ -3,7 +3,7 @@
  *  세션 중: 대상 이름 · 원격 주소(읽기 전용 글자, 링크 아님) · 정책 배지 · 화면 방식(픽셀↔미러) · 연결/지연 · 세션 끝내기 · 사용자 메뉴
  *  세션 없음: 앱 이름 · 사용자 메뉴
  * 키보드: 격리 화면에 포커스가 있을 때 Ctrl+Alt+B 로 이 줄의 첫 단추로 온다(앱이 건다). 이 줄에서 Esc 면 다시 격리 화면으로.
- * TODO: 줄 높이·배지 밀도·주소 칸 폭·지연 표시 규격은 디자인 확정 뒤에. 지금은 기존 키트(UiBadge·UiButton·UiSegment·
+ * 기존 키트(UiBadge·UiButton·UiSegment·
  *   UiStatusDot·UiMenu·UiKeycap·UiIcon)와 다크 토큰만 쓴다.
  */
 import { type KeyboardEvent, type Ref } from 'react'

@@ -135,7 +135,7 @@ describe('shiftSeries — 반복 "전체" 수정', () => {
   })
 })
 
-describe('반복 규칙 상한(보안 H5)', () => {
+describe('반복 규칙 상한', () => {
   it('초·분 단위 주기는 만들지 않는다', () => {
     expect(safeRecurrenceFreq('secondly')).toBeNull()
     expect(safeRecurrenceFreq('MINUTELY')).toBeNull()

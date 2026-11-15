@@ -1,5 +1,5 @@
 /**
- * 휴지통 뷰(Vue components/files/FileTrashView.vue — 서버에 있음, 화면만 필요). 시안에 그림이 없어 공통 규격(조밀 40 / 모바일 56).
+ * 휴지통 뷰(서버에 있음, 화면만 필요). 시안에 그림이 없어 공통 규격(조밀 40 / 모바일 56).
  * 열: 이름 · 원래 위치 · 지운 날 · 크기 · 복원 · 영구 삭제(DELETE /trash/{trash_name}, 확인 후). 비우기는 커맨드 바(데스크톱)·보기 시트(모바일).
  */
 import { useEffect, useState } from 'react'

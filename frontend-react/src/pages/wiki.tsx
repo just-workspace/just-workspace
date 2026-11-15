@@ -1,6 +1,5 @@
 /**
  * 위키.
- * Vue 원본: frontend/pages/wiki.vue
  *  데스크톱 3열: 트리 260 / 본문 680(읽기=편집 폭) / 레일 240(목차·최근 기록). 기록 모드는 레일 대신 버전 패널 320.
  *  커맨드 바 44: 경로(스페이스 › 상위 › 제목) · [편집 E] 또는 [함께 편집 아바타 · ✓ 저장됨] · 공유 · ⋯
  *  편집: 공용 서식 툴바 40 + 실시간 공동 편집(Yjs, WikiCollabEditor — 바인딩은 그대로) + 자동 저장.
@@ -8,9 +7,9 @@
  *  새 페이지: 모달 없이 트리 안 인라인 행(현재 페이지 아래 / 노드 + = 하위).
  * 주소: /wiki?space=<id>&page=<id> — 링크 공유·뒤로 가기가 된다.
  *
- * React 이식 메모
+ * 구현 메모
  *  - 비동기 처리기(자동 저장·주소 동기화)가 "지금" 값을 읽어야 해서 화면 상태 일부는 useState + ref 거울(useRefState).
- *  - Vue onBeforeRouteLeave(편집 중이면 저장 후 떠나기) → react-router useBlocker(다른 경로로 갈 때만, 쿼리 변경은 제외).
+ *  - 편집 중이면 저장 후 떠나기 → react-router useBlocker(다른 경로로 갈 때만, 쿼리 변경은 제외).
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent, type MutableRefObject } from 'react'
 import { useBlocker } from 'react-router'
@@ -74,7 +73,7 @@ function useRefState<T>(init: T): [T, (v: T) => void, MutableRefObject<T>] {
 // ─── 주소 ↔ 상태 ───
 const LAST_SPACE = 'wiki:last-space'
 function lastSpace(): string | null { try { return localStorage.getItem(LAST_SPACE) } catch { return null } }
-/** 지금 주소의 쿼리(Vue 의 route.query 를 처리기 안에서 읽던 것) */
+/** 지금 주소의 쿼리(처리기 안에서 읽는다) */
 function curQuery() {
   const r = getAppRouter()
   return parseQuery(r ? r.state.location.search : window.location.search)
@@ -182,10 +181,10 @@ export default function WikiPage() {
   const [loadingVersions, setLoadingVersions] = useState(false)
   const [versionListOpen, setVersionListOpen] = useState(false)   // 모바일 전체 화면 목록
 
-  /** 편집기 본문. 편집기가 없으면 null(Vue: editorRef.value 없음) */
+  /** 편집기 본문. 편집기가 없으면 null */
   function editorContent(): string | null {
     if (editorRef.current) return editorRef.current.getContent()
-    // 화면이 내려가는 중(ref 는 이미 떨어졌고 편집기는 아직 살아 있음) — Vue onBeforeUnmount 와 같은 순간
+    // 화면이 내려가는 중(ref 는 이미 떨어졌고 편집기는 아직 살아 있음)
     // 편집 불가(= 공동 편집기가 아직 본문 준비 전)면 비어 있으니 저장하지 않는다
     const ed = liveEditorRef.current
     return ed && !ed.isDestroyed && ed.isEditable ? (ed.getHTML() || '') : null

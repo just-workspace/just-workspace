@@ -1,6 +1,6 @@
 /**
- * 번들 SPA 앱(VITE_API_BASE) 주소·인증 분기 — 웹은 Vue 판과 같은 상대 주소, 번들 앱은 apiBase + Bearer.
- * Vue 판에서 apiBase 를 안 타던 곳(WS /ws/chat·플러그인 번들·파일 업/다운로드·메일 첨부)을 React 판에서 고친 것의 회귀 테스트.
+ * 번들 SPA 앱(VITE_API_BASE) 주소·인증 분기 — 웹은 상대 주소, 번들 앱은 apiBase + Bearer.
+ * apiBase 를 타야 하는 곳(WS /ws/chat·플러그인 번들·파일 업/다운로드·메일 첨부)의 회귀 테스트.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runtimeConfig, apiUrl, wsUrl, wsProtocols, bundledAuthHeaders, isBundledApp } from '~/lib/runtimeConfig'
@@ -23,7 +23,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('웹(apiBase 없음) — Vue 판과 같다', () => {
+describe('웹(apiBase 없음) — 상대 주소 그대로', () => {
   it('주소는 상대 그대로, 인증 헤더 없음', () => {
     localStorage.setItem('ws_token', 'tok')
     expect(isBundledApp()).toBe(false)

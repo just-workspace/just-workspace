@@ -1,5 +1,5 @@
 /**
- * 런타임 플러그인 로더 — Vue 판 composables/usePluginPage.ts + plugins/plugin-runtime.client.ts(window.__VUE__) 대응.
+ * 런타임 플러그인 로더.
  *
  * 플러그인 프런트는 호스트와 **빌드가 분리된** ES 모듈 하나(`/api/plugin-assets/<id>/bundle.mjs`)다.
  * 호스트를 다시 빌드하지 않고 플러그인을 더하고 바꿀 수 있다. 계약은 두 가지:
@@ -38,7 +38,7 @@ import { setTitle, clearTitle } from '~/composables/useShellTitle'
 // ─────────────────────────────────────────────────────────────── 주소
 
 /**
- * 번들 주소 — Vue 판과 같은 문자열.
+ * 번들 주소.
  *
  * ★ 캐시버스터(?v=Date.now())를 쓰지 않는다.
  * URL 이 매번 달라지면 브라우저가 재검증을 못 해 **열 때마다 번들 전체(150KB+)를 다시 받는다.**
@@ -47,8 +47,8 @@ import { setTitle, clearTitle } from '~/composables/useShellTitle'
  * 안정 URL 을 쓰면 재방문은 304(수백 바이트)로 끝나고
  * 플러그인을 새로 빌드하면 mtime 이 바뀌어 자동으로 새 번들을 받는다. (docs/plugin-frontend.md "번들 캐싱")
  *
- * 웹은 Vue 판과 같은 상대 주소. 번들 SPA 앱(VITE_API_BASE)은 apiBase 를 붙인다 — Vue 판은 앱 자신의 origin 으로
- * 가서 실패했다(원본 버그, React 판에서 수정). 번들은 인증 없는 공개 자산이라 Bearer 는 필요 없다(CORS 만).
+ * 웹은 상대 주소. 번들 SPA 앱(VITE_API_BASE)은 apiBase 를 붙인다 —
+ * 번들은 인증 없는 공개 자산이라 Bearer 는 필요 없다(CORS 만).
  */
 /**
  * 플러그인 id 로 쓸 수 있는 글자(영문·숫자·-·_ — 백엔드 설치 검사와 같다).
@@ -161,8 +161,8 @@ let vuePromise: Promise<VueModule> | null = null
  * Vue 런타임을 지연 로드해 window.__VUE__ 를 세운다(v1 플러그인을 열 때만 — 동적 import 라 메인 번들과 별도 청크).
  *
  * ★ Vue 렌더러는 처음 만들어질 때 `globalThis.__VUE__ = true`(devtools 표식)를 쓴다.
- * Nuxt 에선 호스트 앱이 먼저 렌더러를 만든 뒤 plugin-runtime 이 window.__VUE__ = Vue 로 덮어서 괜찮았지만,
- * 여기선 순서가 반대라 그대로 두면 첫 createApp 이 우리 전역을 `true` 로 덮어 **두 번째 v1 플러그인부터 깨진다.**
+ * 호스트가 Vue 앱이 아니어서 렌더러보다 전역이 먼저 서므로,
+ * 그대로 두면 첫 createApp 이 전역을 `true` 로 덮어 **두 번째 v1 플러그인부터 깨진다.**
  * 그래서 빈 앱 하나로 렌더러를 먼저 만들고 나서 전역을 세운다.
  */
 export function ensureVueRuntime(): Promise<VueModule> {
@@ -257,7 +257,7 @@ function VueIsland({ component, pluginId }: { component: unknown; pluginId: stri
     let cleanup: (() => void) | null = null
     void ensureVueRuntime().then((Vue) => {
       if (disposed) return
-      // Vue 판 pages/p/[id].vue 의 provide('pluginApi', …) 와 같은 모양 — user·appName 은 Vue ref
+      // v1 플러그인이 inject('pluginApi') 로 받는 모양 — user·appName 은 Vue ref
       const user = Vue.shallowRef<User | null>(authStore.getState().user)
       const appName = Vue.ref<string>(siteConfigStore.getState().appName)
       const offAuth = authStore.subscribe((s) => { if (s.user !== user.value) user.value = s.user })
@@ -270,18 +270,18 @@ function VueIsland({ component, pluginId }: { component: unknown; pluginId: stri
     })
     return () => { disposed = true; cleanup?.() }
   }, [component, pluginId])
-  // display: contents — Vue 판에선 플러그인 루트가 페이지 div 의 바로 아래였다. 상자 하나 끼지 않게(h-full 등 유지).
+  // display: contents — 플러그인 루트가 페이지 div 의 바로 아래에 오게. 상자 하나 끼지 않는다(h-full 등 유지).
   return <div ref={elRef} data-plugin-id={pluginId} data-plugin-api="1" style={{ display: 'contents' }} />
 }
 
 // ─────────────────────────────────────────────────────────────── 화면
 
-/** Vue defineAsyncComponent 의 loadingComponent 와 같은 문구·클래스 */
+/** 번들을 불러오는 동안의 문구 */
 export function PluginLoading() {
   return <div className="flex items-center justify-center py-20 text-muted-foreground"><span className="text-sm">Loading plugin...</span></div>
 }
 
-/** Vue defineAsyncComponent 의 errorComponent 와 같은 문구·클래스 */
+/** 번들을 불러오지 못했을 때의 문구 */
 export function PluginLoadError() {
   return <div className="flex items-center justify-center py-20 text-destructive"><span className="text-sm">Failed to load plugin</span></div>
 }
@@ -294,7 +294,7 @@ class PluginErrorBoundary extends ReactComponent<{ children: ReactNode }, { fail
   override render() { return this.state.failed ? <PluginLoadError /> : this.props.children }
 }
 
-/** Vue defineAsyncComponent 기본 delay(200ms) — 빨리 뜨면 로딩 문구가 깜빡이지 않게 */
+/** 로딩 문구를 띄우기 전 지연(200ms) — 빨리 뜨면 로딩 문구가 깜빡이지 않게 */
 const LOADING_DELAY_MS = 200
 
 export interface PluginHostProps {

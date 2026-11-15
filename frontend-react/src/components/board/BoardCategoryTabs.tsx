@@ -1,5 +1,5 @@
 /**
- * 카테고리 밑줄 탭("카테고리는 밑줄 탭") — Vue 판 components/board/BoardCategoryTabs.vue 이식.
+ * 카테고리 밑줄 탭("카테고리는 밑줄 탭").
  * 높이 40, 선택 = 2px primary 밑줄 + 600. 화살표 ←/→ 로 탭 사이 이동(role=tablist).
  */
 import { useRef, type KeyboardEvent } from 'react'

@@ -1,5 +1,5 @@
 /**
- * 플러그인 번들이 쓰는 호스트 전역 — Vue 판 plugins/plugin-runtime.client.ts 대응.
+ * 플러그인 번들이 쓰는 호스트 전역.
  *   window.__REACT__ / window.__REACT_DOM__ : v2(React) 플러그인이 external 로 두고 쓰는 호스트 React
  *   window.__WS_SHELL__                     : 상단바 확장 자리(버튼·칩) + 제목 덮어쓰기(setTitle) — 기존 API 에 멤버만 더함
  *   window.__WS_UI__                        : 호스트 UI 키트(Ui* 부품 + useToast·useDialog) — v2 플러그인이 '@jw/ui' 로 쓴다(plugins/uiKit)

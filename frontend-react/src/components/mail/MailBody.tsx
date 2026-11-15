@@ -1,5 +1,5 @@
 /**
- * 메일 본문 렌더 — Vue 판 components/mail/MailBody.vue. 3경로 + 종이.
+ * 메일 본문 렌더. 3경로 + 종이.
  *  A 텍스트        : 종이 위에 그대로 + 인용문 접기
  *  B 단순 HTML     : 서식 태그만 → prose
  *  C 서식 HTML     : 표·이미지·색 → 샌드박스 iframe(발신자 레이아웃 보존)
@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { UiIcon } from '~/components/ui/Icon'
 import './MailBody.css'

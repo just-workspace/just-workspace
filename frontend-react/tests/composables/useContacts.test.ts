@@ -1,4 +1,4 @@
-// 연락처 store — 범위별 요청 주소·매개변수, 즐겨찾기 낙관 갱신, 범위 이름(Vue useContacts 와 같은 동작)
+// 연락처 store — 범위별 요청 주소·매개변수, 즐겨찾기 낙관 갱신, 범위 이름
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const api = vi.hoisted(() => ({

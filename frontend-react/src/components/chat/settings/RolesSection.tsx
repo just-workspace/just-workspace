@@ -124,7 +124,7 @@ export function RolesSection() {
     } catch (e) { addToast('error', errorText(e, t('chat.settings.roles.deleteFail'))) }
   }
 
-  // ─── 그룹(§5.6 a) — 그룹 목록은 관리자 그룹 API(전역 관리자만 읽힌다) ───
+  // ─── 그룹 — 그룹 목록은 관리자 그룹 API(전역 관리자만 읽힌다) ───
   const [groups, setGroups] = useState<GroupOption[] | null>(null)
   const [groupsLoading, setGroupsLoading] = useState(false)
   useEffect(() => {

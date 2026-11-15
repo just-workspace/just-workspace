@@ -1,12 +1,12 @@
-// 손으로 관리한다. 처음엔 옛 Vue pages/** 에서 1:1 로 생성했다(생성기·Vue 소스는 2026-11-14 삭제).
-// 화면을 이식할 때 이 표는 건드리지 않는다. src/pages/<file> 만 바꾼다.
-// layout: Vue definePageMeta 의 layout('default' 기본, false = 셸 없음) · ownMobileHeader · redirect(Vue redirect 메타).
+// 손으로 관리한다.
+// 화면을 바꿀 때 이 표는 건드리지 않는다. src/pages/<file> 만 바꾼다.
+// layout('default' 기본, false = 셸 없음) · ownMobileHeader · redirect.
 import type { RouteMeta } from '~/lib/router'
 
 export interface AppRouteDef {
-  /** React Router 경로(Vue pages 파일 경로에서 만든 것과 같은 URL) */
+  /** React Router 경로 */
   path: string
-  /** src/pages 아래 파일(= Vue frontend/pages 아래 같은 경로의 .vue) */
+  /** src/pages 아래 파일 */
   file: string
   layout: Exclude<RouteMeta['layout'], undefined>
   ownMobileHeader?: boolean
@@ -15,9 +15,9 @@ export interface AppRouteDef {
   /** 페이지 사이드바 하단에 내 계정 패널이 있다 — 레일 맨 아래 아바타를 뺀다 */
   sidebarAccount?: boolean
   redirect?: string
-  /** Vue [...slug] 의 파라미터 이름 — useRoute().params[slug] 가 string[] */
+  /** catch-all([...slug]) 파라미터 이름 — useRoute().params[slug] 가 string[] */
   catchAll?: string
-  /** 전환(2026-10-17) 뒤 React 에만 새로 생긴 화면 — Vue pages 와 1:1 대조에서 뺀다 */
+  /** 나중에 더한 화면 — 기존 주소 수 검사(tests/router)에서 따로 센다 */
   reactOnly?: boolean
 }
 

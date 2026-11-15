@@ -1,5 +1,5 @@
 /**
- * 배지(시안 I): 솔리드 = 알약 22 · 틴트 = 각진 칩(22 → 6px, 18 → 5px) × 중립·primary·success·warning·danger.
+ * 배지: 솔리드 = 알약 22 · 틴트 = 각진 칩(22 → 6px, 18 → 5px) × 중립·primary·success·warning·danger.
  * 숫자 배지(나를 부른 것)는 솔리드 primary 만. 상태는 항상 글자(또는 아이콘 children)와 함께.
  *
  * 기존 사용처 호환: variant(default/secondary/destructive/outline/success/warning) 는 tone 으로 매핑된다.

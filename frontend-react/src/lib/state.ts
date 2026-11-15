@@ -1,12 +1,11 @@
 /**
- * 키로 공유하는 전역 상태 — Vue 판 Nuxt `useState(key, init)` 대응.
+ * 키로 공유하는 전역 상태 — `useSharedState(key, init)`.
  *
- * Vue:   const open = useState<boolean>('mobile-detail-open', () => false);  open.value = true
- * React: const [open, setOpen] = useSharedState<boolean>('mobile-detail-open', () => false);  setOpen(true)
+ * 사용: const [open, setOpen] = useSharedState<boolean>('mobile-detail-open', () => false);  setOpen(true)
  * 밖에서: getSharedState('mobile-detail-open') / setSharedState('mobile-detail-open', true)
  *
  * 같은 키를 쓰는 모든 컴포넌트가 같은 값을 본다(모듈 싱글턴). 새 전역 상태는 되도록
- * 이름 있는 zustand store(`xxxStore`)로 만들고, 이건 Vue 쪽 useState 키를 그대로 옮길 때 쓴다.
+ * 이름 있는 zustand store(`xxxStore`)로 만들고, 이건 키 하나로 값만 나눠 쓸 때 쓴다.
  */
 import { useCallback } from 'react'
 import { create } from 'zustand'

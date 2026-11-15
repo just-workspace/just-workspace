@@ -1,12 +1,12 @@
 /**
- * "나를 부른 것"(개인 멘션 + 안 읽은 DM) 총수를 탭 제목·파비콘에 싣는다. Vue 판 composables/useAttention.ts 대응.
+ * "나를 부른 것"(개인 멘션 + 안 읽은 DM) 총수를 탭 제목·파비콘에 싣는다.
  * 레일·탭바 배지는 같은 숫자(useChat().totalMentions)를 각 컴포넌트가 직접 읽는다.
  * 굵게 표시만 되는 일반 미읽음은 세지 않는다 — 채팅 시안 결정(굵게 = 미읽음, 숫자 = 나를 부른 것).
  *
  * 셸(DefaultLayout)이 한 번 부른다: useAttention()
  *
- * 제목: Vue 는 useHead({ titleTemplate }) 로 숫자 접두를 붙였다. 토대 lib/head 에 titleTemplate 이 없어
- * 여기서 <title> 변화를 지켜보며(화면들이 useHead 로 정한 제목 = 바탕) 같은 접두를 붙인다. 결과 문자열은 Vue 와 같다.
+ * 제목: 토대 lib/head 에 titleTemplate 이 없어
+ * 여기서 <title> 변화를 지켜보며(화면들이 useHead 로 정한 제목 = 바탕) 숫자 접두를 붙인다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useChat } from '~/composables/useChat'
@@ -91,7 +91,7 @@ export function useAttention() {
         if (seq === drawSeq.current) setBadged(null)
       }
     })()
-    // Vue 는 totalMentions 만 지켜봤다(파비콘 설정이 바뀌어도 다음 숫자 변화 때 다시 그림)
+    // totalMentions 만 지켜본다(파비콘 설정이 바뀌어도 다음 숫자 변화 때 다시 그림)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalMentions])
 

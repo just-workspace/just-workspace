@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitRepoAbout.vue
 /**
  * 저장소 정보(모바일 "정보 더보기" 시트 안).
  * 정보(설명) → ★ 스타 · 용량 · 최근 푸시 → 언어 막대 → 클론 카드(HTTPS/SSH 세그먼트 + 점선 mono 주소 + 복사).

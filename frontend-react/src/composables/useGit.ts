@@ -1,10 +1,10 @@
 /**
- * Git 상태 — Vue 판 composables/useGit.ts 그대로(모듈 싱글턴).
+ * Git 상태(모듈 싱글턴).
  * 화면은 라우트(utils/gitRoute)가 정하고, 이 store 는 "라우트가 가리키는 데이터"만 불러 둔다(딥링크·뒤로 가기·새로고침이 같은 화면).
- * 각 목록은 loading·error 를 따로 가진다(실패를 빈 목록으로 보이지 않게 — 시안 H).
+ * 각 목록은 loading·error 를 따로 가진다(실패를 빈 목록으로 보이지 않게).
  *
- * React: const { repos, selectedRepo, fetchRepos, ... } = useGit()   (값은 .value 없이)
- *   Vue 에서 바깥이 대입하던 상태(searchQuery · issueState · labelFilter · pullState)는 setter 를 같이 쓴다:
+ * React: const { repos, selectedRepo, fetchRepos, ... } = useGit()
+ *   바깥에서 바꾸는 상태(searchQuery · issueState · labelFilter · pullState)는 setter 를 같이 쓴다:
  *   setSearchQuery · setIssueState · setLabelFilter · setPullState
  * 컴포넌트 밖: gitStore.getState() / fetchRepos() 등 모듈 함수 import
  */
@@ -250,7 +250,7 @@ export function _resetGitStore() {
   for (const k of Object.keys(seq)) delete seq[k]
 }
 
-// Vue 에서 바깥이 직접 대입하던 상태
+// 바깥에서 바꾸는 상태
 export function setSearchQuery(v: string) { set({ searchQuery: v }) }
 export function setIssueState(v: 'open' | 'closed') { set({ issueState: v }) }
 export function setLabelFilter(v: number[]) { set({ labelFilter: v }) }
@@ -659,7 +659,7 @@ const actions = {
 
 type GitHook = Readonly<GitState> & typeof actions & { readonly labelCounts: Map<number, number> }
 
-// labelCounts(Vue computed) — 같은 issues 배열이면 다시 세지 않는다
+// labelCounts — 같은 issues 배열이면 다시 세지 않는다
 const countsCache = new WeakMap<ReadonlyArray<Issue>, Map<number, number>>()
 function labelCountsOf(issues: ReadonlyArray<Issue>) {
   let m = countsCache.get(issues)
@@ -667,7 +667,7 @@ function labelCountsOf(issues: ReadonlyArray<Issue>) {
   return m
 }
 
-/** Vue useGit() 과 같은 멤버(값은 렌더 시점 값). 읽은 필드만 구독한다(useTrackedStore). */
+/** 상태 + 동작(값은 렌더 시점 값). 읽은 필드만 구독한다(useTrackedStore). */
 export function useGit(): GitHook {
   const { track } = useTrackedStore(gitStore)
   const out = { ...actions } as GitHook

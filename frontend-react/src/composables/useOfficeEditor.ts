@@ -1,5 +1,5 @@
 /**
- * 오피스 편집기(WOPI) 열기·잠금 상태 — Vue 판 composables/useOfficeEditor.ts 그대로. 상태 없음.
+ * 오피스 편집기(WOPI) 열기·잠금 상태. 상태 없음.
  * React: const { isOfficeFile, openEditor, getLockStatus, OFFICE_EXTENSIONS } = useOfficeEditor()
  * 컴포넌트 밖: 같은 이름 함수를 직접 import(isOfficeFile 은 useFiles 에도 같은 이름이 있어 여기서는 isOfficeFileName 도 낸다).
  */

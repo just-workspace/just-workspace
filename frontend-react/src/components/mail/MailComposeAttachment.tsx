@@ -1,8 +1,8 @@
 /**
- * 작성 창 첨부 칩 — Vue 판 components/mail/MailComposeAttachment.vue: 36 · rounded-md · 이름 + 크기 mono + ✕ 24(히트 40). 모바일은 40.
+ * 작성 창 첨부 칩: 36 · rounded-md · 이름 + 크기 mono + ✕ 24(히트 40). 모바일은 40.
  */
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import type { UploadedAttachment } from '~/composables/useMail'
 import { formatBytes } from '~/utils/mailQuery'

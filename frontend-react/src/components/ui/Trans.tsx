@@ -76,7 +76,7 @@ export function transNodes(translate: (named: Record<string, string>) => string,
  *
  * 번역 문자열의 두 형식을 받는다:
  *  - 감싸는 태그 `{open}미리보기로 열기{/open}` → slots.open(안쪽 글자) 를 그린다(함수 슬롯).
- *  - 자리 표시자 `{link}` · `{n}` (닫는 태그 없음, 기존 Vue `<i18n-t>` 형식) → slots.link 노드를 그 자리에 그린다.
+ *  - 자리 표시자 `{link}` · `{n}` (닫는 태그 없음) → slots.link 노드를 그 자리에 그린다.
  *    함수 슬롯이면 빈 문자열로 불린다.
  * 보간 `values`·복수 `count` 는 t(k, count, values) 그대로(vue-i18n 규칙). 슬롯 이름과 겹치는 values 는 슬롯이 이긴다.
  * 없는 키는 키 문자열이 그대로 나온다(t 와 같음).

@@ -1,7 +1,7 @@
 /**
- * UI 키트 내부 도우미 — Vue 기능을 React 로 옮길 때 키트 부품들이 같이 쓰는 것(앱 화면에서는 쓰지 않는다).
+ * UI 키트 내부 도우미 — 키트 부품들이 같이 쓰는 것(앱 화면에서는 쓰지 않는다).
  *
- * - useModel      ← defineModel: modelValue 를 주면 제어형, 안 주면(undefined) 부품이 값을 가진다(Vue 로컬 모드와 같음)
+ * - useModel      ← modelValue 를 주면 제어형, 안 주면(undefined) 부품이 값을 가진다
  * - useUid        ← `ui-xxx-${Math.random()…}` 한 번만 만드는 id
  * - useTransition ← <Transition> enter/leave 단계(같은 Tailwind 클래스를 단계별로 붙인다)
  * - mergeRefs     ← 안쪽 ref 와 바깥 ref 를 같이 쓸 때
@@ -26,7 +26,7 @@ export function useModel<T>(value: T | undefined, defaultValue: T, onUpdate?: (v
   return [controlled ? (value as T) : local, set]
 }
 
-/** 렌더 사이에 바뀌지 않는 무작위 id(Vue 판과 같은 모양: `${prefix}-xxxxxx`) */
+/** 렌더 사이에 바뀌지 않는 무작위 id(`${prefix}-xxxxxx`) */
 export function useUid(prefix: string): string {
   const [id] = useState(() => `${prefix}-${Math.random().toString(36).slice(2, 8)}`)
   return id
@@ -46,7 +46,7 @@ export function mergeRefs<T>(...refs: Array<Ref<T> | undefined | null>): RefCall
  * <Transition> 단계.
  *  enter-from → (두 프레임 뒤) enter-to → (enterMs 뒤) idle
  *  leave-from → (두 프레임 뒤) leave-to → (leaveMs 뒤) hidden(언마운트)
- * appear=false 면 처음부터 보이는 경우 애니메이션 없이 idle(Vue 기본과 같음).
+ * appear=false 면 처음부터 보이는 경우 애니메이션 없이 idle.
  */
 export type TransitionPhase = 'enter-from' | 'enter-to' | 'idle' | 'leave-from' | 'leave-to' | 'hidden'
 

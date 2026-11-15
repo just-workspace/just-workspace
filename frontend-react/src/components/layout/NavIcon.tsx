@@ -1,5 +1,5 @@
 /**
- * 사이드바 rail용 아이콘(Vue components/layout/NavIcon.vue). 모듈 registry의 icon 이름(lucide식) → SVG path.
+ * 사이드바 rail용 아이콘. 모듈 registry의 icon 이름(lucide식) → SVG path.
  * 아이콘 표는 공용 세트(utils/icons.ts)를 그대로 쓴다 — UiIcon 과 같은 그림.
  */
 import { iconPaths } from '~/utils/icons'

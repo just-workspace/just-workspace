@@ -4,10 +4,10 @@
  *
  * 구역 순서(위 → 아래):
  *   1. 분류 없음(제목 없는 구역) — category_id 가 없거나 지워진 카테고리의 채널
- *   2. 사용자 카테고리(position 순) — 음성 채널도 섞여 들어갈 수 있다(§2.1(1) b)
+ *   2. 사용자 카테고리(position 순) — 음성 채널도 섞여 들어갈 수 있다
  *   3. 시스템 "보관된 프로젝트"(layout/meta 의 archive_category_id) — 보관한 채널은 카테고리와 무관하게 여기. 이름만 바꿀 수 있다
- *   4. 다이렉트 메시지 — 고정 구역, 사용자 카테고리 대상 아님(§2.1(2) a)
- * 접힘은 사람마다(localStorage), 순서·이름은 공통이고 MANAGE_CHANNELS 가 있어야 바꾼다(§2.1(5)).
+ *   4. 다이렉트 메시지 — 고정 구역, 사용자 카테고리 대상 아님
+ * 접힘은 사람마다(localStorage), 순서·이름은 공통이고 MANAGE_CHANNELS 가 있어야 바꾼다.
  * 접힌 카테고리도 안 읽음·선택 채널은 계속 보인다.
  */
 import { createStore, useStore } from 'zustand'
@@ -134,7 +134,7 @@ export async function renameCategory(id: string, name: string) {
   set({ categories: S().categories.map(c => (c.id === id ? { ...c, name } : c)) })
   try { await $fetch(`${B}/categories/${id}`, { method: 'PATCH', body: { name } }) } finally { await loadCategories() }
 }
-/** 지운 카테고리 안의 채널은 "분류 없음"으로 간다(§2.1(4) a) — 채널 목록은 호출부가 다시 읽는다 */
+/** 지운 카테고리 안의 채널은 "분류 없음"으로 간다 — 채널 목록은 호출부가 다시 읽는다 */
 export async function deleteCategory(id: string) {
   await $fetch(`${B}/categories/${id}`, { method: 'DELETE' })
   await loadCategories()

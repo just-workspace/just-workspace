@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitCommitList.vue
 /**
  * 커밋: 날짜 머리 32(sticky · 12/600 muted) + 카드(rounded-12) 안 행 56.
  *  행: 아바타 28(이니셜) · 메시지 13.5/600 · "작성자 · 시각(mono)" · SHA 칩 + 복사 상시 · ↗ Gitea 커밋(32, 히트 40)

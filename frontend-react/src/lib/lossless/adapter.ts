@@ -1,8 +1,8 @@
 /**
  * LosslessVoiceTransport — lib/voice/transport.ts 의 `VoiceTransport` 구현(단계 'lossless').
  *
- * 구성(합성): LiveKit 전송(Phase 1) 위에 자체 릴레이 세션을 얹는다.
- *  · LiveKit 방에는 그대로 들어간다 → presence(사이드바·/voice/state 흐름)가 Phase 1 과 같고, 음성·음악 단계
+ * 구성(합성): LiveKit 전송 위에 자체 릴레이 세션을 얹는다.
+ *  · LiveKit 방에는 그대로 들어간다 → presence(사이드바·/voice/state 흐름)가 그대로이고, 음성·음악 단계
  *    참가자도 나를 듣는다(Opus 호환 스트림 = 음악 레시피 publish). 그들의 Opus 도 그대로 들린다.
  *  · 릴레이 세션(WebTransport 기본 · WebSocket 폴백)으로 PCM 24/48 을 보내고 받는다. 릴레이 피어로 들어온 사람의
  *    LiveKit 트랙은 꺼서(setParticipantAudioMuted) 같은 소리가 두 번 나지 않게 한다 — 짝은 토큰의 LiveKit identity.

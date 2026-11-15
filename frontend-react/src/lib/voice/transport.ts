@@ -3,7 +3,7 @@
  *
  * 음질 단계(VoiceTier)마다 "소리를 어떻게 보내고 받나"가 다르다.
  *  - voice · music  → LiveKit(WebRTC Opus)  — lib/voice/transports/livekit.ts (이번 단계)
- *  - lossless       → 자체 중계(PCM/FLAC, WebTransport·WebSocket) — lib/lossless/* 와 audiorelay/ (다른 에이전트, 준비 중)
+ *  - lossless       → 자체 중계(PCM/FLAC, WebTransport·WebSocket) — lib/lossless/* 와 audiorelay/
  *  - hires          → 데스크톱 앱 네이티브(WASAPI exclusive) — 준비 중
  *
  * 세션(useVoice)은 이 인터페이스만 본다. 새 단계는 registerVoiceTransport(tier, factory) 로 붙인다 —

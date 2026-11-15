@@ -1,4 +1,4 @@
-// 연락처 화면 렌더 — 목록 초성 묶음·즐겨찾기 묶음, 상세 행동 줄 활성 조건, 편집 모달 저장 본문(Vue 와 같은 요청)
+// 연락처 화면 렌더 — 목록 초성 묶음·즐겨찾기 묶음, 상세 행동 줄 활성 조건, 편집 모달 저장 본문
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'
@@ -41,7 +41,7 @@ describe('연락처 화면', () => {
   it('페이지 마운트: 주소록 → 목록 → 그룹·개수 순으로 받는다', async () => {
     renderInRouter(<ContactsPage />)
     await waitFor(() => expect(api.calls.some(c => c.url === '/api/contacts/groups')).toBe(true))
-    // Vue 와 같이 사이드바(자식)도 주소록이 비어 있으면 한 번 더 받는다 — 자식 마운트가 먼저
+    // 사이드바(자식)도 주소록이 비어 있으면 한 번 더 받는다 — 자식 마운트가 먼저
     const urls = api.calls.map(c => c.url)
     expect(urls.indexOf('/api/contacts/address-books')).toBe(0)
     const list = api.calls.find(c => c.url === '/api/contacts/' && c.opts.params?.page === 0)!

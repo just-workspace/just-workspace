@@ -1,6 +1,6 @@
 /**
- * 사용자 삭제 모달(관리 › 사용자 ⋮ › 삭제) — Vue components/admin/AdminUserDeleteModal.vue.
- * 시안에 화면이 없어 파괴적 확인 + 기존 폼 규격으로 구성(디자이너 확인 필요).
+ * 사용자 삭제 모달(관리 › 사용자 ⋮ › 삭제).
+ * 시안에 화면이 없어 파괴적 확인 + 기존 폼 규격으로 구성.
  * 1) GET /api/admin/users/{id}/delete-impact — 막힘(자기 자신·마지막 관리자) · 넘겨야 할 공동 콘텐츠 · 지워질 개인 데이터 · 남는 파일
  * 2) 공동 콘텐츠가 있으면 넘겨받을 사람(transfer_to, 활성 사용자) 선택 필수
  * 3) 사용자명을 그대로 입력해야 [삭제] 가 켜진다 → DELETE /api/admin/users/{id}?confirm=&transfer_to=

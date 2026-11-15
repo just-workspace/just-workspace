@@ -1,4 +1,4 @@
-// 전역 가드 — Vue middleware(auth.global · module-guard.global · setup.global) 와 같은 판정인지.
+// 전역 가드 — 인증(auth) · 모듈 켜짐(module-guard) · 초기 설정(setup) 판정.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const api = vi.hoisted(() => ({

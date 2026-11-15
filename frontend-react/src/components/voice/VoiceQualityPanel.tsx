@@ -4,7 +4,7 @@
  * 고급(늘 펼침): 비트레이트 슬라이더(음악 256–510, 무손실은 흐림 + "2.3 Mbps (고정)") · 샘플레이트 44.1/48/96(96 은 웹에서 흐림) ·
  * 비트심도 16/24(무손실부터) · 버퍼 목표 [자동 · 60 · 120 · 250 ms]. 모바일 시트: 단계 3개(하이레조 없음) + 버퍼 목표 + 한 줄 안내.
  * 웹에서 하이레조는 disabled + 이유. 무손실은 전송이 등록돼 있을 때만(tierAvailable) 고를 수 있다("준비 중").
- * 장치(마이크·스피커) 고르기는 Phase 1 기능 유지 — 고급 맨 아래(참고).
+ * 장치(마이크·스피커) 고르기는 고급 맨 아래(참고).
  */
 import { useEffect, useState } from 'react'
 import { clsx as cn } from 'clsx'
@@ -201,7 +201,7 @@ export function VoiceQualityContent({ mobile }: { mobile: boolean }) {
           <p className="text-[12px] text-muted-foreground">{t('chat.voice.quality.bufferNote')}</p>
         </div>
 
-        {/* 장치(Phase 1 유지) */}
+        {/* 장치 */}
         <div className="grid grid-cols-2 gap-3">
           <UiSelect
             label={t('chat.voice.quality.mic')}

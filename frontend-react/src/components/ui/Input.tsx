@@ -1,5 +1,5 @@
 /**
- * 입력(시안 F): 라벨 위 12/600 muted, 높이 40(h-10) · 인증/모바일 44(h-11), border-input rounded-md bg-background,
+ * 입력: 라벨 위 12/600 muted, 높이 40(h-10) · 인증/모바일 44(h-11), border-input rounded-md bg-background,
  * 포커스 border-ring + ring-2 ring-ring/35, 오류 border-danger + 아이콘 문구, 비활성 bg-muted/50 opacity-70,
  * 읽기 전용 점선 + 복사 버튼. 도움말과 오류는 입력 아래 같은 자리.
  * variant="bare"(검색 줄 등): 테두리·배경 없음, 높이 44, 포커스 때 링·밑줄 없이 이 부품 바깥 묶음(=줄)의 배경만 bg-accent
@@ -17,7 +17,7 @@ import { useModel, useUid } from './internal'
 import { writeClipboard } from '~/lib/clipboard'
 
 export interface UiInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'value' | 'defaultValue' | 'type' | 'placeholder' | 'disabled' | 'readOnly' | 'required' | 'autoComplete'> {
-  /** 값(Vue v-model). 안 주면 입력이 스스로 값을 가진다 */
+  /** 값. 안 주면 입력이 스스로 값을 가진다 */
   modelValue?: string | number | null
   /** 값 바뀜(입력할 때마다, 문자열) */
   onUpdateModelValue?: (v: string) => void
@@ -53,7 +53,7 @@ export interface UiInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>
   inputClass?: string
   /** 복사 버튼으로 복사했을 때 */
   onCopied?: () => void
-  /** 입력 칸 오른쪽 안에 겹쳐 둘 내용(Vue #trailing 슬롯) */
+  /** 입력 칸 오른쪽 안에 겹쳐 둘 내용 */
   trailing?: ReactNode
   /** 안쪽 <input> */
   ref?: Ref<HTMLInputElement>
@@ -120,7 +120,7 @@ export function UiInput({
             inputClass,
           )}
         />
-        {/* 읽기 전용 = 점선 + 복사 버튼(시안 F). 좁은 폭(260~480)에서 "복사"가 두 줄로 꺾이지 않게 nowrap + 최소 56 */}
+        {/* 읽기 전용 = 점선 + 복사 버튼. 좁은 폭(260~480)에서 "복사"가 두 줄로 꺾이지 않게 nowrap + 최소 56 */}
         {readonly && copyable && (
           <button
             type="button"

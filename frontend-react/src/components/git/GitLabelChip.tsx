@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitLabelChip.vue
 // 라벨 칩: 색 점 7 + 중립 테두리, 20 · rounded-5 · 11/500. 사용자 색은 점에만(대비 문제 없음).
 import type { Label } from '~/composables/useGit'
 import { labelDot } from '~/utils/labelColor'

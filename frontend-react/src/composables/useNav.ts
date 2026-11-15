@@ -1,9 +1,9 @@
 /**
- * 사이드바(데스크탑)·하단 탭바(모바일)가 공유하는 그룹 네비 모델 — Vue 판 composables/useNav.ts 그대로.
+ * 사이드바(데스크탑)·하단 탭바(모바일)가 공유하는 그룹 네비 모델.
  * 레일 묶음 순서는 아래 GROUPS. 모바일 "전체" 시트는 별도 묶음을 쓴다(MobileTabBar).
  * 그룹/순서는 여기서 결정하고, 표시(활성 표시·카운트 등)는 각 컴포넌트가 담당.
  *
- * React: const { home, groups, railGroups, flat } = useNav()   — groups·railGroups·flat 은 배열 값(Vue 의 .value)
+ * React: const { home, groups, railGroups, flat } = useNav()   — groups·railGroups·flat 은 배열 값
  * 활성 판정: isNavActive(item, path, withAliases?) — 컴포넌트 밖에서도 쓴다.
  */
 import { useMemo } from 'react'
@@ -91,14 +91,14 @@ export function compareNavItems(a: { id: string; order?: number | null }, b: { i
 
 /**
  * 최상단 단독 항목: 대시보드 — name 은 getter(읽을 때마다 현재 로캘). 시안 표기 "홈"(레일·상단바 "워크스페이스 / 홈"·모바일 제목).
- * Vue 판과 같이 한 객체를 계속 쓴다(useNav().home 과 같은 객체).
+ * 한 객체를 계속 쓴다(useNav().home 과 같은 객체).
  */
 export const navHome: NavItem = { id: 'dashboard', get name() { return i18n.t('shell.tab.home') }, route: '/', icon: 'home', matchExact: true }
 
 export function useNav() {
   const { enabledModules } = usePlatform()
   const { user } = useAuth()
-  // 로캘이 바뀌면 다시 계산되도록 컴포넌트용 t 를 쓴다(Vue 는 useNuxtApp().$i18n)
+  // 로캘이 바뀌면 다시 계산되도록 컴포넌트용 t 를 쓴다
   const { t, te } = useI18n()
   const isAdmin = !!user?.is_admin
 

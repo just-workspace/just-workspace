@@ -36,13 +36,13 @@ export const PRIMARY: readonly CardKey[] = ['inbox', 'today', 'ai', 'cont']
 export const PRIMARY_NEW: readonly CardKey[] = ['today', 'ai', 'inbox']
 /** 판 밖(주 줄 위) 전폭 카드 — 그리드에 넣지 않는다. 편집 패널 목록에는 있다(숨기기·다시 보기) */
 export const FULL_WIDTH: readonly CardKey[] = ['start']
-/** 보조 영역 기본 순서(답 1 "보조 영역 기본 순서" + 진행 중 회의 + 네트워크 랩) */
+/** 보조 영역 기본 순서(+ 진행 중 회의 + 네트워크 랩) */
 export const REST: readonly CardKey[] = ['tasks', 'mail', 'later', 'team', 'git', 'board', 'notice', 'chans', 'store', 'meet', 'lab']
 /** 신규 사용자 보조 영역(시안 #new: 둘러볼 채널 · 공지 먼저) */
 export const REST_NEW: readonly CardKey[] = ['discover', 'notice', 'cont', 'tasks', 'mail', 'later', 'team', 'git', 'board', 'chans', 'store', 'meet', 'lab']
 /** 기본 2칸 */
 export const DEFAULT_SPAN: Partial<Record<CardKey, CardSpan>> = { inbox: 2, cont: 2 }
-/** 주 줄 카드 중 비어도 제자리 빈 상태를 보이는 것(나머지는 "비어 있는 카드" 묶음으로) — 답 1 "빈 카드" */
+/** 주 줄 카드 중 비어도 제자리 빈 상태를 보이는 것(나머지는 "비어 있는 카드" 묶음으로) */
 export const INLINE_EMPTY: readonly CardKey[] = ['inbox', 'today', 'ai']
 
 /** 카드 행 수 상한(실효 높이) */

@@ -1,5 +1,5 @@
 /**
- * 회의 중 장치 전환 팝오버. 컨트롤 바의 "장치" 버튼이 연다. Vue 판 components/meetings/MeetingsDeviceMenu.vue 그대로.
+ * 회의 중 장치 전환 팝오버. 컨트롤 바의 "장치" 버튼이 연다.
  * 기존 폼 토큰(label + select)만 쓴다 — 시안이 오면 이 자리를 갈아끼운다.
  */
 import { useEffect, useRef, useState } from 'react'
@@ -34,7 +34,7 @@ export function MeetingsDeviceMenu({ onClose }: MeetingsDeviceMenuProps) {
   const speakerTouched = useRef(false)
   const [pairedNotice, setPairedNotice] = useState('')
 
-  // onMounted: 감시 시작 → 목록 갱신 → 지금 쓰는 장치(없으면 첫 장치)로 채운다. 채우는 것도 아래 "바뀌면 적용"을 탄다(Vue watch 와 같음).
+  // 마운트 때: 감시 시작 → 목록 갱신 → 지금 쓰는 장치(없으면 첫 장치)로 채운다. 채우는 것도 아래 "바뀌면 적용"을 탄다.
   useEffect(() => {
     startListening()
     void (async () => {
@@ -70,7 +70,7 @@ export function MeetingsDeviceMenu({ onClose }: MeetingsDeviceMenuProps) {
     }
   }
 
-  // Vue: watch(camId) / watch(spkId) / watch(micId) — 값이 바뀔 때마다 적용
+  // camId / spkId / micId — 값이 바뀔 때마다 적용
   const spkRef = useRef(spkId)
   spkRef.current = spkId
   const outSupportedRef = useRef(audioOutputSupported)

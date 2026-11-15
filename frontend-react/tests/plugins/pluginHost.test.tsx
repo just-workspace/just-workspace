@@ -26,7 +26,7 @@ vi.mock('~/lib/api', async (orig) => {
   return { ...real, $fetch }
 })
 
-// UI 키트의 EmptyState 는 다른 에이전트가 동시에 만든다 — 여기선 모양만 흉내(이 테스트는 플러그인 경로만 본다)
+// UI 키트의 EmptyState 는 여기선 모양만 흉내(이 테스트는 플러그인 경로만 본다)
 vi.mock('~/components/ui/EmptyState', () => ({
   UiEmptyState: (p: { title?: string }) => <div data-testid="empty-state">{p.title}</div>,
 }))
@@ -154,7 +154,7 @@ describe('v1(Vue) 어댑터 — 공개 sample-notes 실제 번들', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('pluginApi 모양이 Vue 판과 같다(user·appName = ref, $fetch, 상단바 함수)', async () => {
+  it('pluginApi 모양(user·appName = ref, $fetch, 상단바 함수)', async () => {
     restore = host.configurePluginLoader({
       apiHint: () => 1,
       importModule: async () => {

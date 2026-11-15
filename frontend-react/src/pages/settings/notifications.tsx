@@ -1,10 +1,9 @@
-// Vue 원본: frontend/pages/settings/notifications.vue
 // 설정 › 알림: 브라우저 알림 권한 행(상태 점 + 시험 알림) + 종류 × 데스크톱·모바일·이메일 체크 표.
 // 백엔드 /api/notifications/prefs (type 별 in_app·push·email) 그대로 연결 — 서버 9종(시안 7종 + 일정 초대·시스템).
 // 방해 금지 일정: GET/PUT /api/notifications/dnd-schedule. 스위치 = 즉시 저장 + "저장됨 ✓", 요일·시간은 [바꾸기] 모달(시안에 편집 화면이 없어
-//   기존 폼 규격으로 구성 — 디자이너 확인 필요). 서버는 일정 하나(요일 묶음 + 시작·끝)만 저장한다.
+//   기존 폼 규격으로 구성). 서버는 일정 하나(요일 묶음 + 시작·끝)만 저장한다.
 // 시험 알림: POST /api/notifications/test(내 푸시 구독 기기 전부). 구독이 없으면 이 브라우저 로컬 알림으로 대신 보여 준다.
-// ★ 채널 모델 차이: 시안 열은 데스크톱·모바일·이메일, 서버는 앱 안(in_app)·푸시(push)·이메일 → 서버 의미대로 표기(디자이너 확인 필요).
+// ★ 채널 모델 차이: 시안 열은 데스크톱·모바일·이메일, 서버는 앱 안(in_app)·푸시(push)·이메일 → 서버 의미대로 표기.
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
 import { useHead } from '~/lib/head'

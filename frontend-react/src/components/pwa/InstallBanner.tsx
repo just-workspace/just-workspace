@@ -1,5 +1,5 @@
 /**
- * PWA 설치 안내(Vue components/pwa/InstallBanner.vue) — 설치 가능하고 아직 설치 전이면 오른쪽 아래 카드.
+ * PWA 설치 안내 — 설치 가능하고 아직 설치 전이면 오른쪽 아래 카드.
  */
 import { useState } from 'react'
 import { useI18n } from '~/i18n'

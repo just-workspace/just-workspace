@@ -1,5 +1,5 @@
 /**
- * 메일 서명 — Vue 판 composables/useMailSignature.ts 그대로(모듈 싱글턴).
+ * 메일 서명(모듈 싱글턴).
  *
  * React: const { signatures, loading, fetchSignatures, getDefaultSignature, createSignature, updateSignature, deleteSignature } = useMailSignature()
  * 컴포넌트 밖: mailSignatureStore.getState() 또는 동작 함수 직접 import.

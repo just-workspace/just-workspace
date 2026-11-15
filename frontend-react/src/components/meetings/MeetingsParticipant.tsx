@@ -1,6 +1,5 @@
 /**
  * 참가자 타일 하나(영상·아바타·이름·마이크 점·연결 품질·화면 공유 오버레이·원격 오디오).
- * Vue 판 components/meetings/MeetingsParticipant.vue 그대로.
  */
 import { useEffect, useRef } from 'react'
 import { cn } from '~/lib/utils'
@@ -44,7 +43,7 @@ export function MeetingsParticipant({
   const screenEl = useRef<HTMLVideoElement | null>(null)
   const audioEl = useRef<HTMLAudioElement | null>(null)
 
-  // Vue: watch(videoTrack, (n, o) => { detach(o); attach(n) }, { immediate }) + onBeforeUnmount(detach)
+  // videoTrack 이 바뀌면 옛 트랙을 떼고 새 트랙을 붙인다(처음에도). 언마운트 때 뗀다.
   useEffect(() => {
     const el = videoEl.current
     attachTrack(videoTrack, el)
@@ -57,7 +56,7 @@ export function MeetingsParticipant({
     return () => detachTrack(screenTrack, el)
   }, [screenTrack])
 
-  // 원격만 붙인다. Vue 판은 해제 때(언마운트) 내 트랙도 detach 를 불렀다 — 붙인 적이 없으니 결과는 같다.
+  // 원격만 붙인다.
   useEffect(() => {
     const el = audioEl.current
     if (!isLocal) attachTrack(audioTrack, el)

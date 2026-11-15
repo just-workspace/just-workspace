@@ -1,7 +1,7 @@
 /**
- * 서비스 상태 — Vue 판 composables/useServices.ts 그대로.
+ * 서비스 상태.
  * GET /api/services/status 로 각 서비스의 상태(ok/down/checking)·응답 ms 를 받는다. 실패하면 이전 값을 유지.
- * Vue 에서 useState('services')·useState('services-loading') 로 전역 공유하던 것을 store 하나로.
+ * 앱 전역에서 함께 쓰는 값이라 store 하나에 둔다.
  *
  * React: const { services, loading, fetchServices } = useServices()
  * 컴포넌트 밖: servicesStore.getState().services · fetchServices()

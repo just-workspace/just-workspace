@@ -1,7 +1,7 @@
 /**
- * 일정 칩(Vue components/calendar/CalendarEventChip.vue · 월 보기·종일 줄):
+ * 일정 칩(월 보기·종일 줄):
  * 배경 범주 색/0.2 + 왼쪽 3px 색 바(빗금 대상이면 bg-cat-hatch) + rounded 6, 제목 12/600, 시각 mono 10.5.
- * 클릭 = 읽기 팝오버(앵커 요소를 함께 올림), 더블클릭 = 편집(시안 캘1).
+ * 클릭 = 읽기 팝오버(앵커 요소를 함께 올림), 더블클릭 = 편집.
  */
 import { cn } from '~/lib/utils'
 import { useI18n } from '~/i18n'

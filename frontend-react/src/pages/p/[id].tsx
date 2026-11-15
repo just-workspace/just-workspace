@@ -1,4 +1,4 @@
-// Vue 원본: frontend/pages/p/[id].vue — 플러그인 페이지(/p/:id). 번들 로딩은 ~/plugins/pluginHost.
+// 플러그인 페이지(/p/:id). 번들 로딩은 ~/plugins/pluginHost.
 import { useEffect, useMemo } from 'react'
 import { useRoute, navigateTo } from '~/lib/router'
 import { useHead } from '~/lib/head'
@@ -20,7 +20,7 @@ export default function PluginPage() {
 
   const pluginId = route.params.id as string
 
-  // 모듈이 꺼져 있으면 / 로 — Vue 판 watch([pluginId, loaded], …, { immediate: true }) 와 같이 이 둘이 바뀔 때만 본다
+  // 모듈이 꺼져 있으면 / 로 — pluginId·loaded 가 바뀔 때만 본다(처음에도)
   useEffect(() => {
     if (loaded && !isModuleEnabled(pluginId)) {
       void navigateTo('/')
@@ -29,7 +29,7 @@ export default function PluginPage() {
 
   useHead({ title: `${pluginId} | ${appName}` })
 
-  // v2(React) 플러그인에 넘길 API — v1(Vue) 은 PluginHost 가 Vue 판과 같은 provide('pluginApi') 를 만든다
+  // v2(React) 플러그인에 넘길 API — v1(Vue) 은 PluginHost 가 provide('pluginApi') 로 만든다
   const pluginApi = useMemo<PluginApiV2>(() => ({
     version: 2,
     pluginId,
@@ -46,11 +46,11 @@ export default function PluginPage() {
 
   return (
     <div className="h-full overflow-auto">
-      {/* Dynamic plugin UI — Vue 판 usePluginPage 는 id 가 있으면 항상 컴포넌트를 돌려준다(아래 빈 상태는 id 가 없을 때뿐) */}
+      {/* Dynamic plugin UI — id 가 있으면 항상 컴포넌트를 그린다(아래 빈 상태는 id 가 없을 때뿐) */}
       {pluginId ? (
         <PluginHost key={pluginId} pluginId={pluginId} pluginApi={pluginApi} />
       ) : (
-        // Fallback: plugin has no frontend — 공용 EmptyState(full, 시안 H · 8-5)
+        // Fallback: plugin has no frontend — 공용 EmptyState(full)
         <div className="px-4 py-10 sm:px-6 lg:px-8">
           <UiEmptyState
             variant="full"

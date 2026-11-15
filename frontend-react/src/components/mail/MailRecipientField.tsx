@@ -1,12 +1,12 @@
 /**
- * 받는 사람 칩 + 자동완성 — Vue 판 components/mail/MailRecipientField.vue.
+ * 받는 사람 칩 + 자동완성.
  * Outlook식 수신자 칩 + 자동완성. modelValue 는 콤마 구분 문자열(기존 compose 로직 무수정 호환).
  * 데스크톱(받는이 칩 26 · 아바타 18 · ✕ 18) / 모바일(칩 32 · ✕ 28). ✕ 는 시각 크기 유지, 히트 영역만 40.
  * 워크스페이스 사람(내 도메인 주소·자동완성 출처 user)은 primary/13 채움 + 이니셜, 바깥 주소는 테두리.
  */
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { $fetch } from '~/lib/api'
 import { UiIcon } from '~/components/ui/Icon'
@@ -41,7 +41,7 @@ function pushRecent(e: Recent) {
 }
 
 export interface MailRecipientFieldProps {
-  /** 콤마 구분 주소 문자열(Vue v-model) */
+  /** 콤마 구분 주소 문자열 */
   modelValue: string
   /** 주소 바뀜 */
   onUpdateModelValue?: (v: string) => void
@@ -54,7 +54,7 @@ export interface MailRecipientFieldProps {
   size?: 'md' | 'lg'
   /** 내 메일 도메인 — 같으면 워크스페이스 사람으로 본다 */
   ownDomain?: string
-  /** 받는 사람 줄 오른쪽(참조·숨은참조 링크 등, Vue #actions 슬롯) */
+  /** 받는 사람 줄 오른쪽(참조·숨은참조 링크 등) */
   actions?: ReactNode
 }
 

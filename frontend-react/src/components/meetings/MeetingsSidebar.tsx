@@ -1,6 +1,5 @@
 /**
  * 회의 사이드바 — 참가자 · 대기실(호스트 승인/거절) · 채팅(DataChannel) 탭. 모바일은 영상 위를 덮고, md↑ 는 오른쪽 288.
- * Vue 판 components/meetings/MeetingsSidebar.vue 그대로.
  */
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -50,7 +49,7 @@ export function MeetingsSidebar({ activeTab, onUpdateActiveTab, onClose }: Meeti
     if (activeTab === 'chat' && unreadChat > 0) clearUnreadChat()
   }, [activeTab, unreadChat, clearUnreadChat])
 
-  // 채팅 자동 스크롤(Vue watch(chatMessages, { deep }) — 처음에는 돌지 않는다)
+  // 채팅 자동 스크롤(처음에는 돌지 않는다)
   const firstMsgs = useRef(true)
   useEffect(() => {
     if (firstMsgs.current) { firstMsgs.current = false; return }

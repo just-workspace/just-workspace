@@ -1,4 +1,4 @@
-// R7 — 공유 링크를 이메일로 보내기: 주소 규칙(lib/files) · 칩 입력 · 공유 모달(새 링크 + 보내기, 기존 링크 ⋮ 보내기·보낸 기록). $fetch 는 가짜.
+// 공유 링크를 이메일로 보내기: 주소 규칙(lib/files) · 칩 입력 · 공유 모달(새 링크 + 보내기, 기존 링크 ⋮ 보내기·보낸 기록). $fetch 는 가짜.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'

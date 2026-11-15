@@ -1,5 +1,5 @@
 /**
- * 회의 화면(로그인 사용자·호스트) — 장치 확인 → 회의 → 종료. Vue 판 pages/meetings/room/[name].vue 그대로.
+ * 회의 화면(로그인 사용자·호스트) — 장치 확인 → 회의 → 종료.
  * 미니 통화 창: 접속은 앱 수준 세션(useMeetings)이 쥐고, 이 화면은 "전체 회의 화면"일 뿐이다.
  * 회의 머리 왼쪽 끝 "작게 보기"(minimize-2 · Alt+M), 제목 아래 "경과 · n명".
  * 끝난 뒤 데스크톱 오른쪽 stage 에 "이번 회의" 요약 카드(MeetingsEndSummary).
@@ -33,7 +33,7 @@ import { MeetingAiTodos } from '~/components/meetings/MeetingAiTodos'
 import { MeetingsRecordingsModal } from '~/components/meetings/MeetingsRecordingsModal'
 import { writeClipboard } from '~/lib/clipboard'
 
-/** 회의 화면. Nuxt 는 매개변수가 바뀌면 페이지를 새로 만든다(라우트 키) — 같게 방 이름으로 key. */
+/** 회의 화면. 매개변수가 바뀌면 화면을 새로 만든다 — 방 이름으로 key. */
 export default function MeetingRoomPage() {
   const route = useRoute()
   // 회의 화면 진입 때 livekit-client 청크를 미리 받아 둔다(메인 번들에서 뺀 것 — 입장 버튼 대기 줄이기)
@@ -43,7 +43,7 @@ export default function MeetingRoomPage() {
 
 function MeetingRoom() {
   const route = useRoute()
-  // 라우트 매개변수는 마운트 때 한 번(Vue setup 과 같음). 라우터가 이미 디코드해서 준다 —
+  // 라우트 매개변수는 마운트 때 한 번. 라우터가 이미 디코드해서 준다 —
   // 여기서 한 번 더 디코드하면 이름에 % 가 든 회의("매출 50% 회의")에서 URIError 로 화면이 죽는다.
   const [roomName] = useState(() => String(route.params.name ?? ''))
   // 주소의 ?t=·?ws=(토큰·접속 서버)와 ?host=1 은 받지 않는다. 접속 서버를 주소에서 받으면 꾸민 링크 하나로

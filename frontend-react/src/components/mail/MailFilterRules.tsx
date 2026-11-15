@@ -1,5 +1,5 @@
 /**
- * 메일 필터 규칙 — Vue 판 components/mail/MailFilterRules.vue (설정 › 메일 › 필터 탭).
+ * 메일 필터 규칙 (설정 › 메일 › 필터 탭).
  * 예전 사이드바 모달(MailFilters)을 설정 화면 안 카드로 옮겼다.
  * 시안엔 필터 탭 내용 그림이 없어 목록 행(행 48·제목 13/600·보조 12) + 모달 폼 공통 규격으로 구성.
  * API: GET/POST/PATCH/DELETE /api/mail/filters, POST /api/mail/filters/apply — 그대로.
@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { $fetch } from '~/lib/api'
 import { useMail, mailStore, fetchAccounts, fetchMailboxes } from '~/composables/useMail'
@@ -40,7 +40,7 @@ interface RuleForm { name: string; field: string; match_type: string; value: str
 const emptyForm = (): RuleForm => ({ name: '', field: 'from', match_type: 'contains', value: '', target_folder: '' })
 
 export interface MailFilterRulesProps {
-  /** 규칙 수(탭 배지 등) — Vue emit('count') */
+  /** 규칙 수(탭 배지 등) */
   onCount?: (n: number) => void
 }
 

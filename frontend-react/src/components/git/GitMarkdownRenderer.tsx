@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitMarkdownRenderer.vue
 // README·이슈 본문·댓글 마크다운(markdown-it, html 끔 + DOMPurify). 빈 결과면 아무것도 그리지 않는다.
 import { useEffect, useState } from 'react'
 import DOMPurify from 'dompurify'

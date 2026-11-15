@@ -1,8 +1,8 @@
 /**
- * 앱 루트 — Vue 판 app.vue 대응. 라우터 루트 라우트의 element 로 쓰인다.
+ * 앱 루트. 라우터 루트 라우트의 element 로 쓰인다.
  * - 런타임 브랜딩: /api/health 를 읽고 브랜드 색을 accent(primary/ring)에만 입힌다 · 기본 테마 · 동적 파비콘
  * - 제목 기본값 = 런타임 브랜딩 이름(화면이 useHead 로 정하면 그쪽이 이긴다)
- * - 전역 오류 경계: 렌더 오류를 토스트로 알리고 콘솔에 남긴다(Vue onErrorCaptured)
+ * - 전역 오류 경계: 렌더 오류를 토스트로 알리고 콘솔에 남긴다
  * - 루트에 늘 떠 있는 것: 토스트 · 다이얼로그 · (로그인 중) 떠 있는 메일 작성 창 호스트
  */
 import { useEffect } from 'react'
@@ -17,7 +17,7 @@ import { UiToast } from '~/components/ui/Toast'
 import { UiDialogHost } from '~/components/ui/DialogHost'
 import { MailComposeHost } from '~/components/mail/MailComposeHost'
 import { UpdateNoticeHost } from '~/components/layout/MaintenanceScreen'
-// 로그아웃(user → null) 때 떠 있는 메일 작성 창 목록을 비우는 구독을 앱 시작 때 건다(Vue app.vue 의 watch(user) → useMailCompose().reset())
+// 로그아웃(user → null) 때 떠 있는 메일 작성 창 목록을 비우는 구독을 앱 시작 때 건다
 import '~/composables/useMailCompose'
 
 export { hexToHsl } from '~/lib/brandColor'
@@ -53,7 +53,7 @@ export default function App() {
 
   useEffect(() => { applyBrandTheme(brandColor) }, [brandColor])
 
-  // 첫 로드 기본 테마(사용자가 color-theme 를 직접 정한 적 없으면) — app.vue 와 같은 동작
+  // 첫 로드 기본 테마(사용자가 color-theme 를 직접 정한 적 없으면)
   useEffect(() => {
     let userPref: string | null = null
     try { userPref = localStorage.getItem('color-theme') } catch { /* ignore */ }

@@ -1,5 +1,5 @@
 /**
- * 모듈·플러그인 목록(켜짐/꺼짐) — Vue 판 composables/usePlatform.ts 그대로.
+ * 모듈·플러그인 목록(켜짐/꺼짐).
  *
  * React: const { modules, loaded, enabledModules, fetchModules, isModuleEnabled, toggleModule } = usePlatform()
  * 컴포넌트 밖: platformStore.getState(), isModuleEnabled(id)

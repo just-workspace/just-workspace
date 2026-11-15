@@ -5,7 +5,6 @@
  *  · 시작 중: 안내 글
  * focus() 로 키보드 포커스를 격리 화면에 준다(앱이 세션이 열리면 기본으로 부른다).
  * onFrameWindow: 픽셀 iframe 의 창(같은 출처) — 앱이 단축키(상단 줄로 가기)를 그 창에도 건다(키가 iframe 안에서 먼저 소비되므로).
- * TODO: 시작 중·오류 화면의 시각은 시안에서.
  */
 import { useImperativeHandle, useRef, type Ref } from 'react'
 import { useI18n } from '~/i18n'

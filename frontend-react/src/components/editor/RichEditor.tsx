@@ -1,5 +1,5 @@
 /**
- * 단독 편집기(게시판 쓰기). TipTap StarterKit + 이미지·표. Vue 판 components/editor/RichEditor.vue 이식.
+ * 단독 편집기(게시판 쓰기). TipTap StarterKit + 이미지·표.
  * 데스크톱: 카드(border-input, 포커스 시 ring) 안에 공용 툴바(40) + 본문(min 260).
  * 모바일: 카드 없이 본문만 — 툴바는 호스트 페이지가 키보드 위에 <UiEditorToolbar variant="mobile"> 로 그린다(editor 노출).
  * 이미지·파일 버튼은 호스트가 받는다(onImage) — 게시판은 첨부 업로드 흐름과 같이 간다.
@@ -7,8 +7,8 @@
  * TipTap v3: StarterKit 이 밑줄·링크를 기본 포함한다(따로 넣으면 중복 등록 경고). 표는 @tiptap/extension-table 하나에서,
  * 자리표시(Placeholder)는 @tiptap/extensions 에서 가져온다.
  *
- * Vue v-model:html / v-model:text → html·onUpdateHtml / text·onUpdateText (편집기가 값을 내보내기만 한다 — Vue 판도 들어오는 값은 쓰지 않았다).
- * Vue defineExpose({ editor, insertImage }) → ref 핸들. 호스트가 editor 로 다시 그려야 하면 onUpdateEditor.
+ * html·onUpdateHtml / text·onUpdateText — 편집기가 값을 내보내기만 한다(들어오는 값은 쓰지 않는다).
+ * ref 핸들 = { editor, insertImage }. 호스트가 editor 로 다시 그려야 하면 onUpdateEditor.
  */
 import { useEffect, useImperativeHandle, useRef, type Ref } from 'react'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
@@ -21,7 +21,7 @@ import { useI18n, i18n } from '~/i18n'
 import { UiEditorToolbar } from '~/components/ui/EditorToolbar'
 import './RichEditor.css'
 
-/** ref 로 쓰는 것(Vue defineExpose) */
+/** ref 로 쓰는 것 */
 export interface RichEditorHandle {
   readonly editor: Editor | null
   insertImage: (src: string, alt?: string) => void
@@ -34,11 +34,11 @@ export interface RichEditorProps {
   bare?: boolean
   /** v-model:html 의 값(쓰지 않음, 짝 맞춤용) */
   html?: string | null
-  /** 본문 HTML 이 바뀔 때(Vue update:html) */
+  /** 본문 HTML 이 바뀔 때 */
   onUpdateHtml?: (html: string | null) => void
   /** v-model:text 의 값(쓰지 않음, 짝 맞춤용) */
   text?: string
-  /** 본문 글자가 바뀔 때(Vue update:text) */
+  /** 본문 글자가 바뀔 때 */
   onUpdateText?: (text: string) => void
   /** 툴바 이미지 버튼 */
   onImage?: () => void
@@ -73,7 +73,7 @@ export function RichEditor({ initialContent, placeholder, bare = false, onUpdate
     },
   })
 
-  // 편집 모드에서 기존 글이 뒤늦게 오면 비어 있을 때만 채운다(Vue watch — 첫 값은 건너뜀)
+  // 편집 모드에서 기존 글이 뒤늦게 오면 비어 있을 때만 채운다(첫 값은 건너뜀)
   // v3 setContent 는 기본으로 update 를 내보낸다 — v2 와 같게 끈다(기존 글을 채우는 것은 "내가 고친 것"이 아니라 임시 저장을 건드리면 안 된다)
   const first = useRef(true)
   useEffect(() => {

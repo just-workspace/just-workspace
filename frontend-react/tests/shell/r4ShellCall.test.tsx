@@ -35,7 +35,7 @@ beforeEach(() => {
   api.handler = () => ({})
 })
 
-describe('상태 메시지 값(A4)', () => {
+describe('상태 메시지 값', () => {
   const now = new Date(2026, 9, 17, 14, 0, 0).getTime()
   it('지우기 선택 → 지울 시각', () => {
     expect(statusClearAt('never', '', now)).toBeNull()
@@ -63,7 +63,7 @@ describe('상태 메시지 값(A4)', () => {
   })
 })
 
-describe('사용자 메뉴 상태 메시지 패널(A4)', () => {
+describe('사용자 메뉴 상태 메시지 패널', () => {
   beforeEach(() => {
     setUser({ id: 'u1', username: 'hanul', display_name: '정하늘', email: 'h@x', primary_email: 'h@x', avatar_url: null, is_admin: false } as any)
     platformStore.setState({ modules: [{ id: 'chat', enabled: true }] as any })
@@ -110,7 +110,7 @@ describe('사용자 메뉴 상태 메시지 패널(A4)', () => {
   })
 })
 
-describe('미니 통화 창 값(A5)', () => {
+describe('미니 통화 창 값', () => {
   it('연결 상태 · 새 대기 신청 · 단축키 · 나간 뒤 요약', () => {
     expect(miniCallTone('connected')).toBe('live')
     expect(miniCallTone('reconnecting')).toBe('reconnecting')
@@ -135,7 +135,7 @@ function p(identity: string, name: string, o: Record<string, unknown> = {}) {
   return { identity, name, videoTrack: null, audioTrack: null, screenTrack: null, isMuted: false, isLocal: false, isSpeaking: false, connectionQuality: 'good', ...o }
 }
 
-describe('미니 통화 창(A5)', () => {
+describe('미니 통화 창', () => {
   beforeEach(() => {
     toastStore.setState({ toasts: [] })
     meetingCallStore.setState({ returnPath: '/meetings/room/r1', corner: 'br', lastSpeaker: null, roomPanel: null })
@@ -201,7 +201,7 @@ describe('미니 통화 창(A5)', () => {
   })
 })
 
-describe('회의 결과 요약(A8)', () => {
+describe('회의 결과 요약', () => {
   const people = [{ id: 'u1', name: '박민지', guest: false }, { id: 'guest-1', name: '최수아', guest: true }]
   it('로그인 사용자: 호스트·참가(손님 n)·채팅 + 버튼', () => {
     const chat = vi.fn()
@@ -225,7 +225,7 @@ describe('회의 결과 요약(A8)', () => {
   })
 })
 
-describe('500 서비스 상태(A7 M1)', () => {
+describe('500 서비스 상태', () => {
   it('웹·API 는 이 요청으로 재고, 실패면 웹·API 중단 한 줄', () => {
     const rows = serviceRows({ checked_at: null, services: [{ key: 'auth', status: 'ok', response_ms: 38 }, { key: 'git', status: 'off', response_ms: 12 }] }, 1200)
     expect(rows.map(r => [r.key, r.status, r.ms])).toEqual([['web', 'slow', 1200], ['auth', 'ok', 38], ['git', 'off', null]])
@@ -250,7 +250,7 @@ describe('500 서비스 상태(A7 M1)', () => {
   })
 })
 
-describe('오피스 글자 미리보기(A7 M2)', () => {
+describe('오피스 글자 미리보기', () => {
   it('warning 띠 + 종이 + "[표 1개 · 이미지 2개 생략됨]"', async () => {
     api.handler = (url) => {
       if (url === '/api/wopi/open') return new Promise(() => {})

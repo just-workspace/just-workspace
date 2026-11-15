@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import { toastStore, addToast, toast, removeToast } from '~/composables/useToast'
 
-// React 판 useToast 는 hook 이라, 테스트는 같은 store 를 직접 읽는다(Vue 판 toasts.value 와 같은 값).
+// useToast 는 hook 이라, 테스트는 같은 store 를 직접 읽는다.
 const useToast = () => ({ toasts: { get value() { return toastStore.getState().toasts } }, addToast, toast, removeToast })
 
 describe('useToast', () => {

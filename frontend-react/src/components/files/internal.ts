@@ -1,6 +1,6 @@
 /**
- * 파일 목록·그리드가 함께 쓰는 행 동작(Vue FileList.vue · FileGridView.vue 에 같은 코드로 두 번 있던 것을 한 곳에).
- * 동작은 Vue 와 같다:
+ * 파일 목록·그리드가 함께 쓰는 행 동작(두 보기에 같은 코드를 두 번 두지 않고 한 곳에).
+ * 동작:
  *  - 인라인 편집(새 폴더·이름 바꾸기): inlineEdit 가 바뀌면 이름을 채우고 포커스 + 이름 부분(확장자 제외) 선택. Enter/blur = 확정, Esc = 취소.
  *  - 길게 누르기(터치 500ms, 8px 넘게 움직이면 취소) = 선택 모드 진입, 직후 클릭 한 번은 무시.
  *  - 앱 안 끌기(DRAG_MIME): 선택된 행을 끌면 선택 전체, 아니면 그 행. 폴더 행에만 놓기.
@@ -12,7 +12,7 @@ import { getSharedState, setSharedState } from '~/lib/state'
 import { canMoveInto, DRAG_MIME } from '~/lib/files'
 import { filesStore, setInlineEdit, toggleSelect, type FileItem } from '~/composables/useFiles'
 
-/** 끌고 있는 경로(목록·그리드·사이드바가 함께 본다 — Vue useState('files-dragging')) */
+/** 끌고 있는 경로(목록·그리드·사이드바가 함께 본다) */
 const DRAGGING = 'files-dragging'
 const dragging = () => getSharedState<string[]>(DRAGGING, () => [])
 
@@ -47,7 +47,7 @@ export function useInlineEdit(opts: {
   useEffect(() => {
     const p = pendingSelect.current
     const el = editInput.current
-    // 새 이름이 입력에 반영된 뒤(Vue nextTick)에 고른다
+    // 새 이름이 입력에 반영된 뒤에 고른다
     if (!p || !el || el.value !== p.name) return
     pendingSelect.current = null
     el.focus()

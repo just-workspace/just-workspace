@@ -1,11 +1,11 @@
 /**
- * 관리 분석 데이터 — Vue 판 composables/useAdminAnalytics.ts 그대로(GET /api/admin/analytics/*).
- * Vue 판은 호출마다 새 ref 묶음(싱글턴 아님) → React 도 컴포넌트마다 따로인 지역 상태 hook.
+ * 관리 분석 데이터(GET /api/admin/analytics/*).
+ * 싱글턴이 아니다 — 컴포넌트마다 따로인 지역 상태 hook.
  * 실패하면 빈 값(overview·gitStats·accessLogs = null, 목록 = []). 오류는 던지지 않는다.
  *
  * React: const { overview, dailyVisits, loading, fetchAll, fetchDailyVisits } = useAdminAnalytics()
  *   - 값은 렌더 시점 값. fetch 함수들은 렌더 사이에 같은 참조(useEffect deps 에 넣어도 됨).
- *   - fetchAccessLogs 는 받은 쪽을 돌려준다(Vue 는 accessLogs.value 를 바로 읽었다 — React 는 렌더 전이라 반환값으로).
+ *   - fetchAccessLogs 는 받은 쪽을 돌려준다(상태는 다음 렌더에야 보이므로 반환값으로).
  */
 import { useMemo, useState } from 'react'
 import { $fetch } from '~/lib/api'

@@ -1,5 +1,5 @@
 /**
- * 메일 사이드바 — Vue 판 components/mail/MailSidebar.vue.
+ * 메일 사이드바.
  * 계정 줄 32 · "새 메일 C" 40 · 폴더 34 · 예약함(예약이 있을 때) · 라벨(서버가 키워드를 지원할 때만) · 맨 아래 "메일 설정 · 필터 · 서명".
  * 라벨 줄: 34 · 색점 8(좌우 4) · muted 글자. 고르면 폴더와 같은 primary/13 + 600, 다시 누르면 끈다.
  * 예전 기능 유지: 다계정 트리(계정별 폴더 지연 조회), 폴더 만들기·이름 바꾸기·삭제(사용자 폴더만).
@@ -8,7 +8,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { useMail, mailStore } from '~/composables/useMail'
 import { usePlatform } from '~/composables/usePlatform'

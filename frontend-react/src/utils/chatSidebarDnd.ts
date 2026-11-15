@@ -116,7 +116,7 @@ export function categoryDropIndex(categories: ChatCategory[], draggedId: string,
   return after ? i + 1 : i
 }
 
-// ─── 음성 접속자 줄(§2.1(1)) ───
+// ─── 음성 접속자 줄 ───
 export const VOICE_ROWS_MAX = 4
 /** 접속자 줄 최대 4줄, 넘으면 "+N명" 한 줄 */
 export function voiceRows<T>(people: T[], max = VOICE_ROWS_MAX): { shown: T[]; more: number } {

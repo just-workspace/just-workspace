@@ -1,4 +1,3 @@
-// Vue 원본: frontend/pages/settings/ai.vue
 // 설정 › AI.
 //  ① 기본 모델 — 라디오 행: 워크스페이스 기본 · 워크스페이스 고급(관리자가 지정했을 때) · 내 API 키. 고르면 바로 저장(PUT /api/ai/my-settings) + "저장됨 ✓".
 //  ② 내 API 키 — 관리자가 허용한 경우만. 제공자 160 + API 키(저장돼 있으면 점선 칸에 가림값 + [바꾸기]),
@@ -101,7 +100,7 @@ export default function SettingsAiPage() {
     } catch { /* 무시 */ }
     setSnapshot(snapOf(next ?? myRef.current))
   }
-  // 이벤트 처리기 안에서 "지금" 값(Vue reactive 대응)
+  // 이벤트 처리기 안에서 "지금" 값
   const myRef = useRef(myp)
   myRef.current = myp
 

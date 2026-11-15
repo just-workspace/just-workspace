@@ -1,8 +1,8 @@
 /**
  * 기본 버튼(shadcn 계열). 변형 variant × 크기 size. `as` 로 다른 태그(예: 'a')로 그린다.
- * 빨강은 danger 하나(시안 J). destructive 는 기존 호출처 호환용 별칭 — 새 코드는 danger.
- * 커맨드 바·필터 바 안 컨트롤은 전부 32 = size="xs"(시안 B·D).
- * type 기본값이 없다(Vue 판과 같음) — 폼 안에서 제출 버튼이 아니면 type="button" 을 줄 것.
+ * 빨강은 danger 하나. destructive 는 기존 호출처 호환용 별칭 — 새 코드는 danger.
+ * 커맨드 바·필터 바 안 컨트롤은 전부 32 = size="xs".
+ * type 기본값이 없다 — 폼 안에서 제출 버튼이 아니면 type="button" 을 줄 것.
  * 아이콘은 `icon`(글자 왼쪽) · `iconRight`(글자 오른쪽, ▾·외부 링크) — 아이콘 16, 글자와 간격 6.
  * 버튼 안에 UiIcon 을 직접 넣지 말 것.
  */
@@ -17,7 +17,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs hover:shadow-md',
-        // 빨강은 danger 하나(시안 J). destructive 는 기존 호출처 호환용 별칭 — 새 코드는 danger.
+        // 빨강은 danger 하나. destructive 는 기존 호출처 호환용 별칭 — 새 코드는 danger.
         danger: 'bg-danger text-danger-foreground hover:bg-danger/90',
         destructive: 'bg-danger text-danger-foreground hover:bg-danger/90',
         outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
@@ -30,7 +30,7 @@ const buttonVariants = cva(
       size: {
         default: 'h-10 px-4 py-2',
         sm: 'h-9 rounded-md px-3',
-        // 커맨드 바·필터 바 안 컨트롤은 전부 32(시안 B·D)
+        // 커맨드 바·필터 바 안 컨트롤은 전부 32
         xs: 'h-8 rounded-md px-3 text-xs',
         lg: 'h-11 rounded-md px-8',
         icon: 'h-10 w-10',

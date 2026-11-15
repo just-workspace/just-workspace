@@ -88,7 +88,7 @@ export function DashboardGreeting({ wide, editing, onToggleEdit, noEdit }: Dashb
     // 진짜 낮은 창(실효 높이 < 760)에선 인사 줄을 숨긴다. 버튼은 오른쪽에 남긴다
     <div className="flex items-end gap-4 low:justify-end">
       <div className="min-w-0 flex-1 low:hidden">
-        {/* 좁은 폭에서 "검수 / 님"처럼 글자 단위로 끊기지 않게 keep-all + balance */}
+        {/* 좁은 폭에서 "이름 / 님"처럼 글자 단위로 끊기지 않게 keep-all + balance */}
         {title && <h1 className="text-2xl font-bold tracking-tight [text-wrap:balance] [word-break:keep-all]">{title}</h1>}
         <p className="mt-1 text-[13.5px] text-muted-foreground">{dateStr}</p>
       </div>

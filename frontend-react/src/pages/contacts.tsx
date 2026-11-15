@@ -1,4 +1,3 @@
-// Vue 원본: frontend/pages/contacts.vue
 // 연락처.
 // ≥1024: 사이드바 236 + 목록 340 + 상세(패딩 28/40, 폭 680).
 // 768~1023: 목록 340 + 상세, 사이드바 대신 목록 줄의 ⋯ 시트. <768: 목록 → 상세 전체 화면(탭바 숨김), FAB(새 연락처).
@@ -6,7 +5,7 @@
 // 모바일 목록 머리는 ContactsList 범위 줄, 상세는 LayoutMobileDetailBar — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader)
 import { useEffect } from 'react'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { useHead } from '~/lib/head'
 import { setSharedState } from '~/lib/state'

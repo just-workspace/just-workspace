@@ -73,7 +73,7 @@ describe('버튼 상태', () => {
   })
 })
 
-describe('메일 요약(E1)', () => {
+describe('메일 요약', () => {
   it('요점·할 일 — 기한 있는 것만 처음 체크, 고른 n개 등록 → 되돌리기', async () => {
     api.respond = (url) => {
       if (url === '/api/ai/inline/mail_summary') {
@@ -126,7 +126,7 @@ describe('메일 요약(E1)', () => {
   })
 })
 
-describe('답장 초안(E1)', () => {
+describe('답장 초안', () => {
   it('말투 바꾸면 다시 쓰고, 편집기로 옮기기 = 초안 넘김', async () => {
     api.respond = (url, opts) => (url === '/api/ai/inline/mail_reply'
       ? { ...META, tone: opts.body.tone, draft: opts.body.tone === 'short' ? '짧은 초안' : '정중한 초안\n\n김하나 드림' }
@@ -157,7 +157,7 @@ describe('답장 초안(E1)', () => {
   })
 })
 
-describe('채팅방 요약(E2)', () => {
+describe('채팅방 요약', () => {
   it('안 읽은 것이 적으면 아무것도, 많으면 접힌 버튼 → 첫 안읽음부터 요약', async () => {
     api.respond = (url) => (url === '/api/ai/inline/chat_summary'
       ? {
@@ -188,7 +188,7 @@ describe('채팅방 요약(E2)', () => {
   })
 })
 
-describe('회의 요약 → 할 일(E2)', () => {
+describe('회의 요약 → 할 일', () => {
   it('붙잡아 둔 회의 채팅으로 요약, 담당자 있는 것만 처음 체크, 등록에 room·assignee', async () => {
     _setLastMeetingChat('infra', [{ name: '박준호', text: '팬 교체 필요' }])
     api.respond = (url) => {

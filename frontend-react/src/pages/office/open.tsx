@@ -1,5 +1,5 @@
 /**
- * 오피스 새 탭(Vue pages/office/open.vue) — 여는 중. 셸 없음(routes.ts layout:false).
+ * 오피스 새 탭 — 여는 중. 셸 없음(routes.ts layout:false).
  *  머리 40 bg-card: 브랜드 타일 22 · 파일 이름 600 · 폴더 경로(내 파일 › 프로젝트) muted
  *  가운데: 형식 타일 48(시트 success · 문서 primary · 슬라이드 warning /15) → "파일 여는 중…" 16/600 →
  *          진행 220×4 → "문서 편집기를 불러오고 있습니다 · 10초가 넘으면 [미리보기로 열기]" 13 muted.
@@ -55,7 +55,7 @@ export default function OfficeOpenPage() {
   const { t } = useI18n()
   const { appName, brandLogo } = useSiteConfig()
 
-  // 처음 주소만 읽는다(Vue setup 한 번)
+  // 처음 주소만 읽는다
   const [init] = useState(() => {
     const q = route.query
     const newKind = typeof q.new === 'string' && ['doc', 'sheet', 'slide'].includes(q.new) ? q.new as 'doc' | 'sheet' | 'slide' : null

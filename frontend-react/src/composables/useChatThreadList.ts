@@ -6,7 +6,7 @@
  *   · new_message(parent_id 있음) · thread_update(root_id + reply) → 그 행의 마지막 답글·답글 수·시각·참여자 갱신, 맨 위로.
  *     보관 탭에 있던 행은 빼고(서버: 보관된 스레드에 답글 = 보관 해제), 활성 탭에 없는 스레드면 다시 읽는다(디바운스).
  *   · thread_follow → 팔로우 bell.
- * 이름 없는 스레드: 원문 첫 40자를 따옴표 안 기울임(§5.2) — threadTitle().
+ * 이름 없는 스레드: 원문 첫 40자를 따옴표 안 기울임 — threadTitle().
  * 자동 보관: 1시간 · 24시간 · 3일 · 1주(THREAD_AUTO_ARCHIVE 분) → PATCH /channels/{id} default_thread_auto_archive_minutes.
  */
 import { createStore, useStore } from 'zustand'

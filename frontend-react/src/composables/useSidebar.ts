@@ -1,5 +1,5 @@
 /**
- * 사이드바 동적 단일화 — Vue 판 composables/useSidebar.ts 그대로.
+ * 사이드바 동적 단일화.
  * 한 컴포넌트 · 폭 하나(wide). rail(64) ↔ 확장(236):
  *   - hover → 덮기(overlay): 본문을 밀지 않고 패널만 236 으로 커진다
  *   - pin   → 밀기(push): 클릭 고정 시에만 본문이 밀린다. localStorage(ws.sidebar) 저장.

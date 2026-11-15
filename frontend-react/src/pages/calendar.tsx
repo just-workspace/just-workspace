@@ -1,5 +1,5 @@
 /**
- * 캘린더(Vue 원본: frontend/pages/calendar.vue).
+ * 캘린더
  * 데스크톱: 사이드바 236(bg-card) + 커맨드 바 44(오늘 · ‹ › · 기간 15/600 … 일/주/월/일정 세그먼트 · ⋯).
  * 모바일(<md): 사이드바 대신 FAB(새 일정) + ⋯ 시트(캘린더 목록), 보기 세그먼트 일정/월/주, 월 날짜 탭 = 그날 시트.
  * 시간대 불일치 띠: 상단바 바로 아래·툴바 위 warning 틴트 h-44, [기기 시간대로 바꾸기](outline) · [○○ 그대로](ghost, = 닫기).
@@ -50,7 +50,7 @@ export default function CalendarPage() {
   const { navOwnedByShell } = useDesktopShell()
   const isMobile = useIsMobile()
   const pageRoute = useRoute()
-  // 비동기 처리(onMounted 뒤 await)에서 "지금" 라우트를 읽는다(Vue 의 반응형 route)
+  // 비동기 처리(마운트 뒤 await)에서 "지금" 라우트를 읽는다
   const routeRef = useRef<RouteLocation>(pageRoute)
   routeRef.current = pageRoute
   useHead({ title: `${t('nav.calendar')} | ${appName}` })
@@ -145,7 +145,7 @@ export default function CalendarPage() {
   useEffect(() => () => { closePopover(); closeDaySheet() }, [])
 
   // ── 동기화 오류 띠 ──
-  // 닫으면 다음 오류까지 숨긴다. 일정 API 는 캘린더를 한꺼번에 받으므로 어느 캘린더인지는 가르지 않는다(디자이너 확인 필요).
+  // 닫으면 다음 오류까지 숨긴다. 일정 API 는 캘린더를 한꺼번에 받으므로 어느 캘린더인지는 가르지 않는다.
   const [syncBandHidden, setSyncBandHidden] = useState(false)
   useEffect(() => { if (eventsError) setSyncBandHidden(false) }, [eventsError])
   const lastSyncText = lastSyncedAt ? fmtTime(lastSyncedAt) : ''

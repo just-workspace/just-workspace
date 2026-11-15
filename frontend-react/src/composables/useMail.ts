@@ -1,14 +1,14 @@
 /**
- * 메일 — Vue 판 composables/useMail.ts 그대로(모듈 싱글턴 상태 + 동작). 요청 주소·순서·본문·로그 문구 동일.
+ * 메일(모듈 싱글턴 상태 + 동작). 요청 주소·순서·본문·로그 문구 동일.
  *
  * React: const { messages, selectedMessage, selectMailbox, openMessage, ... } = useMail()
- *   값은 .value 없이. Vue 에서 바깥이 대입하던 상태는 setter 를 같이 낸다:
+ *   바깥에서 바꾸는 상태는 setter 를 같이 낸다:
  *     selectedAccountId → setSelectedAccountId(v) · selectedIds → setSelectedIds(v) · quickFilters → setQuickFilters(v)
- *   (searchQuery 는 Vue 에서도 setSearchQuery(q) 로 바꿨다 — 그대로)
+ *   (searchQuery 는 setSearchQuery(q))
  * 컴포넌트 밖: mailStore.getState(), 또는 아래 동작 함수를 직접 import.
  * 필드 하나만 보는 컴포넌트는 useStore(mailStore, s => s.field) 로 구독하면 덜 다시 그린다.
  *
- * Vue 는 목록 행·메일함 객체를 제자리에서 고쳤다(msg.is_unread = false). 여기서는 같은 값을 새 객체로 바꿔 넣는다.
+ * 목록 행·메일함 객체는 제자리에서 고치지 않고 같은 값을 새 객체로 바꿔 넣는다.
  */
 import { createStore, useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
@@ -171,13 +171,13 @@ export interface MailState {
   sending: boolean
   searchQuery: string
   selectedIds: Set<string>
-  /** 실패는 "비어 있음" 으로 보이지 않게(시안 H) — 목록·본문 각각 오류를 들고 있다가 UiErrorTile 로 보여 준다. */
+  /** 실패는 "비어 있음" 으로 보이지 않게 — 목록·본문 각각 오류를 들고 있다가 UiErrorTile 로 보여 준다. */
   listError: string | null
-  /** 계정·메일함 불러오기 실패 — 빈 상태("메일이 없습니다")와 구분해 오류 타일로 보인다(P5) */
+  /** 계정·메일함 불러오기 실패 — 빈 상태("메일이 없습니다")와 구분해 오류 타일로 보인다 */
   accountsError: string | null
   mailboxesError: string | null
   messageError: string | null
-  /** 빠른 칩(시안 메일 7: 안 읽음·별표·첨부) — 서버 필터(unread·flagged·has_attachment)로 보낸다. */
+  /** 빠른 칩(안 읽음·별표·첨부) — 서버 필터(unread·flagged·has_attachment)로 보낸다. */
   quickFilters: MailQuickFilters
   /** 라벨(IMAP 키워드) — 사이드바 "라벨" 에서 고르면 서버 label 필터. supported=false(POP3·키워드 못 다는 서버)면 UI 를 숨긴다. */
   labelFilter: string | null
@@ -239,7 +239,7 @@ export function _resetMailStore() {
   mailStore.setState(initialState(), true)
 }
 
-// ─── 바깥 대입 대응(Vue 에서 x.value = v 하던 것) ───
+// ─── 바깥에서 바꾸는 상태의 setter ───
 
 export function setSelectedAccountId(id: string | null) { set({ selectedAccountId: id }) }
 export function setSelectedIds(ids: Set<string>) { set({ selectedIds: ids }) }
@@ -307,7 +307,7 @@ function errorDetail(e: any): string {
   return st ? `HTTP ${st}` : (e?.message || '')
 }
 
-/** 목록 행 하나를 고친다(Vue 의 제자리 대입 대응) */
+/** 목록 행 하나를 고친다(새 객체로) */
 function patchMessageRow(id: string, patch: Partial<MessageSummary>) {
   set({ messages: get().messages.map(m => (m.id === id ? { ...m, ...patch } : m)) })
 }
@@ -315,7 +315,7 @@ function patchMessageRow(id: string, patch: Partial<MessageSummary>) {
 /** 지금 메일함의 unread_count 를 고친다 */
 function patchSelectedMailboxUnread(fn: (n: number) => number) {
   const s = get()
-  // Vue 는 mailboxes 와 mailboxesByAccount[계정] 이 같은 배열이라 한쪽만 고쳐도 다계정 트리 숫자가 같이 줄었다 — 둘 다 바꾼다
+  // mailboxes 와 mailboxesByAccount[계정] 은 서로 다른 배열이다 — 다계정 트리 숫자도 같이 줄게 둘 다 바꾼다
   const mailboxes = s.mailboxes.map(m => (m.id === s.selectedMailboxId ? { ...m, unread_count: fn(m.unread_count) } : m))
   const acc = s.selectedAccountId
   set(acc && s.mailboxesByAccount[acc]
@@ -836,7 +836,7 @@ export async function bulkAction(action: string, mailboxId?: string): Promise<bo
 }
 
 /**
- * 쓰기 진입(시안 메일 1 ②+③): 데스크톱은 앱 안 떠 있는 작성 창, 모바일은 전체 화면 페이지.
+ * 쓰기 진입: 데스크톱은 앱 안 떠 있는 작성 창, 모바일은 전체 화면 페이지.
  * 팝업(window.open 900×720)은 폐지. 실제 분기는 useMailCompose.open 이 한다.
  */
 export function openCompose(mode: ComposeMode = 'new', msg?: Readonly<MessageDetail> | null, draftId?: string) {
@@ -881,7 +881,7 @@ function attachmentPath(blobId: string, opts: { inline?: boolean } = {}) {
 
 /**
  * 첨부 URL. inline=true 면 브라우저가 열어 보여 준다(이미지 썸네일·PDF 미리보기).
- * 웹은 Vue 판과 같은 상대 주소, 번들 앱은 apiBase 를 붙인다(Vue 판은 앱 자신의 주소로 갔다 — 원본 버그 수정).
+ * 웹은 상대 주소, 번들 앱은 apiBase 를 붙인다.
  */
 export function attachmentUrl(blobId: string, opts: { inline?: boolean } = {}) {
   return apiUrl(attachmentPath(blobId, opts))
@@ -1084,7 +1084,7 @@ const actions = {
 }
 
 /**
- * Vue useMail() 과 같은 멤버. 상태 전체를 얕게 구독한다(어느 필드가 바뀌어도 다시 그림).
+ * 상태 + 동작. 상태 전체를 얕게 구독한다(어느 필드가 바뀌어도 다시 그림).
  * 상태 + computed(totalPages·hasNextPage·hasPrevPage·totalUnread·selectedMailbox·selectedAccount·isPop3·archiveMailbox·selectedIndex) + 동작.
  */
 export function useMail() {

@@ -1,10 +1,10 @@
 /**
- * 앱 안 링크 — Vue 판 `<NuxtLink to>` 대응. Vue 템플릿의 `<NuxtLink :to="x" class="…">` 를 그대로 옮긴다.
+ * 앱 안 링크 — `<NuxtLink to="x" className="…">`.
  *
- * - to: 문자열 또는 { path, query, hash } (Vue 와 같음)
+ * - to: 문자열 또는 { path, query, hash }
  * - 외부 주소(http:, mailto: 등)나 external 이면 일반 <a>
  * - 같은 페이지 해시(#general)는 기본 앵커 동작
- * Vue Router 가 붙이던 router-link-active 클래스는 앱 CSS 가 쓰지 않아 붙이지 않는다.
+ * 활성 링크 클래스(router-link-active)는 앱 CSS 가 쓰지 않아 붙이지 않는다.
  */
 import { forwardRef, type AnchorHTMLAttributes, type ReactNode } from 'react'
 import { Link } from 'react-router'
@@ -29,7 +29,7 @@ export const NuxtLink = forwardRef<HTMLAnchorElement, NuxtLinkProps>(function Nu
   if (isExternal || raw.startsWith('#')) {
     return <a ref={ref} href={raw} {...rest}>{children}</a>
   }
-  // 앱 안 문자열 주소도 vue-router 와 같은 쿼리 모양으로(href·주소창 1:1)
+  // 앱 안 문자열 주소도 객체 주소와 같은 쿼리 모양으로(href·주소창 1:1)
   const href = typeof to === 'string' && to.startsWith('/') ? resolve(to).fullPath : raw
   return <Link ref={ref} to={href} replace={replace} {...rest}>{children}</Link>
 })

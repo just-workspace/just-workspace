@@ -1,5 +1,5 @@
 /**
- * 관리 분석 카드의 표시 형식 도우미 — Vue 판은 각 AdminAnalytics*.vue 안에 같은 함수가 따로 있었다(내용 그대로 모음).
+ * 관리 분석 카드의 표시 형식 도우미 — 카드마다 같은 함수를 따로 두지 않고 한 곳에 모았다.
  */
 type T = (key: string, params?: Record<string, unknown>) => string
 

@@ -5,14 +5,14 @@
  * 수단을 제공해야 한다(SHOULD)고 명시한다. 모바일에서 오타로 인한 재설정
  * 요청을 줄이는 효과가 크다.
  *
- * 시안 F 입력 규격(UiInput 과 같은 테두리·포커스·오류)을 기본으로 쓰고, 기존 호출처가 넘기는 inputClass 는
+ * 입력 규격(UiInput 과 같은 테두리·포커스·오류)을 기본으로 쓰고, 기존 호출처가 넘기는 inputClass 는
  * 그대로 덧붙여 호환한다(비우면 기본 규격). 보기 토글은 32px 아이콘 버튼 — 히트 영역은 세로로 전체 높이.
  *
- * 키 이벤트: onKeyDown·onKeyUp·onBlur 는 안쪽 <input> 에서 그대로 내보낸다(Vue 판 keydown·keyup·blur 이벤트).
- * Caps Lock: 입력 중 Caps Lock 상태를 capsLock/onUpdateCapsLock(Vue v-model:caps-lock)으로 알려 주고,
+ * 키 이벤트: onKeyDown·onKeyUp·onBlur 는 안쪽 <input> 에서 그대로 내보낸다.
+ * Caps Lock: 입력 중 Caps Lock 상태를 capsLock/onUpdateCapsLock으로 알려 주고,
  * capsLockHint 를 주면 입력 아래에 ↑ 경고(warning 12/500, role=status)를 직접 그린다. 포커스가 빠지면 내린다.
  *
- * Vue 판과 같이 className·나머지 속성은 바깥 묶음(div)에 붙는다(안쪽 <input> 아님). ref 는 안쪽 <input>.
+ * className·나머지 속성은 바깥 묶음(div)에 붙는다(안쪽 <input> 아님). ref 는 안쪽 <input>.
  */
 import { useEffect, useRef, useState, type FocusEvent, type HTMLAttributes, type KeyboardEvent, type Ref } from 'react'
 import { cn } from '~/lib/utils'
@@ -22,11 +22,11 @@ import { UiIcon } from './Icon'
 import { useModel, useUid } from './internal'
 
 export interface UiPasswordInputProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onKeyDown' | 'onKeyUp' | 'onBlur' | 'id'> {
-  /** 값(Vue v-model) */
+  /** 값 */
   modelValue?: string
   /** 값 바뀜 */
   onUpdateModelValue?: (v: string) => void
-  /** Caps Lock 켜짐 여부(입력 중에만 판단, Vue v-model:caps-lock) */
+  /** Caps Lock 켜짐 여부(입력 중에만 판단) */
   capsLock?: boolean
   /** Caps Lock 상태 바뀜 */
   onUpdateCapsLock?: (v: boolean) => void
@@ -73,7 +73,7 @@ export function UiPasswordInput({
   const [capsLock, setCapsLockModel] = useModel(capsLockProp, false, onUpdateCapsLock)
 
   const caps = useCapsLock()
-  // Vue watch(caps.capsLock) → 모델에 반영(바뀔 때만)
+  // Caps Lock 상태를 모델에 반영(바뀔 때만)
   const first = useRef(true)
   const setCapsRef = useRef(setCapsLockModel)
   setCapsRef.current = setCapsLockModel

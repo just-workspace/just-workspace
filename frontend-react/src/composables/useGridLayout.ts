@@ -1,12 +1,12 @@
 /**
- * 참가자 그리드의 열·행 수를 컨테이너 크기에 맞춰 고른다. Vue 판 composables/useGridLayout.ts 그대로.
+ * 참가자 그리드의 열·행 수를 컨테이너 크기에 맞춰 고른다.
  *
  * N명을 c열 × r행으로 깔았을 때 타일 하나가 16:9 로 얼마나 커질 수 있는지를
  * 모든 c 에 대해 계산하고, 가장 큰 c 를 고른다. Tailwind 의 grid-cols-* 단계
  * 방식은 컨테이너 높이를 모르기 때문에 6명부터 행이 넘쳐 겹쳤다.
  *
  * React: const { style } = useGridLayout(gridEl, count, 8)
- *   containerEl 은 콜백 ref 로 받은 요소(state) — 요소가 바뀌면 다시 관찰한다(Vue 의 watch(containerEl, …, { immediate })).
+ *   containerEl 은 콜백 ref 로 받은 요소(state) — 요소가 바뀌면 다시 관찰한다.
  */
 import { useEffect, useState } from 'react'
 

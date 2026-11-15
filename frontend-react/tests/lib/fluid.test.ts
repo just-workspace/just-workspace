@@ -5,7 +5,7 @@ import {
   listColumnWidth, chatSideWidth, chatThreadDocked, mailSideOpen,
 } from '~/lib/fluid'
 
-/** R14 renderVals 를 그대로 다시 계산(레일은 기본값) */
+/** renderVals 를 그대로 다시 계산(레일은 기본값) */
 function r14(W: number, H: number) {
   const s = autoScale(W, H)
   const e = effective(W, H, s)
@@ -60,7 +60,7 @@ describe('배율 = min(폭 구간, 높이 구간)', () => {
   })
 })
 
-describe('R14 renderVals 예시', () => {
+describe('renderVals 예시', () => {
   it.each([
     // W, H, railWide, cols, cards, listW, mailSide, sideW, chatThread
     [1440, 900, false, 3, 6, 330, false, 240, false],
@@ -87,7 +87,7 @@ describe('열 수 · 카드 수 · 패널 폭 함수', () => {
   ])('본문 %i → %i열', (w, c) => { expect(dashColumns(w, false)).toBe(c) })
 
   it('세로 화면은 2열', () => { expect(dashColumns(3000, true)).toBe(2) })
-  it('공식 예외: 가로 화면 실효 폭 1280 미만은 2열(handover 16 답 8)', () => {
+  it('공식 예외: 가로 화면 실효 폭 1280 미만은 2열', () => {
     expect(dashColumns(1216, false, 1280)).toBe(3)
     expect(dashColumns(1215, false, 1279)).toBe(2)
     expect(dashColumns(960, false, 1024)).toBe(2)

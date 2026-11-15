@@ -1,5 +1,5 @@
 /**
- * 관리 › 사용자 화면의 순수 로직 — Vue pages/admin/users.vue 의 script 안 함수들을 그대로 모음(화면 조각과 테스트가 같이 쓴다).
+ * 관리 › 사용자 화면의 순수 로직(화면 조각과 테스트가 같이 쓴다).
  */
 import type { UiMenuItem } from '~/components/ui/Menu'
 

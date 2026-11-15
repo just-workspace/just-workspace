@@ -1,5 +1,5 @@
 /**
- * 세그먼트 1종(시안 D): bg-muted 트랙 2px 패딩 + 선택 칸 bg-card(그림자 scrim/30), 32(안 28).
+ * 세그먼트 1종: bg-muted 트랙 2px 패딩 + 선택 칸 bg-card(그림자 scrim/30), 32(안 28).
  * 이슈·PR·캘린더 월/주/일·관리 기간·테마 라이트/다크/시스템 공용. 모바일 탭 세그먼트는 size="lg"(40, 안 36).
  * role=radiogroup/radio(단일 선택). 아이콘만 쓰는 칸은 ariaLabel 로 이름을 준다. ←→ 로 이동·선택.
  */
@@ -33,7 +33,7 @@ const TONE_TEXT: Record<NonNullable<SegmentItem['tone']>, string> = {
 }
 
 export interface UiSegmentProps extends Omit<HTMLAttributes<HTMLDivElement>, 'role'> {
-  /** 고른 값(Vue v-model) */
+  /** 고른 값 */
   modelValue?: string | number | null
   /** 값 바뀜 */
   onUpdateModelValue?: (v: string | number | null) => void

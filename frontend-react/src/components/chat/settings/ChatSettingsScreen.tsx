@@ -6,7 +6,7 @@
  * 섹션: 'overview' | 'roles' | 'channel-perm'(targetId=채널) | 'category-perm'(targetId=카테고리) | 'emoji' | 'notify-default' |
  *   'policy' | 'profile' | 'voice' | 'display' | 'notify'.
  * 저장 안 된 변경(역할 편집)이 있으면 다른 섹션으로 가려 할 때 띠를 흔들고, 닫기(✕·Esc)는 확인 대화 상자.
- * 모바일(§5.4): 한 화면씩 — 섹션 목록 → 섹션(→ 편집). 열 때 섹션을 주면 바로 그 섹션.
+ * 모바일: 한 화면씩 — 섹션 목록 → 섹션(→ 편집). 열 때 섹션을 주면 바로 그 섹션.
  */
 import { useEffect, useState } from 'react'
 import { useStore } from 'zustand'

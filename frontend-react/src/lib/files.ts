@@ -141,7 +141,7 @@ export function linkMeta(l: { expires_at: string | null; max_downloads: number |
   return parts.join(' · ')
 }
 
-// ─── 공유 링크 이메일로 보내기(R7) — 서버 규칙(app/files/share_email.py)과 같은 한도·형식 ───
+// ─── 공유 링크 이메일로 보내기 — 서버 규칙(app/files/share_email.py)과 같은 한도·형식 ───
 
 /** 한 번에 보낼 수 있는 받는 사람 수 */
 export const SHARE_EMAIL_MAX = 20

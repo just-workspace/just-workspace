@@ -111,7 +111,7 @@ describe('useMail', () => {
     expect(mail.attachmentUrl('b/1', { inline: true })).toBe('/api/mail/attachments/b%2F1?mailbox_id=Sent&account_id=a%201&inline=1')
   })
 
-  it('useMail() hook — 값·computed·setter 가 Vue 이름 그대로, 바뀌면 다시 그린다', () => {
+  it('useMail() hook — 값·파생 값·setter 를 내고, 바뀌면 다시 그린다', () => {
     const { result } = renderHook(() => mail.useMail())
     expect(result.current.messages).toEqual([])
     expect(result.current.totalPages).toBe(0)

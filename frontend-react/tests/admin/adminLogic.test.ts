@@ -1,4 +1,4 @@
-// 관리(사용자·개요·접근 로그·초대) 순수 로직 — Vue pages/admin/users.vue·dashboard.vue·logs.vue·AdminInviteModal.vue 의 함수 그대로
+// 관리(사용자·개요·접근 로그·초대) 순수 로직
 import { describe, it, expect } from 'vitest'
 import { i18n } from '~/i18n'
 import {

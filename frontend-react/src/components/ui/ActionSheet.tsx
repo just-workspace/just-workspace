@@ -3,7 +3,7 @@
  * 아래 여백 28 + safe-area. 머리글 두 가지:
  *  · 제목만 — 17/600
  *  · 아이콘 + 이름 + 메타 — 아이콘 28 · 이름 16/600 · 메타 12 muted(" · " 로 잇고 mono 조각 지원), 아래 구분선
- *  · header — 아이콘 자리에 모듈 고유 그림(파일 유형 아이콘 등)을 넣을 때(Vue #header 슬롯). 이름·메타는 props 그대로.
+ *  · header — 아이콘 자리에 모듈 고유 그림(파일 유형 아이콘 등)을 넣을 때. 이름·메타는 props 그대로.
  * 항목(items) = 48 · 15px · 아이콘 20 · 간격 14(UiMenu 와 같은 항목 형식 — description 이 있으면 56 두 줄, 하위 메뉴 항목은 ›).
  * children 은 항목 아래 자유 내용(보기·정렬 시트 등).
  * Esc 닫기 · 포커스 트랩 · ↑↓ 항목 이동 · 닫으면 연 요소로 포커스 복귀.
@@ -34,7 +34,7 @@ export interface UiActionSheetProps {
   onClose?: () => void
   /** 항목 고름 — 항목 key */
   onSelect?: (key: string) => void
-  /** 머리글 아이콘 자리 그림(Vue #header 슬롯) */
+  /** 머리글 아이콘 자리 그림 */
   header?: ReactNode
   /** 항목 아래 자유 내용 */
   children?: ReactNode

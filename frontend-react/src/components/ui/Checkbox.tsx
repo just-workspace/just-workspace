@@ -1,5 +1,5 @@
 /**
- * 체크박스(시안 F): 18 rounded-5, 해제 = inset ring 1.5 muted-foreground, 체크 = primary 채움 + ✓.
+ * 체크박스: 18 rounded-5, 해제 = inset ring 1.5 muted-foreground, 체크 = primary 채움 + ✓.
  * 실제 <input type=checkbox> 를 시각적으로 숨기고 라벨로 감싼다(시맨틱·키보드·폼 제출 유지). 히트 영역 40.
  * className 은 바깥 <label> 에, 나머지 속성(name·onChange 등)은 안쪽 <input> 에. ref 는 안쪽 <input>.
  */
@@ -9,7 +9,7 @@ import { UiIcon } from './Icon'
 import { mergeRefs, useModel, useUid } from './internal'
 
 export interface UiCheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'type' | 'checked' | 'defaultChecked' | 'disabled' | 'aria-label'> {
-  /** 체크 여부(Vue v-model) */
+  /** 체크 여부 */
   modelValue?: boolean
   /** 체크 바뀜 */
   onUpdateModelValue?: (v: boolean) => void

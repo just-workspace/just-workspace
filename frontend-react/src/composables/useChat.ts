@@ -1,15 +1,15 @@
 /**
- * Chat — WebSocket 클라이언트 + 상태 관리. Vue 판 composables/useChat.ts 그대로(모듈 싱글턴).
+ * Chat — WebSocket 클라이언트 + 상태 관리(모듈 싱글턴).
  *
  * 상태 반영 규칙(이벤트 → 상태)은 lib/chatEvents.ts 의 순수 함수에 있다. 여기는 네트워크·타이머·상태만.
  *
  * React: const { channels, messages, selectChannel, sendMessage, ... } = useChat()
- *   - 멤버 이름은 Vue 판과 같다. 값은 .value 없이(렌더 시점 값). 읽은 필드만 구독한다(useTrackedStore).
- *   - Vue 에서 바깥이 대입하던 상태는 setter: setShowMemberPanel · setShowPinsPanel · setShowSearchPanel ·
+ *   - 값은 렌더 시점 값. 읽은 필드만 구독한다(useTrackedStore).
+ *   - 바깥에서 바꾸는 상태는 setter: setShowMemberPanel · setShowPinsPanel · setShowSearchPanel ·
  *     setSearchQuery · setShowNotifyBanner
  * 컴포넌트 밖: chatStore.getState() / 아래 export 함수들(initChat, selectChannel, sendMessage …)
  *   이벤트 처리기 안에서 "지금" 값이 필요하면 chatStore.getState().messages 처럼 store 를 직접 읽는다.
- * 셸 진입점: initChat()(= Vue useChat().init()) · cleanupChat()(= cleanup, 로그아웃 때 useAuth 가 자동으로 부른다)
+ * 셸 진입점: initChat() · cleanupChat()(로그아웃 때 useAuth 가 자동으로 부른다)
  */
 import { createStore } from 'zustand'
 import { $fetch } from '~/lib/api'
@@ -419,7 +419,7 @@ const S = () => chatStore.getState()
 const set = (p: Partial<ChatState>) => chatStore.setState(p)
 const me = () => authStore.getState().user
 
-/** Vue 판의 채널 객체 제자리 수정(ch.unread_count++ 등)을 새 배열로 */
+/** 채널 하나를 고친 새 배열(ch.unread_count 등 — 제자리에서 고치지 않는다) */
 function patchChannel(id: string, fn: (c: Channel) => Channel) {
   const list = S().channels
   if (!list.some(c => c.id === id)) return
@@ -465,7 +465,7 @@ let _flushingOutbox = false
 // 재접속 복구 커서 — 받은 메시지 중 가장 큰 seq. 끊긴 동안 생긴 것만 /api/chat/changes 로 받는다
 let _lastSeq = 0
 
-// ─── 바깥에서 대입하던 상태(Vue 의 x.value = v) ───
+// ─── 바깥에서 바꾸는 상태 ───
 
 export const setShowMemberPanel = (v: boolean) => set({ showMemberPanel: v })
 export const setShowPinsPanel = (v: boolean) => set({ showPinsPanel: v })
@@ -473,7 +473,7 @@ export const setShowSearchPanel = (v: boolean) => set({ showSearchPanel: v })
 export const setSearchQuery = (v: string) => set({ searchQuery: v })
 export const setShowNotifyBanner = (v: boolean) => set({ showNotifyBanner: v })
 
-// ─── 계산 값(Vue computed) — 컴포넌트 밖에서도 쓰게 state 를 받는 함수로 ───
+// ─── 계산 값 — 컴포넌트 밖에서도 쓰게 state 를 받는 함수로 ───
 
 export function selectSelectedChannel(s: ChatState = S()): Channel | null {
   return s.channels.find(c => c.id === s.selectedChannelId) || null
@@ -1404,7 +1404,7 @@ const chatOn = () => isModuleEnabled('chat')
 export function connectWS() {
   if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) return
 
-  // 웹은 Vue 판과 같이 현재 창 주소 기준. 번들 앱은 apiBase 호스트 + 인증 하위 프로토콜(토큰은 쿼리에 싣지 않는다)
+  // 웹은 현재 창 주소 기준. 번들 앱은 apiBase 호스트 + 인증 하위 프로토콜(토큰은 쿼리에 싣지 않는다)
   const url = wsUrl('/ws/chat')
 
   _ws = new WebSocket(url, wsProtocols())
@@ -2010,7 +2010,7 @@ export function getDMDisplayName(channel: Channel, s: ChatState = S()): string {
 
 // ─── Init ───
 
-/** 앱 전체 실시간 연결 시작(Vue useChat().init()). 이미 시작했으면 아무것도 안 한다. */
+/** 앱 전체 실시간 연결 시작. 이미 시작했으면 아무것도 안 한다. */
 export async function initChat() {
   if (_initialized) return
   _initialized = true
@@ -2035,7 +2035,7 @@ export async function initChat() {
   if (chat) void migrateLocalDrafts()   // 채널 목록·서버 임시글을 받은 뒤에(멤버 아닌 채널은 403, 서버본 우선)
 }
 
-/** 연결 끊고 사용자별 상태 비우기(Vue useChat().cleanup()) — 로그아웃 직전에 useAuth 가 부른다 */
+/** 연결 끊고 사용자별 상태 비우기 — 로그아웃 직전에 useAuth 가 부른다 */
 export function cleanupChat() {
   _initialized = false
   _lastSeq = 0
@@ -2069,7 +2069,7 @@ export function cleanupChat() {
   })
 }
 
-// Vue 판 useAuth().logout 이 부르던 useChat().cleanup() — 다음 사용자에게 이전 사용자의 이벤트가 가지 않게
+// 로그아웃 직전에 정리한다 — 다음 사용자에게 이전 사용자의 이벤트가 가지 않게
 onBeforeLogout(cleanupChat)
 
 export function useChat() {

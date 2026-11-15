@@ -1,6 +1,5 @@
-// Vue 원본: frontend/components/git/GitPullList.vue
 /**
- * PR 목록(시안에 PR 화면은 없어 이슈 목록 규격을 그대로 쓴다, 디자이너 확인 필요).
+ * PR 목록(시안에 PR 화면은 없어 이슈 목록 규격을 그대로 쓴다).
  *  머리 52: 열림/닫힘 세그먼트(이슈와 같은 UiSegment — 수제 세그먼트 2종 통일) · Gitea에서 새 PR ↗
  *  행 60: 상태 아이콘(열림 success · 병합 primary · 닫힘 muted) · 제목 + 라벨 칩 · "#n · 작성자 · 언제 · head → base"
  */

@@ -1,11 +1,10 @@
-// Vue 원본: frontend/pages/ai.vue
 // AI(코어 일반 AI 화면).
 //  데스크톱: 사이드바 236(접기) + 대화 머리 44(제목 · 모델 피커 · 도구 N · 지침 · ⋯) + 본문 680 + 입력.
 //  모바일: 대화 목록(자체 머리 + FAB) → 대화(LayoutMobileDetailBar ‹ · 제목/모델·도구 · ⋯, 탭바 숨김).
 // 모델·도구 이름은 서버(/api/ai/status) 응답만 보인다.
 //
-// React 이식 메모: Vue 는 스트리밍 중인 어시스턴트 메시지(reactive)를 제자리에서 고쳤다. 여기서는 같은 객체를
-// 고친 뒤 새 객체로 바꿔 넣는다(_uid 로 찾음 — 목록이 비워졌으면 아무 일 없음, Vue 에서 떨어진 객체를 고치는 것과 같다).
+// 스트리밍 중인 어시스턴트 메시지는 같은 객체를
+// 고친 뒤 새 객체로 바꿔 넣는다(_uid 로 찾음 — 목록이 비워졌으면 아무 일 없음).
 // 비동기 처리기는 "지금" 값이 필요해 상태마다 ref 를 같이 둔다(useLive).
 //
 // 질문 수정 → 답변 버전(◀ n/N ▶, POST /messages/{id}/edit · /versions/{n}) ·
@@ -131,7 +130,7 @@ export default function Page() {
     try { setStatus(await $fetch<AiStatus>('/api/ai/status', { credentials: 'include' })) } catch { /* 그대로 */ }
   }
 
-  // K1 — 고를 수 있는 모델 중 이미지를 읽는 것(설정 › AI 기본 모델과 같은 선택지)
+  // 고를 수 있는 모델 중 이미지를 읽는 것(설정 › AI 기본 모델과 같은 선택지)
   const [modelChoices, setModelChoices] = useState<AiModelChoice[]>([])
   async function loadModelChoices() {
     try {
@@ -611,7 +610,7 @@ export default function Page() {
   }
 
   async function send(preset?: string) {
-    // onClick={send} 처럼 쓰면 이벤트가 첫 인자로 온다 — 문자열일 때만 프리셋으로 본다(Vue 와 같은 방어).
+    // onClick={send} 처럼 쓰면 이벤트가 첫 인자로 온다 — 문자열일 때만 프리셋으로 본다.
     const raw = typeof preset === 'string' ? preset : inputRef.current
     const text = (raw ?? '').trim()
     const atts = typeof preset === 'string' ? [] : attachmentsRef.current
@@ -682,12 +681,12 @@ export default function Page() {
     if (files.length) addFiles(files)
   }
 
-  /** K1 [이미지 빼기] — 첨부한 이미지 모두 */
+  /** [이미지 빼기] — 첨부한 이미지 모두 */
   function removeImages() {
     for (const a of attachmentsRef.current.filter(x => x.kind === 'image')) removeAttachment(a)
   }
 
-  /** K1 [이미지 읽는 모델로 바꾸기] — 설정 › AI 기본 모델을 vision 지원 선택지로 */
+  /** [이미지 읽는 모델로 바꾸기] — 설정 › AI 기본 모델을 vision 지원 선택지로 */
   async function switchToVisionModel() {
     const c = visionChoice
     if (!c) return
@@ -826,7 +825,7 @@ export default function Page() {
     setProject(made)
   }
 
-  /** J1 편집 창 저장 — 이름·지침, 뺀 파일, 새로 연결한 파일을 차례로 */
+  /** 편집 창 저장 — 이름·지침, 뺀 파일, 새로 연결한 파일을 차례로 */
   async function saveProjectForm(v: AiProjectFormValue) {
     const cur = projectRef.current; if (!cur) return
     let last: AiProject | undefined

@@ -5,7 +5,7 @@ import {
   roleAtLeast, roleOf, roleLabelKey,
 } from '~/lib/files'
 
-describe('fileKind — 유형 아이콘 색 체계(시안 06-1 결정 8)', () => {
+describe('fileKind — 유형 아이콘 색 체계', () => {
   it('폴더·문서·시트·슬라이드·PDF·이미지·압축·기타', () => {
     expect(fileKind({ name: '디자인 자료', is_dir: true })).toBe('folder')
     expect(fileKind({ name: '4분기 로드맵.docx' })).toBe('doc')
@@ -85,7 +85,7 @@ describe('선택·이동 판정', () => {
   })
 })
 
-describe('p4 공유·활동 보조', () => {
+describe('공유·활동 보조', () => {
   it('비밀번호·내려받기 막음 링크는 손님 화면(/s/)', () => {
     expect(shareUrl('https://x', 't', false, { hasPassword: true })).toBe('https://x/s/t')
     expect(shareUrl('https://x', 't', false, { allowDownload: false })).toBe('https://x/s/t')
@@ -110,7 +110,7 @@ describe('p4 공유·활동 보조', () => {
   })
 })
 
-describe('공유 권한 4단계(p9 · 보기 < 댓글 < 편집 < 공동 소유)', () => {
+describe('공유 권한 4단계(보기 < 댓글 < 편집 < 공동 소유)', () => {
   it('roleAtLeast — 순서대로 비교, 내 항목(role 없음)은 소유자', () => {
     expect(roleAtLeast('view', 'comment')).toBe(false)
     expect(roleAtLeast('comment', 'comment')).toBe(true)

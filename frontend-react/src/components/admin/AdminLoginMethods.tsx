@@ -1,5 +1,5 @@
 /**
- * 설정 › 일반 "로그인 방식" — Vue components/admin/AdminLoginMethods.vue.
+ * 설정 › 일반 "로그인 방식".
  * 로컬 계정 · LDAP · SSO 의 순서와 사용 여부를 한 카드에(기존 "인증 우선순위"와 LDAP "사용" 체크를 통합).
  * 행 48(rounded-md bg-background) = 끌기 손잡이 + 순번 mono + 이름·설명 + "설정" + 스위치. 순서·스위치는 즉시 저장 + "저장됨 ✓".
  * 아래 "LDAP 연결" 카드(텍스트 필드)는 카드별 저장(되돌리기/저장) + 연결 시험.
@@ -174,7 +174,7 @@ export function AdminLoginMethods() {
   }
 
   function scrollToLdap() { document.getElementById('ldap')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
-  // Nuxt 라우터는 같은 페이지 #해시 이동 때 그 요소로 스크롤한다 — React Router 는 하지 않아 여기서 맞춘다
+  // React Router 는 같은 페이지 #해시 이동 때 그 요소로 스크롤하지 않아 여기서 맞춘다
   function scrollToGeneral() { setTimeout(() => document.getElementById('general')?.scrollIntoView({ block: 'start' }), 0) }
 
   return (

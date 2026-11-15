@@ -1,5 +1,4 @@
-// Vue 원본: frontend/pages/verify-email.vue
-// 이메일 인증(8-3-1): 결과 화면 틀(아이콘 타일 40 + 제목 24/700 + 서버 안내 + 1차 버튼).
+// 이메일 인증: 결과 화면 틀(아이콘 타일 40 + 제목 24/700 + 서버 안내 + 1차 버튼).
 // 확인 중엔 같은 틀의 스켈레톤(제목·문단 자리) — 스피너 대신.
 import { useEffect, useState } from 'react'
 import { $fetch } from '~/lib/api'
@@ -65,7 +64,7 @@ export default function Page() {
         setMessage(e?.data?.detail || t('verifyEmail.errorGeneric'))
       }
     })()
-    // Vue onMounted — 한 번
+    // 마운트 때 한 번
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

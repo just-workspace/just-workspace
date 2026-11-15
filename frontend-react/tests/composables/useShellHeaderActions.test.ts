@@ -3,7 +3,7 @@ import {
   setHeaderActions, clearHeaderActions, clearAllHeaderActions, getHeaderActions, wsShellApi, MAX_ACTIONS,
 } from '~/composables/useShellHeaderActions'
 
-// React 판 useShellHeaderActions 는 hook 이라, 테스트는 같은 상태를 직접 읽는다(Vue 판 actions.value 와 같은 값).
+// useShellHeaderActions 는 hook 이라, 테스트는 같은 상태를 직접 읽는다.
 const useShellHeaderActions = () => ({ actions: { get value() { return getHeaderActions() } } })
 
 describe('상단바 확장 자리', () => {

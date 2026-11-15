@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitRepoHeader.vue
 /**
  * 저장소 안 머리: 커맨드 바 대신 제목 줄 + 밑줄 탭 2단.
  *  제목 줄: ‹(저장소 목록으로) · 소유자 / 이름 18/700 · 공개 칩 20 · ★ 스타 n · Gitea에서 열기 ↗

@@ -1,4 +1,3 @@
-// Vue 원본: frontend/composables/useAiLabels.ts
 // AI 화면 이름표 — 도구·도구 묶음 이름은 서버가 준 식별자를 번역표로 바꾸고, 표에 없으면 식별자 그대로 보인다.
 import { useMemo } from 'react'
 import { useI18n } from '~/i18n'

@@ -1,5 +1,5 @@
 /**
- * Dialog — 브라우저 네이티브 alert/confirm/prompt 를 대체하는 인앱 다이얼로그(Vue 판 그대로).
+ * Dialog — 브라우저 네이티브 alert/confirm/prompt 를 대체하는 인앱 다이얼로그.
  * Promise 기반 싱글톤(useToast 패턴). UiDialogHost 가 렌더링.
  *
  * React: const { alertBox, confirmBox, promptBox, choose } = useDialog()

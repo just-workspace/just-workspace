@@ -1,7 +1,7 @@
 /**
- * Meeting-specific chat panel. Vue 판 components/meetings/MeetingChatPanel.vue 그대로.
+ * Meeting-specific chat panel.
  * Uses direct $fetch instead of useChat singleton to avoid interference.
- * ※ Vue 판에서도 지금 쓰는 곳이 없다(회의 채팅은 MeetingsSidebar 의 DataChannel 채팅). 1:1 이식으로 남겨 둔다.
+ * ※ 지금 쓰는 곳이 없다(회의 채팅은 MeetingsSidebar 의 DataChannel 채팅).
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { cn } from '~/lib/utils'

@@ -1,4 +1,3 @@
-// Vue 원본: frontend/components/git/GitLabelPicker.vue
 // 라벨 선택 드롭다운 — 목록 필터 · 이슈 상세 · 새 이슈 모달에서 공용.
 // 닫을 때 한 번만 commit 한다(체크마다 요청하지 않는다).
 import { useEffect, useRef, useState } from 'react'
@@ -8,7 +7,7 @@ import { useGit } from '~/composables/useGit'
 import { labelDot } from '~/utils/labelColor'
 
 export interface GitLabelPickerProps {
-  /** 선택된 label id(Vue v-model) */
+  /** 선택된 label id */
   modelValue: number[]
   /** 닫을 때 값이 바뀌었으면(commit 직전) */
   onUpdateModelValue?: (v: number[]) => void

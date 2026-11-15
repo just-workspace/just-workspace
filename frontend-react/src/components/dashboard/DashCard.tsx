@@ -80,7 +80,7 @@ export interface DashCardProps {
   footer?: ReactNode
   /** 판 밖 전폭 카드(시작하기) — 편집 중에도 끌기·1칸/2칸 없이 숨기기만 */
   fixed?: boolean
-  /** 머리 제목 자리를 바꿔 그린다(런처 카드 — 아이콘 타일 + 제목 + mono 부제). 주면 머리는 48 고정 대신 p-5 위쪽 여백(시안 화면 15) */
+  /** 머리 제목 자리를 바꿔 그린다(런처 카드 — 아이콘 타일 + 제목 + mono 부제). 주면 머리는 48 고정 대신 p-5 위쪽 여백 */
   head?: ReactNode
 }
 

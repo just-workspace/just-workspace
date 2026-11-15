@@ -2,7 +2,7 @@
  * 캘린더 순수 계산 함수 모음(컴포넌트·테스트 공용).
  *
  * - 주 시작 요일(설정›표시 → 로케일 기본)
- * - 주·일 보기 절대 배치: 겹치는 일정을 열(column)로 나눈다(시안 캘3)
+ * - 주·일 보기 절대 배치: 겹치는 일정을 열(column)로 나눈다
  * - 반복 일정 "이후 모두 삭제" = RRULE 의 UNTIL 을 이 회차 직전으로 되감기
  * - 일정 색 → 범주 토큰(--cat-N) 바탕 /0.2 + 3px 바. 규칙은 utils/categoryColor
  * - 날짜·시각 함수(startOfDay·addDays·isSameDay·startOfWeek·overlapsDay·fmtTime·toDateInput·toTimeInput·fromInputs)는

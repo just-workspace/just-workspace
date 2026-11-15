@@ -131,7 +131,7 @@ describe('시작하기', () => {
   })
 })
 
-describe('시작하기 전폭 카드(handover 18 답 2·"추가")', () => {
+describe('시작하기 전폭 카드', () => {
   const d = { items: ['profile_photo', 'first_message', 'invite_colleague', 'upload_file', 'install_app', 'enable_push'].map((id, i) => ({ id, label: id, link: '', done: i === 0 })), done_count: 1, total: 6, completed: false, dismissed: false }
   it('항목은 판 열 수에 맞춘 격자(3열 이상 3열), 행 56 — ✕ 는 배치 숨기기', () => {
     startStore.setState({ data: d, hidden: false, loaded: true })
@@ -168,7 +168,7 @@ describe('오늘', () => {
   })
 })
 
-describe('Git 활동(Q4)', () => {
+describe('Git 활동', () => {
   it('Gitea 계정이 없으면 [전체] 하나로 다시 불러 보여 준다', async () => {
     api.routes['/api/git/activity'] = (opts) => opts?.params.scope === 'all'
       ? ({ connected: false, scope: 'all', items: [
@@ -403,7 +403,7 @@ describe('판 조립', () => {
   })
 })
 
-describe('네트워크 랩 카드(handover-netlab 답 §5.10 (a) 화면 15)', () => {
+describe('네트워크 랩 카드', () => {
   it('제목 · 호스트(mono) · 설명 · [열기](새 탭) · "새 탭에서 열립니다" — 열기 하나뿐, ready 보고', () => {
     const { ui, report } = withCtx(<DashboardNetLab url="https://lab.example.com" />)
     renderIn(ui)

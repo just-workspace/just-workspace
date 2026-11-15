@@ -182,7 +182,7 @@ export const DUE_GROUP_LABEL: Record<DueGroupKey, string> = {
   week: '이번 주',
   later: '이후',
   none: '마감 없음',
-  // 시안에 완료 묶음이 없다 — 완료 작업은 맨 아래 "완료"로 모은다(디자이너 확인 필요)
+  // 시안에 완료 묶음이 없다 — 완료 작업은 맨 아래 "완료"로 모은다
   done: '완료',
 }
 
@@ -297,7 +297,7 @@ export const TASK_GROUP_LABEL_KEY: Record<string, string> = {
   all: 'common.all',
 }
 
-/** 우선순위 표기(화살표 + 글자). 낮음은 시안에 없어 ↓ muted 로 둔다(디자이너 확인 필요). labelKey = i18n 키 */
+/** 우선순위 표기(화살표 + 글자). 낮음은 시안에 없어 ↓ muted 로 둔다. labelKey = i18n 키 */
 export const PRIORITY_META: Record<TaskPriority, { arrow: string; labelKey: string; tone: 'danger' | 'warning' | 'muted' }> = {
   urgent: { arrow: '↑↑', labelKey: 'tasks.priorityUrgent', tone: 'danger' },
   high: { arrow: '↑', labelKey: 'tasks.priorityHigh', tone: 'warning' },

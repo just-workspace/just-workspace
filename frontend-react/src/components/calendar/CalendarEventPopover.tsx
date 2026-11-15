@@ -1,5 +1,5 @@
 /**
- * 일정 읽기 팝오버(Vue components/calendar/CalendarEventPopover.vue): 폭 340, rounded-lg, shadow-xl,
+ * 일정 읽기 팝오버: 폭 340, rounded-lg, shadow-xl,
  * 머리 40(색 10 + 캘린더 이름 12 muted, 편집(E)·삭제·닫기 32),
  * 본문 p-14 gap-12: 제목 16/600 · 날짜 13 muted(시각 mono · 반복 요약) · 화상 회의 줄([참여] 30 primary).
  * 데스크톱은 일정 옆(왼쪽 우선, 자리가 없으면 오른쪽)에 붙고, 모바일은 바텀시트로 같은 내용을 보여 준다.

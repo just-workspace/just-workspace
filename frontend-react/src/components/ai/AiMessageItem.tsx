@@ -1,5 +1,5 @@
 /**
- * AI 메시지 한 줄(Vue components/ai/AiMessageItem.vue).
+ * AI 메시지 한 줄.
  *  왼쪽 정렬 · 아바타 타일 28(사용자 = 원형 primary/20 이니셜, 어시스턴트 = r8 secondary + 반짝임) · 간격 12(모바일 10).
  *  머리: 이름 13/600 + mono 11 muted(시각, 어시스턴트는 "모델 · 시각") — 모바일은 이름만.
  *  도구 칩 26(r6, 12/600): 완료 muted + ✓ success · 진행 warning/15 + 회전 · 실패 danger/15 "… 실패".

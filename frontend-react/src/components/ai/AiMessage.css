@@ -1,5 +1,5 @@
-/* Vue components/ai/AiMessage.vue 의 <style>(전역) 그대로 */
-/* 본문은 바깥(메시지 줄)의 글자 크기·줄 간격·foreground 를 따른다(시안 AI 1 — muted 아님, 15px) */
+/* AI 답변 본문(AiMessage.tsx) 전역 스타일 */
+/* 본문은 바깥(메시지 줄)의 글자 크기·줄 간격·foreground 를 따른다(muted 아님, 15px) */
 .ai-md.prose-sm { font-size: inherit; line-height: inherit; }
 .ai-md {
   --tw-prose-body: currentColor; --tw-prose-headings: currentColor; --tw-prose-bold: currentColor;

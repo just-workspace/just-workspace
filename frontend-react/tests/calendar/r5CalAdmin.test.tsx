@@ -182,7 +182,7 @@ describe('SSL 인증서 올리기 모달', () => {
   })
 })
 
-describe('B9 — "다크에서 자동 조정됨" 줄은 조정됐을 때만', () => {
+describe('"다크에서 자동 조정됨" 줄은 조정됐을 때만', () => {
   it('다크에서 조정 안 되는 색은 darkAdjusted = null', () => {
     for (const hex of ['#29A376', '#8C56D2', '#CA6A16', '#1F9AAD', '#3B82F6']) {
       const r = resolveBrandTheme(hex)!

@@ -1,9 +1,9 @@
 /**
- * 빠른 입력 한 줄(Vue components/tasks/TasksQuickInput.vue): 44, rounded-10, bg-card, 포커스 ring + ring/30 2px.
+ * 빠른 입력 한 줄: 44, rounded-10, bg-card, 포커스 ring + ring/30 2px.
  * 입력 중 날짜(primary)·!우선순위(색)·@담당(muted) 토큰을 글자 위에 바로 칠한다 — 투명 글자 입력 + 같은 자리 거울 레이어.
  * Enter = 추가. 자세한 건 상세 패널에서.
  * @담당은 페이지가 사용자로 찾아 담당자로 저장한다(못 찾으면 제목에 남김). @ 가 없으면 나에게 배정.
- * ref → { clear, focus }(Vue defineExpose).
+ * ref → { clear, focus }.
  */
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { cn } from '~/lib/utils'
@@ -70,7 +70,7 @@ export function TasksQuickInput({ busy = false, size = 'md', autofocus = false, 
   function focus() { inputRef.current?.focus() }
   useImperativeHandle(ref, () => ({ clear, focus }))
 
-  // Vue: onMounted → nextTick(focus). 시트(UiModal) 안에서는 모달이 뒤이어 첫 포커스 요소(닫기)로 옮긴다 — 원본 동작 그대로(보고서)
+  // 마운트 뒤 포커스. 시트(UiModal) 안에서는 모달이 뒤이어 첫 포커스 요소(닫기)로 옮긴다
   useEffect(() => { if (autofocus) focus() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

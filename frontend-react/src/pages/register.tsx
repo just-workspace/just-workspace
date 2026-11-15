@@ -1,4 +1,3 @@
-// Vue 원본: frontend/pages/register.vue
 // 가입: 이름 · 아이디 · 비밀번호(규칙 실시간 체크, 확인 칸 대신 보기 토글) · 복구 이메일.
 // 백엔드가 복구 이메일로 인증 메일을 보내고 인증 전엔 로그인을 막아(RegisterRequest.recovery_email 필수) 펼친 필수 필드로 둔다.
 //
@@ -52,7 +51,7 @@ export default function Page() {
   }
   useEffect(() => {
     void checkInvite()
-    // Vue onMounted
+    // 마운트 때 한 번
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -127,7 +126,7 @@ export default function Page() {
   return (
     <AuthShell>
       {success ? (
-        /* 결과 화면(아이콘 타일은 결과 화면에만 — 8-3-1) */
+        /* 결과 화면(아이콘 타일은 결과 화면에만) */
         <>
           <AuthHeading icon="check" tone="success" title={t('register.successTitle')} subtitle={successMessage} />
           <UiButton as="a" href="/login" size="lg" className="w-full font-semibold" onClick={(e) => { e.preventDefault(); void navigateTo('/login') }}>

@@ -1,5 +1,5 @@
 /**
- * 메일 목록 보조 — 검색 구문·빠른 칩·스와이프 판정(시안 메일 4·7). 순수 함수만 두어 단위 테스트한다.
+ * 메일 목록 보조 — 검색 구문·빠른 칩·스와이프 판정. 순수 함수만 두어 단위 테스트한다.
  *
  * 검색 구문(커맨드 바 힌트 "from: is:unread"):
  *  - `from:이름|주소`   보낸 사람
@@ -72,7 +72,7 @@ export type SwipeAction = 'archive' | 'toggle-read' | null
 export const SWIPE_REVEAL = 96
 
 /**
- * 손가락을 뗐을 때의 행동. 왼쪽으로 칸 폭 이상 = 보관, 오른쪽 = 읽음 전환(시안 메일 4).
+ * 손가락을 뗐을 때의 행동. 왼쪽으로 칸 폭 이상 = 보관, 오른쪽 = 읽음 전환.
  * 세로 이동이 가로보다 크면 스크롤로 보고 아무것도 안 한다.
  */
 export function swipeAction(dx: number, dy = 0, threshold = SWIPE_REVEAL): SwipeAction {

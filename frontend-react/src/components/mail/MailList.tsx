@@ -1,5 +1,5 @@
 /**
- * 메일 목록 — Vue 판 components/mail/MailList.vue (모바일 목록).
+ * 메일 목록 (모바일 목록).
  *  - 거터 체크박스 상시. 하나라도 고르면 위 줄(44)이 선택 바로 바뀐다: 개수·보관·읽음·이동·삭제·Esc.
  *  - 위 줄(선택 없음): 전체 선택 체크 · 커맨드 바 검색(현재 폴더, `from: is:unread` 구문) · 새로고침.
  *  - 빠른 칩 줄 44: 안 읽음(개수)·별표·첨부 + 정렬(최근 순/보낸 사람 순, 광고 숨기기).
@@ -14,7 +14,7 @@
  */
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref, type TouchEvent as RTouchEvent } from 'react'
 import { useI18n } from '~/i18n'
-// Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
+// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
 import { clsx as cx } from 'clsx'
 import { $fetch } from '~/lib/api'
 import { navigateTo } from '~/lib/router'

@@ -1,5 +1,5 @@
 /**
- * 사이트 설정(브랜딩·공지·데모 모드 등) — Vue 판 composables/useSiteConfig.ts 그대로. /api/health 한 번 읽어 싱글턴.
+ * 사이트 설정(브랜딩·공지·데모 모드 등). /api/health 한 번 읽어 싱글턴.
  *
  * React: const { appName, brandColor, config, fetchAppConfig, refetchAppConfig } = useSiteConfig()  (값은 일반 값)
  * 컴포넌트 밖: siteConfigStore.getState().appName

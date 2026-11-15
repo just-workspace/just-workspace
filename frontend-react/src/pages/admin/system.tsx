@@ -1,5 +1,5 @@
 /**
- * 관리 › 시스템 › 서비스 상태 — Vue pages/admin/system.vue(관리 1: /admin/system 을 "서비스 상태"로 흡수).
+ * 관리 › 시스템 › 서비스 상태(/admin/system).
  * 행 규격은 시안 개요의 서비스 상태 카드(행 40 · 상태 점 + 이름 + 상태 글자 + ms mono).
  * 컨테이너 재시작은 같은 카드 문법의 두 번째 카드(확인 모달 → POST /api/setup/services/{svc}/restart).
  */

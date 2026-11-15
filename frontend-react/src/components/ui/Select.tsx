@@ -1,5 +1,5 @@
 /**
- * 선택(시안 F·8-2-1): 데스크톱은 커스텀(40, 셰브런, 목록 = 드롭다운 규격 rounded-lg shadow-md bg-popover 224)
+ * 선택: 데스크톱은 커스텀(40, 셰브런, 목록 = 드롭다운 규격 rounded-lg shadow-md bg-popover 224)
  * 모바일(터치)은 네이티브 <select> 를 그대로 — OS 피커가 더 낫다. 둘 다 같은 겉모습.
  * 옵션 swatch(CSS 색) = 이름 앞 색 견본 10(rounded 3) — 캘린더·라벨 고르기. 네이티브는 고른 값의 견본만 칸 왼쪽에 겹쳐 그린다.
  * search = 목록 위에 찾기 칸(UiInput icon search) — 긴 목록(시간대 등). 데스크톱 목록에만(모바일 OS 피커엔 없음).
@@ -37,7 +37,7 @@ export interface UiSelectSearch {
 }
 
 export interface UiSelectProps extends Omit<HTMLAttributes<HTMLElement>, 'id' | 'onChange' | 'placeholder'> {
-  /** 고른 값(Vue v-model). null = 고르지 않음 */
+  /** 고른 값. null = 고르지 않음 */
   modelValue?: string | number | null
   /** 값 바뀜 */
   onUpdateModelValue?: (v: string | number | null) => void
@@ -127,7 +127,7 @@ export function UiSelect({
     setQuery('')
     if (next) setActive(Math.max(0, options.findIndex(o => o.value === model)))
   }
-  // 열리면 찾기 칸(있으면) 또는 목록으로 포커스(Vue nextTick)
+  // 열리면 찾기 칸(있으면) 또는 목록으로 포커스
   useEffect(() => { if (open) (searchRef.current ?? listRef.current)?.focus() }, [open])
   // 고른 칸이 보이게
   useEffect(() => {
@@ -205,7 +205,7 @@ export function UiSelect({
               id={inputId}
               value={model === null ? '' : String(model)}
               onChange={(e) => {
-                // Vue v-model 은 옵션의 원래 값(숫자면 숫자)을 돌려준다
+                // 옵션의 원래 값(숫자면 숫자)을 돌려준다(DOM 값은 늘 문자열)
                 const o = options.find(x => String(x.value) === e.target.value)
                 setModel(o ? o.value : e.target.value)
               }}

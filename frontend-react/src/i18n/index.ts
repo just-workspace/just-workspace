@@ -1,16 +1,16 @@
 /**
- * i18n — Vue 판 @nuxtjs/i18n(vue-i18n) 과 같은 사용법을 주는 어댑터. 엔진은 i18next(react-i18next) 를 쓰되
- * 메시지 해석은 vue-i18n 문법(compile.ts)으로 한다 → **기존 locales JSON·키·문구를 그대로** 쓴다.
+ * i18n — vue-i18n 과 같은 사용법을 주는 어댑터. 엔진은 i18next(react-i18next) 를 쓰되
+ * 메시지 해석은 vue-i18n 문법(compile.ts)으로 한다.
  *
  * 사용법(컴포넌트):  const { t, te, tm, rt, locale, locales, setLocale } = useI18n()
- * 컴포넌트 밖(Vue 의 useNuxtApp().$i18n):  import { i18n } from '~/i18n';  i18n.t('key')
+ * 컴포넌트 밖:  import { i18n } from '~/i18n';  i18n.t('key')
  *
  * t 호출 형태(vue-i18n 과 같음):
  *   t(key) · t(key, { name }) · t(key, count) · t(key, count, { name }) · t(key, { name }, count) · t(key, [a, b]) · t(key, 'default')
  *
- * 언어 결정(nuxt.config i18n 과 같음): 쿠키 `i18n_locale` → 없으면 브라우저 언어(ko/en) → 없으면 ko. 결정값을 쿠키에 남긴다.
+ * 언어 결정: 쿠키 `i18n_locale` → 없으면 브라우저 언어(ko/en) → 없으면 ko. 결정값을 쿠키에 남긴다.
  * 메시지 파일은 언어별로 지연 로드한다(첫 화면 전에 현재 언어만 await).
- * 메시지 원본: src/i18n/locales/*.json — 2026-10-17 React 전환 후 이 파일이 원본(Vue frontend/ 쪽은 동결, 동기화 스크립트 폐지).
+ * 메시지 원본: src/i18n/locales/*.json.
  */
 import i18next from 'i18next'
 import { initReactI18next, useTranslation } from 'react-i18next'
@@ -44,7 +44,7 @@ function writeCookie(name: string, value: string) {
   document.cookie = `${name}=${encodeURIComponent(value)}; expires=${exp}; path=/; SameSite=Lax`
 }
 
-/** 언어 감지(@nuxtjs/i18n detectBrowserLanguage 와 같은 결과) */
+/** 언어 감지(쿠키 → 브라우저 언어 → ko) */
 export function detectLocale(): string {
   const fromCookie = readCookie(LOCALE_COOKIE)
   if (fromCookie && LOCALES.some(l => l.code === fromCookie)) return fromCookie
@@ -162,7 +162,7 @@ function makeApi(code: string): I18nApi {
   }
 }
 
-/** 언어 전환 — 쿠키 저장 + 메시지 로드 + 화면 갱신(Vue 판 setLocale 과 같음) */
+/** 언어 전환 — 쿠키 저장 + 메시지 로드 + 화면 갱신 */
 export async function setLocale(code: string): Promise<void> {
   if (!LOCALES.some(l => l.code === code)) return
   await ensureMessages(code)
@@ -177,7 +177,7 @@ export function onLocaleChange(fn: (code: string) => void): () => void {
 }
 
 /**
- * 컴포넌트 밖에서 쓰는 전역 i18n(Vue 판 `useNuxtApp().$i18n`).
+ * 컴포넌트 밖에서 쓰는 전역 i18n.
  * `i18n.locale` 은 읽을 때마다 현재 값이다.
  */
 export const i18n = {

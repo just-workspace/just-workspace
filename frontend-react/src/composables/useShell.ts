@@ -1,9 +1,9 @@
 /**
  * 셸 전역 열림 상태 모음 — 활동 패널(벨 → 우측 400), 단축키 도움말(Ctrl /), 사용자 메뉴, 팰릿(Ctrl K).
- * 한 번에 하나만 열린다(패널을 열면 메뉴는 닫힘). Vue 판 composables/useShell.ts 그대로.
+ * 한 번에 하나만 열린다(패널을 열면 메뉴는 닫힘).
  *
  * React: const { activityOpen, ..., openActivity, setCommandPaletteOpen } = useShell()
- *   Vue 의 `commandPaletteOpen.value = false` 대입은 setCommandPaletteOpen(false) 처럼 setXxx 로.
+ *   값을 바꿀 때는 setCommandPaletteOpen(false) 처럼 setXxx 로.
  * 컴포넌트 밖: shellStore.getState() / openPalette() 등 함수 import
  */
 import { createStore, useStore } from 'zustand'

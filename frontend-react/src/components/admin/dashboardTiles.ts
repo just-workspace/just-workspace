@@ -1,5 +1,5 @@
 /**
- * 관리 › 개요의 운영 요약 4칸·서비스 상태 계산 — Vue pages/admin/dashboard.vue 의 tiles·svcState·fmtWhen·mmdd 그대로(순수 함수로 뺌).
+ * 관리 › 개요의 운영 요약 4칸·서비스 상태 계산 — tiles·svcState·fmtWhen·mmdd(순수 함수).
  */
 import { RUN_STATUS_KEY, type AdminOps } from '~/composables/useAdminOps'
 

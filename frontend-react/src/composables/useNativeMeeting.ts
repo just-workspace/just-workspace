@@ -1,5 +1,5 @@
 /**
- * 모바일 앱(apps/mobile, Capacitor) 안에서 회의를 OS 에 "통화"로 알린다. Vue 판 composables/useNativeMeeting.ts 그대로.
+ * 모바일 앱(apps/mobile, Capacitor) 안에서 회의를 OS 에 "통화"로 알린다.
  *  - 포그라운드 서비스: 화면이 꺼지거나 앱을 내려도 회의가 유지된다
  *  - Telecom self-managed 통화: 일반 전화가 오면 hold, 끝나면 unhold 가 온다
  * 네이티브 쪽은 apps/mobile/android/.../MeetingPlugin.java. 브라우저·데스크톱에서는 전부 no-op.

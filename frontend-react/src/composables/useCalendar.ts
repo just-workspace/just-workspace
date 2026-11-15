@@ -1,10 +1,10 @@
 /**
- * 캘린더 상태·동작 — Vue 판 composables/useCalendar.ts 그대로(모듈 싱글턴).
+ * 캘린더 상태·동작(모듈 싱글턴).
  *
  * React:
  *   const { calendars, selectedDate, viewMode, fetchEvents, openPopover, eventsOnDay, … } = useCalendar()
- *   - 멤버 이름은 Vue 판과 같다. 값은 .value 없이(렌더 시점 값). 읽은 필드만 구독한다(useTrackedStore).
- *   - Vue 에서 바깥이 직접 대입하던 ref(viewMode·selectedDate·showEventModal·showShareModal·mobileMenuOpen·icsMode)는
+ *   - 값은 렌더 시점 값. 읽은 필드만 구독한다(useTrackedStore).
+ *   - 바깥에서 바꾸는 상태(viewMode·selectedDate·showEventModal·showShareModal·mobileMenuOpen·icsMode)는
  *     setter 를 같이 내보낸다: setViewMode(동작 함수, 팝오버 닫기 포함) · selectDate · setShowEventModal ·
  *     setShowShareModal · setMobileMenuOpen · setIcsMode.
  * 컴포넌트 밖: calendarStore.getState() 또는 동작 함수 직접 import.
@@ -105,10 +105,10 @@ export interface CalendarState {
   eventPreset: EventPreset | null
   showShareModal: boolean
   sharingCalendar: CalendarInfo | null
-  /** 읽기 팝오버(시안 캘1) */
+  /** 읽기 팝오버 */
   popoverEvent: CalendarEvent | null
   popoverAnchor: AnchorRect | null
-  /** 모바일: 월 날짜 탭 → 그날 시트(시안 캘2) */
+  /** 모바일: 월 날짜 탭 → 그날 시트 */
   sheetDate: Date | null
   /** 모바일 상단 ⋯ → 캘린더 목록 시트 */
   mobileMenuOpen: boolean
@@ -146,7 +146,7 @@ let popoverClosedAt = 0
 // 기본 캘린더 색 = 범주 1…8. 저장은 hex(CalDAV 호환), 화면은 --cat-N 토큰으로 그린다.
 export const CALENDAR_COLORS: string[] = [...CAT_HEX]
 
-// ─── 파생 값(Vue computed) — 같은 입력이면 같은 결과 객체(렌더 안정) ───
+// ─── 파생 값 — 같은 입력이면 같은 결과 객체(렌더 안정) ───
 
 let _visMemo: { events: CalendarEvent[]; calendars: CalendarInfo[]; out: CalendarEvent[] } | null = null
 /** 표시 중 일정. 초대받은 일정은 내 캘린더 목록에 없으므로 캘린더 표시 토글과 상관없이 보인다 */
@@ -222,7 +222,7 @@ export async function fetchEvents() {
   } catch (e: any) {
     console.error('fetchEvents error:', e)
     if (my !== eventsSeq) return
-    // 시안 캘6: 불러오기 실패는 그리드를 지우지 않고 커맨드 바 아래 띠로
+    // 불러오기 실패는 그리드를 지우지 않고 커맨드 바 아래 띠로
     set({ eventsError: e?.data?.detail || e?.message || i18n.t('calendar.error.load') })
   } finally {
     if (my === eventsSeq) set({ loadingEvents: false })
@@ -370,7 +370,7 @@ export function rruleCount(rule: string | null | undefined): number | null {
 }
 
 /**
- * 반복 일정 수정 범위(시안 캘5).
+ * 반복 일정 수정 범위.
  * - 반복 아님 / 회차 예외 행 / 마스터 자체 + 전체: 그대로 PATCH
  * - 회차 + 전체: 마스터를 받아 회차에서 옮긴 만큼만 옮긴다(회차 날짜가 시리즈 첫날이 되던 문제 방지)
  * - 회차 + 이후 모두: PATCH ?scope=following&occurrence= — 서버가 한 번에 시리즈를 둘로 나눈다(이후 구간의 지운 회차·개별 수정 보존)
@@ -477,7 +477,7 @@ export async function exportIcs(target: { calendarId?: string; eventId?: string 
 }
 
 export function toggleCalendarVisibility(id: string) {
-  // Vue 는 제자리 변경 — 새 객체로 바꿔 넣는다
+  // 제자리에서 고치지 않고 새 객체로 바꿔 넣는다
   set({ calendars: S().calendars.map(c => c.id === id ? { ...c, is_visible: !c.is_visible } : c) })
 }
 
@@ -626,7 +626,7 @@ export function openDaySheet(date: Date) {
 
 export function closeDaySheet() { if (S().sheetDate !== null) set({ sheetDate: null }) }
 
-// ─── Vue 에서 바깥이 직접 대입하던 ref 의 setter ───
+// ─── 바깥에서 바꾸는 상태의 setter ───
 export function setShowEventModal(v: boolean) { set({ showEventModal: v }) }
 export function setShowShareModal(v: boolean) { set({ showShareModal: v }) }
 export function setMobileMenuOpen(v: boolean) { set({ mobileMenuOpen: v }) }

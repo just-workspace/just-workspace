@@ -1,12 +1,12 @@
 /**
- * 연락처 편집 — Vue 판 components/contacts/ContactsEditModal.vue.
+ * 연락처 편집.
  * UiModal 520(모바일 바텀시트). 사진 56(없으면 이니셜) + "사진 추가"(이미지를 256px JPEG 로 줄여 data URI 저장),
  * 2열 입력(이름 · 회사 · 성 · 이름(given)) + 직함, 이메일·전화는 [종류 ▾ 96][값][✕ 40] 행 + "+ 이메일 추가",
  * 그룹 칩(점 8 + 이름 ✕, 28 · rounded 6 · 테두리) + "+ 그룹"(점선) → 기존 그룹 자동완성 입력,
  * 주소·메모·주소록. 푸터 [삭제(편집일 때, 왼쪽 danger 글자)] … [취소][저장].
  *
- * Vue 는 watch(showEditModal, immediate) 로 열릴 때 폼을 채웠다. React 는 열려 있는 동안만 본체(ContactsEditForm)를
- * 마운트해 같은 시점에 초기화한다.
+ * 열려 있는 동안만 본체(ContactsEditForm)를
+ * 마운트해 열릴 때마다 폼을 새로 채운다.
  */
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { useI18n } from '~/i18n'

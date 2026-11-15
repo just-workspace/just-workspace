@@ -1,9 +1,9 @@
 /**
- * 위키 — Vue 판 composables/useWiki.ts 그대로(싱글턴 상태 + API 호출).
+ * 위키(싱글턴 상태 + API 호출).
  *
- * React: const { spaces, currentPage, fetchPage, ... } = useWiki()   — 값은 .value 없이
+ * React: const { spaces, currentPage, fetchPage, ... } = useWiki()
  * 컴포넌트 밖: wikiStore.getState().currentPage, 동작 함수는 모듈 export 를 직접 import.
- * Vue 쪽 페이지가 `currentPage.value = x` 로 바깥에서 대입하던 상태는 setter(setCurrentPage 등)로.
+ * 바깥에서 바꾸는 상태는 setter(setCurrentPage 등)로.
  */
 import { createStore, useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
@@ -106,7 +106,7 @@ export function _resetWikiStore() { wikiStore.setState(initial()) }
 const set = (p: Partial<WikiState>) => wikiStore.setState(p)
 const get = () => wikiStore.getState()
 
-// ─── 바깥 대입용 setter (Vue: currentPage.value = x) ───
+// ─── 바깥에서 바꾸는 상태의 setter ───
 export function setCurrentSpace(v: WikiSpace | null) { set({ currentSpace: v }) }
 export function setPageTree(v: WikiPageNode[]) { set({ pageTree: v }) }
 export function setCurrentPage(v: WikiPageDetail | null) { set({ currentPage: v }) }
@@ -244,7 +244,7 @@ const actions = {
   setCurrentSpace, setPageTree, setCurrentPage, setVersions,
 }
 
-/** Vue useWiki() 와 같은 멤버. 상태는 전부 구독한다(위키 화면 하나가 쓴다). */
+/** 상태 + 동작. 상태는 전부 구독한다(위키 화면 하나가 쓴다). */
 export function useWiki() {
   const state = useStore(wikiStore, useShallow((s: WikiState) => s))
   return { ...state, ...actions }

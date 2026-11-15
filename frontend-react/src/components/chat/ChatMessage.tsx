@@ -1,10 +1,10 @@
 /**
- * 메시지 한 줄(텍스트 · 첨부 공용). Vue 원본: frontend/components/chat/ChatMessage.vue
+ * 메시지 한 줄(텍스트 · 첨부 공용).
  * 행 틀 = ChatMessageRow(cozy · compact · mobile), 본문 = ChatMarkdown, 첨부 = ChatAttachmentGrid(+ 이미지 보기 ChatImageViewer).
  *  · 나·내 역할·@everyone 멘션, 또는 나에게 온 답장(reply_to.sender = 나 && reply_ping) → bg-overlay-mention
  *  · 데스크톱: 호버·키보드 포커스 바(ChatMessageActions) · 단축키(호버·포커스 중) R 답장 · T 스레드 · S 저장 · E 수정
  *    · Alt+클릭 = 여기부터 안 읽음(새 메시지 선이 그 줄 위로 + 토스트)
- *  · 모바일: 길게 누르기 = 시트(ChatMessageSheet) · 왼쪽으로 밀기 = 답장(§2.2(3))
+ *  · 모바일: 길게 누르기 = 시트(ChatMessageSheet) · 왼쪽으로 밀기 = 답장
  *  · 수정은 컴포저에서(컴포저 위 "메시지 수정 중" 띠) — 여기서는 요청만.
  */
 import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent as ReactTouchEvent } from 'react'

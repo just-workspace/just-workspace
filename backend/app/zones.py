@@ -144,6 +144,8 @@ ROUTERS: list[tuple[str, str]] = [
     ("core", "app.admin.router:router"),
     ("core", "app.admin.users_ext:router"),          # 관리 사용자 일괄·삭제·초대·운영 요약
     ("core", "app.admin.settings_ext:router"),       # 관리 로그인 보호 정책·저장소 요약·사용자 할당
+    ("core", "app.system.router:router"),            # 관리 › 구역 켜기·끄기·설정(설치 관리자 대신 호출) · 저장소 상태
+    ("core", "app.system.router:public_router"),     # 파일 탭·알림 띠 — 저장소에 닿는가
     ("core", "app.setup.router:router"),
     ("git", "app.git.router:router"),
     ("core", "app.dashboard.router:router"),

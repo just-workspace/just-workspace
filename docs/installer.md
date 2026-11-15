@@ -2,7 +2,8 @@
 
 Just Workspace 를 "리눅스 + Docker Engine(x86_64)" 서버에 설치하는 컨테이너다. 터미널에서 한 줄로 띄우고, 나머지는 브라우저의 마법사에서 한다. 같은 엔진이 답변 파일로 무인 설치도 한다.
 
-> 이 문서는 **화면 없는 핵심부**(API 와 엔진)를 다룬다. 마법사 화면은 다음 단계에서 이 API 위에 올라간다.
+> 이 문서는 설치 관리자의 **핵심부**(API 와 엔진)를 다룬다. 마법사 화면은 `frontend-react/src/installer-app/` 의 독립 번들이고,
+> 설치 관리자 이미지에 함께 실려 8443 의 `/` 에서 나온다.
 > 손으로 `docker compose up` 하는 기존 흐름은 그대로 남아 있다 — [deployment.md](deployment.md).
 
 ## 1. 한 줄 설치
@@ -29,7 +30,8 @@ docker logs jw-installer
 - 이미지 저장소는 `-e JW_REGISTRY=<저장소/네임스페이스>`, 이미지 태그는 `-e JW_IMAGE_TAG=<태그>` 로 바꾼다. 기본은 `ghcr.io/just-workspace` 와 제품 버전(`VERSION`). `JW_REGISTRY=localhost` 를 주면 서버에 이미 있는(소스에서 빌드한) 이미지를 쓴다.
 - `-e JW_PUBLIC_HOST=<서버 주소>` 를 주면 로그의 주소와 인증서 이름에 그 값을 쓴다.
 
-이미지 빌드(리포 루트에서 — 문맥은 리포 루트, 무엇이 들어가는지는 `installer/Dockerfile.dockerignore`):
+이미지 빌드(리포 루트에서 — 문맥은 리포 루트, 무엇이 들어가는지는 `installer/Dockerfile.dockerignore`).
+첫 단계(Node)가 마법사 화면을 빌드하고(`npm ci` + `npm run build:installer`), 그 결과(`installer.html`·`assets/`·`icon.svg`)가 `/app/ui` 에 실린다:
 
 ```bash
 docker build -f installer/Dockerfile -t just-workspace-installer:$(cat VERSION) .
@@ -40,8 +42,8 @@ docker build -f installer/Dockerfile -t just-workspace-installer:$(cat VERSION) 
 
 ```
 installer/
-  Dockerfile                 Python + FastAPI + docker CLI·compose 플러그인
-  Dockerfile.dockerignore    빌드 문맥(번들 원본과 installer/ 만)
+  Dockerfile                 (Node) 마법사 화면 빌드 → Python + FastAPI + docker CLI·compose 플러그인
+  Dockerfile.dockerignore    빌드 문맥(번들 원본, installer/, 화면의 원본 frontend-react/)
   app/
     answers.py     답변 모델 · 검증(필드별 오류) · 비밀 분리
     catalog.py     구역·메모리·포트 계산(zones.json 을 읽기만 한다)
@@ -65,6 +67,7 @@ installer/
     cli.py         jw 명령
     server.py      서버 진입점
   tests/           docker 없이 도는 테스트
+  e2e/             실서버 검수 — 시나리오 러너와 답변 파일 견본(§13)
 ```
 
 단일 출처는 복제하지 않는다. 이미지 빌드 때 리포에서 **복사**해 번들(`/app/bundle`)에 싣는다.
@@ -158,8 +161,9 @@ docker compose -p just-workspace
 ## 5. 접속과 보안 모델
 
 - **HTTPS 8443, 자체 서명 인증서.** 첫 기동 때 만들어 `/data/state/tls/` 에 두고 SHA-256 지문을 로그에 찍는다. 브라우저의 경고 화면에서 지문을 대조한다.
-- **설치 토큰.** 영문 대문자·숫자 12자리(0/O/1/I 없음), 24시간. 주소의 `?token=` 으로 들어오면 확인 뒤 토큰 없는 주소로 넘기고 세션 쿠키(`HttpOnly`·`Secure`·`SameSite=Strict`)를 준다. 틀리면 `token_wrong`, 만료면 `token_expired`. 5번 틀리면 30초 동안 받지 않는다(`token_locked`). `docker exec jw-installer jw token` 으로 다시 발급하면 옛 토큰은 무효가 되고, 입력해 둔 답과 열린 세션은 그대로다.
-- **잠금.** 설치가 끝나면 토큰과 세션을 없애고 마법사 API 는 `423 locked` 만 답한다. `GET /api/state` 만 남는다(설치됨 표시와 워크스페이스 주소).
+- **화면.** `/` 와 정적 자산(`/assets/*`, `/icon.svg`)은 세션이 없어도 내준다 — 토큰 입력 화면과 잠김 안내를 화면이 그린다. 세션이 필요한 것은 `/api/*` 뿐이다. `installer.html` 은 `no-cache`, 자산(파일 이름에 내용 해시)은 `immutable`. 모든 응답에 `Content-Security-Policy`(`script-src 'self'` — 인라인 스크립트 없음, `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`(주소에 토큰이 실려 올 수 있다)를 붙인다. API 응답은 `no-store`.
+- **설치 토큰.** 영문 대문자·숫자 12자리(0/O/1/I 없음), 24시간. 주소의 `?token=` 으로 들어오면 확인 뒤 토큰 없는 주소로 넘긴다(302). 맞으면 세션 쿠키(`HttpOnly`·`Secure`·`SameSite=Strict`)를 주고, 틀리면 `/?token_status=wrong|expired|locked` 로 넘겨 화면이 사유를 알린다. API 로는 틀리면 `token_wrong`, 만료면 `token_expired`. 5번 틀리면 30초 동안 받지 않는다(`token_locked`). `docker exec jw-installer jw token` 으로 다시 발급하면 옛 토큰은 무효가 되고, 입력해 둔 답과 열린 세션은 그대로다.
+- **잠금.** 설치가 끝나면 토큰과 세션을 없애고 마법사 API 는 `423 locked` 만 답한다. 화면(`/`)과 `GET /api/state` 만 남는다(설치됨 표시, 워크스페이스 주소, 다시 설치·관리자 비밀번호 재설정 명령).
 - **내부 API.** 설치 뒤의 관리 동작은 `/internal/*` 로만 받는다. 다른 포트(8444)에서 평문으로 뜨고 **호스트에 게시하지 않는다.** 설치 관리자는 적용 중에 자신을 워크스페이스 내부망에 `jw-installer` 라는 이름으로 붙인다. 요청은 공유 키(`X-JW-Installer-Key`, 설치 때 만들어 backend 의 `JW_INSTALLER_KEY` 로 전달)와 내부 대역의 출발지 주소를 둘 다 만족해야 하고, 아니면 404 다. 브라우저는 이 포트에 닿지 못한다.
 - **docker.sock.** 설치 관리자는 호스트의 docker 소켓을 쥔다 — 이 컨테이너를 장악하면 서버를 장악한 것과 같다. 그래서 (1) 밖으로는 토큰으로 막은 8443 하나만 열고, (2) 설치가 끝나면 그 문도 잠그며, (3) 사용자 입력은 모두 검증하고 명령은 인자 배열로만 만든다(셸을 거치지 않는다). 설치가 끝난 뒤 8443 게시를 방화벽에서 닫아도 된다(내부 API 는 영향받지 않는다).
 - **비밀값.** 생성 규칙의 단일 출처는 backend 의 `security_defaults` 다. 설치 관리자는 backend 이미지를 한 번 실행해(`python -m app.cli gen-secrets --format json`) 받아 쓰고, 그 이미지를 쓸 수 없을 때만 번들에 실린 같은 표로 만든다. 비밀값은 로그에 찍지 않으며(알고 있는 값은 가린다), 명령 인자에도 싣지 않는다(`--env-file`·표준 입력). 예외는 Gitea 의 `auth add-oauth --secret` 하나다 — Gitea CLI 가 다른 길을 주지 않는다.
@@ -172,10 +176,11 @@ docker compose -p just-workspace
 
 | 메서드·경로 | 하는 일 |
 |---|---|
-| `GET /?token=…` | 토큰 확인 → 세션 쿠키 → `/` 로 넘김 |
+| `GET /` · `/assets/*` · `/icon.svg` | 마법사 화면(세션 없이) |
+| `GET /?token=…` | 토큰 확인 → 세션 쿠키 → `/` 로 넘김(302). 틀리면 `/?token_status=…` |
 | `POST /api/session` `{"token"}` | 토큰을 직접 입력했을 때 |
-| `GET /api/state` | 어디까지 했는지(단계 `wizard`/`applying`/`installed`, 답변 유무, 사전 점검 통과 여부, 적용 상태·오류·대안, 토큰 만료 시각) |
-| `GET /api/answers` · `PUT /api/answers` | 답변 조회 · 부분 저장(겹쳐 합친다, `null` 은 기본값으로). 응답: `{"answers", "secrets_set", "errors"}` |
+| `GET /api/state` | 어디까지 했는지(단계 `wizard`/`applying`/`installed`, 답변 유무, 사전 점검 통과 여부, 적용 상태·오류·대안, 토큰 만료 시각) + 이어 할 화면 `step` + 감지값 `facts` + 화면에 보일 값 `info`(아래) |
+| `GET /api/answers` · `PUT /api/answers[?step=<화면 id>]` | 답변 조회 · 부분 저장(겹쳐 합친다, `null` 은 기본값으로). `step` 을 주면 이어 할 화면으로 기억한다. 응답: `{"answers", "secrets_set", "errors"}` |
 | `GET /api/answers/export` | 비밀을 뺀 답변 파일 |
 | `POST /api/preflight` | 사전 점검(§7) |
 | `GET /api/zones` | `zones.json` + 고른 구역 + 서버 메모리 대비 판정(`fits`, `preset_fits`, `memory`) |
@@ -192,6 +197,17 @@ docker compose -p just-workspace
 | `POST /api/apply/retry` `{"use_temporary_cert"?}` | 실패한 단계부터 다시 |
 | `GET /api/apply/log?step=&tail=` | 단계 로그 |
 | `POST /api/restore…` | 501(이번 단계 범위 밖) |
+
+`GET /api/state` 의 `facts` 와 `info`:
+
+| 값 | 뜻 |
+|---|---|
+| `facts.memory_mb` · `public_ip` · `disk_free_gb` | 감지한 메모리 · 공인 주소 · 여유 공간(사전 점검을 돌린 뒤에 찬다. 모르면 `null`) |
+| `facts.lan_ip` | 서버의 나가는 경로 주소 |
+| `facts.detected_network` | 그 주소가 공인이면 `direct`, 사설이면 `router`, 모르면 `null`. 앞단 프록시 뒤인지는 알 수 없다 |
+| `info.git_verified_version` | 코드 저장소의 검증한 버전(compose 의 고정 이미지 옆 주석) |
+| `info.default_storage_path` | 기본 저장소(도커 볼륨)가 놓이는 호스트 폴더 |
+| `info.commands` | 서버 터미널에서 치는 명령(`reissue_token`·`reset_admin`·`install_from_answers`·`reinstall`) — 실제 컨테이너 이름으로 만든다. 잠긴 뒤에는 `reinstall`·`reset_admin` 만 |
 
 적용 상태(`GET /api/apply`):
 
@@ -245,6 +261,9 @@ docker compose -p just-workspace
 | `jw apply --answers <파일> [--dry-run]` | 답변 파일로 설치. `--dry-run` 은 검증·렌더링까지만 하고 산출물 요약을 낸다(아무것도 바꾸지 않는다) |
 | `jw render --answers <파일> --out <폴더>` | 산출물을 폴더에 써 본다(비밀값은 견본) |
 | `jw reset-admin <계정> [--disable-2fa]` | backend 의 `python -m app.cli reset-admin` 호출 |
+| `jw reinstall [--yes]` | 처음부터 다시 설치할 수 있게 지운다. `--yes` 없이는 지울 목록만 보여 준다(아래) |
+
+**다시 설치.** `docker exec jw-installer jw reinstall` 은 지울 것(워크스페이스의 컨테이너·볼륨·내부망, 설치 폴더의 `stack`·`state`)을 보여 주고 멈춘다. `--yes` 를 붙이면 지우고 설치 관리자를 다시 시작한다 — 새 설치 토큰이 `docker logs jw-installer` 끝에 나온다. **계정·파일·메일·대화가 모두 지워진다.** 설치 관리자 자신의 인증서(지문)는 남는다. 파일 저장소가 NFS·지정 폴더면 그 안의 파일은 지우지 않고 저장소 표식만 지운다(남은 파일은 새 설치의 계정과 이어지지 않는다).
 
 ## 7. 사전 점검
 
@@ -272,7 +291,7 @@ docker compose -p just-workspace
 ### 확인(probe)
 
 - **공인 주소**: 서버의 나가는 주소가 공인 주소면 그것. 아니면 바깥 서비스 네 곳에 차례로 묻고 **같은 답이 둘 이상**일 때만 믿는다. 아니면 `unknown`.
-- **NFS**: ① 서버에 닿는가(TCP 2049) ② 붙일 수 있는가 ③ 쓰기·읽기·지우기(backend 가 쓰는 uid/gid `1000:1000` 으로) ④ 파일 잠금 ⑤ 여유 공간(10GB 미만은 warn). NFS 옵션의 임시 도커 볼륨을 만들어 보조 컨테이너에서 검사하고 지운다. 실패 원인: `unreachable`, `permission_denied`, `read_only`, `no_locking`. 옵션은 `rw,nfsvers=4.1,hard,noatime` 고정.
+- **NFS**: ① 서버에 닿는가(TCP 2049) ② 붙일 수 있는가 ③ 쓰기·읽기·지우기(backend 가 쓰는 uid/gid `1000:1000` 으로) ④ 파일 잠금 ⑤ 여유 공간(10GB 미만은 warn). NFS 옵션의 임시 도커 볼륨을 만들어 보조 컨테이너에서 검사하고 지운다. 실패 원인: `unreachable`(서버에 닿지 않음), `export_not_found`(닿았는데 그 경로를 붙일 수 없음 — NFSv4 서버는 없는 경로와 이 서버에 허용하지 않은 내보내기를 같게 답한다), `permission_denied`(uid 1000 이 쓸 수 없음), `read_only`, `no_locking`. 옵션은 `rw,nfsvers=4.1,hard,noatime` 고정. 볼륨은 `nocopy` 로 붙여 내보내기 뿌리의 소유자·권한을 건드리지 않는다 — 뿌리는 uid/gid `1000:1000` 이 쓸 수 있게 저장소 쪽에서 맞춰 둬야 한다.
 - **로컬 폴더**: `--mount type=bind` 로 붙여 본다(`-v` 는 없는 폴더를 만들어 버린다). `ok`/`not_found`/`not_writable`.
 - **DKIM**: 메일 레코드 화면에서 보여 줘야 하므로 확인할 때 키를 만들어 `/data/state/dkim/` 에 둔다. 서버 구성에는 적용 때 들어간다.
 
@@ -331,7 +350,7 @@ compose 는 저장소 볼륨(`ws-storage-data`)을 `external` 로 쓴다. 설치
 | `local` + `path` | local 드라이버 `type=none,o=bind,device=<호스트 폴더>` |
 | `nfs` | local 드라이버 `type=nfs,o=addr=<서버>,rw,nfsvers=4.1,hard,noatime,device=:<내보내기 경로>` |
 
-만든 뒤 저장소 뿌리에 **표식 파일** `.jw-storage`(설치 id 포함)를 쓴다. backend 는 `STORAGE_MARKER_REQUIRED=1` 일 때 이 파일이 안 보이면(또는 설치 id 가 다르면) 파일 쓰기 API(`/api/files…`, `/api/wopi/files…`)를 `503 storage_unavailable` 로 거부하고 관리자에게 알린다 — 끊긴 저장소 자리의 빈 폴더에 쓰는 사고를 막는다. 같은 이름의 볼륨이 다른 옵션으로 이미 있거나, 표식이 다른 설치의 것이면 건드리지 않고 멈춘다.
+만든 뒤 저장소 뿌리에 **표식 파일** `.jw-storage`(설치 id 포함)를 쓴다. backend 는 `STORAGE_MARKER_REQUIRED=1` 일 때 이 파일이 안 보이면(또는 설치 id 가 다르면) 파일 쓰기 API(`/api/files…`, `/api/wopi/files…`)를 `503 storage_unavailable` 로 거부하고 관리자에게 알린다 — 끊긴 저장소 자리의 빈 폴더에 쓰는 사고를 막는다. NFS 서버가 응답하지 않을 때(`hard` 마운트라 읽기가 멈춘다)는 3초 안에 사유 `unresponsive` 로 거부한다. 같은 이름의 볼륨이 다른 옵션으로 이미 있거나, 표식이 다른 설치의 것이면 건드리지 않고 멈춘다.
 
 ### `.env` 변수의 출처
 
@@ -387,7 +406,7 @@ compose 는 저장소 볼륨(`ws-storage-data`)을 `external` 로 쓴다. 설치
 | 단계 | 하는 일 | 대표 실패 원인 |
 |---|---|---|
 | `config` | 비밀값 생성(이미 있는 것은 유지) → 스택 파일 쓰기 → `compose config -q`. 도커 볼륨 저장소면 여기서 볼륨·표식까지 | `compose_invalid` |
-| `storage` | (NFS·지정 폴더일 때만) 볼륨 만들기 + 표식 | `unreachable`, `permission_denied`, `read_only`, `storage_other_install`, `storage_volume_mismatch` |
+| `storage` | (NFS·지정 폴더일 때만) 볼륨 만들기 + 표식 | `unreachable`, `export_not_found`, `permission_denied`, `read_only`, `storage_other_install`, `storage_volume_mismatch` |
 | `pull` | `compose config --images` 의 이미지를 하나씩 받는다(이미지별 진행). 받지 못해도 서버에 이미 있으면 경고만 | `image_pull_failed` |
 | `database` | postgres·redis 시작, healthy 대기 | `database_not_ready` |
 | `cert` | (프록시가 맡고 따로 필요한 이름도 없으면 생략) 발급·배치 | `cert_issue_failed`(대안: 임시 인증서), `cert_invalid`, `cert_upload_missing` |
@@ -397,7 +416,8 @@ compose 는 저장소 볼륨(`ws-storage-data`)을 `external` 로 쓴다. 설치
 
 - 시작 전에 답변 검증과 사전 점검을 한다. 걸리면 단계 없이 `failed`(`answers_invalid`, `preflight_failed`).
 - 단계는 멱등하다. `POST /api/apply/retry` 는 실패한 단계부터 다시 돌고, 끝난 단계는 건드리지 않는다.
-- 상태는 단계가 바뀔 때마다 `/data/state/apply.json` 에 쓴다. 브라우저를 닫아도 계속 돌고, 설치 관리자가 재시작하면 끊긴 단계부터 잇는다.
+- 상태는 단계가 바뀔 때마다 `/data/state/apply.json` 에 쓴다. 브라우저를 닫아도 계속 돌고, 설치 관리자가 재시작하면 끊긴 단계부터 잇는다(그 단계에 `interrupted: true` 가 남는다).
+- `POST /api/apply`·`/retry` 는 응답을 주기 전에 상태를 `running` 으로 써 둔다 — 202 를 받은 직후의 조회가 옛 `failed` 를 보는 일이 없다.
 - 로그는 `/data/state/logs/<단계>.log`. 알고 있는 비밀값은 `***` 로 가린다.
 
 ## 10. 구역 훅 쓰는 법
@@ -452,7 +472,9 @@ docker 없이 돈다. docker·DNS·HTTP·SMTP 는 가짜로 바꾼다(`tests/fak
 
 - **마법사 화면이 없다.** `/` 는 안내 문구만 낸다. 화면(브라우저 SPA)은 `frontend-react/` 에서 따로 빌드한다 — `cd frontend-react && npm run build:installer` → `frontend-react/dist-installer/`(`installer.html` · `assets/` · `icon.svg`, 자산 주소는 상대 경로). 이 폴더를 이미지에 넣어 `/` 에서 내주는 일이 남았다.
 - **복원**(`mode: restore`)은 없다(501).
-- **backend 쪽 호출부가 없다.** 내부 API 는 준비돼 있지만 워크스페이스 관리 화면이 그것을 부르는 코드는 다음 단계다. backend 에는 `JW_INSTALLER_URL`·`JW_INSTALLER_KEY` 만 전달된다.
+- **backend 쪽 호출부**는 `backend/app/system/` 이다. 관리자 권한을 확인하고 내부 API 를 대신 부르며(`/api/admin/system/zones…`, `/jobs/<id>`, `/probe/…`), 켜기·끄기·설정 변경을 감사 로그에 남긴다. 화면은 관리 › 구역(`/admin/zones`). `JW_INSTALLER_URL`·`JW_INSTALLER_KEY` 가 비어 있으면(설치 관리자 없이 구성한 설치) 목록은 읽기 전용이고 나머지는 `503 installer_unavailable` 이다.
+- **구역 화면이 쓰지만 내부 API 에 아직 없는 것**: 메일 레코드 확인(`POST /internal/probe/mail-records`), 공인 주소 다시 감지(`GET /internal/probe/public-ip`), 진행 중인 작업 목록. 앞의 둘은 backend 가 그 경로를 불러 보고 없으면 각각 `501 installer_unsupported`, 설치 때 감지해 둔 값으로 답한다. 작업은 backend 가 자신이 시작한 작업 id 를 기억해 목록에 붙인다(다른 경로로 시작한 작업은 화면에 보이지 않는다).
+- **저장소 상태**(관리 › 저장소, `GET /api/admin/system/storage`)의 종류·위치는 backend 컨테이너의 마운트 정보에서 읽는다. 설치 관리자가 가진 답변(NFS 서버·내보낸 경로)을 내부 API 로 받지는 않는다.
 - **TURN/TLS**: 직접 받는 구성에서는 5349 에 게시되므로, 443 을 넘겨 주는 장치가 없으면 쓰이지 않는다(§8).
 - **앞단 프록시 구성의 메일·회의 인증서**는 자체 서명이다. 신뢰되는 인증서가 필요하면 지금은 손으로 넣어야 한다.
 - **메일 도메인과 접속 주소가 다르면** `DOMAIN` 은 메일 도메인이 된다. backend 가 `DOMAIN` 을 표시용으로도 쓰는 자리(메일 제목 머리말 등)에는 메일 도메인이 나온다.

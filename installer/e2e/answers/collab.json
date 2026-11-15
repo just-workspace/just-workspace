@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "mode": "new",
+  "access": { "domain": "ws.e2e.example", "network": "direct", "cert": "temporary" },
+  "storage": { "kind": "local" },
+  "preset": "collab",
+  "addons": [],
+  "mail": { "kind": "builtin", "mail_domain": "e2e.example" },
+  "admin": { "name": "관리자", "username": "admin" }
+}

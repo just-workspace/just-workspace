@@ -645,10 +645,21 @@ class Engine:
     # ─── 실행 ───
 
     def start(self, from_step: str | None = None, *, rerun: tuple[str, ...] = ()) -> bool:
-        """백그라운드로 돌린다. 이미 돌고 있으면 False."""
+        """백그라운드로 돌린다. 이미 돌고 있으면 False.
+
+        돌려주기 전에 상태를 `running` 으로 써 둔다 — 시작(또는 재시도) 요청에 202 를 받은 화면이 곧바로
+        상태를 물었을 때 옛 `failed`·`idle` 이 보이면 안 된다(화면은 그것을 "끝났다"로 읽는다).
+        """
         with self._lock:
             if self.running:
                 return False
+            state = self.status()
+            if state.get("status") != "running":
+                for step in state.get("steps", []):
+                    if step["status"] == "failed":
+                        step.update(status="pending", error=None)
+                state.update(status="running", error=None, alternatives=[], finished_at=None)
+                self._save(state)
             self._thread = threading.Thread(target=self.run, kwargs={"from_step": from_step, "rerun": rerun},
                                             name="jw-apply", daemon=True)
             self._thread.start()
@@ -659,8 +670,9 @@ class Engine:
         state = self.status()
         if state.get("status") != "running":
             return False
+        # 단계가 아직 없으면(시작 직후에 끊겼다) 처음부터 — 단계는 멱등하다
         step = next((s["id"] for s in state["steps"] if s["status"] in ("running", "pending")), None)
-        if step is None:
+        if step is None and state["steps"]:
             return False
         for s in state["steps"]:
             if s["status"] == "running":
@@ -718,8 +730,10 @@ class Engine:
         for i, step_id in enumerate(wanted):
             prev = old.get(step_id)
             keep = prev is not None and prev["status"] == "done" and i < start_index and step_id not in rerun
-            steps.append(prev if keep else {"id": step_id, "status": "pending", "started_at": None,
-                                            "finished_at": None, "error": None, "detail": {}})
+            fresh = {"id": step_id, "status": "pending", "started_at": None, "finished_at": None, "error": None, "detail": {}}
+            if prev is not None and prev.get("interrupted"):
+                fresh["interrupted"] = True         # 설치 관리자가 재시작해 끊겼던 단계 — 화면이 "이어서 진행"을 알린다
+            steps.append(prev if keep else fresh)
         state["steps"] = steps
         self._save(state)
         if self.store.install()["phase"] == "wizard":

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "mode": "new",
+  "access": { "domain": "ws.e2e.example", "network": "direct", "cert": "temporary" },
+  "storage": { "kind": "local" },
+  "preset": "full",
+  "addons": ["sso"],
+  "mail": { "kind": "builtin", "mail_domain": "e2e.example" },
+  "meetings": { "public_ip": "__E2E_ADDR__", "turn": true, "lossless_audio": false },
+  "ai": { "mode": "later" },
+  "git": { "version": "verified" },
+  "admin": { "name": "관리자", "username": "admin" }
+}

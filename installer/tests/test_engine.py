@@ -156,6 +156,63 @@ def test_failure_then_retry_from_failed_step(tmp_path):
     assert not svc.engine.retry()                       # 실패한 것이 없으면 재시도할 것도 없다
 
 
+def test_status_is_running_before_start_returns(tmp_path):
+    """시작·재시도 요청이 돌아온 직후의 상태 조회가 옛 상태(idle·failed)를 보이면 안 된다."""
+    import threading
+
+    host = Host(tmp_path)
+    svc = host.install()
+    gate = threading.Event()
+    real = svc.engine.run
+
+    def held(**kw):
+        gate.wait(10)
+        return real(**kw)
+    svc.engine.run = held
+
+    assert svc.engine.status()["status"] == "idle"
+    assert svc.engine.start()
+    assert svc.engine.status()["status"] == "running"          # 스레드가 아직 아무것도 안 했어도
+    assert not svc.engine.start()                               # 돌고 있으면 또 시작하지 않는다
+    gate.set()
+    svc.engine._thread.join(30)
+    assert svc.engine.status()["status"] == "done"
+
+    # 실패 → 재시도: 돌려준 순간 이미 running 이고, 옛 오류·대안은 지워져 있다
+    svc2_host = Host(tmp_path / "second")
+    svc2 = svc2_host.install()
+    svc2_host.certbot_ok = False
+    assert svc2.engine.run()["status"] == "failed"
+    gate2 = threading.Event()
+    real2 = svc2.engine.run
+
+    def held2(**kw):
+        gate2.wait(10)
+        return real2(**kw)
+    svc2.engine.run = held2
+    assert svc2.engine.retry(use_temporary_cert=True)
+    now = svc2.engine.status()
+    assert now["status"] == "running" and now["error"] is None and now["alternatives"] == []
+    assert all(s["status"] != "failed" for s in now["steps"])
+    gate2.set()
+    svc2.engine._thread.join(30)
+    assert svc2.engine.status()["status"] == "done"
+
+
+def test_resume_when_stopped_right_after_start(tmp_path):
+    """시작 요청만 기록되고 단계가 하나도 돌기 전에 설치 관리자가 죽은 경우 — 처음부터 돈다."""
+    host = Host(tmp_path)
+    svc = host.install()
+    state = svc.engine.status()
+    state["status"] = "running"
+    svc.engine._save(state)
+
+    svc2 = host.services_obj()
+    assert svc2.engine.resume()
+    svc2.engine._thread.join(30)
+    assert svc2.engine.status()["status"] == "done"
+
+
 def test_resume_after_installer_restart(tmp_path):
     host = Host(tmp_path)
     svc = host.install()
@@ -183,6 +240,8 @@ def test_resume_after_installer_restart(tmp_path):
     state = svc2.engine.status()
     assert state["status"] == "done", state["error"]
     assert len(host.runner.find("pull", "postgres:16")) == pulls       # 끝난 단계는 다시 하지 않는다
+    marked = [s["id"] for s in state["steps"] if s.get("interrupted")]
+    assert marked == ["database"]                                      # 끊겼던 단계에 표시가 남는다
     assert not svc2.engine.resume()                                    # 돌던 것이 없으면 아무 일도 없다
 
 

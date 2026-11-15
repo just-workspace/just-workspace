@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "mode": "new",
+  "access": { "domain": "ws.e2e.example", "network": "direct", "cert": "temporary" },
+  "storage": { "kind": "nfs", "server": "__E2E_ADDR__", "export": "/srv/e2e-nfs/rw" },
+  "preset": "minimal",
+  "addons": [],
+  "admin": { "name": "관리자", "username": "admin" }
+}

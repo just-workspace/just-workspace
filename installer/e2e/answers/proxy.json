@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "mode": "new",
+  "access": { "domain": "ws.e2e.example", "network": "proxy", "proxy_addresses": ["192.168.10.0/24"], "cert": "proxy" },
+  "storage": { "kind": "local" },
+  "preset": "minimal",
+  "addons": [],
+  "admin": { "name": "관리자", "username": "admin" }
+}

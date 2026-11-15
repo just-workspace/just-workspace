@@ -325,7 +325,7 @@ export class HiresVoiceTransport implements VoiceTransport {
   async getStats(): Promise<VoiceStats> {
     const base = await this.inner.getStats()
     if (!this.hiresUp || !this.bridge) return { ...base, exclusive: false, bitPerfect: false }
-    let s: HiresStats | null = null
+    let s: HiresStats | null
     try { s = await this.bridge.stats() } catch { s = this.lastStats }
     if (!s) return { ...base, exclusive: this.open?.exclusive ?? false, bitPerfect: false }
     return mapHiresStats(base, s)

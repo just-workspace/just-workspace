@@ -1,0 +1,18 @@
+# 설치 관리자 이미지의 빌드 문맥 — 리포 루트에서 아래 것만 보낸다.
+# 번들 원본(installer/app/bundle.py 의 MANIFEST)이 늘면 여기도 늘린다(tests/test_validators_env.py 가 지킨다).
+*
+!VERSION
+!docker-compose.yml
+!backend/app/zones.json
+!backend/app/security_defaults.py
+!nginx/nginx.conf
+!nginx/security-headers.conf
+!init/init-db.sh
+!scripts/certbot-entrypoint.sh
+!mailserver/config/user-patches.sh
+!mailserver/config/auth-workspace.lua
+!mailserver/config/dovecot.cf
+!installer/requirements.txt
+!installer/app/**
+**/__pycache__
+**/*.pyc

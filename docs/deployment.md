@@ -9,7 +9,7 @@
 
 ## 빠른 시작
 
-> 설치 방식은 Docker 기반 웹 설치 마법사로 개편 중(문서 준비 중)
+> 설치 관리자(컨테이너 한 줄 + 브라우저 마법사, 답변 파일 무인 설치)는 [installer.md](installer.md). 마법사 화면은 준비 중이고 API 와 엔진이 먼저 들어와 있다.
 
 ## 배포 모드 (`DEPLOY_MODE`)
 
@@ -79,7 +79,7 @@ COMPOSE_PROFILES=certbot,mailserver,gitea,livekit,egress,onlyoffice,sso
 
 ## 앞단 리버스 프록시 뒤에서 (external_proxy)
 
-- RP 가 TLS 를 종단하고 `X-Real-IP`·`X-Forwarded-Proto` 를 넘긴다. `ws-nginx` 는 `set_real_ip_from` 에 적힌 RP 주소에서 온 연결만 믿는다 — 사이트의 RP 주소는 `nginx/private.d/` 가 아니라 `nginx/nginx.conf` 의 `set_real_ip_from` 을 바꿔야 한다.
+- RP 가 TLS 를 종단하고 `X-Real-IP`·`X-Forwarded-Proto` 를 넘긴다. `ws-nginx` 는 `set_real_ip_from` 에 적힌 RP 주소에서 온 연결만 믿는다 — 사이트의 RP 주소는 `nginx/site.d/http.conf` 의 `set_real_ip_from` 에 적는다(`nginx/nginx.conf` 는 어느 설치에서나 같다 — 사이트별 값은 `nginx/site.d/` 에 있다).
 - WebSocket(`/ws/`, `/livekit/`, `/git/`, `/onlyoffice/`) 업그레이드와 `/api/mcp` 스트리밍(버퍼링 off)을 RP 도 통과시켜야 한다.
 - 대용량 업로드는 RP 의 `client_max_body_size` 도 풀어야 한다(내장 nginx 는 `/api/files/upload` 10G).
 - 컨테이너(gitea · onlyoffice)가 공인 도메인으로 헤어핀 NAT 을 못 넘으면 `RP_LAN_IP` 로 우회한다(compose `extra_hosts`).

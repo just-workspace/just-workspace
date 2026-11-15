@@ -1,0 +1,8 @@
+# backend/requirements.txt 와 같은 계열 버전(전부 == 고정)
+fastapi==0.162.7
+starlette==1.10.0
+uvicorn==0.54.0
+pydantic==2.14.3
+httpx==0.28.1
+cryptography==50.0.2
+dnspython==2.9.2

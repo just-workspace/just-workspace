@@ -161,3 +161,12 @@ def test_bundle_secret_table_is_the_backend_table():
     values = sd.generate()
     assert set(values) == set(names)
     assert all(sd.weakness(sd.spec(n), val) is None for n, val in values.items())
+
+
+def test_dockerignore_lets_every_bundle_source_through():
+    from app import bundle
+
+    lines = (bundle.repo_root() / "installer" / "Dockerfile.dockerignore").read_text(encoding="utf-8").splitlines()
+    allowed = {line[1:] for line in lines if line.startswith("!")}
+    for src in MANIFEST.values():
+        assert src in allowed, f"빌드 문맥에 빠진 번들 원본: {src}"

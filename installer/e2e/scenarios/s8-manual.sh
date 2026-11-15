@@ -57,6 +57,14 @@ expect "프런트 화면(/)" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$H/"
 expect "/api/health" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$H/api/health")"
 note "/api/health zones: $(curl -s "$H/api/health" | json_get 'd["zones"]') (JW_ZONES 를 비우면 전부)"
 expect "게시 포트" "80/tcp " "$(published_ports | grep -v '^\[' | sed 's/^0\.0\.0\.0://' | tr '\n' ' ')"
+# 설치 관리자가 없는 구성 — 점검 관련 경로가 nginx 기동을 막지 않고, 점검 모드도 걸리지 않는다
+expect "정적 점검 페이지(/maintenance.html)" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$H/maintenance.html")"
+expect "공개 점검 상태는 설치 관리자가 없어 502" 502 "$(curl -s -o /dev/null -w '%{http_code}' "$H/maintenance/status")"
+docker stop ws-frontend-react >/dev/null
+for i in $(seq 1 12); do code="$(curl -s --max-time 10 -o "$E2E_WORK/manual-page.html" -w '%{http_code}' "$H/")"; [ "$code" = 503 ] && break; sleep 2; done
+expect "프런트가 없으면 점검 페이지" 503 "$code"
+check "그 본문은 점검 페이지다" grep -q 'maintenance/status' "$E2E_WORK/manual-page.html"
+docker start ws-frontend-react >/dev/null; wait_ready ws-frontend-react 60
 
 say "관리자 로그인·파일"
 body="$E2E_WORK/login.json"

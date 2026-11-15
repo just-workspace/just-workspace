@@ -104,7 +104,7 @@ PY
     # 처음 빌드한 이미지에서 태그만 붙인다. 서버의 `localhost/…:<처음 버전>` 태그는 업데이트가 복원 지점과 함께 치우므로
     # (가리키는 복원 지점이 없어진 옛 버전), 레지스트리 이름으로 남겨 둔 것을 먼저 쓴다.
     base="$REG/just-workspace-$n:$E2E_VERSION"
-    docker image inspect "$base" >/dev/null 2>&1 || base="localhost/just-workspace-$n:$E2E_VERSION"
+    docker image inspect "$base" >/dev/null 2>&1 || docker pull -q "$base" >/dev/null 2>&1 || base="localhost/just-workspace-$n:$E2E_VERSION"
     docker image inspect "$base" >/dev/null 2>&1 || base="localhost/just-workspace-$n:$(env_value JW_VERSION)"
     [ "$base" = "$REG/just-workspace-$n:$ver" ] || docker tag "$base" "$REG/just-workspace-$n:$ver" || return 1
   done

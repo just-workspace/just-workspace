@@ -39,7 +39,7 @@ describe('현황', () => {
     expect(screen.getByText(/새 버전이 나오면 알리고, 관리자가 시작합니다/)).toBeTruthy()
     expect(screen.queryByTestId('update-available')).toBeNull()
     expect(screen.queryByTestId('update-paused')).toBeNull()
-    // 탭은 시안의 순서 그대로, 서로 이어진다
+    // 탭은 정해진 순서 그대로, 서로 이어진다
     expect(screen.getAllByRole('tab').map(x => x.textContent)).toEqual(['현황', '설정', '되돌림', '앱 배포', '기록', '오프라인 업데이트'])
   })
 

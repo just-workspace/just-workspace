@@ -4,7 +4,7 @@
 //
 // Environment:
 //
-//	RELAY_SECRET            HMAC secret shared with the backend (AUDIORELAY_SECRET). Required.
+//	RELAY_SECRET            HMAC secret shared with the backend (AUDIORELAY_SECRET). Required, 32 bytes or longer.
 //	RELAY_HTTP_ADDR         plain HTTP listener (health/info/stats/ws). Default :8090
 //	RELAY_WT_ADDR           WebTransport UDP listener. Default :4433. Empty disables WebTransport.
 //	RELAY_WT_PUBLIC_URL     URL browsers use, e.g. https://relay.example.com:4433/audiorelay/wt.
@@ -38,6 +38,9 @@ import (
 	"just-workspace/audiorelay/internal/server"
 	"just-workspace/audiorelay/internal/wtrelay"
 )
+
+// minSecretLen is the shortest RELAY_SECRET the relay accepts.
+const minSecretLen = 32
 
 func env(k, def string) string {
 	if v := os.Getenv(k); v != "" {
@@ -79,9 +82,10 @@ func main() {
 		server.Version = v
 	}
 
+	// The backend's startup check requires the same minimum (KEY_MIN in app/security_defaults.py).
 	secret := []byte(os.Getenv("RELAY_SECRET"))
-	if len(secret) < 16 {
-		log.Error("RELAY_SECRET missing or shorter than 16 bytes")
+	if len(secret) < minSecretLen {
+		log.Error("RELAY_SECRET missing or shorter than 32 bytes")
 		os.Exit(2)
 	}
 

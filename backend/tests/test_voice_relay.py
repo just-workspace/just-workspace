@@ -149,6 +149,8 @@ async def test_503_when_unconfigured_or_relay_down(db, relay, monkeypatch):
     assert e.value.status_code == 503
 
     from app import config as cfg
+    monkeypatch.setattr(cfg.get_settings(), "audiorelay_secret", SECRET[:31], raising=False)
+    assert not voice_relay.is_configured()               # 기동 검사·릴레이와 같은 최소 길이(32)
     monkeypatch.setattr(cfg.get_settings(), "audiorelay_secret", "", raising=False)
     assert not voice_relay.is_configured()
     with pytest.raises(HTTPException) as e:

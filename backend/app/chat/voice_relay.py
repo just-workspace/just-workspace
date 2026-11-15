@@ -26,6 +26,7 @@ from app.chat import relay_token, voice
 from app.config import get_settings
 from app.db.models import User
 from app.db.session import get_db
+from app.security_defaults import KEY_MIN
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat-voice"])
@@ -40,7 +41,7 @@ class RelayTokenRequest(BaseModel):
 
 def is_configured() -> bool:
     s = get_settings()
-    return bool(getattr(s, "audiorelay_secret", "") and len(s.audiorelay_secret) >= 16 and s.audiorelay_url)
+    return bool(getattr(s, "audiorelay_secret", "") and len(s.audiorelay_secret) >= KEY_MIN and s.audiorelay_url)
 
 
 async def fetch_relay_info() -> dict | None:

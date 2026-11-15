@@ -118,7 +118,7 @@ WebSocket 은 TCP 라 손실이 없지만 릴레이가 (테스트 드롭 등으�
 claims: `{"room":"voice-<채널id>","uid":"<사용자id>","name":"<표시이름>","identity":"<LiveKit identity, 선택>","iat":…,"exp":…,"nonce":"…"}`.
 `identity` 는 같은 세션의 LiveKit identity(음성채널 presence 키). 릴레이는 welcome/peer_joined/통계에 그대로 실어 주고,
 클라이언트는 이것으로 릴레이 피어 ↔ LiveKit 참가자를 짝지어 **같은 사람의 Opus 호환 스트림을 끄고 PCM 을 듣는다**.
-- secret = `.env` 의 `AUDIORELAY_SECRET`(백엔드와 릴레이가 공유). 16 B 미만이면 릴레이가 기동을 거부한다(백엔드의 기동 검사는 32자 이상을 요구한다).
+- secret = `.env` 의 `AUDIORELAY_SECRET`(백엔드와 릴레이가 공유). 32 B 미만이면 릴레이가 기동을 거부한다(백엔드의 기동 검사도 같은 길이를 요구한다).
 - TTL 120 s(백엔드 `POST /api/chat/channels/{id}/voice/relay-token`), 릴레이는 5 s 시계 오차 허용.
 - 백엔드가 채널 멤버십을 확인한 뒤 발급하므로 릴레이는 DB 가 없다. 방 번호 = 토큰의 `room`.
 - 같은 토큰으로 `GET /audiorelay/stats`(`Authorization: Bearer`)를 부르면 **그 방의** 통계만 돌아온다.

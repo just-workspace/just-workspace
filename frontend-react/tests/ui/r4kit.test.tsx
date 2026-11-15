@@ -129,6 +129,32 @@ describe('UiAppRail (C4)', () => {
     fireEvent.click(screen.getByRole('link', { name: '회의' }))
     expect(onNav).toHaveBeenCalledWith(expect.objectContaining({ id: 'meetings' }), expect.anything())
   })
+  it('접힘·펼침에서 아이콘 자리가 같다 — 아이콘 칸·행 여백·머리글 칸의 클래스가 wide 와 무관', () => {
+    // 좌표는 jsdom 이 못 재므로 "자리를 정하는 클래스가 두 모습에서 같다"로 지킨다(가운데 정렬·폭별 여백이 다시 들어오면 깨진다)
+    const shape = (wide: boolean) => {
+      const { container, unmount } = render(<UiAppRail wide={wide} groups={groups} brand={{ name: 'Workspace' }} avatar={<span>A</span>} userName="하나" footerAction={<button>고정</button>} />)
+      const links = [...container.querySelectorAll('nav a')]
+      const layout = (el: Element) => [...el.classList].filter(c => /^(p[xlr]?-|gap-|justify-|h-|w-|m[xlr]?-)/.test(c)).sort().join(' ')
+      const out = {
+        rows: links.map(layout),
+        slots: links.map(a => a.querySelector('[data-rail-slot]')!.className),
+        slotFirst: links.map(a => a.querySelector('[data-rail-slot]') === a.querySelector(':scope > span:not(.absolute)')),
+        heads: [...container.querySelectorAll('[data-rail-head]')].map(h => h.className),
+        brand: layout(container.querySelector('aside > a')!),
+        footer: layout(container.querySelector('aside > div:last-child')!),
+        aside: layout(container.querySelector('aside')!).replace(/w-sidebar(-rail)?/, 'w-*'),
+      }
+      unmount()
+      return out
+    }
+    const rail = shape(false), wide = shape(true)
+    expect(wide).toEqual(rail)
+    expect(rail.slots).toHaveLength(3)
+    expect(rail.slotFirst.every(Boolean)).toBe(true)
+    expect(rail.heads).toHaveLength(1)
+    expect(rail.rows.join(' ')).not.toContain('justify-center')
+    expect(rail.footer).not.toContain('justify-center')
+  })
 })
 
 describe('UiTopbar (C4)', () => {

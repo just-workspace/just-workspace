@@ -80,12 +80,18 @@ function RailLink({ to, inRouter, ...rest }: { to: string; inRouter: boolean } &
   return inRouter ? <NuxtLink to={to} {...rest} /> : <a href={to} {...rest} />
 }
 
+/** 아이콘 칸 — 접힘·펼침에서 똑같은 26 칸(브랜드 로고 타일과 같은 왼쪽 기준) */
+const SLOT = 'grid h-[26px] w-[26px] shrink-0 place-items-center'
+
 const badgeText = (b: number | string) => (typeof b === 'number' && b > 99 ? '99+' : String(b))
 const hasBadge = (b: number | string | undefined) => b !== undefined && b !== '' && b !== 0
 
 /**
  * 앱 레일(시안 ShellRail · Shell Handoff 1e · 답변서 C4) — 데스크톱 왼쪽 모듈 목록. 스토어 없이 props 만으로 그린다.
  * wide=false → 레일 64(아이콘 타일 26 + 묶음 사이 구분선), wide=true → 확장 236(아이콘 20 + 이름 + 묶음 머리글).
+ *
+ * 아이콘 자리는 두 모습에서 같다(접고 펼 때 아이콘이 1px 도 움직이지 않는다): 브랜드·항목·아바타 모두 왼쪽 여백 6 + 26 칸에 놓고
+ * (가운데 정렬·폭별 여백을 쓰지 않는다), 묶음 머리글과 구분선은 같은 높이(20) 칸을 쓴다. 바뀌는 것은 글자와 오른쪽 끝 조각뿐.
  *
  * 항목: 34 높이 · 활성 = 왼쪽 2×14 primary 막대 + 아이콘 타일 primary/16 · primary 글자(wide 는 행 바탕 primary/13 + 600).
  * 배지(badge): primary 숫자 알약 18(99 넘으면 99+) — 레일은 아이콘 오른쪽 위(card 2px 테두리), wide 는 행 오른쪽 끝.
@@ -113,13 +119,12 @@ export function UiAppRail({ wide = false, brand, groups, items, avatar, userName
   const brandInitial = brand?.initial ?? (brand?.name || 'W').charAt(0).toUpperCase()
 
   const itemClass = (it: UiAppRailItem) => cn(
-    'relative flex h-[34px] shrink-0 items-center gap-2.5 rounded-md',
-    wide ? 'px-2' : 'justify-center px-0',
+    'relative flex h-[34px] shrink-0 items-center gap-1.5 rounded-md pl-1.5 pr-2',
     it.active ? 'text-foreground' : 'text-muted-foreground hover:bg-accent/50',
     it.active && wide ? 'bg-primary/[0.13] font-semibold' : '',
   )
   const tileClass = (it: UiAppRailItem) => cn(
-    'grid shrink-0 place-items-center rounded-md',
+    'grid place-items-center rounded-md',
     wide ? 'h-5 w-5' : 'h-[26px] w-[26px]',
     it.active ? 'bg-primary/[0.16] text-primary' : '',
   )
@@ -138,8 +143,11 @@ export function UiAppRail({ wide = false, brand, groups, items, avatar, userName
       onClick={e => onNavigate?.(it, e)}
     >
       {it.active && <span className="absolute left-0 h-3.5 w-0.5 rounded-full bg-primary" />}
-      <span className={tileClass(it)}>
-        <RailIcon name={it.icon} className="h-[18px] w-[18px]" />
+      {/* 아이콘 칸 — 두 모습에서 같은 자리·같은 크기(26). 안쪽 타일만 26 ↔ 20 으로 가운데서 바뀐다 */}
+      <span data-rail-slot="" className={SLOT}>
+        <span className={tileClass(it)}>
+          <RailIcon name={it.icon} className="h-[18px] w-[18px]" />
+        </span>
       </span>
       <span className={labelClass}>{it.label}</span>
       {it.external && wide && <RailIcon name="external-link" className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />}
@@ -180,9 +188,14 @@ export function UiAppRail({ wide = false, brand, groups, items, avatar, userName
       <nav aria-label={ariaLabel} className="flex flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden scrollbar-none">
         {list.map(g => (
           <div key={g.key} className="flex flex-col gap-0.5">
-            {g.label != null && (wide
-              ? <div className="px-2 pb-1 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground/80">{g.label}</div>
-              : <div className="mx-2 my-0.5 h-px bg-border" />)}
+            {/* 머리글 칸 — 머리글(wide)과 구분선(레일)이 같은 높이를 써서 아래 항목의 세로 자리가 같다 */}
+            {g.label != null && (
+              <div data-rail-head="" className="flex h-5 shrink-0 items-center px-2">
+                {wide
+                  ? <span className="min-w-0 truncate text-[11px] font-semibold leading-none tracking-[0.08em] text-muted-foreground/80">{g.label}</span>
+                  : <span className="h-px flex-1 bg-border" />}
+              </div>
+            )}
             {g.items.map(renderItem)}
           </div>
         ))}
@@ -193,7 +206,7 @@ export function UiAppRail({ wide = false, brand, groups, items, avatar, userName
 
       {/* 하단: 아바타 + (wide) 이름·오른쪽 액션 */}
       {(avatar != null || (wide && footerAction != null)) && (
-        <div className={cn('flex items-center gap-2.5 border-t border-border pt-2.5', footerSlot == null ? 'mt-auto' : '', wide ? 'px-2' : 'justify-center px-0')}>
+        <div className={cn('flex items-center gap-2.5 border-t border-border pt-2.5', footerSlot == null ? 'mt-auto' : '', 'pl-1.5 pr-2')}>
           {avatar}
           {avatar != null && wide && userName != null && <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">{userName}</span>}
           {wide && footerAction != null && <span className="ml-auto shrink-0">{footerAction}</span>}

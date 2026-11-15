@@ -30,3 +30,6 @@ mailserver/config/*
 !mailserver/config/user-patches.sh
 !mailserver/config/auth-workspace.lua
 !mailserver/config/dovecot.cf
+
+# scripts/update.sh 가 적어 두는 되돌릴 이미지 목록
+.update-rollback

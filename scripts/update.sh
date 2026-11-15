@@ -1,203 +1,160 @@
 #!/usr/bin/env bash
-# ═══════════════════════════════════════════════════════
-# just-workspace — 무중단 업데이트 스크립트
-# ═══════════════════════════════════════════════════════
+# =============================================
+# just-workspace — 업데이트(설치 관리자 없이 직접 띄운 서버용)
+# =============================================
+# 설치 관리자로 설치한 서버는 이 스크립트를 쓰지 않는다 — 관리 › 업데이트가 백업·되돌림까지 한다.
+# 이 스크립트는 리포 폴더에서 `docker compose` 로 직접 띄운 서버(docs/deployment.md)를 소스에서 다시 빌드해 올린다.
 #
-# 사용법:
-#   bash scripts/update.sh              # 기본 업데이트 (git pull + rebuild)
-#   bash scripts/update.sh --no-pull    # git pull 생략 (로컬 변경만 반영)
-#   bash scripts/update.sh --rollback   # 직전 이미지로 롤백
+# 쓰는 법:
+#   bash scripts/update.sh              # git pull → 빌드 → 다시 띄우기 → 확인
+#   bash scripts/update.sh --no-pull    # git pull 생략(지금 폴더의 소스로)
+#   bash scripts/update.sh --rollback   # 직전 업데이트 때 적어 둔 이미지로 되돌린다
 #
-# 동작:
-#   1. 현재 이미지 태그를 백업 (롤백용)
-#   2. git pull (최신 코드)
-#   3. DB 마이그레이션 (있으면)
-#   4. 서비스별 순차 재빌드 + 재시작 (무중단)
-#   5. 헬스체크 검증
-#   6. 실패 시 자동 롤백
-# ═══════════════════════════════════════════════════════
+# 하는 일:
+#   1. 지금 돌고 있는 우리 이미지의 이름과 ID 를 적어 둔다(.update-rollback)
+#   2. git pull --ff-only
+#   3. 켜진 프로파일의 우리 이미지를 다시 빌드한다
+#   4. docker compose up -d (backend 가 뜰 때 DB 스키마 변경 단계를 적용한다)
+#   5. backend 의 상태를 확인한다
+#
+# 알아 둘 것:
+#   - 서비스가 다시 뜨는 동안 접속이 잠깐 끊긴다.
+#   - **실패해도 스스로 되돌리지 않는다.** 실패하면 종료 코드 1 과 함께 되돌리는 방법을 알려 줄 뿐이다.
+#   - **DB 를 백업하지 않는다.** 먼저 `sudo bash scripts/backup.sh --kind pre-update` 를 돌린다.
+#   - `--rollback` 은 이미지만 되돌린다. 업데이트가 DB 스키마 버전을 올렸으면 이전 이미지의 backend 는
+#     뜨지 않는다 — 그때는 업데이트 직전 백업으로 DB 도 되돌린다(`sudo bash scripts/restore.sh <백업> --items db`).
+#     docs/update-system.md 의 "수동 설치", docs/data-safety.md 5절.
+# =============================================
 
 set -euo pipefail
 
-# ─── Colors ───
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m'
+info() { echo "[INFO] $*"; }
+ok()   { echo "[ OK ] $*"; }
+warn() { echo "[WARN] $*"; }
+err()  { echo "[ERROR] $*" >&2; }
 
-info()  { echo -e "${CYAN}[INFO]${NC} $*"; }
-ok()    { echo -e "${GREEN}[ OK ]${NC} $*"; }
-warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
-err()   { echo -e "${RED}[ERROR]${NC} $*" >&2; }
-
-# ─── Working directory ───
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+COMPOSE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$COMPOSE_DIR"
 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-LOG_FILE="/tmp/ws-update-${TIMESTAMP}.log"
+ROLLBACK_FILE="$COMPOSE_DIR/.update-rollback"
+LOG_FILE="${TMPDIR:-/tmp}/ws-update-$(date +%Y%m%d_%H%M%S).log"
 NO_PULL=false
 ROLLBACK=false
 
-# ─── Parse args ───
 for arg in "$@"; do
   case "$arg" in
     --no-pull)  NO_PULL=true ;;
     --rollback) ROLLBACK=true ;;
-    --help|-h)
-      echo "Usage: bash scripts/update.sh [--no-pull] [--rollback]"
-      echo "  --no-pull   Skip git pull (use local changes only)"
-      echo "  --rollback  Roll back to previous image versions"
-      exit 0
-      ;;
-    *) err "Unknown option: $arg"; exit 1 ;;
+    -h|--help)  sed -n '2,27p' "$0"; exit 0 ;;
+    *) err "모르는 옵션: $arg"; exit 2 ;;
   esac
 done
 
-# ─── Rollback ───
+command -v docker >/dev/null || { err "docker 가 없습니다"; exit 1; }
+[[ -f .env ]] || { err ".env 가 없습니다 — 이 스크립트는 리포 폴더에서 직접 띄운 서버용입니다"; exit 1; }
+
+# 기다린다: backend 컨테이너가 healthy 가 될 때까지(초)
+wait_backend() {
+  local limit="$1" status=""
+  for _ in $(seq 1 "$limit"); do
+    status="$(docker inspect ws-backend --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' 2>/dev/null || true)"
+    [[ "$status" == "healthy" ]] && return 0
+    # 스키마가 맞지 않거나 비밀값이 틀리면 backend 는 뜨지 않고 끝난다 — 끝까지 기다리지 않는다
+    [[ "$status" == "exited" || "$status" == "dead" ]] && return 1
+    sleep 1
+  done
+  return 1
+}
+
+# ─── 되돌리기 ───
 if $ROLLBACK; then
-  ROLLBACK_FILE="$COMPOSE_DIR/.update-rollback"
-  if [[ ! -f "$ROLLBACK_FILE" ]]; then
-    err "롤백 정보 없음 (.update-rollback 파일 없음)"
+  [[ -s "$ROLLBACK_FILE" ]] || { err "되돌릴 정보가 없습니다($ROLLBACK_FILE)"; exit 1; }
+  info "직전 업데이트 때의 이미지로 되돌립니다"
+  failed=0
+  while IFS='|' read -r service ref image_id; do
+    [[ -n "$service" && -n "$ref" && -n "$image_id" ]] || continue
+    if docker image inspect "$image_id" >/dev/null 2>&1 && docker tag "$image_id" "$ref"; then
+      info "  $service → $ref = ${image_id:0:19}"
+    else
+      err "  $service: 이전 이미지($image_id)가 서버에 없습니다"
+      failed=$((failed + 1))
+    fi
+  done < "$ROLLBACK_FILE"
+  if [[ $failed -gt 0 ]]; then
+    err "되돌리지 못한 이미지가 ${failed}개 있습니다 — 컨테이너는 건드리지 않았습니다"
     exit 1
   fi
-  info "롤백 시작..."
-  while IFS='|' read -r service image; do
-    info "  $service → $image"
-    docker tag "$image" "just-workspace-${service}:latest" 2>/dev/null || true
-  done < "$ROLLBACK_FILE"
   docker compose up -d --no-build 2>&1 | tee -a "$LOG_FILE"
-  ok "롤백 완료"
+  if wait_backend 180; then
+    ok "되돌렸습니다"
+    exit 0
+  fi
+  err "이미지는 되돌렸지만 backend 가 준비되지 않았습니다: docker logs ws-backend"
+  warn "로그에 'DB 스키마 버전이 코드가 요구하는 버전보다 높습니다'가 있으면 업데이트 직전 백업으로 DB 도 되돌려야 합니다:"
+  warn "  sudo bash scripts/restore.sh <업데이트 직전 백업> --items db"
+  exit 1
+fi
+
+# ─── 1. 지금 이미지 적어 두기 ───
+info "1/5 지금 돌고 있는 이미지를 적어 둡니다"
+: > "$ROLLBACK_FILE"
+# 우리가 빌드하는 서비스 가운데 지금 프로파일에서 켜지는 것
+mapfile -t SERVICES < <(docker compose config --format json 2>/dev/null \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join(n for n,s in d.get("services",{}).items() if "build" in s))' 2>/dev/null || true)
+if [[ ${#SERVICES[@]} -eq 0 ]]; then
+  SERVICES=(backend frontend-react)       # python3 가 없는 호스트 — 늘 있는 둘만
+  warn "켜진 서비스 목록을 읽지 못해 backend·frontend-react 만 다룹니다(나머지는 docker compose build 로 직접)"
+fi
+for svc in "${SERVICES[@]}"; do
+  cid="$(docker compose ps -q "$svc" 2>/dev/null | head -1 || true)"
+  [[ -n "$cid" ]] || continue
+  ref="$(docker inspect "$cid" --format '{{.Config.Image}}' 2>/dev/null || true)"
+  image_id="$(docker inspect "$cid" --format '{{.Image}}' 2>/dev/null || true)"
+  [[ -n "$ref" && -n "$image_id" ]] && echo "${svc}|${ref}|${image_id}" >> "$ROLLBACK_FILE"
+done
+ok "적어 둠: $ROLLBACK_FILE ($(wc -l < "$ROLLBACK_FILE")개)"
+warn "이 스크립트는 DB 를 백업하지 않습니다 — 아직이면 멈추고 먼저: sudo bash scripts/backup.sh --kind pre-update"
+
+# ─── 2. 소스 ───
+if $NO_PULL; then
+  info "2/5 git pull 생략(--no-pull)"
+else
+  info "2/5 git pull --ff-only"
+  before="$(git rev-parse --short HEAD 2>/dev/null || echo "?")"
+  if ! git pull --ff-only 2>&1 | tee -a "$LOG_FILE"; then
+    err "git pull 실패 — 아무것도 바꾸지 않았습니다"
+    exit 1
+  fi
+  after="$(git rev-parse --short HEAD 2>/dev/null || echo "?")"
+  [[ "$before" == "$after" ]] && ok "이미 최신입니다($before)" || ok "$before → $after"
+fi
+
+# ─── 3. 빌드 ───
+info "3/5 이미지 빌드: ${SERVICES[*]}"
+if ! docker compose build "${SERVICES[@]}" >> "$LOG_FILE" 2>&1; then
+  err "빌드 실패 — 돌고 있는 컨테이너는 그대로입니다. 로그: $LOG_FILE"
+  exit 1
+fi
+ok "빌드 완료"
+
+# ─── 4. 다시 띄우기 ───
+info "4/5 다시 띄웁니다(잠깐 접속이 끊깁니다)"
+if ! docker compose up -d --no-build >> "$LOG_FILE" 2>&1; then
+  err "docker compose up 실패. 로그: $LOG_FILE"
+  warn "이미지를 되돌리려면: bash scripts/update.sh --rollback"
+  exit 1
+fi
+
+# ─── 5. 확인 ───
+info "5/5 backend 가 준비되기를 기다립니다(스키마 변경 단계가 있으면 여기서 적용됩니다)"
+if wait_backend 300 && docker exec ws-backend python -c \
+    "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)" 2>/dev/null; then
+  ok "업데이트 완료 — $(docker exec ws-backend python -m app.cli schema-version 2>/dev/null | sed 's/^/DB 스키마 버전 /' || true)"
+  info "로그: $LOG_FILE"
   exit 0
 fi
-
-echo -e "${BOLD}═══════════════════════════════════════${NC}"
-echo -e "${BOLD}  just-workspace 업데이트${NC}"
-echo -e "${BOLD}═══════════════════════════════════════${NC}"
-echo ""
-
-# ─── Step 1: 현재 이미지 백업 (롤백용) ───
-info "Step 1/5: 현재 이미지 ID 백업..."
-ROLLBACK_FILE="$COMPOSE_DIR/.update-rollback"
-> "$ROLLBACK_FILE"
-for svc in backend frontend-react; do
-  IMAGE_ID=$(docker inspect "ws-${svc}" --format '{{.Image}}' 2>/dev/null || echo "")
-  if [[ -n "$IMAGE_ID" ]]; then
-    echo "${svc}|${IMAGE_ID}" >> "$ROLLBACK_FILE"
-  fi
-done
-ok "롤백 정보 저장 (.update-rollback)"
-
-# ─── Step 2: Git pull ───
-if $NO_PULL; then
-  info "Step 2/5: git pull 생략 (--no-pull)"
-else
-  info "Step 2/5: git pull..."
-  BEFORE_HASH=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
-  if git pull origin main 2>&1 | tee -a "$LOG_FILE"; then
-    AFTER_HASH=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
-    if [[ "$BEFORE_HASH" == "$AFTER_HASH" ]]; then
-      ok "이미 최신 상태 ($BEFORE_HASH)"
-    else
-      ok "업데이트됨: ${BEFORE_HASH:0:8} → ${AFTER_HASH:0:8}"
-    fi
-  else
-    err "git pull 실패"
-    exit 1
-  fi
-fi
-
-# ─── Step 3: DB 마이그레이션 ───
-info "Step 3/5: DB 마이그레이션 확인..."
-# 백엔드가 auto-migration을 시작 시 실행하므로 별도 작업 불필요
-ok "마이그레이션은 백엔드 시작 시 자동 실행됨"
-
-# ─── Step 4: 서비스별 순차 재빌드 + 재시작 ───
-info "Step 4/5: 서비스 재빌드..."
-ERRORS=0
-
-# Backend 먼저 (API 서버)
-info "  backend 빌드 중..."
-if docker compose build --no-cache backend >> "$LOG_FILE" 2>&1; then
-  ok "  backend 빌드 완료"
-else
-  err "  backend 빌드 실패"
-  ERRORS=$((ERRORS + 1))
-fi
-
-# Frontend (React)
-info "  frontend-react 빌드 중..."
-if docker compose build --no-cache frontend-react >> "$LOG_FILE" 2>&1; then
-  ok "  frontend-react 빌드 완료"
-else
-  err "  frontend-react 빌드 실패"
-  ERRORS=$((ERRORS + 1))
-fi
-
-if [[ $ERRORS -gt 0 ]]; then
-  err "빌드 실패 ${ERRORS}건 — 롤백하려면: bash scripts/update.sh --rollback"
-  exit 1
-fi
-
-# 순차 재시작 (nginx는 마지막)
-info "  서비스 재시작 중..."
-docker compose up -d --no-build backend >> "$LOG_FILE" 2>&1
-sleep 3
-
-# 백엔드 헬스체크 대기
-info "  backend 헬스체크 대기..."
-for i in $(seq 1 30); do
-  if docker inspect ws-backend --format '{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy"; then
-    ok "  backend healthy"
-    break
-  fi
-  if [[ $i -eq 30 ]]; then
-    err "  backend 헬스체크 타임아웃 (30s)"
-    ERRORS=$((ERRORS + 1))
-  fi
-  sleep 1
-done
-
-docker compose up -d --no-build frontend-react >> "$LOG_FILE" 2>&1
-sleep 2
-docker compose up -d --no-build nginx >> "$LOG_FILE" 2>&1
-ok "  서비스 재시작 완료"
-
-# ─── Step 5: 최종 검증 ───
-info "Step 5/5: 최종 검증..."
-sleep 3
-
-# 컨테이너 상태 확인
-RUNNING=0
-TOTAL=0
-for svc in ws-postgres ws-redis ws-backend ws-frontend-react ws-nginx; do
-  TOTAL=$((TOTAL + 1))
-  if docker inspect "$svc" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
-    RUNNING=$((RUNNING + 1))
-  else
-    err "  $svc 실행되지 않음"
-    ERRORS=$((ERRORS + 1))
-  fi
-done
-
-# API 헬스체크
-if docker exec ws-backend python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')" 2>/dev/null; then
-  ok "  API 헬스체크 통과"
-else
-  err "  API 헬스체크 실패"
-  ERRORS=$((ERRORS + 1))
-fi
-
-echo ""
-if [[ $ERRORS -gt 0 ]]; then
-  err "업데이트 완료 (경고 ${ERRORS}건)"
-  warn "롤백하려면: bash scripts/update.sh --rollback"
-  warn "로그: $LOG_FILE"
-  exit 1
-else
-  ok "업데이트 완료 — 코어 ${RUNNING}/${TOTAL} 서비스 정상"
-  info "로그: $LOG_FILE"
-fi
+err "backend 가 준비되지 않았습니다: docker logs ws-backend"
+warn "스스로 되돌리지 않습니다. 이미지를 되돌리려면: bash scripts/update.sh --rollback"
+warn "DB 스키마 버전이 이미 올라갔으면 업데이트 직전 백업으로 DB 도 되돌려야 합니다: sudo bash scripts/restore.sh <백업> --items db"
+warn "로그: $LOG_FILE"
+exit 1

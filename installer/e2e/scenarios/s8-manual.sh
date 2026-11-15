@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # S8 수동 설치 — 설치 관리자 없이 README·docs/deployment.md 의 절차 그대로: .env.example 을 채우고 docker compose up.
-# 최소 구성(프로파일 없음), 평문 80(개발 모드)으로 띄워 본다.
+# 최소 구성(프로파일 없음), 평문 80 으로 띄워 본다.
 . "$(dirname "$0")/../lib.sh"
 MANUAL="$HOME/e2e-manual"
 
@@ -21,7 +21,6 @@ cd "$MANUAL" || finish
 cp .env.example .env
 # 도메인 등을 채운다 — 최소 구성, 이 서버의 주소로 평문 접속
 set_env() { sed -i -E "s|^$1=.*|$1=$2|" .env; grep -q "^$1=" .env || printf '%s=%s\n' "$1" "$2" >> .env; }
-set_env DEPLOY_MODE dev
 set_env COMPOSE_PROFILES ""
 set_env APP_URL "http://$E2E_ADDR"
 set_env DOMAIN "$E2E_ADDR"
@@ -77,6 +76,25 @@ head -c 100000 /dev/urandom > "$E2E_WORK/up.bin"
 expect "올리기" 200 "$(curl -s -b "$jar" -H "Origin: $H" -o /dev/null -w '%{http_code}' -F "file=@$E2E_WORK/up.bin;filename=e2e-manual.bin" "$H/api/files/upload?path=my/")"
 expect "내려받기" 200 "$(curl -s -b "$jar" -o "$E2E_WORK/down.bin" -w '%{http_code}' "$H/api/files/download?path=my/e2e-manual.bin")"
 check "올린 것과 내려받은 것이 같다" cmp "$E2E_WORK/up.bin" "$E2E_WORK/down.bin"
+
+say "scripts/update.sh — 소스로 다시 빌드해 올리기와 이미지 되돌리기"
+before_id="$(docker inspect ws-backend --format '{{.Image}}')"
+bash scripts/update.sh --no-pull > "$E2E_WORK/manual-update.log" 2>&1
+rc=$?
+expect "update.sh --no-pull" 0 "$rc"
+[ "$rc" = 0 ] || tail -15 "$E2E_WORK/manual-update.log"
+check "되돌릴 정보에 backend 의 이름과 ID 가 적혔다" grep -q "^backend|localhost/just-workspace-backend:latest|$before_id\$" .update-rollback
+check "되돌릴 정보에 frontend-react 도 있다" grep -q '^frontend-react|' .update-rollback
+expect "업데이트 뒤 /api/health" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$H/api/health")"
+expect "업데이트 뒤 내려받기(데이터 유지)" 200 "$(curl -s -b "$jar" -o "$E2E_WORK/down2.bin" -w '%{http_code}' "$H/api/files/download?path=my/e2e-manual.bin")"
+# 태그를 다른 이미지로 옮겨 두고(새 빌드가 달랐던 것처럼) 되돌리면 적어 둔 ID 로 돌아온다
+docker tag "$(docker inspect ws-frontend-react --format '{{.Image}}')" localhost/just-workspace-backend:latest
+bash scripts/update.sh --rollback > "$E2E_WORK/manual-rollback.log" 2>&1
+rc=$?
+expect "update.sh --rollback" 0 "$rc"
+[ "$rc" = 0 ] || tail -15 "$E2E_WORK/manual-rollback.log"
+expect "되돌린 뒤 backend 이미지 = 업데이트 전" "$before_id" "$(docker inspect ws-backend --format '{{.Image}}')"
+expect "되돌린 뒤 /api/health" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$H/api/health")"
 
 report_usage
 say "정리"

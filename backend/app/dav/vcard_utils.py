@@ -50,7 +50,7 @@ def contact_to_vcard(c) -> str:
     if c.notes:
         v.add("note").value = c.notes
 
-    # ── p4: 직함·그룹·사진 ──
+    # ── 직함·그룹·사진 ──
     if getattr(c, "title", None):
         v.add("title").value = c.title
     groups = _json_list(getattr(c, "groups", None))

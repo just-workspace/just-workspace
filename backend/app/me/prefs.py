@@ -85,7 +85,7 @@ def normalize_keywords(v) -> list[str]:
     return out
 
 
-LAYOUT_KEY = "dash.layout"     # 대시보드 개인 배치(handover 17 편집 모드)
+LAYOUT_KEY = "dash.layout"     # 대시보드 개인 배치(편집 모드)
 
 
 def normalize_dash_layout(v) -> dict:

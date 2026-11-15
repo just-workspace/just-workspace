@@ -105,7 +105,7 @@ async def move_prefix(user: User, old_vp: str, new_vp: str,
                       old_key: str | None = None, new_key: str | None = None) -> None:
     """이름 변경·이동 뒤 활동·즐겨찾기·최근 기록의 경로를 따라 옮긴다(실패해도 무시).
 
-    old_key/new_key 를 주면 활동 기록은 그 정규 키로 옮긴다(공유받은 경로 — 소유자 기준 키, p9).
+    old_key/new_key 를 주면 활동 기록은 그 정규 키로 옮긴다(공유받은 경로 — 소유자 기준 키).
     """
     old_vp, new_vp = old_vp.strip("/"), new_vp.strip("/")
     ok = old_key or canonical_key(old_vp, user)

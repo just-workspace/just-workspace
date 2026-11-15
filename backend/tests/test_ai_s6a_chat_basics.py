@@ -1,4 +1,4 @@
-"""S6a — AI 대화 기본기: 진행 단계·출처·피드백·AI 생성 표시·이어서 받기."""
+"""AI 대화 기본기: 진행 단계·출처·피드백·AI 생성 표시·이어서 받기."""
 
 import json
 from contextlib import asynccontextmanager

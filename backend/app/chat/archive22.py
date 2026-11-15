@@ -1,4 +1,4 @@
-"""보관 시스템 카테고리(시안 §2.1(3)) — "보관된 프로젝트". 이름은 바꿀 수 있고 삭제·순서 변경은 안 된다(늘 DM 바로 위).
+"""보관 시스템 카테고리 — "보관된 프로젝트". 이름은 바꿀 수 있고 삭제·순서 변경은 안 된다(늘 DM 바로 위).
 
 id 는 system_settings 'chat.archive_category_id'. PG 는 기동 마이그레이션(session._run_chat_archive_category_migration)
 이 채운다. 비어 있으면(SQLite 테스트·마이그레이션 실패) 처음 읽는 요청이 같은 규칙으로 채운다.

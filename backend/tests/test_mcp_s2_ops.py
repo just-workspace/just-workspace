@@ -1,4 +1,4 @@
-"""MCP S2 — 개인정보 가리기·호출 한도·감사 기록·사용량."""
+"""MCP 개인정보 가리기·호출 한도·감사 기록·사용량."""
 
 import json
 from contextlib import asynccontextmanager

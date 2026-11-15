@@ -1,4 +1,4 @@
-"""채팅 데이터 계층 — seq 부여·커서, 미읽음/멘션 카운트, 읽음 포인터(R-13/R-16).
+"""채팅 데이터 계층 — seq 부여·커서, 미읽음/멘션 카운트, 읽음 포인터.
 
 SQLite(aiosqlite) 위에서 service 함수를 그대로 부른다. PostgreSQL 에서는 DB 시퀀스가
 seq 를 주지만 SQLite 에는 시퀀스가 없어 models 의 before_insert 폴백(max+1)이 대신한다 —
@@ -49,7 +49,7 @@ async def _chan_for(db, user_id, channel_id):
     return next(c for c in await service.get_user_channels(db, user_id) if c["id"] == channel_id)
 
 
-# ─── R-16 seq ───
+# ─── seq ───
 
 
 async def test_seq_is_strictly_increasing_and_in_dict(db):
@@ -118,7 +118,7 @@ async def test_get_changes_since_scopes_to_my_channels_and_flags_too_many(db):
     assert empty["messages"] == [] and empty["too_many"] is False
 
 
-# ─── R-13 미읽음 · 멘션 · 읽음 포인터 ───
+# ─── 미읽음 · 멘션 · 읽음 포인터 ───
 
 
 async def test_unread_excludes_own_deleted_and_thread_replies(db):

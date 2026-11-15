@@ -40,7 +40,7 @@ class MessageSummary(BaseModel):
     is_unread: bool = False
     is_flagged: bool = False
     has_attachment: bool = False
-    # ── p4 ──
+    # ── 추가 필드 ──
     labels: list[str] = []  # IMAP 키워드 라벨
     thread_count: int | None = None  # 서버 THREAD 지원 시 이 메일함 안 스레드 메일 수
 
@@ -115,13 +115,13 @@ class SendMessageRequest(BaseModel):
     references: list[str] = []
     request_read_receipt: bool = False
     attachments: list[AttachmentRef] | None = None
-    # ── p4 ──
+    # ── 추가 필드 ──
     send_at: str | None = None  # ISO. 지금보다 뒤면 예약 발송(응답에 scheduled=true, id)
     # 주면 서버가 서명을 붙인다(본문에 이미 있던 서명 블록은 빼고 하나만)
     signature_id: str | None = None
     # in_reply_to 가 Message-ID 가 아니라 UID 일 때 원문을 찾을 메일함(기본 INBOX)
     reply_mailbox_id: str | None = None
-    # S7 — 화면 안 AI 답장 초안으로 쓴 메일. 보내기는 사람이 하지만 AI 기본법 표시(X-AI-Generated)를 붙인다
+    # 화면 안 AI 답장 초안으로 쓴 메일. 보내기는 사람이 하지만 AI 기본법 표시(X-AI-Generated)를 붙인다
     ai_generated: bool = False
 
 
@@ -229,7 +229,7 @@ class DraftSave(BaseModel):
     body_html: str | None = None
     body_text: str | None = None
     signature_id: str | None = None  # 이 초안에 쓸 서명(본문에는 넣지 않는 것을 권장)
-    # S4 — 워크스페이스 파일 경로(AI 도구). None = 그대로 둠, [] = 비움
+    # 워크스페이스 파일 경로(AI 도구). None = 그대로 둠, [] = 비움
     file_attachments: list[str] | None = None
 
 
@@ -244,12 +244,12 @@ class DraftResponse(BaseModel):
     body_text: str | None = None
     created_at: str
     updated_at: str
-    # ── p4: 서명 이중 부착 방지 ──
+    # ── 서명 이중 부착 방지 ──
     signature_id: str | None = None
     has_signature: bool = False  # 본문에 서명 블록이 이미 들어 있다
     body_html_without_signature: str | None = None  # 이어 쓰기는 이걸로 하면 중복이 안 생긴다
     body_text_without_signature: str | None = None
-    # S4 — 초안에 붙은 워크스페이스 파일(경로·이름·크기)과, 단건 조회 때 그것을 작성 창 임시 첨부로 바꾼 것
+    # 초안에 붙은 워크스페이스 파일(경로·이름·크기)과, 단건 조회 때 그것을 작성 창 임시 첨부로 바꾼 것
     file_attachments: list[dict] = []
     attachments: list[dict] = []
     attachment_error: str | None = None

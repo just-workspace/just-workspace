@@ -1,4 +1,4 @@
-"""관리자 › AI 운영 › 피드백 (시안 I1·I2, "시안 4차 답").
+"""관리자 › AI 운영 › 피드백.
 
 GET    /api/admin/ai/feedback?reason=&attached_only=&days=&cursor=   별로예요 목록(평가·이유·한 줄 의견·쓴 도구·첨부 상태)
 GET    /api/admin/ai/feedback/{id}/snapshot                          첨부된 대화 보기 — 열람은 감사 로그(ai_feedback.view)
@@ -58,7 +58,7 @@ def _reasons(raw: str | None) -> list[str]:
 
 
 def _tools_of(meta: str | None) -> list[str]:
-    """답변 진행 단계에 남은 도구 이름(S6a meta.steps[].tool). 옛 답변은 없다."""
+    """답변 진행 단계에 남은 도구 이름(meta.steps[].tool). 옛 답변은 없다."""
     try:
         steps = (json.loads(meta or "{}") or {}).get("steps") or []
     except Exception:  # noqa: BLE001

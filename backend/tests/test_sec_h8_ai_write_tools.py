@@ -67,7 +67,7 @@ async def test_model_call_does_not_execute_write_tool(env):
     r = await ai_config.ai_execute_tool(env["db"], "notes_create",
                                         {"title": "x", "content": "y", "space": env["space"]},
                                         alice, provider_external=False)
-    # S3: 실행하지 않고 승인 요청(채팅 카드)만 만든다 — 모델에게는 "실행하지 않았다"가 간다
+    # 실행하지 않고 승인 요청(채팅 카드)만 만든다 — 모델에게는 "실행하지 않았다"가 간다
     assert r.get("needs_confirmation") and r["result"]["status"] == "pending_confirmation"
     assert await _pages(env["db"]) == []
 
@@ -130,6 +130,6 @@ async def test_injected_tool_call_in_stream_is_held(env, monkeypatch):
         if "event: write_request" in out[-1]:
             break  # 선승인 — 여기서 사용자의 결정을 기다린다(실행되지 않은 채)
     text = "".join(out)
-    # S3: 확인 토큰 대신 승인 요청 카드 이벤트
+    # 확인 토큰 대신 승인 요청 카드 이벤트
     assert "write_request" in text
     assert await _pages(env["db"]) == []

@@ -435,7 +435,7 @@ async def search_pages(db: AsyncSession, space_id: str, query: str) -> list[dict
     ]
 
 
-# ─── 역링크(p4) ───
+# ─── 역링크 ───
 #
 # 본문 안 내부 링크 형식(어느 것이든 잡는다):
 #   - 위키 화면 주소: /wiki?space=<id>&page=<id> (절대 URL·마크다운 링크·HTML href 모두)

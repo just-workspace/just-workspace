@@ -1,4 +1,4 @@
-"""S4 결과물 — AI 가 만든 파일·묶음(zip) 작업·만료 링크·내 파일 저장 (S4).
+"""결과물 — AI 가 만든 파일·묶음(zip) 작업·만료 링크·내 파일 저장.
 
 * 파일 하나(docs_create)는 바로 만든다. 여러 개(docs_create_bundle)와 파일 압축(files_zip)은 **서버 작업**
   (작업 id, 화면을 떠나도 계속) — 진행은 실시간 이벤트 ``ai.artifact_job`` 으로, 끝나면 알림도 남긴다.
@@ -263,7 +263,7 @@ async def job_view(db, job: AIArtifactJob, absolute: bool = False) -> dict:
     z = await db.get(AIArtifact, job.zip_artifact_id) if job.zip_artifact_id else None
     out = job_out(job, z, absolute, await conversation_title(db, job.conversation_id))
     if (job.kind or "docs") == "docs":
-        # 문서 묶음은 항목마다 미리보기·내려받기(카드 L1-1) — 항목 수는 MAX_BUNDLE 이하
+        # 문서 묶음은 항목마다 미리보기·내려받기 — 항목 수는 MAX_BUNDLE 이하
         for it in out["items"]:
             a = await db.get(AIArtifact, it["artifact_id"]) if it.get("artifact_id") else None
             if a is not None:

@@ -1,4 +1,4 @@
-"""화면 안 AI(S7) API — 로직은 app.ai.inline.
+"""화면 안 AI API — 로직은 app.ai.inline.
 
 - GET  /api/ai/inline/status              버튼 상태(쓸 수 있음·막힌 이유·외부 AI·개인정보 가리기·모델 이름)
 - POST /api/ai/inline/mail_summary        {message_id, mailbox_id?, account_id?, tz?} → {points, todos[{title,due,who}]}

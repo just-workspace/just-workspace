@@ -1,4 +1,4 @@
-"""관리자 › AI 운영 — 사용량 확장·감사 필터/CSV·정책(보관·로컬 전용)·피드백 목록/스냅샷/정리 (시안 F1·F2·I1·I2)."""
+"""관리자 › AI 운영 — 사용량 확장·감사 필터/CSV·정책(보관·로컬 전용)·피드백 목록/스냅샷/정리."""
 
 import json
 from contextlib import asynccontextmanager

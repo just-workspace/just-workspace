@@ -140,7 +140,7 @@ async def _build_index(account: MailAccount) -> list[dict]:
                     "to": _ic._parse_address(m.get("To")),
                     "subject": _ic._decode_header(m.get("Subject")),
                     "date": _ic._parse_date(m.get("Date")),
-                    # 스레드·첨부 필터용(p4). 옛 캐시에는 없을 수 있다.
+                    # 스레드·첨부 필터용. 옛 캐시에는 없을 수 있다.
                     "msgid": m.get("Message-ID"),
                     "irt": m.get("In-Reply-To"),
                     "refs": m.get("References"),

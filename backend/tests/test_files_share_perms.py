@@ -1,4 +1,4 @@
-"""파일 공유 권한 4단계(p9, 시안 FilesDesktop sharePeople "보기 · 댓글 · 편집 · 공동 소유") + 파일 댓글.
+"""파일 공유 권한 4단계("보기 · 댓글 · 편집 · 공동 소유") + 파일 댓글.
 
 라우터 함수를 직접 부른다. 저장소 루트는 임시 폴더, DB 는 SQLite.
 alice 가 my/docs(a.txt, sub/b.txt)의 원 소유자이고 bob=보기, carol=댓글, dave=편집, erin=공동 소유, frank=권한 없음.
@@ -464,7 +464,7 @@ async def test_upload_onto_file_target_is_400(env):
     assert e.value.status_code == 400
 
 
-# ─── R4(12 답 A1): 답글 · 위치 조각 · 해결 · 멘션 후보 · 권한 요청 ───
+# ─── 답글 · 위치 조각 · 해결 · 멘션 후보 · 권한 요청 ───
 
 
 @pytest.mark.asyncio

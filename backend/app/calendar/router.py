@@ -335,7 +335,7 @@ async def delete_event(
     ] = None,
     notify: Annotated[bool, Query(description="참석자에게 취소 알림(인앱 + 취소 메일)")] = False,
 ):
-    """일정 삭제(시안 CalDesktop recurDelete).
+    """일정 삭제.
 
     - scope 없음: 예전 그대로 — ?occurrence= 또는 회차 id 면 그 회차만(EXDATE), 아니면 일정/시리즈 전체.
     - scope=this: 그 회차만. occurrence(또는 회차 id) 필요. 회차 예외 행 id 면 그 행을 지우고 EXDATE 로 남긴다.

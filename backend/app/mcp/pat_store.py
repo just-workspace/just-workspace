@@ -1,6 +1,6 @@
 """Personal Access Token (PAT) store for the MCP connector.
 
-PATs are a non-interactive fallback to the OAuth flow (§2-2): a user mints a
+PATs are a non-interactive fallback to the OAuth flow: a user mints a
 ``wsmcp_<token_urlsafe>`` bearer credential on the profile "AI 연동" page and
 pastes it into a client. Only the SHA-256 hash is persisted (mirrors
 ``app.auth.oauth_store``); the plaintext is shown exactly once at creation.
@@ -37,7 +37,7 @@ def clamp_scopes(scopes: list[str] | None, *, allow_write: bool = False) -> list
     """Restrict requested scopes to the PAT-allowed set.
 
     기본은 mcp:read 만. 관리자가 AI 쓰기를 허용(allow_write)했고 사용자가 명시적으로 mcp:write 를
-    고른 토큰만 쓰기 권한을 받는다(S3). 쓰기 토큰은 /api/mcp/write 에서만 쓰기 도구가 보이고
+    고른 토큰만 쓰기 권한을 받는다. 쓰기 토큰은 /api/mcp/write 에서만 쓰기 도구가 보이고
     high 위험 작업은 여전히 승인 대기함을 거친다.
     """
     if not scopes:

@@ -1,4 +1,4 @@
-"""채널 탭(시안 ChannelTabs · 11 답 D6) — 메시지 · 파일 · 위키 + 더보기(회의 · 작업 · 탭 관리).
+"""채널 탭 — 메시지 · 파일 · 위키 + 더보기(회의 · 작업 · 탭 관리).
 
 - GET  /api/chat/channels/{id}/tabs      탭 머리 요약(파일 수 · 연결 폴더 · 위키 페이지 · 예정 회의 수 · 열린 작업 수)
 - PUT  /api/chat/channels/{id}/tabs      탭 관리 — 폴더·위키 페이지 연결/해제(채널 소유자·관리자·만든 사람)
@@ -6,7 +6,7 @@
 - GET  /api/chat/channels/{id}/meetings  회의 — 이 채널에 묶인 예정·진행 중 회의
 - GET  /api/chat/channels/{id}/tasks     작업 — 이 채널에 묶인 작업(최상위, filter=open|mine|done + 칩 수)
 
-R4(12 답 A6 · 시안 R12Channel #wiki|#meetings|#tasks|#manage):
+추가된 것:
 - 탭 순서·끄기(layout) — 메시지는 늘 처음이라 저장하지 않는다. 바꾸면 채널 멤버 모두에게 적용.
 - 위키 탭은 스페이스 단위(wiki_space) — 연결 페이지만 있던 채널은 그 페이지의 스페이스로 본다.
 - 회의는 지난 회의(past)도 돌려준다.

@@ -230,7 +230,7 @@ async def list_changes(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """재접속 복구(R-16) — 내 모든 채널에서 since_seq 뒤에 생긴 메시지.
+    """재접속 복구 — 내 모든 채널에서 since_seq 뒤에 생긴 메시지.
 
     `too_many` 면 목록은 비어 있고 클라이언트는 채널 목록·열린 채널을 새로 읽는다.
     """
@@ -626,7 +626,7 @@ async def dismiss_link_preview(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """미리보기 지우기(시안 R13 #link ✕) — 보낸 사람만. 같은 링크로는 다시 만들지 않는다."""
+    """미리보기 지우기 — 보낸 사람만. 같은 링크로는 다시 만들지 않는다."""
     from app.db.models import Message as MsgModel
     msg = await db.get(MsgModel, message_id)
     if not msg or msg.is_deleted:

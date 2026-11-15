@@ -88,7 +88,7 @@ def compute_etag(st: os.stat_result) -> str:
     """파일 ETag — mtime(ns)+크기. 내용 해시가 아니라 stat 만으로 나오니 공짜다.
 
     같은 공식을 목록(`FileItem.etag`)과 다운로드 응답(`ETag` 헤더)이 함께 쓴다.
-    업로드가 클라이언트 mtime 을 보존하므로(R-18) 같은 파일을 다시 올려도 값이 유지된다.
+    업로드가 클라이언트 mtime 을 보존하므로 같은 파일을 다시 올려도 값이 유지된다.
     """
     return f'"{st.st_mtime_ns:x}-{st.st_size:x}"'
 

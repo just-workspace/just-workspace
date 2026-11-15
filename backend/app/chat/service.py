@@ -123,7 +123,7 @@ async def create_channel(
 
 
 async def get_user_channels(db: AsyncSession, user_id: str) -> list[dict]:
-    """내가 속한 채널 목록 + 미읽음·멘션 수 + 마지막 메시지(R-13).
+    """내가 속한 채널 목록 + 미읽음·멘션 수 + 마지막 메시지.
 
     쿼리 3개로 끝낸다(채널 수와 무관). (+ 서버 알림 기본값 캐시가 식었으면 1개)
     1) 채널 + 내 멤버행 + 멤버 수 + 마지막 메시지(channels.last_message_seq 로 1행 조인)
@@ -241,7 +241,7 @@ async def get_user_channels(db: AsyncSession, user_id: str) -> list[dict]:
             "created_by": ch.created_by,
             "is_archived": ch.is_archived,
             "is_voice": bool(ch.is_voice),
-            # 카테고리·정렬(P1-1) — 프런트 카테고리 화면(P1-3)이 쓴다. NULL = 카테고리 없음
+            # 카테고리·정렬 — 프런트 카테고리 화면이 쓴다. NULL = 카테고리 없음
             "category_id": ch.category_id,
             "position": ch.position,
             "created_at": ch.created_at,
@@ -548,7 +548,7 @@ async def get_messages(
     user_id 를 주면 각 메시지에 is_saved(내가 저장했는지)를 붙인다. 답글이 있는 메시지에는
     thread_participants(최근 답글 순 최대 5명)·last_reply_at 도 붙는다.
 
-    커서는 전부 seq 로 푼다(R-16). `before`/`after` 는 메시지 id(기존 프런트 호환),
+    커서는 전부 seq 로 푼다. `before`/`after` 는 메시지 id(기존 프런트 호환),
     `before_seq`/`after_seq` 는 seq 직접 지정(재접속 복구·캐시 델타용). 둘 다 오면
     seq 쪽이 이긴다. created_at 커서는 같은 ms 에 두 메시지가 있으면 하나를 건너뛰어서
     더 쓰지 않는다.
@@ -1119,7 +1119,7 @@ async def create_notifications_for_mentions(
     targets = [u for u in mentioned_users if u.id != sender_id and u.id in member_ids]
     personal_ids = {u.id for u in targets}
 
-    # @역할(P1-1) — 사용자 이름이 아닌 것만 역할로 본다(같은 이름이면 사람이 이긴다).
+    # @역할 — 사용자 이름이 아닌 것만 역할로 본다(같은 이름이면 사람이 이긴다).
     # 받는 사람은 개인 멘션처럼 센다(배지·알림). 이미 이름으로 불린 사람은 한 번만.
     found_names = {u.username.lower() for u in mentioned_users}
     role_targets: list[tuple[str, str]] = []   # (user_id, 역할 이름)
@@ -1199,7 +1199,7 @@ async def record_mentions(
     user_ids: list[str],
     is_group: bool = False,
 ) -> int:
-    """채널별 멘션 배지용 chat_mentions 행을 남긴다(R-13). 남긴 행 수를 돌려준다.
+    """채널별 멘션 배지용 chat_mentions 행을 남긴다. 남긴 행 수를 돌려준다.
 
     msg_dict 는 create_message 가 돌려준 것(id·seq 포함). 같은 메시지로 두 번 불려도
     유니크 인덱스에 걸리는 행은 건너뛴다 — 재전송·재처리에 안전.
@@ -1471,7 +1471,7 @@ def _message_to_dict(msg: Message, sender: User | None) -> dict:
         "is_deleted": msg.is_deleted,
         "pinned_at": msg.pinned_at.isoformat() if msg.pinned_at else None,
         "pinned_by": msg.pinned_by if msg.pinned_at else None,
-        # 링크 미리보기 카드(R5 B12). 없거나 보낸 사람이 지웠으면 None — 표시 여부는 받는 쪽 설정(chat.link_preview)
+        # 링크 미리보기 카드. 없거나 보낸 사람이 지웠으면 None — 표시 여부는 받는 쪽 설정(chat.link_preview)
         "link_preview": public_preview(getattr(msg, "link_preview", None)),
         "seq": msg.seq,
         "created_at": msg.created_at.isoformat(),
@@ -1498,7 +1498,7 @@ async def get_changes_since(
     since_seq: int,
     limit: int = 500,
 ) -> dict:
-    """재접속 복구(R-16 2단계): 내가 속한 모든 채널에서 since_seq 이후 생긴 메시지.
+    """재접속 복구: 내가 속한 모든 채널에서 since_seq 이후 생긴 메시지.
 
     스레드 답글도 포함한다(클라이언트가 parent_id 로 라우팅). limit 를 넘으면 목록을
     비우고 `too_many=True` 만 돌려준다 — 그때는 풀 리프레시가 더 싸다(Matrix 의

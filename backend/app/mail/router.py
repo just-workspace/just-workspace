@@ -45,7 +45,7 @@ from app.mail.schemas import (
 from app.modules.registry import require_module
 
 logger = logging.getLogger(__name__)
-from app.mail import file_attach as _file_attach  # noqa: E402  — S4 워크스페이스 파일 첨부
+from app.mail import file_attach as _file_attach  # noqa: E402  — 워크스페이스 파일 첨부
 
 router = APIRouter(prefix="/api/mail", tags=["mail"])
 

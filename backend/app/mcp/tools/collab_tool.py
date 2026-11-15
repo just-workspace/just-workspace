@@ -180,7 +180,7 @@ async def board_read_post(user: User, post_id: str, **_: object) -> dict:
         return err("not_found", f"게시글이 없습니다: {post_id}")
     return {
         "id": post.get("id"),
-        # 앱 안 링크(/board/{board_id}/{id}) — 내장 AI 출처 칩(S6a)
+        # 앱 안 링크(/board/{board_id}/{id}) — 내장 AI 출처 칩
         "board_id": post.get("board_id"),
         "title": post.get("title"),
         "content": post.get("content"),

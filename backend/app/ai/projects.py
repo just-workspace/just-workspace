@@ -1,4 +1,4 @@
-"""S6b 프로젝트 — 지침 + 지식 파일 + 대화 묶음, 그룹 읽기 전용 공유.
+"""프로젝트 — 지침 + 지식 파일 + 대화 묶음, 그룹 읽기 전용 공유.
 
 권한:
 - 주인: 모두(이름·지침·파일·공유 바꾸기, 지우기).
@@ -6,7 +6,7 @@
 - 지식 파일은 읽을 때마다 **지금 대화하는 사람의 권한**으로 연다. 구성원이 못 읽는 파일은 조용히 건너뛴다
   (주인의 'my/…' 파일은 그 사람에게 공유돼 있어야 읽힌다 — app.files.access.role_on).
 
-지식 고르기(S5 임베딩 전): 파일 글자를 문단 묶음(약 1,200자)으로 자르고, 질문과 겹치는 낱말(영문·숫자 낱말 +
+지식 고르기(임베딩 도입 전): 파일 글자를 문단 묶음(약 1,200자)으로 자르고, 질문과 겹치는 낱말(영문·숫자 낱말 +
 한글 두 글자 조각) 수로 점수를 매겨 높은 묶음부터 예산(KNOWLEDGE_BUDGET)까지 넣는다.
 """
 
@@ -26,9 +26,9 @@ from app.db.models import User
 from app.mcp import docread
 
 MAX_NAME = 120
-MAX_INSTRUCTIONS = 4000      # 시안 J2-4 — 넘으면 지식 파일로
+MAX_INSTRUCTIONS = 4000      # 넘으면 지식 파일로
 MAX_FILES = 50
-MAX_PICK = 20                # 피커 한 번에 고르는 개수(시안 J1)
+MAX_PICK = 20                # 피커 한 번에 고르는 개수
 MAX_CHECK_MEMBERS = 300      # 공유 전 점검에서 보는 구성원 수
 INSTRUCTIONS_BUDGET = 4000
 KNOWLEDGE_BUDGET = 12_000
@@ -183,12 +183,12 @@ async def _real_for(db: AsyncSession, user: User, f: AIProjectFile):
 
 
 async def readable(db: AsyncSession, user: User, f: AIProjectFile) -> bool:
-    """이 사람이 지금 이 지식 파일을 읽을 수 있나(답변에서 빠지는지 미리 알리기 — 시안 J2-1·3)."""
+    """이 사람이 지금 이 지식 파일을 읽을 수 있나(답변에서 빠지는지 미리 알리기)."""
     return (await _real_for(db, user, f)) is not None
 
 
 async def share_check(db: AsyncSession, project: AIProject, group_ids: list[str]) -> dict:
-    """공유 전 점검 — 고른 그룹 구성원 중 지식 파일을 못 읽는 사람 수(시안 J2-1). 경고만, 공유는 막지 않는다.
+    """공유 전 점검 — 고른 그룹 구성원 중 지식 파일을 못 읽는 사람 수. 경고만, 공유는 막지 않는다.
 
     반환 {members, blocked_members, sampled, files:[{id,name,blocked}]} — blocked 는 그 파일을 못 읽는 구성원 수.
     구성원이 아주 많으면(MAX_CHECK_MEMBERS 초과) 앞쪽만 보고 sampled=True.

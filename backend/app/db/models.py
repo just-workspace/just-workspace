@@ -114,7 +114,7 @@ class ShareLink(Base):
     download_count: Mapped[int] = mapped_column(Integer, default=0)
     # 켜면 링크를 받은 사람이 로그인 없이 같이 편집할 수 있다(Office 문서만 — OnlyOffice, app/wopi/share.py).
     can_edit: Mapped[bool] = mapped_column(Boolean, default=False)
-    # ── p4 ── 비밀번호(argon2 해시, 없으면 공개) · 내려받기 허용 · 여러 항목 묶음(JSON 경로 배열)
+    # 비밀번호(argon2 해시, 없으면 공개) · 내려받기 허용 · 여러 항목 묶음(JSON 경로 배열)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     allow_download: Mapped[bool] = mapped_column(Boolean, default=True)
     paths: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -153,7 +153,7 @@ class ShareLinkEmail(Base):
 class FileShare(Base):
     """특정 사용자 또는 채널에 내 파일/폴더 공유(ACL). file_path=소유자 가상경로('my/...').
     수신자는 'shared-with-me/' 루트에서 봄. 권한은 role(보기·댓글·편집·공동 소유), can_write 는 호환용.
-    채널 공유(shared_with_channel_id)는 그 채널 멤버 전원 — 가입·탈퇴가 바로 반영된다(시안 FilesDesktop sharePeople).
+    채널 공유(shared_with_channel_id)는 그 채널 멤버 전원 — 가입·탈퇴가 바로 반영된다.
     한 행은 사람 또는 채널 하나(둘 중 하나만 채운다)."""
     __tablename__ = "file_shares"
     # 컬럼 index=True 중복 선언 금지(같은이름 인덱스 2번 → create_all 롤백. mcp_personal_tokens 교훈).
@@ -178,7 +178,7 @@ class FileShare(Base):
         String(36), ForeignKey("channels.id", ondelete="CASCADE"), nullable=True
     )
     can_write: Mapped[bool] = mapped_column(Boolean, default=False)
-    # 권한 4단계(p9, 시안 sharePeople "보기 · 댓글 · 편집 · 공동 소유"): view|comment|edit|owner.
+    # 권한 4단계("보기 · 댓글 · 편집 · 공동 소유"): view|comment|edit|owner.
     # 예전 행(NULL)은 can_write 로 읽는다(편집/보기) — session._run_legacy_migrations 가 한 번 채운다.
     # can_write 는 role in (edit, owner) 와 늘 같게 유지한다(채널 탭 등 예전 읽는 쪽 호환).
     role: Mapped[str | None] = mapped_column(String(16), nullable=True)
@@ -194,7 +194,7 @@ class FileShare(Base):
 
 
 class FileComment(Base):
-    """파일 댓글(p9). 파일은 공유와 같은 방식으로 식별한다 — (소유자 id, 소유자 가상경로 'my/..').
+    """파일 댓글. 파일은 공유와 같은 방식으로 식별한다 — (소유자 id, 소유자 가상경로 'my/..').
     이름 변경·이동이면 file_path 를 따라 옮기고, 휴지통으로 가면 'trash/<휴지통 이름>..' 으로 옮겨 두었다가
     복원 때 되돌린다(영구 삭제 때 지운다). 쓰기는 댓글 권한 이상·소유자, 수정·삭제는 쓴 사람만."""
     __tablename__ = "file_comments"
@@ -215,7 +215,7 @@ class FileComment(Base):
     # @멘션으로 해석된 사용자 [{id, username, display_name}] (게시판 댓글과 같은 모양)
     mentions: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_edited: Mapped[bool] = mapped_column(Boolean, default=False)
-    # R4(12 답 A1 · 시안 R12Files #comments) — 답글(최상위 댓글 id) · 위치 조각("시트 3 · D14") · 해결.
+    # 답글(최상위 댓글 id) · 위치 조각("시트 3 · D14") · 해결.
     # auto-migrate 가 컬럼을 더한다(기존 행은 NULL = 최상위·위치 없음·열림).
     parent_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     anchor: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -246,20 +246,20 @@ class Channel(Base):
         String(36), ForeignKey("users.id")
     )
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
-    # 채널 탭(시안 ChannelTabs · 11 답 D6) — 연결된 폴더(소유자 'my/..' 가상경로, 채널 공유로 멤버가 연다)·위키 페이지.
+    # 채널 탭 — 연결된 폴더(소유자 'my/..' 가상경로, 채널 공유로 멤버가 연다)·위키 페이지.
     # auto-migrate 가 컬럼을 더한다. 비우면 탭은 "연결 안 됨".
     linked_folder_owner_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     linked_folder_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     linked_wiki_page_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    # 채널 탭 R4(12 답 A6 · 시안 R12Channel) — 위키 탭은 스페이스 단위로 연결(비면 연결 페이지의 스페이스),
+    # 채널 탭 — 위키 탭은 스페이스 단위로 연결(비면 연결 페이지의 스페이스),
     # 탭 순서·끄기 = JSON {"order": [...], "hidden": [...]}(메시지는 늘 처음이라 저장 안 함). auto-migrate 가 컬럼 추가.
     linked_wiki_space_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     tab_layout: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # 음성 채널(handover-20 · R17) — 디스코드식 "들어가 있으면 말하는 방". type(public/private)은 그대로 두고
+    # 음성 채널 — 디스코드식 "들어가 있으면 말하는 방". type(public/private)은 그대로 두고
     # 깃발 하나로 구분한다: 멤버십·권한은 텍스트 채널과 똑같고, LiveKit 방 `voice-<채널id>` 가 하나 붙는다.
     # auto-migrate 가 NULL 허용 컬럼으로 더한다(NULL = 일반 채널).
     is_voice: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    # 마지막 메시지 비정규화(R-13). 채널 목록을 그릴 때마다 DISTINCT ON 으로 메시지
+    # 마지막 메시지 비정규화. 채널 목록을 그릴 때마다 DISTINCT ON 으로 메시지
     # 테이블을 훑지 않기 위해 create_message 가 갱신한다(스레드 답글·삭제분 제외).
     # Matrix 의 sliding_sync_joined_rooms.bump_stamp 와 같은 역할.
     last_message_seq: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
@@ -267,7 +267,7 @@ class Channel(Base):
         DateTime(timezone=True), nullable=True
     )
     last_preview: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # 카테고리·정렬(P1-1/P1-3, CHAT-DISCORD-PARITY §4.2). auto-migrate 가 NULL 허용 컬럼으로 더하고
+    # 카테고리·정렬. auto-migrate 가 NULL 허용 컬럼으로 더하고
     # FK(ON DELETE SET NULL)는 session._run_chat_roles_migration 이 NOT VALID 로 붙인다. NULL = 카테고리 없음.
     category_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("chat_categories.id", ondelete="SET NULL"), nullable=True
@@ -286,7 +286,7 @@ class Channel(Base):
     forum_board_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
-# ─── 채팅 역할·권한(P1-1) — 계산은 app/chat/permissions.py 한 곳 ───
+# ─── 채팅 역할·권한 — 계산은 app/chat/permissions.py 한 곳 ───
 
 
 class ChatCategory(Base):
@@ -391,7 +391,7 @@ class ChannelMember(Base):
     )
     role: Mapped[str] = mapped_column(String(10), default="member")  # owner, admin, member
     last_read_message_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    # 읽음 포인터를 seq 로(R-13). 미읽음 = 이 값보다 큰 seq 의 메시지 수. created_at
+    # 읽음 포인터를 seq 로. 미읽음 = 이 값보다 큰 seq 의 메시지 수. created_at
     # 환산보다 정확하고, 메시지 테이블 조인 없이 바로 비교할 수 있다. NULL = 한 번도 안 읽음.
     # "안 읽음으로 표시" 는 이 값을 뒤로 돌린다(mark_unread) — mark_read 만 단조 증가.
     last_read_seq: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
@@ -401,7 +401,7 @@ class ChannelMember(Base):
     notify_level: Mapped[str | None] = mapped_column(String(10), nullable=True)
     # 음소거 — 서버 동작은 'all' 푸시를 막는 것뿐, 나머지는 프런트가 배지를 회색으로 그린다.
     muted: Mapped[bool] = mapped_column(Boolean, default=False)
-    # ── 채널별 기기 알림 세부(p4) ── 기존 행은 auto-migrate 의 DEFAULT 로 채워진다.
+    # ── 채널별 기기 알림 세부 ── 기존 행은 auto-migrate 의 DEFAULT 로 채워진다.
     # desktop: 데스크톱 앱 알림(클라이언트가 읽어서 띄울지 판단) · push: 웹/모바일 푸시
     # email: 메일 알림(저장만 — 채팅 메일 발송기는 아직 없음) · thread_replies: 팔로우한 스레드 답글 푸시
     pref_desktop: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -437,7 +437,7 @@ class Message(Base):
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    # 전역 단조 순번(R-16). uuid4 id 와 created_at 은 같은 ms 에 충돌할 수 있어
+    # 전역 단조 순번. uuid4 id 와 created_at 은 같은 ms 에 충돌할 수 있어
     # 재접속 복구 커서("since 이후 전부")로 못 쓴다. 모델상 nullable 인 이유는
     # 기존 행 백필 전까지 NULL 이 존재하기 때문 — PG 에서는 백필 뒤 NOT NULL 로 올린다.
     seq: Mapped[int | None] = mapped_column(BigInteger, MESSAGE_SEQ, nullable=True)
@@ -465,7 +465,7 @@ class Message(Base):
     pinned_by: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    # 링크 미리보기(R5 B12) — 본문 첫 외부 링크의 OG 카드 JSON. 서버가 비동기로 채운다(app/chat/link_preview.py).
+    # 링크 미리보기 — 본문 첫 외부 링크의 OG 카드 JSON. 서버가 비동기로 채운다(app/chat/link_preview.py).
     # NULL = 없음(링크 없음·가져오지 못함·아직 안 옴). {"dismissed": true, "url": …} = 보낸 사람이 지움.
     link_preview: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -557,7 +557,7 @@ class Reaction(Base):
 
 
 class ChatMention(Base):
-    """채널 안에서 나를 @멘션한 메시지 1건 = 1행(R-13).
+    """채널 안에서 나를 @멘션한 메시지 1건 = 1행.
 
     Notification(type='mention') 을 재사용하지 않는 이유: 알림함은 종류가 섞인 받은편지함이고
     is_read 가 "알림을 봤다" 는 뜻이라 채널을 읽어도 안 꺼진다. 채널별 멘션 배지는
@@ -898,7 +898,7 @@ class CalendarEventDB(Base):
     reminder_last_sent_for: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    # ── 참석자·회차 예외·시간대·회의 링크 (p4) ──
+    # ── 참석자·회차 예외·시간대·회의 링크 ──
     # IANA 시간대(예: Asia/Seoul). 반복 전개·CalDAV TZID 에 쓴다. 없으면 UTC 로 본다.
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     meeting_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
@@ -973,7 +973,7 @@ class ContactDB(Base):
     phones: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
     addresses: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # ── p4 ── 사진(data URI, 상한 있음) · 즐겨찾기 · 그룹(JSON 문자열 배열 = vCard CATEGORIES) · 직함
+    # 사진(data URI, 상한 있음) · 즐겨찾기 · 그룹(JSON 문자열 배열 = vCard CATEGORIES) · 직함
     photo: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_favorite: Mapped[bool] = mapped_column(Boolean, default=False)
     groups: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -1084,7 +1084,7 @@ class PostComment(Base):
     attachments: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
     is_edited: Mapped[bool] = mapped_column(Boolean, default=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    # @멘션으로 해석된 사용자 [{id, username, display_name}] (p4)
+    # @멘션으로 해석된 사용자 [{id, username, display_name}]
     mentions: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -1231,9 +1231,9 @@ class MailDraft(Base):
     bcc_addresses: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
     body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     body_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # 초안에 고른 서명(p4) — 본문에 서명을 넣지 않고 따로 기억해 이중 부착을 막는다
+    # 초안에 고른 서명 — 본문에 서명을 넣지 않고 따로 기억해 이중 부착을 막는다
     signature_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    # S4 — AI 가 붙인 워크스페이스 파일(JSON [{path,name,size,type}]). 바이트는 복사하지 않고, 작성 창이 초안을
+    # AI 가 붙인 워크스페이스 파일(JSON [{path,name,size,type}]). 바이트는 복사하지 않고, 작성 창이 초안을
     # 열 때 그 사람 권한으로 다시 열어 임시 첨부로 바꾼다(app.mail.file_attach). 기존 행은 NULL.
     file_attachments: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -1461,7 +1461,7 @@ class OAuthRefreshToken(Base):
     금지). Only the SHA-256 hash of the token is persisted — never plaintext.
     Rotation is mandatory: each use revokes the row and issues a successor whose
     ``rotated_from`` points back here, forming a chain. Reuse of an already
-    rotated/revoked token revokes the whole chain (§1-3).
+    rotated/revoked token revokes the whole chain.
     """
 
     __tablename__ = "oauth_refresh_tokens"
@@ -1772,7 +1772,7 @@ class FileIndex(Base):
 
 
 # ════════════════════════════════════════════════════════════════
-# 사람·설정·회의 백엔드(p4/be-people) — 이 브랜치가 새로 만든 테이블은 여기 모은다.
+# 사람·설정·회의 백엔드 — 이 브랜치가 새로 만든 테이블은 여기 모은다.
 # (다른 브랜치와 models.py 충돌을 줄이려고 파일 끝 한 블록에 둔다)
 # ════════════════════════════════════════════════════════════════
 
@@ -1930,7 +1930,7 @@ class UserInvite(Base):
 
 
 # ════════════════════════════════════════════════════════════════════
-# p4/be-content — 콘텐츠 모듈 보강(캘린더·메일·연락처·파일·게시판·채팅·위키)
+# 콘텐츠 모듈 보강(캘린더·메일·연락처·파일·게시판·채팅·위키)
 # 다른 작업과 충돌을 줄이려고 새 클래스는 이 블록에 모은다.
 # ════════════════════════════════════════════════════════════════════
 
@@ -2101,7 +2101,7 @@ class ChatEmoji(Base):
 
 
 class McpWriteRequest(Base):
-    """AI 쓰기 요청 — MCP(claude.ai 등)·내장 AI 공통. S3.
+    """AI 쓰기 요청 — MCP(claude.ai 등)·내장 AI 공통.
 
     쓰기 도구를 부르면 바로 실행하지 않고 여기에 한 행을 만든다.
       - low  : 내장 AI 는 채팅 카드에서 [실행]해야(5분), claude.ai 는 자기 승인 후 즉시 실행.
@@ -2123,7 +2123,7 @@ class McpWriteRequest(Base):
     # claude_app | personal_token | builtin_web | builtin_desktop | internal
     client_kind: Mapped[str | None] = mapped_column(String(24), nullable=True)
     client_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # 요청을 낸 연결(MCP=OAuth client_id 또는 "pat:<토큰 id>") — 연결을 끊으면 대기 요청을 '연결 해제됨'으로 거부(시안 H2-3)
+    # 요청을 낸 연결(MCP=OAuth client_id 또는 "pat:<토큰 id>") — 연결을 끊으면 대기 요청을 '연결 해제됨'으로 거부
     client_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     conversation_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     after_untrusted: Mapped[bool] = mapped_column(Boolean, default=False)

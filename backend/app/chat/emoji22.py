@@ -1,4 +1,4 @@
-"""커스텀 이모지(chat22, CHAT-DISCORD-PARITY §2.1 P1-5) — 검증·정규화·직렬화. 엔드포인트는 router22.
+"""커스텀 이모지(chat22) — 검증·정규화·직렬화. 엔드포인트는 router22.
 
 - 이름 `^[a-z0-9_]{2,32}$`, 워크스페이스 안에서 유일. 본문·리액션에서는 `:name:`.
 - 형식 png·gif·webp·jpeg(Pillow 로 실제 형식을 본다 — 올린 쪽이 말한 Content-Type 은 믿지 않는다), 256KB 이하.

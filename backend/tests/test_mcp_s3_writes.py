@@ -1,4 +1,4 @@
-"""MCP S3 — AI 쓰기 승인 흐름 ("S3 설계 확정")."""
+"""MCP AI 쓰기 승인 흐름."""
 
 from contextlib import asynccontextmanager
 from datetime import timedelta

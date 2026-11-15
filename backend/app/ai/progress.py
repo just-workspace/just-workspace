@@ -1,9 +1,9 @@
-"""내장 AI 답변의 진행 단계·출처 (S6a, "S6·S7 설계 확정", 시안 C1·C2).
+"""내장 AI 답변의 진행 단계·출처.
 
 - 진행 단계(SSE ``step``): ``{id, kind, label, status, detail, started_at, ended_at}``.
   kind = search|read|tool|write|think, status = running|done|failed. 같은 id 가 running → done/failed.
   한 번의 도구 묶음(모델이 한 차례에 부른 도구들) 안에서 같은 도구를 여러 번 부르면 한 단계로 묶는다
-  ("파일 3개 읽기" — 시안 C1).
+  ("파일 3개 읽기").
 - 출처(SSE ``citation``): ``{n, kind, id, title, url, snippet, author?, date?}``.
   kind = mail|file|wiki|board|chat|event|web. url 은 앱 안 링크(웹은 원래 주소), 깊은 링크가 없으면 None.
   성공한 읽기 도구 결과에서만 만든다. 같은 자료는 같은 번호.

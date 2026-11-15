@@ -1,4 +1,4 @@
-"""채팅 서버(워크스페이스) 설정(chat22 Settings22 "개요"·"알림 기본값") — system_settings 에 둔다.
+"""채팅 서버(워크스페이스) 설정("개요"·"알림 기본값") — system_settings 에 둔다.
 
   chat.server.name                  채팅 사이드바 머리 이름(없으면 프런트가 사이트 이름)
   chat.server.description           설명

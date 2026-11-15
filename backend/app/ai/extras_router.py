@@ -1,4 +1,4 @@
-"""내장 AI 화면 보강(시안 J1·J2·K1) — router.py 를 키우지 않으려고 따로 둔 엔드포인트. prefix 는 router.py 가 붙인다(/api/ai).
+"""내장 AI 화면 보강 — router.py 를 키우지 않으려고 따로 둔 엔드포인트. prefix 는 router.py 가 붙인다(/api/ai).
 
 - GET /projects/{id}/share-check?group_ids=a,b — 공유 전 점검(못 읽는 지식 파일·구성원 수, 경고만). 주인만.
 - GET /attachments/{id}/file[?download=1]      — 보낸 첨부 원본(7일 보관). 주인만, 안전 헤더(serve_safety).
@@ -27,7 +27,7 @@ TEXT_PREVIEW_CHARS = 20_000
 @require_module("ai")
 async def project_share_check(project_id: str, group_ids: str = "", user: User = Depends(get_current_user),
                               db: AsyncSession = Depends(get_db)):
-    """고른 그룹 구성원 중 지식 파일을 못 읽는 사람이 있으면 알려 준다(시안 J2-1). 공유는 막지 않는다."""
+    """고른 그룹 구성원 중 지식 파일을 못 읽는 사람이 있으면 알려 준다. 공유는 막지 않는다."""
     p = await ai_projects.get_owned(db, user, project_id)
     gids = [g for g in dict.fromkeys(x.strip() for x in group_ids.split(",")) if g]
     if not gids:

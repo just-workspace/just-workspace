@@ -1,4 +1,4 @@
-"""음성 채널(handover-20 · R17 Phase 1) — 채널 깃발·토큰 권한·접속 상태(presence)·웹훅 분기·대조.
+"""음성 채널 — 채널 깃발·토큰 권한·접속 상태(presence)·웹훅 분기·대조.
 
 SQLite + 가짜 Redis·LiveKit. 라우터 함수를 직접 부른다.
 """

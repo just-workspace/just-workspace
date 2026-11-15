@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://redis:6379/0"
 
-    # 채팅 역할·권한 엔진(P1-1, docs/chat-permissions.md) — legacy | shadow | enforce.
+    # 채팅 역할·권한 엔진(docs/chat-permissions.md) — legacy | shadow | enforce.
     # legacy: 예전 하드코딩 검사만. shadow(기본): 예전 검사로 막고 새 엔진 결과를 옆에서 계산해
     # 다르면 구조화 로그(chat_perm_shadow_mismatch)만 남긴다. enforce: 새 엔진으로 막는다.
     chat_permissions_engine: str = "shadow"
@@ -107,12 +107,12 @@ class Settings(BaseSettings):
     oauth_dynamic_clients_max: int = 500
 
     # MCP remote connector (Streamable HTTP + legacy SSE).
-    # Auth is OAuth Bearer by default (§2-2). The static-key path below is an
+    # Auth is OAuth Bearer by default. The static-key path below is an
     # OPT-IN internal-tools escape hatch, DISABLED by default. When
     # mcp_internal_tools_enabled=True AND mcp_api_key is non-empty, a bearer
     # equal to mcp_api_key (constant-time compared) is accepted for headless
-    # internal callers. It carries NO user (there is no admin fallback anymore,
-    # §2-3), so only user-less tools (e.g. web_search) run under it.
+    # internal callers. It carries NO user (there is no admin fallback anymore),
+    # so only user-less tools (e.g. web_search) run under it.
     mcp_api_key: str = ""
     mcp_internal_tools_enabled: bool = False
     # Public URL of the MCP resource server (dedicated subdomain, e.g.

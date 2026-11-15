@@ -24,7 +24,7 @@ MAX_PDF_PAGES = 300
 MAX_DOC_CHARS = 1_000_000  # 문서 하나에서 뽑는 최대 글자 — 거대한 표 문서가 수백만 자·수 분 걸린 적이 있다
 
 
-# 실패 코드(S6b 첨부 화면이 문구를 고른다) — 메시지 문자열을 해석하지 말고 code 를 볼 것.
+# 실패 코드(첨부 화면이 문구를 고른다) — 메시지 문자열을 해석하지 말고 code 를 볼 것.
 ERROR_CODES = ("encrypted", "distribution", "corrupt", "too_large", "unsupported_version", "unsupported")
 
 

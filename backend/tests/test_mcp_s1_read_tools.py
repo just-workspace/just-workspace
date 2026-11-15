@@ -1,4 +1,4 @@
-"""MCP S1 — 문서 구조 해석·페이지 넘김·새 읽기 도구."""
+"""MCP 문서 구조 해석·페이지 넘김·새 읽기 도구."""
 
 import contextlib
 import io

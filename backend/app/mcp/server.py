@@ -27,25 +27,25 @@ class Tool:
     handler: Callable[..., Awaitable[Any]]
     # Some tools don't need a user (e.g. web_search). Most do.
     requires_user: bool = True
-    # OAuth scope required to call this tool (§3-1): "mcp:read" | "mcp:write".
+    # OAuth scope required to call this tool: "mcp:read" | "mcp:write".
     # Read/write endpoints are physically split by resource URL, and each exposes
     # only tools whose ``scope`` matches — a write tool is never reachable via the
     # read endpoint.
     scope: str = "mcp:read"
     # True = tool output is unauthenticated external content (e.g. inbound email,
-    # web pages). The call path wraps such output behind a trust boundary (§3-3)
+    # web pages). The call path wraps such output behind a trust boundary
     # so the model treats it as data, never as instructions.
     untrusted_output: bool = False
-    # 쓰기 도구의 위험도(S3): "low" = 생성·임시저장·수정(되돌리기 가능), "high" = 삭제·발송·외부 공유.
+    # 쓰기 도구의 위험도: "low" = 생성·임시저장·수정(되돌리기 가능), "high" = 삭제·발송·외부 공유.
     # high 는 어디서 부르든 승인 대기함을 거친다. 읽기 도구에는 의미 없다.
     risk: str = "low"
     # 화면(승인 카드·대기함)에 보일 사람용 이름. 없으면 name.
     title: str | None = None
-    # 쓰기 도구 선택 훅(S3): previewer(args) -> [{field,label,before,after}], summarizer(args) -> str.
+    # 쓰기 도구 선택 훅: previewer(args) -> [{field,label,before,after}], summarizer(args) -> str.
     # 입력 스키마 속성에 "x-label"(한국어 칸 이름)·"x-editable"(카드에서 고칠 칸)·"x-hidden" 을 달 수 있다.
     previewer: Callable[[dict], Any] | None = None
     summarizer: Callable[[dict], Any] | None = None
-    # S4 — low 쓰기 가운데 사용자 데이터를 바꾸지 않고 본인만 받는 임시 결과물(24시간 링크)을 만드는 도구
+    # low 쓰기 가운데 사용자 데이터를 바꾸지 않고 본인만 받는 임시 결과물(24시간 링크)을 만드는 도구
     # (문서 생성·파일 압축). 내장 AI 에서도 카드 없이 바로 실행하고, 직전 외부 읽기 뒤에도 승인함으로 올리지 않는다.
     # 기록·감사·멱등은 다른 쓰기와 같다(request_write).
     auto_run: bool = False
@@ -62,7 +62,7 @@ class Tool:
     conv_untrusted: Any = False
 
 
-# ── Trust boundary (§3-3) ─────────────────────────────────────
+# ── Trust boundary ─────────────────────────────────────
 # Maps an untrusted-output tool to the ``source`` label used in the wrapper.
 _UNTRUSTED_SOURCE: dict[str, str] = {
     "mail_search": "external_email",
@@ -110,7 +110,7 @@ async def execute_tool(
     user: User | None,
     scopes: frozenset[str] | None = None,
 ) -> dict:
-    """도구 실행 + 사용자별 호출 한도 + 감사 기록(S2). 실제 실행은 _execute_tool_core."""
+    """도구 실행 + 사용자별 호출 한도 + 감사 기록. 실제 실행은 _execute_tool_core."""
     import time as _time
 
     from app.mcp import audit, writes
@@ -142,7 +142,7 @@ async def _execute_tool_core(
 
     ``scopes`` = the caller's granted OAuth scopes. When provided (remote MCP
     callers), a tool whose required ``scope`` is not among them is rejected before
-    execution — defense-in-depth on top of the endpoint-level scope filter (§3-1).
+    execution — defense-in-depth on top of the endpoint-level scope filter.
     ``None`` = trusted in-process caller (plugin); no scope gate.
     """
     tool = WORKSPACE_TOOLS.get(name)

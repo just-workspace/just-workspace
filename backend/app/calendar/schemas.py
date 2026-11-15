@@ -59,7 +59,7 @@ class CalendarEvent(BaseModel):
     original_event_id: str | None = None
     created: str | None = None
     updated: str | None = None
-    # ── p4 추가 ──
+    # ── 추가 필드 ──
     timezone: str | None = None
     meeting_url: str | None = None
     exdates: list[str] = []

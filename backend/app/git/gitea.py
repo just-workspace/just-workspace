@@ -401,7 +401,7 @@ async def create_pr_review(
     )
 
 
-# ─── p4: 이슈 수정 · 언어 · 파일별 마지막 커밋 · 스타 · 총수 ───
+# ─── 이슈 수정 · 언어 · 파일별 마지막 커밋 · 스타 · 총수 ───
 
 
 async def _patch(path: str, json: dict | None = None) -> dict:
@@ -505,7 +505,7 @@ async def repo_counts(owner: str, repo: str, default_branch: str | None = None) 
     }
 
 
-# ─── 대시보드 Git 활동(답변서 B8) ───
+# ─── 대시보드 Git 활동 ───
 
 
 async def user_exists(username: str) -> bool:

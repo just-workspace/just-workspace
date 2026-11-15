@@ -63,11 +63,11 @@ async def after_message_created(
 
     await emit_to_channel(channel_id, {"type": "new_message", "message": msg})
 
-    # 링크 미리보기(R5 B12) — 첫 외부 링크의 카드를 백그라운드로 만들고 다 되면 link_preview 이벤트
+    # 링크 미리보기 — 첫 외부 링크의 카드를 백그라운드로 만들고 다 되면 link_preview 이벤트
     from app.chat.link_preview import schedule_for_message
     schedule_for_message(msg)
 
-    # 채널 멘션 배지(R-13) — 알림함 이벤트와 별개로, 그 채널의 미읽음 멘션 수를 바로 맞춘다
+    # 채널 멘션 배지 — 알림함 이벤트와 별개로, 그 채널의 미읽음 멘션 수를 바로 맞춘다
     for uid in mentioned_ids:
         try:
             count, group = await service.get_mention_state(db, uid, channel_id)

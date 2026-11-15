@@ -2,7 +2,7 @@
 
 Authorization codes: Redis if available (survives restart), falls back to
 in-memory. Refresh tokens: Postgres (see ``OAuthRefreshToken`` model) so they
-survive restarts/container refreshes — Redis 단독 저장 금지 (§1-3).
+survive restarts/container refreshes — Redis 단독 저장 금지.
 """
 
 import hashlib
@@ -30,9 +30,9 @@ class AuthorizationCode:
     code_challenge: str | None
     nonce: str | None
     expires_at: float
-    # PKCE method — only "S256" is accepted (§1-6). None for legacy/non-PKCE.
+    # PKCE method — only "S256" is accepted. None for legacy/non-PKCE.
     code_challenge_method: str | None = None
-    # RFC 8707 resource indicator bound at /authorize, carried to token aud (§1-5).
+    # RFC 8707 resource indicator bound at /authorize, carried to token aud.
     resource: str | None = None
     # 코드를 내준 워크스페이스 세션 sid — ID 토큰 sid·백채널 로그아웃 추적용.
     # 기본값 None 이라 배포 직전에 Redis 에 저장된 코드(필드 없음)도 그대로 읽힌다.

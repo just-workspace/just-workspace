@@ -151,11 +151,11 @@ async def get_ai_config(db, *, reveal_key: bool = False) -> dict:
             # 한도 — 0 = 제한 없음. daily_limit: 사용자당 최근 24시간 질문 수, retention_days: 대화 보관 일수
             "daily_limit": _int(await _get(db, "ai.gov.daily_limit", "0")),
             "retention_days": _int(await _get(db, "ai.gov.retention_days", "0")),
-            # S2 — 외부 AI 로 보내기 전 개인정보 가리기(기본 켬), AI 커넥터 쓰기 허용(기본 켬), 분당 도구 호출 한도
+            # 외부 AI 로 보내기 전 개인정보 가리기(기본 켬), AI 커넥터 쓰기 허용(기본 켬), 분당 도구 호출 한도
             "mask_pii": (await _get(db, "ai.gov.mask_pii", "true")) != "false",
             "mcp_write_enabled": (await _get(db, "mcp.write_enabled", "true")).strip().lower() not in ("false", "0", "off"),
             "mcp_rate_limit_per_min": _int(await _get(db, "mcp.rate_limit_per_min", "120"), 120),
-            # 관리자 › AI 운영 › 정책(시안 F2) — AI 감사 기록 보관(년, 1·2·3 — 개인정보 접속기록 최소 1년),
+            # 관리자 › AI 운영 › 정책 — AI 감사 기록 보관(년, 1·2·3 — 개인정보 접속기록 최소 1년),
             # 로컬 모델만 쓰기(외부 AI API 로 아무것도 보내지 않음 — 외부 제공자는 해석 단계에서 빠진다)
             "audit_retention_years": audit_retention_years(await _get(db, AUDIT_RETENTION_KEY, "1")),
             "local_only": (await _get(db, LOCAL_ONLY_KEY, "false")) == "true",

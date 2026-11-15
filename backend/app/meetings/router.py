@@ -1019,7 +1019,7 @@ async def get_participants(name: str, user: User = Depends(get_current_user),
 
 @router.get("/rooms/{name}/summary", response_model=MeetingSummary)
 async def meeting_summary(name: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """회의 종료 화면 "이번 회의" 카드(시안 R12Misc meetEnd) — 제목·호스트·채팅 채널·캘린더 일정·시각.
+    """회의 종료 화면 "이번 회의" 카드 — 제목·호스트·채팅 채널·캘린더 일정·시각.
 
     볼 수 있는 사람: 채널 통화(chan-<id>)는 그 채널 멤버, 그 밖은 호스트·초대 대상(DB 회의) 또는
     Redis 방의 호스트. 아니면 404(남의 회의는 있는지도 알려 주지 않는다). 끝난 회의도 본다.
@@ -1138,7 +1138,7 @@ def _ended_at(row) -> str | None:
 
 
 async def _ended_link_info(token: str) -> dict | None:
-    """Redis 에 없는 링크가 끝났거나 취소된 회의의 것이면 결과 화면용 정보를(시안 WorkMobile meetEnded)."""
+    """Redis 에 없는 링크가 끝났거나 취소된 회의의 것이면 결과 화면용 정보를."""
     try:
         async with repo.session() as db:
             row = await repo.find_by_token(db, token)
@@ -1325,7 +1325,7 @@ async def submit_join_request(token: str, body: JoinRequestCreate,
 
 
 async def _notify_host_waiting(meta, req_id: str, nickname: str) -> None:
-    """대기실 입장 신청 → 호스트 활동 패널에 [들이기][거절] 이 달린 알림(시안 R12Call 4 "활동 패널에도 기록").
+    """대기실 입장 신청 → 호스트 활동 패널에 [들이기][거절] 이 달린 알림("활동 패널에도 기록").
 
     미니 통화 창의 요청 띠와 같은 신청이다 — 어느 쪽에서 처리해도 다른 쪽은 "이미 처리된 신청"(400)이 된다.
     알림이 실패해도 신청은 그대로 받는다.

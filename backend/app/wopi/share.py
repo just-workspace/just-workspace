@@ -91,7 +91,7 @@ async def new_office_file(req: NewOfficeRequest, user: User = Depends(get_curren
 class SharedOpenRequest(BaseModel):
     """손님이 스스로 밝히는 이름. 없으면 서버가 지어 준다."""
     name: str = ""
-    # 비밀번호 링크면 둘 중 하나(p4): 비밀번호 그대로, 또는 /api/files/shared/{token}/unlock 의 access
+    # 비밀번호 링크면 둘 중 하나: 비밀번호 그대로, 또는 /api/files/shared/{token}/unlock 의 access
     password: str | None = None
     access: str | None = None
 

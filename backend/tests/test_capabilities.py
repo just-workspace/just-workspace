@@ -1,4 +1,4 @@
-"""Tests for GET /api/platform/capabilities (R-27).
+"""Tests for GET /api/platform/capabilities.
 
 인증 없이 읽히고, 버전·기능 플래그만 싣고, 민감한 값(URL·도메인·키)은 없어야 한다.
 """

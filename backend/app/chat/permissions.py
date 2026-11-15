@@ -1,6 +1,6 @@
-"""채팅 역할·권한 엔진(P1-1) — 권한 비트 상수표와 계산 함수, 라우터가 부르는 검사 하나(`allowed`).
+"""채팅 역할·권한 엔진 — 권한 비트 상수표와 계산 함수, 라우터가 부르는 검사 하나(`allowed`).
 
-설계 문서: docs/chat-permissions.md · /d/refs/design/CHAT-DISCORD-PARITY.md §2.4·§4.2·§5.
+설계 문서: docs/chat-permissions.md.
 
 ■ 계산 순서(effective_permissions) — 디스코드 순서를 그대로 쓰고, 지금 동작을 지키는 두 단계를 더했다
   워크스페이스 범위(channel 없음 — 역할·카테고리 관리 같은 것)
@@ -56,14 +56,14 @@ READ_HISTORY = 1 << 4
 EMBED_LINKS = 1 << 5
 ATTACH_FILES = 1 << 6
 ADD_REACTIONS = 1 << 7
-USE_EXTERNAL_EMOJI = 1 << 8      # 예약(커스텀 이모지 P1-5)
+USE_EXTERNAL_EMOJI = 1 << 8      # 예약(커스텀 이모지)
 MENTION_EVERYONE = 1 << 9        # @everyone·@here·@채널 + 멘션 불가 역할도 부르기
 MANAGE_MESSAGES = 1 << 10        # 남의 글 삭제·미리보기 지우기
 PIN_MESSAGES = 1 << 11
 MANAGE_THREADS = 1 << 12
 MANAGE_CHANNELS = 1 << 13        # 채널 수정·탭·카테고리 만들기/정렬
 MANAGE_ROLES = 1 << 14           # 역할 CRUD·부여, 덮어쓰기 편집
-MANAGE_EXPRESSIONS = 1 << 15     # 이모지·스티커(P1-5)
+MANAGE_EXPRESSIONS = 1 << 15     # 이모지·스티커
 MANAGE_WEBHOOKS = 1 << 16
 CREATE_INVITE = 1 << 17          # 채널에 사람 추가
 KICK_MEMBERS = 1 << 18           # 채널에서 내보내기
@@ -97,7 +97,7 @@ ALL_PERMISSIONS = 0
 for _v in PERMISSIONS.values():
     ALL_PERMISSIONS |= _v
 
-# 위험 권한 — UI 가 경고를 띄우는 묶음(관리 화면 handover-22)
+# 위험 권한 — UI 가 경고를 띄우는 묶음(관리 화면)
 DANGEROUS = (ADMINISTRATOR | MANAGE_ROLES | MANAGE_CHANNELS | MANAGE_MESSAGES | KICK_MEMBERS
              | MODERATE_MEMBERS | MANAGE_WEBHOOKS | MENTION_EVERYONE)
 
@@ -124,7 +124,7 @@ DEFAULT_EVERYONE = (
 DM_PERMISSIONS = DEFAULT_EVERYONE
 # 채널 역할(channel_members.role) 암묵 권한 — 지금 owner/admin 이 하는 것: 채널 수정·탭·내보내기.
 # owner 만 하는 채널 삭제는 비트가 아니라 ACTIONS 의 owner_only 로 본다.
-# 문서(§4.2)는 owner 에 MANAGE_MESSAGES 를 암묵 부여하자고 하지만 그건 지금 동작이 아니다(owner 도 남의 글을
+# 원래 설계는 owner 에 MANAGE_MESSAGES 를 암묵 부여하자고 하지만 그건 지금 동작이 아니다(owner 도 남의 글을
 # 못 지운다) → enforce 전환 뒤 별도 결정으로 여기에 한 줄 더하면 된다.
 CHANNEL_ROLE_IMPLICIT: dict[str, int] = {
     "owner": MANAGE_CHANNELS | KICK_MEMBERS,
@@ -135,7 +135,7 @@ _SEND_DEPENDENT = ATTACH_FILES | EMBED_LINKS | MENTION_EVERYONE | SEND_POLLS
 _VOICE_DEPENDENT = (SPEAK | STREAM | USE_VAD | PRIORITY_SPEAKER | MUTE_MEMBERS | DEAFEN_MEMBERS | MOVE_MEMBERS
                     | USE_SOUNDBOARD | REQUEST_TO_SPEAK)
 
-# 역할 색 = 우리 토큰 팔레트의 키(hex 금지, 대비 4.5:1 은 토큰이 보장). 시안(§6-4)이 팔레트를 늘리면 여기에 더한다.
+# 역할 색 = 우리 토큰 팔레트의 키(hex 금지, 대비 4.5:1 은 토큰이 보장). 시안이 팔레트를 늘리면 여기에 더한다.
 ROLE_COLOR_TOKENS = (
     "primary", "accent", "success", "warning", "danger", "destructive", "muted-foreground", "foreground",
 )

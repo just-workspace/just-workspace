@@ -1,6 +1,6 @@
 """Dashboard API router — aggregated summary for the dashboard page.
 
-handover 17 답 1 "오늘 브리핑 줄": 인사 아래 칩(안 읽은 메일 · 나를 부른 것 · 오늘 마감(지남) · 다음 회의 ·
+오늘 브리핑 줄: 인사 아래 칩(안 읽은 메일 · 나를 부른 것 · 오늘 마감(지남) · 다음 회의 ·
 관리자 서비스 이상)과 관리자 운영 띠를 이 한 번의 호출로 그린다. 예전 필드(unread_notifications …)는 그대로 둔다.
 
 - day_start/day_end: 프런트가 캘린더 시간대로 계산한 "오늘" [시작, 끝) ISO. 없으면 UTC 오늘.

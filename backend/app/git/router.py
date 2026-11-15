@@ -256,7 +256,7 @@ async def _cached_recent_commits() -> list[RecentCommit]:
     return _recent_commits_cache
 
 
-# ─── 대시보드 Git 활동(답변서 B8 · 시안 R12Misc #dash) ───
+# ─── 대시보드 Git 활동 ───
 # 범위 mine = 나에게 온 것(리뷰 요청 · 배정 · 멘션, 열린 것만), all = 내가 볼 수 있는 최근 이슈·PR + 저장소별 최근 커밋 묶음.
 # Gitea 에 그 사용자가 없으면(connected=false) 프런트는 카드째 숨긴다.
 
@@ -322,7 +322,7 @@ async def git_activity(
         logger.warning("Git 계정 확인 실패 (%s): %s", user.username, e)
         raise HTTPException(status_code=502, detail="Git 서버에 연결하지 못했습니다")
     if not connected:
-        # 계정이 없으면 "내 것"은 비어 있고, "전체"는 공개 저장소 활동만(handover 17 Q4 — 카드는 [전체] 하나로 보여 준다)
+        # 계정이 없으면 "내 것"은 비어 있고, "전체"는 공개 저장소 활동만(카드는 [전체] 하나로 보여 준다)
         if scope != "all":
             return {"connected": False, "scope": scope, "items": []}
         try:

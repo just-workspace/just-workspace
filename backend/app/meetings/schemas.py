@@ -71,7 +71,7 @@ class RoomInfo(BaseModel):
     is_host: bool = False
     pending_count: int = 0
     has_password: bool = False
-    # 목록 "호스트 이름"·예정/진행 중/지난 묶기(시안 MT1). 예약 없이 만든 방은 scheduled_at 이 없다.
+    # 목록 "호스트 이름"·예정/진행 중/지난 묶기. 예약 없이 만든 방은 scheduled_at 이 없다.
     host_name: str = ""
     scheduled_at: str | None = None
     duration_minutes: int | None = None
@@ -118,7 +118,7 @@ class JoinRoomInfo(BaseModel):
     num_participants: int
     max_participants: int
     requires_password: bool = False
-    # 초대 입장 화면 "오늘 15:00–16:00"(시안 MT4)
+    # 초대 입장 화면 "오늘 15:00–16:00"
     scheduled_at: str | None = None
     duration_minutes: int | None = None
     # 대기실이 꺼져 있으면 승인 없이 바로 들어간다(입장 화면 문구용)
@@ -160,7 +160,7 @@ class PendingRequest(BaseModel):
 
 
 class MeetingSummary(BaseModel):
-    """회의 종료 화면 "이번 회의" 카드의 서버 쪽 값(시안 R12Misc meetEnd).
+    """회의 종료 화면 "이번 회의" 카드의 서버 쪽 값.
 
     참가자 수·채팅 수는 서버에 참석 기록이 없어 회의를 본 화면이 센다 — 여기는 회의 자체의 정보만.
     """

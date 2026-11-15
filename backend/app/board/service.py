@@ -853,7 +853,7 @@ def _comment_to_dict(comment: PostComment, author: User | None) -> dict:
     }
 
 
-# ─── 읽음 · 안 읽은 수 · 멘션 (p4) ───
+# ─── 읽음 · 안 읽은 수 · 멘션 ───
 #
 # 읽음 = (글을 연 기록 PostReadLog) 또는 (내가 쓴 글) 또는 (기준 시각 이전 글).
 # 기준 시각 = max(읽음 추적 시작 시각, 그 게시판 "모두 읽음" 시각).

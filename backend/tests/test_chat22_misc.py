@@ -179,7 +179,7 @@ async def test_policy_no_shadow_mismatch(db, events, monkeypatch):
         user = await u(db, who)
         for action in P.ACTIONS:
             if action == "mention.everyone" and who == "carol":
-                continue   # 비멤버 @everyone 은 정책과 무관한 기존 차이(예전 'always') — r24 매트릭스 범위 밖
+                continue   # 비멤버 @everyone 은 정책과 무관한 기존 차이(예전 'always') — 권한 매트릭스 범위 밖
             await P.allowed(db, user, action, priv.id, message=m)
     assert P.SHADOW_STATS["mismatch"] == 0 and P.SHADOW_STATS["error"] == 0
 

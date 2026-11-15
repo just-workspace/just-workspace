@@ -1,4 +1,4 @@
-"""AI 쓰기 요청 — 위험도별 2단계 승인 ("S3 설계 확정").
+"""AI 쓰기 요청 — 위험도별 2단계 승인.
 
 쓰기 도구(scope="mcp:write")는 직접 실행하지 않고 :func:`request_write` 를 거친다.
 
@@ -280,7 +280,7 @@ async def recent_untrusted(user_id: str, client_key: str | None) -> dict | None:
 
 
 def untrusted_hint(tool_name: str, result: object) -> dict:
-    """외부 읽기 경고(read_external) — {kind, at, from, subject, label}. 시안 B1 상세 경고가 그린다."""
+    """외부 읽기 경고(read_external) — {kind, at, from, subject, label}. 승인 대기함 상세 경고가 그린다."""
     at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     data = result.get("data") if isinstance(result, dict) and "data" in result else result
     d = {"kind": "external", "at": at, "from": None, "subject": None, "label": tool_name}
@@ -597,7 +597,7 @@ async def _run_handler(tool_name: str, args: dict, user: User) -> tuple[dict | N
         logger.exception("[mcp-write] %s failed", tool_name)
         return None, str(getattr(e, "detail", None) or e) or e.__class__.__name__, None
     if isinstance(res, dict) and isinstance(res.get("error"), str):
-        # 오류 코드·힌트(error_code·hint 등)는 결과 칸에 남겨 모델에게 형식 맞는 오류로 돌려준다(S4)
+        # 오류 코드·힌트(error_code·hint 등)는 결과 칸에 남겨 모델에게 형식 맞는 오류로 돌려준다
         extra = {k: v for k, v in res.items() if k != "error" and not str(k).startswith("_")}
         return (extra or None), res["error"], None
     undo = None
@@ -666,7 +666,7 @@ async def _execute(db, req: McpWriteRequest, user: User) -> McpWriteRequest:
 
 
 async def _audit(db, user_id: str, action: str, req: McpWriteRequest, mode: str | None = None) -> None:
-    """audit_logs 에 남긴다(S2 감사 로그의 첫 소비자). 실패해도 본 동작은 막지 않는다."""
+    """audit_logs 에 남긴다(감사 로그의 첫 소비자). 실패해도 본 동작은 막지 않는다."""
     try:
         from app.db.models import AuditLog
 
@@ -997,7 +997,7 @@ async def pending_for_client(db, user_id: str, client_id: str) -> list[McpWriteR
 
 
 async def reject_for_client(db, user: User, client_id: str) -> int:
-    """연결을 끊을 때 — 그 연결의 대기 요청을 '연결 해제됨' 사유로 거부한다(시안 H2-3). 거부한 수."""
+    """연결을 끊을 때 — 그 연결의 대기 요청을 '연결 해제됨' 사유로 거부한다. 거부한 수."""
     n = 0
     for req in await pending_for_client(db, user.id, client_id):
         try:

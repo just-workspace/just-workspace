@@ -1,4 +1,4 @@
-"""S4 결과물 — 구조화 입력으로 문서를 만든다(docx·xlsx·pptx·pdf). DB·네트워크 없는 순수 함수.
+"""결과물 — 구조화 입력으로 문서를 만든다(docx·xlsx·pptx·pdf). DB·네트워크 없는 순수 함수.
 
 입력(도구 인자와 같은 모양):
   공통   title(제목) · filename(확장자 없이, 선택) · subtitle(선택)

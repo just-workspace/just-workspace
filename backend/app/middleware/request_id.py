@@ -24,7 +24,7 @@ current_request_id: ContextVar[str] = ContextVar("current_request_id", default="
 
 
 def new_request_id() -> str:
-    """사람이 불러 주기 쉬운 짧은 번호 — "7f3a-91c2" 꼴(시안 ShellPage error500)."""
+    """사람이 불러 주기 쉬운 짧은 번호 — "7f3a-91c2" 꼴."""
     h = secrets.token_hex(4)
     return f"{h[:4]}-{h[4:]}"
 

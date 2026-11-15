@@ -1,4 +1,4 @@
-"""일정·할일 쓰기 도구(S3).
+"""일정·할일 쓰기 도구.
 
 웹 API 와 같은 판정을 쓴다 — 캘린더·할일 라우터의 엔드포인트 함수를 그대로 부른다
 (모듈·그룹 권한(require_module), 캘린더 쓰기 권한(소유·쓰기 공유, 구독 캘린더 거부),
@@ -196,7 +196,7 @@ async def tasks_create(user: User, title: str, description: str = "", due_date: 
     from app.tasks.schemas import TaskCreate
 
     try:
-        # 담당자: 웹 API 와 같은 검사(활성 사용자) + 남에게 배정하면 그 사람에게 '할일 배정' 알림(S7 회의 할 일)
+        # 담당자: 웹 API 와 같은 검사(활성 사용자) + 남에게 배정하면 그 사람에게 '할일 배정' 알림(회의 할 일)
         body = TaskCreate(title=title, description=(description or None), due_date=(due_date or None),
                           priority=priority or "medium", status=status or "todo", project=(project or None),
                           assignee_id=(assignee_id or None))

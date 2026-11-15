@@ -44,7 +44,7 @@ TOOL_MODULE: dict[str, str | None] = {
     "calendar_list_calendars": "calendar",
     "contacts_search": "contacts",
     "tasks_list": "tasks",
-    # ── S3 쓰기 도구(되돌리기 도우미 포함) ──
+    # ── 쓰기 도구(되돌리기 도우미 포함) ──
     "files_write_text": "files",
     "files_create_folder": "files",
     "files_copy": "files",
@@ -75,7 +75,7 @@ TOOL_MODULE: dict[str, str | None] = {
     "chat_undo_send_message": "chat",
     "web_search": None,
     "approvals_status": None,
-    # ── S4 결과물 — 문서 생성은 기능 모듈이 없다(본인만 받는 임시 결과물). 파일을 읽거나 쓰는 것은 files ──
+    # ── 결과물 — 문서 생성은 기능 모듈이 없다(본인만 받는 임시 결과물). 파일을 읽거나 쓰는 것은 files ──
     "docs_create": None,
     "docs_create_bundle": None,
     "docs_job_status": None,
@@ -103,7 +103,7 @@ TOOL_MODULE: dict[str, str | None] = {
 
 # 사용자 개인 데이터를 건드리지 않는 도구. 여기 없는 건 전부 "개인 데이터 도구"로 본다
 # (외부 AI 제공자로 내용이 나가면 민감 → 관리자 허용 + 사용자 동의 필요).
-# S4 문서 생성은 대화 안의 내용만 쓰고 개인 데이터를 읽지 않는다(외부 AI 데이터 차단과 무관).
+# 문서 생성은 대화 안의 내용만 쓰고 개인 데이터를 읽지 않는다(외부 AI 데이터 차단과 무관).
 NON_DATA_TOOLS = frozenset({"web_search", "workspace_context", "docs_create", "docs_create_bundle", "docs_job_status", "web_fetch"})
 
 # 관리자 스위치가 따로 있는 도구 — {도구: (설정 키, 기본값)}. 꺼져 있으면 내장 AI·MCP 어디에도 안 보인다.

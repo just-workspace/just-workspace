@@ -11,9 +11,9 @@ class FileItem(BaseModel):
     modified_at: datetime | None = None
     mime_type: str | None = None
     # 파일만. 크기+mtime(ns) 기반 — 다운로드 응답 ETag 와 같은 값이라 클라이언트가
-    # 목록만 보고 "안 바뀐 파일" 을 가려낼 수 있다. 디렉터리 ETag 는 R-36 에서.
+    # 목록만 보고 "안 바뀐 파일" 을 가려낼 수 있다. 디렉터리 ETag 는 아직 없다.
     etag: str | None = None
-    # ── p4 ── 소유자({id, name}, 모르면 null) · 내 즐겨찾기 여부
+    # 소유자({id, name}, 모르면 null) · 내 즐겨찾기 여부
     owner: dict | None = None
     is_starred: bool = False
 
@@ -56,7 +56,7 @@ class ShareLinkCreate(BaseModel):
     path: str = ""
     expires_in: str | None = None  # "1h", "1d", "7d", None=unlimited
     one_time: bool = False
-    # ── p4 ──
+    # ── 추가 필드 ──
     paths: list[str] | None = None  # 둘 이상이면 묶음 링크(zip)
     password: str | None = None  # 주면 비밀번호 링크
     allow_download: bool = True  # false 면 미리보기만
@@ -73,7 +73,7 @@ class ShareLinkResponse(BaseModel):
     has_password: bool = False
     allow_download: bool = True
     item_count: int = 1
-    is_folder: bool = False  # 폴더 하나짜리 링크 — 손님 화면에서 안을 둘러본다(wave 7)
+    is_folder: bool = False  # 폴더 하나짜리 링크 — 손님 화면에서 안을 둘러본다
 
 
 class ShareLinkListItem(BaseModel):

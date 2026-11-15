@@ -364,7 +364,7 @@ async def test_share_to_channel(env, monkeypatch):
     assert e.value.status_code == 400
 
 
-# ─── 버전 기록이 이동·이름 바꾸기를 따라가고, 영구 삭제로 함께 지워진다(FUNC P2-2) ───
+# ─── 버전 기록이 이동·이름 바꾸기를 따라가고, 영구 삭제로 함께 지워진다 ───
 
 
 @pytest.mark.asyncio

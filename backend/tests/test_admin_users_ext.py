@@ -321,7 +321,7 @@ async def test_ssl_expiry_sources(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_ssl_settings_effective_matches_ops_summary(db, monkeypatch, tmp_path):
-    """보안·SSL 화면(GET /settings/ssl)과 관리 개요(ops-summary)는 같은 인증서 정보를 본다(검수 P8 U2).
+    """보안·SSL 화면(GET /settings/ssl)과 관리 개요(ops-summary)는 같은 인증서 정보를 본다.
     올린 인증서가 없어도 리버스 프록시(SSL_CHECK_HOST)에서 읽은 인증서가 effective 로 나온다."""
     na = datetime.now(timezone.utc) + timedelta(days=50, hours=1)
     info = {"not_after": na, "not_before": na - timedelta(days=90), "name": "ws.example.com", "issuer": "Let's Encrypt"}

@@ -1,4 +1,4 @@
-"""관리자 › AI 운영 — 사용량·도구 품질·감사 로그 (S2, 시안 F).
+"""관리자 › AI 운영 — 사용량·도구 품질·감사 로그 (시안 F).
 
 GET /api/admin/ai/usage?days=7     사용자·그룹·도구·출처별 호출 수, 성공률, 응답 시간, 일별 추이, 쓰기 요청 현황
 GET /api/admin/ai/audit?cursor=    AI 도구 호출·쓰기 감사 기록(최신순). 인자 값은 기록하지 않는다(이름만).
@@ -131,7 +131,7 @@ async def ai_usage(days: int = Query(7, ge=1, le=90), admin: User = Depends(requ
         .group_by(McpWriteRequest.status, McpWriteRequest.risk)
     )).all()
     writes = [{"status": s, "risk": r, "count": n} for s, r, n in w_rows]
-    # 쓰기 현황(시안 F2) — 위험도별 실행·되돌림·거부·만료·실패. 되돌린 건은 실행된 뒤 되돌린 것이라 실행에도 센다.
+    # 쓰기 현황 — 위험도별 실행·되돌림·거부·만료·실패. 되돌린 건은 실행된 뒤 되돌린 것이라 실행에도 센다.
     summary = {r: {"executed": 0, "undone": 0, "rejected": 0, "canceled": 0, "expired": 0, "failed": 0, "pending": 0}
                for r in ("low", "high")}
     for st, risk, n in w_rows:
@@ -149,7 +149,7 @@ async def ai_usage(days: int = Query(7, ge=1, le=90), admin: User = Depends(requ
     )) or 0)
     from app.mcp.writes import UNTRUSTED_WINDOW_SEC
 
-    # 답변 피드백(S6a) — 통계만. 이유·의견·첨부된 대화 내용은 여기서 내보내지 않는다.
+    # 답변 피드백 — 통계만. 이유·의견·첨부된 대화 내용은 여기서 내보내지 않는다.
     from app.ai.models import AIMessageFeedback
 
     fb_rows = (await db.execute(

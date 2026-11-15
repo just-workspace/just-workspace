@@ -26,7 +26,7 @@ class Contact(BaseModel):
     notes: str | None = None
     created: str | None = None
     updated: str | None = None
-    # ── p4 ──
+    # ── 추가 필드 ──
     photo: str | None = None  # data:image/...;base64,...
     is_favorite: bool = False
     groups: list[str] = []

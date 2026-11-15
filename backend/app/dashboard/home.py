@@ -1,4 +1,4 @@
-"""홈 대시보드 카드 조회(handover 17) — 이어서 하기 · 팀 · 내 저장 공간.
+"""홈 대시보드 카드 조회 — 이어서 하기 · 팀 · 내 저장 공간.
 
 - GET /api/dashboard/continue?tab=recent|favorites|shared : "이어서 하기" 한 목록(파일·문서·시트·위키·채널·게시글)
     recent    = 최근 연 파일(files_recent) + 내가 쓰거나 고친 위키 문서 + 안 읽은 채널

@@ -12,7 +12,7 @@ class ChannelCreate(BaseModel):
     type: str = Field("public", pattern=r"^(public|private)$")
     description: str | None = Field(None, max_length=500)
     member_ids: list[str] = Field(default_factory=list)
-    # 음성 채널로 만들기(handover-20). 종류(public/private)는 그대로 — 멤버십 규칙이 같다.
+    # 음성 채널로 만들기. 종류(public/private)는 그대로 — 멤버십 규칙이 같다.
     voice: bool = False
     # 포럼 채널(chat22) — 게시판 데이터의 채팅 보기. board_id 가 있으면 그 게시판 연결, 없으면 같은 이름 게시판 생성
     forum: bool = False
@@ -64,7 +64,7 @@ class MarkUnreadRequest(BaseModel):
 class ChannelPrefsUpdate(BaseModel):
     notify_level: str | None = Field(None, pattern=r"^(all|mentions|none)$")
     muted: bool | None = None
-    # ── 기기 알림 세부(p4) ──
+    # ── 기기 알림 세부 ──
     desktop: bool | None = None
     push: bool | None = None
     email: bool | None = None
@@ -184,7 +184,7 @@ class NotificationReadRequest(BaseModel):
     notification_ids: list[str] | None = None
 
 
-# ─── Voice channel (handover-20) ───
+# ─── Voice channel ───
 
 class VoiceStateUpdate(BaseModel):
     """내 음성 상태 — 토큰 발급 때 받은 identity 로 나를 가리킨다."""

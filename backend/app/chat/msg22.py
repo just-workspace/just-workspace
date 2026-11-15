@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Channel, Message, User
 
-# messages.flags 비트(CHAT-DISCORD-PARITY §4.1 과 같은 자리 + 답장 멘션)
+# messages.flags 비트(답장 멘션)
 MSG_FLAG_SILENT = 1
 MSG_FLAG_SUPPRESS_EMBEDS = 2      # 예약
 MSG_FLAG_REPLY_PING = 32

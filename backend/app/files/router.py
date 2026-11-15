@@ -589,7 +589,7 @@ async def upload_file(
         tmp.unlink(missing_ok=True)
         raise
 
-    fs.apply_mtime(target, client_mtime)      # 클라이언트 mtime 보존(R-18)
+    fs.apply_mtime(target, client_mtime)      # 클라이언트 mtime 보존
 
     if r and rkey:
         try:
@@ -1140,7 +1140,7 @@ async def move_file(
     - 복사 대상 폴더에 같은 이름이 있으면 "이름 (사본).ext" 로 만든다(같은 폴더에 복사 포함).
       이동은 예전처럼 409.
     - 폴더를 자기 자신·하위 폴더로 옮기거나 복사하면 400(무한 복사·shutil 오류 방지).
-    - 공유받은 경로(p9): 옮기기는 원본 공동 소유 + 대상 편집 이상, 같은 소유자 영역 안에서만.
+    - 공유받은 경로: 옮기기는 원본 공동 소유 + 대상 편집 이상, 같은 소유자 영역 안에서만.
       복사는 원본 보기 + 대상 편집 이상이면 영역을 넘어도 된다(내려받아 올리는 것과 같다).
       공유·댓글은 옮긴 자리로 따라간다(소유자 영역 밖으로 나가면 정리).
     """
@@ -1719,7 +1719,7 @@ async def restore_version(
 
 # ─── 사용자 간 공유(ACL) ───
 #
-# 권한 4단계(p9, 시안 FilesDesktop sharePeople "보기 · 댓글 · 편집 · 공동 소유") — 규칙은 app/files/access.py.
+# 권한 4단계("보기 · 댓글 · 편집 · 공동 소유") — 규칙은 app/files/access.py.
 # 공동 소유자는 공유 경로(shared-with-me/<id>/..)로 재공유·권한 변경·해제를 할 수 있다. 단,
 #   - 원 소유자가 만든 공유는 바꾸거나 해제하지 못한다(원 소유자 보호)
 #   - 공동 소유 지정·해제는 원 소유자만
@@ -2077,7 +2077,7 @@ async def shared_with_me(
             "size": st.st_size if real.is_file() else 0,
             "modified_at": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
             "etag": fs.compute_etag(st) if real.is_file() else None,
-            # 받은 날(공유가 만들어진 때) — 공유받음 목록 "받은 날" 열(12 답 A1)
+            # 받은 날(공유가 만들어진 때) — 공유받음 목록 "받은 날" 열
             "shared_at": (s.created_at if s.created_at.tzinfo else s.created_at.replace(tzinfo=timezone.utc)).isoformat()
             if s.created_at else None,
         })
@@ -2267,7 +2267,7 @@ def resolve_link_path(link: ShareLink, vp: str | None = None) -> Path:
     return real
 
 
-# ─── 폴더 링크 탐색(OneDrive식 보기 전용, wave 7) ───
+# ─── 폴더 링크 탐색(OneDrive식 보기 전용) ───
 # 폴더 하나로 만든 링크(paths 에 폴더 1개)는 손님이 그 폴더 안을 돌아다니며 파일별로 미리보기·내려받기 할 수 있다.
 # 범위는 링크 폴더 아래로만 — 숨김(fs.is_hidden_name: . 시작·NAS 시스템 이름)·`..`·심볼릭으로 밖을 가리키는 항목은 목록에서 빼고 요청도 404.
 

@@ -52,7 +52,7 @@ async def connector_info(user: User = Depends(get_current_user), db=Depends(get_
     return {
         "connector_url": READ_ENDPOINT.resource,
         "scope": READ_ENDPOINT.required_scope,
-        # 설정 › AI 연동(MCP) 화면(시안 H1) — 읽기 전용·쓰기 포함 주소 두 개 + 관리자 쓰기 허용 여부
+        # 설정 › AI 연동(MCP) 화면 — 읽기 전용·쓰기 포함 주소 두 개 + 관리자 쓰기 허용 여부
         "read_url": READ_ENDPOINT.resource,
         "write_url": WRITE_ENDPOINT.resource,
         "write_enabled": await _access.write_enabled(db),
@@ -64,7 +64,7 @@ async def connector_info(user: User = Depends(get_current_user), db=Depends(get_
 # ── PAT (Personal Access Token) ──────────────────────────────
 
 
-# 무기한 토큰은 만들 수 없다(시안 H2-1) — 30일·90일·1년 중에서
+# 무기한 토큰은 만들 수 없다 — 30일·90일·1년 중에서
 TOKEN_EXPIRY_DAYS = (30, 90, 365)
 DEFAULT_TOKEN_DAYS = 90
 
@@ -227,7 +227,7 @@ async def revoke_connection(
     return {"ok": True}
 
 
-# ── 연결된 앱(시안 H1) — MCP 커넥터에 붙은 앱 단위 목록 ─────────
+# ── 연결된 앱 — MCP 커넥터에 붙은 앱 단위 목록 ─────────
 # OAuth: MCP 리소스(읽기·쓰기 주소)에 발급된 살아 있는 리프레시 토큰을 client_id 로 묶는다.
 # 개인 토큰: 한 번이라도 쓰인(last_used_at) 살아 있는 토큰 하나 = 앱 하나.
 # 행 열쇠(key)는 OAuth 면 client_id, 개인 토큰이면 "pat:<id>" — 쓰기 요청의 client_id 와 같은 값이다.

@@ -234,7 +234,7 @@ async def test_thread_update_goes_to_followers_except_sender(db, events):
     assert [u for u, _ in ups] == ["alice"]
     assert ups[0][1]["root_id"] == root["id"] and ups[0][1]["channel_id"] == ch.id
     assert ups[0][1]["reply"]["id"] == r1["id"] and ups[0][1]["unread_replies"] == 1
-    # 일반 답글은 채널 'all' 푸시 대상이 아니다 — 오프라인 스레드 팔로워(alice) 답글 푸시만 간다(p4)
+    # 일반 답글은 채널 'all' 푸시 대상이 아니다 — 오프라인 스레드 팔로워(alice) 답글 푸시만 간다
     assert [(u, t) for u, t in events["push"]] == [("alice", "#general · Bob님의 스레드 답글")]
     # 새 메시지 이벤트는 여전히 채널로
     assert events["channel"][0][1]["type"] == "new_message"
@@ -317,7 +317,7 @@ async def test_notify_level_defaults_and_update(db):
 
     res = await service.update_channel_prefs(db, pub.id, "bob", notify_level="all", muted=True)
     assert {k: res[k] for k in ("channel_id", "notify_level", "muted")} ==         {"channel_id": pub.id, "notify_level": "all", "muted": True}
-    # p4: 기기 알림 세부 기본값이 같이 온다
+    # 기기 알림 세부 기본값이 같이 온다
     assert res["push"] is True and res["thread_replies"] is True and res["email"] is False
     row = await _chan_for(db, "bob", pub.id)
     assert row["notify_level"] == "all" and row["muted"] is True

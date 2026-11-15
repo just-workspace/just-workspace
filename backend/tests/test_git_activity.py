@@ -1,4 +1,4 @@
-"""대시보드 Git 활동(답변서 B8) — /api/git/activity 범위 mine·all, 계정 미연결.
+"""대시보드 Git 활동 — /api/git/activity 범위 mine·all, 계정 미연결.
 
 Gitea HTTP 는 httpx MockTransport 로 흉내 낸다(경로·쿼리·Sudo 헤더를 본다).
 """
@@ -93,7 +93,7 @@ async def test_unconnected_user_hides_card(fake):
 
 @pytest.mark.asyncio
 async def test_unconnected_user_all_scope_shows_public_only(monkeypatch):
-    """계정 없는 사용자 "전체"(handover 17 Q4) — 공개 저장소(소유자도 공개)의 이슈·PR·커밋 묶음만."""
+    """계정 없는 사용자 "전체" — 공개 저장소(소유자도 공개)의 이슈·PR·커밋 묶음만."""
     seen = []
 
     def handler(req: httpx.Request) -> httpx.Response:

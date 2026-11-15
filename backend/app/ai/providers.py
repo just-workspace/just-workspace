@@ -45,7 +45,7 @@ class ProviderConfig:
         return (self.base_url or DEFAULT_BASE.get(self.kind, "")).rstrip("/")
 
 
-# ─── 이미지 입력(S6b 첨부) ───
+# ─── 이미지 입력(첨부) ───
 # 공통 메시지에 {"images": [{"mime", "data"(base64)}]} 가 붙어 오면 제공자 모양으로 바꾼다.
 # 모델이 이미지를 읽는지는 이름으로 짐작한다(정확한 능력 조회 API 가 제공자마다 없거나 다르다).
 # 관리자가 extra["vision"] 을 주면 그 값이 우선.

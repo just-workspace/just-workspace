@@ -1314,7 +1314,7 @@ async def update_appconfig(
 # 이미지 + 영상(월페이퍼 엔진식 움직이는 배경) 허용
 WALLPAPER_ALLOWED_TYPES = {"image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"}
 WALLPAPER_MAX_BYTES = 40 * 1024 * 1024  # 영상 허용으로 상향
-WALLPAPER_MAX_COUNT = 4  # 브랜딩 화면 타일 그리드(답변서 B5) — 4장까지
+WALLPAPER_MAX_COUNT = 4  # 브랜딩 화면 타일 그리드 — 4장까지
 
 
 def _wallpaper_files() -> list[str]:

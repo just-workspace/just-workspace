@@ -1,6 +1,6 @@
-"""MCP 도구 접근 판정(fail-closed) · 오류 정규화 — S0/S1.
+"""MCP 도구 접근 판정(fail-closed) · 오류 정규화.
 
-S0 사고: TOOL_MODULE 에 없는 도구가 "모듈 없음 = 항상 허용"으로 처리돼, mail_read·채팅·게시판·
+사고: TOOL_MODULE 에 없는 도구가 "모듈 없음 = 항상 허용"으로 처리돼, mail_read·채팅·게시판·
 캘린더·연락처·할일이 관리자가 모듈을 꺼도·RBAC 가 없어도 MCP 로 불렸다. 내장 AI 의 DATA_TOOLS
 에도 같은 도구가 빠져 외부 AI 데이터 차단을 우회했다.
 """

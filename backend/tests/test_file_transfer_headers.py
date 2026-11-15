@@ -1,4 +1,4 @@
-"""파일 전송 헤더(R-18) — ETag 공식·If-None-Match 비교·mtime 파싱·Range(Starlette)."""
+"""파일 전송 헤더 — ETag 공식·If-None-Match 비교·mtime 파싱·Range(Starlette)."""
 
 import os
 import sys

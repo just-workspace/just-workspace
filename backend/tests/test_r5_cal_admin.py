@@ -1,4 +1,4 @@
-"""R5 cal-admin — 구독 미리 읽기(일정 수·이름·연도, SSRF 그대로) · SSL 인증서 미리 읽기(도메인·짝·형식) · 올리기 검사."""
+"""구독 미리 읽기(일정 수·이름·연도, SSRF 그대로) · SSL 인증서 미리 읽기(도메인·짝·형식) · 올리기 검사."""
 
 import io
 from datetime import datetime, timedelta, timezone

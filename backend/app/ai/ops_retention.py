@@ -1,4 +1,4 @@
-"""AI 운영 정리 작업 — 관리자 › AI 운영(시안 F2·I2).
+"""AI 운영 정리 작업 — 관리자 › AI 운영.
 
 1. AI 감사 기록 보관: 정책의 1·2·3년(`ai.gov.audit_retention_years`, 기본 1년 — 개인정보 접속기록 최소 1년)을
    넘긴 AI 감사 행(ai_tool.call · ai_write.* · ai_feedback.*)만 지운다. 다른 감사 기록(사용자 승인 등)은 건드리지 않는다.

@@ -20,7 +20,7 @@ TEXT_EXTENSIONS = {
     ".vue", ".jsx", ".tsx", ".sql", ".go", ".rs", ".java",
 }
 PDF_EXTENSIONS = {".pdf"}
-# 오피스 문서 — 편집기가 늦게 뜰 때 "미리보기로 열기"(시안 ShellPage officeLoading)용 글자만 미리보기.
+# 오피스 문서 — 편집기가 늦게 뜰 때 "미리보기로 열기"용 글자만 미리보기.
 # 손님 공유 링크 미리보기(can_preview)에는 넣지 않는다 — 로그인 사용자 /preview 에서만.
 OFFICE_TEXT_EXTENSIONS = {".docx", ".xlsx", ".pptx"}
 
@@ -41,7 +41,7 @@ def get_office_text(path: Path) -> str:
     return text[:TEXT_PREVIEW_BYTES]
 
 
-# 글자 미리보기에서 빠지는 요소 세기(시안 R12Misc office "[표 1개 · 이미지 2개 생략됨]").
+# 글자 미리보기에서 빠지는 요소 세기("[표 1개 · 이미지 2개 생략됨]").
 # 파트 XML 을 정규식으로 센다 — 파싱보다 싸고, 못 읽으면 0. 시트의 칸 글자는 미리보기에 그대로 나오므로
 # xlsx 는 표를 세지 않고 그림만 센다.
 _OMIT_PATTERNS = {

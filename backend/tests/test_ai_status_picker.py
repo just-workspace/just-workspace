@@ -28,7 +28,7 @@ def test_tools_for_user_filters(monkeypatch):
     # 내부 제공자: 전체
     assert ai_config.tools_for_user(gov, external=False) == sorted(TOOLS)
     # 외부 + 데이터 접근 차단: 개인데이터 도구 제외. tasks_list(개인 할일)도 개인데이터다 —
-    # 예전 고정 목록이 빠뜨려 외부로 새던 것을 fail-closed 판정으로 막았다(S0).
+    # 예전 고정 목록이 빠뜨려 외부로 새던 것을 fail-closed 판정으로 막았다.
     assert ai_config.tools_for_user(gov, external=True) == ["web_search"]
     # 외부 + 데이터 허용: 동의 대기여도 목록엔 남는다
     assert ai_config.tools_for_user({**gov, "external_allow_data": True}, external=True) == sorted(TOOLS)

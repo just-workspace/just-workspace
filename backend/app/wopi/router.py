@@ -201,7 +201,7 @@ async def _token_owner(token_data: dict, db: AsyncSession) -> User:
 
 
 async def _recheck_share_edit(token_data: dict, virtual_path: str, db: AsyncSession) -> None:
-    """공유받은 사람(계정 있음)이 연 편집 토큰이면 저장할 때 권한을 다시 본다(p9).
+    """공유받은 사람(계정 있음)이 연 편집 토큰이면 저장할 때 권한을 다시 본다.
 
     토큰은 열 때 한 번 발급돼 TTL 동안 살아 있다 — 그 사이 권한이 보기·댓글로 내려가거나 공유가 해제되면
     저장을 거부한다. 소유자 본인 토큰은 해당 없음.
@@ -257,7 +257,7 @@ async def open_editor(
 ):
     """Get editor URL and WOPI token for opening a document.
 
-    공유받은 경로(shared-with-me/..)는 보기 권한 이상이면 열고, 편집 권한 이상일 때만 쓰기 토큰(p9).
+    공유받은 경로(shared-with-me/..)는 보기 권한 이상이면 열고, 편집 권한 이상일 때만 쓰기 토큰.
     토큰의 경로·owner 는 원 소유자 기준('my/..', owner_id=소유자) — 원 소유자와 같은 문서 세션에서 같이 편집한다.
     """
     from app.files import access as acc

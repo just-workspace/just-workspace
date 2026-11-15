@@ -1,4 +1,4 @@
-"""채널 탭(시안 ChannelTabs · 11 답 D6) — 요약·폴더/위키 연결 권한·파일 목록(메시지+폴더)·회의·작업.
+"""채널 탭 — 요약·폴더/위키 연결 권한·파일 목록(메시지+폴더)·회의·작업.
 
 라우터 함수를 직접 부른다. 저장소 루트는 임시 폴더, DB 는 SQLite.
 """
@@ -158,7 +158,7 @@ async def test_meetings_and_tasks_counts(env):
     assert up.channel_id is None
 
 
-# ─── R4(12 답 A6): 탭 순서·끄기 · 위키 스페이스 · 지난 회의 · 작업 칩 ───
+# ─── 탭 순서·끄기 · 위키 스페이스 · 지난 회의 · 작업 칩 ───
 
 
 @pytest.mark.asyncio

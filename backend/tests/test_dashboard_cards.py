@@ -88,7 +88,7 @@ async def test_recent_wiki_only_visible_spaces_newest_first(db):
     await db.commit()
 
     items = await cards.recent_wiki_pages(db, "alice")
-    assert [i["id"] for i in items] == ["p2", "p3", "p1"]          # 비밀 공간(p4)은 안 보인다
+    assert [i["id"] for i in items] == ["p2", "p3", "p1"]          # 비밀 공간은 안 보인다
     assert items[0]["space_name"] == "내 공간" and items[0]["space_id"] == "mine"
     assert items[0]["updated_at"].endswith("+00:00")
     assert [i["id"] for i in await cards.recent_wiki_pages(db, "alice", limit=1)] == ["p2"]

@@ -1,4 +1,4 @@
-"""Notes / wiki tools — 검색·읽기 + 쓰기(S3: 만들기·고치기·삭제). 권한은 웹 API 와 같은 writer 기준."""
+"""Notes / wiki tools — 검색·읽기 + 쓰기(만들기·고치기·삭제). 권한은 웹 API 와 같은 writer 기준."""
 
 import logging
 

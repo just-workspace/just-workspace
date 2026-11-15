@@ -103,7 +103,7 @@ class Issue(BaseModel):
     state: str = "open"
     user: IssueUser | None = None
     labels: list[Label] = []
-    # 담당자 — 이슈 상세 "담당 이름"(시안 GT3). 변경은 PATCH /issues/{index} 의 assignees.
+    # 담당자 — 이슈 상세 "담당 이름". 변경은 PATCH /issues/{index} 의 assignees.
     assignees: list[IssueUser] = []
     comments: int = 0
     created_at: str = ""

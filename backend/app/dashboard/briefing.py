@@ -1,4 +1,4 @@
-"""대시보드 AI 브리핑 "오늘의 포커스"(handover 17 답 1 — 옵트인 카드 하나).
+"""대시보드 AI 브리핑 "오늘의 포커스"(옵트인 카드 하나).
 
 입력은 **이 사용자가 볼 수 있는 것만**: 안 읽은 채팅(내 채널) · 안 읽은 메일(내 받은편지함) · 오늘 일정(내 캘린더 범위) ·
 오늘까지 마감인 작업(내가 만들었거나 담당). 다른 사람 데이터·관리자 권한 데이터는 넣지 않는다.
@@ -387,7 +387,7 @@ async def generate_briefing(
                 GEN_TIMEOUT_S,
             )
             items, prep_line = parse_output(text, srcs)
-            # 회의 준비 한 줄은 관련 채팅이 근거 — 근거가 없으면 AI 가 써도 버린다(handover 18 답 12)
+            # 회의 준비 한 줄은 관련 채팅이 근거 — 근거가 없으면 AI 가 써도 버린다
             if not related:
                 prep_line = None
         except asyncio.TimeoutError:

@@ -16,7 +16,7 @@ from app.mail import access_guard
 from app.mail.crypto import decrypt_password
 
 # AI 기본법(2026-01-22 시행) — AI 가 작성·발송한 메일임을 기계가 읽을 수 있게 표시한다(보이지 않는 표시).
-# MCP mail_send 도구가 발송 동안 켠다. 사람이 직접 쓴 메일에는 붙지 않는다. (S2)
+# MCP mail_send 도구가 발송 동안 켠다. 사람이 직접 쓴 메일에는 붙지 않는다.
 AI_GENERATED: ContextVar[str | None] = ContextVar("mail_ai_generated", default=None)
 
 logger = logging.getLogger(__name__)

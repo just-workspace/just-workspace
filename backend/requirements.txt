@@ -53,7 +53,7 @@ python-docx==1.2.0
 # pyhwp 는 AGPL 이라 제품에 넣지 않는다 → HWP 레코드는 app/mcp/docread.py 에서 직접 푼다.
 openpyxl==3.1.5
 olefile==0.47
-# S4 결과물 — AI 가 만드는 발표(pptx, MIT)·PDF(reportlab, BSD). docx·xlsx 는 위 python-docx·openpyxl.
+# 결과물 — AI 가 만드는 발표(pptx, MIT)·PDF(reportlab, BSD). docx·xlsx 는 위 python-docx·openpyxl.
 # 한글 PDF 는 reportlab 내장 CID 글꼴(HYGothic-Medium)이라 글꼴 파일을 이미지에 넣지 않는다.
 python-pptx==1.0.2
 reportlab==5.1.0

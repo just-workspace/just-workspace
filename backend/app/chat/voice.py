@@ -1,4 +1,4 @@
-"""음성 채널(handover-20 · R17 Phase 1) — 디스코드식 상시 음성 방 + "누가 들어가 있나".
+"""음성 채널 — 디스코드식 상시 음성 방 + "누가 들어가 있나".
 
 채널(`channels.is_voice`)마다 LiveKit 방 `voice-<채널id>` 하나. 거는 통화(chan-, app/meetings/calls.py)와
 달리 벨이 없고 누르면 바로 붙는다. 토큰·권한은 채널 멤버십과 똑같다(is_channel_member).

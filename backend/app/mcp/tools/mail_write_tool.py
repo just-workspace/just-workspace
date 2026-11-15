@@ -1,4 +1,4 @@
-"""메일 쓰기 도구(S3) — 임시저장(low)·발송(high).
+"""메일 쓰기 도구 — 임시저장(low)·발송(high).
 
 웹 작성 화면과 같은 경로를 쓴다: 메일 라우터의 save_draft / send_message 를 그대로 부른다
 (모듈 사용 여부·그룹 권한(require_module), 본인 계정 확인(_get_account), 서명 정리, 보낸편지함 복사,

@@ -17,9 +17,9 @@ from app.db.models import (  # noqa: F401 — ensure all models registered
 )
 # 채팅 권한 엔진이 group_members 를 읽는다(관리되는 역할) — app.main 을 거치지 않는 init_db 에서도 테이블이 생기게
 import app.groups.models  # noqa: F401,E402
-# 내장 AI 대화·메시지·피드백(S6a ai_message_feedback)·프로젝트·메모리·첨부(S6b) — init_db 단독 실행에서도 테이블이 생기게
+# 내장 AI 대화·메시지·피드백(ai_message_feedback)·프로젝트·메모리·첨부 — init_db 단독 실행에서도 테이블이 생기게
 import app.ai.models  # noqa: F401,E402
-import app.ai.artifact_models  # noqa: F401,E402  — S4 결과물(ai_artifacts·ai_artifact_jobs)
+import app.ai.artifact_models  # noqa: F401,E402  — 결과물(ai_artifacts·ai_artifact_jobs)
 
 settings = get_settings()
 engine = create_async_engine(
@@ -133,14 +133,14 @@ async def _run_legacy_migrations():
         "CREATE INDEX IF NOT EXISTS ix_reactions_message_id ON reactions(message_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_reactions_unique ON reactions(message_id, user_id, emoji)",
         "CREATE INDEX IF NOT EXISTS ix_messages_parent_id ON messages(parent_id)",
-        # 캘린더 회차 예외 행 → 마스터 (p4, 컬럼은 auto-migrate 가 추가)
+        # 캘린더 회차 예외 행 → 마스터 (컬럼은 auto-migrate 가 추가)
         "CREATE INDEX IF NOT EXISTS ix_calendar_events_parent ON calendar_events(parent_event_id)",
-        # 파일 채널 공유 (p8): 사람 대신 채널을 받는 행이 생긴다 → user 칸 NOT NULL 해제 + 채널 인덱스
+        # 파일 채널 공유: 사람 대신 채널을 받는 행이 생긴다 → user 칸 NOT NULL 해제 + 채널 인덱스
         "ALTER TABLE file_shares ALTER COLUMN shared_with_user_id DROP NOT NULL",
         "CREATE INDEX IF NOT EXISTS ix_file_shares_channel ON file_shares(shared_with_channel_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_file_shares_unique_channel "
         "ON file_shares(owner_id, file_path, shared_with_channel_id)",
-        # 파일 공유 권한 4단계(p9): role 컬럼(auto-migrate)을 예전 can_write 로 한 번 채운다.
+        # 파일 공유 권한 4단계: role 컬럼(auto-migrate)을 예전 can_write 로 한 번 채운다.
         # role 이 비어 있는 행만 건드리므로 매 기동 돌아도 안전. 코드도 NULL 이면 can_write 로 읽는다.
         "UPDATE file_shares SET role = CASE WHEN can_write THEN 'edit' ELSE 'view' END WHERE role IS NULL",
         # Subtasks: parent_id column added by auto-migrate; index here
@@ -155,10 +155,10 @@ async def _run_legacy_migrations():
         "ALTER TABLE tasks ADD CONSTRAINT tasks_parent_id_fkey FOREIGN KEY (parent_id) "
         "REFERENCES tasks(id) ON DELETE CASCADE NOT VALID; "
         "END IF; END $$",
-        # 채널 탭(p8): 채널에 묶인 작업·회의 (컬럼은 auto-migrate)
+        # 채널 탭: 채널에 묶인 작업·회의 (컬럼은 auto-migrate)
         "CREATE INDEX IF NOT EXISTS ix_tasks_channel_id ON tasks(channel_id)",
         "CREATE INDEX IF NOT EXISTS ix_meetings_chat_channel ON meetings(chat_channel_id)",
-        # S6b AI 대화: 답변 버전 가지·프로젝트 묶음 (컬럼은 auto-migrate, 이름은 SQLAlchemy 기본 ix_<표>_<열> 과
+        # AI 대화: 답변 버전 가지·프로젝트 묶음 (컬럼은 auto-migrate, 이름은 SQLAlchemy 기본 ix_<표>_<열> 과
         # 같게 — 새 설치에서 create_all 이 만든 인덱스와 겹치지 않고 그대로 건너뛴다)
         "CREATE INDEX IF NOT EXISTS ix_ai_messages_parent_id ON ai_messages(parent_id)",
         "CREATE INDEX IF NOT EXISTS ix_ai_conversations_project_id ON ai_conversations(project_id)",
@@ -198,7 +198,7 @@ _CHAT_MIGRATION_LOCK_KEY = 7314001
 
 
 async def _run_chat_seq_migration():
-    """R-16 메시지 전역 순번 — 시퀀스 생성·기존 행 백필·DEFAULT/NOT NULL·인덱스.
+    """메시지 전역 순번 — 시퀀스 생성·기존 행 백필·DEFAULT/NOT NULL·인덱스.
 
     세 가지를 보장해야 한다.
     - 멱등: 매 기동마다 돌아도 두 번째부터는 사실상 no-op (NULL 행이 없으면 백필 생략).
@@ -251,7 +251,7 @@ async def _run_chat_seq_migration():
             "CREATE INDEX IF NOT EXISTS ix_messages_channel_seq ON messages(channel_id, seq)"
         ))
 
-        # ── R-13 읽음 포인터·채널 메타 백필 (seq 가 전부 채워진 뒤에만 의미가 있다) ──
+        # ── 읽음 포인터·채널 메타 백필 (seq 가 전부 채워진 뒤에만 의미가 있다) ──
         # 기존 last_read_message_id → 그 메시지의 seq. NULL 인 것만 건드리니 멱등.
         res = await conn.execute(text(
             "UPDATE channel_members cm SET last_read_seq = m.seq "
@@ -309,7 +309,7 @@ async def _run_thread_follow_backfill():
 
 
 async def _run_search_trgm_migration():
-    """R-14 검색 인덱스와 쿼리 일치 — 메시지·게시글 본문에 pg_trgm GIN.
+    """검색 인덱스와 쿼리 일치 — 메시지·게시글 본문에 pg_trgm GIN.
 
     메시지 검색(chat/service.search_messages, search/router)과 게시판 검색은 전부
     `ILIKE '%q%'` 인데 인덱스는 to_tsvector 였다 → 인덱스를 전혀 안 탔다. 한국어는 형태소
@@ -358,7 +358,7 @@ async def _run_search_trgm_migration():
 
 
 async def _run_chat_roles_migration():
-    """P1-1 역할·권한 — @everyone 시드, 기본 카테고리 3개 시드+백필(한 번), channels.category_id FK.
+    """역할·권한 — @everyone 시드, 기본 카테고리 3개 시드+백필(한 번), channels.category_id FK.
 
     - @everyone: is_default 행이 없을 때만 만든다(권한 = permissions.DEFAULT_EVERYONE = 지금 동작).
       이미 있으면 손대지 않는다 — 관리자가 바꾼 기본 권한을 기동 때마다 되돌리면 안 된다.
@@ -444,9 +444,9 @@ async def _run_chat22_migration():
 
 
 async def _run_chat_archive_category_migration():
-    """보관 시스템 카테고리(시안 §2.1(3)) — system_settings 'chat.archive_category_id' 를 한 번 채운다.
+    """보관 시스템 카테고리 — system_settings 'chat.archive_category_id' 를 한 번 채운다.
 
-    r24 시드(_run_chat_roles_migration)가 만든 '보관' 카테고리가 있으면 그것을 '보관된 프로젝트'로 바꿔 쓰고,
+    역할 시드(_run_chat_roles_migration)가 만든 '보관' 카테고리가 있으면 그것을 '보관된 프로젝트'로 바꿔 쓰고,
     없으면 새로 만든다. 키가 이미 있으면 아무것도 안 한다(관리자가 이름을 바꿔도 되돌리지 않는다).
     """
     if engine.dialect.name != "postgresql":
@@ -528,7 +528,7 @@ async def _init_db_unlocked():
             # Step 5: 검색용 trigram 인덱스 (실패해도 기동은 막지 않는다)
             await _run_search_trgm_migration()
 
-            # Step 5b: 채팅 역할·카테고리 시드(P1-1). 실패하면 엔진은 상수 기본값으로 돈다 — 기동은 막지 않는다
+            # Step 5b: 채팅 역할·카테고리 시드. 실패하면 엔진은 상수 기본값으로 돈다 — 기동은 막지 않는다
             try:
                 await _run_chat_roles_migration()
             except Exception as e:

@@ -24,7 +24,7 @@ from starlette.responses import Response
 from starlette.routing import Route
 
 # Reuse the shared MCP server, auth, per-request context and endpoint config so
-# both transports behave identically (§2-2/§2-3/§2-4).
+# both transports behave identically.
 from app.config import get_settings
 from app.mcp.http_server import (
     PHASE2_ENDPOINT,

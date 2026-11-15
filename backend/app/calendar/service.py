@@ -294,7 +294,7 @@ def _event_to_dict(
         "original_event_id": None,
         "created": event.created_at.isoformat() if event.created_at else None,
         "updated": event.updated_at.isoformat() if event.updated_at else None,
-        # ── p4 추가 필드 ──
+        # ── 추가 필드 ──
         "timezone": event.timezone,
         "meeting_url": event.meeting_url,
         "exdates": [d.isoformat() for d in parse_exdates(event.exdates)],

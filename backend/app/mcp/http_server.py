@@ -1,10 +1,10 @@
 """MCP server exposed over Streamable HTTP for remote clients (claude.ai custom
 connector, Claude Code CLI, etc.).
 
-This is the primary remote transport (§2-1). The legacy SSE transport lives in
+This is the primary remote transport. The legacy SSE transport lives in
 ``sse_server.py`` and shares the auth / user-binding / RBAC logic defined here.
 
-Auth (§2-2/§2-3): every request carries an OAuth **Bearer** access token minted
+Auth: every request carries an OAuth **Bearer** access token minted
 by the Phase-1 provider. We verify signature, ``exp``, ``aud`` (must equal this
 endpoint's resource URL) and ``scope`` (must contain the endpoint's required
 scope). The real user is resolved from the token ``sub`` and bound to every tool
@@ -12,7 +12,7 @@ call — there is no ``MCP_ADMIN_USERNAME`` fallback. Unauthenticated/invalid
 requests get **401** + a ``WWW-Authenticate`` header pointing at the protected
 resource metadata, never 200.
 
-Tool exposure (§2-4): both ``tools/list`` and ``tools/call`` are filtered by the
+Tool exposure: both ``tools/list`` and ``tools/call`` are filtered by the
 module on/off state (``app.modules.registry``) and per-user RBAC grants
 (``app.groups.service``) for the resolved user.
 
@@ -65,7 +65,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-# ── Tool → module map (§2-4) ──────────────────────────────────
+# ── Tool → module map ──────────────────────────────────
 # Maps each registered tool to the module_id that gates it. Tools with no
 # backing module (module_id None) are always available (e.g. web_search).
 # TOOL_MODULE 은 app.mcp.access 로 옮겼다(내장 AI 와 공유). 옛 import 경로 호환용 재수출.
@@ -82,13 +82,13 @@ class McpContext:
     scopes: frozenset[str]
     resource: str
     # The required scope of the endpoint this request came in on. It doubles as
-    # the tool-scope filter (§3-2): an endpoint exposes only tools whose
+    # the tool-scope filter: an endpoint exposes only tools whose
     # ``tool.scope`` equals this, so a mcp:write tool is invisible/unreachable on
     # the read (or base) endpoint.
     endpoint_scope: str = "mcp:read"
     client_id: str | None = None
     internal: bool = False  # True = static-key internal-tools mode (no user)
-    # 승인 카드·대기함에 보일 요청 출처(S3). claude_app | personal_token
+    # 승인 카드·대기함에 보일 요청 출처. claude_app | personal_token
     client_name: str | None = None
     client_kind: str | None = None
     # 토큰 발급 시각(OAuth iat) 또는 연결 시각(개인 토큰) — 그 뒤에 연결을 끊었으면 거절한다(app.mcp.revocation)
@@ -144,7 +144,7 @@ PHASE2_ENDPOINT = MCPEndpoint(
 # The WRITE resource (``/api/mcp/write``, ``mcp:write``, approval-gated) is
 # intentionally NOT built yet — deferred by decision. Until it exists, no write
 # tool is exposed or callable through any MCP endpoint.
-# S3 쓰기 리소스 — aud ``<app>/api/mcp/write``, mcp:write 필요. 읽기+쓰기 도구를 모두 노출한다.
+# 쓰기 리소스 — aud ``<app>/api/mcp/write``, mcp:write 필요. 읽기+쓰기 도구를 모두 노출한다.
 # 쓰기 도구는 실행되지 않고 app.mcp.writes 로 간다(low 즉시·high 승인 대기함). 커넥터 URL 을 따로 두어
 # 사용자가 "쓰기 커넥터"를 일부러 연결해야만 쓰기가 열린다(읽기 커넥터는 그대로 읽기 전용).
 WRITE_ENDPOINT = MCPEndpoint(
@@ -183,7 +183,7 @@ def unauthorized(endpoint: MCPEndpoint, detail: str = "unauthorized") -> JSONRes
     )
 
 
-# ── Bearer verification + user binding (§2-2 / §2-3) ──────────
+# ── Bearer verification + user binding ──────────
 def _extract_bearer(request: Request) -> str | None:
     auth = request.headers.get("authorization", "")
     if not auth.lower().startswith("bearer "):
@@ -238,7 +238,7 @@ async def authenticate(request: Request, endpoint: MCPEndpoint) -> McpContext | 
                             endpoint.required_scope, sorted(scopes))
                 return None
             user = await _resolve_active_user(row.user_id)
-            if user is None:      # inactive / deleted → 401 (§2-3)
+            if user is None:      # inactive / deleted → 401
                 return None
             await db.commit()     # persist last_used_at bump
         return McpContext(
@@ -264,9 +264,9 @@ async def authenticate(request: Request, endpoint: MCPEndpoint) -> McpContext | 
             payload = await verify_access_token(
                 _kdb,
                 token,
-                audience=endpoint.resource,  # aud must EQUAL this resource (§1-5/§2-2)
+                audience=endpoint.resource,  # aud must EQUAL this resource
                 issuer=settings.app_url,
-                # aud 없는 토큰(Gitea SSO 등)은 MCP 에서 거절 — 필수 클레임을 명시(§1-5).
+                # aud 없는 토큰(Gitea SSO 등)은 MCP 에서 거절 — 필수 클레임을 명시.
                 options={"require": ["aud", "exp", "iss", "sub"]},
             )
     except JWTError as e:
@@ -282,7 +282,7 @@ async def authenticate(request: Request, endpoint: MCPEndpoint) -> McpContext | 
     if not sub:
         return None
     user = await _resolve_active_user(sub)
-    if user is None:      # inactive / deleted → 401 (§2-3)
+    if user is None:      # inactive / deleted → 401
         return None
 
     client_id = payload.get("client_id") or payload.get("azp")
@@ -320,7 +320,7 @@ async def _client_display_name(client_id: str | None) -> str:
     return "Claude" if "claude" in client_id.lower() else client_id[:64]
 
 
-# ── Module + RBAC tool filtering (§2-4) ───────────────────────
+# ── Module + RBAC tool filtering ───────────────────────
 async def _module_enabled(db, module_id: str) -> bool:
     return await _access_module_enabled(db, module_id)
 
@@ -328,7 +328,7 @@ async def _module_enabled(db, module_id: str) -> bool:
 async def allowed_tool_names(ctx: McpContext) -> set[str]:
     """Names this caller may see/call: tool scope matches the endpoint AND module
     enabled AND user has grant. Used by BOTH ``tools/list`` and ``tools/call`` so
-    a filtered-out tool is neither listed nor invokable (§3-2).
+    a filtered-out tool is neither listed nor invokable.
 
     The endpoint scope filter (``tool.scope == ctx.endpoint_scope``) is what keeps
     ``notes_create`` (mcp:write) off the read/base endpoints entirely.
@@ -346,7 +346,7 @@ async def allowed_tool_names(ctx: McpContext) -> set[str]:
                 if tool.scope not in ("mcp:read", "mcp:write"):
                     continue
             elif tool.scope != ctx.endpoint_scope:
-                continue                   # tool not in this endpoint's scope (§3-2)
+                continue                   # tool not in this endpoint's scope
             if not await _access_mcp_exposed(db, name):    # 내장 AI 전용으로 시작한 도구(code_run 등)
                 continue
             if await tool_accessible(db, ctx.user, name):   # TOOL_MODULE(fail-closed)+모듈 on/off+RBAC
@@ -387,12 +387,12 @@ async def _call_tool(_rctx: ServerRequestContext, params: CallToolRequestParams)
     else:
         names = await allowed_tool_names(ctx)
         if name not in names:
-            # Reject even direct calls to hidden tools (§2-4 module/RBAC, §3-2
+            # Reject even direct calls to hidden tools (module/RBAC,
             # endpoint scope). notes_create is filtered out here on read/base.
             result = fail("forbidden", f"tool '{name}' is not available")
         else:
             # Pass caller scopes so execute_tool re-checks the tool scope before
-            # running — defense-in-depth on top of the endpoint filter (§3-1).
+            # running — defense-in-depth on top of the endpoint filter.
             from app.mcp import writes as _writes
 
             _ct = _writes.call_context.set(_writes.CallContext(
@@ -511,7 +511,7 @@ async def mount_mcp_http(app) -> None:
         f"OAuth Bearer{'; internal-key ON' if internal_on else ''})"
     )
 
-    # S3: 쓰기 엔드포인트. 하위 경로는 Mount, 슬래시 없는 /api/mcp/write 는 베이스 마운트의 resolve_sub 가
+    # 쓰기 엔드포인트. 하위 경로는 Mount, 슬래시 없는 /api/mcp/write 는 베이스 마운트의 resolve_sub 가
     # WRITE_ENDPOINT 로 인증한다(read 와 같은 방식).
     handler = _make_asgi_handler(WRITE_ENDPOINT)
     app.router.routes.append(Mount(WRITE_ENDPOINT.path, app=handler))

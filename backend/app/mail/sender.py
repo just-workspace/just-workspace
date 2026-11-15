@@ -1,4 +1,4 @@
-"""메일 보낸 사람 카드(handover 14 답 5 — 메일 오른쪽 상세 패널).
+"""메일 보낸 사람 카드(메일 오른쪽 상세 패널).
 
 GET /api/mail/sender?email=… → 그 주소가 이 워크스페이스 사용자면 {user: {id, username, display_name, avatar_url}}, 아니면 {user: null}.
 패널의 [채팅]·[통화]가 이 id 로 DM 을 연다. 404 대신 null — 바깥 사람이 보낸 메일이 대부분이라 오류가 아니다.

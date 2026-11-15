@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 router = APIRouter(prefix="/oauth", tags=["oauth-provider"])
 # Root-level discovery routes (no prefix) — RFC 8414 / RFC 9728 require issuer
-# to be the app root, so these are registered separately in main.py (§1-1, §1-2).
+# to be the app root, so these are registered separately in main.py.
 root_router = APIRouter(tags=["oauth-discovery"])
 
 # 서명 알고리즘.
@@ -72,7 +72,7 @@ ADMIN_GROUP_MARKER = "admin"
 
 def _mcp_resource(sub: str = "") -> str:
     """Canonical MCP resource URL. Must match the connector URL char-for-char
-    (no trailing slash) — used both in metadata and as token ``aud`` (§1-2)."""
+    (no trailing slash) — used both in metadata and as token ``aud``."""
     base = (settings.mcp_public_url or settings.app_url).rstrip("/")
     return f"{base}/api/mcp/{sub}" if sub else f"{base}/api/mcp"
 
@@ -154,7 +154,7 @@ def _get_clients() -> dict:
 
 
 # Scopes a DCR (RFC 7591) client may ever hold. mcp:write 는 관리자가 AI 쓰기를 허용했을 때만
-# (app.mcp.access.write_enabled, S3). 쓰기 도구는 토큰 aud 가 /api/mcp/write 일 때만 보이고,
+# (app.mcp.access.write_enabled). 쓰기 도구는 토큰 aud 가 /api/mcp/write 일 때만 보이고,
 # high 위험 작업은 승인 대기함을 거친다. 읽기 커넥터(/api/mcp/read)는 쓰기 스코프가 있어도 읽기 도구만 노출.
 DCR_ALLOWED_SCOPES = {"mcp:read"}
 DCR_WRITE_SCOPES = {"mcp:read", "mcp:write"}
@@ -246,7 +246,7 @@ async def _create_access_token(
         "type": "workspace_oauth",
     }
     # aud/scope are only added for resource-bound (MCP) tokens. Gitea SSO tokens
-    # stay aud-less for backward compat; MCP endpoints require aud (§1-5).
+    # stay aud-less for backward compat; MCP endpoints require aud.
     if aud:
         payload["aud"] = aud
     if scope:
@@ -366,7 +366,7 @@ def _client_display_name(client_id: str, client_cfg: dict) -> str:
 @router.get("/.well-known/openid-configuration")
 async def openid_configuration_legacy():
     """Legacy path — kept as a thin delegate so existing Gitea SSO config that
-    points here keeps working (§1-1, 금지사항 5)."""
+    points here keeps working."""
     return _authorization_server_metadata()
 
 
@@ -639,7 +639,7 @@ async def authorize(
             "unsupported_response_type", "only 'code' is supported"
         )
 
-    # Per-client scope restriction (§1-7) — reject scopes exceeding the client's
+    # Per-client scope restriction — reject scopes exceeding the client's
     # allowlist. Absent/empty "scopes" means legacy client (OIDC only) → allow.
     requested_scopes = [s for s in scope.split() if s]
     allowed_scopes = client_cfg.get("scopes")
@@ -650,7 +650,7 @@ async def authorize(
                 "invalid_scope", f"not allowed for client: {' '.join(excess)}"
             )
 
-    # PKCE (§1-6): only S256 is accepted; MCP scope requests MUST use PKCE.
+    # PKCE: only S256 is accepted; MCP scope requests MUST use PKCE.
     if code_challenge_method is not None and code_challenge_method != "S256":
         return _redirect_error(
             "invalid_request", "only S256 code_challenge_method is supported"
@@ -993,7 +993,7 @@ def _issues_refresh(scope: str, client_cfg: dict | None = None) -> bool:
 
 @router.post("/token")
 async def token(request: Request, db: AsyncSession = Depends(get_db)):
-    # Parse body (form-encoded per OAuth spec — keep request.form(), §1-4)
+    # Parse body (form-encoded per OAuth spec — keep request.form())
     form = await request.form()
     data = dict(form)
 
@@ -1049,7 +1049,7 @@ async def _grant_authorization_code(
         if not hmac.compare_digest(computed, auth_code.code_challenge or ""):
             return _oauth_error("invalid_grant", "Invalid code_verifier")
 
-    # aud/scope bound to the code (§1-5). aud is None for legacy Gitea flow.
+    # aud/scope bound to the code. aud is None for legacy Gitea flow.
     aud = auth_code.resource
     scope = auth_code.scope
     user = await db.get(User, auth_code.user_id)

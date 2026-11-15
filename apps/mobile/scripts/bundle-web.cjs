@@ -1,5 +1,5 @@
 /**
- * 번들 빌드용 웹 산출물 — React 판(frontend-react)을 이 워크스페이스 주소로 빌드해 www-react/ 에 둔다.
+ * 번들 빌드용 웹 산출물 — 웹 프런트(frontend-react)를 이 워크스페이스 주소로 빌드해 www-react/ 에 둔다.
  *
  * 번들 모드는 앱 안에 SPA 를 넣고 API 만 서버로 보낸다(VITE_API_BASE = 사이트 주소, Bearer 토큰).
  * 기본(원격) 모드는 서버 웹을 그대로 여므로 이 단계가 없다 — builder-build.sh 가 JW_WEB_BUNDLE=1 일 때만 부른다.

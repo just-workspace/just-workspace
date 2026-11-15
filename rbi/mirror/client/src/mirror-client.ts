@@ -733,7 +733,7 @@ export class MirrorClient {
       if (wasFocus !== this.focusedWidget) for (const id of [wasFocus, this.focusedWidget]) { const w = this.entries.get(id); if (w && w.node.k === 'widget') this.renderWidget(w) }
     })
     d.addEventListener('mouseup', ev => {
-      // 미뤄 둔 이동이 있으면 먼저 — 드래그 마지막 구간이 빠지지 않게(P0 실측 5px)
+      // 미뤄 둔 이동이 있으면 먼저 — 드래그 마지막 구간이 빠지지 않게
       if (this.moveTimer) { window.clearTimeout(this.moveTimer); this.moveTimer = 0; this.mouseMsg('move', this.lastMoveEv ?? ev) }
       this.mouseMsg('up', ev)
       this.ime.focus({ preventScroll: true })

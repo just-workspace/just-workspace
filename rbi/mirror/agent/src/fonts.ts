@@ -2,7 +2,7 @@
  * 폰트 — 원격이 **실제로 쓴** 폰트(CSS.getPlatformFontsForNode)를 고정 폰트 키(FONT_KEYS)로 바꾼다.
  *
  * 세션 이미지에는 우리 묶음(Liberation2·DejaVu·Noto CJK)만 깔려 있고, 사용자 PC 는 같은 파일에서 만든 WOFF2(/rbi/<sid>/font/)로 그린다
- * → 원격 폭 = 로컬 폭(P0 의 글리프 드리프트 12 % 는 원격 DejaVu 대체 vs 사용자 Arial 이었다).
+ * → 원격 폭 = 로컬 폭(글꼴이 서로 다르면 — 예: 원격 DejaVu 대체 vs 사용자 Arial — 글리프 폭이 12 % 까지 어긋난다).
  * 작성자 웹폰트(@font-face)는 원격에서만 쓰이고 바이트는 넘어가지 않는다 — isCustomFont 면 우리 묶음의 비슷한 것으로 대체하고,
  * 아이콘 폰트(Font Awesome·Glyphicons 같은 사용자 영역 글리프)면 래스터로 보낸다(raster.ts).
  *

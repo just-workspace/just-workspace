@@ -399,7 +399,7 @@ async def test_support_download_anonymous(db_session):
         p.unlink()
 
 
-# ── 시안 반영(2차) ──
+# ── 화면 보강분 ──
 
 def _variant(code: str, i: int) -> str:
     """i 번째 자리만 바꾼 코드(한 자리 차이 = 그 코드를 노린 틀린 입력)"""

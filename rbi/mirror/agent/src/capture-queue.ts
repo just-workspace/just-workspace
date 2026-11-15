@@ -1,5 +1,5 @@
 /**
- * 캡처 큐 — Page.captureScreenshot 을 **한 줄로만** 부른다(P0 필수 4번).
+ * 캡처 큐 — Page.captureScreenshot 을 **한 줄로만** 부른다.
  *
  * 캡처 두 개가 동시에 돌면 Chromium 이 clip 을 섞는다(계측용 전체 화면이 인셋 영역 9장 타일로 나옴),
  * 페이지 이동 순간 걸린 캡처는 영영 돌아오지 않는다(인셋 0fps). 그래서

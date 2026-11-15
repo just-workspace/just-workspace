@@ -2,7 +2,7 @@
  * 입력 — 클라이언트 메시지를 CDP Input.* 으로 바꾼다. 메시지는 이미 validateClientMsg(엄격)를 통과했다.
  *
  * 좌표는 노드 id + 노드 안 상대좌표다. 원격의 **지금** 위치는 수집기 pt(id) 가 getBoundingClientRect 로 알려 준다
- * (P0 은 마지막 스냅샷 좌표였다 — 미러가 늦어도 "그 노드" 를 가리키는 건 같고, 이제는 원격이 움직였어도 정확하다).
+ * (마지막 스냅샷 좌표를 쓰지 않는다 — 미러가 늦어도 "그 노드" 를 가리키고, 원격이 움직였어도 정확하다).
  * id 0 은 원격 뷰포트 좌표 그대로.
  * 한글 IME: 조합 중 텍스트는 Input.imeSetComposition, 확정은 Input.insertText. 조합 중 ⌫·자모 분해는 사용자 PC 의 IME 가 끝내고 결과만 온다.
  * 정책: 붙여넣기(paste)는 ci, 원격 선택 복사(getsel)는 co — 막히면 원격에 아무것도 하지 않고 'blocked-*' 알림만.
@@ -61,7 +61,7 @@ export class InputBridge {
           } finally { this.moveBusy = false }
           return true
         }
-        // 누르기·떼기 전에 밀린 이동을 먼저(드래그 마지막 구간 누락 방지 — P0 실측 5px)
+        // 누르기·떼기 전에 밀린 이동을 먼저(드래그 마지막 구간 누락 방지)
         if (this.moveNext) { const mv = this.moveNext; this.moveNext = null; await this.mouse(mv) }
         return this.mouse(m)
       }
@@ -115,7 +115,7 @@ export class InputBridge {
         return false
       }
       case 'scroll': {
-        // 로컬 스크롤이 진실 → 원격은 **절대값**(휠 델타는 과주행했다 — P0 실측). 연속 스크롤은 합친다.
+        // 로컬 스크롤이 진실 → 원격은 **절대값**(휠 델타로 보내면 과주행한다). 연속 스크롤은 합친다.
         this.pendingScroll.set(m.id, m)
         if (this.scrolling) return false
         this.scrolling = true

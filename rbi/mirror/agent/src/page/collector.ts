@@ -2,7 +2,7 @@
  * 수집기 — 원격 페이지의 **격리 world**(Page.createIsolatedWorld, 이름 jw-mirror)에서 돈다. 페이지 스크립트는 이 함수·변수에 닿지 못하고
  * (world 마다 JS 전역·프로토타입이 따로다) 우리는 DOM 만 공유한다. 하는 일은 "읽기" 뿐이다(스크롤 지시만 예외).
  *
- * P0 은 틱마다 DOMSnapshot.captureSnapshot(문서 전체, 4.5천 노드에 115–135ms)을 다시 읽었다. P1 은
+ * 틱마다 문서 전체(DOMSnapshot.captureSnapshot — 4.5천 노드에 115–135ms)를 다시 읽지 않는다.
  *   MutationObserver(+입력·포커스·애니메이션·이미지 로드·폰트 로드·크기 변경·포인터 이벤트)로 더러운 곳만 표시하고, 틱마다 그곳만 다시 읽는다.
  *   단계: ① 구조(추가·삭제 서브트리) ② 스타일(바뀐 요소만, 상속 속성이 바뀌면 자손까지) ③ 기하(바뀐 요소의 가장 가까운
  *   흐름 밖 조상 = position absolute/fixed 서브트리만, 그런 조상이 없으면 문서 전체) ④ 텍스트(문자 변화·부모 상자 변화)
@@ -590,7 +590,7 @@ export function collectorMain(cfg: CollectorCfg): void {
     return { changed, inherited, text: textAffect, layout, self }
   }
 
-  // ── 지역 배치(부모 기준) — P0 클라이언트의 place() 계산을 수집기로 옮겼다(부모 이동이 자식 갱신을 만들지 않게) ──
+  // ── 지역 배치(부모 기준) — 수집기가 계산한다(부모 이동이 자식 갱신을 만들지 않게) ──
   const inv = (m: number[]): [number, number, number, number] => { const det = m[0] * m[3] - m[1] * m[2] || 1; return [m[3] / det, -m[1] / det, -m[2] / det, m[0] / det] }
   const apply = (m: number[], x: number, y: number): [number, number] => [m[0] * x + m[2] * y, m[1] * x + m[3] * y]
   const isId = (m: number[]) => Math.abs(m[0] - 1) < 1e-4 && Math.abs(m[1]) < 1e-4 && Math.abs(m[2]) < 1e-4 && Math.abs(m[3] - 1) < 1e-4

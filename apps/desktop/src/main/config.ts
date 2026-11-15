@@ -33,7 +33,7 @@ export const CONFIG = {
   web: normalizeWeb(process.env.JW_WEB ?? site.web),
 } as const;
 
-/** 'react' 만 react, 나머지(빈값·오타 포함)는 vue — 운영 기본값 쪽으로 넘어진다. */
+/** 'react' 만 react, 나머지(빈값·오타 포함)는 vue — 기본값 쪽으로 넘어진다. */
 export function normalizeWeb(v: string | undefined): 'vue' | 'react' {
   return (v ?? '').trim().toLowerCase() === 'react' ? 'react' : 'vue';
 }

@@ -129,7 +129,7 @@ export function isLossy(msg: ViewerMsg): boolean {
   return msg.t === 'mm'
 }
 
-/** 연결 품질 — 왕복 지연 200ms 넘거나 15fps 아래면 느림(시안 C) */
+/** 연결 품질 — 왕복 지연 200ms 넘거나 15fps 아래면 느림 */
 export function qualityOf(rttMs: number | null, fps: number | null): 'ok' | 'slow' {
   if ((rttMs != null && rttMs > 200) || (fps != null && fps > 0 && fps < 15)) return 'slow'
   return 'ok'

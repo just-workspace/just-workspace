@@ -1,6 +1,6 @@
 /**
- * 인셋 — canvas/video/iframe/embed/shadow host 영역을 WebP 로 10~15fps 찍어 바이너리 프레임으로 보낸다(콘솔은 P1 에서 이것으로).
- * 캡처는 capture-queue 한 줄(우선순위 2, 같은 노드 키는 최신만, 200ms 넘게 기다린 프레임은 버림) — P0 의 동시 캡처 clip 섞임·이동 중 무한 대기를 없앴다.
+ * 인셋 — canvas/video/iframe/embed/shadow host 영역을 WebP 로 10~15fps 찍어 바이너리 프레임으로 보낸다(콘솔도 이것으로).
+ * 캡처는 capture-queue 한 줄(우선순위 2, 같은 노드 키는 최신만, 200ms 넘게 기다린 프레임은 버림) — 동시 캡처의 clip 섞임·이동 중 무한 대기를 막는다.
  * 바뀌지 않은 프레임(바이트 해시 같음)은 보내지 않는다. 뷰포트와 겹치는 부분만 찍고, 잘린 위치는 프레임 머리에 적는다.
  * 프레임 머리: [0x01][u32 nodeId][u32 seq][u16 w][u16 h][i16 dx][i16 dy] + webp (dx,dy = 노드 상자 안에서의 위치)
  */

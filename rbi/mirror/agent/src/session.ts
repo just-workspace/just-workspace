@@ -115,7 +115,7 @@ export class MirrorSession {
 
   async start(): Promise<void> {
     const exe = this.cfg.chromium || (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)
-    // 기본(영구) 컨텍스트 — 관리 정책 IncognitoModeAvailability=1 이 newContext(=시크릿)를 막는다(P0)
+    // 기본(영구) 컨텍스트 — 관리 정책 IncognitoModeAvailability=1 이 newContext(=시크릿)를 막는다
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'mirror-profile-'))
     this.ctx = await chromium.launchPersistentContext(profile, {
       executablePath: exe, headless: true,

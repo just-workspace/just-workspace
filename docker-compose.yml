@@ -107,7 +107,7 @@ services:
     # Multi-worker so a long-running plugin request can't starve /api/health
     # --proxy-headers: X-Forwarded-For 는 ws-nginx(172.28.0.2 고정, 아래 nginx 서비스) 연결에서 온 것만 믿는다.
     # ws-nginx 가 앞단 리버스 프록시 연결일 때만 실 IP 를 승격하고 XFF 를 덮어써 넘기므로 request.client 가 곧 실 IP 다.
-    # 메일(.30)처럼 직접 부르는 연결은 연결 주소 그대로 남는다(R7 A2).
+    # 메일(.30)처럼 직접 부르는 연결은 연결 주소 그대로 남는다.
     # --timeout-graceful-shutdown: 재시작 때 열린 SSE(내장 AI 이어 받기 구독)를 5초만 기다리고 닫아, docker stop(10초)
     # 안에 종료 훅이 돌아 생성 중 답변을 interrupted 로 저장하게 한다(app/ai/runs.py).
     # 워커 수는 entrypoint 가 붙인다: BACKEND_WORKERS, 없으면 CPU 수 기준 min(8, max(2, nproc)).

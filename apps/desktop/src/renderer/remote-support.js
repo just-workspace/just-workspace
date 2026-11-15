@@ -1,4 +1,4 @@
-// 원격 지원(포터블) 화면 — 메인(src/main/remote/support.ts)이 보내는 상태대로 한 구역만 보인다(시안 SupportApp ①~④).
+// 원격 지원(포터블) 화면 — 메인(src/main/remote/support.ts)이 보내는 상태대로 한 구역만 보인다.
 const $ = (id) => document.getElementById(id);
 const VIEWS = ['server', 'code', 'expired', 'pending', 'active', 'ended', 'error'];
 let timer = null;

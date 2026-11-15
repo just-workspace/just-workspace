@@ -15,7 +15,7 @@
 # 멱등: 체인 내용이 마지막으로 적용한 것과 같고 목록이 그대로면 손대지 않는다(다르거나 사라졌을 때만 flush → 재구성).
 # 종료(SIGTERM): 체인·점프를 걷어낸다(남은 세션은 백엔드 reaper 가 하트비트 만료로 거둔다).
 #
-# ★ 운영 체인을 시험이 건드리지 못하게(r21 P0 사고: 시험 중 `docker run <이미지> sh -c "iptables -S"` 가 ENTRYPOINT 로 이 스크립트를
+# ★ 운영 체인을 시험이 건드리지 못하게(실제 사고: 시험 중 `docker run <이미지> sh -c "iptables -S"` 가 ENTRYPOINT 로 이 스크립트를
 #   기본값(체인 WS-RBI)으로 돌렸다 — NET_ADMIN 이 없어 실패했을 뿐):
 #   1) 인자를 받지 않는다 — `docker run <이미지> <명령>` 으로 다른 일을 시키면 아무것도 하지 않고 끝난다(--entrypoint 를 쓸 것).
 #   2) RBI_CHAIN 기본값이 없다 — 운영 compose 가 RBI_CHAIN=WS-RBI 를 명시한다. 비면 아무것도 하지 않고 끝난다.

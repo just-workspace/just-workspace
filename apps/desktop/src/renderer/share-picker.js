@@ -133,7 +133,7 @@ async function start() {
   const { sources, context } = await window.jw.picker.load();
   state.sources = sources;
   if (context) $('sub').textContent = context;
-  // 주 화면을 미리 골라둔다(핸드오프 목업도 선택된 상태다). 미리 골라도
+  // 주 화면을 미리 골라둔다(디자인 목업도 선택된 상태다). 미리 골라도
   // 공유는 버튼을 눌러야 시작되므로 실수로 나가지 않는다.
   const screens = sources.filter((s) => s.kind === 'screen');
   if (screens.length > 0) state.picked = screens[0].id;

@@ -40,7 +40,7 @@ const (
 	CodecPCMF32 uint8 = 2
 	CodecFLAC   uint8 = 3
 	CodecOpus   uint8 = 4 // opus passthrough (pre-encoded by the sender)
-	CodecPCMS32 uint8 = 5 // 32-bit signed integer LE (desktop hi-res, r19)
+	CodecPCMS32 uint8 = 5 // 32-bit signed integer LE (desktop hi-res)
 )
 
 // Flags (header byte 3).

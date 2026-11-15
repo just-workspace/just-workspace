@@ -99,7 +99,7 @@ npm run dist      # electron-builder
 - `tsconfig` 의 `module` 은 `node16`(CommonJS 출력). TypeScript 7 이 `moduleResolution: node` 를 없앴다.
 - `safeStorage` 는 비동기 API 만 쓴다(동기 API 는 Electron 46 에서 제거). 기존 설치의 암호문은 그대로 읽힌다.
 
-## 하이레조 네이티브 오디오 (handover-20 Tier 4, r19)
+## 하이레조 네이티브 오디오
 
 음성채널 "하이레조" 단계 — **WASAPI exclusive** 로 장치를 독점해 장치 네이티브 포맷(최대 32-bit/192 kHz) PCM 을 리샘플·변환 없이
 무손실 릴레이(`audiorelay`, PROTOCOL v1)로 보내고 받는다. 브라우저 무손실 피어(PCM 24/48)와 같은 방에서 서로 들린다.
@@ -125,7 +125,7 @@ src/preload/webview.ts          임베드 웹뷰 전용 프리로드 — window.
 ### 왜 이렇게
 
 - **miniaudio**(public domain/MIT-0, 단일 헤더). RtAudio·cpal 은 WASAPI shared 전용, PortAudio 는 exclusive 가 되지만 ASIO 를 끌어들인다.
-  ASIO 는 2025-10 부터 GPLv3/독점 이중 라이선스라 보류(VOICE-RESEARCH §Tier 4). 단, miniaudio 원본은 exclusive 에서 **Windows 기본 형식만**
+  ASIO 는 2025-10 부터 GPLv3/독점 이중 라이선스라 보류. 단, miniaudio 원본은 exclusive 에서 **Windows 기본 형식만**
   쓰므로 요청 포맷(24/96·32/192)을 먼저 `IsFormatSupported(EXCLUSIVE)` 로 시험하는 패치를 넣었다(`vendor/miniaudio/apply-patch.py`, 멱등).
 - **네트워크·장치 I/O 는 전부 메인 프로세스.** 렌더러(서버 웹)는 IPC 로 열기/통계/이벤트만 본다. 토큰 중 렌더러→메인으로 넘어오는 것은
   120 s 릴레이 토큰만(OAuth 토큰은 여전히 메인 밖으로 안 나간다).
@@ -133,7 +133,7 @@ src/preload/webview.ts          임베드 웹뷰 전용 프리로드 — window.
   (BSD-3, libquiche 프리빌드 N-API v6 win32-x64 5.3 MB, cmake 불필요), (c) WebSocket 만. **(b) 를 기본, (c) 를 폴백**으로 골랐다 —
   운영 릴레이(LE 인증서)에 핸드셰이크 42 ms·데이터그램 1215 B, 인증서 불일치 호스트는 거부(검증 동작 확인), 라이브러리 경고
   "Non serverCertificateHashes verification is experimental" 은 위험으로 기록. 폴백·재시도 정책은 브라우저 `transportSelector` 와 같다.
-- **와이어 코덱 = 장치 포맷 그대로**: s16→pcm_s16, s24→pcm_s24, s32→**pcm_s32(codec 5, r19 추가)**, f32→pcm_f32. 32-bit 정수는 float32 가
+- **와이어 코덱 = 장치 포맷 그대로**: s16→pcm_s16, s24→pcm_s24, s32→**pcm_s32(codec 5)**, f32→pcm_f32. 32-bit 정수는 float32 가
   못 담으므로 지터버퍼·재생 경로가 전부 바이트 단위(Float64 는 믹스·리샘플 때만).
 - **비트퍼펙트 판정**: 캡처 = exclusive + 내부 포맷·레이트·채널 == 요청(24-in-32 컨테이너 → s24 `>>8` 은 무손실로 인정).
   재생 = exclusive + 피어 하나 + 레이트 같음 + 정수 상향 변환만. 레이트가 다르면 speex 리샘플 + `bitPerfect=false`(통계·배지에 "리샘플").
@@ -169,7 +169,7 @@ CI: `npm ci && npm run native:build && npm run build && npm test`(windows-latest
 - 이벤트 `on(type|'*', fn)`: `started{result}` · `failed{reason, code?, app?, device}` · `downgraded{from, to, reason}` · `state` · `connected` · `transport_fallback` · `peer_joined/left/format` · `needGrant` · `warning` · `stats` · `error`
 - 실패 이유 `reason`: `device_in_use`(다른 앱이 독점, `app` 에 프로세스 이름 — Windows 세션 열거로 보일 때만) · `exclusive_not_allowed`(소리 설정의 "독점 모드 허용" 꺼짐) ·
   `unsupported_format` · `access_denied` · `no_device` · `addon_unavailable`
-- 어댑터(`frontend-react/src/lib/hires/adapter.ts`)는 r18 UI 훅 `useVoice.confirmHiresExclusive(device, 'PCM 32/192 · 비트퍼펙트 · 12.3 Mbps')`(처음 한 번,
+- 어댑터(`frontend-react/src/lib/hires/adapter.ts`)는 UI 훅 `useVoice.confirmHiresExclusive(device, 'PCM 32/192 · 비트퍼펙트 · 12.3 Mbps')`(처음 한 번,
   "다음부터 묻지 않기") 와 `useVoice.reportExclusiveError({app, device})`(danger 띠, [다시 시도]=`retryHires`) 를 늦은 import 로 부른다.
   실패·취소 시 그동안 **브라우저 무손실 24/48** 로 보낸다(`LosslessVoiceTransport.setSend(tier 'lossless')`).
 

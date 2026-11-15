@@ -163,7 +163,7 @@ async function verifyIssuer(): Promise<boolean> {
  *
  * 데스크톱은 사이트별로 따로 빌드·배포되므로 서버와 클라이언트 버전이 어긋나는 게
  * 일상이다. 어느 쪽이 무엇인지 로그와 설정 창에 남겨두면 "왜 안 되지" 의 절반은
- * 여기서 끝난다. 엔드포인트가 없는 서버(R-27 이전)는 404 → null 로 넘어간다.
+ * 여기서 끝난다. 엔드포인트가 없는 서버는 404 → null 로 넘어간다.
  */
 async function fetchCapabilities(): Promise<{ version: string; features: string[] } | null> {
   try {

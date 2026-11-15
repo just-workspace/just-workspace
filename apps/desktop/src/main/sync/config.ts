@@ -39,7 +39,7 @@ export interface SyncSettings {
   /** 종량제 네트워크에서 일시중지. */
   pauseOnMetered: boolean;
   /**
-   * 삭제 전파. **v2 로 미룬 기능이라 항상 false 다**(핸드오프 설계 결정).
+   * 삭제 전파. **v2 로 미룬 기능이라 항상 false 다**(설계 결정).
    * 한쪽에서 지워도 반대쪽은 유지된다.
    */
   propagateDeletes: false;

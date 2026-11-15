@@ -2,7 +2,7 @@
  * 릴레이 전송(Node/Electron 메인) — WebTransport 기본, WebSocket 폴백. 브라우저 lib/lossless/transport.ts 와 같은 인터페이스·같은 와이어.
  *
  * WebTransport: @fails-components/webtransport(BSD-3) + http3-quiche 프리빌드(N-API). Node 에 WebTransport API 가 없어 고른 것.
- *   선택 근거(r19 평가): 운영 릴레이(LE 인증서) 핸드셰이크 42 ms, 데이터그램 1215 B, 인증서 불일치 호스트는 거부(검증 동작 확인).
+ *   선택 근거: 운영 릴레이(LE 인증서) 핸드셰이크 42 ms, 데이터그램 1215 B, 인증서 불일치 호스트는 거부(검증 동작 확인).
  *   ESM 전용이라 CJS 메인에서 dynamic import() 로 올린다. 바이너리는 asarUnpack.
  * WebSocket: ws(MIT). 토큰은 Sec-WebSocket-Protocol 하위 프로토콜(쿼리 금지 — PROTOCOL.md §4.1).
  *

@@ -18,7 +18,7 @@ export const DEFAULT_RULE: NotifyRule = 'mentions';
 interface Store {
   /** channelId → 규칙. 없으면 DEFAULT_RULE. */
   rules: Record<string, NotifyRule>;
-  /** 데스크톱 앱이 떠 있으면 웹 탭에는 토스트를 띄우지 않는다(핸드오프 옵션). */
+  /** 데스크톱 앱이 떠 있으면 웹 탭에는 토스트를 띄우지 않는다. */
   desktopOnly: boolean;
 }
 

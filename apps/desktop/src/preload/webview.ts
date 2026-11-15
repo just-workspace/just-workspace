@@ -1,5 +1,5 @@
 /**
- * 임베드 웹뷰 전용 프리로드 — `window.jwNativeAudio`(하이레조, handover-20 Tier 4)와
+ * 임베드 웹뷰 전용 프리로드 — `window.jwNativeAudio`(하이레조)와
  * `window.jwShell`(셸 → 웹 이동 명령 하나, 0.5.0) 둘만 내보낸다.
  *
  * 셸의 `jw` API(preload/index.ts)는 여기 없다 — 서버가 내려주는 코드가 닿는 표면은 이 좁은 오디오 API 가 전부다.

@@ -26,6 +26,10 @@
   voice_state       음성 채널 접속 상태(app/chat/voice.py) {channel_id, participants, since}
 전체 대상(socket.py publish_presence)
   presence          {user_id, username, status(online|offline 하위호환), state, emoji, text}
+전체 대상(emit_to_all)
+  system.update_countdown   업데이트 예고 {job, kind, ends_at, expected_seconds}
+  system.update_cancelled   예고 취소 {job}
+  system.maintenance        점검 시작·끝 {active, kind, started_at, expected_seconds, result}
 플러그인은 `plugin:<id>:<event>` 형식을 쓴다.
 """
 
@@ -41,6 +45,7 @@ logger = logging.getLogger(__name__)
 
 USER_CHANNEL = "chat:notification:{}"
 CHAT_CHANNEL = "chat:channel:{}"
+ALL_CHANNEL = "chat:presence"     # 접속한 모든 소켓에 그대로 전달되는 채널(socket.py — 접속 상태가 쓰는 그 채널)
 CONN_KEY = "chat:user:{}:conns"   # app/chat/presence.py 가 관리하는 연결 수(모든 워커 합산)
 
 
@@ -62,6 +67,12 @@ async def emit_to_users(user_ids: Iterable[str], event: dict) -> None:
 async def emit_to_channel(channel_id: str, event: dict) -> None:
     r = await get_redis()
     await r.publish(CHAT_CHANNEL.format(channel_id), _dump(event))
+
+
+async def emit_to_all(event: dict) -> None:
+    """접속한 모든 사용자에게 — 업데이트 예고·점검처럼 워크스페이스 전체에 알릴 것만."""
+    r = await get_redis()
+    await r.publish(ALL_CHANNEL, _dump(event))
 
 
 async def is_connected(user_id: str) -> bool:

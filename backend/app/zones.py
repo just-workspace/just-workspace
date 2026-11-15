@@ -146,6 +146,9 @@ ROUTERS: list[tuple[str, str]] = [
     ("core", "app.admin.settings_ext:router"),       # 관리 로그인 보호 정책·저장소 요약·사용자 할당
     ("core", "app.system.router:router"),            # 관리 › 구역 켜기·끄기·설정(설치 관리자 대신 호출) · 저장소 상태
     ("core", "app.system.router:public_router"),     # 파일 탭·알림 띠 — 저장소에 닿는가
+    ("core", "app.system.update_router:router"),           # 관리 › 업데이트(설치 관리자 대신 호출)
+    ("core", "app.system.update_router:public_router"),    # 업데이트 예고·점검 상태(로그인한 누구나)
+    ("core", "app.system.update_router:internal_router"),  # 설치 관리자가 예고·점검을 알려 오는 경로(키 필요)
     ("core", "app.setup.router:router"),
     ("git", "app.git.router:router"),
     ("core", "app.dashboard.router:router"),

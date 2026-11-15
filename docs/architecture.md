@@ -18,8 +18,7 @@
 │                                                                  │
 │  [선택 — COMPOSE_PROFILES]                                       │
 │  mailserver · gitea · livekit · egress · onlyoffice · sso        │
-│  (ws-sso + ws-ldap) · logging (vector · loki · grafana ·          │
-│  healthprobe) · aitools (searxng) · certbot                      │
+│  (ws-sso + ws-ldap) · aitools (searxng) · certbot                │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -114,7 +113,7 @@ PATCH /api/admin/modules/{id}      → 모듈 on/off (admin)
 
 - 채팅·알림 WebSocket `/ws/chat` — 워커 간 전파는 Redis Pub/Sub.
 - **인증 토큰은 쿼리스트링이 아니라 `Sec-WebSocket-Protocol` 헤더**로 보낸다(`jw.bearer, jw.token.<base64url>`; 서버는 `jw.bearer` 로 응답).
-  쿠키 세션도 그대로 받는다. 쿼리 토큰은 nginx error_log·Loki 에 평문으로 남아서 폐기했다.
+  쿠키 세션도 그대로 받는다. 쿼리 토큰은 nginx error_log 에 평문으로 남아서 폐기했다.
 - 알림은 소켓 이벤트가 실시간을 맡고, 5분 폴링은 끊김 보정용이다.
 - 위키 공동 편집 `/ws/wiki/collab` — Yjs 릴레이(`app/collab/relay.py`), 워커를 가로질러 Redis 로 중계.
 
@@ -162,15 +161,6 @@ PATCH /api/admin/modules/{id}      → 모듈 on/off (admin)
 - MCP 서버(`app/mcp`): Streamable HTTP(`/api/mcp`, `/api/mcp/read`) + 레거시 SSE, OAuth Bearer(`aud`·`scope`) 또는 PAT(`wsmcp_…`, `mcp:read` 한정).
   읽기 도구 18개(파일·메모·메일·채팅·게시판·캘린더·연락처·할 일·웹 검색), `mcp:write` 는 `notes_create` 하나이고 `/api/mcp/write` 는 아직 404. → [CONNECTOR.md](CONNECTOR.md)
 
-## 관제 (logging 프로파일)
-
-```
-컨테이너 stdout ─▶ Vector(docker_logs) ─▶ Loki ─▶ Grafana (LAN 포트 3001 에만 게시)
-healthprobe(alpine, 5분) ─▶ JSON 한 줄 stdout ─▶ 같은 경로
-```
-
-Grafana 는 공인 경로에 두지 않는다 — `GRAFANA_BIND`(기본 127.0.0.1) 로 네트워크 레벨에서 막는다.
-
 ## 클라이언트 앱
 
 - 데스크톱: Electron 44 셸(`apps/desktop`), 서버 웹을 `WebContentsView` 로 얹고 트레이·알림·화면 공유·OS 자격 증명 저장소만 네이티브. RFC 8252 시스템 브라우저 로그인.
@@ -191,9 +181,8 @@ Grafana 는 공인 경로에 두지 않는다 — `GRAFANA_BIND`(기본 127.0.0.
 | 2222 (`GIT_SSH_PORT`) | Gitea SSH | `gitea` |
 | 7882-7892/udp, 7881/tcp, 3478/udp | LiveKit 미디어 · ICE TCP · TURN UDP | `livekit` |
 | 636 (+ `LDAP_PLAIN_BIND`:389) | ws-ldap (컨테이너 안은 1636/1389). 평문 389 는 기본으로 루프백에만 게시 | `sso` |
-| 3001 (`GRAFANA_BIND`) | Grafana — LAN 전용 | `logging` |
 | 172.28.0.1:임시포트 (`RBI_PUBLISH_IP`) | 격리 브라우저 세션의 KasmVNC 6901 — workspace 브리지 게이트웨이에만 게시, ws-nginx 출발지만 통과(netfilter). 공인·LAN 포트 없음 | 모듈 `rbi` |
-| 내부만 | backend 8000 · frontend(-react) 3000 · postgres 5432 · redis 6379 · gitea 3000 · onlyoffice 80 · searxng 8080 · sso 8000 · livekit 7880 · loki 3100 | — |
+| 내부만 | backend 8000 · frontend(-react) 3000 · postgres 5432 · redis 6379 · gitea 3000 · onlyoffice 80 · searxng 8080 · sso 8000 · livekit 7880 | — |
 
 ## 의존성 라이선스
 

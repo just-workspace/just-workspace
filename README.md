@@ -43,7 +43,6 @@ docker compose config --quiet && docker compose up -d
 | `egress` | 회의 녹화 (LiveKit Egress 1.15, cpu 4) |
 | `onlyoffice` | docx/xlsx/pptx 공동 편집 (OnlyOffice Docs 10.0, WOPI, AGPL) |
 | `sso` | SAML/SCIM (`ws-sso`) + LDAP 디렉터리 (`ws-ldap`, LDAPS 636) |
-| `logging` | Vector · Loki · Grafana 13 + 헬스 프로브 (LAN 전용 게시, Grafana/Loki AGPL) |
 | `aitools` | SearXNG 웹 검색 (AGPL) |
 | `certbot` | 메일/TURN 인증서 (standalone 은 웹 인증서까지) |
 
@@ -67,7 +66,7 @@ docker compose config --quiet && docker compose up -d
 | **AI** | 내장 AI 채팅 (Ollama / OpenAI 호환 / Anthropic), 사용자별 API 키, 도구 호출 확인 게이트, MCP 서버 — claude.ai 커스텀 커넥터로 노출 ([docs/CONNECTOR.md](docs/CONNECTOR.md)) |
 | **검색** | Ctrl+K 커맨드 팔레트, 7개 모듈 통합 검색 |
 | **플러그인** | 런타임 로딩 (리빌드 없이 추가/제거), v1 Vue · v2 React 계약, 패키지 업로드 설치, SDK ([docs/extensions.md](docs/extensions.md)) |
-| **운영** | 웹 최초 설정 마법사, 앱 내 백업/복원, 관리자 패널(감사 로그·보안 정책·저장소), 관제 대시보드·알림 (logging) |
+| **운영** | 웹 최초 설정 마법사, 앱 내 백업/복원, 관리자 패널(감사 로그·보안 정책·저장소·서비스 상태) |
 | **클라이언트** | PWA, 모바일 (Capacitor 8, Android APK 서버 빌드·게시 / iOS 소스), 데스크톱 (Electron 44) — [apps/](apps/README.md) |
 | **화면** | 전 페이지 다크 UI, 1280~8K 유동 레이아웃, 화면 배율, 한/영 |
 
@@ -80,7 +79,6 @@ docker compose config --quiet && docker compose up -d
 | 데이터 | PostgreSQL 16, Redis 8 (세션·Pub/Sub·잠금·캐시) |
 | 실시간 | WebSocket (토큰은 `Sec-WebSocket-Protocol`) + Redis Pub/Sub, Yjs 릴레이 |
 | 화상회의 | LiveKit (WebRTC SFU) + Egress 녹화, 내장 TURN |
-| 관제 | Vector · Loki · Grafana · healthprobe (선택) |
 | 배포 | Docker Compose |
 
 ## 운영
@@ -106,5 +104,5 @@ docker compose config --quiet && docker compose up -d
 
 [MIT](LICENSE). 코어 소스는 MIT 이고 대부분의 의존성은 permissive(MIT·BSD·Apache) 입니다. 예외는 명시합니다:
 backend 의 IMAP 클라이언트 `aioimaplib` 은 GPL-3.0, `ldap3`·`psycopg` 는 LGPL-3.0, Redis 8 은 RSALv2/SSPL/AGPL 삼중.
-ONLYOFFICE·SearXNG·Grafana·Loki(AGPL) 는 선택 프로파일로 기본 비활성이며 켜면 각자의 라이선스를 따릅니다.
+ONLYOFFICE·SearXNG(AGPL) 는 선택 프로파일로 기본 비활성이며 켜면 각자의 라이선스를 따릅니다.
 → [docs/licensing.md](docs/licensing.md) · [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)

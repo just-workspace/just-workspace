@@ -30,7 +30,7 @@ def _all_zones(_requirement: str) -> bool:
 
 def _good_env(**over) -> dict[str, str]:
     env = sd.generate(sd.names())          # 표의 전부(기본 생성 대상이 아닌 것까지)
-    env["COMPOSE_PROFILES"] = "mailserver,logging"
+    env["COMPOSE_PROFILES"] = "mailserver"
     env["MCP_INTERNAL_TOOLS_ENABLED"] = "true"
     env.update(over)
     return env
@@ -66,7 +66,7 @@ def test_example_placeholders_rejected():
     ("LIVEKIT_API_SECRET", "secret"),
     ("SECRET_KEY", "changeme"),
     ("DB_PASSWORD", "password"),
-    ("GRAFANA_ADMIN_PASSWORD", "admin"),
+    ("DOVECOT_MASTER_PASSWORD", "admin"),
     ("DB_PASSWORD", "workspace"),
     ("SEARXNG_SECRET", "please-change-this-secret-key-32chars"),
     ("ONLYOFFICE_JWT_SECRET", "change-me-onlyoffice"),
@@ -122,13 +122,11 @@ def test_disabled_zone_secrets_are_ignored():
                                    "ONLYOFFICE_JWT_SECRET", "SANDBOX_TOKEN", "DOVECOT_MASTER_PASSWORD"}
 
 
-def test_profile_and_flag_gates():
-    env = _good_env(GRAFANA_ADMIN_PASSWORD="CHANGE_ME", MCP_API_KEY="short", COMPOSE_PROFILES="mailserver",
-                    MCP_INTERNAL_TOOLS_ENABLED="false")
+def test_flag_gate():
+    env = _good_env(MCP_API_KEY="short", MCP_INTERNAL_TOOLS_ENABLED="false")
     assert _check(env) == []
-    env["COMPOSE_PROFILES"] = "mailserver, logging"
     env["MCP_INTERNAL_TOOLS_ENABLED"] = "true"
-    assert _names(_check(env)) == {"GRAFANA_ADMIN_PASSWORD", "MCP_API_KEY"}
+    assert _names(_check(env)) == {"MCP_API_KEY"}
 
 
 def test_zone_gate_uses_installed_zones(monkeypatch):
@@ -198,7 +196,7 @@ def test_generated_values_are_shell_and_sed_safe():
 
 def test_generate_defaults_and_only():
     default = sd.generate()
-    assert "SECRET_KEY" in default and "DB_PASSWORD" in default and "GRAFANA_ADMIN_PASSWORD" in default
+    assert "SECRET_KEY" in default and "DB_PASSWORD" in default and "SEARXNG_SECRET" in default
     assert "SMTP_PASSWORD" not in default and "MCP_API_KEY" not in default
     assert list(sd.generate(["MCP_API_KEY", "SECRET_KEY"])) == ["MCP_API_KEY", "SECRET_KEY"]
     with pytest.raises(KeyError):
@@ -223,7 +221,7 @@ def test_merge_fills_only_empty_or_placeholder():
     assert env["APP_URL"] == "https://ws.example.com"
     assert env["SECRET_KEY"] == keep and "SECRET_KEY" not in filled
     assert env["LIVEKIT_API_KEY"] == "devkey" and "LIVEKIT_API_KEY" not in filled
-    assert {"INTERNAL_API_KEY", "DB_PASSWORD", "LIVEKIT_API_SECRET", "GRAFANA_ADMIN_PASSWORD"} <= set(filled)
+    assert {"INTERNAL_API_KEY", "DB_PASSWORD", "LIVEKIT_API_SECRET", "SEARXNG_SECRET"} <= set(filled)
     assert sd.weakness(sd.spec("INTERNAL_API_KEY"), env["INTERNAL_API_KEY"]) is None
     # DATABASE_URL 에 박혀 있던 자리표시자도 같은 비밀번호로 맞춘다
     assert env["DATABASE_URL"] == f"postgresql+asyncpg://workspace:{env['DB_PASSWORD']}@postgres:5432/workspace"
@@ -257,7 +255,7 @@ def test_env_example_ships_no_secret_values_and_merge_makes_it_pass():
 
     merged, _ = sd.merge_env(text)
     env = parse(merged)
-    env["COMPOSE_PROFILES"] += ",logging,sso,aitools,onlyoffice,audiorelay"
+    env["COMPOSE_PROFILES"] += ",sso,aitools,onlyoffice,audiorelay"
     url = env.get("DATABASE_URL") or PG_URL.format(pw=env["DB_PASSWORD"])
     assert sd.check(env, database_url=url, zone_ok=_all_zones) == []
 

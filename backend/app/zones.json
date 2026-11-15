@@ -53,8 +53,7 @@
       "docs",
       "meetings",
       "git",
-      "ai",
-      "monitoring"
+      "ai"
     ]
   },
   "zones": [
@@ -265,35 +264,6 @@
       },
       "ports": [],
       "wizard_step": "ai"
-    },
-    {
-      "id": "monitoring",
-      "name": {
-        "ko": "상태 감시",
-        "en": "Monitoring"
-      },
-      "summary": {
-        "ko": "로그 수집과 상태 화면",
-        "en": "Log collection and health dashboards"
-      },
-      "compose_profiles": [
-        "logging"
-      ],
-      "services": [
-        "vector",
-        "loki",
-        "grafana",
-        "loki-gw",
-        "healthprobe"
-      ],
-      "modules": [],
-      "requires": [],
-      "memory_mb": {
-        "idle": 750,
-        "limit": 2200,
-        "recommend": 1500
-      },
-      "ports": []
     }
   ],
   "addons": [

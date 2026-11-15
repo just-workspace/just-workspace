@@ -15,7 +15,6 @@ just-workspace 는 다음 오픈소스 프로젝트를 사용한다. 버전은 2
 | dompurify 3.4.17 | MPL-2.0 OR Apache-2.0 | frontend-react | Apache-2.0 선택 가능 |
 | @livekit/krisp-noise-filter 0.4.5 | LiveKit 이용약관(비공개) | frontend-react(회의 노이즈 제거) | 오픈소스 아님. LiveKit 의 약관을 따른다 |
 | Redis 8.8 | RSALv2 / SSPLv1 / AGPL-3.0 삼중 | 코어 컨테이너 | 자체 운영은 어느 쪽이든 무방 |
-| Grafana 13 · Loki 3.7 | AGPL-3.0 | `logging` 프로파일 | 네트워크로 쓰는 별도 컨테이너. 수정 배포 시 AGPL |
 | ONLYOFFICE Docs CE 10.0 | AGPL-3.0 | `onlyoffice` 프로파일 | 별도 컨테이너(WOPI 호출) |
 | SearXNG | AGPL-3.0 | `aitools` 프로파일 | 별도 컨테이너 |
 
@@ -153,10 +152,6 @@ ASIO 는 넣지 않았다 — Steinberg ASIO SDK 가 2025-10 GPLv3/독점 이중
 | livekit/egress | 1.15.0 | Apache-2.0 | `egress` |
 | onlyoffice/documentserver | 10.0.0 | **AGPL-3.0** | `onlyoffice` |
 | searxng/searxng | 2026.10.17 | **AGPL-3.0** | `aitools` |
-| timberio/vector (alpine) | 0.59.0 | MPL-2.0 | `logging` |
-| grafana/loki | 3.7.8 | **AGPL-3.0** | `logging` |
-| grafana/grafana | 13.2.4 | **AGPL-3.0** | `logging` |
-| alpine (healthprobe) | 3.24.2 | MIT (패키지별 상이) | `logging` |
 | just-workspace-audiorelay (자체 빌드, distroless static) | — | MIT(코어) + 위 Go 의존성 | `audiorelay` |
 | kasmweb/chromium (격리 브라우저 세션 컨테이너 — 백엔드가 세션마다 띄움, compose 에 없음) | 1.18.0 | 이미지 레시피(kasmtech/workspaces-images) MIT · 안의 KasmVNC **GPL-2.0** · Chromium BSD-3-Clause · Ubuntu 22.04 패키지 각자 | 모듈 `rbi` |
 | just-workspace-rbi-netfilter (자체 빌드, debian:13-slim + iptables) | — | iptables GPL-2.0(별도 컨테이너, 호스트 규칙만 적용) | `rbi` |
@@ -184,5 +179,5 @@ ASIO 는 넣지 않았다 — Steinberg ASIO SDK 가 2025-10 GPLv3/독점 이중
 
 - Just-Workspace 코어 소스는 **MIT**. 다른 컨테이너는 네트워크/WOPI/LDAP 으로만 호출하는 별도 프로세스라 코어의 라이선스에 영향을 주지 않는다 — 단 그 컨테이너를 켜고 배포하는 것은 운영자의 선택이자 책임이다.
 - backend 이미지 자체는 GPL(aioimaplib) · LGPL(ldap3) · MPL(pywebpush) 라이브러리를 포함한다. **"코어는 permissive 라이선스만" 이라는 표현은 맞지 않다.** 내부 운영에는 제약이 없고, 수정한 backend 이미지를 재배포한다면 GPL-3.0 조건(소스 제공)을 따라야 한다.
-- AGPL(ONLYOFFICE · SearXNG · Grafana · Loki) 컨테이너를 쓰지 않으면 선택 프로파일은 permissive 로만 구성된다(`mailserver`·`gitea`·`livekit`·`audiorelay`·`egress`·`sso`·`certbot`).
+- AGPL(ONLYOFFICE · SearXNG) 컨테이너를 쓰지 않으면 선택 프로파일은 permissive 로만 구성된다(`mailserver`·`gitea`·`livekit`·`audiorelay`·`egress`·`sso`·`certbot`).
 - 격리 브라우저(`rbi`)는 kasmweb/chromium 이미지를 **수정 없이** 세션마다 띄우고(KasmVNC 는 GPL-2.0, 네트워크로만 화면을 받는다) 정책 파일 두 개(Chromium 관리 정책 JSON · kasmvnc.yaml)만 컨테이너에 넣는다. 이미지를 재배포하지 않으므로 추가 의무가 없다. 상표: "Kasm" 은 Kasm Technologies 의 상표이며 이 프로젝트는 Kasm Workspaces 제품을 포함하지 않는다.

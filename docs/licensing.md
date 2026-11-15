@@ -33,11 +33,10 @@ Just-Workspace 코어(이 저장소의 소스)는 **MIT License**로 배포된�
 |-----------|---------|------|
 | ONLYOFFICE Docs CE | **AGPL-3.0** | 오피스 편집(선택, 기본 off) |
 | SearXNG | **AGPL-3.0** | AI 웹 검색(선택 `aitools`, 기본 off) |
-| Grafana · Loki | **AGPL-3.0** | 관제(선택 `logging`). Vector 는 MPL-2.0 |
 | Redis 8 | RSALv2 / SSPLv1 / AGPL-3.0 삼중 | 코어. 자체 운영은 무방 |
 | PostgreSQL · Nginx · Gitea · LiveKit/Egress · certbot · docker-mailserver(Postfix·Dovecot·Rspamd) | PostgreSQL License · BSD-2 · MIT · Apache-2.0 · Apache-2.0 · MIT(+IBM PL·LGPL·Apache) | Permissive |
 
-> AGPL/GPL 컨테이너(ONLYOFFICE, SearXNG, Grafana, Loki)를 켜지 않으면 선택 프로파일은 permissive 로만 구성된다. 코어 backend 의 GPL 라이브러리(aioimaplib)는 그래도 남는다.
+> AGPL/GPL 컨테이너(ONLYOFFICE, SearXNG)를 켜지 않으면 선택 프로파일은 permissive 로만 구성된다. 코어 backend 의 GPL 라이브러리(aioimaplib)는 그래도 남는다.
 
 ## 전체 의존성
 

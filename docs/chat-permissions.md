@@ -89,7 +89,7 @@ init_db(advisory lock) 가 한 번 하는 일: @everyone 행(없을 때만, 권�
 전환 절차:
 1. **배포(shadow)**. 기본 역할 세트 = 지금 동작이라 불일치는 0 이어야 한다(테스트로 960 경우 확인).
 2. **관찰 1~2주**. 관리자로 `GET /api/chat/permissions/shadow-stats?days=14` → `days.*.mismatch`·`error` 가 0 인지,
-   Grafana/Vector 에서 `chat_perm_shadow_mismatch`·`chat_perm_engine_error` 검색.
+   백엔드 컨테이너 로그에서 `chat_perm_shadow_mismatch`·`chat_perm_engine_error` 검색.
    - 역할·덮어쓰기를 만들기 시작하면 불일치가 **의도대로** 생긴다(예: MANAGE_MESSAGES 역할 → `message.delete:0>1`).
      카운터 필드 `<action>:<예전>><새>` 로 의도한 차이인지 본다. 의도 밖이면 멈추고 원인 파악.
 3. **전환 전 점검**: 아래 §5 "enforce 전 남은 일" 확인 — 특히 멤버에게서 VIEW 를 빼거나 비멤버에게 VIEW 를 주는

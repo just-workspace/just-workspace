@@ -36,7 +36,7 @@ _PLACEHOLDER_PREFIXES = ("changeme", "replaceme", "yoursecret", "pleasechange")
 KNOWN_DEFAULTS = frozenset({
     "devkey", "secret", "changeme", "change-me", "change_me", "password", "passwd", "pass",
     "admin", "administrator", "root", "test", "testing", "default", "example", "demo",
-    "workspace", "portal", "postgres", "redis", "grafana", "livekit", "onlyoffice",
+    "workspace", "portal", "postgres", "redis", "livekit", "onlyoffice",
     "ultrasecretkey", "change-me-onlyoffice", "please-change-this-secret-key-32chars",
     "123456", "12345678", "1234567890", "qwerty", "letmein",
 })
@@ -51,7 +51,6 @@ class SecretSpec:
     min_len: int                # 최소 길이(0 = 길이는 보지 않는다 — 외부에서 받은 값)
     required: bool = False      # 그 기능이 켜져 있을 때 비어 있으면 거부
     zone: str = "core"          # 이 비밀값을 쓰는 구역("chat+meetings" 처럼 묶음 가능)
-    profile: str = ""           # 컨테이너만 쓰는 값이면 그 compose 프로파일(COMPOSE_PROFILES 에 있을 때만 검사)
     flag: str = ""              # 추가 기능 플래그(환경변수, 참일 때만 검사)
     generate: bool = True       # gen-secrets 가 기본으로 만드는가(False = --only 로 지목했을 때만)
     gen_len: int = 0            # 생성 길이(16진수 글자 수, 0 = 최소 길이 기준 기본값)
@@ -74,7 +73,6 @@ SECRETS: tuple[SecretSpec, ...] = (
     SecretSpec("SANDBOX_TOKEN", KEY_MIN, zone="ai", note="분석 샌드박스 공유 비밀"),
     SecretSpec("DOCCONV_TOKEN", KEY_MIN, zone="ai", note="문서 변환 공유 비밀"),
     SecretSpec("SEARXNG_SECRET", KEY_MIN, zone="ai", note="웹 검색 컨테이너 비밀값"),
-    SecretSpec("GRAFANA_ADMIN_PASSWORD", PASSWORD_MIN, profile="logging", note="관제 화면 관리자 비밀번호"),
     # ── 아래는 쓰는 사람만 채운다(기본 생성 대상 아님, --only 로 만들 수 있다) ──
     SecretSpec("MCP_API_KEY", KEY_MIN, zone="ai", flag="MCP_INTERNAL_TOOLS_ENABLED", generate=False,
                note="MCP 내부 도구 정적 키"),
@@ -159,10 +157,6 @@ def _db_password_from_url(url: str) -> str | None:
 def _applies(s: SecretSpec, env: Mapping[str, str], zone_ok: Callable[[str], bool]) -> bool:
     if not zone_ok(s.zone):
         return False
-    if s.profile:
-        profiles = {p.strip() for p in env.get("COMPOSE_PROFILES", "").split(",")}
-        if s.profile not in profiles:
-            return False
     if s.flag and not _truthy(env.get(s.flag)):
         return False
     return True

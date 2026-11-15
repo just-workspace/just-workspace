@@ -13,8 +13,8 @@ Just-Workspace 의 환경별 값은 **`.env` 변수** 또는 **설치기가 생�
 | 변수 | 기본/예시 | 설명 | 설치기 |
 |---|---|---|---|
 | `DEPLOY_MODE` | external_proxy | `standalone` / `external_proxy` / `dev` | 대화형 선택 |
-| `COMPOSE_PROFILES` | mailserver,gitea,livekit | 활성 프로파일(쉼표). 사용 가능: mailserver gitea livekit audiorelay egress onlyoffice sso logging aitools certbot | 대화형 선택 |
-| `JW_ZONES` | (비움) | 설치된 구역(쉼표): mail chat calendar docs meetings git ai monitoring sso rbi. 비우면 전부. 적지 않은 구역의 API 라우터·백그라운드 작업은 백엔드에 올라오지 않는다. 선언은 `backend/app/zones.json`, 라우터·루프 표는 `backend/app/zones.py` | 대화형 선택 |
+| `COMPOSE_PROFILES` | mailserver,gitea,livekit | 활성 프로파일(쉼표). 사용 가능: mailserver gitea livekit audiorelay egress onlyoffice sso aitools certbot | 대화형 선택 |
+| `JW_ZONES` | (비움) | 설치된 구역(쉼표): mail chat calendar docs meetings git ai sso rbi. 비우면 전부. 적지 않은 구역의 API 라우터·백그라운드 작업은 백엔드에 올라오지 않는다. 선언은 `backend/app/zones.json`, 라우터·루프 표는 `backend/app/zones.py` | 대화형 선택 |
 | `STORAGE_VOLUME` | ws-storage-data | 파일 스토리지 볼륨명(외부 볼륨/NFS 가능) | 기본값 |
 | `BACKUP_VOLUME` | backups-vol | 앱 내 백업 저장 볼륨 | 기본값 |
 | `APP_NAME` | Workspace | 표시 이름(브랜딩) | 입력 |
@@ -47,7 +47,6 @@ Just-Workspace 의 환경별 값은 **`.env` 변수** 또는 **설치기가 생�
 | `DOVECOT_MASTER_PASSWORD` | 16 | 아니오 | 구역 `mail` + 값이 있을 때 |
 | `ONLYOFFICE_JWT_SECRET` | 32 | 아니오 | 구역 `docs` + 값이 있을 때 |
 | `SANDBOX_TOKEN` / `DOCCONV_TOKEN` / `SEARXNG_SECRET` | 32 | 아니오 | 구역 `ai` + 값이 있을 때 |
-| `GRAFANA_ADMIN_PASSWORD` | 16 | 아니오 | `COMPOSE_PROFILES` 에 `logging` + 값이 있을 때(Grafana 컨테이너는 비어 있어도 거부) |
 | `MCP_API_KEY` | 32 | 아니오 | 구역 `ai` + `MCP_INTERNAL_TOOLS_ENABLED=true` + 값이 있을 때 |
 | `GITEA_WEBHOOK_SECRET` | 32 | 아니오 | 구역 `chat` + 값이 있을 때 |
 | `LDAP_SERVICE_PASSWORD` | 16 | `LDAP_SERVICE_USER` 가 있으면(ws-ldap 이 검사) | 구역 `sso` + 값이 있을 때 |
@@ -67,7 +66,7 @@ python -m app.cli check-secrets                       # 기동 검사와 같은 
 docker run --rm -v "$PWD/.env:/work/.env" <backend 이미지> python -m app.cli gen-secrets --merge /work/.env --in-place
 ```
 
-기본 생성 대상은 표의 `SECRET_KEY` 부터 `GRAFANA_ADMIN_PASSWORD` 까지이고, 그 아래는 `--only` 로 지목했을 때만 만든다. 이미 값이 있는 줄은 건드리지 않는다. `DB_PASSWORD` 는 **DB 볼륨을 처음 만들 때만** 적용되므로, 이미 돌고 있는 설치에서 바꾸려면 PostgreSQL 쪽 비밀번호도 함께 바꿔야 한다.
+기본 생성 대상은 표의 `SECRET_KEY` 부터 `SEARXNG_SECRET` 까지이고, 그 아래는 `--only` 로 지목했을 때만 만든다. 이미 값이 있는 줄은 건드리지 않는다. `DB_PASSWORD` 는 **DB 볼륨을 처음 만들 때만** 적용되므로, 이미 돌고 있는 설치에서 바꾸려면 PostgreSQL 쪽 비밀번호도 함께 바꿔야 한다.
 
 ### 관리자 계정
 
@@ -158,16 +157,6 @@ docker compose exec backend python -m app.cli reset-admin <아이디> --disable-
 | `RBI_GUARD_STATE` / `RBI_GUARD_MAX_AGE` / `RBI_CONTAINER_PREFIX` | /run/rbi-guard/state.json / 180 / ws-rbi-s- | 하트비트 경로·허용 나이(초)·세션 컨테이너 이름 접두어 | 기본값 |
 
 구조·보안 모델·격리 검증은 [rbi.md](rbi.md).
-
-### 관제 (logging)
-
-| 변수 | 기본/예시 | 설명 | 설치기 |
-|---|---|---|---|
-| `GRAFANA_ADMIN_PASSWORD` | (랜덤) | logging 프로파일을 켤 때 필수(16자 이상). 비어 있거나 짧으면 Grafana 가 뜨지 않는다 | **자동생성** |
-| `GRAFANA_BIND` | 127.0.0.1 | 포트를 게시할 주소 — 공인 인터페이스에 열지 말 것(LAN IP 또는 127.0.0.1) | 기본값 |
-| `ALERT_EMAIL` | admin@도메인 | Grafana 알림 수신 | 자동 조합 |
-| `PROBE_INTERVAL` | 300 | 헬스 프로브 주기(초) | 기본값 |
-| `RP_IP` / `TUNNEL_IP` / `TUNNEL_PROBE_HOST` | (빈값) | 사이트 전용 점검(앞단 리버스 프록시 인증서 만료, 터널 경유 경로). 비우면 건너뜀 | 수동 |
 
 ### TLS
 

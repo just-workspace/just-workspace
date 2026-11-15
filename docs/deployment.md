@@ -4,7 +4,7 @@
 
 - Linux 호스트 — Ubuntu 22.04/24.04, Debian 12/13, Rocky/AlmaLinux 9·10
 - Docker Engine 24+ & Docker Compose v2
-- 코어만: 2 vCPU / 4GB. 풀스택(mailserver·gitea·livekit·onlyoffice·logging): 4 vCPU / 8GB 이상 권장. 회의 녹화(egress)는 cpu 4 를 따로 요구한다
+- 코어만: 2 vCPU / 4GB. 풀스택(mailserver·gitea·livekit·onlyoffice): 4 vCPU / 8GB 이상 권장. 회의 녹화(egress)는 cpu 4 를 따로 요구한다
 - 도메인 1개. 자체 메일 서버를 쓰면 고정 공인 IP + PTR
 
 ## 빠른 시작
@@ -39,7 +39,7 @@
 docker run --rm -v "$PWD/.env:/work/.env" <backend 이미지> python -m app.cli gen-secrets --merge /work/.env --in-place
 ```
 
-빈 값·예시 값·짧은 값으로는 백엔드가 뜨지 않는다 — 로그에 변수 이름과 사유가 나온다. 켠 프로파일의 비밀값(`LIVEKIT_API_SECRET`, `GRAFANA_ADMIN_PASSWORD`, `SEARXNG_SECRET` …)이 비어 있으면 그 컨테이너가 기동을 거부한다. 규칙 표와 생성기 사용법은 [CONFIG.md](CONFIG.md) 의 "비밀값" 절.
+빈 값·예시 값·짧은 값으로는 백엔드가 뜨지 않는다 — 로그에 변수 이름과 사유가 나온다. 켠 프로파일의 비밀값(`LIVEKIT_API_SECRET`, `SEARXNG_SECRET` …)이 비어 있으면 그 컨테이너가 기동을 거부한다. 규칙 표와 생성기 사용법은 [CONFIG.md](CONFIG.md) 의 "비밀값" 절.
 
 ## 프로파일 (`COMPOSE_PROFILES`)
 
@@ -53,7 +53,6 @@ docker run --rm -v "$PWD/.env:/work/.env" <backend 이미지> python -m app.cli 
 | `egress` | ws-egress (1.15) | 회의 녹화. livekit 과 함께. cpu 4 / 4G |
 | `onlyoffice` | ws-onlyoffice (10.0) | WOPI. AGPL. `ONLYOFFICE_JWT_SECRET`, `RP_LAN_IP` |
 | `sso` | ws-sso + ws-ldap | SAML/SCIM + LDAP 디렉터리. 밖으로는 LDAPS 636 만 — 평문 389 는 `LDAP_PLAIN_BIND`(기본 127.0.0.1)에만 연다 |
-| `logging` | ws-vector · ws-loki · ws-grafana · ws-healthprobe | Grafana 3001 포트는 `GRAFANA_BIND`(기본 127.0.0.1) |
 | `aitools` | ws-searxng | AI 웹 검색 도구. AGPL |
 | `certbot` | ws-certbot | 메일·TURN 인증서(standalone 은 웹 인증서까지). `ACME_DOMAINS`, `LETSENCRYPT_EMAIL` |
 | `rbi` | ws-rbi-netfilter | 격리 브라우저 세션 브리지의 호스트 iptables 규칙(host 네트워크 + NET_ADMIN). `RBI_ALLOW`. 세션 컨테이너는 백엔드가 docker.sock 으로 띄운다 — [rbi.md](rbi.md) |
@@ -73,7 +72,7 @@ FEATURE_BUILTIN_MAILSERVER=true
 COMPOSE_PROFILES=gitea,livekit
 
 # 풀스택
-COMPOSE_PROFILES=certbot,mailserver,gitea,livekit,egress,onlyoffice,sso,logging
+COMPOSE_PROFILES=certbot,mailserver,gitea,livekit,egress,onlyoffice,sso
 ```
 
 꺼진 프로파일의 `${VAR:?}` 도 compose 가 검사한다 — 필수 변수는 프로파일과 무관하게 채운다. `docker compose config --quiet` 가 누락을 알려 준다.

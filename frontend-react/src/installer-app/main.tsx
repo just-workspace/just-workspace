@@ -8,7 +8,6 @@
  * 실제 API 대신 가짜 서버로 돈다(시나리오 이름은 api/mock.ts 머리의 표). 배포용 빌드에는 가짜 서버 코드가 실리지 않는다.
  */
 import { createRoot } from 'react-dom/client'
-import '~/assets/css/main.css'
 import './installer.css'
 import { createHttpApi } from './api/client'
 import type { InstallerApi } from './api/types'

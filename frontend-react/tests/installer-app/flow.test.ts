@@ -1,4 +1,6 @@
 // 설치 마법사의 단계 목록 규칙(src/installer-app/flow.ts) · 주소 해석(router.ts) · 표시용 변환(format.ts) · 번들 가드 · 번역 파일 짝.
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, it, expect } from 'vitest'
 import { flow, isLive, liveSteps, nearestLive, nextStep, prevStep, progressOf, stepForField, stepStates, type FlowInput } from '~/installer-app/flow'
 import { hashFor, parseHash } from '~/installer-app/router'
@@ -8,7 +10,7 @@ import {
 } from '~/installer-app/format'
 import { MOCK_ADDONS, MOCK_ZONES } from '~/installer-app/api/mock'
 import type { ZonesResponse } from '~/installer-app/api/types'
-import { installerForbiddenModules } from '../../installer-bundle-guard'
+import { INSTALLER_TAILWIND_SOURCES, installerForbiddenModules, installerUnscannedModules } from '../../installer-bundle-guard'
 import ko from '~/installer-app/i18n/ko.json'
 import en from '~/installer-app/i18n/en.json'
 
@@ -153,6 +155,28 @@ describe('번들 가드', () => {
     ]
     expect(installerForbiddenModules([...bad, ...ok])).toHaveLength(bad.length)
     expect(installerForbiddenModules(ok)).toEqual([])
+  })
+
+  it('CSS 가 훑는 소스 목록 = installer.css 의 @source, 목록 밖의 모듈은 걸린다', () => {
+    const installerCss = readFileSync(resolve(__dirname, '../../src/installer-app/installer.css'), 'utf8')
+    // installer.css 는 src/installer-app/ 에 있다 — @source 의 상대 경로를 frontend-react 기준으로 푼다
+    const fromCss = [...installerCss.matchAll(/^@source '([^']+)';\r?$/gm)].map((m) => {
+      const parts = ['src', 'installer-app']
+      for (const seg of m[1].split('/')) {
+        if (seg === '..') parts.pop()
+        else if (seg !== '.' && seg !== '') parts.push(seg)
+      }
+      return parts.join('/') + (m[1].endsWith('/') ? '/' : '')
+    })
+    expect(fromCss.sort()).toEqual([...INSTALLER_TAILWIND_SOURCES].sort())
+    expect(installerCss).toContain("@import 'tailwindcss' source(none);")
+    const ok = [
+      '/app/src/installer-app/screens/Zones.tsx', '/app/src/components/ui/Button.tsx', '/app/src/lib/utils.ts', '/app/src/i18n/index.ts',
+      '/app/src/i18n/locales/ko.json', '/app/src/assets/css/theme.css', '/app/node_modules/react/index.js', 'D:\\repo\\frontend-react\\src\\utils\\icons.ts',
+    ]
+    expect(installerUnscannedModules(ok)).toEqual([])
+    expect(installerUnscannedModules([...ok, '/app/src/lib/date.ts', '/app/src/composables/useFiles.ts']))
+      .toEqual(['/app/src/lib/date.ts', '/app/src/composables/useFiles.ts'])
   })
 })
 

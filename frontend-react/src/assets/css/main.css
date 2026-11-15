@@ -1,11 +1,3 @@
-/* ── 폰트: IBM Plex Sans KR(본문/한글) + JetBrains Mono(숫자·코드) ──
-   fontsource 자체호스팅(오프라인/자체호스팅 워크스페이스라 외부 CDN 미사용).
-   각 weight css는 라틴+한글 전체 유니코드 범위를 포함.
-   Tailwind 설정·토큰·전역 스타일은 app.css — 폰트 없이도 가져다 쓸 수 있게 분리. */
-@import '@fontsource/ibm-plex-sans-kr/400.css';
-@import '@fontsource/ibm-plex-sans-kr/500.css';
-@import '@fontsource/ibm-plex-sans-kr/600.css';
-@import '@fontsource/ibm-plex-sans-kr/700.css';
-@import '@fontsource/jetbrains-mono/400.css';
-@import '@fontsource/jetbrains-mono/500.css';
+/* 워크스페이스 앱의 전역 CSS — 폰트(fonts.css) + Tailwind 설정·토큰·전역 스타일(app.css → theme.css). */
+@import './fonts.css';
 @import './app.css';

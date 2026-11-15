@@ -2,6 +2,7 @@
  * 설치 마법사 빌드 — `npm run build:installer` → dist-installer/(installer.html · assets/ · icon.svg).
  * 워크스페이스 앱(vite.config.ts → dist/)과 따로 빌드한다. 설치 관리자 이미지가 이 폴더를 통째로 가져가 내준다.
  *
+ *  - Tailwind 는 마법사가 쓰는 소스만 훑는다(src/installer-app/installer.css 의 @source). 목록 밖의 모듈이 번들에 들어오면 빌드를 멈춘다.
  *  - 들어가면 안 되는 것(워크스페이스 화면·셸·라우터·API 클라이언트·무거운 라이브러리)이 섞이면 빌드를 멈춘다(jw-installer-isolation).
  *  - 앱 번역 파일에서는 UI 키트가 읽는 common·ui 만 싣는다(jw-installer-locale-subset). 마법사 문구는 전용 파일(src/installer-app/i18n).
  *  - 자산 주소는 상대 경로(base './') — 설치 관리자가 어느 경로로 내줘도 된다.
@@ -14,7 +15,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath, URL } from 'node:url'
 import { readFileSync } from 'node:fs'
-import { installerForbiddenModules } from './installer-bundle-guard'
+import { installerForbiddenModules, installerUnscannedModules } from './installer-bundle-guard'
 
 const src = fileURLToPath(new URL('./src', import.meta.url))
 const KEEP_LOCALE_KEYS = ['common', 'ui']
@@ -27,6 +28,8 @@ function isolation(): Plugin {
       for (const f of Object.values(bundle)) if (f.type === 'chunk') ids.push(...Object.keys(f.modules))
       const bad = installerForbiddenModules(ids)
       if (bad.length) this.error(`설치 마법사 번들에 워크스페이스 모듈이 섞였습니다:\n  ${bad.slice(0, 20).join('\n  ')}`)
+      const unscanned = installerUnscannedModules(ids)
+      if (unscanned.length) this.error(`설치 마법사 CSS 가 훑지 않는 모듈이 번들에 있습니다(installer-bundle-guard.ts 의 INSTALLER_TAILWIND_SOURCES 와 installer.css 의 @source 에 더하세요):\n  ${unscanned.slice(0, 20).join('\n  ')}`)
     },
   }
 }

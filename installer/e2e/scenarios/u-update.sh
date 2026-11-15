@@ -12,7 +12,7 @@
 #   u5      중간 버전: 1.0.0 → 1.0.1 → 1.0.3
 #   u4      자동 업데이트: 3일 유예 · 시간대 · 실패 뒤 멈춤과 다시 켜기 (1.0.4)
 #   u6      Beta 채널로 올렸다가 Stable 로 — 기다리기와 "시험판 이전 상태로 복원" (1.1.0-beta.1)
-#   u8      오프라인: 레지스트리·채널을 끊고 묶음 파일 + 추가 이미지 파일로 (1.0.5)
+#   u8      오프라인: 레지스트리·채널을 끊고 묶음 파일 + 추가 이미지 파일로 (1.0.5 — E2E_OFFLINE_VERSION 으로 바꾼다)
 #   down    가짜 릴리스 환경 내리기
 . "$(dirname "$0")/../lib.sh"
 . "$(dirname "$0")/../update-lib.sh"
@@ -430,28 +430,29 @@ stage_u8() {
   say "U8 오프라인"
   ws_login
   local base; base="$(health_version)"
-  local stage="$REL/stage-1.0.5" bundle="$REL/just-workspace-1.0.5-offline.tar"
+  local OFF="${E2E_OFFLINE_VERSION:-1.0.5}"
+  local stage="$REL/stage-$OFF" bundle="$REL/just-workspace-$OFF-offline.tar"
   if [ ! -f "$bundle" ]; then
     # 이 릴리스는 캐시(redis) 이미지가 올라갔다 — 서버에 없는 "추가 이미지"가 하나 생긴다
     local other; other="$(other_redis)"
-    note "1.0.5 의 redis: ${other:-(다른 판을 받지 못했다)}"
-    E2E_REDIS_REF="$other" check "1.0.5 이미지" rel_build 1.0.5 schema3
-    check "1.0.5 manifest" rel_manifest 1.0.5 3
+    note "$OFF 의 redis: ${other:-(다른 판을 받지 못했다)}"
+    E2E_REDIS_REF="$other" check "$OFF 이미지" rel_build $OFF schema3
+    check "$OFF manifest" rel_manifest $OFF 3
     rm -rf "$stage"; mkdir -p "$stage/images"
-    cp "$REL/manifests/1.0.5.json" "$stage/manifest.json"
-    check "manifest 서명" jwrelease sign /work/stage-1.0.5/manifest.json --key /work/keys/release.pem
+    cp "$REL/manifests/$OFF.json" "$stage/manifest.json"
+    check "manifest 서명" jwrelease sign /work/stage-$OFF/manifest.json --key /work/keys/release.pem
     note "이미지를 파일로 저장한다(bundle plan 이 낸 명령)"
-    jwrelease bundle plan --manifest /work/stage-1.0.5/manifest.json --stage "$stage" | grep -E '^ *docker ' > "$REL/bundle-plan.sh"
+    jwrelease bundle plan --manifest /work/stage-$OFF/manifest.json --stage "$stage" | grep -E '^ *docker ' > "$REL/bundle-plan.sh"
     check "docker pull·tag·save" bash -c "[ -s '$REL/bundle-plan.sh' ] && bash -e '$REL/bundle-plan.sh'"
-    check "색인 + 서명" jwrelease bundle index --stage /work/stage-1.0.5 --key /work/keys/release.pem
-    check "묶기" jwrelease bundle pack --stage /work/stage-1.0.5 -o /work/just-workspace-1.0.5-offline.tar
-    check "묶음 검증(도구)" jwrelease bundle verify /work/just-workspace-1.0.5-offline.tar --pubkey /work/keys/release.pub
+    check "색인 + 서명" jwrelease bundle index --stage /work/stage-$OFF --key /work/keys/release.pem
+    check "묶기" jwrelease bundle pack --stage /work/stage-$OFF -o /work/just-workspace-$OFF-offline.tar
+    check "묶음 검증(도구)" jwrelease bundle verify /work/just-workspace-$OFF-offline.tar --pubkey /work/keys/release.pub
     rm -rf "$stage/images"
   fi
   note "묶음 크기: $(du -h "$bundle" | cut -f1)"
   # 추가 이미지 하나를 파일로 받아 둔다(인터넷이 되는 PC 에서 하는 일) — 캐시(redis)
   local redis_ref redis_tag
-  redis_ref="$(json_get 'd["third_party"]["core"]["redis"]' < "$REL/manifests/1.0.5.json")"
+  redis_ref="$(json_get 'd["third_party"]["core"]["redis"]' < "$REL/manifests/$OFF.json")"
   redis_tag="${redis_ref%@*}:jw-$(printf '%s' "${redis_ref#*sha256:}" | cut -c1-12)"
   # 화면이 알려 주는 명령 그대로(docker pull … && docker tag … && docker save …)
   check "redis 를 파일로 저장" bash -c "cd '$REL' && docker pull -q '$redis_ref' >/dev/null && docker tag '$redis_ref' '$redis_tag' && docker save '$redis_tag' -o redis.tar"
@@ -462,8 +463,10 @@ stage_u8() {
   check_now >/dev/null
   expect "온라인 확인은 실패한다" channel_unreachable "$(iapi GET /status | json_get 'd["check"]["error"]["code"]')"
   # 새 버전의 우리 이미지와 redis 를 서버에서 지운다(묶음·파일에서 들어와야 한다)
-  docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -E ':1\.0\.5$' | xargs -r docker image rm >/dev/null 2>&1
-  python3 -c 'import json,sys; [print(v) for v in json.load(open(sys.argv[1]))["images"].values()]' "$REL/manifests/1.0.5.json" | xargs -r docker image rm >/dev/null 2>&1
+  docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -F -- ":$OFF" | grep -E ":$OFF\$" | xargs -r docker image rm >/dev/null 2>&1
+  # 다이제스트로 지우면 그 내용을 가리키는 다른 태그까지 사라진다 — 버전마다 새로 빌드한 둘(backend·설치 관리자)만 그렇게 지운다
+  python3 -c 'import json,sys; m=json.load(open(sys.argv[1]))["images"]; [print(m[n]) for n in ("backend","installer")]' "$REL/manifests/$OFF.json" | xargs -r docker image rm >/dev/null 2>&1
+  expect "새 버전의 backend 이미지는 서버에 없다" 1 "$(docker image inspect "$(json_get 'd["images"]["backend"]' < "$REL/manifests/$OFF.json")" >/dev/null 2>&1; echo $?)"
 
   say "거부되는 묶음"
   sudo mkdir -p "$E2E_HOST_DIR/offline"
@@ -495,13 +498,13 @@ stage_u8() {
   ( sleep 4; upd GET /offline | json_get '"올리는 중: "+d["bundle"]["state"]+" "+str(d["bundle"]["percent"])+"%"' > "$E2E_WORK/upload-progress.txt" ) &
   local t0=$(date +%s)
   expect "올리기 응답" 202 "$(ws_curl --max-time 3600 -b "$UJAR" -H "Origin: $WS" -H 'Content-Type: application/octet-stream' \
-    -H "X-JW-Filename: just-workspace-1.0.5-offline.tar" -o "$E2E_WORK/upload.out" -w '%{http_code}' -T "$bundle" -X POST "$WS$UPD/offline/bundle")"
+    -H "X-JW-Filename: just-workspace-$OFF-offline.tar" -o "$E2E_WORK/upload.out" -w '%{http_code}' -T "$bundle" -X POST "$WS$UPD/offline/bundle")"
   wait
   note "$(cat "$E2E_WORK/upload-progress.txt" 2>/dev/null) · 올리는 데 $(( $(date +%s) - t0 ))초"
   local i
   for i in $(seq 1 200); do case "$(upd GET /offline | json_get 'd["bundle"]["state"]')" in uploading|verifying) sleep 3 ;; *) break ;; esac; done
   local view; view="$(upd GET /offline)"
-  expect "검증 결과" "verified 1.0.5 $base upload" "$(printf '%s' "$view" | json_get '" ".join([d["bundle"]["state"],d["bundle"]["version"],d["bundle"]["current_version"],d["bundle"]["source"]])')"
+  expect "검증 결과" "verified $OFF $base upload" "$(printf '%s' "$view" | json_get '" ".join([d["bundle"]["state"],d["bundle"]["version"],d["bundle"]["current_version"],d["bundle"]["source"]])')"
   note "추가 이미지: $(printf '%s' "$view" | json_get '" ".join(i["id"]+"="+i["state"] for i in d["images"])')"
   expect "꺼진 구역의 것은 필요 없음" not_needed "$(printf '%s' "$view" | json_get '[i["state"] for i in d["images"] if i["id"]=="gitea"][0]')"
   note "받는 명령(redis): $(printf '%s' "$view" | json_get '[i["command"] for i in d["images"] if i["id"]=="redis"][0]')"
@@ -527,8 +530,8 @@ stage_u8() {
   note "pull 단계의 이미지: $(ujob "$job" '" ".join(i["name"]+"="+i["status"] for i in d["steps"][2]["detail"]["images"])')"
   check "backend 준비" wait_ready ws-backend 180
   ws_login
-  expect "버전" 1.0.5 "$(health_version)"
-  expect "설치 관리자 버전" 1.0.5 "$(installer_version)"
+  expect "버전" $OFF "$(health_version)"
+  expect "설치 관리자 버전" $OFF "$(installer_version)"
   expect "적용한 준비물은 치워졌다" None "$(upd GET /offline | json_get 'd["bundle"]')"
   expect "레지스트리는 여전히 꺼져 있다" "" "$(docker ps -q --filter name=jw-e2e-registry)"
   check_data "U8 뒤"

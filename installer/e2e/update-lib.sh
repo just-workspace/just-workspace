@@ -105,6 +105,7 @@ PY
     # (가리키는 복원 지점이 없어진 옛 버전), 레지스트리 이름으로 남겨 둔 것을 먼저 쓴다.
     base="$REG/just-workspace-$n:$E2E_VERSION"
     docker image inspect "$base" >/dev/null 2>&1 || base="localhost/just-workspace-$n:$E2E_VERSION"
+    docker image inspect "$base" >/dev/null 2>&1 || base="localhost/just-workspace-$n:$(env_value JW_VERSION)"
     [ "$base" = "$REG/just-workspace-$n:$ver" ] || docker tag "$base" "$REG/just-workspace-$n:$ver" || return 1
   done
   docker tag alpine:latest "$REG/just-workspace-rbi-mirror:$ver"       # 검수 서버에서는 빌드하지 않는 이미지 — 자리만
@@ -165,12 +166,13 @@ reg_restore() {
 
 # compose 에 고정한 것과 다른 redis 이미지 하나를 받아 `redis:<태그>@sha256:…` 로 돌려준다(오프라인 검수의 "추가 이미지")
 other_redis() {
-  local pinned tag digest
+  local pinned running tag digest
   pinned="$(grep -oE 'redis:[^ ]+@sha256:[0-9a-f]{64}' "$E2E_REPO/docker-compose.yml" | head -1)"
-  for tag in 8-alpine alpine 8.8-alpine; do
+  running="$(docker inspect ws-redis --format '{{.Config.Image}}' 2>/dev/null)"
+  for tag in 8-alpine 8 alpine 8.8-alpine; do
     docker pull -q "redis:$tag" >/dev/null 2>&1 || continue
     digest="$(docker image inspect "redis:$tag" --format '{{range .RepoDigests}}{{println .}}{{end}}' | grep -oE 'sha256:[0-9a-f]{64}' | head -1)"
-    [ -n "$digest" ] && [ "$digest" != "${pinned#*@}" ] && { echo "redis:$tag@$digest"; return 0; }
+    [ -n "$digest" ] && [ "$digest" != "${pinned#*@}" ] && [ "$digest" != "${running#*@}" ] && { echo "redis:$tag@$digest"; return 0; }
   done
   return 1
 }

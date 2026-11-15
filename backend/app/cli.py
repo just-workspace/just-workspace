@@ -9,6 +9,7 @@ Usage:
     python -m app.cli check-secrets                     # 기동 검사와 같은 판정(문제 있으면 종료 코드 1)
     python -m app.cli seed-admin --username admin       # 관리자 계정 만들기(비밀번호는 물어본다)
     python -m app.cli reset-admin admin [--disable-2fa] # 관리자 임시 비밀번호 발급(한 번만 출력)
+    python -m app.cli configure < settings.json         # DB 에 저장되는 설정 넣기(설치 관리자용, 표준 입력 JSON)
 
 gen-secrets · check-secrets 는 DB 없이 돈다(설치 관리자가 컨테이너를 띄우기 전에 부른다).
 """
@@ -249,6 +250,56 @@ def _cmd_reset_admin(args) -> int:
     return 0
 
 
+# 설치 관리자가 넣을 수 있는 설정 키(그 밖은 거부한다)
+CONFIGURE_SETTINGS = {"smtp.security": ("starttls", "ssl", "none")}
+
+
+async def configure(payload: dict) -> list[str]:
+    """DB 에 저장되는 설정을 넣는다(환경변수로는 줄 수 없는 것). 돌려주는 값: 넣은 항목 이름.
+
+    payload: {"settings": {"smtp.security": "ssl"}, "ai": {"kind", "model", "base_url", "api_key"}}
+    값은 표준 입력으로만 받는다 — API 키가 명령 인자나 환경변수에 남지 않게.
+    """
+    from app.admin.settings import set_setting
+    from app.db.models import Base
+    from app.db.session import async_session, engine
+
+    settings = payload.get("settings") or {}
+    for key, value in settings.items():
+        if key not in CONFIGURE_SETTINGS or value not in CONFIGURE_SETTINGS[key]:
+            raise ValueError(f"넣을 수 없는 설정: {key}")
+    ai = payload.get("ai")
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    done: list[str] = []
+    async with async_session() as db:
+        for key, value in settings.items():
+            await set_setting(db, key, value)
+            done.append(key)
+        if ai:
+            from app.ai.config import set_ai_config
+
+            await set_ai_config(db, kind=ai.get("kind") or "", model=ai.get("model") or "",
+                                base_url=ai.get("base_url") or "", api_key=ai.get("api_key") or "")
+            done.append("ai")
+        await db.commit()
+    return done
+
+
+def _cmd_configure(args) -> int:
+    try:
+        payload = json.loads(sys.stdin.read() or "{}")
+        if not isinstance(payload, dict):
+            raise ValueError("JSON 객체가 아닙니다")
+        done = asyncio.run(configure(payload))
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
+    print("configured: " + (", ".join(done) if done else "(없음)"))   # 값은 찍지 않는다
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app.cli", description="Workspace CLI")
     sub = parser.add_subparsers(dest="command")
@@ -275,6 +326,9 @@ def build_parser() -> argparse.ArgumentParser:
     reset.add_argument("username", help="관리자 아이디")
     reset.add_argument("--disable-2fa", action="store_true", help="2단계 인증·복구 코드도 해제한다")
     reset.set_defaults(func=_cmd_reset_admin)
+
+    conf = sub.add_parser("configure", help="DB 에 저장되는 설정을 표준 입력(JSON)으로 넣는다 — 설치 관리자용")
+    conf.set_defaults(func=_cmd_configure)
     return parser
 
 

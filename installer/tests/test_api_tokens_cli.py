@@ -248,7 +248,7 @@ def test_preflight_zones_summary_and_probes(wizard):
     assert client.post("/api/probe/ai", json={"provider": "google", "api_key": "k"}).json()["status"] == "ok"
     assert client.post("/api/probe/nfs", json={"server": "nas;rm", "export": "/x"}).status_code == 422
     assert client.post("/api/probe/local-path", json={"path": "../etc"}).json()["code"] == "path_invalid"
-    assert client.post("/api/restore").status_code == 501
+    assert client.get("/api/restore/review").json()["code"] == "restore_no_backup"      # 복원 — tests/test_restore.py
 
 
 def test_cert_upload_probe(wizard):

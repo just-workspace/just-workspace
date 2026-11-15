@@ -97,6 +97,13 @@ class Admin(_Model):
     password: str | None = None
 
 
+class Restore(_Model):
+    """`mode: restore` 의 답변 파일에서만 쓴다(화면은 백업을 올리거나 경로를 알려 준다)."""
+
+    path: str | None = None              # 서버(호스트)에 있는 백업 파일(.jwbak)·폴더의 절대 경로
+    password_file: str | None = None     # 설정이 암호로 보호된 백업 — 암호가 든 파일(컨테이너 안 /data 아래)
+
+
 class Answers(_Model):
     version: int = ANSWERS_VERSION
     mode: Literal["new", "quick", "restore"] = "new"
@@ -111,6 +118,7 @@ class Answers(_Model):
     git: Git = Field(default_factory=Git)
     advanced: Advanced = Field(default_factory=Advanced)
     admin: Admin = Field(default_factory=Admin)
+    restore: Restore = Field(default_factory=Restore)
 
 
 # ─── 오류 ───
@@ -257,9 +265,8 @@ def validate(answers: Answers, catalog: Catalog, facts: Facts | None = None, *, 
     facts = facts or Facts()
     errors: list[FieldError] = []
     need = final
-
-    if answers.mode == "restore":
-        errors.append(FieldError("mode", "restore_not_supported"))
+    # 복원: 구역·메일·관리자는 백업에서 온다 — 관리자 계정은 만들지 않으므로 묻지 않는다
+    restoring = answers.mode == "restore"
 
     # ── 접속 ──
     a = answers.access
@@ -293,6 +300,11 @@ def validate(answers: Answers, catalog: Catalog, facts: Facts | None = None, *, 
         value = getattr(a, name)
         if value and not (value.startswith("/data/") and ".." not in value.split("/")):
             errors.append(FieldError(f"access.{name}", "path_outside_data"))
+    if answers.restore.path:
+        _check(errors, "restore.path", v.host_path, answers.restore.path, required=False)
+    pw_file = answers.restore.password_file
+    if pw_file and not (pw_file.startswith("/data/") and ".." not in pw_file.split("/")):
+        errors.append(FieldError("restore.password_file", "path_outside_data"))
 
     # ── 저장소 ──
     s = answers.storage
@@ -340,7 +352,8 @@ def validate(answers: Answers, catalog: Catalog, facts: Facts | None = None, *, 
 
     if "meetings" in chosen:
         mt = answers.meetings
-        _check(errors, "meetings.public_ip", v.ipv4, mt.public_ip, required=need and not facts.public_ip)
+        _check(errors, "meetings.public_ip", v.ipv4, mt.public_ip,
+               required=need and not facts.public_ip and not restoring)
         if mt.turn and domain_is_ip:
             errors.append(FieldError("meetings.turn", "turn_needs_domain"))
         if mt.lossless_audio and "chat" not in chosen:
@@ -366,9 +379,11 @@ def validate(answers: Answers, catalog: Catalog, facts: Facts | None = None, *, 
     # ── 고급 · 관리자 ──
     _check(errors, "advanced.subnet", v.subnet24, answers.advanced.subnet, required=True)
     ad = answers.admin
-    _check(errors, "admin.name", v.single_line, ad.name, required=need)
-    _check(errors, "admin.username", v.username, ad.username, required=need)
-    if ad.password is None or ad.password == "":
+    _check(errors, "admin.name", v.single_line, ad.name, required=need and not restoring)
+    _check(errors, "admin.username", v.username, ad.username, required=need and not restoring)
+    if restoring:
+        pass
+    elif ad.password is None or ad.password == "":
         if need:
             errors.append(FieldError("admin.password", "required"))
     elif len(ad.password) < ADMIN_PASSWORD_MIN:

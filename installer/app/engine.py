@@ -14,6 +14,7 @@ admin(관리자 계정) → lock(마법사 잠금)
 from __future__ import annotations
 
 import json
+import re
 import secrets as pysecrets
 import threading
 import time
@@ -34,6 +35,7 @@ BACKEND_UID_GID = "1000:1000"
 CERT_VOLUME = "ws-certbot-data"
 HEALTH_TIMEOUT = 300
 POLL_SECONDS = 3
+LOG_NAME = re.compile(r"[a-z][a-z0-9_-]{0,40}")      # 단계 로그의 이름(설치·복원의 단계, gate, zone-<id>)
 
 
 class StepError(Exception):
@@ -451,7 +453,7 @@ def configure_backend(ctx: Context) -> None:
         ctx.store.forget_answer_secret("ai.api_key")
 
 
-def step_zones(ctx: Context) -> None:
+def step_zones(ctx: Context, *, configure: bool = True) -> None:
     ctx.up(["backend", "frontend-react", "nginx"])
     ctx.wait_ready("ws-backend")
     ctx.wait_ready("ws-nginx", 120)
@@ -490,7 +492,8 @@ def step_zones(ctx: Context) -> None:
         ctx.log("연동 값이 바뀌어 backend 를 다시 띄웁니다")
         ctx.up(["backend"])
         ctx.wait_ready("ws-backend")
-    configure_backend(ctx)
+    if configure:
+        configure_backend(ctx)
 
 
 def step_admin(ctx: Context) -> None:
@@ -613,7 +616,7 @@ class Engine:
         return log
 
     def read_log(self, step: str, tail: int = 500) -> list[str]:
-        if step not in STEP_ORDER and step != "gate":
+        if not LOG_NAME.fullmatch(step or ""):
             return []
         try:
             lines = self.log_path(step).read_text(encoding="utf-8").splitlines()
@@ -660,6 +663,14 @@ class Engine:
         failed = [i["id"] for i in report["items"] if i["status"] == "fail"]
         if failed:
             raise StepError("preflight_failed", "fix_preflight", items=failed)
+
+    def steps_for(self, answers: ans.Answers, plan: render.Plan) -> tuple[dict, list[str]]:
+        """(단계 함수 표, 돌릴 단계 id) — 복원은 자기 단계 표를 쓴다(app/restore.py). 엔진의 나머지는 같다."""
+        if answers.mode == "restore":
+            from app import restore
+
+            return restore.STEPS, restore.plan_steps(answers, plan, self.store)
+        return STEPS, plan_steps(answers, plan)
 
     # ─── 실행 ───
 
@@ -714,7 +725,7 @@ class Engine:
             answers.access.cert = "temporary"
             self.store.save_answers(answers)
             self.store.update_facts(cert_issue_failed=True)
-            rerun = ("config",)       # nginx 설정·프로파일이 달라진다
+            rerun = ("config", "unpack")       # nginx 설정·프로파일이 달라진다(복원에서는 unpack 이 설정을 쓴다)
         return self.start(failed, rerun=rerun)
 
     def run(self, from_step: str | None = None, rerun: tuple[str, ...] = ()) -> dict:
@@ -742,7 +753,12 @@ class Engine:
             return state
 
         plan = render.derive(answers, facts, self.catalog)
-        wanted = plan_steps(answers, plan)
+        table, wanted = self.steps_for(answers, plan)
+        state["mode"] = answers.mode
+        if answers.mode == "restore":
+            from app import restore
+
+            state["restore"] = restore.outcome(answers, self.store)
         old = {s["id"]: s for s in state["steps"]}
         start_index = wanted.index(from_step) if from_step in wanted else 0
         steps = []
@@ -769,7 +785,7 @@ class Engine:
             self._save(state)
             ctx.log(f"── {step['id']} 시작 ──")
             try:
-                STEPS[step["id"]](ctx)
+                table[step["id"]](ctx)
             except StepError as e:
                 ctx.log(f"실패: {e.cause}")
                 step.update(status="failed", finished_at=now_iso(), error=e.as_dict())

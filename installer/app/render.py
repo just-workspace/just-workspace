@@ -33,6 +33,10 @@ TURN_TLS_PORT_STANDALONE = 5349      # nginx 가 443 을 쓰는 서버에서 TUR
 INTERNAL_API_PORT = 8444             # 설치 관리자 내부 API(워크스페이스 내부망 전용)
 INSTALLER_ALIAS = "jw-installer"
 DKIM_SELECTOR = "default"
+# 복원한 설치에서, 백업의 `.env` 에서 그대로 옮겨 온 값들을 담아 두는 자리(`env.secret.json` 안의 사전 하나).
+# 설치 관리자가 스스로 쓰는 변수 가운데서는 `CARRIED_ENV` 만 이 값으로 바꾸고, 다루지 않는 변수는 끝에 덧붙인다.
+EXTRA_ENV_KEY = "_extra_env"
+CARRIED_ENV = ("APP_NAME", "DOMAIN", "ADMIN_EMAILS")
 CERT_ROOT = "/etc/letsencrypt/live"
 
 # 권한이 600 이어야 하는 파일 / 실행 권한이 필요한 파일
@@ -318,7 +322,20 @@ def env_sections(answers: Answers, secrets: dict, facts: Facts, plan: Plan,
         ("DOMAIN_ALIAS", ""),
         ("LDAP_PLAIN_BIND", "127.0.0.1"),
     ]))
-    return sections
+    return carry_extra_env(sections, secrets.get(EXTRA_ENV_KEY))
+
+
+def carry_extra_env(sections: list[tuple[str, list[tuple[str, str]]]], extra) -> list[tuple[str, list[tuple[str, str]]]]:
+    """백업에서 옮겨 온 값을 얹는다 — 이어 쓰는 변수는 제자리에서 바꾸고, 설치 관리자가 다루지 않는 변수는 끝에 덧붙인다."""
+    if not isinstance(extra, dict) or not extra:
+        return sections
+    managed = {key for _, pairs in sections for key, _ in pairs}
+    out = [(title, [(k, str(extra[k]) if k in CARRIED_ENV and extra.get(k) else val) for k, val in pairs])
+           for title, pairs in sections]
+    rest = sorted((k, str(val)) for k, val in extra.items() if k not in managed)
+    if rest:
+        out.append(("백업에서 옮겨 온 설정", rest))
+    return out
 
 
 # ─── nginx site.d ───

@@ -129,8 +129,10 @@ def test_partial_save_skips_missing_required(catalog):
     assert ("access.domain", "domain_invalid") in codes(ans.validate(a, catalog, ans.Facts(), final=False))
 
 
-def test_restore_is_out_of_scope(catalog, facts):
-    assert ("mode", "restore_not_supported") in codes(ans.validate(make_answers(mode="restore"), catalog, facts))
+def test_restore_mode_is_accepted_without_admin_account(catalog, facts):
+    # 복원은 관리자 계정을 만들지 않는다 — 백업의 계정이 그대로 온다(tests/test_restore.py)
+    a = ans.load({"mode": "restore", "access": {"domain": "ws.example.com"}, "zones": []})
+    assert ans.validate(a, catalog, facts) == []
 
 
 def test_unknown_zone_and_preset(catalog, facts):

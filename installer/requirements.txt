@@ -6,3 +6,5 @@ pydantic==2.14.3
 httpx==0.28.1
 cryptography==50.0.2
 dnspython==2.9.2
+# 백업 파일 올리기(복원) — multipart 본문을 디스크로 바로 흘려 쓴다(backend 와 같은 버전)
+python-multipart==0.0.33

@@ -9,6 +9,10 @@
 
 답변 파일은 JSON 이다(화면의 "답변 파일 내려받기"와 같은 형식). 비밀은 파일에 적거나 환경변수로 준다:
 JW_ADMIN_PASSWORD · JW_MAIL_PASSWORD · JW_AI_API_KEY
+
+`"mode": "restore"` 면 백업에서 복원한다 — `restore.path`(서버의 백업 파일 경로)와 이 서버에서 다시 정할 값
+(접속 주소·연결 형태·인증서·저장소·내부 대역)만 적는다. 구역·메일·관리자는 백업에서 온다.
+설정이 암호로 보호된 백업은 `restore.password_file` 또는 환경변수 JW_BACKUP_PASSWORD.
 """
 
 from __future__ import annotations
@@ -128,9 +132,52 @@ def cmd_render(args) -> int:
     return 0
 
 
+def prepare_restore(svc: api.Services, answers: ans.Answers, env: dict | None = None) -> ans.Answers | None:
+    """답변 파일의 복원 — 백업을 확인하고, 백업 설정과 합친 답변을 돌려준다. 쓸 수 없으면 사유를 찍고 None."""
+    from app import api_restore
+
+    env = os.environ if env is None else env
+    mgr = api_restore.manager(svc)
+    if not answers.restore.path:
+        print("  ✗ restore.path: required  (mode: restore 에는 서버에 있는 백업 파일의 경로가 필요합니다)")
+        return None
+    password = env.get("JW_BACKUP_PASSWORD") or None
+    if not password and answers.restore.password_file:
+        try:
+            password = Path(answers.restore.password_file).read_text(encoding="utf-8").splitlines()[0].strip()
+        except (OSError, IndexError):
+            print(f"  ✗ restore.password_file: 읽을 수 없습니다 ({answers.restore.password_file})")
+            return None
+    print(f"백업을 확인합니다: {answers.restore.path}")
+    info = mgr.use_path(answers.restore.path, password)
+    if info["status"] != "ok":
+        print(f"  ✗ 이 백업으로는 복원할 수 없습니다: {info['status']}" + (f" ({info['reason']})" if info.get("reason") else ""))
+        return None
+    review = mgr.review()
+    print(f"  만든 서버 {review['source_url'] or '?'} · 버전 {review['backup_version']} · 구역 {', '.join(review['zones']) or '(기본만)'}"
+          f" · 파일 {'포함' if review['files_included'] else '미포함'}")
+    a = answers.access
+    target = {"domain": a.domain or None, "network": a.network, "proxy_addresses": a.proxy_addresses, "cert": a.cert,
+              "cert_path": a.cert_path, "key_path": a.key_path, "storage": answers.storage.model_dump(mode="json"),
+              "subnet": answers.advanced.subnet, "restore": answers.restore.model_dump(mode="json")}
+    built, secrets, errors = mgr.prepare(target)
+    if errors:
+        print("답변에 문제가 있습니다:")
+        print_errors(errors)
+        return None
+    return ans.join(ans.split(built)[0], secrets)
+
+
 def cmd_apply(args) -> int:
     svc = _services(args)
     answers = read_answers(args.answers)
+    if answers.mode == "restore":
+        if svc.store.locked:
+            print("설치가 이미 끝났습니다.")
+            return 1
+        answers = prepare_restore(svc, answers)
+        if answers is None:
+            return 1
 
     if args.dry_run:
         facts = svc.store.facts()
@@ -144,20 +191,22 @@ def cmd_apply(args) -> int:
         answers, _ = ans.resolve_quick(answers, svc.catalog, facts)
         files = render.render(answers, sample_secrets(svc.bundle), facts, svc.bundle, registry=svc.registry,
                               image_tag=svc.engine.image_tag)
-        from app.engine import plan_steps
-
         print("검증 통과 — 적용하면 이렇게 됩니다(아무것도 바꾸지 않았습니다)")
         print(f"  접속 주소  {plan.app_url}  (인증서: {plan.cert_mode}, 이름: {', '.join(plan.cert_names)})")
         print(f"  구역       {', '.join(plan.zones) or '(기본만)'}")
         print(f"  프로파일   {', '.join(plan.profiles) or '(없음)'}")
         print(f"  여는 포트  {', '.join(plan.ports)}")
         print(f"  저장소     {render.storage_volume(answers)['kind']}")
-        print(f"  단계       {' → '.join(plan_steps(answers, plan))}")
+        print(f"  단계       {' → '.join(svc.engine.steps_for(answers, plan)[1])}")
         for c in plan.cautions:
             print(f"  주의: {c['key']} {json.dumps(c['vars'], ensure_ascii=False) if c['vars'] else ''}")
         print("  산출물:")
         for row in render.summarize(files):
             print(f"    {row['mode']}  {row['bytes']:>7}  {row['path']}")
+        if answers.mode == "restore":
+            from app import api_restore
+
+            api_restore.manager(svc).discard()       # 확인하려고 꺼내 둔 백업 설정을 남기지 않는다
         return 0
 
     if svc.store.locked:

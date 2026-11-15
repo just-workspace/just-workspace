@@ -218,6 +218,7 @@ class UpdateHost(Host):
         if self.fail_migrate:
             self.schema += 1          # 앞 단계는 적용된 채 남는다
             return Result(1, "", "단계 3 실패: column does not exist")
+        assert any(a.endswith("run-network.yml") for a in argv)      # 돌고 있는 backend 의 고정 주소와 겹치지 않게
         override = Path(argv[[i for i, a in enumerate(argv) if a == "--env-file"][-1] + 1]).read_text(encoding="utf-8")
         version = re.search(r"JW_VERSION=(.*)", override).group(1)
         self.schema = self.schema_required = int(self.releases.manifests[version].db_schema or self.schema)

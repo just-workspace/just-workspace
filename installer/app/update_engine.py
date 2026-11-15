@@ -401,7 +401,7 @@ class UpdateManager:
             try:
                 keys = rel.load_keys(self.store.dir)
             except rel.verify.VerifyError as e:
-                raise rel.CheckError("unconfigured", str(e)) from None
+                raise rel.CheckError("unconfigured") from None
             result = rel.check_channel(current=current, channel_name=channel_name, keys=keys,
                                        last_sequence=chk["sequence"].get(channel_name), now=self.now(), fetch=self.fetch)
         except rel.CheckError as e:
@@ -1172,17 +1172,32 @@ class UpdateManager:
         version = job["path"][job["version_index"]]
         job["ctx"]["migrate_started"] = True
         self._save(job)
-        override = self.dir / "tmp" / "migrate.env"
-        write_private(override, f"JW_VERSION={version}\nJW_APP_VERSION={version}\n")
-        try:
-            r = self.docker.run([*self.docker.compose_prefix(), "--env-file", override.as_posix(), "run", "--rm",
-                                 "--no-deps", "-T", "--entrypoint", "python", "backend", "-m", "app.cli", "migrate"],
-                                timeout=3600, on_line=log)
-        finally:
-            override.unlink(missing_ok=True)
+        r = self._backend_run(["-m", "app.cli", "migrate"], version=version, timeout=3600, on_line=log)
         if not r.ok:
             raise fail("database_migrate_failed", r.err or r.out, exit_code=r.rc)
         log("데이터베이스 스키마를 새 버전에 맞췄습니다")
+
+    def _backend_run(self, argv: list[str], *, version: str | None = None, user: str | None = None,
+                     timeout: float = 600, on_line=None):
+        """backend 이미지의 일회용 컨테이너(`compose run`)로 명령을 돌린다. version 을 주면 그 버전의 이미지로.
+
+        compose 의 backend 서비스는 내부망의 고정 주소를 쓴다. 돌고 있는 backend 가 그 주소를 쥐고 있으므로
+        일회용 컨테이너에서는 고정 주소를 뺀다(compose 조각을 하나 덧붙인다) — 아니면 "Address already in use" 다.
+        """
+        tmp = self.dir / "tmp"
+        tmp.mkdir(parents=True, exist_ok=True)
+        network = tmp / "run-network.yml"
+        network.write_text("services:\n  backend:\n    networks: !override\n      workspace: {}\n", encoding="utf-8")
+        prefix = [*self.docker.compose_prefix(), "-f", network.as_posix()]
+        override = tmp / "run-version.env"
+        if version:
+            write_private(override, f"JW_VERSION={version}\nJW_APP_VERSION={version}\n")
+            prefix += ["--env-file", override.as_posix()]
+        try:
+            return self.docker.run([*prefix, "run", "--rm", "--no-deps", "-T", *(["--user", user] if user else []),
+                                    "--entrypoint", "python", "backend", *argv], timeout=timeout, on_line=on_line)
+        finally:
+            override.unlink(missing_ok=True)
 
     def _write_pins(self, manifest: rel.Manifest | None, services: list[str]) -> None:
         """다이제스트로 찾을 수 없는(파일로 들여온) 남의 이미지를 들여온 이름으로 가리키는 compose 조각."""
@@ -1313,10 +1328,10 @@ class UpdateManager:
         for svc in self._services():
             if svc != "certbot":
                 self._wait_ready(f"ws-{svc}", 300)
-        want = self.docker.inspect("image", self.local_tag("backend", version)) or {}
-        have = self.docker.inspect("container", "ws-backend") or {}
-        if want.get("Id") and have.get("Image") and want["Id"] != have["Image"]:
-            raise fail("backend_image_mismatch", expected=version)
+        # backend 컨테이너가 그 버전의 이미지로 떠 있는가 — 이미지 id 는 저장 방식에 따라 표기가 달라 이름으로 본다
+        running = ((self.docker.inspect("container", "ws-backend") or {}).get("Config") or {}).get("Image") or ""
+        if running and running.rsplit(":", 1)[-1] != version:
+            raise fail("backend_image_mismatch", expected=version, actual=running)
         if self._env_value("JW_APP_VERSION") not in ("", version):
             raise fail("version_mismatch", expected=version, actual=self._env_value("JW_APP_VERSION"))
         code, _ = self.engine.http.get("http://backend:8000/api/health", timeout=10)
@@ -1454,9 +1469,8 @@ class UpdateManager:
             raise fail("restore_point_schema_mismatch", backup=info, expected=point["schema_version"])
         self._up(["postgres", "redis"], log)
         self._wait_ready("ws-postgres", 180)
-        r = self.docker.compose("run", "--rm", "--no-deps", "-T", "--user", "0", "--entrypoint", "python", "backend",
-                                "-m", "app.cli", "restore", point["backup"], "--items", "db", "--yes", "--json",
-                                timeout=7200, on_line=log)
+        r = self._backend_run(["-m", "app.cli", "restore", point["backup"], "--items", "db", "--yes", "--json"],
+                              user="0", timeout=7200, on_line=log)
         ok = False
         for line in reversed(r.out.splitlines()):
             try:
@@ -1469,8 +1483,7 @@ class UpdateManager:
         log("데이터베이스를 백업 시점으로 되돌렸습니다")
 
     def _backup_schema(self, point: dict) -> int | None:
-        r = self.docker.compose("run", "--rm", "--no-deps", "-T", "--user", "0", "--entrypoint", "python", "backend",
-                                "-m", "app.cli", "backup", "inspect", point["backup"], "--json", timeout=300)
+        r = self._backend_run(["-m", "app.cli", "backup", "inspect", point["backup"], "--json"], user="0", timeout=300)
         try:
             return json.loads(r.out).get("schema_version") if r.ok else None
         except ValueError:

@@ -162,7 +162,7 @@ def check_channel(*, current: str, channel_name: str, keys: list, last_sequence:
                   fetch: Callable[[str], bytes] = http_fetch, base_url: str | None = None) -> CheckResult:
     """채널을 받아 검증하고(서명 → 형식 → 만료 → 순번) 계획을 세운다. 경로의 manifest 도 받아 검증한다."""
     if not keys:
-        raise CheckError("unconfigured", "public key missing")
+        raise CheckError("unconfigured")
     base = (base_url or channel_base_url()).rstrip("/")
     rel = channel_rel_path(channel_name)
     try:

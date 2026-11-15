@@ -1,211 +1,105 @@
 #!/usr/bin/env bash
 # =============================================
-# just-workspace — Backup Script
+# just-workspace — 백업
 # =============================================
-# Usage: sudo bash scripts/backup.sh [backup-dir]
+# 쓰는 법: sudo bash scripts/backup.sh [받을-폴더] [옵션]
 #
-# Backs up:
-#   - PostgreSQL (pg_dump + gzip)
-#   - Redis (BGSAVE + RDB copy)
-#   - Mail data (tar, if mailserver running)
+#   받을-폴더            백업 파일(.jwbak)을 둘 호스트 폴더 (기본 ./backups)
+#   --kind full|pre-update   full = 전체(기본), pre-update = DB 와 설정만
+#   --include-files      파일 저장소도 넣는다(로컬 저장소일 때만 — NFS 는 넣지 않는다)
+#   --password-file F    설정 항목(.env — 암호화 키)을 이 파일의 암호로 보호한다
+#   --keep-days N        받을-폴더에서 N일 넘은 .jwbak 을 지운다 (기본 30, 0 = 지우지 않음)
 #
-# Retention: deletes backups older than 30 days
+# 이 스크립트는 얇은 래퍼다. 백업은 backend 컨테이너의 `python -m app.cli backup create` 가 만들고
+# (관리 화면·설치 관리자와 같은 형식 — docs/data-safety.md), 여기서는 그 결과를 tar 한 개로 묶어
+# 호스트로 꺼낸다.
+#
+# 백업에는 암호화 키(SECRET_KEY)와 DB·서비스 비밀번호가 들어 있다. 파일 권한은 600 으로 만든다.
+# Redis 는 백업하지 않는다(세션·캐시 — 복원 뒤 다시 로그인하면 된다).
 # =============================================
 
 set -euo pipefail
 
-# ─── Colors ───
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m'
+info()  { echo "[INFO] $*"; }
+err()   { echo "[ERROR] $*" >&2; }
 
-info()  { echo -e "${CYAN}[INFO]${NC} $*"; }
-ok()    { echo -e "${GREEN}[OK]${NC} $*"; }
-warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
-err()   { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+BACKEND="${JW_CONTAINER_PREFIX:-ws-}backend"
+OUT_DIR="./backups"
+KEEP_DAYS=30
+PASSWORD_FILE=""
+ARGS=()
 
-# ─── Configuration ───
-BACKUP_DIR="${1:-./backups}"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-TARGET_DIR="${BACKUP_DIR}/${TIMESTAMP}"
-RETENTION_DAYS=30
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --kind)           ARGS+=(--kind "$2"); shift 2 ;;
+        --include-files)  ARGS+=(--include-files); shift ;;
+        --password-file)  PASSWORD_FILE="$2"; shift 2 ;;
+        --keep-days)      KEEP_DAYS="$2"; shift 2 ;;
+        -h|--help)        sed -n '2,19p' "$0"; exit 0 ;;
+        -*)               err "모르는 옵션: $1"; exit 2 ;;
+        *)                OUT_DIR="$1"; shift ;;
+    esac
+done
 
-POSTGRES_CONTAINER="ws-postgres"
-REDIS_CONTAINER="ws-redis"
-MAIL_CONTAINER="ws-mailserver"
-
-DB_USER="${DB_USER:-workspace}"
-DB_NAME="${DB_NAME:-workspace}"
-
-# ─── Pre-flight checks ───
-echo ""
-echo -e "${BOLD}═══════════════════════════════════════${NC}"
-echo -e "${BOLD}  just-workspace — Backup${NC}"
-echo -e "${BOLD}═══════════════════════════════════════${NC}"
-echo ""
-info "Timestamp: ${TIMESTAMP}"
-info "Backup directory: ${TARGET_DIR}"
-
-if ! command -v docker &>/dev/null; then
-    err "Docker is not installed or not in PATH."
+command -v docker >/dev/null || { err "docker 가 없습니다"; exit 1; }
+if [[ "$(docker inspect -f '{{.State.Running}}' "$BACKEND" 2>/dev/null)" != "true" ]]; then
+    err "$BACKEND 컨테이너가 실행 중이 아닙니다 — 백업은 backend 가 떠 있을 때 만듭니다"
     exit 1
 fi
 
-# ─── Create backup directory ───
-mkdir -p "${TARGET_DIR}"
-ok "Backup directory created: ${TARGET_DIR}"
-
-ERRORS=0
-
-# ─── 1. PostgreSQL Backup ───
-echo ""
-info "─── PostgreSQL Backup ───"
-if docker inspect "${POSTGRES_CONTAINER}" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
-    PG_DUMP_FILE="${TARGET_DIR}/postgres_${TIMESTAMP}.sql.gz"
-    info "Dumping database '${DB_NAME}' from ${POSTGRES_CONTAINER}..."
-    if docker exec "${POSTGRES_CONTAINER}" pg_dump -U "${DB_USER}" "${DB_NAME}" | gzip > "${PG_DUMP_FILE}"; then
-        PG_SIZE=$(du -h "${PG_DUMP_FILE}" | cut -f1)
-        ok "PostgreSQL dump complete: ${PG_DUMP_FILE} (${PG_SIZE})"
-    else
-        err "PostgreSQL dump failed!"
-        rm -f "${PG_DUMP_FILE}"
-        ERRORS=$((ERRORS + 1))
-    fi
-else
-    warn "Container '${POSTGRES_CONTAINER}' is not running — skipping PostgreSQL backup."
-    ERRORS=$((ERRORS + 1))
+EXEC=(docker exec)
+if [[ -n "$PASSWORD_FILE" ]]; then
+    [[ -r "$PASSWORD_FILE" ]] || { err "암호 파일을 읽을 수 없습니다: $PASSWORD_FILE"; exit 1; }
+    # 값을 명령 인자에 싣지 않는다 — 이름만 넘기고 값은 환경으로
+    JW_BACKUP_PASSWORD="$(head -n 1 "$PASSWORD_FILE")"
+    export JW_BACKUP_PASSWORD
+    EXEC+=(-e JW_BACKUP_PASSWORD)
 fi
 
-# ─── 2. Redis Backup ───
-echo ""
-info "─── Redis Backup ───"
-if docker inspect "${REDIS_CONTAINER}" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
-    REDIS_FILE="${TARGET_DIR}/redis_${TIMESTAMP}.rdb"
-    info "Triggering BGSAVE on ${REDIS_CONTAINER}..."
-    docker exec "${REDIS_CONTAINER}" redis-cli BGSAVE >/dev/null 2>&1
+umask 077
+mkdir -p "$OUT_DIR"
 
-    # Wait for BGSAVE to complete (up to 30s)
-    WAIT=0
-    MAX_WAIT=30
-    while [[ $WAIT -lt $MAX_WAIT ]]; do
-        LAST_SAVE_STATUS=$(docker exec "${REDIS_CONTAINER}" redis-cli LASTSAVE 2>/dev/null || echo "")
-        BG_STATUS=$(docker exec "${REDIS_CONTAINER}" redis-cli INFO persistence 2>/dev/null | grep "rdb_bgsave_in_progress:0" || true)
-        if [[ -n "$BG_STATUS" ]]; then
-            break
-        fi
-        sleep 1
-        WAIT=$((WAIT + 1))
-    done
-
-    if [[ $WAIT -ge $MAX_WAIT ]]; then
-        warn "BGSAVE may not have completed within ${MAX_WAIT}s — copying RDB anyway."
-    fi
-
-    # Copy the RDB file out of the container
-    if docker cp "${REDIS_CONTAINER}:/data/dump.rdb" "${REDIS_FILE}" 2>/dev/null; then
-        REDIS_SIZE=$(du -h "${REDIS_FILE}" | cut -f1)
-        ok "Redis RDB backup complete: ${REDIS_FILE} (${REDIS_SIZE})"
-    else
-        err "Redis RDB copy failed! (dump.rdb may not exist if no data)"
-        rm -f "${REDIS_FILE}"
-        ERRORS=$((ERRORS + 1))
-    fi
-else
-    warn "Container '${REDIS_CONTAINER}' is not running — skipping Redis backup."
-    ERRORS=$((ERRORS + 1))
-fi
-
-# ─── 3. Mail Data Backup ───
-echo ""
-info "─── Mail Data Backup ───"
-if docker inspect "${MAIL_CONTAINER}" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
-    MAIL_FILE="${TARGET_DIR}/mail_${TIMESTAMP}.tar.gz"
-    info "Archiving /var/mail from ${MAIL_CONTAINER}..."
-    if docker exec "${MAIL_CONTAINER}" tar czf - /var/mail > "${MAIL_FILE}" 2>/dev/null; then
-        MAIL_SIZE=$(du -h "${MAIL_FILE}" | cut -f1)
-        # Check if the tar is non-trivially sized (not empty)
-        MAIL_BYTES=$(stat --printf="%s" "${MAIL_FILE}" 2>/dev/null || echo "0")
-        if [[ "${MAIL_BYTES}" -le 50 ]]; then
-            warn "Mail archive appears empty (${MAIL_BYTES} bytes) — no mail data?"
-            rm -f "${MAIL_FILE}"
-        else
-            ok "Mail data backup complete: ${MAIL_FILE} (${MAIL_SIZE})"
-        fi
-    else
-        err "Mail data backup failed!"
-        rm -f "${MAIL_FILE}"
-        ERRORS=$((ERRORS + 1))
-    fi
-else
-    warn "Container '${MAIL_CONTAINER}' is not running — skipping mail backup."
-fi
-
-# ─── 3b. 안드로이드 앱 서명 키 ───
-# 잃으면 이미 설치된 앱을 갱신할 수 없다(새 키로는 다른 앱 취급). 첫 APK 빌드 때 만들어진다.
-if docker volume inspect jw-android-signing &>/dev/null; then
-    SIGN_FILE="${TARGET_DIR}/android-signing_${TIMESTAMP}.tar.gz"
-    if docker run --rm -v jw-android-signing:/s:ro alpine tar czf - -C /s . > "${SIGN_FILE}" 2>/dev/null; then
-        chmod 600 "${SIGN_FILE}"
-        ok "Android signing key backup complete: ${SIGN_FILE}"
-    else
-        err "Android signing key backup failed!"
-        rm -f "${SIGN_FILE}"
-        ERRORS=$((ERRORS + 1))
-    fi
-fi
-
-# ─── 4. Retention Policy ───
-echo ""
-info "─── Retention Policy ───"
-info "Removing backups older than ${RETENTION_DAYS} days from ${BACKUP_DIR}..."
-
-OLD_COUNT=0
-if [[ -d "${BACKUP_DIR}" ]]; then
-    while IFS= read -r -d '' old_dir; do
-        rm -rf "${old_dir}"
-        OLD_COUNT=$((OLD_COUNT + 1))
-        info "Deleted: ${old_dir}"
-    done < <(find "${BACKUP_DIR}" -mindepth 1 -maxdepth 1 -type d -mtime +"${RETENTION_DAYS}" -print0 2>/dev/null)
-fi
-
-if [[ $OLD_COUNT -gt 0 ]]; then
-    ok "Removed ${OLD_COUNT} old backup(s)."
-else
-    ok "No backups older than ${RETENTION_DAYS} days found."
-fi
-
-# ─── 5. Backup Summary ───
-echo ""
-echo -e "${BOLD}═══════════════════════════════════════${NC}"
-echo -e "${BOLD}  Backup Summary${NC}"
-echo -e "${BOLD}═══════════════════════════════════════${NC}"
-echo ""
-echo -e "  Timestamp:  ${CYAN}${TIMESTAMP}${NC}"
-echo -e "  Directory:  ${CYAN}${TARGET_DIR}${NC}"
-echo ""
-
-if [[ -d "${TARGET_DIR}" ]]; then
-    echo -e "  ${BOLD}Files:${NC}"
-    TOTAL_SIZE=0
-    while IFS= read -r file; do
-        FILE_SIZE=$(du -h "${file}" | cut -f1)
-        FILE_NAME=$(basename "${file}")
-        echo -e "    ${GREEN}${FILE_NAME}${NC}  ${FILE_SIZE}"
-    done < <(find "${TARGET_DIR}" -type f -print | sort)
-
-    DIR_SIZE=$(du -sh "${TARGET_DIR}" | cut -f1)
-    echo ""
-    echo -e "  Total size: ${BOLD}${DIR_SIZE}${NC}"
-fi
-
-echo ""
-if [[ $ERRORS -gt 0 ]]; then
-    warn "${ERRORS} backup task(s) had errors. Check messages above."
+info "백업을 만듭니다(컨테이너 $BACKEND)"
+set +e
+RESULT="$("${EXEC[@]}" "$BACKEND" python -m app.cli backup create --pack --json ${ARGS[@]+"${ARGS[@]}"})"
+RC=$?
+set -e
+# 0 = 성공, 2 = 일부 항목이 빠진 백업(파일은 만들어졌다), 그 밖 = 실패
+if [[ $RC -ne 0 && $RC -ne 2 ]]; then
+    err "백업 실패(종료 코드 $RC)"
     exit 1
-else
-    ok "All backups completed successfully."
-    exit 0
+fi
+
+# 결과 JSON 의 첫 "path" 가 컨테이너 안의 백업 파일이다
+INNER="$(printf '%s\n' "$RESULT" | sed -n 's/^  "path": "\(.*\)",\{0,1\}$/\1/p' | head -n 1)"
+if [[ -z "$INNER" ]]; then
+    err "백업 결과를 읽지 못했습니다"
+    exit 1
+fi
+NAME="$(basename "$INNER")"
+
+# 묶은 파일을 검증하고(형식을 아는 것은 컨테이너 쪽이다), 꺼낸 뒤 해시가 같은지 본다
+if ! docker exec "$BACKEND" python -m app.cli backup verify "$INNER" >/dev/null; then
+    err "만든 백업이 검증을 통과하지 못했습니다: $INNER"
+    exit 1
+fi
+SUM_IN="$(docker exec "$BACKEND" sha256sum "$INNER" | cut -d' ' -f1)"
+docker cp "$BACKEND:$INNER" "$OUT_DIR/$NAME"
+chmod 600 "$OUT_DIR/$NAME"
+SUM_OUT="$(sha256sum "$OUT_DIR/$NAME" | cut -d' ' -f1)"
+if [[ -z "$SUM_IN" || "$SUM_IN" != "$SUM_OUT" ]]; then
+    err "꺼낸 백업 파일이 원본과 다릅니다(컨테이너 안의 $INNER 는 남겨 두었습니다): $OUT_DIR/$NAME"
+    exit 1
+fi
+docker exec "$BACKEND" rm -f "$INNER"
+
+if [[ "$KEEP_DAYS" =~ ^[0-9]+$ && "$KEEP_DAYS" -gt 0 ]]; then
+    find "$OUT_DIR" -maxdepth 1 -type f -name '*.jwbak' -mtime +"$KEEP_DAYS" -print -delete | sed 's/^/[INFO] 오래된 백업 삭제: /'
+fi
+
+info "백업: $OUT_DIR/$NAME ($(du -h "$OUT_DIR/$NAME" | cut -f1))"
+echo "[주의] 이 파일에는 암호화 키와 비밀번호가 들어 있습니다 — 접근이 제한된 곳에 보관하세요."
+if [[ $RC -eq 2 ]]; then
+    err "일부 항목이 백업에 들어가지 못했습니다 — 위의 경고를 확인하세요"
+    exit 2
 fi

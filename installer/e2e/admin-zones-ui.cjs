@@ -31,7 +31,8 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
   const ctx = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 900 }, locale: 'ko-KR' })
   const page = await ctx.newPage()
   const errors = []
-  page.on('pageerror', e => errors.push(String(e).slice(0, 200)))
+  // 자체 서명 인증서에서는 서비스 워커 등록이 거절된다 — 화면의 오류가 아니다
+  page.on('pageerror', e => { if (!/ServiceWorker/.test(String(e))) errors.push(String(e).slice(0, 200)) })
   const snap = async n => { shot++; await page.screenshot({ path: path.join(opt.out, `${String(shot).padStart(2, '0')}-${n}.png`), fullPage: true }) }
   const api = p => page.evaluate(async p => { try { const r = await fetch(p, { credentials: 'same-origin' }); return { status: r.status, body: await r.json().catch(() => null) } } catch { return { status: 0, body: null } } }, p)
 
@@ -51,9 +52,13 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
   // act(이름, 구역 id, 켤지) — 스위치를 누르고(확인 창이 뜨면 진행 단추를 누른다) 반영될 때까지 본다
   const act = async (name, id, on) => {
     console.log(`== ${name} ${on ? '켜기' : '끄기'} ==`)
+    if ((await toggle(name).getAttribute('aria-checked')) === String(on)) {
+      console.log('   이미 그 상태다 — 건너뛴다')
+      return
+    }
     await toggle(name).click()
     await page.waitForTimeout(1500)
-    const dialog = page.getByRole('dialog').last()
+    const dialog = page.locator('[role="dialog"], [role="alertdialog"]').last()
     if (await dialog.count()) {
       const text = (await dialog.innerText()).replace(/\s+/g, ' ').slice(0, 300)
       console.log('   창: ' + text)
@@ -63,7 +68,7 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
       console.log('   단추: ' + labels.join(' | '))
       // 진행 단추 = 닫기·취소가 아닌 마지막 단추. 여러 단계 창이면 더 누를 것이 없을 때까지 누른다
       for (let step = 0; step < 5; step++) {
-        const d = page.getByRole('dialog').last()
+        const d = page.locator('[role="dialog"], [role="alertdialog"]').last()
         if (!(await d.count())) break
         const names = await d.getByRole('button').evaluateAll(b => b.map(x => ({ t: x.textContent.trim(), off: x.disabled })))
         const go = names.map((n, i) => ({ ...n, i })).filter(n => n.t && !/취소|닫기|이전|^×$/.test(n.t) && !n.off).pop()

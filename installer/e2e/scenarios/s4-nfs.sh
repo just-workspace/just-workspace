@@ -101,6 +101,8 @@ expect "끊긴 동안 올리기는 503" 503 "$code"
 expect "전용 코드" storage_unavailable "$(json_get 'd["code"]' < "$E2E_WORK/upload.out")"
 note "응답까지 ${took}초 · 사유 $(json_get 'd["reason"]' < "$E2E_WORK/upload.out")"
 check "거부는 오래 걸리지 않는다(30초 안)" test "$took" -lt 30
+expect "끊긴 동안 저장소 상태(파일 탭·알림 띠용): 닿지 않음" False "$(ws_api GET /api/system/storage-status | json_get 'd["available"]')"
+expect "끊긴 동안 관리 › 저장소의 상태" down "$(ws_api GET /api/admin/system/storage | json_get 'd["state"]')"
 expect "끊긴 동안에도 로그인·다른 API 는 돈다" 200 "$(ws_api_code GET /api/auth/me)"
 expect "끊긴 동안에도 /api/health" 200 "$(ws_code "$WS/api/health")"
 code="$(upload_code e2e-while-down-2.bin 60)"
@@ -117,6 +119,8 @@ for i in $(seq 1 40); do
 done
 expect "다시 살아난 뒤 올리기" 200 "$code"
 note "복구까지 약 $(( i * 5 ))초 안"
+expect "복구 뒤 저장소 상태: 닿음" True "$(ws_api GET /api/system/storage-status | json_get 'd["available"]')"
+note "관리 › 저장소: $(ws_api POST /api/admin/system/storage/recheck | json_get '"%s %s %s" % (d.get("state"), d.get("kind"), d.get("location"))')"
 check "복구 뒤 올린 파일이 NFS 에 있다" bash -c "sudo find '$NFS_ROOT/rw' -name 'e2e-after-recover.bin' | grep -q ."
 check "거부된 올리기의 파일은 쓰이지 않았다" bash -c "! sudo find '$NFS_ROOT/rw' -name 'e2e-while-down*' | grep -q ."
 check_locked

@@ -20,5 +20,5 @@
       "~/*": ["./src/*"]
     }
   },
-  "include": ["src", "tests", "vite.config.ts", "vite.rbi.config.ts", "rbi-bundle-guard.ts", "vitest.config.ts", "eslint.config.js"]
+  "include": ["src", "tests", "vite.config.ts", "vite.rbi.config.ts", "rbi-bundle-guard.ts", "vite.installer.config.ts", "installer-bundle-guard.ts", "vitest.config.ts", "eslint.config.js"]
 }

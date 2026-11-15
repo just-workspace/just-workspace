@@ -4,3 +4,5 @@ dev-dist
 coverage
 *.local
 dist-rbi
+dist-installer
+dist-installer-mock

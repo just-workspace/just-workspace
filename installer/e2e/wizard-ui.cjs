@@ -143,6 +143,7 @@ async function main() {
   console.log('== 접속 주소 ==')
   await page.getByLabel('접속 주소').first().waitFor({ timeout: 30000 })
   await page.getByLabel('접속 주소').first().fill(opt.domain)
+  await page.keyboard.press('Tab')
   if (opt.flow !== 'quick') {
     await heading('접속 주소와 연결 형태')
     await page.getByRole('radio', { name: /공인 주소에 직접 연결/ }).click()
@@ -151,6 +152,13 @@ async function main() {
     await temp.waitFor({ state: 'visible', timeout: 60000 })
     await temp.click()
     expect('감지한 연결 형태가 표시된다', (await page.getByText(/감지됨/).count()) > 0)
+  }
+  else {
+    // 빠른 설치: DNS 에 없는 이름이면 "임시 인증서"를 직접 골라야 넘어간다
+    const temp = page.getByText('임시 인증서로 설치하고 나중에 발급')
+    await temp.waitFor({ state: 'visible', timeout: 60000 })
+    await temp.click()
+    ok('빠른 설치: 접속 주소가 이 서버를 가리키지 않으면 임시 인증서를 고르게 한다')
   }
   await snap('domain')
   await noOverflow('접속 주소')
@@ -176,7 +184,18 @@ async function main() {
   }
 
   // 메일 화면은 메일 구역이 켜졌을 때만 나온다(빠른 설치도 협업 묶음이면 나온다)
-  await page.waitForFunction(() => /^#\/(mail|meet|ai|git|admin)/.test(window.location.hash), null, { timeout: 30000 })
+  const settled = () => page.waitForFunction(() => /^#\/(ports|mail|meet|ai|git|admin)/.test(window.location.hash), null, { timeout: 30000 })
+  await settled()
+  if ((await hash()).startsWith('#/ports')) {
+    // 공유기 뒤로 감지된 경우 — 넘길 포트 안내
+    console.log('== 포트 포워딩 안내 ==')
+    const body = await page.locator('main').innerText()
+    expect('포트 안내: 넘길 포트(80 · 443)', /80/.test(body) && /443/.test(body))
+    await snap('ports')
+    await next()
+    await page.waitForFunction(() => !window.location.hash.startsWith('#/ports'), null, { timeout: 30000 })
+    await settled()
+  }
   if ((await hash()).startsWith('#/mail') || await page.getByRole('heading', { name: '메일을 어떻게 보낼까요' }).count()) {
     console.log('== 메일 ==')
     await heading('메일을 어떻게 보낼까요')
@@ -195,10 +214,11 @@ async function main() {
   console.log('== 관리자 ==')
   await heading('관리자 계정')
   const fillAdmin = async () => {
-    await page.getByLabel('이름', { exact: true }).fill('관리자')
-    await page.getByLabel('아이디', { exact: true }).fill('admin')
-    await page.getByLabel('비밀번호', { exact: true }).fill(password)
-    await page.getByLabel('비밀번호 확인', { exact: true }).fill(password)
+    const main = page.locator('main')
+    await main.locator('input[autocomplete="name"]').fill('관리자')
+    await main.locator('input[autocomplete="username"]').fill('admin')
+    await main.locator('input[autocomplete="new-password"]').nth(0).fill(password)
+    await main.locator('input[autocomplete="new-password"]').nth(1).fill(password)
   }
   await fillAdmin()
   await snap('admin')
@@ -206,8 +226,12 @@ async function main() {
   // ─── 새로 고침 뒤 이어 하기 ───
   console.log('== 새로 고침 뒤 이어 하기 ==')
   await page.reload()
+  await heading('관리자 계정', 60000)
+  ok('새로 고침해도 하던 화면에 그대로 있다')
+  // 주소를 다시 열면(창을 닫았다 온 경우) 이어 하기 화면이 나온다
+  await page.goto(opt.url + '/')
   await heading('하던 설치를 이어갑니다', 60000)
-  ok('새로 고침하면 이어 하기 화면')
+  ok('다시 들어오면 이어 하기 화면')
   await snap('resume')
   await page.getByRole('button', { name: '이어서 하기' }).click()
   await heading('관리자 계정', 30000)
@@ -218,7 +242,12 @@ async function main() {
 
   console.log('== 요약 ==')
   await heading('이대로 설치합니다')
-  await page.getByRole('button', { name: '설치', exact: true }).waitFor({ timeout: 60000 })
+  // 요약은 사전 점검을 한 번 더 돌린 뒤에 채워진다 — "설치"를 누를 수 있을 때까지 기다린다
+  await page.waitForFunction(() => {
+    const all = [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === '설치')
+    const b = all[all.length - 1]
+    return b && !b.disabled && b.getAttribute('aria-disabled') !== 'true'
+  }, null, { timeout: 180000 })
   const summary = await page.locator('main').innerText()
   expect('요약: 접속 주소', summary.includes(`https://${opt.domain}`))
   expect('요약: 열리는 포트(80 · 443 · 메일)', /80 · 443/.test(summary) && /993/.test(summary))
@@ -241,8 +270,9 @@ async function main() {
   const open = page.getByRole('button', { name: '완료 화면 열기' }).or(page.getByRole('link', { name: '완료 화면 열기' }))
   if (await open.count()) await open.first().click()
   await page.getByText('다음에 할 일').waitFor({ timeout: 30000 })
-  const done = await page.locator('main, body').first().innerText()
-  expect('완료 화면: 워크스페이스 주소', done.includes(`https://${opt.domain}`))
+  const done = await page.locator('body').innerText()
+  const openHref = await page.getByRole('link', { name: /워크스페이스 열기/ }).first().getAttribute('href')
+  expect('완료 화면: 워크스페이스 열기가 접속 주소로 간다', openHref === `https://${opt.domain}`, String(openHref))
   expect('완료 화면: 할 일(사람 초대 · 백업 · 인증서)', /사람 초대/.test(done) && /백업 설정/.test(done) && /인증서 발급/.test(done))
   const links = await page.locator('a[href*="/admin/"]').evaluateAll(a => a.map(x => x.getAttribute('href')))
   expect('완료 화면: 관리 화면 링크가 실제 경로', links.length >= 2 && links.every(h => /\/admin\/(users|storage|mail)$/.test(h)), links.join(' '))
@@ -270,6 +300,7 @@ async function finish(browser) {
   process.exit(fail ? 1 : 0)
 }
 
+process.on('unhandledRejection', e => { console.log('  FAIL ' + String(e).slice(0, 200)); process.exit(1) })
 main().catch(async e => {
   console.log('  FAIL 진행이 멈췄다 — ' + String(e).split('\n')[0].slice(0, 300))
   process.exit(1)

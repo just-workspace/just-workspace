@@ -1,7 +1,12 @@
-"""First-Time-Setup-Wizard (웹 최초설정) + 설정 상태.
+"""최초 설정(`/api/setup/*`)과, 같은 접두사 아래의 관리자용 설정 API.
 
-목표: 설치 후 CLI 없이 웹에서 끝까지. 최초 관리자 생성은 관리자가 0명일 때만 공개 허용.
-나머지 설정 단계(브랜딩/메일/모듈/LDAP)는 관리자 로그인 후 기존 admin API 재사용.
+- 최초 설정: 관리자가 한 명도 없을 때만 `/setup` 화면이 열린다(`status`·`admin`·`complete`).
+  설치 관리자는 관리자를 직접 만들므로(`seed-admin`) 이 화면을 거치지 않는다 — 설치 관리자 없이 띄우고
+  관리자를 미리 만들지 않은 서버의 첫 화면이다.
+- 관리 화면이 쓰는 것: 로그인 순서(`auth-order`), 저장소 백엔드(`storage`), 내장 메일 플래그(`features`),
+  컨테이너 상태·재시작(`services`).
+
+백업에서 복원은 여기에 없다(실행 중인 backend 는 자기 DB 를 갈아 끼울 수 없다) — docs/data-safety.md 4절.
 """
 from __future__ import annotations
 
@@ -81,10 +86,6 @@ async def create_first_admin(body: AdminCreate, db: AsyncSession = Depends(get_d
     db.add(user)
     await db.commit()
     return {"ok": True, "username": username}
-
-
-class CompleteBody(BaseModel):
-    pass
 
 
 @router.get("/features")
@@ -217,22 +218,6 @@ async def update_features(body: FeaturesUpdate, request: Request = None, user: U
         {"builtin_mailserver": body.builtin_mailserver}, _ip(request),
     )
     return {"ok": True}
-
-
-@router.post("/restore")
-async def restore():
-    """앱 안에서는 복원하지 않는다 — 늘 409 와 안내.
-
-    복원은 backend 를 세우고 DB 를 갈아 끼운 뒤 다시 띄우는 일이다. 실행 중인 backend 가 자기 DB 위에
-    덤프를 덮어쓰면 실패해도 알 수 없고(예전 구현은 결과와 무관하게 성공으로 답했다) 되돌릴 수도 없다.
-    서버에서 `scripts/restore.sh <백업>`(= `python -m app.cli restore`) 또는 설치 관리자의
-    "백업에서 복원"을 쓴다 — docs/data-safety.md.
-    """
-    raise HTTPException(
-        status_code=409,
-        detail="앱 안에서는 복원할 수 없습니다. 서버에서 scripts/restore.sh <백업 파일> 을 실행하거나 "
-               "설치 관리자의 '백업에서 복원'을 사용하세요.",
-    )
 
 
 @router.get("/services")

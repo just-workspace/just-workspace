@@ -547,11 +547,10 @@ async def test_admin_backup_records_honest_status(db_session, stack, tmp_path, m
     assert await service.delete_backup(db_session, rec.id) is True
 
 
-async def test_in_app_restore_endpoint_is_closed():
-    from fastapi import HTTPException
-
+def test_no_in_app_restore_endpoint():
+    """앱 안의 복원 API 는 없다 — 복원은 backend 를 세우고 하는 일이라 CLI·설치 관리자만 한다."""
     from app.setup import router as setup_router
 
-    with pytest.raises(HTTPException) as info:
-        await setup_router.restore()
-    assert info.value.status_code == 409 and "scripts/restore.sh" in info.value.detail
+    paths = {r.path for r in setup_router.router.routes}
+    assert "/api/setup/status" in paths
+    assert not [p for p in paths if "restore" in p]

@@ -260,7 +260,7 @@ sudo bash scripts/restore.sh <백업> --inspect      # 내용만 본다
 
 스크립트는 backend 이미지의 **일회용 컨테이너**에서 `python -m app.cli restore` 를 부른다. 리포 폴더에서 직접 띄운 서버용이다. 설치 관리자로 설치한 서버에서는 같은 일을 `docker exec jw-installer jw restore <백업> [--yes]` 가 한다(설정은 되돌리지 않는다 — [installer.md](installer.md) 6절의 "같은 서버에 되돌리기").
 
-**앱 안에서는 복원하지 않는다.** 복원은 backend 를 세우고 DB 를 갈아 끼운 뒤 다시 띄우는 일인데, 실행 중인 backend 는 자신을 세울 수 없다. 예전의 앱 내 복원은 돌아가는 DB 위에 덤프를 덮어썼고 결과와 무관하게 성공으로 답했다. 그 API(`POST /api/setup/restore`)는 이제 늘 409 와 안내를 돌려준다. 실행 중인 backend 컨테이너 안에서 `restore` 를 부르면 아무것도 건드리지 않고 거부한다.
+**앱 안에서는 복원하지 않는다.** 복원은 backend 를 세우고 DB 를 갈아 끼운 뒤 다시 띄우는 일인데, 실행 중인 backend 는 자신을 세울 수 없다. 그래서 복원하는 API 와 화면은 앱에 없다(돌아가는 DB 위에 덤프를 덮어쓰던 예전의 앱 내 복원은 없앴다). 실행 중인 backend 컨테이너 안에서 `restore` 를 부르면 아무것도 건드리지 않고 거부한다.
 
 ### 순서
 

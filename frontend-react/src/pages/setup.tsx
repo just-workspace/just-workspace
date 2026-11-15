@@ -1,7 +1,9 @@
 // 최초 설정(FTW): auth 틀(AuthShell) 위, 폼 위에 "단계명 n / 6 + 진행 바".
-// 관리자 단계 = 이름·아이디·비밀번호(규칙 체크, 확인 칸 대신 보기 토글) + [이전][다음 — 브랜딩] + 백업에서 복원 링크.
+// 관리자가 한 명도 없을 때만 열린다 — 설치 관리자 없이 직접 띄우고 관리자를 미리 만들지 않은 서버의 첫 화면.
+// 관리자 단계 = 이름·아이디·비밀번호(규칙 체크, 확인 칸 대신 보기 토글) + [이전][다음 — 브랜딩].
+// 백업에서 옮겨 오는 일은 여기서 하지 않는다(설치 관리자의 "백업에서 복원") — 시작 단계에 안내만 둔다.
 // 기능 선택 = 토글 목록 한 화면(스위치 즉시 저장 — 실패하면 되돌림).
-import { useState, type ChangeEvent, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { $fetch } from '~/lib/api'
 import { navigateTo } from '~/lib/router'
 import { useHead } from '~/lib/head'
@@ -36,33 +38,6 @@ export default function Page() {
   const [step, setStep] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-
-  // 마이그레이션(기존 백업에서 복원)
-  const [migrating, setMigrating] = useState(false)
-  const [mFile, setMFile] = useState<File | null>(null)
-  const [mBusy, setMBusy] = useState(false)
-  const [mMsg, setMMsg] = useState('')
-  const [mTone, setMTone] = useState<'info' | 'danger' | 'warning'>('info')
-  function onFile(e: ChangeEvent<HTMLInputElement>) { setMFile(e.target.files?.[0] || null) }
-  async function doRestore() {
-    if (!mFile) { setMMsg(t('setup.restore.selectFile')); setMTone('info'); return }
-    setMBusy(true); setMMsg(t('setup.restore.uploading')); setMTone('info')
-    try {
-      const fd = new FormData(); fd.append('file', mFile)
-      await $fetch('/api/setup/restore', { method: 'POST', body: fd })
-      setMMsg(t('setup.restore.restarting')); setMTone('info')
-      setSetupStatus(null)
-      let tries = 0
-      const iv = setInterval(async () => {
-        tries++
-        try {
-          const s = await $fetch<any>('/api/setup/status')
-          if (s && s.has_admin) { clearInterval(iv); setSetupStatus({ needs_setup: false }); await navigateTo('/login') }
-        } catch { /* 재시작 중 */ }
-        if (tries > 50) { clearInterval(iv); setMMsg(t('setup.restore.delayed')); setMTone('warning') }
-      }, 3000)
-    } catch (e: any) { setMMsg(t('setup.restore.failed', { detail: e?.data?.detail || e?.message || '' })); setMTone('danger'); setMBusy(false) }
-  }
 
   const [aUser, setAUser] = useState(''); const [aPass, setAPass] = useState(''); const [aName, setAName] = useState('')
   const aRules = checkPasswordRules(aPass, [aUser.trim()])
@@ -141,140 +116,111 @@ export default function Page() {
 
   return (
     <AuthShell>
-      {migrating ? (
-        /* 마이그레이션 (기존 백업 복원) */
+      <AuthStepHeader label={steps[step]} step={step + 1} total={steps.length} />
+
+      {step === 0 ? (
+        /* 1 시작 */
         <>
-          <AuthHeading title={t('setup.restore.title')} subtitle={t('setup.restore.subtitle')} />
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="setup-restore-file" className="text-xs font-semibold text-muted-foreground">{t('setup.restore.fileLabel')}</label>
-            <input
-              id="setup-restore-file"
-              type="file"
-              accept=".gz,.tgz,.tar.gz,application/gzip"
-              disabled={mBusy}
-              className="h-11 w-full rounded-md border border-input bg-background px-1.5 py-1.5 text-sm text-foreground file:mr-3 file:h-full file:rounded-sm file:border-0 file:bg-muted file:px-3 file:text-sm file:font-medium file:text-foreground focus:border-ring focus:outline-hidden focus:ring-2 focus:ring-ring/35"
-              onChange={onFile}
-            />
+          <AuthHeading title={t('setup.start.title', { appName })} subtitle={t('setup.start.subtitle')} />
+          <div className="flex flex-col gap-2">
+            <UiButton size="lg" className="w-full font-semibold" onClick={() => setStep(1)}>{t('setup.start.fresh')}</UiButton>
           </div>
-          {mMsg && <AuthAlert tone={mTone} title={mMsg} />}
+          <p className="text-[13px] text-muted-foreground">{t('setup.start.restoreHint')}</p>
+        </>
+      ) : step === 1 ? (
+        /* 2 관리자 계정 */
+        <>
+          <AuthHeading title={t('setup.admin.title')} subtitle={t('setup.admin.subtitle')} />
+          {error && <AuthAlert tone="danger" title={error} />}
+          <form className="flex flex-col gap-[18px]" noValidate onSubmit={(e) => { void createAdmin(e) }}>
+            <UiInput id="setup-admin-name" modelValue={aName} onUpdateModelValue={setAName} size="lg" label={t('authScreens.register.name')} hint={t('setup.admin.nameHint')} autocomplete="name" autoFocus />
+            <UiInput id="setup-admin-user" modelValue={aUser} onUpdateModelValue={setAUser} size="lg" label={t('authScreens.register.username')} placeholder={t('setup.admin.usernamePlaceholder')} autocomplete="username" autoCapitalize="none" spellCheck="false" />
+            <div className="flex flex-col gap-1.5">
+              <UiPasswordInput id="setup-admin-pass" modelValue={aPass} onUpdateModelValue={setAPass} size="lg" label={t('authScreens.register.password')} autocomplete="new-password" />
+              <AuthPasswordRules results={aRules} contextLabel={t('authScreens.register.username')} />
+            </div>
+            <div className="mt-1 flex gap-2">
+              <UiButton type="button" variant="outline" size="lg" className="px-[18px]" disabled={busy} onClick={() => setStep(0)}>{t('common.prev')}</UiButton>
+              <UiButton type="submit" size="lg" className="flex-1 px-4 font-semibold" disabled={busy || !aUser || !passwordRulesPass(aRules)}>
+                {busy ? t('setup.admin.creating') : t('setup.admin.next')}
+              </UiButton>
+            </div>
+          </form>
+        </>
+      ) : step === 2 ? (
+        /* 3 브랜딩 */
+        <>
+          <AuthHeading title={t('setup.steps.branding')} subtitle={t('setup.branding.subtitle')} />
+          {error && <AuthAlert tone="danger" title={error} />}
+          <UiInput id="setup-brand-name" modelValue={bName} onUpdateModelValue={setBName} size="lg" label={t('setup.branding.siteName')} autocomplete="off" />
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="setup-brand-color-hex" className="text-xs font-semibold text-muted-foreground">{t('setup.branding.color')}</label>
+            <div className="flex items-center gap-2">
+              <input value={bColor} onChange={e => setBColor(e.target.value)} type="color" aria-label={t('setup.branding.pickColor')} className="h-11 w-12 shrink-0 cursor-pointer rounded-md border border-input bg-background p-1" />
+              <UiInput id="setup-brand-color-hex" modelValue={bColor} onUpdateModelValue={setBColor} size="lg" mono className="flex-1" autocomplete="off" />
+            </div>
+          </div>
           <div className="flex gap-2">
-            <UiButton variant="outline" size="lg" className="px-[18px]" disabled={mBusy} onClick={() => setMigrating(false)}>{t('common.prev')}</UiButton>
-            <UiButton size="lg" className="flex-1 px-4 font-semibold" disabled={mBusy || !mFile} onClick={() => { void doRestore() }}>{mBusy ? t('setup.restore.restoring') : t('setup.restore.start')}</UiButton>
+            <UiButton variant="outline" size="lg" className="px-[18px]" disabled={busy} onClick={() => setStep(3)}>{t('setup.branding.skip')}</UiButton>
+            <UiButton size="lg" className="flex-1 px-4 font-semibold" disabled={busy} onClick={() => { void saveBranding() }}>{busy ? t('setup.saving') : t('setup.branding.next')}</UiButton>
+          </div>
+        </>
+      ) : step === 3 ? (
+        /* 4 메일 */
+        <>
+          <AuthHeading title={t('setup.mail.title')} subtitle={t('setup.mail.subtitle')} />
+          {error && <AuthAlert tone="danger" title={error} />}
+          <div role="radiogroup" aria-label={t('setup.mail.title')} className="flex flex-col gap-2">
+            {MAIL_OPTS.map(opt => (
+              <UiRadioCard
+                key={opt.v}
+                modelValue={mailMode}
+                onUpdateModelValue={v => setMailMode(v as MailMode)}
+                value={opt.v}
+                title={opt.t}
+                description={opt.d}
+                className="w-full"
+              />
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <UiButton variant="outline" size="lg" className="px-[18px]" disabled={busy} onClick={() => setStep(2)}>{t('common.prev')}</UiButton>
+            <UiButton size="lg" className="flex-1 px-4 font-semibold" disabled={busy} onClick={() => { void saveMail() }}>{busy ? t('setup.saving') : t('setup.mail.next')}</UiButton>
+          </div>
+        </>
+      ) : step === 4 ? (
+        /* 5 기능 선택 */
+        <>
+          <AuthHeading title={t('setup.modules.title')} subtitle={t('setup.modules.subtitle')} />
+          {modules.length ? (
+            <div className="overflow-hidden rounded-lg border border-border bg-card">
+              {modules.map(m => (
+                <div key={m.id} className="flex min-h-12 items-center border-b border-border px-3.5 py-1 last:border-b-0">
+                  <UiSwitch
+                    modelValue={!!m.enabled}
+                    label={featInfo(m).t}
+                    description={featInfo(m).d}
+                    disabled={!!featBusy[m.id]}
+                    className="w-full"
+                    onUpdateModelValue={(v: boolean) => { void toggleFeature(m, v) }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <UiSkeleton preset="list" rows={6} framed />
+          )}
+          <div className="flex gap-2">
+            <UiButton variant="outline" size="lg" className="px-[18px]" onClick={() => setStep(3)}>{t('common.prev')}</UiButton>
+            <UiButton size="lg" className="flex-1 px-4 font-semibold" onClick={() => setStep(5)}>{t('setup.modules.next')}</UiButton>
           </div>
         </>
       ) : (
+        /* 6 완료 */
         <>
-          <AuthStepHeader label={steps[step]} step={step + 1} total={steps.length} />
-
-          {step === 0 ? (
-            /* 1 시작 */
-            <>
-              <AuthHeading title={t('setup.start.title', { appName })} subtitle={t('setup.start.subtitle')} />
-              <div className="flex flex-col gap-2">
-                <UiButton size="lg" className="w-full font-semibold" onClick={() => setStep(1)}>{t('setup.start.fresh')}</UiButton>
-                <UiButton variant="outline" size="lg" className="w-full bg-card" onClick={() => setMigrating(true)}>{t('setup.start.restore')}</UiButton>
-              </div>
-            </>
-          ) : step === 1 ? (
-            /* 2 관리자 계정 */
-            <>
-              <AuthHeading title={t('setup.admin.title')} subtitle={t('setup.admin.subtitle')} />
-              {error && <AuthAlert tone="danger" title={error} />}
-              <form className="flex flex-col gap-[18px]" noValidate onSubmit={(e) => { void createAdmin(e) }}>
-                <UiInput id="setup-admin-name" modelValue={aName} onUpdateModelValue={setAName} size="lg" label={t('authScreens.register.name')} hint={t('setup.admin.nameHint')} autocomplete="name" autoFocus />
-                <UiInput id="setup-admin-user" modelValue={aUser} onUpdateModelValue={setAUser} size="lg" label={t('authScreens.register.username')} placeholder={t('setup.admin.usernamePlaceholder')} autocomplete="username" autoCapitalize="none" spellCheck="false" />
-                <div className="flex flex-col gap-1.5">
-                  <UiPasswordInput id="setup-admin-pass" modelValue={aPass} onUpdateModelValue={setAPass} size="lg" label={t('authScreens.register.password')} autocomplete="new-password" />
-                  <AuthPasswordRules results={aRules} contextLabel={t('authScreens.register.username')} />
-                </div>
-                <div className="mt-1 flex gap-2">
-                  <UiButton type="button" variant="outline" size="lg" className="px-[18px]" disabled={busy} onClick={() => setStep(0)}>{t('common.prev')}</UiButton>
-                  <UiButton type="submit" size="lg" className="flex-1 px-4 font-semibold" disabled={busy || !aUser || !passwordRulesPass(aRules)}>
-                    {busy ? t('setup.admin.creating') : t('setup.admin.next')}
-                  </UiButton>
-                </div>
-              </form>
-              <p className="text-[13px] text-muted-foreground">
-                {t('setup.admin.hasPrevious')}{' '}
-                <button type="button" className="font-semibold text-primary hover:underline" onClick={() => setMigrating(true)}>{t('setup.restore.title')}</button>
-              </p>
-            </>
-          ) : step === 2 ? (
-            /* 3 브랜딩 */
-            <>
-              <AuthHeading title={t('setup.steps.branding')} subtitle={t('setup.branding.subtitle')} />
-              {error && <AuthAlert tone="danger" title={error} />}
-              <UiInput id="setup-brand-name" modelValue={bName} onUpdateModelValue={setBName} size="lg" label={t('setup.branding.siteName')} autocomplete="off" />
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="setup-brand-color-hex" className="text-xs font-semibold text-muted-foreground">{t('setup.branding.color')}</label>
-                <div className="flex items-center gap-2">
-                  <input value={bColor} onChange={e => setBColor(e.target.value)} type="color" aria-label={t('setup.branding.pickColor')} className="h-11 w-12 shrink-0 cursor-pointer rounded-md border border-input bg-background p-1" />
-                  <UiInput id="setup-brand-color-hex" modelValue={bColor} onUpdateModelValue={setBColor} size="lg" mono className="flex-1" autocomplete="off" />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <UiButton variant="outline" size="lg" className="px-[18px]" disabled={busy} onClick={() => setStep(3)}>{t('setup.branding.skip')}</UiButton>
-                <UiButton size="lg" className="flex-1 px-4 font-semibold" disabled={busy} onClick={() => { void saveBranding() }}>{busy ? t('setup.saving') : t('setup.branding.next')}</UiButton>
-              </div>
-            </>
-          ) : step === 3 ? (
-            /* 4 메일 */
-            <>
-              <AuthHeading title={t('setup.mail.title')} subtitle={t('setup.mail.subtitle')} />
-              {error && <AuthAlert tone="danger" title={error} />}
-              <div role="radiogroup" aria-label={t('setup.mail.title')} className="flex flex-col gap-2">
-                {MAIL_OPTS.map(opt => (
-                  <UiRadioCard
-                    key={opt.v}
-                    modelValue={mailMode}
-                    onUpdateModelValue={v => setMailMode(v as MailMode)}
-                    value={opt.v}
-                    title={opt.t}
-                    description={opt.d}
-                    className="w-full"
-                  />
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <UiButton variant="outline" size="lg" className="px-[18px]" disabled={busy} onClick={() => setStep(2)}>{t('common.prev')}</UiButton>
-                <UiButton size="lg" className="flex-1 px-4 font-semibold" disabled={busy} onClick={() => { void saveMail() }}>{busy ? t('setup.saving') : t('setup.mail.next')}</UiButton>
-              </div>
-            </>
-          ) : step === 4 ? (
-            /* 5 기능 선택 */
-            <>
-              <AuthHeading title={t('setup.modules.title')} subtitle={t('setup.modules.subtitle')} />
-              {modules.length ? (
-                <div className="overflow-hidden rounded-lg border border-border bg-card">
-                  {modules.map(m => (
-                    <div key={m.id} className="flex min-h-12 items-center border-b border-border px-3.5 py-1 last:border-b-0">
-                      <UiSwitch
-                        modelValue={!!m.enabled}
-                        label={featInfo(m).t}
-                        description={featInfo(m).d}
-                        disabled={!!featBusy[m.id]}
-                        className="w-full"
-                        onUpdateModelValue={(v: boolean) => { void toggleFeature(m, v) }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <UiSkeleton preset="list" rows={6} framed />
-              )}
-              <div className="flex gap-2">
-                <UiButton variant="outline" size="lg" className="px-[18px]" onClick={() => setStep(3)}>{t('common.prev')}</UiButton>
-                <UiButton size="lg" className="flex-1 px-4 font-semibold" onClick={() => setStep(5)}>{t('setup.modules.next')}</UiButton>
-              </div>
-            </>
-          ) : (
-            /* 6 완료 */
-            <>
-              <AuthHeading icon="check" tone="success" title={t('setup.done.title')} subtitle={t('setup.done.subtitle')} />
-              {error && <AuthAlert tone="danger" title={error} />}
-              <UiButton size="lg" className="w-full font-semibold" disabled={busy} onClick={() => { void finish() }}>{busy ? t('setup.processing') : t('setup.done.goDashboard')}</UiButton>
-            </>
-          )}
+          <AuthHeading icon="check" tone="success" title={t('setup.done.title')} subtitle={t('setup.done.subtitle')} />
+          {error && <AuthAlert tone="danger" title={error} />}
+          <UiButton size="lg" className="w-full font-semibold" disabled={busy} onClick={() => { void finish() }}>{busy ? t('setup.processing') : t('setup.done.goDashboard')}</UiButton>
         </>
       )}
     </AuthShell>

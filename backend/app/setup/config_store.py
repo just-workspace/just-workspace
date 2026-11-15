@@ -6,7 +6,7 @@ Cisco Catalyst Center식 단일 웹 컨트롤 플레인 + K8s 대비:
 """
 from __future__ import annotations
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import SystemSetting
@@ -30,15 +30,6 @@ async def set(db: AsyncSession, key: str, value: str) -> None:
         existing.value = value
     else:
         db.add(SystemSetting(key=key, value=value))
-
-
-async def set_many(db: AsyncSession, values: dict[str, str]) -> None:
-    for k, v in values.items():
-        await set(db, k, v)
-
-
-async def delete_key(db: AsyncSession, key: str) -> None:
-    await db.execute(delete(SystemSetting).where(SystemSetting.key == key))
 
 
 async def get_by_prefix(db: AsyncSession, prefix: str) -> dict[str, str]:

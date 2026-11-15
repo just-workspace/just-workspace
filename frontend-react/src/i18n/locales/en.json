@@ -7577,23 +7577,11 @@
       "features": "Features",
       "done": "Done"
     },
-    "restore": {
-      "title": "Restore from backup",
-      "subtitle": "Upload a .tar.gz backup from your previous server (download it from Admin › Backup) to restore the database, files, and mail.",
-      "fileLabel": "Backup file",
-      "selectFile": "Select a backup file (.tar.gz)",
-      "uploading": "Uploading and restoring… (may take a few minutes depending on data size)",
-      "restarting": "Restore complete — restarting the server… You'll be taken to the sign-in page shortly.",
-      "delayed": "The restart is taking longer than expected. Refresh the page in a moment.",
-      "failed": "Restore failed: {detail}",
-      "restoring": "Restoring…",
-      "start": "Start restore"
-    },
     "start": {
       "title": "{appName} initial setup",
       "subtitle": "Set everything up from the web. No command line needed.",
       "fresh": "New install",
-      "restore": "Restore from an existing backup"
+      "restoreHint": "To move a backup from another server, use \"Restore from backup\" in the installer instead of this screen."
     },
     "admin": {
       "title": "Create the admin account",
@@ -7601,8 +7589,7 @@
       "nameHint": "Optional — your username is shown if left blank.",
       "usernamePlaceholder": "Lowercase letters and numbers",
       "creating": "Creating…",
-      "next": "Next — Branding",
-      "hasPrevious": "Have a previous install?"
+      "next": "Next — Branding"
     },
     "branding": {
       "subtitle": "You can change this later in Admin › Branding.",
@@ -8196,14 +8183,11 @@
       "deleteConfirm": "This deletes the {when} backup file. This cannot be undone.",
       "deleteTitle": "Delete this backup?",
       "title": "Automatic backups",
-      "desc": "PostgreSQL · storage · Redis + mail and Git (when running). Stored in the server backups volume; use Download to get a copy.",
       "saveSchedule": "Save schedule",
       "running": "Backing up…",
       "runNow": "Back up now",
       "loadError": "Couldn't load backup info",
       "scheduleDaily": "Scheduled backup (daily)",
-      "hourUtc": "Hour (UTC)",
-      "hourKst": "= {h}:00 KST",
       "retentionDays": "Retention (days)",
       "empty": "No backups yet",
       "rowMenu": "{when} backup menu",
@@ -8212,10 +8196,10 @@
       "descOff": "Automatic backups are off — turn them on with the switch",
       "target": "Destination",
       "retention": "Keep",
-      "time": "Time (KST)",
+      "time": "Time (this browser's time zone)",
       "keepDays": "Keep {n} days",
       "runConfirmTitle": "Back up now?",
-      "runConfirmBody": "Copies the database, files, mail and Git to the server backup folder. It can take minutes and slow the server meanwhile.",
+      "runConfirmBody": "Copies the database, settings, mail, code repositories, certificates and (when stored on this server) file storage to the server's backup volume. Sign-in sessions and caches are not included. The code repository service pauses briefly during the backup. It can take minutes and slow the server meanwhile.",
       "cardTitle": "Backup"
     },
     "loginMethods": {

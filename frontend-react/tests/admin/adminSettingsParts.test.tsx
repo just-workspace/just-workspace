@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { i18n } from '~/i18n'
 import { ldapChangeCount, normalizeAuthOrder, dropOrder, moveOrder, type LdapCfg } from '~/components/admin/AdminLoginMethods'
-import { fmtBackupSize, kstFromUtc, utcFromKst } from '~/components/admin/AdminBackup'
+import { fmtBackupSize, localTimeFromUtcHour, backupHourOptions } from '~/components/admin/AdminBackup'
 import { fmtAppSize, fmtDay } from '~/components/admin/AdminAppBuild'
 import { brandContrast, contrastBlocked, isHexColor } from '~/components/admin/brandingContrast'
 
@@ -46,11 +46,20 @@ describe('백업·앱 빌드 서식', () => {
     expect(fmtBackupSize(1536)).toBe('1.5 KB')
     expect(fmtAppSize(5 * 1024 * 1024)).toBe('5 MB')
   })
-  it('한국 시 ↔ UTC', () => {
-    expect(kstFromUtc(18)).toBe('3')
-    expect(kstFromUtc('0')).toBe('9')
-    expect(utcFromKst('3')).toBe(18)
-    expect(utcFromKst(9)).toBe(0)
+  it('UTC 시 → 브라우저 시간대의 시각', () => {
+    // offsetMin = UTC − 현지(분): UTC+9 는 -540, UTC-5 는 300, UTC+5:30 은 -330
+    expect(localTimeFromUtcHour(18, -540)).toBe('03:00')
+    expect(localTimeFromUtcHour('0', -540)).toBe('09:00')
+    expect(localTimeFromUtcHour(3, 300)).toBe('22:00')
+    expect(localTimeFromUtcHour(20, -330)).toBe('01:30')
+    expect(localTimeFromUtcHour(7, 0)).toBe('07:00')
+  })
+  it('시각 선택지 — 값은 UTC 시, 현지 시각 순', () => {
+    const opts = backupHourOptions(-540)
+    expect(opts).toHaveLength(24)
+    expect(opts[0]).toEqual({ value: '15', label: '00:00' })
+    expect(opts[3]).toEqual({ value: '18', label: '03:00' })
+    expect(new Set(opts.map(o => o.value)).size).toBe(24)
   })
   it('MM/DD', () => {
     expect(fmtDay(null)).toBe('')

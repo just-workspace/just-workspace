@@ -1,6 +1,6 @@
 /**
- * 백업 카드 — Vue components/admin/AdminBackup.vue. 관리 › 저장소·백업.
- * 맨 위 행 = "자동 백업" + "매일 HH:00 · 대상" · 시각(한국 시간으로 고르고 UTC 로 저장) · 스위치,
+ * 백업 카드 — 관리 › 저장소·백업.
+ * 맨 위 행 = "자동 백업" + "매일 HH:MM · 대상" · 시각(이 브라우저의 시간대로 고르고 UTC 시로 저장) · 스위치,
  * 그 아래 2열 칸: 대상(서버 경로, 읽기 전용 mono) · 보관(선택).
  * 기록 행(min 52: 시각 600 + "결과 · 크기" 12 muted, 오른쪽 상태 틴트 배지 + ⋮ 받기·삭제), 최근 10개.
  * 푸터 = [지금 백업](확인 모달 → POST /api/admin/backup/run, 3초 간격 최대 6번 다시 읽기) [되돌리기] [저장].
@@ -35,13 +35,23 @@ export function fmtBackupSize(n: number) {
   while (v >= 1024 && i < u.length - 1) { v /= 1024; i++ }
   return `${v.toFixed(1)} ${u[i]}`
 }
-/** UTC 시 → 한국 시(문자열 "0"~"23") */
-export function kstFromUtc(hourUtc: number | string) { return String(((Number(hourUtc) || 0) + 9) % 24) }
-/** 한국 시 → UTC 시 */
-export function utcFromKst(kst: number | string) { return (Number(kst) + 24 - 9) % 24 }
+/**
+ * UTC 시(0~23) → 이 브라우저 시간대의 "HH:MM".
+ * 서버는 UTC 의 "시"만 저장하고 그 시각에 돈다. 30분·45분 단위 시간대에서는 분이 00 이 아니다.
+ * `offsetMin` 은 `Date#getTimezoneOffset()` 과 같은 뜻(UTC − 현지, 분) — 테스트가 넣는다.
+ */
+export function localTimeFromUtcHour(hourUtc: number | string, offsetMin: number = new Date().getTimezoneOffset()) {
+  const m = ((((Number(hourUtc) || 0) * 60 - offsetMin) % 1440) + 1440) % 1440
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+}
+/** 시각 선택지 — 값은 UTC 시, 글자는 현지 시각. 현지 시각 순서로 늘어놓는다 */
+export function backupHourOptions(offsetMin: number = new Date().getTimezoneOffset()) {
+  return Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: localTimeFromUtcHour(h, offsetMin) }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
 
 const SCHED_KEYS = ['enabled', 'hour_utc', 'retention_days'] as const
-const hourOptions = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${String(h).padStart(2, '0')}:00` }))
+const hourOptions = backupHourOptions()
 
 export interface AdminBackupProps {
   /** 루트 카드 id(딥링크 #backup) */
@@ -140,12 +150,12 @@ export function AdminBackup({ id, className }: AdminBackupProps) {
     finally { setSchedSaving(false) }
   }
 
-  // 시각은 한국 시간으로 고르고 UTC 로 저장한다
-  const kstHour = kstFromUtc(sched.hour_utc)
+  // 선택지의 값이 UTC 시라서 그대로 저장한다 — 보이는 글자만 이 브라우저의 시간대
+  const hourUtc = String(Number(sched.hour_utc) || 0)
   const retention = [7, 14, 30, 60, 90, 180, 365].map(d => ({ value: String(d), label: t('adminParts.backup.keepDays', { n: d }) }))
   if (!retention.some(o => o.value === String(sched.retention_days))) retention.push({ value: String(sched.retention_days), label: t('adminParts.backup.keepDays', { n: sched.retention_days }) })
   const desc = sched.enabled
-    ? t('adminParts.backup.descOn', { time: `${kstHour.padStart(2, '0')}:00`, target: target || '—' })
+    ? t('adminParts.backup.descOn', { time: localTimeFromUtcHour(hourUtc), target: target || '—' })
     : t('adminParts.backup.descOff')
 
   return (
@@ -168,7 +178,7 @@ export function AdminBackup({ id, className }: AdminBackupProps) {
               <b className="block font-semibold text-foreground">{t('adminParts.backup.title')}</b>
               <span className="block truncate text-xs text-muted-foreground">{desc}</span>
             </span>
-            <UiSelect modelValue={kstHour} onUpdateModelValue={v => setSched(s => ({ ...s, hour_utc: utcFromKst(v ?? 0) }))} options={hourOptions} size="sm" className="w-28" aria-label={t('adminParts.backup.time')} disabled={!sched.enabled} />
+            <UiSelect modelValue={hourUtc} onUpdateModelValue={v => setSched(s => ({ ...s, hour_utc: Number(v ?? 0) }))} options={hourOptions} size="sm" className="w-28" aria-label={t('adminParts.backup.time')} disabled={!sched.enabled} />
             <UiSwitch modelValue={sched.enabled} onUpdateModelValue={v => setSched(s => ({ ...s, enabled: v }))} ariaLabel={t('adminParts.backup.scheduleDaily')} />
           </div>
           <div className="grid gap-x-4 gap-y-3.5 border-t border-border px-5 py-4 sm:grid-cols-2">

@@ -91,7 +91,7 @@ class ShareLinkListItem(BaseModel):
     has_password: bool = False
     allow_download: bool = True
     paths: list[str] = []  # 묶음 링크면 여러 개
-    email_count: int = 0  # 이메일로 보낸 받는 사람 수(성공만, R7)
+    email_count: int = 0  # 이메일로 보낸 받는 사람 수(성공만)
     is_folder: bool = False
     # false 면 "내려받기 막음"으로 바꿀 수 없다 — 파일 하나짜리 링크인데 미리보기가 안 되는 형식(죽은 링크가 된다)
     can_block_download: bool = True

@@ -124,7 +124,7 @@ class ShareLink(Base):
 
 
 class ShareLinkEmail(Base):
-    """공유 링크를 이메일로 보낸 기록(R7) — 받는 사람 한 명당 한 행. 링크를 지우면 같이 지운다(FK CASCADE + 라우터 명시 삭제).
+    """공유 링크를 이메일로 보낸 기록 — 받는 사람 한 명당 한 행. 링크를 지우면 같이 지운다(FK CASCADE + 라우터 명시 삭제).
     비밀번호는 메일에 싣지 않는다. 시간당 발송 제한은 sent_by·created_at 으로 센다(실패한 시도도 센다)."""
     __tablename__ = "share_link_emails"
     # 컬럼 index=True 중복 선언 금지 — 인덱스는 여기서만.
@@ -476,7 +476,7 @@ class Message(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
-    # ── chat22(디스코드 동등 P1) ── 전부 NULL 허용(auto-migrate). 읽는 쪽이 NULL 을 기본값으로 푼다.
+    # ── chat22 ── 전부 NULL 허용(auto-migrate). 읽는 쪽이 NULL 을 기본값으로 푼다.
     # 인라인 답장 원문 — parent_id(스레드)와 별개. FK 없음: 원문 행이 지워지면 state='unavailable' 로 보인다.
     reply_to_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     # 비트(chat/messages22.py MSG_FLAG_*): SILENT 1 · SUPPRESS_EMBEDS 2(예약) · REPLY_PING 32
@@ -526,7 +526,7 @@ def _message_seq_fallback(mapper, connection, target) -> None:
     """시퀀스를 지원하지 않는 DB(SQLite 테스트)에서만 seq 를 max+1 로 채운다.
 
     PostgreSQL 은 MESSAGE_SEQ 가 INSERT 시 nextval 로 부여하므로 이 분기에 들어오지
-    않는다. 동시성 보장이 없는 폴백이라 운영에서는 절대 타면 안 된다.
+    않는다. 동시성 보장이 없는 폴백이라 실제 서비스에서는 절대 타면 안 된다.
     """
     if target.seq is None and not connection.dialect.supports_sequences:
         target.seq = connection.execute(

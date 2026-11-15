@@ -3,7 +3,7 @@
 - GET /api/dashboard/continue?tab=recent|favorites|shared : "이어서 하기" 한 목록(파일·문서·시트·위키·채널·게시글)
     recent    = 최근 연 파일(files_recent) + 내가 쓰거나 고친 위키 문서 + 안 읽은 채널
     favorites = 파일 즐겨찾기(file_stars) + 게시글 북마크(post_bookmarks)
-                ※ 모듈별 즐겨찾기 현황(2026-10-18): 파일 별표·게시글 북마크만 개인 즐겨찾기가 있다.
+                ※ 모듈별 즐겨찾기 현황: 파일 별표·게시글 북마크만 개인 즐겨찾기가 있다.
                   위키 is_pinned 는 공간 고정(모두에게), 채팅 고정은 채널 고정, 연락처 즐겨찾기는 사람이라 넣지 않는다.
     shared    = 나에게 공유된 파일·폴더(files shared-with-me — 사람·채널 공유)
   행: {key, kind, name, to, reason, actor?, n?, at, path?, is_dir?}

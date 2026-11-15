@@ -240,7 +240,7 @@ async def test_past_meetings_and_task_filters(env):
     assert e.value.status_code == 400
 
 
-# ── 연결 해제 = 연결이 만든 공유만 회수(R7) ──
+# ── 연결 해제 = 연결이 만든 공유만 회수 ──
 
 async def _channel_rows(env):
     from sqlalchemy import select

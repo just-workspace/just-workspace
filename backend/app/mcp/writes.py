@@ -705,7 +705,7 @@ async def _notify_pending(db, user: User, req: McpWriteRequest) -> None:
 
 
 async def emit_count(db, user_id: str, req: "McpWriteRequest | None" = None) -> None:
-    """대기 건수 실시간 이벤트 — 레일 배지·벨·토스트가 같은 값을 쓴다(시안 회신 B-1).
+    """대기 건수 실시간 이벤트 — 레일 배지·벨·토스트가 같은 값을 쓴다.
 
     바뀐 요청이 있으면 그 객체(to_dict)를 함께 실어, 토스트·카드가 다시 조회하지 않게 한다.
     """

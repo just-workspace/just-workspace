@@ -1,4 +1,4 @@
-"""빌트인 AI 채팅 — 대화/메시지 모델 (Phase C)."""
+"""빌트인 AI 채팅 — 대화/메시지 모델."""
 
 import uuid
 from datetime import datetime, timezone

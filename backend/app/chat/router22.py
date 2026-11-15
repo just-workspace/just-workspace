@@ -1,4 +1,4 @@
-"""chat22(디스코드 동등 P1) REST — 첨부 묶음·스레드(혼합형)·커스텀 이모지·검색·프로필·채팅 정책·보관 카테고리.
+"""chat22 REST — 첨부 묶음·스레드(혼합형)·커스텀 이모지·검색·프로필·채팅 정책·보관 카테고리.
 
 기존 router.py 엔드포인트는 그대로(하위 호환)이고,
 메시지 모양(reply_to·silent·attachments·thread)은 service._message_to_dict + msg22.enrich 가 모든 경로에 붙인다.

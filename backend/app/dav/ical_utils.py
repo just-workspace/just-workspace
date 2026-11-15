@@ -107,7 +107,7 @@ def _allday_date(dt: datetime) -> date:
 
     현행 규약은 그날 UTC 00:00 이라 그대로 그날이다. 예전 웹 화면이 기기 자정으로 저장한 행
     (서울 = 전날 15:00Z)을 `.date()` 로 자르면 휴대폰·외부 클라이언트에서 하루 앞당겨 보였다
-    (R7 B-1). UTC−12~+12 에서 정확하다.
+    UTC−12~+12 에서 정확하다.
     """
     return (_utc(dt) + _HALF_DAY).date()
 
@@ -146,7 +146,7 @@ def _rrule_value(ev) -> vRecur | None:
             # RFC 5545: DTSTART 가 DATE 면 UNTIL 도 DATE 여야 한다.
             # UNTIL 은 "그날 끝"(현행 T235959Z, 옛 서울 행 T145959Z)이라 따로 가장 가까운 자정으로
             # 반올림하면 다음날로 넘어가 회차가 하나 는다 → **마스터 시작과 같은 차이**만큼 옮긴 뒤
-            # 날짜를 취한다(현행 행은 차이 0 → 기존과 같음, R7 B-4 규칙).
+            # 날짜를 취한다(현행 행은 차이 0 → 기존과 같음).
             if isinstance(u, datetime):
                 u = (_utc(u) + _allday_shift(getattr(ev, "start", None))).date()
         elif isinstance(u, datetime):

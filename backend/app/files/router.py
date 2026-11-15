@@ -1527,7 +1527,7 @@ async def delete_share_link(
     return {"ok": True}
 
 
-# ─── 공유 링크 이메일로 보내기(R7) — 규칙은 app/files/share_email.py ───
+# ─── 공유 링크 이메일로 보내기 — 규칙은 app/files/share_email.py ───
 
 
 class ShareLinkEmailRequest(BaseModel):

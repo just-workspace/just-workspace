@@ -51,7 +51,7 @@ def _sha256(real) -> str:
     return h.hexdigest()
 
 
-# ── 파일 항목 모양(P1) ─────────────────────────────────────────
+# ── 파일 항목 모양 ─────────────────────────────────────────
 # 기본: path·type·size("2.6MB")·modified(사용자 시간대 "YYYY-MM-DD HH:MM")·snippet(있을 때만, ≤150자).
 # name·parent 는 path 와 겹치고 score 는 모델에게 쓸모가 적어 기본에서 뺐다 — `fields`/`verbose` 로 받는다.
 _EXTRA_FIELDS = ("name", "parent", "score", "size_bytes", "modified_iso")

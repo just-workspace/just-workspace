@@ -1,4 +1,4 @@
-"""H5 회귀 — 반복 일정 규칙으로 서버 펼침이 폭주하지 않는다."""
+"""회귀 — 반복 일정 규칙으로 서버 펼침이 폭주하지 않는다."""
 
 import time
 from datetime import datetime, timedelta, timezone

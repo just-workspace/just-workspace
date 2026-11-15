@@ -43,7 +43,7 @@ def client_ip(request: Request) -> str:
     - uvicorn 은 `--proxy-headers --forwarded-allow-ips 172.28.0.2`(ws-nginx 고정 IP)라
       그 연결에서 온 XFF 만 `request.client` 에 반영한다.
     그래서 여기서 X-Real-IP/XFF 를 다시 읽으면 LAN·도커망에서 nginx 를 거치지 않고 온
-    요청이 헤더로 IP 를 위조할 수 있게 된다(R7 A-3 R1·R2). slowapi 의
+    요청이 헤더로 IP 를 위조할 수 있게 된다. slowapi 의
     `get_remote_address` 도 같은 `request.client.host` 를 쓰므로 키가 자동으로 맞는다.
     """
     return request.client.host if request.client else ""
@@ -61,7 +61,7 @@ async def resolve_hostname(ip: str) -> str:
     """역방향 DNS(PTR)로 hostname. 실패/사설망이면 빈 문자열. 블로킹이라 executor+타임아웃.
 
     사설·루프백은 조회하지 않는다 — 컨테이너 /etc/hosts 의 `host.docker.internal`
-    같은 내부 별칭이 세션 목록에 기기 이름처럼 찍히던 것(R7 A-2).
+    같은 내부 별칭이 세션 목록에 기기 이름처럼 찍히는 것을 막는다.
     """
     if not ip or _is_non_public(ip):
         return ""

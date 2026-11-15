@@ -4,7 +4,7 @@
 음성 채널 멤버인지 확인하고 ws-audiorelay 가 검증할 짧은 HMAC 토큰(120 s)과 접속 정보를 돌려준다.
 릴레이가 꺼져 있거나(프로파일 미활성·시크릿 없음) 닿지 않으면 503 — 클라이언트는 음악 티어로 내려간다.
 
-presence 는 Phase 1 과 같은 흐름(app/chat/voice.py)을 그대로 쓴다: 무손실 클라이언트도 LiveKit 방에 들어가
+presence 는 음성 채널과 같은 흐름(app/chat/voice.py)을 그대로 쓴다: 무손실 클라이언트도 LiveKit 방에 들어가
 (Opus 호환 스트림 publish) ``/voice/state`` 로 tier='lossless' 를 알린다. 여기서 받는 ``identity`` 는 그 LiveKit
 identity 로, 내 것인지(voice._owned_identity) 확인한 뒤 토큰 claims 에 실어 릴레이 피어 ↔ LiveKit 참가자를 짝지을 수 있게 한다.
 

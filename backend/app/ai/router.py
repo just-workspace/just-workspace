@@ -1,4 +1,4 @@
-"""빌트인 AI 채팅 API (Phase C: 설정/거버넌스/동의/대화 CRUD + 채팅 SSE).
+"""빌트인 AI 채팅 API (설정/거버넌스/동의/대화 CRUD + 채팅 SSE).
 
 설정 엔드포인트(/config·/governance·/probe-models·/status)는 모듈 게이트 없이
 admin 권한만으로 접근 가능 — 모듈 활성화 전에도 제공자를 구성할 수 있어야 함(닭-달걀 방지).
@@ -334,7 +334,7 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
                 except ai_memory.MemoryError as me:
                     results_lines.append(f"[{ai_memory.TOOL_NAME}]\n" + json.dumps(
                         {"saved": False, "error": me.message}, ensure_ascii=False))
-            # 한 차례에 부른 도구들 — 같은 도구는 한 단계로 묶는다(처음 부른 순서 유지, 시안 "파일 3개 읽기")
+            # 한 차례에 부른 도구들 — 같은 도구는 한 단계로 묶는다(처음 부른 순서 유지 — 예: "파일 3개 읽기")
             groups: list = []
             for tc in pending:
                 name = tc.get("name", "")
@@ -1116,7 +1116,7 @@ async def delete_conversation(conv_id: str, user: User = Depends(get_current_use
     return None
 
 
-# ─── 채팅 SSE (C2): provider 스트리밍 + MCP 거버넌스 관문 경유 도구 루프 ───
+# ─── 채팅 SSE: provider 스트리밍 + MCP 거버넌스 관문 경유 도구 루프 ───
 @router.post("/conversations/{conv_id}/chat")
 @require_module("ai")
 async def chat_send(
@@ -1573,7 +1573,7 @@ async def switch_version(msg_id: str, n: int, user: User = Depends(get_current_u
                          db: AsyncSession = Depends(get_db)):
     """버전 전환 — msg_id 와 같은 질문의 n번째(1부터) 버전을 보이게 하고 지금 가지의 메시지를 돌려준다.
 
-    (시안 노트 d2 는 GET …/versions/{n} 이었으나 상태를 바꾸는 호출이라 POST 로 둔다.)
+    (상태를 바꾸는 호출이라 GET 이 아니라 POST 다.)
     """
     m, conv = await _owned_user_message(db, user, msg_id)
     rows = await branches.load_rows(db, conv.id)
@@ -2042,7 +2042,7 @@ async def remove_project_file(project_id: str, file_id: str, user: User = Depend
     return await _project_out(db, user, p, "owner", with_files=True)
 
 
-# 시안 J·K 보강 엔드포인트(공유 점검·첨부 원본·모델 선택지) — 따로 둔 라우터를 같은 /api/ai 아래에 붙인다
+# 보강 엔드포인트(공유 점검·첨부 원본·모델 선택지) — 따로 둔 라우터를 같은 /api/ai 아래에 붙인다
 from app.ai.extras_router import router as _extras_router  # noqa: E402
 
 router.include_router(_extras_router)

@@ -19,7 +19,7 @@ from app.db.models import (
 # 직렬화 형식이 바뀌면 올린다 — ETag·ctag 가 한 번 전부 바뀌어 휴대폰이 다시 받아 간다.
 # RRULE·EXDATE·RECURRENCE-ID·ATTENDEE·VTIMEZONE(캘린더), TITLE·CATEGORIES·PHOTO(연락처) 추가.
 # 이게 없으면 이미 동기화된 반복 일정은 수정되기 전까지 휴대폰에서 계속 한 번짜리로 남는다.
-# p5: 종일 DTSTART·DTEND·EXDATE·RECURRENCE-ID·UNTIL 을 가장 가까운 UTC 자정 기준으로(옛 기기 자정 행이 하루 앞당겨 보이던 것, R7 B1).
+# p5: 종일 DTSTART·DTEND·EXDATE·RECURRENCE-ID·UNTIL 을 가장 가까운 UTC 자정 기준으로(옛 기기 자정 행이 하루 앞당겨 보이던 것).
 SERIAL_VERSION = "p5"
 
 

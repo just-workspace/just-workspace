@@ -172,7 +172,7 @@ async def notes_list(
             return {"spaces": [], "note": "no accessible spaces"}
         space_out = [{"id": s["id"], "name": s.get("name", s["id"])} for s in spaces]
         # Gather page metadata across spaces. Per-space failures are surfaced in
-        # the response (spaces_failed), never silently swallowed (§B1 principle).
+        # the response (spaces_failed), never silently swallowed.
         pages: list[dict] = []
         failed = 0
         for sp in spaces:

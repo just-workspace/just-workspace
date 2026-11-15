@@ -1,4 +1,4 @@
-"""H6 회귀 — 레이트리밋 카운터는 워커 공유 저장소(Redis), 기본 한도가 실제로 붙는다."""
+"""회귀 — 레이트리밋 카운터는 워커 공유 저장소(Redis), 기본 한도가 실제로 붙는다."""
 
 import pytest
 from httpx import ASGITransport, AsyncClient

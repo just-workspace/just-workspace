@@ -139,7 +139,7 @@ async def mentionable_people(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """"@" 후보(시안 "이 파일을 볼 수 있는 사람") — 이름·아이디·이메일 앞부분 검색, 나 제외.
+    """"@" 후보("이 파일을 볼 수 있는 사람") — 이름·아이디·이메일 앞부분 검색, 나 제외.
     role = 그 사람의 이 파일 권한(볼 수 없으면 null — 언급해도 알림이 가지 않는다). 볼 수 있는 사람이 먼저."""
     a = await _target(db, user, path, "comment")
     term = (q or "").strip().lstrip("@").lower()

@@ -1,4 +1,4 @@
-"""승인 대기함·채팅 승인 카드 API — /api/approvals (시안 A·B).
+"""승인 대기함·채팅 승인 카드 API — /api/approvals.
 
 같은 요청 객체(app.mcp.writes.to_dict)를 채팅 카드와 승인 대기함이 함께 쓴다.
 

@@ -1,4 +1,4 @@
-"""chat22(디스코드 동등 P1) 조회 — 원문 점프(around)·채널 스레드 목록·검색 필터.
+"""chat22 조회 — 원문 점프(around)·채널 스레드 목록·검색 필터.
 
 직렬화는 service._message_to_dict + msg22.enrich 그대로(목록 단위 한 번에 — N+1 없음).
 """

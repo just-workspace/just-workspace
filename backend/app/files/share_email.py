@@ -1,4 +1,4 @@
-"""공유 링크를 이메일로 보내기(R7).
+"""공유 링크를 이메일로 보내기.
 
 발송은 워크스페이스의 시스템 메일 경로(app.admin.settings.get_smtp_config + send_system_email —
 비밀번호 재설정·가입 초대 메일과 같은 것)를 그대로 쓴다. 새 SMTP 설정은 없다.

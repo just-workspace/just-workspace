@@ -321,7 +321,7 @@ def test_all_day_rrule_until_is_date():
 
 
 def test_legacy_device_midnight_all_day_not_shifted_back():
-    """R7 B1 — 예전 웹 화면이 기기 자정(서울 = 전날 15:00Z)으로 저장한 종일 일정.
+    """예전 웹 화면이 기기 자정(서울 = 전날 15:00Z)으로 저장한 종일 일정.
 
     `.date()` 로 자르면 휴대폰에서 하루 앞당겨 보였다. 마스터·EXDATE·RECURRENCE-ID 는 가장 가까운
     UTC 자정으로, UNTIL(그날 끝 14:59:59Z)은 마스터와 같은 +9h 만큼 옮긴 날짜여야 한다

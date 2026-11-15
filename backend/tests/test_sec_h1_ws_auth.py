@@ -1,4 +1,4 @@
-"""H1 회귀 — WebSocket(채팅·위키 협업) 인증이 REST 와 같은 세션 검증을 거친다.
+"""회귀 — WebSocket(채팅·위키 협업) 인증이 REST 와 같은 세션 검증을 거친다.
 
 - 2단계 인증 전 임시 토큰(purpose=2fa) 거부
 - 강제 로그아웃(token_version 증가)·폐기된 세션(sid) 거부

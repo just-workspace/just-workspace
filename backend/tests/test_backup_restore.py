@@ -1,6 +1,6 @@
 """백업 형식·계획·실행·복원 — docker 없이(가짜 실행기 tests/backup_fakes.py).
 
-실제 pg_dump/pg_restore 왕복은 검수 서버에서 따로 돈다(docs/data-safety.md 의 "검증").
+실제 pg_dump/pg_restore 왕복은 여기서 돌지 않는다(docs/data-safety.md 의 "검증").
 """
 
 import io

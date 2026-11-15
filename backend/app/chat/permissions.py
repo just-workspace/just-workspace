@@ -67,7 +67,7 @@ MANAGE_EXPRESSIONS = 1 << 15     # 이모지·스티커
 MANAGE_WEBHOOKS = 1 << 16
 CREATE_INVITE = 1 << 17          # 채널에 사람 추가
 KICK_MEMBERS = 1 << 18           # 채널에서 내보내기
-MODERATE_MEMBERS = 1 << 19       # 타임아웃(P2)
+MODERATE_MEMBERS = 1 << 19       # 타임아웃
 VIEW_AUDIT_LOG = 1 << 20
 BYPASS_SLOWMODE = 1 << 21
 SEND_POLLS = 1 << 22
@@ -135,7 +135,7 @@ _SEND_DEPENDENT = ATTACH_FILES | EMBED_LINKS | MENTION_EVERYONE | SEND_POLLS
 _VOICE_DEPENDENT = (SPEAK | STREAM | USE_VAD | PRIORITY_SPEAKER | MUTE_MEMBERS | DEAFEN_MEMBERS | MOVE_MEMBERS
                     | USE_SOUNDBOARD | REQUEST_TO_SPEAK)
 
-# 역할 색 = 우리 토큰 팔레트의 키(hex 금지, 대비 4.5:1 은 토큰이 보장). 시안이 팔레트를 늘리면 여기에 더한다.
+# 역할 색 = 우리 토큰 팔레트의 키(hex 금지, 대비 4.5:1 은 토큰이 보장). 팔레트가 늘면 여기에 더한다.
 ROLE_COLOR_TOKENS = (
     "primary", "accent", "success", "warning", "danger", "destructive", "muted-foreground", "foreground",
 )

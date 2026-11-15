@@ -1,6 +1,6 @@
 """CSP 위반 리포트 수집 엔드포인트.
 
-CSP 를 처음부터 강제(enforce)로 켜면 앱이 조용히 깨진다 — Nuxt 하이드레이션
+CSP 를 처음부터 강제(enforce)로 켜면 앱이 조용히 깨진다 — 프런트엔드
 인라인 스크립트, Tailwind 인라인 스타일, Collabora/OnlyOffice iframe, LiveKit
 WebSocket 이 전부 정책에 걸릴 수 있고, 어디가 걸리는지는 실제 트래픽을 봐야 안다.
 

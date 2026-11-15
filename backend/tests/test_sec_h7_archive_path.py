@@ -1,4 +1,4 @@
-"""H7 회귀 — 메일 보관(.eml·첨부) 경로는 사용자 본인 보관 폴더를 벗어나지 못한다(POP3 UIDL 조작)."""
+"""회귀 — 메일 보관(.eml·첨부) 경로는 사용자 본인 보관 폴더를 벗어나지 못한다(POP3 UIDL 조작)."""
 
 from email.message import EmailMessage
 from pathlib import Path

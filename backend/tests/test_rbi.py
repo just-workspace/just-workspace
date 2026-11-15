@@ -494,7 +494,7 @@ async def test_module_disabled_blocks_user_api(db_session, fake_docker, monkeypa
     assert r.status_code == 403
 
 
-# ── 미러 모드(P1) ──
+# ── 미러 모드 ──
 
 def test_validate_mode_and_agent_policy():
     assert pol.validate_mode(None) == "pixel" and pol.validate_mode(" Mirror ") == "mirror"
@@ -512,7 +512,7 @@ def test_mirror_container_env_carries_policy_allowlist_idle_and_devtools_1():
     assert json.loads(env["MIRROR_ALLOW"]) == ["192.168.10.70:8080", "10.0.0.9"]
     assert env["MIRROR_IDLE_SECONDS"] == "1200"
     chrome = json.loads(env["RBI_POLICY_JSON"])
-    # P0 함정: 정책 2(금지)면 CDP 가 페이지에 못 붙는다 → 미러는 1. URL 허용목록·다운로드 차단은 픽셀과 같다
+    # 정책 2(금지)면 CDP 가 페이지에 못 붙는다 → 미러는 1. URL 허용목록·다운로드 차단은 픽셀과 같다
     assert chrome["DeveloperToolsAvailability"] == 1 and chrome["RemoteDebuggingAllowed"] is True
     assert chrome["URLBlocklist"] == ["*"] and chrome["URLAllowlist"][:2] == ["192.168.10.70:8080", "10.0.0.9"]
     assert chrome["DownloadRestrictions"] == 3 and chrome["AllowFileSelectionDialogs"] is False

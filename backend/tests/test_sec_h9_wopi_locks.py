@@ -1,4 +1,4 @@
-"""H9 회귀 — WOPI 잠금·file_id 에 소유자가 들어가 사용자끼리 충돌·탈취가 안 된다."""
+"""회귀 — WOPI 잠금·file_id 에 소유자가 들어가 사용자끼리 충돌·탈취가 안 된다."""
 
 import pytest
 from fastapi import HTTPException

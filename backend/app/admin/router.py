@@ -58,7 +58,7 @@ def _client_ip(request: Request | None) -> str | None:
     """감사 로그용 클라이언트 IP — `auth.sessions.client_ip` 와 같은 규칙.
 
     예전엔 X-Forwarded-For 첫 값을 믿었다. RP 는 XFF 를 덮어쓰지 않고 이어 붙이므로
-    인터넷에서 보낸 위조값이 첫 값으로 남아 감사 로그에 그대로 찍혔다(R7 A-3 R2).
+    인터넷에서 보낸 위조값이 첫 값으로 남아 감사 로그에 그대로 찍혔다.
     """
     if request is None:
         return None

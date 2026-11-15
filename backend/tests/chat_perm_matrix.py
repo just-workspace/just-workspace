@@ -255,7 +255,7 @@ async def run_case(name: str, ch: str, actor: str, tmp_dir: str, *, seeded: bool
         await eng.dispose()
 
 
-# ─── 지금 동작(2026-10-23, main 3eab225) — 손으로 적은 표 ───
+# ─── 지금 동작 — 손으로 적은 표 ───
 # 열: owner·admin·member·none(비멤버). 값: 200 = 됨, 그 외 = HTTP 코드.
 # 전역 관리자(is_admin)는 채팅 안에서 아무 특권이 없다 — gad 는 none, gam 은 member 열을 따른다.
 OK4 = {"owner": 200, "admin": 200, "member": 200, "none": 403}     # "멤버면 된다"

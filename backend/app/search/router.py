@@ -251,7 +251,7 @@ async def global_search(
                 "id": page.id,
                 "title": page.title,
                 "snippet": _snippet(page.content, q),
-                # 위키 화면 주소는 /wiki?space=<id>&page=<id>(pages/wiki.vue). 예전 /wiki/{slug}/{slug} 는 없는 경로라 404.
+                # 위키 화면 주소는 /wiki?space=<id>&page=<id>. 예전 /wiki/{slug}/{slug} 는 없는 경로라 404.
                 "url": f"/wiki?space={space.id}&page={page.id}",
             })
 

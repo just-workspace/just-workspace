@@ -1,4 +1,4 @@
-"""R8 — 접속 IP 신뢰 경계(R7 계획서 A1·A2).
+"""접속 IP 신뢰 경계.
 
 배치 경로: 클라이언트 → 앞단 리버스 프록시(RP, X-Real-IP 덮어씀) → ws-nginx(172.28.0.2, realip 은 RP 만 신뢰,
 뒤로는 X-Real-IP·XFF 를 덮어씀) → uvicorn(`--proxy-headers --forwarded-allow-ips 172.28.0.2`) → 앱.
@@ -42,7 +42,7 @@ def test_client_ip_ignores_spoofed_headers():
 
 
 def test_audit_ip_ignores_xff_first_value():
-    """예전엔 XFF 첫 값을 믿어 인터넷에서 감사 로그 IP 를 위조할 수 있었다(R7 A-3 R2)."""
+    """예전엔 XFF 첫 값을 믿어 인터넷에서 감사 로그 IP 를 위조할 수 있었다."""
     r = _req("203.0.113.9", {"X-Forwarded-For": "6.6.6.6, 203.0.113.9"})
     assert admin_router._client_ip(r) == "203.0.113.9"
     assert admin_router._client_ip(None) is None

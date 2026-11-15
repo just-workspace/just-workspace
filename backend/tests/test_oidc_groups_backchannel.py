@@ -1,4 +1,4 @@
-"""OIDC 제공자 — groups 스코프·클레임 + Back-Channel Logout 1.0 (D4, netlab).
+"""OIDC 제공자 — groups 스코프·클레임 + Back-Channel Logout 1.0.
 
 실제 FastAPI 앱에 authorize → token → userinfo 를 태우고, 로그아웃 경로가 RP 로
 logout_token 을 보내는지 본다. Redis 는 가짜, RP 는 httpx.MockTransport.

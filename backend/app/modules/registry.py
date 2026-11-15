@@ -148,9 +148,9 @@ BUILTIN_MODULES: list[dict[str, Any]] = [
     },
 ]
 
-# ─── Nav 카테고리 (Dashboard Dark 시안 그룹) ───
+# ─── Nav 카테고리 ───
 # 사이드바가 모듈을 이 카테고리로 묶어 그룹 렌더링한다. 프론트에서 라벨/순서 매핑.
-# 시안 그룹: 커뮤니케이션 / 협업 / 콘텐츠 / AI 스튜디오 / 개발·시스템.
+# 그룹: 커뮤니케이션 / 협업 / 콘텐츠 / AI 스튜디오 / 개발·시스템.
 _CATEGORY_BY_ID: dict[str, str] = {
     "mail": "communication",
     "chat": "communication",

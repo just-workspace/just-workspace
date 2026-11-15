@@ -5,7 +5,7 @@ This is the primary remote transport. The legacy SSE transport lives in
 ``sse_server.py`` and shares the auth / user-binding / RBAC logic defined here.
 
 Auth: every request carries an OAuth **Bearer** access token minted
-by the Phase-1 provider. We verify signature, ``exp``, ``aud`` (must equal this
+by the built-in OAuth provider. We verify signature, ``exp``, ``aud`` (must equal this
 endpoint's resource URL) and ``scope`` (must contain the endpoint's required
 scope). The real user is resolved from the token ``sub`` and bound to every tool
 call — there is no ``MCP_ADMIN_USERNAME`` fallback. Unauthenticated/invalid
@@ -16,7 +16,7 @@ Tool exposure: both ``tools/list`` and ``tools/call`` are filtered by the
 module on/off state (``app.modules.registry``) and per-user RBAC grants
 (``app.groups.service``) for the resolved user.
 
-The endpoint is modelled as a resource-aware :class:`MCPEndpoint` so Phase 3 can
+The endpoint is modelled as a resource-aware :class:`MCPEndpoint` so the server can
 add physically-separate ``/api/mcp/read`` and ``/api/mcp/write`` resources
 (distinct ``aud``) without touching the auth core.
 """
@@ -57,7 +57,7 @@ from app.groups import service as groups_service
 from app.modules.registry import _module_key, is_module_enabled
 from app.mcp.server import WORKSPACE_TOOLS, execute_tool, fail
 from app.mcp import pat_store, revocation
-# Reuse the Phase-1 token signing algorithm so this validator matches the
+# Reuse the OAuth provider token signing algorithm so this validator matches the
 # provider's ``_create_access_token`` exactly (same key = settings.secret_key).
 from app.auth.oauth_provider import JWT_ALGORITHM
 
@@ -100,7 +100,7 @@ class McpContext:
 _mcp_ctx: ContextVar[McpContext | None] = ContextVar("mcp_ctx", default=None)
 
 
-# ── Endpoint description (resource-aware; Phase 3 adds read/write) ─
+# ── Endpoint description (resource-aware; separate read/write resources) ─
 @dataclass
 class MCPEndpoint:
     path: str            # ASGI route path
@@ -122,9 +122,9 @@ def _mcp_base() -> str:
     return (settings.mcp_public_url or settings.app_url).rstrip("/")
 
 
-# Phase 2 uses a single, neutral ``/api/mcp`` resource whose protected-resource
-# metadata is the Phase-1 root document (``resource`` = ``<app>/api/mcp``).
-# Phase 3 (read side) narrows this base endpoint to READ tools only — its
+# The base endpoint is a single, neutral ``/api/mcp`` resource whose protected-resource
+# metadata is the root document (``resource`` = ``<app>/api/mcp``).
+# This base endpoint exposes READ tools only — its
 # ``required_scope`` is ``mcp:read`` and that value doubles as the tool-scope
 # filter, so no ``mcp:write`` tool is reachable via MCP anywhere until the
 # (deferred) write endpoint is built.
@@ -137,8 +137,8 @@ PHASE2_ENDPOINT = MCPEndpoint(
 )
 
 
-# Phase 3 (read side): a physically-separate read resource with its own ``aud``
-# (``<app>/api/mcp/read``) and its own Phase-1 protected-resource metadata. It
+# Read side: a physically-separate read resource with its own ``aud``
+# (``<app>/api/mcp/read``) and its own protected-resource metadata. It
 # exposes ONLY ``mcp:read`` tools. This is the URL registered on claude.ai.
 #
 # The WRITE resource (``/api/mcp/write``, ``mcp:write``, approval-gated) is
@@ -427,7 +427,7 @@ session_manager = StreamableHTTPSessionManager(
 async def _write_not_found(scope: Scope, receive: Receive, send: Send) -> None:
     """ASGI app for the (unimplemented) write endpoint.
 
-    Returns **404**, not the base mount's 401 auth challenge (§B4). A 401 would
+    Returns **404**, not the base mount's 401 auth challenge. A 401 would
     tell the client "authenticate and you may enter", so it starts an OAuth flow
     and only breaks later at an unrelated point. 404 says the resource simply
     isn't there yet, which is accurate until the write endpoint ships.
@@ -440,7 +440,7 @@ async def _write_not_found_route(request: Request) -> Response:
     the mount root WITH a trailing slash, so the bare ``/api/mcp/write`` (what a
     client actually POSTs) would fall through to the base ``/api/mcp`` mount and
     get a 401. This request-response Route covers the exact path so every
-    ``/api/mcp/write`` variant returns 404 (§B4)."""
+    ``/api/mcp/write`` variant returns 404."""
     return JSONResponse({"error": "not_found"}, status_code=404)
 
 
@@ -502,7 +502,7 @@ async def mount_mcp_http(app) -> None:
     #   2. the (unimplemented) ``/api/mcp/write`` explicit 404 BEFORE the base
     #      ``/api/mcp`` mount — otherwise the base mount catches it and answers a
     #      401 auth challenge, misleading clients into an OAuth flow that breaks
-    #      later (§B4). The real write endpoint/approval gate is NOT built here.
+    #      later. The real write endpoint/approval gate is NOT built here.
     handler = _make_asgi_handler(READ_ENDPOINT)
     app.router.routes.append(Mount(READ_ENDPOINT.path, app=handler))
     print(

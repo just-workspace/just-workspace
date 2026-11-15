@@ -434,7 +434,7 @@ async def _run_chat_roles_migration(engine):
 
 
 async def _run_chat22_migration(engine):
-    """chat22(디스코드 동등 P1) — auto-migrate 가 못 하는 것만. 전부 idempotent.
+    """chat22 — auto-migrate 가 못 하는 것만. 전부 idempotent.
 
     - reactions.emoji VARCHAR(10) → VARCHAR(64): 커스텀 이모지 `:name:`. 이미 64 이상이면 건너뛴다
       (ALTER 가 짧은 ACCESS EXCLUSIVE 잠금 — varchar 넓히기는 테이블 재작성이 없어 무중단).

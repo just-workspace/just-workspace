@@ -1,4 +1,4 @@
-"""chat22(디스코드 동등 P1) 메시지 모양 — 인라인 답장·@silent·첨부 여러 개·스레드 메타.
+"""chat22 메시지 모양 — 인라인 답장·@silent·첨부 여러 개·스레드 메타.
 
 service._message_to_dict 가 DB 없이 채울 수 있는 것(reply_to_id·reply_ping·silent·attachments·명시 시작 스레드)은
 fields_of() 로, DB 가 필요한 것(reply_to 원문 요약·답글 수가 있는 스레드 메타)은 enrich() 로 **목록 단위 한 번에** 채운다

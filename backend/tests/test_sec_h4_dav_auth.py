@@ -1,4 +1,4 @@
-"""H4 회귀 — CalDAV/CardDAV 는 앱 비밀번호만, 실패는 로그인 잠금에 집계."""
+"""회귀 — CalDAV/CardDAV 는 앱 비밀번호만, 실패는 로그인 잠금에 집계."""
 
 import base64
 

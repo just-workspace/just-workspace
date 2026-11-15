@@ -18,4 +18,28 @@ fi
 # 격리 브라우저 동적 허용 목록(rbi-allow 볼륨) — 백엔드만 쓴다. 이미 있던 볼륨이 루트 소유여도 쓸 수 있게(사이드카는 읽기 전용)
 if [ -d /run/rbi-allow ]; then chown appuser /run/rbi-allow 2>/dev/null || true; fi
 
+# 앱 서버를 띄울 때만: 비밀값 검사 → 워커 수 결정
+if [ "$1" = "uvicorn" ]; then
+    # 약한·기본 비밀값이면 여기서 멈춘다(워커가 뜨기 전에 한 번만, 변수마다 사유 한 줄 — app/security_defaults.py).
+    # 채우는 법: python -m app.cli gen-secrets --merge .env --in-place
+    gosu appuser python -m app.cli check-secrets || exit 1
+
+    # 워커 수 — 명령에 --workers 가 없으면 BACKEND_WORKERS, 그것도 없으면 CPU 수 기준 min(8, max(2, nproc)).
+    case " $* " in
+        *" --workers "*) ;;
+        *)
+            W="${BACKEND_WORKERS:-}"
+            case "$W" in
+                ''|*[!0-9]*|0)
+                    N="$(nproc 2>/dev/null || echo 2)"
+                    W="$N"
+                    if [ "$W" -lt 2 ]; then W=2; fi
+                    if [ "$W" -gt 8 ]; then W=8; fi
+                    ;;
+            esac
+            set -- "$@" --workers "$W"
+            ;;
+    esac
+fi
+
 exec gosu appuser "$@"

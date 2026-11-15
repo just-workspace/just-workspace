@@ -19,10 +19,10 @@ class Settings(BaseSettings):
     # File storage
     storage_root: str = "/storage"
     upload_max_size_mb: int = 5120
-    # 번들 SPA 앱(Tauri/Capacitor)의 로컬 출처를 CORS 허용목록에 넣을지.
-    # Capacitor 안드로이드는 실제로 http://localhost 에서 구동되므로 끄면 모바일 앱이 깨진다.
-    # 데스크탑/모바일 앱을 배포하지 않는 설치본은 false 로 두는 것이 안전하다.
-    allow_native_app_origins: bool = True
+    # 번들 빌드 모바일 앱(화면을 앱 안에 넣는 빌드)의 웹뷰 출처(https://localhost · capacitor://localhost)를
+    # CORS·CSRF·WebSocket 허용 목록에 넣을지. 기본 앱은 서버 화면을 그대로 열어 같은 출처라 필요 없다 —
+    # 번들 빌드 앱을 배포할 때만 true 로 켠다(app/auth/ws_auth.py 의 NATIVE_APP_ORIGINS).
+    allow_native_app_origins: bool = False
     # 세션 쿠키로 인증된 상태 변경 요청(POST/PUT/PATCH/DELETE)의 Origin 검사(app/middleware/origin_check.py).
     # 같은 등록 도메인의 다른 하위 도메인에서 오는 요청은 SameSite 쿠키로 못 막아서 둔다. 문제가 생기면 false 로 끈다.
     csrf_origin_check: bool = True
@@ -135,9 +135,6 @@ class Settings(BaseSettings):
     # 편집 세션 하나를 덮으면 충분하다. 24시간짜리 토큰은 URL 이 새어 나갔을 때
     # 하루 동안 남의 파일을 읽고 쓸 수 있다는 뜻이라 너무 길었다.
     wopi_token_ttl: int = 7200  # 2 hours
-
-    # Demo mode (password-free login, auto-session)
-    demo_mode: bool = False
 
     # ── 격리 브라우저(RBI, app/rbi) ──
     # 세션마다 KasmVNC 브라우저 컨테이너를 하나 띄운다(docker.sock). 네트워크·브리지 이름은

@@ -153,21 +153,25 @@ async def _backup_loop():
 async def lifespan(app: FastAPI):
     from app.chat.redis_client import get_redis, close_redis
 
-    # Validate secret_key is not the default
-    if settings.secret_key == "CHANGE_ME" and not settings.debug:
-        raise RuntimeError(
-            "FATAL: secret_key is set to the default 'CHANGE_ME'. "
-            "Set a secure SECRET_KEY in .env before running in production."
-        )
+    # 약한·기본 비밀값으로는 뜨지 않는다(app/security_defaults.py — 변수마다 사유 한 줄, 값은 찍지 않는다).
+    # 컨테이너는 entrypoint 가 같은 검사를 먼저 돌려 워커가 뜨기 전에 멈춘다. 여기는 그 밖의 실행 경로용.
+    from app import security_defaults
+    security_defaults.enforce()
 
     await init_db()
 
-    # Auto-seed admin if ADMIN_USERNAME + ADMIN_PASSWORD are set
+    # 첫 기동 관리자 시드 — 사용자가 한 명도 없을 때만. 그 뒤로는 env 에 값이 남아 있어도 아무것도 하지 않고,
+    # 같은 이름의 일반 계정을 관리자로 올리지도 않는다(경고만). 워커 여럿이 동시에 뜨므로 한 워커만.
     admin_user = os.environ.get("ADMIN_USERNAME")
     admin_pass = os.environ.get("ADMIN_PASSWORD")
     if admin_user and admin_pass:
         from app.cli import seed_admin
-        await seed_admin(admin_user, admin_pass)
+        from app.jobs.lock import try_acquire
+        if await try_acquire("startup:seed-admin", ttl=20):
+            try:
+                await seed_admin(admin_user, admin_pass, only_if_empty=True)
+            except Exception as e:  # noqa: BLE001 — 시드 실패로 서비스 전체가 못 뜨면 안 된다
+                print(f"[SEED] 관리자 시드 실패: {type(e).__name__}")
 
     # Load module states from DB
     from app.modules.registry import load_module_states
@@ -243,19 +247,15 @@ async def lifespan(app: FastAPI):
     await close_redis()
 
 
-# CORS — same-origin(웹/SSR) + 번들 SPA 앱 출처(Tauri/Capacitor, Bearer 토큰 인증)
+# CORS — 기본은 공개 주소(APP_URL) 하나. allow_credentials=True 와 함께 쓰이므로 허용목록이 곧 신뢰 경계다.
 _cors_origins = [settings.app_url]
 if settings.debug:
-    _cors_origins += ["http://localhost:3000", "http://localhost:8000"]
-# 네이티브 앱 셸 출처(데스크탑/모바일 번들 SPA가 cross-origin으로 /api 호출).
-# allow_credentials=True 와 함께 쓰이므로 허용목록이 곧 신뢰 경계다.
-# http(s)://localhost 는 Capacitor 안드로이드의 실제 출처라 뺄 수 없지만,
-# 앱을 배포하지 않는 설치본에서는 ALLOW_NATIVE_APP_ORIGINS=false 로 좁힐 수 있다.
+    _cors_origins += ["http://localhost:3000", "http://localhost:8000"]   # 개발 서버(DEBUG 일 때만)
+# 번들 빌드 모바일 앱(화면을 앱 안에 넣고 API 만 서버로 부르는 빌드)의 출처 — ALLOW_NATIVE_APP_ORIGINS=true 일 때만.
+# 기본 앱(데스크톱·모바일)은 서버 화면을 그대로 열어 같은 출처라 필요 없다. 목록과 근거: app/auth/ws_auth.py
 if settings.allow_native_app_origins:
-    _cors_origins += [
-        "tauri://localhost", "http://tauri.localhost",          # Tauri (mac/linux, windows)
-        "capacitor://localhost", "http://localhost", "https://localhost",  # Capacitor (ios/android)
-    ]
+    from app.auth.ws_auth import NATIVE_APP_ORIGINS
+    _cors_origins += list(NATIVE_APP_ORIGINS)
 
 
 async def _validation_handler(request: Request, exc: RequestValidationError):
@@ -311,7 +311,6 @@ async def well_known_workspace(db: AsyncSession = Depends(get_db)):
         "name": site_name,
         "logo": f"{settings.app_url}{logo}" if logo and not logo.startswith("http") else logo,
         "domain": settings.domain,
-        "version": APP_VERSION,
     }
 
 
@@ -404,8 +403,24 @@ def _public_netlab_url() -> str:
     return url if url.startswith("https://") else ""
 
 
+async def _signed_in(request: Request, db: AsyncSession) -> bool:
+    """이 요청이 로그인한 사용자의 것인가(세션 쿠키·Bearer). 아니면 조용히 False."""
+    if not request.cookies.get("ws_session") and not request.headers.get("authorization"):
+        return False
+    try:
+        from app.auth.deps import get_current_user
+        return await get_current_user(request, request.cookies.get("ws_session"), db) is not None
+    except Exception:  # noqa: BLE001 — 만료·위조·저장소 장애 모두 "로그인 안 됨"
+        return False
+
+
 @_site.get("/api/health")
-async def health_check(db: AsyncSession = Depends(get_db)):
+async def health_check(request: Request, db: AsyncSession = Depends(get_db)):
+    """상태 확인 + 로그인 화면이 그리는 데 필요한 사이트 설정(브랜딩·가입 방식·공지·구역).
+
+    인증 없이 열려 있으므로 **서버 버전은 싣지 않는다** — 로그인한 요청에만 붙인다.
+    (클라이언트 호환 확인용 버전은 /api/platform/capabilities 가 따로 낸다.)
+    """
     from app.admin.settings import get_settings_by_prefix
 
     db_vals = await get_settings_by_prefix(db, "branding.")
@@ -418,10 +433,9 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         for k, v in (await get_settings_by_prefix(db, "appcfg.")).items()
     }
 
-    return {
+    out = {
         "status": "ok",
         "service": db_vals.get("branding.site_name") or settings.app_name,
-        "version": APP_VERSION,
         "domain": settings.domain,
         "app_url": settings.app_url,
         "gitea_url": settings.gitea_external_url or f"{settings.app_url}/git/",
@@ -433,13 +447,15 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         "announcement": gen_vals.get("general.announcement") or "",
         "announcement_type": gen_vals.get("general.announcement_type") or "info",
         "git_visibility": gen_vals.get("general.git_visibility") or "private",
-        "demo_mode": settings.demo_mode,
         # NetLab(별도 출처 랩) 주소 — 레일 '도구' 항목·대시보드 카드가 새 탭으로 연다. https 만(아니면 빈값 → 둘 다 숨김)
         "netlab_url": _public_netlab_url(),
         # 설치된 구역 id(JW_ZONES, 비면 전부) — 화면이 없는 구역의 메뉴·진입점을 숨기는 데 쓴다
         "zones": zones.installed_zone_ids(),
         "config": appcfg,
     }
+    if await _signed_in(request, db):
+        out["version"] = APP_VERSION
+    return out
 
 
 @_site.get("/api/branding/favicon")

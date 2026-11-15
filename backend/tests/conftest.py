@@ -23,6 +23,9 @@ os.environ.update({
     "REDIS_URL": "redis://localhost:6379/0",
     # 레이트리밋 카운터는 테스트에서 메모리로(운영은 REDIS_URL — 워커 공유)
     "RATE_LIMIT_STORAGE_URI": "memory://",
+    # 테스트는 짧은 고정 비밀값을 쓴다 — 기동 검사(app/security_defaults.py)가 거부 대신 경고만 하게.
+    # 운영 기본은 "거부"다(이 변수가 없으면 약한 값으로는 뜨지 않는다).
+    "JW_ALLOW_INSECURE_DEFAULTS": "1",
 })
 
 import pytest

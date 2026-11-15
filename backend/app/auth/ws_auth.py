@@ -17,10 +17,13 @@ from starlette.websockets import WebSocket
 from app.config import get_settings
 from app.db.models import User
 
-_NATIVE_ORIGINS = (
-    "tauri://localhost", "http://tauri.localhost",
-    "capacitor://localhost", "http://localhost", "https://localhost",
-)
+# 번들 빌드 모바일 앱의 웹뷰 출처(ALLOW_NATIVE_APP_ORIGINS=true 일 때만 허용 — CORS·CSRF·WebSocket 이 같이 쓴다).
+#   https://localhost      안드로이드(apps/mobile/capacitor.config.ts 의 androidScheme: 'https')
+#   capacitor://localhost  iOS
+# http://localhost 는 넣지 않는다 — 앱은 https 스킴으로 뜨고, 넣으면 사용자 PC 의 아무 로컬 웹 서버가
+# 쿠키를 실은 요청을 보낼 수 있게 된다.
+NATIVE_APP_ORIGINS = ("https://localhost", "capacitor://localhost")
+_NATIVE_ORIGINS = NATIVE_APP_ORIGINS
 
 
 WS_AUTH_PROTOCOL = "jw.bearer"

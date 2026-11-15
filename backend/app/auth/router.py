@@ -163,12 +163,8 @@ def _token_digest(token: str) -> str:
 
 
 def _token_match(column, token: str):
-    """저장형(해시) 우선, 과거에 평문으로 저장된 토큰도 함께 조회한다.
-
-    해시 저장 전환(2026-08-27) 시점에 이미 발송된 링크를 살려두기 위한 과도기
-    조치다. 미사용 평문 토큰이 전부 만료되면 평문 비교는 제거해도 된다.
-    """
-    return or_(column == _token_digest(token), column == token)
+    """저장형(해시)으로만 찾는다 — 토큰 원문은 DB 에 없다."""
+    return column == _token_digest(token)
 
 
 _dummy_hash: str | None = None
@@ -294,25 +290,6 @@ async def login_post(request: Request, body: LoginRequest, db: AsyncSession = De
     else:
         max_age = await get_session_max_age_default(db)
     return await _session_response(request, user, max_age=max_age)
-
-
-# ── POST /api/auth/demo-login ─────────────────────────────────
-
-
-@router.post("/demo-login")
-async def demo_login(request: Request, db: AsyncSession = Depends(get_db)):
-    """Auto-login as demo admin. Only available when DEMO_MODE=true."""
-    if not settings.demo_mode:
-        raise HTTPException(status_code=404, detail="Not found")
-    import os
-    admin_user = os.environ.get("ADMIN_USERNAME", "admin")
-    result = await db.execute(select(User).where(User.username == admin_user))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=500, detail="Demo user not found")
-    user.last_login_at = datetime.now(timezone.utc)
-    await db.commit()
-    return await _session_response(request, user, max_age=86400 * 7)
 
 
 # ── GET /api/auth/me ─────────────────────────────────────────

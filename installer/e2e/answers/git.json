@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "mode": "new",
+  "access": { "domain": "ws.e2e.example", "network": "direct", "cert": "temporary" },
+  "storage": { "kind": "local" },
+  "zones": ["git"],
+  "addons": [],
+  "git": { "version": "verified" },
+  "admin": { "name": "관리자", "username": "admin" }
+}

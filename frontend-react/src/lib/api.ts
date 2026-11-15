@@ -60,6 +60,21 @@ export function notifyStorageDown(status: number | undefined, data: unknown) {
   try { window.dispatchEvent(new CustomEvent(STORAGE_DOWN_EVENT)) } catch { /* ignore */ }
 }
 
+/**
+ * 서버에 닿지 못했다는 신호(연결 실패 또는 502·503·504) — composables/useUpdateNotice 가 듣고, 업데이트 점검 중인지 묻는다.
+ * 저장소 끊김(503 `storage_unavailable`)과 호출부가 스스로 끊은 요청은 알리지 않는다.
+ */
+export const API_DOWN_EVENT = 'jw:api-down'
+export function notifyApiDown(e: unknown) {
+  if (typeof window === 'undefined') return
+  const x = e as { response?: Response; data?: { code?: unknown }; name?: string; cause?: { name?: string } } | null
+  if (x?.name === 'AbortError' || x?.cause?.name === 'AbortError') return
+  const status = x?.response?.status
+  if (status !== undefined && ![502, 503, 504].includes(status)) return
+  if (x?.data?.code === STORAGE_DOWN_CODE) return
+  try { window.dispatchEvent(new CustomEvent(API_DOWN_EVENT, { detail: { status: status ?? 0 } })) } catch { /* ignore */ }
+}
+
 const base$fetch: $Fetch = ofetch.create({})
 
 async function call<T>(request: string, opts: FetchOptions<'json'> = {}): Promise<T> {
@@ -95,6 +110,7 @@ async function call<T>(request: string, opts: FetchOptions<'json'> = {}): Promis
     // 번들 앱은 위 onResponseError 가 맡는다 — 웹만
     if (!base && isApi(request)) notifyAuthLost(request, resp)
     if (isApi(request)) notifyStorageDown(resp?.status, (e as { data?: unknown })?.data)
+    if (isApi(request)) notifyApiDown(e)
     throw e
   }
 }

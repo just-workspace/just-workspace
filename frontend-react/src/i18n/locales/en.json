@@ -1700,6 +1700,469 @@
         "mismatch": "Storage from a different installation is attached.",
         "unresponsive": "The storage is not responding."
       }
+    },
+    "update": {
+      "title": "Updates",
+      "loadError": "Couldn't load the update status",
+      "busy": "Another job is running. Try again when it finishes.",
+      "toHome": "Back to status",
+      "tabs": {
+        "home": "Status",
+        "settings": "Settings",
+        "rollback": "Roll back",
+        "apps": "App files",
+        "history": "History",
+        "offline": "Offline update"
+      },
+      "unavailable": {
+        "no_installer": {
+          "title": "This install was set up without the installer, so it can't be updated from here",
+          "body": "Update on the server directly, following the update steps in the install guide."
+        },
+        "unsupported": {
+          "title": "This installer doesn't support updates",
+          "body": "Replace the installer with a version that has the update feature, then open this page again."
+        }
+      },
+      "channel": {
+        "stable": {
+          "short": "Stable",
+          "title": "Stable",
+          "desc": "Only fully verified versions"
+        },
+        "beta": {
+          "short": "Beta",
+          "title": "Beta",
+          "desc": "Get new features first"
+        }
+      },
+      "mode": {
+        "manual": {
+          "title": "Manual",
+          "desc": "Tells you when a new version is out; an admin starts it"
+        },
+        "auto": {
+          "title": "Automatic",
+          "desc": "Applies on its own in the time window you set"
+        }
+      },
+      "trigger": {
+        "manual": "Manual",
+        "auto": "Automatic",
+        "offline": "Offline",
+        "manualUpdate": "Manual update",
+        "autoUpdate": "Automatic update",
+        "offlineUpdate": "Offline update"
+      },
+      "step": {
+        "preflight": "Pre-checks",
+        "backup": "Automatic backup",
+        "pull": "Download images",
+        "migrate": "Database changes",
+        "switch": "Switch zones",
+        "verify": "Health check",
+        "stop": "Stop zones",
+        "images": "Switch to previous images",
+        "restore_db": "Restore database from backup",
+        "start": "Start zones",
+        "status": {
+          "pending": "Waiting",
+          "running": "Running",
+          "done": "Done",
+          "failed": "Failed"
+        }
+      },
+      "home": {
+        "current": "Current version",
+        "changes": "What changed",
+        "channel": "Channel",
+        "change": "Change",
+        "mode": "How updates apply",
+        "modeAuto": " (server time) · only releases out for {days} days",
+        "modePaused": "· paused after a failure",
+        "paused": "Paused",
+        "lastCheck": "Last checked",
+        "neverChecked": "Not checked yet",
+        "check": "Check now",
+        "checking": "Checking",
+        "checkFailed": "Couldn't start the check",
+        "latest": "You're on the latest version.",
+        "newVersion": "New version",
+        "view": "View details",
+        "live": {
+          "update": "An update is in progress",
+          "rollback": "Rolling back to the previous version",
+          "restore": "Restoring a previous version",
+          "open": "View progress"
+        },
+        "wait": {
+          "title": "Waiting for Stable to catch up with this version",
+          "body": "This server stays on {current} and starts receiving updates again once Stable reaches {version} or later. Updates are paused until then.",
+          "bodyUnknown": "Updates resume once a Stable version newer than the current one is released. Updates are paused until then."
+        },
+        "blocked": {
+          "title": "Version {version} is out, but this version can't go to it directly",
+          "body": "It can only be installed from {version} or later, and the channel has no version to go through. Use Offline update to install an intermediate version first.",
+          "bodyUnknown": "The channel has no intermediate version to go through. Use Offline update to install an intermediate version first."
+        },
+        "failed": {
+          "title": "Couldn't reach the update server",
+          "retry": "Check again",
+          "offline": "If this server has no internet access, upload a bundle file in {link}Offline update{/link}.",
+          "code": {
+            "channel_unreachable": "Connection failed",
+            "channel_invalid": "The channel file couldn't be trusted (signature or expiry)",
+            "manifest_invalid": "The release manifest couldn't be trusted"
+          }
+        }
+      },
+      "auto": {
+        "ok": {
+          "title": "Updated to version {version} overnight.",
+          "kind": "Automatic update",
+          "at": "finished at {time}",
+          "down": "down for {time}",
+          "changes": "What changed in this version"
+        },
+        "history": "View history",
+        "bad": {
+          "title": "The overnight automatic update failed and was rolled back to the previous version.",
+          "titleStuck": "The overnight automatic update failed, and rolling back failed too.",
+          "where": "It stopped at {time}, in the {step} step.",
+          "now": "The server is running normally on version {version}.",
+          "paused": "Automatic updates are paused; they try again in the next window only after you turn them back on.",
+          "history": "View failure record"
+        },
+        "resume": "Turn automatic updates back on",
+        "resumeShort": "Turn back on",
+        "resumeFailed": "Couldn't turn it back on",
+        "resumed": {
+          "title": "Automatic updates are back on.",
+          "body": "It will try again in the next window ({window}). If it fails at the same point, it pauses again."
+        }
+      },
+      "notes": {
+        "none": "There's no new version to install right now",
+        "version": "Version",
+        "size": "Download size",
+        "downtime": "Expected downtime",
+        "downtimeNote": "everyone sees the maintenance screen during this time",
+        "zones": "Zones affected",
+        "changes": "What changed",
+        "plugins": {
+          "title": "{n} plugin(s) haven't been confirmed to work with the new version.",
+          "body": "After the update these plugins start turned off. An admin checks them and turns them back on from the admin pages."
+        },
+        "hop": {
+          "title": "Goes through intermediate version {versions}, in {n} rounds.",
+          "body": "Once started, all {n} versions are applied one after another. Each version gets its own backup, and the progress page shows which version is being applied."
+        },
+        "footnote": "Starting shows a 5-minute notice bar to users, then backs up the database, settings and encryption keys and applies the update. Files are not backed up and not touched.",
+        "later": "Later",
+        "start": "Start update",
+        "startFailed": "Couldn't start the update",
+        "stale": "The available version changed in the meantime. Review the details again."
+      },
+      "changes": {
+        "loadError": "Couldn't load the changes for this version",
+        "applied": "Applied",
+        "down": "down for",
+        "previous": "Previous version",
+        "pluginsBody": "turned off when moving to this version. Check them, then turn them back on in plugin management."
+      },
+      "settings": {
+        "loadError": "Couldn't load the update settings",
+        "saved": "Saved",
+        "saveFailed": "Couldn't save",
+        "dirty": "Your changes haven't been saved yet.",
+        "mode": "How updates apply",
+        "windowStart": "Start applying at",
+        "windowEnd": "Don't start after",
+        "windowSame": "Start and end can't be the same",
+        "autoNote": "Times are in server time. Automatic updates only take releases that have been out for {days} days. A notice bar appears on users' screens 5 minutes before, then a backup is made and the update is applied. If any step fails, the server is rolled back to the previous version and automatic updates pause. They start again only after you turn them back on in Status.",
+        "channel": "Channel",
+        "toBeta": {
+          "title": "Beta versions haven't finished verification.",
+          "body": "Features may change and problems may occur. If this workspace is in real use, check your backup settings first. After switching, Beta versions arrive from the next check."
+        },
+        "toStable": {
+          "title": "Choose how to return to Stable.",
+          "aria": "How to return to Stable",
+          "wait": "Wait for the next Stable version",
+          "waitDesc": "Keep the current version and update when a newer Stable version is released. Updates are paused until then",
+          "restore": "Restore the state from before Beta",
+          "restoreDesc": "Goes back to the backup taken just before switching to Beta. Mail, chats and events written since switching to Beta are lost. Files stay as they are"
+        },
+        "noRestorePoint": "There's no backup from just before Beta, so it can't be restored",
+        "betaRestore": {
+          "title": "Restore the state from before Beta?",
+          "since": "Switched to Beta: {time}"
+        },
+        "maint": "Maintenance screen",
+        "contact": "Admin contact",
+        "contactHint": "If set, it's shown on the maintenance screen when maintenance runs longer than expected. Leave empty to show nothing."
+      },
+      "restore": {
+        "title": "Restore a previous version",
+        "lead": "Goes back to the backup made just before an update (database, settings, encryption keys). Mail, chats and events written after the update are lost. Files stay as they are.",
+        "loadError": "Couldn't load the restore points",
+        "table": "Restore points",
+        "empty": "There are no backups to restore from. After you update once, the backup taken just before it appears here.",
+        "at": "Backup time",
+        "size": "Size",
+        "pick": "Restore this version",
+        "pickAria": "Restore version {version} (backup from {time})",
+        "footnote": "If an update fails, it's rolled back automatically without choosing here. Use this page to go back to a previous version after an update has finished.",
+        "confirmTitle": "Restore version {version}?",
+        "loss": "Mail, chats and events written after the update are lost. Files stay as they are.",
+        "maint": "Users see the maintenance screen while the restore runs.",
+        "countdown": "Starting shows a 5-minute notice bar to users first.",
+        "start": "Start restore",
+        "startFailed": "Couldn't start the restore"
+      },
+      "job": {
+        "unknown": "No record of this job was found",
+        "reconnecting": "The server is restarting. Reconnecting…",
+        "progress": "{done} of {total} steps done",
+        "notAllowed": "That can't be done right now. The status was reloaded.",
+        "actionFailed": "Couldn't process the request"
+      },
+      "apply": {
+        "steps": "Update steps",
+        "progress": "Update progress",
+        "versions": "Versions to go through",
+        "hop": "Version {pos} · {version}",
+        "soonTitle": "The update starts shortly",
+        "runningTitle": "Updating to version {version}",
+        "failedTitle": "The update stopped",
+        "doneTitle": "The update is complete",
+        "cancelled": "The update was cancelled",
+        "lead": "After the pre-checks and backup, zones are switched to the new version.",
+        "failedLead": "It stopped at one step.",
+        "doneLead": "All steps are done.",
+        "countdown": "Users are being told the update starts shortly. Time left",
+        "countdownBody": "A bar asking users to save is showing at the top of their screens. You can also start without waiting.",
+        "doneText": "Updated to version {version}. Users can sign in again.",
+        "footnote": "Users see the maintenance screen during the update. It keeps running even if you close this window."
+      },
+      "rollback": {
+        "steps": "Rollback steps",
+        "progress": "Rollback progress",
+        "footnote": "What's rolled back is the database, settings and encryption keys. Files weren't backed up and aren't touched. Users see the maintenance screen while this runs.",
+        "auto": {
+          "soonTitle": "Rolling back to the previous version shortly",
+          "runningTitle": "Rolling back to the previous version",
+          "doneTitle": "Rolled back to the previous version",
+          "failedTitle": "The rollback stopped",
+          "failedLead": "The automatic rollback stopped at one step.",
+          "cancelled": "The rollback was cancelled",
+          "lead": "The update failed, so the server is rolled back automatically to the backup made at the start.",
+          "doneLead": "All steps are done.",
+          "countdown": "Users are being told the rollback starts shortly. Time left",
+          "doneText": "Rolled back to the previous version {version}. This is the state from just before the update started, and files stay as they are. Users can sign in again."
+        },
+        "manual": {
+          "soonTitle": "The restore starts shortly",
+          "runningTitle": "Restoring version {version}",
+          "doneTitle": "Restored version {version}",
+          "failedTitle": "The restore stopped",
+          "failedLead": "The restore stopped at one step.",
+          "cancelled": "The restore was cancelled",
+          "lead": "Going back to the previous version the admin chose.",
+          "doneLead": "All steps are done.",
+          "countdown": "Users are being told the restore starts shortly. Time left",
+          "doneText": "Restored version {version}. Mail, chats and events written after the update are gone, and files stay as they are. Users can sign in again."
+        },
+        "beta": {
+          "soonTitle": "Restoring the state from before Beta shortly",
+          "runningTitle": "Restoring the state from before Beta",
+          "doneTitle": "Restored the state from before Beta",
+          "failedTitle": "The restore stopped",
+          "failedLead": "Restoring the state from before Beta stopped at one step.",
+          "cancelled": "The restore was cancelled",
+          "lead": "Going back to the backup taken just before switching to Beta, and switching the channel to Stable.",
+          "doneLead": "All steps are done.",
+          "countdown": "Users are being told the restore starts shortly. Time left",
+          "doneText": "Back on Stable version {version}. Mail, chats and events written since switching to Beta are gone, and files stay as they are. The channel is Stable."
+        }
+      },
+      "fail": {
+        "generic": "It stopped at this step.",
+        "update": {
+          "preflight": "The pre-checks didn't pass.",
+          "backup": "The pre-update backup couldn't be made.",
+          "pull": "Downloading the new version's images stopped.",
+          "migrate": "Changing the database structure for the new version stopped.",
+          "switch": "Switching zones to the new version stopped.",
+          "verify": "The new version didn't become healthy."
+        },
+        "rollback": {
+          "stop": "The zones couldn't be stopped.",
+          "images": "Couldn't switch back to the previous images.",
+          "restore_db": "The database couldn't be restored from the backup.",
+          "start": "The zones couldn't be started again.",
+          "verify": "The server didn't become healthy after rolling back."
+        },
+        "choice": "The database hasn't been changed yet. Retry from this step, or stop and roll back to the previous version {version}.",
+        "autoRollback": "From this step on there's no retry: the previous version {version} is restored automatically from the backup made at the start (database, settings, encryption keys).",
+        "autoTrigger": "Automatic updates don't retry at any step: the server is rolled back automatically to the previous version {version}.",
+        "stopped": "The workspace is stopped.",
+        "backupAt": "The backup file is still at {path}.",
+        "docs": "If retrying gives the same result, download the log and follow {link}the restore steps in the data safety guide{/link}.",
+        "doRetry": "Retry from this step",
+        "doRollback": "Roll back",
+        "watchRollback": "View rollback progress"
+      },
+      "log": {
+        "view": "View log",
+        "download": "Download log",
+        "downloadFailed": "Couldn't download the log",
+        "loading": "Reading the log…",
+        "failed": "Couldn't read the log.",
+        "empty": "No log entries."
+      },
+      "offline": {
+        "loadError": "Couldn't load the offline update status",
+        "intro": "A server without internet access is updated with a bundle file.",
+        "introUrl": "Download the bundle file on a computer with internet access from {url}.",
+        "wayAria": "How to provide the bundle file",
+        "wayUpload": "Upload a file",
+        "wayPath": "File path on the server",
+        "drop": "Drag the bundle file here",
+        "choose": "Choose file",
+        "format": "File format {ext}",
+        "replace": "Replace",
+        "uploading": "Uploading · {percent}%",
+        "uploadingElse": "Uploading",
+        "verifying": "Verifying · checking the signature and version",
+        "uploadFailed": "Couldn't upload the file",
+        "tooLarge": "The file is too large to upload. Copy it to the server and give its path instead.",
+        "clearFailed": "Couldn't clear it",
+        "pathLabel": "Path of the bundle file on the server",
+        "pathHint": "For a large file it's faster to copy it to the server first and give its path.",
+        "pathCheck": "Check file",
+        "pathChecking": "Checking · reading the file and checking its signature and version",
+        "pathOk": "Verified",
+        "pathMissing": "There's no file at this path, or it can't be read. Check the path and the file's permissions.",
+        "pathFailed": "Couldn't check the file",
+        "sig": "Signature",
+        "sigOk": "Verified · official Just Workspace bundle",
+        "sigBad": "Signature mismatch",
+        "verBad": "not newer than the current version",
+        "containsLabel": "Contains",
+        "contains": {
+          "images": "Just Workspace images",
+          "apps": "desktop and mobile app installers"
+        },
+        "extra": {
+          "title": "Additional images needed",
+          "allPresent": "Everything needed is present",
+          "lacking": "Not ready yet: {n}",
+          "name": "Component",
+          "usedBy": "Used by",
+          "state": "Status",
+          "always": "Always needed",
+          "zoneOn": "{zone} zone · on",
+          "zoneOff": "{zone} zone · off",
+          "status": {
+            "present": "Present",
+            "missing": "Missing",
+            "verifying": "Verifying",
+            "hash_mismatch": "Hash mismatch",
+            "not_needed": "Not needed"
+          },
+          "copy": "Copy the download command for {name}",
+          "upload": "Upload the {name} image file",
+          "footnote": "The bundle file only contains Just Workspace images. For things that are always needed (database, cache, web server) and the components of zones that are turned on, copy the download command, fetch the image file on a PC with internet access, and upload it here. Uploaded files are verified by hash. Components of zones that are off aren't needed."
+        },
+        "copied": "Download command copied",
+        "alert": {
+          "signature": {
+            "title": "The signature doesn't match.",
+            "body": "This isn't an official bundle file, or it was damaged in transit. Download the bundle file again."
+          },
+          "version": {
+            "title": "This isn't newer than the current version.",
+            "body": "This bundle is version {bundle} and the server is on {current}. To go to an older version, restore a previous version in the Roll back tab."
+          },
+          "invalid": {
+            "title": "This bundle file can't be used.",
+            "body": "It isn't a bundle file or its contents don't match. It may also be a version this server can't go to directly. Download the bundle file again."
+          },
+          "image": {
+            "title": "The hash of the {name} image doesn't match.",
+            "body": "It was damaged while downloading, or it's an image of a different version. Copy the download command again, fetch it anew, and upload it."
+          }
+        },
+        "block": {
+          "empty": "Upload a bundle file to check its signature and version.",
+          "emptyPath": "Enter a path and choose Check file before applying.",
+          "uploading": "The signature and version are checked once the upload finishes.",
+          "verifying": "You can apply once verification finishes.",
+          "signature": "Only a bundle file with a verified signature can be applied.",
+          "version": "Only a bundle file newer than the current version can be applied.",
+          "file_missing": "Enter the path of a readable bundle file before applying.",
+          "invalid": "Only a bundle file that passes verification can be applied.",
+          "image_missing": "Upload every image that's needed before applying.",
+          "image_verifying": "You can apply once the uploaded images are verified.",
+          "image_mismatch": "Upload an image whose hash matches before applying."
+        },
+        "apply": "Apply",
+        "applyFailed": "Couldn't start applying"
+      },
+      "apps": {
+        "loadError": "Couldn't load the list of app installers",
+        "intro": "These installers ship with server version {version}. They change together when the server is updated.",
+        "pageLabel": "Download address to share with users",
+        "pageHint": "Signed-in users get the file for their device at this address.",
+        "files": "Installers",
+        "empty": "This version doesn't include any app installers",
+        "col": {
+          "app": "App",
+          "os": "For",
+          "file": "File"
+        },
+        "kind": {
+          "windows-desktop": {
+            "app": "Desktop",
+            "os": "Windows"
+          },
+          "android": {
+            "app": "Mobile",
+            "os": "Android"
+          }
+        },
+        "copy": "Copy the download address of the {name} app",
+        "get": "Download the {name} app",
+        "copied": "Download address copied",
+        "footnote": "Only installers included in this version are shown."
+      },
+      "history": {
+        "loadError": "Couldn't load the update history",
+        "detailError": "Couldn't load the step record",
+        "table": "Update history",
+        "empty": "No history yet",
+        "col": {
+          "at": "Time",
+          "how": "Method",
+          "result": "Result",
+          "who": "By",
+          "took": "Duration"
+        },
+        "result": {
+          "success": "Succeeded",
+          "rolled_back": "Failed · rolled back",
+          "rollback_failed": "Failed · rollback failed",
+          "restored": "Previous version restored",
+          "restore_failed": "Restore failed",
+          "cancelled": "Cancelled"
+        },
+        "steps": "Step record",
+        "versionOf": "Version {i} of {n}",
+        "rollback": "Rollback",
+        "footnoteYear": "Select a result to see its step record below. History is kept for 1 year.",
+        "footnote": "Select a result to see its step record below. History is kept for {days} days."
+      }
     }
   },
   "mail": {
@@ -7381,7 +7844,8 @@
         "system": "Service status",
         "logs": "Access logs",
         "aiOps": "AI operations",
-        "zones": "Zones"
+        "zones": "Zones",
+        "update": "Updates"
       },
       "kw": {
         "dashboard": "dashboard,analytics,visits,stats,ops summary",
@@ -7400,7 +7864,8 @@
         "system": "services,restart,response time",
         "logs": "logs,IP,requests,audit",
         "aiOps": "AI usage,audit log,feedback,PII masking,writes,tool calls",
-        "zones": "zones,install,enable,disable,mail,meetings,AI,code hosting,add-on,SSO,LDAP,isolated browser,memory,ports"
+        "zones": "zones,install,enable,disable,mail,meetings,AI,code hosting,add-on,SSO,LDAP,isolated browser,memory,ports",
+        "update": "update,version,release,channel,stable,beta,automatic update,rollback,restore,offline,bundle,app installers,history"
       }
     },
     "shortcuts": {
@@ -7494,6 +7959,32 @@
     "storageDown": {
       "message": "The file storage is disconnected and file writes have stopped.",
       "link": "View storage status"
+    },
+    "update": {
+      "minutes": "{m} min",
+      "seconds": "{s} sec",
+      "minutesSeconds": "{m} min {s} sec",
+      "countdown": {
+        "title": "An update starts in {n} min. Save your work.",
+        "soon": "An update starts shortly. Save now.",
+        "titleRestore": "A restore to a previous version starts in {n} min. Save your work.",
+        "soonRestore": "A restore to a previous version starts shortly. Save now.",
+        "sub": "The workspace will be unavailable for about {time}.",
+        "startNow": "Start now",
+        "failed": "Couldn't process the request"
+      },
+      "maint": {
+        "title": "Update in progress",
+        "body": "An admin is moving the workspace to a new version. This screen reopens automatically when it's done.",
+        "titleRestore": "Maintenance in progress",
+        "bodyRestore": "An admin is taking the workspace back to a previous version. This screen reopens automatically when it's done.",
+        "reconnecting": "Reconnecting",
+        "started": "Started",
+        "expected": "Expected time",
+        "late": "This is taking longer than expected.",
+        "lateBody": "If this screen stays, let your admin know.",
+        "reconnect": "Reconnect now"
+      }
     }
   },
   "adminParts": {

@@ -16,6 +16,7 @@ import { AppErrorBoundary } from '~/components/AppErrorBoundary'
 import { UiToast } from '~/components/ui/Toast'
 import { UiDialogHost } from '~/components/ui/DialogHost'
 import { MailComposeHost } from '~/components/mail/MailComposeHost'
+import { UpdateNoticeHost } from '~/components/layout/MaintenanceScreen'
 // 로그아웃(user → null) 때 떠 있는 메일 작성 창 목록을 비우는 구독을 앱 시작 때 건다(Vue app.vue 의 watch(user) → useMailCompose().reset())
 import '~/composables/useMailCompose'
 
@@ -71,6 +72,8 @@ export default function App() {
       <UiDialogHost />
       {/* 떠 있는 메일 작성 창(데스크톱) — 화면·레이아웃을 옮겨도 쓰던 창이 살아 있게 루트에 둔다 */}
       {user && <MailComposeHost />}
+      {/* 업데이트 예고·점검 — 점검 중이면 어느 화면에서든 점검 화면이 덮는다 */}
+      <UpdateNoticeHost />
     </>
   )
 }

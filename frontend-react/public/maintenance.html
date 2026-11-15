@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <!-- 스크립트가 막혀도 30초마다 같은 주소를 다시 연다 — 서버가 돌아와 있으면 쓰던 화면이 열린다 -->
+  <meta http-equiv="refresh" content="30">
+  <title>업데이트 중입니다</title>
+  <!--
+    서버가 내려가 있는 동안 웹 서버(nginx)가 내주는 점검 페이지. 앱 번들 없이 혼자 뜬다.
+    nginx 쪽 연결(error_page, /maintenance/status)은 docs/update-api.md 7절.
+    문구는 앱 안의 점검 화면(src/components/layout/MaintenanceScreen.tsx)과 같다.
+  -->
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif; font-size: 14px; line-height: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; min-height: 100dvh; padding: 32px 16px; background: #f8fafc; color: #0f172a; }
+    .brand { font-size: 16px; font-weight: 600; }
+    main { width: 100%; max-width: 448px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+    .spin { width: 44px; height: 44px; border-radius: 9999px; background: rgba(59, 130, 246, .1); color: #2563eb; display: flex; align-items: center; justify-content: center; }
+    .spin svg { width: 24px; height: 24px; animation: turn 1s linear infinite; }
+    @keyframes turn { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spin svg { animation: none; } }
+    h1 { font-size: 24px; line-height: 32px; font-weight: 700; margin-top: 12px; }
+    p { color: #64748b; margin-top: 8px; }
+    dl { display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; }
+    dl div { display: flex; gap: 12px; }
+    dt { flex: 0 0 96px; color: #64748b; }
+    dd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .late { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px; border-radius: 12px; background: rgba(245, 158, 11, .12); font-size: 13px; }
+    .late strong { font-weight: 500; }
+    .late span { color: #64748b; }
+    button { width: 100%; height: 40px; border: 1px solid #cbd5e1; border-radius: 8px; background: transparent; color: inherit; font: inherit; font-weight: 500; cursor: pointer; }
+    button:hover { background: rgba(100, 116, 139, .1); }
+    button:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+    [hidden] { display: none !important; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #0b0f17; color: #e2e8f0; }
+      main { background: #111827; border-color: #1f2937; }
+      p, dt, .late span { color: #94a3b8; }
+      .spin { color: #60a5fa; }
+      button { border-color: #334155; }
+    }
+  </style>
+</head>
+<body>
+  <div class="brand">Just Workspace</div>
+  <main>
+    <div>
+      <span class="spin" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>
+      </span>
+      <h1 id="title" role="status">업데이트 중입니다</h1>
+      <p id="body">관리자가 워크스페이스를 새 버전으로 바꾸고 있습니다. 끝나면 이 화면이 자동으로 다시 열립니다.</p>
+    </div>
+    <dl id="facts" hidden>
+      <div id="row-started" hidden><dt id="l-started">시작</dt><dd id="started"></dd></div>
+      <div id="row-expected" hidden><dt id="l-expected">예상 시간</dt><dd id="expected"></dd></div>
+    </dl>
+    <div class="late" id="late" hidden>
+      <strong id="late-title">예상보다 오래 걸리고 있습니다.</strong>
+      <span><span id="late-body">계속 이 화면이면 관리자에게 알려 주세요.</span> <span id="contact"></span></span>
+    </div>
+    <button type="button" id="retry">지금 다시 연결</button>
+  </main>
+  <script>
+    (function () {
+      var en = !/^ko/i.test(navigator.language || 'ko');
+      var T = en ? {
+        title: 'Update in progress', body: 'An admin is moving the workspace to a new version. This screen reopens automatically when it’s done.',
+        titleRestore: 'Maintenance in progress', bodyRestore: 'An admin is taking the workspace back to a previous version. This screen reopens automatically when it’s done.',
+        started: 'Started', expected: 'Expected time', late: 'This is taking longer than expected.', lateBody: 'If this screen stays, let your admin know.',
+        retry: 'Reconnect now', min: ' min', sec: ' sec'
+      } : {
+        title: '업데이트 중입니다', body: '관리자가 워크스페이스를 새 버전으로 바꾸고 있습니다. 끝나면 이 화면이 자동으로 다시 열립니다.',
+        titleRestore: '점검 중입니다', bodyRestore: '관리자가 워크스페이스를 이전 버전으로 되돌리고 있습니다. 끝나면 이 화면이 자동으로 다시 열립니다.',
+        started: '시작', expected: '예상 시간', late: '예상보다 오래 걸리고 있습니다.', lateBody: '계속 이 화면이면 관리자에게 알려 주세요.',
+        retry: '지금 다시 연결', min: '분', sec: '초'
+      };
+      var $ = function (id) { return document.getElementById(id); };
+      var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+      if (en) document.documentElement.lang = 'en';
+      $('l-started').textContent = T.started; $('l-expected').textContent = T.expected;
+      $('late-title').textContent = T.late; $('late-body').textContent = T.lateBody; $('retry').textContent = T.retry;
+
+      function show(s) {
+        var restore = s && (s.kind === 'restore' || s.kind === 'rollback');
+        $('title').textContent = document.title = restore ? T.titleRestore : T.title;
+        $('body').textContent = restore ? T.bodyRestore : T.body;
+        var at = s && s.started_at ? new Date(s.started_at) : null;
+        var ok = at && !isNaN(at.getTime());
+        var exp = s && typeof s.expected_seconds === 'number' && s.expected_seconds >= 0 ? Math.round(s.expected_seconds) : null;
+        $('row-started').hidden = !ok;
+        if (ok) $('started').textContent = at.getFullYear() + '-' + pad(at.getMonth() + 1) + '-' + pad(at.getDate()) + ' ' + pad(at.getHours()) + ':' + pad(at.getMinutes());
+        $('row-expected').hidden = exp === null;
+        if (exp !== null) {
+          var m = Math.floor(exp / 60), sec = exp % 60;
+          $('expected').textContent = (m ? m + T.min : '') + (m && sec ? ' ' : '') + (sec || !m ? sec + T.sec : '');
+        }
+        $('facts').hidden = !ok && exp === null;
+        $('late').hidden = !(ok && exp !== null && Date.now() > at.getTime() + exp * 1000);
+        $('contact').textContent = s && typeof s.contact === 'string' ? s.contact : '';
+      }
+
+      function json(url) {
+        return fetch(url, { cache: 'no-store', credentials: 'omit' }).then(function (r) { if (!r.ok) throw 0; return r.json(); });
+      }
+      function back() {
+        // 서버가 답할 때만 돌아간다 — 아직이면 이 페이지를 그대로 둔다
+        return fetch('/api/health', { cache: 'no-store', credentials: 'omit' }).then(function (r) { if (r.ok) location.reload(); });
+      }
+      function tick() {
+        return json('/maintenance/status').then(function (s) {
+          if (s && s.active === true) show(s); else return back();
+        }, function () { return back(); }).catch(function () {});
+      }
+      $('retry').addEventListener('click', tick);
+      tick();
+      setInterval(tick, 5000);
+    })();
+  </script>
+</body>
+</html>

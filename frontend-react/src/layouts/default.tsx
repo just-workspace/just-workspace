@@ -46,6 +46,7 @@ import { VoiceHiresDialog } from '~/components/voice/VoiceHiresDialog'
 import { useVoice } from '~/composables/useVoice'
 import { PwaInstallBanner } from '~/components/pwa/InstallBanner'
 import { LayoutStorageDownBanner } from '~/components/layout/StorageDownBanner'
+import { LayoutUpdateCountdownBanner } from '~/components/layout/UpdateCountdownBanner'
 import { CommandPalette } from '~/components/CommandPalette'
 import { connectDesktopBridge } from '~/lib/desktopBridge'
 import { ensureAiArtifacts } from '~/composables/useAiArtifacts'
@@ -258,6 +259,9 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
 
         {/* 파일 저장소 끊김 — 관리자에게만 */}
         {user && <LayoutStorageDownBanner />}
+
+        {/* 업데이트 5분 예고 — 모든 사용자 */}
+        {user && <LayoutUpdateCountdownBanner />}
 
         <main className="min-h-0 flex-1 overflow-hidden">
           <AppErrorBoundary scope="layout">

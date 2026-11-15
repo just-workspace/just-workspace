@@ -35,14 +35,21 @@ def test_matrix_covers_every_compose_build(matrix, compose_text):
         assert (REPO_ROOT / item["dockerfile"]).is_file()
 
 
-def test_installer_is_optional(matrix):
-    assert matrix["installer"]["optional"] is True
-    assert matrix["installer"]["dockerfile"] == "installer/Dockerfile"
+def test_installer_builds_from_repo_root(matrix):
+    """설치 관리자 이미지는 리포 루트를 문맥으로 빌드한다(Dockerfile 머리말·docs/installer.md 의 명령과 같다)."""
+    item = matrix["installer"]
+    assert item["context"] == "." and item["dockerfile"] == "installer/Dockerfile"
+    assert not item.get("optional")
+    assert (REPO_ROOT / item["dockerfile"]).is_file()
+    assert (REPO_ROOT / (item["dockerfile"] + ".dockerignore")).is_file()      # 문맥을 줄이는 목록
+    assert item["build_args_registry"] == "JW_REGISTRY"                        # 받을 이미지 저장소를 굽는다
+    dockerfile = (REPO_ROOT / item["dockerfile"]).read_text(encoding="utf-8")
+    assert re.search(r"^ARG JW_REGISTRY=", dockerfile, re.MULTILINE)
 
 
 def test_triggers(workflow):
     on = workflow.get("on", workflow.get(True))            # YAML 1.1 은 `on` 을 불리언으로 읽는다
-    assert on["push"] == {"tags": ["v*"]}
+    assert on["push"] == {"tags": ["v*-beta.*"]}            # Stable 은 다시 빌드하지 않는다(승격만)
     assert on["workflow_dispatch"]["inputs"]["version"]["required"] is True
     assert "branches" not in on["push"] and "pull_request" not in on
 

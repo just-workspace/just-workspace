@@ -3,7 +3,7 @@
   "channel": "stable",
   "sequence": 1,
   "generated": "2026-12-15T09:00:00Z",
-  "expires": "2027-01-14T09:00:00Z",
+  "expires": "2027-03-15T09:00:00Z",
   "releases": [
     {
       "version": "1.0.0",

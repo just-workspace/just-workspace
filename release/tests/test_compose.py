@@ -37,12 +37,20 @@ THIRD_PARTY_SNAPSHOT = {
     "searxng": ("searxng/searxng", "ai"),
 }
 
-UNPINNED_SNAPSHOT = {"postgres", "redis", "nginx", "egress"}
+# 리포의 compose 는 남의 이미지를 전부 다이제스트로 고정한다(태그는 `이름:태그@sha256:…` 로 함께 남긴다).
+UNPINNED_SNAPSHOT: set[str] = set()
+TAG_AND_DIGEST = {"postgres", "redis", "nginx", "egress"}
 
 
 @pytest.fixture(scope="module")
 def images(compose_text):
     return compose.read_images(compose_text, ENV)
+
+
+@pytest.fixture(scope="module")
+def unpinned_images(unpinned_compose_text):
+    """다이제스트 고정을 뗀 사본 — 고정이 빠졌을 때의 동작(실패·pins·resolver)을 본다."""
+    return compose.read_images(unpinned_compose_text, ENV)
 
 
 def test_own_images_snapshot(images):
@@ -66,7 +74,20 @@ def test_third_party_snapshot(images, zones_raw):
 
 def test_unpinned_third_party_snapshot(images):
     assert {i.service for i in compose.unpinned_third_party(images)} == UNPINNED_SNAPSHOT
-    for i in compose.unpinned_third_party(images):
+    assert all(i.ref.pinned for i in compose.third_party_images(images))
+    assert {i.service for i in compose.third_party_images(images) if i.ref.tag} == TAG_AND_DIGEST
+
+
+def test_repo_pins_match_example_table(images):
+    """compose 에 적은 다이제스트와 예시 표(release/examples/pins.json)가 어긋나지 않게."""
+    table = json.loads((REPO_ROOT / "release" / "examples" / "pins.json").read_text(encoding="utf-8"))
+    in_compose = {i.ref.by_tag(): i.ref.digest for i in compose.third_party_images(images) if i.ref.tag}
+    assert in_compose == table
+
+
+def test_unpinned_copy_has_tag_only(unpinned_images):
+    assert {i.service for i in compose.unpinned_third_party(unpinned_images)} == TAG_AND_DIGEST
+    for i in compose.unpinned_third_party(unpinned_images):
         assert i.ref.tag and not i.ref.pinned
 
 
@@ -237,16 +258,16 @@ def test_image_ref_rejects(bad):
 # ── 구역별 남의 이미지, 다이제스트 없는 것 처리 ──────────────
 
 
-def test_unpinned_third_party_fails_by_default(images, zones_raw):
+def test_unpinned_third_party_fails_by_default(unpinned_images, zones_raw):
     with pytest.raises(ComposeError) as e:
-        compose.third_party_by_zone(images, json.loads(zones_raw))
+        compose.third_party_by_zone(unpinned_images, json.loads(zones_raw))
     message = str(e.value)
     for needle in ("postgres:16.16-alpine", "redis:8.8.4-alpine", "nginx:1.31.8-alpine", "livekit/egress:v1.15.0"):
         assert needle in message
 
 
-def test_unpinned_filled_from_pins(images, zones_raw):
-    out = compose.third_party_by_zone(images, json.loads(zones_raw), pins=PINS)
+def test_unpinned_filled_from_pins(unpinned_images, zones_raw):
+    out = compose.third_party_by_zone(unpinned_images, json.loads(zones_raw), pins=PINS)
     assert set(out) == {"core", "git", "meetings", "docs", "ai"}
     assert out["core"]["postgres"] == "postgres@" + PINS["postgres:16.16-alpine"]
     assert out["meetings"]["egress"] == "livekit/egress@" + PINS["livekit/egress:v1.15.0"]
@@ -257,36 +278,41 @@ def test_unpinned_filled_from_pins(images, zones_raw):
             assert "@sha256:" in ref and ":" not in ref.split("@")[0].rsplit("/", 1)[-1]
 
 
-def test_unpinned_filled_by_resolver_only_for_missing(images, zones_raw):
+def test_unpinned_filled_by_resolver_only_for_missing(unpinned_images, zones_raw):
     asked = []
 
     def resolver(ref):
         asked.append(ref.by_tag())
         return fake_digest(ref.by_tag())
 
-    out = compose.third_party_by_zone(images, json.loads(zones_raw), pins={"redis:8.8.4-alpine": PINS["redis:8.8.4-alpine"]}, resolver=resolver)
+    out = compose.third_party_by_zone(unpinned_images, json.loads(zones_raw), pins={"redis:8.8.4-alpine": PINS["redis:8.8.4-alpine"]}, resolver=resolver)
     assert sorted(asked) == ["livekit/egress:v1.15.0", "nginx:1.31.8-alpine", "postgres:16.16-alpine"]
     assert out["core"]["redis"] == "redis@" + PINS["redis:8.8.4-alpine"]
     assert out["core"]["nginx"] == "nginx@" + fake_digest("nginx:1.31.8-alpine")
 
 
-def test_partial_pins_still_fail_listing_the_rest(images, zones_raw):
+def test_partial_pins_still_fail_listing_the_rest(unpinned_images, zones_raw):
     with pytest.raises(ComposeError) as e:
-        compose.third_party_by_zone(images, json.loads(zones_raw), pins={"redis:8.8.4-alpine": PINS["redis:8.8.4-alpine"]})
+        compose.third_party_by_zone(unpinned_images, json.loads(zones_raw), pins={"redis:8.8.4-alpine": PINS["redis:8.8.4-alpine"]})
     assert "redis" not in str(e.value) and "postgres" in str(e.value)
 
 
-def test_bad_pin_value_rejected(images, zones_raw):
+def test_bad_pin_value_rejected(unpinned_images, zones_raw):
     pins = dict(PINS, **{"redis:8.8.4-alpine": "latest"})
     with pytest.raises(ComposeError):
-        compose.third_party_by_zone(images, json.loads(zones_raw), pins=pins)
+        compose.third_party_by_zone(unpinned_images, json.loads(zones_raw), pins=pins)
 
 
-def test_third_party_outside_any_zone_fails(images, zones_raw):
+def test_repo_compose_fills_without_pins(images, zones_raw):
+    out = compose.third_party_by_zone(images, json.loads(zones_raw))
+    assert sum(len(m) for m in out.values()) == 9
+
+
+def test_third_party_outside_any_zone_fails(unpinned_images, zones_raw):
     zones = json.loads(zones_raw)
     zones["core"]["services"].remove("redis")
     with pytest.raises(ComposeError) as e:
-        compose.third_party_by_zone(images, zones, pins=PINS)
+        compose.third_party_by_zone(unpinned_images, zones, pins=PINS)
     assert "redis" in str(e.value)
 
 

@@ -13,9 +13,11 @@ name: build-images
 #
 # 액션은 커밋 SHA 로 고정한다(옆 주석이 그 SHA 의 태그). 올릴 때는 SHA 와 주석을 함께 바꾼다.
 
+# 트리거: Beta 태그(vX.Y.Z-beta.N)와 수동 실행뿐이다. Stable 은 다시 빌드하지 않는다 —
+# 검증을 마친 Beta 의 이미지(같은 다이제스트)를 승격해서만 만든다(docs/releases.md).
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*-beta.*"]
   workflow_dispatch:
     inputs:
       version:
@@ -102,7 +104,7 @@ jobs:
           - name: audiorelay
             context: audiorelay
             dockerfile: audiorelay/Dockerfile
-            # 바이너리에 구워지는 값(실행 시 덮는 방법이 없다) — 승격 뒤에도 Beta 문자열이 남는다.
+            # 표시 버전의 예비값(바이너리에 굽는다). 실행할 때 환경변수 JW_APP_VERSION 이 있으면 그것이 우선한다.
             build_args: VERSION
           - name: docconv
             context: docconv
@@ -117,12 +119,12 @@ jobs:
             context: rbi/mirror
             dockerfile: rbi/mirror/Dockerfile
             target: prod
-          # 설치 관리자 — compose 에 없는 이미지. Dockerfile 이 리포에 있을 때만 빌드한다(없으면 건너뛴다).
-          # 컨텍스트는 리포 루트로 잡아 두었다 — Dockerfile 이 다른 컨텍스트를 전제하면 여기를 맞춘다.
+          # 설치 관리자 — compose 에 없는 이미지. 컨텍스트는 리포 루트다(번들에 실을 파일이 리포 여기저기에 있다 —
+          # 무엇이 들어가는지는 installer/Dockerfile.dockerignore). 받을 이미지 저장소를 빌드 인자로 굽는다.
           - name: installer
             context: .
             dockerfile: installer/Dockerfile
-            optional: true
+            build_args_registry: JW_REGISTRY
     env:
       IMAGE: ${{ needs.version.outputs.registry }}/${{ vars.JW_IMAGE_PREFIX || 'just-workspace-' }}${{ matrix.name }}
       VERSION: ${{ needs.version.outputs.version }}
@@ -154,11 +156,14 @@ jobs:
         shell: bash
         env:
           ARG_NAMES: ${{ matrix.build_args || '' }}
+          REGISTRY_ARG_NAMES: ${{ matrix.build_args_registry || '' }}
+          REGISTRY: ${{ needs.version.outputs.registry }}
         run: |
           set -euo pipefail
           {
             echo "list<<__ARGS__"
             for name in $ARG_NAMES; do echo "$name=$VERSION"; done
+            for name in $REGISTRY_ARG_NAMES; do echo "$name=$REGISTRY"; done
             echo "__ARGS__"
           } >> "$GITHUB_OUTPUT"
 

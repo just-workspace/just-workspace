@@ -47,7 +47,7 @@ docker run --rm -v "$PWD/.env:/work/.env" <backend 이미지> python -m app.cli 
 
 | 프로파일 | 컨테이너 | 비고 |
 |----------|----------|------|
-| `mailserver` | ws-mailserver (Postfix · Dovecot · Rspamd) | `FEATURE_BUILTIN_MAILSERVER=true` 와 함께. 25/465/587/143/993 |
+| `mailserver` | ws-mailserver (Postfix · Dovecot · Rspamd) | `FEATURE_BUILTIN_MAILSERVER=true` 와 함께. 25/465/587/993 |
 | `gitea` | ws-gitea (Gitea 28) | `/git/` 서브패스, SSH `GIT_SSH_PORT`(2222). OIDC 자동 가입·연동이 env 로 사전 구성됨 |
 | `livekit` | ws-livekit (1.13) | UDP 7882-7892, TCP 7881, TURN 3478/udp + 443/tcp(`LIVEKIT_TURN_TLS_PUBLISH`) |
 | `egress` | ws-egress (1.15) | 회의 녹화. livekit 과 함께. cpu 4 / 4G |

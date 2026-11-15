@@ -208,7 +208,7 @@ def backend_workers(facts: Facts) -> str:
 
 
 def env_sections(answers: Answers, secrets: dict, facts: Facts, plan: Plan,
-                 *, version: str, registry: str, gitea_image: str) -> list[tuple[str, list[tuple[str, str]]]]:
+                 *, version: str, registry: str, gitea_image: str, app_version: str = "") -> list[tuple[str, list[tuple[str, str]]]]:
     s = lambda name: secrets.get(name, "")  # noqa: E731
     zones = set(plan.zones)
     d = plan.env_domain
@@ -219,6 +219,8 @@ def env_sections(answers: Answers, secrets: dict, facts: Facts, plan: Plan,
         ("JW_INSTALL_ID", s("JW_INSTALL_ID")),
         ("JW_REGISTRY", registry),
         ("JW_VERSION", version),
+        # 화면에 보이는 제품 버전 — 이미지에 구운 값보다 우선한다(이미지 태그와 다를 수 있다)
+        ("JW_APP_VERSION", app_version or version),
         ("COMPOSE_PROJECT_NAME", "just-workspace"),
         ("DEPLOY_MODE", "standalone" if plan.tls else "external_proxy"),
         ("COMPOSE_PROFILES", ",".join(plan.profiles)),
@@ -539,6 +541,7 @@ def render(answers: Answers, secrets: dict, facts: Facts, bundle: Bundle,
     files[".env"] = envfile.render(env_sections(
         answers, secrets, facts, plan,
         version=image_tag or bundle.version, registry=registry, gitea_image=gitea_image(answers, bundle),
+        app_version=bundle.version,
     ))
     files[SITE_COMPOSE] = site_compose(plan)
     files.update(nginx_site(answers, plan))

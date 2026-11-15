@@ -28,7 +28,7 @@ class Settings:
     # 설치 파일·오프라인 묶음 첨부의 기준 주소. `{version}` 과 `{filename}` 이 채워진다.
     download_url_template: str = "https://github.com/just-workspace/just-workspace/releases/download/v{version}/{filename}"
     # 채널 파일 만료까지의 날 수.
-    expires_days: int = 30
+    expires_days: int = 90
 
     def image_repository(self, service: str) -> str:
         return f"{self.registry.rstrip('/')}/{self.image_prefix}{service}"

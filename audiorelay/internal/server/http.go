@@ -15,7 +15,7 @@ import (
 	"just-workspace/audiorelay/internal/wsrelay"
 )
 
-// Version is stamped at build time.
+// Version is stamped at build time; main overrides it from JW_APP_VERSION when set.
 var Version = "dev"
 
 // Info is the GET /audiorelay/info document the backend relays to clients.

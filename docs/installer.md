@@ -26,13 +26,14 @@ docker logs jw-installer
 ```
 
 - `-v <호스트 폴더>:/data` 와 `-e JW_HOST_DIR=<같은 호스트 폴더>` 는 **반드시 같은 경로**여야 한다(§3).
-- 이미지 저장소는 `-e JW_REGISTRY=<저장소/네임스페이스>`, 이미지 태그는 `-e JW_IMAGE_TAG=<태그>` 로 바꾼다. 기본은 `localhost`(서버에 이미 있는 이미지)와 제품 버전(`VERSION`).
+- 이미지 저장소는 `-e JW_REGISTRY=<저장소/네임스페이스>`, 이미지 태그는 `-e JW_IMAGE_TAG=<태그>` 로 바꾼다. 기본은 `ghcr.io/just-workspace` 와 제품 버전(`VERSION`). `JW_REGISTRY=localhost` 를 주면 서버에 이미 있는(소스에서 빌드한) 이미지를 쓴다.
 - `-e JW_PUBLIC_HOST=<서버 주소>` 를 주면 로그의 주소와 인증서 이름에 그 값을 쓴다.
 
-이미지 빌드(리포 루트에서):
+이미지 빌드(리포 루트에서 — 문맥은 리포 루트, 무엇이 들어가는지는 `installer/Dockerfile.dockerignore`):
 
 ```bash
 docker build -f installer/Dockerfile -t just-workspace-installer:$(cat VERSION) .
+# 받을 이미지 저장소의 기본값을 바꿔 구우려면: --build-arg JW_REGISTRY=<저장소/네임스페이스>
 ```
 
 ## 2. 구조
@@ -374,6 +375,7 @@ compose 는 저장소 볼륨(`ws-storage-data`)을 `external` 로 쓴다. 설치
 | `RP_LAN_IP` / `HAIRPIN_HOST` | 파생 | 컨테이너가 접속 주소로 되돌아올 때의 우회. 직접 받는 구성: 내장 nginx(`<내부 대역>.2`). `proxy`: 프록시 주소가 하나(단일 주소)면 그 주소, 아니면 끔(`hairpin-off.invalid`) |
 | `JW_NET_PREFIX` | 답변 | `advanced.subnet` 의 앞 세 자리 |
 | `JW_REGISTRY` / `JW_VERSION` | 고정 | 설치 관리자의 `JW_REGISTRY` / 제품 버전(또는 `JW_IMAGE_TAG`) |
+| `JW_APP_VERSION` | 고정 | 제품 버전(번들의 `VERSION`) — 화면에 보이는 버전. 이미지에 구운 값보다 우선한다 |
 | `COMPOSE_PROJECT_NAME` | 고정 | `just-workspace` |
 | `STORAGE_MARKER_REQUIRED` / `JW_INSTALL_ID` | 고정 | `1` / 설치 id |
 | `JW_INSTALLER_URL` / `JW_INSTALLER_KEY` | 고정 / 생성 | `http://jw-installer:8444` / 내부 API 키 |
@@ -459,5 +461,3 @@ docker 없이 돈다. docker·DNS·HTTP·SMTP 는 가짜로 바꾼다(`tests/fak
 - **저장소 표식**은 `/api/files`·`/api/wopi/files` 의 쓰기만 막는다. 채팅 첨부·메일 보관처럼 다른 경로로 저장소에 쓰는 기능은 아직 막지 않는다.
 - **인증서 방식 바꾸기**(임시 → 자동 등)를 설치 뒤에 하는 API 는 없다.
 - **업데이트**(이미지 교체·채널 검증)는 다음 단계다.
-- `zones.json` 의 메일 포트 목록에는 143 이 없지만 compose 는 143 도 게시한다 — 요약의 "여는 포트"에는 `zones.json` 의 것만 나온다.
-- 설치 관리자 이미지의 `JW_REGISTRY` 기본값은 `localhost` 다. 공개 저장소가 정해지면 빌드 인자로 넣는다.

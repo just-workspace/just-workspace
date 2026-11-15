@@ -73,6 +73,12 @@ func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl}))
 	slog.SetDefault(log)
 
+	// 표시 버전: 실행 환경(JW_APP_VERSION)이 빌드 때 구운 값보다 우선한다 —
+	// 이미지를 다시 빌드하지 않고 승격한 릴리스에서도 맞는 버전이 보이게.
+	if v := strings.TrimSpace(os.Getenv("JW_APP_VERSION")); v != "" {
+		server.Version = v
+	}
+
 	secret := []byte(os.Getenv("RELAY_SECRET"))
 	if len(secret) < 16 {
 		log.Error("RELAY_SECRET missing or shorter than 16 bytes")

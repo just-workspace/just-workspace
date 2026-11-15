@@ -4,5 +4,5 @@
   "channel_base_url": "https://raw.githubusercontent.com/just-workspace/releases/main",
   "channel_repo_url": "https://github.com/just-workspace/releases",
   "download_url_template": "https://github.com/just-workspace/just-workspace/releases/download/v{version}/{filename}",
-  "expires_days": 30
+  "expires_days": 90
 }

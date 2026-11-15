@@ -1,6 +1,7 @@
 """공통 준비물. 서명 키는 실행할 때마다 새로 만든다 — 리포에는 어떤 키도 두지 않는다."""
 
 import hashlib
+import re
 import json
 import sys
 from datetime import datetime, timezone
@@ -57,6 +58,19 @@ def compose_text() -> str:
     return (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
 
+def strip_pins(text: str) -> str:
+    """compose 원문에서 `이름:태그@sha256:…` 의 다이제스트를 뗀다 — "태그로만 고정된 남의 이미지"가 있는 compose 를 만든다."""
+    out, n = re.subn(r"(image:\s+[\w./-]+:[\w.-]+)@sha256:[0-9a-f]{64}", r"\1", text)
+    assert n == len(PINS), n
+    return out
+
+
+@pytest.fixture(scope="session")
+def unpinned_compose_text(compose_text) -> str:
+    """리포의 compose 는 남의 이미지를 전부 다이제스트로 고정한다. 고정이 빠졌을 때의 동작은 이 사본으로 본다."""
+    return strip_pins(compose_text)
+
+
 @pytest.fixture(scope="session")
 def zones_raw() -> bytes:
     return (REPO_ROOT / "backend" / "app" / "zones.json").read_bytes()
@@ -101,10 +115,10 @@ def make_digests(version: str, settings: Settings, names=None) -> builder.Digest
 def make_manifest(compose_text, zones_raw, settings):
     def _make(version="1.0.0-beta.1", published=T0, **kw):
         kw.setdefault("pins", PINS)
+        kw.setdefault("compose_text", compose_text)
         return builder.make_manifest(
             version=version,
             digests=make_digests(version, settings),
-            compose_text=compose_text,
             zones_raw=zones_raw,
             settings=settings,
             published=published,

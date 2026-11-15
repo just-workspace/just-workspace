@@ -177,7 +177,7 @@ PATCH /api/admin/modules/{id}      → 모듈 on/off (admin)
 | 80 | ws-nginx (유일한 웹 진입점) | 항상 |
 | 443 | standalone 모드의 nginx TLS / external_proxy 모드의 LiveKit TURN-TLS | DEPLOY_MODE 에 따라 |
 | 25, 465, 587 | Postfix | `mailserver` |
-| 143, 993 | Dovecot | `mailserver` |
+| 993 | Dovecot (IMAP 은 TLS 만 게시한다. 평문 143 은 내부망에서만) | `mailserver` |
 | 2222 (`GIT_SSH_PORT`) | Gitea SSH | `gitea` |
 | 7882-7892/udp, 7881/tcp, 3478/udp | LiveKit 미디어 · ICE TCP · TURN UDP | `livekit` |
 | 636 (+ `LDAP_PLAIN_BIND`:389) | ws-ldap (컨테이너 안은 1636/1389). 평문 389 는 기본으로 루프백에만 게시 | `sso` |

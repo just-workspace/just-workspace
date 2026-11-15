@@ -143,7 +143,7 @@ def run(*argv):
     return main([str(a) for a in argv])
 
 
-def test_cli_full_flow(tmp_path, key, settings, capsys):
+def test_cli_full_flow(tmp_path, key, settings, capsys, unpinned_compose_text):
     priv, pub = key.write(tmp_path)
     repo = tmp_path / "channel-repo"
     repo.mkdir()
@@ -156,12 +156,16 @@ def test_cli_full_flow(tmp_path, key, settings, capsys):
     apps.mkdir()
     (apps / "workspace-desktop-setup.exe").write_bytes(b"installer-bytes")
 
-    # manifest 만들기 — 고정 안 된 남의 이미지가 있으면 실패
+    # manifest 만들기 — 고정 안 된 남의 이미지가 있으면 실패(리포의 compose 는 전부 고정돼 있어 고정을 뗀 사본으로 본다)
+    (work / "unpinned-compose.yml").write_text(unpinned_compose_text, encoding="utf-8", newline="\n")
     args = ["make-manifest", "--version", "1.0.0-beta.1", "--digests", work / "digests.json",
             "--changelog-file", work / "CHANGES.md", "--apps-dir", apps, "-o", work / "manifest.json", "--now", "2026-12-01T09:00:00Z"]
-    assert run(*args) == 2
+    unpinned = [*args, "--compose", work / "unpinned-compose.yml"]
+    assert run(*unpinned) == 2
     assert "postgres" in capsys.readouterr().err and not (work / "manifest.json").exists()
-    assert run(*args, "--pins", work / "pins.json") == 0
+    assert run(*unpinned, "--pins", work / "pins.json") == 0
+    assert Manifest.from_bytes((work / "manifest.json").read_bytes()).third_party["core"]["postgres"] == "postgres@" + PINS["postgres:16.16-alpine"]
+    assert run(*args) == 0                                      # 리포의 compose 그대로면 pins 없이 된다
     beta = Manifest.from_bytes((work / "manifest.json").read_bytes())
     assert beta.changelog == "## 1.0.0-beta.1\n\n- 첫 공개 시험판\n" and beta.apps[0].kind == "windows-desktop"
 
@@ -189,9 +193,10 @@ def test_cli_full_flow(tmp_path, key, settings, capsys):
 
     # 전체 검증, 만료, 만료 갱신
     assert run("verify", "--repo", repo, "--pubkey", pub, "--now", "2026-12-16T00:00:00Z") == 0
-    assert run("verify", "--repo", repo, "--pubkey", pub, "--now", "2027-02-01T00:00:00Z") == 1
-    assert run("refresh", "--repo", repo, "--key", priv, "--now", "2027-01-10T00:00:00Z") == 0
-    assert run("verify", "--repo", repo, "--pubkey", pub, "--now", "2027-02-01T00:00:00Z") == 0
+    assert run("verify", "--repo", repo, "--pubkey", pub, "--now", "2027-02-01T00:00:00Z") == 0      # 기본 만료 90일 안
+    assert run("verify", "--repo", repo, "--pubkey", pub, "--now", "2027-04-01T00:00:00Z") == 1
+    assert run("refresh", "--repo", repo, "--key", priv, "--now", "2027-03-10T00:00:00Z") == 0
+    assert run("verify", "--repo", repo, "--pubkey", pub, "--now", "2027-04-01T00:00:00Z") == 0
     assert channelrepo.load_channel(repo, "stable").sequence == 2
 
     # 설치 관리자 쪽 흐름: 채널 → 판정 → manifest
@@ -241,4 +246,4 @@ def test_cli_sign_and_no_sign(tmp_path, key, make_manifest, capsys):
 def test_cli_images_report(capsys):
     assert run("images") == 0
     out = capsys.readouterr().out
-    assert "rbi-mirror" in out and "target=prod" in out and "다이제스트 없음" in out
+    assert "rbi-mirror" in out and "target=prod" in out and "다이제스트 없음" not in out      # 남의 이미지는 전부 고정돼 있다

@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import timedelta
 
 import pytest
@@ -18,7 +19,8 @@ def test_manifest_contents(make_manifest, settings, zones_raw):
     for name, ref in m.images.items():
         assert ref == f"ghcr.io/just-workspace/just-workspace-{name}@{fake_digest('img:' + name)}"
     assert set(m.third_party) == {"core", "git", "meetings", "docs", "ai"}
-    assert m.third_party["core"]["postgres"] == "postgres@" + PINS["postgres:16.16-alpine"]
+    assert re.fullmatch(r"postgres@sha256:[0-9a-f]{64}", m.third_party["core"]["postgres"])   # compose 에 고정된 값 그대로
+    assert m.third_party["core"]["postgres"] != "postgres@" + PINS["postgres:16.16-alpine"]   # pins 는 고정 안 된 것만 채운다
     assert (m.zones_sha256, m.zones_content) == zones_fingerprint(zones_raw)
     assert m.zones_content == json.loads(zones_raw)
     # 자리만 있는 항목
@@ -32,14 +34,25 @@ def test_same_inputs_same_bytes(make_manifest):
     assert sha256_hex(make_manifest().to_bytes()) != sha256_hex(make_manifest(changelog="x").to_bytes())
 
 
-def test_unpinned_third_party_fails_without_pins(make_manifest):
+def test_repo_compose_needs_no_pins(make_manifest):
+    """리포의 compose 는 남의 이미지를 전부 다이제스트로 고정하므로 pins 없이도 manifest 가 나온다."""
+    m = make_manifest(pins=None)
+    assert all("@sha256:" in ref for refs in m.third_party.values() for ref in refs.values())
+
+
+def test_unpinned_third_party_fails_without_pins(make_manifest, unpinned_compose_text):
     with pytest.raises(BuildError) as e:
-        make_manifest(pins=None)
+        make_manifest(pins=None, compose_text=unpinned_compose_text)
     assert "postgres:16.16-alpine" in str(e.value)
 
 
-def test_unpinned_third_party_filled_by_resolver(make_manifest):
-    m = make_manifest(pins=None, resolver=lambda ref: fake_digest("r:" + ref.by_tag()))
+def test_unpinned_third_party_filled_from_pins(make_manifest, unpinned_compose_text):
+    m = make_manifest(compose_text=unpinned_compose_text)
+    assert m.third_party["core"]["postgres"] == "postgres@" + PINS["postgres:16.16-alpine"]
+
+
+def test_unpinned_third_party_filled_by_resolver(make_manifest, unpinned_compose_text):
+    m = make_manifest(pins=None, compose_text=unpinned_compose_text, resolver=lambda ref: fake_digest("r:" + ref.by_tag()))
     assert m.third_party["core"]["nginx"] == "nginx@" + fake_digest("r:nginx:1.31.8-alpine")
 
 
@@ -138,7 +151,7 @@ def test_collect_apps(tmp_path, settings):
 
 def test_settings_defaults_and_overrides(tmp_path):
     s = Settings()
-    assert s.registry == "ghcr.io/just-workspace" and s.expires_days == 30
+    assert s.registry == "ghcr.io/just-workspace" and s.expires_days == 90
     assert s.image_repository("backend") == "ghcr.io/just-workspace/just-workspace-backend"
     assert s.channel_url("channels/stable.json") == "https://raw.githubusercontent.com/just-workspace/releases/main/channels/stable.json"
 

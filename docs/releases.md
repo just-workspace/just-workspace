@@ -38,7 +38,7 @@ releases/<버전>/manifest.json   releases/<버전>/manifest.json.sig
 | `channel` | `stable` 또는 `beta` |
 | `sequence` | 순번. 파일을 새로 낼 때마다 1 씩 올라간다. 받는 쪽은 이전에 본 값보다 작으면 거부한다 |
 | `generated` | 만든 시각(UTC, `YYYY-MM-DDTHH:MM:SSZ`) |
-| `expires` | 만료 시각. 지나면 받는 쪽이 거부한다(옛 파일을 다시 내미는 공격 차단). 기본은 만든 때부터 30일 |
+| `expires` | 만료 시각. 지나면 받는 쪽이 거부한다(옛 파일을 다시 내미는 공격 차단). 기본은 만든 때부터 90일 |
 | `releases[]` | 릴리스 목록, 버전 오름차순 |
 | `releases[].version` | 버전 |
 | `releases[].published` | 공개 시각 |
@@ -70,7 +70,8 @@ releases/<버전>/manifest.json   releases/<버전>/manifest.json.sig
 | `plugin_api` | 플러그인 호환 범위 — **자리**. 지금은 `null` |
 
 이미지는 전부 다이제스트로 적는다. 태그는 가리키는 내용이 바뀔 수 있어서 싣지 않는다.
-compose 에 태그로만 고정된 남의 이미지가 있으면 `make-manifest` 는 **실패**한다. 채우는 방법은 둘이다.
+compose 의 남의 이미지는 전부 다이제스트로 고정해 둔다(`이름:태그@sha256:…` — 태그는 읽기 쉽게 남긴 것이고 받는 내용은 다이제스트가 정한다).
+태그로만 고정된 남의 이미지가 생기면 `make-manifest` 는 **실패**한다. 채우는 방법은 둘이다.
 
 - `--pins <파일>`: `{"저장소:태그": "sha256:…"}` 표를 준다(예시 `release/examples/pins.json`).
 - `--resolve-digests`: 레지스트리에서 그 시점의 다이제스트를 조회해 채운다.
@@ -144,7 +145,7 @@ python -m jwrelease verify --repo . --pubkey cosign.pub
    python -m jwrelease promote --repo ../releases --version 1.1.0-beta.1 --key ~/keys/release.pem
    ```
    이미지를 다시 빌드하지 않는다. 버전 문자열만 다른 manifest(`1.1.0`, `promoted_from` 기록)를 만들어 `stable.json` 과 `beta.json` 에 더하고, 같은 다이제스트에 Stable 태그를 붙이는 `docker buildx imagetools create` 명령을 **출력**한다(`--run` 을 주면 실행). 그 뒤 확인·커밋·푸시.
-   승격한 버전의 git 태그(`v1.1.0`)를 푸시하면 CI 가 다시 빌드해 다른 다이제스트가 생긴다 — [알려진 한계](#알려진-한계)를 본다.
+   승격한 버전의 git 태그(`v1.1.0`)를 푸시해도 CI 는 빌드하지 않는다(빌드 트리거는 Beta 태그와 수동 실행뿐이다).
 
 Stable 을 Beta 없이 바로 내려면 6번에서 `--channel stable` 을 쓴다(그 릴리스는 beta 채널에도 들어간다).
 
@@ -172,18 +173,18 @@ Stable 을 Beta 없이 바로 내려면 6번에서 `--channel stable` 을 쓴다
 | 이미지 | 버전을 아는 방법 | 승격 뒤 |
 |---|---|---|
 | backend | 환경변수 `JW_APP_VERSION` → 없으면 이미지의 `/app/VERSION`(빌드 인자) → 개발 표기 | 실행 환경이 `JW_APP_VERSION` 을 넣으면 맞다. 안 넣으면 Beta 문자열이 보인다 |
-| audiorelay | 빌드 인자 `VERSION` 이 바이너리에 구워진다. 실행 시 덮는 방법이 없다 | 상태 응답의 `version` 에 Beta 문자열이 남는다 |
+| audiorelay | 환경변수 `JW_APP_VERSION` → 없으면 바이너리에 구운 값(빌드 인자 `VERSION`) | backend 와 같다 |
 | 그 밖의 이미지 | 제품 버전을 표시하지 않는다 | 영향 없음 |
 
 ## 만료 갱신
 
-채널 파일은 만든 때부터 30일(설정 `expires_days`) 뒤에 만료된다. 릴리스가 없어도 **만료 전에** 갱신해야 한다 — 만료되면 설치된 서버가 채널을 받아들이지 않아 새 버전을 알 수 없게 된다(이미 돌고 있는 서비스에는 영향이 없다).
+채널 파일은 만든 때부터 90일(설정 `expires_days`) 뒤에 만료된다. 릴리스가 없어도 **만료 전에** 갱신해야 한다 — 만료되면 설치된 서버가 채널을 받아들이지 않아 새 버전을 알 수 없게 된다(이미 돌고 있는 서비스에는 영향이 없다).
 
 ```bash
 python -m jwrelease refresh --repo ../releases --key ~/keys/release.pem
 ```
 
-두 채널 모두 순번이 1 올라가고 만료가 다시 30일 뒤로 간다. 2~3주에 한 번을 권한다. 서명이 필요해서 자동화하려면 비공개 키를 자동화 환경에 둬야 하는데, 그것은 아래 원칙과 어긋나므로 사람이 한다.
+두 채널 모두 순번이 1 올라가고 만료가 다시 90일 뒤로 간다. 두 달에 한 번을 권한다. 서명이 필요해서 자동화하려면 비공개 키를 자동화 환경에 둬야 하는데, 그것은 아래 원칙과 어긋나므로 사람이 한다.
 
 ## 키 관리
 
@@ -257,16 +258,16 @@ python -m jwrelease bundle verify just-workspace-1.1.0-offline.tar --pubkey rele
 | `channel_base_url` | `JWRELEASE_CHANNEL_BASE_URL` | `https://raw.githubusercontent.com/just-workspace/releases/main` | 채널 파일·manifest 를 내려받는 기준 주소(`verify --url` 의 기본) |
 | `channel_repo_url` | `JWRELEASE_CHANNEL_REPO_URL` | `https://github.com/just-workspace/releases` | 안내 출력 |
 | `download_url_template` | `JWRELEASE_DOWNLOAD_URL_TEMPLATE` | `https://github.com/just-workspace/just-workspace/releases/download/v{version}/{filename}` | 앱 설치 파일·오프라인 묶음의 주소 |
-| `expires_days` | `JWRELEASE_EXPIRES_DAYS` | `30` | 채널 파일 만료까지의 날 수 |
+| `expires_days` | `JWRELEASE_EXPIRES_DAYS` | `90` | 채널 파일 만료까지의 날 수 |
 
 빌드 워크플로 쪽은 리포 Variables 로 정한다: `JW_REGISTRY`(기본 `ghcr.io`), `JW_IMAGE_NS`(기본 리포 소유자), `JW_IMAGE_PREFIX`(기본 `just-workspace-`). GHCR 가 아닌 레지스트리면 Secrets `REGISTRY_USER`·`REGISTRY_TOKEN` 을 넣는다.
 두 쪽의 값이 어긋나면 `make-manifest` 가 "저장소가 다르다"로 멈춘다.
 
 ## 빌드 워크플로
 
-`.github/workflows/build-images.yml` — 태그 `v*` 푸시 또는 수동 실행.
+`.github/workflows/build-images.yml` — Beta 태그(`v*-beta.*`) 푸시 또는 수동 실행. Stable 태그(`v1.1.0`)는 빌드를 일으키지 않는다 — Stable 은 승격으로만 만든다.
 
-- 빌드하는 것: backend, frontend-react, sso, ldap, mailserver, audiorelay, docconv, sandbox, rbi-netfilter, rbi-mirror, 그리고 설치 관리자(`installer/Dockerfile` 이 있을 때만).
+- 빌드하는 것: backend, frontend-react, sso, ldap, mailserver, audiorelay, docconv, sandbox, rbi-netfilter, rbi-mirror, 그리고 설치 관리자(`installer/Dockerfile`, 문맥은 리포 루트 — 받을 이미지 저장소를 빌드 인자 `JW_REGISTRY` 로 굽는다).
 - `linux/amd64` 만. 태그는 버전 하나(`latest` 는 붙이지 않는다). 빌드 캐시는 GitHub Actions 캐시.
 - 각 작업이 이름 → 다이제스트를 내고, 마지막 작업이 `digests.json` 으로 모아 산출물 `digests` 로 올린다(보존 90일).
 - 서명·채널 갱신 단계는 없다. 비공개 키도 없다.
@@ -298,8 +299,7 @@ docker·네트워크 없이 돈다. compose 의 이미지 구성이 바뀌면 `t
 
 - **cosign 교차 검증을 하지 않았다.** 형식은 맞췄지만 실제 cosign 으로 서명·검증해 보지 않았다.
 - **빌드 워크플로를 실제로 돌려 보지 않았다.** YAML 문법과 구조만 확인했다.
-- **승격한 버전의 태그.** `v1.1.0` 태그를 푸시하면 CI 가 그 커밋을 다시 빌드해 Beta 와 다른 다이제스트의 이미지가 `:1.1.0` 태그를 덮어쓴다. 채널의 manifest 는 다이제스트를 가리키므로 설치에는 영향이 없지만, 태그로 받는 사람은 다른 이미지를 받는다. 지금은 승격한 Stable 버전의 git 태그를 푸시하지 않거나, 푸시했다면 그 빌드 실행을 취소해야 한다. 워크플로에서 Stable 태그 빌드를 어떻게 다룰지는 아직 정하지 않았다.
-- **mailserver 이미지의 compose 태그.** compose 는 mailserver 만 제품 버전이 아닌 고정 태그를 쓴다. CI 는 다른 이미지와 같이 제품 버전 태그로 올린다. 다이제스트로 받는 설치에는 영향이 없고, 태그로 받는 구성(`JW_VERSION`)에서는 mailserver 를 찾지 못한다.
+- **수동 실행으로 Stable 버전을 빌드할 수 있다.** 트리거는 Beta 태그뿐이지만 수동 실행의 버전 입력은 `X.Y.Z` 도 받는다(첫 릴리스처럼 Beta 를 거치지 않는 경우를 위해). 이미 승격한 버전을 수동으로 다시 빌드하면 태그가 다른 다이제스트를 가리키게 되므로 하지 않는다.
 - **compose 읽기는 필요한 범위만.** `image`·`build`·`profiles` 만 읽는다. 그 항목에 앵커·병합 키·여러 줄 값을 쓰면 멈춘다. `include`·`extends` 로 나눈 compose 는 읽지 못한다.
 - **`--resolve-digests` 는 익명 조회.** 인증이 필요한 레지스트리의 남의 이미지는 `--pins` 로 준다. 조회 값은 그 시점에 태그가 가리키던 것이라, 시험한 이미지와 같은지는 사람이 확인해야 한다 — compose 에서 다이제스트로 고정해 두는 편이 낫다.
 - **여러 아키텍처 미지원.** `linux/amd64` 만 빌드한다.

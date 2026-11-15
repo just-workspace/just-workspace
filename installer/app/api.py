@@ -31,6 +31,9 @@ from app.state import Store, now_iso, write_private
 from app.tokens import COOKIE_NAME, SESSION_TTL, TokenStore
 from app.zonectl import ZoneManager, ZoneRequestError
 
+# 받을 이미지 저장소의 기본값 — 이미지(Dockerfile 의 ARG JW_REGISTRY)와 같은 값. 실행할 때 JW_REGISTRY 로 바꾼다.
+DEFAULT_REGISTRY = "ghcr.io/just-workspace"
+
 KEY_HEADER = "x-jw-installer-key"
 LOCAL_KEY_HEADER = "x-jw-local-key"
 
@@ -76,7 +79,7 @@ def build_services(paths: Paths, *, runner: Runner | None = None, registry: str 
     paths.ensure_dirs()
     bundle = Bundle(paths.bundle)
     docker = Docker(runner or SubprocessRunner(), paths)
-    registry = registry or os.environ.get("JW_REGISTRY") or "localhost"
+    registry = registry or os.environ.get("JW_REGISTRY") or DEFAULT_REGISTRY
     image_tag = image_tag or os.environ.get("JW_IMAGE_TAG") or None
     engine_kwargs = {k: overrides.pop(k) for k in ("http", "sleep") if k in overrides}
     preflight_kwargs = overrides.pop("preflight_kwargs", {})

@@ -22,7 +22,7 @@ x-logging: &default-logging
 services:
   # ─── 1. PostgreSQL 16 (workspace + gitea 공유) ───
   postgres:
-    image: postgres:16.16-alpine   # 16 라인 최신 마이너. 17/18 은 pg_upgrade 또는 덤프·복원 필요(별도)
+    image: postgres:16.16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e   # 16 라인 최신 마이너. 17/18 은 pg_upgrade 또는 덤프·복원 필요(별도)
     command:
       - "postgres"
       - "-c"
@@ -67,7 +67,7 @@ services:
 
   # ─── 2. Redis 7 ───
   redis:
-    image: redis:8.8.4-alpine   # 7.4 RDB/AOF 를 그대로 읽지만 8 에서 저장한 뒤엔 7 로 못 돌아간다(롤백=백업 복원)
+    image: redis:8.8.4-alpine@sha256:1273af45b299d2b8b60d0e400d90aa6c2c5b1794f01d6a7ca60ff3ba6e65efb5   # 7.4 RDB/AOF 를 그대로 읽지만 8 에서 저장한 뒤엔 7 로 못 돌아간다(롤백=백업 복원)
     container_name: ws-redis
     logging: *default-logging
     command: redis-server --appendonly yes --appendfsync everysec
@@ -120,6 +120,8 @@ services:
       # .env 에 DATABASE_URL 이 없거나 비어 있으면 DB_USER·DB_PASSWORD·DB_NAME 으로 조립한다(비밀번호를 두 곳에 적지 않게).
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${DB_USER:-workspace}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-workspace}}
       BACKEND_WORKERS: ${BACKEND_WORKERS:-}
+      # 표시 버전. 이미지에 구운 값보다 우선한다 — 승격(Beta → Stable)은 이미지를 다시 빌드하지 않으므로 실행 환경이 넣는다.
+      JW_APP_VERSION: ${JW_APP_VERSION:-}
       # 설치된 구역(쉼표 구분 id, backend/app/zones.json). 비우면 전부 — 미설치 구역의 API·백그라운드 작업은 올라오지 않는다.
       JW_ZONES: ${JW_ZONES:-}
       # 브랜드 APK 자동빌드 — 호스트의 리포 경로(docker -v 마운트용). 미설정 시 빌드 비활성.
@@ -204,7 +206,7 @@ services:
 
   # ─── 5. Nginx (내장 리버스 프록시, 항상 기동) ───
   nginx:
-    image: nginx:1.31.8-alpine
+    image: nginx:1.31.8-alpine@sha256:fed7e14be83cbd2661a75cdc5b872d936cf155d46c327084d30b8df19ae88d72
     container_name: ws-nginx
     logging: *default-logging
     security_opt: ["no-new-privileges:true"]
@@ -271,7 +273,7 @@ services:
   mailserver:
     # v16.0.1(Debian 13 / Dovecot 2.4) 릴리스 digest + 데비안 보안 갱신 파생 이미지(mailserver/image/Dockerfile).
     # 다음 DMS 릴리스가 나오면 그 Dockerfile 의 FROM 을 바꾼다.
-    image: ${JW_REGISTRY:-localhost}/just-workspace-mailserver:17.0.0-r2-sec
+    image: ${JW_REGISTRY:-localhost}/just-workspace-mailserver:${JW_VERSION:-latest}
     build:
       context: ./mailserver/image
     container_name: ws-mailserver
@@ -283,8 +285,8 @@ services:
       - "25:25"
       - "465:465"
       - "587:587"
+      # IMAP 은 TLS(993)만 연다. 평문 143 은 게시하지 않는다(내부망에서는 그대로 듣는다).
       - "993:993"
-      - "143:143"
     volumes:
       - mail-data:/var/mail
       - mail-state:/var/mail-state
@@ -548,6 +550,8 @@ services:
       RELAY_WT_KEY: ${AUDIORELAY_WT_KEY:-/etc/letsencrypt/live/${DOMAIN}/privkey.pem}
       RELAY_WT_SELF_SIGNED_HOSTS: ${AUDIORELAY_WT_SELF_SIGNED_HOSTS:-127.0.0.1,localhost}
       RELAY_MAX_PEERS_PER_ROOM: "16"
+      # 표시 버전(/audiorelay/info). 비우면 빌드 때 구운 값.
+      JW_APP_VERSION: ${JW_APP_VERSION:-}
     volumes:
       # LE 인증서(갱신되면 1시간 안에 다시 읽는다). 없으면 자가서명으로 뜬다.
       - certbot-data:/etc/letsencrypt:ro
@@ -630,7 +634,7 @@ services:
   # 헤드리스 크롬으로 룸을 합성 녹화 → egress-out 볼륨에 mp4 저장. redis 로 livekit 과 통신.
   # 리소스 무거움(크롬). livekit 프로필과 함께 켤 때만 의미 있음.
   egress:
-    image: livekit/egress:v1.15.0   # v1.14.x 는 크롬 V8 원격 실행 취약점 — 1.15.0 이상
+    image: livekit/egress:v1.15.0@sha256:ac244a40268ce1dd1510fbff6eb529609ec68aceff1602343f79be8ca08c355b   # v1.14.x 는 크롬 V8 원격 실행 취약점 — 1.15.0 이상
     container_name: ws-egress
     logging: *default-logging
     profiles: ["egress"]

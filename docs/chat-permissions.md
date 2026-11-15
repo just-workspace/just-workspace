@@ -16,7 +16,7 @@
 
 `channel_members.role`(owner/admin/member)과 `users.is_admin` 은 그대로 둔다.
 
-init_db(advisory lock) 가 한 번 하는 일: @everyone 행(없을 때만, 권한 = `DEFAULT_EVERYONE`), 기본 카테고리
+스키마 기준선(`backend/app/db/baseline.py` — [data-safety.md](data-safety.md))이 한 번 하는 일: @everyone 행(없을 때만, 권한 = `DEFAULT_EVERYONE`), 기본 카테고리
 "채널"·"음성"·"보관" + DM 아닌 채널 배치(`system_settings.chat.categories_seeded` 표시로 한 번만),
 `channels.category_id` FK(NOT VALID)·인덱스. 관리자가 바꾼 @everyone 권한은 기동 때 되돌리지 않는다.
 

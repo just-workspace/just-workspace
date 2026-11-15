@@ -70,7 +70,7 @@ docker compose config --quiet && docker compose up -d
 | **AI** | 내장 AI 채팅 (Ollama / OpenAI 호환 / Anthropic), 사용자별 API 키, 도구 호출 확인 게이트, MCP 서버 — claude.ai 커스텀 커넥터로 노출 ([docs/CONNECTOR.md](docs/CONNECTOR.md)) |
 | **검색** | Ctrl+K 커맨드 팔레트, 7개 모듈 통합 검색 |
 | **플러그인** | 런타임 로딩 (리빌드 없이 추가/제거), v1 Vue · v2 React 계약, 패키지 업로드 설치, SDK ([docs/extensions.md](docs/extensions.md)) |
-| **운영** | 웹 최초 설정 마법사, 앱 내 백업/복원, 관리자 패널(감사 로그·보안 정책·저장소·서비스 상태) |
+| **운영** | 웹 최초 설정 마법사, 앱 내 백업(복원은 서버에서 — 스키마 버전·백업 형식은 docs/data-safety.md), 관리자 패널(감사 로그·보안 정책·저장소·서비스 상태) |
 | **클라이언트** | PWA, 모바일 (Capacitor 8, Android APK 서버 빌드·게시 / iOS 소스), 데스크톱 (Electron 44) — [apps/](apps/README.md) |
 | **화면** | 전 페이지 다크 UI, 1280~8K 유동 레이아웃, 화면 배율, 한/영 |
 

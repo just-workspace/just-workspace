@@ -147,8 +147,9 @@ docker compose restart backend
 ## 백업
 
 ```bash
-sudo bash scripts/backup.sh [백업디렉토리]   # PostgreSQL(pg_dump) + Redis(RDB) + 메일 데이터 + 안드로이드 서명 키, 30일 보존
-sudo bash scripts/restore.sh <백업디렉토리>
+sudo bash scripts/backup.sh [받을-폴더]              # 전체 백업을 .jwbak 한 개로(30일 보존)
+sudo bash scripts/backup.sh --include-files          # 파일 저장소도 넣는다(로컬 저장소일 때만)
+sudo bash scripts/restore.sh <백업 파일>
 ```
 
-파일 스토리지(`storage-vol`)와 Gitea 데이터(`gitea-data`), 녹화(`egress-out`)는 볼륨 자체를 백업한다. 관리 › 저장소·백업에서 앱 내 백업/복원도 된다.
+DB·설정(`.env` — 암호화 키)·메일·코드 저장소·플러그인 데이터·인증서·앱 서명 키가 들어간다. Redis 와 NFS 의 파일, 녹화 임시 볼륨(`egress-out`)은 들어가지 않는다. 관리 › 저장소·백업에서도 같은 형식의 백업을 만든다(복원은 서버에서 `scripts/restore.sh`). 자세한 것은 [data-safety.md](data-safety.md).

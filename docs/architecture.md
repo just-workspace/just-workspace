@@ -50,7 +50,7 @@ TipTap 3 + Yjs(위키 공동 편집) · zustand · TanStack Query · i18next(ko/
 `backend/` — Python 3.14 · FastAPI 0.143 · Starlette · SQLAlchemy 2.1(asyncio) + asyncpg · pydantic 2 · Redis 8(redis-py) · uvicorn 0.54.
 
 - **멀티워커**: `uvicorn --workers N`(`BACKEND_WORKERS`, 기본은 CPU 수 기준 2~8). 프로세스 메모리에 상태를 두지 않는다 — 세션 레지스트리·회의 메타·메일 첨부·OAuth 코드·헬스 결과·파일 잠금은 Redis.
-- `init_db()` 는 PostgreSQL **세션 advisory lock** 안에서 돈다 — 워커 8개가 동시에 `create_all`·`ALTER` 를 돌려 충돌하던 것을 막는다(채팅 마이그레이션은 별도 트랜잭션 락).
+- 스키마 변경은 PostgreSQL **세션 advisory lock** 을 쥔 하나만 한다 — 컨테이너가 뜰 때 워커보다 먼저 한 번 적용하고, 워커는 버전만 확인한다([data-safety.md](data-safety.md)).
 - 서비스 헬스 체크(`/api/services`)는 락을 잡은 워커 하나만 점검하고 결과를 Redis 에 올린다. 나머지 워커는 저장본을 읽는다.
 - 웹 푸시 VAPID 키는 env(`VAPID_PUBLIC_KEY/PRIVATE_KEY`) → DB(`system_settings` `push.vapid`) 순으로 찾고, 없으면 만들어 DB 에 저장한다 — 워커마다 다른 키가 생기지 않는다.
 - 클라이언트 IP 신뢰 경계: `--proxy-headers --forwarded-allow-ips 172.28.0.2`(ws-nginx 고정 IP). nginx 는 앞단 RP 연결일 때만 `X-Real-IP` 를 승격하고 XFF 를 **덮어써** 넘긴다.
@@ -168,7 +168,7 @@ PATCH /api/admin/modules/{id}      → 모듈 on/off (admin)
 
 ## 데이터베이스
 
-단일 PostgreSQL 16: `workspace` DB(앱 전체) + `gitea` DB(같은 인스턴스, 별도 database). 스키마는 기동 시 `init_db()` 가 `create_all` + 경량 마이그레이션으로 맞춘다.
+단일 PostgreSQL 16: `workspace` DB(앱 전체) + `gitea` DB(같은 인스턴스, 별도 database). 스키마에는 버전이 있고(`schema_migrations`), 번호 붙은 변경 단계로만 바뀐다 — [data-safety.md](data-safety.md).
 
 ## 포트 맵
 

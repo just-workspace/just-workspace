@@ -17,6 +17,7 @@ Just-Workspace 의 환경별 값은 **`.env` 변수** 또는 **설치기가 생�
 | `JW_ZONES` | (비움) | 설치된 구역(쉼표): mail chat calendar docs meetings git ai sso rbi. 비우면 전부. 적지 않은 구역의 API 라우터·백그라운드 작업은 백엔드에 올라오지 않는다. 선언은 `backend/app/zones.json`, 라우터·루프 표는 `backend/app/zones.py` | 대화형 선택 |
 | `STORAGE_VOLUME` | ws-storage-data | 파일 스토리지 볼륨명(외부 볼륨/NFS 가능) | 기본값 |
 | `BACKUP_VOLUME` | backups-vol | 앱 내 백업 저장 볼륨 | 기본값 |
+| `JW_MIGRATE_ON_START` | (비움 = 켬) | backend 가 뜰 때 DB 스키마 변경 단계를 스스로 적용할지. `0` 이면 적용하지 않고, 버전이 안 맞으면 뜨지 않는다(`python -m app.cli migrate` 를 따로 부르는 구성) — [data-safety.md](data-safety.md) | 기본값 |
 | `APP_NAME` | Workspace | 표시 이름(브랜딩) | 입력 |
 | `APP_URL` | https://도메인 | 외부 접속 URL = OAuth issuer | 자동 조합 |
 | `NETLAB_URL` | (비움) | NetLab 별도 출처 주소(https 만). 있으면 앱 내려받기 페이지(`/api/apps`)에 NetLab 콘솔 도우미 링크를 띄운다 | 선택 |

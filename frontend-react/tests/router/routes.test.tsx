@@ -10,13 +10,16 @@ const apiMock = vi.hoisted(() => ({
   user: { id: 'u1', username: 'admin', display_name: 'Admin', email: null, primary_email: null, avatar_url: null, recovery_email: null, is_admin: true, last_login_at: null } as Record<string, unknown> | null,
 }))
 
+const ALL_MODULE_IDS = vi.hoisted(() => ['mail', 'chat', 'ai', 'meetings', 'files', 'calendar', 'contacts', 'git', 'board', 'tasks', 'wiki', 'rbi', 'id-1'])
+
 vi.mock('~/lib/api', async (orig) => {
   const real = await orig<typeof import('~/lib/api')>()
   const fake = async (url: string) => {
     if (url === '/api/auth/me') { if (!apiMock.user) throw Object.assign(new Error('401'), { statusCode: 401 }); return apiMock.user }
     if (url === '/api/setup/status') return { needs_setup: apiMock.needsSetup }
     if (url === '/api/health') return { service: 'Workspace', config: {} }
-    if (url === '/api/platform/modules') return { modules: [] }
+    // 모든 화면을 여는 테스트 — 내장 모듈과 표본 플러그인(/p/id-1)이 다 켜진 설치를 흉내 낸다(목록에 없는 모듈은 꺼진 것)
+    if (url === '/api/platform/modules') return { modules: ALL_MODULE_IDS.map(id => ({ id, name: id, icon: '', route: `/${id}`, type: id === 'id-1' ? 'plugin' : 'builtin', requires: [], enabled: true })) }
     // 셸(기본 레이아웃)이 여는 실시간·알림 — 목록 응답은 빈 목록 모양으로
     if (url === '/api/chat/channels' || url === '/api/chat/users') return []
     if (url === '/api/chat/drafts' || url === '/api/chat/saved') return { items: [] }

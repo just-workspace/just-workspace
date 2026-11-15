@@ -26,6 +26,8 @@ export interface SiteConfigState {
   netlabUrl: string
   /** 디자인 대개편 확장 설정 — appcfg.* (예: config['dash.cards']). 빈값/부재는 i18n 폴백. */
   config: Record<string, string>
+  /** 설치된 구역 id(서버 /api/health 의 zones). null 이면 아직 모른다(로딩 중이거나 서버가 알려 주지 않음) */
+  zones: string[] | null
   loaded: boolean
 }
 
@@ -45,8 +47,26 @@ export const siteConfigStore = createStore<SiteConfigState>()(() => ({
   demoMode: false,
   netlabUrl: '',
   config: {},
+  zones: null,
   loaded: false,
 }))
+
+/**
+ * 구역(메일·문서·AI 등 설치 단위)이 설치돼 있는가. 켜고 끄는 모듈이 없는 기능(문서 편집, AI 연동 설정 등)을 가릴 때 쓴다.
+ * 구역 목록을 아직 모르면 판정을 미룬다(설치된 것으로 본다).
+ */
+export function zoneInstalledIn(zones: string[] | null, id: string): boolean {
+  return zones === null || zones.includes(id)
+}
+
+export function isZoneInstalled(id: string): boolean {
+  return zoneInstalledIn(siteConfigStore.getState().zones, id)
+}
+
+/** 컴포넌트용 — 구역 목록이 오면 다시 그린다 */
+export function useZoneInstalled(id: string): boolean {
+  return useStore(siteConfigStore, s => zoneInstalledIn(s.zones, id))
+}
 
 export async function fetchAppConfig() {
   if (siteConfigStore.getState().loaded) return
@@ -67,6 +87,7 @@ export async function fetchAppConfig() {
       demo_mode: boolean
       netlab_url?: string
       config: Record<string, string>
+      zones?: string[]
     }>('/api/health')
     siteConfigStore.setState({
       appName: data.service || 'Workspace',
@@ -84,6 +105,7 @@ export async function fetchAppConfig() {
       demoMode: data.demo_mode || false,
       netlabUrl: data.netlab_url || '',
       config: data.config || {},
+      zones: Array.isArray(data.zones) ? data.zones : null,
       loaded: true,
     })
   } catch {

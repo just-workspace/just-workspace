@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
 import { navigateTo } from '~/lib/router'
 import { useAuth } from '~/composables/useAuth'
-import { useSiteConfig } from '~/composables/useSiteConfig'
+import { useSiteConfig, useZoneInstalled } from '~/composables/useSiteConfig'
 import { usePlatform } from '~/composables/usePlatform'
 import { openCompose } from '~/composables/useMail'
 import { addToast } from '~/composables/useToast'
@@ -58,6 +58,7 @@ export function DashboardGreeting({ wide, editing, onToggleEdit, noEdit }: Dashb
       : t('greeting.withName', { greeting, name: user?.display_name || user?.username })
   const dateStr = now ? now.toLocaleDateString(locale, { month: 'long', day: 'numeric', weekday: 'long' }) : ''
 
+  const docsOn = useZoneInstalled('docs')   // 문서 편집기는 문서 구역 것
   function newDoc() {
     const win = window.open('/office/open?new=doc&dir=my', '_blank')
     if (!win) addToast('error', t('files.page.popupBlocked'))
@@ -67,7 +68,7 @@ export function DashboardGreeting({ wide, editing, onToggleEdit, noEdit }: Dashb
   if (isModuleEnabled('mail')) main.push({ key: 'mail', label: t('dashboard.shortcuts.composeMail'), icon: 'mail', run: () => openCompose('new') })
   if (isModuleEnabled('calendar')) main.push({ key: 'event', label: t('dashboard.header.newEvent'), icon: 'calendar', run: () => { void navigateTo('/calendar?new=1') } })
   if (isModuleEnabled('files')) {
-    main.push({ key: 'doc', label: t('dashboard.d17.create.doc'), icon: 'file-doc', run: newDoc })
+    if (docsOn) main.push({ key: 'doc', label: t('dashboard.d17.create.doc'), icon: 'file-doc', run: newDoc })
     main.push({ key: 'file', label: t('dashboard.header.uploadFile'), icon: 'upload', run: () => { void navigateTo('/files') } })
   }
   // ▾ 더 보기

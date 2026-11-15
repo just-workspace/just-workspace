@@ -6,7 +6,9 @@
  * React: const { groups, flat, find, labelFor } = useSettingsNav('settings' | 'admin')   — groups·flat 은 배열 값
  */
 import { useCallback, useEffect, useMemo } from 'react'
+import { useStore } from 'zustand'
 import { usePlatform } from '~/composables/usePlatform'
+import { siteConfigStore, zoneInstalledIn } from '~/composables/useSiteConfig'
 import { useAdminOps } from '~/composables/useAdminOps'
 import { authStore } from '~/composables/useAuth'
 import { useI18n } from '~/i18n'
@@ -21,6 +23,8 @@ export interface SettingsNavItem {
   keywords?: string[]
   /** 모듈이 꺼져 있으면 숨김 */
   module?: string
+  /** 이 구역이 설치되지 않았으면 숨김(켜고 끄는 모듈과 별개 — AI 설정처럼 모듈을 켜기 전에도 보여야 하는 항목) */
+  zone?: string
   adminOnly?: boolean
 }
 export interface SettingsNavGroup { label: string; items: SettingsNavItem[] }
@@ -29,6 +33,7 @@ export type SettingsNavMatch = SettingsNavFlatItem & { matched: string | undefin
 
 export function useSettingsNav(scope: 'settings' | 'admin') {
   const { isModuleEnabled } = usePlatform()
+  const zones = useStore(siteConfigStore, s => s.zones)
   const { ops, ensure } = useAdminOps()
   const { t } = useI18n()
 
@@ -44,6 +49,8 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
       label: t(`${ns}.label.${id}`),
       keywords: t(`${ns}.kw.${id}`).split(',').map(s => s.trim()).filter(Boolean),
     })
+    // 꺼진 모듈·설치되지 않은 구역의 항목은 뺀다(항목이 다 빠진 묶음은 묶음째)
+    const shown = (i: SettingsNavItem) => (!i.module || isModuleEnabled(i.module)) && (!i.zone || zoneInstalledIn(zones, i.zone))
     if (scope === 'settings') {
       return [
         { label: t('shell.settingsNav.group.personal'), items: [
@@ -57,14 +64,14 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
           { to: '/settings/mail', ...L('shell.settingsNav', 'mail'), module: 'mail' },
           { to: '/settings/calendar', ...L('shell.settingsNav', 'calendar'), module: 'calendar' },
           { to: '/settings/chat', ...L('shell.settingsNav', 'chat'), module: 'chat' },
-          { to: '/settings/ai', ...L('shell.settingsNav', 'ai') },
+          { to: '/settings/ai', ...L('shell.settingsNav', 'ai'), zone: 'ai' },
         ] as SettingsNavItem[] },
         // AI 하위(시안 H1 좌 내비 "AI" 묶음) — 메모리 · AI 연동(MCP)
         { label: t('shell.settingsNav.group.ai'), items: [
-          { to: '/settings/ai/memory', ...L('shell.settingsNav', 'aiMemory') },
-          { to: '/settings/ai/mcp', ...L('shell.settingsNav', 'aiMcp') },
+          { to: '/settings/ai/memory', ...L('shell.settingsNav', 'aiMemory'), zone: 'ai' },
+          { to: '/settings/ai/mcp', ...L('shell.settingsNav', 'aiMcp'), zone: 'ai' },
         ] as SettingsNavItem[] },
-      ].map(g => ({ ...g, items: g.items.filter(i => !i.module || isModuleEnabled(i.module)) }))
+      ].map(g => ({ ...g, items: g.items.filter(shown) })).filter(g => g.items.length)
     }
     // 관리(시안 AdminPage nav · 관리 1 ②): 설정 9카드를 항목으로 쪼개고 /admin/system 은 "서비스 상태"로 흡수.
     // 보조 글자는 운영 요약(useAdminOps)에서: 승인 대기 n(경고) · SSL D-n(30일 이하 경고) · 서비스 n/n.
@@ -81,7 +88,7 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
         { to: '/admin/users', ...L('shell.adminNav', 'users'), ...pendingMeta },
         { to: '/admin/groups', ...L('shell.adminNav', 'groups') },
         { to: '/admin/modules', ...L('shell.adminNav', 'modules') },
-        { to: '/admin/ai-ops', ...L('shell.adminNav', 'aiOps') },
+        { to: '/admin/ai-ops', ...L('shell.adminNav', 'aiOps'), zone: 'ai' },
       ] },
       { label: t('shell.adminNav.group.settings'), items: [
         { to: '/admin/settings', ...L('shell.adminNav', 'settings') },
@@ -90,19 +97,19 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
         { to: '/admin/mail', ...L('shell.adminNav', 'mail') },
         { to: '/admin/storage', ...L('shell.adminNav', 'storage') },
         { to: '/admin/security', ...L('shell.adminNav', 'security'), ...sslMeta },
-        { to: '/admin/ai', ...L('shell.adminNav', 'ai') },
+        { to: '/admin/ai', ...L('shell.adminNav', 'ai'), zone: 'ai' },
         { to: '/admin/app-build', ...L('shell.adminNav', 'appBuild') },
       ] },
       // 격리 브라우저는 따로 묶는다(r22) — 사용자 메뉴(레일·탭·팔레트)에는 없고, 사용자는 전용 출처(rbi.<도메인>)로 바로 들어간다
       { label: t('shell.adminNav.group.rbi'), items: [
-        { to: '/admin/rbi', ...L('shell.adminNav', 'rbi') },
+        { to: '/admin/rbi', ...L('shell.adminNav', 'rbi'), zone: 'rbi' },
       ] },
       { label: t('shell.adminNav.group.system'), items: [
         { to: '/admin/system', ...L('shell.adminNav', 'system'), ...svcMeta },
         { to: '/admin/logs', ...L('shell.adminNav', 'logs') },
       ] },
-    ]
-  }, [scope, t, isModuleEnabled, ops])
+    ].map(g => ({ ...g, items: (g.items as SettingsNavItem[]).filter(shown) })).filter(g => g.items.length)
+  }, [scope, t, isModuleEnabled, zones, ops])
 
   const flat = useMemo<SettingsNavFlatItem[]>(() => groups.flatMap(g => g.items.map(i => ({ ...i, group: g.label }))), [groups])
 

@@ -3,6 +3,7 @@
  * 그 밖은 "미리 볼 수 없음 + 다운로드". Esc 닫기 + 열릴 때 포커스, 닫으면 연 요소로 복귀(시안 G 규칙).
  * 마운트 = 열림. Vue 와 같이 포털 없이 페이지 안에 fixed 로 그린다.
  */
+import { useZoneInstalled } from '~/composables/useSiteConfig'
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
 import { $fetch } from '~/lib/api'
@@ -25,7 +26,9 @@ export function FilesFilePreviewModal({ item, onClose, onOpenEditor }: FilesFile
   const [loadingText, setLoadingText] = useState(false)
 
   // 형식 판정은 lib/files previewKind 한곳 — mime 을 모르는 항목(직접 공유받은 파일)은 확장자로 본다
-  const previewType = previewKind(item) ?? (isOfficeFile(item.name) ? 'office' : null)
+  // 문서 구역이 없으면 편집기로 열 수 없다 — 오피스 파일도 "미리 볼 수 없음 + 내려받기"로
+  const docsOn = useZoneInstalled('docs')
+  const previewType = previewKind(item) ?? (docsOn && isOfficeFile(item.name) ? 'office' : null)
 
   async function loadTextPreview() {
     if (previewType !== 'text') return

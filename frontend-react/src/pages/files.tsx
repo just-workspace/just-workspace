@@ -22,7 +22,7 @@ import { useAuth } from '~/composables/useAuth'
 import { useIsMobile } from '~/composables/useIsMobile'
 import { useToast } from '~/composables/useToast'
 import { confirmBox, promptBox } from '~/composables/useDialog'
-import { useSiteConfig } from '~/composables/useSiteConfig'
+import { useSiteConfig, useZoneInstalled } from '~/composables/useSiteConfig'
 import { useDesktopShell } from '~/composables/useDesktopShell'
 import { useBreadcrumb } from '~/composables/useBreadcrumb'
 import { UiIcon } from '~/components/ui/Icon'
@@ -185,10 +185,13 @@ export default function FilesPage() {
     }
     // 공유받은 항목도 같은 길 — 미리보기·다운로드·오피스 API 가 shared-with-me/ 경로를 권한대로 받는다(p9)
     markRecent(item.path)
-    if (isOfficeFile(item.name)) { openInlineEditor(item); return }
+    if (docsOn && isOfficeFile(item.name)) { openInlineEditor(item); return }
     // 이미지·PDF·텍스트는 미리보기, 그 밖은 미리보기 모달의 "미리 볼 수 없음 + 다운로드"
     setPreviewFile(item)
   }
+
+  // 문서 편집기는 문서 구역 것 — 설치되지 않았으면 "새 문서"·편집으로 열기를 숨기고 오피스 파일은 미리보기(내려받기)로 연다
+  const docsOn = useZoneInstalled('docs')
 
   // 새 Office 문서 — 빈 docx/xlsx/pptx 를 만들어 바로 OnlyOffice 로 연다.
   // 이름을 먼저 묻지 않는다(제목은 편집기에서 "다른 이름으로" 또는 파일 목록에서 바꾼다).
@@ -672,6 +675,7 @@ export default function FilesPage() {
           <button type="button" className="flex h-12 w-full items-center gap-3.5 px-4 text-left text-[15px]" onClick={() => newFromSheet('folder')}>
             <FilesFileTypeIcon kind="folder" className="h-5 w-5" />{t('files.commandBar.newFolder')}
           </button>
+          {docsOn && <>
           <button type="button" className="flex h-12 w-full items-center gap-3.5 px-4 text-left text-[15px]" onClick={() => newFromSheet('doc')}>
             <FilesFileTypeIcon kind="doc" className="h-5 w-5" />{t('files.commandBar.newDoc')}
           </button>
@@ -681,6 +685,7 @@ export default function FilesPage() {
           <button type="button" className="flex h-12 w-full items-center gap-3.5 px-4 text-left text-[15px]" onClick={() => newFromSheet('slide')}>
             <FilesFileTypeIcon kind="slide" className="h-5 w-5" />{t('files.commandBar.newSlide')}
           </button>
+          </>}
         </UiActionSheet>
       )}
     </div>

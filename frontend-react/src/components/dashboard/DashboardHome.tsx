@@ -10,6 +10,7 @@
  *   바꿀 때마다 /api/me/prefs `dash.layout` 에 바로 저장(기기 간 동기화). "기본값으로" = 개인 배치를 지워 관리자 기본 배치로.
  * mode="admin"(관리 › 설정 › 대시보드): 늘 편집, 저장은 관리자 기본 배치(appcfg dash.layout), 패널에서 카드 잠금(관리자 고정).
  */
+import { useZoneInstalled } from '~/composables/useSiteConfig'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useI18n } from '~/i18n'
 import { navigateTo } from '~/lib/router'
@@ -107,13 +108,14 @@ export function DashboardHome({ mode = 'user' }: { mode?: 'user' | 'admin' }) {
 
   // ── 카드 정의 ──
   const has = (m: string) => isModuleEnabled(m)
+  const aiZone = useZoneInstalled('ai')   // AI 브리핑 카드는 AI 구역 것(모듈을 켜기 전에도 보이므로 구역으로 판정)
   // 네트워크 랩 — NETLAB_URL(https)이 있을 때만 쓸 수 있는 카드(기본 보임, 다른 카드처럼 옮기기·숨기기)
   const netlabUrl = useNetLabUrl()
   const defs = useMemo<Record<CardKey, CardDef>>(() => ({
     start: { title: t('dashboard.d17.start.title'), icon: 'check-circle', on: isNew && !admin, node: () => <DashboardStart />, empty: { text: '', link: '', to: '/' } },
     inbox: { title: t('dashboard.inbox.title'), icon: 'inbox', on: true, node: () => <DashboardInbox />, empty: { text: t('dashboard.inbox.empty'), link: t('dashboard.inbox.open'), to: '/activity' } },
     today: { title: t('common.today'), icon: 'calendar', on: has('calendar'), node: () => <DashboardToday />, empty: { text: t('dashboard.today.empty'), link: t('dashboard.today.create'), to: '/calendar?new=1' } },
-    ai: { title: t('dashboard.d17.ai.title'), icon: 'sparkles', on: true, node: () => <DashboardFocus />, empty: { text: '', link: '', to: '/' } },
+    ai: { title: t('dashboard.d17.ai.title'), icon: 'sparkles', on: aiZone, node: () => <DashboardFocus />, empty: { text: '', link: '', to: '/' } },
     cont: { title: t('dashboard.d17.cont.title'), icon: 'folder', on: has('files') || has('wiki') || has('chat') || has('board'), node: () => <DashboardContinue />, empty: { text: t('dashboard.d17.empty.cont'), link: t('dashboard.recentFiles.open'), to: '/files' } },
     tasks: { title: t('dashboard.d17.tasks.title'), icon: 'check-square', on: has('tasks'), node: () => <DashboardTasks />, empty: { text: t('dashboard.d17.empty.none'), link: t('dashboard.d17.empty.tasksLink'), to: '/tasks' } },
     mail: { title: t('dashboard.recentMail.title'), icon: 'mail', on: has('mail'), node: () => <DashboardRecentMail />, empty: { text: t('dashboard.recentMail.emptyInbox'), link: t('dashboard.recentMail.open'), to: '/mail' } },
@@ -129,7 +131,7 @@ export function DashboardHome({ mode = 'user' }: { mode?: 'user' | 'admin' }) {
     lab: { title: t('dashboard.d17.lab.title'), icon: 'router', on: !!netlabUrl, node: () => (netlabUrl ? <DashboardNetLab url={netlabUrl} /> : null), empty: { text: '', link: '', to: '/' } },
     // has 는 isModuleEnabled 에 묶여 있다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [t, isNew, admin, isModuleEnabled, netlabUrl])
+  }), [t, isNew, admin, isModuleEnabled, netlabUrl, aiZone])
   const available = useMemo(() => (Object.keys(defs) as CardKey[]).filter(k => defs[k].on), [defs])
 
   // ── 배치(개인 · 관리자 기본) ──

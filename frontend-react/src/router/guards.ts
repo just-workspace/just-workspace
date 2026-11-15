@@ -7,8 +7,8 @@
  */
 import { $fetch } from '~/lib/api'
 import { authStore, fetchUser, authUncertain } from '~/composables/useAuth'
-import { siteConfigStore, fetchAppConfig } from '~/composables/useSiteConfig'
-import { platformStore } from '~/composables/usePlatform'
+import { siteConfigStore, fetchAppConfig, isZoneInstalled } from '~/composables/useSiteConfig'
+import { platformStore, moduleEnabledIn, fetchModules } from '~/composables/usePlatform'
 import { getSharedState, setSharedState } from '~/lib/state'
 
 export interface GuardTarget {
@@ -78,7 +78,11 @@ export async function authGuard(to: GuardTarget): Promise<string | null> {
   return null
 }
 
-const MODULE_ROUTES: Record<string, string> = {
+/**
+ * 모듈에 속한 화면 — 경로 접두사 → 모듈 id. 라우트 표(router/routes.ts)에 모듈 화면을 더하면 여기도 더한다.
+ * 여기 없는 경로(홈·설정·관리·활동 등 코어 화면)는 모듈 판정을 받지 않는다.
+ */
+export const MODULE_ROUTES: Record<string, string> = {
   '/mail': 'mail',
   '/chat': 'chat',
   '/meetings': 'meetings',
@@ -88,21 +92,46 @@ const MODULE_ROUTES: Record<string, string> = {
   '/code': 'git',
   '/git': 'git',
   '/board': 'board',
+  '/tasks': 'tasks',
+  '/wiki': 'wiki',
+  '/ai': 'ai',
   '/rbi': 'rbi',
+  '/settings/mail': 'mail',
+  '/settings/calendar': 'calendar',
+  '/settings/chat': 'chat',
 }
 
-/** middleware/module-guard.global.ts — 꺼진 모듈 화면이면 대시보드로 */
+/**
+ * 켜고 끄는 모듈은 없지만 특정 구역이 설치돼야 쓸 수 있는 화면 — 경로 접두사 → 구역 id.
+ * (AI 설정·운영 화면은 AI 모듈을 켜기 전에도 열려야 하므로 모듈이 아니라 구역으로 판정한다.)
+ */
+export const ZONE_ROUTES: Record<string, string> = {
+  '/office': 'docs',
+  '/approvals': 'ai',
+  '/settings/ai': 'ai',
+  '/admin/ai': 'ai',
+  '/admin/ai-ops': 'ai',
+  '/admin/rbi': 'rbi',
+}
+
+const under = (path: string, prefix: string) => path === prefix || path.startsWith(prefix + '/')
+
+/** middleware/module-guard.global.ts — 꺼졌거나 설치되지 않은 모듈·구역의 화면이면 대시보드로 */
 export function moduleGuard(to: GuardTarget): string | null {
   const { modules, loaded } = platformStore.getState()
   // Don't guard until modules are loaded
   if (!loaded) return null
-  const enabled = (id: string) => modules.find(m => m.id === id)?.enabled ?? true
+  // 목록에 없는 id 는 꺼진 것(설치하지 않은 구역의 모듈은 서버가 목록에서 뺀다)
+  const enabled = (id: string) => moduleEnabledIn(modules, loaded, id)
 
   for (const [prefix, moduleId] of Object.entries(MODULE_ROUTES)) {
-    if (to.path === prefix || to.path.startsWith(prefix + '/')) {
+    if (under(to.path, prefix)) {
       if (!enabled(moduleId)) return '/'
       break
     }
+  }
+  for (const [prefix, zoneId] of Object.entries(ZONE_ROUTES)) {
+    if (under(to.path, prefix) && !isZoneInstalled(zoneId)) return '/'
   }
   // Plugin routes: /p/{pluginId}
   const pluginMatch = to.path.match(/^\/p\/([^/]+)/)
@@ -135,6 +164,12 @@ export async function runGuards(to: GuardTarget): Promise<string | null> {
   await bootAuth()
   const a = await authGuard(to)
   if (a && a !== to.path) return a
+  // 주소를 직접 치고 들어온 첫 이동에서도 판정할 수 있게, 로그인한 사용자면 모듈 목록(과 필요하면 구역 목록)을 먼저 받는다.
+  // 받지 못하면(일시 오류) 판정을 미루고 그대로 보낸다.
+  if (authStore.getState().user && to.matched) {
+    if (!platformStore.getState().loaded) await fetchModules()
+    if (Object.keys(ZONE_ROUTES).some(prefix => under(to.path, prefix))) await fetchAppConfig()
+  }
   const m = moduleGuard(to)
   if (m && m !== to.path) return m
   const s = await setupGuard(to)

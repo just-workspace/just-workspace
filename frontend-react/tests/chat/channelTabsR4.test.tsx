@@ -40,7 +40,8 @@ const summary = (p: Record<string, any> = {}) => ({
 beforeEach(() => {
   api.calls.length = 0
   api.routes = {}
-  platformStore.setState({ modules: [], loaded: true })
+  // 탭이 기대는 모듈이 모두 켜진 설치(목록에 없는 모듈은 꺼진 것)
+  platformStore.setState({ modules: [{ id: 'files', enabled: true }, { id: 'wiki', enabled: true }, { id: 'meetings', enabled: true }, { id: 'tasks', enabled: true }] as any, loaded: true })
   authStore.setState({ user: { id: 'u1', username: 'kim', display_name: '김서연', is_admin: false } as any, loading: false })
   chatStore.setState({
     callStates: {},
@@ -78,7 +79,7 @@ describe('ChatChannelTabs', () => {
 
 describe('ChatChannelTabsManage', () => {
   it('끄고 저장하면 layout(order·hidden)을 보내고, 꺼진 모듈 행은 스위치가 잠긴다', async () => {
-    platformStore.setState({ modules: [{ id: 'meetings', name: '회의', enabled: false } as any], loaded: true })
+    platformStore.setState({ modules: [{ id: 'files', enabled: true }, { id: 'wiki', enabled: true }, { id: 'tasks', enabled: true }, { id: 'meetings', name: '회의', enabled: false }] as any, loaded: true })
     api.routes['/api/chat/channels/c1/tabs'] = (opts) => ({ ...summary(), layout: [] , _body: opts?.body })
     const onSaved = vi.fn()
     renderIn(<ChatChannelTabsManage channelId="c1" channelName="개발" summary={summary()} onSaved={onSaved} />)

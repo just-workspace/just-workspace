@@ -36,12 +36,14 @@ export function useCommands() {
   const { t } = useI18n()
   const isAdmin = !!user?.is_admin
   const calendarOn = isModuleEnabled('calendar')
+  const wikiOn = isModuleEnabled('wiki')
+  const tasksOn = isModuleEnabled('tasks')
 
   const all = useMemo<Command[]>(() => {
     const list: Command[] = []
     if (calendarOn) list.push({ id: 'new-event', label: t('shell.cmd.newEvent'), icon: 'calendar', aliases: ['일정', 'event'], run: () => navigateTo('/calendar') })
-    list.push({ id: 'new-doc', label: t('shell.cmd.newDoc'), icon: 'book-open', aliases: ['위키', '문서', 'wiki'], run: () => navigateTo('/wiki') })
-    list.push({ id: 'new-task', label: t('shell.cmd.newTask'), icon: 'check-square', aliases: ['작업', 'task'], run: () => navigateTo('/tasks') })
+    if (wikiOn) list.push({ id: 'new-doc', label: t('shell.cmd.newDoc'), icon: 'book-open', aliases: ['위키', '문서', 'wiki'], run: () => navigateTo('/wiki') })
+    if (tasksOn) list.push({ id: 'new-task', label: t('shell.cmd.newTask'), icon: 'check-square', aliases: ['작업', 'task'], run: () => navigateTo('/tasks') })
     list.push({
       id: 'status', label: presence === 'away' ? t('shell.cmd.statusOnline') : t('shell.cmd.statusAway'), icon: 'smile', aliases: ['상태', 'status', '자리'],
       run: () => setPresence(presence === 'away' ? 'online' : 'away'),

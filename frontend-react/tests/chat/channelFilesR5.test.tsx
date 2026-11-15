@@ -40,7 +40,8 @@ beforeEach(() => {
   api.handler = () => ({})
   resetSharedState()
   isMobileStore.setState({ isMobile: false })
-  platformStore.setState({ modules: [], loaded: true })
+  // 탭이 기대는 모듈이 모두 켜진 설치(목록에 없는 모듈은 꺼진 것)
+  platformStore.setState({ modules: [{ id: 'files', enabled: true }, { id: 'wiki', enabled: true }, { id: 'meetings', enabled: true }, { id: 'tasks', enabled: true }] as any, loaded: true })
   setUser({ id: 'u1', username: 'haneul', display_name: '정하늘', email: null, primary_email: null, avatar_url: null, recovery_email: null, is_admin: false, last_login_at: null } as any)
 })
 

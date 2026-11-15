@@ -32,15 +32,28 @@ export const platformStore = createStore<{ modules: PlatformModule[]; loaded: bo
 export async function fetchModules() {
   try {
     const data = await $fetch<{ modules: PlatformModule[] }>('/api/platform/modules')
+    // 목록이 아닌 답(프록시 오류 화면 등)은 받은 것으로 치지 않는다 — "목록에 없으면 꺼짐" 판정이 전부를 끄지 않게
+    if (!Array.isArray(data?.modules)) throw new Error('unexpected /api/platform/modules response')
     platformStore.setState({ modules: data.modules, loaded: true })
   } catch (e) {
     console.error('fetchModules error:', e)
   }
 }
 
+/**
+ * 모듈(또는 플러그인) id 가 켜져 있는가 — 레일·가드·대시보드·명령 팔레트가 모두 이 판정을 쓴다.
+ *
+ * - 목록을 아직 못 받았으면(loaded=false) 판정을 미룬다(켜진 것으로 본다) — 로딩 중에 화면을 막거나 깜빡이지 않게.
+ * - 목록을 받은 뒤에는 **목록에 없는 id 는 꺼진 것**이다. 서버는 설치하지 않은 구역의 모듈을 목록에서 뺀다.
+ */
+export function moduleEnabledIn(modules: PlatformModule[], loaded: boolean, id: string): boolean {
+  if (!loaded) return true
+  return modules.find(m => m.id === id)?.enabled ?? false
+}
+
 export function isModuleEnabled(id: string): boolean {
-  const mod = platformStore.getState().modules.find(m => m.id === id)
-  return mod?.enabled ?? true
+  const { modules, loaded } = platformStore.getState()
+  return moduleEnabledIn(modules, loaded, id)
 }
 
 export async function toggleModule(id: string, enabled: boolean) {
@@ -60,6 +73,6 @@ export function usePlatform() {
   const loaded = useStore(platformStore, s => s.loaded)
   const enabledModules = useMemo(() => modules.filter(m => m.enabled), [modules])
   // 렌더 중에 판정하는 함수 — 구독한 modules 기준(컴포넌트가 목록 변경에 다시 그려지게)
-  const isEnabled = useMemo(() => (id: string) => modules.find(m => m.id === id)?.enabled ?? true, [modules])
+  const isEnabled = useMemo(() => (id: string) => moduleEnabledIn(modules, loaded, id), [modules, loaded])
   return { modules, loaded, enabledModules, fetchModules, isModuleEnabled: isEnabled, toggleModule }
 }

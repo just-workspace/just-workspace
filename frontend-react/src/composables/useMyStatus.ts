@@ -13,7 +13,7 @@
  * 컴포넌트 밖: myStatusSnapshot() 으로 같은 계산 값, set* 함수는 그대로 import
  */
 import { createStore, useStore } from 'zustand'
-import { platformStore } from '~/composables/usePlatform'
+import { platformStore, isModuleEnabled, moduleEnabledIn } from '~/composables/usePlatform'
 import { chatStore, updateMyStatus } from '~/composables/useChat'
 import { ensureUserPrefs, userPrefsStore, setPresence as setPrefsPresence, setStatusMessage as setPrefsStatusMessage, useUserPrefs } from '~/composables/useUserPrefs'
 import type { Presence } from '~/composables/useUserPrefs'
@@ -66,7 +66,7 @@ function computeView(chatEnabled: boolean, myStatus: MyStatus | null, prefsPrese
   return { server, presence, dot, invisible, dndUntil, message }
 }
 
-const chatEnabledNow = () => platformStore.getState().modules.find(m => m.id === 'chat')?.enabled ?? true
+const chatEnabledNow = () => isModuleEnabled('chat')
 
 /** 컴포넌트 밖에서 지금 값 */
 export function myStatusSnapshot(): MyStatusView {
@@ -126,7 +126,7 @@ export async function clearMessage() {
 export function useMyStatus() {
   statusClock()
   const prefs = useUserPrefs()
-  const chatEnabled = useStore(platformStore, s => s.modules.find(m => m.id === 'chat')?.enabled ?? true)
+  const chatEnabled = useStore(platformStore, s => moduleEnabledIn(s.modules, s.loaded, 'chat'))
   const myStatus = useStore(chatStore, s => s.myStatus)
   const now = useStore(statusClockStore, s => s.now)
   const v = computeView(chatEnabled, myStatus, prefs.presence, prefs.statusMessage, now)

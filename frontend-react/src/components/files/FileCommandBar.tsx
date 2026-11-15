@@ -5,6 +5,7 @@
  * 공유 · 이동 · 다운로드 · 삭제(32, 12px) · 오른쪽 "모두 선택".
  * 업로드 진행은 전송 패널 한 곳(결정 9) — 업로드 버튼은 파일 고르기만 연다(진행 모달 폐지).
  */
+import { useZoneInstalled } from '~/composables/useSiteConfig'
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { clsx } from 'clsx'
 import { useI18n } from '~/i18n'
@@ -78,7 +79,8 @@ export function FilesFileCommandBar(props: FilesFileCommandBarProps) {
   const allSelected = sortedItems.length > 0 && selCount === sortedItems.length
   function clearSelection() { setSelectedItems(new Set()) }
 
-  // ── 새로 만들기 ▾ ──
+  // ── 새로 만들기 ▾ ── (문서·시트·발표 자료는 문서 구역이 설치됐을 때만)
+  const docsOn = useZoneInstalled('docs')
   const [showNew, setShowNew] = useState(false)
   const newWrap = useRef<HTMLDivElement | null>(null)
   useClickOutside(newWrap, () => setShowNew(false))
@@ -214,6 +216,7 @@ export function FilesFileCommandBar(props: FilesFileCommandBarProps) {
                   <button type="button" role="menuitem" className="flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-sm hover:bg-accent/40" onClick={() => newItem('folder')}>
                     <FilesFileTypeIcon kind="folder" className="h-[15px] w-[15px]" />{t('files.commandBar.newFolder')}
                   </button>
+                  {docsOn && <>
                   <div className="my-1 border-t border-border" role="separator" />
                   <button type="button" role="menuitem" className="flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-sm hover:bg-accent/40" onClick={() => newItem('doc')}>
                     <FilesFileTypeIcon kind="doc" className="h-[15px] w-[15px]" />{t('files.commandBar.newDoc')}
@@ -224,6 +227,7 @@ export function FilesFileCommandBar(props: FilesFileCommandBarProps) {
                   <button type="button" role="menuitem" className="flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-sm hover:bg-accent/40" onClick={() => newItem('slide')}>
                     <FilesFileTypeIcon kind="slide" className="h-[15px] w-[15px]" />{t('files.commandBar.newSlide')}
                   </button>
+                  </>}
                 </div>
               )}
             </div>

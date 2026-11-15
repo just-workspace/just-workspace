@@ -14,8 +14,8 @@ import { useRoute, navigateTo } from '~/lib/router'
 import { useEventListener } from '~/lib/dom'
 import { useSharedState } from '~/lib/state'
 import { AppErrorBoundary } from '~/components/AppErrorBoundary'
-import { usePlatform, fetchModules, platformStore, isModuleEnabled as isModuleEnabledNow } from '~/composables/usePlatform'
-import { useSiteConfig } from '~/composables/useSiteConfig'
+import { usePlatform, fetchModules, platformStore } from '~/composables/usePlatform'
+import { useSiteConfig, fetchAppConfig, isZoneInstalled } from '~/composables/useSiteConfig'
 import { addToast } from '~/composables/useToast'
 import { useAuth, authStore } from '~/composables/useAuth'
 import { useIsMobile } from '~/composables/useIsMobile'
@@ -177,13 +177,18 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
       }
       // 실시간 채널(/ws/chat)은 채팅 화면이 아니라 앱이 연다. 알림·멘션·DM·통화 상태가 어느 화면에서든
       // 바로 오고, 알림 폴링은 소켓이 끊겼을 때의 보정으로만 남는다(useNotifications).
-      if (authStore.getState().user && (!platformStore.getState().loaded || isModuleEnabledNow('chat'))) {
+      // 채팅 모듈이 꺼져 있거나 설치되지 않았어도 연다 — 채팅 쪽 불러오기만 initChat 이 건너뛴다.
+      if (authStore.getState().user) {
         Promise.resolve(initChat()).catch((e: any) => console.error('[Layout] chat init failed:', e))
       }
-      // AI 쓰기 승인 대기 건수(레일 배지·토스트) — 처음 값 + 같은 소켓의 approvals.count 이벤트
-      ensureApprovals()
-      // AI 결과물 묶음 진행·완료 토스트(S4) — 같은 소켓의 ai.artifact_job 이벤트
-      ensureAiArtifacts()
+      // 아래 둘은 AI 구역 것 — 설치되지 않았으면 부르지 않는다(구역 목록을 모르면 예전처럼 부른다)
+      await fetchAppConfig()
+      if (isZoneInstalled('ai')) {
+        // AI 쓰기 승인 대기 건수(레일 배지·토스트) — 처음 값 + 같은 소켓의 approvals.count 이벤트
+        ensureApprovals()
+        // AI 결과물 묶음 진행·완료 토스트(S4) — 같은 소켓의 ai.artifact_job 이벤트
+        ensureAiArtifacts()
+      }
     })()
     // 마운트 한 번(Vue onMounted)
     // eslint-disable-next-line react-hooks/exhaustive-deps

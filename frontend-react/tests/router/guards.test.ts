@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   demo: false,
   demoLogin: 'ok' as 'ok' | 'fail',
   me: null as Record<string, unknown> | null,
+  modules: {} as Record<string, unknown> | Error,
 }))
 
 vi.mock('~/lib/api', async (orig) => {
@@ -16,6 +17,7 @@ vi.mock('~/lib/api', async (orig) => {
     if (url === '/api/setup/status') { if (api.setup instanceof Error) throw api.setup; return api.setup }
     if (url === '/api/health') return { service: 'WS', demo_mode: api.demo, config: {} }
     if (url === '/api/auth/demo-login') { if (api.demoLogin === 'fail') throw new Error('no'); api.me = { id: 'd', is_admin: false }; return {} }
+    if (url === '/api/platform/modules') { if (api.modules instanceof Error) throw api.modules; return api.modules }
     if (url === '/api/auth/me') { if (!api.me) throw Object.assign(new Error('401'), { statusCode: 401 }); return api.me }
     return {}
   }
@@ -31,11 +33,11 @@ const { resetSharedState } = await import('~/lib/state')
 const user = (extra: Record<string, unknown> = {}) => ({ id: 'u', username: 'a', display_name: null, email: null, primary_email: null, avatar_url: null, recovery_email: null, is_admin: false, last_login_at: null, ...extra })
 
 beforeEach(() => {
-  api.calls = []; api.setup = { needs_setup: false }; api.demo = false; api.demoLogin = 'ok'; api.me = null
+  api.calls = []; api.modules = {}; api.setup = { needs_setup: false }; api.demo = false; api.demoLogin = 'ok'; api.me = null
   _resetGuards(); resetSharedState()
   authStore.setState({ user: null, loading: false })
   platformStore.setState({ modules: [], loaded: false })
-  siteConfigStore.setState({ loaded: false, demoMode: false })
+  siteConfigStore.setState({ loaded: false, demoMode: false, zones: null })
 })
 
 describe('auth.global', () => {
@@ -81,7 +83,56 @@ describe('module-guard.global', () => {
     expect(moduleGuard({ path: '/mailbox', matched: true })).toBeNull()
     expect(moduleGuard({ path: '/code/a/b', matched: true })).toBe('/')
     expect(moduleGuard({ path: '/p/notes', matched: true })).toBe('/')
-    expect(moduleGuard({ path: '/chat', matched: true })).toBeNull() // 목록에 없으면 켜짐
+    expect(moduleGuard({ path: '/chat', matched: true })).toBe('/') // 목록에 없으면 꺼짐(설치하지 않은 구역)
+  })
+  it('목록에 없는 모듈 화면은 / — 코어 화면·켜진 모듈·켜진 플러그인은 그대로', () => {
+    platformStore.setState({ loaded: true, modules: [
+      { id: 'files', name: 'f', icon: '', route: '/files', type: 'builtin', requires: [], enabled: true },
+      { id: 'notes', name: 'n', icon: '', route: '/p/notes', type: 'plugin', requires: [], enabled: true },
+    ] })
+    for (const p of ['/mail', '/chat', '/calendar', '/contacts', '/meetings', '/code/a/b', '/git', '/board/1', '/tasks', '/wiki', '/ai', '/rbi', '/settings/mail', '/settings/chat', '/settings/calendar', '/p/ghost']) {
+      expect(moduleGuard({ path: p, matched: true }), p).toBe('/')
+    }
+    for (const p of ['/', '/files', '/p/notes', '/activity', '/settings/account', '/settings/security', '/admin/users', '/admin/modules', '/aide']) {
+      expect(moduleGuard({ path: p, matched: true }), p).toBeNull()
+    }
+  })
+  it('구역으로 판정하는 화면 — 구역 목록을 모르면 보류, 알면 미설치 구역 화면은 /', () => {
+    platformStore.setState({ loaded: true, modules: [] })
+    siteConfigStore.setState({ zones: null })
+    for (const p of ['/office/open', '/approvals', '/settings/ai/mcp', '/admin/ai', '/admin/ai-ops/usage', '/admin/rbi']) {
+      expect(moduleGuard({ path: p, matched: true }), p).toBeNull()
+    }
+    siteConfigStore.setState({ zones: ['docs'] })
+    expect(moduleGuard({ path: '/office/open', matched: true })).toBeNull()
+    for (const p of ['/approvals', '/settings/ai', '/settings/ai/mcp', '/admin/ai', '/admin/ai-ops/usage', '/admin/rbi']) {
+      expect(moduleGuard({ path: p, matched: true }), p).toBe('/')
+    }
+    siteConfigStore.setState({ zones: ['ai', 'rbi'] })
+    expect(moduleGuard({ path: '/office/open', matched: true })).toBe('/')
+    expect(moduleGuard({ path: '/approvals', matched: true })).toBeNull()
+    expect(moduleGuard({ path: '/admin/rbi', matched: true })).toBeNull()
+  })
+  it('가드에 등록한 화면은 라우트 표에 실제로 있는 경로다', async () => {
+    const { ROUTES } = await import('~/router/routes')
+    const { MODULE_ROUTES, ZONE_ROUTES } = await import('~/router/guards')
+    const paths = ROUTES.map(r => r.path.replace(/\/\*$/, ''))
+    for (const prefix of [...Object.keys(MODULE_ROUTES), ...Object.keys(ZONE_ROUTES)]) {
+      expect(paths.some(p => p === prefix || p.startsWith(prefix + '/')), prefix).toBe(true)
+    }
+  })
+  it('주소를 직접 치고 들어온 첫 이동 — 로그인한 사용자면 모듈 목록을 받아 판정한다', async () => {
+    api.me = user()
+    api.modules = { modules: [{ id: 'files', name: 'f', icon: '', route: '/files', type: 'builtin', requires: [], enabled: true }] }
+    expect(await runGuards({ path: '/wiki', matched: true })).toBe('/')
+    expect(api.calls).toContain('/api/platform/modules')
+    expect(await runGuards({ path: '/files', matched: true })).toBeNull()
+  })
+  it('모듈 목록을 못 받으면(일시 오류) 판정을 미루고 그대로 보낸다', async () => {
+    api.me = user()
+    api.modules = new Error('503')
+    expect(await runGuards({ path: '/wiki', matched: true })).toBeNull()
+    expect(platformStore.getState().loaded).toBe(false)
   })
 })
 

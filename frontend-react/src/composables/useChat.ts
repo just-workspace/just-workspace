@@ -14,6 +14,7 @@
 import { createStore } from 'zustand'
 import { $fetch } from '~/lib/api'
 import { wsUrl, wsProtocols } from '~/lib/runtimeConfig'
+import { isModuleEnabled } from '~/composables/usePlatform'
 import { authStore, onBeforeLogout } from '~/composables/useAuth'
 import { addToast } from '~/composables/useToast'
 import {
@@ -1336,8 +1337,9 @@ export function applyVoiceState(channelId: string, state: VoiceChannelState | nu
  * 열린 채널은 마지막으로 가진 메시지 뒤(after)만 받아 붙이고, 너무 많이 밀렸으면 통째로 다시 읽는다.
  */
 async function resyncAfterReconnect() {
-  void fetchCallStates()   // 끊긴 동안 열리고 닫힌 통화
-  void fetchVoiceStates()  // 끊긴 동안 드나든 음성 채널
+  if (isModuleEnabled('meetings')) void fetchCallStates()   // 끊긴 동안 열리고 닫힌 통화
+  if (!chatOn()) return   // 아래는 모두 채팅 것 — 채팅이 없으면 소켓은 알림·배지 전달만 한다
+  if (isModuleEnabled('meetings')) void fetchVoiceStates()  // 끊긴 동안 드나든 음성 채널
   // 끊긴 동안의 상태 변화·스레드 답글·다른 기기의 임시글 — seq 커서에 안 잡히는 것들
   void fetchPresence()
   void fetchThreadUnreadCount()
@@ -1396,6 +1398,9 @@ async function resyncAfterReconnect() {
   }
 }
 
+/** 채팅 모듈이 켜져 있는가(설치되지 않았으면 꺼진 것) */
+const chatOn = () => isModuleEnabled('chat')
+
 export function connectWS() {
   if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) return
 
@@ -1411,8 +1416,10 @@ export function connectWS() {
     if (_everConnected) void resyncAfterReconnect()
     _everConnected = true
     // 대기함을 다 보낸 뒤 임시글을 다시 받는다 — 끊기기 전 서버에 저장된 옛 임시글("hel")이, 대기함으로 이미 보낸 글 뒤에 입력창에 되살아났다
-    void flushOutbox().then(() => fetchDrafts())
-    flushPendingRead()
+    if (chatOn()) {
+      void flushOutbox().then(() => fetchDrafts())
+      flushPendingRead()
+    }
     // 핑 — 첫 회는 0~10초 지터(서버 재시작 뒤 수백 명이 같은 박자로 치지 않게), 이후 30초.
     // 90초 동안 pong 이 없으면 반쯤 죽은 연결(NAT 만료·절전 복귀)로 보고 끊는다 → onclose 의 백오프 재접속.
     const ws = _ws
@@ -2010,13 +2017,22 @@ export async function initChat() {
   hookVisibility()
   loadOutbox()
   ensurePushSubscription()
+  // 소켓은 채팅 모듈과 무관하게 연다(알림·승인 배지·통화 상태가 이 소켓으로 온다).
+  // 채팅·회의 쪽 불러오기는 그 모듈이 켜져 있을 때만 — 꺼졌거나 설치되지 않았으면 그 API 는 없다.
+  const chat = chatOn()
+  const meetings = isModuleEnabled('meetings')
   await Promise.all([
-    fetchChannels(), fetchPresence(), fetchAllUsers(), fetchNotifications(), fetchCallStates(), fetchVoiceStates(),
-    fetchMyStatus(), fetchThreadUnreadCount(), fetchDrafts(), fetchSaved(),
-    $fetch<{ seq: number }>('/api/chat/latest-seq').then(r => { _lastSeq = Math.max(_lastSeq, r.seq || 0) }).catch(() => {}),
+    ...(chat ? [fetchChannels(), fetchPresence(), fetchAllUsers()] : []),
+    fetchNotifications(),
+    ...(meetings ? [fetchCallStates()] : []),
+    ...(chat && meetings ? [fetchVoiceStates()] : []),
+    ...(chat ? [
+      fetchMyStatus(), fetchThreadUnreadCount(), fetchDrafts(), fetchSaved(),
+      $fetch<{ seq: number }>('/api/chat/latest-seq').then(r => { _lastSeq = Math.max(_lastSeq, r.seq || 0) }).catch(() => {}),
+    ] : []),
   ])
   connectWS()
-  void migrateLocalDrafts()   // 채널 목록·서버 임시글을 받은 뒤에(멤버 아닌 채널은 403, 서버본 우선)
+  if (chat) void migrateLocalDrafts()   // 채널 목록·서버 임시글을 받은 뒤에(멤버 아닌 채널은 403, 서버본 우선)
 }
 
 /** 연결 끊고 사용자별 상태 비우기(Vue useChat().cleanup()) — 로그아웃 직전에 useAuth 가 부른다 */

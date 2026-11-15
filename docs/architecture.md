@@ -70,6 +70,11 @@ PATCH /api/admin/modules/{id}      → 모듈 on/off (admin)
 오피스(WOPI)는 파일 모듈 안에 있고 `onlyoffice` 프로파일이 있을 때 동작한다. `rbi`(격리 브라우저)는 기본 꺼짐 —
 `rbi` 프로파일(호스트 netfilter 사이드카)과 함께 켠다([rbi.md](rbi.md)).
 
+**구역(zone)**: 설치 단위는 모듈보다 큰 구역이다 — 선언은 `backend/app/zones.json`(구역 id·소유 모듈·compose 프로파일),
+어느 라우터·백그라운드 루프가 어느 구역 것인지는 `backend/app/zones.py` 의 표. 환경변수 `JW_ZONES`(쉼표 구분, 비우면 전부)에
+없는 구역은 라우터와 루프가 아예 올라오지 않고(API 404), 그 구역의 모듈은 목록에서 빠져 켤 수도 없다. 모듈 on/off 는
+설치된 구역 안에서의 표시·접근 제어다. 설치된 구역 목록은 `GET /api/health` 의 `zones` 로 내려간다.
+
 비활성 모듈은 네비게이션에서 숨고, API 는 `403 이 기능은 비활성화되어 있습니다`, 페이지 진입은 대시보드로 보낸다.
 
 ```

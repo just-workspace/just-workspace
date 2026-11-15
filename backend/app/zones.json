@@ -1,5 +1,5 @@
 {
-  "$comment": "구역 선언 — 설치 마법사·설치 관리자·백엔드가 함께 읽는 단일 출처. memory_mb.idle 은 유휴 실측, limit 는 compose 의 상한 합계. ports 는 호스트에 여는 포트.",
+  "$comment": "구역 선언 — 설치 마법사·설치 관리자·백엔드가 함께 읽는 단일 출처(구역 id·modules). 백엔드 이미지에 실리도록 backend/app/ 에 둔다. modules 는 그 구역이 소유한 백엔드 영역 이름이고, 구역별 라우터·백그라운드 루프 표는 backend/app/zones.py 에 있다. 설치된 구역은 환경변수 JW_ZONES 로 정한다(비우면 전부). memory_mb.idle 은 유휴 실측, limit 는 compose 의 상한 합계. ports 는 호스트에 여는 포트.",
   "version": 1,
   "core": {
     "id": "core",

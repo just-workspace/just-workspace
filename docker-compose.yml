@@ -102,6 +102,8 @@ services:
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0
+      # 설치된 구역(쉼표 구분 id, backend/app/zones.json). 비우면 전부 — 미설치 구역의 API·백그라운드 작업은 올라오지 않는다.
+      JW_ZONES: ${JW_ZONES:-}
       # 브랜드 APK 자동빌드 — 호스트의 리포 경로(docker -v 마운트용). 미설정 시 빌드 비활성.
       JW_HOST_REPO: ${JW_HOST_REPO:-}
       # 격리 브라우저 미러 모드 세션 이미지 — 아래 rbi-mirror 빌드 항목과 같은 이름(백엔드가 세션마다 docker create 한다)

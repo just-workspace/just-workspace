@@ -14,6 +14,7 @@ Just-Workspace 의 환경별 값은 **`.env` 변수** 또는 **설치기가 생�
 |---|---|---|---|
 | `DEPLOY_MODE` | external_proxy | `standalone` / `external_proxy` / `dev` | 대화형 선택 |
 | `COMPOSE_PROFILES` | mailserver,gitea,livekit | 활성 프로파일(쉼표). 사용 가능: mailserver gitea livekit audiorelay egress onlyoffice sso logging aitools certbot | 대화형 선택 |
+| `JW_ZONES` | (비움) | 설치된 구역(쉼표): mail chat calendar docs meetings git ai monitoring sso rbi. 비우면 전부. 적지 않은 구역의 API 라우터·백그라운드 작업은 백엔드에 올라오지 않는다. 선언은 `backend/app/zones.json`, 라우터·루프 표는 `backend/app/zones.py` | 대화형 선택 |
 | `STORAGE_VOLUME` | ws-storage-data | 파일 스토리지 볼륨명(외부 볼륨/NFS 가능) | 기본값 |
 | `BACKUP_VOLUME` | backups-vol | 앱 내 백업 저장 볼륨 | 기본값 |
 | `APP_NAME` | Workspace | 표시 이름(브랜딩) | 입력 |

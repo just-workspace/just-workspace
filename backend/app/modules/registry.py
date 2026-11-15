@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import SystemSetting
 from app.chat.redis_client import get_redis
+from app.zones import module_installed
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 _plugin_modules: list[dict[str, Any]] = []
 
 # ─── Built-in module definitions ───
+# 어느 모듈이 어느 구역 것인지는 app/zones.json 의 modules 가 정한다(id 가 같아야 한다).
+# 설치되지 않은 구역의 모듈은 목록에서 빠지고 켤 수도 없다 — _all_modules · is_module_enabled.
 
 BUILTIN_MODULES: list[dict[str, Any]] = [
     {
@@ -183,8 +186,11 @@ def _module_key(module_id: str) -> str:
 
 
 def _all_modules() -> list[dict[str, Any]]:
-    """Return combined list of builtin + plugin modules."""
-    return BUILTIN_MODULES + _plugin_modules
+    """Return combined list of builtin + plugin modules — 설치된 구역 것만.
+
+    미설치 구역의 모듈은 여기서 빠지므로 모듈 목록(내비게이션)에 안 나오고
+    set_module_enabled 도 "없는 모듈"로 거절한다."""
+    return [m for m in BUILTIN_MODULES + _plugin_modules if module_installed(m["id"])]
 
 
 def parse_plugin_order(value: Any) -> int | None:
@@ -246,7 +252,11 @@ async def load_module_states(db: AsyncSession) -> None:
 
 
 def is_module_enabled(module_id: str) -> bool:
-    """Fast cached check. Falls back to default_enabled if cache not loaded."""
+    """Fast cached check. Falls back to default_enabled if cache not loaded.
+
+    구역이 설치되지 않은 모듈은 DB 에 켜짐으로 남아 있어도 늘 꺼진 것으로 본다."""
+    if not module_installed(module_id):
+        return False
     if module_id in _module_states:
         return _module_states[module_id]
     # Fallback: find in all modules
@@ -376,6 +386,12 @@ def require_module(module_id: str):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             db = kwargs.get("db")
+            # 구역이 설치되지 않은 모듈 — DB 값과 무관하게 막는다(라우터가 없어 보통은 여기까지 오지 않는다)
+            if not module_installed(module_id):
+                raise HTTPException(
+                    status_code=403,
+                    detail="이 기능은 비활성화되어 있습니다",
+                )
             # 모듈 활성여부는 DB 권위(8 워커 in-memory 드리프트로 토글 후 403 나는 문제 방지)
             enabled = is_module_enabled(module_id)
             if db is not None:

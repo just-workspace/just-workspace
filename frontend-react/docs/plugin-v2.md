@@ -1,26 +1,27 @@
 # 플러그인 프런트 v2 (React) — 작성법
 
-React 호스트(`frontend-react/`)는 플러그인 번들을 두 계약으로 연다.
+워크스페이스 본체 화면(이하 "호스트", `frontend-react/`)은 플러그인 번들을 두 계약으로 연다. 새 플러그인은 **v2** 로 쓴다.
 
 | 계약 | 번들 | 호스트가 하는 일 |
 |---|---|---|
-| **v1 (Vue)** — 지금까지의 모든 플러그인 | `plugins/build-plugin.mjs` 산출물. `const {…} = window.__VUE__` 로 시작, default export = Vue 컴포넌트 | v1 플러그인을 열 때만 Vue 런타임을 지연 로드(별도 청크)해 `window.__VUE__` 를 세우고 `createApp(...).mount(div)`. `inject('pluginApi')` 모양은 Vue 호스트와 같다 |
-| **v2 (React)** | react 를 external 로 두고 `window.__REACT__` / `window.__REACT_DOM__` 사용. default export = React 컴포넌트 | 호스트 React 트리 안에서 `<Plugin pluginApi={…} />` 로 그린다(같은 React 인스턴스라 hook 이 그대로 동작) |
+| **v2 (React)** | react 를 번들에 넣지 않고 `window.__REACT__` / `window.__REACT_DOM__` 에서 꺼내 쓴다. default export = React 컴포넌트 | 호스트 React 트리 안에서 `<Plugin pluginApi={…} />` 로 그린다(같은 React 인스턴스라 hook 이 그대로 동작) |
+| **v1 (Vue)** | `plugins/build-plugin.mjs` 산출물. `const {…} = window.__VUE__` 로 시작, default export = Vue 컴포넌트 | v1 플러그인을 열 때만 Vue 런타임을 내려받아(별도 청크) `window.__VUE__` 를 세우고 `createApp(...).mount(div)` 로 띄운다. 호스트 API 는 `inject('pluginApi')` |
 
-로더: `src/plugins/pluginHost.tsx`, 페이지: `src/pages/p/[id].tsx`.
+견본: v2 는 `plugins/remote-desktop`, v1 은 `plugins/sample-notes`. 로더는 `src/plugins/pluginHost.tsx`, 화면은 `src/pages/p/[id].tsx`(이 문서의 `src/…` 는 `frontend-react/src/…`).
+플러그인 전체 그림(manifest·백엔드·설치·보안)은 [docs/extensions.md](../../docs/extensions.md), 두 계약 공통 제약은 [docs/plugin-frontend.md](../../docs/plugin-frontend.md).
 
 ## 1. 번들 주소·캐싱 (v1 과 같음)
 
 - 주소는 `/api/plugin-assets/<id>/bundle.mjs` (백엔드가 `plugins/<folder>/frontend/dist/plugin.mjs` 를 준다).
 - **캐시버스터를 붙이지 않는다.** 백엔드가 ETag + `Cache-Control: no-cache` 를 주고 `If-None-Match` 를 직접 처리하므로
-  안정 URL 이면 재방문은 304(수백 바이트), 새로 빌드하면 mtime 이 바뀌어 자동 반영된다. 자세한 이유는 `docs/plugin-frontend.md` "번들 캐싱".
+  안정 URL 이면 재방문은 304(수백 바이트), 새로 빌드하면 mtime 이 바뀌어 자동 반영된다. 자세한 것은 [plugin-frontend.md](../../docs/plugin-frontend.md) "번들 캐싱".
 - 번들은 **파일 하나**로 만든다(코드 분할 금지 — 청크 경로를 호스트가 모른다). CSS 는 JS 에 인라인(아래 빌드 예).
 
 ## 2. 계약 버전 판정
 
-1. 모듈 목록(`/api/platform/modules`)의 manifest 필드 `frontend_api`(`1`·`2`·`"vue"`·`"react"`) — **지금 백엔드는 이 필드를 넘기지 않는다**
-   (`backend/app/modules/registry.py` 가 고정 필드만 복사). 나중에 넘어오면 그것을 믿는다. manifest 에 미리 적어 두는 건 무해하다.
-2. 없으면 호스트가 번들 **소스를 fetch** 해서 본다: `jwPlugin` export·`window.__REACT__` → v2, `window.__VUE__` → v1.
+1. 모듈 목록(`/api/platform/modules`)에 `frontend_api`(`1`·`2`·`"vue"`·`"react"`) 값이 있으면 그것을 믿는다. **지금 백엔드는 manifest 의 이 필드를 목록에 싣지 않으므로**
+   (`backend/app/modules/registry.py` 가 정해진 필드만 복사) 실제로는 늘 2번으로 간다. manifest 에 적어 두는 것은 무해하다.
+2. 호스트가 번들 **소스를 fetch** 해서 본다: `jwPlugin` export·`window.__REACT__` → v2, `window.__VUE__` → v1.
    v1 번들은 맨 위에서 `window.__VUE__` 를 구조분해하므로 import **전에** 알아야 하기 때문이다.
    같은 URL 이라 HTTP 캐시를 같이 쓰고 두 번째 요청은 304 로 끝난다.
 3. import 후 `export const jwPlugin = { api: 2 }` 가 있으면 최종 v2. 표식도 전역 참조도 없으면 v1 로 본다.
@@ -63,7 +64,7 @@ export default function NotesPage({ pluginApi }: { pluginApi: PluginApiV2 }) {
 | `pluginId` | `string` | 지금 열린 플러그인 id (`/p/<id>`) |
 | `user` | `User \| null` | 로그인 사용자 — **값**(v1 은 Vue ref). 바뀌면 새 props 로 다시 그려진다 |
 | `appName` | `string` | 사이트 이름(브랜딩) — **값** |
-| `$fetch` | `(url, opts?) => Promise` | 호스트 API 클라이언트(ofetch). 번들 앱(apiBase·Bearer)도 처리. 옵션은 ofetch 와 같다(`method/body/query/headers`) |
+| `$fetch` | `(url, opts?) => Promise` | 호스트 API 클라이언트(ofetch). 로그인 정보와 서버 주소를 알아서 붙인다(웹·데스크톱·모바일 앱 공통). 옵션은 ofetch 와 같다(`method/body/query/headers`) |
 | `setHeaderActions` | `(actions, owner = 'plugin') => () => void` | 상단바 버튼·칩 등록. 돌려준 함수로 해제 |
 | `clearHeaderActions` | `(owner = 'plugin') => void` | 상단바 항목 해제 |
 | `setTitle` | `(title: string \| null, owner = 'plugin') => () => void` | 상단바 제목 덮어쓰기(데스크톱 경로 마지막 칸 · 모바일 머리). `null`·`''` = 원복. 돌려준 함수로 원복 |
@@ -81,16 +82,20 @@ export default function NotesPage({ pluginApi }: { pluginApi: PluginApiV2 }) {
 |---|---|
 | `window.__REACT__` | 호스트 `react` 모듈(네임스페이스) |
 | `window.__REACT_DOM__` | `react-dom` + `react-dom/client` 를 합친 객체(`createPortal`, `flushSync`, `createRoot` …) |
-| `window.__WS_SHELL__` | `{ version: 1, setHeaderActions, clearHeaderActions, setTitle, clearTitle }` — `docs/plugin-frontend.md` "상단바 확장 자리"·"상단바 제목" 과 같은 API. `pluginApi` 의 같은 이름 함수와 같은 상태를 바꾼다 |
+| `window.__WS_SHELL__` | `{ version: 1, setHeaderActions, clearHeaderActions, setTitle, clearTitle }` — [plugin-frontend.md](../../docs/plugin-frontend.md) "상단바 확장 자리"·"상단바 제목" 과 같은 API. `pluginApi` 의 같은 이름 함수와 같은 상태를 바꾼다 |
 | `window.__WS_UI__` | 호스트 UI 키트 `{ version: 1, UiButton, UiModal, UiMenu, …, useToast, toast, useDialog, confirmBox, … }` — 아래 7절 |
 
 ## 4. 번들 빌드 설정 예 (react external + 전역 치환)
 
-`plugins/build-plugin.mjs` 가 vue 에 하는 것과 같은 방식이다. JSX 는 **classic 런타임**(`React.createElement`)으로 내보내면
-`react/jsx-runtime` 을 따로 치환할 필요가 없다.
+v2 용 공용 빌드 스크립트는 리포에 없다 — 플러그인이 자기 빌드 스크립트를 둔다. 할 일은 `plugins/build-plugin.mjs` 가 vue 에 하는 것과 같다:
+`react`·`react-dom`·`@jw/ui` 를 번들에 넣지 않고(external), 남은 import 문을 호스트 전역에서 꺼내는 코드로 바꾼다.
+JSX 는 **classic 런타임**(`React.createElement`)으로 내보내면 `react/jsx-runtime` 을 따로 바꿀 필요가 없다.
+
+실제로 돌아가는 예는 견본의 `plugins/remote-desktop/frontend/build.mjs`(esbuild — 타입 검사, 번들, 전역 치환, 치환 누락·표식 검사까지 한 파일)다.
+아래는 같은 일을 vite 로 하는 설정 예다(리포에 없는 파일 — 필요한 패키지 `vite`·`@vitejs/plugin-react` 는 직접 설치한다).
 
 ```js
-// plugins/build-plugin-react.mjs (예시)
+// <플러그인 폴더>/frontend/build.mjs (예시)
 import { build } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -125,30 +130,29 @@ await build({
     },
   },
 })
-// CSS 인라인은 build-plugin.mjs 의 "Inline emitted CSS" 단계를 그대로 쓴다.
+// CSS 파일이 따로 나오면 plugins/build-plugin.mjs 끝의 "Inline emitted CSS" 단계처럼 plugin.mjs 안에 넣는다(서빙되는 것은 plugin.mjs 하나뿐이다).
 ```
 
 빌드 후 확인: `dist/plugin.mjs` 에 `from "react"`·`from "@jw/ui"` 가 **남아 있지 않아야** 하고, `jwPlugin` export 가 있어야 한다.
 
 ## 5. 스타일 제약 (v1 과 같음)
 
-`docs/plugin-frontend.md` 의 제약이 그대로 적용된다:
+[plugin-frontend.md](../../docs/plugin-frontend.md) 의 제약이 그대로 적용된다:
 
 - 호스트 Tailwind 는 호스트 소스만 스캔한다 → 플러그인에서 쓴 클래스는 **호스트도 쓰고 있을 때만** CSS 가 있다.
 - **반응형 variant(`sm:` `md:` `lg:`)에 기대지 말 것** — `window.matchMedia('(max-width: 767px)')` 로 JS 판정(호스트 `useIsMobile` 과 같은 기준).
 - transform 처럼 값이 다양한 건 인라인 `style` 로.
 - 새 클래스는 브라우저에서 실제로 먹는지 확인(`getComputedStyle`).
 
-## 6. v1(Vue) 플러그인은 그대로 동작한다
+## 6. v1(Vue) 플러그인이 열리는 방식
 
-- 번들을 다시 빌드할 필요가 없다. 호스트가 판정(위 2) → `import('vue')`(별도 청크, v1 을 열 때만) → `window.__VUE__ = Vue` →
+- 호스트가 판정(위 2) → `import('vue')`(별도 청크, v1 을 열 때만) → `window.__VUE__ = Vue` →
   번들 import → `createApp(default).provide('pluginApi', { user, $fetch, appName, setHeaderActions, clearHeaderActions, setTitle, clearTitle }).mount(div)`.
   `user`·`appName` 은 Vue `ref` 이고 호스트 상태(로그인·브랜딩)와 동기화된다. 페이지를 떠나면 `app.unmount()`.
-- 마운트 자리는 `display: contents` div 라 플러그인 루트의 `h-full` 등이 Vue 호스트와 같게 먹는다.
-- Vue 렌더러는 처음 만들어질 때 `globalThis.__VUE__ = true`(devtools 표식)를 쓴다. 호스트는 렌더러를 먼저 만든 뒤 전역을 세워
-  두 번째 v1 플러그인도 깨지지 않게 한다.
-- 한계(Vue 호스트에서도 없던 것): Nuxt 전용 API(`useNuxtApp`, `useRoute`, 자동 import 컴포넌트), 호스트 전역 디렉티브.
-  Vue 호스트에서도 번들에 들어가지 않으므로 지금 v1 플러그인이 쓰고 있을 리 없다.
+- 마운트 자리는 `display: contents` div 라 플러그인 루트의 `h-full` 같은 높이 지정이 그대로 먹는다.
+- 호스트는 React 앱이다. v1 플러그인이 쓸 수 있는 호스트 기능은 위 `pluginApi` 와 `window.__WS_SHELL__` 뿐이다 —
+  Vue Router·Nuxt API·호스트 컴포넌트·호스트 디렉티브는 없고, v1 의 `pluginApi` 에는 `navigateTo`·`t` 도 없다.
+- Vue 런타임 버전은 호스트가 정한다(`frontend-react/package.json` 의 `vue`). 번들은 Vue 를 품지 않는다.
 
 ## 7. 호스트 UI 키트 (`window.__WS_UI__`)
 

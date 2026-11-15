@@ -1,7 +1,12 @@
 # audiorelay — 무손실 음성채널 릴레이
 
-Go 로 쓴 SFU 식 순수 포워더. 디코딩·트랜스코딩 없음. 프로토콜은 [PROTOCOL.md](PROTOCOL.md), 브라우저 클라이언트는
-`frontend-react/src/lib/lossless/`, 토큰 발급은 백엔드 `POST /api/chat/channels/{id}/voice/relay-token`.
+Just Workspace 채팅 음성채널의 **무손실** 음질 단계(PCM 24-bit/48 kHz, 압축 없음)를 나르는 중계 서버. Go 로 쓴 SFU 식 순수 포워더로,
+받은 오디오 프레임을 같은 방의 다른 참가자에게 바이트 그대로 넘긴다(디코딩·트랜스코딩 없음, DB·Redis 의존 없음).
+
+- 구조·켜는 법·외부 공개 체크리스트: [docs/voice-lossless.md](../docs/voice-lossless.md)
+- 프로토콜: [PROTOCOL.md](PROTOCOL.md)
+- 브라우저 클라이언트: `frontend-react/src/lib/lossless/` · 데스크톱 클라이언트: `apps/desktop/src/main/nativeAudio/`
+- 접속 토큰 발급: 백엔드 `POST /api/chat/channels/{id}/voice/relay-token`
 
 ```
 cmd/audiorelay        진입점·env·헬스체크(-check)
@@ -20,7 +25,8 @@ RELAY_SECRET=$(openssl rand -hex 24) RELAY_WT_PUBLIC_URL=https://192.168.10.20:4
 RELAY_WT_SELF_SIGNED_HOSTS=192.168.10.20 go run ./cmd/audiorelay
 ```
 
-env 는 `cmd/audiorelay/main.go` 머리 주석에. compose 에서는 `ws-audiorelay` 서비스(`profiles: audiorelay`)로 뜬다.
+환경변수 전체는 `cmd/audiorelay/main.go` 머리 주석에 있다. `RELAY_SECRET` 은 필수(16바이트 이상)이고 `RELAY_WT_PUBLIC_URL` 을 비우면 WebSocket 만 연다.
+워크스페이스에서는 compose 서비스 `audiorelay`(컨테이너 `ws-audiorelay`, `profiles: audiorelay`)로 뜨며, `.env` 의 `AUDIORELAY_*` 가 `RELAY_*` 로 넘어간다.
 
 ## 테스트
 

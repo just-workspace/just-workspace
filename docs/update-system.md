@@ -1,11 +1,13 @@
-# Update System
+# 업데이트
+
+업데이트가 무엇을 하고, 실패하면 어떻게 되는지를 적는다. 관리 화면에서 누르는 순서는 [operate.md](operate.md#2-업데이트).
 
 ## 두 가지 길
 
 | 설치한 방법 | 업데이트하는 방법 |
 |---|---|
 | 설치 관리자(마법사·답변 파일) | 관리 › 업데이트 화면 — 설치 관리자가 릴리스 단위로 한다(아래) |
-| 손으로 `docker compose up`(소스 빌드) | `scripts/update.sh`(맨 아래 "수동 설치") |
+| 설치 관리자 없이 직접([deployment.md](deployment.md)) | `scripts/update.sh`(맨 아래 "수동 설치") |
 
 ## 설치 관리자로 설치한 서버
 
@@ -60,12 +62,12 @@
 - 변경은 번호 붙은 단계로만 한다(`backend/app/db/migrations.py`). 단계 하나가 한 트랜잭션이고 되돌리는 단계는 없다
 - 적용: `python -m app.cli migrate`(`--check`, `--status`). 한 번에 하나만 돈다(**PostgreSQL 세션 advisory lock**)
 - 컨테이너가 뜰 때 워커보다 먼저 한 번 적용한다. 적용에 실패했거나 DB 가 코드보다 새것이면 **서버가 뜨지 않는다**. `JW_MIGRATE_ON_START=0` 이면 적용하지 않고 버전만 확인한다
-- 컨테이너 버전 올리기(postgres 메이저, Redis 7→8, Gitea 1.27→28 등)는 compose 주석에 되돌리기 조건이 적혀 있다 — 전부 **백업 먼저**
+- 다른 곳에서 만든 구성 요소(PostgreSQL, Redis, Gitea 등)의 버전을 올리면 데이터 형식이 함께 올라가 이전 버전으로 돌아갈 수 없는 경우가 있다. 조건은 `docker-compose.yml` 의 그 이미지 옆 주석에 있다 — 전부 **백업 먼저**
 
 ## 버전
 
-- 앱 버전 단일 출처: `backend/app/main.py` 의 `APP_VERSION`(`/api/health` 가 돌려준다). 패키지 버전도 여기서 나온다.
-- 컨테이너 이미지 버전: `docker-compose.yml`(digest 고정 + 버전 주석)
+- 제품 버전의 단일 출처는 리포 루트의 `VERSION` 파일이다. backend 는 환경변수 `JW_APP_VERSION` → 이미지에 구운 값 → `VERSION` 순으로 읽고(`backend/app/version.py`), `/api/health` 가 돌려준다.
+- 컨테이너 이미지 버전: `docker-compose.yml`(다이제스트 고정 + 버전 주석)
 - 의존성: `backend/requirements.txt`(전부 `==` 고정), `frontend-react/package.json`
 
 ## 수동 설치(소스 빌드)
@@ -88,12 +90,10 @@ git log --oneline -10 && git checkout <해시> && docker compose build && docker
 ```
 
 주의: 이미지만 되돌리면 안 되는 경우가 있다. 업데이트가 스키마 버전을 올렸으면 이전 이미지의 backend 는 **뜨지 않는다**(DB 가 코드보다 새것) — 업데이트 직전 백업으로 DB 도 복원해야 한다(`scripts/restore.sh`, [data-safety.md](data-safety.md) 4·5절). 데이터 버전을 올린 컨테이너(Redis 8 RDB, Gitea 28 DB)도 백업 복원이 유일한 롤백이다.
-프런트(React)도 다른 서비스와 같이 직전 이미지로 되돌린다. 옛 Vue 프런트로 되돌리는 경로는 없다.
 
-## CI
+## 이미지 빌드와 릴리스
 
-- 배포 워크플로는 리포에 없다(사이트마다 다르다). 권장: `main` push 는 빌드·정적 검사·백엔드 테스트까지만 하고 실제 교체는 수동 실행으로 — 문서 오타 하나에 사용 중인 세션이 끊기지 않게.
-- `.github/workflows/build-images.yml` — 태그 `v*` 에 멀티아치 이미지를 레지스트리로 push — [IMAGES.md](IMAGES.md).
+미리 빌드한 이미지를 만들고 채널에 올리는 절차는 [releases.md](releases.md)(빌드 워크플로 `.github/workflows/build-images.yml`, 서명, 승격).
 
 ## 백업
 
@@ -103,4 +103,4 @@ sudo bash scripts/backup.sh --kind pre-update        # DB 와 설정만(업데�
 sudo bash scripts/restore.sh <백업 파일>             # 검증 → 정지 → DB → 스키마 → 나머지 → 시작 → 확인
 ```
 
-형식은 하나이고(관리 화면·스크립트·CLI·설치 관리자 공통), 무엇이 들어가고 빠지는지(Redis, NFS 의 파일), 암호화 키, 복원의 단계와 실패 시 동작은 [data-safety.md](data-safety.md). 관리 › 저장소·백업 화면의 백업(`/api/admin/backup`)은 `BACKUP_VOLUME`(기본 `backups-vol`)에 쌓인다. 복원은 앱 안에서 하지 않는다.
+위 스크립트는 직접 띄운 서버용이다. 형식은 하나이고(관리 화면·스크립트·CLI·설치 관리자 공통), 무엇이 들어가고 빠지는지(Redis, NFS 의 파일), 암호화 키, 복원의 단계와 실패 시 동작은 [data-safety.md](data-safety.md). 관리 › 저장소·백업 화면의 백업은 백업 볼륨(`BACKUP_VOLUME`, 기본 `ws-backups`)에 쌓인다. 복원은 앱 안에서 하지 않는다 — 설치 관리자로 설치한 서버의 절차는 [operate.md](operate.md#3-백업과-복원-서버-이전).

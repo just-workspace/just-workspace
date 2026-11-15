@@ -1,189 +1,197 @@
-# Architecture Guide
+# 구조
 
-## 시스템 구성
+Just Workspace 가 어떤 조각으로 이루어져 있고 서로 어떻게 이어지는지를 적는다. 설치하는 방법은 [install.md](install.md), 낱말은 [glossary.md](glossary.md).
+
+## 한눈에
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                        Docker Compose (단일 노드)                │
-├────────────────────────────────────────────────────────────────┤
-│  [코어 — 항상 실행]                                              │
-│  nginx :80 ──┬─► frontend-react :3000  React 정적 빌드           │
-│   (ws-nginx) │     (nginx-unprivileged)                          │
-│              └─► backend :8000  FastAPI · uvicorn 멀티 워커       │
-│                    인증 · 메일 · 캘린더 · 연락처 · 파일 · 채팅 ·    │
-│                    회의 · 게시판 · 위키 · 할 일 · AI · Git API ·    │
-│                    WebSocket · DAV · WOPI · MCP · 플러그인 로더     │
-│                                                                  │
-│  postgres :5432 (16)      redis :6379 (8)                        │
-│                                                                  │
-│  [선택 — COMPOSE_PROFILES]                                       │
-│  mailserver · gitea · livekit · egress · onlyoffice · sso        │
-│  (ws-sso + ws-ldap) · aitools (searxng) · certbot                │
-└────────────────────────────────────────────────────────────────┘
+                         ┌──────────────────────────────────────────────────────────┐
+  브라우저·앱 ── 80/443 ─►│ nginx (ws-nginx) — 유일한 웹 진입점                       │
+                         │   ├─► frontend-react   React 정적 빌드                    │
+                         │   └─► backend          FastAPI · 여러 워커                │
+                         │         로그인 · 관리 · 파일 · 대시보드 · 실시간 소켓 ·      │
+                         │         구역별 API · 플러그인                             │
+                         │                                                          │
+                         │   postgres            redis                              │
+                         ├──────────────────────────────────────────────────────────┤
+                         │ 구역이 켜는 컨테이너                                       │
+                         │   메일      mailserver                                   │
+                         │   문서 편집  onlyoffice                                   │
+                         │   회의      livekit · egress · audiorelay                │
+                         │   코드 저장소 gitea                                       │
+                         │   AI 도우미  searxng · docconv · sandbox                  │
+                         │   애드온     sso · ldap / rbi-netfilter                   │
+                         │   (인증서 자동 발급) certbot                              │
+                         └──────────────────────────────────────────────────────────┘
+                                          ▲ docker compose · 내부 API(8444)
+  설치할 때만 ── 8443 ──► 설치 관리자 (jw-installer) — 설치 · 구역 · 업데이트 · 인증서
 ```
 
-- 외부 진입점은 `ws-nginx` :80 하나다. TLS 는 앞단 리버스 프록시(external_proxy)나 certbot(standalone)이 종단한다.
-- 컨테이너 버전은 `docker-compose.yml` 이 단일 출처다(이미지 digest 고정). 이 문서의 숫자는 그 요약이다.
-- 컨테이너는 전부 `no-new-privileges`, backend 는 `gosu` 로 비루트(appuser) 강등, 프런트는 비특권 nginx(uid 101).
+- 서버 한 대, Docker Compose 프로젝트 하나(`just-workspace`). 컨테이너 이름은 `ws-` 로 시작한다.
+- 웹 진입점은 내장 nginx 하나다. 이 서버가 TLS 를 직접 끝내거나(443), 앞단 프록시 뒤에서 80 평문으로 받는다. 메일·회의·Git SSH·LDAP 은 자기 포트를 호스트에 직접 게시한다.
+- 컨테이너는 내부 대역(기본 `172.28.0.0/24`)의 고정 주소를 쓴다.
+- 이미지와 버전의 단일 출처는 `docker-compose.yml` 이다. 다른 곳에서 만든 이미지는 다이제스트로 고정돼 있다.
+- 컨테이너는 `no-new-privileges` 로 뜨고, backend 는 시작한 뒤 비루트 사용자로 내려간다. 프런트는 비특권 nginx 다.
 
-## 설계 원칙
+## 설치 관리자
 
-- 단일 서버, `docker compose up` 한 번. 무거운 구성요소는 프로파일로 켠다.
-- 자체 인증 — 외부 IdP 의존 없음. 반대로 **우리가 IdP 가 된다**(OAuth 2.0 / OIDC, 선택 SAML·SCIM·LDAP).
-- 채팅·캘린더·연락처·게시판·위키·할 일·AI 는 backend 에 내장 — 추가 컨테이너 불필요.
-- 메일은 IMAP/SMTP/POP3 클라이언트 모델. 자체 메일 서버는 선택 프로파일.
-- 모듈 시스템 — 관리자가 기능별 on/off, 그룹별 접근 권한(RBAC).
-- 플러그인 — 리빌드 없이 런타임 로딩(v1 Vue · v2 React).
+설치와 그 뒤의 구성 변경을 맡는 별도 컨테이너(`jw-installer`, 소스는 `installer/`)다. 호스트의 docker 소켓을 쥐고 compose 를 부른다. 자세한 것은 [installer.md](installer.md).
+
+- **설치 마법사**(8443, HTTPS, 설치 토큰): 답변을 받아 스택 파일(`.env`, nginx 설정 조각, 회의 서버 설정 등)을 만들고 단계별로 적용한다. 설치가 끝나면 잠긴다. 화면은 `frontend-react/src/installer-app/` 의 독립 번들이다.
+- **내부 API**(8444, 호스트에 게시하지 않음): 설치 뒤의 구역 켜고 끄기, 업데이트, 인증서 다시 발급. backend(`backend/app/system/`)가 관리자 권한을 확인한 뒤 공유 키로 대신 부른다. 브라우저는 이 포트에 닿지 못한다.
+- **단일 출처를 복제하지 않는다.** 구역 선언(`zones.json`), 비밀값 규칙(`security_defaults.py`), compose 와 nginx 설정은 이미지 빌드 때 리포에서 복사해 싣는다.
+- 설치 관리자 없이 띄운 설치([deployment.md](deployment.md))에서는 backend 의 `JW_INSTALLER_URL` 이 비어 있고, 관리 화면의 구역·업데이트·인증서 카드는 읽기 전용이다.
+
+## 구역
+
+설치하고 켜고 끄는 단위다. 선언은 `backend/app/zones.json` 하나이고 설치 마법사·설치 관리자·backend 가 같은 파일을 읽는다.
+
+| 무엇 | 어디 |
+|---|---|
+| 구역 id, 이름, 소유한 모듈, compose 프로파일·서비스, 권장 메모리, 포트, 묶음 | `backend/app/zones.json` |
+| 어느 API 라우터·백그라운드 루프·소켓 처리기가 어느 구역 것인가 | `backend/app/zones.py` 의 `ROUTERS` · `LOOPS` · `SOCKET_HANDLERS` |
+| 설치된 구역 | 환경변수 `JW_ZONES`(쉼표, 비우면 전부). `GET /api/health` 의 `zones` 로 내려간다 |
+| 구역의 컨테이너 | `COMPOSE_PROFILES`(구역의 `compose_profiles` 합집합) |
+| 구역을 켤 때의 설치·연결 동작 | `installer/app/zones/` 의 구역 훅([installer.md](installer.md) 10절) |
+
+- 설치되지 않은 구역은 라우터와 루프가 **아예 올라오지 않는다**(API 404). 그 구역의 모듈은 목록에서 빠진다.
+- 채팅·일정처럼 컨테이너가 없는 구역은 backend 안의 기능이다.
+- 음성 채널은 채팅과 회의가 둘 다 있을 때만 올라온다(표의 `chat+meetings`).
+- 구역을 켜고 끄면 설치 관리자가 `.env` 의 `JW_ZONES`·`COMPOSE_PROFILES` 를 바꾸고 backend 를 다시 띄운다.
+
+### 모듈
+
+구역 안의 화면 단위다(`backend/app/modules/registry.py`). 내장 모듈은 `mail` `chat` `ai` `meetings` `files` `calendar` `contacts` `git` `board` `tasks` `wiki` `rbi`. 관리자가 모듈을 끄거나 그룹별로 접근을 제한할 수 있다 — 설치된 구역 안에서의 표시·접근 제어다.
+
+```
+GET   /api/platform/modules        켜진 모듈 + 플러그인 목록
+PATCH /api/admin/modules/{id}      모듈 켜고 끄기(관리자)
+```
+
+꺼진 모듈은 메뉴에서 숨고, API 는 403, 페이지 진입은 대시보드로 보낸다.
 
 ## 프런트엔드
 
-`frontend-react/` — React 19 · React Router 8 · Vite 8 · TypeScript 6 · Tailwind CSS 4(CSS-first, `src/assets/css/app.css`) ·
-TipTap 3 + Yjs(위키 공동 편집) · zustand · TanStack Query · i18next(ko/en) · livekit-client(지연 로드) · vite-plugin-pwa.
+`frontend-react/` — React 19 · React Router 8 · Vite 8 · TypeScript 6 · Tailwind CSS 4 · TipTap 3 + Yjs(위키 함께 편집) · zustand · TanStack Query · i18next(한국어·영어) · livekit-client.
 
-- 정적 빌드를 컨테이너 안 nginx-unprivileged 가 서빙한다(`/assets/` immutable, HTML no-cache, SPA fallback). 보안 헤더·CSP 는 앞단 `ws-nginx` 가 붙인다.
-- Vue(Nuxt 3) 에서 전환했다. Vue 컨테이너와 소스 폴더 `frontend/` 는 더 이상 없다. `ws-nginx` 는 `/_nuxt/` 에 404 를 돌려준다.
-- 유동 레이아웃: 1280 ~ 8K 폭까지 본문 폭·대시보드 열 수가 따라간다. 설정 › 표시에서 화면 배율을 고를 수 있다(실효 폭 1280 미만이면 배율 비활성).
-- 모바일은 `matchMedia('(max-width: 767px)')` 기준(`useIsMobile`), 하단 탭바, 셸 전환 애니메이션. 뷰포트는 `dvh` 기준(h-screen 금지).
+- 정적 빌드를 컨테이너 안의 비특권 nginx 가 내준다. 보안 머리말과 CSP 는 앞의 `ws-nginx` 가 붙인다.
+- 빌드 대상이 셋이다: 워크스페이스(`npm run build`), 격리 브라우저 단독 화면(`build:rbi`), 설치 마법사(`build:installer` — 설치 관리자 이미지에 실린다).
+- 화면 문구는 `src/i18n/locales/`(본 앱)와 `src/installer-app/i18n/`(설치 마법사)에 있다.
+- 모바일 폭은 `matchMedia('(max-width: 767px)')` 기준이고 높이는 `dvh` 를 쓴다.
 
 ## 백엔드
 
-`backend/` — Python 3.14 · FastAPI 0.143 · Starlette · SQLAlchemy 2.1(asyncio) + asyncpg · pydantic 2 · Redis 8(redis-py) · uvicorn 0.54.
+`backend/` — Python 3.14 · FastAPI · SQLAlchemy 2(asyncio) + asyncpg · pydantic 2 · Redis. 버전은 `backend/requirements.txt`(전부 고정).
 
-- **멀티워커**: `uvicorn --workers N`(`BACKEND_WORKERS`, 기본은 CPU 수 기준 2~8). 프로세스 메모리에 상태를 두지 않는다 — 세션 레지스트리·회의 메타·메일 첨부·OAuth 코드·헬스 결과·파일 잠금은 Redis.
-- 스키마 변경은 PostgreSQL **세션 advisory lock** 을 쥔 하나만 한다 — 컨테이너가 뜰 때 워커보다 먼저 한 번 적용하고, 워커는 버전만 확인한다([data-safety.md](data-safety.md)).
-- 서비스 헬스 체크(`/api/services`)는 락을 잡은 워커 하나만 점검하고 결과를 Redis 에 올린다. 나머지 워커는 저장본을 읽는다.
-- 웹 푸시 VAPID 키는 env(`VAPID_PUBLIC_KEY/PRIVATE_KEY`) → DB(`system_settings` `push.vapid`) 순으로 찾고, 없으면 만들어 DB 에 저장한다 — 워커마다 다른 키가 생기지 않는다.
-- 클라이언트 IP 신뢰 경계: `--proxy-headers --forwarded-allow-ips 172.28.0.2`(ws-nginx 고정 IP). nginx 는 앞단 RP 연결일 때만 `X-Real-IP` 를 승격하고 XFF 를 **덮어써** 넘긴다.
-- 백그라운드 작업(한 워커가 락을 잡고 실행): 파일 색인, 캘린더 리마인더, 메일 폴러/아카이브, 접속 로그 플러시, 휴지통 보존 정리.
+- **여러 워커.** `uvicorn --workers N`(`BACKEND_WORKERS`, 기본은 코어 수 기준 2~8). 프로세스 메모리에 상태를 두지 않는다 — 세션, 회의 상태, OAuth 코드, 잠금은 Redis 에 있다.
+- **백그라운드 작업**(파일 색인, 일정 알림, 메일 확인, 휴지통 정리 등)은 워커 하나가 잠금을 잡고 돈다. 구역 것은 그 구역이 설치됐을 때만 올라온다.
+- **접속자 주소.** backend 는 `ws-nginx`(내부 대역의 `.2`)에서 온 연결의 `X-Forwarded-For` 만 믿는다. nginx 는 설정된 프록시 주소에서 온 연결일 때만 `X-Real-IP` 를 접속자 주소로 올린다.
+- **비밀값 검사.** 약한·기본 비밀값이면 뜨지 않는다(`backend/app/security_defaults.py`, [CONFIG.md](CONFIG.md) 3절).
+- **docker 소켓.** backend 컨테이너에 docker 소켓이 붙어 있다 — 내장 메일 서버의 계정 만들기, 백업, 격리 브라우저 세션 띄우기에 쓴다([SECURITY.md](../SECURITY.md)).
 
-## 모듈 시스템
+### 스키마 버전
 
-모든 기능은 **모듈**로 등록된다(`backend/app/modules/registry.py`). 관리자가 개별 on/off 할 수 있다.
+DB 구조에는 번호가 있다(`schema_migrations` 표, 코드가 요구하는 번호는 `backend/app/db/schema_version.py`). 변경은 번호 붙은 단계로만 한다(`backend/app/db/migrations.py`) — 단계 하나가 한 트랜잭션이고 되돌리는 단계는 없다.
 
-```
-GET   /api/platform/modules        → 활성 모듈 + 플러그인 목록 (인증 불필요, Redis 60초 캐시)
-PATCH /api/admin/modules/{id}      → 모듈 on/off (admin)
-```
+- 적용은 `python -m app.cli migrate`. PostgreSQL 의 세션 잠금을 쥔 하나만 돈다.
+- 컨테이너가 뜰 때 워커보다 먼저 한 번 적용한다. 실패했거나 DB 가 코드보다 새것이면 **서버가 뜨지 않는다.**
+- 설치·업데이트에서는 설치 관리자가 일회용 컨테이너로 먼저 적용한다. 업데이트가 실패하면 이전 이미지 + 직전 백업의 DB 로 되돌린다.
 
-내장 모듈(12): `mail` `chat` `ai` `meetings` `files` `calendar` `contacts` `git` `board` `tasks` `wiki` `rbi`.
-오피스(WOPI)는 파일 모듈 안에 있고 `onlyoffice` 프로파일이 있을 때 동작한다. `rbi`(격리 브라우저)는 기본 꺼짐 —
-`rbi` 프로파일(호스트 netfilter 사이드카)과 함께 켠다([rbi.md](rbi.md)).
+자세한 것과 백업 형식은 [data-safety.md](data-safety.md).
 
-**구역(zone)**: 설치 단위는 모듈보다 큰 구역이다 — 선언은 `backend/app/zones.json`(구역 id·소유 모듈·compose 프로파일),
-어느 라우터·백그라운드 루프가 어느 구역 것인지는 `backend/app/zones.py` 의 표. 환경변수 `JW_ZONES`(쉼표 구분, 비우면 전부)에
-없는 구역은 라우터와 루프가 아예 올라오지 않고(API 404), 그 구역의 모듈은 목록에서 빠져 켤 수도 없다. 모듈 on/off 는
-설치된 구역 안에서의 표시·접근 제어다. 설치된 구역 목록은 `GET /api/health` 의 `zones` 로 내려간다.
+## 실시간 전송
 
-비활성 모듈은 네비게이션에서 숨고, API 는 `403 이 기능은 비활성화되어 있습니다`, 페이지 진입은 대시보드로 보낸다.
-
-```
-1. 앱 시작 → init_db() → load_module_states(db)
-2. 프런트 부팅 → GET /api/platform/modules → platformStore
-3. 사이드바 레일 → enabledModules 기반 동적 메뉴 (플러그인은 manifest order 순)
-4. 라우터 가드(src/router/guards.ts) → 비활성 모듈 페이지 차단
-5. @require_module 데코레이터 → API 레벨 차단
-6. 그룹 권한(RBAC) → 모듈·플러그인별 접근 그룹 (관리 › 그룹/권한)
-```
+- **실시간 소켓 `/ws/chat`** 하나로 알림·배지·통화 상태·채팅 등 모든 실시간 이벤트가 전달된다(`backend/app/realtime/socket.py`). 경로 이름과 달리 **기본 구역 소속**이라 채팅 구역이 없어도 올라온다.
+- 이벤트를 내는 곳은 `backend/app/realtime/events.py` 하나다(`emit_to_user`, `emit_to_channel`). 워커 사이는 Redis Pub/Sub 으로 전달한다.
+- 클라이언트가 보내는 프레임은 `type` 으로 갈린다. `ping` 은 소켓이 처리하고 나머지는 구역이 등록한 처리기로 넘긴다(`zones.py` 의 `SOCKET_HANDLERS` — 지금은 채팅). 처리기가 없는 종류는 오류 프레임으로 답한다.
+- 인증 토큰은 주소가 아니라 `Sec-WebSocket-Protocol` 머리말로 보낸다(`jw.bearer, jw.token.<base64url>`). 쿠키 세션도 받는다.
+- 위키 함께 편집은 `/ws/wiki/collab`(Yjs 릴레이, `backend/app/collab/`)이고 워커 사이를 Redis 로 중계한다.
+- 무손실 오디오는 별도 릴레이 컨테이너(`audiorelay`, Go)가 WebTransport(UDP 4433) 또는 WebSocket 으로 나른다 — [voice-lossless.md](voice-lossless.md).
 
 ## 인증
 
-```
-로그인 폼 → POST /api/auth/login
-  → Argon2id 검증 (libpass CryptContext: argon2 기본, bcrypt_sha256·bcrypt 는 검증만·deprecated)
-  → 레거시 bcrypt 해시는 verify_and_update 로 로그인 시 Argon2id 로 자동 이관
-  → TOTP 2단계 (pyotp, 복구 코드, 관리자가 필수 대상을 off/admins/all 로 지정)
-  → 서명 세션 쿠키 ws_session (itsdangerous, httponly·SameSite=lax) + Redis 세션 레지스트리
-     (sid 별 IP/UA/last-seen, per-user token_version — 원격 로그아웃 즉시 반영, Redis 장애 시 fail-open)
-```
+- **자체 로그인.** Argon2id 비밀번호 해시, TOTP 2단계 인증과 복구 코드, 서명한 세션 쿠키 + Redis 의 세션 목록(기기별 조회·원격 로그아웃).
+- **OAuth 2.0 / OpenID Connect 제공자**(`backend/app/auth/oauth_provider.py`): 인가 코드 + PKCE, 리프레시 토큰 교체, 동의 화면, RS256 ID 토큰과 JWKS, 동적 클라이언트 등록(RFC 7591). 코드 저장소의 로그인 연동, MCP 커넥터, 데스크톱 앱이 이것을 쓴다. 미리 등록하는 클라이언트는 `OAUTH_CLIENTS_JSON`([CONFIG.md](CONFIG.md) 4절).
+- **외부 LDAP/AD 로 로그인**(`ldap_client.py`): 바깥 디렉터리로 인증하는 쪽.
+- **SSO·LDAP 제공 애드온**: `sso` 컨테이너(SAML IdP · SCIM — backend 의 세션을 확인해 다시 발행한다)와 `ldap` 컨테이너(이 워크스페이스가 LDAP 서버가 된다. 비밀번호 확인은 backend 의 내부 API 에 맡긴다).
+- **backend 내부 API** `/api/internal/*`: 메일 서버의 로그인 확인, LDAP 컨테이너, 설치 관리자의 알림이 쓴다. `INTERNAL_API_KEY` 로 지키고, nginx 가 밖에서 오는 요청을 404 로 막는다.
+- **앱 비밀번호.** CalDAV·CardDAV 는 앱 비밀번호만 받는다. 내장 메일 서버의 로그인은 워크스페이스 비밀번호를 그대로 쓴다.
 
-- **OAuth 2.0 / OIDC 제공자**(`app/auth/oauth_provider.py`): 인가 코드 + PKCE, 리프레시 토큰 회전·재사용 탐지, 동의 화면,
-  RS256 ID 토큰 + JWKS(`/oauth/jwks.json`), 루트 `/.well-known/openid-configuration`·`oauth-authorization-server`,
-  **동적 클라이언트 등록**(RFC 7591, `/oauth/register`, `OAUTH_DYNAMIC_CLIENTS_MAX`). 정적 클라이언트는 `OAUTH_CLIENTS_JSON`.
-  Gitea SSO 와 claude.ai MCP 커넥터, 데스크톱 앱(public client + 루프백 리다이렉트, 내장 `desktop-app`)이 이걸 쓴다.
-- **LDAP/AD 로그인**(`ldap_client.py`, ldap3): 외부 디렉터리로 인증하는 컨슈머. `ws-ldap` 과 방향이 반대다.
-- **ws-sso**(profiles: sso, `sso/`): SAML IdP · SCIM. 사용자를 소유하지 않고 backend 의 `ws_session` 을 검증해 재발행만 한다.
-  별도 컨테이너인 이유는 pysaml2 → `cryptography<44` 의존성 충돌.
-- **ws-ldap**(profiles: sso, `ldap/`): 우리가 LDAP **서버**가 되는 쪽(ldaptor/Twisted, 389/636 LDAPS 자체 서명 인증서 보존).
-  비밀번호 검증은 backend `/api/internal/*` 에 `INTERNAL_API_KEY` 로 위임. `/api/internal/` 은 nginx 가 외부에서 404 로 막는다.
-- **앱 비밀번호**: DAV(CalDAV/CardDAV) 는 앱 비밀번호만 받는다. `DAV_ALLOW_ACCOUNT_PASSWORD=true` 일 때만 계정 비밀번호를 허용하되
-  2단계 인증을 켠 사용자는 제외된다. 메일(Dovecot) 로그인은 `/api/internal/mail-auth` 로 워크스페이스 비밀번호를 그대로 쓴다.
-- 비밀번호 정책(`password_policy.py`, 흔한 비밀번호 목록), 로그인 보호·세션 정책(`security_policy.py`), nginx `limit_req`(auth 5r/s).
+## 구역별 구성
 
-## 실시간
+### 파일 (기본)
 
-- 채팅·알림 WebSocket `/ws/chat` — 워커 간 전파는 Redis Pub/Sub.
-- **인증 토큰은 쿼리스트링이 아니라 `Sec-WebSocket-Protocol` 헤더**로 보낸다(`jw.bearer, jw.token.<base64url>`; 서버는 `jw.bearer` 로 응답).
-  쿠키 세션도 그대로 받는다. 쿼리 토큰은 nginx error_log 에 평문으로 남아서 폐기했다.
-- 알림은 소켓 이벤트가 실시간을 맡고, 5분 폴링은 끊김 보정용이다.
-- 위키 공동 편집 `/ws/wiki/collab` — Yjs 릴레이(`app/collab/relay.py`), 워커를 가로질러 Redis 로 중계.
+- 저장소는 backend 컨테이너의 `/storage` 에 붙는 볼륨이다. 그 볼륨이 로컬 디스크인지 NFS 인지는 설치 관리자가 볼륨을 만들 때 정한다(compose 는 그 볼륨을 `external` 로 쓴다). S3 호환 저장소는 관리 화면에서 설정한다.
+- 설치 관리자는 저장소 뿌리에 표식 파일을 쓰고, backend 는 표식이 보이지 않으면 파일 쓰기를 거부한다([installer.md](installer.md) 8절).
+- 올리기는 스트리밍이다(nginx 가 본문을 버퍼링하지 않는다). 공유 링크, 댓글, 권한, 활동 기록, 할당량, 휴지통, 본문 색인이 있다.
 
-## 메일
+### 메일
 
-- 기본은 클라이언트 모델: `mail_accounts` 에 계정별 IMAP/SMTP/POP3 정보(Fernet 암호화, `SECRET_KEY` 파생), 멀티 계정,
-  Gmail·M365 OAuth2(`mail/oauth.py`), 자동 서버 감지(Outlook식 추가), 스레드, 예약 발송, 필터 규칙, 외부 메일 `.eml` 아카이브 → 파일 검색 편입.
-- `aioimaplib`(IMAP) · `aiosmtplib`(SMTP) · 자체 `pop3_client.py`.
-- 자체 메일 서버(`mailserver` 프로파일, docker-mailserver 기반 Postfix·Dovecot·Rspamd): `FEATURE_BUILTIN_MAILSERVER=true` 면 가입 승인 시
-  계정 자동 생성(`docker exec`, 소켓 읽기전용), Dovecot 은 lua passdb 로 backend 에 비밀번호를 물어본다 — 워크스페이스 비밀번호가 곧 메일 비밀번호.
+- 기본은 클라이언트 방식이다: 사용자가 외부 메일 계정(IMAP/POP3/SMTP, OAuth2)을 연결한다. 계정의 비밀번호는 `SECRET_KEY` 에서 만든 키로 암호화해 DB 에 둔다.
+- 내장 메일 서버(`mailserver` 컨테이너 — docker-mailserver 에서 파생한 이미지: Postfix · Dovecot · Rspamd)를 쓰면 계정을 승인할 때 메일함이 함께 만들어지고, Dovecot 이 backend 에 비밀번호를 물어본다.
 
-## 파일·오피스
+### 문서 편집·위키·게시판
 
-- 스토리지 백엔드는 로컬 파일시스템(기본) 또는 S3 호환(`storage.backend=s3`, boto3). 스트리밍 업로드(1MB 청크, nginx `proxy_request_buffering off`, 10GB 상한),
-  공유 링크(비밀번호·만료·횟수), 파일 댓글·4단계 권한, 활동 로그, 사용자 할당량, 휴지통 보존 기간, 전문 색인(`files/indexer.py`).
-- 오피스 편집은 **OnlyOffice Document Server(WOPI)** 하나다(2026-10-15 자체 .jwdoc/.jwsheet 편집기 폐기, Collabora 는 그 전에 제거).
-  - backend 가 WOPI Host(`/api/wopi/*`, 토큰 TTL `WOPI_TOKEN_TTL`), 잠금은 Redis(TTL 30분), 잠금 키·file_id 에 소유자 포함, 보기 토큰은 잠금 조작 불가.
-  - 에디터 URL 은 WOPI discovery 로 동적 생성, 같은 출처 iframe(`/onlyoffice/` 서브패스, CSP `frame-ancestors 'self'`).
-  - "새 문서"는 빈 docx/xlsx/pptx 템플릿(`POST /api/wopi/new`). 공유 링크 같이 편집: `/s/<token>` → `POST /api/wopi/shared/{token}/open`(손님 `guest-xxxx`).
-  - OnlyOffice 10.0 부터 WOPI 되가져오기는 사설 주소가 **ipfilter 규칙에 명시**돼야 한다 — compose 가 `IP_FILTER_RULES="allow ${RP_LAN_IP};allow all"` 로 넣는다.
+- 문서·시트·발표 자료 편집은 **OnlyOffice Document Server** 가 맡는다. backend 가 WOPI 호스트(`/api/wopi/*`)이고, 편집기는 같은 출처의 `/onlyoffice/` 아래에서 열린다.
+- 위키(Yjs 함께 편집)와 게시판은 backend 안의 기능이다.
 
-## 화상회의
+### 회의
 
-- LiveKit SFU(`livekit` 프로파일): UDP 7882-7892, ICE TCP 7881 폴백, 내장 TURN(UDP 3478 + **TLS 443**). LiveKit 은 클라이언트에 `turns:<domain>:443` 으로 광고하므로
-  `tls_port` 는 반드시 443 — standalone(nginx 가 443)에서는 `LIVEKIT_TURN_TLS_PUBLISH=127.0.0.1:4443` 으로 비켜 둔다.
-- 녹화는 **LiveKit Egress**(`egress` 프로파일, 헤드리스 크롬 룸 합성 → `egress-out` 볼륨 mp4, backend 가 `/recordings` 로 서빙). 합성 녹화 1건이 cpu 4 를 요구해 compose 한도는 cpu 4 / 4G.
-- 비밀번호 입장, 게스트 승인(대기실), 호스트 검증 토큰, 미니 통화 창, 노이즈 제거(krisp), 안드로이드 Telecom 통화 연동.
+- LiveKit 서버: UDP 7882-7892(미디어), TCP 7881(UDP 가 막힌 참가자), 내장 TURN(UDP 3478 + TLS).
+- TURN/TLS 는 클라이언트에 늘 443 으로 알린다. 이 서버의 nginx 가 443 을 쓰는 구성에서는 호스트의 5349 에 게시된다([installer.md](installer.md) 8절).
+- 녹화는 LiveKit Egress, 무손실 오디오는 `audiorelay`.
 
-## 플러그인 시스템
+### 코드 저장소
 
-런타임 플러그앤플레이 — 프런트 리빌드 없이 추가/제거. 자세한 계약은 [extensions.md](extensions.md), [plugin-frontend.md](plugin-frontend.md), [frontend-react/docs/plugin-v2.md](../frontend-react/docs/plugin-v2.md).
+- Gitea 가 `/git/` 아래에서 열리고 SSH 는 호스트의 2222 다. DB 는 워크스페이스의 PostgreSQL 안의 별도 데이터베이스(`gitea`)다.
+- 로그인은 워크스페이스의 OpenID Connect 로 한다. backend 는 관리 토큰으로 Gitea API 를 부른다.
 
-```
-1. plugins/<name>/ 에 manifest.json + backend/router.py (+ models.py) + frontend/dist/plugin.mjs
-2. backend 기동 → 자동 발견 → api_prefix 에 라우터 마운트 + 모듈 등록(order 로 메뉴 순서)
-3. 프런트 → /api/plugin-assets/{id}/bundle.mjs 를 ETag 캐시로 import()
-4. v1(Vue) 번들은 window.__VUE__ 를 지연 로드해 마운트, v2(React) 번들은 window.__REACT__ 와 호스트 UI 키트 window.__WS_UI__('@jw/ui') 를 쓴다
-5. 상단바 확장 window.__WS_SHELL__ (버튼·칩·제목), SDK app.plugins.sdk (라우터·DB·사용자·MCP 도구 등록)
-6. 관리 › 플러그인에서 .zip 업로드 설치(/plugins-data 볼륨) → backend 자동 재시작
-```
+### AI 도우미
 
-## AI · MCP
+- 내장 AI 채팅(`backend/app/ai`)은 외부 AI 제공자에 연결한다. 도구 호출은 사용자의 확인을 거친다.
+- 웹 검색은 `searxng`, 문서 변환은 `docconv`(LibreOffice), 코드 실행은 `sandbox` 컨테이너가 맡는다. `docconv` 와 `sandbox` 는 네트워크가 없고 backend 와 유닉스 소켓으로만 통한다.
+- MCP 서버(`backend/app/mcp`)는 워크스페이스의 데이터를 바깥 AI 클라이언트에 도구로 내준다 — [CONNECTOR.md](CONNECTOR.md).
 
-- 내장 AI 채팅(`app/ai`): Ollama · OpenAI 호환 · Anthropic 프로바이더, 사용자별 API 키, 도구 호출 확인 게이트(`tool_confirm.py`), SearXNG 웹 검색(`aitools` 프로파일).
-- MCP 서버(`app/mcp`): Streamable HTTP(`/api/mcp`, `/api/mcp/read`) + 레거시 SSE, OAuth Bearer(`aud`·`scope`) 또는 PAT(`wsmcp_…`, `mcp:read` 한정).
-  읽기 도구 18개(파일·메모·메일·채팅·게시판·캘린더·연락처·할 일·웹 검색), `mcp:write` 는 `notes_create` 하나이고 `/api/mcp/write` 는 아직 404. → [CONNECTOR.md](CONNECTOR.md)
+### 격리 브라우저 (애드온)
+
+세션마다 일회용 브라우저 컨테이너를 backend 가 띄우고, `rbi-netfilter` 가 호스트의 방화벽 규칙으로 그 세션의 출구를 제한한다 — [rbi.md](rbi.md).
+
+## 플러그인
+
+`plugins/<이름>/` 의 `manifest.json` 과 backend 라우터, 프런트 번들로 이루어진 확장이다. backend 가 뜰 때 찾아 라우터를 붙이고, 프런트는 번들을 실행 중에 불러온다. 관리 › 모듈·플러그인에서 묶음 파일을 올려 설치할 수도 있다. **플러그인은 backend 프로세스 안에서 서버 권한으로 실행된다.**
+
+프런트 번들의 계약은 둘이다: v2(React — 새 플러그인의 기본, 견본은 `plugins/remote-desktop`)와 v1(Vue — 견본 `plugins/sample-notes`). manifest 의 `zones` 에 적은 구역이 설치돼 있지 않으면 그 플러그인은 올라오지 않는다.
+
+계약은 [extensions.md](extensions.md), [plugin-frontend.md](plugin-frontend.md), [frontend-react/docs/plugin-v2.md](../frontend-react/docs/plugin-v2.md).
+
+## 업데이트와 릴리스
+
+- 릴리스는 이미지 묶음과 그 목록 파일(manifest)이다. 서명한 채널 파일이 어느 버전이 최신인지 알린다 — [releases.md](releases.md).
+- 설치 관리자가 채널을 주기적으로 받아 확인하고, 관리자가 시작하면(또는 자동으로) 백업 → 이미지 받기 → DB 변경 → 교체 → 확인 순으로 적용한다. 설치 관리자 자신도 새 이미지로 바뀐다 — [update-system.md](update-system.md), [installer.md](installer.md) 16절.
+- 업데이트하는 동안 nginx 가 표식 파일을 보고 일반 요청을 막는다(점검).
 
 ## 클라이언트 앱
 
-- 데스크톱: Electron 44 셸(`apps/desktop`), 서버 웹을 `WebContentsView` 로 얹고 트레이·알림·화면 공유·OS 자격 증명 저장소만 네이티브. RFC 8252 시스템 브라우저 로그인.
-- 모바일: Capacitor 8(`apps/mobile`), Android APK 는 서버에서 빌드·게시(`/api/apps/android`), iOS 는 소스만. → [apps/README.md](../apps/README.md)
+- 데스크톱: Electron 셸(`apps/desktop`)이 서버의 웹 화면을 그대로 얹는다.
+- 모바일: Capacitor(`apps/mobile`).
 
-## 데이터베이스
+→ [apps/README.md](../apps/README.md)
 
-단일 PostgreSQL 16: `workspace` DB(앱 전체) + `gitea` DB(같은 인스턴스, 별도 database). 스키마에는 버전이 있고(`schema_migrations`), 번호 붙은 변경 단계로만 바뀐다 — [data-safety.md](data-safety.md).
+## 포트
 
-## 포트 맵
+| 포트 | 무엇 | 언제 |
+|---|---|---|
+| 80 | nginx | 항상 |
+| 443 | nginx(TLS) | 이 서버가 TLS 를 직접 끝낼 때. 앞단 프록시 뒤 구성에서는 회의의 TURN/TLS 가 쓴다 |
+| 25, 465, 587, 993 | 메일 서버(IMAP 은 TLS 인 993 만 게시한다) | 메일 구역(내장 메일 서버) |
+| 2222 (`GIT_SSH_PORT`) | Git SSH | 코드 저장소 구역 |
+| 7882-7892/udp, 7881, 3478/udp | 회의 미디어 · TCP 대체 경로 · TURN | 회의 구역 |
+| 5349 | 회의의 TURN/TLS | 회의 구역 + 이 서버가 TLS 를 직접 끝낼 때 |
+| 4433/udp | 무손실 오디오(WebTransport) | 회의 구역 + 무손실 오디오 |
+| 636, (`LDAP_PLAIN_BIND`)389 | LDAPS, 평문 LDAP(기본은 서버 자신에게만) | SSO·LDAP 제공 애드온 |
+| 8443 | 설치 마법사 | 설치 관리자(설치가 끝나면 잠긴다) |
+| 내부만 | backend 8000 · 프런트 3000 · postgres 5432 · redis 6379 · 설치 관리자 내부 API 8444 등 | — |
 
-| 포트 | 서비스 | 조건 |
-|------|--------|------|
-| 80 | ws-nginx (유일한 웹 진입점) | 항상 |
-| 443 | standalone 모드의 nginx TLS / external_proxy 모드의 LiveKit TURN-TLS | DEPLOY_MODE 에 따라 |
-| 25, 465, 587 | Postfix | `mailserver` |
-| 993 | Dovecot (IMAP 은 TLS 만 게시한다. 평문 143 은 내부망에서만) | `mailserver` |
-| 2222 (`GIT_SSH_PORT`) | Gitea SSH | `gitea` |
-| 7882-7892/udp, 7881/tcp, 3478/udp | LiveKit 미디어 · ICE TCP · TURN UDP | `livekit` |
-| 636 (+ `LDAP_PLAIN_BIND`:389) | ws-ldap (컨테이너 안은 1636/1389). 평문 389 는 기본으로 루프백에만 게시 | `sso` |
-| 172.28.0.1:임시포트 (`RBI_PUBLISH_IP`) | 격리 브라우저 세션의 KasmVNC 6901 — workspace 브리지 게이트웨이에만 게시, ws-nginx 출발지만 통과(netfilter). 공인·LAN 포트 없음 | 모듈 `rbi` |
-| 내부만 | backend 8000 · frontend(-react) 3000 · postgres 5432 · redis 6379 · gitea 3000 · onlyoffice 80 · searxng 8080 · sso 8000 · livekit 7880 | — |
+## 라이선스
 
-## 의존성 라이선스
-
-→ [THIRD_PARTY_LICENSES.md](../THIRD_PARTY_LICENSES.md) · [licensing.md](licensing.md)
+→ [licensing.md](licensing.md) · [THIRD_PARTY_LICENSES.md](../THIRD_PARTY_LICENSES.md)

@@ -1,8 +1,12 @@
 # 채팅 역할·권한 엔진
 
-디스코드식 역할·권한 비트·채널/카테고리 덮어쓰기.
-코드: `backend/app/chat/permissions.py`(비트표·계산·검사 하나) · `backend/app/chat/roles.py`(API).
-관리 화면은 채팅 안 설정 화면(역할·권한)이다.
+채팅에는 역할(role), 권한 비트, 채널·카테고리별 덮어쓰기로 이뤄진 권한 엔진이 있다(디스코드와 같은 방식).
+코드: `backend/app/chat/permissions.py`(비트표·계산·검사) · `backend/app/chat/roles.py`(API) · `backend/app/chat/policy.py`(정책 토글).
+화면은 채팅 › 채팅 설정의 "역할" · "카테고리 · 채널 권한" · "서버 전역 정책"이다.
+
+> **먼저 알 것 — 기본값은 `shadow` 다.** 새로 설치한 워크스페이스에서 역할과 덮어쓰기를 만들 수는 있지만, 실제로 막는 것은
+> 여전히 채널 멤버십 기준의 기본 검사다(엔진은 옆에서 계산만 하고 차이를 기록한다). 역할·덮어쓰기가 실제로 접근을 막게 하려면
+> `.env` 에 `CHAT_PERMISSIONS_ENGINE=enforce` 를 두고 backend 를 다시 시작한다. 그 전에 [§6 알려진 한계](#6-알려진-한계)를 읽는다.
 
 ## 1. 데이터
 
@@ -31,9 +35,13 @@
 번호는 `permissions.py` 한 곳에서만 정한다(디스코드 번호와 무관, 재사용 금지). 아직 쓰는 기능이 없는 비트
 (슬로 모드·타임아웃·웹훅·사운드보드 …)는 자리만 잡아 두었다 — 그 기능이 생길 때 검사를 붙인다.
 
-**@everyone 기본값 = 지금 멤버가 하는 것 전부**: 보기·쓰기·답글·스레드·기록 읽기·임베드·첨부·리액션·외부 이모지·
+**@everyone 기본값 = 채널 멤버가 기본으로 할 수 있는 것 전부**: 보기·쓰기·답글·스레드·기록 읽기·임베드·첨부·리액션·외부 이모지·
 @everyone·고정·초대·투표·명령·음성 접속/말하기/공유/VAD/사운드보드/발언 요청.
-**채널 역할 암묵 권한**(호환): owner·admin → `MANAGE_CHANNELS` · `KICK_MEMBERS`. 채널 삭제는 owner(또는 ADMINISTRATOR)만.
+**채널 역할 암묵 권한**: 채널 owner·admin → `MANAGE_CHANNELS` · `KICK_MEMBERS`. 채널 삭제는 owner(또는 ADMINISTRATOR)만.
+
+**정책 토글**(채팅 설정 › 서버 전역 정책, `GET·PUT /api/chat/policy`, 둘 다 기본 꺼짐):
+`admin_channel_privileges` — 전역 관리자가 채널 안에서도 전부 할 수 있다(DM·비공개 채널 포함) ·
+`owner_manage_messages` — 채널 owner 에게 `MANAGE_MESSAGES`(남의 글 삭제)를 준다. 바꾸면 최대 30초 안에 모든 워커에 반영된다.
 
 ## 3. 계산 순서
 
@@ -45,19 +53,20 @@
 채널 범위
   DM          → 멤버면 DM_PERMISSIONS(+채널 역할 암묵), 아니면 0. 역할·덮어쓰기 무시
   1 기본       = @everyone ∪ 내 역할(직접 + 그룹 연동)        ; ADMINISTRATOR 면 전부(짧은 길)
-  2 [호환] 멤버십 문: 채널 멤버가 아니면 VIEW_CHANNEL 제거
+  2 멤버십: 채널 멤버가 아니면 VIEW_CHANNEL 제거
   3 카테고리 덮어쓰기: @everyone → 역할 합(deny 전부 뺀 뒤 allow 전부 더함) → 사용자
   4 채널 덮어쓰기:     @everyone → 역할 합(deny 후 allow)               → 사용자
-  5 [호환] 채널 역할 암묵 권한(owner/admin)
+  5 채널 역할 암묵 권한(owner/admin) + 정책 토글
   6 의존: VIEW 없으면 0 · SEND 없으면 첨부/임베드/@everyone/투표 0 · CONNECT 없으면 음성 비트 0
 ```
 
 짧은 길(short-circuit) 세 가지: **ADMINISTRATOR 비트**(역할) = 채널 안에서도 전부, **전역 관리자** = 워크스페이스 범위만
-(채널 안에서는 지금처럼 특권 없음 — 남의 DM·비공개 채널을 못 본다), **채널 owner** = owner 전용 동작(채널 삭제).
+(채널 안에서는 특권 없음 — 남의 DM·비공개 채널을 못 본다. 정책 토글 `admin_channel_privileges` 를 켜면 채널 안에서도 전부),
+**채널 owner** = owner 전용 동작(채널 삭제).
 
-동작 ↔ 비트(라우터가 부르는 이름, `ACTIONS`):
+동작 ↔ 비트(라우터가 부르는 이름, `ACTIONS`). "기본 검사"는 `legacy`·`shadow` 모드에서 실제로 막는 규칙, "엔진"은 `enforce` 에서 막는 규칙이다:
 
-| 동작 | 예전 | 새 엔진 |
+| 동작 | 기본 검사 | 엔진 |
 |---|---|---|
 | channel.view / channel.participate(팔로우·저장·안읽음·임시글·스레드 읽음) | 멤버 | VIEW_CHANNEL |
 | message.read · file.download | 멤버 | VIEW + READ_HISTORY |
@@ -71,33 +80,33 @@
 | voice.connect | 멤버 | VIEW + CONNECT |
 | mention.everyone | 누구나 | MENTION_EVERYONE |
 
-## 4. 모드와 전환 절차
+## 4. 모드
 
-`CHAT_PERMISSIONS_ENGINE` (`.env`, backend 재시작으로 반영)
+`CHAT_PERMISSIONS_ENGINE` — `.env` 에 적고 backend 를 다시 시작하면 반영된다(`.env.example` 에는 없다 — 줄을 직접 더한다).
 
-| 모드 | 막는 것 | 새 엔진 |
+| 모드 | 실제로 막는 것 | 엔진 |
 |---|---|---|
-| `legacy` | 예전 검사 | 안 돌림. @역할 멘션도 꺼짐 |
-| `shadow`(기본) | 예전 검사 | 옆에서 계산, 다르면 `chat_perm_shadow_mismatch` 로그 + Redis `chat:perm:shadow:YYYYMMDD` |
-| `enforce` | 새 엔진 | 엔진 오류 = 거부(fail-closed) + `chat_perm_engine_error` |
+| `legacy` | 기본 검사(채널 멤버십·채널 역할) | 돌리지 않는다. @역할 멘션도 꺼진다 |
+| `shadow`(기본) | 기본 검사 | 옆에서 계산하고, 결과가 다르면 `chat_perm_shadow_mismatch` 로그 + Redis `chat:perm:shadow:YYYYMMDD` 카운터 |
+| `enforce` | 엔진 | 엔진 오류 = 거부(fail-closed) + `chat_perm_engine_error` 로그 |
 
-역할·카테고리·덮어쓰기 API 와 @역할 멘션은 새 기능이라 legacy 가 아니면 모드와 무관하게 동작한다.
+역할·카테고리·덮어쓰기 API 와 @역할 멘션은 `legacy` 가 아니면 모드와 무관하게 동작한다.
 엔진 쿼리는 PostgreSQL 에서 SAVEPOINT 안에서 돈다 — 실패해도 요청 트랜잭션은 살아 있다.
 
 로그(개인정보 없음): `{"event":"chat_perm_shadow_mismatch","action","legacy","engine","channel_type","is_voice","channel_role","roles","overwrites","everyone_default","user":<해시12>,"channel":<해시12>}` — id 는 `SECRET_KEY` 섞은 sha256 앞 12자, 본문 없음.
 
-전환 절차:
-1. **배포(shadow)**. 기본 역할 세트 = 지금 동작이라 불일치는 0 이어야 한다(테스트로 960 경우 확인).
-2. **관찰 1~2주**. 관리자로 `GET /api/chat/permissions/shadow-stats?days=14` → `days.*.mismatch`·`error` 가 0 인지,
-   백엔드 컨테이너 로그에서 `chat_perm_shadow_mismatch`·`chat_perm_engine_error` 검색.
-   - 역할·덮어쓰기를 만들기 시작하면 불일치가 **의도대로** 생긴다(예: MANAGE_MESSAGES 역할 → `message.delete:0>1`).
-     카운터 필드 `<action>:<예전>><새>` 로 의도한 차이인지 본다. 의도 밖이면 멈추고 원인 파악.
-3. **전환 전 점검**: 아래 §5 "enforce 전 남은 일" 확인 — 특히 멤버에게서 VIEW 를 빼거나 비멤버에게 VIEW 를 주는
-   덮어쓰기가 없어야 한다(WS·검색·타 모듈은 아직 멤버십 기준).
-4. **enforce**: `.env` 에 `CHAT_PERMISSIONS_ENGINE=enforce` → `docker compose up -d backend`(재시작). 스모크: 채널 보기·보내기·
+### `enforce` 로 바꾸기
+
+1. **`shadow` 에서 본다.** 역할·덮어쓰기를 하나도 만들지 않았다면 엔진 결과는 기본 검사와 같아야 한다(불일치 0).
+   관리자로 `GET /api/chat/permissions/shadow-stats?days=14` → `days.*.mismatch`·`error`, 그리고 backend 로그에서
+   `chat_perm_shadow_mismatch`·`chat_perm_engine_error` 를 찾는다.
+   - 역할·덮어쓰기를 만들면 불일치가 **의도대로** 생긴다(예: `MANAGE_MESSAGES` 를 가진 역할 → `message.delete:0>1`).
+     카운터 필드 `<동작>:<기본 검사>><엔진>` 으로 의도한 차이인지 본다. 의도 밖이면 멈추고 원인을 찾는다.
+2. **바꾸기 전 점검**: [§6](#6-알려진-한계) — 특히 멤버에게서 `VIEW_CHANNEL` 을 빼거나 비멤버에게 주는 덮어쓰기가 없어야 한다.
+3. **바꾼다**: `.env` 에 `CHAT_PERMISSIONS_ENGINE=enforce` → `docker compose up -d backend`. 확인: 채널 보기·보내기·
    리액션·고정·음성 접속·채널 설정.
-5. **롤백**: `.env` 를 `shadow`(또는 `legacy`)로 → backend 재시작. 데이터 마이그레이션이 없어 즉시 원상(역할·덮어쓰기 행은 남지만
-   shadow/legacy 에서는 아무것도 막지 않는다).
+4. **되돌리기**: `.env` 를 `shadow`(또는 `legacy`)로 → backend 재시작. 데이터가 바뀌지 않으므로 바로 원래대로다(역할·덮어쓰기 행은 남지만
+   `shadow`·`legacy` 에서는 아무것도 막지 않는다).
 
 ## 5. API (`/api/chat`)
 
@@ -118,7 +127,7 @@
 | `GET /channels/{id}/members/by-role` — hoist 역할별 묶음 + 사람마다 roles·color | channel.view |
 
 `allow`/`deny`·`permissions` 는 정수 또는 이름 목록. 계층: 내 최고 역할보다 낮은 역할만, 내가 가진 비트만 줄 수 있다
-(전역 관리자·ADMINISTRATOR 예외). 새 역할은 @everyone 바로 위(position 1). 채널 목록(`GET /channels`)에 `category_id`·`position` 추가.
+(전역 관리자·ADMINISTRATOR 예외). 새 역할은 @everyone 바로 위(position 1). 채널 목록(`GET /channels`)의 각 채널에 `category_id`·`position` 이 실린다.
 
 **@역할 멘션**: `@이름`(공백은 `-`, 대소문자 무시 — 예 "On Call" → `@on-call`). 사용자 이름이 먼저. `mentionable` 이거나 보낸 사람이
 MENTION_EVERYONE 을 가지면 부를 수 있다. 받는 사람 = 역할 멤버 ∩ 채널 멤버(보낸 사람 제외) → 개인 멘션처럼 배지 + 알림
@@ -127,15 +136,14 @@ MENTION_EVERYONE 을 가지면 부를 수 있다. 받는 사람 = 역할 멤버 
 **감사 로그**(`audit_logs`, `chat.` 접두): role.create/update/delete/reorder/assign/unassign/set_user/sync_group ·
 channel.permission(_delete) · category.permission(_delete) · category.create/update/delete · layout.update. 바뀐 값의 이전/이후를 남긴다.
 
-## 6. 리스크 · enforce 전 남은 일
+## 6. 알려진 한계
 
-- **WS 팬아웃·검색·타 모듈은 멤버십 기준 그대로**: `realtime` 채널 구독, `search_messages`, 대시보드, 파일 채널 공유, 회의·작업 탭,
-  MCP 도구가 `is_channel_member` 를 쓴다. 덮어쓰기로 멤버의 VIEW 를 빼도 이벤트·검색 결과는 계속 간다(누수),
-  비멤버에게 VIEW 를 줘도 실시간 이벤트를 못 받는다. → enforce 전 또는 직후에 "볼 수 있는 사람" 기준으로 옮겨야 한다(카테고리 화면 작업과 함께).
-- **비용**: 검사마다 쿼리 3~4개(역할·그룹·덮어쓰기)가 더 돈다(shadow 도). 캐시는 아직 없음 — 문서 계획대로 Redis 짧은 캐시 + 무효화 이벤트를
-  붙일 자리(`load_context`). 워커 8개라 프로세스 메모리 캐시는 쓰지 않는다.
-- **의도된 비호환 후보**(enforce 뒤 결정): 원래 설계의 "owner 가 MANAGE_MESSAGES 암묵 보유"는 지금 동작이 아니라 넣지 않았다
-  (`CHANNEL_ROLE_IMPLICIT` 한 줄). 나간 채널의 본인 글 수정·삭제도 지금처럼 된다.
-- 전역 관리자는 채널 안에서 특권이 없다(지금과 같음). 바꾸려면 개인정보(DM) 정책 결정이 먼저.
-- 그룹이 지워지면 연동 역할은 멤버 0 인 역할로 남는다(FK 없음).
-- 역할 변경 WS 이벤트(`roles_update`·`layout_update`)는 아직 없다.
+- **채널 밖의 여러 경로는 여전히 채널 멤버십을 기준으로 본다.** 실시간 이벤트 전달, 메시지 검색, 대시보드, 파일의 채널 공유,
+  회의·할 일 연동, AI 도구가 `is_channel_member` 를 쓴다. 그래서 `enforce` 에서도 덮어쓰기로 **멤버의 `VIEW_CHANNEL` 을 빼면
+  채팅 화면에서는 안 보이지만 실시간 이벤트·검색 결과로는 내용이 계속 간다**(누수). 반대로 비멤버에게 `VIEW_CHANNEL` 을 줘도 실시간 이벤트는 못 받는다.
+  채널을 숨기려면 덮어쓰기가 아니라 **멤버에서 빼는 것**으로 한다.
+- **비용**: 검사마다 쿼리 3~4개(역할·그룹·덮어쓰기)가 더 돈다(`shadow` 에서도). 결과 캐시는 없다.
+- 채널 owner 는 기본으로는 남의 글을 지울 수 없다(정책 토글 `owner_manage_messages`). 채널에서 나간 뒤에도 자기 글은 고치고 지울 수 있다.
+- 전역 관리자는 기본으로는 채널 안에서 특권이 없다(정책 토글 `admin_channel_privileges`).
+- 그룹이 지워지면 그 그룹에 연동된 역할은 멤버 0 인 역할로 남는다.
+- 역할·배치가 바뀌었다는 실시간 이벤트는 없다 — 다른 사람 화면에는 목록을 다시 불러올 때 반영된다.

@@ -1,6 +1,6 @@
 # audiorelay 전송 프로토콜 v1
 
-just-workspace 음성채널 **무손실 티어(Tier 3)** 의 중계 프로토콜. 릴레이(`ws-audiorelay`)는 SFU 식 순수 포워더다 —
+Just Workspace 음성채널의 **무손실** 음질 단계가 쓰는 중계 프로토콜(구조와 켜는 법은 [docs/voice-lossless.md](../docs/voice-lossless.md)). 릴레이(`ws-audiorelay`)는 SFU 식 순수 포워더다 —
 **디코딩·트랜스코딩을 절대 하지 않고**, 보낸 사람의 프레임을 같은 방의 다른 멤버에게 바이트 그대로 넘긴다.
 릴레이가 손대는 바이트는 헤더의 `src`(송신 피어 번호) 2바이트와, 재전송일 때 `flags` 의 비트 하나뿐이다.
 
@@ -118,7 +118,7 @@ WebSocket 은 TCP 라 손실이 없지만 릴레이가 (테스트 드롭 등으�
 claims: `{"room":"voice-<채널id>","uid":"<사용자id>","name":"<표시이름>","identity":"<LiveKit identity, 선택>","iat":…,"exp":…,"nonce":"…"}`.
 `identity` 는 같은 세션의 LiveKit identity(음성채널 presence 키). 릴레이는 welcome/peer_joined/통계에 그대로 실어 주고,
 클라이언트는 이것으로 릴레이 피어 ↔ LiveKit 참가자를 짝지어 **같은 사람의 Opus 호환 스트림을 끄고 PCM 을 듣는다**.
-- secret = `.env` 의 `AUDIORELAY_SECRET`(백엔드와 릴레이가 공유). 16 B 미만이면 릴레이가 기동을 거부한다.
+- secret = `.env` 의 `AUDIORELAY_SECRET`(백엔드와 릴레이가 공유). 16 B 미만이면 릴레이가 기동을 거부한다(백엔드의 기동 검사는 32자 이상을 요구한다).
 - TTL 120 s(백엔드 `POST /api/chat/channels/{id}/voice/relay-token`), 릴레이는 5 s 시계 오차 허용.
 - 백엔드가 채널 멤버십을 확인한 뒤 발급하므로 릴레이는 DB 가 없다. 방 번호 = 토큰의 `room`.
 - 같은 토큰으로 `GET /audiorelay/stats`(`Authorization: Bearer`)를 부르면 **그 방의** 통계만 돌아온다.
@@ -142,4 +142,4 @@ claims: `{"room":"voice-<채널id>","uid":"<사용자id>","name":"<표시이름>
 
 ## 9. 버전 정책
 `ver` 가 바뀌면 헤더 레이아웃이 바뀐 것이다. 같은 `ver` 안에서는 `flags` 비트·`codec` 값·`CTRL` 필드 추가만 허용(모르는 비트·코덱·필드는 무시 — 모르는 코덱의 스트림은 재생하지 않는다).
-`codec 5 pcm_s32` 는 데스크톱 하이레조에서 더해졌다 — 릴레이는 보지 않고, 브라우저 무손실 클라이언트는 lib/lossless/pcm.ts 가 풀어 재생한다.
+`codec 5 pcm_s32` 는 데스크톱 앱의 하이레조 단계가 보낸다 — 릴레이는 코덱을 보지 않고, 브라우저 클라이언트는 `frontend-react/src/lib/lossless/pcm.ts` 가 풀어 재생한다.

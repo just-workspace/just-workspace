@@ -12,7 +12,11 @@
 격리 브라우저는 **워크스페이스와 다른 출처**(`RBI_PUBLIC_ORIGIN`, 예: `https://rbi.example.com`)의 단독 전체 화면 앱이다(§7). 워크스페이스 셸 안에는 없다 —
 사용자는 그 주소로 바로(또는 사용자 메뉴 "격리 브라우저 열기"), 관리자는 관리 › 격리 브라우저. 대상의 출구 허용 목록은 관리 화면에서 더한 대상으로 **동적으로** 만들어진다(§8).
 
-별도 Kasm Workspaces 설치가 아니라 워크스페이스에 **내장된 모듈**이다(`backend/app/rbi`, 모듈 ID `rbi`, 기본 꺼짐).
+별도 Kasm Workspaces 설치가 아니라 워크스페이스에 **내장된 기능**이다(`backend/app/rbi`). 설치 단위로는 애드온 구역 "격리 브라우저"(`rbi`)이고,
+그 안의 모듈 `rbi` 는 처음에 꺼져 있다 — 구역을 설치한 뒤 관리 › 모듈·플러그인에서 켠다(§5).
+
+**전제**: 전용 출처로 쓸 호스트 이름(`rbi.` 로 시작)과 그 이름의 HTTPS 인증서가 하나 더 필요하다 — 이 문서는 TLS 를 워크스페이스 앞단의
+리버스 프록시가 끝내는 구성을 기준으로 쓴다. 앱 서버는 리눅스여야 한다(호스트 iptables·도커 브리지를 쓴다). 세션 하나가 CPU 2개·메모리 2 GB 까지 쓴다.
 
 이 문서의 주소는 모두 예시다 — 워크스페이스 `example.com`, 전용 출처 `rbi.example.com`, 앱 서버 `192.168.10.20`, LAN 게이트웨이 `192.168.10.1`, 대상 `192.168.10.30`.
 
@@ -82,7 +86,7 @@ backend ── 켜진 대상의 출구 ── allow.txt(rbi-allow 볼륨) ──
 | 바깥 → 세션 컨테이너 | 6901 은 `172.28.0.1`(workspace 브리지 게이트웨이)에만 게시. `WS-RBI`: ws-nginx(172.28.0.2) 출발지 NEW 만 통과, 그 외 DROP. LAN·다른 컨테이너에서 게시 포트로 가면 DNAT 뒤 FORWARD 에서 DROP(타임아웃으로 보인다) |
 | 세션 시작 | 사이드카 하트비트(`/run/rbi-guard/state.json`, 180초 안, 같은 브리지, ok=true)가 아니면 **시작 거부**(503). `RBI_REQUIRE_GUARD=false` 는 시험용 |
 | 컨테이너 자체 | 비루트·읽기 전용·cap 없음·no-new-privileges·자원 상한·pids 상한. 홈은 tmpfs 라 세션과 함께 사라진다 |
-| 감사 | `rbi.session.start / start_failed / stop / mode`, `rbi.target.create / update / delete`, `rbi.allow.add / remove`(출구 증감), `rbi.site.login`(rbi 출처 로그인) (관리 › 로그) |
+| 감사 | `rbi.session.start / start_failed / stop / mode`, `rbi.target.create / update / delete`, `rbi.allow.add / remove`(출구 증감), `rbi.site.login`(rbi 출처 로그인) (관리 › 접근 로그) |
 
 권한: 대상마다 `allowed_user_ids`·`allowed_group_ids`. **둘 다 비면 관리자만** 열 수 있다(모듈 grant 의 "비면 전체 허용" 과 반대 — 기본 거부).
 모듈 `rbi` 가 꺼져 있으면 사용자 API 전체가 403.
@@ -172,14 +176,15 @@ POST   /api/rbi/sessions/{id}/mode      {mode}
 
 ### 켜기
 
-1. `.env`: `RBI_PUBLIC_ORIGIN=https://rbi.<도메인>`, `RBI_PROTECTED=<앱 서버 IP>,<LAN 게이트웨이>`, `COMPOSE_PROFILES` 에 `rbi` 추가.
-   `RBI_ALLOW` 는 비워도 된다(대상은 관리 화면에서 — §8).
+1. `.env`: `RBI_PUBLIC_ORIGIN=https://rbi.example.com`, `RBI_PROTECTED=<앱 서버 IP>,<LAN 게이트웨이>`, `COMPOSE_PROFILES` 에 `rbi` 추가
+   (`JW_ZONES` 를 쓰고 있다면 거기에도 `rbi`). `RBI_ALLOW` 는 비워도 된다(대상은 관리 화면에서 — §8).
 2. 앞단 리버스 프록시와 DNS 를 전용 출처에 맞춘다(§7 "앞단 프록시가 해야 할 일").
 3. 이미지: `docker pull kasmweb/chromium:1.18.0` (1.3 GB — 첫 세션 때 받으면 45초 안에 못 뜬다), `docker compose build rbi-netfilter`.
    미러 모드를 쓸 거면 §6 "운영" 의 미러 이미지도 굽는다.
 4. `docker compose up -d backend frontend-react rbi-netfilter` (backend 는 `rbi-guard`·`rbi-allow` 마운트 때문에 재생성된다).
-5. `docker compose restart nginx` — nginx.conf 는 bind 마운트라 reload 로는 안 바뀐다.
-6. 관리 › 모듈에서 **격리 브라우저** 켜기 → 관리 › 격리 브라우저: "격리 규칙 적용됨" 확인 → 대상 추가(예: 식별자 `lab`, 주소 `http://192.168.10.30`) → 허용 그룹/사용자.
+5. `nginx/nginx.conf` 를 고쳤다면(예: 전용 출처 호스트가 `rbi.` 로 시작하지 않아 `server_name` 을 바꾼 경우) `docker compose restart nginx` —
+   파일 하나를 bind 마운트한 것이라 reload 로는 바뀐 내용이 안 들어간다.
+6. 관리 › 모듈·플러그인에서 **격리 브라우저** 켜기 → 관리 › 격리 브라우저: "격리 규칙 적용됨" 확인 → 대상 추가(예: 식별자 `lab`, 주소 `http://192.168.10.30`) → 허용 그룹/사용자.
 7. 확인: 세션 하나 열어 대상 화면이 보이는지, 관리 화면 "활성 세션" 에 보이는지, 끝내기 뒤 `docker ps` 에 `ws-rbi-s-*` 가 없는지. 격리는 §3 으로 확인한다.
 
 네트워크 `ws-rbi`(브리지 `br-wsrbi`)는 백엔드가 첫 세션 때 `docker network create --subnet 172.31.200.0/24 --ip-range 172.31.200.128/25 --gateway 172.31.200.1
@@ -202,7 +207,7 @@ POST   /api/rbi/sessions/{id}/mode      {mode}
 | "격리 규칙이 확인되지 않아 세션을 시작하지 않습니다" | `docker compose logs rbi-netfilter` — `ok=1` 이어야. 브리지가 없으면 첫 세션이 만든다(15초 안에 따라붙음). 하트비트 파일: `docker run --rm -v ws-rbi-guard:/g alpine cat /g/state.json` |
 | 세션 503 "KasmVNC 가 45초 안에 듣기 시작하지 않았습니다" | 이미지 미리 pull 했나, 호스트 메모리. `docker logs ws-rbi-s-<sid12>` 는 reaper 가 지우기 전 30초 안에만 |
 | 화면이 "서버 연결에 실패했습니다" | 스트림 URL 에 `path=rbi/<sid>/websockify` 가 있나. nginx 로그의 `/rbi/<sid>/websockify` 가 101 인지. 앞단 프록시가 WebSocket 을 넘기는지 |
-| 403 | 다른 사용자·만료·끝난 세션. 관리 › 로그 `rbi.*` |
+| 403 | 다른 사용자·만료·끝난 세션. 관리 › 접근 로그의 `rbi.*` |
 | 세션이 몇 분 만에 끊김 | 대상의 유휴 분이 짧다 — 뷰어가 없는 시간도 센다(시작 뒤 바로 열지 않으면) |
 
 규칙 걷기(긴급): `docker compose stop rbi-netfilter`(SIGTERM 에 체인·점프 제거) — 뜬 세션은 출구가 열리므로 먼저 `관리 › 격리 브라우저` 에서 강제 종료.
@@ -278,12 +283,9 @@ POST /api/admin/rbi/targets · PUT …/{id}   {…, mode: "pixel"|"mirror"}
 켜기(픽셀 모드 §5 를 이미 했다는 전제):
 1. 이미지: `docker compose --profile rbi-build build rbi-mirror` (또는 `sh rbi/mirror/build-image.sh`) → `localhost/just-workspace-rbi-mirror:latest`(약 1.6 GB).
    다른 이름이면 `.env` 에 `RBI_MIRROR_IMAGE`. compose 의 `rbi-mirror` 항목은 빌드 전용(entrypoint `true`, 네트워크 없음) — `up` 하지 않는다.
-2. `rbi-netfilter` 의 `apply.sh` 는 `RBI_CHAIN` 이 **필수**다(compose 가 `WS-RBI` 를 준다).
-3. 백엔드 시작 시 auto-migrate 가 `rbi_targets.mode`·`rbi_sessions.mode` 열(NULL = pixel)을 붙인다 — 기존 행은 그대로 픽셀.
-4. `docker compose restart nginx`(bind 마운트 — reload 무효).
-5. 업로드를 허용할 대상이면 앞단 리버스 프록시의 `client_max_body_size` 가 50m 이상인지 확인한다.
-6. 관리 › 격리 브라우저 › 대상 편집 → **화면 방식: 미러** → 저장. 다음 세션부터 적용(뜬 세션은 그대로).
-7. 확인: 세션 열기 → 신뢰 바 "연결됨" · 글자가 선명한지 · 한글 입력 · `docker ps` 의 `ws-rbi-s-*` 가 `just-workspace-rbi-mirror` 인지 · 끝내기 뒤 사라지는지.
+2. 업로드를 허용할 대상이면 앞단 리버스 프록시의 `client_max_body_size` 가 50m 이상인지 확인한다.
+3. 관리 › 격리 브라우저 › 대상 편집 → **화면 방식: 미러** → 저장. 다음 세션부터 적용(뜬 세션은 그대로).
+4. 확인: 세션 열기 → 신뢰 바 "연결됨" · 글자가 선명한지 · 한글 입력 · `docker ps` 의 `ws-rbi-s-*` 가 `just-workspace-rbi-mirror` 인지 · 끝내기 뒤 사라지는지.
 
 이미지 갱신: Chromium·폰트·베이스는 Dockerfile `ARG` 로 고정(`NODE_IMAGE` 다이제스트, `CHROMIUM_VERSION`, `FONTS_*`, `IPROUTE2`, `CA_CERTS`).
 데비안 보안 갱신으로 옛 버전이 저장소에서 빠지면 빌드가 실패한다 — `apt-cache policy chromium` 으로 새 버전을 보고 `BUILD_ARGS="--build-arg CHROMIUM_VERSION=…"` 로 다시 굽는다.
@@ -293,14 +295,14 @@ Chromium 은 **보안 갱신마다** 올린다(세션 브라우저가 경계다)
 
 되돌리기:
 - 대상 하나: 관리 화면에서 화면 방식을 **픽셀**로 — 다음 세션부터 KasmVNC. 사용자도 신뢰 바의 "픽셀 모드로 전환" 으로 그 세션만 바꿀 수 있다.
-- 기능 전체: 모든 대상을 픽셀로 두면 미러 경로·이미지는 쓰이지 않는다(nginx 미러 location 은 미러 세션이 아니면 403). DB 의 `mode` 열은 남아도 무해(NULL/pixel).
+- 기능 전체: 모든 대상을 픽셀로 두면 미러 경로·이미지는 쓰이지 않는다(nginx 미러 location 은 미러 세션이 아니면 403).
 
 문제 해결:
 
 | 증상 | 보기 |
 |---|---|
 | 세션 503 "45초 안에 듣기 시작하지 않았습니다" | 미러 이미지가 있나(`docker image ls just-workspace-rbi-mirror`), `RBI_MIRROR_IMAGE` 이름 |
-| 화면이 흰색·"연결 중" 에서 멈춤 | nginx 가 재시작됐나(미러 location), 브라우저 개발자도구에서 `/rbi/<sid>/mirror` 가 101 인지, `docker logs ws-rbi-s-<sid12>` 의 `listening :6901`·`fonts: 168 faces` |
+| 화면이 흰색·"연결 중" 에서 멈춤 | 브라우저 개발자도구에서 `/rbi/<sid>/mirror` 가 101 인지, `docker logs ws-rbi-s-<sid12>` 의 `listening :6901`·`fonts: 168 faces` |
 | 글자가 겹치거나 굵게 보임 | 폰트 묶음 누락(`fonts: 0 faces`) — 이미지를 prod 타깃으로 다시 굽는다 |
 | 특정 화면이 깨짐 | 신뢰 바 "픽셀 모드로 전환"(그 세션만). 반복되면 대상 방식을 픽셀로 |
 | 한글 이름 파일 올리기가 조용히 실패 | 컨테이너 env `LANG=C.UTF-8`(이미지·env 두 겹) |
@@ -461,7 +463,7 @@ ws-rbi-netfilter ─ RBI_POLL(5초)마다 읽기 ─ 줄마다 재검사(rbi-all
 - frontend vitest: 단독 앱 · 런처/내비/번들 격리 · 관리 화면
 - nginx: `nginx -t`
 - 사이드카 전파(`deploy/rbi-netfilter/test-propagation.sh`, 별도 체인·브리지 이름의 임시 컨테이너): 대상 추가 → 2초 안에 규칙 + 세션 대역에서 실제 연결 · 금지 줄 5종 거부(이유) · 제거 → 2초 안에 규칙 소멸 + 차단 · 종료 시 체인·점프 정리
-- 미러: 시험 스택 `rbi/mirror/bench/stack/`, 시험 페이지 `rbi/mirror/devpages/`(시험용 토폴로지 페이지 `topo/` 포함)
+- 미러: 단위 시험 `rbi/mirror/test/`(어휘 검증·수집·변환·로컬 에코), 시험 페이지 `rbi/mirror/devpages/`(세션 이미지의 `dev` 타깃에만 들어간다)
 
-시험 스택은 운영과 다른 체인·브리지 이름을 쓴다. `apply.sh` 는 `RBI_TEST_STACK=1` 이면 운영 이름(`WS-RBI`·`br-wsrbi`)을 거부하고,
-인자를 받지 않으며, `RBI_CHAIN` 이 없으면 시작하지 않는다(exit 64) — 시험이 운영 체인을 건드릴 수 없다.
+사이드카 시험은 운영과 다른 체인·브리지 이름을 쓴다. `apply.sh` 는 `RBI_TEST_STACK=1` 이면 운영 이름(`WS-RBI`·`br-wsrbi`)을 거부하고,
+인자를 받지 않으며, `RBI_CHAIN` 이 없으면 시작하지 않는다(exit 64, 운영 compose 는 `WS-RBI` 를 준다) — 시험이 운영 체인을 건드릴 수 없다.

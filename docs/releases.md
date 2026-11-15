@@ -254,7 +254,7 @@ python -m jwrelease bundle verify just-workspace-1.1.0-offline.tar --pubkey rele
 
 - 묶음 안의 manifest 는 `offline_bundle` 이 비어 있는 판이다(묶음이 자기 해시를 담을 수 없다). 묶음의 크기·해시를 실은 manifest 는 묶음을 만든 **뒤에** `make-manifest --offline-bundle <파일>` 로 다시 만들어 게시한다. 두 manifest 는 `offline_bundle` 만 다르다.
 - `docker load` 는 레지스트리 다이제스트를 되살리지 못한다. 그래서 묶음의 이미지는 태그로 저장한다 — 우리 이미지는 `저장소:<버전>`, 남의 이미지(`--include-third-party`)는 `저장소:jw-<다이제스트 앞 12자>`. 오프라인 설치는 색인의 `images[].tag` 로 이미지를 가리킨다.
-- **지금은 명세와 골격이다.** 색인·묶기·검증은 테스트로 고정했지만, 실제 `docker save` 로 만든 묶음을 `docker load` 해서 띄우는 것까지는 확인하지 않았다.
+- **검수 서버에서 확인한 범위.** 릴리스 도구로 실제 `docker save` 묶음을 만들고(`bundle plan` → `index` → 서명 → `pack` → `verify`), 레지스트리와 채널을 끈 서버에 올려 검증·추가 이미지 판정을 거친 뒤 묶음과 이미지 파일만으로 업데이트를 끝냈다([installer.md](installer.md) 13절의 `u8`). 색인·묶기·검증의 형식은 테스트로도 고정돼 있다. 확인하지 못한 것은 실제 서명 키로 낸 묶음과 여러 GB 묶음을 앞단 프록시를 거쳐 올리는 경우다.
 
 ## 주소 설정값
 

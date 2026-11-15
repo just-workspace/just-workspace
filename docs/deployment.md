@@ -48,6 +48,7 @@ docker compose config --quiet && docker compose up -d
 - 빈 값·예시 값·짧은 값의 비밀값으로는 backend 가 뜨지 않는다 — 로그에 변수 이름과 사유가 나온다([CONFIG.md](CONFIG.md)의 "비밀값").
 - 관리자를 `.env` 에 적지 않고 만들려면 띄운 뒤 `docker compose exec backend python -m app.cli seed-admin --username <아이디>`.
 - `.env` 의 `ADMIN_PASSWORD` 는 관리자가 만들어진 뒤 지운다.
+- **관리자가 한 명도 없는 동안에는 웹의 최초 설정 화면(`/setup`)이 열려 있고, 처음 접속한 사람이 첫 관리자를 만든다.** 밖에서 닿는 서버라면 위 두 방법 가운데 하나로 관리자를 먼저 만든다(설치 관리자는 늘 그렇게 한다). 관리자가 생기면 그 화면은 닫힌다.
 
 ## 앞단 프록시
 

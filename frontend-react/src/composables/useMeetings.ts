@@ -155,6 +155,9 @@ export interface MeetingsState {
   vbgEnabled: boolean
   /** 배경 처리 중(공용) */
   blurBusy: boolean
+  /** 잡음 제거 — 브라우저 기본 잡음 억제(noiseSuppression)를 켜고 끈다. 기본 켬. */
+  noiseEnabled: boolean
+  noiseBusy: boolean
   /** Egress 녹화 중 */
   recording: boolean
   recordingBusy: boolean
@@ -191,6 +194,8 @@ export const meetingsStore = createStore<MeetingsState>()(() => ({
   blurEnabled: false,
   vbgEnabled: false,
   blurBusy: false,
+  noiseEnabled: true,
+  noiseBusy: false,
   recording: false,
   recordingBusy: false,
   inCall: false,
@@ -578,8 +583,8 @@ async function connectToRoom(wsUrl: string, token: string, opts: ConnectOptions 
       ...(opts?.selectedMicId ? { deviceId: opts.selectedMicId } : {}),
       echoCancellation: true,
       autoGainControl: true,
-      // 잡음 제거는 브라우저 기본 억제를 쓴다
-      noiseSuppression: true,
+      // 잡음 제거는 브라우저 기본 억제를 쓴다 — 컨트롤 바의 토글이 켜고 끈다(toggleNoiseCancellation)
+      noiseSuppression: S().noiseEnabled,
     },
     // 장치 설정에서 고른 스피커. 예전엔 emit 까지 왔다가 여기서 버려졌다.
     ...(opts?.selectedSpeakerId ? { audioOutput: { deviceId: opts.selectedSpeakerId } } : {}),
@@ -976,6 +981,46 @@ async function _localMicTrack(): Promise<any | null> {
   return (pub?.track as any) || null
 }
 
+// ─── 잡음 제거(브라우저 기본 잡음 억제) ───
+
+/**
+ * 잡음 제거 토글 — 내 마이크의 브라우저 잡음 억제(`noiseSuppression`)를 켜고 끈다.
+ * 지금 트랙에 제약을 바로 걸어 보고, 브라우저가 그 자리에서 바꿔 주지 않으면 같은 장치로 트랙을 다시 잡는다.
+ * 둘 다 안 되면 상태를 그대로 두고 알린다. 마이크가 꺼져 있으면 다음에 켤 때 적용된다.
+ */
+export const toggleNoiseCancellation = async () => {
+  if (S().noiseBusy) return
+  const next = !S().noiseEnabled
+  const room = S().currentRoom as any
+  const defaults = room?.options?.audioCaptureDefaults as Record<string, unknown> | undefined
+  const before = defaults?.noiseSuppression
+  set({ noiseBusy: true })
+  try {
+    if (defaults) defaults.noiseSuppression = next          // 마이크를 다시 켜거나 장치를 바꿀 때도 같은 값으로
+    const track = await _localMicTrack()
+    const mst = track?.mediaStreamTrack as MediaStreamTrack | undefined
+    if (track && mst) {
+      let applied = false
+      try {
+        await mst.applyConstraints({ noiseSuppression: next })
+        const now = mst.getSettings?.().noiseSuppression
+        applied = now === undefined || now === next
+      } catch { /* 이 브라우저는 그 자리에서 못 바꾼다 — 아래에서 다시 잡는다 */ }
+      if (!applied) {
+        await track.restartTrack({ ...(defaults ?? {}), noiseSuppression: next })
+        await _watchMicTrack()
+      }
+    }
+    set({ noiseEnabled: next })
+  } catch (e) {
+    if (defaults) defaults.noiseSuppression = before
+    console.warn('[meet] 잡음 제거 전환 실패', e)
+    addToast('error', t('meetings.controls.noiseFail'))
+  } finally {
+    set({ noiseBusy: false })
+  }
+}
+
 // ─── 회의 녹화(Egress, 호스트 전용) ───
 export const toggleRecording = async () => {
   if (S().recordingBusy) return
@@ -1133,6 +1178,8 @@ export const useMeetings = () => {
     get blurEnabled() { return track('blurEnabled') },
     get vbgEnabled() { return track('vbgEnabled') },
     get blurBusy() { return track('blurBusy') },
+    get noiseEnabled() { return track('noiseEnabled') },
+    get noiseBusy() { return track('noiseBusy') },
     get recording() { return track('recording') },
     get recordingBusy() { return track('recordingBusy') },
     get pendingRequests() { return track('pendingRequests') },
@@ -1143,7 +1190,7 @@ export const useMeetings = () => {
     getMeeting, updateRoom, endRoom, rsvpMeeting,
     getToken, joinRoom, joinRoomWithToken, leaveRoom,
     toggleCamera, toggleMic, toggleScreenShare,
-    toggleBackgroundBlur, setVirtualBackground,
+    toggleBackgroundBlur, setVirtualBackground, toggleNoiseCancellation,
     switchActiveDevice, getActiveDevice,
     toggleRecording, fetchRecordingStatus,
     sendChatMessage, clearUnreadChat,

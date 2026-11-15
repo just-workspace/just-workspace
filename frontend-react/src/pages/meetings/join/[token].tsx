@@ -24,7 +24,7 @@ import { authStore, useAuth } from '~/composables/useAuth'
 import { addToast } from '~/composables/useToast'
 import {
   meetingsStore, useMeetings, reacquireMic, joinRoomWithToken, leaveRoom, cancelPendingJoin, isJoinCancelled,
-  runMediaToggle, toggleBackgroundBlur, setVirtualBackground,
+  runMediaToggle, toggleBackgroundBlur, setVirtualBackground, toggleNoiseCancellation,
   loadLivekit,
 } from '~/composables/useMeetings'
 import { useMeetingSessionStats } from '~/composables/useMeetingSessionStats'
@@ -75,7 +75,7 @@ function MeetingJoin() {
 
   const {
     connected, connectionState, rejoinAttempt, micInterrupted, remoteEnded, currentRoom, currentRoomName, participants,
-    cameraEnabled, micEnabled, screenShareEnabled, blurEnabled, vbgEnabled, blurBusy,
+    cameraEnabled, micEnabled, screenShareEnabled, blurEnabled, vbgEnabled, blurBusy, noiseEnabled, noiseBusy,
   } = useMeetings()
   const { appName } = useSiteConfig()
   const { user } = useAuth()
@@ -551,6 +551,9 @@ function MeetingJoin() {
             blurEnabled={blurEnabled}
             vbgEnabled={vbgEnabled}
             blurBusy={blurBusy}
+            noiseEnabled={noiseEnabled}
+            noiseBusy={noiseBusy}
+            onToggleNoise={() => void toggleNoiseCancellation()}
             deviceMenuOpen={deviceMenuOpen}
             sidebarOpen={sidebarOpen}
             sidebarTab={sidebarTab}

@@ -4453,6 +4453,8 @@
       "micOn": "마이크 켜기",
       "screenStop": "화면공유 중지",
       "screenShare": "화면공유",
+      "noise": "노이즈 제거",
+      "noiseFail": "잡음 제거를 바꾸지 못했습니다",
       "blur": "배경 흐림",
       "vbg": "가상배경",
       "recStart": "녹화",

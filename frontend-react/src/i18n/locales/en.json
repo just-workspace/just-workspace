@@ -4453,6 +4453,8 @@
       "micOn": "Unmute",
       "screenStop": "Stop sharing",
       "screenShare": "Share screen",
+      "noise": "Noise filter",
+      "noiseFail": "Couldn't change noise suppression",
       "blur": "Blur background",
       "vbg": "Virtual bg",
       "recStart": "Record",

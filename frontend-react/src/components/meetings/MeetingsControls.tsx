@@ -1,5 +1,5 @@
 /**
- * 회의 컨트롤 바 — 카메라·마이크·녹화(호스트)·화면 공유·배경 블러·가상 배경·참가자·채팅·장치 + 나가기.
+ * 회의 컨트롤 바 — 카메라·마이크·녹화(호스트)·잡음 제거·화면 공유·배경 블러·가상 배경·참가자·채팅·장치 + 나가기.
  */
 import { useRef, type ChangeEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -18,6 +18,9 @@ export interface MeetingsControlsProps {
   vbgEnabled?: boolean
   /** 배경 처리 중(블러·가상 배경 공용) */
   blurBusy?: boolean
+  /** 잡음 제거(브라우저 기본 잡음 억제) 켜짐 */
+  noiseEnabled?: boolean
+  noiseBusy?: boolean
   deviceMenuOpen?: boolean
   /** 호스트만 녹화 버튼 */
   isHost?: boolean
@@ -29,6 +32,7 @@ export interface MeetingsControlsProps {
   onToggleMic?: () => void
   onToggleScreen?: () => void
   onToggleBlur?: () => void
+  onToggleNoise?: () => void
   onToggleDeviceMenu?: () => void
   /** 가상 배경 이미지(null = 해제) */
   onSetBackground?: (file: File | null) => void
@@ -42,7 +46,7 @@ const btn = 'inline-flex items-center justify-center h-14 w-14 sm:h-[52px] sm:w-
 /** 회의 컨트롤 바 */
 export function MeetingsControls(props: MeetingsControlsProps) {
   const {
-    cameraEnabled, micEnabled, screenShareEnabled, blurEnabled, vbgEnabled, blurBusy,
+    cameraEnabled, micEnabled, screenShareEnabled, blurEnabled, vbgEnabled, blurBusy, noiseEnabled, noiseBusy,
     deviceMenuOpen, isHost, recording, recordingBusy, sidebarOpen, sidebarTab,
   } = props
   const { t } = useI18n()
@@ -118,6 +122,22 @@ export function MeetingsControls(props: MeetingsControlsProps) {
             <UiIcon name="monitor" className="h-5 w-5" />
           </button>
           <span className="text-[11px] font-medium text-muted-foreground">{screenShareEnabled ? t('meetings.controls.screenStop') : t('meetings.controls.screenShare')}</span>
+        </div>
+
+        {/* 잡음 제거 토글 — 브라우저 기본 잡음 억제. 마이크가 켜져 있을 때만 */}
+        <div className="flex flex-col items-center gap-1">
+          <button
+            onClick={() => props.onToggleNoise?.()}
+            disabled={!micEnabled || noiseBusy}
+            aria-pressed={!!noiseEnabled}
+            title={t('meetings.controls.noise')}
+            className={cn(btn, 'disabled:opacity-40', noiseEnabled ? 'bg-primary/15 text-primary hover:bg-primary/25' : 'bg-muted hover:bg-muted/80')}
+          >
+            {noiseBusy
+              ? <UiIcon name="loader" strokeWidth={2.4} className="h-5 w-5 animate-spin" />
+              : <UiIcon name="audio-lines" className="h-5 w-5" />}
+          </button>
+          <span className="text-[11px] font-medium text-muted-foreground">{t('meetings.controls.noise')}</span>
         </div>
 
         {/* 배경 블러 토글 (카메라 켜져 있을 때만, GPU 우선/CPU 폴백) */}

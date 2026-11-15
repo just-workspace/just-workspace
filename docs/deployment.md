@@ -25,15 +25,21 @@
 
 전체 목록은 [CONFIG.md](CONFIG.md).
 
-### 필수 (프로파일과 무관하게 compose 가 검사)
+### 필수
 
 | 변수 | 설명 |
 |------|------|
-| `DB_PASSWORD` | PostgreSQL 비밀번호 |
-| `SECRET_KEY` | 세션 서명·Fernet 키 파생. **ws-sso 와 같은 값** |
-| `INTERNAL_API_KEY` | backend 내부 API 키 — Dovecot 메일 로그인·ws-ldap 이 쓴다 |
-| `GRAFANA_ADMIN_PASSWORD` | logging 프로파일을 안 켜도 채워야 한다 |
+| `DB_PASSWORD` | PostgreSQL 비밀번호(16자 이상) — compose 가 검사 |
+| `SECRET_KEY` | 세션 서명·Fernet 키 파생(32자 이상). **ws-sso 와 같은 값** — compose 가 검사 |
 | `DOMAIN` · `APP_URL` | 서비스 도메인 · 외부 URL |
+
+`.env.example` 의 비밀값은 비어 있다. 한 줄로 채운다(이미 값이 있는 줄은 건드리지 않는다):
+
+```bash
+docker run --rm -v "$PWD/.env:/work/.env" <backend 이미지> python -m app.cli gen-secrets --merge /work/.env --in-place
+```
+
+빈 값·예시 값·짧은 값으로는 백엔드가 뜨지 않는다 — 로그에 변수 이름과 사유가 나온다. 켠 프로파일의 비밀값(`LIVEKIT_API_SECRET`, `GRAFANA_ADMIN_PASSWORD`, `SEARXNG_SECRET` …)이 비어 있으면 그 컨테이너가 기동을 거부한다. 규칙 표와 생성기 사용법은 [CONFIG.md](CONFIG.md) 의 "비밀값" 절.
 
 ## 프로파일 (`COMPOSE_PROFILES`)
 
@@ -46,7 +52,7 @@
 | `livekit` | ws-livekit (1.13) | UDP 7882-7892, TCP 7881, TURN 3478/udp + 443/tcp(`LIVEKIT_TURN_TLS_PUBLISH`) |
 | `egress` | ws-egress (1.15) | 회의 녹화. livekit 과 함께. cpu 4 / 4G |
 | `onlyoffice` | ws-onlyoffice (10.0) | WOPI. AGPL. `ONLYOFFICE_JWT_SECRET`, `RP_LAN_IP` |
-| `sso` | ws-sso + ws-ldap | SAML/SCIM + LDAP 디렉터리(389/636) |
+| `sso` | ws-sso + ws-ldap | SAML/SCIM + LDAP 디렉터리. 밖으로는 LDAPS 636 만 — 평문 389 는 `LDAP_PLAIN_BIND`(기본 127.0.0.1)에만 연다 |
 | `logging` | ws-vector · ws-loki · ws-grafana · ws-healthprobe | Grafana 3001 포트는 `GRAFANA_BIND`(기본 127.0.0.1) |
 | `aitools` | ws-searxng | AI 웹 검색 도구. AGPL |
 | `certbot` | ws-certbot | 메일·TURN 인증서(standalone 은 웹 인증서까지). `ACME_DOMAINS`, `LETSENCRYPT_EMAIL` |
@@ -99,7 +105,7 @@ MCP 커넥터를 전용 서브도메인에 두려면 `mcp.example.com` A 레코�
 bash scripts/update.sh           # git pull → 순차 재빌드 → 헬스체크 → 실패 시 --rollback
 ```
 
-DB 스키마는 backend 기동 시 `init_db()` 가 advisory lock 안에서 맞춘다(워커 8개 동시 기동 안전). 자세한 것은 [update-system.md](update-system.md).
+DB 스키마는 backend 기동 시 `init_db()` 가 advisory lock 안에서 맞춘다(워커 여럿 동시 기동 안전). 자세한 것은 [update-system.md](update-system.md).
 
 ## 플러그인 빌드
 

@@ -9,7 +9,7 @@
 │  [코어 — 항상 실행]                                              │
 │  nginx :80 ──┬─► frontend-react :3000  React 정적 빌드           │
 │   (ws-nginx) │     (nginx-unprivileged)                          │
-│              └─► backend :8000  FastAPI · uvicorn 워커 8          │
+│              └─► backend :8000  FastAPI · uvicorn 멀티 워커       │
 │                    인증 · 메일 · 캘린더 · 연락처 · 파일 · 채팅 ·    │
 │                    회의 · 게시판 · 위키 · 할 일 · AI · Git API ·    │
 │                    WebSocket · DAV · WOPI · MCP · 플러그인 로더     │
@@ -50,7 +50,7 @@ TipTap 3 + Yjs(위키 공동 편집) · zustand · TanStack Query · i18next(ko/
 
 `backend/` — Python 3.14 · FastAPI 0.143 · Starlette · SQLAlchemy 2.1(asyncio) + asyncpg · pydantic 2 · Redis 8(redis-py) · uvicorn 0.54.
 
-- **멀티워커**: `uvicorn --workers 8`. 프로세스 메모리에 상태를 두지 않는다 — 세션 레지스트리·회의 메타·메일 첨부·OAuth 코드·헬스 결과·파일 잠금은 Redis.
+- **멀티워커**: `uvicorn --workers N`(`BACKEND_WORKERS`, 기본은 CPU 수 기준 2~8). 프로세스 메모리에 상태를 두지 않는다 — 세션 레지스트리·회의 메타·메일 첨부·OAuth 코드·헬스 결과·파일 잠금은 Redis.
 - `init_db()` 는 PostgreSQL **세션 advisory lock** 안에서 돈다 — 워커 8개가 동시에 `create_all`·`ALTER` 를 돌려 충돌하던 것을 막는다(채팅 마이그레이션은 별도 트랜잭션 락).
 - 서비스 헬스 체크(`/api/services`)는 락을 잡은 워커 하나만 점검하고 결과를 Redis 에 올린다. 나머지 워커는 저장본을 읽는다.
 - 웹 푸시 VAPID 키는 env(`VAPID_PUBLIC_KEY/PRIVATE_KEY`) → DB(`system_settings` `push.vapid`) 순으로 찾고, 없으면 만들어 DB 에 저장한다 — 워커마다 다른 키가 생기지 않는다.
@@ -190,7 +190,7 @@ Grafana 는 공인 경로에 두지 않는다 — `GRAFANA_BIND`(기본 127.0.0.
 | 143, 993 | Dovecot | `mailserver` |
 | 2222 (`GIT_SSH_PORT`) | Gitea SSH | `gitea` |
 | 7882-7892/udp, 7881/tcp, 3478/udp | LiveKit 미디어 · ICE TCP · TURN UDP | `livekit` |
-| 389, 636 | ws-ldap (컨테이너 안은 1389/1636) | `sso` |
+| 636 (+ `LDAP_PLAIN_BIND`:389) | ws-ldap (컨테이너 안은 1636/1389). 평문 389 는 기본으로 루프백에만 게시 | `sso` |
 | 3001 (`GRAFANA_BIND`) | Grafana — LAN 전용 | `logging` |
 | 172.28.0.1:임시포트 (`RBI_PUBLISH_IP`) | 격리 브라우저 세션의 KasmVNC 6901 — workspace 브리지 게이트웨이에만 게시, ws-nginx 출발지만 통과(netfilter). 공인·LAN 포트 없음 | 모듈 `rbi` |
 | 내부만 | backend 8000 · frontend(-react) 3000 · postgres 5432 · redis 6379 · gitea 3000 · onlyoffice 80 · searxng 8080 · sso 8000 · livekit 7880 · loki 3100 | — |

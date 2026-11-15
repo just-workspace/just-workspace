@@ -20,15 +20,18 @@
 
 ```bash
 cp .env.example .env
-# CHANGE_ME 를 전부 채운다 (DB_PASSWORD, SECRET_KEY, INTERNAL_API_KEY, GRAFANA 비밀번호 등).
-# compose 는 꺼진 프로파일의 필수 변수도 검사한다.
+# 도메인 등을 채우고, 비어 있는 비밀값(SECRET_KEY, DB_PASSWORD …)은 생성기로 채운다.
+# 빈 값·예시 값·짧은 값으로는 백엔드가 뜨지 않는다(docs/CONFIG.md "비밀값").
+docker compose build backend
+docker run --rm -v "$PWD/.env:/work/.env" localhost/just-workspace-backend:latest \
+  python -m app.cli gen-secrets --merge /work/.env --in-place
 cp livekit/livekit.example.yaml livekit/livekit.yaml   # livekit 프로파일을 쓸 때
 docker compose config --quiet && docker compose up -d
 ```
 
 ## 구성
 
-**코어 (항상 실행)** — `nginx` (유일한 진입점 :80) · `frontend-react` (React 정적 빌드, nginx-unprivileged) · `backend` (FastAPI, uvicorn 워커 8) · `postgres` 16 · `redis` 8
+**코어 (항상 실행)** — `nginx` (유일한 진입점 :80) · `frontend-react` (React 정적 빌드, nginx-unprivileged) · `backend` (FastAPI, uvicorn 멀티 워커) · `postgres` 16 · `redis` 8
 
 **선택 (`COMPOSE_PROFILES`)**
 
@@ -39,7 +42,7 @@ docker compose config --quiet && docker compose up -d
 | `livekit` | 화상회의 SFU (LiveKit 1.13) + 내장 TURN (UDP 3478 · TLS 443) |
 | `egress` | 회의 녹화 (LiveKit Egress 1.15, cpu 4) |
 | `onlyoffice` | docx/xlsx/pptx 공동 편집 (OnlyOffice Docs 10.0, WOPI, AGPL) |
-| `sso` | SAML/SCIM (`ws-sso`) + LDAP 디렉터리 (`ws-ldap`, 389/636) |
+| `sso` | SAML/SCIM (`ws-sso`) + LDAP 디렉터리 (`ws-ldap`, LDAPS 636) |
 | `logging` | Vector · Loki · Grafana 13 + 헬스 프로브 (LAN 전용 게시, Grafana/Loki AGPL) |
 | `aitools` | SearXNG 웹 검색 (AGPL) |
 | `certbot` | 메일/TURN 인증서 (standalone 은 웹 인증서까지) |
@@ -73,7 +76,7 @@ docker compose config --quiet && docker compose up -d
 | 분류 | 기술 |
 |------|------|
 | 프론트엔드 | React 19, React Router 8, Vite 8, TypeScript 6, Tailwind CSS 4, TipTap 3 + Yjs, zustand, TanStack Query, livekit-client — nginx-unprivileged 정적 서빙 |
-| 백엔드 | Python 3.14, FastAPI 0.143, SQLAlchemy 2.1 (async) + asyncpg, pydantic 2, uvicorn 워커 8, libpass(Argon2id), PyJWT, MCP SDK 2 |
+| 백엔드 | Python 3.14, FastAPI 0.143, SQLAlchemy 2.1 (async) + asyncpg, pydantic 2, uvicorn 멀티 워커, libpass(Argon2id), PyJWT, MCP SDK 2 |
 | 데이터 | PostgreSQL 16, Redis 8 (세션·Pub/Sub·잠금·캐시) |
 | 실시간 | WebSocket (토큰은 `Sec-WebSocket-Protocol`) + Redis Pub/Sub, Yjs 릴레이 |
 | 화상회의 | LiveKit (WebRTC SFU) + Egress 녹화, 내장 TURN |

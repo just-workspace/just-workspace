@@ -6,7 +6,7 @@ Just-Workspace 의 환경별 값은 **`.env` 변수** 또는 **설치기가 생�
 
 ## 1. `.env` 변수
 
-"설치기" 열: **자동생성** = `openssl rand` 로 만들고 기존 값은 보존(멱등) / 자동 조합 = 도메인·모드에서 파생 / 입력 = 대화형 질문.
+"설치기" 열: **자동생성** = 비밀값 생성기(`python -m app.cli gen-secrets`, 아래 "비밀값" 절)로 만들고 기존 값은 보존(멱등) / 자동 조합 = 도메인·모드에서 파생 / 입력 = 대화형 질문.
 
 ### 배포·앱
 
@@ -24,8 +24,62 @@ Just-Workspace 의 환경별 값은 **`.env` 변수** 또는 **설치기가 생�
 | `DOMAIN_ALIAS` | (빈값) | 같은 앱을 다른 도메인으로도 서빙할 때(헤어핀 우회 대상 추가) | 수동 |
 | `DEBUG` | false | 디버그 | 기본값 |
 | `SECRET_KEY` | (랜덤) | 세션 서명·Fernet 키 파생. **ws-sso 와 같은 값** | **자동생성** |
-| `INTERNAL_API_KEY` | (랜덤) | backend 내부 API(`/api/internal/*`) 키 — Dovecot 메일 로그인·ws-ldap 이 쓴다. 필수 | **자동생성** |
+| `INTERNAL_API_KEY` | (랜덤) | backend 내부 API(`/api/internal/*`) 키 — Dovecot 메일 로그인·ws-ldap 이 쓴다. 비우면 내부 API 가 닫힌다 | **자동생성** |
+| `BACKEND_WORKERS` | (비움) | 백엔드 워커 수. 비우면 CPU 수 기준 `min(8, max(2, 코어 수))` | 기본값 |
+| `BACKEND_CPUS` | (비움) | 백엔드 컨테이너 CPU 상한(예 `4.0`). 비우면 제한 없음 | 기본값 |
+| `ALLOW_NATIVE_APP_ORIGINS` | false | 번들 빌드 모바일 앱의 출처(`https://localhost`·`capacitor://localhost`)를 CORS·CSRF·WebSocket 허용 목록에 넣는다. 번들 빌드 앱을 배포할 때만 true — 기본 허용 출처는 `APP_URL` 하나 | 수동 |
+| `JW_ALLOW_INSECURE_DEFAULTS` | (비움) | `1` 이면 약한·기본 비밀값을 거부하지 않고 경고만 남긴다. **개발·테스트 전용** | 수동 |
 | `BRAND_LOGO` / `BRAND_COLOR` | (빈값) / #3B82F6 | 로고 URL · 테마 색(관리 › 브랜딩에서 DB 로도 덮음) | 수동 |
+
+### 비밀값 — 기동 검사와 생성기
+
+백엔드는 **약한·기본 비밀값으로는 뜨지 않는다.** 컨테이너 entrypoint(`python -m app.cli check-secrets`)와 앱 기동 경로가 같은 표(`backend/app/security_defaults.py`)로 검사하고, 거부한 변수마다 이름과 사유를 한 줄씩 로그에 남긴다(값은 찍지 않는다). ws-sso·ws-ldap 도 같은 규칙으로 자기 비밀값을 검사한다.
+
+거부 조건: 비어 있음(필수인 것) · `CHANGE_ME…` 자리표시자 · 널리 알려진 기본값(`devkey`, `secret`, `changeme`, `password`, `admin` …) · 길이 미달 · 같은 글자 반복. 기능이 꺼져 있어(구역 `JW_ZONES`, 프로파일) 쓰지 않는 값은 보지 않는다.
+
+| 변수 | 최소 길이 | 필수 | 검사하는 때 |
+|---|---|---|---|
+| `SECRET_KEY` | 32 | 예 | 항상 |
+| `DB_PASSWORD`(`DATABASE_URL` 안의 비밀번호 포함) | 16 | 예 | PostgreSQL 일 때(항상) |
+| `INTERNAL_API_KEY` | 32 | 아니오(비우면 내부 API 닫힘) | 값이 있을 때. 세로선·`&`·`/`·역슬래시·공백·따옴표 금지(메일 서버 스크립트가 치환한다) |
+| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | 16 / 32 | 아니오(비우면 회의 꺼짐) | 구역 `meetings` + 값이 있을 때 |
+| `AUDIORELAY_SECRET` | 32 | 아니오 | 구역 `chat`+`meetings` + 값이 있을 때 |
+| `DOVECOT_MASTER_PASSWORD` | 16 | 아니오 | 구역 `mail` + 값이 있을 때 |
+| `ONLYOFFICE_JWT_SECRET` | 32 | 아니오 | 구역 `docs` + 값이 있을 때 |
+| `SANDBOX_TOKEN` / `DOCCONV_TOKEN` / `SEARXNG_SECRET` | 32 | 아니오 | 구역 `ai` + 값이 있을 때 |
+| `GRAFANA_ADMIN_PASSWORD` | 16 | 아니오 | `COMPOSE_PROFILES` 에 `logging` + 값이 있을 때(Grafana 컨테이너는 비어 있어도 거부) |
+| `MCP_API_KEY` | 32 | 아니오 | 구역 `ai` + `MCP_INTERNAL_TOOLS_ENABLED=true` + 값이 있을 때 |
+| `GITEA_WEBHOOK_SECRET` | 32 | 아니오 | 구역 `chat` + 값이 있을 때 |
+| `LDAP_SERVICE_PASSWORD` | 16 | `LDAP_SERVICE_USER` 가 있으면(ws-ldap 이 검사) | 구역 `sso` + 값이 있을 때 |
+| `SMTP_PASSWORD` | — | 아니오 | 자리표시자·알려진 기본값만 거부(외부 계정일 수 있어 길이는 보지 않는다) |
+
+생성기 — 값은 16진수라 셸·`sed`·URL 어디에 넣어도 이스케이프가 필요 없다(키 48자, 비밀번호 32자):
+
+```bash
+python -m app.cli gen-secrets                         # 기본 생성 대상 전부를 KEY=value 로 출력
+python -m app.cli gen-secrets --format json
+python -m app.cli gen-secrets --only SECRET_KEY DB_PASSWORD
+python -m app.cli gen-secrets --merge .env            # .env 의 빈(또는 CHANGE_ME) 비밀값만 채운 내용을 출력
+python -m app.cli gen-secrets --merge .env --in-place # 파일에 바로 쓴다(값은 화면에 찍지 않는다)
+python -m app.cli check-secrets                       # 기동 검사와 같은 판정, 문제가 있으면 종료 코드 1
+
+# 컨테이너를 띄우기 전(이미지만 있을 때)
+docker run --rm -v "$PWD/.env:/work/.env" <backend 이미지> python -m app.cli gen-secrets --merge /work/.env --in-place
+```
+
+기본 생성 대상은 표의 `SECRET_KEY` 부터 `GRAFANA_ADMIN_PASSWORD` 까지이고, 그 아래는 `--only` 로 지목했을 때만 만든다. 이미 값이 있는 줄은 건드리지 않는다. `DB_PASSWORD` 는 **DB 볼륨을 처음 만들 때만** 적용되므로, 이미 돌고 있는 설치에서 바꾸려면 PostgreSQL 쪽 비밀번호도 함께 바꿔야 한다.
+
+### 관리자 계정
+
+```bash
+docker compose exec backend python -m app.cli seed-admin --username <아이디>      # 비밀번호는 물어본다(.env 에 남기지 않는다)
+docker compose exec backend python -m app.cli reset-admin <아이디>                # 임시 비밀번호 발급 — 화면에 한 번만 나온다
+docker compose exec backend python -m app.cli reset-admin <아이디> --disable-2fa  # 인증 앱도 잃어버렸을 때
+```
+
+- `ADMIN_USERNAME`/`ADMIN_PASSWORD` 로 하는 자동 시드는 사용자가 한 명도 없을 때만 돈다. 그 뒤에는 값이 남아 있어도 아무것도 하지 않는다.
+- 같은 이름의 일반 계정이 이미 있으면 관리자로 올리지 않고 경고만 남긴다. 서버에서 명시적으로 올리려면 `seed-admin --username <아이디> --promote`.
+- `reset-admin` 은 관리자 계정에만 쓴다(일반 계정은 거부 — 관리 화면에서 재설정). 그 계정의 열린 세션과 앱 토큰은 모두 끊긴다.
 
 ### 데이터베이스·스토리지
 
@@ -33,7 +87,7 @@ Just-Workspace 의 환경별 값은 **`.env` 변수** 또는 **설치기가 생�
 |---|---|---|---|
 | `DB_NAME` / `DB_USER` | workspace / workspace | PostgreSQL DB·유저 | 기본값 |
 | `DB_PASSWORD` | (랜덤) | DB 비밀번호 | **자동생성** |
-| `DATABASE_URL` | postgresql+asyncpg://… | 외부 DB 사용 시 교체 | 자동 조합 |
+| `DATABASE_URL` | (비움) | 비우면 compose 가 `DB_USER`·`DB_PASSWORD`·`DB_NAME` 으로 조립한다. 외부 DB 를 쓸 때만 적는다 | 비움 |
 | `JW_IMAGE_SOURCE` / `JW_REGISTRY` / `JW_VERSION` | build / localhost / latest | 소스 빌드 vs prebuilt pull — [IMAGES.md](IMAGES.md) | 기본값 |
 | `JW_HOST_REPO` | (빈값) | 관리 화면 APK 빌드용 호스트 리포 경로(docker -v). 비우면 빌드 비활성 | 수동 |
 
@@ -47,7 +101,7 @@ Just-Workspace 의 환경별 값은 **`.env` 변수** 또는 **설치기가 생�
 | `DOVECOT_MASTER_USER` / `DOVECOT_MASTER_PASSWORD` | portal / (랜덤) | Dovecot 마스터 계정 | **자동생성** |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | mailserver / 587 / noreply@도메인 | 시스템 발신(noreply) SMTP | 일부 자동 |
 | `ADMIN_EMAILS` | admin@도메인 | 관리자 이메일(권한 부여, 쉼표) | 자동 조합 |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | (입력) | 첫 기동 시드. 시드 후 비움 권장 | 입력 |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | (입력) | 첫 기동 관리자 시드 — **사용자가 한 명도 없을 때만** 만든다. 같은 이름의 계정이 있어도 관리자로 올리지 않는다. 만든 뒤 지울 것(아래 "관리자 계정" 절) | 입력 |
 
 ### 인증·연동
 
@@ -58,6 +112,7 @@ Just-Workspace 의 환경별 값은 **`.env` 변수** 또는 **설치기가 생�
 | `MCP_PUBLIC_URL` | https://mcp.example.com | MCP 리소스 서버 공개 URL(전용 서브도메인). 비우면 `APP_URL` | 수동 |
 | `MCP_INTERNAL_TOOLS_ENABLED` / `MCP_API_KEY` | false / (빈값) | 헤드리스 내부 도구용 정적키 모드(사용자 바인딩 없음). 둘 다 설정해야 활성 | 수동 |
 | `DAV_ALLOW_ACCOUNT_PASSWORD` | false | CalDAV/CardDAV 에 계정 비밀번호 허용(기본은 앱 비밀번호만). 2단계 인증 사용자는 그래도 제외 | 수동(config.py) |
+| `LDAP_PLAIN_BIND` | 127.0.0.1 | ws-ldap(프로파일 `sso`)의 평문 389 포트를 게시할 주소. 밖으로는 LDAPS(636)만 열고 평문은 기본으로 루프백에만 둔다. 평문만 되는 장비가 내부망에 있을 때만 그 망의 서버 주소(예 192.168.10.20)를 적는다 | 기본값 |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | (빈값) | 웹 푸시 키. 비우면 backend 가 만들어 DB 에 저장 | 수동(config.py) |
 
 ### Gitea · 회의 · 오피스 · 검색
@@ -70,7 +125,7 @@ Just-Workspace 의 환경별 값은 **`.env` 변수** 또는 **설치기가 생�
 | `LIVEKIT_URL` | http://livekit:7880 | 내부 LiveKit(외부/클라우드 시 교체) | 기본값 |
 | `LIVEKIT_TURN_TLS_PUBLISH` | 443 | 내장 TURN/TLS 를 게시할 호스트 포트. standalone(nginx 가 443)은 설치기가 `127.0.0.1:4443` | 모드 따라 |
 | `ONLYOFFICE_JWT_SECRET` | (랜덤) | OnlyOffice ↔ backend JWT | **자동생성** |
-| `AUDIORELAY_SECRET` | (랜덤, ≥16자) | 음성채널 무손실 티어 릴레이 토큰 HMAC. backend 와 ws-audiorelay(`RELAY_SECRET`) 공유. 비우면 `relay-token` 이 503 → 음악 티어로 강등 | 수동(`openssl rand -hex 24`) |
+| `AUDIORELAY_SECRET` | (랜덤, ≥32자) | 음성채널 무손실 티어 릴레이 토큰 HMAC. backend 와 ws-audiorelay(`RELAY_SECRET`) 공유. 비우면 `relay-token` 이 503 → 음악 티어로 강등 | **자동생성** |
 | `AUDIORELAY_WT_PUBLIC_URL` | (빈값) | WebTransport(HTTP/3·UDP) 공개 URL `https://relay.도메인:4433/audiorelay/wt`. 비우면 WebSocket(`/audiorelay/ws`, nginx 경유)만 | 수동 |
 | `AUDIORELAY_WT_PORT` | 4433 | 호스트에 게시하는 UDP 포트 | 기본값 |
 | `AUDIORELAY_WT_CERT` / `AUDIORELAY_WT_KEY` | /etc/letsencrypt/live/${DOMAIN}/… | WebTransport TLS. 없으면 13일 자가서명 + `/audiorelay/info` 의 `cert_hash`(LAN 테스트 전용) | 기본값 |
@@ -108,7 +163,7 @@ Just-Workspace 의 환경별 값은 **`.env` 변수** 또는 **설치기가 생�
 
 | 변수 | 기본/예시 | 설명 | 설치기 |
 |---|---|---|---|
-| `GRAFANA_ADMIN_PASSWORD` | (랜덤) | 필수(프로파일과 무관하게 compose 가 검사) | **자동생성** |
+| `GRAFANA_ADMIN_PASSWORD` | (랜덤) | logging 프로파일을 켤 때 필수(16자 이상). 비어 있거나 짧으면 Grafana 가 뜨지 않는다 | **자동생성** |
 | `GRAFANA_BIND` | 127.0.0.1 | 포트를 게시할 주소 — 공인 인터페이스에 열지 말 것(LAN IP 또는 127.0.0.1) | 기본값 |
 | `ALERT_EMAIL` | admin@도메인 | Grafana 알림 수신 | 자동 조합 |
 | `PROBE_INTERVAL` | 300 | 헬스 프로브 주기(초) | 기본값 |

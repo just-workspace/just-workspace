@@ -208,8 +208,7 @@ stage_u2() {
   say "U2 pull 실패 → 되돌리기 / 다시 시도"
   ws_login
   check "레지스트리에서 backend 1.0.1 을 지운다(없는 다이제스트)" reg_delete backend 1.0.1-beta.1
-  docker image rm "$REG/just-workspace-backend:1.0.1-beta.1" localhost/just-workspace-backend:1.0.1 >/dev/null 2>&1
-  docker image rm "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["images"]["backend"])' "$REL/manifests/1.0.1.json")" >/dev/null 2>&1
+  check "서버에서도 그 이미지를 지운다(파일로 보관)" reg_forget backend 1.0.1-beta.1 1.0.1
   local job rb
   job="$(apply_now 1.0.1)"
   check "작업이 멈춘다" wait_ujob "$job" 600
@@ -229,7 +228,7 @@ stage_u2() {
   job="$(apply_now 1.0.1)"
   check "다시 멈춘다" wait_ujob "$job" 600
   expect "실패 단계" pull "$(ujob "$job" 'd["error"]["step"]')"
-  check "이미지를 다시 올린다" reg_push backend 1.0.1-beta.1
+  check "이미지를 다시 올린다" reg_restore backend 1.0.1-beta.1
   expect "다시 시도" running "$(upd POST "/jobs/$job/action" '{"action":"retry"}' | json_get 'd["status"]')"
   check "작업 끝" wait_ujob "$job" 1500
   expect "작업 상태" done "$(ujob "$job" 'd["status"]')"
@@ -322,7 +321,7 @@ stage_u4() {
     check "게시" rel_publish 1.0.4 stable
   fi
   local hour next
-  hour="$(date +%H)"; next="$(printf '%02d' $(( (10#$hour + 1) % 24 )))"
+  hour="$(date +%H)"; next="$(printf '%02d' $(( (10#$hour + 2) % 24 )))"
   local far1 far2
   far1="$(printf '%02d' $(( (10#$hour + 5) % 24 )))"; far2="$(printf '%02d' $(( (10#$hour + 6) % 24 )))"
   expect "자동 방식 + 지금을 포함한 시간대($hour:00~$next:00)" auto "$(upd PUT /settings "{\"mode\":\"auto\",\"window\":{\"start\":\"$hour:00\",\"end\":\"$next:00\"}}" | json_get 'd["settings"]["mode"]')"
@@ -339,8 +338,8 @@ stage_u4() {
 
   # 실패하게 해 두고 시간대 안으로 → 예고가 열린다
   check "레지스트리에서 backend 1.0.4 를 지운다" reg_delete backend 1.0.4
-  docker image rm "$REG/just-workspace-backend:1.0.4" "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["images"]["backend"])' "$REL/manifests/1.0.4.json")" >/dev/null 2>&1
-  hour="$(date +%H)"; next="$(printf '%02d' $(( (10#$hour + 1) % 24 )))"
+  check "서버에서도 그 이미지를 지운다(파일로 보관)" reg_forget backend 1.0.4 1.0.4
+  hour="$(date +%H)"; next="$(printf '%02d' $(( (10#$hour + 2) % 24 )))"
   upd PUT /settings "{\"window\":{\"start\":\"$hour:00\",\"end\":\"$next:00\"}}" >/dev/null
   local job="" i
   for i in $(seq 1 30); do job="$(active_job)"; [ -n "$job" ] && break; sleep 5; done
@@ -355,7 +354,7 @@ stage_u4() {
   expect "last_auto" "rolled_back pull" "$(printf '%s' "$st" | json_get 'd["last_auto"]["result"]+" "+d["last_auto"]["failed_step"]')"
   ws_login
   contains "관리자 알림 한 건" "자동 업데이트가 실패" "$(ws_api GET '/api/notifications?limit=5')"
-  check "이미지를 다시 올린다" reg_push backend 1.0.4
+  check "이미지를 다시 올린다" reg_restore backend 1.0.4
   sleep 130
   expect "멈춰 있는 동안에는 다시 시도하지 않는다" "" "$(active_job)"
   expect "다시 켜기" False "$(upd POST /auto/resume '{}' | json_get 'd["auto"]["paused"]')"

@@ -50,8 +50,15 @@ def inspect(kind: str, name: str) -> dict | None:
     return data[0] if isinstance(data, list) and data else None
 
 
-def plan_create(container: dict, old_image: dict | None, new_image: str,
-                version: str | None = None) -> tuple[list[str], list[tuple[str, list[str]]]]:
+def user_env(container: dict, image: dict | None) -> list[str]:
+    """컨테이너의 환경변수 중 사용자가 준 것 — 그 이미지가 정한 값과 같은 것, 버전을 가리키는 것은 뺀다."""
+    image_env = set((image or {}).get("Config", {}).get("Env") or [])
+    return [item for item in (container.get("Config") or {}).get("Env") or []
+            if item not in image_env and item.split("=", 1)[0] not in DROP_ENV]
+
+
+def plan_create(container: dict, old_image: dict | None, new_image: str, version: str | None = None,
+                env: list[str] | None = None) -> tuple[list[str], list[tuple[str, list[str]]]]:
     """옛 컨테이너의 구성 → (`docker create` 인자, 나중에 붙일 네트워크 [(이름, 별칭들)]).
 
     version 을 주면 `JW_APP_VERSION` 으로 넣는다 — 새 설치 관리자가 자신을 그 제품 버전으로 안다(app/bundle.py)."""
@@ -76,12 +83,9 @@ def plan_create(container: dict, old_image: dict | None, new_image: str,
     for bind in host.get("Binds") or []:
         argv += ["-v", bind]
 
-    image_env = set((old_image or {}).get("Config", {}).get("Env") or [])
-    for item in config.get("Env") or []:
-        key = item.split("=", 1)[0]
-        if item in image_env or key in DROP_ENV:
-            continue
-        argv += ["-e", item]
+    for item in (user_env(container, old_image) if env is None else env):
+        if item.split("=", 1)[0] not in DROP_ENV:
+            argv += ["-e", item]
     if version:
         argv += ["-e", f"JW_APP_VERSION={version}"]
 
@@ -106,7 +110,7 @@ def plan_create(container: dict, old_image: dict | None, new_image: str,
     return argv, [n for n in networks if n is not first]
 
 
-def swap(container_ref: str, new_image: str, expect_version: str, log) -> str | None:
+def swap(container_ref: str, new_image: str, expect_version: str, log, env: list[str] | None = None) -> str | None:
     """교체한다. 성공하면 None, 실패하면 이유(옛 컨테이너는 되살려 둔다)."""
     old = inspect("container", container_ref)
     if old is None:
@@ -114,7 +118,7 @@ def swap(container_ref: str, new_image: str, expect_version: str, log) -> str | 
     name = str(old.get("Name") or "").lstrip("/")
     if inspect("image", new_image) is None:
         return "image not found"
-    argv, networks = plan_create(old, inspect("image", old.get("Image") or ""), new_image, expect_version)
+    argv, networks = plan_create(old, inspect("image", old.get("Image") or ""), new_image, expect_version, env)
     prev = f"{name}-prev"
     docker("rm", "-f", prev)
     log(f"옛 설치 관리자({name})를 멈춥니다")
@@ -172,6 +176,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--expect-version", required=True)
     p.add_argument("--result", required=True)
     p.add_argument("--log")
+    p.add_argument("--env-json")
     args = p.parse_args(argv)
 
     def log(text: str) -> None:
@@ -185,7 +190,14 @@ def main(argv: list[str] | None = None) -> int:
                 pass
 
     time.sleep(1)      # 부른 쪽이 상태를 디스크에 다 쓸 틈
-    error = swap(args.container, args.image, args.expect_version, log)
+    env = None
+    if args.env_json:
+        try:
+            with open(args.env_json, encoding="utf-8") as f:
+                env = [str(x) for x in json.load(f)]
+        except (OSError, ValueError):
+            env = None
+    error = swap(args.container, args.image, args.expect_version, log, env)
     try:
         with open(args.result, "w", encoding="utf-8") as f:
             json.dump({"ok": error is None, "error": error, "version": args.expect_version}, f)

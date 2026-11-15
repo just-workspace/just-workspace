@@ -138,6 +138,24 @@ reg_delete() {
   curl -fs -o /dev/null -X DELETE "http://${REG%%/*}/v2/${REG#*/}/just-workspace-$name/manifests/$digest"
 }
 reg_push() { docker push -q "$REG/just-workspace-$1:$2" >/dev/null 2>&1; }
+# reg_forget <name> <build-version> <product-version>: keep a copy as a file, then drop every local name of the image
+reg_forget() {
+  local name="$1" built="$2" ver="$3" digest
+  docker save "$REG/just-workspace-$name:$built" -o "$REL/keep-$name-$built.tar" || return 1
+  digest="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["images"][sys.argv[2]]["digest"])' "$REL/digests-$built.json" "$name")"
+  docker image rm "$REG/just-workspace-$name:$built" "$REG/just-workspace-$name@$digest" "localhost/just-workspace-$name:$ver" >/dev/null 2>&1
+  ! docker image inspect "$REG/just-workspace-$name@$digest" >/dev/null 2>&1
+}
+# reg_restore <name> <build-version>: load the kept copy, push it back (same digest), drop the local copy again
+reg_restore() {
+  local name="$1" built="$2" digest
+  docker load -q -i "$REL/keep-$name-$built.tar" >/dev/null || return 1
+  reg_push "$name" "$built" || return 1
+  digest="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["images"][sys.argv[2]]["digest"])' "$REL/digests-$built.json" "$name")"
+  curl -fsI -o /dev/null "http://${REG%%/*}/v2/${REG#*/}/just-workspace-$name/manifests/$digest" || return 1
+  docker image rm "$REG/just-workspace-$name:$built" "$REG/just-workspace-$name@$digest" >/dev/null 2>&1
+  rm -f "$REL/keep-$name-$built.tar"
+}
 
 # compose 에 고정한 것과 다른 redis 이미지 하나를 받아 `redis:<태그>@sha256:…` 로 돌려준다(오프라인 검수의 "추가 이미지")
 other_redis() {

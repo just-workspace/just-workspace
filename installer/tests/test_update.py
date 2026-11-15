@@ -344,6 +344,12 @@ def test_migrate_failure_rolls_back_automatically_with_db_restore(host):
 
 
 def test_verify_failure_in_new_installer_rolls_back_and_swaps_installer_back(host):
+    # 설치 관리자를 띄울 때 사용자가 준 환경변수 — 복원 지점에 적어 두었다가 되돌아올 때 그대로 쓴다
+    host.runner.on("container", "inspect", "jw-self", out=json.dumps([{
+        "Image": "sha256:selfimage", "NetworkSettings": {"Networks": {}},
+        "Config": {"Env": ["PATH=/usr/bin", "JW_UPDATE_CHANNEL_URL=https://mirror.example.com", "JW_APP_VERSION=1.0.0"]}}]))
+    host.runner.on("image", "inspect", "sha256:selfimage", out=json.dumps([{"Id": "sha256:selfimage",
+                                                                           "Config": {"Env": ["PATH=/usr/bin"]}}]))
     mgr = ready(host, "1.0.0", "1.0.1", db_schema=2)
     with pytest.raises(Killed):
         mgr.apply("1.0.1", "now", None)
@@ -358,6 +364,8 @@ def test_verify_failure_in_new_installer_rolls_back_and_swaps_installer_back(hos
     assert rb["id"] == job["rollback_job"] and steps(rb)["start"] == "running"
     back = host.runner.find("run", "app.update_swap")[-1]
     assert back[back.index("--image") + 1] == "sha256:selfimage" and back[back.index("--expect-version") + 1] == "1.0.0"
+    assert "--env-json" in back and "--env-json" not in host.runner.find("run", "app.update_swap")[0]
+    assert json.loads((new.dir / "swap-env.json").read_text(encoding="utf-8")) == ["JW_UPDATE_CHANNEL_URL=https://mirror.example.com"]
     host.http.responses.clear()
     old = host.manager(own_version="1.0.0")
     old.resume()
@@ -733,3 +741,6 @@ def test_swap_plan_carries_name_ports_volumes_env_and_networks():
     assert envs == ["JW_HOST_DIR=/opt/just-workspace", "JW_REGISTRY=registry.example.com/jw", "JW_APP_VERSION=1.0.1"]
     assert argv[argv.index("--network") + 1] == "bridge"
     assert networks == [("just-workspace_workspace", ["jw-installer"])]
+    # 되돌아올 때는 복원 지점에 적어 둔 환경을 그대로 쓴다(지금 컨테이너의 것에서 추리지 않는다)
+    argv, _ = update_swap.plan_create(container, image, "sha256:old", "1.0.0", env=["JW_HOST_DIR=/opt/just-workspace", "JW_IMAGE_TAG=x"])
+    assert [argv[i + 1] for i, a in enumerate(argv) if a == "-e"] == ["JW_HOST_DIR=/opt/just-workspace", "JW_APP_VERSION=1.0.0"]

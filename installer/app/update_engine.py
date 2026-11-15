@@ -40,6 +40,7 @@ from typing import Callable
 from app import answers as ans
 from app import engine as eng
 from app import update_release as rel
+from app import update_swap
 from app.state import write_private
 
 UPDATE_STEPS = ("preflight", "backup", "pull", "migrate", "switch", "verify")
@@ -1012,7 +1013,7 @@ class UpdateManager:
         point = {"id": "rp-" + self.now().strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(2), "kind": kind,
                  "version": from_version, "created_at": self.iso(), "size_bytes": info.get("size_bytes"),
                  "backup": info["path"], "schema_version": info.get("schema_version"), "job": job["id"],
-                 "installer_image": self.docker.self_image()}
+                 "installer_image": self.docker.self_image(), "installer_env": self.installer_env()}
         point["snapshot"] = self._stack_snapshot(point["id"])
         self._write("points.json", [point, *points])
         if kind == "pre-beta":
@@ -1284,7 +1285,16 @@ class UpdateManager:
         if self.own_version != version:
             self._handoff(job, step, image, version, log)
 
-    def _handoff(self, job: dict, step: dict, image: str, version: str, log) -> None:
+    def installer_env(self) -> list[str] | None:
+        """지금 설치 관리자 컨테이너에 사용자가 준 환경변수(이미지가 정한 것은 뺀다). 복원 지점에 적어 둔다 —
+        이 버전으로 되돌아올 때 설치 관리자를 그때의 환경으로 다시 띄운다."""
+        container = self.docker.inspect("container", self.docker.self_ref)
+        image = self.docker.inspect("image", self.docker.self_image()) if container else None
+        if not container or not image:
+            return None
+        return update_swap.user_env(container, image)
+
+    def _handoff(self, job: dict, step: dict, image: str, version: str, log, env: list[str] | None = None) -> None:
         """설치 관리자 자신을 `image` 로 바꾼다. 성공하면 이 프로세스는 여기서 끝난다(새 설치 관리자가 잇는다)."""
         result = self.dir / "swap-result.json"
         result.unlink(missing_ok=True)
@@ -1293,12 +1303,16 @@ class UpdateManager:
         self._save(job)
         me = self.docker.self_image()
         host = self.paths.host_dir
+        extra = []
+        if env is not None:
+            self._write("swap-env.json", env)
+            extra = ["--env-json", "/data/state/update/swap-env.json"]
         r = self.docker.run(["run", "-d", "--rm", "--name", f"jw-installer-swap-{job['id'][:8]}",
                              "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{host}:/data",
                              "--entrypoint", "python", me, "-m", "app.update_swap", "--container", self.docker.self_ref,
                              "--image", image, "--expect-version", version,
                              "--result", "/data/state/update/swap-result.json",
-                             "--log", f"/data/state/update/jobs/{job['id']}.log"], timeout=120)
+                             "--log", f"/data/state/update/jobs/{job['id']}.log", *extra], timeout=120)
         if not r.ok:
             job["ctx"]["handoff"]["state"] = "failed"
             raise fail("installer_replace_failed", r.err)
@@ -1505,7 +1519,7 @@ class UpdateManager:
             image = point.get("installer_image") or self.local_tag("installer", target)
             if not self.docker.image_exists(image):
                 raise fail("previous_image_missing", image=image)
-            self._handoff(job, step, image, target, log)
+            self._handoff(job, step, image, target, log, env=point.get("installer_env"))
 
     def revert_verify(self, job: dict, step: dict, log) -> None:
         self._verify(job["target_version"], step, log, None)

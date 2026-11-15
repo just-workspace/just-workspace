@@ -218,7 +218,7 @@ export function HomeTab({ status, onReload, onChecked }: { status: UpdateStatus;
       {failed && (
         <>
           <UiCard data-testid="update-check-failed">
-            <UiErrorTile className="m-4" title={t('admin.update.home.failed.title')}
+            <UiErrorTile className="m-4" title={t(status.check.error?.code === 'unconfigured' ? 'admin.update.home.failed.unconfiguredTitle' : 'admin.update.home.failed.title')}
               detail={[status.check.error?.detail || (status.check.error?.code ? t(`admin.update.home.failed.code.${status.check.error.code}`, status.check.error.code) : ''), checkedAt].filter(Boolean).join(' · ')}
               retryLabel={t('admin.update.home.failed.retry')} onRetry={() => { void check() }} />
           </UiCard>

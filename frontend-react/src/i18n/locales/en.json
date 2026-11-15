@@ -1968,9 +1968,11 @@
         },
         "failed": {
           "title": "Couldn't reach the update server",
+          "unconfiguredTitle": "Update checks aren't set up",
           "retry": "Check again",
           "offline": "If this server has no internet access, upload a bundle file in {link}Offline update{/link}.",
           "code": {
+            "unconfigured": "The installer has no public key to verify release signatures. Add the key, then check again",
             "channel_unreachable": "Connection failed",
             "channel_invalid": "The channel file couldn't be trusted (signature or expiry)",
             "manifest_invalid": "The release manifest couldn't be trusted"

@@ -1968,9 +1968,11 @@
         },
         "failed": {
           "title": "업데이트 서버에 연결하지 못했습니다",
+          "unconfiguredTitle": "업데이트 확인이 구성되지 않았습니다",
           "retry": "다시 확인",
           "offline": "이 서버가 인터넷에 나갈 수 없다면 {link}오프라인 업데이트{/link}로 묶음 파일을 올립니다.",
           "code": {
+            "unconfigured": "릴리스의 서명을 확인할 공개 키가 설치 관리자에 없습니다. 공개 키를 넣은 뒤 다시 확인합니다",
             "channel_unreachable": "연결 실패",
             "channel_invalid": "받은 채널 파일을 믿을 수 없습니다(서명·만료)",
             "manifest_invalid": "받은 릴리스 목록을 믿을 수 없습니다"

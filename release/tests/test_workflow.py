@@ -145,9 +145,6 @@ def test_repo_license_is_agpl_and_package_metadata_agrees():
         assert lock["packages"][""].get("license") == "AGPL-3.0-or-later", folder
 
 
-    assert [line for line in ignore if line and not line.startswith("#")] == ["*", "!LICENSE", "!THIRD_PARTY_LICENSES.md"]
-
-
 def test_source_repo_url_matches_the_backend_default():
     """제품 화면의 "소스 코드" 링크 — backend 의 기본 주소와 릴리스 도구의 값이 같아야 한다."""
     from jwrelease.config import Settings

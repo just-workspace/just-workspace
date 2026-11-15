@@ -150,5 +150,5 @@ What goes into which image and which obligations follow is described in [docs/li
 
 ## Contributing and security reports
 
-- Bug reports, feature requests and code contributions: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Bug reports, feature requests and code contributions: [CONTRIBUTING.md](CONTRIBUTING.md). Code contributions are made under the [contribution terms](CONTRIBUTING.md#기여-조건) (same license, plus a grant letting the project's copyright holder also distribute them under other terms).
 - Please do not open public issues for security vulnerabilities. Use GitHub's private vulnerability reporting: [SECURITY.md](SECURITY.md)

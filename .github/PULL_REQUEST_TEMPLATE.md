@@ -23,6 +23,10 @@
 - [ ] 의존성을 더했다면 `THIRD_PARTY_LICENSES.md` (GPL·LGPL·MPL 계열은 아래에 따로 적기 — 오픈소스가 아닌 것은 받지 않습니다)
 - [ ] 비밀값, 실제 주소·도메인·이름이 들어가지 않았다
 
+## 기여 조건
+
+- [ ] 기여 조건(CONTRIBUTING.md)을 읽었고 동의합니다 / I have read and agree to the contribution terms in CONTRIBUTING.md.
+
 ## 더 알려 줄 것
 
 <!-- 검토할 때 봐 줬으면 하는 곳, 알려진 한계, 뒤에 남는 일 -->

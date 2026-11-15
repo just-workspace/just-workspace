@@ -148,5 +148,5 @@ License, or (at your option) any later version. This program is distributed WITH
 
 ## 기여와 보안 신고
 
-- 버그 신고·기능 제안·코드 기여: [CONTRIBUTING.md](CONTRIBUTING.md)
+- 버그 신고·기능 제안·코드 기여: [CONTRIBUTING.md](CONTRIBUTING.md). 코드를 기여할 때는 [기여 조건](CONTRIBUTING.md#기여-조건)(같은 라이선스로 제공, 프로젝트 저작권자에게 다른 조건으로도 배포할 권한 부여)에 동의하게 됩니다.
 - 보안 취약점은 공개 이슈로 올리지 말고 GitHub 의 비공개 취약점 신고로 알려 주세요: [SECURITY.md](SECURITY.md)

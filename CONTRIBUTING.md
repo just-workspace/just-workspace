@@ -111,4 +111,16 @@ docker·네트워크 없이 돕니다. **compose 의 이미지 구성을 바꾸�
 
 ## 라이선스
 
-이 리포는 [GNU Affero General Public License 버전 3 또는 그 이후 버전](LICENSE)(`AGPL-3.0-or-later`)으로 배포합니다. 기여한 내용도 같은 라이선스로 제공됩니다.
+이 리포는 [GNU Affero General Public License 버전 3 또는 그 이후 버전](LICENSE)(`AGPL-3.0-or-later`)으로 배포합니다.
+
+## 기여 조건
+
+PR 을 올릴 때 템플릿의 확인란("기여 조건을 읽었고 동의합니다")에 표시하면 아래에 동의한 것으로 봅니다.
+
+1. **라이선스.** 기여물은 이 프로젝트의 라이선스(AGPL-3.0-or-later)로 제공됩니다.
+2. **권리의 확인.** 기여자는 그 기여물을 제공할 권리가 있음을 확인합니다 — 직접 작성했거나 제공할 권한이 있고, 고용주 등 다른 사람이 권리를 가진 저작물이면 허락을 받았습니다.
+3. **재허가 권한.** 기여자는 기여물의 저작권을 그대로 가집니다. 다만 프로젝트 저작권자(리포의 [LICENSE](LICENSE)·[NOTICE](NOTICE)에 적힌 Just-Workspace)에게, 그 기여물을 이 프로젝트의 일부로서 **다른 라이선스 조건으로도 배포하고 재허가할 수 있는** 전 세계적·영구적·비독점적·무상·취소 불가능한 권리를 줍니다. 기여물에 기여자의 특허가 걸려 있으면, 그 기여물을 쓰는 데 필요한 범위에서 같은 조건의 허락을 함께 줍니다.
+
+이 권한을 받는 이유: 프로젝트가 나중에 라이선스 조건을 바꾸거나(예: 더 허용적인 라이선스로) 특정 대상에게 별도 조건으로 제공해야 할 때, 기여자 한 사람 한 사람에게 다시 동의를 구하지 않고도 할 수 있게 하기 위해서입니다. AGPL 로 공개된 판은 그대로 AGPL 로 남습니다.
+
+**Contribution terms (English).** By ticking the box in the pull request template ("I have read and agree to the contribution terms"), you agree to the following. (1) Your contribution is provided under this project's license, AGPL-3.0-or-later. (2) You confirm that you have the right to provide it — you wrote it yourself or are otherwise entitled to contribute it, and if someone else such as your employer holds rights in it, you have their permission. (3) You keep the copyright in your contribution, and you grant the project's copyright holder (Just-Workspace, as named in [LICENSE](LICENSE) and [NOTICE](NOTICE)) a worldwide, perpetual, non-exclusive, royalty-free, irrevocable right to distribute and sublicense your contribution, as part of this project, **under other license terms as well**; where your contribution is covered by patents you hold, you grant a licence on the same terms to the extent needed to use the contribution. We ask for this so that the project can later change its license terms (for example to a more permissive license) or offer it to particular parties under separate terms without having to ask every contributor again. Versions already published under the AGPL remain under the AGPL.

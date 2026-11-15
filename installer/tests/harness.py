@@ -112,9 +112,6 @@ class Host:
         kw.setdefault("sleep", lambda s: None)
         kw.setdefault("preflight_kwargs", {"reach": lambda url: True, "clock": lambda: True,
                                            "data_free_bytes": lambda: 300 * 1024 ** 3})
-        import os
-
-        os.environ["JW_SELF"] = "jw-self"
         svc = api.build_services(self.paths, runner=self.runner, registry="localhost", image_tag="1.0.0", **kw)
         svc.docker.self_ref = "jw-self"
         return svc

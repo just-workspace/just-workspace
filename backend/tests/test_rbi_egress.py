@@ -26,7 +26,7 @@ from app.rbi.site import get_rbi_user
 from tests.test_rbi import ALICE, FakeDocker  # noqa: F401
 
 ADMIN = User(id="u-admin", username="admin", display_name="관리자", is_admin=True, is_active=True, email="a@x", token_version=0)
-DNS = {"portal.lan": ["192.168.10.70"], "nas.lan": ["192.168.10.20", "192.168.10.21"], "rp.lan": ["192.168.10.50"],
+DNS = {"portal.lan": ["192.168.10.17"], "nas.lan": ["192.168.10.20", "192.168.10.21"], "rp.lan": ["192.168.10.50"],
        "pub.example": ["8.8.8.8"], "loop.lan": ["127.0.0.1"], "workspace.test": ["192.168.10.50"], "rbi.workspace.test": ["192.168.10.50"]}
 
 
@@ -34,7 +34,7 @@ DNS = {"portal.lan": ["192.168.10.70"], "nas.lan": ["192.168.10.20", "192.168.10
 def env(monkeypatch, tmp_path):
     s = get_settings()
     monkeypatch.setattr(s, "rbi_allow_file", str(tmp_path / "allow" / "allow.txt"))
-    monkeypatch.setattr(s, "rbi_protected", "192.168.10.20,192.168.10.1")
+    monkeypatch.setattr(s, "rbi_protected", "192.168.10.25,192.168.10.1")
     monkeypatch.setattr(s, "rbi_allow_ceiling", "")
     monkeypatch.setattr(s, "app_url", "https://workspace.test")
     monkeypatch.setattr(s, "rbi_public_origin", "https://rbi.workspace.test")
@@ -105,11 +105,11 @@ async def _audit(db, action) -> list[dict]:
     ("http://169.254.1.1", [], [], "루프백"),
     ("http://172.28.0.10:8000", [], [8000], "도커 브리지"),         # 워크스페이스 컨테이너 망
     ("http://172.31.200.5", [], [], "도커 브리지"),                  # 세션 대역
-    ("http://192.168.10.20", [], [], "워크스페이스 자신"),            # RBI_PROTECTED(앱 호스트)
+    ("http://192.168.10.25", [], [], "워크스페이스 자신"),            # RBI_PROTECTED(앱 호스트)
     ("http://192.168.10.1", [], [], "워크스페이스 자신"),              # 게이트웨이
     ("http://rp.lan", [], [], "워크스페이스 자신"),                  # APP_URL/RBI_PUBLIC_ORIGIN 이 풀리는 RP
-    ("http://192.168.10.70:8080", [], [], "포트는 80·443"),          # 추가 포트 미명시
-    ("http://192.168.10.70", ["192.168.10.71:22"], [], "포트는 80·443"),
+    ("http://192.168.10.17:8080", [], [], "포트는 80·443"),          # 추가 포트 미명시
+    ("http://192.168.10.17", ["192.168.10.71:22"], [], "포트는 80·443"),
     ("http://nope.lan", [], [], "이름을 풀지"),
     ("http://[fd00::1]", [], [], "IPv6"),
     ("http://bad_name", [], [], "형식"),
@@ -121,8 +121,8 @@ async def test_validation_rejects(url, hosts, ports, msg):
 
 
 async def test_force_allows_own_host_with_warning_but_not_hard_denied():
-    entries, warn = await eg.compute_egress("http://192.168.10.20", [], [], force=True)
-    assert [e.line() for e in entries] == ["192.168.10.20:80", "192.168.10.20:443"] and all(e.forced for e in entries)
+    entries, warn = await eg.compute_egress("http://192.168.10.25", [], [], force=True)
+    assert [e.line() for e in entries] == ["192.168.10.25:80", "192.168.10.25:443"] and all(e.forced for e in entries)
     assert warn and "강제로" in warn[0]
     for bad in ("http://127.0.0.1", "http://172.28.0.10", "http://8.8.8.8"):
         with pytest.raises(ValueError):
@@ -134,10 +134,10 @@ async def test_hostname_pinned_and_ports():
     assert warn == []
     assert [(e.host, e.line()) for e in entries] == [
         ("nas.lan", "192.168.10.20:8443"),            # 여러 IP 중 첫 번째로 고정
-        ("portal.lan", "192.168.10.70:80"), ("portal.lan", "192.168.10.70:443"),
+        ("portal.lan", "192.168.10.17:80"), ("portal.lan", "192.168.10.17:443"),
         ("192.168.10.71", "192.168.10.71:443"),
     ]
-    assert eg.add_host_args(entries) == ["--add-host", "nas.lan:192.168.10.20", "--add-host", "portal.lan:192.168.10.70"]
+    assert eg.add_host_args(entries) == ["--add-host", "nas.lan:192.168.10.20", "--add-host", "portal.lan:192.168.10.17"]
 
 
 def test_extra_ports_validation():
@@ -164,11 +164,11 @@ async def test_admin_add_disable_delete_propagates_and_audits(db_session):
     assert len(await _audit(db_session, "rbi.allow.add")) == 1          # 새 출구가 없으니 추가 감사도 없다
     # 끄면 그 대상만의 출구가 빠진다(겹치면 남는다) → 지우면 빠지고 감사
     assert (await _req(db_session, "PUT", f"/api/admin/rbi/targets/{tid}", json={"url": "http://portal.lan"})).status_code == 200
-    assert _file_lines() == ["192.168.10.70:443  # nas", "192.168.10.70:80  # nas", "192.168.10.20:443  # nas2", "192.168.10.20:80  # nas2"]
+    assert _file_lines() == ["192.168.10.17:443  # nas", "192.168.10.17:80  # nas", "192.168.10.20:443  # nas2", "192.168.10.20:80  # nas2"]
     assert (await _req(db_session, "PUT", f"/api/admin/rbi/targets/{tid}", json={"enabled": False})).status_code == 200
     assert _file_lines() == ["192.168.10.20:443  # nas2", "192.168.10.20:80  # nas2"]
     rem = await _audit(db_session, "rbi.allow.remove")
-    assert rem[-1]["entries"] == ["192.168.10.70:443", "192.168.10.70:80"]
+    assert rem[-1]["entries"] == ["192.168.10.17:443", "192.168.10.17:80"]
     t2 = (await _req(db_session, "GET", "/api/admin/rbi")).json()["targets"]
     nas2 = next(t for t in t2 if t["key"] == "nas2")
     assert (await _req(db_session, "DELETE", f"/api/admin/rbi/targets/{nas2['id']}")).status_code == 200
@@ -184,10 +184,10 @@ async def test_admin_rejects_and_force(db_session):
     assert r.status_code == 400 and "워크스페이스 자신" in r.json()["detail"]
     r = await _req(db_session, "POST", "/api/admin/rbi/targets", json={"key": "pub", "name": "P", "url": "http://8.8.8.8"})
     assert r.status_code == 400
-    r = await _req(db_session, "POST", "/api/admin/rbi/targets", json={"key": "alt", "name": "A", "url": "http://192.168.10.70:8080"})
+    r = await _req(db_session, "POST", "/api/admin/rbi/targets", json={"key": "alt", "name": "A", "url": "http://192.168.10.17:8080"})
     assert r.status_code == 400 and "포트" in r.json()["detail"]
     assert _file_lines() == [] and not (await db_session.execute(select(RbiTarget))).scalars().all()
-    r = await _req(db_session, "POST", "/api/admin/rbi/targets", json={"key": "alt", "name": "A", "url": "http://192.168.10.70:8080", "extra_ports": [8080]})
+    r = await _req(db_session, "POST", "/api/admin/rbi/targets", json={"key": "alt", "name": "A", "url": "http://192.168.10.17:8080", "extra_ports": [8080]})
     assert r.status_code == 201 and r.json()["extra_ports"] == [8080]
     r = await _req(db_session, "POST", "/api/admin/rbi/targets", json={"key": "rp", "name": "RP", "url": "http://rp.lan", "force": True})
     assert r.status_code == 201 and r.json()["egress_forced"] is True and r.json()["warnings"]
@@ -197,17 +197,17 @@ async def test_admin_rejects_and_force(db_session):
     # 수정 실패는 DB 를 바꾸지 않는다
     tid = r.json()["id"]
     assert (await _req(db_session, "PUT", f"/api/admin/rbi/targets/{tid}", json={"url": "http://8.8.8.8"})).status_code == 400
-    assert (await _req(db_session, "GET", "/api/admin/rbi")).json()["targets"][-1]["url"] in ("http://rp.lan", "http://192.168.10.70:8080")
+    assert (await _req(db_session, "GET", "/api/admin/rbi")).json()["targets"][-1]["url"] in ("http://rp.lan", "http://192.168.10.17:8080")
 
 
 async def test_status_shows_desired_applied_pending(db_session, guard):
-    await _req(db_session, "POST", "/api/admin/rbi/targets", json={"key": "portal", "name": "P", "url": "http://192.168.10.70"})
+    await _req(db_session, "POST", "/api/admin/rbi/targets", json={"key": "portal", "name": "P", "url": "http://192.168.10.17"})
     st = (await _req(db_session, "GET", "/api/admin/rbi")).json()["status"]
-    assert st["egress"]["desired"] == ["192.168.10.70:443", "192.168.10.70:80"]
-    assert st["egress"]["pending"] == ["192.168.10.70:443", "192.168.10.70:80"]
-    guard.state["allow"] = ["192.168.10.70:80", "192.168.10.70:443"]
+    assert st["egress"]["desired"] == ["192.168.10.17:443", "192.168.10.17:80"]
+    assert st["egress"]["pending"] == ["192.168.10.17:443", "192.168.10.17:80"]
+    guard.state["allow"] = ["192.168.10.17:80", "192.168.10.17:443"]
     st = (await _req(db_session, "GET", "/api/admin/rbi")).json()["status"]
-    assert st["egress"]["pending"] == [] and st["guard"]["allow"] == ["192.168.10.70:80", "192.168.10.70:443"]
+    assert st["egress"]["pending"] == [] and st["guard"]["allow"] == ["192.168.10.17:80", "192.168.10.17:443"]
 
 
 async def test_session_waits_for_sidecar_to_apply_target(db_session, guard):
@@ -226,13 +226,13 @@ async def test_session_waits_for_sidecar_to_apply_target(db_session, guard):
 
 async def test_legacy_target_without_egress_is_filled_by_sync(db_session):
     t = RbiTarget()
-    svc.apply_target_fields(t, {"key": "old", "name": "Old", "url": "http://192.168.10.70"}, creating=True)
+    svc.apply_target_fields(t, {"key": "old", "name": "Old", "url": "http://192.168.10.17"}, creating=True)
     t.egress = None
     db_session.add(t)
     await db_session.commit()
     lines = await eg.sync_allow_file(db_session)
-    assert [ln.split()[0] for ln in lines] == ["192.168.10.70:443", "192.168.10.70:80"]
+    assert [ln.split()[0] for ln in lines] == ["192.168.10.17:443", "192.168.10.17:80"]
     await db_session.refresh(t)
-    assert json.loads(t.egress)[0]["ip"] == "192.168.10.70"
+    assert json.loads(t.egress)[0]["ip"] == "192.168.10.17"
     # 파일은 바뀔 때만 쓴다
     assert eg.write_allow_file(lines) is False

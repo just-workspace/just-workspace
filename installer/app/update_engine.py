@@ -1272,7 +1272,7 @@ class UpdateManager:
         host = self.paths.host_dir
         r = self.docker.run(["run", "--rm", "--network", "none", "-v", f"{host}:/data", "-e", "JW_DATA_DIR=/data",
                              "-e", f"JW_HOST_DIR={host}", "-e", f"JW_REGISTRY={self.registry}",
-                             "-e", f"JW_IMAGE_TAG={version}", "-e", f"JW_APP_VERSION={version}",
+                             "-e", f"JW_IMAGE_TAG={version}", "-e", f"JW_INSTALLER_VERSION={version}",
                              "--entrypoint", "python", image, "-m", "app.update_restack"],
                             timeout=300)
         if not r.ok:
@@ -1349,6 +1349,11 @@ class UpdateManager:
             raise fail("backend_image_mismatch", expected=version, actual=running)
         if self._env_value("JW_APP_VERSION") not in ("", version):
             raise fail("version_mismatch", expected=version, actual=self._env_value("JW_APP_VERSION"))
+        # 컨테이너가 실제로 받은 표시 버전(화면·/api/health 에 보이는 값)
+        container_env = ((self.docker.inspect("container", "ws-backend") or {}).get("Config") or {}).get("Env") or []
+        shown = next((e.split("=", 1)[1] for e in container_env if e.startswith("JW_APP_VERSION=")), "")
+        if shown not in ("", version):
+            raise fail("version_mismatch", expected=version, actual=shown)
         code, _ = self.engine.http.get("http://backend:8000/api/health", timeout=10)
         if code != 200:
             raise fail("health_check_failed", status=code)

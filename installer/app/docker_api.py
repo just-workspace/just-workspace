@@ -24,6 +24,11 @@ from app.paths import NETWORK_NAME, PROJECT_NAME, SITE_COMPOSE, Paths
 
 
 
+# docker CLI 에 넘기지 않는 환경변수. compose 는 `--env-file` 보다 실행한 쪽의 환경변수를 먼저 본다 — 설치 관리자
+# 컨테이너가 가진 값이 스택의 `.env`(버전·저장소·프로파일)를 덮으면 안 된다.
+COMPOSE_SHADOWED = ("JW_REGISTRY", "JW_VERSION", "JW_APP_VERSION", "COMPOSE_PROFILES", "COMPOSE_FILE")
+
+
 @dataclass
 class Result:
     rc: int
@@ -52,10 +57,11 @@ class SubprocessRunner:
 
     def run(self, argv, *, input=None, timeout=120.0, on_line=None) -> Result:
         cmd = [self.binary, *[str(a) for a in argv]]
+        env = {k: v for k, v in os.environ.items() if k not in COMPOSE_SHADOWED}
         try:
             proc = subprocess.Popen(
                 cmd, stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", env=env,
             )
         except OSError as e:
             return Result(127, "", f"docker 를 실행하지 못했습니다: {e}")

@@ -168,12 +168,13 @@ stage_u1() {
 stage_page() {
   say "정적 점검 페이지와 공개 경로"
   docker stop ws-frontend-react >/dev/null
-  local page; page="$(ws_curl -i "$WS/some/page")"
+  local page i
+  for i in $(seq 1 12); do page="$(ws_curl --max-time 10 -i "$WS/some/page")"; case "$page" in HTTP*503*) break ;; esac; sleep 2; done
   contains "프런트가 없으면 503 + 점검 페이지(요청한 주소 그대로)" "HTTP/2 503" "$(printf '%s' "$page" | head -1)"
   contains "점검 페이지는 공개 점검 상태를 묻는다" "/maintenance/status" "$page"
   expect "API 는 그대로다(점검 페이지로 바꾸지 않는다)" 200 "$(ws_code "$WS/api/health")"
   docker start ws-frontend-react >/dev/null; wait_ready ws-frontend-react 60
-  local i; for i in $(seq 1 30); do [ "$(ws_code "$WS/")" = 200 ] && break; sleep 1; done
+  for i in $(seq 1 30); do [ "$(ws_code "$WS/")" = 200 ] && break; sleep 1; done
   expect "프런트가 돌아오면 화면도 돌아온다" 200 "$(ws_code "$WS/")"
   expect "공개 점검 상태는 GET 만" 403 "$(ws_curl -o /dev/null -w '%{http_code}' -X POST "$WS/maintenance/status")"
   expect "설치 관리자의 다른 내부 경로는 밖에서 닿지 않는다(/internal/…)" 200 "$(ws_code "$WS/internal/update/status")"

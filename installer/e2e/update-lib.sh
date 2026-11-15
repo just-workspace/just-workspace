@@ -152,7 +152,7 @@ reg_restore() {
   docker load -q -i "$REL/keep-$name-$built.tar" >/dev/null || return 1
   reg_push "$name" "$built" || return 1
   digest="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["images"][sys.argv[2]]["digest"])' "$REL/digests-$built.json" "$name")"
-  curl -fsI -o /dev/null "http://${REG%%/*}/v2/${REG#*/}/just-workspace-$name/manifests/$digest" || return 1
+  curl -fsI -o /dev/null -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json'     "http://${REG%%/*}/v2/${REG#*/}/just-workspace-$name/manifests/$digest" || return 1
   docker image rm "$REG/just-workspace-$name:$built" "$REG/just-workspace-$name@$digest" >/dev/null 2>&1
   rm -f "$REL/keep-$name-$built.tar"
 }

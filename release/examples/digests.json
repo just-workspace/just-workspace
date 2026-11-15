@@ -1,0 +1,52 @@
+{
+  "format": 1,
+  "version": "1.0.0-beta.1",
+  "registry": "ghcr.io/just-workspace",
+  "commit": "0000000000000000000000000000000000000000",
+  "images": {
+    "backend": {
+      "repository": "ghcr.io/just-workspace/just-workspace-backend",
+      "digest": "sha256:80cb377de814e46a64f74b749c7d6f6b50c2deed49f4d6be9823b21067b63774"
+    },
+    "frontend-react": {
+      "repository": "ghcr.io/just-workspace/just-workspace-frontend-react",
+      "digest": "sha256:e89702e7af74c28ed4a998f4fe81dcecd8dbd11d2a1892b06d5c00f8a8cbe765"
+    },
+    "mailserver": {
+      "repository": "ghcr.io/just-workspace/just-workspace-mailserver",
+      "digest": "sha256:a8c760234ee242161f280aab9900569c39ee51dec8480c74fc2daaf2c048ef36"
+    },
+    "sso": {
+      "repository": "ghcr.io/just-workspace/just-workspace-sso",
+      "digest": "sha256:03b6ccef22ccd4dff018deeae503bd0497afa6b10c64ade71f4693562c04c5f0"
+    },
+    "ldap": {
+      "repository": "ghcr.io/just-workspace/just-workspace-ldap",
+      "digest": "sha256:480395fba3943d82e8757a7568978eeb0292a3112a465812c489edc447147381"
+    },
+    "audiorelay": {
+      "repository": "ghcr.io/just-workspace/just-workspace-audiorelay",
+      "digest": "sha256:66b71991a3f2a0e4c87ddc720c0f5fa0c18a7f94036ddcc9f2dd16c335c01c92"
+    },
+    "rbi-netfilter": {
+      "repository": "ghcr.io/just-workspace/just-workspace-rbi-netfilter",
+      "digest": "sha256:1deba23f2b89c9dfff4bb9f02d75a7d0cd10eb1ae00cd70387ce5b0a5d3958a3"
+    },
+    "rbi-mirror": {
+      "repository": "ghcr.io/just-workspace/just-workspace-rbi-mirror",
+      "digest": "sha256:622884505f20d0ad90adb1ab7f673a77ddaccf22767b1737d68170b074496540"
+    },
+    "docconv": {
+      "repository": "ghcr.io/just-workspace/just-workspace-docconv",
+      "digest": "sha256:7b5120207bbb46c6467919096bd7789ba7c2f10a8f435ca8c4faca8af335c97c"
+    },
+    "sandbox": {
+      "repository": "ghcr.io/just-workspace/just-workspace-sandbox",
+      "digest": "sha256:2b0ec0bc9b2d8f28757b681c934abe76d576ef41371337e15430dd5a2b6554e3"
+    },
+    "installer": {
+      "repository": "ghcr.io/just-workspace/just-workspace-installer",
+      "digest": "sha256:08267713b106d8008cec1ae153856e3fe2f2ce59966bf32738fb0299a4f15811"
+    }
+  }
+}

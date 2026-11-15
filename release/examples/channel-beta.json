@@ -1,0 +1,29 @@
+{
+  "format": 1,
+  "channel": "beta",
+  "sequence": 2,
+  "generated": "2026-12-15T09:00:00Z",
+  "expires": "2027-01-14T09:00:00Z",
+  "releases": [
+    {
+      "version": "1.0.0-beta.1",
+      "published": "2026-12-01T09:00:00Z",
+      "min_upgrade_from": null,
+      "manifest": {
+        "path": "releases/1.0.0-beta.1/manifest.json",
+        "sha256": "8140496b36fd1904cf990f88739dc75c0c48daaa3cf569cecde72557fe890ad5"
+      },
+      "summary": "첫 공개 시험판"
+    },
+    {
+      "version": "1.0.0",
+      "published": "2026-12-15T09:00:00Z",
+      "min_upgrade_from": null,
+      "manifest": {
+        "path": "releases/1.0.0/manifest.json",
+        "sha256": "cf2c72a7a50e5bef5a9eb438d74e615c9eac45286108f1cb20464d8b7d8b52b7"
+      },
+      "summary": "첫 정식판"
+    }
+  ]
+}

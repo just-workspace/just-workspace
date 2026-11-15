@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:just-workspace:release:channel:1",
+  "title": "Just Workspace 채널 파일",
+  "description": "channels/stable.json, channels/beta.json. 옆에 서명 파일 <이름>.sig 가 있다. 스키마로 표현하지 못하는 조건(releases 는 버전 오름차순·중복 없음, expires 가 generated 보다 뒤)은 jwrelease/model.py 가 검사한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "channel", "sequence", "generated", "expires", "releases"],
+  "properties": {
+    "format": {
+      "description": "형식 버전",
+      "const": 1
+    },
+    "channel": {
+      "description": "채널 이름",
+      "enum": ["stable", "beta"]
+    },
+    "sequence": {
+      "description": "순번. 파일을 새로 낼 때마다 1 씩 올라간다(내려가지 않는다)",
+      "type": "integer",
+      "minimum": 1
+    },
+    "generated": {
+      "description": "이 파일을 만든 시각(UTC)",
+      "$ref": "#/$defs/time"
+    },
+    "expires": {
+      "description": "이 시각이 지나면 이 파일을 받아들이지 않는다(UTC)",
+      "$ref": "#/$defs/time"
+    },
+    "releases": {
+      "description": "릴리스 목록(버전 오름차순). beta 채널에는 Stable 릴리스도 들어 있다",
+      "type": "array",
+      "items": { "$ref": "#/$defs/release" }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "channel": { "const": "stable" } } },
+      "then": {
+        "properties": {
+          "releases": {
+            "items": { "properties": { "version": { "$ref": "#/$defs/stableVersion" } } }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "time": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "stableVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "version": {
+      "description": "X.Y.Z(Stable) 또는 X.Y.Z-beta.N(Beta)",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-beta\\.[1-9][0-9]*)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "published", "min_upgrade_from", "manifest", "summary"],
+      "properties": {
+        "version": { "$ref": "#/$defs/version" },
+        "published": {
+          "description": "공개 시각(UTC)",
+          "$ref": "#/$defs/time"
+        },
+        "min_upgrade_from": {
+          "description": "이 버전으로 바로 올라올 수 있는 최소 버전. 제약이 없으면 null",
+          "oneOf": [{ "$ref": "#/$defs/version" }, { "type": "null" }]
+        },
+        "manifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": {
+              "description": "채널 기준 주소에서의 상대 경로",
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)*$"
+            },
+            "sha256": {
+              "description": "manifest 파일 바이트의 SHA-256",
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "summary": {
+          "description": "요약 한 줄",
+          "type": "string",
+          "pattern": "^[^\\r\\n]*$"
+        }
+      }
+    }
+  }
+}

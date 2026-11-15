@@ -1,0 +1,385 @@
+{
+  "format": 1,
+  "version": "1.0.0-beta.1",
+  "published": "2026-12-01T09:00:00Z",
+  "min_upgrade_from": null,
+  "promoted_from": null,
+  "db_schema": null,
+  "images": {
+    "backend": "ghcr.io/just-workspace/just-workspace-backend@sha256:80cb377de814e46a64f74b749c7d6f6b50c2deed49f4d6be9823b21067b63774",
+    "frontend-react": "ghcr.io/just-workspace/just-workspace-frontend-react@sha256:e89702e7af74c28ed4a998f4fe81dcecd8dbd11d2a1892b06d5c00f8a8cbe765",
+    "mailserver": "ghcr.io/just-workspace/just-workspace-mailserver@sha256:a8c760234ee242161f280aab9900569c39ee51dec8480c74fc2daaf2c048ef36",
+    "sso": "ghcr.io/just-workspace/just-workspace-sso@sha256:03b6ccef22ccd4dff018deeae503bd0497afa6b10c64ade71f4693562c04c5f0",
+    "ldap": "ghcr.io/just-workspace/just-workspace-ldap@sha256:480395fba3943d82e8757a7568978eeb0292a3112a465812c489edc447147381",
+    "audiorelay": "ghcr.io/just-workspace/just-workspace-audiorelay@sha256:66b71991a3f2a0e4c87ddc720c0f5fa0c18a7f94036ddcc9f2dd16c335c01c92",
+    "rbi-netfilter": "ghcr.io/just-workspace/just-workspace-rbi-netfilter@sha256:1deba23f2b89c9dfff4bb9f02d75a7d0cd10eb1ae00cd70387ce5b0a5d3958a3",
+    "rbi-mirror": "ghcr.io/just-workspace/just-workspace-rbi-mirror@sha256:622884505f20d0ad90adb1ab7f673a77ddaccf22767b1737d68170b074496540",
+    "docconv": "ghcr.io/just-workspace/just-workspace-docconv@sha256:7b5120207bbb46c6467919096bd7789ba7c2f10a8f435ca8c4faca8af335c97c",
+    "sandbox": "ghcr.io/just-workspace/just-workspace-sandbox@sha256:2b0ec0bc9b2d8f28757b681c934abe76d576ef41371337e15430dd5a2b6554e3",
+    "installer": "ghcr.io/just-workspace/just-workspace-installer@sha256:08267713b106d8008cec1ae153856e3fe2f2ce59966bf32738fb0299a4f15811"
+  },
+  "third_party": {
+    "core": {
+      "postgres": "postgres@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e",
+      "redis": "redis@sha256:1273af45b299d2b8b60d0e400d90aa6c2c5b1794f01d6a7ca60ff3ba6e65efb5",
+      "nginx": "nginx@sha256:fed7e14be83cbd2661a75cdc5b872d936cf155d46c327084d30b8df19ae88d72",
+      "certbot": "certbot/certbot@sha256:c5698da859429ccee0fcc299a8000368198222d1f9e789ab6e388b491e8ce06d"
+    },
+    "git": {
+      "gitea": "gitea/gitea@sha256:8967bf9deaf3c5c4adae13519436dc1b20c646ac83fe37ae810c933a1045227d"
+    },
+    "meetings": {
+      "livekit": "livekit/livekit-server@sha256:25cd902de7cacbd5f1f779f6a6ac1eae20ba8f56b0935934ce6b0ab80d1e3d20",
+      "egress": "livekit/egress@sha256:ac244a40268ce1dd1510fbff6eb529609ec68aceff1602343f79be8ca08c355b"
+    },
+    "docs": {
+      "onlyoffice": "onlyoffice/documentserver@sha256:ca17889f10b11141cc6441836aebdd2835cf3e1b49681b2fd6e155c94b7850b3"
+    },
+    "ai": {
+      "searxng": "searxng/searxng@sha256:048e613ce4a7ddc35dfb05a0b8ede795a054187b3c3b89518adc37d5e03a8297"
+    }
+  },
+  "zones": {
+    "sha256": "ae1523e3bb494843d47da19cd250297361525068b7da88a3885b37e9177830a7",
+    "content": {
+      "$comment": "구역 선언 — 설치 마법사·설치 관리자·백엔드가 함께 읽는 단일 출처(구역 id·modules). 백엔드 이미지에 실리도록 backend/app/ 에 둔다. modules 는 그 구역이 소유한 백엔드 영역 이름이고, 구역별 라우터·백그라운드 루프 표는 backend/app/zones.py 에 있다. 설치된 구역은 환경변수 JW_ZONES 로 정한다(비우면 전부). memory_mb.idle 은 유휴 실측, limit 는 compose 의 상한 합계. ports 는 호스트에 여는 포트. recommend 는 마법사가 보여 주고 합계로 판정하는 권장값(유휴 + 여유).",
+      "version": 1,
+      "core": {
+        "id": "core",
+        "name": {
+          "ko": "기본",
+          "en": "Core"
+        },
+        "summary": {
+          "ko": "로그인, 관리, 대시보드, 파일",
+          "en": "Sign-in, admin, dashboard, files"
+        },
+        "compose_profiles": [],
+        "services": [
+          "postgres",
+          "redis",
+          "backend",
+          "frontend-react",
+          "nginx",
+          "certbot"
+        ],
+        "modules": [
+          "files",
+          "dashboard",
+          "search",
+          "notifications",
+          "groups",
+          "backup"
+        ],
+        "memory_mb": {
+          "idle": 2400,
+          "limit": 6200,
+          "recommend": 4000
+        },
+        "ports": [
+          "80/tcp",
+          "443/tcp"
+        ]
+      },
+      "presets": {
+        "minimal": [],
+        "collab": [
+          "mail",
+          "chat",
+          "calendar",
+          "docs"
+        ],
+        "full": [
+          "mail",
+          "chat",
+          "calendar",
+          "docs",
+          "meetings",
+          "git",
+          "ai"
+        ]
+      },
+      "zones": [
+        {
+          "id": "mail",
+          "name": {
+            "ko": "메일",
+            "en": "Mail"
+          },
+          "summary": {
+            "ko": "내장 메일 서버 또는 외부 발신 서버",
+            "en": "Built-in mail server or external relay"
+          },
+          "compose_profiles": [
+            "mailserver"
+          ],
+          "services": [
+            "mailserver"
+          ],
+          "modules": [
+            "mail"
+          ],
+          "requires": [],
+          "memory_mb": {
+            "idle": 400,
+            "limit": 1024,
+            "recommend": 1000
+          },
+          "ports": [
+            "25/tcp",
+            "465/tcp",
+            "587/tcp",
+            "993/tcp"
+          ],
+          "wizard_step": "mail"
+        },
+        {
+          "id": "chat",
+          "name": {
+            "ko": "채팅",
+            "en": "Chat"
+          },
+          "summary": {
+            "ko": "채널, 대화, 음성 채널(회의 구역 필요)",
+            "en": "Channels, DMs, voice channels (needs Meetings)"
+          },
+          "compose_profiles": [],
+          "services": [],
+          "modules": [
+            "chat"
+          ],
+          "requires": [],
+          "memory_mb": {
+            "idle": 0,
+            "limit": 0,
+            "recommend": 0
+          },
+          "ports": []
+        },
+        {
+          "id": "calendar",
+          "name": {
+            "ko": "일정·연락처·할 일",
+            "en": "Calendar, contacts, tasks"
+          },
+          "summary": {
+            "ko": "달력 동기화(CalDAV·CardDAV) 포함",
+            "en": "Includes CalDAV/CardDAV sync"
+          },
+          "compose_profiles": [],
+          "services": [],
+          "modules": [
+            "calendar",
+            "contacts",
+            "tasks",
+            "dav"
+          ],
+          "requires": [],
+          "memory_mb": {
+            "idle": 0,
+            "limit": 0,
+            "recommend": 0
+          },
+          "ports": []
+        },
+        {
+          "id": "docs",
+          "name": {
+            "ko": "문서 편집·위키·게시판",
+            "en": "Documents, wiki, boards"
+          },
+          "summary": {
+            "ko": "문서·시트·발표 자료 함께 편집",
+            "en": "Co-edit documents, sheets and slides"
+          },
+          "compose_profiles": [
+            "onlyoffice"
+          ],
+          "services": [
+            "onlyoffice"
+          ],
+          "modules": [
+            "wopi",
+            "wiki",
+            "board"
+          ],
+          "requires": [],
+          "memory_mb": {
+            "idle": 750,
+            "limit": 2048,
+            "recommend": 2000
+          },
+          "ports": []
+        },
+        {
+          "id": "meetings",
+          "name": {
+            "ko": "회의",
+            "en": "Meetings"
+          },
+          "summary": {
+            "ko": "화상 회의, 화면 공유, 녹화, 무손실 오디오",
+            "en": "Video calls, screen share, recording, lossless audio"
+          },
+          "compose_profiles": [
+            "livekit",
+            "egress",
+            "audiorelay"
+          ],
+          "services": [
+            "livekit",
+            "egress",
+            "audiorelay"
+          ],
+          "modules": [
+            "meetings"
+          ],
+          "requires": [],
+          "memory_mb": {
+            "idle": 60,
+            "limit": 4800,
+            "recommend": 1000
+          },
+          "ports": [
+            "7881/tcp",
+            "7882-7892/udp",
+            "3478/udp",
+            "4433/udp"
+          ],
+          "wizard_step": "meetings"
+        },
+        {
+          "id": "git",
+          "name": {
+            "ko": "코드 저장소",
+            "en": "Code hosting"
+          },
+          "summary": {
+            "ko": "Git 호스팅(Gitea)",
+            "en": "Git hosting (Gitea)"
+          },
+          "compose_profiles": [
+            "gitea"
+          ],
+          "services": [
+            "gitea"
+          ],
+          "modules": [
+            "git"
+          ],
+          "requires": [],
+          "memory_mb": {
+            "idle": 270,
+            "limit": 512,
+            "recommend": 500
+          },
+          "ports": [
+            "2222/tcp"
+          ]
+        },
+        {
+          "id": "ai",
+          "name": {
+            "ko": "AI 도우미",
+            "en": "AI assistant"
+          },
+          "summary": {
+            "ko": "외부 AI 서비스 연결, 웹 검색, 코드 실행, MCP 커넥터",
+            "en": "External AI provider, web search, code sandbox, MCP connector"
+          },
+          "compose_profiles": [
+            "aitools"
+          ],
+          "services": [
+            "searxng",
+            "docconv",
+            "sandbox"
+          ],
+          "modules": [
+            "ai",
+            "mcp"
+          ],
+          "requires": [],
+          "memory_mb": {
+            "idle": 230,
+            "limit": 6000,
+            "recommend": 1000
+          },
+          "ports": [],
+          "wizard_step": "ai"
+        }
+      ],
+      "addons": [
+        {
+          "id": "sso",
+          "name": {
+            "ko": "SSO·LDAP 제공",
+            "en": "SSO and LDAP provider"
+          },
+          "summary": {
+            "ko": "다른 서비스가 이 워크스페이스 계정으로 로그인",
+            "en": "Let other services sign in with workspace accounts"
+          },
+          "compose_profiles": [
+            "sso"
+          ],
+          "services": [
+            "sso",
+            "ldap"
+          ],
+          "modules": [],
+          "requires": [],
+          "memory_mb": {
+            "idle": 210,
+            "limit": 1536,
+            "recommend": 500
+          },
+          "ports": [
+            "389/tcp",
+            "636/tcp"
+          ]
+        },
+        {
+          "id": "rbi",
+          "name": {
+            "ko": "격리 브라우저",
+            "en": "Isolated browser"
+          },
+          "summary": {
+            "ko": "내부 웹 화면을 격리된 브라우저로 열기",
+            "en": "Open internal web UIs in an isolated browser"
+          },
+          "compose_profiles": [
+            "rbi"
+          ],
+          "services": [
+            "rbi-netfilter"
+          ],
+          "modules": [
+            "rbi"
+          ],
+          "requires": [],
+          "memory_mb": {
+            "idle": 10,
+            "limit": 64,
+            "recommend": 100
+          },
+          "ports": []
+        }
+      ]
+    }
+  },
+  "installer_bundle": null,
+  "apps": [
+    {
+      "kind": "windows-desktop",
+      "filename": "workspace-desktop-setup.exe",
+      "size": 98765432,
+      "sha256": "4b5b26346e222201bd0740cdf150f5d1b12ef46784ef1ca341973cfe5ec7cb84",
+      "url": "https://github.com/just-workspace/just-workspace/releases/download/v1.0.0-beta.1/workspace-desktop-setup.exe"
+    }
+  ],
+  "offline_bundle": null,
+  "changelog": "## 1.0.0-beta.1\n\n- 첫 공개 시험판\n",
+  "plugin_api": null
+}

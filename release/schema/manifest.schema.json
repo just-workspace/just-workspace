@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:just-workspace:release:manifest:1",
+  "title": "Just Workspace 릴리스 목록 파일",
+  "description": "releases/<버전>/manifest.json. 옆에 서명 파일 manifest.json.sig 가 있다. 스키마로 표현하지 못하는 조건(promoted_from 이 이 버전의 Beta 인지 등)은 jwrelease/model.py 가 검사한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format", "version", "published", "min_upgrade_from", "promoted_from", "db_schema", "images", "third_party",
+    "zones", "installer_bundle", "apps", "offline_bundle", "changelog", "plugin_api"
+  ],
+  "properties": {
+    "format": {
+      "description": "형식 버전",
+      "const": 1
+    },
+    "version": {
+      "description": "제품 버전",
+      "$ref": "#/$defs/version"
+    },
+    "published": {
+      "description": "공개 시각(UTC)",
+      "$ref": "#/$defs/time"
+    },
+    "min_upgrade_from": {
+      "description": "이 버전으로 바로 올라올 수 있는 최소 버전. 제약이 없으면 null",
+      "oneOf": [{ "$ref": "#/$defs/version" }, { "type": "null" }]
+    },
+    "promoted_from": {
+      "description": "Beta 에서 승격한 릴리스면 그 Beta 버전(이미지 다이제스트가 같다). 아니면 null",
+      "oneOf": [
+        { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-beta\\.[1-9][0-9]*$" },
+        { "type": "null" }
+      ]
+    },
+    "db_schema": {
+      "description": "DB 스키마 버전(자리 — 값은 backend 가 정한다). 정해지기 전에는 null",
+      "type": ["integer", "string", "null"]
+    },
+    "images": {
+      "description": "우리가 빌드한 이미지: 이름 → 저장소@sha256:…",
+      "$ref": "#/$defs/imageMap",
+      "minProperties": 1
+    },
+    "third_party": {
+      "description": "남의 이미지(원 배포처 그대로): 구역 id → (이름 → 저장소@sha256:…)",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/name" },
+      "additionalProperties": { "$ref": "#/$defs/imageMap" }
+    },
+    "zones": {
+      "description": "구역 선언(zones.json 사본)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "content"],
+      "properties": {
+        "sha256": {
+          "description": "content 를 결정적 직렬화한 바이트의 SHA-256",
+          "$ref": "#/$defs/sha256"
+        },
+        "content": {
+          "description": "zones.json 의 내용",
+          "type": "object"
+        }
+      }
+    },
+    "installer_bundle": {
+      "description": "설치 관리자 번들(compose·템플릿 묶음) — 자리. 없으면 null",
+      "oneOf": [{ "$ref": "#/$defs/fileRef" }, { "type": "null" }]
+    },
+    "apps": {
+      "description": "앱 설치 파일",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "filename", "size", "sha256", "url"],
+        "properties": {
+          "kind": { "enum": ["windows-desktop", "android"] },
+          "filename": { "type": "string", "pattern": "^[^/\\\\]+$" },
+          "size": { "type": "integer", "minimum": 0 },
+          "sha256": { "$ref": "#/$defs/sha256" },
+          "url": { "$ref": "#/$defs/url" }
+        }
+      }
+    },
+    "offline_bundle": {
+      "description": "오프라인 묶음. 없으면 null",
+      "oneOf": [{ "$ref": "#/$defs/fileRef" }, { "type": "null" }]
+    },
+    "changelog": {
+      "description": "변경 내용(마크다운)",
+      "type": "string"
+    },
+    "plugin_api": {
+      "description": "플러그인 호환 범위 — 자리. 정해지기 전에는 null",
+      "type": ["object", "null"]
+    }
+  },
+  "$defs": {
+    "time": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "version": {
+      "description": "X.Y.Z(Stable) 또는 X.Y.Z-beta.N(Beta)",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-beta\\.[1-9][0-9]*)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "url": {
+      "type": "string",
+      "pattern": "^https?://\\S+$"
+    },
+    "imageMap": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/name" },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9._\\-/:]*@sha256:[0-9a-f]{64}$"
+      }
+    },
+    "fileRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "size", "sha256"],
+      "properties": {
+        "url": { "$ref": "#/$defs/url" },
+        "size": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

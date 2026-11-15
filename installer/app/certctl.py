@@ -146,6 +146,10 @@ class CertManager:
             ctx.wait_ready("ws-nginx", 120)
             if ctx.plan.turn and ctx.docker.container_status("ws-livekit")["running"]:
                 ctx.docker.run(["restart", "ws-livekit"], timeout=120)
+            if "gitea" in active and ctx.docker.container_status("ws-gitea")["running"]:
+                # 믿게 할 발급 CA 가 생기거나 사라졌으면 여기서 컨테이너가 다시 만들어진다(바뀐 것이 없으면 그대로다)
+                ctx.up(["gitea"])
+                ctx.wait_ready("ws-gitea")
             ctx.up(["backend"])                           # `.env` 의 인증서에 딸린 값이 바뀌었으면 다시 만들어진다
             ctx.wait_ready("ws-backend")
             zm._stage(job, "reload", "done")

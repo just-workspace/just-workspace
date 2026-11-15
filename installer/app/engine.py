@@ -342,6 +342,26 @@ def _place(ctx: Context, name: str, aliases: list[str], cert: str | None = None,
         raise StepError("cert_place_failed", "see_log", detail=r.text[-300:])
 
 
+def set_site_ca(ctx: Context, chain: str) -> None:
+    """올린 인증서에 함께 온 발급 CA(체인)를 코드 저장소 컨테이너가 믿게 한다 — 없으면 걷어 낸다.
+
+    사설 CA 가 내준 인증서를 올리면 코드 저장소(Gitea)는 접속 주소의 인증서를 믿지 못해 로그인 연동이 보류로 남는다.
+    체인이 함께 왔으면 그것을 스택 폴더에 두고 사이트 조각이 컨테이너의 신뢰 폴더에 붙인다(app/render.py 의 site_compose).
+    서버 인증서 한 장만 올렸으면 믿게 할 CA 를 알 수 없으므로 아무것도 하지 않는다.
+    """
+    target = ctx.paths.stack / render.SITE_CA_FILE
+    have = bool(chain)
+    if have:
+        write_private(target, chain, 0o644)             # 컨테이너의 비루트 프로세스가 읽는다(공개 정보다)
+    else:
+        target.unlink(missing_ok=True)
+    if ctx.facts.site_ca != have:
+        ctx.facts.site_ca = have
+        ctx.store.update_facts(site_ca=have)
+        ctx.write_stack()                               # 사이트 조각에 붙이는 줄이 생기거나 사라진다
+        ctx.log("올린 인증서의 발급 CA 를 코드 저장소가 믿게 합니다" if have else "코드 저장소에 따로 믿게 한 CA 를 걷어 냅니다")
+
+
 def read_cert(ctx: Context, name: str) -> str | None:
     r = ctx.docker.helper(["read-cert", "--name", name], volumes=[f"{CERT_VOLUME}:/etc/letsencrypt"], timeout=60)
     return helper_json(r).get("cert")
@@ -352,6 +372,8 @@ def step_cert(ctx: Context) -> None:
     name, names, aliases = plan.cert_dir, plan.cert_names, plan.cert_aliases
     mode = plan.cert_mode
     existing = read_cert(ctx, name)
+    if mode != "upload":
+        set_site_ca(ctx, "")                 # 올린 인증서를 쓰다가 다른 방식으로 바꿨다
 
     def remember(cert_pem: str, kind: str) -> None:
         ctx.store.write("cert.json", {"name": name, "kind": kind, "fingerprint": certs.fingerprint_sha256(cert_pem),
@@ -397,6 +419,7 @@ def step_cert(ctx: Context) -> None:
         _place(ctx, name, aliases, cert, key)
         remember(cert, "upload")
         ctx.log("올린 인증서를 놓았습니다")
+        set_site_ca(ctx, certs.chain_pem(cert))
         return
 
     # auto — Let's Encrypt

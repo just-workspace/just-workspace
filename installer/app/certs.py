@@ -51,6 +51,15 @@ def self_signed(names: list[str], *, days: int = 365, common_name: str | None = 
     return cert_pem, key_pem
 
 
+def chain_pem(cert_pem: str) -> str:
+    """올린 인증서 파일에서 **첫 장(서버 인증서)을 뺀 나머지** — 함께 온 발급 CA(중간·루트). 없으면 빈 글자."""
+    try:
+        chain = x509.load_pem_x509_certificates(cert_pem.encode())
+    except Exception:  # noqa: BLE001
+        return ""
+    return "".join(c.public_bytes(serialization.Encoding.PEM).decode() for c in chain[1:])
+
+
 def fingerprint_sha256(cert_pem: str) -> str:
     """`AB:CD:…` 꼴의 SHA-256 지문(첫 인증서)."""
     cert = x509.load_pem_x509_certificates(cert_pem.encode())[0]

@@ -38,6 +38,8 @@ DKIM_SELECTOR = "default"
 EXTRA_ENV_KEY = "_extra_env"
 CARRIED_ENV = ("APP_NAME", "DOMAIN", "ADMIN_EMAILS")
 CERT_ROOT = "/etc/letsencrypt/live"
+SITE_CA_FILE = "site-ca/ca.pem"                         # 스택 폴더 기준 — 올린 인증서에 함께 온 발급 CA(적용 엔진이 쓴다)
+SITE_CA_MOUNT = "/etc/ssl/certs/jw-site-ca.pem"         # 코드 저장소 컨테이너 안(시스템 CA 폴더 — 묶음 파일에 더해 읽힌다)
 
 # 권한이 600 이어야 하는 파일 / 실행 권한이 필요한 파일
 SECRET_FILES = (".env", "mailserver/config/dovecot-masters.cf", "mailserver/config/postfix-accounts.cf",
@@ -390,11 +392,16 @@ server {{
     }
 
 
-def site_compose(plan: Plan) -> str:
+def site_compose(plan: Plan, facts: Facts | None = None) -> str:
     head = _GENERATED + "# 리포의 docker-compose.yml 에 덧붙이는 사이트별 조각(-f 로 함께 넘긴다).\n"
+    services = ""
     if plan.tls:
-        return head + 'services:\n  nginx:\n    ports:\n      - "443:443"\n'
-    return head + "services: {}\n"
+        services += '  nginx:\n    ports:\n      - "443:443"\n'
+    if plan.tls and plan.cert_mode == "upload" and facts is not None and facts.site_ca:
+        # 올린 인증서와 함께 온 발급 CA 를 코드 저장소 컨테이너의 신뢰 폴더에 놓는다 — 사설 CA 가 내준 인증서여도
+        # 코드 저장소가 접속 주소로 되돌아가 로그인 설정 문서를 읽을 수 있다(시스템의 CA 묶음은 그대로 두고 더한다).
+        services += f"  gitea:\n    volumes:\n      - ./{SITE_CA_FILE}:{SITE_CA_MOUNT}:ro\n"
+    return head + (f"services:\n{services}" if services else "services: {}\n")
 
 
 # ─── LiveKit ───
@@ -562,7 +569,7 @@ def render(answers: Answers, secrets: dict, facts: Facts, bundle: Bundle,
         version=image_tag or bundle.version, registry=registry, gitea_image=gitea_image(answers, bundle),
         app_version=bundle.version,
     ))
-    files[SITE_COMPOSE] = site_compose(plan)
+    files[SITE_COMPOSE] = site_compose(plan, facts)
     files.update(nginx_site(answers, plan))
     # compose 가 폴더째 붙이는 자리 — 비어 있어도 폴더는 있어야 한다
     files["nginx/private.d/.keep"] = ""

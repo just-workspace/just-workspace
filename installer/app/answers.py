@@ -223,6 +223,7 @@ class Facts:
     dns_status: str | None = None          # match | mismatch | unknown
     cert_issue_failed: bool = False        # 인증서 자동 발급이 실패한 적이 있다
     upload_cert_ok: bool = False           # 올린 인증서 파일이 검증을 통과했다
+    site_ca: bool = False                  # 올린 인증서에 발급 CA(체인)가 함께 왔다 — 코드 저장소가 그것을 믿게 한다
     proxy_lan_ip: str | None = None
 
     def as_dict(self) -> dict:

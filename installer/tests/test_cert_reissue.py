@@ -155,3 +155,60 @@ def test_disabling_a_zone_clears_its_pending_mark(tmp_path):
     host, svc = temporary_install(tmp_path)
     job = finish(svc, svc.zones.disable("git"))
     assert job["status"] == "done" and zones.pending(svc.store) == {}
+
+
+# ─── 올린 인증서의 발급 CA 를 코드 저장소가 믿게 한다 ───
+
+
+def test_uploaded_chain_is_trusted_by_the_git_container(tmp_path):
+    from app import render
+
+    host, svc = temporary_install(tmp_path)
+    site = host.paths.stack / render.SITE_COMPOSE
+    ca_file = host.paths.stack / render.SITE_CA_FILE
+    assert "gitea" not in site.read_text(encoding="utf-8") and not ca_file.exists()
+
+    leaf, key = certs.self_signed(["ws.example.com"], days=90)                 # 사설 CA 가 내준 것으로 친다
+    ca, _ = certs.self_signed(["Example Private CA"], days=3650)
+    host.trusted = True
+    job = finish(svc, api_cert.manager(svc).reissue({"mode": "upload", "cert": leaf + ca, "key": key}))
+    assert job["status"] == "done", job["error"]
+    # 체인(첫 장을 뺀 나머지)만 스택 폴더에 놓이고, 사이트 조각이 그것을 컨테이너의 신뢰 폴더에 붙인다
+    assert ca_file.read_text(encoding="utf-8") == ca and leaf not in ca_file.read_text(encoding="utf-8")
+    assert f"  gitea:\n    volumes:\n      - ./site-ca/ca.pem:{render.SITE_CA_MOUNT}:ro\n" in site.read_text(encoding="utf-8")
+    assert '"443:443"' in site.read_text(encoding="utf-8")
+    assert svc.store.facts().site_ca is True
+    # 컨테이너를 다시 만든 뒤에 보류된 연결을 다시 건다
+    from tests.fakes import seq
+
+    calls = host.runner.calls
+    recreate = [i for i, c in enumerate(calls) if seq("compose", "up", "-d", "gitea")(c)][-1]
+    connect = [i for i, c in enumerate(calls) if seq("exec", "ws-gitea", "auth", "add-oauth")(c)][-1]
+    assert recreate < connect and zones.pending(svc.store) == {}
+
+    # 자동 발급으로 바꾸면 걷어 낸다
+    host.services.append("certbot")
+    job = finish(svc, api_cert.manager(svc).reissue({"mode": "auto"}))
+    assert job["status"] == "done", job["error"]
+    assert not ca_file.exists() and "gitea" not in site.read_text(encoding="utf-8") and svc.store.facts().site_ca is False
+
+
+def test_uploaded_leaf_alone_adds_no_trust(tmp_path):
+    from app import render
+
+    host, svc = temporary_install(tmp_path)
+    leaf, key = certs.self_signed(["ws.example.com"], days=90)
+    job = finish(svc, api_cert.manager(svc).reissue({"mode": "upload", "cert": leaf, "key": key}))
+    assert job["status"] in ("done", "failed")                                 # 연결은 여전히 보류다(믿게 할 CA 를 모른다)
+    assert not (host.paths.stack / render.SITE_CA_FILE).exists()
+    assert "gitea" not in (host.paths.stack / render.SITE_COMPOSE).read_text(encoding="utf-8")
+    assert svc.store.facts().site_ca is False and zones.pending(svc.store)["git"]
+
+
+def test_chain_pem():
+    leaf, _ = certs.self_signed(["ws.example.com"])
+    mid, _ = certs.self_signed(["Intermediate"])
+    root, _ = certs.self_signed(["Root"])
+    assert certs.chain_pem(leaf) == "" and certs.chain_pem("garbage") == ""
+    assert certs.chain_pem(leaf + mid + root) == mid + root
+

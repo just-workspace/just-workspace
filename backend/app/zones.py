@@ -203,6 +203,7 @@ LOOPS: list[tuple[str, str]] = [
     ("core", "app.main:_backup_loop"),                       # 예약 백업
     ("meetings", "app.meetings.calls:run_call_state_loop"),  # 채널 통화 상태 대조(웹훅 누락 보정)
     ("core", "app.files.retention:run_retention"),           # 버전·휴지통·업로드 세션 만료 정리
+    ("core", "app.db.redis_handoff:run_handoff"),            # 예전에 Redis 에만 있던 값을 DB 로(기동 뒤 한 번)
     ("mail", "app.mail.scheduled:run_scheduled_sender"),     # 예약 메일 발송
     ("calendar", "app.main:_calendar_subscription_loop"),    # 외부 캘린더 구독(.ics) 갱신
     ("rbi", "app.rbi.service:run_reaper"),                   # 격리 브라우저 세션 거두기

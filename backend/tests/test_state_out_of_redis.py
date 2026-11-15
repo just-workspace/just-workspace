@@ -16,6 +16,7 @@ from sqlalchemy import select, update
 
 from app.auth.password import hash_password
 from app.db.models import Base, MailAccount, MailPop3State, PrivacyPin, User
+from app.db import redis_handoff
 from app.db.session import async_session, engine
 from app.mail import archive, imap_client, poller, pop3_client
 from app.privacy import gate
@@ -38,10 +39,17 @@ class FakeRedis:
         self._check()
         return self.kv.get(key)
 
-    async def set(self, key, value, **_kw):
+    async def set(self, key, value, nx=False, **_kw):
         self._check()
+        if nx and key in self.kv:
+            return None
         self.kv[key] = value
         return True
+
+    async def scan_iter(self, match="*"):
+        self._check()
+        for key in [k for k in self.kv if k.startswith(match.rstrip("*"))]:
+            yield key
 
     async def delete(self, key):
         self._check()
@@ -90,6 +98,7 @@ async def redis(monkeypatch):
     monkeypatch.setattr(gate, "get_redis", _get)
     monkeypatch.setattr(pop3_client, "get_redis", _get)
     monkeypatch.setattr(poller, "get_redis", _get)
+    monkeypatch.setattr(redis_handoff, "get_redis", _get)
     pop3_client._imported.clear()
     return fake
 
@@ -328,3 +337,42 @@ async def test_poller_skips_pop3_and_tolerates_broken_redis_on_import(redis, inb
     acc = SimpleNamespace(id="x", email="x@example.net", last_seen_uid=None)
     redis.broken = True
     assert await poller._load_last_seen(redis, acc) == 0
+
+
+# ─── 기동 때 한 번 훑기 ───
+
+
+async def test_startup_sweep_moves_what_nobody_has_read_yet(redis, monkeypatch):
+    """업데이트한 뒤 아무도 열어 보지 않은 값도 DB 로 — 그 상태로 백업해도 잃지 않게."""
+    uid, kept = await _user(), await _user()
+    await gate.set_pin(kept, "1234")                         # 이미 DB 에 있는 것은 건드리지 않는다
+    redis.kv[gate._pin_key(uid)] = hash_password("5678")
+    redis.kv[gate._pin_key("deleted-user")] = hash_password("0000")
+    pop = await _account("pop3")
+    redis.sets[pop3_client._read_key(pop.id)] = {"a"}
+    imap = await _account("imap")
+    redis.kv[poller._lastuid_key(imap.id)] = "41"
+
+    moved = await redis_handoff.sweep()
+    assert moved["pins"] >= 1 and moved["pop3_accounts"] >= 1 and moved["last_uids"] >= 1
+
+    redis.flush()                                            # 복원 뒤
+    pop3_client._imported.clear()
+    assert await gate.verify_pin(uid, "5678") is True
+    assert await gate.verify_pin(kept, "1234") is True
+    assert await pop3_client._state(pop.id) == ({"a"}, set())
+    assert (await _reload(imap)).last_seen_uid == 41
+
+    again = await redis_handoff.sweep()                      # 다시 돌아도 옮길 것이 없다
+    assert again["pins"] == 0 and again["last_uids"] == 0
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(redis_handoff.asyncio, "sleep", no_sleep)
+    redis.kv[redis_handoff._LOCK_KEY] = "1"                  # 다른 워커가 잡고 있으면 돌지 않는다
+    redis.kv[gate._pin_key(await _user())] = hash_password("9999")
+    await redis_handoff.run_handoff()
+    assert (await redis_handoff.sweep())["pins"] == 1        # 위에서는 안 옮겨졌다는 뜻
+    redis.broken = True
+    await redis_handoff.run_handoff()                        # Redis 가 죽어 있어도 예외를 올리지 않는다

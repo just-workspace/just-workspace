@@ -9,12 +9,13 @@
 단계는 **여러 번 돌려도 결과가 같아야 한다.** 새 설치는 지금 모델로 테이블을 만든 뒤(기준선) 모든 단계를
 차례로 지나가므로, 단계가 더하려는 컬럼이 이미 있을 수 있다. 아래 도우미는 전부 그렇게 동작한다.
 
-    async def _0002_user_title(conn):
+    async def _0003_user_title(conn):
         await add_column(conn, "users", "title")            # 모델에 선언된 컬럼을 그대로 더한다
         await run_sql(conn, "CREATE INDEX IF NOT EXISTS ix_users_title ON users(title)")
 
     STEPS = (
-        Step(2, "users.title 추가", _0002_user_title),
+        ...,
+        Step(3, "users.title 추가", _0003_user_title),
     )
 
 - 단계 하나는 한 트랜잭션이다(PostgreSQL 은 DDL 도 되돌린다). 실패하면 그 단계는 흔적 없이 되돌려지고
@@ -92,4 +93,19 @@ async def add_column(conn: AsyncConnection, table: str, column: str) -> bool:
 
 # ─── 단계 목록(버전 2 부터) ───
 
-STEPS: tuple[Step, ...] = ()
+
+
+async def _0002_state_out_of_redis(conn: AsyncConnection) -> None:
+    """Redis 에만 있던 값 셋의 자리 — 개인 잠금 PIN, POP3 의 읽음·별표, 새 메일 감시의 마지막 UID.
+
+    자리만 만든다. 값은 코드가 처음 읽을 때 Redis 에서 옮겨 온다(이 단계는 DB 만 만질 수 있다) —
+    app/privacy/gate.py, app/mail/pop3_client.py, app/mail/poller.py.
+    """
+    await create_tables(conn, "privacy_pins", "mail_pop3_state")
+    await add_column(conn, "mail_accounts", "last_seen_uid")
+    await add_column(conn, "mail_accounts", "pop3_state_imported")
+
+
+STEPS: tuple[Step, ...] = (
+    Step(2, "개인 잠금 PIN·POP3 읽음 표시·새 메일 감시 위치를 DB 로", _0002_state_out_of_redis),
+)

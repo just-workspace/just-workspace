@@ -795,7 +795,7 @@ class MailAccount(Base):
     display_name: Mapped[str] = mapped_column(String(100))
     email: Mapped[str] = mapped_column(String(255))
     # 수신 프로토콜: imap(기본) | pop3. POP3는 서버측 폴더/플래그가 없어 INBOX 전용 +
-    # 읽음/별표를 로컬(Redis)에 저장한다. 아래 imap_* 필드를 POP3에선 '수신 서버'로 재사용.
+    # 읽음/별표를 로컬(mail_pop3_state 표)에 저장한다. 아래 imap_* 필드를 POP3에선 '수신 서버'로 재사용.
     protocol: Mapped[str] = mapped_column(String(10), default="imap", server_default="imap")
     # IMAP (POP3면 수신 서버)
     imap_host: Mapped[str] = mapped_column(String(255))
@@ -824,9 +824,45 @@ class MailAccount(Base):
         DateTime(timezone=True), nullable=True
     )
     sync_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # 새 메일 감시(app/mail/poller.py)가 마지막으로 본 INBOX UID. NULL = 아직 기준을 잡지 않았다.
+    last_seen_uid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # POP3 의 읽음·별표(mail_pop3_state)를 예전 저장 위치(Redis)에서 옮겨 왔는가 — 한 번만 옮긴다.
+    pop3_state_imported: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class MailPop3State(Base):
+    """POP3 계정의 메시지별 읽음·별표. POP3 서버에는 플래그가 없어 여기에 둔다(식별자는 UIDL).
+
+    둘 다 꺼진 메시지는 행을 두지 않는다.
+    """
+
+    __tablename__ = "mail_pop3_state"
+
+    account_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("mail_accounts.id", ondelete="CASCADE"), primary_key=True
+    )
+    uidl: Mapped[str] = mapped_column(String(255), primary_key=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_flagged: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+
+class PrivacyPin(Base):
+    """개인 잠금 PIN 의 해시(app/privacy/gate.py). 사용자 표와 따로 둔다 — 사용자 행을 읽는 코드에 실려 나가지 않게."""
+
+    __tablename__ = "privacy_pins"
+
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    pin_hash: Mapped[str] = mapped_column(String(255))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

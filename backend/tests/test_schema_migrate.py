@@ -85,15 +85,16 @@ def test_models_fingerprint_matches_recorded_value():
 async def test_empty_db_gets_baseline(eng):
     assert (await mg.read_state(eng)).kind == "empty"
     result = await mg.migrate(eng, log=quiet)
-    assert result.applied == [(1, mg.BASELINE_NAME)] and result.to_version == 1
+    assert result.applied == mg.all_steps() and result.applied[0] == (1, mg.BASELINE_NAME)
+    assert result.to_version == sv.SCHEMA_VERSION
     state = await mg.read_state(eng)
-    assert state.kind == "versioned" and state.current == 1
+    assert state.kind == "versioned" and state.current == sv.SCHEMA_VERSION
     assert state.applied[0]["name"] == mg.BASELINE_NAME and state.applied[0]["app_version"]
     assert await mg.find_drift(eng) == []
 
     again = await mg.migrate(eng, log=quiet)                 # 두 번째는 할 일이 없다
-    assert again.applied == [] and again.to_version == 1
-    assert await scalar(eng, "SELECT count(*) FROM schema_migrations") == 1
+    assert again.applied == [] and again.to_version == sv.SCHEMA_VERSION
+    assert await scalar(eng, "SELECT count(*) FROM schema_migrations") == sv.SCHEMA_VERSION
 
 
 async def test_legacy_db_is_adopted_without_data_loss(eng):
@@ -111,15 +112,50 @@ async def test_legacy_db_is_adopted_without_data_loss(eng):
     assert set(await mg.find_drift(eng)) == {"system_settings.updated_at", "backup_records"}
 
     result = await mg.migrate(eng, log=quiet)
-    assert result.applied == [(1, mg.BASELINE_NAME)]
+    assert result.applied[0] == (1, mg.BASELINE_NAME) and result.to_version == sv.SCHEMA_VERSION
     assert await mg.find_drift(eng) == []
     assert await scalar(eng, "SELECT value FROM system_settings WHERE key = 'general.x'") == "kept"
+
+
+async def test_step_2_adds_the_homes_for_state_that_lived_in_redis(eng):
+    """버전 1 의 DB(표·컬럼이 없다)에 단계 2 를 적용한다 — 기존 행은 그대로, 새 컬럼은 기본값."""
+    from app.db.models import Base
+
+    mg.register_models()
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("DROP TABLE privacy_pins"))
+        await conn.execute(text("DROP TABLE mail_pop3_state"))
+        await conn.execute(text("ALTER TABLE mail_accounts DROP COLUMN last_seen_uid"))
+        await conn.execute(text("ALTER TABLE mail_accounts DROP COLUMN pop3_state_imported"))
+        await conn.execute(text(
+            "INSERT INTO mail_accounts (id, user_id, display_name, email, protocol, imap_host, imap_port, "
+            "imap_security, smtp_host, smtp_port, smtp_security, username, password_encrypted, auth_method, "
+            "archive_enabled, is_default, created_at, updated_at) VALUES ('a1', 'u1', 'x', 'x@example.com', "
+            "'pop3', 'h', 995, 'ssl', 'h', 587, 'starttls', 'x', 'x', 'password', 0, 1, "
+            "'2026-01-01', '2026-01-01')"
+        ))
+        await conn.run_sync(lambda sync: mg.schema_migrations.create(sync, checkfirst=True))
+        await mg._record(conn, 1, mg.BASELINE_NAME)
+    assert (await mg.read_state(eng)).current == 1
+    assert set(await mg.find_drift(eng)) == {
+        "privacy_pins", "mail_pop3_state", "mail_accounts.last_seen_uid", "mail_accounts.pop3_state_imported",
+    }
+
+    result = await mg.migrate(eng, log=quiet)
+    assert [v for v, _ in result.applied] == [2]
+    assert await mg.find_drift(eng) == []
+    assert await scalar(eng, "SELECT email FROM mail_accounts WHERE id = 'a1'") == "x@example.com"
+    assert await scalar(eng, "SELECT last_seen_uid FROM mail_accounts WHERE id = 'a1'") is None
+    assert not await scalar(eng, "SELECT pop3_state_imported FROM mail_accounts WHERE id = 'a1'")
+    assert await scalar(eng, "SELECT count(*) FROM privacy_pins") == 0
 
 
 # ─── 단계 적용 ───
 
 
 async def test_pending_steps_apply_in_order(eng, monkeypatch):
+    use_steps(monkeypatch)                                   # 기준선만 있는 DB 에서 시작한다
     await mg.migrate(eng, log=quiet)
     order = []
 
@@ -152,6 +188,7 @@ async def test_new_install_runs_every_step_after_baseline(eng, monkeypatch):
 
 
 async def test_failed_step_stops_and_keeps_earlier_ones(eng, monkeypatch):
+    use_steps(monkeypatch)
     await mg.migrate(eng, log=quiet)
     ran = []
 
@@ -201,7 +238,7 @@ async def test_ensure_schema_refuses_when_auto_apply_is_off(eng, value):
     assert (await mg.read_state(eng)).kind == "empty"        # 아무것도 만들지 않았다
 
     await mg.migrate(eng, log=quiet)                         # 설치 관리자가 따로 적용하면
-    assert await mg.ensure_schema(eng, env=env, log=quiet) == 1
+    assert await mg.ensure_schema(eng, env=env, log=quiet) == sv.SCHEMA_VERSION
 
 
 async def test_schema_newer_than_code_is_refused(eng):
@@ -219,12 +256,12 @@ async def test_verify_catches_missing_column_and_repair_fixes_it(eng):
     await mg.migrate(eng, log=quiet)
     async with eng.begin() as conn:
         await conn.execute(text("ALTER TABLE system_settings DROP COLUMN updated_at"))
-    assert await mg.ensure_schema(eng, env={}, log=quiet) == 1                   # 워커 기동은 버전만 본다
+    assert await mg.ensure_schema(eng, env={}, log=quiet) == sv.SCHEMA_VERSION   # 워커 기동은 버전만 본다
     with pytest.raises(mg.SchemaDrift) as info:
         await mg.ensure_schema(eng, verify=True, env={}, log=quiet)              # 컨테이너 기동은 대조한다
     assert info.value.missing == ["system_settings.updated_at"]
     await mg.migrate(eng, repair=True, log=quiet)
-    assert await mg.ensure_schema(eng, verify=True, env={}, log=quiet) == 1
+    assert await mg.ensure_schema(eng, verify=True, env={}, log=quiet) == sv.SCHEMA_VERSION
 
 
 async def test_init_db_does_not_swallow_failures(monkeypatch):
@@ -293,7 +330,7 @@ def test_cli_migrate_check_status_and_apply(cli_engine, capsys):
     assert "대기" in out and mg.BASELINE_NAME in out
 
     assert cli.main(["migrate"]) == cli.MIGRATE_OK
-    assert "0 → 1" in capsys.readouterr().out
+    assert f"0 → {sv.SCHEMA_VERSION}" in capsys.readouterr().out
     assert cli.main(["migrate", "--check"]) == cli.MIGRATE_OK
     capsys.readouterr()
 
@@ -307,6 +344,7 @@ def test_cli_migrate_reports_failed_step(cli_engine, capsys, monkeypatch):
     async def bad(conn):
         raise RuntimeError("디스크가 가득 참")
 
+    use_steps(monkeypatch)
     assert cli.main(["migrate"]) == cli.MIGRATE_OK
     use_steps(monkeypatch, Step(2, "큰 표 고치기", bad))
     assert cli.main(["migrate"]) == cli.MIGRATE_FAILED

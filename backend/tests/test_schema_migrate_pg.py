@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.db import migrate as mg
 from app.db import migrations as steps_mod
+from app.db import schema_version as sv
 from app.db.migrations import Step
 
 PG_URL = os.environ.get("JW_TEST_PG_URL", "")
@@ -69,13 +70,15 @@ async def indexes(engine) -> set[str]:
 
 
 def use_steps(monkeypatch, *steps: Step) -> None:
+    """테스트용 단계 목록. 단계를 안 주면 기준선만 있는 코드가 된다."""
     monkeypatch.setattr(steps_mod, "STEPS", tuple(steps))
-    monkeypatch.setattr(mg, "SCHEMA_VERSION", steps[-1].version)
+    monkeypatch.setattr(mg, "SCHEMA_VERSION", steps[-1].version if steps else sv.BASELINE_VERSION)
 
 
 async def test_new_database_reaches_baseline_without_warnings(eng):
     result = await mg.migrate(eng, log=quiet)
-    assert result.applied == [(1, mg.BASELINE_NAME)] and result.warnings == []
+    assert result.applied == mg.all_steps() and result.applied[0] == (1, mg.BASELINE_NAME)
+    assert result.warnings == [] and result.to_version == sv.SCHEMA_VERSION
     assert await mg.find_drift(eng) == []
     # create_all 만으로는 안 생기는 것들: 메시지 순번 시퀀스·기본값, trigram 인덱스, @everyone 역할
     assert "nextval" in await scalar(
@@ -127,7 +130,7 @@ async def test_legacy_database_is_adopted_losslessly_and_matches_new_install(eng
     assert (await mg.read_state(eng)).kind == "legacy"
 
     result = await mg.migrate(eng, log=quiet)
-    assert result.applied == [(1, mg.BASELINE_NAME)] and result.warnings == []
+    assert result.applied == mg.all_steps() and result.warnings == []
     # 데이터는 그대로, 빠졌던 것은 채워졌다
     assert await scalar(eng, "SELECT count(*) FROM users") == 1
     assert await scalar(eng, "SELECT auth_source FROM users WHERE id = 'u1'") == "local"
@@ -144,8 +147,8 @@ async def test_eight_concurrent_runs_apply_once(pg_url):
     engines = [create_async_engine(pg_url) for _ in range(8)]
     try:
         results = await asyncio.gather(*(mg.ensure_schema(e, env={}, log=quiet) for e in engines))
-        assert results == [1] * 8
-        assert await scalar(engines[0], "SELECT count(*) FROM schema_migrations") == 1
+        assert results == [sv.SCHEMA_VERSION] * 8
+        assert await scalar(engines[0], "SELECT count(*) FROM schema_migrations") == sv.SCHEMA_VERSION
         assert await scalar(engines[0], "SELECT count(*) FROM chat_roles WHERE is_default") == 1
         assert await scalar(engines[0], "SELECT count(*) FROM chat_categories") == 3
         assert await mg.find_drift(engines[0]) == []
@@ -164,6 +167,7 @@ async def test_concurrent_step_runs_exactly_once(pg_url, monkeypatch):
 
     engines = [create_async_engine(pg_url) for _ in range(4)]
     try:
+        use_steps(monkeypatch)                                        # 기준선만 있는 DB 에서 시작한다
         await mg.migrate(engines[0], log=quiet)
         use_steps(monkeypatch, Step(2, "둘", two))
         results = await asyncio.gather(*(mg.migrate(e, log=quiet) for e in engines))
@@ -183,12 +187,13 @@ async def test_migrate_waits_while_another_holds_the_lock(eng, pg_url):
             assert not task.done()                                    # 잠금이 풀릴 때까지 기다린다
             assert (await mg.read_state(holder)).kind == "empty"      # 그동안 아무것도 만들지 않았다
         result = await asyncio.wait_for(task, timeout=120)
-        assert result.to_version == 1
+        assert result.to_version == sv.SCHEMA_VERSION
     finally:
         await holder.dispose()
 
 
 async def test_failed_step_rolls_back_its_ddl_and_version(eng, monkeypatch):
+    use_steps(monkeypatch)
     await mg.migrate(eng, log=quiet)
 
     async def two(conn):
@@ -217,6 +222,7 @@ async def test_failed_step_rolls_back_its_ddl_and_version(eng, monkeypatch):
 
 
 async def test_non_transactional_step_and_newer_schema(eng, monkeypatch):
+    use_steps(monkeypatch)
     await mg.migrate(eng, log=quiet)
 
     async def two(conn):
@@ -241,4 +247,42 @@ async def test_repair_retries_skipped_optional_parts(eng):
         await mg.ensure_schema(eng, verify=True, env={}, log=quiet)
     await mg.migrate(eng, repair=True, log=quiet)
     assert "ix_messages_content_trgm" in await indexes(eng)
-    assert await mg.ensure_schema(eng, verify=True, env={}, log=quiet) == 1
+    assert await mg.ensure_schema(eng, verify=True, env={}, log=quiet) == sv.SCHEMA_VERSION
+
+
+async def test_step_2_on_a_version_1_database_keeps_rows_and_matches_new_install(eng):
+    """버전 1 의 DB(단계 2 가 만드는 표·컬럼이 없다)에 행을 넣고 올린다 — 새 설치와 같은 모양이 된다."""
+    await mg.migrate(eng, log=quiet)
+    fresh_columns = await columns(eng)
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db.models import MailAccount, User
+
+    async with AsyncSession(eng) as db:
+        db.add(User(id="u1", username="kim", password_hash="x", display_name="김", email="kim@example.com"))
+        await db.flush()
+        db.add(MailAccount(
+            id="a1", user_id="u1", display_name="밖", email="kim@example.net", protocol="pop3",
+            imap_host="pop.example.net", smtp_host="smtp.example.net", username="kim", password_encrypted="x",
+        ))
+        await db.commit()
+    async with eng.begin() as conn:
+        for sql in (
+            "DELETE FROM schema_migrations WHERE version >= 2",
+            "DROP TABLE privacy_pins",
+            "DROP TABLE mail_pop3_state",
+            "ALTER TABLE mail_accounts DROP COLUMN last_seen_uid",
+            "ALTER TABLE mail_accounts DROP COLUMN pop3_state_imported",
+        ):
+            await conn.execute(text(sql))
+    assert (await mg.read_state(eng)).current == 1
+
+    result = await mg.migrate(eng, log=quiet)
+    assert [v for v, _ in result.applied] == list(range(2, sv.SCHEMA_VERSION + 1))
+    assert await mg.find_drift(eng) == []
+    assert await scalar(eng, "SELECT email FROM mail_accounts WHERE id = 'a1'") == "kim@example.net"
+    assert await scalar(eng, "SELECT last_seen_uid FROM mail_accounts WHERE id = 'a1'") is None
+    assert await scalar(eng, "SELECT pop3_state_imported FROM mail_accounts WHERE id = 'a1'") is False
+    assert await columns(eng) == fresh_columns
+    assert await mg.ensure_schema(eng, verify=True, env={}, log=quiet) == sv.SCHEMA_VERSION

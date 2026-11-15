@@ -8,7 +8,7 @@ Design goals:
   replayed on each request via the ``X-Privacy-Unlock`` header. The server only
   checks the signature + expiry, so there is no server-side "unlocked" state to
   linger across sessions.
-- **PIN-gated**: a numeric PIN (bcrypt-hashed in Redis) guards unlock. Setting
+- **PIN-gated**: a numeric PIN (bcrypt hash in the DB — table ``privacy_pins``) guards unlock. Setting
   the PIN requires the account password, so a shoulder-surfer / guest cannot
   mint a vault key.
 
@@ -16,13 +16,19 @@ This module is intentionally content-agnostic. Which models/files count as
 "private" is decided by the callers (plugins), never here.
 """
 
+import logging
+
 from fastapi import Request
 from itsdangerous import BadSignature, URLSafeTimedSerializer
+from sqlalchemy.exc import IntegrityError
 
 from app.auth.password import hash_password, verify_password
 from app.chat.redis_client import get_redis
 from app.config import get_settings
-from app.db.models import User
+from app.db.models import PrivacyPin, User
+from app.db.session import async_session
+
+logger = logging.getLogger(__name__)
 
 _settings = get_settings()
 _signer = URLSafeTimedSerializer(_settings.secret_key, salt="privacy-unlock")
@@ -43,21 +49,85 @@ def _fail_key(uid: str) -> str:
     return f"privacy:fail:{uid}"
 
 
-# ── PIN storage (bcrypt hash in Redis; persists via AOF) ──
+# ── PIN 저장 ──
+# 해시는 DB(privacy_pins)에 둔다. 예전에는 Redis 에만 있어서(키 `privacy:pin:<사용자>`) 백업에 들지
+# 않았고 복원하면 사라졌다.
+#
+# - 읽기: DB 에 있으면 그것만 쓴다. 없을 때만 예전 Redis 키를 보고, 있으면 DB 로 옮긴 뒤 그 값을 쓴다.
+# - 쓰기: DB 에 쓰고, 같은 값을 예전 Redis 키에도 써 둔다. Redis 쪽은 읽지 않는 사본이다 —
+#   업데이트가 실패해 이전 버전(그 키만 읽는다)으로 되돌아갔을 때 PIN 이 그대로 통하게 하려는 것이다.
+#   옮긴 뒤에도 키를 지우지 않는 이유가 같다.
+# - DB 에 행이 생긴 뒤로는 Redis 의 값이 무엇이든 영향이 없다(낡은 값이 되살아나지 않는다).
+
+async def _db_hash(uid: str) -> str | None:
+    async with async_session() as db:
+        row = await db.get(PrivacyPin, uid)
+        return row.pin_hash if row else None
+
+
+async def _legacy_hash(uid: str) -> str | None:
+    try:
+        r = await get_redis()
+        h = await r.get(_pin_key(uid))
+    except Exception as e:  # noqa: BLE001 — Redis 가 없어도 DB 의 PIN 은 동작해야 한다
+        logger.warning("[privacy] 예전 PIN 위치를 읽지 못했습니다: %s", e)
+        return None
+    if isinstance(h, (bytes, bytearray)):
+        h = h.decode()
+    return h or None
+
+
+async def _mirror_legacy(uid: str, pin_hash: str) -> None:
+    try:
+        r = await get_redis()
+        await r.set(_pin_key(uid), pin_hash)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[privacy] PIN 사본을 쓰지 못했습니다(동작에는 영향 없음): %s", e)
+
+
+async def _pin_hash(uid: str) -> str | None:
+    h = await _db_hash(uid)
+    if h:
+        return h
+    legacy = await _legacy_hash(uid)
+    if not legacy:
+        return None
+    # 옮긴다. 다른 워커가 먼저 넣었으면(같은 값을 옮겼거나 그 사이에 새 PIN 을 정했다) 그쪽이 맞다.
+    async with async_session() as db:
+        db.add(PrivacyPin(user_id=uid, pin_hash=legacy))
+        try:
+            await db.commit()
+            return legacy
+        except IntegrityError:
+            await db.rollback()
+    return await _db_hash(uid)
+
 
 async def has_pin(uid: str) -> bool:
-    r = await get_redis()
-    return bool(await r.get(_pin_key(uid)))
+    return bool(await _pin_hash(uid))
 
 
 async def set_pin(uid: str, new_pin: str) -> None:
-    r = await get_redis()
-    await r.set(_pin_key(uid), hash_password(new_pin))
+    new_hash = hash_password(new_pin)
+    for _ in range(2):
+        async with async_session() as db:
+            row = await db.get(PrivacyPin, uid)
+            if row is None:
+                db.add(PrivacyPin(user_id=uid, pin_hash=new_hash))
+            else:
+                row.pin_hash = new_hash
+            try:
+                await db.commit()
+                break
+            except IntegrityError:   # 두 요청이 동시에 처음 정했다 — 다시 읽어 덮어쓴다
+                await db.rollback()
+    else:
+        raise RuntimeError("PIN 을 저장하지 못했습니다")
+    await _mirror_legacy(uid, new_hash)
 
 
 async def verify_pin(uid: str, pin: str) -> bool:
-    r = await get_redis()
-    h = await r.get(_pin_key(uid))
+    h = await _pin_hash(uid)
     if not h:
         return False
     try:

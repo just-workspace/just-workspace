@@ -2,7 +2,7 @@
 
 POP3 는 서버측 폴더/플래그/검색이 없다:
 - 메일함은 INBOX 하나뿐(list_mailboxes).
-- 읽음/별표는 서버에 없으므로 Redis 에 UIDL 기준으로 로컬 저장.
+- 읽음/별표는 서버에 없으므로 DB(mail_pop3_state)에 UIDL 기준으로 저장.
 - 메시지 식별자(uid)는 POP3 UIDL(세션 무관 안정적)을 쓴다.
 - poplib 은 동기 API 라 asyncio.to_thread 로 감싼다.
 발신은 이 모듈과 무관 — POP3 계정도 SMTP(smtp_client)로 그대로 보낸다.
@@ -16,8 +16,12 @@ import logging
 import poplib
 import ssl
 
+from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
+
 from app.chat.redis_client import get_redis
-from app.db.models import MailAccount
+from app.db.models import MailAccount, MailPop3State
+from app.db.session import async_session
 from app.mail import imap_client as _ic  # 파싱 헬퍼 재사용
 from app.mail import threads
 
@@ -63,10 +67,131 @@ def _flag_key(aid: str) -> str:
     return f"mail:pop3:flag:{aid}"
 
 
-async def _members(key: str) -> set[str]:
+# ── 읽음·별표 ──
+# DB(mail_pop3_state)에 둔다. 예전에는 Redis 의 집합 두 개(`mail:pop3:read:<계정>`, `…:flag:<계정>`)에만
+# 있어서 백업에 들지 않았고, 복원하면 POP3 메일이 전부 안 읽음으로 돌아갔다.
+#
+# - 계정마다 **한 번** 예전 집합을 DB 로 옮긴다(mail_accounts.pop3_state_imported). 그 뒤로는 DB 만 읽는다 —
+#   "DB 에 행이 없다"는 "아직 안 옮겼다"가 아니라 "읽은 것이 없다"일 수 있어서 표시를 따로 둔다.
+# - 바꿀 때는 DB 에 쓰고 예전 집합에도 같은 변경을 해 둔다. 읽지 않는 사본이다 — 업데이트가 실패해
+#   이전 버전(그 집합만 읽는다)으로 되돌아갔을 때 읽음 표시가 남아 있게 하려는 것이다.
+
+_imported: set[str] = set()   # 이 프로세스가 옮긴 것을 확인한 계정(매번 DB 에 묻지 않게)
+
+
+async def _legacy_members(key: str) -> set[str]:
     r = await get_redis()
     raw = await r.smembers(key)
     return {x.decode() if isinstance(x, (bytes, bytearray)) else x for x in (raw or [])}
+
+
+async def _ensure_imported(aid: str) -> None:
+    if aid in _imported:
+        return
+    async with async_session() as db:
+        done = (await db.execute(
+            select(MailAccount.pop3_state_imported).where(MailAccount.id == aid)
+        )).scalar_one_or_none()
+    if done:
+        _imported.add(aid)
+        return
+    if done is None:
+        # 계정 행이 없다(지워지는 중이거나 그 값이 비어 있는 옛 행) — 옮길 곳이 없으면 그만둔다.
+        async with async_session() as db:
+            exists = (await db.execute(select(MailAccount.id).where(MailAccount.id == aid))).scalar_one_or_none()
+        if exists is None:
+            return
+    try:
+        read_set = await _legacy_members(_read_key(aid))
+        flag_set = await _legacy_members(_flag_key(aid))
+    except Exception as e:  # noqa: BLE001 — 표시를 남기지 않는다. 다음 접근 때 다시 옮긴다.
+        logger.warning("[pop3] 예전 읽음·별표 위치를 읽지 못했습니다(%s): %s", aid, e)
+        return
+    async with async_session() as db:
+        # 표시부터 잡는다. 여러 워커가 동시에 와도 이 줄을 바꾼 하나만 옮긴다(나머지는 0행).
+        claimed = await db.execute(
+            update(MailAccount)
+            .where(MailAccount.id == aid, MailAccount.pop3_state_imported.isnot(True))
+            .values(pop3_state_imported=True, updated_at=MailAccount.updated_at)
+        )
+        if claimed.rowcount:
+            for uidl in sorted(read_set | flag_set):
+                if not uidl or len(uidl) > 255:
+                    continue
+                db.add(MailPop3State(
+                    account_id=aid, uidl=uidl, is_read=uidl in read_set, is_flagged=uidl in flag_set,
+                ))
+            try:
+                await db.commit()
+            except IntegrityError:   # 표시가 없는데 행이 이미 있었다 — 표시만 남긴다
+                await db.rollback()
+                await db.execute(
+                    update(MailAccount).where(MailAccount.id == aid)
+                    .values(pop3_state_imported=True, updated_at=MailAccount.updated_at)
+                )
+                await db.commit()
+            if read_set or flag_set:
+                logger.info("[pop3] 읽음 %d·별표 %d 건을 DB 로 옮겼습니다(%s)", len(read_set), len(flag_set), aid)
+    _imported.add(aid)
+
+
+async def _state(aid: str) -> tuple[set[str], set[str]]:
+    """(읽은 UIDL, 별표한 UIDL)."""
+    await _ensure_imported(aid)
+    async with async_session() as db:
+        rows = (await db.execute(
+            select(MailPop3State.uidl, MailPop3State.is_read, MailPop3State.is_flagged)
+            .where(MailPop3State.account_id == aid)
+        )).all()
+    return {u for u, rd, _ in rows if rd}, {u for u, _, fl in rows if fl}
+
+
+async def _set_state(aid: str, uidl: str, *, read: bool | None = None, flagged: bool | None = None) -> None:
+    """읽음·별표를 바꾼다(None = 그대로). 둘 다 꺼지면 행을 지운다."""
+    await _ensure_imported(aid)
+    for _ in range(2):
+        async with async_session() as db:
+            row = await db.get(MailPop3State, (aid, uidl))
+            if row is None:
+                if not (read or flagged):
+                    break
+                db.add(MailPop3State(account_id=aid, uidl=uidl, is_read=bool(read), is_flagged=bool(flagged)))
+            else:
+                if read is not None:
+                    row.is_read = read
+                if flagged is not None:
+                    row.is_flagged = flagged
+                if not (row.is_read or row.is_flagged):
+                    await db.delete(row)
+            try:
+                await db.commit()
+                break
+            except IntegrityError:   # 같은 메시지를 두 요청이 동시에 처음 표시했다 — 다시 읽어 고친다
+                await db.rollback()
+    # 예전 집합의 사본
+    try:
+        r = await get_redis()
+        if read is not None:
+            await (r.sadd if read else r.srem)(_read_key(aid), uidl)
+        if flagged is not None:
+            await (r.sadd if flagged else r.srem)(_flag_key(aid), uidl)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+async def _forget(aid: str, uidl: str) -> None:
+    """지운 메시지의 표시를 없앤다."""
+    await _ensure_imported(aid)
+    async with async_session() as db:
+        await db.execute(delete(MailPop3State).where(
+            MailPop3State.account_id == aid, MailPop3State.uidl == uidl))
+        await db.commit()
+    try:
+        r = await get_redis()
+        await r.srem(_read_key(aid), uidl)
+        await r.srem(_flag_key(aid), uidl)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 # ── 인터페이스 (imap_client 와 동일 시그니처) ──
@@ -173,8 +298,7 @@ async def fetch_messages(
 ) -> tuple[list[dict], int]:
     """label 은 POP3 에 저장소가 없어 무시한다(라벨 지원 안 함)."""
     index = await _build_index(account)
-    read_set = await _members(_read_key(account.id))
-    flag_set = await _members(_flag_key(account.id))
+    read_set, flag_set = await _state(account.id)
     q = (query or "").strip().lower()
     if q:
         def _hit(it):
@@ -218,8 +342,7 @@ async def fetch_thread(
     if me is None:
         return None
     tid = threads.header_thread_id(me.get("msgid"), me.get("irt"), me.get("refs"))
-    read_set = await _members(_read_key(account.id))
-    flag_set = await _members(_flag_key(account.id))
+    read_set, flag_set = await _state(account.id)
     members = [it for it in index if it is me or (
         tid and threads.header_thread_id(it.get("msgid"), it.get("irt"), it.get("refs")) == tid)]
     members.sort(key=lambda it: it.get("date") or "")
@@ -262,9 +385,8 @@ async def fetch_message(account: MailAccount, mailbox: str, uid: str) -> dict | 
     if html_body and "cid:" in html_body.lower():
         html_body = _ic._rewrite_cid_images(html_body, _ic._inline_cid_map(m))
     attachments = _ic._extract_attachments(m)
-    r = await get_redis()
-    await r.sadd(_read_key(account.id), uid)  # 열면 읽음 처리(로컬)
-    flag_set = await _members(_flag_key(account.id))
+    await _set_state(account.id, uid, read=True)  # 열면 읽음 처리(로컬)
+    _read_set, flag_set = await _state(account.id)
     return {
         "id": uid, "thread_id": None, "mailbox_ids": ["INBOX"],
         "from_": _ic._parse_address(m.get("From")), "to": _ic._parse_address(m.get("To")),
@@ -289,17 +411,20 @@ async def update_flags(
     account: MailAccount, mailbox: str, uid: str,
     add_flags: list[str] | None = None, remove_flags: list[str] | None = None,
 ) -> bool:
-    r = await get_redis()
+    read: bool | None = None
+    flagged: bool | None = None
     for f in (add_flags or []):
         if f == "\\Seen":
-            await r.sadd(_read_key(account.id), uid)
+            read = True
         elif f == "\\Flagged":
-            await r.sadd(_flag_key(account.id), uid)
+            flagged = True
     for f in (remove_flags or []):
         if f == "\\Seen":
-            await r.srem(_read_key(account.id), uid)
+            read = False
         elif f == "\\Flagged":
-            await r.srem(_flag_key(account.id), uid)
+            flagged = False
+    if read is not None or flagged is not None:
+        await _set_state(account.id, uid, read=read, flagged=flagged)
     return True
 
 
@@ -324,9 +449,8 @@ async def delete_message(
             return False
     ok = await asyncio.to_thread(_work)
     if ok:
+        await _forget(account.id, uid)
         r = await get_redis()
-        await r.srem(_read_key(account.id), uid)
-        await r.srem(_flag_key(account.id), uid)
         await r.delete(_index_key(account.id))  # 인덱스 캐시 무효화 → 다음 조회에 반영
     return {"ok": ok, "permanent": True}
 

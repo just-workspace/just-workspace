@@ -1,8 +1,8 @@
 """실시간 이벤트 발행 — 단일 진입점.
 
-브라우저·데스크톱 셸은 채팅 WebSocket(`/ws/chat`) 하나로 모든 실시간 이벤트를 받는다.
+브라우저·데스크톱 셸은 실시간 소켓(`/ws/chat`) 하나로 모든 실시간 이벤트를 받는다.
 발행은 Redis Pub/Sub 을 거쳐 그 사용자(또는 채널 구독자)의 소켓을 가진 워커가 전달한다
-(app/chat/websocket.py `ConnectionManager._subscribe_loop`).
+(app/realtime/socket.py `ConnectionManager._subscribe_loop`).
 
 여기 함수만 쓰고 Redis 채널 이름을 직접 쓰지 않는다 — 이름이 흩어지면 다른 모듈(메일·캘린더·
 파일·플러그인)이 이벤트를 붙이기 어려워진다.
@@ -24,7 +24,7 @@
 채널 대상(emit_to_channel)
   new_message, reaction_update, message_read, message_update(핀 등 {message}), message_delete …
   voice_state       음성 채널 접속 상태(app/chat/voice.py) {channel_id, participants, since}
-전체 대상(websocket.py publish_presence)
+전체 대상(socket.py publish_presence)
   presence          {user_id, username, status(online|offline 하위호환), state, emoji, text}
 플러그인은 `plugin:<id>:<event>` 형식을 쓴다.
 """

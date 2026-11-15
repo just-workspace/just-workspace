@@ -4,7 +4,7 @@
 
 - `zones.json`(이 파일 옆): 구역 id 와 그 구역이 소유한 modules 의 단일 출처.
   설치 마법사·설치 관리자도 같은 파일을 읽는다.
-- 이 파일의 `ROUTERS` · `LOOPS`: 어느 라우터·루프가 어느 구역 것인지. 라우터는 등록
+- 이 파일의 `ROUTERS` · `LOOPS` · `SOCKET_HANDLERS`: 어느 라우터·루프가 어느 구역 것인지. 라우터는 등록
   순서가 경로 매칭에 영향을 주므로(같은 prefix, catch-all) 구역별로 흩지 않고 **등록
   순서 그대로 한 줄로** 둔다. 표의 구역 이름이 zones.json 에 있는지, 문자열이 실제로
   import 되는지는 tests/test_zones.py 가 지킨다.
@@ -161,7 +161,7 @@ ROUTERS: list[tuple[str, str]] = [
     ("chat", "app.chat.roles:router"),               # 역할·권한·카테고리
     ("chat", "app.chat.router22:router"),            # 첨부 묶음·스레드·이모지·검색·프로필·정책
     ("chat+meetings", "app.chat.voice:router"),      # 음성 채널(토큰·접속 상태) — 회의 서버가 있어야 한다
-    ("chat", "app.chat.websocket:router"),
+    ("core", "app.realtime.socket:router"),          # 실시간 소켓(/ws/chat) — 알림·배지 등 전 구역이 쓴다
     ("chat+meetings", "app.chat.voice_relay:router"),  # 음성 채널 무손실 티어 — 릴레이 토큰
     ("chat", "app.chat.webhook:router"),
     ("docs", "app.board.router:router"),
@@ -204,6 +204,12 @@ LOOPS: list[tuple[str, str]] = [
     ("ai", "app.ai.ops_retention:run_ai_retention"),         # AI 감사 기록·피드백 스냅샷 정리
 ]
 
+# 실시간 소켓(app/realtime/socket.py)이 클라이언트에게서 받는 프레임의 처리기.
+# 대상은 {프레임 종류(type): 처리기} 사전 — 설치된 구역 것만 합쳐서 쓴다.
+SOCKET_HANDLERS: list[tuple[str, str]] = [
+    ("chat", "app.chat.ws_handlers:HANDLERS"),               # 메시지 전송·반응·타이핑·읽음
+]
+
 
 def resolve(target: str) -> Any:
     """"모듈경로:속성" 문자열을 실제 객체로."""
@@ -219,3 +225,18 @@ def active_routers() -> list[Any]:
 def active_loops() -> list[Any]:
     """설치된 구역의 백그라운드 루프 함수 — 시작 순서 그대로."""
     return [resolve(target) for requirement, target in LOOPS if requirement_met(requirement)]
+
+
+@lru_cache(maxsize=16)
+def _socket_handlers(installed: frozenset[str]) -> dict[str, Any]:
+    """설치된 구역 집합별 처리기 사전(캐시) — 프레임마다 다시 만들지 않는다."""
+    handlers: dict[str, Any] = {}
+    for requirement, target in SOCKET_HANDLERS:
+        if all(zone_id == CORE or zone_id in installed for zone_id in requirement.split("+")):
+            handlers.update(resolve(target))
+    return handlers
+
+
+def active_socket_handlers() -> dict[str, Any]:
+    """설치된 구역이 등록한 실시간 소켓 프레임 처리기 — {프레임 종류: 처리기}."""
+    return _socket_handlers(frozenset(installed_zones()))

@@ -413,7 +413,7 @@ async def join_discover_channel(
     added = await chat_service.add_members(db, channel_id, [str(user.id)])
     if added:
         try:
-            from app.chat.websocket import manager
+            from app.realtime.socket import manager
 
             await manager.notify_channels_changed([str(user.id)])
         except Exception as e:  # 실시간 알림 실패는 참여를 되돌리지 않는다

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     internal_api_key: str = ""
 
     # 사용자 목록 조회용(읽기 전용).
-    database_url: str = "postgresql://portal:portal@postgres:5432/workspace"
+    database_url: str = "postgresql://workspace@postgres:5432/workspace"
 
     # 익명 SEARCH 허용 여부. 대부분의 장비는 서비스 계정으로 bind 한 뒤 검색하므로
     # 기본은 금지다. 켜면 사용자 목록이 인증 없이 노출된다.

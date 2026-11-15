@@ -12,11 +12,21 @@ import logging
 from fastapi import Cookie, Depends, FastAPI, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import secret_guard
 from app.config import settings
-from app.identity import SESSION_COOKIE, Session, list_users, resolve_session
 
 logging.basicConfig(level=settings.log_level)
 logger = logging.getLogger(__name__)
+
+# 약한·기본 비밀값으로는 뜨지 않는다. SECRET_KEY 는 세션 쿠키 서명 검증에 쓰여, 값이 알려지면 누구든 로그인한 사용자로 꾸밀 수 있다.
+if not secret_guard.enforce([
+    ("SECRET_KEY", settings.secret_key, secret_guard.KEY_MIN, True),
+    ("DB_PASSWORD", secret_guard.db_password(settings.database_url) or "", secret_guard.PASSWORD_MIN,
+     secret_guard.db_password(settings.database_url) is not None),
+]):
+    raise SystemExit(1)
+
+from app.identity import SESSION_COOKIE, Session, list_users, resolve_session  # noqa: E402
 
 app = FastAPI(title="just-workspace SSO", docs_url=None, redoc_url=None)
 

@@ -172,11 +172,17 @@ registerAdapter(
 
 
 def main() -> int:
-    if not settings.internal_api_key:
-        logger.error(
-            "INTERNAL_API_KEY 가 없다 — backend 의 내부 API 가 닫혀 있어 bind 가 "
-            "전부 실패한다. .env 에 설정할 것."
-        )
+    # 약한·기본 비밀값으로는 뜨지 않는다. INTERNAL_API_KEY 가 없으면 backend 의 내부 API 가 닫혀 있어
+    # bind 가 전부 실패하고, 서비스 계정 비밀번호가 비어 있으면 그 계정으로 누구나 디렉터리를 읽는다.
+    from app import secret_guard
+
+    db_pw = secret_guard.db_password(settings.database_url)
+    if not secret_guard.enforce([
+        ("INTERNAL_API_KEY", settings.internal_api_key, secret_guard.KEY_MIN, True),
+        ("LDAP_SERVICE_PASSWORD", settings.ldap_service_password, secret_guard.PASSWORD_MIN,
+         bool(settings.ldap_service_user)),
+        ("DB_PASSWORD", db_pw or "", secret_guard.PASSWORD_MIN, db_pw is not None),
+    ]):
         return 1
 
     twisted_log.PythonLoggingObserver(loggerName="ws-ldap.twisted").start()

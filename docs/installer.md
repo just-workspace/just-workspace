@@ -29,6 +29,7 @@ docker logs jw-installer
 - `-v <호스트 폴더>:/data` 와 `-e JW_HOST_DIR=<같은 호스트 폴더>` 는 **반드시 같은 경로**여야 한다(§3).
 - 이미지 저장소는 `-e JW_REGISTRY=<저장소/네임스페이스>`, 이미지 태그는 `-e JW_IMAGE_TAG=<태그>` 로 바꾼다. 기본은 `ghcr.io/just-workspace` 와 제품 버전(`VERSION`). `JW_REGISTRY=localhost` 를 주면 서버에 이미 있는(소스에서 빌드한) 이미지를 쓴다.
 - `-e JW_PUBLIC_HOST=<서버 주소>` 를 주면 로그의 주소와 인증서 이름에 그 값을 쓴다.
+- 업데이트를 확인할 채널 주소는 `-e JW_UPDATE_CHANNEL_URL=<주소>` 로 바꾼다(기본은 공식 채널). 서명을 확인할 공개 키와 함께 16절.
 
 이미지 빌드(리포 루트에서 — 문맥은 리포 루트, 무엇이 들어가는지는 `installer/Dockerfile.dockerignore`).
 첫 단계(Node)가 마법사 화면을 빌드하고(`npm ci` + `npm run build:installer`), 그 결과(`installer.html`·`assets/`·`icon.svg`)가 `/app/ui` 에 실린다:
@@ -64,8 +65,10 @@ installer/
     zones/         구역 훅(__init__.py = 기본 동작, git.py = Gitea)
     zonectl.py     설치 뒤 구역 켜기·끄기·설정
     api.py         마법사 API(8443) · 내부 API(8444)
+    api_update.py  업데이트 내부 API(/internal/update/*)
     cli.py         jw 명령
     server.py      서버 진입점
+    update_*.py    업데이트 — 채널 확인, 적용·되돌림, 오프라인 묶음, 자기 교체(§16)
   tests/           docker 없이 도는 테스트
   e2e/             실서버 검수 — 시나리오 러너와 답변 파일 견본(§13)
 ```
@@ -78,6 +81,7 @@ installer/
 | `security_defaults.py` | `backend/app/security_defaults.py` | 비밀값 이름·길이·금지 문자, 대체 생성기 |
 | `VERSION` | `VERSION` | 제품 버전(= 받을 이미지 태그) |
 | `docker-compose.yml`, `nginx/*`, `init/*`, `scripts/certbot-entrypoint.sh`, `mailserver/config/*` | 같은 경로 | compose 와 compose 가 bind mount 하는 파일 |
+| `frontend-react/public/maintenance.html` | 같은 경로 | 정적 점검 페이지 — nginx 가 직접 붙여 읽는다(업데이트 중에는 프런트 컨테이너도 바뀌는 중일 수 있다) |
 
 개발·테스트에서는 번들 폴더 없이 리포에서 바로 읽는다.
 
@@ -244,6 +248,7 @@ docker compose -p just-workspace
 | `GET /internal/probe/public-ip[?refresh=true]` | 공인 주소(기억해 둔 값, `refresh` 면 다시 감지) |
 | `GET /internal/jobs` | 구역 작업 목록 — 진행 중인 것과 최근 것(새것부터, 20개) |
 | `GET /internal/storage` | 파일 저장소: `{"kind": local\|nfs, "location", "volume", "install_id"}` |
+| `/internal/update/*` | 업데이트 — 상태·설정·적용·작업·복원 지점·오프라인·기록. 경로와 응답은 [update-api.md](update-api.md). `GET /internal/update/maintenance`(공개 점검 상태)만 키 없이 열린다 |
 | `GET /internal/cert` | 지금 쓰는 인증서 — §15 |
 | `POST /internal/cert/reissue` | 인증서 다시 발급 / 올린 인증서로 교체(202 + 작업) — §15 |
 | `POST /internal/zones/<id>/reconnect` | 보류된 구역 연결을 다시 시도(202 + 작업) — §15 |
@@ -311,7 +316,7 @@ docker compose -p just-workspace
 
 | 파일 | 내용 |
 |---|---|
-| `docker-compose.yml`, `nginx/nginx.conf`, `nginx/security-headers.conf`, `init/init-db.sh`, `scripts/certbot-entrypoint.sh`, `mailserver/config/{user-patches.sh,auth-workspace.lua,dovecot.cf}` | 번들에서 **그대로** |
+| `docker-compose.yml`, `nginx/nginx.conf`, `nginx/security-headers.conf`, `init/init-db.sh`, `scripts/certbot-entrypoint.sh`, `mailserver/config/{user-patches.sh,auth-workspace.lua,dovecot.cf}`, `frontend-react/public/maintenance.html` | 번들에서 **그대로** |
 | `.env` (600) | 아래 표 |
 | `docker-compose.site.yml` | 사이트별 조각 — TLS 를 직접 끝낼 때 nginx 의 `443:443` |
 | `nginx/site.d/{http,listen-main,listen-rbi,headers}.conf` | 아래 "nginx" |
@@ -493,7 +498,7 @@ docker 없이 돈다. docker·DNS·HTTP·SMTP 는 가짜로 바꾼다(`tests/fak
 - **인증서 방식 바꾸기**는 임시 → 자동·올리기, 자동 → 올리기만 된다(§15). 앞단 프록시가 맡는 설치의 메일·회의용 인증서는 여전히 자체 서명이다.
 - **복원에서 파일 저장소의 두 번 읽기**: 데이터 되돌리기(backend CLI)는 백업 묶음을 작업 폴더(백업 볼륨)에 통째로 푼 뒤 올린다 — 백업 크기만큼의 여유 공간이 도커 데이터 폴더에 더 필요하다. 올린 백업은 설치 폴더에 한 벌 더 놓인다(끝나면 지운다). 큰 백업은 서버에 먼저 옮겨 두고 경로를 알려 주는 편이 낫다.
 - **복원에서 다시 정하지 않는 것**: 지정 폴더 저장소(화면은 도커 볼륨·NFS 만 묻는다 — 답변 파일로는 `storage.path` 를 줄 수 있다), 인증서 올리기(화면에서는 자동·임시만 — 복원 뒤 관리 화면에서 올린다).
-- **업데이트**(이미지 교체·채널 검증)는 다음 단계다.
+- **업데이트**: 플러그인 호환 판정과 호환이 확인되지 않은 플러그인을 끄는 동작은 아직 없다(manifest 의 `plugin_api` 가 자리뿐이다). 예고 시간(5분)은 고정이고, 올리다 끊긴 묶음 파일을 이어 올리지 못한다 — 16절.
 
 ### 주의(`cautions`)의 키
 
@@ -528,6 +533,8 @@ installer/e2e/remote.sh <ssh 대상> run s1-minimal api   # 시나리오 하나
 # 화면을 눌러서(Playwright — 이 PC 에서):
 node installer/e2e/wizard-ui.cjs --url https://<서버 주소>:8443 --token <설치 토큰> [--flow quick] [--width 390]
 node installer/e2e/admin-zones-ui.cjs --url https://<접속 주소> --addr <서버 주소> --password-file <파일>
+installer/e2e/remote.sh <ssh 대상> run u-update setup u9 u1 u7 u2 u3     # 업데이트(가짜 릴리스 환경 — 16절). 단계를 이어서: r103 u5 u4 u6 u8
+node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서버 주소> --password-file <파일>
 ```
 
 요건: 리눅스 x86_64, Docker Engine 24+, compose 플러그인 2.20+, 4코어·메모리 12GB·디스크 40GB 이상, 인터넷으로 나갈 수 있을 것(밖에서 들어오는 길은 없어도 된다). 접속 주소는 DNS 에 없는 이름을 쓰고 서버 주소로 직접 붙는다.
@@ -544,6 +551,24 @@ node installer/e2e/admin-zones-ui.cjs --url https://<접속 주소> --addr <서�
 | `s8-manual` | 설치 관리자 없이 [deployment.md](deployment.md) 의 절차대로 최소 구성 기동 |
 | `wizard-ui.cjs` | 화면을 눌러 일반 설치(협업 묶음·임시 인증서)와 빠른 설치를 완료 화면까지 — 1280 폭과 390 폭. 토큰 없는 주소·틀린 토큰, 사전 점검 14항목, 구역·메모리 합계, 메일 레코드 표, 이어 하기, 요약, 적용, 잠김 화면. 콘솔 오류 없음 |
 | `jw reinstall` | 설치된 서버에서 목록 확인 → `--yes` 로 지우고 새 토큰으로 다시 시작 |
+
+업데이트(`scenarios/u-update.sh` — 서버 안의 가짜 릴리스 환경에서, 릴리스 도구로 낸 릴리스로):
+
+| 단계 | 실제 서버에서 확인한 것 |
+|---|---|
+| `setup` | 릴리스 도구로 1.0.0 과 1.0.1-beta.1 을 내고(이미지 올리기 → `make-manifest --resolve-sizes --db-schema` → `publish` → `verify`) Beta 를 Stable 로 승격. 공개 키가 없으면 `unconfigured`, 키를 넣으면 확인이 되고, Beta 릴리스는 stable 채널에 보이지 않다가 승격 뒤에 보인다 |
+| `u9` | 변조한 채널 파일·다른 키로 서명한 채널·만료된 채널·순번이 뒤로 간 채널·변조한 manifest·닿지 않는 채널을 각각 거부하고, 마지막으로 성공한 결과는 그대로 둔다 |
+| `u1` | 수동 업데이트 1.0.0 → 1.0.1(승격한 릴리스): 예고(backend 의 예고 조회·공개 점검 상태에 반영)와 취소, "지금 바로 시작", 점검 모드(일반 API 503 + `Retry-After`, 진행 조회·로그인은 통과), 여섯 단계, 설치 관리자 자기 교체(새 이미지·같은 이름·8443 응답·옛 컨테이너 없음), `/api/health` 의 버전·스키마, 검수용 변경 단계 적용, 넣어 둔 데이터(계정·파일·대화·메일) 보존, 기록·기록 내려받기·복원 지점. 프런트가 없을 때의 정적 점검 페이지, `/maintenance/status` 는 GET 만, 내부 API 는 밖에서 닿지 않음 |
+| `u7` | 복원 지점으로 수동 복원(1.0.1 → 1.0.0): 다섯 단계, DB 복원(검수용 표가 사라짐), 설치 관리자도 이전 이미지·이전 환경으로, 데이터 보존, 다시 받을 수 있음 |
+| `u2` | 레지스트리에서 이미지를 지워 `pull` 실패 → `failed` + `retry`·`rollback` → 되돌리기(바뀐 것이 없어 세 단계 건너뜀) / 이미지를 되살린 뒤 다시 시도 → 완료 |
+| `u3` | 둘째 변경 단계가 깨지는 릴리스: `migrate` 실패 → 선택 없이 되돌림 → 이전 버전, DB 스키마 버전 원복(앞서 적용된 단계의 흔적도 없음), 데이터 보존 |
+| `admin-update-ui.cjs` | 화면으로 한 번(1.0.1 → 1.0.3): 현황의 새 버전 → 내용 보기 → 업데이트 시작 → 일반 사용자 창의 예고 띠 → "지금 바로 시작" → 진행 화면의 단계와 "다시 연결 중" → 일반 사용자 창의 점검 화면과 복귀 → 완료 → 기록. 콘솔 오류 없음 |
+| `u5` | 중간 버전 1.0.0 → 1.0.1 → 1.0.3 을 한 작업으로: 버전마다 백업·자기 교체·기록 |
+| `u4` | 자동: 공개 3일 전에는 시간대 안이어도 시작하지 않음, 3일 뒤에도 시간대 밖이면 시작하지 않음, 둘 다 맞으면 5분 예고로 시작, `pull` 실패도 선택 없이 되돌린 뒤 멈춤(관리자 알림), 멈춘 동안 다시 시도하지 않음, 다시 켜면 다음 확인에서 적용 |
+| `u6` | Beta 채널로 올림(시험판 이전 백업을 따로 보관) → Stable 로: 기다리기(`wait`, 적용 거부) / "시험판 이전 상태로 복원"(그 사이에 쓴 대화는 사라지고 채널은 stable) |
+| `u8` | 레지스트리·채널을 끈 채로: 낮은 버전·다른 키·없는 파일·한 바이트 바꾼 묶음을 각각 거부, 묶음 올리기(nginx → backend → 설치 관리자), 추가 이미지 판정(없음·불일치·있음·필요 없음), 묶음과 이미지 파일만으로 적용 |
+
+업데이트에서 확인하지 못한 것: 실제 배포 채널·실제 서명 키, 인터넷 너머의 레지스트리에서 받는 시간(검수 서버에서는 이미지 계층이 대부분 이미 있었다), 여러 GB 묶음을 앞단 프록시를 거쳐 올리기, 플러그인 호환 판정, 설치 관리자를 `docker run` 의 다른 옵션(자원 제한 등)과 함께 띄운 경우의 자기 교체.
 
 확인하지 못한 것: 실제 Let's Encrypt 발급과 갱신, 신뢰되는 인증서에서의 Gitea 로그인 연동, 격리 브라우저 애드온(`rbi`), 무손실 오디오, 외부 SMTP·AI 제공자 연결, 지정 폴더 저장소, 공유기 뒤·실제 앞단 프록시, x86_64 가 아닌 서버, SELinux 가 켜진 배포판.
 
@@ -663,3 +688,87 @@ docker exec jw-installer jw apply --answers /data/restore.json
 작업(`kind: "cert"`, `zone: null`)의 단계는 `issue`(답변·설정을 바꾸고 발급·배치) → `reload`(nginx 재시작, 회의 서버 재시작, 자동 발급이면 갱신 컨테이너 시작, backend 다시 만들기) → `reconnect`(보류된 구역의 `connect` 훅 — 코드 저장소의 로그인 연동). `issue` 가 실패하면 답변·설정을 되돌리고 **쓰던 인증서를 다시 놓는다**(자동 발급을 시도하며 임시 인증서의 링크를 뗐을 수 있다). 거부: `409 cert_managed_by_proxy`(앞단 프록시가 맡는 설치), `422 cert_auto_needs_domain`, `409 busy`.
 
 구역 연결이 보류되는 경우는 지금 하나다: 코드 저장소의 로그인 원본 등록(Gitea 가 접속 주소의 인증서를 믿지 못할 때). `GET /internal/zones` 의 그 구역 행에 `pending: true` 가 붙고, 관리 › 구역에 "연결 보류"와 "다시 연결"이 보인다.
+
+## 16. 업데이트
+
+설치 뒤의 업데이트도 설치 관리자가 한다. 화면은 관리 › 업데이트이고, backend 가 내부 API(`/internal/update/*`)를 대신 부른다 — 응답의 모양과 오류 코드는 [update-api.md](update-api.md), 사용자 쪽 설명은 [update-system.md](update-system.md), 채널·릴리스의 형식은 [releases.md](releases.md).
+
+| 파일 | 하는 일 |
+|---|---|
+| `app/update_release.py` | 채널을 받아 검증하고 계획을 세운다. 검증은 릴리스 도구의 모듈(`release/jwrelease` 의 `semver`·`model`·`verify`·`bundle`)을 그대로 쓴다 — 이미지 빌드가 `/app/jwrelease` 로 복사한다 |
+| `app/update_engine.py` | 작업(적용·되돌림·복원), 예고와 점검, 자동 업데이트, 복원 지점, 기록 |
+| `app/update_offline.py` | 오프라인 묶음과 추가 이미지 |
+| `app/update_restack.py` | 스택 파일을 이 이미지의 번들로 다시 쓴다(새 버전 이미지의 일회용 컨테이너에서 돈다) |
+| `app/update_swap.py` | 설치 관리자 자기 교체(보조 컨테이너에서 돈다) |
+| `app/api_update.py` | 내부 API 경로 |
+
+### 채널과 공개 키
+
+| 설정 | 어디서 | 기본 |
+|---|---|---|
+| 채널 주소 | 환경변수 `JW_UPDATE_CHANNEL_URL`(이미지 빌드 인자 같은 이름으로 기본값을 굽는다) | 릴리스 도구의 `channel_base_url`(`release/jwrelease/config.py`) |
+| 공개 키 | `<설치 폴더>/state/update/keys/*.pub` — 있으면 이것만 쓴다. 없으면 이미지의 `/app/keys/*.pub`(빌드할 때 `installer/keys/` 에 넣은 것) | 리포에는 키가 없다 |
+| 오프라인 묶음을 받는 주소 | `JW_UPDATE_OFFLINE_URL`(`{version}`·`{filename}`) | 릴리스 도구의 `download_url_template` |
+
+- 공개 키는 **둘까지**(현재·다음, 파일 이름순) 받고 어느 하나로 검증되면 통과시킨다 — 키 교체 절차는 releases.md 의 "키 관리".
+- 키가 하나도 없으면 확인은 `unconfigured` 로 끝난다(채널을 받으러 가지 않는다).
+- 확인은 여섯 시간마다 + 0~30분의 흔들림. 채널 서버에는 정적 파일을 GET 할 뿐이고 식별자·버전·통계를 보내지 않는다. 받아들인 채널의 순번(`sequence`)을 기억해, 그보다 낮은 파일은 거부한다.
+- 검증을 통과한 manifest 는 `state/update/manifests/` 에 서명과 함께 두고, **쓸 때마다 서명을 다시 확인한다.**
+
+### 적용 단계와 번들
+
+| 단계 | 하는 일 |
+|---|---|
+| `preflight` | manifest 서명 재확인, 다른 작업 유무, backend 가 떠 있는가, 여유 공간(받을 용량의 2배 + 1GB), 스키마 버전이 내려가지 않는가(`migrate --status` 와 manifest 의 `db_schema`), 플러그인 호환 |
+| `backup` | backend 컨테이너에서 `backup create --kind pre-update --json` → 지금의 스택 파일을 `state/update/snapshots/<복원 지점>/stack/` 에 복사 → 복원 지점으로 등록 |
+| `pull` | **설치 관리자 이미지부터** 다이제스트로 받아 번들을 `state/update/bundles/<버전>/` 에 꺼낸다 → 그 compose 로 켜지는 서비스를 알아내, 우리 이미지와 켜진 구역의 남의 이미지를 다이제스트로 받는다. 우리 이미지에는 `<JW_REGISTRY>/just-workspace-<이름>:<버전>` 태그를 붙인다(compose 가 그 이름으로 가리킨다) |
+| `migrate` | `.env` 위에 `JW_VERSION=<새 버전>` 만 덮어 새 backend 이미지의 일회용 컨테이너로 `python -m app.cli migrate` |
+| `switch` | 새 설치 관리자 이미지의 일회용 컨테이너가 스택 파일을 다시 쓴다 → 구역의 컨테이너 → 프런트 → nginx(다시 만든다) → **backend(맨 마지막)** → 설치 관리자 자신 |
+| `verify` | 컨테이너가 전부 준비됐는가, backend 가 그 버전의 이미지인가, `/api/health`, DB 스키마 버전 = 코드가 요구하는 버전 = manifest 의 값, 설치 관리자의 버전 |
+
+**번들.** 새 버전의 compose·nginx 템플릿·구역 선언은 새 설치 관리자 이미지 안에 있고, 답변을 `.env`·설정 파일로 바꾸는 코드도 그 이미지의 것이다. 그래서 스택 파일은 옛 설치 관리자가 쓰지 않고 새 이미지가 쓴다(`docker run --rm … <새 이미지> python -m app.update_restack`). 답변·비밀값·감지값은 상태 폴더의 것을 그대로 쓴다.
+
+**자기 교체.** 컨테이너는 자신을 바꿀 수 없다. `switch` 의 끝에서:
+
+1. 작업 상태를 디스크에 쓴다(`ctx.handoff = {to, image, step, state: "pending"}`).
+2. 자기 이미지로 보조 컨테이너를 띄운다(docker 소켓과 설치 폴더를 붙여서). 보조 컨테이너는 옛 컨테이너의 구성을 읽고, 멈추고, 이름을 `<이름>-prev` 로 바꾼 뒤, 같은 이름·재시작 정책·게시 포트·볼륨·사용자가 준 환경변수·네트워크(별칭 포함)로 새 이미지의 컨테이너를 만들어 시작한다.
+3. 새 설치 관리자는 기동할 때 진행 중인 작업을 읽는다. 자신의 버전이 `handoff.to` 와 같으면 그 단계를 끝난 것으로 치고 `verify` 로 넘어간다.
+4. 새 컨테이너가 정상이 아니거나 버전이 다르면 보조 컨테이너가 그것을 지우고 옛 컨테이너를 되살린다. 되살아난 옛 설치 관리자는 자신의 버전이 `handoff.to` 와 다른 것을 보고 그 단계를 `installer_replace_failed` 로 실패 처리한다(→ 자동 되돌림). 보조 컨테이너를 띄우지 못했거나 5분 안에 아무 일도 일어나지 않아도 같다.
+
+- 옮기는 구성은 위 목록이 전부다. 그 밖의 옵션(자원 제한, 레이블 등)을 직접 붙여 띄운 설치 관리자는 교체 뒤 다시 붙여야 한다.
+- 환경변수는 "옛 이미지가 정한 값"을 빼고 옮긴다(새 이미지의 기본값이 살아야 한다). `JW_IMAGE_TAG` 는 옮기지 않는다 — 업데이트 뒤에는 이미지 태그가 곧 제품 버전이다.
+- 새 컨테이너에는 `JW_INSTALLER_VERSION=<제품 버전>` 을 넣는다. 승격(Beta → Stable)은 이미지를 다시 빌드하지 않아서 이미지 안의 `VERSION` 은 Beta 의 글자다 — 설치 관리자는 이 환경변수가 있으면 그것을 자신의 버전으로 안다.
+- 되돌림·복원이 설치 관리자의 버전을 바꿔야 할 때도 같은 방법을 쓴다(`start` 단계의 끝, 이미지는 복원 지점에 적어 둔 것). 이때의 환경변수는 지금 컨테이너에서 추리지 않고 **복원 지점에 적어 둔 것**(그 버전이 돌 때 사용자가 준 값)을 그대로 쓴다 — 새 이미지의 기본값과 같아서 올라올 때 빠진 값(예: 채널 주소)이 옛 이미지로 돌아가면서 사라지지 않게.
+- backend 이미지의 일회용 컨테이너(`migrate`, 복원)는 내부망의 고정 주소 없이 띄운다 — 돌고 있는 backend 가 그 주소를 쥐고 있다(`compose run` 에 조각을 하나 덧붙인다).
+
+### 실패와 되돌림
+
+- `migrate` 전(`preflight`·`backup`·`pull`)의 실패: 작업이 `failed` 로 멈추고 `choices = ["retry", "rollback"]`. 이때의 되돌림은 바꾼 것이 없으므로 `stop`·`images`·`restore_db` 를 건너뛴다(`detail.skipped`).
+- `migrate` 부터의 실패, 그리고 자동 업데이트의 모든 실패: 되돌림 작업을 바로 만든다.
+- 되돌림·복원의 단계: `stop`(DB·캐시·nginx 를 뺀 컨테이너를 멈춘다) → `images`(스택 파일을 복원 지점의 것으로 되돌린다) → `restore_db`(그 버전 backend 이미지의 일회용 컨테이너에서 `restore <백업> --items db --yes`. DB 변경을 시작하지 않았으면 건너뛴다. 백업의 스키마 버전이 복원 지점의 기록과 다르면 시작하지 않는다) → `start`(backend 를 맨 마지막에, 그 뒤 설치 관리자 교체) → `verify`.
+- 되돌림이 실패하면 그 작업이 `failed` + `choices = ["retry"]` 로 남고 점검은 풀리지 않는다. `error.vars.backup_location` 이 백업의 위치다.
+- 중간 버전을 거치다 실패하면 **그 버전의 직전**으로 되돌린다. 이미 끝낸 앞 버전은 그대로다.
+
+### 점검 모드
+
+점검이 시작되면(예고가 끝난 때, `backup` 전) 설치 관리자가 `stack/nginx/state/maintenance.on` 을 놓는다. nginx 는 이 파일이 있으면 관리자의 진행 화면이 쓰는 경로(`/api/auth/`, `/api/admin/system/update/`, `/api/system/update-notice`, `/api/health`)만 지나가게 하고 그 밖의 API·소켓·구역 프록시를 `503 {"code": "maintenance"}`(+ `Retry-After`)로 막는다. 파일은 요청마다 보므로 nginx 를 다시 읽힐 필요가 없다. 작업이 끝나면(성공이든 되돌림이든) 지운다. 관리자의 선택을 기다리는 동안과 되돌림이 실패해 멈춘 동안에는 남는다.
+
+### 복원 지점의 보관
+
+- `pre-update`(업데이트 직전 백업): **최근 3개**. 업데이트가 성공으로 끝날 때 넘치는 것을 지운다 — 백업 폴더, 스택 사본, 그리고 어느 복원 지점도 가리키지 않게 된 옛 버전의 우리 이미지 태그.
+- `pre-beta`(Stable 에서 Beta 로 처음 올리기 직전): 위 3개와 따로 **하나**를 기한 없이 둔다. Stable 채널로 돌아와 지금 버전이 Stable 이 되거나, "시험판 이전 상태로 복원"을 마치면 지운다.
+- 복원 지점은 백업의 위치·크기·스키마 버전, 그때의 버전, 스택 사본, 그때 돌던 설치 관리자의 이미지와 환경변수를 기억한다. 그 버전의 이미지가 서버에 남아 있어야 복원할 수 있다(위 규칙이 지키는 것).
+
+### 오프라인
+
+1. 묶음을 올리거나(`POST …/offline/bundle`, 본문을 디스크로 흘려 받는다 — `state/update/offline/bundle.tar`) 서버의 경로를 지정한다(설치 폴더 아래만. `<설치 폴더>/…` 로 적어도 `/data/…` 로 적어도 된다. 복사하지 않고 그 자리에서 읽는다).
+2. 검증: 묶음 서명 → manifest → 파일별 해시(`jwrelease.bundle.verify_bundle`) → 버전(현재보다 높고 한 번에 갈 수 있어야 한다).
+3. 추가로 필요한 이미지: manifest 의 남의 이미지 중 묶음에 없는 것. 지금 프로파일에서 켜지지 않는 것은 `not_needed`. 서버에 그 다이제스트(또는 `저장소:jw-<다이제스트 앞 12자>` 이름)가 있으면 `present`.
+4. 이미지 파일을 올리면 `docker load` 한 뒤 위 이름이 생겼는지 본다. 안 생겼으면 `hash_mismatch`.
+5. 적용: `pull` 단계가 받는 대신 묶음에서 이미지를 꺼내 `docker load` 한다. 다이제스트로 찾을 수 없는(이름으로만 들어온) 남의 이미지는 `stack/docker-compose.pins.yml` 로 그 이름을 가리킨다.
+
+올리는 파일의 상한은 64GB(`JW_UPDATE_UPLOAD_MAX`, 바이트). 이어 올리기는 없다 — 큰 파일은 경로 방식이 낫다.
+
+### 실서버 검수
+
+`installer/e2e/scenarios/u-update.sh <단계…>` — 서버 안에 가짜 릴리스 환경(루프백의 `registry:2`, 정적 채널 서버, 그 자리에서 만든 임시 키)을 만들고 릴리스 도구로 진짜 형식의 릴리스를 내서 돌린다(`update-lib.sh`). 무엇을 확인했는지는 13절의 표.

@@ -3,7 +3,7 @@
 제품은 Docker 이미지 묶음으로 배포된다. 설치된 서버의 설치 관리자는 **채널 파일**을 주기적으로 받아 새 버전을 알아낸다.
 이 문서는 채널·릴리스 목록의 형식, 서명 규칙, 릴리스를 내는 절차, 그 도구(`release/`)를 다룬다.
 
-설치 관리자가 채널을 받아 적용하는 쪽은 이 문서의 범위가 아니다. 그쪽이 쓸 검증 함수는 [맨 아래](#설치-관리자가-가져다-쓰는-함수)에 있다.
+설치 관리자가 채널을 받아 적용하는 쪽은 [installer.md](installer.md) 16절과 [update-api.md](update-api.md)다. 그쪽이 쓰는 검증 함수는 [맨 아래](#설치-관리자가-가져다-쓰는-함수)에 있다.
 
 ## 한눈에
 
@@ -63,7 +63,7 @@ releases/<버전>/manifest.json   releases/<버전>/manifest.json.sig
 | `third_party` | 남의 이미지: 구역 id → (이름 → 원 배포처의 `저장소@sha256:…`). compose 에서 뽑는다 |
 | `zones.content` | 구역 선언(`backend/app/zones.json`) 사본 |
 | `zones.sha256` | `zones.content` 를 [결정적 직렬화](#서명-대상-바이트)한 바이트의 SHA-256 |
-| `installer_bundle` | 설치 관리자 번들(compose·템플릿 묶음)의 주소·크기·SHA-256 — **자리**. 지금은 `null` |
+| `installer_bundle` | 설치 관리자 번들(compose·템플릿 묶음)의 주소·크기·SHA-256 — **자리**. 지금은 `null` 이다: 번들은 설치 관리자 **이미지**(`images.installer`) 안에 있고, 업데이트는 그 이미지에서 꺼내 쓴다 |
 | `apps[]` | 앱 설치 파일: `kind`(`windows-desktop`, `android`), `filename`, `size`, `sha256`, `url` |
 | `offline_bundle` | 오프라인 묶음의 주소·크기·SHA-256. 없으면 `null` |
 | `changelog` | 변경 내용(마크다운) |
@@ -182,6 +182,7 @@ Stable 을 Beta 없이 바로 내려면 6번에서 `--channel stable` 을 쓴다
 |---|---|---|
 | backend | 환경변수 `JW_APP_VERSION` → 없으면 이미지의 `/app/VERSION`(빌드 인자) → 개발 표기 | 실행 환경이 `JW_APP_VERSION` 을 넣으면 맞다. 안 넣으면 Beta 문자열이 보인다 |
 | audiorelay | 환경변수 `JW_APP_VERSION` → 없으면 바이너리에 구운 값(빌드 인자 `VERSION`) | backend 와 같다 |
+| 설치 관리자 | 환경변수 `JW_INSTALLER_VERSION` → 없으면 이미지의 번들에 든 `VERSION` | 업데이트로 바뀐 설치 관리자는 맞다(업데이트가 그 값을 넣어 띄운다). 승격한 이미지를 **처음 설치할 때** `docker run` 에 `-e JW_INSTALLER_VERSION=<버전>` 을 주지 않으면 Beta 문자열을 자신의 버전으로 안다 |
 | 그 밖의 이미지 | 제품 버전을 표시하지 않는다 | 영향 없음 |
 
 ## 만료 갱신
@@ -317,7 +318,7 @@ docker·네트워크 없이 돈다. compose 의 이미지 구성이 바뀌면 `t
 
 ## 설치 관리자가 가져다 쓰는 함수
 
-`release/jwrelease/` 의 `semver.py`, `model.py`, `verify.py` 세 파일. 의존성은 `cryptography` 하나이고, 파일·네트워크·시계를 건드리지 않는다(바이트와 "지금 시각"을 인자로 받는다).
+`release/jwrelease/` 의 `semver.py`, `model.py`, `verify.py` 세 파일(+ 오프라인 묶음의 `bundle.py`, 그것이 끌어오는 `sign.py`, 기본 주소의 `config.py`). 설치 관리자 이미지의 빌드가 이 파일들을 `/app/jwrelease` 로 **복사**한다 — 같은 코드를 두 벌 두지 않는다. 의존성은 `cryptography` 하나이고, 파일·네트워크·시계를 건드리지 않는다(바이트와 "지금 시각"을 인자로 받는다).
 
 | 함수 | 하는 일 |
 |---|---|

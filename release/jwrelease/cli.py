@@ -2,7 +2,7 @@
 
 명령: images, make-manifest, sign, publish, promote, verify, refresh, bundle(plan·index·pack·verify)
 어느 명령도 git 커밋·푸시를 하지 않는다. 레지스트리를 건드리는 것은 `promote --run` 과
-`bundle plan --run`, `make-manifest --resolve-digests`(조회만)뿐이다.
+`bundle plan --run`, `make-manifest --resolve-digests`·`--resolve-sizes`(조회만)뿐이다.
 """
 
 from __future__ import annotations
@@ -151,6 +151,11 @@ def cmd_make_manifest(args) -> int:
         p = Path(path)
         return builder.file_ref(p, settings.download_url(version, p.name))
 
+    if args.download_bytes is not None and args.resolve_sizes:
+        raise CliError("--download-bytes 와 --resolve-sizes 는 함께 쓸 수 없다")
+    if args.download_bytes is not None and args.download_bytes < 0:
+        raise CliError("--download-bytes 는 0 이상이어야 한다")
+
     manifest = builder.make_manifest(
         version=version,
         digests=digests,
@@ -165,12 +170,25 @@ def cmd_make_manifest(args) -> int:
         installer_bundle=attached(args.installer_bundle),
         pins=pins,
         resolver=resolver,
+        db_schema=args.db_schema,
+        download_bytes=args.download_bytes,
     )
+    if args.resolve_sizes:
+        # 크기는 있으면 좋은 값이다 — 조회하지 못하면 경고만 하고 항목을 싣지 않는다(받는 쪽은 그 줄을 숨긴다)
+        from dataclasses import replace
+
+        from .registry import image_size
+
+        try:
+            manifest = replace(manifest, download_bytes=builder.total_image_size(manifest, image_size))
+        except compose.ComposeError as e:
+            print(f"경고: 받을 용량을 조회하지 못해 download_bytes 를 싣지 않는다 — {e}", file=sys.stderr)
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(manifest.to_bytes())
     print(f"{out}: 버전 {manifest.version}, 우리 이미지 {len(manifest.images)}개, "
-          f"남의 이미지 {sum(len(m) for m in manifest.third_party.values())}개, 앱 파일 {len(manifest.apps)}개")
+          f"남의 이미지 {sum(len(m) for m in manifest.third_party.values())}개, 앱 파일 {len(manifest.apps)}개"
+          + (f", 받을 용량 {manifest.download_bytes}바이트" if manifest.download_bytes is not None else ""))
     return 0
 
 
@@ -394,6 +412,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--installer-bundle", help="설치 관리자 번들 파일(크기·해시를 적는다)")
     sp.add_argument("--pins", help='태그만 있는 남의 이미지의 다이제스트 표(JSON: {"저장소:태그": "sha256:…"})')
     sp.add_argument("--resolve-digests", action="store_true", help="태그만 있는 남의 이미지를 레지스트리에서 조회해 채운다")
+    sp.add_argument("--db-schema", type=int, help="이 릴리스의 DB 스키마 버전(backend 의 `python -m app.cli schema-version` 출력)")
+    sp.add_argument("--download-bytes", type=int, help="받을 이미지의 압축 크기 합(바이트)을 직접 준다")
+    sp.add_argument("--resolve-sizes", action="store_true",
+                    help="받을 이미지의 압축 크기 합을 레지스트리에서 조회해 채운다(못 하면 경고만 하고 싣지 않는다)")
     sp.add_argument("-o", "--output", required=True)
     common_time(sp)
     sp.set_defaults(func=cmd_make_manifest)

@@ -390,7 +390,7 @@ class AppFile:
 
 _MANIFEST_KEYS = {
     "format", "version", "published", "min_upgrade_from", "promoted_from", "db_schema", "images", "third_party",
-    "zones", "installer_bundle", "apps", "offline_bundle", "changelog", "plugin_api",
+    "zones", "installer_bundle", "apps", "offline_bundle", "changelog", "plugin_api", "download_bytes",
 }
 
 
@@ -410,10 +410,11 @@ class Manifest:
     offline_bundle: FileRef | None = None
     changelog: str = ""
     plugin_api: dict[str, Any] | None = None      # 자리 — 플러그인 호환 범위
+    download_bytes: int | None = None             # 선택 — 이미지 압축 크기의 합. 모르면 키 자체를 싣지 않는다
     format: int = FORMAT
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out = {
             "format": self.format,
             "version": self.version,
             "published": self.published,
@@ -429,6 +430,9 @@ class Manifest:
             "changelog": self.changelog,
             "plugin_api": self.plugin_api,
         }
+        if self.download_bytes is not None:
+            out["download_bytes"] = self.download_bytes
+        return out
 
     def to_bytes(self) -> bytes:
         return canonical_bytes(self.to_dict())
@@ -477,6 +481,9 @@ class Manifest:
         plugin_api = d["plugin_api"]
         if plugin_api is not None and not isinstance(plugin_api, dict):
             raise FormatError("manifest.plugin_api: 객체 또는 null 이어야 한다")
+        download_bytes = None
+        if "download_bytes" in d:       # 선택 항목 — 있으면 정수여야 한다(null 은 받지 않는다: 모르면 키를 뺀다)
+            download_bytes = _size(d["download_bytes"], "manifest.download_bytes")
         ib = d["installer_bundle"]
         ob = d["offline_bundle"]
         return cls(
@@ -494,6 +501,7 @@ class Manifest:
             offline_bundle=FileRef.from_dict(ob, "manifest.offline_bundle") if ob is not None else None,
             changelog=changelog,
             plugin_api=plugin_api,
+            download_bytes=download_bytes,
             format=fmt,
         )
 

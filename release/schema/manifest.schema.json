@@ -95,6 +95,11 @@
     "plugin_api": {
       "description": "플러그인 호환 범위 — 자리. 정해지기 전에는 null",
       "type": ["object", "null"]
+    },
+    "download_bytes": {
+      "description": "선택 — 받을 이미지(우리 것 + 남의 것)의 압축 크기 합(바이트). 모르면 이 키를 싣지 않는다",
+      "type": "integer",
+      "minimum": 0
     }
   },
   "$defs": {

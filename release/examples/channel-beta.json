@@ -11,7 +11,7 @@
       "min_upgrade_from": null,
       "manifest": {
         "path": "releases/1.0.0-beta.1/manifest.json",
-        "sha256": "8140496b36fd1904cf990f88739dc75c0c48daaa3cf569cecde72557fe890ad5"
+        "sha256": "59021def6463bf2494c2d85f9bd524c956a109ed323ede1bf551250202446174"
       },
       "summary": "첫 공개 시험판"
     },
@@ -21,7 +21,7 @@
       "min_upgrade_from": null,
       "manifest": {
         "path": "releases/1.0.0/manifest.json",
-        "sha256": "cf2c72a7a50e5bef5a9eb438d74e615c9eac45286108f1cb20464d8b7d8b52b7"
+        "sha256": "86245a1153f833656dff45524ee553b8f6a2bb4f05667ea2102a0e26031d21fa"
       },
       "summary": "첫 정식판"
     }

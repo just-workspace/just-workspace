@@ -58,7 +58,7 @@ releases/<버전>/manifest.json   releases/<버전>/manifest.json.sig
 | `format` | 형식 버전. 지금은 `1` |
 | `version`, `published`, `min_upgrade_from` | 채널 파일의 그 줄과 같은 값(받는 쪽이 대조한다) |
 | `promoted_from` | Beta 에서 승격한 릴리스면 그 Beta 버전, 아니면 `null` |
-| `db_schema` | DB 스키마 버전 — **자리**. 값은 backend 가 정한다. 지금은 `null` |
+| `db_schema` | DB 스키마 버전(정수) — backend 의 `python -m app.cli schema-version` 출력을 `make-manifest --db-schema` 로 넣는다. 안 넣으면 `null` |
 | `images` | 우리가 빌드한 이미지: 이름 → `저장소@sha256:…` |
 | `third_party` | 남의 이미지: 구역 id → (이름 → 원 배포처의 `저장소@sha256:…`). compose 에서 뽑는다 |
 | `zones.content` | 구역 선언(`backend/app/zones.json`) 사본 |
@@ -68,6 +68,7 @@ releases/<버전>/manifest.json   releases/<버전>/manifest.json.sig
 | `offline_bundle` | 오프라인 묶음의 주소·크기·SHA-256. 없으면 `null` |
 | `changelog` | 변경 내용(마크다운) |
 | `plugin_api` | 플러그인 호환 범위 — **자리**. 지금은 `null` |
+| `download_bytes` | **선택.** 받을 이미지(우리 것 + 남의 것 전부)의 압축 크기 합(바이트, 0 이상의 정수). 모르면 `null` 이 아니라 **키를 싣지 않는다** — 받는 쪽은 그 줄을 보이지 않는다 |
 
 이미지는 전부 다이제스트로 적는다. 태그는 가리키는 내용이 바뀔 수 있어서 싣지 않는다.
 compose 의 남의 이미지는 전부 다이제스트로 고정해 둔다(`이름:태그@sha256:…` — 태그는 읽기 쉽게 남긴 것이고 받는 내용은 다이제스트가 정한다).
@@ -75,6 +76,13 @@ compose 의 남의 이미지는 전부 다이제스트로 고정해 둔다(`이�
 
 - `--pins <파일>`: `{"저장소:태그": "sha256:…"}` 표를 준다(예시 `release/examples/pins.json`).
 - `--resolve-digests`: 레지스트리에서 그 시점의 다이제스트를 조회해 채운다.
+
+받을 용량(`download_bytes`)을 채우는 방법도 둘이다. 둘 다 안 주면 항목이 빠진다.
+
+- `--download-bytes <바이트>`: 직접 준다.
+- `--resolve-sizes`: 레지스트리에서 이미지마다 manifest 를 받아 `linux/amd64` 의 config + 계층 크기를 더한다(익명 조회). 하나라도 조회하지 못하면 경고만 내고 항목을 싣지 않는다 — manifest 는 그대로 만들어진다. 값은 "전부 새로 받을 때"의 크기다. 서버에 이미 있는 계층은 다시 받지 않으므로 실제로 받는 양은 이보다 적을 수 있다.
+
+레지스트리 조회는 https 로 한다. 이 PC 자신의 레지스트리(`localhost`, `127.x.x.x`, `[::1]` — 포트가 붙어도 같다)만 docker 와 같이 평문 http 로 붙는다.
 
 `release/examples/` 의 다이제스트는 형식을 보이기 위한 값이다. 우리 이미지의 것은 지어낸 값이고, 실제 릴리스의 값이 아니다.
 
@@ -131,7 +139,7 @@ python -m jwrelease verify --repo . --pubkey cosign.pub
 5. **manifest 만들기**
    ```bash
    python -m jwrelease make-manifest --digests digests.json \
-     --changelog-file CHANGES.md --min-upgrade-from 1.0.0 \
+     --changelog-file CHANGES.md --min-upgrade-from 1.0.0 --db-schema 3 --resolve-sizes \
      --apps-dir ./apps-out --pins pins.json -o work/manifest.json
    ```
    버전은 `VERSION` 에서 읽는다(`--version` 으로 덮을 수 있다). `digests.json` 의 버전과 다르면 멈춘다.
@@ -157,7 +165,7 @@ Stable 을 Beta 없이 바로 내려면 6번에서 `--channel stable` 을 쓴다
 | 명령 | 하는 일 |
 |---|---|
 | `images` | compose 의 이미지 목록 — 우리 것, 남의 것, 다이제스트 없는 것 |
-| `make-manifest` | `digests.json` + compose + `zones.json` (+ 앱 파일, 변경 내용) → `manifest.json` |
+| `make-manifest` | `digests.json` + compose + `zones.json` (+ 앱 파일, 변경 내용, DB 스키마 버전, 받을 용량) → `manifest.json` |
 | `sign` | 파일에 서명(`.sig`) |
 | `publish` | 채널 리포 작업 디렉터리에 릴리스를 넣고 채널 파일 갱신·서명 |
 | `promote` | Beta 릴리스를 Stable 로 |
@@ -301,7 +309,7 @@ docker·네트워크 없이 돈다. compose 의 이미지 구성이 바뀌면 `t
 - **빌드 워크플로를 실제로 돌려 보지 않았다.** YAML 문법과 구조만 확인했다.
 - **수동 실행으로 Stable 버전을 빌드할 수 있다.** 트리거는 Beta 태그뿐이지만 수동 실행의 버전 입력은 `X.Y.Z` 도 받는다(첫 릴리스처럼 Beta 를 거치지 않는 경우를 위해). 이미 승격한 버전을 수동으로 다시 빌드하면 태그가 다른 다이제스트를 가리키게 되므로 하지 않는다.
 - **compose 읽기는 필요한 범위만.** `image`·`build`·`profiles` 만 읽는다. 그 항목에 앵커·병합 키·여러 줄 값을 쓰면 멈춘다. `include`·`extends` 로 나눈 compose 는 읽지 못한다.
-- **`--resolve-digests` 는 익명 조회.** 인증이 필요한 레지스트리의 남의 이미지는 `--pins` 로 준다. 조회 값은 그 시점에 태그가 가리키던 것이라, 시험한 이미지와 같은지는 사람이 확인해야 한다 — compose 에서 다이제스트로 고정해 두는 편이 낫다.
+- **`--resolve-digests`·`--resolve-sizes` 는 익명 조회.** 인증이 필요한 레지스트리의 남의 이미지는 `--pins` 로 준다. 조회 값은 그 시점에 태그가 가리키던 것이라, 시험한 이미지와 같은지는 사람이 확인해야 한다 — compose 에서 다이제스트로 고정해 두는 편이 낫다.
 - **여러 아키텍처 미지원.** `linux/amd64` 만 빌드한다.
 - **앱 설치 파일은 사이트마다 따로 빌드하는 구조**라서 지금은 릴리스에 실을 공용 파일이 없다. `apps[]` 는 형식만 준비돼 있다.
 - **같은 순번의 다른 파일**은 구별하지 않는다. 받는 쪽은 순번이 작아지는 것만 막는다.

@@ -133,6 +133,9 @@ def test_schema_and_model_reject_the_same_bad_manifests(manifest_validator):
         lambda d: d.update(db_schema=[1]),
         lambda d: d.pop("promoted_from"),
         lambda d: d.update(surprise=1),
+        lambda d: d.update(download_bytes=-1),
+        lambda d: d.update(download_bytes="1288490188"),
+        lambda d: d.update(download_bytes=None),                          # 모르면 null 이 아니라 키를 뺀다
     ]
     for bad in _mutations(doc, changes):
         assert not manifest_validator.is_valid(bad), bad

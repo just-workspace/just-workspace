@@ -381,5 +381,6 @@
   ],
   "offline_bundle": null,
   "changelog": "## 1.0.0\n\n- 첫 정식판\n",
-  "plugin_api": null
+  "plugin_api": null,
+  "download_bytes": 1288490188
 }

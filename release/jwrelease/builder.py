@@ -91,6 +91,7 @@ def make_manifest(
     plugin_api: dict[str, Any] | None = None,
     pins: Mapping[str, str] | None = None,
     resolver: compose.Resolver | None = None,
+    download_bytes: int | None = None,
 ) -> Manifest:
     """빌드 결과(digests.json)와 compose·zones.json 으로 manifest 를 만든다.
 
@@ -105,6 +106,9 @@ def make_manifest(
         raise BuildError(f"버전 꼴이 아니다(X.Y.Z 또는 X.Y.Z-beta.N): {version!r}")
     if digests.version != version:
         raise BuildError(f"digests.json 의 버전({digests.version})이 만들려는 버전({version})과 다르다")
+    if download_bytes is not None and (isinstance(download_bytes, bool) or not isinstance(download_bytes, int)
+                                       or download_bytes < 0):
+        raise BuildError("download_bytes 는 0 이상의 정수여야 한다")
     if min_upgrade_from is not None:
         if not semver.is_product_version(min_upgrade_from):
             raise BuildError(f"min_upgrade_from 이 버전 꼴이 아니다: {min_upgrade_from!r}")
@@ -156,7 +160,17 @@ def make_manifest(
         offline_bundle=offline_bundle,
         changelog=changelog,
         plugin_api=plugin_api,
+        download_bytes=download_bytes,
     )
+
+
+def total_image_size(manifest: Manifest, size_of) -> int:
+    """manifest 의 모든 이미지(우리 것 + 남의 것)의 압축 크기 합. `size_of(저장소, 다이제스트)` 는 주입한다."""
+    total = 0
+    for ref in sorted(set(manifest.all_image_refs().values())):
+        repo, digest = ref.split("@", 1)
+        total += size_of(repo, digest)
+    return total
 
 
 _KEEP = object()

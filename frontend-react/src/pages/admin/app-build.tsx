@@ -1,5 +1,5 @@
 /**
- * 관리 › 설정 › 앱 빌드 — Vue pages/admin/app-build.vue(시안 AdminPage variant=appbuild · Review11 D2g).
+ * 관리 › 설정 › 앱 빌드 — Vue pages/admin/app-build.vue.
  * 배포 채널 · 빌드 = AdminAppBuild.
  */
 import { useEffect } from 'react'

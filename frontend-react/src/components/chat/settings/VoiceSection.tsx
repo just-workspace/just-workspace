@@ -1,5 +1,5 @@
 /**
- * 음성 · 눌러서 말하기(Settings22 #voice #voice-forced) — 개인 설정(useUserPrefs, 계정에 저장).
+ * 음성 · 눌러서 말하기 — 개인 설정(useUserPrefs, 계정에 저장).
  * 입력 모드(UiRadioCard row: 음성 감지 / 눌러서 말하기) · 단축키 기록(누르면 "키를 누르세요…" + 지금 키캡, Esc = 취소) ·
  * 놓기 지연 UiSlider 0–2000 ms(10 단계, 값 mono) · 브라우저 안내 한 줄 · 다른 단축키(Ctrl+Shift+M 음소거 · Ctrl+Shift+D 듣기 끔 — 계정 패널).
  * 아래에 음질·장치(VoiceQualityContent) — 접속 줄 팝오버와 같은 설정.

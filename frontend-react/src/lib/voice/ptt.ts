@@ -1,5 +1,5 @@
 /**
- * 눌러서 말하기(PTT, handover-22 Chat22 #ptt) — 개인 설정 chatVoiceMode='ptt' · chatPttKey(KeyboardEvent.code) · chatPttReleaseMs.
+ * 눌러서 말하기(PTT) — 개인 설정 chatVoiceMode='ptt' · chatPttKey(KeyboardEvent.code) · chatPttReleaseMs.
  *  · 음성 채널에 접속해 있고 PTT 모드면, 그 키를 누르고 있는 동안만 마이크를 연다(LiveKit setMuted). 떼면 releaseMs 뒤 닫는다.
  *  · 음소거(사용자 버튼)·듣기 끔이면 키를 눌러도 열지 않는다(디스코드와 같다). 표시용 "말하는 중"은 talking.
  *  · 키는 이 창에 포커스가 있을 때만 받는다 — 데스크톱 앱 전역 단축키는 범위 밖.

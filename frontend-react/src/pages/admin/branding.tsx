@@ -1,10 +1,10 @@
 /**
- * 관리 › 설정 › 브랜딩 — Vue pages/admin/branding.vue(시안 AdminPage variant=branding · Review11 D2b). 폼 720, 카드 2장.
- *  ① 기본(맨 위) — 워크스페이스 이름 · 태그라인 · 기본 테마 UiSegment(카드 푸터 저장, 답변서 B5) /
+ * 관리 › 설정 › 브랜딩 — Vue pages/admin/branding.vue. 폼 720, 카드 2장.
+ *  ① 기본(맨 위) — 워크스페이스 이름 · 태그라인 · 기본 테마 UiSegment(카드 푸터 저장) /
  *     로고 · 파비콘(이미지 칸 64, 고르는 즉시 올림, 지우기 = 칸의 ✕ 아이콘 버튼).
  *  ② 강조 색 — 색 라디오 32 원 5개 + 직접 입력(#hex)·대비 표시. 푸터 저장.
- *     로그인 배경 = 타일 그리드(4장까지) + "+ 추가" 타일, 타일마다 ✕, 끌어서(또는 Alt+←/→) 순서 — 바로 저장(답변서 B5).
- *  강조 색은 본문 바탕 대비 4.5:1 미만(두 테마 모두)이면 고를 수 없다(저장 막음, 검수 P8 U7).
+ *     로그인 배경 = 타일 그리드(4장까지) + "+ 추가" 타일, 타일마다 ✕, 끌어서(또는 Alt+←/→) 순서 — 바로 저장.
+ *  강조 색은 본문 바탕 대비 4.5:1 미만(두 테마 모두)이면 고를 수 없다(저장 막음).
  */
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode, type RefObject } from 'react'
 import { useI18n } from '~/i18n'
@@ -322,7 +322,7 @@ export default function AdminBrandingPage() {
                       <span className={cn('pb-2.5 font-mono text-xs', contrastBlocked ? 'text-danger' : 'text-muted-foreground')}>{t('admin.branding.contrastBoth', { l: contrast.light, d: contrast.dark })}</span>
                     )}
                   </div>
-                  {/* 답변서 B2: 자동 조정된 테마는 실제로 쓰는 값을 보여 준다 */}
+                  {/* 자동 조정된 테마는 실제로 쓰는 값을 보여 준다 */}
                   {contrast?.lightAdjusted && <UiTrans k="admin.branding.adjustedLight" className="text-xs text-muted-foreground" slots={{ hex: <span className="font-mono">{contrast.lightAdjusted}</span> }} />}
                   {contrast?.darkAdjusted && <UiTrans k="admin.branding.adjustedDark" className="text-xs text-muted-foreground" slots={{ hex: <span className="font-mono">{contrast.darkAdjusted}</span> }} />}
                 </div>

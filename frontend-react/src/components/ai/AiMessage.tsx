@@ -19,7 +19,7 @@ export interface AiMessageProps {
   content: string
   /** 받는 중(다시 그리기를 60ms 로 묶는다) */
   streaming?: boolean
-  /** 이 답변의 출처 번호(본문 [n] 중 이 번호만 버튼이 된다, S6a) */
+  /** 이 답변의 출처 번호(본문 [n] 중 이 번호만 버튼이 된다) */
   citations?: number[]
   /** 본문 [n] 을 누름 */
   onCite?: (n: number, el: HTMLElement) => void

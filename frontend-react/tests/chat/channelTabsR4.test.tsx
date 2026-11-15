@@ -1,4 +1,4 @@
-// 채널 탭 R4(12 답 A6 · 시안 R12Channel) — 탭 줄 순서·끄기·모듈, 탭 관리 저장 본문, 작업 칩·빠른 입력, 회의 지난 묶음
+// 채널 탭 — 탭 줄 순서·끄기·모듈, 탭 관리 저장 본문, 작업 칩·빠른 입력, 회의 지난 묶음
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'

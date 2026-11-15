@@ -2,7 +2,7 @@
  * 여러 줄 입력(시안 F): 패딩 10/12, 테두리·포커스·오류 규격은 UiInput 과 같다.
  * className 은 바깥 묶음에, 나머지 속성(name·maxLength·onKeyDown 등)은 안쪽 <textarea> 에 붙는다. ref 는 <textarea>.
  *
- * autoGrow(프롬프트 입력): 높이 = 내용 높이(1~maxRows줄, 기본 6), 포커스와 무관 — 포커스만으로 펼치지 않는다(핸드오프 15-10).
+ * autoGrow(프롬프트 입력): 높이 = 내용 높이(1~maxRows줄, 기본 6), 포커스와 무관 — 포커스만으로 펼치지 않는다.
  * 비면 1줄(높이 44), 줄이 늘면 maxRows 까지 자라고 그보다 길면 안에서 스크롤. rows·resizable 은 쓰지 않는다.
  */
 import { useLayoutEffect, useRef, type ChangeEvent, type Ref, type TextareaHTMLAttributes } from 'react'

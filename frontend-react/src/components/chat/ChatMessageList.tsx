@@ -1,5 +1,5 @@
 /**
- * 메시지 목록(handover-21·22 · Chat22 #cozy #unread #jump-far #loading #empty #failed · Mob22 #m-conv). Vue 원본: frontend/components/chat/ChatMessageList.vue
+ * 메시지 목록. Vue 원본: frontend/components/chat/ChatMessageList.vue
  * 아래 정렬(메시지가 적으면 컴포저 바로 위에 붙는다). 메시지 열은 대화 열 전체 폭.
  *  · 날짜 구분선: 1px + 가운데 12/600 칩(radius 8, 바탕색) · 새 메시지 선: danger + 오른쪽 "새" 꼬리표 10 굵게
  *  · 위 띠 32(아래 모서리만 radius 8): "새 메시지 N개 · 시각부터 / 읽음으로 표시"
@@ -133,7 +133,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight
     const atBottom = dist < 100
     autoScroll.current = atBottom && !L.current.detached
-    // 맨 아래를 보고 있는지 useChat 에 알린다 — 읽음 처리 기준(R-22). 옛 창 끝은 "맨 아래"가 아니다
+    // 맨 아래를 보고 있는지 useChat 에 알린다 — 읽음 처리 기준. 옛 창 끝은 "맨 아래"가 아니다
     setViewAtBottom(atBottom && !L.current.detached)
     setFarFromBottom(dist > el.clientHeight)
     updateDividerAbove()
@@ -234,7 +234,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      {/* 화면 안 AI 채팅방 요약(S7 · 시안 E2) — 머리 아래 카드 */}
+      {/* 화면 안 AI 채팅방 요약 — 머리 아래 카드 */}
       <ChatAiSummary channelId={selectedChannelId} firstUnreadId={firstUnreadId} unreadCount={unreadSnapshot} />
       <div ref={listRef} role="feed" aria-label={t('chat.msg.list.feed')} aria-busy={loading || loadingMore} className="flex-1 overflow-y-auto" onScroll={onScroll}>
         <div className="flex min-h-full flex-col justify-end pb-2 pt-2">
@@ -242,7 +242,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
 
           {loading
             ? (
-              /* 불러오는 중(Chat22 #loading) — 아바타 40 + 줄 막대 */
+              /* 불러오는 중 — 아바타 40 + 줄 막대 */
               <div className="skeleton-delay flex flex-col gap-5 px-4" aria-busy="true" data-skeleton="">
                 {[['w-3/4', 'w-1/2'], ['w-2/3'], ['w-1/2', 'w-2/5'], ['w-1/2']].map((rows, i) => (
                   <div key={i} className="flex gap-4">

@@ -1,9 +1,9 @@
 /**
- * S6b 첨부 칩(시안 D1 입력창 · D2-3 변환 중/실패) + Wave5 보강(시안 K1).
+ * 첨부 칩(입력창 · 변환 중/실패).
  *  48 높이 · r10 · 테두리 · 아이콘 20 + 이름 13 / 부가 11.5(mono 크기 · 상태) + [빼기].
  *  올리는 중·변환 중 = 회전 아이콘 · 실패 = danger 테두리·바탕 + 코드별 문구.
- * K1-1: 이미지는 88×88 썸네일(모바일 64) + 오른쪽 위 [빼기](solid) — 미리보기는 고른 파일의 로컬 주소.
- * K1-2: 보낸 메시지 안 첨부는 AiSentAttachments(32 칩: 아이콘 14 · 이름 · 크기 mono) — 누르면 원본 미리보기·내려받기.
+ * 이미지는 88×88 썸네일(모바일 64) + 오른쪽 위 [빼기](solid) — 미리보기는 고른 파일의 로컬 주소.
+ * 보낸 메시지 안 첨부는 AiSentAttachments(32 칩: 아이콘 14 · 이름 · 크기 mono) — 누르면 원본 미리보기·내려받기.
  */
 import { useEffect, useState } from 'react'
 import { cn } from '~/lib/utils'
@@ -21,7 +21,7 @@ export interface AiAttachmentsProps {
   vision?: boolean
   /** 빼기 — 없으면 읽기 전용(메시지 안) */
   onRemove?: (a: AiAttachment) => void
-  /** 모바일 입력창 — 썸네일 64 · 칩 64 높이 · 한 줄 가로 스크롤(K1-4) */
+  /** 모바일 입력창 — 썸네일 64 · 칩 64 높이 · 한 줄 가로 스크롤 */
   compact?: boolean
   className?: string
 }
@@ -94,7 +94,7 @@ export function AiAttachments({ items, vision = true, onRemove, compact, classNa
   )
 }
 
-/** K1-2 — 보낸 메시지 안 첨부 칩. 누르면 원본 미리보기·내려받기 창 */
+/** 보낸 메시지 안 첨부 칩. 누르면 원본 미리보기·내려받기 창 */
 export function AiSentAttachments({ items, className }: { items: AiAttachment[]; className?: string }) {
   const { t } = useI18n()
   const [open, setOpen] = useState<AiAttachment | null>(null)

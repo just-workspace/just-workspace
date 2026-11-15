@@ -1,5 +1,5 @@
 /**
- * 회의 목록(시안 MT1 데스크톱 · MTM1 모바일 · 결정 회의 3): 카드 3버튼 → 행 + ⋮. Vue 판 components/meetings/MeetingsList.vue 그대로.
+ * 회의 목록: 카드 3버튼 → 행 + ⋮. Vue 판 components/meetings/MeetingsList.vue 그대로.
  *  묶음 머리 32(12/600 muted) + 카드(rounded-12) 안 행 60:
  *   시각 96(mono 12: 시작 600 / 길이·"시작 n분" muted) · 제목 14/600 + Live 칩(success 틴트 · 점 · "Live · n명") + "내가 호스트"
  *   · 메타 12(호스트 · 비밀번호 · 대기 n명) · [참여](진행 중·입장 가능) 또는 [링크 복사] · ⋮(수정·캘린더·삭제는 호스트만)

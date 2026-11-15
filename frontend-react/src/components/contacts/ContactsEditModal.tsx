@@ -1,5 +1,5 @@
 /**
- * 연락처 편집 — Vue 판 components/contacts/ContactsEditModal.vue (시안 CT2).
+ * 연락처 편집 — Vue 판 components/contacts/ContactsEditModal.vue.
  * UiModal 520(모바일 바텀시트). 사진 56(없으면 이니셜) + "사진 추가"(이미지를 256px JPEG 로 줄여 data URI 저장),
  * 2열 입력(이름 · 회사 · 성 · 이름(given)) + 직함, 이메일·전화는 [종류 ▾ 96][값][✕ 40] 행 + "+ 이메일 추가",
  * 그룹 칩(점 8 + 이름 ✕, 28 · rounded 6 · 테두리) + "+ 그룹"(점선) → 기존 그룹 자동완성 입력,

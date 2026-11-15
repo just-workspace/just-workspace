@@ -1,5 +1,5 @@
 /**
- * 채널 탭 — 파일(시안 ChannelTabs variant=files · 11 답 D6a). Vue 원본: frontend/components/chat/ChannelFilesTab.vue (ChatChannelFilesTab)
+ * 채널 탭 — 파일. Vue 원본: frontend/components/chat/ChannelFilesTab.vue (ChatChannelFilesTab)
  *  줄 44: "연결된 폴더" muted + 굵게 "내 파일 › 프로젝트 › 개발" + muted "· 채널에 올린 파일 포함" … [파일에서 열기 32][업로드 32 primary]
  *  목록 행 48: [종류 타일 28 + 이름 | 올린 사람 · 메시지에서/폴더 160 | 시각 mono 11 120 | ⋮ 40(메시지로 가기·공유·다운로드)]
  *  모바일은 가운데 두 칸을 이름 아래 한 줄로 접는다.

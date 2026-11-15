@@ -1,7 +1,7 @@
 /**
  * /admin — Vue 원본: frontend/pages/admin/index.vue
- * 데스크톱은 개요(/admin/dashboard)로, 모바일은 관리 메뉴 목록(시안 ADM1: 그룹 카드 52 행 + 보조 글자 + ›).
- * 모바일 머리는 이 페이지 header(시안 ADM1: 제목 + "관리자 · 이름") — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader).
+ * 데스크톱은 개요(/admin/dashboard)로, 모바일은 관리 메뉴 목록(그룹 카드 52 행 + 보조 글자 + ›).
+ * 모바일 머리는 이 페이지 header(제목 + "관리자 · 이름") — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader).
  */
 import { Fragment, useEffect } from 'react'
 import { useI18n } from '~/i18n'

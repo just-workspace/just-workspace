@@ -1,5 +1,5 @@
 /**
- * 인증·셋업·손님 진입 공통 틀(Vue components/auth/AuthShell.vue · 시안 AuthScreen · 8-3-5 · 8-4 · 8-5).
+ * 인증·셋업·손님 진입 공통 틀(Vue components/auth/AuthShell.vue).
  * (예전 layouts/auth.vue 는 이 셸로 모두 옮겨져 삭제했다 — 인증·셋업·동의·손님 화면은 layout: false + AuthShell.)
  *  데스크톱(lg↑): 왼쪽 월페이퍼(관리자 업로드 이미지·영상/그라디언트/그리드) + 좌하단 브랜드(타일 40 · 28/700 · 태그라인 15)
  *                + 오른쪽 520 단색 패널(48/60 패딩, border-left) 안 400 폼.
@@ -56,7 +56,7 @@ export function AuthShell({ children }: AuthShellProps) {
   const effWallpaper = wallpaper === 'image' && !picked ? 'gradient' : wallpaper
   const footerLinks = cfg('brand.footer_links').split(',').map(s => s.trim()).filter(Boolean)
 
-  // 모바일 시스템 키보드 감지(시안 8-3-5: 띠 160 → 72). visualViewport 가 120px 이상 줄면 키보드로 본다.
+  // 모바일 시스템 키보드 감지(띠 160 → 72). visualViewport 가 120px 이상 줄면 키보드로 본다.
   // visualViewport 가 없는 브라우저는 폼 안 포커스로 대신한다.
   const [keyboard, setKeyboard] = useState(false)
   const [focusInside, setFocusInside] = useState(false)
@@ -82,7 +82,7 @@ export function AuthShell({ children }: AuthShellProps) {
         )}
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
-        {/* 키보드가 올라온 모바일(한 줄 띠)은 시안 AuthScreen:26 대로 월페이퍼 없이 단색 + 하단 테두리 */}
+        {/* 키보드가 올라온 모바일(한 줄 띠)은 월페이퍼 없이 단색 + 하단 테두리 */}
         <div className={cn('pointer-events-none absolute inset-0', compact ? 'max-lg:hidden' : '')}>
           {effWallpaper === 'gradient' ? (
             <>

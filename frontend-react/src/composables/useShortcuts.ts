@@ -1,5 +1,5 @@
 /**
- * 단축키 도움말(Ctrl /) 의 모듈별 묶음 등록 — 원칙 3. (Vue 판 composables/useShortcuts.ts 대응)
+ * 단축키 도움말(Ctrl /) 의 모듈별 묶음 등록. (Vue 판 composables/useShortcuts.ts 대응)
  *
  * 페이지(모듈 화면)가 `usePageShortcuts('메일', [...])` 를 부르면 그 화면이 떠 있는 동안
  * LayoutShortcutsModal 의 "어디서나 · 목록" 위에 해당 모듈 묶음이 붙는다. 화면을 떠나면(언마운트) 빠진다.

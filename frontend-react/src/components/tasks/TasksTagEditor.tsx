@@ -1,5 +1,5 @@
 /**
- * 작업 태그 줄(Vue components/tasks/TasksTagEditor.vue · 시안 TK1 패널 "태그": 칩 22 = 테두리 + primary 점 7 + 글자 12 · 점선 "+" 칩).
+ * 작업 태그 줄(Vue components/tasks/TasksTagEditor.vue · "태그" + primary 점 7 + 글자 12 · 점선 "+" 칩).
  *  "+" → 같은 높이 입력(자동완성 = GET /api/tasks/facets 의 tags, 네이티브 datalist). Enter/쉼표 = 추가, Esc = 닫기.
  *  칩의 ✕ = 빼기(누를 수 있는 영역 40). 바꿀 때마다 태그 목록 전체를 onCommit 한다.
  */

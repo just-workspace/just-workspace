@@ -1,4 +1,4 @@
-// 관리자 › AI 운영(시안 F1·F2·I1·I2) — API 모양·순수 도우미. 화면은 pages/admin/ai-ops.tsx + components/admin/aiOps/*.
+// 관리자 › AI 운영 — API 모양·순수 도우미. 화면은 pages/admin/ai-ops.tsx + components/admin/aiOps/*.
 import { $fetch, errorStatus } from '~/lib/api'
 
 export type AiOpsTab = 'usage' | 'writes' | 'audit' | 'policy' | 'feedback'

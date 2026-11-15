@@ -1,5 +1,5 @@
 /**
- * "또는" 구분선(Vue components/auth/AuthDivider.vue · 시안 AuthForm:21): 12px muted, 양쪽 1px border.
+ * "또는" 구분선(Vue components/auth/AuthDivider.vue): 12px muted, 양쪽 1px border.
  * 아래에 outline 44 보조 진입 버튼이 세로로 쌓인다(8-3-3).
  */
 import { useI18n } from '~/i18n'

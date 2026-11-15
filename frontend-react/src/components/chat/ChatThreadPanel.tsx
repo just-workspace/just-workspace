@@ -3,7 +3,7 @@
  * 데스크톱 400(넓게 = 대화 영역의 50% 까지, 대화 폭 480 보장), 모바일 전체 화면.
  * 머리: [따라가는 중] 알약 토글 · 넓게 · 새 창 · 닫기(Esc). 모바일: ‹ #채널로 돌아가기 · 알약 · ⋯.
  * 컴포저는 본 컴포저와 같은 도구 + "#채널에도 보내기"(기본 꺼짐, 보낸 뒤 다시 꺼짐 — 2-1-2).
- * handover-22 §5.2(혼합형): 머리 = threads 20 · 스레드 이름 15/600(없으면 “원문 첫 40자” 기울임) + 채널 11
+ * 혼합형: 머리 = threads 20 · 스레드 이름 15/600(없으면 “원문 첫 40자” 기울임) + 채널 11
  *   · 이름 바꾸기(edit-2 → 그 자리 입력, Enter 저장 · Esc 취소) · 보관/보관 해제(archive, aria-pressed) — 루트 작성자 또는 MANAGE_THREADS.
  *   머리 48+1(디스코드 49). 보관된 스레드는 컴포저 위 안내 한 줄. 스레드 안 인라인 답장은 컴포저(ChatInput mode=thread · parentId)가 받는다.
  */
@@ -74,13 +74,13 @@ export function ChatThreadPanel() {
   // 스레드 첨부 답글 — 실시간 이벤트가 끊겨 있어도 응답 메시지로 패널에 바로 보이게
   useEffect(() => onThreadFileSent((msg: ChatMessageT) => ingestThreadReply(msg)), [])
 
-  // ── 스레드 이름 · 보관(handover-22 §5.2 혼합형) ──
+  // ── 스레드 이름 · 보관(혼합형) ──
   // 메타는 원문 메시지(thread)에서, 이 패널에서 바꾼 값은 스레드별로 덮어 둔다
   const [metaOverride, setMetaOverride] = useState<Record<string, ThreadMeta>>({})
   const meta: ThreadMeta | null = (activeThreadId && metaOverride[activeThreadId]) || threadParent?.thread || null
   const title = threadParent || meta ? threadTitle(meta, threadParent) : { text: t('chat.thread.title'), unnamed: false }
   const archived = !!meta?.archived
-  // 권한: 루트 작성자 또는 MANAGE_THREADS(r24 — 채널 권한을 아직 못 읽었으면 읽는다)
+  // 권한: 루트 작성자 또는 MANAGE_THREADS(채널 권한을 아직 못 읽었으면 읽는다)
   const channelId = selectedChannel?.id ?? null
   const canManageThreads = useChatRoles(s => canInChannel(channelId, PERM.MANAGE_THREADS, s))
   const isRootAuthor = !!threadParent?.sender && threadParent.sender.id === user?.id

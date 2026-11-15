@@ -1,4 +1,4 @@
-// 반복 일정 편집 회귀(FUNC P2): 반복 칸을 안 건드리면 원래 규칙 그대로(UNTIL 재확장 금지),
+// 반복 일정 편집 회귀: 반복 칸을 안 건드리면 원래 규칙 그대로(UNTIL 재확장 금지),
 // "이 일정과 이후" 는 남은 회차만(COUNT 재시작 금지).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'

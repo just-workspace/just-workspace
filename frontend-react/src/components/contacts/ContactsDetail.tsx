@@ -1,5 +1,5 @@
 /**
- * 연락처 상세 — Vue 판 components/contacts/ContactsDetail.vue (시안 CT1 · CTM2 · 연2).
+ * 연락처 상세 — Vue 판 components/contacts/ContactsDetail.vue.
  * 데스크톱: 본문 패딩 28/40, 폭 680. 머리 = 이니셜 72 · 이름 24/700(-0.02em) · 보조 13.5 muted · [편집] 36 outline · ⋯ 36.
  *   행동 줄 4칸(64, rounded-lg card, 아이콘 18 primary + 12/600): 메일 쓰기 · 채팅 · 통화 · 일정 잡기 — mailto 폐지.
  *   정보 카드(rounded-lg card): 행 48 = 라벨 100(12 muted) | 값 13.5 | 행동(복사 12/600 primary).
@@ -121,7 +121,7 @@ export function ContactsDetail() {
   async function startCall() {
     // 채팅 머리의 드롭인 통화와 같은 방(chan-<DM id>)
     const id = await dmChannelId()
-    // 같은 탭 회의 화면 — 다른 화면으로 가면 미니 통화 창(P-8)
+    // 같은 탭 회의 화면 — 다른 화면으로 가면 미니 통화 창
     if (id) openRoom(`chan-${id}`)
   }
 

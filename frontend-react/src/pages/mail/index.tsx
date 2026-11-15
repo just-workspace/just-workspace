@@ -1,9 +1,9 @@
 // Vue 원본: frontend/pages/mail/index.vue
 /**
- * 메일(시안 ML1·ML2 데스크톱 / MM1 모바일).
+ * 메일.
  * 데스크톱: 사이드바 236 | 목록 clamp(320, 본문 폭 × 24%, 440) | 읽기 판(끝까지, 본문 760 가운데) | 보낸 사람 360(상세 칸 ≥ 1400 일 때만 펼친 채)
- *   자리가 없으면 읽기 머리의 보낸 사람(아바타+이름)을 눌러 같은 패널을 오버레이로 연다 — Esc·바깥 클릭으로 닫힘(handover 16 답 5).
- *   + 오른쪽 아래 떠 있는 작성 창들(앱 루트 MailComposeHost). 세로 화면(실효 높이 > 폭): 목록 위 42% / 본문 아래로 쌓는다(handover 14 답 4·5).
+ *   자리가 없으면 읽기 머리의 보낸 사람(아바타+이름)을 눌러 같은 패널을 오버레이로 연다 — Esc·바깥 클릭으로 닫힘.
+ *   + 오른쪽 아래 떠 있는 작성 창들(앱 루트 MailComposeHost). 세로 화면(실효 높이 > 폭): 목록 위 42% / 본문 아래로 쌓는다.
  * 1024 미만: 사이드바는 드로어(≡ 또는 왼쪽 가장자리 스와이프). 모바일: 목록만, 본문은 /mail/:id 로 푸시.
  * 단축키(데스크톱): C 새 메일 · / 검색 · J/K 다음/이전 · R/A/F 답장/전체/전달 · E 보관 · Del(#) 삭제 · U 안 읽음 · S 별표 · X 선택 · Esc 선택 해제/닫기.
  */
@@ -55,7 +55,7 @@ export default function MailPage() {
   const isMobile = useIsMobile()
   // 계정을 다 받기 전엔 온보딩(계정 없음)을 그리지 않는다 — 깜빡임·오인 방지
   const [accountsLoaded, setAccountsLoaded] = useState(false)
-  // 모바일 머리: 목록 화면은 MailList 의 폴더 머리(시안 MM1)가 대신한다. 온보딩·오류 화면은 공용 상단바("메일")
+  // 모바일 머리: 목록 화면은 MailList 의 폴더 머리가 대신한다. 온보딩·오류 화면은 공용 상단바("메일")
   useOwnMobileHeader(!demoMode && accountsLoaded && !accountsError && accounts.length > 0)
 
   const [showDrawer, setShowDrawer] = useState(false)
@@ -207,7 +207,7 @@ export default function MailPage() {
     { keys: ['Esc'], label: t('mail.shortcuts.escape') },
   ])
 
-  // ─── 왼쪽 가장자리 스와이프 = 폴더 드로어(시안 MM1 "스와이프로도 열림") ───
+  // ─── 왼쪽 가장자리 스와이프 = 폴더 드로어("스와이프로도 열림") ───
   const edgeX = useRef<number | null>(null)
   function onEdgeStart(e: RTouchEvent) { const x = e.touches[0].clientX; edgeX.current = x < 24 ? x : null }
   function onEdgeMove(e: RTouchEvent) {

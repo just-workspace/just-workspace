@@ -1,4 +1,4 @@
-// 관리자 › AI 운영 › 사용량 — 시안 F1(핵심 수치 4 · 일별 질문 막대 · 사용자별·도구별·그룹별 표) + F2 상태(로딩·실패)·모바일 390.
+// 관리자 › AI 운영 › 사용량 — 핵심 수치 4 · 일별 질문 막대 · 사용자별·도구별·그룹별 표 + 상태(로딩·실패)·모바일 390.
 import { useState } from 'react'
 import { useI18n } from '~/i18n'
 import { useIsMobile } from '~/composables/useIsMobile'

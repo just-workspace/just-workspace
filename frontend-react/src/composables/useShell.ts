@@ -15,7 +15,7 @@ export interface ShellState {
   userMenuOpen: boolean
   commandPaletteOpen: boolean
   /**
-   * 떠 있는 미니 통화 창(P-8)의 폭 — 떠 있지 않으면 0. 겹침 순서(11-C11): 통화 창 z 45 가 위, 메일 작성 창 z 40.
+   * 떠 있는 미니 통화 창의 폭 — 떠 있지 않으면 0. 겹침 순서: 통화 창 z 45 가 위, 메일 작성 창 z 40.
    * 둘 다 뜨면 작성 창 묶음이 (이 폭 + 16)만큼 왼쪽으로 비켜 선다(MailComposeHost). 통화 창이 마운트/언마운트 때 올린다.
    */
   miniCallWidth: number

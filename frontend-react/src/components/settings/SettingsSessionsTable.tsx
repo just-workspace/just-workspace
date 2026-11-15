@@ -1,8 +1,8 @@
 /**
- * 설정 › 보안 "내 세션" — Vue components/settings/SettingsSessionsTable.vue(시안 SettingsPage section=security · Review11 D1a)
- * + 모바일 카드 스택(시안 R12Mobile #sessions · TM1).
+ * 설정 › 보안 "내 세션" — Vue components/settings/SettingsSessionsTable.vue
+ * + 모바일 카드 스택.
  * 데스크톱: 카드 머리 = 제목 + "로그인된 기기 N대 · …" + 오른쪽 [이 기기 빼고 모두 로그아웃](32, danger 테두리 0.6).
- *   표 머리 36(11/600 0.06em muted) + 행 SettingsSessionRow. "접속 주소" 칸 = 호스트 이름(없으면 IP), mono(답변서 B7).
+ *   표 머리 36(11/600 0.06em muted) + 행 SettingsSessionRow. "접속 주소" 칸 = 호스트 이름(없으면 IP), mono.
  * 모바일(md 미만): "로그인된 기기 n" 머리 + 기기 카드(SettingsSessionCard) 스택 + 맨 아래 [이 기기 빼고 모두 로그아웃](outline lg danger).
  * 데이터·동작은 useMySessions(계정 "로그인된 기기" 카드와 공유). 마운트 때 불러온다.
  *
@@ -39,7 +39,7 @@ export interface SettingsSessionCardProps {
 }
 
 /**
- * 모바일 세션 카드(시안 R12Mobile #sessions): 타일 36 · 이름 15/600(+ "이 기기" 배지) · 접속 주소 11 mono · 마지막 활동 12 · [로그아웃] ghost danger.
+ * 모바일 세션 카드: 타일 36 · 이름 15/600(+ "이 기기" 배지) · 접속 주소 11 mono · 마지막 활동 12 · [로그아웃] ghost danger.
  */
 export function SettingsSessionCard({ icon, name, address, when, current = false, disabled = false, onRevoke }: SettingsSessionCardProps) {
   const { t } = useI18n()

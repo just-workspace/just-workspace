@@ -1,7 +1,7 @@
 /**
- * 인증 폼 제목(Vue components/auth/AuthHeading.vue · 시안 8-3-1): 왼쪽 정렬 24/700 letter-spacing -0.02em + 보조 14 muted(위 6).
+ * 인증 폼 제목(Vue components/auth/AuthHeading.vue): 왼쪽 정렬 24/700 letter-spacing -0.02em + 보조 14 muted(위 6).
  * 40px 아이콘 타일은 결과 화면(재설정 완료·만료·오류)에만 — icon + tone 을 주면 제목 위에 붙는다.
- * 타일 반지름: 시안 11px 는 8-2-6 에서 사용 중지한 값 → 10px(디자이너 확인 필요).
+ * 타일 반지름: 디자인의 11px 는 사용 중지한 값 → 10px.
  */
 import type { ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -23,7 +23,7 @@ const TONE = {
   warning: 'bg-warning/15 text-warning',
   danger: 'bg-danger/15 text-danger',
   primary: 'bg-primary/15 text-primary',
-  // 회의 종료처럼 좋지도 나쁘지도 않은 결과(시안 WorkMobile meetOver)
+  // 회의 종료처럼 좋지도 나쁘지도 않은 결과
   muted: 'bg-muted text-muted-foreground',
 }
 

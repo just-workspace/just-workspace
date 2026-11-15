@@ -1,5 +1,5 @@
 /**
- * 상태 아이콘(Vue components/work/WorkStateIcon.vue · 시안 PatBadges·GitDesktop):
+ * 상태 아이콘(Vue components/work/WorkStateIcon.vue):
  * 열림 = 원+점 · 닫힘 = 원+체크 · 병합 = 가지 · 진행 중 = 반원.
  * 색은 부모 글자색(currentColor). 이슈 행 앞 16px 아이콘도 이것을 쓴다. 그림은 공용 세트(utils/icons.ts).
  */

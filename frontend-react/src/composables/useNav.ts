@@ -1,6 +1,6 @@
 /**
  * 사이드바(데스크탑)·하단 탭바(모바일)가 공유하는 그룹 네비 모델 — Vue 판 composables/useNav.ts 그대로.
- * 레일 묶음은 시안 ShellRail 순서(아래 GROUPS). 모바일 "전체" 시트는 시안 SM2 의 별도 묶음을 쓴다(MobileTabBar).
+ * 레일 묶음 순서는 아래 GROUPS. 모바일 "전체" 시트는 별도 묶음을 쓴다(MobileTabBar).
  * 그룹/순서는 여기서 결정하고, 표시(활성 표시·카운트 등)는 각 컴포넌트가 담당.
  *
  * React: const { home, groups, railGroups, flat } = useNav()   — groups·railGroups·flat 은 배열 값(Vue 의 .value)
@@ -19,7 +19,7 @@ export interface NavItem {
   icon?: string // rail 아이콘(모듈 registry icon 이름). 없으면 dot
   matchExact?: boolean
   matchPrefix?: string // 활성 판정용 경로 접두사(route와 다를 때. 예: 관리 → /admin)
-  /** 이 경로들에서도 레일 활성(하위 모듈 — 예: 메일 ← /contacts, 11-C9) */
+  /** 이 경로들에서도 레일 활성(하위 모듈 — 예: 메일 ← /contacts) */
   alsoMatch?: string[]
   /** false 면 레일에 그리지 않는다(전체 시트·Ctrl+K 에는 남음) */
   rail?: boolean
@@ -35,7 +35,7 @@ export function isNavActive(item: NavItem, path: string, withAliases = true): bo
   return under(item.route)
 }
 
-// 연락처는 레일에 없다 — 메일 모듈의 하위(11-C9). 진입: 메일 사이드바 "연락처" · 전체 시트 · Ctrl+K.
+// 연락처는 레일에 없다 — 메일 모듈의 하위. 진입: 메일 사이드바 "연락처" · 전체 시트 · Ctrl+K.
 // 연락처 화면에서는 레일의 메일이 켜지고 상단바 경로는 메일 / 연락처.
 const RAIL_HIDDEN = new Set(['contacts'])
 /**
@@ -54,8 +54,8 @@ export interface NavGroup {
 }
 
 // 그룹 이름은 i18n 키 shell.navGroup.<key> (groups 계산 안에서 t — 로캘 전환에 반응)
-// 레일 순서·구분선은 시안 ShellRail: 홈 | 메일·채팅·캘린더·회의 | 파일·위키·게시판 | 작업·Git·AI | 관리.
-// 연락처는 소통 묶음 끝(레일에는 숨김 — 11-C9), 메모 등 플러그인은 카테고리 성격대로 묶음 끝에 붙인다.
+// 레일 순서·구분선: 홈 | 메일·채팅·캘린더·회의 | 파일·위키·게시판 | 작업·Git·AI | 관리.
+// 연락처는 소통 묶음 끝(레일에는 숨김), 메모 등 플러그인은 카테고리 성격대로 묶음 끝에 붙인다.
 const GROUPS: { key: string; ids: string[]; categories: string[] }[] = [
   { key: 'communication', ids: ['mail', 'chat', 'calendar', 'meetings', 'contacts'], categories: ['communication'] },
   { key: 'content', ids: ['files', 'wiki', 'board', 'notes'], categories: ['collaboration', 'content'] },

@@ -1,5 +1,5 @@
 /**
- * 카드 제목(시안 8-2-5): 13/600. 예전 text-2xl 기본은 카드 안 제목으로 너무 커서 대시보드가 매번 덮어썼다.
+ * 카드 제목: 13/600. 예전 text-2xl 기본은 카드 안 제목으로 너무 커서 대시보드가 매번 덮어썼다.
  */
 import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from '~/lib/utils'

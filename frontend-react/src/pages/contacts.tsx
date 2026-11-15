@@ -1,9 +1,9 @@
 // Vue 원본: frontend/pages/contacts.vue
-// 연락처(시안 CT1·CT2 데스크톱 / CTM1·CTM2 모바일 · 결정 연1~4).
+// 연락처.
 // ≥1024: 사이드바 236 + 목록 340 + 상세(패딩 28/40, 폭 680).
 // 768~1023: 목록 340 + 상세, 사이드바 대신 목록 줄의 ⋯ 시트. <768: 목록 → 상세 전체 화면(탭바 숨김), FAB(새 연락처).
-// 연락처는 메일 모듈의 하위(11-C9): 레일 활성 = 메일, 상단바 경로 = 메일 / 연락처. 진입은 메일 사이드바·전체 시트·Ctrl+K.
-// 모바일 목록 머리는 ContactsList 범위 줄(시안 CTM1), 상세는 LayoutMobileDetailBar — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader)
+// 연락처는 메일 모듈의 하위: 레일 활성 = 메일, 상단바 경로 = 메일 / 연락처. 진입은 메일 사이드바·전체 시트·Ctrl+K.
+// 모바일 목록 머리는 ContactsList 범위 줄, 상세는 LayoutMobileDetailBar — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader)
 import { useEffect } from 'react'
 import { useI18n } from '~/i18n'
 // Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)
@@ -32,7 +32,7 @@ export default function ContactsPage() {
   } = useContacts()
   const isMobile = useIsMobile()
 
-  // 상단바 3단 경로: 워크스페이스 / 메일 / 연락처(11-C9). 범위(주소록·즐겨찾기·그룹)는 목록 머리가 보여 준다.
+  // 상단바 3단 경로: 워크스페이스 / 메일 / 연락처. 범위(주소록·즐겨찾기·그룹)는 목록 머리가 보여 준다.
   useBreadcrumb(t('nav.contacts'))
 
   // 모바일에서 상세가 열리면 하단 탭바 숨김(목록에선 유지)

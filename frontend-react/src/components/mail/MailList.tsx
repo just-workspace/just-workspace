@@ -1,6 +1,6 @@
 /**
- * 메일 목록 — Vue 판 components/mail/MailList.vue (시안 ML1 가운데 열 420 · MM1 모바일 목록).
- *  - 거터 체크박스 상시(메일 3 ①). 하나라도 고르면 위 줄(44)이 선택 바로 바뀐다: 개수·보관·읽음·이동·삭제·Esc.
+ * 메일 목록 — Vue 판 components/mail/MailList.vue (모바일 목록).
+ *  - 거터 체크박스 상시. 하나라도 고르면 위 줄(44)이 선택 바로 바뀐다: 개수·보관·읽음·이동·삭제·Esc.
  *  - 위 줄(선택 없음): 전체 선택 체크 · 커맨드 바 검색(현재 폴더, `from: is:unread` 구문) · 새로고침.
  *  - 빠른 칩 줄 44: 안 읽음(개수)·별표·첨부 + 정렬(최근 순/보낸 사람 순, 광고 숨기기).
  *  - 행: 2줄 56(밀도 조밀이면 한 줄 40). 안 읽음 = 두 줄 굵게(6px 점 폐지). 대화 수(thread_count ≥ 2)는 보낸 사람 옆 mono 숫자.
@@ -652,7 +652,7 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
         </div>
       )}
 
-      {/* FAB "새 메일"(시안 MM1: 56 · 좌우 20 · 16 둥글기 · 펜 아이콘 + 글자). 목록 판 안 오른쪽 아래.
+      {/* FAB "새 메일"(56 · 좌우 20 · 16 둥글기 · 펜 아이콘 + 글자). 목록 판 안 오른쪽 아래.
           1024 미만은 사이드바가 드로어라 "새 메일" 버튼이 안 보여서 태블릿(768~1023)까지 띄운다. */}
       {!hasSelection && <UiFab label={t('mail.compose.new')} icon="pen" extended contained until="lg" onClick={() => openCompose('new')} />}
     </div>

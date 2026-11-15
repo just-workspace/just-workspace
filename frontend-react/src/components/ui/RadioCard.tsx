@@ -1,8 +1,8 @@
 /**
- * 카드형 라디오(시안 SettingsPage 표시›밀도·AdminPage 로그인 순서): 선택 = 1.5px primary 테두리 + primary/8 바탕.
+ * 카드형 라디오: 선택 = 1.5px primary 테두리 + primary/8 바탕.
  * 안은 children(미리보기 그림)과 제목 + mono 보조.
  *
- * layout="row"(답변서 C1 — 가로형): 높이 56 한 줄 — 라디오 점 18 · 제목 13/600 · 설명 한 줄(12 muted, 넘치면 …) · 오른쪽 meta.
+ * layout="row"(가로형): 높이 56 한 줄 — 라디오 점 18 · 제목 13/600 · 설명 한 줄(12 muted, 넘치면 …) · 오른쪽 meta.
  * 선택 = border-primary + bg-primary/5. 세로로 쌓아 목록처럼 쓴다(`flex flex-col gap-2` 안에).
  */
 import type { ButtonHTMLAttributes, MouseEvent, ReactNode } from 'react'

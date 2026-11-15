@@ -34,7 +34,7 @@ export interface CalendarInfo {
   can_write?: boolean
   /** 외부 .ics 구독(설정 › 캘린더) — 읽기 전용, 서버가 6시간마다 새로 받는다 */
   is_subscription?: boolean
-  /** 앞 순번 캘린더와 같은 범주 색 → 빗금으로 구분(11-A1, 화면 계산값) */
+  /** 앞 순번 캘린더와 같은 범주 색 → 빗금으로 구분(화면 계산값) */
   hatched?: boolean
 }
 
@@ -56,7 +56,7 @@ export interface CalendarEvent {
   original_event_id: string | null
   created: string | null
   updated: string | null
-  // ── p4 ──
+  // ── 추가 필드 ──
   timezone?: string | null
   meeting_url?: string | null
   exdates?: string[]
@@ -69,7 +69,7 @@ export interface CalendarEvent {
   is_exception?: boolean
   /** 내 캘린더가 아니라 초대받아서 보이는 일정(읽기 전용, 내 응답만) */
   is_invited?: boolean
-  /** 캘린더가 빗금 대상이면 일정 블록에도 빗금(11-A1, 화면 계산값) */
+  /** 캘린더가 빗금 대상이면 일정 블록에도 빗금(화면 계산값) */
   hatched?: boolean
 }
 
@@ -143,7 +143,7 @@ const set = calendarStore.setState
 // 팝오버를 바깥 클릭으로 닫은 바로 그 클릭이 빈 칸 "새 일정"으로 이어지지 않게
 let popoverClosedAt = 0
 
-// 기본 캘린더 색 = 범주 1…8(11-A1). 저장은 hex(CalDAV 호환), 화면은 --cat-N 토큰으로 그린다.
+// 기본 캘린더 색 = 범주 1…8. 저장은 hex(CalDAV 호환), 화면은 --cat-N 토큰으로 그린다.
 export const CALENDAR_COLORS: string[] = [...CAT_HEX]
 
 // ─── 파생 값(Vue computed) — 같은 입력이면 같은 결과 객체(렌더 안정) ───
@@ -326,7 +326,7 @@ export async function deleteEvent(id: string) {
 }
 
 /**
- * 반복 일정 삭제 범위(시안 CalDesktop recurDelete) — 서버가 한 번에 처리한다(DELETE ?scope=&occurrence=&notify=).
+ * 반복 일정 삭제 범위 — 서버가 한 번에 처리한다(DELETE ?scope=&occurrence=&notify=).
  *  - 이 일정만: 회차 예외(EXDATE). 회차 예외 행이면 그 행 id 로.
  *  - 이후 모두: 서버가 규칙을 이 회차 직전에서 끊고 뒤 예외 행을 정리(첫 회차면 전체 삭제).
  *  - 반복 전체: 마스터째.

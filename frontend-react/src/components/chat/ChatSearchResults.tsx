@@ -1,5 +1,5 @@
 /**
- * 검색 결과 — 오른쪽 자리 400(handover-22 "검색" 결과 · §5.5 · 시안 Side22 search / search-none / search-loading · Mob22 #m-search 전체 화면).
+ * 검색 결과 — 오른쪽 자리 400.
  * 자리: chatStore.showSearchPanel(기존 "search" 패널 자리 — ChatSearchPanel 이 이것을 그린다).
  *
  * 머리 48+1: (모바일 ‹ 44) search 20 · "검색 결과" 16/600 · 닫기 32(Esc).

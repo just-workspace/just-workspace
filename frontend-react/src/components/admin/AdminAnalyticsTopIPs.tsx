@@ -18,7 +18,7 @@ export interface AdminAnalyticsTopIPsProps {
 
 export function AdminAnalyticsTopIPs({ data }: AdminAnalyticsTopIPsProps) {
   const { t } = useI18n()
-  // 색 = CSS 변수 주입(관리 5 ①) — hex 하드코딩 제거
+  // 색 = CSS 변수 주입 — hex 하드코딩 제거
   const { tokens } = useChartTokens()
 
   const chartData = useMemo(() => ({

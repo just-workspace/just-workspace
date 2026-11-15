@@ -1,5 +1,5 @@
 /**
- * 설정 › AI(시안 SettingsPage section=ai · Review11 D1c) 화면 조각 — Vue pages/settings/ai.vue 의 인라인 마크업을 이름 붙여 뺀 것.
+ * 설정 › AI 화면 조각 — Vue pages/settings/ai.vue 의 인라인 마크업을 이름 붙여 뺀 것.
  *  · SettingsAiModelChoice — 기본 모델 라디오 행(min 52, 선택 = 1.5 primary 테두리 + primary/0.08)
  *  · SettingsMaskedKey — 저장된 키 가림값 칸(점선 40, mono "sk-…a91f") + [바꾸기]
  *  · SettingsVerifiedMark — "연결 확인됨 · MM/DD"(success, role=status)

@@ -1,8 +1,8 @@
 /**
- * AI 시스템 설정(Vue components/ai/AiAdminSettings.vue) — 관리 › 설정 › AI(/admin/ai, 시안 AdminPage variant=ai · Review11 D2f). 자기완결, 이 화면에서만 쓴다.
+ * AI 시스템 설정(Vue components/ai/AiAdminSettings.vue) — 관리 › 설정 › AI(/admin/ai). 자기완결, 이 화면에서만 쓴다.
  *  ① 워크스페이스 모델 — 행(min 52): 워크스페이스 기본 · 워크스페이스 고급(이름 600 + "로컬/외부 · 모델" 12 muted, 상태 배지
  *     정상 success · 느림 n.ns warning · 연결 안 됨 danger — POST /api/ai/config/test 로 잼), 개인 API 키 허용 스위치.
- *     제공자·키·주소·모델을 고치는 폼은 시안에 없어 행 ⋮ 메뉴의 첫 항목 "설정" 모달로 둔다(답변서 B5, 폼은 디자이너 확인 필요).
+ *     제공자·키·주소·모델을 고치는 폼은 시안에 없어 행 ⋮ 메뉴의 첫 항목 "설정" 모달로 둔다(폼은 디자이너 확인 필요).
  *  ② 도구 허용 — 스위치 행: 메일·파일·캘린더 검색(웹 검색 밖의 데이터 도구 전부) · 웹 검색. 즉시 저장 + "저장됨 ✓".
  *     외부 AI 개인데이터 접근 허용 스위치와 도구별 체크(자세히)는 기존 기능이라 같은 카드 아래에 유지(디자이너 확인 필요).
  *  ③ 한도 — 사용자당 하루 요청(0 = 제한 없음)·대화 보관(선택), 카드 푸터 저장.
@@ -301,7 +301,7 @@ export function AiAdminSettings() {
                 <span className="block truncate text-xs text-muted-foreground">{cfg.model ? `${where} · ${cfg.kind} · ${cfg.model}` : t('aiAdmin.notSet')}</span>
               </span>
               {baseBadge && <UiBadge tone={baseBadge.tone} tint>{baseBadge.text}</UiBadge>}
-              {/* 행 액션 = ⋮ 하나, 첫 항목 "설정"(답변서 B5) */}
+              {/* 행 액션 = ⋮ 하나, 첫 항목 "설정" */}
               <UiMenu
                 triggerIcon="more-vertical"
                 label={t('aiAdmin.rowMenu', { name: t('aiAdmin.base') })}

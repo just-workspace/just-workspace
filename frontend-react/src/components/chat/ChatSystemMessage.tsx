@@ -1,5 +1,5 @@
 /**
- * 시스템 줄(Chat22 kSys · Rich22 #pin). Vue 원본: frontend/components/chat/ChatSystemMessage.vue
+ * 시스템 줄. Vue 원본: frontend/components/chat/ChatSystemMessage.vue
  * 거터 72 안 오른쪽 아이콘 16 + 본문 14/22 muted(사람 이름은 foreground 500) + 시각 mono 12. 위 8.
  * 고정 줄(file_meta.kind = 'pin'): "○○ 님이 메시지를 고정했습니다. [고정 보기]" — 누르면 원문으로 점프.
  */

@@ -1,5 +1,5 @@
 /**
- * 날짜 고르기 팝오버(handover-22 "검색 · 날짜 고르기" · 시안 Side22): 7열 미니 달력.
+ * 날짜 고르기 팝오버: 7열 미니 달력.
  * 머리 = 달 이름 13/600 + ‹ › 28(히트 40). 요일 24 muted. 날짜 칸 32 · mono 12.
  *   고른 날 = bg-primary · primary-foreground(600) · 오늘 = 1px ring(primary, inset) · 다른 달 = muted-foreground/60 · 범위 밖 = 40% 비활성.
  * 값은 'YYYY-MM-DD' 문자열(검색 before/after/during 그대로). 날짜 계산은 브라우저 지역 날짜(서버가 하루 경계를 정한다).

@@ -1,5 +1,5 @@
 /**
- * 이모지 피커(handover-22 "이모지 피커" · 시안 Picker22 base/search/none/react, Mob22 #m-emoji).
+ * 이모지 피커.
  * 데스크톱 팝오버 420×440 · 모바일 아래 시트 560(8열 · 칸 44). chat.tsx 에 <ChatEmojiPicker /> 하나만 두고
  * useChatUi.emojiPicker 상태로 스스로 뜬다:
  *  - 컴포저: openComposeEmojiPicker(기준 요소, insert) — 고른 글리프(피부색 적용) 또는 ':name: ' 을 insert 로 넘긴다

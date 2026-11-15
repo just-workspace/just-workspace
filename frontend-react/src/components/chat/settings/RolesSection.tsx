@@ -1,5 +1,5 @@
 /**
- * 역할 섹션(Settings22 #roles #role-* · 모바일 #m-roles #m-role-edit).
+ * 역할 섹션(모바일 #m-roles #m-role-edit).
  * 왼쪽 목록 240: "역할 — N" 12/600 + [역할 만들기] · 행 40(손잡이는 호버 때만 · 색 점 12 · 이름 15 · 잠금/그룹 배지 · 인원 mono 12) ·
  *   @everyone 은 구분선 아래 고정 · 끌어 정렬(#role-drag — 자리 선 UiDropLine, 끄는 행 40%, aria-live) + 키보드 ↑↓(손잡이).
  *   내 최고 역할 이상(useChatRoles.myTopPosition)은 잠금 아이콘(#role-locked) — 편집은 보기만.

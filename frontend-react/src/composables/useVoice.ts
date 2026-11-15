@@ -1,5 +1,5 @@
 /**
- * 음성 채널 세션(handover-20 · R17 Phase 1 → R18 화면 답 반영) — 앱 수준 싱글턴. 미니 통화 창(useMeetings 의 앱 수준 세션)과 같은 원리:
+ * 음성 채널 세션 — 앱 수준 싱글턴. 미니 통화 창(useMeetings 의 앱 수준 세션)과 같은 원리:
  * 접속은 모듈 단위로 올려 두어 화면(채팅 → 메일 → 파일)을 옮겨도 끊기지 않고, 셸이 접속 바(VoiceConnectedBar)를 띄운다.
  *
  *  · 전송은 lib/voice/transport 의 VoiceTransport 로만 다룬다 — 음성·음악은 LiveKit(lib/voice/transports/livekit),
@@ -37,7 +37,7 @@ registerVoiceTransport(['voice', 'music'], createLiveKitVoiceTransport)
 import '~/lib/lossless/register'
 // 하이레조(Tier 4) — 데스크톱 앱(window.jwNativeAudio)에서만 등록된다. import 만으로 등록(없으면 아무 일도 안 한다).
 import '~/lib/hires/register'
-// 사람별 음량 · 눌러서 말하기(handover-22) — 아래(store 를 만든 뒤) install 로 구독을 건다(순환 import 피함)
+// 사람별 음량 · 눌러서 말하기 — 아래(store 를 만든 뒤) install 로 구독을 건다(순환 import 피함)
 import { installUserVolumeSync } from '~/lib/voice/userVolume'
 import { installPushToTalk } from '~/lib/voice/ptt'
 

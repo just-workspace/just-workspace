@@ -24,7 +24,7 @@ export { hexToHsl } from '~/lib/brandColor'
 /**
  * 브랜드 색 주입 — Dashboard Dark 시안은 고정 중립 팔레트를 표면·텍스트·테두리에 쓴다.
  * 브랜드색은 accent(primary/ring)만 물들이고 나머지는 main.css 시안값을 유지한다.
- * 대비 자동 보정(답변서 B2): 테마별로 card·background 위 4.5:1 이 되게 밝기만 조정, 버튼 글자는 흰/검 중 높은 쪽(lib/brandColor).
+ * 대비 자동 보정: 테마별로 card·background 위 4.5:1 이 되게 밝기만 조정, 버튼 글자는 흰/검 중 높은 쪽(lib/brandColor).
  */
 export function applyBrandTheme(hex: string) {
   const css = brandThemeCss(hex)

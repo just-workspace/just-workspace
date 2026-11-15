@@ -1,5 +1,5 @@
 /**
- * 입력 중 표시(handover-22 · 디스코드 실측): 컴포저 아래 24 예약 자리 · 점 3개 7px(1.2s) · 12/500 · 이름은 foreground 600.
+ * 입력 중 표시(디스코드 실측): 컴포저 아래 24 예약 자리 · 점 3개 7px(1.2s) · 12/500 · 이름은 foreground 600.
  * 글이 없어도 자리를 차지해 레이아웃을 밀지 않는다. reduce-motion 이면 점이 움직이지 않는다.
  * Vue 원본: frontend/components/chat/ChatTypingIndicator.vue
  */

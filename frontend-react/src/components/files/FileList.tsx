@@ -1,11 +1,11 @@
 /**
- * 파일 목록(Vue components/files/FileList.vue · 시안 FilesDesktop list · FilesMobile list · PatRows "조밀 40 — 표·파일·로그").
+ * 파일 목록(Vue components/files/FileList.vue · "조밀 40 — 표·파일·로그").
  * 데스크톱: 열 40 · 이름 · 소유자 120 · 수정 120 · 크기 80 · ⋮ 40, 행 40, 헤더 36 11px.
  * 소유자 열은 서버 owner(my/=나, shared/=처음 올린 사람, 모르면 —). 즐겨찾기는 이름 옆 채운 별(warning 12).
  * 모바일: 행 56 — 유형 아이콘 22 · 이름 15 + 공유 아이콘 · mono 메타 11 · ⋮ 40 상시.
- * 클릭 = 열기(결정 2), Ctrl/⌘ 클릭 = 선택 토글, Shift 클릭 = 범위, Space = 상세, ↑↓ 이동, Enter 열기.
+ * 클릭 = 열기, Ctrl/⌘ 클릭 = 선택 토글, Shift 클릭 = 범위, Space = 상세, ↑↓ 이동, Enter 열기.
  * 체크박스·⋮ 는 hover/포커스 때(터치 기기는 상시), 하나라도 고르면 전 행 상시. 길게 누르기 = 선택 모드.
- * 새 폴더·이름 바꾸기는 인라인 편집 행(결정 7, Enter/Esc). 행은 끌어서 폴더·경로·사이드바에 놓으면 이동(결정 4).
+ * 새 폴더·이름 바꾸기는 인라인 편집 행(Enter/Esc). 행은 끌어서 폴더·경로·사이드바에 놓으면 이동.
  */
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { clsx } from 'clsx'
@@ -62,7 +62,7 @@ export function FilesFileList({ onOpen, onMenu, onDetail, onDropMove, onCommitNe
     if (inlineEdit?.kind === 'rename' && inlineEdit.path === item.path) return
     if (e.metaKey || e.ctrlKey) { onToggle(item); return }
     if (e.shiftKey) { setSelection(rangeBetween(order, anchor.current, item.path)); return }
-    // 모바일 선택 모드에서는 탭 = 선택 토글(PatMobile)
+    // 모바일 선택 모드에서는 탭 = 선택 토글
     if (isMobile && anySelected) { onToggle(item); return }
     onOpen?.(item)
   }
@@ -253,7 +253,7 @@ export function FilesFileList({ onOpen, onMenu, onDetail, onDropMove, onCommitNe
 
                     {/* 데스크톱 40 */}
                     <div className="hidden h-10 grid-cols-[40px_1fr_120px_120px_80px_40px] items-center pr-2 text-[13px] md:grid">
-                      {/* 체크박스는 상시(시안 FL1 · 메일 거터 체크박스와 같은 규칙), ⋮ 만 hover 로 드러난다 */}
+                      {/* 체크박스는 상시(메일 거터 체크박스와 같은 규칙), ⋮ 만 hover 로 드러난다 */}
                       <span role="gridcell" className="grid place-items-center" onClick={e => e.stopPropagation()}>
                         <UiCheckbox modelValue={selected} size={16} ariaLabel={t('files.list.selectItem', { name: item.name })} onUpdateModelValue={() => onToggle(item)} />
                       </span>

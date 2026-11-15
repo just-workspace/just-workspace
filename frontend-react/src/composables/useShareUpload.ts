@@ -1,5 +1,5 @@
 /**
- * 게시판 첨부·위키 이미지 업로드(시안 BD4 "내 파일함에 저장됩니다") — Vue 판 composables/useShareUpload.ts 그대로.
+ * 게시판 첨부·위키 이미지 업로드("내 파일함에 저장됩니다") — Vue 판 composables/useShareUpload.ts 그대로.
  * 파일을 내 파일함 폴더(my/<folder>)에 올리고, 다른 사람도 열 수 있게 공유 링크를 만들어 그 주소를 돌려준다.
  *
  * 예전 게시판 쓰기 화면은 /api/files/upload 응답의 url·filename 을 썼는데, 그 응답에는 name·size·path 만 있어

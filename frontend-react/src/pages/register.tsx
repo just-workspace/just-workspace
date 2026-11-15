@@ -1,5 +1,5 @@
 // Vue 원본: frontend/pages/register.vue
-// 가입(시안 A2·AM2 · AuthForm register · 8-3-4): 이름 · 아이디 · 비밀번호(규칙 실시간 체크, 확인 칸 대신 보기 토글) · 복구 이메일.
+// 가입: 이름 · 아이디 · 비밀번호(규칙 실시간 체크, 확인 칸 대신 보기 토글) · 복구 이메일.
 // 백엔드가 복구 이메일로 인증 메일을 보내고 인증 전엔 로그인을 막아(RegisterRequest.recovery_email 필수) 펼친 필수 필드로 둔다.
 //
 // 초대 가입(/register?invite=<token>): GET /api/auth/invites/{token} 으로 확인 → 받는 메일 주소를 복구 이메일에 미리 채우고

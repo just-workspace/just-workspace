@@ -1,5 +1,5 @@
 /**
- * 음성채널 화면의 상태 로직(handover-20 답) — 순수 함수만. 단위 테스트 대상(tests/voice/voiceUiLogic.test.ts).
+ * 음성채널 화면의 상태 로직 — 순수 함수만. 단위 테스트 대상(tests/voice/voiceUiLogic.test.ts).
  *
  *  · 단계 색(참고): 음성 neutral · 음악 primary · 무손실/하이레조 success(하이레조는 점에 링).
  *  · 접속 바 상태 글자 · 본문 띠(재연결/중계 실패/독점 실패/이어폰/권한 없음) 판정.
@@ -23,7 +23,7 @@ export function tierDotClass(tier: VoiceTier): string {
   }
 }
 
-/** 단계별 예상 지연(시안 tierDef.meta) */
+/** 단계별 예상 지연 */
 export const TIER_LATENCY: Record<VoiceTier, string> = { voice: '~40 ms', music: '~60 ms', lossless: '100–300 ms', hires: '150–300 ms' }
 
 /** 음악 이상이면 에코 제거가 꺼진다 → 이어폰 권장 */

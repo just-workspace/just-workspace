@@ -1,7 +1,7 @@
 /**
  * 채팅 모바일 단계 ↔ 주소 도우미. Vue 원본: frontend/pages/chat.vue 안의 stageFromState·stageFromRoute·depthOf·sameStage
  * (React 판은 페이지 파일이 컴포넌트만 내보내게 여기로 뺐다 — 내용 같음)
- * handover-22: 오른쪽 자리에 "스레드 목록"(threads, useChatUi.threadListOpen)이 더해졌다 — 주소 panel=threads.
+ * 오른쪽 자리에 "스레드 목록"(threads, useChatUi.threadListOpen)이 더해졌다 — 주소 panel=threads.
  */
 import { chatStore } from '~/composables/useChat'
 import { chatUiStore } from '~/composables/useChatUi'

@@ -1,5 +1,5 @@
 /**
- * 채팅 오른쪽 자리(handover-21 §5.1 · handover-22 셸) — 순수 함수.
+ * 채팅 오른쪽 자리 — 순수 함수.
  * 자리는 하나: 멤버 264 · 스레드 400 · 스레드 목록 400 · 검색 결과 400 · 고정 400 · 음성 글 채팅 340 이 서로 배타, 새로 연 것이 바꿔 낀다.
  *  · 스레드·스레드 목록·검색·고정(그리고 좁은 화면의 멤버 덮개)은 잠깐 여는 패널 — 열려 있으면 그것(panelOf 순서).
  *  · 아니면 바탕 열: 음성 채널에 접속해 글 채팅을 열어 두었으면 음성 글 채팅, 아니면 멤버 열(켜 두었을 때).
@@ -13,7 +13,7 @@ export type RightColumn = 'thread' | 'threads' | 'search' | 'pins' | 'members' |
 /** 멤버 열을 상시로 붙이는 최소 실효 폭 */
 export const CHAT_MEMBERS_DOCK_MIN = 1180
 
-/** 자리별 폭(px) — 멤버 264 는 디스코드 기본, 나머지는 시안 Side22 */
+/** 자리별 폭(px) — 멤버 264 는 디스코드 기본, 나머지는 디자인 값 */
 export const RIGHT_COLUMN_WIDTH: Record<Exclude<RightColumn, null>, number> = {
   members: 264, thread: 400, threads: 400, search: 400, pins: 400, voiceText: 340,
 }

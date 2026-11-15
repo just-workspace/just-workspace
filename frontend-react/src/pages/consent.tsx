@@ -94,7 +94,7 @@ export default function Page() {
         <>
           <AuthHeading title={t('consent.title')} subtitle={t('consent.subtitle')} />
 
-          {/* 앱 카드(시안 AuthForm:37): 로고/첫 글자 타일 40 + 이름(client_uri 링크) + 계정 */}
+          {/* 앱 카드: 로고/첫 글자 타일 40 + 이름(client_uri 링크) + 계정 */}
           <AuthGuestCard
             name={info.client_name}
             logo={info.logo_uri || undefined}

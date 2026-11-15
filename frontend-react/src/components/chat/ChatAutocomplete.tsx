@@ -1,5 +1,5 @@
 /**
- * 컴포저 자동완성 `:` `@`(handover-22 "자동완성" · 시안 Chat22 #ac-emoji #ac-mention).
+ * 컴포저 자동완성 `:` `@`.
  * 컴포저 위 목록(키트 UiMentionList — 행 36 · 앞 24 · 이름 · 설명 muted · 꼬리표 · 비활성 60% + 이유), 최대 8개,
  * 아래 aria-live 결과 수 + 키 안내. Tab/Enter 고르기 · ↑↓ · Esc(입력의 onKeyDown 에서 useUiMentionList 가 처리).
  *

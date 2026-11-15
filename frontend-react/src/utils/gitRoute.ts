@@ -1,5 +1,5 @@
 /**
- * Git 라우트(결정 Git 2): /code/:owner/:repo/(tree|blob|issues|pulls|commits).
+ * Git 라우트: /code/:owner/:repo/(tree|blob|issues|pulls|commits).
  *  /code                               → 저장소 목록
  *  /code/o/r                            → 코드(루트)
  *  /code/o/r/tree/a/b                   → 코드(폴더)

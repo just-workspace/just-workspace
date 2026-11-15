@@ -1,5 +1,5 @@
 /**
- * 채널 스레드 목록(handover-22 "스레드 목록" · 시안 Side22 threads / threads-arch / threads-empty · Mob22 #m-threads).
+ * 채널 스레드 목록.
  * GET /api/chat/channels/{id}/threads?archived= (chatApi22.fetchChannelThreads) — 정렬 = 최근 활동순(서버), 받은 뒤에도 같은 선으로 다시 줄 세운다.
  *
  * 실시간: useChat.onChatEvent 구독 —
@@ -73,7 +73,7 @@ export function isThreadArchived(it: ThreadListItem, now = Date.now()): boolean 
   return !!last && last + mins * 60_000 <= now
 }
 
-/** "10분 전" · "1시간 전" · "어제" · "9월 18일" (시안 Side22) */
+/** "10분 전" · "1시간 전" · "어제" · "9월 18일" */
 export function threadAgo(iso: string | null | undefined, now = new Date()): string {
   if (!iso) return ''
   const d = new Date(iso)

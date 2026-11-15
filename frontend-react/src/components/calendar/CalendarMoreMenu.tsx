@@ -1,5 +1,5 @@
 /**
- * 커맨드 바 ⋯(Vue components/calendar/CalendarMoreMenu.vue · 시안 CL1 "캘린더 메뉴 — 가져오기·내보내기·CalDAV 주소").
+ * 커맨드 바 ⋯(Vue components/calendar/CalendarMoreMenu.vue · "캘린더 메뉴 — 가져오기·내보내기·CalDAV 주소").
  * 공용 UiMenu(드롭다운 224 · 항목 36). 가져오기·내보내기(.ics)는 CalendarIcsModal 을 연다(캘린더 고르기).
  */
 import { useI18n } from '~/i18n'

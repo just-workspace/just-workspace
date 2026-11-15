@@ -1,5 +1,5 @@
 /**
- * 파일 댓글(Vue components/files/FileCommentsPanel.vue · p9) — 상세 패널의 "댓글" 탭. 12 답 A1 · 시안 R12Files #comments|#viewer, R12Mobile #comments.
+ * 파일 댓글(Vue components/files/FileCommentsPanel.vue) — 상세 패널의 "댓글" 탭.
  * 데스크톱:
  *  맨 위 줄 = "내 권한 [배지]" … "댓글 n"(px-4 py-2.5 12 muted, 아래 선).
  *  행(px-4 py-3, 아래 선 border/60) = 아바타 28 · 이름 13/600 · 시각 mono 11 · (해결됨 success 틴트 배지) / 본문 13 relaxed(@언급 = primary/15 칩)
@@ -7,7 +7,7 @@
  *  입력(위 선, p-3) = UiTextarea rows 2 + "Ctrl + Enter 로 등록" + [등록](xs). "@" 를 치면 입력 위 UiMentionList
  *    (머리 "이 파일을 볼 수 있는 사람", 보조 = 이메일 · 권한 / "보기 권한 없음", 바닥 안내).
  *  보기 권한 = 입력 자리에 안내 띠(eye) "보기 권한은 댓글을 읽기만 합니다 … [권한 요청]" → 원 소유자에게 알림.
- * 모바일(FM1): 행 = 아바타 32 · 이름 14 · 시각 · 본문 15 + 오른쪽 ⋮(답글 · 해결 · 수정 · 삭제), 입력 = UiTextarea 1줄 + 보내기(solid lg).
+ * 모바일: 행 = 아바타 32 · 이름 14 · 시각 · 본문 15 + 오른쪽 ⋮(답글 · 해결 · 수정 · 삭제), 입력 = UiTextarea 1줄 + 보내기(solid lg).
  * 디자이너 확인 필요: 답글은 최상위 아래 들여 쓴다(왼쪽 54) · "○○ 님에게 답글 ✕" 줄 · 해결된 댓글의 "다시 열기" ·
  *   내 댓글의 수정·삭제(기존 기능) 를 행동 줄 끝에 남김.
  */
@@ -41,7 +41,7 @@ export interface FilesFileCommentsPanelProps {
   state?: FileCommentsState
 }
 
-/** 권한 배지 톤(12 답 A1): 보기 neutral · 댓글 primary · 편집 success · 공동 소유 warning */
+/** 권한 배지 톤: 보기 neutral · 댓글 primary · 편집 success · 공동 소유 warning */
 export const ROLE_TONE = { view: 'neutral', comment: 'primary', edit: 'success', owner: 'warning' } as const
 
 export function FilesFileCommentsPanel({ path, state }: FilesFileCommentsPanelProps) {

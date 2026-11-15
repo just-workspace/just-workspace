@@ -1,5 +1,5 @@
 /**
- * 떠 있는 메일 작성 창(시안 ML2 · 메일 1 ②+③) — Vue 판 composables/useMailCompose.ts 그대로.
+ * 떠 있는 메일 작성 창 — Vue 판 composables/useMailCompose.ts 그대로.
  *
  * - 데스크톱: 앱 안 오른쪽 아래 580×640 창. 여러 개 열 수 있고 각자 최소화(제목 줄만)·크게 보기 가능.
  *   팝업(window.open) 은 폐지.
@@ -34,7 +34,7 @@ export interface ComposeWindow {
   draftId?: string | null
   /** 새 메일 받는 사람 미리 채우기(쉼표로 여러 명) */
   to?: string
-  /** 화면 안 AI 답장 초안(S7) — 본문에 채우고, 보내면 X-AI-Generated 를 붙인다 */
+  /** 화면 안 AI 답장 초안 — 본문에 채우고, 보내면 X-AI-Generated 를 붙인다 */
   aiDraft?: string
   /** 제목 줄 — 제목 입력이 바뀌면 갱신 */
   title: string

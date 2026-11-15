@@ -1,5 +1,5 @@
 /**
- * 채팅 본문 마크다운 그리기(handover-22 "마크다운" · Rich22 #md #md-compact · Mob22 #m-md).
+ * 채팅 본문 마크다운 그리기.
  * 파싱은 utils/chatMarkdown.parseChatMarkdown(AST) — 여기는 React 요소로만 그린다(innerHTML 없음 → XSS 경로 없음, 링크는 http(s) 만).
  *  · h1 24/700 · h2 20/700 · h3 16/700 · `-#` 13 muted · 목록 들여쓰기 20(• ◦ ▪ / 1.)
  *  · 마스크 링크 [글](주소): primary 밑줄 + 호버·포커스 툴팁에 실제 주소(mono 12). 다른 출처면 처음 한 번 확인(도메인 기억 = 개인 localStorage)

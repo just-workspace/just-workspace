@@ -1,4 +1,4 @@
-// 파일 댓글·4단계 권한 R4(12 답 A1 · 시안 R12Files #comments|#viewer|#info|#share)
+// 파일 댓글·4단계 권한
 // 내 권한 줄 · 답글/해결 · Ctrl+Enter · @멘션 머리/바닥 · 보기 권한 안내 + 권한 요청 · 상세 탭 순서 · 공동 소유자 이름 바꾸기 · 공유 권한 메뉴
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'

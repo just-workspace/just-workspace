@@ -1,4 +1,4 @@
-// 핸드오프 12 셸·통화(R4): 상태 메시지 펼침 패널(A4) · 미니 통화 창(A5) · 500 서비스 상태·오피스 미리보기(A7) · 회의 결과 요약(A8)
+// 셸·통화: 상태 메시지 펼침 패널 · 미니 통화 창 · 500 서비스 상태·오피스 미리보기 · 회의 결과 요약
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor, act, render } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'

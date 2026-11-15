@@ -1,6 +1,6 @@
 /**
  * 브랜딩 강조 색 대비 — 관리 › 브랜딩 화면용 얇은 포장(계산은 lib/brandColor 순수 함수).
- * 답변서 B2: 저장 조건 = "조정 후 양쪽 통과". 조정 전 대비가 모자란 테마는 밝기만 자동 조정해 쓰고, 화면에 실제 값을 보여 준다.
+ * 저장 조건 = "조정 후 양쪽 통과". 조정 전 대비가 모자란 테마는 밝기만 자동 조정해 쓰고, 화면에 실제 값을 보여 준다.
  */
 import { fmtRatio, hslToHex, isHexColor, resolveBrandTheme } from '~/lib/brandColor'
 

@@ -1,11 +1,11 @@
 /**
- * 전송 패널(Vue components/files/TransferPanel.vue) — 업로드·다운로드 진행 표시는 여기 한 곳(결정 9).
- *  데스크톱(시안 FilesDesktop variant=transfer · 11 답 D3b): 왼쪽 아래(레일 64 + 24, 아래 24) 폭 380, rounded 12, 그림자.
+ * 전송 패널(Vue components/files/TransferPanel.vue) — 업로드·다운로드 진행 표시는 여기 한 곳.
+ *  데스크톱: 왼쪽 아래(레일 64 + 24, 아래 24) 폭 380, rounded 12, 그림자.
  *    머리 48 "올리는 중 3 / 5 · 약 40초 남음" + [모두 취소] + 접기 → 전체 진행 3px(가로 꽉) →
  *    파일 행 52: 이름 13 + 아래 줄(진행 중 = 4px 막대 + mono 11 "64% · 1.4 / 2.2 MB" / 실패 = danger 12 사유 /
  *    완료 = "완료 · 2.1 MB" / 대기 = "대기 중") · 오른쪽(완료 ✓ "폴더에서 보기" success · 실패 [다시 시도] · 진행·대기 ✕ "취소")
  *    → 안내 12 "창을 닫아도 계속 올립니다 · 탭을 닫으면 멈춤".
- *  모바일(시안 FilesMobile upload): 탭바 위 8(선택 바가 떠 있으면 그 위) · 좌우 12 · rounded 14 · 머리 52 · 행 48.
+ *  모바일: 탭바 위 8(선택 바가 떠 있으면 그 위) · 좌우 12 · rounded 14 · 머리 52 · 행 48.
  * 기존 디스크 기록 진행률(서버가 실제로 쓴 바이트, NFS)은 진행 중 행의 mono 줄 끝에 "· 디스크 80%"로 붙인다(데스크톱).
  */
 import { useState, type CSSProperties } from 'react'

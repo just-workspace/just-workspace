@@ -1,5 +1,5 @@
 /**
- * Ctrl+K 전환기의 "최근"(시안 X2: 최근 6개, 종류 섞음). 클라이언트(localStorage)에만 둔다 — 백엔드 없음.
+ * Ctrl+K 전환기의 "최근"(최근 6개, 종류 섞음). 클라이언트(localStorage)에만 둔다 — 백엔드 없음.
  * 셸이 라우트 변화마다 모듈 단위로 기록하고, 페이지가 더 정확한 이름(채널·문서·폴더)을 알면 pushRecent 로 덮어쓴다.
  * (Vue 판 composables/useRecents.ts 그대로)
  *

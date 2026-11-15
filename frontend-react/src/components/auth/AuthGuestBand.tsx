@@ -1,7 +1,7 @@
 /**
- * 손님 편집 중 상단 띠(Vue components/auth/AuthGuestBand.vue · 시안 8-5-2 · ShellPage G2):
+ * 손님 편집 중 상단 띠(Vue components/auth/AuthGuestBand.vue):
  * 40px, 로고 22 · 문서명 600 · 칩 "손님 · 이름"(muted 20) · 공유자·만료 muted · 오른쪽 [나가기] 28 outline.
- * 나가기 시각 크기는 28 유지, 히트 영역은 40(P7 규칙 5).
+ * 나가기 시각 크기는 28 유지, 히트 영역은 40.
  */
 import { useI18n } from '~/i18n'
 import { useSiteConfig } from '~/composables/useSiteConfig'

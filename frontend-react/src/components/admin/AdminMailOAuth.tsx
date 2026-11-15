@@ -1,6 +1,6 @@
 /**
  * 메일 OAuth2(Gmail/Microsoft 365) 앱 자격 증명 — Vue components/admin/AdminMailOAuth.vue. 관리 › 메일 발송.
- * 제공자마다 카드 하나(카드별 저장, 관리 2 ①). 상태는 StatusDot + 글자(설정됨/미설정).
+ * 제공자마다 카드 하나(카드별 저장). 상태는 StatusDot + 글자(설정됨/미설정).
  * redirect URI 는 읽기 전용 입력(점선 + 복사).
  *
  * @example <AdminMailOAuth />

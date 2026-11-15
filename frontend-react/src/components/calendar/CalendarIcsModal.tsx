@@ -1,5 +1,5 @@
 /**
- * .ics 가져오기·내보내기(Vue components/calendar/CalendarIcsModal.vue · 시안 CL1 ⋯ 메뉴 항목 — 대화 상자 그림은 없어 P4 PatForm 규격:
+ * .ics 가져오기·내보내기(Vue components/calendar/CalendarIcsModal.vue · ⋯ 메뉴 항목 — 대화 상자는 기존 폼 규격:
  * UiModal 기본 폭, 라벨 12/600 필드 + [취소][확인]).
  * 가져오기: 쓸 수 있는 캘린더 고르기 + 파일(.ics, 10MB) → 결과 토스트 "새 n · 갱신 n · 건너뜀 n".
  * 내보내기: 캘린더 고르기 → 파일 다운로드(반복 규칙·회차 예외·참석자 포함 — 서버 직렬화).

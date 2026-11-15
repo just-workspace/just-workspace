@@ -1,5 +1,5 @@
 /**
- * 사이드바 구역 하나(시안 Chat22 #list #cat-empty #drag-over #drag-cat #cat-rename · Mob22 #m-list).
+ * 사이드바 구역 하나.
  * 제목 24 · 12/600(모바일 44 · 13/600): button + aria-expanded, 화살표 100ms −90°(reduce-motion 이면 즉시).
  * 오른쪽 ⋯(사용자·시스템 카테고리 — 카테고리 메뉴) · +(채널 만들기 — 이 카테고리로 / DM 은 새 메시지).
  * "분류 없음"은 제목이 없다. 빈 사용자 카테고리는 점선 칸 안내.

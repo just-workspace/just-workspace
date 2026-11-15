@@ -1,5 +1,5 @@
 /**
- * 메일 폴더 한 줄 — Vue 판 components/mail/MailSidebarFolder.vue (시안 ML1 사이드바): 34 · rounded-sm · 아이콘 16 · 개수 mono 12.
+ * 메일 폴더 한 줄 — Vue 판 components/mail/MailSidebarFolder.vue: 34 · rounded-sm · 아이콘 16 · 개수 mono 12.
  * 고른 폴더 = primary/13 + 600. 모바일(드로어)은 터치 타깃 40. 플랫 목록·다계정 트리 공용.
  * 표시+선택만 담당하고 폴더 메뉴는 actions(Vue #actions 슬롯).
  */

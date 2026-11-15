@@ -81,7 +81,7 @@ export function aiApplyEvent(prev: AiRunMsg, ev: string, payload: any): { msg: A
   let parentId: string | undefined
   let fallback = false
   if (ev === 'token') msg.content = (msg.content || '') + (payload.text || '')
-  // S6a — 답변 메타(저장될 메시지 id·모델·AI 생성 표시)
+  // 답변 메타(저장될 메시지 id·모델·AI 생성 표시)
   else if (ev === 'meta') {
     if (payload.message_id) msg.id = payload.message_id
     if (payload.parent_id) parentId = payload.parent_id
@@ -91,13 +91,13 @@ export function aiApplyEvent(prev: AiRunMsg, ev: string, payload: any): { msg: A
   // 진행 단계 — 같은 id 가 running → done/failed
   else if (ev === 'step' && payload?.id) msg.steps = aiApplyStep(msg.steps, payload)
   else if (ev === 'citation' && payload?.n) msg.citations = aiApplyCitation(msg.citations, payload)
-  // S6b — 메모리에 저장함 [취소]
+  // 메모리에 저장함 [취소]
   else if (ev === 'memory_saved' && payload?.id) msg.memories = [...(msg.memories ?? []), { id: payload.id, kind: payload.kind, text: payload.text }]
   // 이어 받기: 서버에 저장된 받은 부분(화면보다 많을 수 있다)
   else if (ev === 'partial') msg.content = payload.text || ''
-  // S4 — 만든 결과물(문서·묶음) → 결과물 카드
+  // 만든 결과물(문서·묶음) → 결과물 카드
   else if (ev === 'artifact' && (payload?.artifact?.id || payload?.job?.id)) msg.artifacts = [...((msg as any).artifacts ?? []), payload]
-  // C2-10 — 모델 창을 넘어 앞부분을 이번 답에서 뺐다(화면이 대화 맨 위에 안내)
+  // 모델 창을 넘어 앞부분을 이번 답에서 뺐다(화면이 대화 맨 위에 안내)
   else if (ev === 'context_trimmed' && payload?.dropped) msg.trimmed = { dropped: Number(payload.dropped) || 0, window: Number(payload.window) || 0 }
   // 이어 쓰기를 제공자가 못 받음 → 처음부터 다시 만든다
   else if (ev === 'continue_fallback') {
@@ -129,7 +129,7 @@ export function aiApplyEvent(prev: AiRunMsg, ev: string, payload: any): { msg: A
     if (x) x.ok = !!payload.ok
     else msg.tools!.push({ name: payload.name, ok: !!payload.ok })
   }
-  // 쓰기 도구 — 실행하지 않고 승인 요청이 왔다(S3)
+  // 쓰기 도구 — 실행하지 않고 승인 요청이 왔다
   else if (ev === 'write_request' && payload?.id) {
     const list = msg.writes ?? (msg.writes = [])
     const at = list.findIndex(w => w.id === payload.id)

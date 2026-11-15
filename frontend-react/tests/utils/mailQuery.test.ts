@@ -93,7 +93,7 @@ describe('applyLabelChange', () => {
 describe('labelTone', () => {
   it('같은 이름은 늘 같은 색', () => {
     expect(labelTone('프로젝트')).toBe(labelTone('프로젝트'))
-    // 범주 색 cat-1…8(11-A1)
+    // 범주 색 cat-1…8
     expect(labelTone('고객')).toMatch(/^cat-[1-8]$/)
   })
 })

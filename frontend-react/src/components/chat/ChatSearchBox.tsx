@@ -1,5 +1,5 @@
 /**
- * 채팅 헤더 검색칸 + 필터 안내 드롭다운 + 날짜(handover-22 "검색" · §5.5 · 시안 Chat22 #search-focus #search-chips #search-res · Mob22 #m-search).
+ * 채팅 헤더 검색칸 + 필터 안내 드롭다운 + 날짜.
  * 놓는 자리(헤더 오른쪽 끝)는 SHELL — `<ChatSearchBox />`. 모바일 결과 화면 안에서는 `<ChatSearchBox variant="mobile" />`.
  *
  * 접힘: 160×32 bg-muted rounded-md · search 16 · "검색" 13 muted · "Ctrl F"(맥 "⌘F") mono 11.
@@ -427,7 +427,7 @@ export function ChatSearchBox({ variant = 'header', autoFocus = false, className
             </button>
           )}
         </div>
-        {/* 모바일 필터 칩 줄(Mob22) — 누르면 그 키로 값 고르기 */}
+        {/* 모바일 필터 칩 줄 — 누르면 그 키로 값 고르기 */}
         <div className="flex gap-1.5 overflow-x-auto">
           {MOBILE_FILTER_KEYS.map(k => (
             <button

@@ -1,4 +1,4 @@
-// 관리자 › AI 운영 › 감사 로그 — 시안 F2(검색·출처·실패만·CSV, 인자 값 없음 안내, 표) + 결과 없음·실패·로딩 + 모바일 390 목록.
+// 관리자 › AI 운영 › 감사 로그 — 검색·출처·실패만·CSV, 인자 값 없음 안내, 표 + 결과 없음·실패·로딩 + 모바일 390 목록.
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
 import { useIsMobile } from '~/composables/useIsMobile'

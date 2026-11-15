@@ -1,4 +1,4 @@
-// 설정 › AI 연동(MCP) — 시안 H1(기본) · H2(토큰 만들기·한 번 보기·연결 해제 확인·관리자 쓰기 막음·빈·실패·모바일 390).
+// 설정 › AI 연동(MCP) — 기본 화면 · 토큰 만들기·한 번 보기·연결 해제 확인·관리자 쓰기 막음·빈·실패·모바일 390.
 //  ① 커넥터 주소: 읽기 전용(먼저 이걸 연결) · 쓰기 포함(따로 추가 연결, 관리자가 막으면 "조직에서 막음").
 //     주소는 서버가 주는 값 그대로(전용 포트 https://mcp.<도메인>:8443/… — CP 통제, 3차 결정).
 //  ② 연결된 앱: OAuth(claude.ai 등) + 쓰인 개인 토큰. [연결 해제] → 그 앱의 대기 쓰기 요청은 '연결 해제됨' 사유로 거부.
@@ -267,7 +267,7 @@ export default function Page() {
             )}
       </SettingsCard>
 
-      {/* H2-1 토큰 만들기 */}
+      {/* 토큰 만들기 */}
       {creating && (
         <UiModal
           title={t('settings.mcp.createTitle')}
@@ -288,7 +288,7 @@ export default function Page() {
         </UiModal>
       )}
 
-      {/* H2-2 만든 직후 한 번 */}
+      {/* 만든 직후 한 번 */}
       {issued && (
         <UiModal title={t('settings.mcp.issuedTitle')} size="480" persistent onClose={() => setIssued(null)}
           footer={<UiButton size="sm" onClick={() => setIssued(null)}>{t('settings.mcp.copiedDone')}</UiButton>}>
@@ -297,7 +297,7 @@ export default function Page() {
         </UiModal>
       )}
 
-      {/* H2-3 연결 해제 확인 */}
+      {/* 연결 해제 확인 */}
       {confirm && (
         <UiModal
           confirm

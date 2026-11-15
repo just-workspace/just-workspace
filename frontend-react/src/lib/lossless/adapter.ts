@@ -96,7 +96,7 @@ export class LosslessVoiceTransport implements VoiceTransport {
       this.lastRelayError = 'channel id unknown'
       return
     }
-    // 음질 패널 "고급"(handover-20 답) — 샘플레이트 요청·비트심도·버퍼 목표는 송신 설정(VoiceSendConfig)에서 온다
+    // 음질 패널 "고급" — 샘플레이트 요청·비트심도·버퍼 목표는 송신 설정(VoiceSendConfig)에서 온다
     const adv = advancedOf(this.cfg)
     const session = new LosslessSession({
       ...this.options,

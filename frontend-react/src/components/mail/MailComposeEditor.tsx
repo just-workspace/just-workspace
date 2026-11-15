@@ -1,5 +1,5 @@
 /**
- * 메일 작성 본문 에디터 — Vue 판 components/mail/MailComposeEditor.vue (시안 ML2 서식 툴바 · MM3 하단 툴바 · 인라인 답장 Aa).
+ * 메일 작성 본문 에디터 — Vue 판 components/mail/MailComposeEditor.vue (하단 툴바 · 인라인 답장 Aa).
  *  toolbar="desktop" : 본문 위 40 줄 — 굵게·기울임·밑줄 | 글머리·번호 | 링크·인용·코드·이미지 (32 버튼)
  *  toolbar="mobile"  : 본문 아래 48 줄 — Aa · B · I · 글머리 · 링크 … toolbarEnd(서명)
  *  toolbar="none"    : 툴바 없음(인라인 답장 — Aa 로 desktop 툴바를 펼친다)
@@ -20,7 +20,7 @@ import { addToast } from '~/composables/useToast'
 import { UiEditorToolbar, type EditorToolKey } from '~/components/ui/EditorToolbar'
 import './MailComposeEditor.css'
 
-// 메일 서식 도구(시안 MailDesktop tools 배열 순서, '|' = 구분선) — 공용 UiEditorToolbar
+// 메일 서식 도구('|' = 구분선) — 공용 UiEditorToolbar
 const TOOLS: Array<EditorToolKey | '|'> = ['bold', 'italic', 'underline', '|', 'bullet', 'ordered', '|', 'link', 'quote', 'code', 'image']
 const MOBILE_TOOLS: EditorToolKey[] = ['bold', 'italic', 'bullet', 'link']
 

@@ -1,5 +1,5 @@
 // Vue 원본: frontend/pages/setup.vue
-// 최초 설정(FTW · 시안 A4·A5·AM4 · 8-4-1·8-4-2): auth 틀(AuthShell) 위, 폼 위에 "단계명 n / 6 + 진행 바".
+// 최초 설정(FTW · 8-4-1·8-4-2): auth 틀(AuthShell) 위, 폼 위에 "단계명 n / 6 + 진행 바".
 // 관리자 단계 = 이름·아이디·비밀번호(규칙 체크, 확인 칸 대신 보기 토글) + [이전][다음 — 브랜딩] + 백업에서 복원 링크.
 // 기능 선택 = 토글 목록 한 화면(스위치 즉시 저장 — 실패하면 되돌림). API 호출 순서·엔드포인트는 Vue 그대로.
 import { useState, type ChangeEvent, type FormEvent } from 'react'
@@ -104,7 +104,7 @@ export default function Page() {
     catch (e: any) { setError(e?.data?.detail || t('setup.errors.mailFailed')) } finally { setBusy(false) }
   }
 
-  // 기능 선택 — 토글 목록 한 화면(시안 AuthForm:55). 이름·설명은 시안 문구, 목록에 없는 모듈은 서버 이름.
+  // 기능 선택 — 토글 목록 한 화면. 이름·설명은 시안 문구, 목록에 없는 모듈은 서버 이름.
   const FEAT: Record<string, { t: string; d: string }> = {
     mail: { t: t('setup.modules.items.mail.title'), d: t('setup.modules.items.mail.desc') },
     chat: { t: t('setup.modules.items.chat.title'), d: t('setup.modules.items.chat.desc') },

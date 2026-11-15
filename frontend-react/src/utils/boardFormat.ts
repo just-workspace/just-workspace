@@ -1,5 +1,5 @@
 /**
- * 게시판 표기 도우미(시안 BD1~BD4·BM1~BM3 공통).
+ * 게시판 표기 도우미.
  */
 
 const p2 = (n: number) => String(n).padStart(2, '0')
@@ -36,7 +36,7 @@ export function initialOf(name: string): string {
 }
 
 /**
- * 안 읽음 = 굵게(시안 결정 5). 서버의 is_read 가 오면 그것을, 없으면 "아직 안 읽은 필독"만 안다(/must-read).
+ * 안 읽음 = 굵게. 서버의 is_read 가 오면 그것을, 없으면 "아직 안 읽은 필독"만 안다(/must-read).
  * 그 밖의 글은 읽음으로 그린다 — 게시판별 읽음 기록이 서버에 없다(백엔드 갭).
  */
 export function isUnreadPost(post: { id: string; is_read?: boolean }, unreadMustRead: ReadonlySet<string>): boolean {
@@ -45,7 +45,7 @@ export function isUnreadPost(post: { id: string; is_read?: boolean }, unreadMust
   return unreadMustRead.has(post.id)
 }
 
-/** 파일 유형 칩(시안 BD3 첨부 "PDF" 32×36): 글자와 색 토큰 */
+/** 파일 유형 칩("PDF"): 글자와 색 토큰 */
 export function fileKind(name: string): { label: string; tone: 'danger' | 'primary' | 'success' | 'warning' | 'muted' } {
   const ext = (name.split('.').pop() || '').toLowerCase()
   if (ext === 'pdf') return { label: 'PDF', tone: 'danger' }
@@ -55,7 +55,7 @@ export function fileKind(name: string): { label: string; tone: 'danger' | 'prima
   return { label: (ext || 'FILE').toUpperCase().slice(0, 4), tone: 'muted' }
 }
 
-/** 댓글 본문을 텍스트·@언급 조각으로(시안 BD3: @김서연 = accent 바탕 칩) */
+/** 댓글 본문을 텍스트·@언급 조각으로(@김서연 = accent 바탕 칩) */
 export function splitMentions(text: string): Array<{ mention: boolean; text: string }> {
   const out: Array<{ mention: boolean; text: string }> = []
   const re = /(^|[\s(])(@[^\s@,.!?;:()]+)/g

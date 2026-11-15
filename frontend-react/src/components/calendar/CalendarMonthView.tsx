@@ -1,6 +1,6 @@
 /**
  * 월 보기(Vue components/calendar/CalendarMonthView.vue). 데스크톱: 칩 3개 + "+n"(클릭 → 그날 일 보기), 빈 칸 클릭 = 새 일정.
- * 모바일(시안 CM1): 칸 52, 날짜 28 mono 13, 점 ≤3 + "+n", 날짜 탭 = 그날 일정 시트(시안 캘2).
+ * 모바일: 칸 52, 날짜 28 mono 13, 점 ≤3 + "+n", 날짜 탭 = 그날 일정 시트(시안 캘2).
  */
 import { useState } from 'react'
 import { cn } from '~/lib/utils'

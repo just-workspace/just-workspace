@@ -1,5 +1,5 @@
 /**
- * 활동 수신함 목록(Vue components/layout/ActivityList.vue · 시안 X1·X4·P-1·PatActivityMobile):
+ * 활동 수신함 목록(Vue components/layout/ActivityList.vue):
  * 필터 칩 + 날짜 그룹 + 행(아바타 32/40 + 종류 아이콘 배지, 안 읽음 = 굵게, 읽음 = muted).
  * 데스크톱 패널(400)과 모바일 /activity 페이지가 같은 목록을 쓴다.
  *

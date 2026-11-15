@@ -1,5 +1,5 @@
 /**
- * 메시지 한 줄(텍스트 · 첨부 공용) — handover-22 "메시지" · Chat22 · Rich22 · Mob22. Vue 원본: frontend/components/chat/ChatMessage.vue
+ * 메시지 한 줄(텍스트 · 첨부 공용). Vue 원본: frontend/components/chat/ChatMessage.vue
  * 행 틀 = ChatMessageRow(cozy · compact · mobile), 본문 = ChatMarkdown, 첨부 = ChatAttachmentGrid(+ 이미지 보기 ChatImageViewer).
  *  · 나·내 역할·@everyone 멘션, 또는 나에게 온 답장(reply_to.sender = 나 && reply_ping) → bg-overlay-mention
  *  · 데스크톱: 호버·키보드 포커스 바(ChatMessageActions) · 단축키(호버·포커스 중) R 답장 · T 스레드 · S 저장 · E 수정

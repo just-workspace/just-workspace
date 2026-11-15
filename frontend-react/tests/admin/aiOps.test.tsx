@@ -1,4 +1,4 @@
-// 관리자 › AI 운영(시안 F1·F2·I1·I2): 탭 경로, 사용량 수치·표·실패/권한 상태, 쓰기 현황, 감사 필터·빈 상태·CSV,
+// 관리자 › AI 운영: 탭 경로, 사용량 수치·표·실패/권한 상태, 쓰기 현황, 감사 필터·빈 상태·CSV,
 // 정책 저장(바뀐 값만), 피드백 목록 → 첨부 대화 패널(열람 안내) → 스냅샷 삭제 확인 · 만료(410) · 빈 목록 · 실패.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'

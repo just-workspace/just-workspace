@@ -1,6 +1,6 @@
 /**
  * [할일에 등록] 공용 — 고른 항목을 /api/ai/inline/tasks 로(서버가 writes.request_write → 승인 → 실행).
- * 등록 뒤 한 줄: "n개를 할일에 등록했습니다 [되돌리기] [할일 보기]"(10분 안 되돌리기 — S3 되돌리기 창).
+ * 등록 뒤 한 줄: "n개를 할일에 등록했습니다 [되돌리기] [할일 보기]"(10분 안 되돌리기 — 되돌리기 창).
  */
 import { useRef, useState } from 'react'
 import { useI18n } from '~/i18n'

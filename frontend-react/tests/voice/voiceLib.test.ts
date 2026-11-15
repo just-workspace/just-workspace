@@ -1,4 +1,4 @@
-// 음성 채널(handover-20 · R17): Opus 레시피 · SDP 손질 · 통계 요약 · 로컬 설정 · 전송 레지스트리 — 순수 함수
+// 음성 채널: Opus 레시피 · SDP 손질 · 통계 요약 · 로컬 설정 · 전송 레지스트리 — 순수 함수
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   captureFor, publishFor, fmtpFor, clampMusicBitrate, tierBadge, formatBitrate, isDegraded, screenAudioConfig,

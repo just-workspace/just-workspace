@@ -1,5 +1,5 @@
 /**
- * 첨부 한도 막대 — Vue 판 components/mail/MailComposeQuota.vue (시안 ML2): 80×4 · "1.1 / 15 MB" mono. 90% 넘으면 warning.
+ * 첨부 한도 막대 — Vue 판 components/mail/MailComposeQuota.vue: 80×4 · "1.1 / 15 MB" mono. 90% 넘으면 warning.
  */
 import { useI18n } from '~/i18n'
 // Vue 의 class 묶음처럼 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지워 Vue 와 달라진다)

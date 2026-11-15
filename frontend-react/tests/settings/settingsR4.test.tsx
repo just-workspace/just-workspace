@@ -1,4 +1,4 @@
-// R4 설정·보안(핸드오프 12) — 캘린더·채팅 설정 조각, 2단계 인증 모달, 세션 카드, 비밀번호 체크 목록
+// 설정·보안 — 캘린더·채팅 설정 조각, 2단계 인증 모달, 세션 카드, 비밀번호 체크 목록
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { i18n } from '~/i18n'

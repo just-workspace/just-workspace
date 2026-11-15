@@ -1,5 +1,5 @@
 // 승인 입구(사용자 결정): 레일 '승인'은 대기 건이 있을 때만 배지와 함께, 실시간 approvals.count 이벤트로 건수 갱신,
-// 건수가 늘고 대기함 밖이면 토스트(B2-4), AI 사이드바 진입 칸.
+// 건수가 늘고 대기함 밖이면 토스트, AI 사이드바 진입 칸.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, act, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'

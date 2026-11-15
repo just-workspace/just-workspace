@@ -1,5 +1,5 @@
 // Vue 원본: frontend/pages/login.vue
-// 로그인(시안 A1·AM1 · AuthForm login · 8-3-1~3). 모듈 셸(AuthShell)로 감싼다.
+// 로그인. 모듈 셸(AuthShell)로 감싼다.
 // 서버 오류 = 폼 상단 danger 타일, Caps Lock = 비밀번호 아래 warning 힌트, 보조 진입 = "또는" 아래.
 // 2단계 인증 계정이면 같은 자리에서 코드 입력 단계로 넘어간다(/api/auth/2fa/verify).
 // ※ 초록 "Git 바로가기" 버튼은 운영 결정으로 유지(사용자 고집) — 클래스 그대로.
@@ -309,7 +309,7 @@ export default function Page() {
           <AuthDivider label={t('authScreens.login.or')} />
 
           <div className="flex flex-col gap-2">
-            {/* 비회원용 코드 저장소(Gitea) 바로가기 — 시그니처 초록(운영 결정으로 유지, 시안 8-3-3 의 outline 대신) */}
+            {/* 비회원용 코드 저장소(Gitea) 바로가기 — 시그니처 초록(운영 결정으로 유지) */}
             <a
               href={giteaUrl || '/git/'}
               className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-success px-4 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-success/90 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-success/50"

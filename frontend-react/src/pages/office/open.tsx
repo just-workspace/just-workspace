@@ -1,11 +1,11 @@
 /**
- * 오피스 새 탭(Vue pages/office/open.vue) — 여는 중(시안 ShellPage variant=officeLoading · 11 답 D6c). 셸 없음(routes.ts layout:false).
+ * 오피스 새 탭(Vue pages/office/open.vue) — 여는 중. 셸 없음(routes.ts layout:false).
  *  머리 40 bg-card: 브랜드 타일 22 · 파일 이름 600 · 폴더 경로(내 파일 › 프로젝트) muted
  *  가운데: 형식 타일 48(시트 success · 문서 primary · 슬라이드 warning /15) → "파일 여는 중…" 16/600 →
  *          진행 220×4 → "문서 편집기를 불러오고 있습니다 · 10초가 넘으면 [미리보기로 열기]" 13 muted.
  *  편집기 세션을 받으면 이 탭이 편집기로 넘어간다(OnlyOffice 는 WOPI 표준대로 access_token 을 POST 폼으로).
  *  미리보기로 열기 = 같은 탭에서 글자 미리보기(/api/files/preview → type office) — 편집기가 끝내 안 뜨는 경우.
- *    미리보기(시안 R12Misc office · 답변서 A7 M2): 머리 48(브랜드 · 형식 아이콘 · 파일명 · "미리보기" 배지 · [편집기 다시 열기][다운로드])
+ *    미리보기: 머리 48(브랜드 · 형식 아이콘 · 파일명 · "미리보기" 배지 · [편집기 다시 열기][다운로드])
  *    → warning 띠 "글자만 보여 드립니다"(role=status) → bg-paper 종이 760 에 글자, 끝에 "[표 1개 · 이미지 2개 생략됨]"(서버 omitted).
  *  ?path=<가상경로> 또는 ?new=doc|sheet|slide&dir=<폴더>(새 문서를 만들고 연다).
  */
@@ -117,7 +117,7 @@ export default function OfficeOpenPage() {
       else window.location.replace(url)
     } catch (e: any) {
       if (phaseRef.current !== 'opening') return
-      // 서버 detail(영문 원문)은 보이지 않는다 — 상태 코드로 한국어 안내(검수 P8 K4).
+      // 서버 detail(영문 원문)은 보이지 않는다 — 상태 코드로 한국어 안내.
       // 지원하지 않는 형식(400)은 다시 시도해도 같으므로 [다시 시도]를 숨기고 미리보기만 둔다.
       const status = Number(e?.statusCode ?? e?.status ?? e?.response?.status ?? 0)
       setUnsupported(status === 400)

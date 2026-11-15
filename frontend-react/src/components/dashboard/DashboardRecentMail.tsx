@@ -1,5 +1,5 @@
 /**
- * 최근 메일(시안 Dash17 mail): 받은편지함 최근 메일, 두 줄 행 56 = 아바타(보낸 사람 첫 글자) + 제목(안 읽음 semibold) /
+ * 최근 메일: 받은편지함 최근 메일, 두 줄 행 56 = 아바타(보낸 사람 첫 글자) + 제목(안 읽음 semibold) /
  * 보낸 사람 + 시각. 머리 개수 = 받은편지함 안 읽음(요약), "메일 보기 ›". 행 수 = min(4, 상한 − 1).
  * 연결된 계정이 없으면 빈 카드(맨 아래 묶음 "메일 계정 없음 · 메일 연결" — 메일함은 부르지 않는다).
  * 계정 로그인 실패(sync_error)면 카드 안 경고 타일 "{계정} 로그인 실패 · 다시 연결"(→ 설정 › 메일).
@@ -38,7 +38,7 @@ export function DashboardRecentMail() {
   async function load() {
     setLoading(true); setError(false); setNoAccount(false)
     try {
-      // 계정 목록을 먼저 본다 — 계정이 없으면 /api/mail/mailboxes 는 404 라 부르지 않는다(검수 P8 U3).
+      // 계정 목록을 먼저 본다 — 계정이 없으면 /api/mail/mailboxes 는 404 라 부르지 않는다.
       const accounts = await $fetch<Account[]>('/api/mail/accounts')
       if (!accounts.length) { setNoAccount(true); setMails([]); setFailedAccount(null); return }
       setFailedAccount(accounts.find(a => a.sync_error) ?? null)

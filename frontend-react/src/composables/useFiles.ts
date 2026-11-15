@@ -34,11 +34,11 @@ export interface FileItem {
   owner?: { id: string | null; name: string } | null
   /** 내 즐겨찾기 */
   is_starred?: boolean
-  /** 공유받은 항목(shared-with-me/..)이면 그 항목에 대한 내 권한(p9) */
+  /** 공유받은 항목(shared-with-me/..)이면 그 항목에 대한 내 권한 */
   role?: ShareRole
 }
 
-/** 공유 권한 4단계(p9, 시안 sharePeople "보기 · 댓글 · 편집 · 공동 소유") */
+/** 공유 권한 4단계("보기 · 댓글 · 편집 · 공동 소유") */
 export type ShareRole = 'view' | 'comment' | 'edit' | 'owner'
 
 /** 최근·즐겨찾기 행(GET /recent · /stars) */
@@ -94,7 +94,7 @@ export interface ShareLinkResponse {
   has_password?: boolean
   allow_download?: boolean
   item_count?: number
-  /** 폴더 하나짜리 링크 — 손님 화면에서 안을 둘러본다(wave 7) */
+  /** 폴더 하나짜리 링크 — 손님 화면에서 안을 둘러본다 */
   is_folder?: boolean
 }
 
@@ -107,7 +107,7 @@ export interface ShareLinkListEntry extends ShareLinkItem {
   paths?: string[]
   /** 이메일로 보낸 받는 사람 수(성공만, R7) */
   email_count?: number
-  /** 폴더 하나짜리 링크(wave 7) */
+  /** 폴더 하나짜리 링크 */
   is_folder?: boolean
   /** false = "다운로드 막음"으로 바꿀 수 없다(파일 하나짜리 링크인데 미리보기가 안 되는 형식 — 서버 판정) */
   can_block_download?: boolean
@@ -174,7 +174,7 @@ export interface UserShareEntry {
   /** 공유가 생긴 까닭 — "channel_folder" = 채널 폴더 연결이 만든 것(연결을 풀면 회수), null = 사람이 건 공유 */
   origin?: string | null
   can_write: boolean
-  /** 권한(p9). 예전 서버면 없음 → can_write 로 */
+  /** 권한. 예전 서버면 없음 → can_write 로 */
   role?: ShareRole
   /** 만든 사람(비었으면 원 소유자) */
   created_by?: string | null
@@ -195,18 +195,18 @@ export interface SharedWithMeEntry {
   owner_path: string
   owner: { id: string; display_name: string }
   can_write: boolean
-  /** 내 권한(p9) */
+  /** 내 권한 */
   role?: ShareRole
   /** 채널로 받은 공유면 그 채널 */
   via_channel?: { id: string; name: string } | null
   is_dir: boolean
   size: number
   modified_at: string | null
-  /** 받은 날(공유가 만들어진 때, R4) */
+  /** 받은 날(공유가 만들어진 때) */
   shared_at?: string | null
 }
 
-/** 사이드바 뷰(시안 06-1 결정 5). files = 폴더 탐색(my/shared/users) */
+/** 사이드바 뷰. files = 폴더 탐색(my/shared/users) */
 export type FilesView = 'files' | 'shared-with-me' | 'recent' | 'starred' | 'links' | 'trash'
 
 export type ViewMode = 'list' | 'grid'
@@ -240,7 +240,7 @@ export interface FilesState {
   searchActive: boolean
   searchQuery: string
   searchResults: FileItem[]
-  // 시안 06-1 — 뷰·휴지통·공유 표시
+  // 뷰·휴지통·공유 표시
   view: FilesView
   trashItems: TrashEntry[]
   trashRetentionDays: number | null
@@ -249,7 +249,7 @@ export interface FilesState {
   shareCounts: Record<string, { users: number; link: boolean }>
   /** 목록 맨 위 인라인 편집 행(새 폴더) / 행 안 이름 바꾸기 */
   inlineEdit: FilesInlineEdit
-  // 최근·즐겨찾기 뷰(p4 /recent · /stars)
+  // 최근·즐겨찾기 뷰(/recent · /stars)
   recentItems: QuickItem[]
   starredItems: QuickItem[]
   /** 공유받은 폴더 안 탐색 — null 이면 공유받음 첫 목록 */
@@ -389,7 +389,7 @@ function xhrUpload(file: File, path: string, existing?: Transfer): Promise<{ nam
     xhr.open('POST', apiUrl(`/api/files/upload?path=${encodeURIComponent(path)}&upload_id=${uploadId}&size=${file.size}`))
     xhr.withCredentials = true
     for (const [k, v] of Object.entries(bundledAuthHeaders())) xhr.setRequestHeader(k, v)
-    // e.total 은 multipart 본문 크기(경계·머리 포함)라 파일 크기와 다르다 — 6 B 파일이 "완료 · 191 B"(검수 P8 K3).
+    // e.total 은 multipart 본문 크기(경계·머리 포함)라 파일 크기와 다르다 — 6 B 파일이 "완료 · 191 B".
     // 진행 비율만 받아 파일 크기에 맞춘다.
     xhr.upload.onprogress = (e) => {
       const ratio = e.total ? Math.min(1, e.loaded / e.total) : 0
@@ -769,7 +769,7 @@ export function navigateToPath(path: string) {
   fetchFiles(path)
 }
 
-// ─── 시안 06-1 추가: 뷰·휴지통·버전·사람 공유·이동 ───
+// ─── 뷰·휴지통·버전·사람 공유·이동 ───
 
 export function setView(v: FilesView) {
   set({ view: v, inlineEdit: null, selectedItems: new Set(), listError: null })
@@ -781,7 +781,7 @@ export function setView(v: FilesView) {
   else if (v === 'starred') fetchStars().catch(() => {})
 }
 
-// ─── p4: 최근·즐겨찾기·활동 ───
+// ─── 최근·즐겨찾기·활동 ───
 
 /** 파일을 열었음을 기록(미리보기·편집기·내려받기로 열 때). 실패해도 여는 동작엔 영향 없음. */
 export function markRecent(path: string) {
@@ -831,7 +831,7 @@ export async function fetchActivity(path: string, includeChildren = false) {
   return r.items
 }
 
-// ─── p4: 공유 링크 확장·채널·휴지통 단건 ───
+// ─── 공유 링크 확장·채널·휴지통 단건 ───
 
 /** 링크 만들기 — 하나(paths 1개) 또는 묶음(paths 2+ → 받는 쪽은 zip 하나). 비밀번호·내려받기 막음 포함. */
 export async function createLink(opts: { paths: string[]; isDir?: boolean; expiresIn?: string; oneTime?: boolean; canEdit?: boolean; password?: string; allowDownload?: boolean }) {
@@ -897,7 +897,7 @@ export async function deleteTrashItem(trashName: string) {
   fetchStorageInfo()
 }
 
-// ─── p4: 공유받은 폴더 안 ───
+// ─── 공유받은 폴더 안 ───
 
 export async function openSharedFolder(entry: { share_id: string; name: string; owner: { display_name: string } }, sub = '') {
   const seq = ++sharedSeq
@@ -977,7 +977,7 @@ export async function fetchVersions(path: string) {
   return r.versions
 }
 
-/** 버전 목록 + 현재본 작성자(p4) */
+/** 버전 목록 + 현재본 작성자 */
 export async function fetchVersionInfo(path: string) {
   const r = await $fetch<{ versions: VersionEntry[]; count: number; current_author?: { id: string; name: string } | null }>('/api/files/versions', { params: { path } })
   return { versions: r.versions, currentAuthor: r.current_author ?? null }
@@ -991,7 +991,7 @@ export async function restoreVersion(path: string, version: string) {
 export async function fetchUserShares(path: string) {
   return (await fetchShareInfo(path)).shares
 }
-/** 공유 목록 + 원 소유자 + 내 권한(p9). path 는 my/.. 또는 공동 소유로 받은 shared-with-me/.. */
+/** 공유 목록 + 원 소유자 + 내 권한. path 는 my/.. 또는 공동 소유로 받은 shared-with-me/.. */
 export async function fetchShareInfo(path: string): Promise<UserShareInfo> {
   const r = await $fetch<Partial<UserShareInfo> & { shares: UserShareEntry[] }>('/api/files/share-user/list', { params: { path } })
   return { shares: r.shares, owner: r.owner ?? null, my_role: r.my_role ?? 'owner' }
@@ -1010,7 +1010,7 @@ export async function shareWithUsers(
   return r
 }
 
-/** 공유 한 줄 권한 바꾸기(p9) */
+/** 공유 한 줄 권한 바꾸기 */
 export async function updateUserShare(id: string, role: ShareRole) {
   await $fetch(`/api/files/share-user/${id}`, { method: 'PATCH', body: { role } })
 }
@@ -1040,7 +1040,7 @@ export async function fetchSharedWithMe() {
 
 /**
  * 나에게 공유된 파일 내려받기 — 경로가 아니라 공유 id 로 받는다(전송 패널에 진행률).
- * sub 를 주면 공유받은 폴더 안의 그 파일(p4).
+ * sub 를 주면 공유받은 폴더 안의 그 파일.
  */
 export async function downloadSharedWithMe(entry: Pick<SharedWithMeEntry, 'share_id' | 'name' | 'size'>, sub?: string) {
   const t = addTransfer(entry.name, 'down', entry.size)
@@ -1210,13 +1210,13 @@ export function useFiles() {
     searchQuery: s.searchQuery,
     sortedItems,
     breadcrumbs,
-    // 시안 06-1
+    // 뷰·휴지통·공유
     view: s.view,
     trashItems: s.trashItems,
     trashRetentionDays: s.trashRetentionDays,
     sharedWithMe: s.sharedWithMe,
     inlineEdit: s.inlineEdit,
-    // p4
+    // 최근·즐겨찾기·공유 확장
     recentItems: s.recentItems,
     starredItems: s.starredItems,
     sharedBrowse: s.sharedBrowse,

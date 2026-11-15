@@ -1,11 +1,11 @@
 // Vue 원본: frontend/pages/settings/ai.vue
-// 설정 › AI(시안 SettingsPage section=ai · Review11 D1c).
+// 설정 › AI.
 //  ① 기본 모델 — 라디오 행: 워크스페이스 기본 · 워크스페이스 고급(관리자가 지정했을 때) · 내 API 키. 고르면 바로 저장(PUT /api/ai/my-settings) + "저장됨 ✓".
 //  ② 내 API 키 — 관리자가 허용한 경우만. 제공자 160 + API 키(저장돼 있으면 점선 칸에 가림값 + [바꾸기]),
 //     "연결 확인됨 · MM/DD", 카드 안에 모델·주소 칸, 푸터 = 왼쪽 "키 삭제"(danger) · 오른쪽 [연결 시험][되돌리기][저장]
-//     — 카드별 저장 규칙(변경 없으면 되돌리기·저장 비활성, 답변서 B5).
+//     — 카드별 저장 규칙(변경 없으면 되돌리기·저장 비활성).
 //  ③ 도구 기본값 · 지침 — 스위치 행 바로 저장, 내 지침 텍스트 칸(모든 대화에 붙음, 칸을 벗어나면 저장).
-//  외부 AI 데이터 접근 동의 카드는 ② 개인 키 카드 바로 아래, 스위치 즉시 저장(답변서 B5).
+//  외부 AI 데이터 접근 동의 카드는 ② 개인 키 카드 바로 아래, 스위치 즉시 저장.
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
 import { useHead } from '~/lib/head'
@@ -278,7 +278,7 @@ export default function SettingsAiPage() {
                   </SettingsCard>
                 )}
 
-                {/* 외부 AI 데이터 동의 — 개인 키 카드 바로 아래(답변서 B5) */}
+                {/* 외부 AI 데이터 동의 — 개인 키 카드 바로 아래 */}
                 {aiStatus.external && aiStatus.external_allow_data && (
                   <SettingsCard title={t('settings.ai.consentTitle')} saved={consentSaved}>
                     <UiSwitch modelValue={consent} label={t('ai.settings.consentLabel')} description={t('ai.settings.consentDesc')} className="w-full" onUpdateModelValue={v => void setConsent(v)} />
@@ -313,7 +313,7 @@ export default function SettingsAiPage() {
                   </div>
                 </SettingsCard>
 
-                {/* ④ 메모리(S6b, 시안 D2) — 별도 화면 */}
+                {/* ④ 메모리 — 별도 화면 */}
                 <SettingsCard title={t('ai.memory.title')} description={t('ai.memory.manageDesc')}>
                   <UiButton as="a" href="/settings/ai/memory" variant="outline" size="sm" iconRight="chevron-right" onClick={(e: MouseEvent) => { e.preventDefault(); void navigateTo('/settings/ai/memory') }}>{t('ai.memory.manage')}</UiButton>
                 </SettingsCard>

@@ -1,5 +1,5 @@
 // Vue 원본: frontend/components/git/GitRepoCard.vue
-// 저장소 카드(시안 GT1): 16 패딩 · rounded-12 · bg-card. "소유자 /" muted + 이름 14/600 + 공개 칩 18(muted)
+// 저장소 카드: 16 패딩 · rounded-12 · bg-card. "소유자 /" muted + 이름 14/600 + 공개 칩 18(muted)
 // → 설명 13 muted → 언어 점 9(primary — 인라인 hex 폐지) · ★ n · 갱신 시각(mono). 카드 전체가 링크.
 import type { RepoSummary } from '~/composables/useGit'
 import { useI18n } from '~/i18n'

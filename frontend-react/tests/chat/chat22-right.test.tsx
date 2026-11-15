@@ -1,4 +1,4 @@
-// handover-22 RIGHT — 검색 질의 파서(칩 ↔ SearchParams 왕복 · 날짜 · has 여러 개) · 결과 묶음/강조
+// 채팅 RIGHT — 검색 질의 파서(칩 ↔ SearchParams 왕복 · 날짜 · has 여러 개) · 결과 묶음/강조
 // · 스레드 목록(정렬 · 이름 없는 표시 40자 · 보관 판정 · 실시간 갱신) · 검색칸 칩 입력 · 스레드 행 · 포럼 썸네일
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act, fireEvent, render, screen } from '@testing-library/react'

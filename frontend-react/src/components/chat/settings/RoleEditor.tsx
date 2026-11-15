@@ -1,5 +1,5 @@
 /**
- * 역할 편집(Settings22 #roles #role-perm #role-members #role-managed #role-locked · 모바일 #m-role-edit).
+ * 역할 편집(모바일 #m-role-edit).
  * 머리: 색 점 + "역할 편집 — 이름" 16/600 (+ 그룹 연결이면 "○○ 그룹에서 자동" 배지).
  * 탭(밑줄형 14/500, 선택 = 2px primary 밑줄): 표시 · 권한 · 멤버 N. @everyone 은 권한만(서버가 권한만 받는다).
  *  - 표시: 이름 · 색(UiColorSwatches, 값 = 서버 토큰 키) + 배경/카드 위 미리보기 · 따로 묶기(hoist) · 멘션 허용 ·

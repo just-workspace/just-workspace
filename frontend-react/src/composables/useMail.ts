@@ -148,7 +148,7 @@ export interface SendMessageData {
   signature_id?: string | null
   /** 답장 원문이 있는 메일함 — 서버가 원문 Message-ID·References 를 찾는다 */
   reply_mailbox_id?: string | null
-  /** 화면 안 AI 답장 초안으로 쓴 메일(S7) — 서버가 X-AI-Generated 를 붙인다 */
+  /** 화면 안 AI 답장 초안으로 쓴 메일 — 서버가 X-AI-Generated 를 붙인다 */
   ai_generated?: boolean
 }
 
@@ -830,7 +830,7 @@ export async function bulkOn(ids: string[], action: string, mailboxId?: string):
   }
 }
 
-/** 선택된 메일 전부에 — 선택 바(시안 ML1). */
+/** 선택된 메일 전부에 — 선택 바. */
 export async function bulkAction(action: string, mailboxId?: string): Promise<boolean> {
   return bulkOn(Array.from(get().selectedIds), action, mailboxId)
 }

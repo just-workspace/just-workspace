@@ -1,6 +1,6 @@
 /**
  * 채팅 화면. Vue 원본: frontend/pages/chat.vue
- * 데스크톱(handover-21 · 22 셸, 디스코드식 4열): 레일 64(셸) · 채널 목록(기본 298, 드래그 199–367 · 더블클릭 298, 레일 채팅 아이콘을 다시 누르면 접힘)
+ * 데스크톱(22 셸, 디스코드식 4열): 레일 64(셸) · 채널 목록(기본 298, 드래그 199–367 · 더블클릭 298, 레일 채팅 아이콘을 다시 누르면 접힘)
  *   · 대화 1fr · 오른쪽 자리 하나(멤버 264 / 스레드 400 / 스레드 목록 400 / 검색 결과 400 / 고정 400 / 음성 글 채팅 340 — 서로 배타,
  *   새로 연 것이 바꿔 낀다, utils/chatRightColumn). 실효 폭 1180 미만이면 오른쪽 자리는 대화 위 덮개.
  *   채팅 화면엔 데스크톱 전역 상단바가 없다(routes.ts noDesktopTopbar) — 위쪽 크롬 = 채널 머리 49.
@@ -8,7 +8,7 @@
  *   채팅 설정(useChatUi.settings)이 열리면 대화 영역 위 전체(레일 제외)를 덮는다 — ChatSettingsScreen(SETTINGS 담당, lazy).
  * 모바일(390): 한 번에 한 화면 — 목록 → 대화 → (스레드 · 스레드 목록 · 검색 · 멤버 · 고정 전체 화면). 대화 이상에서는 탭바를 숨긴다.
  *   목록으로 돌아가기: 상단 ‹(44) 또는 화면 왼쪽 가장자리에서 밀기. 단계는 주소에 싣는다(utils/chatStage).
- * 떠 있는 것: 프로필 팝아웃(Pop22) · 사람별 음량(Pop22 #vol) · 이모지 피커(COMPOSER).
+ * 떠 있는 것: 프로필 팝아웃 · 사람별 음량 · 이모지 피커(COMPOSER).
  * 소켓은 앱 전체가 쓴다(layouts/default). 화면을 떠난다고 끊지 않는다 — 끊는 건 로그아웃.
  */
 import { lazy, Suspense, useEffect, useRef, useState, type ComponentType, type TouchEvent } from 'react'
@@ -133,7 +133,7 @@ export default function ChatPage() {
   // 3단 경로: 워크스페이스 / 채팅 / #채널 (모아보기면 그 이름)
   const location = (() => {
     const ch = selectedChannel
-    // 비공개 채널은 '#' 을 붙이지 않는다(헤더는 자물쇠 — 경로는 글자뿐이라 이름만, 검수 P8 K9)
+    // 비공개 채널은 '#' 을 붙이지 않는다(헤더는 자물쇠 — 경로는 글자뿐이라 이름만)
     if (ch) return ch.type === 'dm' ? getDMDisplayName(ch) : ch.type === 'private' ? ch.name : `#${ch.name}`
     if (collection) return { threads: t('chat.sidebar.threads'), drafts: t('chat.sidebar.drafts'), saved: t('chat.sidebar.saved') }[collection]
     return ''
@@ -156,7 +156,7 @@ export default function ChatPage() {
   // 모바일 화면 단계
   const hasDetail = !!selectedChannelId || !!collection
 
-  // Shell Handoff: 모바일에서 대화 이상이 열려 있으면 하단 탭바를 숨긴다(목록에선 유지)
+  // 모바일에서 대화 이상이 열려 있으면 하단 탭바를 숨긴다(목록에선 유지)
   useEffect(() => { setSharedState('mobile-detail-open', !!(isMobile && (hasDetail || panel))) }, [hasDetail, panel, isMobile])
   useEffect(() => () => { setSharedState('mobile-detail-open', false) }, [])
   // 모바일은 단계마다 채팅 자체 머리가 있다 — 공용 상단바를 숨겨 제목이 두 번 보이지 않게
@@ -357,7 +357,7 @@ export default function ChatPage() {
           {collection && !selectedChannelId
             ? <ChatCollectionView key={collection} kind={collection} onBack={backToList} />
             : selectedChannel?.is_voice
-              // 음성 채널(handover-20) — 글 대신 참가자 목록·들어가기. 다른 패널이 오른쪽 자리를 쓰면 글 채팅은 숨긴다
+              // 음성 채널 — 글 대신 참가자 목록·들어가기. 다른 패널이 오른쪽 자리를 쓰면 글 채팅은 숨긴다
               ? <VoiceChannelView onBack={backToList} onOpenChannels={portraitDesk ? () => setDrawerOpen(true) : undefined} chatHidden={!!deskRight} />
               : <ChatConversation onBack={backToList} onOpenChannels={portraitDesk ? () => setDrawerOpen(true) : undefined} />}
         </section>
@@ -400,9 +400,9 @@ export default function ChatPage() {
       {showCreateModal && <ChatCreateModal onClose={() => setShowCreateModal(false)} />}
       {notifySheetChannelId && <ChatNotifySheet />}
       {inviteOpen && selectedChannel && <ChatInviteModal />}
-      {/* 이모지 피커(Picker22) — useChatUi.emojiPicker 로 스스로 뜬다(컴포저 · 리액션) */}
+      {/* 이모지 피커 — useChatUi.emojiPicker 로 스스로 뜬다(컴포저 · 리액션) */}
       <ChatEmojiPicker />
-      {/* 프로필 팝아웃(Pop22) · 사람별 음량(Pop22 #vol) */}
+      {/* 프로필 팝아웃 · 사람별 음량 */}
       <ChatProfilePopoutHost />
       <ChatUserVolumeHost />
     </div>

@@ -1,5 +1,5 @@
 // Vue 원본: frontend/pages/mail/[id].vue
-// 모바일 메일 본문(시안 MM2 = ShellMobile detail · 메일 5 ②): /mail/:id 푸시 + 데스크톱과 같은 MailReader.
+// 모바일 메일 본문: /mail/:id 푸시 + 데스크톱과 같은 MailReader.
 // 상단 56 = ‹ 폴더 · n / N(mono) · 보관 · ⋯(읽지 않음·스팸·삭제·원문 보기), 별표는 제목 옆, 하단 고정 답장·전체 답장·전달.
 // 데스크톱에서 이 주소로 오면 목록 화면의 읽기 판으로 연다.
 import { useEffect, useRef, useState } from 'react'

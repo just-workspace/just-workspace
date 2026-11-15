@@ -1,5 +1,5 @@
 /**
- * 모델 피커 내용(Vue components/ai/AiModelPicker.vue · 시안 AI3 AiDesktop:33 · 결정 AI 2 ①):
+ * 모델 피커 내용(Vue components/ai/AiModelPicker.vue):
  *  묶음 머리(11/600 · 0.08em, 10 14 4) "워크스페이스 제공" / "내 API 키"
  *  · 옵션 min 48(이름 600 + 설명 12 muted · 선택 ✓ primary) · 선 아래 "이 대화에서 쓸 도구" + 행 40(이름 + 스위치).
  * 모델·도구 이름은 서버 응답(/api/ai/status)을 그대로 보인다. 대화별 모델 전환은 백엔드에 없어(보고서 백엔드 갭) 지금 쓰는 쪽만 고를 수 있다.

@@ -1,5 +1,5 @@
 /**
- * 모바일 ⋯ 시트 — Vue 판 components/contacts/ContactsMobileMenu.vue (시안 CTM1 · 연1 ① "주소록·그룹·가져오기·내보내기"): 항목 48.
+ * 모바일 ⋯ 시트 — Vue 판 components/contacts/ContactsMobileMenu.vue ("주소록·그룹·가져오기·내보내기"): 항목 48.
  * 범위(모든 연락처 · 즐겨찾기 · 워크스페이스 사용자 · 주소록 · 그룹) 선택 + 새 주소록 + vCard 가져오기/내보내기 + 연동 계정.
  * 페이지가 mobileMenuOpen 일 때만 마운트한다(닫기 = setMobileMenuOpen(false)).
  */

@@ -1,12 +1,12 @@
 /**
- * 파일 댓글(p9) — Vue 판 composables/useFileComments.ts 그대로. GET/POST /api/files/comments, PATCH/DELETE /api/files/comments/{id}.
+ * 파일 댓글 — Vue 판 composables/useFileComments.ts 그대로. GET/POST /api/files/comments, PATCH/DELETE /api/files/comments/{id}.
  * 파일은 내 경로(my/..)든 공유받은 경로(shared-with-me/..)든 같은 댓글을 본다(서버가 소유자 경로로 묶는다).
  * 쓰기는 댓글 권한 이상(서버가 can_comment 로 알려 준다), 수정·삭제는 쓴 사람만(is_mine).
  *
  * Vue 는 호출마다 새 상태를 만드는 composable(싱글턴 아님)이라 React 도 컴포넌트 지역 상태 hook 이다.
  * React: const { items, canComment, role, owner, isOriginalOwner, loading, error, load, add, edit, remove, resolve, mentionable, requestAccess } = useFileComments(path)
  *   path 는 Vue 의 Ref/getter 대신 렌더 시점 문자열 — load·add 는 부를 때의 최신 path 를 쓴다.
- * R4(12 답 A1): 답글(add 의 parentId) · 위치 조각(anchor) · 해결(resolve) · "@" 후보(mentionable — 그 파일 권한 표시) ·
+ * 답글(add 의 parentId) · 위치 조각(anchor) · 해결(resolve) · "@" 후보(mentionable — 그 파일 권한 표시) ·
  *   보기 권한의 "권한 요청"(requestAccess — 원 소유자에게 알림).
  */
 import { useCallback, useRef, useState } from 'react'

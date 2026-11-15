@@ -1,5 +1,5 @@
 /**
- * 목록 밀도 고르기(시안 PF3·10-6 ⑤) — 라디오 카드 3(편안 56 / 기본 48 / 조밀 40) + 행 간격 미리보기.
+ * 목록 밀도 고르기 — 라디오 카드 3(편안 56 / 기본 48 / 조밀 40) + 행 간격 미리보기.
  * Vue pages/settings/display.vue 의 radiogroup 을 이름 붙여 뺀 것. 터치 기기에서는 조밀을 막는다(compactAllowed=false).
  *
  * @example <SettingsDensityPicker modelValue={density} onUpdateModelValue={setDensity} compactAllowed />

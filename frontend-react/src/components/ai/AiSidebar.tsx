@@ -1,5 +1,5 @@
 /**
- * AI 대화 사이드바(데스크톱, Vue components/ai/AiSidebar.vue · 시안 AI1 AiDesktop:16-21 · 결정 AI 3 · S6b 시안 D1·D2-4).
+ * AI 대화 사이드바(데스크톱, Vue components/ai/AiSidebar.vue).
  *  [+ 새 대화](primary 36) + [접기] → 대화 검색(서버: 제목+본문, 결과 행 = 제목 + 일치 조각 강조 · 프로젝트/날짜)
  *  → 프로젝트(＋ 만들기, 행 = 폴더/공유 아이콘 · 이름 · 내 대화 수 mono) → 최근 대화(오늘·이번 주·이전, 프로젝트 대화 제외)
  *  → 임시 대화(점선 행 · 눈 감은 아이콘 · "창 닫으면 삭제"). 아래 고정: AI 설정 · 개인 키 · 연결된 도구.
@@ -173,7 +173,7 @@ export function AiSidebar({
 
       <nav className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
         {query.trim() ? (
-          // 검색 결과(시안 D2-4)
+          // 검색 결과
           <div aria-label={t('ai.search.results')} role="region" aria-busy={searching}>
             {(results ?? []).map(r => (
               <button

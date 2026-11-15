@@ -1,5 +1,5 @@
 /**
- * 비밀번호 규칙 실시간 체크(시안 8-3-4 · AuthForm:30). 백엔드 app/auth/password_policy.py(NIST SP 800-63B-4)와 같은 기준:
+ * 비밀번호 규칙 실시간 체크. 백엔드 app/auth/password_policy.py(NIST SP 800-63B-4)와 같은 기준:
  *  - length      8자 이상 (SHALL)                       — 필수
  *  - distinct    아이디·이메일을 빼고도 8자 이상 (문맥 추측 차단) — 필수
  *  - recommended 15자 이상 (SHOULD)                      — 권장(제출 막지 않음)

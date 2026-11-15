@@ -1,6 +1,6 @@
 // Vue 원본: frontend/components/git/GitFileViewer.vue
 /**
- * 코드 뷰어(시안 GitDesktop variant=code · 11 답 D5e · 결정 Git 5).
+ * 코드 뷰어.
  *  위: 브랜치 32 + 경로 브레드크럼(저장소 / 폴더 / … / 파일).
  *  카드(rounded-12): 머리 44 bg-card — mono 12 "n줄 · 크기 · 언어" | 줄바꿈 스위치 · [원본] · [복사] · [Gitea ↗] (각 28, 히트 40)
  *  본문 bg-background, mono 13 / 줄 22: 줄 번호 52(오른쪽 맞춤, 패딩 14) — 누르면 그 줄 링크(#L12)가 복사되고 강조,
@@ -161,7 +161,7 @@ export function GitFileViewer({ path }: GitFileViewerProps) {
     : ''
 
   return (
-    // 시안 D5e: 코드 상자가 남은 높이를 채우고(안에서 스크롤) 안내문은 그 아래 고정(검수 P8 K11)
+    // 코드 상자가 남은 높이를 채우고(안에서 스크롤) 안내문은 그 아래 고정
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 py-4 md:px-6">
         <div className="flex shrink-0 items-center gap-2 text-[13px]">
@@ -170,7 +170,7 @@ export function GitFileViewer({ path }: GitFileViewerProps) {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
-          {/* 머리 44. 모바일은 메타 줄이 잘리지 않게 두 줄(메타 / 줄바꿈·원본·복사·Gitea) — 검수 P8 K10 */}
+          {/* 머리 44. 모바일은 메타 줄이 잘리지 않게 두 줄(메타 / 줄바꿈·원본·복사·Gitea) */}
           <div className="flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-border bg-card py-2 pl-3.5 pr-2 text-xs text-muted-foreground sm:h-11 sm:flex-nowrap sm:py-0">
             <span className="min-w-0 font-mono max-sm:w-full sm:truncate">{metaLine}</span>
             <span className="flex-1 max-sm:hidden" />
@@ -222,7 +222,7 @@ export function GitFileViewer({ path }: GitFileViewerProps) {
                       key={i}
                       className={isSel(i + 1) ? 'bg-warning/[0.14] shadow-[inset_3px_0_0_hsl(var(--warning))]' : ''}
                     >
-                      {/* td 기본 패딩 1px 이 줄 높이를 24 로 만들던 것 — py-0 으로 시안 22(검수 P8 K11) */}
+                      {/* td 기본 패딩 1px 이 줄 높이를 24 로 만들던 것 — py-0 으로 시안 22 */}
                       <td className={cn('sticky left-0 w-[52px] min-w-[52px] select-none whitespace-nowrap py-0 pl-0 pr-3.5 text-right align-top', isSel(i + 1) ? '' : 'bg-background')}>
                         <a
                           href={lineHash(i + 1)}

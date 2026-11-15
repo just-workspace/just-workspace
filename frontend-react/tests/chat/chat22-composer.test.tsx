@@ -1,4 +1,4 @@
-// handover-22 COMPOSER — 자동완성 후보 · @silent · @everyone 두 번 Enter · 서식줄 · 이모지 검색/피부색 · 첨부 묶음 보내기 · 피커 리액션
+// 채팅 COMPOSER — 자동완성 후보 · @silent · @everyone 두 번 Enter · 서식줄 · 이모지 검색/피부색 · 첨부 묶음 보내기 · 피커 리액션
 import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 

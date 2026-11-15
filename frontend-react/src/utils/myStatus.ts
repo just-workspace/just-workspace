@@ -13,7 +13,7 @@ export function menuPresence(s: Pick<MyStatus, 'mode' | 'dnd_until'>, now: numbe
   return 'online'
 }
 
-// ─── 상태 메시지 펼침 패널(시안 R12Status · 답변서 A4) ───
+// ─── 상태 메시지 펼침 패널 ───
 
 /** 상태 문구 최대 글자 수(시안 "6 / 60") */
 export const STATUS_TEXT_MAX = 60
@@ -73,7 +73,7 @@ export function dndSegmentValue(dnd: boolean, until: Date | null, now: number): 
   return DND_SEGMENT_MINUTES.find(m => m > 0 && m >= left - 0.5) ?? 240
 }
 
-// ─── 상태 메시지 이모지 고르기(R5 A4 · 시안 R13 #emoji, 8×2) ───
+// ─── 상태 메시지 이모지 고르기(8×2) ───
 
 /** 이모지 고르기 기본 추천(16 — 최근 쓴 것이 없으면 이것만으로 8×2 를 채운다) */
 export const STATUS_EMOJIS = ['💬', '🎧', '🗓', '🚌', '🍱', '☕', '🤒', '🌴', '🏠', '✈️', '🎯', '🔕', '🚀', '✅', '👀', '🙏']

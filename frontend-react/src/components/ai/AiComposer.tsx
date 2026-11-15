@@ -1,10 +1,10 @@
 /**
- * AI 입력(Vue components/ai/AiComposer.vue · 시안 AI1 AiDesktop:32 · AIM2 AiMobile:24 · 결정 AI 4·5 · S6b 시안 D1·D2).
+ * AI 입력(Vue components/ai/AiComposer.vue).
  *  데스크톱: 10 24 18 여백 · 폭 680 카드(r12) · [첨부 칩] · 입력 15px · 도구 줄 [첨부][화면 캡처] | [임시 대화] … [■ 36] 또는 [보내기 36].
  *  모바일: 위 선 · 8 8 28 여백 · 한 줄 카드 [입력][첨부 44][보내기 44] — 첨부 칩은 카드 위.
- * S6b 첨부: 끌어다 놓기(놓을 곳 표시 "놓으면 첨부됩니다") · 붙여넣기 · 파일 고르기 · 화면 캡처(getDisplayMedia 한 장).
+ * 첨부: 끌어다 놓기(놓을 곳 표시 "놓으면 첨부됩니다") · 붙여넣기 · 파일 고르기 · 화면 캡처(getDisplayMedia 한 장).
  *  올리기·변환은 부모가 맡는다(onFiles). 받아쓰기(마이크)는 범위 밖이라 버튼을 두지 않는다.
- * Wave5(시안 K1): 이미지 썸네일(88 · 모바일 64, 카드 안) · 모델이 이미지를 못 읽으면 보내기 막힘 —
+ * 이미지 썸네일(88 · 모바일 64, 카드 안) · 모델이 이미지를 못 읽으면 보내기 막힘 —
  *  데스크톱: danger 줄 "이 모델(…)은 이미지를 읽지 못합니다…" + [이미지 읽는 모델로 바꾸기](고를 수 있는 vision 모델이 있을 때만) + [이미지 빼기],
  *  도구 줄 "보내기 막힘" + 보내기 disabled. 모바일: 한 줄 "이 모델은 이미지를 읽지 못합니다 · 모델 바꾸기 · 이미지 빼기"(danger) + 보내기 disabled.
  *  모바일 도구 줄: [첨부][사진 찍기] 입력 [보내기].
@@ -37,7 +37,7 @@ export interface AiComposerProps {
   onSend?: () => void
   /** 멈추기(■ · 생성 중 Esc) */
   onStop?: () => void
-  /** S6b — 첨부 칩(올리는 중·변환 중·완료·실패) */
+  /** 첨부 칩(올리는 중·변환 중·완료·실패) */
   attachments?: AiAttachment[]
   /** 파일이 들어옴(끌어다 놓기·붙여넣기·고르기·화면 캡처) — 없으면 첨부 기능을 숨긴다 */
   onFiles?: (files: File[]) => void
@@ -122,7 +122,7 @@ export function AiComposer({
 
   const pending = attachments.some(a => a.status === 'uploading' || a.status === 'converting')
   const readyCount = attachments.filter(a => a.status === 'ready').length
-  // 이미지를 못 읽는 모델 + 이미지 첨부 = 보내기 막힘(시안 K1)
+  // 이미지를 못 읽는 모델 + 이미지 첨부 = 보내기 막힘
   const blocked = !vision && attachments.some(a => a.kind === 'image' && a.status !== 'failed')
   const canSend = !pending && !blocked && (!!modelValue.trim() || readyCount > 0)
 
@@ -209,7 +209,7 @@ export function AiComposer({
       onDrop={onDrop}
     >
       {dragN !== null && (
-        // 놓을 곳(시안 D2-1)
+        // 놓을 곳
         <div aria-live="polite" className="pointer-events-none absolute inset-x-2 inset-y-1 z-10 mx-auto flex max-w-[680px] flex-col items-center justify-center gap-1.5 rounded-[14px] border-2 border-dashed border-primary bg-primary/[0.08] md:inset-x-6">
           <UiIcon name="upload" className="h-7 w-7 text-primary" />
           <span className="text-sm font-semibold text-foreground">{t('ai.attach.dropTitle')}</span>
@@ -225,7 +225,7 @@ export function AiComposer({
         )}
         {blocked && (
           <>
-            {/* 데스크톱 오류 줄(K1-1) */}
+            {/* 데스크톱 오류 줄 */}
             <div role="alert" className="mx-3 mt-2.5 hidden flex-wrap items-center gap-2 rounded-lg border border-danger/45 bg-danger/[0.08] px-3 py-2 text-[12.5px] text-foreground md:flex">
               <UiIcon name="alert-circle" className="h-3.5 w-3.5 shrink-0 text-danger" />
               <span className="min-w-0 flex-[1_1_280px]">
@@ -234,7 +234,7 @@ export function AiComposer({
               {onSwitchVisionModel && <UiButton variant="outline" size="xs" onClick={() => onSwitchVisionModel()}>{t('ai.attach.switchVision')}</UiButton>}
               <UiButton variant="ghost" size="xs" onClick={() => onRemoveImages?.()}>{t('ai.attach.removeImages')}</UiButton>
             </div>
-            {/* 모바일 한 줄(K1-4) */}
+            {/* 모바일 한 줄 */}
             <p role="alert" className="m-0 px-3 pt-2 text-xs text-danger md:hidden">
               {t('ai.attach.noVision')}
               {onSwitchVisionModel && <> · <button type="button" className="underline" onClick={() => onSwitchVisionModel()}>{t('ai.attach.switchShort')}</button></>}
@@ -278,7 +278,7 @@ export function AiComposer({
                   <UiIcon name="paperclip" className="h-5 w-5 md:h-4 md:w-4" />
                 </button>
               </UiTooltip>
-              {/* 모바일 사진 찍기(K1-4) */}
+              {/* 모바일 사진 찍기 */}
               <input
                 ref={cameraInput}
                 type="file"

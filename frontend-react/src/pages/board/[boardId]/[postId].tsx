@@ -1,5 +1,5 @@
 /**
- * 게시글 보기(시안 BD3 · BM2, 06-3 결정 3·4).
+ * 게시글 보기.
  * Vue 원본: frontend/pages/board/[boardId]/[postId].vue
  *  폭 680 하나 — 배지(필독 솔리드 warning 22) · 제목 26/700 · 메타(아바타 24 · 작성자 · 시각 mono · 조회 N · 오른쪽 북마크)
  *  · 본문 15/1.75 · 첨부 카드 · 리액션 · 댓글 N(1단 답글, @언급 칩) · 댓글 입력.
@@ -160,7 +160,7 @@ function PostPage({ boardId, postId }: { boardId: string; postId: string }) {
 
   return (
     <BoardShell>
-      {/* 모바일 상단 바(BM2) */}
+      {/* 모바일 상단 바 */}
       <LayoutMobileDetailBar
         title={board?.name ?? t('board.title')}
         backLabel={t('board.post.backToBoard', { name: board?.name ?? t('board.title') })}
@@ -182,7 +182,7 @@ function PostPage({ boardId, postId }: { boardId: string; postId: string }) {
         ) : null}
       />
 
-      {/* 데스크톱 커맨드 바(BD3) */}
+      {/* 데스크톱 커맨드 바 */}
       <BoardCommandBar
         actions={currentPost ? (
           <>

@@ -1,11 +1,11 @@
 /**
- * 회의(시안 MT1·MT2·MT3 데스크톱 · MTM1 모바일 · 결정 회의 2·3). Vue 판 pages/meetings/index.vue 그대로.
+ * 회의. Vue 판 pages/meetings/index.vue 그대로.
  *  머리: 회의 24/700 + "진행 중 n · 오늘 예정 n" · [지금 시작](outline 40) [회의 예약](primary 40) — 폭 1100.
  *  목록: 진행 중 · 예정(날짜별) · 지난 묶음의 행 + ⋮. 모바일은 FAB → [지금 시작 / 회의 예약] 시트.
  *  만들기 → "예약됨" 시트(링크 복사 · 캘린더 · 채널 공유, 지금 시작이면 "지금 입장"). 같은 이름 409 는 이름 칸 아래 안내.
  *  행 ⋮: 수정(같은 예약 창, PATCH) · 회의 종료 · 내 응답(RSVP) · 캘린더에서 보기(그 날짜).
  *  알림의 회의 초대 수락/거절(useNotifications.runAction)·새 초대 알림이 오면 목록을 다시 받는다.
- * 회의는 같은 탭 회의 화면으로 연다(미니 통화 창 P-8).
+ * 회의는 같은 탭 회의 화면으로 연다(미니 통화 창).
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -57,7 +57,7 @@ export default function MeetingsIndexPage() {
   const { t } = useI18n()
   const { appName, demoMode } = useSiteConfig()
   useHead({ title: `${t('nav.meetings')} | ${appName}` })
-  // 상단바 = "워크스페이스 / 회의"(시안 MeetDesktop) — 목록은 세 번째 단 없음
+  // 상단바 = "워크스페이스 / 회의" — 목록은 세 번째 단 없음
   useBreadcrumb('')
 
   const { user } = useAuth()
@@ -89,7 +89,7 @@ export default function MeetingsIndexPage() {
 
   const counts = meetingCounts(rooms, now)
 
-  // 회의는 같은 탭 회의 화면으로 연다(예전 팝업 → 미니 통화 창 P-8 을 위해). 다른 화면으로 가면 셸이 미니 창을 띄운다.
+  // 회의는 같은 탭 회의 화면으로 연다(예전 팝업 → 미니 통화 창을 위해). 다른 화면으로 가면 셸이 미니 창을 띄운다.
   // 호스트 여부는 주소로 넘기지 않는다 — 토큰을 주는 백엔드가 알려 준다.
   function openMeetingWindow(roomName: string, shareToken: string) {
     void openRoom(roomName, shareToken ? { st: shareToken } : undefined)
@@ -239,7 +239,7 @@ export default function MeetingsIndexPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      {/* 시안 MeetDesktop 최대 1100. 유동 레이아웃(핸드오프 14) 뒤로 큰 화면에서 왼쪽에 붙어 빈 상태·목록이 치우쳐 보여 가운데 정렬 */}
+      {/* 최대 1100. 유동 레이아웃 뒤로 큰 화면에서 왼쪽에 붙어 빈 상태·목록이 치우쳐 보여 가운데 정렬 */}
       <div className="mx-auto flex w-full max-w-[1100px] flex-col pb-28 md:gap-4 md:px-7 md:pb-10 md:pt-6">
         {/* 머리 */}
         <div className="flex items-end gap-2.5 px-4 pb-2 pt-3 md:p-0">

@@ -1,7 +1,7 @@
 /**
- * 메일 필터 규칙 — Vue 판 components/mail/MailFilterRules.vue (설정 › 메일 › 필터 탭, 시안 ML3 · 메일 8 ②).
+ * 메일 필터 규칙 — Vue 판 components/mail/MailFilterRules.vue (설정 › 메일 › 필터 탭).
  * 예전 사이드바 모달(MailFilters)을 설정 화면 안 카드로 옮겼다.
- * 시안엔 필터 탭 내용 그림이 없어 PatRows(행 48·제목 13/600·보조 12) + PatForm(모달 폼) 공통 규격으로 구성.
+ * 시안엔 필터 탭 내용 그림이 없어 목록 행(행 48·제목 13/600·보조 12) + 모달 폼 공통 규격으로 구성.
  * API: GET/POST/PATCH/DELETE /api/mail/filters, POST /api/mail/filters/apply — 그대로.
  * 쓰는 곳: 개인 설정 › 메일(설정 모듈이 연결한다).
  */

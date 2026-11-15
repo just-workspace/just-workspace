@@ -1,5 +1,5 @@
 /**
- * Git 활동(시안 Dash17 git · handover 17 Q4): 범위 [내 것|전체], Git 계정이 없으면 [전체] 하나(공개 저장소 활동).
+ * Git 활동: 범위 [내 것|전체], Git 계정이 없으면 [전체] 하나(공개 저장소 활동).
  * 두 줄 행 56 = 상태 아이콘(리뷰·병합 PR primary · 열린 이슈 success · 닫힘·커밋 muted) + "PR #482 제목" /
  * "상태 · 작성자"(커밋 묶음은 "main 에 3커밋" / "저장소 · 작성자들") + 시각. 머리 "Git ›".
  * 서버: GET /api/git/activity?scope=mine|all&limit=n (backend app/git/router.py)

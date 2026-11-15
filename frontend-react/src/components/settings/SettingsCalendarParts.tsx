@@ -1,11 +1,11 @@
 /**
- * 설정 › 캘린더 조각(시안 R12Settings #calendar · S1):
+ * 설정 › 캘린더 조각:
  *  · SettingsSubscriptionRow — 외부 캘린더 구독 한 줄(min 56): 범주 색 점 10 · 이름 600 + .ics 주소(11 mono, 한 줄) ·
  *    "받음 HH:MM"(mono) 또는 danger 틴트 배지 "받지 못함 · 404" · UiMenu[지금 새로 고침 · 색 바꾸기(하위 메뉴) · 공유 · ─ · 구독 해제].
- *  · subscriptionMenuItems — 구독 ⋮ 메뉴 한 벌. 설정 › 캘린더와 캘린더 사이드바가 같이 쓴다(handover 17 답 2-4: 두 곳 통일, "삭제" 대신 "구독 해제").
- *  · [+ 구독 추가] 모달은 캘린더와 같이 쓰는 components/calendar/CalendarSubscribeModal(시안 R13 #ics).
+ *  · subscriptionMenuItems — 구독 ⋮ 메뉴 한 벌. 설정 › 캘린더와 캘린더 사이드바가 같이 쓴다(두 곳 통일, "삭제" 대신 "구독 해제").
+ *  · [+ 구독 추가] 모달은 캘린더와 같이 쓰는 components/calendar/CalendarSubscribeModal.
  *  · subscriptionReason — 서버 실패 이유(HTTP 상태 숫자 또는 이름) → 배지 글자.
- *  · refreshSubscriptionNow — "지금 새로 고침" 한 번(토스트 포함). 캘린더 사이드바 구독 행 ⋮ 도 같이 쓴다(handover 16 답 14).
+ *  · refreshSubscriptionNow — "지금 새로 고침" 한 번(토스트 포함). 캘린더 사이드바 구독 행 ⋮ 도 같이 쓴다.
  */
 import { useI18n } from '~/i18n'
 import { $fetch, errorStatus } from '~/lib/api'
@@ -42,7 +42,7 @@ export function subscriptionReason(t: T, code: string | null | undefined): strin
 
 /**
  * 구독 "지금 새로 고침" — POST /api/calendar/subscriptions/{id}/refresh + 결과 토스트 + 캘린더 다시 읽기.
- * 1분 안에 다시 누르면 서버가 429 → "받지 못했습니다 · 1분 뒤 다시"(handover 16 답 11, 메뉴는 비활성으로 두지 않는다).
+ * 1분 안에 다시 누르면 서버가 429 → "받지 못했습니다 · 1분 뒤 다시"(메뉴는 비활성으로 두지 않는다).
  * @returns 새 구독 줄(실패면 null)
  */
 export async function refreshSubscriptionNow(t: T, sub: { id: string; name: string }): Promise<CalendarSubscription | null> {

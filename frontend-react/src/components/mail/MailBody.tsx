@@ -1,9 +1,9 @@
 /**
- * 메일 본문 렌더 — Vue 판 components/mail/MailBody.vue. 3경로(Mail Body Render 핸드오프) + 종이(시안 MailDesktop:53 · 메일 10 ①).
+ * 메일 본문 렌더 — Vue 판 components/mail/MailBody.vue. 3경로 + 종이.
  *  A 텍스트        : 종이 위에 그대로 + 인용문 접기
  *  B 단순 HTML     : 서식 태그만 → prose
  *  C 서식 HTML     : 표·이미지·색 → 샌드박스 iframe(발신자 레이아웃 보존)
- * 종이 색은 전역 토큰 --paper / --paper-foreground(11-A2, 두 테마 같은 흰 종이). MailBody.css 의 --mail-paper* 가 그 토큰을 받는다.
+ * 종이 색은 전역 토큰 --paper / --paper-foreground(두 테마 같은 흰 종이). MailBody.css 의 --mail-paper* 가 그 토큰을 받는다.
  * "어둡게 보기"(dark) 는 A·B 는 앱 색으로, C 는 iframe 을 색 반전(이미지는 되돌림)한다.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -48,7 +48,7 @@ type BodyMode = 'text' | 'plain-html' | 'rich-html'
 export interface MailBodyProps {
   /** 메일 상세(MessageDetail — id·subject·text_body·html_body 를 쓴다) */
   message: any
-  /** 어둡게 보기(메일 10 ①) */
+  /** 어둡게 보기 */
   dark?: boolean
   /** 루트에 덧붙일 클래스 */
   className?: string

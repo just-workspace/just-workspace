@@ -1,5 +1,5 @@
 /**
- * Git(시안 GT1~GT4 · GTM1·GTM2 · 결정 Git 1~6) 상태 — Vue 판 composables/useGit.ts 그대로(모듈 싱글턴).
+ * Git 상태 — Vue 판 composables/useGit.ts 그대로(모듈 싱글턴).
  * 화면은 라우트(utils/gitRoute)가 정하고, 이 store 는 "라우트가 가리키는 데이터"만 불러 둔다(딥링크·뒤로 가기·새로고침이 같은 화면).
  * 각 목록은 loading·error 를 따로 가진다(실패를 빈 목록으로 보이지 않게 — 시안 H).
  *

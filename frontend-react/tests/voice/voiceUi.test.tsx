@@ -1,4 +1,4 @@
-// 음성 채널(handover-20 답 · R18) 화면: 사이드바 "음성" 구역·접속자, 새 채널 모달의 음성 체크, 접속 바(상태·음질 버튼·팝오버), 본문(타일·띠·채팅),
+// 음성 채널 화면: 사이드바 "음성" 구역·접속자, 새 채널 모달의 음성 체크, 접속 바(상태·음질 버튼·팝오버), 본문(타일·띠·채팅),
 // 음질 패널(무손실 활성·하이레조 웹 disabled·고급), 상태 12종 중 재연결·중계 실패·권한 없음·이어폰·독점 실패·하이레조 확인창
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
@@ -70,7 +70,7 @@ beforeEach(() => {
 })
 
 describe('사이드바 "음성" 구역', () => {
-  // handover-22 §2.1(1) b: 음성 채널은 별도 구역 없이 카테고리에 섞인다(카테고리 없으면 "분류 없음")
+  // 음성 채널은 별도 구역 없이 카테고리에 섞인다(카테고리 없으면 "분류 없음")
   it('음성 채널 행(아이콘·이름·인원 mono) · 접속자 줄(음소거·듣기 끔·단계 짧은 글자)', () => {
     renderInRouter(<ChatSidebar />)
     expect(screen.queryByTestId('voice-section')).toBeNull()

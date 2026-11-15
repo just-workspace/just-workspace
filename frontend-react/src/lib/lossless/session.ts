@@ -320,7 +320,7 @@ export class LosslessSession {
         // latency 는 lib.dom 에 없지만 Chrome 이 받는다(Cleanfeed·ipDTL 도 ideal 0)
         ...({ latency: { ideal: 0 } } as Record<string, unknown>),
       }
-      // 96 kHz 를 먼저 청한다 — 브라우저가 장치 레이트를 그대로 주는지는 getSettings() 로 확인(연구 §3.2 미검증 항목)
+      // 96 kHz 를 먼저 청한다 — 브라우저가 장치 레이트를 그대로 주는지는 getSettings() 로 확인(미검증 항목)
       stream = await navigator.mediaDevices.getUserMedia({ audio: { ...base, sampleRate: { ideal: want.sampleRate } } })
     }
     this.stream = stream

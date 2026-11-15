@@ -1,4 +1,4 @@
-// R5 키트 — UiMenu 고른 뒤 닫힘 규칙(다중 토글은 열린 채 · radio·실행형은 닫힘)
+// 키트 — UiMenu 고른 뒤 닫힘 규칙(다중 토글은 열린 채 · radio·실행형은 닫힘)
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

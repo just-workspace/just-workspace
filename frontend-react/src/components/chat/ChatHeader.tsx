@@ -1,11 +1,11 @@
 /**
- * 채널 머리(handover-21 §5.3 + handover-22 셸 · 시안 Chat22 header / Mob22 m-conv). Vue 원본: frontend/components/chat/ChatHeader.vue
+ * 채널 머리. Vue 원본: frontend/components/chat/ChatHeader.vue
  * 데스크톱 48 + 아래 1px(= 49, 디스코드 실측): 아이콘 20 · 채널 이름 16/600(누르면 채널 메뉴) · 구분선 · 주제(13 muted 말줄임)
  *   · 세그먼트 sm(메시지·파일·회의·작업 — 포럼 채널은 글 목록/갤러리) · 구분선 · 통화 · 스레드 목록 · 고정 · 멤버 토글(각 32, aria-pressed)
  *   · 검색칸 160(포커스 360 — ChatSearchBox, RIGHT). 검색칸이 펼쳐지면 세그먼트는 숨긴다(시안 #search-*).
  *   채팅 화면에는 전역 상단바가 없다(routes.ts noDesktopTopbar) — 위쪽 크롬은 이 머리 하나.
  *   채널 메뉴(이름 버튼): 알림 설정 · 탭 관리(관리 권한) · 채널 나가기 · 채널 삭제(소유자). 시안 머리에 ⋯ 가 없어 이름으로 옮겼다.
- * 모바일 56(Mob22): ‹ 뒤로(+ 다른 채널 멘션 합계) · 이름 + "멤버 N명 · M명 접속 중"(누르면 멤버) · 스레드 · 멤버 · ⋯(통화·알림·나가기·삭제) — 전부 44.
+ * 모바일 56: ‹ 뒤로(+ 다른 채널 멘션 합계) · 이름 + "멤버 N명 · M명 접속 중"(누르면 멤버) · 스레드 · 멤버 · ⋯(통화·알림·나가기·삭제) — 전부 44.
  * 오른쪽 자리는 하나(utils/chatRightColumn): 새로 연 것이 바꿔 낀다 — openChatPanel.
  */
 import { useStore } from 'zustand'
@@ -128,7 +128,7 @@ export function ChatHeader({ onBack, onOpenChannels, className, tabs, tab, onTab
 
   const callLabel = callState ? t('chat.header.callJoin', { n: callState.count }) : t('chat.shell.header.call')
 
-  // 드롭인 통화 — 채널 전용 LiveKit 방. 같은 탭 회의 화면으로 열고, 채팅으로 돌아오면 미니 통화 창(P-8)이 통화를 잇는다.
+  // 드롭인 통화 — 채널 전용 LiveKit 방. 같은 탭 회의 화면으로 열고, 채팅으로 돌아오면 미니 통화 창이 통화를 잇는다.
   function startCall() {
     if (!ch) return
     openRoom(`chan-${ch.id}`)

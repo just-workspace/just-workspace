@@ -4,7 +4,7 @@
  * - 주 시작 요일(설정›표시 → 로케일 기본)
  * - 주·일 보기 절대 배치: 겹치는 일정을 열(column)로 나눈다(시안 캘3)
  * - 반복 일정 "이후 모두 삭제" = RRULE 의 UNTIL 을 이 회차 직전으로 되감기
- * - 일정 색 → 범주 토큰(--cat-N) 바탕 /0.2 + 3px 바(11-A1). 규칙은 utils/categoryColor
+ * - 일정 색 → 범주 토큰(--cat-N) 바탕 /0.2 + 3px 바. 규칙은 utils/categoryColor
  * - 날짜·시각 함수(startOfDay·addDays·isSameDay·startOfWeek·overlapsDay·fmtTime·toDateInput·toTimeInput·fromInputs)는
  *   전부 **캘린더 시간대**(utils/calTz — 설정 시간대, 빈 값 = 기기) 벽시계 기준이다. 기기 시간대 getter 를 직접 쓰지 말 것.
  */
@@ -124,7 +124,7 @@ export function rruleUntilBefore(rrule: string, occurrenceStart: Date): string {
   return parts.join(';')
 }
 
-/** 일정 블록 바탕(11-A1): 범주 색 / 0.2. 범주면 테마 토큰, 사용자 지정 hex 는 알파를 붙여, 없으면 primary */
+/** 일정 블록 바탕: 범주 색 / 0.2. 범주면 테마 토큰, 사용자 지정 hex 는 알파를 붙여, 없으면 primary */
 export function eventBg(color: string | null | undefined, alpha = 0.2): string {
   return catColor(color, alpha)
 }

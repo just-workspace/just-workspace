@@ -1,5 +1,5 @@
 /**
- * 떠 있는 작성 창 하나 — Vue 판 components/mail/MailComposeWindow.vue (시안 ML2): 580×640, 위 모서리 12, 아래 테두리 없음, 그림자 0 -8 40 scrim/55.
+ * 떠 있는 작성 창 하나 — Vue 판 components/mail/MailComposeWindow.vue: 580×640, 위 모서리 12, 아래 테두리 없음, 그림자 0 -8 40 scrim/55.
  * 제목 줄 44(secondary): 제목 · 최소화(—) · 크게 보기 · 닫기(임시보관함에 저장). 최소화하면 제목 줄만.
  * 최소화해도 작성기는 살아 있다(Vue v-show → MailComposer show=false).
  */

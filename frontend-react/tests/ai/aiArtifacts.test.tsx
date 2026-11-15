@@ -1,4 +1,4 @@
-// S4 결과물 카드(시안 C1·C2-6·C2-7·L1): 파일 카드·저장(공간 부족)·링크 만료·묶음(부분 실패·이것만 다시)·만드는 중·
+// 결과물 카드: 파일 카드·저장(공간 부족)·링크 만료·묶음(부분 실패·이것만 다시)·만드는 중·
 // 모바일, 완료 토스트(카드가 화면에 없을 때만), 도우미 함수, 파일 화면 압축 도우미.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'

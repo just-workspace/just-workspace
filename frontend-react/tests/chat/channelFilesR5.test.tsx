@@ -1,4 +1,4 @@
-// R5(13 답 A3 · A5 · B3 · 시안 R13 #tabWiki #tabFolder #wikiNew)
+// 채널 탭 연결·위키 새 페이지·모바일 파일 상세
 // 탭 관리 하위 화면(‹ 제목 · 스페이스 고르기 · 폴더 고르기/들어가기) · 위키 탭 [+] pressed·안내·Esc · 모바일 파일 상세 활동 묶음·전체 목록
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'

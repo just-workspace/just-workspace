@@ -1,9 +1,9 @@
 /**
- * 파일 액션 메뉴(Vue components/files/FileContextMenu.vue) — 데스크톱 드롭다운(⋮·우클릭) / 모바일 액션 시트(시안 FilesMobile sheet).
- * 같은 항목·같은 순서(PatRows 규칙).
+ * 파일 액션 메뉴(Vue components/files/FileContextMenu.vue) — 데스크톱 드롭다운(⋮·우클릭) / 모바일 액션 시트.
+ * 같은 항목·같은 순서.
  * 순서: 열기 · 공유 · 채널로 보내기(파일만) · 이동·복사 · 이름 바꾸기 · 버전 기록 · 다운로드 · 즐겨찾기 · 상세 정보 · (검색 결과) 위치 열기 — 휴지통으로.
  * "채널로 보내기"는 공유 모달의 "사람·채널" 탭을 연다(POST /share-channel). 즐겨찾기 줄은 시안 목록에 없어 다운로드 뒤에 붙였다(디자이너 확인 필요).
- * 공유받은 항목(shared-with-me/.., p9): 같은 순서에서 권한에 맞는 줄만 — 열기 · 다운로드 · 상세 정보는 늘,
+ * 공유받은 항목(shared-with-me/..): 같은 순서에서 권한에 맞는 줄만 — 열기 · 다운로드 · 상세 정보는 늘,
  *   공유 · 이동·복사 · 이름 바꾸기 · 휴지통은 공동 소유일 때만. 채널로 보내기 · 버전 · 즐겨찾기는 서버가 내 경로만 받아 뺀다.
  * 마운트 = 열림. 부모가 onClose 에서 상태를 내린다.
  */
@@ -69,7 +69,7 @@ export function FilesFileContextMenu({ item, x, y, inSearch, onClose, onAction }
   const isMobile = useIsMobile()
   const { t } = useI18n()
 
-  // 순서·이름은 시안 FilesMobile acts 그대로, 모양은 공용 아이콘 세트
+  // 순서·이름은 디자인 그대로, 모양은 공용 아이콘 세트
   const items = useMemo(() => fileMenuItems(item, inSearch, t), [item, inSearch, t])
 
   const kind = KIND_META[fileKind(item)]

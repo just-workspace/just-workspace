@@ -1,5 +1,5 @@
 /**
- * 앱 레일(시안 ShellRail · Shell Handoff 1e · 답변서 C4) — 데스크톱 왼쪽 모듈 목록. 스토어 없이 props 만으로 그린다.
+ * 앱 레일 — 데스크톱 왼쪽 모듈 목록. 스토어 없이 props 만으로 그린다.
  * (자세한 설명·예시는 아래 컴포넌트 JSDoc)
  */
 import type { AnchorHTMLAttributes, MouseEvent, ReactNode } from 'react'
@@ -29,7 +29,7 @@ export interface UiAppRailItem {
   live?: boolean
   /** live 점 접근성 이름(기본 "통화 중") */
   liveLabel?: string
-  /** 바깥 출처로 새 탭(target=_blank, rel=noopener) — 오른쪽 12 external-link 아이콘 + 툴팁 "새 탭에서 열기"(handover-netlab 답) */
+  /** 바깥 출처로 새 탭(target=_blank, rel=noopener) — 오른쪽 12 external-link 아이콘 + 툴팁 "새 탭에서 열기" */
   external?: boolean
 }
 
@@ -56,7 +56,7 @@ export interface UiAppRailProps {
   userName?: string
   /** wide 일 때 바닥 줄 오른쪽 끝(사이드바 고정 버튼 등) */
   footerAction?: ReactNode
-  /** 아바타 줄 위에 끼우는 조각(예: 음성채널 접속 바 — handover-20 답 §5.2). 폭은 레일/확장 그대로, 가로 여백 없이 */
+  /** 아바타 줄 위에 끼우는 조각(예: 음성채널 접속 바). 폭은 레일/확장 그대로, 가로 여백 없이 */
   footerSlot?: ReactNode
   /** 항목·브랜드를 눌렀을 때(오버레이 확장을 닫는 등) */
   onNavigate?: (item: UiAppRailItem | null, e: MouseEvent) => void
@@ -87,7 +87,7 @@ const badgeText = (b: number | string) => (typeof b === 'number' && b > 99 ? '99
 const hasBadge = (b: number | string | undefined) => b !== undefined && b !== '' && b !== 0
 
 /**
- * 앱 레일(시안 ShellRail · Shell Handoff 1e · 답변서 C4) — 데스크톱 왼쪽 모듈 목록. 스토어 없이 props 만으로 그린다.
+ * 앱 레일 — 데스크톱 왼쪽 모듈 목록. 스토어 없이 props 만으로 그린다.
  * wide=false → 레일 64(아이콘 타일 26 + 묶음 사이 구분선), wide=true → 확장 236(아이콘 20 + 이름 + 묶음 머리글).
  *
  * 아이콘 자리는 두 모습에서 같다(접고 펼 때 아이콘이 1px 도 움직이지 않는다): 브랜드·항목·아바타 모두 왼쪽 여백 6 + 26 칸에 놓고
@@ -201,7 +201,7 @@ export function UiAppRail({ wide = false, brand, groups, items, avatar, userName
         ))}
       </nav>
 
-      {/* 하단 끼움(접속 바 등 — handover-20) — aside 의 px-3 를 상쇄해 가로 끝까지 */}
+      {/* 하단 끼움(접속 바 등) — aside 의 px-3 를 상쇄해 가로 끝까지 */}
       {footerSlot != null && <div className="-mx-3 mt-auto shrink-0">{footerSlot}</div>}
 
       {/* 하단: 아바타 + (wide) 이름·오른쪽 액션 */}

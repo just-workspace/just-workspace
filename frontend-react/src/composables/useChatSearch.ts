@@ -1,5 +1,5 @@
 /**
- * 채팅 검색(handover-22 "검색" · §5.5 오른쪽 자리 · 시안 Chat22 #search-* · Side22 search · Mob22 #m-search).
+ * 채팅 검색(오른쪽 자리).
  *
  * 헤더 검색칸(ChatSearchBox)에 쓴 필터 칩 + 글자 → SearchParams → GET /api/chat/search(chatApi22.searchChat)
  * → 결과는 오른쪽 자리(ChatSearchResults, 400 · 기존 chatStore.showSearchPanel 자리)에 뜬다.
@@ -24,7 +24,7 @@ import { setThreadListOpen } from '~/composables/useChatUi'
 export type FilterKey = 'from' | 'in' | 'has' | 'mentions' | 'before' | 'after' | 'during' | 'pinned'
 /** 시안 필터 안내 목록 순서 */
 export const FILTER_ORDER: FilterKey[] = ['from', 'in', 'has', 'mentions', 'before', 'after', 'during', 'pinned']
-/** 모바일 칩 줄(Mob22 #m-search) */
+/** 모바일 칩 줄 */
 export const MOBILE_FILTER_KEYS: FilterKey[] = ['from', 'in', 'has', 'during', 'pinned']
 export const DATE_KEYS: FilterKey[] = ['before', 'after', 'during']
 export const PERSON_KEYS: FilterKey[] = ['from', 'mentions']
@@ -194,7 +194,7 @@ export interface ChatSearchState {
   text: string
   /** 값을 고르는 중인 키(칩 모양으로 보이되 값 없음 — 시안 #search-chips "during:") */
   pending: FilterKey | null
-  /** 검색칸이 넓게(360) 펼쳐짐 — 포커스이거나 칩·글자가 있다. 헤더(SHELL)는 이때 채널 탭을 숨긴다(시안 tabsOn = !sBig) */
+  /** 검색칸이 넓게(360) 펼쳐짐 — 포커스이거나 칩·글자가 있다. 헤더(SHELL)는 이때 채널 탭을 숨긴다 */
   focused: boolean
   /** 마지막으로 찾은 질의(결과 화면 기준) */
   query: SearchParams | null

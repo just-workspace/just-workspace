@@ -1,6 +1,6 @@
 /**
  * 채널 소개(D7, 3-1-1) — 대화 기록 맨 위. 새 채널에서는 컴포저 바로 위에 보인다. Vue 원본: frontend/components/chat/ChatChannelIntro.vue
- * handover-22 #empty: 원 64(bg-muted, # 32) + 제목 26/700 "#채널 채널의 시작입니다" + 만든 사람·날짜·설명 16 muted + 첫 행동 3개(멤버 초대 primary · 파일 올리기 · 설명 수정).
+ * 원 64(bg-muted, # 32) + 제목 26/700 "#채널 채널의 시작입니다" + 만든 사람·날짜·설명 16 muted + 첫 행동 3개(멤버 초대 primary · 파일 올리기 · 설명 수정).
  * 버튼은 첫 메시지 20개 이후 숨긴다. 설명 수정은 채널 소유자·관리자만(PATCH /channels/{id} 권한).
  */
 import { useStore } from 'zustand'

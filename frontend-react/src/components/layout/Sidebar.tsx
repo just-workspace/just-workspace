@@ -1,7 +1,7 @@
 /**
- * 셸 사이드바(Vue components/layout/Sidebar.vue) — wide 하나로 rail(64) ↔ 확장(236) 두 모습을 만든다 (Shell Handoff 1e).
+ * 셸 사이드바(Vue components/layout/Sidebar.vue) — wide 하나로 rail(64) ↔ 확장(236) 두 모습을 만든다.
  * 폭·덮기/밀기 판단은 layouts/default(spacer+panel)와 useSidebar 가 한다.
- * 겉모습은 키트 UiAppRail(답변서 C4) — 이 파일은 스토어(네비·채팅 멘션·통화·내 상태·고정)를 항목 데이터로 잇기만 한다.
+ * 겉모습은 키트 UiAppRail — 이 파일은 스토어(네비·채팅 멘션·통화·내 상태·고정)를 항목 데이터로 잇기만 한다.
  */
 import type { ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -40,19 +40,19 @@ export function LayoutSidebar({ wide, onNavigate, className, footerSlot }: Layou
   const route = useRoute()
   const { appName, brandLogo, config } = useSiteConfig()
   const { user } = useAuth()
-  // 레일은 rail:false(연락처 등 하위 모듈)를 뺀 묶음 — 11-C9
+  // 레일은 rail:false(연락처 등 하위 모듈)를 뺀 묶음
   const { home, railGroups: groups } = useNav()
   const { pinned, togglePin } = useSidebar()
-  // '도구' 묶음(격리 브라우저·네트워크 랩 — 바깥 출처 새 탭, handover-netlab 답 화면 14). 없으면 null
+  // '도구' 묶음(격리 브라우저·네트워크 랩 — 바깥 출처 새 탭). 없으면 null
   const tools = useRailTools()
-  // 채팅 항목 배지 = 나를 부른 것(멘션 + DM) — 채팅 시안 레일 규칙. 회의 항목 = 통화 중이면 초록 점(P-4).
+  // 채팅 항목 배지 = 나를 부른 것(멘션 + DM) — 채팅 시안 레일 규칙. 회의 항목 = 통화 중이면 초록 점.
   const { totalMentions: chatMentions, callStates } = useChat()
   // 아바타 상태점 — 서버 상태 기준(오프라인으로 표시 중이면 offline)
   const { dot: presence } = useMyStatus()
   // 내가 통화 중이어도(미니 통화 창으로 내려 둔 통화 포함) 켠다
   const { inCall: meInCall } = useMeetingCall()
   const liveCall = meInCall || Object.values(callStates).some(c => c.count > 0)
-  // 승인 대기함 — 대기 건이 있을 때만 배지와 함께(사용자 결정, S3 "입구")
+  // 승인 대기함 — 대기 건이 있을 때만 배지와 함께(사용자 결정)
   const approvalsPending = useApprovalsCount() ?? 0
   // 내장 AI 가 답변을 만드는 중(다른 화면에 있어도 — 서버가 끝까지 만든다, useAiStreams)
   const aiGenerating = useAiGenerating()
@@ -62,10 +62,10 @@ export function LayoutSidebar({ wide, onNavigate, className, footerSlot }: Layou
   // 태그라인은 로그인 화면과 같은 설정값(brand.tagline) — 하드코딩 제거(8-1-6)
   const tagline = (config?.['brand.tagline'] ?? '').trim() || 'self-hosted workspace'
   const emit = () => onNavigate?.()
-  // 사이드바 하단에 내 계정 패널이 있는 화면(채팅 — handover-21 §5.6)은 레일 아바타를 뺀다. 채널 목록을 접으면 다시 레일에.
+  // 사이드바 하단에 내 계정 패널이 있는 화면(채팅)은 레일 아바타를 뺀다. 채널 목록을 접으면 다시 레일에.
   const chatListCollapsed = useStore(chatUiStore, s => s.listCollapsed)
   const pageHasAccount = !!route.meta.sidebarAccount && !(route.path === '/chat' && chatListCollapsed)
-  // 채팅 화면에서 레일의 채팅 아이콘을 다시 누르면 채널 목록을 접고 편다(handover-21 §5.9)
+  // 채팅 화면에서 레일의 채팅 아이콘을 다시 누르면 채널 목록을 접고 편다
   function onRailNavigate(item: UiAppRailItem | null, e: { preventDefault: () => void }) {
     if (item?.to === '/chat' && route.path === '/chat') { e.preventDefault(); toggleListCollapsed() }
     emit()
@@ -102,7 +102,7 @@ export function LayoutSidebar({ wide, onNavigate, className, footerSlot }: Layou
       badge: approvalsPending,
       ariaLabel: t('approvals.railAria', { n: approvalsPending }),
     }
-    // AI 바로 뒤(시안 B1 레일) — AI 가 없으면 '작업' 묶음 끝, 그것도 없으면 관리 앞 단독 묶음
+    // AI 바로 뒤 — AI 가 없으면 '작업' 묶음 끝, 그것도 없으면 관리 앞 단독 묶음
     const gi = navGroups.findIndex(g => g.items.some(i => i.id === 'ai'))
     if (gi >= 0) {
       const items = [...navGroups[gi].items]

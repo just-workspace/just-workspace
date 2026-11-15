@@ -1,7 +1,7 @@
 /**
- * 홈 대시보드 배치 규칙(handover 17 답 1 · 시안 Dash17.dc.html renderVals 숫자 그대로) — 순수 함수만.
+ * 홈 대시보드 배치 규칙 — 순수 함수만.
  *
- * - 시작하기(신규 사용자)는 주 줄에 넣지 않는다 — 칩 줄 아래·주 줄 위 전폭 카드, 항목은 startColumns 열 격자(handover 18 답 "추가").
+ * - 시작하기(신규 사용자)는 주 줄에 넣지 않는다 — 칩 줄 아래·주 줄 위 전폭 카드, 항목은 startColumns 열 격자.
  * - 주 줄: 후보 순서(나에게 온 것 2칸 → 오늘 → 오늘의 포커스 → 이어서 하기 2칸)를 열 수를 넘지 않게 앞에서부터 채운다.
  *   못 들어가는 후보는 건너뛰고 다음 후보를 본다(시안 그대로). 주 줄 같은 높이는 내용 있는 카드끼리만(tierHeights):
  *   빈 상태 카드·AI 꺼짐 카드는 자기 높이. 주 줄에 못 든 후보는 보조 영역 맨 앞.
@@ -31,12 +31,12 @@ export interface DashLayout {
   locked?: CardKey[]
 }
 
-/** 주 줄 후보(시안 primary) */
+/** 주 줄 후보 */
 export const PRIMARY: readonly CardKey[] = ['inbox', 'today', 'ai', 'cont']
 export const PRIMARY_NEW: readonly CardKey[] = ['today', 'ai', 'inbox']
 /** 판 밖(주 줄 위) 전폭 카드 — 그리드에 넣지 않는다. 편집 패널 목록에는 있다(숨기기·다시 보기) */
 export const FULL_WIDTH: readonly CardKey[] = ['start']
-/** 보조 영역 기본 순서(답 1 "보조 영역 기본 순서" + 진행 중 회의 + 네트워크 랩 — handover-netlab 답 화면 15) */
+/** 보조 영역 기본 순서(답 1 "보조 영역 기본 순서" + 진행 중 회의 + 네트워크 랩) */
 export const REST: readonly CardKey[] = ['tasks', 'mail', 'later', 'team', 'git', 'board', 'notice', 'chans', 'store', 'meet', 'lab']
 /** 신규 사용자 보조 영역(시안 #new: 둘러볼 채널 · 공지 먼저) */
 export const REST_NEW: readonly CardKey[] = ['discover', 'notice', 'cont', 'tasks', 'mail', 'later', 'team', 'git', 'board', 'chans', 'store', 'meet', 'lab']

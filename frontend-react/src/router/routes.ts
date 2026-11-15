@@ -10,9 +10,9 @@ export interface AppRouteDef {
   file: string
   layout: Exclude<RouteMeta['layout'], undefined>
   ownMobileHeader?: boolean
-  /** 데스크톱에서 공용 상단바를 그리지 않는다 — 페이지 머리가 그 자리를 맡는다(채팅 handover-21 §5.3) */
+  /** 데스크톱에서 공용 상단바를 그리지 않는다 — 페이지 머리가 그 자리를 맡는다(채팅) */
   noDesktopTopbar?: boolean
-  /** 페이지 사이드바 하단에 내 계정 패널이 있다 — 레일 맨 아래 아바타를 뺀다(handover-21 §5.6) */
+  /** 페이지 사이드바 하단에 내 계정 패널이 있다 — 레일 맨 아래 아바타를 뺀다 */
   sidebarAccount?: boolean
   redirect?: string
   /** Vue [...slug] 의 파라미터 이름 — useRoute().params[slug] 가 string[] */

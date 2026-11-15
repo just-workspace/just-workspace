@@ -1,5 +1,5 @@
 /**
- * 공용 편집기 툴바(시안 WK2·BD4·WM3·BM3·ML2·MM3, 06-2 결정 4 · 06 공통 "툴바 3종 → 한 규격").
+ * 공용 편집기 툴바("툴바 3종 → 한 규격").
  *  desktop — 40 높이, 아이콘 버튼 32(아이콘 15, 선 2.2). tools 순서대로, '|' 는 구분선, 'block' 은 [본문 ▾] 블록 형식.
  *  mobile  — 48 높이, 키보드 위 한 줄: Aa(펼침) + mobileTools(44) … end(서명 등). Aa 를 누르면 위에 나머지 한 줄(블록 형식 + 나머지 도구).
  * 위키(실시간 공동 편집)·게시판(단독 편집)·메일 작성이 같은 툴바를 쓴다. 편집기에 없는 확장(표·밑줄 등)은 tools 에서 빼면 된다.
@@ -35,7 +35,7 @@ export interface UiEditorToolbarProps extends HTMLAttributes<HTMLDivElement> {
   tools?: Array<EditorToolKey | '|'>
   /** 모바일 한 줄에 상시 보일 도구(기본 bold·bullet·link·image) */
   mobileTools?: EditorToolKey[]
-  /** 모바일 한 줄의 굵게·기울임을 글자(B · I)로(메일 MM3) */
+  /** 모바일 한 줄의 굵게·기울임을 글자(B · I)로(메일) */
   letterMarks?: boolean
   /** 도구 이름 바꾸기(예: image → "이미지") */
   labels?: Partial<Record<EditorToolKey, string>>

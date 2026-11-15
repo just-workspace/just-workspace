@@ -31,9 +31,9 @@ export interface ChatUiState {
   filePickerTick: number
   /** 스레드 패널 넓게 보기(2-1-1) */
   threadWide: boolean
-  /** 채널 목록 접힘(데스크톱) — 레일의 채팅 아이콘을 다시 누르면 접고 편다(handover-21 §5.9) */
+  /** 채널 목록 접힘(데스크톱) — 레일의 채팅 아이콘을 다시 누르면 접고 편다 */
   listCollapsed: boolean
-  /** 멤버 열(데스크톱 ≥1180 상시 열) 켬 — 헤더 멤버 토글(handover-21 §5.1). 기기별 기억 */
+  /** 멤버 열(데스크톱 ≥1180 상시 열) 켬 — 헤더 멤버 토글. 기기별 기억 */
   membersOpen: boolean
   /** 음성 채널 글 채팅(340)을 오른쪽 열에 둔다 — 멤버 열과 서로 배타, 새로 연 것이 바꿔 낀다 */
   voiceTextOpen: boolean
@@ -41,18 +41,18 @@ export interface ChatUiState {
   tabsManageOpen: boolean
   /** 컴포저에서 수정 중인 메시지(행 선택 덧칠) */
   editingMessageId: string | null
-  // ── handover-22 ──
+  // ── 답장·점프·떠 있는 것 ──
   /** 인라인 답장 중(컴포저 위 띠). ping = @ 켬(마지막 값은 사람마다 기억 — useUserPrefs chatReplyPing) */
   replyTo: { channelId: string; parentId: string | null; messageId: string; senderId: string | null; senderName: string; ping: boolean } | null
   /** 원문으로 점프 — 목록이 그 줄로 스크롤하고 강조(2초 유지 + 1초 사라짐). nonce 로 같은 메시지 다시 점프 */
   jumpTarget: { channelId: string; messageId: string; nonce: number } | null
-  /** 오른쪽 자리 "스레드 목록"(Side22, 400) — 다른 오른쪽 패널과 배타 */
+  /** 오른쪽 자리 "스레드 목록"(400) — 다른 오른쪽 패널과 배타 */
   threadListOpen: boolean
   /** 채팅 안 전체 화면 설정(§5.4). section = 'roles'|'role-perm'|'channel-perm'|'category-perm'|'emoji'|'voice'… */
   settings: { section: string; targetId?: string | null } | null
-  /** 프로필 팝아웃(Pop22) — 붙일 기준 사각형 */
+  /** 프로필 팝아웃 — 붙일 기준 사각형 */
   profilePopout: { userId: string; anchor: { x: number; y: number; w: number; h: number } } | null
-  /** 이모지 피커(Picker22) — 컴포저 입력 / 리액션 추가 */
+  /** 이모지 피커 — 컴포저 입력 / 리액션 추가 */
   emojiPicker: { mode: 'compose' | 'react'; messageId?: string; anchor?: { x: number; y: number; w: number; h: number } } | null
 }
 

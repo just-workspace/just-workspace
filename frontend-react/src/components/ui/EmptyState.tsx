@@ -4,7 +4,7 @@
  *  panel — 카드·사이드 패널 안: 테두리 없음, 타일 32, 제목 13/600, 텍스트 버튼
  *  inline— 트리·하위 목록·댓글 한 줄: 32 행, muted 글자 + primary 텍스트 버튼
  * 행동은 actionTo(링크) 또는 onAction(클릭) 둘 다 받는다. 기능 아이콘은 icon(이름) 또는 iconSlot(그림).
- * 아이콘 타일 반지름: 시안의 11px/9px 는 8-2-6 에서 사용 중지한 값 → 10px/8px 로 둠(디자이너 확인 필요).
+ * 아이콘 타일 반지름: 시안의 11px/9px 는 사용 중지한 값 → 10px/8px 로 둠(디자이너 확인 필요).
  */
 import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -24,7 +24,7 @@ export interface UiEmptyStateProps extends Omit<HTMLAttributes<HTMLDivElement>, 
   icon?: string
   /** full(기본) · panel · inline */
   variant?: 'full' | 'panel' | 'inline'
-  /** inline 을 카드 행(px-5) 줄에 맞춘다 — 카드 안 빈 행의 글자가 다른 행과 같은 세로선에(검수 P8 K7) */
+  /** inline 을 카드 행(px-5) 줄에 맞춘다 — 카드 안 빈 행의 글자가 다른 행과 같은 세로선에 */
   inset?: boolean
   /** 행동 버튼 클릭(actionTo 가 없을 때) */
   onAction?: () => void

@@ -1,5 +1,5 @@
 /**
- * 메시지 행 틀(handover-22 "메시지" · Chat22 #cozy #compact #hover #focus #reply #jump · Mob22 #m-conv · 디스코드 수치) — ChatMessage 공용.
+ * 메시지 행 틀(디스코드 수치) — ChatMessage 공용.
  *  cozy   : 본문 16/22 · 이름 16/22·500·역할 색 · 시간 12 mono "오전 10:02" · 아바타 40(left 16) · 들여쓰기 72 · 그룹 첫 줄 최소 44 ·
  *           연속 줄 패딩 2 · 연속 줄 시간 = 거터 56 오른쪽 정렬 11 mono(호버·포커스 때만) · 그룹 시작 margin-top = groupGap + 1(투명 1px 위 테두리)
  *  compact: 패딩 2 · 시간 칸 68(24시간 표기면 50) · 들여쓰기 80 · 이름은 본문 앞 인라인 · 그룹 시작 4 + 1

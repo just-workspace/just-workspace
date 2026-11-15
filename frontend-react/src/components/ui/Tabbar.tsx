@@ -1,5 +1,5 @@
 /**
- * 모바일 하단 탭바(시안 TabBar · 10-6 ① · 답변서 C4) — 높이 64 + safe-area, 바탕 card, 위 테두리. 스토어 없이 props 만으로 그린다.
+ * 모바일 하단 탭바 — 높이 64 + safe-area, 바탕 card, 위 테두리. 스토어 없이 props 만으로 그린다.
  * (자세한 설명·예시는 아래 컴포넌트 JSDoc)
  */
 import type { ButtonHTMLAttributes, CSSProperties } from 'react'
@@ -46,7 +46,7 @@ export interface UiTabbarProps {
 const badgeText = (n: number) => (n > 99 ? '99+' : String(n))
 
 /**
- * 모바일 하단 탭바(시안 TabBar · 10-6 ① · 답변서 C4) — 높이 64 + safe-area, 바탕 card, 위 테두리. 스토어 없이 props 만으로 그린다.
+ * 모바일 하단 탭바 — 높이 64 + safe-area, 바탕 card, 위 테두리. 스토어 없이 props 만으로 그린다.
  * 칸(보통 5: 홈 · 채팅 · 활동 · 메일 · 전체)은 똑같이 나눈다. 칸 = 아이콘 타일 32(18 아이콘) + 이름 11.
  * 활성 = primary 글자 600 + 타일 primary/16. 배지 = primary 숫자 알약 18(타일 오른쪽 위, card 2px 테두리, 99 넘으면 99+).
  * 점(dot) = 7px foreground 점(안 읽음 — 숫자 없이 있다는 것만, 활성 칸에서는 숨김).

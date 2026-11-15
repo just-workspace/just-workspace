@@ -1,4 +1,4 @@
-// 캘린더 시간대 불일치 띠(답변서 13 A1 · 시안 R13 #tz) — 순수 함수 + 기기별 "그대로" 기억.
+// 캘린더 시간대 불일치 띠 — 순수 함수 + 기기별 "그대로" 기억.
 //
 // 띠: 설정 시간대(설정 › 캘린더 · 표시, 빈 값 = 기기 따름)가 기기 시간대와 지금 오프셋이 다르면 띄운다.
 // [○○ 그대로] 를 고르면 그 (설정, 기기) 조합으로는 이 기기에서 다시 띄우지 않는다(localStorage — 기기 시간대는 기기마다 다르니 기기 단위).
@@ -13,11 +13,11 @@ export function utcOffsetLabel(tz: string, at = new Date()): string {
 }
 
 /**
- * 주요 도시 IANA → 한글 도시명(핸드오프 15-2: 브라우저가 한국어 도시명을 주지 않아 표로 둔다).
+ * 주요 도시 IANA → 한글 도시명(브라우저가 한국어 도시명을 주지 않아 표로 둔다).
  * 표에 없는 시간대는 영문 도시명 그대로(+ 이름만 쓰는 자리에서는 UTC 오프셋 — tzPlace).
  * 같은 곳의 옛 이름(Asia/Calcutta·Asia/Saigon·America/Buenos_Aires 등)도 같이 둔다.
  * 베이징·하노이·뉴델리는 IANA 이름이 따로 없어 Asia/Shanghai·Asia/Ho_Chi_Minh·Asia/Kolkata 를 그 수도 이름으로 보인다
- * (handover 16 답 12). 원래 도시 이름(상하이·호찌민·콜카타)은 검색에서도 맞도록 TZ_CITY_KO_ALIASES 에 남긴다.
+ * . 원래 도시 이름(상하이·호찌민·콜카타)은 검색에서도 맞도록 TZ_CITY_KO_ALIASES 에 남긴다.
  */
 export const TZ_CITY_KO: Readonly<Record<string, string>> = {
   'Asia/Seoul': '서울',
@@ -69,7 +69,7 @@ export const TZ_CITY_KO: Readonly<Record<string, string>> = {
   'Africa/Johannesburg': '요하네스버그',
 }
 
-/** 보이는 이름 말고도 검색에 맞아야 하는 이름(handover 16 답 12 — "두 이름 모두") */
+/** 보이는 이름 말고도 검색에 맞아야 하는 이름("두 이름 모두") */
 export const TZ_CITY_KO_ALIASES: Readonly<Record<string, readonly string[]>> = {
   'Asia/Shanghai': ['상하이', 'Beijing'],
   'Asia/Ho_Chi_Minh': ['호찌민', 'Hanoi'],
@@ -163,7 +163,7 @@ export function roParticle(word: string): string {
 }
 
 /**
- * 시간대 고르기(UiSelect search)용 — 한글·영문 도시명·IANA 이름(tzMatches) 또는 라벨 일부로 찾는다(handover 17 답 2-5).
+ * 시간대 고르기(UiSelect search)용 — 한글·영문 도시명·IANA 이름(tzMatches) 또는 라벨 일부로 찾는다.
  * @example <UiSelect options={zones} search={tzSelectSearch(t)} />
  */
 export function tzSelectSearch(t: (k: string) => string): { placeholder: string; match: (o: { value: string | number; label: string }, q: string) => boolean } {
@@ -177,7 +177,7 @@ export function tzSelectSearch(t: (k: string) => string): { placeholder: string;
 export const TZ_TOP: readonly string[] = ['Asia/Seoul', 'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Singapore', 'UTC', 'Europe/London', 'America/New_York', 'America/Los_Angeles']
 
 /**
- * 시간대 고르기 목록 — 기기 시간대 → 주요 도시(TZ_TOP) → 나머지 IANA 이름(중복 없이). 설정 › 표시와 일정 편집 창이 같은 목록을 쓴다(handover 18 답 16).
+ * 시간대 고르기 목록 — 기기 시간대 → 주요 도시(TZ_TOP) → 나머지 IANA 이름(중복 없이). 설정 › 표시와 일정 편집 창이 같은 목록을 쓴다.
  * @param extra 맨 앞에 넣을 이름(예: 일정에 저장된, 목록에 없는 시간대)
  */
 export function tzZoneNames(extra?: string | null): string[] {

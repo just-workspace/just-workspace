@@ -1,5 +1,5 @@
 /**
- * 글 첨부(시안 BD3) — Vue 판 components/board/BoardAttachments.vue 이식.
+ * 글 첨부 — Vue 판 components/board/BoardAttachments.vue 이식.
  * 첨부마다 카드 1장 — 테두리 · rounded 10 · card 바탕 · 안쪽 10/12,
  * 유형 칩 32×36(PDF danger 틴트 등, 파일 모듈 유형 색과 같은 규칙) · 이름 600 + 크기 mono 11 · 오른쪽 "열기"(primary 600).
  * 시안의 "미리보기"는 앱 안 미리보기 모달이 게시판 첨부(공유 링크)를 열 수 없어 새 탭 "열기"로 두었다(보고서).

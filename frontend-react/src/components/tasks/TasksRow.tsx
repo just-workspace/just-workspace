@@ -1,9 +1,9 @@
 /**
- * 작업 행(Vue components/tasks/TasksRow.vue · 시안 TK1:22 데스크톱 · WorkMobile tasksList 모바일 · 결정 작업 3).
+ * 작업 행(Vue components/tasks/TasksRow.vue).
  *  데스크톱 48: 원형 체크 18 · 제목 13.5/500 · 상태 칩(누르면 메뉴) · 우선순위(화살표+글자) · 하위 n/m(mono) · 마감(D-n, 지남 danger) · ⋮
  *  모바일 60: 체크 22 · 제목 15/500 + 메타 12(우선순위 · 상태 · 마감) · ⋮ 40
  * 색만 쓰던 2px 우선순위 바는 폐지. 선택 = primary/13(rounded-8).
- * 마지막 열 36 = 담당 아바타 24(시안 TK1). 행에 올리거나 포커스가 들어오면 같은 자리에 ⋮(시안 C 행 규격 hover ⋮).
+ * 마지막 열 36 = 담당 아바타 24. 행에 올리거나 포커스가 들어오면 같은 자리에 ⋮(시안 C 행 규격 hover ⋮).
  * 담당이 없으면 그 자리는 비고 ⋮ 만 hover 로.
  */
 import type { KeyboardEvent, MouseEvent } from 'react'

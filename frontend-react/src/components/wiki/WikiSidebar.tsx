@@ -1,5 +1,5 @@
 /**
- * 위키 왼쪽 트리 패널(시안 WK1 aside 260 · WM1 트리 화면) — Vue 판 components/wiki/WikiSidebar.vue 이식.
+ * 위키 왼쪽 트리 패널(트리 화면) — Vue 판 components/wiki/WikiSidebar.vue 이식.
  *  데스크톱 — 스페이스 전환(▾) / 페이지 찾기 + 새 페이지(현재 페이지 아래) / 고정 / 페이지 트리 / 바닥 "스페이스 설정 · 멤버 N".
  *  모바일   — 56 헤더(스페이스명 ▾ 18/600 + "위키 · 페이지 N") + 검색 44, 트리 행 48, FAB 새 페이지.
  * 상태(인라인 새 페이지·이름 바꾸기)는 호스트(pages/wiki)가 들고, 여기는 그리기와 이벤트만.
@@ -115,7 +115,7 @@ export function WikiSidebar(props: WikiSidebarProps) {
     else if (e.key === 'Escape') { e.preventDefault(); onCancelDraft?.() }
   }
 
-  // ───────── 모바일(WM1) ─────────
+  // ───────── 모바일 ─────────
   if (mobile) {
     return (
       <div className={cn('flex h-full min-h-0 flex-col bg-background', className)}>
@@ -207,7 +207,7 @@ export function WikiSidebar(props: WikiSidebarProps) {
     )
   }
 
-  // ───────── 데스크톱(WK1) ─────────
+  // ───────── 데스크톱 ─────────
   return (
     <aside className={cn('flex h-full w-[260px] shrink-0 flex-col border-r border-border bg-card px-2 py-2.5 text-[13.5px]', className)} aria-label={t('wiki.sidebar.label')}>
       <button

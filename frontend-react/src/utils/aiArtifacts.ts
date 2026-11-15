@@ -1,5 +1,5 @@
 /**
- * S4 결과물(AI 가 만든 문서·묶음·파일 압축) — 타입·API·표시 도우미.
+ * 결과물(AI 가 만든 문서·묶음·파일 압축) — 타입·API·표시 도우미.
  * 서버: app/ai/artifacts.py · artifacts_router.py(/api/ai/artifacts). 채팅 SSE `artifact` 이벤트와
  * 메시지 기록(messages[].artifacts)이 같은 모양 {type:'file', artifact} | {type:'bundle', job} 이다.
  */

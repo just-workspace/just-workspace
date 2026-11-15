@@ -5,7 +5,7 @@
  *   0 UPDATE        — 편집 변경분
  *   1 SYNC_REQUEST  — 접속 직후 "내 상태 벡터는 이거다, 모자란 걸 달라"
  *   2 SYNC_RESPONSE — 요청한 쪽에 모자란 변경분
- *   3 AWARENESS     — 프레즌스(누가 어디를 편집 중인지). 시안 WK2 의 아바타·커서 이름표.
+ *   3 AWARENESS     — 프레즌스(누가 어디를 편집 중인지). 아바타·커서 이름표.
  *                     옛 클라이언트는 모르는 종류를 무시하므로 0~2 동작은 그대로다.
  *   4 ACCESS        — 서버가 이 소켓에만 보내는 제어 프레임: [4, 0|1] = 붙어 있는 동안 내 권한이 바뀜(0 읽기 전용 · 1 편집 가능).
  *                     권한이 아예 사라지면 서버가 닫힘 코드 4003 으로 끊는다 — 그때는 재접속하지 않는다.
@@ -55,7 +55,7 @@ export const SYNC_WAIT_MS = 700
 /** 접속이 아예 안 될 때(릴레이 꺼짐) 저장본으로 시작하기까지 */
 export const CONNECT_WAIT_MS = 2500
 
-// 프레즌스 색(시안 WK2: success·warning 링). 디자인 토큰에서 고른다 — 사용자 id 해시로.
+// 프레즌스 색(success·warning 링). 디자인 토큰에서 고른다 — 사용자 id 해시로.
 // awareness 로는 토큰을 푼 #rrggbb 를 보낸다: TipTap v3(y-tiptap 커서 플러그인·CollaborationCaret)는 user.color 가
 // #rrggbb 가 아니면 경고를 찍고 투명으로 그린다(원격 awareness 값을 스타일에 그대로 꽂던 구멍을 막은 것).
 const PEER_TOKENS = ['--success', '--warning', '--primary'] as const

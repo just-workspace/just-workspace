@@ -1,7 +1,7 @@
 /**
  * 예약함 — Vue 판 components/mail/MailScheduledList.vue.
  * 보내기 ▾ "예약 보내기"로 걸어 둔 메일(GET /api/mail/scheduled). 메일 목록 자리(가운데 열·모바일 목록)에 뜬다.
- * 시안엔 예약함 그림이 없어 메일 목록 행 규격(2줄 56 · 위 줄 44 · mono 시각)과 PatRows 행 끝 아이콘 버튼으로 구성했다.
+ * 시안엔 예약함 그림이 없어 메일 목록 행 규격(2줄 56 · 위 줄 44 · mono 시각)과 행 끝 아이콘 버튼으로 구성했다.
  * 행 끝: 시각 변경 · 예약 취소. 보내는 중이면 둘 다 막음(서버 409), 실패는 danger 틴트 배지 + 사유(다시 시각을 잡으면 재시도).
  */
 import { useState } from 'react'

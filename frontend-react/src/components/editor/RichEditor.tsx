@@ -1,5 +1,5 @@
 /**
- * 단독 편집기(게시판 쓰기 — 시안 BD4·BM3). TipTap StarterKit + 이미지·표. Vue 판 components/editor/RichEditor.vue 이식.
+ * 단독 편집기(게시판 쓰기). TipTap StarterKit + 이미지·표. Vue 판 components/editor/RichEditor.vue 이식.
  * 데스크톱: 카드(border-input, 포커스 시 ring) 안에 공용 툴바(40) + 본문(min 260).
  * 모바일: 카드 없이 본문만 — 툴바는 호스트 페이지가 키보드 위에 <UiEditorToolbar variant="mobile"> 로 그린다(editor 노출).
  * 이미지·파일 버튼은 호스트가 받는다(onImage) — 게시판은 첨부 업로드 흐름과 같이 간다.

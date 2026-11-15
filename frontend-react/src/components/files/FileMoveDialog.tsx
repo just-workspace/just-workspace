@@ -1,9 +1,9 @@
 /**
- * 이동·복사(Vue components/files/FileMoveDialog.vue · 시안 FilesDesktop move · 결정 4 ①): UiModal "N개 항목 이동",
+ * 이동·복사(Vue components/files/FileMoveDialog.vue): UiModal "N개 항목 이동",
  * 폴더 찾기(36) + 트리(300, 행 34, 들여쓰기 18, ▾/▸ 12, 폴더 아이콘 warning 15, 선택 primary/13 + 600) +
  * 푸터 "+ 새 폴더" · [복사] · ["폴더명"로 이동].
  * 루트: 내 파일 · 공유 파일. 하위 폴더는 펼칠 때 불러온다. 모바일은 UiModal 전체 화면 시트(mobile="full"), 데스크톱 480.
- * roots 를 주면 그 루트만(p9: 공동 소유자가 공유받은 항목을 옮길 때 = 그 공유 폴더 안).
+ * roots 를 주면 그 루트만(공동 소유자가 공유받은 항목을 옮길 때 = 그 공유 폴더 안).
  *
  * 트리 노드는 Vue 처럼 객체를 제자리에서 고치고(open·loaded·children) 다시 그리기만 알린다(bump).
  */

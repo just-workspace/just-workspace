@@ -1,5 +1,5 @@
 /**
- * 회의 참가 전 화면(handover 19 답)의 상태 논리 — 순수 함수만. 화면은 MeetingsDeviceSetup.tsx.
+ * 회의 참가 전 화면의 상태 논리 — 순수 함수만. 화면은 MeetingsDeviceSetup.tsx.
  *
  *  · getUserMedia 오류 이름 → 상태(권한 거부 · 다른 앱 사용 중 · 장치 없음)
  *  · 처음 장치 잡기: 둘 다 → 오디오만 → 비디오만 순으로 시도해 "무엇이 막혔나"를 장치별로 가른다

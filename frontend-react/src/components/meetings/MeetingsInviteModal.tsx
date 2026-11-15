@@ -1,5 +1,5 @@
 /**
- * 회의 예약 / 지금 시작(시안 MT2 · 결정 회의 2·7): UiModal 520(모바일 바텀시트). Vue 판 components/meetings/MeetingsInviteModal.vue 그대로.
+ * 회의 예약 / 지금 시작: UiModal 520(모바일 바텀시트). Vue 판 components/meetings/MeetingsInviteModal.vue 그대로.
  *  회의 이름 → [날짜 1.3fr · 시작 1fr · 길이 1fr] → 초대(사람·이메일 칩 입력) → 비밀번호(선택, 보기 토글) → [취소][예약]
  *  지금 시작(mode="now")은 날짜·시작·길이 줄을 뺀다.
  * 초대 칩: 워크스페이스 사람 = primary/13 알약, 외부 = 테두리 알약 + "외부". ✕ 20(히트 40).

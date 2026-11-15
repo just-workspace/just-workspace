@@ -1,5 +1,5 @@
 /**
- * 접속 바에서 위로 열리는 팝오버(handover-20 답 §5.4 · 음질 패널 460 · 음질 상태 400). 데스크톱 전용 — 모바일은 호출자가 UiModal(바텀시트)로 그린다.
+ * 접속 바에서 위로 열리는 팝오버(음질 패널 460 · 음질 상태 400). 데스크톱 전용 — 모바일은 호출자가 UiModal(바텀시트)로 그린다.
  * 기준 요소(접속 바의 버튼) 위쪽에 붙여 body 로 포털(사이드바는 overflow-hidden 이라 안에서 그리면 잘린다).
  * 좌표는 화면 배율(루트 zoom) 아래에서도 맞게 toCssRect 로 바꾼다(UiMenu·UiTooltip 과 같은 규칙). Esc·바깥 클릭으로 닫힌다.
  */
@@ -10,7 +10,7 @@ import { toCssRect, useViewport } from '~/composables/useViewport'
 import { FOCUSABLE } from '~/components/ui/internal'
 
 export interface VoicePopoverProps {
-  /** 기준 요소(접속 바) — 그 왼쪽 + 12, 바로 위(+8)에 열린다(시안 left:76 · bottom:120) */
+  /** 기준 요소(접속 바) — 그 왼쪽 + 12, 바로 위(+8)에 열린다 */
   anchor: HTMLElement | null
   width: 400 | 460
   ariaLabel: string

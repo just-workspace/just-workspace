@@ -1,5 +1,5 @@
 /**
- * 음성 채널 전송 계층의 확장점(handover-20 · R17 Phase 1).
+ * 음성 채널 전송 계층의 확장점.
  *
  * 음질 단계(VoiceTier)마다 "소리를 어떻게 보내고 받나"가 다르다.
  *  - voice · music  → LiveKit(WebRTC Opus)  — lib/voice/transports/livekit.ts (이번 단계)
@@ -30,7 +30,7 @@ export interface VoiceSendConfig {
   noiseSuppression?: boolean
   autoGainControl?: boolean
   /**
-   * 고급(handover-20 답 "음질 패널 · 고급") — 무손실·하이레조 전송(lib/lossless)이 읽는다. Opus 단계는 무시(48k 고정).
+   * 고급 — 무손실·하이레조 전송(lib/lossless)이 읽는다. Opus 단계는 무시(48k 고정).
    * 샘플레이트는 "요청"이다(장치가 못 하면 전송이 장치 값으로 내리고 stats 에 실제 값을 쓴다).
    */
   sampleRate?: VoiceSampleRate
@@ -168,13 +168,13 @@ export interface VoiceTransport {
   peers(): VoicePeer[]
   on<K extends keyof VoiceTransportEvents>(ev: K, fn: VoiceTransportEvents[K]): () => void
   /**
-   * (선택) 내 마이크 상태 — 'denied' 면 권한이 없어 듣기만 하는 중(handover-20 상태 "권한 없음").
+   * (선택) 내 마이크 상태 — 'denied' 면 권한이 없어 듣기만 하는 중(상태 "권한 없음").
    * join 은 마이크가 없어도 성공해야 한다(들어가는 건 막지 않는다). 다시 시도는 setSend 로.
    */
   micState?(): 'ok' | 'denied'
   /** (선택) 한 참가자의 수신 음량(0..1) — 음악 공유 띠의 [공유 음량] */
   setParticipantVolume?(identity: string, volume: number): void
-  /** (선택) 사람별 음량(0..2 = 0–200%, handover-22) — 나만 듣는 음량. setParticipantVolume 과 곱한다 */
+  /** (선택) 사람별 음량(0..2 = 0–200%) — 나만 듣는 음량. setParticipantVolume 과 곱한다 */
   setParticipantGain?(identity: string, gain: number): void
 }
 

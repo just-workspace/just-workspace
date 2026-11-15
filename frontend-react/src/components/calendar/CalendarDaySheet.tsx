@@ -1,5 +1,5 @@
 /**
- * 모바일 월 보기 날짜 시트(Vue components/calendar/CalendarDaySheet.vue · 시안 CM1·캘2): 페이지 아래에 붙는 372 시트, 핸들 36×4,
+ * 모바일 월 보기 날짜 시트(Vue components/calendar/CalendarDaySheet.vue): 페이지 아래에 붙는 372 시트, 핸들 36×4,
  * 머리 "10월 15일 목요일 오늘" 17/600 + [+ 새 일정] 36, 행은 CalendarAgendaRow. 빈 날은 "일정 없음 + 새 일정"(시안 캘6).
  * 탭바는 그대로(목록 화면이라 숨기지 않음).
  */

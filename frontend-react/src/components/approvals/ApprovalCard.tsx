@@ -1,9 +1,9 @@
 /**
- * 채팅 안 쓰기 승인 카드 — 시안 A1(기본 low·high) · A2(상태 9종).
+ * 채팅 안 쓰기 승인 카드 — 기본(low·high) · 상태 9종.
  *
  * 내장 AI 스트림의 `write_request` 이벤트가 실어 온 요청 객체(app/mcp/writes.py to_dict)를 그린다.
- *   low  pending : [실행]=approve · [수정]=칸 인라인 편집 → PATCH(A2-2, 다시 계산 중 A2-1) · [취소]=cancel. 남은 시간(5분).
- *   high pending : "승인 대기함으로 보냄" + 대기함 링크(/approvals?id=). 대기함에서 처리되면 건수 이벤트로 다시 읽어 A2-7·A2-8.
+ *   low  pending : [실행]=approve · [수정]=칸 인라인 편집 → PATCH(다시 계산 중 표시) · [취소]=cancel. 남은 시간(5분).
+ *   high pending : "승인 대기함으로 보냄" + 대기함 링크(/approvals?id=). 대기함에서 처리되면 건수 이벤트로 다시 읽어 승인됨·거부됨으로 바꾼다.
  *   executed     : 결과 + [되돌리기] 남은 시간(undo_until 까지, 10분) · undone
  *   canceled · expired · failed · rejected
  * 모든 남은 시간은 서버 시각 기준(offset = server_now − 받은 순간의 클라이언트 시각).
@@ -110,7 +110,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // high 대기: 대기 건수 이벤트가 오면 대기함에서 처리됐는지 다시 본다(A2-7·A2-8)
+  // high 대기: 대기 건수 이벤트가 오면 대기함에서 처리됐는지 다시 본다
   const seq = useApprovalsSeq()
   const seqSeen = useRef(seq)
   useEffect(() => {
@@ -221,7 +221,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
   const link = resultLink(req.result)
   const label = t('approvals.card.label', { title: req.title })
 
-  // A2-1 미리보기 다시 계산 중
+  // 미리보기 다시 계산 중
   if (mode === 'computing') {
     return (
       <section aria-label={t('approvals.card.computingLabel', { title: req.title })} aria-busy="true" className="overflow-hidden rounded-xl border border-border bg-card">
@@ -232,7 +232,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
     )
   }
 
-  // A2-2 [수정] 누른 뒤 — 인라인 편집
+  // [수정] 누른 뒤 — 인라인 편집
   if (status === 'pending' && mode === 'edit') {
     return (
       <section aria-label={t('approvals.card.editLabel', { title: req.title })} className="overflow-hidden rounded-xl border border-primary/50 bg-card">
@@ -343,7 +343,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
     )
   }
 
-  // 대기(low) — A1 카드 1 / A2-9 모바일
+  // 대기(low) — 데스크톱 카드 / 모바일
   if (status === 'pending' && !isHigh && req.source !== 'mcp') {
     const btnSize = isMobile ? 'lg' : 'sm'
     return (
@@ -395,7 +395,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
     )
   }
 
-  // A2-3 실행됨 / A2-7 high 승인됨
+  // 실행됨 / high 승인됨
   if (status === 'executed') {
     return (
       <section aria-label={t('approvals.card.executedLabel', { title: req.title })} className="overflow-hidden rounded-xl border border-border bg-card">
@@ -430,7 +430,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
     )
   }
 
-  // A2-4 취소됨
+  // 취소됨
   if (status === 'canceled') {
     return (
       <section aria-label={t('approvals.card.canceledLabel', { title: req.title })} className="overflow-hidden rounded-xl border border-dashed border-border bg-transparent">
@@ -443,7 +443,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
     )
   }
 
-  // A2-5 만료
+  // 만료
   if (status === 'expired') {
     return (
       <section aria-label={t('approvals.card.expiredLabel', { title: req.title })} className="overflow-hidden rounded-xl border border-border bg-card opacity-85">
@@ -459,7 +459,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
     )
   }
 
-  // A2-6 실행 실패
+  // 실행 실패
   if (status === 'failed') {
     return (
       <section aria-label={t('approvals.card.failedLabel', { title: req.title })} className="overflow-hidden rounded-xl border border-danger/45 bg-card">
@@ -479,7 +479,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
     )
   }
 
-  // A2-8 거부됨(대기함에서)
+  // 거부됨(대기함에서)
   return (
     <section aria-label={t('approvals.card.rejectedLabel', { title: req.title })} className="overflow-hidden rounded-xl border border-border bg-card">
       {header({ icon: 'ban', iconCls: 'text-danger', border: false, badge: isHigh ? riskBadge('high') : undefined, right: <UiBadge tone="danger" size={18}>{t('approvals.status.rejected')}</UiBadge> })}

@@ -1,5 +1,5 @@
 /**
- * "나를 부른 것"(개인 멘션 + 안 읽은 DM) 총수를 탭 제목·파비콘에 싣는다(R-23). Vue 판 composables/useAttention.ts 대응.
+ * "나를 부른 것"(개인 멘션 + 안 읽은 DM) 총수를 탭 제목·파비콘에 싣는다. Vue 판 composables/useAttention.ts 대응.
  * 레일·탭바 배지는 같은 숫자(useChat().totalMentions)를 각 컴포넌트가 직접 읽는다.
  * 굵게 표시만 되는 일반 미읽음은 세지 않는다 — 채팅 시안 결정(굵게 = 미읽음, 숫자 = 나를 부른 것).
  *

@@ -1,7 +1,7 @@
 /**
- * 오류 화면(Vue components/auth/AuthErrorScreen.vue · 시안 S3·8-4-3) — pages/error(/error 라우트)와 라우터 전역 오류·404 가 같이 쓴다.
+ * 오류 화면(Vue components/auth/AuthErrorScreen.vue) — pages/error(/error 라우트)와 라우터 전역 오류·404 가 같이 쓴다.
  *  로그인 후 404 = 셸 안(mono 404 · 제목 22/700 · 설명 14 + 경로 mono · [홈으로][검색 Ctrl K]).
- *  서버 오류(5xx) = 셸 없는 500 화면(시안 ShellPage error500 — AuthServerErrorScreen, 요청 번호 복사).
+ *  서버 오류(5xx) = 셸 없는 500 화면(AuthServerErrorScreen, 요청 번호 복사).
  *  그 밖(로그인 전 404·403 등) = 인증 틀(AuthShell) 위 결과 화면(아이콘 타일 40 + 제목 24/700 + 설명 + [다시 시도][홈으로]).
  *
  * Vue 의 useError()/clearError({ redirect }) 대신: 오류는 prop error 로 받고(없으면 500 취급 — Vue 의 /error 직접 방문과 같다),
@@ -42,7 +42,7 @@ export function AuthErrorScreen({ error }: AuthErrorScreenProps) {
   const statusCode: number = err?.statusCode ?? 500
   const inShell = !!user && statusCode === 404
   const isServerError = statusCode >= 500
-  // 셸 안 404 의 상단바 = "워크스페이스 / (모듈 또는 홈) / 찾을 수 없음"(시안 S3)
+  // 셸 안 404 의 상단바 = "워크스페이스 / (모듈 또는 홈) / 찾을 수 없음"
   useBreadcrumb(inShell ? t('error.404.crumb') : '')
 
   const info = (() => {

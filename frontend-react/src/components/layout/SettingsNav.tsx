@@ -1,5 +1,5 @@
 /**
- * 설정·관리 좌측 내비(Vue components/layout/SettingsNav.vue · 시안 SettingsPage·AdminPage): 240, "설정 찾기" 32 입력,
+ * 설정·관리 좌측 내비(Vue components/layout/SettingsNav.vue): 240, "설정 찾기" 32 입력,
  * 그룹 라벨 11/600 0.08em, 항목 34(관리 32) rounded-sm, 선택 = primary/13 + 왼쪽 3px 바 + 600, 보조 글자 mono 11 / 경고 틴트 배지.
  * 검색어가 있으면 그룹 대신 일치 항목(키워드 포함)만 보인다.
  */

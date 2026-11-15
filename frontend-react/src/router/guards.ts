@@ -38,7 +38,7 @@ export async function authGuard(to: GuardTarget): Promise<string | null> {
   if (to.path.startsWith('/meetings/room/')) return null
   // 공유 링크로 들어온 손님. /s/<token> 에서 바로 OnlyOffice 편집기를 연다.
   if (to.path.startsWith('/s/')) return null
-  // 없는 주소는 로그인으로 보내지 않고 인증 틀 안 404(시안 S3)
+  // 없는 주소는 로그인으로 보내지 않고 인증 틀 안 404
   if (!to.matched) return null
 
   // 로그인 여부를 아직 모른다(/api/auth/me 가 429·5xx·네트워크 오류) — 미인증으로 단정하지 않고 다시 확인한다.

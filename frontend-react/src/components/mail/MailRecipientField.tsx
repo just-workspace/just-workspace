@@ -1,7 +1,7 @@
 /**
  * 받는 사람 칩 + 자동완성 — Vue 판 components/mail/MailRecipientField.vue.
  * Outlook식 수신자 칩 + 자동완성. modelValue 는 콤마 구분 문자열(기존 compose 로직 무수정 호환).
- * 시안 ML2(받는이 칩 26 · 아바타 18 · ✕ 18) / MM3(칩 32 · ✕ 28). ✕ 는 시각 크기 유지, 히트 영역만 40(P7 규칙 5).
+ * 데스크톱(받는이 칩 26 · 아바타 18 · ✕ 18) / 모바일(칩 32 · ✕ 28). ✕ 는 시각 크기 유지, 히트 영역만 40.
  * 워크스페이스 사람(내 도메인 주소·자동완성 출처 user)은 primary/13 채움 + 이니셜, 바깥 주소는 테두리.
  */
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'

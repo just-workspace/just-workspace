@@ -1,4 +1,4 @@
-// 유동 레이아웃 규칙 — handover 14 답 · R14.dc.html renderVals 의 예시 값을 표로 고정한다.
+// 유동 레이아웃 규칙 — 예시 값을 표로 고정한다.
 import { describe, it, expect } from 'vitest'
 import {
   autoScale, resolveScale, effective, railWideByDefault, mainWidthOf, dashColumns, dashCardCount,

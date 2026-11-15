@@ -1,7 +1,7 @@
 /**
- * 채팅 handover-22 백엔드 API — 얇은 fetch 함수와 응답 타입(한 곳).
+ * 채팅 백엔드 API — 얇은 fetch 함수와 응답 타입(한 곳).
  * 계약: 답장·점프·스레드(혼합형)·커스텀 이모지·검색(오른쪽 자리)·음소거 기간·프로필 팝아웃·포럼·여러 첨부.
- * 역할·권한·카테고리(r24)는 useChatRoles.ts · useChatLayout.ts 가 부른다.
+ * 역할·권한·카테고리는 useChatRoles.ts · useChatLayout.ts 가 부른다.
  * 상태(zustand)는 각 화면의 composable 이 갖는다 — 여기는 네트워크만.
  */
 import { $fetch } from '~/lib/api'
@@ -182,7 +182,7 @@ export function createForumChannel(name: string, type: 'public' | 'private', opt
   return $fetch(`${B}/channels`, { method: 'POST', body: { name, type, forum: true, ...opts } })
 }
 
-// ─── 채팅 서버 설정(개요 · 알림 기본값 — Settings22) ───
+// ─── 채팅 서버 설정(개요 · 알림 기본값) ───
 export type ChatNotifyLevel = 'all' | 'mentions' | 'none'
 export interface ChatServerSettings {
   /** 채팅 이름(사이드바 머리). 비면 사이트 이름 */

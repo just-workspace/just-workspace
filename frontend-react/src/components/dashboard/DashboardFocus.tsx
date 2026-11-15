@@ -1,5 +1,5 @@
 /**
- * 오늘의 포커스 — AI 브리핑 카드(시안 Dash17 ai · 옵트인 · 주 줄 4·5·6열, 3열 이하는 보조 영역 맨 앞).
+ * 오늘의 포커스 — AI 브리핑 카드(옵트인 · 주 줄 4·5·6열, 3열 이하는 보조 영역 맨 앞).
  *
  * 켜짐: 3줄(번호 mono + 문장 + 출처 링크 xs primary) → "회의 준비" 접이식(회의 10분 전부터 자동 펼침:
  *       지난 회의 한 줄 + 관련 채팅 #채널 n · 메일 n) → 바닥 "09:00 생성 · 내가 볼 수 있는 것만" · 다시 만들기 · [도움됨][아님].
@@ -177,7 +177,7 @@ export function DashboardFocus() {
             </button>
             {prepShown && (
               <ul className="mt-1.5 flex flex-col gap-1 pl-6 text-muted-foreground">
-                {/* 근거(관련 채팅)가 없으면 요약 줄은 빼고 "관련 채팅 n · 메일 n" 만(handover 18 답 12) */}
+                {/* 근거(관련 채팅)가 없으면 요약 줄은 빼고 "관련 채팅 n · 메일 n" 만 */}
                 {prep.last_line && prep.chat.count > 0 && <li>{t('dashboard.d17.ai.prepLast', { text: prep.last_line })}</li>}
                 <li>
                   {t('dashboard.d17.ai.prepChat')}{' '}

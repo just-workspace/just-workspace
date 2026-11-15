@@ -1,7 +1,7 @@
 /**
  * 채팅 설정 공용 조각 — 섹션 머리(데스크톱 제목 20/600 + 설명 14 + 닫기 ESC), 모바일 머리(뒤로 44 · 17/600 · +),
  * 안내 띠(banner: warn · info · danger), 설정 화면 맥락(모바일 여부 · 닫기 · 모바일 뒤로).
- * 시안: Settings22.dc.html 머리·banner·모바일 header.
+ * 머리·banner·모바일 header 는 디자인 그대로.
  */
 import { createContext, useContext, type ReactNode } from 'react'
 import { cn } from '~/lib/utils'

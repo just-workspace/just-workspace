@@ -1,5 +1,5 @@
 /**
- * 컴포저(handover-22 "컴포저" · 시안 Chat22 #reply #emoji #ac-* #everyone #everyone-no #silent #c-attach #c-format #c-edit, Mob22 #m-reply).
+ * 컴포저.
  * Vue 원본: frontend/components/chat/ChatInput.vue → 디스코드식 한 줄 카드로 바꿨다.
  *
  * 데스크톱: 한 줄 카드 56(입력 16/22, 위아래 17) · 좌우 인셋 8 · radius 8 · 1px · 최대 50vh 후 스크롤.
@@ -146,7 +146,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
     return t('chat.input.placeholderIn', { channel: ch.type === 'dm' ? chat.getDMDisplayName(ch) : `#${ch.name}` })
   })()
 
-  // 권한(@everyone) — 채널 권한을 읽어 둔다(r24 어댑터, 실패하면 기본값)
+  // 권한(@everyone) — 채널 권한을 읽어 둔다(어댑터, 실패하면 기본값)
   const myPerms = useStore(chatRolesStore, s => (selectedChannelId ? s.myChannelPerms[selectedChannelId] : undefined))
   const roles = useStore(chatRolesStore, s => s.roles)
   useStore(chatRolesStore, s => s.catalog)

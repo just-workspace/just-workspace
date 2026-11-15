@@ -1,7 +1,7 @@
 /**
- * 채팅 첨부 트레이 + 묶음 보내기(R-24 → handover-22 #c-attach). Vue 원본: frontend/composables/useChatAttachments.ts
+ * 채팅 첨부 트레이 + 묶음 보내기. Vue 원본: frontend/composables/useChatAttachments.ts
  *
- * handover-22: 여러 첨부를 **메시지 하나로**(디스코드식, 최대 10개 · 파일당 50MB) 보낸다.
+ * 여러 첨부를 **메시지 하나로**(디스코드식, 최대 10개 · 파일당 50MB) 보낸다.
  *  - 트레이에 넣을 때는 대기('queued')만 한다(채널·스레드 같음). 항목마다 스포일러(spoiler) · 대체 텍스트(alt).
  *  - 보내기(sendAttachments) = 낙관적 메시지 한 줄(id 'local-up-…', ChatMessage._upload)을 목록 끝에 넣고
  *    chatApi22.postAttachments(본문 · reply_to_id · reply_ping · silent · parent_id · also_to_channel 함께)로 올린다.

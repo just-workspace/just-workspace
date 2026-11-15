@@ -1,4 +1,4 @@
-// R5 키트 — UiInput variant="bare"(검색 줄)
+// 키트 — UiInput variant="bare"(검색 줄)
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 

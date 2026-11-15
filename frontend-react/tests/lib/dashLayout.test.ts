@@ -1,4 +1,4 @@
-// 홈 대시보드 배치 규칙(handover 17 · Dash17 renderVals) — 주 줄 · 행 수 상한 · row span · 개인/관리자 배치 합치기.
+// 홈 대시보드 배치 규칙 — 주 줄 · 행 수 상한 · row span · 개인/관리자 배치 합치기.
 import { describe, it, expect } from 'vitest'
 import {
   PRIMARY, PRIMARY_NEW, REST, REST_NEW, CARD_KEYS, maxRowsFor, rowSpanFor, planTier, drawOrder, resolveLayout, mergeOrder,

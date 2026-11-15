@@ -1,4 +1,4 @@
-// 참가 전 화면(MeetingsDeviceSetup, handover 19): 권한 거부 · http · 정상 · 토글 · 장치 바 · 다른 앱 사용 중 · 끊김 · 블루투스 짝 · 손님 잠금 · 대기 띠
+// 참가 전 화면(MeetingsDeviceSetup): 권한 거부 · http · 정상 · 토글 · 장치 바 · 다른 앱 사용 중 · 끊김 · 블루투스 짝 · 손님 잠금 · 대기 띠
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { i18n } from '~/i18n'

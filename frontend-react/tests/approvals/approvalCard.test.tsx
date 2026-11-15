@@ -1,4 +1,4 @@
-// 채팅 승인 카드(시안 A1·A2): 상태 전이(대기 → 실행 → 되돌리기 · 취소 · 수정 → PATCH → 실행),
+// 채팅 승인 카드: 상태 전이(대기 → 실행 → 되돌리기 · 취소 · 수정 → PATCH → 실행),
 // 서버 시각 offset 으로 만료·남은 시간을 센다(클라이언트 시계만 믿지 않음), high 는 대기함 링크.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'

@@ -1,4 +1,4 @@
-// 레일 '도구' 묶음(handover-netlab 답 §5.10 (a) 화면 14) — 네트워크 랩은 NETLAB 주소가 있을 때만, 바깥 출처 새 탭(external).
+// 레일 '도구' 묶음 — 네트워크 랩은 NETLAB 주소가 있을 때만, 바깥 출처 새 탭(external).
 // 격리 브라우저도 같은 묶음(쓸 수 있는 대상 + rbi 출처가 있을 때). ($fetch 는 가짜 — tests/shell/shell.test.tsx 와 같은 방식)
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, waitFor, act } from '@testing-library/react'

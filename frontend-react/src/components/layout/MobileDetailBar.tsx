@@ -1,5 +1,5 @@
 /**
- * 모바일 상세 화면 상단 바(Vue components/layout/MobileDetailBar.vue · 시안 SM1·8-1-2·P7 규칙 1):
+ * 모바일 상세 화면 상단 바(Vue components/layout/MobileDetailBar.vue):
  * 56, ‹(44) · 제목 16/600(+보조 12 mono/muted) · 액션 ≤2(44, ⋯ 로 접기).
  * 상세(본문·문서·작업·연락처·게시글·미리보기)에서는 탭바를 숨긴다 — hideTabbar 가 셸의 mobile-detail-open 을 켠다.
  * 데스크톱(md↑)에서는 렌더하지 않는다(md:hidden). 1차 행동은 하단 고정 바로.

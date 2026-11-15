@@ -1,5 +1,5 @@
 /**
- * 인증 폼 상단 타일(Vue components/auth/AuthAlert.vue · 시안 8-3-2 · AuthForm:16):
+ * 인증 폼 상단 타일(Vue components/auth/AuthAlert.vue):
  * 서버 오류 = danger(무엇 + 다음에 일어날 일), 성공 = success, 경고 = warning.
  * 아이콘 16 + 13px/1.5, 제목 600 + 설명 muted. 형식 오류는 여기가 아니라 입력 아래(UiInput error).
  */

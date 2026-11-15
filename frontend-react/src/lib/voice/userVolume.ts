@@ -1,5 +1,5 @@
 /**
- * 사람별 음량(handover-22 Pop22 #vol) — 개인 설정 chatUserVolumes(%)·chatUserMuted 를 음성 접속자에게 실제로 적용한다.
+ * 사람별 음량 — 개인 설정 chatUserVolumes(%)·chatUserMuted 를 음성 접속자에게 실제로 적용한다.
  *  · 값은 사용자 id 기준으로 저장한다(identity 는 세션마다 바뀐다). identity → user_id 는 chatStore.voiceStates 의 participants.
  *  · 적용: 전송의 setParticipantGain(identity, 0..2). 나만 음소거면 0. 100% 는 1(기본).
  *  · 접속자·설정·음성 상태가 바뀔 때마다 다시 맞춘다(같은 값이면 다시 부르지 않는다).

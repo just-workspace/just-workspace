@@ -1,7 +1,7 @@
 /**
  * 파일 모듈 순수 함수 — 유형 판정·표기·선택 범위. 컴포넌트·테스트가 함께 쓴다.
  *
- * 유형 아이콘 색 체계(시안 06-1 결정 8): 폴더 warning · 문서 primary · 시트 success · 슬라이드 warning ·
+ * 유형 아이콘 색 체계: 폴더 warning · 문서 primary · 시트 success · 슬라이드 warning ·
  * PDF danger · 이미지/압축 muted. 목록·그리드 동일, aria-label 에 유형 이름.
  */
 
@@ -22,7 +22,7 @@ export function fileKind(item: KindLike): FileKind {
   return 'file'
 }
 
-/** 유형 → [이름 i18n 키, 색 토큰 클래스, 공용 아이콘 이름(utils/icons.ts)]. 모양은 시안 FilesDesktop TY 표 그대로를 공용 세트로 올렸다. */
+/** 유형 → [이름 i18n 키, 색 토큰 클래스, 공용 아이콘 이름(utils/icons.ts)]. 모양은 디자인 그대로를 공용 세트로 올렸다. */
 export const KIND_META: Record<FileKind, { labelKey: string; tone: string; icon: string }> = {
   folder: { labelKey: 'files.kind.folder', tone: 'text-warning', icon: 'folder' },
   doc: { labelKey: 'files.kind.doc', tone: 'text-primary', icon: 'file-doc' },
@@ -71,7 +71,7 @@ export function isComposingKey(e: { nativeEvent?: { isComposing?: boolean }; key
   return !!(e.nativeEvent?.isComposing || e.isComposing || e.keyCode === 229)
 }
 
-/** 클릭 = 열기(결정 2)에서 미리보기 모달로 여는 종류. 오피스는 새 탭, 폴더는 들어가기. */
+/** 클릭 = 열기에서 미리보기 모달로 여는 종류. 오피스는 새 탭, 폴더는 들어가기. */
 export function previewKind(item: KindLike): 'image' | 'pdf' | 'text' | null {
   if (item.is_dir) return null
   const mime = item.mime_type || ''
@@ -105,7 +105,7 @@ export function formatStamp(iso: string | null | undefined): string {
   return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-/** 모바일 메타 줄 "10/15"(시안 FilesMobile). */
+/** 모바일 메타 줄 "10/15". */
 export function formatDay(iso: string | null | undefined): string {
   if (!iso) return ''
   const d = new Date(iso)
@@ -125,7 +125,7 @@ export function expiryLabel(key: string, now = new Date(), tr: FilesTranslate = 
   return tr('files.expiry.inDays', { month: at.getMonth() + 1, day: at.getDate(), days })
 }
 
-/** 링크 행 메타 "10/20 만료 · 비밀번호 · 다운로드 막음 · 1회용 · 다운로드 14회"(시안 FilesDesktop links) */
+/** 링크 행 메타 "10/20 만료 · 비밀번호 · 다운로드 막음 · 1회용 · 다운로드 14회" */
 export function linkMeta(l: { expires_at: string | null; max_downloads: number | null; download_count: number; has_password?: boolean; allow_download?: boolean; paths?: string[]; email_count?: number }, tr: FilesTranslate = koTranslate): string {
   const parts: string[] = []
   if (l.expires_at) {
@@ -205,7 +205,7 @@ export function activityKey(action: string): string {
   return `files.activity.${ACTIVITY_ACTIONS.has(action) ? action : 'other'}`
 }
 
-/** 공유 권한 4단계 순서(p9) — 보기 < 댓글 < 편집 < 공동 소유 */
+/** 공유 권한 4단계 순서 — 보기 < 댓글 < 편집 < 공동 소유 */
 export const SHARE_ROLES = ['view', 'comment', 'edit', 'owner'] as const
 export type ShareRoleName = typeof SHARE_ROLES[number]
 /** role 이 need 이상인가. 공유가 아닌 내 항목(role 없음)은 소유자로 본다. */

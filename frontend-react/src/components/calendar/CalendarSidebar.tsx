@@ -1,7 +1,7 @@
 /**
- * 데스크톱 캘린더 사이드바(Vue components/calendar/CalendarSidebar.vue · 시안 CL1): 236 bg-card · [+ 새 일정] 40 primary · 미니 달력 ·
- * "내 캘린더" / "구독"(끝에 "+ 구독 추가" 줄 — 시안 R13 #ics) / "공유받은 캘린더" 34 행(체크 16 + 색 견본 10 + 이름). 공유·삭제는 hover/포커스에만(데스크톱 규칙 C).
- * 구독 행은 hover 에 ⋮ 하나만 — 메뉴 = 지금 새로 고침 · 색 바꾸기 · 공유 · ─ · 구독 해제(handover 17 답 2-4, 설정 › 캘린더와 같은 한 벌).
+ * 데스크톱 캘린더 사이드바(Vue components/calendar/CalendarSidebar.vue): 236 bg-card · [+ 새 일정] 40 primary · 미니 달력 ·
+ * "내 캘린더" / "구독"(끝에 "+ 구독 추가" 줄) / "공유받은 캘린더" 34 행(체크 16 + 색 견본 10 + 이름). 공유·삭제는 hover/포커스에만(데스크톱 규칙 C).
+ * 구독 행은 hover 에 ⋮ 하나만 — 메뉴 = 지금 새로 고침 · 색 바꾸기 · 공유 · ─ · 구독 해제(설정 › 캘린더와 같은 한 벌).
  * 모바일(<md)에서는 페이지가 이 사이드바를 그리지 않고 FAB + 상단 ⋯ 시트를 쓴다(시안 캘2).
  */
 import { useEffect, useState } from 'react'
@@ -43,7 +43,7 @@ export function CalendarSidebar() {
   const [newColor, setNewColor] = useState(CALENDAR_COLORS[0])
 
   function setFormOpen(open: boolean) {
-    // 새 캘린더 기본 색은 순번대로 범주 1→8 순환(11-A1)
+    // 새 캘린더 기본 색은 순번대로 범주 1→8 순환
     if (open && !showNewForm) {
       const mine = calendarStore.getState().calendars.filter(c => !c.is_shared)
       setNewColor(CAT_HEX[catForIndex(mine.length).cat - 1])
@@ -198,7 +198,7 @@ export function CalendarSidebar() {
               </div>
             )}
 
-            {/* 구독(외부 .ics) — 묶음 끝 "+ 구독 추가"(답변서 13 A2) */}
+            {/* 구독(외부 .ics) — 묶음 끝 "+ 구독 추가" */}
             <h3 className="px-1 pb-1.5 pt-3 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground">{t('calendar.sidebar.subscriptions')}</h3>
             {subscriptions.map(ownRow)}
             <button

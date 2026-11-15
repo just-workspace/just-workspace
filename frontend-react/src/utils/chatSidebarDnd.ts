@@ -1,5 +1,5 @@
 /**
- * 채팅 사이드바 정렬·드래그 계산(handover-22 §2.1 · 시안 Chat22 #drag #drag-over #drag-cat · Mob22 #m-order).
+ * 채팅 사이드바 정렬·드래그 계산.
  * 순수 계산(테스트 대상)과, 그 결과를 서버에 보내는 동작(moveChannelTo / moveCategoryTo)을 함께 둔다.
  * 카테고리·정렬 API 는 useChatLayout 만 부른다(patchLayout · moveChannelPatch · moveCategoryPatch).
  * 보관된 프로젝트(시스템 구역)로 끌어 놓기 = 채널 보관(PATCH /channels/{id} is_archived), 거기서 꺼내기 = 보관 해제.
@@ -180,7 +180,7 @@ export function channelLabel(c: Pick<Channel, 'name' | 'is_voice' | 'type'>): st
 }
 
 type T = (k: string, a?: Record<string, unknown>) => string
-/** "#시안-리뷰를 ‘디자인 팀’ 두 번째로 옮겼습니다"(Mob22 #m-order status · 키보드 이동 aria-live) */
+/** "#시안-리뷰를 ‘디자인 팀’ 두 번째로 옮겼습니다"(키보드 이동 aria-live) */
 export function channelMovedText(t: T, locale: string, c: Pick<Channel, 'name' | 'is_voice' | 'type'>, sectionName: string, index: number): string {
   const name = channelLabel(c)
   return t('chat.side.moved', { name, obj: locale.startsWith('ko') ? objParticle(name) : '', cat: sectionName, nth: ordinalText(index + 1, t, locale) })

@@ -1,4 +1,4 @@
-// handover 17 답 2 — 16번 구현 확인 반영(구독 ⋮ 통일 · 시간대 찾기 칸)
+// 구독 ⋮ 통일 · 시간대 찾기 칸
 import { describe, it, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { i18n } from '~/i18n'

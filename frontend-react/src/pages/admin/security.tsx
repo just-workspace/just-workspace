@@ -1,9 +1,9 @@
 /**
- * 관리 › 설정 › 보안·SSL — Vue pages/admin/security.vue(시안 AdminPage variant=ssl · Review11 D2e). 폼 720.
+ * 관리 › 설정 › 보안·SSL — Vue pages/admin/security.vue. 폼 720.
  *  ① SSL 인증서 — 머리 배지(만료 30일 이내 "갱신 필요"), 인증서 행(도메인 600 + "MM/DD 만료 · D-n", 상태 배지).
  *     서버 effective(관리 개요 ops-summary 의 ssl 과 같은 출처) 하나를 보인다. 재발급 버튼은 두지 않는다.
- *     머리 오른쪽 [인증서 올리기](outline, 답변서 B5) → AdminSslUploadModal(시안 R13 #ssl — 미리 읽기·짝 검사) + 기존 삭제 줄. 자동 발급 버튼은 없다(재발급 버튼 두지 않음).
- *  ② 로그인 보호 — 2단계 인증 필수 대상 UiSelect(없음/관리자/전체, 답변서 B5), 연속 실패 잠금, 새 기기 로그인 메일 알림. 즉시 저장.
+ *     머리 오른쪽 [인증서 올리기](outline) → AdminSslUploadModal(미리 읽기·짝 검사) + 기존 삭제 줄. 자동 발급 버튼은 없다(재발급 버튼 두지 않음).
+ *  ② 로그인 보호 — 2단계 인증 필수 대상 UiSelect(없음/관리자/전체), 연속 실패 잠금, 새 기기 로그인 메일 알림. 즉시 저장.
  *  ③ 세션 — 세션 유지·유휴 로그아웃 선택 + 카드 푸터 저장.
  */
 import { useEffect, useState } from 'react'
@@ -138,7 +138,7 @@ export default function AdminSecurityPage() {
     finally { setSessSaving(false) }
   }
 
-  // ── ④ 인증서 올리기(시안 R13 #ssl) ──
+  // ── ④ 인증서 올리기 ──
   const [uploaded, setUploaded] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   async function onUploaded() {
@@ -243,7 +243,7 @@ export default function AdminSecurityPage() {
         </div>
       </SettingsCard>
 
-      {/* 인증서 올리기(SSL 카드 머리 버튼 → 모달, 시안 R13 #ssl). 삭제 줄은 기존 기능 유지 */}
+      {/* 인증서 올리기(SSL 카드 머리 버튼 → 모달). 삭제 줄은 기존 기능 유지 */}
       {uploadOpen && (
         <AdminSslUploadModal
           onUploaded={() => void onUploaded()}

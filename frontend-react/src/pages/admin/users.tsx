@@ -1,9 +1,9 @@
 /**
- * 관리 › 사용자 — Vue 원본: frontend/pages/admin/users.vue (시안 AdminPage users · ADM2 · 관리 3).
+ * 관리 › 사용자 — Vue 원본: frontend/pages/admin/users.vue.
  * 헤더 [전체 강제 로그아웃][사용자 초대], 표 위 검색 260 + 상태 칩(승인 대기 n = warning) + 그룹 선택,
- * 선택하면 표 머리에 붙는 일괄 바(AdminUsersBulkBar), S2 표(AdminUsersTable), 모바일은 카드 스택(AdminUserCard).
+ * 선택하면 표 머리에 붙는 일괄 바(AdminUsersBulkBar), 표(AdminUsersTable), 모바일은 카드 스택(AdminUserCard).
  *
- * 서버 연결(p4):
+ * 서버 연결:
  *   목록 = GET /admin/users?q&status(쉼표 여럿)&role&group&sort&page&size → {users,total,page,size} — 검색·필터·정렬·페이지 전부 서버.
  *   상태 = 행의 status(active·pending·suspended). 칩 숫자(승인 대기)는 운영 요약(ops-summary).
  *   일괄·단건 승인/거절/정지/그룹 추가 = POST /admin/users/bulk(사람마다 결과).
@@ -383,7 +383,7 @@ export default function AdminUsersPage() {
                   ))}
                 </div>
 
-                {/* 페이지(S2 Pagination: 32 버튼 · mono 범위) — 한 쪽이면 숨김 */}
+                {/* 페이지(32 버튼 · mono 범위) — 한 쪽이면 숨김 */}
                 {totalPages > 1 && (
                   <div className="flex items-center gap-2">
                     <span className="flex-1 font-mono text-[11px] text-muted-foreground">{rangeText(page, total)}</span>

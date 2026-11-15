@@ -1,5 +1,5 @@
 /**
- * 멘션 자동완성 목록(답변서 C5 · 시안 R12Files #comments) — 입력(textarea·input) 위/아래에 붙는 listbox.
+ * 멘션 자동완성 목록 — 입력(textarea·input) 위/아래에 붙는 listbox.
  * (자세한 설명·예시는 아래 컴포넌트 JSDoc)
  */
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
@@ -57,7 +57,7 @@ export interface UiMentionListProps {
   ariaLabel?: string
   /** 목록 최대 높이 px(기본 240) */
   maxHeight?: number
-  /** 크기 — default(행 36 · 이름 13/500 · 보조 12 · 선택 bg-accent) · chat(handover-22 채팅 자동완성: 행 36 · 이름 14/500 · 보조 13 · 선택 overlay-selected /20 · 호버 /12) */
+  /** 크기 — default(행 36 · 이름 13/500 · 보조 12 · 선택 bg-accent) · chat(채팅 자동완성: 행 36 · 이름 14/500 · 보조 13 · 선택 overlay-selected /20 · 호버 /12) */
   size?: 'default' | 'chat'
   className?: string
 }
@@ -133,12 +133,12 @@ export function useUiMentionList({ count, open, onPick, onClose, idPrefix = 'ui-
 }
 
 /**
- * 멘션 자동완성 목록(답변서 C5 · 시안 R12Files #comments) — 입력(textarea·input) 위/아래에 붙는 listbox.
+ * 멘션 자동완성 목록 — 입력(textarea·input) 위/아래에 붙는 listbox.
  * 채팅 입력·게시판 댓글·파일 댓글이 같이 쓴다.
  *
  * 모양: rounded-lg · border · bg-popover · shadow-md. 머리글(11/600 muted) · 행 36(아바타 20 · 이름 13/500 · 보조 글 12 muted)
  *       · 선택 행 bg-accent + 오른쪽 ↵ 키캡 · 바닥 안내 줄(12 muted, 위 테두리).
- *       옵션 슬롯(handover-22): leading(아바타 자리 대체) · trailing(오른쪽 꼬리표) · disabled + disabledReason(60% + 이유 12 muted,
+ *       옵션 슬롯: leading(아바타 자리 대체) · trailing(오른쪽 꼬리표) · disabled + disabledReason(60% + 이유 12 muted,
  *       aria-disabled, 클릭·Enter 로 안 골라짐 — 훅에 isDisabled 를 같이 준다).
  * 키보드: 포커스는 입력에 둔 채(aria-activedescendant) — 입력 onKeyDown 에서 useUiMentionList().onKeyDown(e) 를 먼저 부른다.
  *   ↑↓ 이동(돌기) · Enter/Tab 고르기(Ctrl/⌘+Enter 는 건드리지 않음 — 보내기 단축키, anyEnter 면 그것도 고르기) · Esc 닫기.

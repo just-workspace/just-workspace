@@ -1,11 +1,11 @@
 /**
- * AI 쓰기 승인(S3) — 대기 건수 싱글턴 + /api/approvals 호출.
+ * AI 쓰기 승인 — 대기 건수 싱글턴 + /api/approvals 호출.
  *
  * 대기 건수(승인 대기함 = high 이거나 MCP 에서 온 대기 요청)는 레일 배지·AI 사이드바·토스트가 같은 값을 쓴다(시안 회신 rB-1):
  *   - 처음 값: GET /api/approvals/count (로그인 뒤 한 번, 창이 다시 보일 때 1분 간격 보정)
  *   - 실시간: 사용자 소켓 이벤트 {type:"approvals.count", pending:n} (알림과 같은 /ws/chat 채널 — useChat onChatEvent)
  *   - 대기함 목록 응답의 pending 도 그대로 반영
- * 건수가 늘었고 사용자가 승인 대기함 밖에 있으면 토스트(시안 B2-4)로 알린다.
+ * 건수가 늘었고 사용자가 승인 대기함 밖에 있으면 토스트로 알린다.
  *
  * React: const pending = useApprovalsCount()   (null = 모름)
  * 컴포넌트 밖: approvalsStore.getState().pending · setApprovalsCount(n) · approvalsApi.*
@@ -85,7 +85,7 @@ function onApprovalsPage(): boolean {
   return p === '/approvals' || p.startsWith('/approvals/')
 }
 
-/** 새 승인 요청 토스트(B2-4) — 가장 최근 대기 요청 한 건을 붙인다 */
+/** 새 승인 요청 토스트 — 가장 최근 대기 요청 한 건을 붙인다 */
 async function notifyNew(added: number) {
   const t = (k: string, v?: Record<string, unknown>) => i18n.t(k, v)
   let latest: ApprovalRequest | undefined

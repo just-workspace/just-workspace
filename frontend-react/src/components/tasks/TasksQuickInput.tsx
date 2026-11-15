@@ -1,5 +1,5 @@
 /**
- * 빠른 입력 한 줄(Vue components/tasks/TasksQuickInput.vue · 시안 TK1:19 · 결정 작업 4): 44, rounded-10, bg-card, 포커스 ring + ring/30 2px.
+ * 빠른 입력 한 줄(Vue components/tasks/TasksQuickInput.vue): 44, rounded-10, bg-card, 포커스 ring + ring/30 2px.
  * 입력 중 날짜(primary)·!우선순위(색)·@담당(muted) 토큰을 글자 위에 바로 칠한다 — 투명 글자 입력 + 같은 자리 거울 레이어.
  * Enter = 추가. 자세한 건 상세 패널에서.
  * @담당은 페이지가 사용자로 찾아 담당자로 저장한다(못 찾으면 제목에 남김). @ 가 없으면 나에게 배정.

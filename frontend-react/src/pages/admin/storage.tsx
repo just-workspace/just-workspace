@@ -1,8 +1,8 @@
 /**
- * 관리 › 설정 › 저장소·백업 — Vue pages/admin/storage.vue(시안 AdminPage variant=backup · Review11 D2d). 폼 720.
+ * 관리 › 설정 › 저장소·백업 — Vue pages/admin/storage.vue. 폼 720.
  *  ① 저장소 — 행(min 52): 전체 사용량 "사용 / 전체 · n%" + 상태 배지, 사용자 기본 할당 [바꾸기], 휴지통 보관 [바꾸기](작은 모달).
  *  ② 자동 백업 = AdminBackup(#backup).
- *  ③ 외부 저장소(파일 시스템 / S3·MinIO) — 백업 카드 아래 별도 카드(답변서 B5).
+ *  ③ 외부 저장소(파일 시스템 / S3·MinIO) — 백업 카드 아래 별도 카드.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -167,7 +167,7 @@ export default function AdminStoragePage() {
       {/* ② 자동 백업 */}
       <AdminBackup id="backup" className="scroll-mt-4" />
 
-      {/* ③ 외부 저장소(답변서 B5 — 백업 카드 아래 별도 카드) */}
+      {/* ③ 외부 저장소(백업 카드 아래 별도 카드) */}
       <SettingsCard title={t('admin.storage.externalTitle')} description={t('admin.storage.cardDesc')} changes={changes} saving={saving} saved={saved} onSave={save} onReset={reset}>
         {loading ? (
           <UiSkeleton preset="text" rows={3} />

@@ -1,8 +1,8 @@
 /**
- * 메일 작성 본체 — Vue 판 components/mail/MailComposer.vue. 세 자리에서 같은 로직을 쓴다(시안 메일 1 ②+③).
- *  variant="window" : 데스크톱 떠 있는 작성 창 580×640 안(MailComposeWindow 가 제목 줄을 그림) — ML2
- *  variant="page"   : 모바일 전체 화면 /mail/compose — MM3
- *  variant="inline" : 읽기 화면 본문 아래 인라인 답장 — ML1
+ * 메일 작성 본체 — Vue 판 components/mail/MailComposer.vue. 세 자리에서 같은 로직을 쓴다.
+ *  variant="window" : 데스크톱 떠 있는 작성 창 580×640 안(MailComposeWindow 가 제목 줄을 그림)
+ *  variant="page"   : 모바일 전체 화면 /mail/compose
+ *  variant="inline" : 읽기 화면 본문 아래 인라인 답장
  *
  * 기능: 보낸 계정·이름, 받는이 칩·참조·숨은참조, 서명, 첨부 15MB(넘으면 대용량 첨부 = 파일함 + 30일 링크), 30초 임시 저장(/api/mail/drafts), 읽음 확인 요청,
  * 답장·전체 답장·전달 인용, 임시 보관 메일 이어 쓰기. 닫기 = 임시보관함에 저장(묻지 않음), 버리기는 휴지통 버튼(확인).
@@ -70,7 +70,7 @@ export interface MailComposerProps {
   original?: Readonly<MessageDetail> | null
   /** 새 메일 받는 사람 미리 채우기(연락처 "메일 쓰기" 등) */
   to?: string | null
-  /** 화면 안 AI 답장 초안(S7) — 답장 본문 맨 위에 채운다. 이 초안으로 보내면 서버가 X-AI-Generated 를 붙인다 */
+  /** 화면 안 AI 답장 초안 — 답장 본문 맨 위에 채운다. 이 초안으로 보내면 서버가 X-AI-Generated 를 붙인다 */
   aiDraft?: string | null
   /** 닫힘(보냄·버림·저장 후) */
   onClose?: () => void
@@ -295,7 +295,7 @@ export function MailComposer({
           const text = d.body_text_without_signature ?? d.body_text
           setInitialContent(html || textToHtml(text || ''))
           draftSignature = d.signature_id || null
-          // S4 — AI 가 초안에 붙인 워크스페이스 파일(서버가 열 때 임시 첨부로 바꿔 준다)
+          // AI 가 초안에 붙인 워크스페이스 파일(서버가 열 때 임시 첨부로 바꿔 준다)
           if (Array.isArray(d.attachments) && d.attachments.length) setAttachments(d.attachments)
           if (d.attachment_error) addToast('warning', d.attachment_error)
         } catch { /* 지워진 초안 — 빈 창 */ }
@@ -539,7 +539,7 @@ export function MailComposer({
 
   const fileInputEl = <input ref={fileInput} type="file" multiple className="hidden" onChange={e => { void handleFiles(e.target.files) }} />
 
-  // ─────────── 인라인 답장(시안 ML1 본문 아래) ───────────
+  // ─────────── 인라인 답장 ───────────
   if (isInline) {
     return (
       <section

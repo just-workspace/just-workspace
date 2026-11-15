@@ -1,5 +1,5 @@
 /**
- * 문구 안 버튼·링크·강조(답변서 C3) — 번역 문자열 일부를 React 노드로 그린다. 기존 i18n(vue-i18n 문법 어댑터)과 같은 t 를 거친다.
+ * 문구 안 버튼·링크·강조 — 번역 문자열 일부를 React 노드로 그린다. 기존 i18n(vue-i18n 문법 어댑터)과 같은 t 를 거친다.
  * (자세한 설명·예시는 아래 컴포넌트 JSDoc)
  */
 import { Fragment, createElement, type ElementType, type ReactNode } from 'react'
@@ -72,7 +72,7 @@ export function transNodes(translate: (named: Record<string, string>) => string,
 }
 
 /**
- * 문구 안 버튼·링크·강조(답변서 C3) — 번역 문자열 일부를 React 노드로 그린다. 기존 i18n(vue-i18n 문법 어댑터)과 같은 t 를 거친다.
+ * 문구 안 버튼·링크·강조 — 번역 문자열 일부를 React 노드로 그린다. 기존 i18n(vue-i18n 문법 어댑터)과 같은 t 를 거친다.
  *
  * 번역 문자열의 두 형식을 받는다:
  *  - 감싸는 태그 `{open}미리보기로 열기{/open}` → slots.open(안쪽 글자) 를 그린다(함수 슬롯).

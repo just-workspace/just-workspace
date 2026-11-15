@@ -1,4 +1,4 @@
-// 음성채널 화면 상태 로직(handover-20 답) — lib/voice/ui 순수 함수 · prefs 고급값 · 무손실 어댑터 고급 옵션
+// 음성채널 화면 상태 로직 — lib/voice/ui 순수 함수 · prefs 고급값 · 무손실 어댑터 고급 옵션
 import { describe, it, expect } from 'vitest'
 import {
   actualFormat, bandsFor, barStatus, browserKind, detectSpeakerOutput, formatDb, formatRtt, losslessBitrate, lossPercent,

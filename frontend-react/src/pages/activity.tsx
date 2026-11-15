@@ -1,9 +1,9 @@
 /**
- * 활동(시안 X4·PatActivityMobile). Vue 원본: frontend/pages/activity.vue
+ * 활동. Vue 원본: frontend/pages/activity.vue
  * 모바일 탭바 "활동" 탭의 화면. 상단 56(제목 18/600 + 모두 읽음) + 칩 36 + 목록(아바타 40, 글자 14).
  * 데스크톱에서는 같은 목록을 읽기 폭(680)으로 보여 준다(벨 → 패널이 기본 진입).
- * ★ 스와이프 "읽음"(P-15)은 제스처 부품이 없어 이번 단계에서는 탭 = 열기+읽음만.
- * 모바일 머리는 이 페이지 header(시안 X4) — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader)
+ * ★ 스와이프 "읽음"은 제스처 부품이 없어 이번 단계에서는 탭 = 열기+읽음만.
+ * 모바일 머리는 이 페이지 header — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader)
  */
 import { useI18n } from '~/i18n'
 import { useHead } from '~/lib/head'

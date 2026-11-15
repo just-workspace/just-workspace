@@ -29,7 +29,7 @@ export function CalendarMobileMenu() {
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState(CALENDAR_COLORS[0])
   const [creating, setCreating] = useState(false)
-  // 새 캘린더 기본 색은 순번대로 범주 1→8 순환(11-A1)
+  // 새 캘린더 기본 색은 순번대로 범주 1→8 순환
   function setShowNew(open: boolean) {
     if (open && !showNew) setNewColor(CAT_HEX[catForIndex(calendarStore.getState().calendars.filter(c => !c.is_shared).length).cat - 1])
     setShowNewRaw(open)

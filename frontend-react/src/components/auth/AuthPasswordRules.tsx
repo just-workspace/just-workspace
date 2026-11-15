@@ -1,5 +1,5 @@
 /**
- * 비밀번호 규칙 체크 목록(Vue components/auth/AuthPasswordRules.vue · 시안 8-3-4 · AuthForm:30):
+ * 비밀번호 규칙 체크 목록(Vue components/auth/AuthPasswordRules.vue):
  * 12px, 통과 = success 600 + ✓, 미통과 = muted + 빈 원 10px. 강도 미터 없음.
  * 규칙 판정은 utils/passwordRules.ts(백엔드 정책과 동일). aria-live 로 변화를 읽어 준다.
  */

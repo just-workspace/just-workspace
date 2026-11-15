@@ -1,8 +1,8 @@
 /**
  * 회의 화면(로그인 사용자·호스트) — 장치 확인 → 회의 → 종료. Vue 판 pages/meetings/room/[name].vue 그대로.
- * 미니 통화 창(P-8): 접속은 앱 수준 세션(useMeetings)이 쥐고, 이 화면은 "전체 회의 화면"일 뿐이다.
- * 핸드오프 12 A5: 회의 머리 왼쪽 끝 "작게 보기"(minimize-2 · Alt+M), 제목 아래 "경과 · n명".
- * 핸드오프 12 A8: 끝난 뒤 데스크톱 오른쪽 stage 에 "이번 회의" 요약 카드(MeetingsEndSummary).
+ * 미니 통화 창: 접속은 앱 수준 세션(useMeetings)이 쥐고, 이 화면은 "전체 회의 화면"일 뿐이다.
+ * 회의 머리 왼쪽 끝 "작게 보기"(minimize-2 · Alt+M), 제목 아래 "경과 · n명".
+ * 끝난 뒤 데스크톱 오른쪽 stage 에 "이번 회의" 요약 카드(MeetingsEndSummary).
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -60,7 +60,7 @@ function MeetingRoom() {
 
   const { t } = useI18n()
   const { user } = useAuth()
-  // 미니 통화 창(P-8): 접속은 앱 수준 세션이 쥐고, 이 화면은 "전체 회의 화면"일 뿐이다.
+  // 미니 통화 창: 접속은 앱 수준 세션이 쥐고, 이 화면은 "전체 회의 화면"일 뿐이다.
   const { returnPath } = useMeetingCall()
 
   // 이미 이 방에 통화 중이면(미니 창에서 펼쳐 돌아옴) 장치 확인 없이 회의 화면으로 이어 간다
@@ -97,7 +97,7 @@ function MeetingRoom() {
 
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false)
 
-  // 회의 종료 화면 "'회의' · 58분 · 참가 6명"(시안 WorkMobile meetOver).
+  // 회의 종료 화면 "'회의' · 58분 · 참가 6명".
   // 앱 수준(key)에 둔다 — 미니 창으로 내렸다 돌아와도, 미니 창에서 나가도 같은 통계를 쓴다.
   const stats = useMeetingSessionStats(() => participants.length, 'meetings-call-stats')
   // 끝난 회의 요약(서버 쪽: 제목·호스트·채널·캘린더) — 볼 수 없으면(404) 이 화면이 본 값만
@@ -267,7 +267,7 @@ function MeetingRoom() {
       stopPendingPoll()
       // 아직 접속 중이면(토큰 요청·connect 대기) 그 입장을 접는다 — 떠난 뒤에 접속이 완료돼 통화가 붙지 않게
       cancelPendingJoin()
-      // 로그인 사용자가 다른 화면으로 가면 통화를 끊지 않는다 — 셸의 미니 통화 창이 이어받는다(P-8).
+      // 로그인 사용자가 다른 화면으로 가면 통화를 끊지 않는다 — 셸의 미니 통화 창이 이어받는다.
       // 손님(셸 없음)·돌아올 경로가 없는 경우는 예전처럼 떠나면 퇴장. 재입장 대기 중(connected=false)도 세션을 끝낸다.
       const s = meetingsStore.getState()
       const minimizable = !!authStore.getState().user && !!meetingCallStore.getState().returnPath
@@ -279,7 +279,7 @@ function MeetingRoom() {
 
   return (
     <div className="min-h-dvh bg-background text-foreground">
-      {/* 1. 장치 테스트(참가 전 화면, handover 19) */}
+      {/* 1. 장치 테스트(참가 전 화면) */}
       {phase === 'device-setup' && (
         <MeetingsDeviceSetup
           roomName={roomName}
@@ -329,9 +329,9 @@ function MeetingRoom() {
               </div>
             </div>
           )}
-          {/* 룸 헤더 — 왼쪽 끝 "작게 보기"(뒤로 자리, 시안 R12Call 6) · 제목 + 경과·인원 · 오른쪽 초대 링크 */}
+          {/* 룸 헤더 — 왼쪽 끝 "작게 보기"(뒤로 자리) · 제목 + 경과·인원 · 오른쪽 초대 링크 */}
           <div className="flex min-h-14 shrink-0 items-center gap-2 border-b border-border bg-background px-3 py-2 pt-[calc(0.5rem+env(safe-area-inset-top))]">
-            {/* 작게 보기(P-8): 통화를 유지한 채 앱의 다른 화면으로. 손님에겐 없다(셸이 없다). */}
+            {/* 작게 보기: 통화를 유지한 채 앱의 다른 화면으로. 손님에겐 없다(셸이 없다). */}
             {canMinimize && (
               <UiIconButton
                 label={t('meetings.mini.minimizeLong')}
@@ -420,7 +420,7 @@ function MeetingRoom() {
         </div>
       )}
 
-      {/* 3. 회의 종료(시안 WorkMobile meetOver · 11 답 D5c: 종료 muted 타일 · [회의 목록으로][다시 참여]). 팝업이 닫히지 않을 때의 폴백 포함 */}
+      {/* 3. 회의 종료(종료 muted 타일 · [회의 목록으로][다시 참여]). 팝업이 닫히지 않을 때의 폴백 포함 */}
       {phase === 'ended' && (
         <MeetingsResultScreen
           icon="video"
@@ -438,7 +438,7 @@ function MeetingRoom() {
               onOpenCalendar={calendarTarget ? () => { void navigateTo(calendarTarget) } : undefined}
               onOpenRecordings={everRecorded && user ? () => setShowRecordings(true) : undefined}
             />
-            {/* 화면 안 AI(S7 · 시안 E2): 회의 요약 → 할 일 */}
+            {/* 화면 안 AI: 회의 요약 → 할 일 */}
             {user && <MeetingAiTodos room={roomName} title={endTitle} timeRange={aiRange} startedAt={res?.startedAt} />}
             </div>
           )}

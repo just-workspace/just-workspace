@@ -1,8 +1,8 @@
 // Vue 원본: frontend/components/git/GitRepoList.vue
 /**
- * 저장소 목록(시안 GT1): 커맨드 바 44(bg-card) — "저장소 n개" · 찾기 220×32 · Gitea에서 새 저장소 ↗
+ * 저장소 목록: 커맨드 바 44(bg-card) — "저장소 n개" · 찾기 220×32 · Gitea에서 새 저장소 ↗
  * → 카드 그리드 3열(gap 14, 패딩 20/24). 모바일 1열 · 찾기는 줄 아래 전체 폭.
- * 저장소 만들기·포크는 Gitea 로(결정 Git 1).
+ * 저장소 만들기·포크는 Gitea 로.
  */
 import { useRef, useState } from 'react'
 import { useI18n } from '~/i18n'

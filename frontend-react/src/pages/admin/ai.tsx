@@ -1,5 +1,5 @@
 /**
- * 관리 › 설정 › AI — Vue pages/admin/ai.vue(시안 AdminPage variant=ai · Review11 D2f).
+ * 관리 › 설정 › AI — Vue pages/admin/ai.vue.
  * 워크스페이스 모델 · 도구 허용 · 한도 = AiAdminSettings(AI 모듈 담당).
  */
 import { useEffect } from 'react'

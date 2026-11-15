@@ -1,5 +1,5 @@
 /**
- * 앱 빌드 — Vue components/admin/AdminAppBuild.vue. 관리 › 설정 › 앱 빌드(시안 AdminPage variant=appbuild · Review11 D2g).
+ * 앱 빌드 — Vue components/admin/AdminAppBuild.vue. 관리 › 설정 › 앱 빌드.
  *  ① 배포 채널 — 서버 주소(읽기 전용 점선 + [복사]) · 앱 이름(글자). 카드 푸터 저장.
  *  ② 빌드 — 행(min 52): Android · Windows(데스크톱) = "MM/DD · 크기" + [내려받기], iOS = "지원 안 함" 배지,
  *     "새 빌드 만들기" = 설명 + [빌드 시작](POST /api/admin/apps/build, 확인 모달 → 5초 간격 상태 폴링).
@@ -29,7 +29,7 @@ export function fmtAppSize(n: number) {
   while (v >= 1024 && i < u.length - 1) { v /= 1024; i++ }
   return `${Math.round(v)} ${u[i]}`
 }
-/** ISO → "MM/DD"(시안 "10/12" — toLocaleDateString(ko) 는 꼬리 점이 붙는다, 검수 P8 K6). 파싱 실패 '' */
+/** ISO → "MM/DD"(시안 "10/12" — toLocaleDateString(ko) 는 꼬리 점이 붙는다). 파싱 실패 '' */
 export function fmtDay(s: string | null) {
   if (!s) return ''
   const d = new Date(s)
@@ -130,7 +130,7 @@ export function AdminAppBuild() {
           <UiSkeleton preset="text" rows={2} />
         ) : (
           <form className="grid gap-x-4 gap-y-3.5 sm:grid-cols-2" onSubmit={e => { e.preventDefault(); void save() }}>
-            {/* 서버 주소 = 읽기 전용 UiInput(복사 버튼 내장, 답변서 B5) */}
+            {/* 서버 주소 = 읽기 전용 UiInput(복사 버튼 내장) */}
             <UiInput modelValue={cfg.target_url} readonly mono label={t('adminParts.appBuild.serverUrl')} />
             <UiInput modelValue={cfg.app_name} onUpdateModelValue={v => setCfg(c => ({ ...c, app_name: v }))} label={t('adminParts.appBuild.appName')} />
             <button type="submit" className="hidden" />

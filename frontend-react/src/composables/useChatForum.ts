@@ -1,5 +1,5 @@
 /**
- * 포럼 채널 = 게시판 데이터의 채팅 쪽 보기(handover-22 §5.1 b). Channel.forum_board_id 의 게시판 글을 기존 게시판 API 로 읽는다
+ * 포럼 채널 = 게시판 데이터의 채팅 쪽 보기. Channel.forum_board_id 의 게시판 글을 기존 게시판 API 로 읽는다
  * (/api/board/boards/{id}/posts · posts/{id} · comments — 글·댓글 열기는 useBoard 의 fetchPost/fetchComments 를 그대로 쓴다).
  * 목록은 게시판 화면 상태(boardStore.posts)를 건드리지 않게 여기서 따로 들고 있다 — 같은 글이 게시판에서도 보인다.
  *

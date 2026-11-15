@@ -1,11 +1,11 @@
 /**
  * 메일 읽기 — Vue 판 components/mail/MailReader.vue.
- * 데스크톱 오른쪽 판(variant="pane", 시안 ML1)과 모바일 /mail/:id 본문(variant="page", 시안 MM2)이 같은 컴포넌트.
+ * 데스크톱 오른쪽 판(variant="pane")과 모바일 /mail/:id 본문(variant="page")이 같은 컴포넌트.
  *  pane : 액션 줄 44(답장·전체 답장·전달 | 보관·삭제·안 읽음·더보기 … n / N) + 본문 카드 + 인라인 답장
  *  page : 상단 바는 페이지(LayoutMobileDetailBar)가, 하단 고정 답장·전체 답장·전달 줄은 여기서
- * 스레드(시안 ML1:48-50): 본문 카드 위에 같은 대화의 첫 메일 한 줄(44) + "이전 메일 n개 더 보기"(28). 줄을 누르면 그 메일 본문을 펼친다.
+ * 스레드: 본문 카드 위에 같은 대화의 첫 메일 한 줄(44) + "이전 메일 n개 더 보기"(28). 줄을 누르면 그 메일 본문을 펼친다.
  *   GET /messages/{id}/thread(보낸편지함 포함, 읽음 처리 안 함). 펼칠 때만 그 메일이 있는 메일함에서 본문을 받는다.
- * 라벨: 제목 옆 칩(색점 + 중립 테두리 22, 시안 ML1:46). 붙이기·떼기는 ⋯ "라벨"(서버가 키워드를 지원할 때만).
+ * 라벨: 제목 옆 칩(색점 + 중립 테두리 22). 붙이기·떼기는 ⋯ "라벨"(서버가 키워드를 지원할 때만).
  *
  * ref: { reply, forward, archive, remove, markUnread, star, spam, onMore, mobileMoreItems }
  *   mobileMoreItems 는 모바일 상단 바 ⋯ 메뉴 항목 — 바뀌면 onMobileMoreItems 로도 알린다(React 는 ref 값 변경으로 다시 그리지 않으므로).
@@ -62,7 +62,7 @@ export interface MailReaderProps {
   /** 모바일 ⋯ 항목이 바뀜(페이지 상단 바가 그린다) */
   onMobileMoreItems?: (items: UiMenuItem[]) => void
   /**
-   * 보낸 사람(아바타+이름)을 눌렀을 때 — 주면 그 둘이 버튼이 된다(handover 16 답 5).
+   * 보낸 사람(아바타+이름)을 눌렀을 때 — 주면 그 둘이 버튼이 된다.
    * pages/mail 이 보낸 사람 패널이 붙을 자리가 없을 때만 넘겨 패널을 오버레이로 연다.
    */
   onSenderClick?: () => void
@@ -94,7 +94,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
   const isPage = variant === 'page'
   const myEmail = selectedAccount?.email || user?.primary_email || user?.email || ''
 
-  // ─── 어둡게 보기(메일 10 ①: 기억됨) — 개인 설정(useUserPrefs.mailDarkView, 서버 동기화) ───
+  // ─── 어둡게 보기 — 개인 설정(useUserPrefs.mailDarkView, 서버 동기화) ───
   const { mailDarkView, setMailDarkView, readReceiptDefault } = useUserPrefs()
   const paperDark = mailDarkView
   function togglePaper() { setMailDarkView(!mailDarkView) }
@@ -141,7 +141,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
     void sendReadReceipt(m.id)
   }, [msg?.id, readReceiptDefault, sendReadReceipt])
 
-  // ─── 화면 안 AI(S7 · 시안 E1): 요약 패널 · 답장 초안 ───
+  // ─── 화면 안 AI: 요약 패널 · 답장 초안 ───
   const { status: aiStatus } = useAiInline()
   const [aiSumOpen, setAiSumOpen] = useState(false)
   const [aiDraftOpen, setAiDraftOpen] = useState(false)
@@ -633,7 +633,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
                       </div>
                     </article>
 
-                    {/* 화면 안 AI 답장 초안(시안 E1 — 본문 아래) */}
+                    {/* 화면 안 AI 답장 초안(본문 아래) */}
                     {aiMail && aiDraftOpen && (
                       <div className={isPage ? 'mt-4' : ''}>
                         <MailAiDraft mail={aiMail} onClose={() => setAiDraftOpen(false)} onUse={applyAiDraft} />
@@ -664,12 +664,12 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
                   </div>
                 )}
               </div>
-              {/* 화면 안 AI 요약 패널 — 데스크톱 오른쪽 340(시안 E1 aside) */}
+              {/* 화면 안 AI 요약 패널 — 데스크톱 오른쪽 340 */}
               {!isPage && aiMail && aiSumOpen && <MailAiSummary key={aiMail.id} mail={aiMail} status={aiStatus} variant="aside" onClose={() => setAiSumOpen(false)} />}
               </div>
             )}
 
-      {/* 라벨 붙이기·떼기(시안 그림 없음 — PatForm 체크 목록 + 새 라벨 입력) */}
+      {/* 라벨 붙이기·떼기(시안 그림 없음 — 체크 목록 + 새 라벨 입력) */}
       {labelsOpen && (
         <UiModal
           title={t('mail.labels.edit')}

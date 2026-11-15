@@ -1,4 +1,4 @@
-// handover-22 MESSAGES — 그룹 판정 · 마크다운 · 첨부 그리드 · 답장 원문 상태 · 점프 창 교체
+// 채팅 MESSAGES — 그룹 판정 · 마크다운 · 첨부 그리드 · 답장 원문 상태 · 점프 창 교체
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, render } from '@testing-library/react'
 

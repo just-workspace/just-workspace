@@ -1,5 +1,5 @@
 /**
- * 대시보드 머리(시안 Dash17): 왼쪽 h1 24/700 "좋은 아침이에요, 하늘 님" + 날짜 13.5 muted(요약은 칩 줄이 맡는다 — Q8),
+ * 대시보드 머리: 왼쪽 h1 24/700 "좋은 아침이에요, 하늘 님" + 날짜 13.5 muted(요약은 칩 줄이 맡는다 — Q8),
  * 오른쪽 빠른 만들기 버튼 행 [메일 쓰기][일정][문서][파일 올리기][▾] · 구분선 · layout 아이콘 "대시보드 편집".
  * 3열 미만·모바일은 아이콘 2개(+ 새로 만들기 메뉴 · 편집).
  * 인사 문구는 관리 › 일반 "대시보드 문구·공지"(dash.greeting_mode: date 자동 / custom 직접 / none 숨김).
@@ -85,7 +85,7 @@ export function DashboardGreeting({ wide, editing, onToggleEdit, noEdit }: Dashb
   const all = [...main, ...more]
 
   return (
-    // 진짜 낮은 창(실효 높이 < 760 — handover 14 답 4)에선 인사 줄을 숨긴다. 버튼은 오른쪽에 남긴다
+    // 진짜 낮은 창(실효 높이 < 760)에선 인사 줄을 숨긴다. 버튼은 오른쪽에 남긴다
     <div className="flex items-end gap-4 low:justify-end">
       <div className="min-w-0 flex-1 low:hidden">
         {/* 좁은 폭에서 "검수 / 님"처럼 글자 단위로 끊기지 않게 keep-all + balance */}

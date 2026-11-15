@@ -1,4 +1,4 @@
-// handover-22 채팅 설정(SETTINGS) — 권한 행렬 비트(32비트 넘는 비트) · 3단 토글 → allow/deny · 동기화 판정 · 계층 잠금 ·
+// 채팅 설정(SETTINGS) — 권한 행렬 비트(32비트 넘는 비트) · 3단 토글 → allow/deny · 동기화 판정 · 계층 잠금 ·
 // 이모지 이름 검사·오류 문구 · 정책 토글 확인 흐름 · 저장 안 된 변경 띠
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'

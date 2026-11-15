@@ -11,7 +11,7 @@ export const HANGUL_KEYS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', '�
 export const LATIN_KEYS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 export const OTHER_KEY = '#'
 
-/** 색인 바 순서(시안 CTM1: ★ ㄱ…ㅎ A #). ★ 은 즐겨찾기(백엔드 갭) 라 제외 */
+/** 색인 바 순서(★ ㄱ…ㅎ A #). ★ 은 즐겨찾기(백엔드 갭) 라 제외 */
 export const INDEX_ORDER = [...HANGUL_KEYS, ...LATIN_KEYS, OTHER_KEY]
 
 export function indexKeyOf(name: string | null | undefined): string {
@@ -74,7 +74,7 @@ export function initialsOf(name: string | null | undefined): string {
 }
 
 /**
- * 그룹 점 색 — 그룹에 색 필드가 없어 이름으로 고정 배정한다. 범주 색 --cat-1…8(11-A1).
+ * 그룹 점 색 — 그룹에 색 필드가 없어 이름으로 고정 배정한다. 범주 색 --cat-1…8.
  * Tailwind 가 utils 를 훑지 않으므로 클래스 대신 CSS 값(hsl(var(--cat-N)))을 돌려준다.
  */
 export function groupDotColor(name: string): string {

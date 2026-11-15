@@ -1,5 +1,5 @@
 /**
- * 하이레조 켜기 확인(handover-20 답 "상태 · 하이레조 켜기") — 데스크톱 앱, 처음 한 번. alertdialog 440:
+ * 하이레조 켜기 확인 — 데스크톱 앱, 처음 한 번. alertdialog 440:
  * "하이레조를 켜면 이 장치를 독점합니다" + 장치 이름 굵게 + 지연·이어폰 안내 + 형식 mono 상자 + "다음부터 묻지 않기" + [취소][독점하고 켜기].
  * 열림은 useVoice.hiresPrompt(confirmHiresExclusive 가 넣는다) — 3단계(네이티브 전송)가 장치 이름·형식을 넣어 부른다. 셸(layouts/default)이 그린다.
  */

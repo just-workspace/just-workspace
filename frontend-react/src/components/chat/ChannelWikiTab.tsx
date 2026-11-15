@@ -1,11 +1,11 @@
 /**
- * 채널 탭 — 위키(12 답 A6 · 시안 R12Channel #wiki H1). Vue 원본: frontend/components/chat/ChannelWikiTab.vue (ChatChannelWikiTab)
+ * 채널 탭 — 위키. Vue 원본: frontend/components/chat/ChannelWikiTab.vue (ChatChannelWikiTab)
  *  왼쪽 300 = 머리 h-11 "연결된 위키 · {스페이스}" + [+](이 채널에 새 페이지) · 페이지 행 h-12(제목 13 · 작성자 · 날짜 11 muted), 고른 행 bg-accent + 600.
  *  오른쪽 = 읽기 전용 본문(px-10 py-8, 최대 680): 제목 2xl bold + [위키에서 열기](outline xs) · 작성자 · 시각 mono · v버전 · "채널 탭에서는 읽기만".
- * [+](13 답 A5 · 시안 R13 #wikiNew): 누르면 pressed, 목록 위에 UiInput "새 페이지 제목" + 안내 11 muted
+ * [+]: 누르면 pressed, 목록 위에 UiInput "새 페이지 제목" + 안내 11 muted
  *  ("Enter 만들고 위키 편집으로 · Esc 취소 · {스페이스} 맨 아래에 생깁니다", 키 이름 mono), 목록은 border-t pt-1 로 갈린다.
  *  Enter = 그 스페이스 최상위 맨 아래(sort_order 최대+1)에 만들고 위키 편집으로. Esc 또는 [+] 다시 = 취소.
- * 연결이 없으면 빈 상태 + (관리자) 탭 관리. 모바일(<md)은 목록 → 본문(‹ 목록으로) 한 단계씩(13 답 A5 확인),
+ * 연결이 없으면 빈 상태 + (관리자) 탭 관리. 모바일(<md)은 목록 → 본문(‹ 목록으로) 한 단계씩,
  *  모바일 [+] 도 같은 입력 줄을 목록 맨 위에 연다.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'

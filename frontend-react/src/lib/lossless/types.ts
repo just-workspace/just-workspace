@@ -5,7 +5,7 @@
  * UI 는 `LosslessSession`(직접) 또는 `LosslessVoiceTransport`(티어 공통 `VoiceTransport` 어댑터)로 붙는다.
  */
 
-/** pcm_s32 = 32-bit 정수(codec 5) — 데스크톱 하이레조(r19)가 보낸다. 브라우저는 받아서 재생만(송신은 f32 까지) */
+/** pcm_s32 = 32-bit 정수(codec 5) — 데스크톱 하이레조가 보낸다. 브라우저는 받아서 재생만(송신은 f32 까지) */
 export type LosslessCodec = 'pcm_s16' | 'pcm_s24' | 'pcm_f32' | 'flac' | 'opus' | 'pcm_s32'
 
 export interface LosslessFormat {

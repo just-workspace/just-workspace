@@ -1,5 +1,5 @@
 /**
- * 숫자 페이지네이션(시안 BD2 바닥 48 · 결정 1 "글 번호로 소통하니 숫자 유지") — Vue 판 components/board/BoardPagination.vue 이식.
+ * 숫자 페이지네이션("글 번호로 소통하니 숫자 유지") — Vue 판 components/board/BoardPagination.vue 이식.
  *  ‹ › 32 테두리 · 번호 32 mono 12 · 현재 = primary/13 + 안쪽 테두리 primary/50 · aria-current="page".
  */
 import { Fragment } from 'react'

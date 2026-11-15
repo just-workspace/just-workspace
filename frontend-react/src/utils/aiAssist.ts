@@ -102,9 +102,9 @@ export interface AiStatus {
   workspace_model?: string
   /** 이 사용자 AI 가 쓸 수 있는 도구 이름 */
   tools?: string[]
-  /** S6b — 지금 모델이 이미지 첨부를 읽는지 */
+  /** 지금 모델이 이미지 첨부를 읽는지 */
   vision?: boolean
-  /** S6b — 첨부 한 개 최대 바이트(30MB) */
+  /** 첨부 한 개 최대 바이트(30MB) */
   attachment_max_bytes?: number
 }
 
@@ -116,9 +116,9 @@ export interface AiConv {
   updated_at?: string | null
   /** 마지막 메시지 앞부분 */
   preview?: string
-  /** S6b — 임시 대화(기록·메모리·프로젝트 지식 안 씀, 나가면 삭제) */
+  /** 임시 대화(기록·메모리·프로젝트 지식 안 씀, 나가면 삭제) */
   temporary?: boolean
-  /** S6b — 묶인 프로젝트 */
+  /** 묶인 프로젝트 */
   project_id?: string | null
 }
 
@@ -132,7 +132,7 @@ export interface AiMsg {
   created_at?: string | null
   streaming?: boolean
   tools?: AiToolRun[]
-  /** 답한 모델 이름(S6a 부터 저장된 기록에도 있다. 그 전 기록은 없음) */
+  /** 답한 모델 이름(저장된 기록에도 있다. 옛 기록은 없음) */
   model?: string | null
   /** AI 생성 답변(AI 기본법 표시) */
   ai_generated?: boolean
@@ -151,16 +151,16 @@ export interface AiMsg {
   error?: string
   /** 사용자가 멈춤 */
   stopped?: boolean
-  /** 이 응답 중 AI 가 요청한 쓰기(스트림 write_request — 채팅 승인 카드, 시안 A1·A2). 저장된 기록엔 없다 */
+  /** 이 응답 중 AI 가 요청한 쓰기(스트림 write_request — 채팅 승인 카드). 저장된 기록엔 없다 */
   writes?: ApprovalRequest[]
-  /** S6b — 같은 질문의 버전들(사용자 메시지) + 지금 보이는 번호(1부터) */
+  /** 같은 질문의 버전들(사용자 메시지) + 지금 보이는 번호(1부터) */
   versions?: { id: string; created_at?: string | null }[]
   active_version?: number
-  /** S6b — 사용자 메시지 첨부 */
+  /** 사용자 메시지 첨부 */
   attachments?: AiAttachment[]
-  /** S6b — 이 답변 중 메모리에 저장한 것(스트림 memory_saved). 저장된 기록엔 없다 */
+  /** 이 답변 중 메모리에 저장한 것(스트림 memory_saved). 저장된 기록엔 없다 */
   memories?: AiMemorySaved[]
-  /** S4 — 만든 결과물(스트림 artifact · 저장된 기록 meta.artifacts) */
+  /** 만든 결과물(스트림 artifact · 저장된 기록 meta.artifacts) */
   artifacts?: AiArtifactPayload[]
   /** AI 질문 카드(ask_user · plan_exit — Claude Code AskUserQuestion · ExitPlanMode). 스트림 question · meta.questions */
   questions?: AiQuestion[]
@@ -180,7 +180,7 @@ export interface AiQuestion {
   expires_at?: number
 }
 
-/** S6b 첨부(서버 POST /api/ai/attachments 결과 + 화면 진행 상태) */
+/** 첨부(서버 POST /api/ai/attachments 결과 + 화면 진행 상태) */
 export type AiAttachStage = 'uploading' | 'converting' | 'ready' | 'failed'
 export type AiAttachErrorCode = 'encrypted' | 'distribution' | 'corrupt' | 'too_large' | 'unsupported_version' | 'unsupported'
 export const AI_ATTACH_ERROR_CODES: AiAttachErrorCode[] = ['encrypted', 'distribution', 'corrupt', 'too_large', 'unsupported_version', 'unsupported']
@@ -226,7 +226,7 @@ export interface AiMemoryItem {
 
 export interface AiProjectFile {
   id: string; name: string; path: string; size?: number | null
-  /** 지금 보는 사람이 읽을 수 있나(못 읽으면 답변에서 빠짐 — 시안 J2-3). 목록 응답엔 없다 */
+  /** 지금 보는 사람이 읽을 수 있나(못 읽으면 답변에서 빠짐). 목록 응답엔 없다 */
   readable?: boolean
 }
 export interface AiProject {

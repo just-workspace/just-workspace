@@ -1,5 +1,5 @@
 /**
- * 캘린더 구독 추가(답변서 13 A2 · 시안 R13 #ics · #icsErr) — 캘린더 왼쪽 목록 "+ 구독 추가"와 설정 › 캘린더 [+ 구독 추가]가 같이 쓴다.
+ * 캘린더 구독 추가(#icsErr) — 캘린더 왼쪽 목록 "+ 구독 추가"와 설정 › 캘린더 [+ 구독 추가]가 같이 쓴다.
  * UiModal 480: .ics 주소(mono) → 칸을 벗어나면 서버가 바로 읽어(POST /api/calendar/subscriptions/preview)
  * "읽음 · 일정 n개 … 2026–2027" 확인 줄 + 이름 자동 채움 → 이름 · 색 8개(cat-1~8, 원형 28, 고른 것 ring).
  * 못 읽으면 주소 칸 error, [구독 추가] 비활성(#icsErr — 이름·색 칸 없이 주소 칸만).
@@ -171,7 +171,7 @@ export function CalendarSubscribeModal({ existingCount = 0, onAdded, onClose }: 
           data-autofocus
         />
 
-        {/* 확인 줄 — 읽는 동안에도 같은 자리·같은 상자(같은 높이)에 스피너 + "읽는 중…"(핸드오프 15-3), 읽으면 ✓ 읽음 · 일정 n개 */}
+        {/* 확인 줄 — 읽는 동안에도 같은 자리·같은 상자(같은 높이)에 스피너 + "읽는 중…", 읽으면 ✓ 읽음 · 일정 n개 */}
         {(reading || (preview && !error)) && (
           <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-[13px]" role="status" aria-busy={reading || undefined}>
             {reading || !preview

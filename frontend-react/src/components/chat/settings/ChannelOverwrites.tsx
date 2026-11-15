@@ -1,5 +1,5 @@
 /**
- * 채널·카테고리 권한 덮어쓰기(Settings22 #perm · #perm-cat · 모바일 #m-perm).
+ * 채널·카테고리 권한 덮어쓰기(#perm-cat · 모바일 #m-perm).
  * 위 동기화 banner(채널: 카테고리와 다르면 warn + [동기화] · 카테고리: 동기화된 채널 N개에 함께 적용) →
  * 비공개 스위치(@everyone '채널 보기' 거부 — 채널 수정 API 가 type 을 받지 않아 디스코드식 덮어쓰기로) →
  * 대상 목록 220(@everyone · 역할 · 사람) + [+] / 권한 행(UiTriToggle 거부·상속·허용 → putOverwrite 즉시 저장) →

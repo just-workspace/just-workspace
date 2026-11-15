@@ -1,5 +1,5 @@
 /**
- * 채널 목록 폭 손잡이(handover-21 §5.9 + 디스코드 실측) — 목록 오른쪽 가장자리 세로 띠(맞히는 폭 8, 보이는 선은 호버·끄는 동안 primary 2px).
+ * 채널 목록 폭 손잡이(디스코드 실측) — 목록 오른쪽 가장자리 세로 띠(맞히는 폭 8, 보이는 선은 호버·끄는 동안 primary 2px).
  *  드래그 199–367(CHAT_LIST_WIDTH — 디스코드 사이드바 264–432 에서 레일 64+1 을 뺀 값), 더블클릭 = 기본 298.
  *  키보드: role=separator(aria-orientation vertical, aria-valuenow/min/max) — ←→ 8px, Shift 와 함께 32px, Home/End 최소/최대, Enter 기본값.
  *  끄는 동안은 onPreview(폭)로 화면만 바꾸고, 놓을 때 개인 설정(chatSidebarWidth)에 한 번 저장한다.

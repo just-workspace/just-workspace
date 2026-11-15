@@ -1,5 +1,5 @@
 /**
- * 브랜딩 강조색 자동 보정(답변서 B2) — 순수 함수(DOM 없음). App 의 applyBrandTheme 과 관리 › 브랜딩 화면이 같이 쓴다.
+ * 브랜딩 강조색 자동 보정 — 순수 함수(DOM 없음). App 의 applyBrandTheme 과 관리 › 브랜딩 화면이 같이 쓴다.
  *
  * 기준 두 가지:
  *  (a) 글자·아이콘 — 강조색(primary)이 그 테마의 card·background 위 4.5:1 미만이면, 그 테마에서만 밝기(L)만 조정한다
@@ -7,7 +7,7 @@
  *  (b) 버튼 바탕 — primary-foreground 와 4.5:1 미만이면 글자를 흰/검 중 대비가 높은 쪽으로.
  * 저장 조건 = 조정 후 양쪽 테마 모두 (a)(b) 통과.
  *
- * 추가로 반전색 토스트(bg-foreground) 위 행동 버튼용 `--primary-inverse` 도 같은 방식으로 맞춘다(답변서 C8):
+ * 추가로 반전색 토스트(bg-foreground) 위 행동 버튼용 `--primary-inverse` 도 같은 방식으로 맞춘다:
  * 라이트 토스트 바탕 = 라이트 foreground(어두움) → 밝게, 다크 토스트 바탕 = 다크 foreground(밝음) → 어둡게.
  *
  * 테마 표면 값은 assets/css/main.css 토큰과 같아야 한다(바꾸면 여기도).

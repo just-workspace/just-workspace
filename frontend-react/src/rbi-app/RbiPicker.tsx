@@ -1,7 +1,7 @@
 /**
  * 대상 고르기(단독 앱, 세션이 없을 때) — 대상 카드(하나 고름) · 화면 방식 · [시작] · 내 최근 세션 목록.
  * 딥 링크 ?target=<key> 면 그 대상을 미리 고르고 [시작] 에 포커스(세션은 사용자가 눌러야 뜬다 — 링크만으로 컨테이너를 띄우지 않는다).
- * TODO(handover-rbi): 카드 밀도·선택 표시·세션 목록 행 규격은 Claude Design 시안에서. 기존 키트(UiCard·UiBadge·UiButton·UiSegment·UiEmptyState)만.
+ * TODO: 카드 밀도·선택 표시·세션 목록 행 규격은 디자인 확정 뒤에. 기존 키트(UiCard·UiBadge·UiButton·UiSegment·UiEmptyState)만.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'

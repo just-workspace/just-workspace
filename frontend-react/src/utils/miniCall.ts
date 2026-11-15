@@ -1,9 +1,9 @@
 /**
- * 미니 통화 창(P-8) 상태 계산 — 화면과 떼어 낸 순수 함수(단위 테스트 대상).
+ * 미니 통화 창 상태 계산 — 화면과 떼어 낸 순수 함수(단위 테스트 대상).
  *
- * 시안 Workspace X3 결정 3: 오른쪽 아래 320×180(여백 24), 네 귀퉁이 스냅. 영상이 없으면 높이 56 알약.
+ * 오른쪽 아래 320×180(여백 24), 네 귀퉁이 스냅. 영상이 없으면 높이 56 알약.
  * 모바일은 상태 표시줄 아래 36px 초록 띠 — 탭하면 통화로.
- * 겹침(11-C11): 통화 창 z 45 > 메일 작성 창 z 40. 둘 다 뜨면 작성 창이 (통화 창 폭 + 16)만큼 왼쪽으로.
+ * 겹침: 통화 창 z 45 > 메일 작성 창 z 40. 둘 다 뜨면 작성 창이 (통화 창 폭 + 16)만큼 왼쪽으로.
  */
 
 export type MiniCallCorner = 'tl' | 'tr' | 'bl' | 'br'
@@ -113,7 +113,7 @@ export function isMeetingPopupWindow(windowName: string): boolean {
   return windowName.startsWith('meeting-') || windowName.startsWith('jw-call-')
 }
 
-// ─── 핸드오프 12 A5(시안 R12Call) ───
+// ─── 미니 창 상태·모양 ───
 
 /** 연결 상태 → 미니 창 모양: live(정상) · reconnecting(warning, role=status) · lost(danger, role=alert) */
 export function miniCallTone(state: string): 'live' | 'reconnecting' | 'lost' {

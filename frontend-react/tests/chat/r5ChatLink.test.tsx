@@ -1,4 +1,4 @@
-// 핸드오프 13(R5) 채팅·셸: 링크 미리보기 카드(B12 · R13 #link) · 상태 이모지 8×2(A4 · R13 #emoji) · 탭바 메일 점(B24)
+// 채팅·셸: 링크 미리보기 카드 · 상태 이모지 8×2 · 탭바 메일 점
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'

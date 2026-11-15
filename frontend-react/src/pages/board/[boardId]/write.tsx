@@ -1,5 +1,5 @@
 /**
- * 글쓰기·고치기(시안 BD4 · BM3, 06-3 결정 7 "전체 페이지 + 공용 편집기 툴바 + 첨부 끌어다 놓기").
+ * 글쓰기·고치기("전체 페이지 + 공용 편집기 툴바 + 첨부 끌어다 놓기").
  * Vue 원본: frontend/pages/board/[boardId]/write.vue
  *  데스크톱: 커맨드 바(새 글 · 게시판 + 임시 저장됨 HH:MM | 취소 · 올리기) → 680 폭
  *    [카테고리 160×40][필독으로 표시][맨 위 고정] / 제목 52(20/700) / 편집기 카드(툴바 40 + 본문 260) / 첨부 드롭 영역 64.
@@ -241,7 +241,7 @@ function WritePage({ boardId }: { boardId: string }) {
   }
 
   function cancel() {
-    // 새 글은 임시 저장이 남는다(시안 BM3 "닫기 — 임시 저장")
+    // 새 글은 임시 저장이 남는다("닫기 — 임시 저장")
     if (window.history.length > 1) router.back()
     else void router.push(`/board/${boardId}`)
   }
@@ -251,7 +251,7 @@ function WritePage({ boardId }: { boardId: string }) {
 
   return (
     <BoardShell>
-      {/* 모바일 헤더(BM3) */}
+      {/* 모바일 헤더 */}
       <header className="flex h-14 shrink-0 items-center gap-1 border-b border-border px-1 md:hidden">
         <UiIconButton label={isEditMode ? t('common.close') : t('board.write.closeWithDraft')} icon="close" size="lg" noTooltip className="text-foreground" onClick={cancel} />
         <span className="min-w-0 flex-1 truncate text-[17px] font-semibold text-foreground">{heading}</span>
@@ -263,7 +263,7 @@ function WritePage({ boardId }: { boardId: string }) {
         >{submitLabel}</button>
       </header>
 
-      {/* 데스크톱 커맨드 바(BD4) */}
+      {/* 데스크톱 커맨드 바 */}
       <BoardCommandBar
         actions={(
           <>

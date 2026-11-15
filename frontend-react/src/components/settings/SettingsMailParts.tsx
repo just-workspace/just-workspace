@@ -1,5 +1,5 @@
 /**
- * 설정 › 메일(시안 ML3 = SettingsPage mail · 메일 8 ②) 화면 조각 — Vue pages/settings/mail.vue 의 인라인 마크업을 이름 붙여 뺀 것.
+ * 설정 › 메일 화면 조각 — Vue pages/settings/mail.vue 의 인라인 마크업을 이름 붙여 뺀 것.
  *  · SettingsMailAccountRow — 계정 행: 메일 타일 36(기본=primary) + 주소(+기본·내장 배지) + 상태 줄 + [다시 연결]/[편집] + ⋮ 메뉴
  *  · SettingsMdnRow — 읽음 확인 요청 응답 기본값 행(선택 180 + 저장됨)
  *  · SettingsSignatureRow — 서명 행: 이름(+기본 배지) + 본문 미리보기 + [기본으로] + 편집·삭제 아이콘

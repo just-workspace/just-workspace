@@ -1,5 +1,5 @@
 /**
- * 셋업 단계 머리(Vue components/auth/AuthStepHeader.vue · 시안 8-4-1 · AuthForm:13):
+ * 셋업 단계 머리(Vue components/auth/AuthStepHeader.vue):
  * "단계명  n / 6"(12/600 muted, 숫자 mono) + 4px 진행 바(primary, n/total).
  */
 export interface AuthStepHeaderProps {

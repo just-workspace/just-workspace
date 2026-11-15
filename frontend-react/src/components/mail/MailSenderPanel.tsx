@@ -1,5 +1,5 @@
 /**
- * 메일 오른쪽 상세 패널 — 보낸 사람(시안 R14 #mail mailSide · handover 14 답 5).
+ * 메일 오른쪽 상세 패널 — 보낸 사람.
  * 자리가 날 때(상세 칸 ≥ 1400, 가로 화면)만 pages/mail 이 펼친 채 둔다. 폭 360, border-l, px-5 py-6.
  *  ① 보낸 사람 카드: 아바타 48 · 이름 · 주소 · [채팅][통화](보낸 사람이 이 워크스페이스 사용자일 때만 — GET /api/mail/sender)
  *  ② 최근 주고받은 메일: 지금 메일함에서 그 주소로 찾은 최근 5통(지금 메일 제외) — 누르면 그 메일을 연다
@@ -28,7 +28,7 @@ function shortDate(iso: string | null) {
 
 /**
  * @param msg 지금 연 메일
- * @param overlay 자리가 없어 읽기 판 위에 띄움(handover 16 답 5, 17 답 2-1 바탕 bg-card — 채팅 오른쪽 패널 오버레이와 같은 방식: 오른쪽 붙임·그림자·Esc·바깥 클릭 닫힘은 pages/mail 이 맡는다)
+ * @param overlay 자리가 없어 읽기 판 위에 띄움(바탕 bg-card — 채팅 오른쪽 패널 오버레이와 같은 방식: 오른쪽 붙임·그림자·Esc·바깥 클릭 닫힘은 pages/mail 이 맡는다)
  */
 export function MailSenderPanel({ msg, overlay = false }: { msg: MessageDetail; overlay?: boolean }) {
   const { t } = useI18n()

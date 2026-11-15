@@ -1,9 +1,9 @@
 /**
- * AI 대화 목록(모바일, Vue components/ai/AiMobileList.vue · 시안 AIM1 AiMobile:14-16): 머리 56(h1 18/600 "AI" + 대화 검색 44)
+ * AI 대화 목록(모바일, Vue components/ai/AiMobileList.vue): 머리 56(h1 18/600 "AI" + 대화 검색 44)
  *  · 묶음 머리 11/600(12 16 4) · 행 min 56(제목 15/600 + 미리보기 13 muted 한 줄 · ⋮ 40)
  *  · 오른쪽 아래 확장 FAB "+ 새 대화"(56, 탭바 위). 탭바는 보인다.
  * 검색: 시안은 아이콘만 — 누르면 머리 아래에 검색 입력이 열린다(디자이너 확인 필요).
- * Wave5(시안 J2-7): 묶음 = 프로젝트(폴더 · 공유받음 배지 · 대화 수) → 최근 대화(프로젝트 밖) → 임시 대화(눈 감김 · 창 닫으면 삭제).
+ * 묶음 = 프로젝트(폴더 · 공유받음 배지 · 대화 수) → 최근 대화(프로젝트 밖) → 임시 대화(눈 감김 · 창 닫으면 삭제).
  */
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { cn } from '~/lib/utils'

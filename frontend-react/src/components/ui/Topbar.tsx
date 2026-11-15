@@ -1,5 +1,5 @@
 /**
- * 상단바(시안 ShellTop · 8-1 · 답변서 C4) — 높이 56, 바탕 background, 아래 테두리. 스토어 없이 props 만으로 그린다.
+ * 상단바 — 높이 56, 바탕 background, 아래 테두리. 스토어 없이 props 만으로 그린다.
  * (자세한 설명·예시는 아래 컴포넌트 JSDoc)
  */
 import type { CSSProperties, ReactNode, Ref } from 'react'
@@ -57,7 +57,7 @@ export interface UiTopbarProps {
 }
 
 /**
- * 상단바(시안 ShellTop · 8-1 · 답변서 C4) — 높이 56, 바탕 background, 아래 테두리. 스토어 없이 props 만으로 그린다.
+ * 상단바 — 높이 56, 바탕 background, 아래 테두리. 스토어 없이 props 만으로 그린다.
  *
  * 데스크톱(mobile=false):
  *   [사이드바 고정 32(onTogglePin 이 있을 때, aria-pressed, Ctrl \)] 경로 3단(워크스페이스 / 모듈 / 위치 — 12, 마지막 칸 600)

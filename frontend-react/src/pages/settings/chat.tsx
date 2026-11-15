@@ -1,4 +1,4 @@
-// 설정 › 채팅(시안 R12Settings #chat · S2) — React 에만 있는 화면(Vue 동결 뒤 신설).
+// 설정 › 채팅 — React 에만 있는 화면(Vue 동결 뒤 신설).
 //  ① 입력 카드: Enter 키 세그먼트(보내기 / 줄바꿈 — Ctrl+Enter 보내기) + 링크 미리보기 · 이미지·영상 자동 펼치기 스위치.
 //  ② 알림 카드: 알림 키워드(제거 가능한 UiChip 이 든 입력, 최대 20개, Enter 로 추가) + 방해 금지 시간 스위치 + 시작·끝(mono).
 //  모두 바로 저장 + "저장됨 ✓". 입력·키워드는 useUserPrefs → /api/me/prefs(chat.*), 키워드 판정은 서버(app/chat/keywords.py).
@@ -50,7 +50,7 @@ export default function SettingsChatPage() {
   )
 }
 
-/** ① 입력 카드 — 채팅 설정 화면(Settings22 "메시지 표시")에서도 재사용 */
+/** ① 입력 카드 — 채팅 설정 화면("메시지 표시")에서도 재사용 */
 export function ChatInputPrefsCard() {
   const { t } = useI18n()
   const { prefs } = useUserPrefs()
@@ -103,7 +103,7 @@ export function ChatInputPrefsCard() {
   )
 }
 
-/** ② 알림 카드(키워드 · 방해 금지 시간) — 채팅 설정 화면(Settings22 "알림")에서도 재사용 */
+/** ② 알림 카드(키워드 · 방해 금지 시간) — 채팅 설정 화면("알림")에서도 재사용 */
 export function ChatNotifyPrefsCard() {
   const { t } = useI18n()
   const { prefs } = useUserPrefs()

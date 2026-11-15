@@ -1,5 +1,5 @@
 /**
- * 음성 채널 본문(handover-20 답 §5.3 · §5.5) — 채널을 열었을 때.
+ * 음성 채널 본문 — 채널을 열었을 때.
  *  머리 56: 스피커 아이콘 · 이름(16/600) · "{n}명 · 음질은 사람마다 따로"(13 muted) · 오른쪽 [음악 공유](outline sm, 접속 중).
  *  띠(role=alert, VoiceBands) → 본문: 참가자 타일 그리드 `repeat(auto-fill, minmax(220px,1fr))`(모바일 2열).
  *   타일 = 아바타 64 · 이름(+음소거 아이콘) · 음질 배지(tint) · 실제 형식 mono 12 · 상태 한 줄(말하는 중/음소거/듣기만). 말하는 중 = 테두리 success/60 + 아바타 링.
@@ -32,7 +32,7 @@ import { VoiceChatPanel } from './VoiceChatPanel'
 export interface VoiceChannelViewProps {
   onBack?: () => void
   onOpenChannels?: () => void
-  /** 오른쪽 자리를 다른 패널(멤버·스레드·검색…)이 쓰는 중 — 글 채팅(340)을 숨긴다(handover-22 셸: 자리는 하나) */
+  /** 오른쪽 자리를 다른 패널(멤버·스레드·검색…)이 쓰는 중 — 글 채팅(340)을 숨긴다(오른쪽 자리는 하나) */
   chatHidden?: boolean
 }
 

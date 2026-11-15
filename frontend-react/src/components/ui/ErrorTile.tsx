@@ -25,7 +25,7 @@ export interface UiErrorTileProps extends Omit<HTMLAttributes<HTMLDivElement>, '
   secondaryTo?: string
   /** 다시 시도 버튼 숨김 */
   noRetry?: boolean
-  /** page 의 다시 시도 버튼 — primary(기본) · outline(테두리 + 배경색 + ↻ 아이콘, 채팅 시안 B1) */
+  /** page 의 다시 시도 버튼 — primary(기본) · outline(테두리 + 배경색 + ↻ 아이콘, 채팅 목록 실패) */
   retryVariant?: 'primary' | 'outline'
   /** 다시 시도 클릭 */
   onRetry?: () => void

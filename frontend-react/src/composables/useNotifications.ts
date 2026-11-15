@@ -242,7 +242,7 @@ export function ensurePushSubscription() {
   subscribePush().catch(() => { /* 지원 안 하는 환경 */ })
 }
 
-/** 사용자가 누른 버튼에서만 부른다(R-25). 허락되면 웹푸시 구독까지 — 창을 닫아도 멘션·DM 이 오게. */
+/** 사용자가 누른 버튼에서만 부른다. 허락되면 웹푸시 구독까지 — 창을 닫아도 멘션·DM 이 오게. */
 export async function requestBrowserPermission(): Promise<NotificationPermission | 'unsupported'> {
   if (typeof Notification === 'undefined') return 'unsupported'
   let perm = Notification.permission

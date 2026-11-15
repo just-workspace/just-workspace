@@ -1,6 +1,6 @@
 /**
  * Toast — 싱글턴(Vue 판 composables/useToast.ts 그대로).
- * 시안 8-2-4: 제목+본문 2줄형, 행동 1개까지, 기본 4초 / 행동 있으면 6초 / 오류는 닫을 때까지.
+ * 제목+본문 2줄형, 행동 1개까지, 기본 4초 / 행동 있으면 6초 / 오류는 닫을 때까지.
  *
  * 기존 호출 addToast(type, message, duration?) 은 그대로 동작한다(duration 미지정 시 규칙 적용).
  * 새 호출은 toast({ type, title, description, action }) 로 2줄형·되돌리기를 쓴다.

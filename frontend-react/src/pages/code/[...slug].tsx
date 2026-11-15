@@ -1,6 +1,6 @@
 // Vue 원본: frontend/pages/code/[...slug].vue
 /**
- * Git(시안 GT1~GT4 · GTM1·GTM2 · 결정 Git 1~6). 화면은 라우트가 정한다(utils/gitRoute):
+ * Git. 화면은 라우트가 정한다(utils/gitRoute):
  *  /code → 저장소 목록 · /code/:owner/:repo/(tree|blob|issues|pulls|commits) → 저장소 안(제목 줄 + 밑줄 탭).
  *  이슈·PR 은 목록 560 + 상세(1024↑ 2단). 1024 미만은 목록 → 상세 전환(모바일 상세는 탭바 숨김 + 뒤로 막대).
  * ⚠ nginx 가 /git/ 를 Gitea 로 넘기므로, 이 주소를 새로고침하거나 바깥에서 열면 Gitea 의 같은 화면이 뜬다(보고서 "남은 위험").
@@ -163,7 +163,7 @@ export default function Page() {
           />
         ) : selectedRepo ? (
           <>
-            {/* 머리(모바일 상세·파일 보기에선 뒤로 막대로 바뀐다 — 공용 상단바 + 저장소 머리 이중 방지, 검수 P8 K10) */}
+            {/* 머리(모바일 상세·파일 보기에선 뒤로 막대로 바뀐다 — 공용 상단바 + 저장소 머리 이중 방지) */}
             {isMobile && isBlob ? (
               <LayoutMobileDetailBar
                 title={blobName}

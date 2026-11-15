@@ -1,5 +1,5 @@
 /**
- * 슬라이더(handover-22 "새 부품" · 시안 Pop22 사람별 음량 · 20 의 것 확정):
+ * 슬라이더(20 의 것 확정):
  * 트랙 6(bg-muted, rounded-full) + 채움 primary · 손잡이 16(border-2 primary, bg-background) · 눈금 marks(2×12 muted-foreground).
  * 전체 높이 20(h-5) — 손잡이·트랙을 세로 가운데. 값 글자(예: "120%" mono primary)는 호출부가 옆에 그린다.
  * 접근성: 바깥 div 가 role=slider(tabIndex 0, aria-valuemin/max/now, aria-valuetext = formatValue(값)). 포커스 링은 손잡이에.

@@ -1,12 +1,12 @@
 /**
- * 모바일 하단 탭바(Vue components/layout/MobileTabBar.vue · 시안 TabBar·10-6 ①): 홈 · 채팅 · 활동 · 메일 · 전체.
+ * 모바일 하단 탭바(Vue components/layout/MobileTabBar.vue): 홈 · 채팅 · 활동 · 메일 · 전체.
  * 64 + safe-area, 활성 = primary 글자 + 32 타일 primary/16.
- * 배지: 채팅 = 나를 부른 것(멘션+DM), 활동 = 안 읽은 알림. 메일 = 7px 점(안 읽은 메일이 있을 때, R5 B24 — useMailUnread:
+ * 배지: 채팅 = 나를 부른 것(멘션+DM), 활동 = 안 읽은 알림. 메일 = 7px 점(안 읽은 메일이 있을 때 — useMailUnread:
  *   기존 /api/mail/mailboxes 받은편지함 unread_count. 데이터가 오기 전·계정 없음이면 점 없음).
  * 4번째 칸(기본 메일)은 "전체" 시트의 "탭 편집"으로 다른 모듈로 바꿀 수 있다(useUserPrefs.pinnedTab, 서버 동기화).
- *   교체 대상은 4번째(메일) 칸만(11-C10 확정). 홈·채팅·활동은 고정, 전체는 항상 마지막.
- * '전체' 시트(시안 SM2): rounded-sheet, 핸들 36×4, 소통·문서·기타 3묶음 4열 그리드(타일 48 + 배지). 탭에 있는 모듈은 빼고,
- * 탭 편집 중에는 탭 모듈까지 다 보여 고르게 한다. 시트는 화면 아래 끝까지 덮는다(시안 SM2) — 바깥·Esc 로 닫는다.
+ *   교체 대상은 4번째(메일) 칸만. 홈·채팅·활동은 고정, 전체는 항상 마지막.
+ * '전체' 시트: rounded-sheet, 핸들 36×4, 소통·문서·기타 3묶음 4열 그리드(타일 48 + 배지). 탭에 있는 모듈은 빼고,
+ * 탭 편집 중에는 탭 모듈까지 다 보여 고르게 한다. 시트는 화면 아래 끝까지 덮는다 — 바깥·Esc 로 닫는다.
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
@@ -30,7 +30,7 @@ const ALL_TAB = '__all'
 interface Tab { id: string; route: string; label: string; icon: string; alsoMatch?: string[] }
 interface SheetItem { id: string; name: string; route: string; icon: string; fixed?: boolean }
 
-// 시안 SM2 묶음: 소통 = 파일·캘린더·회의·연락처, 문서 = 위키·게시판·작업·Git, 기타 = AI·(플러그인)·프로필·관리.
+// 묶음: 소통 = 파일·캘린더·회의·연락처, 문서 = 위키·게시판·작업·Git, 기타 = AI·(플러그인)·프로필·관리.
 // 메일은 4번째 탭을 다른 모듈로 바꿨을 때만 시트에 나온다(소통 맨 앞).
 const SHEET_GROUPS: { key: string; label: string; ids: string[] }[] = [
   { key: 'talk', label: 'shell.tab.groupTalk', ids: ['mail', 'files', 'calendar', 'meetings', 'contacts'] },
@@ -62,7 +62,7 @@ export function LayoutMobileTabBar() {
   })()
 
   const isActive = (r: string) => (r === '/' ? route.path === '/' : route.path === r || route.path.startsWith(r + '/'))
-  // 탭 활성: 하위 경로(alsoMatch — 연락처 → 메일, 11-C9)까지 본다. 전체 시트가 열려 있으면 "전체" 하나만 활성(검수 P8 U5).
+  // 탭 활성: 하위 경로(alsoMatch — 연락처 → 메일)까지 본다. 전체 시트가 열려 있으면 "전체" 하나만 활성.
   const routeMatches = (tb: Tab) => isActive(tb.route) || !!tb.alsoMatch?.some(isActive)
   const tabActive = (tb: Tab) => !showAll && routeMatches(tb)
   const badgeFor = (id: string) => (id === 'chat' ? totalMentions : id === 'activity' ? unreadCount : 0)
@@ -104,7 +104,7 @@ export function LayoutMobileTabBar() {
 
   return (
     <>
-      {/* md:hidden 은 부모가 아니라 여기 둔다(루트가 nav + 포털 두 개). 겉모습은 키트 UiTabbar(답변서 C4). */}
+      {/* md:hidden 은 부모가 아니라 여기 둔다(루트가 nav + 포털 두 개). 겉모습은 키트 UiTabbar. */}
       <UiTabbar
         className="md:hidden"
         tabs={[
@@ -134,7 +134,7 @@ export function LayoutMobileTabBar() {
         }}
       />
 
-      {/* '전체' 바텀시트 — 화면 아래 끝까지(탭바를 덮음, 시안 SM2 · 검수 P8 U8). 바깥(스크림)·Esc 로 닫힘 */}
+      {/* '전체' 바텀시트 — 화면 아래 끝까지(탭바를 덮음). 바깥(스크림)·Esc 로 닫힘 */}
       {showAll && createPortal(
         <div
           className="fixed inset-0 z-modal flex flex-col justify-end bg-scrim md:hidden"

@@ -1,16 +1,16 @@
 /**
- * AI 메시지 한 줄(Vue components/ai/AiMessageItem.vue · 시안 AI1 AiDesktop:25-28 · AIM2 AiMobile:21-22 · 결정 AI 1·4).
+ * AI 메시지 한 줄(Vue components/ai/AiMessageItem.vue).
  *  왼쪽 정렬 · 아바타 타일 28(사용자 = 원형 primary/20 이니셜, 어시스턴트 = r8 secondary + 반짝임) · 간격 12(모바일 10).
  *  머리: 이름 13/600 + mono 11 muted(시각, 어시스턴트는 "모델 · 시각") — 모바일은 이름만.
  *  도구 칩 26(r6, 12/600): 완료 muted + ✓ success · 진행 warning/15 + 회전 · 실패 danger/15 "… 실패".
  *  본문 15px foreground(줄 1.75, 모바일 1.65~1.7) · 스트리밍 커서 8×16 foreground/70.
  *  오류·도구 실패 = warning 띠(role=alert) + "다시 시도"(primary 600).
  *
- * S6a(시안 C1·C2): 진행 단계 카드(도구 칩 대신) · 본문 [n] 출처 표식 + 출처 칩·미리보기 · 수식(KaTeX) ·
+ * 진행 단계 카드(도구 칩 대신) · 본문 [n] 출처 표식 + 출처 칩·미리보기 · 수식(KaTeX) ·
  *  행동 줄(복사 · 👍 · 👎 · 다시 만들기 … AI 생성 · 모델 · 확인 안내) · 끊김/멈춤 = "이어서 받기" 타일 ·
  *  받는 중 [멈추기].
  *
- * S6b(시안 C1·C2-3·D2-5): 사용자 메시지 아래 [질문 수정] [◀ n/N ▶](버전이 2개 이상일 때) · 수정 칸(보내기 = 새 버전) ·
+ * 사용자 메시지 아래 [질문 수정] [◀ n/N ▶](버전이 2개 이상일 때) · 수정 칸(보내기 = 새 버전) ·
  *  첨부 칩 · 답변 중 메모리에 저장했으면 "메모리에 저장함 — “…” 보기 · 취소" 줄.
  */
 import { Fragment, useCallback, useId, useState } from 'react'
@@ -69,14 +69,14 @@ export interface AiMessageItemProps {
   onQuestionChange?: (q: AiQuestion) => void
   /** 승인 카드 "대화로 고치기"·"다시 제안" — 입력 칸에 넣을 문장 */
   onWriteCompose?: (text: string) => void
-  /** S6b — 질문 수정 보내기(새 버전). 있으면 "편집"이 입력칸 대신 제자리 수정 칸을 연다.
-   *  keepIds = 원래 첨부 중 이번 버전에 넣을 것(시안 K1-3 — 첨부가 없으면 undefined) */
+  /** 질문 수정 보내기(새 버전). 있으면 "편집"이 입력칸 대신 제자리 수정 칸을 연다.
+   *  keepIds = 원래 첨부 중 이번 버전에 넣을 것(첨부가 없으면 undefined) */
   onEditSubmit?: (text: string, keepIds?: string[]) => void
   /** 지금 모델이 이미지를 읽는지 — 수정 때 이미지를 유지하면 보내기 막힘 */
   vision?: boolean
-  /** S6b — 버전 넘기기(1부터) */
+  /** 버전 넘기기(1부터) */
   onSwitchVersion?: (n: number) => void
-  /** S6b — 메모리 저장 취소 */
+  /** 메모리 저장 취소 */
   onMemoryUndo?: (m: AiMemorySaved) => void
 }
 
@@ -107,7 +107,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
   const [openCite, setOpenCite] = useState<number | null>(null)
   const onOpenCite = useCallback((n: number | null) => setOpenCite(n), [])
   const [editing, setEditing] = useState<string | null>(null)
-  // 질문 수정 때 뺄 첨부 id(시안 K1-3 — 기본은 모두 유지)
+  // 질문 수정 때 뺄 첨부 id(기본은 모두 유지)
   const [dropped, setDropped] = useState<string[]>([])
   const editAtts = (msg.attachments ?? []).filter(a => a.id)
   const editBlocked = !vision && editAtts.some(a => a.kind === 'image' && !dropped.includes(a.id as string))
@@ -169,7 +169,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
           {meta && <span className="hidden font-mono text-[11px] font-normal text-muted-foreground md:inline">{meta}</span>}
         </div>
 
-        {/* 진행 단계(S6a) — 없으면(옛 기록·단계 이벤트 없는 서버) 도구 칩 */}
+        {/* 진행 단계 — 없으면(옛 기록·단계 이벤트 없는 서버) 도구 칩 */}
         {!isUser && !!steps.length && (
           <AiSteps steps={steps} streaming={msg.streaming} startedAt={msg.started_at} endedAt={msg.ended_at} className="my-1.5 md:my-2" />
         )}
@@ -197,7 +197,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
 
         {/* 본문 */}
         {isUser && editing !== null ? (
-          // 질문 수정(시안 C2-3)
+          // 질문 수정
           <div className="mt-1 flex flex-col gap-2.5 rounded-xl border border-ring bg-card p-3">
             {!!editAtts.length && (
               <div className="flex flex-wrap gap-1.5">
@@ -243,7 +243,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
           </div>
         ) : isUser ? (
           <>
-            {/* 보낸 첨부(시안 K1-2) — 누르면 원본 미리보기·내려받기 */}
+            {/* 보낸 첨부 — 누르면 원본 미리보기·내려받기 */}
             {!!msg.attachments?.length && <AiSentAttachments items={msg.attachments} className="mb-1.5 mt-1" />}
             {!!msg.content && <div className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-[1.65] text-foreground md:leading-[1.7]">{msg.content}</div>}
           </>
@@ -261,7 +261,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
           </div>
         )}
 
-        {/* 받는 중 멈추기(시안 C2-1) */}
+        {/* 받는 중 멈추기 */}
         {!isUser && msg.streaming && onStop && (
           <div className="mt-2">
             <UiButton variant="outline" size="sm" icon="square" onClick={() => onStop()}>{t('ai.message.stop')}</UiButton>
@@ -273,13 +273,13 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
           <AiCitations items={citations} idPrefix={`cite-${uid}`} openN={openCite} onOpenChange={onOpenCite} className="mt-3" />
         )}
 
-        {/* 결과물 카드(S4 · 시안 C1·L1) — 스트림·기록 + 승인 카드로 실행한 파일 압축 */}
+        {/* 결과물 카드 — 스트림·기록 + 승인 카드로 실행한 파일 압축 */}
         {/* 승인 카드로 실행한 결과(files_zip 묶음)는 그 승인 카드 안에 보인다 — 따로 카드를 띄우면 이중으로 보인다 */}
         {!isUser && !!standaloneArtifacts.length && (
           <AiArtifacts items={standaloneArtifacts} className="mt-3" />
         )}
 
-        {/* 메모리에 저장함(시안 D2-5) */}
+        {/* 메모리에 저장함 */}
         {!isUser && !!msg.memories?.length && (
           <div className="mt-2.5 flex flex-col gap-1.5">
             {msg.memories.map(m => (
@@ -304,7 +304,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
           </div>
         )}
 
-        {/* 쓰기 승인 카드(시안 A1·A2) */}
+        {/* 쓰기 승인 카드 */}
         {!isUser && !!msg.writes?.length && (
           <div className="mt-3.5 flex flex-col gap-3.5">
             {batchOn && (
@@ -341,7 +341,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
           </div>
         )}
 
-        {/* 끊김·멈춤 — 받은 부분은 저장됨, 이어서 받기(시안 C2-8) */}
+        {/* 끊김·멈춤 — 받은 부분은 저장됨, 이어서 받기 */}
         {partial && (
           <UiErrorTile
             className="mt-2.5"
@@ -367,7 +367,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
           </div>
         )}
 
-        {/* 행동 줄 + AI 생성 표시(AI 기본법 — 시안 C1 맨 아래) */}
+        {/* 행동 줄 + AI 생성 표시(AI 기본법) */}
         {!isUser && !msg.streaming && (!!msg.content || !!msg.writes?.length || !!msg.artifacts?.length) ? (
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
             {!!msg.content && <UiIconButton label={t('ai.message.copy')} icon="copy" size="sm" onClick={() => onCopy?.(msg.content)} />}
@@ -387,7 +387,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
             </span>
           </div>
         ) : isUser && editing === null ? (
-          // 질문 수정 · 버전 넘기기(시안 C1) — 버전이 여럿이면 늘 보이고, 아니면 hover·포커스 때
+          // 질문 수정 · 버전 넘기기 — 버전이 여럿이면 늘 보이고, 아니면 hover·포커스 때
           <div className={'mt-1 flex items-center gap-0.5 text-xs text-muted-foreground transition-opacity ' + (versionTotal > 1 ? '' : 'md:opacity-0 md:focus-within:opacity-100 md:group-hover:opacity-100')}>
             {onEditSubmit && msg.id ? (
               <UiIconButton label={t('ai.versions.editQuestion')} icon="edit" size="sm" disabled={busy} onClick={() => { setDropped([]); setEditing(msg.content) }} />

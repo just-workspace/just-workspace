@@ -1,9 +1,9 @@
 /**
- * 연락처 목록 — Vue 판 components/contacts/ContactsList.vue (시안 CT1 · CTM1 · 연3).
+ * 연락처 목록 — Vue 판 components/contacts/ContactsList.vue.
  * 데스크톱: 커맨드 바 44 bg-card(검색 32 "이름·회사·이메일" + "이름순 ▾"), 초성 헤더 28(sticky, 11/700 muted, bg-background),
  *   행 56(이니셜 36 · 이름 14/600 · 보조 12 muted), 선택 = primary/13.
  * 모바일: 범위 줄(주소록 ▾ · 개수 mono · 검색 · ⋯), 헤더 28 bg-card 12/700, 행 60(이니셜 40 · 15/600 · 13), 오른쪽 초성 색인 바.
- *   색인 글자 시각 24×22 유지, 터치는 바 전체를 끌어 고르는 방식 + 폭 40 히트 영역(P7 규칙 5).
+ *   색인 글자 시각 24×22 유지, 터치는 바 전체를 끌어 고르는 방식 + 폭 40 히트 영역.
  * 사진(있으면 이미지, 없으면 이니셜) · 즐겨찾기 별(warning 14). 즐겨찾기는 맨 위 "★" 묶음으로 모은다(색인 바 ★ 포함).
  */
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
@@ -22,7 +22,7 @@ import { UiEmptyState } from '~/components/ui/EmptyState'
 import { getUiZoom } from '~/composables/useViewport'
 
 const FAV_KEY = '★' // 내부 묶음 키(화면에는 UiIcon star 로 그린다)
-// ── 모바일 초성 색인 바(시안 CTM1: ★ ㄱ…ㅎ A #) ──
+// ── 모바일 초성 색인 바(★ ㄱ…ㅎ A #) ──
 const INDEX = [FAV_KEY, ...HANGUL_KEYS, 'A', OTHER_KEY]
 
 function subline(c: Contact) {
@@ -151,8 +151,8 @@ export function ContactsList() {
         </label>
       </div>
 
-      {/* 1024 미만 범위 줄: 주소록 ▾ · 개수 · 검색(모바일) · ⋯ — 사이드바 대신(연1).
-          모바일(<768)에선 이 줄이 화면 머리(시안 CTM1: 56, 제목 "연락처" 18/600 + 아래 범위 줄) — 공용 상단바는 숨긴다. */}
+      {/* 1024 미만 범위 줄: 주소록 ▾ · 개수 · 검색(모바일) · ⋯ — 사이드바 대신.
+          모바일(<768)에선 이 줄이 화면 머리(56, 제목 "연락처" 18/600 + 아래 범위 줄) — 공용 상단바는 숨긴다. */}
       <div className="flex h-14 shrink-0 items-center gap-0.5 border-b border-border pl-4 pr-1 md:h-12 lg:hidden">
         <div className="flex min-w-0 flex-1 flex-col">
           <h1 className="truncate text-lg font-semibold leading-6 text-foreground md:hidden">{t('nav.contacts')}</h1>

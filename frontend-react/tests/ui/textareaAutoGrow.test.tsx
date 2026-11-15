@@ -1,5 +1,5 @@
-// R5 키트 — UiTextarea autoGrow + maxRows(프롬프트 입력)
-// 핸드오프 15-10: 높이 = 내용(1~maxRows 줄), 포커스와 무관 — 포커스만으로 maxRows 까지 펼치지 않는다. 비면 1줄.
+// 키트 — UiTextarea autoGrow + maxRows(프롬프트 입력)
+// 높이 = 내용(1~maxRows 줄), 포커스와 무관 — 포커스만으로 maxRows 까지 펼치지 않는다. 비면 1줄.
 import { describe, it, expect, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 

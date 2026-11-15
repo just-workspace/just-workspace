@@ -1,4 +1,4 @@
-// 설정 › 캘린더(시안 R12Settings #calendar · S1) — React 에만 있는 화면(Vue 동결 뒤 신설).
+// 설정 › 캘린더 — React 에만 있는 화면(Vue 동결 뒤 신설).
 //  ① 보기 카드: 기본 보기 UiSegment(일·주·월·일정) + 주 시작 요일 · 기본 알림 · 시간대 UiSelect(2열).
 //     고르면 바로 저장 + "저장됨 ✓"(카드 저장 규칙 — 선택만 있는 카드). 값은 useUserPrefs → /api/me/prefs
 //     (calendar.default_view · calendar.default_reminder · week_start · timezone). 주 시작·시간대는 설정 › 표시와 같은 값.

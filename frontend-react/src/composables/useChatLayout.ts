@@ -1,5 +1,5 @@
 /**
- * 채팅 사이드바 카테고리·정렬(handover-22 §2.1 · r24 백엔드 /api/chat/categories · PATCH /layout).
+ * 채팅 사이드바 카테고리·정렬(백엔드 /api/chat/categories · PATCH /layout).
  * 카테고리 API 는 프런트에서 여기서만 부른다.
  *
  * 구역 순서(위 → 아래):
@@ -8,7 +8,7 @@
  *   3. 시스템 "보관된 프로젝트"(layout/meta 의 archive_category_id) — 보관한 채널은 카테고리와 무관하게 여기. 이름만 바꿀 수 있다
  *   4. 다이렉트 메시지 — 고정 구역, 사용자 카테고리 대상 아님(§2.1(2) a)
  * 접힘은 사람마다(localStorage), 순서·이름은 공통이고 MANAGE_CHANNELS 가 있어야 바꾼다(§2.1(5)).
- * 접힌 카테고리도 안 읽음·선택 채널은 계속 보인다(handover-21 §5.4).
+ * 접힌 카테고리도 안 읽음·선택 채널은 계속 보인다.
  */
 import { createStore, useStore } from 'zustand'
 import { $fetch } from '~/lib/api'

@@ -1,4 +1,4 @@
-// R4 키트 추가분 — 답변서 C1~C8 · B1 · B2 부품의 렌더·키보드 동작
+// 키트 추가분 — 부품의 렌더·키보드 동작
 import { describe, it, expect, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 

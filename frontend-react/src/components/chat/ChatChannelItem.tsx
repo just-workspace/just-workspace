@@ -1,5 +1,5 @@
 /**
- * 채널·DM·음성·포럼 한 줄(handover-22 사이드바 · 시안 Chat22 #list #voice #drag · Mob22 #m-list).
+ * 채널·DM·음성·포럼 한 줄.
  * 데스크톱 행 32: 아이콘 20 · 간격 8 · radius 8 · 왼쪽 8 · 글자 16.
  *   기본 muted-foreground / 안 읽음 600 + 왼쪽 알약 4×8 / 멘션 danger 숫자 / 음소거 bell-off(+ "오후 3:00까지 알림 끔" 툴팁) /
  *   선택 bg-overlay-selected / 호버 bg-overlay-hover + 초대·설정 아이콘 / 비공개 lock / 포럼 messages-square / DM 아바타 24 + 상태 점.

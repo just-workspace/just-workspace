@@ -1,5 +1,5 @@
 /**
- * 손님 진입 대상 카드(Vue components/auth/AuthGuestCard.vue · 시안 8-5-1 · AuthForm:60, 문서·회의 공용):
+ * 손님 진입 대상 카드(Vue components/auth/AuthGuestCard.vue, 문서·회의 공용):
  * 아이콘 타일 40(primary/15) + 이름 14/600 + 보조 12 muted + 권한 틴트 배지.
  * OAuth 동의의 앱 카드(AuthForm:37)도 같은 틀 — icon 대신 initial/logo 를 넘긴다.
  */

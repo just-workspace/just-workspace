@@ -1,7 +1,7 @@
 /**
  * 새 채널 만들기 모달(이름 · 종류 · 공개/비공개 · 설명 · 멤버). Vue 원본: frontend/components/chat/ChatCreateModal.vue
  * 원본이 공용 UiModal 이 아닌 자체 오버레이라 그대로 옮긴다.
- * 종류(handover-22 §5.1): 텍스트 · 음성(handover-20) · 포럼(= 게시판 데이터의 채팅 보기 — 같은 이름 새 게시판 / 기존 게시판 연결,
+ * 종류: 텍스트 · 음성 · 포럼(= 게시판 데이터의 채팅 보기 — 같은 이름 새 게시판 / 기존 게시판 연결,
  *   chatApi22.createForumChannel). categoryId 를 주면 만든 뒤 그 카테고리 맨 아래로 옮긴다(PATCH /layout — useChatLayout).
  */
 import { useEffect, useRef, useState } from 'react'
@@ -31,7 +31,7 @@ export function ChatCreateModal({ onClose, categoryId = null }: ChatCreateModalP
 
   const [name, setName] = useState('')
   const [type, setType] = useState<'public' | 'private'>('public')
-  // 종류 — 음성(handover-20, 글 대신 소리로 모이는 방) · 포럼(게시판 글을 채팅에서)
+  // 종류 — 음성(글 대신 소리로 모이는 방) · 포럼(게시판 글을 채팅에서)
   const [kind, setKind] = useState<Kind>('text')
   // 포럼 게시판: '' = 같은 이름으로 새 게시판, 그 밖 = 기존 게시판 id
   const [boardId, setBoardId] = useState('')
@@ -148,7 +148,7 @@ export function ChatCreateModal({ onClose, categoryId = null }: ChatCreateModalP
             </div>
           </div>
 
-          {/* 종류 — 텍스트 · 음성(handover-20) · 포럼(handover-22 §5.1). 공개/비공개와 별개 */}
+          {/* 종류 — 텍스트 · 음성 · 포럼. 공개/비공개와 별개 */}
           <fieldset>
             <legend className="block text-sm font-medium mb-1 text-foreground">{t('chat.side.create.kind')}</legend>
             <div role="radiogroup" aria-label={t('chat.side.create.kind')} className="flex gap-4">

@@ -1,16 +1,16 @@
 /**
- * 작업(Vue 원본: frontend/pages/tasks.vue · 시안 TK1 데스크톱 · TKM1·TKM2 모바일 · 결정 작업 1~5).
+ * 작업(Vue 원본: frontend/pages/tasks.vue).
  *  데스크톱: 머리(작업 24/700 + 집계 · 목록/보드 세그먼트) → 칩 줄(진행 중 · 우선순위 높음 · + 필터 · 묶기/정렬 ▾)
  *            → 빠른 입력 44 → 마감 묶음 목록(행 48) + 오른쪽 상세 패널 360(작업을 고르면).
  *  모바일: 칩 줄(36) + ⋯(묶기·정렬) → 목록(행 60, 묶음 머리 32) + FAB(새 작업 시트) / 작업을 고르면 전체 화면 상세(탭바 숨김).
- * 좌 200 aside 는 폐지(결정 작업 2). 데스크톱 셸(Electron)이 넘기는 ?status=·?priority= 는 칩 상태로 받는다.
+ * 좌 200 aside 는 폐지. 데스크톱 셸(Electron)이 넘기는 ?status=·?priority= 는 칩 상태로 받는다.
  * 선택한 작업은 ?task=<id> 로 URL 에 남겨 링크 복사·뒤로 가기가 된다.
  * 필터는 서버로(GET /api/tasks/?assignee=&tag=&project=&status=&priority=) — "마감 지남"만 화면에서 거른다.
  * 칩 줄: [나에게 배정](assignee=me) · 진행 중 · 우선순위 높음↑ · + 필터(상태·우선순위·담당자·태그·프로젝트).
  *  "나에게 배정" 칩은 기본 꺼짐 — 담당 기능 전에 만든 작업은 담당자가 비어 있어 켜 두면 안 보이기 때문(보고서).
  * 빠른 입력 @담당 → 사용자(resolveAssignee)로 저장. @ 가 없으면 나에게 배정. 못 찾으면 @글자를 제목에 남기고 알린다.
- * 보드 보기는 토글 자리만(결정 작업 1 — 다음 단계).
- * 모바일 머리: 목록 = 이 페이지 header(시안 TKM1), 상세 = LayoutMobileDetailBar — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader).
+ * 보드 보기는 토글 자리만(다음 단계).
+ * 모바일 머리: 목록 = 이 페이지 header, 상세 = LayoutMobileDetailBar — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader).
  */
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -389,7 +389,7 @@ export default function TasksPage() {
   const [viewMode, setViewMode] = useState<string | number | null>('list')
   const viewItems = [
     { value: 'list', label: t('tasks.view.list') },
-    // 보드 보기는 토글 자리만(결정 작업 1 — 다음 단계)
+    // 보드 보기는 토글 자리만(다음 단계)
     { value: 'board', label: t('tasks.view.board'), disabled: true, ariaLabel: t('tasks.view.boardSoon') },
   ]
 
@@ -403,7 +403,7 @@ export default function TasksPage() {
         className="flex min-w-0 flex-1 flex-col overflow-hidden md:px-7 md:pt-6"
         style={isMobile && selected ? { display: 'none' } : undefined}
       >
-        {/* 머리(모바일, 시안 TKM1: 56 · 제목 "작업" 18/600 + "나에게 배정 n" · ⋯ 묶기·정렬) — 공용 상단바 대신 */}
+        {/* 머리(모바일, 56 · 제목 "작업" 18/600 + "나에게 배정 n" · ⋯ 묶기·정렬) — 공용 상단바 대신 */}
         <header className="flex h-14 shrink-0 items-center border-b border-border pl-4 pr-1 md:hidden">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-semibold leading-6 text-foreground">{t('nav.tasks')}</h1>

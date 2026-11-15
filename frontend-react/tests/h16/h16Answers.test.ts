@@ -1,4 +1,4 @@
-// handover 16 답 — 순수 로직(배율 하한 9 · 수도 이름 12)
+// 순수 로직(배율 하한 · 수도 이름)
 import { describe, it, expect } from 'vitest'
 import { uiScaleAllowed, UI_SCALE_MIN_WIDTH } from '~/lib/fluid'
 import { tzCity, tzMatches, tzSearchNames } from '~/utils/timezoneBand'

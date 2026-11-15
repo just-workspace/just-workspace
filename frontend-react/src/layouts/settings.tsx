@@ -1,5 +1,5 @@
 /**
- * 개인 설정 셸 — Vue layouts/settings.vue 그대로(시안 SettingsPage·PFM1/2·10-6 ⑥):
+ * 개인 설정 셸 — Vue layouts/settings.vue 그대로:
  * 기본 셸 안에 좌 내비 240 + 본문 max-w 720(헤더형 h1 24/700 + 부제 13.5).
  * 모바일(md 미만): /settings 는 섹션 목록, 하위 페이지는 상세 상단 바(‹ 설정 목록으로 · 제목)로 2단. 프로필 흡수.
  *
@@ -39,7 +39,7 @@ export function SettingsLayout({ children }: { children?: ReactNode }) {
             hideTabbar={false}
           />
         )}
-        {/* 시안 SettingsPage: main padding 28/40 안에 본문 최대 720(패딩 제외) */}
+        {/* main padding 28/40 안에 본문 최대 720(패딩 제외) */}
         <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-10 md:py-7">
           <div className="mx-auto flex max-w-[720px] flex-col gap-[18px] md:mx-0">
             {children ?? <Outlet />}

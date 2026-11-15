@@ -1,11 +1,11 @@
 /**
- * HiresVoiceTransport — 'hires' 단계(handover-20 Tier 4, 데스크톱 앱 전용)의 VoiceTransport.
+ * HiresVoiceTransport — 'hires' 단계(데스크톱 앱 전용)의 VoiceTransport.
  *
  * 구성(합성): LosslessVoiceTransport(= LiveKit presence + 브라우저 무손실 릴레이) 위에 네이티브 엔진(window.jwNativeAudio)을 얹는다.
  *  · LiveKit 방에는 그대로 들어간다 → presence(사이드바·/voice/state)가 다른 단계와 같고, 음성·음악 참가자도 나를 듣는다(Opus 호환 스트림).
  *  · 하이레조가 켜지면 소리는 네이티브 엔진(메인 프로세스)이 WASAPI exclusive 장치 ↔ 릴레이로 직접 보낸다. 브라우저 무손실 세션은 돌지 않는다.
  *    릴레이 피어(identity)가 보이면 그 사람의 LiveKit 트랙은 꺼서(setParticipantAudioMuted) 두 번 들리지 않게 한다 — 무손실 어댑터와 같은 규칙.
- *  · 처음 켤 때 확인창(answers "하이레조 켜기": alertdialog, "다음부터 묻지 않기") — r18 useVoice.confirmHiresExclusive 로 띄운다.
+ *  · 처음 켤 때 확인창(alertdialog, "다음부터 묻지 않기") — useVoice.confirmHiresExclusive 로 띄운다.
  *  · 장치 독점 실패(다른 앱 점유·정책·포맷) → useVoice.reportExclusiveError({app, device}) 로 danger 띠, 그동안 **무손실 24/48(브라우저)** 로 보낸다
  *    (answers "장치 독점 실패"). [다시 시도] = useVoice.retryHires → setSend(tier 'hires') 가 다시 들어온다.
  *  · 사용자가 확인창에서 [취소]하면 띠 없이 무손실로 보낸다.
@@ -31,7 +31,7 @@ export interface HiresUiHooks {
 
 let uiHooks: HiresUiHooks | null = null
 
-/** r18 셸(useVoice)이 아닌 곳에서 쓸 때 훅을 바꾼다. null 이면 기본(useVoice 늦은 import) */
+/** 셸(useVoice)이 아닌 곳에서 쓸 때 훅을 바꾼다. null 이면 기본(useVoice 늦은 import) */
 export function setHiresUiHooks(h: HiresUiHooks | null): void {
   uiHooks = h
 }

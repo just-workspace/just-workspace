@@ -1,5 +1,5 @@
 /**
- * 모바일 설정 첫 화면 조각(시안 PFM1) — Vue pages/settings/index.vue 의 인라인 마크업을 이름 붙여 뺀 것.
+ * 모바일 설정 첫 화면 조각 — Vue pages/settings/index.vue 의 인라인 마크업을 이름 붙여 뺀 것.
  *  · SettingsProfileHead — 아바타 52 + 이름 16/600 + 이메일 13 muted
  *  · SettingsNavGroupCard — 그룹 머리(11/600 0.08em) + 카드 안 52 행(이름 15 + 보조 글자 13 muted + ›)
  */

@@ -1,5 +1,5 @@
 /**
- * 저장 안 된 변경 띠(Settings22 #role-dirty): 아래 떠 있는 카드(popover · 그림자 · 1px) — 문구 14/500 + 되돌리기(ghost) · 저장.
+ * 저장 안 된 변경 띠: 아래 떠 있는 카드(popover · 그림자 · 1px) — 문구 14/500 + 되돌리기(ghost) · 저장.
  * 디스코드처럼 변경이 있는데 다른 곳으로 가려 하면(settingsStore.requestLeave) 띠를 흔들고 잠시 danger 테두리.
  * reduce-motion 이면 흔들지 않고 테두리만. 섹션 끝에 sticky 로 붙는다(스크롤해도 아래에 보인다).
  */

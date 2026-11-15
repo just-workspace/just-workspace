@@ -1,5 +1,5 @@
 /**
- * 분할 버튼(handover-netlab 답 키트 제안) — 본 동작 버튼 + 붙은 ▾ 메뉴 버튼. 모양은 UiButton 두 개를 한 덩어리로 붙인 것.
+ * 분할 버튼 — 본 동작 버튼 + 붙은 ▾ 메뉴 버튼. 모양은 UiButton 두 개를 한 덩어리로 붙인 것.
  * 메뉴는 UiMenu(모바일은 바닥 시트). ▾ 버튼은 따로 포커스되고 aria-haspopup=menu.
  */
 import type { ReactNode } from 'react'

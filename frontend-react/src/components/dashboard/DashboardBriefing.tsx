@@ -1,5 +1,5 @@
 /**
- * 오늘 브리핑 줄 + 관리자 운영 띠(시안 Dash17 · handover 17 답 1 "오늘 브리핑 줄").
+ * 오늘 브리핑 줄 + 관리자 운영 띠.
  *
  * 칩(높이 36, rounded-full, 누르면 해당 화면): 안 읽은 메일 n · 나를 부른 것 n · 오늘 마감 n · 지남 n(지난 것만이면 `지남 n` danger 하나) ·
  * 다음 회의 `제목 14:00 · 10분 후 [참여]`(30분 전부터 primary 테두리 + [참여]) · 관리자만 서비스 이상 n(warning).
@@ -49,7 +49,7 @@ export function briefChips(s: DashSummary | null, now: number, t: (k: string, a?
       sub: s.tasks_overdue ? t('dashboard.d17.chip.overdue', { n: s.tasks_overdue }) : undefined, to: '/tasks',
     })
   } else if (s.tasks_overdue) {
-    // 오늘 마감 0 · 지난 것만 — "지남 n" 하나(handover 18 답 3)
+    // 오늘 마감 0 · 지난 것만 — "지남 n" 하나
     out.push({ key: 'due', icon: 'check-square', label: t('dashboard.d17.chip.overdueLabel'), value: String(s.tasks_overdue), danger: true, to: '/tasks' })
   }
   const m = s.next_meeting

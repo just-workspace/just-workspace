@@ -1,10 +1,10 @@
 /**
- * 캘린더(Vue 원본: frontend/pages/calendar.vue · 시안 CL1·CL2 데스크톱 / CM1·CM2 모바일 · 결정 캘1~6).
+ * 캘린더(Vue 원본: frontend/pages/calendar.vue).
  * 데스크톱: 사이드바 236(bg-card) + 커맨드 바 44(오늘 · ‹ › · 기간 15/600 … 일/주/월/일정 세그먼트 · ⋯).
  * 모바일(<md): 사이드바 대신 FAB(새 일정) + ⋯ 시트(캘린더 목록), 보기 세그먼트 일정/월/주, 월 날짜 탭 = 그날 시트.
- * 시간대 불일치 띠(답변서 13 A1 · 시안 R13 #tz): 상단바 바로 아래·툴바 위 warning 틴트 h-44, [기기 시간대로 바꾸기](outline) · [○○ 그대로](ghost, = 닫기).
+ * 시간대 불일치 띠: 상단바 바로 아래·툴바 위 warning 틴트 h-44, [기기 시간대로 바꾸기](outline) · [○○ 그대로](ghost, = 닫기).
  *   툴바 오른쪽에 지금 시간대 mono 표시(항상).
- * 오류는 그리드를 지우지 않고 커맨드 바 아래 동기화 오류 띠 40(시안 CalDesktop syncError · 11 답 D4b). 빈 상태는 일정 목록·날짜 시트에서만.
+ * 오류는 그리드를 지우지 않고 커맨드 바 아래 동기화 오류 띠 40. 빈 상태는 일정 목록·날짜 시트에서만.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -242,7 +242,7 @@ export default function CalendarPage() {
             }}
             values={{ city: tzPlace(prefTz, locale) }}
           />
-          {/* 띠 버튼은 한 줄 말줄임, 전체 문구는 툴팁(handover 16 답 13 — 표에 없는 시간대는 "Almaty (UTC+5) 그대로"처럼 길어진다) */}
+          {/* 띠 버튼은 한 줄 말줄임, 전체 문구는 툴팁(표에 없는 시간대는 "Almaty (UTC+5) 그대로"처럼 길어진다) */}
           {[
             { key: 'device', variant: 'outline' as const, onClick: switchToDeviceTz, text: t('calendar.tzBand.useDevice', { city: tzPlace(deviceTz, locale), ro: roParticle(tzPlace(deviceTz, locale)) }) },
             { key: 'keep', variant: 'ghost' as const, onClick: keepPrefTz, text: t('calendar.tzBand.keep', { city: tzPlace(prefTz, locale) }) },
@@ -324,7 +324,7 @@ export default function CalendarPage() {
                 ? <CalendarDayView />
                 : <CalendarAgendaView />}
 
-          {/* 모바일 월: 날짜 탭 → 그날 시트(CM1) */}
+          {/* 모바일 월: 날짜 탭 → 그날 시트 */}
           {isMobile && sheetDate && viewMode === 'month' && <CalendarDaySheet />}
         </div>
       </div>

@@ -1,4 +1,4 @@
-// Wave5 chat — 내장 AI 화면 보강: 프로젝트 편집·피커(J1) · 공유 상태(J2) · 첨부(K1) · 길이 초과 안내(C2-10) · 설정 › AI 연동(MCP)(H1·H2).
+// 내장 AI 화면 보강: 프로젝트 편집·피커 · 공유 상태 · 첨부 · 길이 초과 안내 · 설정 › AI 연동(MCP).
 // $fetch·fetch·업로드·apiRawFetch 는 가짜.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'

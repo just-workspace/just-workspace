@@ -1,9 +1,9 @@
 /**
- * 관리 › 그룹 — Vue pages/admin/groups.vue(시안 AdminPage variant=groups · Review11 D2a). 최대 1100, 2단: 왼쪽 320 목록 + 오른쪽 상세.
+ * 관리 › 그룹 — Vue pages/admin/groups.vue. 최대 1100, 2단: 왼쪽 320 목록 + 오른쪽 상세.
  *  목록 카드: "그룹 찾기"(32) · 행 48(이름 600 + 설명 12 muted, 오른쪽 멤버 수, 선택 = primary/13 바탕).
  *  상세 ① 멤버 카드: 이름 15/600 + "설명 · 멤버 N", [이름 바꾸기] [멤버 추가], 행 48 = 아바타 28 + 이름·이메일 + 역할 + 빼기.
  *  상세 ② "이 그룹이 쓸 수 있는 모듈" — 토글 칩. 누르면 바로 저장.
- *  [새 그룹](헤더형 오른쪽 1차 버튼), 그룹 삭제 = 상세 머리 ⋮ 메뉴(danger, 확인형 — 답변서 B5). 모바일은 목록 위·상세 아래로 쌓는다.
+ *  [새 그룹](헤더형 오른쪽 1차 버튼), 그룹 삭제 = 상세 머리 ⋮ 메뉴(danger, 확인형). 모바일은 목록 위·상세 아래로 쌓는다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -177,7 +177,7 @@ export default function AdminGroupsPage() {
       subtitle={t('admin.groups.count', { n: groups.length })}
       actions={(
         <>
-          {/* 채팅 역할·권한·이모지는 채팅 안 전체 화면 설정(handover-22 §5.4 c) — 여기는 링크만 */}
+          {/* 채팅 역할·권한·이모지는 채팅 안 전체 화면 설정 — 여기는 링크만 */}
           <UiButton size="sm" variant="outline" icon="external-link" title={t('chat.settings.admin.hint')} onClick={() => void navigateTo('/chat?settings=roles')}>{t('chat.settings.admin.open')}</UiButton>
           <UiButton size="sm" className="font-semibold" onClick={openCreate}>{t('admin.groups.newGroup')}</UiButton>
         </>

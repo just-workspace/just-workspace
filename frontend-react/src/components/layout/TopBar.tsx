@@ -1,9 +1,9 @@
 /**
- * 상단바(Vue components/layout/TopBar.vue · 시안 ShellTop·8-1, 56px).
+ * 상단바(Vue components/layout/TopBar.vue, 56px).
  * 데스크톱: [사이드바 고정(aria-pressed, Ctrl \)] 워크스페이스 / 모듈 / 위치(3단, 위치는 페이지가 useBreadcrumb 로 올림 · 플러그인은 __WS_SHELL__.setTitle)
  *           … [이동하거나 검색 240 + Ctrl K 키캡] [벨 36 테두리 → 활동 패널 400, 숫자 배지 primary] [아바타 32 + 상태점 → 사용자 메뉴 288]
  * 모바일: 제목 한 줄 + 검색 아이콘 + 아바타(활동은 탭바 "활동" 탭이 맡는다). 테마 토글은 사용자 메뉴로 옮겼다.
- * 겉모습은 키트 UiTopbar(답변서 C4) — 이 파일은 경로·알림 수·사용자·플러그인 확장 액션·사용자 메뉴를 잇기만 한다.
+ * 겉모습은 키트 UiTopbar — 이 파일은 경로·알림 수·사용자·플러그인 확장 액션·사용자 메뉴를 잇기만 한다.
  */
 import { useEffect, useRef } from 'react'
 import { cn } from '~/lib/utils'
@@ -27,7 +27,7 @@ import { ShellTransition } from './shellTransition'
 import { LayoutUserMenu } from './UserMenu'
 
 export interface LayoutTopBarProps {
-  /** 모바일 통화 띠(P-8)가 위에 끼면 노치 여백은 띠 위에서 이미 줬다 */
+  /** 모바일 통화 띠가 위에 끼면 노치 여백은 띠 위에서 이미 줬다 */
   noSafeTop?: boolean
 }
 

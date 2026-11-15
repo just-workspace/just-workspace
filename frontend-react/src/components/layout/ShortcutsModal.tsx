@@ -1,5 +1,5 @@
 /**
- * 단축키 도움말(Ctrl /) — 원칙 3. (Vue components/layout/ShortcutsModal.vue) 키캡은 UiKeycap 20 하나(11-B8).
+ * 단축키 도움말(Ctrl /). (Vue components/layout/ShortcutsModal.vue) 키캡은 UiKeycap 20 하나.
  * 모듈 묶음은 각 페이지가 usePageShortcuts('메일', [...]) 로 등록 — 지금 화면의 묶음이 맨 위에 온다.
  */
 import { useI18n } from '~/i18n'

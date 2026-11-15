@@ -1,8 +1,8 @@
 /**
- * AI 답변 진행 단계(S6a · 시안 C1 "4단계 완료 · 메일 검색 → … · 18초", C2-1 작성 중 펼침, C2-2 단계 하나 실패).
+ * AI 답변 진행 단계("4단계 완료 · 메일 검색 → … · 18초", 작성 중 펼침, 단계 하나 실패).
  *  카드 r12 · card · border(실패 있으면 warning/45). 머리 = 상태 아이콘 + 요약 + ▾/▴ (aria-expanded).
  *  받는 중에는 펼침이 기본, 끝나면 접힘(사용자가 누르면 그 선택을 따른다). 숫자·시간은 JetBrains Mono.
- *  모바일은 요약에서 단계 이름 사슬을 숨긴다("4단계 완료 · 18초", 시안 C2-9).
+ *  모바일은 요약에서 단계 이름 사슬을 숨긴다("4단계 완료 · 18초").
  */
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { cn } from '~/lib/utils'

@@ -1,10 +1,10 @@
 /**
- * 메일 사이드바 — Vue 판 components/mail/MailSidebar.vue (시안 ML1 왼쪽 236).
+ * 메일 사이드바 — Vue 판 components/mail/MailSidebar.vue.
  * 계정 줄 32 · "새 메일 C" 40 · 폴더 34 · 예약함(예약이 있을 때) · 라벨(서버가 키워드를 지원할 때만) · 맨 아래 "메일 설정 · 필터 · 서명".
- * 라벨 줄: 34 · 색점 8(좌우 4) · muted 글자(시안 ML1:20-22). 고르면 폴더와 같은 primary/13 + 600, 다시 누르면 끈다.
+ * 라벨 줄: 34 · 색점 8(좌우 4) · muted 글자. 고르면 폴더와 같은 primary/13 + 600, 다시 누르면 끈다.
  * 예전 기능 유지: 다계정 트리(계정별 폴더 지연 조회), 폴더 만들기·이름 바꾸기·삭제(사용자 폴더만).
- * 필터 모달은 /settings/mail 필터 탭으로 옮겼다(메일 8 ②) — 여기서는 링크만.
- * 맨 아래 "연락처"는 레일에 없는 연락처의 데스크톱 진입점(11-C9).
+ * 필터 모달은 /settings/mail 필터 탭으로 옮겼다 — 여기서는 링크만.
+ * 맨 아래 "연락처"는 레일에 없는 연락처의 데스크톱 진입점.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -239,7 +239,7 @@ export function MailSidebar({ onNavigate }: MailSidebarProps) {
           />
         )}
 
-        {/* 라벨(시안 ML1:20-22) — 서버가 키워드를 지원할 때만 */}
+        {/* 라벨 — 서버가 키워드를 지원할 때만 */}
         {labelInfo.supported && labelInfo.labels.length > 0 && (
           <>
             <h3 className="px-2 pb-1 pt-3.5 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground">{t('mail.labels.title')}</h3>
@@ -262,7 +262,7 @@ export function MailSidebar({ onNavigate }: MailSidebarProps) {
         )}
       </nav>
 
-      {/* 연락처 — 메일 모듈의 하위(11-C9, 레일에는 없음) */}
+      {/* 연락처 — 메일 모듈의 하위(레일에는 없음) */}
       {contactsEnabled && (
         <NuxtLink
           to="/contacts"

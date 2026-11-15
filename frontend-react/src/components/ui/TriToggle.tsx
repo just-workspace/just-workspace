@@ -1,5 +1,5 @@
 /**
- * 3단 토글(handover-22 "3단 토글" · 시안 Settings22 채널 덮어쓰기): 거부 / 상속 / 허용 중 하나.
+ * 3단 토글: 거부 / 상속 / 허용 중 하나.
  * 모양: 1px border · rounded-md 묶음 안 3칸, 칸 32(h-8) · 아이콘 14 + 글자 12, 간격 4, 좌우 10.
  *   선택 바탕 — 거부 ✕ danger/15(글자 danger) · 상속 ／ foreground/20(글자 foreground) · 허용 ✓ success/15(글자 success).
  *   안 고른 칸은 muted-foreground, 호버 bg-overlay-hover.

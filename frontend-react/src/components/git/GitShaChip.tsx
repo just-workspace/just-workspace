@@ -1,5 +1,5 @@
 // Vue 원본: frontend/components/git/GitShaChip.vue
-// SHA 칩 + 복사 버튼 상시(시안 GT2·GT4 · 결정 Git 6): muted 바탕 mono 7자 + 복사 아이콘 버튼(터치 가능 — hover 전용 폐지).
+// SHA 칩 + 복사 버튼 상시: muted 바탕 mono 7자 + 복사 아이콘 버튼(터치 가능 — hover 전용 폐지).
 // size md = 커밋 행 28 · sm = 최신 커밋 줄 24. 복사 버튼 히트는 40.
 import type { MouseEvent } from 'react'
 import { useI18n } from '~/i18n'

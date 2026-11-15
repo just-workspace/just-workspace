@@ -1,6 +1,6 @@
 /**
  * 고정 메시지 패널 — 채널 ⋯ "고정 메시지"에서 연다. Vue 원본: frontend/components/chat/ChatPinsPanel.vue
- * 시안에 그림이 없어 스레드 패널(400, 머리 53) 골격 + P5 빈 상태(EmptyState panel) 규격으로 구성했다(디자이너 확인 필요).
+ * 시안에 그림이 없어 스레드 패널(400, 머리 53) 골격 + 빈 상태(EmptyState panel) 규격으로 구성했다(디자이너 확인 필요).
  */
 import { useEffect } from 'react'
 import { useStore } from 'zustand'
@@ -34,7 +34,7 @@ export function ChatPinsPanel() {
     catch (e: any) { addToast('error', e?.data?.detail || t('error.genericError')) }
   }
 
-  // 답글을 고정한 경우 스레드를 열고 그 답글로, 원 메시지면 대화에서 그 줄로 점프(handover-22 — 강조 2초 + "최근으로" 바).
+  // 답글을 고정한 경우 스레드를 열고 그 답글로, 원 메시지면 대화에서 그 줄로 점프(강조 2초 + "최근으로" 바).
   // 모바일은 대화가 보이게 패널을 닫는다(데스크톱은 열어 둔 채 점프).
   function onOpen(m: { id: string; channel_id: string; parent_id: string | null; thread_broadcast?: boolean }) {
     if (m.parent_id && !m.thread_broadcast) { close(); void openThread(m.parent_id).then(() => jumpTo(m.channel_id, m.id)); return }

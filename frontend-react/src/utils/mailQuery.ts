@@ -68,7 +68,7 @@ export function filterMailRows<T extends RowLike>(rows: readonly T[], flags: Mai
 
 export type SwipeAction = 'archive' | 'toggle-read' | null
 
-/** 스와이프 폭 — 시안 MailMobile 의 드러난 행동 칸 96. */
+/** 스와이프 폭 — 드러난 행동 칸 96. */
 export const SWIPE_REVEAL = 96
 
 /**
@@ -133,7 +133,7 @@ const DEFAULT_RECIPIENT_LABELS: RecipientSummaryLabels = {
   more: (names, n) => `${names} 외 ${n}명`,
 }
 
-/** "나, 김서연 외 4명" — 받는 사람 요약(시안 ML1·MM2). */
+/** "나, 김서연 외 4명" — 받는 사람 요약. */
 export function summarizeRecipients(list: readonly { name: string | null; email: string }[], myEmail = '', shown = 2, labels: RecipientSummaryLabels = DEFAULT_RECIPIENT_LABELS): string {
   const me = myEmail.toLowerCase()
   const names = list.map(a => (a.email.toLowerCase() === me ? labels.me : (a.name || a.email.split('@')[0])))
@@ -152,7 +152,7 @@ export function applyLabelChange(current: readonly string[] | undefined, add: re
 
 /**
  * 라벨 색점 — 서버 라벨엔 색이 없어 이름으로 고정 배정한다(같은 이름 = 늘 같은 색).
- * 범주 색 --cat-1…8(11-A1) 중 하나. 이웃 라벨은 색만이 아니라 이름 글자로도 구분된다(점 옆에 늘 이름).
+ * 범주 색 --cat-1…8 중 하나. 이웃 라벨은 색만이 아니라 이름 글자로도 구분된다(점 옆에 늘 이름).
  * 반환값은 CSS 변수 이름(hsl(var(--<값>)) 으로 쓴다).
  */
 export function labelTone(name: string): `cat-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8}` {
@@ -162,7 +162,7 @@ export function labelTone(name: string): `cat-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8}` 
 }
 
 /**
- * 본문의 접힌 대화(시안 ML1: 첫 메일 한 줄 + "이전 메일 n개 더 보기").
+ * 본문의 접힌 대화(첫 메일 한 줄 + "이전 메일 n개 더 보기").
  * thread 는 오래된 순. 열린 메일을 뺀 나머지 중 첫 통을 늘 보이고, 그 사이 것들은 "n개 더 보기"로 접는다.
  */
 export function threadLayout<T extends { id: string; mailbox_ids?: readonly string[] }>(thread: readonly T[], currentId: string, expanded = false, currentMailbox?: string | null): { shown: T[]; hidden: number } {

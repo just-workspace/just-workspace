@@ -94,7 +94,7 @@ describe('설정 화면 조각', () => {
     const { rerender } = render(<SettingsSessionRow icon="monitor" name="Chrome on macOS" kind="웹" ip="1.2.3.4" recentShort="r" recent="R" current />)
     expect(screen.getByText(t('settings.sessions.thisDevice'))).toBeTruthy()
     rerender(<SettingsSessionRow icon="monitor" name="Chrome on macOS" kind="웹" ip="1.2.3.4" hostname="" recentShort="r" recent="R" onRevoke={onRevoke} />)
-    // 접속 주소 칸(답변서 B7): 호스트 이름이 없으면 IP
+    // 접속 주소 칸: 호스트 이름이 없으면 IP
     expect(screen.getAllByText('1.2.3.4', { exact: false }).length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: t('settings.devices.revokeAria', { name: 'Chrome on macOS' }) }))
     expect(onRevoke).toHaveBeenCalledOnce()

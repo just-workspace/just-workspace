@@ -1,6 +1,6 @@
 /**
- * 백업 카드 — Vue components/admin/AdminBackup.vue(시안 AdminPage variant=backup · Review11 D2d). 관리 › 저장소·백업.
- * 맨 위 행 = "자동 백업" + "매일 HH:00 · 대상" · 시각(한국 시간으로 고르고 UTC 로 저장) · 스위치(답변서 B5),
+ * 백업 카드 — Vue components/admin/AdminBackup.vue. 관리 › 저장소·백업.
+ * 맨 위 행 = "자동 백업" + "매일 HH:00 · 대상" · 시각(한국 시간으로 고르고 UTC 로 저장) · 스위치,
  * 그 아래 2열 칸: 대상(서버 경로, 읽기 전용 mono) · 보관(선택).
  * 기록 행(min 52: 시각 600 + "결과 · 크기" 12 muted, 오른쪽 상태 틴트 배지 + ⋮ 받기·삭제), 최근 10개.
  * 푸터 = [지금 백업](확인 모달 → POST /api/admin/backup/run, 3초 간격 최대 6번 다시 읽기) [되돌리기] [저장].
@@ -162,7 +162,7 @@ export function AdminBackup({ id, className }: AdminBackupProps) {
         <UiErrorTile placement="card" title={t('adminParts.backup.loadError')} className="mx-5 mb-4" onRetry={load} />
       ) : (
         <>
-          {/* 맨 위 행 — 자동 백업 스위치 · 시각(답변서 B5) */}
+          {/* 맨 위 행 — 자동 백업 스위치 · 시각 */}
           <div className="flex min-h-[52px] flex-wrap items-center gap-3 border-t border-border px-5 py-2 text-[13px]">
             <span className="min-w-0 flex-1">
               <b className="block font-semibold text-foreground">{t('adminParts.backup.title')}</b>

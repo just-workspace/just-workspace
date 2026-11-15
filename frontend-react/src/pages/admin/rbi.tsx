@@ -1,5 +1,5 @@
 /**
- * 관리 › 격리 브라우저 — 임시 기능 화면(시안은 Claude Design — TODO(handover-rbi)). 기존 관리 카드 규격(AdminPageShell + SettingsCard)만 쓴다.
+ * 관리 › 격리 브라우저 — 임시 기능 화면(화면 디자인 미정 — TODO). 기존 관리 카드 규격(AdminPageShell + SettingsCard)만 쓴다.
  * 대상은 여기서만 더하고 고친다 — 저장하면 출구(허용 목적지)가 검증·고정되고 netfilter 사이드카가 한 주기(5초) 안에 건다(.env 수정·재시작 없음).
  *  1) 격리 규칙 상태: 사이드카 하트비트(적용/미확인·나이) · 지금 걸린 허용 목록 · 원하는데 아직 안 걸린 것 · 사이드카가 거부한 줄 ·
  *     고정 허용(RBI_ALLOW)·상한(RBI_ALLOW_CEILING) · 전용 출처 · 이미지 · 네트워크 · 활성 세션 n/max
@@ -83,7 +83,7 @@ function toBody(f: Form): Record<string, unknown> {
   }
 }
 
-/** 대상 폼 — TODO(handover-rbi): 그룹/사용자 선택은 ID 입력(임시). 시안에서 피커로 */
+/** 대상 폼 — TODO: 그룹/사용자 선택은 ID 입력(임시). 시안에서 피커로 */
 function TargetForm({ initial, saving, onSave, onCancel }: { initial: Form; saving: boolean; onSave: (f: Form) => void; onCancel: () => void }) {
   const { t } = useI18n()
   const [f, setF] = useState<Form>(initial)
@@ -94,7 +94,7 @@ function TargetForm({ initial, saving, onSave, onCancel }: { initial: Form; savi
       <UiInput modelValue={f.key} onUpdateModelValue={set('key')} label={t(A + 'key')} hint={t(A + 'keyHint')} placeholder="portal" mono required />
       <UiInput modelValue={f.name} onUpdateModelValue={set('name')} label={t(A + 'name')} placeholder="Intranet Portal" required />
       <UiInput modelValue={f.url} onUpdateModelValue={set('url')} label={t(A + 'url')} hint={t(A + 'urlHint')} placeholder="http://192.168.10.70" mono required className="sm:col-span-2" />
-      {/* TODO(handover-rbi): 화면 방식 고르기 규격(셀렉트/세그먼트)은 시안에서 */}
+      {/* TODO: 화면 방식 고르기 규격(셀렉트/세그먼트)은 시안에서 */}
       <UiSelect modelValue={f.mode} onUpdateModelValue={v => set('mode')((v === 'mirror' ? 'mirror' : 'pixel') as RbiMode)} label={t(A + 'mode')} hint={t(A + 'modeHint')} native className="sm:col-span-2"
         options={[{ value: 'pixel', label: t('rbi.mode.pixel') }, { value: 'mirror', label: t('rbi.mode.mirror') }]} />
       <UiInput modelValue={f.allowed_hosts} onUpdateModelValue={set('allowed_hosts')} label={t(A + 'allowedHosts')} hint={t(A + 'allowedHostsHint')} mono className="sm:col-span-2" />

@@ -1,13 +1,13 @@
 /**
- * S6b 프로젝트(시안 D1) + Wave5 보강(시안 J1·J2).
+ * 프로젝트.
  *  카드: r12 · card · 18 20 여백 — [폴더 20 primary] 이름 18/600 [나만 보기|공유 배지] … [지침 편집][파일 추가](주인만)
  *  · 지침(12/600 머리 + 13.5 본문) · 지식 파일 n · 크기(mono) + 칩(파일 종류 아이콘).
- *  공유받은 구성원(J2-2): [사람들 아이콘] 이름 [공유받음] … "○○ 님이 그룹에 공유" · 지침 · 칩 2개 + "+N" · 읽기 전용 안내.
- * J1 편집 창: 이름 · 지침(n / 4,000, 넘으면 빨강 + 오류) · 지식 파일 목록(빼기) + [내 파일에서 고르기] — 저장 때 한꺼번에 반영.
+ *  공유받은 구성원: [사람들 아이콘] 이름 [공유받음] … "○○ 님이 그룹에 공유" · 지침 · 칩 2개 + "+N" · 읽기 전용 안내.
+ * 편집 창: 이름 · 지침(n / 4,000, 넘으면 빨강 + 오류) · 지식 파일 목록(빼기) + [내 파일에서 고르기] — 저장 때 한꺼번에 반영.
  *  피커: 경로(내 파일 › …) · 이 폴더에서 검색 · 체크 줄(이미 들어 있음) · "n개 고름 · 한 번에 최대 20개 · 프로젝트 전체 a/50개".
  *  지식 파일은 복사하지 않고 연결(원본을 고치면 다음 답변부터 반영).
- * J2-1 공유 창: 그룹 체크(구성원 수) + 못 읽는 파일 경고(공유는 막지 않음 — 그 사람 답변에서만 빠짐).
- * J2-3 답변에서 빠진 지식 파일 줄 · J2-6 공유가 끊긴 프로젝트(구성원 쪽).
+ * 공유 창: 그룹 체크(구성원 수) + 못 읽는 파일 경고(공유는 막지 않음 — 그 사람 답변에서만 빠짐).
+ * 답변에서 빠진 지식 파일 줄 · 공유가 끊긴 프로젝트(구성원 쪽).
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '~/lib/utils'
@@ -84,7 +84,7 @@ export function AiProjectCard({ project, onEditInstructions, onAddFiles, onRemov
   )
 }
 
-/** 공유받은 구성원이 보는 프로젝트 머리(시안 J2-2) — 고치는 단추 없음 */
+/** 공유받은 구성원이 보는 프로젝트 머리 — 고치는 단추 없음 */
 function AiProjectMemberCard({ project }: { project: AiProject }) {
   const { t } = useI18n()
   const files = project.files ?? []
@@ -118,7 +118,7 @@ function AiProjectMemberCard({ project }: { project: AiProject }) {
   )
 }
 
-/** J2-3 — 이번 답변에서 권한이 없어 빠진 지식 파일 */
+/** 이번 답변에서 권한이 없어 빠진 지식 파일 */
 export function AiKnowledgeSkipped({ files }: { files: AiProjectFile[] }) {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
@@ -143,7 +143,7 @@ export function AiKnowledgeSkipped({ files }: { files: AiProjectFile[] }) {
   )
 }
 
-/** J2-6 — 공유가 끊긴 프로젝트(구성원 쪽) */
+/** 공유가 끊긴 프로젝트(구성원 쪽) */
 export function AiProjectGone() {
   const { t } = useI18n()
   return <UiEmptyState variant="panel" icon="ban" title={t('ai.project.goneTitle')} description={t('ai.project.goneDesc')} />
@@ -260,7 +260,7 @@ export function AiProjectFormModal({ initial, title, onSubmit, onClose, startPic
 interface ShareTarget { id: string; name: string; members?: number }
 interface ShareCheck { members: number; blocked_members: number; files: { id: string; name: string; blocked: number }[] }
 
-/** J2-1 공유 — 내가 속한 그룹(여러 개) + 못 읽는 파일 경고. 빈 선택으로 저장 = 공유 해제 */
+/** 공유 — 내가 속한 그룹(여러 개) + 못 읽는 파일 경고. 빈 선택으로 저장 = 공유 해제 */
 export function AiProjectShareModal({ project, onSubmit, onClose }: {
   project: AiProject
   onSubmit: (groupIds: string[]) => Promise<void> | void

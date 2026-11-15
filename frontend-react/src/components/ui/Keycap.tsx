@@ -1,5 +1,5 @@
 /**
- * 키캡(11-B8): 하나로 통일 — 높이 20, 좌우 패딩 5, 10px mono 600, bg-muted.
+ * 키캡: 하나로 통일 — 높이 20, 좌우 패딩 5, 10px mono 600, bg-muted.
  * 팰릿·메뉴·상단바·단축키 도움말 모두 20. 툴팁 안(반전색 바탕)만 18 테두리형.
  */
 import type { HTMLAttributes, ReactNode } from 'react'

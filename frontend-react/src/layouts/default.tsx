@@ -65,13 +65,13 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
   // 데스크톱 셸(Electron) 0.5.0+ 는 창 테두리만 그리고 껍데기는 전부 웹이 그린다.
   // 자체 레일·상단바가 있던 옛 셸(0.5.0 미만)에서만 웹 껍데기를 숨긴다 — 두 벌이 되지 않게.
   const { isDesktopShell, shellHidesWebChrome: hideChrome } = useDesktopShell()
-  // 나를 부른 것 수 → 탭 제목·파비콘(R-23)
+  // 나를 부른 것 수 → 탭 제목·파비콘
   useAttention()
   // 셸 전역 열림 상태(활동 패널·단축키·팰릿) + 밀도 적용 + 최근 방문 기록
   const { commandPaletteOpen } = useShell()
   useUserPrefs()
   const { flat } = useNav()
-  // Shell Handoff: 하단 탭바는 '목록'에선 유지, detail(대화/본문)·통화에서만 숨긴다.
+  // 하단 탭바는 '목록'에선 유지, detail(대화/본문)·통화에서만 숨긴다.
   // 각 페이지가 detail 열림을 useSharedState('mobile-detail-open')로 셸에 알린다.
   const [detailOpen] = useSharedState<boolean>('mobile-detail-open', () => false)
   // 하단을 컨트롤이 쓰는 화면 — 탭바를 숨긴다.
@@ -81,10 +81,10 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
   const inCall = route.path.startsWith('/meetings/room/') ||
     platformModules.some(m => m.type === 'plugin' && m.fullscreen && route.path.startsWith(m.route))
   const hideBottomNav = detailOpen || inCall
-  // 미니 통화 창(P-8): 회의 화면을 떠나도 통화가 이어지면 데스크톱은 떠 있는 창, 모바일은 상단 36 초록 띠.
+  // 미니 통화 창: 회의 화면을 떠나도 통화가 이어지면 데스크톱은 떠 있는 창, 모바일은 상단 36 초록 띠.
   const { visible: miniCallVisible, returnPath: callReturnPath, setReturnPath: setCallReturnPath, inCall: callActive } = useMeetingCall()
   const callBand = miniCallVisible && isMobile && !!user
-  // 음성 채널 접속 바(handover-20 답 §5.2 — 사이드바 하단): 세션(useVoice)이 앱 수준이라 화면을 옮겨도 이어진다.
+  // 음성 채널 접속 바(사이드바 하단): 세션(useVoice)이 앱 수준이라 화면을 옮겨도 이어진다.
   // 데스크톱: 채팅 목록 사이드바가 그리는 동안(barHosts>0)은 그쪽, 아니면 셸 사이드바 하단(레일이면 세로 compact).
   // 모바일: 하단 탭 바 바로 위. 데스크톱 셸(Electron, 웹 사이드바 없음)은 채팅 계정 패널이 그리는 동안(barHosts>0)은 그쪽,
   // 아니면(다른 화면·목록 접힘·옛 셸) 본문 아래 한 줄로 남긴다.
@@ -115,7 +115,7 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
   // 페이지가 모바일 자체 머리를 선언하면(useOwnMobileHeader · routes.ts ownMobileHeader · LayoutMobileDetailBar)
   // 모바일 공용 상단바를 숨긴다 — 제목이 두 번 보이지 않게.
   const ownMobileHeader = useOwnMobileHeaderActive()
-  // 데스크톱에서 페이지 머리가 상단바 자리를 맡는 화면(채팅 — handover-21 §5.3: 위쪽 크롬 = 채널 머리 48 하나)
+  // 데스크톱에서 페이지 머리가 상단바 자리를 맡는 화면(채팅 — 위쪽 크롬 = 채널 머리 48 하나)
   const noDesktopTopbar = !isMobile && !!route.meta.noDesktopTopbar
   const showTopBar = !!user && !hideChrome && !(isMobile && ownMobileHeader) && !noDesktopTopbar
 
@@ -124,7 +124,7 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
   const [dismissedText, setDismissedText] = useState<string | null>(readDismissed)
   const announcementDismissed = dismissedText === announcement
 
-  // Ctrl+K 전환기 · Ctrl+\ 사이드바 고정 · Ctrl+/ 단축키 도움말 (원칙 3)
+  // Ctrl+K 전환기 · Ctrl+\ 사이드바 고정 · Ctrl+/ 단축키 도움말
   useEventListener(typeof document !== 'undefined' ? document : null, 'keydown', (e: KeyboardEvent) => {
     if (!authStore.getState().user) return
     const mod = e.metaKey || e.ctrlKey
@@ -186,7 +186,7 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
       if (isZoneInstalled('ai')) {
         // AI 쓰기 승인 대기 건수(레일 배지·토스트) — 처음 값 + 같은 소켓의 approvals.count 이벤트
         ensureApprovals()
-        // AI 결과물 묶음 진행·완료 토스트(S4) — 같은 소켓의 ai.artifact_job 이벤트
+        // AI 결과물 묶음 진행·완료 토스트 — 같은 소켓의 ai.artifact_job 이벤트
         ensureAiArtifacts()
       }
     })()
@@ -225,7 +225,7 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
 
       {/* 우측: 상단바 + 배너 + 본문 + (모바일)하단탭바. relative — 활동 패널(400)이 이 안 오른쪽에 붙는다 */}
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* 모바일 통화 띠(P-8): 상태 표시줄(safe-area) 바로 아래 → 그 아래 상단바. 띠가 있으면 노치 여백은 띠 위에서 한 번만. */}
+        {/* 모바일 통화 띠: 상태 표시줄(safe-area) 바로 아래 → 그 아래 상단바. 띠가 있으면 노치 여백은 띠 위에서 한 번만. */}
         {callBand && !hideChrome && <div className="shrink-0 bg-background" style={{ height: 'env(safe-area-inset-top)' }} aria-hidden="true" />}
         {/* 미니 통화 창: 모바일은 이 자리에 띠로 끼고, 데스크톱은 fixed 라 흐름을 차지하지 않는다 */}
         {user && miniCallVisible && <LayoutMiniCall mobile={isMobile} />}
@@ -238,7 +238,7 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
 
         {/* Announcement banner */}
         {announcement && !announcementDismissed && (
-          // 낮은 창(실효 높이 < 760)에선 띠를 36 으로(handover 14 답 4)
+          // 낮은 창(실효 높이 < 760)에선 띠를 36 으로
           <div className={cn('border-b px-4 py-2 text-sm flex items-center gap-2 low:h-9 low:py-0', announcementClasses)}>
             <UiIcon name="info" className="h-4 w-4 flex-shrink-0" />
             <span className="flex-1">{announcement}</span>
@@ -278,7 +278,7 @@ export function DefaultLayout({ children }: { children?: ReactNode }) {
       {commandPaletteOpen && <CommandPalette onClose={() => setCommandPaletteOpen(false)} />}
       <AiArtifactToasts />
       {user && <LayoutShortcutsModal />}
-      {/* 하이레조 장치 독점 확인(handover-20) — 데스크톱 앱이 confirmHiresExclusive 로 연다 */}
+      {/* 하이레조 장치 독점 확인 — 데스크톱 앱이 confirmHiresExclusive 로 연다 */}
       {user && <VoiceHiresDialog />}
     </div>
   )

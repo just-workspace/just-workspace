@@ -1,6 +1,6 @@
 /* 위키 전역 스타일 — Vue pages/wiki.vue · components/wiki/WikiCollabEditor.vue 의 <style>(scoped 아님) 그대로 */
 
-/* 기록 미리보기 변경 표시(시안 WK3): 추가 = success 밑줄+틴트, 삭제 = danger 취소선+틴트 */
+/* 기록 미리보기 변경 표시: 추가 = success 밑줄+틴트, 삭제 = danger 취소선+틴트 */
 .wiki-diff ins { text-decoration: underline; text-decoration-color: hsl(var(--success)); background: hsl(var(--success) / 0.15); }
 .wiki-diff del { text-decoration: line-through; text-decoration-color: hsl(var(--danger)); background: hsl(var(--danger) / 0.15); }
 .wiki-body h1, .wiki-body h2, .wiki-body h3 { scroll-margin-top: 16px; }
@@ -21,7 +21,7 @@
 .wiki-collab-editor .ProseMirror td, .wiki-collab-editor .ProseMirror th { border: 1px solid hsl(var(--border)); padding: 4px 8px; }
 .wiki-collab-editor .ProseMirror th { background: hsl(var(--muted)); }
 .wiki-collab-editor .ProseMirror .selectedCell { background: hsl(var(--primary) / 0.13); }
-/* 함께 편집 중인 사람의 커서(시안 WK2): 2px 세로선 + 위에 이름표 10/600.
+/* 함께 편집 중인 사람의 커서: 2px 세로선 + 위에 이름표 10/600.
    TipTap v3 CollaborationCaret 클래스(collaboration-carets__*). 선택 영역은 y-tiptap 기본 ProseMirror-yjs-selection */
 .wiki-collab-editor .collaboration-carets__caret {
   position: relative;

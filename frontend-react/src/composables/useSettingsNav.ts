@@ -1,5 +1,5 @@
 /**
- * /settings/* (개인) 와 /admin/* (관리) 좌측 내비 정의 + "설정 찾기" 검색 색인(시안 SettingsPage·AdminPage, 10-6 ⑥).
+ * /settings/* (개인) 와 /admin/* (관리) 좌측 내비 정의 + "설정 찾기" 검색 색인.
  * 색인은 클라이언트 전용 — 항목 이름·키워드로 걸러 해당 페이지로 보낸다. 서버 검색 없음.
  * (Vue 판 composables/useSettingsNav.ts 그대로)
  *
@@ -66,14 +66,14 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
           { to: '/settings/chat', ...L('shell.settingsNav', 'chat'), module: 'chat' },
           { to: '/settings/ai', ...L('shell.settingsNav', 'ai'), zone: 'ai' },
         ] as SettingsNavItem[] },
-        // AI 하위(시안 H1 좌 내비 "AI" 묶음) — 메모리 · AI 연동(MCP)
+        // AI 하위("AI") — 메모리 · AI 연동(MCP)
         { label: t('shell.settingsNav.group.ai'), items: [
           { to: '/settings/ai/memory', ...L('shell.settingsNav', 'aiMemory'), zone: 'ai' },
           { to: '/settings/ai/mcp', ...L('shell.settingsNav', 'aiMcp'), zone: 'ai' },
         ] as SettingsNavItem[] },
       ].map(g => ({ ...g, items: g.items.filter(shown) })).filter(g => g.items.length)
     }
-    // 관리(시안 AdminPage nav · 관리 1 ②): 설정 9카드를 항목으로 쪼개고 /admin/system 은 "서비스 상태"로 흡수.
+    // 관리: 설정 9카드를 항목으로 쪼개고 /admin/system 은 "서비스 상태"로 흡수.
     // 보조 글자는 운영 요약(useAdminOps)에서: 승인 대기 n(경고) · SSL D-n(30일 이하 경고) · 서비스 n/n.
     const o = ops
     const pendingMeta = o.pending ? { meta: String(o.pending), metaTone: 'warning' as const } : {}
@@ -100,7 +100,7 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
         { to: '/admin/ai', ...L('shell.adminNav', 'ai'), zone: 'ai' },
         { to: '/admin/app-build', ...L('shell.adminNav', 'appBuild') },
       ] },
-      // 격리 브라우저는 따로 묶는다(r22) — 사용자 메뉴(레일·탭·팔레트)에는 없고, 사용자는 전용 출처(rbi.<도메인>)로 바로 들어간다
+      // 격리 브라우저는 따로 묶는다 — 사용자 메뉴(레일·탭·팔레트)에는 없고, 사용자는 전용 출처(rbi.<도메인>)로 바로 들어간다
       { label: t('shell.adminNav.group.rbi'), items: [
         { to: '/admin/rbi', ...L('shell.adminNav', 'rbi'), zone: 'rbi' },
       ] },

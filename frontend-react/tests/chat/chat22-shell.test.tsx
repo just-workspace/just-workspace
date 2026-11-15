@@ -1,4 +1,4 @@
-// handover-22 셸(SHELL) — 오른쪽 자리·모바일 단계·멤버 묶음·사람별 음량·PTT 키·현지 시각 + 멤버 열·음량 카드·머리 토글
+// 채팅 셸(SHELL) — 오른쪽 자리·모바일 단계·멤버 묶음·사람별 음량·PTT 키·현지 시각 + 멤버 열·음량 카드·머리 토글
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act, fireEvent, screen } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'

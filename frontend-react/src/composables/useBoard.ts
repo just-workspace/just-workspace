@@ -49,7 +49,7 @@ export interface PostSummary {
   created_at: string
   updated_at: string
   board_name?: string
-  /** 안 읽음 표시(시안 BD2 굵게). 목록·인덱스 카드·내가 쓴 글 응답에 붙는다(검색·북마크엔 없다 → 필독 기준) */
+  /** 안 읽음 표시. 목록·인덱스 카드·내가 쓴 글 응답에 붙는다(검색·북마크엔 없다 → 필독 기준) */
   is_read?: boolean
 }
 

@@ -6,7 +6,7 @@ import DOMPurify from 'dompurify'
 // 채널 전원을 부르는 말. 백엔드 app/chat/service.py GROUP_MENTIONS 와 같아야 한다.
 export const GROUP_MENTIONS = new Set(['channel', 'all', 'here', 'everyone', '채널', '전체', '모두'])
 
-/** 이 본문이 나(username)·채널 전원·내 역할(roleKeys = 내 역할의 mention 키)을 불렀나 — 메시지 행 강조(R-26 · handover-22). */
+/** 이 본문이 나(username)·채널 전원·내 역할(roleKeys = 내 역할의 mention 키)을 불렀나 — 메시지 행 강조. */
 export function mentionsMe(raw: string, me?: string | null, roleKeys?: readonly string[] | null): boolean {
   if (!raw) return false
   const re = /(^|\s)@([\p{L}\p{N}_](?:[\p{L}\p{N}_.-]*[\p{L}\p{N}_])?)/gu   // 서버 MENTION_RE 와 같게: 한글 이름 + 사이의 . - (first-last), 끝의 . - 는 문장부호
@@ -50,7 +50,7 @@ export function renderChatMarkdown(raw: string, opts: { me?: string | null } = {
   // 7) 기울임 *..* / _.._
   text = text.replace(/(^|[^*\w])\*([^\s*][^*\n]*?)\*(?!\*)/g, '$1<em>$2</em>')
   text = text.replace(/(^|[^_\w])_([^\s_][^_\n]*?)_(?![_\w])/g, '$1<em>$2</em>')
-  // 8) @멘션 — 나·채널 전원은 강조 칩, 다른 사람은 일반(채팅 시안, R-26)
+  // 8) @멘션 — 나·채널 전원은 강조 칩, 다른 사람은 일반(채팅 시안)
   text = text.replace(/(^|\s)@([\p{L}\p{N}_](?:[\p{L}\p{N}_.-]*[\p{L}\p{N}_])?)/gu, (_m, pre: string, name: string) => {
     const cls = GROUP_MENTIONS.has(name.toLowerCase())
       ? 'chat-mention chat-mention-group'
@@ -75,7 +75,7 @@ export function renderChatMarkdown(raw: string, opts: { me?: string | null } = {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
-// handover-22 · Rich22 마크다운 — 구조 파서(AST). 그리기는 components/chat/ChatMarkdown.tsx(React 가 글자를 이스케이프 →
+// 마크다운 — 구조 파서(AST). 그리기는 components/chat/ChatMarkdown.tsx(React 가 글자를 이스케이프 →
 // innerHTML 을 쓰지 않으니 XSS 경로가 없다. 링크 주소는 http(s) 만). renderChatMarkdown(HTML 문자열)은 다른 화면(고정 목록 ·
 // 모아보기 · 음성 글 채팅)이 그대로 쓰므로 남겨 둔다.
 //  블록: # h1 · ## h2 · ### h3 · -# 작은 글 · - / * / 1. 목록(앞 공백 2칸 = 한 단계) · > 인용 · >>> 여러 줄 인용 · ```lang 코드```
@@ -105,7 +105,7 @@ export type MdBlock =
   | { t: 'quote'; c: MdBlock[] }
   | { t: 'code'; lang: string; code: string }
 
-/** 코드 블록이 이 줄 수를 넘으면 접는다(Rich22 "20줄 넘으면 접힘") */
+/** 코드 블록이 이 줄 수를 넘으면 접는다("20줄 넘으면 접힘") */
 export const CODE_FOLD_LINES = 20
 
 const NAME_RE = /[\p{L}\p{N}_](?:[\p{L}\p{N}_.-]*[\p{L}\p{N}_])?/uy

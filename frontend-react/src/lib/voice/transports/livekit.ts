@@ -1,5 +1,5 @@
 /**
- * LiveKit(WebRTC Opus) 전송 — 음성·음악 단계(handover-20 Tier 1·2). VoiceTransport 구현.
+ * LiveKit(WebRTC Opus) 전송 — 음성·음악 단계. VoiceTransport 구현.
  *
  *  · 캡처·publish 옵션은 lib/voice/opus.ts 레시피, answer 의 cbr/useinbandfec 는 lib/voice/sdp.ts 로 강제.
  *  · 단계를 바꾸면 마이크 트랙을 새로 만들어 다시 publish 한다(제약·stereo 는 트랙 생성 때 정해진다).
@@ -80,7 +80,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
   }
 
   /**
-   * 사람별 음량(handover-22 Pop22 · 0..2 = 0–200%) — 나만 듣는 음량. 1 이하는 <audio>.volume, 1 을 넘으면
+   * 사람별 음량(0..2 = 0–200%) — 나만 듣는 음량. 1 이하는 <audio>.volume, 1 을 넘으면
    * 그 트랙을 WebAudio GainNode 로 돌려 키운다(요소는 음소거한 채 붙여 둔다 — 크롬은 원격 WebRTC 소리가 요소에 붙어 있어야 흐른다).
    */
   setParticipantGain(identity: string, gain: number): void {
@@ -298,7 +298,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
       track = await lk.createLocalAudioTrack({ ...captureFor(cfg, false), ...(this.monoFallback ? { channelCount: 1 } : {}) })
       this.micDenied = false
     } catch (e) {
-      // 권한 없음·장치 없음 — 들어가는 건 막지 않는다(handover-20 "권한 없음": 듣기만으로 접속). 그 밖의 오류는 그대로 던진다
+      // 권한 없음·장치 없음 — 들어가는 건 막지 않는다("권한 없음": 듣기만으로 접속). 그 밖의 오류는 그대로 던진다
       if (isMicUnavailable(e)) { this.micDenied = true; this.emit('peers', this.peers()); return }
       throw e
     }

@@ -1,4 +1,4 @@
-// S6a AI 대화 기본기: 진행 단계(펼침/접힘·실패), 출처 칩 + 본문 [n], 피드백(대화 첨부 기본 꺼짐), 이어서 받기,
+// AI 대화 기본기: 진행 단계(펼침/접힘·실패), 출처 칩 + 본문 [n], 피드백(대화 첨부 기본 꺼짐), 이어서 받기,
 // 수식(KaTeX)이 코드블록을 건드리지 않음. $fetch 와 fetch(스트림)는 가짜.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react'

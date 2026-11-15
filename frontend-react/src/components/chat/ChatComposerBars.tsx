@@ -1,10 +1,10 @@
 /**
- * 컴포저 위 띠 32(handover-22 "컴포저" · 시안 Chat22 #reply #c-edit #everyone, Mob22 #m-reply).
+ * 컴포저 위 띠 32.
  * 카드 위에 붙고(위 모서리만 radius 8, 아래 테두리 없음) 카드는 아래 모서리만 둥글다 — 디스코드 stackedBars.
  * - 답장: reply 아이콘 · "○○ 님에게 답장 중" · @ 켬/끔 스위치(role=switch, 바꾼 값은 사람마다 기억 — 부모가 저장) · ✕(Esc)
  * - 수정: edit-3 · "메시지 수정 중" · "Esc 취소 · Enter 저장" · ✕
  * - @everyone/@here 확인: warning 톤 · alert-triangle · "@everyone — 이 채널 멤버 N명에게 알림이 갑니다" · "Enter를 한 번 더 누르면 보냅니다"
- * 모바일: 둥근 muted 띠 40, 스위치·✕ 44 터치(Mob22).
+ * 모바일: 둥근 muted 띠 40, 스위치·✕ 44 터치.
  */
 import { clsx as cn } from 'clsx'
 import { useI18n } from '~/i18n'

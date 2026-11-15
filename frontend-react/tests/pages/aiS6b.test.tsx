@@ -1,4 +1,4 @@
-// S6b AI 대화 기본기 2: 답변 버전(◀ n/N ▶·질문 수정), 임시 대화(배너·사이드바·만들기), 프로젝트(카드·구성원 읽기 전용),
+// AI 대화 기본기 2: 답변 버전(◀ n/N ▶·질문 수정), 임시 대화(배너·사이드바·만들기), 프로젝트(카드·구성원 읽기 전용),
 // 메모리 저장 알림 [취소] + 설정 화면 비밀 거부, 첨부(단계·실패 코드), 사이드바 서버 검색. $fetch·fetch·업로드는 가짜.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react'

@@ -63,7 +63,7 @@ const api = {
   setFormat(f: Partial<LosslessFormat>) { session?.setFormat(f) },
   async leave() { await session?.leave(); session = null },
   async probeCapture() {
-    // 96 kHz 요청 시 장치가 실제로 주는 값(연구 §3.2 미검증 항목)
+    // 96 kHz 요청 시 장치가 실제로 주는 값(미검증 항목)
     const out: Record<string, unknown> = {}
     for (const rate of [96000, 48000]) {
       try {

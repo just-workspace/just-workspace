@@ -1,14 +1,14 @@
 /**
- * 초대 링크 입장(시안 MT4·MT5 · MTM2·MTM3 · 결정 회의 4·5·6·7). Vue 판 pages/meetings/join/[token].vue 그대로.
- *  setup   — 참가 전 화면(MeetingsDeviceSetup, handover 19): 왼쪽 미리보기 + 장치 바, 오른쪽 방 정보 · 표시 이름(기억) · 비밀번호(보기 토글) → [참가 신청]
+ * 초대 링크 입장. Vue 판 pages/meetings/join/[token].vue 그대로.
+ *  setup   — 참가 전 화면(MeetingsDeviceSetup): 왼쪽 미리보기 + 장치 바, 오른쪽 방 정보 · 표시 이름(기억) · 비밀번호(보기 토글) → [참가 신청]
  *            버튼은 이름이 비었을 때만 잠기고(guestJoinLock) 이유를 버튼 아래에 쓴다.
  *  waiting — [참가 신청] 자리의 primary 띠(스피너 · 경과 · 취소 — 설정 화면이 그린다). 미리보기·장치는 살아 있다(승인 즉시 그대로 입장).
  *  room    — 통화(기존 그대로 — LiveKit 통화 중 기능은 손대지 않는다)
- *  invalid · denied · error · ended · wrongpw — 결과 화면 1틀(MeetingsResultScreen = MTM3 회의 머리 틀 · 데스크톱 MT4 왼쪽 패널, 11 답 D5)
+ *  invalid · denied · error · ended · wrongpw — 결과 화면 1틀(MeetingsResultScreen = 모바일 회의 머리 틀 · 데스크톱 왼쪽 패널)
  *    invalid  링크 만료(서버 410 이면 "'회의'는 10월 15일 16:00에 끝났습니다") + [호스트에게 알리기][로그인]
  *    denied   "박민지 님이 이번 입장 요청을 받지 않았습니다" + [다시 요청][닫기]
  *    ended    "'회의' · 58분 · 참가 6명 · 파일·채팅은 #채널에" + [회의 목록으로][다시 참여]
- *             손님(로그인 안 함)은 버튼 대신 "이 창을 닫아도 됩니다"(답변서 A8). 데스크톱 오른쪽 stage = "이번 회의" 요약
+ *             손님(로그인 안 함)은 버튼 대신 "이 창을 닫아도 됩니다". 데스크톱 오른쪽 stage = "이번 회의" 요약
  *             (손님은 참가·시각만 — MeetingsEndSummary guest)
  *    wrongpw  제목 = 회의 이름, 비밀번호 입력 + 아래 오류 "비밀번호가 맞지 않습니다 · 2번 남음" + [다시 시도]
  *  비밀번호 틀림 화면으로 넘어갈 때 장치 선택을 받아 두고 미리보기를 끈다(다시 시도로 맞히면 그 선택으로 입장).
@@ -571,7 +571,7 @@ function MeetingJoin() {
       </div>
     )
   } else if (step === 'invalid') {
-    /* 링크 만료·잘못됨(MTM3 · D5a meetEnded) */
+    /* 링크 만료·잘못됨(D5a meetEnded) */
     body = (
       <MeetingsResultScreen icon="clock" tone="warning" title={t('meetings.join.expiredTitle')} description={expiredDesc}>
         <UiButton size="lg" className="h-12 w-full rounded-lg text-[15px] font-semibold" disabled={notifyState !== 'idle'} onClick={() => void notifyHost()}>
@@ -591,7 +591,7 @@ function MeetingJoin() {
       </MeetingsResultScreen>
     )
   } else if (step === 'ended') {
-    /* 회의에서 나옴(D5c meetOver · R12Misc meetEnd) */
+    /* 회의에서 나옴(D5c meetOver) */
     const res = stats.result
     const range = res?.startedAt && res.endedAt ? `${hhmmOf(new Date(res.startedAt))}–${hhmmOf(new Date(res.endedAt))}` : undefined
     body = (

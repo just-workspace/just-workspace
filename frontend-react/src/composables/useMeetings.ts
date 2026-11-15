@@ -32,7 +32,7 @@ export interface MeetingRoomInfo {
   is_host: boolean
   pending_count: number
   has_password?: boolean
-  /** 목록 "호스트 이름"·예정/진행 중/지난 묶기(시안 MT1) */
+  /** 목록 "호스트 이름"·예정/진행 중/지난 묶기 */
   host_name?: string
   scheduled_at?: string | null
   duration_minutes?: number | null
@@ -221,7 +221,7 @@ export const setMeetingsState = (p: Partial<MeetingsState>) => set(p)
 export const setIsHost = (v: boolean) => set({ isHost: v })
 export const setMeetingsError = (v: string | null) => set({ error: v })
 
-// ─── 앱 수준 통화 세션(미니 통화 창 P-8) ───
+// ─── 앱 수준 통화 세션(미니 통화 창) ───
 // 예전엔 접속 정보·재입장 타이머·화면 꺼짐 방지가 useMeetings() 를 부른 컴포넌트(회의 화면)에 묶여 있어서
 // 화면을 떠나면 같이 사라졌다. 통화는 한 번에 하나뿐이므로 모듈 단위로 올려, 회의 화면을 떠나
 // 다른 화면으로 가도(미니 창) 끊김 재입장·화면 꺼짐 방지·창 닫기 퇴장이 계속 돈다.

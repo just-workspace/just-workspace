@@ -1,9 +1,9 @@
 /**
- * 화면 배율·실효 크기(handover 14 답 1) — 앱 전역 하나.
+ * 화면 배율·실효 크기 — 앱 전역 하나.
  *
  * - 배율은 루트 한 곳(<html> 의 CSS zoom)에 건다. 레이아웃 판단은 배율 뒤의 실효 폭·높이로만 한다(lib/fluid).
  * - 자동 = min(폭 구간, 높이 구간). 설정 › 표시 › 화면 크기(자동·100·125·150·200·300%)로 바꿀 수 있다.
- *   실효 폭이 1280 미만이 되는 배율은 고를 수 없고, 화면이 바뀌어 벗어나면 자동으로 되돌린다 + 토스트(handover 16 답 9).
+ *   실효 폭이 1280 미만이 되는 배율은 고를 수 없고, 화면이 바뀌어 벗어나면 자동으로 되돌린다 + 토스트.
  *   기기별(localStorage ws.uiScale) — 계정 동기화 안 함.
  * - 모바일(<768)엔 배율을 쓰지 않는다.
  * - zoom 아래에서 vh·dvh·vw 는 배율만큼 커진다 → 빌드 때 postcss(viewportZoomUnits)가 `÷ var(--ui-zoom)` 로 바꾼다.
@@ -78,7 +78,7 @@ function notifyReverted(tries = 0) {
 }
 
 function update(pref = viewportStore.getState().pref) {
-  // 화면이 바뀌어 고른 배율이 범위를 벗어나면(실효 폭 < 1280) 자동으로 되돌린다(handover 16 답 9)
+  // 화면이 바뀌어 고른 배율이 범위를 벗어나면(실효 폭 < 1280) 자동으로 되돌린다
   if (!uiScaleAllowed(pref, window.innerWidth)) {
     pref = 'auto'
     try { localStorage.setItem(KEY, 'auto') } catch { /* 이번 세션만 */ }

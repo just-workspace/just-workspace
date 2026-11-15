@@ -1,5 +1,5 @@
 /**
- * 댓글 한 개(시안 BD3 · 결정 4 "1단 답글 + @멘션, 아바타 24 통일") — Vue 판 components/board/BoardCommentItem.vue 이식.
+ * 댓글 한 개("1단 답글 + @멘션, 아바타 24 통일") — Vue 판 components/board/BoardCommentItem.vue 이식.
  *  아바타 24 · 이름 600 + 시각 mono 11 · 본문 14/1.6(@언급 = accent 바탕 칩) · 행동 줄 12/600 muted(답글 · 수정 · 삭제)
  *  답글은 같은 열 안쪽(아바타 옆)에 이어 붙는다. 답글의 답글은 없다(1단).
  */

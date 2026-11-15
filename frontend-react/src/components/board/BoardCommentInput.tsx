@@ -1,7 +1,7 @@
 /**
- * 댓글 입력(시안 BD3 바닥 · BM2 하단 고정 바) — Vue 판 components/board/BoardCommentInput.vue 이식.
+ * 댓글 입력(하단 고정 바) — Vue 판 components/board/BoardCommentInput.vue 이식.
  * 테두리 input · rounded-xl(12) · min 44 · card 바탕, 자리표시 "댓글 달기 — @로 언급", 오른쪽 등록 32(primary, 비면 50%). Ctrl/⌘+Enter 로 등록.
- * @멘션 자동완성(06-3 결정 4 "멘션 칩은 채팅과 같은 규칙"): "@" 뒤 글자로 GET /api/board/mention-users 를 찾아
+ * @멘션 자동완성("멘션 칩은 채팅과 같은 규칙"): "@" 뒤 글자로 GET /api/board/mention-users 를 찾아
  * 채팅 컴포저와 같은 후보 목록(아바타 24 · 이름 · @아이디)을 입력 위에 띄운다. ↑↓ 고르기, Enter/Tab 넣기, Esc 닫기.
  * 넣으면 "@아이디 " — 서버가 저장할 때 해석해 멘션 알림을 보낸다(댓글 mentions[]).
  */

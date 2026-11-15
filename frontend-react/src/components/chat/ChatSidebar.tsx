@@ -1,5 +1,5 @@
 /**
- * 채팅 사이드바(handover-21+22 "디스코드와 동등" · 시안 Chat22 #list #voice #cat-* #drag* #mute-menu · Mob22 #m-list #m-order).
+ * 채팅 사이드바.
  * 데스크톱: 머리 48(워크스페이스 이름 + chevron-down 메뉴 · 오른쪽 32 아이콘 3개 = 내 스레드·임시 저장·저장한 메시지, 새 글 = danger 점)
  *   → 구역(분류 없음 · 사용자 카테고리 · 시스템 "보관된 프로젝트" · 다이렉트 메시지, useChatLayout.buildSections)
  *   → 맨 아래 계정 패널(SHELL 의 ChatAccountPanel — 음성 접속 줄 포함).
@@ -83,7 +83,7 @@ export function ChatSidebar({ onNavigate, onSearch }: ChatSidebarProps) {
   const chat = useChat()
   const { channels, selectedChannelId, loadingChannels, channelsError, threadUnread, drafts } = chat
   const collection = useStore(chatUiStore, s => s.collection)
-  // 머리 이름 = 채팅 서버 설정 이름(Settings22 개요), 비면 사이트 이름 — SETTINGS 연결
+  // 머리 이름 = 채팅 서버 설정 이름, 비면 사이트 이름 — SETTINGS 연결
   const appName = useChatServerName()
   const isMobile = useIsMobile()
   const myVoiceId = useStore(voiceStore, s => s.channelId)
@@ -131,7 +131,7 @@ export function ChatSidebar({ onNavigate, onSearch }: ChatSidebarProps) {
     await chat.selectChannel(id)
     onNavigate?.()
   }
-  // 음성 채널(handover-20): 누르면 바로 들어가고(벨 없음) 본문도 그 채널로. 실패는 세션이 토스트로 알린다.
+  // 음성 채널: 누르면 바로 들어가고(벨 없음) 본문도 그 채널로. 실패는 세션이 토스트로 알린다.
   async function onVoice(id: string) {
     void chat.selectChannel(id)
     onNavigate?.()

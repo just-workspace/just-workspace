@@ -1,5 +1,5 @@
 // Vue 원본: frontend/components/chat/ChatThreadSummary.vue
-// 메시지 아래 스레드 칩(handover-22 · 시안 Chat22 r.thread): 32 높이 rounded-lg 1px bg-card px-10 · 13 —
+// 메시지 아래 스레드 칩: 32 높이 rounded-lg 1px bg-card px-10 · 13 —
 //   threads 16 muted · 스레드 이름(primary 600, 이름 없으면 “원문 첫 40자” 기울임) · "답글 N개 · 10분 전"(muted)
 //   · 참여자 아바타 18 겹침(있으면, 이름 앞) · 보관됨이면 archive 아이콘.
 // 메타(이름·보관·답글 수·마지막 시각)는 서버가 루트 메시지에 붙인 thread(ThreadMeta), 옛 서버면 reply_count·last_reply_at.

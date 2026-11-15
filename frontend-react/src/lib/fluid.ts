@@ -1,5 +1,5 @@
 /**
- * 유동 레이아웃 규칙(handover 14 답 · R14.dc.html renderVals 숫자 그대로) — 순수 함수만.
+ * 유동 레이아웃 규칙 — 순수 함수만.
  *
  * 원칙: 배율을 먼저 정하고, 레이아웃은 배율 뒤의 "실효 폭·높이"(CSS px ÷ 배율)로만 정한다.
  * 부품 px 값은 바꾸지 않는다 — 배율(루트 zoom)이 키운다.
@@ -23,7 +23,7 @@ export const UI_SCALE_CHOICES = ['auto', 100, 125, 150, 200, 300] as const
 export type UiScalePref = typeof UI_SCALE_CHOICES[number]
 
 /**
- * 수동 배율의 하한 — 배율 뒤 실효 폭이 이보다 작아지는 값은 고를 수 없다(handover 16 답 9).
+ * 수동 배율의 하한 — 배율 뒤 실효 폭이 이보다 작아지는 값은 고를 수 없다.
  * "자동"은 늘 고를 수 있다. 화면이 바뀌어 지금 값이 범위를 벗어나면 자동으로 되돌린다(useViewport).
  */
 export const UI_SCALE_MIN_WIDTH = 1280
@@ -85,14 +85,14 @@ export function railWideByDefault(width: number, portrait: boolean): boolean {
 export const DASH_COL_MAX = 520
 
 /**
- * 공식 예외 기준 — 가로 화면이라도 실효 폭이 이보다 작으면 대시보드는 2열(handover 16 답 8).
+ * 공식 예외 기준 — 가로 화면이라도 실효 폭이 이보다 작으면 대시보드는 2열.
  * 공식대로면 3열이 나오지만(하한 3) 1280 미만에선 카드 한 칸이 너무 좁아져 2열을 유지한다.
  */
 export const DASH_TWO_COL_BELOW = 1280
 
 /**
  * 열 = clamp(3, floor((본문 폭 − 56 + 20) / 400), 6). 세로 화면 2.
- * 공식 예외(디자이너 확정, handover 16 답 8): 가로 화면이고 실효 폭(effectiveWidth) < 1280 이면 2열.
+ * 공식 예외(디자이너 확정): 가로 화면이고 실효 폭(effectiveWidth) < 1280 이면 2열.
  * @param effectiveWidth 화면 실효 폭(레일 포함). 생략하면 예외를 보지 않는다(R14 표 계산용)
  */
 export function dashColumns(mainWidth: number, portrait: boolean, effectiveWidth?: number): number {
@@ -121,7 +121,7 @@ export function mailSideOpen(paneWidth: number, portrait: boolean): boolean {
 }
 
 // ── 채팅 ──
-// handover-22 셸(디스코드식 4열)부터 채팅 화면은 아래 유동 폭 대신 고정 폭을 쓴다:
+// 디스코드식 4열 셸부터 채팅 화면은 아래 유동 폭 대신 고정 폭을 쓴다:
 //   채널 목록 = 개인 설정 chatSidebarWidth(useUserPrefs CHAT_LIST_WIDTH 기본 298 · 199–367 드래그),
 //   오른쪽 자리 = utils/chatRightColumn RIGHT_COLUMN_WIDTH(멤버 264 · 400 · 음성 글 340), 1180 미만 덮개.
 // chatSideWidth · chatThreadDocked 는 R14 표 테스트(tests/lib/fluid)와 옛 화면 계산을 위해 남긴다.

@@ -1,5 +1,5 @@
 /**
- * 채팅 이모지 데이터 한 곳(handover-22 "이모지 피커" · 자동완성 `:` · 리액션 · 커스텀 이모지 관리).
+ * 채팅 이모지 데이터 한 곳(자동완성 `:` · 리액션 · 커스텀 이모지 관리).
  * COMPOSER 가 만들고 MESSAGES(리액션·본문 :name: 그림)·SETTINGS(커스텀 이모지 관리)도 쓴다.
  *
  * 데이터: emojibase-data(ko/compact.json — 한국어 이름·태그·분류·피부색, en/shortcodes/github.json — `:fire:` 같은 영어 이름).
@@ -45,7 +45,7 @@ export type EmojiHit =
   | { kind: 'custom'; key: string; custom: CustomEmoji }
 
 export type EmojiCategoryKey = 'recent' | 'custom' | 'people' | 'nature' | 'food' | 'activity' | 'travel' | 'objects' | 'symbols' | 'flags'
-/** 분류 탭(시안 Picker22 순서). groups = emojibase group 번호. i18n 이름은 chat.compose.emoji.cat.<key> */
+/** 분류 탭. groups = emojibase group 번호. i18n 이름은 chat.compose.emoji.cat.<key> */
 export const EMOJI_CATEGORIES: ReadonlyArray<{ key: EmojiCategoryKey; glyph: string; groups: number[] }> = [
   { key: 'recent', glyph: '🕘', groups: [] },
   { key: 'custom', glyph: '🚢', groups: [] },
@@ -58,7 +58,7 @@ export const EMOJI_CATEGORIES: ReadonlyArray<{ key: EmojiCategoryKey; glyph: str
   { key: 'symbols', glyph: '🔣', groups: [8] },
   { key: 'flags', glyph: '🏁', groups: [9] },
 ]
-/** 아직 쓴 이모지가 없을 때 "자주 쓴" 칸(시안 freq) */
+/** 아직 쓴 이모지가 없을 때 "자주 쓴" 칸 */
 export const DEFAULT_FREQUENT = ['👍', '👀', '🎉', '🔥', '✅', '🙏', '😂', '❤️', '🚀', '💯', '🤔', '👏', '😅', '🙌', '⏰', '📌', '🐛', '☕']
 /** 피부색 수식(1–5) */
 export const SKIN_MODIFIERS = ['\u{1F3FB}', '\u{1F3FC}', '\u{1F3FD}', '\u{1F3FE}', '\u{1F3FF}']

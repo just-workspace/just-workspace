@@ -1,8 +1,8 @@
 /**
- * 홈 대시보드 판(handover 17 답 1 · 시안 Dash17.dc.html #user #new #admin #edit) — 홈(/)과 관리 › 설정 › 대시보드가 같이 쓴다.
+ * 홈 대시보드 판 — 홈(/)과 관리 › 설정 › 대시보드가 같이 쓴다.
  *
  * 순서: (편집 띠) → 머리(인사·날짜 + 빠른 만들기 · 편집) → (공지 띠) → 오늘 브리핑 칩 → (관리자 운영 띠) → (시작하기 전폭) → 카드 판 → 비어 있는 카드.
- * 카드 판: 열 = lib/fluid dashColumns(R14·16 답 8), 최대 폭 열 × 520 가운데, grid-auto-rows 4px + dense,
+ * 카드 판: 열 = lib/fluid dashColumns, 최대 폭 열 × 520 가운데, grid-auto-rows 4px + dense,
  * 주 줄(내용 있는 카드끼리 같은 높이 — 빈 상태·AI 꺼짐은 자기 높이) + 보조 영역(카드마다 row span = ceil((본래 높이 + 20) / 4)) — 규칙은 lib/dashLayout.
  * 빈 카드: 주 줄 카드는 제자리 한 줄, 나머지는 그리지 않고 맨 아래 점선 상자 "비어 있는 카드 n"에 한 줄씩.
  *
@@ -194,7 +194,7 @@ export function DashboardHome({ mode = 'user' }: { mode?: 'user' | 'admin' }) {
   // 관리자 화면에서는 빈 카드도 자리를 보여 준다(배치를 정하는 화면이라)
   // 편집 중엔 빈 카드도 판에 그린다(관리자 모드와 같이) — 숨기면 카드 안 크기·숨기기 버튼을 쓸 수 없었다
   const empties = admin || editing ? [] : order.filter(isEmpty)
-  // 주 줄 같은 높이는 내용 있는 카드끼리만(빈 상태·AI 꺼짐·로딩·오류는 자기 높이 — handover 18 답 "추가")
+  // 주 줄 같은 높이는 내용 있는 카드끼리만(빈 상태·AI 꺼짐·로딩·오류는 자기 높이)
   const tierH = tierHeights(tier, heights, k => status[k]?.s === 'ready')
   const rowsOf = (k: CardKey) => rowSpanFor(tier.includes(k) ? (tierH[k] ?? 240) : (heights[k] ?? 200))
   const showStart = visible.includes('start') && defs.start.on

@@ -1,5 +1,5 @@
 /**
- * 게시판 인덱스(시안 BD1, 06-3 결정 2·5·6) + 보조 보기(필독 · 북마크 · 검색 결과).
+ * 게시판 인덱스 + 보조 보기(필독 · 북마크 · 검색 결과).
  * Vue 원본: frontend/pages/board/index.vue
  *  커맨드 바 44: "전체 게시판" | 검색(모든 게시판) + 글쓰기(게시판 고르기)
  *  2열 카드(rounded 12 · card): 머리(이름 14/600 · 전체 보기) + 최근 글 행 48(안 읽음 굵게 / 읽음 foreground·80 · 작성자 · 날짜 mono)
@@ -260,7 +260,7 @@ export default function BoardIndexPage() {
         </form>
       )}
 
-      {/* 데스크톱 커맨드 바(BD1) */}
+      {/* 데스크톱 커맨드 바 */}
       <BoardCommandBar
         searchPlaceholder={currentView === 'search' && searchScopeName ? t('board.search.inScope', { name: searchScopeName }) : t('board.search.allBoards')}
         searchValue={currentView === 'search' ? searchQ : ''}
@@ -316,7 +316,7 @@ export default function BoardIndexPage() {
               </>
             )
         ) : (
-          /* 인덱스(BD1) */
+          /* 인덱스 */
           <>
             {/* 모바일: 필독 콜아웃(데스크톱은 사이드바에 있다) */}
             {mustReadPosts.length > 0 && (

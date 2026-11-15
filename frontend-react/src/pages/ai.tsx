@@ -1,5 +1,5 @@
 // Vue 원본: frontend/pages/ai.vue
-// AI(코어 일반 AI 화면) — 시안 AI1~AI3(AiDesktop) · AIM1·AIM2(AiMobile) · 결정 노트 07 "AI 1~5".
+// AI(코어 일반 AI 화면).
 //  데스크톱: 사이드바 236(접기) + 대화 머리 44(제목 · 모델 피커 · 도구 N · 지침 · ⋯) + 본문 680 + 입력.
 //  모바일: 대화 목록(자체 머리 + FAB) → 대화(LayoutMobileDetailBar ‹ · 제목/모델·도구 · ⋯, 탭바 숨김).
 // 모델·도구 이름은 서버(/api/ai/status) 응답만 보인다.
@@ -8,11 +8,11 @@
 // 고친 뒤 새 객체로 바꿔 넣는다(_uid 로 찾음 — 목록이 비워졌으면 아무 일 없음, Vue 에서 떨어진 객체를 고치는 것과 같다).
 // 비동기 처리기는 "지금" 값이 필요해 상태마다 ref 를 같이 둔다(useLive).
 //
-// S6b(시안 C1·C2-3·D1·D2): 질문 수정 → 답변 버전(◀ n/N ▶, POST /messages/{id}/edit · /versions/{n}) ·
+// 질문 수정 → 답변 버전(◀ n/N ▶, POST /messages/{id}/edit · /versions/{n}) ·
 //  임시 대화(입력창 스위치 · 배너 · 사이드바 "임시 대화" · 나가거나 창을 닫으면 DELETE) · 프로젝트(카드·지침·지식 파일·공유) ·
 //  메모리 저장 알림 [취소] · 첨부(끌어다 놓기·붙여넣기·고르기, 올리는 중 → 변환 중 → 완료/실패 코드) · 서버 대화 검색.
 //
-// Wave5(시안 J1·J2·K1·C2-10): 프로젝트 편집 창(지식 파일 연결·피커 20개) · 여러 그룹 공유(못 읽는 파일 경고) ·
+// 프로젝트 편집 창(지식 파일 연결·피커 20개) · 여러 그룹 공유(못 읽는 파일 경고) ·
 //  구성원 머리 · 답변에서 빠진 지식 파일 줄 · 공유가 끊긴 프로젝트 · 모바일 목록 묶음 · 이미지 썸네일 ·
 //  이미지 못 읽는 모델이면 보내기 막힘 + [이미지 읽는 모델로 바꾸기](설정 › AI 기본 모델) · 보낸 첨부 미리보기 ·
 //  질문 수정 때 첨부 유지/빼기 · context_trimmed → 대화 맨 위 "앞부분 N개 메시지는 … 쓰지 않았습니다"(빠진 메시지 흐리게).
@@ -246,16 +246,16 @@ export default function Page() {
   const isMobileRef = useRef(isMobile)
   isMobileRef.current = isMobile
   const [conversations, setConversations, convsRef] = useLive<AiConv[]>([])
-  // S6b — 임시 대화·프로젝트·첨부
+  // 임시 대화·프로젝트·첨부
   const [tempConvs, setTempConvs, tempConvsRef] = useLive<AiConv[]>([])
   const [projects, setProjects] = useState<AiProject[]>([])
   const [project, setProject, projectRef] = useLive<AiProject | null>(null)
   const [tempMode, setTempMode, tempModeRef] = useLive(false)
   const [attachments, setAttachments, attachmentsRef] = useLive<AiAttachment[]>([])
   const [projectModal, setProjectModal] = useState<null | 'create' | 'edit' | 'share' | 'files'>(null)
-  // J2-6 — 공유가 끊긴 프로젝트(구성원 쪽, 그 프로젝트 id)
+  // 공유가 끊긴 프로젝트(구성원 쪽, 그 프로젝트 id)
   const [projectGone, setProjectGone] = useState<string | null>(null)
-  // C2-10 — 이번 답에서 길이 때문에 뺀 앞부분(대화 id 별)
+  // 이번 답에서 길이 때문에 뺀 앞부분(대화 id 별)
   const [trimmed, setTrimmed] = useState<{ convId: string; dropped: number; window: number } | null>(null)
   const [activeId, setActiveId, activeIdRef] = useLive<string | null>(null)
   const [messages, setMessages, messagesRef] = useLive<Msg[]>([])
@@ -280,7 +280,7 @@ export default function Page() {
 
   // 상단바 3단 경로: 워크스페이스 / AI / 대화 제목
   useBreadcrumb(view === 'chat' ? (activeId ? (activeConv?.title || t('ai.untitled')) : isTemp ? t('ai.temp.crumb') : (project?.name || '')) : '')
-  // 모바일 대화 목록은 자체 머리(시안 AIM1) — 대화 화면은 LayoutMobileDetailBar 가 스스로 선언한다
+  // 모바일 대화 목록은 자체 머리 — 대화 화면은 LayoutMobileDetailBar 가 스스로 선언한다
   useOwnMobileHeader(view === 'chat' && isMobile && !activeId && !project)
 
   const [collapsed, setCollapsedState] = useState(false)
@@ -308,7 +308,7 @@ export default function Page() {
       void loadProjects()
       // 모바일에선 첫 대화를 자동 선택하지 않는다 — 목록 상태(하단 탭바 노출)로 진입해
       // 다른 모듈로 이동할 수 있어야 한다. 데스크톱은 편의상 자동 선택.
-      // 토스트 [대화로 가기] — 저장소 대기값(스트림 완료) 또는 /ai?c=<id>(S4 결과물 완료)
+      // 토스트 [대화로 가기] — 저장소 대기값(스트림 완료) 또는 /ai?c=<id>(결과물 완료)
       const fromUrl = !urlOpenTaken.current && typeof location !== 'undefined' ? new URLSearchParams(location.search).get('c') : null
       urlOpenTaken.current = true
       const want = takeAiPendingOpen() || fromUrl
@@ -362,7 +362,7 @@ export default function Page() {
     } catch (e: any) { addToast('error', tRef.current('ai.errors.load', { msg: errMsg(e) })) }
   }
 
-  // S4 — 완료 토스트 [대화로 가기](AI 화면에 있을 때)
+  // 완료 토스트 [대화로 가기](AI 화면에 있을 때)
   useEffect(() => {
     const on = (e: Event) => { const id = (e as CustomEvent<string>).detail; if (id) void selectConv(id) }
     window.addEventListener(AI_OPEN_CONVERSATION_EVENT, on)
@@ -561,7 +561,7 @@ export default function Page() {
     setMessages(list => aiMergeRuns(list, st.runs))
     scrollDown()
   }), []) // eslint-disable-line react-hooks/exhaustive-deps
-  // C2-10 — 받는 중인 답변이 context_trimmed 를 받으면(저장소가 msg.trimmed 로 남김) 대화 맨 위 안내
+  // 받는 중인 답변이 context_trimmed 를 받으면(저장소가 msg.trimmed 로 남김) 대화 맨 위 안내
   useEffect(() => {
     const last = [...messages].reverse().find(m => m.role === 'assistant' && (m as any).trimmed)
     const tr = last ? (last as any).trimmed as { dropped: number; window: number } : null
@@ -712,14 +712,14 @@ export default function Page() {
     } catch { /* 화면 그대로 */ }
   }
 
-  /** 질문 수정 → 새 버전(시안 C2-3). 그 뒤 메시지는 옛 가지로 숨고 새 답을 받는다 */
+  /** 질문 수정 → 새 버전. 그 뒤 메시지는 옛 가지로 숨고 새 답을 받는다 */
   async function editQuestion(msg: Msg, text: string, keepIds?: string[]) {
     const convId = activeIdRef.current
     if (!convId || !msg.id || busyRef.current) return
     const list = messagesRef.current
     const idx = list.findIndex(m => m.id === msg.id)
     if (idx < 0) return
-    // 새 파일은 입력창의 파일 첨부로 올린 것(시안 K1-3)
+    // 새 파일은 입력창의 파일 첨부로 올린 것
     const staged = attachmentsRef.current
     if (staged.some(a => a.status === 'uploading' || a.status === 'converting')) { addToast('info', tRef.current('ai.attach.waiting')); return }
     const fresh = staged.filter(a => a.status === 'ready' && a.id)
@@ -787,7 +787,7 @@ export default function Page() {
       setProjects(list => list.map(x => (x.id === id ? { ...x, ...p } : x)))
       setProjectGone(g => (g === id ? null : g))
     } catch (e: any) {
-      // 공유받은 프로젝트가 더는 안 보임 = 공유가 끊김(시안 J2-6). 서버는 내 대화를 '최근 대화'로 옮겨 둔다
+      // 공유받은 프로젝트가 더는 안 보임 = 공유가 끊김. 서버는 내 대화를 '최근 대화'로 옮겨 둔다
       const wasMember = (projectRef.current?.id === id && projectRef.current.role === 'member')
       if (wasMember && (e?.status === 404 || e?.statusCode === 404 || e?.response?.status === 404 || /404|찾을 수 없/.test(String(e?.data?.detail || e?.message || '')))) {
         setProjectGone(id)
@@ -1106,7 +1106,7 @@ export default function Page() {
         // 파일을 입력창 밖(대화 목록·빈 곳)에 놓으면 브라우저가 그 파일을 열어 화면을 떠났다 — 기본 동작을 막는다
         <div className="relative flex h-full overflow-hidden" onDragOver={onStrayDrag} onDrop={onStrayDrag}>
           {isMobile && !activeId && !project ? (
-            // 모바일 대화 목록(AIM1 · J2-7)
+            // 모바일 대화 목록
             <AiMobileList
               className="min-w-0 flex-1"
               conversations={conversations}
@@ -1141,7 +1141,7 @@ export default function Page() {
 
               <section className="relative flex min-w-0 flex-1 flex-col bg-background" onDrop={onChatDrop}>
                 {isMobile ? (
-                  // 모바일 대화 머리(AIM2)
+                  // 모바일 대화 머리
                   <LayoutMobileDetailBar
                     title={activeConv?.title || (!activeId && project ? project.name : t('ai.untitled'))}
                     backLabel={t('ai.header.back')}
@@ -1160,7 +1160,7 @@ export default function Page() {
                     )}
                   />
                 ) : (
-                  // 데스크톱 대화 머리(AI1 AiDesktop:23)
+                  // 데스크톱 대화 머리
                   <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border bg-card pl-4 pr-2.5 text-[13px]">
                     {collapsed && (
                       <UiIconButton label={t('ai.sidebar.expand')} icon="panel-left" size="sm" className="-ml-2 text-muted-foreground" onClick={() => setCollapsed(false)} />
@@ -1197,7 +1197,7 @@ export default function Page() {
                       <UiMenu items={convMenu} label={t('ai.header.menu')} triggerSize="sm" className="text-muted-foreground" onSelect={onConvMenu} />
                     )}
 
-                    {/* 모델 피커 팝오버(AI3 AiDesktop:33): top 44 · right 120 · 320 · r12 · card · shadow-lg */}
+                    {/* 모델 피커 팝오버: top 44 · right 120 · 320 · r12 · card · shadow-lg */}
                     {pickerOpen && status && (
                       <div
                         ref={pickerEl}
@@ -1217,7 +1217,7 @@ export default function Page() {
                   </div>
                 )}
 
-                {/* 임시 대화 배너(시안 D1) */}
+                {/* 임시 대화 배너 */}
                 {isTemp && (
                   <div role="status" className="flex items-center gap-2.5 border-b border-border bg-secondary px-4 py-2.5 text-[13px] text-foreground md:px-6">
                     <UiIcon name="eye-off" className="h-4 w-4 shrink-0" />
@@ -1273,7 +1273,7 @@ export default function Page() {
                     ) : (
                       <div className="mx-auto flex max-w-[680px] flex-col gap-[18px] p-4 md:gap-[22px] md:px-6 md:pb-6 md:pt-6">
                         {trimInfo && (
-                          // C2-10 — 대화 맨 위 고정 한 줄. 빠진 메시지는 흐리게(숨기지 않음)
+                          // 대화 맨 위 고정 한 줄. 빠진 메시지는 흐리게(숨기지 않음)
                           <div role="status" className="sticky top-0 z-10 -mt-1 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-secondary px-3 py-2 text-[12.5px] text-foreground">
                             <UiIcon name="info" className="h-3.5 w-3.5 shrink-0" />
                             <span className="min-w-0 flex-[1_1_320px]">

@@ -1,5 +1,5 @@
 /**
- * 프로필 팝아웃(handover-22 · 시안 Pop22 #profile #profile-me #profile-admin 300 / Mob22 #m-profile 시트).
+ * 프로필 팝아웃.
  *  배너 64(첫 역할 색 /30, 없으면 muted) → 아바타 80 + 상태 점 12(ring-4 popover) [관리면 ⋯] → 이름 20/700 · 아이디 13 muted
  *  → 커스텀 상태 14 → 카드(bg-card p-3: 직함 · 소개 · 역할 칩 + [+] · 현지 시각과 차이) → DM 입력(Enter 로 보냄) / 내 것이면 상태 바꾸기 · 프로필 편집
  *  → "전체 프로필 보기".

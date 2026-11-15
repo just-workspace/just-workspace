@@ -91,7 +91,7 @@ export interface Channel {
   description: string | null
   created_by: string
   is_archived: boolean
-  /** 음성 채널(handover-20) — 종류는 그대로, LiveKit 방 voice-<id> 가 붙는다 */
+  /** 음성 채널 — 종류는 그대로, LiveKit 방 voice-<id> 가 붙는다 */
   is_voice?: boolean
   created_at: string
   updated_at: string
@@ -106,13 +106,13 @@ export interface Channel {
   notify_level?: NotifyLevel
   /** 뮤트 — 굵게(미읽음) 표시만 빠지고 멘션 숫자는 그대로(백엔드 규칙) */
   muted?: boolean
-  /** 음소거 기간(handover-22 "알림 끄기 ›") — 이 시각까지. null = 내가 끌 때까지 */
+  /** 음소거 기간 — 이 시각까지. null = 내가 끌 때까지 */
   muted_until?: string | null
-  /** 카테고리(r24 chat_categories) — null = 분류 없음 */
+  /** 카테고리(chat_categories) — null = 분류 없음 */
   category_id?: string | null
   /** 카테고리 안 순서(작을수록 위) */
   position?: number | null
-  /** 포럼 채널 = 이 게시판의 채팅 쪽 보기(handover-22 §5.1) */
+  /** 포럼 채널 = 이 게시판의 채팅 쪽 보기 */
   forum_board_id?: string | null
   /** 이 채널 새 스레드 자동 보관(분) */
   default_thread_auto_archive_minutes?: number | null
@@ -167,9 +167,9 @@ export interface ChatMessage {
   thread_participants?: ThreadParticipant[]
   /** 답글이 있는 루트에만 — 마지막 답글 시각(ISO) */
   last_reply_at?: string | null
-  /** 링크 미리보기 카드(R5 B12) — 서버가 첫 외부 링크를 비동기로 읽어 채운다(WS link_preview). 없거나 지웠으면 null */
+  /** 링크 미리보기 카드 — 서버가 첫 외부 링크를 비동기로 읽어 채운다(WS link_preview). 없거나 지웠으면 null */
   link_preview?: LinkPreview | null
-  // ── handover-22 ──
+  // ── 답장·조용히 보내기 등 ──
   /** 인라인 답장 대상 */
   reply_to_id?: string | null
   /** 답장 대상에게 알림(@ 켬) */
@@ -186,7 +186,7 @@ export interface ChatMessage {
   _upload?: { localId: string; state: 'uploading' | 'failed' | 'too_large'; progress: number; error?: string | null }
 }
 
-/** 보내기 옵션(handover-22) — 인라인 답장 · @silent. 소켓 send_message · REST · 대기함 모두 실린다 */
+/** 보내기 옵션 — 인라인 답장 · @silent. 소켓 send_message · REST · 대기함 모두 실린다 */
 export interface SendOptions { reply_to_id?: string | null; reply_ping?: boolean; silent?: boolean }
 
 /** 답장 원문 상태: ok · 삭제됨 · 불러올 수 없음 · 권한 없음 */
@@ -284,13 +284,13 @@ export interface OutboxItem {
   localId: string; channelId: string; content: string; createdAt: string
   /** 답장 · @silent(재전송 때 유지) */
   opts?: SendOptions
-  /** 서버가 거절했다(4xx — 채널을 나갔거나 권한이 없어짐). 줄에 "보내지 못했습니다 · 다시 보내기 · 삭제"(handover-21 #failed) */
+  /** 서버가 거절했다(4xx — 채널을 나갔거나 권한이 없어짐). 줄에 "보내지 못했습니다 · 다시 보내기 · 삭제" */
   failed?: boolean
 }
 
 export interface ChatState {
   channels: Channel[]
-  /** 채널 목록 불러오기 실패 — 시안 B1 "불러오기 실패" 타일(원인 한 줄 + 다시 시도)을 그리려면 실패를 삼키지 말아야 한다 */
+  /** 채널 목록 불러오기 실패 — "불러오기 실패" 타일(원인 한 줄 + 다시 시도)을 그리려면 실패를 삼키지 말아야 한다 */
   channelsError: string | null
   selectedChannelId: string | null
   messages: ChatMessage[]
@@ -351,19 +351,19 @@ export interface ChatState {
   drafts: Record<string, ChatDraft>
 
   /**
-   * 읽음 처리(R-22) — "봤다"는 건 창이 보이고 포커스가 있고 목록 맨 아래가 화면에 있을 때뿐이다.
+   * 읽음 처리 — "봤다"는 건 창이 보이고 포커스가 있고 목록 맨 아래가 화면에 있을 때뿐이다.
    * 그 조건이 안 되면 읽음을 미뤘다가 조건이 맞는 순간 보낸다.
    */
   viewAtBottom: boolean
   /** 위로 스크롤해 있는 동안 아래에 쌓인 새 메시지 수("새 메시지 N") */
   newBelowCount: number
 
-  /** 연결 상태(R-23) — 끊긴 시각과 다음 재시도 시각. 배너는 3초 넘게 끊겼을 때만 띄운다. */
+  /** 연결 상태 — 끊긴 시각과 다음 재시도 시각. 배너는 3초 넘게 끊겼을 때만 띄운다. */
   disconnectedAt: number | null
   reconnectAt: number | null
 
   outbox: OutboxItem[]
-  /** 점프(handover-22 #jump-far)로 옛 위치를 보는 중 — 아래(최근)에 더 있다. 이 동안 새 메시지는 붙이지 않고 "새 메시지 N" 만 센다 */
+  /** 점프로 옛 위치를 보는 중 — 아래(최근)에 더 있다. 이 동안 새 메시지는 붙이지 않고 "새 메시지 N" 만 센다 */
   hasMoreAfter: boolean
 }
 
@@ -462,7 +462,7 @@ function insertBySeq(list: ChatMessage[], msg: ChatMessage): ChatMessage[] {
 let _outboxLoaded = false
 let _flushingOutbox = false
 
-// 재접속 복구 커서(R-16) — 받은 메시지 중 가장 큰 seq. 끊긴 동안 생긴 것만 /api/chat/changes 로 받는다
+// 재접속 복구 커서 — 받은 메시지 중 가장 큰 seq. 끊긴 동안 생긴 것만 /api/chat/changes 로 받는다
 let _lastSeq = 0
 
 // ─── 바깥에서 대입하던 상태(Vue 의 x.value = v) ───
@@ -479,7 +479,7 @@ export function selectSelectedChannel(s: ChatState = S()): Channel | null {
   return s.channels.find(c => c.id === s.selectedChannelId) || null
 }
 export function selectSortedChannels(s: ChatState = S()): { channels: Channel[]; dms: Channel[]; voice: Channel[] } {
-  // 음성 채널은 따로 묶는다(handover-20 답 §5.1 — 사이드바 별도 "음성" 구역)
+  // 음성 채널은 따로 묶는다(사이드바 별도 "음성" 구역)
   const pub = s.channels.filter(c => c.type !== 'dm' && !c.is_voice)
   const dms = s.channels.filter(c => c.type === 'dm')
   const voice = s.channels.filter(c => c.type !== 'dm' && !!c.is_voice)
@@ -599,7 +599,7 @@ export async function fetchMessages(before?: string) {
     set({ hasMoreMessages: data.has_more })
     if (!before) set({ hasMoreAfter: false })
 
-    // 진입 직후 맨 아래를 보고 있으면 읽음 — 창이 안 보이면 보일 때까지 미룬다(R-22)
+    // 진입 직후 맨 아래를 보고 있으면 읽음 — 창이 안 보이면 보일 때까지 미룬다
     if (!before && data.messages.length > 0) {
       const last = data.messages[data.messages.length - 1]
       set({ newBelowCount: 0 })
@@ -806,7 +806,7 @@ export async function markUnread(channelId: string, messageId: string) {
   return res
 }
 
-/** 사이드바 채널 메뉴 "읽음으로 표시"(handover-22 #mute-menu) — 마지막 메시지까지 읽음(WS mark_read) */
+/** 사이드바 채널 메뉴 "읽음으로 표시" — 마지막 메시지까지 읽음(WS mark_read) */
 export async function markChannelRead(channelId: string) {
   const r = await $fetch<{ messages: ChatMessage[] }>(`/api/chat/channels/${channelId}/messages`, { params: { limit: 1 } })
   const last = r?.messages?.[r.messages.length - 1]
@@ -1503,7 +1503,7 @@ export function onChatEvent(fn: (data: any) => void): () => void {
 
 /** 테스트에서 이벤트 반영을 확인하려고 내보낸다(앱 코드는 소켓 onmessage 만 부른다) */
 export function handleWSMessage(data: any) {
-  // handover-22 — 역할·카테고리 변경(r24 관리 화면) · 다른 모듈 구독자(스레드 목록 등)
+  // 역할·카테고리 변경(관리 화면) · 다른 모듈 구독자(스레드 목록 등)
   if (data?.type === 'chat_roles_changed' || data?.type === 'chat_member_roles_changed') void import('~/composables/useChatRoles').then(m => m.handleRolesEvent(data))
   if (data?.type === 'chat_layout_changed') void import('~/composables/useChatLayout').then(m => m.handleLayoutEvent(data))
   for (const fn of _wsListeners) { try { fn(data) } catch { /* 구독자 오류는 소켓을 막지 않는다 */ } }
@@ -1538,7 +1538,7 @@ export function handleWSMessage(data: any) {
         if (!S().hasMoreAfter && !S().messages.find(m => m.id === msg.id)) {
           set({ messages: insertBySeq(S().messages, msg) })
         }
-        // 보고 있을 때만 읽음. 위로 스크롤해 있으면 "새 메시지 N" 을 띄운다(R-22)
+        // 보고 있을 때만 읽음. 위로 스크롤해 있으면 "새 메시지 N" 을 띄운다
         const mine = msg.sender?.id === me()?.id
         if (!mine && !S().viewAtBottom) set({ newBelowCount: S().newBelowCount + 1 })
         if (mine) markRead(msg.channel_id, msg.id)
@@ -1630,7 +1630,7 @@ export function handleWSMessage(data: any) {
       break
 
     case 'link_preview':
-      // 링크 미리보기 카드가 생김/지워짐(R5 B12)
+      // 링크 미리보기 카드가 생김/지워짐
       if (typeof data.message_id === 'string') applyLinkPreview(data.message_id, (data.link_preview ?? null) as LinkPreview | null)
       break
 
@@ -1876,7 +1876,7 @@ async function flushOutbox() {
   }
 }
 
-// ─── 알림 권한(R-25) — 첫 메시지를 보낸 뒤에야 묻는다(배너, 사용자가 누를 때만 브라우저 프롬프트) ───
+// ─── 알림 권한 — 첫 메시지를 보낸 뒤에야 묻는다(배너, 사용자가 누를 때만 브라우저 프롬프트) ───
 
 function afterFirstSend() {
   if (!('Notification' in window)) return
@@ -1979,7 +1979,7 @@ function probeConnection() {
   setTimeout(() => { if (ws === _ws && ws.readyState === WebSocket.OPEN && _lastPong < sentAt) ws.close() }, 5000)
 }
 
-/** 점프(handover-22): 원문 주변 창으로 목록을 바꾼다. hasMoreAfter = 아래(최근)에 더 있음 */
+/** 점프: 원문 주변 창으로 목록을 바꾼다. hasMoreAfter = 아래(최근)에 더 있음 */
 export function replaceMessagesWindow(list: ChatMessage[], hasMore: boolean, hasMoreAfter: boolean) {
   set({ messages: list, hasMoreMessages: hasMore, hasMoreAfter, newBelowCount: hasMoreAfter ? S().newBelowCount : 0 })
 }

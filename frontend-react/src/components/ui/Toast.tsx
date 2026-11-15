@@ -1,6 +1,6 @@
 /**
- * 토스트 호스트(시안 8-2-4·P3): 반전색 바탕(foreground/background), 제목 600 + 본문 12 opacity .8,
- * 행동 1개(링크형, --primary-inverse 글자 — 반전 바탕 위 4.5:1 로 보정된 반대 테마 강조색, 답변서 C8),
+ * 토스트 호스트: 반전색 바탕(foreground/background), 제목 600 + 본문 12 opacity .8,
+ * 행동 1개(링크형, --primary-inverse 글자 — 반전 바탕 위 4.5:1 로 보정된 반대 테마 강조색),
  * 아이콘은 종류 색. 데스크톱 왼쪽 아래 24, 모바일은 상단(상단바 아래 8 — 탭바·FAB 와 경쟁하지 않음).
  * role=status(오류는 alert). 오류·수동 닫기 토스트에만 닫기 버튼. 같은 오류가 합쳐지면 제목 뒤에 횟수(mono 11).
  * 앱 루트(App.tsx)에 한 번 그린다. 토스트 내기는 `addToast`/`toast`(~/composables/useToast).

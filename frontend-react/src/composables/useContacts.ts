@@ -37,7 +37,7 @@ export interface Contact {
   notes: string | null
   created: string | null
   updated: string | null
-  // ── p4 ──
+  // ── 추가 필드 ──
   /** data:image/...;base64,… (워크스페이스 사용자 행은 아바타 URL) */
   photo?: string | null
   is_favorite?: boolean
@@ -112,7 +112,7 @@ export interface ContactsState {
   editingContact: Contact | null
   /** 목록 불러오기 실패(시안 H: 실패를 "비어 있음"으로 보이지 않게) */
   contactsError: string
-  /** 목록 정렬(시안 CT1 "이름순 ▾") — 현재 페이지 안에서만 정렬한다(서버는 이름순) */
+  /** 목록 정렬("이름순 ▾") — 현재 페이지 안에서만 정렬한다(서버는 이름순) */
   sortBy: 'name' | 'org'
   /** 모바일 ⋯ 시트(주소록·가져오기·내보내기) */
   mobileMenuOpen: boolean
@@ -120,7 +120,7 @@ export interface ContactsState {
   scopeKind: 'all' | 'favorite' | 'workspace' | 'group'
   selectedGroup: string | null
   groups: ContactGroup[]
-  /** 사이드바 개수(시안 CT1: 모든 연락처 248 · 즐겨찾기 12 · 워크스페이스 사용자 48) */
+  /** 사이드바 개수(모든 연락처 248 · 즐겨찾기 12 · 워크스페이스 사용자 48) */
   counts: { all: number | null; favorite: number | null; workspace: number | null }
 }
 

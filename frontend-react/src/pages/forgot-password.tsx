@@ -1,5 +1,5 @@
 // Vue 원본: frontend/pages/forgot-password.vue
-// 비밀번호 찾기(시안 8-3-1·8-3-2, AuthForm 로그인 세대): 아이디 1필드 → 재설정 링크.
+// 비밀번호 찾기: 아이디 1필드 → 재설정 링크.
 // 성공은 같은 자리 결과 화면(아이콘 타일 40 + 제목 + 서버 안내) — 서버는 아이디 존재 여부를 숨기려 항상 같은 문구를 준다.
 import { useState, type FormEvent } from 'react'
 import { navigateTo } from '~/lib/router'

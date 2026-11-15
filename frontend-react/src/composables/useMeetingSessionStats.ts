@@ -1,8 +1,8 @@
 /**
- * 회의 한 번의 통계(회의 종료 화면 "'회의' · 58분 · 참가 6명" — 시안 WorkMobile meetOver · R12Misc meetEnd "이번 회의"). Vue 판에서 출발.
+ * 회의 한 번의 통계(회의 종료 화면 "'회의' · 58분 · 참가 6명" · "이번 회의"). Vue 판에서 출발.
  * 들어간 시각부터 나온 시각까지의 분, 그동안 본 최대 참가자 수(나 포함), 본 사람(이름·손님 여부), 회의 채팅 수.
  * 서버 기록이 아니라 이 화면이 본 값이다(서버에는 참석 기록이 없다).
- * key 를 주면 값이 앱 수준(useSharedState — Vue 의 useState)에 남는다 — 회의 화면을 미니 창으로 내렸다 돌아와도(P-8) 통계가 이어진다.
+ * key 를 주면 값이 앱 수준(useSharedState — Vue 의 useState)에 남는다 — 회의 화면을 미니 창으로 내렸다 돌아와도 통계가 이어진다.
  * 이 경우 참가자 감시는 이 함수를 부른 화면마다 돈다(회의 화면·미니 창 둘 다 부른다).
  *
  * React: const stats = useMeetingSessionStats(() => participants.length, 'meetings-call-stats')

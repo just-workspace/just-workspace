@@ -9,7 +9,7 @@
  * 그대로 덧붙여 호환한다(비우면 기본 규격). 보기 토글은 32px 아이콘 버튼 — 히트 영역은 세로로 전체 높이.
  *
  * 키 이벤트: onKeyDown·onKeyUp·onBlur 는 안쪽 <input> 에서 그대로 내보낸다(Vue 판 keydown·keyup·blur 이벤트).
- * Caps Lock(시안 A1 · AuthForm:18): 입력 중 Caps Lock 상태를 capsLock/onUpdateCapsLock(Vue v-model:caps-lock)으로 알려 주고,
+ * Caps Lock: 입력 중 Caps Lock 상태를 capsLock/onUpdateCapsLock(Vue v-model:caps-lock)으로 알려 주고,
  * capsLockHint 를 주면 입력 아래에 ↑ 경고(warning 12/500, role=status)를 직접 그린다. 포커스가 빠지면 내린다.
  *
  * Vue 판과 같이 className·나머지 속성은 바깥 묶음(div)에 붙는다(안쪽 <input> 아님). ref 는 안쪽 <input>.

@@ -9,7 +9,7 @@
   }
 }
 
-/* 모바일: 아래로 짙어지는 스크림(시안 AuthScreen:24). 데스크톱: 하단 300 그라디언트(:15) */
+/* 모바일: 아래로 짙어지는 스크림. 데스크톱: 하단 300 그라디언트 */
 .auth-scrim {
   background: linear-gradient(transparent 30%, hsl(var(--scrim) / 0.7));
 }

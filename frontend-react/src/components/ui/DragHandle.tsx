@@ -1,5 +1,5 @@
 /**
- * 끌기 손잡이 + 놓을 자리 선(handover-22 "드래그" · 시안 Chat22 채널 목록 · Settings22 역할 목록).
+ * 끌기 손잡이 + 놓을 자리 선.
  *
  * UiDragHandle — grip-vertical 16 아이콘 버튼(기본 24×24, touch 44). aria-label "순서 바꾸기"(바꿀 수 있음).
  *   hoverOnly 면 평소 투명, 부모 행(.group)에 호버 · 손잡이 포커스 때만 보인다 — 부모에 className="group" 을 붙인다.

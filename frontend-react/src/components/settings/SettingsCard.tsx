@@ -1,12 +1,12 @@
 /**
- * 설정 카드(시안 F 저장 모델·PatForm) — Vue 판 components/settings/SettingsCard.vue.
+ * 설정 카드 — Vue 판 components/settings/SettingsCard.vue.
  * 개인 설정·관리·AI·메일 설정 화면이 같이 쓴다(토대 공용).
  *
  * 제목 13/600 + 설명 13 muted, 본문, 푸터 [되돌리기][저장](변경 있을 때만 활성).
  * 스위치·선택만 있는 행은 푸터 없이 즉시 저장 + "저장됨 ✓"(saved) 를 쓴다. 토스트는 쓰지 않는다.
- * mobileBar: 모바일(md 미만)에서 카드 푸터 대신 화면 하단 고정 저장 바(시안 PFM2·ADM3).
- *  · 'save' — [저장] 한 칸(PFM2 개인 설정 상세). 변경 없으면 흐리게(opacity .5).
- *  · 'full' — [되돌리기][저장 · 변경 n건](ADM3 관리 설정 상세).
+ * mobileBar: 모바일(md 미만)에서 카드 푸터 대신 화면 하단 고정 저장 바.
+ *  · 'save' — [저장] 한 칸. 변경 없으면 흐리게(opacity .5).
+ *  · 'full' — [되돌리기][저장 · 변경 n건].
  *  떠 있는 동안 하단 탭바는 숨긴다. 한 페이지에 저장 카드가 하나일 때만 쓴다.
  * 루트가 둘(카드 + 하단 바)이라 className 등 나머지 속성은 카드(section)에 붙는다.
  *
@@ -39,7 +39,7 @@ export interface SettingsCardProps extends Omit<HTMLAttributes<HTMLElement>, 'ti
   danger?: boolean
   /** 저장 버튼 문구(기본 i18n settingsCard.save) */
   saveLabel?: string
-  /** 모바일 하단 고정 저장 바 — 'save'(PFM2) · 'full'(ADM3) */
+  /** 모바일 하단 고정 저장 바 — 'save' · 'full' */
   mobileBar?: 'save' | 'full'
   /** 머리 오른쪽 슬롯(Vue #header) */
   header?: ReactNode

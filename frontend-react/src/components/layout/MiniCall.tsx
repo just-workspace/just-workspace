@@ -1,5 +1,5 @@
 /**
- * 미니 통화 창(P-8 · 시안 R12Call #board|#page · 답변서 A5). Vue 판 components/layout/MiniCall.vue 에서 출발.
+ * 미니 통화 창. Vue 판 components/layout/MiniCall.vue 에서 출발.
  *  데스크톱: 오른쪽 아래 320(여백 24) 떠 있는 창, 네 귀퉁이 스냅(끌어 놓기). z-mini-call — 메일 작성 창이 비켜 선다(오른쪽 아래일 때만).
  *   · 영상 없음 = 높이 56 알약: 점 · 이름 + 경과 / 화자 · 인원 · [마이크][펼치기][나가기 danger]. 알약 아무 데나 눌러도 펼침.
  *   · 영상 있음 = 180 타일 + [마이크][카메라][화면 공유][펼치기] … [나가기]. 화면 공유 중 = 공유 버튼 채움(solid) + aria-pressed,
@@ -8,7 +8,7 @@
  *   · 호스트 대기실 요청 띠(창 위, primary/10): 아바타 · "○○ 님이 들어오려고 합니다" · +n · [들이기][거절] · 대기실 전체.
  *     새 신청마다 소리 1회(활동 패널 기록은 서버 알림). 30초 응답 없으면 띠를 접고 펼치기 버튼에 점 배지만.
  *   · 나가면 토스트 "#개발 통화에서 나왔습니다 · 12분 · 아직 3명" [다시 참여](6초), 마지막 사람이면 "통화가 끝났습니다 · 12분".
- *  모바일:   상태 표시줄 아래 36px 초록 띠 "#개발 통화 중 · 12:43  돌아가기 ›" — 탭하면 회의 화면으로(시안 PatActivityMobile).
+ *  모바일:   상태 표시줄 아래 36px 초록 띠 "#개발 통화 중 · 12:43  돌아가기 ›" — 탭하면 회의 화면으로.
  * 회의 화면이 내려가 있으므로 다른 참가자 소리도 여기서 붙인다(안 그러면 미니 창 상태에서 소리가 안 난다).
  * 셸(layouts/default)이 useMeetingCall().visible 일 때만 띄운다.
  */
@@ -244,7 +244,7 @@ export function LayoutMiniCall({ mobile }: LayoutMiniCallProps) {
     ...(drag ? { transform: `translate(${drag.x}px, ${drag.y}px)` } : {}),
   }
 
-  // 메일 작성 창이 비켜 설 폭(11-C11 · 답변서 B3: 오른쪽 아래일 때만, 통화 창 폭 + 16) — 떠 있는 동안만
+  // 메일 작성 창이 비켜 설 폭(오른쪽 아래일 때만, 통화 창 폭 + 16) — 떠 있는 동안만
   useEffect(() => {
     setMiniCallWidth(miniCallReservedWidth({ visible: true, mobile, corner }))
   }, [mobile, corner])

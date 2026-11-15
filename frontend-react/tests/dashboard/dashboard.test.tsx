@@ -1,4 +1,4 @@
-// 홈 대시보드(handover 17 · 시안 Dash17) — 카드 요청·행·빈 상태 보고, 오늘 브리핑 칩, AI 브리핑 상태, 판 조립(빈 카드 묶음·편집 저장).
+// 홈 대시보드 — 카드 요청·행·빈 상태 보고, 오늘 브리핑 칩, AI 브리핑 상태, 판 조립(빈 카드 묶음·편집 저장).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'

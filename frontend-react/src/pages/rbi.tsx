@@ -4,7 +4,7 @@
  *  · [격리 브라우저 열기] → 새 탭(rel=noopener). 대상마다 딥 링크(?target=<key>) — 단독 앱이 그 대상을 미리 고른다(시작은 사용자가).
  *  · 자동으로 창을 띄우지 않는다(팝업 차단·사용자 동작 없는 새 창 금지). 데스크톱 앱은 새 창을 시스템 브라우저로 넘긴다(apps/desktop).
  *  · 워크스페이스 내비게이션에는 없다(useNav NAV_EXCLUDED) — 사용자 메뉴 "격리 브라우저 열기"·직접 주소가 입구.
- * TODO(handover-rbi): 런처 시각(안내 문구·대상 행)은 Claude Design 시안에서. 기존 키트만.
+ * TODO: 런처 시각(안내 문구·대상 행)은 디자인 확정 뒤에. 기존 키트만.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'

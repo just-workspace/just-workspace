@@ -1,5 +1,5 @@
 // Vue 원본: frontend/pages/settings/mail.vue
-// 설정 › 메일(시안 ML3 = SettingsPage mail · 메일 8 ②): 탭 계정 · 필터(n) · 서명 · 보관·전달.
+// 설정 › 메일: 탭 계정 · 필터(n) · 서명 · 보관·전달.
 //  계정: GET/PATCH/DELETE /api/mail/accounts, POST …/test. 추가·상세 편집은 기존 /mail/accounts 화면(IMAP/SMTP·OAuth 폼)으로.
 //  필터: MailFilterRules(메일 모듈 담당 — 아직 React 판이 없으면 자리 표시) · 서명: /api/mail/signatures
 //  보관: 외부 메일 .eml 아카이브(archive_enabled · archive/backfill · archive/status)

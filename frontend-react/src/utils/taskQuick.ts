@@ -1,5 +1,5 @@
 /**
- * 작업(시안 TK1 · 결정 작업 3~5) 순수 로직 — 빠른 입력 해석 · 마감 표기(D-n) · 마감 묶기 · 우선순위 정렬.
+ * 작업 순수 로직 — 빠른 입력 해석 · 마감 표기(D-n) · 마감 묶기 · 우선순위 정렬.
  * 화면과 분리해 vitest 로 검증한다(tests/lib/taskQuick.test.ts).
  *
  * 마감(due_date)은 "날짜"로만 다룬다. 서버는 datetime(UTC 자정)으로 돌려주므로 앞 10자(YYYY-MM-DD)만 읽어
@@ -68,7 +68,7 @@ const PRIORITY_WORDS: Record<string, TaskPriority> = {
 }
 
 /**
- * 빠른 입력 한 줄 해석(시안 TK1:19 "회고 자료 준비 금요일 !높음").
+ * 빠른 입력 한 줄 해석("회고 자료 준비 금요일 !높음").
  *  날짜: 오늘 · 내일 · 모레 · (이번 주|다음 주) X요일 · X요일 · 다음 주 · M/D · M월 D일 · YYYY-MM-DD
  *  우선순위: !긴급 · !높음 · !보통 · !낮음 (+ !high/!medium/!low)
  *  담당: @이름
@@ -213,7 +213,7 @@ const koTranslate: TaskTranslate = (key, params) =>
   (DUE_TEXT_KO[key] ?? key).replace(/\{(\w+)\}/g, (_, n: string) => String(params?.[n] ?? ''))
 
 /**
- * 행 마감 표기(시안 TK1:22): 지남 = "어제 · 지남"/"10/12 · 지남"(danger), 오늘 = "오늘"(warning),
+ * 행 마감 표기: 지남 = "어제 · 지남"/"10/12 · 지남"(danger), 오늘 = "오늘"(warning),
  * 이번 주 = "10/17 D-2"(foreground — 2일 이내만 D-n 병기), 이후 = "10/24"(muted).
  */
 export function dueLabel(task: { due_date: string | null; status: string }, now: Date = new Date(), tr: TaskTranslate = koTranslate): { text: string; tone: DueTone } | null {
@@ -297,7 +297,7 @@ export const TASK_GROUP_LABEL_KEY: Record<string, string> = {
   all: 'common.all',
 }
 
-/** 우선순위 표기(시안 PatBadges: 화살표 + 글자). 낮음은 시안에 없어 ↓ muted 로 둔다(디자이너 확인 필요). labelKey = i18n 키 */
+/** 우선순위 표기(화살표 + 글자). 낮음은 시안에 없어 ↓ muted 로 둔다(디자이너 확인 필요). labelKey = i18n 키 */
 export const PRIORITY_META: Record<TaskPriority, { arrow: string; labelKey: string; tone: 'danger' | 'warning' | 'muted' }> = {
   urgent: { arrow: '↑↑', labelKey: 'tasks.priorityUrgent', tone: 'danger' },
   high: { arrow: '↑', labelKey: 'tasks.priorityHigh', tone: 'warning' },
@@ -308,14 +308,14 @@ export const PRIORITY_META: Record<TaskPriority, { arrow: string; labelKey: stri
 export const STATUS_META: Record<TaskStatus, { labelKey: string; tone: 'neutral' | 'warning' | 'primary' | 'success' }> = {
   todo: { labelKey: 'tasks.statusLabel.todo', tone: 'neutral' },
   in_progress: { labelKey: 'tasks.statusInProgress', tone: 'warning' },
-  // 검토 = primary 틴트(시안 TK1 행 상태 칩 "검토")
+  // 검토 = primary 틴트("검토")
   review: { labelKey: 'tasks.statusLabel.review', tone: 'primary' },
   done: { labelKey: 'tasks.statusDone', tone: 'success' },
 }
 
 /** 우선순위 고르기 순서(높은 것부터) */
 export const PRIORITY_ORDER: TaskPriority[] = ['urgent', 'high', 'medium', 'low']
-/** 상태 순서(시안 결정 작업 1: 할 일·진행 중·검토·완료) */
+/** 상태 순서(할 일·진행 중·검토·완료) */
 export const STATUS_ORDER: TaskStatus[] = ['todo', 'in_progress', 'review', 'done']
 
 export interface AssigneeCandidate { id: string; username: string; display_name: string | null }

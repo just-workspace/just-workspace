@@ -1,4 +1,4 @@
-// 승인 대기함(S3) — 시안 B1(목록 + 상세, 대기/처리 기록 탭, 거부 사유, 외부 내용 경고) · B2(빈·오류·로딩·만료·모바일 390 목록→상세).
+// 승인 대기함 — 목록 + 상세, 대기/처리 기록 탭, 거부 사유, 외부 내용 경고 · 빈·오류·로딩·만료·모바일 390 목록→상세.
 // React 전환 뒤 새로 생긴 화면(Vue 대응 없음 — routes.ts reactOnly).
 //  - 대기 = AI 가 요청한 위험 작업(high) 또는 외부 AI 커넥터(MCP)에서 온 쓰기. 승인하기 전에는 아무것도 실행되지 않는다.
 //  - ?id= 는 그 요청을 고른다(벨 알림·토스트·채팅 카드 링크). 대기 목록에 없으면(이미 처리·만료) 따로 불러 상세에 보인다.
@@ -79,7 +79,7 @@ export default function ApprovalsPage() {
         ...s,
         items: more
           ? [...s.items, ...r.items.filter(n => !s.items.some(o => o.id === n.id))]
-          // 조용한 새로 고침: 방금 이 화면에서 처리한 것은 배지와 함께 남긴다(시안 B1 — 처리 뒤에도 목록에 상태 배지)
+          // 조용한 새로 고침: 방금 이 화면에서 처리한 것은 배지와 함께 남긴다(처리 뒤에도 목록에 상태 배지)
           : quiet && view === 'pending'
             ? [...r.items, ...s.items.filter(o => o.status !== 'pending' && !r.items.some(n => n.id === o.id))]
             : r.items,
@@ -136,7 +136,7 @@ export default function ApprovalsPage() {
   const selectedId = queryId || (!isMobile && tab === 'pending' ? autoId : null)
   const selected = inLists(selectedId) || (extra && extra.id === selectedId ? extra : null)
 
-  // ?id= 가 목록에 없으면 따로 불러온다(이미 처리됐거나 만료된 것 — B2-6)
+  // ?id= 가 목록에 없으면 따로 불러온다(이미 처리됐거나 만료된 것)
   useEffect(() => {
     setExtraError(false)
     if (!queryId || !pending.loaded || inLists(queryId) || (extra && extra.id === queryId)) return
@@ -305,7 +305,7 @@ export default function ApprovalsPage() {
     />
   )
 
-  // ── 모바일 상세(B2-7 오른쪽) ──
+  // ── 모바일 상세 ──
   if (isMobile && queryId) {
     return (
       <div className="flex h-full flex-col bg-background">

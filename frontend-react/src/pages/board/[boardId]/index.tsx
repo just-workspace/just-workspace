@@ -1,5 +1,5 @@
 /**
- * 게시판 글 목록(시안 BD2 · BM1, 06-3 결정 1·2·5·6).
+ * 게시판 글 목록.
  * Vue 원본: frontend/pages/board/[boardId]/index.vue
  *  커맨드 바 44: 게시판명 600 + 설명 muted | 검색(이 게시판) + 글쓰기
  *  카테고리 밑줄 탭 40 + "최신순 ▾" → 글 행 56(아바타 28 · 필독 솔리드 · 고정 틴트 · 안 읽음 굵게) → 숫자 페이지네이션 48
@@ -120,7 +120,7 @@ function BoardListPage({ boardId }: { boardId: string }) {
 
   return (
     <BoardShell>
-      {/* 모바일 상단 바(BM1) */}
+      {/* 모바일 상단 바 */}
       <LayoutMobileDetailBar
         title={currentBoard?.name ?? t('board.title')}
         subtitle={mobileSubtitle}
@@ -155,7 +155,7 @@ function BoardListPage({ boardId }: { boardId: string }) {
         </form>
       )}
 
-      {/* 데스크톱 커맨드 바(BD2) */}
+      {/* 데스크톱 커맨드 바 */}
       <BoardCommandBar
         searchPlaceholder={t('board.search.inBoard')}
         onSearch={search}

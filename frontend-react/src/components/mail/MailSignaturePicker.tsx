@@ -1,5 +1,5 @@
 /**
- * "서명: 기본 ▾" — Vue 판 components/mail/MailSignaturePicker.vue (시안 ML2·ML1·MM3). 글자처럼 보이는 네이티브 선택. 히트 영역 40.
+ * "서명: 기본 ▾" — Vue 판 components/mail/MailSignaturePicker.vue. 글자처럼 보이는 네이티브 선택. 히트 영역 40.
  */
 import { useI18n } from '~/i18n'
 import type { Signature } from '~/composables/useMailSignature'

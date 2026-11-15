@@ -1,5 +1,5 @@
 /**
- * 개인 설정(시안 10-6 ⑤·SettingsPage 표시 섹션·S1 사용자 메뉴 상태) — 서버(/api/me/prefs)와 동기화.
+ * 개인 설정 — 서버(/api/me/prefs)와 동기화.
  * Vue 판 composables/useUserPrefs.ts 그대로.
  *
  * - 로그인하면 서버 값을 받아 적용한다(서버에 있는 키가 이긴다). 받기 전에 바꾼 키는 내 변경을 지킨다.
@@ -9,11 +9,11 @@
  *
  * 서버 키(백엔드 app/me/prefs.py TOP_LEVEL_KEYS):
  *   density · theme · language · timezone · week_start · tabbar_pinned([id]) · mail_dark_view · read_receipt_default
- * 설정 › 캘린더·채팅(R12Settings S1·S2, 접두사 키):
+ * 설정 › 캘린더·채팅(접두사 키):
  *   calendar.default_view · calendar.default_reminder(분, 없으면 키 없음) ·
  *   chat.enter_key(send|newline) · chat.link_preview · chat.media_autoexpand · chat.keywords([단어], 서버가 20개로 정리하고
  *   메시지에 나오면 멘션처럼 알림 — app/chat/keywords.py)
- * 사용자 메뉴 상태 메시지 이모지(R5 A4): ui.status_emoji_recent([이모지], 최근 쓴 순 최대 8 — 사용자 단위라 기기 사이에서 이어진다)
+ * 사용자 메뉴 상태 메시지 이모지: ui.status_emoji_recent([이모지], 최근 쓴 순 최대 8 — 사용자 단위라 기기 사이에서 이어진다)
  * 테마는 colorMode(~/composables/useColorMode), 언어는 i18n(~/i18n) 이 주인이라 여기서는 그 값을 지켜보다가 올리고,
  * 서버 값이 오면 그쪽에 적용만 한다.
  *
@@ -33,7 +33,7 @@ export type Presence = 'online' | 'away' | 'dnd'
 export type ReadReceiptPolicy = 'ask' | 'always' | 'never'
 export type CalendarView = 'day' | 'week' | 'month' | 'agenda'
 export type ChatEnterKey = 'send' | 'newline'
-/** 채팅 메시지 표시(handover-21 §5.7) — cozy(아바타·이름 줄) · compact(시간 이름 본문 한 줄). 터치에선 compact 를 쓰지 않는다 */
+/** 채팅 메시지 표시 — cozy(아바타·이름 줄) · compact(시간 이름 본문 한 줄). 터치에선 compact 를 쓰지 않는다 */
 export type ChatMessageDisplay = 'cozy' | 'compact'
 /** 메시지 묶음 사이 간격(px) — 디스코드 설정 단계 0/4/8/16/24, 기본 16 */
 export const CHAT_GROUP_GAPS = [0, 4, 8, 16, 24] as const
@@ -43,7 +43,7 @@ export type ChatGroupGap = typeof CHAT_GROUP_GAPS[number]
 export const CHAT_LIST_WIDTH = { def: 298, min: 199, max: 367 } as const
 /** 음성 입력 방식 — 음성 감지(vad) · 눌러서 말하기(ptt) */
 export type ChatVoiceMode = 'vad' | 'ptt'
-/** 사람별 음량 범위(%) — Pop22 0~200, 5% 단계 */
+/** 사람별 음량 범위(%) — 0~200, 5% 단계 */
 export const USER_VOLUME = { min: 0, max: 200, def: 100, step: 5 } as const
 /** 이모지 피커 "최근" 칸 수 */
 export const CHAT_EMOJI_RECENT_MAX = 27
@@ -79,8 +79,8 @@ export interface Prefs {
   chatSidebarWidth: number
   /** 상태 메시지 이모지 — 최근 쓴 순(최대 STATUS_EMOJI_RECENT_MAX) */
   statusEmojiRecent: string[]
-  // ── handover-22 ──
-  /** 답장할 때 대상에게 알림(@ 켬) — 마지막으로 고른 값(§2.2(2)) */
+  // ── 채팅 개인 설정 ──
+  /** 답장할 때 대상에게 알림(@ 켬) — 마지막으로 고른 값 */
   chatReplyPing: boolean
   /** 사람별 음량(%) — user_id → 0~200. 100 은 저장하지 않는다 */
   chatUserVolumes: Record<string, number>

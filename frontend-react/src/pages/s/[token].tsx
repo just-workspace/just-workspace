@@ -1,16 +1,16 @@
 /**
  * 공유 링크로 들어오는 문(Vue pages/s/[token].vue) — `/s/<token>`. 셸 없음(routes.ts layout:false).
  *
- * 화면(시안 G1·G2·G3·GM1·GM2 · 8-5): 손님 진입 공통 틀(AuthShell) — 브랜드 → 대상 카드 → (표시 이름) → 1차 버튼.
+ * 화면: 손님 진입 공통 틀(AuthShell) — 브랜드 → 대상 카드 → (표시 이름) → 1차 버튼.
  * 열기 전에 GET /api/wopi/shared/{token}/info(횟수 안 셈)로 대상 카드(이름·공유자·권한 칩·만료)를 그린다.
- *  - 비밀번호 링크: info 가 requires_password 만 알려 준다 → "비밀번호 필요" 결과 틀(입력 1개 + 열기, 시안 AuthForm:69)
+ *  - 비밀번호 링크: info 가 requires_password 만 알려 준다 → "비밀번호 필요" 결과 틀(입력 1개 + 열기)
  *    → POST /api/files/shared/{token}/unlock → access(1시간). 이후 내려받기·편집기 열기에 access 를 붙인다.
  *  - 같이 편집 링크(can_edit): 표시 이름(기억) → 문서 열기(POST /api/wopi/shared/{token}/open) → 40px 손님 띠 + 편집기.
  *  - 내려받기 링크: [내려받기](GET /api/files/shared/{token}?access=) — 내려받기 막힘이면 [미리보기](?inline=1, 새 탭).
  *    묶음 링크는 zip 하나. 이 경우 화면 문구는 시안에 없어 같은 틀로 구성(디자이너 확인 필요).
  *    내려받기가 막혔는데 미리보기도 안 되는 형식(예전에 만든 링크 · info.can_preview=false, 비밀번호 링크는 unlock 응답)이면
  *    [미리보기] 대신 "미리 볼 수 없고 내려받기가 막혀 있습니다" 안내 — 새 탭에 서버 오류(JSON)가 뜨던 죽은 링크.
- *  - 폴더 링크(info.is_folder, wave 7): 셸 대신 SharedFolderView(OneDrive식 탐색 — 하위 폴더·파일별 미리보기/받기).
+ *  - 폴더 링크(info.is_folder): 셸 대신 SharedFolderView(OneDrive식 탐색 — 하위 폴더·파일별 미리보기/받기).
  *    비밀번호 링크는 info 가 내용을 숨기므로, 풀고 나서 /list 를 한 번 불러 보고 되면 폴더 화면으로 간다.
  * 만료·권한 없음·삭제됨·횟수 초과는 같은 결과 화면 틀.
  */
@@ -258,7 +258,7 @@ export default function SharedLinkPage() {
     <AuthShell>
       {blocked
         ? (
-          // 만료·권한 없음·삭제됨·횟수 초과 — 결과 화면 틀(시안 G3 · AuthForm expired)
+          // 만료·권한 없음·삭제됨·횟수 초과 — 결과 화면 틀
           <>
             <AuthHeading
               icon={RESULT[blocked.kind].icon}
@@ -316,7 +316,7 @@ export default function SharedLinkPage() {
               )
               : isEdit
                 ? (
-                  // 같이 편집(시안 G1·GM1)
+                  // 같이 편집
                   <>
                     <AuthHeading title={t('share.title')} subtitle={t('share.subtitle')} />
                     <AuthGuestCard name={cardName} meta={cardMeta} icon={cardIcon} badge={badge.label} badgeTone={badge.tone} />

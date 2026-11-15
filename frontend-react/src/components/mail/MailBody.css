@@ -1,8 +1,8 @@
 /*
  * 메일 본문 종이 — Vue 판 MailBody.vue 의 <style> 그대로.
- * 전역 토큰 --paper / --paper-foreground(11-A2). 두 테마 같은 흰 종이(HTML 메일 원본 보존, 대비 16:1).
+ * 전역 토큰 --paper / --paper-foreground. 두 테마 같은 흰 종이(HTML 메일 원본 보존, 대비 16:1).
  * 링크·인용선·인용 글자 색은 종이 위 전용 값이라 토큰이 없다 — 예전 iframe 의 hex(#1b5fd9 #d7dce3 #5e6978)를 HSL 로 옮긴 것.
- * "어둡게 보기"는 card·foreground(11-A2 확정).
+ * "어둡게 보기"는 card·foreground.
  */
 .mail-paper-scope {
   --mail-paper: var(--paper);
@@ -26,7 +26,7 @@
 .mail-paper--dark .mail-paper-prose { --tw-prose-links: hsl(var(--primary)); --tw-prose-quotes: hsl(var(--muted-foreground)); --tw-prose-quote-borders: hsl(var(--border)); }
 .mail-paper-prose :where(blockquote) { border-color: hsl(var(--mail-paper-rule)); color: hsl(var(--mail-paper-muted)); }
 .mail-paper-quote-toggle, .mail-paper-quote { border-color: hsl(var(--mail-paper-rule)); color: hsl(var(--mail-paper-muted)); }
-/* 어둡게 보기(A·B): 앱 색 card/foreground(11-A2). */
+/* 어둡게 보기(A·B): 앱 색 card/foreground. */
 .mail-paper.mail-paper--dark {
   background: hsl(var(--card));
   color: hsl(var(--foreground));

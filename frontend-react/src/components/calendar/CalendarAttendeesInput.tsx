@@ -1,5 +1,5 @@
 /**
- * 일정 폼 참석자 칩 입력(Vue components/calendar/CalendarAttendeesInput.vue · 시안 CL2 "참석자"):
+ * 일정 폼 참석자 칩 입력(Vue components/calendar/CalendarAttendeesInput.vue · "참석자"):
  * 상자 min-h 40 · p 5/8 · gap 6, 칩 28 알약 primary/13
  * (이니셜 20 · 이름 · 상태[가능 = success 점 8 / 겹침 = warning 11/600] · ✕ 20(히트 40)) + "이름·이메일로 추가" 입력.
  * 자동완성 = 워크스페이스 사용자(/api/contacts/workspace-users). 목록에 없는 이메일은 외부 참석자로 추가.

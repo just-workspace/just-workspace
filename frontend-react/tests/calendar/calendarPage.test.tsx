@@ -104,7 +104,7 @@ describe('캘린더 화면', () => {
       const band = await screen.findByRole('status')
       expect(band.textContent).toContain('Kiritimati (UTC+14)')
       expect(screen.getByText('UTC+14 Kiritimati')).toBeTruthy()
-      // 한글 표에 없는 시간대 — 이름만 쓰는 버튼은 영문 + UTC 오프셋(핸드오프 15-2)
+      // 한글 표에 없는 시간대 — 이름만 쓰는 버튼은 영문 + UTC 오프셋
       fireEvent.click(screen.getByRole('button', { name: t('calendar.tzBand.keep', { city: 'Kiritimati (UTC+14)' }) }))
       await waitFor(() => expect(screen.queryByText(/Kiritimati \(UTC\+14\)/)).toBeNull())
       unmount()

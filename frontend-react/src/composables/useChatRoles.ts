@@ -1,9 +1,9 @@
 /**
- * 채팅 역할·권한 어댑터(r24 백엔드 app/chat/roles.py · permissions.py — 계약 docs/chat-permissions.md).
+ * 채팅 역할·권한 어댑터(백엔드 app/chat/roles.py · permissions.py — 계약 docs/chat-permissions.md).
  * 역할·권한 API 는 프런트에서 **여기서만** 부른다. 화면(멤버 열·자동완성·프로필·설정)은 이 store 를 읽는다.
  *
  * - 역할 색: 서버는 팔레트 토큰 키 8개(permissions.ROLE_COLOR_TOKENS, 순서 고정)로 저장한다.
- *   순서 i → --role-(i+1)(= cat-(i+1)) 로 그린다(handover-22 §5.3 "기존 cat-1…8 재사용"). roleColorIndex 한 곳.
+ *   순서 i → --role-(i+1)(= cat-(i+1)) 로 그린다. roleColorIndex 한 곳.
  * - 실패(엔진 legacy·네트워크)면 "역할 없음"으로 떨어진다: 목록 비움, 관리 권한 = 전역 관리자만.
  * - 실시간 갱신: 서버가 chat_roles_changed 이벤트를 보내면 handleRolesEvent 가 다시 읽는다.
  *
@@ -221,7 +221,7 @@ export function rolesOfUser(userId: string, s: ChatRolesState = S()): ChatRole[]
   return s.roles.filter(r => ids.includes(r.id)).sort((a, b) => b.position - a.position)
 }
 
-// ─── 관리(Settings22) ───
+// ─── 관리 ───
 export type RoleInput = Partial<Pick<ChatRole, 'name' | 'color' | 'icon' | 'hoist' | 'mentionable' | 'group_id'>> & { permissions?: number }
 export async function createRole(body: RoleInput & { name: string }) {
   const r = await $fetch<ChatRole>(`${B}/roles`, { method: 'POST', body })

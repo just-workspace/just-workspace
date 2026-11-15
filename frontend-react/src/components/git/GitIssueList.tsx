@@ -1,6 +1,6 @@
 // Vue 원본: frontend/components/git/GitIssueList.vue
 /**
- * 이슈 목록(시안 GT3 왼쪽 560 · GTM2 모바일).
+ * 이슈 목록.
  *  머리 52: 열림 n / 닫힘 세그먼트 · 라벨 ▾(GitLabelPicker 필터 — 기존 기능 유지) · 담당 ▾ · 새 이슈(primary 32)
  *  행 60: 상태 아이콘 16(열림 success · 닫힘 muted) · 제목 13.5/600 + 라벨 칩 · "#n · 작성자 · 언제" · 댓글 수
  *  모바일: 세그먼트·칩 36, 행 15/600 · 아이콘 18, 새 이슈는 FAB.

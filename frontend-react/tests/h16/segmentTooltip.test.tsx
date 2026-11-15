@@ -1,4 +1,4 @@
-// UiSegment — 툴팁 있는 비활성 칸(handover 16 답 9 "이 화면에서는 너무 큽니다")
+// UiSegment — 툴팁 있는 비활성 칸
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { UiSegment } from '~/components/ui/Segment'

@@ -1,7 +1,7 @@
 /**
- * 모바일 상단(Vue components/files/FileMobileHeader.vue · 시안 FilesMobile header 56):
+ * 모바일 상단(Vue components/files/FileMobileHeader.vue):
  * ‹ 상위 폴더(44) · 폴더 이름 16/600 + 위치 12 muted · 검색(44) · ⋯ 보기·정렬(44).
- * 선택 모드(PatMobile): ‹ 선택 해제 · "N개 선택됨" · "전체 선택"(primary 14/600).
+ * 선택 모드: ‹ 선택 해제 · "N개 선택됨" · "전체 선택"(primary 14/600).
  * 검색: 돋보기를 누르면 같은 줄이 입력창으로 바뀐다(시안에 그림 없음 — 공통 규격 검색 입력).
  */
 import { useEffect, useRef, useState } from 'react'

@@ -3,7 +3,7 @@
  * 빨강은 danger 하나(시안 J). destructive 는 기존 호출처 호환용 별칭 — 새 코드는 danger.
  * 커맨드 바·필터 바 안 컨트롤은 전부 32 = size="xs"(시안 B·D).
  * type 기본값이 없다(Vue 판과 같음) — 폼 안에서 제출 버튼이 아니면 type="button" 을 줄 것.
- * 아이콘은 `icon`(글자 왼쪽) · `iconRight`(글자 오른쪽, ▾·외부 링크) — 아이콘 16, 글자와 간격 6(handover 18 답 10).
+ * 아이콘은 `icon`(글자 왼쪽) · `iconRight`(글자 오른쪽, ▾·외부 링크) — 아이콘 16, 글자와 간격 6.
  * 버튼 안에 UiIcon 을 직접 넣지 말 것.
  */
 import type { AllHTMLAttributes, ElementType, ReactNode, Ref } from 'react'

@@ -1,5 +1,5 @@
 /**
- * 위키 오른쪽 레일 240(시안 WK1·WK2 aside "목차와 정보") — Vue 판 components/wiki/WikiRail.vue 이식.
+ * 위키 오른쪽 레일 240("목차와 정보") — Vue 판 components/wiki/WikiRail.vue 이식.
  *  "이 페이지" 목차(왼쪽 1px 선 + 현재 항목 2px primary) · "최근 기록"(v12 정하늘 · 10:44) + 전체 기록 보기.
  *  "이 페이지를 가리키는 곳"(백링크, GET /api/wiki/pages/{id}/backlinks): 12 muted 한 줄에 "제목 · 제목"(시안 그대로),
  *  각 제목은 그 페이지로 가는 링크(다른 스페이스면 "스페이스 › 제목"). 가리키는 곳이 없으면 칸을 숨긴다.

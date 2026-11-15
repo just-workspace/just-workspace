@@ -1,4 +1,4 @@
-// handover-22 키트 — UiSlider · UiTriToggle · UiColorSwatches · UiDatePopover/UiMiniCalendar · UiDragHandle/UiDropLine · UiEmojiGrid · UiMentionList 슬롯
+// 채팅 키트 — UiSlider · UiTriToggle · UiColorSwatches · UiDatePopover/UiMiniCalendar · UiDragHandle/UiDropLine · UiEmojiGrid · UiMentionList 슬롯
 import { describe, it, expect, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'

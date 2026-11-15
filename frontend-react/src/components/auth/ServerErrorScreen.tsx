@@ -1,5 +1,5 @@
 /**
- * 500(Vue components/auth/ServerErrorScreen.vue · 시안 R12Misc e500 · 답변서 A7 M1) — 셸 없음, 가운데 480 열 하나.
+ * 500(Vue components/auth/ServerErrorScreen.vue) — 셸 없음, 가운데 480 열 하나.
  *  브랜드(타일 28 + 이름 15/600) → mono 500 · 제목 24/700 · 설명 14 → 요청 번호(UiInput readonly mono · 복사) →
  *  [다시 시도(refresh)][서비스 상태 ▴/▾ outline] → 펼치면 UiCard: 머리 "서비스 상태 · 확인 10:42:08 · 새로 확인",
  *  행 40 = StatusDot · 서비스 · 상태 글자 · 응답 시간(mono, 오른쪽 64).

@@ -1,5 +1,5 @@
 /**
- * 브랜딩 › 로그인 배경 타일 그리드(답변서 B5) 계산 — 화면(pages/admin/branding.tsx)·테스트 공용.
+ * 브랜딩 › 로그인 배경 타일 그리드 계산 — 화면(pages/admin/branding.tsx)·테스트 공용.
  */
 
 /** 로그인 배경 최대 장수(백엔드 app/admin/router.py WALLPAPER_MAX_COUNT 와 같음) */

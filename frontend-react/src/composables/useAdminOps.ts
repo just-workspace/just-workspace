@@ -1,5 +1,5 @@
 /**
- * 관리 운영 요약(시안 AdminPage overview "운영 요약 4칸" + 좌 내비 보조 글자). Vue 판 composables/useAdminOps.ts 그대로.
+ * 관리 운영 요약("운영 요약 4칸" + 좌 내비 보조 글자). Vue 판 composables/useAdminOps.ts 그대로.
  * 승인 대기 n · 마지막 백업 · SSL D-n · 서비스 n/n 을 GET /api/admin/ops-summary 한 번으로 받는다.
  * 그 엔드포인트가 없는 예전 서버면 예전처럼 API 4개를 병렬로 부른다.
  *
@@ -63,7 +63,7 @@ export function daysUntil(dateText: string | null | undefined): number | null {
   return Math.floor((t - Date.now()) / 86_400_000)
 }
 
-/** 원시 enum → 한글(관리 6) */
+/** 원시 enum → 한글 */
 export const RUN_STATUS_LABEL: Record<string, string> = {
   success: '완료', partial: '일부 실패', running: '진행 중', idle: '대기', failed: '실패', building: '진행 중',
 }

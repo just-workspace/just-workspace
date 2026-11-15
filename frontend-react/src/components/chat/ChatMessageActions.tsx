@@ -1,5 +1,5 @@
 /**
- * 메시지 호버 바(handover-22 "호버 바" · Chat22 #hover #shift #focus · 디스코드 수치). Vue 원본: frontend/components/chat/ChatMessageActions.vue
+ * 메시지 호버 바(디스코드 수치). Vue 원본: frontend/components/chat/ChatMessageActions.vue
  *  모양: 1px · radius 8 · 안쪽 2 · 버튼 32(radius 6) · 아이콘 20 · 구분선 1×24 · 줄 위 −16. 아이콘 호버 1.1배(reduce-motion 제외).
  *  구성: 최근 리액션 3(개인 설정 chatEmojiRecent 앞 3, 없으면 시안 👍 👀 🎉) | 리액션 추가(피커) · 답장 · 스레드로 답장 · 저장 · ⋯
  *  Shift 를 누르고 있으면 고정 · 삭제(danger)가 ⋯ 앞에 바로 보인다(디스코드).
@@ -114,7 +114,7 @@ export function useMessageActionRunner(o: ActionRunnerOpts) {
           break
         }
         case 'unread': await markUnreadHere(m, t); break
-        // 화면 안 AI(S7) — 이 메시지부터 끝까지 요약(목록 위 카드)
+        // 화면 안 AI — 이 메시지부터 끝까지 요약(목록 위 카드)
         case 'aiSummary': requestChatAiSummary(m.channel_id, m.id); break
         case 'delete': {
           if (!await confirmBox(t('chat.message.deleteConfirm'), { danger: true })) return

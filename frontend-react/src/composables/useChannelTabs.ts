@@ -1,5 +1,5 @@
 // Vue 원본: frontend/composables/useChannelTabs.ts
-// 채널 탭(시안 ChannelTabs · 11 답 D6) — 메시지 · 파일 · 위키 + 더보기(회의 · 작업 · 탭 관리).
+// 채널 탭 — 메시지 · 파일 · 위키 + 더보기(회의 · 작업 · 탭 관리).
 // 서버: /api/chat/channels/{id}/tabs|files|meetings|tasks (backend app/chat/tabs.py). 채팅 상태(useChat)와는 따로 둔다.
 // 상태 없는 요청 묶음이라 store 없이 모듈 함수 + 같은 이름의 hook(useChannelTabs)으로 둔다.
 import { $fetch } from '~/lib/api'
@@ -29,11 +29,11 @@ export interface ChannelTabsSummary {
   folder: ChannelFolder | null
   /** 예전 페이지 연결(있으면) */
   wiki: { id: string; title: string; space_id: string } | null
-  /** 위키 탭이 보여 주는 스페이스(R4 — 스페이스 단위 연결) · pages = 페이지 수 */
+  /** 위키 탭이 보여 주는 스페이스(스페이스 단위 연결) · pages = 페이지 수 */
   wiki_space?: { id: string; name: string; pages: number } | null
   meetings_upcoming: number
   tasks_open: number
-  /** 탭 순서·끄기(R4) — 채널 멤버 모두에게 같다 */
+  /** 탭 순서·끄기 — 채널 멤버 모두에게 같다 */
   layout?: ChannelTabLayoutItem[]
   can_manage: boolean
 }

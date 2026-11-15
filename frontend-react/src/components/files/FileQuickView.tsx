@@ -1,6 +1,6 @@
 /**
- * 최근 · 즐겨찾기 뷰(Vue components/files/FileQuickView.vue · 결정 5) — GET /api/files/recent(파일을 열 때 POST 로 쌓임) · GET /api/files/stars.
- * 시안 그림 없음 → 공통 규격(PatRows 조밀 40 / 모바일 56). 열: 이름 · 위치 · 연 시각(즐겨찾기는 추가한 시각) · 크기 · 행동.
+ * 최근 · 즐겨찾기 뷰(Vue components/files/FileQuickView.vue) — GET /api/files/recent(파일을 열 때 POST 로 쌓임) · GET /api/files/stars.
+ * 시안 그림 없음 → 공통 규격(조밀 40 / 모바일 56). 열: 이름 · 위치 · 연 시각(즐겨찾기는 추가한 시각) · 크기 · 행동.
  * 행 클릭 = 열기(파일 목록과 같은 규칙), 행 끝: 위치 열기 · 즐겨찾기 빼기(즐겨찾기 뷰). 원본이 없어진 즐겨찾기는 흐리게 + "원본 없음".
  */
 import { useEffect, useState } from 'react'

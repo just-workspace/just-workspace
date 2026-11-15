@@ -1,9 +1,9 @@
 /**
- * 데스크톱 커맨드 바(Vue components/files/FileCommandBar.vue · 시안 FilesDesktop): 44 · bg-card · border-b,
+ * 데스크톱 커맨드 바(Vue components/files/FileCommandBar.vue): 44 · bg-card · border-b,
  * 순서 경로 → 검색(180) → 보기 세그먼트 → 업로드(outline 32) → 새로 만들기 ▾(primary 32).
- * 선택 모드(결정 3 ②): 하나라도 고르면 바가 바뀐다 — primary/10 바탕 + primary/35 밑줄, ✕(선택 해제 Esc) · "N개 선택" ·
+ * 선택 모드: 하나라도 고르면 바가 바뀐다 — primary/10 바탕 + primary/35 밑줄, ✕(선택 해제 Esc) · "N개 선택" ·
  * 공유 · 이동 · 다운로드 · 삭제(32, 12px) · 오른쪽 "모두 선택".
- * 업로드 진행은 전송 패널 한 곳(결정 9) — 업로드 버튼은 파일 고르기만 연다(진행 모달 폐지).
+ * 업로드 진행은 전송 패널 한 곳 — 업로드 버튼은 파일 고르기만 연다(진행 모달 폐지).
  */
 import { useZoneInstalled } from '~/composables/useSiteConfig'
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
@@ -29,7 +29,7 @@ export interface FilesFileCommandBarProps {
   onBulkShare?: () => void
   onBulkMove?: () => void
   onBulkDownload?: () => void
-  /** 선택 항목을 서버에서 압축해 내려받기(S4 — AI 압축과 같은 작업) */
+  /** 선택 항목을 서버에서 압축해 내려받기(AI 압축과 같은 작업) */
   onBulkZip?: () => void
   /** 지금 검색 결과 전부를 압축해 내려받기 */
   onSearchZip?: () => void
@@ -40,7 +40,7 @@ export interface FilesFileCommandBarProps {
   onDropMove?: (paths: string[], dst: string) => void
 }
 
-// 선택 모드 액션 — 시안 selActs(공용 아이콘)
+// 선택 모드 액션(공용 아이콘)
 const SEL_ACTS = [
   { key: 'share', labelKey: 'common.share', icon: 'share-up' },
   { key: 'move', labelKey: 'common.move', icon: 'folder-move' },

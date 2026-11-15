@@ -1,5 +1,5 @@
 /**
- * AI 답변 👍/👎(S6a · 시안 C1 행동 줄, C2-4 "별로예요 → 이유 받기" + 수정 요청 a2fix).
+ * AI 답변 👍/👎("별로예요 → 이유 받기" + 수정 요청 a2fix).
  *  👍 = 바로 저장(다시 누르면 취소). 👎 = 바로 저장하고 이유 카드를 연다 — 이유 칩·한 줄 의견·
  *  "이 대화 내용도 함께 보내기"(기본 꺼짐). 개인정보: 기본은 이유만 저장, 대화 내용은 켰을 때만 첨부.
  *  POST /api/ai/messages/{id}/feedback {rating, reasons, comment, include_conversation}

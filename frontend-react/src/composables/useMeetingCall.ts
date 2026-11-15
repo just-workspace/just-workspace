@@ -1,5 +1,5 @@
 /**
- * 미니 통화 창(P-8) — 회의 화면과 셸 사이의 길잡이. Vue 판 composables/useMeetingCall.ts 그대로.
+ * 미니 통화 창 — 회의 화면과 셸 사이의 길잡이. Vue 판 composables/useMeetingCall.ts 그대로.
  *
  * LiveKit 접속 자체는 useMeetings 의 앱 수준 세션이 쥐고 있다(회의 화면을 떠나도 끊기지 않음).
  * 여기는 "어디로 돌아가나·창이 어디 붙나·누구를 비추나" 같은 셸 쪽 상태만 둔다.
@@ -48,7 +48,7 @@ export function roomPath(name: string, query?: Record<string, string>): { path: 
 
 /**
  * 앱 안에서 회의로 들어가기(목록 "참여"·채팅 머리 통화·연락처 통화). 예전엔 새 창(팝업)이었지만
- * 그러면 통화가 그 창에 갇혀 셸의 미니 창이 붙을 수 없다 — 같은 탭 라우트로(시안 TasksGit "② 같은 탭 라우트").
+ * 그러면 통화가 그 창에 갇혀 셸의 미니 창이 붙을 수 없다 — 같은 탭 라우트로("② 같은 탭 라우트").
  * 이미 이 방에 통화 중이면 그대로 펼친다.
  */
 export function openRoom(name: string, query?: Record<string, string>) {

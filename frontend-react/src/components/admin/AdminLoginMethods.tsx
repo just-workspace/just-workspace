@@ -1,6 +1,6 @@
 /**
- * 설정 › 일반 "로그인 방식" — Vue components/admin/AdminLoginMethods.vue(시안 AdminPage settings).
- * 로컬 계정 · LDAP · SSO 의 순서와 사용 여부를 한 카드에(기존 "인증 우선순위"와 LDAP "사용" 체크를 통합 — 관리 1).
+ * 설정 › 일반 "로그인 방식" — Vue components/admin/AdminLoginMethods.vue.
+ * 로컬 계정 · LDAP · SSO 의 순서와 사용 여부를 한 카드에(기존 "인증 우선순위"와 LDAP "사용" 체크를 통합).
  * 행 48(rounded-md bg-background) = 끌기 손잡이 + 순번 mono + 이름·설명 + "설정" + 스위치. 순서·스위치는 즉시 저장 + "저장됨 ✓".
  * 아래 "LDAP 연결" 카드(텍스트 필드)는 카드별 저장(되돌리기/저장) + 연결 시험.
  * ★ 백엔드 갭: 로컬 계정 끄기 API 없음(항상 켜짐) · SSO(OIDC) 없음 → 둘 다 스위치 비활성.

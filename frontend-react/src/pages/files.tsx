@@ -1,11 +1,11 @@
 /**
- * 파일(Vue pages/files.vue · 시안 FilesDesktop · FilesMobile · 결정 노트 FilesWiki nF 1–10).
+ * 파일(Vue pages/files.vue).
  * 데스크톱: 사이드바 236 · 커맨드 바 44(경로 바 안, 선택 모드로 변신) · 목록/그리드 · 상세 패널 320.
  * 모바일: 상단 56(‹ 상위 · 이름 · 검색 · ⋯ 보기·정렬) · 행 56 + ⋮ 40 상시 · FAB 56 · 선택 바/전송 카드는 탭바 위 8.
  * 클릭 = 열기(이미지·PDF·텍스트 미리보기 모달, 오피스 새 탭, 폴더 들어가기), 상세 = ⋮ "상세 정보" 또는 Space.
- * 공유받은 항목(p9): 미리보기·오피스도 같은 규칙(서버가 권한대로 보기/편집), ⋮ 메뉴·상세 패널(댓글 탭)도 공유받음 화면에서 연다.
+ * 공유받은 항목: 미리보기·오피스도 같은 규칙(서버가 권한대로 보기/편집), ⋮ 메뉴·상세 패널(댓글 탭)도 공유받음 화면에서 연다.
  *   공동 소유면 공유·이동(같은 공유 폴더 안)·이름 바꾸기(입력 대화상자)·휴지통(원 소유자 휴지통)까지.
- * 모바일 머리는 FileMobileHeader(시안 FM1) — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader).
+ * 모바일 머리는 FileMobileHeader — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader).
  */
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type MouseEvent } from 'react'
 import { aiArtifactError, aiZipAndDownload } from '~/utils/aiArtifacts'
@@ -176,14 +176,14 @@ export default function FilesPage() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── 열기(결정 2) ──
+  // ── 열기 ──
   function openItem(item: FileItem) {
     if (item.is_dir) {
       if (filesStore.getState().searchActive) enterFolder(item)
       else openFolder(item.path)
       return
     }
-    // 공유받은 항목도 같은 길 — 미리보기·다운로드·오피스 API 가 shared-with-me/ 경로를 권한대로 받는다(p9)
+    // 공유받은 항목도 같은 길 — 미리보기·다운로드·오피스 API 가 shared-with-me/ 경로를 권한대로 받는다
     markRecent(item.path)
     if (docsOn && isOfficeFile(item.name)) { openInlineEditor(item); return }
     // 이미지·PDF·텍스트는 미리보기, 그 밖은 미리보기 모달의 "미리 볼 수 없음 + 다운로드"
@@ -204,7 +204,7 @@ export default function FilesPage() {
 
   /**
    * 오피스 문서는 새 탭에서 편집(인라인 iframe 은 해상도 손실). 새 탭은 앱 페이지 /office/open 이
-   * "여는 중" 화면(시안 ShellPage officeLoading · 10초 넘으면 미리보기로 열기)을 그리고 편집기로 넘어간다.
+   * "여는 중" 화면(10초 넘으면 미리보기로 열기)을 그리고 편집기로 넘어간다.
    * 클릭 제스처 안에서 바로 주소로 열어 팝업 차단을 피한다.
    */
   function openOfficeTab(url: string): boolean {
@@ -308,7 +308,7 @@ export default function FilesPage() {
     }
   }
 
-  // ── 이름 입력: 목록 맨 위 인라인 행(결정 7) ──
+  // ── 이름 입력: 목록 맨 위 인라인 행 ──
   function startNewFolder() {
     if (filesStore.getState().searchActive) exitSearch()
     if (filesStore.getState().view !== 'files') setView('files')
@@ -337,7 +337,7 @@ export default function FilesPage() {
     }
   }
 
-  // ── 선택 모드 일괄 동작(결정 3) ──
+  // ── 선택 모드 일괄 동작 ──
   function selectedList() { return sortedItems.filter(i => selectedItems.has(i.path)) }
   function bulkShare() { const l = selectedList(); if (l.length) { setShareTab(null); setShareTargets([...l]) } }
   function bulkMove() { if (selectedItems.size) setMoveTargets([...selectedItems]) }
@@ -352,7 +352,7 @@ export default function FilesPage() {
       await downloadMultiple(paths)
     }
   }
-  /** S4 — 서버에서 압축(파일 수·크기 상한, 권한 재검사, 진행률) → 내려받기. zip 은 내 파일 › AI 결과물에도 남는다 */
+  /** 서버에서 압축(파일 수·크기 상한, 권한 재검사, 진행률) → 내려받기. zip 은 내 파일 › AI 결과물에도 남는다 */
   async function zipDownload(body: { paths?: string[]; query?: string }, label: string) {
     try {
       const job = await aiZipAndDownload(body, label, { addTransfer, updateProgress, finishTransfer })
@@ -385,7 +385,7 @@ export default function FilesPage() {
     }
   }
 
-  // ── 끌어다 놓기 이동(결정 4 ②) ──
+  // ── 끌어다 놓기 이동 ──
   async function onDropMove(paths: string[], dst: string) {
     const failed = await moveItems(paths, dst)
     setSelectedItems(new Set())
@@ -510,7 +510,7 @@ export default function FilesPage() {
         />
 
         <div className="relative flex min-h-0 flex-1">
-          {/* 바깥 파일 끌어다 놓기(시안 FilesDesktop transfer · D3b): 목록 위 점선 2px primary · rounded 16 · primary/0.08 · 15/600 */}
+          {/* 바깥 파일 끌어다 놓기(D3b): 목록 위 점선 2px primary · rounded 16 · primary/0.08 · 15/600 */}
           {isDragOver && (
             <div
               className="pointer-events-none absolute inset-3 z-dropdown flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-primary/[0.08] px-6 text-center text-[15px] font-semibold text-primary md:inset-6"

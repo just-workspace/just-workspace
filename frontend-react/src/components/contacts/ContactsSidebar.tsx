@@ -1,9 +1,9 @@
 /**
  * 연락처 사이드바 — Vue 판 components/contacts/ContactsSidebar.vue.
- * 시안 CT1 · 연4: 236 bg-card, [+ 새 연락처] 40 primary,
+ * 236 bg-card, [+ 새 연락처] 40 primary,
  * 범위 행 34(선택 = primary/13 + 600, 개수 mono 12) — 모든 연락처 · 즐겨찾기 · 워크스페이스 사용자 /
  * 주소록(섹션 11/600 트래킹) / 그룹(점 8 + 이름) / "가져오기 · 내보내기 (vCard)".
- * 1024 미만에서는 페이지가 이 사이드바를 그리지 않고 FAB + ⋯ 시트(ContactsMobileMenu)를 쓴다(연1).
+ * 1024 미만에서는 페이지가 이 사이드바를 그리지 않고 FAB + ⋯ 시트(ContactsMobileMenu)를 쓴다.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'

@@ -1,8 +1,8 @@
 /**
- * 차트 색(시안 관리 5 ①) — Vue 판 composables/useChartTokens.ts 그대로.
+ * 차트 색 — Vue 판 composables/useChartTokens.ts 그대로.
  * CSS 변수(primary·success·warning·danger)를 Chart.js 에 주입. 축 글자 = muted-foreground, 격자 = border.
  * 브랜드 primary 를 바꾸거나 테마를 바꾸면 따라 바뀐다. hex 하드코딩 금지.
- * 범주 색은 --cat-1…8(11-A1) 순서대로 — 계열 1부터, 9개 이상이면 다시 1부터(범례·툴팁의 이름으로 구분).
+ * 범주 색은 --cat-1…8 순서대로 — 계열 1부터, 9개 이상이면 다시 1부터(범례·툴팁의 이름으로 구분).
  *
  * React: const { tokens } = useChartTokens()   — 컴포넌트마다 따로(Vue 도 인스턴스별)
  */

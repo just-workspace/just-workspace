@@ -1,5 +1,5 @@
 /**
- * 색 견본 고르기(handover-22 "새 부품" · 시안 Settings22 역할 색): 36 원 한 줄(간격 8).
+ * 색 견본 고르기: 36 원 한 줄(간격 8).
  * 고른 것 = 흰(bg-background 색) 체크 + 2px ring(foreground, offset 2). 마지막 "색 없음" = 점선 원 + ban 아이콘.
  * 값 = 옵션 value 문자열 | null(색 없음).
  * 기본 옵션 ROLE_COLOR_OPTIONS = 백엔드 역할 색 키 8개(순서 고정, permissions.ROLE_COLOR_TOKENS) → 견본 bg-role-1…8.

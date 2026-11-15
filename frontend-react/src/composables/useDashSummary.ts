@@ -1,5 +1,5 @@
 /**
- * 홈 대시보드 요약(handover 17 "오늘 브리핑 줄") — GET /api/dashboard/summary 한 번으로 칩·운영 띠·카드 개수를 그린다.
+ * 홈 대시보드 요약 — GET /api/dashboard/summary 한 번으로 칩·운영 띠·카드 개수를 그린다.
  * "오늘"은 캘린더 시간대(utils/calTz) 기준으로 보낸다(day_start/day_end).
  *
  * React: const { summary, loading, refresh } = useDashSummary()

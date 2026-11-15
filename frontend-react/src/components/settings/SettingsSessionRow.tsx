@@ -1,6 +1,6 @@
 /**
  * "내 세션" 표의 한 행(min 52) — Vue SettingsSessionsTable.vue 의 v-for 행을 이름 붙여 뺀 것.
- * 데스크톱 4열(1.6fr 1fr 1fr 110): 기기(타일 30 + 이름 600 + 종류 12) / 접속 주소(역방향 DNS 호스트 이름, 없으면 IP — mono, 답변서 B7) / 최근 활동 / 행동.
+ * 데스크톱 4열(1.6fr 1fr 1fr 110): 기기(타일 30 + 이름 600 + 종류 12) / 접속 주소(역방향 DNS 호스트 이름, 없으면 IP — mono) / 최근 활동 / 행동.
  * 모바일은 기기 아래 한 줄(종류 · IP · 최근 활동)로 접고 위치·최근 열은 숨긴다.
  * 행동: 현재 기기 = "이 기기" success 틴트 배지, 나머지 = [로그아웃](32 테두리, danger 글자).
  *
@@ -33,7 +33,7 @@ export interface SettingsSessionRowProps {
   onRevoke?: () => void
 }
 
-/** 접속 주소 칸(답변서 B7) — 역방향 DNS 호스트 이름, 없으면 IP. 지역 이름은 쓰지 않는다 */
+/** 접속 주소 칸 — 역방향 DNS 호스트 이름, 없으면 IP. 지역 이름은 쓰지 않는다 */
 export function sessionAddress(hostname: string | null | undefined, ip: string | null | undefined): string {
   return hostname || ip || '—'
 }

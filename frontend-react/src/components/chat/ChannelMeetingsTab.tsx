@@ -1,5 +1,5 @@
 /**
- * 채널 탭 — 회의(12 답 A6 · 시안 R12Channel #meetings H2).
+ * 채널 탭 — 회의.
  *  (진행 중 채널 통화가 있으면) success 띠: StatusDot live · "채널 통화 진행 중 · mm:ss" + 참여자 · [참여](sm)
  *  "예정" · "지난 회의" 묶음 = 머리 12/600 muted + UiCard 안 행 min-h-14:
  *    w-24 mono(굵은 일시 / muted 길이) · 제목 14/600 + 보조 12 muted(호스트) · [링크 복사](outline xs) · UiMenu(캘린더에서 보기 · 링크 복사 · 수정)

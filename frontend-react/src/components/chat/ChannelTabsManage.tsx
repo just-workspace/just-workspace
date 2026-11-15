@@ -1,5 +1,5 @@
 /**
- * 탭 관리(12 답 A6 · 시안 R12Channel #manage H4). Vue 원본: frontend/components/chat/ChannelTabsManage.vue (ChatChannelTabsManage)
+ * 탭 관리. Vue 원본: frontend/components/chat/ChannelTabsManage.vue (ChatChannelTabsManage)
  * UiModal 480 "#채널 탭 관리":
  *  안내 13 muted → 목록(rounded-md border, 행 min-h-12):
  *    메시지 = lock 고정(옮기기·끄기 없음) · 나머지 = 끌기 손잡이(UiIconButton grip) + 아이콘 + 이름·설명 + UiSwitch.
@@ -8,12 +8,12 @@
  *  → 아래 안내 12 muted. 바닥 [취소][저장] — 순서·끄기는 저장을 눌러야 채널 멤버 모두에게 적용된다.
  * 순서 바꾸기: 손잡이를 끌어 놓기(마우스) 또는 손잡이에서 ↑↓(키보드).
  * [바꾸기]·[폴더 연결]은 같은 창 안 하위 화면으로 들어가고, 거기서 연결하면 바로 저장된다(기존 동작).
- * 하위 화면(13 답 A3 · 시안 R13 #tabWiki · #tabFolder): 제목 자리 = ‹(탭 관리로) + 제목(titleSlot).
+ * 하위 화면(#tabFolder): 제목 자리 = ‹(탭 관리로) + 제목(titleSlot).
  *  위키: UiInput 검색 → 스페이스 행 h-14(book-open · 이름 13 · "페이지 n · 공개범위|소유자" 12 muted), 고른 것 = primary 틴트 + 600 + ✓ →
  *        안내 12 muted "지금: …". 푸터 [뒤로][이 스페이스로].
  *  폴더: 경로 한 줄(13, 앞 칸 muted · › · 지금 칸 600) → 폴더 행 h-11(행 = 고르기, › = 들어가기; 더블클릭도 들어가기) → 안내.
  *        푸터 [뒤로]["이름" 연결] — 고른 행이 없으면 지금 들어와 있는 폴더.
- *  연결 해제 = 푸터 왼쪽 danger 글자 버튼, 누르면 확인형 모달(UiModal confirm sm) 뒤 해제(핸드오프 15-7).
+ *  연결 해제 = 푸터 왼쪽 danger 글자 버튼, 누르면 확인형 모달(UiModal confirm sm) 뒤 해제.
  *  폴더 행의 "파일 n" 수와 "권한 없는 멤버 경고" 줄은 그리지 않는다 — 목록 API 에 하위 개수가 없고,
  *  폴더 연결은 채널 공유(FileShare.shared_with_channel_id)를 만들어 멤버 전원이 늘 읽을 수 있어 경고 대상이 생기지 않는다.
  */
@@ -206,7 +206,7 @@ export function ChatChannelTabsManage({ channelId, channelName, summary, onClose
   const folderTarget = picked ?? (dir !== 'my' ? dir : null)
   const folderTargetName = folderTarget ? folderTarget.split('/').filter(Boolean).pop() ?? '' : ''
 
-  // 연결 해제 — 푸터 왼쪽 danger 글자 버튼 → 확인형 모달(sm) → 해제(핸드오프 15-7)
+  // 연결 해제 — 푸터 왼쪽 danger 글자 버튼 → 확인형 모달(sm) → 해제
   async function confirmUnlink(body: Parameters<typeof updateTabs>[1], msg: string, kind: 'wiki' | 'folder') {
     const ok = await confirmBox(t(kind === 'wiki' ? 'chat.tabs.unlinkWikiBody' : 'chat.tabs.unlinkFolderBody'), {
       title: t('chat.tabs.unlinkTitle'),
@@ -249,7 +249,7 @@ export function ChatChannelTabsManage({ channelId, channelName, summary, onClose
         </>
       )
 
-  // 하위 화면 제목 자리 = ‹ + 제목(시안 R13 #tabWiki·#tabFolder titleSlot)
+  // 하위 화면 제목 자리 = ‹ + 제목
   const subTitle = view === 'tabs' ? null : (
     <div className="flex items-center gap-1.5">
       <UiIconButton icon="chevron-left" label={t('chat.tabs.backToManage')} size="sm" onClick={() => setView('tabs')} />

@@ -1,7 +1,7 @@
 /**
  * 예약 보내기 시각 고르기 — Vue 판 components/mail/MailScheduleDialog.vue.
  * 작성 창 "보내기 ▾ › 예약 보내기"와 예약함 "시각 변경"이 같이 쓴다.
- * 시안엔 이 대화상자 그림이 없어 PatForm 규격(UiModal sm + 라벨 위 입력 40 + [취소][확인])으로 구성했다.
+ * 시안엔 이 대화상자 그림이 없어 기존 폼 규격(UiModal sm + 라벨 위 입력 40 + [취소][확인])으로 구성했다.
  * 서버 규칙: 지금+30초 이내면 바로 보냄, 1년 넘으면 400 — 여기서 미리 막는다.
  */
 import { useState } from 'react'

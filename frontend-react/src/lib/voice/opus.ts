@@ -1,5 +1,5 @@
 /**
- * Opus 레시피(VOICE-RESEARCH §5 Tier 1·2) — 순수 함수. 단위 테스트 대상(tests/voice/opus.test.ts).
+ * Opus 레시피 — 순수 함수. 단위 테스트 대상(tests/voice/opus.test.ts).
  *
  *  음성: 48k mono ~32 kbps, AEC/NS/AGC 켬(Krisp 가 붙으면 브라우저 NS 는 끔), DTX 켬, RED 켬, 인밴드 FEC 켬.
  *  음악: 48k stereo 256~510 kbps, CBR, DTX 끔, RED 끔, FEC 끔(CELT 엔 인밴드 FEC 가 없다 — RFC 6716),

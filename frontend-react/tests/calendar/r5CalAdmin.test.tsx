@@ -1,4 +1,4 @@
-// R5 cal-admin — 시간대 띠(A1) · 구독 추가 모달(A2) · SSL 올리기 모달(A2) · 브랜딩 다크 자동 조정 줄(B9)
+// 시간대 띠 · 구독 추가 모달 · SSL 올리기 모달 · 브랜딩 다크 자동 조정 줄
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { i18n } from '~/i18n'

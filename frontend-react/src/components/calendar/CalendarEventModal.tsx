@@ -1,5 +1,5 @@
 /**
- * 일정 폼(Vue components/calendar/CalendarEventModal.vue · 시안 CL2 · 캘5): UiModal(데스크톱 중앙 520 · 모바일 바텀시트).
+ * 일정 폼(Vue components/calendar/CalendarEventModal.vue): UiModal(데스크톱 중앙 520 · 모바일 바텀시트).
  * 기본 5 — 제목(44, 16/600) · 시간(날짜 + 시작–끝 mono + 길이 + 종일 스위치) · 캘린더 / 화상 회의 · 참석자
  * + "자세히 ▾"(장소 · 반복 · 알림 · 설명 · 시간대). 푸터 [삭제(편집일 때, 왼쪽)] … [취소][저장].
  * 화상 회의: "링크 자동 생성" 을 켜고 저장하면 예약 회의(/api/meetings/rooms)를 만들어 그 참여 링크를 meeting_url 로 넣는다.
@@ -273,7 +273,7 @@ export function CalendarEventModal() {
   const reminderModel = form.reminder_minutes ?? ''
   function setReminder(v: string | number | null) { upd({ reminder_minutes: v === '' || v === null ? null : Number(v) }) }
 
-  // 설정 › 표시와 같은 목록 · 같은 찾기 규칙(handover 18 답 16). 모바일은 UiSelect 가 OS 선택기로 그린다(찾기 칸 없음)
+  // 설정 › 표시와 같은 목록 · 같은 찾기 규칙. 모바일은 UiSelect 가 OS 선택기로 그린다(찾기 칸 없음)
   const tzOptions = useMemo(() => {
     return tzZoneNames(form.timezone).map(z => ({ value: z, label: `${z.replace(/_/g, ' ')} (${tzGmtLabel(z)})` }))
   }, [form.timezone])
@@ -422,7 +422,7 @@ export function CalendarEventModal() {
       : t('calendar.form.conflictOne', { name, s, e })
   })()
 
-  /** 새로 초대하는 사람이 있으면 저장 버튼이 "저장하고 초대 보내기"(시안 CL2) */
+  /** 새로 초대하는 사람이 있으면 저장 버튼이 "저장하고 초대 보내기" */
   const hasNewInvitees = (() => {
     const before = new Set((editingEvent?.attendees || []).map(a => a.email.toLowerCase()))
     return form.attendees.some(a => !before.has(a.email.toLowerCase()))

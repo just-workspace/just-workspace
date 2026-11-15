@@ -1,14 +1,14 @@
 /**
- * 회의 결과 화면 1틀(시안 MTM3 · WorkMobile meetEnded·meetRejected·meetOver·meetWrongPw · Review11 D5).
+ * 회의 결과 화면 1틀.
  * Vue 판 components/meetings/MeetingsResultScreen.vue 그대로.
  *  모바일: 회의 머리 56(제목 17/600 "회의", 비밀번호 틀림만 "회의 입장") + 본문이 세로 가운데(패딩 24 · 간격 14)
  *          아이콘 타일 40(반지름 10) → 제목 22/700 → 설명 15/1.6 muted → (children: 입력·[1차 48][2차 48 outline]).
- *  데스크톱(lg↑): "같은 내용을 MT4 왼쪽 패널(520) 자리에" — 입장 화면(MeetingsDeviceSetup)과 같은 520 패널
+ *  데스크톱(lg↑): 같은 내용을 왼쪽 패널(520) 자리에 — 입장 화면(MeetingsDeviceSetup)과 같은 520 패널
  *          (48/60 패딩, 오른쪽 경계선, 세로 가운데, 간격 18) 맨 위에 브랜드 줄(타일 28 + 앱 이름 15/600), 제목 24/700.
- *  인증 화면 틀(AuthShell: 월페이퍼 띠·브랜드 머리)은 쓰지 않는다(검수 P8 U1).
+ *  인증 화면 틀(AuthShell: 월페이퍼 띠·브랜드 머리)은 쓰지 않는다.
  *  아이콘 타일: 만료 warning · 거절 danger · 종료 muted.
  *  시안 모바일 머리 오른쪽 "더보기"는 결과 화면에서 할 동작이 정의되지 않아 두지 않는다(입장 화면 머리와 같게).
- *  데스크톱 오른쪽: aside 를 주면 bg-stage 가운데에 그린다(회의 끝 "이번 회의" 요약 카드 — 시안 R12Misc meetEnd). 없으면 빈 자리.
+ *  데스크톱 오른쪽: aside 를 주면 bg-stage 가운데에 그린다(회의 끝 "이번 회의" 요약 카드). 없으면 빈 자리.
  */
 import type { ReactNode } from 'react'
 import { cn } from '~/lib/utils'

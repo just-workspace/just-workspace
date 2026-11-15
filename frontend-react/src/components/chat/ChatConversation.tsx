@@ -1,9 +1,9 @@
 /**
  * 대화 영역(머리 · 연결 끊김 띠 · 메시지 목록 · 컴포저 · 드롭 오버레이). Vue 원본: frontend/components/chat/ChatConversation.vue
  * 채널을 안 골랐으면(데스크톱) 빈 상태.
- * handover-22 셸: 채널 탭(메시지·파일·회의·작업)은 머리 안 세그먼트 sm 로 옮겼다(탭 줄 없음, 탭 관리는 머리 채널 메뉴).
+ * 채널 탭(메시지·파일·회의·작업)은 머리 안 세그먼트 sm 로 옮겼다(탭 줄 없음, 탭 관리는 머리 채널 메뉴).
  *   포럼 채널(forum_board_id)은 탭 대신 글 목록/갤러리 전환 — 본문은 ChatForumView(RIGHT 담당, 파일이 생기면 자동으로 붙는다).
- *   연결 끊김(#offline)은 머리 바로 아래 전체 폭 띠 40. 대화 열은 전체 폭(handover-21 §5.8).
+ *   연결 끊김(#offline)은 머리 바로 아래 전체 폭 띠 40. 대화 열은 전체 폭.
  */
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ComponentType, type DragEvent } from 'react'
 import { useI18n } from '~/i18n'
@@ -61,7 +61,7 @@ export function ChatConversation({ onBack, onOpenChannels }: ChatConversationPro
   const selectedChannel = chat.selectedChannel
   const { messages, loadingMessages, hasMoreMessages, loadingMore, typingUsers } = chat
 
-  // ─── 채널 탭(12 답 A6 · 시안 R12Channel): 메시지 + 채널 설정 순서의 파일 · 위키 · 회의 · 작업 + 톱니(탭 관리) ───
+  // ─── 채널 탭: 메시지 + 채널 설정 순서의 파일 · 위키 · 회의 · 작업 + 톱니(탭 관리) ───
   // 1:1 대화(DM)에는 탭이 없다. 채널을 바꾸면 메시지 탭으로 돌아간다.
   const [tab, setTab] = useState<ChannelTabKey>('messages')
   const [tabsSummary, setTabsSummary] = useState<ChannelTabsSummary | null>(null)
@@ -104,7 +104,7 @@ export function ChatConversation({ onBack, onOpenChannels }: ChatConversationPro
     if (tab !== 'messages' && tabsSummary && !shown.includes(tab)) setTab('messages')
   }, [tab, tabsSummary, shown])
 
-  // ─── 대화 영역 전체 드롭 오버레이 (R-24) ───
+  // ─── 대화 영역 전체 드롭 오버레이 ───
   // 드래그가 대화 영역에 들어오면 표시, 놓으면 ChatInput 의 첨부 트레이로 들어간다(즉시 전송 아님).
   const depth = useRef(0)
   const [dragDepth, setDragDepthState] = useState(0)
@@ -200,7 +200,7 @@ export function ChatConversation({ onBack, onOpenChannels }: ChatConversationPro
             />
             {/* 모바일: 입력 중 표시는 컴포저 위 / 데스크톱: 컴포저 아래(D1) */}
             <ChatTypingIndicator typingUsers={typingUsers} className="md:hidden" />
-            {/* 대화 열 전체 폭(handover-21 §5.8) */}
+            {/* 대화 열 전체 폭 */}
             <div className="w-full">
               {/* 입력 중 표시는 컴포저 아래 24 예약 자리(ChatInput typing) */}
               <ChatInput onSend={sendMessage} onTyping={sendTyping} typing={<ChatTypingIndicator typingUsers={typingUsers} className="hidden px-0 md:block md:px-0" />} />

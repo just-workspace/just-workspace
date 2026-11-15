@@ -1,4 +1,4 @@
-// 브랜딩 강조색 자동 보정(답변서 B2) — 순수 함수
+// 브랜딩 강조색 자동 보정 — 순수 함수
 import { describe, it, expect } from 'vitest'
 import {
   adjustLightness, bestOnColor, brandPasses, brandThemeCss, contrastRatio, hexToHsl, hslToHex,

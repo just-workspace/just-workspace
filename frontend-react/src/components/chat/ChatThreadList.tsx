@@ -1,6 +1,6 @@
 /**
- * 채널 스레드 목록 — 오른쪽 자리 400(handover-22 "스레드 목록" · 시안 Side22 threads / threads-arch / threads-empty · Chat22 #threads*
- * · Mob22 #m-threads 전체 화면). 여는 곳: 헤더 스레드 버튼 → useChatUi.setThreadListOpen(true) (자리 배치는 SHELL).
+ * 채널 스레드 목록 — 오른쪽 자리 400.
+ * 모바일은 전체 화면. 여는 곳: 헤더 스레드 버튼 → useChatUi.setThreadListOpen(true) (자리 배치는 SHELL).
  *
  * 머리 48+1: (모바일 ‹ 44) threads 20 · "스레드 · #채널" 16/600 · 닫기 32.
  * 세그먼트 줄: 활성 N / 보관됨(grow) + "최근 활동순" 12 muted.
@@ -113,7 +113,7 @@ export function ChatThreadList() {
   const mobile = useIsMobile()
   const { id: channelId, label } = useChannelLabel()
   const { tab, items, hasMore, loading, loadingMore, error, activeCount, autoArchive, channelId: listCh } = useThreadList()
-  // 권한(r24): MANAGE_THREADS — 채널 권한을 아직 못 읽었으면 읽는다
+  // 권한: MANAGE_THREADS — 채널 권한을 아직 못 읽었으면 읽는다
   const canManage = useChatRoles(s => canInChannel(channelId, PERM.MANAGE_THREADS, s))
   useEffect(() => { if (channelId) void loadMyChannelPerms(channelId) }, [channelId])
 

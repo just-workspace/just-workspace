@@ -1,5 +1,5 @@
 /**
- * 위키(시안 WikiDesktop WK1 읽기 · WK2 편집 · WK3 기록 / DocsMobile WM1 트리 · WM2 읽기 · WM3 편집, 06-2 결정 1~6).
+ * 위키.
  * Vue 원본: frontend/pages/wiki.vue
  *  데스크톱 3열: 트리 260 / 본문 680(읽기=편집 폭) / 레일 240(목차·최근 기록). 기록 모드는 레일 대신 버전 패널 320.
  *  커맨드 바 44: 경로(스페이스 › 상위 › 제목) · [편집 E] 또는 [함께 편집 아바타 · ✓ 저장됨] · 공유 · ⋯
@@ -951,7 +951,7 @@ export default function WikiPage() {
       {/* 본문 */}
       {(!isMobile || mobileShowsPage) && (
         <main className="flex min-w-0 flex-1 flex-col">
-          {/* 모바일 상단 바(WM2·WM3) */}
+          {/* 모바일 상단 바 */}
           {isMobile ? (
             <LayoutMobileDetailBar
               title={currentPage?.title ?? ''}
@@ -1020,7 +1020,7 @@ export default function WikiPage() {
                           {saveState === 'error' && <button type="button" className="ml-1 underline" onClick={() => { void retrySave() }}>{t('common.retry')}</button>}
                         </span>
                       )}
-                      {/* 화면 안 AI 문서 교정(S7 · 시안 E2) */}
+                      {/* 화면 안 AI 문서 교정 */}
                       <WikiProofreadButtons editor={liveEditor} title={editTitle} />
                       <button
                         type="button"

@@ -120,7 +120,7 @@ export function UiInput({
             inputClass,
           )}
         />
-        {/* 읽기 전용 = 점선 + 복사 버튼(시안 F). 좁은 폭(260~480)에서 "복사"가 두 줄로 꺾이지 않게 nowrap + 최소 56(답변서 C7) */}
+        {/* 읽기 전용 = 점선 + 복사 버튼(시안 F). 좁은 폭(260~480)에서 "복사"가 두 줄로 꺾이지 않게 nowrap + 최소 56 */}
         {readonly && copyable && (
           <button
             type="button"

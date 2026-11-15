@@ -1,5 +1,5 @@
 /**
- * 네트워크 랩(NetLab — 별도 출처 lab.<도메인>) 런처 — handover-netlab 답 §5.10 (a) 화면 14·15.
+ * 네트워크 랩(NetLab — 별도 출처 lab.<도메인>) 런처.
  * 주소는 백엔드 NETLAB_URL → /api/health netlab_url(https 만) → useSiteConfig().netlabUrl.
  * 비어 있으면 레일 '도구' 항목·대시보드 카드 둘 다 숨긴다. 열기는 늘 새 탭(워크스페이스 화면은 그대로).
  */

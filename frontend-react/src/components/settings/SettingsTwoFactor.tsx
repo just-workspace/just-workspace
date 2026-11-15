@@ -1,5 +1,5 @@
 /**
- * 설정 › 보안 "2단계 인증" 카드 + 모달 — 시안 R12Settings #security · #on1 · #on1err · #on2 · #off · #regen(T1~T5).
+ * 설정 › 보안 "2단계 인증" 카드 + 모달.
  *
  * 카드: UiCard 머리(제목 + "로그인할 때 인증 앱의 6자리 코드를 한 번 더 묻습니다" + 상태 틴트 배지 켜짐 success / 꺼짐 neutral),
  *   본문 버튼 — 꺼짐 [켜기] · 켜짐 [복구 코드 새로 발급](outline) [끄기](ghost danger).

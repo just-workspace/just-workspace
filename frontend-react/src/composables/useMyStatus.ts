@@ -1,5 +1,5 @@
 /**
- * 내 상태(사용자 메뉴 S1 · 11-B3) — 상단바 아바타 점·사용자 메뉴·Ctrl+K 명령이 같은 값을 본다.
+ * 내 상태(사용자 메뉴) — 상단바 아바타 점·사용자 메뉴·Ctrl+K 명령이 같은 값을 본다.
  * Vue 판 composables/useMyStatus.ts 그대로.
  *
  * 기준은 서버(GET/PUT /api/chat/me/status — useChat 이 앱 시작 때 받아 둔다).

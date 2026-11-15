@@ -1,5 +1,5 @@
 /**
- * 활동 패널(Vue components/layout/ActivityPanel.vue · 시안 X1·8-1-3 ②): 벨 → 우측 400(스레드 패널과 같은 폭), z-drawer, 상단바 아래부터, shadow-lg.
+ * 활동 패널(Vue components/layout/ActivityPanel.vue): 벨 → 우측 400(스레드 패널과 같은 폭), z-drawer, 상단바 아래부터, shadow-lg.
  * 헤더 52 = 제목 15/600 · "모두 읽음" · 알림 설정 · 닫기(Esc). 알림 드롭다운은 폐지.
  */
 import { useRef } from 'react'

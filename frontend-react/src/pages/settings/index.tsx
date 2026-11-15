@@ -1,5 +1,5 @@
 // Vue 원본: frontend/pages/settings/index.vue
-// /settings — 데스크톱은 첫 섹션(계정)으로, 모바일은 섹션 목록(시안 PFM1: 아바타 머리 + 그룹 카드 52 행 + ›).
+// /settings — 데스크톱은 첫 섹션(계정)으로, 모바일은 섹션 목록(아바타 머리 + 그룹 카드 52 행 + ›).
 import { Fragment, useEffect } from 'react'
 import { useI18n } from '~/i18n'
 import { useHead } from '~/lib/head'

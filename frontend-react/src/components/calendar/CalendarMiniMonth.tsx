@@ -1,8 +1,8 @@
 /**
- * 사이드바 미니 달력(Vue components/calendar/CalendarMiniMonth.vue · 시안 CL1):
+ * 사이드바 미니 달력(Vue components/calendar/CalendarMiniMonth.vue):
  * 머리 13/600 + ‹ › 28, 요일 24 muted, 날짜 28 mono 11.
  * 오늘 = primary 원(700) · 선택한 주(주 보기) 또는 선택한 날 = primary/13 · 다른 달 = muted/60.
- * ‹ › 는 시각 28 유지, 히트 영역은 40(P7 규칙 5).
+ * ‹ › 는 시각 28 유지, 히트 영역은 40.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { cn } from '~/lib/utils'

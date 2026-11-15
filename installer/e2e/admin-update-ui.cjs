@@ -3,7 +3,8 @@
  * 관리 › 업데이트 화면을 눌러서 업데이트 한 번을 끝까지 — 화면 → backend → 설치 관리자 내부 API 경로를 실제로 탄다.
  * 받을 버전이 있는 서버에서 돌린다(가짜 릴리스 환경은 scenarios/u-update.sh).
  *
- *   node admin-update-ui.cjs --url https://ws.e2e.example --addr 192.168.10.20 --password-file <파일> [--out <폴더>] [--chrome <경로>]
+ *   node admin-update-ui.cjs --url https://ws.e2e.example --addr 192.168.10.20 --password-file <파일>
+ *        [--user <계정> --user-password-file <파일>] [--out <폴더>] [--chrome <경로>]
  *
  * 창을 둘 연다: 관리자(진행 화면)와 일반 사용자(예고 띠·점검 화면). 일반 사용자 계정은 이 스크립트가 만들어 승인한다.
  * 보는 것: 현황의 새 버전 안내 → 업데이트 시작 → 예고(일반 사용자 창의 띠) → "지금 바로 시작" → 진행(backend 가
@@ -56,15 +57,20 @@ const text = async page => (await page.locator('body').innerText().catch(() => '
   const password = fs.readFileSync(opt['password-file'], 'utf8').trim()
   expect('관리자 로그인', (await loginAs(admin, 'admin', password)) === 200)
 
-  // 일반 사용자 — 가입시키고 관리자가 승인한다
-  const name = 'viewer' + crypto.randomBytes(3).toString('hex')
-  const userPass = crypto.randomBytes(12).toString('base64').replace(/[^A-Za-z0-9]/g, '') + 'Aa1!'
+  // 일반 사용자 — --user 와 --user-password-file 로 받거나, 여기서 가입시키고 관리자가 승인한다
+  // (가입 뒤 메일 주소 확인을 요구하는 설치에서는 미리 만든 계정을 준다)
+  let name = opt.user, userPass = opt['user-password-file'] ? fs.readFileSync(opt['user-password-file'], 'utf8').trim() : null
   await user.goto(base + '/login')
-  const reg = await call(user, 'POST', '/api/auth/register', { username: name, password: userPass, display_name: '검수 사용자', recovery_email: `${name}@example.com` })
-  const users = await call(admin, 'GET', `/api/admin/users?q=${name}`)
-  const list = (users.body && (users.body.users || users.body.items)) || (Array.isArray(users.body) ? users.body : [])
-  const row = list.find(u => u.username === name)
-  if (row) await call(admin, 'POST', `/api/admin/users/${row.id}/approve`)
+  let reg = { status: '-' }
+  if (!name || !userPass) {
+    name = 'viewer' + crypto.randomBytes(3).toString('hex')
+    userPass = crypto.randomBytes(12).toString('base64').replace(/[^A-Za-z0-9]/g, '') + 'Aa1!'
+    reg = await call(user, 'POST', '/api/auth/register', { username: name, password: userPass, display_name: '검수 사용자', recovery_email: `${name}@example.com` })
+    const users = await call(admin, 'GET', `/api/admin/users?q=${name}`)
+    const list = Array.isArray(users.body) ? users.body : ((users.body && (users.body.users || users.body.items)) || [])
+    const row = list.find(u => u.username === name)
+    if (row) await call(admin, 'POST', `/api/admin/users/${row.id}/approve`)
+  }
   const userLogin = await loginAs(user, name, userPass)
   expect('일반 사용자 로그인', userLogin === 200, `가입 ${reg.status} · 로그인 ${userLogin}`)
   await user.goto(base + '/')
@@ -83,6 +89,15 @@ const text = async page => (await page.locator('body').innerText().catch(() => '
   await snap(admin, 'home')
 
   console.log('== 업데이트 시작 ==')
+  // 현황의 새 버전 카드 → 내용 보기(변경 내용·바뀌는 구역) → 업데이트 시작
+  const details = admin.getByRole('button', { name: /내용 보기/ }).or(admin.getByRole('link', { name: /내용 보기/ })).first()
+  if (await details.count()) {
+    await details.click()
+    await admin.waitForTimeout(1500)
+    const notes = await text(admin)
+    expect('변경 내용 화면에 바뀌는 구역과 예상 중단 시간이 보인다', /구역|중단/.test(notes), notes.slice(0, 200))
+    await snap(admin, 'notes')
+  }
   await admin.getByRole('button', { name: '업데이트 시작' }).first().click()
   await admin.waitForTimeout(1500)
   // 확인 창이 있으면 진행 단추를 누른다
@@ -109,14 +124,13 @@ const text = async page => (await page.locator('body').innerText().catch(() => '
   expect('관리자 화면에 예고 안내가 보인다', /남은 시간|곧 업데이트를 시작/.test(adminCountdown), adminCountdown.slice(0, 200))
   await snap(admin, 'countdown')
   // 일반 사용자 창 — 새로 고치지 않아도 띠가 떠야 한다(실시간 알림)
-  let banner = false
-  for (let i = 0; i < 15 && !banner; i++) {
-    banner = /업데이트|점검/.test(await user.locator('[role="status"], [role="alert"], [data-update-banner], header, body').first().innerText().catch(() => '')) &&
-      /분|초/.test(await text(user))
-    if (!banner) await user.waitForTimeout(1000)
+  let userText = ''
+  for (let i = 0; i < 20; i++) {
+    userText = await text(user)
+    if (/뒤 업데이트를 시작합니다|곧 업데이트를 시작합니다/.test(userText)) break
+    await user.waitForTimeout(1000)
   }
-  const userText = await text(user)
-  expect('일반 사용자 창에 예고 띠가 떴다', /곧.*업데이트|업데이트.*시작|점검.*예정/.test(userText), userText.slice(0, 200))
+  expect('일반 사용자 창에 예고 띠가 떴다(새로 고치지 않고)', /뒤 업데이트를 시작합니다|곧 업데이트를 시작합니다/.test(userText), userText.slice(0, 200))
   await snap(user, 'user-countdown')
 
   console.log('== 지금 바로 시작 ==')
@@ -131,7 +145,7 @@ const text = async page => (await page.locator('body').innerText().catch(() => '
     if (/다시 연결 중/.test(body)) { if (!sawReconnect) await snap(admin, 'reconnecting'); sawReconnect = true }
     for (const s of ['사전 점검', '백업', '이미지', '구역', '상태 확인']) if (body.includes(s)) sawSteps.add(s)
     const u = await text(user)
-    if (/점검 중|업데이트 중입니다/.test(u)) { if (!sawUserMaint) await snap(user, 'user-maintenance'); sawUserMaint = true }
+    if (/점검 중입니다|업데이트 중입니다/.test(u)) { if (!sawUserMaint) await snap(user, 'user-maintenance'); sawUserMaint = true }
     const j = await call(admin, 'GET', `/api/admin/system/update/jobs/${job.id}`)
     if (j.status !== 200) sawDown = true
     if (j.body && ['done', 'failed', 'cancelled'].includes(j.body.status)) { final = j.body; break }
@@ -151,7 +165,7 @@ const text = async page => (await page.locator('body').innerText().catch(() => '
   // 일반 사용자 창은 점검이 끝나면 스스로 돌아온다
   let back = false
   for (let i = 0; i < 30 && !back; i++) {
-    back = !/점검 중|업데이트 중입니다/.test(await text(user))
+    back = !/점검 중입니다|업데이트 중입니다/.test(await text(user))
     if (!back) await user.waitForTimeout(2000)
   }
   expect('일반 사용자 창이 점검 화면에서 돌아왔다', back)

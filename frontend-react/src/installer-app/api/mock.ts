@@ -11,18 +11,20 @@
  * | 서버 | mem-6(6 GB) · mem-8 · mem-unknown · detect-router · detect-proxy · no-public-ip |
  * | 접속 주소 | dns-mismatch · dns-unknown · dns-checking |
  * | 인증서 올리기 | cert-domain · cert-key · cert-expired · cert-mail |
- * | 파일 저장 위치 | nfs-unreachable · nfs-permission · nfs-readonly · nfs-nolock · nfs-lowspace · nfs-checking · path-missing |
+ * | 파일 저장 위치 | nfs-unreachable · nfs-export(없는 공유 경로) · nfs-permission · nfs-readonly · nfs-nolock · nfs-lowspace · nfs-checking · path-missing |
  * | 메일 · AI | records-ok · records-unknown · smtp-fail · ai-fail |
  * | 미리 채운 답변 | router · proxy · upload · full(전체 묶음과 애드온) · quick · quick-ready(빠른 설치 요약 직전) · ready(요약 직전까지 채움) |
  * | 요약 | summary-error |
  * | 적용 | apply-cert-fail · apply-storage-fail · apply-zone-fail · apply-running · apply-done |
- * | 복원 | restore(지원함) · restore-badfile · restore-uploading · restore-version · restore-local · restore-nofiles · restore-fail · restore-done |
+ * | 복원 · 파일 | restore(지원함) · restore-badfile · restore-format · restore-noconfig · restore-corrupt · restore-password(맞는 암호는 `backup-pass`) · restore-uploading · restore-checking · restore-nospace · restore-kept(이미 올려 둔 백업) |
+ * | 복원 · 내용 확인 | restore-version · restore-memory · restore-local · restore-nofiles · restore-proxy · restore-nobackup · restore-invalid(시작 거부) · restore-nfs-marker · restore-nfs-other |
+ * | 복원 · 적용 | restore-fail · restore-cert-fail · restore-done |
  */
 import {
   ApiError, emptyAnswers,
   type Answers, type AnswersPatch, type AnswersResponse, type ApplyState, type ApplyStep, type CertProbe, type FieldError,
   type InstallerApi, type MailRecord, type NfsProbe, type NfsStep, type PreflightItem, type PreflightResponse, type RestoreFileInfo,
-  type RestoreReview, type StateResponse, type SummaryResponse, type ZoneRow, type ZonesResponse,
+  type RestoreOutcome, type RestoreReview, type StateResponse, type SummaryResponse, type ZoneRow, type ZonesResponse,
 } from './types'
 
 export interface MockOptions {
@@ -142,9 +144,22 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
   const emit = () => { const snap = JSON.parse(JSON.stringify(apply)) as ApplyState; listeners.forEach(fn => fn(snap)) }
   const restoreMode = () => answers.mode === 'restore'
   let restoreFiles = !has('restore-nofiles') && has('restore-local')
+  let restoreCert: RestoreOutcome['cert'] = 'auto'
+  let restoreDomainChanged = false
+  const backupFromNfs = () => !(has('restore-local') || has('restore-nofiles'))
+  function restoreOutcome(): RestoreOutcome {
+    return {
+      files: backupFromNfs() ? 'nfs' : (restoreFiles ? 'restored' : 'not_included'),
+      storage_kind: answers.storage.kind,
+      domain_changed: restoreDomainChanged,
+      cert: restoreCert,
+    }
+  }
 
   function stepIds(): string[] {
-    if (restoreMode()) return ['unpack', 'storage', 'pull', 'database', ...(restoreFiles ? ['files'] : []), 'cert', 'zones']
+    if (restoreMode()) {
+      return ['unpack', ...(answers.storage.kind === 'nfs' ? ['storage'] : []), 'pull', 'database', ...(restoreFiles ? ['files'] : []), ...(restoreCert === 'proxy' ? [] : ['cert']), 'zones']
+    }
     const ids = ['config']
     if (answers.storage.kind === 'nfs' || answers.storage.path) ids.push('storage')
     ids.push('pull', 'database')
@@ -153,7 +168,13 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
     return ids
   }
   function failAt(): { step: string; cause: string; fix: string; vars: Record<string, unknown>; alt?: string } | null {
-    if (restoreMode()) return has('restore-fail') ? { step: 'database', cause: 'restore_database_failed', fix: 'see_log', vars: {} } : null
+    if (restoreMode()) {
+      if (has('restore-fail')) return { step: 'database', cause: 'restore_database_failed', fix: 'see_log', vars: { stage: 'postgres', detail: 'pg_restore: error', state: 'partial' } }
+      if (has('restore-cert-fail') && restoreCert === 'auto') {
+        return { step: 'cert', cause: 'cert_issue_failed', fix: 'cert_retry_or_temporary', vars: { names: [answers.access.domain], alternative: 'use_temporary_cert' }, alt: 'use_temporary_cert' }
+      }
+      return null
+    }
     if (has('apply-cert-fail') && answers.access.cert !== 'temporary') {
       return { step: 'cert', cause: 'cert_issue_failed', fix: 'cert_retry_or_temporary', vars: { names: [answers.access.domain], alternative: 'use_temporary_cert' }, alt: 'use_temporary_cert' }
     }
@@ -199,6 +220,7 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
       finished_at: done || failed ? new Date().toISOString() : null,
       // 쓸 때마다 달라지는 표식(실제 서버는 쓴 시각)
       updated_at: `write-${++writes}`,
+      ...(restoreMode() ? { restore: restoreOutcome() } : {}),
     }
     if (done) phase = 'installed'
     else phase = 'applying'
@@ -232,7 +254,11 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
     if (has('resume-failed')) on.add('apply-cert-fail')
     buildApply(terminalIndex())
   }
-  if (has('restore-done')) { buildApply(stepIds().length) }
+  if (has('restore-done')) {
+    answers.access.domain = 'workspace.example.com'
+    if (backupFromNfs()) answers.storage = { kind: 'nfs', server: 'nas.example.com', export: '/volume1/workspace' }
+    buildApply(stepIds().length)
+  }
 
   function stream(onState: (s: ApplyState) => void): () => void {
     listeners.add(onState)
@@ -285,14 +311,17 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
 
   function nfs(server: string, exportPath: string): NfsProbe {
     const order = ['reach', 'mount', 'write', 'lock', 'space']
-    const failIndex = has('nfs-unreachable') ? 0 : (has('nfs-permission') ? 1 : (has('nfs-readonly') ? 2 : (has('nfs-nolock') ? 3 : -1)))
-    const cause = [null, 'unreachable', 'permission_denied', 'read_only', 'no_locking'][failIndex + 1]
+    const failIndex = has('nfs-unreachable') ? 0 : (has('nfs-permission') || has('nfs-export') ? 1 : (has('nfs-readonly') ? 2 : (has('nfs-nolock') ? 3 : -1)))
+    const cause = has('nfs-export') ? 'export_not_found' : [null, 'unreachable', 'permission_denied', 'read_only', 'no_locking'][failIndex + 1]
     const values: unknown[] = [server, exportPath, null, null, has('nfs-lowspace') ? 6 : 1840]
     const steps: NfsStep[] = order.map((id, i) => {
       if (failIndex >= 0) return { id, status: i < failIndex ? 'pass' : (i === failIndex ? 'fail' : 'skipped'), value: i <= failIndex ? values[i] : null }
       return { id, status: id === 'space' && has('nfs-lowspace') ? 'warn' : 'pass', value: values[i] }
     })
-    return { ok: failIndex < 0, cause, steps }
+    if (failIndex >= 0 || !restoreMode()) return { ok: failIndex < 0, cause, steps }
+    // 복원: 다섯 검사를 통과해도 이 공유가 백업의 그 저장소가 아니면 쓸 수 없다
+    const marker = has('restore-nfs-marker') ? 'missing' as const : (has('restore-nfs-other') ? 'mismatch' as const : 'match' as const)
+    return { ok: marker === 'match', cause: marker === 'missing' ? 'marker_missing' : (marker === 'mismatch' ? 'other_install' : null), steps, marker: { status: marker } }
   }
 
   function cert(): CertProbe {
@@ -358,19 +387,35 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
   // ─── 복원 ───
   const restoreSupported = [...on].some(s => s.startsWith('restore'))
   const unsupported = <T,>(): Promise<T> => Promise.reject(new ApiError(501, 'restore_not_supported', { detail: 'restore_not_supported' }))
-  const fileInfo = (): RestoreFileInfo => (has('restore-badfile')
-    ? { status: 'invalid', name: 'notes.zip', size_bytes: 18_400 }
-    : { status: 'ok', name: 'workspace-backup-20260101.jwbak', size_bytes: 4_812_000_000 })
+  const BACKUP_PASSWORD = 'backup-pass'
+  function fileInfo(source: 'upload' | 'path', fileName: string | null, size: number | null, path: string | null = null): RestoreFileInfo {
+    const base = { name: fileName, size_bytes: size, source, path, reason: null }
+    if (has('restore-badfile')) return { ...base, status: 'invalid', state: 'failed', reason: 'not_a_backup' }
+    if (has('restore-format')) return { ...base, status: 'invalid', state: 'failed', reason: 'format_unsupported' }
+    if (has('restore-noconfig')) return { ...base, status: 'invalid', state: 'failed', reason: 'no_config' }
+    if (has('restore-corrupt')) return { ...base, status: 'corrupt', state: 'failed' }
+    if (has('restore-password')) return { ...base, status: 'password_required', state: 'ready' }
+    return { ...base, status: 'ok', state: 'ready' }
+  }
+  const noFile = (): RestoreFileInfo => ({ status: 'none', state: 'none', name: null, size_bytes: null, source: null, path: null, reason: null })
+  let uploaded: RestoreFileInfo | null = has('restore-kept') ? fileInfo('upload', 'workspace-backup-20260101.jwbak', 4_812_000_000) : null
   function review(): RestoreReview {
-    const local = has('restore-local') || has('restore-nofiles')
+    const proxy = has('restore-proxy')
+    const blockers = [
+      ...(has('restore-version') ? [{ code: 'version_newer', vars: { backup_version: '9.9.0', installer_version: '1.4.0' } }] : []),
+      ...(has('restore-memory') ? [{ code: 'memory_insufficient', vars: { need_mb: 8000, have_mb: 6144 } }] : []),
+    ]
     return {
       source_url: 'https://workspace.example.com', created_at: '2026-01-01T03:00:00Z',
       backup_version: has('restore-version') ? '9.9.0' : '1.4.0', installer_version: '1.4.0',
-      version_status: has('restore-version') ? 'newer' : 'ok',
+      version_status: has('restore-version') ? 'newer' : 'ok', version_reason: has('restore-version') ? 'product' : null,
+      schema_version: 1, installer_schema_version: 1, kind: 'full', size_bytes: 4_812_000_000,
       zones: [...PRESETS.collab], users: 42, data_bytes: 9_300_000_000,
-      storage: local ? { kind: 'local' } : { kind: 'nfs', server: 'nas.example.com', export: '/volume1/workspace' },
+      storage: backupFromNfs() ? { kind: 'nfs', server: 'nas.example.com', export: '/volume1/workspace' } : { kind: 'local' },
       files_included: restoreFiles, files_bytes: restoreFiles ? 61_000_000_000 : null,
-      domain: 'workspace.example.com',
+      domain: 'workspace.example.com', mail_domain: 'example.com', install_id: 'mock-install',
+      network: proxy ? 'proxy' : 'direct', proxy_addresses: proxy ? ['192.168.10.5'] : [], subnet: '172.28.0.0/24',
+      blockers,
     }
   }
 
@@ -467,27 +512,60 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
 
     restoreUpload: (file, onProgress, signal) => {
       if (!restoreSupported) return unsupported()
-      if (has('restore-uploading')) { onProgress(62); return new Promise((_, reject) => signal?.addEventListener('abort', () => reject(new ApiError(0, 'aborted', null)))) }
+      const hang = () => new Promise<RestoreFileInfo>((_, reject) => signal?.addEventListener('abort', () => reject(new ApiError(0, 'aborted', null))))
+      if (has('restore-uploading')) { onProgress(62); return hang() }
       onProgress(100)
-      return wait({ ...fileInfo(), name: file.name, size_bytes: file.size || fileInfo().size_bytes }, delay * 2)
+      // 다 올라간 뒤 서버가 파일을 확인하는 동안
+      if (has('restore-checking')) return hang()
+      if (has('restore-nospace')) return Promise.reject(new ApiError(507, 'no_space', { code: 'no_space', vars: { need_bytes: 4_812_000_000, free_bytes: 1_200_000_000 } }))
+      uploaded = fileInfo('upload', file.name, file.size || 4_812_000_000)
+      return wait({ ...uploaded }, delay * 2)
     },
     restoreCheckPath: path => {
       if (!restoreSupported) return unsupported()
-      return wait(path.includes('missing') ? { status: 'not_found' as const } : { ...fileInfo(), name: path.split('/').pop() }, delay * 2)
+      if (path.includes('missing')) return wait({ ...noFile(), status: 'not_found' as const, state: 'failed' as const, source: 'path' as const, path }, delay * 2)
+      uploaded = fileInfo('path', path.split('/').pop() ?? null, 4_812_000_000, path)
+      return wait({ ...uploaded }, delay * 2)
     },
-    restoreReview: () => (restoreSupported ? wait(review()) : unsupported()),
+    restorePassword: password => {
+      if (!restoreSupported) return unsupported()
+      if (!uploaded) return Promise.reject(new ApiError(409, 'restore_no_backup', { code: 'restore_no_backup', vars: {} }))
+      uploaded = { ...uploaded, status: password === BACKUP_PASSWORD ? 'ok' : 'password_wrong' }
+      return wait({ ...uploaded }, delay * 2)
+    },
+    restoreFile: () => (restoreSupported ? wait(uploaded ? { ...uploaded } : noFile()) : unsupported()),
+    restoreDiscard: () => {
+      if (!restoreSupported) return unsupported()
+      uploaded = null
+      return wait(undefined)
+    },
+    restoreReview: () => {
+      if (!restoreSupported) return unsupported()
+      if (has('restore-nobackup')) return Promise.reject(new ApiError(409, 'restore_no_backup', { code: 'restore_no_backup', vars: {} }))
+      return wait(review())
+    },
     restoreApply: target => {
       if (!restoreSupported) return unsupported()
+      if (has('restore-invalid')) {
+        return Promise.reject(new ApiError(422, 'restore_invalid', { code: 'restore_invalid', vars: { errors: [{ field: 'storage', code: 'storage_marker_missing', vars: {} }, { field: 'access.domain', code: 'domain_unusual', vars: {} }] } }))
+      }
+      const backup = review()
+      restoreDomainChanged = target.domain !== backup.domain
       answers.access.domain = target.domain
+      answers.access.network = target.network ?? 'direct'
+      answers.access.proxy_addresses = target.proxy_addresses ?? []
       answers.storage = { kind: target.storage.kind, server: target.storage.server ?? null, export: target.storage.export ?? null }
-      restoreFiles = review().files_included
+      if (target.subnet) answers.advanced.subnet = target.subnet
+      restoreCert = target.cert ?? (answers.access.network === 'proxy' ? 'proxy' : (has('dns-mismatch') || has('dns-unknown') ? 'temporary' : 'auto'))
+      restoreFiles = backup.files_included
       return wait(run(0))
     },
     restoreGetApply: () => (restoreSupported ? wait(JSON.parse(JSON.stringify(apply)) as ApplyState) : unsupported()),
     restoreStream: stream,
-    restoreRetry: () => {
+    restoreRetry: opts => {
       if (!restoreSupported) return unsupported()
-      on.delete('restore-fail')
+      if (opts?.use_temporary_cert) restoreCert = 'temporary'
+      else on.delete('restore-fail')
       return wait(run(Math.max(0, apply.steps.findIndex(s => s.status === 'failed'))))
     },
   }

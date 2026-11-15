@@ -10,7 +10,8 @@
  *  - `GET /api/summary`: 구역이 `{id, name}` 목록으로 온다 → id 목록으로.
  *  - `POST /api/probe/cert`: 파일이 아니라 파일의 글자(PEM)를 JSON 으로 보낸다.
  *  - 상태 흐름(SSE)은 `status` · `end` 이름의 이벤트로 온다.
- *  - 복원(`/api/restore/*`)은 서버가 아직 만들지 않았다(501, 읽기 요청은 404·405) → 전부 "지원하지 않음"으로 알린다.
+ *  - 복원(`/api/restore/*`): 복원이 없는 옛 서버(501, 읽기 요청은 404·405)는 전부 "지원하지 않음"으로 알린다.
+ *    올리기는 다 올라간 뒤에도 서버가 파일을 확인하는 동안 응답이 오지 않는다 — 진행률 100 을 알린 뒤 기다린다.
  */
 import {
   ApiError,
@@ -216,6 +217,8 @@ export function createHttpApi(base = ''): InstallerApi {
       xhr.withCredentials = true
       xhr.responseType = 'text'
       xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)) }
+      // 다 올라갔다 — 이제부터는 서버가 형식과 해시를 확인하는 시간이다
+      xhr.upload.onload = () => onProgress(100)
       xhr.onload = () => {
         let data: unknown
         try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null } catch { data = xhr.responseText }
@@ -230,15 +233,27 @@ export function createHttpApi(base = ''): InstallerApi {
       xhr.send(form)
     }),
     restoreCheckPath: path => restore<RestoreFileInfo>('POST', '/api/restore/path', { path }),
+    restorePassword: password => restore<RestoreFileInfo>('POST', '/api/restore/password', { password }),
+    restoreFile: () => restore<RestoreFileInfo>('GET', '/api/restore/file'),
+    async restoreDiscard() { await restore('DELETE', '/api/restore/file') },
     restoreReview: () => restore<RestoreReview>('GET', '/api/restore/review'),
     async restoreApply(target: RestoreTarget) {
-      await restore('POST', '/api/restore/apply', target)
+      try {
+        await restore('POST', '/api/restore/apply', target)
+      } catch (e) {
+        // 이미 돌고 있으면 그 진행을 그대로 보여 준다
+        if (!(e instanceof ApiError && e.code === 'apply_running')) throw e
+      }
       return api.restoreGetApply()
     },
     restoreGetApply: () => restore<ApplyState>('GET', '/api/restore/apply'),
     restoreStream: onState => stream('/api/restore/apply/stream', () => api.restoreGetApply(), onState),
-    async restoreRetry() {
-      await restore('POST', '/api/restore/apply/retry', {})
+    async restoreRetry(opts) {
+      try {
+        await restore('POST', '/api/restore/apply/retry', opts ?? {})
+      } catch (e) {
+        if (!(e instanceof ApiError && e.code === 'apply_running')) throw e
+      }
       return api.restoreGetApply()
     },
   }

@@ -133,7 +133,7 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
   })
   /** 임시 인증서로 바꿔 계속 — 서버가 답변의 인증서 방식을 바꾸므로 화면이 들고 있는 답변도 맞춘다(완료 화면의 할 일에 쓰인다) */
   const continueWithTemporaryCert = () => act(async () => {
-    const next = await api.retryApply({ use_temporary_cert: true })
+    const next = kind === 'restore' ? await api.restoreRetry({ use_temporary_cert: true }) : await api.retryApply({ use_temporary_cert: true })
     store.setState(s => ({ answers: { ...s.answers, access: { ...s.answers.access, cert: 'temporary' } } }))
     return next
   })
@@ -172,11 +172,15 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
     const cause = step.error?.cause ?? ''
     const vars = { ...(step.error?.vars ?? {}) } as Record<string, unknown>
     let key = 'other'
-    if (step.id === 'storage') {
-      key = answers.storage.kind === 'nfs' ? 'storage' : 'storage_local'
+    // 원인에 딱 맞는 문구가 있으면 그것이 먼저다(복원의 "다른 저장소" 같은 원인은 저장소 단계에서도 따로 알린다)
+    const known = has(`apply.fail.${cause}.title`)
+    if (step.id === 'storage' && !known) {
+      // 복원을 이어 보는 창은 저장소 이름을 모를 수 있다 — 그때는 이름 없는 문구로
+      const named = answers.storage.kind === 'nfs' && !!answers.storage.server
+      key = kind === 'restore' && !named ? 'restore_storage' : (answers.storage.kind === 'nfs' ? 'storage' : 'storage_local')
       vars.target = `${answers.storage.server ?? ''}:${answers.storage.export ?? ''}`
       vars.p = josa(String(answers.storage.export ?? ''), '을/를')
-    } else if (has(`apply.fail.${cause}.title`)) {
+    } else if (known) {
       key = cause
       if (cause === 'cert_issue_failed') vars.domain = Array.isArray(vars.names) && vars.names.length ? String(vars.names[0]) : answers.access.domain
       if (cause === 'image_pull_failed') vars.p = josa(String(vars.image ?? ''), '을/를')
@@ -260,7 +264,7 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <UiButton type="button" size="sm" icon="refresh" className={btn} disabled={busy} onClick={() => { void retry() }}>{t('apply.retry')}</UiButton>
-                      {kind === 'install' && alternatives.some(x => x.key === 'use_temporary_cert') && (
+                      {alternatives.some(x => x.key === 'use_temporary_cert') && (
                         <UiButton type="button" size="sm" variant="secondary" className={btn} disabled={busy} onClick={() => { void continueWithTemporaryCert() }}>{t('apply.useTemporaryCert')}</UiButton>
                       )}
                       {kind === 'install' && step.id === 'storage' && (

@@ -366,6 +366,9 @@
       "permission_denied": "The NAS refused the connection. In the NAS share settings, check that this server's address has write access and that account mapping is right.",
       "read_only": "The share is read-only. Change it to read/write in the NAS share settings.",
       "no_locking": "File locking does not work. Without locking, co-editing and resumable uploads break, so this storage cannot be used. Turn on NFS locking on the NAS.",
+      "export_not_found": "The server is reachable, but this share path cannot be mounted. Check the path and that the NAS share settings export it to this server's address.",
+      "marker_missing": "This share has no marker left by the original server. It is a different share, or it is empty. Enter the server address and share path the original server used.",
+      "other_install": "This share is used by a different installation. Enter the server address and share path the original server used.",
       "other": "This check stopped. Review the NAS settings, then check again. ({cause})"
     },
     "spaceLow": "Less than 10 GB is free. You can continue, but it may fill up soon.",
@@ -779,7 +782,9 @@
       "files": "Restore files"
     },
     "restoreSteps": {
-      "database": "Restore the database",
+      "database": "Restore data",
+      "unpack": "Unpack the backup and create configuration files",
+      "files": "Restore files",
       "zones": "Start zones and lock the installer"
     },
     "status": {
@@ -860,8 +865,36 @@
         "body": "Go back to the summary, upload the certificate again, and try again."
       },
       "restore_database_failed": {
-        "title": "Restoring the database from the backup stopped.",
+        "title": "Restoring data from the backup stopped.",
         "body": "Steps that already finished stay as they are. If it stops at the same place again, download the log and look into it, then create a fresh backup on the original server and upload it."
+      },
+      "restore_backup_missing": {
+        "title": "The uploaded backup file could not be found.",
+        "body": "Go back to the review, upload the backup file again, then restore."
+      },
+      "restore_config_failed": {
+        "title": "Configuration files could not be created from the backup's settings.",
+        "body": "Check the log, then try again. If it keeps stopping at the same place, create a fresh backup on the original server and upload it."
+      },
+      "restore_files_failed": {
+        "title": "Restoring files from the backup stopped.",
+        "body": "Check that the file location has free space and is writable, then try again. Steps that already finished stay as they are."
+      },
+      "storage_marker_missing": {
+        "title": "This share has no marker left by the original server.",
+        "body": "It is a different share, or it is empty. Go back to the review and enter the share the original server used."
+      },
+      "storage_other_install": {
+        "title": "This share is used by a different installation.",
+        "body": "Go back to the review and enter the share the original server used."
+      },
+      "restore_version_newer": {
+        "title": "This backup was created by a newer version than the one being installed.",
+        "body": "Download the latest install script and start over."
+      },
+      "restore_storage": {
+        "title": "The file location could not be prepared.",
+        "body": "For network storage, check that the NAS is on and try again, or go back to the review and change where files are kept."
       },
       "other": {
         "title": "It stopped at this step. ({cause})",
@@ -963,6 +996,31 @@
     "reasonPathEmpty": "Enter a path and press Check file to continue.",
     "reasonPathChecking": "You can continue once the check finishes.",
     "reasonPathBad": "Enter the path of a readable backup file to continue.",
+    "verifying": "Checking · verifying that the file is intact. A large backup takes a few minutes.",
+    "checkingTitle": "Checking",
+    "checkingBody": "The uploaded backup file is being checked. A large backup takes a few minutes.",
+    "discard": "Discard",
+    "bad": {
+      "not_a_backup": "It is not a Just Workspace backup file. Upload a backup file created from the admin screen of the original server.",
+      "format_unsupported": "This installer does not know this backup format. Download the latest install script and start over.",
+      "no_config": "This backup contains no settings, so it cannot be moved to a new server. Create a full backup on the original server.",
+      "path_invalid": "This path cannot be used. Enter the full path of a backup file or backup folder on the server.",
+      "corrupt": "It was damaged in transit. Download the backup again from the original server and upload it.",
+      "not_found": "The file could not be found. Upload it again."
+    },
+    "uploadError": {
+      "no_space": "The server does not have enough free space. {need} is needed but only {free} is left. Free up space, then upload again.",
+      "apply_running": "A restore is already running, so the backup cannot be replaced.",
+      "upload_invalid": "The upload could not be read. Choose the file and upload it again."
+    },
+    "passwordTitle": "This backup is protected by a password.",
+    "passwordBody": "Enter the password set when the backup was created on the original server to read its settings.",
+    "passwordLabel": "Backup password",
+    "passwordConfirm": "Check password",
+    "passwordChecking": "Checking",
+    "passwordWrong": "The password is wrong. Enter it again.",
+    "reasonChecking": "You can continue once the file check finishes.",
+    "reasonPassword": "Enter the backup password and check it to continue.",
     "reviewTitle": "Restore from this backup",
     "reviewLead": "Nothing has changed on the server yet. Pressing Restore moves over the settings and data in the backup as they are.",
     "rowSource": "Created on",
@@ -1009,6 +1067,35 @@
     "reasonAddress": "Enter the address to restore.",
     "reviewFailed": "The backup contents could not be read.",
     "startFailed": "The restore could not start. Press again.",
+    "blockedTitle": "This backup cannot be restored on this server.",
+    "blocker": {
+      "memory_insufficient": "The zones in the backup need {need} GB of recommended memory, but this server has {have} GB. Add memory to the server, then start again.",
+      "memory_below_minimum": "This server's {have} GB of memory is below the {need} GB minimum needed to install. Add memory to the server, then start again.",
+      "other": "Something blocks the restore. ({code})"
+    },
+    "reasonBlocked": "Resolve the reasons above to restore.",
+    "nfsMarkerTitle": "This share cannot be used to restore.",
+    "reasonNfsMarker": "Connect the share the original server used to restore.",
+    "networkTitle": "Connection type and internal subnet",
+    "networkSummary": "{network} · internal subnet {subnet}",
+    "networkNote": {
+      "direct": "The server holds a public address directly.",
+      "router": "The router must forward ports to this server before it can be reached from outside.",
+      "proxy": "The proxy in front handles the certificate; this server does not issue one."
+    },
+    "reasonProxy": "Enter the proxy address to restore.",
+    "reasonSubnet": "Fix the internal subnet to restore.",
+    "startErrorTitle": "The restore cannot start like this.",
+    "reasonStartErrors": "Fix the items above, then press again.",
+    "startError": {
+      "storage_must_be_nfs": "This backup contains no files, so the network storage the original server used must be reconnected.",
+      "storage_marker_missing": "This share has no marker left by the original server. It is a different share, or it is empty.",
+      "storage_other_install": "This share is used by a different installation.",
+      "version_newer": "This backup was created by a newer version than the one being installed.",
+      "memory_insufficient": "The recommended memory of the zones in the backup exceeds the server memory.",
+      "memory_below_minimum": "The server memory is below the minimum needed to install.",
+      "other": "The server did not accept the values. ({code})"
+    },
     "applyTitleRunning": "Restoring",
     "applyTitleFailed": "The restore stopped",
     "applyTitleDone": "The restore is complete",
@@ -1019,6 +1106,11 @@
     "applyFootnote": "When it finishes, the installer locks and moves on to the completion screen. Accounts and passwords stay as they were on the original server.",
     "doneTitle": "The restore is complete",
     "doneLead": "Accounts, passwords and data are as they were on the original server. The installer is locked.",
+    "doneFiles": {
+      "restored": "The files in the backup were restored too.",
+      "not_included": "Restored without files — the Files tab and chat and mail attachments are empty.",
+      "nfs": "The network storage was reconnected — the files are still on that storage."
+    },
     "moveTitle": "Move the address",
     "moveDesc": "Point the address's record at this server and people will connect here",
     "recordsTitle": "Check mail records",

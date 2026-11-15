@@ -1,13 +1,15 @@
 /**
  * 완료 — 접속 주소와 다음에 할 일. 설치와 복원의 문구·할 일 목록이 다르다.
  * 할 일은 해당할 때만 보인다(임시 인증서로 설치했을 때의 인증서 발급, 맞지 않는 메일 레코드가 있을 때의 등록).
+ * 복원은 파일을 어떻게 했는지(되돌림 · 백업에 없었음 · 같은 네트워크 저장소를 다시 연결)를 한 줄 덧붙인다 —
+ * 이 화면은 서버가 잠긴 뒤에 뜨므로 서버에 다시 묻지 않고, 적용 화면이 마지막으로 받은 상태를 쓴다.
  * 이 화면은 설치를 끝낸 그 창에서만 보인다 — 나중에 같은 주소로 다시 들어오면 잠김 화면이 뜬다.
  */
 import { UiBadge } from '~/components/ui/Badge'
 import { UiButton } from '~/components/ui/Button'
 import { UiIcon } from '~/components/ui/Icon'
 import { UiInput } from '~/components/ui/Input'
-import { useT } from '../i18n'
+import { useHas, useT } from '../i18n'
 import { CenterShell } from '../shell/WizardShell'
 import { useWizard, zoneOn } from '../store'
 import { recordsPending } from './MailScreen'
@@ -17,15 +19,18 @@ interface Todo { icon: string; title: string; desc: string; href?: string; cauti
 
 export function DoneScreen() {
   const t = useT()
+  const has = useHas()
   const answers = useWizard(s => s.answers)
   const catalog = useWizard(s => s.catalog)
   const appUrl = useWizard(s => s.server?.info.app_url ?? null)
   const records = useWizard(s => s.records.result?.records ?? null)
   const restore = answers.mode === 'restore'
+  const outcome = useWizard(s => s.apply?.restore ?? null)
 
   const url = (appUrl ?? (answers.access.domain ? `https://${answers.access.domain}` : '')).replace(/\/+$/, '')
   const at = (path: string) => `${url}${path}`
-  const temporary = answers.access.cert === 'temporary'
+  // 복원의 인증서 방식은 서버가 정했다
+  const temporary = restore && outcome ? outcome.cert === 'temporary' : answers.access.cert === 'temporary'
   const pending = records && zoneOn(answers, catalog, 'mail') && answers.mail.kind === 'builtin' ? recordsPending(records).total : 0
 
   const todos: Todo[] = []
@@ -52,6 +57,7 @@ export function DoneScreen() {
         <div className="flex min-w-0 flex-col gap-2">
           <h1 className="m-0 text-xl font-bold leading-7">{restore ? t('restore.doneTitle') : t('done.title')}</h1>
           <p className="m-0 text-muted-foreground">{restore ? t('restore.doneLead') : t('done.lead')}</p>
+          {restore && outcome && has(`restore.doneFiles.${outcome.files}`) && <p className="m-0 text-muted-foreground">{t(`restore.doneFiles.${outcome.files}`)}</p>}
         </div>
       </div>
       {url && (

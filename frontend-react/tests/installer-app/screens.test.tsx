@@ -1,6 +1,6 @@
 // 설치 마법사 화면(src/installer-app) — 가짜 서버(api/mock.ts)의 시나리오로 각 화면의 상태를 띄워 본다.
 // 들어오기(토큰 · 잠김 · 이어 하기) · 사전 점검 · 시작 방식 · 접속 주소 · 프록시 · 저장 위치 · 구역 · 메일 · 관리자 · 요약 · 적용 · 완료 · 복원.
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { InstallerApp } from '~/installer-app/InstallerApp'
 import { createMockApi } from '~/installer-app/api/mock'
@@ -260,6 +260,7 @@ describe('파일 저장 위치', () => {
   it.each([
     ['nfs-unreachable', '1. 서버에 닿는가', /서버에 닿지 않습니다/, 3],
     ['nfs-permission', '2. 붙일 수 있는가', /NAS가 연결을 거부했습니다/, 2],
+    ['nfs-export', '2. 붙일 수 있는가', /서버에는 닿았지만 이 공유 경로를 붙일 수 없습니다/, 2],
     ['nfs-readonly', '3. 쓰기·읽기·지우기', /공유 폴더가 읽기 전용입니다/, 1],
     ['nfs-nolock', '4. 파일 잠금', /파일 잠금이 동작하지 않습니다/, 0],
   ] as const)('연결 확인 실패(%s) — 원인별 문구와 꺼진 다음', async (scenario, label, text, skippedAfter) => {
@@ -593,6 +594,8 @@ describe('적용', () => {
 })
 
 describe('백업에서 복원', () => {
+  const restoreSteps = () => Array.from(document.querySelectorAll('[data-step]')).map(el => `${el.getAttribute('data-step')}:${el.getAttribute('data-status')}`)
+
   it('서버가 아직 지원하지 않으면 그 사실을 알린다', async () => {
     open('', '#/start')
     await heading('어떻게 시작할까요')
@@ -632,13 +635,19 @@ describe('백업에서 복원', () => {
     fireEvent.click(button('복원'))
 
     await heading('복원이 끝났습니다')
-    expect(screen.getByText('백업 풀기')).toBeTruthy()
-    expect(screen.getByText('데이터베이스 되돌리기')).toBeTruthy()
+    expect(restoreSteps()).toEqual(['unpack:done', 'storage:done', 'pull:done', 'database:done', 'cert:done', 'zones:done'])
+    expect(screen.getByText('백업 풀고 설정 파일 만들기')).toBeTruthy()
+    expect(screen.getByText('데이터 되돌리기')).toBeTruthy()
+    expect(screen.getByText('구역 시작하고 마법사 잠그기')).toBeTruthy()
     // 백업에 파일이 없으면 "파일 되돌리기" 단계가 없다
     expect(screen.queryByText('파일 되돌리기')).toBeNull()
     fireEvent.click(button('완료 화면 열기'))
     expect(await screen.findByText('원래 서버 끄기')).toBeTruthy()
     expect(screen.getByText(/계정, 비밀번호, 데이터는 원래 서버에서 쓰던 그대로입니다/)).toBeTruthy()
+    // 원래 서버가 네트워크 저장소를 썼으면 같은 저장소를 다시 연결한 것이다
+    expect(screen.getByText(/네트워크 저장소를 다시 연결했습니다/)).toBeTruthy()
+    expect(screen.getByText('접속 주소 옮기기')).toBeTruthy()
+    expect(screen.queryByText('인증서 발급')).toBeNull()
   })
 
   it('새 버전의 백업은 복원할 수 없다 · 연결 확인 실패는 원인을 알린다', async () => {
@@ -659,6 +668,224 @@ describe('백업에서 복원', () => {
     await screen.findByText('이 파일로는 복원할 수 없습니다.')
     expect(next().disabled).toBe(true)
     expect(screen.getByText('복원할 수 있는 백업 파일을 올려야 다음으로 갈 수 있습니다.')).toBeTruthy()
+  })
+})
+
+describe('백업에서 복원 — 파일 상태', () => {
+  const pickFile = (container: HTMLElement, fileName = 'workspace-backup.jwbak') =>
+    fireEvent.change(container.querySelector('input[type=file]') as HTMLInputElement, { target: { files: [new File(['x'], fileName)] } })
+
+  it.each([
+    ['restore-badfile', /Just Workspace 백업 파일이 아닙니다/],
+    ['restore-format', /이 설치 관리자가 모르는 형식의 백업입니다/],
+    ['restore-noconfig', /설정이 들어 있지 않은 백업이라 새 서버로 옮길 수 없습니다/],
+    ['restore-corrupt', /옮기는 중에 손상됐습니다/],
+  ])('복원할 수 없는 파일은 사유를 알린다 (%s)', async (scenario, body) => {
+    const { container } = open(`restore,${scenario}`, '#/file')
+    await heading('백업 파일 올리기')
+    pickFile(container)
+    await screen.findByText('이 파일로는 복원할 수 없습니다.')
+    expect(screen.getByText(body)).toBeTruthy()
+    expect(next().disabled).toBe(true)
+  })
+
+  it('다 올라간 뒤에는 서버가 확인하는 동안 "확인 중"을 보인다 · 취소하면 처음으로', async () => {
+    const { container } = open('restore,restore-checking', '#/file')
+    await heading('백업 파일 올리기')
+    pickFile(container)
+    await screen.findByText(/확인 중 · 파일이 온전한지 보고 있습니다/)
+    expect(screen.getByText('파일 확인이 끝나면 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(next().disabled).toBe(true)
+    fireEvent.click(button('취소'))
+    await screen.findByText('백업 파일을 여기에 끌어다 놓습니다')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('올리는 중에는 진행률을 보인다', async () => {
+    const { container } = open('restore,restore-uploading', '#/file')
+    await heading('백업 파일 올리기')
+    pickFile(container)
+    await screen.findByText('올리는 중 · 62%')
+    expect(screen.getByText('다 올라가면 파일을 확인합니다.')).toBeTruthy()
+  })
+
+  it('서버에 빈 공간이 모자라면 얼마가 필요한지 알린다', async () => {
+    const { container } = open('restore,restore-nospace', '#/file')
+    await heading('백업 파일 올리기')
+    pickFile(container)
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('서버에 빈 공간이 모자랍니다. 4.5 GB가 필요한데 1.1 GB만 남았습니다.')
+    expect(next().disabled).toBe(true)
+  })
+
+  it('암호로 보호된 백업 — 틀리면 다시 묻고, 맞으면 다음으로 간다', async () => {
+    const { container } = open('restore,restore-password', '#/file')
+    await heading('백업 파일 올리기')
+    pickFile(container)
+    await screen.findByText('암호로 보호된 백업입니다.')
+    expect(next().disabled).toBe(true)
+    expect(screen.getByText('백업 암호를 넣고 확인해야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect((screen.getByLabelText('백업 암호') as HTMLInputElement).type).toBe('password')
+    expect(button('암호 확인').disabled).toBe(true)
+    type('백업 암호', 'not-it')
+    fireEvent.click(button('암호 확인'))
+    await screen.findByText('암호가 맞지 않습니다. 다시 넣습니다.')
+    expect(next().disabled).toBe(true)
+    type('백업 암호', 'backup-pass')
+    fireEvent.click(button('암호 확인'))
+    await screen.findByText(/파일이 온전하고, 이 버전에서 복원할 수 있는 백업입니다/)
+    expect(screen.queryByText('암호로 보호된 백업입니다.')).toBeNull()
+    expect(next().disabled).toBe(false)
+  })
+
+  it('다시 들어오면 서버가 가진 백업의 상태를 그대로 보인다 · 버릴 수 있다', async () => {
+    const { api } = open('restore,restore-kept', '#/file')
+    await heading('백업 파일 올리기')
+    await screen.findByText('workspace-backup-20260101.jwbak')
+    expect(screen.getByText(/파일이 온전하고, 이 버전에서 복원할 수 있는 백업입니다/)).toBeTruthy()
+    expect(next().disabled).toBe(false)
+    fireEvent.click(button('버리기'))
+    await screen.findByText('백업 파일을 여기에 끌어다 놓습니다')
+    expect(next().disabled).toBe(true)
+    expect((await api.restoreFile()).status).toBe('none')
+  })
+
+  it('서버에 있는 경로 — 없는 파일은 입력란에 알리고, 있는 파일은 확인된다', async () => {
+    open('restore', '#/file')
+    await heading('백업 파일 올리기')
+    fireEvent.click(screen.getByRole('radio', { name: '서버에 있는 파일 경로' }))
+    type(/서버에 있는 백업 파일 경로/, '/srv/backup/missing.jwbak')
+    fireEvent.click(button('파일 확인'))
+    await screen.findByText(/이 경로에 파일이 없거나 읽을 권한이 없습니다/)
+    expect(next().disabled).toBe(true)
+    type(/서버에 있는 백업 파일 경로/, '/srv/backup/a.jwbak')
+    fireEvent.click(button('파일 확인'))
+    await screen.findByText(/파일이 온전하고, 이 버전에서 복원할 수 있는 백업입니다/)
+    expect(next().disabled).toBe(false)
+  })
+})
+
+describe('백업에서 복원 — 내용 확인과 완료', () => {
+  const stepsOf = () => Array.from(document.querySelectorAll('[data-step]')).map(el => `${el.getAttribute('data-step')}:${el.getAttribute('data-status')}`)
+  const ready = async () => {
+    await heading('이 백업으로 복원합니다')
+    await waitFor(() => expect(button('복원').disabled).toBe(false), { timeout: 3000 })
+  }
+
+  it('올려 둔 백업이 없으면 파일 화면으로 돌려보낸다', async () => {
+    open('restore,restore-nobackup', '#/review')
+    await heading('백업 파일 올리기')
+  })
+
+  it('서버가 알려 준 막는 사유를 보이고 복원을 막는다', async () => {
+    open('restore,restore-local,restore-memory', '#/review')
+    await heading('이 백업으로 복원합니다')
+    await screen.findByText('이 서버에는 이 백업을 복원할 수 없습니다.')
+    expect(screen.getByText(/백업에 든 구역에 권장 메모리 8 GB가 필요한데 이 서버는 6 GB입니다/)).toBeTruthy()
+    expect(screen.getByText('위 사유를 해결해야 복원할 수 있습니다.')).toBeTruthy()
+    expect(button('복원').disabled).toBe(true)
+  })
+
+  it('다섯 검사를 통과해도 백업의 그 공유가 아니면 막는다(번호 없는 제목)', async () => {
+    open('restore,restore-nfs-marker', '#/review')
+    await heading('이 백업으로 복원합니다')
+    fireEvent.click(await screen.findByRole('button', { name: '연결 확인' }))
+    await screen.findByText('이 공유로는 복원할 수 없습니다.')
+    expect(screen.getByText(/이 공유에는 원래 서버가 남긴 표식이 없습니다/)).toBeTruthy()
+    expect(screen.queryByText(/번 검사 실패/)).toBeNull()
+    expect(screen.getByText('원래 서버가 쓰던 공유를 연결해야 복원할 수 있습니다.')).toBeTruthy()
+    expect(button('복원').disabled).toBe(true)
+  })
+
+  it('서버가 시작을 거부하면(422) 사유를 항목별로 보인다', async () => {
+    open('restore,restore-local,restore-invalid', '#/review')
+    await ready()
+    fireEvent.click(button('복원'))
+    await screen.findByText('이대로는 복원을 시작할 수 없습니다.')
+    expect(screen.getByText(/이 공유에는 원래 서버가 남긴 표식이 없습니다. 다른 공유이거나 비어 있습니다./)).toBeTruthy()
+    // 문구를 모르는 사유는 코드를 그대로 보인다
+    expect(screen.getByText('서버가 값을 받지 않았습니다. (domain_unusual)')).toBeTruthy()
+    expect(screen.getByText('위 항목을 고친 뒤 다시 누릅니다.')).toBeTruthy()
+    await heading('이 백업으로 복원합니다')
+  })
+
+  it('연결 형태 · 프록시 주소 · 내부 대역은 백업의 값을 기본으로 보낸다', async () => {
+    const { api } = open('restore,restore-local,restore-proxy', '#/review')
+    const sent = vi.spyOn(api, 'restoreApply')
+    await ready()
+    const box = screen.getByRole('button', { name: /연결 형태와 내부 대역/ })
+    expect(box.textContent).toContain('기존 프록시 뒤 · 내부 대역 172.28.0.0/24')
+    fireEvent.click(box)
+    expect((screen.getByLabelText(/프록시 주소 또는 대역/) as HTMLInputElement).value).toBe('192.168.10.5')
+    type(/프록시 주소 또는 대역/, '')
+    expect(button('복원').disabled).toBe(true)
+    expect(screen.getByText('프록시 주소를 입력해야 복원할 수 있습니다.')).toBeTruthy()
+    type(/프록시 주소 또는 대역/, '192.168.10.5, 192.168.10.6')
+    type('내부 대역', '172.30.0.0/16')
+    expect(screen.getByText('내부 대역을 고쳐야 복원할 수 있습니다.')).toBeTruthy()
+    type('내부 대역', '172.30.0.0/24')
+    fireEvent.click(button('복원'))
+    await heading('복원이 끝났습니다')
+    expect(sent).toHaveBeenCalledWith({
+      domain: 'workspace.example.com', storage: { kind: 'local' }, network: 'proxy',
+      proxy_addresses: ['192.168.10.5', '192.168.10.6'], subnet: '172.30.0.0/24',
+    })
+    // 프록시 뒤면 인증서 단계가 없다
+    expect(stepsOf()).toEqual(['unpack:done', 'pull:done', 'database:done', 'files:done', 'zones:done'])
+    fireEvent.click(button('완료 화면 열기'))
+    expect(await screen.findByText('백업에 든 파일도 되돌렸습니다.')).toBeTruthy()
+  })
+
+  it('연결 형태를 바꿔 보낸다 · 프록시가 아니면 프록시 주소를 보내지 않는다', async () => {
+    const { api } = open('restore,restore-local', '#/review')
+    const sent = vi.spyOn(api, 'restoreApply')
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: /연결 형태와 내부 대역/ }))
+    fireEvent.click(screen.getByRole('radio', { name: '공유기 뒤 (포트 포워딩)' }))
+    expect(screen.queryByLabelText(/프록시 주소 또는 대역/)).toBeNull()
+    fireEvent.click(button('복원'))
+    await heading('복원이 끝났습니다')
+    expect(sent).toHaveBeenCalledWith({ domain: 'workspace.example.com', storage: { kind: 'local' }, network: 'router', subnet: '172.28.0.0/24' })
+  })
+
+  it('파일 없는 백업 · 접속 주소가 아직 여기를 가리키지 않으면 — 완료 화면이 그렇게 알린다', async () => {
+    open('restore,restore-nofiles,dns-mismatch', '#/review')
+    await ready()
+    expect(screen.getByText('파일 없이 복원합니다.')).toBeTruthy()
+    expect(screen.getByText('접속 주소가 아직 이 서버를 가리키지 않습니다. 그대로 복원할 수 있습니다.')).toBeTruthy()
+    fireEvent.click(button('복원'))
+    await heading('복원이 끝났습니다')
+    fireEvent.click(button('완료 화면 열기'))
+    expect(await screen.findByText(/파일 없이 복원했습니다/)).toBeTruthy()
+    // 서버가 임시 인증서로 정했다
+    expect(screen.getByText('인증서 발급')).toBeTruthy()
+    expect(screen.getByText('원래 서버 끄기')).toBeTruthy()
+  })
+
+  it('인증서 발급 실패 — 복원에서도 임시 인증서로 계속할 수 있다', async () => {
+    const { api } = open('restore,restore-local,restore-cert-fail', '#/review')
+    const retried = vi.spyOn(api, 'restoreRetry')
+    await ready()
+    fireEvent.click(button('복원'))
+    await heading('복원이 멈췄습니다')
+    expect(stepsOf()).toEqual(['unpack:done', 'pull:done', 'database:done', 'files:done', 'cert:failed', 'zones:pending'])
+    fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: /임시 인증서/ }))
+    await heading('복원이 끝났습니다')
+    expect(retried).toHaveBeenCalledWith({ use_temporary_cert: true })
+    fireEvent.click(button('완료 화면 열기'))
+    expect(await screen.findByText('인증서 발급')).toBeTruthy()
+  })
+
+  it('데이터를 되돌리다 멈추면 원인을 알리고 다시 시도할 수 있다', async () => {
+    open('restore,restore-local,restore-fail', '#/review')
+    await ready()
+    fireEvent.click(button('복원'))
+    await heading('복원이 멈췄습니다')
+    const card = screen.getByRole('alert')
+    expect(card.textContent).toContain('백업의 데이터를 되돌리다 멈췄습니다.')
+    expect(within(card).getByRole('link', { name: '내용 확인으로 돌아가기' }).getAttribute('href')).toBe('#/review')
+    fireEvent.click(within(card).getByRole('button', { name: '이 단계부터 다시' }))
+    await heading('복원이 끝났습니다')
   })
 })
 

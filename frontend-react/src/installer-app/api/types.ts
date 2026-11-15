@@ -161,10 +161,20 @@ export interface CertCheck { id: string; status: 'pass' | 'warn' | 'fail'; value
 export interface CertProbe { ok: boolean; checks: CertCheck[]; names?: string[]; not_after?: string | null; issuer?: string | null }
 export interface SmtpProbe { status: 'ok' | 'unreachable' | 'tls_failed' | 'auth_failed' | 'error'; detail?: string | null }
 export interface AiProbe { status: 'ok' | 'auth_failed' | 'unreachable' | 'error'; http_status?: number | null; models?: string[] }
-export type NfsCause = 'unreachable' | 'permission_denied' | 'read_only' | 'no_locking'
+/**
+ * export_not_found = 서버에는 닿았는데 그 경로를 붙일 수 없다.
+ * marker_missing · other_install = 복원에서만: 다섯 검사는 통과했지만 이 공유가 백업의 그 저장소가 아니다
+ */
+export type NfsCause = 'unreachable' | 'export_not_found' | 'permission_denied' | 'read_only' | 'no_locking' | 'marker_missing' | 'other_install'
 export type NfsStepId = 'reach' | 'mount' | 'write' | 'lock' | 'space'
 export interface NfsStep { id: NfsStepId | string; status: 'pass' | 'warn' | 'fail' | 'skipped'; value: unknown }
-export interface NfsProbe { ok: boolean; cause: NfsCause | string | null; steps: NfsStep[] }
+export interface NfsProbe {
+  ok: boolean
+  cause: NfsCause | string | null
+  steps: NfsStep[]
+  /** 복원에서만 — 이 공유에 남아 있는 설치 표식이 백업과 맞는가 */
+  marker?: { status: 'match' | 'missing' | 'mismatch' } | null
+}
 export interface LocalPathProbe { status: 'ok' | 'not_found' | 'not_writable' | 'error'; path?: string; free_gb?: number | null }
 
 export interface SmtpProbeRequest { host: string; port: number; security: MailSecurity; username: string; password: string }
@@ -220,16 +230,38 @@ export interface ApplyState {
   started_at?: string | null
   finished_at?: string | null
   updated_at?: string | null
+  /** 복원일 때만 — 완료 화면의 문구를 가른다 */
+  restore?: RestoreOutcome | null
+}
+/** files: restored = 백업의 파일을 되돌렸다 · not_included = 백업에 파일이 없었다 · nfs = 같은 네트워크 저장소를 다시 연결했다 */
+export interface RestoreOutcome {
+  files: 'restored' | 'not_included' | 'nfs'
+  storage_kind: StorageKind
+  domain_changed: boolean
+  cert: CertMode
 }
 export interface ApplyLog { step: string; lines: string[] }
 
 // ─── 복원 ───
 
+/**
+ * 올려 둔 백업의 상태.
+ * status: ok = 복원할 수 있음 · invalid(reason: not_a_backup · format_unsupported · no_config · path_invalid) ·
+ *   corrupt = 옮기는 중 손상 · password_required = 설정이 암호로 보호됨 · password_wrong · not_found · none = 올려 둔 백업 없음
+ * state: 서버가 지금 하는 일(uploading · checking 이면 아직 결과가 아니다)
+ */
+export type RestoreFileStatus = 'ok' | 'invalid' | 'corrupt' | 'password_required' | 'password_wrong' | 'not_found' | 'none'
 export interface RestoreFileInfo {
-  status: 'ok' | 'invalid' | 'not_found'
+  status: RestoreFileStatus
+  state?: 'none' | 'uploading' | 'checking' | 'ready' | 'failed'
   name?: string | null
   size_bytes?: number | null
+  source?: 'upload' | 'path' | null
+  path?: string | null
+  reason?: string | null
 }
+/** 복원을 막는 사유 — version_newer · memory_insufficient · memory_below_minimum */
+export interface RestoreBlocker { code: string; vars?: Record<string, unknown> }
 export interface RestoreReview {
   source_url?: string | null
   created_at?: string | null
@@ -237,6 +269,11 @@ export interface RestoreReview {
   installer_version?: string | null
   /** ok = 복원할 수 있음 · newer = 설치하는 버전보다 새 백업 */
   version_status: 'ok' | 'newer'
+  version_reason?: 'schema' | 'product' | null
+  schema_version?: number | string | null
+  installer_schema_version?: number | string | null
+  kind?: 'full' | 'pre-update' | null
+  size_bytes?: number | null
   zones: string[]
   users?: number | null
   data_bytes?: number | null
@@ -244,9 +281,25 @@ export interface RestoreReview {
   /** 백업에 파일이 들어 있는가 */
   files_included: boolean
   files_bytes?: number | null
+  /** 접속 주소 기본값(백업의 접속 주소) */
   domain: string
+  mail_domain?: string | null
+  install_id?: string | null
+  /** 연결 형태 · 프록시 주소 · 내부 대역의 기본값 */
+  network?: Network | null
+  proxy_addresses?: string[] | null
+  subnet?: string | null
+  blockers?: RestoreBlocker[] | null
 }
-export interface RestoreTarget { domain: string; storage: { kind: StorageKind; server?: string | null; export?: string | null } }
+export interface RestoreTarget {
+  domain: string
+  storage: { kind: StorageKind; server?: string | null; export?: string | null }
+  network?: Network
+  proxy_addresses?: string[]
+  /** 보내지 않으면 서버가 정한다(프록시 → proxy, 접속 주소가 이 서버를 가리키면 auto, 아니면 temporary) */
+  cert?: 'auto' | 'temporary' | 'proxy'
+  subnet?: string
+}
 
 // ─── 클라이언트 ───
 
@@ -279,11 +332,17 @@ export interface InstallerApi {
   getApplyLog(step: string, tail?: number): Promise<ApplyLog>
   restoreUpload(file: File, onProgress: (percent: number) => void, signal?: AbortSignal): Promise<RestoreFileInfo>
   restoreCheckPath(path: string): Promise<RestoreFileInfo>
+  /** 암호로 보호된 백업 — 암호를 넣고 다시 확인한다 */
+  restorePassword(password: string): Promise<RestoreFileInfo>
+  /** 지금 올려 둔 백업(없으면 status 'none') */
+  restoreFile(): Promise<RestoreFileInfo>
+  /** 올려 둔 백업을 버린다 */
+  restoreDiscard(): Promise<void>
   restoreReview(): Promise<RestoreReview>
   restoreApply(target: RestoreTarget): Promise<ApplyState>
   restoreGetApply(): Promise<ApplyState>
   restoreStream(onState: (s: ApplyState) => void): () => void
-  restoreRetry(): Promise<ApplyState>
+  restoreRetry(opts?: { use_temporary_cert?: boolean }): Promise<ApplyState>
 }
 
 /** 서버가 2xx 가 아닌 응답을 줬다 */
@@ -296,6 +355,11 @@ export class ApiError extends Error {
     this.status = status
     this.code = code
     this.body = body
+  }
+  /** 서버가 오류와 같이 준 값(`{code, vars}` 의 vars) */
+  get vars(): Record<string, unknown> {
+    const v = this.body && typeof this.body === 'object' ? (this.body as Record<string, unknown>).vars : null
+    return v && typeof v === 'object' ? (v as Record<string, unknown>) : {}
   }
   /** 서버가 아직 만들지 않은 기능 */
   get notImplemented(): boolean { return this.status === 501 }

@@ -119,7 +119,42 @@ describe('답변 · 요약 · 확인', () => {
     expect(calls[2].body).toEqual({ use_temporary_cert: true })
   })
 
-  it('복원은 서버에 아직 없다 — 501 · 404 · 405 를 모두 "지원하지 않음"으로 알린다', async () => {
+  it('복원 — 계약의 경로와 본문으로 부른다', async () => {
+    const api = createHttpApi()
+    const info = { status: 'ok', state: 'ready', name: 'a.jwbak', size_bytes: 10, source: 'path', path: '/srv/a.jwbak', reason: null }
+    replies['POST /api/restore/path'] = { body: info }
+    replies['POST /api/restore/password'] = { body: { ...info, status: 'password_wrong' } }
+    replies['GET /api/restore/file'] = { body: { ...info, status: 'none', state: 'none' } }
+    replies['DELETE /api/restore/file'] = { status: 204 }
+    replies['POST /api/restore/apply'] = [{ status: 202, body: { started: true } }, { status: 409, body: { code: 'apply_running', vars: {} } }, { status: 422, body: { code: 'restore_invalid', vars: { errors: [{ field: 'storage.kind', code: 'storage_must_be_nfs', vars: {} }] } } }]
+    replies['POST /api/restore/apply/retry'] = { status: 202, body: { started: true } }
+    replies['GET /api/restore/apply'] = { body: { status: 'running', steps: [], current: 'unpack', error: null, restore: { files: 'nfs', storage_kind: 'nfs', domain_changed: false, cert: 'auto' } } }
+    expect((await api.restoreCheckPath('/srv/a.jwbak')).status).toBe('ok')
+    expect((await api.restorePassword('pw')).status).toBe('password_wrong')
+    expect((await api.restoreFile()).status).toBe('none')
+    await api.restoreDiscard()
+    const target = { domain: 'workspace.example.com', storage: { kind: 'nfs' as const, server: 'nas.example.com', export: '/volume1/workspace' }, network: 'proxy' as const, proxy_addresses: ['192.168.10.5'], subnet: '172.28.0.0/24' }
+    expect((await api.restoreApply(target)).restore?.files).toBe('nfs')
+    // 이미 돌고 있으면(409) 그 진행을 그대로 보여 준다
+    expect((await api.restoreApply(target)).status).toBe('running')
+    // 거부(422)는 사유를 그대로 올린다
+    const refused = await api.restoreApply(target).catch(x => x) as ApiError
+    expect(refused.code).toBe('restore_invalid')
+    expect(refused.vars.errors).toEqual([{ field: 'storage.kind', code: 'storage_must_be_nfs', vars: {} }])
+    await api.restoreRetry({ use_temporary_cert: true })
+    const sent = calls.filter(c => c.method !== 'GET').map(c => [`${c.method} ${c.url}`, c.body])
+    expect(sent).toEqual([
+      ['POST /api/restore/path', { path: '/srv/a.jwbak' }],
+      ['POST /api/restore/password', { password: 'pw' }],
+      ['DELETE /api/restore/file', undefined],
+      ['POST /api/restore/apply', target],
+      ['POST /api/restore/apply', target],
+      ['POST /api/restore/apply', target],
+      ['POST /api/restore/apply/retry', { use_temporary_cert: true }],
+    ])
+  })
+
+  it('복원이 없는 옛 서버 — 501 · 404 · 405 를 모두 "지원하지 않음"으로 알린다', async () => {
     const api = createHttpApi()
     replies['POST /api/restore/path'] = { status: 501, body: { code: 'restore_not_supported', vars: {} } }
     replies['GET /api/restore/review'] = { status: 405, body: { detail: 'Method Not Allowed' } }

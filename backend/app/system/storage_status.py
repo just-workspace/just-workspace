@@ -4,7 +4,8 @@
 읽기가 오류가 아니라 **멈춤**일 수 있으므로, 저장소를 만지는 일은 전부 따로 둔 스레드에서 하고
 `timeout` 안에 답이 없으면 사유 `unresponsive` 로 본다. 멈춘 확인은 하나만 둔다.
 
-종류와 위치는 저장소를 만지지 않고 `/proc/self/mountinfo` 에서 읽는다(끊긴 동안에도 답한다).
+종류와 위치는 저장소를 만지지 않고 읽는다(끊긴 동안에도 답한다) — 설치 관리자가 아는 값(`GET /internal/storage`)을
+먼저 쓰고, 설치 관리자가 없거나 답이 없으면 `/proc/self/mountinfo` 에서 추정한다.
 """
 from __future__ import annotations
 
@@ -74,6 +75,45 @@ def describe(root: str, mountinfo: str | None = None) -> dict:
     if found and found["mount_point"] != "/" and found["root"] not in ("", "/"):
         location = found["root"]
     return {"kind": "local", "location": location}
+
+
+INSTALLER_TIMEOUT = 3.0            # 상태 카드를 붙잡지 않게 짧게
+INSTALLER_CACHE_SECONDS = 60.0     # 종류·위치는 설치 뒤에 바뀌지 않는다
+INSTALLER_RETRY_SECONDS = 15.0     # 답이 없었으면 이 시간 동안은 다시 묻지 않는다
+_installer_seen: tuple[float, dict | None] | None = None
+
+
+async def installed_description(force: bool = False) -> dict:
+    """설치 관리자가 아는 저장소 — {kind, [location], volume, source: "installer"}.
+
+    컨테이너 안의 마운트 정보로는 호스트 폴더를 정확히 알 수 없는 설치가 있어, 설치 관리자의 답을 먼저 쓴다.
+    설치 관리자가 없거나 답이 없으면 {"volume": None, "source": "mountinfo"} — 호출한 쪽은 `describe` 의 추정을 그대로 둔다.
+    """
+    global _installer_seen
+    from app.system import installer_client as installer
+
+    fallback = {"volume": None, "source": "mountinfo"}
+    if not installer.configured():
+        return fallback
+    now = time.monotonic()
+    if not force and _installer_seen is not None:
+        seen_at, seen = _installer_seen
+        if now - seen_at < (INSTALLER_CACHE_SECONDS if seen is not None else INSTALLER_RETRY_SECONDS):
+            return dict(seen) if seen is not None else fallback
+    found: dict | None = None
+    try:
+        data = await installer.request("GET", "/internal/storage", timeout=INSTALLER_TIMEOUT)
+    except installer.InstallerError:
+        data = None
+    if isinstance(data, dict) and data.get("kind") in ("local", "nfs"):
+        volume = data.get("volume")
+        found = {"kind": data["kind"], "volume": volume if isinstance(volume, str) and volume else None,
+                 "source": "installer"}
+        location = data.get("location")
+        if isinstance(location, str) and location:
+            found["location"] = location
+    _installer_seen = (now, found)
+    return dict(found) if found is not None else fallback
 
 
 # ─── 확인(저장소를 만진다 — 멈출 수 있다) ───

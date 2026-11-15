@@ -18,6 +18,7 @@ from app.auth.deps import get_current_user
 from app.db.models import Base, User
 from app.db.session import get_db
 from app.middleware import storage_guard
+from app.system import installer_client
 from app.system import router as system_router
 from app.system import storage_status
 from app.system.storage_status import StorageProber
@@ -159,6 +160,10 @@ async def env(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_status, "prober", StorageProber(**kwargs))
     monkeypatch.setattr(storage_status, "light_prober", StorageProber(probe_fn=storage_status.probe_marker, **kwargs))
     monkeypatch.setattr(system_router, "_seen_down", None)
+    # 설치 관리자 없이 구성한 설치가 기본 — 설치 관리자의 답을 쓰는 경우는 테스트가 따로 붙인다
+    monkeypatch.delenv(installer_client.ENV_URL, raising=False)
+    monkeypatch.delenv(installer_client.ENV_KEY, raising=False)
+    monkeypatch.setattr(storage_status, "_installer_seen", None)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         yield client, state
     await engine.dispose()
@@ -185,6 +190,50 @@ async def test_storage_api_tracks_when_it_went_down(env):
     _marker(state.root)
     back = (await client.post("/api/admin/system/storage/recheck")).json()
     assert back["state"] == "ok" and back["down_since"] is None
+
+
+@pytest.mark.asyncio
+async def test_kind_and_location_come_from_the_installer_when_it_answers(env, monkeypatch):
+    client, state = env
+    _marker(state.root)
+    first = (await client.get("/api/admin/system/storage")).json()
+    assert first["source"] == "mountinfo" and first["volume"] is None      # 설치 관리자 없음 → 마운트 정보의 추정
+
+    calls: list[str] = []
+    answer: dict = {"status": 200, "body": {"kind": "nfs", "location": "nas.example.com:/volume1/workspace",
+                                           "volume": "ws-storage-data", "install_id": "never-shown"}}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(f"{request.method} {request.url.path} {request.headers.get('x-jw-installer-key')}")
+        return httpx.Response(answer["status"], json=answer["body"])
+
+    monkeypatch.setenv(installer_client.ENV_URL, "http://jw-installer:8444")
+    monkeypatch.setenv(installer_client.ENV_KEY, "shared-key-for-tests")
+    monkeypatch.setattr(installer_client, "transport", httpx.MockTransport(handler))
+
+    got = (await client.get("/api/admin/system/storage")).json()
+    assert calls == ["GET /internal/storage shared-key-for-tests"]
+    assert (got["kind"], got["location"], got["volume"], got["source"]) == (
+        "nfs", "nas.example.com:/volume1/workspace", "ws-storage-data", "installer")
+    assert "install_id" not in got and got["state"] == "ok"                # 연결 판정은 그대로 이 서버가 한다
+    await client.get("/api/admin/system/storage")
+    assert len(calls) == 1                                                 # 바뀌지 않는 값이라 잠시 기억한다
+
+    # 위치를 모르는 답이면 종류만 쓰고 위치는 추정값을 둔다
+    answer["body"] = {"kind": "local", "location": None, "volume": "ws-storage-data"}
+    got = (await client.post("/api/admin/system/storage/recheck")).json()   # 다시 확인은 기억한 값을 쓰지 않는다
+    assert len(calls) == 2
+    assert got["kind"] == "local" and got["location"] == first["location"] and got["source"] == "installer"
+
+    # 답이 없거나 알 수 없는 답이면 추정으로 떨어지고, 한동안 다시 묻지 않는다
+    for status, body in ((500, {"code": "unexpected_error", "vars": {}}), (404, {"detail": "Not Found"}),
+                         (200, {"kind": "tape"})):
+        answer.update(status=status, body=body)
+        got = (await client.post("/api/admin/system/storage/recheck")).json()
+        assert got["source"] == "mountinfo" and got["volume"] is None and got["kind"] == first["kind"], status
+    asked = len(calls)
+    assert (await client.get("/api/admin/system/storage")).json()["source"] == "mountinfo"
+    assert len(calls) == asked
 
 
 @pytest.mark.asyncio

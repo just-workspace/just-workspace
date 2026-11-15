@@ -1,6 +1,7 @@
-"""관리 › 구역 · 저장소 API.
+"""관리 › 구역 · 저장소 · 인증서 API.
 
-- `/api/admin/system/*`(관리자만): 구역 목록·켜기·끄기·설정, 작업 진행, 연결 확인, 저장소 상태.
+- `/api/admin/system/*`(관리자만): 구역 목록·켜기·끄기·설정·다시 연결, 작업 목록·진행, 연결 확인, 저장소 상태,
+  인증서 상태·다시 발급.
   구역을 실제로 바꾸는 일은 설치 관리자가 한다 — 여기서는 권한을 확인하고 내부 API 를 대신 부른 뒤
   감사 로그를 남긴다(app/system/installer_client.py).
 - `/api/system/storage-status`(로그인한 누구나): 파일 탭이 "저장소가 끊겼는가"만 묻는 가벼운 조회.
@@ -12,11 +13,9 @@
 """
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import JSONResponse
@@ -38,10 +37,12 @@ from app.system.installer_client import InstallerError
 
 logger = logging.getLogger(__name__)
 
-JOB_KEY_PREFIX = "system.zonejob."
+JOB_KEY_PREFIX = "system.zonejob."         # 예전에 작업 id 를 적어 두던 자리 — 남은 것은 목록을 읽을 때 지운다
+DISMISSED_KEY_PREFIX = JOB_KEY_PREFIX + "dismissed."      # 구역별로 "걷은" 작업 id(끝난 작업 표시를 닫았다)
 DOWN_SINCE_KEY = "system.storage.down_since"
 DONE_JOB_KEEP = timedelta(minutes=10)      # 끝난 작업을 목록에 "방금 켰습니다"로 남겨 두는 시간
 SECRET_FIELDS = ("password", "api_key")
+CERT_PEM_MAX = 1024 * 1024                 # 올리는 인증서·개인 키 글자 수의 상한(각각)
 REDACTED = "***"
 
 MESSAGES = {
@@ -58,6 +59,12 @@ MESSAGES = {
     "already_enabled": "이미 켜져 있습니다.",
     "not_enabled": "꺼져 있는 구역입니다.",
     "job_unknown": "작업을 찾을 수 없습니다.",
+    "not_pending": "보류된 연결이 없습니다.",
+    "not_installed": "설치가 끝나지 않았습니다.",
+    "cert_managed_by_proxy": "이 설치의 인증서는 앞단 프록시가 맡습니다.",
+    "cert_invalid": "올린 인증서를 쓸 수 없습니다.",
+    "cert_auto_needs_domain": "인증서 자동 발급은 접속 주소가 도메인일 때만 됩니다.",
+    "file_too_large": "파일이 너무 큽니다.",
 }
 
 
@@ -140,6 +147,9 @@ def _row(declared: dict, kind: str, live: dict | None, enabled: bool) -> dict:
         "enabled": enabled,
         "has_settings": bool(live.get("has_settings")),
         "fits": live.get("fits"),
+        # 켜져 있지만 로그인 연동이 보류된 구역(신뢰되는 인증서가 생기면 다시 연결할 수 있다)
+        "pending": bool(live.get("pending")),
+        "pending_reason": live.get("pending_reason") if isinstance(live.get("pending_reason"), str) else None,
         "menu": bool(set(declared.get("modules", [])) & _menu_modules()),
         "job": None,
     }
@@ -175,8 +185,12 @@ def build_listing(listing: dict | None) -> dict:
 
 
 def _job_view(job: dict) -> dict:
-    return {k: job.get(k) for k in ("id", "kind", "zone", "status", "stages", "error", "warnings", "ports",
-                                    "started_at", "finished_at")}
+    out = {k: job.get(k) for k in ("id", "kind", "zone", "status", "stages", "error", "warnings", "ports",
+                                   "started_at", "finished_at")}
+    for key in ("stages", "warnings", "ports"):      # 인증서 작업처럼 포트가 없는 작업도 같은 꼴로
+        if not isinstance(out[key], list):
+            out[key] = []
+    return out
 
 
 def _parse_time(value: Any) -> datetime | None:
@@ -189,47 +203,54 @@ def _parse_time(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
-async def _track(db: AsyncSession, zone_id: str, job: dict, admin: User) -> None:
-    await set_setting(db, JOB_KEY_PREFIX + zone_id, json.dumps(
-        {"id": job.get("id"), "kind": job.get("kind"), "by": admin.id, "at": storage_status.now_iso()}))
+async def _recent_jobs() -> list[dict]:
+    """설치 관리자가 기억하는 작업 — 진행 중인 것과 최근 것, 새것부터."""
+    data = await installer.request("GET", "/internal/jobs")
+    jobs = data.get("jobs") if isinstance(data, dict) else None
+    if not isinstance(jobs, list):
+        return []
+    views = [_job_view(j) for j in jobs if isinstance(j, dict) and isinstance(j.get("id"), str)]
+    return sorted(views, key=lambda j: j.get("started_at") or "", reverse=True)
+
+
+def _latest_by_zone(jobs: list[dict]) -> dict[str, dict]:
+    latest: dict[str, dict] = {}
+    for job in jobs:
+        zone = job.get("zone")
+        if isinstance(zone, str) and zone not in latest:      # 인증서 작업(zone 없음)은 구역 행에 붙지 않는다
+            latest[zone] = job
+    return latest
 
 
 async def _attach_jobs(db: AsyncSession, listing: dict) -> None:
-    """이 화면에서 시작한 작업을 행에 붙인다 — 화면을 떠났다 돌아와도 진행을 이어 받게."""
-    tracked: dict[str, dict] = {}
-    for key, raw in (await get_settings_by_prefix(db, JOB_KEY_PREFIX)).items():
-        try:
-            data = json.loads(raw)
-        except ValueError:
-            data = None
-        if isinstance(data, dict) and isinstance(data.get("id"), str):
-            tracked[key[len(JOB_KEY_PREFIX):]] = data
+    """구역마다 가장 최근 작업을 행에 붙인다 — 화면을 새로 열어도 진행 중인 작업과 방금 끝난 작업이 보이게.
+
+    작업은 설치 관리자가 기억한다. 여기서 기억하는 것은 "걷은" 작업 id 뿐이다.
+    """
+    try:
+        latest = _latest_by_zone(await _recent_jobs())
+    except InstallerError as e:
+        logger.info("[system] 작업 목록을 읽지 못했습니다(%s)", e.code)
+        return
+    dismissed: dict[str, str] = {}
+    for key, value in (await get_settings_by_prefix(db, JOB_KEY_PREFIX)).items():
+        if key.startswith(DISMISSED_KEY_PREFIX):
+            dismissed[key[len(DISMISSED_KEY_PREFIX):]] = value
         else:
             await delete_setting(db, key)
-    if not tracked:
-        return
-
-    async def fetch(zone_id: str, ref: dict) -> tuple[str, dict | None, bool]:
-        try:
-            return zone_id, _job_view(await installer.request("GET", f"/internal/jobs/{ref['id']}")), False
-        except InstallerError as e:
-            if e.code == "job_unknown":
-                return zone_id, None, True
-            # 설치 관리자가 잠깐 안 닿는다(backend 를 다시 띄우는 중일 수 있다) — 지우지 않고 모름으로 둔다
-            return zone_id, {"id": ref["id"], "kind": ref.get("kind"), "zone": zone_id, "status": "unknown",
-                             "stages": [], "error": None, "warnings": [], "ports": [],
-                             "started_at": ref.get("at"), "finished_at": None}, False
-
-    rows = {r["id"]: r for r in (*listing["zones"], *listing["addons"])}
     now = datetime.now(timezone.utc)
-    for zone_id, job, gone in await asyncio.gather(*(fetch(z, ref) for z, ref in tracked.items())):
-        if job is not None and job.get("status") == "done":
-            finished = _parse_time(job.get("finished_at")) or _parse_time(tracked[zone_id].get("at"))
-            gone = finished is None or now - finished > DONE_JOB_KEEP
-        if gone or zone_id not in rows:
-            await delete_setting(db, JOB_KEY_PREFIX + zone_id)
+    for row in (*listing["zones"], *listing["addons"]):
+        job = latest.get(row["id"])
+        if job is None or dismissed.get(row["id"]) == job["id"]:
             continue
-        rows[zone_id]["job"] = job
+        if job.get("status") == "done":
+            finished = _parse_time(job.get("finished_at")) or _parse_time(job.get("started_at"))
+            if finished is None or now - finished > DONE_JOB_KEEP:
+                continue
+        row["job"] = job
+    for zone_id, job_id in dismissed.items():      # 그 구역에 새 작업이 생겼으면 걷은 표시는 쓸모가 없다
+        if zone_id not in latest or latest[zone_id]["id"] != job_id:
+            await delete_setting(db, DISMISSED_KEY_PREFIX + zone_id)
 
 
 @router.get("/zones")
@@ -245,6 +266,8 @@ async def list_zones(admin: User = Depends(require_admin), db: AsyncSession = De
             reason = e.code
     out = build_listing(listing if isinstance(listing, dict) else None)
     out["installer"] = {"available": reason is None, "reason": reason}
+    verified = listing.get("git_verified_version") if isinstance(listing, dict) else None
+    out["git_verified_version"] = verified if isinstance(verified, str) and verified else None
     if reason is None:
         await _attach_jobs(db, out)
     return out
@@ -263,7 +286,6 @@ async def enable_zone(zone_id: str, request: Request, body: SettingsBody | None 
     _zone_or_404(zone_id)
     settings = body.settings if body else None
     job = _job_view(await installer.request("POST", f"/internal/zones/{zone_id}/enable", json={"settings": settings}))
-    await _track(db, zone_id, job, admin)
     await audit.log_action(db, admin.id, "system.zone.enable", "zone", zone_id,
                            {"job": job.get("id"), "settings": redact(settings or {})}, _client_ip(request))
     return job
@@ -274,7 +296,6 @@ async def disable_zone(zone_id: str, request: Request, admin: User = Depends(req
                        db: AsyncSession = Depends(get_db)):
     _zone_or_404(zone_id)
     job = _job_view(await installer.request("POST", f"/internal/zones/{zone_id}/disable"))
-    await _track(db, zone_id, job, admin)
     await audit.log_action(db, admin.id, "system.zone.disable", "zone", zone_id, {"job": job.get("id")},
                            _client_ip(request))
     return job
@@ -284,8 +305,21 @@ async def disable_zone(zone_id: str, request: Request, admin: User = Depends(req
 async def dismiss_zone_job(zone_id: str, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """끝난 작업(실패·완료 직후) 표시를 걷는다 — "꺼진 채로 두기"."""
     _zone_or_404(zone_id)
-    await delete_setting(db, JOB_KEY_PREFIX + zone_id)
+    job = _latest_by_zone(await _recent_jobs()).get(zone_id)
+    if job is not None and job.get("status") != "running":
+        await set_setting(db, DISMISSED_KEY_PREFIX + zone_id, job["id"])
     return {"ok": True}
+
+
+@router.post("/zones/{zone_id}/reconnect", status_code=202)
+async def reconnect_zone(zone_id: str, request: Request, admin: User = Depends(require_admin),
+                         db: AsyncSession = Depends(get_db)):
+    """보류된 연결(코드 저장소의 로그인 연동)을 다시 건다."""
+    _zone_or_404(zone_id)
+    job = _job_view(await installer.request("POST", f"/internal/zones/{zone_id}/reconnect"))
+    await audit.log_action(db, admin.id, "system.zone.reconnect", "zone", zone_id, {"job": job.get("id")},
+                           _client_ip(request))
+    return job
 
 
 @router.get("/zones/{zone_id}/settings")
@@ -303,7 +337,6 @@ async def put_zone_settings(zone_id: str, body: SettingsBody, request: Request,
     _zone_or_404(zone_id)
     job = _job_view(await installer.request("PUT", f"/internal/zones/{zone_id}/settings",
                                             json={"settings": body.settings or {}}))
-    await _track(db, zone_id, job, admin)
     await audit.log_action(db, admin.id, "system.zone.settings", "zone", zone_id,
                            {"job": job.get("id"), "settings": redact(body.settings or {})}, _client_ip(request))
     return job
@@ -316,6 +349,12 @@ def _job_id(job_id: str) -> str:
     if not (0 < len(job_id) <= 64 and job_id.isalnum()):
         raise InstallerError(404, "job_unknown")
     return job_id
+
+
+@router.get("/jobs")
+async def list_jobs(admin: User = Depends(require_admin)):
+    """진행 중인 작업과 최근 작업(구역 켜기·끄기·설정·다시 연결, 인증서) — 새것부터."""
+    return {"jobs": await _recent_jobs()}
 
 
 @router.get("/jobs/{job_id}")
@@ -368,6 +407,51 @@ async def probe_public_ip(refresh: bool = False, admin: User = Depends(require_a
     return {"status": "detected" if ip else "unknown", "ip": ip or None, "source": "cached"}
 
 
+# ─── 인증서 ───
+
+CERT_FIELDS = ("managed", "mode", "temporary", "domain", "names", "not_after", "days_left", "issuer", "self_signed",
+               "pending")
+
+
+class CertReissueBody(BaseModel):
+    mode: Literal["auto", "upload"]
+    cert: str | None = None      # PEM 글자(mode = upload)
+    key: str | None = None
+
+
+def _cert_view(data: Any) -> dict:
+    data = data if isinstance(data, dict) else {}
+    out = {k: data.get(k) for k in CERT_FIELDS}
+    for key in ("names", "pending"):
+        out[key] = [str(x) for x in out[key]] if isinstance(out[key], list) else []
+    job = data.get("job")
+    out["job"] = _job_view(job) if isinstance(job, dict) else None
+    return out
+
+
+@router.get("/cert")
+async def get_cert(admin: User = Depends(require_admin)):
+    """접속 주소의 인증서 — 종류, 만료, 발급자, 든 이름, 인증서 때문에 연결이 보류된 구역, 진행 중인 작업."""
+    return _cert_view(await installer.request("GET", "/internal/cert"))
+
+
+@router.post("/cert/reissue", status_code=202)
+async def reissue_cert(body: CertReissueBody, request: Request, admin: User = Depends(require_admin),
+                       db: AsyncSession = Depends(get_db)):
+    """다시 발급(auto) 또는 올린 인증서로 바꾸기(upload). 실패하면 쓰던 인증서가 그대로 남는다."""
+    payload: dict[str, Any] = {"mode": body.mode}
+    if body.mode == "upload":
+        cert, key = body.cert or "", body.key or ""
+        if len(cert) > CERT_PEM_MAX or len(key) > CERT_PEM_MAX:
+            raise InstallerError(413, "file_too_large", {"max_bytes": CERT_PEM_MAX})
+        payload.update(cert=cert, key=key)
+    job = _job_view(await installer.request("POST", "/internal/cert/reissue", json=payload))
+    # 누가 언제 바꿨는지만 남긴다(인증서·개인 키 내용은 남기지 않는다)
+    await audit.log_action(db, admin.id, "system.cert.reissue", "cert", None,
+                           {"job": job.get("id"), "mode": body.mode}, _client_ip(request))
+    return job
+
+
 # ─── 저장소 ───
 
 _seen_down: bool | None = None      # 이 프로세스가 마지막으로 본 상태(끊긴 시각을 바뀔 때만 적으려고)
@@ -389,6 +473,8 @@ async def _down_since(db: AsyncSession, down: bool, at: str | None) -> str | Non
 
 async def _storage(db: AsyncSession, force: bool) -> dict:
     status = await storage_status.prober.status(force=force)
+    # 종류·위치는 설치 관리자가 아는 값이 정확하다(호스트 폴더, NFS 주소). 못 받으면 마운트 정보에서 읽은 값 그대로
+    status.update(await storage_status.installed_description(force=force))
     status["down_since"] = await _down_since(db, status["state"] == "down", status.get("checked_at"))
     return status
 

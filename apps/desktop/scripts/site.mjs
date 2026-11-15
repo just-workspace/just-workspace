@@ -9,8 +9,6 @@
  *   JW_APP_ID        기본: 호스트를 뒤집고 .just-workspace (ws.example.com → com.example.ws.just-workspace)
  *   JW_PRODUCT_NAME  기본: just-workspace. 설치 폴더·바로가기 이름. 주면 사용자 데이터 폴더도
  *                    이 이름으로 갈린다(한 PC 에 두 사이트 앱을 둘 때 필요)
- *   JW_WEB           vue | react (기본 react). 본문에 얹을 웹 UI. 서버 nginx 의 UI 전환 쿠키(jw_ui)를
- *                    앱 세션에 심어 고른다(src/main/webUi.ts).
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -49,15 +47,7 @@ const appId =
 const productNameExplicit = !!process.env.JW_PRODUCT_NAME?.trim();
 const productName = process.env.JW_PRODUCT_NAME?.trim() || 'just-workspace';
 
-// 본문 웹 UI 기본값.
-const DEFAULT_WEB = 'react';
-const web = (process.env.JW_WEB ?? '').trim().toLowerCase() || DEFAULT_WEB;
-if (web !== 'vue' && web !== 'react') {
-  console.error(`JW_WEB 은 vue 또는 react 여야 한다: ${process.env.JW_WEB}`);
-  process.exit(1);
-}
-
-const site = { serverUrl, appId, productName, productNameExplicit, web };
+const site = { serverUrl, appId, productName, productNameExplicit };
 await mkdir(path.join(root, 'dist'), { recursive: true });
 await writeFile(path.join(root, 'dist', 'site.json'), JSON.stringify(site, null, 2) + '\n');
-console.log(`site → ${serverUrl} (${appId}, ${productName}, web=${web})${raw ? '' : ' [기본값: 개발용]'}`);
+console.log(`site → ${serverUrl} (${appId}, ${productName})${raw ? '' : ' [기본값: 개발용]'}`);

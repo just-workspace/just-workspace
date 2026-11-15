@@ -6,8 +6,6 @@ interface Site {
   serverUrl?: string;
   appId?: string;
   productName?: string;
-  /** 본문 웹 UI(scripts/site.mjs 의 JW_WEB). 옛 site.json 에는 없다 → vue */
-  web?: string;
 }
 
 function readSite(): Site {
@@ -29,14 +27,7 @@ export const CONFIG = {
   /** 로그인 대기 상한. 브라우저를 열어두고 자리를 비우는 경우가 있다. */
   loginTimeoutMs: 5 * 60_000,
   protocol: 'jw',
-  /** 본문에 얹을 웹 UI — 'vue' | 'react'. 빌드 때 정한다(JW_WEB). 실행 시 같은 변수로 덮을 수 있다(개발용). */
-  web: normalizeWeb(process.env.JW_WEB ?? site.web),
 } as const;
-
-/** 'react' 만 react, 나머지(빈값·오타 포함)는 vue — 기본값 쪽으로 넘어진다. */
-export function normalizeWeb(v: string | undefined): 'vue' | 'react' {
-  return (v ?? '').trim().toLowerCase() === 'react' ? 'react' : 'vue';
-}
 
 /**
  * 이 URL 이 우리 워크스페이스 출처(scheme+host+port)인가.

@@ -70,12 +70,7 @@
       err.textContent = '';
       await save(v); await open(v);
     }
-    /*
-     * 본문 웹 UI(Vue/React) 쿠키를 그 주소에 심고 이동한다(WebUiPlugin.java, 빌드 값 JW_WEB).
-     * 플러그인이 없는 옛 빌드·브라우저에서는 그냥 이동한다 — 서버 기본 UI 가 나올 뿐이다.
-     */
     async function open(v) {
-      try { const p = window.Capacitor?.Plugins?.WebUi; if (p) await p.apply({ url: v }); } catch (e) {}
       location.href = v;
     }
     (async () => { const s = await saved(); if (s) await open(s); })();

@@ -31,10 +31,7 @@ const pageModules = import.meta.glob<PageModule>('../pages/**/*.tsx')
 function pageRoute(def: AppRouteDef): RouteObject {
   const load = pageModules[`../pages/${def.file}`]
   if (!load) throw new Error(`[router] 페이지 파일 없음: src/pages/${def.file}`)
-  const handle: RouteMeta = {
-    layout: def.layout,
-    vuePath: `pages/${def.file.replace(/\.tsx$/, '.vue')}`,
-  }
+  const handle: RouteMeta = { layout: def.layout }
   if (def.ownMobileHeader) handle.ownMobileHeader = true
   if (def.noDesktopTopbar) handle.noDesktopTopbar = true
   if (def.sidebarAccount) handle.sidebarAccount = true

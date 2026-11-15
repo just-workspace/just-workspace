@@ -30,7 +30,6 @@ import { setEventHandlers, startEvents, stopEvents } from './events';
 import { ruleFor } from './notifyRules';
 import { installPermissionHandlers } from './permissions';
 import { installContextMenu } from './contextMenu';
-import { applyWebUi } from './webUi';
 import { createLoginWindow } from './windows/login';
 import { closeMeeting, getMeetingWindow, showMeeting } from './windows/meeting';
 import { sessionUrl } from './session';
@@ -514,9 +513,6 @@ app.whenReady().then(async () => {
       void signOut();
     },
   );
-
-  // 본문 웹 UI(Vue/React) — 첫 로드 전에 서버 UI 전환 쿠키를 심는다(webUi.ts). 빌드 값 JW_WEB.
-  await applyWebUi(session.defaultSession);
 
   /*
    * 웹앱이 `getDisplayMedia()` 를 부르면 브라우저 기본 피커 대신 우리 피커를 띄운다.

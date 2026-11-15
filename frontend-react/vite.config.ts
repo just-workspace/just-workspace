@@ -54,7 +54,7 @@ export default defineConfig(({ mode }) => {
         workbox: {
           navigateFallback: '/',
           // /api·/oauth·/ws·/git 등 서버 경로는 SPA 로 떨어지면 안 된다
-          navigateFallbackDenylist: [/^\/api\//, /^\/oauth\//, /^\/ws\//, /^\/git\//, /^\/dav\//, /^\/sso\//, /^\/onlyoffice\//, /^\/livekit\//, /^\/audiorelay\//, /^\/__ui\//, /^\/\.well-known\//],
+          navigateFallbackDenylist: [/^\/api\//, /^\/oauth\//, /^\/ws\//, /^\/git\//, /^\/dav\//, /^\/sso\//, /^\/onlyoffice\//, /^\/livekit\//, /^\/audiorelay\//, /^\/\.well-known\//],
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
           maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
           // 웹푸시 표시(push · notificationclick) — generateSW 는 push 처리기를 만들지 않는다. public/push-sw.js

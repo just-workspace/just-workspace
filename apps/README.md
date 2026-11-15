@@ -32,7 +32,6 @@ Just Workspace 의 데스크톱·모바일 앱이다. 화면을 따로 만들지
 - **번들 모드(선택, 안드로이드만)**: 빌더를 직접 실행하면서 `JW_WEB_BUNDLE=1` 을 주면 `apps/mobile/scripts/bundle-web.cjs` 가 `frontend-react` 를
   `VITE_API_BASE=<워크스페이스 주소>` 로 빌드해 앱 안에 넣는다(`www-react/`, 서비스워커 없음). 앱 출처는 `https://localhost` 이고 API·WebSocket 만 서버로 간다(Bearer 인증).
   관리 화면의 빌드는 원격 모드만 만든다. 번들 모드는 웹이 바뀔 때마다 앱을 다시 빌드해야 하고, 위키 동시 편집처럼 쿠키에 기대는 기능은 동작하지 않는다.
-- 빌드 값 `JW_WEB`(`react`·`vue`, 기본 `react`)은 지금 효과가 없다 — 서버가 React 화면 하나만 내보낸다.
 
 ### 모바일 회의 (Android)
 

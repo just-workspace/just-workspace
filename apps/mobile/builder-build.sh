@@ -7,9 +7,7 @@
 #   APP_ID     기본: 호스트를 뒤집고 .workspace (ws.example.com → com.example.ws.workspace).
 #              한 번 배포하면 바꾸지 말 것 — 바꾸면 다른 앱이 된다.
 #   APP_NAME   기본: Just Workspace (런처에 보이는 이름)
-#   JW_WEB     vue | react (기본 react). 앱이 여는 서버 웹 UI — 서버 nginx 의 jw_ui 쿠키를 앱이 심는다.
-#              기본값은 scripts/bake-site.cjs·capacitor.config.ts 의 DEFAULT_WEB.
-#   JW_WEB_BUNDLE  1 이면 React 판을 앱 안에 넣는다(번들 모드, JW_WEB=react 필요). frontend-react 소스를
+#   JW_WEB_BUNDLE  1 이면 웹 화면을 앱 안에 넣는다(번들 모드). frontend-react 소스를
 #              /web 에 ro 마운트해야 한다(-v <repo>/frontend-react:/web:ro). 기본은 원격 모드(서버 웹을 그대로 연다).
 #
 # 서명 키는 처음 빌드 때 /signing(별도 볼륨 jw-android-signing)에 만들고 계속 쓴다. 키가 바뀌면 설치된 앱이
@@ -28,9 +26,8 @@ fi
 APP_NAME=${APP_NAME:-Just Workspace}
 VERSION_CODE=$(( $(date +%s) / 60 ))          # 빌드할 때마다 올라가야 갱신 설치가 된다
 VERSION_NAME=$(date -u +%Y.%m.%d.%H%M)
-JW_WEB=${JW_WEB:-react}
-export WS_URL APP_ID APP_NAME JW_WEB JW_WEB_BUNDLE
-echo "[site] $WS_URL  id=$APP_ID  name=$APP_NAME  web=$JW_WEB${JW_WEB_BUNDLE:+ bundle=$JW_WEB_BUNDLE}  v$VERSION_NAME ($VERSION_CODE)"
+export WS_URL APP_ID APP_NAME JW_WEB_BUNDLE
+echo "[site] $WS_URL  id=$APP_ID  name=$APP_NAME${JW_WEB_BUNDLE:+  bundle=$JW_WEB_BUNDLE}  v$VERSION_NAME ($VERSION_CODE)"
 
 cp -r /src /work
 cd /work
@@ -40,7 +37,7 @@ echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
 echo "[npm] install..."
 npm install --no-audit --no-fund 2>&1 | tail -3
 
-# 번들 모드: React 판을 이 주소로 빌드해 www-react/ 에 두고 그걸 webDir 로 sync 한다
+# 번들 모드: 웹 화면을 이 주소로 빌드해 www-react/ 에 두고 그걸 webDir 로 sync 한다
 if [ "$JW_WEB_BUNDLE" = "1" ]; then
   [ -f /web/package.json ] || { echo "JW_WEB_BUNDLE=1 인데 /web(frontend-react) 마운트가 없다" >&2; exit 1; }
   rm -rf /work-web && mkdir -p /work-web

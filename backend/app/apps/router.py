@@ -94,8 +94,6 @@ async def build(user: User = Depends(get_current_user), db: AsyncSession = Depen
             "-e", f"WS_URL={url}",
             "-e", f"APP_NAME={app_name}",
             "-e", f"APP_ID={os.getenv('ANDROID_APP_ID', '')}",
-            # 앱이 여는 서버 웹 UI(vue|react). 빈값이면 builder-build.sh 기본(react). 번들 모드는 빌더를 직접 실행할 때만.
-            "-e", f"JW_WEB={os.getenv('JW_WEB', '')}",
             "--entrypoint", "sh",
             "jw-android-builder", "/src/builder-build.sh",
         ]

@@ -87,9 +87,7 @@ describe('모든 라우트가 렌더된다', () => {
       } else {
         expect(router.state.location.pathname).toBe(url)
         expect(router.state.errors).toBeNull()
-        const ph = container.querySelector('[data-testid="not-ported-yet"]')
-        if (ph) expect(ph.getAttribute('data-vue-path')).toBe(`pages/${def.file.replace(/\.tsx$/, '.vue')}`)
-        else await waitFor(() => expect(container.innerHTML.length).toBeGreaterThan(0))
+        await waitFor(() => expect(container.innerHTML.length).toBeGreaterThan(0))
       }
       act(() => unmount())
       router.dispose()

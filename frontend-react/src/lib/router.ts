@@ -25,8 +25,6 @@ export interface RouteMeta {
   noDesktopTopbar?: boolean
   /** 페이지 사이드바 하단에 내 계정 패널 — 레일 아바타를 뺀다 */
   sidebarAccount?: boolean
-  /** 옛 페이지 파일 경로(표시용) */
-  vuePath?: string
   /** catch-all 파라미터 이름([...slug]) */
   catchAll?: string
   [k: string]: unknown

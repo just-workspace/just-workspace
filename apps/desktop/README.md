@@ -87,7 +87,6 @@ npm run dist      # electron-builder
 | `JW_SERVER_URL` | 개발 빌드 `http://localhost`, `npm run dist` 는 필수 | 워크스페이스 주소 |
 | `JW_APP_ID` | 호스트를 뒤집고 `.just-workspace` (`ws.example.com` → `com.example.ws.just-workspace`) | 설치·업데이트 식별자. **한 번 배포하면 바꾸지 말 것** |
 | `JW_PRODUCT_NAME` | `just-workspace` | 설치 폴더·바로가기 이름. 주면 사용자 데이터 폴더도 갈린다(한 PC 에 두 사이트 앱) |
-| `JW_WEB` | `react` | 지금은 효과가 없다(서버가 React 화면 하나만 내보낸다). `src/main/webUi.ts` |
 
 개발 중에는 실행할 때 `JW_SERVER_URL` 을 줘서 구운 값을 덮을 수 있다.
 

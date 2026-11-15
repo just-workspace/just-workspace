@@ -98,8 +98,14 @@ PY
      docker compose --profile '*' build backend >> "$log" 2>&1) || { echo "backend 빌드 실패 — $log"; return 1; }
   (cd "$src" && docker build -q -f installer/Dockerfile --build-arg JW_UPDATE_CHANNEL_URL="$CHANNEL_URL" \
      -t "$REG/just-workspace-installer:$ver" . >> "$log" 2>&1) || { echo "설치 관리자 빌드 실패 — $log"; return 1; }
+  local base
   for n in "${OUR_IMAGES[@]}"; do
-    [ "$n" = backend ] || docker tag "localhost/just-workspace-$n:$E2E_VERSION" "$REG/just-workspace-$n:$ver"
+    [ "$n" = backend ] && continue
+    # 처음 빌드한 이미지에서 태그만 붙인다. 서버의 `localhost/…:<처음 버전>` 태그는 업데이트가 복원 지점과 함께 치우므로
+    # (가리키는 복원 지점이 없어진 옛 버전), 레지스트리 이름으로 남겨 둔 것을 먼저 쓴다.
+    base="$REG/just-workspace-$n:$E2E_VERSION"
+    docker image inspect "$base" >/dev/null 2>&1 || base="localhost/just-workspace-$n:$E2E_VERSION"
+    [ "$base" = "$REG/just-workspace-$n:$ver" ] || docker tag "$base" "$REG/just-workspace-$n:$ver" || return 1
   done
   docker tag alpine:latest "$REG/just-workspace-rbi-mirror:$ver"       # 검수 서버에서는 빌드하지 않는 이미지 — 자리만
   {
@@ -192,6 +198,7 @@ state_file() { sudo cat "$E2E_HOST_DIR/state/update/$1" 2>/dev/null | json_get "
 # 작업이 끝날 때까지(상태가 done·failed·cancelled 이고 도는 것이 없을 때까지) 기다린다. 되돌림으로 넘어가면 그것까지.
 wait_ujob() {
   local id="$1" limit="${2:-1500}" waited=0 st rb
+  [ -n "$id" ] && [ "${id#\{}" = "$id" ] || return 1
   while [ "$waited" -lt "$limit" ]; do
     st="$(ujob "$id" 'd["status"]')"
     case "$st" in

@@ -7,9 +7,7 @@ from __future__ import annotations
 
 import re
 
-from pathlib import Path
-
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -222,33 +220,19 @@ async def update_features(body: FeaturesUpdate, request: Request = None, user: U
 
 
 @router.post("/restore")
-async def restore(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
-    """마이그레이션 — 업로드한 백업(.tar.gz)으로 복원. 신규 인스턴스(관리자 0명)에서만.
+async def restore():
+    """앱 안에서는 복원하지 않는다 — 늘 409 와 안내.
 
-    복원 후 백엔드가 자동 재시작되어 복원된 데이터/관리자로 전환됨.
+    복원은 backend 를 세우고 DB 를 갈아 끼운 뒤 다시 띄우는 일이다. 실행 중인 backend 가 자기 DB 위에
+    덤프를 덮어쓰면 실패해도 알 수 없고(예전 구현은 결과와 무관하게 성공으로 답했다) 되돌릴 수도 없다.
+    서버에서 `scripts/restore.sh <백업>`(= `python -m app.cli restore`) 또는 설치 관리자의
+    "백업에서 복원"을 쓴다 — docs/data-safety.md.
     """
-    if await has_admin(db):
-        raise HTTPException(status_code=403, detail="이미 설정된 인스턴스입니다. 마이그레이션은 신규 인스턴스에서만 가능합니다.")
-    from app.backup import service as backup_service
-    dest = Path("/backups") / "_upload_restore.tar.gz"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with open(dest, "wb") as f:
-            while True:
-                chunk = await file.read(1024 * 1024)
-                if not chunk:
-                    break
-                f.write(chunk)
-        result = await backup_service.restore_from_archive(dest)
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"복원 실패: {e}")
-    finally:
-        try:
-            dest.unlink()
-        except OSError:
-            pass
-    await backup_service.schedule_backend_restart(3.0)
-    return {"ok": True, "restored": result, "restarting": True}
+    raise HTTPException(
+        status_code=409,
+        detail="앱 안에서는 복원할 수 없습니다. 서버에서 scripts/restore.sh <백업 파일> 을 실행하거나 "
+               "설치 관리자의 '백업에서 복원'을 사용하세요.",
+    )
 
 
 @router.get("/services")

@@ -203,11 +203,11 @@ async def test_pop3_filters_and_thread(monkeypatch):
     async def _build_index(account):
         return list(index)
 
-    async def _members(key):
-        return {"B"} if "read" in key else {"A"}
+    async def _state(account_id):
+        return {"B"}, {"A"}          # (읽은 것, 별표한 것)
 
     monkeypatch.setattr(pop3_client, "_build_index", _build_index)
-    monkeypatch.setattr(pop3_client, "_members", _members)
+    monkeypatch.setattr(pop3_client, "_state", _state)
     acct = SimpleNamespace(id="acc")
 
     out, total = await pop3_client.fetch_messages(acct, "INBOX")

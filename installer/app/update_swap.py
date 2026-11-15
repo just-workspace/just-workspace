@@ -12,7 +12,8 @@
 결과는 `--result` 파일에 JSON 으로 남긴다. 옮기는 구성은 위 목록이 전부다 — 그 밖의 `docker run` 옵션(자원 제한,
 레이블 등)을 직접 붙여 띄운 설치 관리자라면 교체 뒤 다시 붙여야 한다.
 환경변수는 "옛 이미지가 정한 것"을 빼고 옮긴다(새 이미지의 기본값이 살아야 한다). `JW_IMAGE_TAG` 도 옮기지 않는다 —
-업데이트 뒤에는 이미지 태그가 곧 제품 버전이다.
+업데이트 뒤에는 이미지 태그가 곧 제품 버전이다. 새 컨테이너에는 `JW_APP_VERSION=<제품 버전>` 을 넣는다: 승격한
+릴리스의 이미지는 Beta 때 빌드한 것이라 이미지 안의 버전 글자가 Beta 의 것이다.
 
 표준 라이브러리만 쓴다.
 """
@@ -26,7 +27,7 @@ import sys
 import time
 from datetime import datetime, timezone
 
-DROP_ENV = ("JW_IMAGE_TAG", "HOSTNAME", "HOME", "PATH")
+DROP_ENV = ("JW_IMAGE_TAG", "JW_APP_VERSION", "HOSTNAME", "HOME", "PATH")
 WAIT_SECONDS = 180
 
 
@@ -49,8 +50,11 @@ def inspect(kind: str, name: str) -> dict | None:
     return data[0] if isinstance(data, list) and data else None
 
 
-def plan_create(container: dict, old_image: dict | None, new_image: str) -> tuple[list[str], list[tuple[str, list[str]]]]:
-    """옛 컨테이너의 구성 → (`docker create` 인자, 나중에 붙일 네트워크 [(이름, 별칭들)])."""
+def plan_create(container: dict, old_image: dict | None, new_image: str,
+                version: str | None = None) -> tuple[list[str], list[tuple[str, list[str]]]]:
+    """옛 컨테이너의 구성 → (`docker create` 인자, 나중에 붙일 네트워크 [(이름, 별칭들)]).
+
+    version 을 주면 `JW_APP_VERSION` 으로 넣는다 — 새 설치 관리자가 자신을 그 제품 버전으로 안다(app/bundle.py)."""
     name = str(container.get("Name") or "").lstrip("/")
     config = container.get("Config") or {}
     host = container.get("HostConfig") or {}
@@ -78,6 +82,8 @@ def plan_create(container: dict, old_image: dict | None, new_image: str) -> tupl
         if item in image_env or key in DROP_ENV:
             continue
         argv += ["-e", item]
+    if version:
+        argv += ["-e", f"JW_APP_VERSION={version}"]
 
     for opt in host.get("SecurityOpt") or []:
         argv += ["--security-opt", opt]
@@ -108,7 +114,7 @@ def swap(container_ref: str, new_image: str, expect_version: str, log) -> str | 
     name = str(old.get("Name") or "").lstrip("/")
     if inspect("image", new_image) is None:
         return "image not found"
-    argv, networks = plan_create(old, inspect("image", old.get("Image") or ""), new_image)
+    argv, networks = plan_create(old, inspect("image", old.get("Image") or ""), new_image, expect_version)
     prev = f"{name}-prev"
     docker("rm", "-f", prev)
     log(f"옛 설치 관리자({name})를 멈춥니다")
@@ -144,7 +150,9 @@ def swap(container_ref: str, new_image: str, expect_version: str, log) -> str | 
         state = (inspect("container", name) or {}).get("State") or {}
         health = (state.get("Health") or {}).get("Status", "")
         if state.get("Running") and health in ("", "healthy"):
-            rc, out, _ = docker("exec", name, "cat", "/app/bundle/VERSION")
+            rc, out, _ = docker("exec", name, "python", "-c",
+                                "from pathlib import Path;from app.bundle import Bundle;"
+                                "print(Bundle(Path('/app/bundle')).version)")
             if rc == 0 and out.strip() == expect_version:
                 docker("rm", "-f", prev)
                 log(f"설치 관리자를 {expect_version} 으로 바꿨습니다")

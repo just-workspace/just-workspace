@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import sys
 from functools import cached_property
@@ -86,6 +87,11 @@ class Bundle:
 
     @cached_property
     def version(self) -> str:
+        """제품 버전. 환경변수 `JW_APP_VERSION` 이 있으면 그것이 우선한다 — 승격(Beta → Stable)은 이미지를 다시 빌드하지
+        않아서 이미지 안의 `VERSION` 은 Beta 의 글자로 남는다. 업데이트가 설치 관리자를 바꿀 때 이 값을 넣어 준다."""
+        override = (os.environ.get("JW_APP_VERSION") or "").strip()
+        if override:
+            return override
         try:
             value = self.read("VERSION").strip()
         except BundleError:

@@ -1255,7 +1255,8 @@ class UpdateManager:
         host = self.paths.host_dir
         r = self.docker.run(["run", "--rm", "--network", "none", "-v", f"{host}:/data", "-e", "JW_DATA_DIR=/data",
                              "-e", f"JW_HOST_DIR={host}", "-e", f"JW_REGISTRY={self.registry}",
-                             "-e", f"JW_IMAGE_TAG={version}", "--entrypoint", "python", image, "-m", "app.update_restack"],
+                             "-e", f"JW_IMAGE_TAG={version}", "-e", f"JW_APP_VERSION={version}",
+                             "--entrypoint", "python", image, "-m", "app.update_restack"],
                             timeout=300)
         if not r.ok:
             raise fail("stack_render_failed", r.err or r.out)

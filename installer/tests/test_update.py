@@ -724,11 +724,12 @@ def test_swap_plan_carries_name_ports_volumes_env_and_networks():
                                          "just-workspace_workspace": {"Aliases": ["jw-installer", "0123456789ab"]}}},
     }
     image = {"Config": {"Env": ["PATH=/usr/bin", "JW_DATA_DIR=/data", "JW_REGISTRY=ghcr.io/just-workspace"]}}
-    argv, networks = update_swap.plan_create(container, image, "localhost/just-workspace-installer:1.0.1")
+    argv, networks = update_swap.plan_create(container, image, "localhost/just-workspace-installer:1.0.1", "1.0.1")
     assert argv[:3] == ["create", "--name", "jw-installer"] and argv[-1] == "localhost/just-workspace-installer:1.0.1"
     assert argv[argv.index("--restart") + 1] == "unless-stopped" and argv[argv.index("-p") + 1] == "8443:8443/tcp"
     assert [argv[i + 1] for i, a in enumerate(argv) if a == "-v"] == container["HostConfig"]["Binds"]
     envs = [argv[i + 1] for i, a in enumerate(argv) if a == "-e"]
-    assert envs == ["JW_HOST_DIR=/opt/just-workspace", "JW_REGISTRY=registry.example.com/jw"]   # 이미지 기본값·옛 태그는 빼고
+    # 이미지 기본값·옛 태그는 빼고, 제품 버전을 넣는다(승격한 릴리스의 이미지는 Beta 의 글자를 품고 있다)
+    assert envs == ["JW_HOST_DIR=/opt/just-workspace", "JW_REGISTRY=registry.example.com/jw", "JW_APP_VERSION=1.0.1"]
     assert argv[argv.index("--network") + 1] == "bridge"
     assert networks == [("just-workspace_workspace", ["jw-installer"])]

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 보안 취약점 신고 (Security vulnerability)
+    url: https://github.com/just-workspace/just-workspace/security/advisories/new
+    about: 보안 취약점은 공개 이슈로 올리지 말고 여기로 알려 주세요. Please report security issues privately here.

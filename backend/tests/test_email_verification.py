@@ -14,9 +14,10 @@ def test_startup_never_marks_accounts_verified():
     """
     import inspect
     import re
-    from app.db import session as sess
+    from app.db import baseline, migrations
 
-    src = inspect.getsource(sess._run_legacy_migrations)
+    # 기준선 보정과 그 뒤의 변경 단계 전부
+    src = inspect.getsource(baseline) + inspect.getsource(migrations)
     assert "email_verified = true" not in src
     assert not re.search(r"TIMESTAMPTZ '20\d\d-", src)
 

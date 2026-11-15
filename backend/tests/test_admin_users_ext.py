@@ -389,10 +389,10 @@ def test_auto_migrate_carries_string_server_default():
     """문자열 server_default 는 ADD COLUMN 에 실려야 기존 행이 채워진다."""
     from sqlalchemy import create_engine, text
 
-    from app.db import session as sess
+    from app.db import baseline
 
     eng = create_engine("sqlite://")
     with eng.begin() as conn:
         conn.execute(text("CREATE TABLE users (id VARCHAR(36) PRIMARY KEY)"))
-        stmts = {(t, c): sql for t, c, _ty, sql in sess._diff_columns(conn)}
+        stmts = {(t, c): sql for t, c, _ty, sql in baseline._diff_columns(conn)}
     assert stmts[("users", "auth_source")].endswith("DEFAULT 'local'")

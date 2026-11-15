@@ -158,6 +158,8 @@ async def lifespan(app: FastAPI):
     from app import security_defaults
     security_defaults.enforce()
 
+    # DB 스키마를 코드가 요구하는 버전에 맞춘다. 컨테이너는 entrypoint 가 워커를 띄우기 전에 먼저 맞춘다 —
+    # 여기서는 보통 버전 확인만 한다. 맞출 수 없으면 예외로 기동을 멈춘다(app/db/migrate.py).
     await init_db()
 
     # 첫 기동 관리자 시드 — 사용자가 한 명도 없을 때만. 그 뒤로는 env 에 값이 남아 있어도 아무것도 하지 않고,
@@ -455,6 +457,10 @@ async def health_check(request: Request, db: AsyncSession = Depends(get_db)):
     }
     if await _signed_in(request, db):
         out["version"] = APP_VERSION
+        # DB 스키마 버전: 코드가 요구하는 값 / 이 워커가 기동 때 확인한 값(app/db/migrate.py)
+        from app.db.migrate import confirmed_version
+        from app.db.schema_version import SCHEMA_VERSION
+        out["schema_version"] = {"required": SCHEMA_VERSION, "current": confirmed_version()}
     return out
 
 

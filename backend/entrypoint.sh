@@ -24,6 +24,11 @@ if [ "$1" = "uvicorn" ]; then
     # 채우는 법: python -m app.cli gen-secrets --merge .env --in-place
     gosu appuser python -m app.cli check-secrets || exit 1
 
+    # DB 스키마를 코드가 요구하는 버전에 맞춘다(워커가 뜨기 전에 한 번). 적용에 실패했거나 DB 가 코드보다
+    # 새것이면 여기서 멈춘다 — 반쯤 적용된 스키마로 서버가 뜨지 않게. JW_MIGRATE_ON_START=0 이면 적용하지
+    # 않고 버전만 확인한다(설치 관리자가 python -m app.cli migrate 를 따로 부르는 구성).
+    gosu appuser python -m app.cli migrate --on-start || exit 1
+
     # 워커 수 — 명령에 --workers 가 없으면 BACKEND_WORKERS, 그것도 없으면 CPU 수 기준 min(8, max(2, nproc)).
     case " $* " in
         *" --workers "*) ;;

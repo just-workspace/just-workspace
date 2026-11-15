@@ -10,8 +10,13 @@ Usage:
     python -m app.cli seed-admin --username admin       # 관리자 계정 만들기(비밀번호는 물어본다)
     python -m app.cli reset-admin admin [--disable-2fa] # 관리자 임시 비밀번호 발급(한 번만 출력)
     python -m app.cli configure < settings.json         # DB 에 저장되는 설정 넣기(설치 관리자용, 표준 입력 JSON)
+    python -m app.cli migrate                           # DB 스키마 변경 단계 적용(실패하면 종료 코드 1)
+    python -m app.cli migrate --check                   # 적용할 것이 있으면 종료 코드 1 과 목록
+    python -m app.cli migrate --status [--json]         # 현재 버전·대기 단계·기록
+    python -m app.cli schema-version                    # 이 코드가 요구하는 스키마 버전(숫자만)
 
-gen-secrets · check-secrets 는 DB 없이 돈다(설치 관리자가 컨테이너를 띄우기 전에 부른다).
+gen-secrets · check-secrets · schema-version 은 DB 없이 돈다(설치 관리자가 컨테이너를 띄우기 전에 부른다).
+스키마 버전과 변경 단계는 docs/data-safety.md.
 """
 
 import argparse
@@ -300,6 +305,95 @@ def _cmd_configure(args) -> int:
     return 0
 
 
+# ─── 스키마 ───
+
+# migrate 종료 코드
+MIGRATE_OK = 0          # 적용했거나 할 일이 없다
+MIGRATE_FAILED = 1      # 단계 실패 / --check 에서 대기 단계 있음
+MIGRATE_TOO_NEW = 3     # DB 가 코드보다 새것 — 백업에서 복원해야 한다
+MIGRATE_DRIFT = 4       # 버전은 맞는데 빠진 테이블·컬럼이 있다(--repair)
+
+
+async def _migrate_async(args) -> int:
+    from app.db import migrate as mg
+    from app.db.session import engine
+
+    err = lambda line: print(line, file=sys.stderr, flush=True)  # noqa: E731
+    try:
+        if args.status or args.check:
+            info = await mg.status(engine)
+            if args.json:
+                print(json.dumps(info, ensure_ascii=False, indent=2))
+            else:
+                names = {"empty": "빈 DB", "legacy": "버전 기록 이전의 설치", "versioned": "버전 기록 있음"}
+                print(f"코드가 요구하는 스키마 버전: {info['required']}")
+                print(f"DB 스키마 버전: {info['current']} ({names[info['state']]})")
+                for row in info["applied"]:
+                    print(f"  적용됨 {row['version']:>3}  {row['name']}  ({row['applied_at']}, 제품 {row['app_version'] or '?'})")
+                    for note in filter(None, row["notes"].splitlines()):
+                        print(f"        경고: {note}")
+                for row in info["pending"]:
+                    print(f"  대기   {row['version']:>3}  {row['name']}")
+                if info["missing"]:
+                    print("  빠진 테이블·컬럼: " + ", ".join(info["missing"]))
+            if info["too_new"]:
+                err(f"ERROR: {mg.SchemaTooNew(info['current'], info['required'])}")
+                return MIGRATE_TOO_NEW
+            if args.check:
+                if info["pending"]:
+                    return MIGRATE_FAILED
+                if info["missing"]:
+                    return MIGRATE_DRIFT
+            return MIGRATE_OK
+
+        if args.on_start:
+            await mg.ensure_schema(engine, verify=True)
+            return MIGRATE_OK
+
+        result = await mg.migrate(engine, repair=args.repair)
+        if result.applied:
+            print(f"[DB] 스키마 {result.from_version} → {result.to_version}: "
+                  + ", ".join(f"{v}({n})" for v, n in result.applied))
+        else:
+            print(f"[DB] 적용할 단계가 없습니다(스키마 {result.to_version})")
+        if result.warnings:
+            print(f"[DB] 경고 {len(result.warnings)}건 — python -m app.cli migrate --status 로 볼 수 있습니다")
+        return MIGRATE_OK
+    except mg.SchemaTooNew as e:
+        err(f"ERROR: {e}")
+        return MIGRATE_TOO_NEW
+    except mg.SchemaDrift as e:
+        err(f"ERROR: {e}")
+        return MIGRATE_DRIFT
+    except (mg.MigrationError, mg.SchemaOutdated) as e:
+        err(f"ERROR: {e}")
+        cause = getattr(e, "cause", None)
+        if isinstance(cause, BaseException):
+            err(f"  원인: {type(cause).__name__}: {str(cause).strip()[:2000]}")
+        return MIGRATE_FAILED
+    except Exception as e:  # noqa: BLE001 — DB 에 못 닿는 경우 등: 원인을 그대로 보여 주고 실패로 끝낸다
+        err(f"ERROR: 스키마 작업 실패 — {type(e).__name__}: {str(e).strip()[:2000]}")
+        return MIGRATE_FAILED
+    finally:
+        await engine.dispose()
+
+
+def _cmd_migrate(args) -> int:
+    return asyncio.run(_migrate_async(args))
+
+
+def _cmd_schema_version(args) -> int:
+    from app.db.schema_version import SCHEMA_VERSION
+
+    if args.fingerprint:
+        from app.db.migrate import models_fingerprint
+
+        print(models_fingerprint())
+        return 0
+    print(SCHEMA_VERSION)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app.cli", description="Workspace CLI")
     sub = parser.add_subparsers(dest="command")
@@ -329,6 +423,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     conf = sub.add_parser("configure", help="DB 에 저장되는 설정을 표준 입력(JSON)으로 넣는다 — 설치 관리자용")
     conf.set_defaults(func=_cmd_configure)
+
+    mig = sub.add_parser("migrate", help="DB 스키마 변경 단계를 적용한다(실패하면 종료 코드 1)")
+    mode = mig.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true", help="적용하지 않고, 적용할 것이 있으면 종료 코드 1")
+    mode.add_argument("--status", action="store_true", help="현재 버전·대기 단계·기록을 보여 준다")
+    mode.add_argument("--repair", action="store_true",
+                      help="기준선 보정(빠진 테이블·컬럼·인덱스 채우기)을 다시 돌린 뒤 대기 단계를 적용한다")
+    mode.add_argument("--on-start", action="store_true",
+                      help="컨테이너 기동용 — JW_MIGRATE_ON_START 를 따르고, 끝나면 모델과 DB 를 대조한다")
+    mig.add_argument("--json", action="store_true", help="--status/--check 결과를 JSON 으로")
+    mig.set_defaults(func=_cmd_migrate)
+
+    sv = sub.add_parser("schema-version", help="이 코드가 요구하는 DB 스키마 버전(숫자만, DB 없이)")
+    sv.add_argument("--fingerprint", action="store_true", help="버전 대신 모델 지문을 출력(개발용)")
+    sv.set_defaults(func=_cmd_schema_version)
     return parser
 
 

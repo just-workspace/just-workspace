@@ -128,6 +128,29 @@ async def test_unresponsive_storage_is_refused_without_hanging(tmp_path):
         assert (await c.post("/api/files/upload")).status_code == 200
 
 
+async def test_fast_probe_does_not_leave_stale_result(tmp_path, monkeypatch):
+    """표식 읽기 스레드가 시작하자마자 끝나도(대입보다 먼저) 끝난 읽기가 남아 옛 결과를 되풀이하지 않는다."""
+    import threading
+
+    class InstantThread:
+        """start() 안에서 일을 끝내 버리는 스레드 — 스레드가 호출한 쪽보다 먼저 끝나는 순서를 늘 만든다."""
+
+        def __init__(self, target=None, **kw):
+            self.target = target
+
+        def start(self):
+            self.target()
+
+    monkeypatch.setattr(threading, "Thread", InstantThread)
+    app = _app(tmp_path)
+    assert await app.problem_async() == "missing"
+    assert app._probe is None                              # 끝난 읽기가 남지 않는다
+    (tmp_path / sg.MARKER_NAME).write_text("{}", encoding="utf-8")
+    assert await app.problem_async() is None               # 저장소가 돌아오면 바로 반영된다
+    (tmp_path / sg.MARKER_NAME).unlink()
+    assert await app.problem_async() == "missing"          # 다시 끊기면 다시 잡는다
+
+
 async def test_notify_admins_never_raises():
     # DB·Redis 에 닿지 못해도 예외를 밖으로 내지 않는다
     assert isinstance(await sg.notify_admins("missing"), int)

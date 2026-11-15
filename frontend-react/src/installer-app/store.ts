@@ -271,6 +271,8 @@ export function createWizardStore(api: InstallerApi): WizardStore {
           set({ preflightBusy: false })
           // 점검이 서버 메모리를 알아냈으면 구역 목록의 판정도 달라진다
           void get().reloadZones()
+          // 감지값(나가는 주소 · 연결 형태 · 여유 공간)도 점검 뒤에야 채워진다
+          void get().refreshState()
         } catch (e) {
           set({ preflightBusy: false, preflightFailed: true })
           if (e instanceof ApiError && e.unauthorized) void get().refreshState()

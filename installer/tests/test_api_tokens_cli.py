@@ -438,3 +438,42 @@ def test_jw_reinstall_lists_first_then_wipes(jw, capsys, monkeypatch):
     assert not (svc.paths.stack / ".env").exists()
     assert not svc.store.locked and svc.store.install()["phase"] == "wizard"      # 처음 상태 — 새 토큰으로 다시 시작한다
     assert (svc.paths.state / "tls" / "cert.pem").exists()                        # 설치 관리자의 인증서는 남는다
+
+
+def test_internal_api_for_admin_screens(tmp_path):
+    """설치 뒤 관리 화면이 쓰는 것 — 메일 레코드, 공인 주소, 작업 목록, 저장소, 코드 저장소의 검증한 버전."""
+    host = Host(tmp_path)
+    resolver = FakeResolver({("example.com", "MX"): ["10 mail.example.com"]})
+    svc = host.services_obj(resolver=resolver, ip_fetchers=[lambda: "203.0.113.10", lambda: "203.0.113.10"])
+    host.install(svc)
+    assert svc.engine.run()["status"] == "done"
+    key = svc.store.env_secrets()["JW_INSTALLER_KEY"]
+    inside = TestClient(api.create_internal_app(svc), client=("172.28.0.20", 5000), headers={api.KEY_HEADER: key})
+    nokey = TestClient(api.create_internal_app(svc), client=("172.28.0.20", 5000))
+    for method, path in (("post", "/internal/probe/mail-records"), ("get", "/internal/probe/public-ip"),
+                         ("get", "/internal/jobs"), ("get", "/internal/storage")):
+        assert getattr(nokey, method)(path).status_code == 404, path
+
+    rec = inside.post("/internal/probe/mail-records", json={}).json()
+    by_id = {r["id"]: r for r in rec["records"]}
+    assert set(by_id) == {"mx", "a", "spf", "dkim", "dmarc"} and by_id["mx"]["status"] == "ok"
+    from app import dkim
+    assert by_id["dkim"]["expected"] == dkim.ensure(svc.store, "example.com")["record_value"]      # 설치 때 만든 키
+
+    assert inside.get("/internal/probe/public-ip").json()["ip"] == "203.0.113.10"
+    assert inside.get("/internal/probe/public-ip", params={"refresh": "true"}).json()["status"] == "detected"
+
+    st = inside.get("/internal/storage").json()
+    assert st["kind"] == "local" and st["install_id"] == svc.store.install()["install_id"]
+    svc.store.save_answers(make_answers(storage={"kind": "nfs", "server": "192.168.10.9", "export": "/export/ws"}))
+    assert inside.get("/internal/storage").json()["location"] == "192.168.10.9:/export/ws"
+
+    assert inside.get("/internal/jobs").json() == {"jobs": []}
+    svc.store.write("jobs.json", {"a": {"id": "a", "zone": "chat", "status": "done", "started_at": "2026-01-01T00:00:00Z"},
+                                  "b": {"id": "b", "zone": "git", "status": "running", "started_at": "2026-01-02T00:00:00Z"}})
+    assert [j["id"] for j in inside.get("/internal/jobs").json()["jobs"]] == ["b", "a"]           # 새것부터
+
+    version = svc.bundle.gitea_verified_version
+    assert version and inside.get("/internal/zones").json()["git_verified_version"] == version
+    assert inside.get("/internal/zones/git/settings").json()["verified_version"] == version
+    assert "verified_version" not in inside.get("/internal/zones/mail/settings").json()

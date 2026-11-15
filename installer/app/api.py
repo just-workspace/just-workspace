@@ -208,6 +208,28 @@ def detected_facts(svc: Services, pre: dict | None) -> dict:
             "detected_network": detected, "disk_free_gb": free}
 
 
+def mail_records(svc: Services, body: dict) -> dict:
+    """메일 도메인에 등록할 레코드의 기대값과 현재값. DKIM 값은 설치 때 만든(또는 지금 만드는) 키에서 나온다."""
+    answers = svc.store.load_answers()
+    mail_domain = body.get("mail_domain") or answers.mail.mail_domain or answers.access.domain
+    key = dkim.ensure(svc.store, mail_domain)
+    ip = public_ip(svc).get("ip")
+    return probes.probe_mail_records(key["domain"], ip, key["record_value"], svc.resolver, key["selector"])
+
+
+def storage_info(svc: Services) -> dict:
+    """파일 저장소가 무엇인가 — {kind: local|nfs, location, install_id}. 위치는 NFS 면 `서버:/경로`, 아니면 호스트 폴더."""
+    s = svc.store.load_answers().storage
+    if s.kind == "nfs":
+        kind, location = "nfs", f"{s.server}:{s.export}"
+    elif s.path:
+        kind, location = "local", s.path
+    else:
+        kind, location = "local", default_storage_path(svc)
+    return {"kind": kind, "location": location, "volume": render.STORAGE_VOLUME,
+            "install_id": svc.store.install()["install_id"]}
+
+
 def default_storage_path(svc: Services) -> str | None:
     """기본 저장소(도커 볼륨)가 호스트의 어디에 놓이는지 — 도커 데이터 폴더 아래."""
     if "docker_root" not in svc.cache:
@@ -443,11 +465,7 @@ def create_wizard_app(svc: Services) -> FastAPI:
 
     @app.post("/api/probe/mail-records", dependencies=[Depends(unlocked)])
     def probe_mail(body: dict = Body(default={})):
-        answers = svc.store.load_answers()
-        mail_domain = body.get("mail_domain") or answers.mail.mail_domain or answers.access.domain
-        key = dkim.ensure(svc.store, mail_domain)
-        ip = public_ip(svc).get("ip")
-        return probes.probe_mail_records(key["domain"], ip, key["record_value"], svc.resolver, key["selector"])
+        return mail_records(svc, body)
 
     @app.post("/api/probe/cert", dependencies=[Depends(unlocked)])
     def probe_cert(body: dict = Body(...)):
@@ -601,11 +619,24 @@ def create_internal_app(svc: Services) -> FastAPI:
 
     @app.get("/internal/zones", dependencies=[Depends(keyed)])
     def zones_list():
-        return svc.zones.listing()
+        return {**svc.zones.listing(), "git_verified_version": svc.bundle.gitea_verified_version}
 
     @app.get("/internal/zones/{zone_id}/settings", dependencies=[Depends(keyed)])
     def zone_settings(zone_id: str):
-        return svc.zones.get_settings(zone_id)
+        out = svc.zones.get_settings(zone_id)
+        if zone_id == "git":
+            out["verified_version"] = svc.bundle.gitea_verified_version      # "검증된 버전"이 몇 버전인지
+        return out
+
+    @app.get("/internal/jobs", dependencies=[Depends(keyed)])
+    def jobs_list():
+        """구역 작업 — 진행 중인 것과 최근 것(새것부터, 20개까지 기억한다)."""
+        jobs = sorted(svc.zones.jobs().values(), key=lambda j: j.get("started_at") or "", reverse=True)
+        return {"jobs": jobs}
+
+    @app.get("/internal/storage", dependencies=[Depends(keyed)])
+    def storage():
+        return storage_info(svc)
 
     @app.put("/internal/zones/{zone_id}/settings", dependencies=[Depends(keyed)], status_code=202)
     def zone_settings_put(zone_id: str, body: dict = Body(...)):
@@ -649,6 +680,15 @@ def create_internal_app(svc: Services) -> FastAPI:
     @app.post("/internal/probe/ai", dependencies=[Depends(keyed)])
     def internal_ai(body: dict = Body(default={})):
         return ai_probe(svc, body)
+
+    # 설치 뒤의 관리 화면(메일 레코드 표, 회의의 공인 주소)
+    @app.post("/internal/probe/mail-records", dependencies=[Depends(keyed)])
+    def internal_mail_records(body: dict = Body(default={})):
+        return mail_records(svc, body)
+
+    @app.get("/internal/probe/public-ip", dependencies=[Depends(keyed)])
+    def internal_public_ip(refresh: bool = False):
+        return public_ip(svc, refresh=refresh)
 
     # 같은 컨테이너의 `jw` 명령용(루프백 + 상태 폴더의 키)
     @app.post("/local/apply", dependencies=[Depends(local)], status_code=202)

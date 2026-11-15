@@ -120,8 +120,12 @@ class StorageMarkerGuard:
         self._checked_at = now
         return self._reason
 
-    def _start_probe(self) -> concurrent.futures.Future:
+    def _start_probe(self, now: float) -> concurrent.futures.Future:
         future: concurrent.futures.Future = concurrent.futures.Future()
+        # 스레드를 띄우기 **전에** 적어 둔다. 읽기가 아주 빨리 끝나면 스레드가 `_probe` 를 비우는 일이 대입보다
+        # 먼저 일어나고, 그 뒤의 대입이 끝난 future 를 되살려 캐시가 지나도 옛 결과만 돌려주게 된다.
+        self._probe = future
+        self._probe_started = now
 
         def work() -> None:
             try:
@@ -144,9 +148,8 @@ class StorageMarkerGuard:
         if self._cached(now):
             return self._reason
         probe = self._probe
-        if probe is None:
-            probe = self._probe = self._start_probe()
-            self._probe_started = now
+        if probe is None or probe.done():      # 끝난 읽기가 남아 있으면(있어서는 안 된다) 새로 읽는다
+            probe = self._start_probe(now)
         remaining = self.check_timeout - (now - self._probe_started)
         if remaining > 0 and not probe.done():
             try:
@@ -223,7 +226,7 @@ async def notify_admins(reason: str) -> int:
                     "파일 저장소에 연결되어 있지 않습니다",
                     body="저장소 표식을 확인하지 못해 파일 저장을 막았습니다. 저장소 연결(네트워크 저장소·디스크)을 "
                          f"확인하세요. (사유: {reason})",
-                    link="/admin",
+                    link="/admin/storage",
                 )
             return len(admin_ids)
     except Exception as e:  # noqa: BLE001

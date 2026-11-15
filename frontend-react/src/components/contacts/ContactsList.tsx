@@ -26,7 +26,7 @@ const FAV_KEY = '★' // 내부 묶음 키(화면에는 UiIcon star 로 그린�
 const INDEX = [FAV_KEY, ...HANGUL_KEYS, 'A', OTHER_KEY]
 
 function subline(c: Contact) {
-  // 시안 "제품팀 · seoyeon@just.work" — 회사 · 첫 이메일(없으면 전화)
+  // 시안 "제품팀 · seoyeon@example.com" — 회사 · 첫 이메일(없으면 전화)
   const contact = c.emails?.[0]?.value || c.phones?.[0]?.value || ''
   return [c.organization, contact].filter(Boolean).join(' · ')
 }

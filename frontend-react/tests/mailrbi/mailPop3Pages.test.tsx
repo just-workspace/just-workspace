@@ -42,7 +42,7 @@ const bulkPosts = () => api.calls.filter(c => c.url === '/api/mail/bulk')
 beforeEach(() => {
   _resetMailStore()
   api.calls = []
-  setUser({ id: 'u1', username: 'qa', display_name: 'QA', email: 'me@just.work', primary_email: null } as any)
+  setUser({ id: 'u1', username: 'qa', display_name: 'QA', email: 'me@example.com', primary_email: null } as any)
 })
 
 async function openList(protocol: 'imap' | 'pop3') {

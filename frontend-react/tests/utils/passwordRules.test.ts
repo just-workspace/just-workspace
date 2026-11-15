@@ -21,7 +21,7 @@ describe('passwordRules', () => {
 
   it('아이디·이메일을 빼고 8자가 안 되면 distinct 실패(백엔드 _strip_context 와 동일)', () => {
     expect(byKey('hanul2026!', ['hanul']).distinct.ok).toBe(false)
-    expect(byKey('hanul@just.work1', ['hanul@just.work']).distinct.ok).toBe(false)
+    expect(byKey('hanul@example.com1', ['hanul@example.com']).distinct.ok).toBe(false)
     expect(byKey('HANUL-sunrise-river', ['hanul']).distinct.ok).toBe(true)
   })
 
@@ -31,7 +31,7 @@ describe('passwordRules', () => {
   })
 
   it('stripContext 는 이메일 로컬파트까지 뺀다', () => {
-    expect(stripContext('hanulpass', ['hanul@just.work'])).toBe('pass')
+    expect(stripContext('hanulpass', ['hanul@example.com'])).toBe('pass')
   })
 
   it('passwordRulesPass 는 필수 규칙만 본다', () => {

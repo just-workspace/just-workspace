@@ -27,7 +27,7 @@ def test_pii_masked(raw, expect):
 
 
 @pytest.mark.parametrize("raw", [
-    "2026-11-05 회의", "버전 1.2.3", "IP 192.168.10.120", "포트 8443", "hana.kim@example.com",
+    "2026-11-05 회의", "버전 1.2.3", "IP 192.168.10.20", "포트 8443", "hana.kim@example.com",
     "카드 1234-5678-9012-3456",   # Luhn 불일치 — 카드번호 아님
     "티켓 PRJ-0100",
 ])

@@ -27,7 +27,7 @@ const { MailRecipientField } = await import('~/components/mail/MailRecipientFiel
 
 const detail = (o: Record<string, unknown> = {}) => ({
   id: 'm1', thread_id: null, mailbox_ids: ['INBOX'], from_: [{ name: '김서연', email: 'kim@ext.io' }],
-  to: [{ name: null, email: 'me@just.work' }, { name: '박', email: 'park@ext.io' }], cc: [{ name: null, email: 'lee@ext.io' }],
+  to: [{ name: null, email: 'me@example.com' }, { name: '박', email: 'park@ext.io' }], cc: [{ name: null, email: 'lee@ext.io' }],
   bcc: [], reply_to: [], subject: '견적', text_body: '안녕하세요\n> 인용', html_body: null, preview: null,
   received_at: '2026-10-01T01:00:00Z', is_unread: false, is_flagged: false, attachments: [],
   disposition_notification_to: null, mdn_sent: false, ...o,
@@ -39,7 +39,7 @@ beforeEach(() => {
   mailSignatureStore.setState({ signatures: [], loading: false })
   api.calls = []
   api.handler = (url) => {
-    if (url === '/api/mail/accounts') return [{ id: 'a1', email: 'me@just.work', is_default: true }]
+    if (url === '/api/mail/accounts') return [{ id: 'a1', email: 'me@example.com', is_default: true }]
     if (url === '/api/mail/signatures') return []
     if (url === '/api/mail/signatures/default') return null
     if (url === '/api/mail/send') return { ok: true }
@@ -47,7 +47,7 @@ beforeEach(() => {
     if (url === '/api/mail/mailboxes') return { mailboxes: [] }
     return {}
   }
-  setUser({ id: 'u1', username: 'me', display_name: '나', email: 'me@just.work', primary_email: null } as any)
+  setUser({ id: 'u1', username: 'me', display_name: '나', email: 'me@example.com', primary_email: null } as any)
 })
 
 describe('composeText — Vue MailComposer 순수 함수 그대로', () => {
@@ -63,10 +63,10 @@ describe('composeText — Vue MailComposer 순수 함수 그대로', () => {
     expect(text.reSubject(null, 'Re:')).toBe('Re:')
   })
   it('전체 답장: 나·보낸 사람 중복 빼고 to+cc', () => {
-    const r = text.replyRecipients(detail() as any, true, 'ME@just.work')
+    const r = text.replyRecipients(detail() as any, true, 'ME@example.com')
     expect(r.to).toBe('김서연 <kim@ext.io>')
     expect(r.cc).toBe('박 <park@ext.io>, lee@ext.io')
-    expect(text.replyRecipients(detail() as any, false, 'me@just.work').cc).toBe('')
+    expect(text.replyRecipients(detail() as any, false, 'me@example.com').cc).toBe('')
   })
   it('인용·전달 본문', () => {
     const q = text.quoteOf(detail() as any)

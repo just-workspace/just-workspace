@@ -119,8 +119,8 @@ describe('2단계 인증', () => {
 
 describe('세션(답변서 B7 · TM1)', () => {
   it('접속 주소 = 호스트 이름, 없으면 IP', () => {
-    expect(sessionAddress('kt-211-36-14-9.kornet.net', '211.36.14.9')).toBe('kt-211-36-14-9.kornet.net')
-    expect(sessionAddress('', '121.134.22.80')).toBe('121.134.22.80')
+    expect(sessionAddress('host-203-0-113-9.isp.example', '203.0.113.9')).toBe('host-203-0-113-9.isp.example')
+    expect(sessionAddress('', '198.51.100.80')).toBe('198.51.100.80')
     expect(sessionAddress(null, null)).toBe('—')
     const { container } = render(<SettingsSessionRow icon="monitor" name="Chrome on macOS" kind="웹" ip="1.2.3.4" hostname="" recentShort="3분 전" recent="3분 전" />)
     expect(container.querySelector('.font-mono')!.textContent).toContain('1.2.3.4')

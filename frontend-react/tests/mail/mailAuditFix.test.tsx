@@ -28,7 +28,7 @@ const { MailRecipientField } = await import('~/components/mail/MailRecipientFiel
 
 const detail = (o: Record<string, unknown> = {}) => ({
   id: 'm1', thread_id: null, mailbox_ids: ['INBOX'], from_: [{ name: '김서연', email: 'kim@ext.io' }],
-  to: [{ name: null, email: 'me@just.work' }], cc: [], bcc: [], reply_to: [], subject: '견적',
+  to: [{ name: null, email: 'me@example.com' }], cc: [], bcc: [], reply_to: [], subject: '견적',
   text_body: '안녕하세요', html_body: null, preview: null, received_at: '2026-10-01T01:00:00Z',
   is_unread: false, is_flagged: false, attachments: [], disposition_notification_to: null, mdn_sent: false, ...o,
 })
@@ -49,7 +49,7 @@ beforeEach(() => {
   mailSignatureStore.setState({ signatures: [], loading: false })
   api.calls = []
   api.handler = (url) => {
-    if (url === '/api/mail/accounts') return [{ id: 'a1', email: 'me@just.work', is_default: true }]
+    if (url === '/api/mail/accounts') return [{ id: 'a1', email: 'me@example.com', is_default: true }]
     if (url === '/api/mail/signatures') return []
     if (url === '/api/mail/signatures/default') return null
     if (url === '/api/mail/send') return { ok: true }
@@ -57,7 +57,7 @@ beforeEach(() => {
     if (url === '/api/mail/mailboxes') return { mailboxes: [] }
     return {}
   }
-  setUser({ id: 'u1', username: 'me', display_name: '나', email: 'me@just.work', primary_email: null } as any)
+  setUser({ id: 'u1', username: 'me', display_name: '나', email: 'me@example.com', primary_email: null } as any)
 })
 
 describe('주소 목록 — 이름 속 쉼표', () => {
@@ -281,7 +281,7 @@ describe('MailComposer — 보내기 재진입·치던 주소', () => {
   })
   it('초안을 저장하면 임시보관함 목록이 다시 받게 알린다', async () => {
     const before = mailDraftsStore.getState().rev
-    api.handler = url => (url === '/api/mail/drafts' ? { id: 'd1' } : url === '/api/mail/accounts' ? [{ id: 'a1', email: 'me@just.work', is_default: true }] : url === '/api/mail/signatures' ? [] : {})
+    api.handler = url => (url === '/api/mail/drafts' ? { id: 'd1' } : url === '/api/mail/accounts' ? [{ id: 'a1', email: 'me@example.com', is_default: true }] : url === '/api/mail/signatures' ? [] : {})
     const onClose = vi.fn()
     renderInRouter(<MailComposer variant="page" mode="new" to="kim@ext.io" onClose={onClose} />)
     await waitFor(() => expect(screen.getByLabelText('제목')).toBeTruthy())

@@ -344,7 +344,7 @@ async def test_ssl_settings_effective_matches_ops_summary(db, monkeypatch, tmp_p
 
 
 def test_split_host_port():
-    assert ux._split_host_port("192.168.10.150") == ("192.168.10.150", 443)
+    assert ux._split_host_port("192.168.10.50") == ("192.168.10.50", 443)
     assert ux._split_host_port("rp.lan:8443") == ("rp.lan", 8443)
     assert ux._split_host_port("[fd00::1]:9443") == ("fd00::1", 9443)
 

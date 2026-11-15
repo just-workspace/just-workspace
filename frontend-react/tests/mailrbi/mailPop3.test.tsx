@@ -60,7 +60,7 @@ beforeEach(() => {
     if (url === '/api/mail/drafts') return []
     return {}
   }
-  setUser({ id: 'u1', username: 'me', display_name: '나', email: 'me@just.work', primary_email: null } as any)
+  setUser({ id: 'u1', username: 'me', display_name: '나', email: 'me@example.com', primary_email: null } as any)
 })
 
 const posted = (url: string) => api.calls.filter(c => c.url === url && c.opts?.method === 'POST')

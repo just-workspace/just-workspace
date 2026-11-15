@@ -32,7 +32,7 @@ ALICE = User(id="u-alice", username="alice", display_name="앨리스", is_admin=
 BOB = User(id="u-bob", username="bob", display_name="밥", is_admin=False, is_active=True,
            email="b@x", token_version=0)
 
-TARGET = "http://192.168.10.170"
+TARGET = "http://192.168.10.70"
 
 
 # ── 정책(순수 함수) ──
@@ -41,7 +41,7 @@ def test_chromium_policy_locks_to_target_and_blocks_leaks():
     p = pol.TargetPolicy(url=TARGET)
     c = pol.chromium_policy(p)
     assert c["URLBlocklist"] == ["*"]
-    assert "192.168.10.170" in c["URLAllowlist"]
+    assert "192.168.10.70" in c["URLAllowlist"]
     assert c["ExtensionInstallBlocklist"] == ["*"]
     assert c["DeveloperToolsAvailability"] == 2
     assert c["PasswordManagerEnabled"] is False
@@ -91,17 +91,17 @@ def test_docker_create_args_hardening():
 
 
 def test_mirror_policy_allows_cdp_pipe_only_difference():
-    tp = pol.TargetPolicy(url="http://192.168.10.170")
+    tp = pol.TargetPolicy(url="http://192.168.10.70")
     base, mir = pol.chromium_policy(tp), pol.mirror_chromium_policy(tp)
     assert mir["RemoteDebuggingAllowed"] is True and base["RemoteDebuggingAllowed"] is False
     diff = {k for k in base if base[k] != mir.get(k)}
     assert diff == {"RemoteDebuggingAllowed", "DeveloperToolsAvailability", "DownloadDirectory"}
     assert mir["DeveloperToolsAvailability"] == 1
-    assert mir["URLBlocklist"] == ["*"] and "192.168.10.170" in mir["URLAllowlist"]
+    assert mir["URLBlocklist"] == ["*"] and "192.168.10.70" in mir["URLAllowlist"]
 
 
 def test_mirror_docker_create_args_same_hardening_and_port():
-    tp = pol.TargetPolicy(url="http://192.168.10.170")
+    tp = pol.TargetPolicy(url="http://192.168.10.70")
     env = pol.mirror_container_env(tp, sid="a" * 32)
     args = pol.mirror_docker_create_args(name="ws-rbi-s-x", network="ws-rbi", publish_ip="172.28.0.1", image="ws-rbi-mirror:p0",
                                          env=env, cpu=2, memory_mb=2048)
@@ -113,7 +113,7 @@ def test_mirror_docker_create_args_same_hardening_and_port():
     assert args[-1] == pol.MIRROR_STARTUP_SCRIPT and "zz-rbi-policy.json" in args[-1]
 
 @pytest.mark.parametrize("raw,norm", [
-    ("192.168.10.170", "http://192.168.10.170"), ("http://192.168.10.170/", "http://192.168.10.170"),
+    ("192.168.10.70", "http://192.168.10.70"), ("http://192.168.10.70/", "http://192.168.10.70"),
     ("https://portal.lan:8443/admin", "https://portal.lan:8443/admin"),
 ])
 def test_normalize_url_ok(raw, norm):
@@ -127,7 +127,7 @@ def test_normalize_url_rejects(raw):
 
 
 def test_normalize_hosts_includes_target_host_with_port():
-    assert pol.normalize_hosts(["other.lan"], "http://192.168.10.170:8080") == ["192.168.10.170:8080", "other.lan"]
+    assert pol.normalize_hosts(["other.lan"], "http://192.168.10.70:8080") == ["192.168.10.70:8080", "other.lan"]
     with pytest.raises(ValueError):
         pol.normalize_hosts(["bad host!"], TARGET)
 
@@ -193,7 +193,7 @@ def fake_docker(monkeypatch):
               "container_state", "established_viewers", "remove_container", "list_session_containers"):
         monkeypatch.setattr(dk, n, getattr(fd, n))
     # 사이드카가 이 출구들을 건 상태(동적 허용 목록 시험은 tests/test_rbi_egress.py)
-    fd.allow = ["192.168.10.170:80", "192.168.10.170:443", "192.168.10.171:80", "192.168.10.171:443"]
+    fd.allow = ["192.168.10.70:80", "192.168.10.70:443", "192.168.10.71:80", "192.168.10.71:443"]
     monkeypatch.setattr(dk, "read_guard_state", lambda: dk.GuardState(ok=True, reason="ok", age=5.0, allow=list(fd.allow)))
     return fd
 
@@ -257,7 +257,7 @@ async def test_start_session_creates_hardened_container_with_policies(db_session
     args, env = fake_docker.created[0]
     assert "--read-only" in args and "ALL" in args
     assert "RBI_POLICY_JSON" in env and "RBI_KASMVNC_YAML" in env
-    assert json.loads(env["RBI_POLICY_JSON"])["URLAllowlist"][0] == "192.168.10.170"
+    assert json.loads(env["RBI_POLICY_JSON"])["URLAllowlist"][0] == "192.168.10.70"
     assert "no_user_session_timeout: 900" in env["RBI_KASMVNC_YAML"]
     assert args[-2] == "-c" and "zz-rbi-policy.json" in args[-1] and "kasm_startup.sh --wait" in args[-1]
     # 비밀번호는 암호문으로만 저장
@@ -293,7 +293,7 @@ async def test_start_session_failure_cleans_up(db_session, fake_docker):
 
 async def test_start_session_limits(db_session, fake_docker, monkeypatch):
     t = await _target(db_session)
-    t2 = await _target(db_session, key="other", url="http://192.168.10.171")
+    t2 = await _target(db_session, key="other", url="http://192.168.10.71")
     await svc.start_session(db_session, ADMIN, t, None)
     with pytest.raises(svc.SessionStartError) as ei:
         await svc.start_session(db_session, ADMIN, t2, None)
@@ -373,7 +373,7 @@ def _module_on(monkeypatch):
 
 async def test_api_targets_filtered_by_permission(db_session, fake_docker):
     await _target(db_session, allowed_user_ids=[ALICE.id])
-    await _target(db_session, key="hidden", url="http://192.168.10.171")
+    await _target(db_session, key="hidden", url="http://192.168.10.71")
     r = await _req(ALICE, db_session, "GET", "/api/rbi/targets")
     assert r.status_code == 200
     keys = [t["key"] for t in r.json()["targets"]]
@@ -463,11 +463,11 @@ async def test_internal_stream_auth_rejects_workspace_session_cookie(db_session,
 
 async def test_admin_target_crud_and_overview(db_session, fake_docker):
     r = await _req(ADMIN, db_session, "POST", "/api/admin/rbi/targets",
-                   json={"key": "PORTAL", "name": "Portal", "url": "192.168.10.170", "allowed_user_ids": [ALICE.id]})
+                   json={"key": "PORTAL", "name": "Portal", "url": "192.168.10.70", "allowed_user_ids": [ALICE.id]})
     assert r.status_code == 201, r.text
     tid = r.json()["id"]
     assert r.json()["key"] == "portal" and r.json()["url"] == TARGET and r.json()["private_ip"] is True
-    assert r.json()["allowed_hosts"] == ["192.168.10.170"]
+    assert r.json()["allowed_hosts"] == ["192.168.10.70"]
     # 중복 키
     assert (await _req(ADMIN, db_session, "POST", "/api/admin/rbi/targets", json={"key": "portal", "name": "x", "url": "10.0.0.1"})).status_code == 409
     # 검증
@@ -505,16 +505,16 @@ def test_validate_mode_and_agent_policy():
 
 
 def test_mirror_container_env_carries_policy_allowlist_idle_and_devtools_1():
-    tp = pol.TargetPolicy(url="http://192.168.10.170:8080", allowed_hosts=["10.0.0.9"], idle_minutes=20, clipboard_from_browser=False)
+    tp = pol.TargetPolicy(url="http://192.168.10.70:8080", allowed_hosts=["10.0.0.9"], idle_minutes=20, clipboard_from_browser=False)
     env = pol.mirror_container_env(tp, sid="b" * 32, auth_header="Basic eA==")
     assert env["MIRROR_AUTH"] == "Basic eA==" and env["MIRROR_SID"] == "b" * 32 and env["MIRROR_PORT"] == "6901"
     assert json.loads(env["MIRROR_POLICY"]) == {"ci": True, "co": False, "dl": False, "ul": False}
-    assert json.loads(env["MIRROR_ALLOW"]) == ["192.168.10.170:8080", "10.0.0.9"]
+    assert json.loads(env["MIRROR_ALLOW"]) == ["192.168.10.70:8080", "10.0.0.9"]
     assert env["MIRROR_IDLE_SECONDS"] == "1200"
     chrome = json.loads(env["RBI_POLICY_JSON"])
     # P0 함정: 정책 2(금지)면 CDP 가 페이지에 못 붙는다 → 미러는 1. URL 허용목록·다운로드 차단은 픽셀과 같다
     assert chrome["DeveloperToolsAvailability"] == 1 and chrome["RemoteDebuggingAllowed"] is True
-    assert chrome["URLBlocklist"] == ["*"] and chrome["URLAllowlist"][:2] == ["192.168.10.170:8080", "10.0.0.9"]
+    assert chrome["URLBlocklist"] == ["*"] and chrome["URLAllowlist"][:2] == ["192.168.10.70:8080", "10.0.0.9"]
     assert chrome["DownloadRestrictions"] == 3 and chrome["AllowFileSelectionDialogs"] is False
     assert "VNC_PW" not in env and "remote-debugging-port" not in json.dumps(env)
 
@@ -560,7 +560,7 @@ async def test_mirror_target_can_fallback_to_pixel_but_pixel_target_cannot_mirro
     s = await svc.start_session(db_session, ADMIN, tm, None, mode="pixel")
     assert s.mode == "pixel" and "kasmweb/chromium:1.18.0" in fake_docker.created[0][0]
     await svc.stop_session(db_session, s, "user")
-    tp = await _target(db_session, key="pix", url="http://192.168.10.171")
+    tp = await _target(db_session, key="pix", url="http://192.168.10.71")
     with pytest.raises(svc.SessionStartError) as ei:
         await svc.start_session(db_session, ADMIN, tp, None, mode="mirror")
     assert ei.value.status == 400 and len(fake_docker.created) == 1

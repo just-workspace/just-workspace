@@ -94,7 +94,7 @@ plugins/
             └── plugin.mjs     # 빌드된 번들 (자동 생성, 파일 하나·CSS 인라인)
 ```
 
-사이트 전용(비공개) 플러그인은 코어 리포에 두지 않는다 — `.gitignore` 허용목록(`sample-notes` + 빌드 도구)만 추적되고, 나머지는 별도 오버레이 리포에서 배포한다.
+직접 만든 플러그인은 이 리포에 두지 않는다 — `.gitignore` 허용목록(`sample-notes`·`remote-desktop` + 빌드 도구)만 추적된다.
 
 ### manifest.json
 

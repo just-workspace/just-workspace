@@ -11,7 +11,7 @@ const dlg = vi.hoisted(() => ({ answer: true, asked: [] as string[] }))
 
 const POLICY = { clipboard_to_browser: true, clipboard_from_browser: false, downloads: false, uploads: false, idle_minutes: 15, max_hours: 8 }
 const MIRROR = {
-  id: SID, status: 'running', mode: 'mirror', modes: ['mirror', 'pixel'], target_id: 't1', target_key: 'portal', target_name: 'Portal', target_url: 'http://192.168.10.170',
+  id: SID, status: 'running', mode: 'mirror', modes: ['mirror', 'pixel'], target_id: 't1', target_key: 'portal', target_name: 'Portal', target_url: 'http://192.168.10.70',
   stream_url: `/rbi/${SID}/`, started_at: new Date().toISOString(), expires_at: new Date(Date.now() + 8 * 3600e3).toISOString(),
   idle_minutes: 15, max_hours: 8, last_seen_at: null, ended_at: null, end_reason: null, error: null,
 }
@@ -68,7 +68,7 @@ function setLocation(search: string) {
 beforeEach(() => {
   api.calls = []; api.sessions = []; api.recent = []; api.me = ME
   api.targets = [
-    { id: 't1', key: 'portal', name: 'Portal', url: 'http://192.168.10.170', host: '192.168.10.170', enabled: true, mode: 'mirror', modes: ['mirror', 'pixel'], policy: POLICY },
+    { id: 't1', key: 'portal', name: 'Portal', url: 'http://192.168.10.70', host: '192.168.10.70', enabled: true, mode: 'mirror', modes: ['mirror', 'pixel'], policy: POLICY },
     { id: 't2', key: 'nas', name: 'NAS', url: 'http://192.168.10.20', host: '192.168.10.20', enabled: true, mode: 'pixel', modes: ['pixel'], policy: POLICY },
   ]
   fake.last = null; fake.started = 0; fake.stopped = 0; fake.focused = 0
@@ -147,13 +147,13 @@ describe('격리 브라우저 단독 앱 — 세션 화면', () => {
     await waitFor(() => expect(fake.started).toBe(1))
     expect(fake.last.opt.wsUrl).toBe(`wss://rbi.example/rbi/${SID}/mirror`)
     await act(async () => {
-      fake.last.opt.onDoc({ cw: 1, ch: 1, vw: 1, vh: 1, sx: 0, sy: 0, url: 'http://192.168.10.170/legacy/labs', title: 'Portal' })
+      fake.last.opt.onDoc({ cw: 1, ch: 1, vw: 1, vh: 1, sx: 0, sy: 0, url: 'http://192.168.10.70/legacy/labs', title: 'Portal' })
       fake.last.opt.onPolicy({ ci: true, co: false, dl: false, ul: false })
       fake.last.opt.onConnection(true)
       fake.last.opt.onStats({ connected: true, rttMs: 23.4 })
     })
     const url = screen.getByTestId('rbi-bar-url')
-    expect(url.textContent).toBe('http://192.168.10.170/legacy/labs')
+    expect(url.textContent).toBe('http://192.168.10.70/legacy/labs')
     expect(url.closest('a')).toBeNull()
     expect(screen.getByTestId('rbi-bar-title').textContent).toBe('Portal')
     expect(screen.getByText('클립보드: 내 PC → 브라우저만')).toBeTruthy()

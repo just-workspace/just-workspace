@@ -37,7 +37,7 @@ function renderPage() {
 beforeEach(() => {
   api.calls = []
   api.origin = 'https://rbi.example'
-  api.targets = [{ id: 't1', key: 'portal', name: 'Portal', url: 'http://192.168.10.170', host: '192.168.10.170', enabled: true, mode: 'mirror', modes: ['mirror', 'pixel'],
+  api.targets = [{ id: 't1', key: 'portal', name: 'Portal', url: 'http://192.168.10.70', host: '192.168.10.70', enabled: true, mode: 'mirror', modes: ['mirror', 'pixel'],
     policy: { clipboard_to_browser: true, clipboard_from_browser: true, downloads: false, uploads: false, idle_minutes: 15, max_hours: 8 } }]
   platformStore.setState({ modules: MODS(true) as any, loaded: true })
   setUser({ id: 'u1', username: 'qa', display_name: '검수', email: null, primary_email: null, avatar_url: null, recovery_email: null, is_admin: false, last_login_at: null })

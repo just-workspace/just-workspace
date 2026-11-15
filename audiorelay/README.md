@@ -16,8 +16,8 @@ internal/server       HTTP(health/info/stats/ws), 인증서(파일 또는 자가
 ## 실행
 
 ```sh
-RELAY_SECRET=$(openssl rand -hex 24) RELAY_WT_PUBLIC_URL=https://192.168.10.120:4433/audiorelay/wt \
-RELAY_WT_SELF_SIGNED_HOSTS=192.168.10.120 go run ./cmd/audiorelay
+RELAY_SECRET=$(openssl rand -hex 24) RELAY_WT_PUBLIC_URL=https://192.168.10.20:4433/audiorelay/wt \
+RELAY_WT_SELF_SIGNED_HOSTS=192.168.10.20 go run ./cmd/audiorelay
 ```
 
 env 는 `cmd/audiorelay/main.go` 머리 주석에. compose 에서는 `ws-audiorelay` 서비스(`profiles: audiorelay`)로 뜬다.

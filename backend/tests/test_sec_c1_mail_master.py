@@ -52,7 +52,7 @@ def _ext(**kw):
 
 @pytest.mark.parametrize("host", [
     "mailserver", "ws-mailserver", "MailServer.", "localhost", "postgres", "foo.internal",
-    "127.0.0.1", "10.1.2.3", "172.18.0.4", "192.168.10.120", "169.254.169.254", "::1",
+    "127.0.0.1", "10.1.2.3", "172.18.0.4", "192.168.10.20", "169.254.169.254", "::1",
     "[::ffff:127.0.0.1]", "fd00::1", "0.0.0.0", "mail.rebind.example", "mixed.example",
     "nonexistent.example", "",
 ])

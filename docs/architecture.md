@@ -42,7 +42,7 @@
 TipTap 3 + Yjs(위키 공동 편집) · zustand · TanStack Query · i18next(ko/en) · livekit-client(지연 로드) · vite-plugin-pwa.
 
 - 정적 빌드를 컨테이너 안 nginx-unprivileged 가 서빙한다(`/assets/` immutable, HTML no-cache, SPA fallback). 보안 헤더·CSP 는 앞단 `ws-nginx` 가 붙인다.
-- Vue(Nuxt 3) 에서 전환했다. Vue 컨테이너와 소스 폴더 `frontend/` 는 더 이상 없다. `ws-nginx` 는 `/_nuxt/` 에 404 를 돌려준다. 이식 규칙·대응표는 [frontend-react/MIGRATION.md](../frontend-react/MIGRATION.md).
+- Vue(Nuxt 3) 에서 전환했다. Vue 컨테이너와 소스 폴더 `frontend/` 는 더 이상 없다. `ws-nginx` 는 `/_nuxt/` 에 404 를 돌려준다.
 - 유동 레이아웃: 1280 ~ 8K 폭까지 본문 폭·대시보드 열 수가 따라간다. 설정 › 표시에서 화면 배율을 고를 수 있다(실효 폭 1280 미만이면 배율 비활성).
 - 모바일은 `matchMedia('(max-width: 767px)')` 기준(`useIsMobile`), 하단 탭바, 셸 전환 애니메이션. 뷰포트는 `dvh` 기준(h-screen 금지).
 

@@ -5,7 +5,7 @@ const row = (o: Partial<{ is_unread: boolean; is_flagged: boolean; has_attachmen
   is_unread: !!o.is_unread,
   is_flagged: !!o.is_flagged,
   has_attachment: !!o.has_attachment,
-  from_: [{ name: o.from || null, email: `${(o.from || 'x').toLowerCase()}@just.work` }],
+  from_: [{ name: o.from || null, email: `${(o.from || 'x').toLowerCase()}@example.com` }],
 })
 
 describe('parseMailQuery', () => {

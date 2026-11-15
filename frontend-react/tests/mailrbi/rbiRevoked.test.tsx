@@ -9,7 +9,7 @@ const fake = vi.hoisted(() => ({ last: null as any }))
 
 const POLICY = { clipboard_to_browser: true, clipboard_from_browser: false, downloads: false, uploads: false, idle_minutes: 15, max_hours: 8 }
 const MIRROR = {
-  id: SID, status: 'running', mode: 'mirror', modes: ['mirror', 'pixel'], target_id: 't1', target_key: 'portal', target_name: 'Portal', target_url: 'http://192.168.10.170',
+  id: SID, status: 'running', mode: 'mirror', modes: ['mirror', 'pixel'], target_id: 't1', target_key: 'portal', target_name: 'Portal', target_url: 'http://192.168.10.70',
   stream_url: `/rbi/${SID}/`, started_at: new Date().toISOString(), expires_at: new Date(Date.now() + 8 * 3600e3).toISOString(),
   idle_minutes: 15, max_hours: 8, last_seen_at: null, ended_at: null, end_reason: null, error: null,
 }
@@ -52,7 +52,7 @@ const statusFetches = () => api.calls.filter(c => c.url === `/api/rbi/sessions/$
 beforeEach(() => {
   api.calls = []; api.recent = []; api.ping = 'running'
   api.sessions = [MIRROR]; api.current = MIRROR
-  api.targets = [{ id: 't1', key: 'portal', name: 'Portal', url: 'http://192.168.10.170', host: '192.168.10.170', enabled: true, mode: 'mirror', modes: ['mirror', 'pixel'], policy: POLICY }]
+  api.targets = [{ id: 't1', key: 'portal', name: 'Portal', url: 'http://192.168.10.70', host: '192.168.10.70', enabled: true, mode: 'mirror', modes: ['mirror', 'pixel'], policy: POLICY }]
   fake.last = null
   toastStore.setState({ toasts: [] })
   Object.defineProperty(window, 'location', {

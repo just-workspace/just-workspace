@@ -93,7 +93,7 @@ function TargetForm({ initial, saving, onSave, onCancel }: { initial: Form; savi
     <form className="grid gap-x-4 gap-y-3.5 rounded-md border border-border p-4 sm:grid-cols-2" onSubmit={e => { e.preventDefault(); onSave(f) }} aria-label={t(A + 'editTarget')}>
       <UiInput modelValue={f.key} onUpdateModelValue={set('key')} label={t(A + 'key')} hint={t(A + 'keyHint')} placeholder="portal" mono required />
       <UiInput modelValue={f.name} onUpdateModelValue={set('name')} label={t(A + 'name')} placeholder="Intranet Portal" required />
-      <UiInput modelValue={f.url} onUpdateModelValue={set('url')} label={t(A + 'url')} hint={t(A + 'urlHint')} placeholder="http://192.168.10.170" mono required className="sm:col-span-2" />
+      <UiInput modelValue={f.url} onUpdateModelValue={set('url')} label={t(A + 'url')} hint={t(A + 'urlHint')} placeholder="http://192.168.10.70" mono required className="sm:col-span-2" />
       {/* TODO(handover-rbi): 화면 방식 고르기 규격(셀렉트/세그먼트)은 시안에서 */}
       <UiSelect modelValue={f.mode} onUpdateModelValue={v => set('mode')((v === 'mirror' ? 'mirror' : 'pixel') as RbiMode)} label={t(A + 'mode')} hint={t(A + 'modeHint')} native className="sm:col-span-2"
         options={[{ value: 'pixel', label: t('rbi.mode.pixel') }, { value: 'mirror', label: t('rbi.mode.mirror') }]} />

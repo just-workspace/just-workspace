@@ -89,8 +89,8 @@ describe('출력 선택 가능(setSinkId) · http', () => {
     expect(sinkSelectable(undefined, 2)).toBe(false)
   })
   it('http 주소 → 같은 경로 https(기본 포트 80 은 뗀다)', () => {
-    expect(httpsUrlFor({ protocol: 'http:', host: '192.168.10.120', pathname: '/meetings/room/qa', search: '?host=1', hash: '' }))
-      .toBe('https://192.168.10.120/meetings/room/qa?host=1')
+    expect(httpsUrlFor({ protocol: 'http:', host: '192.168.10.20', pathname: '/meetings/room/qa', search: '?host=1', hash: '' }))
+      .toBe('https://192.168.10.20/meetings/room/qa?host=1')
     expect(httpsUrlFor({ protocol: 'http:', host: 'ws.example.test:80', pathname: '/x', search: '', hash: '#a' })).toBe('https://ws.example.test/x#a')
     expect(httpsUrlFor({ protocol: 'http:', host: 'localhost:3000', pathname: '/', search: '', hash: '' })).toBe('https://localhost:3000/')
   })

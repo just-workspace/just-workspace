@@ -204,7 +204,7 @@ claude.ai 커넥터 고정 등록 예(읽기 전용):
 ## 3. 코어에 남기지 않는 것 (.gitignore)
 
 - `.env` 와 그 백업(시크릿)
-- 사설 플러그인(`.gitignore` 의 private plugins 블록) · `nginx/private.d/*` — 사이트별 비공개 오버레이 리포에서 관리
+- 직접 만든 플러그인 · `nginx/private.d/*` — 리포 밖에서 관리(추적하지 않음)
 - 생성 파일(`livekit/livekit.yaml`, `nginx/standalone.conf`, `docker-compose.override.yml`) — 설치 시 생성
 
 ## 4. 남은 변수화 항목

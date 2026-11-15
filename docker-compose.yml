@@ -585,7 +585,7 @@ services:
         apk add --no-cache curl openssl bind-tools coreutils redis postgresql-client >/dev/null 2>&1 ||         apk add --no-cache curl openssl bind-tools coreutils redis >/dev/null 2>&1
         exec /bin/sh /healthprobe/probe.sh
     volumes:
-      # 디렉터리째 — 사이트 장비 목록(devices.conf, 오버레이)이 없을 수도 있어서
+      # 디렉터리째 — 사이트 장비 목록(devices.conf)이 없을 수도 있어서
       # 파일 단위로 걸면 도커가 빈 디렉터리를 만들어 버린다.
       - ./logging/healthprobe:/healthprobe:ro
       # 디스크 사용률을 보려면 실제 데이터가 있는 볼륨을 봐야 한다

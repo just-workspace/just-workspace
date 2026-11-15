@@ -94,7 +94,6 @@ docker compose config --quiet && docker compose up -d
 | [docs/IMAGES.md](docs/IMAGES.md) | 미리 빌드한 이미지 |
 | [docs/update-system.md](docs/update-system.md) | 업데이트 |
 | [docs/extensions.md](docs/extensions.md) · [docs/plugin-frontend.md](docs/plugin-frontend.md) · [frontend-react/docs/plugin-v2.md](frontend-react/docs/plugin-v2.md) | 플러그인 (백엔드 SDK · 프런트 제약 · v2 React 계약) |
-| [frontend-react/MIGRATION.md](frontend-react/MIGRATION.md) | Vue → React 전환 규칙·대응표 |
 | [docs/CONNECTOR.md](docs/CONNECTOR.md) | claude.ai MCP 커넥터 |
 | [docs/rbi.md](docs/rbi.md) | 격리 브라우저(RBI) — 구조·보안 모델·설정·격리 검증 |
 | [apps/README.md](apps/README.md) · [apps/desktop/README.md](apps/desktop/README.md) | 모바일 · 데스크톱 앱 |

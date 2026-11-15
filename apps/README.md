@@ -29,8 +29,7 @@ React 전환 뒤 서버 nginx 는 쿠키와 상관없이 전부 `frontend-react`
 
 - **번들 모드(선택, 안드로이드만)**: `ANDROID_WEB_BUNDLE=1` 이면 `scripts/bundle-web.cjs` 가 `frontend-react` 를
   `VITE_API_BASE=<사이트 주소>` 로 빌드해 앱 안에 넣는다(`www-react/`, 서비스워커 없음). 앱 출처는 `https://localhost`, API·WS 만 서버로(Bearer).
-  빌더를 직접 실행할 때만 지원(관리자 화면 빌드는 원격 모드). 웹 변경마다 앱을 다시 빌드해야 하고, 위키 동시편집처럼 쿠키에 기대는 곳은 아직 안 된다
-  ([../frontend-react/MIGRATION.md](../frontend-react/MIGRATION.md) 5-3).
+  빌더를 직접 실행할 때만 지원(관리자 화면 빌드는 원격 모드). 웹 변경마다 앱을 다시 빌드해야 하고, 위키 동시편집처럼 쿠키에 기대는 곳은 아직 안 된다.
 
 ### 모바일 회의 (Android)
 

@@ -21,9 +21,9 @@ const OVERVIEW = () => ({
   status: {
     image: 'kasm', mirror_image: 'mirror', network: 'ws-rbi', subnet: '172.31.200.0/24', bridge: 'br-wsrbi', publish_ip: '172.28.0.1',
     max_sessions: 4, active_sessions: 1, public_origin: 'https://rbi.example',
-    guard: { ok: true, reason: 'ok', age: 3, allow: ['192.168.10.170:80'], rules: 7, required: true, rejected: ['192.168.10.120:22 self-needs-force'], allow_rev: 'abc' },
-    egress: { desired: ['192.168.10.20:443', '192.168.10.20:80'], pending: ['192.168.10.20:443', '192.168.10.20:80'], static: ['192.168.10.170:80'],
-      ceiling: '10.0.0.0/8,172.16.0.0/12,192.168.0.0/16', protected: '192.168.10.120', file: '/run/rbi-allow/allow.txt' },
+    guard: { ok: true, reason: 'ok', age: 3, allow: ['192.168.10.70:80'], rules: 7, required: true, rejected: ['192.168.10.20:22 self-needs-force'], allow_rev: 'abc' },
+    egress: { desired: ['192.168.10.20:443', '192.168.10.20:80'], pending: ['192.168.10.20:443', '192.168.10.20:80'], static: ['192.168.10.70:80'],
+      ceiling: '10.0.0.0/8,172.16.0.0/12,192.168.0.0/16', protected: '192.168.10.20', file: '/run/rbi-allow/allow.txt' },
   },
 })
 
@@ -63,15 +63,15 @@ beforeEach(() => {
 describe('관리 › 격리 브라우저', () => {
   it('격리 규칙 상태: 지금 걸린 목록 · 사이드카 대기 · 거부한 줄 · 고정 허용 · 전용 출처', async () => {
     renderPage()
-    expect((await screen.findByTestId('rbi-allow-applied')).textContent).toBe('192.168.10.170:80')
+    expect((await screen.findByTestId('rbi-allow-applied')).textContent).toBe('192.168.10.70:80')
     expect(screen.getByTestId('rbi-allow-pending').textContent).toContain('192.168.10.20:443, 192.168.10.20:80')
-    expect(screen.getByTestId('rbi-allow-rejected').textContent).toContain('192.168.10.120:22 self-needs-force')
+    expect(screen.getByTestId('rbi-allow-rejected').textContent).toContain('192.168.10.20:22 self-needs-force')
     expect(screen.getByText('https://rbi.example')).toBeTruthy()
     expect(screen.getByTestId('rbi-egress-nas').textContent).toContain('nas.lan → 192.168.10.20:80')
   })
 
   it('대상 추가: 추가 포트·강제를 보내고, 서버 경고는 경고 토스트로', async () => {
-    api.warnings = ['192.168.10.150: 워크스페이스 자신의 주소(RP)를 강제로 엽니다']
+    api.warnings = ['192.168.10.50: 워크스페이스 자신의 주소(RP)를 강제로 엽니다']
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: '대상 추가' }))
     const form = screen.getByRole('form', { name: '대상 편집' })
@@ -85,7 +85,7 @@ describe('관리 › 격리 브라우저', () => {
     await waitFor(() => expect(api.calls.some(c => c.url === '/api/admin/rbi/targets' && c.opts?.method === 'POST')).toBe(true))
     const body = api.calls.find(c => c.opts?.method === 'POST')!.opts.body
     expect(body).toMatchObject({ key: 'rp', url: 'http://rp.lan:8443', extra_ports: [8443, 9000], force: true })
-    await waitFor(() => expect(toasts()).toContain('warning:192.168.10.150: 워크스페이스 자신의 주소(RP)를 강제로 엽니다'))
+    await waitFor(() => expect(toasts()).toContain('warning:192.168.10.50: 워크스페이스 자신의 주소(RP)를 강제로 엽니다'))
   })
 
   it('거부 사유는 서버 문구 그대로', async () => {

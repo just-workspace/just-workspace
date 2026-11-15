@@ -1,0 +1,95 @@
+/* 인증 틀(AuthShell.tsx) 전용 — Vue components/auth/AuthShell.vue 의 <style scoped> 그대로. 클래스가 auth- 접두라 전역이어도 겹치지 않는다. */
+.auth-brand-panel {
+  background-color: hsl(var(--scrim));
+}
+/* 모바일 키보드 한 줄 띠: 단색(데스크톱 왼쪽 컬럼은 키보드 감지와 무관하게 항상 월페이퍼) */
+@media (max-width: 1023.98px) {
+  .auth-brand-compact {
+    background-color: hsl(var(--background));
+  }
+}
+
+/* 모바일: 아래로 짙어지는 스크림(시안 AuthScreen:24). 데스크톱: 하단 300 그라디언트(:15) */
+.auth-scrim {
+  background: linear-gradient(transparent 30%, hsl(var(--scrim) / 0.7));
+}
+@media (min-width: 1024px) {
+  .auth-scrim {
+    background: linear-gradient(transparent calc(100% - 300px), hsl(var(--scrim) / 0.75));
+  }
+}
+
+.auth-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(24px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.auth-orb-1 {
+  left: -8%;
+  top: 4%;
+  height: 30rem;
+  width: 30rem;
+  background: radial-gradient(circle at center, hsl(var(--primary) / 0.9), transparent 68%);
+  animation: auth-float-1 34s ease-in-out infinite alternate;
+}
+.auth-orb-2 {
+  left: 18%;
+  bottom: -12%;
+  height: 26rem;
+  width: 26rem;
+  background: radial-gradient(circle at center, hsl(var(--success) / 0.8), transparent 68%);
+  animation: auth-float-2 46s ease-in-out infinite alternate;
+}
+.auth-orb-3 {
+  right: -6%;
+  top: 22%;
+  height: 24rem;
+  width: 24rem;
+  background: radial-gradient(circle at center, hsl(var(--warning) / 0.7), transparent 68%);
+  animation: auth-float-3 58s ease-in-out infinite alternate;
+}
+
+.auth-kenburns {
+  animation: auth-kenburns 30s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes auth-kenburns {
+  from { transform: scale(1.05) translate(0, 0); }
+  to { transform: scale(1.18) translate(-3%, -3%); }
+}
+
+.auth-grid {
+  background-image:
+    linear-gradient(to right, hsl(var(--card)) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--card)) 1px, transparent 1px);
+  background-size: 64px 64px;
+  opacity: 0.55;
+  animation: auth-grid-move 90s linear infinite;
+}
+
+@keyframes auth-float-1 {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(7%, 9%) scale(1.12); }
+}
+@keyframes auth-float-2 {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(-8%, -6%) scale(1.15); }
+}
+@keyframes auth-float-3 {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(-5%, 7%) scale(1.1); }
+}
+@keyframes auth-grid-move {
+  from { background-position: 0 0; }
+  to { background-position: 64px 64px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-orb,
+  .auth-grid,
+  .auth-kenburns {
+    animation: none;
+  }
+}

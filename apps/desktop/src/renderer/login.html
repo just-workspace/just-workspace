@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; script-src 'self'; img-src 'self' data:;">
+<title>워크스페이스 연결</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* 창 크기 600×700 고정 — 핸드오프 아트보드 규격 */
+  body { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  .body {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 56px 0;
+  }
+
+  .appicon {
+    width: 52px; height: 52px;
+    border-radius: 13px;
+    background: var(--brand);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .head {
+    margin-top: 15px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .head h1 {
+    margin: 0;
+    font-size: 21px; font-weight: 600; letter-spacing: -0.018em;
+  }
+  .head p {
+    margin: 0;
+    font-size: 13px; color: var(--label); font-weight: var(--body-weight);
+    text-align: center; max-width: 42ch; line-height: 1.55;
+  }
+
+  .fields {
+    width: 100%; margin-top: 26px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field > label {
+    font-size: 11px; color: var(--label);
+    font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.09em;
+  }
+  .control {
+    height: 42px;
+    border: 1px solid var(--input-border);
+    border-radius: 7px;
+    display: flex; align-items: center; gap: 9px;
+    padding: 0 13px;
+    background: var(--app-bg);
+  }
+  .control:focus-within { border-color: var(--brand-text); }
+  .control input {
+    flex: 1 1 auto; min-width: 0;
+    border: 0; outline: 0; background: none;
+    font-family: inherit; font-size: 14px; color: var(--text);
+    user-select: text;
+  }
+  .control input.mono { font-family: 'IBM Plex Mono', monospace; }
+  .control input::placeholder { color: var(--muted); }
+  .hint { font-size: 11px; color: var(--muted); font-weight: var(--body-weight); }
+  .verified {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11.5px; color: var(--ok); font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .primary {
+    height: 46px;
+    border: 0; border-radius: 7px;
+    background: var(--brand);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 4px;
+    font-family: inherit; font-size: 14.5px; font-weight: 600; color: #fff;
+    cursor: default;
+  }
+  .primary:hover:not(:disabled) { filter: brightness(1.08); }
+  .primary:disabled { opacity: .55; }
+
+  /* 대기 카드 */
+  .waiting {
+    width: 100%; margin-top: 20px;
+    border: 1px solid var(--brand-border);
+    background: var(--brand-tint);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex; gap: 12px;
+  }
+  .spinner {
+    width: 30px; height: 30px; border-radius: 50%;
+    border: 2.5px solid var(--spinner-track);
+    border-top-color: var(--brand-text);
+    flex-shrink: 0;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+  .waiting .col { min-width: 0; }
+  .waiting .t { font-size: 13px; font-weight: 600; color: var(--brand-strong); }
+  .waiting .d {
+    font-size: 11.5px; color: var(--brand-body);
+    font-weight: var(--body-weight); line-height: 1.6; margin-top: 3px;
+  }
+  .authurl {
+    margin-top: 7px;
+    background: var(--app-bg);
+    border: 1px solid var(--brand-border);
+    border-radius: 5px;
+    padding: 7px 9px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: var(--micro-size);
+    color: var(--text-2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    user-select: text;
+  }
+  .retry { margin-top: 9px; font-size: 12px; font-weight: 500; }
+
+  /* 오류 카드 — 대기 카드와 같은 자리를 쓴다 */
+  .error {
+    width: 100%; margin-top: 20px;
+    border: 1px solid var(--warn-border);
+    background: var(--warn-tint);
+    border-left: 3px solid var(--warn);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .error .t { font-size: 13px; font-weight: 600; color: var(--warn); }
+  .error .d {
+    font-size: 11.5px; color: var(--text-3);
+    font-weight: var(--body-weight); line-height: 1.6; margin-top: 3px;
+  }
+
+  footer {
+    border-top: 1px solid var(--footer-line);
+    padding: 14px 56px 18px;
+    display: flex; align-items: center; gap: 10px;
+    flex-shrink: 0;
+  }
+  footer .note { font-size: 11px; color: var(--footer-note); font-weight: var(--body-weight); }
+  footer .ver {
+    margin-left: auto; font-size: var(--micro-size); color: var(--version);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <span class="title">워크스페이스 연결</span>
+  <div class="spacer"></div>
+  <button class="winbtn" id="btn-min" aria-label="최소화">
+    <svg width="11" height="11" viewBox="0 0 12 12" stroke="var(--titlebar-icon)" stroke-width="1.2"><path d="M1 6h10"/></svg>
+  </button>
+  <button class="winbtn close" id="btn-close" aria-label="닫기">
+    <svg width="11" height="11" viewBox="0 0 12 12" stroke="var(--titlebar-icon)" stroke-width="1.2"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"/></svg>
+  </button>
+</div>
+
+<div class="body">
+  <div class="appicon">
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h13"/></svg>
+  </div>
+
+  <div class="head">
+    <h1>워크스페이스에 연결</h1>
+    <p>기본 브라우저가 열리고 거기서 로그인합니다. 이 창에는 비밀번호를 입력하지 않습니다.</p>
+  </div>
+
+  <div class="fields">
+    <div class="field">
+      <label for="server">서버 주소</label>
+      <div class="control">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--icon-muted)" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18"/></svg>
+        <input id="server" class="mono" readonly value="" aria-label="서버 주소">
+        <span class="verified" id="verified" hidden>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 5 5L20 6"/></svg>
+          확인됨
+        </span>
+      </div>
+      <span class="hint">사내망에서는 자동으로 내부 주소로 연결합니다</span>
+    </div>
+
+    <div class="field">
+      <label for="device">이 기기의 이름</label>
+      <div class="control">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--icon-muted)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/></svg>
+        <input id="device" aria-label="이 기기의 이름">
+      </div>
+      <span class="hint">기기 목록에 이 이름으로 표시되고, 여기서 언제든 연결을 끊을 수 있습니다</span>
+    </div>
+
+    <button class="primary" id="btn-login">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h5v5"/><path d="M19 4 11 12"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>
+      브라우저로 로그인
+    </button>
+  </div>
+
+  <div class="waiting" id="waiting" hidden>
+    <div class="spinner"></div>
+    <div class="col">
+      <div class="t">브라우저에서 로그인을 기다리는 중</div>
+      <div class="d">브라우저 창이 열리지 않았다면 아래 주소를 직접 여세요.</div>
+      <div class="authurl" id="authurl"></div>
+      <div class="retry"><a href="#" id="btn-cancel">취소하고 다시 시도</a></div>
+    </div>
+  </div>
+
+  <div class="error" id="error" hidden>
+    <div class="t">로그인하지 못했습니다</div>
+    <div class="d" id="error-msg"></div>
+  </div>
+</div>
+
+<footer>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--icon-muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+  <span class="note" id="store-note">로그인 정보는 OS 자격 증명 저장소에 저장됩니다</span>
+  <span class="ver mono" id="version"></span>
+</footer>
+
+<script src="login.js"></script>
+</body>
+</html>

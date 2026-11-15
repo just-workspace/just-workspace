@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>heavy — 4.5천 노드 + 드래그</title>
+<!-- 증분 수집 측정용(P0 필수 3번): long.html 과 같은 400행 표(≈4.5천 노드) + 고정 위치 상자(80행) + 위에 떠 있는 jsPlumb 식 노드 3개(absolute, SVG 링크).
+     드래그 = 노드 left/top 변경 + 링크 path 다시 그리기(실제 jsPlumb 와 같은 DOM 변화). 스크롤 = 문서·내부 상자. -->
+<style>
+ body{margin:0;font:14px "Noto Sans KR",Arial,sans-serif;background:#fff;color:#222}
+ h1{margin:0;padding:12px 16px;background:#2b3a55;color:#fff;font-size:18px}
+ table{border-collapse:collapse;margin:12px 16px;width:calc(100% - 252px)}
+ td,th{border-bottom:1px solid #e3e6ea;padding:6px 10px;text-align:left}
+ tr:nth-child(2n) td{background:#f7f9fb}
+ #box{position:fixed;right:16px;top:60px;width:200px;height:300px;overflow:auto;border:1px solid #ccd;background:#fff}
+ #box div{padding:6px 8px;border-bottom:1px solid #eee}
+ .nd{position:absolute;width:90px;height:56px;background:#e8f0fe;border:2px solid #2c6aa0;border-radius:6px;text-align:center;line-height:52px;cursor:move;user-select:none;z-index:10}
+ svg#links{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none;z-index:9}
+ #st{position:fixed;left:16px;bottom:8px;font-family:monospace;background:#fff;border:1px solid #ccd;padding:2px 6px;z-index:20}
+</style></head><body>
+<h1>랩 목록 (4.5천 노드 + 드래그)</h1>
+<table><thead><tr><th>#</th><th>이름</th><th>경로</th><th>노드</th><th>수정</th></tr></thead><tbody id="tb"></tbody></table>
+<div id="box"></div>
+<svg id="links"><path id="l1" stroke="#2c6aa0" stroke-width="2" fill="none"/><path id="l2" stroke="#2c6aa0" stroke-width="2" fill="none"/></svg>
+<div class="nd" id="n1" style="left:300px;top:200px">R1</div>
+<div class="nd" id="n2" style="left:620px;top:260px">SW1</div>
+<div class="nd" id="n3" style="left:460px;top:420px">PC</div>
+<div id="st">ready</div>
+<script>
+const tb = document.getElementById('tb'), box = document.getElementById('box'), st = document.getElementById('st')
+for (let i = 1; i <= 400; i++) { const tr = document.createElement('tr'); tr.innerHTML = `<td>${i}</td><td>lab-${String(i).padStart(3,'0')} CCNA 실습</td><td>/labs/folder${i % 7}/lab-${i}.unl</td><td>${(i * 7) % 23 + 2}</td><td>2026-10-${String(i % 28 + 1).padStart(2,'0')}</td>`; tb.appendChild(tr) }
+for (let i = 1; i <= 80; i++) { const d = document.createElement('div'); d.textContent = '폴더 항목 ' + i; box.appendChild(d) }
+const c = id => { const e = document.getElementById(id); return [e.offsetLeft + 45, e.offsetTop + 28] }
+function draw() {
+  const [a, b, d] = [c('n1'), c('n2'), c('n3')]
+  document.getElementById('l1').setAttribute('d', `M ${a[0]} ${a[1]} L ${b[0]} ${b[1]}`)
+  document.getElementById('l2').setAttribute('d', `M ${b[0]} ${b[1]} L ${d[0]} ${d[1]}`)
+}
+draw()
+for (const el of document.querySelectorAll('.nd')) {
+  el.addEventListener('mousedown', ev => {
+    const sx = ev.clientX, sy = ev.clientY, ox = el.offsetLeft, oy = el.offsetTop
+    const mv = e => { el.style.left = (ox + e.clientX - sx) + 'px'; el.style.top = (oy + e.clientY - sy) + 'px'; draw(); st.textContent = `drag ${el.textContent} → ${el.offsetLeft},${el.offsetTop}` }
+    const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up) }
+    addEventListener('mousemove', mv); addEventListener('mouseup', up); ev.preventDefault()
+  })
+}
+</script></body></html>

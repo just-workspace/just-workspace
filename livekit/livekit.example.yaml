@@ -1,0 +1,47 @@
+# LiveKit 설정 예시 — 실제 파일은 livekit/livekit.yaml (git 추적 안 함).
+# 이 파일을 복사해 환경에 맞게 고친다.
+port: 7880
+bind_addresses:
+  - 0.0.0.0
+# Egress(회의 녹화) 연동용 메시지 버스 — egress 컨테이너와 redis pub/sub 로 통신.
+# 단일노드 동작에는 영향 없음(redis 없으면 단일노드, 있으면 egress/멀티노드 가능).
+redis:
+  address: redis:6379
+  db: 0
+rtc:
+  port_range_start: 7882
+  port_range_end: 7892
+  tcp_port: 7881           # UDP 막힐 때 ICE TCP fallback
+  # 공인 IP 를 고정한다. 방화벽이 서비스별로 다른 IP 로 SNAT 하는 환경에서는
+  # STUN 자동 탐지(use_external_ip: true)가 실제 미디어 출구와 어긋나 ICE 가 붙지 않는다.
+  # 단순한 환경이면 node_ip 를 지우고 use_external_ip: true 로 둬도 된다.
+  use_external_ip: false
+  node_ip: 203.0.113.10
+# 내장 TURN — 통신사 NAT(5G)나 사내망에서 UDP 7882-7892 가 막히면 여기를 거친다.
+# 예전엔 TCP 7881 폴백뿐이라 head-of-line 블로킹으로 끊기기 쉬웠다.
+# domain 은 인증서 이름과 같아야 한다(turn.<도메인> → node_ip).
+# 인증서가 갱신되면 이 컨테이너를 재시작해야 새 파일을 읽는다.
+# tls_port 는 443 이어야 한다 — LiveKit 은 클라이언트에게 무조건
+# turns:<domain>:443 으로 광고하므로, 5349 로 열면 실제 리스닝 포트와
+# 광고 포트가 어긋나 TURN/TLS 를 아무도 못 쓴다. (앞단 프록시가 웹 TLS 를 맡아
+# 이 호스트의 443 이 비어 있어야 한다. standalone 은 TURN/TLS 를 끈다.)
+turn:
+  enabled: true
+  domain: turn.example.com
+  tls_port: 443
+  udp_port: 3478
+  cert_file: /etc/letsencrypt/live/turn.example.com/fullchain.pem
+  key_file: /etc/letsencrypt/live/turn.example.com/privkey.pem
+room:
+  enabled_codecs:
+    - mime: video/vp9
+    - mime: video/h264
+    - mime: video/vp8
+    - mime: audio/opus
+    - mime: audio/red
+# 참가자 입·퇴장 웹훅 — 채팅 채널의 "통화 중 N명" 표시. api_key 는 LIVEKIT_API_KEY 와 같게
+# (시크릿은 LIVEKIT_KEYS 에서 찾아 서명한다). 백엔드가 서명을 검증한다.
+webhook:
+  api_key: devkey
+  urls:
+    - http://backend:8000/api/meetings/livekit/webhook

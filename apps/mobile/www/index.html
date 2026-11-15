@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Just Workspace</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center; background: #0b0b0c; color: #eee; }
+    .c { width: 90%; max-width: 380px; text-align: center; }
+    h2 { margin: 0 0 4px; }
+    p { opacity: .6; font-size: 14px; margin: 0 0 18px; }
+    input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333;
+      background: #161618; color: #eee; font-size: 16px; box-sizing: border-box; }
+    button { margin-top: 12px; width: 100%; padding: 12px; border: 0; border-radius: 8px;
+      background: #3b82f6; color: #fff; font-size: 16px; cursor: pointer; }
+    .err { color: #f87171; font-size: 13px; min-height: 18px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="c">
+    <h2>워크스페이스 연결</h2>
+    <p>워크스페이스 주소를 입력하세요</p>
+    <input id="u" placeholder="https://workspace.example.com" inputmode="url" autocapitalize="off" autocorrect="off" />
+    <button onclick="go()">연결</button>
+    <div class="err" id="e"></div>
+  </div>
+  <script>
+    const KEY = 'ws_url';
+    async function prefs() { try { return window.Capacitor?.Plugins?.Preferences || null; } catch (e) { return null; } }
+    async function saved() {
+      const p = await prefs();
+      if (p) { try { return (await p.get({ key: KEY })).value; } catch (e) {} }
+      return localStorage.getItem(KEY);
+    }
+    async function save(v) {
+      const p = await prefs();
+      if (p) { try { await p.set({ key: KEY, value: v }); } catch (e) {} }
+      localStorage.setItem(KEY, v);
+    }
+    function norm(v) { v = v.trim(); if (!/^https?:\/\//.test(v)) v = 'https://' + v; return v.replace(/\/+$/, ''); }
+    /*
+     * 입력한 주소가 just-workspace 서버인지 /api/platform/capabilities 로 확인한다.
+     *   'ok'      우리 서버다(버전까지 읽힘)
+     *   'not-ws'  200 인데 우리 응답이 아니다 — 다른 사이트 주소를 넣은 것
+     *   'unknown' 404(엔드포인트 없는 옛 서버)·네트워크 오류·CORS — 판단 불가, 예전처럼 그냥 연다
+     * 판단 불가를 막지 않는 이유: 이 엔드포인트가 없는 서버가 아직 돌고 있고, 런처가
+     * 그 서버를 못 열게 되면 업데이트 순서가 꼬인다. 확인은 보너스, 열기가 본업이다.
+     */
+    async function probe(base) {
+      try {
+        const ctl = new AbortController();
+        const t = setTimeout(() => ctl.abort(), 5000);
+        const r = await fetch(base + '/api/platform/capabilities', { signal: ctl.signal, cache: 'no-store' });
+        clearTimeout(t);
+        if (r.status === 404) return 'unknown';
+        if (!r.ok) return 'unknown';
+        const d = await r.json().catch(() => null);
+        return d && d.product === 'just-workspace' && typeof d.version === 'string' ? 'ok' : 'not-ws';
+      } catch (e) { return 'unknown'; }
+    }
+    async function go() {
+      const err = document.getElementById('e');
+      let v = document.getElementById('u').value;
+      if (!v) { err.textContent = '주소를 입력하세요'; return; }
+      v = norm(v);
+      err.textContent = '확인 중…';
+      const res = await probe(v);
+      if (res === 'not-ws') { err.textContent = '워크스페이스 서버가 아닙니다. 주소를 확인하세요'; return; }
+      err.textContent = '';
+      await save(v); await open(v);
+    }
+    /*
+     * 본문 웹 UI(Vue/React) 쿠키를 그 주소에 심고 이동한다(WebUiPlugin.java, 빌드 값 JW_WEB).
+     * 플러그인이 없는 옛 빌드·브라우저에서는 그냥 이동한다 — 서버 기본 UI 가 나올 뿐이다.
+     */
+    async function open(v) {
+      try { const p = window.Capacitor?.Plugins?.WebUi; if (p) await p.apply({ url: v }); } catch (e) {}
+      location.href = v;
+    }
+    (async () => { const s = await saved(); if (s) await open(s); })();
+  </script>
+</body>
+</html>

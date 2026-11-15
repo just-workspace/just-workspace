@@ -1,0 +1,30 @@
+{
+  "name": "@just-workspace/rbi-mirror",
+  "version": "1.0.0-p1",
+  "private": true,
+  "description": "격리 브라우저 미러 모드 — 세션 컨테이너용 mirror-agent(Chromium+CDP+격리 world 수집기→닫힌 어휘) + 스크립트 없는 iframe 클라이언트",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p agent/tsconfig.json && node client/build.mjs",
+    "build:agent": "tsc -p agent/tsconfig.json",
+    "build:client": "node client/build.mjs",
+    "agent": "node agent/dist/agent/src/index.js",
+    "dev": "tsx agent/src/index.ts",
+    "typecheck": "tsc -p agent/tsconfig.json --noEmit && tsc -p client/tsconfig.json --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:unit": "node --import tsx --test test/vocab.test.ts test/background.test.ts test/local-echo.test.ts test/convert.test.ts test/sync.test.ts"
+  },
+  "dependencies": {
+    "playwright-core": "1.65.1",
+    "sharp": "0.35.5",
+    "ws": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/ws": "^8",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

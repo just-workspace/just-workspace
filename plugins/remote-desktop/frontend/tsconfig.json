@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "typeRoots": [
+      "../../../frontend-react/node_modules/@types"
+    ],
+    "types": [
+      "react",
+      "react-dom"
+    ],
+    "paths": {
+      "react": [
+        "../../../frontend-react/node_modules/@types/react"
+      ],
+      "react-dom": [
+        "../../../frontend-react/node_modules/@types/react-dom"
+      ],
+      "livekit-client": [
+        "../../../frontend-react/node_modules/livekit-client"
+      ]
+    }
+  },
+  "include": [
+    "page.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ],
+  "exclude": [
+    "src/**/*.test.ts"
+  ]
+}

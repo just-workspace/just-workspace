@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>policy — 대화상자·내려받기·올리기·클립보드</title>
+<style>body{margin:0;padding:16px;font:14px Arial,"Noto Sans KR",sans-serif} .row{margin:10px 0;display:flex;gap:10px;align-items:center} #st{font-family:monospace;color:#357} input,textarea{font:inherit}</style>
+</head><body>
+<h2>정책 시험 페이지</h2>
+<div class="row"><button id="b-alert">alert</button><button id="b-confirm">confirm</button><button id="b-prompt">prompt</button></div>
+<div class="row"><a id="dl" href="/files/report.txt" download="보고서 2026.txt">내려받기(report.txt)</a> <a id="dl2" href="/files/config.cfg" download>config.cfg</a></div>
+<div class="row"><label>올리기 <input type="file" id="up"></label> <span id="upname">-</span></div>
+<div class="row"><label>붙여넣기 칸 <input id="paste" placeholder="여기에 붙여넣기" style="width:260px"></label></div>
+<div class="row"><p id="copytext">복사할 문장: 격리 브라우저 클립보드 정책 시험 ABC-123</p></div>
+<div class="row"><textarea id="ta" rows="3" cols="40">여러 줄
+텍스트 칸</textarea></div>
+<div id="st">ready</div>
+<script>
+const st = document.getElementById('st')
+document.getElementById('b-alert').onclick = () => { alert('안내: 원격 alert'); st.textContent = 'alert done' }
+document.getElementById('b-confirm').onclick = () => { st.textContent = 'confirm ' + confirm('계속할까요?') }
+document.getElementById('b-prompt').onclick = () => { st.textContent = 'prompt ' + JSON.stringify(prompt('이름?', '기본값')) }
+document.getElementById('up').addEventListener('change', ev => { const f = ev.target.files[0]; if (!f) return; f.text().then(t => { document.getElementById('upname').textContent = `${f.name} ${f.size}B ${t.slice(0, 20)}`; st.textContent = 'uploaded ' + f.name }) })
+</script>
+</body></html>

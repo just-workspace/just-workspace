@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>console — 캔버스 인셋</title>
+<style>
+  body{margin:0;background:#eef;font:14px sans-serif}
+  #hdr{padding:8px 12px;background:#334;color:#fff}
+  #wrap{display:flex;gap:16px;padding:16px}
+  canvas{border:1px solid #889;background:#000;display:block}
+  iframe{border:1px solid #889;display:block;background:#000}
+  p{max-width:600px}
+</style>
+</head>
+<body>
+<div id="hdr">HTML5 콘솔 흉내 — 왼쪽은 canvas(터미널), 오른쪽은 같은 출처 iframe(Guacamole 자리)</div>
+<div id="wrap">
+  <div><canvas id="term" width="520" height="300"></canvas><p>canvas 는 DOM 미러 불가 → 픽셀 인셋(WebP 10~15fps) 로 합성돼야 한다.</p></div>
+  <iframe id="guac" src="console-inner.html" width="360" height="300"></iframe>
+</div>
+<script>
+const c = document.getElementById('term').getContext('2d')
+const lines = ['LAB-R1#show ip int brief', 'Interface        IP-Address      OK? Status', 'Gi0/0            10.0.0.1        YES up', 'Gi0/1            unassigned      YES down', 'LAB-R1#']
+let tick = 0
+function draw() {
+  tick++
+  c.fillStyle = '#000'; c.fillRect(0, 0, 520, 300)
+  c.fillStyle = '#9f9'; c.font = '14px monospace'
+  lines.forEach((l, i) => c.fillText(l, 8, 20 + i * 18))
+  c.fillText('tick ' + tick + ' ' + new Date().toLocaleTimeString(), 8, 20 + lines.length * 18 + 10)
+  if (tick % 2) c.fillRect(8 + 11 * 8.4, 20 + (lines.length - 1) * 18 - 12, 8, 14) // 깜빡이는 커서
+  requestAnimationFrame(() => setTimeout(draw, 100))
+}
+draw()
+</script>
+</body>
+</html>

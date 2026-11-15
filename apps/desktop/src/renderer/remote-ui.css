@@ -1,0 +1,91 @@
+/*
+ * 원격 데스크톱 창 공용 스타일(동의 창·접속 막대·지원 프로그램) — 웹 키트(frontend-react)의 다크 토큰 값을 그대로 옮긴 것.
+ * 이 창들은 키트 번들을 못 싣는다(오프라인·CSP 'self'). 값이 바뀌면 frontend-react/src/assets/css/app.css 의 .dark 블록을 따라 고친다.
+ */
+:root {
+  --background: 218 22% 7%;
+  --foreground: 216 25% 92%;
+  --card: 215 22% 11%;
+  --primary: 218 100% 65%;
+  --primary-foreground: 218 22% 7%;
+  --secondary: 217 18% 20%;
+  --muted: 217 18% 20%;
+  --muted-foreground: 215 13% 65%;
+  --accent: 217 18% 20%;
+  --border: 216 21% 14%;
+  --input: 216 21% 14%;
+  --ring: 218 100% 65%;
+  --success: 153 48% 47%;
+  --warning: 39 74% 53%;
+  --danger: 3 75% 60%;
+  --danger-foreground: 216 25% 92%;
+  --scrim: 218 30% 4%;
+  --font: 'IBM Plex Sans KR', 'Malgun Gothic', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; color: hsl(var(--foreground)); font-family: var(--font); -webkit-font-smoothing: antialiased; word-break: keep-all; overflow-wrap: anywhere; }
+[hidden] { display: none !important; }
+.mono { font-family: var(--mono); }
+.muted { color: hsl(var(--muted-foreground)); }
+.icon { display: inline-flex; flex-shrink: 0; }
+.icon svg { width: 100%; height: 100%; }
+
+/* 버튼(키트 UiButton 과 같은 모양): 높이 sm 32 · md 40 · lg 44 · xs 28 */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;
+  height: 40px; padding: 0 16px; border-radius: 10px; border: 0; font: 500 14px/20px var(--font); cursor: pointer;
+  background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); transition: background-color .12s, transform .06s;
+}
+.btn:hover { background: hsl(var(--primary) / 0.9); }
+.btn:active { transform: scale(0.98); }
+.btn:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.btn:disabled { opacity: .5; pointer-events: none; }
+.btn .icon { width: 16px; height: 16px; }
+.btn.xs { height: 28px; padding: 0 10px; font-size: 12px; border-radius: 8px; gap: 6px; }
+.btn.xs .icon { width: 14px; height: 14px; }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 13px; }
+.btn.lg { height: 44px; padding: 0 20px; }
+.btn.block { width: 100%; }
+.btn.outline { background: hsl(var(--background)); color: hsl(var(--foreground)); border: 1px solid hsl(var(--input)); }
+.btn.outline:hover, .btn.ghost:hover { background: hsl(var(--accent)); }
+.btn.secondary { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+.btn.secondary:hover { background: hsl(var(--secondary) / 0.8); }
+.btn.ghost { background: transparent; color: hsl(var(--foreground)); }
+.btn.danger { background: hsl(var(--danger)); color: hsl(var(--danger-foreground)); }
+.btn.danger:hover { background: hsl(var(--danger) / 0.9); }
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px;
+  border: 0; background: transparent; color: hsl(var(--muted-foreground)); cursor: pointer;
+}
+.icon-btn:hover { background: hsl(var(--accent)); color: hsl(var(--foreground)); }
+.icon-btn:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.icon-btn .icon { width: 15px; height: 15px; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 9999px;
+  font: 500 12px/16px var(--font); align-self: flex-start;
+}
+.badge.warning { background: hsl(var(--warning) / 0.12); color: hsl(var(--warning)); }
+
+/* 상태 점(키트 UiStatusDot live) */
+.dot { width: 8px; height: 8px; border-radius: 9999px; flex-shrink: 0; background: hsl(var(--success)); }
+.dot.lg { width: 10px; height: 10px; }
+.dot.pulse { animation: rd-pulse 1.6s ease-in-out infinite; }
+@keyframes rd-pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .dot.pulse { animation: none; } }
+
+/* 아바타(이니셜) */
+.avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 9999px;
+  background: hsl(var(--primary) / 0.18); color: hsl(var(--primary)); font-weight: 600;
+}
+
+/* 창 머리(테두리 없는 창의 끌기 영역) */
+.titlebar {
+  height: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 0 8px 0 16px; background: hsl(var(--background)); border-bottom: 1px solid hsl(var(--border));
+  font-size: 12px; line-height: 16px; color: hsl(var(--muted-foreground)); -webkit-app-region: drag; user-select: none;
+}
+.titlebar button, .titlebar .no-drag { -webkit-app-region: no-drag; }

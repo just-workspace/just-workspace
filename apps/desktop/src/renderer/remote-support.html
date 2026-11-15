@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;">
+<title>원격 지원</title>
+<link rel="stylesheet" href="remote-ui.css">
+<style>
+  html, body { height: 100%; overflow: hidden; background: hsl(var(--card)); }
+  body { display: flex; flex-direction: column; border: 1px solid hsl(var(--border)); }
+  section { flex: 1 1 auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+  .center { align-items: center; justify-content: center; text-align: center; gap: 12px; }
+  .label { display: flex; align-items: center; gap: 8px; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .label .icon { width: 16px; height: 16px; color: hsl(var(--warning)); }
+  .codebox { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px 12px; border-radius: 12px; background: hsl(var(--muted)); border: 1px dashed hsl(var(--warning) / 0.5); }
+  .codebox .code { font-family: var(--mono); font-size: 44px; line-height: 52px; font-weight: 500; letter-spacing: 0.02em; user-select: all; }
+  .codebox.dead .code { opacity: .45; text-decoration: line-through; }
+  .small { font-size: 12px; line-height: 16px; color: hsl(var(--muted-foreground)); }
+  .small .mono { color: hsl(var(--foreground)); }
+  .note { font-size: 13px; line-height: 20px; color: hsl(var(--muted-foreground)); }
+  .alert { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; background: hsl(var(--warning) / 0.1); border: 1px solid hsl(var(--warning) / 0.35); font-size: 13px; line-height: 20px; }
+  .alert .icon { width: 16px; height: 16px; margin-top: 2px; color: hsl(var(--warning)); }
+  .person { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 10px; background: hsl(var(--muted)); overflow-wrap: anywhere; }
+  .person .nm { font-size: 18px; line-height: 28px; font-weight: 700; }
+  .person .em { font-family: var(--mono); font-size: 13px; line-height: 20px; }
+  .person .og { font-size: 13px; line-height: 20px; }
+  .person.row { flex-direction: row; gap: 12px; align-items: center; }
+  .person.row .avatar { width: 40px; height: 40px; font-size: 16px; }
+  .person.row .nm { font-size: 16px; line-height: 24px; }
+  .person.row .em { font-size: 12px; line-height: 16px; }
+  .h { font-size: 18px; line-height: 28px; font-weight: 600; }
+  .held { margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; border-radius: 10px; border: 1px dashed hsl(var(--border)); opacity: .6; }
+  .held .mono { font-size: 20px; line-height: 28px; }
+  .live { display: flex; align-items: center; gap: 8px; }
+  .live .t { font-size: 14px; line-height: 20px; font-weight: 600; color: hsl(var(--success)); }
+  .live .mono { margin-left: auto; font-size: 14px; }
+  .bottom { margin-top: auto; }
+  input { height: 40px; width: 100%; padding: 0 12px; border-radius: 10px; border: 1px solid hsl(var(--input)); background: hsl(var(--background)); color: hsl(var(--foreground)); font: 14px var(--font); }
+  input:focus { outline: none; border-color: hsl(var(--ring)); box-shadow: 0 0 0 2px hsl(var(--ring) / 0.35); }
+  .err { color: hsl(var(--danger)); font-size: 12px; line-height: 16px; font-weight: 500; }
+  .ok-icon { width: 36px; height: 36px; color: hsl(var(--success)); }
+  .bad-icon { width: 36px; height: 36px; color: hsl(var(--warning)); }
+</style>
+</head>
+<body>
+  <div class="titlebar">
+    <span>Just Workspace 원격 지원</span>
+    <button class="icon-btn" id="close" aria-label="닫기" title="닫기"><span class="icon" data-icon="close"></span></button>
+  </div>
+
+  <!-- 서버 주소(빌드에 구운 주소가 없을 때만) -->
+  <section id="v-server" hidden>
+    <span class="label"><span class="icon" data-icon="lock"></span>워크스페이스 주소</span>
+    <p class="note" style="margin:0">지원해 줄 회사의 워크스페이스 주소를 넣으세요.</p>
+    <input id="server" placeholder="https://example.com" autocomplete="off">
+    <span class="err" id="server-err"></span>
+    <button class="btn bottom" id="server-ok">확인</button>
+  </section>
+
+  <!-- ① 코드 대기 -->
+  <section id="v-code" hidden>
+    <span class="label"><span class="icon" data-icon="lock"></span>내 접속 코드</span>
+    <div class="codebox" id="codebox">
+      <span class="code" id="code">— — —</span>
+      <span class="small" id="code-meta">남은 유효 시간 <span class="mono" id="code-left">—</span></span>
+    </div>
+    <button class="btn secondary" id="code-copy"><span class="icon" data-icon="copy"></span><span id="code-copy-txt">코드 복사</span></button>
+    <div class="alert"><span class="icon" data-icon="alert-triangle"></span><span>이 코드는 지원 담당자에게만 알려 주세요. 코드를 아는 사람은 이 PC에 접속을 요청할 수 있습니다.</span></div>
+    <span class="small bottom">요청이 오면 누가 요청했는지 보여 주고, 허용해야만 연결됩니다.</span>
+  </section>
+
+  <!-- 코드 만료 -->
+  <section id="v-expired" hidden>
+    <span class="label"><span class="icon" data-icon="lock"></span>내 접속 코드</span>
+    <div class="codebox dead">
+      <span class="code" id="exp-code">— — —</span>
+      <span class="small">코드가 만료되었습니다</span>
+    </div>
+    <button class="btn" id="exp-new">새 코드 받기</button>
+    <span class="small bottom">새 코드를 받으면 이전 코드로는 접속할 수 없습니다.</span>
+  </section>
+
+  <!-- ② 요청 도착(동의 창은 따로 맨 위에 뜬다) -->
+  <section id="v-pending" hidden>
+    <span class="badge warning" id="pend-badge">응답 대기 0:30</span>
+    <span class="h">접속 요청이 왔습니다</span>
+    <div class="person">
+      <span class="nm" id="pend-name">—</span>
+      <span class="em" id="pend-email" hidden></span>
+      <span class="og" id="pend-org" hidden></span>
+    </div>
+    <span class="note">맨 위에 뜬 동의 창에서 허용하거나 거부하세요. 이 창에서는 허용할 수 없습니다.</span>
+    <div class="held">
+      <span class="mono" id="pend-code">— — —</span>
+      <span class="small">요청 처리 중에는 새 요청을 받지 않습니다</span>
+    </div>
+  </section>
+
+  <!-- ③ 연결됨 -->
+  <section id="v-active" hidden>
+    <div class="live">
+      <span class="dot lg pulse" title="연결됨"></span>
+      <span class="t">원격 접속 중</span>
+      <span class="mono" id="act-time">0:00</span>
+    </div>
+    <div class="person row">
+      <span class="avatar" id="act-avatar">?</span>
+      <div style="display:flex;flex-direction:column;min-width:0">
+        <span class="nm" id="act-name">—</span>
+        <span class="em" id="act-email" hidden></span>
+      </div>
+    </div>
+    <span class="note">이 사람이 화면을 보고 키보드·마우스를 조작하고 있습니다. 언제든 끊을 수 있습니다.</span>
+    <button class="btn danger lg bottom" id="active-stop"><span class="icon" data-icon="log-out"></span>세션 끊기</button>
+  </section>
+
+  <!-- ④ 종료(거부 포함) — 코드는 이미 폐기됐다. 새 코드는 없다: 다시 받으려면 프로그램을 새로 실행 -->
+  <section id="v-ended" class="center" hidden>
+    <span class="icon ok-icon" id="end-icon" data-icon="check-circle"></span>
+    <span class="h" id="end-title">원격 지원이 끝났습니다</span>
+    <span class="note" id="end-meta"></span>
+    <span class="note" style="max-width:300px">사용한 코드는 폐기됐습니다. 다시 지원받으려면 프로그램을 새로 실행하세요.</span>
+    <button class="btn outline" id="end-close" style="margin-top:8px">프로그램 닫기</button>
+  </section>
+
+  <section id="v-error" class="center" hidden>
+    <span class="icon bad-icon" data-icon="alert-triangle"></span>
+    <span class="h">연결하지 못했습니다</span>
+    <span class="note" id="error-txt"></span>
+    <button class="btn" id="error-retry" style="margin-top:8px">다시 시도</button>
+  </section>
+<script src="remote-icons.js"></script>
+<script src="remote-support.js"></script>
+</body>
+</html>

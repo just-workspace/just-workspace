@@ -1,0 +1,25 @@
+# 알림 수신 채널.
+#
+# 자체 메일서버로 바로 쏜다(172.28.0.30:25). 같은 도커 네트워크 안이고 수신인이
+# 로컬 도메인이라 인증 없이 받아준다 — 외부 릴레이가 아니라 자기 도메인으로 오는
+# 메일이기 때문이다. 외부 SMTP 를 쓰면 그 외부 서비스가 죽었을 때 알림도 같이
+# 죽는데, 하필 그런 날 알림이 가장 필요하다.
+#
+# ⚠ 한계: 메일서버 자체가 죽으면 "메일서버가 죽었다"는 알림도 못 간다.
+#   그 구멍은 메일 말고 다른 채널(텔레그램 등)을 하나 더 붙여야 메워진다.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: workspace-mail
+    receivers:
+      - uid: ws-mail
+        type: email
+        settings:
+          addresses: ${ALERT_EMAIL}
+          # 한 번에 묶어 보낸다. 점검 10개가 동시에 깨지면 메일 10통이 아니라 1통.
+          singleEmail: true
+          # 제목·본문은 templates.yaml(ws-mail) — 한글 이름과 문장으로 쓴 상태
+          subject: '{{ template "ws.subject" . }}'
+          message: '{{ template "ws.message" . }}'
+        disableResolveMessage: false

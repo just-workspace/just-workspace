@@ -1,0 +1,7 @@
+# ws-sandbox 기본 — 한글 글꼴, 그림 저장 품질
+backend: Agg
+font.family: NanumGothic, Noto Sans CJK KR, DejaVu Sans
+axes.unicode_minus: False
+savefig.dpi: 150
+savefig.bbox: tight
+figure.figsize: 8, 5

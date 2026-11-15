@@ -1,0 +1,6 @@
+
+# shell scripts must be LF (Windows host bind-mount into linux containers)
+*.sh text eol=lf
+
+# 사이드카 줄 검사 스크립트도 LF(CRLF 면 정규식이 깨진다)
+*.awk text eol=lf

@@ -1,0 +1,53 @@
+.env
+# ★ env 백업까지 전부 제외 — 와일드카드가 없어서 `.env.bak.gitcutover` 같은 파일이
+#   추적 대상으로 잡혔던 적이 있다(시크릿 전량 포함). 예시 파일만 예외로 둔다.
+.env.*
+!.env.example
+docker-compose.demo.yml
+nginx/nginx-demo.conf
+nginx/git-demo.html
+mailserver/config/ssl/
+mailserver/config/postfix-accounts.cf
+mailserver/config/rspamd/dkim/*.private.txt
+mailserver/config/postfix-accounts.cf
+mailserver/config/dovecot-masters.cf
+plugins/node_modules/
+cookie.txt
+*.pyc
+
+# 플러그인 — 리포에는 빌드 도구와 예제(sample-notes)만 올린다.
+# 그 밖의 플러그인 폴더는 이름을 적지 않고 통째로 제외한다(허용목록).
+plugins/*
+!plugins/build-all.mjs
+!plugins/build-plugin.mjs
+!plugins/package.json
+!plugins/package-lock.json
+!plugins/sample-notes/
+!plugins/remote-desktop/
+plugins/remote-desktop/frontend/node_modules/
+plugins/node_modules/
+# 비공개 플러그인의 nginx location (nginx.conf 가 include 한다)
+nginx/private.d/
+# 리포에 올리지 않는 운영 메모
+docs/private/
+# 설치기가 환경별로 생성하는 파일 (예시: livekit/livekit.example.yaml)
+livekit/livekit.yaml
+nginx/standalone.conf
+docker-compose.override.yml
+# 사이트 전용 알림 규칙 (오버레이가 넣는다)
+logging/grafana/provisioning/alerting/site-*.yaml
+# 사이트 전용 장비 목록 (오버레이 — 예시는 *.example.*)
+logging/healthprobe/devices.conf
+# app/mcp 는 빌트인 AI의 데이터 게이트웨이(코어) — 더 이상 제외하지 않음
+*.log
+mailserver/config/rspamd/override.d/dkim_signing.conf
+mailserver/config/
+
+*.bak-*
+
+# 메일서버 설정 디렉터리는 통째로 제외하지만, 아래 둘은 **설정이 아니라 코드**다.
+# 비밀값은 환경변수로만 들어오고 파일에는 자리표시자뿐이다. 서버 한 대에만
+# 존재하면 잃어버리기 쉬워 추적한다.
+!mailserver/config/user-patches.sh
+!mailserver/config/auth-workspace.lua
+!mailserver/config/dovecot.cf

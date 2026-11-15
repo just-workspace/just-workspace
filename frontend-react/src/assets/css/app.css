@@ -1,0 +1,443 @@
+/* ── Tailwind 4 (CSS-first 설정) ──
+   예전 tailwind.config.ts(darkMode·content·theme.extend·plugins)를 여기로 옮겼다. 폰트(@fontsource)는 main.css 에 두고
+   이 파일은 폰트 없이 import 할 수 있게 분리했다.
+   @source 경로는 이 파일 기준: ../../ = src, ../../../index.html. 자동 탐색(source(none) 해제)은 쓰지 않는다 —
+   tests·docs 의 클래스가 섞여 들어가지 않게. 플러그인 번들은 여전히 이 글롭 밖이다(docs/plugin-frontend.md). */
+@import 'tailwindcss' source(none);
+@source '../../../index.html';
+@source '../../';
+@plugin '@tailwindcss/typography';
+
+/* darkMode: 'class' → <html class="dark">. :where 라 특이도는 v3 보다 낮지만 변형 순서가 뒤라 결과는 같다. */
+@custom-variant dark (&:where(.dark, .dark *));
+/* 화면 배율 뒤 실효 크기 변형(composables/useViewport 가 <html> 에 data 속성을 단다)
+    low: 실효 높이 < 760 — 상단 띠 36 · 대시보드 인사 줄 숨김(handover 14 답 4) */
+@custom-variant low (:root[data-vp-low] &);
+/* v4 는 hover: 를 @media (hover: hover) 로 감싼다(터치 기기에서 hover 무시). v3 와 같게 항상 적용. */
+@custom-variant hover (&:hover);
+
+/* 색·그림자·radius 는 inline — 유틸리티에 hsl(var(--x)) 가 그대로 박혀(v3 와 동일) 하위 트리에서 --primary 등을 덮어도 따라간다. */
+@theme inline {
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  /* 반전색 바탕(토스트 bg-foreground) 위 강조 글자 — 답변서 C8. 브랜드 색이면 lib/brandColor 가 4.5:1 로 맞춘다 */
+  --color-primary-inverse: hsl(var(--primary-inverse));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  /* 시안 상태색 — text-success / bg-warning/10 / text-danger 등으로 직접 사용 */
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
+  /* 빨강은 danger 하나(시안 J). destructive 는 CSS 변수 별칭으로만 남아 있다 — 새 코드는 danger. */
+  --color-danger: hsl(var(--danger));
+  --color-danger-foreground: hsl(var(--danger-foreground));
+  --color-scrim: hsl(var(--scrim) / 0.62);
+  /* 통화 화면 바탕(회의 비디오 그리드). 라이트/다크 값은 아래 --stage. */
+  --color-stage: hsl(var(--stage));
+  /* 범주 색(11-A1) — 캘린더 색 견본·차트 계열·라벨. bg-cat-3/20 처럼 투명도 수식 가능.
+     순서는 1→8 순환(composables/useCategoryColor). 9개 이상은 1부터 다시 + bg-cat-hatch 빗금. */
+  --color-cat-1: hsl(var(--cat-1));
+  --color-cat-2: hsl(var(--cat-2));
+  --color-cat-3: hsl(var(--cat-3));
+  --color-cat-4: hsl(var(--cat-4));
+  --color-cat-5: hsl(var(--cat-5));
+  --color-cat-6: hsl(var(--cat-6));
+  --color-cat-7: hsl(var(--cat-7));
+  --color-cat-8: hsl(var(--cat-8));
+  /* 역할 색(handover-22) — 채팅 이름 글자·역할 점·프로필 배너. --role-N 은 --cat-N 별칭(아래 :root).
+     text-role-3 · bg-role-5/30 처럼 쓴다. 백엔드 색 키 i 번째 → role-(i+1)(UiColorSwatches ROLE_COLOR_OPTIONS). */
+  --color-role-1: hsl(var(--role-1));
+  --color-role-2: hsl(var(--role-2));
+  --color-role-3: hsl(var(--role-3));
+  --color-role-4: hsl(var(--role-4));
+  --color-role-5: hsl(var(--role-5));
+  --color-role-6: hsl(var(--role-6));
+  --color-role-7: hsl(var(--role-7));
+  --color-role-8: hsl(var(--role-8));
+  /* 메일 종이(11-A2) — HTML 메일 본문 바탕. 두 테마 같은 흰 종이. "어둡게 보기"는 card/foreground. */
+  --color-paper: hsl(var(--paper));
+  --color-paper-foreground: hsl(var(--paper-foreground));
+
+  /* 그림자 — 종류당 1단(시안 J). 팝오버·드롭다운 md / 드로어·패널 lg / 모달 xl. 스크림 색 기반. */
+  --shadow-md: 0 12px 32px hsl(var(--scrim) / 0.55);
+  --shadow-lg: 0 16px 40px hsl(var(--scrim) / 0.55);
+  --shadow-xl: 0 20px 48px hsl(var(--scrim) / 0.6);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  /* 시안 신규 토큰: 바텀시트 상단·모바일 인증 카드·FAB. rounded-xl(16)·2xl(20) 대신 쓴다. */
+  --radius-sheet: 16px;
+
+  /* 밀도 변수(아래 data-density) — 목록 행 글자 크기 text-row (행 높이는 @utility h-row 등) */
+  --text-row: var(--row-fs);
+}
+
+@theme {
+  /* 본문/한글: IBM Plex Sans KR · 숫자·코드: JetBrains Mono (fontsource 자체호스팅, main.css) */
+  --font-sans: 'IBM Plex Sans KR', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  /* 셸 레이아웃 토큰 (HANDOFF-SPEC §1-2) — w-sidebar · pl-sidebar-rail · h-topbar · pb-tabbar */
+  --spacing-sidebar: 236px;
+  --spacing-sidebar-rail: 64px;
+  --spacing-topbar: 56px;
+  --spacing-tabbar: 64px;
+
+  /* 본문 최대 폭 1400(왼쪽 정렬)은 폐기(handover 14 답 2) — 쪽 종류별 폭은 lib/fluid
+     읽기 본문(위키·메일 본문·게시글) — 상세 칸 안에서 가운데: max-w-reading */
+  --container-reading: 760px;
+
+  /* v4 는 text-xs~4xl 의 줄 높이를 단위 없는 비율(calc(1/.75) 등)로 둔다 — text-sm md:text-[13.5px] 처럼 글자 크기만 덮는 자리에서
+     줄 높이가 따라 커져 1~2px 어긋난다. v3 의 절대값(rem) 그대로. */
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl--line-height: 2.5rem;
+  --text-5xl--line-height: 1;
+  --text-6xl--line-height: 1;
+  --text-7xl--line-height: 1;
+  --text-8xl--line-height: 1;
+  --text-9xl--line-height: 1;
+
+  /* v4 기본 회색은 oklch 로 바뀌었다(prose 본문·placeholder 가 쓴다) — v3 hex 그대로 두어 화면이 변하지 않게 */
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  --color-gray-950: #030712;
+}
+
+/* 밀도 변수 — 목록 행에 h-row / min-h-row-2 / text-row 로 쓴다(v3 theme.height/minHeight.row) */
+@utility h-row { height: var(--row-h); }
+@utility h-row-2 { height: var(--row-2h); }
+@utility min-h-row { min-height: var(--row-h); }
+@utility min-h-row-2 { min-height: var(--row-2h); }
+/* 범주 색 빗금(답변서 B1) — 아래 --cat-hatch. 블록 바탕(cat/0.2) 위에 무늬만 겹친다. 9번째 계열부터. */
+@utility bg-cat-hatch { background-image: repeating-linear-gradient(var(--cat-hatch)); }
+/* 겹침 바탕(handover-22) — 시안의 인라인 겹침 span 대신. hover: 변형 가능(hover:bg-overlay-hover).
+   mention·jump 는 왼쪽 2px 띠(inset box-shadow)까지 같이 그린다 — 다른 shadow 유틸과 같이 쓰지 않는다. */
+@utility bg-overlay-hover { background-color: hsl(var(--foreground) / var(--overlay-hover)); }
+@utility bg-overlay-selected { background-color: hsl(var(--foreground) / var(--overlay-selected)); }
+@utility bg-overlay-mention { background-color: hsl(var(--warning) / var(--overlay-mention)); box-shadow: inset 2px 0 0 hsl(var(--warning)); }
+@utility bg-overlay-jump { background-color: hsl(var(--primary) / var(--overlay-jump)); box-shadow: inset 2px 0 0 hsl(var(--primary)); }
+/* 떠 있는 창 겹침 순서(11-C11): 메일 작성 창 40 < 미니 통화 창 45. 둘 다 드롭다운(100)보다 아래.
+   셸 사이드바 오버레이 확장(250): 페이지 자체 사이드바(drawer 200) 위, 모달(300) 아래 */
+@utility z-compose { z-index: 40; }
+@utility z-mini-call { z-index: 45; }
+@utility z-dropdown { z-index: 100; }
+@utility z-drawer { z-index: 200; }
+/* 사용자 메뉴가 열린 동안의 상단바 — 서랍(200) 위, 주메뉴(250) 아래. 메뉴가 헤더의 쌓임 맥락에 갇혀 있어서 헤더째 올린다 */
+@utility z-topbar-open { z-index: 210; }
+@utility z-sidebar { z-index: 250; }
+@utility z-modal { z-index: 300; }
+@utility z-overlay { z-index: 400; }
+@utility z-toast { z-index: 500; }
+
+/* ── v4 기본값 변경 되돌리기(업그레이드 가이드) — 화면이 v3 와 같게 ── */
+/* divide-y/x · space-y/x: v4 는 마지막을 뺀 자식의 아래쪽(border-bottom · margin-bottom)에 긋고, v3 는 첫째를 뺀 자식의 위쪽에 그었다.
+   행 안에서 내용이 1px 어긋나고(divide), 자식 자신의 mt-* 와 겹쳐 간격이 벌어진다(space). v3 선택자로 되돌린다 — 핵심 규칙(:where, 특이도 0)보다 뒤에 와 이긴다. */
+@utility divide-y {
+  & > :not([hidden]) ~ :not([hidden]) { border-top-width: 1px; border-bottom-width: 0; }
+}
+@utility divide-x {
+  & > :not([hidden]) ~ :not([hidden]) { border-left-width: 1px; border-right-width: 0; }
+}
+@utility space-y-* {
+  & > :not([hidden]) ~ :not([hidden]) { margin-top: --spacing(--value(number)); margin-bottom: 0; }
+  & > :not([hidden]) ~ :not([hidden]) { margin-top: --value([length]); }
+}
+@utility space-x-* {
+  & > :not([hidden]) ~ :not([hidden]) { margin-left: --spacing(--value(number)); margin-right: 0; }
+  & > :not([hidden]) ~ :not([hidden]) { margin-left: --value([length]); }
+}
+@utility space-y-px { & > :not([hidden]) ~ :not([hidden]) { margin-top: 1px; margin-bottom: 0; } }
+@utility space-x-px { & > :not([hidden]) ~ :not([hidden]) { margin-left: 1px; margin-right: 0; } }
+/* 첫째 자식에 남는 v4 핵심 규칙의 아래쪽 선·여백은 파일 끝 @layer utilities 에서 지운다(생성된 유틸리티 뒤에 와야 이기므로). */
+@layer base {
+  /* v3 preflight: 버튼 cursor pointer (v4 는 default) */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+  /* v4 preflight 는 모든 요소의 margin·padding 을 0 으로 민다. v3 는 td/th 의 브라우저 기본 padding(1px)을 두어
+     표 행 안쪽이 1px 들여졌다(관리 사용자 표 등) — 그대로. p-·px- 유틸리티가 있으면 그쪽이 이긴다(레이어 순서). */
+  td,
+  th {
+    padding: 1px;
+  }
+  /* 같은 이유 — <hr> 의 브라우저 기본 위아래 여백(0.5em)도 v3 에선 남아 있었다(메일 계정 설정의 구분선) */
+  hr {
+    margin-block: 0.5em;
+    margin-inline: auto;
+  }
+  /* v3 preflight: placeholder 색 gray-400 (v4 는 currentColor 50%) */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+}
+
+/* ── Design tokens (HANDOFF-SPEC §1) ── semantic 변수, 전 페이지 자동 반영 */
+@layer base {
+  :root {
+    --background: 216 25% 98%;
+    --foreground: 216 28% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 216 28% 14%;
+    --primary: 218 88% 52%;
+    --primary-foreground: 0 0% 100%;
+    /* 반전색 토스트(bg-foreground) 위 행동 글자(C8): 어두운 토스트 위라 다크 강조색 — 대비 5.0:1 */
+    --primary-inverse: 218 100% 65%;
+    --secondary: 216 20% 95%;
+    --secondary-foreground: 216 25% 20%;
+    --muted: 216 20% 95%;
+    --muted-foreground: 215 14% 42%;
+    --accent: 216 20% 95%;
+    --accent-foreground: 216 25% 20%;
+    --border: 216 18% 90%;
+    --input: 216 18% 90%;
+    --ring: 218 88% 52%;
+    --success: 153 52% 34%;
+    --warning: 33 82% 38%;
+    --danger: 3 68% 46%;
+    --danger-foreground: 0 0% 100%;
+    --scrim: 6 8% 4%;
+    --radius: 0.75rem;
+
+    /* ── 시안 J(토큰 결정) 반영 ──
+       - 빨강은 danger 하나. destructive 는 danger 의 별칭(기존 화면 호환용) — 새 코드에서는 쓰지 않는다.
+       - --popover = --card. 떠 있는 것은 색이 아니라 그림자로 구분한다.
+       - --stage: 통화(회의) 화면 바탕. 라이트 220 20% 93% / 다크 220 30% 4% (PatBadges 시안). */
+    --destructive: var(--danger);
+    --destructive-foreground: var(--danger-foreground);
+    --popover: var(--card);
+    --popover-foreground: var(--card-foreground);
+    --stage: 220 20% 93%;
+
+    /* ── 범주 색(11-A1): 캘린더 색 견본·차트 계열·라벨. 글자로 써도 card·background 위 4.5:1 이상.
+       순서 고정 1→8 순환, 9개 이상이면 다시 1부터 + 빗금(bg-cat-hatch). tailwind colors.cat.1…8. */
+    --cat-1: 218 72% 52%;
+    --cat-2: 158 60% 32%;
+    --cat-3: 28 80% 38%;
+    --cat-4: 352 68% 52%;
+    --cat-5: 266 58% 58%;
+    --cat-6: 188 70% 32%;
+    --cat-7: 318 58% 49%;
+    --cat-8: 44 70% 32%;
+    /* ── 역할 색(handover-22): cat 별칭. 라이트 cat-1 4.62/4.84 · cat-5 4.59/4.81(background/card, WCAG) — 4.5:1 넘어 별칭 그대로.
+       .dark 는 같은 이름 cat 이 따라온다(.dark 가 <html> 에 붙으므로 :root 의 var() 가 다크 값으로 풀린다). */
+    --role-1: var(--cat-1);
+    --role-2: var(--cat-2);
+    --role-3: var(--cat-3);
+    --role-4: var(--cat-4);
+    --role-5: var(--cat-5);
+    --role-6: var(--cat-6);
+    --role-7: var(--cat-7);
+    --role-8: var(--cat-8);
+    /* ── 겹침 투명도(handover-22): 행 호버 .12 · 선택 .20 · 멘션(warning) .12 · 점프(primary) .10.
+       유틸 bg-overlay-hover / -selected / -mention / -jump 가 쓴다(아래 @utility). */
+    --overlay-hover: 0.12;
+    --overlay-selected: 0.2;
+    --overlay-mention: 0.12;
+    --overlay-jump: 0.1;
+    /* ── 메일 종이(11-A2): HTML 메일 원본 보존용 흰 종이. 두 테마 같은 값(대비 16:1).
+       "어둡게 보기"는 paper 대신 card·foreground 로 그린다. */
+    --paper: 0 0% 100%;
+    --paper-foreground: 216 28% 14%;
+    /* ── 범주 색 빗금(답변서 B1): 선 2px · 간격 4px · 주기 6px, -45°. repeating-linear-gradient 인자.
+       foreground 를 따라가므로 다크에서 따로 정하지 않는다. 유틸 bg-cat-hatch(tailwind backgroundImage). */
+    --cat-hatch: -45deg, hsl(var(--foreground) / 0.14) 0 2px, transparent 2px 6px;
+  }
+
+  .dark {
+    --background: 218 22% 7%;
+    --foreground: 216 25% 92%;
+    --card: 215 22% 11%;
+    --card-foreground: 216 25% 92%;
+    --primary: 218 100% 65%;
+    --primary-foreground: 218 22% 7%;
+    /* 밝은 토스트 위라 라이트 강조색을 4.5:1 까지 어둡게(52→48%) */
+    --primary-inverse: 218 88% 48%;
+    --secondary: 217 18% 20%;
+    --secondary-foreground: 216 25% 92%;
+    --muted: 217 18% 20%;
+    --muted-foreground: 215 13% 65%;
+    --accent: 217 18% 20%;
+    --accent-foreground: 216 25% 92%;
+    --border: 216 21% 14%;
+    --input: 216 21% 14%;
+    --ring: 218 100% 65%;
+    --success: 153 48% 47%;
+    --warning: 39 74% 53%;
+    --danger: 3 75% 60%;
+    --danger-foreground: 216 25% 92%;
+    --scrim: 218 30% 4%;
+    --radius: 0.75rem;
+    --stage: 220 30% 4%;
+    --cat-1: 218 72% 59%;
+    --cat-2: 158 52% 48%;
+    --cat-3: 28 80% 44%;
+    --cat-4: 352 68% 61%;
+    --cat-5: 266 58% 64%;
+    --cat-6: 188 60% 48%;
+    --cat-7: 318 58% 58%;
+    --cat-8: 44 70% 52%;
+    /* 역할 색 별칭을 .dark 요소에서 다시 풀어 둔다(.dark 가 <html> 아닌 하위 묶음에 붙는 미리보기에서도 다크 cat 을 따라가게) */
+    --role-1: var(--cat-1);
+    --role-2: var(--cat-2);
+    --role-3: var(--cat-3);
+    --role-4: var(--cat-4);
+    --role-5: var(--cat-5);
+    --role-6: var(--cat-6);
+    --role-7: var(--cat-7);
+    --role-8: var(--cat-8);
+    --paper: 0 0% 100%;
+    --paper-foreground: 216 28% 14%;
+    /* destructive/popover 별칭은 :root 에서 var() 로 묶여 있어 다크에서도 자동으로 따라온다. */
+  }
+
+  /* ── 밀도(P-10, 시안 10-6 ⑤) ── 목록 행 높이·글자 크기를 변수로 두고 루트 data-density 로 바꾼다.
+     편안 56 / 기본 48 / 조밀 40, 글자 14 / 13.5 / 13, 2줄 행 64 / 56 / 48.
+     기본값은 "기본". 터치 기기에서는 조밀을 비활성(설정›표시 화면에서 막는다). */
+  :root,
+  :root[data-density="default"] {
+    --row-h: 48px;
+    --row-2h: 56px;
+    --row-fs: 13.5px;
+  }
+  :root[data-density="comfortable"] {
+    --row-h: 56px;
+    --row-2h: 64px;
+    --row-fs: 14px;
+  }
+  :root[data-density="compact"] {
+    --row-h: 40px;
+    --row-2h: 48px;
+    --row-fs: 13px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* ── 채팅 mrkdwn 본문 스타일 ── */
+.chat-body { white-space: pre-wrap; line-height: 1.45; }
+.chat-body a.chat-link { color: hsl(var(--primary)); text-decoration: none; }
+.chat-body a.chat-link:hover { text-decoration: underline; }
+.chat-body .chat-mention {
+  color: hsl(var(--accent-foreground));
+  background: hsl(var(--accent));
+  border-radius: 0.25rem; padding: 0 0.15rem; font-weight: 500;
+}
+/* 나·채널 전원을 부른 멘션 — 채팅 시안: warning 틴트 칩 + 안쪽 테두리 */
+.chat-body .chat-mention.chat-mention-me,
+.chat-body .chat-mention.chat-mention-group {
+  color: hsl(var(--foreground));
+  background: hsl(var(--warning) / 0.22);
+  box-shadow: inset 0 0 0 1px hsl(var(--warning) / 0.55);
+  border-radius: 5px; padding: 0 4px; font-weight: 600;
+}
+.chat-body strong { font-weight: 700; }
+.chat-body em { font-style: italic; }
+.chat-body del { text-decoration: line-through; opacity: .75; }
+.chat-body code.chat-inline-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .85em; background: hsl(var(--muted));
+  color: hsl(var(--foreground)); border-radius: 0.25rem; padding: 0.05rem 0.3rem;
+}
+.chat-body pre.chat-code {
+  margin: 0.35rem 0; padding: 0.55rem 0.7rem; border-radius: 0.4rem;
+  background: hsl(var(--muted)); border: 1px solid hsl(var(--border));
+  overflow-x: auto; white-space: pre;
+}
+.chat-body pre.chat-code code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .82rem; line-height: 1.4; background: none; color: inherit;
+}
+.chat-body blockquote.chat-quote {
+  border-left: 3px solid hsl(var(--border));
+  padding-left: 0.6rem; margin: 0.15rem 0; color: hsl(var(--muted-foreground));
+}
+
+/* Mobile bottom sheet animation */
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.2s ease-out;
+}
+
+/* Hide scrollbar but keep scroll */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* 얇은 스크롤바 — Windows·Linux 크롬 기본 15~17px를 8px로, 트랙 투명 (Mail List 7b).
+   목록 폭에서 스크롤바가 먹는 면적을 줄인다. .scrollbar-none 은 클래스 특이도로 계속 우선. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--accent)) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: hsl(var(--accent)); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); }
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* 스켈레톤 — 300ms 뒤에만 보인다(시안 H: 짧은 로딩은 아무것도 안 보여 깜빡임 방지) */
+@keyframes skeleton-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.skeleton-delay {
+  opacity: 0;
+  animation: skeleton-reveal 0.15s ease-out 0.3s forwards;
+}
+
+/* ── v3 호환(위 @utility divide/space 와 한 쌍): v4 핵심 규칙이 첫째 자식에 남기는 아래쪽 선·여백 제거.
+   특이도 0(:where) 이라 자식 자신의 border-b/mb-* 는 그대로 이기고, 생성된 유틸리티보다 뒤에 와 핵심 규칙만 덮는다. */
+@layer utilities {
+  :where([class*='divide-y']) > :where(:not([hidden]):first-child) { border-bottom-width: 0; }
+  :where([class*='divide-x']) > :where(:not([hidden]):first-child) { border-inline-end-width: 0; }
+  /* 음수(-space-*)는 위 @utility 가 받지 않아 v4 핵심 규칙 그대로 둔다(앱 미사용) */
+  :where([class*='space-y-']:not([class*='-space-y-'])) > :where(:not([hidden]):first-child) { margin-block-end: 0; }
+  :where([class*='space-x-']:not([class*='-space-x-'])) > :where(:not([hidden]):first-child) { margin-inline-end: 0; }
+}

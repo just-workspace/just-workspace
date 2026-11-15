@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ES2023", "DOM", "DOM.Iterable"
+    ],
+    "types": [
+      "node"
+    ],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": "..",
+    "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": true,
+    "paths": {
+      "cdp-protocol": [
+        "../node_modules/playwright-core/types/protocol.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "../protocol"
+  ]
+}

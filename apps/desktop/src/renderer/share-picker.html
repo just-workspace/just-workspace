@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; script-src 'self'; img-src 'self' data:;">
+<title>공유할 항목 선택</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* 창 자체는 투명하다. 그래야 카드의 그림자가 잘리지 않는다.
+     아트보드의 바탕(데스크톱)은 목업이라 그리지 않는다. */
+  html, body { height: 100%; background: transparent; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    padding: 22px; overflow: hidden;
+    -webkit-app-region: drag;      /* 프레임리스라 카드 밖도 잡아 끌 수 있게 */
+  }
+
+  .modal {
+    width: 820px; height: 580px;
+    background: var(--app-bg);
+    border-radius: 10px;
+    box-shadow: 0 18px 44px rgba(16, 24, 32, .22);
+    display: flex; flex-direction: column; overflow: hidden;
+    -webkit-app-region: no-drag;
+  }
+
+  header { padding: 18px 22px 0; display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+  header .row { display: flex; align-items: center; -webkit-app-region: drag; }
+  header h1 {
+    margin: 0; font-size: 16px; font-weight: 600;
+    letter-spacing: -0.012em; color: var(--text);
+  }
+  header .close {
+    margin-left: auto; width: 26px; height: 26px; border: 0; border-radius: 5px;
+    background: none; display: flex; align-items: center; justify-content: center;
+    cursor: default; -webkit-app-region: no-drag;
+  }
+  header .close:hover { background: var(--card-2); }
+  header .sub { font-size: 12px; color: var(--label); font-weight: var(--body-weight); }
+
+  .tabs { padding: 14px 22px 0; display: flex; gap: 4px; flex-shrink: 0; }
+  .tabs button {
+    border: 0; background: none; font-family: inherit;
+    font-size: 12.5px; font-weight: 400; color: var(--tab-off);
+    padding: 5px 10px 7px; cursor: default;
+    border-bottom: 2px solid transparent;
+  }
+  .tabs button[aria-selected="true"] {
+    font-weight: 600; color: var(--brand-text); border-bottom-color: var(--brand-text);
+  }
+  .rule { height: 1px; background: var(--picker-divider); flex-shrink: 0; }
+
+  .grid-wrap { flex-grow: 1; overflow-y: auto; padding: 16px 22px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+
+  .card {
+    border: 0; padding: 0; border-radius: 8px; overflow: hidden;
+    background: var(--app-bg); font-family: inherit; text-align: left;
+    cursor: default; box-shadow: 0 0 0 1px var(--card-ring);
+  }
+  .card[aria-pressed="true"] {
+    box-shadow: 0 0 0 2px var(--brand), 0 4px 12px rgba(16, 24, 32, .12);
+  }
+  .card .thumb {
+    height: 108px; background: #1c2226; position: relative;
+    display: flex; align-items: center; justify-content: center;
+  }
+  /* cover: 16:9 썸네일을 2.3:1 카드에 넣으면 contain 은 위아래 검은 띠가 생긴다.
+     목업처럼 꽉 차게 보이려면 잘라서 채운다. */
+  .card .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card .check {
+    position: absolute; top: 8px; right: 8px;
+    width: 22px; height: 22px; border-radius: 50%; background: var(--brand);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .card .meta { padding: 8px 10px 9px; display: flex; flex-direction: column; gap: 1px; }
+  .card .nm {
+    font-size: 12px; font-weight: 400; color: var(--card-label);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .card[aria-pressed="true"] .nm { font-weight: 600; color: var(--text); }
+  .card .sz {
+    font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .empty {
+    grid-column: 1 / -1; padding: 48px 0; text-align: center;
+    font-size: 12.5px; color: var(--muted); font-weight: var(--body-weight);
+  }
+
+  footer {
+    border-top: 1px solid var(--picker-divider);
+    padding: 14px 22px; display: flex; align-items: center; gap: 14px; flex-shrink: 0;
+  }
+  .toggle { display: flex; align-items: center; gap: 8px; }
+  .toggle button {
+    width: 30px; height: 17px; border: 0; border-radius: 9px;
+    background: var(--input-border); position: relative; flex-shrink: 0;
+    cursor: default; padding: 0;
+  }
+  .toggle button::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 13px; height: 13px; border-radius: 50%; background: #fff;
+  }
+  .toggle button[aria-pressed="true"] { background: var(--brand); }
+  .toggle button[aria-pressed="true"]::after { left: auto; right: 2px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .toggle button, .toggle button::after { transition: all 140ms ease-out; }
+  }
+  .toggle span { font-size: 12.5px; color: var(--text-2); font-weight: var(--body-weight); }
+
+  .note {
+    display: flex; align-items: center; gap: 7px; padding-left: 4px;
+    font-size: 11.5px; color: var(--warn-note); font-weight: var(--body-weight);
+  }
+  .note span { white-space: nowrap; }
+
+  .actions { margin-left: auto; display: flex; gap: 8px; }
+  .actions button {
+    height: 34px; border-radius: 6px; padding: 0 18px;
+    display: flex; align-items: center; gap: 7px;
+    font-family: inherit; font-size: 13px; font-weight: 500; cursor: default;
+  }
+  .actions .cancel {
+    border: 1px solid var(--btn-outline); background: none; color: var(--btn-outline-fg);
+  }
+  .actions .share { border: 0; background: var(--brand); color: #fff; }
+  .actions .share:disabled { opacity: .55; }
+</style>
+</head>
+<body>
+
+<div class="modal">
+  <header>
+    <div class="row">
+      <h1>공유할 항목 선택</h1>
+      <button class="close" id="btn-close" aria-label="닫기">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--icon-muted)" stroke-width="2.2" stroke-linecap="round"><path d="M5 5l14 14M19 5 5 19"/></svg>
+      </button>
+    </div>
+    <span class="sub" id="sub">공유를 시작하면 회의 참가자가 보게 됩니다</span>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-screen" aria-selected="true">전체 화면</button>
+    <button role="tab" id="tab-window" aria-selected="false">창</button>
+  </div>
+  <div class="rule"></div>
+
+  <div class="grid-wrap">
+    <div class="grid" id="grid">
+      <p class="empty">불러오는 중…</p>
+    </div>
+  </div>
+
+  <footer>
+    <div class="toggle">
+      <button id="btn-audio" aria-pressed="false" aria-label="시스템 소리 함께 공유"></button>
+      <span>시스템 소리 함께 공유</span>
+    </div>
+
+    <div class="note" id="note" hidden>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17.2h.01"/></svg>
+      <span>창 단위 공유는 해당 창이 가려져도 계속 전송됩니다</span>
+    </div>
+
+    <div class="actions">
+      <button class="cancel" id="btn-cancel">취소</button>
+      <button class="share" id="btn-share" disabled>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 8v5M9.5 10.5 12 8l2.5 2.5"/></svg>
+        <span id="share-label">항목을 선택하세요</span>
+      </button>
+    </div>
+  </footer>
+</div>
+
+<script src="share-picker.js"></script>
+</body>
+</html>

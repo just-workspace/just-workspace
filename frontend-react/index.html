@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="%VITE_BRAND_COLOR%" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="%VITE_APP_NAME%" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="%VITE_APP_NAME%" />
+    <meta name="msapplication-TileColor" content="%VITE_BRAND_COLOR%" />
+    <meta name="description" content="Self-hosted all-in-one workspace" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <title>%VITE_APP_NAME%</title>
+    <!-- 컬러 모드 초기 적용 — @nuxtjs/color-mode 의 head 스크립트와 같은 동작(저장 키 nuxt-color-mode,
+         기본 system, system 이면 OS 설정, 판별 불가면 light). 첫 화면이 깜빡이지 않게 번들보다 먼저 돈다. -->
+    <script>
+      ;(function () {
+        var w = window, de = document.documentElement, known = ['dark', 'light']
+        var preference = 'system'
+        try { preference = w.localStorage.getItem('nuxt-color-mode') || 'system' } catch (e) {}
+        function pcs(s) { return w.matchMedia('(prefers-color-scheme' + s + ')') }
+        function scheme() {
+          if (w.matchMedia && pcs('').media !== 'not all') {
+            for (var i = 0; i < known.length; i++) if (pcs(':' + known[i]).matches) return known[i]
+          }
+          return 'light'
+        }
+        var value = preference === 'system' ? scheme() : preference
+        var forced = de.getAttribute('data-color-mode-forced')
+        if (forced) value = forced
+        de.classList.add(value)
+        w.__NUXT_COLOR_MODE__ = { preference: preference, value: value }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- hardenedRuntime 을 켜면 Electron 이 쓰는 JIT 가 막힌다. 아래 셋이 없으면
+       공증한 앱이 실행되자마자 죽는다. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+
+  <!-- 회의: 마이크·카메라. 화면 기록은 entitlement 가 아니라 TCC 권한이라
+       Info.plist 의 설명 문구(package.json 의 extendInfo)로 다룬다. -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
+  <key>com.apple.security.device.camera</key>
+  <true/>
+</dict>
+</plist>

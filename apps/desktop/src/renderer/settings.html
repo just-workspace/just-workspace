@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; script-src 'self'; img-src 'self' data:;">
+<title>설정</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  body { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  .stage { flex-grow: 1; display: flex; min-height: 0; }
+
+  /* ── 좌측 설정 내비 ─────────────────────────────────── */
+  .nav {
+    width: 176px; background: var(--surface-alt);
+    border-right: 1px solid var(--divider-2);
+    padding: 12px 10px; display: flex; flex-direction: column; gap: 1px;
+    flex-shrink: 0;
+  }
+  .nav button {
+    display: flex; align-items: center; gap: 9px;
+    padding: 8px 10px; border: 0; border-radius: 6px; background: none;
+    font-family: inherit; font-size: 12.5px; font-weight: 400; color: var(--text-2);
+    text-align: left; cursor: default; width: 100%;
+  }
+  .nav button:hover { background: rgba(127, 140, 155, .10); }
+  .nav button[aria-current="page"] {
+    background: var(--brand-tint-2); color: var(--brand-strong); font-weight: 600;
+  }
+  .nav button svg { flex-shrink: 0; }
+
+  /* ── 콘텐츠 ─────────────────────────────────────────── */
+  .content {
+    flex-grow: 1; padding: 20px 24px; min-width: 0;
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  /* 패널이 남는 높이를 다 먹어야 "폴더 추가" 줄이 아래에 붙는다(margin-top:auto). */
+  .content > section { flex-grow: 1; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+
+  .card {
+    border: 1px solid var(--list-search-bd); border-radius: 9px;
+    background: var(--card); padding: 16px 18px;
+    display: flex; gap: 20px; align-items: center; flex-shrink: 0;
+  }
+  .card .badge-icon {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    background: var(--ok-tint);
+  }
+  .card .badge-icon.idle { background: var(--card-2); }
+  .card .badge-icon.warn { background: var(--warn-tint-2); }
+  .card .t { font-size: 14.5px; font-weight: 600; letter-spacing: -0.008em; }
+  .card .d { font-size: 11.5px; color: var(--label); font-weight: var(--body-weight); }
+
+  .card .syncnow {
+    margin-left: auto; height: 30px; border-radius: 6px; padding: 0 12px;
+    border: 1px solid var(--btn-outline); background: none; font-family: inherit;
+    font-size: 12px; font-weight: 500; color: var(--text-2); cursor: default; flex-shrink: 0;
+  }
+  .card .syncnow:disabled { opacity: .55; }
+  /* 진행률이 보이면 그 옆에 붙는다. */
+  .card .syncnow + .quota { margin-left: 14px; }
+
+  .quota { margin-left: auto; display: flex; flex-direction: column; gap: 5px; width: 240px; flex-shrink: 0; }
+  .quota .nums { display: flex; align-items: baseline; gap: 6px; }
+  .quota .used { font-size: 12.5px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
+  .quota .cap { font-size: 11px; color: var(--label); font-family: 'IBM Plex Mono', monospace; }
+  .quota .bar { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+  .quota .bar span { display: block; height: 100%; background: var(--brand); }
+  .quota .note { font-size: 11px; color: var(--muted); font-weight: var(--body-weight); }
+
+  /* ── 폴더 표 ────────────────────────────────────────── */
+  .table { border: 1px solid var(--list-search-bd); border-radius: 9px; overflow: hidden; flex-shrink: 0; }
+  .table .head, .table .row {
+    display: grid; grid-template-columns: 1.5fr 1.6fr 0.7fr 1.1fr; align-items: center;
+  }
+  .table .head {
+    background: var(--surface-alt); border-bottom: 1px solid var(--picker-divider);
+  }
+  .table .head span {
+    font-size: 11px; color: var(--footer-note); font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.09em; padding: 9px 14px;
+  }
+  .table .row { border-bottom: 1px solid var(--footer-line); }
+  .table .row:last-child { border-bottom: 0; }
+  .table .row:nth-child(odd of .row) { background: var(--card); }
+  .table .row .nm { font-size: 12.5px; font-weight: 500; padding: 11px 14px; }
+  .table .row .mono {
+    font-size: 11.5px; color: var(--text-3); font-family: 'IBM Plex Mono', monospace;
+    padding: 11px 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .table .row .state { display: flex; align-items: center; gap: 7px; padding: 11px 14px; }
+  .table .row .state .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .table .row .state .lbl { font-size: 11.5px; font-weight: var(--body-weight); color: var(--text-2); }
+  .table .row .state button {
+    margin-left: auto; border: 0; background: none; font-family: inherit;
+    font-size: 11.5px; color: var(--brand-text); cursor: default; padding: 0;
+  }
+  .table .row .state button:hover { text-decoration: underline; }
+  .table .empty {
+    padding: 26px 14px; text-align: center;
+    font-size: 12px; color: var(--muted); font-weight: var(--body-weight); line-height: 1.7;
+  }
+
+  /* ── 충돌 안내 ──────────────────────────────────────── */
+  .conflict {
+    border: 1px solid var(--warn-border); border-left: 3px solid var(--warn);
+    border-radius: 8px; background: var(--warn-tint);
+    padding: 12px 15px; display: flex; gap: 11px; flex-shrink: 0;
+  }
+  .conflict .t { font-size: 12.5px; font-weight: 600; color: var(--warn-strong); }
+  .conflict .d {
+    font-size: 11.5px; color: var(--warn-body); font-weight: var(--body-weight);
+    line-height: 1.55; margin-top: 3px;
+  }
+  .conflict .d code { font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+
+  /* ── 옵션 ───────────────────────────────────────────── */
+  .options { display: flex; flex-direction: column; gap: 11px; flex-shrink: 0; }
+  .option { display: flex; align-items: center; gap: 10px; }
+  .option .sw, .rd-switch .sw {
+    width: 32px; height: 18px; border: 0; border-radius: 9px;
+    background: var(--input-border); position: relative; flex-shrink: 0;
+    cursor: default; padding: 0;
+  }
+  .option .sw::after, .rd-switch .sw::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%; background: #fff;
+  }
+  .option .sw[aria-pressed="true"], .rd-switch .sw[aria-pressed="true"] { background: var(--brand); }
+  .option .sw[aria-pressed="true"]::after, .rd-switch .sw[aria-pressed="true"]::after { left: auto; right: 2px; }
+  .option .sw:disabled, .rd-switch .sw:disabled { opacity: .6; }
+  @media (prefers-reduced-motion: no-preference) {
+    .option .sw, .option .sw::after, .rd-switch .sw, .rd-switch .sw::after { transition: all 140ms ease-out; }
+  }
+  .option .lbl { font-size: 12.5px; color: var(--text-2); font-weight: var(--body-weight); }
+  .option .chip {
+    font-size: 11px; color: var(--warn); background: var(--warn-tint-2);
+    border-radius: 4px; padding: 2px 7px; font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* ── 하단 ───────────────────────────────────────────── */
+  .foot { margin-top: auto; display: flex; align-items: center; gap: 12px; flex-shrink: 0; padding-top: 4px; }
+  .foot button.add {
+    height: 34px; border-radius: 6px; border: 1px solid var(--btn-outline);
+    background: none; display: flex; align-items: center; gap: 7px; padding: 0 14px;
+    font-family: inherit; font-size: 12.5px; font-weight: 500; color: var(--text-2);
+    cursor: default;
+  }
+  .foot .root { font-size: 11px; color: var(--muted); font-weight: var(--body-weight); }
+  .foot .root code { font-family: 'IBM Plex Mono', monospace; }
+
+  .soon {
+    border: 1px dashed var(--divider); border-radius: 9px;
+    padding: 20px; font-size: 12px; color: var(--muted);
+    font-weight: var(--body-weight); line-height: 1.7;
+  }
+
+  /* ── 원격 접속(시안 DeviceSettings) ─────────────────── */
+  #panel-remote { gap: 20px; }
+  .rd-head h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .rd-head p { margin: 4px 0 0; font-size: 12.5px; color: var(--label); font-weight: var(--body-weight); line-height: 1.6; }
+  .rd-card { border: 1px solid var(--list-search-bd); border-radius: 10px; background: var(--card); padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; flex-shrink: 0; }
+  .rd-switch { display: flex; align-items: center; gap: 16px; }
+  .rd-switch .txt, .rd-danger .txt { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .rd-switch .t, .rd-danger .t { font-size: 13.5px; font-weight: 600; }
+  .rd-switch .d, .rd-danger .d { font-size: 12px; color: var(--label); font-weight: var(--body-weight); line-height: 1.55; }
+  .rd-switch.off { opacity: .55; }
+  .rd-sep { height: 1px; background: var(--divider-2); }
+  .rd-field { display: flex; flex-direction: column; gap: 6px; }
+  .rd-field .lab { font-size: 11.5px; font-weight: 600; color: var(--label); }
+  .rd-field .hint { font-size: 11.5px; color: var(--label); font-weight: var(--body-weight); }
+  .rd-field .hint.err { color: hsl(3 75% 60%); }
+  .rd-name-row { display: flex; gap: 8px; }
+  .rd-name-row input { flex: 1 1 auto; min-width: 0; height: 34px; border-radius: 7px; border: 1px solid var(--input-border); background: var(--list-search-bg); color: var(--text); padding: 0 10px; font: inherit; font-size: 13px; }
+  .rd-name-row input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-tint-2); }
+  .rd-name-row input:disabled { opacity: .6; }
+  .rd-btn { height: 32px; border-radius: 7px; padding: 0 14px; border: 1px solid var(--btn-outline); background: none; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--text-2); cursor: default; flex-shrink: 0; }
+  .rd-btn:disabled { opacity: .5; }
+  .rd-btn.danger { background: hsl(3 75% 60%); border-color: hsl(3 75% 60%); color: #fff; font-weight: 600; }
+  .rd-note { margin: 0; font-size: 11.5px; color: var(--label); font-weight: var(--body-weight); }
+  .rd-log { padding: 0; gap: 0; }
+  .rd-log-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-bottom: 1px solid var(--divider-2); }
+  .rd-log-head h2 { margin: 0; font-size: 14px; font-weight: 600; }
+  .rd-log-head span { font-size: 11.5px; color: var(--label); }
+  .rd-row { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 6px 18px; border-bottom: 1px solid var(--footer-line); font-size: 12.5px; }
+  .rd-row:last-child { border-bottom: 0; }
+  .rd-row .who { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rd-row .kind { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 9999px; background: var(--brand-tint); color: var(--brand-text); flex-shrink: 0; }
+  .rd-row .kind.deny { background: hsl(3 75% 60% / .14); color: hsl(3 75% 60%); }
+  .rd-row .kind.sup { background: var(--warn-tint); color: var(--warn-strong); }
+  .rd-row .when { width: 96px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--label); flex-shrink: 0; }
+  .rd-row .dur { width: 60px; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--label); flex-shrink: 0; }
+  .rd-empty { padding: 20px 18px; font-size: 12px; color: var(--muted); text-align: center; }
+  .rd-danger { display: flex; align-items: center; gap: 16px; padding: 14px 18px; border-radius: 10px; border: 1px solid hsl(3 75% 60% / .35); background: hsl(3 75% 60% / .08); flex-shrink: 0; }
+  .rd-confirm { display: inline-flex; gap: 8px; }
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <span class="title">설정</span>
+  <div class="spacer"></div>
+  <button class="winbtn" id="btn-min" aria-label="최소화">
+    <svg width="11" height="11" viewBox="0 0 12 12" stroke="var(--titlebar-icon)" stroke-width="1.2"><path d="M1 6h10"/></svg>
+  </button>
+  <button class="winbtn" id="btn-max" aria-label="최대화">
+    <svg width="11" height="11" viewBox="0 0 12 12" stroke="var(--titlebar-icon)" stroke-width="1.2" fill="none"><rect x="1.5" y="1.5" width="9" height="9"/></svg>
+  </button>
+  <button class="winbtn close" id="btn-close" aria-label="닫기">
+    <svg width="11" height="11" viewBox="0 0 12 12" stroke="var(--titlebar-icon)" stroke-width="1.2"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"/></svg>
+  </button>
+</div>
+
+<div class="stage">
+  <nav class="nav" id="nav" aria-label="설정 영역"></nav>
+
+  <div class="content" id="content">
+    <!-- 동기화 패널 -->
+    <section id="panel-sync">
+      <div class="card">
+        <span class="badge-icon idle" id="status-icon"></span>
+        <div style="min-width:0">
+          <div class="t" id="status-title">—</div>
+          <div class="d" id="status-detail"></div>
+        </div>
+        <button class="syncnow" id="btn-sync-now">지금 동기화</button>
+        <div class="quota" id="quota" hidden>
+          <div class="nums">
+            <span class="used" id="quota-used">—</span>
+            <span class="cap" id="quota-cap"></span>
+          </div>
+          <div class="bar"><span id="quota-fill" style="width:0"></span></div>
+          <span class="note">서버 전체에서 선택한 폴더만 내려받습니다</span>
+        </div>
+      </div>
+
+      <div class="table">
+        <div class="head">
+          <span>로컬 폴더</span><span>서버 경로</span><span>크기</span><span>상태</span>
+        </div>
+        <div id="rows"></div>
+      </div>
+
+      <div class="conflict" id="conflict" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17.2h.01"/></svg>
+        <div style="min-width:0">
+          <div class="t">양쪽에서 같이 고쳐진 파일이 있습니다</div>
+          <div class="d" id="conflict-detail"></div>
+        </div>
+      </div>
+
+      <div class="options">
+        <div class="option">
+          <button class="sw" id="opt-startup" aria-pressed="false" aria-label="시작 시 동기화 자동 시작"></button>
+          <span class="lbl" id="opt-startup-label">시작 시 동기화 자동 시작</span>
+        </div>
+        <div class="option">
+          <button class="sw" id="opt-metered" aria-pressed="false" aria-label="종량제 네트워크에서는 일시중지"></button>
+          <span class="lbl">종량제 네트워크에서는 일시중지</span>
+        </div>
+        <div class="option">
+          <button class="sw" id="opt-deletes" aria-pressed="false" disabled aria-label="삭제를 서버에 전파"></button>
+          <span class="lbl">삭제를 서버에 전파</span>
+          <span class="chip">v2 예정</span>
+        </div>
+      </div>
+
+      <div class="foot">
+        <button class="add" id="btn-add">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          폴더 추가
+        </button>
+        <span class="root">동기화 폴더 · <code id="root-path">—</code></span>
+      </div>
+    </section>
+
+    <!-- 원격 접속(내 기기) — 서버에 원격 데스크톱 플러그인이 있을 때만 보인다(시안 DeviceSettings) -->
+    <section id="panel-remote" hidden>
+      <div class="rd-head">
+        <h1>원격 접속</h1>
+        <p>웹의 원격 데스크톱에서 이 PC에 연결할 수 있게 합니다. 연결할 때마다 이 PC에서 허용해야 합니다.</p>
+      </div>
+
+      <div class="rd-card">
+        <div class="rd-switch">
+          <div class="txt">
+            <span class="t">이 PC 원격 접속 허용</span>
+            <span class="d">끄면 내 기기 목록에서 이 PC가 오프라인으로 보이고 접속 요청을 받지 않습니다.</span>
+          </div>
+          <button class="sw" id="opt-remote" aria-pressed="false" aria-label="이 PC 원격 접속 허용"></button>
+        </div>
+        <div class="rd-switch" id="row-unattended">
+          <div class="txt">
+            <span class="t">무인 접속</span>
+            <span class="d">내 계정으로 요청하면 허용 창 없이 엽니다. 누가 접속했는지는 화면 위 막대와 서버 기록에 남습니다.</span>
+          </div>
+          <button class="sw" id="opt-unattended" aria-pressed="false" aria-label="무인 접속"></button>
+        </div>
+        <div class="rd-sep"></div>
+        <label class="rd-field">
+          <span class="lab">기기 이름</span>
+          <span class="rd-name-row">
+            <input id="rd-name" maxlength="100" autocomplete="off">
+            <button class="rd-btn" id="rd-name-save" disabled>저장</button>
+          </span>
+          <span class="hint" id="rd-name-hint">내 기기 목록과 접속 요청 창에 이 이름이 보입니다.</span>
+        </label>
+        <p class="rd-note" id="remote-note"></p>
+      </div>
+
+      <div class="rd-card rd-log">
+        <div class="rd-log-head"><h2>최근 접속 기록</h2><span>최근 3건</span></div>
+        <div id="rd-log"></div>
+      </div>
+
+      <div class="rd-danger" id="rd-danger">
+        <div class="txt">
+          <span class="t">이 기기 등록 해지</span>
+          <span class="d" id="rd-danger-desc">내 기기 목록에서 지우고 원격 접속 키를 폐기합니다. 다시 쓰려면 새로 등록해야 합니다.</span>
+        </div>
+        <button class="rd-btn danger" id="rd-unreg">등록 해지</button>
+        <span class="rd-confirm" id="rd-confirm" hidden>
+          <button class="rd-btn" id="rd-unreg-cancel">취소</button>
+          <button class="rd-btn danger" id="rd-unreg-ok">해지</button>
+        </span>
+      </div>
+    </section>
+
+    <!-- 아직 없는 영역 -->
+    <section id="panel-soon" hidden>
+      <p class="soon" id="soon-text"></p>
+    </section>
+  </div>
+</div>
+
+<script src="settings.js"></script>
+</body>
+</html>

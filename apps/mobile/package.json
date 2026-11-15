@@ -1,0 +1,27 @@
+{
+  "name": "just-workspace-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Just Workspace 모바일 앱 (Capacitor — Nuxt 웹 재사용, URL 연결/브랜드 빌드)",
+  "scripts": {
+    "sync": "cap sync",
+    "android": "cap open android",
+    "ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/cli": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/ios": "^8.6.2",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/push-notifications": "^8.1.3"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "xcode": {
+      "uuid": "^14.0.3"
+    }
+  }
+}

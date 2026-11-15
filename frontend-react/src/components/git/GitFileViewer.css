@@ -1,0 +1,18 @@
+/* Vue 원본: frontend/components/git/GitFileViewer.vue <style scoped> 그대로.
+   구문 색 = 디자인 토큰(결정 Git 5). shiki css-variables 테마가 이 변수 이름으로 색을 낸다. */
+.git-code {
+  --shiki-foreground: hsl(var(--foreground));
+  --shiki-background: transparent;
+  --shiki-token-keyword: hsl(var(--primary));
+  --shiki-token-string: hsl(var(--success));
+  --shiki-token-string-expression: hsl(var(--success));
+  --shiki-token-constant: hsl(var(--warning));
+  --shiki-token-comment: hsl(var(--muted-foreground));
+  --shiki-token-function: hsl(var(--foreground));
+  --shiki-token-parameter: hsl(var(--foreground) / 0.85);
+  --shiki-token-punctuation: hsl(var(--foreground) / 0.75);
+  --shiki-token-link: hsl(var(--primary));
+  --shiki-token-inserted: hsl(var(--success));
+  --shiki-token-deleted: hsl(var(--danger));
+  --shiki-token-changed: hsl(var(--warning));
+}

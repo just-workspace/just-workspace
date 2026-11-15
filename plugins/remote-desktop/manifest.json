@@ -1,0 +1,14 @@
+{
+  "id": "remote-desktop",
+  "name": "원격 데스크톱",
+  "name_en": "Remote Desktop",
+  "version": "0.1.0",
+  "description": "내 PC 원격 접속과 1회성 원격 지원(접속 코드·동의) — 화면·입력은 LiveKit",
+  "author": "just-workspace",
+  "icon": "monitor",
+  "route": "/p/remote-desktop",
+  "api_prefix": "/api/plugins/remote-desktop",
+  "requires": [],
+  "frontend": true,
+  "frontend_api": 2
+}

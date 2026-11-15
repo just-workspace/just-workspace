@@ -1,0 +1,9 @@
+# builder.Dockerfile 빌드 컨텍스트 최소화(빌더는 builder-build.sh만 필요).
+# 런타임엔 apps/mobile 전체를 -v로 마운트하므로 무관.
+node_modules
+android
+ios
+www
+*.apk
+*.aab
+www-react

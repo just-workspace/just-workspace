@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;">
+<title>원격 접속 중</title>
+<link rel="stylesheet" href="remote-ui.css">
+<style>
+  html, body { height: 100%; background: transparent; overflow: hidden; }
+  body { display: flex; align-items: flex-start; justify-content: center; }
+  /* 화면 위 가장자리에 붙은 카드(시안 SessionBar) — 위 테두리 없음, 아래만 둥글게 */
+  .bar {
+    display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 6px 0 4px; white-space: nowrap;
+    background: hsl(var(--card)); border: 1px solid hsl(var(--warning) / 0.6); border-top: none; border-radius: 0 0 12px 12px;
+    box-shadow: 0 12px 32px hsla(218, 30%, 4%, 0.55); font-size: 13px; line-height: 20px;
+  }
+  .grip { -webkit-app-region: drag; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 32px; color: hsl(var(--muted-foreground)); cursor: grab; }
+  .grip .icon { width: 14px; height: 14px; }
+  .txt { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .txt b { font-weight: 600; }
+  .time { font-family: var(--mono); color: hsl(var(--muted-foreground)); }
+</style>
+</head>
+<body>
+  <div class="bar" role="status" aria-live="polite">
+    <span class="grip" title="끌어서 옮기기"><span class="icon" data-icon="grip-vertical"></span></span>
+    <span class="dot pulse" title="원격 접속 중"></span>
+    <span class="txt"><b id="who">—</b>님이 원격 접속 중</span>
+    <span class="time" id="time">0:00</span>
+    <button class="btn danger xs" id="stop"><span class="icon" data-icon="log-out"></span>끊기</button>
+  </div>
+<script src="remote-icons.js"></script>
+<script src="remote-bar.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+node_modules/
+# Capacitor 빌드 산출물(소스 구조는 커밋, 빌드물/의존성은 제외)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/app/release/
+ios/App/Pods/
+ios/App/build/
+ios/App/output/
+ios/DerivedData/
+*.apk
+*.aab
+*.ipa
+.DS_Store
+# 번들 모드 웹 산출물(scripts/bundle-web.cjs)
+www-react/

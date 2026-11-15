@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; script-src 'self'; img-src 'self' data:;">
+<title>알림</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* 토스트 스택. 창 하나에 여러 장을 쌓는다 — 장마다 창을 띄우면 z 순서와
+     위치를 OS 와 다투게 된다. */
+  html, body { height: 100%; background: transparent; overflow: hidden; }
+  body { padding: 16px; display: flex; flex-direction: column; justify-content: flex-end; }
+
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+
+  .toast {
+    width: 352px;
+    background: var(--card-2);
+    border-radius: 9px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .40);
+    overflow: hidden;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .toast { animation: rise 180ms ease-out; }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: none; }
+    }
+  }
+
+  .head { display: flex; align-items: center; gap: 7px; padding: 8px 12px 0; }
+  .head .mark {
+    width: 14px; height: 14px; border-radius: 4px; background: var(--brand);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .head .app {
+    font-size: 11px; color: var(--label); font-family: 'IBM Plex Mono', monospace;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .head .when {
+    margin-left: auto; font-size: 11px; color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace; flex-shrink: 0;
+  }
+  .head .x {
+    border: 0; background: none; padding: 0; cursor: default;
+    display: flex; align-items: center; flex-shrink: 0;
+  }
+
+  .body { display: flex; gap: 10px; padding: 8px 12px 10px; }
+  .body.only { padding-bottom: 11px; }
+  .av {
+    width: 34px; height: 34px; border-radius: 7px; color: #fff;
+    font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .av.warn { background: var(--warn-tint-2); }
+  .col { min-width: 0; }
+  .top { display: flex; align-items: baseline; gap: 6px; }
+  .who { font-size: 12.5px; font-weight: 600; color: var(--text); }
+  .where { font-size: 11px; color: var(--label); font-family: 'IBM Plex Mono', monospace; }
+  .text {
+    font-size: 12px; color: var(--text-2); font-weight: var(--body-weight);
+    line-height: 1.5; margin-top: 2px;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .text .mention { color: var(--brand-text); font-weight: 600; }
+
+  .reply { padding: 0 12px 11px; display: flex; gap: 7px; }
+  .reply input {
+    flex-grow: 1; height: 30px; border-radius: 5px;
+    border: 1px solid var(--panel-border); background: var(--app-bg);
+    padding: 0 10px; font-family: inherit; font-size: 11.5px; color: var(--text);
+    outline: 0; user-select: text; min-width: 0;
+  }
+  .reply input::placeholder { color: var(--muted); font-weight: var(--body-weight); }
+  .reply input:focus { border-color: var(--brand-text); }
+  .reply button {
+    height: 30px; border: 0; border-radius: 5px; background: var(--brand);
+    padding: 0 14px; font-family: inherit; font-size: 11.5px; font-weight: 500;
+    color: #fff; cursor: default; flex-shrink: 0;
+  }
+  .reply button:disabled { opacity: .55; }
+</style>
+</head>
+<body>
+<div class="stack" id="stack"></div>
+<script src="toast.js"></script>
+</body>
+</html>

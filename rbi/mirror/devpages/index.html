@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>mimic — jsPlumb 토폴로지</title>
+<style>
+  body{margin:0;font:14px "Noto Sans KR","Malgun Gothic",Arial,sans-serif;background:#f4f5f7;color:#222}
+  #top{display:flex;gap:8px;align-items:center;padding:8px 12px;background:#2b3a55;color:#fff;height:28px}
+  #top button{background:#4f6fa8;color:#fff;border:0;border-radius:3px;padding:4px 10px;cursor:pointer}
+  #top .zoomv{font-family:monospace}
+  #side{position:absolute;top:44px;left:0;width:220px;bottom:0;background:#fff;border-right:1px solid #ddd;overflow:auto}
+  #side ul{list-style:none;margin:0;padding:0}
+  #side li{padding:8px 12px;border-bottom:1px solid #eee;cursor:pointer}
+  #side li:hover{background:#eef3ff}
+  #stage{position:absolute;top:44px;left:220px;right:0;bottom:0;overflow:auto;background:#fafbfc;background-image:linear-gradient(#eee 1px,transparent 1px),linear-gradient(90deg,#eee 1px,transparent 1px);background-size:20px 20px}
+  #canvas{position:relative;width:1600px;height:1200px;transform-origin:0 0}
+  .node_frame{position:absolute;width:90px;text-align:center;cursor:move;user-select:none}
+  .node_frame img{width:48px;height:48px;display:block;margin:0 auto}
+  .node_frame .lbl{font-size:12px;margin-top:4px;background:rgba(255,255,255,.8);border-radius:3px;padding:1px 3px;display:inline-block}
+  svg.links{position:absolute;left:0;top:0;width:1600px;height:1200px;pointer-events:none}
+  .lnklbl{position:absolute;font-size:10px;color:#555;background:#fff;padding:0 2px;border:1px solid #ccc;border-radius:2px}
+  #form{position:absolute;right:16px;top:60px;background:#fff;border:1px solid #ccd;border-radius:6px;padding:12px;width:240px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+  #form input,#form select,#form textarea{width:100%;box-sizing:border-box;margin:4px 0 8px;padding:6px;border:1px solid #bbb;border-radius:3px;font:inherit}
+  #form label{font-size:12px;color:#555}
+  #status{position:absolute;left:232px;bottom:8px;font-family:monospace;font-size:12px;color:#357;background:#fff;padding:2px 6px;border:1px solid #cde}
+</style>
+</head>
+<body>
+<div id="top">
+  <strong>Lab: mimic-topology</strong>
+  <button id="zin">zoom +</button><button id="zout">zoom −</button><span class="zoomv" id="zv">100%</span>
+  <button id="addnode">노드 추가</button>
+  <span style="margin-left:auto">사용자: <em>guest</em></span>
+</div>
+<div id="side">
+  <ul id="list"></ul>
+</div>
+<div id="stage">
+  <div id="canvas">
+    <svg class="links" id="links"></svg>
+  </div>
+</div>
+<div id="form">
+  <label>이름 <input id="f-name" placeholder="장비 이름"></label>
+  <label>비밀번호 <input id="f-pw" type="password" placeholder="password"></label>
+  <label>종류 <select id="f-kind"><option>router</option><option selected>switch</option><option>firewall</option></select></label>
+  <label><input type="checkbox" id="f-chk" checked> 콘솔 사용</label>
+  <label>메모 <textarea id="f-memo" rows="2">한 줄 메모</textarea></label>
+  <button id="f-ok">적용</button>
+</div>
+<div id="status">ready</div>
+<script>
+// jsPlumb 흉내 — div+img 노드, SVG path 링크, CSS transform 줌, mousedown/move/up 드래그
+const canvas = document.getElementById('canvas'), links = document.getElementById('links'), status = document.getElementById('status')
+const icon = (hue) => 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect x="4" y="12" width="40" height="24" rx="4" fill="hsl(${hue} 60% 50%)"/><circle cx="14" cy="24" r="3" fill="#fff"/><circle cx="24" cy="24" r="3" fill="#fff"/><circle cx="34" cy="24" r="3" fill="#fff"/></svg>`)
+const nodes = [], edges = []
+let zoom = 1
+function addNode(name, x, y, hue) {
+  const el = document.createElement('div'); el.className = 'node_frame'; el.style.left = x + 'px'; el.style.top = y + 'px'; el.dataset.name = name
+  const img = document.createElement('img'); img.src = icon(hue); img.draggable = false
+  const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = name
+  el.append(img, lbl); canvas.appendChild(el)
+  const n = { name, x, y, el }; nodes.push(n)
+  const li = document.createElement('li'); li.textContent = name; li.onclick = () => { status.textContent = 'selected ' + name; el.style.outline = '2px solid #e63'; setTimeout(() => el.style.outline = '', 600) }
+  document.getElementById('list').appendChild(li)
+  el.addEventListener('mousedown', ev => {
+    const sx = ev.clientX, sy = ev.clientY, ox = n.x, oy = n.y
+    const move = e => { n.x = ox + (e.clientX - sx) / zoom; n.y = oy + (e.clientY - sy) / zoom; el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; draw(); status.textContent = `drag ${name} → ${Math.round(n.x)},${Math.round(n.y)}` }
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up) }
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up); ev.preventDefault()
+  })
+  return n
+}
+function addEdge(a, b, label) { edges.push({ a, b, label }) }
+function draw() {
+  while (links.firstChild) links.removeChild(links.firstChild)
+  document.querySelectorAll('.lnklbl').forEach(e => e.remove())
+  for (const e of edges) {
+    const x1 = e.a.x + 45, y1 = e.a.y + 24, x2 = e.b.x + 45, y2 = e.b.y + 24
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    const mx = (x1 + x2) / 2
+    p.setAttribute('d', `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`)
+    p.setAttribute('stroke', '#5a7fb0'); p.setAttribute('stroke-width', '2'); p.setAttribute('fill', 'none')
+    links.appendChild(p)
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); c.setAttribute('cx', x2); c.setAttribute('cy', y2); c.setAttribute('r', 4); c.setAttribute('fill', '#5a7fb0'); links.appendChild(c)
+    const l = document.createElement('div'); l.className = 'lnklbl'; l.textContent = e.label; l.style.left = (mx - 14) + 'px'; l.style.top = ((y1 + y2) / 2 - 8) + 'px'
+    const ang = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI; l.style.transform = `rotate(${ang.toFixed(1)}deg)`
+    canvas.appendChild(l)
+  }
+}
+const r1 = addNode('R1', 120, 100, 210), r2 = addNode('R2', 420, 90, 210), sw1 = addNode('SW1', 270, 300, 140), fw = addNode('FW-방화벽', 560, 320, 10), pc = addNode('PC-서울', 120, 480, 40)
+addEdge(r1, r2, 'e0/0'); addEdge(r1, sw1, 'e0/1'); addEdge(r2, sw1, 'g0/1'); addEdge(sw1, fw, 'g0/2'); addEdge(sw1, pc, 'f0/1')
+draw()
+function setZoom(z) { zoom = Math.max(.3, Math.min(3, z)); canvas.style.transform = `scale(${zoom})`; document.getElementById('zv').textContent = Math.round(zoom * 100) + '%' }
+document.getElementById('zin').onclick = () => setZoom(zoom + .1)
+document.getElementById('zout').onclick = () => setZoom(zoom - .1)
+let k = 0
+document.getElementById('addnode').onclick = () => { const n = addNode('N' + (++k), 700 + k * 30, 120 + k * 40, 300); addEdge(sw1, n, 'p' + k); draw() }
+document.getElementById('f-ok').onclick = () => { status.textContent = `apply name="${document.getElementById('f-name').value}" kind=${document.getElementById('f-kind').value} chk=${document.getElementById('f-chk').checked}` }
+document.getElementById('f-name').addEventListener('input', e => { status.textContent = 'name=' + e.target.value })
+</script>
+</body>
+</html>

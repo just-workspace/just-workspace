@@ -1,0 +1,42 @@
+/* Vue components/ai/AiMessage.vue 의 <style>(전역) 그대로 */
+/* 본문은 바깥(메시지 줄)의 글자 크기·줄 간격·foreground 를 따른다(시안 AI 1 — muted 아님, 15px) */
+.ai-md.prose-sm { font-size: inherit; line-height: inherit; }
+.ai-md {
+  --tw-prose-body: currentColor; --tw-prose-headings: currentColor; --tw-prose-bold: currentColor;
+  --tw-prose-bullets: currentColor; --tw-prose-counters: currentColor;
+  --tw-prose-invert-body: currentColor; --tw-prose-invert-headings: currentColor; --tw-prose-invert-bold: currentColor;
+  --tw-prose-invert-bullets: currentColor; --tw-prose-invert-counters: currentColor;
+}
+.ai-md > :first-child { margin-top: 0; }
+.ai-md > :last-child { margin-bottom: 0; }
+.ai-md pre.shiki, .ai-md pre.ai-pre {
+  margin: 0; padding: 0.7rem 0.9rem; border-radius: 0 0 0.5rem 0.5rem;
+  overflow-x: auto; font-size: 0.8125rem; line-height: 1.55;
+}
+.ai-md pre.ai-pre { background: hsl(var(--muted)); }
+.ai-md .ai-cb {
+  margin: 0.75rem 0; border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem; overflow: hidden;
+}
+.ai-md .ai-cb-h {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.25rem 0.6rem; font-size: 0.7rem; background: hsl(var(--muted));
+}
+.ai-md .ai-cb-lang { text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.65; }
+.ai-md .ai-cb-copy { opacity: 0.65; cursor: pointer; padding: 0 0.2rem; }
+.ai-md .ai-cb-copy:hover { opacity: 1; }
+/* S6a — 출처 표식 [n] · 수식 */
+.ai-md .ai-cite {
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; line-height: 1;
+  vertical-align: super; margin-left: 2px; padding: 0 1px; border-radius: 3px;
+  color: hsl(var(--primary)); background: transparent; cursor: pointer;
+}
+.ai-md .ai-cite:hover { text-decoration: underline; }
+.ai-md .ai-cite:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 1px; }
+.ai-md .ai-math-block {
+  display: block; width: fit-content; max-width: 100%; overflow-x: auto; margin: 0.75rem 0;
+  padding: 0.75rem 1.1rem; border: 1px solid hsl(var(--border)); border-radius: 0.5rem; background: hsl(var(--card));
+}
+.ai-md .ai-math-block .katex-display { margin: 0; }
+.ai-md .katex { font-size: 1.08em; }
+.ai-md code.ai-math-src, .ai-md pre.ai-math-src { opacity: 0.8; }

@@ -1,0 +1,8 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>body{margin:0;background:#000}</style></head>
+<body><canvas id="c" width="360" height="300"></canvas>
+<script>
+const x = document.getElementById('c').getContext('2d'); let t = 0
+function d() { t++; x.fillStyle = '#000'; x.fillRect(0, 0, 360, 300); x.fillStyle = '#ff9'; x.font = '13px monospace'; x.fillText('guacamole iframe tile ' + t, 10, 30); x.fillStyle = `hsl(${t * 7 % 360} 70% 50%)`; x.fillRect(10, 60, 200, 20); setTimeout(d, 120) }
+d()
+</script></body></html>

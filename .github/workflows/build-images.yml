@@ -1,0 +1,66 @@
+name: build-images
+
+# just-workspace 백엔드/프런트(React) prebuilt 이미지 빌드·푸시.
+# 태그 push(v*) 또는 수동 실행 시 동작. GitHub Actions / Gitea Actions 둘 다 호환.
+#
+# 필요한 설정 (repo Secrets/Variables):
+#   vars.JW_REGISTRY    예: ghcr.io  (또는 git.example.com / docker.io)
+#   vars.JW_IMAGE_NS    예: your-org (이미지 네임스페이스/오너)
+#   secrets.REGISTRY_USER, secrets.REGISTRY_TOKEN  (레지스트리 로그인)
+#     - GHCR면 USER=github actor, TOKEN=GITHUB_TOKEN(또는 PAT write:packages)
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "이미지 태그(미입력=latest)"
+        required: false
+
+env:
+  REGISTRY: ${{ vars.JW_REGISTRY || 'ghcr.io' }}
+  IMAGE_NS: ${{ vars.JW_IMAGE_NS || github.repository_owner }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service: [backend, frontend-react]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Registry login
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then v="${{ github.ref_name }}"
+          elif [[ -n "${{ inputs.version }}" ]]; then v="${{ inputs.version }}"
+          else v="latest"; fi
+          echo "version=${v#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NS }}/just-workspace-${{ matrix.service }}:${{ steps.ver.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NS }}/just-workspace-${{ matrix.service }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

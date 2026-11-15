@@ -1,0 +1,136 @@
+{
+  "$comment": "구역 선언 — 설치 마법사·설치 관리자·백엔드가 함께 읽는 단일 출처. memory_mb.idle 은 유휴 실측, limit 는 compose 의 상한 합계. ports 는 호스트에 여는 포트.",
+  "version": 1,
+  "core": {
+    "id": "core",
+    "name": {"ko": "기본", "en": "Core"},
+    "summary": {"ko": "로그인, 관리, 대시보드, 파일", "en": "Sign-in, admin, dashboard, files"},
+    "compose_profiles": [],
+    "services": ["postgres", "redis", "backend", "frontend-react", "nginx", "certbot"],
+    "modules": ["files", "dashboard", "search", "notifications", "groups", "backup"],
+    "memory_mb": {"idle": 2400, "limit": 6200},
+    "ports": ["80/tcp", "443/tcp"]
+  },
+  "presets": {
+    "minimal": [],
+    "collab": ["mail", "chat", "calendar", "docs"],
+    "full": ["mail", "chat", "calendar", "docs", "meetings", "git", "ai", "monitoring"]
+  },
+  "zones": [
+    {
+      "id": "mail",
+      "name": {"ko": "메일", "en": "Mail"},
+      "summary": {"ko": "내장 메일 서버 또는 외부 발신 서버", "en": "Built-in mail server or external relay"},
+      "compose_profiles": ["mailserver"],
+      "services": ["mailserver"],
+      "modules": ["mail"],
+      "requires": [],
+      "memory_mb": {"idle": 400, "limit": 1024},
+      "ports": ["25/tcp", "465/tcp", "587/tcp", "993/tcp"],
+      "wizard_step": "mail"
+    },
+    {
+      "id": "chat",
+      "name": {"ko": "채팅", "en": "Chat"},
+      "summary": {"ko": "채널, 대화, 음성 채널(회의 구역 필요)", "en": "Channels, DMs, voice channels (needs Meetings)"},
+      "compose_profiles": [],
+      "services": [],
+      "modules": ["chat"],
+      "requires": [],
+      "memory_mb": {"idle": 0, "limit": 0},
+      "ports": []
+    },
+    {
+      "id": "calendar",
+      "name": {"ko": "일정·연락처·할 일", "en": "Calendar, contacts, tasks"},
+      "summary": {"ko": "달력 동기화(CalDAV·CardDAV) 포함", "en": "Includes CalDAV/CardDAV sync"},
+      "compose_profiles": [],
+      "services": [],
+      "modules": ["calendar", "contacts", "tasks", "dav"],
+      "requires": [],
+      "memory_mb": {"idle": 0, "limit": 0},
+      "ports": []
+    },
+    {
+      "id": "docs",
+      "name": {"ko": "문서 편집·위키·게시판", "en": "Documents, wiki, boards"},
+      "summary": {"ko": "문서·시트·발표 자료 함께 편집", "en": "Co-edit documents, sheets and slides"},
+      "compose_profiles": ["onlyoffice"],
+      "services": ["onlyoffice"],
+      "modules": ["wopi", "wiki", "board"],
+      "requires": [],
+      "memory_mb": {"idle": 750, "limit": 2048},
+      "ports": []
+    },
+    {
+      "id": "meetings",
+      "name": {"ko": "회의", "en": "Meetings"},
+      "summary": {"ko": "화상 회의, 화면 공유, 녹화, 무손실 오디오", "en": "Video calls, screen share, recording, lossless audio"},
+      "compose_profiles": ["livekit", "egress", "audiorelay"],
+      "services": ["livekit", "egress", "audiorelay"],
+      "modules": ["meetings"],
+      "requires": [],
+      "memory_mb": {"idle": 60, "limit": 4800},
+      "ports": ["7881/tcp", "7882-7892/udp", "3478/udp", "4433/udp"],
+      "wizard_step": "meetings"
+    },
+    {
+      "id": "git",
+      "name": {"ko": "코드 저장소", "en": "Code hosting"},
+      "summary": {"ko": "Git 호스팅(Gitea)", "en": "Git hosting (Gitea)"},
+      "compose_profiles": ["gitea"],
+      "services": ["gitea"],
+      "modules": ["git"],
+      "requires": [],
+      "memory_mb": {"idle": 270, "limit": 512},
+      "ports": ["2222/tcp"]
+    },
+    {
+      "id": "ai",
+      "name": {"ko": "AI 도우미", "en": "AI assistant"},
+      "summary": {"ko": "외부 AI 서비스 연결, 웹 검색, 코드 실행, MCP 커넥터", "en": "External AI provider, web search, code sandbox, MCP connector"},
+      "compose_profiles": ["aitools"],
+      "services": ["searxng", "docconv", "sandbox"],
+      "modules": ["ai", "mcp"],
+      "requires": [],
+      "memory_mb": {"idle": 230, "limit": 6000},
+      "ports": [],
+      "wizard_step": "ai"
+    },
+    {
+      "id": "monitoring",
+      "name": {"ko": "상태 감시", "en": "Monitoring"},
+      "summary": {"ko": "로그 수집과 상태 화면", "en": "Log collection and health dashboards"},
+      "compose_profiles": ["logging"],
+      "services": ["vector", "loki", "grafana", "loki-gw", "healthprobe"],
+      "modules": [],
+      "requires": [],
+      "memory_mb": {"idle": 750, "limit": 2200},
+      "ports": []
+    }
+  ],
+  "addons": [
+    {
+      "id": "sso",
+      "name": {"ko": "SSO·LDAP 제공", "en": "SSO and LDAP provider"},
+      "summary": {"ko": "다른 서비스가 이 워크스페이스 계정으로 로그인", "en": "Let other services sign in with workspace accounts"},
+      "compose_profiles": ["sso"],
+      "services": ["sso", "ldap"],
+      "modules": [],
+      "requires": [],
+      "memory_mb": {"idle": 210, "limit": 1536},
+      "ports": ["389/tcp", "636/tcp"]
+    },
+    {
+      "id": "rbi",
+      "name": {"ko": "격리 브라우저", "en": "Isolated browser"},
+      "summary": {"ko": "내부 웹 화면을 격리된 브라우저로 열기", "en": "Open internal web UIs in an isolated browser"},
+      "compose_profiles": ["rbi"],
+      "services": ["rbi-netfilter"],
+      "modules": ["rbi"],
+      "requires": [],
+      "memory_mb": {"idle": 10, "limit": 64},
+      "ports": []
+    }
+  ]
+}

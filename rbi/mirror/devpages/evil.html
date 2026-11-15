@@ -1,0 +1,73 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>evil — 어휘 바깥으로 새어 나가려는 모든 것</title>
+<!-- 보안 점검용 "털린 대상 웹앱" 흉내. 여기 있는 것 중 어느 하나라도 클라이언트(미러)에 닿으면 실패다. -->
+<meta http-equiv="refresh" content="3000;url=/exfil?meta-refresh">
+<base href="/exfil/base/">
+<link rel="stylesheet" href="/exfil?link-css">
+<link rel="preload" href="/exfil?preload" as="image">
+<link rel="dns-prefetch" href="//exfil.invalid">
+<style>
+  @import url("/exfil?import");
+  @font-face{font-family:Leak;src:url("/exfil?font");unicode-range:U+0041}
+  body{margin:0;font:15px Arial,sans-serif;background:#fff url("/exfil?body-bg") no-repeat}
+  input[value^="a"]{background:url("/exfil?keylog-a")}
+  input[value^="b"]{background:url("/exfil?keylog-b")}
+  .cur{cursor:url("/exfil?cursor"),pointer}
+  .li{list-style-image:url("/exfil?list")}
+  .mask{-webkit-mask-image:url("/exfil?mask");mask-image:url("/exfil?mask")}
+  .bi{border-image:url("/exfil?border-image") 10}
+  .is{background-image:image-set(url("/exfil?image-set") 1x)}
+  .grad{background:linear-gradient(90deg,#f00,#00f)}
+  a:visited{color:rgb(1,2,3)}
+  .hidden-overlay{position:fixed;inset:0;opacity:0;cursor:pointer}
+  .leak{font-family:Leak}
+  #marker{color:rgb(200, 30, 30);font-weight:700}
+</style>
+<script>window.__evilRan = true; document.title = 'evil-script-ran'</script>
+<script src="/exfil?script-src"></script>
+</head>
+<body onload="window.__onload = 1">
+<h1 id="marker">EVIL PAGE</h1>
+<p class="leak cur li mask bi is grad">텍스트는 보여야 한다 — 그러나 CSS 의 url() 은 하나도 미러에 가면 안 된다.</p>
+<img src="/exfil?img-onerror" onerror="window.__onerror=1">
+<img src="x" onerror="document.title='img-onerror-ran'" alt="">
+<img srcset="/exfil?srcset 1x" src="/i/ok.png">
+<img id="exif" src="/i/exif.jpg" width="64" height="48" alt="exif">
+<picture><source srcset="/exfil?picture"><img src="/i/ok.png"></picture>
+<a href="javascript:alert(1)" id="js-link">javascript: 링크</a>
+<a href="java&#x09;script:alert(2)">javascript 변형</a>
+<a href="/exfil?ping" ping="/exfil?ping-attr">ping 링크</a>
+<a href="/i/ok.png" download="x.png">download</a>
+<form action="javascript://%0aalert(3)" id="f"><input name="q" value="abc"><input type="image" src="/exfil?input-image"><button formaction="/exfil?formaction">go</button></form>
+<iframe src="/exfil?iframe" width="200" height="60"></iframe>
+<iframe srcdoc="<script>parent.__srcdoc=1</script><b>srcdoc</b>" width="200" height="60"></iframe>
+<iframe src="data:text/html,<script>top.__data=1</script>" width="200" height="60"></iframe>
+<object data="/exfil?object" width="100" height="40"></object>
+<embed src="/exfil?embed" width="100" height="40">
+<video poster="/exfil?poster" width="160" height="90"><source src="/exfil?video"><track src="/exfil?track"></video>
+<table background="/exfil?table-bg"><tr><td background="/exfil?td-bg">table</td></tr></table>
+<svg width="220" height="120" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <script>document.title='svg-script-ran'</script>
+  <defs><filter id="flt"><feImage href="/exfil?feImage"/></filter></defs>
+  <rect x="5" y="5" width="100" height="50" fill="rgb(40,120,200)" filter="url(#flt)"/>
+  <image href="/exfil?svg-image" x="110" y="5" width="50" height="50"/>
+  <use href="/exfil?svg-use#x"/>
+  <a xlink:href="javascript:alert(4)"><circle cx="40" cy="90" r="20" fill="rgb(200,40,40)"/></a>
+  <animate attributeName="href" to="javascript:alert(5)" dur="1s"/>
+  <set attributeName="onmouseover" to="alert(6)"/>
+  <path d="M 120 70 L 200 110" stroke="rgb(0,0,0)" stroke-width="3"/>
+  <foreignObject x="120" y="60" width="100" height="50"><body xmlns="http://www.w3.org/1999/xhtml"><script>document.title='fo-script-ran'</script><b>fo</b></body></foreignObject>
+</svg>
+<div style="width:120px;height:30px;background:url('/exfil?inline-style') rgb(220, 220, 220)" onclick="alert(7)" onmouseover="alert(8)">inline style+handler</div>
+<div class="hidden-overlay"></div>
+<math><mi href="javascript:alert(9)">m</mi></math>
+<template><script>document.title='template-ran'</script></template>
+<noscript><img src="/exfil?noscript"></noscript>
+<p>bidi: a‮evil‬ b <span>&#x202E;dlrow&#x202C;</span> zw:&#x200B;x</p>
+<input id="pw" type="password" value="secret123">
+<input id="t" value="a">
+</body>
+</html>

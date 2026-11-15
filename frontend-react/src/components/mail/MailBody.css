@@ -1,0 +1,38 @@
+/*
+ * 메일 본문 종이 — Vue 판 MailBody.vue 의 <style> 그대로.
+ * 전역 토큰 --paper / --paper-foreground(11-A2). 두 테마 같은 흰 종이(HTML 메일 원본 보존, 대비 16:1).
+ * 링크·인용선·인용 글자 색은 종이 위 전용 값이라 토큰이 없다 — 예전 iframe 의 hex(#1b5fd9 #d7dce3 #5e6978)를 HSL 로 옮긴 것.
+ * "어둡게 보기"는 card·foreground(11-A2 확정).
+ */
+.mail-paper-scope {
+  --mail-paper: var(--paper);
+  --mail-paper-foreground: var(--paper-foreground);
+  --mail-paper-link: 218 78% 48%;
+  --mail-paper-rule: 215 18% 87%;
+  --mail-paper-muted: 215 12% 42%;
+}
+.mail-paper {
+  background: hsl(var(--mail-paper));
+  color: hsl(var(--mail-paper-foreground));
+}
+.mail-paper a { color: hsl(var(--mail-paper-link)); }
+.mail-paper-prose {
+  color: inherit;
+  --tw-prose-body: currentColor; --tw-prose-headings: currentColor; --tw-prose-bold: currentColor;
+  --tw-prose-code: currentColor; --tw-prose-bullets: currentColor; --tw-prose-counters: currentColor;
+  --tw-prose-links: hsl(var(--mail-paper-link)); --tw-prose-quotes: hsl(var(--mail-paper-muted));
+  --tw-prose-quote-borders: hsl(var(--mail-paper-rule));
+}
+.mail-paper--dark .mail-paper-prose { --tw-prose-links: hsl(var(--primary)); --tw-prose-quotes: hsl(var(--muted-foreground)); --tw-prose-quote-borders: hsl(var(--border)); }
+.mail-paper-prose :where(blockquote) { border-color: hsl(var(--mail-paper-rule)); color: hsl(var(--mail-paper-muted)); }
+.mail-paper-quote-toggle, .mail-paper-quote { border-color: hsl(var(--mail-paper-rule)); color: hsl(var(--mail-paper-muted)); }
+/* 어둡게 보기(A·B): 앱 색 card/foreground(11-A2). */
+.mail-paper.mail-paper--dark {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  box-shadow: inset 0 0 0 1px hsl(var(--border));
+}
+.mail-paper--dark a { color: hsl(var(--primary)); }
+.mail-paper--dark .mail-paper-prose :where(blockquote),
+.mail-paper--dark .mail-paper-quote-toggle,
+.mail-paper--dark .mail-paper-quote { border-color: hsl(var(--border)); color: hsl(var(--muted-foreground)); }

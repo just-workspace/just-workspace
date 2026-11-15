@@ -1,0 +1,344 @@
+/*
+ * 디자인 토큰 — design_handoff_just_workspace_client 확정값.
+ *
+ * 값의 출처는 핸드오프의 .dc.html 인라인 스타일이다. 임의로 바꾸지 않는다.
+ * 라이트/다크는 **색만 다르다** — 레이아웃·간격·타이포는 동일하다.
+ *
+ * 라이트 테마 규칙(핸드오프 명시):
+ *   · 본문 최소 굵기 400. font-weight 300 을 쓰지 않는다.
+ *   · 10px 이하 글자를 쓰지 않는다(다크의 10.5px → 라이트 11px).
+ */
+
+/* 라이트가 기본 */
+:root {
+  /* 표면 */
+  --app-bg:        #ffffff;
+  --surface-alt:   #f4f6f8;   /* 사이드바 */
+  --card:          #fbfcfd;
+  --card-2:        #f7f9fa;
+  --titlebar:      #12191b;   /* 타이틀바·좌측 레일 */
+  --rail-active:   #1d2a2c;
+  --canvas:        #eceeef;
+
+  /* 텍스트 */
+  --text:          #171b21;
+  --text-2:        #1f262e;
+  --text-3:        #4d5762;
+  --label:         #566270;
+  --muted:         #6c7783;
+  --footer-note:   #5c6774;
+  --version:       #7b8593;
+
+  /* 선 */
+  --divider:       #dfe5eb;
+  --divider-2:     #dbe2e9;
+  --input-border:  #cfd6dd;
+  --footer-line:   #eef1f4;
+
+  /* 브랜드 */
+  --brand:         #0f7a84;   /* 채워진 버튼 배경 — 양 테마 동일 */
+  --brand-text:    #0b6670;   /* 텍스트·아이콘 */
+  --brand-strong:  #0b5c64;
+  --brand-tint:    #f2f9fa;
+  --brand-tint-2:  #e2f1f2;
+  --brand-border:  #cfe0e2;
+  --brand-body:    #2f6168;   /* 틴트 카드 안 본문 */
+  --spinner-track: #b7d5d8;
+
+  /* 의미 */
+  --ok:            #2f7d46;
+  --ok-tint:       #e6f2ea;
+  --warn:          #a4630a;
+  --warn-tint:     #fdf9f1;
+  --warn-border:   #e9dcc0;
+  --badge:         #c2372f;   /* 양 테마 공통 */
+  --sharing:       #4ec3cc;
+
+  --icon-muted:    #8a94a1;
+  --titlebar-text: #cdd8da;
+  --titlebar-icon: #a8b6b8;
+
+
+  /* ── 셸(Main) 전용 ─────────────────────────────────────
+     좌측 레일·타이틀바는 **양 테마 모두 어둡다**. 아래 값은 테마와 무관하게
+     같고, 배경(--titlebar)만 테마에 따라 바뀐다. */
+  --rail-fg:       #9aa8ab;   /* 비활성 아이콘·라벨 */
+  --rail-fg-on:    #ffffff;   /* 활성 */
+  --rail-fg-dim:   #6f7f82;   /* 하단 보조(업데이트 상태) */
+  --rail-marker:   #4ec3cc;   /* 활성 표시 막대 */
+  --rail-avatar:   #2b4448;
+  --rail-avatar-fg:#cfe4e6;
+  --tb-brand-fg:   #e7edee;   /* 타이틀바 제품명 */
+  --tb-search-bg:  #1d2a2c;
+  --tb-search-fg:  #7d8f92;
+
+  --list-sel:      #ffffff;   /* 선택된 대화 카드 배경 */
+  --list-sel-ring: #dbe3e9;
+  --list-search-bg:#ffffff;
+  --list-search-bd:#e0e6ec;
+  --chip-on-bg:    #e2f1f2;
+  --chip-on-fg:    #0b6670;
+  --icon-btn-bg:   #e3ecee;
+  --icon-strong:   #5b6570;
+  /* 목록 안의 검색 아이콘. 로그인 화면(--icon-muted)보다 한 단계 진하다. */
+  --icon-muted-2:  #7c8792;
+  /* 강조 아이콘(＋ 등). 라이트는 채움색과 같고 다크는 밝은 청록으로 뒤집힌다. */
+  --accent-icon:   #0f7a84;
+
+  /* ── 공유 소스 피커 ─────────────────────────────────── */
+  --picker-divider: #e6eaef;
+  --card-ring:      #dfe4ea;   /* 썸네일 카드 기본 테두리(그림자로 그린다) */
+  --btn-outline:    #d3dae1;
+  --btn-outline-fg: #4a5462;
+  --tab-off:        #4d5762;
+  --card-label:     #2b333d;   /* 비선택 카드 라벨 */
+  /* 경고 문구. 핸드오프가 양 테마 같은 값을 쓴다(파일 실측). */
+  --warn-note:      #8a6a2e;
+
+  /* ── 트레이 메뉴 · OS 토스트 ────────────────────────── */
+  --panel-border:   #d7dee5;   /* 팝오버·토스트 테두리 */
+  --warn-tint-2:    #f7edda;   /* 토스트 경고 아이콘 배경 */
+
+  /* ── 설정 · 동기화 ──────────────────────────────────── */
+  --dot-idle:       #b7bec6;
+  --fg-disabled:    #5f6a72;
+  --chip-neutral:   #1d2429;
+  --sunday:         #e08078;
+  --success-fg:     #6cc286;   /* 일시중지 상태 점 (양 테마 공통) */
+
+  /* ── 셸 목록 열 (v0.2.0) ────────────────────────────── */
+  --fg-disabled:    #a2adb8;   /* 미니 달력의 인접 월 */
+  --chip-neutral:   #e6ebf0;   /* 중립 칩 배경 */
+  --sunday:         #c2372f;   /* 미니 달력 일요일 */
+  --success-fg:     #1f5e33;   /* 성공 텍스트(점보다 진하게) */
+  --warn-strong:    #6f4a10;   /* 충돌 안내 제목 */
+  --warn-body:      #7d6535;   /* 충돌 안내 본문 */
+  --track:          #e6eaef;   /* 진행 막대 트랙 */
+
+  /* 라이트에서만 쓰는 최소 굵기·최소 크기 */
+  --body-weight:   400;
+  --micro-size:    11px;
+}
+
+/* 시스템이 다크이고 사용자가 라이트를 명시하지 않았을 때 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --app-bg:        #151b1f;
+    --surface-alt:   #11171a;
+    --card:          #1b2226;
+    --card-2:        #1b2226;
+    --titlebar:      #0b1012;
+    --rail-active:   #1d2a2c;
+    --canvas:        #0a0e11;
+
+    --text:          #e9eef0;
+    --text-2:        #c5ced4;
+    --text-3:        #a3adb5;
+    --label:         #98a3ac;
+    --muted:         #8a959e;
+    --footer-note:   #8a959e;
+    --version:       #6e7880;
+
+    --divider:       #2a343c;
+    --divider-2:     #2a343c;
+    --input-border:  #333e46;
+    --footer-line:   #242d34;
+
+    --brand-text:    #4ec3cc;
+    --brand-strong:  #7fd4db;
+    --brand-tint:    #12262a;
+    --brand-tint-2:  #123338;
+    --brand-border:  #1f4a50;
+    --brand-body:    #93c3c8;
+    --spinner-track: #1f4a50;
+
+    --ok:            #57b573;
+    --ok-tint:       #17301f;
+    --warn:          #e0a13a;
+    --warn-tint:     #251d10;
+    --warn-border:   #4a3a17;
+
+
+    --list-sel:      #1b2226;
+    --list-sel-ring: #2a343c;
+    --list-search-bg:#151b1f;
+    --list-search-bd:#2a343c;
+    --chip-on-bg:    #123338;
+    --chip-on-fg:    #7fd4db;
+    --icon-btn-bg:   #123338;
+    --icon-strong:   #98a3ac;
+    --icon-muted-2:  #8a959e;
+    --accent-icon:   #4ec3cc;
+
+  --picker-divider: #242d34;
+  --card-ring:      #333e46;
+  --btn-outline:    #333e46;
+  --btn-outline-fg: #aeb8bf;
+  --tab-off:        #a3adb5;
+    --panel-border:   #333e46;
+  --warn-tint-2:    #3a2c12;
+  --dot-idle:       #b7bec6;
+  /* 핸드오프 다크 파일에는 이 셋이 라이트 값(#6f4a10 등) 그대로 남아 있다.
+     다크 배경에서 거의 안 보이므로 토큰 표의 다크 경고색을 쓴다. */
+  --warn-strong:    #e0a13a;
+  --warn-body:      #a3adb5;
+  --warn-note:      #e0a13a;
+  --track:          #242d34;
+  --card-label:     #a3adb5;
+
+    --picker-divider: #242d34;
+    --card-ring:      #333e46;
+    --btn-outline:    #333e46;
+    --btn-outline-fg: #aeb8bf;
+    --tab-off:        #a3adb5;
+    --panel-border:   #333e46;
+    --warn-tint-2:    #3a2c12;
+    --dot-idle:       #b7bec6;
+    --fg-disabled:    #5f6a72;
+    --chip-neutral:   #1d2429;
+    --sunday:         #e08078;
+    --success-fg:     #6cc286;
+    /* 핸드오프 다크 파일에는 이 셋이 라이트 값(#6f4a10 등) 그대로 남아 있다.
+       다크 배경에서 거의 안 보이므로 토큰 표의 다크 경고색을 쓴다. */
+    --warn-strong:    #e0a13a;
+    --warn-body:      #a3adb5;
+    --warn-note:      #e0a13a;
+    --track:          #242d34;
+    /* 핸드오프 다크 파일의 카드 라벨은 라이트 값이 그대로 남아 있다(미반영).
+       토큰 표의 3차 텍스트를 쓴다. */
+    --card-label:     #a3adb5;
+
+    --icon-muted:    #8a959e;
+
+    /* 다크는 밝은 글자라 얇아 보인다 — 핸드오프가 300 을 허용하지만 400 권장 */
+    --body-weight:   400;
+    --micro-size:    10.5px;
+  }
+}
+
+/* 사용자가 다크를 명시 */
+:root[data-theme='dark'] {
+  --app-bg:        #151b1f;
+  --surface-alt:   #11171a;
+  --card:          #1b2226;
+  --card-2:        #1b2226;
+  --titlebar:      #0b1012;
+  --rail-active:   #1d2a2c;
+  --canvas:        #0a0e11;
+
+  --text:          #e9eef0;
+  --text-2:        #c5ced4;
+  --text-3:        #a3adb5;
+  --label:         #98a3ac;
+  --muted:         #8a959e;
+  --footer-note:   #8a959e;
+  --version:       #6e7880;
+
+  --divider:       #2a343c;
+  --divider-2:     #2a343c;
+  --input-border:  #333e46;
+  --footer-line:   #242d34;
+
+  --brand-text:    #4ec3cc;
+  --brand-strong:  #7fd4db;
+  --brand-tint:    #12262a;
+  --brand-tint-2:  #123338;
+  --brand-border:  #1f4a50;
+  --brand-body:    #93c3c8;
+  --spinner-track: #1f4a50;
+
+  --ok:            #57b573;
+  --ok-tint:       #17301f;
+  --warn:          #e0a13a;
+  --warn-tint:     #251d10;
+  --warn-border:   #4a3a17;
+
+
+  --list-sel:      #1b2226;
+  --list-sel-ring: #2a343c;
+  --list-search-bg:#151b1f;
+  --list-search-bd:#2a343c;
+  --chip-on-bg:    #123338;
+  --chip-on-fg:    #7fd4db;
+  --icon-btn-bg:   #123338;
+  --icon-strong:   #98a3ac;
+  --icon-muted-2:  #8a959e;
+  --accent-icon:   #4ec3cc;
+
+  --icon-muted:    #8a959e;
+
+  --body-weight:   400;
+  --micro-size:    10.5px;
+}
+
+* { box-sizing: border-box; }
+
+/* hidden 속성으로 화면을 껐다 켠다. display 를 지정한 요소(flex 카드 등)는
+   기본 [hidden] 규칙을 이겨버리므로 여기서 못을 박는다. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--app-bg);
+  color: var(--text);
+  font-family: 'IBM Plex Sans KR', 'Malgun Gothic', 'Segoe UI', system-ui, sans-serif;
+  font-weight: var(--body-weight);
+  -webkit-font-smoothing: antialiased;
+  /* 프레임리스 창 — 텍스트 선택은 입력 요소에서만 */
+  user-select: none;
+  cursor: default;
+}
+
+.mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+
+a { color: var(--brand-text); text-decoration: none; }
+a:hover { color: var(--brand-strong); text-decoration: underline; }
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--brand-text);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ── 타이틀바 (프레임리스) ───────────────────────────────
+   빈 영역은 드래그, 버튼은 no-drag. 핸드오프 "Interactions" 항목. */
+.titlebar {
+  height: 40px;
+  background: var(--titlebar);
+  display: flex;
+  align-items: center;
+  padding-left: 16px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+.titlebar .title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--titlebar-text);
+}
+.titlebar .spacer { flex-grow: 1; }
+.winbtn {
+  width: 42px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: default;
+  -webkit-app-region: no-drag;
+}
+.winbtn:hover { background: rgba(255, 255, 255, 0.08); }
+.winbtn.close:hover { background: #c2372f; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .winbtn { transition: background 120ms ease-out; }
+}
+
+/* macOS 는 OS 가 그리는 신호등을 쓴다(titleBarStyle: hiddenInset).
+   우리 버튼을 같이 띄우면 창을 닫는 방법이 두 개가 된다. */
+html.is-mac .winbtn { display: none; }
+/* 신호등 자리를 비워 준다. */
+html.is-mac .titlebar { padding-left: 78px; }

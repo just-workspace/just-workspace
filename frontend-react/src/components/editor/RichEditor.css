@@ -1,0 +1,12 @@
+/* Vue components/editor/RichEditor.vue 의 <style>(scoped 아님) 그대로 */
+.rich-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+  height: 0;
+}
+.rich-editor .ProseMirror table { border-collapse: collapse; width: 100%; }
+.rich-editor .ProseMirror td, .rich-editor .ProseMirror th { border: 1px solid hsl(var(--border)); padding: 4px 8px; }
+.rich-editor .ProseMirror th { background: hsl(var(--muted)); }
+.rich-editor .ProseMirror .selectedCell { background: hsl(var(--primary) / 0.13); }

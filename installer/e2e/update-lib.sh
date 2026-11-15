@@ -16,6 +16,9 @@ REL="$E2E_WORK/release"                 # keys/ channel/ manifests/ src-<버전>
 OUR_IMAGES=(backend frontend-react mailserver sso ldap audiorelay docconv sandbox rbi-netfilter)
 UPD=/api/admin/system/update
 TOOL_IMAGE="${E2E_TOOL_IMAGE:-just-workspace-installer:$E2E_VERSION}"     # python + cryptography 가 든 이미지
+# 리포의 DB 스키마 버전(S0)과, 검수용 변경 단계를 하나(S1)·둘(S2) 더한 버전
+S0="$(sed -n 's/^SCHEMA_VERSION = \([0-9][0-9]*\).*/\1/p' "$E2E_REPO/backend/app/db/schema_version.py")"
+S1=$((S0 + 1)); S2=$((S0 + 2))
 
 # ─── 가짜 릴리스 환경 ───
 
@@ -51,7 +54,7 @@ jwrelease() {
 }
 
 # rel_build <버전> <변형>  — 그 버전의 이미지를 만들어 레지스트리에 올리고 digests.json 을 쓴다.
-#   변형: base(스키마 그대로) · schema2(검수용 변경 단계 하나) · schema3(둘) · broken3(둘째가 일부러 깨진다)
+#   변형: base(스키마 그대로) · plus1(리포의 단계 뒤에 검수용 변경 단계 하나) · plus2(둘) · broken2(둘째가 일부러 깨진다)
 # backend 와 설치 관리자만 새로 빌드한다(VERSION 과, 검수용 스키마 변경 단계 — 리포에는 없는 패치). 나머지는 같은 이미지에 태그만.
 rel_build() {
   local ver="$1" variant="${2:-base}" src="$REL/src-$1" n log="$REL/build-$1.log"
@@ -66,31 +69,41 @@ rel_build() {
   python3 - "$src" "$variant" <<'PY' || return 1
 import re, sys
 src, variant = sys.argv[1], sys.argv[2]
-steps = {"base": 0, "schema2": 1, "schema3": 2, "broken3": 2}[variant]
+steps = {"base": 0, "plus1": 1, "plus2": 2, "broken2": 2}[variant]
 if steps:
-    p = f"{src}/backend/app/db/migrations.py"
-    s = open(p, encoding="utf-8").read()
-    body = '''
-async def _e2e_0002(conn):
-    await run_sql(conn, "CREATE TABLE IF NOT EXISTS e2e_update_marker (id integer PRIMARY KEY, note text)")
-    await run_sql(conn, "INSERT INTO e2e_update_marker (id, note) VALUES (2, 'step 2') ON CONFLICT DO NOTHING")
-
-
-async def _e2e_0003(conn):
-    await run_sql(conn, "%s")
-
-'''
-    third = "SELECT * FROM e2e_no_such_table" if variant == "broken3" else \
-            "INSERT INTO e2e_update_marker (id, note) VALUES (3, 'step 3') ON CONFLICT DO NOTHING"
-    entries = ['Step(2, "e2e marker", _e2e_0002),', 'Step(3, "e2e step 3", _e2e_0003),'][:steps]
-    s, n = re.subn(r"\nSTEPS(: [^=]+)? = \(\s*\)", "\n" + body % third + "\nSTEPS = (\n    " + "\n    ".join(entries) + "\n)", s)
-    assert n == 1, "STEPS 를 찾지 못했다"
-    open(p, "w", encoding="utf-8").write(s)
     p = f"{src}/backend/app/db/schema_version.py"
     s = open(p, encoding="utf-8").read()
-    s, n = re.subn(r"\nSCHEMA_VERSION = \d+", f"\nSCHEMA_VERSION = {1 + steps}", s)
+    base = int(re.search(r"(?m)^SCHEMA_VERSION = (\d+)", s).group(1))
+    s, n = re.subn(r"(?m)^SCHEMA_VERSION = \d+", f"SCHEMA_VERSION = {base + steps}", s)
     assert n == 1
     open(p, "w", encoding="utf-8").write(s)
+    # 리포의 단계 목록 뒤에 검수용 단계를 잇는다(번호는 리포의 버전 다음부터).
+    first, second = base + 1, base + 2
+    if variant == "broken2":
+        second_sql = "SELECT * FROM e2e_no_such_table"
+    else:
+        second_sql = f"INSERT INTO e2e_update_marker (id, note) VALUES ({second}, 'second') ON CONFLICT DO NOTHING"
+    entries = [f'Step({first}, "e2e marker", _e2e_first),', f'Step({second}, "e2e second", _e2e_second),'][:steps]
+    body = f'''
+
+
+async def _e2e_first(conn):
+    await run_sql(conn, "CREATE TABLE IF NOT EXISTS e2e_update_marker (id integer PRIMARY KEY, note text)")
+    await run_sql(conn, "INSERT INTO e2e_update_marker (id, note) VALUES ({first}, 'first') ON CONFLICT DO NOTHING")
+
+
+async def _e2e_second(conn):
+    await run_sql(conn, "{second_sql}")
+
+
+STEPS = STEPS + (
+    {(chr(10) + "    ").join(entries)}
+)
+'''
+    p = f"{src}/backend/app/db/migrations.py"
+    s = open(p, encoding="utf-8").read()
+    assert re.search(r"(?m)^STEPS(: [^=]+)? = \(", s), "STEPS 를 찾지 못했다"
+    open(p, "w", encoding="utf-8").write(s.rstrip() + body)
 PY
   : > "$log"
   (cd "$src" && [ -f .env ] || : > "$src/.env"

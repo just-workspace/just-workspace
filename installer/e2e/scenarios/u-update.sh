@@ -32,10 +32,10 @@ stage_setup() {
   rel_env_up
   say "릴리스 만들기"
   check "1.0.0 이미지·다이제스트" rel_build 1.0.0 base
-  check "1.0.0 manifest" rel_manifest 1.0.0 1
+  check "1.0.0 manifest" rel_manifest 1.0.0 "$S0"
   check "1.0.0 을 stable 로 게시" rel_publish 1.0.0 stable
-  check "1.0.1-beta.1 이미지(검수용 스키마 변경 단계 하나)" rel_build 1.0.1-beta.1 schema2
-  check "1.0.1-beta.1 manifest" rel_manifest 1.0.1-beta.1 2
+  check "1.0.1-beta.1 이미지(검수용 스키마 변경 단계 하나)" rel_build 1.0.1-beta.1 plus1
+  check "1.0.1-beta.1 manifest" rel_manifest 1.0.1-beta.1 "$S1"
   check "Beta 로 게시" rel_publish 1.0.1-beta.1 beta
   check "채널 검증(공개 키)" rel_verify
   note "받을 용량(manifest): $(json_get 'd.get("download_bytes")' < "$REL/manifests/1.0.1-beta.1.json")"
@@ -102,7 +102,7 @@ stage_u1() {
   say "U1 수동 업데이트 1.0.0 → 1.0.1"
   ws_login
   expect "업데이트 전 버전(/api/health)" 1.0.0 "$(health_version)"
-  expect "업데이트 전 스키마" 1 "$(health_schema)"
+  expect "업데이트 전 스키마" "$S0" "$(health_schema)"
   local t0 job
   # 화면이 쓰는 길(backend 대신 부르기)로 예고부터
   job="$(upd POST /apply '{"target":"1.0.1","start":"countdown"}' | json_get 'd["id"]')"
@@ -146,7 +146,7 @@ stage_u1() {
   check "backend 준비" wait_ready ws-backend 120
   ws_login
   expect "업데이트 뒤 버전(/api/health)" 1.0.1 "$(health_version)"
-  expect "업데이트 뒤 스키마(/api/health)" 2 "$(health_schema)"
+  expect "업데이트 뒤 스키마(/api/health)" "$S1" "$(health_schema)"
   expect "검수용 변경 단계가 적용됐다" t "$(marker_table)"
   expect ".env 의 JW_VERSION" 1.0.1 "$(env_value JW_VERSION)"
   expect "점검이 끝났다(공개 점검 상태)" False "$(ws_curl "$WS/maintenance/status" | json_get 'd["active"]')"
@@ -198,7 +198,7 @@ stage_u7() {
   check "backend 준비" wait_ready ws-backend 180
   ws_login
   expect "버전(/api/health)" 1.0.0 "$(health_version)"
-  expect "스키마" 1 "$(health_schema)"
+  expect "스키마" "$S0" "$(health_schema)"
   expect "검수용 표는 사라졌다(DB 복원)" f "$(marker_table)"
   expect "설치 관리자도 1.0.0 으로" 1.0.0 "$(installer_version)"
   check_data "U7 뒤"
@@ -243,8 +243,8 @@ stage_u2() {
 stage_u3() {
   say "U3 DB 변경 실패 → 자동 되돌림"
   if [ ! -f "$REL/manifests/1.0.2.json" ]; then
-    check "1.0.2 이미지(둘째 변경 단계가 일부러 깨진다)" rel_build 1.0.2 broken3
-    check "1.0.2 manifest" rel_manifest 1.0.2 3 --min-upgrade-from 1.0.1
+    check "1.0.2 이미지(둘째 변경 단계가 일부러 깨진다)" rel_build 1.0.2 broken2
+    check "1.0.2 manifest" rel_manifest 1.0.2 "$S2" --min-upgrade-from 1.0.1
     check "게시" rel_publish 1.0.2 stable
   fi
   ws_login
@@ -265,9 +265,9 @@ stage_u3() {
   check "backend 준비" wait_ready ws-backend 180
   ws_login
   expect "버전(/api/health)" 1.0.1 "$(health_version)"
-  expect "스키마 원복(/api/health)" 2 "$(health_schema)"
-  expect "DB 의 스키마 버전" 2 "$(db_schema)"
-  expect "깨지기 전에 적용된 단계의 흔적도 없다" "2" "$(docker exec ws-postgres psql -U workspace -d workspace -Atc 'SELECT max(version) FROM schema_migrations')"
+  expect "스키마 원복(/api/health)" "$S1" "$(health_schema)"
+  expect "DB 의 스키마 버전" "$S1" "$(db_schema)"
+  expect "깨지기 전에 적용된 단계의 흔적도 없다" "$S1" "$(docker exec ws-postgres psql -U workspace -d workspace -Atc 'SELECT max(version) FROM schema_migrations')"
   expect ".env 의 JW_VERSION" 1.0.1 "$(env_value JW_VERSION)"
   expect "설치 관리자 버전" 1.0.1 "$(installer_version)"
   check_data "U3 뒤"
@@ -278,8 +278,8 @@ stage_u3() {
 stage_r103() {
   [ -f "$REL/manifests/1.0.3.json" ] && return 0
   say "1.0.3 릴리스"
-  check "1.0.3 이미지(변경 단계 둘)" rel_build 1.0.3 schema3
-  check "1.0.3 manifest(1.0.1 이상에서만 바로)" rel_manifest 1.0.3 3 --min-upgrade-from 1.0.1
+  check "1.0.3 이미지(변경 단계 둘)" rel_build 1.0.3 plus2
+  check "1.0.3 manifest(1.0.1 이상에서만 바로)" rel_manifest 1.0.3 "$S2" --min-upgrade-from 1.0.1
   check "게시" rel_publish 1.0.3 stable
   expect "받을 버전" update "$(check_now)"
 }
@@ -306,7 +306,7 @@ stage_u5() {
   check "backend 준비" wait_ready ws-backend 180
   ws_login
   expect "버전" 1.0.3 "$(health_version)"
-  expect "스키마" 3 "$(health_schema)"
+  expect "스키마" "$S2" "$(health_schema)"
   expect "설치 관리자 버전" 1.0.3 "$(installer_version)"
   expect "버전마다 기록" '["1.0.1", "1.0.3"]' "$(upd GET "/history/$job" | json_get '[v["version"] for v in d["versions"]]')"
   expect "버전마다 백업(복원 지점의 버전)" "1.0.1 1.0.0" "$(iapi GET /restore-points | json_get '" ".join(p["version"] for p in d["points"][:2])')"
@@ -323,8 +323,8 @@ stage_u4() {
   # 공개 시각 = 지금부터 3일 전 + 4분 → 4분 뒤에 유예가 끝난다
   young="$(date -u -d "@$(( now - 3 * 86400 + 240 ))" +%Y-%m-%dT%H:%M:%SZ)"
   if [ ! -f "$REL/manifests/1.0.4.json" ]; then
-    check "1.0.4 이미지" rel_build 1.0.4 schema3
-    check "1.0.4 manifest(공개 시각 $young)" rel_manifest 1.0.4 3 --now "$young"
+    check "1.0.4 이미지" rel_build 1.0.4 plus2
+    check "1.0.4 manifest(공개 시각 $young)" rel_manifest 1.0.4 "$S2" --now "$young"
     check "게시" rel_publish 1.0.4 stable
   fi
   local hour next
@@ -385,8 +385,8 @@ stage_u6() {
   ws_login
   local base; base="$(health_version)"
   if [ ! -f "$REL/manifests/1.1.0-beta.1.json" ]; then
-    check "1.1.0-beta.1 이미지" rel_build 1.1.0-beta.1 schema3
-    check "manifest" rel_manifest 1.1.0-beta.1 3
+    check "1.1.0-beta.1 이미지" rel_build 1.1.0-beta.1 plus2
+    check "manifest" rel_manifest 1.1.0-beta.1 "$S2"
     check "Beta 로만 게시" rel_publish 1.1.0-beta.1 beta
   fi
   expect "stable 채널에서는 보이지 않는다" none "$(check_now)"
@@ -436,8 +436,8 @@ stage_u8() {
     # 이 릴리스는 캐시(redis) 이미지가 올라갔다 — 서버에 없는 "추가 이미지"가 하나 생긴다
     local other; other="$(other_redis)"
     note "$OFF 의 redis: ${other:-(다른 판을 받지 못했다)}"
-    E2E_REDIS_REF="$other" check "$OFF 이미지" rel_build $OFF schema3
-    check "$OFF manifest" rel_manifest $OFF 3
+    E2E_REDIS_REF="$other" check "$OFF 이미지" rel_build $OFF plus2
+    check "$OFF manifest" rel_manifest $OFF "$S2"
     rm -rf "$stage"; mkdir -p "$stage/images"
     cp "$REL/manifests/$OFF.json" "$stage/manifest.json"
     check "manifest 서명" jwrelease sign /work/stage-$OFF/manifest.json --key /work/keys/release.pem

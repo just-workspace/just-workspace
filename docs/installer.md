@@ -545,6 +545,7 @@ docker 없이 돈다. docker·DNS·HTTP·SMTP 는 가짜로 바꾼다(`tests/fak
 installer/e2e/remote.sh <ssh 대상> push                 # 커밋된 상태를 서버에 올린다
 installer/e2e/remote.sh <ssh 대상> build                # 서버에서 이미지를 소스로 빌드(localhost/just-workspace-<이름>:<VERSION>)
 installer/e2e/remote.sh <ssh 대상> run s1-minimal api   # 시나리오 하나
+installer/e2e/remote.sh <ssh 대상> run s9-operate       # 설치 뒤의 jw 명령(되돌리기·채널 키)과 사설 CA 인증서
 # 화면을 눌러서(Playwright — 이 PC 에서):
 node installer/e2e/wizard-ui.cjs --url https://<서버 주소>:8443 --token <설치 토큰> [--flow quick] [--width 390]
 node installer/e2e/admin-zones-ui.cjs --url https://<접속 주소> --addr <서버 주소> --password-file <파일>
@@ -563,7 +564,8 @@ node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서
 | `s5-proxy` | 80 평문만(443 미게시, HSTS 없음), 프록시 주소에서 온 `X-Real-IP` 만 클라이언트 주소로 쓰고 다른 출발지의 머리말은 무시, backend 의 세션 기록에도 그 주소 |
 | `s6-zone-toggle` | 내부 API 로 채팅 → 문서 → 코드 저장소 켜기, 문서·코드 저장소 끄기. `.env` 의 `JW_ZONES`·`COMPOSE_PROFILES`, `/api/health` 의 zones, 끈 구역의 볼륨 유지. 8443·호스트에서는 내부 API 에 닿지 않고, 틀린 키·내부 대역 밖은 404 |
 | `s7-failure-retry` | 토큰(틀림·재발급·만료·5회 잠금), 없는 이미지 → `pull` 실패·원인 키 → 고친 뒤 그 단계부터, 적용 도중 설치 관리자 재시작 → 이어서 완료, 인증서 자동 발급 실패 → 임시 인증서로 계속 |
-| `s8-manual` | 설치 관리자 없이 [deployment.md](deployment.md) 의 절차대로 최소 구성 기동 |
+| `s8-manual` | 설치 관리자 없이 [deployment.md](deployment.md) 의 절차대로 최소 구성 기동, `scripts/update.sh --no-pull` 로 다시 빌드해 올리기와 `--rollback`(적어 둔 이미지 ID 로 태그를 되돌린다) |
+| `s9-operate` | 기본 + 코드 저장소에서: 버전 환경변수 없이 띄웠을 때의 로그 알림, `jw update-key`(비공개 키·엉뚱한 파일 거부, 넣으면 확인이 `unconfigured` → 채널을 받으러 감)·`jw update-channel`, `jw restore`(목록, `--yes` 없이는 내용만, 백업 볼륨의 이름·서버 경로, 되돌린 뒤 백업 시점의 파일만 남고 쓰기가 됨, 없는 파일·틀린 경로 거부), 사설 CA 인증서(서버 인증서만 올리면 코드 저장소 연결이 보류로 남고, 발급 CA 를 함께 올리면 컨테이너에 CA 가 붙고 로그인 원본이 등록됨) |
 | `wizard-ui.cjs` | 화면을 눌러 일반 설치(협업 묶음·임시 인증서)와 빠른 설치를 완료 화면까지 — 1280 폭과 390 폭. 토큰 없는 주소·틀린 토큰, 사전 점검 14항목, 구역·메모리 합계, 메일 레코드 표, 이어 하기, 요약, 적용, 잠김 화면. 콘솔 오류 없음 |
 | `jw reinstall` | 설치된 서버에서 목록 확인 → `--yes` 로 지우고 새 토큰으로 다시 시작 |
 | `restore` + `restore-ui.cjs` | 서버 이전: 협업 묶음에 계정 2·파일·채팅·메일·일정·암호화된 값을 넣고 전체 백업 → 서버를 체크포인트로 되돌린 뒤 화면으로 올려 복원 → 옛 계정 로그인, 파일 해시, 채팅·메일·일정, DKIM 키, 암호화 값 복호, 설치 id, 잠금. 서버 경로 + 답변 파일(무인, 접속 주소 변경). 거부 경로(형식 아님·손상·끊김·암호 없음/틀림/맞음·더 높은 버전). 데이터 되돌리기 중 DB 정지 → 실패 → 재시도로 완료. NFS: 로컬 선택·빈 공유·다른 설치의 공유 거부, 같은 공유 재연결 뒤 파일 그대로 |
@@ -587,7 +589,7 @@ node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서
 
 업데이트에서 확인하지 못한 것: 실제 배포 채널·실제 서명 키, 인터넷 너머의 레지스트리에서 받는 시간(검수 서버에서는 이미지 계층이 대부분 이미 있었다), 여러 GB 묶음을 앞단 프록시를 거쳐 올리기, 플러그인 호환 판정, 설치 관리자를 `docker run` 의 다른 옵션(자원 제한 등)과 함께 띄운 경우의 자기 교체.
 
-확인하지 못한 것: 실제 Let's Encrypt 발급과 갱신(다시 발급의 `auto` 포함), 공개 CA 인증서에서의 Gitea 로그인 연동(사설 CA 를 Gitea 컨테이너에 손으로 믿게 한 뒤 다시 연결되는 것까지는 확인), 로컬 백업을 NFS 로 옮기는 복원, 수 GB 이상의 백업 올리기, 격리 브라우저 애드온(`rbi`), 무손실 오디오, 외부 SMTP·AI 제공자 연결, 지정 폴더 저장소, 공유기 뒤·실제 앞단 프록시, x86_64 가 아닌 서버, SELinux 가 켜진 배포판.
+확인하지 못한 것: 실제 Let's Encrypt 발급과 갱신(다시 발급의 `auto` 포함), 공개 CA 인증서에서의 Gitea 로그인 연동(사설 CA 는 발급 CA 를 함께 올려 이어지는 것까지 확인 — `s9-operate`), 로컬 백업을 NFS 로 옮기는 복원, 수 GB 이상의 백업 올리기, 격리 브라우저 애드온(`rbi`), 무손실 오디오, 외부 SMTP·AI 제공자 연결, 지정 폴더 저장소, 공유기 뒤·실제 앞단 프록시, x86_64 가 아닌 서버, SELinux 가 켜진 배포판.
 
 ## 14. 백업에서 복원
 

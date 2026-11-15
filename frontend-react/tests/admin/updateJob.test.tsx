@@ -56,7 +56,7 @@ describe('적용 진행', () => {
 
   it('migrate 전 실패: "이 단계부터 다시"와 "되돌리기" 둘 중 고른다', async () => {
     on('GET', '/jobs/job1', fx.jobs.failedBeforeMigrate())
-    on('POST', '/jobs/job1/action', fx.jobs.pulling())
+    on('POST', '/jobs/job1/action', () => { on('GET', '/jobs/job1', fx.jobs.pulling()); return fx.jobs.pulling() })
     await renderUpdate('/admin/update/apply/job1')
     expect(await title()).toBe('업데이트가 멈췄습니다')
     expect(stepStates()).toEqual(['preflight:done', 'backup:done', 'pull:failed', 'migrate:pending', 'switch:pending', 'verify:pending'])
@@ -137,8 +137,8 @@ describe('적용 진행', () => {
   })
 
   it('예고 중: 남은 시간, "지금 바로 시작"을 누르면 곧바로 진행으로', async () => {
-    on('GET', '/jobs/job1', seq(fx.jobs.countdown(soon()), fx.jobs.pulling()))
-    on('POST', '/jobs/job1/action', fx.jobs.pulling())
+    on('GET', '/jobs/job1', fx.jobs.countdown(soon()))
+    on('POST', '/jobs/job1/action', () => { on('GET', '/jobs/job1', fx.jobs.pulling()); return fx.jobs.pulling() })
     await renderUpdate('/admin/update/apply/job1')
     expect(await title()).toBe('곧 업데이트를 시작합니다')
     const box = screen.getByTestId('update-job-countdown')
@@ -153,7 +153,7 @@ describe('적용 진행', () => {
 
   it('예고 중 취소', async () => {
     on('GET', '/jobs/job1', fx.jobs.countdown(soon()))
-    on('POST', '/jobs/job1/action', fx.jobs.cancelled())
+    on('POST', '/jobs/job1/action', () => { on('GET', '/jobs/job1', fx.jobs.cancelled()); return fx.jobs.cancelled() })
     const page = await renderUpdate('/admin/update/apply/job1')
     fireEvent.click(within(await screen.findByTestId('update-job-countdown')).getByRole('button', { name: '취소' }))
     await waitFor(async () => expect(await title()).toBe('업데이트를 취소했습니다'))
@@ -233,7 +233,7 @@ describe('되돌림 — 자동', () => {
 
   it('실패: 워크스페이스가 멈춰 있다는 것, 백업 위치, 문서, 다시 시도 — 지원 창구 문구는 없다', async () => {
     on('GET', '/jobs/jobrb1', fx.jobs.rollbackFailed())
-    on('POST', '/jobs/jobrb1/action', fx.jobs.rollbackRunning())
+    on('POST', '/jobs/jobrb1/action', () => { on('GET', '/jobs/jobrb1', fx.jobs.rollbackRunning()); return fx.jobs.rollbackRunning() })
     await renderUpdate('/admin/update/rollback/jobrb1')
     expect(await title()).toBe('되돌림이 멈췄습니다')
     expect(screen.getByText('자동 되돌림이 한 단계에서 멈췄습니다.')).toBeTruthy()
@@ -361,5 +361,23 @@ describe('되돌림 — 수동 복원', () => {
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: '복원 시작' }))
     await waitFor(() => expect(toastStore.getState().toasts).toHaveLength(1))
     expect(page.path()).toBe('/admin/update/rollback')
+  })
+})
+
+describe('진행 조회와 제어가 엇갈릴 때', () => {
+  it('제어의 응답보다 먼저 떠난 조회의 답은 버린다', async () => {
+    let release: (v: any) => void = () => {}
+    let hold = false
+    on('GET', '/jobs/job1', () => (hold ? new Promise((r) => { release = r }) : fx.jobs.countdown(soon())))
+    on('POST', '/jobs/job1/action', fx.jobs.cancelled())
+    await renderUpdate('/admin/update/apply/job1')
+    await screen.findByTestId('update-job-countdown')
+    hold = true
+    await waitFor(() => expect(called('GET', '/jobs/job1').length).toBeGreaterThan(1))      // 조회 하나가 떠 있다
+    fireEvent.click(within(screen.getByTestId('update-job-countdown')).getByRole('button', { name: '취소' }))
+    await waitFor(async () => expect(await title()).toBe('업데이트를 취소했습니다'))
+    release(fx.jobs.countdown(soon()))                                                        // 늦게 온 옛 답
+    await new Promise(r => setTimeout(r, 60))
+    expect(await title()).toBe('업데이트를 취소했습니다')
   })
 })

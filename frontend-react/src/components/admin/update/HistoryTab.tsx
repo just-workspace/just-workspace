@@ -59,7 +59,7 @@ function Detail({ item }: { item: HistoryItem }) {
             {data.versions.map((v, i) => (
               <UiDisclosure key={v.version} variant="row" defaultOpen={v.steps.some(s => s.status === 'failed') || i === data.versions.length - 1}
                 title={<span className="font-mono">{v.version}</span>}
-                description={t('admin.update.history.versionOf', { i: i + 1, n: data.versions.length })}>
+                description={data.versions.length > 1 ? t('admin.update.history.versionOf', { i: i + 1, n: data.versions.length }) : undefined}>
                 <StepRows label={`${v.version} ${t('admin.update.history.steps')}`} steps={rows(v.steps)} />
               </UiDisclosure>
             ))}

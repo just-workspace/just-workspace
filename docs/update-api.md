@@ -231,6 +231,7 @@
 | `path` · `version_index` | 거칠 버전과 지금 몇 번째(0 부터)인가. `steps` 는 **지금 버전**의 단계다 — 다음 버전으로 넘어가면 전부 `pending` 으로 돌아간다 |
 | `countdown` | `status = "countdown"` 일 때 `{"ends_at": "…", "seconds": 300}`. 그 밖엔 `null` |
 | `steps[].detail.images` | `pull` 단계의 이미지별 진행. `status`: `pending`/`pulling`/`done`/`failed`, `percent` 0~100 |
+| `steps[].detail.percent` | 그 밖의 단계가 진행률을 알 때(0~100). 모르면 싣지 않는다 |
 | `error` | 실패했을 때 `{"step", "cause", "detail", "vars"}`. `cause` 는 문구 키, `detail` 은 원문 한 줄 |
 | `choices` | 지금 관리자가 고를 수 있는 제어: `retry`, `rollback`. 자동 되돌림이면 빈 배열 |
 | `rollback_job` | 이 업데이트를 되돌리는 작업의 id(되돌림이 시작됐을 때) |
@@ -392,7 +393,7 @@ manifest 의 `apps[]` 에 실린 것만 온다 — **빈 배열일 수 있다.**
 **권장안 C 를 계약으로 한다.**
 
 1. 엔진은 `switch` 에서 **backend 를 맨 마지막에** 바꾼다. 작업 상태는 설치 관리자가 갖고 있으므로 backend 가 다시 뜨면 같은 작업 id 로 이어 읽힌다.
-2. 관리자의 진행 화면은 1.5초마다 `GET /api/admin/system/update/jobs/<id>` 를 읽고, 실패하면 "다시 연결 중"으로 둔 채 계속 읽는다. 그 사이 공개 점검 상태가 `active: false` 가 되면(끝났다) 곧바로 작업을 한 번 더 읽어 결과를 보인다.
+2. 관리자의 진행 화면은 1.5초마다 `GET /api/admin/system/update/jobs/<id>` 를 읽고, 실패하면 마지막으로 본 단계를 둔 채 "다시 연결 중"으로 계속 읽는다. backend 가 돌아오면 같은 작업 id 로 이어진다. 이 화면이 떠 있는 동안에는 점검 화면이 덮지 않는다.
 3. 일반 사용자의 화면은 API 호출이 실패하면(연결 실패·502·503·504) 공개 점검 상태를 물어, `active` 이면 점검 화면으로 바뀐다. `active: false` 가 되고 `/api/health` 가 답하면 화면을 새로 연다.
 4. 새로 접속한 브라우저에는 nginx 가 정적 점검 페이지를 내준다(아래).
 
@@ -516,6 +517,18 @@ location / {
 ```
 
 `state`: `none` / `countdown` / `maintenance`. 작업 id 말고는 버전·단계를 싣지 않는다.
+
+### 화면
+
+| 무엇 | 어디 |
+|---|---|
+| 관리 › 업데이트(`/admin/update` 와 탭) | `frontend-react/src/pages/admin/update.tsx`, `src/components/admin/update/` |
+| 호출과 형(型) | `src/composables/useSystemUpdate.ts` |
+| 예고 띠 · 점검 화면 | `src/components/layout/UpdateCountdownBanner.tsx` · `MaintenanceScreen.tsx`, 상태는 `src/composables/useUpdateNotice.ts` |
+| 정적 점검 페이지 | `frontend-react/public/maintenance.html` |
+| 계약대로 만든 가짜 응답 묶음 | `src/components/admin/update/fixtures.ts` — 화면의 모든 상태가 하나씩 있다. 엔진이 이 모양으로 답하면 화면이 그대로 붙는다 |
+
+화면이 계약에서 기대는 것: 실패했을 때의 버튼은 `choices` 로, 자동 되돌림으로 넘어가는 길은 `rollback_job` 으로, 되돌림·복원의 문구는 `kind` 와 `restore.reason` 으로 고른다. 값이 `null` 인 항목(`download_bytes`, `downtime_seconds`, `expected_seconds`, `contact`, `download_url`, `download_page` …)은 그 줄을 그리지 않는다.
 
 ## 9. 엔진 구현자가 지킬 것
 

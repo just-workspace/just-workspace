@@ -45,11 +45,14 @@ export function JobView({ jobId, onFinished }: { jobId: string; onFinished?: () 
   const alive = useRef(true)
   const finished = useRef(false)
   const seen = useRef(false)
+  const gen = useRef(0)
 
   const read = useCallback(async () => {
+    const my = gen.current
     try {
       const j = await updateApi.job(jobId)
-      if (!alive.current) return
+      // 그 사이 제어(다시·취소…)의 응답이 왔으면 그쪽이 더 새것이다 — 먼저 떠난 조회의 답은 버린다
+      if (!alive.current || my !== gen.current) return
       seen.current = true
       setJob(j); setError(null); setReconnecting(false)
     } catch (e) {
@@ -116,6 +119,7 @@ export function JobView({ jobId, onFinished }: { jobId: string; onFinished?: () 
       const next = await updateApi.jobAction(job!.id, action)
       if (!alive.current) return
       if (action === 'rollback' && next.rollback_job) { navigate(`${UPDATE_BASE}/rollback/${next.rollback_job}`); return }
+      gen.current += 1
       setJob(next)
       finished.current = false
     } catch (e: any) {

@@ -14,7 +14,7 @@ bash scripts/update.sh --rollback   # 직전 이미지 태그로 롤백
 
 현재 이미지 태그를 적어 두고 서비스를 순차 재빌드·재기동한 뒤 헬스체크(`/api/health`)를 본다. **자동으로 되돌리지는 않는다** — 실패하면 `--rollback` 을 안내할 뿐이다. 이 스크립트는 DB 를 백업하지 않으므로 먼저 `scripts/backup.sh --kind pre-update` 를 돌린다. `scripts/health.sh` 는 Docker·컨테이너·DB·Redis·API·디스크·NFS·SSL 만료를 점검한다(`--json`).
 
-설치 관리자로 설치한 서버는 이 스크립트가 아니라 설치 관리자가 릴리스 단위로 업데이트한다(사전 점검 → 자동 백업 → 이미지 받기 → DB 변경 → 구역 교체 → 상태 확인). 그 흐름과 되돌림은 [data-safety.md](data-safety.md) 5절.
+설치 관리자로 설치한 서버는 이 스크립트가 아니라 설치 관리자가 릴리스 단위로 업데이트한다(사전 점검 → 자동 백업 → 이미지 받기 → DB 변경 → 구역 교체 → 상태 확인). 그 흐름과 되돌림은 [data-safety.md](data-safety.md) 5절. 관리 › 업데이트 화면이 부르는 내부 API 의 계약은 [update-api.md](update-api.md) — 업데이트 엔진은 아직 없고, 그 문서가 구현 기준이다.
 
 ## DB 마이그레이션
 

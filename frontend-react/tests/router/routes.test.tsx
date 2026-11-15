@@ -53,7 +53,7 @@ describe('라우트 표', () => {
     const shared = ROUTES.filter(r => !r.reactOnly)
     expect(shared.length).toBe(57)
     // 전환 뒤 새로 만든 화면
-    expect(ROUTES.filter(r => r.reactOnly).map(r => r.path).sort()).toEqual(['/admin/ai-ops/*', '/admin/dashboard-layout', '/admin/rbi', '/admin/zones', '/approvals', '/rbi', '/settings/ai/mcp', '/settings/ai/memory', '/settings/calendar', '/settings/chat'])
+    expect(ROUTES.filter(r => r.reactOnly).map(r => r.path).sort()).toEqual(['/admin/ai-ops/*', '/admin/dashboard-layout', '/admin/rbi', '/admin/update/*', '/admin/zones', '/approvals', '/rbi', '/settings/ai/mcp', '/settings/ai/memory', '/settings/calendar', '/settings/chat'])
     // 경로는 겹치지 않는다
     expect(new Set(ROUTES.map(r => r.path)).size).toBe(ROUTES.length)
   })

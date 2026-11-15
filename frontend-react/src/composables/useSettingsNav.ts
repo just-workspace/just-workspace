@@ -107,6 +107,7 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
       ] },
       { label: t('shell.adminNav.group.system'), items: [
         { to: '/admin/system', ...L('shell.adminNav', 'system'), ...svcMeta },
+        { to: '/admin/update', ...L('shell.adminNav', 'update') },
         { to: '/admin/logs', ...L('shell.adminNav', 'logs') },
       ] },
     ].map(g => ({ ...g, items: (g.items as SettingsNavItem[]).filter(shown) })).filter(g => g.items.length)

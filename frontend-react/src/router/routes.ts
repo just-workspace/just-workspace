@@ -40,6 +40,7 @@ export const ROUTES: AppRouteDef[] = [
   { path: '/admin/settings', file: 'admin/settings.tsx', layout: 'admin' },
   { path: '/admin/storage', file: 'admin/storage.tsx', layout: 'admin' },
   { path: '/admin/system', file: 'admin/system.tsx', layout: 'admin' },
+  { path: '/admin/update/*', file: 'admin/update.tsx', layout: 'admin', reactOnly: true, catchAll: 'view' },
   { path: '/admin/users', file: 'admin/users.tsx', layout: 'admin' },
   { path: '/admin/zones', file: 'admin/zones.tsx', layout: 'admin', reactOnly: true },
   { path: '/ai', file: 'ai.tsx', layout: 'default' },

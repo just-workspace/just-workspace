@@ -4,7 +4,7 @@
 ## 코어: postgres, redis, backend, frontend-react, nginx (항상 기동)
 ## 선택: certbot, mailserver, gitea, livekit, audiorelay (COMPOSE_PROFILES로 활성화)
 ##
-## 네트워크: workspace (172.28.0.0/24) 고정 IP
+## 네트워크: workspace (기본 172.28.0.0/24) 고정 IP — 다른 대역과 겹치면 JW_NET_PREFIX 로 앞 세 자리를 바꾼다(예 172.30.5)
 ## 외부 접근: nginx :80 단일 진입점 + 메일/SSH/WebRTC 직접 바인딩
 ##
 ## 배포 예시:
@@ -62,7 +62,7 @@ services:
           memory: 256M
     networks:
       workspace:
-        ipv4_address: 172.28.0.10
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.10
     restart: unless-stopped
 
   # ─── 2. Redis 7 ───
@@ -88,7 +88,7 @@ services:
           memory: 64M
     networks:
       workspace:
-        ipv4_address: 172.28.0.11
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.11
     restart: unless-stopped
 
   # ─── 3. Backend (FastAPI) ───
@@ -98,6 +98,9 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        # 제품 버전(리포 루트 VERSION). 예: JW_APP_VERSION="$(cat VERSION)" docker compose build backend
+        JW_APP_VERSION: ${JW_APP_VERSION:-}
     container_name: ws-backend
     logging: *default-logging
     security_opt: ["no-new-privileges:true"]
@@ -110,7 +113,7 @@ services:
     # 워커 수는 entrypoint 가 붙인다: BACKEND_WORKERS, 없으면 CPU 수 기준 min(8, max(2, nproc)).
     # 기동 전에 entrypoint 가 비밀값을 검사해 약한·기본 값이면 뜨지 않는다(python -m app.cli check-secrets).
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
-              "--proxy-headers", "--forwarded-allow-ips", "172.28.0.2", "--timeout-graceful-shutdown", "5"]
+              "--proxy-headers", "--forwarded-allow-ips", "${JW_NET_PREFIX:-172.28.0}.2", "--timeout-graceful-shutdown", "5"]
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0
@@ -169,7 +172,7 @@ services:
           memory: 512M
     networks:
       workspace:
-        ipv4_address: 172.28.0.20
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.20
     restart: unless-stopped
 
   # ─── 4. Frontend (React 정적 빌드) ───
@@ -196,7 +199,7 @@ services:
           memory: 128M
     networks:
       workspace:
-        ipv4_address: 172.28.0.22
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.22
     restart: unless-stopped
 
   # ─── 5. Nginx (내장 리버스 프록시, 항상 기동) ───
@@ -212,6 +215,8 @@ services:
       # 공통 보안 헤더 스니펫. conf.d/ 밖에 둔다 — conf.d/*.conf 는 자동 include 라
       # 거기 두면 http 레벨에 중복 적용된다.
       - ./nginx/security-headers.conf:/etc/nginx/security-headers.conf:ro
+      # 사이트마다 다른 부분(신뢰 프록시 주소·listen·TLS 인증서·HSTS). 기본 파일은 "앞단 프록시 뒤, 80 평문" 구성.
+      - ./nginx/site.d:/etc/nginx/site.d:ro
       # 비공개 확장 경로(git 미추적). 없으면 빈 디렉터리가 붙고 include 는 아무것도 안 한다.
       - ./nginx/private.d:/etc/nginx/private.d:ro
       - certbot-data:/etc/letsencrypt:ro
@@ -228,7 +233,7 @@ services:
           memory: 32M
     networks:
       workspace:
-        ipv4_address: 172.28.0.2
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.2
     restart: unless-stopped
 
   # ─── 5-1. Certbot (TLS 인증서 자동 발급/갱신) — profiles: certbot ───
@@ -259,7 +264,7 @@ services:
           memory: 32M
     networks:
       workspace:
-        ipv4_address: 172.28.0.3
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.3
     restart: unless-stopped
 
   # ─── 6. Mail Server (Postfix+Dovecot+Rspamd) — profiles: mailserver ───
@@ -317,12 +322,13 @@ services:
           memory: 256M
     networks:
       workspace:
-        ipv4_address: 172.28.0.30
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.30
     restart: unless-stopped
 
   # ─── 7. Gitea — profiles: gitea ───
   gitea:
-    image: gitea/gitea@sha256:8967bf9deaf3c5c4adae13519436dc1b20c646ac83fe37ae810c933a1045227d  # 28.3.0 (1.27.3 에서 DB 마이그레이션 343~357 — 다운그레이드 불가, 되돌리려면 백업 복원)
+    # GITEA_IMAGE 를 비우면 아래 고정 버전(검증한 버전)을 쓴다.
+    image: ${GITEA_IMAGE:-gitea/gitea@sha256:8967bf9deaf3c5c4adae13519436dc1b20c646ac83fe37ae810c933a1045227d}  # 28.3.0 (1.27.3 에서 DB 마이그레이션 343~357 — 다운그레이드 불가, 되돌리려면 백업 복원)
     container_name: ws-gitea
     logging: *default-logging
     security_opt: ["no-new-privileges:true"]
@@ -333,9 +339,10 @@ services:
       - "3000"
     # SSO OIDC 백채널: 컨테이너가 공인 도메인으로 헤어핀 NAT 을 못 넘는다.
     # 유효 인증서로 워크스페이스를 서빙하는 리버스 프록시의 LAN 주소로 우회한다.
-    # 실제 주소는 .env 의 RP_LAN_IP (미설정 시 비활성).
+    # 실제 주소는 .env 의 RP_LAN_IP. 우회할 이름은 HAIRPIN_HOST(비우면 DOMAIN).
+    # RP_LAN_IP 를 비우면 그 이름이 127.0.0.1 로 묶인다 — 우회가 필요 없으면 HAIRPIN_HOST 에 쓰지 않는 이름(예 hairpin-off.invalid)을 적는다.
     extra_hosts:
-      - "${DOMAIN:-localhost}:${RP_LAN_IP:-127.0.0.1}"
+      - "${HAIRPIN_HOST:-${DOMAIN:-localhost}}:${RP_LAN_IP:-127.0.0.1}"
       # 같은 앱을 다른 도메인으로도 서빙할 때(선택). 비우면 존재하지 않는 이름(.invalid)이라 무해하다.
       - "${DOMAIN_ALIAS:-alias.invalid}:${RP_LAN_IP:-127.0.0.1}"
     volumes:
@@ -343,7 +350,7 @@ services:
     environment:
       GITEA__server__ROOT_URL: ${GITEA_EXTERNAL_URL:-${APP_URL:-http://localhost}/git/}
       GITEA__server__SSH_PORT: ${GIT_SSH_PORT:-2222}
-      GITEA__server__SSH_DOMAIN: ${DOMAIN:-localhost}
+      GITEA__server__SSH_DOMAIN: ${GIT_SSH_DOMAIN:-${DOMAIN:-localhost}}
       # SSO 사전구성: FTW 잠금 + 로컬가입 차단, 워크스페이스 OIDC로 자동가입/연동
       GITEA__security__INSTALL_LOCK: "true"
       GITEA__service__DISABLE_REGISTRATION: "true"
@@ -362,7 +369,7 @@ services:
           memory: 128M
     networks:
       workspace:
-        ipv4_address: 172.28.0.31
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.31
     restart: unless-stopped
 
   # ─── ws-sso — SSO 프로토콜 계층 (profiles: sso) ───
@@ -409,7 +416,7 @@ services:
           memory: 128M
     networks:
       workspace:
-        ipv4_address: 172.28.0.60
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.60
     restart: unless-stopped
 
   # ─── ws-ldap — LDAP 프로바이더 (profiles: sso) ───
@@ -456,7 +463,7 @@ services:
           cpus: '0.5'
     networks:
       workspace:
-        ipv4_address: 172.28.0.61
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.61
     restart: unless-stopped
 
   # ─── 8. LiveKit — profiles: livekit ───
@@ -508,7 +515,7 @@ services:
           memory: 128M
     networks:
       workspace:
-        ipv4_address: 172.28.0.32
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.32
     restart: unless-stopped
 
   # ─── 음성채널 무손실 릴레이(ws-audiorelay) — profiles: audiorelay ───
@@ -559,7 +566,7 @@ services:
           memory: 32M
     networks:
       workspace:
-        ipv4_address: 172.28.0.34
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.34
     restart: unless-stopped
 
   # ─── 격리 브라우저(RBI) netfilter 사이드카 — profiles: rbi ───
@@ -585,7 +592,7 @@ services:
       RBI_CHAIN: WS-RBI
       RBI_BRIDGE: ${RBI_BRIDGE:-br-wsrbi}
       RBI_SUBNET: ${RBI_SUBNET:-172.31.200.0/24}
-      RBI_NGINX_IP: "172.28.0.2"
+      RBI_NGINX_IP: "${JW_NET_PREFIX:-172.28.0}.2"
       # 고정 허용(늘 허용, "IP:포트" 쉼표). 대상은 관리 화면에서 더하면 동적 목록으로 따라온다 — 여기는 비워도 된다.
       RBI_ALLOW: ${RBI_ALLOW:-}
       # 동적 목록(백엔드가 씀) · 상한(비면 사설 대역) · 언제나 거부할 CIDR 추가 · 확인 주기
@@ -655,7 +662,7 @@ services:
           memory: 512M
     networks:
       workspace:
-        ipv4_address: 172.28.0.33
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.33
 
   # ─── 9. OnlyOffice Document Server — profiles: onlyoffice ───
   onlyoffice:
@@ -670,7 +677,7 @@ services:
       - "80"
     # WOPI 백채널: 에디터가 wopi_src(공인 도메인)를 되가져올 때 헤어핀 NAT 이 안 되면 RP_LAN_IP 로 우회
     extra_hosts:
-      - "${DOMAIN:-localhost}:${RP_LAN_IP:-127.0.0.1}"
+      - "${HAIRPIN_HOST:-${DOMAIN:-localhost}}:${RP_LAN_IP:-127.0.0.1}"
       # 같은 앱을 다른 도메인으로도 서빙할 때(선택). 비우면 존재하지 않는 이름(.invalid)이라 무해하다.
       - "${DOMAIN_ALIAS:-alias.invalid}:${RP_LAN_IP:-127.0.0.1}"
     environment:
@@ -696,7 +703,7 @@ services:
           memory: 512M
     networks:
       workspace:
-        ipv4_address: 172.28.0.40
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.40
     restart: unless-stopped
 
   # ─── 11. SearXNG (10번 Collabora 는 제거됨 — OnlyOffice 단일화) — self-hosted metasearch for LLM web_search tool ───
@@ -733,7 +740,7 @@ services:
           memory: 64M
     networks:
       workspace:
-        ipv4_address: 172.28.0.50
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.50
     restart: unless-stopped
 
   # ─── 12. 문서 변환 (LibreOffice headless + H2Orestart) — AI 도구 files_convert ───
@@ -811,7 +818,7 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.28.0.0/24
+        - subnet: ${JW_NET_PREFIX:-172.28.0}.0/24
 
 volumes:
   docconv-sock:

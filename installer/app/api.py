@@ -22,7 +22,7 @@ from fastapi import Body, Depends, FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 
 from app import answers as ans
-from app import api_update, certs, dkim, preflight, probes, render
+from app import api_cert, api_restore, api_update, certs, dkim, preflight, probes, render
 from app import validators as v
 from app.bundle import Bundle
 from app.catalog import Catalog
@@ -260,6 +260,7 @@ def state(svc: Services) -> dict:
             "git_verified_version": svc.bundle.gitea_verified_version,
             "default_storage_path": default_storage_path(svc),
             "commands": commands(svc),
+            "backup_file_format": ".jwbak",
         },
     }
 
@@ -498,8 +499,9 @@ def create_wizard_app(svc: Services) -> FastAPI:
         s = svc.store.load_answers().storage
         opts = lambda server, export: render.storage_volume(  # noqa: E731
             ans.load({"storage": {"kind": "nfs", "server": server, "export": export}}))["opts"]
-        return probes.probe_nfs(svc.docker, body.get("server") or s.server or "", body.get("export") or s.export or "",
-                                volume_opts=opts)
+        server, export = body.get("server") or s.server or "", body.get("export") or s.export or ""
+        # 복원 중이면 표식 파일의 설치 id 가 백업의 것과 같은지도 본다
+        return api_restore.nfs_probe(svc, probes.probe_nfs(svc.docker, server, export, volume_opts=opts), server, export)
 
     @app.post("/api/probe/local-path", dependencies=[Depends(unlocked)])
     def probe_local(body: dict = Body(default={})):
@@ -553,12 +555,8 @@ def create_wizard_app(svc: Services) -> FastAPI:
         return StreamingResponse(events(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
-    # ── 복원(이번 단계 범위 밖) ──
-
-    @app.post("/api/restore", dependencies=[Depends(unlocked)])
-    @app.post("/api/restore/{rest:path}", dependencies=[Depends(unlocked)])
-    def restore(rest: str = ""):
-        raise ApiError(501, "restore_not_supported")
+    # ── 복원 — app/api_restore.py ──
+    api_restore.register(app, svc, unlocked=unlocked, session=session, stream=stream)
 
     return app
 
@@ -689,6 +687,9 @@ def create_internal_app(svc: Services) -> FastAPI:
     @app.get("/internal/probe/public-ip", dependencies=[Depends(keyed)])
     def internal_public_ip(refresh: bool = False):
         return public_ip(svc, refresh=refresh)
+
+    # 인증서 다시 발급 · 보류된 구역 연결 — app/api_cert.py
+    api_cert.register(app, svc, keyed=keyed)
 
     # 같은 컨테이너의 `jw` 명령용(루프백 + 상태 폴더의 키)
     @app.post("/local/apply", dependencies=[Depends(local)], status_code=202)

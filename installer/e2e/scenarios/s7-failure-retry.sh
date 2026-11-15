@@ -21,11 +21,12 @@ if want token; then
   T1="$(installer_token)"
   check "토큰은 12자리(헷갈리는 글자 없음)" bash -c "printf '%s' '$T1' | grep -qE '^[A-HJ-NP-Z2-9]{12}\$'"
   expect "틀린 토큰" 401 "$(session_code AAAAAAAAAAAA)"; expect "  원인" token_wrong "$(session_err)"
-  expect "주소의 ?token= 이 틀리면" 401 "$(curl -sk -o /dev/null -w '%{http_code}' "$WIZARD/?token=AAAAAAAAAAAA")"
+  expect "주소의 ?token= 이 틀리면 사유를 실어 토큰 없는 주소로" "302 /?token_status=wrong" "$(curl -sk -o /dev/null -w '%{http_code} %{redirect_url}' "$WIZARD/?token=AAAAAAAAAAAA" | sed "s#$WIZARD##")"
   expect "맞는 토큰(소문자·줄표로 옮겨 적어도)" 200 "$(session_code "$(printf '%s' "$T1" | tr 'A-Z' 'a-z' | sed -E 's/(....)(....)/\1-\2-/')")"
+  expect "세션 없이도 화면(/)은 열린다" 200 "$(curl -sk -o /dev/null -w '%{http_code}' "$WIZARD/")"
   check "세션 발급" wizard_login
   wapi GET /api/state >/dev/null; expect "세션으로 /api/state" 200 "$(wcode)"
-  expect "주소의 ?token= 이 맞으면 토큰 없는 주소로 넘긴다" 303 "$(curl -sk -o /dev/null -w '%{http_code}' "$WIZARD/?token=$T1")"
+  expect "주소의 ?token= 이 맞으면 토큰 없는 주소로 넘긴다" 302 "$(curl -sk -o /dev/null -w '%{http_code}' "$WIZARD/?token=$T1")"
 
   say "다시 발급"
   out="$(jw token)"; expect "jw token" 0 "$?"

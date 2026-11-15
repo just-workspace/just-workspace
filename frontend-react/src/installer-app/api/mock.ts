@@ -283,7 +283,7 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
       it('port_80', 'pass', 'free'),
       it('port_443', 'pass', 'free'),
       has('preflight-ok') ? it('port_25', 'pass', 'free') : it('port_25', 'warn', 'used', 'port_25_in_use', { port: 25, needed: true }),
-      has('subnet-conflict') || answers.advanced.subnet === '192.168.0.0/24' ? it('subnet', 'fail', answers.advanced.subnet, 'subnet_conflict', { conflicts: [{ subnet: '192.168.0.0/24' }] }) : it('subnet', 'pass', answers.advanced.subnet),
+      has('subnet-conflict') || answers.advanced.subnet === '192.168.10.0/24' ? it('subnet', 'fail', answers.advanced.subnet, 'subnet_conflict', { conflicts: [{ subnet: '192.168.10.0/24' }] }) : it('subnet', 'pass', answers.advanced.subnet),
       it('internet', 'pass', 'reachable'),
       it('registry', 'pass', 'registry.example.com'),
       it('selinux', 'pass', 'disabled'),

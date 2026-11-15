@@ -494,7 +494,7 @@ describe('요약', () => {
     type('내부 대역', '172.28.0.0/16')
     expect(screen.getByText('172.28.0.0/24 처럼 /24 대역으로 입력합니다.')).toBeTruthy()
     expect(button('요약으로 돌아가기').disabled).toBe(true)
-    type('내부 대역', '192.168.0.0/24')
+    type('내부 대역', '192.168.10.0/24')
     fireEvent.click(button('요약으로 돌아가기'))
     await screen.findByText('이 서버가 이미 쓰는 네트워크와 겹칩니다. 다른 대역을 입력합니다.')
     expect(screen.getByText('내부 대역을 고쳐야 돌아갈 수 있습니다.')).toBeTruthy()

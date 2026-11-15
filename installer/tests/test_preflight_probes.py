@@ -142,7 +142,7 @@ def test_public_ip_needs_agreement():
     assert probes.detect_public_ip([f("203.0.113.10"), f(None)])["status"] == "unknown"
     assert probes.detect_public_ip([f("203.0.113.10"), f("198.51.100.7")])["status"] == "unknown"
     # 사설 주소·쓰레기 답은 버린다
-    assert probes.detect_public_ip([f("192.168.0.5"), f("192.168.0.5"), f("<html>")])["status"] == "unknown"
+    assert probes.detect_public_ip([f("192.168.10.5"), f("192.168.10.5"), f("<html>")])["status"] == "unknown"
 
     def boom():
         raise RuntimeError("down")

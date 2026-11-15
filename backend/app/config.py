@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     app_url: str = "http://localhost"
     # NetLab(별도 출처 랩 플랫폼) 주소 — 있으면 앱 내려받기 페이지(/api/apps)에 콘솔 도우미 링크를 띄운다. 예: https://lab.example.com
     netlab_url: str = ""
+    # 이 서버가 돌리는 프로그램의 소스 주소(환경변수 JW_SOURCE_URL). 비우면 원래 리포 — 고쳐서 서비스하면 고친 소스의 주소로(app/source.py)
+    jw_source_url: str = ""
     debug: bool = False
     secret_key: str = "CHANGE_ME"
 

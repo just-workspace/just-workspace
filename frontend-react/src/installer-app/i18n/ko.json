@@ -1,5 +1,7 @@
 {
   "brand": "Just Workspace",
+  "sourceCode": "소스 코드",
+  "licenseId": "AGPL-3.0-or-later",
   "brandSuffix": "설치",
   "docTitle": "Just Workspace 설치",
   "stepsLabel": "설치 단계",

@@ -1,4 +1,8 @@
 {
+  "about": {
+    "sourceCode": "Source code",
+    "licenseLine": "This service runs Just Workspace, distributed under {license}."
+  },
   "common": {
     "repeatCount": "×{n}",
     "cat": {

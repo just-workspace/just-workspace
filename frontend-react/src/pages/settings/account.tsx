@@ -16,6 +16,7 @@ import { SettingsHeader } from '~/components/settings/SettingsHeader'
 import { SettingsCard } from '~/components/settings/SettingsCard'
 import { SettingsAvatarRow } from '~/components/settings/SettingsAvatarRow'
 import { SettingsDevices } from '~/components/settings/SettingsDevices'
+import { SourceNotice } from '~/components/SourceNotice'
 
 interface ProfileForm { display_name: string; recovery_email: string }
 
@@ -177,6 +178,9 @@ export default function SettingsAccountPage() {
 
       {/* 로그인된 기기 — GET /api/auth/me/sessions (개별 로그아웃 · 다른 기기 모두 로그아웃) */}
       <SettingsDevices />
+
+      {/* 이 서비스의 라이선스와 소스 코드 */}
+      <SourceNotice className="px-1" />
     </>
   )
 }

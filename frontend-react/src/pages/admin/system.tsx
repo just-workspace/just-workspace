@@ -20,6 +20,7 @@ import { UiSkeleton } from '~/components/ui/Skeleton'
 import { UiEmptyState } from '~/components/ui/EmptyState'
 import { UiErrorTile } from '~/components/ui/ErrorTile'
 import { UiStatusDot } from '~/components/ui/StatusDot'
+import { SourceNotice } from '~/components/SourceNotice'
 
 interface Container { service: string; present: boolean; running: boolean; status: string }
 
@@ -131,6 +132,9 @@ export default function AdminSystemPage() {
           </div>
         ))}
       </section>
+
+      {/* 이 서비스의 라이선스와 소스 코드(고쳐서 서비스하면 JW_SOURCE_URL 을 고친 소스의 주소로 바꾼다) */}
+      <SourceNotice className="px-1" />
     </AdminPageShell>
   )
 }

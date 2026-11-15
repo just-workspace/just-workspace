@@ -76,6 +76,19 @@ def offline_download_url(version: str) -> str | None:
         return None
 
 
+def source_url_override() -> str:
+    """설치 관리자에 준 소스 주소(`-e JW_SOURCE_URL=…`) — http(s) 주소가 아니면 빈 글자(= 기본값을 쓴다)."""
+    url = (os.environ.get("JW_SOURCE_URL") or "").strip()
+    ok = url.lower().startswith(("https://", "http://")) and len(url) <= 2000 \
+        and not any(ch.isspace() or ord(ch) < 32 or ch in "\"'<>" for ch in url)
+    return url if ok else ""
+
+
+def source_url() -> str:
+    """이 제품의 소스가 있는 곳 — 화면의 "소스 코드" 링크. 고쳐서 서비스하는 사람은 `JW_SOURCE_URL` 로 바꾼다."""
+    return source_url_override() or ReleaseSettings().source_repo_url
+
+
 def utc_iso(t: datetime) -> str:
     return t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 

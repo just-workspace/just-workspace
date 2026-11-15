@@ -8,6 +8,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { UiStepList, type UiStep } from '~/components/ui/StepList'
 import { flow, stepStates, type FlowInput, type StepId } from '../flow'
 import { useT } from '../i18n'
+import { SourceLink } from '../parts/SourceLink'
 import { effectiveZones, useWizard } from '../store'
 import { ShellTools } from './ShellTools'
 
@@ -58,7 +59,7 @@ export function WizardShell({ step, preview, children }: WizardShellProps) {
         <nav aria-label={t('stepsLabel')} className="hidden w-[260px] shrink-0 flex-col border-r border-border px-4 py-6 md:flex">
           <div className="px-2.5 pb-5 text-base font-semibold">{t('brand')} <span className="font-normal text-muted-foreground">{t('brandSuffix')}</span></div>
           <UiStepList label={t('stepsLabel')} labels={labels} steps={steps} />
-          <div className="mt-auto px-1 pt-6"><ShellTools /></div>
+          <div className="mt-auto flex flex-col gap-3 px-1 pt-6"><ShellTools /><SourceLink /></div>
         </nav>
         <main ref={main} tabIndex={-1} className="flex min-w-0 flex-1 flex-col items-center px-4 py-6 focus:outline-hidden md:px-6 md:py-10">
           <div className="flex w-full max-w-[720px] installer-in flex-col gap-5">
@@ -98,6 +99,7 @@ export function CenterShell({ width = 448, children }: { width?: 448 | 520; chil
         <div className={`w-full installer-in rounded-lg border border-border bg-card text-card-foreground ${width === 520 ? 'max-w-[520px]' : 'max-w-[448px]'}`}>
           <div className="flex flex-col gap-5 p-5 sm:p-8">{children}</div>
         </div>
+        <SourceLink className="pt-4 text-center" />
       </main>
     </div>
   )

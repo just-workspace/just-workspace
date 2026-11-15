@@ -1,5 +1,7 @@
 {
   "brand": "Just Workspace",
+  "sourceCode": "Source code",
+  "licenseId": "AGPL-3.0-or-later",
   "brandSuffix": "Setup",
   "docTitle": "Just Workspace Setup",
   "stepsLabel": "Setup steps",

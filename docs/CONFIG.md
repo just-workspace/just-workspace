@@ -141,6 +141,7 @@ Just Workspace 의 환경별 값은 스택의 `.env` 파일에 있다. 소스에
 | `JW_HOST_REPO` | (비움) | 관리 › 앱 빌드가 쓸 호스트의 리포 경로. 비우면 앱 빌드가 꺼진다 | 수동 |
 | `ANDROID_APP_ID` | (비움 = 접속 주소에서 만든다) | 관리 › 앱 빌드의 안드로이드 앱 ID — [apps/README.md](../apps/README.md) | 수동 |
 | `GPU_HOST_IP` | (비움) | backend 컨테이너의 `host.docker.internal` 이 가리킬 주소(다른 머신의 서비스를 플러그인이 부를 때) | 수동 |
+| `JW_SOURCE_URL` | (비움 = 원래 리포) | 화면의 "소스 코드" 링크가 가리키는 주소(http·https). 로그인 화면 바닥글, 설정 › 계정, 관리 › 서비스 상태에 보이고 `/api/health` 의 `source_url` 로 나간다. **고쳐서 서비스하면 고친 소스의 주소로 바꾼다**(AGPL-3.0-or-later 13조) | 설치 관리자에 준 값(`-e JW_SOURCE_URL`), 없으면 비움 |
 | `NETLAB_URL` | (비움) | 별도 출처의 실습 환경(NetLab) 주소(https). 있으면 대시보드와 앱 내려받기 화면에 연결 항목이 보인다 | 수동 |
 
 데스크톱·모바일 앱을 빌드할 때의 변수는 [apps/README.md](../apps/README.md) 와 [apps/desktop/README.md](../apps/desktop/README.md).
@@ -155,6 +156,7 @@ Just Workspace 의 환경별 값은 스택의 `.env` 파일에 있다. 소스에
 | `JW_REGISTRY` | `ghcr.io/just-workspace` | 우리 이미지를 받을 저장소. `localhost` 면 서버에 이미 있는 이미지를 쓴다 |
 | `JW_INSTALLER_VERSION` | 이미지에 든 `VERSION` | 설치 관리자가 자신과 설치할 제품의 버전으로 아는 값. 이미지 태그와 같게 적는다 — 승격한(Beta → Stable) 이미지는 안의 `VERSION` 이 Beta 의 글자다 |
 | `JW_IMAGE_TAG` | 제품 버전 | 받을 이미지의 태그 |
+| `JW_SOURCE_URL` | 원래 리포 | "소스 코드" 링크의 주소. 설치 마법사에 보이고, 스택의 `.env` 로 넘겨 워크스페이스 화면에도 쓰인다. 고쳐서 서비스하면 고친 소스의 주소로 |
 | `JW_PUBLIC_HOST` | (비움) | 로그의 주소와 설치 관리자의 인증서에 쓸 서버 주소 |
 | `JW_UPDATE_CHANNEL_URL` | 공식 채널 | 업데이트 채널 파일을 받는 기준 주소 |
 | `JW_UPDATE_OFFLINE_URL` | 릴리스 도구의 기본값 | 오프라인 묶음을 받는 주소 틀(`{version}`·`{filename}`) |

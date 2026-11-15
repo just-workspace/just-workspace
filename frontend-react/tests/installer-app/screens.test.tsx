@@ -71,6 +71,11 @@ describe('들어오기', () => {
     // 다시 설치하는 명령은 서버가 알려 준 글자 그대로 보인다
     expect(screen.getByText(/처음부터 다시 설치하려면/)).toBeTruthy()
     expect(screen.getByText('docker exec jw-installer jw reinstall --yes')).toBeTruthy()
+    // 소스 코드 링크 — 서버가 준 주소로, 새 창에서
+    const source = screen.getByRole('link', { name: '소스 코드' })
+    expect(source.getAttribute('href')).toBe('https://github.com/just-workspace/just-workspace')
+    expect(source.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(screen.getByTestId('source-link').textContent).toContain('AGPL-3.0-or-later')
   })
 
   it('입력하던 것이 있으면 이어 하기 — 이어서 하면 그 단계로', async () => {

@@ -215,6 +215,7 @@ docker compose -p just-workspace
 | `facts.detected_network` | 그 주소가 공인이면 `direct`, 사설이면 `router`, 모르면 `null`. 앞단 프록시 뒤인지는 알 수 없다 |
 | `info.git_verified_version` | 코드 저장소의 검증한 버전(compose 의 고정 이미지 옆 주석) |
 | `info.default_storage_path` | 기본 저장소(도커 볼륨)가 놓이는 호스트 폴더 |
+| `info.source_url` | 이 제품의 소스가 있는 곳 — 화면 구석의 "소스 코드" 링크. 설치 관리자의 환경변수 `JW_SOURCE_URL`, 없으면 릴리스 도구의 `source_repo_url`. 잠긴 뒤에도 준다 |
 | `info.commands` | 서버 터미널에서 치는 명령(`reissue_token`·`reset_admin`·`install_from_answers`·`reinstall`) — 실제 컨테이너 이름으로 만든다. 잠긴 뒤에는 `reinstall`·`reset_admin` 만 |
 
 적용 상태(`GET /api/apply`):
@@ -425,6 +426,7 @@ compose 는 저장소 볼륨(`ws-storage-data`)을 `external` 로 쓴다. 설치
 | `JW_NET_PREFIX` | 답변 | `advanced.subnet` 의 앞 세 자리 |
 | `JW_REGISTRY` / `JW_VERSION` | 고정 | 설치 관리자의 `JW_REGISTRY` / 제품 버전(또는 `JW_IMAGE_TAG`) |
 | `JW_APP_VERSION` | 고정 | 제품 버전(번들의 `VERSION`) — 화면에 보이는 버전. 이미지에 구운 값보다 우선한다 |
+| `JW_SOURCE_URL` | 고정 | 설치 관리자에 준 `JW_SOURCE_URL`(http·https 주소일 때만). 없으면 빈 값 — backend 가 원래 리포의 주소를 쓴다. 화면의 "소스 코드" 링크 |
 | `COMPOSE_PROJECT_NAME` | 고정 | `just-workspace` |
 | `STORAGE_MARKER_REQUIRED` / `JW_INSTALL_ID` | 고정 | `1` / 설치 id |
 | `JW_INSTALLER_URL` / `JW_INSTALLER_KEY` | 고정 / 생성 | `http://jw-installer:8444` / 내부 API 키 |

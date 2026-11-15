@@ -444,6 +444,7 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
         commands: { reissue_token: 'docker exec jw-installer jw token', reinstall: 'docker exec jw-installer jw reinstall --yes', reset_admin: 'docker exec jw-installer jw reset-admin', install_from_answers: 'docker exec -e JW_ADMIN_PASSWORD jw-installer jw apply --answers /data/answers.json' },
         answers_example: JSON.stringify({ version: 1, mode: 'new', access: { domain: 'workspace.example.com', network: 'direct', cert: 'auto' }, preset: 'collab', mail: { kind: 'builtin', mail_domain: 'example.com' }, admin: { name: 'Admin', username: 'admin' } }, null, 2),
         backup_file_format: '.jwbak',
+        source_url: 'https://github.com/just-workspace/just-workspace',
       },
     }
   }

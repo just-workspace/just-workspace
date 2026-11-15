@@ -1,4 +1,8 @@
 {
+  "about": {
+    "sourceCode": "소스 코드",
+    "licenseLine": "이 서비스는 {license} 로 배포되는 Just Workspace 로 운영됩니다."
+  },
   "common": {
     "repeatCount": "{n}회",
     "cat": {

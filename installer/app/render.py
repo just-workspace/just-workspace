@@ -27,6 +27,7 @@ from app.answers import Answers, Facts, selected_zones
 from app.bundle import STACK_COPIES, Bundle
 from app.catalog import Catalog
 from app.paths import SITE_COMPOSE
+from app.update_release import source_url_override
 
 HAIRPIN_OFF = "hairpin-off.invalid"
 TURN_TLS_PORT_STANDALONE = 5349      # nginx 가 443 을 쓰는 서버에서 TURN/TLS 를 게시하는 호스트 포트
@@ -237,6 +238,8 @@ def env_sections(answers: Answers, secrets: dict, facts: Facts, plan: Plan,
         ("JW_NET_PREFIX", plan.net_prefix),
         ("JW_INSTALLER_URL", f"http://{INSTALLER_ALIAS}:{INTERNAL_API_PORT}"),
         ("JW_INSTALLER_KEY", s("JW_INSTALLER_KEY")),
+        # 화면의 "소스 코드" 링크 — 설치 관리자에 준 값(-e JW_SOURCE_URL)을 그대로 넘긴다. 비어 있으면 backend 의 기본값(원래 리포)
+        ("JW_SOURCE_URL", source_url_override()),
     ]))
     sections.append(("앱", [
         ("APP_NAME", "Workspace"),

@@ -25,6 +25,8 @@ class Settings:
     channel_base_url: str = "https://raw.githubusercontent.com/just-workspace/releases/main"
     # 채널 리포(사람이 커밋·푸시하는 곳) — 안내 출력에만 쓴다.
     channel_repo_url: str = "https://github.com/just-workspace/releases"
+    # 소스 리포 — 제품 화면의 "소스 코드" 링크가 가리키는 기본 주소(backend/app/source.py 와 같은 값).
+    source_repo_url: str = "https://github.com/just-workspace/just-workspace"
     # 설치 파일·오프라인 묶음 첨부의 기준 주소. `{version}` 과 `{filename}` 이 채워진다.
     download_url_template: str = "https://github.com/just-workspace/just-workspace/releases/download/v{version}/{filename}"
     # 채널 파일 만료까지의 날 수.

@@ -22,7 +22,7 @@ from fastapi import Body, Depends, FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 
 from app import answers as ans
-from app import api_cert, api_restore, api_update, certs, dkim, preflight, probes, render
+from app import api_cert, api_restore, api_update, certs, dkim, preflight, probes, render, update_release
 from app import validators as v
 from app.bundle import Bundle
 from app.catalog import Catalog
@@ -261,6 +261,7 @@ def state(svc: Services) -> dict:
             "default_storage_path": default_storage_path(svc),
             "commands": commands(svc),
             "backup_file_format": ".jwbak",
+            "source_url": update_release.source_url(),
         },
     }
 
@@ -397,7 +398,8 @@ def create_wizard_app(svc: Services) -> FastAPI:
             cmds = commands(svc)
             return {"phase": "installed", "locked": True, "version": svc.bundle.version,
                     "url": f"https://{domain}" if domain else None,
-                    "info": {"commands": {"reinstall": cmds["reinstall"], "reset_admin": cmds["reset_admin"]}}}
+                    "info": {"commands": {"reinstall": cmds["reinstall"], "reset_admin": cmds["reset_admin"]},
+                             "source_url": update_release.source_url()}}
         session(request)
         return state(svc)
 

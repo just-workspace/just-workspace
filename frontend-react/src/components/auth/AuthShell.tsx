@@ -12,6 +12,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { cn } from '~/lib/utils'
 import { $fetch } from '~/lib/api'
 import { useSiteConfig } from '~/composables/useSiteConfig'
+import { SourceNotice } from '~/components/SourceNotice'
 import './AuthShell.css'
 
 export interface AuthShellProps {
@@ -144,6 +145,8 @@ export function AuthShell({ children }: AuthShellProps) {
       >
         <div className="flex w-full max-w-[400px] flex-col gap-[18px]">
           {children}
+          {/* 이 서비스가 돌리는 프로그램의 소스 — 로그인하지 않은 사람도 볼 수 있어야 한다 */}
+          <SourceNotice variant="compact" className="pt-2" />
         </div>
       </div>
     </div>

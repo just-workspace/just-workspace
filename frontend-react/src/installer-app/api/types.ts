@@ -101,6 +101,8 @@ export interface StateResponse {
     }
     answers_example?: string | null
     backup_file_format?: string | null
+    /** 이 제품의 소스가 있는 곳("소스 코드" 링크) */
+    source_url?: string | null
   }
 }
 

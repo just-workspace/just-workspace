@@ -399,6 +399,9 @@ img{{margin:22px auto;display:block;background:#fff;padding:10px;border-radius:1
 </body></html>""")
 
 
+from app.source import LICENSE_ID, public_source_url  # noqa: E402
+
+
 def _public_netlab_url() -> str:
     """설정된 NetLab 주소를 공개용으로 — https:// 로 시작할 때만, 끝 / 제거. 아니면 빈값."""
     url = (settings.netlab_url or "").strip().rstrip("/")
@@ -451,6 +454,9 @@ async def health_check(request: Request, db: AsyncSession = Depends(get_db)):
         "git_visibility": gen_vals.get("general.git_visibility") or "private",
         # NetLab(별도 출처 랩) 주소 — 레일 '도구' 항목·대시보드 카드가 새 탭으로 연다. https 만(아니면 빈값 → 둘 다 숨김)
         "netlab_url": _public_netlab_url(),
+        # 이 서버가 돌리는 프로그램의 소스 주소와 라이선스 — 로그인 화면·설정이 "소스 코드" 링크로 보여 준다(app/source.py)
+        "source_url": public_source_url(settings.jw_source_url),
+        "license": LICENSE_ID,
         # 설치된 구역 id(JW_ZONES, 비면 전부) — 화면이 없는 구역의 메뉴·진입점을 숨기는 데 쓴다
         "zones": zones.installed_zone_ids(),
         "config": appcfg,

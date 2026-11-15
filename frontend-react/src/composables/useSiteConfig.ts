@@ -24,6 +24,10 @@ export interface SiteConfigState {
   demoMode: boolean
   /** NetLab(별도 출처 랩) 주소 — 서버가 https 일 때만 준다. 빈값이면 레일 '도구' 항목·대시보드 카드를 숨긴다 */
   netlabUrl: string
+  /** 이 서버가 돌리는 프로그램의 소스 주소(서버의 JW_SOURCE_URL) — "소스 코드" 링크. 빈값이면 링크를 숨긴다 */
+  sourceUrl: string
+  /** 라이선스 표기(SPDX) */
+  license: string
   /** 디자인 대개편 확장 설정 — appcfg.* (예: config['dash.cards']). 빈값/부재는 i18n 폴백. */
   config: Record<string, string>
   /** 설치된 구역 id(서버 /api/health 의 zones). null 이면 아직 모른다(로딩 중이거나 서버가 알려 주지 않음) */
@@ -46,6 +50,8 @@ export const siteConfigStore = createStore<SiteConfigState>()(() => ({
   gitVisibility: 'private',
   demoMode: false,
   netlabUrl: '',
+  sourceUrl: '',
+  license: 'AGPL-3.0-or-later',
   config: {},
   zones: null,
   loaded: false,
@@ -86,6 +92,8 @@ export async function fetchAppConfig() {
       git_visibility: string
       demo_mode: boolean
       netlab_url?: string
+      source_url?: string
+      license?: string
       config: Record<string, string>
       zones?: string[]
     }>('/api/health')
@@ -104,6 +112,8 @@ export async function fetchAppConfig() {
       gitVisibility: data.git_visibility || 'private',
       demoMode: data.demo_mode || false,
       netlabUrl: data.netlab_url || '',
+      sourceUrl: data.source_url || '',
+      license: data.license || 'AGPL-3.0-or-later',
       config: data.config || {},
       zones: Array.isArray(data.zones) ? data.zones : null,
       loaded: true,

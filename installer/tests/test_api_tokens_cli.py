@@ -477,3 +477,30 @@ def test_internal_api_for_admin_screens(tmp_path):
     assert version and inside.get("/internal/zones").json()["git_verified_version"] == version
     assert inside.get("/internal/zones/git/settings").json()["verified_version"] == version
     assert "verified_version" not in inside.get("/internal/zones/mail/settings").json()
+
+
+def test_state_carries_the_source_url_also_when_locked(wizard, monkeypatch):
+    """"소스 코드" 링크의 주소 — 기본은 원래 리포, 설치 관리자에 준 값이 있으면 그것. 잠긴 뒤에도 준다."""
+    from app import update_release
+
+    _, svc, client = wizard
+    login(svc, client)
+    default = update_release.ReleaseSettings().source_repo_url
+    assert client.get("/api/state").json()["info"]["source_url"] == default
+    monkeypatch.setenv("JW_SOURCE_URL", "https://git.example.com/acme/workspace")
+    assert client.get("/api/state").json()["info"]["source_url"] == "https://git.example.com/acme/workspace"
+    monkeypatch.setenv("JW_SOURCE_URL", "javascript:alert(1)")
+    assert client.get("/api/state").json()["info"]["source_url"] == default
+    svc.store.set_phase("installed")
+    assert client.get("/api/state").json()["info"]["source_url"] == default
+
+
+def test_env_passes_the_given_source_url_to_the_stack(monkeypatch, bundle, secrets, facts):
+    from app import render
+
+    files = render.render(make_answers(), secrets, facts, bundle, registry="localhost")
+    assert "\nJW_SOURCE_URL=\n" in files[".env"]
+    monkeypatch.setenv("JW_SOURCE_URL", "https://git.example.com/acme/workspace")
+    files = render.render(make_answers(), secrets, facts, bundle, registry="localhost")
+    assert "\nJW_SOURCE_URL=https://git.example.com/acme/workspace\n" in files[".env"]
+

@@ -767,7 +767,15 @@
       "install": "Install",
       "restartingAria": "Backend restarting",
       "restartingTitle": "Restarting the backend…",
-      "restartingHint": "Applying the plugin (~20s)"
+      "restartingHint": "Applying the plugin (~20s)",
+      "skipped": {
+        "title": "Plugins not loaded",
+        "lead": "These plugins are on the server but can't be used right now. They appear in the list above once the reason is resolved.",
+        "badge": "Unavailable",
+        "zoneNotInstalled": "A required zone is turned off: {zones}",
+        "other": "Couldn't be loaded ({reason})",
+        "toZones": "View zones"
+      }
     },
     "plugins": {
       "title": "Plugins",

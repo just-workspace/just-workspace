@@ -111,9 +111,12 @@ def missing_zones(manifest: dict) -> list[str]:
 
 async def load_plugins(app: FastAPI) -> None:
     """Scan plugins directory, validate manifests, load routers and models."""
+    from app.plugins import sdk
+
     _loaded_plugins.clear()
     _skipped_plugins.clear()
     _hook_modules.clear()
+    sdk.unregister_plugin_tools()      # 다시 읽을 때 옛 등록이 남지 않게
     seen_ids: set[str] = set()
 
     plugin_dirs: list[Path] = []
@@ -168,28 +171,35 @@ async def load_plugins(app: FastAPI) -> None:
         models_path = backend_dir / "models.py"
         if models_path.is_file():
             try:
-                _import_module_from_path(f"plugin_{plugin_id}_models", models_path)
+                with sdk.loading_plugin(plugin_id):
+                    _import_module_from_path(f"plugin_{plugin_id}_models", models_path)
                 logger.info("[Plugins] %s: models loaded", plugin_id)
             except Exception as e:
                 logger.error("[Plugins] %s: failed to load models: %s", plugin_id, e)
+                sdk.unregister_plugin_tools(plugin_id)
                 continue
 
         # Import router.py (required)
         router_path = backend_dir / "router.py"
         if not router_path.is_file():
             logger.error("[Plugins] %s: backend/router.py not found", plugin_id)
+            sdk.unregister_plugin_tools(plugin_id)
             continue
 
+        # register_tool 로 등록하는 AI 도구는 이 플러그인의 모듈에 묶인다(sdk.loading_plugin)
         try:
-            router_mod = _import_module_from_path(f"plugin_{plugin_id}_router", router_path)
+            with sdk.loading_plugin(plugin_id):
+                router_mod = _import_module_from_path(f"plugin_{plugin_id}_router", router_path)
         except Exception as e:
             logger.error("[Plugins] %s: failed to load router: %s", plugin_id, e)
+            sdk.unregister_plugin_tools(plugin_id)
             continue
 
         # Find the APIRouter instance
         router_obj = getattr(router_mod, "router", None)
         if router_obj is None:
             logger.error("[Plugins] %s: router.py must export 'router' (APIRouter)", plugin_id)
+            sdk.unregister_plugin_tools(plugin_id)
             continue
 
         # Include the router in the FastAPI app

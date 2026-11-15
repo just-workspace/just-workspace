@@ -184,6 +184,152 @@ async def list_items(user: User = Depends(get_current_user)):
 
 ```python
 from app.plugins.sdk import register_tool
+
+async def _search(user, query: str):
+    return {"result": "..."}
+
+register_tool("myplugin_search", "내 플러그인 검색", {
+    "type": "object",
+    "properties": {"query": {"type": "string"}},
+    "required": ["query"],
+}, _search)
+```
+
+- `backend/router.py`(또는 `models.py`)를 읽는 동안 부른 `register_tool` 은 도구를 **그 플러그인의 모듈**(manifest 의 `id`)에 묶는다 —
+  접근 판정의 표 `TOOL_MODULE`(`backend/app/mcp/access.py`)에 `도구 → 플러그인 id` 가 들어간다. 판정은 내장 도구와 같다:
+  플러그인이 꺼져 있거나, 사용자의 그룹에 그 플러그인 권한이 없거나, 사용자 없이 부르는 호출이면 보이지도 불리지도 않는다.
+  외부 AI 제공자로 내용이 나가는 것을 막는 관리자 정책·사용자 동의에서는 개인 데이터를 다루는 도구로 취급한다.
+- 도구 이름은 전체에서 하나다. 내장 도구나 다른 플러그인이 이미 쓰는 이름이면 등록하지 않고 `False` 를 돌려주며 로그에 남긴다 —
+  이름 앞에 플러그인 id 를 붙인다(`myplugin_…`).
+- 플러그인을 올리다 실패하면(라우터를 읽지 못함 등) 그 플러그인이 등록한 도구도 함께 걷어 낸다.
+- 표에 없는 도구는 노출되지 않는다는 규칙은 그대로다. 플러그인을 읽는 중이 아닐 때(요청 처리 중 등) 부른 `register_tool` 은
+  모듈에 묶이지 않아 어디에도 보이지 않는다 — 도구는 모듈을 읽을 때 등록한다.
+- `register_tool` 로 등록한 도구는 읽기 도구(`mcp:read`)다. 쓰기 도구(승인 절차를 거치는 `mcp:write`)나, 결과를 "믿을 수 없는 외부 내용"으로
+  감싸는 표시(`untrusted_output`)가 필요하면 `app.mcp.server` 의 `Tool`·`register` 를 직접 쓰고 `TOOL_MODULE` 에도 직접 넣는다.
+
+### 프런트엔드 가드
+
+- 내비게이션: `usePlatform()`(`frontend-react/src/composables/usePlatform.ts`)이 `/api/platform/modules` 에서 모듈·플러그인 목록을 받아
+  사이드바와 모바일 탭바를 그린다. 플러그인은 manifest `order` 순으로 내장 모듈 뒤에 놓인다.
+- 페이지: `frontend-react/src/router/guards.ts` 가 화면을 옮길 때마다 로그인 → 초기 설정 → 모듈 순으로 검사해, 꺼진 모듈의 화면은 대시보드(`/`)로 돌려보낸다.
+  컴포넌트 밖에서는 `isModuleEnabled(id)`.
+
+---
+
+## 플러그인
+
+플러그인은 **폴더 하나**다. 백엔드가 뜰 때 폴더를 읽어 API 를 붙이고, 프런트는 화면을 열 때 그 플러그인의 번들을 내려받아 그린다.
+그래서 워크스페이스 프런트를 다시 빌드하지 않고 플러그인을 더하고 뺄 수 있다.
+
+```
+plugins/
+├── package.json              # 빌드 의존성(vite, vue, @vitejs/plugin-vue)
+├── build-plugin.mjs          # 플러그인 하나 빌드 — frontend/page.vue 가 있는 플러그인용
+├── build-all.mjs             # frontend/page.vue 가 있는 플러그인 전부 빌드
+├── sample-notes/             # 견본 — 메모(Vue 프런트)
+│   ├── manifest.json          # 필수
+│   ├── backend/
+│   │   ├── router.py          # 필수 — FastAPI APIRouter 를 `router` 라는 이름으로
+│   │   └── models.py          # 선택 — SQLAlchemy 모델
+│   └── frontend/
+│       ├── page.vue           # 소스
+│       └── dist/plugin.mjs    # 빌드 산출물(파일 하나, CSS 포함) — 이것이 서빙된다
+└── remote-desktop/           # 견본 — 원격 데스크톱(React 프런트, 자체 빌드 스크립트 frontend/build.mjs)
+```
+
+리포에는 견본 둘과 빌드 도구만 들어 있다(`.gitignore` 가 `plugins/` 아래 다른 폴더를 추적하지 않는다). 직접 만든 플러그인은 자기 저장소에서 관리한다.
+
+백엔드가 플러그인을 찾는 곳은 두 군데다.
+
+| 컨테이너 경로 | 무엇 | 지울 수 있나 |
+|---|---|---|
+| `/plugins` | 리포의 `plugins/` 폴더(읽기 전용 마운트) | 관리 화면에서는 못 지운다 |
+| `/plugins-data` | 관리 화면에서 올린 플러그인(도커 볼륨 `ws-plugins-data`) | 관리 화면에서 지운다 |
+
+같은 `id` 가 두 곳에 있으면 `/plugins` 것이 올라오고 다른 하나는 건너뛴다.
+
+### manifest.json
+
+```json
+{
+  "id": "notes",
+  "name": "메모",
+  "name_en": "Notes",
+  "version": "1.0.0",
+  "description": "간단한 메모 관리",
+  "author": "just-workspace",
+  "icon": "edit-3",
+  "route": "/p/notes",
+  "api_prefix": "/api/plugins/notes",
+  "zones": [],
+  "frontend": true
+}
+```
+
+| 필드 | 필수 | 설명 |
+|------|------|------|
+| `id` | O | 고유 ID(영문·숫자·`-`·`_`). 모듈 ID 로도 쓰인다 |
+| `name` | O | 표시 이름 |
+| `route` | O | 화면 경로. `/p/<id>` 로 둔다(호스트의 플러그인 화면이 `/p/<id>` 하나다) |
+| `api_prefix` | O | API 접두사. 반드시 `/api/plugins/` 로 시작 |
+| `name_en` · `version` · `description` · `author` · `icon` | X | 관리 화면과 내비게이션에 보이는 값. `icon` 은 호스트 아이콘 이름(없으면 `puzzle`) |
+| `zones` | X | 이 플러그인이 기대는 **구역 id 목록**(`backend/app/zones.json` 의 id — `mail` `chat` `calendar` `docs` `meetings` `git` `ai` `sso` `rbi`). 하나라도 설치돼 있지 않으면 플러그인을 **아예 올리지 않는다** — 아래 설명 |
+| `order` | X | 내비게이션과 관리 화면에서의 순서. 정수, 작을수록 위 |
+| `fullscreen` | X | 화면 아래까지 자기 컨트롤로 쓰는 페이지 — 모바일 하단 탭바를 숨긴다(기본 false) |
+| `requires` | X | 의존 모듈 ID 목록. 지금은 목록에 실리기만 하고 검사하지 않는다 — 구역 의존은 `zones` 로 적는다 |
+| `frontend` · `frontend_api` | X | 적어 두는 값일 뿐 백엔드가 읽지 않는다. 프런트가 있는지는 `frontend/dist/plugin.mjs` 파일이 있는지로, 프런트 계약 버전은 번들을 보고 판정한다 |
+
+**`zones`**: 플러그인이 다른 구역의 기능을 쓴다면(예: 견본 `remote-desktop` 은 화면 전송에 회의 구역의 LiveKit 을 쓴다 → `"zones": ["meetings"]`)
+여기에 적는다. 백엔드는 뜰 때 설치된 구역(`JW_ZONES`)과 견줘, 빠진 구역이 있으면 그 플러그인의 라우터·모델·모듈을 올리지 않고 로그에
+`필요한 구역이 설치되지 않아 건너뜀` 을 남긴다. 건너뛴 플러그인과 빠진 구역은 `GET /api/admin/plugins` 응답의 `skipped`
+(`[{id, name, reason: "zone_not_installed", missing_zones}]`)에 실린다. 필드가 없거나 빈 배열이면 구역과 무관하게 올라온다.
+
+**`order`**: `order` 가 있는 플러그인이 먼저(작은 순), 없는 플러그인은 그 뒤에 폴더 이름순으로 온다. 같은 값끼리도 폴더 이름순.
+정수가 아니면(`"1"`, `1.5`, `true`) 경고 로그를 남기고 없는 것으로 친다. 사이에 끼울 자리를 남기려면 10 단위로 매긴다.
+내장 모듈의 순서는 바뀌지 않고, 백엔드가 라우터를 붙이는 순서도 늘 폴더 이름순이다.
+
+### 백엔드
+
+`backend/router.py` 가 `router`(FastAPI `APIRouter`)를 내놓으면 manifest 의 `api_prefix` 아래에 붙는다.
+
+```python
+from fastapi import Depends
+from app.plugins.sdk import APIRouter, get_current_user, get_db, User
+
+router = APIRouter()
+
+@router.get("")
+async def list_items(user: User = Depends(get_current_user)):
+    ...
+```
+
+`app.plugins.sdk` 는 자주 쓰는 것을 모아 다시 내보낸다: `APIRouter` · `get_current_user` · `get_db` · `require_module` · `register_tool` · `User`.
+플러그인 코드는 `app.*` 의 무엇이든 import 할 수 있다 — 그만큼 코어가 바뀌면 깨질 수 있다.
+
+- **모델**: `backend/models.py` 가 있으면 라우터보다 먼저 `plugin_<id>_models` 라는 모듈 이름으로 불러온다(`id` 의 `-` 도 그대로).
+  라우터에서는 `from plugin_notes_models import Note` 처럼 가져온다.
+- **테이블**: 코어는 플러그인 테이블을 만들어 주지 않는다. 견본처럼 플러그인 전용 `DeclarativeBase` 를 두고 첫 요청 때
+  `create_all` 을 직접 부른다. 열을 바꾸는 마이그레이션도 플러그인 몫이다.
+- **꺼짐 검사**: 관리자가 플러그인을 꺼도 라우터는 붙어 있다. 각 엔드포인트에서 `@require_module("<id>")` 또는 `is_module_enabled("<id>")` 로 막는다(견본 참고).
+- **이름 겹침**: 테이블은 `plugin_<이름>_…` 처럼 접두사를 붙여 코어·다른 플러그인과 겹치지 않게 한다.
+
+#### 라이프사이클 훅 (선택)
+
+`backend/router.py` 에 아래 이름의 함수가 있으면 불린다. 인자는 DB 세션 하나, 동기·비동기 모두 된다. 훅이 실패하면 로그만 남고 계속 진행한다.
+
+| 훅 | 시점 |
+|----|------|
+| `on_install(db)` | 처음 올라올 때 한 번(`system_settings` 의 `plugin.<id>.installed` 로 기억). 다시 올리면 다시 불린다 |
+| `on_enable(db)` | 관리자가 켤 때 |
+| `on_disable(db)` | 관리자가 끌 때 |
+| `on_uninstall(db)` | 관리 화면에서 지울 때 — 테이블·파일 정리는 여기서 |
+
+#### AI 도구 등록 (선택)
+
+플러그인이 AI 도구를 등록하면 내장 AI 와 외부 MCP 커넥터([CONNECTOR.md](CONNECTOR.md))가 같은 관문을 거쳐 부른다.
+
+```python
+from app.plugins.sdk import register_tool
 from app.mcp.access import TOOL_MODULE
 
 async def _search(user, query: str):

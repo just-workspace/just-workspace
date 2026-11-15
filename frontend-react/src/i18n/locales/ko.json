@@ -767,7 +767,15 @@
       "install": "설치",
       "restartingAria": "백엔드 재시작 중",
       "restartingTitle": "백엔드 다시 시작하는 중…",
-      "restartingHint": "플러그인을 적용하고 있습니다 (~20초)"
+      "restartingHint": "플러그인을 적용하고 있습니다 (~20초)",
+      "skipped": {
+        "title": "올리지 않은 플러그인",
+        "lead": "서버에 들어 있지만 지금은 쓸 수 없는 플러그인입니다. 사유가 해결되면 위 목록에 나타납니다.",
+        "badge": "쓸 수 없음",
+        "zoneNotInstalled": "필요한 구역이 꺼져 있습니다: {zones}",
+        "other": "올리지 못했습니다 ({reason})",
+        "toZones": "구역 보기"
+      }
     },
     "plugins": {
       "title": "플러그인",

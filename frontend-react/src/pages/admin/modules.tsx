@@ -3,6 +3,7 @@
  * 한 카드 안 행 64 — 타일 36(글자) + 이름(플러그인이면 "플러그인 v" 배지) + 설명 한 줄, 켜짐/꺼짐 글자 + 스위치(즉시 반영) + ⋮.
  * 헤더 1차 = "플러그인 설치"(모달). 설치·삭제 뒤에는 서버 재시작을 기다리는 모달(/api/health 폴링).
  * 플러그인 이름·설명은 서버 목록을 그대로 보여 준다(코드에 개별 플러그인 이름을 적지 않는다).
+ * 서버가 올리지 않은 플러그인(목록의 `skipped` — 필요한 구역이 꺼져 있는 것)은 카드 아래에 사유와 함께 따로 보여 준다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -13,6 +14,7 @@ import { cn } from '~/lib/utils'
 import { useAuth } from '~/composables/useAuth'
 import { useSiteConfig } from '~/composables/useSiteConfig'
 import { usePlatform, fetchModules, toggleModule } from '~/composables/usePlatform'
+import { zonesApi, localized } from '~/composables/useSystemZones'
 import { addToast } from '~/composables/useToast'
 import { confirmBox } from '~/composables/useDialog'
 import { AdminPageShell } from '~/components/admin/AdminPageShell'
@@ -26,6 +28,8 @@ import { UiMenu, type UiMenuItem } from '~/components/ui/Menu'
 import { UiModal } from '~/components/ui/Modal'
 
 interface PluginInfo { id: string; name: string; version: string; description: string; author: string; enabled: boolean; removable?: boolean }
+/** 서버가 올리지 않은 플러그인 — reason 은 지금 zone_not_installed 하나 */
+export interface SkippedPlugin { id: string; name: string; reason: string; missing_zones?: string[] }
 interface Row { id: string; name: string; desc: string; enabled: boolean; plugin: boolean; version?: string; removable?: boolean }
 
 // 기본 모듈 설명(시안 문구). 플러그인은 서버가 준 설명.
@@ -33,7 +37,7 @@ const DESC_IDS = ['mail', 'chat', 'files', 'calendar', 'contacts', 'board', 'git
 function tile(name: string) { return /^[A-Za-z]{1,3}$/.test(name) ? name : name.charAt(0) }
 
 export default function AdminModulesPage() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { appName } = useSiteConfig()
   useHead({ title: t('admin.common.headTitle', { page: t('admin.modules.pageTitle'), app: appName }) })
   const { user } = useAuth()
@@ -41,6 +45,9 @@ export default function AdminModulesPage() {
 
   const { modules } = usePlatform()
   const [plugins, setPlugins] = useState<PluginInfo[]>([])
+  const [skipped, setSkipped] = useState<SkippedPlugin[]>([])
+  // 구역 id → 이름(구역 목록을 읽을 수 있을 때만. 못 읽으면 id 그대로 보인다)
+  const [zoneNames, setZoneNames] = useState<Record<string, Record<string, string>>>({})
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
@@ -57,9 +64,15 @@ export default function AdminModulesPage() {
     try {
       const [, p] = await Promise.all([
         fetchModules(),
-        $fetch<{ plugins: PluginInfo[] }>('/api/admin/plugins'),
+        $fetch<{ plugins: PluginInfo[]; skipped?: SkippedPlugin[] }>('/api/admin/plugins'),
       ])
       setPlugins(p.plugins || [])
+      setSkipped(p.skipped || [])
+      if (p.skipped?.length) {
+        zonesApi.list()
+          .then(z => setZoneNames(Object.fromEntries([...(z.zones || []), ...(z.addons || [])].map(x => [x.id, x.name]))))
+          .catch(() => { /* 이름 없이 id 로 보인다 */ })
+      }
     } catch { setLoadError(true) } finally { setLoading(false) }
   }
   useEffect(() => { void load() }, [])
@@ -125,6 +138,14 @@ export default function AdminModulesPage() {
     } finally { setInstalling(false) }
   }
 
+  function skippedReason(p: SkippedPlugin) {
+    if (p.reason === 'zone_not_installed') {
+      const zones = (p.missing_zones || []).map(id => localized(zoneNames[id], locale) || id).join(', ')
+      return t('admin.modules.skipped.zoneNotInstalled', { zones })
+    }
+    return t('admin.modules.skipped.other', { reason: p.reason })
+  }
+
   if (!user?.is_admin) return null
   return (
     <AdminPageShell
@@ -159,6 +180,29 @@ export default function AdminModulesPage() {
               <UiMenu triggerIcon="more-vertical" label={t('admin.common.rowMenu', { name: r.name })} items={menuItems(r)} onSelect={key => { void onMenu(r, key) }} />
             </div>
           ))}
+        </section>
+      )}
+
+      {/* 올리지 않은 플러그인 — 사유와 함께 */}
+      {skipped.length > 0 && (
+        <section className="mt-5" aria-labelledby="skipped-plugins-title">
+          <h2 id="skipped-plugins-title" className="mb-1 text-sm font-semibold text-foreground">{t('admin.modules.skipped.title')}</h2>
+          <p className="mb-2 text-xs text-muted-foreground">{t('admin.modules.skipped.lead')}</p>
+          <div className="rounded-lg border border-border bg-card">
+            {skipped.map(p => (
+              <div key={p.id} data-testid={`skipped-${p.id}`} className="flex min-h-14 items-center gap-3.5 border-b border-border px-4 py-2 last:border-b-0 sm:px-[18px]">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-muted text-[13px] font-bold text-muted-foreground">{tile(p.name)}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-foreground">{p.name}</div>
+                  <div className="text-xs text-muted-foreground">{skippedReason(p)}</div>
+                </div>
+                <UiBadge tone="warning" tint size={18}>{t('admin.modules.skipped.badge')}</UiBadge>
+                {p.reason === 'zone_not_installed' && (
+                  <UiButton variant="outline" size="sm" onClick={() => { void navigateTo('/admin/zones') }}>{t('admin.modules.skipped.toZones')}</UiButton>
+                )}
+              </div>
+            ))}
+          </div>
         </section>
       )}
 

@@ -9,7 +9,34 @@
 
 ## 빠른 시작
 
-> 설치 관리자(컨테이너 한 줄 + 브라우저 마법사, 답변 파일 무인 설치)는 [installer.md](installer.md). 마법사 화면은 준비 중이고 API 와 엔진이 먼저 들어와 있다.
+> 설치 관리자(컨테이너 한 줄 + 브라우저 마법사, 답변 파일 무인 설치)는 [installer.md](installer.md). 아래는 설치 관리자 없이 손으로 띄우는 절차다.
+
+리포 루트에서:
+
+```bash
+cp .env.example .env
+# 1) .env 를 채운다: DOMAIN · APP_URL · COMPOSE_PROFILES(코어만이면 비운다) · DEPLOY_MODE.
+#    첫 관리자는 ADMIN_USERNAME · ADMIN_PASSWORD(12자 이상)를 적어 두면 첫 기동 때 만들어진다.
+
+# 2) backend 이미지를 빌드한다 — 비밀값 생성기가 그 안에 있다.
+#    비밀값이 아직 비어 있는 동안에는 `docker compose build` 가 필수 변수 검사(DB_PASSWORD · SECRET_KEY)에 걸리므로
+#    docker build 로 직접 빌드한다.
+docker build -t localhost/just-workspace-backend:latest ./backend
+
+# 3) 비어 있는 비밀값을 채운다(이미 값이 있는 줄은 건드리지 않는다).
+docker run --rm -v "$PWD/.env:/work/.env" localhost/just-workspace-backend:latest \
+  python -m app.cli gen-secrets --merge /work/.env --in-place
+
+# 4) 파일 저장소 볼륨을 만든다. compose 는 이 이름(STORAGE_VOLUME, 기본 ws-storage-data)의 볼륨을
+#    "이미 있는 것"으로 쓴다 — NFS 등 다른 저장소로 만들 수 있게 하려는 것이다. 없으면 up 이 멈춘다.
+docker volume create ws-storage-data
+
+# 5) 띄운다(나머지 이미지는 이때 빌드된다).
+docker compose config --quiet && docker compose up -d
+```
+
+- 앞단 프록시 없이 평문 80 으로 받아 보려면 `DEPLOY_MODE=dev`, `APP_URL=http://<서버 주소>`.
+- `livekit` 프로파일을 쓰면 먼저 `cp livekit/livekit.example.yaml livekit/livekit.yaml`.
 
 ## 배포 모드 (`DEPLOY_MODE`)
 

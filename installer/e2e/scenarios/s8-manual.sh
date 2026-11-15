@@ -31,8 +31,8 @@ set_env ADMIN_PASSWORD "$(cat "$(admin_password_file)")"
 chmod 600 .env
 
 t0=$(date +%s)
-docker compose build backend > "$E2E_WORK/manual-build.log" 2>&1
-expect "docker compose build backend" 0 "$?"
+docker build -t localhost/just-workspace-backend:latest ./backend > "$E2E_WORK/manual-build.log" 2>&1
+expect "docker build backend" 0 "$?"
 docker run --rm -v "$PWD/.env:/work/.env" localhost/just-workspace-backend:latest \
   python -m app.cli gen-secrets --merge /work/.env --in-place > "$E2E_WORK/manual-secrets.log" 2>&1
 expect "비밀값 채우기(gen-secrets --merge)" 0 "$?"

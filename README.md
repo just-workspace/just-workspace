@@ -22,9 +22,13 @@
 cp .env.example .env
 # 도메인 등을 채우고, 비어 있는 비밀값(SECRET_KEY, DB_PASSWORD …)은 생성기로 채운다.
 # 빈 값·예시 값·짧은 값으로는 백엔드가 뜨지 않는다(docs/CONFIG.md "비밀값").
-docker compose build backend
+# backend 이미지를 먼저 빌드한다(비밀값 생성기가 그 안에 있다). 비밀값이 아직 비어 있는 동안에는
+# `docker compose build` 가 필수 변수 검사에 걸리므로 docker build 로 직접 빌드한다.
+docker build -t localhost/just-workspace-backend:latest ./backend
 docker run --rm -v "$PWD/.env:/work/.env" localhost/just-workspace-backend:latest \
   python -m app.cli gen-secrets --merge /work/.env --in-place
+# 파일 저장소 볼륨 — compose 는 이 이름(STORAGE_VOLUME)의 볼륨을 이미 있는 것으로 쓴다(NFS 등으로 바꿔 만들 수 있게).
+docker volume create ws-storage-data
 cp livekit/livekit.example.yaml livekit/livekit.yaml   # livekit 프로파일을 쓸 때
 docker compose config --quiet && docker compose up -d
 ```

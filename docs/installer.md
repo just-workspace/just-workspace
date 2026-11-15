@@ -4,7 +4,8 @@ Just Workspace 를 "리눅스 + Docker Engine(x86_64)" 서버에 설치하는 �
 
 > 이 문서는 설치 관리자의 **핵심부**(API 와 엔진)를 다룬다. 마법사 화면은 `frontend-react/src/installer-app/` 의 독립 번들이고,
 > 설치 관리자 이미지에 함께 실려 8443 의 `/` 에서 나온다.
-> 손으로 `docker compose up` 하는 기존 흐름은 그대로 남아 있다 — [deployment.md](deployment.md).
+> 설치하는 사람을 위한 안내(준비물·화면별 설명·문제 해결)는 [install.md](install.md), 설치 뒤의 운영은 [operate.md](operate.md).
+> 손으로 `docker compose up` 하는 흐름은 그대로 남아 있다 — [deployment.md](deployment.md).
 
 ## 1. 한 줄 설치
 

@@ -28,7 +28,7 @@ import secrets
 from app import render
 from app.engine import StepError
 from app.state import write_private
-from app.zones import default_install, default_remove
+from app.zones import clear_pending, default_install, default_remove, mark_pending
 
 CONTAINER = "ws-gitea"
 ADMIN_USER = "jw-admin"
@@ -133,21 +133,27 @@ def connect(ctx, zone_id: str) -> None:
     if entry != wanted:
         ctx.set_env(OAUTH_CLIENTS_JSON=render.oauth_clients(s.get("OAUTH_CLIENTS_JSON", ""), CLIENT_ID, wanted))
 
-    # Gitea 의 로그인 원본 — 워크스페이스 주소로 되돌아가 설정 문서를 읽으므로 신뢰되는 인증서가 필요하다
+    # Gitea 의 로그인 원본 — 워크스페이스 주소로 되돌아가 설정 문서를 읽으므로 신뢰되는 인증서가 필요하다.
+    # 이미 있으면 지금 값으로 고쳐 쓴다(서버를 옮겨 접속 주소가 바뀌었으면 옛 주소를 가리키고 있다).
+    discovery = f"{ctx.plan.app_url}/oauth/.well-known/openid-configuration"
+    source = ["--name", AUTH_NAME, "--provider", "openidConnect", "--key", CLIENT_ID, "--secret", client_secret,
+              "--auto-discover-url", discovery, "--scopes", "openid email profile"]
     listed = _gitea(ctx, "admin", "auth", "list")
-    if AUTH_NAME in [line.split()[1] for line in listed.out.splitlines()[1:] if len(line.split()) > 1]:
-        ctx.log("git: 로그인 연동이 이미 있습니다")
+    existing = next((p[0] for p in (line.split() for line in listed.out.splitlines()[1:])
+                     if len(p) > 1 and p[1] == AUTH_NAME and p[0].isdigit()), None)
+    if existing is not None:
+        r = _gitea(ctx, "admin", "auth", "update-oauth", "--id", existing, *source)
     else:
-        r = _gitea(ctx, "admin", "auth", "add-oauth", "--name", AUTH_NAME, "--provider", "openidConnect",
-                   "--key", CLIENT_ID, "--secret", client_secret,
-                   "--auto-discover-url", f"{ctx.plan.app_url}/oauth/.well-known/openid-configuration",
-                   "--scopes", "openid email profile")
-        if r.ok:
-            ctx.log("git: 워크스페이스 로그인 연동을 걸었습니다")
-        else:
-            # 임시 인증서이거나 접속 주소가 아직 이 서버를 가리키지 않으면 여기서 막힌다 — 설치는 계속한다
-            ctx.log(r.err[-300:])
-            ctx.warn("git_sso_pending", reason="discovery_unreachable")
+        r = _gitea(ctx, "admin", "auth", "add-oauth", *source)
+    if r.ok:
+        clear_pending(ctx.store, zone_id)
+        ctx.log("git: 워크스페이스 로그인 연동을 " + ("확인했습니다" if existing is not None else "걸었습니다"))
+    else:
+        # 임시 인증서이거나 접속 주소가 아직 이 서버를 가리키지 않으면 여기서 막힌다 — 설치는 계속한다.
+        # 보류로 적어 두고, 인증서를 바꾼 뒤(또는 "다시 연결"로) 다시 시도한다.
+        ctx.log(r.err[-300:])
+        mark_pending(ctx, zone_id, "discovery_unreachable")
+        ctx.warn("git_sso_pending", reason="discovery_unreachable")
 
     # 앞단 경로
     scheme = "https" if ctx.plan.tls else "http"
@@ -166,6 +172,7 @@ def remove(ctx, zone_id: str) -> None:
             if len(parts) > 1 and parts[1] == AUTH_NAME and parts[0].isdigit():
                 _gitea(ctx, "admin", "auth", "delete", "--id", parts[0])
                 ctx.log("git: 로그인 연동을 지웠습니다")
+    clear_pending(ctx.store, zone_id)
     s = ctx.secrets()
     ctx.set_env(GITEA_TOKEN="", OAUTH_CLIENTS_JSON=render.oauth_clients(s.get("OAUTH_CLIENTS_JSON", ""), CLIENT_ID, None))
     default_remove(ctx, zone_id)

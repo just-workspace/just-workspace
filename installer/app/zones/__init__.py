@@ -27,6 +27,26 @@ import importlib
 from types import SimpleNamespace
 
 ZONE_START_TIMEOUT = 300
+PENDING = "pending.json"      # 구역 id → {"reason", "since"} — 켜져 있지만 연결(로그인 연동)을 걸지 못한 구역
+
+
+def pending(store) -> dict:
+    """연결이 보류된 구역. 인증서를 바꾼 뒤(또는 "다시 연결"로) 다시 시도한다."""
+    return store.read(PENDING, {}) or {}
+
+
+def mark_pending(ctx, zone_id: str, reason: str) -> None:
+    from app.state import now_iso
+
+    data = pending(ctx.store)
+    data[zone_id] = {"reason": reason, "since": (data.get(zone_id) or {}).get("since") or now_iso()}
+    ctx.store.write(PENDING, data)
+
+
+def clear_pending(store, zone_id: str) -> None:
+    data = pending(store)
+    if data.pop(zone_id, None) is not None:
+        store.write(PENDING, data)
 
 
 def container_name(service: str) -> str:

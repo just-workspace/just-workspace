@@ -101,9 +101,14 @@ class ZoneManager:
     def listing(self) -> dict:
         enabled = self.enabled()
         out = self.catalog.listing(enabled, self.server_memory_mb() or None)
+        waiting = zones.pending(self.store)
         for row in (*out["zones"], *out["addons"]):
             row["enabled"] = row.pop("selected")
             row["has_settings"] = row["id"] in SECTIONS
+            # 켜져 있지만 연결(로그인 연동)이 걸리지 않았다 — 신뢰되는 인증서로 바뀐 뒤 다시 건다
+            hold = waiting.get(row["id"]) if row["enabled"] else None
+            row["pending"] = hold is not None
+            row["pending_reason"] = (hold or {}).get("reason")
         return out
 
     def get_settings(self, zone_id: str) -> dict:
@@ -337,6 +342,35 @@ class ZoneManager:
             self._guard(lambda: self._restart_backend(back), job, back)
             ctx.log(f"{zone_id}: 설정을 바꾸지 못해 이전 값으로 되돌렸습니다")
         self._finish(job, ctx, error)
+
+    # ─── 다시 연결 ───
+
+    def reconnect(self, zone_id: str) -> dict:
+        """보류된 연결(코드 저장소의 로그인 연동)을 다시 시도한다. 여전히 안 되면 작업이 실패로 남는다."""
+        self._require_installed()
+        self._known(zone_id)
+        if zone_id not in self.enabled():
+            raise ZoneRequestError(409, "not_enabled", zone=zone_id)
+        if zone_id not in zones.pending(self.store):
+            raise ZoneRequestError(409, "not_pending", zone=zone_id)
+        return self._start("reconnect", zone_id, ("connect",), self._run_reconnect, zone_id)
+
+    def _run_reconnect(self, job: dict, zone_id: str) -> None:
+        ctx = self.engine._context(f"zone-{zone_id}", self.store.load_answers(), self.store.facts())
+        ctx.log(f"── {zone_id} 다시 연결 ──")
+
+        def work() -> None:
+            self._stage(job, "connect", "running")
+            zones.get(zone_id).connect(ctx, zone_id)
+            if ctx.env_dirty:
+                self._restart_backend(ctx)
+            hold = zones.pending(self.store).get(zone_id)
+            if hold is not None:
+                raise eng.StepError("connection_still_pending", "cert_use_trusted", zone=zone_id,
+                                    reason=hold.get("reason"))
+            self._stage(job, "connect", "done")
+
+        self._finish(job, ctx, self._guard(work, job, ctx))
 
     def _require_installed(self) -> None:
         if not self.store.locked:

@@ -1,0 +1,157 @@
+"""설치 뒤의 인증서 — 상태, 다시 발급(자동·올리기), 실패 때 되돌리기, 보류된 구역 연결 다시 시도."""
+
+import json
+
+from starlette.testclient import TestClient
+
+from app import api, api_cert, certs, envfile, zones
+from tests.test_zones import TOKEN, finish, gitea_host
+
+KEY_HEADERS = lambda svc: {api.KEY_HEADER: svc.store.env_secrets()["JW_INSTALLER_KEY"]}  # noqa: E731
+
+
+def temporary_install(tmp_path, **answers):
+    """임시 인증서 + 코드 저장소 — 로그인 연동이 인증서 때문에 걸리지 않은 설치."""
+    host = gitea_host(tmp_path)
+    host.trusted = False
+
+    def oauth(argv, _):
+        from app.docker_api import Result
+
+        if not host.trusted:
+            return Result(1, "", "Failed to initialize OpenID Connect Provider: x509: certificate signed by unknown authority")
+        host.auth_list = "ID\tName\tType\tEnabled\n1\tworkspace\tOAuth2\ttrue\n"
+        return ""
+
+    host.runner.on("exec", "ws-gitea", "auth", "add-oauth", fn=oauth)
+    host.runner.on("exec", "ws-gitea", "auth", "update-oauth", fn=oauth)
+    svc = host.install(preset=None, zones=["git"], mail={}, access={"cert": "temporary"}, **answers)
+    svc.store.update_facts(dns_status="mismatch")
+    state = svc.engine.run()
+    assert state["status"] == "done", state["error"]
+    return host, svc
+
+
+def test_temporary_install_records_pending_connection(tmp_path):
+    host, svc = temporary_install(tmp_path)
+    assert zones.pending(svc.store)["git"]["reason"] == "discovery_unreachable"
+    rows = {z["id"]: z for z in svc.zones.listing()["zones"]}
+    assert rows["git"]["pending"] is True and rows["git"]["pending_reason"] == "discovery_unreachable"
+    assert rows["chat"]["pending"] is False                     # 꺼진 구역은 보류가 아니다
+
+    status = api_cert.manager(svc).status()
+    assert status["managed"] and status["mode"] == "temporary" and status["temporary"] and status["self_signed"]
+    assert status["domain"] == "ws.example.com" and "ws.example.com" in status["names"]
+    assert status["days_left"] > 300 and status["not_after"].endswith("Z") and status["pending"] == ["git"]
+    assert status["job"] is None
+
+
+def test_upload_reissue_reloads_and_reconnects(tmp_path):
+    host, svc = temporary_install(tmp_path)
+    client = TestClient(api.create_internal_app(svc), client=("127.0.0.1", 50000))
+    assert client.get("/internal/cert").status_code == 404                      # 키 없이는 없는 길이다
+    h = KEY_HEADERS(svc)
+    assert client.get("/internal/cert", headers=h).json()["temporary"] is True
+
+    # 검증에 걸리는 인증서(다른 이름) → 422, 아무것도 바꾸지 않는다
+    wrong_cert, wrong_key = certs.self_signed(["other.example.com"])
+    r = client.post("/internal/cert/reissue", headers=h, json={"mode": "upload", "cert": wrong_cert, "key": wrong_key})
+    assert r.status_code == 422 and r.json()["code"] == "cert_invalid" and r.json()["vars"]["checks"]
+    assert client.post("/internal/cert/reissue", headers=h, json={"mode": "magic"}).status_code == 422
+    assert svc.store.load_answers().access.cert == "temporary"
+
+    cert, key = certs.self_signed(["ws.example.com"], days=90)                 # 사설 CA 가 내준 것으로 친다
+    host.trusted = True
+    restarts = len(host.runner.find("restart", "ws-nginx"))
+    r = client.post("/internal/cert/reissue", headers=h, json={"mode": "upload", "cert": cert, "key": key})
+    assert r.status_code == 202 and r.json()["kind"] == "cert" and r.json()["zone"] is None
+    assert [s["id"] for s in r.json()["stages"]] == ["issue", "reload", "reconnect"]
+    job = finish(svc, r.json())
+    assert job["status"] == "done", job["error"]
+    assert [s["status"] for s in job["stages"]] == ["done", "done", "done"] and job["warnings"] == []
+    assert host.cert == cert and svc.store.load_answers().access.cert == "upload"
+    assert svc.store.read("cert.json")["kind"] == "upload"
+    assert len(host.runner.find("restart", "ws-nginx")) == restarts + 1         # 새 인증서를 읽게 한다
+    # 보류됐던 로그인 연동이 걸렸다
+    assert zones.pending(svc.store) == {} and host.runner.find("exec", "ws-gitea", "auth", "add-oauth")
+    status = client.get("/internal/cert", headers=h).json()
+    assert status["mode"] == "upload" and status["pending"] == [] and status["days_left"] in (89, 90)
+    env = envfile.parse(host.paths.env_file.read_text(encoding="utf-8"))
+    assert "Strict-Transport-Security" in (host.paths.stack / "nginx/site.d/headers.conf").read_text(encoding="utf-8")
+    assert json.loads(env["OAUTH_CLIENTS_JSON"])["gitea"] and env["GITEA_TOKEN"] == TOKEN
+    jobs = client.get("/internal/jobs", headers=h).json()["jobs"]
+    assert jobs[0]["kind"] == "cert"
+
+
+def test_auto_reissue_failure_puts_the_old_certificate_back(tmp_path):
+    host, svc = temporary_install(tmp_path)
+    before = host.cert
+    host.certbot_ok = False
+    job = finish(svc, api_cert.manager(svc).reissue({"mode": "auto"}))
+    assert job["status"] == "failed" and job["error"]["cause"] == "cert_issue_failed"
+    assert [s["status"] for s in job["stages"]] == ["failed", "pending", "pending"]
+    assert svc.store.load_answers().access.cert == "temporary"                 # 답변을 되돌렸다
+    assert certs.is_self_signed(host.cert) and host.cert                        # 임시 인증서가 다시 놓였다
+    assert "certbot" not in envfile.parse(host.paths.env_file.read_text(encoding="utf-8"))["COMPOSE_PROFILES"]
+    assert zones.pending(svc.store)["git"] and before
+
+    host.certbot_ok = True
+    host.trusted = True
+    host.services.append("certbot")                                             # 자동 발급이면 갱신 컨테이너가 프로파일에 든다
+    job = finish(svc, api_cert.manager(svc).reissue({"mode": "auto"}))
+    assert job["status"] == "done", job["error"]
+    assert svc.store.load_answers().access.cert == "auto" and zones.pending(svc.store) == {}
+    assert "certbot" in envfile.parse(host.paths.env_file.read_text(encoding="utf-8"))["COMPOSE_PROFILES"]
+    assert host.runner.find("compose", "up", "-d", "certbot")
+
+
+def test_reissue_refusals(tmp_path):
+    import pytest
+
+    from app.zonectl import ZoneRequestError
+
+    host = gitea_host(tmp_path)
+    svc = host.install(preset="minimal", mail={}, access={"network": "proxy", "cert": "proxy", "proxy_addresses": ["192.168.10.5"]})
+    mgr = api_cert.manager(svc)
+    with pytest.raises(ZoneRequestError) as e:
+        mgr.reissue({"mode": "auto"})
+    assert e.value.code == "not_installed"
+    assert svc.engine.run()["status"] == "done"
+    with pytest.raises(ZoneRequestError) as e:
+        mgr.reissue({"mode": "auto"})
+    assert (e.value.status, e.value.code) == (409, "cert_managed_by_proxy")
+    assert mgr.status()["managed"] is False and mgr.status()["temporary"] is False
+
+
+def test_reconnect_job(tmp_path):
+    import pytest
+
+    from app.zonectl import ZoneRequestError
+
+    host, svc = temporary_install(tmp_path)
+    client = TestClient(api.create_internal_app(svc), client=("127.0.0.1", 50000))
+    h = KEY_HEADERS(svc)
+    # 아직 믿을 수 없는 인증서 — 다시 걸어도 보류로 남고 작업은 실패로 끝난다
+    r = client.post("/internal/zones/git/reconnect", headers=h)
+    assert r.status_code == 202 and r.json()["kind"] == "reconnect"
+    job = finish(svc, r.json())
+    assert job["status"] == "failed" and job["error"]["cause"] == "connection_still_pending"
+    assert job["error"]["vars"] == {"zone": "git", "reason": "discovery_unreachable"}
+    assert zones.pending(svc.store)["git"]
+
+    host.trusted = True
+    job = finish(svc, svc.zones.reconnect("git"))
+    assert job["status"] == "done" and zones.pending(svc.store) == {}
+    assert not {z["id"] for z in svc.zones.listing()["zones"] if z["pending"]}
+    with pytest.raises(ZoneRequestError) as e:
+        svc.zones.reconnect("git")
+    assert e.value.code == "not_pending"
+    with pytest.raises(ZoneRequestError) as e:
+        svc.zones.reconnect("chat")
+    assert e.value.code == "not_enabled"
+
+
+def test_disabling_a_zone_clears_its_pending_mark(tmp_path):
+    host, svc = temporary_install(tmp_path)
+    job = finish(svc, svc.zones.disable("git"))
+    assert job["status"] == "done" and zones.pending(svc.store) == {}

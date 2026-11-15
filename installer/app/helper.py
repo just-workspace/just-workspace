@@ -11,6 +11,8 @@
 | `path-test <경로>` | `--mount type=bind`, uid 1000 | 쓰기·읽기·지우기 |
 | `nfs-test <경로>` | NFS 볼륨, uid 1000 | 쓰기·읽기·지우기, 파일 잠금, 여유 공간 |
 | `write-marker <경로> --install-id <id>` | 저장소 볼륨, uid 1000 | 표식 파일 쓰기 |
+| `read-marker <경로>` | 저장소 볼륨 | 표식 파일 읽기(복원 — 같은 설치의 저장소인지) |
+| `restore-files <백업> <경로> --member <이름>` | 백업(읽기 전용) + 저장소 볼륨, root 로 시작 | 백업 안의 파일 묶음을 저장소에 푼다 |
 | `place-cert …` · `read-cert …` | 인증서 볼륨 | 인증서 배치·읽기 |
 """
 
@@ -216,6 +218,85 @@ def cmd_write_marker(args) -> int:
     return _out({"status": "written"})
 
 
+def cmd_read_marker(args) -> int:
+    """{"status": found|missing|unreadable, "install_id"} — 아무것도 쓰지 않는다."""
+    path = os.path.join(args.path, MARKER_NAME)
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return _out({"status": "missing", "install_id": None})
+    except (OSError, ValueError):
+        return _out({"status": "unreadable", "install_id": None})
+    return _out({"status": "found", "install_id": str((data or {}).get("install_id", "")) if isinstance(data, dict) else ""})
+
+
+# ─── 복원: 파일 저장소 되돌리기 ───
+#
+# 백업은 폴더이거나 tar 한 개(.jwbak)이고, 파일 저장소는 그 안의 tar(압축 없음) 한 멤버다.
+# 백업 파일은 소유자(root)만 읽을 수 있고 저장소는 backend 의 사용자(uid 1000)가 써야 한다 —
+# root 로 백업을 연 뒤 **권한을 내리고** 푼다(root 를 낮추는 NFS 내보내기에서도 쓸 수 있고, 파일 소유자가 backend 가 된다).
+
+
+def _open_member(source: str, member: str):
+    """(읽을 파일 객체, 닫을 것들). 백업이 폴더면 그 안의 파일, tar 면 그 멤버."""
+    import tarfile
+
+    if os.path.isdir(source):
+        f = open(os.path.join(source, member), "rb")
+        return f, [f]
+    outer = tarfile.open(source, mode="r:")
+    for info in outer:
+        if info.name == member and info.isfile():
+            return outer.extractfile(info), [outer]
+    outer.close()
+    raise FileNotFoundError(member)
+
+
+def _wipe(folder: str) -> None:
+    import shutil
+
+    for entry in os.listdir(folder):
+        path = os.path.join(folder, entry)
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        else:
+            os.unlink(path)
+
+
+def cmd_restore_files(args) -> int:
+    import tarfile
+
+    if os.sep in args.member or args.member.startswith("."):
+        return _out({"status": "error", "error": "bad_member"})
+    try:
+        stream, closers = _open_member(args.source, args.member)
+    except (OSError, tarfile.TarError) as e:
+        return _out({"status": "error", "error": "source_unreadable", "detail": str(e)[:200]})
+    try:
+        if _uid() == 0 and args.uid:
+            os.setgroups([])
+            os.setgid(args.gid)
+            os.setuid(args.uid)
+        _wipe(args.path)
+        count = total = 0
+        with tarfile.open(fileobj=stream, mode="r|") as inner:
+            for info in inner:
+                inner.extract(info, args.path, filter="data")
+                count += 1
+                total += info.size if info.isfile() else 0
+    except (OSError, tarfile.TarError) as e:
+        code = errno.errorcode.get(getattr(e, "errno", None) or 0, "") if isinstance(e, OSError) else ""
+        return _out({"status": "error", "error": code or type(e).__name__, "detail": str(e)[:200]})
+    finally:
+        for c in closers:
+            try:
+                c.close()
+            except OSError:
+                pass
+    return _out({"status": "restored", "entries": count, "bytes": total})
+
+
 # ─── 인증서 배치 ───
 #
 # 인증서 볼륨(/etc/letsencrypt)의 배치:
@@ -316,6 +397,27 @@ def cmd_unlink_cert(args) -> int:
     return _out({"status": "kept"})
 
 
+def cmd_drop_cert(args) -> int:
+    """그 이름의 인증서를 통째로 치운다(링크·certbot 폴더·갱신 설정). 복원에서, 되돌린 인증서를 쓰지 않게 됐을 때만 부른다."""
+    import shutil
+
+    name = _safe_name(args.name)
+    removed = []
+    for path in (os.path.join(args.root, "live", name), os.path.join(args.root, "archive", name),
+                 os.path.join(args.root, "jw", name), os.path.join(args.root, "renewal", name + ".conf")):
+        try:
+            if os.path.islink(path) or os.path.isfile(path):
+                os.unlink(path)
+            elif os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                continue
+            removed.append(os.path.relpath(path, args.root))
+        except OSError:
+            pass
+    return _out({"status": "dropped", "removed": removed})
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="app.helper")
     sub = p.add_subparsers(dest="command", required=True)
@@ -325,6 +427,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("nfs-test"); s.add_argument("path"); s.set_defaults(func=cmd_nfs_test)
     s = sub.add_parser("write-marker"); s.add_argument("path"); s.add_argument("--install-id", required=True)
     s.add_argument("--adopt", action="store_true"); s.set_defaults(func=cmd_write_marker)
+    s = sub.add_parser("read-marker"); s.add_argument("path"); s.set_defaults(func=cmd_read_marker)
+    s = sub.add_parser("restore-files"); s.add_argument("source"); s.add_argument("path")
+    s.add_argument("--member", required=True); s.add_argument("--uid", type=int, default=1000)
+    s.add_argument("--gid", type=int, default=1000); s.set_defaults(func=cmd_restore_files)
     s = sub.add_parser("place-cert"); s.add_argument("--root", default=LE_ROOT); s.add_argument("--name", required=True)
     s.add_argument("--aliases", default=""); s.add_argument("--link-only", action="store_true")
     s.set_defaults(func=cmd_place_cert)
@@ -332,6 +438,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_unlink_cert)
     s = sub.add_parser("read-cert"); s.add_argument("--root", default=LE_ROOT); s.add_argument("--name", required=True)
     s.set_defaults(func=cmd_read_cert)
+    s = sub.add_parser("drop-cert"); s.add_argument("--root", default=LE_ROOT); s.add_argument("--name", required=True)
+    s.set_defaults(func=cmd_drop_cert)
     return p
 
 

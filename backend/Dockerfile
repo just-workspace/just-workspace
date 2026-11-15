@@ -8,11 +8,10 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
     && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list \
     && apt-get update -qq && apt-get install -y -qq --no-install-recommends docker-ce-cli gosu \
-    && apt-get install -y -qq --no-install-recommends pandoc ffmpeg \
+    && apt-get install -y -qq --no-install-recommends pandoc \
     && rm -rf /var/lib/apt/lists/*
 # pandoc: 네이티브 문서(.jwdoc)의 HTML 정본을 docx/pdf/md 로 내보내고, 받은 docx 를
 #         가져올 때 쓴다. 자체 포맷에 갇히지 않게 하는 핵심 조각.
-# ffmpeg: 플러그인이 영상·음성을 이어붙이거나 규격을 맞출 때 쓴다(재인코딩·스케일).
 
 # 베이스 이미지의 pip 은 설치 시점 취약점(경로 순회 계열)이 있어 먼저 최신으로 올린다.
 RUN pip install --no-cache-dir -U pip

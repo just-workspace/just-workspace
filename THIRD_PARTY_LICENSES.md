@@ -19,7 +19,6 @@ Just Workspace 의 소스는 [MIT](LICENSE) 다. 이 문서는 함께 쓰이는 
 | pywebpush · py-vapid | 2.5.0 · 1.9.6 | MPL-2.0 | backend | 웹 푸시 |
 | certifi | 2026.10.23 | MPL-2.0 | backend · sso · installer | 루트 인증서 묶음(전이 의존성) |
 | pandoc (데비안 패키지) | 베이스 배포판 판 | GPL-2.0-or-later | backend | 문서 변환 — 별도 프로세스로 실행 |
-| ffmpeg 와 코덱 라이브러리 (데비안 패키지) | 베이스 배포판 판 | GPL-2.0-or-later (라이브러리는 LGPL-2.1+·GPL 혼합) | backend | 플러그인의 영상·음성 변환 — 별도 프로세스 |
 | psycopg · psycopg-binary | 3.3.9 | LGPL-3.0-only | ldap | PostgreSQL 드라이버(libpq 를 담은 바이너리 휠) |
 | zope.interface | 8.7 | ZPL-2.1 (permissive, 참고) | ldap | Twisted 전이 의존성 |
 | LibreOffice (데비안 backports 패키지) | 베이스 배포판 판 | MPL-2.0 (일부 LGPL-3.0+·Apache-2.0) | docconv | 오피스 문서 변환 — 별도 프로세스 |
@@ -61,7 +60,6 @@ Just Workspace 의 소스는 [MIT](LICENSE) 다. 이 문서는 함께 쓰이는 
 | asyncpg | 0.32.0 | Apache-2.0 | PostgreSQL 드라이버 |
 | itsdangerous | 2.2.0 | BSD-3-Clause | 서명 |
 | pydantic · pydantic-settings | 2.14.3 · 2.16.3 | MIT | 스키마·설정 |
-| aiofiles | 25.1.0 | Apache-2.0 | (코드에서 쓰지 않음 — 설치만 됨) |
 | python-multipart | 0.0.33 | Apache-2.0 | 업로드 파싱 |
 | Pillow | 13.0.0 | MIT-CMU | 이미지 처리 |
 | slowapi | 0.1.10 | MIT | 요청 수 제한 |
@@ -92,7 +90,7 @@ Just Workspace 의 소스는 [MIT](LICENSE) 다. 이 문서는 함께 쓰이는 
 
 전이 의존성 가운데 permissive 가 아닌 것: certifi(MPL-2.0). 그 밖(aiohappyeyeballs·typing_extensions PSF-2.0 등)은 permissive 다.
 
-apt 로 넣는 것: `docker-ce-cli`(Apache-2.0), `gosu`(Apache-2.0), `curl`(curl 라이선스), `ca-certificates`(MPL-2.0·GPL-2.0+), **`pandoc`(GPL-2.0-or-later)**, **`ffmpeg`(GPL-2.0-or-later, 데비안 빌드 기준 — 딸려 오는 코덱 라이브러리는 LGPL·GPL·BSD 혼합)**. pandoc 과 ffmpeg 는 backend 코드에 링크되지 않고 별도 프로세스로 실행된다.
+apt 로 넣는 것: `docker-ce-cli`(Apache-2.0), `gosu`(Apache-2.0), `curl`(curl 라이선스), `ca-certificates`(MPL-2.0·GPL-2.0+), **`pandoc`(GPL-2.0-or-later)**. pandoc 은 backend 코드에 링크되지 않고 별도 프로세스로 실행된다.
 
 ### 2.2 sso (`sso/requirements.txt`, 베이스 `python:3.14-slim`)
 
@@ -322,6 +320,6 @@ marked 18.1.1 · vite ^8.3.4 · vue ^3.5.44 · @vitejs/plugin-vue ^6.0.10 — �
 
 ## 6. 확인하지 못한 것
 
-- 데비안 패키지의 정확한 버전과 패키지별 저작권 파일. Dockerfile 이 버전을 고정하지 않은 것(pandoc, ffmpeg, LibreOffice, OpenJDK, iptables 등)은 빌드 시점의 배포판 판이 들어간다.
+- 데비안 패키지의 정확한 버전과 패키지별 저작권 파일. Dockerfile 이 버전을 고정하지 않은 것(pandoc, LibreOffice, OpenJDK, iptables 등)은 빌드 시점의 배포판 판이 들어간다.
 - 남의 이미지 안의 패키지 목록(docker-mailserver, OnlyOffice, SearXNG, LiveKit Egress, kasmweb/chromium). 이미지를 열어 대조하지 않았다.
 - 파이썬 전이 의존성은 리눅스 x86-64 휠 기준으로 풀어 확인했다. 다른 아키텍처에서 달라지는 것은 보지 않았다.

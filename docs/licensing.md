@@ -52,7 +52,6 @@ MIT 는 **우리가 쓴 코드**에만 해당한다. 배포물은 코드만이 �
 | backend | ldap3 2.9.1 | LGPL-3.0 | `backend/app/auth/ldap_client.py` 가 `import` |
 | backend | pywebpush 2.5.0 · py-vapid 1.9.6 · certifi | MPL-2.0 | `import`(수정 없음) |
 | backend | pandoc | GPL-2.0-or-later | 별도 프로세스로 실행 |
-| backend | ffmpeg 와 코덱 라이브러리 | GPL-2.0-or-later(데비안 빌드) | 별도 프로세스로 실행 |
 | ldap | psycopg · psycopg-binary 3.3.9 | LGPL-3.0-only | `import` |
 | docconv | LibreOffice | MPL-2.0 (일부 LGPL-3.0+) | 별도 프로세스 |
 | docconv | H2Orestart v0.8.0 | **GPL-3.0** | LibreOffice 확장 — LibreOffice 프로세스 안에서 돈다. 우리 코드와는 별도 프로세스 |
@@ -76,7 +75,7 @@ GPL-2.0·GPL-3.0 프로그램의 바이너리를 배포하면 수정 여부와 �
 
 데비안 패키지로 넣은 것은 이미지 안 `/usr/share/doc/<패키지>/copyright` 에 고지가 남아 있고 소스는 데비안이 공개한다. 다만 **"상위 배포처가 공개하고 있다"는 것만으로 배포자의 소스 제공 의무가 채워지는지는 판단이 필요하다** — 5절.
 
-별도 프로세스로 실행만 하는 GPL 프로그램(pandoc, ffmpeg, iptables, LibreOffice 확장 등)은 같은 이미지에 함께 담겨 있어도 우리 코드의 라이선스에 영향을 주지 않는다는 해석이 일반적이다(GPL 의 "단순 집합").
+별도 프로세스로 실행만 하는 GPL 프로그램(pandoc, iptables, LibreOffice 확장 등)은 같은 이미지에 함께 담겨 있어도 우리 코드의 라이선스에 영향을 주지 않는다는 해석이 일반적이다(GPL 의 "단순 집합").
 
 ### 3.3 aioimaplib(GPL-3.0-only)과 backend
 
@@ -121,12 +120,12 @@ LGPL 은 라이브러리를 **쓰는** 프로그램에 자기 조건을 요구�
 이미지를 공개 레지스트리에 올리기 전에 사람이 결정하거나 확인해야 하는 것이다. 지금 리포에는 아래를 처리하는 장치가 없다.
 
 1. **이미지 안의 고지가 충분한가.** 우리가 빌드하는 이미지는 모두 `LICENSE` 와 `THIRD_PARTY_LICENSES.md` 를 `/licenses/` 에 담는다(rbi-mirror 는 `THIRD_PARTY-rbi-mirror.md` 도). pip·npm 으로 넣은 패키지의 라이선스 파일은 `site-packages`·`node_modules` 에 남는다(파이썬 이미지, rbi-mirror). 다만 `THIRD_PARTY_LICENSES.md` 는 목록이지 **라이선스 전문 모음이 아니고**, 웹 번들(frontend-react)은 빌드 과정에서 라이선스 주석이 빠질 수 있다. MIT·BSD·Apache-2.0·ISC·OFL 도 저작권 고지와 라이선스 전문의 동봉을 요구하므로, 전문까지 이미지에 넣을지는 정해야 한다.
-2. **GPL·LGPL 구성 요소의 소스 제공 방법.** 대상: aioimaplib, ldap3, psycopg, H2Orestart, pandoc, ffmpeg, iptables·iproute2·procps, libvips, OpenJDK, mailserver 이미지 안의 GPL 프로그램, 베이스 OS. 상위 배포처(PyPI·데비안·GitHub) 주소를 안내하는 것으로 충분한지, 해당 버전의 소스를 직접 보관·제공해야 하는지, 서면 제공 약속을 둘지 정해야 한다.
+2. **GPL·LGPL 구성 요소의 소스 제공 방법.** 대상: aioimaplib, ldap3, psycopg, H2Orestart, pandoc, iptables·iproute2·procps, libvips, OpenJDK, mailserver 이미지 안의 GPL 프로그램, 베이스 OS. 상위 배포처(PyPI·데비안·GitHub) 주소를 안내하는 것으로 충분한지, 해당 버전의 소스를 직접 보관·제공해야 하는지, 서면 제공 약속을 둘지 정해야 한다.
 3. **aioimaplib 을 유지할지.** 유지하면 backend 이미지가 GPL-3.0 조건으로 배포된다는 점을 README 와 이 문서에 계속 밝혀야 한다. 바꾸면 3.3 이 없어진다.
 4. **H2Orestart(GPL-3.0)를 docconv 이미지에 넣어 배포할지.** 빌드 인자 `H2ORESTART_VERSION` 을 비우면 넣지 않고 빌드된다(HWP 변환을 잃는다).
 5. **오프라인 묶음에 남의 이미지를 담을지.** 담으면 OnlyOffice·SearXNG(AGPL-3.0), Redis(삼중 라이선스), kasmweb/chromium(GPL-2.0 인 KasmVNC 포함) 등을 우리가 재배포하는 것이 되고, 각 라이선스의 배포 의무와 상표 사용 조건이 우리에게 생긴다.
 6. **mailserver 파생 이미지.** 원 이미지를 그대로 받게 하고 보안 갱신은 다른 방법으로 할지, 파생 이미지를 계속 배포하면서 2번을 처리할지.
-7. **버전이 고정되지 않은 데비안 패키지.** pandoc, ffmpeg, LibreOffice 등은 빌드 시점의 판이 들어가므로, 배포한 이미지에 들어간 정확한 버전(소스 제공의 기준)을 빌드 때 기록해 둘 필요가 있다.
+7. **버전이 고정되지 않은 데비안 패키지.** pandoc, LibreOffice 등은 빌드 시점의 판이 들어가므로, 배포한 이미지에 들어간 정확한 버전(소스 제공의 기준)을 빌드 때 기록해 둘 필요가 있다.
 8. **아이콘 고지.** `frontend-react/src/utils/icons.ts` 에 Lucide(ISC)에서 옮긴 SVG 경로가 있다. ISC 는 저작권 고지 유지를 요구한다.
 10. **데스크톱·모바일 앱.** Electron 설치 파일에는 Chromium 과 FFmpeg(LGPL-2.1+)이 들어간다. 설치 파일에 제3자 고지를 넣는지 확인한다.
 

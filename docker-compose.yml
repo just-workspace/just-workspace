@@ -221,6 +221,10 @@ services:
       - ./nginx/site.d:/etc/nginx/site.d:ro
       # 비공개 확장 경로(git 미추적). 없으면 빈 디렉터리가 붙고 include 는 아무것도 안 한다.
       - ./nginx/private.d:/etc/nginx/private.d:ro
+      # 정적 점검 페이지 — frontend 컨테이너가 아니라 nginx 가 직접 읽는다(업데이트 중에는 frontend 도 바뀌는 중일 수 있다)
+      - ./frontend-react/public/maintenance.html:/etc/nginx/static/maintenance.html:ro
+      # 점검 모드 표식(maintenance.on) — 설치 관리자가 업데이트 동안 놓는다. 없으면 빈 폴더가 붙고 아무 일도 없다.
+      - ./nginx/state:/etc/nginx/state:ro
       - certbot-data:/etc/letsencrypt:ro
       - certbot-webroot:/var/www/certbot:ro
     depends_on:

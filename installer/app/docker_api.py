@@ -126,8 +126,10 @@ class Docker:
         stack = self.paths.stack
         argv = ["compose", "-p", PROJECT_NAME, "--project-directory", self.paths.host_stack,
                 "-f", f"{stack.as_posix()}/docker-compose.yml"]
-        if (stack / SITE_COMPOSE).exists():
-            argv += ["-f", f"{stack.as_posix()}/{SITE_COMPOSE}"]
+        # 사이트별 조각(렌더링)과, 파일로 들여온 이미지의 이름 조각(오프라인 업데이트 — app/update_engine.py)
+        for extra in (SITE_COMPOSE, "docker-compose.pins.yml"):
+            if (stack / extra).exists():
+                argv += ["-f", f"{stack.as_posix()}/{extra}"]
         argv += ["--env-file", f"{stack.as_posix()}/.env"]
         return argv
 

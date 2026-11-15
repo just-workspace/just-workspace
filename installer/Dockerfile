@@ -34,6 +34,13 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY installer/app/ /app/app/
 
+# 채널·릴리스 목록 검증 — 릴리스 도구의 모듈을 그대로 쓴다(복제하지 않는다. docs/releases.md 맨 아래)
+COPY release/jwrelease/__init__.py release/jwrelease/semver.py release/jwrelease/model.py release/jwrelease/verify.py \
+     release/jwrelease/bundle.py release/jwrelease/sign.py release/jwrelease/config.py /app/jwrelease/
+# 채널 서명을 확인할 공개 키(*.pub, 둘까지 — 현재·다음). 리포에는 키를 두지 않는다: 릴리스 빌드가 이 폴더에 넣는다.
+# 비어 있으면 업데이트 확인은 "구성되지 않음"으로 답하고, 설치 뒤 상태 폴더(update/keys/)에 넣어도 된다.
+COPY installer/keys/ /app/keys/
+
 # 마법사 화면(installer.html · assets/ · icon.svg) — 설치 관리자가 8443 의 / 에서 내준다
 COPY --from=ui /ui/dist-installer/ /app/ui/
 
@@ -44,7 +51,11 @@ RUN python -m app.bundle build /src /app/bundle && rm -rf /src
 # 받을 이미지의 저장소(네임스페이스 포함). 다른 곳에서 받으려면 빌드 인자나 실행할 때 -e JW_REGISTRY=… 로 바꾼다.
 # localhost 를 주면 서버에 이미 있는(소스에서 빌드한) 이미지를 쓴다.
 ARG JW_REGISTRY=ghcr.io/just-workspace
+# 채널 파일을 받는 기준 주소 — 비우면 릴리스 도구의 기본값(release/jwrelease/config.py 의 channel_base_url)
+ARG JW_UPDATE_CHANNEL_URL=
 ENV JW_REGISTRY=${JW_REGISTRY} \
+    JW_UPDATE_CHANNEL_URL=${JW_UPDATE_CHANNEL_URL} \
+    JW_UPDATE_PUBKEY_DIR=/app/keys \
     JW_DATA_DIR=/data \
     JW_BUNDLE_DIR=/app/bundle \
     JW_UI_DIR=/app/ui \

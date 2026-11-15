@@ -31,6 +31,8 @@ MANIFEST: dict[str, str] = {
     "mailserver/config/user-patches.sh": "mailserver/config/user-patches.sh",
     "mailserver/config/auth-workspace.lua": "mailserver/config/auth-workspace.lua",
     "mailserver/config/dovecot.cf": "mailserver/config/dovecot.cf",
+    # 정적 점검 페이지 — nginx 가 직접 읽는다(업데이트 중에는 frontend 도 바뀌는 중일 수 있다)
+    "frontend-react/public/maintenance.html": "frontend-react/public/maintenance.html",
 }
 
 # 번들에서 스택으로 **그대로** 복사하는 파일(렌더링이 내용을 바꾸지 않는다)
@@ -43,6 +45,7 @@ STACK_COPIES: tuple[str, ...] = (
     "mailserver/config/user-patches.sh",
     "mailserver/config/auth-workspace.lua",
     "mailserver/config/dovecot.cf",
+    "frontend-react/public/maintenance.html",
 )
 
 DEV_VERSION = "0.0.0-dev"

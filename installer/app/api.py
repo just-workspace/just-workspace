@@ -22,7 +22,7 @@ from fastapi import Body, Depends, FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 
 from app import answers as ans
-from app import certs, dkim, preflight, probes, render
+from app import api_update, certs, dkim, preflight, probes, render
 from app import validators as v
 from app.bundle import Bundle
 from app.catalog import Catalog
@@ -703,4 +703,6 @@ def create_internal_app(svc: Services) -> FastAPI:
     def local_status():
         return svc.engine.status()
 
+    # 업데이트 — app/api_update.py
+    api_update.register(app, svc, keyed, client_allowed)
     return app

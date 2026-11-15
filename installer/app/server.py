@@ -12,7 +12,7 @@ import asyncio
 import os
 import sys
 
-from app import api, certs, engine, render
+from app import api, api_update, certs, engine, render
 from app import paths as paths_mod
 from app.state import write_private
 
@@ -73,10 +73,12 @@ async def serve(svc: api.Services, cert: str, key: str, wizard_port: int, intern
     internal = uvicorn.Server(uvicorn.Config(api.create_internal_app(svc), host="0.0.0.0", port=internal_port,
                                              log_level="warning", access_log=False, server_header=False))
     watcher = asyncio.create_task(cert_watch(svc))
+    updates = asyncio.create_task(api_update.ticker(svc))
     try:
         await asyncio.gather(wizard.serve(), internal.serve())
     finally:
         watcher.cancel()
+        updates.cancel()
 
 
 def main() -> int:
@@ -99,6 +101,8 @@ def main() -> int:
     print(banner(svc, fingerprint, wizard_port), flush=True)
     if svc.engine.resume():
         print("끊겼던 적용을 이어서 진행합니다.", flush=True)
+    if api_update.manager(svc).resume():
+        print("진행 중이던 업데이트 작업을 이어서 진행합니다.", flush=True)
     try:
         asyncio.run(serve(svc, cert, key, wizard_port, internal_port))
     except KeyboardInterrupt:

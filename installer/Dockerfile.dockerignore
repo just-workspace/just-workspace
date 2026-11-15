@@ -14,8 +14,18 @@
 !mailserver/config/dovecot.cf
 !installer/requirements.txt
 !installer/app/**
+!installer/keys/**
+# 채널 검증 모듈(릴리스 도구와 같은 파일)
+!release/jwrelease/__init__.py
+!release/jwrelease/semver.py
+!release/jwrelease/model.py
+!release/jwrelease/verify.py
+!release/jwrelease/bundle.py
+!release/jwrelease/sign.py
+!release/jwrelease/config.py
 # 마법사 화면의 원본(빌드 산출물·의존성 폴더는 빼고)
 !frontend-react/**
+!frontend-react/public/maintenance.html
 frontend-react/node_modules
 frontend-react/dist
 frontend-react/dist-*

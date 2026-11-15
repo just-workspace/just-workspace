@@ -16,9 +16,11 @@ Tool exposure: both ``tools/list`` and ``tools/call`` are filtered by the
 module on/off state (``app.modules.registry``) and per-user RBAC grants
 (``app.groups.service``) for the resolved user.
 
-The endpoint is modelled as a resource-aware :class:`MCPEndpoint` so the server can
-add physically-separate ``/api/mcp/read`` and ``/api/mcp/write`` resources
-(distinct ``aud``) without touching the auth core.
+The endpoint is modelled as a resource-aware :class:`MCPEndpoint`. There are
+three resources with distinct ``aud``: the base ``/api/mcp`` and ``/api/mcp/read``
+(read tools only) and ``/api/mcp/write`` (read + write tools; write calls are not
+executed directly but go through ``app.mcp.writes`` — immediate for low-risk,
+approval queue for high-risk).
 """
 
 from __future__ import annotations
@@ -46,8 +48,8 @@ from mcp.types import (
 )
 from sqlalchemy import select
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
-from starlette.routing import Mount, Route
+from starlette.responses import JSONResponse
+from starlette.routing import Mount
 from starlette.types import Receive, Scope, Send
 
 from app.config import get_settings
@@ -126,8 +128,8 @@ def _mcp_base() -> str:
 # metadata is the root document (``resource`` = ``<app>/api/mcp``).
 # This base endpoint exposes READ tools only — its
 # ``required_scope`` is ``mcp:read`` and that value doubles as the tool-scope
-# filter, so no ``mcp:write`` tool is reachable via MCP anywhere until the
-# (deferred) write endpoint is built.
+# filter, so no ``mcp:write`` tool is reachable here. Write tools live on the
+# separate write resource below.
 PHASE2_ENDPOINT = MCPEndpoint(
     path="/api/mcp",
     resource=f"{_mcp_base()}/api/mcp",
@@ -140,10 +142,15 @@ PHASE2_ENDPOINT = MCPEndpoint(
 # Read side: a physically-separate read resource with its own ``aud``
 # (``<app>/api/mcp/read``) and its own protected-resource metadata. It
 # exposes ONLY ``mcp:read`` tools. This is the URL registered on claude.ai.
-#
-# The WRITE resource (``/api/mcp/write``, ``mcp:write``, approval-gated) is
-# intentionally NOT built yet — deferred by decision. Until it exists, no write
-# tool is exposed or callable through any MCP endpoint.
+READ_ENDPOINT = MCPEndpoint(
+    path="/api/mcp/read",
+    resource=f"{_mcp_base()}/api/mcp/read",
+    required_scope="mcp:read",
+    metadata_path="/.well-known/oauth-protected-resource/api/mcp/read",
+    advertise_scopes="mcp:read",
+)
+
+
 # 쓰기 리소스 — aud ``<app>/api/mcp/write``, mcp:write 필요. 읽기+쓰기 도구를 모두 노출한다.
 # 쓰기 도구는 실행되지 않고 app.mcp.writes 로 간다(low 즉시·high 승인 대기함). 커넥터 URL 을 따로 두어
 # 사용자가 "쓰기 커넥터"를 일부러 연결해야만 쓰기가 열린다(읽기 커넥터는 그대로 읽기 전용).
@@ -153,15 +160,6 @@ WRITE_ENDPOINT = MCPEndpoint(
     required_scope="mcp:write",
     metadata_path="/.well-known/oauth-protected-resource/api/mcp/write",
     advertise_scopes="mcp:read mcp:write",
-)
-
-
-READ_ENDPOINT = MCPEndpoint(
-    path="/api/mcp/read",
-    resource=f"{_mcp_base()}/api/mcp/read",
-    required_scope="mcp:read",
-    metadata_path="/.well-known/oauth-protected-resource/api/mcp/read",
-    advertise_scopes="mcp:read",
 )
 
 
@@ -424,26 +422,6 @@ session_manager = StreamableHTTPSessionManager(
 )
 
 
-async def _write_not_found(scope: Scope, receive: Receive, send: Send) -> None:
-    """ASGI app for the (unimplemented) write endpoint.
-
-    Returns **404**, not the base mount's 401 auth challenge. A 401 would
-    tell the client "authenticate and you may enter", so it starts an OAuth flow
-    and only breaks later at an unrelated point. 404 says the resource simply
-    isn't there yet, which is accurate until the write endpoint ships.
-    """
-    await JSONResponse({"error": "not_found"}, status_code=404)(scope, receive, send)
-
-
-async def _write_not_found_route(request: Request) -> Response:
-    """Exact-path 404 for ``/api/mcp/write``. A Starlette ``Mount`` only matches
-    the mount root WITH a trailing slash, so the bare ``/api/mcp/write`` (what a
-    client actually POSTs) would fall through to the base ``/api/mcp`` mount and
-    get a 401. This request-response Route covers the exact path so every
-    ``/api/mcp/write`` variant returns 404."""
-    return JSONResponse({"error": "not_found"}, status_code=404)
-
-
 def _make_asgi_handler(endpoint: MCPEndpoint, *, resolve_sub: bool = False):
     """endpoint 로 인증하는 ASGI 핸들러.
 
@@ -451,8 +429,7 @@ def _make_asgi_handler(endpoint: MCPEndpoint, *, resolve_sub: bool = False):
     슬래시가 오는 경로만 매칭한다(정규식 ``^/api/mcp/read(?P<path>/.*)$``). 그래서
     클라이언트가 실제로 POST 하는 **슬래시 없는 ``/api/mcp/read``** 는 read 마운트를
     비껴가 베이스 마운트에 걸리고, 베이스의 resource(``…/api/mcp``)와 토큰의 aud
-    (``…/api/mcp/read``)가 어긋나 **401** 이 됐다. (``/write`` 는 같은 이유로 이미
-    정확경로 Route 를 따로 두고 있다.)
+    (``…/api/mcp/read``)가 어긋나 **401** 이 된다. ``/api/mcp/write`` 도 같다.
 
     베이스 마운트가 삼킨 경우 남은 경로를 보고 올바른 엔드포인트를 고른다.
     """
@@ -496,13 +473,9 @@ async def mount_mcp_http(app) -> None:
     # Starlette Route would mis-invoke it as handler(request) → 500. Mount treats
     # it as ASGI and the stateless session manager handles method routing itself.
     #
-    # Order matters (Starlette matches routes in order):
-    #   1. the more specific ``/api/mcp/read`` BEFORE the base ``/api/mcp`` so a
-    #      read request isn't swallowed by the base mount's prefix;
-    #   2. the (unimplemented) ``/api/mcp/write`` explicit 404 BEFORE the base
-    #      ``/api/mcp`` mount — otherwise the base mount catches it and answers a
-    #      401 auth challenge, misleading clients into an OAuth flow that breaks
-    #      later. The real write endpoint/approval gate is NOT built here.
+    # Order matters (Starlette matches routes in order): the more specific
+    # ``/api/mcp/read`` and ``/api/mcp/write`` BEFORE the base ``/api/mcp`` so
+    # their sub-paths aren't swallowed by the base mount's prefix.
     handler = _make_asgi_handler(READ_ENDPOINT)
     app.router.routes.append(Mount(READ_ENDPOINT.path, app=handler))
     print(

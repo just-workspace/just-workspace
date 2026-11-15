@@ -1,5 +1,5 @@
 /**
- * v2(React) 플러그인용 호스트 UI 키트 — window.__WS_UI__ (작성법: docs/plugin-v2.md "7. 호스트 UI 키트").
+ * v2(React) 플러그인용 호스트 UI 키트 — window.__WS_UI__ (작성법: frontend-react/docs/plugin-v2.md "7. 호스트 UI 키트").
  * 플러그인 번들은 react 와 함께 이 키트를 external 로 두고(가상 모듈 '@jw/ui' → window.__WS_UI__) 호스트와 같은 부품을 쓴다.
  * 같은 React 인스턴스·같은 토큰 CSS 라 모양·동작이 호스트 화면과 똑같다.
  *

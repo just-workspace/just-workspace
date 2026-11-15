@@ -1,6 +1,6 @@
 // 원격 데스크톱 v2(React) 번들 빌드 — frontend/dist/plugin.mjs 파일 하나.
 //   node plugins/remote-desktop/frontend/build.mjs
-// · react / react-dom / @jw/ui 는 external → 호스트 전역(window.__REACT__ / __REACT_DOM__ / __WS_UI__)으로 바꾼다(docs/plugin-v2.md 4절).
+// · react / react-dom / @jw/ui 는 external → 호스트 전역(window.__REACT__ / __REACT_DOM__ / __WS_UI__)으로 바꾼다(frontend-react/docs/plugin-v2.md 4절).
 // · JSX 는 classic(React.createElement) — react/jsx-runtime 치환이 필요 없다.
 // · livekit-client 는 번들에 넣는다(호스트가 전역으로 내주지 않는다) — 코어 frontend-react/node_modules 에서 찾는다.
 // · 도구(esbuild·typescript)는 코어 frontend-react/node_modules 에서 빌려 쓴다(이 폴더에 node_modules 를 두지 않는다).

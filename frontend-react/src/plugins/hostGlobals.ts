@@ -27,6 +27,6 @@ export function installHostGlobals() {
   window.__REACT_DOM__ = { ...ReactDOM, ...ReactDOMClient }
   // 셸 확장 API(상단바 버튼·칩 등록 · 제목) — docs/plugin-frontend.md "상단바 확장 자리"·"상단바 제목"
   window.__WS_SHELL__ = wsShellApi
-  // 호스트 UI 키트 — docs/plugin-v2.md "7. 호스트 UI 키트"
+  // 호스트 UI 키트 — frontend-react/docs/plugin-v2.md "7. 호스트 UI 키트"
   window.__WS_UI__ = wsUiKit
 }

@@ -1,0 +1,9 @@
+{
+  "kind": "nfs",
+  "name": "ws-storage-data",
+  "opts": {
+    "device": ":/export/workspace",
+    "o": "addr=192.168.10.9,rw,nfsvers=4.1,hard,noatime",
+    "type": "nfs"
+  }
+}

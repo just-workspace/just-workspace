@@ -1,0 +1,66 @@
+{
+  "app_url": "https://ws.example.com",
+  "cautions": [
+    {
+      "key": "proxy_side_certs_self_signed",
+      "vars": {
+        "names": [
+          "mail.example.com"
+        ]
+      }
+    },
+    {
+      "key": "mail_needs_dns_and_port25",
+      "vars": {
+        "mail_domain": "example.com"
+      }
+    },
+    {
+      "key": "account_domain_is_mail_domain",
+      "vars": {
+        "mail_domain": "example.com"
+      }
+    }
+  ],
+  "cert_aliases": [
+    "mail.example.com"
+  ],
+  "cert_dir": "ws.example.com",
+  "cert_mode": "proxy",
+  "cert_names": [
+    "ws.example.com",
+    "mail.example.com"
+  ],
+  "domain": "ws.example.com",
+  "env_domain": "example.com",
+  "hairpin_host": "ws.example.com",
+  "lossless": false,
+  "mail_builtin": true,
+  "mail_domain": "example.com",
+  "net_prefix": "172.28.0",
+  "ports": [
+    "80/tcp",
+    "25/tcp",
+    "465/tcp",
+    "587/tcp",
+    "993/tcp",
+    "2222/tcp"
+  ],
+  "profiles": [
+    "mailserver",
+    "onlyoffice",
+    "gitea"
+  ],
+  "rp_lan_ip": "192.168.10.5",
+  "tls": false,
+  "turn": false,
+  "turn_domain": "",
+  "turn_tls_publish": "443",
+  "zones": [
+    "mail",
+    "chat",
+    "calendar",
+    "docs",
+    "git"
+  ]
+}

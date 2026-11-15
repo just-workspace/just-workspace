@@ -1,0 +1,35 @@
+{
+  "app_url": "https://ws.example.com",
+  "cautions": [
+    {
+      "key": "no_system_mail",
+      "vars": {}
+    }
+  ],
+  "cert_aliases": [],
+  "cert_dir": "ws.example.com",
+  "cert_mode": "auto",
+  "cert_names": [
+    "ws.example.com"
+  ],
+  "domain": "ws.example.com",
+  "env_domain": "ws.example.com",
+  "hairpin_host": "ws.example.com",
+  "lossless": false,
+  "mail_builtin": false,
+  "mail_domain": "",
+  "net_prefix": "172.28.0",
+  "ports": [
+    "80/tcp",
+    "443/tcp"
+  ],
+  "profiles": [
+    "certbot"
+  ],
+  "rp_lan_ip": "172.28.0.2",
+  "tls": true,
+  "turn": false,
+  "turn_domain": "",
+  "turn_tls_publish": "5349",
+  "zones": []
+}

@@ -1,0 +1,96 @@
+{
+  "app_url": "https://ws.example.com",
+  "cautions": [
+    {
+      "key": "turn_tls_alternate_port",
+      "vars": {
+        "port": 5349
+      }
+    },
+    {
+      "key": "mail_needs_dns_and_port25",
+      "vars": {
+        "mail_domain": "example.com"
+      }
+    },
+    {
+      "key": "account_domain_is_mail_domain",
+      "vars": {
+        "mail_domain": "example.com"
+      }
+    },
+    {
+      "key": "lossless_needs_udp_4433",
+      "vars": {}
+    },
+    {
+      "key": "rbi_needs_dns",
+      "vars": {
+        "name": "rbi.ws.example.com"
+      }
+    }
+  ],
+  "cert_aliases": [
+    "mail.example.com",
+    "turn.ws.example.com"
+  ],
+  "cert_dir": "ws.example.com",
+  "cert_mode": "auto",
+  "cert_names": [
+    "ws.example.com",
+    "mail.example.com",
+    "turn.ws.example.com",
+    "rbi.ws.example.com"
+  ],
+  "domain": "ws.example.com",
+  "env_domain": "example.com",
+  "hairpin_host": "ws.example.com",
+  "lossless": true,
+  "mail_builtin": true,
+  "mail_domain": "example.com",
+  "net_prefix": "172.28.0",
+  "ports": [
+    "80/tcp",
+    "443/tcp",
+    "25/tcp",
+    "465/tcp",
+    "587/tcp",
+    "993/tcp",
+    "7881/tcp",
+    "7882-7892/udp",
+    "3478/udp",
+    "4433/udp",
+    "2222/tcp",
+    "389/tcp",
+    "636/tcp",
+    "5349/tcp"
+  ],
+  "profiles": [
+    "mailserver",
+    "onlyoffice",
+    "livekit",
+    "egress",
+    "audiorelay",
+    "gitea",
+    "aitools",
+    "sso",
+    "rbi",
+    "certbot"
+  ],
+  "rp_lan_ip": "172.28.0.2",
+  "tls": true,
+  "turn": true,
+  "turn_domain": "turn.ws.example.com",
+  "turn_tls_publish": "5349",
+  "zones": [
+    "mail",
+    "chat",
+    "calendar",
+    "docs",
+    "meetings",
+    "git",
+    "ai",
+    "sso",
+    "rbi"
+  ]
+}

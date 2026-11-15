@@ -828,7 +828,8 @@ class UpdateManager:
 
     def _step(self, job: dict, step: dict, funcs: dict) -> eng.StepError | None:
         log = self._logger(job, step["id"])
-        step.update(status="running", started_at=self.iso(), finished_at=None)
+        started = step.pop("resumed_from", None) or self.iso()
+        step.update(status="running", started_at=started, finished_at=None)
         step.setdefault("detail", {})
         self._save(job)
         log("시작")
@@ -1527,6 +1528,7 @@ class UpdateManager:
                 handoff["state"] = "done"
                 log(f"설치 관리자 {self.own_version} 이 작업을 이어받았습니다")
                 step["status"] = "pending"
+                step["resumed_from"] = step.get("started_at")
                 self._save(job)
             else:
                 handoff["state"] = "failed"

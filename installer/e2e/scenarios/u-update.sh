@@ -136,7 +136,8 @@ stage_u1() {
   expect "작업 상태" done "$(ujob "$job" 'd["status"]')"
   expect "단계" "preflight=done backup=done pull=done migrate=done switch=done verify=done" "$(ujob_steps "$job")"
   note "단계별 초: $(ujob "$job" '" ".join(s["id"]+"="+str(int((__import__("datetime").datetime.fromisoformat(s["finished_at"][:-1])-__import__("datetime").datetime.fromisoformat(s["started_at"][:-1])).total_seconds())) for s in d["steps"])')"
-  check "프런트가 내려간 동안 정적 점검 페이지가 나왔다" test -f "$E2E_WORK/probe-saw-static-page"
+  # 이 릴리스에서 프런트 이미지가 그대로면 프런트는 내려가지 않는다 — 그때는 정적 점검 페이지가 나올 일이 없다
+  if [ -f "$E2E_WORK/probe-saw-static-page" ]; then note "프런트가 내려간 동안 정적 점검 페이지가 나왔다"; else note "화면(/)은 끊기지 않았다 — 정적 점검 페이지는 아래에서 따로 본다"; fi
   expect "설치 관리자 자신도 바뀌었다(버전)" 1.0.1 "$(installer_version)"
   expect "설치 관리자 이미지" localhost/just-workspace-installer:1.0.1 "$(installer_image)"
   check "설치 관리자 8443 응답" installer_wait_up
@@ -160,6 +161,25 @@ stage_u1() {
   contains "기록 내려받기" "[verify] 완료" "$(ws_curl -b "$UJAR" "$WS$UPD/jobs/$job/log/download")"
   expect "복원 지점" "pre-update 1.0.0" "$(upd GET /restore-points | json_get 'd["points"][0]["kind"]+" "+d["points"][0]["version"]')"
   expect "적용된 버전의 변경 내용" "- 1.0.1-beta.1 검수용 릴리스" "$(upd GET /releases/1.0.1 | json_get 'd["changelog"]')"
+  stage_page
+}
+
+# 정적 점검 페이지 — 프런트 컨테이너가 없을 때 nginx 가 직접 내준다. 설치 관리자의 내부 API 는 밖으로 열리지 않는다.
+stage_page() {
+  say "정적 점검 페이지와 공개 경로"
+  docker stop ws-frontend-react >/dev/null
+  local page; page="$(ws_curl -i "$WS/some/page")"
+  contains "프런트가 없으면 503 + 점검 페이지(요청한 주소 그대로)" "HTTP/2 503" "$(printf '%s' "$page" | head -1)"
+  contains "점검 페이지는 공개 점검 상태를 묻는다" "/maintenance/status" "$page"
+  expect "API 는 그대로다(점검 페이지로 바꾸지 않는다)" 200 "$(ws_code "$WS/api/health")"
+  docker start ws-frontend-react >/dev/null; wait_ready ws-frontend-react 60
+  local i; for i in $(seq 1 30); do [ "$(ws_code "$WS/")" = 200 ] && break; sleep 1; done
+  expect "프런트가 돌아오면 화면도 돌아온다" 200 "$(ws_code "$WS/")"
+  expect "공개 점검 상태는 GET 만" 403 "$(ws_curl -o /dev/null -w '%{http_code}' -X POST "$WS/maintenance/status")"
+  expect "설치 관리자의 다른 내부 경로는 밖에서 닿지 않는다(/internal/…)" 200 "$(ws_code "$WS/internal/update/status")"
+  case "$(ws_curl "$WS/internal/update/status")" in *'"current"'*) bad "내부 API 가 밖으로 열렸다" ;; *) ok "그 주소는 화면(프런트)이 답한다 — 내부 API 가 아니다" ;; esac
+  expect "키를 실어도 공개 경로는 점검 상태만 준다" "active,contact,countdown_ends_at,expected_seconds,kind,phase,started_at" \
+    "$(ws_curl -H "X-JW-Installer-Key: $(env_value JW_INSTALLER_KEY)" "$WS/maintenance/status/../status" | json_get '",".join(sorted(d))')"
 }
 
 stage_u7() {
@@ -406,7 +426,10 @@ stage_u8() {
   local base; base="$(health_version)"
   local stage="$REL/stage-1.0.5" bundle="$REL/just-workspace-1.0.5-offline.tar"
   if [ ! -f "$bundle" ]; then
-    check "1.0.5 이미지" rel_build 1.0.5 schema3
+    # 이 릴리스는 캐시(redis) 이미지가 올라갔다 — 서버에 없는 "추가 이미지"가 하나 생긴다
+    local other; other="$(other_redis)"
+    note "1.0.5 의 redis: ${other:-(다른 판을 받지 못했다)}"
+    E2E_REDIS_REF="$other" check "1.0.5 이미지" rel_build 1.0.5 schema3
     check "1.0.5 manifest" rel_manifest 1.0.5 3
     rm -rf "$stage"; mkdir -p "$stage/images"
     cp "$REL/manifests/1.0.5.json" "$stage/manifest.json"
@@ -424,7 +447,8 @@ stage_u8() {
   local redis_ref redis_tag
   redis_ref="$(json_get 'd["third_party"]["core"]["redis"]' < "$REL/manifests/1.0.5.json")"
   redis_tag="${redis_ref%@*}:jw-$(printf '%s' "${redis_ref#*sha256:}" | cut -c1-12)"
-  check "redis 를 파일로 저장" bash -c "docker tag '$redis_ref' '$redis_tag' && docker save '$redis_tag' -o '$REL/redis.tar'"
+  # 화면이 알려 주는 명령 그대로(docker pull … && docker tag … && docker save …)
+  check "redis 를 파일로 저장" bash -c "cd '$REL' && docker pull -q '$redis_ref' >/dev/null && docker tag '$redis_ref' '$redis_tag' && docker save '$redis_tag' -o redis.tar"
   docker save alpine:latest -o "$REL/wrong.tar"
 
   say "레지스트리·채널을 끊는다"
@@ -477,8 +501,8 @@ stage_u8() {
   note "받는 명령(redis): $(printf '%s' "$view" | json_get '[i["command"] for i in d["images"] if i["id"]=="redis"][0]')"
 
   say "추가 이미지 — 없는 것으로 만들고 파일로 들인다"
-  docker image rm -f "$redis_tag" "$redis_ref" >/dev/null 2>&1
-  docker image ls --format '{{.Repository}}:{{.Tag}} {{.ID}}' | awk '$1 ~ /^redis:/ {print $2}' | xargs -r docker image rm -f >/dev/null 2>&1
+  docker image rm "$redis_tag" "$redis_ref" "${redis_ref%@*}" >/dev/null 2>&1
+  docker image ls --digests --format '{{.Repository}}@{{.Digest}} {{.ID}}' | awk -v d="redis@${redis_ref#*@}" '$1 == d {print $2}' | xargs -r docker image rm >/dev/null 2>&1
   expect "redis 가 없다" "missing images_missing" "$(upd GET /offline | json_get '[i["state"] for i in d["images"] if i["id"]=="redis"][0]+" "+",".join(d["blockers"])')"
   expect "빠진 채로는 적용할 수 없다" offline_incomplete "$(upd POST /offline/apply '{"start":"now"}' | json_get 'd["code"]')"
   upload_image() { ws_curl --max-time 600 -b "$UJAR" -H "Origin: $WS" -H 'Content-Type: application/octet-stream' -H "X-JW-Filename: $2" -o /dev/null -w '%{http_code}' -T "$1" -X POST "$WS$UPD/offline/images/redis"; }

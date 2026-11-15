@@ -58,6 +58,11 @@ rel_build() {
   rm -rf "$src"; mkdir -p "$src"
   (cd "$E2E_REPO" && tar -cf - --exclude=./frontend-react/node_modules .) | tar -xf - -C "$src"
   printf '%s\n' "$ver" > "$src/VERSION"
+  if [ -n "${E2E_REDIS_REF:-}" ]; then
+    # 이 버전의 compose 에서 캐시(redis) 이미지를 바꾼다 — "남의 이미지가 올라간 릴리스"
+    sed -i -E "s#^(    image: )redis:[^ ]+@sha256:[0-9a-f]{64}#\\1$E2E_REDIS_REF#" "$src/docker-compose.yml"
+    grep -q "image: $E2E_REDIS_REF" "$src/docker-compose.yml" || { echo "redis 이미지를 바꾸지 못했다"; return 1; }
+  fi
   python3 - "$src" "$variant" <<'PY' || return 1
 import re, sys
 src, variant = sys.argv[1], sys.argv[2]
@@ -133,6 +138,18 @@ reg_delete() {
   curl -fs -o /dev/null -X DELETE "http://${REG%%/*}/v2/${REG#*/}/just-workspace-$name/manifests/$digest"
 }
 reg_push() { docker push -q "$REG/just-workspace-$1:$2" >/dev/null 2>&1; }
+
+# compose 에 고정한 것과 다른 redis 이미지 하나를 받아 `redis:<태그>@sha256:…` 로 돌려준다(오프라인 검수의 "추가 이미지")
+other_redis() {
+  local pinned tag digest
+  pinned="$(grep -oE 'redis:[^ ]+@sha256:[0-9a-f]{64}' "$E2E_REPO/docker-compose.yml" | head -1)"
+  for tag in 8-alpine alpine 8.8-alpine; do
+    docker pull -q "redis:$tag" >/dev/null 2>&1 || continue
+    digest="$(docker image inspect "redis:$tag" --format '{{range .RepoDigests}}{{println .}}{{end}}' | grep -oE 'sha256:[0-9a-f]{64}' | head -1)"
+    [ -n "$digest" ] && [ "$digest" != "${pinned#*@}" ] && { echo "redis:$tag@$digest"; return 0; }
+  done
+  return 1
+}
 
 # ─── 업데이트 API ───
 

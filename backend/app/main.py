@@ -26,7 +26,7 @@ from app.rbi import models as _rbi_models  # noqa: F401
 
 settings = get_settings()
 
-APP_VERSION = "4.3.0"
+from app.version import APP_VERSION  # noqa: E402,F401 — 단일 출처는 리포 루트 VERSION (app/version.py)
 
 
 def _install_log_redaction() -> None:
@@ -555,6 +555,11 @@ def create_app() -> FastAPI:
         # 격리 브라우저 전용 출처(Host = RBI_PUBLIC_ORIGIN)로 온 요청은 /api/rbi/* · nginx 내부 인증 말고 404(ws-nginx 와 이중)
         from app.rbi.site import RbiHostGuard
         app.add_middleware(RbiHostGuard)
+    # 저장소 표식 확인 — STORAGE_MARKER_REQUIRED=1 일 때만. 표식이 안 보이면 파일 쓰기를 503 으로 거부한다
+    # (끊긴 네트워크 저장소 자리의 빈 폴더에 쓰는 사고 방지 — app/middleware/storage_guard.py)
+    from app.middleware import storage_guard
+    if storage_guard.required():
+        app.add_middleware(storage_guard.StorageMarkerGuard)
     # 세션 쿠키로 인증된 상태 변경 요청의 출처 검사(CSRF) — 레이트리밋 안쪽이라 거부된 요청도 한도에 잡히고,
     # 접속 로그(더 바깥)에 403 으로 남는다. 허용 출처는 CORS 목록과 같은 것을 쓴다(CSRF_ORIGIN_CHECK=false 로 끔)
     app.add_middleware(CookieOriginGuard, allowed_origins=_cors_origins)

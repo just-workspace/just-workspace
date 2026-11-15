@@ -21,6 +21,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
 
+# 제품 버전 — 빌드할 때 리포 루트 VERSION 의 값을 넘긴다(--build-arg JW_APP_VERSION="$(cat VERSION)").
+# 넘기지 않으면 파일을 만들지 않고, 앱은 개발 표기(0.0.0-dev)로 뜬다(app/version.py).
+ARG JW_APP_VERSION=
+RUN if [ -n "$JW_APP_VERSION" ]; then echo "$JW_APP_VERSION" > /app/VERSION; fi
+
 RUN groupadd -g 1001 docker || true \
     && useradd -m -u 1000 -G 1001 appuser \
     && chown -R appuser:appuser /app \

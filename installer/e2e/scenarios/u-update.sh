@@ -441,8 +441,8 @@ stage_u8() {
     cp "$REL/manifests/1.0.5.json" "$stage/manifest.json"
     check "manifest 서명" jwrelease sign /work/stage-1.0.5/manifest.json --key /work/keys/release.pem
     note "이미지를 파일로 저장한다(bundle plan 이 낸 명령)"
-    jwrelease bundle plan --manifest /work/stage-1.0.5/manifest.json --stage "$stage" | grep '^docker ' > "$REL/bundle-plan.sh"
-    check "docker pull·tag·save" bash -e "$REL/bundle-plan.sh"
+    jwrelease bundle plan --manifest /work/stage-1.0.5/manifest.json --stage "$stage" | grep -E '^ *docker ' > "$REL/bundle-plan.sh"
+    check "docker pull·tag·save" bash -c "[ -s '$REL/bundle-plan.sh' ] && bash -e '$REL/bundle-plan.sh'"
     check "색인 + 서명" jwrelease bundle index --stage /work/stage-1.0.5 --key /work/keys/release.pem
     check "묶기" jwrelease bundle pack --stage /work/stage-1.0.5 -o /work/just-workspace-1.0.5-offline.tar
     check "묶음 검증(도구)" jwrelease bundle verify /work/just-workspace-1.0.5-offline.tar --pubkey /work/keys/release.pub

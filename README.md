@@ -55,6 +55,7 @@ docker run -d --name jw-installer --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/just-workspace:/data \
   -e JW_HOST_DIR=/opt/just-workspace \
+  -e JW_INSTALLER_VERSION=1.0.0 \
   ghcr.io/just-workspace/just-workspace-installer:1.0.0
 
 docker logs jw-installer
@@ -63,6 +64,7 @@ docker logs jw-installer
 로그에 나온 주소(`https://<서버 주소>:8443/?token=…`)를 브라우저로 열면 설치 마법사가 시작됩니다. 설치 관리자의 인증서는 자체 서명이라 브라우저가 경고를 보여 줍니다 — 로그의 SHA-256 지문과 대조하고 진행합니다.
 
 - `-v` 의 호스트 폴더와 `JW_HOST_DIR` 은 **같은 경로**여야 합니다. 이 폴더가 설치 폴더입니다.
+- `JW_INSTALLER_VERSION` 에는 이미지 태그와 같은 버전을 적습니다 — 설치 관리자가 설치할 제품 버전입니다.
 - 위 이미지는 첫 릴리스와 함께 공개됩니다. 그 전에는 소스에서 빌드합니다 — [docs/install.md](docs/install.md#소스에서-빌드해-설치).
 - 화면 없이 설치하려면 답변 파일을 씁니다: `docker exec jw-installer jw apply --answers /data/answers.json`.
 - 설치 관리자 없이 `docker compose` 로 직접 띄울 수도 있습니다 — [docs/deployment.md](docs/deployment.md).

@@ -131,12 +131,14 @@ docker run -d --name jw-installer --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/just-workspace:/data \
   -e JW_HOST_DIR=/opt/just-workspace \
+  -e JW_INSTALLER_VERSION=1.0.0 \
   ghcr.io/just-workspace/just-workspace-installer:1.0.0
 
 docker logs jw-installer
 ```
 
 - `/opt/just-workspace` 가 **설치 폴더**다. 다른 경로를 써도 되지만 `-v <폴더>:/data` 와 `-e JW_HOST_DIR=<폴더>` 는 반드시 같은 경로여야 한다.
+- `-e JW_INSTALLER_VERSION=<버전>` 에는 **이미지 태그와 같은 버전**을 적는다. 설치 관리자가 설치할 제품 버전이다. 안정판 이미지는 검증을 마친 시험판 이미지를 다시 빌드하지 않고 그대로 승격한 것이라, 이 값을 주지 않으면 이미지 안에 구워진 시험판 버전 글자(`1.0.0-beta.N`)를 자신의 버전으로 안다(그때는 설치 관리자의 로그 첫머리에 한 줄 알림이 나온다).
 - `-e JW_PUBLIC_HOST=<서버 주소>` 를 주면 로그의 주소와 설치 관리자의 인증서에 그 값을 쓴다.
 - 위 이미지는 첫 릴리스와 함께 공개된다. 그 전에는 [소스에서 빌드해 설치](#소스에서-빌드해-설치)한다.
 
@@ -249,6 +251,7 @@ docker run -d --name jw-installer --restart unless-stopped \
   -v /opt/just-workspace:/data \
   -e JW_HOST_DIR=/opt/just-workspace \
   -e JW_REGISTRY=localhost \
+  -e JW_INSTALLER_VERSION=$(cat VERSION) \
   just-workspace-installer:$(cat VERSION)
 ```
 
@@ -256,7 +259,7 @@ docker run -d --name jw-installer --restart unless-stopped \
 - 스크립트는 `localhost/just-workspace-<이름>:<버전>` 과 `just-workspace-installer:<버전>` 을 만든다(검수에 쓰는 것과 같은 스크립트다). `JW_REGISTRY=localhost` 는 설치 관리자에게 서버에 이미 있는 그 이미지를 쓰라고 알린다.
 - 다른 곳에서 만든 구성 요소(데이터베이스, 문서 편집기 등)는 이 경우에도 원 배포처에서 받는다.
 - 격리 브라우저 애드온의 세션 이미지는 무거워서 따로 빌드한다: `bash installer/e2e/build-images.sh rbi-mirror`.
-- 이렇게 설치한 서버는 관리 › 업데이트가 "구성되지 않음"으로 나온다(채널의 서명을 확인할 공개 키가 없다). 이 경우 새 버전으로 올리는 방법은 [operate.md](operate.md#2-업데이트)의 "업데이트 확인이 구성되지 않았습니다"를 본다.
+- 이렇게 설치한 서버는 관리 › 업데이트가 "구성되지 않음"으로 나온다(채널의 서명을 확인할 공개 키가 없다). 쓸 채널이 있으면 `docker exec -i jw-installer jw update-key add - < release.pub` 로 공개 키를 넣는다 — [operate.md](operate.md#2-업데이트)의 "업데이트 확인이 구성되지 않았습니다".
 
 ## 3. 설치 뒤 할 일
 

@@ -15,7 +15,8 @@ docker run -d --name jw-installer --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/just-workspace:/data \
   -e JW_HOST_DIR=/opt/just-workspace \
-  <설치 관리자 이미지>
+  -e JW_INSTALLER_VERSION=<버전> \
+  <설치 관리자 이미지>:<버전>
 
 docker logs jw-installer
 ```
@@ -28,6 +29,7 @@ docker logs jw-installer
 ```
 
 - `-v <호스트 폴더>:/data` 와 `-e JW_HOST_DIR=<같은 호스트 폴더>` 는 **반드시 같은 경로**여야 한다(§3).
+- `-e JW_INSTALLER_VERSION=<버전>` 은 설치 관리자가 자신(과 설치할 제품)의 버전으로 아는 값이다 — 이미지 태그와 같게 적는다. 승격(Beta → Stable)한 이미지는 다시 빌드하지 않아 이미지 안의 `VERSION` 이 Beta 의 글자이므로, 이 값이 없으면 그 글자를 버전으로 쓴다(시작할 때 로그에 한 줄로 알린다). 소스에서 빌드한 이미지는 이미지의 값이 곧 그 버전이라 생략해도 결과가 같다.
 - 이미지 저장소는 `-e JW_REGISTRY=<저장소/네임스페이스>`, 이미지 태그는 `-e JW_IMAGE_TAG=<태그>` 로 바꾼다. 기본은 `ghcr.io/just-workspace` 와 제품 버전(`VERSION`). `JW_REGISTRY=localhost` 를 주면 서버에 이미 있는(소스에서 빌드한) 이미지를 쓴다.
 - `-e JW_PUBLIC_HOST=<서버 주소>` 를 주면 로그의 주소와 인증서 이름에 그 값을 쓴다.
 - 업데이트를 확인할 채널 주소는 `-e JW_UPDATE_CHANNEL_URL=<주소>` 로 바꾼다(기본은 공식 채널). 서명을 확인할 공개 키와 함께 16절.
@@ -278,8 +280,20 @@ docker compose -p just-workspace
 | `jw render --answers <파일> --out <폴더>` | 산출물을 폴더에 써 본다(비밀값은 견본) |
 | `jw reset-admin <계정> [--disable-2fa]` | backend 의 `python -m app.cli reset-admin` 호출 |
 | `jw reinstall [--yes]` | 처음부터 다시 설치할 수 있게 지운다. `--yes` 없이는 지울 목록만 보여 준다(아래) |
+| `jw restore <백업> [--items a,b] [--password-file F] [--allow-key-mismatch] [--yes] [--json]` · `jw restore --list` | 설치된 이 서버의 데이터를 백업 시점으로 되돌린다. `--yes` 없이는 내용만 보여 준다(아래) |
+| `jw update-key [list \| add <파일\|-> [--name N] \| remove <이름>]` | 업데이트 채널의 서명을 확인할 공개 키(§16) |
+| `jw update-channel [<주소> \| --reset]` | 업데이트 채널 주소 보기·바꾸기(§16) |
 
 **다시 설치.** `docker exec jw-installer jw reinstall` 은 지울 것(워크스페이스의 컨테이너·볼륨·내부망, 설치 폴더의 `stack`·`state`)을 보여 주고 멈춘다. `--yes` 를 붙이면 지우고 설치 관리자를 다시 시작한다 — 새 설치 토큰이 `docker logs jw-installer` 끝에 나온다. **계정·파일·메일·대화가 모두 지워진다.** 설치 관리자 자신의 인증서(지문)는 남는다. 파일 저장소가 NFS·지정 폴더면 그 안의 파일은 지우지 않고 저장소 표식만 지운다(남은 파일은 새 설치의 계정과 이어지지 않는다).
+
+**같은 서버에 되돌리기.** `jw restore <백업>` 은 backend 의 `python -m app.cli restore`([data-safety.md](data-safety.md) 4절)를 backend 이미지의 일회용 컨테이너(`compose run`, 내부망의 고정 주소 없이)로 돌린다. 코드는 `installer/app/restore_local.py`.
+
+- `<백업>` 은 서버의 절대 경로(파일 `.jwbak` 또는 폴더 — 읽기 전용으로 붙인다. `/data/…` 로 적으면 설치 폴더의 경로로 바꾼다)이거나, `/` 가 없으면 백업 볼륨 안의 이름이다(`jw restore --list`).
+- 먼저 `backup inspect` 로 내용을 읽어 만든 서버·버전·되돌릴 항목을 보여 준다. `--yes` 가 없으면 여기서 끝난다.
+- **설정 항목(`config`)은 되돌리지 않는다.** `.env` 와 사이트 파일은 설치 관리자가 답변에서 만든 것이다. 그래서 암호화 키가 다른 백업(다른 설치의 것)은 backend 가 `compat` 단계에서 거부한다 — 그런 백업은 새 설치의 "백업에서 복원"(§14)으로 올린다. `--password-file` 은 backend 로 넘기지만, 암호는 설정 항목에만 걸리므로 이 명령에서는 없어도 된다.
+- 도는 동안 점검 표식(`nginx/state/maintenance.on`)을 놓아 앞단에서 쓰기를 막고, 끝나면(성공이든 실패든) 지운다. 서비스 정지·시작과 DB 의 되돌림은 backend 의 복원이 한다.
+- 결과는 backend 가 낸 것을 그대로 전한다: 성공이면 되돌린 항목·스키마 버전 변화·복원 전 DB 덤프의 위치, 실패면 단계 이름·원인·그 뒤의 DB 상태. 끝난 뒤 backend 가 준비되지 않았으면 성공으로 치지 않는다(종료 코드 1).
+- 설치·업데이트·구역 작업이 도는 중이면 시작하지 않는다.
 
 ## 7. 사전 점검
 
@@ -487,7 +501,7 @@ docker 없이 돈다. docker·DNS·HTTP·SMTP 는 가짜로 바꾼다(`tests/fak
 ## 12. 알려진 한계
 
 - **backend 쪽 호출부**는 `backend/app/system/` 이다. 관리자 권한을 확인하고 내부 API 를 대신 부르며(`/api/admin/system/zones…`, `/jobs/<id>`, `/probe/…`), 켜기·끄기·설정 변경을 감사 로그에 남긴다. 화면은 관리 › 구역(`/admin/zones`). `JW_INSTALLER_URL`·`JW_INSTALLER_KEY` 가 비어 있으면(설치 관리자 없이 구성한 설치) 목록은 읽기 전용이고 나머지는 `503 installer_unavailable` 이다.
-- **코드 저장소의 로그인 연동**(Gitea 의 OpenID Connect 로그인 원본)은 접속 주소의 인증서를 **Gitea 컨테이너가** 믿을 수 있어야 걸린다. 임시 인증서로 설치하면 "연결 보류"로 남고, 신뢰되는 인증서로 바꾸면(§15) 다시 건다. 공개 CA 가 아닌 **사설 CA** 가 내준 인증서는 올려도 Gitea 가 믿지 못해 보류로 남는다 — Gitea 컨테이너의 신뢰 저장소에 그 CA 를 넣는 일은 설치 관리자가 하지 않는다.
+- **코드 저장소의 로그인 연동**(Gitea 의 OpenID Connect 로그인 원본)은 접속 주소의 인증서를 **Gitea 컨테이너가** 믿을 수 있어야 걸린다. 임시 인증서로 설치하면 "연결 보류"로 남고, 신뢰되는 인증서로 바꾸면(§15) 다시 건다. 공개 CA 가 아닌 **사설 CA** 가 내준 인증서는 **발급 CA(체인)를 함께 올렸을 때만** 이어진다(§15의 "사설 CA"). 서버 인증서 한 장만 올리면 믿게 할 CA 를 알 수 없어 보류로 남는다.
 - **인증서 자동 발급(Let's Encrypt)의 실제 발급**은 밖에서 80 으로 닿는 서버에서만 된다. 발급이 실패했을 때의 흐름(실패 → 임시 인증서로 계속)만 실서버에서 확인했다.
 - **TURN/TLS**: 직접 받는 구성에서는 5349 에 게시되므로, 443 을 넘겨 주는 장치가 없으면 쓰이지 않는다(§8).
 - **앞단 프록시 구성**: 프록시는 클라이언트 주소를 `X-Real-IP` 로 넘겨야 한다(`X-Forwarded-For` 만으로는 클라이언트 주소로 쓰지 않는다). 메일·회의 인증서는 자체 서명이다 — 신뢰되는 인증서가 필요하면 지금은 손으로 넣어야 한다.
@@ -690,6 +704,8 @@ docker exec jw-installer jw apply --answers /data/restore.json
 
 작업(`kind: "cert"`, `zone: null`)의 단계는 `issue`(답변·설정을 바꾸고 발급·배치) → `reload`(nginx 재시작, 회의 서버 재시작, 자동 발급이면 갱신 컨테이너 시작, backend 다시 만들기) → `reconnect`(보류된 구역의 `connect` 훅 — 코드 저장소의 로그인 연동). `issue` 가 실패하면 답변·설정을 되돌리고 **쓰던 인증서를 다시 놓는다**(자동 발급을 시도하며 임시 인증서의 링크를 뗐을 수 있다). 거부: `409 cert_managed_by_proxy`(앞단 프록시가 맡는 설치), `422 cert_auto_needs_domain`, `409 busy`.
 
+**사설 CA.** 올린 인증서 파일에 서버 인증서 말고 다른 인증서(중간·루트 CA)가 이어 붙어 있으면, 첫 장을 뺀 나머지를 `stack/site-ca/ca.pem` 에 두고 사이트 조각(`docker-compose.site.yml`)이 그 파일을 코드 저장소 컨테이너의 `/etc/ssl/certs/jw-site-ca.pem` 으로 붙인다. Gitea(Go)는 시스템의 CA 묶음에 더해 그 폴더의 파일을 읽으므로 공개 CA 에 대한 신뢰는 그대로다. `reload` 단계가 코드 저장소 컨테이너를 다시 만들고, 이어지는 `reconnect` 가 보류된 로그인 연동을 건다. 자동 발급으로 바꾸면 걷어 낸다. 믿게 하는 범위는 **코드 저장소 컨테이너뿐**이다 — backend·문서 편집기 등 다른 컨테이너와 사용자의 브라우저는 해당하지 않는다.
+
 구역 연결이 보류되는 경우는 지금 하나다: 코드 저장소의 로그인 원본 등록(Gitea 가 접속 주소의 인증서를 믿지 못할 때). `GET /internal/zones` 의 그 구역 행에 `pending: true` 가 붙고, 관리 › 구역에 "연결 보류"와 "다시 연결"이 보인다.
 
 ## 16. 업데이트
@@ -709,12 +725,13 @@ docker exec jw-installer jw apply --answers /data/restore.json
 
 | 설정 | 어디서 | 기본 |
 |---|---|---|
-| 채널 주소 | 환경변수 `JW_UPDATE_CHANNEL_URL`(이미지 빌드 인자 같은 이름으로 기본값을 굽는다) | 릴리스 도구의 `channel_base_url`(`release/jwrelease/config.py`) |
-| 공개 키 | `<설치 폴더>/state/update/keys/*.pub` — 있으면 이것만 쓴다. 없으면 이미지의 `/app/keys/*.pub`(빌드할 때 `installer/keys/` 에 넣은 것) | 리포에는 키가 없다 |
+| 채널 주소 | `jw update-channel <주소>` 로 정한 값(`<설치 폴더>/state/update/channel-url`) → 환경변수 `JW_UPDATE_CHANNEL_URL`(이미지 빌드 인자 같은 이름으로 기본값을 굽는다) | 릴리스 도구의 `channel_base_url`(`release/jwrelease/config.py`) |
+| 공개 키 | `<설치 폴더>/state/update/keys/*.pub` — 있으면 이것만 쓴다(`jw update-key add` 가 검증해 넣는다). 없으면 이미지의 `/app/keys/*.pub`(빌드할 때 `installer/keys/` 에 넣은 것) | 리포에는 키가 없다 |
 | 오프라인 묶음을 받는 주소 | `JW_UPDATE_OFFLINE_URL`(`{version}`·`{filename}`) | 릴리스 도구의 `download_url_template` |
 
 - 공개 키는 **둘까지**(현재·다음, 파일 이름순) 받고 어느 하나로 검증되면 통과시킨다 — 키 교체 절차는 releases.md 의 "키 관리".
-- 키가 하나도 없으면 확인은 `unconfigured` 로 끝난다(채널을 받으러 가지 않는다).
+- 키가 하나도 없으면 확인은 `unconfigured` 로 끝난다(채널을 받으러 가지 않는다). 소스로 빌드해 설치한 서버가 그렇다 — `docker exec -i jw-installer jw update-key add - < release.pub` 로 넣는다(PEM 공개 키인지 확인하고 지문을 보여 준다. 비공개 키는 거부한다).
+- `jw update-channel <주소>` 는 채널 주소를 바꾸고, 앞 채널에서 기억한 확인 결과와 순번을 지운다(다른 발행자의 채널은 순번이 더 낮을 수 있다). `--reset` 은 환경변수·이미지의 값으로 되돌린다.
 - 확인은 여섯 시간마다 + 0~30분의 흔들림. 채널 서버에는 정적 파일을 GET 할 뿐이고 식별자·버전·통계를 보내지 않는다. 받아들인 채널의 순번(`sequence`)을 기억해, 그보다 낮은 파일은 거부한다.
 - 검증을 통과한 manifest 는 `state/update/manifests/` 에 서명과 함께 두고, **쓸 때마다 서명을 다시 확인한다.**
 

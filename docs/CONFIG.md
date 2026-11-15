@@ -153,6 +153,7 @@ Just Workspace 의 환경별 값은 스택의 `.env` 파일에 있다. 소스에
 |---|---|---|
 | `JW_HOST_DIR` | (필수) | 설치 폴더의 호스트 경로. `-v <폴더>:/data` 와 같은 경로여야 한다 |
 | `JW_REGISTRY` | `ghcr.io/just-workspace` | 우리 이미지를 받을 저장소. `localhost` 면 서버에 이미 있는 이미지를 쓴다 |
+| `JW_INSTALLER_VERSION` | 이미지에 든 `VERSION` | 설치 관리자가 자신과 설치할 제품의 버전으로 아는 값. 이미지 태그와 같게 적는다 — 승격한(Beta → Stable) 이미지는 안의 `VERSION` 이 Beta 의 글자다 |
 | `JW_IMAGE_TAG` | 제품 버전 | 받을 이미지의 태그 |
 | `JW_PUBLIC_HOST` | (비움) | 로그의 주소와 설치 관리자의 인증서에 쓸 서버 주소 |
 | `JW_UPDATE_CHANNEL_URL` | 공식 채널 | 업데이트 채널 파일을 받는 기준 주소 |

@@ -182,7 +182,7 @@ Stable 을 Beta 없이 바로 내려면 6번에서 `--channel stable` 을 쓴다
 |---|---|---|
 | backend | 환경변수 `JW_APP_VERSION` → 없으면 이미지의 `/app/VERSION`(빌드 인자) → 개발 표기 | 실행 환경이 `JW_APP_VERSION` 을 넣으면 맞다. 안 넣으면 Beta 문자열이 보인다 |
 | audiorelay | 환경변수 `JW_APP_VERSION` → 없으면 바이너리에 구운 값(빌드 인자 `VERSION`) | backend 와 같다 |
-| 설치 관리자 | 환경변수 `JW_INSTALLER_VERSION` → 없으면 이미지의 번들에 든 `VERSION` | 업데이트로 바뀐 설치 관리자는 맞다(업데이트가 그 값을 넣어 띄운다). 승격한 이미지를 **처음 설치할 때** `docker run` 에 `-e JW_INSTALLER_VERSION=<버전>` 을 주지 않으면 Beta 문자열을 자신의 버전으로 안다 |
+| 설치 관리자 | 환경변수 `JW_INSTALLER_VERSION` → 없으면 이미지의 번들에 든 `VERSION` | 업데이트로 바뀐 설치 관리자는 맞다(업데이트가 그 값을 넣어 띄운다). 승격한 이미지를 **처음 설치할 때**는 `docker run` 에 `-e JW_INSTALLER_VERSION=<버전>` 을 준다(문서의 설치 명령이 모두 그렇게 적혀 있다). 주지 않으면 Beta 문자열을 자신의 버전으로 알고, 시작할 때 로그에 한 줄로 알린다 |
 | 그 밖의 이미지 | 제품 버전을 표시하지 않는다 | 영향 없음 |
 
 ## 만료 갱신

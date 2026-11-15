@@ -57,6 +57,7 @@ docker run -d --name jw-installer --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /opt/just-workspace:/data \
   -e JW_HOST_DIR=/opt/just-workspace \
+  -e JW_INSTALLER_VERSION=1.0.0 \
   ghcr.io/just-workspace/just-workspace-installer:1.0.0
 
 docker logs jw-installer
@@ -65,6 +66,7 @@ docker logs jw-installer
 Open the address printed in the log (`https://<server address>:8443/?token=…`) in a browser to start the setup wizard. The installer uses a self-signed certificate, so the browser shows a warning; compare the SHA-256 fingerprint in the log before continuing.
 
 - The host folder in `-v` and `JW_HOST_DIR` must be the **same path**. This is the install folder.
+- Set `JW_INSTALLER_VERSION` to the same version as the image tag — it is the product version the installer installs.
 - The image above will be published with the first release. Until then, build from source — [docs/install.md](docs/install.md#소스에서-빌드해-설치).
 - To install without the wizard, use an answers file: `docker exec jw-installer jw apply --answers /data/answers.json`.
 - You can also run the stack by hand with `docker compose`, without the installer — [docs/deployment.md](docs/deployment.md).

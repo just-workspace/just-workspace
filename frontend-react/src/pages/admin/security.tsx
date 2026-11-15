@@ -1,5 +1,8 @@
 /**
  * 관리 › 설정 › 보안·SSL — Vue pages/admin/security.vue. 폼 720.
+ *  ⓪ 인증서(AdminCertCard) — 설치 관리자가 인증서를 맡는 설치: 상태, 다시 발급, 인증서 올리기, 진행·실패.
+ *     이때 ①은 그리지 않는다(①의 올리기는 설치 관리자가 놓은 인증서를 바꾸지 못한다).
+ *     설치 관리자 없이 구성한 설치는 ⓪이 안내 한 줄로 줄고 ①이 예전처럼 보인다.
  *  ① SSL 인증서 — 머리 배지(만료 30일 이내 "갱신 필요"), 인증서 행(도메인 600 + "MM/DD 만료 · D-n", 상태 배지).
  *     서버 effective(관리 개요 ops-summary 의 ssl 과 같은 출처) 하나를 보인다. 재발급 버튼은 두지 않는다.
  *     머리 오른쪽 [인증서 올리기](outline) → AdminSslUploadModal(미리 읽기·짝 검사) + 기존 삭제 줄. 자동 발급 버튼은 없다(재발급 버튼 두지 않음).
@@ -26,6 +29,7 @@ import { UiSelect } from '~/components/ui/Select'
 import { UiSwitch } from '~/components/ui/Switch'
 import { UiButton } from '~/components/ui/Button'
 import { AdminSslUploadModal } from '~/components/admin/AdminSslUploadModal'
+import { AdminCertCard } from '~/components/admin/AdminCertCard'
 
 interface Effective { not_after: string | null; days_left: number | null; source: string | null; name?: string | null; issuer?: string | null }
 interface Ssl { installed: boolean; subject?: string; issuer?: string; not_before?: string; not_after?: string; has_key?: boolean; error?: string; effective?: Effective }
@@ -57,6 +61,9 @@ export default function AdminSecurityPage() {
   useEffect(() => { if (user && !user.is_admin) void navigateTo('/') }, [user])
 
   function flash(set: (v: boolean) => void) { set(true); setTimeout(() => { set(false) }, 2000) }
+
+  // ── ⓪ 설치 관리자가 맡는 인증서인가 — null: 아직 모름 · true: 맡지 않음(① 을 보인다) · false: 맡음(⓪ 만) ──
+  const [legacyCert, setLegacyCert] = useState<boolean | null>(null)
 
   // ── ① 인증서 ──
   const [ssl, setSsl] = useState<Ssl | null>(null)
@@ -160,8 +167,11 @@ export default function AdminSecurityPage() {
   if (!user?.is_admin) return null
   return (
     <AdminPageShell title={t('admin.sslPage.pageTitle')} subtitle={t('admin.sslPage.subtitle')} width="form">
-      {/* ① SSL 인증서 */}
-      <SettingsCard
+      {/* ⓪ 인증서(설치 관리자) */}
+      <AdminCertCard onLegacy={setLegacyCert} />
+
+      {/* ① SSL 인증서 — 설치 관리자가 인증서를 맡지 않는 설치에서만 */}
+      {legacyCert === true && <SettingsCard
         title={t('admin.sslPage.certTitle')}
         description={ssl ? certDesc : ''}
         flush
@@ -193,7 +203,7 @@ export default function AdminSecurityPage() {
             {certBadge && <UiBadge tone={certBadge.tone} tint>{certBadge.text}</UiBadge>}
           </div>
         )}
-      </SettingsCard>
+      </SettingsCard>}
 
       {/* ② 로그인 보호 */}
       <SettingsCard title={t('admin.sslPage.protectTitle')} description={t('admin.sslPage.protectDesc')} saved={polSaved} flush>

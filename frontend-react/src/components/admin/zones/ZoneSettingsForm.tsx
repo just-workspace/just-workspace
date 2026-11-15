@@ -3,7 +3,7 @@
  *  · 메일: 내장(메일 도메인 + 등록할 레코드 확인) / 외부 발신 서버(주소·포트·보안 방식·계정·비밀번호 + 연결 확인)
  *  · 회의: 공인 주소(감지값, 없으면 직접 입력) · 중계 서버 · 무손실 오디오
  *  · AI 도우미: 지금 연결(제공자·키 + 연결 확인) / 나중에
- *  · 코드 저장소: 검증된 버전 / 최신 / 직접 지정
+ *  · 코드 저장소: 검증된 버전(몇 버전인지 옆에 적는다) / 최신 / 직접 지정
  * 연결 확인이 필요한 값(외부 발신 서버, AI 키)을 바꾸면 확인 상태는 처음으로 돌아간다.
  */
 import { useEffect, useState } from 'react'
@@ -38,6 +38,8 @@ export interface ZoneSettingsFormProps {
   redetecting: boolean
   /** 켜진 구역의 설정을 다시 연 것인가(메일 레코드를 열자마자 확인한다) */
   reopened: boolean
+  /** 코드 저장소의 "검증된 버전"이 몇 버전인지 — 알 때만 선택지 옆에 적는다 */
+  verifiedVersion?: string | null
 }
 
 const AI_PROVIDERS = [
@@ -135,7 +137,7 @@ function MailRecords({ domain, auto }: { domain: string; auto: boolean }) {
   )
 }
 
-export function ZoneSettingsForm({ zoneId, form, onChange, verify, onVerify, detectedIp, onRedetectIp, redetecting, reopened }: ZoneSettingsFormProps) {
+export function ZoneSettingsForm({ zoneId, form, onChange, verify, onVerify, detectedIp, onRedetectIp, redetecting, reopened, verifiedVersion }: ZoneSettingsFormProps) {
   const { t } = useI18n()
   const str = (v: unknown) => (v == null ? '' : String(v))
   const pick = (key: string) => (v: string | number | null) => { if (v != null) onChange({ [key]: v }, true) }
@@ -240,7 +242,8 @@ export function ZoneSettingsForm({ zoneId, form, onChange, verify, onVerify, det
       <>
         <div role="radiogroup" aria-label={t('admin.zones.git.aria')} className="flex flex-col gap-2">
           {(['tested', 'latest', 'custom'] as const).map(v => (
-            <UiRadioCard key={v} className="w-full" value={v} title={t(`admin.zones.git.${v}.title`)} description={t(`admin.zones.git.${v}.desc`)} modelValue={form.version} onUpdateModelValue={x => { if (x != null) onChange({ version: x }) }} />
+            <UiRadioCard key={v} className="w-full" value={v} title={t(`admin.zones.git.${v}.title`)} description={t(`admin.zones.git.${v}.desc`)}
+              meta={v === 'tested' && verifiedVersion ? verifiedVersion : undefined} modelValue={form.version} onUpdateModelValue={x => { if (x != null) onChange({ version: x }) }} />
           ))}
         </div>
         {form.version === 'custom' && (

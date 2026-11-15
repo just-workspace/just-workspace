@@ -1,6 +1,7 @@
 /**
  * 구역 한 행 — 이름·설명, 권장 메모리, 상태(색 + 아이콘 + 글자), [설정], 켜기 스위치.
  * 진행·결과는 행 안에 펼친다: 켜는 중(받기·설정·연결), 끄는 중, 방금 켰습니다(열 포트 안내), 껐습니다, 실패(다시 시도·기록).
+ * 켜져 있지만 로그인 연동이 보류된 구역은 "연결 보류" 배지 + 한 줄 설명 + [다시 연결]. 다시 연결하는 작업도 같은 자리에서 진행을 보인다.
  */
 import { useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -10,6 +11,7 @@ import { UiSwitch } from '~/components/ui/Switch'
 import { UiButton } from '~/components/ui/Button'
 import { UiIconButton } from '~/components/ui/IconButton'
 import { UiIcon } from '~/components/ui/Icon'
+import { UiBadge } from '~/components/ui/Badge'
 import { UiProgress } from '~/components/ui/Progress'
 
 export interface ZoneRowViewProps {
@@ -24,6 +26,8 @@ export interface ZoneRowViewProps {
   onSettings: () => void
   onRetry: () => void
   onDismiss: () => void
+  /** 보류된 연결을 다시 건다 */
+  onReconnect?: () => void
 }
 
 function downloadText(name: string, text: string) {
@@ -34,7 +38,7 @@ function downloadText(name: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-export function ZoneRowView({ zone, readOnly, locked, reconnecting, onToggle, onSettings, onRetry, onDismiss }: ZoneRowViewProps) {
+export function ZoneRowView({ zone, readOnly, locked, reconnecting, onToggle, onSettings, onRetry, onDismiss, onReconnect }: ZoneRowViewProps) {
   const { t, locale } = useI18n()
   const name = localized(zone.name, locale)
   const job = zone.job
@@ -42,6 +46,8 @@ export function ZoneRowView({ zone, readOnly, locked, reconnecting, onToggle, on
   const failed = job?.status === 'failed'
   const done = job?.status === 'done'
   const kind = job?.kind
+  // 연결 보류 — 켜져 있고 지금 도는 작업이 없을 때만 따로 알린다(다시 연결이 실패한 직후에는 실패 줄이 대신 말한다)
+  const pending = zone.enabled && !!zone.pending && !active && !failed
 
   const [logOpen, setLogOpen] = useState(false)
   const [log, setLog] = useState<string[] | null>(null)
@@ -63,9 +69,11 @@ export function ZoneRowView({ zone, readOnly, locked, reconnecting, onToggle, on
   // 상태 표시
   const st = active
     ? { tone: kind === 'disable' ? 'text-muted-foreground' : 'text-primary', icon: 'loader', spin: true,
-        text: reconnecting || job.status === 'unknown' ? t('admin.zones.status.reconnecting') : t(`admin.zones.status.${kind === 'disable' ? 'disabling' : kind === 'update' ? 'updating' : 'enabling'}`) }
+        text: reconnecting || job.status === 'unknown' ? t('admin.zones.status.reconnecting') : t(`admin.zones.status.${kind === 'disable' ? 'disabling' : kind === 'update' ? 'updating' : kind === 'reconnect' ? 'reconnectJob' : 'enabling'}`) }
     : failed
-      ? { tone: 'text-danger', icon: 'alert-circle', spin: false, text: t(`admin.zones.status.${kind === 'disable' ? 'disableFailed' : kind === 'update' ? 'updateFailed' : 'enableFailed'}`) }
+      ? { tone: 'text-danger', icon: 'alert-circle', spin: false, text: t(`admin.zones.status.${kind === 'disable' ? 'disableFailed' : kind === 'update' ? 'updateFailed' : kind === 'reconnect' ? 'reconnectFailed' : 'enableFailed'}`) }
+      : pending
+        ? { tone: 'text-warning', icon: 'alert-triangle', spin: false, text: t('admin.zones.status.pending') }
       : zone.enabled
         ? { tone: 'text-success', icon: 'check-circle', spin: false, text: t('admin.zones.status.on') }
         : { tone: 'text-muted-foreground', icon: 'minus', spin: false, text: t('admin.zones.status.off') }
@@ -77,18 +85,22 @@ export function ZoneRowView({ zone, readOnly, locked, reconnecting, onToggle, on
     ? t('admin.zones.fail.disable', { name })
     : kind === 'update'
       ? t('admin.zones.fail.update', { name })
+    : kind === 'reconnect'
+      ? t('admin.zones.fail.reconnect', { name })
       : t(`admin.zones.fail.${failedStage === 'pull' || failedStage === 'configure' || failedStage === 'connect' ? failedStage : 'generic'}`, { name })
   const failHelp = kind === 'disable'
     ? `${t('admin.zones.fail.stayOn')} ${t('admin.zones.fail.seeLog')}`
     : kind === 'update'
       ? t('admin.zones.fail.seeLog')
+    : kind === 'reconnect'
+      ? t('admin.zones.fail.reconnectHelp')
       : `${t('admin.zones.fail.stayOff')} ${failedStage === 'pull' ? t('admin.zones.fail.checkInternet') : t('admin.zones.fail.seeLog')}`
 
   return (
     <div
       className={cn('flex flex-col border-t border-border', failed && 'bg-danger/10', done && kind !== 'disable' && 'bg-success/10')}
       data-testid={`zone-${zone.id}`}
-      data-state={active ? 'busy' : failed ? 'failed' : done ? 'fresh' : zone.enabled ? 'on' : 'off'}
+      data-state={active ? 'busy' : failed ? 'failed' : done ? 'fresh' : pending ? 'pending' : zone.enabled ? 'on' : 'off'}
     >
       <div className="flex min-h-[52px] flex-wrap items-center gap-3 px-4 py-1">
         <span className="flex min-w-0 flex-1 basis-[220px] flex-col">
@@ -107,7 +119,18 @@ export function ZoneRowView({ zone, readOnly, locked, reconnecting, onToggle, on
         <UiSwitch ariaLabel={t('admin.zones.toggleAria', { name })} modelValue={switchOn} disabled={readOnly || active || locked} onUpdateModelValue={onToggle} />
       </div>
 
-      {/* 켜는 중 · 설정 적용 중 */}
+      {/* 연결 보류 */}
+      {pending && (
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-3 text-[13px]" role="status" data-testid={`zone-${zone.id}-pending`}>
+          <UiBadge tone="warning" tint size={18}>{t('admin.zones.pending.badge')}</UiBadge>
+          <span className="min-w-0 flex-1 basis-[220px] text-muted-foreground">{t('admin.zones.pending.desc')}</span>
+          {!readOnly && onReconnect && (
+            <UiButton variant="outline" size="xs" icon="refresh" disabled={locked} aria-label={t('admin.zones.pending.reconnectAria', { name })} onClick={onReconnect}>{t('admin.zones.pending.reconnect')}</UiButton>
+          )}
+        </div>
+      )}
+
+      {/* 켜는 중 · 설정 적용 중 · 다시 연결 중 */}
       {active && kind !== 'disable' && job.stages.length > 0 && (
         <div className="flex flex-col gap-2 px-4 pb-3.5">
           {job.stages.map(s => (
@@ -130,7 +153,7 @@ export function ZoneRowView({ zone, readOnly, locked, reconnecting, onToggle, on
             <>
               <span className="inline-flex items-center gap-1.5 font-medium text-success">
                 <UiIcon name="check-circle" className="h-4 w-4" />
-                {kind === 'update' ? t('admin.zones.fresh.updated') : `${t('admin.zones.fresh.on')}${zone.menu ? ` ${t('admin.zones.fresh.menu')}` : ''}`}
+                {kind === 'update' ? t('admin.zones.fresh.updated') : kind === 'reconnect' ? t('admin.zones.fresh.reconnected') : `${t('admin.zones.fresh.on')}${zone.menu ? ` ${t('admin.zones.fresh.menu')}` : ''}`}
               </span>
               <span className="min-w-0 flex-1 basis-[200px] text-muted-foreground">
                 {job.ports.length > 0 && <><span className="font-mono">{formatPorts(job.ports)}</span>{t('admin.zones.fresh.ports')}</>}

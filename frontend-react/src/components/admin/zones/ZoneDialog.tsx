@@ -4,6 +4,7 @@
  * 켜기(mode="enable"):
  *   1) 설정 — 설정이 있는 구역만(메일·회의·AI 도우미·코드 저장소). 연결 확인이 필요한 폼은 통과 전까지 [다음]이 꺼지고 이유가 보인다.
  *   2) 메모리와 포트 확인 — 서버가 판정한다. 메모리를 넘으면 [켜기]가 꺼지고 이유가 보인다.
+ *      이 구역을 켜서 새로 생기는 주의(인증서·포트·메일 레코드 등)가 있으면 아래에 함께 보인다.
  *   → [켜기]를 누르면 창이 닫히고, 받기·설정·연결 진행은 목록의 그 행에서 이어진다.
  * 설정(mode="settings"): 같은 폼 한 장 + [저장]. 바꾼 내용이 없으면 [저장]이 꺼진다.
  */
@@ -11,7 +12,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useI18n } from '~/i18n'
 import { cn } from '~/lib/utils'
 import {
-  zonesApi, errorCode, localized, recommendGb, gb, formatPorts, initialSettings, toPayload, blockReason,
+  zonesApi, errorCode, localized, recommendGb, gb, formatPorts, initialSettings, toPayload, blockReason, cautionText,
   type ZoneCheck, type ZoneJob, type ZoneMemory, type ZoneRow, type ZoneSettings,
 } from '~/composables/useSystemZones'
 import { UiModal } from '~/components/ui/Modal'
@@ -26,12 +27,14 @@ export interface ZoneDialogProps {
   mode: 'enable' | 'settings'
   /** 지금 켜진 구역 기준의 메모리(켜기 전 합계) */
   memory: ZoneMemory
+  /** 코드 저장소의 검증된 버전(목록이 알려 준 값 — 설정을 읽으면 그 값이 우선) */
+  verifiedVersion?: string | null
   onClose: () => void
   /** 작업이 시작됐다 — 창은 닫히고 행이 진행을 보여 준다 */
   onStarted: (job: ZoneJob, settings: ZoneSettings | null) => void
 }
 
-export function ZoneDialog({ zone, mode, memory, onClose, onStarted }: ZoneDialogProps) {
+export function ZoneDialog({ zone, mode, memory, verifiedVersion, onClose, onStarted }: ZoneDialogProps) {
   const { t, locale } = useI18n()
   const name = localized(zone.name, locale)
   const hasForm = zone.has_settings
@@ -40,6 +43,7 @@ export function ZoneDialog({ zone, mode, memory, onClose, onStarted }: ZoneDialo
   const [form, setForm] = useState<ZoneSettings>(() => initialSettings(zone.id, undefined))
   const [saved, setSaved] = useState<string>('')
   const [detectedIp, setDetectedIp] = useState<string | null>(null)
+  const [verified, setVerified] = useState<string | null>(verifiedVersion ?? null)
   const [redetecting, setRedetecting] = useState(false)
   const [verify, setVerify] = useState<VerifyState>({ state: 'idle' })
   const [report, setReport] = useState<ZoneCheck | null>(null)
@@ -57,6 +61,7 @@ export function ZoneDialog({ zone, mode, memory, onClose, onStarted }: ZoneDialo
       setForm(init)
       setSaved(JSON.stringify(toPayload(zone.id, init)))
       setDetectedIp(r.detected?.public_ip || null)
+      if (r.verified_version) setVerified(r.verified_version)
     }).catch(() => {
       if (alive) setSaved(JSON.stringify(toPayload(zone.id, initialSettings(zone.id, undefined))))
     }).finally(() => { if (alive) setLoading(false) })
@@ -145,7 +150,7 @@ export function ZoneDialog({ zone, mode, memory, onClose, onStarted }: ZoneDialo
           {loading
             ? <UiSkeleton preset="text" rows={4} />
             : <ZoneSettingsForm zoneId={zone.id} form={form} onChange={change} verify={verify} onVerify={() => { void runVerify() }}
-                detectedIp={detectedIp} onRedetectIp={() => { void redetect() }} redetecting={redetecting} reopened={mode === 'settings'} />}
+                detectedIp={detectedIp} onRedetectIp={() => { void redetect() }} redetecting={redetecting} reopened={mode === 'settings'} verifiedVersion={verified} />}
           {errorBox}
         </div>
       </UiModal>
@@ -159,6 +164,7 @@ export function ZoneDialog({ zone, mode, memory, onClose, onStarted }: ZoneDialo
   const before = recommendGb(memory.need_mb ?? 0)
   const after = recommendGb(mem?.need_mb ?? (memory.need_mb ?? 0) + zone.recommend_mb)
   const ports = report?.ports ?? []
+  const cautions = (report?.cautions ?? []).filter(c => c && typeof c.key === 'string')
   return (
     <UiModal
       size="480"
@@ -197,6 +203,16 @@ export function ZoneDialog({ zone, mode, memory, onClose, onStarted }: ZoneDialo
               <dd className="m-0">{t('admin.zones.dialog.steps')}</dd>
             </div>
           </dl>
+        )}
+        {report && cautions.length > 0 && (
+          <UiCallout tone="warning" role="status" title={t('admin.zones.dialog.cautions')} data-testid="zone-dialog-cautions">
+            <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-muted-foreground">
+              {cautions.map((c, i) => {
+                const { key, values } = cautionText(c)
+                return <li key={`${c.key}-${i}`} className="break-words" data-caution={c.key}>{t(key, values)}</li>
+              })}
+            </ul>
+          </UiCallout>
         )}
         {errorBox}
       </div>

@@ -5,16 +5,19 @@
 import { $fetch } from '~/lib/api'
 
 export type ZoneJobStatus = 'running' | 'done' | 'failed' | 'unknown'
-export type ZoneJobKind = 'enable' | 'disable' | 'update'
+export type ZoneJobKind = 'enable' | 'disable' | 'update' | 'reconnect' | 'cert'
+/** 주의(구역 확인의 cautions) · 작업이 남긴 주의(warnings) — 문구는 화면이 key 로 고른다 */
+export interface ZoneCaution { key: string; vars?: Record<string, unknown> }
 export type ZoneStageStatus = 'pending' | 'running' | 'done' | 'failed'
 export interface ZoneJob {
   id: string
   kind: ZoneJobKind
-  zone: string
+  /** 인증서 작업(kind = cert)은 구역이 없다 */
+  zone: string | null
   status: ZoneJobStatus
   stages: { id: string; status: ZoneStageStatus }[]
   error: { cause?: string; fix?: string; vars?: Record<string, unknown> } | null
-  warnings: unknown[]
+  warnings: ZoneCaution[]
   ports: string[]
   started_at: string | null
   finished_at: string | null
@@ -29,6 +32,9 @@ export interface ZoneRow {
   enabled: boolean
   has_settings: boolean
   fits: boolean | null
+  /** 켜져 있지만 로그인 연동이 보류됐다(신뢰되는 인증서가 생기면 다시 연결할 수 있다) */
+  pending?: boolean
+  pending_reason?: string | null
   /** 켜면 왼쪽 메뉴에 항목이 생기는 구역인가 */
   menu: boolean
   job: ZoneJob | null
@@ -40,6 +46,8 @@ export interface ZoneListing {
   core: { name: Record<string, string>; recommend_mb: number }
   zones: ZoneRow[]
   addons: ZoneRow[]
+  /** 코드 저장소의 "검증된 버전"이 몇 버전인지(설치 관리자가 알려 줄 때만) */
+  git_verified_version?: string | null
 }
 export interface ZoneCheck {
   zone: string
@@ -47,10 +55,10 @@ export interface ZoneCheck {
   errors: { field: string; code: string; vars?: Record<string, unknown> }[]
   memory: ZoneMemory & { below_minimum?: boolean }
   ports: string[]
-  cautions: unknown[]
+  cautions: ZoneCaution[]
 }
 export type ZoneSettings = Record<string, any>
-export interface ZoneSettingsReply { zone: string; enabled: boolean; settings: ZoneSettings; detected?: { public_ip?: string | null } }
+export interface ZoneSettingsReply { zone: string; enabled: boolean; settings: ZoneSettings; detected?: { public_ip?: string | null }; verified_version?: string | null }
 export interface MailRecord { id: string; name: string; type: string; expected: string; current: string[]; status: 'ok' | 'missing' | 'different' | 'unknown' }
 
 const BASE = '/api/admin/system'
@@ -61,8 +69,10 @@ export const zonesApi = {
   enable: (id: string, settings: ZoneSettings | null) => $fetch<ZoneJob>(`${BASE}/zones/${id}/enable`, { method: 'POST', body: { settings } }),
   disable: (id: string) => $fetch<ZoneJob>(`${BASE}/zones/${id}/disable`, { method: 'POST' }),
   dismissJob: (id: string) => $fetch(`${BASE}/zones/${id}/job`, { method: 'DELETE' }),
+  reconnect: (id: string) => $fetch<ZoneJob>(`${BASE}/zones/${id}/reconnect`, { method: 'POST' }),
   settings: (id: string) => $fetch<ZoneSettingsReply>(`${BASE}/zones/${id}/settings`),
   saveSettings: (id: string, settings: ZoneSettings) => $fetch<ZoneJob>(`${BASE}/zones/${id}/settings`, { method: 'PUT', body: { settings } }),
+  jobs: () => $fetch<{ jobs: ZoneJob[] }>(`${BASE}/jobs`),
   job: (jobId: string) => $fetch<ZoneJob>(`${BASE}/jobs/${jobId}`),
   jobLog: (jobId: string) => $fetch<{ lines: string[] }>(`${BASE}/jobs/${jobId}/log`, { query: { tail: 2000 } }),
   probeSmtp: (body: Record<string, unknown>) => $fetch<{ status: string }>(`${BASE}/probe/smtp`, { method: 'POST', body }),
@@ -97,6 +107,24 @@ export function formatPorts(ports: string[]): string {
     const [range, proto] = p.split('/')
     return proto ? `${proto.toUpperCase()} ${range}` : range
   }).join(' · ')
+}
+
+/** 서버가 아는 주의 키 — 문구는 `admin.zones.caution.<키>`. 모르는 키는 `other` 로 보인다 */
+export const CAUTION_KEYS = [
+  'cert_temporary', 'git_sso_needs_trusted_cert', 'router_port_forward', 'proxy_side_certs_self_signed',
+  'hairpin_not_configured', 'turn_tls_alternate_port', 'mail_needs_dns_and_port25', 'account_domain_is_mail_domain',
+  'no_system_mail', 'meetings_public_ip_unknown', 'lossless_needs_udp_4433', 'rbi_needs_dns', 'dns_mismatch_cert_will_fail',
+] as const
+
+/** 주의 한 건 → 문구 키와 채울 값(포트 목록·이름 목록은 읽기 좋게 잇는다) */
+export function cautionText(c: ZoneCaution): { key: string; values: Record<string, string> } {
+  const known = (CAUTION_KEYS as readonly string[]).includes(c.key)
+  const values: Record<string, string> = { key: c.key }
+  for (const [name, v] of Object.entries(c.vars ?? {})) {
+    if (Array.isArray(v)) values[name] = name === 'ports' ? formatPorts(v.map(String)) : v.map(String).join(', ')
+    else if (v != null) values[name] = String(v)
+  }
+  return { key: `admin.zones.caution.${known ? c.key : 'other'}`, values }
 }
 
 export const isActive = (job: ZoneJob | null | undefined): job is ZoneJob => !!job && (job.status === 'running' || job.status === 'unknown')

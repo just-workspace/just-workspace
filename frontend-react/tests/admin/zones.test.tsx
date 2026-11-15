@@ -594,6 +594,161 @@ describe('관리 › 구역 — 켜진 구역의 설정 다시 열기', () => {
   })
 })
 
+describe('관리 › 구역 — 검증된 버전 · 켜기 전 주의', () => {
+  it('코드 저장소: "검증된 버전" 옆에 실제 버전 글자가 보인다(설정이 알려 준 값이 우선, 없으면 목록의 값)', async () => {
+    api.routes[`GET ${B}/zones`] = () => listing({}, { git_verified_version: '1.25.3' })
+    api.routes[`GET ${B}/zones/git/settings`] = () => ({ zone: 'git', enabled: false, settings: { version: 'tested' }, detected: {}, verified_version: '1.25.4' })
+    renderPage()
+    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 켜기' }))
+    const tested = await screen.findByRole('radio', { name: /검증된 버전/ })
+    await waitFor(() => expect(tested.textContent).toContain('1.25.4'))
+    expect(screen.getByRole('radio', { name: /최신/ }).textContent).not.toContain('1.25')
+  })
+
+  it('코드 저장소: 설정을 못 읽어도 목록이 알려 준 버전을 쓰고, 아무도 모르면 적지 않는다', async () => {
+    api.routes[`GET ${B}/zones`] = () => listing({}, { git_verified_version: '1.25.3' })
+    api.routes[`GET ${B}/zones/git/settings`] = () => { throw fail(502, 'installer_error') }
+    const first = renderPage()
+    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 켜기' }))
+    expect((await screen.findByRole('radio', { name: /검증된 버전/ })).textContent).toContain('1.25.3')
+    first.unmount()
+
+    api.routes[`GET ${B}/zones`] = () => listing()
+    api.routes[`GET ${B}/zones/git/settings`] = () => ({ zone: 'git', enabled: false, settings: { version: 'tested' }, detected: {} })
+    renderPage()
+    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 켜기' }))
+    expect((await screen.findByRole('radio', { name: /검증된 버전/ })).textContent).toBe('검증된 버전이 워크스페이스 버전과 연동을 확인한 버전입니다')
+  })
+
+  it('메모리·포트 확인 단계에 서버가 준 주의를 문구로 보여 준다(값 채움, 모르는 키는 키째로)', async () => {
+    api.routes[`GET ${B}/zones/git/settings`] = () => ({ zone: 'git', enabled: false, settings: { version: 'tested' }, detected: {} })
+    api.routes[`POST ${B}/zones/git/check`] = () => check({
+      ports: ['2222/tcp'],
+      cautions: [
+        { key: 'git_sso_needs_trusted_cert', vars: {} },
+        { key: 'router_port_forward', vars: { ports: ['2222/tcp', '7882-7892/udp'] } },
+        { key: 'proxy_side_certs_self_signed', vars: { names: ['mail.example.com', 'meet.example.com'] } },
+        { key: 'account_domain_is_mail_domain', vars: { mail_domain: 'example.com' } },
+        { key: 'something_new', vars: {} },
+      ],
+    })
+    renderPage()
+    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 켜기' }))
+    fireEvent.click(await screen.findByRole('button', { name: '다음' }))
+    const box = await screen.findByTestId('zone-dialog-cautions')
+    expect(box.textContent).toContain('켜기 전에 확인할 것')
+    const items = [...box.querySelectorAll('li')].map(li => li.textContent)
+    expect(items).toEqual([
+      '임시 인증서로는 코드 저장소의 로그인 연동이 동작하지 않습니다. 켜지기는 하지만 연결이 보류되고, 인증서를 발급한 뒤 다시 연결할 수 있습니다.',
+      '공유기에서 이 서버로 포트를 넘겨야 밖에서 접속됩니다: TCP 2222 · UDP 7882-7892',
+      '프록시를 거치지 않는 이름(mail.example.com, meet.example.com)에는 자체 서명 인증서를 씁니다. 메일 앱에서 인증서 경고가 뜰 수 있습니다.',
+      '계정의 메일 주소는 아이디@example.com 꼴이 됩니다.',
+      '확인이 필요한 항목이 있습니다. (something_new)',
+    ])
+    // 주의는 막지 않는다 — 켤 수 있다
+    expect((screen.getByRole('button', { name: '켜기' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('주의가 없으면 그 상자를 그리지 않는다', async () => {
+    api.routes[`POST ${B}/zones/rbi/check`] = () => check()
+    renderPage()
+    fireEvent.click(await screen.findByRole('switch', { name: '격리 브라우저 켜기' }))
+    await screen.findByTestId('zone-dialog-memory')
+    expect(screen.queryByTestId('zone-dialog-cautions')).toBeNull()
+  })
+
+  it('주의 문구는 서버가 아는 키마다 한국어·영어가 있다', async () => {
+    const { default: ko } = await import('~/i18n/locales/ko.json')
+    const { default: en } = await import('~/i18n/locales/en.json')
+    for (const key of [...sys.CAUTION_KEYS, 'other']) {
+      expect((ko as any).admin.zones.caution[key], `ko ${key}`).toBeTruthy()
+      expect((en as any).admin.zones.caution[key], `en ${key}`).toBeTruthy()
+    }
+    expect(sys.cautionText({ key: 'turn_tls_alternate_port', vars: { port: 5349 } })).toEqual({ key: 'admin.zones.caution.turn_tls_alternate_port', values: { key: 'turn_tls_alternate_port', port: '5349' } })
+    expect(sys.cautionText({ key: 'nope' }).key).toBe('admin.zones.caution.other')
+  })
+})
+
+describe('관리 › 구역 — 연결 보류 · 다시 연결', () => {
+  const pendingGit = { git: { enabled: true, pending: true, pending_reason: 'cert_untrusted' } }
+  const connJob = (o: Record<string, unknown> = {}) => job({ id: 'conn1', kind: 'reconnect', zone: 'git', stages: [{ id: 'connect', status: 'running' }], ...o })
+
+  it('켜져 있지만 연동이 보류된 구역: 배지와 한 줄 설명, [다시 연결]', async () => {
+    api.routes[`GET ${B}/zones`] = () => listing(pendingGit)
+    renderPage()
+    await waitFor(() => expect(zoneRow('git').dataset.state).toBe('pending'))
+    expect(screen.getByTestId('zone-git-status').textContent).toBe('연결 보류')
+    const line = screen.getByTestId('zone-git-pending')
+    expect(line.textContent).toContain('연결 보류')
+    expect(line.textContent).toContain('접속 주소의 인증서가 신뢰되는 인증서로 바뀌면 다시 연결할 수 있습니다.')
+    expect(within(line).getByRole('button', { name: '코드 저장소 다시 연결' })).toBeTruthy()
+    expect(toggle('코드 저장소').getAttribute('aria-checked')).toBe('true')      // 켜진 구역이다
+    expect(screen.queryByTestId('zone-mail-pending')).toBeNull()
+  })
+
+  it('[다시 연결] → 행에서 진행 → 연결되면 보류 표시가 걷힌다', async () => {
+    let connected = false
+    const doneJob = connJob({ status: 'done', stages: [{ id: 'connect', status: 'done' }] })
+    // 끝난 뒤의 목록은 서버가 방금 끝난 작업을 행에 붙여 준다
+    api.routes[`GET ${B}/zones`] = () => listing(connected ? { git: { enabled: true, job: doneJob } } : pendingGit)
+    api.routes[`POST ${B}/zones/git/reconnect`] = () => connJob()
+    api.routes[`GET ${B}/jobs/conn1`] = () => connJob()
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: '코드 저장소 다시 연결' }))
+    await waitFor(() => expect(zoneRow('git').dataset.state).toBe('busy'))
+    expect(called('POST', `${B}/zones/git/reconnect`)).toHaveLength(1)
+    expect(screen.getByTestId('zone-git-status').textContent).toBe('다시 연결 중')
+    expect(screen.getByTestId('zone-git-stage-connect').textContent).toContain('워크스페이스와 연결')
+    expect(screen.queryByTestId('zone-git-pending')).toBeNull()                 // 진행 중에는 진행만 보인다
+    expect((toggle('메일') as HTMLButtonElement).disabled).toBe(true)           // 한 번에 하나
+
+    connected = true
+    api.routes[`GET ${B}/jobs/conn1`] = () => doneJob
+    await waitFor(() => expect(zoneRow('git').dataset.state).toBe('fresh'))
+    expect(zoneRow('git').textContent).toContain('다시 연결했습니다.')
+    expect(screen.queryByTestId('zone-git-pending')).toBeNull()
+  })
+
+  it('여전히 안 걸리면 실패로 남고, [다시 시도]가 다시 연결을 부른다', async () => {
+    api.routes[`GET ${B}/zones`] = () => listing({ git: { ...pendingGit.git, job: connJob({ status: 'failed', stages: [{ id: 'connect', status: 'failed' }], error: { cause: 'connection_still_pending', vars: { zone: 'git', reason: 'cert_untrusted' } } }) } })
+    api.routes[`POST ${B}/zones/git/reconnect`] = () => connJob({ id: 'conn2' })
+    api.routes[`GET ${B}/jobs/conn2`] = () => connJob({ id: 'conn2' })
+    renderPage()
+    await waitFor(() => expect(zoneRow('git').dataset.state).toBe('failed'))
+    expect(screen.getByTestId('zone-git-status').textContent).toBe('연결 실패')
+    expect(zoneRow('git').textContent).toContain('코드 저장소의 로그인 연동을 아직 연결하지 못했습니다.')
+    expect(zoneRow('git').textContent).toContain('이 구역은 켜진 채로 있습니다.')
+    expect(screen.queryByTestId('zone-git-pending')).toBeNull()                 // 실패 줄이 대신 말한다
+    expect(screen.queryByRole('button', { name: '꺼진 채로 두기' })).toBeNull()
+    fireEvent.click(within(zoneRow('git')).getByRole('button', { name: '다시 시도' }))
+    await waitFor(() => expect(called('POST', `${B}/zones/git/reconnect`)).toHaveLength(1))
+    await waitFor(() => expect(zoneRow('git').dataset.state).toBe('busy'))
+    expect(called('POST', `${B}/zones/git/enable`)).toHaveLength(0)
+  })
+
+  it('그사이 연결됐으면(not_pending) 목록만 새로 받고, 다른 작업 중이면 알린다', async () => {
+    let state: 'pending' | 'ok' = 'pending'
+    api.routes[`GET ${B}/zones`] = () => listing(state === 'pending' ? pendingGit : { git: { enabled: true } })
+    api.routes[`POST ${B}/zones/git/reconnect`] = () => { throw fail(409, 'busy') }
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: '코드 저장소 다시 연결' }))
+    await waitFor(() => expect(toasts()).toEqual(['error:다른 작업이 진행 중입니다. 끝난 뒤 다시 시도하세요.']))
+
+    state = 'ok'
+    api.routes[`POST ${B}/zones/git/reconnect`] = () => { throw fail(409, 'not_pending') }
+    fireEvent.click(screen.getByRole('button', { name: '코드 저장소 다시 연결' }))
+    await waitFor(() => expect(zoneRow('git').dataset.state).toBe('on'))
+    expect(toasts()).toHaveLength(1)
+  })
+
+  it('설치 관리자가 없는 설치에서는 [다시 연결]이 없다', async () => {
+    api.routes[`GET ${B}/zones`] = () => listing(pendingGit, { installer: { available: false, reason: 'not_configured' } })
+    renderPage()
+    await screen.findByTestId('zone-git-pending')
+    expect(screen.queryByRole('button', { name: '코드 저장소 다시 연결' })).toBeNull()
+  })
+})
+
 describe('구역 계산', () => {
   it('포트·메모리 표기', () => {
     expect(sys.formatPorts(['7881/tcp', '7882-7892/udp'])).toBe('TCP 7881 · UDP 7882-7892')

@@ -7,6 +7,7 @@
  *  · 진행은 작업을 1.5초마다 다시 읽는다. 화면을 떠나면 멈추고, 돌아오면 목록이 알려 준 진행 중 작업을 이어 받는다.
  *  · 구역이 바뀌면 서버가 다시 뜬다 — 그동안 읽기가 실패하면 "다시 연결 중"으로 두고, 돌아오면 모듈 목록과
  *    설치된 구역을 새로 받아 메뉴에 반영한다.
+ *  · 켜져 있지만 로그인 연동이 보류된 구역은 "연결 보류"로 보이고, [다시 연결]로 그 연결만 다시 건다.
  *  · 설치 관리자 없이 구성한 설치는 지금 켜진 구역만 읽기 전용으로 보여 준다.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -123,8 +124,19 @@ export default function AdminZonesPage() {
     } finally { setOffBusy(false) }
   }
 
+  async function reconnect(zone: ZoneRow) {
+    try {
+      setJob(zone.id, await zonesApi.reconnect(zone.id))
+    } catch (e: any) {
+      const code = errorCode(e)
+      if (code === 'not_pending') { await load(); return }      // 그사이 연결됐다 — 목록만 새로
+      addToast('error', code === 'busy' ? t('admin.zones.dialog.busy') : e?.data?.detail || t('admin.zones.dialog.failed'))
+    }
+  }
+
   async function retry(zone: ZoneRow) {
     const kind = zone.job?.kind
+    if (kind === 'reconnect') { await reconnect(zone); return }
     if (kind === 'disable') { setOffAsk(zone); return }
     if (kind === 'update') { setDialog({ zone, mode: 'settings' }); return }
     // 방금 넣은 설정이 남아 있으면 그대로 다시, 없으면(화면을 다시 연 뒤) 창부터
@@ -170,6 +182,7 @@ export default function AdminZonesPage() {
       onSettings={() => setDialog({ zone: z, mode: 'settings' })}
       onRetry={() => { void retry(z) }}
       onDismiss={() => { void dismiss(z) }}
+      onReconnect={() => { void reconnect(z) }}
     />
   ))
 
@@ -221,6 +234,7 @@ export default function AdminZonesPage() {
           zone={dialog.zone}
           mode={dialog.mode}
           memory={data.memory}
+          verifiedVersion={dialog.zone.id === 'git' ? data.git_verified_version : null}
           onClose={() => setDialog(null)}
           onStarted={(job, settings) => {
             lastSettings.current[dialog.zone.id] = settings

@@ -1464,6 +1464,9 @@
         "enableFailed": "Failed to turn on",
         "disableFailed": "Failed to turn off",
         "updateFailed": "Settings failed",
+        "pending": "Link pending",
+        "reconnectJob": "Reconnecting",
+        "reconnectFailed": "Link failed",
         "reconnecting": "Reconnecting"
       },
       "toggleAria": "Turn on {name}",
@@ -1472,6 +1475,28 @@
       "verify": "Test connection",
       "verifying": "Checking",
       "footnote": "Data of zones and add-ons you turn off is not deleted. Turn them back on and it is all still there. Third-party components are downloaded from their original publisher when you turn a zone on.",
+      "pending": {
+        "badge": "Link pending",
+        "desc": "Sign-in integration is on hold. It can be reconnected once the address uses a trusted certificate.",
+        "reconnect": "Reconnect",
+        "reconnectAria": "Reconnect {name}"
+      },
+      "caution": {
+        "cert_temporary": "A temporary certificate is in use, so browsers show a warning. You can issue one under Admin › Security.",
+        "git_sso_needs_trusted_cert": "Sign-in integration for code hosting does not work with a temporary certificate. The zone turns on with the link on hold; reconnect it after a certificate is issued.",
+        "router_port_forward": "Forward these ports on your router to this server so it can be reached from outside: {ports}",
+        "proxy_side_certs_self_signed": "Names that do not go through the proxy ({names}) use a self-signed certificate. Mail apps may show a certificate warning.",
+        "hairpin_not_configured": "The proxy address is not a single address, so there is no path back to the address from inside the server. Document editing and code hosting integration may not work.",
+        "turn_tls_alternate_port": "The encrypted meeting relay uses port {port}.",
+        "mail_needs_dns_and_port25": "The built-in mail server needs the mail records of {mail_domain} and inbound port 25 to receive mail.",
+        "account_domain_is_mail_domain": "Account mail addresses will look like name{'@'}{mail_domain}.",
+        "no_system_mail": "The mail zone is off, so invitations and password reset mail cannot be sent.",
+        "meetings_public_ip_unknown": "The public address for meetings is unknown. People outside may not be able to join meetings.",
+        "lossless_needs_udp_4433": "Lossless audio needs UDP port 4433 reachable from outside. Otherwise calls fall back to standard quality.",
+        "rbi_needs_dns": "The isolated browser also needs {name} to point to this server.",
+        "dns_mismatch_cert_will_fail": "The address does not point to this server, so automatic certificate issuance will fail.",
+        "other": "Something needs your attention. ({key})"
+      },
       "noInstaller": {
         "title": "This installation was set up without the installer, so zones cannot be changed here.",
         "body": "Only the zones that are currently on are shown."
@@ -1499,6 +1524,7 @@
         "menu": "It was added to the left menu.",
         "ports": " — make sure these ports are open on your router or firewall.",
         "off": "Turned off. Data is kept and will be there when you turn it back on.",
+        "reconnected": "Reconnected.",
         "updated": "Settings updated."
       },
       "fail": {
@@ -1508,6 +1534,8 @@
         "generic": "Could not turn on {name}.",
         "disable": "Could not turn off {name}.",
         "update": "Could not change the {name} settings; the previous values were restored.",
+        "reconnect": "Sign-in integration for {name} is still not connected.",
+        "reconnectHelp": "Check that the address uses a trusted certificate, then try again. This zone stays on.",
         "stayOff": "This zone stays off and the other zones keep working.",
         "stayOn": "This zone stays on.",
         "checkInternet": "Check that the server can reach the internet, then try again.",
@@ -1536,6 +1564,7 @@
         "portsNone": "None",
         "portsNote": "Open these yourself on your router or firewall. They are not checked from here",
         "portsNoneNote": "No new ports to open",
+        "cautions": "Check before turning on",
         "steps": "Downloads the required images, configures them, and connects them to the workspace",
         "invalid": "Check the settings.",
         "busy": "Another task is in progress. Try again when it finishes.",
@@ -1662,6 +1691,138 @@
         "untested": {
           "badge": "Version not verified with this workspace",
           "body": "Sign-in integration or the repository list may not work correctly. If something breaks, you can switch back to the tested version here."
+        }
+      }
+    },
+    "certCard": {
+      "title": "Certificate",
+      "desc": "The certificate used for the address. You can issue it again or replace it with one you have.",
+      "loadError": "Could not load the certificate status",
+      "noInstaller": {
+        "title": "This install was set up without the installer, so the certificate cannot be issued again here.",
+        "body": "Replace the certificate on the web server or proxy you set up yourself."
+      },
+      "unsupported": {
+        "title": "This installer does not support issuing the certificate again.",
+        "body": "Update the installer to issue again or upload a certificate here."
+      },
+      "proxy": {
+        "title": "A front proxy handles the certificate for this install.",
+        "body": "The certificate for the address is issued and renewed on the proxy. Nothing is changed here."
+      },
+      "row": {
+        "kind": "Type",
+        "domain": "Address",
+        "expiry": "Expires",
+        "issuer": "Issuer",
+        "names": "Names in the certificate"
+      },
+      "mode": {
+        "auto": "Automatic (Let's Encrypt)",
+        "upload": "Uploaded certificate",
+        "temporary": "Temporary certificate (self-signed)",
+        "proxy": "Handled by the proxy",
+        "unknown": "Unknown"
+      },
+      "expiry": {
+        "left": "{date} · {n} days left",
+        "expired": "{date} · expired",
+        "unknown": "Unknown"
+      },
+      "badge": {
+        "temporary": "Temporary",
+        "expired": "Expired",
+        "renew": "Renewal needed",
+        "selfSigned": "self-signed"
+      },
+      "temporary": {
+        "title": "A temporary certificate is in use, so browsers show a warning.",
+        "body": "If the address points to this server and port 80 is reachable from outside, use Issue again to get a certificate. You can also upload one you already have.",
+        "pending": "Once the certificate is trusted, {n} zone links on hold are tried again."
+      },
+      "reissue": "Issue again",
+      "upload": "Upload certificate",
+      "job": {
+        "running": "Replacing the certificate.",
+        "reconnecting": "The server is reloading the certificate. Reconnecting…",
+        "done": "The certificate was replaced.",
+        "doneBody": "You may need to refresh the page for the browser to show the new certificate.",
+        "failed": "The certificate could not be replaced.",
+        "kept": "The previous certificate is still in use."
+      },
+      "stage": {
+        "issue": "Issue",
+        "reload": "Reload",
+        "reconnect": "Reconnect zones"
+      },
+      "warn": {
+        "git_sso_pending": "Sign-in integration for code hosting is still not connected. You can reconnect it under Admin › Zones.",
+        "other": "Something needs your attention. ({key})"
+      },
+      "fail": {
+        "cert_issue_failed": "The certificate authority could not reach port 80 of {domain}. Check that port 80 is open on the firewall or router, then try again.",
+        "cert_dir_managed": "The place where the certificate is kept is managed by another tool, so it could not be replaced.",
+        "cert_invalid": "The uploaded certificate cannot be used. Check the certificate and private key and upload again.",
+        "other": "Check the log and try again. ({cause})"
+      },
+      "error": {
+        "busy": "Another task is in progress. Try again when it finishes.",
+        "cert_managed_by_proxy": "A front proxy handles the certificate for this install, so it cannot be changed here.",
+        "not_installed": "The install is not finished, so the certificate cannot be changed.",
+        "cert_auto_needs_domain": "Automatic certificate issuance needs a domain name.",
+        "file_too_large": "The file is too large. The certificate and the private key must each be 1 MB or less.",
+        "cert_invalid": "The uploaded certificate cannot be used.",
+        "generic": "The request could not be processed. Try again."
+      },
+      "modal": {
+        "title": "Upload certificate",
+        "lead": "You need two files: the certificate and its private key. They are checked against the address before the certificate is replaced.",
+        "certSlot": "Certificate",
+        "certHint": "One file including the intermediate certificates",
+        "keySlot": "Private key",
+        "keyHint": "A key file without a passphrase",
+        "choose": "Choose file",
+        "replace": "Replace",
+        "none": "No file chosen",
+        "needBoth": "Choose both files to upload.",
+        "submit": "Upload and replace",
+        "submitting": "Checking",
+        "readError": "The file could not be read.",
+        "checksTitle": "These files cannot be used. The previous certificate is still in use.",
+        "footnote": "The private key is stored only on this server."
+      },
+      "msg": {
+        "cert_domain_missing": {
+          "title": "This certificate does not include the address.",
+          "body": "Upload a certificate that includes {domain}."
+        },
+        "key_mismatch": {
+          "title": "The private key does not match this certificate.",
+          "body": "Upload the key file that was created together with the certificate."
+        },
+        "cert_expired": {
+          "title": "This certificate has expired.",
+          "body": "Upload a newly issued certificate. If the address points to this server you can also use Issue again."
+        },
+        "cert_not_pem": {
+          "title": "The certificate file cannot be read.",
+          "body": "Check that it is a PEM certificate file and upload it again."
+        },
+        "key_not_pem": {
+          "title": "The private key file cannot be read.",
+          "body": "Check that it is a PEM key file and upload it again."
+        },
+        "key_encrypted": {
+          "title": "The private key is protected by a passphrase.",
+          "body": "Upload a key file with the passphrase removed."
+        },
+        "cert_not_yet_valid": {
+          "title": "This certificate is not valid yet.",
+          "body": "Check that the server clock is right, or upload a certificate that is valid now."
+        },
+        "other": {
+          "title": "These files cannot be used.",
+          "body": "Check that the certificate and private key are the right files and upload again. ({code})"
         }
       }
     },

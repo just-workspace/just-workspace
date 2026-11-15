@@ -40,7 +40,7 @@ Just Workspace 의 환경별 값은 스택의 `.env` 파일에 있다. 소스에
 | `BACKEND_WORKERS` | (비움) | backend 워커 수. 비우면 `min(8, max(2, 코어 수))` | 파생(메모리 6 GB 미만이면 2) |
 | `BACKEND_CPUS` | (비움) | backend 컨테이너의 CPU 상한(예 `4.0`). 비우면 제한 없음 | 수동 |
 | `BACKUP_VOLUME` | `backups-vol` | 백업이 쌓이는 볼륨(실제 이름 `ws-backups`). 호스트 경로를 적어 다른 디스크로 돌릴 수 있다 | 수동 |
-| `DEPLOY_MODE` | — | 설치 관리자가 적어 두는 표시값(`standalone`/`external_proxy`). compose 와 backend 는 읽지 않는다 | 파생 |
+| `DEPLOY_MODE` | — | 설치 관리자가 `.env` 에 적어 두는 표시값(`standalone`/`external_proxy`). compose 와 backend 는 읽지 않는다 — 직접 띄울 때는 적지 않는다(`.env.example` 에 없다) | 파생 |
 | `COMPOSE_PROJECT_NAME` | — | compose 프로젝트 이름 | 고정(`just-workspace`) |
 
 ### 접속과 보안
@@ -139,7 +139,7 @@ Just Workspace 의 환경별 값은 스택의 `.env` 파일에 있다. 소스에
 | `BRAND_LOGO` / `BRAND_COLOR` | (비움) / `#3B82F6` | 로고 주소 · 테마 색(관리 › 브랜딩의 값이 우선한다) | 수동 |
 | `UPLOAD_MAX_SIZE_MB` | `5120` | 파일 하나의 올리기 상한(MB) | 수동 |
 | `JW_HOST_REPO` | (비움) | 관리 › 앱 빌드가 쓸 호스트의 리포 경로. 비우면 앱 빌드가 꺼진다 | 수동 |
-| `ANDROID_APP_ID` | (비움) | 관리 › 앱 빌드의 안드로이드 앱 ID — [apps/README.md](../apps/README.md) | 수동 |
+| `ANDROID_APP_ID` | (비움 = 접속 주소에서 만든다) | 관리 › 앱 빌드의 안드로이드 앱 ID — [apps/README.md](../apps/README.md) | 수동 |
 | `GPU_HOST_IP` | (비움) | backend 컨테이너의 `host.docker.internal` 이 가리킬 주소(다른 머신의 서비스를 플러그인이 부를 때) | 수동 |
 | `NETLAB_URL` | (비움) | 별도 출처의 실습 환경(NetLab) 주소(https). 있으면 대시보드와 앱 내려받기 화면에 연결 항목이 보인다 | 수동 |
 

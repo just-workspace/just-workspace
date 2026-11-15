@@ -48,7 +48,6 @@ docker compose config --quiet && docker compose up -d
 - 빈 값·예시 값·짧은 값의 비밀값으로는 backend 가 뜨지 않는다 — 로그에 변수 이름과 사유가 나온다([CONFIG.md](CONFIG.md)의 "비밀값").
 - 관리자를 `.env` 에 적지 않고 만들려면 띄운 뒤 `docker compose exec backend python -m app.cli seed-admin --username <아이디>`.
 - `.env` 의 `ADMIN_PASSWORD` 는 관리자가 만들어진 뒤 지운다.
-- `.env.example` 의 `DEPLOY_MODE` 는 설치 관리자가 적어 두는 표시값이다. compose 와 backend 는 읽지 않는다 — 여기서는 바꿀 필요가 없다.
 
 ## 앞단 프록시
 
@@ -107,11 +106,11 @@ FEATURE_BUILTIN_MAILSERVER=true
 
 ```bash
 sudo bash scripts/backup.sh --kind pre-update     # 먼저 DB 와 설정을 백업한다
-bash scripts/update.sh                            # git pull → 순차 재빌드 → 상태 확인
-bash scripts/update.sh --rollback                 # 직전 이미지로 되돌린다
+bash scripts/update.sh                            # git pull → 켜진 우리 이미지 빌드 → 다시 띄우기 → 상태 확인
+bash scripts/update.sh --rollback                 # 직전 업데이트 때 적어 둔 이미지로 되돌린다
 ```
 
-`update.sh` 는 실패해도 **스스로 되돌리지 않는다**(`--rollback` 을 안내한다). 스키마 버전이 올라간 뒤에는 이미지만 되돌리면 backend 가 뜨지 않으므로 DB 도 직전 백업으로 복원해야 한다 — [update-system.md](update-system.md)의 "수동 설치", [data-safety.md](data-safety.md) 5절.
+`update.sh` 는 직접 띄운 서버 전용이다(설치 관리자로 설치한 서버는 관리 › 업데이트). DB 를 백업하지 않고, 실패해도 **스스로 되돌리지 않는다**(`--rollback` 을 안내한다). 다시 뜨는 동안 접속이 잠깐 끊긴다. 스키마 버전이 올라간 뒤에는 이미지만 되돌리면 backend 가 뜨지 않으므로 DB 도 직전 백업으로 복원해야 한다 — [update-system.md](update-system.md)의 "수동 설치", [data-safety.md](data-safety.md) 5절.
 
 ### 백업과 복원
 

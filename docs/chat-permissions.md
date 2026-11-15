@@ -1,8 +1,8 @@
-# 채팅 역할·권한 엔진 (P1-1)
+# 채팅 역할·권한 엔진
 
-디스코드식 역할·권한 비트·채널/카테고리 덮어쓰기. 설계 출처: `CHAT-DISCORD-PARITY.md` §2.4 · §4.2 · §5.
+디스코드식 역할·권한 비트·채널/카테고리 덮어쓰기.
 코드: `backend/app/chat/permissions.py`(비트표·계산·검사 하나) · `backend/app/chat/roles.py`(API).
-관리 화면은 아직 없다(handover-22).
+관리 화면은 채팅 안 설정 화면(역할·권한)이다.
 
 ## 1. 데이터
 
@@ -131,11 +131,11 @@ channel.permission(_delete) · category.permission(_delete) · category.create/u
 
 - **WS 팬아웃·검색·타 모듈은 멤버십 기준 그대로**: `realtime` 채널 구독, `search_messages`, 대시보드, 파일 채널 공유, 회의·작업 탭,
   MCP 도구가 `is_channel_member` 를 쓴다. 덮어쓰기로 멤버의 VIEW 를 빼도 이벤트·검색 결과는 계속 간다(누수),
-  비멤버에게 VIEW 를 줘도 실시간 이벤트를 못 받는다. → enforce 전 또는 직후에 "볼 수 있는 사람" 기준으로 옮겨야 한다(P1-2/P1-3과 함께).
+  비멤버에게 VIEW 를 줘도 실시간 이벤트를 못 받는다. → enforce 전 또는 직후에 "볼 수 있는 사람" 기준으로 옮겨야 한다(카테고리 화면 작업과 함께).
 - **비용**: 검사마다 쿼리 3~4개(역할·그룹·덮어쓰기)가 더 돈다(shadow 도). 캐시는 아직 없음 — 문서 계획대로 Redis 짧은 캐시 + 무효화 이벤트를
   붙일 자리(`load_context`). 워커 8개라 프로세스 메모리 캐시는 쓰지 않는다.
-- **의도된 비호환 후보**(enforce 뒤 결정): 문서 §4.2 의 "owner 가 MANAGE_MESSAGES 암묵 보유"는 지금 동작이 아니라 넣지 않았다
+- **의도된 비호환 후보**(enforce 뒤 결정): 원래 설계의 "owner 가 MANAGE_MESSAGES 암묵 보유"는 지금 동작이 아니라 넣지 않았다
   (`CHANNEL_ROLE_IMPLICIT` 한 줄). 나간 채널의 본인 글 수정·삭제도 지금처럼 된다.
 - 전역 관리자는 채널 안에서 특권이 없다(지금과 같음). 바꾸려면 개인정보(DM) 정책 결정이 먼저.
 - 그룹이 지워지면 연동 역할은 멤버 0 인 역할로 남는다(FK 없음).
-- 역할 변경 WS 이벤트(`roles_update`·`layout_update`)는 아직 없다 — 관리 화면(handover-22) 때 붙인다.
+- 역할 변경 WS 이벤트(`roles_update`·`layout_update`)는 아직 없다.

@@ -99,7 +99,7 @@ FLAC 코덱(헤더에 자리만 있음)을 넣을 때 후보는 libflac.js(MIT, 
 | ws | 8.22.0 | MIT | WebSocket 폴백(이미 의존) |
 
 Windows SDK(WASAPI·MMDevice·AudioPolicy 헤더)와 MSVC 런타임은 Microsoft 소프트웨어 라이선스 조건의 재배포 허용 범위(정적 CRT 미사용, 시스템 DLL 의존)에서 쓴다.
-ASIO 는 넣지 않았다 — Steinberg ASIO SDK 가 2025-10 GPLv3/독점 이중 라이선스로 바뀌어 비공개 배포 앱은 독점 계약이 필요하다(VOICE-RESEARCH §Tier 4).
+ASIO 는 넣지 않았다 — Steinberg ASIO SDK 가 2025-10 GPLv3/독점 이중 라이선스로 바뀌어 비공개 배포 앱은 독점 계약이 필요하다.
 
 ## 코어 — frontend-react (`frontend-react/package.json`)
 

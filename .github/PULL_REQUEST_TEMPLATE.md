@@ -20,7 +20,7 @@
 - [ ] 동작이 바뀌면 문서(`docs/`)와 화면 문구(한국어·영어)
 - [ ] 환경변수를 더하거나 뺐다면 `.env.example` 과 `docs/CONFIG.md`
 - [ ] DB 구조를 바꿨다면 번호 붙은 변경 단계(`docs/data-safety.md`)
-- [ ] 의존성을 더했다면 `THIRD_PARTY_LICENSES.md` (GPL·AGPL 계열, 오픈소스가 아닌 것은 아래에 따로 적기)
+- [ ] 의존성을 더했다면 `THIRD_PARTY_LICENSES.md` (GPL·LGPL·MPL 계열은 아래에 따로 적기 — 오픈소스가 아닌 것은 받지 않습니다)
 - [ ] 비밀값, 실제 주소·도메인·이름이 들어가지 않았다
 
 ## 더 알려 줄 것

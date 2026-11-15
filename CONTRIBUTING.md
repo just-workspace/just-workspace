@@ -107,8 +107,8 @@ docker·네트워크 없이 돕니다. **compose 의 이미지 구성을 바꾸�
 - 줄바꿈은 LF 입니다.
 - PR 에는 무엇을 왜 바꿨는지, 어떻게 확인했는지를 적습니다. **돌려 본 것과 돌려 보지 못한 것을 구분해 적어 주세요.**
 - 비밀값, 실제 운영 주소·도메인·이름을 코드와 문서에 넣지 않습니다. 예시는 `workspace.example.com`, `192.168.10.x`, `203.0.113.x` 를 씁니다.
-- 새 의존성을 넣을 때는 라이선스를 확인하고 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) 를 함께 고칩니다. GPL·AGPL 계열과 오픈소스가 아닌 것은 PR 에 따로 적어 주세요([docs/licensing.md](docs/licensing.md)).
+- 새 의존성을 넣을 때는 라이선스를 확인하고 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) 를 함께 고칩니다. AGPL-3.0 과 함께 배포할 수 없는 라이선스(오픈소스가 아닌 것, GPL-2.0 "만"인 라이브러리를 같은 프로세스에서 불러 쓰는 경우 등)의 의존성은 받지 않습니다. GPL·LGPL·MPL 계열은 PR 에 따로 적어 주세요([docs/licensing.md](docs/licensing.md)).
 
 ## 라이선스
 
-기여한 내용은 이 리포의 [MIT 라이선스](LICENSE)로 배포됩니다.
+이 리포는 [GNU Affero General Public License 버전 3 또는 그 이후 버전](LICENSE)(`AGPL-3.0-or-later`)으로 배포합니다. 기여한 내용도 같은 라이선스로 제공됩니다.

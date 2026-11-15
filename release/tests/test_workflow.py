@@ -108,9 +108,9 @@ def test_no_untrusted_input_interpolated_into_scripts(workflow):
 
 
 def test_every_image_carries_the_license_notices(workflow, matrix, compose_text):
-    """우리가 빌드하는 이미지는 모두 LICENSE · THIRD_PARTY_LICENSES.md 를 /licenses/ 에 담는다.
+    """우리가 빌드하는 이미지는 모두 LICENSE · NOTICE · THIRD_PARTY_LICENSES.md 를 /licenses/ 에 담는다.
 
-    두 파일은 리포 루트에 있다 — compose·워크플로·Dockerfile 이 같은 이름의 문맥(licenses)을 쓰는지 본다.
+    세 파일은 리포 루트에 있다 — compose·워크플로·Dockerfile 이 같은 이름의 문맥(licenses)을 쓰는지 본다.
     """
     services = yaml.safe_load(compose_text)["services"]
     own = {name: svc["build"] for name, svc in services.items() if "build" in svc}
@@ -119,11 +119,27 @@ def test_every_image_carries_the_license_notices(workflow, matrix, compose_text)
         assert build.get("additional_contexts") == {"licenses": "."}, name
     step = next(s for s in workflow["jobs"]["build"]["steps"] if s.get("id") == "build")
     assert step["with"]["build-contexts"] == "licenses=."
-    copy = re.compile(r"^COPY (--from=licenses )?(--chmod=\d+ )?LICENSE THIRD_PARTY_LICENSES\.md /licenses/$", re.MULTILINE)
+    copy = re.compile(r"^COPY (--from=licenses )?(--chmod=\d+ )?LICENSE NOTICE THIRD_PARTY_LICENSES\.md /licenses/$", re.MULTILINE)
     for name, item in matrix.items():
         found = copy.search((REPO_ROOT / item["dockerfile"]).read_text(encoding="utf-8"))
         assert found, name
         assert bool(found.group(1)) == (item["context"] != "."), name        # 문맥이 리포 루트면 바로 복사한다
-    # 이름 붙인 문맥으로는 두 파일만 간다
+    # 이름 붙인 문맥으로는 고지 파일만 간다
     ignore = (REPO_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
-    assert [line for line in ignore if line and not line.startswith("#")] == ["*", "!LICENSE", "!THIRD_PARTY_LICENSES.md"]
+    assert [line for line in ignore if line and not line.startswith("#")] == ["*", "!LICENSE", "!NOTICE", "!THIRD_PARTY_LICENSES.md"]
+
+
+def test_repo_license_is_agpl_and_package_metadata_agrees():
+    """리포의 라이선스는 AGPL-3.0-or-later 다 — LICENSE 는 FSF 의 문안 그대로, 패키지 메타데이터도 같은 표기."""
+    import hashlib
+    import json
+
+    text = (REPO_ROOT / "LICENSE").read_bytes()
+    assert hashlib.sha256(text).hexdigest() == "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0"
+    notice = (REPO_ROOT / "NOTICE").read_text(encoding="utf-8")
+    assert "GNU Affero General Public License" in notice and "SPDX-License-Identifier: AGPL-3.0-or-later" in notice
+    for folder in ("apps/desktop", "apps/mobile", "frontend-react", "plugins", "rbi/mirror"):
+        package = json.loads((REPO_ROOT / folder / "package.json").read_text(encoding="utf-8"))
+        assert package["license"] == "AGPL-3.0-or-later", folder
+        lock = json.loads((REPO_ROOT / folder / "package-lock.json").read_text(encoding="utf-8"))
+        assert lock["packages"][""].get("license") == "AGPL-3.0-or-later", folder

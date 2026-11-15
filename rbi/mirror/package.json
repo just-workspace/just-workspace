@@ -3,7 +3,7 @@
   "version": "1.0.0-p1",
   "private": true,
   "description": "격리 브라우저 미러 모드 — 세션 컨테이너용 mirror-agent(Chromium+CDP+격리 world 수집기→닫힌 어휘) + 스크립트 없는 iframe 클라이언트",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "build": "tsc -p agent/tsconfig.json && node client/build.mjs",

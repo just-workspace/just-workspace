@@ -59,10 +59,10 @@ COPY --from=build /src/package.json ./
 COPY --from=build /src/node_modules ./node_modules
 COPY --from=build /src/agent/dist ./agent/dist
 COPY --from=fonts /out ./fonts/dist
-# 라이선스 고지 — 이미지를 배포하면 고지도 함께 가야 한다. 두 파일은 빌드 문맥 밖(리포 루트)에 있어
+# 라이선스 고지 — 이미지를 배포하면 고지도 함께 가야 한다. 세 파일은 빌드 문맥 밖(리포 루트)에 있어
 # 이름 붙인 문맥 `licenses` 로 받는다: compose 의 build.additional_contexts, 직접 빌드할 때는
 # `docker build --build-context licenses=<리포 루트> …`.
-COPY --from=licenses --chmod=0644 LICENSE THIRD_PARTY_LICENSES.md /licenses/
+COPY --from=licenses --chmod=0644 LICENSE NOTICE THIRD_PARTY_LICENSES.md /licenses/
 # 이 이미지의 npm·데비안 구성요소 고지
 COPY --chmod=0644 THIRD_PARTY.md /licenses/THIRD_PARTY-rbi-mirror.md
 

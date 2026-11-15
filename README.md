@@ -125,9 +125,23 @@ docker logs jw-installer
 
 ## 라이선스
 
-이 리포의 소스는 [MIT](LICENSE) 입니다. 다만 함께 쓰이는 것들 가운데 MIT 가 아닌 것이 있습니다.
+Just Workspace 는 **GNU Affero General Public License 버전 3 또는 그 이후 버전**(`AGPL-3.0-or-later`)으로 배포합니다. 전문은 [LICENSE](LICENSE), 저작권 고지는 [NOTICE](NOTICE) 에 있습니다.
 
-- **우리 이미지에 들어가는 카피레프트 구성 요소** — backend 이미지의 IMAP 클라이언트 `aioimaplib`(GPL-3.0)과 pandoc(GPL), 문서 변환 이미지의 LibreOffice 와 HWP 확장 H2Orestart(GPL-3.0), 메일 서버 이미지(docker-mailserver 에서 파생 — 안에 GPL 프로그램이 있습니다) 등. 이미지를 배포하는 것 자체가 배포이므로 그 라이선스의 의무가 따릅니다.
+```
+Copyright (C) 2026 Just-Workspace
+
+This program is free software: you can redistribute it and/or modify it under the terms of the
+GNU Affero General Public License as published by the Free Software Foundation, version 3 of the
+License, or (at your option) any later version. This program is distributed WITHOUT ANY WARRANTY.
+```
+
+- **받아서 그대로 운영**하는 데에는 추가로 할 일이 없습니다.
+- **고쳐서 다른 사람이 쓰게 서비스**하면, 그 이용자가 고친 판의 소스를 받을 수 있게 해야 합니다. 제품의 "소스 코드" 링크가 그 자리이고, 주소는 `JW_SOURCE_URL` 로 바꿉니다.
+- **플러그인 예외는 없습니다.** 이 프로그램의 코드를 불러 쓰는 플러그인을 배포한다면 AGPL 과 양립하는 조건이어야 한다는 것이 일반적인 해석입니다.
+
+함께 쓰이는 남의 소프트웨어는 각자의 라이선스를 따릅니다.
+
+- **우리 이미지에 들어가는 구성 요소** — backend 이미지의 IMAP 클라이언트 `aioimaplib`(GPL-3.0)과 pandoc(GPL), 문서 변환 이미지의 LibreOffice 와 HWP 확장 H2Orestart(GPL-3.0), 메일 서버 이미지(docker-mailserver 에서 파생 — 안에 GPL 프로그램이 있습니다) 등. 이미지를 배포하는 것 자체가 배포이므로 그 라이선스의 의무가 따릅니다.
 - **원 배포처에서 받아 쓰는 구성 요소** — OnlyOffice Document Server·SearXNG(AGPL-3.0), Redis 8(RSALv2 / SSPLv1 / AGPL-3.0 가운데 선택) 등. 이들은 우리 이미지에 담지 않습니다.
 
 무엇이 어느 이미지에 들어가고 어떤 의무가 따르는지는 [docs/licensing.md](docs/licensing.md), 전체 목록은 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) 에 있습니다.

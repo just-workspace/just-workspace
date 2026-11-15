@@ -1,0 +1,24 @@
+Just Workspace
+Copyright (C) 2026 Just-Workspace
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program (the file LICENSE).  If not, see
+<https://www.gnu.org/licenses/>.
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+This applies to the source in this repository. Third-party software that
+is used with it, or that is included in the container images built from it,
+remains under its own license: see THIRD_PARTY_LICENSES.md and
+docs/licensing.md. Vendored third-party code keeps the license file that
+accompanies it.

@@ -3,6 +3,7 @@
 *
 !VERSION
 !LICENSE
+!NOTICE
 !THIRD_PARTY_LICENSES.md
 !docker-compose.yml
 !backend/app/zones.json

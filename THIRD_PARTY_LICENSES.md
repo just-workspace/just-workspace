@@ -1,6 +1,6 @@
 # 제3자 라이선스 고지
 
-Just Workspace 의 소스는 [MIT](LICENSE) 다. 이 문서는 함께 쓰이는 남의 소프트웨어를 **무엇이 어디에 들어가는지** 기준으로 적는다.
+Just Workspace 의 소스는 [AGPL-3.0-or-later](LICENSE) 다(저작권 고지는 [NOTICE](NOTICE)). 이 문서는 함께 쓰이는 남의 소프트웨어를 **무엇이 어디에 들어가는지** 기준으로 적는다.
 의무와 해석은 [docs/licensing.md](docs/licensing.md) 에 있다.
 
 - 버전은 리포의 고정값이다 — `*/requirements.txt`, `*/package.json`·`package-lock.json`, `audiorelay/go.mod`, `docker-compose.yml`, 각 `Dockerfile`.

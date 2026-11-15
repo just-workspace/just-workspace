@@ -2,6 +2,7 @@
   "name": "just-workspace-mobile",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "description": "Just Workspace 모바일 앱 (Capacitor — Nuxt 웹 재사용, URL 연결/브랜드 빌드)",
   "scripts": {
     "sync": "cap sync",

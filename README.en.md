@@ -127,9 +127,23 @@ The version is 1.0.0 and the first public release is being prepared.
 
 ## License
 
-The source in this repository is [MIT](LICENSE). Some of what it is used with is not.
+Just Workspace is distributed under the **GNU Affero General Public License, version 3 or (at your option) any later version** (`AGPL-3.0-or-later`). The full text is in [LICENSE](LICENSE) and the copyright notice in [NOTICE](NOTICE).
 
-- **Copyleft components inside our images** — the IMAP client `aioimaplib` (GPL-3.0) plus pandoc (GPL) in the backend image, LibreOffice and the HWP extension H2Orestart (GPL-3.0) in the document conversion image, the mail server image (derived from docker-mailserver, which contains GPL programs), and others. Distributing an image is distribution, so those licenses' obligations apply.
+```
+Copyright (C) 2026 Just-Workspace
+
+This program is free software: you can redistribute it and/or modify it under the terms of the
+GNU Affero General Public License as published by the Free Software Foundation, version 3 of the
+License, or (at your option) any later version. This program is distributed WITHOUT ANY WARRANTY.
+```
+
+- **Running it unmodified** requires nothing further.
+- If you **modify it and let others use it over a network**, you must offer those users the source of your modified version. The "Source code" link in the product is the place for that; change its address with `JW_SOURCE_URL`.
+- **There is no plugin exception.** A plugin that calls into this program's code and is distributed is generally understood to need AGPL-compatible terms.
+
+Third-party software used with it stays under its own license.
+
+- **Components inside our images** — the IMAP client `aioimaplib` (GPL-3.0) plus pandoc (GPL) in the backend image, LibreOffice and the HWP extension H2Orestart (GPL-3.0) in the document conversion image, the mail server image (derived from docker-mailserver, which contains GPL programs), and others. Distributing an image is distribution, so those licenses' obligations apply.
 - **Components pulled from their original publishers** — OnlyOffice Document Server and SearXNG (AGPL-3.0), Redis 8 (your choice of RSALv2, SSPLv1 or AGPL-3.0) and others. They are not included in our images.
 
 What goes into which image and which obligations follow is described in [docs/licensing.md](docs/licensing.md) (Korean); the full list is in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).

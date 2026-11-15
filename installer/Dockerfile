@@ -49,7 +49,7 @@ COPY . /src
 RUN python -m app.bundle build /src /app/bundle && rm -rf /src
 
 # 라이선스 고지 — 이미지를 배포하면 고지도 함께 가야 한다(문맥이 리포 루트라 바로 복사한다)
-COPY --chmod=0644 LICENSE THIRD_PARTY_LICENSES.md /licenses/
+COPY --chmod=0644 LICENSE NOTICE THIRD_PARTY_LICENSES.md /licenses/
 
 # 받을 이미지의 저장소(네임스페이스 포함). 다른 곳에서 받으려면 빌드 인자나 실행할 때 -e JW_REGISTRY=… 로 바꾼다.
 # localhost 를 주면 서버에 이미 있는(소스에서 빌드한) 이미지를 쓴다.

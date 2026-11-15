@@ -98,7 +98,7 @@ services:
     build:
       context: ./backend
       additional_contexts:
-        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
+        licenses: .          # LICENSE · NOTICE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
       args:
         # 제품 버전(리포 루트 VERSION). 예: JW_APP_VERSION="$(cat VERSION)" docker compose build backend
@@ -188,7 +188,7 @@ services:
     build:
       context: ./frontend-react
       additional_contexts:
-        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
+        licenses: .          # LICENSE · NOTICE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
     container_name: ws-frontend-react
     logging: *default-logging
@@ -285,7 +285,7 @@ services:
     build:
       context: ./mailserver/image
       additional_contexts:
-        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
+        licenses: .          # LICENSE · NOTICE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
     container_name: ws-mailserver
     logging: *default-logging
     security_opt: ["no-new-privileges:true"]
@@ -398,7 +398,7 @@ services:
     build:
       context: ./sso
       additional_contexts:
-        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
+        licenses: .          # LICENSE · NOTICE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
     container_name: ws-sso
     logging: *default-logging
@@ -446,7 +446,7 @@ services:
     build:
       context: ./ldap
       additional_contexts:
-        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
+        licenses: .          # LICENSE · NOTICE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
     container_name: ws-ldap
     logging: *default-logging
@@ -544,7 +544,7 @@ services:
     build:
       context: ./audiorelay
       additional_contexts:
-        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
+        licenses: .          # LICENSE · NOTICE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
     container_name: ws-audiorelay
     logging: *default-logging
@@ -600,7 +600,7 @@ services:
     build:
       context: ./deploy/rbi-netfilter
       additional_contexts:
-        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
+        licenses: .          # LICENSE · NOTICE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
     container_name: ws-rbi-netfilter
     logging: *default-logging
     profiles: ["rbi"]
@@ -642,7 +642,7 @@ services:
     build:
       context: ./rbi/mirror
       additional_contexts:
-        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
+        licenses: .          # LICENSE · NOTICE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       target: prod
     profiles: ["rbi-build"]
     logging: *default-logging
@@ -774,7 +774,7 @@ services:
     build:
       context: ./docconv
       additional_contexts:
-        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
+        licenses: .          # LICENSE · NOTICE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
     container_name: ws-docconv
     logging: *default-logging
@@ -810,7 +810,7 @@ services:
     build:
       context: ./sandbox
       additional_contexts:
-        licenses: .          # LICENSE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
+        licenses: .          # LICENSE · NOTICE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
     container_name: ws-sandbox
     logging: *default-logging

@@ -1,6 +1,7 @@
 # 리포 루트를 빌드 문맥으로 쓰는 것은 두 가지뿐이다.
 #  - 설치 관리자 이미지: installer/Dockerfile.dockerignore 가 따로 있어 이 파일을 보지 않는다.
-#  - 각 이미지의 이름 붙인 문맥 `licenses`(라이선스 고지 두 파일만 가져간다) — 이 파일이 적용된다.
+#  - 각 이미지의 이름 붙인 문맥 `licenses`(라이선스 고지 파일만 가져간다) — 이 파일이 적용된다.
 *
 !LICENSE
+!NOTICE
 !THIRD_PARTY_LICENSES.md

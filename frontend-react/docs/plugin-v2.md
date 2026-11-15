@@ -10,6 +10,8 @@
 견본: v2 는 `plugins/remote-desktop`, v1 은 `plugins/sample-notes`. 로더는 `src/plugins/pluginHost.tsx`, 화면은 `src/pages/p/[id].tsx`(이 문서의 `src/…` 는 `frontend-react/src/…`).
 플러그인 전체 그림(manifest·백엔드·설치·보안)은 [docs/extensions.md](../../docs/extensions.md), 두 계약 공통 제약은 [docs/plugin-frontend.md](../../docs/plugin-frontend.md).
 
+> 라이선스: 호스트는 AGPL-3.0-or-later 이고 플러그인 예외는 없다 — 배포하는 플러그인의 조건은 [docs/extensions.md](../../docs/extensions.md)의 "플러그인의 라이선스".
+
 ## 1. 번들 주소·캐싱 (v1 과 같음)
 
 - 주소는 `/api/plugin-assets/<id>/bundle.mjs` (백엔드가 `plugins/<folder>/frontend/dist/plugin.mjs` 를 준다).

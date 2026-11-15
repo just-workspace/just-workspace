@@ -267,6 +267,10 @@ GET /api/plugin-assets/{plugin_id}/bundle.mjs      # 로그인 없이 받을 수
 
 ---
 
+### 플러그인의 라이선스
+
+Just Workspace 는 AGPL-3.0-or-later 이고 **플러그인에 대한 예외는 없다.** backend 플러그인은 backend 와 같은 프로세스에서 `app.*` 과 플러그인 SDK 를 불러 쓰고, 프런트 플러그인은 호스트 화면이 내주는 모듈을 쓴다. 이렇게 이 프로그램의 코드를 불러 쓰는 플러그인을 **남에게 배포한다면 AGPL-3.0 과 양립하는 조건으로 배포해야 한다는 것이 일반적인 해석**이다. 자기 서버에만 얹어 쓰는 것은 배포가 아니다. 다만 그 서버를 다른 사람이 네트워크로 쓰는 경우의 의무는 [licensing.md](licensing.md) 4절을 본다. 견본 플러그인(`plugins/sample-notes`, `plugins/remote-desktop`)은 이 리포와 같은 라이선스다.
+
 ## 플러그인 설치
 
 ### 관리 화면에서 올리기

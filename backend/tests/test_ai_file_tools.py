@@ -869,9 +869,10 @@ async def test_code_run_passes_inputs_and_saves_outputs(env, monkeypatch):
                 "files": [{"name": "chart.png", "data": png(), "size": len(png())},
                           {"name": "sub/요약.csv", "data": b"a,b\n", "size": 4}], "files_skipped": []}
     monkeypatch.setattr(containers, "sandbox_run", fake)
-    x = put(env, "docs/s.xlsx", make_xlsx())
+    sheet = make_xlsx()          # 한 번만 만든다 — 압축 파일에는 만든 시각이 들어가 두 번 만들면 초가 넘어갈 때 달라진다
+    x = put(env, "docs/s.xlsx", sheet)
     res = await run_ok(env, "code_run", {"code": "print('hi')", "input_paths": [x], "timeout_sec": 999})
-    assert seen["files"][0][0] == "s.xlsx" and seen["files"][0][1] == make_xlsx() and seen["timeout"] == 120
+    assert seen["files"][0][0] == "s.xlsx" and seen["files"][0][1] == sheet and seen["timeout"] == 120
     assert res["stdout"] == "합계 60\n" and res["exit_code"] == 0
     assert res["inputs"] == [{"path": x, "as": "input/s.xlsx"}]
     names = sorted(f["name"] for f in res["files"])

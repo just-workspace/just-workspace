@@ -337,12 +337,18 @@ def _json_tail(text: str) -> dict:
 
 
 def classify_mount_error(text: str) -> str:
-    """NFS 볼륨을 붙이다 난 오류 문구 → 원인."""
+    """NFS 볼륨을 붙이다 난 오류 문구 → 원인.
+
+    `export_not_found`: 서버에는 닿았는데 그 경로를 붙일 수 없다. NFSv4 서버는 이 클라이언트에 허용하지 않은
+    내보내기를 "없는 경로"로 답하므로, 경로가 틀린 경우와 이 서버의 주소가 허용 목록에 없는 경우가 같은 꼴로 온다.
+    """
     low = text.lower()
     if any(k in low for k in ("permission denied", "access denied", "operation not permitted", "not permitted")):
         return "permission_denied"
     if "read-only" in low:
         return "read_only"
+    if "no such file or directory" in low:
+        return "export_not_found"
     return "unreachable"
 
 
@@ -360,7 +366,11 @@ def probe_nfs(docker: Docker, server: str, export: str, *, volume_opts: Callable
 
     ① 서버에 닿는가 ② 붙일 수 있는가 ③ 쓰기·읽기·지우기(backend 가 쓰는 uid/gid 로) ④ 파일 잠금 ⑤ 여유 공간.
     임시 도커 볼륨(NFS 옵션)을 만들어 보조 컨테이너에서 검사하고 지운다.
-    돌려주는 값: {"ok", "cause": unreachable|permission_denied|read_only|no_locking|null, "steps": [...]}
+    돌려주는 값: {"ok", "cause": unreachable|export_not_found|permission_denied|read_only|no_locking|null, "steps": [...]}
+
+    볼륨은 `nocopy` 로 붙인다. 그냥 붙이면 도커가 **빈** 볼륨의 뿌리를 이미지 쪽 폴더의 소유자·권한으로 바꾸려 든다 —
+    내보내기 뿌리의 소유자가 확인만으로 바뀌거나(root 를 그대로 받는 내보내기), 그 시도가 거절돼 붙이기부터
+    실패한다(root 를 낮추는 보통의 내보내기). 저장소의 권한은 저장소 관리자가 정한 그대로 두고 본다.
     """
     server = v.hostname(server)
     export = v.nfs_export(export)
@@ -383,7 +393,7 @@ def probe_nfs(docker: Docker, server: str, export: str, *, volume_opts: Callable
         by_id["mount"]["value"] = created.text[-300:]
         return done("unreachable")
     try:
-        result = docker.helper(["nfs-test", "/mnt"], volumes=[f"{name}:/mnt"], user=BACKEND_UID_GID, timeout=90)
+        result = docker.helper(["nfs-test", "/mnt"], volumes=[f"{name}:/mnt:nocopy"], user=BACKEND_UID_GID, timeout=90)
         data = _json_tail(result.out) if result.ok else {}
         if not data:
             by_id["mount"]["status"] = "fail"

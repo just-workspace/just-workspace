@@ -333,6 +333,7 @@ def test_probe_nfs_success_and_cleanup(tmp_path):
     assert any(a.startswith("o=addr=192.168.10.9,") for a in create)
     test = runner.find("app.helper", "nfs-test")[0]
     assert test[test.index("--user") + 1] == "1000:1000"          # backend 가 쓰는 사용자로 검사한다
+    assert test[test.index("-v") + 1].endswith(":/mnt:nocopy")    # 확인이 내보내기 뿌리의 소유자를 바꾸지 않게
     name = create[-1]
     assert runner.find("volume", "rm", name), "임시 볼륨을 지워야 한다"
     assert runner.index("volume", "create") < runner.index("app.helper", "nfs-test") < runner.index("volume", "rm")
@@ -436,4 +437,10 @@ def test_classify_mount_error():
     assert probes.classify_mount_error("mount.nfs: access denied by server while mounting") == "permission_denied"
     assert probes.classify_mount_error("Connection refused") == "unreachable"
     assert probes.classify_mount_error("No route to host") == "unreachable"
+    # NFSv4 서버는 없는 경로와 이 클라이언트에 허용하지 않은 내보내기를 같은 말로 답한다
+    assert probes.classify_mount_error(
+        "failed to mount local volume: mount :/srv/x:/var/lib/docker/volumes/v/_data, flags: 0x400, "
+        "data: addr=192.168.10.9,nfsvers=4.1,hard: no such file or directory") == "export_not_found"
+    assert probes.classify_mount_error(
+        "failed to chmod on /var/lib/docker/volumes/v/_data: read-only file system") == "read_only"
     assert isinstance(Result(1, "", "x").text, str)

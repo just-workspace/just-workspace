@@ -207,8 +207,12 @@ def prepare_storage(ctx: Context) -> None:
         if have != spec["opts"]:
             raise StepError("storage_volume_mismatch", "storage_volume_remove_or_keep", volume=spec["name"])
         ctx.log("저장소 볼륨이 이미 있습니다")
+    # 도커 볼륨(새로 만든 빈 볼륨)은 이미지의 /storage 소유권(1000:1000)을 물려받게 그냥 붙인다.
+    # NFS·지정 폴더는 `nocopy` — 도커가 남의 저장소 뿌리의 소유자·권한을 바꾸려 들지 않게 한다
+    # (root 를 낮추는 NFS 내보내기에서는 그 시도가 거절돼 붙이기부터 실패한다).
+    mount = f"{spec['name']}:/storage" + ("" if spec["kind"] == "volume" else ":nocopy")
     r = ctx.docker.helper(["write-marker", "/storage", "--install-id", install_id],
-                          volumes=[f"{spec['name']}:/storage"], user=BACKEND_UID_GID, timeout=120)
+                          volumes=[mount], user=BACKEND_UID_GID, timeout=120)
     if not r.ok:
         from app.probes import classify_mount_error
 

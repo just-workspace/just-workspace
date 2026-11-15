@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 설치 관리자 실서버 검수 — 이 PC 에서 검수 서버를 부리는 러너.
 #
-#   remote.sh <ssh 대상> push                     작업 트리(git 이 추적하는 파일)를 서버의 <원격 폴더>에 올린다
+#   remote.sh <ssh 대상> push                     커밋된 상태(HEAD)를 서버의 <원격 폴더>에 올린다(커밋 안 한 변경은 가지 않는다)
 #   remote.sh <ssh 대상> build [서비스…]           서버에서 이미지를 빌드한다(인자가 없으면 우리 이미지 전부 + 설치 관리자)
 #   remote.sh <ssh 대상> run <시나리오> [인자…]    시나리오를 돌린다(scenarios/<이름>.sh)
 #   remote.sh <ssh 대상> all                       push → build → 시나리오 전부
@@ -30,7 +30,7 @@ forward_env() {
 }
 
 push() {
-  (cd "$REPO" && git ls-files -z | tar --null -T - -czf - 2>/dev/null) \
+  (cd "$REPO" && git archive --format=tar.gz HEAD) \
     | ssh "$TARGET" "rm -rf '$REMOTE_DIR' && mkdir -p '$REMOTE_DIR' && tar -xzf - -C '$REMOTE_DIR' && chmod +x '$REMOTE_DIR'/installer/e2e/*.sh '$REMOTE_DIR'/installer/e2e/scenarios/*.sh"
   echo "올렸습니다: $TARGET:$REMOTE_DIR"
 }

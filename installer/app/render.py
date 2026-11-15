@@ -115,6 +115,8 @@ def derive(answers: Answers, facts: Facts, catalog: Catalog) -> Plan:
 
     if proxy:
         drop("443/tcp")
+    # 평문 LDAP(389)은 이 서버 자신(루프백)에만 연다(LDAP_PLAIN_BIND=127.0.0.1) — 밖으로 여는 포트가 아니다
+    drop("389/tcp")
     if mail_on and not mail_builtin:
         drop(*catalog.get("mail").get("ports", []))
     if meetings_on:

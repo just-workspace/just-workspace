@@ -90,6 +90,44 @@ def test_cache_reuses_result(tmp_path):
     assert guard.problem() == "missing"       # 캐시 시간 안에서는 다시 보지 않는다
 
 
+async def test_unresponsive_storage_is_refused_without_hanging(tmp_path):
+    """끊긴 NFS(hard 마운트)처럼 표식 읽기가 돌아오지 않을 때 — 요청이 멈추지 않고 503 으로 거부된다."""
+    import threading
+    import time
+
+    release = threading.Event()
+    calls = []
+
+    def stuck(root, install_id=""):
+        calls.append(1)
+        release.wait(30)                       # 저장소가 돌아올 때까지 돌아오지 않는 읽기
+        return sg.check_marker(root, install_id)
+
+    (tmp_path / sg.MARKER_NAME).write_text("{}", encoding="utf-8")
+    inner = Starlette(routes=[Route("/api/files/upload", _ok, methods=["POST"]),
+                              Route("/api/auth/login", _ok, methods=["POST"])])
+    app = sg.StorageMarkerGuard(inner, root=str(tmp_path), install_id="", cache_seconds=0,
+                                check_timeout=0.3, checker=stuck)
+    async with _client(app) as c:
+        t0 = time.monotonic()
+        r = await c.post("/api/files/upload")
+        assert r.status_code == 503 and r.json()["code"] == sg.ERROR_CODE
+        assert r.json()["reason"] == "unresponsive"
+        assert time.monotonic() - t0 < 5
+        # 답이 없는 동안의 다음 요청은 새로 읽지 않고 바로 거부된다(멈춘 읽기는 하나뿐)
+        t1 = time.monotonic()
+        assert (await c.post("/api/files/upload")).status_code == 503
+        assert time.monotonic() - t1 < 0.25 and len(calls) == 1
+        assert (await c.post("/api/auth/login")).status_code == 200       # 저장소와 무관한 요청은 그대로
+        # 저장소가 돌아오면(멈춘 읽기가 끝나면) 다시 받는다
+        release.set()
+        for _ in range(50):
+            if (await c.post("/api/files/upload")).status_code == 200:
+                break
+            time.sleep(0.05)
+        assert (await c.post("/api/files/upload")).status_code == 200
+
+
 async def test_notify_admins_never_raises():
     # DB·Redis 에 닿지 못해도 예외를 밖으로 내지 않는다
     assert isinstance(await sg.notify_admins("missing"), int)

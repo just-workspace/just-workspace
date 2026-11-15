@@ -144,6 +144,7 @@ def test_full_properties(bundle, secrets, facts):
     plan = render.derive(a, facts, render.Catalog(bundle.zones))
     assert plan.cert_aliases == ["mail.example.com", "turn.ws.example.com"]
     assert {"5349/tcp", "3478/udp", "4433/udp", "25/tcp", "2222/tcp", "636/tcp"} <= set(plan.ports)
+    assert "389/tcp" not in plan.ports                 # 평문 LDAP 은 루프백에만 연다 — 여는 포트로 안내하지 않는다
 
 
 def test_meetings_without_turn_or_lossless(bundle, secrets, facts):

@@ -317,7 +317,8 @@ def test_nfs_storage_creates_volume_and_marker(tmp_path):
     assert steps_of(state)[1] == ("storage", "done")
     assert host.volumes["ws-storage-data"]["Options"]["type"] == "nfs"
     marker = host.runner.find("app.helper", "write-marker")[0]
-    assert "ws-storage-data:/storage" in marker and marker[marker.index("--user") + 1] == "1000:1000"
+    # NFS 는 nocopy 로 붙인다 — 도커가 내보내기 뿌리의 소유자·권한을 바꾸려 들지 않게
+    assert "ws-storage-data:/storage:nocopy" in marker and marker[marker.index("--user") + 1] == "1000:1000"
     assert marker[marker.index("--install-id") + 1] == svc.store.install()["install_id"]
 
 

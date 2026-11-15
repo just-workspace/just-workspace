@@ -15,15 +15,23 @@
   `GUARDED_PREFIXES` 아래의 POST/PUT/PATCH/DELETE. 읽기는 막지 않는다(끊긴 저장소에서는 어차피 404 다).
   응답은 503 + `{"code": "storage_unavailable"}`, `Retry-After: 30`.
 
+응답 없는 저장소
+  NFS 를 `hard` 로 붙이면 서버가 끊긴 동안 그 자리의 읽기는 **오류가 아니라 멈춤**이다(돌아올 때까지 기다린다).
+  표식을 요청 처리 흐름에서 그대로 읽으면 그 요청도, 그 워커의 다른 요청도 함께 멈춘다. 그래서 표식은 따로 둔
+  스레드에서 읽고 `CHECK_TIMEOUT` 안에 답이 없으면 사유 `unresponsive` 로 거부한다. 멈춘 읽기는 하나만 둔다 —
+  답이 오기 전의 요청들은 새로 읽지 않고 바로 거부되고, 저장소가 돌아와 그 읽기가 끝나면 다시 받는다.
+
 관리자 알림
   막을 때마다 로그 한 줄, 그리고 10분에 한 번 관리자 전원에게 알림(실패해도 요청 처리에는 영향 없음).
 """
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import logging
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -41,6 +49,7 @@ UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 GUARDED_PREFIXES = ("/api/files", "/api/wopi/files")
 
 CACHE_SECONDS = 5.0        # 표식 확인 결과를 이만큼 재사용한다(요청마다 stat 하지 않게)
+CHECK_TIMEOUT = 3.0        # 표식 읽기가 이만큼 답이 없으면 "응답 없음"으로 보고 거부한다
 ALERT_INTERVAL = 600.0     # 관리자 알림 간격(초)
 _ALERT_KEY = "storage:marker:alerted"
 
@@ -51,9 +60,17 @@ def required(env: dict[str, str] | None = None) -> bool:
 
 
 def check_marker(root: str | os.PathLike, install_id: str = "") -> str | None:
-    """표식이 정상이면 None, 아니면 사유(`missing` | `unreadable` | `mismatch`)."""
+    """표식이 정상이면 None, 아니면 사유(`missing` | `unreadable` | `mismatch`).
+
+    끊긴 네트워크 저장소에서는 이 호출이 돌아오지 않을 수 있다 — 요청 처리 흐름에서는 `problem_async` 로 부른다
+    (그쪽이 답 없음을 `unresponsive` 로 바꾼다).
+    """
     path = Path(root) / MARKER_NAME
     try:
+        # 먼저 파일 시스템 통계를 묻는다 — NFS 에서 이 호출은 캐시 없이 서버까지 간다. 표식 파일만 읽으면
+        # 서버가 끊긴 직후에는 클라이언트 캐시에서 읽혀 "정상"으로 보인다(그 뒤의 쓰기는 멈춘다).
+        if hasattr(os, "statvfs"):
+            os.statvfs(root)
         raw = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return "missing"
@@ -78,28 +95,73 @@ class StorageMarkerGuard:
     """순수 ASGI 미들웨어 — 업로드 본문을 읽기 전에 거부한다."""
 
     def __init__(self, app, root: str | None = None, install_id: str | None = None,
-                 cache_seconds: float = CACHE_SECONDS):
+                 cache_seconds: float = CACHE_SECONDS, check_timeout: float = CHECK_TIMEOUT, checker=check_marker):
         self.app = app
         self.root = root if root is not None else get_settings().storage_root
         self.install_id = os.environ.get(ENV_INSTALL_ID, "").strip() if install_id is None else install_id
         self.cache_seconds = cache_seconds
+        self.check_timeout = check_timeout
+        self.checker = checker
         self._checked_at: float | None = None
         self._reason: str | None = None
         self._alerted_at: float | None = None
+        self._probe: concurrent.futures.Future | None = None     # 아직 답이 없는 표식 읽기(하나만 둔다)
+        self._probe_started = 0.0
+
+    def _cached(self, now: float) -> bool:
+        return self._checked_at is not None and now - self._checked_at < self.cache_seconds
 
     def problem(self) -> str | None:
+        """표식을 그 자리에서 읽는다(캐시 포함). 응답 없는 저장소에서는 돌아오지 않을 수 있다."""
         now = time.monotonic()
-        if self._checked_at is not None and now - self._checked_at < self.cache_seconds:
+        if self._cached(now):
             return self._reason
-        self._reason = check_marker(self.root, self.install_id)
+        self._reason = self.checker(self.root, self.install_id)
         self._checked_at = now
         return self._reason
+
+    def _start_probe(self) -> concurrent.futures.Future:
+        future: concurrent.futures.Future = concurrent.futures.Future()
+
+        def work() -> None:
+            try:
+                reason = self.checker(self.root, self.install_id)
+            except Exception:  # noqa: BLE001 — 읽다 난 어떤 오류든 "못 읽음"
+                reason = "unreadable"
+            self._reason = reason
+            self._checked_at = time.monotonic()
+            if self._probe is future:
+                self._probe = None
+            future.set_result(reason)
+
+        # 기본 스레드 풀을 쓰지 않는다 — 멈춘 읽기가 풀의 자리를 차지해 다른 일을 막지 않게.
+        threading.Thread(target=work, name="storage-marker", daemon=True).start()
+        return future
+
+    async def problem_async(self) -> str | None:
+        """표식이 정상이면 None, 아니면 사유. 읽기가 `check_timeout` 안에 끝나지 않으면 `unresponsive`."""
+        now = time.monotonic()
+        if self._cached(now):
+            return self._reason
+        probe = self._probe
+        if probe is None:
+            probe = self._probe = self._start_probe()
+            self._probe_started = now
+        remaining = self.check_timeout - (now - self._probe_started)
+        if remaining > 0 and not probe.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(asyncio.wrap_future(probe)), remaining)
+            except asyncio.TimeoutError:
+                pass
+        if probe.done():
+            return probe.result()
+        return "unresponsive"
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or not _guarded(scope.get("method", ""), scope.get("path", "")):
             await self.app(scope, receive, send)
             return
-        reason = self.problem()
+        reason = await self.problem_async()
         if reason is None:
             await self.app(scope, receive, send)
             return

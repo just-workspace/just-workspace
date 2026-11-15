@@ -62,15 +62,15 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
       const labels = await buttons.evaluateAll(b => b.map(x => x.textContent.trim()))
       console.log('   단추: ' + labels.join(' | '))
       // 진행 단추 = 닫기·취소가 아닌 마지막 단추. 여러 단계 창이면 더 누를 것이 없을 때까지 누른다
-      for (let step = 0; step < 4; step++) {
+      for (let step = 0; step < 5; step++) {
         const d = page.getByRole('dialog').last()
         if (!(await d.count())) break
         const names = await d.getByRole('button').evaluateAll(b => b.map(x => ({ t: x.textContent.trim(), off: x.disabled })))
         const go = names.map((n, i) => ({ ...n, i })).filter(n => n.t && !/취소|닫기|이전|^×$/.test(n.t) && !n.off).pop()
         if (!go) break
         await d.getByRole('button').nth(go.i).click()
+        console.log('   누름: ' + go.t)
         await page.waitForTimeout(2500)
-        if (/진행|받는 중|설정 중|연결 중|다시 연결/.test(await page.locator('body').innerText())) break
       }
     }
     await snap(`${id}-${on ? 'enable' : 'disable'}-running`)

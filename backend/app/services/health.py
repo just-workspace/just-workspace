@@ -13,23 +13,30 @@ logger = logging.getLogger(__name__)
 
 
 def _build_service_defs() -> list[dict]:
-    """Build SERVICE_DEFS from settings — allows .env to override URLs."""
+    """점검 대상 — 설정(.env 의 주소)과 설치된 구역으로 정한다.
+
+    항목의 "zone" 은 그 서비스를 띄우는 구역이다. 설치하지 않은 구역의 서비스는 점검하지
+    않는다 — 컨테이너가 없는 것은 장애가 아니다.
+    """
     s = get_settings()
     defs = [
         {
             "name": "Gitea",
+            "zone": "git",
             "health_url": f"{s.gitea_url}/api/v1/version",
             "external_url": "/git/",
             "internal_only": False,
         },
         {
             "name": "PostgreSQL",
+            "zone": "core",
             "health_tcp": "postgres:5432",
             "external_url": None,
             "internal_only": True,
         },
         {
             "name": "Redis",
+            "zone": "core",
             "health_tcp": "redis:6379",
             "external_url": None,
             "internal_only": True,
@@ -43,6 +50,7 @@ def _build_service_defs() -> list[dict]:
             _mail_host += ":993"
         defs.append({
             "name": "Mail Server",
+            "zone": "mail",
             "health_tcp": _mail_host,
             "external_url": "/mail/",
             "internal_only": True,
@@ -50,6 +58,7 @@ def _build_service_defs() -> list[dict]:
     if s.livekit_url:
         defs.append({
             "name": "LiveKit",
+            "zone": "meetings",
             "health_url": s.livekit_url.replace("ws://", "http://").replace("wss://", "https://") + "/",
             "external_url": None,
             "internal_only": True,
@@ -57,11 +66,13 @@ def _build_service_defs() -> list[dict]:
     if s.onlyoffice_jwt_secret:
         defs.append({
             "name": "OnlyOffice",
+            "zone": "docs",
             "health_url": f"{s.onlyoffice_url}/healthcheck",
             "external_url": None,
             "internal_only": True,
         })
-    return defs
+    from app.zones import zone_installed
+    return [d for d in defs if zone_installed(d["zone"])]
 
 # In-memory cache
 _cache: list[ServiceStatus] = []
@@ -245,12 +256,15 @@ def build_public_status(cache: list[ServiceStatus] | None = None, module_enabled
     """{checked_at: ISO|None, services: [{key, status, response_ms}]} — 공개해도 되는 것만."""
     from datetime import datetime, timezone
 
+    from app.zones import module_installed
     if module_enabled is None:
         from app.modules.registry import is_module_enabled as module_enabled
     rows = get_cached_status() if cache is None else cache
     by_name = {r.name: r for r in rows}
     out: list[dict] = []
     for key, module_id, names in PUBLIC_GROUPS:
+        if module_id and not module_installed(module_id):
+            continue  # 설치하지 않은 구역 — "꺼짐"이 아니라 항목 자체가 없다
         if module_id and not module_enabled(module_id):
             out.append({"key": key, "status": "off", "response_ms": None})
             continue

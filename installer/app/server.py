@@ -92,6 +92,10 @@ def main() -> int:
         print("주의: JW_HOST_DIR 가 없습니다 — 호스트의 데이터 폴더 경로를 -e JW_HOST_DIR=… 로 알려 주세요.",
               file=sys.stderr, flush=True)
     svc = api.build_services(paths)
+    if not (os.environ.get("JW_INSTALLER_VERSION") or "").strip():
+        # 승격(Beta → Stable)한 이미지는 다시 빌드하지 않아 이미지 안의 VERSION 이 Beta 의 글자다(app/bundle.py)
+        print(f"알림: JW_INSTALLER_VERSION 이 없어 이미지에 든 버전({svc.bundle.version})을 씁니다. "
+              "이미지 태그와 다르면 -e JW_INSTALLER_VERSION=<버전> 을 주고 다시 띄우세요.", flush=True)
     if not os.path.exists("/var/run/docker.sock"):
         print("주의: /var/run/docker.sock 이 붙어 있지 않습니다 — 설치를 진행할 수 없습니다.", file=sys.stderr, flush=True)
     cert, key, fingerprint = ensure_tls(svc)

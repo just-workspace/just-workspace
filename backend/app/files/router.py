@@ -1797,6 +1797,9 @@ async def _notify_share_in_chat(
     user_ids: list[str], channel_ids: list[str], message: str | None,
 ) -> int:
     """공유 알림을 채팅으로 — 사람은 1:1 DM, 채널은 그 채널. 실패한 대상은 건너뛴다. 보낸 곳 수."""
+    from app.modules.registry import is_module_enabled
+    if not is_module_enabled("chat"):
+        return 0   # 채팅이 없으면 아무도 못 보는 DM 을 만들지 않는다 — 공유 알림(벨)은 따로 간다
     from app.chat import service as chat_service
     from app.chat.router import _broadcast_message
     perm = _ROLE_LABEL.get(role, _ROLE_LABEL["view"])
@@ -1847,6 +1850,9 @@ async def share_with_users(
     real = a.real
     if not real.exists():
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    from app.modules.registry import is_module_enabled
+    if body.channel_ids and not is_module_enabled("chat"):
+        raise HTTPException(status_code=404, detail="채팅을 쓰지 않는 설치입니다 — 채널에는 공유할 수 없습니다")
     from app.chat import service as chat_service
     channel_ids = list(dict.fromkeys(body.channel_ids))
     for cid in channel_ids:
@@ -2886,6 +2892,9 @@ async def share_to_channel(
     import json as _json
     import mimetypes as _mt
     import uuid as _uuid
+    from app.modules.registry import is_module_enabled
+    if not is_module_enabled("chat"):
+        raise HTTPException(status_code=404, detail="채팅을 쓰지 않는 설치입니다 — 채널에는 공유할 수 없습니다")
     from app.chat import service as chat_service
 
     if not await chat_service.is_channel_member(db, body.channel_id, user.id):

@@ -110,6 +110,7 @@ def test_only_chat_zone(monkeypatch):
     assert _has(app, "/api/chat/")
     assert "/ws/chat" in paths
     assert _has(app, "/api/webhooks")
+    assert set(zones.active_socket_handlers()) == {"send_message", "toggle_reaction", "typing", "mark_read"}
 
     for zone_id in ("mail", "calendar", "docs", "meetings", "git", "ai", "rbi"):
         assert not _has(app, ZONE_PATHS[zone_id]), f"{zone_id} 경로가 남아 있다"
@@ -158,6 +159,196 @@ def test_route_order_is_stable_subset(monkeypatch):
     assert len(part) < len(full)
     it = iter(full)
     assert all(row in it for row in part)  # part 는 full 의 부분열
+
+
+# ─── 실시간 소켓은 코어 — 채팅 구역이 없어도 올라온다 ───
+
+
+def test_realtime_socket_without_chat(monkeypatch):
+    """알림·배지·통화 상태가 이 소켓으로 간다. 채팅 프레임 처리기만 채팅 구역을 따른다."""
+    from app.main import create_app
+
+    monkeypatch.setenv(zones.ENV_VAR, "mail,meetings")
+    app = create_app()
+    assert "/ws/chat" in _paths(app)
+    assert not _has(app, "/api/chat/")
+    assert zones.active_socket_handlers() == {}
+
+    monkeypatch.setenv(zones.ENV_VAR, "nope-zone-z")      # core 만
+    assert "/ws/chat" in _paths(create_app())
+
+    monkeypatch.delenv(zones.ENV_VAR)
+    assert "send_message" in zones.active_socket_handlers()
+
+
+def test_socket_position_unchanged(monkeypatch):
+    """소켓 라우터는 ROUTERS 에서 예전 자리 그대로 — 전부 설치했을 때 라우트 순서가 바뀌지 않는다."""
+    targets = [t for _, t in zones.ROUTERS]
+    at = targets.index("app.realtime.socket:router")
+    assert targets[at - 1] == "app.chat.voice:router" and targets[at + 1] == "app.chat.voice_relay:router"
+    assert dict((t, r) for r, t in zones.ROUTERS)["app.realtime.socket:router"] == zones.CORE
+
+
+def test_old_websocket_import_path_reexports():
+    """옛 경로 app.chat.websocket 의 이름들은 코어 소켓의 같은 객체다."""
+    from app.chat import websocket as old
+    from app.realtime import socket as new
+
+    assert old.manager is new.manager and old.router is new.router
+    assert old.ConnectionManager is new.ConnectionManager and old.chat_ws is new.chat_ws
+    for name in ("PUBSUB_MSG", "PUBSUB_PRESENCE", "PUBSUB_TYPING", "PUBSUB_NOTIFICATION", "_Conn", "_authenticate_ws"):
+        assert getattr(old, name) is getattr(new, name), name
+
+
+def test_socket_handler_table_imports():
+    for requirement, target in zones.SOCKET_HANDLERS:
+        handlers = zones.resolve(target)
+        assert handlers and all(inspect.iscoroutinefunction(fn) for fn in handlers.values()), target
+        assert "ping" not in handlers        # ping 은 소켓이 직접 답한다
+
+
+@pytest.mark.asyncio
+async def test_socket_subscribes_no_channels_without_chat(monkeypatch, db_session):
+    from app.realtime import socket
+
+    monkeypatch.setenv(zones.ENV_VAR, "mail")
+    assert await socket._user_channel_ids(db_session, "nobody") == []
+
+
+# ─── 미설치 구역은 상태 점검·검색·대시보드에서 빠진다 ───
+
+
+def test_health_checks_follow_zones(monkeypatch):
+    from app.services import health
+    from app.services.schemas import ServiceStatus
+
+    def names() -> set[str]:
+        return {d["name"] for d in health._build_service_defs()}
+
+    monkeypatch.delenv(zones.ENV_VAR, raising=False)
+    assert {"Gitea", "PostgreSQL", "Redis"} <= names()
+
+    monkeypatch.setenv(zones.ENV_VAR, "chat")
+    assert names() == {"PostgreSQL", "Redis"}
+    monkeypatch.setenv(zones.ENV_VAR, "git")
+    assert names() == {"PostgreSQL", "Redis", "Gitea"}
+
+    # 점검 표의 구역 이름이 썩지 않게
+    monkeypatch.delenv(zones.ENV_VAR)
+    known = {zones.CORE, *zones.all_zone_ids()}
+    assert all(d["zone"] in known for d in health._build_service_defs())
+
+    # 공개 상태 — 미설치 구역의 묶음은 "꺼짐"이 아니라 항목이 없다
+    monkeypatch.setenv(zones.ENV_VAR, "chat")
+    ok = [ServiceStatus(name=n, url=None, status="ok", response_ms=3, internal_only=True) for n in ("PostgreSQL", "Redis")]
+    keys = {s["key"] for s in health.build_public_status(cache=ok, module_enabled=lambda _m: True, checked_at=1.0)["services"]}
+    assert keys == {"auth", "chat", "files"}
+
+
+def test_search_targets_follow_zones(monkeypatch):
+    from app.search.router import VALID_MODULES, searchable_modules
+
+    monkeypatch.delenv(zones.ENV_VAR, raising=False)
+    assert searchable_modules("") == VALID_MODULES
+    assert searchable_modules("chat,nope") == {"chat"}
+
+    monkeypatch.setenv(zones.ENV_VAR, "chat")
+    assert searchable_modules("") == {"chat", "files"}
+    assert searchable_modules("wiki,board,tasks,calendar,contacts") == set()   # 적어도 찾지 않는다
+    monkeypatch.setenv(zones.ENV_VAR, "calendar,docs")
+    assert searchable_modules("") == {"files", "calendar", "contacts", "tasks", "wiki", "board"}
+
+
+def test_checklist_items_follow_zones(monkeypatch):
+    from types import SimpleNamespace
+    from app.dashboard.checklist import ITEMS, visible_items
+
+    member, admin = SimpleNamespace(is_admin=False), SimpleNamespace(is_admin=True)
+    monkeypatch.delenv(zones.ENV_VAR, raising=False)
+    assert visible_items(member) == ITEMS
+
+    monkeypatch.setenv(zones.ENV_VAR, "mail")              # 채팅·회의 없음
+    ids = [i for i, _, _ in visible_items(member)]
+    assert "first_message" not in ids and "invite_colleague" not in ids and "upload_file" in ids
+    assert dict((i, link) for i, _, link in visible_items(admin))["invite_colleague"] == "/admin/users"
+
+    monkeypatch.setenv(zones.ENV_VAR, "chat")              # 채팅만 — 초대는 채널로
+    items = dict((i, link) for i, _, link in visible_items(member))
+    assert items["invite_colleague"] == "/chat" and "first_message" in items
+
+
+@pytest.mark.asyncio
+async def test_dashboard_summary_drops_uninstalled(monkeypatch, db_session):
+    from app.dashboard.router import dashboard_summary
+    from app.db.models import User
+
+    user = User(id="zone-u1", username="zone-u1", email="zone-u1@x", password_hash="x")
+    db_session.add(user)
+    await db_session.commit()
+    zone_keys = {"tasks", "tasks_due_today", "tasks_overdue", "recent_posts_7d", "recent_messages_7d",
+                 "upcoming_events_7d", "today_events", "next_meeting", "mail_unread"}
+
+    monkeypatch.setenv(zones.ENV_VAR, "git")               # 대시보드가 읽는 구역은 하나도 없다
+    out = await dashboard_summary(day_start=None, day_end=None, user=user, db=db_session)
+    assert not (zone_keys & set(out)), zone_keys & set(out)
+    assert {"status", "unread_notifications", "mentions_unread", "active_share_links", "admin"} <= set(out)
+
+    monkeypatch.setenv(zones.ENV_VAR, "chat,calendar,docs")
+    out = await dashboard_summary(day_start=None, day_end=None, user=user, db=db_session)
+    assert zone_keys - {"mail_unread"} <= set(out) and "mail_unread" not in out
+
+
+def test_plugin_zone_requirement(monkeypatch):
+    from app.plugins.loader import missing_zones
+
+    monkeypatch.setenv(zones.ENV_VAR, "chat")
+    assert missing_zones({"zones": ["meetings"]}) == ["meetings"]
+    assert missing_zones({"zones": ["chat"]}) == [] and missing_zones({}) == []
+    monkeypatch.delenv(zones.ENV_VAR)
+    assert missing_zones({"zones": ["meetings", "chat"]}) == []
+
+
+@pytest.mark.asyncio
+async def test_plugin_with_missing_zone_is_not_loaded(monkeypatch, tmp_path):
+    import json
+
+    from fastapi import FastAPI
+    from app.plugins import loader
+
+    plugin_dir = tmp_path / "needs-meetings"
+    plugin_dir.mkdir()
+    (plugin_dir / "manifest.json").write_text(json.dumps({
+        "id": "needs-meetings", "name": "회의에 기대는 플러그인", "route": "/p/needs-meetings",
+        "api_prefix": "/api/plugins/needs-meetings", "zones": ["meetings"],
+    }), encoding="utf-8")
+    monkeypatch.setattr(loader, "PLUGIN_DIRS", [tmp_path])
+    monkeypatch.setattr(loader, "_loaded_plugins", [])
+    monkeypatch.setattr(loader, "_skipped_plugins", [])
+    monkeypatch.setattr(loader, "_hook_modules", {})
+    monkeypatch.setenv(zones.ENV_VAR, "chat")
+
+    app = FastAPI()
+    await loader.load_plugins(app)
+    assert loader.get_loaded_plugins() == []
+    assert loader.get_skipped_plugins() == [{
+        "id": "needs-meetings", "name": "회의에 기대는 플러그인",
+        "reason": "zone_not_installed", "missing_zones": ["meetings"],
+    }]
+    assert not any(getattr(r, "path", "").startswith("/api/plugins/needs-meetings") for r in app.routes)
+
+
+def test_bundled_plugin_manifests_name_known_zones():
+    """리포에 든 플러그인 manifest 의 zones 는 아는 구역 id 만 가리킨다."""
+    import json
+    from pathlib import Path
+
+    plugins_dir = Path(__file__).resolve().parents[2] / "plugins"
+    if not plugins_dir.is_dir():
+        pytest.skip("plugins 디렉터리가 없는 실행 환경")
+    known = set(zones.all_zone_ids())
+    for manifest_path in plugins_dir.glob("*/manifest.json"):
+        wanted = json.loads(manifest_path.read_text(encoding="utf-8")).get("zones", [])
+        assert set(wanted) <= known, f"{manifest_path.parent.name}: {wanted}"
 
 
 # ─── (c) module_installed · 알 수 없는 id ───

@@ -9,6 +9,7 @@
   "route": "/p/remote-desktop",
   "api_prefix": "/api/plugins/remote-desktop",
   "requires": [],
+  "zones": ["meetings"],
   "frontend": true,
   "frontend_api": 2
 }

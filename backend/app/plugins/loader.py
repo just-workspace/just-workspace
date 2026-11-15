@@ -20,6 +20,8 @@ PLUGIN_DIRS = [PLUGINS_DIR, UPLOADED_DIR]
 
 # Loaded plugin metadata (filled at startup)
 _loaded_plugins: list[dict[str, Any]] = []
+# 로드하지 않은 플러그인과 그 사유(필요한 구역 미설치 등) — 관리 화면 목록에 사유를 보여 준다
+_skipped_plugins: list[dict[str, Any]] = []
 # plugin_id → router module (라이프사이클 훅 호출용: on_install/on_enable/on_disable/on_uninstall)
 _hook_modules: dict[str, Any] = {}
 
@@ -92,9 +94,25 @@ def get_loaded_plugins() -> list[dict[str, Any]]:
     return _loaded_plugins
 
 
+def get_skipped_plugins() -> list[dict[str, Any]]:
+    """로드하지 않은 플러그인 — [{id, name, reason, missing_zones}]."""
+    return _skipped_plugins
+
+
+def missing_zones(manifest: dict) -> list[str]:
+    """manifest 의 "zones"(이 플러그인이 기대는 구역 id 목록) 중 설치되지 않은 것."""
+    from app.zones import zone_installed
+
+    wanted = manifest.get("zones") or []
+    if not isinstance(wanted, list):
+        return []
+    return [str(z) for z in wanted if not zone_installed(str(z))]
+
+
 async def load_plugins(app: FastAPI) -> None:
     """Scan plugins directory, validate manifests, load routers and models."""
     _loaded_plugins.clear()
+    _skipped_plugins.clear()
     _hook_modules.clear()
     seen_ids: set[str] = set()
 
@@ -132,6 +150,18 @@ async def load_plugins(app: FastAPI) -> None:
             logger.info("[Plugins] %s: 중복 id(다른 디렉토리) — 건너뜀", plugin_id)
             continue
         seen_ids.add(plugin_id)
+
+        # 기대는 구역이 설치되지 않았으면 올리지 않는다(라우터·모델·모듈 목록 모두) — 사유는 로그와 목록에
+        missing = missing_zones(manifest)
+        if missing:
+            logger.warning("[Plugins] %s: 필요한 구역이 설치되지 않아 건너뜀 — %s", plugin_id, ", ".join(missing))
+            _skipped_plugins.append({
+                "id": plugin_id,
+                "name": manifest.get("name", plugin_id),
+                "reason": "zone_not_installed",
+                "missing_zones": missing,
+            })
+            continue
         backend_dir = plugin_dir / "backend"
 
         # Import models.py if present (must be before router so models are registered)

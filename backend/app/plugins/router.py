@@ -17,7 +17,7 @@ from app.auth.deps import get_current_user
 from app.db.models import User
 from app.db.session import get_db
 from app.plugins.loader import (
-    PLUGINS_DIR, UPLOADED_DIR, get_loaded_plugins, run_plugin_hook, _installed_flag,
+    PLUGINS_DIR, UPLOADED_DIR, get_loaded_plugins, get_skipped_plugins, run_plugin_hook, _installed_flag,
 )
 from app.modules.registry import is_module_enabled, set_module_enabled
 
@@ -61,7 +61,8 @@ async def list_plugins(user: User = Depends(get_current_user)):
             "enabled": is_module_enabled(p["id"]),
             "removable": str(p.get("_dir", "")).startswith(str(UPLOADED_DIR)),
         })
-    return {"plugins": result}
+    # skipped: 폴더는 있지만 올리지 않은 플러그인과 사유(필요한 구역 미설치 등)
+    return {"plugins": result, "skipped": get_skipped_plugins()}
 
 
 class PluginToggleRequest(BaseModel):

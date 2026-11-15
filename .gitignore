@@ -33,3 +33,5 @@ mailserver/config/*
 
 # scripts/update.sh 가 적어 두는 되돌릴 이미지 목록
 .update-rollback
+# 설치 관리자 테스트의 렌더링 스냅샷 — 견본 값으로 만든 .env 다(비밀값이 아니다)
+!installer/tests/snapshots/**/.env

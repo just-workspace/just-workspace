@@ -301,6 +301,21 @@ def step_database(ctx: Context) -> None:
         ctx.wait_ready("ws-redis", 120)
     except StepError as e:
         raise StepError("database_not_ready", "see_container_log", **e.vars) from None
+    migrate_database(ctx)
+
+
+def migrate_database(ctx: Context) -> None:
+    """DB 스키마를 이 버전의 코드에 맞춘다 — backend 이미지의 일회용 컨테이너로 `python -m app.cli migrate`.
+
+    backend 를 띄우기 전에 여기서 명시적으로 돌리고 종료 코드를 본다(backend 는 기동 때 "같음"만 확인하고 지나간다).
+    실패하면 backend 를 띄우지 않고 이 단계에서 멈춘다 — 원인은 단계 로그에 남는다.
+    """
+    r = ctx.docker.compose("run", "--rm", "--no-deps", "-T", "--entrypoint", "python", "backend",
+                           "-m", "app.cli", "migrate", timeout=1800, on_line=ctx.log)
+    if not r.ok:
+        ctx.log(r.text[-800:])
+        raise StepError("database_migrate_failed", "see_log", exit_code=r.rc)
+    ctx.log("데이터베이스 스키마를 맞췄습니다")
 
 
 def _place(ctx: Context, name: str, aliases: list[str], cert: str | None = None, key: str | None = None) -> None:

@@ -370,3 +370,32 @@ def test_quick_mode_downgrade_is_recorded(tmp_path):
     assert state["status"] == "done", state["error"]
     assert state["notes"][0]["key"] == "quick_downgraded"
     assert envfile.parse(host.paths.env_file.read_text(encoding="utf-8"))["JW_ZONES"] == "core"
+
+
+def test_database_step_runs_migrate_before_backend(tmp_path):
+    """DB 가 뜬 뒤 backend 이미지로 migrate 를 명시적으로 돌리고, 그다음에 backend 를 띄운다."""
+    host = Host(tmp_path)
+    svc = host.install()
+    assert svc.engine.run()["status"] == "done"
+    run = host.runner.find("compose", "run", "backend", "migrate")[0]
+    assert run[run.index("--entrypoint") + 1] == "python" and "--no-deps" in run and "--rm" in run
+    assert run[-3:] == ["-m", "app.cli", "migrate"] or run[-4:] == ["backend", "-m", "app.cli", "migrate"]
+    assert host.runner.index("compose", "up", "postgres") < host.runner.index("compose", "run", "backend", "migrate") \
+        < host.runner.index("compose", "up", "backend")
+
+
+def test_database_step_fails_when_migrate_fails(tmp_path):
+    host = Host(tmp_path)
+    svc = host.install()
+    host.runner.on("compose", "run", "backend", "migrate", rc=1, err="단계 7 실패: column missing")
+    state = svc.engine.run()
+    assert state["status"] == "failed"
+    assert state["error"]["step"] == "database" and state["error"]["cause"] == "database_migrate_failed"
+    assert state["error"]["vars"]["exit_code"] == 1
+    assert not host.runner.find("compose", "up", "backend")            # backend 는 띄우지 않는다
+    assert any("column missing" in line for line in svc.engine.read_log("database"))
+    # 고친 뒤 그 단계부터
+    host.runner.on("compose", "run", "backend", "migrate", out="ok")
+    assert svc.engine.retry()
+    svc.engine._thread.join(30)
+    assert svc.engine.status()["status"] == "done"

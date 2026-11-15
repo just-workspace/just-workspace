@@ -231,14 +231,18 @@ docker compose -p just-workspace
 | 메서드·경로 | 하는 일 |
 |---|---|
 | `GET /internal/health` | 키 없이 — 버전, 설치 여부 |
-| `GET /internal/zones` | 구역 목록(켜짐 여부, 메모리 판정, 설정 유무) |
+| `GET /internal/zones` | 구역 목록(켜짐 여부, 메모리 판정, 설정 유무) + `git_verified_version` |
 | `POST /internal/zones/<id>/check` `{"settings"}` | 켜도 되는가 — 설정 오류, 메모리, 새로 열리는 포트, 주의(아무것도 바꾸지 않는다) |
 | `POST /internal/zones/<id>/enable` `{"settings"}` | 켜기(202 + 작업). 메모리가 모자라면 `409 memory_insufficient`, 설정이 틀리면 `422 settings_invalid` |
 | `POST /internal/zones/<id>/disable` | 끄기(연결 해제 + 컨테이너 정지, 데이터 볼륨은 남는다) |
-| `GET /internal/zones/<id>/settings` | 켜진 구역의 설정 다시 열기(비밀은 `…_set` 여부만) |
+| `GET /internal/zones/<id>/settings` | 켜진 구역의 설정 다시 열기(비밀은 `…_set` 여부만). 코드 저장소는 `verified_version`(검증한 버전 글자)도 |
 | `PUT /internal/zones/<id>/settings` `{"settings"}` | 설정 바꾸기(202 + 작업) |
 | `GET /internal/jobs/<id>` · `/log` | 작업 진행·로그 |
 | `POST /internal/probe/smtp` · `/ai` | 구역 켜기 창의 "연결 확인" |
+| `POST /internal/probe/mail-records` `{"mail_domain"?}` | 메일 레코드(MX·A·SPF·DKIM·DMARC)의 기대값과 현재값 — DKIM 은 설치 때 만든 키 |
+| `GET /internal/probe/public-ip[?refresh=true]` | 공인 주소(기억해 둔 값, `refresh` 면 다시 감지) |
+| `GET /internal/jobs` | 구역 작업 목록 — 진행 중인 것과 최근 것(새것부터, 20개) |
+| `GET /internal/storage` | 파일 저장소: `{"kind": local\|nfs, "location", "volume", "install_id"}` |
 
 구역별 `settings`:
 
@@ -408,7 +412,7 @@ compose 는 저장소 볼륨(`ws-storage-data`)을 `external` 로 쓴다. 설치
 | `config` | 비밀값 생성(이미 있는 것은 유지) → 스택 파일 쓰기 → `compose config -q`. 도커 볼륨 저장소면 여기서 볼륨·표식까지 | `compose_invalid` |
 | `storage` | (NFS·지정 폴더일 때만) 볼륨 만들기 + 표식 | `unreachable`, `export_not_found`, `permission_denied`, `read_only`, `storage_other_install`, `storage_volume_mismatch` |
 | `pull` | `compose config --images` 의 이미지를 하나씩 받는다(이미지별 진행). 받지 못해도 서버에 이미 있으면 경고만 | `image_pull_failed` |
-| `database` | postgres·redis 시작, healthy 대기 | `database_not_ready` |
+| `database` | postgres·redis 시작, healthy 대기 → backend 이미지의 일회용 컨테이너로 `python -m app.cli migrate`(DB 스키마를 이 버전에 맞춘다 — [data-safety.md](data-safety.md)). 종료 코드가 0 이 아니면 backend 를 띄우지 않고 멈춘다 | `database_not_ready`, `database_migrate_failed` |
 | `cert` | (프록시가 맡고 따로 필요한 이름도 없으면 생략) 발급·배치 | `cert_issue_failed`(대안: 임시 인증서), `cert_invalid`, `cert_upload_missing` |
 | `zones` | backend·frontend·nginx 시작 → 설치 관리자를 내부망에 연결 → 구역마다 `install` → 구역마다 `connect` → 연동 값이 바뀌었으면 backend 다시 시작 → DB 에 저장되는 설정 넣기 | `service_not_ready`, `git_*` |
 | `admin` | `seed-admin`(비밀번호는 env 파일로 넘기고 지운다) | `admin_username_taken` |
@@ -470,16 +474,82 @@ docker 없이 돈다. docker·DNS·HTTP·SMTP 는 가짜로 바꾼다(`tests/fak
 
 ## 12. 알려진 한계
 
-- **마법사 화면이 없다.** `/` 는 안내 문구만 낸다. 화면(브라우저 SPA)은 `frontend-react/` 에서 따로 빌드한다 — `cd frontend-react && npm run build:installer` → `frontend-react/dist-installer/`(`installer.html` · `assets/` · `icon.svg`, 자산 주소는 상대 경로). 이 폴더를 이미지에 넣어 `/` 에서 내주는 일이 남았다.
-- **복원**(`mode: restore`)은 없다(501).
+- **복원**(`mode: restore`)은 없다(501) — §14.
 - **backend 쪽 호출부**는 `backend/app/system/` 이다. 관리자 권한을 확인하고 내부 API 를 대신 부르며(`/api/admin/system/zones…`, `/jobs/<id>`, `/probe/…`), 켜기·끄기·설정 변경을 감사 로그에 남긴다. 화면은 관리 › 구역(`/admin/zones`). `JW_INSTALLER_URL`·`JW_INSTALLER_KEY` 가 비어 있으면(설치 관리자 없이 구성한 설치) 목록은 읽기 전용이고 나머지는 `503 installer_unavailable` 이다.
-- **구역 화면이 쓰지만 내부 API 에 아직 없는 것**: 메일 레코드 확인(`POST /internal/probe/mail-records`), 공인 주소 다시 감지(`GET /internal/probe/public-ip`), 진행 중인 작업 목록. 앞의 둘은 backend 가 그 경로를 불러 보고 없으면 각각 `501 installer_unsupported`, 설치 때 감지해 둔 값으로 답한다. 작업은 backend 가 자신이 시작한 작업 id 를 기억해 목록에 붙인다(다른 경로로 시작한 작업은 화면에 보이지 않는다).
-- **저장소 상태**(관리 › 저장소, `GET /api/admin/system/storage`)의 종류·위치는 backend 컨테이너의 마운트 정보에서 읽는다. 설치 관리자가 가진 답변(NFS 서버·내보낸 경로)을 내부 API 로 받지는 않는다.
+- **내부 API 에는 있지만 backend·화면이 아직 쓰지 않는 것**: 작업 목록(`GET /internal/jobs` — backend 는 자신이 시작한 작업 id 를 기억하는 방식을 그대로 쓴다), 저장소 정보(`GET /internal/storage` — 관리 › 저장소는 backend 컨테이너의 마운트 정보에서 종류·위치를 읽는다), 코드 저장소의 검증한 버전 글자(`verified_version` — 응답에는 실리지만 화면에 표시하는 자리는 없다), 구역 확인(`check`)의 `cautions`(아래 표의 키 — 화면이 문구로 바꿔 보여 주는 일이 남았다).
+- **코드 저장소의 로그인 연동**(Gitea 의 OpenID Connect 로그인 원본)은 접속 주소의 인증서를 Gitea 가 믿을 수 있어야 걸린다. 임시 인증서로 설치하면 주의(`git_sso_pending`)를 남기고 건너뛰며, 나중에 다시 거는 길(인증서를 바꾼 뒤 자동으로 다시 시도)은 아직 없다 — 구역을 껐다 켜면 다시 시도한다.
+- **인증서 자동 발급(Let's Encrypt)의 실제 발급**은 밖에서 80 으로 닿는 서버에서만 된다. 발급이 실패했을 때의 흐름(실패 → 임시 인증서로 계속)만 실서버에서 확인했다.
 - **TURN/TLS**: 직접 받는 구성에서는 5349 에 게시되므로, 443 을 넘겨 주는 장치가 없으면 쓰이지 않는다(§8).
-- **앞단 프록시 구성의 메일·회의 인증서**는 자체 서명이다. 신뢰되는 인증서가 필요하면 지금은 손으로 넣어야 한다.
+- **앞단 프록시 구성**: 프록시는 클라이언트 주소를 `X-Real-IP` 로 넘겨야 한다(`X-Forwarded-For` 만으로는 클라이언트 주소로 쓰지 않는다). 메일·회의 인증서는 자체 서명이다 — 신뢰되는 인증서가 필요하면 지금은 손으로 넣어야 한다.
 - **메일 도메인과 접속 주소가 다르면** `DOMAIN` 은 메일 도메인이 된다. backend 가 `DOMAIN` 을 표시용으로도 쓰는 자리(메일 제목 머리말 등)에는 메일 도메인이 나온다.
 - **외부 SMTP 의 보안 방식**과 **AI 제공자**는 DB 설정이라 backend 가 뜬 뒤 `python -m app.cli configure` 로 넣는다. 실패하면 주의(`backend_settings_not_applied`)만 남는다.
-- **NFS** 는 v4.1 만 쓴다(잠금이 프로토콜에 든 버전). v3 만 되는 서버는 붙지 않는다.
+- **NFS** 는 v4.1 만 쓴다(잠금이 프로토콜에 든 버전). v3 만 되는 서버는 붙지 않는다. `hard` 로 붙이므로 서버가 끊긴 동안 저장소를 **읽는** 요청(파일 목록·내려받기)은 돌아올 때까지 기다린다 — 쓰기만 503 으로 바로 거부한다. 끊긴 것을 알아채기 전(표식 확인 결과를 5초 재사용한다)에 시작된 쓰기도 서버가 돌아올 때까지 기다렸다가 끝난다.
 - **저장소 표식**은 `/api/files`·`/api/wopi/files` 의 쓰기만 막는다. 채팅 첨부·메일 보관처럼 다른 경로로 저장소에 쓰는 기능은 아직 막지 않는다.
+- **받을 이미지 용량**은 알려 주지 않는다(레지스트리에 묻지 않는다) — 요약의 그 줄은 보이지 않는다.
 - **인증서 방식 바꾸기**(임시 → 자동 등)를 설치 뒤에 하는 API 는 없다.
 - **업데이트**(이미지 교체·채널 검증)는 다음 단계다.
+
+### 주의(`cautions`)의 키
+
+요약(`GET /api/summary`)과 구역 확인(`POST /internal/zones/<id>/check`)이 같은 키를 쓴다. 문구는 화면이 가진다(마법사: `frontend-react/src/installer-app/i18n/*.json` 의 `summary.caution.<키>`).
+
+| 키 | 값(`vars`) | 뜻 |
+|---|---|---|
+| `cert_temporary` | `domain` | 임시(자체 서명) 인증서로 설치한다 |
+| `git_sso_needs_trusted_cert` | | 임시 인증서로는 코드 저장소의 로그인 연동이 걸리지 않는다 |
+| `router_port_forward` | `ports` | 공유기에서 이 포트들을 이 서버로 넘겨야 한다 |
+| `proxy_side_certs_self_signed` | `names` | 프록시를 거치지 않는 이름(메일·회의)에는 자체 서명 인증서를 쓴다 |
+| `hairpin_not_configured` | `domain` | 프록시 주소가 하나로 정해지지 않아 컨테이너가 접속 주소로 되돌아오는 길이 없다(문서 편집·코드 저장소 연동) |
+| `turn_tls_alternate_port` | `port` | 회의 중계의 보안 연결은 이 포트(5349)에 열린다 |
+| `mail_needs_dns_and_port25` | `mail_domain` | 내장 메일은 메일 레코드와 밖에서 들어오는 25 가 있어야 받는다 |
+| `account_domain_is_mail_domain` | `mail_domain` | 계정의 메일 주소는 `<아이디>@<메일 도메인>` 이 된다 |
+| `no_system_mail` | | 메일 구역이 없어 초대·비밀번호 재설정 메일을 보내지 못한다 |
+| `meetings_public_ip_unknown` | | 회의에 쓸 공인 주소를 모른다 |
+| `lossless_needs_udp_4433` | | 무손실 오디오는 UDP 4433 이 밖에서 닿아야 한다 |
+| `rbi_needs_dns` | `name` | 격리 브라우저의 전용 이름도 이 서버를 가리켜야 한다 |
+| `dns_mismatch_cert_will_fail` | `domain` | 접속 주소가 이 서버를 가리키지 않아 자동 발급이 실패한다 |
+
+적용·구역 작업이 남기는 주의(`warnings`): `git_sso_pending`, `git_front_path_unverified`, `side_certs_self_signed`, `image_not_refreshed`, `installer_not_on_network`, `backend_settings_not_applied`.
+
+## 13. 실서버 검수
+
+단위 테스트는 docker 를 가짜로 바꾼다. 실제 docker 로 처음부터 끝까지 도는지는 `installer/e2e/` 의 시나리오로 본다 — 검수 **전용** 서버에서만 돌린다(컨테이너·볼륨·설치 폴더를 지우고, NFS 시나리오는 호스트에 NFS 서버 패키지를 깐다).
+
+```bash
+installer/e2e/remote.sh <ssh 대상> push                 # 커밋된 상태를 서버에 올린다
+installer/e2e/remote.sh <ssh 대상> build                # 서버에서 이미지를 소스로 빌드(localhost/just-workspace-<이름>:<VERSION>)
+installer/e2e/remote.sh <ssh 대상> run s1-minimal api   # 시나리오 하나
+# 화면을 눌러서(Playwright — 이 PC 에서):
+node installer/e2e/wizard-ui.cjs --url https://<서버 주소>:8443 --token <설치 토큰> [--flow quick] [--width 390]
+node installer/e2e/admin-zones-ui.cjs --url https://<접속 주소> --addr <서버 주소> --password-file <파일>
+```
+
+요건: 리눅스 x86_64, Docker Engine 24+, compose 플러그인 2.20+, 4코어·메모리 12GB·디스크 40GB 이상, 인터넷으로 나갈 수 있을 것(밖에서 들어오는 길은 없어도 된다). 접속 주소는 DNS 에 없는 이름을 쓰고 서버 주소로 직접 붙는다.
+
+| 시나리오 | 실제 서버에서 확인한 것 |
+|---|---|
+| `s1-minimal` (답변 파일 · API) | 최소 묶음 설치 완료, 컨테이너 준비, 프런트·`/api/health`, 관리자 로그인, 파일 올리기·내려받기, 잠금(423), 설치 관리자 재시작 뒤 상태 유지, `jw status`·`jw reset-admin` |
+| `s2-collab` (답변 파일 · API) | 내장 메일(IMAP 993 로그인, 내부 발송·수신, DKIM 서명 — 미리 만든 키와 서버의 키가 같음), 문서 편집기 discovery, 채팅 웹소켓, 일정 만들기, 요약의 포트 = 실제 게시 포트(143 은 열리지 않음) |
+| `s3-full-sso` (답변 파일 · API) | 전체 묶음 + SSO·LDAP 가 12GB 에서 기동(유휴 실측 약 1.9GB). 회의 토큰 발급·UDP 게시, Gitea 구역 훅(고정 이미지, PostgreSQL 연결, 관리 계정, 토큰이 backend 에 주입, OAuth 클라이언트, `/git/`·`/api/git/repos`), LDAPS 636·평문 389 는 루프백만. 로그인 원본 등록은 임시 인증서라 미뤄짐(주의) — 명령 자체는 내부 주소로 시험 등록해 확인 |
+| `s4-nfs` | 확인 다섯 항목 통과, 실패 분류(`unreachable`·`export_not_found`·`permission_denied`·`read_only`), 확인이 내보내기 뿌리의 소유자를 바꾸지 않음, root 를 낮추는 내보내기에 설치, 표식·업로드가 NFS 에 쓰임, 서버를 멈추면 쓰기 503(`storage_unavailable`, 3초 안)·다른 API 는 정상, 다시 띄우면 복구. `no_locking` 은 재현하지 못했다(NFSv4.1 은 잠금을 끌 수 없다) |
+| `s5-proxy` | 80 평문만(443 미게시, HSTS 없음), 프록시 주소에서 온 `X-Real-IP` 만 클라이언트 주소로 쓰고 다른 출발지의 머리말은 무시, backend 의 세션 기록에도 그 주소 |
+| `s6-zone-toggle` | 내부 API 로 채팅 → 문서 → 코드 저장소 켜기, 문서·코드 저장소 끄기. `.env` 의 `JW_ZONES`·`COMPOSE_PROFILES`, `/api/health` 의 zones, 끈 구역의 볼륨 유지. 8443·호스트에서는 내부 API 에 닿지 않고, 틀린 키·내부 대역 밖은 404 |
+| `s7-failure-retry` | 토큰(틀림·재발급·만료·5회 잠금), 없는 이미지 → `pull` 실패·원인 키 → 고친 뒤 그 단계부터, 적용 도중 설치 관리자 재시작 → 이어서 완료, 인증서 자동 발급 실패 → 임시 인증서로 계속 |
+| `s8-manual` | 설치 관리자 없이 [deployment.md](deployment.md) 의 절차대로 최소 구성 기동 |
+| `wizard-ui.cjs` | 화면을 눌러 일반 설치(협업 묶음·임시 인증서)와 빠른 설치를 완료 화면까지 — 1280 폭과 390 폭. 토큰 없는 주소·틀린 토큰, 사전 점검 14항목, 구역·메모리 합계, 메일 레코드 표, 이어 하기, 요약, 적용, 잠김 화면. 콘솔 오류 없음 |
+| `jw reinstall` | 설치된 서버에서 목록 확인 → `--yes` 로 지우고 새 토큰으로 다시 시작 |
+
+확인하지 못한 것: 실제 Let's Encrypt 발급과 갱신, 신뢰되는 인증서에서의 Gitea 로그인 연동, 격리 브라우저 애드온(`rbi`), 무손실 오디오, 외부 SMTP·AI 제공자 연결, 지정 폴더 저장소, 공유기 뒤·실제 앞단 프록시, x86_64 가 아닌 서버, SELinux 가 켜진 배포판.
+
+## 14. 예정 — 복원
+
+`mode: restore` 는 아직 없고 `POST /api/restore…` 는 501 을 준다. 마법사 화면(`frontend-react/src/installer-app/api/client.ts`)은 아래 경로를 전제로 만들어져 있다 — 구현할 때 이 모양에 맞춘다(응답 형태는 같은 폴더 `types.ts` 의 `RestoreFileInfo`·`RestoreReview`·`RestoreTarget`·`ApplyState`).
+
+| 메서드·경로 | 하는 일 | 응답 |
+|---|---|---|
+| `POST /api/restore/upload` (multipart `file`) | 백업 파일 올리기(진행률은 브라우저가 잰다) | `{"status": "ok"\|"invalid"\|"not_found", "name", "size_bytes"}` |
+| `POST /api/restore/path` `{"path"}` | 서버에 이미 있는 백업 파일 확인 | 위와 같음 |
+| `GET /api/restore/review` | 백업의 내용 — 만든 때, 버전(`version_status`: `ok`/`newer`), 구역, 계정 수, 용량, 저장소, 파일 포함 여부, 접속 주소 | `RestoreReview` |
+| `POST /api/restore/apply` `{"domain", "storage"}` | 복원 시작(바꿀 접속 주소·저장소) | 202 |
+| `GET /api/restore/apply` · `/apply/stream` | 진행(적용과 같은 형태, SSE 는 `status`·`end`) | `ApplyState` |
+| `POST /api/restore/apply/retry` | 실패한 단계부터 다시 | 202 |

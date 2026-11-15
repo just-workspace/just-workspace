@@ -30,7 +30,6 @@ just-workspace 는 다음 오픈소스 프로젝트를 사용한다. 버전은 2
 | SQLAlchemy[asyncio] | 2.1.5 | MIT | ORM |
 | greenlet | 3.5.6 | MIT AND PSF-2.0 | SQLAlchemy asyncio |
 | asyncpg | 0.32.0 | Apache-2.0 | PostgreSQL 드라이버 |
-| alembic | 1.20.0 | MIT | 마이그레이션 도구 |
 | itsdangerous | 2.2.0 | BSD-3-Clause | 세션 쿠키 서명 |
 | pydantic / pydantic-settings | 2.14.1 / 2.16.0 | MIT | 스키마·설정 |
 | aiofiles | 25.1.0 | Apache-2.0 | 비동기 파일 I/O |

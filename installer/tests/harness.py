@@ -54,6 +54,7 @@ class Host:
         r.on("app.helper", "read-cert", fn=lambda argv, i: json.dumps({"cert": self.cert}) + "\n")
         r.on("app.helper", "place-cert", fn=self._place)
         r.on("compose", "run", "certbot", fn=self._certbot)
+        r.on("compose", "run", "backend", "migrate", out="스키마 버전 1 → 3\n")
         r.on("exec", "ws-backend", "seed-admin", out="[SEED] Admin 'admin' created\n")
 
     def _container(self, argv, _):

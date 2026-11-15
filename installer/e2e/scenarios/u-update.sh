@@ -8,6 +8,7 @@
 #   u7      복원 지점으로 수동 복원(1.0.1 → 1.0.0)
 #   u2      pull 실패(레지스트리에 없는 다이제스트) → 되돌리기 / 다시 시도
 #   u3      DB 변경 실패(일부러 깨진 단계가 든 1.0.2) → 자동 되돌림
+#   r103    1.0.3 릴리스를 낸다(u5 가 없으면 스스로 부른다 — 화면 검수 admin-update-ui.cjs 를 그 전에 돌릴 때 쓴다)
 #   u5      중간 버전: 1.0.0 → 1.0.1 → 1.0.3
 #   u4      자동 업데이트: 3일 유예 · 시간대 · 실패 뒤 멈춤과 다시 켜기 (1.0.4)
 #   u6      Beta 채널로 올렸다가 Stable 로 — 기다리기와 "시험판 이전 상태로 복원" (1.1.0-beta.1)
@@ -274,13 +275,18 @@ stage_u3() {
   expect "점검 끝" False "$(ws_curl "$WS/maintenance/status" | json_get 'd["active"]')"
 }
 
+stage_r103() {
+  [ -f "$REL/manifests/1.0.3.json" ] && return 0
+  say "1.0.3 릴리스"
+  check "1.0.3 이미지(변경 단계 둘)" rel_build 1.0.3 schema3
+  check "1.0.3 manifest(1.0.1 이상에서만 바로)" rel_manifest 1.0.3 3 --min-upgrade-from 1.0.1
+  check "게시" rel_publish 1.0.3 stable
+  expect "받을 버전" update "$(check_now)"
+}
+
 stage_u5() {
   say "U5 중간 버전: 1.0.0 → 1.0.1 → 1.0.3"
-  if [ ! -f "$REL/manifests/1.0.3.json" ]; then
-    check "1.0.3 이미지(변경 단계 둘)" rel_build 1.0.3 schema3
-    check "1.0.3 manifest(1.0.1 이상에서만 바로)" rel_manifest 1.0.3 3 --min-upgrade-from 1.0.1
-    check "게시" rel_publish 1.0.3 stable
-  fi
+  stage_r103
   ws_login
   if [ "$(health_version)" != 1.0.0 ]; then
     local point job

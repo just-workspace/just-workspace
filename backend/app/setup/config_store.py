@@ -1,8 +1,7 @@
-"""런타임 설정 저장소 — DB(SystemSetting) 우선, env 시드 폴백.
+"""런타임 설정 저장소 — DB(SystemSetting) 우선, 환경변수는 초깃값.
 
-Cisco Catalyst Center식 단일 웹 컨트롤 플레인 + K8s 대비:
-설정을 .env가 아닌 DB에 두어, 배포방식(docker-compose/K8s)과 무관하게 웹에서 라이브로 바꾼다.
-우선순위: DB > env(초기 시드) > 코드 기본값.
+관리 화면에서 바꾸는 설정은 .env 가 아니라 DB 에 둔다(다시 시작하지 않고 반영된다).
+우선순위: DB > 환경변수 > 코드 기본값.
 """
 from __future__ import annotations
 

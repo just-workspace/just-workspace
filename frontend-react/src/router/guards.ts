@@ -28,7 +28,7 @@ export function _resetGuards() { _booted = null }
 
 const PUBLIC_PAGES = ['/setup', '/login', '/register', '/forgot-password', '/reset-password', '/verify-email']
 
-/** middleware/auth.global.ts */
+/** 로그인 가드 */
 export async function authGuard(to: GuardTarget): Promise<string | null> {
   const { user, loading } = authStore.getState()
 
@@ -116,7 +116,7 @@ export const ZONE_ROUTES: Record<string, string> = {
 
 const under = (path: string, prefix: string) => path === prefix || path.startsWith(prefix + '/')
 
-/** middleware/module-guard.global.ts — 꺼졌거나 설치되지 않은 모듈·구역의 화면이면 대시보드로 */
+/** 모듈 가드 — 꺼졌거나 설치되지 않은 모듈·구역의 화면이면 대시보드로 */
 export function moduleGuard(to: GuardTarget): string | null {
   const { modules, loaded } = platformStore.getState()
   // Don't guard until modules are loaded
@@ -141,7 +141,7 @@ export function moduleGuard(to: GuardTarget): string | null {
 
 interface SetupStatus { needs_setup?: boolean }
 
-/** middleware/setup.global.ts — 최초설정(관리자 0명/미완료)이면 /setup 으로 */
+/** 최초 설정 가드 — 최초설정(관리자 0명/미완료)이면 /setup 으로 */
 export async function setupGuard(to: GuardTarget): Promise<string | null> {
   let status = getSharedState<SetupStatus | null>('setup-status', () => null)
   if (status === null) {

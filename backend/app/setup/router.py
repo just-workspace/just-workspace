@@ -222,7 +222,7 @@ async def update_features(body: FeaturesUpdate, request: Request = None, user: U
 
 @router.get("/services")
 async def services(user: User = Depends(get_current_user)):
-    """서비스 상태 (관리자) — 단일 웹 컨트롤 플레인 가시성."""
+    """서비스 상태 (관리자)."""
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="관리자만 가능합니다")
     from app.setup import orchestrator

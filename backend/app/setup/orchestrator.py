@@ -1,8 +1,7 @@
-"""오케스트레이션 어댑터 — 서비스 라이프사이클(단일 웹 컨트롤 플레인).
+"""컨테이너 상태 조회와 재시작 — 관리 › 시스템 화면이 쓴다(docker 소켓).
 
-지금: docker(컨테이너 상태/재시작, docker.sock). 차후: k8s 어댑터(동일 인터페이스로 교체).
-서비스 '시작/중지'(프로파일 신규 기동)는 compose 파일 접근이 필요해 여기서 다루지 않고,
-여기선 sock만으로 가능한 '상태 조회 + 재시작'을 제공(안전).
+구역을 켜고 끄는 일(컨테이너를 새로 만들고 지우는 일)은 compose 파일이 필요해 여기서 하지 않는다 —
+설치 관리자가 한다. 여기서는 소켓만으로 되는 "상태 보기 + 재시작"만 한다.
 """
 from __future__ import annotations
 
@@ -28,7 +27,7 @@ async def _docker(*args: str, timeout: float = 20.0) -> tuple[int, str]:
 
 
 async def service_status() -> list[dict]:
-    """ws-* 컨테이너 상태 목록 (Catalyst식 어슈어런스)."""
+    """ws-* 컨테이너 상태 목록."""
     rc, out = await _docker("ps", "-a", "--format", "{{.Names}}\t{{.State}}\t{{.Status}}")
     found: dict[str, dict] = {}
     if rc == 0:

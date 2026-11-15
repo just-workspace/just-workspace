@@ -153,7 +153,7 @@ describe('setup.global', () => {
   })
 })
 
-describe('순서(Nuxt 파일 이름 순: auth → module → setup)', () => {
+describe('순서(auth → module → setup)', () => {
   it('첫 이동에서 사용자 정보를 먼저 읽는다(plugins/auth.ts)', async () => {
     api.me = user()
     authStore.setState({ user: null, loading: true })

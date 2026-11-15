@@ -1,4 +1,4 @@
-// ESLint(flat) — 타입스크립트 권장 + React Hooks 규칙. 스타일 규칙은 두지 않는다(포맷은 Vue 판과 같은 손글씨 관례).
+// ESLint(flat) — 타입스크립트 권장 + React Hooks 규칙. 스타일 규칙은 두지 않는다(포맷은 손글씨 관례).
 import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 import reactHooks from 'eslint-plugin-react-hooks'

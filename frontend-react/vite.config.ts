@@ -4,12 +4,12 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
 
-// Vue 판 nuxt.config.ts 의 PWA·프록시·브랜딩 설정을 그대로 옮겼다.
+// PWA·개발 서버 프록시·브랜딩 설정.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const appName = env.APP_NAME || env.VITE_APP_NAME || 'Workspace'
   const brandColor = env.BRAND_COLOR || env.VITE_BRAND_COLOR || '#3B82F6'
-  // 번들 SPA 앱(apiBase 설정)에선 SW 끔 — nuxt.config 와 같은 이유(옛 SW 가 구번들을 영구 precache 하는 사고 방지)
+  // 번들 SPA 앱(apiBase 설정)에선 SW 끔(옛 SW 가 구번들을 영구 precache 하는 사고 방지)
   const apiBase = env.VITE_API_BASE || env.NUXT_PUBLIC_API_BASE || ''
   const backend = env.DEV_BACKEND || 'http://localhost:8000'
 

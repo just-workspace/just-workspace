@@ -14,6 +14,8 @@ Usage:
     python -m app.cli migrate --check                   # 적용할 것이 있으면 종료 코드 1 과 목록
     python -m app.cli migrate --status [--json]         # 현재 버전·대기 단계·기록
     python -m app.cli schema-version                    # 이 코드가 요구하는 스키마 버전(숫자만)
+    python -m app.cli backup create|list|inspect|verify …  # 백업(app/backup/cli.py)
+    python -m app.cli restore <백업>                    # 복원 — backend 밖에서(scripts/restore.sh)
 
 gen-secrets · check-secrets · schema-version 은 DB 없이 돈다(설치 관리자가 컨테이너를 띄우기 전에 부른다).
 스키마 버전과 변경 단계는 docs/data-safety.md.
@@ -438,6 +440,11 @@ def build_parser() -> argparse.ArgumentParser:
     sv = sub.add_parser("schema-version", help="이 코드가 요구하는 DB 스키마 버전(숫자만, DB 없이)")
     sv.add_argument("--fingerprint", action="store_true", help="버전 대신 모델 지문을 출력(개발용)")
     sv.set_defaults(func=_cmd_schema_version)
+
+    # backup · restore — app/backup/cli.py
+    from app.backup.cli import add_parsers as add_backup_parsers
+
+    add_backup_parsers(sub)
     return parser
 
 

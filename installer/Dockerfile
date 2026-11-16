@@ -49,6 +49,9 @@ COPY . /src
 RUN python -m app.bundle build /src /app/bundle && rm -rf /src
 
 # 라이선스 고지 — 이미지 배포 시 고지 동반 필수(빌드 컨텍스트가 리포 루트이므로 직접 복사)
+# 디렉터리(/licenses)를 0755 로 먼저 생성한다 — `--chmod=0644` 는 신규 생성되는 상위 디렉터리에도 적용되어
+# 실행 비트가 없는 디렉터리가 되고, 비루트 사용자가 고지 파일을 읽지 못한다. 파일은 다음 줄에서 0644 로 덮어쓴다.
+COPY --chmod=0755 LICENSE /licenses/
 COPY --chmod=0644 LICENSE NOTICE THIRD_PARTY_LICENSES.md /licenses/
 
 # pull 대상 이미지의 저장소(네임스페이스 포함). 변경 시 빌드 인자 또는 실행 시 -e JW_REGISTRY=… 로 지정한다.

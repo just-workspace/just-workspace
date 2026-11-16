@@ -21,6 +21,9 @@ COPY server.py helpers.py /opt/sandbox/
 # 라이선스 고지 — 이미지를 배포하면 고지도 함께 가야 한다. 세 파일은 빌드 문맥 밖(리포 루트)에 있어
 # 이름 붙인 문맥 `licenses` 로 받는다: compose 의 build.additional_contexts, 직접 빌드할 때는
 # `docker build --build-context licenses=<리포 루트> …`.
+# 디렉터리(/licenses)를 0755 로 먼저 생성한다 — `--chmod=0644` 는 신규 생성되는 상위 디렉터리에도 적용되어
+# 실행 비트가 없는 디렉터리가 되고, 비루트 사용자가 고지 파일을 읽지 못한다. 파일은 다음 줄에서 0644 로 덮어쓴다.
+COPY --from=licenses --chmod=0755 LICENSE /licenses/
 COPY --from=licenses --chmod=0644 LICENSE NOTICE THIRD_PARTY_LICENSES.md /licenses/
 
 # 슬롯별 실행 계정(로그인 없음). 글꼴 캐시는 이미지에 미리 만들어 두고 작업마다 복사한다.

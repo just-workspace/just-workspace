@@ -38,6 +38,9 @@ RUN groupadd -g 1001 docker || true \
 # 라이선스 고지 — 이미지 배포 시 고지를 함께 포함해야 한다. 세 파일은 빌드 컨텍스트 밖(리포 루트)에 있으므로
 # 명명된 컨텍스트 `licenses` 로 수신한다: compose 의 build.additional_contexts, 직접 빌드 시에는
 # `docker build --build-context licenses=<리포 루트> …`.
+# 디렉터리(/licenses)를 0755 로 먼저 생성한다 — `--chmod=0644` 는 신규 생성되는 상위 디렉터리에도 적용되어
+# 실행 비트가 없는 디렉터리가 되고, 비루트 사용자가 고지 파일을 읽지 못한다. 파일은 다음 줄에서 0644 로 덮어쓴다.
+COPY --from=licenses --chmod=0755 LICENSE /licenses/
 COPY --from=licenses --chmod=0644 LICENSE NOTICE THIRD_PARTY_LICENSES.md /licenses/
 
 # 루트로 기동 → entrypoint 가 docker.sock gid 정렬 후 gosu 로 appuser 로 강등

@@ -88,7 +88,7 @@ def test_auto_reissue_failure_puts_the_old_certificate_back(tmp_path):
     before = host.cert
     host.certbot_ok = False
     job = finish(svc, api_cert.manager(svc).reissue({"mode": "auto"}))
-    assert job["status"] == "failed" and job["error"]["cause"] == "cert_issue_failed"
+    assert job["status"] == "failed" and job["error"]["cause"] == "cert_dns_mismatch"      # 접속 주소의 DNS 불일치가 감지된 설치
     assert [s["status"] for s in job["stages"]] == ["failed", "pending", "pending"]
     assert svc.store.load_answers().access.cert == "temporary"                 # 응답(answers)이 롤백되었다
     assert certs.is_self_signed(host.cert) and host.cert                        # 임시 인증서가 다시 배치되었다

@@ -1450,10 +1450,23 @@ class UpdateManager:
             if (job.get("restore") or {}).get("reason") == "beta":
                 self._drop_point(job["restore"]["point"])
                 self._save_settings(channel="stable", beta={"since": None, "restore_point": None})
-            chk = self.check_raw()
-            chk["available"] = {"state": "none"}       # 버전 변경됨 — 다음 확인 시 재설정된다
-            self._write("check.json", chk)
-            self._save_settings(next_check_at=None)
+        self._recheck_after_revert()
+
+    def _recheck_after_revert(self) -> None:
+        """롤백·복원 완료 후 — 현재 버전이 변경되었으므로 이전 버전 기준의 확인 결과를 무효화하고 즉시 재확인한다.
+
+        재확인 이전의 결과(예: 복원 전 최신 버전이었던 경우의 `none`)가 남으면, 복원한 버전보다 상위인 릴리스가 다음 주기
+        확인 시까지 표시되지 않는다. 재확인은 백그라운드로 수행하며, 진행 중에는 현황의 확인 상태가 `checking` 이다.
+        재확인이 시작되지 않는 경우(확인이 이미 진행 중 등)에도 `next_check_at` 을 비워 다음 주기 작업(1분)에서 확인한다.
+        """
+        chk = self.check_raw()
+        chk["available"] = {"state": "none"}
+        self._write("check.json", chk)
+        self._save_settings(next_check_at=None)
+        try:
+            self.check()
+        except UpdateError:
+            pass
 
     def _skip(self, step: dict, log, why: str) -> None:
         step["detail"]["skipped"] = True

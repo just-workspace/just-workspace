@@ -683,6 +683,35 @@ def test_verify_waits_for_docs_server(host):
     assert job["steps"][-1]["detail"]["warnings"] == [{"key": "docs_not_ready", "vars": {}}]
 
 
+def test_restore_rechecks_channel_immediately(host):
+    """복원 지점으로 복원한 직후 — 복원 전의 확인 결과(최신 버전이므로 none)를 남기지 않고 즉시 재확인한다.
+    별도의 "지금 확인" 없이 현황에 복원 이전 버전(상위 릴리스)이 표시되어야 한다."""
+    mgr = ready(host, "1.0.0", "1.0.1", db_schema=2)
+    mgr, _ = run_to_end(host, mgr, lambda m: m.apply("1.0.1", "now", None))
+    mgr.check()
+    assert mgr.status()["available"] == {"state": "none"}          # 1.0.1 이 최신
+    point = mgr.restore_points()["points"][0]
+    fetched = len(host.releases.fetched)
+    mgr, _ = run_to_end(host, mgr, lambda m: m.start_restore(point["id"], "now", None))
+    assert mgr.current()["version"] == "1.0.0"
+    assert len(host.releases.fetched) > fetched                      # 완료 처리에서 채널을 재수신했다
+    status = mgr.status()
+    assert status["available"]["state"] == "update" and status["available"]["version"] == "1.0.1"
+    assert status["check"]["ok"] is True and status["check"]["state"] == "idle"
+
+
+def test_rollback_rechecks_channel(host):
+    """업데이트 실패 후 자동 롤백 — 완료 시 확인 결과를 재산출하여 동일 버전을 다시 받을 수 있는 상태로 표시한다."""
+    mgr = ready(host, "1.0.0", "1.0.1", db_schema=2)
+    host.fail_migrate = True
+    fetched = len(host.releases.fetched)
+    job = mgr.apply("1.0.1", "now", None)
+    assert mgr.job_raw(job["rollback_job"])["status"] == "done" and mgr.current()["version"] == "1.0.0"
+    assert len(host.releases.fetched) > fetched
+    available = mgr.status()["available"]
+    assert available["state"] == "update" and available["version"] == "1.0.1"
+
+
 def test_restore_failure_offers_only_retry(host):
     mgr = ready(host, "1.0.0", "1.0.1", db_schema=2)
     mgr, _ = run_to_end(host, mgr, lambda m: m.apply("1.0.1", "now", None))

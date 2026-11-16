@@ -1,6 +1,7 @@
 /**
  * 적용 진행 화면 — 설치와 복원이 공용한다. 단계 목록(완료 · 진행 중 · 실패 · 대기)과 전체 진행 막대,
- * 진행 중인 단계의 세부(이미지별 · 구역별), 실패한 단계의 실패 카드를 렌더링한다.
+ * 진행 중인 단계의 세부(이미지별 · 구역별), 실패한 단계의 실패 카드를 렌더링한다. 설정 단계의 이미지 진행은 비밀 키 생성에
+ * 사용하는 backend 이미지의 선행 다운로드이며, 해당 용도를 함께 표시한다.
  * 단계 목록과 상태는 서버가 전달한 그대로이다(저장소 연결 같은 단계는 필요한 경우에만 목록에 포함된다).
  * 진행 상황은 서버의 상태 흐름으로 수신한다. 숫자 변경 시마다 낭독되지 않도록 진행 부분에는 aria-live 를 두지 않는다.
  */
@@ -245,6 +246,10 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
 
                 {step.status === 'running' && (images.length > 0 || zones.length > 0) && (
                   <div className="flex flex-col gap-2 pb-3.5 pl-[46px] pr-4">
+                    {/* 설정 단계는 비밀 키 생성에 사용하는 backend 이미지 1개를 먼저 받는다 — 이미지 단계의 진행과 구별되도록 용도를 표시한다 */}
+                    {step.id === 'config' && images.length > 0 && (
+                      <span className="text-xs text-muted-foreground" data-testid="apply-config-image-note">{t('apply.configImageNote')}</span>
+                    )}
                     {images.map(im => (
                       <SubRow
                         key={im.image}

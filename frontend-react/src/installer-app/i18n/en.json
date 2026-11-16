@@ -805,6 +805,7 @@
     "count": "{m}{done}{/m} of {m}{total}{/m} steps done",
     "elapsed": "{min} min {sec} s",
     "progressLabel": "Install progress",
+    "configImageNote": "Downloading the backend image first; it is used to generate the secret keys. The other images are downloaded in the \"Download images\" step.",
     "steps": {
       "config": "Create configuration files and secret keys",
       "storage": "Connect storage",

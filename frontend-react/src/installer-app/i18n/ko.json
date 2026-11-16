@@ -805,6 +805,7 @@
     "count": "전체 {m}{total}{/m}단계 중 {m}{done}{/m}단계 완료",
     "elapsed": "{min}분 {sec}초",
     "progressLabel": "설치 진행",
+    "configImageNote": "비밀 키 생성에 사용하는 backend 이미지를 먼저 다운로드합니다. 나머지 이미지는 \"이미지 다운로드\" 단계에서 다운로드합니다.",
     "steps": {
       "config": "설정 파일과 비밀 키 만들기",
       "storage": "저장소 연결",

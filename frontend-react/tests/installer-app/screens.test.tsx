@@ -610,6 +610,17 @@ describe('적용', () => {
     expect(screen.getByText(/이 창을 닫아도 설치는 계속됩니다/)).toBeTruthy()
   })
 
+  it('설정 단계의 이미지 다운로드는 해당 단계 아래에 용도와 함께 표시된다', async () => {
+    open('ready,apply-config-running', '#/apply')
+    await heading('설치하는 중입니다')
+    expect(stepsOf()[0]).toBe('config:running')
+    const config = document.querySelector('[data-step=config]') as HTMLElement
+    expect(within(config).getByTestId('apply-config-image-note').textContent).toContain('비밀 키 생성에 사용하는 backend 이미지를 먼저 다운로드합니다')
+    expect(within(config).getByRole('progressbar', { name: 'ghcr.io/just-workspace/just-workspace-backend:1.0.0' })).toBeTruthy()
+    expect(within(config).getByText('다운로드 중')).toBeTruthy()
+    expect(document.querySelector('[data-step=pull]')!.querySelector('[role=progressbar]')).toBeNull()
+  })
+
   it('시작하지 않은 채 적용 주소로 오면 요약으로 돌려보낸다', async () => {
     open('ready', '#/apply')
     await heading('이대로 설치합니다')

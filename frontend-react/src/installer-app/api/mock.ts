@@ -15,7 +15,7 @@
  * | 메일 · AI | records-ok · records-unknown · smtp-fail · ai-fail |
  * | 미리 채운 답변 | router · proxy · upload · full(전체 묶음과 애드온) · quick · quick-ready(빠른 설치 요약 직전) · ready(요약 직전까지 채움) |
  * | 요약 | summary-error |
- * | 적용 | apply-cert-fail · apply-storage-fail · apply-zone-fail · apply-running · apply-done |
+ * | 적용 | apply-cert-fail · apply-storage-fail · apply-zone-fail · apply-running · apply-config-running(설정 단계의 backend 이미지 선행 다운로드) · apply-done |
  * | 복원 · 파일 | restore(지원함) · restore-badfile · restore-format · restore-noconfig · restore-corrupt · restore-password(맞는 암호는 `backup-pass`) · restore-uploading · restore-checking · restore-nospace · restore-kept(이미 올려 둔 백업) |
  * | 복원 · 내용 확인 | restore-version · restore-memory · restore-local · restore-nofiles · restore-proxy · restore-nobackup · restore-invalid(시작 거부) · restore-nfs-marker · restore-nfs-other |
  * | 복원 · 적용 | restore-fail · restore-cert-fail · restore-done |
@@ -182,9 +182,13 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
     if (has('apply-zone-fail')) return { step: 'zones', cause: 'git_not_responding', fix: 'see_container_log', vars: { zone: 'git', container: 'ws-git' } }
     return null
   }
-  const stuckAt = () => (has('apply-running') ? 'pull' : (has('resume-applying') ? 'zones' : null))
+  const stuckAt = () => (has('apply-running') ? 'pull' : (has('apply-config-running') ? 'config' : (has('resume-applying') ? 'zones' : null)))
 
   function detail(id: string, running: boolean): ApplyStep['detail'] {
+    // 설정 단계: 비밀 키 생성에 사용하는 backend 이미지가 없으면 먼저 받는다(진행률 없음 — 서버는 진행 줄만 전달한다)
+    if (id === 'config' && running && has('apply-config-running')) {
+      return { images: [{ image: 'ghcr.io/just-workspace/just-workspace-backend:1.0.0', status: 'pulling', progress: 'Downloading' }] }
+    }
     if (id === 'pull') {
       const images = ['frontend', 'backend', 'postgres', 'redis', 'nginx', ...(selected().includes('mail') ? ['mailserver'] : []), ...(selected().includes('docs') ? ['docconv'] : [])]
       return { images: images.map((image, i) => ({ image, status: !running ? 'done' : (i < 2 ? 'done' : (i === 2 ? 'pulling' : 'pending')), progress: running && i === 2 ? 'Downloading 62%' : '', percent: !running ? 100 : (i < 2 ? 100 : (i === 2 ? 62 : 0)) })) }
@@ -250,7 +254,7 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
     }, stepMs)
     return apply
   }
-  if (has('resume-applying') || has('resume-failed') || has('apply-running')) {
+  if (has('resume-applying') || has('resume-failed') || has('apply-running') || has('apply-config-running')) {
     if (has('resume-failed')) on.add('apply-cert-fail')
     buildApply(terminalIndex())
   }

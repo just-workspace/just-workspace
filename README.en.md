@@ -122,7 +122,7 @@ The version is 1.0.0 and the first public release is being prepared.
 
 - Updates against the real distribution channel and signing key, and an actual run of the image build workflow.
 - Real Let's Encrypt issuance and renewal (only the "issuance failed → continue with a temporary certificate" path was checked).
-- Code hosting sign-in integration with a trusted certificate, the isolated browser add-on, lossless audio, external SMTP and AI provider connections, and storage in a custom host folder.
+- Code hosting sign-in integration with a public CA certificate (with a private CA it was verified once the issuing CA is uploaded with the certificate), pixel mode of the isolated browser and what is rendered inside a session (starting and ending a mirror-mode session was verified), lossless audio, external SMTP and AI provider connections, and storage in a custom host folder.
 - Servers behind a home router or a real front proxy, distributions with SELinux enabled, and non-x86_64 servers.
 
 ## License

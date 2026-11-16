@@ -448,6 +448,7 @@ ws-rbi-netfilter ─ RBI_POLL(5초)마다 읽기 ─ 줄마다 재검사(rbi-all
 | 금지 | 루프백·링크로컬·멀티캐스트·세션 대역·이 호스트의 `docker0`/`br-*` 대역·`RBI_DENY` → `denied` |
 | 상한 | `RBI_ALLOW_CEILING`(비면 사설 대역) 밖 → `outside-ceiling` |
 | 자기 주소 | 이 호스트의 IP·기본 게이트웨이는 `force` 줄만 → 아니면 `self-needs-force` |
+| (참고) | backend 가 "자신의 주소"로 아는 것은 `RBI_PROTECTED` 와 접속 주소가 풀리는 IP 뿐이다. 서버의 LAN 주소가 `RBI_PROTECTED` 에 없으면 backend 는 그냥 받아 주지만 사이드카가 `self-needs-force` 로 거부한다 — 관리 화면의 "격리 규칙 상태"에 보이고, 그 대상은 **강제**로 다시 저장하면 `force` 가 붙어 열린다. 설치 관리자는 `RBI_PROTECTED` 를 채우지 않는다 |
 
 `RBI_ALLOW` 는 **고정 허용**으로 남는다(검사 없이 늘 허용 — 운영자가 .env 에 적은 것). 상한은 `RBI_ALLOW_CEILING`.
 볼륨을 둘로 나눈 이유: 사이드카는 host 네트워크라 내부 HTTP 엔드포인트를 쓰려면 새 노출면이 생긴다. `rbi-allow`(백엔드 → 사이드카 ro)·`rbi-guard`(사이드카 → 백엔드 ro)로

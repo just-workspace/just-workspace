@@ -120,6 +120,15 @@ async def test_validation_rejects(url, hosts, ports, msg):
     assert msg in str(ei.value), str(ei.value)
 
 
+async def test_force_marks_entries_the_backend_does_not_know_as_its_own():
+    """backend 가 자신의 주소로 알지 못하는 서버의 LAN 주소도, 강제로 저장하면 사이드카가 통과시키는 표시(force)가 붙는다."""
+    entries, warn = await eg.compute_egress("http://192.168.10.77:8080", [], [8080], force=True)
+    assert [e.line() for e in entries] == ["192.168.10.77:8080"] and all(e.forced for e in entries)
+    assert warn and "강제로 저장" in warn[0]
+    entries, warn = await eg.compute_egress("http://192.168.10.77:8080", [], [8080])
+    assert not any(e.forced for e in entries) and warn == []
+
+
 async def test_force_allows_own_host_with_warning_but_not_hard_denied():
     entries, warn = await eg.compute_egress("http://192.168.10.25", [], [], force=True)
     assert [e.line() for e in entries] == ["192.168.10.25:80", "192.168.10.25:443"] and all(e.forced for e in entries)

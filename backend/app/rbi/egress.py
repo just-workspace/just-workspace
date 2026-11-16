@@ -223,8 +223,12 @@ async def compute_egress(url: str, allowed_hosts: list[str], extra_ports: list[i
                 raise ValueError(f"{host} → {ip} — 워크스페이스 자신의 주소입니다({why}). 꼭 열어야 하면 강제(force)로 저장하세요")
             if why:
                 warnings.append(f"{host} → {ip}: 워크스페이스 자신의 주소({why})를 강제로 엽니다")
+            elif force:
+                # backend 가 아는 "자신의 주소"는 설정(RBI_PROTECTED)과 접속 주소가 풀리는 IP 뿐이다. 서버의 LAN 주소·기본
+                # 게이트웨이는 사이드카만 알고, 사이드카는 force 가 붙은 줄만 통과시킨다 — 강제로 저장한 뜻을 그대로 전한다.
+                warnings.append(f"{host} → {ip}: 강제로 저장했습니다 — 이 서버 자신의 주소나 기본 게이트웨이여도 엽니다")
             for p in ports:
-                e = EgressEntry(host=host, ip=ip, port=p, forced=bool(why))
+                e = EgressEntry(host=host, ip=ip, port=p, forced=bool(why) or force)
                 if all(x.line() != e.line() for x in entries):
                     entries.append(e)
     if len(entries) > 64:

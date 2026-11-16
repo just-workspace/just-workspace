@@ -21,7 +21,7 @@ export interface CertState {
   site_ca?: boolean
   /** 발급 CA 인증서를 별도로 업로드할 수 있는 설치(업로드한 인증서를 사용하며 자체 서명이 아님) */
   ca_uploadable?: boolean
-  /** 자동 갱신 상태 — 이 항목을 주지 않는 설치 관리자(이전 버전)도 있다 */
+  /** 자동 갱신 상태 — 이전 버전의 설치 관리자는 이 항목을 제공하지 않는다 */
   renewal?: CertRenewal | null
   /** 인증서 문제로 연결이 보류된 구역 */
   pending: string[]
@@ -29,7 +29,7 @@ export interface CertState {
   job: ZoneJob | null
 }
 export interface CertRenewal {
-  /** 자동 발급 설치(갱신 서비스가 있어야 하는 설치) */
+  /** 자동 발급 설치 여부(갱신 서비스가 필요한 설치) */
   applicable: boolean
   service: 'running' | 'stopped' | 'missing'
   last_run_at: string | null

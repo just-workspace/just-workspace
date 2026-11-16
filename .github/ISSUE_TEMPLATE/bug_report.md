@@ -41,8 +41,8 @@ Security vulnerabilities are not to be reported here — see SECURITY.md. Report
   docker logs --tail 200 jw-installer        # 설치·구역·업데이트 문제
 
 - 오류 화면에 "요청 번호"가 표시된 경우 해당 값을 함께 기재한다.
-- 설치 단계가 실패한 경우 화면의 "기록 내려받기" 또는 <설치 폴더>/state/logs/<단계>.log
-- 업데이트 문제는 관리 › 업데이트 › 기록에서 내려받은 기록
+- 설치 단계가 실패한 경우 화면의 "로그 다운로드" 또는 <설치 폴더>/state/logs/<단계>.log
+- 업데이트 문제는 관리 › 업데이트 › 기록에서 다운로드한 로그
 
 상세 내용: docs/operate.md 의 "로그"
 -->

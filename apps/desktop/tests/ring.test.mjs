@@ -3,16 +3,27 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const native = require('../native/index.js').load();
 
-test('capacity rounds up to power of two; empty reads 0', () => {
+// 애드온은 리포에 들어 있지 않다(빌드 산출물) — 빌드하지 않은 곳에서는 이유를 적고 건너뛴다.
+// 빌드했는데 불러오지 못하는 것(깨진 바이너리 등)은 건너뛰지 않고 실패한다.
+// 애드온이 반드시 있어야 하는 곳(릴리스 빌드)에서는 JW_REQUIRE_NATIVE=1 로 건너뛰기를 실패로 바꾼다.
+let native = null;
+let skip = false;
+try {
+  native = require('../native/index.js').load();
+} catch (e) {
+  if (e?.code !== 'JW_NATIVE_AUDIO_MISSING' || process.env.JW_REQUIRE_NATIVE === '1') throw e;
+  skip = '네이티브 애드온(native/build/Release/jw_native_audio.node)이 빌드되지 않았다 — npm run native:build:node (Windows + MSVC 빌드 도구)';
+}
+
+test('capacity rounds up to power of two; empty reads 0', { skip }, () => {
   const r = new native.RingTest(100);
   assert.equal(r.capacity(), 128);
   assert.equal(r.available(), 0);
   assert.equal(r.read(new Uint8Array(10)), 0);
 });
 
-test('write is all-or-nothing (frame atomicity) and wraps around', () => {
+test('write is all-or-nothing (frame atomicity) and wraps around', { skip }, () => {
   const r = new native.RingTest(128);
   assert.equal(r.write(new Uint8Array(70).fill(1)), 70);
   assert.equal(r.write(new Uint8Array(70).fill(2)), 0);   // 58 만 남음 → 거부
@@ -29,7 +40,7 @@ test('write is all-or-nothing (frame atomicity) and wraps around', () => {
   assert.equal(r.available(), 0);
 });
 
-test('byte order survives many wraps (sequence check)', () => {
+test('byte order survives many wraps (sequence check)', { skip }, () => {
   const r = new native.RingTest(1024);
   let w = 0, rd = 0;
   const chunk = new Uint8Array(97);
@@ -45,7 +56,7 @@ test('byte order survives many wraps (sequence check)', () => {
   assert.equal(w - rd, r.available());
 });
 
-test('discard drops oldest bytes; reset empties', () => {
+test('discard drops oldest bytes; reset empties', { skip }, () => {
   const r = new native.RingTest(64);
   r.write(new Uint8Array([1, 2, 3, 4, 5, 6]));
   assert.equal(r.discard(4), 4);

@@ -156,6 +156,10 @@ npm run build && npm test     # tsc + node --test(프로토콜 벡터·링버퍼
 node scripts/native-smoke.mjs --exclusive-try   # 장치 목록·exclusive 매트릭스·실제 장치 exclusive 시도·null 백엔드 왕복·리샘플러
 ```
 
+네이티브 애드온을 빌드하지 않은 곳에서 `npm test` 를 돌리면, 애드온이 있어야 하는 링버퍼 테스트(`tests/ring.test.mjs`)는 이유와 함께
+**건너뜀**으로 표시된다(실패가 아니다). 빌드했는데 불러오지 못하면 실패한다. 애드온이 반드시 있어야 하는 곳(릴리스 빌드)에서는
+`JW_REQUIRE_NATIVE=1 npm test` 로 건너뛰기를 실패로 바꾼다.
+
 CI: `npm ci && npm run native:build && npm run build && npm test`(windows-latest 러너에 VS Build Tools 기본 포함). `npm run dist` 는
 `npmRebuild: false` 로 electron-builder 의 재빌드를 끄고 `asarUnpack: ['**/*.node']` 로 두 바이너리(jw_native_audio·quiche)를 asar 밖에 둔다.
 

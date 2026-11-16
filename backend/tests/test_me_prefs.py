@@ -1,4 +1,4 @@
-"""개인 설정 서버 저장 — GET/PATCH /api/me/prefs (키 규칙·크기 제한·합치기·사용자 분리)."""
+"""개인 설정 서버 저장 — GET/PATCH /api/me/prefs (키 규칙·크기 제한·병합·사용자 분리)."""
 
 import pytest
 from fastapi import HTTPException
@@ -29,7 +29,7 @@ async def test_empty_then_merge_and_delete(db):
     r = await mp.patch_prefs({"density": "compact", "theme": "dark", "tabbar_pinned": ["mail", "chat"],
                               "mail.dark_view": True}, user=alice, db=db)
     assert r["prefs"]["tabbar_pinned"] == ["mail", "chat"]
-    # 합치기 — 보낸 키만 바뀌고 null 은 지운다. {"prefs": {...}} 감싼 모양도 받는다
+    # 병합 — 전송한 키만 변경되고 null 은 삭제. {"prefs": {...}} 로 감싼 형태도 수신
     r = await mp.patch_prefs({"prefs": {"theme": None, "week_start": 1}}, user=alice, db=db)
     assert r["prefs"] == {"density": "compact", "tabbar_pinned": ["mail", "chat"], "mail.dark_view": True,
                           "week_start": 1}

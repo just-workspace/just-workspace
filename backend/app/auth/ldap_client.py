@@ -81,14 +81,14 @@ async def auto_provision(db) -> bool:
 
 
 class LdapUnavailable(Exception):
-    """디렉터리에 물어볼 수 없었다(연결·서비스 계정·설정 문제) — "비밀번호가 틀렸다"와 다르다."""
+    """디렉터리 조회 불가(연결·서비스 계정·설정 문제) — "비밀번호가 틀렸다"와 구분된다."""
 
 
 def _authenticate_sync(cfg: dict, username: str, password: str, strict: bool = False) -> dict | None:
     """동기 LDAP 인증. 성공 시 {email, name, dn} 반환, 실패 시 None.
 
-    strict=True 면 디렉터리 장애를 None(=틀림)으로 뭉개지 않고 LdapUnavailable 로 올린다 —
-    본인 확인 실패 횟수를 세는 호출부(복구 이메일 변경)가 장애를 "틀림"으로 세지 않게."""
+    strict=True 이면 디렉터리 장애를 None(=틀림)으로 처리하지 않고 LdapUnavailable 예외를 발생시킨다 —
+    본인 확인 실패 횟수를 집계하는 호출자(복구 이메일 변경)가 장애를 "틀림"으로 집계하지 않도록 하기 위함이다."""
     from ldap3 import Server, Connection, ALL, SUBTREE
     from ldap3.utils.conv import escape_filter_chars
 
@@ -142,7 +142,7 @@ async def authenticate(db, username: str, password: str) -> dict | None:
 
 
 async def authenticate_strict(db, username: str, password: str) -> dict | None:
-    """authenticate 와 같되 디렉터리 장애·미설정은 LdapUnavailable. None 은 "계정 없음·비밀번호 틀림"만."""
+    """authenticate 와 동일하나 디렉터리 장애·미설정 시 LdapUnavailable 예외 발생. None 은 "계정 없음·비밀번호 틀림"에 한정."""
     cfg = await get_config(db, reveal=True)
     if not cfg["enabled"] or not cfg["host"] or not cfg["base_dn"]:
         raise LdapUnavailable("LDAP 설정이 완전하지 않습니다")

@@ -1,4 +1,4 @@
-"""내장 AI 대화 표시(남이 쓴 내용을 읽음) — 도구 밖 경로: 공유 프로젝트 지침, 메모리 저장 거절."""
+"""내장 AI 대화 표시(타인이 작성한 내용을 읽음) — 도구 외 경로: 공유 프로젝트 지침, 메모리 저장 거부."""
 
 import json
 
@@ -59,7 +59,7 @@ async def test_memory_save_still_works_without_untrusted_read(env):
     cid = await _conv(env, env.alice, tools_enabled=True)
     evs = await _chat(env, cid, "기억해")
     assert [d["kind"] for e, d in evs if e == "memory_saved"] == ["preference"]
-    assert ai_memory.TOOL_NAME  # 저장 경로는 그대로
+    assert ai_memory.TOOL_NAME  # 저장 경로는 유지
 
 
 async def test_shared_project_instructions_mark_conversation_for_members_only(env):
@@ -74,12 +74,12 @@ async def test_shared_project_instructions_mark_conversation_for_members_only(en
         ai_router.ProjectBody(name="운영", instructions="답은 개조식으로"), user=env.alice, db=env.db)
     await ai_router.patch_project.__wrapped__(p["id"], ai_router.ProjectPatch(share_group_id=g.id),
                                               user=env.alice, db=env.db)
-    # 주인 — 본인이 쓴 지침이라 표시하지 않는다
+    # 소유자 — 본인이 작성한 지침이므로 표시하지 않는다
     acid = await _conv(env, env.alice, project_id=p["id"])
     await _chat(env, acid, "안녕")
     assert "답은 개조식으로" in env.seen[-1]["system"]
     assert await writes.conv_untrusted("alice", acid) is None
-    # 구성원 — 남이 쓴 지침이 맥락에 들어갔다 → 대화 표시(15분 창과 무관하게 대화 내내)
+    # 구성원 — 타인이 작성한 지침이 맥락에 포함됨 → 대화 표시(15분 창과 무관하게 대화 전체 기간)
     bcid = await _conv(env, env.bob, project_id=p["id"])
     await _chat(env, bcid, "안녕", user=env.bob)
     assert "답은 개조식으로" in env.seen[-1]["system"]

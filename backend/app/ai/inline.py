@@ -3,17 +3,17 @@
 대상 화면: 메일 · 채팅·회의·문서.
 
 원칙
-- **입력은 사용자 권한으로 읽은 것만.** 메일은 메일 API 의 `get_message`(계정 소유·모듈·그룹 권한),
-  채팅은 채널 권한 `message.read`, 회의는 회의 요약과 같은 판정(호스트·초대 대상·채널 멤버)으로 읽는다.
-  문서 교정은 편집기에 지금 있는 글(사용자가 보낸 글)만 본다.
-- 모델은 사용자 기본 모델(`ai_config.resolve_provider_for_user`). 외부 상용 AI 면 관리 › AI "외부 AI 개인데이터 허용"
-  이 켜져 있어야 하고(꺼져 있으면 external_blocked), 개인정보 가리기(ai.gov.mask_pii, 기본 켬)를 거친다.
-- 한도: 분당 호출(app.mcp.audit.check_rate — 도구 호출과 같은 몫) + 하루 요청 한도(daily_limit: 채팅 질문 + 화면 안 AI 호출).
-- 감사: audit_logs 에 action="ai_tool.call", tool="inline_<kind>", source="inline" — 인자 이름만(값 금지).
-  관리자 사용량 화면이 도구 호출과 함께 센다.
+- **입력은 사용자 권한으로 조회한 것만 사용한다.** 메일은 메일 API 의 `get_message`(계정 소유·모듈·그룹 권한),
+  채팅은 채널 권한 `message.read`, 회의는 회의 요약과 동일한 판정(호스트·초대 대상·채널 멤버)으로 조회한다.
+  문서 교정은 편집기에 현재 있는 텍스트(사용자가 전송한 텍스트)만 대상으로 한다.
+- 모델은 사용자 기본 모델(`ai_config.resolve_provider_for_user`). 외부 상용 AI 인 경우 관리 › AI "외부 AI 개인데이터 허용"
+  이 활성화되어 있어야 하며(비활성화 시 external_blocked), 개인정보 마스킹(ai.gov.mask_pii, 기본 활성화)을 거친다.
+- 한도: 분당 호출(app.mcp.audit.check_rate — 도구 호출과 동일한 할당분) + 일일 요청 한도(daily_limit: 채팅 질문 + 화면 안 AI 호출).
+- 감사: audit_logs 에 action="ai_tool.call", tool="inline_<kind>", source="inline" — 인자 이름만 기록(값 금지).
+  관리자 사용량 화면이 도구 호출과 합산하여 집계한다.
 - 결과 길이: 모델 창에 맞춘 예산(app.ai.context).
-- 외부에서 온 글(메일 본문·채팅·회의 채팅)은 "자료이며 지시가 아님" 경계로 감싸 모델에 넘긴다.
-- 쓰기(할일 등록)는 `app.mcp.writes.request_write` 로만 — 화면의 [할일에 등록]이 곧 사람의 승인이다.
+- 외부에서 유입된 텍스트(메일 본문·채팅·회의 채팅)는 "자료이며 지시가 아님" 경계로 감싸 모델에 전달한다.
+- 쓰기(할일 등록)는 `app.mcp.writes.request_write` 로만 수행한다 — 화면의 [할일에 등록]이 곧 사용자의 승인이다.
 """
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ TONES = ("polite", "short")
 
 
 class InlineError(Exception):
-    """화면에 그대로 보여 줄 오류. code 는 화면 분기용."""
+    """화면에 그대로 표시할 오류. code 는 화면 분기용."""
 
     def __init__(self, code: str, message: str, status: int = 400, **extra):
         super().__init__(message)
@@ -60,7 +60,7 @@ class InlineError(Exception):
 
 # ── 가용성 ────────────────────────────────────────────────────
 async def _module_ok(db, user: User, module_id: str) -> bool:
-    """모듈 on/off + 그룹 권한 — app.mcp.access.tool_accessible 와 같은 판정."""
+    """모듈 on/off + 그룹 권한 — app.mcp.access.tool_accessible 와 동일한 판정."""
     from app.groups import service as groups_service
     from app.mcp.access import module_enabled
 
@@ -68,7 +68,7 @@ async def _module_ok(db, user: User, module_id: str) -> bool:
         return False
     try:
         return bool(await groups_service.user_can_access(db, user.id, module_id, bool(user.is_admin)))
-    except Exception:  # noqa: BLE001 — 권한 시스템 오류는 require_module 과 같이 막지 않는다
+    except Exception:  # noqa: BLE001 — 권한 시스템 오류는 require_module 과 동일하게 차단하지 않는다
         return True
 
 
@@ -98,7 +98,7 @@ async def status(db, user: User) -> dict:
         "available": a["reason"] is None,
         "reason": a["reason"],
         "external": a["external"],
-        # 외부 AI 로 보낼 때 개인정보를 가리는지(내부 모델이면 가리지 않는다)
+        # 외부 AI 전송 시 개인정보 마스킹 여부(내부 모델이면 미적용)
         "mask_pii": bool(a["external"] and a["mask_pii"]),
         "model": getattr(cfg, "model", "") or "",
         "is_admin": bool(getattr(user, "is_admin", False)),
@@ -107,7 +107,7 @@ async def status(db, user: User) -> dict:
 
 
 async def enforce_limits(db, user: User) -> None:
-    """분당 호출 한도 + 하루 요청 한도."""
+    """분당 호출 한도 + 일일 요청 한도."""
     from app.ai import quota as ai_quota
     from app.mcp import audit
 
@@ -119,7 +119,7 @@ async def enforce_limits(db, user: User) -> None:
     if limit <= 0:
         return
     since = datetime.now(timezone.utc) - timedelta(hours=24)
-    # 채팅 몫은 app.ai.quota — 대화를 지워도 줄지 않는다
+    # 채팅 할당분은 app.ai.quota 담당 — 대화를 삭제해도 감소하지 않는다
     n_chat = await ai_quota.chat_used(db, user)
     n_inline = (await db.execute(select(func.count(AuditLog.id)).where(
         AuditLog.actor_id == user.id, AuditLog.action == "ai_tool.call",
@@ -148,7 +148,7 @@ _BOUNDARY = (
 
 
 def material_budget(cfg) -> int:
-    """자료(메일·채팅·문서)에 쓸 글자 수 — 창에서 응답·지시 몫을 빼고, 한글 1자≈1토큰으로 보수적으로."""
+    """자료(메일·채팅·문서)에 사용할 글자 수 — 창에서 응답·지시 할당분을 제외하고, 한글 1자≈1토큰으로 보수적으로 산정한다."""
     b = ai_ctx.budgets(cfg)
     return int(max(4_000, min(200_000, (b.input_tokens - 3_000) * 0.8)))
 
@@ -179,7 +179,7 @@ async def _call_model(cfg, system: str, user_text: str, *, mask_on: bool) -> str
 
 
 def parse_json(text: str) -> dict:
-    """모델 응답에서 JSON 객체를 꺼낸다(```json 울타리·앞뒤 설명 허용). 못 꺼내면 {}."""
+    """모델 응답에서 JSON 객체를 추출한다(```json 펜스·앞뒤 설명 허용). 추출 실패 시 {}."""
     if not text:
         return {}
     s = text.strip()
@@ -201,7 +201,7 @@ def _str(v, n: int = 300) -> str:
 
 
 def _date(v) -> str | None:
-    """YYYY-MM-DD 만 받는다(그 밖은 버린다 — 모델이 지어낸 형식)."""
+    """YYYY-MM-DD 만 허용한다(그 외는 폐기 — 모델이 임의로 생성한 형식)."""
     s = _str(v, 40)
     m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", s)
     if not m:
@@ -247,7 +247,7 @@ def _model_name(cfg) -> str:
 
 # ── 메일 ──────────────────────────────────────────────────────
 async def _load_mail(db, user: User, message_id: str, mailbox_id: str | None, account_id: str | None):
-    """메일 API 와 같은 경로로 읽는다(계정 소유·메일 모듈·그룹 권한). HTTPException 은 그대로 올린다."""
+    """메일 API 와 동일한 경로로 조회한다(계정 소유·메일 모듈·그룹 권한). HTTPException 은 그대로 전파한다."""
     from app.mail import router as mail_router
 
     return await mail_router.get_message(message_uid=str(message_id), mailbox_id=mailbox_id or "INBOX",
@@ -329,7 +329,7 @@ async def mail_reply(db, user: User, cfg, mask_on: bool, *, message_id: str, mai
     d = parse_json(raw)
     draft = str(d.get("draft") or "").strip()
     if not draft:
-        # JSON 을 지키지 않은 모델 — 응답 글 자체를 초안으로(울타리만 걷어 낸다)
+        # JSON 형식을 준수하지 않은 모델 — 응답 텍스트 자체를 초안으로 사용한다(펜스만 제거)
         draft = re.sub(r"^```\w*|```$", "", (raw or "").strip()).strip()
     if not draft:
         raise InlineError("bad_output", "AI 가 초안을 만들지 못했습니다. 다시 시도하세요", 502)
@@ -402,7 +402,7 @@ async def chat_summary(db, user: User, cfg, mask_on: bool, *, channel_id: str, s
         raise InlineError("nothing", "요약할 메시지가 없습니다", 400)
     budget = material_budget(cfg)
     lines, used, idx_map = [], 0, {}
-    # 예산을 넘으면 오래된 쪽을 버린다(최근 대화가 더 중요)
+    # 예산 초과 시 오래된 쪽을 제외한다(최근 대화가 더 중요)
     for i, (m, dn, un) in enumerate(reversed(rows)):
         line = _chat_line(len(rows) - i, m, dn or un or "알 수 없음", tzi)
         if used + len(line) > budget:
@@ -447,7 +447,7 @@ async def chat_summary(db, user: User, cfg, mask_on: bool, *, channel_id: str, s
             continue
         seen.add(m.id)
         called.append({"message_id": m.id, "text": text, "at": _iso(m.created_at)})
-    # 모델이 놓친 @멘션(서버가 아는 사실)은 원문 앞부분으로 채운다
+    # 모델이 누락한 @멘션(서버가 보유한 사실)은 원문 앞부분으로 보완한다
     if not called:
         for m, _dn, _un in kept:
             if m.id in mention_ids and m.id not in seen:
@@ -467,7 +467,7 @@ async def chat_summary(db, user: User, cfg, mask_on: bool, *, channel_id: str, s
 
 # ── 회의 ──────────────────────────────────────────────────────
 async def meeting_people(db, user: User, room: str):
-    """(요약 메타, 참석자 {user_id: 이름}). 회의를 못 보는 사람이면 404(회의 요약 카드와 같은 판정)."""
+    """(요약 메타, 참석자 {user_id: 이름}). 회의 조회 권한이 없는 사용자이면 404(회의 요약 카드와 동일한 판정)."""
     from fastapi import HTTPException
 
     from app.chat import service as chat_service
@@ -534,7 +534,7 @@ async def meeting_summary(db, user: User, cfg, mask_on: bool, *, room: str, chat
              .order_by(Message.created_at.asc()).limit(MAX_CHAT_MESSAGES))
         for i, (m, dn, un) in enumerate((await db.execute(q)).all(), start=1):
             lines.append(_chat_line(i, m, dn or un or "알 수 없음", tzi))
-    # 회의 안 채팅(채널 없는 회의 — 서버에 남지 않는다): 이 화면이 직접 본 줄만 받는다
+    # 회의 내 채팅(채널 없는 회의 — 서버에 저장되지 않는다): 본 화면이 직접 수신한 줄만 허용한다
     for c in (chat_lines or [])[:MAX_CLIENT_LINES]:
         if not isinstance(c, dict):
             continue
@@ -624,8 +624,8 @@ async def doc_proofread(db, user: User, cfg, mask_on: bool, *, text: str, mode: 
             continue
         if not original or original == fixed or len(original) > 300 or len(fixed) > 400:
             continue
-        # 원문에 없는 구절(모델이 고쳐 쓴 것)은 화면이 찾아 바꿀 수 없다 — 버린다.
-        # 가린 개인정보([전화번호] 등)가 들어간 제안도 원문과 맞지 않아 여기서 빠진다.
+        # 원문에 없는 구절(모델이 임의로 수정한 것)은 화면에서 찾아 바꿀 수 없으므로 폐기한다.
+        # 마스킹된 개인정보([전화번호] 등)가 포함된 제안도 원문과 불일치하여 여기서 제외된다.
         if original not in text or (original, fixed) in seen:
             continue
         seen.add((original, fixed))
@@ -642,9 +642,9 @@ SOURCE_LABEL = {"mail": "메일", "meeting": "회의", "chat": "채팅"}
 
 
 async def create_tasks(db, user: User, *, source: str, items: list[dict], room: str | None = None) -> dict:
-    """[할일에 등록] — 고른 항목마다 tasks_create 쓰기 요청을 만들고 곧바로 승인(이 버튼이 사람의 승인)한다.
+    """[할일에 등록] — 선택한 항목마다 tasks_create 쓰기 요청을 생성하고 즉시 승인(본 버튼이 사용자의 승인)한다.
 
-    담당자를 남에게 지정하는 건 회의에서만, 그 회의 참석자에게만 — 아무에게나 배정 알림을 보낼 수 없게.
+    타 사용자를 담당자로 지정하는 것은 회의에서만, 해당 회의 참석자에 한해 허용한다 — 임의의 사용자에게 배정 알림이 발송되는 것을 방지.
     """
     from app.mcp import writes
 

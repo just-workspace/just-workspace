@@ -1,12 +1,12 @@
 """개인정보관리(PIM) 읽기 도구 — 캘린더 · 연락처 · 할일.
 
-MCP 로 나가 있던 도구가 files/mail/notes/web 넷뿐이라 일정·연락처·할일은 아예
-접근이 안 됐다. 전부 **읽기 전용**(mcp:read)이다 — 쓰기는 승인 게이트가 갖춰진
-뒤에 연다.
+MCP 로 제공되던 도구가 files/mail/notes/web 4종뿐이어서 일정·연락처·할일은
+접근이 불가했다. 전부 **읽기 전용**(mcp:read)이다 — 쓰기는 승인 게이트가 구비된
+이후 제공한다.
 
-각 도구는 서비스 계층을 그대로 호출한다. 쿼리를 직접 짜면 소유권/공유 필터가
-빠질 수 있는데, 서비스 함수는 이미 user_id 기준으로 자기 것과 공유받은 것만
-돌려주도록 돼 있다.
+각 도구는 서비스 계층을 그대로 호출한다. 쿼리를 직접 작성하면 소유권/공유 필터가
+누락될 수 있으나, 서비스 함수는 user_id 기준으로 본인 소유 항목과 공유받은 항목만
+반환한다.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -21,25 +21,25 @@ from app.mcp.tools._common import (
 )
 from app.tasks import service as task_svc
 
-# 응답이 지나치게 커지면 모델 컨텍스트를 잡아먹는다. 도구별 상한을 둔다.
+# 응답이 과도하게 커지면 모델 컨텍스트를 소모하므로 도구별 상한을 둔다.
 _MAX_ITEMS = 100
 
 
 def _iso(v):
-    """서비스 계층이 datetime 을 그대로 돌려주는 필드가 있다(tasks.due_date 등).
-    JSON 직렬화가 안 되므로 문자열로 바꾼다."""
+    """서비스 계층이 datetime 을 그대로 반환하는 필드가 있다(tasks.due_date 등).
+    JSON 직렬화가 불가하므로 문자열로 변환한다."""
     return v.isoformat() if isinstance(v, datetime) else v
 
 
-_DESC_MAX = 300   # 일정·할일 설명 상한(글자) — 목록에서는 요지만, 전문이 필요하면 원본 화면
+_DESC_MAX = 300   # 일정·할일 설명 상한(글자) — 목록에서는 요지만 제공, 전문은 원본 화면에서 확인
 
 
 async def calendar_list_events(
     user: User, start: str = "", end: str = "", days: int = 14, limit: int = 100, cursor: str = "", **_: object
 ) -> dict:
-    """기간 내 일정을 돌려준다. start/end 미지정 시 오늘부터 days 일.
+    """기간 내 일정을 반환한다. start/end 미지정 시 오늘부터 days 일.
 
-    순서는 서비스(get_events)가 주는 시작 시각순 그대로다(같은 요청이면 같은 순서 — 반복 일정 전개 포함).
+    순서는 서비스(get_events)가 반환하는 시작 시각순을 유지한다(동일 요청이면 동일 순서 — 반복 일정 전개 포함).
     """
     if not start:
         now = datetime.now(timezone.utc)
@@ -71,7 +71,7 @@ async def calendar_list_events(
 
 
 async def calendar_list_calendars(user: User, **_: object) -> dict:
-    """사용자가 접근 가능한 캘린더 목록(본인 것 + 공유받은 것)."""
+    """사용자가 접근 가능한 캘린더 목록(본인 소유 + 공유받은 것)."""
     async with async_session() as db:
         cals = await cal_svc.get_calendars(db, user.id)
     return {
@@ -87,7 +87,7 @@ async def calendar_list_calendars(user: User, **_: object) -> dict:
 async def contacts_search(
     user: User, query: str = "", limit: int = 50, cursor: str = "", **_: object
 ) -> dict:
-    """연락처를 검색한다. query 가 비면 전체 목록. 순서: 이름 → id(서비스)."""
+    """연락처를 검색한다. query 가 비어 있으면 전체 목록. 순서: 이름 → id(서비스)."""
     n = clamp(limit, 1, _MAX_ITEMS, 50)
     qh = query_hash("contacts_search", (query or "").strip())
     off, cerr = read_cursor(cursor, qh)
@@ -116,7 +116,7 @@ async def contacts_search(
 async def tasks_list(
     user: User, status: str = "", priority: str = "", limit: int = 50, cursor: str = "", **_: object
 ) -> dict:
-    """할일 목록. status/priority 로 걸러낼 수 있다. 순서: 만든 시각 최신 → id(서비스)."""
+    """할일 목록. status/priority 로 필터링 가능. 순서: 생성 시각 최신 → id(서비스)."""
     n = clamp(limit, 1, _MAX_ITEMS, 50)
     qh = query_hash("tasks_list", status, priority)
     off, cerr = read_cursor(cursor, qh)
@@ -161,7 +161,7 @@ register(Tool(
             "cursor": CURSOR_PARAM,
         },
     },
-    # 남이 쓴 글이 들어 있다 — 신뢰 경계로 감싸고, 직후의 쓰기는 승인 흐름이 경고·자동 실행 금지로 다룬다
+    # 타인이 작성한 글 포함 — 신뢰 경계를 적용하며, 직후의 쓰기는 승인 흐름이 경고·자동 실행 금지로 처리한다
     handler=calendar_list_events, untrusted_output=True,
 ))
 
@@ -187,7 +187,7 @@ register(Tool(
             "cursor": CURSOR_PARAM,
         },
     },
-    # 남이 쓴 글 조각이 섞인다 — 내장 AI 대화 표시만 남긴다(conv_untrusted: MCP 15분 창·래핑 없음)
+    # 타인이 작성한 글 일부 포함 — 내장 AI 대화 표시만 기록한다(conv_untrusted: MCP 15분 창·래핑 없음)
     handler=contacts_search, conv_untrusted=True,
 ))
 
@@ -206,6 +206,6 @@ register(Tool(
             "cursor": CURSOR_PARAM,
         },
     },
-    # 남이 쓴 글 조각이 섞인다 — 내장 AI 대화 표시만 남긴다(conv_untrusted: MCP 15분 창·래핑 없음)
+    # 타인이 작성한 글 일부 포함 — 내장 AI 대화 표시만 기록한다(conv_untrusted: MCP 15분 창·래핑 없음)
     handler=tasks_list, conv_untrusted=True,
 ))

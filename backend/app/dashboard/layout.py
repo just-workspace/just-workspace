@@ -1,24 +1,24 @@
-"""대시보드 카드 배치 — 값 모양 검사·정규화.
+"""대시보드 카드 배치 — 값 형식 검증·정규화.
 
-같은 모양을 두 곳에 쓴다.
-- 개인 배치: /api/me/prefs 의 `dash.layout` (사용자가 편집 모드에서 바꾸면 즉시 저장, 기기 간 동기화)
-- 관리자 기본 배치: 관리 › 설정 › 대시보드 → appcfg `dash.layout` (/api/health config 로 모두에게 공개 — 비밀 아님)
+동일한 형식을 두 곳에서 사용한다.
+- 개인 배치: /api/me/prefs 의 `dash.layout` (사용자가 편집 모드에서 변경하면 즉시 저장, 기기 간 동기화)
+- 관리자 기본 배치: 관리 › 설정 › 대시보드 → appcfg `dash.layout` (/api/health config 로 전체 공개 — 비밀 정보 아님)
 
-모양:
+형식:
     {"v": 1, "order": [카드 키…], "hidden": [카드 키…], "size": {카드 키: 1|2}, "locked": [카드 키…]}
-- order: 보이는 순서. 모르는 키·중복은 버린다(프런트가 없는 키를 기본 순서 자리에 끼운다).
-- hidden: 숨긴 카드. size: 1칸/2칸(열이 1이면 화면이 1칸으로 줄인다).
-- locked: 관리자 고정 카드 — 관리자 기본 배치에서만 뜻이 있다(사용자는 숨김·크기 불가, 순서만).
-  개인 배치에 들어온 locked 는 버린다.
+- order: 표시 순서. 알 수 없는 키·중복은 제거한다(order 에 없는 키는 프런트가 기본 순서 위치에 삽입한다).
+- hidden: 숨긴 카드. size: 1칸/2칸(열이 1개이면 화면에서 1칸으로 축소한다).
+- locked: 관리자 고정 카드 — 관리자 기본 배치에서만 유효하다(사용자는 숨김·크기 변경 불가, 순서만 변경 가능).
+  개인 배치에 포함된 locked 는 제거한다.
 """
 
 from __future__ import annotations
 
-# 프런트 lib/dashLayout.ts CARD_KEYS 와 같아야 한다
+# 프런트 lib/dashLayout.ts CARD_KEYS 와 동일해야 함
 CARD_KEYS = (
     "start", "inbox", "today", "ai", "cont", "tasks", "mail", "later", "team", "git",
     "board", "notice", "chans", "store", "meet", "discover",
-    # 네트워크 랩(NETLAB_URL 이 있을 때만 프런트가 쓸 수 있는 카드로 친다)
+    # 네트워크 랩(NETLAB_URL 이 설정된 경우에만 프런트가 사용 가능한 카드로 취급)
     "lab",
 )
 LAYOUT_VERSION = 1
@@ -35,7 +35,7 @@ def _keys(v) -> list[str]:
 
 
 def normalize_layout(value, *, allow_locked: bool = False) -> dict:
-    """검사해서 정규화한 배치를 돌려준다. 객체가 아니면 ValueError."""
+    """검증 후 정규화한 배치를 반환한다. 객체가 아니면 ValueError."""
     if not isinstance(value, dict):
         raise ValueError("대시보드 배치는 객체여야 합니다")
     size_raw = value.get("size") if isinstance(value.get("size"), dict) else {}

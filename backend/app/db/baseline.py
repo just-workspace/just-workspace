@@ -1,20 +1,20 @@
-"""기준선(스키마 버전 1) — 버전 기록이 생기기 전의 스키마 보정 전부.
+"""기준선(스키마 버전 1) — 버전 기록 도입 이전의 스키마 보정 전체.
 
-버전 기록(`schema_migrations`)이 없던 시절에는 서버가 뜰 때마다 `create_all` + 누락 컬럼
-`ADD COLUMN` + 손으로 쓴 ALTER·백필을 돌렸다. 그 묶음 전체를 "기준선 = 1"로 정의한다.
+버전 기록(`schema_migrations`)이 없던 시기에는 서버 기동 시마다 `create_all` + 누락 컬럼
+`ADD COLUMN` + 수작업 ALTER·백필을 실행했다. 해당 묶음 전체를 "기준선 = 1"로 정의한다.
 
-- 새 설치: 빈 DB 에 이 묶음을 돌리면 지금 모델과 같은 스키마가 된다.
-- 기존 설치(테이블은 있고 버전 기록이 없음): 같은 묶음이 빠진 것만 채운다(전부 멱등 — 여러 번 돌려도
-  결과가 같다). 데이터는 지우지 않는다.
+- 신규 설치: 빈 DB 에 본 묶음을 실행하면 현재 모델과 동일한 스키마가 된다.
+- 기존 설치(테이블은 있으나 버전 기록이 없음): 동일한 묶음이 누락분만 보충한다(전부 멱등 — 반복 실행해도
+  결과가 동일하다). 데이터는 삭제하지 않는다.
 
-**여기에 새 변경을 더하지 않는다.** 기준선 이후의 스키마 변경은 `app/db/migrations.py` 에 새 번호의
-단계로만 넣는다. 이 파일은 기준선의 정의이므로, 고치면 "버전 1"의 뜻이 설치마다 달라진다.
+**여기에 신규 변경을 추가하지 않는다.** 기준선 이후의 스키마 변경은 `app/db/migrations.py` 에 새 번호의
+단계로만 추가한다. 본 파일은 기준선의 정의이므로, 수정하면 "버전 1"의 의미가 설치마다 달라진다.
 
 실패 처리:
-- 필수(테이블 만들기, 누락 컬럼 추가, 메시지 순번)가 실패하면 예외 — 기준선으로 표시하지 않는다.
-- 선택(인덱스·확장·시드·백필)은 예전과 같이 건너뛰고 경고를 돌려준다. 경고는 버전 기록의 notes 에 남고
-  `python -m app.cli migrate --repair` 로 다시 시도할 수 있다. 이것들을 필수로 올리면, 예컨대 중복 행 때문에
-  유니크 인덱스를 못 만드는 기존 설치가 업데이트 뒤 아예 뜨지 못한다.
+- 필수(테이블 생성, 누락 컬럼 추가, 메시지 순번)가 실패하면 예외 발생 — 기준선으로 표시하지 않는다.
+- 선택(인덱스·확장·시드·백필)은 기존과 같이 건너뛰고 경고를 반환한다. 경고는 버전 기록의 notes 에 기록되며
+  `python -m app.cli migrate --repair` 로 재시도할 수 있다. 이를 필수로 격상하면, 예컨대 중복 행으로 인해
+  유니크 인덱스를 생성하지 못하는 기존 설치가 업데이트 후 기동하지 못한다.
 """
 
 from sqlalchemy import inspect, text
@@ -52,7 +52,7 @@ def _col_ddl(col) -> str:
 
 
 def column_add_sql(table_name: str, col) -> str:
-    """모델 컬럼 하나를 더하는 ALTER 문(늘 NULL 허용, 상수 기본값은 DEFAULT 로)."""
+    """모델 컬럼 하나를 추가하는 ALTER 문(항상 NULL 허용, 상수 기본값은 DEFAULT 로 지정)."""
     ddl_type = _col_ddl(col)
     # Always make new columns nullable to avoid breaking existing rows
     default = ""
@@ -66,8 +66,8 @@ def column_add_sql(table_name: str, col) -> str:
         if not callable(arg):
             default = f" DEFAULT {arg}"
     elif type_cls in ("STRING", "VARCHAR") and col.server_default is not None:
-        # 문자열 기본값도 실어야 기존 행이 채워진다. 빠뜨렸을 때 users.auth_source 가
-        # 옛 계정에서 NULL 로 남아 "local 이 아니면 외부 인증" 판정에 걸렸다.
+        # 문자열 기본값도 포함해야 기존 행이 채워진다. 누락 시 users.auth_source 가
+        # 과거 계정에서 NULL 로 남아 "local 이 아니면 외부 인증" 판정에 해당되었다.
         arg = getattr(col.server_default, "arg", None)
         if isinstance(arg, str):
             default = " DEFAULT '" + arg.replace("'", "''") + "'"
@@ -123,8 +123,8 @@ async def _auto_migrate(engine):
                 await conn.execute(text(sql))
                 print(f"[DB] auto-migrate: added {table_name}.{col_name} ({ddl_type})")
             except Exception as e:
-                # 다른 프로세스가 먼저 더한 경우만 넘어간다. 그 밖의 실패는 올린다 —
-                # 예전에는 여기서 삼켜서 컬럼이 빠진 채 서버가 떴다.
+                # 다른 프로세스가 먼저 추가한 경우만 무시한다. 그 밖의 실패는 예외로 전파한다 —
+                # 과거에는 여기서 예외를 무시하여 컬럼이 누락된 상태로 서버가 기동되었다.
                 err_str = str(e).lower()
                 if "already exists" not in err_str and "duplicate" not in err_str:
                     raise RuntimeError(
@@ -133,26 +133,26 @@ async def _auto_migrate(engine):
 
 
 async def _run_legacy_migrations(engine) -> list[str]:
-    """One-time legacy migrations for constraints/indexes (idempotent). 돌려주는 값: 건너뛴 문장의 경고."""
+    """One-time legacy migrations for constraints/indexes (idempotent). 반환값: 건너뛴 문장의 경고."""
     migrations = [
         "CREATE INDEX IF NOT EXISTS ix_reactions_message_id ON reactions(message_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_reactions_unique ON reactions(message_id, user_id, emoji)",
         "CREATE INDEX IF NOT EXISTS ix_messages_parent_id ON messages(parent_id)",
         # 캘린더 회차 예외 행 → 마스터 (컬럼은 auto-migrate 가 추가)
         "CREATE INDEX IF NOT EXISTS ix_calendar_events_parent ON calendar_events(parent_event_id)",
-        # 파일 채널 공유: 사람 대신 채널을 받는 행이 생긴다 → user 칸 NOT NULL 해제 + 채널 인덱스
+        # 파일 채널 공유: 사용자 대신 채널을 수신 대상으로 하는 행이 생성된다 → user 컬럼 NOT NULL 해제 + 채널 인덱스
         "ALTER TABLE file_shares ALTER COLUMN shared_with_user_id DROP NOT NULL",
         "CREATE INDEX IF NOT EXISTS ix_file_shares_channel ON file_shares(shared_with_channel_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_file_shares_unique_channel "
         "ON file_shares(owner_id, file_path, shared_with_channel_id)",
-        # 파일 공유 권한 4단계: role 컬럼(auto-migrate)을 예전 can_write 로 한 번 채운다.
-        # role 이 비어 있는 행만 건드리므로 매 기동 돌아도 안전. 코드도 NULL 이면 can_write 로 읽는다.
+        # 파일 공유 권한 4단계: role 컬럼(auto-migrate)을 기존 can_write 값으로 1회 채운다.
+        # role 이 비어 있는 행만 대상이므로 기동 시마다 실행해도 안전하다. 코드도 NULL 이면 can_write 로 판정한다.
         "UPDATE file_shares SET role = CASE WHEN can_write THEN 'edit' ELSE 'view' END WHERE role IS NULL",
         # Subtasks: parent_id column added by auto-migrate; index here
         "CREATE INDEX IF NOT EXISTS ix_tasks_parent_id ON tasks(parent_id)",
-        # 하위 작업 FK(ON DELETE CASCADE) — 모델엔 있지만 auto-migrate 는 컬럼만 더해 운영 DB 에 FK 가 없었다
-        # (부모를 지워도 하위가 고아로 남음). NOT VALID: 이미 있는 고아 행은 검사하지 않고(지우지 않는다)
-        # 앞으로의 삽입·부모 삭제에만 적용. 이미 있으면 건너뛴다.
+        # 하위 작업 FK(ON DELETE CASCADE) — 모델에는 있으나 auto-migrate 는 컬럼만 추가하므로 운영 DB 에 FK 가 없었다
+        # (부모를 삭제해도 하위 작업이 고아 행으로 잔존). NOT VALID: 기존 고아 행은 검사하지 않으며(삭제하지 않는다)
+        # 이후의 삽입·부모 삭제에만 적용한다. 이미 존재하면 건너뛴다.
         "DO $$ BEGIN "
         "IF NOT EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_attribute a "
         "ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey) "
@@ -160,17 +160,17 @@ async def _run_legacy_migrations(engine) -> list[str]:
         "ALTER TABLE tasks ADD CONSTRAINT tasks_parent_id_fkey FOREIGN KEY (parent_id) "
         "REFERENCES tasks(id) ON DELETE CASCADE NOT VALID; "
         "END IF; END $$",
-        # 채널 탭: 채널에 묶인 작업·회의 (컬럼은 auto-migrate)
+        # 채널 탭: 채널에 연결된 작업·회의 (컬럼은 auto-migrate)
         "CREATE INDEX IF NOT EXISTS ix_tasks_channel_id ON tasks(channel_id)",
         "CREATE INDEX IF NOT EXISTS ix_meetings_chat_channel ON meetings(chat_channel_id)",
-        # AI 대화: 답변 버전 가지·프로젝트 묶음 (컬럼은 auto-migrate, 이름은 SQLAlchemy 기본 ix_<표>_<열> 과
-        # 같게 — 새 설치에서 create_all 이 만든 인덱스와 겹치지 않고 그대로 건너뛴다)
+        # AI 대화: 답변 버전 분기·프로젝트 묶음 (컬럼은 auto-migrate, 이름은 SQLAlchemy 기본 ix_<표>_<열> 과
+        # 동일하게 지정 — 신규 설치에서 create_all 이 생성한 인덱스와 충돌하지 않고 그대로 건너뛴다)
         "CREATE INDEX IF NOT EXISTS ix_ai_messages_parent_id ON ai_messages(parent_id)",
         "CREATE INDEX IF NOT EXISTS ix_ai_conversations_project_id ON ai_conversations(project_id)",
 
         # ── 파일 검색 색인 ──
-        # 한글은 형태소 분석기 없이 tsvector 를 쓰면 토큰이 통째로 잡혀
-        # 부분일치가 안 된다. trigram 으로 ILIKE 를 인덱스 태운다.
+        # 한글은 형태소 분석기 없이 tsvector 를 사용하면 토큰이 통째로 추출되어
+        # 부분 일치가 불가하다. trigram 으로 ILIKE 가 인덱스를 사용하도록 한다.
         "CREATE EXTENSION IF NOT EXISTS pg_trgm",
         "CREATE INDEX IF NOT EXISTS ix_file_index_name_trgm "
         "ON file_index USING gin (lower(name) gin_trgm_ops)",
@@ -180,15 +180,15 @@ async def _run_legacy_migrations(engine) -> list[str]:
         "ON file_index USING gin (lower(content) gin_trgm_ops)",
 
         # ── 문자열 기본값 소급 ──
-        # auto-migrate 가 문자열 server_default 를 빼고 컬럼만 더해서, 컬럼 추가 전에 있던 행은 NULL,
-        # DB 기본값도 없었다. NULL 인 행만 채우므로 매 기동 돌아도 안전(LDAP 계정은 "ldap" 이 들어 있다).
+        # auto-migrate 가 문자열 server_default 를 제외하고 컬럼만 추가하여, 컬럼 추가 이전의 행은 NULL 이고
+        # DB 기본값도 없었다. NULL 인 행만 채우므로 기동 시마다 실행해도 안전하다(LDAP 계정에는 "ldap" 이 저장되어 있다).
         "UPDATE users SET auth_source = 'local' WHERE auth_source IS NULL",
         "ALTER TABLE users ALTER COLUMN auth_source SET DEFAULT 'local'",
         "UPDATE mail_accounts SET protocol = 'imap' WHERE protocol IS NULL",
         "ALTER TABLE mail_accounts ALTER COLUMN protocol SET DEFAULT 'imap'",
     ]
-    # 문장마다 세이브포인트 — PostgreSQL 은 한 문장이 실패하면 트랜잭션이 abort 되어,
-    # 예전처럼 한 트랜잭션에서 except: pass 로 넘기면 그 뒤 문장이 전부 조용히 실패했다.
+    # 문장별 세이브포인트 사용 — PostgreSQL 은 한 문장이 실패하면 트랜잭션이 abort 되므로,
+    # 과거처럼 단일 트랜잭션에서 except: pass 로 무시하면 이후 문장이 전부 경고 없이 실패했다.
     warnings: list[str] = []
     async with engine.begin() as conn:
         for sql in migrations:
@@ -202,20 +202,20 @@ async def _run_legacy_migrations(engine) -> list[str]:
     return warnings
 
 
-# 채팅 마이그레이션용 advisory lock 키. 임의의 고정 상수 — 다른 락과 겹치지만 않으면 된다.
+# 채팅 마이그레이션용 advisory lock 키. 임의의 고정 상수이며 다른 락과 중복되지 않으면 충분하다.
 _CHAT_MIGRATION_LOCK_KEY = 7314001
 
 
 async def _run_chat_seq_migration(engine):
     """메시지 전역 순번 — 시퀀스 생성·기존 행 백필·DEFAULT/NOT NULL·인덱스.
 
-    세 가지를 보장해야 한다.
-    - 멱등: 매 기동마다 돌아도 두 번째부터는 사실상 no-op (NULL 행이 없으면 백필 생략).
-    - 동시 기동 안전: 워커 8개가 함께 올라오므로 트랜잭션 범위 advisory lock 으로
-      한 워커만 들어오고, 나머지는 그 커밋을 기다렸다가 "할 게 없음"을 확인한다.
-    - 순서 보존: 백필은 created_at, id 순으로 row_number 를 매긴다. 백필 중 구버전
-      워커가 끼어들어 NULL seq 행을 만들지 못하게 messages 테이블에 쓰기 락을 건다
-      (읽기는 막지 않는다; 수만 건이면 수 초 안에 끝난다).
+    다음 세 가지를 보장해야 한다.
+    - 멱등: 기동 시마다 실행해도 두 번째부터는 사실상 no-op (NULL 행이 없으면 백필 생략).
+    - 동시 기동 안전: 워커 8개가 동시에 기동하므로 트랜잭션 범위 advisory lock 으로
+      한 워커만 진입시키고, 나머지는 해당 커밋을 대기한 뒤 "할 게 없음"을 확인한다.
+    - 순서 보존: 백필은 created_at, id 순으로 row_number 를 부여한다. 백필 중 구버전
+      워커가 개입하여 NULL seq 행을 생성하지 못하도록 messages 테이블에 쓰기 락을 설정한다
+      (읽기는 차단하지 않는다; 수만 건이면 수 초 내에 완료된다).
     """
     if engine.dialect.name != "postgresql":
         return
@@ -224,7 +224,7 @@ async def _run_chat_seq_migration(engine):
         await conn.execute(text(f"SELECT pg_advisory_xact_lock({_CHAT_MIGRATION_LOCK_KEY})"))
 
         await conn.execute(text("CREATE SEQUENCE IF NOT EXISTS messages_seq_seq AS BIGINT"))
-        # 테이블이 지워지면 시퀀스도 같이 — 이름 충돌·고아 방지
+        # 테이블 삭제 시 시퀀스도 함께 삭제 — 이름 충돌·고아 시퀀스 방지
         await conn.execute(text("ALTER SEQUENCE messages_seq_seq OWNED BY messages.seq"))
 
         has_null = (
@@ -232,7 +232,7 @@ async def _run_chat_seq_migration(engine):
         ).scalar()
         if has_null:
             await conn.execute(text("LOCK TABLE messages IN SHARE ROW EXCLUSIVE MODE"))
-            # 이미 seq 를 받은 행(롤링 재시작 중 신버전이 먼저 넣은 것)이 있으면 그 뒤에 붙인다.
+            # 이미 seq 가 부여된 행(롤링 재시작 중 신버전이 먼저 삽입한 행)이 있으면 그 뒤에 이어서 부여한다.
             res = await conn.execute(text(
                 "UPDATE messages m SET seq = s.rn + base.mx "
                 "FROM (SELECT id, row_number() OVER (ORDER BY created_at, id) AS rn "
@@ -242,13 +242,13 @@ async def _run_chat_seq_migration(engine):
             ))
             print(f"[DB] chat-migrate: messages.seq 백필 {res.rowcount}행")
 
-        # 시퀀스 현재값을 max(seq) 에 맞춘다. 비어 있으면 다음 nextval 이 1 이 되게 is_called=false.
+        # 시퀀스 현재값을 max(seq) 에 맞춘다. 비어 있으면 다음 nextval 이 1 이 되도록 is_called=false 로 설정한다.
         await conn.execute(text(
             "SELECT setval('messages_seq_seq', "
             "  GREATEST(coalesce((SELECT max(seq) FROM messages), 0), 1), "
             "  (SELECT max(seq) FROM messages) IS NOT NULL)"
         ))
-        # ORM 을 거치지 않는 INSERT(구버전 워커·수동 SQL)도 seq 를 받도록 DB 기본값으로 박는다.
+        # ORM 을 거치지 않는 INSERT(구버전 워커·수동 SQL)에도 seq 가 부여되도록 DB 기본값으로 지정한다.
         await conn.execute(text(
             "ALTER TABLE messages ALTER COLUMN seq SET DEFAULT nextval('messages_seq_seq')"
         ))
@@ -260,8 +260,8 @@ async def _run_chat_seq_migration(engine):
             "CREATE INDEX IF NOT EXISTS ix_messages_channel_seq ON messages(channel_id, seq)"
         ))
 
-        # ── 읽음 포인터·채널 메타 백필 (seq 가 전부 채워진 뒤에만 의미가 있다) ──
-        # 기존 last_read_message_id → 그 메시지의 seq. NULL 인 것만 건드리니 멱등.
+        # ── 읽음 포인터·채널 메타 백필 (seq 가 전부 채워진 이후에만 유효) ──
+        # 기존 last_read_message_id → 해당 메시지의 seq. NULL 인 행만 대상이므로 멱등.
         res = await conn.execute(text(
             "UPDATE channel_members cm SET last_read_seq = m.seq "
             "FROM messages m "
@@ -269,7 +269,7 @@ async def _run_chat_seq_migration(engine):
         ))
         if res.rowcount:
             print(f"[DB] chat-migrate: channel_members.last_read_seq 백필 {res.rowcount}행")
-        # 채널별 마지막 메시지(스레드 답글·삭제 제외) — 아직 안 채워진 채널만
+        # 채널별 마지막 메시지(스레드 답글·삭제 제외) — 아직 채워지지 않은 채널만 대상
         res = await conn.execute(text(
             "UPDATE channels c SET last_message_seq = m.seq, last_message_at = m.created_at, "
             "  last_preview = left(m.content, 200) "
@@ -283,12 +283,12 @@ async def _run_chat_seq_migration(engine):
 
 
 async def _run_thread_follow_backfill(engine):
-    """스레드 팔로우 테이블이 비어 있을 때 한 번만 — 기존 스레드의 참여 이력을 팔로우로 옮긴다.
+    """스레드 팔로우 테이블이 비어 있을 때 1회만 — 기존 스레드의 참여 이력을 팔로우로 이전한다.
 
-    예전 "내 스레드" 는 참여(원 글 작성·답글 작성)로 셌다. 팔로우 기반으로 바꾸면서 기존
-    스레드가 목록에서 사라지지 않게 같은 집합을 thread_follows 로 넣는다. last_read_seq 는
-    그 스레드의 마지막 답글 seq 로 두어 옛 스레드가 전부 미읽음으로 뜨지 않게 한다.
-    테이블에 행이 하나라도 있으면 건너뛰므로 매 기동 돌아도 안전하다.
+    과거 "내 스레드" 는 참여(원 글 작성·답글 작성) 기준으로 집계했다. 팔로우 기반으로 전환하면서 기존
+    스레드가 목록에서 누락되지 않도록 동일한 집합을 thread_follows 에 삽입한다. last_read_seq 는
+    해당 스레드의 마지막 답글 seq 로 설정하여 기존 스레드가 전부 미읽음으로 표시되지 않게 한다.
+    테이블에 행이 하나라도 있으면 건너뛰므로 기동 시마다 실행해도 안전하다.
     """
     if engine.dialect.name != "postgresql":
         return
@@ -318,17 +318,17 @@ async def _run_thread_follow_backfill(engine):
 
 
 async def _run_search_trgm_migration(engine) -> list[str]:
-    """검색 인덱스와 쿼리 일치 — 메시지·게시글 본문에 pg_trgm GIN.
+    """검색 인덱스와 쿼리의 일치 — 메시지·게시글 본문에 pg_trgm GIN 적용.
 
     메시지 검색(chat/service.search_messages, search/router)과 게시판 검색은 전부
-    `ILIKE '%q%'` 인데 인덱스는 to_tsvector 였다 → 인덱스를 전혀 안 탔다. 한국어는 형태소
-    분석기 없이 tsvector 를 쓰면 부분일치가 안 되므로 ILIKE 를 유지하고 trigram 으로
-    받친다(files/search.py 와 같은 선택). 확장을 못 만들면(권한) 경고만 남기고 건너뛴다 —
-    검색이 느려질 뿐 틀리진 않는다.
+    `ILIKE '%q%'` 인데 인덱스는 to_tsvector 였다 → 인덱스가 전혀 사용되지 않았다. 한국어는 형태소
+    분석기 없이 tsvector 를 사용하면 부분 일치가 불가하므로 ILIKE 를 유지하고 trigram 으로
+    보완한다(files/search.py 와 동일한 선택). 확장을 생성하지 못하면(권한) 경고만 기록하고 건너뛴다 —
+    검색 속도만 저하될 뿐 결과는 정확하다.
 
-    예전 모델이 선언하던 to_tsvector 인덱스(ix_messages_fulltext, ix_posts_fulltext)는 어떤
-    쿼리도 쓰지 않으면서 INSERT 마다 GIN 갱신 비용만 냈다 — 모델에서 뺐고, 그 버전으로
-    새로 설치해 남아 있는 곳은 여기서 지운다(IF EXISTS, 데이터와 무관).
+    과거 모델이 선언하던 to_tsvector 인덱스(ix_messages_fulltext, ix_posts_fulltext)는 어떤
+    쿼리에도 사용되지 않으면서 INSERT 마다 GIN 갱신 비용만 발생시켰다 — 모델에서 제거했으며, 해당 버전으로
+    신규 설치하여 잔존하는 경우 여기서 삭제한다(IF EXISTS, 데이터와 무관).
     """
     warnings: list[str] = []
     if engine.dialect.name != "postgresql":
@@ -372,15 +372,15 @@ async def _run_search_trgm_migration(engine) -> list[str]:
 
 
 async def _run_chat_roles_migration(engine):
-    """역할·권한 — @everyone 시드, 기본 카테고리 3개 시드+백필(한 번), channels.category_id FK.
+    """역할·권한 — @everyone 시드, 기본 카테고리 3개 시드+백필(1회), channels.category_id FK.
 
-    - @everyone: is_default 행이 없을 때만 만든다(권한 = permissions.DEFAULT_EVERYONE = 지금 동작).
-      이미 있으면 손대지 않는다 — 관리자가 바꾼 기본 권한을 기동 때마다 되돌리면 안 된다.
-    - 카테고리: system_settings 'chat.categories_seeded' 표시가 없을 때 한 번만 "채널"·"음성"·"보관"을 만들고
-      DM 이 아닌 채널의 category_id 가 비었으면 채운다(보관 → 보관, 음성 → 음성, 나머지 → 채널).
-      표시를 남기므로 관리자가 카테고리를 다 지워도 다시 생기지 않는다.
-    - FK: auto-migrate 는 컬럼만 더한다 → ON DELETE SET NULL FK 를 NOT VALID 로(이미 있으면 건너뜀).
-    워커 8개 동시 기동 — 마이그레이션 세션 락 안에서 돌고, 여기서도 트랜잭션 advisory lock 을 한 번 더 잡는다.
+    - @everyone: is_default 행이 없을 때만 생성한다(권한 = permissions.DEFAULT_EVERYONE = 현재 동작).
+      이미 있으면 변경하지 않는다 — 관리자가 변경한 기본 권한을 기동 시마다 되돌려서는 안 된다.
+    - 카테고리: system_settings 'chat.categories_seeded' 표시가 없을 때 1회만 "채널"·"음성"·"보관"을 생성하고
+      DM 이 아닌 채널의 category_id 가 비어 있으면 채운다(보관 → 보관, 음성 → 음성, 나머지 → 채널).
+      표시를 기록하므로 관리자가 카테고리를 전부 삭제해도 재생성되지 않는다.
+    - FK: auto-migrate 는 컬럼만 추가한다 → ON DELETE SET NULL FK 를 NOT VALID 로 추가한다(이미 있으면 건너뜀).
+    워커 8개 동시 기동 — 마이그레이션 세션 락 안에서 실행되며, 여기서도 트랜잭션 advisory lock 을 추가로 획득한다.
     """
     if engine.dialect.name != "postgresql":
         return
@@ -434,12 +434,12 @@ async def _run_chat_roles_migration(engine):
 
 
 async def _run_chat22_migration(engine):
-    """chat22 — auto-migrate 가 못 하는 것만. 전부 idempotent.
+    """chat22 — auto-migrate 가 처리하지 못하는 항목만. 전부 idempotent.
 
     - reactions.emoji VARCHAR(10) → VARCHAR(64): 커스텀 이모지 `:name:`. 이미 64 이상이면 건너뛴다
-      (ALTER 가 짧은 ACCESS EXCLUSIVE 잠금 — varchar 넓히기는 테이블 재작성이 없어 무중단).
-    - messages.reply_to_id 인덱스(새 컬럼은 Step 2 auto-migrate 가 더했다).
-    워커 8개 — 마이그레이션 세션 락 안에서 돌고, 여기서도 트랜잭션 advisory lock 을 잡는다.
+      (ALTER 는 짧은 ACCESS EXCLUSIVE 잠금을 획득한다 — varchar 확장은 테이블 재작성이 없어 무중단).
+    - messages.reply_to_id 인덱스(신규 컬럼은 Step 2 auto-migrate 가 추가했다).
+    워커 8개 — 마이그레이션 세션 락 안에서 실행되며, 여기서도 트랜잭션 advisory lock 을 획득한다.
     """
     if engine.dialect.name != "postgresql":
         return
@@ -458,10 +458,10 @@ async def _run_chat22_migration(engine):
 
 
 async def _run_chat_archive_category_migration(engine):
-    """보관 시스템 카테고리 — system_settings 'chat.archive_category_id' 를 한 번 채운다.
+    """보관 시스템 카테고리 — system_settings 'chat.archive_category_id' 를 1회 채운다.
 
-    역할 시드(_run_chat_roles_migration)가 만든 '보관' 카테고리가 있으면 그것을 '보관된 프로젝트'로 바꿔 쓰고,
-    없으면 새로 만든다. 키가 이미 있으면 아무것도 안 한다(관리자가 이름을 바꿔도 되돌리지 않는다).
+    역할 시드(_run_chat_roles_migration)가 생성한 '보관' 카테고리가 있으면 이를 '보관된 프로젝트'로 변경하여 사용하고,
+    없으면 새로 생성한다. 키가 이미 있으면 아무 작업도 수행하지 않는다(관리자가 이름을 변경해도 되돌리지 않는다).
     """
     if engine.dialect.name != "postgresql":
         return
@@ -492,34 +492,34 @@ async def _run_chat_archive_category_migration(engine):
 
 
 async def apply_baseline(engine) -> list[str]:
-    """기준선 묶음을 돌린다. 돌려주는 값: 건너뛴 선택 항목의 경고(없으면 빈 목록).
+    """기준선 묶음을 실행한다. 반환값: 건너뛴 선택 항목의 경고(없으면 빈 목록).
 
-    호출하는 쪽(app/db/migrate.py)이 잠금을 쥐고 있어야 한다.
+    호출자(app/db/migrate.py)가 잠금을 보유한 상태여야 한다.
     """
     warnings: list[str] = []
     postgres = engine.dialect.name == "postgresql"
 
-    # 1) 새 테이블
+    # 1) 신규 테이블
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # 2) 모델에는 있고 DB 에는 없는 컬럼 (실패하면 예외)
+    # 2) 모델에는 있고 DB 에는 없는 컬럼 (실패 시 예외 발생)
     await _auto_migrate(engine)
 
     if not postgres:
-        # 아래는 PostgreSQL 전용 문법이다(SQLite 는 테스트용 — 테이블·컬럼까지만 맞춘다)
+        # 이하는 PostgreSQL 전용 문법이다(SQLite 는 테스트용 — 테이블·컬럼까지만 일치시킨다)
         return warnings
 
-    # 3) 제약·인덱스·기본값 소급 (문장별로 건너뛸 수 있다)
+    # 3) 제약·인덱스·기본값 소급 (문장별로 건너뛸 수 있음)
     warnings += await _run_legacy_migrations(engine)
 
-    # 4) 채팅 메시지 순번 — 시퀀스·백필·NOT NULL (실패하면 예외)
+    # 4) 채팅 메시지 순번 — 시퀀스·백필·NOT NULL (실패 시 예외 발생)
     await _run_chat_seq_migration(engine)
 
     # 5) 검색용 trigram 인덱스
     warnings += await _run_search_trgm_migration(engine)
 
-    # 6) 채팅 역할·카테고리 시드, 이모지 칸 넓히기, 보관 카테고리, 스레드 팔로우 백필
+    # 6) 채팅 역할·카테고리 시드, 이모지 컬럼 확장, 보관 카테고리, 스레드 팔로우 백필
     for label, steps in (
         ("채팅 역할·카테고리", (_run_chat_roles_migration,)),
         ("chat22", (_run_chat22_migration, _run_chat_archive_category_migration)),
@@ -528,7 +528,7 @@ async def apply_baseline(engine) -> list[str]:
         try:
             for step in steps:
                 await step(engine)
-        except Exception as e:  # noqa: BLE001 — 선택 항목: 경고로 남긴다
+        except Exception as e:  # noqa: BLE001 — 선택 항목: 경고로 기록
             line = f"{label} 실패 — {_first_line(e)}"
             print(f"[DB] WARN: {line}")
             warnings.append(line)

@@ -1,6 +1,6 @@
-"""파일 UI가 쓰는 응답 필드 — 공유 링크 목록의 can_edit, 휴지통의 retention_days.
+"""파일 UI가 사용하는 응답 필드 — 공유 링크 목록의 can_edit, 휴지통의 retention_days.
 
-라우터 함수를 직접 부른다(SQLite, 필요한 테이블만). 휴지통은 저장소 루트를 임시 폴더로 돌린다.
+라우터 함수를 직접 호출한다(SQLite, 필요한 테이블만 사용). 휴지통은 저장소 루트를 임시 폴더로 대체한다.
 """
 
 import os
@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 if os.name == "nt" and "resource" not in sys.modules:
-    # 라우터 → indexer 가 유닉스 전용 `resource` 를 import 한다(test_file_transfer_headers 와 같은 처리).
+    # 라우터 → indexer 가 유닉스 전용 `resource` 를 import 한다(test_file_transfer_headers 와 동일한 처리).
     sys.modules["resource"] = types.ModuleType("resource")
 
 from app.db.models import Base, ShareLink, ShareLinkEmail, SystemSetting, User  # noqa: E402
@@ -50,7 +50,7 @@ async def test_share_list_reports_can_edit(db):
     by_token = {r.token: r for r in rows}
     assert by_token["t-view"].can_edit is False
     assert by_token["t-edit"].can_edit is True
-    # 기존 필드는 그대로
+    # 기존 필드는 유지
     assert by_token["t-edit"].display_name == "b.docx" and by_token["t-edit"].download_count == 0
 
 
@@ -64,13 +64,13 @@ async def test_trash_reports_retention_days(db, tmp_path: Path, monkeypatch):
     assert res.retention_days == retention.DEFAULT_TRASH_DAYS
     assert res.items == []
 
-    # 관리자가 바꾼 값
+    # 관리자가 변경한 값
     db.add(SystemSetting(key=retention.KEY_TRASH_DAYS, value="7"))
     await db.commit()
     res = await files_router.list_trash(user=user, db=db)
     assert res.retention_days == 7
 
-    # 0 = 자동 삭제 안 함, 잘못된 값 → 기본값
+    # 0 = 자동 삭제 비활성화, 잘못된 값 → 기본값
     s = await db.get(SystemSetting, retention.KEY_TRASH_DAYS)
     s.value = "0"
     await db.commit()
@@ -82,7 +82,7 @@ async def test_trash_reports_retention_days(db, tmp_path: Path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_trash_items_unchanged(db, tmp_path: Path, monkeypatch):
-    """필드 추가가 기존 항목 응답(이름·원래 경로)을 바꾸지 않는다."""
+    """필드 추가가 기존 항목 응답(이름·원래 경로)을 변경하지 않는다."""
     import json
     monkeypatch.setattr(files_router.settings, "storage_root", str(tmp_path))
     trash = tmp_path / "users" / "alice" / ".trash"

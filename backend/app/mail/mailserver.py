@@ -26,13 +26,13 @@ def _docker_exec(
 ) -> tuple[int, str]:
     """Run a command inside the mailserver container (blocking).
 
-    stdin_data 를 주면 `docker exec -i` 로 표준입력에 흘려보낸다. 비밀번호를
-    명령행 인자로 넘기면 컨테이너의 프로세스 목록(ps)에 평문으로 노출되므로,
+    stdin_data 지정 시 `docker exec -i` 로 표준입력에 전달한다. 비밀번호를
+    명령행 인자로 전달하면 컨테이너의 프로세스 목록(ps)에 평문으로 노출되므로,
     `setup email add/update` 의 선택 인자 <PASSWORD> 를 생략하고 프롬프트에
-    stdin 으로 답한다.
+    stdin 으로 응답한다.
 
-    secrets 에 준 문자열은 반환되는 출력에서 마스킹한다 — 명령이 실패할 때
-    사용법(usage)에 인자가 섞여 나오면 그대로 로그에 남기 때문이다.
+    secrets 에 지정한 문자열은 반환되는 출력에서 마스킹한다. 명령 실패 시
+    사용법(usage)에 인자가 포함되어 출력되면 그대로 로그에 기록되기 때문이다.
     """
     full_cmd = ["docker", "exec"]
     if stdin_data is not None:
@@ -54,7 +54,7 @@ def _docker_exec(
 
 
 def _password_stdin(password: str) -> str:
-    """비밀번호 프롬프트는 입력·확인 두 번 묻는다."""
+    """비밀번호 프롬프트는 입력·확인 2회를 요구한다."""
     return password + chr(10) + password + chr(10)
 
 
@@ -83,13 +83,13 @@ async def create_account(email: str, password: str) -> bool:
 async def delete_account(email: str) -> bool:
     """Delete a mail account from docker-mailserver.
 
-    `-y` 는 "메일함 데이터까지 지운다" 는 뜻인데, docker-mailserver v16 의
-    delmailuser 는 그 디렉터리가 없으면 지우지 못하고 **중단한다**. 메일함은
-    첫 수신 때 생기므로, 만들어 두고 한 통도 받지 않은 계정은 이 경로로 못 지운다
-    (워크스페이스 계정을 만들었다 지우면 정확히 그 상황이다).
+    `-y` 는 "메일함 데이터까지 지운다" 는 의미이나, docker-mailserver v16 의
+    delmailuser 는 해당 디렉터리가 없으면 삭제하지 못하고 **중단한다**. 메일함은
+    첫 수신 시 생성되므로, 생성 후 한 통도 수신하지 않은 계정은 이 경로로 삭제할 수 없다
+    (워크스페이스 계정을 생성 후 삭제하는 경우가 이에 해당한다).
 
-    지울 메일함이 없을 때는 `-n`("메일함은 남긴다") 이 같은 일을 해 준다 —
-    남길 것이 애초에 없으므로. 그래서 그때만 한 번 더 시도한다.
+    삭제할 메일함이 없을 때는 `-n`("메일함은 남긴다") 이 동일한 결과를 낸다 —
+    보존할 대상이 애초에 없기 때문이다. 따라서 해당 경우에만 1회 재시도한다.
     """
     rc, out = await asyncio.to_thread(
         _docker_exec,

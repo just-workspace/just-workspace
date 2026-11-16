@@ -1,6 +1,6 @@
 """채팅 링크 미리보기 — SSRF 방어·파싱·캐시·썸네일 프록시·보낸 사람 지우기.
 
-외부 접속은 httpx.MockTransport, DNS 는 가짜 resolver 로 대신한다(네트워크 없이 돈다).
+외부 접속은 httpx.MockTransport, DNS 는 가짜 resolver 로 대체한다(네트워크 없이 실행).
 """
 
 import asyncio
@@ -26,7 +26,7 @@ PUBLIC6 = "2606:4700:4700::1111"
 
 
 def _resolver(table: dict[str, list]):
-    """호스트 → 주소 목록. 값이 목록의 목록이면 부를 때마다 다음 것을 준다(리바인딩 흉내)."""
+    """호스트 → 주소 목록. 값이 목록의 목록이면 호출마다 다음 항목을 반환한다(리바인딩 모사)."""
     calls: list[str] = []
 
     async def resolve(host, port):
@@ -82,9 +82,9 @@ def _png(w=640, h=320, color=(200, 30, 30)) -> bytes:
     "169.254.1.1", "100.64.0.1", "198.18.0.1", "224.0.0.1", "255.255.255.255", "192.0.2.10",
     "::1", "::", "fe80::1", "fc00::1", "fd00:ec2::254",
     "::ffff:127.0.0.1", "::ffff:169.254.169.254",   # IPv4-mapped
-    "2002:7f00:0001::1",                            # 6to4 안의 127.0.0.1
-    "64:ff9b::a9fe:a9fe",                           # NAT64 안의 169.254.169.254
-    "64:ff9b::c0a8:1",                              # NAT64 안의 192.168.10.1
+    "2002:7f00:0001::1",                            # 6to4 에 내장된 127.0.0.1
+    "64:ff9b::a9fe:a9fe",                           # NAT64 에 내장된 169.254.169.254
+    "64:ff9b::c0a8:1",                              # NAT64 에 내장된 192.168.10.1
     "::127.0.0.1",                                  # IPv4 호환(폐기 형식)
     "fe80::1%eth0", "not-an-ip",
 ])
@@ -114,7 +114,7 @@ def test_normalize_rejects(url, code):
     assert e.value.code == code
 
 
-# ── 사설·루프백·링크로컬·메타데이터: 접속 전에 막힌다 ──
+# ── 사설·루프백·링크로컬·메타데이터: 접속 전에 차단 ──
 
 @pytest.mark.parametrize("url", [
     "http://127.0.0.1/", "http://[::1]/", "http://169.254.169.254/latest/meta-data/",
@@ -136,10 +136,10 @@ async def test_literal_internal_ips_blocked_before_connect(url):
     "http://localhost/",
 ])
 async def test_numeric_and_localhost_forms_blocked(url):
-    """ip_address() 가 못 읽는 표기는 실제 getaddrinfo 가 127.0.0.1 로 푼다 — 그 결과로 막혀야 한다."""
+    """ip_address() 가 해석하지 못하는 표기는 실제 getaddrinfo 가 127.0.0.1 로 변환한다 — 그 결과로 차단되어야 한다."""
     t = _transport(lambda r: httpx.Response(200, html=HTML))
     with pytest.raises(lp.PreviewError) as e:
-        await lp.safe_get(url, transport=t)   # 시스템 resolver(숫자 표기·localhost 는 네트워크 없이 풀린다)
+        await lp.safe_get(url, transport=t)   # 시스템 resolver(숫자 표기·localhost 는 네트워크 없이 해석됨)
     assert e.value.code in ("blocked", "dns")
     assert t.seen == []
 
@@ -149,7 +149,7 @@ async def test_hostname_resolving_private_blocked():
     for ips in (["10.1.2.3"], ["169.254.169.254"], ["::1"], [PUBLIC, "192.168.10.10"]):
         with pytest.raises(lp.PreviewError) as e:
             await lp.safe_get("http://evil.test/", transport=t, resolver=_resolver({"evil.test": ips}))
-        assert e.value.code == "blocked"   # 하나라도 사설이면 거부(섞어 두기 수법)
+        assert e.value.code == "blocked"   # 하나라도 사설이면 거부(혼합 수법)
     assert t.seen == []
 
 
@@ -169,7 +169,7 @@ async def test_redirect_to_internal_literal_blocked():
     with pytest.raises(lp.PreviewError) as e:
         await lp.safe_get("http://example.com/", transport=t, resolver=_resolver({"example.com": [PUBLIC]}))
     assert e.value.code == "blocked"
-    assert len(t.seen) == 1                      # 메타데이터 주소로는 한 번도 안 갔다
+    assert len(t.seen) == 1                      # 메타데이터 주소로는 한 번도 접속하지 않음
 
 
 async def test_redirect_to_hostname_resolving_private_blocked():
@@ -180,7 +180,7 @@ async def test_redirect_to_hostname_resolving_private_blocked():
     with pytest.raises(lp.PreviewError) as e:
         await lp.safe_get("http://example.com/", transport=t, resolver=res)
     assert e.value.code == "blocked"
-    assert res.calls == ["example.com", "internal.test"]   # 리다이렉트마다 다시 풀어 검사
+    assert res.calls == ["example.com", "internal.test"]   # 리다이렉트마다 재해석하여 검사
     assert len(t.seen) == 1
 
 
@@ -216,14 +216,14 @@ async def test_connects_to_checked_ip_with_original_host_header():
     await lp.safe_get("https://example.com/post?x=1", transport=t,
                       resolver=_resolver({"example.com": [PUBLIC]}))
     req = t.seen[0]
-    assert req.url.host == PUBLIC                    # 이름이 아니라 검사한 IP 로 접속
+    assert req.url.host == PUBLIC                    # 이름이 아닌 검사한 IP 로 접속
     assert req.headers["host"] == "example.com"      # 가상 호스트는 원래 이름
     assert req.extensions.get("sni_hostname") == "example.com"   # TLS SNI·인증서 검증도 원래 이름
     assert req.url.query == b"x=1"
 
 
 async def test_rebinding_second_resolution_private_is_blocked():
-    """첫 풀이는 공인, 같은 이름의 다음 풀이(리다이렉트 뒤)는 사설 — 다시 풀 때 막혀야 한다."""
+    """첫 해석은 공인, 동일 이름의 다음 해석(리다이렉트 이후)은 사설 — 재해석 시 차단되어야 한다."""
     def h(req):
         return httpx.Response(302, headers={"Location": "http://rebind.test/next"})
     t = _transport(h)
@@ -231,7 +231,7 @@ async def test_rebinding_second_resolution_private_is_blocked():
     with pytest.raises(lp.PreviewError) as e:
         await lp.safe_get("http://rebind.test/", transport=t, resolver=res)
     assert e.value.code == "blocked"
-    assert [r.url.host for r in t.seen] == [PUBLIC]   # 사설 IP 로는 접속하지 않았다
+    assert [r.url.host for r in t.seen] == [PUBLIC]   # 사설 IP 로는 접속하지 않음
 
 
 async def test_ipv6_pinned_url_brackets():
@@ -283,7 +283,7 @@ def test_limits_match_brief():
     assert lp.MAX_BYTES == 1024 * 1024 and lp.TOTAL_TIMEOUT == 5.0
 
 
-# ── 파싱·링크 고르기 ──
+# ── 파싱·링크 선택 ──
 
 def test_parse_meta_og_and_fallbacks():
     m = lp.parse_meta(HTML, "https://blog.example.dev/post/1")
@@ -296,7 +296,7 @@ def test_parse_meta_og_and_fallbacks():
     assert m["title"] == "Release process" and m["site"] == "docs.example.org"
     assert m["description"] is None and m["image_src"] is None
     assert lp.parse_meta("<html><body>no title</body></html>", "https://x.example/") is None
-    # 이미지가 javascript: 같은 엉뚱한 주소면 버린다
+    # 이미지가 javascript: 같은 비정상 주소이면 폐기
     m = lp.parse_meta('<title>t</title><meta property="og:image" content="javascript:alert(1)">', "https://x.example/")
     assert m["image_src"] is None
 
@@ -322,10 +322,10 @@ def test_thumbnail_reencodes_and_rejects_svg():
     from PIL import Image
     assert max(Image.open(io.BytesIO(body)).size) <= lp.THUMB_MAX
     assert lp.make_thumbnail(b'<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>') is None
-    assert lp.make_thumbnail(b"GIF89a" + b"\0" * 10) is None   # 깨진 그림
+    assert lp.make_thumbnail(b"GIF89a" + b"\0" * 10) is None   # 손상된 이미지
 
 
-# ── 캐시·메시지 붙이기·지우기 ──
+# ── 캐시·메시지 첨부·삭제 ──
 
 TABLES = [t.__table__ for t in (User, Channel, ChannelMember, Message, Reaction, ChatMention,
                                 ThreadFollow, ChatDraft, SavedMessage, LinkPreviewCache, LinkPreviewImage,
@@ -372,7 +372,7 @@ async def test_attach_end_to_end_cache_and_image_proxy(factory):
 
     assert card["title"] == "무중단 Postgres 마이그레이션 체크리스트"
     assert card["site"] == "예시 블로그"
-    assert card["image"].startswith("/api/chat/link-preview/images/")   # 외부 주소가 아니라 서버 프록시
+    assert card["image"].startswith("/api/chat/link-preview/images/")   # 외부 주소가 아닌 서버 프록시
     assert "blog.example.dev/img" not in json.dumps(card)
     assert events and events[0][1]["type"] == "link_preview" and events[0][1]["message_id"] == msg["id"]
     assert len(t.seen) == 2   # 페이지 + 이미지
@@ -384,7 +384,7 @@ async def test_attach_end_to_end_cache_and_image_proxy(factory):
         img = await db.get(LinkPreviewImage, img_id)
         assert img.content_type == "image/jpeg" and img.data[:3] == b"\xff\xd8\xff"
 
-        # 썸네일 엔드포인트 — 다시 인코딩된 것만, 안전 헤더
+        # 썸네일 엔드포인트 — 재인코딩된 것만 제공, 안전 헤더 포함
         bob = await db.get(User, "bob")
         resp = await chat_router.link_preview_image(image_id=img_id, user=bob, db=db)
         assert resp.media_type == "image/jpeg"
@@ -393,7 +393,7 @@ async def test_attach_end_to_end_cache_and_image_proxy(factory):
         with pytest.raises(HTTPException):
             await chat_router.link_preview_image(image_id="../../etc/passwd", user=bob, db=db)
 
-        # 같은 링크의 두 번째 메시지 — 캐시로, 외부에 다시 가지 않는다
+        # 동일 링크의 두 번째 메시지 — 캐시 사용, 외부 재접속 없음
         msg2 = await service.create_message(db, ch.id, "bob", "저도 https://blog.example.dev/post")
     card2 = await lp.attach_to_message(msg2["id"], url, factory, emit, transport=t, resolver=res)
     assert card2 == card and len(t.seen) == 2
@@ -415,7 +415,7 @@ async def test_failed_fetch_gives_no_card(factory):
     async with factory() as db:
         assert (await db.get(Message, msg["id"])).link_preview is None
         row = await db.get(LinkPreviewCache, lp.url_hash("http://intranet.test/x"))
-        assert row is not None and row.data is None    # 실패도 잠깐 캐시
+        assert row is not None and row.data is None    # 실패도 단시간 캐시
 
 
 async def test_svg_image_dropped_card_kept(factory):
@@ -431,7 +431,7 @@ async def test_svg_image_dropped_card_kept(factory):
         pass
     card = await lp.attach_to_message(msg["id"], "https://svg.example/p", factory, emit,
                                       transport=_transport(h), resolver=_resolver({"svg.example": [PUBLIC]}))
-    assert card["title"] == "T" and card["image"] is None    # 썸네일 칸 없음
+    assert card["title"] == "T" and card["image"] is None    # 썸네일 영역 없음
 
 
 async def test_dismiss_only_sender_and_not_recreated(factory, monkeypatch):
@@ -460,12 +460,12 @@ async def test_dismiss_only_sender_and_not_recreated(factory, monkeypatch):
         m = await db.get(Message, msg["id"])
         assert service._message_to_dict(m, None)["link_preview"] is None
 
-    # 같은 링크로는 다시 만들지 않는다
+    # 동일 링크로는 재생성하지 않음
     again = await lp.attach_to_message(msg["id"], url, factory, emit, transport=_site(),
                                        resolver=_resolver({"blog.example.dev": [PUBLIC]}))
     assert again is None
 
-    # 본문 링크를 바꾸면 "지움" 표시가 풀린다
+    # 본문 링크를 변경하면 "지움" 표시가 해제됨
     async with factory() as db:
         await service.update_message(db, msg["id"], "https://other.example/x")
         assert (await db.get(Message, msg["id"])).link_preview is None
@@ -499,7 +499,7 @@ def test_public_preview_shapes():
 
 
 async def test_edit_and_delete_broadcast_and_thread_returns_parent_latest(factory, monkeypatch):
-    """수정·삭제는 채널 전원에게 알리고, 스레드 응답은 원문과 최신 답글을 준다."""
+    """수정·삭제는 채널 전원에게 알리고, 스레드 응답은 원문과 최신 답글을 반환한다."""
     events = []
 
     async def emit(cid, ev):
@@ -520,7 +520,7 @@ async def test_edit_and_delete_broadcast_and_thread_returns_parent_latest(factor
         ev = next(e for _c, e in events if e["type"] == "message_update")
         assert ev["message"]["id"] == root["id"] and ev["message"]["content"] == "고친 원문" and updated["is_edited"]
 
-        # 스레드: 원문 포함, limit 를 넘으면 최신 것부터(순서는 오래된 → 최신)
+        # 스레드: 원문 포함, limit 초과 시 최신 항목부터(순서는 오래된 → 최신)
         res = await chat_router.get_thread(message_id=root["id"], limit=2, user=alice, db=db)
         assert res["parent"]["id"] == root["id"] and res["parent"]["reply_count"] == 5
         assert [r["id"] for r in res["replies"]] == [replies[3]["id"], replies[4]["id"]]

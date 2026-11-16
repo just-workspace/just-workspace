@@ -1,8 +1,8 @@
-"""chat22 메시지 모양 — 인라인 답장·@silent·첨부 여러 개·스레드 메타.
+"""chat22 메시지 형태 — 인라인 답장·@silent·다중 첨부·스레드 메타.
 
-service._message_to_dict 가 DB 없이 채울 수 있는 것(reply_to_id·reply_ping·silent·attachments·명시 시작 스레드)은
-fields_of() 로, DB 가 필요한 것(reply_to 원문 요약·답글 수가 있는 스레드 메타)은 enrich() 로 **목록 단위 한 번에** 채운다
-(답장 원문은 id 를 모아 쿼리 1번 + 보낸 사람 1번 — N+1 없음).
+service._message_to_dict 가 DB 없이 채울 수 있는 항목(reply_to_id·reply_ping·silent·attachments·명시적으로 시작된 스레드)은
+fields_of() 로, DB 가 필요한 항목(reply_to 원문 요약·답글 수가 있는 스레드 메타)은 enrich() 로 **목록 단위 1회에** 채운다
+(답장 원문은 id 를 수집하여 쿼리 1회 + 발신자 1회 — N+1 없음).
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ SILENT_PREFIX = "@silent "
 
 
 class ReplyError(ValueError):
-    """답장 대상이 잘못됨 — code 는 프런트가 분기하는 값."""
+    """답장 대상이 유효하지 않음 — code 는 프런트가 분기에 사용하는 값."""
 
     def __init__(self, code: str, message: str):
         super().__init__(message)
@@ -37,7 +37,7 @@ class ReplyError(ValueError):
 
 
 def split_silent(content: str) -> tuple[str, bool]:
-    """본문이 `@silent ` 로 시작하면 떼고 silent=True."""
+    """본문이 `@silent ` 로 시작하면 이를 제거하고 silent=True."""
     if content and content.startswith(SILENT_PREFIX):
         return content[len(SILENT_PREFIX):].lstrip(), True
     return content, False
@@ -88,7 +88,7 @@ def _public_attachment(a: dict, idx: int) -> dict:
 
 
 def attachments_of(msg: Message) -> list[dict]:
-    """attachments(JSON 배열) — 없으면 옛 단일 file_meta 를 1개짜리로."""
+    """attachments(JSON 배열) — 없으면 기존 단일 file_meta 를 1개 항목 배열로 변환."""
     raw = getattr(msg, "attachments", None)
     items: list = []
     if raw:
@@ -135,7 +135,7 @@ def thread_meta_of(msg: Message, reply_count: int, last_reply_at, channel_defaul
 
 
 def fields_of(msg: Message) -> dict:
-    """_message_to_dict 에 더하는 필드(DB 없이). reply_to·답글 있는 스레드는 enrich 가 채운다."""
+    """_message_to_dict 에 추가하는 필드(DB 불필요). reply_to·답글 있는 스레드는 enrich 가 채운다."""
     flags = int(getattr(msg, "flags", 0) or 0)
     started = getattr(msg, "thread_started_at", None) is not None and msg.parent_id is None
     return {
@@ -155,10 +155,10 @@ def _sender_dict(u: User | None) -> dict | None:
 
 
 def reply_summary(src: Message, target: Message | None, sender: User | None) -> dict:
-    """원문 상태 4가지 — ok · deleted(지운 글) · unavailable(행 없음/다른 채널) · forbidden(볼 권한 없음).
+    """원문 상태 4가지 — ok · deleted(삭제된 글) · unavailable(행 없음/다른 채널) · forbidden(조회 권한 없음).
 
-    같은 채널만 답장할 수 있어서(보낼 때 검사) 지금 forbidden 은 생기지 않는다 — 원문이 다른 채널로 판정되면
-    unavailable(계약). forbidden 자리는 채널 READ_HISTORY 덮어쓰기(enforce) 이후용으로 남겨 둔다.
+    동일 채널에만 답장할 수 있으므로(전송 시 검사) 현재 forbidden 은 발생하지 않는다 — 원문이 다른 채널로 판정되면
+    unavailable(계약). forbidden 은 채널 READ_HISTORY 덮어쓰기(enforce) 이후 용도로 예약해 둔다.
     """
     rid = src.reply_to_id
     base = {"id": rid, "sender": None, "content": "", "message_type": "text",
@@ -169,7 +169,7 @@ def reply_summary(src: Message, target: Message | None, sender: User | None) -> 
         return {**base, "state": "deleted", "message_type": target.message_type or "text"}
     atts = attachments_of(target)
     content = target.content or ""
-    # 옛 /upload 파일 메시지는 본문 = 파일 이름 → "첨부만"으로 본다
+    # 기존 /upload 파일 메시지는 본문 = 파일 이름 → "첨부만"으로 간주
     if target.message_type == "file" and not getattr(target, "attachments", None):
         content = ""
     return {
@@ -184,10 +184,10 @@ def reply_summary(src: Message, target: Message | None, sender: User | None) -> 
 
 
 async def enrich(db: AsyncSession, pairs: list[tuple[Message, dict]]) -> None:
-    """목록 한 번에 reply_to·thread 를 채운다(제자리 수정).
+    """목록 단위 1회로 reply_to·thread 를 채운다(제자리 수정).
 
-    thread: 루트(parent_id 없음) 중 답글이 있거나(d["reply_count"] 또는 조회) 명시로 시작된 것.
-    d 에 reply_count·last_reply_at 이 이미 있으면(get_messages) 그것을 쓰고, 없으면 한 쿼리로 센다.
+    thread: 루트(parent_id 없음) 중 답글이 있거나(d["reply_count"] 또는 조회) 명시적으로 시작된 것.
+    d 에 reply_count·last_reply_at 이 이미 있으면(get_messages) 해당 값을 사용하고, 없으면 쿼리 1회로 집계한다.
     """
     if not pairs:
         return
@@ -233,7 +233,7 @@ async def enrich(db: AsyncSession, pairs: list[tuple[Message, dict]]) -> None:
 async def validate_reply(
     db: AsyncSession, channel_id: str, parent_id: str | None, reply_to_id: str | None,
 ) -> Message | None:
-    """답장 대상 검사 — 같은 채널, 스레드 안이면 같은 스레드(루트 또는 그 답글), 밖이면 메인 타임라인 글."""
+    """답장 대상 검증 — 동일 채널, 스레드 내부이면 동일 스레드(루트 또는 그 답글), 외부이면 메인 타임라인 글."""
     if not reply_to_id:
         return None
     t = await db.get(Message, reply_to_id)

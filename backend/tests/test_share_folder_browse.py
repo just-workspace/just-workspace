@@ -1,8 +1,8 @@
 """폴더 공유 링크 탐색(OneDrive식 보기 전용).
 
-- 폴더 하나로 만든 링크는 손님 화면 주소(/s/<token>)를 주고, 안을 둘러보며 파일별로 받는다.
-- 범위는 링크 폴더 아래로만: `..`·숨김(./@)·심볼릭 탈출은 목록에서 빠지고 요청은 404.
-- 비밀번호·내려받기 막음·횟수 제한은 그대로. 미리보기는 횟수를 세지 않는다.
+- 폴더 하나로 생성한 링크는 손님 화면 주소(/s/<token>)를 반환하며, 내부를 탐색하면서 파일별로 내려받는다.
+- 범위는 링크 폴더 하위로 제한: `..`·숨김(./@)·심볼릭 탈출은 목록에서 제외되고 요청은 404.
+- 비밀번호·내려받기 차단·횟수 제한은 그대로 적용된다. 미리보기는 횟수에 집계하지 않는다.
 """
 
 import io
@@ -58,7 +58,7 @@ async def test_list_hides_and_navigates(env):
     assert top["items"][1]["preview"] == "text" and top["items"][1]["size"] == 5
     sub = await fr.list_shared_link_folder(token=link.token, request=Req(), sub="sub", access=None, db=env.db)
     assert [i["path"] for i in sub["items"]] == ["sub/b.txt"]
-    assert await _count(env, link.id) == 0          # 둘러보기는 세지 않는다
+    assert await _count(env, link.id) == 0          # 탐색은 횟수에 집계하지 않음
 
 
 @pytest.mark.asyncio
@@ -99,7 +99,7 @@ async def test_download_file_subfolder_zip_and_whole(env):
     assert z.namelist() == ["sub/b.txt"] and "sub.zip" in resp.headers["content-disposition"]
     resp = await fr.download_shared(token=link.token, request=Req(), access=None, inline=False, db=env.db)
     z = zipfile.ZipFile(io.BytesIO(b"".join([c async for c in resp.body_iterator])))
-    assert sorted(z.namelist()) == ["docs/a.txt", "docs/sub/b.txt"]     # 숨김(./@)은 zip 에도 없다
+    assert sorted(z.namelist()) == ["docs/a.txt", "docs/sub/b.txt"]     # 숨김(./@)은 zip 에도 미포함
     assert await _count(env, link.id) == 3
 
 

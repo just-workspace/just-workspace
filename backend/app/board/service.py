@@ -90,7 +90,7 @@ async def get_posts(
 ) -> dict:
     """Return {pinned: [...], posts: [...], total, page, page_size}.
 
-    user_id 를 주면 각 글에 is_read 를 붙인다. mine=True 면 그 사용자가 쓴 글만.
+    user_id 를 지정하면 각 글에 is_read 를 포함한다. mine=True 이면 해당 사용자가 작성한 글만 반환한다.
 
     Optimised: JOINs author in the same query to avoid separate author-fetch queries.
     """
@@ -192,7 +192,7 @@ async def get_post(
         ).scalar_one_or_none()
         is_bookmarked = bm is not None
 
-    # 읽음 기록 — 필독뿐 아니라 모든 글(목록 is_read·안 읽은 수에 쓴다)
+    # 읽음 기록 — 필독뿐 아니라 모든 글 대상(목록 is_read·읽지 않은 글 수에 사용)
     if user_id:
         existing_read = (
             await db.execute(
@@ -224,7 +224,7 @@ async def create_post(db: AsyncSession, **kwargs) -> dict:
     return _post_to_detail(post, author, [], False)
 
 
-# 수정에서 null 로 비울 수 있는 칸(나머지 칸의 null 은 "안 바꿈")
+# 수정 시 null 로 비울 수 있는 필드(나머지 필드의 null 은 "안 바꿈")
 NULLABLE_POST_FIELDS = frozenset({"category", "attachments", "must_read_expires_at"})
 
 
@@ -401,7 +401,7 @@ async def get_recent_posts_by_board(db: AsyncSession, limit_per_board: int = 5,
     for post, user in rows:
         posts_by_board[post.board_id].append((post, user))
 
-    # user_id 를 주면 각 글에 is_read(목록과 같은 규칙: 연 글·내 글·"모두 읽음" 이전 글은 읽음)
+    # user_id 를 지정하면 각 글에 is_read 포함(목록과 동일 규칙: 열람한 글·본인 글·"모두 읽음" 이전 글은 읽음)
     read = await read_post_ids(db, user_id, [p for p, _ in rows]) if user_id else None
 
     # Build result keeping original board order
@@ -464,7 +464,7 @@ async def create_comment(
         parent = await db.get(PostComment, parent_id)
         if not parent:
             raise ValueError("부모 댓글을 찾을 수 없습니다")
-        # 다른 글의 댓글을 부모로 주면 댓글 수만 늘고 어디에도 안 보이는 댓글이 생긴다
+        # 다른 글의 댓글을 부모로 지정하면 댓글 수만 증가하고 어디에도 표시되지 않는 댓글이 생성됨
         if parent.post_id != post_id:
             raise ValueError("부모 댓글을 찾을 수 없습니다")
         if parent.parent_id is not None:
@@ -618,7 +618,7 @@ async def get_user_bookmarks(
     db: AsyncSession, user_id: str, page: int = 1, page_size: int = 20
 ) -> dict:
     """Get bookmarked posts with author JOINed to avoid separate fetch."""
-    # 지워진 글은 목록에서 빠지므로 수에서도 뺀다(페이지 수가 어긋나지 않게)
+    # 삭제된 글은 목록에서 제외되므로 개수에서도 제외(페이지 수 불일치 방지)
     count_q = select(func.count(PostBookmark.id)).join(Post, Post.id == PostBookmark.post_id).where(
         PostBookmark.user_id == user_id,
         Post.is_deleted == False,  # noqa: E712
@@ -721,7 +721,7 @@ _IMG_MD_RE = re.compile(r"!\[[^\]]*\]\(\s*<?([^)\s>]+)")
 
 
 def _safe_thumb(url: str | None) -> str | None:
-    """목록 썸네일로 내보내도 되는 주소만 — 같은 출처 경로(/...) 또는 http(s). data:·javascript: 등은 버린다."""
+    """목록 썸네일로 반환할 수 있는 주소만 허용 — 동일 출처 경로(/...) 또는 http(s). data:·javascript: 등은 제외."""
     u = (url or "").strip()
     if not u or len(u) > 2048:
         return None
@@ -734,7 +734,7 @@ def _safe_thumb(url: str | None) -> str | None:
 def post_thumbnail_url(content: str | None, attachments: list | None) -> str | None:
     """포럼 갤러리(chat22)용 — 본문 첫 이미지(HTML <img> 또는 마크다운 ![]()), 없으면 첫 이미지 첨부. 없으면 None.
 
-    본문 문자열만 본다(조회수·읽음 표시를 건드리지 않는다).
+    본문 문자열만 검사한다(조회수·읽음 표시를 변경하지 않는다).
     """
     text = content or ""
     hits = [m for m in (_IMG_HTML_RE.search(text), _IMG_MD_RE.search(text)) if m]
@@ -855,10 +855,10 @@ def _comment_to_dict(comment: PostComment, author: User | None) -> dict:
 
 # ─── 읽음 · 안 읽은 수 · 멘션 ───
 #
-# 읽음 = (글을 연 기록 PostReadLog) 또는 (내가 쓴 글) 또는 (기준 시각 이전 글).
-# 기준 시각 = max(읽음 추적 시작 시각, 그 게시판 "모두 읽음" 시각).
-# 읽음 추적 시작 시각(system_settings 'board.read_tracking_since')은 처음 쓰일 때 한 번 정해진다 —
-# 기능이 들어가기 전 글이 전부 "안 읽음"으로 쏟아지지 않게.
+# 읽음 = (글 열람 기록 PostReadLog) 또는 (본인 작성 글) 또는 (기준 시각 이전 글).
+# 기준 시각 = max(읽음 추적 시작 시각, 해당 게시판 "모두 읽음" 시각).
+# 읽음 추적 시작 시각(system_settings 'board.read_tracking_since')은 최초 사용 시 1회 결정된다 —
+# 기능 도입 이전 글이 전부 "안 읽음"으로 표시되는 것을 방지한다.
 
 READ_SINCE_KEY = "board.read_tracking_since"
 
@@ -918,7 +918,7 @@ async def read_post_ids(db: AsyncSession, user_id: str, posts: list[Post]) -> se
 
 
 async def unread_counts(db: AsyncSession, user_id: str) -> dict[str, int]:
-    """{board_id: 안 읽은 글 수} — 게시판마다 한 번에(그룹 쿼리 하나)."""
+    """{board_id: 읽지 않은 글 수} — 전체 게시판을 일괄 조회(그룹 쿼리 1회)."""
     from app.db.models import BoardReadMark
     since = await read_tracking_since(db)
     q = (
@@ -951,7 +951,7 @@ async def mark_board_read(db: AsyncSession, user_id: str, board_id: str) -> None
 
 
 async def get_my_posts(db: AsyncSession, user_id: str, page: int = 1, page_size: int = 20) -> dict:
-    """모든 게시판에서 내가 쓴 글(최신순)."""
+    """전체 게시판에서 본인이 작성한 글(최신순)."""
     cond = [Post.author_id == user_id, Post.is_deleted == False]  # noqa: E712
     total = (await db.execute(select(func.count(Post.id)).where(*cond))).scalar() or 0
     rows = (await db.execute(
@@ -971,7 +971,7 @@ def parse_comment_mentions(content: str) -> list[str]:
 
 
 async def resolve_mentions(db: AsyncSession, content: str, exclude_user_id: str | None = None) -> list[dict]:
-    """본문의 @username 을 활성 사용자로 해석(자기 자신 제외). 없는 이름은 버린다."""
+    """본문의 @username 을 활성 사용자로 해석(본인 제외). 존재하지 않는 이름은 제외."""
     names = parse_comment_mentions(content)[:20]
     if not names:
         return []
@@ -989,7 +989,7 @@ async def resolve_mentions(db: AsyncSession, content: str, exclude_user_id: str 
 
 async def notify_comment_mentions(db: AsyncSession, post: Post, comment: dict, author: User,
                                   mentions: list[dict]) -> None:
-    """멘션된 사람에게 알림 — 기존 notifications 서비스 함수만 부른다."""
+    """멘션 대상자에게 알림 — 기존 notifications 서비스 함수만 호출한다."""
     from app.notifications.service import create_notification
     name = author.display_name or author.username
     for m in mentions:

@@ -1,6 +1,6 @@
 """격리 브라우저 동적 출구 허용 목록(app/rbi/egress.py) — 대상 검증 거부·강제·이름 고정 · 관리 API → 허용 파일 · 감사 · 세션 시작 전 확인.
 
-사이드카(deploy/rbi-netfilter)가 파일을 읽어 체인에 거는 것은 임시 컨테이너 시험(deploy/rbi-netfilter/test-propagation.sh — docs/rbi.md §8)이 본다.
+사이드카(deploy/rbi-netfilter)가 파일을 읽어 체인에 적용하는 부분은 임시 컨테이너 시험(deploy/rbi-netfilter/test-propagation.sh — docs/rbi.md §8)에서 확인한다.
 """
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ async def _audit(db, action) -> list[dict]:
 
 @pytest.mark.parametrize("url,hosts,ports,msg", [
     ("http://8.8.8.8", [], [], "허용 상한"),                         # 공인 IP
-    ("http://pub.example", [], [], "허용 상한"),                     # 공인으로 풀리는 이름
+    ("http://pub.example", [], [], "허용 상한"),                     # 공인 IP 로 해석되는 이름
     ("http://127.0.0.1", [], [], "루프백"),
     ("http://loop.lan", [], [], "루프백"),
     ("http://169.254.1.1", [], [], "루프백"),
@@ -107,7 +107,7 @@ async def _audit(db, action) -> list[dict]:
     ("http://172.31.200.5", [], [], "도커 브리지"),                  # 세션 대역
     ("http://192.168.10.25", [], [], "워크스페이스 자신"),            # RBI_PROTECTED(앱 호스트)
     ("http://192.168.10.1", [], [], "워크스페이스 자신"),              # 게이트웨이
-    ("http://rp.lan", [], [], "워크스페이스 자신"),                  # APP_URL/RBI_PUBLIC_ORIGIN 이 풀리는 RP
+    ("http://rp.lan", [], [], "워크스페이스 자신"),                  # APP_URL/RBI_PUBLIC_ORIGIN 이 해석되는 RP
     ("http://192.168.10.17:8080", [], [], "포트는 80·443"),          # 추가 포트 미명시
     ("http://192.168.10.17", ["192.168.10.71:22"], [], "포트는 80·443"),
     ("http://nope.lan", [], [], "이름을 풀지"),
@@ -121,7 +121,7 @@ async def test_validation_rejects(url, hosts, ports, msg):
 
 
 async def test_force_marks_entries_the_backend_does_not_know_as_its_own():
-    """backend 가 자신의 주소로 알지 못하는 서버의 LAN 주소도, 강제로 저장하면 사이드카가 통과시키는 표시(force)가 붙는다."""
+    """backend 가 자신의 주소로 인식하지 못하는 서버의 LAN 주소도, 강제로 저장하면 사이드카가 통과시키는 표시(force)가 부여된다."""
     entries, warn = await eg.compute_egress("http://192.168.10.77:8080", [], [8080], force=True)
     assert [e.line() for e in entries] == ["192.168.10.77:8080"] and all(e.forced for e in entries)
     assert warn and "강제로 저장" in warn[0]
@@ -166,12 +166,12 @@ async def test_admin_add_disable_delete_propagates_and_audits(db_session):
     assert _file_lines() == ["192.168.10.20:443  # nas", "192.168.10.20:80  # nas"]
     adds = await _audit(db_session, "rbi.allow.add")
     assert adds and adds[-1]["entries"] == ["192.168.10.20:443", "192.168.10.20:80"] and adds[-1]["target"] == "nas"
-    # 두 번째 대상이 같은 IP 를 쓰면 줄은 하나(주석에 두 키)
+    # 두 번째 대상이 동일 IP 를 사용하면 줄은 하나(주석에 두 키)
     r = await _req(db_session, "POST", "/api/admin/rbi/targets", json={"key": "nas2", "name": "NAS2", "url": "http://192.168.10.20"})
     assert r.status_code == 201
     assert _file_lines() == ["192.168.10.20:443  # nas,nas2", "192.168.10.20:80  # nas,nas2"]
-    assert len(await _audit(db_session, "rbi.allow.add")) == 1          # 새 출구가 없으니 추가 감사도 없다
-    # 끄면 그 대상만의 출구가 빠진다(겹치면 남는다) → 지우면 빠지고 감사
+    assert len(await _audit(db_session, "rbi.allow.add")) == 1          # 새 출구가 없으므로 추가 감사도 없음
+    # 비활성화하면 해당 대상 전용 출구가 제거된다(중복분은 유지) → 삭제하면 제거되고 감사 기록
     assert (await _req(db_session, "PUT", f"/api/admin/rbi/targets/{tid}", json={"url": "http://portal.lan"})).status_code == 200
     assert _file_lines() == ["192.168.10.17:443  # nas", "192.168.10.17:80  # nas", "192.168.10.20:443  # nas2", "192.168.10.20:80  # nas2"]
     assert (await _req(db_session, "PUT", f"/api/admin/rbi/targets/{tid}", json={"enabled": False})).status_code == 200
@@ -183,7 +183,7 @@ async def test_admin_add_disable_delete_propagates_and_audits(db_session):
     assert (await _req(db_session, "DELETE", f"/api/admin/rbi/targets/{nas2['id']}")).status_code == 200
     assert _file_lines() == []
     assert (await _audit(db_session, "rbi.allow.remove"))[-1]["entries"] == ["192.168.10.20:443", "192.168.10.20:80"]
-    # 대상 감사도 남는다
+    # 대상 감사도 기록됨
     for a in ("rbi.target.create", "rbi.target.update", "rbi.target.delete"):
         assert await _audit(db_session, a), a
 
@@ -203,7 +203,7 @@ async def test_admin_rejects_and_force(db_session):
     assert "192.168.10.50:443 force  # rp" in _file_lines()
     created = await _audit(db_session, "rbi.target.create")
     assert any(c.get("forced") for c in created)
-    # 수정 실패는 DB 를 바꾸지 않는다
+    # 수정 실패 시 DB 변경 없음
     tid = r.json()["id"]
     assert (await _req(db_session, "PUT", f"/api/admin/rbi/targets/{tid}", json={"url": "http://8.8.8.8"})).status_code == 400
     assert (await _req(db_session, "GET", "/api/admin/rbi")).json()["targets"][-1]["url"] in ("http://rp.lan", "http://192.168.10.17:8080")
@@ -243,5 +243,5 @@ async def test_legacy_target_without_egress_is_filled_by_sync(db_session):
     assert [ln.split()[0] for ln in lines] == ["192.168.10.17:443", "192.168.10.17:80"]
     await db_session.refresh(t)
     assert json.loads(t.egress)[0]["ip"] == "192.168.10.17"
-    # 파일은 바뀔 때만 쓴다
+    # 파일은 변경 시에만 기록
     assert eg.write_allow_file(lines) is False

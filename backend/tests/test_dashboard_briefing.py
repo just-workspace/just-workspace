@@ -119,10 +119,10 @@ async def test_briefing_off_until_enabled_then_cached_daily(db, ai_ok):
     assert st["status"] == "ready" and st["items"][0]["text"] == "오늘 할 일"
     assert st["items"][0]["sources"] == [{"label": "작업", "to": "/tasks"}]
     assert st["regen_left"] == br.REGEN_MAX and st["generated_at"]
-    # 같은 날 다시 부르면 캐시 — AI 를 다시 부르지 않는다
+    # 같은 날 재호출 시 캐시 사용 — AI 를 다시 호출하지 않음
     await br.generate_briefing(br.GenerateBody(), day_start=None, day_end=None, user=alice, db=db)
     assert ai_ok["n"] == 1
-    # 다른 사용자는 꺼진 상태 그대로
+    # 다른 사용자는 비활성 상태 유지
     bob = await db.get(User, "bob")
     assert (await br.get_briefing(day_start=None, day_end=None, user=bob, db=db))["status"] == "off"
 
@@ -147,7 +147,7 @@ async def test_briefing_regenerate_limit_feedback_and_disable(db, ai_ok):
     st = await br.enable_briefing(br.EnableBody(enabled=False), day_start=None, day_end=None, user=alice, db=db)
     assert st["status"] == "off"
     from sqlalchemy import select
-    assert (await db.execute(select(DashBriefing))).scalars().all() == []   # 끄면 오늘 것도 지운다
+    assert (await db.execute(select(DashBriefing))).scalars().all() == []   # 비활성화 시 당일 항목도 삭제
 
 
 @pytest.mark.asyncio
@@ -175,7 +175,7 @@ async def test_briefing_no_inputs_skips_ai(db, ai_ok, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_briefing_prep_line_needs_related_chat(db, ai_ok, monkeypatch):
-    """회의 준비 한 줄은 관련 채팅(근거)이 있을 때만 남긴다 — 없으면 AI 가 써도 버린다."""
+    """회의 준비 한 줄은 관련 채팅(근거)이 있을 때만 유지한다 — 없으면 AI 가 작성해도 폐기한다."""
     meeting = {"id": "ev1", "title": "디자인 리뷰", "start": NOW.isoformat(), "end": (NOW + timedelta(hours=1)).isoformat(), "join_url": None}
 
     async def inputs(db, user, s, e):
@@ -219,7 +219,7 @@ async def test_briefing_availability_reasons(db, monkeypatch):
     async def ext_cfg(db, user):
         return Ext(), False
     monkeypatch.setattr(br.ai_config, "resolve_provider_for_user", ext_cfg)
-    # 외부 제공자 + 관리자가 외부 개인데이터를 막아 둠(기본값) → 브리핑 불가, 켜기도 거절
+    # 외부 제공자 + 관리자가 외부 개인데이터를 차단한 상태(기본값) → 브리핑 불가, 활성화도 거부
     assert (await br._availability(db, alice))[2] == "external_blocked"
     with pytest.raises(HTTPException):
         await br.enable_briefing(br.EnableBody(enabled=True), day_start=None, day_end=None, user=alice, db=db)

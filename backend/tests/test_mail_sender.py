@@ -1,4 +1,4 @@
-"""메일 보낸 사람 카드 — 주소로 워크스페이스 사용자 찾기(대소문자 무시·비활성 제외·바깥 주소 null)."""
+"""메일 보낸 사람 카드 — 주소로 워크스페이스 사용자 조회(대소문자 무시·비활성 제외·외부 주소 null)."""
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine

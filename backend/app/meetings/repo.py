@@ -1,11 +1,11 @@
 """회의 DB 저장소 — 예약 회의·초대 대상·참석 응답·상태.
 
-Redis 메타(store.py)는 "지금 열려 있는 방"의 빠른 상태(참가 신청·녹화)를 들고, 이 모듈은
-회의 자체를 오래 들고 있다. Redis 메타가 사라졌으면(24시간 TTL) 여기 행으로 되살린다.
+Redis 메타(store.py)는 "지금 열려 있는 방"의 빠른 조회용 상태(참가 신청·녹화)를 보관하고, 본 모듈은
+회의 자체를 장기 보존한다. Redis 메타가 소멸했으면(24시간 TTL) 본 모듈의 행으로 복원한다.
 
-상태 흐름: scheduled → live(누군가 들어옴, 웹훅) → ended(방이 닫힘, 웹훅·종료 버튼)
-          scheduled → cancelled(시작 전에 호스트가 지움)
-목록에 보이는 상태는 LiveKit 에 방이 살아 있는지와 예약 시간대를 함께 보고 정한다(effective_status).
+상태 흐름: scheduled → live(참가자 입장, 웹훅) → ended(방 종료, 웹훅·종료 버튼)
+          scheduled → cancelled(시작 전에 호스트가 삭제)
+목록에 표시하는 상태는 LiveKit 방의 존재 여부와 예약 시간대를 함께 확인하여 결정한다(effective_status).
 """
 
 from __future__ import annotations
@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 ACTIVE = ("scheduled", "live")
 RESPONSES = ("pending", "accepted", "declined", "tentative")
 DEFAULT_DURATION = 60
-PAST_DAYS = 30          # 목록에 싣는 지난 회의 범위
+PAST_DAYS = 30          # 목록에 포함하는 지난 회의 범위
 PAST_LIMIT = 50
 
-# 테스트가 SQLite 세션 팩토리로 갈아끼운다. None 이면 앱 세션을 쓴다.
+# 테스트에서 SQLite 세션 팩토리로 교체한다. None 이면 앱 세션을 사용한다.
 _session_factory = None
 
 
@@ -42,20 +42,20 @@ def _now() -> datetime:
 
 
 def _aware(dt: datetime | None) -> datetime | None:
-    # SQLite 는 시간대를 버린다 — 저장은 늘 UTC 라 UTC 로 붙인다
+    # SQLite 는 시간대를 보존하지 않는다 — 저장은 항상 UTC 이므로 UTC 로 지정한다
     if dt is not None and dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
 
 
 def window(row: MeetingDB) -> tuple[datetime, datetime]:
-    """회의 시간대(시작, 끝). 예약 없이 바로 만든 방은 만든 시각부터."""
+    """회의 시간대(시작, 끝). 예약 없이 즉시 생성한 방은 생성 시각부터."""
     start = _aware(row.scheduled_at) or _aware(row.created_at) or _now()
     return start, start + timedelta(minutes=row.duration_minutes or DEFAULT_DURATION)
 
 
 def effective_status(row: MeetingDB, live: bool, now: datetime | None = None) -> str:
-    """목록에 보일 상태 — live | scheduled | ended | cancelled."""
+    """목록에 표시할 상태 — live | scheduled | ended | cancelled."""
     if row.status == "cancelled":
         return "cancelled"
     if live:
@@ -68,7 +68,7 @@ def effective_status(row: MeetingDB, live: bool, now: datetime | None = None) ->
 
 
 async def find_active(db: AsyncSession, room_name: str) -> MeetingDB | None:
-    """그 방 이름으로 아직 끝나지 않은 가장 최근 회의."""
+    """해당 방 이름으로 아직 종료되지 않은 가장 최근 회의."""
     return (await db.execute(
         select(MeetingDB)
         .where(MeetingDB.room_name == room_name, MeetingDB.status.in_(ACTIVE))
@@ -78,7 +78,7 @@ async def find_active(db: AsyncSession, room_name: str) -> MeetingDB | None:
 
 
 async def find_latest_closed(db: AsyncSession, room_name: str, host_user_id: str) -> MeetingDB | None:
-    """그 방 이름으로 이 호스트가 연, 목록에 아직 남아 있는 가장 최근 지난(끝난·취소된) 회의."""
+    """해당 방 이름으로 이 호스트가 개설한, 목록에 아직 남아 있는 가장 최근의 지난(종료·취소) 회의."""
     return (await db.execute(
         select(MeetingDB)
         .where(MeetingDB.room_name == room_name, MeetingDB.host_user_id == host_user_id,
@@ -103,12 +103,12 @@ async def get_invitees(db: AsyncSession, meeting_id: str) -> list[MeetingInvitee
 
 
 def _own_email(user) -> str:
-    """초대 주소와 견줄 수 있는 이 계정의 주소(소문자) — 본인이 바꿀 수 없는 주소만. 없으면 "".
+    """초대 주소와 비교 가능한 이 계정의 주소(소문자) — 본인이 변경할 수 없는 주소만. 없으면 "".
 
-    로컬 계정의 주소는 가입 때 시스템이 정한다. LDAP 등 외부 인증 계정은 로그인할 때마다 디렉터리의
-    mail 속성으로 덮어쓰는데(auth/router._try_ldap_login), 디렉터리에서 그 값을 스스로 바꿀 수 있는 사람이
-    남에게 온 초대 주소로 맞춰 대기실·비밀번호 없이 들어올 수 있다 — 그런 계정은 주소로 묶지 않는다
-    (계정을 지정한 초대나 초대 링크로 들어온다).
+    로컬 계정의 주소는 가입 시 시스템이 지정한다. LDAP 등 외부 인증 계정은 로그인할 때마다 디렉터리의
+    mail 속성으로 덮어쓰는데(auth/router._try_ldap_login), 디렉터리에서 해당 값을 직접 변경할 수 있는 사용자가
+    타인에게 발송된 초대 주소와 일치시켜 대기실·비밀번호 없이 입장할 수 있다 — 이러한 계정은 주소로 매칭하지 않는다
+    (계정을 지정한 초대나 초대 링크로 입장한다).
     """
     email = (getattr(user, "email", None) or "").strip().lower()
     if not email:
@@ -132,15 +132,15 @@ async def my_invite(db: AsyncSession, meeting_id: str, user) -> MeetingInvitee |
 
 
 async def can_view(db: AsyncSession, row: MeetingDB, user) -> bool:
-    """회의 상세를 볼 수 있는 사람 — 호스트 또는 초대 대상."""
+    """회의 상세를 열람할 수 있는 사용자 — 호스트 또는 초대 대상."""
     if row.host_user_id == str(user.id):
         return True
     return await my_invite(db, row.id, user) is not None
 
 
 async def add_invitees(db: AsyncSession, meeting_id: str, items) -> list[MeetingInvitee]:
-    """InviteeItem 목록을 초대 행으로. 내부 사용자는 user_id 로 묶고(username 만 오면 찾는다),
-    이미 있는 사람은 건너뛴다. 새로 추가된 행만 돌려준다(커밋은 호출자가)."""
+    """InviteeItem 목록을 초대 행으로 변환한다. 내부 사용자는 user_id 로 매칭하고(username 만 전달되면 조회한다),
+    이미 존재하는 대상은 생략한다. 새로 추가된 행만 반환한다(커밋은 호출자가 수행)."""
     existing = await get_invitees(db, meeting_id)
     have_users = {i.user_id for i in existing if i.user_id}
     have_emails = {(i.email or "").lower() for i in existing if i.email}
@@ -186,11 +186,11 @@ def invitee_dict(inv: MeetingInvitee) -> dict:
 
 
 async def list_visible(db: AsyncSession, user, now: datetime | None = None) -> list[MeetingDB]:
-    """내가 호스트이거나 초대받은 회의 — 끝나지 않은 것 전부 + 최근 30일 안에 끝난 것."""
+    """본인이 호스트이거나 초대받은 회의 — 종료되지 않은 것 전부 + 최근 30일 이내에 종료된 것."""
     now = now or _now()
-    # 이메일이 없는 계정은 이메일 조건을 뺀다. 예전엔 "\x00" 을 대신 넣었는데 PostgreSQL 은 NUL 문자를
-    # 받지 않아 목록 전체가 500 이 됐다(이메일 없는 계정의 회의 목록).
-    # 주소로 묶는 기준은 _is_me 와 같다(로컬 계정의 주소만, 대소문자 무시) — 목록에는 보이는데 입장은 안 되는 일이 없게.
+    # 이메일이 없는 계정은 이메일 조건을 제외한다. 과거에는 "\x00" 을 대신 넣었으나 PostgreSQL 은 NUL 문자를
+    # 허용하지 않아 목록 전체가 500 이 됐다(이메일 없는 계정의 회의 목록).
+    # 주소 매칭 기준은 _is_me 와 동일하다(로컬 계정의 주소만, 대소문자 무시) — 목록에는 표시되나 입장이 불가한 상황 방지.
     email = _own_email(user)
     conds = [MeetingInvitee.user_id == str(user.id)]
     if email:
@@ -221,7 +221,7 @@ async def list_visible(db: AsyncSession, user, now: datetime | None = None) -> l
 
 
 def meta_kwargs(row: MeetingDB) -> dict:
-    """Redis RoomMeta 로 되살릴 때 쓰는 값."""
+    """Redis RoomMeta 복원 시 사용하는 값."""
     return dict(
         name=row.room_name,
         host_user_id=row.host_user_id,
@@ -239,7 +239,7 @@ def meta_kwargs(row: MeetingDB) -> dict:
 
 
 async def load_for_restore(name: str | None = None, token: str | None = None) -> dict | None:
-    """Redis 에 메타가 없을 때 DB 에서 찾아 RoomMeta 인자로. 끝났거나 취소된 회의는 되살리지 않는다."""
+    """Redis 에 메타가 없을 때 DB 에서 조회하여 RoomMeta 인자로 변환한다. 종료됐거나 취소된 회의는 복원하지 않는다."""
     async with session() as db:
         row = await find_active(db, name) if name else await find_by_token(db, token or "")
         if row is None or row.status not in ACTIVE:
@@ -252,10 +252,10 @@ async def load_for_restore(name: str | None = None, token: str | None = None) ->
 
 
 async def on_room_event(event: str, room_name: str) -> None:
-    """LiveKit 웹훅 → 회의 상태. 채널 통화(chan-)는 여기 오지 않는다.
+    """LiveKit 웹훅 → 회의 상태. 채널 통화(chan-)는 여기로 전달되지 않는다.
 
-    room_finished 는 아무도 안 들어온 채 5분 지나 방이 닫혀도 온다(예약만 해 둔 회의).
-    그래서 누가 들어온 적이 있을 때(started_at)만 ended 로 바꾼다.
+    room_finished 는 입장자 없이 5분이 지나 방이 닫힌 경우에도 수신된다(예약만 된 회의).
+    따라서 입장 이력이 있을 때(started_at)만 ended 로 변경한다.
     """
     async with session() as db:
         row = (await db.execute(

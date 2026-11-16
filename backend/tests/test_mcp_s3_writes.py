@@ -175,7 +175,7 @@ async def test_undo_within_window_only(env):
     rid = r["result"]["request_id"]
     req = await writes.undo(env["db"], env["alice"], rid)
     assert req.status == "undone" and LOG[-1] == ("undo", "x1")
-    # 두 번째 실행 → 시간 지난 뒤 되돌리기 거부
+    # 두 번째 실행 → 시간 경과 후 되돌리기 거부
     t = _ctx("mcp")
     try:
         r2 = await execute_tool("t_low", {"title": "b"}, env["alice"], scopes=frozenset({"mcp:read", "mcp:write"}))

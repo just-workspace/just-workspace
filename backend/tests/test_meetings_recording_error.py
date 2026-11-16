@@ -1,4 +1,4 @@
-"""녹화 시작 실패는 사람 말 detail 로 502 — 프런트가 토스트로 그대로 보여 준다(원문 twirp 오류는 로그로)."""
+"""녹화 시작 실패는 사용자용 문구 detail 과 함께 502 — 프런트가 토스트로 그대로 표시한다(원문 twirp 오류는 로그에 기록)."""
 
 from types import SimpleNamespace
 

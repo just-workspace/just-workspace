@@ -1,10 +1,10 @@
-"""Redis 에만 있던 값 셋이 DB 로 옮겨졌는가 — 개인 잠금 PIN, POP3 의 읽음·별표, 새 메일 감시의 마지막 UID.
+"""Redis 에만 있던 값 3종이 DB 로 이전되었는지 검증 — 개인 잠금 PIN, POP3 의 읽음·별표, 새 메일 감시의 마지막 UID.
 
-보는 것:
-- 이전: 예전 Redis 키에만 있던 값이 첫 접근 뒤 DB 에 있다.
-- 복원 뒤: Redis 를 비워도(백업에는 Redis 가 없다) 값이 남는다.
-- 옮긴 뒤에는 DB 가 기준이다 — Redis 의 낡은 값이 되살아나지 않는다.
-- 이전 버전으로 되돌아갈 때를 위해 예전 키에도 같은 값을 써 둔다.
+검증 항목:
+- 이전: 기존 Redis 키에만 있던 값이 첫 접근 이후 DB 에 존재한다.
+- 복원 후: Redis 를 비워도(백업에는 Redis 가 포함되지 않는다) 값이 유지된다.
+- 이전 후에는 DB 가 기준이다 — Redis 의 오래된 값이 복원되지 않는다.
+- 이전 버전으로 롤백하는 경우에 대비하여 기존 키에도 동일한 값을 기록한다.
 """
 
 import uuid
@@ -23,7 +23,7 @@ from app.privacy import gate
 
 
 class FakeRedis:
-    """문자열·집합만 — 이 테스트가 쓰는 명령뿐이다."""
+    """문자열·집합만 지원 — 이 테스트가 사용하는 명령으로 한정한다."""
 
     def __init__(self):
         self.kv: dict[str, str] = {}
@@ -81,7 +81,7 @@ class FakeRedis:
         self.published.append((channel, payload))
 
     def flush(self):
-        """복원 뒤 — Redis 는 비어 있다."""
+        """복원 후 상태 — Redis 는 비어 있다."""
         self.kv.clear()
         self.sets.clear()
 
@@ -143,7 +143,7 @@ async def test_pin_set_goes_to_db_and_survives_empty_redis(redis):
     assert await gate.has_pin(uid) is False
     await gate.set_pin(uid, "4321")
     assert await _pin_row(uid)
-    redis.flush()                                            # 복원 뒤
+    redis.flush()                                            # 복원 후
     assert await gate.has_pin(uid) is True
     assert await gate.verify_pin(uid, "4321") is True
     assert await gate.verify_pin(uid, "0000") is False
@@ -152,12 +152,12 @@ async def test_pin_set_goes_to_db_and_survives_empty_redis(redis):
 async def test_pin_in_redis_only_moves_to_db_on_first_access(redis):
     uid = await _user()
     legacy = hash_password("2468")
-    redis.kv[gate._pin_key(uid)] = legacy                    # 업데이트 전의 상태
+    redis.kv[gate._pin_key(uid)] = legacy                    # 업데이트 이전 상태
     assert await _pin_row(uid) is None
 
     assert await gate.has_pin(uid) is True
-    assert await _pin_row(uid) == legacy                     # 첫 접근에 옮겨졌다
-    assert redis.kv[gate._pin_key(uid)] == legacy            # 예전 키는 그대로(이전 버전으로 되돌아갈 때)
+    assert await _pin_row(uid) == legacy                     # 첫 접근 시 이전됨
+    assert redis.kv[gate._pin_key(uid)] == legacy            # 기존 키는 유지(이전 버전으로 롤백하는 경우 대비)
     redis.flush()
     assert await gate.verify_pin(uid, "2468") is True
 
@@ -165,10 +165,10 @@ async def test_pin_in_redis_only_moves_to_db_on_first_access(redis):
 async def test_pin_db_wins_over_stale_redis_and_new_pin_is_mirrored(redis):
     uid = await _user()
     redis.kv[gate._pin_key(uid)] = hash_password("1111")
-    assert await gate.verify_pin(uid, "1111") is True        # 옮김
+    assert await gate.verify_pin(uid, "1111") is True        # 이전 수행
     await gate.set_pin(uid, "2222")
-    assert redis.kv[gate._pin_key(uid)] == await _pin_row(uid)   # 사본도 새 값
-    redis.kv[gate._pin_key(uid)] = hash_password("9999")     # 누가 Redis 를 옛 값으로 되돌려도
+    assert redis.kv[gate._pin_key(uid)] == await _pin_row(uid)   # 사본도 새 값으로 갱신
+    redis.kv[gate._pin_key(uid)] = hash_password("9999")     # Redis 값이 이전 값으로 되돌려지더라도
     assert await gate.verify_pin(uid, "2222") is True
     assert await gate.verify_pin(uid, "9999") is False
 
@@ -177,7 +177,7 @@ async def test_pin_works_without_redis_and_concurrent_import_is_quiet(redis):
     uid = await _user()
     legacy = hash_password("1357")
     redis.kv[gate._pin_key(uid)] = legacy
-    # 다른 워커가 먼저 옮긴 상황: DB 에 이미 행이 있는데 한 번 더 넣으려 한다
+    # 다른 워커가 먼저 이전한 상황: DB 에 이미 행이 있는 상태에서 재삽입을 시도
     async with async_session() as db:
         db.add(PrivacyPin(user_id=uid, pin_hash=legacy))
         await db.commit()
@@ -190,13 +190,13 @@ async def test_pin_works_without_redis_and_concurrent_import_is_quiet(redis):
 
     gate._db_hash, saved = first_miss, gate._db_hash
     try:
-        assert await gate.verify_pin(uid, "1357") is True    # 유니크 충돌이 예외로 새지 않는다
+        assert await gate.verify_pin(uid, "1357") is True    # 유니크 충돌이 예외로 전파되지 않음
     finally:
         gate._db_hash = saved
 
-    redis.broken = True                                      # Redis 가 죽어도 DB 의 PIN 은 통한다
+    redis.broken = True                                      # Redis 장애 시에도 DB 의 PIN 은 유효
     assert await gate.has_pin(uid) is True
-    await gate.set_pin(uid, "8642")                          # 사본 쓰기 실패는 삼킨다
+    await gate.set_pin(uid, "8642")                          # 사본 쓰기 실패는 무시
     assert await gate.verify_pin(uid, "8642") is True
     assert await gate.has_pin(await _user()) is False
 
@@ -216,17 +216,17 @@ async def test_pop3_flags_go_to_db_and_survive_empty_redis(redis):
     await pop3_client.update_flags(acc, "INBOX", "m2", add_flags=["\\Seen", "\\Flagged"])
     await pop3_client.update_flags(acc, "INBOX", "m3", add_flags=["\\Flagged"])
     assert await _rows(acc) == {"m1": (True, False), "m2": (True, True), "m3": (False, True)}
-    # 예전 집합의 사본(이전 버전으로 되돌아갈 때)
+    # 기존 집합의 사본(이전 버전으로 롤백하는 경우 대비)
     assert redis.sets[pop3_client._read_key(acc.id)] == {"m1", "m2"}
     assert redis.sets[pop3_client._flag_key(acc.id)] == {"m2", "m3"}
 
-    redis.flush()                                            # 복원 뒤
-    pop3_client._imported.clear()                            # 서버도 새로 떴다
+    redis.flush()                                            # 복원 후
+    pop3_client._imported.clear()                            # 서버도 재기동된 상태
     assert await pop3_client._state(acc.id) == ({"m1", "m2"}, {"m2", "m3"})
 
     await pop3_client.update_flags(acc, "INBOX", "m2", remove_flags=["\\Seen"])
     await pop3_client.update_flags(acc, "INBOX", "m3", remove_flags=["\\Flagged"])
-    assert await _rows(acc) == {"m1": (True, False), "m2": (False, True)}      # 둘 다 꺼진 행은 지운다
+    assert await _rows(acc) == {"m1": (True, False), "m2": (False, True)}      # 둘 다 해제된 행은 삭제
 
 
 async def test_pop3_flags_in_redis_only_move_once(redis):
@@ -235,11 +235,11 @@ async def test_pop3_flags_in_redis_only_move_once(redis):
     redis.sets[pop3_client._flag_key(acc.id)] = {"b", "c"}
     assert await _rows(acc) == {}
 
-    assert await pop3_client._state(acc.id) == ({"a", "b"}, {"b", "c"})        # 첫 접근에 옮겨졌다
+    assert await pop3_client._state(acc.id) == ({"a", "b"}, {"b", "c"})        # 첫 접근 시 이전됨
     assert await _rows(acc) == {"a": (True, False), "b": (True, True), "c": (False, True)}
     assert (await _reload(acc)).pop3_state_imported is True
 
-    # 전부 안 읽음으로 되돌린 뒤 Redis 에 낡은 집합이 남아 있어도 다시 옮기지 않는다
+    # 전부 읽지 않음으로 되돌린 뒤 Redis 에 오래된 집합이 남아 있어도 재이전하지 않음
     for uidl in ("a", "b"):
         await pop3_client.update_flags(acc, "INBOX", uidl, remove_flags=["\\Seen"])
     for uidl in ("b", "c"):
@@ -252,13 +252,13 @@ async def test_pop3_flags_in_redis_only_move_once(redis):
 async def test_pop3_import_is_claimed_by_one_worker_and_waits_for_redis(redis):
     acc = await _account()
     redis.sets[pop3_client._read_key(acc.id)] = {"a"}
-    redis.broken = True                                      # Redis 를 못 읽으면 옮겼다고 적지 않는다
+    redis.broken = True                                      # Redis 조회 실패 시 이전 완료로 기록하지 않음
     assert await pop3_client._state(acc.id) == (set(), set())
     assert not (await _reload(acc)).pop3_state_imported
     redis.broken = False
     assert await pop3_client._state(acc.id) == ({"a"}, set())
 
-    # 두 번째 워커: 이미 옮긴 계정 — 행을 다시 넣으려 들지 않는다
+    # 두 번째 워커: 이미 이전된 계정 — 행 재삽입을 시도하지 않음
     pop3_client._imported.clear()
     redis.sets[pop3_client._read_key(acc.id)] = {"a", "zzz"}
     assert await pop3_client._state(acc.id) == ({"a"}, set())
@@ -298,33 +298,33 @@ def inbox(monkeypatch):
 
 async def test_poller_keeps_last_uid_in_db_and_survives_empty_redis(redis, inbox):
     acc = await _account("imap")
-    await poller._poll_account(redis, acc)                   # 첫 폴: 기준만 잡는다
+    await poller._poll_account(redis, acc)                   # 첫 폴링: 기준만 설정
     assert redis.published == [] and (await _reload(acc)).last_seen_uid == 12
-    assert redis.kv[poller._lastuid_key(acc.id)] == "12"     # 예전 키의 사본
+    assert redis.kv[poller._lastuid_key(acc.id)] == "12"     # 기존 키의 사본
 
-    redis.flush()                                            # 복원 뒤
-    async with async_session() as db:                        # 계정의 수정 시각은 감시가 건드리지 않는다
+    redis.flush()                                            # 복원 후
+    async with async_session() as db:                        # 계정의 수정 시각은 감시가 변경하지 않음
         await db.execute(update(MailAccount).where(MailAccount.id == acc.id).values(updated_at=datetime(2026, 1, 1)))
         await db.commit()
     inbox["uids"] = [11, 12, 13, 14]
     await poller._poll_account(redis, await _reload(acc))
-    assert inbox["archived"] == ["13", "14"]                 # 기준을 잃지 않았다 — 새 메일만 알린다
+    assert inbox["archived"] == ["13", "14"]                 # 기준 유지 — 새 메일만 알림
     after = await _reload(acc)
     assert len(redis.published) == 2 and after.last_seen_uid == 14
     assert after.updated_at.replace(tzinfo=None) == datetime(2026, 1, 1)
 
-    await poller._poll_account(redis, after)                 # 새 메일이 없으면 그대로
+    await poller._poll_account(redis, after)                 # 새 메일이 없으면 변경 없음
     assert len(redis.published) == 2
 
 
 async def test_poller_moves_last_uid_from_redis_once(redis, inbox):
     acc = await _account("imap")
-    redis.kv[poller._lastuid_key(acc.id)] = "11"             # 업데이트 전의 상태
+    redis.kv[poller._lastuid_key(acc.id)] = "11"             # 업데이트 이전 상태
     await poller._poll_account(redis, acc)
-    assert inbox["archived"] == ["12"]                       # 기준을 다시 잡지 않고 이어서 본다
+    assert inbox["archived"] == ["12"]                       # 기준을 재설정하지 않고 이어서 확인
     assert (await _reload(acc)).last_seen_uid == 12
 
-    redis.kv[poller._lastuid_key(acc.id)] = "5"              # 낡은 값이 남아 있어도 DB 가 기준
+    redis.kv[poller._lastuid_key(acc.id)] = "5"              # 오래된 값이 남아 있어도 DB 가 기준
     await poller._poll_account(redis, await _reload(acc))
     assert inbox["archived"] == ["12"]
 
@@ -339,13 +339,13 @@ async def test_poller_skips_pop3_and_tolerates_broken_redis_on_import(redis, inb
     assert await poller._load_last_seen(redis, acc) == 0
 
 
-# ─── 기동 때 한 번 훑기 ───
+# ─── 기동 시 1회 일괄 처리 ───
 
 
 async def test_startup_sweep_moves_what_nobody_has_read_yet(redis, monkeypatch):
-    """업데이트한 뒤 아무도 열어 보지 않은 값도 DB 로 — 그 상태로 백업해도 잃지 않게."""
+    """업데이트 후 한 번도 접근되지 않은 값도 DB 로 이전한다 — 그 상태로 백업해도 손실되지 않도록 한다."""
     uid, kept = await _user(), await _user()
-    await gate.set_pin(kept, "1234")                         # 이미 DB 에 있는 것은 건드리지 않는다
+    await gate.set_pin(kept, "1234")                         # 이미 DB 에 있는 항목은 변경하지 않음
     redis.kv[gate._pin_key(uid)] = hash_password("5678")
     redis.kv[gate._pin_key("deleted-user")] = hash_password("0000")
     pop = await _account("pop3")
@@ -356,23 +356,23 @@ async def test_startup_sweep_moves_what_nobody_has_read_yet(redis, monkeypatch):
     moved = await redis_handoff.sweep()
     assert moved["pins"] >= 1 and moved["pop3_accounts"] >= 1 and moved["last_uids"] >= 1
 
-    redis.flush()                                            # 복원 뒤
+    redis.flush()                                            # 복원 후
     pop3_client._imported.clear()
     assert await gate.verify_pin(uid, "5678") is True
     assert await gate.verify_pin(kept, "1234") is True
     assert await pop3_client._state(pop.id) == ({"a"}, set())
     assert (await _reload(imap)).last_seen_uid == 41
 
-    again = await redis_handoff.sweep()                      # 다시 돌아도 옮길 것이 없다
+    again = await redis_handoff.sweep()                      # 재실행 시 이전할 항목 없음
     assert again["pins"] == 0 and again["last_uids"] == 0
 
     async def no_sleep(_):
         return None
 
     monkeypatch.setattr(redis_handoff.asyncio, "sleep", no_sleep)
-    redis.kv[redis_handoff._LOCK_KEY] = "1"                  # 다른 워커가 잡고 있으면 돌지 않는다
+    redis.kv[redis_handoff._LOCK_KEY] = "1"                  # 다른 워커가 락을 보유 중이면 실행하지 않음
     redis.kv[gate._pin_key(await _user())] = hash_password("9999")
     await redis_handoff.run_handoff()
-    assert (await redis_handoff.sweep())["pins"] == 1        # 위에서는 안 옮겨졌다는 뜻
+    assert (await redis_handoff.sweep())["pins"] == 1        # 위 호출에서는 이전되지 않았음을 의미
     redis.broken = True
-    await redis_handoff.run_handoff()                        # Redis 가 죽어 있어도 예외를 올리지 않는다
+    await redis_handoff.run_handoff()                        # Redis 장애 상태에서도 예외를 전파하지 않음

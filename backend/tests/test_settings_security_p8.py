@@ -1,7 +1,7 @@
 """설정 › 보안·연결된 앱·AI — 2단계 복구 코드, 앱 비밀번호, 연결된 앱, 로그인 보호 정책, 사용자 AI 기본값.
 
-보안 민감 동작은 "본인 것만" 다루는지(남의 id → 404, 남의 자격으로 인증 불가)를 함께 본다.
-Redis 는 가짜, 메일 발송·역방향 DNS 는 막는다.
+보안 민감 동작은 "본인 것만" 다루는지(타 사용자 id → 404, 타 사용자 자격으로 인증 불가)를 함께 검증한다.
+Redis 는 가짜 구현을 사용하고, 메일 발송·역방향 DNS 는 차단한다.
 """
 
 import base64
@@ -138,8 +138,8 @@ def test_recovery_codes_hashed_and_single_use():
     assert not any(c in u.totp_recovery_codes for c in codes)  # 평문 미저장
     assert len(stored) == 10 and all(len(h) == 64 for h in stored)
     assert two_factor.consume(u, codes[0].upper().replace("-", " ")) is True  # 대소문자·구분자 무시
-    assert two_factor.consume(u, codes[0]) is False  # 한 번만
-    assert two_factor.consume(u, "123456") is False  # TOTP 모양은 복구 코드 아님
+    assert two_factor.consume(u, codes[0]) is False  # 1회만 사용 가능
+    assert two_factor.consume(u, "123456") is False  # TOTP 형식은 복구 코드가 아님
     assert two_factor.remaining(u) == 9
 
 
@@ -161,7 +161,7 @@ async def test_enable_returns_codes_and_recovery_login(db, redis):
     with pytest.raises(HTTPException) as e:  # 같은 복구 코드 재사용 불가
         await auth_router.verify_2fa(_request(), TwoFactorVerifyRequest(temp_token=temp, code=codes[3]), db=db)
     assert e.value.status_code == 401
-    # 남의 복구 코드로는 못 들어간다
+    # 타 사용자의 복구 코드로는 로그인 불가
     bob = await db.get(User, "bob")
     bob.totp_secret = pyotp.random_base32()
     await db.commit()
@@ -183,11 +183,11 @@ async def test_regenerate_codes_requires_totp_and_status(db, redis):
     res = await two_factor.regenerate_recovery_codes(
         _request(), two_factor.CodeBody(code=pyotp.TOTP(secret).now()), user=alice, db=db)
     assert len(res["recovery_codes"]) == 10
-    assert two_factor.consume(alice, old[0]) is False  # 예전 코드 폐기
+    assert two_factor.consume(alice, old[0]) is False  # 이전 코드 폐기
     st = await two_factor.two_factor_status(user=alice)
     assert st["enabled"] is True and st["recovery_remaining"] == 10 and st["required"] is False
     bob = await db.get(User, "bob")
-    with pytest.raises(HTTPException):  # 2단계 안 켠 사람은 발급 불가
+    with pytest.raises(HTTPException):  # 2단계 인증 미설정 사용자는 발급 불가
         await two_factor.regenerate_recovery_codes(_request(), two_factor.CodeBody(code="123456"), user=bob, db=db)
 
 
@@ -227,11 +227,11 @@ async def test_app_password_lifecycle_and_ownership(db):
     assert await me_security.verify_app_password(db, alice, plain, "mail") is True
     assert await me_security.verify_app_password(db, alice, plain.upper(), "mail") is True
     assert await me_security.verify_app_password(db, alice, plain, "dav") is False  # 범위 밖
-    assert await me_security.verify_app_password(db, bob, plain, "mail") is False   # 남의 계정
+    assert await me_security.verify_app_password(db, bob, plain, "mail") is False   # 타 사용자 계정
     row = await db.get(AppPassword, created["id"])
     assert row.last_used_at is not None and plain not in row.token_hash
 
-    with pytest.raises(HTTPException) as e:  # 남의 것은 못 지운다
+    with pytest.raises(HTTPException) as e:  # 타 사용자의 항목은 삭제 불가
         await me_security.delete_app_password(created["id"], user=bob, db=db)
     assert e.value.status_code == 404
     with pytest.raises(HTTPException):
@@ -243,7 +243,7 @@ async def test_app_password_lifecycle_and_ownership(db):
 @pytest.mark.asyncio
 async def test_app_password_accepted_by_mail_auth_and_dav(db, monkeypatch):
     alice = await db.get(User, "alice")
-    alice.totp_secret = pyotp.random_base32()  # 2단계 사용자도 OTP 없이
+    alice.totp_secret = pyotp.random_base32()  # 2단계 사용자도 OTP 불필요
     await db.commit()
     mail_pw = (await me_security.create_app_password(
         me_security.AppPasswordCreate(name="m", scopes=["mail"]), user=alice, db=db))["password"]
@@ -302,13 +302,13 @@ async def test_connected_apps_grouped_and_caller_scoped(db, monkeypatch):
     assert "이름·표시이름" in gitea["scope_labels"]
     assert apps[0]["last_used_at"] > apps[0]["connected_at"]
 
-    with pytest.raises(HTTPException) as e:  # 남의 앱은 못 끊는다
+    with pytest.raises(HTTPException) as e:  # 타 사용자의 앱은 연결 해제 불가
         await me_security.disconnect_app("dcr_bob", user=alice, db=db)
     assert e.value.status_code == 404
     res = await me_security.disconnect_app("dcr_x", user=alice, db=db)
     assert res["revoked_tokens"] == 1
     assert [a["client_id"] for a in (await me_security.list_connected_apps(user=alice, db=db))["apps"]] == ["portal-gitea"]
-    assert len((await me_security.list_connected_apps(user=bob, db=db))["apps"]) == 1  # bob 은 그대로
+    assert len((await me_security.list_connected_apps(user=bob, db=db))["apps"]) == 1  # bob 은 유지
 
 
 # ── 로그인 보호 정책 ────────────────────────────────────────
@@ -321,13 +321,13 @@ async def test_lockout_counts_account_and_ip(redis):
     for _ in range(security_policy.LOCKOUT_THRESHOLD):
         await security_policy.record_failure(pol, "Alice", "1.1.1.1")
     assert await security_policy.check_lockout(pol, "alice", "2.2.2.2") > 0   # 계정 기준(대소문자 무시)
-    assert await security_policy.check_lockout(pol, "bob", "1.1.1.1") == 0    # IP 는 더 넉넉
+    assert await security_policy.check_lockout(pol, "bob", "1.1.1.1") == 0    # IP 기준은 한도가 더 높음
     await security_policy.clear_failures("alice")
     assert await security_policy.check_lockout(pol, "alice", "2.2.2.2") == 0
     off = dict(security_policy.DEFAULTS)
     for _ in range(10):
         await security_policy.record_failure(off, "carol", "3.3.3.3")
-    assert await security_policy.check_lockout(off, "carol", "3.3.3.3") == 0  # 꺼져 있으면 무시
+    assert await security_policy.check_lockout(off, "carol", "3.3.3.3") == 0  # 비활성화 상태이면 무시
 
 
 @pytest.mark.asyncio
@@ -375,7 +375,7 @@ async def test_get_current_user_enforces_totp_and_idle(db, redis):
     redis.kv["sess:" + sid] = json.dumps(rec)
     with pytest.raises(HTTPException) as e:
         await auth_deps.get_current_user(_request("/api/files/list"), ws_session=token, db=db)
-    assert e.value.status_code == 401 and ("sess:" + sid) not in redis.kv  # 세션도 지운다
+    assert e.value.status_code == 401 and ("sess:" + sid) not in redis.kv  # 세션도 삭제
 
 
 @pytest.mark.asyncio
@@ -384,10 +384,10 @@ async def test_new_device_alert(redis):
     pol = {**security_policy.DEFAULTS, "new_device_alert": True}
     win = "Mozilla/5.0 (Windows NT 10.0) Chrome/141.0 Safari/537.36"
     ios = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Version/18.0 Mobile/15E148 Safari/604.1"
-    assert await security_policy.note_login_device(pol, user, win, "10.0.0.5") is False   # 첫 로그인은 알리지 않음
+    assert await security_policy.note_login_device(pol, user, win, "10.0.0.5") is False   # 첫 로그인은 알림 미발송
     assert await security_policy.note_login_device(pol, user, win, "10.0.0.77") is False  # 같은 /24·같은 브라우저
     assert await security_policy.note_login_device(pol, user, ios, "8.8.8.8") is True
-    assert await security_policy.note_login_device(pol, user, ios, "8.8.8.8") is False    # 이제 아는 기기
+    assert await security_policy.note_login_device(pol, user, ios, "8.8.8.8") is False    # 이 시점부터 알려진 기기
     off = dict(security_policy.DEFAULTS)
     assert await security_policy.note_login_device(off, user, "curl/8", "9.9.9.9") is False
 
@@ -407,7 +407,7 @@ async def test_ai_prefs_and_provider_choice(db, monkeypatch):
     cfg = await ai_config.get_user_provider_config(db, "alice")
     assert cfg["key_hint"] == "sk-…1234" and "abcdefgh" not in json.dumps(cfg)
 
-    # 미지정 = 예전 동작(개인 키 우선)
+    # 미지정 = 기존 동작(개인 키 우선)
     prov, personal = await ai_config.resolve_provider_for_user(db, alice)
     assert personal is True and prov.model == "gpt-x"
     res = await ai_router.put_my_settings(ai_router.MyAISettingsUpdate(default_model="workspace_advanced"), user=alice, db=db)
@@ -425,7 +425,7 @@ async def test_ai_prefs_and_provider_choice(db, monkeypatch):
         user=alice, db=db)
     assert res["tools"] == {"mail": False, "files": True, "calendar": True, "web": True}
     assert res["instructions"] == "짧게"
-    # bob 의 설정은 따로
+    # bob 의 설정은 별도
     bob = await db.get(User, "bob")
     assert (await ai_config.get_user_ai_prefs(db, "bob"))["tools"]["mail"] is True
     assert ai_config.compose_system("짧게", "") == "짧게"
@@ -447,7 +447,7 @@ async def test_ai_tool_gate_respects_user_prefs(db, monkeypatch):
     await ai_config.set_user_ai_prefs(db, "alice", tools={"mail": False})
     r = await ai_config.ai_execute_tool(db, "mail_search", {}, alice, provider_external=False)
     assert r["ok"] is False and calls == []
-    r = await ai_config.ai_execute_tool(db, "tasks_list", {}, alice, provider_external=False)  # 스위치 밖 도구
+    r = await ai_config.ai_execute_tool(db, "tasks_list", {}, alice, provider_external=False)  # 스위치 대상이 아닌 도구
     assert r["ok"] is True and calls == ["tasks_list"]
     filtered = ai_router._filter_tools_by_prefs(
         [{"function": {"name": "mail_search"}}, {"function": {"name": "files_read"}}],
@@ -480,7 +480,7 @@ async def test_ai_daily_limit_and_retention(db):
     await ai_router._prune_old_conversations(db, alice)
     assert await db.get(AIConversation, "c0") is None
     assert await db.get(AIConversation, "c1") is not None
-    assert await db.get(AIConversation, "cb") is not None  # 남의 대화는 건드리지 않음
+    assert await db.get(AIConversation, "cb") is not None  # 타 사용자의 대화는 변경하지 않음
 
 
 @pytest.mark.asyncio

@@ -1,10 +1,10 @@
 """AI 도구 호출 감사·한도.
 
-- 감사: 모든 AI 도구 호출(MCP·내장 AI)을 audit_logs 에 남긴다(action="ai_tool.call").
-  누가·언제·어떤 도구·출처·결과·지연. **인자 값은 남기지 않는다**(메일 본문·검색어가 개인정보일 수 있다).
-  인자 이름만 남긴다. 쓰기 요청 자체는 writes.py 가 ai_write.* 로 따로 남긴다.
-- 한도: 사용자당 분당 호출 수(관리자 설정 mcp.rate_limit_per_min, 기본 120). 넘으면 rate_limited(재시도 가능).
-  Redis 를 못 쓰면 통과시킨다(가용성 우선 — 한도는 남용 방지용이지 보안 경계가 아니다).
+- 감사: 모든 AI 도구 호출(MCP·내장 AI)을 audit_logs 에 기록한다(action="ai_tool.call").
+  호출자·시각·도구·출처·결과·지연. **인자 값은 기록하지 않는다**(메일 본문·검색어가 개인정보일 수 있다).
+  인자 이름만 기록한다. 쓰기 요청 자체는 writes.py 가 ai_write.* 로 별도 기록한다.
+- 한도: 사용자당 분당 호출 수(관리자 설정 mcp.rate_limit_per_min, 기본 120). 초과 시 rate_limited(재시도 가능).
+  Redis 사용 불가 시 통과시킨다(가용성 우선 — 한도는 남용 방지용이며 보안 경계가 아니다).
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ async def _rate_limit_value() -> int:
 
 
 async def check_rate(user_id: str) -> int | None:
-    """한도 초과면 다시 시도할 때까지 초를 돌려준다. 통과면 None."""
+    """한도 초과 시 재시도까지의 대기 시간(초)을 반환한다. 통과 시 None."""
     limit = await _rate_limit_value()
     if limit <= 0:
         return None
@@ -85,5 +85,5 @@ async def record_tool_call(*, user_id: str | None, tool: str, ok: bool, error_co
                 }, ensure_ascii=False),
             ))
             await db.commit()
-    except Exception:  # noqa: BLE001 — 감사 기록 실패가 도구 호출을 막으면 안 된다
+    except Exception:  # noqa: BLE001 — 감사 기록 실패가 도구 호출을 차단하면 안 된다
         logger.debug("[mcp-audit] record failed", exc_info=True)

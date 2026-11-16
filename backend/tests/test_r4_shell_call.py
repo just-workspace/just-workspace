@@ -2,7 +2,7 @@
 
 - 공개 서비스 상태: 내부 이름·주소·버전 없이 묶음 key·상태·응답 ms 만, 인증 불요.
 - 오피스 글자 미리보기 생략 요소 수("[표 1개 · 이미지 2개 생략됨]").
-- 회의 종료 요약("이번 회의") — 볼 수 있는 사람만.
+- 회의 종료 요약("이번 회의") — 열람 가능한 사용자만.
 - 대기실 신청 → 호스트 활동 패널 알림([들이기][거절] 행동).
 """
 
@@ -57,7 +57,7 @@ def test_public_status_groups_and_hides_internal_names():
 
 
 def test_public_status_skips_group_without_checks_and_reports_checking():
-    # 메일 점검이 없으면(외부 IMAP) 메일 줄을 뺀다. 아직 점검 전이면 checking
+    # 메일 점검이 없으면(외부 IMAP) 메일 줄을 제외. 아직 점검 전이면 checking
     cache = [_svc("PostgreSQL", "checking", None), _svc("Redis", "checking", None)]
     out = health.build_public_status(cache, module_enabled=lambda m: True, checked_at=None)
     keys = [s["key"] for s in out["services"]]
@@ -246,7 +246,7 @@ async def test_waiting_request_notifies_host_with_actions(env, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_list_visible_without_email_sends_no_nul(env):
-    """이메일 없는 계정의 회의 목록 — PostgreSQL 이 NUL 매개변수를 거부해 500 이 나던 것(운영 확인 중 발견)."""
+    """이메일 없는 계정의 회의 목록 — PostgreSQL 이 NUL 매개변수를 거부하여 500 이 발생하던 문제(운영 확인 중 발견)."""
     from sqlalchemy import event
 
     async with env["factory"]() as db:

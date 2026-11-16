@@ -1,7 +1,7 @@
 """결과물 API — 카드(미리보기·내려받기·내 파일 저장·다시 만들기)·묶음 작업·파일 화면 [압축해서 내려받기].
 
-모듈 게이트 없음(MCP 로 만든 결과물도 같은 링크로 받는다). 모든 요청은 로그인한 **소유자**만.
-내려받기는 서명(exp·sig, 24시간)까지 맞아야 한다. 내 파일 저장·파일 압축은 쓰기 체계(request_write)를 지난다.
+모듈 게이트 없음(MCP 로 생성한 결과물도 동일한 링크로 수신한다). 모든 요청은 로그인한 **소유자**만 허용.
+내려받기는 서명(exp·sig, 24시간)까지 일치해야 한다. 내 파일 저장·파일 압축은 쓰기 체계(request_write)를 경유한다.
 """
 from pathlib import Path
 
@@ -23,7 +23,7 @@ def _http(e: arts.ArtifactError) -> HTTPException:
 
 
 async def _write(db, user: User, tool: str, args: dict, client: str) -> dict:
-    """사람이 누른 쓰기 — internal 출처로 request_write(감사·기록·되돌리기는 같다)."""
+    """사용자가 직접 수행한 쓰기 — internal 출처로 request_write(감사·기록·되돌리기는 동일)."""
     from app.mcp import writes
 
     out = await writes.request_write(db, user, tool, args, ctx=writes.CallContext(
@@ -47,7 +47,7 @@ async def _quota_check(db, user: User, items: list) -> None:
             "message": "저장 공간이 부족해 저장하지 못했습니다"})
 
 
-# ── 파일 하나 ─────────────────────────────────────────────────
+# ── 단일 파일 ─────────────────────────────────────────────────
 @router.get("/{aid}")
 async def get_artifact(aid: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     try:
@@ -70,7 +70,7 @@ async def download_artifact(aid: str, request: Request, exp: str = "", sig: str 
         raise HTTPException(status_code=410, detail={"code": "expired", "message": "내려받기 링크가 만료됐습니다"})
     real = Path(arts.real_path(a))
     if a.saved_path and (arts._uj(a.info, {}) or {}).get("source") == "files":
-        # 내 파일에 둔 zip — 지금 권한으로 다시 연다(옮겼거나 지웠으면 만료로)
+        # 내 파일에 저장된 zip — 현재 권한으로 다시 연다(이동 또는 삭제된 경우 만료로 처리)
         from app.files import access as acc
 
         gone = HTTPException(status_code=410, detail={"code": "expired", "message": "파일이 옮겨졌거나 지워졌습니다"})
@@ -102,7 +102,7 @@ async def save_artifact(aid: str, user: User = Depends(get_current_user), db: As
     await _quota_check(db, user, items)
     res = await _write(db, user, "artifacts_save_to_files", {"artifact_id": aid}, "결과물 카드")
     a = await arts.get_owned(db, user, aid)
-    await db.refresh(a)          # 저장은 도구가 다른 세션에서 했다
+    await db.refresh(a)          # 저장은 도구가 다른 세션에서 수행했다
     return {**res, "artifact": arts.artifact_out(a)}
 
 
@@ -169,7 +169,7 @@ class ZipBody(BaseModel):
 
 @router.post("/zip", status_code=202)
 async def start_zip(body: ZipBody, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """files_zip 과 같은 작업 — 작업 id 를 돌려주고 화면은 GET /jobs/{id} 로 진행을 본다."""
+    """files_zip 과 동일한 작업 — 작업 id 를 반환하고 화면은 GET /jobs/{id} 로 진행 상황을 조회한다."""
     if not (body.paths or body.folder.strip("/") or body.query.strip()):
         raise HTTPException(status_code=400, detail="paths·folder·query 중 하나는 있어야 합니다")
     from app.mcp import writes

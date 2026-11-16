@@ -4,12 +4,12 @@
 
     low  + MCP(claude.ai 등) : claude.ai 가 자체 도구 승인을 받았으므로 즉시 실행.
                                단, 직전에 외부 내용을 읽었으면(인젝션 위험) 즉시 실행하지 않고
-                               승인 대기함으로 올린다.
-    low  + 내장 AI           : 채팅 카드 [실행]을 기다린다(5분).
-    high (어디서든)          : 승인 대기함에서 사람이 승인해야 서버가 실행한다(30분).
+                               승인 대기함에 등록한다.
+    low  + 내장 AI           : 채팅 카드 [실행]을 대기한다(5분).
+    high (출처 무관)         : 승인 대기함에서 사용자가 승인해야 서버가 실행한다(30분).
 
-도구 핸들러는 결과 dict 에 ``_undo: {"tool", "args"}`` 를 넣어 역연산을 알려줄 수 있다.
-실행 후 10분 안에만 되돌리기를 허용한다. 역연산은 승인 없이 바로 실행한다(사용자 본인이 누름).
+도구 핸들러는 결과 dict 에 ``_undo: {"tool", "args"}`` 를 포함하여 역연산을 지정할 수 있다.
+되돌리기는 실행 후 10분 이내에만 허용한다. 역연산은 승인 없이 즉시 실행한다(사용자 본인의 조작).
 """
 
 from __future__ import annotations
@@ -32,17 +32,17 @@ logger = logging.getLogger(__name__)
 LOW_TTL = timedelta(minutes=5)
 HIGH_TTL = timedelta(minutes=30)
 UNDO_WINDOW = timedelta(minutes=10)
-UNTRUSTED_WINDOW_SEC = 15 * 60       # 외부 내용을 읽은 뒤 15분 안의 쓰기는 경고·자동실행 금지(턴 수와 무관)
+UNTRUSTED_WINDOW_SEC = 15 * 60       # 외부 내용 읽기 이후 15분 이내의 쓰기는 경고·자동실행 금지(턴 수와 무관)
 
-# ── 권한 모드(Claude Code 와 같은 이름·뜻) ───────────────────────
+# ── 권한 모드(Claude Code 와 동일한 이름·의미) ───────────────────────
 # default            low=카드 [실행] · high=승인 대기함 (기존 동작)
-# acceptEdits        low(되돌리기 가능한 만들기·고치기)는 바로 실행 · high 는 묻는다
-# plan               쓰기 도구를 아예 실행하지 않는다(모델은 계획만 낸다)
-# auto               low 바로 실행 · high 도 바로 실행하되, 직전 외부 내용(메일·웹)을 읽었으면 승인 대기함(주입 방어)
-# bypassPermissions  묻지 않고 전부 실행
-# 예외(모든 모드·허용 규칙 공통): 같은 대화에서 남이 쓴 내용을 읽은 뒤의 '남에게 보이는 쓰기'
-# (Tool.visible_to_others — 채팅 발송·게시글·댓글·메일 발송 등)는 묻는다. 주입 → 사칭 발송 방어.
-# 내장 AI(source="ai")에만 적용한다 — 외부 MCP 클라이언트는 기존 규칙 그대로.
+# acceptEdits        low(되돌리기 가능한 생성·수정)는 즉시 실행 · high 는 사용자 확인 요청
+# plan               쓰기 도구를 실행하지 않는다(모델은 계획만 제시)
+# auto               low 즉시 실행 · high 도 즉시 실행하되, 직전에 외부 내용(메일·웹)을 읽었으면 승인 대기함(주입 방어)
+# bypassPermissions  확인 없이 전부 실행
+# 예외(모든 모드·허용 규칙 공통): 동일 대화에서 타인이 작성한 내용을 읽은 이후의 '타인에게 노출되는 쓰기'
+# (Tool.visible_to_others — 채팅 발송·게시글·댓글·메일 발송 등)는 사용자 확인을 요청한다. 주입 → 사칭 발송 방어.
+# 내장 AI(source="ai")에만 적용한다 — 외부 MCP 클라이언트는 기존 규칙 유지.
 PERMISSION_MODES = ("default", "acceptEdits", "plan", "auto", "bypassPermissions")
 PERMISSION_PREF_KEY = "ai.permission_mode"
 
@@ -58,7 +58,7 @@ async def get_permission_mode(db, user_id: str) -> str:
 
 
 # ── 허용·거부 규칙(Claude Code permissions.allow/deny) ──────────
-# 내장 AI(source="ai")에만 적용. 거부 > 허용 > 모드 순서로 본다.
+# 내장 AI(source="ai")에만 적용. 거부 > 허용 > 모드 순서로 판정한다.
 #   항상(계정): 사용자 설정 ai.permission_rules = {"allow": [tool], "deny": [tool]}
 #   이 대화만: Redis 집합(대화 단위, 30일) — 카드의 "예, 이 대화에서는 다시 묻지 않기"
 RULES_PREF_KEY = "ai.permission_rules"
@@ -166,7 +166,7 @@ async def set_conv_allowed(user_id: str, conv_id: str, tool: str, on: bool) -> l
 
 
 async def rule_for(db, user_id: str, tool: str, conv_id: str | None) -> str | None:
-    """'deny' | 'allow' | None — 거부가 먼저."""
+    """'deny' | 'allow' | None — 거부 우선."""
     rules = await get_rules(db, user_id)
     if tool in rules["deny"]:
         return "deny"
@@ -193,7 +193,7 @@ async def set_permission_mode(db, user_id: str, mode: str) -> str:
 
 
 def mode_runs_now(mode: str, risk: str, after_untrusted: bool) -> bool:
-    """이 모드에서 묻지 않고 바로 실행하는가(plan 은 호출 전에 막힌다)."""
+    """이 모드에서 확인 없이 즉시 실행하는지 여부(plan 은 호출 전에 차단된다)."""
     if mode == "bypassPermissions":
         return True
     if mode == "auto":
@@ -207,19 +207,19 @@ TERMINAL = {"executed", "failed", "rejected", "canceled", "expired", "undone"}
 
 
 def session():
-    """DB 세션 진입점 — 테스트가 바꿔 끼운다."""
+    """DB 세션 진입점 — 테스트에서 교체한다."""
     from app.db.session import async_session
 
     return async_session()
 
 
-# ── 호출 맥락 (누가·어디서) ─────────────────────────────────────
+# ── 호출 맥락 (주체·출처) ─────────────────────────────────────
 @dataclass
 class CallContext:
     source: str                          # "mcp" | "ai" | "internal"
     client_name: str | None = None       # claude.ai 앱 이름 / 개인 토큰 이름 / "내장 AI(웹)"
     client_kind: str | None = None       # claude_app | personal_token | builtin_web | builtin_desktop | internal
-    client_key: str | None = None        # 외부 읽기 표시를 묶는 단위(MCP=client_id, AI=대화 id)
+    client_key: str | None = None        # 외부 읽기 표시의 묶음 단위(MCP=client_id, AI=대화 id)
     conversation_id: str | None = None
     extra: dict = field(default_factory=dict)
 
@@ -238,7 +238,7 @@ def _aware(dt: datetime | None) -> datetime | None:
 
 
 # ── 직전 외부 읽기 표시 ────────────────────────────────────────
-# 워커 8개라 프로세스 메모리로는 못 묶는다 → Redis. Redis 가 없으면 프로세스 메모리(최선).
+# 워커가 8개이므로 프로세스 메모리로는 공유할 수 없다 → Redis 사용. Redis 가 없으면 프로세스 메모리(best-effort).
 _local_marks: dict[str, tuple[float, dict]] = {}
 
 
@@ -280,7 +280,7 @@ async def recent_untrusted(user_id: str, client_key: str | None) -> dict | None:
 
 
 def untrusted_hint(tool_name: str, result: object) -> dict:
-    """외부 읽기 경고(read_external) — {kind, at, from, subject, label}. 승인 대기함 상세 경고가 그린다."""
+    """외부 읽기 경고(read_external) — {kind, at, from, subject, label}. 승인 대기함 상세 경고에서 표시한다."""
     at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     data = result.get("data") if isinstance(result, dict) and "data" in result else result
     d = {"kind": "external", "at": at, "from": None, "subject": None, "label": tool_name}
@@ -300,17 +300,17 @@ def untrusted_hint(tool_name: str, result: object) -> dict:
     elif tool_name == "files_read" and isinstance(data, dict):
         d.update(kind="file", subject=data.get("path"), label="파일 본문")
     elif tool_name in _WORKSPACE_READ_LABEL:
-        # 워크스페이스 안이지만 남이 쓴 글 — 카드 경고에 무엇을 읽었는지 사람 말로 보인다
+        # 워크스페이스 내부이나 타인이 작성한 글 — 카드 경고에 읽은 대상을 사용자가 이해할 수 있는 문구로 표시한다
         d.update(kind="workspace", label=_WORKSPACE_READ_LABEL[tool_name],
                  subject=(data.get("title") or data.get("name")) if isinstance(data, dict) else None)
     return d
 
 
 # ── 대화 단위 외부 읽기 표시(내장 AI) ──────────────────────────
-# 위 15분 창은 MCP(턴 개념 없음)용이다. 내장 AI 는 읽은 내용이 대화 맥락에 계속 남아 15분 뒤에도 모델을
-# 움직일 수 있으므로, '남에게 보이는 쓰기' 관문은 대화가 살아 있는 동안(허용 규칙과 같은 30일) 유지한다.
-# Redis 를 못 읽으면 "읽었는지 모른다" = 읽은 것으로 보고 묻는다(fail-closed). 프로세스 메모리 대체는 두지 않는다
-# — 워커가 여럿이라 다른 워커가 남긴 표시를 못 보고 조용히 통과시키기 때문.
+# 위 15분 창은 MCP(턴 개념 없음)용이다. 내장 AI 는 읽은 내용이 대화 맥락에 계속 남아 15분 이후에도 모델에
+# 영향을 줄 수 있으므로, '타인에게 노출되는 쓰기' 관문은 대화가 유지되는 동안(허용 규칙과 동일한 30일) 유지한다.
+# Redis 조회 실패 시 "읽기 여부 불명" = 읽은 것으로 간주하여 사용자 확인을 요청한다(fail-closed). 프로세스 메모리 fallback 은 두지 않는다
+# — 워커가 여러 개이므로 다른 워커가 기록한 표시를 확인하지 못한 채 통과시키기 때문이다.
 CONV_MARK_UNKNOWN = {"kind": "external", "label": "외부 내용(읽기 기록을 확인할 수 없음)"}
 
 
@@ -328,7 +328,7 @@ async def mark_conv_untrusted(user_id: str, conv_id: str | None, hint: dict) -> 
         r = await get_redis()
         await r.set(key, json.dumps({"t": time.time(), "hint": hint}, ensure_ascii=False, default=str),
                     ex=CONV_RULE_TTL)
-    except Exception:  # noqa: BLE001 — 표시 실패가 읽기를 막으면 안 된다(읽는 쪽이 fail-closed 로 받는다)
+    except Exception:  # noqa: BLE001 — 표시 실패가 읽기를 차단해서는 안 된다(읽는 쪽이 fail-closed 로 처리)
         logger.warning("[mcp-write] conversation untrusted mark failed", exc_info=True)
 
 
@@ -344,14 +344,14 @@ async def conv_untrusted(user_id: str, conv_id: str | None) -> dict | None:
         if raw:
             return json.loads(raw).get("hint") or {"kind": "external", "label": "외부 내용"}
         return None
-    except Exception:  # noqa: BLE001 — 판정 불가 = 묻는다
+    except Exception:  # noqa: BLE001 — 판정 불가 = 사용자 확인 요청
         logger.warning("[mcp-write] conversation untrusted lookup failed — treating as read", exc_info=True)
         return dict(CONV_MARK_UNKNOWN)
 
 
 async def tool_visible(tool, args: dict | None, user=None) -> bool:
-    """다른 사람에게 보이는 쓰기인가 — 도구 정의의 명시 플래그만 본다(이름 추측 없음).
-    visible_for(args, user) 는 DB 조회가 필요하면 코루틴이어도 된다. 판정 실패는 '보인다'."""
+    """타인에게 노출되는 쓰기인지 판정 — 도구 정의의 명시 플래그만 확인한다(이름 기반 추측 없음).
+    visible_for(args, user) 는 DB 조회가 필요하면 코루틴이어도 된다. 판정 실패는 '노출'로 간주한다."""
     fn = getattr(tool, "visible_for", None)
     if callable(fn):
         try:
@@ -359,14 +359,14 @@ async def tool_visible(tool, args: dict | None, user=None) -> bool:
             if inspect.isawaitable(v):
                 v = await v
             return bool(v)
-        except Exception:  # noqa: BLE001 — 판정 실패는 더 조심스러운 쪽으로
+        except Exception:  # noqa: BLE001 — 판정 실패는 보수적인 쪽으로 처리
             logger.debug("[mcp-write] visible_for failed", exc_info=True)
             return True
     return bool(getattr(tool, "visible_to_others", False))
 
 
 def reads_others(tool, args: dict | None) -> bool:
-    """결과에 남이 쓴 내용이 실리는 도구인가(untrusted_output 또는 conv_untrusted) — 내장 AI 대화 표시용."""
+    """결과에 타인이 작성한 내용이 포함되는 도구인지 판정(untrusted_output 또는 conv_untrusted) — 내장 AI 대화 표시용."""
     if getattr(tool, "untrusted_output", False):
         return True
     f = getattr(tool, "conv_untrusted", False)
@@ -378,8 +378,8 @@ def reads_others(tool, args: dict | None) -> bool:
     return bool(f)
 
 
-# 승인 카드에 보일 "왜 묻는지" — untrusted_hint JSON 의 gate 값(새 DB 칸 없이 기존 칸에 싣는다).
-# 화면에는 사유 코드(ask_reason)로 나가고 문구는 프론트가 번역한다.
+# 승인 카드에 표시할 확인 요청 사유 — untrusted_hint JSON 의 gate 값(DB 컬럼 추가 없이 기존 컬럼에 저장한다).
+# 화면에는 사유 코드(ask_reason)로 전달하며 문구는 프런트가 번역한다.
 GATE_VISIBLE = "visible_after_untrusted"
 
 
@@ -389,15 +389,15 @@ _WORKSPACE_READ_LABEL = {
     "contacts_search": "연락처", "tasks_list": "할 일",
     "ai_attachment": "대화 첨부 파일", "ai_project_knowledge": "프로젝트 지식 파일",
     "ai_project_instructions": "공유 프로젝트 지침",
-    # conv_untrusted — 남의 글 조각이 섞이는 목록·검색(내장 AI 대화 표시만)
+    # conv_untrusted — 타인이 작성한 글 일부가 포함되는 목록·검색(내장 AI 대화 표시만)
     "files_search": "파일 검색 결과", "files_list": "공유 폴더 목록", "board_list_posts": "게시글 목록",
     "chat_list_channels": "채팅 채널 목록", "notes_list": "위키 문서 목록", "code_run": "코드 실행 결과",
 }
 
 
-# ── 비밀값 가리기 ──────────────────────────────────────────────
-# 외부 공유 링크 비밀번호 같은 값은 실행에 필요해 인자에 들어오지만, 승인 대기함·카드·감사 기록에
-# 평문으로 보이면 안 된다. 화면에는 가리고, 요청이 끝나면(실행·실패·거부·만료) DB 에서도 지운다.
+# ── 비밀값 마스킹 ──────────────────────────────────────────────
+# 외부 공유 링크 비밀번호 등의 값은 실행에 필요하여 인자에 포함되지만, 승인 대기함·카드·감사 기록에
+# 평문으로 노출되어서는 안 된다. 화면에서는 마스킹하고, 요청이 종료되면(실행·실패·거부·만료) DB 에서도 삭제한다.
 _SECRET_KEYS = ("password", "passwd", "secret", "token", "api_key", "apikey", "credential")
 
 
@@ -411,7 +411,7 @@ def _mask(args: dict) -> dict:
 
 
 def _scrub(req) -> None:
-    """끝난 요청의 인자에서 비밀값을 지운다(되돌리기 서명 token 은 실행 후 필요 없다)."""
+    """종료된 요청의 인자에서 비밀값을 삭제한다(되돌리기 서명 token 은 실행 후 불필요)."""
     args = _uj(req.args) or {}
     if any(_is_secret_key(k) for k in args):
         req.args = _j({k: ("[삭제됨]" if _is_secret_key(k) and v not in (None, "") else v) for k, v in args.items()})
@@ -436,7 +436,7 @@ def _props(tool) -> dict:
 
 
 def _editable(tool) -> list[dict]:
-    """인라인 편집 칸 — 스키마에서 x-editable 인 것만, 한국어 라벨(x-label)과 함께."""
+    """인라인 편집 필드 — 스키마에서 x-editable 인 항목만, 한국어 라벨(x-label)과 함께 반환."""
     out = []
     for k, p in _props(tool).items():
         if k == "idempotency_key" or not p.get("x-editable"):
@@ -447,7 +447,7 @@ def _editable(tool) -> list[dict]:
 
 
 def _preview(tool, args: dict) -> list[dict]:
-    """미리보기 diff — [{field,label,before,after}]. 도구 previewer 가 있으면 그걸, 없으면 인자로 '추가' 줄."""
+    """미리보기 diff — [{field,label,before,after}]. 도구 previewer 가 있으면 해당 결과를, 없으면 인자로 '추가' 행을 구성한다."""
     fn = getattr(tool, "previewer", None) if tool else None
     if fn:
         try:
@@ -519,12 +519,12 @@ def to_dict(req: McpWriteRequest) -> dict:
 
 
 # ── 실행 선점 ─────────────────────────────────────────────────
-# 예전엔 approve 가 "대기인가"를 읽고 나서 실행했고, 상태는 핸들러가 끝나야 바뀌었다. 실행이 긴 도구
-# (메일 발송·변환·코드 실행)가 도는 동안 다른 탭·승인 대기함·묶음 실행이 같은 요청을 또 승인하면 핸들러가
-# 두 번 돌았다(메일 두 번 발송). 이제 조건부 UPDATE 한 번으로 "대기이고 아직 아무도 안 집은" 요청만 집는다.
-# 집은 표시는 decided_at — 상태 문자열은 그대로 pending 이라 목록·건수·카드·wait_decided 가 읽는 값이 안 바뀐다
-# (실행 중 = status pending + decided_at 있음). 거절·취소·수정도 같은 조건으로만 통과한다.
-CLAIM_GRACE = timedelta(minutes=10)   # 실행 중인 요청은 만료 시각이 지나도 이만큼은 만료로 바꾸지 않는다(서버가 죽어 남은 것 정리용)
+# 과거에는 approve 가 "대기 상태 여부"를 조회한 뒤 실행했고, 상태는 핸들러 종료 후에야 변경됐다. 실행 시간이 긴 도구
+# (메일 발송·변환·코드 실행)가 실행되는 동안 다른 탭·승인 대기함·일괄 실행이 동일 요청을 다시 승인하면 핸들러가
+# 2회 실행됐다(메일 2회 발송). 현재는 조건부 UPDATE 1회로 "대기 상태이며 아직 선점되지 않은" 요청만 선점한다.
+# 선점 표시는 decided_at — 상태 문자열은 pending 으로 유지되므로 목록·건수·카드·wait_decided 가 읽는 값은 변하지 않는다
+# (실행 중 = status pending + decided_at 있음). 거절·취소·수정도 동일 조건으로만 통과한다.
+CLAIM_GRACE = timedelta(minutes=10)   # 실행 중인 요청은 만료 시각이 지나도 이 시간 동안은 만료로 변경하지 않는다(서버 비정상 종료로 남은 요청 정리용)
 
 
 def _unclaimed():
@@ -532,7 +532,7 @@ def _unclaimed():
 
 
 async def _cas(db, req: McpWriteRequest, cond, **values) -> bool:
-    """조건이 지금도 참일 때만 값을 바꾼다. 바꿨으면 True. 어느 쪽이든 req 를 DB 값으로 다시 읽는다."""
+    """조건이 현재도 참일 때만 값을 변경한다. 변경했으면 True. 어느 경우든 req 를 DB 값으로 다시 읽는다."""
     from sqlalchemy import update
 
     res = await db.execute(update(McpWriteRequest).where(McpWriteRequest.id == req.id, cond).values(**values)
@@ -547,7 +547,7 @@ async def _claim(db, req: McpWriteRequest) -> bool:
 
 
 def _expired_now(req: McpWriteRequest) -> bool:
-    """대기가 만료됐는가 — 실행 중(집힌) 요청은 유예를 둔다(실행 도중 '만료됨'으로 뒤집히지 않게)."""
+    """대기 만료 여부 — 실행 중(선점된) 요청에는 유예를 둔다(실행 도중 '만료됨'으로 전환되는 것 방지)."""
     if req.status != "pending":
         return False
     exp = _aware(req.expires_at)
@@ -578,7 +578,7 @@ async def expire_due(db, user_id: str | None = None) -> int:
 
 # ── 실행 ──────────────────────────────────────────────────────
 async def _run_handler(tool_name: str, args: dict, user: User) -> tuple[dict | None, str | None, dict | None]:
-    """(result, error, undo). 쓰기 도구 핸들러를 직접 부른다(승인을 이미 통과한 뒤)."""
+    """(result, error, undo). 쓰기 도구 핸들러를 직접 호출한다(승인 통과 이후)."""
     from app.mcp.server import WORKSPACE_TOOLS
 
     tool = WORKSPACE_TOOLS.get(tool_name)
@@ -597,7 +597,7 @@ async def _run_handler(tool_name: str, args: dict, user: User) -> tuple[dict | N
         logger.exception("[mcp-write] %s failed", tool_name)
         return None, str(getattr(e, "detail", None) or e) or e.__class__.__name__, None
     if isinstance(res, dict) and isinstance(res.get("error"), str):
-        # 오류 코드·힌트(error_code·hint 등)는 결과 칸에 남겨 모델에게 형식 맞는 오류로 돌려준다
+        # 오류 코드·힌트(error_code·hint 등)는 결과 필드에 유지하여 모델에 형식을 갖춘 오류로 반환한다
         extra = {k: v for k, v in res.items() if k != "error" and not str(k).startswith("_")}
         return (extra or None), res["error"], None
     undo = None
@@ -608,7 +608,7 @@ async def _run_handler(tool_name: str, args: dict, user: User) -> tuple[dict | N
 
 async def _execute(db, req: McpWriteRequest, user: User) -> McpWriteRequest:
     args = _uj(req.args) or {}
-    # 승인까지 최대 30분 — 그 사이 관리자가 모듈을 끄거나 그룹 권한을 뺐으면 실행하지 않는다
+    # 승인까지 최대 30분 — 그 사이 관리자가 모듈을 비활성화했거나 그룹 권한을 회수했으면 실행하지 않는다
     try:
         from app.mcp.access import tool_accessible
 
@@ -618,16 +618,16 @@ async def _execute(db, req: McpWriteRequest, user: User) -> McpWriteRequest:
     if not allowed:
         result, error, undo = None, "이 기능을 쓸 권한이 없거나 관리자가 기능을 껐습니다", None
     else:
-        # 승인 뒤 실행(카드·대기함)은 요청 때의 호출 맥락이 없다 → 행에 남긴 출처·대화로 되살린다
-        # (결과물 저장 폴더 "AI 결과물/날짜 대화 제목" 처럼 대화를 아는 도구가 쓴다).
+        # 승인 후 실행(카드·대기함)에는 요청 시점의 호출 맥락이 없다 → 행에 저장한 출처·대화로 복원한다
+        # (결과물 저장 폴더 "AI 결과물/날짜 대화 제목" 처럼 대화 정보가 필요한 도구가 사용한다).
         ctx_tok = None if call_context.get() is not None else call_context.set(CallContext(
             source=req.source or "internal", client_name=req.client_name, client_kind=req.client_kind,
             client_key=req.conversation_id, conversation_id=req.conversation_id))
         try:
             result, error, undo = await _run_handler(req.tool, args, user)
         except BaseException:
-            # 요청 취소·워커 종료로 핸들러가 끊겼다 — 선점 표시(decided_at)만 남으면 카드가 "대기"로 보이면서
-            # 승인·거절이 전부 409 로 굳는다. 실패로 닫아 두고 그대로 올린다.
+            # 요청 취소·워커 종료로 핸들러가 중단된 경우 — 선점 표시(decided_at)만 남으면 카드는 "대기"로 표시되면서
+            # 승인·거절이 전부 409 로 고착된다. 실패로 종료 처리한 뒤 예외를 그대로 전파한다.
             try:
                 req.status = "failed"
                 req.error = "실행이 중단되었습니다"
@@ -641,8 +641,8 @@ async def _execute(db, req: McpWriteRequest, user: User) -> McpWriteRequest:
                 call_context.reset(ctx_tok)
     req.executed_at = _now()
     if not error and req.source == "ai" and req.conversation_id:
-        # 쓰기 도구라도 결과에 남의 내용이 실리면(입력 파일을 읽는 코드 실행의 stdout 등) 모델이 그걸 읽는다
-        # → 대화 표시. 읽기 도구는 app.mcp.server 가 남긴다.
+        # 쓰기 도구라도 결과에 타인의 내용이 포함되면(입력 파일을 읽는 코드 실행의 stdout 등) 모델이 이를 읽는다
+        # → 대화 표시 기록. 읽기 도구는 app.mcp.server 가 기록한다.
         from app.mcp.server import WORKSPACE_TOOLS
 
         _tool = WORKSPACE_TOOLS.get(req.tool)
@@ -666,7 +666,7 @@ async def _execute(db, req: McpWriteRequest, user: User) -> McpWriteRequest:
 
 
 async def _audit(db, user_id: str, action: str, req: McpWriteRequest, mode: str | None = None) -> None:
-    """audit_logs 에 남긴다(감사 로그의 첫 소비자). 실패해도 본 동작은 막지 않는다."""
+    """audit_logs 에 기록한다(감사 로그의 첫 소비자). 실패해도 본 동작은 차단하지 않는다."""
     try:
         from app.db.models import AuditLog
 
@@ -676,7 +676,7 @@ async def _audit(db, user_id: str, action: str, req: McpWriteRequest, mode: str 
                                     "client": req.client_name, "kind": req.client_kind,
                                     "status": req.status,
                                     **({"mode": mode} if mode and mode != "default" else {}),
-                                    # 관문('남에게 보이는 쓰기')이 자동 실행을 막고 물었다는 표시
+                                    # 관문('타인에게 노출되는 쓰기')이 자동 실행을 차단하고 사용자 확인을 요청했다는 표시
                                     **({"gate": gate} if (gate := (_uj(req.untrusted_hint) or {}).get("gate")) else {})})))
         await db.commit()
     except Exception:  # noqa: BLE001
@@ -705,9 +705,9 @@ async def _notify_pending(db, user: User, req: McpWriteRequest) -> None:
 
 
 async def emit_count(db, user_id: str, req: "McpWriteRequest | None" = None) -> None:
-    """대기 건수 실시간 이벤트 — 레일 배지·벨·토스트가 같은 값을 쓴다.
+    """대기 건수 실시간 이벤트 — 레일 배지·벨·토스트가 동일한 값을 사용한다.
 
-    바뀐 요청이 있으면 그 객체(to_dict)를 함께 실어, 토스트·카드가 다시 조회하지 않게 한다.
+    변경된 요청이 있으면 해당 객체(to_dict)를 함께 전달하여 토스트·카드의 재조회를 방지한다.
     """
     try:
         from sqlalchemy import func
@@ -731,9 +731,9 @@ async def emit_count(db, user_id: str, req: "McpWriteRequest | None" = None) -> 
 async def request_write(db, user: User, tool_name: str, args: dict, *,
                         ctx: CallContext | None = None,
                         idempotency_key: str | None = None) -> dict:
-    """쓰기 요청을 만들고, 위험도·출처에 따라 즉시 실행하거나 대기시킨다.
+    """쓰기 요청을 생성하고, 위험도·출처에 따라 즉시 실행하거나 대기시킨다.
 
-    반환(모델에게 그대로 간다):
+    반환(모델에 그대로 전달):
       {"status": "executed", "request_id", "result", "can_undo"}
       {"status": "pending_confirmation", "request_id", ...}   — 내장 AI 카드 대기
       {"status": "pending_approval", "approval_id", ...}      — 승인 대기함
@@ -760,28 +760,28 @@ async def request_write(db, user: User, tool_name: str, args: dict, *,
 
     rule = await rule_for(db, user.id, tool_name, ctx.conversation_id) if ctx.source == "ai" else None
     if rule == "deny":
-        # Claude Code deny 규칙 — 요청도 만들지 않는다. 모델은 다른 방법을 찾거나 사용자에게 묻는다
+        # Claude Code deny 규칙 — 요청 자체를 생성하지 않는다. 모델은 다른 방법을 찾거나 사용자에게 질의한다
         return {"status": "failed", "error_code": "denied_by_rule",
                 "error": f"사용자가 '{getattr(tool, 'title', None) or tool_name}' 도구를 거부 규칙으로 막아 두었습니다. "
                          "실행하지 않았습니다. 다른 방법을 쓰거나 사용자에게 어떻게 할지 물어보세요."}
 
     hint = await recent_untrusted(user.id, ctx.client_key)
-    # 내장 AI 의 '남에게 보이는 쓰기' — 15분 창이 지났어도 같은 대화에서 남이 쓴 내용을 읽었으면 읽은 뒤로 본다
+    # 내장 AI 의 '타인에게 노출되는 쓰기' — 15분 창이 지났더라도 동일 대화에서 타인이 작성한 내용을 읽었으면 읽기 이후로 간주한다
     visible = ctx.source == "ai" and await tool_visible(tool, args, user)
     if visible and not hint:
         hint = await conv_untrusted(user.id, ctx.conversation_id)
     mode = await get_permission_mode(db, user.id) if ctx.source == "ai" else "default"
     by_mode = mode_runs_now(mode, risk, bool(hint))
-    # 읽은 게 없었다면 묻지 않고 실행됐을 요청인가 — 관문이 결과를 뒤집은 경우에만 카드에 사유를 붙인다
-    # (auto 모드의 high 는 mode_runs_now 가 이미 막지만, 왜 묻는지는 같으므로 사유를 함께 싣는다)
+    # 읽은 내용이 없었다면 확인 없이 실행됐을 요청인지 판정 — 관문이 결과를 변경한 경우에만 카드에 사유를 첨부한다
+    # (auto 모드의 high 는 mode_runs_now 가 이미 차단하지만, 확인 요청 사유는 동일하므로 사유를 함께 포함한다)
     would_run = mode_runs_now(mode, risk, False) or rule == "allow"
     if rule == "allow" and not (risk == "high" and hint):
-        # 허용 규칙(항상·이 대화) — 다시 묻지 않는다. 단 외부 내용을 읽은 직후의 high 는 여전히 묻는다
+        # 허용 규칙(항상·이 대화) — 재확인하지 않는다. 단 외부 내용을 읽은 직후의 high 는 계속 사용자 확인을 요청한다
         by_mode = True
         mode = mode if mode != "default" else "rule"
     if visible and hint and (by_mode or would_run):
-        # 주입된 지시가 사용자 이름으로 글·메시지를 내보내는 경로를 막는다. acceptEdits·auto·허용 규칙은 물론
-        # bypassPermissions 도 예외가 아니다(바이패스는 관리자 전용이 아니라 본인 확인만으로 켜진다).
+        # 주입된 지시가 사용자 명의로 글·메시지를 발송하는 경로를 차단한다. acceptEdits·auto·허용 규칙은 물론
+        # bypassPermissions 도 예외가 아니다(바이패스는 관리자 전용이 아니며 본인 확인만으로 활성화된다).
         by_mode = False
         hint = {**hint, "gate": GATE_VISIBLE}
     req = McpWriteRequest(
@@ -801,21 +801,21 @@ async def request_write(db, user: User, tool_name: str, args: dict, *,
         idempotency_key=(idempotency_key or None) and idempotency_key[:128],
         expires_at=_now() + (HIGH_TTL if risk == "high" else LOW_TTL),
     )
-    # 직전 외부 읽기 뒤의 low 쓰기는 MCP 에서도 자동 실행하지 않고 승인 대기함으로 올린다
+    # 직전 외부 읽기 이후의 low 쓰기는 MCP 에서도 자동 실행하지 않고 승인 대기함에 등록한다
     auto_run = bool(getattr(tool, "auto_run", False)) and risk == "low"
     escalate = bool(hint) and risk == "low" and ctx.source == "mcp" and not auto_run
     if escalate:
         req.expires_at = _now() + HIGH_TTL
     run_now = by_mode or (risk == "low" and (ctx.source in ("mcp", "internal") or auto_run) and not escalate)
     if run_now:
-        # 바로 실행할 요청은 만들 때부터 집힌 상태로 — 실행 도중 승인 대기함에서 또 승인하지 못한다(_claim 과 같은 표시)
+        # 즉시 실행할 요청은 생성 시점부터 선점 상태로 둔다 — 실행 도중 승인 대기함에서 재승인 불가(_claim 과 동일한 표시)
         req.decided_at = _now()
     db.add(req)
     await db.commit()
     await _audit(db, user.id, "ai_write.requested", req, mode=mode)
 
     if run_now:
-        await _execute(db, req, user)   # 결과는 이 호출의 반환으로 모델에게 바로 간다(대화 보고 불필요)
+        await _execute(db, req, user)   # 결과는 이 호출의 반환값으로 모델에 즉시 전달된다(대화 보고 불필요)
     elif risk == "high" or escalate:
         await _notify_pending(db, user, req)
         await emit_count(db, user.id, req)
@@ -829,19 +829,19 @@ def _tool_of(name: str):
 
 
 def tool_risk(tool, args: dict | None) -> str:
-    """도구 위험도. 인자에 따라 달라지는 도구(예: 덮어쓰기 옵션)는 ``tool.risk_for(args)`` 를 단다."""
+    """도구 위험도. 인자에 따라 달라지는 도구(예: 덮어쓰기 옵션)는 ``tool.risk_for(args)`` 를 정의한다."""
     risk = getattr(tool, "risk", "low") or "low"
     fn = getattr(tool, "risk_for", None)
     if callable(fn):
         try:
             risk = fn(args or {}) or risk
-        except Exception:  # noqa: BLE001 — 판정 실패는 더 위험한 쪽으로
+        except Exception:  # noqa: BLE001 — 판정 실패는 위험도가 높은 쪽으로 처리
             risk = "high"
     return risk if risk in ("low", "high") else "high"
 
 
 def _model_view(req: McpWriteRequest) -> dict:
-    """모델에게 돌려줄 요약 — 무엇이 일어났는지와 다음 행동."""
+    """모델에 반환할 요약 — 발생한 결과와 다음 행동."""
     d = {"request_id": req.id, "tool": req.tool, "risk": req.risk}
     if req.status == "executed":
         d.update(status="executed", result=_uj(req.result))
@@ -874,7 +874,7 @@ def _model_view(req: McpWriteRequest) -> dict:
     return d
 
 
-# ── 사람의 결정 ────────────────────────────────────────────────
+# ── 사용자의 결정 ────────────────────────────────────────────────
 class WriteError(Exception):
     def __init__(self, code: str, message: str):
         super().__init__(message)
@@ -897,7 +897,7 @@ BUSY_MSG = "이미 처리 중인 요청입니다 — 잠시 뒤 결과를 확인
 
 
 async def approve(db, user: User, req_id: str) -> McpWriteRequest:
-    """승인(high) 또는 카드 [실행](low) — 서버가 실행한다. 같은 요청을 동시에 여러 번 승인해도 한 번만 실행한다."""
+    """승인(high) 또는 카드 [실행](low) — 서버가 실행한다. 동일 요청을 동시에 여러 번 승인해도 1회만 실행한다."""
     req = await get_owned(db, user, req_id)
     if req.status != "pending":
         raise WriteError("conflict", f"이미 처리된 요청입니다({req.status})")
@@ -910,7 +910,7 @@ async def approve(db, user: User, req_id: str) -> McpWriteRequest:
 
 
 async def remember_approval(db, user: User, req: McpWriteRequest, scope: str) -> None:
-    """카드 "예, 다시 묻지 않기" — 허용 규칙을 남기고, 같은 대화에 같은 도구로 대기 중인 카드도 함께 실행한다."""
+    """카드 "예, 다시 묻지 않기" — 허용 규칙을 저장하고, 동일 대화에서 동일 도구로 대기 중인 카드도 함께 실행한다."""
     if scope == "conversation":
         if not req.conversation_id:
             raise WriteError("invalid_argument", "대화에 묶인 요청이 아닙니다")
@@ -934,9 +934,9 @@ async def remember_approval(db, user: User, req: McpWriteRequest, scope: str) ->
         McpWriteRequest.source == "ai", McpWriteRequest.id != req.id))).scalars().all()
     for r in rows:
         if r.risk == "high" and r.after_untrusted:
-            continue  # 외부 내용을 읽은 직후의 high 는 규칙이 있어도 묻는다
+            continue  # 외부 내용을 읽은 직후의 high 는 규칙이 있어도 사용자 확인 요청
         if r.after_untrusted and await tool_visible(_tool_of(r.tool), _uj(r.args), user):
-            continue  # 외부 내용을 읽은 뒤의 '남에게 보이는 쓰기'도 카드마다 따로 묻는다
+            continue  # 외부 내용 읽기 이후의 '타인에게 노출되는 쓰기'도 카드별로 개별 확인 요청
         try:
             await approve(db, user, r.id)
         except WriteError:
@@ -945,8 +945,8 @@ async def remember_approval(db, user: User, req: McpWriteRequest, scope: str) ->
 
 async def batch_decide(db, user: User, conversation_id: str, ids: list[str] | None = None,
                        action: str = "approve") -> list[McpWriteRequest]:
-    """채팅 묶음 처리 — 이 대화의 대기 low 카드 중 고른 것(ids 없으면 전부)을 실행(approve) 또는 취소(cancel).
-    high 는 승인 대기함에서 하나씩 본다(여기서는 건드리지 않는다)."""
+    """채팅 일괄 처리 — 이 대화의 대기 low 카드 중 선택한 것(ids 없으면 전부)을 실행(approve) 또는 취소(cancel).
+    high 는 승인 대기함에서 개별 처리한다(여기서는 변경하지 않는다)."""
     await expire_due(db, user.id)
     q = select(McpWriteRequest).where(
         McpWriteRequest.user_id == user.id, McpWriteRequest.conversation_id == conversation_id,
@@ -971,7 +971,7 @@ async def reject(db, user: User, req_id: str, reason: str | None = None, *, canc
     req = await get_owned(db, user, req_id)
     if req.status != "pending":
         raise WriteError("conflict", f"이미 처리된 요청입니다({req.status})")
-    # 실행이 이미 시작된(집힌) 요청은 거절·취소로 뒤집지 않는다 — 조건부 UPDATE 로만 바꾼다
+    # 실행이 이미 시작된(선점된) 요청은 거절·취소로 전환하지 않는다 — 조건부 UPDATE 로만 변경한다
     if not await _cas(db, req, _unclaimed(), status="canceled" if cancel else "rejected",
                       reject_reason=(reason or "").strip()[:1000] or None, decided_at=_now()):
         raise WriteError("conflict", BUSY_MSG if req.status == "pending" else f"이미 처리된 요청입니다({req.status})")
@@ -987,7 +987,7 @@ DISCONNECTED_REASON = "연결 해제됨"
 
 
 async def pending_for_client(db, user_id: str, client_id: str) -> list[McpWriteRequest]:
-    """이 연결(client_id)이 낸, 아직 대기 중인 내 요청."""
+    """이 연결(client_id)이 생성한, 아직 대기 중인 본인 요청."""
     from sqlalchemy import select as _select
 
     return list((await db.execute(_select(McpWriteRequest).where(
@@ -997,7 +997,7 @@ async def pending_for_client(db, user_id: str, client_id: str) -> list[McpWriteR
 
 
 async def reject_for_client(db, user: User, client_id: str) -> int:
-    """연결을 끊을 때 — 그 연결의 대기 요청을 '연결 해제됨' 사유로 거부한다. 거부한 수."""
+    """연결 해제 시 — 해당 연결의 대기 요청을 '연결 해제됨' 사유로 거부한다. 거부 건수를 반환."""
     n = 0
     for req in await pending_for_client(db, user.id, client_id):
         try:
@@ -1009,7 +1009,7 @@ async def reject_for_client(db, user: User, client_id: str) -> int:
 
 
 async def update_args(db, user: User, req_id: str, args: dict) -> McpWriteRequest:
-    """[수정] — 대기 중인 요청의 인자를 고친다. 만료 시계를 다시 잰다."""
+    """[수정] — 대기 중인 요청의 인자를 수정한다. 만료 시각을 다시 계산한다."""
     if not isinstance(args, dict):
         raise WriteError("invalid_argument", "args 는 객체여야 합니다")
     req = await get_owned(db, user, req_id)
@@ -1027,9 +1027,9 @@ async def update_args(db, user: User, req_id: str, args: dict) -> McpWriteReques
         except TypeError as e:
             raise WriteError("invalid_argument", f"인자가 맞지 않습니다: {e}")
         if tool_risk(tool, args) != req.risk:
-            # 낮은 위험으로 승인받은 요청을 고쳐 덮어쓰기 같은 고위험 동작으로 바꾸지 못하게
+            # 낮은 위험도로 승인받은 요청을 수정하여 덮어쓰기 등 고위험 동작으로 변경하는 것 방지
             raise WriteError("invalid_argument", "위험도가 바뀌는 수정입니다 — 새 요청으로 다시 하세요")
-    # 실행이 시작된 뒤에는 인자를 못 바꾼다(승인과 같은 조건부 UPDATE)
+    # 실행 시작 이후에는 인자 변경 불가(승인과 동일한 조건부 UPDATE)
     if not await _cas(db, req, _unclaimed(), args=_j(args),
                       expires_at=_now() + (HIGH_TTL if req.risk == "high" or req.source == "mcp" else LOW_TTL)):
         raise WriteError("conflict", BUSY_MSG if req.status == "pending" else f"이미 처리된 요청입니다({req.status})")
@@ -1045,7 +1045,7 @@ async def undo(db, user: User, req_id: str) -> McpWriteRequest:
         raise WriteError("conflict", "되돌릴 수 없는 요청입니다")
     if until < _now():
         raise WriteError("conflict", "되돌리기 시간(10분)이 지났습니다")
-    # 되돌리기도 한 번만 — 먼저 executed → undone 으로 집고(조건부 UPDATE), 역연산이 실패하면 되돌려 놓는다
+    # 되돌리기도 1회만 — 먼저 executed → undone 으로 선점하고(조건부 UPDATE), 역연산이 실패하면 원상태로 복원한다
     if not await _cas(db, req, McpWriteRequest.status == "executed", status="undone"):
         raise WriteError("conflict", "이미 되돌렸거나 되돌리는 중입니다")
     result, error, _ = await _run_handler(inv.get("tool", ""), inv.get("args") or {}, user)
@@ -1058,9 +1058,9 @@ async def undo(db, user: User, req_id: str) -> McpWriteRequest:
     return req
 
 
-# ── 선승인 흐름(Claude Code 식) ───────────────────────────────
-# 내장 AI 답변은 쓰기 요청이 나오면 그 자리에서 사용자의 결정을 기다렸다가 실제 결과로 이어 쓴다.
-# 기다리는 동안은 답변 자체가 결과를 말하므로 _report_back(대화에 따로 붙이는 결과 메시지)은 건너뛴다.
+# ── 선승인 흐름(Claude Code 방식) ───────────────────────────────
+# 내장 AI 답변은 쓰기 요청이 발생하면 그 시점에서 사용자의 결정을 대기한 뒤 실제 결과를 반영하여 이어서 작성한다.
+# 대기 중에는 답변 자체가 결과를 전달하므로 _report_back(대화에 별도로 추가하는 결과 메시지)은 생략한다.
 _local_awaited: dict[str, float] = {}
 WAIT_POLL_SEC = 1.0
 
@@ -1101,9 +1101,9 @@ async def is_awaited(req_id: str) -> bool:
 
 
 async def wait_decided(user: User, req_ids: list[str], *, poll: float | None = None) -> dict[str, dict]:
-    """요청들이 모두 대기를 벗어날 때까지(실행·실패·취소·거절·만료) 기다린다. 만료는 get_owned 가 맞춘다.
-    돌려주는 값: {id: {"status", "view"(모델용 decision_view), "card"(화면용 to_dict)}}.
-    호출한 쪽이 취소되면(답변 멈춤) 그대로 CancelledError 가 올라간다."""
+    """요청이 모두 대기 상태를 벗어날 때까지(실행·실패·취소·거절·만료) 대기한다. 만료는 get_owned 가 반영한다.
+    반환값: {id: {"status", "view"(모델용 decision_view), "card"(화면용 to_dict)}}.
+    호출자가 취소되면(답변 중지) CancelledError 가 그대로 전파된다."""
     import asyncio
 
 
@@ -1127,8 +1127,8 @@ async def wait_decided(user: User, req_ids: list[str], *, poll: float | None = N
 
 
 async def cancel_awaited(user: User, req_ids: list[str]) -> None:
-    """답변을 멈추면 아직 대기 중인 카드(low)는 취소한다 — Claude Code 처럼 '멈춤 = 거절'.
-    high 는 승인 대기함에 그대로 두고, 나중에 처리되면 _report_back 이 대화에 결과를 남긴다."""
+    """답변을 중지하면 아직 대기 중인 카드(low)는 취소한다 — Claude Code 와 동일하게 '중지 = 거절'.
+    high 는 승인 대기함에 유지하며, 이후 처리되면 _report_back 이 대화에 결과를 기록한다."""
 
     async with session() as db:
         for rid in req_ids:
@@ -1141,7 +1141,7 @@ async def cancel_awaited(user: User, req_ids: list[str]) -> None:
 
 
 def decision_view(req: McpWriteRequest) -> dict:
-    """기다린 끝의 결과 — 모델이 이어 쓸 근거."""
+    """대기 종료 후의 결과 — 모델이 답변을 이어서 작성할 근거."""
     d = _model_view(req)
     note = {
         "canceled": "사용자가 이 작업을 취소했습니다. 같은 작업을 다시 요청하지 말고, 바꿀 점이 있는지 물어보세요.",
@@ -1152,7 +1152,7 @@ def decision_view(req: McpWriteRequest) -> dict:
     if note:
         d["message"] = note
     if req.reject_reason and req.status in ("canceled", "rejected"):
-        # Claude Code "아니요, 대신 이렇게" — 사용자의 지시를 그대로 넘겨 모델이 다시 계획하게 한다
+        # Claude Code "아니요, 대신 이렇게" — 사용자의 지시를 그대로 전달하여 모델이 재계획하도록 한다
         d["user_instruction"] = req.reject_reason
         d["message"] = ("사용자가 이 작업을 실행하지 않고 대신 이렇게 하라고 했습니다: "
                         f"\"{req.reject_reason}\". 이 지시를 따라 다시 계획하세요. 같은 요청을 그대로 다시 보내지 마세요.")
@@ -1160,11 +1160,11 @@ def decision_view(req: McpWriteRequest) -> dict:
 
 
 async def _report_back(db, req: McpWriteRequest) -> None:
-    """내장 AI 대화로 결과를 돌려보낸다(승인 대기함에서 처리한 경우 사용자가 대화에서도 알게)."""
+    """내장 AI 대화로 결과를 전달한다(승인 대기함에서 처리한 경우 사용자가 대화에서도 확인할 수 있도록)."""
     if req.source != "ai" or not req.conversation_id or req.risk != "high":
         return
     if await is_awaited(req.id):
-        return  # 답변이 이 결정을 기다리는 중 — 결과는 답변이 이어서 말한다
+        return  # 답변이 이 결정을 대기 중 — 결과는 답변이 이어서 전달한다
     try:
         from app.ai.models import AIMessage
 
@@ -1192,12 +1192,12 @@ async def list_requests(db, user: User, *, view: str = "pending", limit: int = 5
     await expire_due(db, user.id)
     q = select(McpWriteRequest).where(McpWriteRequest.user_id == user.id)
     if conversation_id:
-        # 대화를 다시 열 때 채팅 카드 복원용 — 그 대화의 요청 전부(대기·처리 포함), 오래된 순
+        # 대화를 다시 열 때의 채팅 카드 복원용 — 해당 대화의 요청 전부(대기·처리 포함), 오래된 순
         q = q.where(McpWriteRequest.conversation_id == conversation_id).order_by(McpWriteRequest.created_at.asc())
         rows = (await db.execute(q.offset(offset).limit(limit + 1))).scalars().all()
         return rows[:limit], len(rows) > limit
     if view == "pending":
-        # 승인 대기함 = high 이거나 MCP 에서 올라온 것(카드형 low 대기는 채팅 안에서 처리)
+        # 승인 대기함 = high 이거나 MCP 에서 등록된 요청(카드형 low 대기는 채팅 내에서 처리)
         q = q.where(McpWriteRequest.status == "pending",
                     or_(McpWriteRequest.risk == "high", McpWriteRequest.source == "mcp"))
         q = q.order_by(McpWriteRequest.created_at.desc())

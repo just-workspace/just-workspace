@@ -1,11 +1,11 @@
 """AI 쓰기 도구 확인 토큰.
 
-모델이 쓰기 도구를 부르면 서버는 실행하지 않고 이 토큰을 화면에 넘긴다. 사용자가 승인하면
-화면이 POST /api/ai/tools/confirm 으로 토큰을 돌려보내고, 그때 한 번만 실행된다.
+모델이 쓰기 도구를 호출하면 서버는 실행하지 않고 본 토큰을 화면에 전달한다. 사용자가 승인하면
+화면이 POST /api/ai/tools/confirm 으로 토큰을 반환하며, 그 시점에 1회만 실행된다.
 
-- 서명(itsdangerous, 전용 salt) — 사용자·대화·도구·인자를 묶는다(인자를 바꾸면 무효)
+- 서명(itsdangerous, 전용 salt) — 사용자·대화·도구·인자를 결합한다(인자 변경 시 무효)
 - 수명 TTL 초
-- 한 번만 — Redis 에 jti 를 SET NX. Redis 를 못 쓰면 실행하지 않는다(fail-closed)
+- 1회 한정 — Redis 에 jti 를 SET NX. Redis 사용 불가 시 실행하지 않는다(fail-closed)
 """
 from __future__ import annotations
 

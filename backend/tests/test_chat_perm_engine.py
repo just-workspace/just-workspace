@@ -1,8 +1,8 @@
 """채팅 역할·권한 엔진 — 그림자/강제 모드 비교, 계산 순서, 역할·덮어쓰기·카테고리 API, @역할 멘션.
 
 핵심 보증: 기본 역할 세트(@everyone = DEFAULT_EVERYONE, 역할·덮어쓰기 없음)에서
-  - shadow 모드: 스냅샷 표 그대로 + 불일치 0 + 엔진 오류 0
-  - enforce 모드: 새 엔진으로 막아도 스냅샷 표 그대로
+  - shadow 모드: 스냅샷 표와 동일 + 불일치 0 + 엔진 오류 0
+  - enforce 모드: 새 엔진으로 차단해도 스냅샷 표와 동일
 """
 
 import json
@@ -36,7 +36,7 @@ def _reset_stats():
         P.SHADOW_STATS[k] = 0
 
 
-# ─── 1. 기본 역할 세트 = 지금 동작 ───
+# ─── 1. 기본 역할 세트 = 현재 동작 ───
 
 @pytest.mark.parametrize("action,ch,actor", M.all_cases())
 async def test_shadow_zero_mismatch(world, monkeypatch, action, ch, actor):
@@ -58,7 +58,7 @@ async def test_enforce_matches_snapshot(world, monkeypatch, action, ch, actor):
 
 
 async def test_shadow_without_seed_rows_still_zero(world, monkeypatch):
-    """@everyone 행이 아직 없을 때(마이그레이션 전) — 상수 기본값으로 계산해도 불일치 0."""
+    """@everyone 행이 아직 없는 경우(마이그레이션 전) — 상수 기본값으로 계산해도 불일치 0."""
     _mode(monkeypatch, "shadow")
     _reset_stats()
     for action in M.EXPECTED:
@@ -88,11 +88,11 @@ def _ctx(**kw):
 
 def test_order_role_deny_then_allow_then_member():
     S = P.SEND_MESSAGES
-    # @everyone 거부 → 역할 A 거부, 역할 B 허용 → 허용이 이긴다
+    # @everyone 거부 → 역할 A 거부, 역할 B 허용 → 허용 우선
     c = _ctx(role_ids={"a", "b"}, channel_overwrites=[
         ("role", "ev", 0, S), ("role", "a", 0, S), ("role", "b", S, 0)])
     assert P.compute_permissions(c) & S
-    # 사용자 거부가 역할 허용보다 나중
+    # 사용자 거부가 역할 허용보다 나중에 적용
     c.channel_overwrites.append(("user", "u", 0, S))
     assert not P.compute_permissions(c) & S
 
@@ -123,7 +123,7 @@ def test_administrator_short_circuit_and_dm_isolation():
 
 def test_global_admin_is_workspace_only():
     assert P.compute_permissions(_ctx(channel=None, is_global_admin=True)) == P.ALL_PERMISSIONS
-    # 채널 안에서는 특권 없음(지금 동작 — 남의 비공개 채널·DM 을 못 본다)
+    # 채널 내에서는 특권 없음(현재 동작 — 타 사용자의 비공개 채널·DM 조회 불가)
     assert P.compute_permissions(_ctx(member_role=None, is_global_admin=True)) == 0
 
 
@@ -148,7 +148,7 @@ def test_bits_of():
     assert len(P.PERMISSIONS) >= 30
 
 
-# ─── 3. 역할을 쓰기 시작하면: 그림자는 차이만 기록, 강제는 새 판정 ───
+# ─── 3. 역할 사용 시작 시: 그림자는 차이만 기록, 강제는 새 판정 ───
 
 async def _world(world):
     eng, db = await M.open_world(world)
@@ -180,8 +180,8 @@ async def test_manage_messages_role_shadow_vs_enforce(world, monkeypatch, caplog
         caplog.set_level(logging.WARNING, logger="app.chat.permissions")
         with pytest.raises(HTTPException) as e:
             await r.delete_message("m_mem_pub", user=M.user_ns("adm"), db=db)
-        assert e.value.status_code == 403          # 그림자: 예전대로 막는다
-        assert P.SHADOW_STATS["mismatch"] == 1     # … 차이는 기록
+        assert e.value.status_code == 403          # 그림자: 기존대로 차단
+        assert P.SHADOW_STATS["mismatch"] == 1     # 차이는 기록됨
         rec = [json.loads(x.getMessage()) for x in caplog.records if "chat_perm_shadow_mismatch" in x.getMessage()]
         assert rec and rec[0]["action"] == "message.delete" and rec[0]["legacy"] is False and rec[0]["engine"] is True
         # 개인정보 없음 — id 는 해시, 본문 없음
@@ -206,7 +206,7 @@ async def test_overwrite_deny_send_enforced(world, monkeypatch):
         assert ow["deny_names"] == ["SEND_MESSAGES"]
         me = await R.my_channel_permissions("pub", user=M.user_ns("mem"), db=db)
         assert "SEND_MESSAGES" not in me["permission_names"] and "VIEW_CHANNEL" in me["permission_names"]
-        # 역할 허용이 @everyone 거부를 이긴다
+        # 역할 허용이 @everyone 거부보다 우선
         role = await _mk_role(db, admin, name="speakers", permissions=0)
         await R.assign_role(role["id"], "mem", user=admin, db=db)
         await R.put_channel_overwrite("pub", "role", role["id"], R.OverwriteBody(allow=["SEND_MESSAGES"]),
@@ -216,7 +216,7 @@ async def test_overwrite_deny_send_enforced(world, monkeypatch):
         with pytest.raises(HTTPException) as e:
             await r.send_message("pub", MessageCreate(content="no"), user=M.user_ns("gam"), db=db)
         assert e.value.status_code == 403
-        # 덮어쓰기 지우면 원상
+        # 덮어쓰기 삭제 시 원상 복원
         await R.delete_channel_overwrite("pub", "role", "everyone", user=admin, db=db)
         assert (await r.send_message("pub", MessageCreate(content="ok"), user=M.user_ns("gam"), db=db))["id"]
         # DM 에는 덮어쓰기 불가
@@ -238,7 +238,7 @@ async def test_category_overwrite_applies(world, monkeypatch):
                                        user=admin, db=db)
         assert not await P.effective_permissions(db, M.user_ns("mem"), "pub") & P.ADD_REACTIONS
         assert await P.effective_permissions(db, M.user_ns("mem"), "voi") & P.ADD_REACTIONS   # 음성 카테고리
-        # 채널 덮어쓰기가 카테고리보다 나중
+        # 채널 덮어쓰기가 카테고리보다 나중에 적용
         await R.put_channel_overwrite("pub", "user", "mem", R.OverwriteBody(allow=["ADD_REACTIONS"]), user=admin, db=db)
         assert await P.effective_permissions(db, M.user_ns("mem"), "pub") & P.ADD_REACTIONS
     finally:
@@ -267,14 +267,14 @@ async def test_roles_crud_hierarchy_and_audit(world):
         lead = await _mk_role(db, admin, name="Team Lead", color="primary", hoist=True,
                               permissions=["MANAGE_ROLES", "KICK_MEMBERS"])
         assert lead["mention"] == "team-lead" and lead["position"] == 1
-        staff = await _mk_role(db, admin, name="staff")           # 새 역할은 맨 아래(1), lead 는 2
+        staff = await _mk_role(db, admin, name="staff")           # 새 역할은 최하위(1), lead 는 2
         assert staff["position"] == 1
         with pytest.raises(HTTPException) as e:
             await _mk_role(db, admin, name="STAFF")
         assert e.value.status_code == 409
         await R.assign_role(lead["id"], "mem", user=admin, db=db)
 
-        # mem(lead 보유) — 아래 역할(staff)만 다룬다, 자기 비트만 준다
+        # mem(lead 보유) — 하위 역할(staff)만 관리 가능, 본인 보유 비트만 부여 가능
         await R.update_role(staff["id"], R.RolePatch(permissions=["KICK_MEMBERS"]), user=mem, db=db)
         with pytest.raises(HTTPException) as e:
             await R.update_role(staff["id"], R.RolePatch(permissions=["ADMINISTRATOR"]), user=mem, db=db)
@@ -284,12 +284,12 @@ async def test_roles_crud_hierarchy_and_audit(world):
         assert e.value.status_code == 403
         new = await _mk_role(db, mem, name="helpers")
         await R.assign_role(new["id"], "out", user=mem, db=db)
-        # 순서: mem 은 자기 역할 위로 올릴 수 없다
+        # 순서: mem 은 본인 역할 위로 올릴 수 없음
         with pytest.raises(HTTPException) as e:
             await R.reorder_roles(R.RoleOrder(role_ids=[new["id"], lead["id"]]), user=mem, db=db)
         assert e.value.status_code == 403
 
-        # @everyone 은 권한만
+        # @everyone 은 권한만 변경 가능
         with pytest.raises(HTTPException) as e:
             await R.update_role("everyone", R.RolePatch(name="all"), user=admin, db=db)
         assert e.value.status_code == 400
@@ -326,7 +326,7 @@ async def test_group_sync_managed_role(world):
         with pytest.raises(HTTPException) as e:
             await R.assign_role(rid, "out", user=admin, db=db)
         assert e.value.status_code == 409
-        # 그룹 멤버십으로 권한이 따라온다
+        # 그룹 멤버십에 따라 권한이 적용됨
         await R.update_role(rid, R.RolePatch(permissions=["MANAGE_MESSAGES"]), user=admin, db=db)
         assert await P.effective_permissions(db, M.user_ns("mem"), "pub") & P.MANAGE_MESSAGES
         assert not await P.effective_permissions(db, M.user_ns("own"), "pub") & P.MANAGE_MESSAGES
@@ -369,7 +369,7 @@ async def test_categories_and_layout(world):
             await R.create_category(R.CategoryCreate(name="x"), user=M.user_ns("mem"), db=db)
         c = await R.create_category(R.CategoryCreate(name="프로젝트"), user=admin, db=db)
         assert c["position"] == 3
-        # 채널 owner 는 자기 채널을 옮길 수 있다(MANAGE_CHANNELS 암묵), member 는 못 한다
+        # 채널 owner 는 본인 채널을 이동할 수 있고(MANAGE_CHANNELS 암묵), member 는 불가
         await R.update_layout(R.LayoutBody(channels=[R.LayoutChannel(id="pub", category_id=c["id"], position=2)]),
                               user=M.user_ns("own"), db=db)
         with pytest.raises(HTTPException) as e:
@@ -398,8 +398,8 @@ async def test_members_by_role(world):
     try:
         admin = M.user_ns("gad")
         mods = await _mk_role(db, admin, name="mods", hoist=True, color="success")
-        vip = await _mk_role(db, admin, name="vip", hoist=True, color="warning")   # vip 가 mods 보다 아래(1)
-        plain = await _mk_role(db, admin, name="plain", color="danger")            # hoist 아님, 가장 아래
+        vip = await _mk_role(db, admin, name="vip", hoist=True, color="warning")   # vip 가 mods 보다 하위(1)
+        plain = await _mk_role(db, admin, name="plain", color="danger")            # hoist 아님, 최하위
         await R.reorder_roles(R.RoleOrder(role_ids=[mods["id"], vip["id"], plain["id"]]), user=admin, db=db)
         await R.assign_role(mods["id"], "own", user=admin, db=db)
         await R.assign_role(vip["id"], "own", user=admin, db=db)
@@ -435,14 +435,14 @@ async def test_role_mention(world, monkeypatch):
     try:
         admin = M.user_ns("gad")
         ops = await _mk_role(db, admin, name="On Call", mentionable=True)
-        for u in ("own", "adm", "out"):           # out 은 채널 비멤버 → 안 받는다
+        for u in ("own", "adm", "out"):           # out 은 채널 비멤버 → 수신하지 않음
             await R.assign_role(ops["id"], u, user=admin, db=db)
         msg = await r.send_message("pub", MessageCreate(content="@on-call 장애입니다"), user=M.user_ns("mem"), db=db)
         rows, notifs = await _mentions(db, msg["id"])
         assert rows == [("adm", False), ("own", False)]
         assert any("@On Call 역할" in t for _u, t in notifs)
 
-        # 멘션 불가 역할 — MENTION_EVERYONE 이 있으면 부를 수 있다(기본 @everyone 에 있음)
+        # 멘션 불가 역할 — MENTION_EVERYONE 이 있으면 멘션 가능(기본 @everyone 에 포함)
         hidden = await _mk_role(db, admin, name="secret")
         await R.assign_role(hidden["id"], "gam", user=admin, db=db)
         msg = await r.send_message("pub", MessageCreate(content="@secret hi"), user=M.user_ns("mem"), db=db)
@@ -452,7 +452,7 @@ async def test_role_mention(world, monkeypatch):
         msg = await r.send_message("pub", MessageCreate(content="@secret hi"), user=M.user_ns("mem"), db=db)
         assert (await _mentions(db, msg["id"]))[0] == []
 
-        # legacy 모드: 역할 멘션 꺼짐
+        # legacy 모드: 역할 멘션 비활성
         _mode(monkeypatch, "legacy")
         msg = await r.send_message("pub", MessageCreate(content="@on-call again"), user=M.user_ns("mem"), db=db)
         assert (await _mentions(db, msg["id"]))[0] == []
@@ -472,12 +472,12 @@ async def test_mention_everyone_permission(world, monkeypatch):
         _mode(monkeypatch, "shadow")
         _reset_stats()
         msg = await r.send_message("pub", MessageCreate(content="@everyone a"), user=M.user_ns("mem"), db=db)
-        assert len((await _mentions(db, msg["id"]))[0]) == 3          # 그림자: 예전대로 전원
+        assert len((await _mentions(db, msg["id"]))[0]) == 3          # 그림자: 기존대로 전원
         assert P.SHADOW_STATS["mismatch"] == 1
         _mode(monkeypatch, "enforce")
         msg = await r.send_message("pub", MessageCreate(content="@everyone b"), user=M.user_ns("mem"), db=db)
         assert (await _mentions(db, msg["id"]))[0] == []
-        # DM 은 역할과 무관 — 그대로 된다
+        # DM 은 역할과 무관 — 기존대로 동작
         msg = await r.send_message("dm", MessageCreate(content="@everyone c"), user=M.user_ns("mem"), db=db)
         assert (await _mentions(db, msg["id"]))[0] == [("own", True)]
     finally:

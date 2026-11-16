@@ -1,6 +1,6 @@
 """화면 안 AI API — 로직은 app.ai.inline.
 
-- GET  /api/ai/inline/status              버튼 상태(쓸 수 있음·막힌 이유·외부 AI·개인정보 가리기·모델 이름)
+- GET  /api/ai/inline/status              버튼 상태(사용 가능 여부·차단 사유·외부 AI·개인정보 마스킹·모델 이름)
 - POST /api/ai/inline/mail_summary        {message_id, mailbox_id?, account_id?, tz?} → {points, todos[{title,due,who}]}
 - POST /api/ai/inline/mail_reply          {message_id, mailbox_id?, account_id?, tone: polite|short, tz?} → {draft}
 - POST /api/ai/inline/chat_summary        {channel_id, scope: unread|range, from_message_id?, to_message_id?, tz?}
@@ -10,9 +10,9 @@
 
 오류는 {detail: {code, message, ...}} — code: module_off·not_configured·external_blocked·rate_limited·daily_limit·
 forbidden·not_found·nothing·no_content·too_large·timeout·provider_error·bad_output·invalid_argument.
-응답은 스트리밍이 아니라 한 번에(구조화된 결과라 화면이 다 받은 뒤에 그린다).
+응답은 스트리밍이 아닌 일괄 반환(구조화된 결과이므로 화면이 전체 수신 후 렌더링한다).
 
-주의: `from __future__ import annotations` 금지(ai/router.py 머리말과 같은 이유).
+주의: `from __future__ import annotations` 금지(ai/router.py 머리말과 동일한 이유).
 """
 import time
 
@@ -111,7 +111,7 @@ async def _run(kind: str, db: AsyncSession, user: User, body: BaseModel, fn, **k
         await inline.record(user, kind, ok=False, error_code=e.code, started=started, arg_keys=arg_keys)
         raise _http(e)
     except HTTPException as e:
-        # 메일 API 등 원래 경로의 거절(권한·없음·메일 서버 오류)을 그대로 — 우회하지 않는다
+        # 메일 API 등 원래 경로의 거부(권한·없음·메일 서버 오류)를 그대로 전달한다 — 우회하지 않는다
         await inline.record(user, kind, ok=False, error_code=str(e.status_code), started=started, arg_keys=arg_keys)
         msg = e.detail if isinstance(e.detail, str) else "요청을 처리하지 못했습니다"
         code = {403: "forbidden", 404: "not_found"}.get(e.status_code, "source_error")
@@ -154,7 +154,7 @@ async def doc_proofread(body: DocBody, user: User = Depends(get_current_user), d
 
 @router.post("/tasks")
 async def create_tasks(body: TasksBody, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """AI 가 뽑은 할 일 중 사용자가 고른 것을 등록 — app.mcp.writes 쓰기 요청(low)으로, 버튼이 곧 승인."""
+    """AI 가 추출한 할 일 중 사용자가 선택한 항목을 등록 — app.mcp.writes 쓰기 요청(low)으로 처리하며, 버튼이 곧 승인."""
     try:
         return await inline.create_tasks(db, user, source=body.source, room=body.room,
                                          items=[i.model_dump() for i in body.items])

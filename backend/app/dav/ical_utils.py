@@ -1,12 +1,12 @@
 """iCalendar serialization / deserialization.
 
-CalDAV(휴대폰 캘린더)와 .ics 가져오기/내보내기가 같이 쓴다.
+CalDAV(휴대폰 캘린더)와 .ics 가져오기/내보내기가 공용한다.
 
-- 반복: RRULE · EXDATE · RECURRENCE-ID(회차 단일 수정)를 한 VCALENDAR 안에 같은 UID 로 묶는다.
-- 시간대: 일정에 IANA 시간대가 있으면 DTSTART/DTEND 에 TZID 를 붙이고 VTIMEZONE 을 넣는다.
-  (반복 일정은 UTC 로만 보내면 서머타임 지역에서 회차 시각이 한 시간씩 밀린다.)
+- 반복: RRULE · EXDATE · RECURRENCE-ID(회차 단일 수정)를 하나의 VCALENDAR 안에 동일 UID 로 묶는다.
+- 시간대: 일정에 IANA 시간대가 있으면 DTSTART/DTEND 에 TZID 를 지정하고 VTIMEZONE 을 포함한다.
+  (반복 일정을 UTC 로만 송신하면 서머타임 지역에서 회차 시각이 한 시간씩 어긋난다.)
 - 참석자: ATTENDEE(CN·PARTSTAT·ROLE·RSVP)와 ORGANIZER.
-- 회의 링크: CONFERENCE(RFC 7986) + URL. 읽을 때는 X-GOOGLE-CONFERENCE 등도 본다.
+- 회의 링크: CONFERENCE(RFC 7986) + URL. 읽기 시에는 X-GOOGLE-CONFERENCE 등도 확인한다.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ _VALID_RESPONSES = set(_PARTSTAT_OUT)
 
 
 def get_zone(name: str | None):
-    """IANA 이름 → ZoneInfo. 모르는 이름이면 None."""
+    """IANA 이름 → ZoneInfo. 알 수 없는 이름이면 None."""
     if not name:
         return None
     try:
@@ -83,10 +83,10 @@ _UNTIL_RE = re.compile(r"UNTIL=([0-9TZ]+)", re.IGNORECASE)
 
 
 def normalize_rrule_for_aware(rule: str) -> str:
-    """UNTIL 이 시각인데 Z 가 없으면 Z 를 붙인다.
+    """UNTIL 이 시각 값인데 Z 가 없으면 Z 를 추가한다.
 
-    dateutil 은 DTSTART 가 aware 면 UNTIL 도 UTC 여야 한다며 예외를 낸다 → 전개가 통째로
-    실패해 마스터 한 건만 보이던 문제를 막는다.
+    dateutil 은 DTSTART 가 aware 이면 UNTIL 도 UTC 여야 한다는 이유로 예외를 발생시킨다 → 전개 전체가
+    실패하여 마스터 1건만 표시되던 문제를 방지한다.
     """
     def _fix(m):
         v = m.group(1)
@@ -103,17 +103,17 @@ _HALF_DAY = timedelta(hours=12)
 
 
 def _allday_date(dt: datetime) -> date:
-    """종일 값의 날짜 = **가장 가까운 UTC 자정**의 날짜(프런트 calTz.allDayYmd 와 같은 규칙).
+    """종일 값의 날짜 = **가장 가까운 UTC 자정**의 날짜(프런트 calTz.allDayYmd 와 동일한 규칙).
 
-    현행 규약은 그날 UTC 00:00 이라 그대로 그날이다. 예전 웹 화면이 기기 자정으로 저장한 행
-    (서울 = 전날 15:00Z)을 `.date()` 로 자르면 휴대폰·외부 클라이언트에서 하루 앞당겨 보였다
+    현행 규약은 해당 일자의 UTC 00:00 이므로 그대로 해당 일자가 된다. 과거 웹 화면이 기기 자정으로 저장한 행
+    (서울 = 전날 15:00Z)을 `.date()` 로 절단하면 휴대폰·외부 클라이언트에서 하루 앞당겨 표시되었다.
     UTC−12~+12 에서 정확하다.
     """
     return (_utc(dt) + _HALF_DAY).date()
 
 
 def _allday_shift(start) -> timedelta:
-    """종일 마스터의 시작을 가장 가까운 UTC 자정으로 옮기는 차이(현행 행이면 0, 서울 옛 행이면 +9h)."""
+    """종일 마스터의 시작을 가장 가까운 UTC 자정으로 이동하는 차이값(현행 행이면 0, 서울의 과거 행이면 +9h)."""
     if not isinstance(start, datetime):
         return timedelta(0)
     u = _utc(start)
@@ -143,10 +143,10 @@ def _rrule_value(ev) -> vRecur | None:
     if until:
         u = until[0] if isinstance(until, list) else until
         if ev.all_day:
-            # RFC 5545: DTSTART 가 DATE 면 UNTIL 도 DATE 여야 한다.
-            # UNTIL 은 "그날 끝"(현행 T235959Z, 옛 서울 행 T145959Z)이라 따로 가장 가까운 자정으로
-            # 반올림하면 다음날로 넘어가 회차가 하나 는다 → **마스터 시작과 같은 차이**만큼 옮긴 뒤
-            # 날짜를 취한다(현행 행은 차이 0 → 기존과 같음).
+            # RFC 5545: DTSTART 가 DATE 이면 UNTIL 도 DATE 여야 한다.
+            # UNTIL 은 "해당 일자의 끝"(현행 T235959Z, 과거 서울 행 T145959Z)이므로 별도로 가장 가까운 자정으로
+            # 반올림하면 다음 날로 넘어가 회차가 1개 증가한다 → **마스터 시작과 동일한 차이**만큼 이동한 뒤
+            # 날짜를 취한다(현행 행은 차이 0 → 기존과 동일).
             if isinstance(u, datetime):
                 u = (_utc(u) + _allday_shift(getattr(ev, "start", None))).date()
         elif isinstance(u, datetime):
@@ -242,7 +242,7 @@ def event_to_ical(ev, attendees=None, overrides=None, organizer: dict | None = N
 
 def build_vevents(ev, attendees=None, overrides=None, organizer=None,
                   override_attendees=None, cal: Calendar | None = None):
-    """마스터 VEVENT 를 돌려주고, 회차 예외 VEVENT 들은 cal 에 바로 넣는다."""
+    """마스터 VEVENT 를 반환하고, 회차 예외 VEVENT 는 cal 에 직접 추가한다."""
     zone = None if ev.all_day else get_zone(getattr(ev, "timezone", None))
     uid = getattr(ev, "ical_uid", None) or ev.id
     master = _build_vevent(ev, uid=uid, zone=zone, attendees=attendees, organizer=organizer)
@@ -261,7 +261,7 @@ def build_vevents(ev, attendees=None, overrides=None, organizer=None,
 
 
 def _finish_calendar(cal: Calendar):
-    # TZID 를 쓴 시간대의 VTIMEZONE 정의를 붙인다(없으면 iOS 가 UTC 로 해석).
+    # TZID 를 사용한 시간대의 VTIMEZONE 정의를 추가한다(누락 시 iOS 가 UTC 로 해석).
     try:
         cal.add_missing_timezones()
     except Exception:
@@ -276,7 +276,7 @@ def events_to_ical(items: list[dict], name: str | None = None) -> str:
     cal.add("calscale", "GREGORIAN")
     if name:
         cal.add("x-wr-calname", name)
-    # 하위 VEVENT 들을 먼저 모은 다음 마스터 순으로 넣는다(순서는 무관하지만 읽기 쉽게)
+    # 하위 VEVENT 를 먼저 수집한 뒤 마스터 순으로 추가한다(순서는 무관하나 가독성 목적)
     for it in items:
         master = build_vevents(
             it["event"], it.get("attendees"), it.get("overrides"), it.get("organizer"),
@@ -446,7 +446,7 @@ def _component_to_data(component) -> dict:
 def ical_to_event_bundles(ical_text: str) -> list[dict] | None:
     """VCALENDAR → UID 별 묶음 목록 [{"master": data|None, "overrides": [data...]}].
 
-    .ics 가져오기처럼 여러 일정이 한 파일에 있는 경우에 쓴다. 파싱 실패면 None.
+    .ics 가져오기처럼 하나의 파일에 여러 일정이 있는 경우에 사용한다. 파싱 실패 시 None.
     """
     try:
         cal = Calendar.from_ical(ical_text)
@@ -484,7 +484,7 @@ def ical_to_event_bundle(ical_text: str) -> dict | None:
         return None
     b = bundles[0]
     if b["master"] is None:
-        # 회차 예외만 온 경우(드묾) — 첫 예외를 단독 일정으로 취급
+        # 회차 예외만 수신한 경우(드묾) — 첫 예외를 단독 일정으로 처리
         if not b["overrides"]:
             return None
         m = dict(b["overrides"][0])

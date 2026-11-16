@@ -76,7 +76,7 @@ async def test_audit_filters_and_csv(env):
     a = usage_router.ai_audit
     base = dict(limit=100, cursor="", user_id="", tool="", admin=env["root"], db=db)
     out = await a(**base)
-    assert {i["action"] for i in out["items"]} == {"ai_tool.call", "ai_write.rejected"}  # 다른 감사 행은 안 보임
+    assert {i["action"] for i in out["items"]} == {"ai_tool.call", "ai_write.rejected"}  # 다른 감사 행은 미표시
     assert out["retention_years"] == 1
     rej = next(i for i in out["items"] if i["action"] == "ai_write.rejected")
     assert rej["tool"] == "mail_send" and rej["result"] == "rejected" and rej["code"] == "rejected_by_user"
@@ -90,7 +90,7 @@ async def test_audit_filters_and_csv(env):
                                           admin=env["root"], db=db)
     body = resp.body.decode("utf-8-sig")
     assert body.splitlines()[0] == "at,user,tool,source,client,result,error_code"
-    assert "'=cmd" in body and '"q"' not in body  # 수식 주입 방지, 인자 이름도 없음
+    assert "'=cmd" in body and '"q"' not in body  # 수식 주입 방지, 인자 이름도 미포함
 
 
 # ── 정책: 보관·로컬 전용 ─────────────────────────────────────
@@ -111,7 +111,7 @@ async def test_governance_retention_and_local_only(env):
     await ai_config.set_governance(db, local_only=False)
     await ai_config.set_ai_config(db, kind="anthropic", model="m")
     assert (await ai_config.resolve_provider(db)).kind == "anthropic"
-    # 화면 API 로도
+    # 화면 API 경유도 동일
     r = await ai_router.put_governance(ai_router.GovernanceUpdate(audit_retention_years=2), user=env["root"], db=db)
     assert r["governance"]["audit_retention_years"] == 2
     with pytest.raises(HTTPException) as ei:
@@ -137,7 +137,7 @@ async def test_purge_ai_audit_respects_years_and_other_actions(env):
     await ai_config.set_governance(db, audit_retention_years=2)
     db.add(_call("alice", "c", at=old))
     await db.commit()
-    assert (await ops_retention.run_once(_s))["audit"] == 0  # 2년 보관이면 400일 전 행은 남는다
+    assert (await ops_retention.run_once(_s))["audit"] == 0  # 2년 보관이면 400일 전 행은 유지된다
 
 
 # ── 피드백 ───────────────────────────────────────────────────
@@ -167,14 +167,14 @@ async def test_feedback_list_filters_and_privacy(env):
     lf = fa.list_feedback
     base = dict(limit=50, cursor="", admin=env["root"], db=db)
     out = await lf(**base)
-    assert out["total"] == 2 and len(out["items"]) == 2  # 👎 만, 기간 30일
+    assert out["total"] == 2 and len(out["items"]) == 2  # 부정 평가만, 기간 30일
     assert out["reason_counts"] == {"wrong_source": 1, "too_long": 1}
     assert out["attached_total"] == 1
     first = next(i for i in out["items"] if i["reasons"] == ["wrong_source"])
     assert first["tools"] == ["mail_search", "files_read"] and first["snapshot"] == "attached"
     assert first["snapshot_expires_at"] and first["who"] in ("A", "B")
     dumped = json.dumps(out, ensure_ascii=False)
-    assert "비밀" not in dumped and "alice" not in dumped and "bob" not in dumped  # 내용·사용자 id 없음
+    assert "비밀" not in dumped and "alice" not in dumped and "bob" not in dumped  # 내용·사용자 id 미포함
     assert [i["reasons"] for i in (await lf(**base, reason="too_long"))["items"]] == [["too_long"]]
     assert (await lf(**base, attached_only=True))["total"] == 1
     assert (await lf(**base, days=90))["total"] == 3
@@ -190,17 +190,17 @@ async def test_snapshot_view_audit_delete_and_states(env):
     assert [m["content"] for m in out["messages"]] == ["비밀 질문", "비밀 답변"]
     logs = (await db.execute(select(AuditLog).where(AuditLog.action == "ai_feedback.view"))).scalars().all()
     assert len(logs) == 1 and logs[0].actor_id == "root" and logs[0].resource_id == f.id
-    assert "비밀" not in logs[0].details  # 누가·어느 피드백만
-    # 감사 화면에도 보인다
+    assert "비밀" not in logs[0].details  # 열람자·대상 피드백만 기록
+    # 감사 화면에도 표시됨
     au = await usage_router.ai_audit(limit=10, cursor="", user_id="", tool="", admin=env["root"], db=db)
     assert au["items"][0]["action"] == "ai_feedback.view" and au["items"][0]["result"] == "viewed"
-    # 삭제 — 평가·이유는 남는다
+    # 삭제 — 평가·이유는 유지
     before = f.updated_at
     r = await fa.delete_snapshot(f.id, admin=env["root"], db=db)
     assert r["snapshot"] == "admin_deleted"
     await db.refresh(f)
     assert f.conversation_snapshot is None and f.snapshot_state == "admin_deleted" and f.rating == "down"
-    assert f.updated_at.replace(tzinfo=None) == before.replace(tzinfo=None)  # 통계 기간 안 흔들림
+    assert f.updated_at.replace(tzinfo=None) == before.replace(tzinfo=None)  # 통계 기간에 영향 없음
     with pytest.raises(HTTPException) as ei:
         await fa.view_snapshot(f.id, admin=env["root"], db=db)
     assert ei.value.status_code == 410 and ei.value.detail["code"] == "admin_deleted"
@@ -220,7 +220,7 @@ async def test_snapshot_expiry_and_conversation_delete(env):
         await db.refresh(x)
     assert old.conversation_snapshot is None and old.snapshot_state == "expired" and old.comment == "의견"
     assert fresh.conversation_snapshot == "[]" and none.snapshot_state is None
-    # 사용자가 대화를 지우면 "사용자가 지움"(첨부 없던 행은 그대로 '첨부 안 함')
+    # 사용자가 대화를 삭제하면 "사용자가 지움"(첨부가 없던 행은 그대로 '첨부 안 함')
     conv = AIConversation(user_id="alice", title="t")
     db.add(conv)
     await db.commit()

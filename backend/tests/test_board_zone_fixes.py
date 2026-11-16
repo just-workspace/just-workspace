@@ -1,8 +1,8 @@
-"""게시판·위키 구역 전수조사 수정 고정.
+"""게시판·위키 구역 전수조사 수정 사항 고정.
 
-게시판: 일반 사용자의 자기 글 수정(고정·필독 값을 함께 보내도 403 아님) · 카테고리/첨부 비우기 ·
-        다른 글의 댓글을 부모로 한 답글 거절 · 북마크 수에서 지워진 글 제외.
-위키:   base_version 충돌 409 · 다른 스페이스 부모 거절 · 멤버 역할 검증/중복 추가 · 설명 비우기.
+게시판: 일반 사용자의 본인 글 수정(고정·필독 값을 함께 전송해도 403 아님) · 카테고리/첨부 비우기 ·
+        다른 글의 댓글을 부모로 한 답글 거부 · 북마크 수에서 삭제된 글 제외.
+위키:   base_version 충돌 409 · 다른 스페이스 부모 거부 · 멤버 역할 검증/중복 추가 · 설명 비우기.
 """
 
 import pytest
@@ -39,7 +39,7 @@ async def _users(db):
 
 @pytest.mark.asyncio
 async def test_author_can_edit_own_post_when_flags_are_sent_unchanged(db_session):
-    """편집 화면은 is_pinned·is_must_read 를 늘 보낸다 — 값이 그대로면 공지 권한 검사에 걸리지 않는다."""
+    """편집 화면은 is_pinned·is_must_read 를 항상 전송한다 — 값이 동일하면 공지 권한 검사 대상이 아니다."""
     db = db_session
     alice, bob, root = await _users(db)
     b = await board_service.create_board(db, name="자유", slug="free")  # notice_permission 기본 = admin
@@ -52,7 +52,7 @@ async def test_author_can_edit_own_post_when_flags_are_sent_unchanged(db_session
     )
     assert out["title"] == "고친 제목" and out["content"] == "고친 본문"
 
-    # 값을 실제로 바꾸려 하면 여전히 관리자만
+    # 값을 실제로 변경하려는 경우는 여전히 관리자만 허용
     with pytest.raises(HTTPException) as ei:
         await board_router.update_post(post_id=p["id"], body=PostUpdate(is_pinned=True), user=alice, db=db)
     assert ei.value.status_code == 403
@@ -61,7 +61,7 @@ async def test_author_can_edit_own_post_when_flags_are_sent_unchanged(db_session
     assert ei.value.status_code == 403
     assert (await board_router.update_post(post_id=p["id"], body=PostUpdate(is_pinned=True), user=root, db=db))["is_pinned"] is True
 
-    # 남의 글은 여전히 못 고친다
+    # 타 사용자의 글은 여전히 수정 불가
     with pytest.raises(HTTPException) as ei:
         await board_router.update_post(post_id=p["id"], body=PostUpdate(title="x"), user=bob, db=db)
     assert ei.value.status_code == 403
@@ -79,22 +79,22 @@ async def test_edit_can_clear_category_and_attachments(db_session):
     )
     assert p["category"] == "질문" and len(p["attachments"]) == 1
 
-    # 안 보낸 칸은 그대로
+    # 전송하지 않은 필드는 유지
     out = await board_router.update_post(post_id=p["id"], body=PostUpdate(title="t2"), user=alice, db=db)
     assert out["category"] == "질문" and len(out["attachments"]) == 1
 
-    # null · 빈 목록으로 비운다
+    # null · 빈 목록 전송 시 비움
     out = await board_router.update_post(post_id=p["id"], body=PostUpdate(category=None, attachments=[]), user=alice, db=db)
     assert out["category"] is None and out["attachments"] == []
     row = await db.get(Post, p["id"])
     assert row.category is None and row.attachments is None
 
-    # 다시 붙였다가 null 로도 비워진다
+    # 다시 첨부한 뒤 null 로도 비워짐
     await board_router.update_post(post_id=p["id"], body=PostUpdate(attachments=[{"name": "b", "url": "/s/2"}]), user=alice, db=db)
     out = await board_router.update_post(post_id=p["id"], body=PostUpdate(attachments=None), user=alice, db=db)
     assert out["attachments"] == []
 
-    # 제목·본문의 null 은 "안 바꿈", 빈 본문은 거절
+    # 제목·본문의 null 은 "안 바꿈", 빈 본문은 거부
     out = await board_router.update_post(post_id=p["id"], body=PostUpdate(title=None, content=None, category="질문"), user=alice, db=db)
     assert out["title"] == "t2" and out["content"] == "c" and out["category"] == "질문"
     with pytest.raises(HTTPException) as ei:
@@ -116,7 +116,7 @@ async def test_reply_parent_must_belong_to_same_post(db_session):
     assert ei.value.status_code == 400
     assert (await db.get(Post, p2["id"])).comment_count == 0
 
-    # 같은 글의 답글은 된다
+    # 같은 글의 답글은 허용
     r = await board_router.create_comment(post_id=p1["id"], body=CommentCreate(content="답글", parent_id=c1["id"]), user=bob, db=db)
     assert r["parent_id"] == c1["id"]
 
@@ -154,23 +154,23 @@ async def test_wiki_base_version_conflict_is_409(db_session):
     page = await wiki_router.create_page(space_id=sid, body=PageCreate(title="p", slug="p", content="v1"), user=alice, db=db)
     assert page["version"] == 1
 
-    # 밥이 먼저 고친다(버전 2)
+    # 밥이 먼저 수정(버전 2)
     out = await wiki_router.update_page(page_id=page["id"], body=PageUpdate(content="밥의 수정", base_version=1), user=bob, db=db)
     assert out["version"] == 2
 
-    # 앨리스는 옛 버전(1)을 보고 저장 → 409, 본문은 밥의 것 그대로
+    # 앨리스는 이전 버전(1)을 기준으로 저장 → 409, 본문은 밥의 수정본 유지
     with pytest.raises(HTTPException) as ei:
         await wiki_router.update_page(page_id=page["id"], body=PageUpdate(content="앨리스의 옛 본문", base_version=1), user=alice, db=db)
     assert ei.value.status_code == 409
     assert (await wiki_service.get_page(db, page["id"]))["content"] == "밥의 수정"
 
-    # 맞는 버전이면 저장되고, base_version 없이(덮어쓰기 선택·옛 클라이언트)도 저장된다
+    # 버전이 일치하면 저장되며, base_version 없이(덮어쓰기 선택·구형 클라이언트)도 저장된다
     out = await wiki_router.update_page(page_id=page["id"], body=PageUpdate(content="앨리스 v3", base_version=2), user=alice, db=db)
     assert out["content"] == "앨리스 v3"
     out = await wiki_router.update_page(page_id=page["id"], body=PageUpdate(content="강제"), user=bob, db=db)
     assert out["content"] == "강제"
 
-    # 이동·고정은 버전이 달라도 막지 않는다
+    # 이동·고정은 버전이 상이해도 차단하지 않음
     out = await wiki_router.update_page(page_id=page["id"], body=PageUpdate(is_pinned=True, base_version=1), user=alice, db=db)
     assert out["is_pinned"] is True
 
@@ -193,7 +193,7 @@ async def test_wiki_parent_must_be_in_same_space(db_session):
         await wiki_router.update_page(page_id=a["id"], body=PageUpdate(parent_id="no-such-page"), user=alice, db=db)
     assert ei.value.status_code == 400
 
-    # 같은 스페이스 안에서는 된다
+    # 같은 스페이스 내에서는 허용
     child = await wiki_router.create_page(space_id=s1, body=PageCreate(title="c", slug="c", parent_id=a["id"]), user=alice, db=db)
     assert child["parent_id"] == a["id"]
 
@@ -209,7 +209,7 @@ async def test_wiki_member_role_validated_and_duplicate_add_updates(db_session):
     assert ei.value.status_code == 400
 
     await wiki_router.add_member(space_id=sid, body=MemberAdd(user_id="bob", role="reader"), user=alice, db=db)
-    # 같은 사람을 다시 넣어도 500 이 아니라 역할만 바뀐다
+    # 동일 사용자를 다시 추가해도 500 이 아니라 역할만 변경됨
     await wiki_router.add_member(space_id=sid, body=MemberAdd(user_id="bob", role="writer"), user=alice, db=db)
     members = await wiki_service.get_members(db, sid)
     assert [(m["user_id"], m["role"]) for m in members] == [("bob", "writer")]

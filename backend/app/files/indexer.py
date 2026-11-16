@@ -1,22 +1,22 @@
-"""파일 검색 색인기 — 저장소를 훑어 이름과 본문을 Postgres 에 쌓는다.
+"""파일 검색 색인기 — 저장소를 순회하여 이름과 본문을 Postgres 에 적재한다.
 
-왜 색인을 두나
+색인 도입 사유
 --------------
-예전 검색은 질의마다 os.walk 로 트리 전체를 돌며 파일명 부분일치만 봤다.
-파일 15,000개·386GB 규모에서 그건 느리고, 내용 검색·랭킹·필터를 붙일 수도 없다.
+과거 검색은 질의마다 os.walk 로 트리 전체를 순회하며 파일명 부분일치만 확인했다.
+파일 15,000개·386GB 규모에서는 속도가 느리고, 내용 검색·랭킹·필터 추가도 불가하다.
 
-무엇을 넣나
------------
-이름·확장자·크기·수정시각은 모든 항목에. 본문은 추출 가능한 형식만:
+색인 대상
+---------
+이름·확장자·크기·수정시각은 모든 항목에 대해 저장한다. 본문은 추출 가능한 형식만 대상으로 한다:
   - 순수 텍스트 계열(.txt .md .csv .log .json .py .ts ...)
   - .pdf(pypdf) / .docx(python-docx)
-  - .xlsx / .pptx — 표준 라이브러리만 쓰는 ooxml 파서(app/files/ooxml.py)
-본문은 파일당 상한을 둔다. 검색어를 찾는 게 목적이지 원문 보관이 아니다.
+  - .xlsx / .pptx — 표준 라이브러리만 사용하는 ooxml 파서(app/files/ooxml.py)
+본문에는 파일당 상한을 적용한다. 목적은 검색어 탐색이며 원문 보관이 아니다.
 
-재색인 판단
+재색인 판정
 -----------
-(크기, 수정시각) 을 stamp 로 저장해 두고 같으면 건너뛴다. 그래서 두 번째
-전체 훑기는 디스크 stat 만 보고 지나간다(본문 추출은 새/바뀐 파일만).
+(크기, 수정시각) 을 stamp 로 저장하고 동일하면 생략한다. 따라서 두 번째
+전체 순회는 디스크 stat 만 확인한다(본문 추출은 신규/변경 파일만 대상).
 """
 
 import asyncio
@@ -42,16 +42,16 @@ from app.files.service import STORAGE_ROOT, is_hidden_name
 
 logger = logging.getLogger(__name__)
 
-# 본문 상한. 넘치면 앞부분만 넣는다.
+# 본문 상한. 초과 시 앞부분만 저장.
 MAX_CONTENT = 200_000
-# 이보다 큰 파일은 본문을 뽑지 않고 이름만 색인한다.
+# 이보다 큰 파일은 본문을 추출하지 않고 이름만 색인.
 MAX_EXTRACT_BYTES = 40 * 1024 * 1024
-# 압축 문서(xlsx/pptx/docx)는 풀면 수십 배로 불어난다 — 더 낮게.
+# 압축 문서(xlsx/pptx/docx)는 해제 시 수십 배로 증가하므로 더 낮게 설정.
 MAX_OOXML_BYTES = 10 * 1024 * 1024
 
-# 본문 추출은 별도 프로세스에서 한다. 파일 하나가 pypdf/openpyxl 안에서
-# 수 GB 를 먹고 워커(=요청 처리 중인 프로세스)를 cgroup OOM 으로 죽인 적이 있다.
-# 자식에 주소공간 상한을 걸면 MemoryError 로 끝나고 워커는 멀쩡하다.
+# 본문 추출은 별도 프로세스에서 수행한다. 파일 하나가 pypdf/openpyxl 내부에서
+# 수 GB 를 점유하여 워커(=요청 처리 중인 프로세스)가 cgroup OOM 으로 종료된 사례가 있다.
+# 자식 프로세스에 주소공간 상한을 설정하면 MemoryError 로 종료되고 워커는 영향을 받지 않는다.
 EXTRACT_RLIMIT_AS = 1024 * 1024 * 1024
 EXTRACT_TIMEOUT = 300
 
@@ -61,7 +61,7 @@ TEXT_EXTS = {
     ".py", ".js", ".ts", ".tsx", ".jsx", ".vue", ".go", ".rs", ".java", ".c", ".h",
     ".cpp", ".hpp", ".cs", ".rb", ".php", ".html", ".htm", ".css", ".scss", ".toml",
 }
-# 탭·개행은 위에서 공백 정규화로 이미 사라진다. 여기 걸리는 건 진짜 제어문자.
+# 탭·개행은 앞 단계의 공백 정규화에서 이미 제거된다. 여기서 처리되는 것은 실제 제어문자뿐이다.
 _CTRL_RE = re.compile("[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]")
 SKIP_DIRS = {".trash", ".versions", ".thumbs", "__pycache__", "node_modules", ".git"}
 
@@ -82,7 +82,7 @@ def _read_pdf(path: Path) -> str:
         from pypdf import PdfReader
 
         out: list[str] = []
-        for page in PdfReader(str(path)).pages[:200]:   # 아주 긴 문서는 앞부분만
+        for page in PdfReader(str(path)).pages[:200]:   # 매우 긴 문서는 앞부분만 대상
             out.append(page.extract_text() or "")
             if sum(len(x) for x in out) > MAX_CONTENT:
                 break
@@ -106,7 +106,7 @@ def _read_docx(path: Path) -> str:
 
 
 def _read_ooxml(path: Path, ext: str) -> str:
-    """xlsx / pptx — app/files/ooxml.py 의 읽기 함수를 쓴다."""
+    """xlsx / pptx — app/files/ooxml.py 의 읽기 함수를 사용한다."""
     try:
         from app.files import ooxml
 
@@ -133,11 +133,11 @@ def _read_ooxml(path: Path, ext: str) -> str:
 
 
 def _read_eml(path: Path) -> str:
-    """아카이브된 메일(.eml) — 헤더와 본문을 함께 뽑는다.
+    """아카이브된 메일(.eml) — 헤더와 본문을 함께 추출한다.
 
-    보낸사람·제목까지 색인해야 "김부장이 보낸 계약서" 같은 검색이 먹는다.
-    첨부 본문은 여기서 안 읽는다. 아카이버가 첨부를 별도 파일로 떨궈 두기 때문에
-    그건 기존 PDF/docx 추출기가 알아서 맡는다.
+    발신자·제목까지 색인해야 "김부장이 보낸 계약서" 같은 검색이 가능하다.
+    첨부 본문은 여기서 읽지 않는다. 아카이버가 첨부를 별도 파일로 저장하므로
+    해당 파일은 기존 PDF/docx 추출기가 처리한다.
     """
     import email
     from email import policy
@@ -184,28 +184,28 @@ def extract_content(path: Path, ext: str, size: int) -> str:
         text = _read_eml(path)
     else:
         return ""
-    # 공백 정규화 — 줄바꿈·들여쓰기가 많으면 용량만 먹는다
+    # 공백 정규화 — 줄바꿈·들여쓰기가 많으면 용량만 증가한다
     text = " ".join(text.split())
-    # NUL 은 Postgres text 에 못 들어간다(invalid byte sequence 0x00). 한 파일만
-    # 걸려도 배치 INSERT 전체가 롤백돼 색인이 매 주기 통째로 실패했다.
-    # 다른 제어문자도 검색에 의미가 없으니 같이 털어낸다.
+    # NUL 은 Postgres text 에 저장할 수 없다(invalid byte sequence 0x00). 파일 하나만
+    # 해당해도 배치 INSERT 전체가 롤백되어 색인이 매 주기 전부 실패했다.
+    # 다른 제어문자도 검색에 의미가 없으므로 함께 제거한다.
     text = _CTRL_RE.sub(" ", text)
-    # 짝 없는 서로게이트(cp949 등에서 잘못 디코딩된 잔해)는 UTF-8 로 인코딩할 수
-    # 없다. 추출은 자식 프로세스가 하고 결과를 json 으로 돌려주는데, 한 글자만
-    # 섞여 있어도 json.dumps 가 터져 그 묶음(수십~수백 파일) 전체가 날아갔다.
+    # 짝 없는 서로게이트(cp949 등에서 잘못 디코딩된 잔여물)는 UTF-8 로 인코딩할 수
+    # 없다. 추출은 자식 프로세스가 수행하고 결과를 json 으로 반환하는데, 한 글자만
+    # 포함되어도 json.dumps 가 예외를 발생시켜 해당 묶음(수십~수백 파일) 전체가 유실되었다.
     if not text.isascii():
         text = text.encode("utf-8", "replace").decode("utf-8", "replace")
     return text[:MAX_CONTENT]
 
 
 def _scan_scope(root: Path, scope: str, known: dict[str, str]) -> tuple[list[dict], set[str]]:
-    """한 scope 를 훑어 (갱신할 항목의 메타, 살아있는 rel_path 집합) 을 만든다.
+    """한 scope 를 순회하여 (갱신할 항목의 메타, 존재하는 rel_path 집합) 을 생성한다.
 
-    known 은 {rel_path: stamp}. stamp 가 같으면 건너뛴다.
-    여기서는 stat 만 본다 — 본문 추출은 _fill_content 가 묶음 단위로 한다.
-    한 번에 전부 뽑아 들고 있으면 파일 15,000개 × 본문 200KB 가 워커 메모리에
-    통째로 올라가 cgroup 한도(4GB)에 걸려 OOM 으로 죽고, 커밋 전에 죽으니
-    다음 주기에 처음부터 다시 — 무한 반복이었다.
+    known 은 {rel_path: stamp}. stamp 가 동일하면 생략한다.
+    여기서는 stat 만 확인한다 — 본문 추출은 _fill_content 가 묶음 단위로 수행한다.
+    전체를 한 번에 추출하여 보유하면 파일 15,000개 × 본문 200KB 가 워커 메모리에
+    모두 적재되어 cgroup 한도(4GB)를 초과해 OOM 으로 종료되고, 커밋 전에 종료되므로
+    다음 주기에 처음부터 재수행하는 무한 반복이 발생했다.
     """
     rows: list[dict] = []
     alive: set[str] = set()
@@ -213,7 +213,7 @@ def _scan_scope(root: Path, scope: str, known: dict[str, str]) -> tuple[list[dic
         return rows, alive
 
     for dirpath, dirnames, filenames in os.walk(root):
-        # 숨김 판정은 service.is_hidden_name 한 곳 — 예전엔 "." 만 봐서 NAS 휴지통(@Recycle) 안까지 색인됐다
+        # 숨김 판정은 service.is_hidden_name 으로 단일화 — 과거에는 "." 만 확인하여 NAS 휴지통(@Recycle) 내부까지 색인되었다
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not is_hidden_name(d)]
         base = Path(dirpath)
         rel_dir = base.relative_to(root).as_posix()
@@ -232,7 +232,7 @@ def _scan_scope(root: Path, scope: str, known: dict[str, str]) -> tuple[list[dic
                 continue
             stamp = _stamp(0 if is_dir else st.st_size, st.st_mtime)
             if known.get(rel) == stamp:
-                continue                      # 안 바뀜 — 건드리지 않는다
+                continue                      # 변경 없음 — 처리 생략
 
             ext = p.suffix.lower()
             rows.append({
@@ -257,10 +257,10 @@ def _limit_child():
 
 
 def _extract_many(items: list[tuple[str, str, int]]) -> list[str]:
-    """(path, ext, size) 목록의 본문을 자식 프로세스에서 뽑는다.
+    """(path, ext, size) 목록의 본문을 자식 프로세스에서 추출한다.
 
-    자식이 죽거나(상한 초과·크래시) 시간을 넘기면 묶음을 하나씩 다시 돌려
-    범인 하나 때문에 나머지를 잃지 않는다. 그래도 안 되는 파일은 빈 본문.
+    자식 프로세스가 종료되거나(상한 초과·크래시) 제한 시간을 초과하면 묶음을 하나씩 재시도하여
+    문제 파일 하나로 인해 나머지가 유실되지 않도록 한다. 그래도 실패하는 파일은 빈 본문으로 처리한다.
     """
     if not items:
         return []
@@ -288,7 +288,7 @@ def _extract_many(items: list[tuple[str, str, int]]) -> list[str]:
 
 
 def _fill_content(chunk: list[dict]) -> list[dict]:
-    """묶음 하나의 본문을 뽑아 DB 행으로 만든다(스레드에서)."""
+    """묶음 하나의 본문을 추출하여 DB 행으로 변환한다(스레드에서 실행)."""
     todo = [(str(r["_path"]), r["_ext"], r["size"]) for r in chunk if not r["is_dir"]]
     texts = iter(_extract_many(todo))
     out: list[dict] = []
@@ -311,8 +311,8 @@ async def _sync_scope(db: AsyncSession, root: Path, scope: str) -> dict:
 
     rows, alive = await asyncio.to_thread(_scan_scope, root, scope, known)
 
-    # 묶음마다 본문 추출 → upsert → commit. 메모리는 묶음 하나만큼만 쓰고,
-    # 중간에 죽어도 그때까지 한 것은 남아 다음 주기가 이어서 한다.
+    # 묶음마다 본문 추출 → upsert → commit. 메모리는 묶음 하나 분량만 사용하며,
+    # 중도 종료되어도 그때까지의 결과는 보존되어 다음 주기에 이어서 수행한다.
     updated = 0
     for i in range(0, len(rows), BATCH):
         chunk = await asyncio.to_thread(_fill_content, rows[i:i + BATCH])
@@ -335,7 +335,7 @@ async def _sync_scope(db: AsyncSession, root: Path, scope: str) -> dict:
         await db.execute(stmt)
         await db.commit()
         updated += len(chunk)
-        rows[i:i + BATCH] = [None] * len(chunk)   # 한 묶음 끝나면 참조를 놓는다
+        rows[i:i + BATCH] = [None] * len(chunk)   # 묶음 하나 완료 시 참조 해제
         await asyncio.sleep(0)
 
     gone = sorted(set(known) - alive)
@@ -352,7 +352,7 @@ async def _sync_scope(db: AsyncSession, root: Path, scope: str) -> dict:
 
 
 async def reindex_all() -> list[dict]:
-    """모든 scope(사용자별 + shared)를 한 번 훑는다."""
+    """모든 scope(사용자별 + shared)를 1회 순회한다."""
     stats: list[dict] = []
     async with async_session() as db:
         uids = (await db.execute(select(User.id).where(User.is_active.is_(True)))).scalars().all()
@@ -362,10 +362,10 @@ async def reindex_all() -> list[dict]:
     return stats
 
 
-# ─── 바로 색인(올리기·폴더 만들기·이름 바꾸기·이동 직후) ───
-# 주기 색인(15분)만 있으면 방금 올린 파일이 검색에 15분까지 안 나왔다. 바뀐 경로만 이름·메타를 바로 넣고
-# (본문은 비워 두고 stamp 를 비워 다음 주기가 본문까지 채우게), 옮기거나 지운 옛 경로는 바로 뺀다.
-QUICK_MAX = 2000      # 폴더를 옮겼을 때 한 번에 넣는 최대 항목 수(나머지는 주기 색인)
+# ─── 즉시 색인(업로드·폴더 생성·이름 변경·이동 직후) ───
+# 주기 색인(15분)만으로는 방금 업로드한 파일이 최대 15분간 검색되지 않았다. 변경된 경로만 이름·메타를 즉시 저장하고
+# (본문과 stamp 는 비워 두어 다음 주기에 본문까지 채우도록 함), 이동·삭제된 기존 경로는 즉시 제거한다.
+QUICK_MAX = 2000      # 폴더 이동 시 한 번에 저장하는 최대 항목 수(나머지는 주기 색인)
 _quick_tasks: set[asyncio.Task] = set()
 
 
@@ -435,7 +435,7 @@ def _upsert(db: AsyncSession, rows: list[dict]):
 
 
 async def quick_index(db: AsyncSession, add: list[Path] | tuple = (), forget: list[Path] | tuple = ()) -> None:
-    """add 경로(폴더면 하위까지)를 바로 넣고 forget 경로(와 그 하위)를 바로 뺀다."""
+    """add 경로(폴더면 하위까지)를 즉시 저장하고 forget 경로(및 그 하위)를 즉시 제거한다."""
     for real in forget:
         sc = scope_of(real)
         if not sc:
@@ -459,7 +459,7 @@ async def quick_index(db: AsyncSession, add: list[Path] | tuple = (), forget: li
 
 
 def schedule_quick_index(add: list[Path] | tuple = (), forget: list[Path] | tuple = ()) -> None:
-    """응답을 붙잡지 않게 뒤에서 — 실패해도 주기 색인이 결국 맞춘다."""
+    """응답을 지연시키지 않도록 백그라운드에서 수행 — 실패해도 주기 색인이 최종적으로 반영한다."""
     async def run():
         try:
             async with async_session() as db:
@@ -475,30 +475,30 @@ def schedule_quick_index(add: list[Path] | tuple = (), forget: list[Path] | tupl
 
 
 _LOCK_KEY = "files:index:lock"
-# 색인기가 "돌았다"는 사실 자체를 남긴다.
-# file_index.indexed_at 은 **파일이 바뀐 시각**이라 감시에 쓸 수 없다 — 바뀐 파일이
-# 없으면 색인기가 멀쩡히 돌아도 그 값은 며칠씩 그대로다. 둘을 구분하지 않으면
-# "색인기가 죽었다"와 "요즘 파일을 안 건드렸다"가 같은 신호로 보인다.
+# 색인기의 실행 사실 자체를 기록한다.
+# file_index.indexed_at 은 **파일이 변경된 시각**이므로 감시에 사용할 수 없다 — 변경된 파일이
+# 없으면 색인기가 정상 동작해도 그 값은 수일간 갱신되지 않는다. 둘을 구분하지 않으면
+# "색인기 중단"과 "최근 파일 변경 없음"이 동일한 신호로 나타난다.
 _HEARTBEAT_KEY = "files:index:last_run"
 
 
 async def run_indexer(interval_seconds: int = 900):
-    """주기 색인. 워커 8개 중 Redis 락을 잡은 하나만 돈다. 한 주기가 터져도 루프를 놓지 않는다."""
+    """주기 색인. 워커 8개 중 Redis 락을 획득한 하나만 수행한다. 한 주기에서 예외가 발생해도 루프를 유지한다."""
     import time as _time
 
     from app.chat.redis_client import get_redis
 
-    await asyncio.sleep(20)          # 기동 직후 혼잡을 피한다
+    await asyncio.sleep(20)          # 기동 직후 혼잡 회피
     while True:
         try:
             redis = await get_redis()
-            # 락 TTL 은 한 주기보다 길게 — 첫 전체 색인(본문 추출)은 오래 걸린다.
+            # 락 TTL 은 한 주기보다 길게 설정 — 최초 전체 색인(본문 추출)은 장시간 소요된다.
             got = await redis.set(_LOCK_KEY, "1", nx=True, ex=interval_seconds * 4)
             if got:
                 try:
                     stats = await reindex_all()
                     changed = sum(s["updated"] + s["removed"] for s in stats)
-                    # 바뀐 게 없어도 찍는다. 이게 "살아 있다"는 유일한 증거다.
+                    # 변경이 없어도 기록한다. 정상 동작을 나타내는 유일한 근거이다.
                     await redis.set(_HEARTBEAT_KEY, str(int(_time.time())),
                                     ex=interval_seconds * 6)
                     if changed:
@@ -513,13 +513,13 @@ async def run_indexer(interval_seconds: int = 900):
 
 
 def _extract_main() -> None:
-    """자식 모드: stdin 으로 [(path, ext, size)...] 를 받아 본문 목록을 JSON 으로 낸다."""
+    """자식 모드: stdin 으로 [(path, ext, size)...] 를 수신하여 본문 목록을 JSON 으로 출력한다."""
     items = json.loads(sys.stdin.read())
     out: list[str] = []
     for path, ext, size in items:
         try:
             out.append(extract_content(Path(path), ext, int(size)))
-        except BaseException:              # MemoryError 포함 — 파일 하나만 포기
+        except BaseException:              # MemoryError 포함 — 해당 파일 하나만 제외
             out.append("")
     sys.stdout.write(json.dumps(out, ensure_ascii=False))
 

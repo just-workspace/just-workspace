@@ -1,9 +1,9 @@
-"""HTML → 본문 텍스트(가벼운 마크다운). 표준 라이브러리 html.parser 만 쓴다.
+"""HTML → 본문 텍스트(경량 마크다운). 표준 라이브러리 html.parser 만 사용한다.
 
-* script·style·svg·form 같은 비본문은 버리고, nav·footer·aside 와 바깥 header 같은 틀도 뺀다.
-* <article>/<main> 이 있고 본문이 충분하면 그 안만 쓴다.
+* script·style·svg·form 등 비본문은 제거하고, nav·footer·aside 와 바깥 header 등 틀 요소도 제외한다.
+* <article>/<main> 이 있고 본문이 충분하면 그 내부만 사용한다.
 * 제목(h1~h6)은 ``#``, 목록은 ``- ``, 코드 블록은 펜스, 표는 ``|`` 로 구분한다.
-* 링크는 본문에 끼우지 않고 따로 모은다(모델이 다음 페이지로 갈 때 쓴다).
+* 링크는 본문에 삽입하지 않고 별도로 수집한다(모델이 다음 페이지로 이동할 때 사용한다).
 """
 
 from __future__ import annotations
@@ -118,7 +118,7 @@ class _Extractor(HTMLParser):
             return
         if tag in _VOID:
             return
-        # 짝 안 맞는 태그를 견딘다: 스택에서 그 태그까지 닫는다
+        # 짝이 맞지 않는 태그 허용: 스택에서 해당 태그까지 닫는다
         if tag not in self._stack:
             return
         while self._stack:
@@ -184,7 +184,7 @@ def _tidy(parts: list[str]) -> str:
         lines.append(line.rstrip() if in_code else re.sub(r"[ \t]+", " ", line).strip())
     text = "\n".join(lines)
     text = re.sub(r"\n{3,}", "\n\n", text)
-    # 내용 없는 머리표·표 줄 정리
+    # 내용 없는 머리 기호·표 줄 제거
     text = re.sub(r"(?m)^(-|#+|>|\|)\s*$\n?", "", text)
     return text.strip()
 
@@ -195,7 +195,7 @@ def html_to_text(html: str, base_url: str = "") -> dict:
     try:
         p.feed(html)
         p.close()
-    except Exception:  # noqa: BLE001 — 깨진 HTML 은 읽은 데까지
+    except Exception:  # noqa: BLE001 — 손상된 HTML 은 파싱된 지점까지만 사용
         pass
     main = _tidy(p.main)
     text = main if len(main) >= _MAIN_MIN_CHARS else _tidy(p.all)

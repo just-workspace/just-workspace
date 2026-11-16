@@ -1,4 +1,4 @@
-"""위키 역링크 — 본문 내부 링크(주소·data-page-id·[[제목]])를 파싱해 가리키는 페이지 목록을 준다."""
+"""위키 역링크 — 본문 내부 링크(주소·data-page-id·[[제목]])를 파싱하여 대상 페이지 목록을 반환한다."""
 
 import pytest
 from fastapi import HTTPException
@@ -54,11 +54,11 @@ async def test_backlinks_permissions(db_session):
 
     res = await wiki_router.page_backlinks(page_id=target.id, user=alice, db=db_session)
     got = {i["title"]: i["link_type"] for i in res["items"]}
-    # 다른 스페이스의 [[같은 제목]] 은 이 페이지가 아니다
+    # 다른 스페이스의 [[같은 제목]] 은 이 페이지에 해당하지 않음
     assert got == {"온보딩": "id", "FAQ": "title", "비밀": "id"}
 
     res = await wiki_router.page_backlinks(page_id=target.id, user=bob, db=db_session)
-    assert {i["title"] for i in res["items"]} == {"온보딩", "FAQ"}  # 비밀 스페이스는 숨김
+    assert {i["title"] for i in res["items"]} == {"온보딩", "FAQ"}  # 비밀 스페이스는 미표시
     assert res["items"][0]["url"].startswith("/wiki?space=s1&page=")
 
     with pytest.raises(HTTPException) as e:

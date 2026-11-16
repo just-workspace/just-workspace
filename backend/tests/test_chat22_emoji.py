@@ -52,7 +52,7 @@ async def test_crud_resize_and_permission(db, events):
     assert ren["name"] == "yay"
     assert (await router22.delete_emoji(emoji_id=gif["id"], user=root, db=db))["ok"] is True
     assert any(ev["type"] == "emoji_update" for ev in events["all"])
-    # 역할로 MANAGE_EXPRESSIONS 를 받으면 일반 사용자도 된다
+    # 역할로 MANAGE_EXPRESSIONS 를 부여받으면 일반 사용자도 가능
     role = ChatRole(id="r-exp", name="이모지 담당", position=1, permissions=P.MANAGE_EXPRESSIONS)
     db.add(role)
     db.add(ChatMemberRole(user_id="alice", role_id="r-exp"))

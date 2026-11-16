@@ -14,7 +14,7 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from itsdangerous import BadSignature
 import jwt
-from jwt import PyJWTError as JWTError   # 예전 python-jose 의 JWTError 자리
+from jwt import PyJWTError as JWTError   # 기존 python-jose 의 JWTError 대체
 from pydantic import BaseModel
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,9 +48,9 @@ router = APIRouter(prefix="/oauth", tags=["oauth-provider"])
 root_router = APIRouter(tags=["oauth-discovery"])
 
 # 서명 알고리즘.
-#   OIDC Discovery 1.0 이 id_token_signing_alg_values_supported 에 RS256 을
-#   MUST 로 규정한다. 대칭키(HS256)로는 표준 RP 가 서명을 검증할 방법이 없다.
-#   서명·검증 모두 RS256(app/auth/jwks.py 의 키)만 쓴다.
+#   OIDC Discovery 1.0 은 id_token_signing_alg_values_supported 에 RS256 을
+#   MUST 로 규정한다. 대칭키(HS256)로는 표준 RP 가 서명을 검증할 수 없다.
+#   서명·검증 모두 RS256(app/auth/jwks.py 의 키)만 사용한다.
 JWT_ALGORITHM = "RS256"
 ACCESS_TOKEN_TTL = 3600  # 1 hour
 
@@ -58,15 +58,15 @@ ACCESS_TOKEN_TTL = 3600  # 1 hour
 SUPPORTED_SCOPES = ["openid", "profile", "email", "groups", "mcp:read", "mcp:write"]
 MCP_SCOPES = {"mcp:read", "mcp:write"}
 
-# ID 토큰·UserInfo 가 내보낼 수 있는 클레임(OIDC Discovery claims_supported).
+# ID 토큰·UserInfo 가 반환할 수 있는 클레임(OIDC Discovery claims_supported).
 CLAIMS_SUPPORTED = [
     "iss", "sub", "aud", "exp", "iat", "nonce", "sid",
     "preferred_username", "name", "email", "groups",
 ]
 
-# 하위호환 관리자 표식. 예전부터 groups 는 ["admin"] 아니면 [] 였고, 기존 RP 가 이 값으로
-# 관리자를 판별할 수 있다. 그래서 워크스페이스 그룹 중 이름이 이것과 같은 것은 내보내지
-# 않는다 — 비관리자가 "admin" 이라는 이름의 그룹에 들어 있다고 관리자 표식이 생기면 안 된다.
+# 하위 호환용 관리자 표식. 기존부터 groups 는 ["admin"] 또는 [] 였으며, 기존 RP 가 이 값으로
+# 관리자를 판별할 수 있다. 따라서 워크스페이스 그룹 중 이름이 이 값과 동일한 것은 반환하지
+# 않는다. 비관리자가 "admin" 이라는 이름의 그룹에 속한 것만으로 관리자 표식이 생성되어서는 안 된다.
 ADMIN_GROUP_MARKER = "admin"
 
 
@@ -98,13 +98,13 @@ def _authorization_server_metadata() -> dict:
         "scopes_supported": SUPPORTED_SCOPES,
         "claims_supported": CLAIMS_SUPPORTED,
         "code_challenge_methods_supported": ["S256"],
-        # OIDC Core §3.1.2.1 — 우리가 실제로 처리하는 값만 광고한다.
+        # OIDC Core §3.1.2.1 — 실제로 처리하는 값만 광고한다.
         "prompt_values_supported": ["none", "consent"],
         # RFC 9207 — authorization response 에 iss 를 포함한다.
         "authorization_response_iss_parameter_supported": True,
-        # OpenID Connect Back-Channel Logout 1.0 §2.1 — 워크스페이스 세션이 끝나면
-        # 정적 클라이언트의 backchannel_logout_uri 로 logout_token 을 보낸다. sid 를 함께
-        # 실으므로 session_supported 도 참(ID 토큰에도 같은 sid 를 넣는다).
+        # OpenID Connect Back-Channel Logout 1.0 §2.1 — 워크스페이스 세션 종료 시
+        # 정적 클라이언트의 backchannel_logout_uri 로 logout_token 을 송신한다. sid 를 함께
+        # 포함하므로 session_supported 도 참이다(ID 토큰에도 동일한 sid 를 포함한다).
         "backchannel_logout_supported": True,
         "backchannel_logout_session_supported": True,
         "token_endpoint_auth_methods_supported": [
@@ -114,13 +114,13 @@ def _authorization_server_metadata() -> dict:
     }
 
 
-# RFC 6749 §5.1 — 토큰 엔드포인트 응답에는 no-store 가 REQUIRED 다.
-# 없으면 중간 프록시나 브라우저가 액세스/리프레시 토큰을 캐시할 수 있다.
+# RFC 6749 §5.1 — 토큰 엔드포인트 응답에는 no-store 가 REQUIRED 이다.
+# 누락 시 중간 프록시나 브라우저가 액세스/리프레시 토큰을 캐시할 수 있다.
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 
 
 def _token_response(content: dict, status: int = 200) -> JSONResponse:
-    """토큰 엔드포인트 전용 응답 — 항상 no-store 를 붙인다."""
+    """토큰 엔드포인트 전용 응답 — 항상 no-store 를 포함한다."""
     return JSONResponse(status_code=status, content=content, headers=NO_STORE)
 
 
@@ -134,16 +134,16 @@ def _oauth_error(error: str, description: str, status: int = 400) -> JSONRespons
 # ── Helpers ──────────────────────────────────────────────────
 
 
-# 코어가 함께 배포하는 1st-party 클라이언트. 사이트마다 .env 에 손으로 넣지 않아도
-# 데스크톱 앱(apps/desktop)이 로그인할 수 있어야 한다. 같은 id 가 OAUTH_CLIENTS_JSON 에
-# 있으면 그쪽이 이긴다.
+# 코어와 함께 배포하는 1st-party 클라이언트. 사이트별로 .env 에 수동 등록하지 않아도
+# 데스크톱 앱(apps/desktop)이 로그인할 수 있어야 한다. 동일 id 가 OAUTH_CLIENTS_JSON 에
+# 있으면 해당 설정이 우선한다.
 BUILTIN_CLIENTS = {
     "desktop-app": {
         "public": True,
         "trusted": True,
         "client_name": "Just Workspace 데스크톱",
         "scopes": ["openid", "profile", "email"],
-        # 루프백: 포트는 앱이 매번 고른다(RFC 8252 §7.3, _redirect_uri_allowed 가 포트를 무시)
+        # 루프백: 포트는 앱이 매번 선택한다(RFC 8252 §7.3, _redirect_uri_allowed 가 포트를 무시)
         "redirect_uris": ["http://127.0.0.1/callback"],
     },
 }
@@ -153,9 +153,9 @@ def _get_clients() -> dict:
     return {**BUILTIN_CLIENTS, **json.loads(settings.oauth_clients_json)}
 
 
-# Scopes a DCR (RFC 7591) client may ever hold. mcp:write 는 관리자가 AI 쓰기를 허용했을 때만
-# (app.mcp.access.write_enabled). 쓰기 도구는 토큰 aud 가 /api/mcp/write 일 때만 보이고,
-# high 위험 작업은 승인 대기함을 거친다. 읽기 커넥터(/api/mcp/read)는 쓰기 스코프가 있어도 읽기 도구만 노출.
+# Scopes a DCR (RFC 7591) client may ever hold. mcp:write 는 관리자가 AI 쓰기를 허용한 경우로 한정한다
+# (app.mcp.access.write_enabled). 쓰기 도구는 토큰 aud 가 /api/mcp/write 일 때만 노출되며,
+# high 위험 작업은 승인 대기함을 경유한다. 읽기 커넥터(/api/mcp/read)는 쓰기 스코프가 있어도 읽기 도구만 노출한다.
 DCR_ALLOWED_SCOPES = {"mcp:read"}
 DCR_WRITE_SCOPES = {"mcp:read", "mcp:write"}
 
@@ -179,10 +179,10 @@ async def _lookup_client(db: AsyncSession, client_id: str) -> dict | None:
             "secret": cfg.get("secret"),
             "secret_hash": None,
             "dynamic": False,
-            # 1st-party 클라이언트만 동의를 건너뛴다(OAUTH_CLIENTS_JSON 에 명시).
+            # 1st-party 클라이언트만 동의를 생략한다(OAUTH_CLIENTS_JSON 에 명시).
             "trusted": bool(cfg.get("trusted")),
             "client_name": cfg.get("client_name") or client_id,
-            # 공개 클라이언트 = 비밀키를 안전히 못 두는 네이티브 앱(RFC 8252).
+            # 공개 클라이언트 = 비밀키를 안전하게 보관할 수 없는 네이티브 앱(RFC 8252).
             # PKCE 로만 증명한다.
             "public": bool(cfg.get("public")),
         }
@@ -225,7 +225,7 @@ async def _touch_dynamic_client(db: AsyncSession, client_id: str) -> None:
 
 
 async def _sign(db: AsyncSession, payload: dict) -> str:
-    """활성 RSA 키로 서명한다. ``kid`` 헤더가 있어야 RP 가 JWKS 에서 키를 고른다."""
+    """활성 RSA 키로 서명한다. ``kid`` 헤더가 있어야 RP 가 JWKS 에서 키를 선택할 수 있다."""
     key = await jwks_mod.get_active_key(db)
     return jwt.encode(
         payload, key.private_pem, algorithm=key.algorithm,
@@ -251,19 +251,19 @@ async def _create_access_token(
         payload["aud"] = aud
     if scope:
         payload["scope"] = scope
-    # RFC 9068 §2.2 — 어떤 클라이언트에게 발급됐는지 남긴다(감사/철회에 필요).
+    # RFC 9068 §2.2 — 발급 대상 클라이언트를 기록한다(감사/철회에 필요).
     if client_id:
         payload["client_id"] = client_id
-    # 발급 시점의 사용자 token_version. 비밀번호 변경·강제 로그아웃으로 값이 오르면 이 토큰을
-    # 일반 API 에서 거절한다(app.auth.deps). 클레임이 없는 옛 토큰은 그대로 받는다 — 배포 순간
-    # 이미 발급된 토큰(데스크톱 앱·MCP 커넥터)이 한꺼번에 끊기지 않게.
+    # 발급 시점의 사용자 token_version. 비밀번호 변경·강제 로그아웃으로 값이 증가하면 해당 토큰을
+    # 일반 API 에서 거부한다(app.auth.deps). 클레임이 없는 기존 토큰은 그대로 허용한다. 배포 시점에
+    # 기발급된 토큰(데스크톱 앱·MCP 커넥터)이 일괄 무효화되는 것을 방지하기 위함이다.
     if tv is not None:
         payload["tv"] = tv
     return await _sign(db, payload)
 
 
 async def verify_access_token(db: AsyncSession, token: str, **kw) -> dict:
-    """발행한 서명 키(RS256, 교체 중이면 여러 개)로 검증한다. 맞는 키가 없으면 JWTError."""
+    """발행한 서명 키(RS256, 교체 중이면 복수)로 검증한다. 일치하는 키가 없으면 JWTError."""
     keys = await jwks_mod.get_all_keys(db)
     last: Exception | None = None
     for k in keys:
@@ -287,16 +287,16 @@ def _parse_basic_auth(header: str) -> tuple[str, str] | None:
 
 # ── Consent ──────────────────────────────────────────────────
 #
-# /oauth/authorize 가 세션만 보고 바로 code 를 내주면, 공개 DCR(/oauth/register)과
-# 결합해 "링크 한 번 클릭 → 무음 인가" 가 성립한다. 공격자가 클라이언트 본인이라
-# PKCE 도 state 도 방어가 되지 않는다. 그래서 코드 발급 전에 사용자 동의를 받는다.
+# /oauth/authorize 가 세션만 확인하고 즉시 code 를 발급하면, 공개 DCR(/oauth/register)과
+# 결합해 "링크 한 번 클릭 → 무음 인가" 가 성립한다. 공격자가 클라이언트 본인이므로
+# PKCE 와 state 모두 방어 수단이 되지 않는다. 따라서 코드 발급 전에 사용자 동의를 받는다.
 
-# 동의 요청 토큰의 서명 salt — 세션 쿠키와 같은 serializer 를 쓰되 salt 로 용도를
-# 분리해, 한쪽 토큰을 다른 쪽에 밀어넣지 못하게 한다.
+# 동의 요청 토큰의 서명 salt — 세션 쿠키와 동일한 serializer 를 사용하되 salt 로 용도를
+# 분리하여, 한쪽 토큰을 다른 쪽에 사용할 수 없게 한다.
 CONSENT_SALT = "oauth-consent-request"
 CONSENT_REQUEST_TTL = 600  # 10분
 
-# 사람이 읽을 수 있는 스코프 설명 (동의 화면에 그대로 표시된다).
+# 사용자가 읽을 수 있는 스코프 설명(동의 화면에 그대로 표시된다).
 SCOPE_DESCRIPTIONS = {
     "openid": "로그인 정보(사용자 식별자)",
     "profile": "이름·표시이름",
@@ -308,9 +308,9 @@ SCOPE_DESCRIPTIONS = {
 
 
 def _client_is_trusted(client_cfg: dict) -> bool:
-    """동의를 건너뛸 수 있는 1st-party 클라이언트인가.
+    """동의를 생략할 수 있는 1st-party 클라이언트 여부.
 
-    정적 클라이언트(OAUTH_CLIENTS_JSON)에 ``"trusted": true`` 가 있을 때만 참.
+    정적 클라이언트(OAUTH_CLIENTS_JSON)에 ``"trusted": true`` 가 있는 경우에만 참.
     DCR 클라이언트는 누구나 등록할 수 있으므로 **절대** 신뢰하지 않는다.
     """
     return bool(client_cfg.get("trusted")) and not client_cfg.get("dynamic")
@@ -318,7 +318,7 @@ def _client_is_trusted(client_cfg: dict) -> bool:
 
 async def _has_consent(db: AsyncSession, user_id: str, client_id: str,
                        requested: list[str]) -> bool:
-    """요청 스코프가 기존 동의에 모두 포함되는지."""
+    """요청 스코프가 기존 동의에 모두 포함되는지 여부."""
     row = (
         await db.execute(
             select(OAuthConsent).where(
@@ -336,7 +336,7 @@ async def _has_consent(db: AsyncSession, user_id: str, client_id: str,
 
 async def _record_consent(db: AsyncSession, user_id: str, client_id: str,
                           requested: list[str]) -> None:
-    """동의를 저장한다. 이미 있으면 스코프를 합집합으로 넓힌다."""
+    """동의를 저장한다. 기존 동의가 있으면 스코프를 합집합으로 확장한다."""
     row = (
         await db.execute(
             select(OAuthConsent).where(
@@ -382,10 +382,10 @@ async def openid_configuration_root():
 
 @router.get("/jwks.json")
 async def jwks(db: AsyncSession = Depends(get_db)):
-    """RFC 7517 JWK Set — 공개키만 나간다.
+    """RFC 7517 JWK Set — 공개키만 반환한다.
 
-    회전된 키도 함께 싣는다. 이전 키로 서명된 토큰이 아직 유효한데 JWKS 에서
-    빼버리면 RP 가 검증에 실패한다.
+    회전된 키도 함께 포함한다. 이전 키로 서명된 토큰이 아직 유효한 상태에서 JWKS 에서
+    제거하면 RP 가 검증에 실패한다.
     """
     return await jwks_mod.jwks_document(db)
 
@@ -416,7 +416,7 @@ async def protected_resource_read():
 
 @root_router.get("/.well-known/oauth-protected-resource/api/mcp/write")
 async def protected_resource_write():
-    # 쓰기 커넥터는 읽기 도구도 함께 쓴다 → 두 스코프를 모두 알린다
+    # 쓰기 커넥터는 읽기 도구도 함께 사용한다 → 두 스코프를 모두 광고한다
     return _protected_resource_metadata(_mcp_resource("write"), ["mcp:read", "mcp:write"])
 
 
@@ -432,8 +432,8 @@ class ClientRegistrationRequest(BaseModel):
     grant_types: list[str] | None = None
     token_endpoint_auth_method: str | None = None
     scope: str | None = None
-    # RFC 7591 §2 가 "동의 화면 표시용"으로 정의한 필드. 받아두지 않으면
-    # 사용자는 client_id 문자열만 보고 승인 여부를 판단해야 한다.
+    # RFC 7591 §2 가 "동의 화면 표시용"으로 정의한 필드. 수신하지 않으면
+    # 사용자는 client_id 문자열만으로 승인 여부를 판단해야 한다.
     logo_uri: str | None = None
     client_uri: str | None = None
     policy_uri: str | None = None
@@ -441,11 +441,11 @@ class ClientRegistrationRequest(BaseModel):
 
 
 def _safe_display_uri(uri: str | None) -> str | None:
-    """동의 화면에 렌더할 URI 는 https 만 허용한다.
+    """동의 화면에 렌더링할 URI 는 https 만 허용한다.
 
-    logo_uri 는 <img src> 로, 나머지는 <a href> 로 나간다. javascript:/data: 를
-    통과시키면 동의 화면 자체가 공격면이 된다. 클라이언트가 등록 시 자유롭게
-    넣는 값이므로 여기서 걸러야 한다.
+    logo_uri 는 <img src> 로, 나머지는 <a href> 로 출력된다. javascript:/data: 를
+    허용하면 동의 화면 자체가 공격면이 된다. 클라이언트가 등록 시 임의로
+    지정하는 값이므로 여기서 차단해야 한다.
     """
     if not uri or not isinstance(uri, str) or len(uri) > 1024:
         return None
@@ -462,9 +462,9 @@ _LOOPBACK_HOSTS = {"127.0.0.1", "::1", "[::1]"}
 def _redirect_uri_allowed(uri: str, allowed: list[str]) -> bool:
     """등록된 redirect_uri 목록과 대조한다.
 
-    기본은 완전일치. 루프백만 포트를 무시한다(RFC 8252 §7.3) — 네이티브 앱은
-    사용 가능한 임의 포트를 열어 콜백을 받기 때문이다. 스킴·호스트·경로는 그대로
-    비교하므로 ``http://127.0.0.1:*/callback`` 이외의 주소로는 절대 나가지 않는다.
+    기본은 완전 일치. 루프백만 포트를 무시한다(RFC 8252 §7.3) — 네이티브 앱은
+    사용 가능한 임의 포트를 열어 콜백을 수신하기 때문이다. 스킴·호스트·경로는 그대로
+    비교하므로 ``http://127.0.0.1:*/callback`` 이외의 주소로는 절대 전달되지 않는다.
     """
     if uri in allowed:
         return True
@@ -538,8 +538,8 @@ async def register_client(
     from app.mcp.access import write_enabled
 
     allowed_scopes = DCR_WRITE_SCOPES if await write_enabled(db) else DCR_ALLOWED_SCOPES
-    # scope 를 안 보내는 클라이언트(claude.ai 등)는 허용 범위 전부를 등록해 둔다 — 실제 토큰 스코프는
-    # authorize 때 요청·리소스로 정해지고, 사용자 동의 화면에 쓰기 권한이 표시된다.
+    # scope 를 전송하지 않는 클라이언트(claude.ai 등)는 허용 범위 전부를 등록한다. 실제 토큰 스코프는
+    # authorize 시 요청·리소스로 결정되며, 사용자 동의 화면에 쓰기 권한이 표시된다.
     requested = [s for s in (body.scope or " ".join(sorted(allowed_scopes))).split() if s]
     granted = [s for s in requested if s in allowed_scopes]
     if not granted:
@@ -612,23 +612,23 @@ async def authorize(
 
     # redirect_uri whitelist — exact match only (no wildcard/prefix, 금지사항 7)
     # 예외: 루프백(127.0.0.1 / [::1])은 **포트를 무시하고** 비교한다.
-    # RFC 8252 §7.3 — 네이티브 앱은 임의 포트를 열어 콜백을 받으므로 포트를 미리
-    # 등록할 수 없다. 포트를 고정하면 그 포트가 이미 쓰이는 기기에서 로그인이 막힌다.
-    # 호스트는 여전히 엄격히 검사하므로 외부로 새는 경로는 열리지 않는다.
+    # RFC 8252 §7.3 — 네이티브 앱은 임의 포트를 열어 콜백을 수신하므로 포트를 사전에
+    # 등록할 수 없다. 포트를 고정하면 해당 포트가 이미 사용 중인 기기에서 로그인이 불가하다.
+    # 호스트는 여전히 엄격히 검사하므로 외부로 유출되는 경로는 발생하지 않는다.
     if not _redirect_uri_allowed(redirect_uri, client_cfg.get("redirect_uris", [])):
         raise HTTPException(status_code=400, detail="Invalid redirect_uri")
 
-    # ── 여기서부터는 client_id 와 redirect_uri 가 검증된 상태다 ──
-    # RFC 6749 §4.1.2.1: 이 시점 이후의 오류는 **redirect_uri 로 error 를 돌려줘야**
-    # 한다. 400 JSON 을 띄우면 사용자는 흰 화면을 보고 클라이언트는 아무 통보도
-    # 받지 못한다. (redirect_uri 자체가 잘못된 경우만 위처럼 400 으로 막는다)
+    # ── 이 지점부터는 client_id 와 redirect_uri 가 검증된 상태이다 ──
+    # RFC 6749 §4.1.2.1: 이 시점 이후의 오류는 **redirect_uri 로 error 를 반환해야**
+    # 한다. 400 JSON 을 반환하면 사용자에게는 빈 화면이 표시되고 클라이언트는 어떤 통보도
+    # 수신하지 못한다. (redirect_uri 자체가 잘못된 경우에만 위와 같이 400 으로 차단한다)
     def _redirect_error(err: str, desc: str = ""):
         params = {"error": err}
         if desc:
             params["error_description"] = desc
         if state:
             params["state"] = state
-        # RFC 9207 — 응답이 어느 AS 에서 왔는지 밝혀 믹스업 공격을 막는다.
+        # RFC 9207 — 응답을 발급한 AS 를 명시하여 믹스업 공격을 방지한다.
         params["iss"] = settings.app_url
         return RedirectResponse(
             url=f"{redirect_uri}?{urlencode(params)}", status_code=302
@@ -659,18 +659,18 @@ async def authorize(
     if wants_mcp and not code_challenge:
         return _redirect_error("invalid_request", "PKCE required for MCP scopes")
     # 공개 클라이언트는 secret 이 없으므로 PKCE 가 유일한 증명 수단이다.
-    # 빠지면 인가 코드를 가로챈 쪽이 그대로 토큰으로 바꿀 수 있다.
+    # 누락 시 인가 코드를 가로챈 측이 그대로 토큰으로 교환할 수 있다.
     if client_cfg.get("public") and not code_challenge:
         return _redirect_error("invalid_request", "PKCE required for public clients")
 
     # OIDC Core §3.1.2.1 prompt 파라미터.
-    #   none    → 어떤 UI 도 띄우지 않는다. 로그인/동의가 필요하면 오류로 돌려준다.
-    #   consent → 기존 동의가 있어도 다시 물어본다.
+    #   none    → UI 를 일절 표시하지 않는다. 로그인/동의가 필요하면 오류를 반환한다.
+    #   consent → 기존 동의가 있어도 재확인한다.
     prompts = {p for p in (prompt or "").split() if p}
     silent = "none" in prompts
 
     def _prompt_error(err: str):
-        """prompt=none 인데 상호작용이 필요할 때 — redirect_uri 로 오류를 돌려준다."""
+        """prompt=none 인데 상호작용이 필요한 경우 — redirect_uri 로 오류를 반환한다."""
         return _redirect_error(err)
 
     # Check session
@@ -699,10 +699,10 @@ async def authorize(
             url=f"/login?redirect={quote(current_url)}", status_code=302
         )
 
-    # 세션 무효화 검사 — get_current_user 와 같은 규칙을 적용한다.
-    # 이 검사가 빠져 있어서, 비밀번호 변경이나 강제 로그아웃으로 token_version 을
-    # 올려도 **OAuth 인가는 계속 통과**했다(폐기된 쿠키로 새 토큰 발급 가능).
-    # sid 레지스트리는 Redis 장애 시 fail-open 이라는 점까지 동일하게 맞춘다.
+    # 세션 무효화 검사 — get_current_user 와 동일한 규칙을 적용한다.
+    # 이 검사가 누락되어, 비밀번호 변경이나 강제 로그아웃으로 token_version 을
+    # 증가시켜도 **OAuth 인가는 계속 통과**했다(폐기된 쿠키로 새 토큰 발급 가능).
+    # sid 레지스트리가 Redis 장애 시 fail-open 이라는 점까지 동일하게 적용한다.
     if data.get("tv") != user.token_version:
         if silent:
             return _prompt_error("login_required")
@@ -729,9 +729,9 @@ async def authorize(
         )
 
     # ── 동의 게이트 ──
-    # 여기까지 왔다는 건 "로그인된 사용자" 라는 뜻일 뿐, "이 클라이언트에게 권한을
-    # 주겠다" 는 의사표시는 아니다. 둘을 구분하지 않으면 로그인 상태에서 링크를
-    # 클릭시키는 것만으로 인가가 끝난다(공개 DCR 과 결합 시 계정 데이터 유출).
+    # 이 지점 도달은 "로그인된 사용자" 임을 의미할 뿐, "이 클라이언트에게 권한을
+    # 주겠다" 는 의사 표시는 아니다. 둘을 구분하지 않으면 로그인 상태에서 링크를
+    # 클릭하게 하는 것만으로 인가가 완료된다(공개 DCR 과 결합 시 계정 데이터 유출).
     force_consent = "consent" in prompts
     if not _client_is_trusted(client_cfg) and (
         force_consent
@@ -745,14 +745,14 @@ async def authorize(
                 "client_id": client_id,
                 "redirect_uri": redirect_uri,
                 "scope": scope,
-                # 원본 authorize 쿼리를 그대로 보관했다가 승인 후 되돌아간다.
+                # 원본 authorize 쿼리를 그대로 보관하고 승인 후 해당 요청으로 복귀한다.
                 "q": request.url.query,
             },
             salt=CONSENT_SALT,
         )
         return RedirectResponse(
-            # 프론트 라우트는 /consent 다 — nginx 가 /oauth/ 를 백엔드로 보내므로
-            # 그 아래에는 프론트 페이지를 둘 수 없다.
+            # 프런트엔드 라우트는 /consent 이다 — nginx 가 /oauth/ 를 백엔드로 전달하므로
+            # 그 하위에는 프런트엔드 페이지를 둘 수 없다.
             url=f"/consent?rq={quote(rq)}", status_code=302
         )
 
@@ -770,13 +770,13 @@ async def authorize(
             nonce=nonce,
             resource=resource,
             expires_at=time.time() + CODE_TTL,
-            # 백채널 로그아웃: 이 코드가 어느 워크스페이스 세션에서 나왔는지.
+            # 백채널 로그아웃: 이 코드를 발급한 워크스페이스 세션 식별용.
             session_id=sid,
         ),
     )
 
-    # RFC 9207 — authorization response 에 iss 를 넣어 믹스업 공격을 막는다.
-    # 여러 AS 를 쓰는 클라이언트가 응답이 어디서 왔는지 확인할 수 있어야 한다.
+    # RFC 9207 — authorization response 에 iss 를 포함하여 믹스업 공격을 방지한다.
+    # 복수의 AS 를 사용하는 클라이언트가 응답의 발급처를 확인할 수 있어야 한다.
     params = {"code": code, "iss": settings.app_url}
     if state:
         params["state"] = state
@@ -797,9 +797,9 @@ def _load_consent_request(rq: str) -> dict | None:
 
 async def _consent_user(rq_data: dict, ws_session: str | None,
                         db: AsyncSession) -> User | None:
-    """동의 요청 토큰의 주체와 현재 세션이 같은 사용자인지 확인.
+    """동의 요청 토큰의 주체와 현재 세션이 동일 사용자인지 확인.
 
-    토큰만 믿으면 남의 동의 요청을 대신 승인시킬 수 있으므로 세션과 대조한다.
+    토큰만 신뢰하면 타인의 동의 요청을 대신 승인하게 할 수 있으므로 세션과 대조한다.
     """
     if not ws_session:
         return None
@@ -809,7 +809,7 @@ async def _consent_user(rq_data: dict, ws_session: str | None,
     user = await db.get(User, rq_data["user_id"])
     if not user or not user.is_active:
         return None
-    # authorize 와 같은 세션 무효화 검사.
+    # authorize 와 동일한 세션 무효화 검사.
     if data.get("tv") != user.token_version:
         return None
     return user
@@ -821,7 +821,7 @@ async def consent_info(
     ws_session: str | None = Cookie(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """동의 화면이 표시할 내용 — 어떤 앱이 어떤 권한을 요구하는지."""
+    """동의 화면에 표시할 내용 — 요청 앱과 해당 앱이 요구하는 권한."""
     data = _load_consent_request(rq)
     if not data:
         raise HTTPException(status_code=400, detail="만료되었거나 유효하지 않은 요청입니다")
@@ -837,14 +837,14 @@ async def consent_info(
     return {
         "client_id": data["client_id"],
         "client_name": _client_display_name(data["client_id"], client_cfg),
-        # 동적 등록 클라이언트는 화면에서 눈에 띄게 경고한다.
+        # 동적 등록 클라이언트는 화면에서 명확히 경고한다.
         "dynamic": bool(client_cfg.get("dynamic")),
         "redirect_uri": data["redirect_uri"],
         "scopes": [
             {"name": s, "description": SCOPE_DESCRIPTIONS.get(s, s)} for s in scopes
         ],
         "username": user.username,
-        # RFC 7591 표시용 메타데이터 — 저장 시 https 로 검증된 값만 들어있다.
+        # RFC 7591 표시용 메타데이터 — 저장 시 https 로 검증된 값만 포함된다.
         "logo_uri": client_cfg.get("logo_uri"),
         "client_uri": client_cfg.get("client_uri"),
         "policy_uri": client_cfg.get("policy_uri"),
@@ -865,7 +865,7 @@ async def consent_decide(
     ws_session: str | None = Cookie(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """동의/거부 처리. 승인 시 원래 authorize URL 을 돌려주고 프론트가 이동한다."""
+    """동의/거부 처리. 승인 시 원래 authorize URL 을 반환하며 프런트엔드가 이동한다."""
     data = _load_consent_request(body.rq)
     if not data:
         raise HTTPException(status_code=400, detail="만료되었거나 유효하지 않은 요청입니다")
@@ -874,7 +874,7 @@ async def consent_decide(
         raise HTTPException(status_code=401, detail="로그인이 필요합니다")
 
     if not body.approve:
-        # RFC 6749 §4.1.2.1 — 거부는 redirect_uri 로 access_denied 를 돌려준다.
+        # RFC 6749 §4.1.2.1 — 거부 시 redirect_uri 로 access_denied 를 반환한다.
         params = {"error": "access_denied",
                   "error_description": "User denied the request"}
         return {"redirect": f"{data['redirect_uri']}?{urlencode(params)}"}
@@ -885,7 +885,7 @@ async def consent_decide(
         "OAuth consent granted: user=%s client=%s scopes=%s",
         user.username, data["client_id"], " ".join(scopes),
     )
-    # 동의가 기록됐으므로 같은 authorize 요청을 다시 태우면 이번엔 통과한다.
+    # 동의가 기록되었으므로 동일한 authorize 요청을 재실행하면 통과한다.
     return {"redirect": f"/oauth/authorize?{data['q']}"}
 
 
@@ -895,10 +895,10 @@ async def consent_decide(
 async def _groups_claim(db: AsyncSession, user: User | None, scopes: set[str]) -> list[str]:
     """``groups`` 클레임 값.
 
-    - 관리자면 항상 "admin" 을 맨 앞에 둔다(기존 RP 호환 — 예전 값 그대로).
-    - ``groups`` 스코프를 받은 토큰에만 실제 워크스페이스 그룹 이름을 덧붙인다.
-      스코프를 안 달라고 한 기존 클라이언트(Gitea·MCP·데스크톱)는 지금과 똑같은 값을 본다.
-    - 그룹 이름이 "admin"(대소문자 무시)인 것은 빼서 관리자 표식과 섞이지 않게 한다.
+    - 관리자이면 항상 "admin" 을 맨 앞에 둔다(기존 RP 호환 — 기존 값과 동일).
+    - ``groups`` 스코프가 부여된 토큰에만 실제 워크스페이스 그룹 이름을 추가한다.
+      해당 스코프를 요청하지 않은 기존 클라이언트(Gitea·MCP·데스크톱)는 기존과 동일한 값을 수신한다.
+    - 그룹 이름이 "admin"(대소문자 무시)인 것은 제외하여 관리자 표식과 혼동되지 않게 한다.
     """
     if not user:
         return []
@@ -946,14 +946,14 @@ async def _authenticate_client(
         return None
 
     # ── 공개 클라이언트 (RFC 8252 · OAuth 2.1) ──
-    # 데스크톱/모바일 앱은 비밀키를 안전하게 보관할 수 없다. 배포본을 뜯으면
-    # 누구나 꺼낼 수 있으므로 비밀키가 비밀이 아니다. 그래서 secret 을 요구하지
+    # 데스크톱/모바일 앱은 비밀키를 안전하게 보관할 수 없다. 배포본을 분해하면
+    # 누구나 추출할 수 있으므로 비밀키의 기밀성이 성립하지 않는다. 따라서 secret 을 요구하지
     # 않고 **PKCE 로 대신 증명**한다(코드 교환 시 code_verifier 검증).
-    # 이런 클라이언트는 정적 설정에 "public": true 로 표시한다.
+    # 해당 클라이언트는 정적 설정에 "public": true 로 표시한다.
     if client_cfg.get("public"):
         if client_secret:
-            # 공개 클라이언트가 secret 을 보내면 설정 착오다. 조용히 통과시키면
-            # 나중에 "왜 secret 이 무시되지" 로 헤맨다.
+            # 공개 클라이언트가 secret 을 전송하면 설정 오류이다. 로그 없이 통과시키면
+            # 이후 secret 이 무시되는 원인을 파악하기 어렵다.
             logger.info("공개 클라이언트가 client_secret 을 보냈다 — 무시: %s", client_id)
         return client_id, client_cfg
 
@@ -972,19 +972,19 @@ async def _authenticate_client(
 
 
 def _issues_refresh(scope: str, client_cfg: dict | None = None) -> bool:
-    """리프레시 토큰을 줄지 판정한다.
+    """리프레시 토큰 발급 여부를 판정한다.
 
-    두 경우에만 준다.
+    다음 두 경우에만 발급한다.
 
-    1. MCP 스코프 — 오래 사는 커넥터라 갱신이 필요하다.
-    2. **1st-party 네이티브 앱** — 데스크톱 클라이언트가 여기다. 액세스 토큰은
-       1시간짜리라, 리프레시가 없으면 사용자가 한 시간마다 브라우저로 나가
-       다시 로그인해야 한다. RFC 8252 가 네이티브 앱에 리프레시 토큰을
-       권장하는 이유이고(§6), 공개 클라이언트라도 **강제 회전 + 재사용 탐지**
-       가 걸려 있으면 된다는 게 RFC 9700 의 요구다 — 우리는 둘 다 한다.
+    1. MCP 스코프 — 장기 유지되는 커넥터이므로 갱신이 필요하다.
+    2. **1st-party 네이티브 앱** — 데스크톱 클라이언트가 해당한다. 액세스 토큰의
+       수명이 1시간이므로, 리프레시가 없으면 사용자가 1시간마다 브라우저로 이동하여
+       재로그인해야 한다. RFC 8252 가 네이티브 앱에 리프레시 토큰을
+       권장하는 이유이며(§6), 공개 클라이언트라도 **강제 회전 + 재사용 탐지**
+       가 적용되어 있으면 된다는 것이 RFC 9700 의 요구이다 — 본 프로젝트는 둘 다 적용한다.
 
     Gitea SSO(portal-gitea) 같은 비-trusted 정적 클라이언트와 DCR 클라이언트는
-    그대로 제외한다. 응답 형태를 바꾸면 기존 연동이 깨진다.
+    그대로 제외한다. 응답 형태를 변경하면 기존 연동이 동작하지 않는다.
     """
     if any(s in MCP_SCOPES for s in (scope or "").split()):
         return True
@@ -1035,8 +1035,8 @@ async def _grant_authorization_code(
     if auth_code.client_id != client_id:
         return _oauth_error("invalid_grant", "Client mismatch")
 
-    # 인가 때 저장한 값과 **정확히** 같아야 한다. 루프백 포트 완화는 화이트리스트
-    # 대조에만 적용되고, 여기서는 같은 요청인지 확인하는 것이므로 완전일치다.
+    # 인가 시 저장한 값과 **정확히** 일치해야 한다. 루프백 포트 완화는 화이트리스트
+    # 대조에만 적용되며, 여기서는 동일 요청 여부를 확인하므로 완전 일치를 요구한다.
     if auth_code.redirect_uri != redirect_uri:
         return _oauth_error("invalid_grant", "redirect_uri mismatch")
 
@@ -1074,7 +1074,7 @@ async def _grant_authorization_code(
     }
     if auth_code.nonce:
         id_claims["nonce"] = auth_code.nonce
-    # Back-Channel Logout §2.1 — 세션 식별자. logout_token 의 sid 와 같은 값이다.
+    # Back-Channel Logout §2.1 — 세션 식별자. logout_token 의 sid 와 동일한 값이다.
     if auth_code.session_id:
         id_claims["sid"] = backchannel.oidc_sid(auth_code.session_id)
     id_token = await _sign(db, id_claims)
@@ -1197,7 +1197,7 @@ async def revoke(request: Request, db: AsyncSession = Depends(get_db)):
         if row is not None and row.client_id == client_id and row.revoked_at is None:
             row.revoked_at = datetime.now(timezone.utc)
             await db.commit()
-            # MCP 는 해제 시각 전에 발급된 액세스 토큰도 거절한다(app.mcp.revocation — Redis 없으면 건너뜀)
+            # MCP 는 해제 시각 이전에 발급된 액세스 토큰도 거부한다(app.mcp.revocation — Redis 부재 시 생략)
             from app.mcp import revocation
 
             await revocation.mark(row.user_id, client_id)
@@ -1214,8 +1214,8 @@ async def userinfo(request: Request, db: AsyncSession = Depends(get_db)):
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
 
-    # aud 검증을 끄고 받는다. 예전에는 audience 를 넘기지 않아 JWT 라이브러리가
-    # "aud 클레임은 있는데 기대값이 없다" 며 JWTClaimsError 를 던졌고, 그 결과
+    # aud 검증을 비활성화하여 수신한다. 기존에는 audience 를 전달하지 않아 JWT 라이브러리가
+    # "aud 클레임은 있는데 기대값이 없다" 는 JWTClaimsError 를 발생시켰고, 그 결과
     # **aud 를 가진 MCP 토큰이 전부 401** 이었다(Gitea SSO 토큰만 통과).
     try:
         payload = await verify_access_token(

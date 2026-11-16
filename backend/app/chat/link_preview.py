@@ -1,23 +1,23 @@
 """채팅 링크 미리보기.
 
-메시지 본문의 **첫 외부 링크 하나**를 서버가 대신 읽어 OG/meta 카드(사이트 · 제목 · 설명 · 썸네일)를 만든다.
+메시지 본문의 **첫 외부 링크 하나**를 서버가 대신 조회하여 OG/meta 카드(사이트 · 제목 · 설명 · 썸네일)를 생성한다.
 
 흐름
-  메시지 생성/수정 → schedule_for_message() 가 백그라운드 작업을 띄운다(보내기 응답을 붙잡지 않는다)
-  → 캐시(link_preview_cache)에 있으면 그대로, 없으면 safe_get() 으로 받아 파싱
-  → 썸네일은 서버가 받아 줄이고 다시 인코딩해 link_preview_images 에 둔다
-    (받는 쪽 브라우저가 외부로 직접 요청하지 않게 — /api/chat/link-preview/images/{id})
+  메시지 생성/수정 → schedule_for_message() 가 백그라운드 작업을 기동한다(전송 응답을 지연시키지 않는다)
+  → 캐시(link_preview_cache)에 있으면 그대로 사용, 없으면 safe_get() 으로 수신하여 파싱
+  → 썸네일은 서버가 수신·축소·재인코딩하여 link_preview_images 에 저장한다
+    (수신 측 브라우저가 외부로 직접 요청하지 않도록 함 — /api/chat/link-preview/images/{id})
   → messages.link_preview 에 저장 + 채널에 실시간 이벤트 `link_preview` {message_id, channel_id, parent_id, link_preview}
-  가져오지 못하면 카드 없이 링크만(이벤트도 없다).
+  수신 실패 시 카드 없이 링크만 표시한다(이벤트도 없음).
 
-SSRF 방어(서버가 사용자 대신 외부에 접속하는 일이라)
-  · http/https 만, 아이디·비밀번호가 든 주소 거부, 포트는 80·443·8080·8443 만
-  · 호스트를 직접 풀어 **모든** 주소가 인터넷 공인이어야 한다 — 사설·루프백·링크 로컬(169.254.169.254 메타데이터 포함)·
-    CGNAT·벤치마크·예약·멀티캐스트·미지정 거부, IPv6 안에 품은 IPv4(::ffff: · 6to4 · Teredo · NAT64)는 안쪽으로 판정
-  · 검사한 그 IP 로 바로 접속(Host 헤더·TLS SNI·인증서 검증은 원래 이름) — 검사와 접속 사이 DNS 리바인딩 차단
-  · 리다이렉트는 3번까지, 매번 같은 검사를 처음부터
+SSRF 방어(서버가 사용자를 대신해 외부에 접속하는 동작이므로)
+  · http/https 만 허용, 아이디·비밀번호가 포함된 주소 거부, 포트는 80·443·8080·8443 만 허용
+  · 호스트를 직접 해석하여 **모든** 주소가 인터넷 공인이어야 한다 — 사설·루프백·링크 로컬(169.254.169.254 메타데이터 포함)·
+    CGNAT·벤치마크·예약·멀티캐스트·미지정 거부, IPv6 에 내장된 IPv4(::ffff: · 6to4 · Teredo · NAT64)는 내부 주소로 판정
+  · 검사한 해당 IP 로 직접 접속(Host 헤더·TLS SNI·인증서 검증은 원래 이름) — 검사와 접속 사이 DNS 리바인딩 차단
+  · 리다이렉트는 3회까지, 매회 동일한 검사를 처음부터 재수행
   · 응답 1MB · 전체 5초 제한, 프록시 환경변수 무시(trust_env=False)
-  · 워크스페이스 자기 주소(설정 domain·app_url 호스트와 그 하위)는 미리보기를 만들지 않는다 — 내부 링크는 기존 파일 카드·멘션 칩
+  · 워크스페이스 자체 주소(설정 domain·app_url 호스트와 그 하위)는 미리보기를 생성하지 않는다 — 내부 링크는 기존 파일 카드·멘션 칩
 """
 
 from __future__ import annotations
@@ -43,14 +43,14 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 MAX_BYTES = 1024 * 1024          # 페이지·이미지 각각 1MB
-TOTAL_TIMEOUT = 5.0              # 한 번 받기(리다이렉트 포함) 전체 5초
+TOTAL_TIMEOUT = 5.0              # 1회 수신(리다이렉트 포함) 전체 5초
 MAX_REDIRECTS = 3
 MAX_URL_LEN = 2000
 ALLOWED_PORTS = {80, 443, 8080, 8443}
 OK_TTL = timedelta(hours=24)
 FAIL_TTL = timedelta(hours=1)
-THUMB_MAX = 448                  # 카드 썸네일 112px 의 4배(고해상도 화면)까지
-MAX_IMAGE_PIXELS = 40_000_000    # 압축 폭탄 방지 — 이보다 큰 그림은 열지 않는다
+THUMB_MAX = 448                  # 카드 썸네일 112px 의 4배(고해상도 화면)까지 허용
+MAX_IMAGE_PIXELS = 40_000_000    # 압축 폭탄 방지 — 이보다 큰 이미지는 열지 않음
 TITLE_MAX = 300
 DESC_MAX = 500
 SITE_MAX = 100
@@ -59,7 +59,7 @@ IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
 
 
 class PreviewError(Exception):
-    """받기 실패. code: invalid_url · scheme · port · blocked · dns · timeout · too_large · network · status · not_html"""
+    """수신 실패. code: invalid_url · scheme · port · blocked · dns · timeout · too_large · network · status · not_html"""
 
     def __init__(self, code: str, detail: str = ""):
         super().__init__(detail or code)
@@ -79,7 +79,7 @@ _NAT64_LOCAL = ipaddress.ip_network("64:ff9b:1::/48")
 
 
 def ip_allowed(ip: str) -> bool:
-    """인터넷 공인 주소만 True. IPv6 안에 품은 IPv4 는 안쪽 IPv4 로 판정한다."""
+    """인터넷 공인 주소만 True. IPv6 에 내장된 IPv4 는 내부 IPv4 로 판정한다."""
     try:
         addr = ipaddress.ip_address(ip.split("%", 1)[0])
     except ValueError:
@@ -103,7 +103,7 @@ def ip_allowed(ip: str) -> bool:
 
 
 def normalize_url(raw: str) -> str:
-    """받을 주소로 정리. 규칙 밖이면 PreviewError."""
+    """수신용 주소로 정규화. 규칙 위반 시 PreviewError."""
     url = (raw or "").strip()
     if not url or len(url) > MAX_URL_LEN:
         raise PreviewError("invalid_url")
@@ -139,7 +139,7 @@ async def system_resolve(host: str, port: int) -> list[str]:
 
 
 async def resolve_public(host: str, port: int, resolver: Resolver | None = None) -> str:
-    """호스트를 풀어 접속할 IP 하나. 풀린 주소 중 하나라도 공인이 아니면 거부(섞어 두는 리바인딩 수법 차단)."""
+    """호스트를 해석하여 접속할 IP 하나를 반환한다. 해석된 주소 중 하나라도 공인이 아니면 거부(혼합 응답을 이용한 리바인딩 수법 차단)."""
     try:
         ipaddress.ip_address(host)
         ips = [host]
@@ -155,13 +155,13 @@ async def resolve_public(host: str, port: int, resolver: Resolver | None = None)
     return ips[0]
 
 
-# ── 받기 ──
+# ── 수신 ──
 
 
 @dataclass
 class Fetched:
-    url: str           # 리다이렉트 뒤 마지막 주소
-    content_type: str  # 소문자, 매개변수 뺀 것
+    url: str           # 리다이렉트 이후 최종 주소
+    content_type: str  # 소문자, 매개변수 제외
     charset: str | None
     body: bytes
 
@@ -179,7 +179,7 @@ async def _get_once(client: httpx.AsyncClient, url: str, accept: str,
         "GET", pinned,
         headers={"Host": parts.netloc, "Accept": accept, "User-Agent": USER_AGENT,
                  "Accept-Language": "ko,en;q=0.8"},
-        # TLS 는 원래 이름으로(SNI·인증서 검증) — 풀어 둔 IP 로 접속해도 인증서는 호스트 이름과 맞춘다
+        # TLS 는 원래 이름으로 수행(SNI·인증서 검증) — 해석해 둔 IP 로 접속해도 인증서는 호스트 이름과 대조
         extensions={"sni_hostname": host} if parts.scheme == "https" else {},
     )
     resp = await client.send(req, stream=True)
@@ -190,7 +190,7 @@ async def _get_once(client: httpx.AsyncClient, url: str, accept: str,
         if declared and declared.isdigit() and int(declared) > MAX_BYTES:
             raise PreviewError("too_large")
         buf = bytearray()
-        # aiter_bytes 는 압축을 푼 바이트 — 풀린 크기로 재므로 압축 폭탄도 1MB 에서 끊긴다
+        # aiter_bytes 는 압축 해제된 바이트를 반환 — 해제 후 크기로 측정하므로 압축 폭탄도 1MB 에서 중단
         async for chunk in resp.aiter_bytes():
             buf.extend(chunk)
             if len(buf) > MAX_BYTES:
@@ -204,7 +204,7 @@ async def safe_get(raw_url: str, *, accept: str = "text/html,application/xhtml+x
                    transport: httpx.AsyncBaseTransport | None = None,
                    resolver: Resolver | None = None,
                    timeout: float | None = None) -> Fetched:
-    """SSRF 를 막으며 주소 하나를 받는다(리다이렉트마다 재검사, 1MB·5초). 실패는 PreviewError."""
+    """SSRF 를 차단하며 주소 하나를 수신한다(리다이렉트마다 재검사, 1MB·5초). 실패 시 PreviewError."""
     url = normalize_url(raw_url)
     total = timeout if timeout is not None else TOTAL_TIMEOUT
 
@@ -238,7 +238,7 @@ async def safe_get(raw_url: str, *, accept: str = "text/html,application/xhtml+x
         raise PreviewError("network", type(e).__name__)
 
 
-# ── HTML 에서 OG/meta 읽기 ──
+# ── HTML 에서 OG/meta 추출 ──
 
 
 class _MetaParser(HTMLParser):
@@ -294,7 +294,7 @@ def _decode_html(f: Fetched) -> str:
 
 
 def parse_meta(html: str, base_url: str) -> dict | None:
-    """OG/트위터/기본 meta 에서 카드 값. 제목이 없으면 None(카드를 만들지 않는다)."""
+    """OG/트위터/기본 meta 에서 카드 값을 추출한다. 제목이 없으면 None(카드를 생성하지 않는다)."""
     p = _MetaParser()
     try:
         p.feed(html)
@@ -335,7 +335,7 @@ def _sniff(data: bytes) -> str | None:
 
 
 def make_thumbnail(data: bytes) -> tuple[bytes, str] | None:
-    """원본을 줄여 다시 인코딩(JPEG 또는 투명이면 PNG). SVG·모르는 형식·너무 큰 그림은 None."""
+    """원본을 축소하여 재인코딩(JPEG 또는 투명이면 PNG). SVG·미지원 형식·과대 이미지는 None."""
     if _sniff(data) is None:
         return None
     from PIL import Image
@@ -358,7 +358,7 @@ def make_thumbnail(data: bytes) -> tuple[bytes, str] | None:
         return None
 
 
-# ── 메시지 본문에서 링크 고르기 ──
+# ── 메시지 본문에서 링크 선택 ──
 
 _URL_RE = re.compile(r"https?://[^\s<>\"'`]+", re.I)
 _CODE_BLOCK = re.compile(r"```.*?```", re.S)
@@ -387,7 +387,7 @@ def first_external_url(content: str | None) -> str | None:
     text = _CODE_SPAN.sub(" ", _CODE_BLOCK.sub(" ", content))
     for m in _URL_RE.finditer(text):
         url = m.group(0)
-        # 문장 끝 구두점·마크다운 링크의 닫는 괄호 떼기
+        # 문장 끝 구두점·마크다운 링크의 닫는 괄호 제거
         while url and url[-1] in ".,!?;:'\"]>":
             url = url[:-1]
         while url.endswith(")") and url.count(")") > url.count("("):
@@ -414,7 +414,7 @@ def image_path(image_id: str) -> str:
 
 
 def public_preview(raw: str | None) -> dict | None:
-    """messages.link_preview → API 로 내보낼 카드. 지운 것·형식이 틀린 것은 None."""
+    """messages.link_preview → API 로 반환할 카드. 삭제된 것·형식이 잘못된 것은 None."""
     if not raw:
         return None
     try:
@@ -445,7 +445,7 @@ def is_dismissed(raw: str | None) -> bool:
     return isinstance(d, dict) and bool(d.get("dismissed"))
 
 
-# ── 만들기(캐시 → 받기 → 파싱 → 썸네일) ──
+# ── 생성(캐시 → 수신 → 파싱 → 썸네일) ──
 
 _sem = asyncio.Semaphore(4)
 _inflight: dict[str, asyncio.Future] = {}
@@ -458,7 +458,7 @@ def _session_factory():
 
 
 async def build_preview(url: str, session_factory=None, *, transport=None, resolver=None) -> dict | None:
-    """주소 하나의 카드(캐시 우선). 못 만들면 None."""
+    """주소 하나의 카드(캐시 우선). 생성 실패 시 None."""
     from app.db.models import LinkPreviewCache, LinkPreviewImage
     factory = session_factory or _session_factory()
     key = url_hash(url)
@@ -487,7 +487,7 @@ async def build_preview(url: str, session_factory=None, *, transport=None, resol
             data = {"url": url, **meta, "image": image}
     except PreviewError as e:
         logger.info("링크 미리보기 실패 %s: %s", urlsplit(url).hostname, e.code)
-    except Exception as e:  # 파싱 등 예기치 못한 것 — 카드 없이 링크만
+    except Exception as e:  # 파싱 등 예기치 못한 오류 — 카드 없이 링크만 표시
         logger.warning("링크 미리보기 오류 %s: %s", urlsplit(url).hostname, e)
 
     async with factory() as db:
@@ -524,7 +524,7 @@ async def _store_image(src: str, factory, model, *, transport=None, resolver=Non
 
 
 async def _shared_build(url: str, factory, **kw) -> dict | None:
-    """같은 주소를 동시에 여러 메시지가 원하면 한 번만 받는다(같은 워커 안)."""
+    """동일 주소를 여러 메시지가 동시에 요청하면 1회만 수신한다(동일 워커 내)."""
     fut = _inflight.get(url)
     if fut is not None:
         return await asyncio.shield(fut)
@@ -544,7 +544,7 @@ async def _shared_build(url: str, factory, **kw) -> dict | None:
 
 
 async def attach_to_message(message_id: str, url: str, session_factory=None, emit=None, **kw) -> dict | None:
-    """카드를 만들어 메시지에 붙이고 채널에 알린다. 그 사이 본문이 바뀌었거나 지워졌으면 그만둔다."""
+    """카드를 생성하여 메시지에 저장하고 채널에 통지한다. 그 사이 본문이 변경되었거나 삭제되었으면 중단한다."""
     from app.db.models import Message
     factory = session_factory or _session_factory()
     preview = await _shared_build(url, factory, **kw)
@@ -573,7 +573,7 @@ async def attach_to_message(message_id: str, url: str, session_factory=None, emi
 
 
 def schedule_for_message(msg: dict) -> asyncio.Task | None:
-    """메시지 dict(_message_to_dict)를 보고 미리보기 작업을 띄운다. 텍스트 메시지만."""
+    """메시지 dict(_message_to_dict)를 확인하여 미리보기 작업을 기동한다. 텍스트 메시지만 대상."""
     try:
         if msg.get("message_type", "text") != "text" or msg.get("is_deleted"):
             return None

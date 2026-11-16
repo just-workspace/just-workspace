@@ -33,7 +33,7 @@ class RepoDetail(RepoSummary):
     readme: str | None = None
     size: int = 0
     created_at: str = ""
-    # Gitea 가 ROOT_URL 로 만든 공개 주소 — 프런트가 추측하지 않게 그대로 넘긴다
+    # Gitea 가 ROOT_URL 로 생성한 공개 주소. 프런트가 추정하지 않도록 그대로 전달
     clone_url: str = ""
     ssh_url: str = ""
 
@@ -51,7 +51,7 @@ class ContentEntry(BaseModel):
     type: str  # "file" | "dir" | "symlink" | "submodule"
     size: int = 0
     sha: str = ""
-    # with_commits=true 로 부를 때만 채운다(항목마다 Gitea 커밋 조회가 한 번씩 든다)
+    # with_commits=true 호출 시에만 설정(항목마다 Gitea 커밋 조회 1회 발생)
     last_commit: LastCommit | None = None
 
 
@@ -159,12 +159,12 @@ class CreateCommentRequest(BaseModel):
 
 
 class CreateLabelRequest(BaseModel):
-    # 색은 서버가 팔레트에서 배정한다 — 클라이언트는 이름만 보낸다.
+    # 색은 서버가 팔레트에서 배정한다. 클라이언트는 이름만 전송한다.
     name: str
 
 
 class SetIssueLabelsRequest(BaseModel):
-    # 이슈에 붙일 라벨 id 전체(교체). 빈 목록이면 라벨 모두 제거.
+    # 이슈에 지정할 라벨 id 전체(교체). 빈 목록이면 라벨 전체 제거.
     labels: list[int] = []
 
 
@@ -175,7 +175,7 @@ class RecentCommit(BaseModel):
     message: str = ""
     author_name: str = ""
     author_date: str = ""
-    # 커밋을 읽은 브랜치(저장소 기본 브랜치) — 대시보드 Git 활동 "main 에 3커밋"
+    # 커밋을 조회한 브랜치(저장소 기본 브랜치) — 대시보드 Git 활동 "main 에 3커밋"
     branch: str = ""
 
 

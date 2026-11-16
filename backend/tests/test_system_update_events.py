@@ -1,4 +1,4 @@
-"""업데이트 예고·점검 — 설치 관리자가 알려 오는 경로의 보호와 방송, 로그인한 사용자의 조회.
+"""업데이트 사전 공지·점검 모드 — 설치 관리자가 통지하는 경로의 보호와 브로드캐스트, 로그인한 사용자의 조회.
 
 계약: docs/update-api.md 8절
 """
@@ -8,7 +8,7 @@ import os
 import sys
 import types
 
-if os.name == "nt" and "resource" not in sys.modules:  # 유닉스 전용 모듈을 import 하는 곳이 있다
+if os.name == "nt" and "resource" not in sys.modules:  # 유닉스 전용 모듈을 import 하는 코드가 존재
     sys.modules["resource"] = types.ModuleType("resource")
 
 import httpx
@@ -102,7 +102,7 @@ async def test_event_needs_the_installer_key(env):
     client, state = env
     assert (await client.post(URL, json=COUNTDOWN)).status_code == 401
     assert (await client.post(URL, json=COUNTDOWN, headers={"X-JW-Installer-Key": "wrong"})).status_code == 401
-    # 로그인한 관리자라도 키가 없으면 안 된다
+    # 로그인한 관리자라도 키가 없으면 거부
     state.user = "root"
     assert (await client.post(URL, json=COUNTDOWN)).status_code == 401
     assert state.sent == [] and await _stored(state) is None
@@ -123,7 +123,7 @@ async def test_unknown_or_broken_events_are_rejected(env):
     assert state.sent == []
 
 
-# ─── 방송 ───
+# ─── 브로드캐스트 ───
 
 
 async def test_countdown_is_broadcast_and_remembered(env):
@@ -154,7 +154,7 @@ async def test_maintenance_start_and_finish(env):
                                  "result": "success", "version": "1.1.0", "from_version": "1.0.0"}, headers=HEAD)
     assert state.sent[-1] == {"type": "system.maintenance", "active": False, "result": "success"}
     assert await _stored(state) is None
-    # 관리자가 직접 한 업데이트는 알림(종)을 남기지 않는다
+    # 관리자가 직접 수행한 업데이트는 알림(종)을 생성하지 않음
     assert state.notified == []
 
 
@@ -180,7 +180,7 @@ async def test_broadcast_failure_does_not_fail_the_event(env, monkeypatch):
     monkeypatch.setattr(events, "emit_to_all", broken)
     r = await client.post(URL, json=COUNTDOWN, headers=HEAD)
     assert r.status_code == 200 and r.json() == {"ok": True, "delivered": False}
-    assert (await _stored(state))["state"] == "countdown"      # 조회로는 전해진다
+    assert (await _stored(state))["state"] == "countdown"      # 조회로는 전달됨
 
 
 # ─── 조회 ───
@@ -212,7 +212,7 @@ async def test_notice_reports_countdown_then_maintenance_with_contact(env):
 
 
 async def test_stale_notice_is_dropped_when_installer_says_idle(env):
-    """끝났다는 알림을 놓쳐도 화면이 점검에 갇히지 않는다."""
+    """종료 알림을 수신하지 못해도 화면이 점검 모드에 고정되지 않는다."""
     client, state = env
     await client.post(URL, json=MAINTENANCE, headers=HEAD)
     state.live = {"active": False, "phase": "idle"}
@@ -223,7 +223,7 @@ async def test_stale_notice_is_dropped_when_installer_says_idle(env):
 async def test_notice_is_kept_when_installer_cannot_be_asked(env):
     client, state = env
     await client.post(URL, json=MAINTENANCE, headers=HEAD)
-    state.live = None       # 닿지 않는다
+    state.live = None       # 연결 불가
     assert (await client.get("/api/system/update-notice")).json()["state"] == "maintenance"
 
 

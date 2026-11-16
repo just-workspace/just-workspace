@@ -1,7 +1,7 @@
-"""채팅이 실시간 소켓으로 받는 프레임 처리 — 메시지 전송·반응·타이핑·읽음.
+"""채팅이 실시간 소켓으로 수신하는 프레임 처리 — 메시지 전송·반응·타이핑·읽음.
 
-소켓 자체(연결·인증·전달)는 코어(app/realtime/socket.py)에 있고, 여기 처리기는 채팅
-구역이 설치됐을 때만 등록된다(app/zones.py 의 `SOCKET_HANDLERS`).
+소켓 자체(연결·인증·전달)는 코어(app/realtime/socket.py)에 있으며, 본 모듈의 처리기는 채팅
+구역이 설치된 경우에만 등록된다(app/zones.py 의 `SOCKET_HANDLERS`).
 """
 
 from app.chat import service
@@ -16,8 +16,8 @@ async def _send_message(ctx: SocketContext, data: dict) -> None:
     message_type = data.get("message_type", "text")
     file_meta = data.get("file_meta")
     parent_id = data.get("parent_id")
-    also_to_channel = bool(data.get("also_to_channel", False))   # 답글을 채널에도
-    # chat22 — 인라인 답장·답장 대상 알림(기본 켬)·@silent(본문 머리 "@silent " 도 같다)
+    also_to_channel = bool(data.get("also_to_channel", False))   # 답글을 채널에도 표시
+    # chat22 — 인라인 답장·답장 대상 알림(기본 활성)·@silent(본문 선두 "@silent " 도 동일)
     reply_to_id = data.get("reply_to_id") or None
     reply_ping = data.get("reply_ping", True) is not False
     from app.chat import msg22
@@ -46,7 +46,7 @@ async def _send_message(ctx: SocketContext, data: dict) -> None:
             reply_to_id=reply_to_id,
             flags=msg22.make_flags(silent=silent, reply_ping=bool(reply_to_id and reply_ping)),
         )
-        # 실시간 전달·멘션 알림·DM 푸시 — REST 경로와 같은 함수(app/chat/notify.py)
+        # 실시간 전달·멘션 알림·DM 푸시 — REST 경로와 동일한 함수(app/chat/notify.py)
         from app.chat.notify import after_message_created
         await after_message_created(db, msg, channel_id, ctx.user_id, content)
 
@@ -111,7 +111,7 @@ async def _mark_read(ctx: SocketContext, data: dict) -> None:
             "seq": seq,
         })
         if seq is not None:
-            # 내 다른 기기·탭의 배지도 같이 끈다(읽음은 계정 단위)
+            # 본인의 다른 기기·탭의 배지도 함께 해제한다(읽음은 계정 단위)
             from app.realtime.events import emit_to_user
             await emit_to_user(ctx.user_id, {
                 "type": "channel_read", "channel_id": channel_id, "seq": seq,

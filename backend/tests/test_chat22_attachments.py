@@ -1,4 +1,4 @@
-"""chat22 — 첨부 묶음(POST /channels/{id}/attachments)·옛 단일 file_meta 호환·이미지 크기·413."""
+"""chat22 — 첨부 묶음(POST /channels/{id}/attachments)·구형 단일 file_meta 호환·이미지 크기·413."""
 
 import io
 import json
@@ -47,7 +47,7 @@ async def test_multi_attachments_one_message(db, events):
     assert [a["spoiler"] for a in atts] == [True, False, True]
     assert atts[0]["alt"] == "빨간 사각형" and atts[1]["alt"] is None
     assert "disk_name" not in atts[0] and atts[0]["url"].startswith(f"/api/chat/channels/{ch.id}/files/")
-    # 옛 프런트 호환 — file_meta = 첫 파일
+    # 구형 프런트 호환 — file_meta = 첫 파일
     assert json.loads(msg["file_meta"])["filename"] == "a.png"
     # 답장 원문 요약에 첨부 종류
     r = await service.create_message(db, ch.id, "bob", "이미지 좋네요", reply_to_id=msg["id"])
@@ -79,7 +79,7 @@ async def test_limits(db, events, monkeypatch, tmp_path):
     with pytest.raises(HTTPException) as e:
         await _attach(db, ch.id, "alice", [_up(b"small", "ok.txt"), _up(b"x" * 50, "big.bin")])
     assert e.value.status_code == 413 and e.value.detail["code"] == "too_large"
-    # 실패하면 앞서 쓴 파일도 지운다
+    # 실패 시 앞서 기록한 파일도 삭제
     assert not list((tmp_path / "chat_files" / ch.id).iterdir())
     with pytest.raises(HTTPException) as e:
         await _attach(db, ch.id, "dave", [_up(b"x", "a.txt")])

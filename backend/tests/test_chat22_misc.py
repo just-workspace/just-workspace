@@ -28,7 +28,7 @@ async def test_muted_minutes(db, events):
     assert timedelta(minutes=59) < until - datetime.now(timezone.utc) <= timedelta(minutes=60)
     lst = {c["id"]: c for c in await service.get_user_channels(db, "bob")}
     assert lst[ch.id]["muted"] is True and lst[ch.id]["muted_until"] == p["muted_until"]
-    # 지나면 음소거 아님(지연 판정) — 목록·푸시 판단 모두
+    # 경과 후에는 음소거 아님(지연 판정) — 목록·푸시 판단 모두 적용
     cm = (await db.execute(select(ChannelMember).where(ChannelMember.channel_id == ch.id,
                                                        ChannelMember.user_id == "bob"))).scalar_one()
     cm.muted_until = datetime.now(timezone.utc) - timedelta(minutes=1)
@@ -37,7 +37,7 @@ async def test_muted_minutes(db, events):
     assert lst[ch.id]["muted"] is False and lst[ch.id]["muted_until"] is None
     members = {m["user_id"]: m for m in await service.get_members_for_notify(db, ch.id)}
     assert members["bob"]["muted"] is False
-    # null 명시 = 끌 때까지
+    # null 명시 = 해제 시까지 유지
     p = await chat_router.update_channel_prefs(channel_id=ch.id, body=ChannelPrefsUpdate(muted_minutes=None),
                                                user=bob, db=db)
     assert p["muted"] is True and p["muted_until"] is None
@@ -57,9 +57,9 @@ async def test_pin_system_line_once(db, events):
     m = await service.create_message(db, ch.id, "alice", "중요 공지")
     bob = await u(db, "bob")
     await chat_router.pin_message(message_id=m["id"], user=bob, db=db)
-    await chat_router.pin_message(message_id=m["id"], user=bob, db=db)     # 이미 고정 → 줄 그대로
+    await chat_router.pin_message(message_id=m["id"], user=bob, db=db)     # 이미 고정 → 줄 유지
     await chat_router.unpin_message(message_id=m["id"], user=bob, db=db)
-    await chat_router.pin_message(message_id=m["id"], user=bob, db=db)     # 다시 고정해도 이미 줄이 있음
+    await chat_router.pin_message(message_id=m["id"], user=bob, db=db)     # 재고정해도 줄이 이미 존재
     lines = (await db.execute(select(Message).where(Message.channel_id == ch.id, Message.content == "고정"))).scalars().all()
     assert len(lines) == 1 and lines[0].message_type == "system"
     import json
@@ -132,7 +132,7 @@ async def test_policy_toggles(db, events, monkeypatch, mode):
     dm = await service.get_or_create_dm(db, "alice", "bob")
     m_bob = await service.create_message(db, priv.id, "bob", "bob 의 글")
     msg_obj = await db.get(Message, m_bob["id"])
-    # 기본(끔) = 지금 동작: 관리자도 남의 비공개 채널·DM 못 봄, owner 도 남의 글 못 지움
+    # 기본(비활성) = 현재 동작: 관리자도 타 사용자의 비공개 채널·DM 조회 불가, owner 도 타 사용자의 글 삭제 불가
     assert not await P.allowed(db, root, "message.read", priv.id)
     assert not await P.allowed(db, root, "message.read", dm.id)
     assert not await P.allowed(db, alice, "message.delete", priv.id, message=msg_obj)
@@ -143,15 +143,15 @@ async def test_policy_toggles(db, events, monkeypatch, mode):
     assert await P.allowed(db, root, "message.read", dm.id)
     assert await P.allowed(db, root, "message.delete", priv.id, message=msg_obj)
     assert await P.allowed(db, root, "channel.delete", priv.id)
-    assert not await P.allowed(db, root, "message.edit", priv.id, message=msg_obj)   # 남의 글 수정은 누구도
+    assert not await P.allowed(db, root, "message.edit", priv.id, message=msg_obj)   # 타 사용자의 글 수정은 누구에게도 불허
     assert not await P.allowed(db, alice, "message.delete", priv.id, message=msg_obj)
 
     await router22.put_chat_policy(body=ChatPolicyUpdate(owner_manage_messages=True), user=root, db=db)
     assert await P.allowed(db, alice, "message.delete", priv.id, message=msg_obj)       # owner
     assert await P.allowed(db, alice, "preview.dismiss", priv.id, message=msg_obj)
     m_alice = await db.get(Message, (await service.create_message(db, priv.id, "alice", "a"))["id"])
-    assert not await P.allowed(db, bob, "message.delete", priv.id, message=m_alice)    # 일반 멤버는 그대로
-    # 그림자 모드에서도 두 판정이 같다(불일치 0)
+    assert not await P.allowed(db, bob, "message.delete", priv.id, message=m_alice)    # 일반 멤버는 변경 없음
+    # 그림자 모드에서도 두 판정이 동일(불일치 0)
     assert P.SHADOW_STATS["error"] == 0
     if mode == "shadow":
         assert P.SHADOW_STATS["mismatch"] == 0
@@ -179,7 +179,7 @@ async def test_policy_no_shadow_mismatch(db, events, monkeypatch):
         user = await u(db, who)
         for action in P.ACTIONS:
             if action == "mention.everyone" and who == "carol":
-                continue   # 비멤버 @everyone 은 정책과 무관한 기존 차이(예전 'always') — 권한 매트릭스 범위 밖
+                continue   # 비멤버 @everyone 은 정책과 무관한 기존 차이(이전 'always') — 권한 매트릭스 범위 밖
             await P.allowed(db, user, action, priv.id, message=m)
     assert P.SHADOW_STATS["mismatch"] == 0 and P.SHADOW_STATS["error"] == 0
 
@@ -202,14 +202,14 @@ async def test_archive_system_category(db, events):
     with pytest.raises(HTTPException) as e:
         await chat_roles.delete_category(category_id="c-arc", user=root, db=db)
     assert e.value.status_code == 400 and e.value.detail["code"] == "system_category"
-    # 이름은 바꿀 수 있고 순서는 고정
+    # 이름은 변경 가능, 순서는 고정
     body = chat_roles.CategoryPatch(name="옛 프로젝트", position=0)
     out = await chat_roles.update_category(category_id="c-arc", body=body, user=root, db=db)
     assert out["name"] == "옛 프로젝트" and out["position"] == 2 and out["system"] is True
     lay = chat_roles.LayoutBody(categories=[{"id": "c-arc", "position": 0}, {"id": "c-ch", "position": 5}], channels=[])
     await chat_roles.update_layout(body=lay, user=root, db=db)
     assert (await db.get(ChatCategory, "c-arc")).position == 2 and (await db.get(ChatCategory, "c-ch")).position == 5
-    # 보관해도 채널의 카테고리는 옮기지 않는다
+    # 보관해도 채널의 카테고리는 이동하지 않음
     ch = await service.create_channel(db, "proj", "public", "alice")
     ch.category_id = "c-ch"
     await db.commit()

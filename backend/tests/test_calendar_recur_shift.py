@@ -1,4 +1,4 @@
-"""반복 "모든 일정" 시각 변경 — 지운 회차·예외 회차가 되살아나거나 겹치지 않는다(회귀)."""
+"""반복 "모든 일정" 시각 변경 — 삭제한 회차·예외 회차가 복원되거나 중복되지 않는다(회귀)."""
 
 from datetime import datetime, timezone
 
@@ -35,8 +35,8 @@ async def test_shift_series_moves_exdates_and_exceptions(db_session):
                                {"start": "2026-10-20T05:00:00Z", "end": "2026-10-20T06:00:00Z"})
     evs = await service.get_events(db_session, "owner", "2026-10-19T00:00:00Z", "2026-10-26T00:00:00Z")
     days = sorted(e["start"][:10] for e in evs)
-    assert "2026-10-22" not in days                     # 지운 회차는 계속 없음
-    assert days.count("2026-10-21") == 1                # 예외 하나만(원래 회차와 겹치지 않음)
+    assert "2026-10-22" not in days                     # 삭제한 회차는 계속 없음
+    assert days.count("2026-10-21") == 1                # 예외 하나만 존재(원래 회차와 중복되지 않음)
     master = await db_session.get(CalendarEventDB, ev["id"])
     assert [d.isoformat() for d in service.parse_exdates(master.exdates)] == ["2026-10-22T05:00:00+00:00"]
     ch = (await db_session.execute(select(CalendarEventDB).where(CalendarEventDB.parent_event_id == ev["id"]))).scalars().one()

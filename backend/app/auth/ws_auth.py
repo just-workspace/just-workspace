@@ -1,12 +1,12 @@
-"""WebSocket 핸드셰이크 인증 — REST 와 같은 세션 검증(app.auth.deps.verify_session_data).
+"""WebSocket 핸드셰이크 인증 — REST 와 동일한 세션 검증(app.auth.deps.verify_session_data).
 
 토큰 출처
-1. ``ws_session`` 쿠키 — 웹. 쿠키는 브라우저가 자동으로 싣기 때문에 Origin 이 우리 출처
-   (APP_URL·같은 Host·번들 앱 출처)일 때만 받는다(교차 사이트 WebSocket 차단).
+1. ``ws_session`` 쿠키 — 웹. 쿠키는 브라우저가 자동으로 첨부하므로 Origin 이 본 서비스 출처
+   (APP_URL·같은 Host·번들 앱 출처)일 때만 허용한다(교차 사이트 WebSocket 차단).
 2. ``Sec-WebSocket-Protocol: jw.bearer, jw.token.<base64url(토큰)>`` — 번들 클라이언트(서명 세션값)
-   · 데스크톱 앱(1st-party OAuth 액세스 토큰). 서버는 ``jw.bearer`` 를 골라 응답한다(accept_subprotocol).
-3. ``?token=`` — 예전 클라이언트 호환. 쿼리에 실리면 nginx error_log 의 ``request:`` 필드에 평문으로 남아
-   (access_log 는 $uri 만 쓰지만 error_log 형식은 못 바꾼다) 새 클라이언트는 2번을 쓴다.
+   · 데스크톱 앱(1st-party OAuth 액세스 토큰). 서버는 ``jw.bearer`` 를 선택하여 응답한다(accept_subprotocol).
+3. ``?token=`` — 구 클라이언트 호환. 쿼리에 포함되면 nginx error_log 의 ``request:`` 필드에 평문으로 기록되므로
+   (access_log 는 $uri 만 사용하나 error_log 형식은 변경할 수 없다) 신규 클라이언트는 2번을 사용한다.
 """
 from __future__ import annotations
 
@@ -17,11 +17,11 @@ from starlette.websockets import WebSocket
 from app.config import get_settings
 from app.db.models import User
 
-# 번들 빌드 모바일 앱의 웹뷰 출처(ALLOW_NATIVE_APP_ORIGINS=true 일 때만 허용 — CORS·CSRF·WebSocket 이 같이 쓴다).
+# 번들 빌드 모바일 앱의 웹뷰 출처(ALLOW_NATIVE_APP_ORIGINS=true 일 때만 허용 — CORS·CSRF·WebSocket 이 공용한다).
 #   https://localhost      안드로이드(apps/mobile/capacitor.config.ts 의 androidScheme: 'https')
 #   capacitor://localhost  iOS
-# http://localhost 는 넣지 않는다 — 앱은 https 스킴으로 뜨고, 넣으면 사용자 PC 의 아무 로컬 웹 서버가
-# 쿠키를 실은 요청을 보낼 수 있게 된다.
+# http://localhost 는 포함하지 않는다 — 앱은 https 스킴으로 기동하며, 포함 시 사용자 PC 의 임의 로컬 웹 서버가
+# 쿠키를 포함한 요청을 송신할 수 있게 된다.
 NATIVE_APP_ORIGINS = ("https://localhost", "capacitor://localhost")
 _NATIVE_ORIGINS = NATIVE_APP_ORIGINS
 
@@ -36,7 +36,7 @@ def _offered_protocols(ws: WebSocket) -> list[str]:
 
 
 def token_from_protocol(ws: WebSocket) -> str | None:
-    """Sec-WebSocket-Protocol 에 실린 토큰(jw.token.<base64url>) — 없거나 깨졌으면 None."""
+    """Sec-WebSocket-Protocol 에 포함된 토큰(jw.token.<base64url>) — 없거나 손상된 경우 None."""
     import base64
     offered = _offered_protocols(ws)
     if WS_AUTH_PROTOCOL not in offered:
@@ -53,7 +53,7 @@ def token_from_protocol(ws: WebSocket) -> str | None:
 
 
 def accept_subprotocol(ws: WebSocket) -> str | None:
-    """클라이언트가 jw.bearer 를 내밀었으면 그걸 고른다 — 고르지 않으면 브라우저가 핸드셰이크를 끊는다."""
+    """클라이언트가 jw.bearer 를 제시한 경우 이를 선택한다 — 선택하지 않으면 브라우저가 핸드셰이크를 종료한다."""
     return WS_AUTH_PROTOCOL if WS_AUTH_PROTOCOL in _offered_protocols(ws) else None
 
 
@@ -70,7 +70,7 @@ def _origin_of(url: str) -> str:
 def origin_allowed(ws: WebSocket) -> bool:
     origin = (ws.headers.get("origin") or "").strip().lower()
     if not origin:
-        # 브라우저는 WebSocket 에 항상 Origin 을 싣는다. 없으면 비브라우저 클라이언트 — 쿠키 위조 위험 없음.
+        # 브라우저는 WebSocket 에 항상 Origin 을 포함한다. 없으면 비브라우저 클라이언트 — 쿠키 위조 위험 없음.
         return True
     s = get_settings()
     allowed = {_origin_of(s.app_url)}

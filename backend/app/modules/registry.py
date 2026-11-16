@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 _plugin_modules: list[dict[str, Any]] = []
 
 # ─── Built-in module definitions ───
-# 어느 모듈이 어느 구역 것인지는 app/zones.json 의 modules 가 정한다(id 가 같아야 한다).
-# 설치되지 않은 구역의 모듈은 목록에서 빠지고 켤 수도 없다 — _all_modules · is_module_enabled.
+# 모듈의 소속 구역은 app/zones.json 의 modules 가 결정한다(id 가 동일해야 한다).
+# 미설치 구역의 모듈은 목록에서 제외되며 활성화도 불가하다 — _all_modules · is_module_enabled.
 
 BUILTIN_MODULES: list[dict[str, Any]] = [
     {
@@ -136,7 +136,7 @@ BUILTIN_MODULES: list[dict[str, Any]] = [
     },
     {
         # 격리 브라우저(RBI) — 내부 자산을 세션별 일회용 브라우저 컨테이너로만 연다(docs/rbi.md).
-        # 호스트 netfilter 사이드카(profiles: rbi)가 있어야 세션이 뜨므로 기본은 꺼 둔다.
+        # 호스트 netfilter 사이드카(profiles: rbi)가 있어야 세션이 기동되므로 기본값은 비활성화이다.
         "id": "rbi",
         "name": "격리 브라우저",
         "icon": "shield",
@@ -149,7 +149,7 @@ BUILTIN_MODULES: list[dict[str, Any]] = [
 ]
 
 # ─── Nav 카테고리 ───
-# 사이드바가 모듈을 이 카테고리로 묶어 그룹 렌더링한다. 프론트에서 라벨/순서 매핑.
+# 사이드바는 모듈을 본 카테고리별로 그룹 렌더링한다. 라벨/순서 매핑은 프론트에서 수행한다.
 # 그룹: 커뮤니케이션 / 협업 / 콘텐츠 / AI 스튜디오 / 개발·시스템.
 _CATEGORY_BY_ID: dict[str, str] = {
     "mail": "communication",
@@ -186,30 +186,30 @@ def _module_key(module_id: str) -> str:
 
 
 def _all_modules() -> list[dict[str, Any]]:
-    """Return combined list of builtin + plugin modules — 설치된 구역 것만.
+    """Return combined list of builtin + plugin modules — 설치된 구역의 모듈만 포함.
 
-    미설치 구역의 모듈은 여기서 빠지므로 모듈 목록(내비게이션)에 안 나오고
-    set_module_enabled 도 "없는 모듈"로 거절한다."""
+    미설치 구역의 모듈은 여기서 제외되므로 모듈 목록(내비게이션)에 표시되지 않으며
+    set_module_enabled 도 "없는 모듈"로 거부한다."""
     return [m for m in BUILTIN_MODULES + _plugin_modules if module_installed(m["id"])]
 
 
 def parse_plugin_order(value: Any) -> int | None:
-    """manifest "order" → 정수(작을수록 위). 없거나 정수가 아니면 None(bool·실수·문자열은 받지 않는다)."""
+    """manifest "order" → 정수(작을수록 상위). 없거나 정수가 아니면 None(bool·실수·문자열은 허용하지 않는다)."""
     if isinstance(value, bool) or not isinstance(value, int):
         return None
     return value
 
 
 def plugin_sort_key(meta: dict[str, Any]) -> tuple[int, int]:
-    """플러그인 정렬 키 — order 있는 것이 먼저(작은 순), 없는 것은 뒤. 안정 정렬과 함께 써서
-    같은 order·order 없음끼리는 원래 순서(로더의 폴더 이름순)를 지킨다."""
+    """플러그인 정렬 키 — order 가 있는 항목이 우선(오름차순), 없는 항목은 후순위. 안정 정렬과 함께 사용하여
+    동일 order·order 없음 항목 간에는 원래 순서(로더의 폴더 이름순)를 유지한다."""
     order = meta.get("order")
     return (0, order) if isinstance(order, int) and not isinstance(order, bool) else (1, 0)
 
 
 def register_plugin_module(plugin_meta: dict[str, Any]) -> None:
     """Register a plugin module (called by plugin loader at startup).
-    목록은 늘 plugin_sort_key 순(레일·메뉴·모듈 목록이 이 순서를 따른다)."""
+    목록은 항상 plugin_sort_key 순으로 유지한다(레일·메뉴·모듈 목록이 이 순서를 따른다)."""
     # Avoid duplicates
     if any(p["id"] == plugin_meta["id"] for p in _plugin_modules):
         return
@@ -246,7 +246,7 @@ async def load_module_states(db: AsyncSession) -> None:
                 pass
 
     _cache_loaded = True
-    # 배포/재기동 시 Redis 모듈캐시 무효화 — 옛 stale(워커 불일치로 캐시된 값) 제거
+    # 배포/재기동 시 Redis 모듈 캐시 무효화 — 워커 불일치로 캐시된 stale 값 제거
     await _invalidate_modules_cache()
     logger.info("[Modules] loaded states: %s", _module_states)
 
@@ -254,7 +254,7 @@ async def load_module_states(db: AsyncSession) -> None:
 def is_module_enabled(module_id: str) -> bool:
     """Fast cached check. Falls back to default_enabled if cache not loaded.
 
-    구역이 설치되지 않은 모듈은 DB 에 켜짐으로 남아 있어도 늘 꺼진 것으로 본다."""
+    구역이 미설치된 모듈은 DB 에 활성 상태로 남아 있어도 항상 비활성으로 판정한다."""
     if not module_installed(module_id):
         return False
     if module_id in _module_states:
@@ -282,9 +282,9 @@ async def _invalidate_modules_cache() -> None:
 async def get_enabled_modules(db: AsyncSession | None = None) -> list[dict]:
     """Return list of all modules (builtin + plugin) with their enabled status.
 
-    상태는 DB(SystemSetting)가 권위 — 8 uvicorn 워커 간 in-memory 불일치(토글이 한 워커
-    메모리만 갱신해 nav에 반영 안 되는 문제) 방지. db 없으면 in-memory 폴백.
-    Redis 60초 캐시(DB 파생값이라 워커 무관 일관)."""
+    상태의 권위 출처는 DB(SystemSetting)이다 — uvicorn 워커 8개 간 in-memory 불일치(토글이 한 워커의
+    메모리만 갱신하여 nav 에 반영되지 않는 문제)를 방지한다. db 가 없으면 in-memory 로 fallback 한다.
+    Redis 60초 캐시(DB 파생값이므로 워커와 무관하게 일관)."""
     # Try Redis cache first
     try:
         redis = await get_redis()
@@ -294,7 +294,7 @@ async def get_enabled_modules(db: AsyncSession | None = None) -> list[dict]:
     except Exception:
         pass  # Redis unavailable — fall through
 
-    # DB에서 활성상태 로드(권위) + 이 워커 메모리 동기화(require_module 보조)
+    # DB 에서 활성 상태 로드(권위 출처) 및 본 워커 메모리 동기화(require_module 보조)
     db_states: dict[str, bool] = {}
     if db is not None:
         try:
@@ -386,13 +386,13 @@ def require_module(module_id: str):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             db = kwargs.get("db")
-            # 구역이 설치되지 않은 모듈 — DB 값과 무관하게 막는다(라우터가 없어 보통은 여기까지 오지 않는다)
+            # 구역이 미설치된 모듈 — DB 값과 무관하게 차단한다(라우터가 없으므로 통상 이 지점에 도달하지 않는다)
             if not module_installed(module_id):
                 raise HTTPException(
                     status_code=403,
                     detail="이 기능은 비활성화되어 있습니다",
                 )
-            # 모듈 활성여부는 DB 권위(8 워커 in-memory 드리프트로 토글 후 403 나는 문제 방지)
+            # 모듈 활성 여부의 권위 출처는 DB(워커 8개의 in-memory 불일치로 토글 후 403 이 발생하는 문제 방지)
             enabled = is_module_enabled(module_id)
             if db is not None:
                 try:
@@ -407,8 +407,8 @@ def require_module(module_id: str):
                     status_code=403,
                     detail="이 기능은 비활성화되어 있습니다",
                 )
-            # 그룹 권한(grant) 체크 — 엔드포인트에 user/db 의존성이 있을 때만.
-            # grant 없는 모듈은 전체 허용(하위호환). 권한시스템 오류 시 막지 않음(가용성).
+            # 그룹 권한(grant) 검사 — 엔드포인트에 user/db 의존성이 있는 경우에만 수행.
+            # grant 없는 모듈은 전체 허용(하위 호환). 권한 시스템 오류 시 차단하지 않음(가용성).
             user = kwargs.get("user")
             db = kwargs.get("db")
             if user is not None and db is not None and not getattr(user, "is_admin", False):

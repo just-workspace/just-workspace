@@ -1,7 +1,7 @@
-"""실시간 소켓(/ws/chat) — 전송 계층은 코어, 채팅 프레임 처리기는 채팅 구역이 설치됐을 때만.
+"""실시간 소켓(/ws/chat) — 전송 계층은 코어, 채팅 프레임 처리기는 채팅 구역이 설치된 경우에만.
 
-Redis·DB 없이 수신 루프의 갈림만 본다: ping 은 소켓이 답하고, 나머지 프레임은 설치된 구역이
-등록한 처리기로 가고, 처리기가 없으면 오류 프레임.
+Redis·DB 없이 수신 루프의 분기만 확인한다: ping 은 소켓이 응답하고, 나머지 프레임은 설치된 구역이
+등록한 처리기로 전달되며, 처리기가 없으면 오류 프레임.
 """
 
 import json
@@ -70,7 +70,7 @@ class _FakeSession:
 
 @pytest.fixture()
 def wired(monkeypatch):
-    """소켓의 바깥 의존(인증·DB·접속 상태·연결 관리자)을 가짜로 바꾼다."""
+    """소켓의 외부 의존(인증·DB·접속 상태·연결 관리자)을 모의 객체로 대체한다."""
     from app.auth import ws_auth
 
     manager = _FakeManager()
@@ -108,7 +108,7 @@ async def test_ping_and_error_frames_without_chat(monkeypatch, wired):
     assert wired.conn.sent == [
         {"type": "pong"},
         {"type": "error", "detail": "Invalid JSON"},
-        {"type": "error", "detail": "Unknown type: send_message"},   # 채팅 프레임 — 처리기가 등록되지 않았다
+        {"type": "error", "detail": "Unknown type: send_message"},   # 채팅 프레임 — 처리기 미등록
         {"type": "error", "detail": "Unknown type: typing"},
     ]
 
@@ -147,7 +147,7 @@ async def test_unauthenticated_is_closed(monkeypatch, wired):
 
 @pytest.mark.asyncio
 async def test_typing_handler_publishes_with_display_name(monkeypatch):
-    """채팅 처리기 — 소켓이 넘긴 연결 정보(ctx)로 예전과 같은 이벤트를 낸다."""
+    """채팅 처리기 — 소켓이 전달한 연결 정보(ctx)로 기존과 동일한 이벤트를 발생시킨다."""
     from app.chat import ws_handlers
 
     published: list[tuple[str, dict]] = []
@@ -158,9 +158,9 @@ async def test_typing_handler_publishes_with_display_name(monkeypatch):
     monkeypatch.setattr(ws_handlers.manager, "publish_typing", _publish_typing)
     ctx = socket.SocketContext(user_id="alice", username="alice", display_name="Alice", conn=_FakeConn())
     await ws_handlers.HANDLERS["typing"](ctx, {"type": "typing", "channel_id": "c1"})
-    await ws_handlers.HANDLERS["typing"](ctx, {"type": "typing"})          # 채널 없음 → 아무것도 안 한다
+    await ws_handlers.HANDLERS["typing"](ctx, {"type": "typing"})          # 채널 없음 → no-op
     assert published == [("c1", {"type": "typing", "channel_id": "c1", "user_id": "alice", "username": "Alice"})]
 
-    # 내용이 빈 메시지는 보낸 연결에만 오류로 답한다(DB 를 건드리기 전에)
+    # 내용이 빈 메시지는 송신 연결에만 오류로 응답(DB 접근 전)
     await ws_handlers.HANDLERS["send_message"](ctx, {"type": "send_message", "channel_id": "c1", "content": "  "})
     assert ctx.conn.sent == [{"type": "error", "detail": "Missing channel_id or content"}]

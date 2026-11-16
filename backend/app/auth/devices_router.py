@@ -1,14 +1,14 @@
 """기기 등록·해지 API.
 
-데스크톱 앱을 세션 쿠키에서 OAuth 로 옮기는 실익이 여기서 나온다. 쿠키는
-``token_version`` 을 올려야 무효화되는데 그러면 **그 사용자의 모든 세션이 함께
-죽는다.** 기기를 따로 기록해야 "노트북만 끊기" 가 가능하다.
+데스크톱 앱의 인증을 세션 쿠키에서 OAuth 로 전환하는 실익이 본 모듈에 있다. 쿠키는
+``token_version`` 을 증가시켜야 무효화되며, 이 경우 **해당 사용자의 모든 세션이 함께
+무효화된다.** 기기를 별도로 기록해야 "노트북만 끊기" 가 가능하다.
 
-해지가 실제로 효과를 내려면 리프레시 토큰까지 폐기해야 한다 — 행만 지우면
-토큰은 살아 있어서 앱이 계속 갱신한다. 그래서 등록 시 토큰 해시를 함께 남긴다.
+해지가 실효를 가지려면 리프레시 토큰까지 폐기해야 한다 — 행만 삭제하면
+토큰이 유효한 상태로 남아 앱이 계속 갱신한다. 따라서 등록 시 토큰 해시를 함께 기록한다.
 """
 
-# ※ from __future__ import annotations 를 넣지 말 것 — FastAPI 가 Pydantic 본문
+# 주의: from __future__ import annotations 사용 금지 — FastAPI 가 Pydantic 본문
 #   모델을 쿼리 파라미터로 오인한다(app/auth/internal_router.py 참고).
 import logging
 from datetime import datetime, timezone
@@ -61,10 +61,10 @@ async def register_device(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> DeviceOut:
-    """앱이 토큰 교환 직후 자기를 등록한다.
+    """앱이 토큰 교환 직후 자신을 등록한다.
 
-    같은 이름·플랫폼이 이미 있으면 새로 만들지 않고 되살린다. 앱을 재설치할
-    때마다 목록이 늘어나면 사용자가 어느 것을 끊어야 할지 알 수 없다.
+    동일한 이름·플랫폼의 기기가 이미 있으면 신규 생성하지 않고 기존 행을 재활성화한다. 앱 재설치
+    시마다 목록이 증가하면 사용자가 해지 대상을 식별할 수 없다.
     """
     existing = (
         await db.execute(
@@ -118,12 +118,12 @@ async def revoke_device(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """기기를 해지한다 — **리프레시 토큰까지 폐기해야** 실제로 접근이 끊긴다."""
+    """기기를 해지한다 — **리프레시 토큰까지 폐기해야** 실제로 접근이 차단된다."""
     dev = (
         await db.execute(
             select(UserDevice).where(
                 UserDevice.id == device_id,
-                UserDevice.user_id == user.id,   # 남의 기기를 끊지 못하게
+                UserDevice.user_id == user.id,   # 타 사용자의 기기 해지 방지
             )
         )
     ).scalar_one_or_none()
@@ -135,8 +135,8 @@ async def revoke_device(
 
     revoked = 0
     if dev.refresh_token_hash:
-        # 회전된 후속 토큰까지 끊어야 한다. 지금 저장된 해시는 마지막으로 발급된
-        # 것이므로, 같은 사용자·클라이언트의 살아 있는 토큰을 함께 정리한다.
+        # 회전된 후속 토큰까지 폐기해야 한다. 현재 저장된 해시는 마지막으로 발급된
+        # 토큰의 것이므로, 동일 사용자·클라이언트의 유효한 토큰을 함께 정리한다.
         result = await db.execute(
             update(OAuthRefreshToken)
             .where(

@@ -58,9 +58,9 @@ async def test_items_computed_from_data(db):
 
     d = _done(await cl.get_checklist(user=alice, db=db))
     assert d["profile_photo"] and d["enable_2fa"] and d["enable_push"] and d["upload_file"]
-    assert d["invite_colleague"]                 # 내 채널에 bob 이 있다
-    assert d["first_message"] is False           # DM 은 안 친다
-    assert d["install_app"] is False             # 해지된 기기는 안 친다
+    assert d["invite_colleague"]                 # 본인 채널에 bob 이 존재
+    assert d["first_message"] is False           # DM 은 집계하지 않음
+    assert d["install_app"] is False             # 해지된 기기는 집계하지 않음
 
     db.add(Message(id=str(uuid.uuid4()), channel_id="c1", sender_id="alice", content="첫 글"))
     await db.commit()
@@ -90,7 +90,7 @@ async def test_dismiss_and_undo(db):
 
 
 def test_links_point_to_real_frontend_routes():
-    """링크는 프런트에 있는 화면이어야 한다(예전 /settings/profile·/settings/devices 는 404 화면)."""
+    """링크는 프런트에 존재하는 화면이어야 한다(이전 /settings/profile·/settings/devices 는 404 화면)."""
     links = {i: link for i, _label, link in cl.ITEMS}
     assert links["profile_photo"] == "/settings/account"
     assert links["install_app"] == "/api/apps"

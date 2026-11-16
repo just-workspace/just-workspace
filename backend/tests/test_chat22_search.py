@@ -50,7 +50,7 @@ async def test_filters(db, events):
     assert {x["id"] for x in (await _s(db, has="image,file"))["items"]} == {m3["id"]}
     assert (await _s(db, has="video"))["total"] == 0
     assert {x["id"] for x in (await _s(db, pinned=True))["items"]} == {m2["id"]}
-    # 정렬·건너뛰기 — 시스템 줄("채널이 생성되었습니다")은 빠진다
+    # 정렬·건너뛰기 — 시스템 줄("채널이 생성되었습니다")은 제외
     all_new = await _s(db)
     assert all_new["total"] == 3
     old = await _s(db, sort="old", limit=1, offset=1)
@@ -77,7 +77,7 @@ async def test_dates_use_seoul_day(db, events):
     assert {x["id"] for x in (await _s(db, after="2026-10-05"))["items"]} == {c["id"]}
     assert {x["id"] for x in (await _s(db, before="2026-10-05", q="글"))["items"]} == set()
     assert {x["id"] for x in (await _s(db, before="2026-10-06", q="글"))["items"]} == {a["id"], b["id"]}
-    # 사용자 시간대가 있으면 그것(UTC 로 보면 a 는 10-04)
+    # 사용자 시간대가 있으면 해당 시간대 적용(UTC 기준으로 a 는 10-04)
     bob = await u(db, "bob")
     bob.timezone = "UTC"
     await db.commit()

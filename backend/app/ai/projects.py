@@ -1,13 +1,13 @@
 """프로젝트 — 지침 + 지식 파일 + 대화 묶음, 그룹 읽기 전용 공유.
 
 권한:
-- 주인: 모두(이름·지침·파일·공유 바꾸기, 지우기).
-- 공유 그룹(여러 개 — ai_project_shares, 옛 share_group_id 도 합집합) 구성원: 읽기 전용 — 프로젝트를 보고 그 안에서 **자기** 대화를 만든다(지침·지식이 들어감). 고치기 불가.
-- 지식 파일은 읽을 때마다 **지금 대화하는 사람의 권한**으로 연다. 구성원이 못 읽는 파일은 조용히 건너뛴다
-  (주인의 'my/…' 파일은 그 사람에게 공유돼 있어야 읽힌다 — app.files.access.role_on).
+- 소유자: 전체(이름·지침·파일·공유 변경, 삭제).
+- 공유 그룹(복수 — ai_project_shares, 기존 share_group_id 도 합집합) 구성원: 읽기 전용 — 프로젝트를 조회하고 그 안에서 **본인** 대화를 생성한다(지침·지식 포함). 수정 불가.
+- 지식 파일은 조회할 때마다 **현재 대화 중인 사용자의 권한**으로 연다. 구성원이 읽을 수 없는 파일은 통지 없이 건너뛴다
+  (소유자의 'my/…' 파일은 해당 구성원에게 공유되어 있어야 읽을 수 있다 — app.files.access.role_on).
 
-지식 고르기(임베딩 도입 전): 파일 글자를 문단 묶음(약 1,200자)으로 자르고, 질문과 겹치는 낱말(영문·숫자 낱말 +
-한글 두 글자 조각) 수로 점수를 매겨 높은 묶음부터 예산(KNOWLEDGE_BUDGET)까지 넣는다.
+지식 선택(임베딩 도입 전): 파일 텍스트를 문단 묶음(약 1,200자)으로 분할하고, 질문과 중복되는 단어(영문·숫자 단어 +
+한글 두 글자 조각) 수로 점수를 산정하여 높은 묶음부터 예산(KNOWLEDGE_BUDGET)까지 포함한다.
 """
 
 from __future__ import annotations
@@ -26,10 +26,10 @@ from app.db.models import User
 from app.mcp import docread
 
 MAX_NAME = 120
-MAX_INSTRUCTIONS = 4000      # 넘으면 지식 파일로
+MAX_INSTRUCTIONS = 4000      # 초과 시 지식 파일로 이전
 MAX_FILES = 50
-MAX_PICK = 20                # 피커 한 번에 고르는 개수
-MAX_CHECK_MEMBERS = 300      # 공유 전 점검에서 보는 구성원 수
+MAX_PICK = 20                # 피커 1회 선택 개수
+MAX_CHECK_MEMBERS = 300      # 공유 전 점검에서 확인하는 구성원 수
 INSTRUCTIONS_BUDGET = 4000
 KNOWLEDGE_BUDGET = 12_000
 CHUNK = 1200
@@ -39,7 +39,7 @@ _MAX_READ = 30 * 1024 * 1024
 
 # ── 권한 ─────────────────────────────────────────────────────
 async def share_group_ids(db: AsyncSession, p: AIProject) -> list[str]:
-    """공유 대상 그룹 — 새 표(ai_project_shares) + 옛 share_group_id(있으면). 순서 유지·중복 제거."""
+    """공유 대상 그룹 — 신규 테이블(ai_project_shares) + 기존 share_group_id(있으면). 순서 유지·중복 제거."""
     rows = (await db.execute(
         select(AIProjectShare.group_id).where(AIProjectShare.project_id == p.id).order_by(AIProjectShare.created_at.asc())
     )).scalars().all()
@@ -69,7 +69,7 @@ async def role(db: AsyncSession, user: User, p: AIProject | None) -> str | None:
 
 
 async def set_share_groups(db: AsyncSession, p: AIProject, group_ids: list[str]) -> None:
-    """공유 대상을 통째로 바꾼다(빈 목록 = 공유 해제). 옛 컬럼은 비운다 — 이후 새 표만 쓴다."""
+    """공유 대상을 전체 교체한다(빈 목록 = 공유 해제). 기존 컬럼은 비운다 — 이후 신규 테이블만 사용한다."""
     from sqlalchemy import delete as _delete
 
     await db.execute(_delete(AIProjectShare).where(AIProjectShare.project_id == p.id))
@@ -80,7 +80,7 @@ async def set_share_groups(db: AsyncSession, p: AIProject, group_ids: list[str])
 
 
 async def detach_lost_conversations(db: AsyncSession, p: AIProject) -> int:
-    """공유가 끊겨 프로젝트를 더는 못 보는 구성원의 대화를 묶음에서 푼다('최근 대화'로 옮김). 옮긴 수."""
+    """공유 해제로 프로젝트를 더 이상 조회할 수 없는 구성원의 대화를 묶음에서 해제한다('최근 대화'로 이동). 이동한 수 반환."""
     convs = (await db.execute(
         select(AIConversation).where(AIConversation.project_id == p.id, AIConversation.user_id != p.owner_id)
     )).scalars().all()
@@ -97,7 +97,7 @@ async def detach_lost_conversations(db: AsyncSession, p: AIProject) -> int:
 
 
 async def detach_orphans_for_user(db: AsyncSession, user: User) -> int:
-    """그룹에서 빠지는 등으로 못 보게 된 프로젝트에 묶인 내 대화를 풀어 둔다(대화 목록을 열 때)."""
+    """그룹 탈퇴 등으로 조회할 수 없게 된 프로젝트에 연결된 본인 대화를 해제한다(대화 목록 조회 시)."""
     rows = (await db.execute(
         select(AIConversation).where(AIConversation.user_id == user.id, AIConversation.project_id.is_not(None))
     )).scalars().all()
@@ -146,7 +146,7 @@ async def visible_projects(db: AsyncSession, user: User) -> list[tuple[AIProject
 
 # ── 지식 파일 경로 ───────────────────────────────────────────
 async def canonical_ref(db: AsyncSession, user: User, vp: str) -> tuple[str, str | None]:
-    """주인이 고른 가상경로 → (저장 영역 기준 경로, storage_owner_id). 지금 읽을 수 있는 파일이어야 한다."""
+    """소유자가 선택한 가상경로 → (저장 영역 기준 경로, storage_owner_id). 현재 읽을 수 있는 파일이어야 한다."""
     from app.files import access as faccess
 
     try:
@@ -162,7 +162,7 @@ async def canonical_ref(db: AsyncSession, user: User, vp: str) -> tuple[str, str
 
 
 async def _real_for(db: AsyncSession, user: User, f: AIProjectFile):
-    """지금 사용자 권한으로 실제 파일 경로. 못 읽으면 None."""
+    """현재 사용자 권한 기준의 실제 파일 경로. 읽기 불가 시 None."""
     from app.files import access as faccess
     from app.files import service as fs
 
@@ -183,15 +183,15 @@ async def _real_for(db: AsyncSession, user: User, f: AIProjectFile):
 
 
 async def readable(db: AsyncSession, user: User, f: AIProjectFile) -> bool:
-    """이 사람이 지금 이 지식 파일을 읽을 수 있나(답변에서 빠지는지 미리 알리기)."""
+    """해당 사용자가 현재 본 지식 파일을 읽을 수 있는지 여부(답변에서 제외되는지 사전 통지용)."""
     return (await _real_for(db, user, f)) is not None
 
 
 async def share_check(db: AsyncSession, project: AIProject, group_ids: list[str]) -> dict:
-    """공유 전 점검 — 고른 그룹 구성원 중 지식 파일을 못 읽는 사람 수. 경고만, 공유는 막지 않는다.
+    """공유 전 점검 — 선택한 그룹 구성원 중 지식 파일을 읽을 수 없는 구성원 수. 경고만 하며 공유는 차단하지 않는다.
 
-    반환 {members, blocked_members, sampled, files:[{id,name,blocked}]} — blocked 는 그 파일을 못 읽는 구성원 수.
-    구성원이 아주 많으면(MAX_CHECK_MEMBERS 초과) 앞쪽만 보고 sampled=True.
+    반환 {members, blocked_members, sampled, files:[{id,name,blocked}]} — blocked 는 해당 파일을 읽을 수 없는 구성원 수.
+    구성원 수가 MAX_CHECK_MEMBERS 를 초과하면 앞쪽만 확인하고 sampled=True.
     """
     from app.groups.models import GroupMember
 
@@ -220,7 +220,7 @@ async def share_check(db: AsyncSession, project: AIProject, group_ids: list[str]
     }
 
 
-# 같은 파일을 차례마다 다시 해석하지 않게(경로·mtime·크기 기준, 워커당 작은 LRU). 권한 검사는 매번 위에서 한다.
+# 동일 파일을 턴마다 재해석하지 않도록 캐시한다(경로·mtime·크기 기준, 워커당 소형 LRU). 권한 검사는 매번 위에서 수행한다.
 _CACHE: OrderedDict[tuple, str] = OrderedDict()
 _CACHE_MAX = 64
 
@@ -256,7 +256,7 @@ def _read_text(real) -> str | None:
     return text
 
 
-# ── 관련 묶음 고르기 ─────────────────────────────────────────
+# ── 관련 묶음 선택 ─────────────────────────────────────────
 _WORD = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]*|[가-힣]+")
 
 
@@ -266,7 +266,7 @@ def terms(text: str) -> set[str]:
         if w[0] >= "가":
             if len(w) == 1:
                 continue
-            out.update(w[i:i + 2] for i in range(len(w) - 1))  # 조사가 붙어도 겹치게 두 글자 조각
+            out.update(w[i:i + 2] for i in range(len(w) - 1))  # 조사가 붙어도 일치하도록 두 글자 조각 사용
         elif len(w) >= 2:
             out.add(w)
     return out
@@ -294,7 +294,7 @@ def chunks(text: str, size: int = CHUNK) -> list[str]:
 
 
 def select_chunks(docs: list[tuple[str, str]], query: str, budget: int = KNOWLEDGE_BUDGET) -> list[tuple[str, str]]:
-    """[(파일 이름, 글자)] → 예산 안의 [(파일 이름, 묶음)]. 겹치는 낱말 많은 순, 같으면 파일·앞쪽 순."""
+    """[(파일 이름, 텍스트)] → 예산 내의 [(파일 이름, 묶음)]. 중복 단어가 많은 순, 동일하면 파일·앞쪽 순."""
     q = terms(query)
     scored = []
     order = 0
@@ -303,7 +303,7 @@ def select_chunks(docs: list[tuple[str, str]], query: str, budget: int = KNOWLED
             score = len(q & terms(c)) if q else 0
             scored.append((score, order, i, name, c))
             order += 1
-    # 겹치는 게 하나도 없으면 파일마다 앞부분부터(개요가 대개 앞에 있다). 있으면 겹치는 묶음만.
+    # 일치 항목이 전혀 없으면 파일별 앞부분부터 포함한다(개요는 대체로 앞에 위치). 있으면 일치하는 묶음만 포함한다.
     any_hit = any(s[0] > 0 for s in scored)
     scored.sort(key=lambda x: (-x[0], x[2], x[1]))
     out: list[tuple[str, str]] = []
@@ -320,7 +320,7 @@ def select_chunks(docs: list[tuple[str, str]], query: str, budget: int = KNOWLED
 
 async def context_block(db: AsyncSession, user: User, project: AIProject, query: str,
                         budget: int | None = None) -> str:
-    """프로젝트 지침 + 관련 지식 묶음(시스템 맥락). 못 읽는 파일은 건너뛴다."""
+    """프로젝트 지침 + 관련 지식 묶음(시스템 컨텍스트). 읽을 수 없는 파일은 건너뛴다."""
     parts: list[str] = []
     instr = (project.instructions or "").strip()
     if instr:
@@ -350,7 +350,7 @@ async def context_block(db: AsyncSession, user: User, project: AIProject, query:
 def to_dict(p: AIProject, role_: str, *, files: list[AIProjectFile] | None = None, conv_count: int = 0,
             group_name: str | None = None, groups: list[dict] | None = None, owner_name: str | None = None,
             readable_ids: set[str] | None = None) -> dict:
-    """groups: 주인에게는 공유 대상 전부, 구성원에게는 그중 자기가 속한 그룹만 [{id, name}]."""
+    """groups: 소유자에게는 공유 대상 전체, 구성원에게는 그중 본인이 속한 그룹만 [{id, name}]."""
     groups = groups or []
     d = {
         "id": p.id, "name": p.name, "instructions": p.instructions or "",

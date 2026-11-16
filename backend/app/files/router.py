@@ -70,7 +70,7 @@ def _check_path(virtual_path: str, user: User) -> Path:
 
 def _safe_filename(raw_name: str | None) -> str:
     """업로드 파일명 검증: 이름 전체가 `..`·널바이트·제어문자·숨김(. 시작)·NAS 시스템 이름(@Recycle 등) 차단. 실패 시 400."""
-    # 규칙은 fs.validate_name 한곳(새 폴더·이름 바꾸기와 같다). 예전엔 이름 어디든 '..' 가 있으면 막아
+    # 규칙은 fs.validate_name 으로 단일화(새 폴더·이름 변경과 동일). 과거에는 이름 내 위치와 무관하게 '..' 가 있으면 차단하여
     # "v1..2.txt"·"결과...최종.pdf" 같은 정상 파일도 영문 "Invalid filename" 으로 실패했다.
     try:
         return fs.validate_name(os.path.basename(raw_name or "upload"))
@@ -79,10 +79,10 @@ def _safe_filename(raw_name: str | None) -> str:
 
 
 def _client_mtime(mtime: int | None, header: str | None) -> int | None:
-    """클라이언트가 보낸 수정 시각(epoch ms). 쿼리 `mtime` 우선, 없으면 `X-File-Mtime`.
+    """클라이언트가 전송한 수정 시각(epoch ms). 쿼리 `mtime` 우선, 없으면 `X-File-Mtime`.
 
-    범위를 벗어난 값(초 단위로 잘못 보낸 1970년대, 수백 년 뒤)은 무시한다 —
-    동기화 엔진이 그 값을 다시 읽어 비교하므로 엉뚱한 값은 안 쓰는 게 낫다.
+    범위를 벗어난 값(초 단위로 잘못 전송한 1970년대, 수백 년 후)은 무시한다 —
+    동기화 엔진이 해당 값을 다시 읽어 비교하므로 잘못된 값은 사용하지 않는 편이 안전하다.
     """
     raw = mtime if mtime is not None else header
     if raw is None or raw == "":
@@ -91,7 +91,7 @@ def _client_mtime(mtime: int | None, header: str | None) -> int | None:
         v = int(raw)
     except (TypeError, ValueError):
         return None
-    # 2001-09-09(1e12 ms) ~ 2286년(1e13 ms). 초 단위 실수 전송은 여기서 걸린다.
+    # 2001-09-09(1e12 ms) ~ 2286년(1e13 ms). 초 단위 오전송은 여기서 걸러진다.
     if v < 1_000_000_000_000 or v > 9_999_999_999_999:
         return None
     return v
@@ -99,14 +99,14 @@ def _client_mtime(mtime: int | None, header: str | None) -> int | None:
 
 def _file_response(real: Path, request: Request, *, filename: str | None = None,
                    media_type: str | None = None, inline: bool = False) -> Response:
-    """ETag / If-None-Match(304) / Accept-Ranges / Range(206) 를 갖춘 파일 응답.
+    """ETag / If-None-Match(304) / Accept-Ranges / Range(206) 를 지원하는 파일 응답.
 
-    헤더(형식·Content-Disposition·nosniff·sandbox CSP)는 serve_safety.safe_file_headers 가 정한다 —
-    inline 은 안전한 형식(이미지·PDF·미디어)일 때만, 그 밖은 attachment + octet-stream.
+    헤더(형식·Content-Disposition·nosniff·sandbox CSP)는 serve_safety.safe_file_headers 가 결정한다 —
+    inline 은 안전한 형식(이미지·PDF·미디어)일 때만 적용하고, 그 외는 attachment + octet-stream.
 
     Range·If-Range·Accept-Ranges·Last-Modified 는 Starlette FileResponse(1.x)가 처리한다.
-    없는 건 조건부 GET(304) 과 우리 공식의 ETag — FileResponse 는 `etag` 를 setdefault
-    로 넣으므로 여기서 먼저 박아 두면 목록(`FileItem.etag`)과 같은 값이 나간다.
+    미지원 항목은 조건부 GET(304) 과 본 프로젝트 공식의 ETag 이다 — FileResponse 는 `etag` 를 setdefault
+    로 설정하므로 여기서 먼저 지정하면 목록(`FileItem.etag`)과 동일한 값이 송신된다.
     """
     st = real.stat()
     etag = fs.compute_etag(st)
@@ -146,7 +146,7 @@ async def list_files(
             )
         return FileListResponse(path="", items=roots)
 
-    # 공유받은 폴더 안(이동 대화상자 트리 등) — 공유 탐색과 같은 규칙
+    # 공유받은 폴더 내부(이동 대화상자 트리 등) — 공유 탐색과 동일 규칙
     parsed = acc.parse_shared(vp)
     if parsed:
         res = await list_shared_folder(share_id=parsed[0], path=parsed[1], user=user, db=db)
@@ -160,11 +160,11 @@ async def list_files(
 
     real = _check_path(vp, user)
     if not real.exists():
-        # 루트(my/, shared/)는 위에서 ensure_*_dir 로 이미 보장했다.
-        # 그 아래 경로까지 자동 생성하면, 이름이 어긋난 요청 한 번에
-        # 빈 디렉터리가 새로 생겨 저장소를 오염시킨다(예:
-        # 파일명이 깨진 폴더를 정상 이름으로 조회 → 빈 폴더가 생성돼
-        # "이 폴더는 비어 있습니다"로 보인다).
+        # 루트(my/, shared/)는 앞에서 ensure_*_dir 로 이미 보장했다.
+        # 그 하위 경로까지 자동 생성하면, 이름이 불일치한 요청 한 번으로
+        # 빈 디렉터리가 새로 생성되어 저장소가 오염된다(예:
+        # 파일명이 손상된 폴더를 정상 이름으로 조회 → 빈 폴더가 생성되어
+        # "이 폴더는 비어 있습니다"로 표시된다).
         raise HTTPException(status_code=404, detail="경로를 찾을 수 없습니다")
 
     items = await asyncio.to_thread(fs.list_directory, real, vp)
@@ -173,10 +173,10 @@ async def list_files(
 
 
 async def _decorate_items(db: AsyncSession, user: User, vp: str, items: list) -> list:
-    """목록 항목에 소유자·즐겨찾기 표시를 붙인다(캐시된 객체는 건드리지 않고 복사본으로).
+    """목록 항목에 소유자·즐겨찾기 표시를 추가한다(캐시된 객체는 변경하지 않고 복사본에 적용).
 
-    소유자: my/ 는 나, users/<id>/ 는 그 사용자, shared/ 는 처음 올린 사람(활동 기록 기준 —
-    기록이 생기기 전에 올라간 파일은 알 수 없어 null).
+    소유자: my/ 는 요청 사용자, users/<id>/ 는 해당 사용자, shared/ 는 최초 업로드 사용자(활동 기록 기준 —
+    기록 도입 이전에 업로드된 파일은 알 수 없어 null).
     """
     if not items:
         return items
@@ -205,19 +205,19 @@ async def _decorate_items(db: AsyncSession, user: User, vp: str, items: list) ->
             }))
         return out
     except Exception:
-        # 새 테이블이 아직 없거나 조회 실패 — 목록 자체는 그대로 준다
+        # 신규 테이블이 아직 없거나 조회 실패 — 목록 자체는 그대로 반환한다
         return items
 
 
 # ─── 검색 ───
 #
-# 예전에는 요청마다 os.walk 로 트리를 훑고 파일명 부분일치만 봤다. 이제는
-# 색인(file_index)을 조회한다 — 내용까지 찾고, 점수로 정렬하고, 연산자로
-# 좁힐 수 있다. 색인은 app/files/indexer.py 가 주기적으로 채운다.
+# 과거에는 요청마다 os.walk 로 트리를 순회하고 파일명 부분일치만 확인했다. 현재는
+# 색인(file_index)을 조회한다 — 내용 검색, 점수 기준 정렬, 연산자를 통한 범위
+# 한정이 가능하다. 색인은 app/files/indexer.py 가 주기적으로 갱신한다.
 
 
 def _search_scopes(user: User, path: str | None) -> list[str]:
-    """이 사용자가 검색할 수 있는 scope 목록. path 가 주어지면 거기에 맞춰 좁힌다."""
+    """해당 사용자가 검색 가능한 scope 목록. path 가 주어지면 그에 맞춰 범위를 한정한다."""
     vp = (path or "").strip("/")
     root = vp.split("/", 1)[0] if vp else ""
     if root == "my":
@@ -227,7 +227,7 @@ def _search_scopes(user: User, path: str | None) -> list[str]:
     if root == "users" and user.is_admin:
         rest = vp.split("/", 2)
         return [rest[1]] if len(rest) > 1 else []
-    return [user.id, "shared"]          # 범위를 안 주면 내 것 + 공유
+    return [user.id, "shared"]          # 범위 미지정 시 본인 영역 + 공유
 
 
 @router.get("/search", response_model=SearchResponse)
@@ -243,7 +243,7 @@ async def search_files(
     if not scopes:
         return SearchResponse(query=q, total=0, items=[])
 
-    # path 가 폴더까지 가리키면 그 아래로 한정한다(in: 연산자와 같은 효과)
+    # path 가 폴더까지 지정하면 그 하위로 한정한다(in: 연산자와 동일한 효과)
     vp = (path or "").strip("/")
     parts = vp.split("/", 1)
     sub = parts[1] if len(parts) > 1 and parts[0] in ("my", "shared") else ""
@@ -258,7 +258,7 @@ async def search_files(
 
 @router.post("/search/reindex")
 async def reindex(user: User = Depends(get_current_user)):
-    """색인을 지금 다시 만든다(관리자)."""
+    """색인을 즉시 재생성한다(관리자)."""
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="관리자만 가능합니다")
     stats = await indexer.reindex_all()
@@ -270,7 +270,7 @@ async def search_status(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """색인 현황 — 몇 개가 들어있고 본문이 있는 건 몇 개인지."""
+    """색인 현황 — 전체 항목 수와 본문 보유 항목 수."""
     scopes = _search_scopes(user, None)
     total = (await db.execute(
         select(func.count()).select_from(FileIndex).where(FileIndex.scope.in_(scopes))
@@ -387,8 +387,8 @@ async def download_zip(
         f"attachment; filename=\"{ascii_fallback}\"; "
         f"filename*=UTF-8''{quote(zip_name)}"
     )
-    # zip을 **온더플라이 스트리밍** 생성 — temp파일로 통째 빌드한 뒤 보내면 빌드 동안
-    # 클라 진행률이 0B에 멈춤. 압축 바이트가 나오는 즉시 흘려보내 진행률이 바로 움직인다.
+    # zip을 **온더플라이 스트리밍** 생성 — temp파일로 전체를 빌드한 후 송신하면 빌드 동안
+    # 클라이언트 진행률이 0B에서 정지한다. 압축 바이트를 생성 즉시 송신하여 진행률이 바로 갱신된다.
     file_paths = ((p, str(p.relative_to(real))) for p in sorted(real.rglob("*")) if p.is_file())
     return StreamingResponse(
         _stream_zip(file_paths),
@@ -412,7 +412,7 @@ async def download_multi(
     reals = [(await acc.resolve(db, user, vp, "view")).real for vp in body.paths]
 
     # 선택 항목들을 하나의 zip 아카이브로 스트리밍. 각 항목의 arcname은 최상위 이름
-    # 기준(폴더는 하위 트리 보존)이라 여러 항목이 zip 루트에 나란히 담긴다.
+    # 기준(폴더는 하위 트리 보존)이므로 여러 항목이 zip 루트에 병렬로 포함된다.
     def _collect():
         for real in reals:
             if not real.exists():
@@ -451,9 +451,9 @@ async def _upload_max_bytes(db: AsyncSession) -> tuple[int, int]:
 
 
 async def _upload_target(db: AsyncSession, path: str, user: User) -> tuple[str, Path, "acc.Access"]:
-    """업로드 대상 디렉터리 (가상경로, 실제경로, 접근). 없으면 만든다.
+    """업로드 대상 디렉터리 (가상경로, 실제경로, 접근). 없으면 생성한다.
 
-    공유받은 폴더(shared-with-me/..)는 편집 권한 이상만 — 파일은 원 소유자 영역에 놓인다.
+    공유받은 폴더(shared-with-me/..)는 편집 권한 이상만 허용 — 파일은 원 소유자 영역에 저장된다.
     """
     vp = path.strip("/") or "my"
     if vp == "my" or vp.startswith("my/"):
@@ -471,7 +471,7 @@ async def _upload_target(db: AsyncSession, path: str, user: User) -> tuple[str, 
 
 
 async def _quota_subject(db: AsyncSession, a: "acc.Access", user: User) -> tuple[User, str]:
-    """할당을 셀 사람·경로. 공유받은 폴더에 올리면 원 소유자의 내 파일 할당에서 센다."""
+    """할당 집계 대상 사용자·경로. 공유받은 폴더에 업로드하면 원 소유자의 내 파일 할당에서 집계한다."""
     if a.via_share and a.owner_id and a.owner_vpath:
         owner = await db.get(User, a.owner_id)
         if owner is not None:
@@ -484,7 +484,7 @@ def _child_key(a: "acc.Access", name: str) -> str | None:
 
 
 def _snapshot_before_overwrite(a: "acc.Access", target: Path, name: str) -> None:
-    """덮어쓰기면 이전본을 버전 스냅샷으로(소유자 기준 my/ 파일만 — 공유받은 경로도 소유자 버전으로)."""
+    """덮어쓰기인 경우 이전본을 버전 스냅샷으로 보관(소유자 기준 my/ 파일만 — 공유받은 경로도 소유자 버전으로 보관)."""
     if not a.owner_id or not a.owner_vpath or not target.is_file():
         return
     rel = fs.owner_relpath_from_my(f"{a.owner_vpath}/{name}")
@@ -521,7 +521,7 @@ async def upload_file(
 ):
     max_mb, max_bytes = await _upload_max_bytes(db)
     vp, real_dir, a = await _upload_target(db, path, user)
-    # 사용자 기본 할당(관리 › 저장소·백업) — 선언 크기로 먼저 거르고, 기록 중에도 넘치면 멈춘다
+    # 사용자 기본 할당(관리 › 저장소·백업) — 선언 크기로 사전 검사하고, 기록 중에도 초과하면 중단한다
     from app.files import quota as file_quota
     q_user, q_vp = await _quota_subject(db, a, user)
     room = await file_quota.ensure_room(db, q_user, q_vp, size)
@@ -529,12 +529,12 @@ async def upload_file(
     client_mtime = _client_mtime(mtime, x_file_mtime)
     target = real_dir / safe_name
     if target.is_dir():
-        # 같은 이름의 폴더 위에는 못 올린다(예전엔 open() 이 IsADirectoryError → 500)
+        # 동일 이름의 폴더 위에는 업로드 불가(과거에는 open() 이 IsADirectoryError → 500)
         raise HTTPException(status_code=409, detail="같은 이름의 폴더가 있습니다")
 
     _overwrite = target.is_file()
-    # 대상에 바로 쓰지 않는다 — 예전엔 open(target, "wb") 가 원본을 먼저 비워, 상한 초과·디스크 가득·
-    # 중단이면 같은 이름의 기존 파일이 사라지거나 잘린 채 남았다. 숨김 임시 파일에 쓰고 끝나면 바꿔치기한다.
+    # 대상에 직접 쓰지 않는다 — 과거에는 open(target, "wb") 가 원본을 먼저 비워, 상한 초과·디스크 용량 부족·
+    # 중단 시 동일 이름의 기존 파일이 삭제되거나 잘린 상태로 남았다. 숨김 임시 파일에 기록한 후 완료 시 교체한다.
     tmp = real_dir / f".upload-{secrets.token_hex(8)}.part"
 
     # 디스크 기록 진행률(멀티워커 공유 → Redis). upload_id 있을 때만 보고.
@@ -575,17 +575,17 @@ async def upload_file(
                         await r.set(rkey, f"{written}:{size}", ex=120)
                     except Exception:
                         pass
-            # NFS 등 느린 스토리지의 실제 기록 완료 보장(여기서 디스크 쓰기 마무리)
+            # NFS 등 저속 스토리지의 실제 기록 완료 보장(여기서 디스크 쓰기 완료)
             f.flush()
             try:
                 os.fsync(f.fileno())
             except OSError:
                 pass
-        # 덮어쓰기면 이전본을 버전 스냅샷으로 보관(소유자 my/ 파일만) — 다 받은 뒤에(실패한 업로드는 버전을 안 남긴다)
+        # 덮어쓰기인 경우 이전본을 버전 스냅샷으로 보관(소유자 my/ 파일만) — 수신 완료 후 수행(실패한 업로드는 버전을 남기지 않음)
         _snapshot_before_overwrite(a, target, safe_name)
         os.replace(tmp, target)
     except BaseException:
-        # 실패·취소 — 임시 파일만 지운다. 원본은 그대로다.
+        # 실패·취소 — 임시 파일만 삭제한다. 원본은 변경되지 않는다.
         tmp.unlink(missing_ok=True)
         raise
 
@@ -606,7 +606,7 @@ async def upload_file(
 
 @router.get("/upload-progress/{upload_id}")
 async def upload_progress(upload_id: str, user: User = Depends(get_current_user)):
-    """서버가 실제 디스크에 기록한 바이트(Redis) — 클라이언트 디스크 기록 바용."""
+    """서버가 실제 디스크에 기록한 바이트(Redis) — 클라이언트의 디스크 기록 진행 표시용."""
     v = None
     try:
         from app.chat.redis_client import get_redis
@@ -626,13 +626,13 @@ async def upload_progress(upload_id: str, user: User = Depends(get_current_user)
 # ─── 청크 업로드 세션 (재개 가능) ───
 #
 # 프로토콜과 디스크 레이아웃은 app/files/upload_sessions.py 머리말 참고.
-# 세션 상태는 전부 디스크(STORAGE_ROOT/.uploads/<id>/)에 있어 어느 워커가 받아도 된다.
+# 세션 상태는 전부 디스크(STORAGE_ROOT/.uploads/<id>/)에 저장되므로 어느 워커가 수신해도 무방하다.
 
 
 class UploadSessionCreate(BaseModel):
     path: str = "my/"             # 대상 디렉터리 가상경로
     name: str                     # 파일명
-    size: int = 0                 # 총 바이트(0 = 모름, commit 때 검사 생략)
+    size: int = 0                 # 총 바이트(0 = 미상, commit 시 검사 생략)
     mtime: int | None = None      # 원본 수정 시각(epoch ms)
 
 
@@ -646,7 +646,7 @@ def _load_session(session_id: str, user: User) -> tuple[Path, dict]:
     except us.SessionError as e:
         raise HTTPException(status_code=404, detail=str(e))
     if meta.get("user_id") != user.id:
-        # 남의 세션은 존재조차 알리지 않는다
+        # 타 사용자의 세션은 존재 여부도 노출하지 않는다
         raise HTTPException(status_code=404, detail="세션이 없거나 만료되었습니다")
     return d, meta
 
@@ -660,7 +660,7 @@ async def create_upload_session(
     max_mb, max_bytes = await _upload_max_bytes(db)
     if body.size < 0 or body.size > max_bytes:
         raise HTTPException(status_code=413, detail=f"File exceeds {max_mb}MB limit")
-    vp, _real_dir, a = await _upload_target(db, body.path, user)   # 대상 경로 권한을 지금 확인
+    vp, _real_dir, a = await _upload_target(db, body.path, user)   # 대상 경로 권한을 이 시점에 확인
     from app.files import quota as file_quota
     q_user, q_vp = await _quota_subject(db, a, user)
     await file_quota.ensure_room(db, q_user, q_vp, body.size)      # 사용자 기본 할당(공유받은 폴더면 소유자)
@@ -680,7 +680,7 @@ async def create_upload_session(
 
 @router.get("/upload/sessions/{session_id}")
 async def get_upload_session(session_id: str, user: User = Depends(get_current_user)):
-    """받은 청크 목록 — 끊긴 뒤 재개할 때 빠진 번호만 다시 보내면 된다."""
+    """수신한 청크 목록 — 중단 후 재개 시 누락된 번호만 재전송한다."""
     d, meta = _load_session(session_id, user)
     chunks = await asyncio.to_thread(us.list_chunks, d)
     return {
@@ -702,7 +702,7 @@ async def put_upload_chunk(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """n번째(1부터) 청크. 본문은 raw 바이트. 같은 번호를 다시 보내면 덮어쓴다."""
+    """n번째(1부터) 청크. 본문은 raw 바이트. 동일 번호를 재전송하면 덮어쓴다."""
     d, meta = _load_session(session_id, user)
     try:
         target = us.chunk_path(d, n)
@@ -710,7 +710,7 @@ async def put_upload_chunk(
         raise HTTPException(status_code=400, detail=str(e))
     _max_mb, max_bytes = await _upload_max_bytes(db)
     declared = int(meta.get("total_size") or 0)
-    # 이미 받은 다른 청크 + 이번 청크가 상한을 넘기면 거부(선언 크기를 믿지 않는다)
+    # 이미 수신한 다른 청크 + 이번 청크가 상한을 초과하면 거부(선언 크기를 신뢰하지 않음)
     others = sum(sz for k, sz in await asyncio.to_thread(us.list_chunks, d) if k != n)
 
     tmp = target.with_name(target.name + ".part")
@@ -745,15 +745,15 @@ async def commit_upload_session(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """청크를 이어 붙여 대상 경로에 놓는다(같은 마운트라 원자적 rename). 세션은 지운다."""
+    """청크를 연결하여 대상 경로에 배치한다(동일 마운트이므로 원자적 rename). 세션은 삭제한다."""
     d, meta = _load_session(session_id, user)
     vp, real_dir, a = await _upload_target(db, meta["target_vpath"], user)   # 권한 재확인(세션 사이 공유 변동 대비)
     safe_name = _safe_filename(meta["name"])
     target = real_dir / safe_name
     if target.is_dir():
         raise HTTPException(status_code=409, detail="같은 이름의 폴더가 있습니다")
-    # 할당은 선언 크기가 아니라 실제로 받은 합계로 다시 본다 — 세션을 size=0 으로 열면
-    # 만들 때의 ensure_room(…, 0) 을 그냥 지나가 할당을 넘겨 올릴 수 있었다.
+    # 할당은 선언 크기가 아니라 실제 수신 합계로 재검사한다 — 세션을 size=0 으로 생성하면
+    # 생성 시의 ensure_room(…, 0) 을 통과하여 할당을 초과해 업로드할 수 있었다.
     from app.files import quota as file_quota
     q_user, q_vp = await _quota_subject(db, a, user)
     await file_quota.ensure_room(db, q_user, q_vp, await asyncio.to_thread(us.received_bytes, d))
@@ -808,11 +808,11 @@ async def mkdir(
     if not new_name:
         raise HTTPException(status_code=400, detail="Invalid path for mkdir")
     try:
-        # 숨김(. 시작)·NAS 시스템 이름·제어문자 등 — 만들어 놓고 목록에서 안 보이는 폴더를 막는다
+        # 숨김(. 시작)·NAS 시스템 이름·제어문자 등 — 생성 후 목록에 표시되지 않는 폴더를 차단한다
         checked = fs.validate_name(new_name)
     except fs.InvalidNameError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    if checked != new_name:        # 앞뒤 공백을 다듬었으면 돌려주는 경로도 맞춘다
+    if checked != new_name:        # 앞뒤 공백을 제거한 경우 반환 경로도 일치시킨다
         new_name = checked
         vp = f"{parent_vp}/{new_name}"
 
@@ -845,7 +845,7 @@ def _uid(user: "User | str") -> str:
 
 
 def _trash_dir(user: "User | str") -> Path:
-    """Return the .trash/ directory for the user's storage. (공동 소유자 삭제는 원 소유자 휴지통으로 — id 로도 받는다)"""
+    """Return the .trash/ directory for the user's storage. (공동 소유자의 삭제는 원 소유자 휴지통으로 이동 — id 도 허용)"""
     trash = Path(settings.storage_root) / "users" / _uid(user) / ".trash"
     trash.mkdir(parents=True, exist_ok=True)
     return trash
@@ -877,7 +877,7 @@ _ROOTS = {"my", "shared", "users"}
 
 
 def _share_detail(a: "acc.Access") -> dict:
-    """공유 경로로 한 조작이면 활동 기록에 남길 단서(실행자는 기록의 user_id)."""
+    """공유 경로를 통한 조작인 경우 활동 기록에 남길 정보(실행자는 기록의 user_id)."""
     return {"via_share": a.share.id, "owner_id": a.owner_id} if a.share is not None else {}
 
 
@@ -888,17 +888,17 @@ async def delete_file(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """삭제(기본은 휴지통). 공유받은 경로는 공동 소유자만 — 원 소유자의 휴지통으로 가고 실행자를 남긴다."""
+    """삭제(기본은 휴지통). 공유받은 경로는 공동 소유자만 가능 — 원 소유자의 휴지통으로 이동하며 실행자를 기록한다."""
     if path.strip("/") in _ROOTS:
         raise HTTPException(status_code=400, detail="최상위 폴더는 지울 수 없습니다")
     a = await acc.resolve(db, user, path, "owner")
     real = a.real
     if not real.exists():
         raise HTTPException(status_code=404, detail="Not found")
-    # 공유 경로면 저장 영역 주인(원 소유자) 기준으로 휴지통·원래 경로를 둔다
+    # 공유 경로인 경우 저장 영역 소유자(원 소유자) 기준으로 휴지통·원래 경로를 결정한다
     trash_owner = a.owner_id if a.via_share else user.id
     original = a.owner_vpath if a.via_share else path.strip("/")
-    link_at = acc.link_scope(a)       # 이 항목에 걸린 공유 링크(만든 사람, 경로)
+    link_at = acc.link_scope(a)       # 이 항목에 설정된 공유 링크(생성자, 경로)
 
     if permanent:
         fs.delete_path(real)
@@ -928,7 +928,7 @@ async def delete_file(
 
     await asyncio.to_thread(shutil.move, str(real), str(target))
 
-    # Save metadata (original virtual path + trashed_at + 지운 사람)
+    # Save metadata (original virtual path + trashed_at + 삭제 실행자)
     meta = await asyncio.to_thread(_load_trash_meta, trash_owner)
     meta[trash_name] = {
         "original_path": original,
@@ -937,10 +937,10 @@ async def delete_file(
     }
     await asyncio.to_thread(_save_trash_meta, trash_owner, meta)
 
-    # 공유·댓글은 휴지통 자리(trash/<이름>)로 옮겨 둔다 — 같은 이름의 새 파일에 붙지 않고, 복원하면 돌아온다
+    # 공유·댓글은 휴지통 위치(trash/<이름>)로 이전해 둔다 — 동일 이름의 새 파일에 연결되지 않으며, 복원 시 원위치된다
     if a.owner_id == trash_owner:
         await acc.repoint(db, a.owner_id, a.owner_vpath, acc.trash_key(trash_name))
-    # 공유 링크도 휴지통 자리로 — 같은 이름으로 새로 올린 파일이 옛 링크로 열리지 않게(복원하면 돌아온다)
+    # 공유 링크도 휴지통 위치로 이전 — 동일 이름으로 새로 업로드한 파일이 기존 링크로 노출되지 않도록 한다(복원 시 원위치)
     if link_at:
         await acc.repoint_links(db, link_at[0], link_at[1], acc.link_trash_key(trash_owner, trash_name))
 
@@ -954,9 +954,9 @@ async def delete_file(
 
 
 def _trash_display_name(trash_name: str, info: dict) -> str:
-    """휴지통 항목의 원래 이름. 메타의 원래 경로 끝 조각이 정답이고, 메타가 없으면 "<시각>_" 접두만 뗀다.
+    """휴지통 항목의 원래 이름. 메타의 원래 경로 마지막 조각을 기준으로 하며, 메타가 없으면 "<시각>_" 접두어만 제거한다.
 
-    예전엔 split("_", 2)[-1] 이라 "보고서_최종.docx" 가 "최종.docx" 로 보였다(복원·영구 삭제 확인창까지).
+    과거에는 split("_", 2)[-1] 을 사용하여 "보고서_최종.docx" 가 "최종.docx" 로 표시되었다(복원·영구 삭제 확인창 포함).
     """
     orig = (info.get("original_path") or "").strip("/") if isinstance(info, dict) else ""
     if orig:
@@ -1039,7 +1039,7 @@ async def restore_from_trash(
     meta.pop(body.trash_name, None)
     await asyncio.to_thread(_save_trash_meta, user, meta)
 
-    # 휴지통 자리에 옮겨 둔 공유·댓글을 복원된 경로(이름이 바뀌었으면 바뀐 이름)로 되돌린다
+    # 휴지통 위치로 이전해 둔 공유·댓글을 복원된 경로(이름이 변경되었으면 변경된 이름)로 복원한다
     ov = original_vpath.strip("/")
     if ov.startswith("my/"):
         restored = ov.rsplit("/", 1)[0] + "/" + dest.name
@@ -1063,7 +1063,7 @@ async def empty_trash(
     db: AsyncSession = Depends(get_db),
 ):
     trash = _trash_dir(user)
-    # 휴지통 항목들의 원래 경로 버전 스냅샷도 지운다
+    # 휴지통 항목들의 원래 경로 버전 스냅샷도 삭제한다
     for info in (await asyncio.to_thread(_load_trash_meta, user)).values():
         if isinstance(info, dict) and info.get("original_path"):
             await asyncio.to_thread(fs.drop_versions, user.id, info["original_path"])
@@ -1076,8 +1076,8 @@ async def empty_trash(
 
     # Clear meta
     await asyncio.to_thread(_save_trash_meta, user, {})
-    await acc.purge(db, user.id, acc.TRASH_PREFIX)     # 휴지통 자리에 옮겨 둔 공유·댓글도
-    await acc.purge_links(db, None, f"{acc.TRASH_PREFIX}/{user.id}")   # 공유 링크도
+    await acc.purge(db, user.id, acc.TRASH_PREFIX)     # 휴지통 위치로 이전해 둔 공유·댓글도 삭제
+    await acc.purge_links(db, None, f"{acc.TRASH_PREFIX}/{user.id}")   # 공유 링크도 삭제
     return {"ok": True}
 
 
@@ -1090,7 +1090,7 @@ async def rename_file(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """이름 바꾸기. 공유받은 경로는 공동 소유자만. 공유·댓글·활동 기록이 새 이름을 따라간다."""
+    """이름 변경. 공유받은 경로는 공동 소유자만 가능. 공유·댓글·활동 기록의 경로도 새 이름으로 갱신된다."""
     if body.path.strip("/") in _ROOTS:
         raise HTTPException(status_code=400, detail="최상위 폴더 이름은 바꿀 수 없습니다")
     a = await acc.resolve(db, user, body.path, "owner")
@@ -1109,13 +1109,13 @@ async def rename_file(
     indexer.schedule_quick_index(add=[new_path], forget=[real])
     old_vp = body.path.strip("/")
     if a.via_share and not acc.parse_shared(old_vp)[1]:
-        new_vp = old_vp            # 공유 루트 자체 — 받는 쪽 경로(shared-with-me/<id>)는 그대로
+        new_vp = old_vp            # 공유 루트 자체 — 수신 측 경로(shared-with-me/<id>)는 유지
     else:
         new_vp = old_vp.rsplit("/", 1)[0] + "/" + new_path.name if "/" in old_vp else new_path.name
     new_owner_vp = (a.owner_vpath.rsplit("/", 1)[0] + "/" + new_path.name) if a.owner_vpath else None
     await acc.repoint(db, a.owner_id, a.owner_vpath, new_owner_vp)
     link_at = acc.link_scope(a)
-    if link_at:      # 공유 링크도 새 이름을 따라간다(my/ 는 소유자 기준, shared/ 는 그 경로 그대로)
+    if link_at:      # 공유 링크도 새 이름으로 갱신(my/ 는 소유자 기준, shared/ 는 해당 경로 그대로)
         await acc.repoint_links(db, link_at[0], link_at[1],
                                 link_at[1].rsplit("/", 1)[0] + "/" + new_path.name, new_creator=link_at[0])
     await asyncio.to_thread(fs.move_versions, a.owner_id, a.owner_vpath, new_owner_vp)
@@ -1137,12 +1137,12 @@ async def move_file(
 ):
     """이동(copy=false) 또는 복사(copy=true).
 
-    - 복사 대상 폴더에 같은 이름이 있으면 "이름 (사본).ext" 로 만든다(같은 폴더에 복사 포함).
-      이동은 예전처럼 409.
-    - 폴더를 자기 자신·하위 폴더로 옮기거나 복사하면 400(무한 복사·shutil 오류 방지).
-    - 공유받은 경로: 옮기기는 원본 공동 소유 + 대상 편집 이상, 같은 소유자 영역 안에서만.
-      복사는 원본 보기 + 대상 편집 이상이면 영역을 넘어도 된다(내려받아 올리는 것과 같다).
-      공유·댓글은 옮긴 자리로 따라간다(소유자 영역 밖으로 나가면 정리).
+    - 복사 대상 폴더에 동일 이름이 있으면 "이름 (사본).ext" 로 생성한다(동일 폴더 내 복사 포함).
+      이동은 기존과 같이 409.
+    - 폴더를 자기 자신·하위 폴더로 이동하거나 복사하면 400(무한 복사·shutil 오류 방지).
+    - 공유받은 경로: 이동은 원본 공동 소유 + 대상 편집 이상이며 동일 소유자 영역 내에서만 허용한다.
+      복사는 원본 보기 + 대상 편집 이상이면 영역 간에도 허용한다(내려받은 후 업로드하는 것과 동일).
+      공유·댓글은 이동한 위치로 갱신된다(소유자 영역 밖으로 나가면 삭제).
     """
     if not body.copy and body.src.strip("/") in _ROOTS:
         raise HTTPException(status_code=400, detail="최상위 폴더는 옮길 수 없습니다")
@@ -1158,11 +1158,11 @@ async def move_file(
     if src_real.is_dir() and (dst_real == src_real or dst_real.is_relative_to(src_real)):
         raise HTTPException(status_code=400, detail="폴더를 자기 안으로 옮기거나 복사할 수 없습니다")
     if not body.copy and dst_real == src_real.parent:
-        return {"ok": True, "path": body.src.strip("/")}   # 같은 자리 이동 — 할 일 없음
+        return {"ok": True, "path": body.src.strip("/")}   # 동일 위치 이동 — no-op
     if dst_real.exists() and not dst_real.is_dir():
         raise HTTPException(status_code=400, detail="대상이 폴더가 아닙니다")
     if body.copy:
-        # 복사도 할당을 쓴다 — 검사가 없어 같은 파일을 되풀이 복사하면 할당을 넘길 수 있었다
+        # 복사도 할당을 사용한다 — 과거에는 검사가 없어 동일 파일을 반복 복사하면 할당을 초과할 수 있었다
         from app.files import quota as file_quota
         q_user, q_vp = await _quota_subject(db, dst, user)
         incoming = (src_real.stat().st_size if src_real.is_file()
@@ -1207,10 +1207,10 @@ async def move_file(
             await acc.repoint(db, src.owner_id, src.owner_vpath, new_owner_vp)
             await asyncio.to_thread(fs.move_versions, src.owner_id, src.owner_vpath, new_owner_vp)
         else:
-            await acc.purge(db, src.owner_id, src.owner_vpath)   # 소유자 영역 밖으로(예: 팀 공유 폴더)
+            await acc.purge(db, src.owner_id, src.owner_vpath)   # 소유자 영역 밖으로 이동(예: 팀 공유 폴더)
             await asyncio.to_thread(fs.drop_versions, src.owner_id, src.owner_vpath)
         src_link, dst_link = acc.link_scope(src), acc.link_scope(dst)
-        if src_link and dst_link:      # 공유 링크도 옮긴 자리로(남의 my/ 로 들어가면 그 링크는 정리된다)
+        if src_link and dst_link:      # 공유 링크도 이동한 위치로 갱신(타 사용자의 my/ 로 들어가면 해당 링크는 삭제된다)
             await acc.repoint_links(db, src_link[0], src_link[1], f"{dst_link[1]}/{target.name}",
                                     new_creator=dst_link[0])
         elif src_link:
@@ -1237,7 +1237,7 @@ async def preview_file(
 
     ptype = pv.can_preview(real)
     if not ptype and real.suffix.lower() in pv.OFFICE_TEXT_EXTENSIONS:
-        # 오피스 문서는 글자만(편집기 대신 "미리보기로 열기")
+        # 오피스 문서는 텍스트만 제공(편집기 대신 "미리보기로 열기")
         text = await asyncio.to_thread(pv.get_office_text, real)
         omitted = await asyncio.to_thread(pv.get_office_omitted, real)
         return {"type": "office", "content": text, "name": real.name, "omitted": omitted}
@@ -1247,7 +1247,7 @@ async def preview_file(
     if ptype == "image":
         if real.suffix.lower() == ".svg":
             data = await asyncio.to_thread(real.read_bytes)
-            # SVG는 JS 삽입 가능 → <img> 용으로만(직접 열면 내려받기, sandbox CSP)
+            # SVG는 JS 삽입 가능 → <img> 용으로만 제공(직접 열면 내려받기, sandbox CSP)
             media, headers = serve_safety.svg_image_headers(real.name)
             return Response(content=data, media_type=media, headers=headers)
         data = await asyncio.to_thread(pv.generate_thumbnail, real)
@@ -1304,26 +1304,26 @@ async def create_share_link(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """공유 링크 만들기.
+    """공유 링크 생성.
 
-    - paths 에 둘 이상을 주면 묶음 링크(받는 쪽은 zip 하나로 내려받는다). 폴더도 된다.
-    - password 를 주면 받는 쪽이 /shared/{token}/unlock 으로 풀어야 내려받는다.
-    - allow_download=false 면 내려받기를 막고 미리보기(이미지·PDF·텍스트)만 허용한다.
+    - paths 에 둘 이상을 지정하면 묶음 링크(수신 측은 zip 하나로 내려받는다). 폴더도 가능하다.
+    - password 를 지정하면 수신 측이 /shared/{token}/unlock 으로 해제해야 내려받을 수 있다.
+    - allow_download=false 이면 내려받기를 차단하고 미리보기(이미지·PDF·텍스트)만 허용한다.
     """
     import json as _json
 
     multi = [p.strip("/") for p in (body.paths or []) if p and p.strip("/")]
     if not multi and not body.path:
         raise HTTPException(status_code=400, detail="path 또는 paths 가 필요합니다")
-    # path 와 paths 를 함께 보내면 합쳐서 본다(중복 제거). 예전엔 path 를 조용히 버려, 파일 하나가 paths 로만 남으면
-    # 단일 파일 판정(미리보기 가능·같이 편집)을 건너뛴 "항목 1개짜리 묶음"이 됐다.
+    # path 와 paths 를 함께 전송하면 병합하여 처리한다(중복 제거). 과거에는 path 를 무시하여, 파일 하나가 paths 로만 남으면
+    # 단일 파일 판정(미리보기 가능·같이 편집)을 생략한 "항목 1개짜리 묶음"이 되었다.
     if multi and body.path and body.path.strip("/"):
         multi = [body.path.strip("/")] + multi
     multi = list(dict.fromkeys(multi))
     if len(multi) == 1 and _check_path(multi[0], user).is_file():
-        body.path, multi = multi[0], []        # 파일 하나는 보통 링크, 폴더 하나는 묶음 링크(zip)
+        body.path, multi = multi[0], []        # 파일 하나는 일반 링크, 폴더 하나는 묶음 링크(zip)
     if multi:
-        # 묶음(zip)은 미리보기가 없다 — 내려받기까지 막으면 받는 사람이 아무것도 못 하는 죽은 링크. 폴더 하나(둘러보기)는 허용.
+        # 묶음(zip)은 미리보기가 없다 — 내려받기까지 차단하면 수신자가 어떤 동작도 할 수 없는 무효 링크가 된다. 폴더 하나(둘러보기)는 허용.
         if body.allow_download is False and not (len(multi) == 1 and _check_path(multi[0], user).is_dir()):
             raise HTTPException(status_code=400, detail=BUNDLE_BLOCK_DETAIL)
         if body.can_edit:
@@ -1347,8 +1347,8 @@ async def create_share_link(
             from app.wopi.router import _ALL_OFFICE_EXTS
             if real.suffix.lower() not in _ALL_OFFICE_EXTS:
                 raise HTTPException(status_code=400, detail="같이 편집하는 링크는 Office 문서에만 만들 수 있습니다")
-        # 내려받기를 막으면 받는 사람은 미리보기만 할 수 있다 — 미리보기가 안 되는 형식이면 아무것도 못 보는 죽은 링크가 된다.
-        # (같이 편집 링크는 편집기로 열리므로 해당 없음. 폴더 링크는 안의 다른 파일을 볼 수 있어 허용.)
+        # 내려받기를 차단하면 수신자는 미리보기만 가능하다 — 미리보기 불가 형식이면 아무것도 볼 수 없는 무효 링크가 된다.
+        # (같이 편집 링크는 편집기로 열리므로 해당 없음. 폴더 링크는 내부의 다른 파일을 볼 수 있어 허용.)
         if body.allow_download is False and not body.can_edit and _preview_kind(real) is None:
             raise HTTPException(status_code=400, detail=NO_PREVIEW_BLOCK_DETAIL)
         file_path = body.path
@@ -1382,7 +1382,7 @@ async def create_share_link(
         await act.record(act.canonical_key(vp, user), user.id, "share_link",
                          {"link_id": link.id, "can_edit": bool(body.can_edit)})
 
-    # 같이 편집하는 링크는 내려받기 주소가 아니라 편집기로 보낸다.
+    # 같이 편집 링크는 내려받기 주소가 아니라 편집기로 연결한다.
     folder_link = bool(multi) and len(multi) == 1 and _check_path(multi[0], user).is_dir()
     url = (f"{settings.app_url}/s/{token}" if body.can_edit or folder_link
            else f"{settings.app_url}/api/files/shared/{token}")
@@ -1457,7 +1457,7 @@ async def update_share_link(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """공유 링크 설정 바꾸기 — 비밀번호(""=해제), 내려받기 허용, 만료, 횟수 제한."""
+    """공유 링크 설정 변경 — 비밀번호(""=해제), 내려받기 허용, 만료, 횟수 제한."""
     link = await db.get(ShareLink, link_id)
     if not link or (link.created_by != user.id and not user.is_admin):
         raise HTTPException(status_code=404, detail="Not found")
@@ -1465,7 +1465,7 @@ async def update_share_link(
     if body.password is not None:
         link.password_hash = hash_password(body.password) if body.password else None
     if body.allow_download is not None:
-        # 허용 → 막음으로 바꿀 때만 본다(이미 막혀 있던 옛 링크는 다른 설정을 고칠 수 있게 그대로 둔다)
+        # 허용 → 차단으로 변경할 때만 검사한다(이미 차단 상태였던 기존 링크는 다른 설정을 수정할 수 있도록 유지)
         refusal = link_block_refusal(link)
         if body.allow_download is False and link.allow_download is not False and refusal:
             raise HTTPException(status_code=400, detail=refusal)
@@ -1499,9 +1499,9 @@ async def update_share_link(
 
 @router.get("/share/preview-kind")
 async def share_preview_kind(path: str = Query(...), user: User = Depends(get_current_user)):
-    """이 파일을 손님 화면에서 미리 볼 수 있나 — 링크 만들기 창이 "내려받기 막음"을 켤 수 있는지 미리 묻는다.
+    """이 파일의 손님 화면 미리보기 가능 여부 — 링크 생성 창이 "내려받기 막음"을 활성화할 수 있는지 사전 조회한다.
 
-    판정은 손님 화면과 같은 함수(_preview_kind). {"preview": "image"|"pdf"|"text"|null}. 폴더는 null.
+    판정은 손님 화면과 동일한 함수(_preview_kind)를 사용한다. {"preview": "image"|"pdf"|"text"|null}. 폴더는 null.
     """
     real = _check_path(path, user)
     if not real.is_file():
@@ -1518,7 +1518,7 @@ async def delete_share_link(
     link = await db.get(ShareLink, link_id)
     if not link or (link.created_by != user.id and not user.is_admin):
         raise HTTPException(status_code=404, detail="Not found")
-    # 이메일 발송 기록도 정리(FK CASCADE 가 없는 예전 DB·SQLite 대비 명시 삭제)
+    # 이메일 발송 기록도 삭제(FK CASCADE 가 없는 기존 DB·SQLite 대비 명시 삭제)
     from sqlalchemy import delete as _sa_delete
     from app.db.models import ShareLinkEmail
     await db.execute(_sa_delete(ShareLinkEmail).where(ShareLinkEmail.link_id == link.id))
@@ -1527,19 +1527,19 @@ async def delete_share_link(
     return {"ok": True}
 
 
-# ─── 공유 링크 이메일로 보내기 — 규칙은 app/files/share_email.py ───
+# ─── 공유 링크 이메일 발송 — 규칙은 app/files/share_email.py ───
 
 
 class ShareLinkEmailRequest(BaseModel):
     emails: list[str]
     message: str | None = None
-    # 메일 언어(보낸 사람 화면 언어) ko|en, 만료 시각을 적을 시간대(IANA, 예: Asia/Seoul)
+    # 메일 언어(발신자 화면 언어) ko|en, 만료 시각 표기에 사용할 시간대(IANA, 예: Asia/Seoul)
     locale: str | None = None
     tz: str | None = None
 
 
 async def _mailable_link(db: AsyncSession, link_id: str, user: User) -> ShareLink:
-    """링크 소유자(만든 사람) 또는 링크 대상(내 파일 my/..)에 편집 이상 권한이 있는 사람만. 아니면 404."""
+    """링크 소유자(생성자) 또는 링크 대상(내 파일 my/..)에 편집 이상 권한이 있는 사용자만 허용. 그 외는 404."""
     link = await db.get(ShareLink, link_id)
     if not link:
         raise HTTPException(status_code=404, detail="Not found")
@@ -1582,7 +1582,7 @@ async def list_share_link_emails(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """이 링크를 누구에게 언제 메일로 보냈나(최신순) + 이번 시간 남은 발송 수."""
+    """이 링크의 메일 발송 이력(수신자·시각, 최신순) + 현재 1시간 구간의 잔여 발송 수."""
     from app.files import share_email as se
     await _mailable_link(db, link_id, user)
     used = await se.sent_last_hour(db, user.id)
@@ -1596,12 +1596,12 @@ async def email_share_link(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """공유 링크를 이메일로 보내기 — 시스템 메일(SMTP) 경로로, 받는 사람마다 한 통.
+    """공유 링크 이메일 발송 — 시스템 메일(SMTP) 경로로 수신자마다 한 통씩 송신한다.
 
-    - emails: 1~20개(형식 검사·중복 제거). 형식이 틀린 주소가 하나라도 있으면 400(아무것도 안 보냄).
-    - 보낸 사람당 1시간 50명(실패한 시도도 센다) — 넘으면 429.
-    - 만료됐거나 횟수를 다 쓴 링크는 400. 비밀번호는 메일에 넣지 않는다(본문에 "따로 전달" 안내).
-    - 결과: 받는 사람별 ok·external(워크스페이스 밖 주소) + 갱신된 발송 기록.
+    - emails: 1~20개(형식 검사·중복 제거). 형식이 잘못된 주소가 하나라도 있으면 400(전체 미발송).
+    - 발신자당 1시간 50명(실패한 시도도 집계) — 초과 시 429.
+    - 만료되었거나 횟수를 소진한 링크는 400. 비밀번호는 메일에 포함하지 않는다(본문에 "따로 전달" 안내).
+    - 결과: 수신자별 ok·external(워크스페이스 외부 주소) + 갱신된 발송 기록.
     """
     from app.admin.settings import get_smtp_config
     from app.db.models import ShareLinkEmail
@@ -1639,7 +1639,7 @@ async def email_share_link(
         ok, err = True, None
         try:
             await se._deliver(cfg, se.build_message(parts, from_addr=cfg.from_addr, to=to, sender=user))
-        except Exception as e:  # 한 사람 실패가 나머지를 막지 않는다
+        except Exception as e:  # 수신자 한 명의 실패가 나머지 발송을 차단하지 않는다
             ok, err = False, str(e)[:255]
             logger.warning("share link email to %s failed: %s", to, e)
         db.add(ShareLinkEmail(link_id=link.id, sent_by=user.id, recipient=to, recipient_user_id=uid,
@@ -1648,7 +1648,7 @@ async def email_share_link(
     await db.commit()
     sent = sum(1 for r in results if r["ok"])
     try:
-        # 활동 기록 키는 링크 소유자 기준(편집 권한자가 보낸 경우 my/.. 는 소유자 영역)
+        # 활동 기록 키는 링크 소유자 기준(편집 권한자가 발송한 경우 my/.. 는 소유자 영역)
         owner = user if link.created_by == user.id else await db.get(User, link.created_by)
         await act.record(act.canonical_key(link.file_path, owner) if owner else None, user.id, "share_link_email",
                          {"link_id": link.id, "count": len(emails), "sent": sent})
@@ -1674,8 +1674,8 @@ async def list_versions(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """버전 목록. 각 버전에 author(그 내용을 쓴 사람 — 활동 기록 기준, 기록 이전 버전은 null)와
-    download_url, 응답에 current_author(현재본 작성자)."""
+    """버전 목록. 각 버전에 author(해당 내용의 작성자 — 활동 기록 기준, 기록 이전 버전은 null)와
+    download_url, 응답에 current_author(현재본 작성자)를 포함한다."""
     from urllib.parse import quote
     rel = fs.owner_relpath_from_my(path)
     if rel is None:
@@ -1720,9 +1720,9 @@ async def restore_version(
 # ─── 사용자 간 공유(ACL) ───
 #
 # 권한 4단계("보기 · 댓글 · 편집 · 공동 소유") — 규칙은 app/files/access.py.
-# 공동 소유자는 공유 경로(shared-with-me/<id>/..)로 재공유·권한 변경·해제를 할 수 있다. 단,
-#   - 원 소유자가 만든 공유는 바꾸거나 해제하지 못한다(원 소유자 보호)
-#   - 공동 소유 지정·해제는 원 소유자만
+# 공동 소유자는 공유 경로(shared-with-me/<id>/..)로 재공유·권한 변경·해제를 수행할 수 있다. 단,
+#   - 원 소유자가 생성한 공유는 변경·해제 불가(원 소유자 보호)
+#   - 공동 소유 지정·해제는 원 소유자만 가능
 
 
 _ROLE_LABEL = {"view": "보기 가능", "comment": "댓글 가능", "edit": "편집 가능", "owner": "공동 소유"}
@@ -1732,13 +1732,13 @@ class ShareUserCreate(BaseModel):
     # 내 파일(my/..) 또는 공동 소유로 받은 경로(shared-with-me/<share_id>/..)
     path: str
     user_ids: list[str] = []
-    # 채널 공유 — 그 채널 멤버 전원(내가 멤버인 채널만)
+    # 채널 공유 — 해당 채널 멤버 전원(본인이 멤버인 채널만)
     channel_ids: list[str] = []
-    # 예전 클라이언트 호환: role 이 없을 때만 본다(true=편집, false=보기)
+    # 구버전 클라이언트 호환: role 이 없을 때만 참조한다(true=편집, false=보기)
     can_write: bool = False
     # view | comment | edit | owner(공동 소유 — 원 소유자만 지정)
     role: str | None = None
-    # "채팅으로 알리고 메시지 남기기" — 사람은 DM, 채널은 그 채널에 메시지 한 줄(+ 남길 말)
+    # "채팅으로 알리고 메시지 남기기" — 사용자는 DM, 채널은 해당 채널에 메시지 한 줄(+ 추가 메시지)
     notify: bool = False
     message: str | None = None
 
@@ -1747,14 +1747,14 @@ class ShareUserUpdate(BaseModel):
     role: str
 
 
-# 예전 이름 유지(테스트·다른 함수가 부른다) — 실제 규칙은 access 모듈
+# 기존 이름 유지(테스트·다른 함수가 호출) — 실제 규칙은 access 모듈
 _my_channel_ids = acc.my_channel_ids
 _accessible_share = acc.accessible_share
 _owner_real = acc.owner_real
 
 
 async def _manage_target(db: AsyncSession, user: User, path: str) -> "acc.Access":
-    """공유를 관리할 대상 — 내 파일(my/..) 또는 공동 소유로 받은 경로. owner_vpath 가 공유 식별 경로다."""
+    """공유 관리 대상 — 내 파일(my/..) 또는 공동 소유로 받은 경로. owner_vpath 가 공유 식별 경로이다."""
     vp = (path or "").strip("/")
     if not acc.parse_shared(vp) and fs.owner_relpath_from_my(vp) is None:
         raise HTTPException(status_code=400, detail="내 파일(my/)만 공유할 수 있습니다")
@@ -1765,10 +1765,10 @@ async def _manage_target(db: AsyncSession, user: User, path: str) -> "acc.Access
 
 
 def _can_manage_row(row: FileShare, user: User) -> bool:
-    """이 공유 행을 바꾸거나 해제할 수 있나(경로에 대한 공동 소유 권한은 호출자가 이미 확인).
+    """이 공유 행의 변경·해제 가능 여부(경로에 대한 공동 소유 권한은 호출자가 이미 확인).
 
-    원 소유자는 늘. 공동 소유자는 공동 소유자가 만든 행만 — 원 소유자가 만든 행(created_by 비었거나 원 소유자)과
-    공동 소유 행은 못 건드린다.
+    원 소유자는 항상 가능. 공동 소유자는 공동 소유자가 생성한 행만 가능 — 원 소유자가 생성한 행(created_by 가 비었거나 원 소유자)과
+    공동 소유 행은 변경 불가.
     """
     if row.owner_id == user.id:
         return True
@@ -1778,7 +1778,7 @@ def _can_manage_row(row: FileShare, user: User) -> bool:
 
 
 async def _row_for_manager(db: AsyncSession, share_id: str, user: User) -> FileShare:
-    """관리(권한 변경·해제)할 공유 행. 볼 수 없는 사람에겐 존재를 알리지 않는다(404), 보호된 행은 403."""
+    """관리(권한 변경·해제) 대상 공유 행. 볼 수 없는 사용자에게는 존재를 노출하지 않으며(404), 보호된 행은 403."""
     row = await db.get(FileShare, share_id)
     if not row:
         raise HTTPException(status_code=404, detail="공유를 찾을 수 없습니다")
@@ -1796,10 +1796,10 @@ async def _notify_share_in_chat(
     db: AsyncSession, user: User, name: str, role: str,
     user_ids: list[str], channel_ids: list[str], message: str | None,
 ) -> int:
-    """공유 알림을 채팅으로 — 사람은 1:1 DM, 채널은 그 채널. 실패한 대상은 건너뛴다. 보낸 곳 수."""
+    """공유 알림의 채팅 송신 — 사용자는 1:1 DM, 채널은 해당 채널. 실패한 대상은 생략한다. 송신 대상 수 반환."""
     from app.modules.registry import is_module_enabled
     if not is_module_enabled("chat"):
-        return 0   # 채팅이 없으면 아무도 못 보는 DM 을 만들지 않는다 — 공유 알림(벨)은 따로 간다
+        return 0   # 채팅이 비활성화 상태이면 아무도 볼 수 없는 DM 을 생성하지 않는다 — 공유 알림(벨)은 별도로 송신된다
     from app.chat import service as chat_service
     from app.chat.router import _broadcast_message
     perm = _ROLE_LABEL.get(role, _ROLE_LABEL["view"])
@@ -1833,12 +1833,12 @@ async def share_with_users(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """파일/폴더를 사람·채널에 공유(ACL). 이미 있으면 권한 갱신.
+    """파일/폴더를 사용자·채널에 공유(ACL). 이미 존재하면 권한 갱신.
 
-    - path: 내 파일(my/..) 또는 공동 소유로 받은 경로(shared-with-me/..) — 공동 소유자의 재공유는 원 소유자 영역에 행을 만든다.
+    - path: 내 파일(my/..) 또는 공동 소유로 받은 경로(shared-with-me/..) — 공동 소유자의 재공유는 원 소유자 영역에 행을 생성한다.
     - role: view|comment|edit|owner(없으면 can_write). owner(공동 소유)는 원 소유자만 지정한다.
-    - 공동 소유자는 원 소유자가 만든 공유를 바꿀 수 없다(403).
-    - channel_ids: 내가 멤버인 채널만(아니면 403). notify=true 면 채팅으로 알린다(사람 DM · 채널 메시지 + message).
+    - 공동 소유자는 원 소유자가 생성한 공유를 변경할 수 없다(403).
+    - channel_ids: 본인이 멤버인 채널만(아니면 403). notify=true 이면 채팅으로 통지한다(사용자 DM · 채널 메시지 + message).
     """
     a = await _manage_target(db, user, body.path)
     role = acc.normalize_role(body.role, body.can_write)
@@ -1864,7 +1864,7 @@ async def share_with_users(
     )).scalars().all()
     by_user = {s.shared_with_user_id: s for s in rows if s.shared_with_user_id}
     by_channel = {s.shared_with_channel_id: s for s in rows if s.shared_with_channel_id}
-    # 나 자신·원 소유자에게는 공유하지 않는다
+    # 본인·원 소유자에게는 공유하지 않는다
     user_ids = [u for u in dict.fromkeys(body.user_ids) if u not in (user.id, owner_id)]
     existing = [by_user[u] for u in user_ids if u in by_user] + [by_channel[c] for c in channel_ids if c in by_channel]
     if any(not _can_manage_row(r, user) for r in existing):
@@ -1886,7 +1886,7 @@ async def share_with_users(
         row = by_channel.get(cid)
         if row:
             acc.apply_role(row, role)
-            # 공유 창에서 직접 다시 걸었다 = 사람이 원한 공유 → 채널 폴더 연결을 풀어도 남긴다
+            # 공유 창에서 직접 재설정함 = 사용자가 의도한 공유 → 채널 폴더 연결을 해제해도 유지한다
             row.origin = None
         else:
             row = FileShare(owner_id=owner_id, file_path=owner_vp, shared_with_channel_id=cid, created_by=user.id)
@@ -1912,10 +1912,10 @@ async def list_user_shares(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """특정 경로의 공유 목록(수신자 + 권한). 원 소유자·공동 소유자만.
+    """특정 경로의 공유 목록(수신자 + 권한). 원 소유자·공동 소유자만 조회 가능.
 
-    행: role · can_write(호환) · created_by · can_manage(내가 바꾸거나 해제할 수 있나). 채널 행은 채널 이름·멤버 수.
-    owner: 원 소유자(공동 소유자 화면의 "소유자" 줄), my_role: 내 권한.
+    행: role · can_write(호환) · created_by · can_manage(요청 사용자의 변경·해제 가능 여부). 채널 행은 채널 이름·멤버 수.
+    owner: 원 소유자(공동 소유자 화면의 "소유자" 줄), my_role: 요청 사용자의 권한.
     """
     from app.db.models import Channel, ChannelMember
     a = await _manage_target(db, user, path)
@@ -1979,8 +1979,8 @@ async def update_user_share(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """공유 한 줄의 권한 변경. 원 소유자·관리자, 또는 그 경로의 공동 소유자(원 소유자가 만든 행·공동 소유 행 제외).
-    공동 소유(owner)로 올리거나 내리는 것은 원 소유자만."""
+    """공유 행 하나의 권한 변경. 원 소유자·관리자, 또는 해당 경로의 공동 소유자(원 소유자가 생성한 행·공동 소유 행 제외).
+    공동 소유(owner)로의 승격·강등은 원 소유자만 가능."""
     row = await _row_for_manager(db, share_id, user)
     role = acc.normalize_role(body.role)
     if (role == "owner" or acc.share_role(row) == "owner") and row.owner_id != user.id:
@@ -1998,7 +1998,7 @@ async def delete_user_share(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """공유 해제. 원 소유자·관리자, 또는 그 경로의 공동 소유자(원 소유자가 만든 공유·공동 소유는 해제 못 함)."""
+    """공유 해제. 원 소유자·관리자, 또는 해당 경로의 공동 소유자(원 소유자가 생성한 공유·공동 소유는 해제 불가)."""
     row = await _row_for_manager(db, share_id, user)
     key = act.owner_key(row.owner_id, row.file_path)
     await db.delete(row)
@@ -2012,10 +2012,10 @@ async def shared_with_me(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """나에게 공유된 파일/폴더 목록(직접 + 내가 멤버인 채널에 공유된 것). 원본이 사라진 항목은 건너뜀.
+    """본인에게 공유된 파일/폴더 목록(직접 + 본인이 멤버인 채널에 공유된 것). 원본이 없는 항목은 생략.
 
-    같은 항목이 사람·채널로 겹치면 한 번만 — 직접 공유를 앞세우고, 권한이 높은 쪽을 고른다.
-    role: 그 항목에 대한 내 권한(view|comment|edit|owner), can_write 는 호환용(edit 이상).
+    동일 항목이 사용자·채널로 중복되면 한 번만 포함 — 직접 공유를 우선하고, 권한이 높은 쪽을 선택한다.
+    role: 해당 항목에 대한 요청 사용자의 권한(view|comment|edit|owner), can_write 는 호환용(edit 이상).
     """
     my_channels = await _my_channel_ids(db, user.id)
     cond = FileShare.shared_with_user_id == user.id
@@ -2039,7 +2039,7 @@ async def shared_with_me(
         cur = picked.get(k)
         if cur is None or _rank(s) > _rank(cur[0]):
             picked[k] = row
-    # 같은 항목이 사람·채널로 겹치면 권한은 둘 중 높은 것(접근 규칙과 같다)
+    # 동일 항목이 사용자·채널로 중복되면 권한은 둘 중 높은 것(접근 규칙과 동일)
     best_role: dict[tuple[str, str], str] = {}
     for row in rows:
         s = row[0]
@@ -2070,14 +2070,14 @@ async def shared_with_me(
             "owner": {"id": s.owner_id, "display_name": display or username or "?"},
             "role": role,
             "can_write": role in ("edit", "owner"),
-            # 채널로 받은 공유면 그 채널(공유받음 목록 "#개발 에서")
+            # 채널로 받은 공유이면 해당 채널(공유받음 목록 "#개발 에서")
             "via_channel": ({"id": s.shared_with_channel_id, "name": channel_names.get(s.shared_with_channel_id, "")}
                             if s.shared_with_channel_id else None),
             "is_dir": real.is_dir(),
             "size": st.st_size if real.is_file() else 0,
             "modified_at": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
             "etag": fs.compute_etag(st) if real.is_file() else None,
-            # 받은 날(공유가 만들어진 때) — 공유받음 목록 "받은 날" 열
+            # 수신일(공유 생성 시점) — 공유받음 목록 "받은 날" 열
             "shared_at": (s.created_at if s.created_at.tzinfo else s.created_at.replace(tzinfo=timezone.utc)).isoformat()
             if s.created_at else None,
         })
@@ -2092,7 +2092,7 @@ async def download_shared_with_me(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """나에게 공유된 파일 다운로드(권한 확인). 공유된 게 폴더면 path 로 그 안의 파일을 받는다."""
+    """본인에게 공유된 파일 다운로드(권한 확인). 공유 대상이 폴더이면 path 로 그 내부의 파일을 내려받는다."""
     s = await _accessible_share(db, share_id, user)
     if not s:
         raise HTTPException(status_code=404, detail="공유를 찾을 수 없습니다")
@@ -2113,7 +2113,7 @@ def _unlock_sig(token: str, exp: int) -> str:
 
 
 def make_unlock_access(token: str, ttl: int = 3600) -> str:
-    """비밀번호를 푼 뒤 쓰는 짧은 접근 키(쿼리 ?access=). 브라우저 내려받기 링크에 붙인다."""
+    """비밀번호 해제 후 사용하는 단기 접근 키(쿼리 ?access=). 브라우저 내려받기 링크에 부가한다."""
     import time as _t
     exp = int(_t.time()) + ttl
     return f"{exp}.{_unlock_sig(token, exp)}"
@@ -2143,9 +2143,9 @@ def _password_ok(link: ShareLink, request: Request | None, access: str | None) -
     return False
 
 
-# 링크 비밀번호 시도 제한(19) — 예전엔 잠금 집계가 없어 nginx 한도(초당 30회)만큼 그대로 대입할 수 있었다.
-# 링크+IP 마다 10분에 10번 틀리면 429. 워커가 여럿이라 Redis 에 센다. Redis 가 없으면 막지 않는다
-# (제한 장치가 죽었다고 정상 손님까지 못 열게 하지 않는다).
+# 링크 비밀번호 시도 제한(19) — 과거에는 잠금 집계가 없어 nginx 한도(초당 30회)까지 그대로 대입 시도가 가능했다.
+# 링크+IP 별로 10분에 10회 실패 시 429. 워커가 여러 개이므로 Redis 에 집계한다. Redis 가 없으면 차단하지 않는다
+# (제한 장치의 장애로 정상 손님의 접근까지 차단하지 않는다).
 UNLOCK_MAX_FAILS = 10
 UNLOCK_WINDOW_S = 600
 
@@ -2171,7 +2171,7 @@ async def _unlock_redis():
 
 
 async def unlock_guard(token: str, request: Request | None) -> None:
-    """이미 너무 많이 틀렸으면 429(비밀번호를 대조하기 전에 부른다)."""
+    """이미 실패 횟수가 한도를 초과했으면 429(비밀번호 대조 전에 호출한다)."""
     r = await _unlock_redis()
     if r is None:
         return
@@ -2207,7 +2207,7 @@ async def unlock_succeeded(token: str, request: Request | None) -> None:
 
 
 async def check_link_password(link: ShareLink, password: str | None, request: Request | None) -> bool:
-    """비밀번호 대조 + 시도 제한. 맞으면 True, 틀리면 False(횟수 +1), 이미 한도를 넘었으면 429."""
+    """비밀번호 대조 + 시도 제한. 일치하면 True, 불일치하면 False(횟수 +1), 이미 한도를 초과했으면 429."""
     from app.auth.password import verify_password
     await unlock_guard(link.token, request)
     if password and verify_password(password, link.password_hash):
@@ -2218,7 +2218,7 @@ async def check_link_password(link: ShareLink, password: str | None, request: Re
 
 
 async def _password_gate(link: ShareLink, request: Request | None, access: str | None) -> bool:
-    """_password_ok 와 같은 판정이되 X-Share-Password 로 보낸 비밀번호에는 시도 제한을 건다."""
+    """_password_ok 와 동일한 판정이되 X-Share-Password 로 전송된 비밀번호에는 시도 제한을 적용한다."""
     if not link.password_hash:
         return True
     if _unlock_ok(link.token, access):
@@ -2230,7 +2230,7 @@ async def _password_gate(link: ShareLink, request: Request | None, access: str |
 
 
 async def load_public_link(db: AsyncSession, token: str) -> ShareLink:
-    """토큰 → 살아 있는 링크(만료면 404). 횟수·비밀번호는 호출부가 본다."""
+    """토큰 → 유효한 링크(만료이면 404). 횟수·비밀번호는 호출부가 확인한다."""
     link = (await db.execute(select(ShareLink).where(ShareLink.token == token))).scalar_one_or_none()
     if not link:
         raise HTTPException(status_code=404, detail="Link not found or expired")
@@ -2243,7 +2243,7 @@ async def load_public_link(db: AsyncSession, token: str) -> ShareLink:
 
 
 def resolve_link_path(link: ShareLink, vp: str | None = None) -> Path:
-    """링크 만든 사람 기준 가상경로 → 실제 경로(트래버설 차단)."""
+    """링크 생성자 기준 가상경로 → 실제 경로(트래버설 차단)."""
     storage_root = Path(settings.storage_root).resolve()
     vp = (vp or link.file_path).strip("/")
     parts = vp.split("/", 1)
@@ -2256,7 +2256,7 @@ def resolve_link_path(link: ShareLink, vp: str | None = None) -> Path:
     elif root_segment == "shared":
         base = storage_root / "shared"
     elif root_segment == acc.TRASH_PREFIX:
-        # 원본이 휴지통에 있다(링크는 복원하면 다시 열린다)
+        # 원본이 휴지통에 있음(복원 시 링크 재사용 가능)
         raise HTTPException(status_code=404, detail="File no longer exists")
     else:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -2268,14 +2268,14 @@ def resolve_link_path(link: ShareLink, vp: str | None = None) -> Path:
 
 
 # ─── 폴더 링크 탐색(OneDrive식 보기 전용) ───
-# 폴더 하나로 만든 링크(paths 에 폴더 1개)는 손님이 그 폴더 안을 돌아다니며 파일별로 미리보기·내려받기 할 수 있다.
-# 범위는 링크 폴더 아래로만 — 숨김(fs.is_hidden_name: . 시작·NAS 시스템 이름)·`..`·심볼릭으로 밖을 가리키는 항목은 목록에서 빼고 요청도 404.
+# 폴더 하나로 생성한 링크(paths 에 폴더 1개)는 손님이 해당 폴더 내부를 탐색하며 파일별로 미리보기·내려받기를 할 수 있다.
+# 범위는 링크 폴더 하위로 한정 — 숨김(fs.is_hidden_name: . 시작·NAS 시스템 이름)·`..`·심볼릭 링크로 외부를 가리키는 항목은 목록에서 제외하고 요청도 404.
 
 _LINK_LIST_MAX = 2000
 
 
 def link_folder_root(link: ShareLink) -> Path | None:
-    """폴더 하나짜리 링크면 그 폴더의 실제 경로, 아니면 None."""
+    """폴더 하나짜리 링크이면 해당 폴더의 실제 경로, 아니면 None."""
     if not getattr(link, "paths", None):
         return None
     ps = _link_paths(link)
@@ -2293,7 +2293,7 @@ def is_folder_link(link: ShareLink) -> bool:
 
 
 def link_browse_target(root: Path, sub: str) -> Path:
-    """링크 폴더 기준 하위 경로 → 실제 경로. 밖·숨김·없음은 모두 404(존재 여부를 흘리지 않는다)."""
+    """링크 폴더 기준 하위 경로 → 실제 경로. 범위 밖·숨김·부재는 모두 404(존재 여부를 노출하지 않음)."""
     parts = [p for p in sub.replace("\\", "/").split("/") if p]
     if any(fs._is_hidden(p) for p in parts):     # '.', '..', '.versions', '@Recycle' …
         raise HTTPException(status_code=404, detail="찾을 수 없습니다")
@@ -2305,10 +2305,10 @@ def link_browse_target(root: Path, sub: str) -> Path:
 
 
 def _preview_kind(p: Path) -> str | None:
-    """손님 화면 미리보기 — 글자이거나 브라우저 안에서 열어도 안전한 이미지·PDF 만.
+    """손님 화면 미리보기 — 텍스트이거나 브라우저 내에서 열어도 안전한 이미지·PDF 만 허용.
 
     미리보기 가능 형식의 단일 출처: 손님 화면(/s/<token> 의 [미리보기]·폴더 링크 목록의 preview),
-    내려받기 막힌 링크의 inline 응답, "내려받기 막음"을 걸 수 있는지(create/update_share_link)가 모두 이 함수를 쓴다.
+    내려받기가 차단된 링크의 inline 응답, "내려받기 막음" 설정 가능 여부(create/update_share_link)가 모두 이 함수를 사용한다.
     """
     t = pv.can_preview(p)
     if t == "text":
@@ -2323,7 +2323,7 @@ NO_PREVIEW_BLOCK_DETAIL = ("이 형식은 미리 볼 수 없어 내려받기를 
 
 
 def link_single_file(link: ShareLink) -> Path | None:
-    """파일 하나짜리 링크면 그 파일의 실제 경로(없거나 폴더·묶음 링크면 None)."""
+    """파일 하나짜리 링크이면 해당 파일의 실제 경로(없거나 폴더·묶음 링크이면 None)."""
     if getattr(link, "paths", None):
         return None
     try:
@@ -2338,11 +2338,11 @@ BUNDLE_BLOCK_DETAIL = ("묶음 링크는 미리보기가 없어 내려받기를 
 
 
 def link_block_refusal(link: ShareLink) -> str | None:
-    """이 링크에 "내려받기 막음(미리보기만)"을 걸면 안 되는 이유(걸어도 되면 None).
+    """이 링크에 "내려받기 막음(미리보기만)"을 설정할 수 없는 사유(설정 가능하면 None).
 
     - 파일 하나짜리 보기 링크가 미리보기 불가 형식 → NO_PREVIEW_BLOCK_DETAIL
-    - 묶음(zip) 링크 — 항목 둘 이상, 또는 예전에 paths 로 만들어진 파일 하나 → BUNDLE_BLOCK_DETAIL
-    - 폴더 하나(둘러보기)·같이 편집 링크, 원본이 없어진 링크는 판정 대상이 아니다(None).
+    - 묶음(zip) 링크 — 항목 둘 이상, 또는 과거에 paths 로 생성된 파일 하나 → BUNDLE_BLOCK_DETAIL
+    - 폴더 하나(둘러보기)·같이 편집 링크, 원본이 없는 링크는 판정 대상이 아니다(None).
     """
     if link.can_edit:
         return None
@@ -2364,7 +2364,7 @@ def link_can_block_download(link: ShareLink) -> bool:
 
 
 def link_target_exists(link: ShareLink) -> bool:
-    """링크 원본이 아직 있나(묶음은 하나라도). 휴지통·삭제·옮김이면 False."""
+    """링크 원본의 존재 여부(묶음은 하나라도 존재하면 참). 휴지통·삭제·이동이면 False."""
     for vp in _link_paths(link):
         try:
             if resolve_link_path(link, vp).exists():
@@ -2391,7 +2391,7 @@ def _scan_link_folder(real: Path, base: Path, sub: str) -> tuple[list[dict], boo
         if fs._is_hidden(e.name):
             continue
         try:
-            if not e.resolve().is_relative_to(base):   # 심볼릭 탈출
+            if not e.resolve().is_relative_to(base):   # 심볼릭 링크를 통한 범위 이탈
                 continue
             st = e.stat()
         except OSError:
@@ -2426,7 +2426,7 @@ async def list_shared_link_folder(
     access: str | None = Query(None, description="unlock 으로 받은 접근 키(비밀번호 링크)"),
     db: AsyncSession = Depends(get_db),
 ):
-    """폴더 링크 안 목록(인증 없음, 횟수 안 셈). 항목 path 는 링크 폴더 기준 상대 경로."""
+    """폴더 링크 내부 목록(인증 없음, 횟수 미집계). 항목 path 는 링크 폴더 기준 상대 경로."""
     link = await load_public_link(db, token)
     if not await _password_gate(link, request, access):
         raise HTTPException(status_code=401, detail="password_required")
@@ -2447,17 +2447,17 @@ async def list_shared_link_folder(
 @router.post("/shared/{token}/unlock")
 async def unlock_shared(token: str, body: ShareUnlockRequest, request: Request = None,
                         db: AsyncSession = Depends(get_db)):
-    """비밀번호 링크 풀기 → {access} (1시간). 내려받기 주소에 ?access= 로 붙인다.
+    """비밀번호 링크 해제 → {access} (1시간). 내려받기 주소에 ?access= 로 부가한다.
 
-    같은 링크를 같은 주소에서 10분에 10번 틀리면 429(시도 제한)."""
+    동일 링크를 동일 주소에서 10분에 10회 실패하면 429(시도 제한)."""
     link = await load_public_link(db, token)
     if not link.password_hash:
         return {"ok": True, "access": None}
     if not await check_link_password(link, body.password or "", request):
         raise HTTPException(status_code=401, detail="비밀번호가 맞지 않습니다")
-    # 비밀번호 링크는 info 가 내용을 숨기므로, 푼 뒤 손님 화면이 안내를 낼 수 있게 여기서 알려 준다.
-    #   exists      — 원본이 지워졌으면 false("삭제됨" 안내가 먼저다. 없는 파일을 "미리 볼 수 없는 형식"이라 하면 틀린 말)
-    #   can_preview — 내려받기 막힌 링크에서 볼 것이 있나(원본이 없으면 판정하지 않고 true)
+    # 비밀번호 링크는 info 가 내용을 숨기므로, 해제 후 손님 화면이 안내를 표시할 수 있도록 여기서 전달한다.
+    #   exists      — 원본이 삭제되었으면 false("삭제됨" 안내가 우선한다. 없는 파일을 "미리 볼 수 없는 형식"으로 안내하면 오류)
+    #   can_preview — 내려받기가 차단된 링크에서 볼 수 있는 내용의 존재 여부(원본이 없으면 판정하지 않고 true)
     exists = link_target_exists(link)
     return {"ok": True, "access": make_unlock_access(token), "exists": exists,
             "can_preview": (not exists) or link_folder_root(link) is not None or link_preview_kind(link) is not None}
@@ -2472,7 +2472,7 @@ async def download_shared(
     sub: str | None = Query(None, description="폴더 링크 안 하위 경로 — 파일이면 그 파일, 폴더면 그 폴더 zip"),
     db: AsyncSession = Depends(get_db),
 ):
-    # 함수를 직접 부르면(테스트) 기본값이 Query 객체라 문자열일 때만 쓴다
+    # 함수를 직접 호출하면(테스트) 기본값이 Query 객체이므로 문자열일 때만 사용한다
     sub = sub.strip("/") if isinstance(sub, str) and sub.strip("/") else None
     link = await load_public_link(db, token)
 
@@ -2525,12 +2525,12 @@ async def download_shared(
         if not real.is_file():
             raise HTTPException(status_code=404, detail="File no longer exists")
         if blocked:
-            # 미리보기는 글자(JSON)거나 브라우저 안에서 열어도 안전한 형식(이미지·PDF)만 — svg·html 등은 안 됨
+            # 미리보기는 텍스트(JSON)이거나 브라우저 내에서 열어도 안전한 형식(이미지·PDF)만 허용 — svg·html 등은 불가
             if _preview_kind(real) is None:
                 raise HTTPException(status_code=403, detail="이 형식은 미리 볼 수 없고 내려받기가 막혀 있습니다")
 
     # 다운로드 횟수 원자적 증가 (TOCTOU 방지 — 동시요청 한도 우회 차단)
-    # 폴더 링크 안 파일 미리보기는 내려받기가 아니라 세지 않는다(둘러보다 1회 링크가 닳지 않게).
+    # 폴더 링크 내부 파일 미리보기는 내려받기가 아니므로 집계하지 않는다(탐색만으로 1회 링크가 소진되지 않도록 함).
     from sqlalchemy import update as _sa_update
     if target is not None and inline and real is not None:
         pass
@@ -2569,7 +2569,7 @@ async def download_shared(
                     for p in sorted(r.rglob("*")):
                         if not p.is_file() or any(fs._is_hidden(part) for part in p.relative_to(r).parts):
                             continue
-                        if fence is not None and not p.resolve().is_relative_to(fence):   # 심볼릭 탈출
+                        if fence is not None and not p.resolve().is_relative_to(fence):   # 심볼릭 링크를 통한 범위 이탈
                             continue
                         yield p, f"{r.name}/{p.relative_to(r)}"
 
@@ -2582,7 +2582,7 @@ async def download_shared(
         )
 
     if blocked:
-        # 내려받기 막힘 — 브라우저 안에서만 보이게(inline + no-store). 완전한 복제 방지는 아니다.
+        # 내려받기 차단 — 브라우저 내에서만 표시(inline + no-store). 완전한 복제 방지는 아니다.
         ptype = pv.can_preview(real)
         if ptype == "text":
             text = await asyncio.to_thread(pv.get_text_preview, real)
@@ -2591,12 +2591,12 @@ async def download_shared(
         headers["Cache-Control"] = "no-store"
         return FileResponse(path=str(real), media_type=media, headers=headers)
 
-    # 횟수 차감 뒤라 304 를 돌려줘도 1회로 센다 — 공유 링크는 캐시 재검증보다 한도가 먼저다.
+    # 횟수 차감 이후이므로 304 를 반환해도 1회로 집계한다 — 공유 링크는 캐시 재검증보다 한도를 우선한다.
     # inline=1 이어도 안전한 형식만 inline(나머지는 내려받기) — serve_safety
     return _file_response(real, request, filename=real.name if target is not None else link.display_name, inline=inline)
 
 
-# ─── 버전: 옛 버전 내려받기 ───
+# ─── 버전: 이전 버전 내려받기 ───
 
 
 @router.get("/versions/download")
@@ -2714,7 +2714,7 @@ async def list_stars(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """즐겨찾기 목록(최근 추가 순). 원본이 없어진 항목은 exists=false 로 함께 준다."""
+    """즐겨찾기 목록(최근 추가 순). 원본이 없는 항목은 exists=false 로 함께 반환한다."""
     rows = (await db.execute(
         select(FileStar).where(FileStar.user_id == user.id).order_by(FileStar.created_at.desc())
     )).scalars().all()
@@ -2793,7 +2793,7 @@ async def list_recent(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """최근 연 파일(최신순). 지워졌거나 권한이 사라진 항목은 뺀다."""
+    """최근 연 파일(최신순). 삭제되었거나 권한이 없어진 항목은 제외한다."""
     rows = (await db.execute(
         select(FileRecent).where(FileRecent.user_id == user.id)
         .order_by(FileRecent.accessed_at.desc()).limit(limit * 2)
@@ -2821,7 +2821,7 @@ async def add_recent(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """파일을 열었음을 기록(프런트가 미리보기·편집기를 열 때 부른다). 활동 기록에도 '열람'으로 남긴다."""
+    """파일 열람을 기록한다(프런트가 미리보기·편집기를 열 때 호출). 활동 기록에도 '열람'으로 기록한다."""
     vp = body.path.strip("/")
     if vp.startswith("shared-with-me/"):
         sid, _, sub = vp[len("shared-with-me/"):].partition("/")
@@ -2840,7 +2840,7 @@ async def add_recent(
     return {"ok": True}
 
 
-# ─── 공유받은 폴더 안 탐색 ───
+# ─── 공유받은 폴더 내부 탐색 ───
 
 
 _shared_sub_real = acc.shared_sub_real   # 공유 루트 아래 sub 경로(범위 밖·숨김 차단) — 규칙은 access 모듈
@@ -2853,9 +2853,9 @@ async def list_shared_folder(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """나에게 공유된 폴더 안을 탐색. 항목 path 는 'shared-with-me/<share_id>/<하위경로>'.
+    """본인에게 공유된 폴더 내부를 탐색. 항목 path 는 'shared-with-me/<share_id>/<하위경로>'.
 
-    role: 이 폴더에 대한 내 권한(조상 폴더 공유까지 본 가장 높은 것), can_write 는 호환용.
+    role: 이 폴더에 대한 요청 사용자의 권한(조상 폴더 공유까지 포함한 최고 권한), can_write 는 호환용.
     """
     sub_q = path.strip("/")
     a = await acc.resolve(db, user, f"{acc.SHARED_ROOT}/{share_id}" + (f"/{sub_q}" if sub_q else ""), "view")
@@ -2865,7 +2865,7 @@ async def list_shared_folder(
         raise HTTPException(status_code=404, detail="폴더가 아닙니다")
     sub = path.strip("/")
     prefix = f"shared-with-me/{share_id}" + (f"/{sub}" if sub else "")
-    # list_directory 캐시는 실제 경로만 키로 써서 소유자의 가상경로(my/..)가 섞여 나온다 → 캐시 없이 읽는다
+    # list_directory 캐시는 실제 경로만 키로 사용하여 소유자의 가상경로(my/..)가 혼입된다 → 캐시 없이 읽는다
     items = await asyncio.to_thread(fs._scan_directory, real, prefix)
     owner = await db.get(User, s.owner_id)
     oname = (owner.display_name or owner.username) if owner else "?"
@@ -2876,7 +2876,7 @@ async def list_shared_folder(
 
 # ─── 채널로 공유(채팅 파일 메시지) ───
 
-_CHANNEL_SHARE_MAX = 50 * 1024 * 1024  # 채팅 첨부 한도와 같다
+_CHANNEL_SHARE_MAX = 50 * 1024 * 1024  # 채팅 첨부 한도와 동일
 
 
 @router.post("/share-channel", status_code=201)
@@ -2885,9 +2885,9 @@ async def share_to_channel(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """파일을 채팅 채널에 첨부 메시지로 올린다(파일은 채팅 저장소로 복사 — 원본이 바뀌어도 메시지는 그대로).
+    """파일을 채팅 채널에 첨부 메시지로 게시한다(파일은 채팅 저장소로 복사 — 원본이 변경되어도 메시지는 유지).
 
-    큰 파일(50MB 초과)은 413 — 공유 링크를 만들어 붙이는 쪽을 쓰라는 뜻.
+    대용량 파일(50MB 초과)은 413 — 공유 링크를 생성하여 첨부하는 방식을 사용해야 함을 의미한다.
     """
     import json as _json
     import mimetypes as _mt

@@ -1,5 +1,5 @@
-"""관리 콘솔 — 로그인 보호 정책 API, 저장소 요약·사용자 기본 할당(업로드 집행), SMTP 마지막 시험,
-백업 대상 표시, 앱 빌드 산출물, AI 모델 상태 시험. 관리자 전용인지도 본다."""
+"""관리 콘솔 — 로그인 보호 정책 API, 저장소 요약·사용자 기본 할당(업로드 집행), SMTP 최근 시험,
+백업 대상 표시, 앱 빌드 산출물, AI 모델 상태 시험. 관리자 전용 여부도 검증한다."""
 
 import io
 import os
@@ -56,7 +56,7 @@ async def test_security_policy_api(db):
     res = await settings_ext.get_security_policy(admin=root, db=db)
     assert res["require_2fa"] == "off" and res["lockout_threshold"] == 5 and 0 in res["idle_choices"]
 
-    # 본인이 2단계를 안 켠 관리자는 "관리자 필수"를 켤 수 없다(켜는 순간 갇힘)
+    # 본인이 2단계 인증을 활성화하지 않은 관리자는 "관리자 필수"를 활성화할 수 없다(활성화 즉시 본인 접근 차단)
     with pytest.raises(HTTPException) as e:
         await settings_ext.put_security_policy(settings_ext.SecurityPolicyUpdate(require_2fa="admins"), _req(), admin=root, db=db)
     assert e.value.status_code == 400
@@ -67,7 +67,7 @@ async def test_security_policy_api(db):
                                           idle_timeout_minutes=60), _req(), admin=root, db=db)
     assert res["require_2fa"] == "admins" and res["lockout_enabled"] and res["new_device_alert"]
     assert res["idle_timeout_minutes"] == 60
-    # 저장하면 캐시도 비워져 바로 반영
+    # 저장 시 캐시도 초기화되어 즉시 반영
     assert (await security_policy.get_policy_cached(db))["require_2fa"] == "admins"
     with pytest.raises(HTTPException):
         await settings_ext.put_security_policy(settings_ext.SecurityPolicyUpdate(idle_timeout_minutes=5), _req(), admin=root, db=db)
@@ -98,11 +98,11 @@ async def test_quota_rules(db, monkeypatch):
                                          admin=await db.get(User, "root"), db=db)
 
     async def _used(uid):
-        return file_quota.GB - 100  # 100 바이트 남음
+        return file_quota.GB - 100  # 100 바이트 잔여
 
     monkeypatch.setattr(file_quota, "personal_usage", _used)
     assert await file_quota.room_left(db, alice, "my") == 100
-    assert await file_quota.room_left(db, alice, "shared/team") is None  # 공유 폴더는 개인 할당 밖
+    assert await file_quota.room_left(db, alice, "shared/team") is None  # 공유 폴더는 개인 할당 대상 외
     assert await file_quota.room_left(db, alice, "myfiles") is None
     assert await file_quota.ensure_room(db, alice, "my/a", 50) == 100
     with pytest.raises(HTTPException) as e:
@@ -130,13 +130,13 @@ async def test_upload_blocked_over_quota(db, monkeypatch, tmp_path):
 
     monkeypatch.setattr(files_router, "_upload_target", _target)
     up = UploadFile(filename="big.bin", file=io.BytesIO(b"x" * 64))
-    with pytest.raises(HTTPException) as e:  # 선언 크기 0 이어도 기록 중에 넘치면 멈추고 지운다
+    with pytest.raises(HTTPException) as e:  # 선언 크기가 0 이어도 기록 중 초과하면 중단하고 삭제한다
         await files_router.upload_file(up, path="my/", upload_id=None, size=0, mtime=None, x_file_mtime=None,
                                        user=alice, db=db)
     assert e.value.status_code == 413
     assert not (target / "big.bin").exists()
 
-    with pytest.raises(HTTPException) as e:  # 큰 파일 재개 업로드 세션도 시작 전에 거른다
+    with pytest.raises(HTTPException) as e:  # 대용량 파일 재개 업로드 세션도 시작 전에 차단한다
         await files_router.create_upload_session(
             files_router.UploadSessionCreate(name="big.bin", path="my/", size=64), user=alice, db=db)
     assert e.value.status_code == 413

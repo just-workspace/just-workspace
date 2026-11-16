@@ -42,9 +42,9 @@ from app.git.schemas import (
 
 logger = logging.getLogger(__name__)
 
-# ─── 요청마다 사용자 권한으로 ───
-# Gitea 를 부르는 토큰은 관리자 토큰이다. 사용자 요청은 반드시 그 사용자 권한(Sudo)으로만 대신한다.
-# Gitea 계정이 없는 사용자는 공개 저장소 읽기만 — 쓰기는 403, 비공개·내부 저장소는 404.
+# ─── 요청별 사용자 권한 적용 ───
+# Gitea 호출 토큰은 관리자 토큰이다. 사용자 요청은 반드시 해당 사용자 권한(Sudo)으로만 대행한다.
+# Gitea 계정이 없는 사용자는 공개 저장소 읽기만 허용한다 — 쓰기는 403, 비공개·내부 저장소는 404.
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
 _ACCOUNT_TTL = 60.0
@@ -103,11 +103,11 @@ router = APIRouter(prefix="/api/git", tags=["git"], dependencies=[Depends(git_id
 
 
 def _public_url(url: str | None) -> str:
-    """Gitea 가 API 요청 Host(내부 http://gitea:3000) 로 만든 링크를 브라우저용 공개 주소로 바꾼다.
+    """Gitea 가 API 요청 Host(내부 http://gitea:3000) 로 생성한 링크를 브라우저용 공개 주소로 변환한다.
 
     Gitea 1.2x 는 html_url·clone_url·avatar_url 의 호스트를 요청 Host 에서 가져오고 경로(/git/…)만
-    ROOT_URL 을 따른다. 그래서 내부 주소(settings.gitea_url)의 scheme·호스트만 공개 주소
-    (GITEA_EXTERNAL_URL, 비면 APP_URL/git/)의 것으로 갈아 끼운다. 이미 공개 주소면 그대로."""
+    ROOT_URL 을 따른다. 따라서 내부 주소(settings.gitea_url)의 scheme·호스트만 공개 주소
+    (GITEA_EXTERNAL_URL, 비어 있으면 APP_URL/git/)의 값으로 치환한다. 이미 공개 주소면 변경하지 않는다."""
     if not url:
         return ""
     settings = get_settings()
@@ -178,14 +178,14 @@ _recent_commits_lock = asyncio.Lock()
 async def _refresh_recent_commits() -> list[RecentCommit]:
     """Fetch recent commits from top 5 repos in parallel.
 
-    공용 캐시라 시스템 권한으로 모은다 — 내보낼 때 반드시 사용자 기준으로 거른다(_visible_for).
+    공용 캐시이므로 시스템 권한으로 수집한다. 반환 시 반드시 사용자 기준으로 필터링한다(_visible_for).
     """
     with gitea.system_call():
         return await _refresh_recent_commits_inner()
 
 
 async def _visible_for(request: Request) -> set[str]:
-    """이 요청 사용자가 볼 수 있는 저장소 full_name."""
+    """요청 사용자가 열람 가능한 저장소 full_name."""
     who = getattr(request.state, "git_user", None)
     if who:
         return await gitea.visible_repo_names(who)
@@ -257,8 +257,8 @@ async def _cached_recent_commits() -> list[RecentCommit]:
 
 
 # ─── 대시보드 Git 활동 ───
-# 범위 mine = 나에게 온 것(리뷰 요청 · 배정 · 멘션, 열린 것만), all = 내가 볼 수 있는 최근 이슈·PR + 저장소별 최근 커밋 묶음.
-# Gitea 에 그 사용자가 없으면(connected=false) 프런트는 카드째 숨긴다.
+# 범위 mine = 본인 대상 항목(리뷰 요청 · 배정 · 멘션, 열린 것만), all = 열람 가능한 최근 이슈·PR + 저장소별 최근 커밋 묶음.
+# Gitea 에 해당 사용자가 없으면(connected=false) 프런트는 카드 전체를 숨긴다.
 
 _MINE_FILTERS = (("review", {"type": "pulls", "review_requested": "true"}),
                  ("assigned", {"assigned": "true"}),
@@ -322,7 +322,7 @@ async def git_activity(
         logger.warning("Git 계정 확인 실패 (%s): %s", user.username, e)
         raise HTTPException(status_code=502, detail="Git 서버에 연결하지 못했습니다")
     if not connected:
-        # 계정이 없으면 "내 것"은 비어 있고, "전체"는 공개 저장소 활동만(카드는 [전체] 하나로 보여 준다)
+        # 계정이 없으면 "내 것"은 비어 있고, "전체"는 공개 저장소 활동만 포함(카드는 [전체] 하나로 표시)
         if scope != "all":
             return {"connected": False, "scope": scope, "items": []}
         try:
@@ -347,7 +347,7 @@ async def git_activity(
             logger.warning("Git 활동(mine) 조회 실패 (%s): %s", user.username, e)
             raise HTTPException(status_code=502, detail="Git 활동을 불러오지 못했습니다")
         seen: set[tuple[str, int]] = set()
-        # 앞선 이유가 이긴다: 리뷰 요청 > 배정 > 멘션
+        # 선순위 사유 우선: 리뷰 요청 > 배정 > 멘션
         for batch in batches:
             for reason, it in batch:
                 key = (((it.get("repository") or {}).get("full_name") or ""), it.get("number"))
@@ -362,7 +362,7 @@ async def git_activity(
             logger.warning("Git 활동(all) 조회 실패 (%s): %s", user.username, e)
             raise HTTPException(status_code=502, detail="Git 활동을 불러오지 못했습니다")
         items = [_activity_from_issue(it, None) for it in rows]
-        # 커밋 캐시는 관리자 토큰으로 모은 것 — 그 사람이 볼 수 있는 저장소만 남긴다
+        # 커밋 캐시는 관리자 토큰으로 수집한 것이므로 해당 사용자가 열람 가능한 저장소만 유지
         try:
             visible = await gitea.visible_repo_names(user.username)
         except Exception:
@@ -497,7 +497,7 @@ async def repo_stats(
     repo: str,
     user: User = Depends(get_current_user),
 ):
-    """태그·이슈(열림/닫힘)·PR(열림/닫힘)·커밋(기본 브랜치)·브랜치 총수. 못 얻은 값은 null."""
+    """태그·이슈(열림/닫힘)·PR(열림/닫힘)·커밋(기본 브랜치)·브랜치 총수. 조회 실패한 값은 null."""
     try:
         data = await gitea.get_repo(owner, repo)
     except Exception:
@@ -535,7 +535,7 @@ async def _set_star(owner: str, repo: str, user: User, starred: bool) -> StarSta
 
 @router.put("/repos/{owner}/{repo}/star", response_model=StarState)
 async def star_repo(owner: str, repo: str, user: User = Depends(get_current_user)):
-    """스타 켜기 — 사용자별(Gitea Sudo 로 그 사용자 이름으로)."""
+    """스타 설정 — 사용자별(Gitea Sudo 로 해당 사용자 이름으로 수행)."""
     return await _set_star(owner, repo, user, True)
 
 
@@ -692,7 +692,7 @@ async def create_label(
     body: CreateLabelRequest,
     user: User = Depends(get_current_user),
 ):
-    """라벨 생성. 색은 서버가 팔레트에서 순환 배정(클라이언트는 이름만 보낸다)."""
+    """라벨 생성. 색은 서버가 팔레트에서 순환 배정(클라이언트는 이름만 전송)."""
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="라벨 이름이 비어 있습니다")
@@ -707,7 +707,7 @@ async def commit_status(
     sha: str,
     user: User = Depends(get_current_user),
 ):
-    """커밋 CI/빌드 상태(combined). 프론트가 보이는 커밋만 지연 조회."""
+    """커밋 CI/빌드 상태(combined). 프론트가 표시 중인 커밋만 지연 조회."""
     data = await gitea.get_commit_status(owner, repo, sha)
     return CommitStatus(
         state=data.get("state", "") or "",
@@ -790,7 +790,7 @@ async def set_issue_labels(
     body: SetIssueLabelsRequest,
     user: User = Depends(get_current_user),
 ):
-    """이슈 라벨을 통째로 교체(PATCH 1회). 교체된 최신 이슈를 반환."""
+    """이슈 라벨을 전체 교체(PATCH 1회). 교체된 최신 이슈를 반환."""
     try:
         data = await gitea.replace_issue_labels(owner, repo, index, body.labels)
     except Exception as e:

@@ -50,14 +50,14 @@ def _fail_key(uid: str) -> str:
 
 
 # ── PIN 저장 ──
-# 해시는 DB(privacy_pins)에 둔다. 예전에는 Redis 에만 있어서(키 `privacy:pin:<사용자>`) 백업에 들지
-# 않았고 복원하면 사라졌다.
+# 해시는 DB(privacy_pins)에 저장한다. 이전에는 Redis 에만 존재하여(키 `privacy:pin:<사용자>`) 백업에 포함되지
+# 않았고 복원 시 소실되었다.
 #
-# - 읽기: DB 에 있으면 그것만 쓴다. 없을 때만 예전 Redis 키를 보고, 있으면 DB 로 옮긴 뒤 그 값을 쓴다.
-# - 쓰기: DB 에 쓰고, 같은 값을 예전 Redis 키에도 써 둔다. Redis 쪽은 읽지 않는 사본이다 —
-#   업데이트가 실패해 이전 버전(그 키만 읽는다)으로 되돌아갔을 때 PIN 이 그대로 통하게 하려는 것이다.
-#   옮긴 뒤에도 키를 지우지 않는 이유가 같다.
-# - DB 에 행이 생긴 뒤로는 Redis 의 값이 무엇이든 영향이 없다(낡은 값이 되살아나지 않는다).
+# - 읽기: DB 에 있으면 해당 값만 사용한다. 없는 경우에만 이전 Redis 키를 조회하고, 있으면 DB 로 이전한 뒤 해당 값을 사용한다.
+# - 쓰기: DB 에 기록하고, 동일 값을 이전 Redis 키에도 기록한다. Redis 측은 읽지 않는 사본이다 —
+#   업데이트 실패로 이전 버전(해당 키만 읽는다)으로 롤백되었을 때 PIN 이 그대로 유효하도록 하기 위함이다.
+#   이전 후에도 키를 삭제하지 않는 이유도 동일하다.
+# - DB 에 행이 생성된 이후에는 Redis 의 값과 무관하게 영향이 없다(stale 값이 복원되지 않는다).
 
 async def _db_hash(uid: str) -> str | None:
     async with async_session() as db:
@@ -92,7 +92,7 @@ async def _pin_hash(uid: str) -> str | None:
     legacy = await _legacy_hash(uid)
     if not legacy:
         return None
-    # 옮긴다. 다른 워커가 먼저 넣었으면(같은 값을 옮겼거나 그 사이에 새 PIN 을 정했다) 그쪽이 맞다.
+    # 이전 수행. 다른 워커가 먼저 삽입한 경우(동일 값을 이전했거나 그 사이에 새 PIN 을 설정함) 해당 값을 우선한다.
     async with async_session() as db:
         db.add(PrivacyPin(user_id=uid, pin_hash=legacy))
         try:
@@ -119,7 +119,7 @@ async def set_pin(uid: str, new_pin: str) -> None:
             try:
                 await db.commit()
                 break
-            except IntegrityError:   # 두 요청이 동시에 처음 정했다 — 다시 읽어 덮어쓴다
+            except IntegrityError:   # 두 요청이 동시에 최초 설정 — 재조회 후 덮어쓴다
                 await db.rollback()
     else:
         raise RuntimeError("PIN 을 저장하지 못했습니다")

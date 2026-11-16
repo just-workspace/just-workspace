@@ -9,7 +9,7 @@ from app.mail import archive
 
 
 def test_safe_name_strips_path_and_control_chars():
-    """제목이 파일명이 되므로 경로 탈출이 막혀야 한다."""
+    """제목이 파일명이 되므로 경로 탈출이 차단되어야 한다."""
     assert "/" not in archive._safe_name("a/b/../../etc/passwd")
     assert "\\" not in archive._safe_name(r"a\b")
     assert archive._safe_name("") == "제목없음"
@@ -28,7 +28,7 @@ def test_eml_path_groups_by_month():
 
 
 def test_eml_path_falls_back_when_date_unparseable():
-    """날짜가 깨져도 저장은 돼야 한다 — 안 그러면 그 메일만 조용히 유실된다."""
+    """날짜가 손상되어도 저장은 되어야 한다 — 그렇지 않으면 해당 메일만 알림 없이 유실된다."""
     p = archive.eml_path("u1", "me@gmail.com", "7", "제목", "not-a-date")
     assert p.name == "7_제목.eml"
     assert len(p.parent.name) == 7 and p.parent.name[4] == "-"
@@ -56,7 +56,7 @@ def test_save_attachments_writes_files_and_keeps_extension(tmp_path: Path):
     assert n == 1
     files = list((tmp_path / archive.ATTACH_DIRNAME).iterdir())
     assert len(files) == 1
-    # 확장자가 남아야 색인기가 PDF 추출기를 고른다
+    # 확장자가 유지되어야 색인기가 PDF 추출기를 선택
     assert files[0].name.endswith(".pdf")
     assert files[0].name.startswith("99_")
 
@@ -66,8 +66,8 @@ def test_save_attachments_survives_garbage(tmp_path: Path):
 
 
 def test_client_picks_pop3_for_pop3_accounts():
-    """POP3 계정에 IMAP 클라이언트를 쓰면 110 포트로 IMAP 핸드셰이크를 시도하다
-    그대로 멈춘다 — 백필이 실제로 그렇게 걸렸다."""
+    """POP3 계정에 IMAP 클라이언트를 사용하면 110 포트로 IMAP 핸드셰이크를 시도하다
+    그대로 정지한다 — 백필에서 실제로 발생한 문제."""
     from app.mail import archive, imap_client, pop3_client
 
     class Pop:
@@ -85,7 +85,7 @@ def test_client_picks_pop3_for_pop3_accounts():
 
 
 def test_both_clients_expose_fetch_raw_many():
-    """아카이브가 프로토콜을 안 가리려면 인터페이스가 같아야 한다."""
+    """아카이브가 프로토콜을 구분하지 않으려면 인터페이스가 동일해야 한다."""
     from app.mail import imap_client, pop3_client
 
     for mod in (imap_client, pop3_client):

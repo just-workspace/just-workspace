@@ -1,10 +1,10 @@
 """파일 활동 기록·최근 열람·소유자 조회 보조.
 
-기록은 실패해도 본 동작(업로드·이동…)을 막지 않는다 — 별도 세션으로 넣고 예외는 삼킨다.
+기록 실패는 본 동작(업로드·이동…)을 차단하지 않는다 — 별도 세션으로 기록하고 예외는 무시한다.
 
-내려받기(/download)는 기록하지 않는다: 데스크톱 동기화 클라이언트가 파일마다 부르므로
-기록하면 활동·최근 목록이 동기화 트래픽으로 덮인다. "열람"은 미리보기·공유 링크·
-`POST /api/files/recent`(프런트가 파일을 열 때 부름)로 남긴다.
+내려받기(/download)는 기록하지 않는다: 데스크톱 동기화 클라이언트가 파일마다 호출하므로
+기록하면 활동·최근 목록이 동기화 트래픽으로 채워진다. "열람"은 미리보기·공유 링크·
+`POST /api/files/recent`(프런트가 파일을 열 때 호출)로 기록한다.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ WRITE_ACTIONS = ("upload", "edit", "create", "copy", "version_restore")
 
 
 def canonical_key(vp: str, user: User) -> str | None:
-    """사용자 가상경로 → 소유자 기준 정규 키. 모르는 루트면 None."""
+    """사용자 가상경로 → 소유자 기준 정규 키. 알 수 없는 루트이면 None."""
     vp = (vp or "").strip("/")
     if vp == "my":
         return f"users/{user.id}"
@@ -103,9 +103,9 @@ async def touch_recent(user_id: str, path: str, name: str, db=None) -> None:
 
 async def move_prefix(user: User, old_vp: str, new_vp: str,
                       old_key: str | None = None, new_key: str | None = None) -> None:
-    """이름 변경·이동 뒤 활동·즐겨찾기·최근 기록의 경로를 따라 옮긴다(실패해도 무시).
+    """이름 변경·이동 후 활동·즐겨찾기·최근 기록의 경로를 갱신한다(실패 시 무시).
 
-    old_key/new_key 를 주면 활동 기록은 그 정규 키로 옮긴다(공유받은 경로 — 소유자 기준 키).
+    old_key/new_key 가 주어지면 활동 기록은 해당 정규 키로 이전한다(공유받은 경로 — 소유자 기준 키).
     """
     old_vp, new_vp = old_vp.strip("/"), new_vp.strip("/")
     ok = old_key or canonical_key(old_vp, user)
@@ -135,7 +135,7 @@ async def move_prefix(user: User, old_vp: str, new_vp: str,
 
 
 async def first_creators(db, keys: list[str]) -> dict[str, str]:
-    """정규 키별 처음 만든(업로드한) 사용자 id."""
+    """정규 키별 최초 생성(업로드) 사용자 id."""
     if not keys:
         return {}
     res = await db.execute(
@@ -159,7 +159,7 @@ async def user_names(db, ids: set[str]) -> dict[str, str]:
 
 
 async def version_authors(db, path_key: str, version_ms: list[int]) -> tuple[dict[int, dict], dict | None]:
-    """각 버전(스냅샷 시각) 내용을 쓴 사람 = 그 시각 직전의 마지막 쓰기 기록.
+    """각 버전(스냅샷 시각) 내용의 작성자 = 해당 시각 직전의 마지막 쓰기 기록.
 
     반환: ({version_ms: {"id","name"}}, 현재본 작성자)
     """

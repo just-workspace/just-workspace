@@ -1,7 +1,7 @@
-"""색인 본문 정제 — NUL 한 글자에 색인 전체가 죽던 것.
+"""색인 본문 정제 — NUL 한 글자로 색인 전체가 실패하던 문제.
 
-Postgres text 컬럼에는 0x00 이 못 들어간다. 배치 INSERT 라서 파일 하나만 걸려도
-그 주기 전체가 롤백됐고, 다음 주기에 같은 파일을 또 만나 무한히 실패했다.
+Postgres text 컬럼에는 0x00 을 저장할 수 없다. 배치 INSERT 이므로 파일 하나만 해당해도
+그 주기 전체가 롤백되었고, 다음 주기에 같은 파일을 다시 처리하여 무한히 실패했다.
 """
 
 from app.files.indexer import _CTRL_RE
@@ -17,7 +17,7 @@ def test_other_control_chars_removed():
 
 
 def test_whitespace_and_text_survive():
-    # 탭/개행은 앞단 공백 정규화가 처리하므로 여기서 건드리면 안 된다
+    # 탭/개행은 전 단계의 공백 정규화가 처리하므로 여기서 변경 금지
     assert _CTRL_RE.sub(" ", "\t\n") == "\t\n"
     assert _CTRL_RE.sub(" ", "한글 English 123 @#$") == "한글 English 123 @#$"
 
@@ -32,11 +32,11 @@ def test_eml_extension_is_indexed():
 
 
 def test_lone_surrogates_are_replaced():
-    """cp949 등에서 잘못 디코딩된 잔해. json.dumps 가 터져 추출 묶음 전체가 날아갔다."""
+    """cp949 등에서 잘못 디코딩된 잔여 문자. json.dumps 에서 예외가 발생하여 추출 묶음 전체가 소실되었다."""
     from app.files.indexer import _CTRL_RE  # noqa: F401
     bad = "정상" + chr(0xDAA8) + "텍스트"
     cleaned = bad.encode("utf-8", "replace").decode("utf-8", "replace")
-    cleaned.encode("utf-8")          # 여기서 안 터져야 한다
+    cleaned.encode("utf-8")          # 이 지점에서 예외가 발생하지 않아야 함
     assert "정상" in cleaned and "텍스트" in cleaned
 
 

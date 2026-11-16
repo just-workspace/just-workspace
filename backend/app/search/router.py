@@ -60,9 +60,9 @@ def _escape_like(q: str) -> str:
 
 
 def searchable_modules(modules: str) -> set[str]:
-    """요청한 검색 대상(쉼표 구분) 중 실제로 찾을 것 — 아는 이름이 없으면 전부.
+    """요청한 검색 대상(쉼표 구분) 중 실제 검색할 대상 — 유효한 이름이 없으면 전체.
 
-    꺼졌거나 설치하지 않은 구역의 모듈은 요청에 적혀 있어도 뺀다.
+    비활성화되었거나 미설치인 구역의 모듈은 요청에 포함되어 있어도 제외한다.
     """
     requested = {m.strip() for m in modules.split(",") if m.strip() in VALID_MODULES}
     if not requested:
@@ -116,7 +116,7 @@ async def global_search(
                 "id": p.id,
                 "title": p.title,
                 "snippet": _snippet(p.content, q),
-                # 게시글 화면 주소는 /board/<게시판 id>/<글 id>. 예전 /board/posts/<id> 는 게시판 자리에 "posts" 가 들어가 목록·삭제 뒤 이동이 깨졌다.
+                # 게시글 화면 주소는 /board/<게시판 id>/<글 id>. 이전 /board/posts/<id> 는 게시판 위치에 "posts" 가 들어가 목록·삭제 후 이동 실패 발생.
                 "url": f"/board/{p.board_id}/{p.id}",
             })
 
@@ -156,7 +156,7 @@ async def global_search(
                     "id": c.id,
                     "title": c.full_name,
                     "snippet": " | ".join(snippet_parts) if snippet_parts else "",
-                    # 연락처는 /contacts 한 화면뿐이다(/contacts/<id> 는 없는 경로라 404) — 목록으로 보낸다.
+                    # 연락처 화면은 /contacts 하나뿐임(/contacts/<id> 는 존재하지 않는 경로로 404). 목록으로 이동.
                     "url": "/contacts",
                 })
 
@@ -187,7 +187,7 @@ async def global_search(
                 "id": msg.id,
                 "title": f"#{ch.name}",
                 "snippet": _snippet(msg.content, q),
-                # 채팅 화면 주소는 /chat?channel=<id>(명령 팔레트 채널 행과 같은 형식). /chat/channels/<id> 는 없는 경로라 404.
+                # 채팅 화면 주소는 /chat?channel=<id>(명령 팔레트 채널 행과 동일 형식). /chat/channels/<id> 는 존재하지 않는 경로로 404.
                 "url": f"/chat?channel={ch.id}",
             })
 
@@ -214,7 +214,7 @@ async def global_search(
                 "id": t.id,
                 "title": t.title,
                 "snippet": _snippet(t.description, q) if t.description else t.status,
-                # 작업 화면은 highlight 쿼리를 읽지 않는다 — 목록으로 보낸다.
+                # 작업 화면은 highlight 쿼리를 처리하지 않음. 목록으로 이동.
                 "url": "/tasks",
             })
 
@@ -251,7 +251,7 @@ async def global_search(
                 "id": page.id,
                 "title": page.title,
                 "snippet": _snippet(page.content, q),
-                # 위키 화면 주소는 /wiki?space=<id>&page=<id>. 예전 /wiki/{slug}/{slug} 는 없는 경로라 404.
+                # 위키 화면 주소는 /wiki?space=<id>&page=<id>. 이전 /wiki/{slug}/{slug} 는 존재하지 않는 경로로 404.
                 "url": f"/wiki?space={space.id}&page={page.id}",
             })
 
@@ -293,8 +293,8 @@ async def global_search(
 
     # ─── Files (이름) ───
     if "files" in requested:
-        # 파일 색인(file_index)에서 찾는다. 예전에는 질의마다 rglob 으로 저장소 전체를 동기 순회해
-        # 이벤트 루프를 막았고, 색인기가 건너뛰는 휴지통(.trash)·점 파일까지 결과에 나왔다.
+        # 파일 색인(file_index)에서 조회한다. 이전에는 질의마다 rglob 으로 저장소 전체를 동기 순회하여
+        # 이벤트 루프를 차단했고, 색인기가 제외하는 휴지통(.trash)·점 파일까지 결과에 포함되었다.
         for scope, virtual_prefix in ((user.id, "my"), ("shared", "shared")):
             try:
                 idx_rows = (
@@ -312,7 +312,7 @@ async def global_search(
                 idx_rows = []
             for f in idx_rows:
                 rel = (f.rel_path or "").strip("/")
-                if not rel or any(_files_hidden(part) for part in rel.split("/")):   # 숨김 판정은 files.service 한 곳
+                if not rel or any(_files_hidden(part) for part in rel.split("/")):   # 숨김 판정은 files.service 로 단일화
                     continue
                 vpath = f"{virtual_prefix}/{rel}"
                 parent = (f.parent_dir or "").strip("/")

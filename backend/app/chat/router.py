@@ -133,7 +133,7 @@ async def delete_channel(
     was_voice = bool(ch and ch.is_voice)
     await service.delete_channel(db, channel_id)
     if was_voice:
-        # 음성 방이 열려 있으면 닫고 접속 상태를 지운다(실패해도 채널 삭제는 끝났다)
+        # 음성 방이 열려 있으면 종료하고 접속 상태를 삭제한다(실패해도 채널 삭제는 이미 완료됨)
         from app.chat import voice
         await voice.close_channel(channel_id)
     await manager.notify_channels_changed(members)
@@ -178,7 +178,7 @@ async def remove_member(
     if target_user_id != user.id:
         if not await perms.allowed(db, user, "member.kick", channel_id):
             raise HTTPException(403, "권한이 없습니다")
-    # 마지막 멤버가 나가면 아무도 못 들어가는 고아 채널(메시지·파일)이 남는다 — 나가기 대신 삭제를 쓰게 한다
+    # 마지막 멤버가 나가면 누구도 입장할 수 없는 고아 채널(메시지·파일)이 남음 — 나가기 대신 삭제를 사용하도록 유도
     members = await service.get_channel_members(db, channel_id)
     if len(members) == 1 and members[0]["user_id"] == target_user_id:
         raise HTTPException(409, "마지막 멤버는 채널을 나갈 수 없습니다 — 채널 삭제를 쓰세요")
@@ -203,11 +203,11 @@ async def list_messages(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """한 페이지. has_more = 그 방향(기본 위·after 면 아래)으로 더 있음, has_more_after = 아래(최근 쪽)로 더 있음."""
+    """한 페이지 조회. has_more = 해당 방향(기본 위쪽, after 지정 시 아래쪽)에 추가 항목 존재, has_more_after = 아래쪽(최근 방향)에 추가 항목 존재."""
     if not await perms.allowed(db, user, "message.read", channel_id):
         raise HTTPException(403, "채널 멤버가 아닙니다")
     from app.chat import messages22
-    if not isinstance(around, str):   # 테스트가 함수를 직접 부르면 Query 기본값 객체가 온다
+    if not isinstance(around, str):   # 테스트에서 함수를 직접 호출하면 Query 기본값 객체가 전달됨
         around = None
     if around:
         res = await messages22.get_messages_around(db, channel_id, around, limit, user.id)
@@ -230,21 +230,21 @@ async def list_changes(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """재접속 복구 — 내 모든 채널에서 since_seq 뒤에 생긴 메시지.
+    """재접속 복구 — 호출 사용자의 모든 채널에서 since_seq 이후 생성된 메시지.
 
-    `too_many` 면 목록은 비어 있고 클라이언트는 채널 목록·열린 채널을 새로 읽는다.
+    `too_many` 인 경우 목록은 비어 있으며 클라이언트는 채널 목록·열린 채널을 다시 조회한다.
     """
     return await service.get_changes_since(db, user.id, since_seq, limit)
 
 
 @router.get("/latest-seq")
 async def latest_seq(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """클라이언트가 복구 커서를 처음 잡을 때 쓴다."""
+    """클라이언트가 복구 커서를 최초 설정할 때 사용한다."""
     return {"seq": await service.get_latest_seq(db)}
 
 
 async def _broadcast_message(db, channel_id: str, sender_id: str, content: str, msg) -> None:
-    """생성된 메시지의 후처리(실시간 전달·멘션 알림·DM 푸시). WS 경로와 같은 함수를 쓴다."""
+    """생성된 메시지의 후처리(실시간 전달·멘션 알림·DM 푸시). WS 경로와 동일한 함수를 사용한다."""
     from app.chat.notify import after_message_created
     await after_message_created(db, msg, channel_id, sender_id, content)
 
@@ -286,7 +286,7 @@ async def mark_channel_unread(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """"여기부터 안 읽음" — 읽음 포인터를 그 메시지 바로 앞으로 되감는다. 내 다른 기기엔 channel_unread."""
+    """"여기부터 안 읽음" — 읽음 포인터를 해당 메시지 직전으로 되돌린다. 본인의 다른 기기에는 channel_unread 를 전달한다."""
     if not await perms.allowed(db, user, "channel.participate", channel_id):
         raise HTTPException(403, "채널 멤버가 아닙니다")
     seq = await service.mark_unread(db, channel_id, user.id, body.message_id)
@@ -307,7 +307,7 @@ async def update_channel_prefs(
     db: AsyncSession = Depends(get_db),
 ):
     """채널별 알림 수준(all|mentions|none)·음소거·기기 알림 세부(desktop/push/email/thread_replies).
-    내 멤버행만 바뀐다."""
+    본인의 멤버행만 변경된다."""
     has_minutes = "muted_minutes" in body.model_fields_set
     if all(v is None for v in (body.notify_level, body.muted, body.desktop, body.push,
                                body.email, body.thread_replies)) and not has_minutes:
@@ -346,7 +346,7 @@ async def get_channel_prefs(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """내 채널 알림 설정(notify_level·muted·desktop·push·email·thread_replies)."""
+    """본인의 채널 알림 설정(notify_level·muted·desktop·push·email·thread_replies)."""
     prefs = await service.get_channel_prefs(db, channel_id, user.id)
     if prefs is None:
         raise HTTPException(403, "채널 멤버가 아닙니다")
@@ -362,7 +362,7 @@ async def upload_chat_file(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload a file and create a message with message_type='file'. parent_id 를 주면 스레드 답글."""
+    """Upload a file and create a message with message_type='file'. parent_id 지정 시 스레드 답글."""
     if not await perms.allowed(db, user, "file.upload", channel_id):
         raise HTTPException(403, "채널 멤버가 아닙니다")
     if parent_id:
@@ -371,7 +371,7 @@ async def upload_chat_file(
         if not parent or parent.channel_id != channel_id or parent.is_deleted:
             raise HTTPException(404, "원 메시지를 찾을 수 없습니다")
         if parent.parent_id:
-            parent_id = parent.parent_id   # 답글의 답글은 같은 스레드로
+            parent_id = parent.parent_id   # 답글의 답글은 동일 스레드로 처리
 
     settings = get_settings()
 
@@ -493,7 +493,7 @@ async def get_thread(
         raise HTTPException(403, "채널 멤버가 아닙니다")
     replies = await service.get_thread_messages(db, message_id, limit=limit, user_id=user.id)
     follow = await service.get_thread_follow_state(db, user.id, message_id)
-    # 원문도 함께 — 딥 링크·검색으로 들어오면 원문이 화면의 최근 목록에 없어 패널이 원문 없이 떴다
+    # 원문도 함께 반환 — 딥 링크·검색으로 진입하면 원문이 화면의 최근 목록에 없어 패널이 원문 없이 표시되었음
     parent_dict = None if parent.is_deleted else await service.get_message_dict(db, parent, user_id=user.id)
     return {"replies": replies, "parent": parent_dict, **follow}
 
@@ -507,9 +507,9 @@ async def _set_pin(db: AsyncSession, message_id: str, user: User, pinned: bool) 
         raise HTTPException(403, "채널 멤버가 아닙니다")
     was_pinned = msg.pinned_at is not None
     updated = await service.set_pinned(db, message_id, user.id, pinned)
-    # 편집과 같은 모양 — 채널 구독자 전원이 메시지를 통째로 갈아 끼운다
+    # 편집과 동일한 형식 — 채널 구독자 전원이 메시지 전체를 교체한다
     await emit_to_channel(msg.channel_id, {"type": "message_update", "message": updated})
-    # 고정 시스템 줄(chat22) — 새로 고정했을 때만, 같은 메시지 줄이 이미 있으면 그대로
+    # 고정 시스템 줄(chat22) — 신규 고정 시에만 생성하며, 동일 메시지의 줄이 이미 있으면 유지
     if pinned and not was_pinned:
         line = await service.create_pin_system_message(db, message_id, msg.channel_id, user.id)
         if line is not None:
@@ -523,7 +523,7 @@ async def pin_message(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """채널 멤버 누구나 핀. 이미 핀이면 그대로."""
+    """채널 멤버 누구나 핀 가능. 이미 핀 상태이면 변경 없음."""
     return await _set_pin(db, message_id, user, True)
 
 
@@ -604,9 +604,9 @@ async def edit_message(
         raise HTTPException(403, "본인 메시지만 수정할 수 있습니다")
     had_preview = msg.link_preview
     updated = await service.update_message(db, message_id, body.content)
-    # 첫 링크가 바뀌어 카드가 빠졌으면 받는 쪽에서도 지우고, 새 링크면 다시 만든다
+    # 첫 링크가 변경되어 카드가 제거된 경우 수신 측에서도 삭제하고, 새 링크이면 다시 생성한다
     if updated is not None:
-        # 고친 본문을 채널 전원에게(내 다른 기기 포함) — 예전엔 아무 이벤트도 안 보내 새로고침해야 바뀌었다. 핀과 같은 모양
+        # 수정된 본문을 채널 전원에게 전달(본인의 다른 기기 포함) — 이전에는 이벤트를 전혀 송신하지 않아 새로고침해야 반영되었음. 핀과 동일한 형식
         await emit_to_channel(msg.channel_id, {"type": "message_update", "message": updated})
         updated_preview = updated.get("link_preview")
         if had_preview and not msg.link_preview:
@@ -626,7 +626,7 @@ async def dismiss_link_preview(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """미리보기 지우기 — 보낸 사람만. 같은 링크로는 다시 만들지 않는다."""
+    """미리보기 삭제 — 발신자만 가능. 동일 링크로는 재생성하지 않는다."""
     from app.db.models import Message as MsgModel
     msg = await db.get(MsgModel, message_id)
     if not msg or msg.is_deleted:
@@ -644,7 +644,7 @@ async def link_preview_image(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """미리보기 썸네일 — 서버가 받아 줄이고 다시 인코딩한 것만 내준다(받는 쪽이 외부로 직접 가지 않게)."""
+    """미리보기 썸네일 — 서버가 수신하여 축소·재인코딩한 것만 제공한다(수신 측이 외부로 직접 접속하지 않도록 함)."""
     import re as _re
     from fastapi import Response
     from app.db.models import LinkPreviewImage
@@ -675,7 +675,7 @@ async def delete_message(
         raise HTTPException(403, "본인 메시지만 삭제할 수 있습니다")
     channel_id, parent_id = msg.channel_id, msg.parent_id
     await service.soft_delete_message(db, message_id)
-    # 지운 것을 채널 전원에게 알린다 — 예전엔 지운 사람 화면에서만 빠지고 다른 사람·다른 기기에는 계속 남았다
+    # 삭제 사실을 채널 전원에게 전달 — 이전에는 삭제한 사용자의 화면에서만 제거되고 다른 사용자·다른 기기에는 계속 남았음
     await emit_to_channel(channel_id, {
         "type": "message_delete", "message_id": message_id, "channel_id": channel_id, "parent_id": parent_id,
     })
@@ -696,7 +696,7 @@ async def get_or_create_dm(
     if not other:
         raise HTTPException(404, "사용자를 찾을 수 없습니다")
     ch = await service.get_or_create_dm(db, user.id, body.user_id)
-    # 새 DM 이면 상대 쪽 구독에 아직 없다(이미 있던 DM 이면 갱신은 무해)
+    # 신규 DM 이면 상대 측 구독에 아직 없음(기존 DM 이면 갱신은 무해)
     await manager.notify_channels_changed([user.id, body.user_id])
     return {"id": ch.id, "name": ch.name, "type": ch.type}
 
@@ -729,14 +729,14 @@ async def update_my_status(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """보낸 필드만 바꾼다(null 명시 = 비우기). 바뀐 실효 상태를 전원에게 presence 로 알린다."""
+    """전송된 필드만 변경한다(null 명시 = 비우기). 변경된 실효 상태를 전원에게 presence 로 전달한다."""
     from app.chat.presence import presence_event, set_status, status_to_dict
     from app.realtime.events import is_connected
 
     fields = {k: getattr(body, k) for k in body.model_fields_set}
     if not fields:
         raise HTTPException(400, "변경할 내용이 없습니다")
-    # 커스텀 텍스트를 비우면 이모지·만료도 같이 비운다(반쪽 상태가 남지 않게)
+    # 커스텀 텍스트를 비우면 이모지·만료도 함께 비운다(불완전한 상태가 남지 않도록 함)
     if "custom_text" in fields and not fields["custom_text"]:
         fields.setdefault("custom_emoji", None)
         fields.setdefault("custom_expires_at", None)
@@ -813,7 +813,7 @@ async def save_message(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """메시지를 저장한다. 이미 저장돼 있으면 그대로 201 — 토글이라 중복이 온다."""
+    """메시지를 저장한다. 이미 저장된 경우에도 그대로 201 을 반환한다 — 토글 방식이므로 중복 요청이 발생한다."""
     from app.db.models import Message as MsgModel
 
     msg = await db.get(MsgModel, message_id)
@@ -851,7 +851,7 @@ async def list_my_threads(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """내가 팔로우하는 스레드의 원 메시지 목록(+ unread_replies · followed · last_reply). 마지막 답글 순."""
+    """호출 사용자가 팔로우하는 스레드의 원 메시지 목록(+ unread_replies · followed · last_reply). 마지막 답글 순."""
     return {"items": await service.get_my_threads(db, user.id, limit)}
 
 
@@ -871,7 +871,7 @@ async def mark_thread_read(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """스레드 읽음 — 마지막 답글(또는 body.seq)까지. 내 다른 기기엔 thread_read."""
+    """스레드 읽음 처리 — 마지막 답글(또는 body.seq)까지. 본인의 다른 기기에는 thread_read 를 전달한다."""
     from app.db.models import Message as MsgModel
     root = await db.get(MsgModel, root_id)
     if not root or root.parent_id is not None:
@@ -901,7 +901,7 @@ async def upsert_draft(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """저장(빈 content 면 삭제). 내 다른 기기엔 draft_update(content null = 삭제)."""
+    """저장(빈 content 이면 삭제). 본인의 다른 기기에는 draft_update(content null = 삭제)를 전달한다."""
     if not await perms.allowed(db, user, "channel.participate", body.channel_id):
         raise HTTPException(403, "채널 멤버가 아닙니다")
     draft = await service.upsert_draft(db, user.id, body.channel_id, body.parent_id, body.content)

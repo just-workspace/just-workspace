@@ -1,8 +1,8 @@
 """관리자 시드 · reset-admin(app/cli.py).
 
-- 자동 시드는 사용자가 한 명도 없을 때만 — 그 뒤로는 env 에 값이 남아 있어도 아무것도 하지 않는다.
-- 같은 이름의 일반 계정을 관리자로 올리지 않는다(명시한 --promote 만).
-- reset-admin 은 관리자 계정에만, 임시 비밀번호는 해시로만 저장하고 한 번만 돌려준다.
+- 자동 시드는 사용자가 한 명도 없을 때만 수행 — 이후에는 env 에 값이 남아 있어도 아무 작업도 하지 않는다.
+- 같은 이름의 일반 계정을 관리자로 승격하지 않는다(명시한 --promote 만).
+- reset-admin 은 관리자 계정에만 적용, 임시 비밀번호는 해시로만 저장하고 한 번만 반환한다.
 """
 
 import pytest
@@ -17,7 +17,7 @@ from app.db.models import User
 
 @pytest.fixture()
 async def db(db_engine, monkeypatch):
-    """cli 가 쓰는 엔진·세션을 테스트용 빈 DB 로 바꾼다."""
+    """cli 가 사용하는 엔진·세션을 테스트용 빈 DB 로 대체한다."""
     import app.db.session as session_mod
 
     factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
@@ -60,13 +60,13 @@ async def test_startup_seed_never_promotes_same_name_account(db, capsys):
     assert await cli.seed_admin("admin", "whatever-password-1", only_if_empty=True) == "conflict"
     u = await _get(db, "admin")
     assert not u.is_admin
-    assert verify_password("old-password-123", u.password_hash)        # 비밀번호도 그대로
+    assert verify_password("old-password-123", u.password_hash)        # 비밀번호도 유지
     assert "승격하지 않습니다" in capsys.readouterr().out
 
 
 async def test_startup_seed_is_idempotent(db):
     assert await cli.seed_admin("root1", "first-password-123", only_if_empty=True) == "created"
-    # 다시 기동 — env 에 다른 비밀번호가 남아 있어도 계정을 건드리지 않는다
+    # 재기동 — env 에 다른 비밀번호가 남아 있어도 계정을 변경하지 않음
     assert await cli.seed_admin("root1", "another-password-456", only_if_empty=True) == "skipped"
     assert verify_password("first-password-123", (await _get(db, "root1")).password_hash)
 
@@ -79,7 +79,7 @@ async def test_explicit_seed_promotes_only_when_asked(db):
     u = await _get(db, "bob")
     assert u.is_admin and verify_password("old-password-123", u.password_hash)
     assert await cli.seed_admin("bob", "x") == "exists"
-    # 다른 사용자가 있어도 서버에서 직접 부르면 새 관리자를 만든다
+    # 다른 사용자가 있어도 서버에서 직접 호출하면 새 관리자를 생성
     assert await cli.seed_admin("ops", "ops-password-12345") == "created"
 
 
@@ -95,7 +95,7 @@ async def test_reset_admin_sets_new_password_and_cuts_sessions(db):
     assert not verify_password("old-password-123", u.password_hash)
     assert password not in u.password_hash
     assert u.token_version == 4 and u.password_changed_at is not None
-    # 두 번 부르면 다른 값
+    # 두 번 호출하면 상이한 값
     assert await cli.reset_admin("root1") != password
 
 

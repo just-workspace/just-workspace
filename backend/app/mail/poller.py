@@ -1,8 +1,8 @@
 """메일 인박스 폴러 — 새 INBOX 메일 감지 → AI 소비자용 이벤트 발행 (Part 3: 폴링 + 이벤트훅).
 
 - 8워커 중 매 주기 1개만 폴링(Redis 락).
-- 계정별 마지막 UID는 DB(mail_accounts.last_seen_uid)에 둔다. 첫 폴은 baseline만 잡고 이벤트 미발행(과거메일 폭주 방지).
-  예전에는 Redis 에만 있었다(`mail:lastuid:<계정>`) — DB 에 값이 없을 때 한 번 읽어 옮긴다.
+- 계정별 마지막 UID는 DB(mail_accounts.last_seen_uid)에 저장한다. 첫 폴은 baseline만 기록하고 이벤트 미발행(과거메일 폭주 방지).
+  이전에는 Redis 에만 저장했다(`mail:lastuid:<계정>`). DB 에 값이 없을 때 1회 조회하여 이관한다.
 - 새 메일 → Redis pub 채널 `mail:new` 로 발행. AI 처리는 별도 소비자(플러그인)가 구독.
   (코어는 "감지 → 이벤트"까지만 = 확장 유연. 소비 예: 플러그인이 LLM 으로 분류/요약.)
 
@@ -33,16 +33,16 @@ _LOCK_KEY = "mail:poll:lock"
 
 
 def _lastuid_key(account_id: str) -> str:
-    """예전 저장 위치(Redis). 읽는 것은 DB 에 값이 없을 때 한 번뿐이다."""
+    """이전 저장 위치(Redis). 조회는 DB 에 값이 없을 때 1회뿐이다."""
     return f"mail:lastuid:{account_id}"
 
 
 async def _load_last_seen(redis, account: MailAccount) -> int:
-    """마지막으로 본 UID. 0 = 아직 기준을 잡지 않았다."""
+    """마지막으로 확인한 UID. 0 = 기준 미설정."""
     current = getattr(account, "last_seen_uid", None)
     if current:
         return int(current)
-    # DB 에 없다 — 예전 위치에 있으면 옮겨 온다(업데이트 직후 한 번).
+    # DB 에 값 없음. 이전 저장 위치에 값이 있으면 이관한다(업데이트 직후 1회).
     try:
         raw = await redis.get(_lastuid_key(account.id))
     except Exception as e:  # noqa: BLE001
@@ -64,15 +64,15 @@ async def _save_last_seen(redis, account: MailAccount, uid: int, *, mirror: bool
         await db.execute(
             update(MailAccount)
             .where(MailAccount.id == account.id)
-            # 계정 설정을 고친 것이 아니다 — 수정 시각은 그대로 둔다.
+            # 계정 설정 수정이 아니므로 수정 시각은 유지한다.
             .values(last_seen_uid=uid, updated_at=MailAccount.updated_at)
         )
         await db.commit()
     account.last_seen_uid = uid
     if not mirror:
         return
-    # 예전 위치에도 같은 값을 써 둔다(읽지 않는 사본). 업데이트가 실패해 이전 버전으로 되돌아가면
-    # 그 버전은 이 키만 읽는다 — 낡은 값이 남아 있으면 그 사이의 메일을 새 메일로 다시 알린다.
+    # 이전 저장 위치에도 동일 값을 기록한다(조회하지 않는 사본). 업데이트 실패로 이전 버전으로 롤백되면
+    # 해당 버전은 이 키만 조회한다. 오래된 값이 남아 있으면 그 사이의 메일을 새 메일로 재알림한다.
     try:
         await redis.set(_lastuid_key(account.id), str(uid))
     except Exception:  # noqa: BLE001
@@ -122,8 +122,8 @@ async def _poll_account(redis, account: MailAccount) -> None:
         await redis.publish(EVENT_CHANNEL, json.dumps(evt, ensure_ascii=False))
         logger.info("[mailpoll] NEW %s uid=%s subj=%r", account.email, uid, (m.get("subject") or "")[:60])
 
-        # 아카이브가 켜진 계정이면 원본을 남긴다. 실패해도 조용히 넘어간다 —
-        # 백업 때문에 새 메일 감지가 멈추면 안 된다.
+        # 아카이브가 활성화된 계정이면 원본을 저장한다. 실패 시 무시한다.
+        # 백업으로 인해 새 메일 감지가 중단되어서는 안 된다.
         await archive.archive_message(
             account, str(uid), m.get("subject"), m.get("received_at"), "INBOX"
         )
@@ -146,7 +146,7 @@ async def _poll_once() -> None:
 
 
 async def run_poller() -> None:
-    """매 주기 Redis 락을 잡은 워커 1개만 폴링한다."""
+    """매 주기 Redis 락을 획득한 워커 1개만 폴링한다."""
     await asyncio.sleep(15)  # 기동 안정화 대기
     while True:
         try:

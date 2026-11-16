@@ -1,16 +1,16 @@
-"""비밀값 표 — 기동 검사와 생성기가 같이 읽는다.
+"""비밀값 표 — 기동 검사와 생성기가 공용으로 참조한다.
 
-낯선 사람이 예시 파일을 그대로 복사해 띄워도 위험한 값으로는 올라오지 않게 한다.
+제3자가 예시 파일을 그대로 복사해 기동하더라도 위험한 값으로는 기동되지 않도록 한다.
 
-- `SECRETS`: 변수 이름·최소 길이·필수 여부·그 비밀값을 쓰는 기능. 검사(`check`)와 생성기
-  (`generate`, `python -m app.cli gen-secrets`)가 이 표 하나에서 나오므로 둘이 어긋나지 않는다.
-- 검사는 기동 경로(entrypoint 의 `check-secrets`, lifespan)에서만 돈다. import·단위 테스트는
-  영향받지 않는다.
-- 탈출구: `JW_ALLOW_INSECURE_DEFAULTS=1` 이면 거부 대신 경고만 남긴다(개발·테스트 전용).
+- `SECRETS`: 변수 이름·최소 길이·필수 여부·해당 비밀값을 사용하는 기능. 검사(`check`)와 생성기
+  (`generate`, `python -m app.cli gen-secrets`)가 이 표 하나에서 파생되므로 양자 간 불일치가 발생하지 않는다.
+- 검사는 기동 경로(entrypoint 의 `check-secrets`, lifespan)에서만 수행한다. import·단위 테스트는
+  영향을 받지 않는다.
+- 예외 경로: `JW_ALLOW_INSECURE_DEFAULTS=1` 이면 거부 대신 경고만 기록한다(개발·테스트 전용).
 
-값은 어디에도 찍지 않는다 — 변수 이름과 사유만.
+값은 어디에도 출력하지 않는다 — 변수 이름과 사유만 출력한다.
 
-이 모듈은 표준 라이브러리만 쓴다(설정·구역은 호출할 때 읽는다).
+본 모듈은 표준 라이브러리만 사용한다(설정·구역은 호출 시점에 조회한다).
 """
 
 from __future__ import annotations
@@ -41,28 +41,28 @@ KNOWN_DEFAULTS = frozenset({
     "123456", "12345678", "1234567890", "qwerty", "letmein",
 })
 
-# 서로 다른 글자가 이보다 적으면(같은 글자 반복 등) 난수로 보지 않는다
+# 서로 다른 문자 수가 이 값 미만이면(동일 문자 반복 등) 난수로 간주하지 않음
 _MIN_DISTINCT = 6
 
 
 @dataclass(frozen=True)
 class SecretSpec:
     env: str                    # 환경변수 이름
-    min_len: int                # 최소 길이(0 = 길이는 보지 않는다 — 외부에서 받은 값)
-    required: bool = False      # 그 기능이 켜져 있을 때 비어 있으면 거부
-    zone: str = "core"          # 이 비밀값을 쓰는 구역("chat+meetings" 처럼 묶음 가능)
+    min_len: int                # 최소 길이(0 = 길이 검사 생략 — 외부에서 발급받은 값)
+    required: bool = False      # 해당 기능이 활성화된 상태에서 값이 비어 있으면 거부
+    zone: str = "core"          # 이 비밀값을 사용하는 구역("chat+meetings" 처럼 결합 지정 가능)
     flag: str = ""              # 추가 기능 플래그(환경변수, 참일 때만 검사)
-    generate: bool = True       # gen-secrets 가 기본으로 만드는가(False = --only 로 지목했을 때만)
+    generate: bool = True       # gen-secrets 의 기본 생성 대상 여부(False = --only 로 지정한 경우에만 생성)
     gen_len: int = 0            # 생성 길이(16진수 글자 수, 0 = 최소 길이 기준 기본값)
-    forbid: str = ""            # 들어가면 안 되는 문자(그 값을 다른 스크립트가 치환·삽입하는 경우)
+    forbid: str = ""            # 포함 불가 문자(해당 값을 다른 스크립트가 치환·삽입하는 경우)
     note: str = ""
 
 
 # 순서 = gen-secrets 출력 순서
 SECRETS: tuple[SecretSpec, ...] = (
     SecretSpec("SECRET_KEY", KEY_MIN, required=True, note="세션·토큰 서명 키"),
-    # 비우면 내부 API 가 통째로 닫힌다(안전한 쪽) — 그래서 필수는 아니다. 넣을 거면 강해야 한다.
-    # 메일 서버 패치 스크립트가 sed 로 치환하므로 구분자·역참조 문자를 막는다.
+    # 비우면 내부 API 전체가 차단된다(안전한 방향) — 따라서 필수가 아니다. 설정하는 경우 강한 값이어야 한다.
+    # 메일 서버 패치 스크립트가 sed 로 치환하므로 구분자·역참조 문자를 금지한다.
     SecretSpec("INTERNAL_API_KEY", KEY_MIN, forbid="|&\\/ \t'\"", note="내부 서비스(메일 로그인·LDAP) → 백엔드"),
     SecretSpec("DB_PASSWORD", PASSWORD_MIN, required=True, note="PostgreSQL 비밀번호"),
     SecretSpec("LIVEKIT_API_KEY", 16, zone="meetings", gen_len=16, note="회의 서버 API 키(식별자)"),
@@ -73,12 +73,12 @@ SECRETS: tuple[SecretSpec, ...] = (
     SecretSpec("SANDBOX_TOKEN", KEY_MIN, zone="ai", note="분석 샌드박스 공유 비밀"),
     SecretSpec("DOCCONV_TOKEN", KEY_MIN, zone="ai", note="문서 변환 공유 비밀"),
     SecretSpec("SEARXNG_SECRET", KEY_MIN, zone="ai", note="웹 검색 컨테이너 비밀값"),
-    # ── 아래는 쓰는 사람만 채운다(기본 생성 대상 아님, --only 로 만들 수 있다) ──
+    # ── 이하는 해당 기능 사용 시에만 설정(기본 생성 대상 아님, --only 로 생성 가능) ──
     SecretSpec("MCP_API_KEY", KEY_MIN, zone="ai", flag="MCP_INTERNAL_TOOLS_ENABLED", generate=False,
                note="MCP 내부 도구 정적 키"),
     SecretSpec("GITEA_WEBHOOK_SECRET", KEY_MIN, zone="chat", generate=False, note="Git 웹훅 서명 키"),
     SecretSpec("LDAP_SERVICE_PASSWORD", PASSWORD_MIN, zone="sso", generate=False, note="LDAP 동기화 서비스 계정"),
-    # 외부 SMTP 계정일 수 있어 길이는 보지 않는다(자리표시자·알려진 기본값만 거부)
+    # 외부 SMTP 계정일 수 있어 길이는 검사하지 않음(자리표시자·알려진 기본값만 거부)
     SecretSpec("SMTP_PASSWORD", 0, generate=False, note="발신 SMTP 계정 비밀번호"),
 )
 
@@ -93,17 +93,17 @@ def names(*, default_only: bool = False) -> list[str]:
     return [s.env for s in SECRETS if s.generate or not default_only]
 
 
-# ─── 값 하나 판정 ───
+# ─── 단일 값 판정 ───
 
 
 def is_placeholder(value: str) -> bool:
-    """예시 파일의 자리표시자(CHANGE_ME…)인가."""
+    """예시 파일의 자리표시자(CHANGE_ME…) 여부."""
     squashed = "".join(ch for ch in value.lower() if ch.isalnum())
     return squashed.startswith(_PLACEHOLDER_PREFIXES)
 
 
 def weakness(s: SecretSpec, value: str) -> str | None:
-    """값이 거부되는 사유(없으면 None). 사유 문구에 값은 넣지 않는다."""
+    """값의 거부 사유(없으면 None). 사유 문구에 값은 포함하지 않는다."""
     if not value:
         return "비어 있음" if s.required else None
     if value != value.strip():
@@ -168,11 +168,11 @@ def check(
     database_url: str | None = None,
     zone_ok: Callable[[str], bool] | None = None,
 ) -> list[Problem]:
-    """쓰이는 비밀값 중 거부할 것 목록. 꺼진 기능의 비밀값은 보지 않는다.
+    """사용 중인 비밀값 가운데 거부 대상 목록. 비활성화된 기능의 비밀값은 검사하지 않는다.
 
-    env: 변수 → 값(기본: 프로세스 환경 + 설정 파일에서 읽힌 값).
-    database_url: PostgreSQL 이면 그 안의 비밀번호를 DB_PASSWORD 로 검사한다.
-    zone_ok: 구역 조건("mail", "chat+meetings")이 충족되는가(기본: app.zones).
+    env: 변수 → 값(기본: 프로세스 환경 + 설정 파일에서 읽은 값).
+    database_url: PostgreSQL 이면 포함된 비밀번호를 DB_PASSWORD 로 검사한다.
+    zone_ok: 구역 조건("mail", "chat+meetings")의 충족 여부(기본: app.zones).
     """
     if env is None:
         env, database_url = _runtime_env()
@@ -187,7 +187,7 @@ def check(
         if s.env == "DB_PASSWORD":
             url_pw = _db_password_from_url(database_url or "")
             if url_pw is None:
-                continue  # PostgreSQL 이 아니다 — 비밀번호가 없다
+                continue  # PostgreSQL 이 아님 — 비밀번호 없음
             values = {url_pw, env.get(s.env, "") or url_pw}
         else:
             values = {env.get(s.env, "")}
@@ -216,7 +216,7 @@ def _runtime_env() -> tuple[dict[str, str], str]:
 
 
 class InsecureDefaults(RuntimeError):
-    """위험한 기본값·약한 비밀값 때문에 기동을 거부한다."""
+    """위험한 기본값·취약한 비밀값으로 인한 기동 거부."""
 
     def __init__(self, problems: list[Problem]):
         self.problems = problems
@@ -233,9 +233,9 @@ HELP = (
 
 
 def enforce(problems: list[Problem] | None = None, *, emit: Callable[[str], None] | None = None) -> list[Problem]:
-    """문제가 있으면 변수마다 한 줄씩 남기고 `InsecureDefaults` 를 던진다.
+    """문제가 있으면 변수별로 한 줄씩 기록하고 `InsecureDefaults` 예외를 발생시킨다.
 
-    `JW_ALLOW_INSECURE_DEFAULTS=1` 이면 같은 줄을 경고로만 남기고 돌아온다.
+    `JW_ALLOW_INSECURE_DEFAULTS=1` 이면 동일한 줄을 경고로만 기록하고 반환한다.
     """
     if problems is None:
         problems = check()
@@ -257,22 +257,22 @@ def enforce(problems: list[Problem] | None = None, *, emit: Callable[[str], None
 
 
 def _hex(length: int) -> str:
-    """16진수 글자 `length` 개 — 셸·sed·URL 어디에 넣어도 이스케이프가 필요 없다."""
+    """16진수 문자 `length` 개 — 셸·sed·URL 어디에 삽입해도 이스케이프가 불필요하다."""
     return secrets.token_hex((length + 1) // 2)[:length]
 
 
 def generate_one(name: str) -> str:
     s = _BY_ENV[name]
-    # 최소 길이의 1.5배(키 48자 = 192비트, 비밀번호 32자 = 128비트). 길이 제한이 없는 값은 비밀번호 기준.
+    # 최소 길이의 1.5배(키 48자 = 192비트, 비밀번호 32자 = 128비트). 길이 제한이 없는 값은 비밀번호 기준 적용.
     length = s.gen_len or max((s.min_len or PASSWORD_MIN) * 3 // 2, 32)
     while True:
         value = _hex(length)
-        if weakness(s, value) is None:   # 드물게 글자 종류가 너무 적게 나오면 다시 뽑는다
+        if weakness(s, value) is None:   # 드물게 문자 종류가 부족하게 생성되면 재생성
             return value
 
 
 def generate(only: Iterable[str] | None = None) -> dict[str, str]:
-    """비밀값을 새로 만든다. only 가 없으면 기본 생성 대상 전부(표 순서)."""
+    """비밀값을 신규 생성한다. only 가 없으면 기본 생성 대상 전체(표 순서)."""
     wanted = list(only) if only else names(default_only=True)
     unknown = [n for n in wanted if n not in _BY_ENV]
     if unknown:
@@ -301,8 +301,8 @@ def _parse_line(line: str) -> tuple[str, str] | None:
 def merge_env(text: str, only: Iterable[str] | None = None) -> tuple[str, list[str]]:
     """.env 내용에서 **비어 있는(또는 자리표시자인) 비밀값만** 채운다.
 
-    이미 값이 있는 줄은 건드리지 않는다. 파일에 없는 변수는 끝에 덧붙인다.
-    돌려주는 것: (새 내용, 채운 변수 이름 목록).
+    이미 값이 있는 줄은 변경하지 않는다. 파일에 없는 변수는 끝에 추가한다.
+    반환값: (새 내용, 채운 변수 이름 목록).
     """
     wanted = list(only) if only else names(default_only=True)
     unknown = [n for n in wanted if n not in _BY_ENV]
@@ -312,7 +312,7 @@ def merge_env(text: str, only: Iterable[str] | None = None) -> tuple[str, list[s
     newline = "\r\n" if "\r\n" in text else "\n"
     lines = text.splitlines()
     filled: dict[str, str] = {}
-    replaced: dict[str, str] = {}   # 옛 자리표시자 값 → 새 값(다른 줄에 박혀 있으면 같이 바꾼다)
+    replaced: dict[str, str] = {}   # 기존 자리표시자 값 → 새 값(다른 줄에 포함되어 있으면 함께 치환)
     seen: set[str] = set()
 
     for i, line in enumerate(lines):
@@ -331,7 +331,7 @@ def merge_env(text: str, only: Iterable[str] | None = None) -> tuple[str, list[s
         if value and key == "DB_PASSWORD":
             replaced[value] = new
 
-    # DATABASE_URL 처럼 비밀번호 자리표시자가 그대로 박힌 줄 — 같은 값으로 맞춘다
+    # DATABASE_URL 처럼 비밀번호 자리표시자가 그대로 포함된 줄 — 동일 값으로 치환
     if replaced:
         for i, line in enumerate(lines):
             parsed = _parse_line(line)

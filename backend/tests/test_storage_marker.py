@@ -1,4 +1,4 @@
-"""저장소 표식 확인(app/middleware/storage_guard.py)과 제품 버전(app/version.py)."""
+"""저장소 마커 확인(app/middleware/storage_guard.py)과 제품 버전(app/version.py)."""
 import json
 
 from httpx import ASGITransport, AsyncClient
@@ -43,7 +43,7 @@ def test_check_marker(tmp_path):
     assert sg.check_marker(tmp_path, "abc") is None
     assert sg.check_marker(tmp_path, "other") == "mismatch"
     (tmp_path / sg.MARKER_NAME).write_text("not json", encoding="utf-8")
-    assert sg.check_marker(tmp_path) is None            # 설치 id 를 안 보면 있기만 하면 된다
+    assert sg.check_marker(tmp_path) is None            # 설치 id 를 검사하지 않는 경우 존재 여부만 확인
     assert sg.check_marker(tmp_path, "abc") == "unreadable"
 
 
@@ -63,7 +63,7 @@ async def test_reads_and_other_paths_pass_without_marker(tmp_path):
         assert (await c.get("/api/files/upload")).status_code == 200
         assert (await c.get("/api/files/list")).status_code == 200
         assert (await c.post("/api/auth/login")).status_code == 200
-        assert (await c.post("/api/filesx")).status_code == 200   # 이웃 경로는 해당 없음
+        assert (await c.post("/api/filesx")).status_code == 200   # 인접 경로는 대상 아님
 
 
 async def test_write_passes_with_marker(tmp_path):
@@ -87,11 +87,11 @@ def test_cache_reuses_result(tmp_path):
     guard = sg.StorageMarkerGuard(None, root=str(tmp_path), install_id="", cache_seconds=60)
     assert guard.problem() == "missing"
     (tmp_path / sg.MARKER_NAME).write_text("{}", encoding="utf-8")
-    assert guard.problem() == "missing"       # 캐시 시간 안에서는 다시 보지 않는다
+    assert guard.problem() == "missing"       # 캐시 시간 내에는 재확인하지 않음
 
 
 async def test_unresponsive_storage_is_refused_without_hanging(tmp_path):
-    """끊긴 NFS(hard 마운트)처럼 표식 읽기가 돌아오지 않을 때 — 요청이 멈추지 않고 503 으로 거부된다."""
+    """끊긴 NFS(hard 마운트)처럼 저장소 마커 읽기가 반환되지 않는 경우 — 요청이 정지하지 않고 503 으로 거부된다."""
     import threading
     import time
 
@@ -100,7 +100,7 @@ async def test_unresponsive_storage_is_refused_without_hanging(tmp_path):
 
     def stuck(root, install_id=""):
         calls.append(1)
-        release.wait(30)                       # 저장소가 돌아올 때까지 돌아오지 않는 읽기
+        release.wait(30)                       # 저장소가 복구될 때까지 반환되지 않는 읽기
         return sg.check_marker(root, install_id)
 
     (tmp_path / sg.MARKER_NAME).write_text("{}", encoding="utf-8")
@@ -114,12 +114,12 @@ async def test_unresponsive_storage_is_refused_without_hanging(tmp_path):
         assert r.status_code == 503 and r.json()["code"] == sg.ERROR_CODE
         assert r.json()["reason"] == "unresponsive"
         assert time.monotonic() - t0 < 5
-        # 답이 없는 동안의 다음 요청은 새로 읽지 않고 바로 거부된다(멈춘 읽기는 하나뿐)
+        # 무응답 상태에서의 다음 요청은 새로 읽지 않고 즉시 거부된다(정지된 읽기는 하나뿐)
         t1 = time.monotonic()
         assert (await c.post("/api/files/upload")).status_code == 503
         assert time.monotonic() - t1 < 0.25 and len(calls) == 1
-        assert (await c.post("/api/auth/login")).status_code == 200       # 저장소와 무관한 요청은 그대로
-        # 저장소가 돌아오면(멈춘 읽기가 끝나면) 다시 받는다
+        assert (await c.post("/api/auth/login")).status_code == 200       # 저장소와 무관한 요청은 정상 처리
+        # 저장소가 복구되면(정지된 읽기가 종료되면) 요청을 다시 허용한다
         release.set()
         for _ in range(50):
             if (await c.post("/api/files/upload")).status_code == 200:
@@ -129,11 +129,11 @@ async def test_unresponsive_storage_is_refused_without_hanging(tmp_path):
 
 
 async def test_fast_probe_does_not_leave_stale_result(tmp_path, monkeypatch):
-    """표식 읽기 스레드가 시작하자마자 끝나도(대입보다 먼저) 끝난 읽기가 남아 옛 결과를 되풀이하지 않는다."""
+    """저장소 마커 읽기 스레드가 시작 직후 종료되어도(대입보다 먼저) 종료된 읽기가 남아 이전 결과를 반복하지 않는다."""
     import threading
 
     class InstantThread:
-        """start() 안에서 일을 끝내 버리는 스레드 — 스레드가 호출한 쪽보다 먼저 끝나는 순서를 늘 만든다."""
+        """start() 내부에서 작업을 완료하는 스레드 — 스레드가 호출 측보다 먼저 종료되는 순서를 항상 재현한다."""
 
         def __init__(self, target=None, **kw):
             self.target = target
@@ -144,15 +144,15 @@ async def test_fast_probe_does_not_leave_stale_result(tmp_path, monkeypatch):
     monkeypatch.setattr(threading, "Thread", InstantThread)
     app = _app(tmp_path)
     assert await app.problem_async() == "missing"
-    assert app._probe is None                              # 끝난 읽기가 남지 않는다
+    assert app._probe is None                              # 종료된 읽기가 남지 않음
     (tmp_path / sg.MARKER_NAME).write_text("{}", encoding="utf-8")
-    assert await app.problem_async() is None               # 저장소가 돌아오면 바로 반영된다
+    assert await app.problem_async() is None               # 저장소 복구 시 즉시 반영
     (tmp_path / sg.MARKER_NAME).unlink()
-    assert await app.problem_async() == "missing"          # 다시 끊기면 다시 잡는다
+    assert await app.problem_async() == "missing"          # 재단절 시 다시 감지
 
 
 async def test_notify_admins_never_raises():
-    # DB·Redis 에 닿지 못해도 예외를 밖으로 내지 않는다
+    # DB·Redis 에 연결하지 못해도 예외를 외부로 전파하지 않음
     assert isinstance(await sg.notify_admins("missing"), int)
 
 
@@ -179,4 +179,4 @@ def test_version_reads_env_then_file(tmp_path):
     (tmp_path / "a" / "VERSION").write_text("2.0.0\n", encoding="utf-8")
     assert v.read_version({}, here=tmp_path / "a" / "app" / "version.py") == "2.0.0"
     assert v.read_version({}, here=tmp_path / "x" / "y" / "app" / "version.py") == v.DEV_VERSION
-    assert v.APP_VERSION        # 체크아웃·이미지 어디서든 비어 있지 않다
+    assert v.APP_VERSION        # 체크아웃·이미지 어느 환경에서도 비어 있지 않음

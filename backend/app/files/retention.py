@@ -1,24 +1,24 @@
-"""버전·휴지통·업로드 세션 만료 — 디스크가 무한히 자라지 않게 하는 정리 루프.
+"""버전·휴지통·업로드 세션 만료 — 디스크 사용량의 무한 증가를 방지하는 정리 루프.
 
-지금까지 `.versions/`(덮어쓰기 스냅샷)와 `users/<id>/.trash/` 는 쌓이기만 했다.
-여기서는 세 가지를 주기적으로 정리한다.
+기존에는 `.versions/`(덮어쓰기 스냅샷)와 `users/<id>/.trash/` 가 정리 없이 누적되었다.
+본 모듈은 다음 세 가지를 주기적으로 정리한다.
 
-1. 버전 간격표(수치는 Nextcloud 공개 문서값, 구현은 우리 것):
+1. 버전 간격표(수치는 Nextcloud 공개 문서값, 구현은 자체 구현):
      나이 ≤ 1시간  : 2초 간격으로 하나
      나이 ≤ 1일    : 1분 간격
      나이 ≤ 1주    : 1시간 간격
      나이 ≤ 1달    : 1일 간격
      그 이후        : 1주 간격
-   같은 간격 안에 여러 스냅샷이 있으면 가장 오래된 것 하나만 남긴다(최신본은 항상 남김).
-   선택으로 `files.versions_max_age_days`(기본 0=무제한) 를 넘긴 스냅샷은 전부 지운다.
-2. 휴지통: `files.trash_retention_days`(기본 30, 0=자동삭제 안 함) 지난 항목 삭제.
-3. 청크 업로드 세션: 마지막 활동 후 24시간 지난 세션 디렉터리 삭제(`upload_sessions.py`).
+   동일 간격 내에 스냅샷이 여러 개이면 가장 오래된 것 하나만 유지한다(최신본은 항상 유지).
+   선택 사항으로 `files.versions_max_age_days`(기본 0=무제한) 를 초과한 스냅샷은 전부 삭제한다.
+2. 휴지통: `files.trash_retention_days`(기본 30, 0=자동 삭제 안 함) 경과 항목 삭제.
+3. 청크 업로드 세션: 마지막 활동 후 24시간 경과한 세션 디렉터리 삭제(`upload_sessions.py`).
 
-안전장치 — 운영 저장소를 실제로 지우는 코드다:
-- 지우는 경로는 반드시 `.versions/` 또는 `.trash/` 아래여야 한다(어휘적 검사 + resolve 검사).
-- 심볼릭 링크는 따라가지 않는다. 링크 자체가 보존 대상이면 링크만 지운다.
-- 삭제 대상 판정(`plan_*`)과 실제 삭제를 분리해 단위 테스트가 판정만 검증할 수 있게 했다.
-- 한 워커만 돈다(`app.jobs.lock`).
+안전장치 — 운영 저장소를 실제로 삭제하는 코드이다:
+- 삭제 경로는 반드시 `.versions/` 또는 `.trash/` 하위여야 한다(어휘적 검사 + resolve 검사).
+- 심볼릭 링크는 따라가지 않는다. 링크 자체가 보존 대상이면 링크만 삭제한다.
+- 삭제 대상 판정(`plan_*`)과 실제 삭제를 분리하여 단위 테스트가 판정만 검증할 수 있도록 했다.
+- 워커 하나만 수행한다(`app.jobs.lock`).
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ KEY_VERSIONS_MAX_AGE_DAYS = "files.versions_max_age_days"
 DEFAULT_TRASH_DAYS = 30
 DEFAULT_VERSIONS_MAX_AGE_DAYS = 0          # 0 = 간격표만 적용, 상한 없음
 
-RUN_INTERVAL = 3600                        # 초. 간격표 최소 단위가 2초라 더 자주 돌 이유는 없다
+RUN_INTERVAL = 3600                        # 초. 간격표 최소 단위가 2초이므로 더 짧은 주기는 불필요
 LOCK_NAME = "files:retention"
 
 # (나이 상한 ms, 그 구간에서 유지할 최소 간격 ms). 마지막 행은 "그 이후".
@@ -86,12 +86,12 @@ def plan_version_expiry(
     now_ms: int,
     max_age_days: int = 0,
 ) -> set[int]:
-    """스냅샷 타임스탬프(epoch ms) 중 지울 것을 고른다.
+    """스냅샷 타임스탬프(epoch ms) 중 삭제 대상을 선택한다.
 
-    간격표에서는 최신 스냅샷을 항상 남긴다. 그 다음부터 오래된 쪽으로 가며, 직전에
-    남긴 스냅샷과의 간격이 그 나이 구간의 간격보다 짧으면 지운다. 미래 타임스탬프
-    (시계 어긋남)는 나이 0 으로 본다. `max_age_days`>0 이면 그보다 오래된 스냅샷은
-    최신 것이라도 지운다(원본이 사라진 파일의 버전 디렉터리가 영구히 남는 것 방지).
+    간격표에서는 최신 스냅샷을 항상 유지한다. 이후 오래된 방향으로 진행하며, 직전에
+    유지한 스냅샷과의 간격이 해당 나이 구간의 간격보다 짧으면 삭제한다. 미래 타임스탬프
+    (시계 불일치)는 나이 0 으로 간주한다. `max_age_days`>0 이면 그보다 오래된 스냅샷은
+    최신 것이라도 삭제한다(원본이 삭제된 파일의 버전 디렉터리가 영구히 잔류하는 것 방지).
     """
     if not timestamps_ms:
         return set()
@@ -122,10 +122,10 @@ def plan_trash_expiry(
     now: datetime,
     retention_days: int,
 ) -> set[str]:
-    """휴지통 항목 (이름, trashed_at) 중 보존기간을 넘긴 이름. retention_days<=0 이면 없음.
+    """휴지통 항목 (이름, trashed_at) 중 보존기간을 초과한 이름. retention_days<=0 이면 없음.
 
-    trashed_at 을 모르는 항목(메타 유실)은 호출자가 이름 접두어나 mtime 으로 채워 넘긴다.
-    그래도 None 이면 지우지 않는다 — 모르는 건 건드리지 않는다.
+    trashed_at 을 알 수 없는 항목(메타 유실)은 호출자가 이름 접두어나 mtime 으로 보완하여 전달한다.
+    그래도 None 이면 삭제하지 않는다 — 판정 불가 항목은 변경하지 않는다.
     """
     if retention_days <= 0:
         return set()
@@ -156,11 +156,11 @@ def trashed_at_from_name(trash_name: str) -> datetime | None:
 
 
 def _is_under(child: Path, parent: Path) -> bool:
-    """어휘적으로도, resolve 해서도 parent 아래인지. 링크로 밖을 가리키는 항목은 False."""
+    """어휘적으로도, resolve 결과로도 parent 하위인지 여부. 링크로 외부를 가리키는 항목은 False."""
     try:
         if not child.is_relative_to(parent):
             return False
-        # child 자체가 링크면 resolve 가 밖으로 나갈 수 있다 — 링크는 "그 자리"만 본다
+        # child 자체가 링크이면 resolve 결과가 외부를 가리킬 수 있다 — 링크는 해당 위치만 확인한다
         probe = child.parent.resolve(strict=True) / child.name
         return probe.is_relative_to(parent.resolve(strict=True))
     except (OSError, ValueError):
@@ -168,7 +168,7 @@ def _is_under(child: Path, parent: Path) -> bool:
 
 
 def remove_within(p: Path, root: Path, stats: Stats) -> None:
-    """root 아래의 파일/디렉터리/링크 하나를 지운다. 링크는 따라가지 않는다."""
+    """root 하위의 파일/디렉터리/링크 하나를 삭제한다. 링크는 따라가지 않는다."""
     if not _is_under(p, root):
         stats.errors += 1
         logger.error("[retention] 범위 밖 경로 삭제 거부: %s (root=%s)", p, root)
@@ -179,7 +179,7 @@ def remove_within(p: Path, root: Path, stats: Stats) -> None:
             p.unlink()
         elif p.is_dir():
             size = _tree_size(p)
-            # rmtree 는 디렉터리 안의 링크를 따라가지 않는다(링크 자체만 지운다).
+            # rmtree 는 디렉터리 내부의 링크를 따라가지 않는다(링크 자체만 삭제).
             shutil.rmtree(p)
         elif p.is_file():
             size = p.stat().st_size
@@ -206,7 +206,7 @@ def _tree_size(d: Path) -> int:
 
 
 def _prune_empty_dirs(start: Path, stop: Path) -> None:
-    """start 부터 stop(미포함) 까지 올라가며 빈 디렉터리를 지운다."""
+    """start 부터 stop(미포함) 까지 상위로 이동하며 빈 디렉터리를 삭제한다."""
     cur = start
     while cur != stop and cur.is_relative_to(stop):
         try:
@@ -232,7 +232,7 @@ def expire_versions(versions_root: Path, now_ms: int | None = None,
 
     for dirpath, dirnames, filenames in os.walk(versions_root, followlinks=False):
         d = Path(dirpath)
-        # 링크된 하위 디렉터리는 내려가지 않는다
+        # 링크된 하위 디렉터리로는 진입하지 않는다
         dirnames[:] = [n for n in dirnames if not (d / n).is_symlink()]
         snaps = [f for f in filenames if f.isdigit() and not (d / f).is_symlink()]
         if not snaps:
@@ -247,8 +247,8 @@ def expire_versions(versions_root: Path, now_ms: int | None = None,
             else:
                 remove_within(target, versions_root, stats)
         if drop and not dry_run and len(drop) == len(snaps) and d != versions_root:
-            # 스냅샷이 다 지워진 relpath 디렉터리는 걷어낸다. 소유자 디렉터리
-            # (.versions/<owner>)까지는 지우지 않는다.
+            # 스냅샷이 모두 삭제된 relpath 디렉터리는 제거한다. 소유자 디렉터리
+            # (.versions/<owner>)까지는 삭제하지 않는다.
             owner_dir = versions_root / d.relative_to(versions_root).parts[0]
             _prune_empty_dirs(d, owner_dir)
     return stats
@@ -256,7 +256,7 @@ def expire_versions(versions_root: Path, now_ms: int | None = None,
 
 def expire_trash_for_user(user_dir: Path, retention_days: int,
                           now: datetime | None = None, dry_run: bool = False) -> Stats:
-    """`users/<id>/.trash/` 한 곳을 정리하고 `.trash_meta.json` 에서도 지운 항목을 뺀다."""
+    """`users/<id>/.trash/` 한 곳을 정리하고 `.trash_meta.json` 에서도 삭제한 항목을 제거한다."""
     stats = Stats()
     if retention_days <= 0:
         return stats
@@ -284,8 +284,8 @@ def expire_trash_for_user(user_dir: Path, retention_days: int,
             except ValueError:
                 when = None
         if when is None:
-            # 메타가 없으면 이름 접두어(삭제 시각)로. 그것도 없으면 None 으로 남겨
-            # plan 이 건너뛴다 — 항목 mtime 은 원본 수정 시각이라 근거가 못 된다.
+            # 메타가 없으면 이름 접두어(삭제 시각)로 판정한다. 그것도 없으면 None 으로 두어
+            # plan 이 생략하도록 한다 — 항목 mtime 은 원본 수정 시각이므로 근거로 사용할 수 없다.
             when = trashed_at_from_name(entry.name)
         entries.append((entry.name, when))
 
@@ -326,7 +326,7 @@ def expire_all_trash(users_root: Path, retention_days: int,
 
 
 async def trash_retention_days(db) -> int:
-    """휴지통 보존 일수(관리자 설정, 없거나 잘못되면 기본값). 0 = 자동 삭제 안 함."""
+    """휴지통 보존 일수(관리자 설정, 없거나 잘못된 값이면 기본값). 0 = 자동 삭제 안 함."""
     from app.admin.settings import get_setting
     v = await get_setting(db, KEY_TRASH_DAYS)
     try:
@@ -369,10 +369,10 @@ async def run_once() -> None:
 
 
 async def run_retention(interval_seconds: int = RUN_INTERVAL) -> None:
-    """주기 정리. 워커 8개 중 락을 잡은 하나만 돈다. 한 주기가 터져도 루프를 놓지 않는다."""
+    """주기 정리. 워커 8개 중 락을 획득한 하나만 수행한다. 한 주기에서 예외가 발생해도 루프를 유지한다."""
     from app.jobs.lock import run_exclusive
 
-    await asyncio.sleep(120)          # 기동 직후 색인기·헬스체크와 겹치지 않게
+    await asyncio.sleep(120)          # 기동 직후 색인기·헬스체크와의 중복 회피
     while True:
         try:
             await run_exclusive(LOCK_NAME, max(60, interval_seconds - 100), run_once)

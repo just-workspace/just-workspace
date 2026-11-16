@@ -1,17 +1,17 @@
-"""워커를 가로지르는 Yjs 릴레이.
+"""워커 간 Yjs 릴레이.
 
-왜 필요한가
+필요성
 -----------
-백엔드는 uvicorn 워커 8개로 뜬다. 방 목록을 프로세스 메모리에만 두면 두 사람이 서로
-다른 워커에 붙는 순간 편집이 상대에게 **영원히** 가지 않는다. 둘 다 화면에는 "실시간
-연결됨" 이라고 떠 있어서 증상이 더 고약하다.
+백엔드는 uvicorn 워커 8개로 기동된다. 방 목록을 프로세스 메모리에만 두면 두 사용자가 서로
+다른 워커에 접속하는 순간 편집 내용이 상대에게 **영구히** 전달되지 않는다. 양측 화면에 모두 "실시간
+연결됨" 으로 표시되므로 증상 파악이 더욱 어렵다.
 
-그래서 받은 프레임을 무조건 Redis pub/sub 으로 흘리고, 각 워커가 자기 소켓에만 꽂는다.
-발신자 표식(conn_id)을 같이 실어서 자기가 보낸 프레임이 자기에게 돌아오지 않게 한다.
+따라서 수신한 프레임을 항상 Redis pub/sub 으로 발행하고, 각 워커는 자신의 소켓에만 전달한다.
+발신자 식별자(conn_id)를 함께 포함하여 발신 프레임이 발신자에게 되돌아오지 않도록 한다.
 
-Redis 가 죽어 있으면 같은 워커 안에서만 중계한다 — 협업이 아예 멈추는 것보다는 낫다.
+Redis 장애 시에는 동일 워커 내에서만 중계한다 — 협업이 완전히 중단되는 것보다 낫다.
 
-쓰는 쪽
+사용 방법
 -------
     relay = Relay("docs:collab")
     entry = await relay.join(path, ws, user.id)
@@ -20,7 +20,7 @@ Redis 가 죽어 있으면 같은 워커 안에서만 중계한다 — 협업이
     ...
     await relay.leave(path, entry)
 
-문서(docs)와 위키(wiki)가 같은 구현을 쓴다. 방 키만 다르다(가상 경로 / 페이지 id).
+문서(docs)와 위키(wiki)가 동일한 구현을 사용한다. 방 키만 상이하다(가상 경로 / 페이지 id).
 """
 
 import asyncio
@@ -41,8 +41,8 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class Member:
     ws: WebSocket
-    member_id: str      # 보통 user.id — 프레즌스 정리에 쓴다
-    conn_id: str        # 이 소켓 하나의 식별자
+    member_id: str      # 통상 user.id — 프레즌스 정리에 사용
+    conn_id: str        # 소켓 1개의 식별자
 
 
 class Relay:
@@ -68,11 +68,11 @@ class Relay:
             self._rooms.pop(room, None)
 
     def local_size(self, room: str) -> int:
-        """이 워커에 붙어 있는 수. 전체 인원은 프레즌스(Redis)가 답이다."""
+        """이 워커에 접속된 수. 전체 인원은 프레즌스(Redis) 기준이다."""
         return len(self._rooms.get(room, set()))
 
     def has_member(self, room: str, member_id: str) -> bool:
-        """같은 사용자가 이 워커에 아직 붙어 있는가(다른 탭 등)."""
+        """동일 사용자가 이 워커에 아직 접속되어 있는지 여부(다른 탭 등)."""
         return any(m.member_id == member_id for m in self._rooms.get(room, set()))
 
     # ── 중계 ────────────────────────────────────────────
@@ -89,8 +89,8 @@ class Relay:
             return
         except Exception as e:
             logger.warning("relay %s: publish failed, local only: %s", self.channel, e)
-        # Redis 가 받아 줬으면 fanout 이 이 워커에도 되돌려 주므로 여기서 또 보내면
-        # 같은 프레임이 두 번 간다. 실패했을 때만 직접 뿌린다.
+        # Redis 발행이 성공하면 fanout 이 이 워커에도 되돌려 전달하므로 여기서 다시 송신하면
+        # 동일 프레임이 2회 전달된다. 실패한 경우에만 직접 전달한다.
         await self._deliver(room, sender.conn_id, data)
 
     async def _deliver(self, room: str, src: str, data: bytes) -> None:
@@ -128,7 +128,7 @@ class Relay:
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            # 다음 접속이 다시 띄운다. 여기서 죽어도 프로세스를 끌고 가면 안 된다.
+            # 다음 접속 시 재기동된다. 여기서 실패해도 프로세스 종료로 이어져서는 안 된다.
             logger.warning("relay %s: fanout stopped: %s", self.channel, e)
         finally:
             try:

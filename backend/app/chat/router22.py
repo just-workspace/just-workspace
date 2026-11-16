@@ -1,7 +1,7 @@
 """chat22 REST — 첨부 묶음·스레드(혼합형)·커스텀 이모지·검색·프로필·채팅 정책·보관 카테고리.
 
-기존 router.py 엔드포인트는 그대로(하위 호환)이고,
-메시지 모양(reply_to·silent·attachments·thread)은 service._message_to_dict + msg22.enrich 가 모든 경로에 붙인다.
+기존 router.py 엔드포인트는 변경 없이 유지하며(하위 호환),
+메시지 형식(reply_to·silent·attachments·thread)은 service._message_to_dict + msg22.enrich 가 모든 경로에 적용한다.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ def _err(status: int, code: str, message: str) -> HTTPException:
 
 
 async def _broadcast_all(event: dict) -> None:
-    """접속한 모든 사용자에게(워크스페이스 전역 변경 — 이모지·정책). presence 와 같은 전역 Pub/Sub 길을 쓴다."""
+    """접속 중인 모든 사용자에게 전달한다(워크스페이스 전역 변경 — 이모지·정책). presence 와 동일한 전역 Pub/Sub 경로를 사용한다."""
     try:
         from app.chat.websocket import manager
         await manager.publish_presence(event)
@@ -109,7 +109,7 @@ async def upload_attachments(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """파일 1–10개 = 메시지 1개(message_type=file, attachments N). 파일당 50MB. 이미지면 width/height."""
+    """파일 1–10개 = 메시지 1개(message_type=file, attachments N). 파일당 50MB. 이미지인 경우 width/height 포함."""
     if not await perms.allowed(db, user, "file.upload", channel_id):
         raise HTTPException(403, "채널 멤버가 아닙니다")
     if not files or len(files) > MAX_FILES:
@@ -171,7 +171,7 @@ async def upload_attachments(
         raise
 
     first = items[0]
-    # 옛 프런트 호환 — file_meta 는 첫 파일(단일 파일 메시지와 같은 모양)
+    # 구 프런트 호환 — file_meta 는 첫 파일 기준(단일 파일 메시지와 동일한 형식)
     file_meta = json.dumps({k: first[k] for k in ("filename", "size", "mime_type", "url", "disk_name")},
                            ensure_ascii=False)
     msg = await service.create_message(
@@ -216,7 +216,7 @@ async def start_thread(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """답글 없이 스레드만 시작(+ 이름). 이미 있는 스레드에 이름을 붙이는 건 루트 작성자·MANAGE_THREADS."""
+    """답글 없이 스레드만 시작(+ 이름). 기존 스레드의 이름 지정은 루트 작성자·MANAGE_THREADS 만 가능."""
     m = await _root_or_404(db, message_id)
     if not await perms.allowed(db, user, "message.reply", m.channel_id):
         raise HTTPException(403, "채널 멤버가 아닙니다")
@@ -271,7 +271,7 @@ async def patch_thread(
             m.thread_archived_at = m.thread_archived_at or now
         else:
             m.thread_archived_at = None
-            m.thread_activity_at = now   # 되살리면 자동 보관 시계도 다시
+            m.thread_activity_at = now   # 보관 해제 시 자동 보관 타이머도 재시작
     if m.thread_started_at is None:
         m.thread_started_at = now
     await db.commit()
@@ -414,7 +414,7 @@ async def emoji_image(emoji_id: str, user: User = Depends(get_current_user), db:
     if e is None or e.content_type not in emoji22._FORMATS.values():
         raise HTTPException(404, "없습니다")
     return Response(content=e.data, media_type=e.content_type, headers={
-        # url 에 ?v=<수정 시각> 이 붙어 있어 내용이 바뀌면 주소가 바뀐다 → 길게 캐시
+        # url 에 ?v=<수정 시각> 이 포함되어 내용 변경 시 주소가 변경됨 → 장기 캐시
         "Cache-Control": "private, max-age=31536000, immutable",
         "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": "default-src 'none'; sandbox",
@@ -474,7 +474,7 @@ async def user_profile(target_id: str, user: User = Depends(get_current_user), d
         "username": u.username,
         "display_name": u.display_name,
         "avatar_url": u.avatar_url,
-        # 직함·부서 — 지금 사용자·조직 데이터에 없다(연락처는 개인 주소록). 컬럼이 생기면 그대로 싣는다.
+        # 직함·부서 — 현재 사용자·조직 데이터에 없음(연락처는 개인 주소록). 컬럼이 추가되면 그대로 포함됨.
         "job_title": getattr(u, "job_title", None),
         "department": getattr(u, "department", None),
         "bio": u.bio,

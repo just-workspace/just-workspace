@@ -1,23 +1,23 @@
 """승인 대기함·채팅 승인 카드 API — /api/approvals.
 
-같은 요청 객체(app.mcp.writes.to_dict)를 채팅 카드와 승인 대기함이 함께 쓴다.
+동일한 요청 객체(app.mcp.writes.to_dict)를 채팅 카드와 승인 대기함이 공용으로 사용한다.
 
-GET    /api/approvals?view=pending|history&cursor=   목록(대기함 = high·MCP 요청, 기록 = 처리된 것 전부)
-GET    /api/approvals?conversation_id=               그 대화의 요청 전부(대화 다시 열 때 카드 복원)
-GET    /api/approvals/count                          대기 건수(실시간 이벤트 approvals.count 의 처음 값)
+GET    /api/approvals?view=pending|history&cursor=   목록(대기함 = high·MCP 요청, 기록 = 처리된 항목 전체)
+GET    /api/approvals?conversation_id=               해당 대화의 요청 전체(대화 재진입 시 카드 복원)
+GET    /api/approvals/count                          대기 건수(실시간 이벤트 approvals.count 의 초기값)
 GET    /api/approvals/{id}                           상세
 POST   /api/approvals/{id}/approve                   승인·[실행] → 서버가 실행
-POST   /api/approvals/{id}/reject  {reason}          거부(사유는 AI 에게 전달)
+POST   /api/approvals/{id}/reject  {reason}          거부(사유는 AI 에 전달)
 POST   /api/approvals/{id}/cancel                    카드 [취소]
-PATCH  /api/approvals/{id}  {args}                   [수정] — 대기 중 인자 고치기
+PATCH  /api/approvals/{id}  {args}                   [수정] — 대기 중 인자 수정
 POST   /api/approvals/{id}/undo                      되돌리기(실행 후 10분)
-GET    /api/approvals/mode                           내장 AI 권한 모드(Claude Code 와 같은 이름)
-PUT    /api/approvals/mode  {mode, confirm}          모드 바꾸기 — bypassPermissions 는 confirm=true 필수
-POST   /api/approvals/batch {conversation_id, ids?, action}  대화의 대기 low 카드 묶음 실행·취소(ids 없으면 전부)
+GET    /api/approvals/mode                           내장 AI 권한 모드(Claude Code 와 동일한 이름)
+PUT    /api/approvals/mode  {mode, confirm}          모드 변경 — bypassPermissions 는 confirm=true 필수
+POST   /api/approvals/batch {conversation_id, ids?, action}  대화의 대기 low 카드 일괄 실행·취소(ids 없으면 전체)
 GET    /api/approvals/rules?conversation_id=         허용·거부 규칙(항상) + 이 대화 허용 + 쓰기 도구 목록
-PUT    /api/approvals/rules {allow, deny}            항상 규칙 바꾸기(Claude Code permissions.allow/deny)
-DELETE /api/approvals/rules/conversation/{conv}/{tool}  이 대화 허용 하나 빼기
-POST   /api/approvals/{id}/approve {remember?}       remember = conversation|always — 실행하고 다시 묻지 않기
+PUT    /api/approvals/rules {allow, deny}            항상 규칙 변경(Claude Code permissions.allow/deny)
+DELETE /api/approvals/rules/conversation/{conv}/{tool}  이 대화 허용 1건 제거
+POST   /api/approvals/{id}/approve {remember?}       remember = conversation|always — 실행 후 재확인 생략
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query

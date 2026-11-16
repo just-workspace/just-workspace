@@ -1,7 +1,7 @@
 """채팅 전제 기능 — 안 읽음 표시 · 스레드 팔로우 · 프레즌스 상태 · 채널 알림 설정 · 핀 · 임시글.
 
-test_chat_seq_unread.py 와 같은 방식(SQLite, 채팅 테이블만)으로 service 함수를 직접 부른다.
-Redis 가 없으므로 notify.py 의 발행·접속 조회는 monkeypatch 로 기록만 한다.
+test_chat_seq_unread.py 와 동일한 방식(SQLite, 채팅 테이블만)으로 service 함수를 직접 호출한다.
+Redis 가 없으므로 notify.py 의 발행·접속 조회는 monkeypatch 로 기록만 수행한다.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -39,7 +39,7 @@ async def db():
 
 @pytest.fixture()
 def events(monkeypatch):
-    """notify.py 가 내보내는 이벤트·푸시를 기록한다(Redis 없음)."""
+    """notify.py 가 발행하는 이벤트·푸시를 기록한다(Redis 없음)."""
     sent = {"user": [], "channel": [], "push": [], "online": set()}
 
     async def _to_user(uid, ev):
@@ -61,7 +61,7 @@ def events(monkeypatch):
     monkeypatch.setattr(notify, "emit_to_channel", _to_channel)
     monkeypatch.setattr(notify, "connected_users", _connected)
     monkeypatch.setattr(notify, "_push", _push)
-    # 멘션 알림(app/notifications/service.py)의 실시간·푸시도 막는다
+    # 멘션 알림(app/notifications/service.py)의 실시간·푸시도 차단
     from app.notifications import service as nsvc
     import app.realtime.events as ev
     monkeypatch.setattr(ev, "emit_to_user", _to_user)
@@ -79,7 +79,7 @@ async def _chan_for(db, user_id, channel_id):
 
 
 async def _settle():
-    """asyncio.create_task 로 띄운 푸시 코루틴이 돌 틈을 준다."""
+    """asyncio.create_task 로 기동한 푸시 코루틴이 실행될 기회를 부여한다."""
     import asyncio
     await asyncio.sleep(0)
     await asyncio.sleep(0)
@@ -106,15 +106,15 @@ async def test_mark_unread_rewinds_pointer_and_recounts(db, events):
     state = await service.get_unread_state(db, "bob", ch.id)
     assert state == {"unread_count": 2, "mention_count": 1, "group_mention": False}
 
-    # 더 앞(m1)으로도 되감긴다 — mark_read 와 달리 뒤로 가는 게 목적
+    # 더 앞(m1)으로도 되돌아간다 — mark_read 와 달리 역방향 이동이 목적
     assert await service.mark_unread(db, ch.id, "bob", m1["id"]) == m1["seq"] - 1
     assert (await _chan_for(db, "bob", ch.id))["unread_count"] == 3
-    # 이미 그보다 앞이면 아무것도 안 바뀐다
+    # 이미 그보다 앞이면 변경 없음
     assert await service.mark_unread(db, ch.id, "bob", m3["id"]) is None
     # 다른 채널 메시지·없는 id
     assert await service.mark_unread(db, ch.id, "bob", "nope") is None
 
-    # 그 뒤 mark_read 는 여전히 단조 증가로 동작
+    # 이후 mark_read 는 여전히 단조 증가로 동작
     assert await service.mark_read(db, ch.id, "bob", m3["id"]) == m3["seq"]
     assert (await _chan_for(db, "bob", ch.id))["unread_count"] == 0
 
@@ -131,13 +131,13 @@ async def test_reply_autofollows_root_author_and_replier(db, events):
     threads_bob = await service.get_my_threads(db, "bob")
     assert [t["id"] for t in threads_alice] == [root["id"]]
     assert [t["id"] for t in threads_bob] == [root["id"]]
-    # 루트 작성자는 답글을 아직 안 읽었고, 답글 작성자는 자기 답글을 읽은 것
+    # 루트 작성자는 답글을 아직 읽지 않은 상태, 답글 작성자는 본인 답글을 읽은 것으로 처리
     assert threads_alice[0]["unread_replies"] == 1 and threads_alice[0]["followed"] is True
     assert threads_bob[0]["unread_replies"] == 0
     assert threads_alice[0]["last_reply"]["id"] == r1["id"]
     assert threads_alice[0]["last_reply"]["sender_name"] == "Bob"
     assert threads_alice[0]["reply_count"] == 1
-    # carol 은 참여하지 않았다
+    # carol 은 참여하지 않음
     assert await service.get_my_threads(db, "carol") == []
 
     # 답글 안에서 멘션된 사람도 자동 팔로우
@@ -146,7 +146,7 @@ async def test_reply_autofollows_root_author_and_replier(db, events):
     carol = await service.get_my_threads(db, "carol")
     assert len(carol) == 1 and carol[0]["unread_replies"] == 2
 
-    # 총 미읽음. alice 는 r2 를 직접 썼으니 그 앞의 r1 까지 읽은 것으로 친다
+    # 총 미읽음. alice 는 r2 를 직접 작성했으므로 그 앞의 r1 까지 읽은 것으로 간주
     assert await service.get_thread_unread_count(db, "carol") == {"threads": 1, "replies": 2}
     assert await service.get_thread_unread_count(db, "alice") == {"threads": 0, "replies": 0}
     assert await service.get_thread_unread_count(db, "bob") == {"threads": 1, "replies": 1}
@@ -156,7 +156,7 @@ async def test_reply_autofollows_root_author_and_replier(db, events):
     assert await service.get_thread_unread_count(db, "carol") == {"threads": 0, "replies": 0}
     st = await service.get_thread_follow_state(db, "carol", root["id"])
     assert st == {"followed": True, "unread_replies": 0, "last_read_seq": r2["seq"]}
-    # 이미 더 앞까지 읽은 사람에게 옛 seq 로 읽음이 오면 포인터는 그대로
+    # 이미 더 앞까지 읽은 사용자에게 이전 seq 로 읽음이 수신되면 포인터는 유지
     assert await service.mark_thread_read(db, "carol", root["id"], up_to_seq=r1["seq"]) == r2["seq"]
     # 답글이 없는 스레드는 None
     lonely = await service.create_message(db, ch.id, "alice", "lonely")
@@ -171,18 +171,18 @@ async def test_unfollow_sticks_until_user_replies(db):
     res = await service.set_thread_follow(db, "alice", root["id"], False)
     assert res == {"root_id": root["id"], "channel_id": ch.id, "followed": False}
     assert await service.get_my_threads(db, "alice") == []
-    # 남의 답글은 끊긴 팔로우를 되살리지 않는다
+    # 타 사용자의 답글은 해제된 팔로우를 복원하지 않음
     await service.create_message(db, ch.id, "bob", "r2", parent_id=root["id"])
     assert await service.get_my_threads(db, "alice") == []
     assert await service.get_thread_unread_count(db, "alice") == {"threads": 0, "replies": 0}
-    # 본인이 답글을 쓰면 다시 켜진다
+    # 본인이 답글을 작성하면 다시 활성화됨
     await service.create_message(db, ch.id, "alice", "r3", parent_id=root["id"])
     assert [t["id"] for t in await service.get_my_threads(db, "alice")] == [root["id"]]
-    # 다시 끊고 명시적으로 켜기
+    # 다시 해제한 뒤 명시적으로 활성화
     await service.set_thread_follow(db, "alice", root["id"], False)
     await service.set_thread_follow(db, "alice", root["id"], True)
     assert (await service.get_thread_follow_state(db, "alice", root["id"]))["followed"] is True
-    # 답글은 팔로우 대상이 아니다
+    # 답글은 팔로우 대상이 아님
     reply = (await service.get_thread_messages(db, root["id"]))[0]
     assert await service.set_thread_follow(db, "bob", reply["id"], True) is None
 
@@ -205,21 +205,21 @@ async def test_also_to_channel_shows_reply_in_timeline_and_unread(db):
         db, ch.id, "alice", "loud", parent_id=root["id"], thread_broadcast=True,
     )
     assert quiet["thread_broadcast"] is False and loud["thread_broadcast"] is True
-    # 원 메시지에 also_to_channel 이 와도 무시
+    # 원 메시지에 also_to_channel 이 전달되어도 무시
     plain = await service.create_message(db, ch.id, "alice", "plain", thread_broadcast=True)
     assert plain["thread_broadcast"] is False
 
     msgs, _ = await service.get_messages(db, ch.id)
     contents = [m["content"] for m in msgs]
     assert "loud" in contents and "quiet" not in contents
-    assert msgs[-2]["parent_id"] == root["id"]   # loud 는 parent_id 를 유지한 채 타임라인에 보인다
+    assert msgs[-2]["parent_id"] == root["id"]   # loud 는 parent_id 를 유지한 채 타임라인에 표시됨
 
     bob = await _chan_for(db, "bob", ch.id)
     assert bob["unread_count"] == 2   # loud + plain
-    # 스레드 패널엔 둘 다 있다
+    # 스레드 패널에는 둘 다 존재
     assert [m["content"] for m in await service.get_thread_messages(db, root["id"])] == ["quiet", "loud"]
 
-    # 채널의 마지막 메시지 포인터도 브로드캐스트 답글을 친다
+    # 채널의 마지막 메시지 포인터도 브로드캐스트 답글을 포함
     await service.soft_delete_message(db, plain["id"])
     assert (await _chan_for(db, "bob", ch.id))["last_message"]["content"] == "loud"
 
@@ -234,9 +234,9 @@ async def test_thread_update_goes_to_followers_except_sender(db, events):
     assert [u for u, _ in ups] == ["alice"]
     assert ups[0][1]["root_id"] == root["id"] and ups[0][1]["channel_id"] == ch.id
     assert ups[0][1]["reply"]["id"] == r1["id"] and ups[0][1]["unread_replies"] == 1
-    # 일반 답글은 채널 'all' 푸시 대상이 아니다 — 오프라인 스레드 팔로워(alice) 답글 푸시만 간다
+    # 일반 답글은 채널 'all' 푸시 대상이 아님 — 오프라인 스레드 팔로워(alice) 답글 푸시만 발송
     assert [(u, t) for u, t in events["push"]] == [("alice", "#general · Bob님의 스레드 답글")]
-    # 새 메시지 이벤트는 여전히 채널로
+    # 새 메시지 이벤트는 여전히 채널로 발송
     assert events["channel"][0][1]["type"] == "new_message"
 
 
@@ -258,7 +258,7 @@ def test_effective_state_matrix():
     assert presence.effective_state(_status(mode="away"), True) == "away"
     assert presence.effective_state(_status(mode="away"), False) == "offline"
     assert presence.effective_state(_status(mode="dnd"), True) == "dnd"
-    # dnd_until 이 미래면 모드가 auto 라도 dnd, 지났으면 풀린다
+    # dnd_until 이 미래이면 모드가 auto 여도 dnd, 경과했으면 해제
     assert presence.effective_state(_status(mode="auto", dnd_until=future), True, now) == "dnd"
     assert presence.effective_state(_status(mode="dnd", dnd_until=past), True, now) == "online"
     assert presence.is_dnd(_status(mode="dnd", dnd_until=future), now) is True
@@ -290,7 +290,7 @@ async def test_set_status_roundtrip_and_push_gate(db, monkeypatch):
     assert presence.status_to_dict(row, False)["custom_text"] is None
     assert presence.status_to_dict(row, False)["state"] == "offline"
 
-    # push_allowed 는 자기 세션을 열어 DND 를 본다 — 테스트 DB 로 바꿔 끼운다
+    # push_allowed 는 자체 세션을 열어 DND 를 조회한다 — 테스트 DB 로 대체
     import app.db.session as sess
     from contextlib import asynccontextmanager
 
@@ -317,13 +317,13 @@ async def test_notify_level_defaults_and_update(db):
 
     res = await service.update_channel_prefs(db, pub.id, "bob", notify_level="all", muted=True)
     assert {k: res[k] for k in ("channel_id", "notify_level", "muted")} ==         {"channel_id": pub.id, "notify_level": "all", "muted": True}
-    # 기기 알림 세부 기본값이 같이 온다
+    # 기기 알림 세부 기본값이 함께 반환됨
     assert res["push"] is True and res["thread_replies"] is True and res["email"] is False
     row = await _chan_for(db, "bob", pub.id)
     assert row["notify_level"] == "all" and row["muted"] is True
     # 비멤버
     assert await service.update_channel_prefs(db, pub.id, "carol", muted=True) is None
-    # 한 쿼리 멤버 목록
+    # 단일 쿼리 멤버 목록
     members = {m["user_id"]: m for m in await service.get_members_for_notify(db, pub.id)}
     assert members["bob"]["notify_level"] == "all" and members["bob"]["muted"] is True
     assert members["alice"]["notify_level"] == "mentions"
@@ -334,14 +334,14 @@ async def test_push_rules_all_mentions_none_muted(db, events):
     await service.update_channel_prefs(db, ch.id, "bob", notify_level="all")
     await service.update_channel_prefs(db, ch.id, "carol", notify_level="none")
 
-    # 일반 메시지: 'all' 인 bob 만(오프라인) 푸시, 'mentions' 기본인 alice 는 보낸 사람
+    # 일반 메시지: 'all' 인 bob 만(오프라인) 푸시, 'mentions' 기본인 alice 는 발신자
     m = await service.create_message(db, ch.id, "alice", "hello")
     await notify.after_message_created(db, m, ch.id, "alice", "hello")
     await _settle()
     assert [p[0] for p in events["push"]] == ["bob"]
     assert events["push"][0][1] == "#general · Alice"
 
-    # 접속 중이면 안 간다
+    # 접속 중이면 발송하지 않음
     events["push"].clear()
     events["online"].add("bob")
     m = await service.create_message(db, ch.id, "alice", "hello again")
@@ -350,18 +350,18 @@ async def test_push_rules_all_mentions_none_muted(db, events):
     assert events["push"] == []
     events["online"].clear()
 
-    # muted 면 'all' 이어도 안 간다
+    # muted 이면 'all' 이어도 발송하지 않음
     await service.update_channel_prefs(db, ch.id, "bob", muted=True)
     m = await service.create_message(db, ch.id, "alice", "muted?")
     await notify.after_message_created(db, m, ch.id, "alice", "muted?")
     await _settle()
     assert events["push"] == []
 
-    # 멘션: 'none' 인 carol 은 인앱 알림·배지는 받고 푸시는 안 받는다
+    # 멘션: 'none' 인 carol 은 인앱 알림·배지는 수신하고 푸시는 수신하지 않음
     m = await service.create_message(db, ch.id, "alice", "@carol @bob ping")
     await notify.after_message_created(db, m, ch.id, "alice", "@carol @bob ping")
     await _settle()
-    assert sorted(p[0] for p in events["push"]) == ["bob"]   # muted 는 멘션 푸시를 막지 않는다
+    assert sorted(p[0] for p in events["push"]) == ["bob"]   # muted 는 멘션 푸시를 차단하지 않음
     notifs = [u for u, e in events["user"] if e["type"] == "notification"]
     assert sorted(notifs) == ["bob", "carol"]
     assert (await _chan_for(db, "carol", ch.id))["mention_count"] == 1
@@ -394,7 +394,7 @@ async def test_pin_unpin_and_list(db):
     d = await service.set_pinned(db, m1["id"], "bob", True)
     assert d["pinned_at"] is not None and d["pinned_by"] == "bob"
     await service.set_pinned(db, m2["id"], "alice", True)
-    # 다시 핀해도 처음 핀한 사람·시각 유지
+    # 다시 핀해도 최초 핀한 사용자·시각 유지
     again = await service.set_pinned(db, m1["id"], "alice", True)
     assert again["pinned_by"] == "bob" and again["pinned_at"] == d["pinned_at"]
 
@@ -409,7 +409,7 @@ async def test_pin_unpin_and_list(db):
     assert un["pinned_at"] is None and un["pinned_by"] is None
     assert [p["id"] for p in await service.get_pinned_messages(db, ch.id)] == [m2["id"]]
 
-    # 삭제된 메시지는 핀 목록에서 빠지고 핀도 못 한다
+    # 삭제된 메시지는 핀 목록에서 제외되고 핀도 불가
     await service.soft_delete_message(db, m2["id"])
     assert await service.get_pinned_messages(db, ch.id) == []
     assert await service.set_pinned(db, m2["id"], "alice", True) is None
@@ -430,14 +430,14 @@ async def test_draft_upsert_delete_and_cleared_on_send(db, events):
     t = await service.upsert_draft(db, "bob", ch.id, root["id"], "스레드 답글 초안")
     assert t["parent_id"] == root["id"]
     drafts = await service.get_drafts(db, "bob")
-    assert len(drafts) == 2   # 채널 입력창 1 + 스레드 1 (채널 쪽은 갱신됐을 뿐)
+    assert len(drafts) == 2   # 채널 입력창 1 + 스레드 1 (채널 쪽은 갱신만 됨)
     assert await service.get_drafts(db, "alice") == []
 
     # 빈 content 는 삭제
     assert await service.upsert_draft(db, "bob", ch.id, root["id"], "   ") is None
     assert [x["parent_id"] for x in await service.get_drafts(db, "bob")] == [None]
 
-    # 메시지를 보내면 그 자리 임시글이 지워지고 draft_update(content null) 가 내 기기로
+    # 메시지를 전송하면 해당 위치의 임시글이 삭제되고 draft_update(content null) 가 본인 기기로 발송됨
     m = await service.create_message(db, ch.id, "bob", "쓰는 중...")
     await notify.after_message_created(db, m, ch.id, "bob", m["content"])
     assert await service.get_drafts(db, "bob") == []
@@ -445,5 +445,5 @@ async def test_draft_upsert_delete_and_cleared_on_send(db, events):
     assert du == [{"type": "draft_update", "channel_id": ch.id, "parent_id": None,
                    "content": None, "updated_at": None}]
 
-    # 없는 걸 지우면 False
+    # 존재하지 않는 항목 삭제 시 False
     assert await service.delete_draft(db, "bob", ch.id, None) is False

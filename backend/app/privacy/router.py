@@ -14,7 +14,7 @@ _MAX_FAILS = 5
 
 
 class SetPinRequest(BaseModel):
-    account_password: str   # 본인 인증 — 게스트/어깨너머가 금고 열쇠를 못 만들게
+    account_password: str   # 본인 인증 — 게스트·어깨너머 관찰자가 금고 열쇠를 생성하지 못하도록 함
     new_pin: str
 
 
@@ -24,7 +24,7 @@ class UnlockRequest(BaseModel):
 
 @router.get("/status")
 async def status(request: Request, user: User = Depends(get_current_user)):
-    """has_pin: 금고가 설정됐는지 / unlocked: 이번 요청이 해제 토큰을 들고 있는지."""
+    """has_pin: 금고 설정 여부 / unlocked: 본 요청의 해제 토큰 보유 여부."""
     return {
         "has_pin": await gate.has_pin(user.id),
         "unlocked": gate.is_unlocked(request, user),

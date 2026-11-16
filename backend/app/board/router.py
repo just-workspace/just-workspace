@@ -113,7 +113,7 @@ async def unread_counts(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """게시판별 안 읽은 글 수 {counts: {board_id: n}, total}. 내가 쓴 글·연 글·"모두 읽음" 이전 글 제외."""
+    """게시판별 읽지 않은 글 수 {counts: {board_id: n}, total}. 본인 작성 글·열람한 글·"모두 읽음" 이전 글 제외."""
     counts = await service.unread_counts(db, user.id)
     return {"counts": counts, "total": sum(counts.values())}
 
@@ -125,7 +125,7 @@ async def mark_board_read(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """이 게시판 글을 모두 읽음으로."""
+    """해당 게시판의 글을 전부 읽음 처리."""
     if not await service.get_board(db, board_id):
         raise HTTPException(404, "게시판을 찾을 수 없습니다")
     await service.mark_board_read(db, user.id, board_id)
@@ -140,7 +140,7 @@ async def my_posts(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """모든 게시판에서 내가 쓴 글."""
+    """전체 게시판에서 본인이 작성한 글."""
     return await service.get_my_posts(db, user.id, page, page_size)
 
 
@@ -152,7 +152,7 @@ async def mention_users(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """댓글 @멘션 자동완성 — 채팅 사용자 검색(app/chat/service.search_users)을 그대로 쓴다."""
+    """댓글 @멘션 자동완성 — 채팅 사용자 검색(app/chat/service.search_users)을 그대로 사용한다."""
     from app.chat.service import search_users
     return await search_users(db, q.strip() or None, limit=limit)
 
@@ -210,11 +210,11 @@ async def update_post(
         raise HTTPException(404, "게시글을 찾을 수 없습니다")
     if post.author_id != user.id and not user.is_admin:
         raise HTTPException(403, "수정 권한이 없습니다")
-    # Check notice/pinned permission — 값이 실제로 바뀔 때만 본다.
-    # (편집 화면은 고정·필독 값을 늘 함께 보낸다 — "보냈다"만으로 막으면 일반 사용자가 자기 글을 고칠 수 없다)
+    # Check notice/pinned permission — 값이 실제로 변경되는 경우에만 검사한다.
+    # (편집 화면은 고정·필독 값을 항상 함께 전송한다 — 전송 여부만으로 차단하면 일반 사용자가 본인 글을 수정할 수 없다)
     pin_changed = body.is_pinned is not None and body.is_pinned != post.is_pinned
     must_changed = body.is_must_read is not None and body.is_must_read != post.is_must_read
-    # 필독 만료일도 같은 권한 — 일반 작성자가 자기 필독 글의 만료를 지워 무기한으로 만들 수 없게
+    # 필독 만료일에도 동일 권한 적용 — 일반 작성자가 본인 필독 글의 만료를 삭제하여 무기한으로 변경하는 것을 방지
     exp_changed = False
     if "must_read_expires_at" in body.model_fields_set:
         _norm = lambda d: d.replace(tzinfo=None, microsecond=0) if d is not None and hasattr(d, "replace") else d  # noqa: E731
@@ -223,7 +223,7 @@ async def update_post(
         board = await service.get_board(db, post.board_id)
         if board and board.notice_permission == "admin" and not user.is_admin:
             raise HTTPException(403, "공지/필독 설정은 관리자만 가능합니다")
-    # 보낸 칸만 반영한다. null 은 "비우기"가 되는 칸(카테고리·첨부·필독 만료)만 남기고 나머지는 무시
+    # 전송된 필드만 반영. null 은 "비우기"로 해석되는 필드(카테고리·첨부·필독 만료)에만 유지하고 나머지는 무시
     updates = {
         k: v for k, v in body.model_dump(exclude_unset=True).items()
         if v is not None or k in service.NULLABLE_POST_FIELDS

@@ -20,10 +20,10 @@ async def test_health_response_fields(client):
     assert "service" in data
     assert isinstance(data["service"], str)
 
-    # 인증 없이 열려 있는 응답에는 서버 버전을 싣지 않는다(로그인한 요청에만 붙는다)
+    # 인증 없이 공개된 응답에는 서버 버전을 포함하지 않는다(로그인한 요청에만 포함)
     assert "version" not in data
     assert "demo_mode" not in data
-    # 로그인 화면이 그리는 데 필요한 것은 그대로
+    # 로그인 화면 렌더링에 필요한 항목은 유지
     for key in ("brand_color", "registration_mode", "zones", "config"):
         assert key in data
 
@@ -35,7 +35,7 @@ async def test_health_version_only_for_signed_in(client, monkeypatch):
     async def yes(request, db):
         return True
 
-    # 쿠키가 있어도 세션이 유효하지 않으면 버전은 없다
+    # 쿠키가 있어도 세션이 유효하지 않으면 버전 미포함
     r = await client.get("/api/health", headers={"Cookie": "ws_session=not-a-session"})
     assert r.status_code == 200 and "version" not in r.json()
 
@@ -51,7 +51,7 @@ async def test_demo_login_is_gone(client):
 
 
 def test_cors_default_is_app_url_only():
-    """기본 허용 출처는 공개 주소 하나(+DEBUG 일 때 개발 서버). 로컬 출처는 번들 앱을 켰을 때만."""
+    """기본 허용 출처는 공개 주소 하나(+DEBUG 일 때 개발 서버). 로컬 출처는 번들 앱 활성화 시에만 허용."""
     import app.main as main_mod
     from app.auth.ws_auth import NATIVE_APP_ORIGINS
     from app.config import Settings

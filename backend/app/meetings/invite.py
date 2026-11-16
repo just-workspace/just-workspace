@@ -73,7 +73,7 @@ async def send_invite_email(
 ) -> None:
     """Send a meeting invitation email with ICS attachment."""
     end_time = scheduled_at + timedelta(minutes=duration_minutes)
-    # 비밀번호는 평문으로 싣는다(사용자 요청) — 이 메일을 받은 사람은 입장 권한이 있는 사람이다
+    # 비밀번호는 평문으로 포함한다(사용자 요청) — 이 메일의 수신자는 입장 권한 보유자이다
     pw_row = (
         f'<tr><td style="padding: 4px 12px 4px 0; color: #888;">비밀번호</td>'
         f'<td style="font-family: monospace; font-weight: 600;">{password}</td></tr>'
@@ -137,10 +137,10 @@ async def create_calendar_event(
     username: str | None = None,
     user_id: str | None = None,
 ) -> str | None:
-    """내부 사용자 기본 캘린더에 회의 일정을 만들고 일정 id 를 돌려준다(실패 None).
+    """내부 사용자 기본 캘린더에 회의 일정을 생성하고 일정 id 를 반환한다(실패 시 None).
 
-    예전엔 bool 을 돌려줬다 — id 문자열도 참/거짓 판정은 같다. 캘린더 모듈 내부는 건드리지 않고
-    calendar_service 공개 함수만 부른다.
+    과거에는 bool 을 반환했다 — id 문자열도 참/거짓 판정은 동일하다. 캘린더 모듈 내부는 변경하지 않고
+    calendar_service 공개 함수만 호출한다.
     """
     from sqlalchemy import select
     from app.db.session import async_session
@@ -186,7 +186,7 @@ async def update_calendar_event_time(
     user_id: str, event_id: str, scheduled_at: datetime, duration_minutes: int,
     meeting_name: str | None = None,
 ) -> bool:
-    """회의 시각·제목이 바뀌면 호스트 일정도 옮긴다."""
+    """회의 시각·제목이 변경되면 호스트 일정도 갱신한다."""
     from app.db.session import async_session
 
     data = {
@@ -200,7 +200,7 @@ async def update_calendar_event_time(
 
 
 async def delete_calendar_event(user_id: str, event_id: str) -> bool:
-    """시작 전에 취소한 회의의 호스트 일정을 지운다."""
+    """시작 전에 취소한 회의의 호스트 일정을 삭제한다."""
     from app.db.session import async_session
 
     async with async_session() as db:

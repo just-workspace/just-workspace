@@ -1,13 +1,13 @@
-"""문서를 **구조째** 텍스트로 — MCP files_read · mail_read_attachment 용.
+"""문서를 **구조를 유지한** 텍스트로 변환 — MCP files_read · mail_read_attachment 용.
 
-색인기(app/files/indexer.py)의 추출기는 검색용이라 공백을 전부 뭉갠다. 모델이 읽기엔
-제목·표·시트·슬라이드·쪽 경계가 사라져 쓸모가 떨어진다. 여기서는 마크다운으로 구조를 남긴다.
+색인기(app/files/indexer.py)의 추출기는 검색용이므로 공백을 전부 병합한다. 모델이 읽을 경우
+제목·표·시트·슬라이드·쪽 경계가 소실되어 활용도가 낮다. 본 모듈은 마크다운으로 구조를 보존한다.
 
 지원: docx(제목·문단·표 순서 유지), xlsx(시트별 표), pptx(슬라이드별 제목·본문·노트),
-pdf(쪽별), hwpx(zip+XML), hwp(5.0 바이너리 — olefile 로 열고 BodyText 레코드를 직접 푼다).
-pyhwp 는 AGPL 이라 쓰지 않는다.
+pdf(쪽별), hwpx(zip+XML), hwp(5.0 바이너리 — olefile 로 열고 BodyText 레코드를 직접 해석한다).
+pyhwp 는 AGPL 이므로 사용하지 않는다.
 
-모든 함수는 bytes 를 받아 (markdown, meta) 를 돌려준다. 해석 실패는 DocReadError.
+모든 함수는 bytes 를 받아 (markdown, meta) 를 반환한다. 해석 실패는 DocReadError.
 """
 
 from __future__ import annotations
@@ -21,15 +21,15 @@ import zlib
 MAX_SHEET_ROWS = 2000      # 시트 하나에서 읽는 최대 행
 MAX_SHEET_COLS = 60
 MAX_PDF_PAGES = 300
-MAX_DOC_CHARS = 1_000_000  # 문서 하나에서 뽑는 최대 글자 — 거대한 표 문서가 수백만 자·수 분 걸린 적이 있다
+MAX_DOC_CHARS = 1_000_000  # 문서 하나에서 추출하는 최대 글자 수 — 대형 표 문서에서 수백만 자·수 분이 소요된 사례가 있다
 
 
-# 실패 코드(첨부 화면이 문구를 고른다) — 메시지 문자열을 해석하지 말고 code 를 볼 것.
+# 실패 코드(첨부 화면이 문구를 선택한다) — 메시지 문자열을 해석하지 않고 code 를 확인할 것.
 ERROR_CODES = ("encrypted", "distribution", "corrupt", "too_large", "unsupported_version", "unsupported")
 
 
 class DocReadError(Exception):
-    """문서를 읽지 못함(손상·암호·배포용 등). 메시지는 사용자에게 그대로 보여도 된다.
+    """문서 읽기 실패(손상·암호·배포용 등). 메시지는 사용자에게 그대로 표시할 수 있다.
 
     ``code`` ∈ ERROR_CODES: encrypted(암호) · distribution(배포용 hwp) · corrupt(손상·해석 실패, 기본) ·
     too_large · unsupported_version(hwp 3.x 등) · unsupported(형식 미지원).
@@ -76,9 +76,9 @@ def read_docx(data: bytes) -> tuple[str, dict]:
     size = 0
     tables = 0
     truncated = False
-    # 본문 순서 그대로(문단과 표가 섞인 순서) — d.paragraphs/d.tables 는 순서를 잃는다.
-    # 표는 python-docx 의 row.cells 를 쓰지 않는다: 병합 셀이 많은 표에서 셀마다 격자를 다시 계산해
-    # 실제 문서 하나가 117초 걸렸다. XML 의 w:tr/w:tc 를 직접 읽는다(병합 칸은 한 번만 나온다).
+    # 본문 순서 유지(문단과 표가 혼재된 순서) — d.paragraphs/d.tables 는 순서를 보존하지 않는다.
+    # 표에는 python-docx 의 row.cells 를 사용하지 않는다: 병합 셀이 많은 표에서 셀마다 격자를 재계산하여
+    # 실제 문서 하나에 117초가 소요되었다. XML 의 w:tr/w:tc 를 직접 읽는다(병합 셀은 1회만 나타난다).
     for el in d.element.body.iterchildren():
         if size > MAX_DOC_CHARS:
             truncated = True
@@ -100,7 +100,7 @@ def read_docx(data: bytes) -> tuple[str, dict]:
                 block = text
         elif tag == "tbl":
             rows = []
-            for tr in el.iterchildren(_W + "tr"):   # 직계 행만(셀 안 중첩 표의 행은 셀 글자로 들어간다)
+            for tr in el.iterchildren(_W + "tr"):   # 직계 행만(셀 내부 중첩 표의 행은 셀 텍스트로 포함된다)
                 rows.append([" ".join(_w_text(p) for p in tc.iter(_W + "p")).strip()
                              for tc in tr.iterchildren(_W + "tc")])
             block = _md_table(rows)
@@ -135,7 +135,7 @@ def read_xlsx(data: bytes) -> tuple[str, dict]:
                     truncated = True
                     break
                 rows.append(list(row[:MAX_SHEET_COLS]))
-            # 뒤쪽 빈 열 잘라내기
+            # 후행 빈 열 제거
             width = 0
             for r in rows:
                 for j in range(len(r) - 1, -1, -1):
@@ -201,7 +201,7 @@ def read_pdf(data: bytes) -> tuple[str, dict]:
         parts.append(f"--- {i}쪽 ---\n{text}")
     meta = {"format": "pdf", "pages": n, "pages_without_text": empty}
     if n and empty == min(n, MAX_PDF_PAGES):
-        # 글자 층이 없는 스캔 PDF — OCR 은 아직 없다
+        # 텍스트 레이어가 없는 스캔 PDF — OCR 은 현재 미지원
         meta["note"] = "텍스트 층이 없는 스캔 문서로 보입니다(글자 인식 미지원)"
     return "\n\n".join(parts), meta
 
@@ -231,7 +231,7 @@ def read_hwpx(data: bytes) -> tuple[str, dict]:
         def para_text(p) -> str:
             return "".join(t.text or "" for t in p.iter() if local(t) == "t").strip()
 
-        # 표 안의 문단은 표로 따로 모으고, 본문 문단에서는 뺀다
+        # 표 내부 문단은 표로 별도 수집하고, 본문 문단에서는 제외한다
         for el in root.iter():
             tag = local(el)
             if tag == "tbl":
@@ -252,7 +252,7 @@ def read_hwpx(data: bytes) -> tuple[str, dict]:
                 if any(local(a) == "tbl" for a in el.iterancestors()):
                     continue
                 if any(local(c) == "tbl" for c in el.iter()):
-                    continue   # 표를 품은 문단 — 표는 위에서 따로 처리
+                    continue   # 표를 포함한 문단 — 표는 위에서 별도 처리
                 text = para_text(el)
                 if text:
                     parts.append(text)
@@ -346,7 +346,7 @@ def read_hwp(data: bytes) -> tuple[str, dict]:
                         parts.append(t)
     finally:
         ole.close()
-    # 표 구조는 아직 복원하지 않는다(셀 글자는 문단으로 순서대로 나온다)
+    # 표 구조는 현재 복원하지 않는다(셀 텍스트는 문단으로 순서대로 출력된다)
     return "\n\n".join(parts), {"format": "hwp", "sections": len(sections),
                                 "note": "표는 셀 글자만 순서대로 표시됩니다"}
 
@@ -373,7 +373,7 @@ def can_read(ext: str) -> bool:
 def read_document(data: bytes, ext: str) -> tuple[str, dict]:
     fn = READERS.get(ext.lower())
     if fn is not None and ext.lower() in _OOXML and data[:8] == _OLE_MAGIC:
-        # 암호를 건 오피스 문서는 zip 이 아니라 OLE(CFB) 봉투에 들어 있다
+        # 암호가 설정된 오피스 문서는 zip 이 아니라 OLE(CFB) 봉투에 저장된다
         raise DocReadError("암호가 걸린 문서입니다", "encrypted")
     if fn is None:
         raise DocReadError(f"{ext} 형식은 아직 해석하지 못합니다", "unsupported")

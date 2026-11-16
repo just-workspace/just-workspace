@@ -1,7 +1,7 @@
 """Office 편집(바이트 → 바이트) — python-docx(MIT)·openpyxl(MIT)·python-pptx(MIT).
 
-모두 "작업 목록(operations)" 을 받아 차례로 적용한다. 하나라도 잘못되면 아무것도 저장하지 않는다(OfficeError).
-찾아 바꾸기는 런(서식 조각) 경계를 넘는 문구도 찾고, 첫 런의 서식을 유지한다.
+모두 "작업 목록(operations)" 을 받아 순서대로 적용한다. 하나라도 오류가 있으면 아무것도 저장하지 않는다(OfficeError).
+찾아 바꾸기는 런(서식 조각) 경계를 넘는 문구도 탐색하며, 첫 런의 서식을 유지한다.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def _open_zip_check(data: bytes, kind: str) -> None:
 
 # ── 런 경계를 넘는 찾아 바꾸기(docx·pptx 공통) ─────────────────
 def replace_in_runs(runs, find: str, repl: str, match_case: bool = True) -> int:
-    """문단의 런 목록에서 find → repl. 첫 런의 서식을 쓴다. 바꾼 횟수."""
+    """문단의 런 목록에서 find → repl. 첫 런의 서식을 적용한다. 치환 횟수를 반환한다."""
     if not find:
         return 0
     texts = [r.text or "" for r in runs]
@@ -63,7 +63,7 @@ def replace_in_runs(runs, find: str, repl: str, match_case: bool = True) -> int:
     matches = list(re.finditer(re.escape(find), full, flags))
     if not matches:
         return 0
-    # 뒤에서부터 바꿔 앞쪽 위치가 흔들리지 않게
+    # 뒤에서부터 치환하여 앞쪽 위치 변동을 방지
     for m in reversed(matches):
         start, end = m.span()
         pos = 0
@@ -80,7 +80,7 @@ def replace_in_runs(runs, find: str, repl: str, match_case: bool = True) -> int:
                 first = False
             else:
                 texts[i] = t[:s0] + t[s1:]
-        # 길이가 바뀌었으니 다음(앞쪽) 매치는 그대로 유효 — 앞쪽 런 텍스트는 안 바뀜
+        # 길이가 변경되어도 다음(앞쪽) 매치는 그대로 유효 — 앞쪽 런 텍스트는 변경되지 않음
     for r, t in zip(runs, texts):
         if (r.text or "") != t:
             r.text = t
@@ -133,7 +133,7 @@ def _all_paragraphs(doc):
 
 
 def _section_end(doc, heading_text: str):
-    """그 제목 절의 끝(다음 같은·상위 제목) 요소. None 이면 문서 끝. 제목이 없으면 OfficeError."""
+    """해당 제목 절의 끝(다음 동급·상위 제목) 요소. None 이면 문서 끝. 제목이 없으면 OfficeError."""
     target = None
     target_level = None
     want = heading_text.strip().lower()
@@ -143,7 +143,7 @@ def _section_end(doc, heading_text: str):
             target, target_level = p, lv
             break
     if target is None:
-        for p in doc.paragraphs:      # 정확히 같은 게 없으면 포함
+        for p in doc.paragraphs:      # 정확히 일치하는 항목이 없으면 부분 일치
             lv = _heading_level(p)
             if lv is not None and want and want in p.text.strip().lower():
                 target, target_level = p, lv
@@ -189,7 +189,7 @@ def _add_par(doc, text: str, style: str | None, heading: int | None):
             p.style = doc.styles[style]
         except KeyError:
             raise OfficeError(f"문서에 없는 스타일입니다: {style}")
-    # 줄바꿈은 문단 안 줄바꿈으로
+    # 줄바꿈은 문단 내 줄바꿈으로 변환
     lines = text.split("\n")
     for i, line in enumerate(lines):
         r = p.add_run(line)
@@ -455,7 +455,7 @@ def _layout(prs, want):
         for lay in layouts:
             if lay.name.lower() == want.lower():
                 return lay
-    # 제목+내용 → 없으면 아무거나
+    # 제목+내용 → 없으면 임의 항목
     for lay in layouts:
         names = {ph.placeholder_format.type for ph in lay.placeholders}
         if 1 in names and 2 in names or (1 in names and 7 in names):   # TITLE + BODY/OBJECT
@@ -563,7 +563,7 @@ def edit_pptx(data: bytes, operations) -> tuple[bytes, dict]:
                 raise OfficeError(f"{i}번째 작업: 글상자를 찾지 못했습니다({target})", "not_found")
             tf = sh.text_frame
             lines = _text(o.get("text")).split("\n")
-            # 첫 문단·첫 런의 서식을 살려 새 글을 넣는다
+            # 첫 문단·첫 런의 서식을 유지하여 새 텍스트를 삽입한다
             first_par = tf.paragraphs[0]
             font_size = first_par.runs[0].font.size if first_par.runs else None
             for extra in tf.paragraphs[1:]:

@@ -1,14 +1,14 @@
-"""백업·복원 실행 — 계획(app/backup/plan.py)을 돌리고 형식(app/backup/format.py)으로 묶는다.
+"""백업·복원 실행 — 계획(app/backup/plan.py)을 실행하고 형식(app/backup/format.py)에 따라 저장한다.
 
-실행기(`Runner`)는 주입한다. 기본은 이 프로세스에서 docker CLI 를 부르는 `SubprocessRunner` 다
-(backend 컨테이너에 docker CLI 와 소켓이 있다). 설치 관리자는 같은 계획을 자기 실행기로 돌릴 수 있다.
+실행기(`Runner`)는 주입 방식이다. 기본값은 본 프로세스에서 docker CLI 를 호출하는 `SubprocessRunner` 이다
+(backend 컨테이너에 docker CLI 와 소켓이 포함되어 있다). 설치 관리자는 동일한 계획을 자체 실행기로 실행할 수 있다.
 
-호출하는 곳:
+호출 위치:
 - `python -m app.cli backup …` / `restore …` (정식 경로)
 - 관리 화면의 "지금 백업"·예약 백업(app/backup/service.py)
 
-복원은 backend 를 세워야 하므로 **실행 중인 backend 안에서는 돌지 않는다** — backend 이미지의 일회용
-컨테이너에서 돈다(scripts/restore.sh, 설치 관리자).
+복원은 backend 중지가 필요하므로 **실행 중인 backend 내부에서는 실행하지 않는다** — backend 이미지의 일회용
+컨테이너에서 실행한다(scripts/restore.sh, 설치 관리자).
 """
 
 from __future__ import annotations
@@ -34,9 +34,9 @@ from app.backup.plan import StackConfig, Step
 
 # 컨테이너 이름 = 접두어 + 서비스. 접두어는 환경변수 JW_CONTAINER_PREFIX(기본 "ws-" — compose 의 container_name).
 ENV_PREFIX = "JW_CONTAINER_PREFIX"
-DB_CONSUMER_SERVICES = ("backend", "sso", "ldap")        # 같은 DB 를 쓰는 서비스 — 복원하는 동안 세운다
+DB_CONSUMER_SERVICES = ("backend", "sso", "ldap")        # 동일 DB 를 사용하는 서비스 — 복원 중 중지
 SIGNING_VOLUME = "jw-android-signing"
-# 프로젝트 폴더에서 설정으로 치는 경로(있는 것만 뜬다). 메일 계정·DKIM 은 mail 항목이 따로 뜬다.
+# 프로젝트 폴더에서 설정으로 취급하는 경로(존재하는 항목만 백업). 메일 계정·DKIM 은 mail 항목에서 별도 백업
 CONFIG_CANDIDATES = (
     ".env", "docker-compose.override.yml", "docker-compose.site.yml",
     "nginx/site.d", "nginx/private.d", "livekit/livekit.yaml",
@@ -66,7 +66,7 @@ class Runner(Protocol):
 
 
 class SubprocessRunner:
-    """이 프로세스에서 명령을 돈다. stdout 을 파일로 받거나(큰 데이터) 문자열로 받는다(조회)."""
+    """본 프로세스에서 명령을 실행한다. stdout 은 파일로 수신하거나(대용량 데이터) 문자열로 수신한다(조회)."""
 
     def run(self, argv, *, stdin=None, stdout=None, timeout=600) -> Completed:
         fin = open(stdin, "rb") if stdin else None
@@ -101,9 +101,9 @@ class StepFailure:
 
 
 def run_steps(steps: list[Step], root: Path, runner: Runner, log: Log, *, stop_on_failure: bool) -> list[StepFailure]:
-    """단계를 차례로 돈다. 실패한 단계의 항목은 남은 단계를 건너뛴다(always 단계는 돈다).
+    """단계를 순차 실행한다. 실패한 단계가 속한 항목은 잔여 단계를 건너뛴다(always 단계는 실행한다).
 
-    stop_on_failure=True 면 첫 실패 뒤로는 always 단계만 돈다(복원). False 면 다른 항목은 계속한다(백업).
+    stop_on_failure=True 이면 최초 실패 이후 always 단계만 실행한다(복원). False 이면 다른 항목은 계속 진행한다(백업).
     """
     failures: list[StepFailure] = []
     broken: set[str] = set()
@@ -123,7 +123,7 @@ def run_steps(steps: list[Step], root: Path, runner: Runner, log: Log, *, stop_o
     return failures
 
 
-# ─── 구성 알아내기 ───
+# ─── 구성 조회 ───
 
 
 def _inspect(runner: Runner, kind: str, name: str) -> dict | None:
@@ -138,7 +138,7 @@ def _inspect(runner: Runner, kind: str, name: str) -> dict | None:
 
 
 def _mount(info: dict | None, dest: str) -> tuple[str, str]:
-    """컨테이너의 dest 에 붙은 것 → (docker -v 에 줄 출발지, 종류 volume|bind). 없으면 ("", "")."""
+    """컨테이너의 dest 에 마운트된 대상 → (docker -v 에 전달할 원본, 종류 volume|bind). 없으면 ("", "")."""
     for m in (info or {}).get("Mounts", []):
         if m.get("Destination") == dest:
             if m.get("Type") == "volume":
@@ -181,12 +181,12 @@ def _storage_info(runner: Runner, source: str, kind: str) -> dict:
 class Discovery:
     config: StackConfig
     storage: dict
-    self_container: str = ""              # 이 프로세스가 도는 컨테이너 이름(컨테이너 밖이면 빈 값)
-    backend: str = "ws-backend"           # backend 컨테이너 이름(복원 뒤 상태 확인)
+    self_container: str = ""              # 본 프로세스가 실행되는 컨테이너 이름(컨테이너 외부이면 빈 값)
+    backend: str = "ws-backend"           # backend 컨테이너 이름(복원 후 상태 확인)
 
 
 def discover(runner: Runner, env: dict[str, str] | None = None) -> Discovery:
-    """실행 중인 스택을 들여다보고 계획에 넣을 구성을 만든다(읽기만 한다)."""
+    """실행 중인 스택을 조회하여 계획에 사용할 구성을 생성한다(읽기 전용)."""
     env = dict(os.environ if env is None else env)
     prefix = env.get(ENV_PREFIX) or "ws-"
     postgres_name, mail_name, gitea_name = prefix + "postgres", prefix + "mailserver", prefix + "gitea"
@@ -265,10 +265,10 @@ def _du_bytes(runner: Runner, cfg: StackConfig, source: str) -> int | None:
 
 
 def collect_stats(runner: Runner, cfg: StackConfig, *, measure_storage: bool = False) -> dict:
-    """요약 화면에 쓸 값들 — 백업을 만들 때 manifest 에 넣어 둔다.
+    """요약 화면에 사용할 값 — 백업 생성 시 manifest 에 기록한다.
 
-    파일 저장소 크기는 전체 백업에서 로컬 저장소일 때만 잰다(파일이 많으면 오래 걸린다 — 업데이트 직전
-    백업은 빨라야 하고, NFS 는 네트워크 너머를 훑어야 한다). 재지 않으면 None.
+    파일 저장소 크기는 전체 백업이면서 로컬 저장소인 경우에만 측정한다(파일 수가 많으면 장시간 소요 — 업데이트 직전
+    백업은 신속해야 하며, NFS 는 네트워크 경유 탐색이 필요하다). 측정하지 않으면 None.
     """
     return {
         "users": _int(_query(runner, cfg, "SELECT count(*) FROM users")),
@@ -286,7 +286,7 @@ def postgres_version(runner: Runner, cfg: StackConfig) -> int | None:
 
 
 def estimate_bytes(runner: Runner, cfg: StackConfig, plan: pl.BackupPlan, stats: dict) -> int:
-    """예상 크기(넉넉하게 — 압축 전 크기로 센다)."""
+    """예상 크기(여유 있게 산정 — 압축 전 크기 기준)."""
     total = int(stats.get("db_bytes") or 0) if "db" in plan.items else 0
     sources = {
         "mail": [cfg.mail_data, cfg.mail_state], "gitea": [cfg.gitea_data], "plugins-data": [cfg.plugins_data],
@@ -295,14 +295,14 @@ def estimate_bytes(runner: Runner, cfg: StackConfig, plan: pl.BackupPlan, stats:
     for item in plan.items:
         for source in filter(None, sources.get(item, [])):
             if item == "files" and stats.get("storage_bytes") is not None:
-                total += int(stats["storage_bytes"])          # 이미 쟀다
+                total += int(stats["storage_bytes"])          # 측정 완료
             else:
                 total += _du_bytes(runner, cfg, source) or 0
     return total
 
 
 def check_destination(dest: Path, need_bytes: int) -> None:
-    """쓸 수 있는지, 자리가 넉넉한지. 아니면 BackupError — 시작하지 않는다."""
+    """쓰기 가능 여부와 여유 공간을 확인한다. 미충족 시 BackupError 를 발생시키고 백업을 시작하지 않는다."""
     try:
         dest.mkdir(parents=True, exist_ok=True)
         probe = dest / f".write-test-{os.getpid()}"
@@ -327,7 +327,7 @@ def _human(n: int) -> str:
     return f"{n}B"
 
 
-# ─── 백업 만들기 ───
+# ─── 백업 생성 ───
 
 
 @dataclass
@@ -352,7 +352,7 @@ def _schema_version() -> int:
 
 
 def _zones(env: dict[str, str]) -> list[str]:
-    """설치된 구역 id — JW_ZONES 가 있으면 그것, 없으면 전부(app/zones.py 와 같은 규칙)."""
+    """설치된 구역 id — JW_ZONES 가 있으면 해당 값, 없으면 전체(app/zones.py 와 동일 규칙)."""
     listed = [z.strip() for z in env.get("JW_ZONES", "").split(",") if z.strip()]
     if listed:
         return listed
@@ -376,9 +376,9 @@ def create_backup(
     check_space: bool = True,
     now: datetime | None = None,
 ) -> BackupResult:
-    """백업 하나를 만든다. DB 를 못 뜨면(또는 사전 검사에 걸리면) BackupError — 디렉터리를 남기지 않는다.
+    """백업 하나를 생성한다. DB 덤프 실패(또는 사전 검사 미통과) 시 BackupError 를 발생시키며 디렉터리를 남기지 않는다.
 
-    그 밖의 항목이 실패하면 그 항목을 빼고 status="partial" 로 돌려준다(무엇이 빠졌는지 manifest 와 결과에 있다).
+    그 외 항목이 실패하면 해당 항목을 제외하고 status="partial" 로 반환한다(제외된 항목은 manifest 와 결과에 기록된다).
     """
     runner = runner or SubprocessRunner()
     env = dict(os.environ if env is None else env)
@@ -395,7 +395,7 @@ def create_backup(
     base = f"{now.strftime('%Y%m%d_%H%M%S')}-{kind}"
     root = dest_root / base
     serial = 1
-    while root.exists() or root.with_name(root.name + fmt.ARCHIVE_SUFFIX).exists():   # 같은 초에 두 번
+    while root.exists() or root.with_name(root.name + fmt.ARCHIVE_SUFFIX).exists():   # 동일 초에 2회 실행된 경우
         serial += 1
         root = dest_root / f"{base}-{serial}"
     root.mkdir(parents=True)
@@ -451,7 +451,7 @@ def create_backup(
 
 
 def list_backups(dest_root: Path) -> list[dict]:
-    """dest_root 아래의 백업 요약(새것부터). 읽을 수 없는 것은 건너뛴다."""
+    """dest_root 하위의 백업 요약(최신순). 읽기 불가 항목은 건너뛴다."""
     found = []
     if not dest_root.is_dir():
         return found
@@ -468,9 +468,9 @@ def list_backups(dest_root: Path) -> list[dict]:
 
 
 def extract_config(path: Path, out_dir: Path, password: str | None = None) -> list[str]:
-    """백업의 설정 묶음을 out_dir 에 푼다(DB·docker 없이). 돌려주는 값: 푼 경로들.
+    """백업의 설정 묶음을 out_dir 에 추출한다(DB·docker 불필요). 반환값: 추출한 경로 목록.
 
-    새 서버로 옮길 때 설치 관리자가 스택을 띄우기 **전에** 부른다 — `.env` 의 암호화 키와 DB 비밀번호가
+    신규 서버로 이전할 때 설치 관리자가 스택 기동 **전에** 호출한다 — `.env` 의 암호화 키와 DB 비밀번호가
     있어야 복원한 DB 를 읽을 수 있다.
     """
     raw = fmt.read_config_tar(fmt.open_backup(path), password)
@@ -497,7 +497,7 @@ def extract_config(path: Path, out_dir: Path, password: str | None = None) -> li
 
 
 class RestoreError(Exception):
-    """복원이 실패했다. stage = 실패한 단계 이름, state = 그 뒤 DB 가 어떤 상태인지."""
+    """복원 실패. stage = 실패한 단계 이름, state = 실패 이후의 DB 상태."""
 
     def __init__(self, stage: str, cause: str, *, state: str = "", done: list[str] | None = None):
         self.stage = stage
@@ -525,7 +525,7 @@ STATE_ROLLBACK_FAILED = "DB 를 되돌리지 못했습니다 — 복원 전 덤�
 
 def check_compat(manifest: fmt.Manifest, *, schema_version: int, pg_version: int | None,
                  secret_key: str, items: list[str], with_config: bool, allow_key_mismatch: bool = False) -> None:
-    """이 백업을 이 코드·이 서버에 복원해도 되는가. 안 되면 BackupError."""
+    """해당 백업을 현재 코드·현재 서버에 복원할 수 있는지 판정한다. 불가 시 BackupError."""
     if manifest.schema_version > schema_version:
         raise BackupError(
             f"백업의 스키마 버전({manifest.schema_version})이 지금 제품이 아는 버전({schema_version})보다 높습니다 — "
@@ -551,7 +551,7 @@ def check_compat(manifest: fmt.Manifest, *, schema_version: int, pg_version: int
 
 
 def _default_migrate() -> tuple[int, int]:
-    """복원한 DB 에 스키마 변경 단계를 적용한다 → (전, 후)."""
+    """복원한 DB 에 스키마 변경 단계를 적용한다 → (적용 전, 적용 후)."""
     import asyncio
 
     async def _go() -> tuple[int, int]:
@@ -568,7 +568,7 @@ def _default_migrate() -> tuple[int, int]:
 
 
 def _wait_healthy(runner: Runner, container: str, seconds: int, sleep: Callable[[float], None]) -> str | None:
-    """컨테이너가 healthy 가 될 때까지 기다린다. 문제가 있으면 그 설명, 없으면 None."""
+    """컨테이너가 healthy 상태가 될 때까지 대기한다. 문제가 있으면 해당 설명, 없으면 None 을 반환한다."""
     deadline = time.monotonic() + seconds
     last = "상태를 읽지 못했습니다"
     while True:
@@ -601,11 +601,11 @@ def restore_backup(
     sleep: Callable[[float], None] = time.sleep,
     now: datetime | None = None,
 ) -> RestoreResult:
-    """백업에서 복원한다. 어느 단계든 실패하면 RestoreError(단계 이름·원인·그 뒤 상태).
+    """백업에서 복원한다. 어느 단계에서든 실패하면 RestoreError(단계 이름·원인·이후 상태)를 발생시킨다.
 
-    순서: 검증 → 버전 판정 → (tar 면 풀기) → 현재 DB 안전 덤프 → 서비스 정지 → DB 를 옆에 올리기 →
-    바꿔 끼우기 → 스키마 변경 단계 → 나머지 항목 → 서비스 시작 → 확인 → 정리.
-    DB 는 스키마 변경 단계까지 통과해야 확정되고, 그 전에 실패하면 원래 DB 로 돌아간다.
+    순서: 검증 → 버전 판정 → (tar 이면 추출) → 현재 DB 안전 덤프 → 서비스 중지 → 별도 DB 에 적재 →
+    교체 → 스키마 변경 단계 → 나머지 항목 → 서비스 기동 → 확인 → 정리.
+    DB 는 스키마 변경 단계까지 통과해야 확정되며, 그 이전에 실패하면 원래 DB 로 롤백한다.
     """
     runner = runner or SubprocessRunner()
     env = dict(os.environ if env is None else env)
@@ -656,7 +656,7 @@ def restore_backup(
         raise fail("compat", e) from None
     stages.append("compat")
 
-    # 3) tar 면 작업 폴더에 푼다
+    # 3) tar 이면 작업 폴더에 추출
     work = work_root / f"_restore-{stamp}"
     cleanup_work = False
     try:
@@ -682,7 +682,7 @@ def restore_backup(
     live_exists = _query(runner, cfg, f"SELECT 1 FROM pg_database WHERE datname = {pl._literal(cfg.db_name)}",
                          db="postgres") == "1"
 
-    # 4) 안전 덤프 — 지금 DB 에 데이터가 있을 때만
+    # 4) 안전 덤프 — 현재 DB 에 데이터가 있는 경우에만 수행
     if restore_db and live_exists and _query(runner, cfg, "SELECT to_regclass('public.users') IS NOT NULL") == "t":
         safety_dir = work_root / SAFETY_DIR
         try:
@@ -704,7 +704,7 @@ def restore_backup(
             old.unlink(missing_ok=True)
         stages.append("safety-dump")
 
-    # 5) 서비스 정지 — 여기서부터는 무슨 일이 있어도 다시 띄운다
+    # 5) 서비스 중지 — 이 시점부터는 결과와 무관하게 반드시 재기동
     log("[restore] 서비스를 세웁니다: " + (", ".join(stops) or "(없음)"))
     start_steps = pl.plan_start(list(reversed(stops)))
 
@@ -722,7 +722,7 @@ def restore_backup(
     stages.append("stop")
 
     if restore_db:
-        # 6) 옆 DB 에 올린다 — 실패해도 쓰던 DB 는 그대로다
+        # 6) 별도 DB 에 적재 — 실패해도 사용 중이던 DB 는 유지
         log("[restore] DB 를 올립니다")
         bad = strict(pl.plan_db_load(cfg, dump=files_by_item["db"]["dump"]), root)
         if bad:
@@ -736,10 +736,10 @@ def restore_backup(
             failed = run_steps(pl.plan_db_rollback(cfg, swapped=True), root, runner, log, stop_on_failure=False)
             return STATE_ROLLBACK_FAILED if failed else STATE_ROLLED_BACK
 
-        # 7) 바꿔 끼운다
+        # 7) 교체
         bad = strict(pl.plan_db_swap(cfg, live_exists=live_exists), root)
         if bad:
-            # 이름 바꾸기가 중간에 멈췄을 수 있다 — 원래 DB 가 옮겨졌으면 되돌린다
+            # 이름 변경이 중간에 중단되었을 수 있음 — 원래 DB 가 이동된 상태이면 복원
             moved = _query(runner, cfg, "SELECT 1 FROM pg_database WHERE datname = "
                            + pl._literal(pl.restore_db_name(cfg, "restore_old")), db="postgres") == "1"
             still = _query(runner, cfg, f"SELECT 1 FROM pg_database WHERE datname = {pl._literal(cfg.db_name)}",
@@ -749,15 +749,15 @@ def restore_backup(
             raise abort("db-swap", bad, state)
         stages.append("db-swap")
 
-        # 8) 스키마 변경 단계 — 백업이 더 낮은 버전이면 여기서 올라온다
+        # 8) 스키마 변경 단계 — 백업 버전이 더 낮으면 이 단계에서 상향
         log("[restore] 스키마 변경 단계를 적용합니다")
         try:
             result.schema_from, result.schema_to = migrate()
-        except Exception as e:  # noqa: BLE001 — 무엇이든 실패면 원래 DB 로
+        except Exception as e:  # noqa: BLE001 — 모든 실패는 원래 DB 로 롤백
             raise abort("migrate", e, roll_back()) from None
         stages.append("migrate")
 
-    # 9) 나머지 항목 — 되돌릴 수 없으므로 되돌릴 수 있는 것이 다 끝난 뒤에 한다
+    # 9) 나머지 항목 — 롤백 불가 항목이므로 롤백 가능한 단계가 모두 끝난 뒤 수행
     kept = ("복원한 DB 는 그대로 두었습니다. 복원 전 DB 는 "
             f"{pl.restore_db_name(cfg, 'restore_old')} 와 {result.safety_dump or '(안전 덤프 없음)'} 에 있습니다"
             ) if restore_db else "DB 는 건드리지 않았습니다"
@@ -768,7 +768,7 @@ def restore_backup(
             raise abort("items", bad, kept)
         stages.append("items")
     if config_steps:
-        # 설정 묶음은 (암호를 풀어) 작업 폴더에 잠깐 꺼내 놓고 넘긴 뒤 바로 지운다
+        # 설정 묶음은 (복호화하여) 작업 폴더에 임시 추출해 전달한 뒤 즉시 삭제
         plain = work / "config.tar"
         try:
             work.mkdir(parents=True, exist_ok=True)
@@ -788,7 +788,7 @@ def restore_backup(
         result.config_restored = True
         result.notes.append("설정(.env)을 되돌렸습니다 — 컨테이너에 반영하려면 스택을 다시 만드세요(docker compose up -d)")
 
-    # 10) 서비스 시작
+    # 10) 서비스 기동
     log("[restore] 서비스를 다시 띄웁니다")
     failed = start_services()
     if failed:
@@ -804,7 +804,7 @@ def restore_backup(
             raise fail("check", f"{found.backend}: {problem}", kept)
         stages.append("check")
 
-    # 12) 정리 — 옮겨 둔 원래 DB 는 여기서 지운다(안전 덤프는 남긴다)
+    # 12) 정리 — 이동해 둔 원래 DB 는 이 단계에서 삭제(안전 덤프는 보존)
     if restore_db:
         if run_steps(pl.plan_db_cleanup(cfg), root, runner, log, stop_on_failure=False):
             result.notes.append(f"옮겨 둔 원래 DB({pl.restore_db_name(cfg, 'restore_old')})를 지우지 못했습니다 — 직접 지우세요")

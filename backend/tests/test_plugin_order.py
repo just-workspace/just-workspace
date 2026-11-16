@@ -1,7 +1,7 @@
 """플러그인 manifest "order" — 레일·메뉴·플러그인 목록 정렬.
 
-order(정수, 작을수록 위)가 있는 것이 먼저, 없는 것은 지금처럼 폴더 이름순으로 뒤에.
-라우터 마운트(로드) 순서는 폴더 이름순 그대로.
+order(정수, 작을수록 위)가 있는 항목이 우선, 없는 항목은 기존과 같이 폴더 이름순으로 후순위.
+라우터 마운트(로드) 순서는 폴더 이름순 유지.
 """
 
 import json
@@ -54,12 +54,12 @@ async def test_load_plugins_sorts_by_order(tmp_path, monkeypatch):
     _make_plugin(base, "b-second", "pb", 5)
     _make_plugin(base, "c-third", "pc")                 # order 없음
     _make_plugin(base, "d-fourth", "pd", 1)
-    _make_plugin(base, "e-fifth", "pe", "x")           # 정수 아님 → 없음 취급
+    _make_plugin(base, "e-fifth", "pe", "x")           # 정수 아님 → 없음으로 처리
 
     monkeypatch.setattr(loader, "PLUGIN_DIRS", [base])
 
     async def _flag(plugin_id, set_to=None):
-        return True  # on_install 건너뜀(DB 없이)
+        return True  # on_install 생략(DB 없이)
 
     monkeypatch.setattr(loader, "_installed_flag", _flag)
     monkeypatch.setattr(registry, "_plugin_modules", [])
@@ -79,7 +79,7 @@ async def test_load_plugins_sorts_by_order(tmp_path, monkeypatch):
     assert [p["id"] for p in loader.get_loaded_plugins()] == want
     assert [p["id"] for p in registry._plugin_modules] == want
     assert {p["id"]: p["order"] for p in loader.get_loaded_plugins()} == {"pa": None, "pb": 5, "pc": None, "pd": 1, "pe": None}
-    # 로드(마운트)는 폴더 이름순 그대로
+    # 로드(마운트)는 폴더 이름순 유지
     assert mounted == [f"/api/plugins/{x}" for x in ("pa", "pb", "pc", "pd", "pe")]
 
 

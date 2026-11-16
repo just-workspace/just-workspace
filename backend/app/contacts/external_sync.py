@@ -1,11 +1,11 @@
-"""외부 계정(Google / Microsoft)에서 주소록을 끌어온다.
+"""외부 계정(Google / Microsoft)에서 주소록을 가져온다.
 
-메일 연동에 쓰는 OAuth refresh token 을 그대로 재사용한다. 새로 로그인시키지
-않지만, **연락처 스코프는 메일 스코프와 별개라 기존 연동 계정은 한 번 재연동해야
-한다** — 그래서 403 이 오면 그 사실을 그대로 사용자에게 돌려준다.
+메일 연동에 사용하는 OAuth refresh token 을 그대로 재사용한다. 재로그인을 요구하지
+않으나, **연락처 스코프는 메일 스코프와 별개이므로 기존 연동 계정은 1회 재연동이
+필요하다** — 따라서 403 수신 시 해당 사실을 그대로 사용자에게 반환한다.
 
-가져온 연락처는 계정마다 전용 주소록에 넣고 external_id 로 upsert 한다.
-사용자가 직접 만든 주소록을 건드리지 않고, 두 번 돌려도 중복이 안 쌓인다.
+가져온 연락처는 계정별 전용 주소록에 저장하고 external_id 로 upsert 한다.
+사용자가 직접 생성한 주소록은 변경하지 않으며, 반복 실행해도 중복이 누적되지 않는다.
 """
 
 from __future__ import annotations
@@ -26,17 +26,17 @@ GOOGLE_PEOPLE = "https://people.googleapis.com/v1/people/me/connections"
 GOOGLE_FIELDS = "names,emailAddresses,phoneNumbers,organizations"
 GRAPH_CONTACTS = "https://graph.microsoft.com/v1.0/me/contacts"
 
-# 한 번에 너무 많이 가져오면 메모리와 응답시간이 같이 터진다
+# 1회 조회량이 과도하면 메모리 사용량과 응답시간이 함께 급증한다
 PAGE_SIZE = 200
 MAX_CONTACTS = 5000
 
 
 class SyncError(Exception):
-    """사용자에게 그대로 보여줄 수 있는 실패."""
+    """사용자에게 그대로 표시할 수 있는 실패."""
 
 
 async def _book_for_account(db: AsyncSession, user_id: str, account: MailAccount) -> AddressBookDB:
-    """계정 전용 주소록. 사용자가 만든 주소록과 섞이지 않게 따로 둔다."""
+    """계정 전용 주소록. 사용자가 생성한 주소록과 혼재되지 않도록 분리한다."""
     name = f"{account.email} 연락처"
     result = await db.execute(
         select(AddressBookDB).where(
@@ -63,7 +63,7 @@ def _parse_google(person: dict) -> dict | None:
     full_name = (names[0].get("displayName") if names else "") or ""
     if not full_name and addrs:
         full_name = addrs[0]["email"].split("@")[0]
-    # 이름도 주소도 없으면 담을 의미가 없다
+    # 이름과 주소가 모두 없으면 저장할 의미 없음
     if not full_name and not addrs:
         return None
 
@@ -152,7 +152,7 @@ async def _fetch_microsoft(token: str) -> list[dict]:
 
 
 async def sync_account(db: AsyncSession, user_id: str, account: MailAccount) -> dict:
-    """계정 하나의 주소록을 가져와 upsert 한다. 돌려주는 건 요약 통계."""
+    """계정 하나의 주소록을 가져와 upsert 한다. 반환값은 요약 통계."""
     if account.auth_method != "oauth" or not account.oauth_provider:
         raise SyncError("OAuth 로 연동한 계정만 연락처를 가져올 수 있습니다")
 

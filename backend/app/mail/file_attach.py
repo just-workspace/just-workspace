@@ -1,11 +1,11 @@
 """워크스페이스 파일 → 메일 첨부 (파일 전달 확장).
 
-AI 도구(mail_save_draft·mail_send 의 attachments=[path])가 쓴다. 매번 **보내는 사람 권한**으로 다시 열고,
-일반 첨부 한도(파일 하나 15MB · 합계 25MB — 작성 창 업로드와 같은 기준)를 넘으면 거절한다.
+AI 도구(mail_save_draft·mail_send 의 attachments=[path])가 사용한다. 매번 **발신자 권한**으로 다시 열고,
+일반 첨부 한도(파일당 15MB · 합계 25MB — 작성 창 업로드와 동일 기준)를 초과하면 거부한다.
 
-  * 보내기: 경로 → 바이트 → 기존 임시 첨부(blob, 30분) → SendMessageRequest.attachments
-  * 임시저장: 초안 행(mail_drafts.file_attachments)에 경로·이름·크기만 둔다. 작성 창이 초안을 열 때
-    (GET /api/mail/drafts/{id}) 그때 권한을 다시 보고 임시 첨부로 바꿔 돌려준다 — 바이트를 초안에 복사하지 않는다.
+  * 발송: 경로 → 바이트 → 기존 임시 첨부(blob, 30분) → SendMessageRequest.attachments
+  * 임시저장: 초안 행(mail_drafts.file_attachments)에 경로·이름·크기만 저장한다. 작성 창이 초안을 열 때
+    (GET /api/mail/drafts/{id}) 해당 시점에 권한을 재확인하고 임시 첨부로 변환하여 반환한다. 바이트를 초안에 복사하지 않는다.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ class AttachError(ValueError):
 
 
 async def resolve(db, user, paths) -> list[dict]:
-    """경로 목록 검사 → [{path, name, size, type}]. 못 읽거나 크면 AttachError."""
+    """경로 목록 검사 → [{path, name, size, type}]. 읽기 불가 또는 크기 초과 시 AttachError."""
     from app.files import access as acc
 
     if paths in (None, "", []):
@@ -61,7 +61,7 @@ async def resolve(db, user, paths) -> list[dict]:
 
 
 async def to_blobs(db, user, metas: list[dict]) -> list[dict]:
-    """[{path,...}] → 작성 창·보내기용 임시 첨부 [{blobId, name, type, size}] (권한·크기 다시 확인)."""
+    """[{path,...}] → 작성 창·발송용 임시 첨부 [{blobId, name, type, size}] (권한·크기 재확인)."""
     from app.mail.router import _store_temp_attachment
     from app.files import access as acc
 

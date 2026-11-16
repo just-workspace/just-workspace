@@ -1,10 +1,10 @@
 """변환(ws-docconv)·분석 샌드박스(ws-sandbox) 컨테이너 클라이언트.
 
-두 컨테이너 모두 **네트워크가 없다**(network_mode: none). 백엔드와는 공유 볼륨의 유닉스 소켓으로만 말한다
-(docker-compose.yml: docconv-sock → /run/docconv, sandbox-sock → /run/sandbox). 그래서 포트 공개도,
-샌드박스 안 코드의 외부 통신도 원천적으로 없다. 요청은 공유 비밀(헤더)로 인증한다.
+두 컨테이너 모두 **네트워크가 없다**(network_mode: none). 백엔드와는 공유 볼륨의 유닉스 소켓으로만 통신한다
+(docker-compose.yml: docconv-sock → /run/docconv, sandbox-sock → /run/sandbox). 따라서 포트 공개도,
+샌드박스 내부 코드의 외부 통신도 원천적으로 불가하다. 요청은 공유 비밀(헤더)로 인증한다.
 
-주소는 환경변수로 바꿀 수 있다: ``unix:///경로`` 또는 ``http://호스트:포트``(개발용).
+주소는 환경변수로 변경할 수 있다: ``unix:///경로`` 또는 ``http://호스트:포트``(개발용).
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import httpx
 DOCCONV_URL = os.getenv("DOCCONV_URL", "unix:///run/docconv/docconv.sock")
 SANDBOX_URL = os.getenv("SANDBOX_URL", "unix:///run/sandbox/sandbox.sock")
 
-# docconv 가 받는 변환 — (원본 확장자 묶음, 대상)
+# docconv 가 지원하는 변환 — (원본 확장자 집합, 대상)
 _WRITER = {".doc", ".docx", ".odt", ".rtf", ".hwp", ".hwpx", ".wpd", ".dotx", ".docm"}
 _CALC = {".xls", ".xlsx", ".xlsm", ".ods", ".csv"}
 _IMPRESS = {".ppt", ".pptx", ".odp", ".ppsx", ".pps"}
@@ -47,7 +47,7 @@ class ContainerError(Exception):
 
 
 def _client(url: str, timeout: float) -> tuple[httpx.AsyncClient, str]:
-    """(클라이언트, 기준 URL). 테스트는 이 함수를 바꿔 끼운다."""
+    """(클라이언트, 기준 URL). 테스트에서 이 함수를 대체한다."""
     if url.startswith("unix://"):
         path = url[len("unix://"):]
         return httpx.AsyncClient(transport=httpx.AsyncHTTPTransport(uds=path), timeout=timeout,

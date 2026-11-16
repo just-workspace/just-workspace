@@ -1,7 +1,7 @@
 """AI 파일 도구 — 웹 읽기(SSRF 방어)·PDF·Office 편집·변환·분석 샌드박스(클라이언트 모킹)·결과 저장 규칙.
 
 저장소 루트는 임시 폴더, DB 는 SQLite(tests.test_settings_security_p8 의 db 픽스처).
-변환(ws-docconv)·샌드박스(ws-sandbox) 컨테이너는 여기서 띄우지 않고 클라이언트를 바꿔 끼운다.
+변환(ws-docconv)·샌드박스(ws-sandbox) 컨테이너는 여기서 기동하지 않고 클라이언트를 대체한다.
 """
 
 import base64
@@ -113,9 +113,9 @@ async def run_fail(env, name, args, user=None) -> dict:
     return r
 
 
-# ══ 문서 만들기 도우미 ═════════════════════════════════════════
+# ══ 문서 생성 도우미 ═════════════════════════════════════════
 def blank_pdf(n: int, w0: int = 100) -> bytes:
-    """쪽마다 폭이 다른(100, 101, …) 빈 PDF — 순서 확인용."""
+    """쪽마다 폭이 상이한(100, 101, …) 빈 PDF — 순서 확인용."""
     from pypdf import PdfWriter
 
     w = PdfWriter()
@@ -250,7 +250,7 @@ def test_tools_registered_with_scope_module_and_policy():
     for name in READ_TOOLS | WRITE_TOOLS:
         assert name in access.TOOL_MODULE, name
     assert access.TOOL_MODULE["web_fetch"] is None
-    assert not access.is_data_tool("web_fetch")             # web_search 와 같은 정책(개인 데이터 아님)
+    assert not access.is_data_tool("web_fetch")             # web_search 와 동일 정책(개인 데이터 아님)
     assert access.is_data_tool("code_run") and access.is_data_tool("pdf_merge")
     assert reg._UNTRUSTED_SOURCE["web_fetch"] == "external_web"
     assert reg.WORKSPACE_TOOLS["web_fetch"].untrusted_output
@@ -275,14 +275,14 @@ def test_overwrite_option_raises_risk():
 
 async def test_code_run_switch_and_mcp_opt_in(env):
     db = env["db"]
-    assert await access.tool_accessible(db, env["alice"], "code_run")      # 기본 켬(내장 AI)
-    assert not await access.mcp_exposed(db, "code_run")                    # MCP 노출 기본 끔
+    assert await access.tool_accessible(db, env["alice"], "code_run")      # 기본 활성(내장 AI)
+    assert not await access.mcp_exposed(db, "code_run")                    # MCP 노출 기본 비활성
     assert await access.mcp_exposed(db, "pdf_merge")
     db.add(SystemSetting(key="ai.gov.code_run_mcp", value="true"))
     db.add(SystemSetting(key="ai.gov.code_run_enabled", value="false"))
     await db.commit()
     assert await access.mcp_exposed(db, "code_run")
-    assert not await access.tool_accessible(db, env["alice"], "code_run")  # 꺼지면 어디에도 없음
+    assert not await access.tool_accessible(db, env["alice"], "code_run")  # 비활성화 시 모든 경로에서 제외
 
 
 async def test_mcp_listing_hides_code_run_by_default(env, monkeypatch):
@@ -372,7 +372,7 @@ async def test_fetch_pins_ip_keeps_host_and_sni(net):
     r = await safe_fetch.fetch("https://public.example/a", max_bytes=1000)
     assert r.body == b"hello"
     req = net["seen"][0]
-    assert req.url.host == "93.184.216.34"                 # 검사한 주소로 직접(재바인딩 차단)
+    assert req.url.host == "93.184.216.34"                 # 검사한 주소로 직접 연결(재바인딩 차단)
     assert req.headers["host"] == "public.example"
     assert req.extensions.get("sni_hostname") == "public.example"
 
@@ -382,7 +382,7 @@ async def test_fetch_blocks_private_dns_and_mixed_answers(net):
         with pytest.raises(safe_fetch.FetchError) as e:
             await safe_fetch.fetch(url, max_bytes=1000)
         assert e.value.code == "forbidden"
-    assert net["seen"] == []                               # 요청이 나가지도 않았다
+    assert net["seen"] == []                               # 요청이 송신되지 않음
 
 
 async def test_fetch_rechecks_every_redirect(net):
@@ -411,10 +411,10 @@ async def test_fetch_size_caps(net):
     net["routes"][("93.184.216.34", "/big.html")] = (200, {"content-type": "text/html"}, b"<p>" + b"a" * 5000)
     net["routes"][("93.184.216.34", "/big.pdf")] = (200, {"content-type": "application/pdf"}, b"%PDF-" + b"0" * 5000)
     r = await safe_fetch.fetch("http://public.example/big.html", max_bytes=1000)
-    assert r.body_truncated and len(r.body) == 1000       # 텍스트류는 잘라서
+    assert r.body_truncated and len(r.body) == 1000       # 텍스트류는 절단하여 반환
     with pytest.raises(safe_fetch.FetchError) as e:
         await safe_fetch.fetch("http://public.example/big.pdf", max_bytes=1000)
-    assert e.value.code == "too_large"                     # PDF 는 잘린 걸 쓰지 않는다
+    assert e.value.code == "too_large"                     # PDF 는 절단본을 사용하지 않는다
 
 
 # ══ web_fetch 도구 ════════════════════════════════════════════
@@ -503,7 +503,7 @@ async def test_ai_card_execution_uses_conversation_title(env):
     req = await writes.approve(db, env["alice"], r["result"]["request_id"])   # 다른 요청(맥락 없음)에서 승인
     assert req.status == "executed", req.error
     path = json.loads(req.result)["path"]
-    assert path.endswith(" 분기 보고 정리/b (회전).pdf")                          # 대화 제목(경로 문자 정리)으로 폴더
+    assert path.endswith(" 분기 보고 정리/b (회전).pdf")                          # 대화 제목(경로 문자 정리)으로 폴더 생성
     assert req.undo                                             # 되돌리기 가능
 
 
@@ -522,7 +522,7 @@ async def test_dst_folder_and_permissions(env):
     res = await run_ok(env, "pdf_delete_pages", {"path": src, "pages": "1", "dst_folder": "my/out",
                                                  "output_name": "결과"})
     assert res["path"] == "my/out/결과.pdf" and widths(read_vp(env, res["path"])) == [101]
-    r = await run_fail(env, "pdf_inspect", {"path": "users/bob/secret.pdf"})     # 남의 파일
+    r = await run_fail(env, "pdf_inspect", {"path": "users/bob/secret.pdf"})     # 타인의 파일
     assert r["ok"] is False
     r = await run_fail(env, "pdf_rotate", {"path": src, "dst_folder": "users/bob"})
     assert "error" in r
@@ -549,7 +549,7 @@ async def test_pdf_merge_split_inspect(env):
     assert info["pages"] == 3 and info["page_info"][0]["width_pt"] == 300 and info["form_fields"] == []
     sp = await run_ok(env, "pdf_split", {"path": res["path"], "ranges": ["1", "2-"]})
     assert sp["parts"] == 2 and len(sp["files"]) == 2
-    assert sp["folder"].endswith("나누기")                      # 여러 결과는 묶음 폴더(되돌리기 단위)
+    assert sp["folder"].endswith("나누기")                      # 복수 결과는 묶음 폴더(되돌리기 단위)
     assert [widths(read_vp(env, f["path"])) for f in sp["files"]] == [[300], [100, 101]]
     every = await run_ok(env, "pdf_split", {"path": res["path"], "every": 1})
     assert every["parts"] == 3
@@ -602,7 +602,7 @@ async def test_pdf_form_fill(env):
     fields = {f["name"]: f for f in pdf_ops.form_fields(read_vp(env, res["path"]))}
     assert fields["name"]["value"] == "홍길동"
     flat = await run_ok(env, "pdf_fill_form", {"path": src, "values": {"name": "A"}, "flatten": True})
-    assert pdf_ops.form_fields(read_vp(env, flat["path"])) == []      # 굳힌 뒤엔 칸이 없다
+    assert pdf_ops.form_fields(read_vp(env, flat["path"])) == []      # 평탄화 이후에는 양식 필드 없음
     r = await run_fail(env, "pdf_fill_form", {"path": src, "values": {"zzz": "1"}})
     assert "폼 칸" in r["error"]
 
@@ -636,7 +636,7 @@ async def test_docx_edit_replace_across_runs_and_structure(env):
         {"op": "add_heading", "text": "부록", "level": 1},
     ]})
     assert res["name"] == "r (수정).docx"
-    assert res["operations"][0]["replaced"] == 1 and res["operations"][1]["replaced"] == 1   # 표 안도
+    assert res["operations"][0]["replaced"] == 1 and res["operations"][1]["replaced"] == 1   # 표 내부도 포함
     assert [h["text"] for h in res["outline"]] == ["개요", "세부", "결론", "부록"]
     d = docx.Document(io.BytesIO(read_vp(env, res["path"])))
     texts = [p.text for p in d.paragraphs]
@@ -646,7 +646,7 @@ async def test_docx_edit_replace_across_runs_and_structure(env):
     run = next(p for p in d.paragraphs if p.text.startswith("2026년 영업이익")).runs
     assert run[0].text == "2026년 영업이익" and not run[0].bold   # 첫 런 서식 유지
     assert d.tables[0].cell(0, 0).text == "표 안 2026년"
-    assert (env["my"] / "docs/r.docx").read_bytes() != read_vp(env, res["path"])   # 원본은 그대로
+    assert (env["my"] / "docs/r.docx").read_bytes() != read_vp(env, res["path"])   # 원본은 유지
 
 
 async def test_docx_edit_errors_change_nothing(env):
@@ -658,7 +658,7 @@ async def test_docx_edit_errors_change_nothing(env):
     r = await run_fail(env, "docx_edit", {"path": src, "operations": [
         {"op": "append_paragraph", "text": "x", "after_heading": "없는 제목"}]})
     assert "제목을 찾지 못했습니다" in r["error"]
-    assert sorted(p.name for p in env["my"].rglob("*")) == before   # 실패하면 아무것도 저장 안 함
+    assert sorted(p.name for p in env["my"].rglob("*")) == before   # 실패 시 저장하지 않음
     ole = put(env, "docs/old.docx", bytes.fromhex("d0cf11e0a1b11ae1") + b"\0" * 100)
     r = await run_fail(env, "docx_edit", {"path": ole, "operations": [{"op": "replace", "find": "a", "replace": "b"}]})
     assert "암호" in r["error"] or "옛 형식" in r["error"]
@@ -673,13 +673,13 @@ async def test_docx_overwrite_needs_approval_and_keeps_version(env):
     r = await call("docx_edit", {"path": src, "overwrite": True,
                                  "operations": [{"op": "replace", "find": "끝", "replace": "END"}]}, env["alice"])
     assert r["ok"] and r["result"]["status"] == "pending_approval" and r["result"]["risk"] == "high"
-    assert read_vp(env, src) == orig                                 # 승인 전엔 그대로
+    assert read_vp(env, src) == orig                                 # 승인 전에는 변경 없음
     req = await writes.approve(env["db"], env["alice"], r["result"]["approval_id"])
     assert req.status == "executed", req.error
     assert read_vp(env, src) != orig
     from app.files import service as fs
 
-    assert fs.list_versions("alice", "docs/o.docx")                  # 이전본은 버전 기록
+    assert fs.list_versions("alice", "docs/o.docx")                  # 이전본은 버전 기록에 보존
 
 
 async def test_edit_card_cannot_escalate_to_overwrite(env):
@@ -716,7 +716,7 @@ async def test_xlsx_edit_cells_formula_sheet_chart(env):
         assert "외부" in r["error"], bad
     r = await run_fail(env, "xlsx_edit", {"path": src, "operations": [{"op": "set_cells", "sheet": "없음", "cells": {"A1": 1}}]})
     assert "없는 시트" in r["error"]
-    # 차트가 있던 통합 문서를 다시 고치면 보존 경고
+    # 차트가 있던 통합 문서를 재수정하면 보존 경고
     res2 = await run_ok(env, "xlsx_edit", {"path": res["path"], "operations": [{"op": "set_cells", "cells": {"A1": "x"}}]})
     assert res2.get("warnings")
 
@@ -780,7 +780,7 @@ async def test_convert_md_docx_pdf_and_images(env):
         import docx
 
         assert any(p.text == "제목" for p in docx.Document(io.BytesIO(read_vp(env, d["path"]))).paragraphs)
-        # 그림·원시 HTML 로 서버 파일·URL 을 끌어오지 못한다
+        # 그림·원시 HTML 로 서버 파일·URL 을 가져올 수 없다
         evil = put(env, "docs/evil.md", (
             b"![pw](/etc/passwd)\n\n![r](http://169.254.169.254/x.png)\n\n<img src='/etc/hostname'>\n"))
         d = await run_ok(env, "files_convert", {"path": evil, "to": "docx"})
@@ -869,7 +869,7 @@ async def test_code_run_passes_inputs_and_saves_outputs(env, monkeypatch):
                 "files": [{"name": "chart.png", "data": png(), "size": len(png())},
                           {"name": "sub/요약.csv", "data": b"a,b\n", "size": 4}], "files_skipped": []}
     monkeypatch.setattr(containers, "sandbox_run", fake)
-    sheet = make_xlsx()          # 한 번만 만든다 — 압축 파일에는 만든 시각이 들어가 두 번 만들면 초가 넘어갈 때 달라진다
+    sheet = make_xlsx()          # 1회만 생성한다 — 압축 파일에는 생성 시각이 포함되어 두 번 생성하면 초가 바뀔 때 결과가 달라진다
     x = put(env, "docs/s.xlsx", sheet)
     res = await run_ok(env, "code_run", {"code": "print('hi')", "input_paths": [x], "timeout_sec": 999})
     assert seen["files"][0][0] == "s.xlsx" and seen["files"][0][1] == sheet and seen["timeout"] == 120
@@ -920,7 +920,7 @@ async def test_sandbox_client_protocol(monkeypatch):
     out = await containers.sandbox_run("print(1)", [("a.csv", b"1,2")], 30)
     assert seen["auth"] == "Bearer s3cret"
     assert seen["body"]["files"] == [{"name": "a.csv", "data": base64.b64encode(b"1,2").decode()}]
-    assert out["files"] == [{"name": "o.txt", "data": b"hey", "size": 3}]     # 깨진 base64 는 버림
+    assert out["files"] == [{"name": "o.txt", "data": b"hey", "size": 3}]     # 손상된 base64 는 폐기
     monkeypatch.setattr(containers, "_client",
                         lambda url, timeout: (httpx.AsyncClient(transport=httpx.MockTransport(
                             lambda r: httpx.Response(401, json={}))), "http://s"))
@@ -970,6 +970,6 @@ def test_store_folder_name_cleans_title():
 
 
 def test_tool_module_objects_present():
-    # 모듈을 import 만 해도 등록된다(직접 참조로 린트 경고 방지)
+    # 모듈을 import 하는 것만으로 등록된다(직접 참조로 린트 경고 방지)
     assert convert_tool.files_convert and web_fetch_tool.web_fetch and code_run_tool.code_run
     assert McpWriteRequest

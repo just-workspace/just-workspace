@@ -1,12 +1,12 @@
 """설치 관리자 내부 API 클라이언트.
 
-설치 관리자는 설치가 끝난 뒤에도 컨테이너로 남아 내부망에서만 닿는 API 를 연다(docs/installer.md 의
-"내부 API"). 브라우저는 거기에 닿지 못하므로, 관리자 권한을 확인한 backend 가 대신 부른다.
+설치 관리자는 설치 완료 후에도 컨테이너로 상주하며 내부망에서만 접근 가능한 API 를 제공한다(docs/installer.md 의
+"내부 API"). 브라우저는 해당 API 에 접근할 수 없으므로, 관리자 권한을 확인한 backend 가 대리 호출한다.
 
-- 주소와 공유 키는 환경변수 `JW_INSTALLER_URL` · `JW_INSTALLER_KEY`(설치 관리자가 `.env` 에 넣는다).
-  둘 중 하나라도 비어 있으면 설치 관리자 없이 구성한 설치다 — 모든 호출이 `installer_unavailable` 이다.
-- 오류는 전부 `InstallerError(status, code, vars)` 로 바꾼다. 화면은 code 로 문구를 고른다.
-- 요청·응답 본문은 로그에 남기지 않는다(SMTP 비밀번호·AI 키가 지나간다). 남기는 것은 경로와 상태 코드뿐이다.
+- 주소와 공유 키는 환경변수 `JW_INSTALLER_URL` · `JW_INSTALLER_KEY`(설치 관리자가 `.env` 에 기록한다).
+  둘 중 하나라도 비어 있으면 설치 관리자 없이 구성한 설치이다 — 모든 호출이 `installer_unavailable` 이다.
+- 오류는 전부 `InstallerError(status, code, vars)` 로 변환한다. 화면은 code 로 문구를 선택한다.
+- 요청·응답 본문은 로그에 기록하지 않는다(SMTP 비밀번호·AI 키가 포함된다). 기록 대상은 경로와 상태 코드뿐이다.
 """
 from __future__ import annotations
 
@@ -23,14 +23,14 @@ ENV_KEY = "JW_INSTALLER_KEY"
 KEY_HEADER = "X-JW-Installer-Key"
 
 DEFAULT_TIMEOUT = 15.0
-PROBE_TIMEOUT = 40.0       # 연결 확인은 설치 관리자가 바깥 서버에 붙어 보는 시간까지 기다린다
+PROBE_TIMEOUT = 40.0       # 연결 확인은 설치 관리자가 외부 서버에 접속을 시도하는 시간까지 대기
 
-#: 테스트가 가짜 transport 로 바꾼다. None 이면 실제 네트워크.
+#: 테스트에서 가짜 transport 로 교체. None 이면 실제 네트워크 사용.
 transport: httpx.AsyncBaseTransport | None = None
 
 
 class InstallerError(Exception):
-    """설치 관리자 호출 실패 — 화면에 그대로 내려가는 `{code, vars}` 와 HTTP 상태."""
+    """설치 관리자 호출 실패 — 화면에 그대로 전달되는 `{code, vars}` 와 HTTP 상태."""
 
     def __init__(self, status: int, code: str, vars: dict | None = None):
         super().__init__(code)
@@ -60,12 +60,12 @@ def _convert(status: int, body: Any) -> InstallerError:
     vars_ = body.get("vars") if isinstance(body, dict) else None
     vars_ = vars_ if isinstance(vars_, dict) else {}
     if not isinstance(code, str) or not code:
-        # 설치 관리자가 만든 오류가 아니다 — 그 경로가 없는 설치 관리자(404)거나 예상하지 못한 응답
+        # 설치 관리자가 생성한 오류가 아님 — 해당 경로가 없는 설치 관리자(404)이거나 예상하지 못한 응답
         if status in (404, 405):
             return InstallerError(501, "installer_unsupported")
         return InstallerError(502, "installer_error", {"status": status})
     if status == 404 and code == "not_found":
-        # 공유 키가 다르거나 backend 가 내부 대역 밖에서 부른 경우 — 설치 관리자는 이유를 숨기고 404 를 준다
+        # 공유 키가 불일치하거나 backend 가 내부 대역 밖에서 호출한 경우 — 설치 관리자는 사유를 숨기고 404 를 반환
         return InstallerError(502, "installer_rejected")
     if status >= 500:
         return InstallerError(502, "installer_error", {"status": status, "cause": code})
@@ -74,7 +74,7 @@ def _convert(status: int, body: Any) -> InstallerError:
 
 async def request(method: str, path: str, *, json: Any = None, params: dict | None = None,
                   timeout: float = DEFAULT_TIMEOUT) -> Any:
-    """내부 API 를 부르고 JSON 본문을 돌려준다. 실패는 InstallerError."""
+    """내부 API 를 호출하고 JSON 본문을 반환한다. 실패 시 InstallerError 예외가 발생한다."""
     if not configured():
         raise InstallerError(503, "installer_unavailable")
     try:

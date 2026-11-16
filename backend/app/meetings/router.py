@@ -51,7 +51,7 @@ router = APIRouter(prefix="/api/meetings", tags=["meetings"])
 
 
 def _parse_scheduled(value: str | None) -> datetime | None:
-    """예약 시각 문자열 → 시간대 있는 datetime. 시간대가 없으면 UTC 로 본다(예전 동작 유지), 못 읽으면 None."""
+    """예약 시각 문자열 → 시간대 포함 datetime. 시간대가 없으면 UTC 로 간주한다(기존 동작 유지), 파싱 실패 시 None."""
     if not value:
         return None
     try:
@@ -62,8 +62,8 @@ def _parse_scheduled(value: str | None) -> datetime | None:
 
 
 async def _ensure_lk_room(meta) -> None:
-    """DB 회의(meeting_id 있음)의 LiveKit 방을 연다(이미 있으면 그대로). 실패해도 입장은 막지 않는다 —
-    LiveKit auto_create 가 켜져 있으면 입장 때 기본 설정으로라도 생긴다."""
+    """DB 회의(meeting_id 있음)의 LiveKit 방을 연다(이미 있으면 유지). 실패해도 입장은 차단하지 않는다 —
+    LiveKit auto_create 가 활성화되어 있으면 입장 시 기본 설정으로 생성된다."""
     if not getattr(meta, "meeting_id", None):
         return
     try:
@@ -90,7 +90,7 @@ def _iso(dt: datetime | None) -> str | None:
 
 
 async def _invitee_stats(db: AsyncSession, meeting_ids: list[str], user) -> dict[str, dict]:
-    """회의별 초대 인원·수락 인원·내 응답 — 목록 한 번에 한 쿼리."""
+    """회의별 초대 인원·수락 인원·본인 응답 — 목록 1회당 쿼리 1회."""
     out: dict[str, dict] = {mid: {"count": 0, "accepted": 0, "mine": None} for mid in meeting_ids}
     if not meeting_ids:
         return out
@@ -127,7 +127,7 @@ def _row_fields(row: MeetingDB | None, status_: str, stats: dict | None) -> dict
 
 
 async def _can_see_channel_call(db: AsyncSession, name: str, user) -> bool:
-    """채널·DM 통화 방(chan-<채널id>)은 그 채널 멤버만."""
+    """채널·DM 통화 방(chan-<채널id>)은 해당 채널 멤버만 열람 가능."""
     from app.chat import service as chat_service
     channel_id = name[len("chan-"):]
     if not channel_id:
@@ -143,8 +143,8 @@ async def _visible_live_rooms(db: AsyncSession, user, rooms: list[dict]) -> list
     for r in rooms:
         name = r.get("name") or ""
         if is_reserved_room_name(name):
-            # 음성 채널 방(voice-<채널id>)은 회의가 아니다 — 회의 목록에 싣지 않는다(채널 id 도 새지 않게).
-            # 채널·DM 통화(chan-)만 그 채널 멤버에게 보인다.
+            # 음성 채널 방(voice-<채널id>)은 회의가 아니다 — 회의 목록에 포함하지 않는다(채널 id 노출 방지).
+            # 채널·DM 통화(chan-)만 해당 채널 멤버에게 표시한다.
             if not is_channel_call_room(name) or not await _can_see_channel_call(db, name, user):
                 continue
         out.append(r)
@@ -152,21 +152,21 @@ async def _visible_live_rooms(db: AsyncSession, user, rooms: list[dict]) -> list
 
 
 async def _live_access(db: AsyncSession, name: str, meta, row: MeetingDB | None, user) -> str | None:
-    """진행 중인 방을 이 사용자가 볼 수 있는 근거 — host | invited | joined | channel, 없으면 None.
+    """진행 중인 방을 이 사용자가 열람할 수 있는 근거 — host | invited | joined | channel, 없으면 None.
 
-    예전엔 진행 중인 회의가 로그인 사용자 모두의 목록에 공유 링크와 함께 실려, 대기실·비밀번호가 없는
-    회의는 목록에서 눌러 누구나 들어올 수 있었다. 이제 호스트·초대 대상·(초대 링크로) 이미 들어온 사람만 본다.
-    링크를 받은 사람은 목록과 상관없이 링크로 들어온다(/join/{token}) — 막는 것은 "목록에서 발견"뿐이다.
+    과거에는 진행 중인 회의가 모든 로그인 사용자의 목록에 공유 링크와 함께 포함되어, 대기실·비밀번호가 없는
+    회의는 목록에서 선택하여 누구나 입장할 수 있었다. 현재는 호스트·초대 대상·(초대 링크로) 이미 입장한 사용자만 열람한다.
+    링크를 받은 사용자는 목록과 무관하게 링크로 입장한다(/join/{token}) — 차단 대상은 "목록에서 발견"뿐이다.
     """
     if is_reserved_room_name(name):
-        return "channel"   # 채널·DM 통화 — 멤버 여부는 _visible_live_rooms 가 이미 걸렀다
+        return "channel"   # 채널·DM 통화 — 멤버 여부는 _visible_live_rooms 에서 이미 필터링됨
     if meta is None:
-        return None        # 누구 회의인지 모르는 방(메타 없음)은 아무에게도 싣지 않는다
+        return None        # 소유자를 알 수 없는 방(메타 없음)은 누구에게도 표시하지 않음
     uid = str(user.id)
     if meta.host_user_id == uid:
         return "host"
-    # 초대 대상은 회의가 아직 살아 있을 때만(토큰 발급 _is_invited 와 같은 조건). 끝났거나 취소된 회의의
-    # LiveKit 방이 남아 있으면 "진행 중"으로 싣지 않는다 — 실으면 [참여]가 403 이다. 그 행은 지난 회의로 나온다.
+    # 초대 대상은 회의가 아직 유효한 동안만 해당한다(토큰 발급 _is_invited 와 동일 조건). 종료됐거나 취소된 회의의
+    # LiveKit 방이 남아 있어도 "진행 중"으로 포함하지 않는다 — 포함하면 [참여]가 403 이 된다. 해당 행은 지난 회의로 표시된다.
     if row is not None and row.status in repo.ACTIVE and await repo.can_view(db, row, user):
         return "invited"
     try:
@@ -181,10 +181,10 @@ async def _optional_user_id(
     request: Request,
     ws_session: str | None = Cookie(None),
 ) -> str | None:
-    """로그인했으면 그 사용자 id, 아니면 None — 인증 불요 경로(초대 링크)에서 "누가 들어왔나"만 적을 때.
+    """로그인 상태이면 해당 사용자 id, 아니면 None — 인증 불요 경로(초대 링크)에서 "누가 입장했는지"만 기록할 때 사용한다.
 
-    DB 세션을 의존성(get_db)으로 받지 않고 여기서 직접 연다: 손님 입장은 DB 없이도 되는 경로라,
-    DB·세션 저장소 장애가 입장 전체 실패로 번지면 안 된다. 무엇이 실패하든 익명으로 본다.
+    DB 세션을 의존성(get_db)으로 받지 않고 여기서 직접 연다: 게스트 입장은 DB 없이도 가능한 경로이므로,
+    DB·세션 저장소 장애가 입장 전체 실패로 확산되어서는 안 된다. 어떤 실패든 익명으로 간주한다.
     """
     try:
         async with repo.session() as db:
@@ -195,11 +195,11 @@ async def _optional_user_id(
 
 
 async def _list_visible_safe(db: AsyncSession, user, now: datetime) -> list:
-    """DB 회의 목록 — 깨져도 진행 중 방 목록은 보여 준다.
+    """DB 회의 목록 — 조회에 실패해도 진행 중 방 목록은 반환한다.
 
-    세이브포인트 안에서 읽는다: PostgreSQL 은 쿼리 하나가 실패하면 트랜잭션 전체가 abort 되어
-    다음 쿼리(_invitee_stats 등)가 InFailedSQLTransaction 으로 500 이 났다. 세이브포인트만 되돌리면
-    바깥 트랜잭션·이미 읽은 행(live_rows)은 그대로 쓸 수 있다."""
+    세이브포인트 안에서 조회한다: PostgreSQL 은 쿼리 하나가 실패하면 트랜잭션 전체가 abort 되어
+    다음 쿼리(_invitee_stats 등)가 InFailedSQLTransaction 으로 500 이 발생했다. 세이브포인트만 롤백하면
+    바깥 트랜잭션·이미 읽은 행(live_rows)은 그대로 사용할 수 있다."""
     try:
         async with db.begin_nested():
             return await repo.list_visible(db, user, now)
@@ -212,15 +212,15 @@ async def _list_visible_safe(db: AsyncSession, user, now: datetime) -> list:
 async def get_rooms(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """회의실 목록 (인증 사용자).
 
-    진행 중(LiveKit 에 지금 있는 방)도 내 회의만 — 호스트이거나, 초대받았거나, 초대 링크로 이미 들어온 것
-    (_live_access). 거기에 DB 에 저장된 내 회의(호스트이거나 초대받은 것) 중 지금 열려 있지 않은
-    예정·지난 회의를 붙인다. 행마다 status 로 구분한다. 공유 링크는 호스트와 링크로 들어온 본인에게만 싣는다.
+    진행 중(LiveKit 에 현재 존재하는 방)도 본인 회의만 포함한다 — 호스트이거나, 초대받았거나, 초대 링크로 이미 입장한 것
+    (_live_access). 여기에 DB 에 저장된 본인 회의(호스트이거나 초대받은 것) 중 현재 열려 있지 않은
+    예정·지난 회의를 추가한다. 행마다 status 로 구분한다. 공유 링크는 호스트와 링크로 입장한 본인에게만 포함한다.
     """
     _check_configured()
     candidates = await _visible_live_rooms(db, user, await livekit.list_rooms())
     now = datetime.now(timezone.utc)
 
-    # 진행 중 방 ↔ DB 행 짝짓기 + 내가 볼 수 있는 방만 남긴다
+    # 진행 중 방 ↔ DB 행 매칭 + 본인이 열람 가능한 방만 유지
     lk_rooms: list[dict] = []
     live_rows: dict[str, MeetingDB | None] = {}
     metas = {}
@@ -252,12 +252,12 @@ async def get_rooms(user: User = Depends(get_current_user), db: AsyncSession = D
         meta = metas[r["name"]]
         row = live_rows[r["name"]]
         how = access[r["name"]]
-        # 대기 인원은 호스트만 본다(예전엔 목록을 보는 모두에게 나갔다)
+        # 대기 인원은 호스트에게만 표시한다(과거에는 목록을 열람하는 모든 사용자에게 반환됐다)
         pending = await store.get_pending_requests(r["name"]) if (meta and how == "host") else []
         result.append(RoomInfo(
             **r,
-            # 공유 링크: 호스트, 그리고 그 링크로 들어온 본인(이미 갖고 있는 값). 초대 대상은 예정 회의와 같게
-            # 싣지 않는다 — 계정으로 초대받은 사람은 링크 없이 바로 들어가고, 링크는 초대 메일·알림에 있다.
+            # 공유 링크: 호스트 및 해당 링크로 입장한 본인(이미 보유한 값). 초대 대상에게는 예정 회의와 동일하게
+            # 포함하지 않는다 — 계정으로 초대받은 사용자는 링크 없이 바로 입장하며, 링크는 초대 메일·알림에 있다.
             share_token=meta.share_token if (meta and how in ("host", "joined")) else "",
             is_host=how == "host",
             pending_count=len(pending),
@@ -275,7 +275,7 @@ async def get_rooms(user: User = Depends(get_current_user), db: AsyncSession = D
             num_participants=0,
             max_participants=row.max_participants or 10,
             creation_time=int(created.timestamp()) if created else 0,
-            # 공유 링크는 호스트에게만(초대받은 사람은 초대 메일·알림으로 받는다)
+            # 공유 링크는 호스트에게만 포함(초대받은 사용자는 초대 메일·알림으로 수신)
             share_token=row.share_token if is_host else "",
             is_host=is_host,
             pending_count=0,
@@ -292,7 +292,7 @@ async def _send_invites(
     *, invitees, meeting_name: str, user: User, share_token: str,
     scheduled_at: datetime | None, duration: int, password: str | None,
 ) -> None:
-    """초대 메일(ICS)·내부 사용자 캘린더 일정 — best-effort (예전 create_room 본문 그대로)."""
+    """초대 메일(ICS)·내부 사용자 캘린더 일정 — best-effort (기존 create_room 본문과 동일)."""
     if not invitees:
         return
     join_url = f"{settings.app_url}/meetings/join/{share_token}"
@@ -351,7 +351,7 @@ async def _send_invites(
 
 
 async def _notify_invitees(db: AsyncSession, row: MeetingDB, added: list[MeetingInvitee], host: User) -> None:
-    """초대받은 내부 사용자에게 인앱 알림(수락/거절 버튼). 실패해도 회의는 만든다."""
+    """초대받은 내부 사용자에게 인앱 알림(수락/거절 버튼) 발송. 실패해도 회의는 생성한다."""
     from app.notifications import service as nsvc
 
     when = repo._aware(row.scheduled_at)
@@ -380,7 +380,7 @@ async def _notify_invitees(db: AsyncSession, row: MeetingDB, added: list[Meeting
 
 
 def _close_status(row: MeetingDB) -> str:
-    """지우거나 끝낼 때 — 누가 들어온 적이 있으면 ended, 없으면 cancelled."""
+    """삭제 또는 종료 시 — 입장 이력이 있으면 ended, 없으면 cancelled."""
     return "ended" if row.started_at is not None or row.status == "live" else "cancelled"
 
 
@@ -390,7 +390,7 @@ async def create_room(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """회의실 생성 → 호스트가 됨 + 참가자 초대. 회의는 DB 에도 저장한다(예약 회의가 살아남게)."""
+    """회의실 생성 → 호스트 지정 + 참가자 초대. 회의는 DB 에도 저장한다(예약 회의가 유지되도록)."""
     _check_configured()
     scheduled_at = _parse_scheduled(body.scheduled_at)
     if body.channel_id:
@@ -398,7 +398,7 @@ async def create_room(
         if not await chat_service.is_channel_member(db, body.channel_id, user.id):
             raise HTTPException(status_code=403, detail="멤버인 채널에만 회의를 묶을 수 있습니다")
 
-    # 같은 이름의 살아 있는 회의를 남이 갖고 있으면 덮어쓰지 않는다(예전엔 호스트가 바뀌었다).
+    # 동일 이름의 유효한 회의를 타 사용자가 보유하고 있으면 덮어쓰지 않는다(과거에는 호스트가 변경됐다).
     existing = await store.get_room_meta(body.name)
     if existing and existing.host_user_id != str(user.id):
         raise HTTPException(status_code=409, detail="같은 이름의 회의가 이미 있습니다")
@@ -406,7 +406,7 @@ async def create_room(
     if old is not None:
         if old.host_user_id != str(user.id):
             raise HTTPException(status_code=409, detail="같은 이름의 회의가 이미 있습니다")
-        # 내 회의를 같은 이름으로 다시 만들면 이전 것은 닫는다
+        # 본인 회의를 동일 이름으로 다시 생성하면 이전 회의는 종료 처리한다
         old.status = _close_status(old)
         old.ended_at = old.ended_at or datetime.now(timezone.utc)
 
@@ -421,7 +421,7 @@ async def create_room(
         description=body.description,
         host_user_id=str(user.id),
         host_display_name=host_name,
-        share_token=secrets.token_hex(16),   # 32hex — store.RoomMeta 와 같은 강도
+        share_token=secrets.token_hex(16),   # 32hex — store.RoomMeta 와 동일한 강도
         password_hash=hash_password(body.password) if body.password else None,
         waiting_room=body.waiting_room,
         max_participants=body.max_participants,
@@ -506,10 +506,10 @@ async def _host_row(db: AsyncSession, name: str, user: User):
 @router.delete("/rooms/{name}", status_code=204)
 async def delete_room(name: str, meeting_id: str | None = None,
                       user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """회의실 삭제 (호스트만 가능). DB 회의는 시작 전이면 취소, 진행했으면 종료로 남긴다.
+    """회의실 삭제 (호스트만 가능). DB 회의는 시작 전이면 취소, 진행했으면 종료로 기록한다.
 
-    이미 끝난(지난) 회의를 지우면 목록에서 뺀다(deleted_at) — 예전엔 아무것도 안 바꾸고 204 라
-    "지난 회의" 의 [삭제]가 무반응이었다. 같은 방 이름이 여러 번 끝났을 수 있어 meeting_id 로 행을 고른다."""
+    이미 종료된(지난) 회의를 삭제하면 목록에서 제외한다(deleted_at) — 과거에는 아무것도 변경하지 않고 204 를 반환하여
+    "지난 회의" 의 [삭제]가 무반응이었다. 동일한 방 이름이 여러 번 종료됐을 수 있으므로 meeting_id 로 행을 선택한다."""
     _check_configured()
     # 채널·DM 통화(chan-)·음성 채널(voice-) 방은 회의가 아니다 — 여기서는 닫을 수 없다.
     if is_reserved_room_name(name):
@@ -528,11 +528,11 @@ async def delete_room(name: str, meeting_id: str | None = None,
     if row is not None and row.host_user_id != str(user.id):
         raise HTTPException(status_code=403, detail="호스트만 삭제할 수 있습니다")
     if meta is None and row is None:
-        # 내 회의라는 근거(메타·DB 행)가 하나도 없다. 예전엔 여기서도 LiveKit 방을 닫아
-        # 로그인 사용자 누구나 이름만 알면 남의 방을 닫을 수 있었다.
+        # 본인 회의라는 근거(메타·DB 행)가 전혀 없는 경우. 과거에는 이 경우에도 LiveKit 방을 닫아
+        # 로그인 사용자 누구나 이름만 알면 타인의 방을 닫을 수 있었다.
         raise HTTPException(status_code=404, detail="회의를 찾을 수 없습니다")
     if meta is None and row is not None and row.status not in repo.ACTIVE:
-        # 지난 회의 행만 지운다 — 같은 이름으로 지금 열려 있을지 모르는 방(메타 없는 방)은 건드리지 않는다
+        # 지난 회의 행만 삭제한다 — 동일 이름으로 현재 열려 있을 수 있는 방(메타 없는 방)은 변경하지 않는다
         if row.deleted_at is None:
             row.deleted_at = datetime.now(timezone.utc)
             await db.commit()
@@ -542,12 +542,12 @@ async def delete_room(name: str, meeting_id: str | None = None,
     except Exception:
         if row is None:
             raise
-        # 예약만 해 둔 회의는 LiveKit 방이 이미 없을 수 있다
+        # 예약만 된 회의는 LiveKit 방이 이미 없을 수 있음
         logger.debug("LiveKit 방 삭제 생략(%s) — 이미 없음", name)
     await store.delete_room_meta(name)
     await store.clear_active_recording(name)
     if row is not None and row.status not in repo.ACTIVE:
-        # 지난 회의 — 목록에서 지운다
+        # 지난 회의 — 목록에서 삭제
         if row.deleted_at is None:
             row.deleted_at = datetime.now(timezone.utc)
             await db.commit()
@@ -565,7 +565,7 @@ async def delete_room(name: str, meeting_id: str | None = None,
 
 @router.post("/rooms/{name}/end")
 async def end_room(name: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """회의 종료(호스트) — 모두 내보내고 '지난 회의' 로 남긴다."""
+    """회의 종료(호스트) — 전원 퇴장시키고 '지난 회의' 로 보존한다."""
     row, meta = await _host_row(db, name, user)
     if livekit.is_configured():
         try:
@@ -573,7 +573,7 @@ async def end_room(name: str, user: User = Depends(get_current_user), db: AsyncS
         except Exception:
             pass
     await store.delete_room_meta(name)
-    # 방이 닫히면 녹화(egress)도 끝난다 — 상태 키를 남기면 다음에 같은 방을 열 때 "녹화 중"으로 보인다
+    # 방이 닫히면 녹화(egress)도 종료된다 — 상태 키가 남으면 이후 동일한 방을 열 때 "녹화 중"으로 표시된다
     await store.clear_active_recording(name)
     if row is not None:
         if row.status in repo.ACTIVE:
@@ -590,7 +590,7 @@ async def update_room(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """회의 수정(호스트) — 제목·설명·시각·길이·비밀번호·대기실·정원·초대 대상. 보낸 필드만 바뀐다."""
+    """회의 수정(호스트) — 제목·설명·시각·길이·비밀번호·대기실·정원·초대 대상. 전송한 필드만 변경된다."""
     row, meta = await _host_row(db, name, user)
     fields = body.model_fields_set
     time_changed = False
@@ -647,7 +647,7 @@ async def update_room(
             meta.max_participants = body.max_participants
         await store.save_room_meta(meta)
 
-    # 호스트 캘린더 일정 따라 옮기기 (best-effort)
+    # 호스트 캘린더 일정 동기 갱신 (best-effort)
     if row is not None and time_changed and row.host_calendar_event_id and row.scheduled_at:
         try:
             await update_calendar_event_time(
@@ -715,10 +715,10 @@ async def _detail(db: AsyncSession, row: MeetingDB | None, meta, user: User, nam
 
 @router.get("/by-id/{meeting_id}", response_model=MeetingDetail)
 async def get_meeting(meeting_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """회의 상세(호스트·초대받은 사람만) — 초대 대상과 각자의 응답 포함. 예정·지난 회의 모두."""
+    """회의 상세(호스트·초대받은 사용자만) — 초대 대상과 각자의 응답 포함. 예정·지난 회의 모두 대상."""
     row = await db.get(MeetingDB, meeting_id)
     if row is None or not await repo.can_view(db, row, user):
-        # 남의 회의는 있는지도 알려 주지 않는다
+        # 타인의 회의는 존재 여부도 노출하지 않음
         raise HTTPException(status_code=404, detail="회의를 찾을 수 없습니다")
     return await _detail(db, row, None, user, row.room_name)
 
@@ -742,7 +742,7 @@ async def rsvp_meeting(
     inv.response = body.response
     inv.responded_at = datetime.now(timezone.utc)
     if not inv.user_id:
-        inv.user_id = str(user.id)   # 메일 주소로 초대받은 내부 사용자 — 이제 계정으로 묶는다
+        inv.user_id = str(user.id)   # 메일 주소로 초대받은 내부 사용자 — 이 시점부터 계정으로 매칭
     await db.commit()
     return {"ok": True, "meeting_id": row.id, "response": inv.response}
 
@@ -754,7 +754,7 @@ async def rsvp_room(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """참석 응답 — 방 이름으로(지금 살아 있는 회의)."""
+    """참석 응답 — 방 이름 기준(현재 유효한 회의)."""
     row = await repo.find_active(db, name)
     if row is None:
         raise HTTPException(status_code=404, detail="초대받은 회의가 아닙니다")
@@ -780,15 +780,15 @@ async def start_recording(name: str, user: User = Depends(get_current_user),
     try:
         rec = await livekit.start_recording(name)
     except Exception as e:
-        # egress 가 꺼져 있거나 CPU 가 모자라 요청을 거절하면 LiveKit 이 ~23초 뒤 "no response from servers".
-        # 원문은 로그로, 사용자에게는 사람 말로(프런트가 토스트로 그대로 보여 준다).
+        # egress 가 중지 상태이거나 CPU 부족으로 요청을 거절하면 LiveKit 이 ~23초 후 "no response from servers" 를 반환한다.
+        # 원문은 로그에 기록하고, 사용자에게는 이해 가능한 문구로 전달한다(프런트가 토스트로 그대로 표시).
         logger.warning("녹화 시작 실패(%s): %s", name, e)
         raise HTTPException(
             status_code=502,
             detail="녹화를 시작하지 못했습니다. 녹화 서버가 꺼져 있거나 자원이 부족합니다 — 관리자에게 문의하세요.",
         )
     await store.set_active_recording(name, rec["egress_id"], rec["filename"])
-    # 파일 ↔ 회의 기록 — 목록·다운로드는 이 회의의 호스트·초대 대상·채널 멤버만
+    # 파일 ↔ 회의 기록 — 목록·다운로드는 이 회의의 호스트·초대 대상·채널 멤버만 허용
     try:
         db.add(MeetingRecording(
             filename=rec["filename"], room_name=name,
@@ -812,8 +812,8 @@ async def stop_recording(name: str, user: User = Depends(get_current_user)):
     try:
         await livekit.stop_recording(active["egress_id"])
     except Exception as e:
-        # 방이 닫히며 이미 끝난 egress 는 LiveKit 이 "멈출 수 없다"고 거절한다. 어느 쪽이든 녹화는 돌고 있지
-        # 않으므로 상태를 내리고 정상 응답한다 — 예전엔 500 이 나가 화면이 "녹화 중"으로 굳었다.
+        # 방이 닫히면서 이미 종료된 egress 는 LiveKit 이 "멈출 수 없다"고 거절한다. 어느 경우든 녹화는 실행 중이
+        # 아니므로 상태를 해제하고 정상 응답한다 — 과거에는 500 이 반환되어 화면이 "녹화 중"으로 고착됐다.
         logger.warning("녹화 중지 실패(%s) — 이미 끝난 녹화로 보고 상태만 내린다: %s", name, e)
     finally:
         await store.clear_active_recording(name)
@@ -823,8 +823,8 @@ async def stop_recording(name: str, user: User = Depends(get_current_user)):
 @router.get("/rooms/{name}/recording")
 async def recording_status(name: str, user: User = Depends(get_current_user),
                            db: AsyncSession = Depends(get_db)):
-    """녹화 중인가(회의 화면이 들어올 때 읽는다). 그 방을 볼 수 있는 사람에게만 답한다 —
-    예전엔 방 이름만 알면 누구에게나 녹화 여부·파일 이름(방이 있다는 사실)이 나갔다. 아니면 "녹화 안 함"."""
+    """녹화 진행 여부(회의 화면 진입 시 조회). 해당 방을 열람할 수 있는 사용자에게만 응답한다 —
+    과거에는 방 이름만 알면 누구에게나 녹화 여부·파일 이름(방의 존재 사실)이 노출됐다. 그 외에는 "녹화 안 함"."""
     if is_reserved_room_name(name):
         allowed = is_channel_call_room(name) and await _can_see_channel_call(db, name, user)
     else:
@@ -841,10 +841,10 @@ RECORDINGS_DIR = "/recordings"
 
 
 async def _can_access_recording(db: AsyncSession, user, filename: str) -> bool:
-    """녹화 파일을 볼 수 있나 — 관리자, 그 회의의 호스트·초대 대상, (채널 통화·채널에 묶인 회의) 채널 멤버.
+    """녹화 파일 열람 가능 여부 — 관리자, 해당 회의의 호스트·초대 대상, (채널 통화·채널에 연결된 회의) 채널 멤버.
 
-    기록이 없는 예전 파일은 파일 이름의 방 이름으로 회의를 찾아 같은 기준을 적용하고,
-    못 찾으면 관리자만.
+    기록이 없는 기존 파일은 파일 이름의 방 이름으로 회의를 조회하여 동일 기준을 적용하고,
+    조회되지 않으면 관리자만 허용한다.
     """
     if getattr(user, "is_admin", False):
         return True
@@ -874,7 +874,7 @@ async def _can_access_recording(db: AsyncSession, user, filename: str) -> bool:
     if not room:
         return False
     if is_reserved_room_name(room):
-        # 채널·DM 통화(chan-)만 채널 멤버에게. 그 밖의 예약 이름(voice-)은 회의 녹화가 아니다 — 관리자만
+        # 채널·DM 통화(chan-)만 채널 멤버에게 허용. 그 밖의 예약 이름(voice-)은 회의 녹화가 아니다 — 관리자만 허용
         return await _member(room[len("chan-"):]) if is_channel_call_room(room) else False
     rows = (await db.execute(select(MeetingDB).where(MeetingDB.room_name == room))).scalars().all()
     for row in rows:
@@ -888,9 +888,9 @@ async def list_recordings(
     room: str | None = None,  # 이 방(회의 room_name)의 녹화만
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    """저장된 녹화 파일 목록(egress-out 볼륨, 백엔드에 /recordings 로 마운트) — 볼 수 있는 것만.
+    """저장된 녹화 파일 목록(egress-out 볼륨, 백엔드에 /recordings 로 마운트) — 열람 가능한 것만.
 
-    파일 이름은 `<방 이름>_<YYYYmmdd-HHMMSS>.mp4`(livekit.start_recording) — room 을 주면 그 방 것만."""
+    파일 이름은 `<방 이름>_<YYYYmmdd-HHMMSS>.mp4`(livekit.start_recording) — room 을 지정하면 해당 방의 파일만."""
     import os
     d = RECORDINGS_DIR
     if not os.path.isdir(d):
@@ -933,8 +933,8 @@ async def create_token(
     """호스트용 직접 참여 토큰 발급. 게스트는 공유링크 승인 플로우 사용."""
     _check_configured()
 
-    # 채널 통화(chat에서 시작) — "chan-<채널id>" 룸은 그 채널 멤버 누구나 입장.
-    # 호스트/사전등록 개념 없이 LiveKit 룸 자동생성(디스코드 음성채널 방식).
+    # 채널 통화(chat에서 시작) — "chan-<채널id>" 룸은 해당 채널 멤버 누구나 입장 가능.
+    # 호스트/사전등록 개념 없이 LiveKit 룸 자동 생성(디스코드 음성채널 방식).
     if is_reserved_room_name(body.room) and not body.room.startswith("chan-"):
         raise HTTPException(status_code=404, detail="회의실을 찾을 수 없습니다")
     if body.room.startswith("chan-"):
@@ -956,10 +956,10 @@ async def create_token(
         raise HTTPException(status_code=404, detail="회의실을 찾을 수 없습니다")
     is_host = meta.host_user_id == str(user.id)
     if not is_host and not await _is_invited(db, meta, user):
-        # 목록을 받은 뒤 초대에서 빠진 경우 등 — 화면이 이 문구를 그대로 보여 준다(다음 길을 알려 준다)
+        # 목록 수신 후 초대에서 제외된 경우 등 — 화면이 이 문구를 그대로 표시한다(대체 경로 안내)
         raise HTTPException(status_code=403, detail="호스트와 초대받은 사람만 바로 참여할 수 있습니다. 받은 초대 링크로 들어와 주세요")
-    # identity는 세션마다 고유하게 — 같은 사용자가 여러 기기/탭으로 들어와도
-    # LiveKit DUPLICATE_IDENTITY로 서로 쫓아내며 무한 재접속하는 것 방지.
+    # identity 는 세션마다 고유하게 생성 — 동일 사용자가 여러 기기/탭으로 입장해도
+    # LiveKit DUPLICATE_IDENTITY 로 상호 퇴장시키며 무한 재접속하는 것 방지.
     # 표시이름(name)만 사용자명 유지.
     token = livekit.generate_token(
         room=body.room,
@@ -967,22 +967,22 @@ async def create_token(
         name=user.display_name or user.username,
     )
 
-    # DB 에서 되살린 예약 회의는 LiveKit 방이 이미 닫혔을 수 있다 — 정원 설정대로 다시 연다
+    # DB 에서 복원한 예약 회의는 LiveKit 방이 이미 닫혔을 수 있다 — 정원 설정대로 다시 연다
     await _ensure_lk_room(meta)
 
     return TokenResponse(token=token, livekit_url=livekit.get_ws_url(), is_host=is_host)
 
 
 async def _is_invited(db: AsyncSession, meta, user: User) -> bool:
-    """호스트가 이 사람을 초대 대상에 넣었나 — 계정으로 지정했거나, 초대한 메일 주소가 이 계정의 주소이거나.
+    """호스트가 이 사용자를 초대 대상에 포함했는지 판정 — 계정으로 지정했거나, 초대한 메일 주소가 이 계정의 주소인 경우.
 
-    목록의 [참여]가 초대받은 사람에게도 뜨는데 토큰은 호스트에게만 줘서 들어갈 길이 없었다.
-    초대 대상은 대기실·비밀번호(링크만 가진 손님을 거르는 장치) 없이 들인다.
-    판정은 참석 응답(RSVP)·목록 노출과 같다(repo.my_invite): user_id 가 같거나, 로컬 계정이면서 초대 주소가
-    계정 주소(User.email)와 같다. 로컬 계정의 주소는 가입 때 시스템이 정하고 본인이 바꿀 수 없다(바꿀 수 있는
-    복구 메일 recovery_email 은 보지 않는다). LDAP 등 외부 인증 계정은 디렉터리 값이 주소를 덮어쓰므로
-    주소로는 묶지 않는다(repo._own_email) — 계정을 지정한 초대나 초대 링크(대기실·비밀번호)로 들어온다.
-    예전엔 메일 주소로만 초대된 내부 계정이 목록에서는 회의를 보는데 [참여]는 403 이었다.
+    목록의 [참여]가 초대받은 사용자에게도 표시되나 토큰은 호스트에게만 발급되어 입장 경로가 없었다.
+    초대 대상은 대기실·비밀번호(링크만 가진 게스트를 선별하는 장치) 없이 입장시킨다.
+    판정은 참석 응답(RSVP)·목록 노출과 동일하다(repo.my_invite): user_id 가 동일하거나, 로컬 계정이면서 초대 주소가
+    계정 주소(User.email)와 동일하다. 로컬 계정의 주소는 가입 시 시스템이 지정하며 본인이 변경할 수 없다(변경 가능한
+    복구 메일 recovery_email 은 확인하지 않는다). LDAP 등 외부 인증 계정은 디렉터리 값이 주소를 덮어쓰므로
+    주소로는 매칭하지 않는다(repo._own_email) — 계정을 지정한 초대나 초대 링크(대기실·비밀번호)로 입장한다.
+    과거에는 메일 주소로만 초대된 내부 계정이 목록에서는 회의를 열람하나 [참여]는 403 이었다.
     """
     meeting_id = getattr(meta, "meeting_id", None)
     if not meeting_id:
@@ -996,10 +996,10 @@ async def _is_invited(db: AsyncSession, meta, user: User) -> bool:
 @router.get("/rooms/{name}/participants", response_model=list[ParticipantInfo])
 async def get_participants(name: str, user: User = Depends(get_current_user),
                            db: AsyncSession = Depends(get_db)):
-    """참여자 목록. 채널·DM 통화 방은 그 채널 멤버만, 회의는 호스트·초대 대상만.
+    """참여자 목록. 채널·DM 통화 방은 해당 채널 멤버만, 회의는 호스트·초대 대상만 조회 가능.
 
-    예전엔 chan- 이 아니면 로그인 사용자 누구에게나 내줘서 방 이름만 알면 참가자 이름이 보였다.
-    음성 채널(voice-)은 app/chat/voice.py 가 따로 낸다 — 여기서는 없는 방이다.
+    과거에는 chan- 이 아니면 로그인 사용자 누구에게나 반환하여 방 이름만 알면 참가자 이름이 노출됐다.
+    음성 채널(voice-)은 app/chat/voice.py 가 별도로 반환한다 — 여기서는 존재하지 않는 방으로 처리한다.
     """
     _check_configured()
     if is_reserved_room_name(name):
@@ -1021,8 +1021,8 @@ async def get_participants(name: str, user: User = Depends(get_current_user),
 async def meeting_summary(name: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """회의 종료 화면 "이번 회의" 카드 — 제목·호스트·채팅 채널·캘린더 일정·시각.
 
-    볼 수 있는 사람: 채널 통화(chan-<id>)는 그 채널 멤버, 그 밖은 호스트·초대 대상(DB 회의) 또는
-    Redis 방의 호스트. 아니면 404(남의 회의는 있는지도 알려 주지 않는다). 끝난 회의도 본다.
+    열람 가능 대상: 채널 통화(chan-<id>)는 해당 채널 멤버, 그 밖은 호스트·초대 대상(DB 회의) 또는
+    Redis 방의 호스트. 그 외에는 404(타인의 회의는 존재 여부도 노출하지 않는다). 종료된 회의도 조회 가능.
     """
     if name.startswith("chan-"):
         channel_id = name[len("chan-"):]
@@ -1121,12 +1121,12 @@ async def deny_request(name: str, req_id: str, user: User = Depends(get_current_
 # 비밀번호 무차별 대입 방지 — 10분 창에서 10회
 _PW_MAX_FAILS = 10
 _PW_WINDOW = 600
-# "호스트에게 알리기" — 같은 링크로 10분에 한 번
+# "호스트에게 알리기" — 동일 링크로 10분에 1회
 _NOTIFY_HOST_WINDOW = 600
 
 
 def _ended_at(row) -> str | None:
-    """끝난 시각 — 기록이 없으면(예약만 하고 안 열린 회의) 예정 끝 시각."""
+    """종료 시각 — 기록이 없으면(예약만 되고 열리지 않은 회의) 예정 종료 시각."""
     end = row.ended_at
     if end is None and row.scheduled_at is not None:
         end = row.scheduled_at + timedelta(minutes=row.duration_minutes or repo.DEFAULT_DURATION)
@@ -1138,7 +1138,7 @@ def _ended_at(row) -> str | None:
 
 
 async def _ended_link_info(token: str) -> dict | None:
-    """Redis 에 없는 링크가 끝났거나 취소된 회의의 것이면 결과 화면용 정보를."""
+    """Redis 에 없는 링크가 종료됐거나 취소된 회의의 링크이면 결과 화면용 정보를 반환한다."""
     try:
         async with repo.session() as db:
             row = await repo.find_by_token(db, token)
@@ -1158,7 +1158,7 @@ async def _ended_link_info(token: str) -> dict | None:
 
 
 async def _channel_name(channel_id: str | None) -> str | None:
-    """회의에 묶인 채널 이름. DM·없는 채널은 None(손님 화면에 사람 이름이 나가지 않게)."""
+    """회의에 연결된 채널 이름. DM·존재하지 않는 채널은 None(게스트 화면에 개인 이름 노출 방지)."""
     if not channel_id:
         return None
     try:
@@ -1176,8 +1176,8 @@ async def _channel_name(channel_id: str | None) -> str | None:
 async def get_join_info(token: str):
     """공유링크 → 회의실 정보 조회 (인증 불요).
 
-    끝났거나 취소된 회의의 링크면 410 + detail {code: "ended", name, host_name, ended_at} —
-    결과 화면이 "'회의' 는 10월 15일 16:00에 끝났습니다" 를 그린다. 모르는 링크는 404.
+    종료됐거나 취소된 회의의 링크이면 410 + detail {code: "ended", name, host_name, ended_at} —
+    결과 화면이 "'회의' 는 10월 15일 16:00에 끝났습니다" 를 표시한다. 알 수 없는 링크는 404.
     """
     _check_configured()
     meta = await store.get_room_by_token(token)
@@ -1209,9 +1209,9 @@ async def get_join_info(token: str):
 
 @router.post("/join/{token}/notify-host", status_code=202)
 async def notify_host(token: str, body: JoinNotifyHost):
-    """만료된(또는 살아 있는) 초대 링크 화면의 "호스트에게 알리기" (인증 불요).
+    """만료된(또는 유효한) 초대 링크 화면의 "호스트에게 알리기" (인증 불요).
 
-    호스트에게 인앱 알림 하나. 같은 링크로는 10분에 한 번만(429) — 손님이 알림 폭탄을 못 보내게.
+    호스트에게 인앱 알림 1건 발송. 동일 링크로는 10분에 1회만 허용(429) — 게스트의 알림 남발 방지.
     """
     nickname = (body.nickname or "").strip()[:30]
     host_id = None
@@ -1254,8 +1254,8 @@ async def submit_join_request(token: str, body: JoinRequestCreate,
     if not meta:
         raise HTTPException(status_code=404, detail="유효하지 않은 초대 링크입니다")
 
-    # 로그인한 사람이 링크로 들어오면 적어 둔다 — 회의 목록에서 자기가 들어가 있는 회의가 보이게(_live_access).
-    # 입장 자체와는 무관하다: 실패해도 신청은 그대로 받는다. (라우터 밖에서 직접 부르면 Depends 객체가 온다)
+    # 로그인 사용자가 링크로 입장하면 기록한다 — 회의 목록에 본인이 입장한 회의를 표시하기 위함(_live_access).
+    # 입장 자체와는 무관하다: 실패해도 신청은 그대로 접수한다. (라우터 밖에서 직접 호출하면 Depends 객체가 전달된다)
     if isinstance(link_uid, str) and link_uid:
         try:
             await store.remember_link_user(meta.name, link_uid)
@@ -1266,7 +1266,7 @@ async def submit_join_request(token: str, body: JoinRequestCreate,
     if not nickname or len(nickname) > 30:
         raise HTTPException(status_code=400, detail="닉네임은 1~30자여야 합니다")
 
-    # ── 비밀번호가 걸린 방: 맞히면 호스트 승인 없이 바로 입장 ──
+    # ── 비밀번호가 설정된 방: 일치하면 호스트 승인 없이 즉시 입장 ──
     if meta.password_hash and body.password:
         r = await get_redis()
         fail_key = f"mtg:pwfail:{token}"
@@ -1277,7 +1277,7 @@ async def submit_join_request(token: str, body: JoinRequestCreate,
                 headers={"X-Attempts-Remaining": "0"},
             )
         if not verify_password(body.password, meta.password_hash):
-            # 무차별 대입 방지 — 10분 창에서 10회. 남은 횟수는 헤더로(결과 화면 "비밀번호가 맞지 않습니다 · 2번 남음")
+            # 무차별 대입 방지 — 10분 창에서 10회. 남은 횟수는 헤더로 전달(결과 화면 "비밀번호가 맞지 않습니다 · 2번 남음")
             fails = int(await r.incr(fail_key) or fails + 1)
             await r.expire(fail_key, _PW_WINDOW)
             raise HTTPException(
@@ -1301,7 +1301,7 @@ async def submit_join_request(token: str, body: JoinRequestCreate,
             livekit_url=livekit.get_ws_url(),
         )
 
-    # ── 대기실 꺼짐: 승인 없이 바로 입장. 비밀번호가 걸린 방이면 비밀번호는 맞혀야 한다 ──
+    # ── 대기실 비활성화: 승인 없이 즉시 입장. 비밀번호가 설정된 방이면 비밀번호 일치 필요 ──
     if not meta.waiting_room:
         if meta.password_hash:
             raise HTTPException(status_code=403, detail="비밀번호가 필요합니다")
@@ -1315,7 +1315,7 @@ async def submit_join_request(token: str, body: JoinRequestCreate,
             request_id=req.id, status="approved", token=lk_token, livekit_url=livekit.get_ws_url(),
         )
 
-    # 비밀번호가 없거나 입력하지 않았으면 기존 호스트 승인 경로
+    # 비밀번호가 없거나 입력하지 않았으면 기존 호스트 승인 경로 적용
     req = await store.create_join_request(meta.name, nickname)
     if not req:
         raise HTTPException(status_code=429, detail="대기 신청이 너무 많거나 회의실을 찾을 수 없습니다")
@@ -1325,10 +1325,10 @@ async def submit_join_request(token: str, body: JoinRequestCreate,
 
 
 async def _notify_host_waiting(meta, req_id: str, nickname: str) -> None:
-    """대기실 입장 신청 → 호스트 활동 패널에 [들이기][거절] 이 달린 알림("활동 패널에도 기록").
+    """대기실 입장 신청 → 호스트 활동 패널에 [들이기][거절] 이 포함된 알림("활동 패널에도 기록").
 
-    미니 통화 창의 요청 띠와 같은 신청이다 — 어느 쪽에서 처리해도 다른 쪽은 "이미 처리된 신청"(400)이 된다.
-    알림이 실패해도 신청은 그대로 받는다.
+    미니 통화 창의 요청 띠와 동일한 신청이다 — 어느 쪽에서 처리하든 다른 쪽은 "이미 처리된 신청"(400)이 된다.
+    알림이 실패해도 신청은 그대로 접수한다.
     """
     from urllib.parse import quote
 
@@ -1359,10 +1359,10 @@ async def _notify_host_waiting(meta, req_id: str, nickname: str) -> None:
 
 @router.post("/join/{token}/request/{req_id}/cancel", status_code=200)
 async def cancel_join_request(token: str, req_id: str):
-    """손님이 대기 중 [취소] (인증 불요 — 초대 링크와 자기 신청 id 를 아는 사람).
+    """게스트가 대기 중 [취소] (인증 불요 — 초대 링크와 본인 신청 id 를 아는 사용자).
 
-    예전엔 화면만 돌아가고 신청은 남아, 호스트 대기실에 유령 신청이 떠 있었다. 아직 대기 중인 신청만 접는다 —
-    이미 승인·거절된 것은 그대로 둔다.
+    과거에는 화면만 복귀하고 신청은 남아, 호스트 대기실에 유효하지 않은 신청이 계속 표시됐다. 아직 대기 중인 신청만 취소한다 —
+    이미 승인·거절된 것은 변경하지 않는다.
     """
     meta = await store.get_room_by_token(token)
     if not meta:

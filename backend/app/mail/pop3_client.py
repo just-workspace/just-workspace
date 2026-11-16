@@ -1,11 +1,11 @@
-"""POP3 수신 클라이언트 — imap_client 와 같은 인터페이스로, 라우터가 protocol 로 분기해 호출.
+"""POP3 수신 클라이언트 — imap_client 와 동일한 인터페이스이며, 라우터가 protocol 로 분기해 호출.
 
 POP3 는 서버측 폴더/플래그/검색이 없다:
 - 메일함은 INBOX 하나뿐(list_mailboxes).
 - 읽음/별표는 서버에 없으므로 DB(mail_pop3_state)에 UIDL 기준으로 저장.
-- 메시지 식별자(uid)는 POP3 UIDL(세션 무관 안정적)을 쓴다.
-- poplib 은 동기 API 라 asyncio.to_thread 로 감싼다.
-발신은 이 모듈과 무관 — POP3 계정도 SMTP(smtp_client)로 그대로 보낸다.
+- 메시지 식별자(uid)는 POP3 UIDL(세션 무관 안정적)을 사용한다.
+- poplib 은 동기 API 이므로 asyncio.to_thread 로 래핑한다.
+발신은 본 모듈과 무관 — POP3 계정도 SMTP(smtp_client)로 동일하게 발신한다.
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ _TIMEOUT = 30
 
 
 def _connect_sync(account: MailAccount):
-    # 외부 계정은 내부망 접속 금지(등록 뒤 DNS 가 바뀌어도 접속 직전마다 확인).
+    # 외부 계정은 내부망 접속 금지(등록 후 DNS 가 변경되어도 접속 직전마다 확인).
     access_guard.ensure_account_hosts_sync(account)
     host = account.imap_host
     sec = account.imap_security or "ssl"
@@ -68,15 +68,15 @@ def _flag_key(aid: str) -> str:
 
 
 # ── 읽음·별표 ──
-# DB(mail_pop3_state)에 둔다. 예전에는 Redis 의 집합 두 개(`mail:pop3:read:<계정>`, `…:flag:<계정>`)에만
-# 있어서 백업에 들지 않았고, 복원하면 POP3 메일이 전부 안 읽음으로 돌아갔다.
+# DB(mail_pop3_state)에 저장한다. 이전에는 Redis 의 집합 두 개(`mail:pop3:read:<계정>`, `…:flag:<계정>`)에만
+# 저장되어 백업에 포함되지 않았고, 복원 시 POP3 메일이 전부 읽지 않음 상태로 돌아갔다.
 #
-# - 계정마다 **한 번** 예전 집합을 DB 로 옮긴다(mail_accounts.pop3_state_imported). 그 뒤로는 DB 만 읽는다 —
-#   "DB 에 행이 없다"는 "아직 안 옮겼다"가 아니라 "읽은 것이 없다"일 수 있어서 표시를 따로 둔다.
-# - 바꿀 때는 DB 에 쓰고 예전 집합에도 같은 변경을 해 둔다. 읽지 않는 사본이다 — 업데이트가 실패해
-#   이전 버전(그 집합만 읽는다)으로 되돌아갔을 때 읽음 표시가 남아 있게 하려는 것이다.
+# - 계정마다 **1회** 이전 집합을 DB 로 이관한다(mail_accounts.pop3_state_imported). 이후에는 DB 만 조회한다.
+#   "DB 에 행이 없다"는 "아직 안 옮겼다"가 아니라 "읽은 것이 없다"일 수 있어 표식을 별도로 둔다.
+# - 변경 시 DB 에 기록하고 이전 집합에도 동일한 변경을 적용한다. 조회하지 않는 사본이다. 업데이트 실패로
+#   이전 버전(해당 집합만 조회한다)으로 롤백되었을 때 읽음 표시를 유지하기 위함이다.
 
-_imported: set[str] = set()   # 이 프로세스가 옮긴 것을 확인한 계정(매번 DB 에 묻지 않게)
+_imported: set[str] = set()   # 본 프로세스가 이관 완료를 확인한 계정(매번 DB 를 조회하지 않도록)
 
 
 async def _legacy_members(key: str) -> set[str]:
@@ -96,7 +96,7 @@ async def _ensure_imported(aid: str) -> None:
         _imported.add(aid)
         return
     if done is None:
-        # 계정 행이 없다(지워지는 중이거나 그 값이 비어 있는 옛 행) — 옮길 곳이 없으면 그만둔다.
+        # 계정 행 없음(삭제 중이거나 해당 값이 비어 있는 이전 행). 이관할 위치가 없으면 중단한다.
         async with async_session() as db:
             exists = (await db.execute(select(MailAccount.id).where(MailAccount.id == aid))).scalar_one_or_none()
         if exists is None:
@@ -104,11 +104,11 @@ async def _ensure_imported(aid: str) -> None:
     try:
         read_set = await _legacy_members(_read_key(aid))
         flag_set = await _legacy_members(_flag_key(aid))
-    except Exception as e:  # noqa: BLE001 — 표시를 남기지 않는다. 다음 접근 때 다시 옮긴다.
+    except Exception as e:  # noqa: BLE001 — 표식을 기록하지 않는다. 다음 접근 시 재이관한다.
         logger.warning("[pop3] 예전 읽음·별표 위치를 읽지 못했습니다(%s): %s", aid, e)
         return
     async with async_session() as db:
-        # 표시부터 잡는다. 여러 워커가 동시에 와도 이 줄을 바꾼 하나만 옮긴다(나머지는 0행).
+        # 표식을 먼저 선점한다. 여러 워커가 동시에 진입해도 이 행을 변경한 하나만 이관한다(나머지는 0행).
         claimed = await db.execute(
             update(MailAccount)
             .where(MailAccount.id == aid, MailAccount.pop3_state_imported.isnot(True))
@@ -123,7 +123,7 @@ async def _ensure_imported(aid: str) -> None:
                 ))
             try:
                 await db.commit()
-            except IntegrityError:   # 표시가 없는데 행이 이미 있었다 — 표시만 남긴다
+            except IntegrityError:   # 표식이 없으나 행이 이미 존재한 경우 — 표식만 기록
                 await db.rollback()
                 await db.execute(
                     update(MailAccount).where(MailAccount.id == aid)
@@ -147,7 +147,7 @@ async def _state(aid: str) -> tuple[set[str], set[str]]:
 
 
 async def _set_state(aid: str, uidl: str, *, read: bool | None = None, flagged: bool | None = None) -> None:
-    """읽음·별표를 바꾼다(None = 그대로). 둘 다 꺼지면 행을 지운다."""
+    """읽음·별표를 변경한다(None = 유지). 둘 다 해제되면 행을 삭제한다."""
     await _ensure_imported(aid)
     for _ in range(2):
         async with async_session() as db:
@@ -166,9 +166,9 @@ async def _set_state(aid: str, uidl: str, *, read: bool | None = None, flagged: 
             try:
                 await db.commit()
                 break
-            except IntegrityError:   # 같은 메시지를 두 요청이 동시에 처음 표시했다 — 다시 읽어 고친다
+            except IntegrityError:   # 동일 메시지를 두 요청이 동시에 최초 표시한 경우 — 재조회 후 갱신
                 await db.rollback()
-    # 예전 집합의 사본
+    # 이전 집합의 사본
     try:
         r = await get_redis()
         if read is not None:
@@ -180,7 +180,7 @@ async def _set_state(aid: str, uidl: str, *, read: bool | None = None, flagged: 
 
 
 async def _forget(aid: str, uidl: str) -> None:
-    """지운 메시지의 표시를 없앤다."""
+    """삭제된 메시지의 표시를 제거한다."""
     await _ensure_imported(aid)
     async with async_session() as db:
         await db.execute(delete(MailPop3State).where(
@@ -222,7 +222,7 @@ async def list_mailboxes(account: MailAccount) -> list[dict]:
     }]
 
 
-_INDEX_TTL = 60           # 헤더 인덱스 캐시(초) — 페이지 넘김은 캐시로 즉시, 이후 새 메일 반영
+_INDEX_TTL = 60           # 헤더 인덱스 캐시(초) — 페이지 이동은 캐시로 즉시 처리, 이후 새 메일 반영
 _INDEX_CAP = 500          # 전체 헤더 조회 상한(구형 POP3 계정 보호). 초과 시 번호 최신 500개.
 
 
@@ -233,7 +233,7 @@ def _index_key(aid: str) -> str:
 async def _build_index(account: MailAccount) -> list[dict]:
     """전체 메시지 헤더 인덱스(날짜 최신순 정렬). Redis 캐시(_INDEX_TTL).
 
-    번호 순서에 의존하지 않고 헤더 Date 로 전역 정렬 → 서버가 번호를 어떻게 매기든 최신순.
+    번호 순서에 의존하지 않고 헤더 Date 로 전역 정렬 → 서버의 번호 부여 방식과 무관하게 최신순.
     """
     r = await get_redis()
     cached = await r.get(_index_key(account.id))
@@ -265,7 +265,7 @@ async def _build_index(account: MailAccount) -> list[dict]:
                     "to": _ic._parse_address(m.get("To")),
                     "subject": _ic._decode_header(m.get("Subject")),
                     "date": _ic._parse_date(m.get("Date")),
-                    # 스레드·첨부 필터용. 옛 캐시에는 없을 수 있다.
+                    # 스레드·첨부 필터용. 이전 캐시에는 없을 수 있다.
                     "msgid": m.get("Message-ID"),
                     "irt": m.get("In-Reply-To"),
                     "refs": m.get("References"),
@@ -296,7 +296,7 @@ async def fetch_messages(
     has_attachment: bool | None = None,
     label: str | None = None,
 ) -> tuple[list[dict], int]:
-    """label 은 POP3 에 저장소가 없어 무시한다(라벨 지원 안 함)."""
+    """label 은 POP3 에 저장소가 없어 무시한다(라벨 미지원)."""
     index = await _build_index(account)
     read_set, flag_set = await _state(account.id)
     q = (query or "").strip().lower()
@@ -336,7 +336,7 @@ def _has_att(it: dict) -> bool:
 async def fetch_thread(
     account: MailAccount, mailbox: str, uid: str, extra_mailboxes: list[str] | None = None,
 ) -> dict | None:
-    """POP3 는 받은편지함 하나 — 인덱스의 헤더로 같은 대화를 묶는다."""
+    """POP3 는 받은편지함 하나뿐이므로 인덱스의 헤더로 동일 대화를 그룹화한다."""
     index = await _build_index(account)
     me = next((it for it in index if it["uidl"] == uid), None)
     if me is None:
@@ -431,7 +431,7 @@ async def update_flags(
 async def delete_message(
     account: MailAccount, mailbox: str, uid: str, trash_mailbox: str | None = None,
 ) -> dict:
-    # POP3 는 휴지통이 없다 — DELE 는 서버에서 영구 삭제.
+    # POP3 는 휴지통이 없다. DELE 는 서버에서 영구 삭제한다.
     def _work():
         pop = _connect_sync(account)
         try:
@@ -509,12 +509,12 @@ async def move_message(account: MailAccount, mailbox: str, uid: str, dest: str) 
 
 
 async def append_to_sent(account: MailAccount, raw_message: bytes) -> bool:
-    return False  # POP3 계정은 서버 보낸함이 없다 — 조용히 건너뜀
+    return False  # POP3 계정은 서버 보낸함이 없으므로 무시
 
 
 def _fetch_raw_many_sync(account: MailAccount, uids: list[str]) -> dict[str, bytes]:
-    """여러 UID 의 원본을 연결 하나로. POP3 는 UIDL 목록을 매번 다시 받아야 해서
-    건건이 접속하면 같은 목록을 N번 받는다(백필이 수백 통이면 그대로 타임아웃)."""
+    """여러 UID 의 원본을 단일 연결로 조회한다. POP3 는 UIDL 목록을 매번 다시 수신해야 하므로
+    건별로 접속하면 동일 목록을 N번 수신한다(백필이 수백 통이면 타임아웃 발생)."""
     out: dict[str, bytes] = {}
     if not uids:
         return out
@@ -539,5 +539,5 @@ def _fetch_raw_many_sync(account: MailAccount, uids: list[str]) -> dict[str, byt
 async def fetch_raw_many(
     account: MailAccount, mailbox: str, uids: list[str]
 ) -> dict[str, bytes]:
-    """imap_client.fetch_raw_many 와 같은 인터페이스(아카이브가 프로토콜을 안 가리게)."""
+    """imap_client.fetch_raw_many 와 동일한 인터페이스(아카이브가 프로토콜을 구분하지 않도록)."""
     return await asyncio.to_thread(_fetch_raw_many_sync, account, uids)

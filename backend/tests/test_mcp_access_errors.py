@@ -1,8 +1,8 @@
 """MCP 도구 접근 판정(fail-closed) · 오류 정규화.
 
-사고: TOOL_MODULE 에 없는 도구가 "모듈 없음 = 항상 허용"으로 처리돼, mail_read·채팅·게시판·
-캘린더·연락처·할일이 관리자가 모듈을 꺼도·RBAC 가 없어도 MCP 로 불렸다. 내장 AI 의 DATA_TOOLS
-에도 같은 도구가 빠져 외부 AI 데이터 차단을 우회했다.
+사고: TOOL_MODULE 에 없는 도구가 "모듈 없음 = 항상 허용"으로 처리되어, mail_read·채팅·게시판·
+캘린더·연락처·할일이 관리자가 모듈을 비활성화해도·RBAC 가 없어도 MCP 로 호출되었다. 내장 AI 의 DATA_TOOLS
+에도 같은 도구가 누락되어 외부 AI 데이터 차단을 우회했다.
 """
 
 import pytest
@@ -13,7 +13,7 @@ from app.mcp.server import Tool, execute_tool
 
 
 def test_every_registered_tool_is_mapped():
-    """새 도구를 만들고 TOOL_MODULE 을 빠뜨리면 여기서 깨진다(그 도구는 노출도 안 된다)."""
+    """새 도구를 생성하고 TOOL_MODULE 을 누락하면 이 테스트가 실패한다(해당 도구는 노출도 되지 않는다)."""
     missing = sorted(set(reg.WORKSPACE_TOOLS) - set(access.TOOL_MODULE))
     assert not missing, f"TOOL_MODULE 에 없는 도구: {missing}"
 
@@ -32,7 +32,7 @@ def test_data_tool_is_fail_closed():
         assert access.is_data_tool(name), name
     assert not access.is_data_tool("web_search")
     from app.ai import config as ai_config
-    assert "mail_read" in ai_config.DATA_TOOLS          # 옛 `in` 호환
+    assert "mail_read" in ai_config.DATA_TOOLS          # 이전 `in` 호환
     assert "web_search" not in ai_config.DATA_TOOLS
 
 

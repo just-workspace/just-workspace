@@ -126,7 +126,7 @@ def test_docgen_docx_xlsx_and_formula_injection():
 
     ws = openpyxl.load_workbook(io.BytesIO(docgen.build(s).data)).active
     assert ws.title == "일지 1" and ws["B3"].value == "=SUM(B2:B2)"
-    assert ws["A4"].data_type == "s"                       # 글자 그대로(수식 아님)
+    assert ws["A4"].data_type == "s"                       # 문자 그대로 저장(수식 아님)
     with pytest.raises(docgen.SpecError):
         docgen.normalize("xlsx", {"sheets": [{"rows": [[{"formula": "=WEBSERVICE(\"http://x\")"}]]}]})
     with pytest.raises(docgen.SpecError):
@@ -166,7 +166,7 @@ def test_tools_registered_with_access_and_risk():
 
 # ── 문서 하나: 쓰기 체계 + 링크 ───────────────────────────────
 async def test_docs_create_runs_immediately_everywhere_and_link_is_signed(env):
-    env.marks[("alice", "k1")] = {"kind": "mail"}            # 직전 외부 읽기여도 생성은 바로(auto_run)
+    env.marks[("alice", "k1")] = {"kind": "mail"}            # 직전 외부 읽기 상태여도 생성은 즉시 실행(auto_run)
     t = _ctx("mcp")
     try:
         r = await execute_tool("docs_create", DOCX, env.alice, scopes=SCOPES)
@@ -195,15 +195,15 @@ async def test_docs_create_runs_immediately_everywhere_and_link_is_signed(env):
     url = arts.download_url(a)
     q = dict(x.split("=") for x in url.split("?")[1].split("&"))
     req_ = SimpleNamespace(headers={})
-    with pytest.raises(HTTPException) as e:                   # 남의 것
+    with pytest.raises(HTTPException) as e:                   # 타인의 항목
         await ar.download_artifact(a.id, req_, q["exp"], q["sig"], user=env.bob, db=env.db)
     assert e.value.status_code == 404
-    with pytest.raises(HTTPException) as e:                   # 서명 틀림
+    with pytest.raises(HTTPException) as e:                   # 서명 불일치
         await ar.download_artifact(a.id, req_, q["exp"], "0" * 40, user=env.alice, db=env.db)
     assert e.value.status_code == 410
     assert arts.check_sig(a, "alice", q["exp"], q["sig"]) and not arts.check_sig(a, "bob", q["exp"], q["sig"])
 
-    # 만료 → 링크 만료 + 다시 만들기
+    # 만료 → 링크 만료 + 재생성
     a.expires_at = arts._now() - timedelta(minutes=1)
     await env.db.commit()
     got = await ar.get_artifact(a.id, user=env.alice, db=env.db)
@@ -249,7 +249,7 @@ async def test_bundle_partial_failure_retry_and_save(env, monkeypatch):
     assert j["items"][1]["error"] == "변환 실패" and env.notes == [job["id"]]
     zpath = arts.file_path(j["zip"]["id"])
     names = zipfile.ZipFile(zpath).namelist()
-    assert names == ["VPN 장애 보고서.docx", "VPN 장애 보고서 (2).docx"]   # 만든 것만, 이름 겹침 구분
+    assert names == ["VPN 장애 보고서.docx", "VPN 장애 보고서 (2).docx"]   # 생성된 항목만, 이름 중복 구분
 
     monkeypatch.setattr(docgen, "build", real_build)
     j = await ar.retry_job_item(job["id"], 1, user=env.alice, db=env.db)
@@ -264,7 +264,7 @@ async def test_bundle_partial_failure_retry_and_save(env, monkeypatch):
     folder = env.root / "users" / "alice" / "AI 결과물" / f"{today} VPN 장애 보고서 초안"
     assert sorted(p.name for p in folder.iterdir()) == ["VPN 장애 보고서 (2).docx", "VPN 장애 보고서.docx", "장애 일지.xlsx"]
     assert saved["job"]["saved_label"].startswith("내 파일 › AI 결과물")
-    # 다시 저장해도 덮지 않는다
+    # 재저장해도 덮어쓰지 않는다
     one = j["items"][0]["artifact_id"]
     s2 = await ar.save_artifact(one, user=env.alice, db=env.db)
     assert s2["files"][0]["name"] == "VPN 장애 보고서 (3).docx" and s2["artifact"]["saved_path"].endswith("(3).docx")
@@ -314,7 +314,7 @@ def _seed_22(env):
     (me / "보고서" / "sub" / "회의록.txt").write_text("b", encoding="utf-8")
     (me / "메모.txt").write_text("same", encoding="utf-8")
     (me / "x").mkdir()
-    (me / "x" / "메모.txt").write_text("same", encoding="utf-8")       # 같은 이름·같은 내용
+    (me / "x" / "메모.txt").write_text("same", encoding="utf-8")       # 동일 이름·동일 내용
     (env.root / "users" / "bob" / "secret.txt").write_text("bob", encoding="utf-8")
     return me
 
@@ -326,7 +326,7 @@ async def test_files_zip_22_files_and_folder_sync_result(env):
     assert r["ok"] and r["result"]["status"] == "executed", r
     out = r["result"]["result"]
     keys = list(out)
-    assert keys[:4] == ["status", "job_id", "path", "size"]                 # 요약이 맨 앞
+    assert keys[:4] == ["status", "job_id", "path", "size"]                 # 요약이 최상단
     today = arts._now().astimezone(__import__("zoneinfo").ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d")
     assert out["path"] == f"my/AI 결과물/{today} 새 대화/묶음.zip" and out["files"] == 24
     assert out["skipped"] == [{"path": "users/bob/secret.txt", "reason": "권한 없음"}] and out["deduped"] == []
@@ -336,7 +336,7 @@ async def test_files_zip_22_files_and_folder_sync_result(env):
     zf = zipfile.ZipFile(zpath)
     names = zf.namelist()
     assert "보고서/회의록.txt" in names and "보고서/sub/회의록.txt" in names     # 폴더 구조 유지
-    assert "메모.txt" in names and "x/메모.txt" in names                       # 같은 이름 = 상대 경로로 둘 다
+    assert "메모.txt" in names and "x/메모.txt" in names                       # 동일 이름 = 상대 경로로 둘 다 포함
     # 한글 이름 = UTF-8 EFS 플래그(bit 11) — Windows 10+·macOS 모두 정상
     for i in zf.infolist():
         if not i.filename.isascii():
@@ -353,14 +353,14 @@ async def test_files_zip_names_conflict_modes_dedupe_and_cp949(env):
     both = {"paths": ["my/메모.txt", "my/x/메모.txt"]}
     r = await _zip(env, {**both, "zip_name": "a"})
     names = zipfile.ZipFile(me / "AI 결과물" / r["result"]["result"]["path"].split("AI 결과물/")[1]).namelist()
-    assert {"메모.txt", "x/메모.txt"} <= set(names)                            # 둘 다 들어감(dedupe off)
+    assert {"메모.txt", "x/메모.txt"} <= set(names)                            # 둘 다 포함(dedupe off)
     r = await _zip(env, {**both, "zip_name": "b", "conflict": "suffix"})
     p = env.root / "users" / "alice" / r["result"]["result"]["path"][3:]
     assert {"메모.txt", "메모 (2).txt"} <= set(zipfile.ZipFile(p).namelist())
     r = await _zip(env, {**both, "zip_name": "c", "dedupe": True})
     out = r["result"]["result"]
     assert out["files"] == 1 and out["deduped"] == [{"path": "my/x/메모.txt", "same_as": "my/메모.txt"}]
-    # cp949 — 표시 끄고 cp949 바이트, cp949 로 못 쓰는 이름(이모지)은 UTF-8+경고
+    # cp949 — 표시 해제 후 cp949 바이트, cp949 로 표현 불가한 이름(이모지)은 UTF-8+경고
     (me / "웃음😀.txt").write_text("e", encoding="utf-8")
     r = await _zip(env, {"paths": ["my/메모.txt", "my/웃음😀.txt"], "zip_name": "d", "encoding": "cp949"})
     out = r["result"]["result"]
@@ -451,7 +451,7 @@ async def test_zip_can_be_shared_and_attached(env, monkeypatch):
     assert bad.get("error_code") in ("forbidden", "not_found")
     bad = await mail_write_tool.mail_save_draft(env.alice, subject="x", attachments=["my/보고서"])
     assert bad.get("error_code") == "invalid_argument"
-    # 채팅 첨부 — 보내기 전에 전부 검사(폴더·남의 파일은 거절)
+    # 채팅 첨부 — 송신 전에 전부 검사(폴더·타인의 파일은 거부)
     c = await collab_write_tool.chat_send_message(env.alice, "ch1", attachments=["my/보고서"])
     assert c.get("error_code") == "invalid_argument"
     c = await collab_write_tool.chat_send_message(env.alice, "ch1", attachments=["users/bob/secret.txt"])
@@ -498,7 +498,7 @@ async def test_archive_list_and_unzip_defenses(env):
         assert lst["ok"] and lst["result"]["untrusted"] is True
         ents = {e["name"]: e for e in lst["result"]["data"]["entries"]}
         assert ents["../evil.txt"].get("unsafe") and not ents["b.txt"].get("unsafe")
-        (me / "in").mkdir()      # 같은 이름 폴더가 있으면 새 폴더는 " (2)"
+        (me / "in").mkdir()      # 동일 이름 폴더가 있으면 새 폴더는 " (2)"
         r = await execute_tool("files_unzip", {"path": "my/in.zip"}, env.alice, scopes=SCOPES)
     finally:
         writes.call_context.reset(t)
@@ -517,7 +517,7 @@ async def test_archive_list_and_unzip_defenses(env):
         writes.call_context.reset(t)
     assert r["result"]["status"] == "pending_confirmation"
 
-    # 덮어쓰지 않기(새 폴더 없이 풀 때)
+    # 덮어쓰기 금지(새 폴더 없이 풀 때)
     t = _ctx("mcp")
     try:
         (me / "b.txt").write_text("old", encoding="utf-8")

@@ -1,11 +1,11 @@
-"""Redis 에만 있던 값을 DB 로 — 기동할 때 한 번 훑는다.
+"""Redis 전용 값의 DB 이전 — 기동 시 1회 수행한다.
 
-개인 잠금 PIN, POP3 의 읽음·별표, 새 메일 감시의 마지막 UID 는 예전에 Redis 에만 있었다(백업에 들지 않는다).
-각 코드는 처음 읽을 때 스스로 옮기지만(app/privacy/gate.py, app/mail/pop3_client.py, app/mail/poller.py),
-그것만으로는 "업데이트한 뒤 한 번도 읽히지 않은 값"이 Redis 에 남는다 — 그 상태로 백업해 서버를 옮기면 잃는다.
-그래서 서버가 뜰 때 남은 것을 마저 옮긴다. 옮기는 방법은 각 모듈의 것을 그대로 쓴다(여러 번 돌아도 같다).
+개인 잠금 PIN, POP3 의 읽음·별표, 새 메일 감시의 마지막 UID 는 과거 Redis 에만 저장되었다(백업 미포함).
+각 코드는 최초 조회 시 자체적으로 이전하지만(app/privacy/gate.py, app/mail/pop3_client.py, app/mail/poller.py),
+이것만으로는 "업데이트한 뒤 한 번도 읽히지 않은 값"이 Redis 에 잔류한다 — 그 상태로 백업하여 서버를 이전하면 유실된다.
+따라서 서버 기동 시 잔여 값을 이전한다. 이전 방식은 각 모듈의 구현을 그대로 사용한다(반복 실행해도 결과 동일).
 
-Redis 의 예전 키는 지우지 않는다 — 이유는 docs/data-safety.md 의 "Redis 에서 DB 로 옮긴 값".
+Redis 의 기존 키는 삭제하지 않는다 — 사유는 docs/data-safety.md 의 "Redis 에서 DB 로 옮긴 값".
 """
 
 from __future__ import annotations
@@ -22,19 +22,19 @@ from app.db.session import async_session
 logger = logging.getLogger(__name__)
 
 _LOCK_KEY = "handoff:redis-to-db:lock"
-_LOCK_TTL = 600        # 워커 여럿 가운데 하나만 훑는다
+_LOCK_TTL = 600        # 다수 워커 중 하나만 수행
 _START_DELAY = 20      # 기동 안정화 대기(초)
 
 
 async def sweep() -> dict[str, int]:
-    """남은 값을 옮긴다. 옮긴 건수를 돌려준다."""
+    """잔여 값을 이전한다. 이전 건수를 반환한다."""
     from app.mail import poller, pop3_client
     from app.privacy import gate
 
     redis = await get_redis()
     moved = {"pins": 0, "pop3_accounts": 0, "last_uids": 0}
 
-    # 개인 잠금 PIN — DB 에 없는 사용자의 키만
+    # 개인 잠금 PIN — DB 에 없는 사용자의 키만 대상
     async with async_session() as db:
         have = set((await db.execute(select(PrivacyPin.user_id))).scalars().all())
     prefix = gate._pin_key("")
@@ -45,9 +45,9 @@ async def sweep() -> dict[str, int]:
         if not uid or uid in have:
             continue
         try:
-            if await gate._pin_hash(uid):       # 읽으면 옮겨진다. 지워진 사용자의 키는 옮겨지지 않는다
+            if await gate._pin_hash(uid):       # 조회 시 이전됨. 삭제된 사용자의 키는 이전되지 않음
                 moved["pins"] += 1
-        except Exception as e:  # noqa: BLE001 — 하나가 막혀도 나머지는 옮긴다
+        except Exception as e:  # noqa: BLE001 — 일부 실패 시에도 나머지는 이전
             logger.warning("[handoff] PIN 을 옮기지 못했습니다(%s): %s", uid, e)
 
     async with async_session() as db:
@@ -67,7 +67,7 @@ async def sweep() -> dict[str, int]:
 
 
 async def run_handoff() -> None:
-    """기동 뒤 한 번. 실패해도 서버는 그대로 돈다 — 각 값은 처음 읽힐 때 다시 옮겨진다."""
+    """기동 후 1회 수행한다. 실패해도 서버 동작에는 영향이 없다 — 각 값은 최초 조회 시 다시 이전된다."""
     await asyncio.sleep(_START_DELAY)
     try:
         redis = await get_redis()

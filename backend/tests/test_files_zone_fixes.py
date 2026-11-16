@@ -1,11 +1,11 @@
 """파일·공유·오피스 구역 전수조사 수정 고정.
 
-- 이름 검증 한곳(새 폴더·이름 바꾸기·업로드): 숨김(. 시작)·NAS 시스템 이름(@Recycle 등) 거부, 이름 중간의 `..` 는 허용
+- 이름 검증 단일화(새 폴더·이름 변경·업로드): 숨김(. 시작)·NAS 시스템 이름(@Recycle 등) 거부, 이름 중간의 `..` 는 허용
   ("@프로젝트" 같은 일반 @ 이름은 허용 — filesdec_names_test.py)
-- 휴지통 표시 이름(밑줄이 든 이름이 잘리지 않는다)
-- 덮어쓰기 업로드가 실패해도 원본이 남는다(.part → os.replace), 대상이 폴더면 409
-- 보안: 할당 우회(세션 size=0·복사), 공유 링크가 경로가 아니라 항목을 따라감, 링크 비밀번호 시도 제한,
-        WOPI 로 횟수·내려받기 막음 우회, 회수한 편집 링크의 손님 토큰, shared/ 문서 편집 세션 키
+- 휴지통 표시 이름(밑줄이 포함된 이름이 잘리지 않는다)
+- 덮어쓰기 업로드가 실패해도 원본이 보존된다(.part → os.replace), 대상이 폴더면 409
+- 보안: 할당 우회(세션 size=0·복사), 공유 링크가 경로가 아닌 항목을 추종, 링크 비밀번호 시도 제한,
+        WOPI 를 통한 횟수·내려받기 막음 우회, 회수한 편집 링크의 손님 토큰, shared/ 문서 편집 세션 키
 """
 
 import io
@@ -60,7 +60,7 @@ async def test_mkdir_and_rename_refuse_hidden_names(env):
         assert not (env.home / "docs" / name).exists()
         assert await _status(fr.rename_file(body=RenameRequest(path="my/docs/a.txt", new_name=name),
                                             user=env.alice, db=env.db)) == 400
-    assert (env.home / "docs" / "a.txt").is_file()        # 그대로
+    assert (env.home / "docs" / "a.txt").is_file()        # 변경 없음
     r = await fr.rename_file(body=RenameRequest(path="my/docs/a.txt", new_name="a..b.txt"), user=env.alice, db=env.db)
     assert r["new_name"] == "a..b.txt"
 
@@ -73,7 +73,7 @@ async def test_upload_name_rules(env):
         await _upload(env, ".env")
     assert e.value.status_code == 400 and "올릴 수 없는 파일 이름" in e.value.detail
     assert await _status(_upload(env, "..")) == 400
-    # 경로가 붙어 와도 끝 조각만 쓴다(탈출 없음)
+    # 경로가 포함되어도 마지막 조각만 사용(탈출 없음)
     r = await _upload(env, "../../evil.txt")
     assert r["path"] == "my/docs/evil.txt"
 
@@ -87,7 +87,7 @@ async def test_trash_shows_full_name_with_underscores(env):
     await fr.delete_file(path="my/docs/보고서_최종_v2.docx", permanent=False, user=env.alice, db=env.db)
     items = (await fr.list_trash(user=env.alice, db=env.db)).items
     assert [i.name for i in items] == ["보고서_최종_v2.docx"]
-    # 메타가 없을 때도 "<시각>_" 만 뗀다
+    # 메타가 없는 경우에도 "<시각>_" 만 제거
     assert fr._trash_display_name("20261114093000_a_b.txt", {}) == "a_b.txt"
     assert fr._trash_display_name("이름만", {}) == "이름만"
 
@@ -151,7 +151,7 @@ async def test_copy_checks_quota(env, monkeypatch):
     assert (env.home / "a.txt").is_file()
 
 
-# ─── 공유 링크가 항목을 따라간다 ───
+# ─── 공유 링크의 항목 추종 ───
 
 
 async def _get(env, token):
@@ -174,7 +174,7 @@ async def test_link_follows_rename_and_move(env):
     assert (await _get(env, link.token)).path.endswith("c.txt")
     await fr.move_file(body=MoveRequest(src="my/docs/c.txt", dst="my/docs/sub"), user=env.alice, db=env.db)
     assert (await _row(env, link.id)).file_path == "my/docs/sub/c.txt"
-    # 폴더 이름을 바꾸면 그 아래 링크도
+    # 폴더 이름 변경 시 하위 링크도 추종
     await fr.rename_file(body=RenameRequest(path="my/docs", new_name="문서"), user=env.alice, db=env.db)
     assert (await _row(env, link.id)).file_path == "my/문서/sub/c.txt"
     assert (await _get(env, link.token)).path.endswith("c.txt")
@@ -185,9 +185,9 @@ async def test_old_link_never_opens_new_file_at_same_path(env):
     link = await fr.create_share_link(body=ShareLinkCreate(path="my/docs/a.txt"), user=env.alice, db=env.db)
     r = await fr.delete_file(path="my/docs/a.txt", permanent=False, user=env.alice, db=env.db)
     assert await _status(_get(env, link.token)) == 404
-    await _upload(env, "a.txt", b"SECRET NEW FILE")          # 같은 자리에 새 파일
-    assert await _status(_get(env, link.token)) == 404       # 옛 링크로는 안 열린다
-    # 복원하면(자리가 차 있어 "a (1).txt") 링크가 그 파일로 돌아온다
+    await _upload(env, "a.txt", b"SECRET NEW FILE")          # 동일 위치에 새 파일
+    assert await _status(_get(env, link.token)) == 404       # 이전 링크로는 열람 불가
+    # 복원 시(위치가 점유되어 "a (1).txt") 링크가 해당 파일로 복귀
     await fr.restore_from_trash(body=TrashRestoreRequest(trash_name=r["trash_name"]), user=env.alice, db=env.db)
     row = await _row(env, link.id)
     assert row.file_path == "my/docs/a (1).txt"
@@ -203,7 +203,7 @@ async def test_permanent_delete_and_trash_purge_drop_links(env):
                                        user=env.alice, db=env.db)
     await fr.delete_file(path="my/docs/a.txt", permanent=True, user=env.alice, db=env.db)
     assert await _row(env, l1.id) is None
-    m = await _row(env, multi.id)                         # 묶음은 그 항목만 빠진다
+    m = await _row(env, multi.id)                         # 묶음에서는 해당 항목만 제외
     assert fr._link_paths(m) == ["my/img.png"] and m.file_path == "my/img.png"
     r = await fr.delete_file(path="my/img.png", permanent=False, user=env.alice, db=env.db)
     assert (await _row(env, l2.id)).file_path.startswith("trash/alice/")
@@ -213,7 +213,7 @@ async def test_permanent_delete_and_trash_purge_drop_links(env):
 
 @pytest.mark.asyncio
 async def test_stale_link_at_destination_is_dropped_on_rename(env):
-    """수정 전에 지워진 파일의 링크가 남아 있어도, 다른 파일이 그 이름이 되는 순간 정리된다."""
+    """수정 전에 삭제된 파일의 링크가 잔존해도, 다른 파일이 해당 이름을 갖는 시점에 정리된다."""
     stale = ShareLink(token="stale-token", file_path="my/docs/old.txt", display_name="old.txt", created_by="alice")
     env.db.add(stale)
     await env.db.commit()
@@ -231,10 +231,10 @@ async def test_team_folder_link_follows_and_others_my_links_untouched(env):
     bobs = await fr.create_share_link(body=ShareLinkCreate(path="my/docs/a.txt"), user=env.bob, db=env.db)
     await fr.rename_file(body=RenameRequest(path="shared/t.txt", new_name="t2.txt"), user=env.alice, db=env.db)
     assert (await _row(env, team.id)).file_path == "shared/t2.txt"
-    # alice 가 자기 my/docs/a.txt 를 바꿔도 bob 의 같은 경로 링크는 그대로
+    # alice 가 본인의 my/docs/a.txt 를 변경해도 bob 의 동일 경로 링크는 유지
     await fr.rename_file(body=RenameRequest(path="my/docs/a.txt", new_name="z.txt"), user=env.alice, db=env.db)
     assert (await _row(env, bobs.id)).file_path == "my/docs/a.txt"
-    # 팀 폴더 → 내 파일로 옮기면 남이 만든 링크는 정리된다(my/ 는 만든 사람 영역으로 풀리므로)
+    # 팀 폴더 → 내 파일로 이동 시 타인이 생성한 링크는 정리(my/ 는 생성자 영역으로 해석되므로)
     await fr.move_file(body=MoveRequest(src="shared/t2.txt", dst="my"), user=env.alice, db=env.db)
     assert await _row(env, team.id) is None
 
@@ -270,7 +270,7 @@ def redis(monkeypatch):
         return r
 
     monkeypatch.setattr(fr, "_unlock_redis", _get)
-    # 해시 계산을 빼 테스트를 가볍게(대조 규칙만 본다)
+    # 해시 계산을 제외하여 테스트 부하 경감(대조 규칙만 확인)
     import app.auth.password as pw
     monkeypatch.setattr(pw, "hash_password", lambda p: "H:" + p)
     monkeypatch.setattr(pw, "verify_password", lambda p, h: h == "H:" + p)
@@ -285,10 +285,10 @@ async def test_unlock_is_rate_limited(env, redis):
         assert await _status(fr.unlock_shared(token=link.token, body=ShareUnlockRequest(password="bad"),
                                               request=Req(), db=env.db)) == 401
     assert list(redis.ttl.values()) == [fr.UNLOCK_WINDOW_S]
-    # 한도를 넘으면 맞는 비밀번호도 429(대입 차단)
+    # 한도 초과 시 올바른 비밀번호도 429(대입 차단)
     assert await _status(fr.unlock_shared(token=link.token, body=ShareUnlockRequest(password="pw1234"),
                                           request=Req(), db=env.db)) == 429
-    # 헤더로 보내는 길, 편집기 여는 길도 같은 집계
+    # 헤더 전송 경로, 편집기 열기 경로도 동일 집계
     assert await _status(fr.download_shared(token=link.token, request=Req({"X-Share-Password": "pw1234"}),
                                             access=None, inline=False, sub=None, db=env.db)) == 429
     from app.wopi import share as wshare
@@ -305,7 +305,7 @@ async def test_unlock_success_resets_counter_and_ip_is_separate(env, redis):
                                        request=Req(), db=env.db))
     r = await fr.unlock_shared(token=link.token, body=ShareUnlockRequest(password="pw1234"), request=Req(), db=env.db)
     assert r["access"] and redis.kv == {}
-    # 다른 주소·다른 링크는 따로 센다
+    # 다른 주소·다른 링크는 별도 집계
     assert fr._unlock_key("t1", None) != fr._unlock_key("t2", None)
 
     class _R(Req):
@@ -357,15 +357,15 @@ async def test_wopi_open_respects_download_limits(env, office):
     _wr, wshare = office
     body = wshare.SharedOpenRequest(name="손님")
     once = await fr.create_share_link(body=ShareLinkCreate(path="my/docs/r.docx", one_time=True), user=env.alice, db=env.db)
-    assert (await wshare.open_shared(token=once.token, body=body, db=env.db)).can_edit is False   # 쓰기 전엔 열린다
+    assert (await wshare.open_shared(token=once.token, body=body, db=env.db)).can_edit is False   # 사용 전에는 열람 가능
     await _get(env, once.token)                                                                # 1회 사용
     assert await _status(wshare.open_shared(token=once.token, body=body, db=env.db)) == 410
-    # 미리보기 안 되는 형식에 "내려받기 막음"은 이제 만들 때 400 — 예전에 만들어진 링크(직접 갱신)로 확인한다
+    # 미리보기 미지원 형식에 "내려받기 막음"은 현재 생성 시 400 — 과거 생성된 링크(직접 갱신)로 확인
     nodl = await fr.create_share_link(body=ShareLinkCreate(path="my/docs/r.docx"), user=env.alice, db=env.db)
     (await env.db.get(ShareLink, nodl.id)).allow_download = False
     await env.db.commit()
     assert await _status(wshare.open_shared(token=nodl.token, body=body, db=env.db)) == 403
-    # 같이 편집 링크는 그대로 열린다
+    # 같이 편집 링크는 변경 없이 열람 가능
     edit = await fr.create_share_link(body=ShareLinkCreate(path="my/docs/r.docx", can_edit=True), user=env.alice, db=env.db)
     assert (await wshare.open_shared(token=edit.token, body=body, db=env.db)).can_edit is True
 
@@ -377,8 +377,8 @@ async def test_revoked_edit_link_guest_cannot_save(env, office):
     link = await fr.create_share_link(body=ShareLinkCreate(path="my/docs/r.docx", can_edit=True), user=env.alice, db=env.db)
     tok = validate_wopi_token((await wshare.open_shared(token=link.token, body=wshare.SharedOpenRequest(), db=env.db)).token)
     assert tok["link_id"] == link.id and tok["user_id"].startswith("guest-")
-    await wr._recheck_share_edit(tok, "my/docs/r.docx", env.db)            # 살아 있는 링크 — 통과
-    # 같이 편집을 끄면(직접 갱신) 거부
+    await wr._recheck_share_edit(tok, "my/docs/r.docx", env.db)            # 유효한 링크 — 통과
+    # 같이 편집 비활성화(직접 갱신) 시 거부
     row = await env.db.get(ShareLink, link.id)
     row.can_edit = False
     await env.db.commit()
@@ -386,10 +386,10 @@ async def test_revoked_edit_link_guest_cannot_save(env, office):
     row.can_edit = True
     await env.db.commit()
     await wr._recheck_share_edit(tok, "my/docs/r.docx", env.db)
-    # 회수(삭제)하면 거부
+    # 회수(삭제) 시 거부
     await fr.delete_share_link(link_id=link.id, user=env.alice, db=env.db)
     assert await _status(wr._recheck_share_edit(tok, "my/docs/r.docx", env.db)) == 403
-    # link_id 없는 옛 손님 토큰(배포 전 발급)은 그대로 통과 — 호환
+    # link_id 없는 이전 손님 토큰(배포 전 발급)은 그대로 통과 — 호환
     await wr._recheck_share_edit({"user_id": "guest-1", "owner_id": "alice"}, "my/docs/r.docx", env.db)
 
 
@@ -403,23 +403,23 @@ async def test_team_folder_document_shares_one_session(env, office):
     (env.root / "shared" / "회의록.docx").write_bytes(b"PK")
     ra = await wr.open_editor(req=EditorOpenRequest(path="shared/회의록.docx"), user=env.alice, db=env.db)
     rb = await wr.open_editor(req=EditorOpenRequest(path="/shared/회의록.docx"), user=env.bob, db=env.db)
-    assert ra.wopi_src == rb.wopi_src                                   # 같은 편집 세션
+    assert ra.wopi_src == rb.wopi_src                                   # 동일 편집 세션
     ta, tb = validate_wopi_token(ra.token), validate_wopi_token(rb.token)
     fid = ra.wopi_src.rsplit("/", 1)[-1]
     assert wr._check_token_file(ta, fid) == wr._check_token_file(tb, fid) == "shared/회의록.docx"
     assert wr._lock_subject(ta, "shared/회의록.docx") == wr._lock_subject(tb, "shared/회의록.docx") \
         == locks.subject("shared", "shared/회의록.docx")
-    # 경로를 풀 사용자는 여전히 각자(shared/ 는 누구로 풀어도 같은 파일)
+    # 경로를 해석할 사용자는 여전히 각자(shared/ 는 어느 사용자로 해석해도 동일 파일)
     assert ta["owner_id"] == "alice" and tb["owner_id"] == "bob"
-    # 내 파일은 예전처럼 사용자마다 따로
+    # 내 파일은 기존과 동일하게 사용자별로 분리
     m = await wr.open_editor(req=EditorOpenRequest(path="my/docs/r.docx"), user=env.alice, db=env.db)
     assert m.wopi_src.rsplit("/", 1)[-1] == wr._encode_file_id("my/docs/r.docx", "alice")
-    # 호환: 배포 전에 받은 토큰(scope 없음)은 옛 file_id·옛 잠금 키로 계속 통과한다
+    # 호환: 배포 전 발급 토큰(scope 없음)은 이전 file_id·이전 잠금 키로 계속 통과
     old = validate_wopi_token(create_wopi_token(user_id="alice", user_name="A", virtual_path="shared/회의록.docx"))
     old_fid = wr._encode_file_id("shared/회의록.docx", "alice")
     assert wr._check_token_file(old, old_fid) == "shared/회의록.docx"
     assert wr._lock_subject(old, "shared/회의록.docx") == locks.subject("alice", "shared/회의록.docx")
-    # 새 토큰으로 옛 file_id 를 쓰거나 그 반대는 거부(세션이 섞이지 않는다)
+    # 새 토큰으로 이전 file_id 를 사용하거나 그 반대는 거부(세션 혼입 방지)
     assert await _status(_call(wr._check_token_file, ta, old_fid)) == 403
     assert await _status(_call(wr._check_token_file, old, fid)) == 403
 

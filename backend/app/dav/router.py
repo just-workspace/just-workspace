@@ -402,7 +402,7 @@ class DavApp:
         elif rt == "calendar" and report_tag == C("calendar-query"):
             cal = await svc.get_calendar(db, route["col"])
             if cal and cal.user_id == user.id:
-                # 참석자·회차 예외를 일정마다 따로 조회하지 않고 한 번에(N+1 방지)
+                # 참석자·회차 예외를 일정별로 개별 조회하지 않고 일괄 조회(N+1 방지)
                 from app.calendar.service import ical_items_for
                 from app.dav.ical_utils import event_to_ical
                 events = await svc.get_calendar_events(db, cal.id)

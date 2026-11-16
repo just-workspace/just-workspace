@@ -47,18 +47,18 @@ logger = logging.getLogger(__name__)
 
 
 # ── 감사 로그 ──
-# audit_logs 테이블과 log_action() 은 있었지만 **호출하는 데가 없어 항상 비어 있었다.**
-# "누가 언제 무슨 설정을 바꿨나" 를 답할 수 없는 상태였다. 계정·권한·세션·설정처럼
-# 되돌리기 어렵거나 보안에 직결되는 변경에만 남긴다(전 요청 로깅은 access_logs 담당).
+# audit_logs 테이블과 log_action() 은 존재했으나 **호출 지점이 없어 항상 비어 있었다.**
+# "누가 언제 무슨 설정을 바꿨나" 에 답할 수 없는 상태였다. 계정·권한·세션·설정과 같이
+# 복원이 어렵거나 보안에 직결되는 변경에 한해 기록한다(전 요청 로깅은 access_logs 담당).
 from app.admin import audit  # noqa: E402
 from app.files import retention  # noqa: E402  — 보존 정책 키·기본값
 
 
 def _client_ip(request: Request | None) -> str | None:
-    """감사 로그용 클라이언트 IP — `auth.sessions.client_ip` 와 같은 규칙.
+    """감사 로그용 클라이언트 IP — `auth.sessions.client_ip` 와 동일한 규칙.
 
-    예전엔 X-Forwarded-For 첫 값을 믿었다. RP 는 XFF 를 덮어쓰지 않고 이어 붙이므로
-    인터넷에서 보낸 위조값이 첫 값으로 남아 감사 로그에 그대로 찍혔다.
+    기존에는 X-Forwarded-For 첫 값을 신뢰했다. RP 는 XFF 를 덮어쓰지 않고 뒤에 추가하므로
+    인터넷에서 송신한 위조 값이 첫 값으로 남아 감사 로그에 그대로 기록되었다.
     """
     if request is None:
         return None
@@ -92,7 +92,7 @@ async def logout_all_sessions(
     from app.auth import sessions as sess_mod
     from app.auth.oauth_store import revoke_user_refresh_tokens
     result = await db.execute(update(User).values(token_version=User.token_version + 1))
-    # 데스크톱 앱·MCP 커넥터의 리프레시 토큰도 전부 끊는다(웹 세션만 끊으면 그쪽은 살아 있다)
+    # 데스크톱 앱·MCP 커넥터의 리프레시 토큰도 전부 폐기한다(웹 세션만 종료하면 해당 토큰은 유효 상태로 남는다)
     await revoke_user_refresh_tokens(db, None)
     await db.commit()
     cleared = await sess_mod.revoke_all_sessions()
@@ -152,9 +152,9 @@ async def revoke_session(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """단일 세션(기기) 원격 로그아웃 — IP/hostname으로 식별한 그 세션만 종료."""
+    """단일 세션(기기) 원격 로그아웃 — IP/hostname 으로 식별한 해당 세션만 종료."""
     from app.auth import sessions as sess_mod
-    # 누구 세션이었는지는 지우기 전에만 알 수 있다(감사 로그용). sid 원문은 남기지 않는다.
+    # 세션 소유자는 삭제 전에만 확인 가능하다(감사 로그용). sid 원문은 기록하지 않는다.
     try:
         owner = ((await sess_mod.get_session(sid)) or {}).get("user_id")
     except Exception:
@@ -173,8 +173,8 @@ async def revoke_session(
 def user_status(u: User) -> str:
     """active(사용 중) | pending(가입 승인 대기) | suspended(관리자가 정지).
 
-    정지 시각(suspended_at)이 생기기 전에 비활성화된 사용자는 로그인 이력으로 가른다 —
-    한 번이라도 로그인했으면 정지, 아니면 승인 대기.
+    정지 시각(suspended_at) 도입 이전에 비활성화된 사용자는 로그인 이력으로 구분한다 —
+    1회 이상 로그인했으면 정지, 아니면 승인 대기.
     """
     if u.is_active:
         return "active"
@@ -231,7 +231,7 @@ def _user_row(u: User, groups: list[dict] | None = None) -> dict:
         "suspended_at": u.suspended_at.isoformat() if getattr(u, "suspended_at", None) else None,
         "avatar_url": u.avatar_url,
         "auth_source": u.auth_source or "local",
-        # 관리 사용자 메뉴 "2단계 인증 초기화" 를 켠 사람에게만 보이게
+        # 관리 사용자 메뉴 "2단계 인증 초기화" 를 2단계 인증 활성화 사용자에게만 표시
         "has_2fa": bool(u.totp_secret),
         "groups": groups or [],
     }
@@ -251,11 +251,11 @@ async def list_users(
 ):
     """List all users.
 
-    인자 없이 부르면 예전처럼 전체 배열(최근 가입순). 걸러 보기:
-      q(아이디·이름·메일 부분일치) · status(active|pending|suspended, 쉼표로 여럿 = 그중 하나) · group(그룹 id) ·
+    인자 없이 호출하면 기존과 동일하게 전체 배열(최근 가입순)을 반환한다. 필터:
+      q(아이디·이름·메일 부분 일치) · status(active|pending|suspended, 쉼표로 복수 지정 = 그중 하나) · group(그룹 id) ·
       role(admin|member) ·
-      sort(created_at|username|display_name|last_login_at|email, 앞에 '-' 면 내림차순; 기본 -created_at)
-    page/size 를 주면 {users, total, page, size} 로 감싸서 준다(page 는 1부터).
+      sort(created_at|username|display_name|last_login_at|email, 앞에 '-' 가 있으면 내림차순; 기본 -created_at)
+    page/size 를 지정하면 {users, total, page, size} 형태로 반환한다(page 는 1부터).
     """
     from sqlalchemy import or_
 
@@ -319,11 +319,11 @@ async def list_pending_users(
             "display_name": u.display_name,
             "email": u.email,
             "recovery_email": u.recovery_email,
-            # 승인자가 "이 사람이 메일 인증을 했는지" 를 보고 판단할 수 있어야 한다
+            # 승인자가 "이 사람이 메일 인증을 했는지" 를 확인하여 판단할 수 있어야 한다
             "email_verified": u.email_verified,
             "email_verify_sent_at": u.email_verify_sent_at.isoformat() if u.email_verify_sent_at else None,
             "created_at": u.created_at.isoformat() if u.created_at else None,
-            # 한 번이라도 로그인했으면 "정지"(비활성화된 기존 사용자), 없으면 "승인 대기"
+            # 1회 이상 로그인했으면 "정지"(비활성화된 기존 사용자), 이력이 없으면 "승인 대기"
             "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
             "status": user_status(u),
         }
@@ -332,10 +332,10 @@ async def list_pending_users(
 
 
 async def mailbox_exists(email: str) -> bool:
-    """내장 메일서버에 이 주소의 계정이 이미 있는가(정확히 같은 주소만).
+    """내장 메일서버에 해당 주소의 계정이 이미 존재하는지 여부(완전 일치 주소만).
 
-    app.mail.mailserver.account_exists 는 목록 출력에 문자열이 들어 있는지만 봐서 "min@" 이
-    "jimin@" 에도 맞는다. 가입 차단에 쓰면 멀쩡한 이름까지 막으므로 주소 단위로 가른다.
+    app.mail.mailserver.account_exists 는 목록 출력의 문자열 포함 여부만 확인하므로 "min@" 이
+    "jimin@" 에도 일치한다. 가입 차단에 사용하면 정상 이름까지 차단되므로 주소 단위로 구분한다.
     """
     import re
     from app.mail import mailserver
@@ -350,20 +350,20 @@ async def mailbox_exists(email: str) -> bool:
 async def activate_user(db: AsyncSession, user: User, send_welcome: bool = True) -> bool:
     """승인 처리 본체 — 메일 사서함 보장·활성화·기본 캘린더/주소록·환영 메일.
 
-    승인 버튼(approve_user)·일괄 승인·초대 링크 가입이 같이 쓴다. 메일 사서함 생성 성공 여부를 돌려준다.
+    승인 버튼(approve_user)·일괄 승인·초대 링크 가입이 공용한다. 메일 사서함 생성 성공 여부를 반환한다.
     """
     # Ensure mail account exists in docker-mailserver (only if built-in mailserver is enabled)
     #
-    # 빈 비밀번호로 만들 수는 없다 — docker-mailserver 의 addmailuser 가
-    # "Password must not be empty" 로 중단한다. 그러면 계정이 accounts.cf 에
-    # 들어가지 않아 postfix 의 virtual_mailbox_maps 에도 없고, 그 주소로 오는
+    # 빈 비밀번호로는 생성할 수 없다 — docker-mailserver 의 addmailuser 가
+    # "Password must not be empty" 로 중단한다. 이 경우 계정이 accounts.cf 에
+    # 등록되지 않아 postfix 의 virtual_mailbox_maps 에도 누락되고, 해당 주소로 수신되는
     # 메일이 전부 550 "User unknown in virtual mailbox table" 로 반송된다.
     #
-    # 여기 넣는 비밀번호는 아무 의미 없는 값이다. 메일 비밀번호 동기화는 폐지됐고
+    # 여기서 지정하는 비밀번호는 의미 없는 값이다. 메일 비밀번호 동기화는 폐지되었고
     # (dovecot passdb lua → 백엔드 /api/internal/mail-auth) 인증은 워크스페이스
-    # 비밀번호로 그때그때 확인한다. 사서함은 postfix 라우팅을 위해 accounts.cf 에
-    # 존재하기만 하면 된다. 가입 시점이 아니라 승인 시점에 만드는 이유는,
-    # 승인 전 계정까지 사서함을 주면 스팸 가입자가 우리 도메인 주소를 갖기 때문.
+    # 비밀번호로 매 요청 시 검증한다. 사서함은 postfix 라우팅을 위해 accounts.cf 에
+    # 존재하기만 하면 충분하다. 가입 시점이 아닌 승인 시점에 생성하는 이유는,
+    # 승인 전 계정에까지 사서함을 부여하면 스팸 가입자가 본 서버 도메인 주소를 보유하게 되기 때문이다.
     mail_created = True
     if await builtin_mailserver_enabled(db):
         try:
@@ -443,7 +443,7 @@ async def admin_resend_verification(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """관리자가 인증 메일을 다시 보낸다(쿨다운 없음 — 사람이 누르는 버튼)."""
+    """관리자가 인증 메일을 재발송한다(쿨다운 없음 — 수동 조작 버튼)."""
     from app.auth.router import issue_verification
 
     user = await db.get(User, user_id)
@@ -474,18 +474,18 @@ async def admin_password_reset_link(
 ):
     """비밀번호 재설정 링크를 발급한다.
 
-    복구 이메일로도 보내지만 링크 자체를 관리자에게 돌려준다 — 복구 이메일까지
-    잃어버린 사용자를 구제하는 게 이 기능의 존재 이유라서, 메일로만 보내면
-    정작 필요한 상황에서 쓸모가 없다. 관리자는 링크를 직접 전달하면 된다.
-    관리자가 비밀번호를 대신 정하지는 않는다(그러면 관리자가 남의 비밀번호를 알게 된다).
+    복구 이메일로도 발송하지만 링크 자체를 관리자에게 반환한다 — 복구 이메일까지
+    분실한 사용자의 구제가 본 기능의 목적이므로, 메일로만 발송하면
+    정작 필요한 상황에서 사용할 수 없다. 관리자가 링크를 직접 전달한다.
+    관리자가 비밀번호를 대신 지정하지는 않는다(지정 시 관리자가 타 사용자의 비밀번호를 알게 된다).
     """
     from app.auth.router import _send_recovery_email, _token_digest
 
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-    # 컬럼이 생기기 전에 만든 계정은 auth_source 가 NULL 이다 — 로컬 계정으로 본다.
-    # (예전엔 NULL != "local" 이라 오래된 로컬 계정이 전부 "외부 인증"으로 막혔다)
+    # 컬럼 도입 이전에 생성된 계정은 auth_source 가 NULL 이다 — 로컬 계정으로 간주한다.
+    # (기존에는 NULL != "local" 이어서 오래된 로컬 계정이 전부 "외부 인증"으로 차단되었다)
     if (user.auth_source or "local") != "local":
         raise HTTPException(status_code=400, detail="외부 인증(LDAP) 사용자는 여기서 재설정할 수 없습니다")
 
@@ -524,8 +524,8 @@ async def reject_user(
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-    # 거절은 "가입 승인 대기"에만 쓴다. 가드가 없어서 활성 사용자·자기 자신·마지막 관리자도 이 경로로
-    # 지울 수 있었다(삭제 API 의 사용자명 확인·소유 이전·마지막 관리자 검사를 전부 건너뜀).
+    # 거절은 "가입 승인 대기"에만 적용한다. 가드가 없어 활성 사용자·자기 자신·마지막 관리자도 이 경로로
+    # 삭제할 수 있었다(삭제 API 의 사용자명 확인·소유 이전·마지막 관리자 검사를 전부 우회).
     if user_status(user) != "pending":
         raise HTTPException(
             status_code=400,
@@ -534,10 +534,10 @@ async def reject_user(
     # 아래에서 삭제되므로 감사 로그용으로 미리 확보한다.
     rejected_username = user.username
 
-    # 메일 계정은 건드리지 않는다. 승인 대기 계정은 사서함이 없다(승인 때 만든다) — 여기서
-    # `setup email del -y <주소>` 를 돌리면 지워지는 건 언제나 같은 주소의 **남의** 사서함이다
-    # (시스템 발송 계정 noreply@, 손으로 만든 공용 사서함, 삭제된 사용자의 보존 사서함).
-    # 누가 그런 이름으로 가입 신청만 해도 관리자의 "거절" 한 번에 메일 데이터가 사라졌다.
+    # 메일 계정은 변경하지 않는다. 승인 대기 계정에는 사서함이 없다(승인 시 생성) — 여기서
+    # `setup email del -y <주소>` 를 실행하면 삭제되는 것은 항상 동일 주소의 **타 사서함**이다
+    # (시스템 발송 계정 noreply@, 수동 생성한 공용 사서함, 삭제된 사용자의 보존 사서함).
+    # 해당 이름으로 가입 신청만 해도 관리자의 "거절" 1회로 메일 데이터가 소실되었다.
 
     # Delete from DB
     await db.delete(user)
@@ -572,8 +572,8 @@ async def deactivate_user_endpoint(
     # Deactivate in DB
     user.is_active = False
     user.suspended_at = datetime.now(timezone.utc)
-    # 열린 세션도 끊는다(일괄 정지 users_ext 와 같은 규칙). 세션 폐기가 OIDC
-    # 백채널 로그아웃을 태우므로 외부 RP(별도 출처 앱) 세션도 함께 끝난다.
+    # 열린 세션도 종료한다(일괄 정지 users_ext 와 동일 규칙). 세션 폐기가 OIDC
+    # 백채널 로그아웃을 유발하므로 외부 RP(별도 출처 앱) 세션도 함께 종료된다.
     user.token_version = (user.token_version or 0) + 1
     from app.auth.oauth_store import revoke_user_refresh_tokens
     await revoke_user_refresh_tokens(db, user.id)
@@ -583,7 +583,7 @@ async def deactivate_user_endpoint(
         await sess_mod.revoke_user_sessions(user.id)
     except Exception as e:
         logger.warning("비활성화 후 세션 폐기 실패(%s): %s", user.username, e)
-    # 열려 있는 격리 브라우저 세션도 바로 끝낸다(실패해도 정지는 그대로 — 거두기가 30초 안에 다시 본다)
+    # 열려 있는 격리 브라우저 세션도 즉시 종료한다(실패해도 정지는 유지 — 회수 작업이 30초 이내에 재확인)
     from app.rbi.service import enforce_access_quietly
     await enforce_access_quietly(db, user_id=user.id, actor_id=admin.id, ip=_client_ip(request))
 
@@ -698,8 +698,8 @@ async def analytics_overview(
         return hit
 
     since = _period_start(period)
-    # "방문"은 요청 수가 아니라 방문자-일(distinct visitor per day) 단위로 집계.
-    # (방문자 = 로그인 사용자면 user_id, 익명이면 ip) → API/폴링 요청으로 인한 뻥튀기 제거.
+    # "방문"은 요청 수가 아닌 방문자-일(distinct visitor per day) 단위로 집계.
+    # (방문자 = 로그인 사용자면 user_id, 익명이면 ip) → API/폴링 요청에 의한 과다 집계 제거.
     _day = func.date(AccessLog.created_at)
     _visitor_day = func.concat(func.coalesce(AccessLog.user_id, AccessLog.ip_address), "|", _day)
     _auth_day = case((AccessLog.user_id.isnot(None), func.concat(AccessLog.user_id, "|", _day)))
@@ -740,7 +740,7 @@ async def analytics_daily_visits(
 
     since = datetime.now(timezone.utc) - timedelta(days=days)
     date_col = func.date(AccessLog.created_at)
-    # 일별 순방문자(요청 수가 아니라 distinct 방문자)
+    # 일별 순방문자(요청 수가 아닌 distinct 방문자)
     _visitor = func.coalesce(AccessLog.user_id, AccessLog.ip_address)
     result = await db.execute(
         select(
@@ -912,8 +912,8 @@ async def analytics_recent_logins(
         .outerjoin(User, User.id == AccessLog.user_id)
         .where(and_(
             AccessLog.user_id.isnot(None),
-            # 세션이 실제로 만들어지는 두 곳(2단계 계정은 /2fa/verify 에서). 사용자 칸은 로그인 처리기가
-            # 요청 상태에 남긴 값으로 채워진다(middleware/access_log._extract_user_id).
+            # 세션이 실제로 생성되는 두 지점(2단계 계정은 /2fa/verify). 사용자 칸은 로그인 처리기가
+            # 요청 상태에 기록한 값으로 채워진다(middleware/access_log._extract_user_id).
             AccessLog.path.in_(["/api/auth/login", "/api/auth/2fa/verify"]),
             AccessLog.status_code < 400,
             _exclude_private_ip(),
@@ -1148,7 +1148,7 @@ class GeneralUpdate(BaseModel):
     announcement: str | None = None
     announcement_type: str | None = None  # info | warning | error
     git_visibility: str | None = None  # public | private
-    trash_retention_days: int | None = None     # 휴지통 자동 삭제(일, 0=안 함)
+    trash_retention_days: int | None = None     # 휴지통 자동 삭제(일, 0=비활성)
     versions_max_age_days: int | None = None    # 버전 스냅샷 상한(일, 0=간격표만)
 
 
@@ -1257,7 +1257,7 @@ APPCFG_MAXLEN: dict[str, int] = {
     "dash.greeting_mode": 16, "dash.greeting_text": 80, "dash.subtitle": 120,
     "dash.notice_banner": 120, "dash.notice_level": 16, "dash.primary_action": 40,
     "dash.primary_href": 200, "dash.cards": 300, "dash.shortcuts": 1000,
-    "dash.layout": 4000,   # 관리자 기본 배치(JSON — app/dashboard/layout.py 가 검사·정규화)
+    "dash.layout": 4000,   # 관리자 기본 배치(JSON — app/dashboard/layout.py 가 검증·정규화)
     "auth.subtitle": 120, "auth.secondary_label": 40, "auth.secondary_href": 200,
     "auth.signup_enabled": 8, "auth.footer_note": 200,
     "empty.mail": 400, "empty.board": 400, "empty.wiki": 400, "empty.ai": 400,
@@ -1266,7 +1266,7 @@ APPCFG_MAXLEN: dict[str, int] = {
 
 
 def normalize_dash_layout_text(val: str) -> str:
-    """관리자 기본 배치(JSON 문자열) → 검사·정규화한 JSON 문자열. 고정(locked) 카드 허용."""
+    """관리자 기본 배치(JSON 문자열) → 검증·정규화한 JSON 문자열. 고정(locked) 카드 허용."""
     import json
     from app.dashboard.layout import normalize_layout
     try:
@@ -1304,17 +1304,17 @@ async def update_appconfig(
         if key == "dash.layout" and val:
             val = normalize_dash_layout_text(val)
         await set_setting(db, f"appcfg.{key}", val or "")
-    # 로그인 화면 문구·보조 링크(auth.secondary_href)·대시보드 바로가기처럼 모든 사용자에게 보이는 값이다
+    # 로그인 화면 문구·보조 링크(auth.secondary_href)·대시보드 바로가기 등 모든 사용자에게 노출되는 값이다
     await audit.log_action(
         db, admin.id, "settings.appconfig.update", "settings", "appconfig", {"keys": sorted(body.values)},
     )
     return {"message": "설정이 저장되었습니다"}
 
 
-# 이미지 + 영상(월페이퍼 엔진식 움직이는 배경) 허용
+# 이미지 및 영상(월페이퍼 엔진 방식의 동적 배경) 허용
 WALLPAPER_ALLOWED_TYPES = {"image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"}
 WALLPAPER_MAX_BYTES = 40 * 1024 * 1024  # 영상 허용으로 상향
-WALLPAPER_MAX_COUNT = 4  # 브랜딩 화면 타일 그리드 — 4장까지
+WALLPAPER_MAX_COUNT = 4  # 브랜딩 화면 타일 그리드 — 최대 4장
 
 
 def _wallpaper_files() -> list[str]:
@@ -1335,8 +1335,8 @@ def _next_wallpaper_index() -> int:
 
 
 def reorder_wallpapers(names: list[str]) -> list[str]:
-    """배경 순서 바꾸기 — 파일 이름 앞 번호를 0,1,2… 로 다시 매긴다(정렬 = 표시 순서).
-    names 는 지금 있는 파일 이름 전부(순서만 다르게). 두 단계 이름 바꾸기로 서로 덮어쓰지 않는다."""
+    """배경 순서 변경 — 파일 이름 앞 번호를 0,1,2… 로 재부여한다(정렬 = 표시 순서).
+    names 는 현재 존재하는 파일 이름 전체(순서만 상이). 2단계 이름 변경으로 상호 덮어쓰기를 방지한다."""
     current = _wallpaper_files()
     if sorted(names) != sorted(current) or len(set(names)) != len(names):
         raise HTTPException(status_code=400, detail="지금 있는 배경 이름 전부를 순서대로 보내야 합니다")
@@ -1357,7 +1357,7 @@ async def order_wallpapers(
     body: dict,
     admin: User = Depends(require_admin),
 ):
-    """배경 순서(끌어서 바꾸기). body = {"names": ["wallpaper-…", …]} — 지금 있는 것 전부."""
+    """배경 순서(드래그로 변경). body = {"names": ["wallpaper-…", …]} — 현재 존재하는 항목 전체."""
     names = body.get("names") if isinstance(body, dict) else None
     if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
         raise HTTPException(status_code=400, detail="names 목록이 필요합니다")
@@ -1372,7 +1372,7 @@ async def upload_wallpaper(
     db: AsyncSession = Depends(get_db),
 ):
     """로그인/셸 배경 업로드 (다중 누적, max 40MB, png/jpeg/webp/mp4/webm).
-    여러 장 올리면 로그인 시 접속마다 랜덤으로 하나가 표시된다."""
+    복수 업로드 시 로그인 화면 접속마다 무작위로 하나가 표시된다."""
     if file.content_type not in WALLPAPER_ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="png/jpeg/webp/mp4/webm 만 허용됩니다")
     if len(_wallpaper_files()) >= WALLPAPER_MAX_COUNT:
@@ -1382,10 +1382,10 @@ async def upload_wallpaper(
         raise HTTPException(status_code=413, detail="배경은 40MB 이하여야 합니다")
     LOGO_DIR.mkdir(parents=True, exist_ok=True)
     ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "jpg"
-    # 누적 저장(기존 삭제 안 함) — 고유 이름. 순서 번호는 맨 뒤(정렬 = 표시 순서)
+    # 누적 저장(기존 파일 삭제 없음) — 고유 이름 사용. 순서 번호는 마지막 순번(정렬 = 표시 순서)
     name = f"wallpaper-{_next_wallpaper_index()}-{abs(hash(data)) % 10_000_000}.{ext}"
     (LOGO_DIR / name).write_bytes(data)
-    # 첫 업로드면 mode를 image로, url은 목록 API를 가리키게
+    # 최초 업로드 시 mode 를 image 로, url 은 목록 API 를 가리키도록 설정
     await set_setting(db, "appcfg.brand.wallpaper", "image")
     await set_setting(db, "appcfg.brand.wallpaper_url", "/api/branding/wallpapers")
     await audit.log_action(db, admin.id, "settings.branding.wallpaper_upload", "settings", "branding", {"name": name})
@@ -1406,12 +1406,12 @@ async def delete_wallpaper(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """배경 삭제. name 주면 해당 1장, 없으면 전체."""
+    """배경 삭제. name 지정 시 해당 1장, 미지정 시 전체."""
     if LOGO_DIR.exists():
         for f in LOGO_DIR.iterdir():
             if f.name.startswith("wallpaper") and (name is None or f.name == name):
                 f.unlink(missing_ok=True)
-    if not _wallpaper_files():  # 다 지워졌으면 config도 비움
+    if not _wallpaper_files():  # 전부 삭제된 경우 config 도 초기화
         await delete_setting(db, "appcfg.brand.wallpaper_url")
     await audit.log_action(
         db, admin.id, "settings.branding.wallpaper_delete", "settings", "branding", {"name": name or "*"},
@@ -1541,8 +1541,8 @@ async def update_general_settings(
         await set_setting(db, retention.KEY_VERSIONS_MAX_AGE_DAYS, str(body.versions_max_age_days))
     await audit.log_action(
         db, admin.id, "settings.general.update", "settings", "general",
-        # 값 자체가 아니라 **어떤 항목이 바뀌었는지**만 남긴다. 공지 문구 등
-        # 긴 값을 통째로 넣으면 감사 로그가 금세 비대해진다.
+        # 값 자체가 아닌 **변경된 항목**만 기록한다. 공지 문구 등
+        # 긴 값을 그대로 저장하면 감사 로그가 급격히 비대해진다.
         {"keys": sorted(
             k for k, v in body.model_dump(exclude_unset=True).items()
             if v is not None
@@ -1596,7 +1596,7 @@ async def update_smtp(
         await set_setting(db, "smtp.from", body.from_addr)
     await audit.log_action(
         db, admin.id, "settings.smtp.update", "settings", "smtp",
-        None, _client_ip(request),   # 값은 남기지 않는다 — 비밀번호가 섞인다
+        None, _client_ip(request),   # 값은 기록하지 않는다 — 비밀번호가 포함될 수 있다
     )
     return {"message": "SMTP 설정이 저장되었습니다"}
 
@@ -1621,7 +1621,7 @@ async def test_smtp(
     msg["From"] = cfg.from_addr
     msg["To"] = body.to_email
 
-    # 마지막 시험 결과를 남긴다(관리 › 메일 발송 카드 푸터 "마지막 시험 MM/DD HH:MM · 성공")
+    # 마지막 시험 결과를 기록한다(관리 › 메일 발송 카드 푸터 "마지막 시험 MM/DD HH:MM · 성공")
     async def _record(ok: bool) -> None:
         try:
             await set_setting(db, "smtp.last_test_at", datetime.now(timezone.utc).isoformat())
@@ -1648,8 +1648,8 @@ async def get_ssl_status(
 ):
     """SSL 인증서 상태.
 
-    installed·subject·… 는 관리 화면에서 올린 인증서(/etc/nginx/ssl) 정보, effective 는 실제로 쓰이는 인증서
-    (관리 개요 ops-summary 의 ssl 과 같은 값 — 설정 파일 → 올린 인증서 → SSL_CHECK_HOST → 공개 주소 순).
+    installed·subject·… 는 관리 화면에서 업로드한 인증서(/etc/nginx/ssl) 정보, effective 는 실제 사용 중인 인증서
+    (관리 개요 ops-summary 의 ssl 과 동일한 값 — 설정 파일 → 업로드한 인증서 → SSL_CHECK_HOST → 공개 주소 순).
     """
     import subprocess
 
@@ -1702,8 +1702,8 @@ async def inspect_ssl(
     key: UploadFile | None = None,
     admin: User = Depends(require_admin),
 ):
-    """올리기 전에 읽어 보기(저장 안 함) — 인증서의 도메인·발급자·유효 기간, 키 짝, 도메인 일치.
-    칸마다 오류 코드(cert_error·key_error)를 따로 준다. ok 면 [올리고 적용] 가능."""
+    """업로드 전 사전 검사(저장하지 않음) — 인증서의 도메인·발급자·유효 기간, 키 쌍 일치, 도메인 일치.
+    필드별 오류 코드(cert_error·key_error)를 개별 반환한다. ok 이면 [올리고 적용] 가능."""
     from app.admin import ssl_inspect
 
     cert_data = await cert.read(ssl_inspect.MAX_BYTES + 1) if cert else None
@@ -1712,7 +1712,7 @@ async def inspect_ssl(
 
 
 async def _audit_ssl(admin: User, action: str, details: dict | None, request: Request | None) -> None:
-    """인증서 올리기·지우기 감사 기록. 파일은 이미 바뀐 뒤라, 기록 실패가 그 결과를 뒤집지 않게 따로 연다."""
+    """인증서 업로드·삭제 감사 기록. 파일은 이미 변경된 상태이므로, 기록 실패가 해당 결과를 무효화하지 않도록 별도 세션을 사용한다."""
     from app.db.session import async_session
 
     try:
@@ -1729,8 +1729,8 @@ async def upload_ssl(
     request: Request = None,
     admin: User = Depends(require_admin),
 ):
-    """인증서·개인 키 올리기. 저장 전에 같은 검사(/settings/ssl/inspect)를 한다 —
-    둘 다 읽히고 짝이 맞고 워크스페이스 도메인을 덮을 때만 저장(아니면 400 {code, message})."""
+    """인증서·개인 키 업로드. 저장 전에 동일한 검사(/settings/ssl/inspect)를 수행한다 —
+    둘 다 판독 가능하고 키 쌍이 일치하며 워크스페이스 도메인을 포함할 때만 저장(아니면 400 {code, message})."""
     from app.admin import ssl_inspect
 
     cert_data = await cert.read(ssl_inspect.MAX_BYTES + 1)
@@ -1748,7 +1748,7 @@ async def upload_ssl(
     (SSL_DIR / "key.pem").write_bytes(key_data)
     from app.admin.users_ext import clear_ssl_cache
     clear_ssl_cache()
-    # 사이트 인증서·개인 키 교체 — 누가 언제 바꿨는지 남긴다(내용은 남기지 않는다)
+    # 사이트 인증서·개인 키 교체 — 변경 주체와 시각을 기록한다(내용은 기록하지 않는다)
     await _audit_ssl(
         admin, "settings.ssl.upload",
         {"subject": (r.get("cert") or {}).get("subject") if isinstance(r.get("cert"), dict) else None},

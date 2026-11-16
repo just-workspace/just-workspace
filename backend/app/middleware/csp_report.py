@@ -1,16 +1,16 @@
 """CSP 위반 리포트 수집 엔드포인트.
 
-CSP 를 처음부터 강제(enforce)로 켜면 앱이 조용히 깨진다 — 프런트엔드
+CSP 를 처음부터 강제(enforce)로 적용하면 앱이 경고 없이 오동작한다 — 프런트엔드
 인라인 스크립트, Tailwind 인라인 스타일, Collabora/OnlyOffice iframe, LiveKit
-WebSocket 이 전부 정책에 걸릴 수 있고, 어디가 걸리는지는 실제 트래픽을 봐야 안다.
+WebSocket 이 모두 정책에 위반될 수 있으며, 위반 지점은 실제 트래픽으로만 확인할 수 있다.
 
-그래서 ``Content-Security-Policy-Report-Only`` 로 먼저 띄우고 여기로 위반을 모은
-뒤, 로그가 조용해지면 강제로 전환한다.
+따라서 ``Content-Security-Policy-Report-Only`` 로 먼저 적용하고 본 엔드포인트로 위반을
+수집한 뒤, 위반 로그가 발생하지 않으면 강제로 전환한다.
 
-브라우저는 두 가지 형식으로 보낸다:
+브라우저의 전송 형식은 두 가지이다:
   * ``report-uri``  → ``application/csp-report``, {"csp-report": {...}}
   * ``report-to``   → ``application/reports+json``, [{"type":"csp-violation",...}]
-둘 다 받는다. 인증 없이 열려 있으므로 레이트리밋과 크기 제한을 둔다.
+두 형식 모두 수신한다. 인증 없이 공개되므로 레이트리밋과 크기 제한을 적용한다.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from fastapi import APIRouter, Request, Response
 logger = logging.getLogger("csp")
 router = APIRouter(tags=["csp"])
 
-# 같은 위반이 페이지마다 쏟아지므로 중복은 눌러서 로그를 읽을 수 있게 한다.
+# 동일 위반이 페이지마다 다량 발생하므로 중복을 억제하여 로그 가독성을 유지한다.
 _seen: dict[str, float] = {}
 _DEDUPE_WINDOW = 300  # 5분
 _MAX_BODY = 16 * 1024
@@ -47,7 +47,7 @@ def _note(directive: str, blocked: str, source: str) -> None:
 
 @router.post("/api/csp-report", include_in_schema=False)
 async def csp_report(request: Request) -> Response:
-    """위반 리포트를 받아 로그로 남긴다. 항상 204 를 돌려준다."""
+    """위반 리포트를 수신하여 로그에 기록한다. 항상 204 를 반환한다."""
     raw = await request.body()
     if not raw or len(raw) > _MAX_BODY:
         return Response(status_code=204)

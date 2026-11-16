@@ -1,19 +1,19 @@
 """채널 탭 — 메시지 · 파일 · 위키 + 더보기(회의 · 작업 · 탭 관리).
 
 - GET  /api/chat/channels/{id}/tabs      탭 머리 요약(파일 수 · 연결 폴더 · 위키 페이지 · 예정 회의 수 · 열린 작업 수)
-- PUT  /api/chat/channels/{id}/tabs      탭 관리 — 폴더·위키 페이지 연결/해제(채널 소유자·관리자·만든 사람)
-- GET  /api/chat/channels/{id}/files     파일 탭 — 채널에 올린 파일(메시지) + 연결된 폴더 파일, 최신순
-- GET  /api/chat/channels/{id}/meetings  회의 — 이 채널에 묶인 예정·진행 중 회의
-- GET  /api/chat/channels/{id}/tasks     작업 — 이 채널에 묶인 작업(최상위, filter=open|mine|done + 칩 수)
+- PUT  /api/chat/channels/{id}/tabs      탭 관리 — 폴더·위키 페이지 연결/해제(채널 소유자·관리자·생성자)
+- GET  /api/chat/channels/{id}/files     파일 탭 — 채널에 업로드한 파일(메시지) + 연결된 폴더 파일, 최신순
+- GET  /api/chat/channels/{id}/meetings  회의 — 이 채널에 연결된 예정·진행 중 회의
+- GET  /api/chat/channels/{id}/tasks     작업 — 이 채널에 연결된 작업(최상위, filter=open|mine|done + 칩 수)
 
-추가된 것:
-- 탭 순서·끄기(layout) — 메시지는 늘 처음이라 저장하지 않는다. 바꾸면 채널 멤버 모두에게 적용.
-- 위키 탭은 스페이스 단위(wiki_space) — 연결 페이지만 있던 채널은 그 페이지의 스페이스로 본다.
-- 회의는 지난 회의(past)도 돌려준다.
+추가 사항:
+- 탭 순서·비활성화(layout) — 메시지는 항상 첫 번째이므로 저장하지 않는다. 변경 시 채널 멤버 전원에게 적용.
+- 위키 탭은 스페이스 단위(wiki_space) — 연결 페이지만 있던 채널은 해당 페이지의 스페이스로 간주한다.
+- 회의는 지난 회의(past)도 반환한다.
 
-폴더 연결 = 그 폴더를 채널에 공유(file_shares.shared_with_channel_id)하는 것 — 멤버는 공유받음 경로로 연다.
-연결이 만든 공유는 origin='channel_folder' 로 표시하고, 연결을 풀거나 다른 폴더로 바꾸면 그 공유만 회수한다.
-연결과 무관하게 걸린 공유(공유 창에서 같은 채널·사람에게 직접 건 것)는 남긴다 — 규칙은 _made_by_link.
+폴더 연결 = 해당 폴더를 채널에 공유(file_shares.shared_with_channel_id)하는 것 — 멤버는 공유받음 경로로 접근한다.
+연결로 생성된 공유는 origin='channel_folder' 로 표시하며, 연결을 해제하거나 다른 폴더로 변경하면 해당 공유만 회수한다.
+연결과 무관하게 설정된 공유(공유 창에서 동일 채널·사용자에게 직접 설정한 것)는 유지한다 — 규칙은 _made_by_link.
 """
 
 import json
@@ -37,12 +37,12 @@ _FILES_LIMIT = 200
 LINK_ORIGIN = "channel_folder"
 _ACTIVE_MEETINGS = ("scheduled", "live")
 _PAST_LIMIT = 10
-# 메시지 뒤에 오는 탭(기본 순서). 메시지는 고정이라 여기 없다.
+# 메시지 뒤에 오는 탭(기본 순서). 메시지는 고정이므로 포함하지 않음.
 TAB_KEYS = ("files", "wiki", "meetings", "tasks")
 
 
 def _layout(ch: Channel) -> list[dict]:
-    """저장된 순서·끄기를 읽어 [{key, visible}] — 모르는 키는 버리고 빠진 키는 기본 순서로 뒤에 붙인다."""
+    """저장된 순서·비활성화 정보를 읽어 [{key, visible}] 를 반환한다 — 알 수 없는 키는 제거하고 누락된 키는 기본 순서로 뒤에 추가한다."""
     order: list[str] = []
     hidden: set[str] = set()
     if ch.tab_layout:
@@ -106,15 +106,15 @@ async def _channel_share(db: AsyncSession, ch: Channel) -> FileShare | None:
 
 
 def _made_by_link(row: FileShare) -> bool:
-    """이 채널 공유를 폴더 연결이 만들었나 — 연결은 origin='channel_folder' 로 표시해 둔다.
+    """이 채널 공유가 폴더 연결로 생성된 것인지 판정한다 — 연결은 origin='channel_folder' 로 표시된다.
 
-    표시가 없는 공유는 사람이 건 것으로 보고 남긴다(회수보다 남기는 쪽이 안전).
+    표시가 없는 공유는 사용자가 설정한 것으로 간주하여 유지한다(회수보다 유지가 안전).
     """
     return row.origin == LINK_ORIGIN
 
 
 async def _revoke_link_share(db: AsyncSession, ch: Channel) -> bool:
-    """지금 연결된 폴더의 채널 공유 중 연결이 만든 것을 지운다(사람이 건 공유는 남김). 지웠으면 True."""
+    """현재 연결된 폴더의 채널 공유 중 연결로 생성된 것을 삭제한다(사용자가 설정한 공유는 유지). 삭제한 경우 True."""
     row = await _channel_share(db, ch)
     if row is None or not _made_by_link(row):
         return False
@@ -143,7 +143,7 @@ async def _folder_info(db: AsyncSession, ch: Channel, user: User) -> dict | None
         "segments": _folder_label(ch.linked_folder_path),
         "share_id": share.id if share else None,
         "mine": mine,
-        # 소유자가 채널 공유를 풀었거나 폴더가 사라졌으면 멤버는 못 연다
+        # 소유자가 채널 공유를 해제했거나 폴더가 삭제된 경우 멤버는 접근 불가
         "accessible": bool(real and real.is_dir() and (mine or share)),
         "can_write": bool(mine or (share and share.can_write)),
     }
@@ -162,7 +162,7 @@ def _folder_files(ch: Channel, info: dict | None) -> list[dict]:
         return []
     from app.files import service as fs
     for p in entries:
-        # 숨김 판정은 파일 모듈 한 곳("@회의록.txt" 는 보이고 @Recycle 같은 NAS 이름만 감춘다)
+        # 숨김 판정은 파일 모듈 한 곳에서 수행("@회의록.txt" 는 표시하고 @Recycle 같은 NAS 이름만 숨김)
         if fs.is_hidden_name(p.name) or not p.is_file():
             continue
         st = p.stat()
@@ -256,13 +256,13 @@ async def channel_tabs(channel_id: str, user: User = Depends(get_current_user), 
 
 
 class TabsLayout(BaseModel):
-    # 메시지 뒤 탭 순서(files·wiki·meetings·tasks 모두)와 끈 탭
+    # 메시지 뒤 탭 순서(files·wiki·meetings·tasks 모두)와 비활성화한 탭
     order: list[str]
     hidden: list[str] = []
 
 
 class TabsUpdate(BaseModel):
-    # 보낸 칸만 바뀐다. null = 연결 해제
+    # 전송된 필드만 변경. null = 연결 해제
     folder_path: str | None = None
     wiki_page_id: str | None = None
     wiki_space_id: str | None = None
@@ -285,7 +285,7 @@ async def update_channel_tabs(
         vp = (body.folder_path or "").strip().strip("/")
         same = bool(vp) and ch.linked_folder_owner_id == user.id and ch.linked_folder_path == vp
         if not vp:
-            # 연결 해제 — 연결이 걸었던 채널 공유도 회수(사람이 직접 건 공유는 남는다)
+            # 연결 해제 — 연결로 생성된 채널 공유도 회수(사용자가 직접 설정한 공유는 유지)
             await _revoke_link_share(db, ch)
             ch.linked_folder_owner_id = None
             ch.linked_folder_path = None
@@ -303,12 +303,12 @@ async def update_channel_tabs(
                 )
             )).scalars().first()
             if not same:
-                # 다른 폴더로 바꾸면 예전 폴더에 연결이 걸었던 공유는 회수(같은 폴더 재연결은 그대로)
+                # 다른 폴더로 변경 시 기존 폴더에 연결로 생성된 공유는 회수(동일 폴더 재연결은 유지)
                 await _revoke_link_share(db, ch)
             if exists is None:
                 db.add(FileShare(owner_id=user.id, file_path=vp, shared_with_channel_id=ch.id, can_write=False,
                                  role="view", origin=LINK_ORIGIN))
-            # 이미 있던 공유(사람이 건 것)는 표시를 바꾸지 않는다 — 연결을 풀어도 남는다
+            # 기존 공유(사용자가 설정한 것)는 표시를 변경하지 않음 — 연결을 해제해도 유지됨
             ch.linked_folder_owner_id = user.id
             ch.linked_folder_path = vp
 
@@ -335,7 +335,7 @@ async def update_channel_tabs(
                 raise HTTPException(status_code=403, detail="볼 수 있는 스페이스만 연결할 수 있습니다")
         ch.linked_wiki_space_id = sid
         if sid is None:
-            # 스페이스를 떼면 예전 페이지 연결도 함께 뗀다(위키 탭 = 연결 없음)
+            # 스페이스 연결 해제 시 기존 페이지 연결도 함께 해제(위키 탭 = 연결 없음)
             ch.linked_wiki_page_id = None
 
     if "layout" in fields and body.layout is not None:
@@ -392,11 +392,11 @@ async def channel_meetings(channel_id: str, user: User = Depends(get_current_use
             "duration_minutes": r.duration_minutes,
             "started_at": _iso(r.started_at),
             "ended_at": _iso(r.ended_at),
-            # 지난 회의의 실제 길이(분) — 시작·끝 기록이 있을 때만
+            # 지난 회의의 실제 소요 시간(분) — 시작·종료 기록이 있는 경우에만
             "actual_minutes": actual,
             "host_name": r.host_display_name,
             "is_host": r.host_user_id == user.id,
-            # 채널 멤버는 초대 링크로 들어간다
+            # 채널 멤버는 초대 링크로 입장
             "join_path": f"/meetings/join/{r.share_token}",
         }
 
@@ -440,6 +440,6 @@ async def channel_tasks(
         "assignee_name": names.get(t.assignee_id) if t.assignee_id else None,
         "assignee_id": t.assignee_id,
         "owner_name": names.get(t.user_id, ""),
-        # 만든 사람·담당자만 작업 화면에서 열 수 있다(완료 체크도 그 사람만)
+        # 생성자·담당자만 작업 화면에서 열 수 있음(완료 체크도 동일)
         "can_open": user.id in (t.user_id, t.assignee_id),
     } for t in rows], "counts": counts}

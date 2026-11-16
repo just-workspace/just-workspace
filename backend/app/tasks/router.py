@@ -38,7 +38,7 @@ async def list_tasks(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """작업 목록 — 내가 만들었거나 내가 담당인 것. assignee·tag·project·status(쉼표로 여러 개) 필터."""
+    """작업 목록 — 본인이 생성했거나 담당인 작업. assignee·tag·project·status(쉼표로 복수 지정) 필터."""
     tasks, total = await service.get_tasks(
         db, user.id, status, priority, due_from, due_to,
         sort_by, sort_dir, page, limit,
@@ -53,7 +53,7 @@ async def task_facets(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """필터 드롭다운용 — 내가 볼 수 있는 작업에 쓰인 프로젝트·태그 목록."""
+    """필터 드롭다운용 — 본인이 조회 가능한 작업에 사용된 프로젝트·태그 목록."""
     return await service.list_projects_and_tags(db, user.id)
 
 
@@ -63,7 +63,7 @@ async def _check_assignee(db: AsyncSession, assignee_id: str | None) -> None:
 
 
 async def _check_channel(db: AsyncSession, user: User, channel_id: str | None) -> None:
-    """작업을 채널에 묶으려면 그 채널 멤버여야 한다(채널 탭 "작업")."""
+    """작업을 채널에 연결하려면 해당 채널의 멤버여야 한다(채널 탭 "작업")."""
     if not channel_id:
         return
     from app.chat import service as chat_service
@@ -148,7 +148,7 @@ async def update_task(
     except service.TaskPermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        # 상위 작업 지정이 규칙에 어긋남(자기 자신·남의 작업·2단계)
+        # 상위 작업 지정이 규칙 위반(자기 자신·타인의 작업·2단계)
         raise HTTPException(status_code=400, detail=str(e))
     if not result:
         raise HTTPException(status_code=404, detail="Task not found")

@@ -61,7 +61,7 @@ async def list_plugins(user: User = Depends(get_current_user)):
             "enabled": is_module_enabled(p["id"]),
             "removable": str(p.get("_dir", "")).startswith(str(UPLOADED_DIR)),
         })
-    # skipped: 폴더는 있지만 올리지 않은 플러그인과 사유(필요한 구역 미설치 등)
+    # skipped: 폴더는 존재하나 로드하지 않은 플러그인과 사유(필요한 구역 미설치 등)
     return {"plugins": result, "skipped": get_skipped_plugins()}
 
 
@@ -98,11 +98,11 @@ async def toggle_plugin(
 async def serve_plugin_bundle(plugin_id: str, request: Request):
     """Serve a pre-built plugin frontend bundle (no auth — public static asset).
 
-    ★ 조건부 요청을 직접 처리한다.
-    Starlette 의 FileResponse 는 ETag/Last-Modified 를 **헤더로 내보내기만 하고**
-    If-None-Match 를 검사하지 않아서, 브라우저가 재검증을 걸어도 매번 본문 전체를
-    다시 내려준다. 플러그인 번들은 30KB(gzip)/150KB 라 모바일에서 페이지를 열 때마다
-    이 비용을 물었다. 여기서 304 를 돌려주면 재방문이 수백 바이트로 끝난다.
+    주의: 조건부 요청을 직접 처리한다.
+    Starlette 의 FileResponse 는 ETag/Last-Modified 를 **헤더로 송신만 하고**
+    If-None-Match 를 검사하지 않으므로, 브라우저가 재검증을 요청해도 매번 본문 전체를
+    다시 전송한다. 플러그인 번들은 30KB(gzip)/150KB 이므로 모바일에서 페이지를 열 때마다
+    해당 비용이 발생했다. 여기서 304 를 반환하면 재방문 시 전송량이 수백 바이트로 감소한다.
     """
     plugins = get_loaded_plugins()
     plugin = next((p for p in plugins if p["id"] == plugin_id), None)
@@ -115,12 +115,12 @@ async def serve_plugin_bundle(plugin_id: str, request: Request):
         raise HTTPException(status_code=404, detail="No frontend bundle")
 
     st = bundle_path.stat()
-    # 파일이 바뀌면(플러그인 재빌드) 값이 바뀌므로 갱신이 자동으로 전파된다.
+    # 파일이 변경되면(플러그인 재빌드) 값이 변경되므로 갱신이 자동으로 전파된다.
     etag = f'"{int(st.st_mtime)}-{st.st_size}"'
     cache_headers = {"Cache-Control": "no-cache, must-revalidate", "ETag": etag}
 
-    # nginx 가 gzip 압축을 하면 ETag 를 weak(`W/"..."`)로 바꿔서 돌려보낸다.
-    # 브라우저는 그 값을 그대로 If-None-Match 로 보내므로 W/ 접두사를 떼고 비교해야 한다.
+    # nginx 가 gzip 압축을 수행하면 ETag 를 weak(`W/"..."`)로 변환하여 반환한다.
+    # 브라우저는 해당 값을 그대로 If-None-Match 로 전송하므로 W/ 접두사를 제거한 뒤 비교해야 한다.
     def _norm(v: str) -> str:
         v = v.strip()
         return v[2:] if v.startswith("W/") else v
@@ -142,10 +142,10 @@ def _valid_pid(pid: str) -> bool:
 
 
 # 압축 폭탄·과대 패키지 방지. 정상 플러그인(백엔드 소스 + 프런트 번들 1개)은 수 MB 수준이다.
-MAX_UPLOAD_BYTES = 100 * 1024 * 1024      # 올리는 zip 자체
-MAX_UNPACKED_BYTES = 300 * 1024 * 1024    # 풀었을 때 합계
+MAX_UPLOAD_BYTES = 100 * 1024 * 1024      # 업로드 zip 자체 크기
+MAX_UNPACKED_BYTES = 300 * 1024 * 1024    # 압축 해제 후 합계
 MAX_ENTRIES = 5000
-MAX_RATIO = 200                           # 항목 하나의 압축률 상한(정상 텍스트도 수십 배 안쪽)
+MAX_RATIO = 200                           # 항목 하나의 압축률 상한(정상 텍스트도 수십 배 이내)
 
 
 def _check_zip_limits(zf: zipfile.ZipFile) -> None:
@@ -173,7 +173,7 @@ async def install_plugin(file: UploadFile = File(...), user: User = Depends(get_
         zf = zipfile.ZipFile(io.BytesIO(data))
     except Exception:
         raise HTTPException(status_code=400, detail="유효한 zip 파일이 아닙니다")
-    # 기존 설치본을 지우기 전에 검사한다(거부되면 이전 버전이 그대로 남는다)
+    # 기존 설치본 삭제 전에 검사한다(거부 시 이전 버전이 그대로 유지된다)
     _check_zip_limits(zf)
 
     names = zf.namelist()

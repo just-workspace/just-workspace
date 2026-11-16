@@ -1,16 +1,16 @@
-"""설정 › 연결된 앱 — 내 OAuth 연결 앱 목록·끊기, 앱 비밀번호 발급·목록·삭제.
+"""설정 › 연결된 앱 — 본인 OAuth 연결 앱 목록·연결 해제, 앱 비밀번호 발급·목록·삭제.
 
-모든 엔드포인트는 get_current_user 로 호출자를 묶고 **호출자 본인 것만** 다룬다(남의 id 는 404).
+모든 엔드포인트는 get_current_user 로 호출자를 식별하며 **호출자 본인 소유 항목만** 처리한다(타 사용자의 id 는 404).
 
 연결된 앱
-  OAuth 동의(oauth_consents)와 살아 있는 리프레시 토큰(oauth_refresh_tokens)을 client_id 로 묶어
-  "앱 하나 = 한 행"으로 보여 준다. 끊으면 동의를 철회하고 그 앱의 리프레시 토큰 사슬을 전부
-  폐기한다 → 다음 갱신부터 거부(이미 나간 액세스 토큰은 만료(최대 1시간)까지 유효).
-  /api/ai-connect/connections 는 MCP 커넥터 화면용(토큰 행 단위)이라 그대로 둔다.
+  OAuth 동의(oauth_consents)와 유효한 리프레시 토큰(oauth_refresh_tokens)을 client_id 기준으로 병합하여
+  "앱 하나 = 한 행"으로 표시한다. 연결 해제 시 동의를 철회하고 해당 앱의 리프레시 토큰 체인을 전부
+  폐기한다 → 다음 갱신부터 거부(기발급 액세스 토큰은 만료(최대 1시간)까지 유효).
+  /api/ai-connect/connections 는 MCP 커넥터 화면용(토큰 행 단위)이므로 변경하지 않는다.
 
 앱 비밀번호
-  app_passwords 테이블(평문 미저장, SHA-256). 메일(IMAP/SMTP — dovecot 이 부르는 mail-auth)과
-  DAV(Basic 인증)에서 계정 비밀번호 대신 받는다. verify_app_password 가 그 관문이다.
+  app_passwords 테이블(평문 미저장, SHA-256). 메일(IMAP/SMTP — dovecot 이 호출하는 mail-auth)과
+  DAV(Basic 인증)에서 계정 비밀번호 대신 수신한다. verify_app_password 가 해당 검증 지점이다.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/api/auth/me", tags=["auth"])
 
 APP_PASSWORD_SCOPES = ("mail", "dav")
 MAX_APP_PASSWORDS = 20
-_ALPHABET = "abcdefghijkmnopqrstuvwxyz"  # 소문자만(메일 앱 입력 편의), l 제외
+_ALPHABET = "abcdefghijkmnopqrstuvwxyz"  # 소문자 한정(메일 앱 입력 편의), l 제외
 
 
 # ── 앱 비밀번호 ─────────────────────────────────────────────
@@ -57,7 +57,7 @@ def looks_like_app_password(pw: str) -> bool:
 
 
 async def verify_app_password(db: AsyncSession, user: User, password: str, scope: str) -> bool:
-    """이 사용자의 앱 비밀번호이고 scope 가 허용돼 있으면 True(마지막 사용 시각 갱신)."""
+    """해당 사용자의 앱 비밀번호이며 scope 가 허용된 경우 True 반환(마지막 사용 시각 갱신)."""
     if not user or not password or not looks_like_app_password(password):
         return False
     row = (
@@ -122,7 +122,7 @@ async def create_app_password(
     db.add(row)
     await db.commit()
     await db.refresh(row)
-    # 평문은 지금 한 번만
+    # 평문은 본 응답에서 1회만 반환
     return {**_pw_public(row), "password": plain}
 
 
@@ -167,7 +167,7 @@ def _aware(dt):
 
 @router.get("/apps")
 async def list_connected_apps(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """동의가 살아 있거나 리프레시 토큰이 살아 있는 OAuth 앱 — client_id 당 한 행."""
+    """동의 또는 리프레시 토큰이 유효한 OAuth 앱 — client_id 당 한 행."""
     consents = (
         await db.execute(
             select(OAuthConsent).where(OAuthConsent.user_id == user.id, OAuthConsent.revoked_at.is_(None))
@@ -193,7 +193,7 @@ async def list_connected_apps(user: User = Depends(get_current_user), db: AsyncS
     for t in tokens:
         live = t.revoked_at is None
         if not live and t.client_id not in apps:
-            continue  # 끊긴 앱의 옛 토큰은 마지막 사용 계산에만 쓴다
+            continue  # 연결 해제된 앱의 이전 토큰은 마지막 사용 시각 계산에만 사용
         a = _slot(t.client_id)
         issued = _aware(t.issued_at)
         if live:
@@ -201,7 +201,7 @@ async def list_connected_apps(user: User = Depends(get_current_user), db: AsyncS
             a["scopes"].update((t.scope or "").split())
             if issued and (a["connected_at"] is None or issued < a["connected_at"]):
                 a["connected_at"] = issued
-        # 리프레시 토큰은 쓸 때마다 새로 발급(회전)되므로 마지막 발급 = 마지막 사용
+        # 리프레시 토큰은 사용 시마다 재발급(회전)되므로 마지막 발급 = 마지막 사용
         if issued and (a["last_used_at"] is None or issued > a["last_used_at"]):
             a["last_used_at"] = issued
 
@@ -225,7 +225,7 @@ async def list_connected_apps(user: User = Depends(get_current_user), db: AsyncS
 
 @router.delete("/apps/{client_id}")
 async def disconnect_app(client_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """동의 철회 + 이 앱에 발급된 내 리프레시 토큰 전부 폐기. 내 연결이 없으면 404."""
+    """동의 철회 및 해당 앱에 발급된 본인 리프레시 토큰 전부 폐기. 본인 연결이 없으면 404."""
     now = datetime.now(timezone.utc)
     consents = (
         await db.execute(

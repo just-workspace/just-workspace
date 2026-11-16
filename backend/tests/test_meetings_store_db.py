@@ -1,6 +1,6 @@
-"""회의 저장소(DB) — 예약 회의가 Redis·LiveKit 수명과 상관없이 살아남는지, 참석 응답·수정·대기실·종료 상태.
+"""회의 저장소(DB) — 예약 회의가 Redis·LiveKit 수명과 무관하게 유지되는지, 참석 응답·수정·대기실·종료 상태.
 
-SQLite(회의·사용자·알림 테이블만) + 가짜 Redis·LiveKit·캘린더·메일. 라우터 함수를 직접 부른다.
+SQLite(회의·사용자·알림 테이블만) + 가짜 Redis·LiveKit·캘린더·메일. 라우터 함수를 직접 호출한다.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -45,7 +45,7 @@ class FakeRedis:
     async def expire(self, k, ttl):
         return True
 
-    # 해시(참가 신청 mtg:req:<방>) — kv 안에 dict 로 둔다(delete 가 같이 지운다)
+    # 해시(참가 신청 mtg:req:<방>) — kv 안에 dict 로 저장(delete 가 함께 삭제)
     async def hset(self, k, f, v):
         self.kv.setdefault(k, {})[f] = v
 
@@ -163,9 +163,9 @@ async def test_create_saves_meeting_invitees_calendar_and_notification(env):
     assert row.host_calendar_event_id == "ev-1"      # 호스트 캘린더 일정 연결
     invs = (await env["db"].execute(select(MeetingInvitee))).scalars().all()
     assert {(i.user_id, i.email) for i in invs} == {("bob", "bob@x"), (None, "guest@ext")}
-    # 초대 메일(내부·외부) 그대로
+    # 초대 메일(내부·외부) 변경 없음
     assert set(env["mails"]) == {"bob@localhost", "guest@ext"}
-    # bob 에게 수락/거절 버튼이 달린 알림
+    # bob 에게 수락/거절 버튼이 포함된 알림
     n = (await env["db"].execute(select(Notification).where(Notification.user_id == "bob"))).scalars().one()
     assert n.type == "meeting_invite" and n.actor_id == "alice" and n.actor_name == "Alice"
     assert '"accepted"' in n.actions_json and f"/api/meetings/by-id/{info.meeting_id}/rsvp" in n.actions_json
@@ -174,7 +174,7 @@ async def test_create_saves_meeting_invitees_calendar_and_notification(env):
 @pytest.mark.asyncio
 async def test_meeting_survives_redis_and_livekit_expiry(env):
     info = await _create(env)
-    # 24시간 TTL·방 5분 타임아웃이 지난 상황
+    # 24시간 TTL·방 5분 타임아웃이 경과한 상황
     env["redis"].kv.clear()
     env["lk"]["rooms"].clear()
 
@@ -184,26 +184,26 @@ async def test_meeting_survives_redis_and_livekit_expiry(env):
     env["lk"]["created"].clear()
     tok = await mr.create_token(TokenRequest(room="kickoff"), user=await _u(env, "alice"), db=env["db"])
     assert tok.is_host is True
-    assert env["lk"]["created"] == ["kickoff"]       # 호스트가 들어오면 방을 다시 연다
+    assert env["lk"]["created"] == ["kickoff"]       # 호스트 입장 시 방 재생성
 
 
 @pytest.mark.asyncio
 async def test_list_merges_db_and_livekit_and_hides_others(env):
     info = await _create(env)
     env["lk"]["rooms"].clear()      # 예약만 된 상태(방 없음)
-    # 다른 사람이 지금 연 즉석 회의
+    # 다른 사용자가 현재 개설한 즉석 회의
     await mr.create_room(RoomCreate(name="standup"), user=await _u(env, "carol"), db=env["db"])
 
     alice_rooms = {r.name: r for r in (await mr.get_rooms(user=await _u(env, "alice"), db=env["db"])).rooms}
     assert alice_rooms["kickoff"].status == "scheduled" and alice_rooms["kickoff"].is_host
-    assert "standup" not in alice_rooms                       # 남이 연 진행 중 회의도 초대 없이는 안 보인다
+    assert "standup" not in alice_rooms                       # 타인이 개설한 진행 중 회의도 초대 없이는 미노출
 
     bob_rooms = {r.name: r for r in (await mr.get_rooms(user=await _u(env, "bob"), db=env["db"])).rooms}
     assert bob_rooms["kickoff"].my_response == "pending"
-    assert bob_rooms["kickoff"].share_token == ""             # 초대받은 사람에게 호스트 링크는 안 준다
+    assert bob_rooms["kickoff"].share_token == ""             # 초대받은 사용자에게 호스트 링크는 제공하지 않음
 
     carol_rooms = {r.name for r in (await mr.get_rooms(user=await _u(env, "carol"), db=env["db"])).rooms}
-    assert "kickoff" not in carol_rooms                       # 남의 예약 회의는 안 보인다
+    assert "kickoff" not in carol_rooms                       # 타인의 예약 회의는 미노출
 
 
 @pytest.mark.asyncio
@@ -244,11 +244,11 @@ async def test_patch_host_only_and_waiting_room_off(env):
         user=await _u(env, "alice"), db=env["db"],
     )
     assert d.waiting_room is False and d.title == "킥오프" and d.invitee_count == 3
-    assert env["cal"]["updated"]                               # 호스트 일정도 옮겼다
+    assert env["cal"]["updated"]                               # 호스트 일정도 이동됨
     meta = await store.get_room_meta("kickoff")
     assert meta.waiting_room is False and meta.scheduled_at.startswith(new_time[:16])
 
-    # 대기실 꺼짐 → 승인 없이 바로 입장
+    # 대기실 비활성 → 승인 없이 즉시 입장
     res = await mr.submit_join_request(info.share_token, JoinRequestCreate(nickname="손님"))
     assert res.status == "approved" and res.token
 
@@ -273,7 +273,7 @@ async def test_waiting_room_on_keeps_host_approval(env):
 @pytest.mark.asyncio
 async def test_webhook_status_transitions(env):
     info = await _create(env)
-    # 아무도 안 들어온 채 방이 닫힘(빈 방 5분) → 예정 그대로
+    # 아무도 입장하지 않은 채 방 종료(빈 방 5분) → 예정 상태 유지
     await repo.on_room_event("room_finished", "kickoff")
     row = await env["db"].get(MeetingDB, info.meeting_id)
     await env["db"].refresh(row)
@@ -302,7 +302,7 @@ async def test_delete_before_start_cancels_and_removes_calendar(env):
     assert env["cal"]["deleted"] == [("alice", "ev-1")]
     rooms = {r.name for r in (await mr.get_rooms(user=await _u(env, "alice"), db=env["db"])).rooms}
     assert "kickoff" not in rooms
-    # 취소된 회의 링크는 되살아나지 않는다
+    # 취소된 회의 링크는 재활성화되지 않음
     env["redis"].kv.clear()
     with pytest.raises(HTTPException):
         await mr.get_join_info(info.share_token)
@@ -340,7 +340,7 @@ def test_effective_status_window():
 
 @pytest.mark.asyncio
 async def test_delete_ended_meeting_hides_it(env):
-    """지난 회의 [삭제] — 예전엔 204 인데 행이 그대로 남았다. 이제 목록에서 빠진다(그 행만)."""
+    """지난 회의 [삭제] — 기존에는 204 를 반환하나 행이 잔존했다. 현재는 목록에서 제외된다(해당 행만)."""
     info = await _create(env)
     row = await env["db"].get(MeetingDB, info.meeting_id)
     row.status = "ended"
@@ -351,7 +351,7 @@ async def test_delete_ended_meeting_hides_it(env):
     alice = await _u(env, "alice")
     names = [r.name for r in (await mr.get_rooms(user=alice, db=env["db"])).rooms]
     assert names.count("kickoff") == 1
-    # 다른 사람은 못 지운다
+    # 다른 사용자는 삭제 불가
     with pytest.raises(HTTPException) as e:
         await mr.delete_room("kickoff", meeting_id=info.meeting_id, user=await _u(env, "bob"), db=env["db"])
     assert e.value.status_code == 403

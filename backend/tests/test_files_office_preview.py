@@ -1,7 +1,7 @@
 """오피스 문서 글자 미리보기("미리보기로 열기").
 
-로그인 사용자 /api/files/preview 는 docx·xlsx·pptx 를 {"type": "office", content} 로 준다.
-손님 공유 링크 미리보기(can_preview)는 그대로 — 오피스는 여전히 미리보기 대상이 아니다.
+로그인 사용자 /api/files/preview 는 docx·xlsx·pptx 를 {"type": "office", content} 로 반환한다.
+손님 공유 링크 미리보기(can_preview)는 변경 없음 — 오피스는 여전히 미리보기 대상이 아니다.
 """
 
 import os

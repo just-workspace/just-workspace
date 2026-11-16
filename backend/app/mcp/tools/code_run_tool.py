@@ -1,9 +1,9 @@
-"""code_run — 격리 Python 분석 실행(ws-sandbox). 쓰기 도구(low): 결과 파일을 사용자 저장소에 남기기 때문.
+"""code_run — 격리 Python 분석 실행(ws-sandbox). 쓰기 도구(low): 결과 파일을 사용자 저장소에 저장하기 때문.
 
-* 샌드박스: 네트워크 없음·읽기 전용 루트·요청마다 다른 비루트 uid·CPU/메모리/시간/출력 상한(docker-compose, sandbox/).
-* 입력 파일은 백엔드가 **사용자 권한으로** 읽어 넘긴다(샌드박스는 저장소를 못 본다). 코드에서는 ``input/<이름>``.
-* 코드가 ``output/`` 에 쓴 파일(차트 png·xlsx·csv …)을 받아 "AI 결과물" 폴더에 저장하고 {path,name,size,mime} 로 돌려준다.
-* 관리자 스위치: ai.gov.code_run_enabled(기본 켬), MCP 노출 ai.gov.code_run_mcp(기본 끔 — 내장 AI 전용으로 시작).
+* 샌드박스: 네트워크 없음·읽기 전용 루트·요청마다 상이한 비루트 uid·CPU/메모리/시간/출력 상한(docker-compose, sandbox/).
+* 입력 파일은 백엔드가 **사용자 권한으로** 읽어 전달한다(샌드박스는 저장소에 접근할 수 없다). 코드에서는 ``input/<이름>``.
+* 코드가 ``output/`` 에 기록한 파일(차트 png·xlsx·csv …)을 수신해 "AI 결과물" 폴더에 저장하고 {path,name,size,mime} 로 반환한다.
+* 관리자 스위치: ai.gov.code_run_enabled(기본 활성화), MCP 노출 ai.gov.code_run_mcp(기본 비활성화 — 내장 AI 전용으로 시작).
   판정은 app.mcp.access.TOOL_SWITCH / MCP_OPT_IN.
 """
 
@@ -17,7 +17,7 @@ from app.db.models import User
 from app.mcp.filetools import containers, store
 from app.mcp.filetools.toolkit import DST_FOLDER_PARAM, base, guard
 from app.mcp.server import Tool, register
-from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 남에게 보이는 쓰기 판정
+from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 타인 노출 쓰기 판정
 from app.mcp.tools._common import clamp, err, user_tz
 
 CODE_MAX = 100_000
@@ -141,8 +141,8 @@ register(Tool(
         "save_outputs": {"type": "boolean", "default": True, "description": "Save files from output/ to the user's files."},
         "dst_folder": DST_FOLDER_PARAM,
     }, "required": ["code"]},
-    visible_for=shared_target("dst_folder"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
-    # 입력 파일(남이 쓴 것일 수 있다)을 읽은 코드의 stdout 이 모델에게 돌아간다 → 내장 AI 대화 표시
+    visible_for=shared_target("dst_folder"),   # 공유 영역이면 타인 노출 쓰기(외부 내용을 읽은 뒤에는 확인을 요청한다)
+    # 입력 파일(타인이 작성한 것일 수 있다)을 읽은 코드의 stdout 이 모델에 반환된다 → 내장 AI 대화 표시
     conv_untrusted=lambda a: bool(a.get("input_paths")),
     handler=code_run, summarizer=_sum, previewer=_prev,
 ))

@@ -2,22 +2,22 @@
 
 SystemSetting(key/value)에 저장한다(별도 테이블 없음):
   auth.require_2fa          off | admins | all   — 2단계 인증 필수 대상
-  auth.lockout_enabled      true | false         — 비밀번호를 연속으로 틀리면 잠금
-  auth.new_device_alert     true | false         — 처음 보는 기기로 로그인하면 메일 알림
-  auth.idle_timeout_minutes 0(사용 안 함) | 분   — 이 시간 동안 요청이 없던 세션은 끊는다
+  auth.lockout_enabled      true | false         — 비밀번호 연속 오류 시 잠금
+  auth.new_device_alert     true | false         — 기록에 없는 기기에서 로그인 시 메일 알림
+  auth.idle_timeout_minutes 0(사용 안 함) | 분   — 해당 시간 동안 요청이 없던 세션은 종료한다
 
 집행 위치
 - 잠금: /api/auth/login 이 비밀번호 검증 전에 check_lockout, 실패 시 record_failure.
-  계정 기준 LOCKOUT_THRESHOLD 회, IP 기준은 그 IP_FACTOR 배(사무실 NAT 뒤 여러 사람이
-  같은 IP 로 보이므로 IP 만으로 바로 잠그면 무고한 사람이 같이 잠긴다).
-- 2단계 필수: 로그인은 막지 않는다(인증 앱 등록을 하려면 들어와야 하므로). 대신
-  get_current_user 가 등록 전 사용자의 요청을 ALLOW_PREFIXES 밖에서는 403 으로 막고,
-  /api/auth/me 의 totp_setup_required 를 보고 프런트가 설정 › 보안으로 보낸다.
-- 유휴 로그아웃: get_current_user 가 세션 last_seen 을 보고 끊는다.
+  계정 기준 LOCKOUT_THRESHOLD 회, IP 기준은 그 IP_FACTOR 배(사무실 NAT 뒤의 여러 사용자가
+  동일 IP 로 식별되므로 IP 만으로 즉시 잠그면 무관한 사용자까지 함께 잠긴다).
+- 2단계 필수: 로그인은 차단하지 않는다(인증 앱 등록을 위해 로그인이 필요하므로). 대신
+  get_current_user 가 등록 전 사용자의 요청을 ALLOW_PREFIXES 밖에서는 403 으로 차단하고,
+  프런트엔드가 /api/auth/me 의 totp_setup_required 를 확인하여 설정 › 보안으로 이동시킨다.
+- 유휴 로그아웃: get_current_user 가 세션 last_seen 을 확인하여 종료한다.
 - 새 기기 알림: 로그인 성공 직후 note_login_device.
 
-get_current_user 는 모든 요청이 지나가는 길이라 정책을 프로세스 메모리에 CACHE_TTL 초 캐시한다
-(워커 8개 — 바꾼 정책이 퍼지는 데 최대 CACHE_TTL 초).
+get_current_user 는 모든 요청이 경유하는 경로이므로 정책을 프로세스 메모리에 CACHE_TTL 초 캐시한다
+(워커 8개 — 변경된 정책의 전파에 최대 CACHE_TTL 초 소요).
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ DEFAULTS = {
     "idle_timeout_minutes": 0,
 }
 
-# 2단계 등록 전에도 쓸 수 있는 API — 인증 자체(me·2fa·logout·세션·비밀번호)와 개인 설정·공개 설정.
+# 2단계 등록 전에도 사용할 수 있는 API — 인증 자체(me·2fa·logout·세션·비밀번호)와 개인 설정·공개 설정.
 ALLOW_PREFIXES = (
     "/api/auth/",
     "/api/me/prefs",
@@ -90,7 +90,7 @@ async def get_policy_cached(db: AsyncSession | None = None) -> dict:
 
             async with async_session() as s:
                 pol = await get_policy(s)
-    except Exception as e:  # DB 장애 시 정책 때문에 전체 인증이 죽지 않게 기본값
+    except Exception as e:  # DB 장애 시 정책 조회 실패로 전체 인증이 중단되지 않도록 기본값 사용
         logger.warning("[security-policy] load failed, using defaults: %s", e)
         pol = dict(DEFAULTS)
     _cache["p"] = (time.monotonic(), pol)
@@ -134,17 +134,17 @@ def totp_required_for(pol: dict, user) -> bool:
 
 
 def totp_setup_required(pol: dict, user) -> bool:
-    """정책상 필수인데 아직 인증 앱을 등록하지 않았다."""
+    """정책상 필수이나 인증 앱이 미등록된 상태."""
     return totp_required_for(pol, user) and not getattr(user, "totp_secret", None)
 
 
 def path_blocked(path: str) -> bool:
-    """2단계 미등록 사용자에게 막는 경로인가(인증·개인 설정 API 밖)."""
+    """2단계 미등록 사용자에게 차단하는 경로 여부(인증·개인 설정 API 밖)."""
     return not any((path or "").startswith(p) for p in ALLOW_PREFIXES)
 
 
 def totp_setup_blocks(pol: dict, user, path: str) -> bool:
-    """이 요청을 2단계 미등록 때문에 막아야 하나."""
+    """본 요청을 2단계 미등록 사유로 차단해야 하는지 여부."""
     return totp_setup_required(pol, user) and path_blocked(path)
 
 
@@ -179,7 +179,7 @@ def _ikey(ip: str) -> str:
 
 
 async def check_lockout(pol: dict, username: str, ip: str) -> int:
-    """잠겨 있으면 남은 초, 아니면 0. Redis 장애면 0(fail-open)."""
+    """잠금 상태이면 남은 초, 아니면 0. Redis 장애 시 0(fail-open)."""
     if not pol.get("lockout_enabled"):
         return 0
     try:
@@ -220,9 +220,9 @@ async def clear_failures(username: str) -> None:
 
 
 # ── 2단계 코드 대입 방지 ─────────────────────────────────────
-# 로그인 잠금(위)은 비밀번호 실패만 세고 관리자가 켜야 돈다. 2단계 코드는 6자리라, 비밀번호를
-# 아는 공격자가 임시 토큰을 계속 새로 받아 대입하면 IP 한도(3/분)만으로는 못 막는다(IP 를 늘리면 선형).
-# 계정 기준으로 항상 센다 — TWO_FA_MAX_FAILS 번 틀리면 TWO_FA_LOCK_MINUTES 분 동안 2단계 검증을 받지 않는다.
+# 로그인 잠금(위)은 비밀번호 실패만 집계하며 관리자가 활성화해야 동작한다. 2단계 코드는 6자리이므로, 비밀번호를
+# 아는 공격자가 임시 토큰을 반복 발급받아 대입하면 IP 한도(3/분)만으로는 차단할 수 없다(IP 를 늘리면 선형).
+# 계정 기준으로 항상 집계한다 — TWO_FA_MAX_FAILS 회 실패 시 TWO_FA_LOCK_MINUTES 분 동안 2단계 검증을 거부한다.
 TWO_FA_MAX_FAILS = 5
 TWO_FA_LOCK_MINUTES = 10
 
@@ -232,7 +232,7 @@ def _tfkey(user_id: str) -> str:
 
 
 async def check_2fa_lock(user_id: str) -> int:
-    """2단계 검증이 잠겨 있으면 남은 초, 아니면 0. Redis 장애면 0(fail-open)."""
+    """2단계 검증이 잠금 상태이면 남은 초, 아니면 0. Redis 장애 시 0(fail-open)."""
     try:
         r = await _redis()
         if int(await r.get(_tfkey(user_id)) or 0) >= TWO_FA_MAX_FAILS:
@@ -265,7 +265,7 @@ async def clear_2fa_failures(user_id: str) -> None:
 
 
 def device_fingerprint(ua: str, ip: str) -> str:
-    """브라우저·OS·앱 + IP 의 앞 세 자리(/24). 같은 사무실 안 IP 변동은 같은 기기로 본다."""
+    """브라우저·OS·앱 + IP 의 앞 세 자리(/24). 동일 사무실 내 IP 변동은 동일 기기로 간주한다."""
     from app.auth.me_sessions import parse_ua
 
     p = parse_ua(ua or "")
@@ -275,9 +275,9 @@ def device_fingerprint(ua: str, ip: str) -> str:
 
 
 async def note_login_device(pol: dict, user, ua: str, ip: str) -> bool:
-    """로그인 기기를 기록하고, 처음 보는 기기면(그리고 알림이 켜져 있으면) 메일을 보낸다.
+    """로그인 기기를 기록하고, 기록에 없는 기기이며 알림이 활성화된 경우 메일을 송신한다.
 
-    처음 로그인(기록이 하나도 없음)은 알리지 않는다. 반환: 새 기기 알림을 보냈는지.
+    최초 로그인(기록이 전혀 없음)은 알리지 않는다. 반환: 새 기기 알림 송신 여부.
     """
     fp = device_fingerprint(ua, ip)
     key = f"knowndev:{user.id}"

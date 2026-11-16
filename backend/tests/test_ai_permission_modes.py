@@ -1,4 +1,4 @@
-"""내장 AI 권한 모드 — Claude Code 와 같은 이름(default·acceptEdits·plan·auto·bypassPermissions)."""
+"""내장 AI 권한 모드 — Claude Code 와 동일한 이름(default·acceptEdits·plan·auto·bypassPermissions)."""
 
 import pytest
 
@@ -44,7 +44,7 @@ async def test_auto_runs_high_unless_external_read(env):
     env["marks"][("alice", "k1")] = {"kind": "mail", "from": "evil@x"}
     r = await _call("t_high", {"to": "z@y"}, env["alice"])
     assert r["result"]["status"] == "pending_approval"
-    r = await _call("t_low", {"title": "b"}, env["alice"])     # low 는 외부 읽기 뒤에도 자동
+    r = await _call("t_low", {"title": "b"}, env["alice"])     # low 는 외부 읽기 이후에도 자동 실행
     assert r["result"]["status"] == "executed"
     assert LOG == [("send", "x@y"), ("create", "b")]
 
@@ -79,7 +79,7 @@ async def test_approve_all_runs_pending_low_cards(env):
         writes.call_context.reset(t)
     done = await writes.batch_decide(env["db"], env["alice"], "c1")
     assert [d.status for d in done] == ["executed"] * 3
-    assert LOG == [("create", "a"), ("create", "b"), ("create", "c")]   # high 는 대기함에 남는다
+    assert LOG == [("create", "a"), ("create", "b"), ("create", "c")]   # high 는 대기함에 유지된다
     left = [r for r in (await env["db"].execute(
         __import__("sqlalchemy").select(McpWriteRequest).where(McpWriteRequest.status == "pending"))).scalars()]
     assert [r.tool for r in left] == ["t_high"]
@@ -96,7 +96,7 @@ async def test_batch_selected_only_and_cancel(env):
     assert [d.id for d in done] == [ids[0], ids[2]] and LOG == [("create", "a"), ("create", "c")]
     gone = await writes.batch_decide(env["db"], env["alice"], "c2", None, action="cancel")
     assert [g.status for g in gone] == ["canceled"] and LOG == [("create", "a"), ("create", "c")]
-    # 남의 요청은 못 건드린다
+    # 타인의 요청은 처리할 수 없다
     assert await writes.batch_decide(env["db"], env["bob"], "c2", ids) == []
 
 
@@ -150,12 +150,12 @@ async def test_remember_conversation_allows_same_tool_in_that_conversation_only(
     assert r1["result"]["status"] == r2["result"]["status"] == "pending_confirmation"
     req = await writes.approve(env["db"], env["alice"], r1["result"]["request_id"])
     await writes.remember_approval(env["db"], env["alice"], req, "conversation")
-    # 같은 대화에 대기 중이던 같은 도구 카드도 함께 실행
+    # 동일 대화에 대기 중이던 동일 도구 카드도 함께 실행
     other = await env["db"].get(McpWriteRequest, r2["result"]["request_id"])
     assert other.status == "executed"
     r3 = await _call_conv("t_low", {"title": "c"}, env["alice"])
     assert r3["result"]["status"] == "executed"
-    r4 = await _call_conv("t_low", {"title": "d"}, env["alice"], conv="c2")   # 다른 대화는 다시 묻는다
+    r4 = await _call_conv("t_low", {"title": "d"}, env["alice"], conv="c2")   # 다른 대화에서는 재확인한다
     assert r4["result"]["status"] == "pending_confirmation"
     assert await writes.conv_allowed("alice", "c1") == ["t_low"]
 

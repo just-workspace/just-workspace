@@ -1,16 +1,16 @@
-"""공유 링크를 이메일로 보내기.
+"""공유 링크 이메일 발송.
 
 발송은 워크스페이스의 시스템 메일 경로(app.admin.settings.get_smtp_config + send_system_email —
-비밀번호 재설정·가입 초대 메일과 같은 것)를 그대로 쓴다. 새 SMTP 설정은 없다.
+비밀번호 재설정·가입 초대 메일과 동일)를 그대로 사용한다. 신규 SMTP 설정은 없다.
 
 규칙
-- 한 번에 받는 사람 MAX_RECIPIENTS(20)명까지, 보낸 사람당 1시간에 HOURLY_LIMIT(50)명까지(실패한 시도도 센다).
-- 링크 소유자(만든 사람), 또는 링크 대상 파일에 편집 이상 권한이 있는 사람만 보낼 수 있다.
-- 링크 비밀번호는 메일에 넣지 않는다 — 본문에 "비밀번호는 따로 전달됨" 안내만.
-- 받는 사람마다 기록(share_link_emails)을 남기고, 워크스페이스 밖 주소인지(external) 표시한다.
-- 템플릿 ko/en(보낸 사람 화면 언어). 만료 시각은 보낸 사람 브라우저 시간대(tz)로, 모르면 UTC.
+- 1회 수신자 MAX_RECIPIENTS(20)명까지, 발신자당 1시간에 HOURLY_LIMIT(50)명까지(실패한 시도도 집계한다).
+- 링크 소유자(생성자) 또는 링크 대상 파일에 편집 이상 권한이 있는 사용자만 발송할 수 있다.
+- 링크 비밀번호는 메일에 포함하지 않는다. 본문에 "비밀번호는 따로 전달됨" 안내만 포함한다.
+- 수신자별 기록(share_link_emails)을 저장하고, 워크스페이스 외부 주소 여부(external)를 표시한다.
+- 템플릿 ko/en(발신자 화면 언어). 만료 시각은 발신자 브라우저 시간대(tz) 기준이며, 미확인 시 UTC.
 
-테스트는 _deliver 를 바꿔 끼운다(실제 발송 금지).
+테스트는 _deliver 를 교체한다(실제 발송 금지).
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ _EMAIL_RE = re.compile(r"^[^@\s,;<>\"']+@[^@\s,;<>\"']+\.[^@\s,;<>\"']+$")
 
 
 def normalize_recipients(raw: list[str]) -> tuple[list[str], list[str]]:
-    """(형식이 맞는 주소 — 소문자·중복 제거·순서 유지, 형식이 틀린 주소)."""
+    """(형식이 유효한 주소 — 소문자·중복 제거·순서 유지, 형식이 유효하지 않은 주소)."""
     good: list[str] = []
     bad: list[str] = []
     seen: set[str] = set()
@@ -63,7 +63,7 @@ def _is_folder(link: ShareLink) -> bool:
 
 
 def link_url(link: ShareLink) -> str:
-    """받는 사람이 여는 주소 — 프런트 lib/files shareUrl 과 같은 규칙."""
+    """수신자가 여는 주소 — 프런트 lib/files shareUrl 과 동일한 규칙."""
     base = settings.app_url.rstrip("/")
     guest = bool(link.can_edit) or bool(link.password_hash) or link.allow_download is False or _is_folder(link)
     return f"{base}/s/{link.token}" if guest else f"{base}/api/files/shared/{link.token}"
@@ -130,7 +130,7 @@ class MailParts:
 
 
 def render(link: ShareLink, sender: User, *, message: str | None, lang: str, tz: str | None) -> MailParts:
-    """메일 제목·본문(text + html). 비밀번호 원문은 어디에도 없다(해시만 갖고 있기도 하다)."""
+    """메일 제목·본문(text + html). 비밀번호 원문은 어디에도 포함되지 않는다(해시만 보유한 경우도 있다)."""
     t = _T.get(lang) or _T["ko"]
     who = _one_line(sender.display_name or sender.username)
     sender_label = f"{who} <{sender.email}>" if sender.email else who
@@ -186,7 +186,7 @@ def render(link: ShareLink, sender: User, *, message: str | None, lang: str, tz:
 def build_message(parts: MailParts, *, from_addr: str, to: str, sender: User) -> MIMEMultipart:
     m = MIMEMultipart("alternative")
     m["Subject"] = parts.subject
-    # 보낸 사람은 시스템 주소(SPF/DKIM 통과), 표시 이름에 사용자 이름. 답장은 사용자에게.
+    # 발신자는 시스템 주소(SPF/DKIM 통과), 표시 이름에 사용자 이름 포함. 회신은 사용자에게 전달.
     who = _one_line(sender.display_name or sender.username)
     m["From"] = formataddr((f"{who} ({settings.app_name})", from_addr))
     m["To"] = to
@@ -198,7 +198,7 @@ def build_message(parts: MailParts, *, from_addr: str, to: str, sender: User) ->
 
 
 async def _deliver(cfg, msg) -> None:
-    """실제 발송(시스템 메일). 테스트에서 바꿔 끼운다."""
+    """실제 발송(시스템 메일). 테스트에서 교체한다."""
     from app.admin.settings import send_system_email
     await asyncio.to_thread(send_system_email, cfg, msg)
 
@@ -213,7 +213,7 @@ async def sent_last_hour(db: AsyncSession, user_id: str, now: datetime | None = 
 
 
 async def classify(db: AsyncSession, emails: list[str]) -> dict[str, tuple[str | None, bool]]:
-    """주소 → (워크스페이스 사용자 id, 외부 여부). 사용자 이메일과 같거나 워크스페이스 도메인이면 내부."""
+    """주소 → (워크스페이스 사용자 id, 외부 여부). 사용자 이메일과 동일하거나 워크스페이스 도메인이면 내부."""
     if not emails:
         return {}
     rows = (await db.execute(

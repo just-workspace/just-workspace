@@ -1,31 +1,31 @@
 """세션 쿠키로 인증된 상태 변경 요청의 출처(Origin) 검사 — CSRF 방어.
 
-왜 필요한가
-  세션 쿠키(ws_session)는 SameSite=Lax 라 **다른 사이트**에서 보낸 POST 에는 붙지 않는다. 하지만
-  SameSite 는 "사이트"(등록 도메인) 단위다 — 같은 등록 도메인의 다른 하위 도메인(다른 서비스·사용자 콘텐츠가
-  실리는 출처)에서 보낸 요청에는 쿠키가 그대로 붙는다. 그 출처 하나가 뚫리면 로그인한 사용자의 이름으로
-  워크스페이스 API 를 부를 수 있다. 그래서 쿠키가 실린 POST/PUT/PATCH/DELETE 는 Origin(없으면 Referer)이
-  우리 출처일 때만 받는다.
+필요 사유
+  세션 쿠키(ws_session)는 SameSite=Lax 이므로 **타 사이트**에서 전송한 POST 에는 포함되지 않는다. 그러나
+  SameSite 는 "사이트"(등록 도메인) 단위이다 — 동일 등록 도메인의 다른 하위 도메인(타 서비스·사용자 콘텐츠가
+  게시되는 출처)에서 전송한 요청에는 쿠키가 그대로 포함된다. 해당 출처 하나가 침해되면 로그인한 사용자의 권한으로
+  워크스페이스 API 를 호출할 수 있다. 따라서 쿠키가 포함된 POST/PUT/PATCH/DELETE 는 Origin(없으면 Referer)이
+  본 프로젝트의 출처인 경우에만 허용한다.
 
-검사하지 않는 요청
-  - 안전한 메서드(GET/HEAD/OPTIONS 등) — 상태를 바꾸지 않는다.
-  - ws_session 쿠키가 없는 요청 — 쿠키로 인증되지 않으니 CSRF 대상이 아니다(OAuth 토큰 교환, WOPI,
-    웹훅, 공유 링크 손님, 내부 서비스 호출이 모두 여기 든다).
-    Bearer 로 인증하는 데스크톱·모바일 앱, MCP, API 클라이언트도 쿠키를 보내지 않으니 여기 든다.
-    **쿠키가 실려 있으면 Authorization: Bearer 가 같이 와도 검사한다** — 인증(app/auth/deps.py)이 쿠키를
-    Bearer 보다 먼저 쓰므로, 쿠키 + 아무 Bearer 로 검사를 건너뛰게 두면 안 된다. 쿠키와 Bearer 를 같이
-    보낼 수 있는 번들 앱(Tauri/Capacitor)의 출처는 CORS 허용 목록에 있어 그대로 통과한다.
-  - Origin·Referer 가 둘 다 없는 요청 — 브라우저가 아니다(브라우저의 교차 출처 POST 는 Origin 을 늘 보낸다).
-  - 격리 브라우저 전용 출처(Host = RBI_PUBLIC_ORIGIN) — 워크스페이스 쿠키가 오지 않고, 자체 Origin 검사
-    (app/rbi/site.py _check_origin)가 따로 있다.
-  - EXEMPT_PREFIXES — 쿠키가 아니라 자체 토큰·키로 인증하는, 밖에서 부르는 엔드포인트. 같은 사이트의
-    다른 출처에서 부를 때 브라우저가 쿠키를 덤으로 실어 보내도 깨지지 않게 한다.
+검사 제외 요청
+  - 안전한 메서드(GET/HEAD/OPTIONS 등) — 상태를 변경하지 않는다.
+  - ws_session 쿠키가 없는 요청 — 쿠키로 인증되지 않으므로 CSRF 대상이 아니다(OAuth 토큰 교환, WOPI,
+    웹훅, 공유 링크 게스트, 내부 서비스 호출이 모두 이에 해당한다).
+    Bearer 로 인증하는 데스크톱·모바일 앱, MCP, API 클라이언트도 쿠키를 전송하지 않으므로 이에 해당한다.
+    **쿠키가 포함되어 있으면 Authorization: Bearer 가 함께 전달되어도 검사한다** — 인증(app/auth/deps.py)이 쿠키를
+    Bearer 보다 우선 사용하므로, 쿠키 + 임의의 Bearer 로 검사를 우회하도록 허용해서는 안 된다. 쿠키와 Bearer 를 함께
+    전송할 수 있는 번들 앱(Tauri/Capacitor)의 출처는 CORS 허용 목록에 있어 그대로 통과한다.
+  - Origin·Referer 가 모두 없는 요청 — 브라우저가 아니다(브라우저의 교차 출처 POST 는 Origin 을 항상 전송한다).
+  - 격리 브라우저 전용 출처(Host = RBI_PUBLIC_ORIGIN) — 워크스페이스 쿠키가 전송되지 않으며, 자체 Origin 검사
+    (app/rbi/site.py _check_origin)가 별도로 존재한다.
+  - EXEMPT_PREFIXES — 쿠키가 아닌 자체 토큰·키로 인증하며 외부에서 호출되는 엔드포인트. 동일 사이트의
+    다른 출처에서 호출할 때 브라우저가 쿠키를 추가로 전송해도 오동작하지 않도록 한다.
 
 허용 출처
-  설정의 공개 주소(APP_URL) · CORS 허용 목록(main.py 가 넘긴다 — 디버그의 vite 개발 서버, 네이티브 앱 셸) ·
-  CSRF_TRUSTED_ORIGINS(쉼표) · 요청의 Host 와 같은 출처(같은 출처 요청 — 사설 IP·다른 이름으로 접속한 경우).
+  설정의 공개 주소(APP_URL) · CORS 허용 목록(main.py 가 전달한다 — 디버그의 vite 개발 서버, 네이티브 앱 셸) ·
+  CSRF_TRUSTED_ORIGINS(쉼표) · 요청의 Host 와 동일한 출처(동일 출처 요청 — 사설 IP·다른 이름으로 접속한 경우).
 
-끄기: CSRF_ORIGIN_CHECK=false (기본 켬).
+비활성화: CSRF_ORIGIN_CHECK=false (기본 활성).
 """
 from __future__ import annotations
 
@@ -40,27 +40,27 @@ logger = logging.getLogger(__name__)
 SESSION_COOKIE = "ws_session"
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
-#: 쿠키가 아닌 자체 인증(토큰·키·서명)으로 도는, 밖에서 호출되는 경로
+#: 쿠키가 아닌 자체 인증(토큰·키·서명)으로 동작하며 외부에서 호출되는 경로
 EXEMPT_PREFIXES = (
     "/api/internal/",     # 내부 서비스(메일서버·ws-ldap·nginx auth_request) — 내부 키
     "/api/webhooks/",     # 수신 웹훅(Gitea 등) — 웹훅 시크릿
-    # WOPI 프로토콜(문서 편집기 → 백엔드, access_token). /api/wopi/open·/new 는 우리 화면이 세션 쿠키로
-    # 부르는 것이라 넣지 않는다 — 검사 대상이다.
+    # WOPI 프로토콜(문서 편집기 → 백엔드, access_token). /api/wopi/open·/new 는 본 프로젝트 화면이 세션 쿠키로
+    # 호출하므로 포함하지 않는다 — 검사 대상이다.
     "/api/wopi/files/",
-    "/api/mcp/",          # MCP(Streamable HTTP·SSE) — Bearer. 마운트 뿌리(/api/mcp)는 EXEMPT_EXACT
+    "/api/mcp/",          # MCP(Streamable HTTP·SSE) — Bearer. 마운트 루트(/api/mcp)는 EXEMPT_EXACT
     "/dav/",              # CalDAV/CardDAV — 앱 비밀번호(Basic)
 )
-#: OAuth/OIDC 클라이언트가 부르는 엔드포인트(클라이언트 인증·PKCE). 동의 결정(/oauth/consent/decide)은
-#: 세션 쿠키로 인증되는 우리 화면의 요청이라 여기 넣지 않는다 — 검사 대상이다.
+#: OAuth/OIDC 클라이언트가 호출하는 엔드포인트(클라이언트 인증·PKCE). 동의 결정(/oauth/consent/decide)은
+#: 세션 쿠키로 인증되는 본 프로젝트 화면의 요청이므로 포함하지 않는다 — 검사 대상이다.
 EXEMPT_EXACT = frozenset({
     "/oauth/token", "/oauth/revoke", "/oauth/register", "/oauth/introspect", "/oauth/userinfo",
     "/api/meetings/livekit/webhook",      # LiveKit 서버 → 서명 검증
-    "/api/mcp",                           # 접두는 경계까지만 — "/api/mcpx…" 같은 이웃 경로가 예외에 묻어 들지 않게
+    "/api/mcp",                           # 접두 일치는 경계까지만 적용 — "/api/mcpx…" 같은 인접 경로가 예외에 포함되지 않도록 함
 })
 
 
 def _origin_of(url: str) -> str | None:
-    """URL → "scheme://host[:port]"(소문자). 못 읽으면 None."""
+    """URL → "scheme://host[:port]"(소문자). 파싱 불가 시 None."""
     try:
         p = urlsplit(url.strip())
     except ValueError:
@@ -78,7 +78,7 @@ def _has_session_cookie(cookie_header: str) -> bool:
 
 
 class CookieOriginGuard:
-    """순수 ASGI 미들웨어(스트리밍 응답·업로드 본문을 건드리지 않는다)."""
+    """순수 ASGI 미들웨어(스트리밍 응답·업로드 본문을 변경하지 않는다)."""
 
     def __init__(self, app, allowed_origins=None, enabled: bool | None = None):
         self.app = app
@@ -97,22 +97,22 @@ class CookieOriginGuard:
             return True
         host = (host or "").strip().lower()
         if host:
-            # 같은 출처 요청(Host 는 공격자가 피해자 브라우저에서 못 바꾼다). 공개 주소가 https 인 설치본은
-            # https 만 — http 로 내려간 같은 이름의 출처는 중간자가 꾸밀 수 있다.
+            # 동일 출처 요청(공격자는 피해자 브라우저의 Host 를 변경할 수 없다). 공개 주소가 https 인 설치본은
+            # https 만 허용한다 — http 로 강등된 동일 이름의 출처는 중간자가 위조할 수 있다.
             if origin == f"https://{host}" or (not self.https and origin == f"http://{host}"):
                 return True
         if self.debug:
-            # 개발: vite 개발 서버(포트 무관) — 프록시가 Host 를 백엔드 주소로 바꿔 보내 위 비교에 안 걸린다
+            # 개발: vite 개발 서버(포트 무관) — 프록시가 Host 를 백엔드 주소로 변경하여 전달하므로 위 비교에 일치하지 않는다
             try:
                 h = urlsplit(origin).hostname or ""
-            except ValueError:      # 읽을 수 없는 출처 — 우리 출처가 아니다
+            except ValueError:      # 파싱 불가 출처 — 허용 출처 아님
                 return False
             if h in ("localhost", "127.0.0.1", "::1"):
                 return True
         return False
 
     def verdict(self, method: str, path: str, headers: dict[str, str]) -> str | None:
-        """막아야 하면 거부된 출처 문자열, 통과면 None. headers 키는 소문자."""
+        """차단 대상이면 거부된 출처 문자열, 통과이면 None 을 반환한다. headers 키는 소문자."""
         if method not in UNSAFE_METHODS:
             return None
         if not _has_session_cookie(headers.get("cookie", "")):
@@ -121,7 +121,7 @@ class CookieOriginGuard:
             return None
         raw = headers.get("origin", "").strip()
         if raw:
-            # "null"(샌드박스 iframe·불투명 출처)은 우리 출처가 아니다 — Referer 로 넘어가지 않고 막는다
+            # "null"(샌드박스 iframe·불투명 출처)은 허용 출처가 아니다 — Referer 로 fallback 하지 않고 차단한다
             origin = _origin_of(raw) or raw.lower()
         else:
             ref = headers.get("referer", "").strip()
@@ -145,12 +145,12 @@ class CookieOriginGuard:
             name = k.decode("latin-1").lower()
             if name in ("cookie", "authorization", "origin", "referer", "host"):
                 val = v.decode("latin-1")
-                # 쿠키 헤더는 HTTP/2 에서 여러 줄로 올 수 있다
+                # 쿠키 헤더는 HTTP/2 에서 여러 줄로 수신될 수 있다
                 headers[name] = f"{headers[name]}; {val}" if name == "cookie" and name in headers else val
         path = scope.get("path") or ""
         try:
             bad = self.verdict(method, path, headers)
-        except Exception as e:  # noqa: BLE001 — 판정하다 넘어지면(이상한 Origin/Referer 등) 500 이 아니라 거부
+        except Exception as e:  # noqa: BLE001 — 판정 중 예외 발생 시(비정상 Origin/Referer 등) 500 이 아닌 거부로 처리
             logger.warning("[csrf] 출처 판정 실패(거부): %s", e)
             bad = "(판정 실패)"
         if bad is None:

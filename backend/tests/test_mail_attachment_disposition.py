@@ -6,7 +6,7 @@ from app.mail.http_utils import attachment_disposition, inline_allowed
 def test_default_is_attachment_with_ascii_and_utf8_names():
     v = attachment_disposition("킥오프-아젠다.pdf")
     assert v.startswith("attachment; ")
-    # ASCII 폴백은 한글을 _ 로 바꾼다
+    # ASCII 폴백은 한글을 _ 로 치환
     assert 'filename="___-___.pdf"' in v
     # RFC 5987 UTF-8 이름은 퍼센트 인코딩
     assert "filename*=UTF-8''%ED%82%A5%EC%98%A4%ED%94%84-%EC%95%84%EC%A0%A0%EB%8B%A4.pdf" in v
@@ -24,7 +24,7 @@ def test_inline_with_safe_type_stays_inline():
 
 
 def test_inline_with_unsafe_type_falls_back_to_attachment():
-    # 보낸 사람이 정한 형식 — html/svg 를 앱 도메인에서 inline 으로 열면 저장형 XSS
+    # 발신자가 지정한 형식 — html/svg 를 앱 도메인에서 inline 으로 열면 저장형 XSS 발생
     for ct in ("text/html", "image/svg+xml", "application/xhtml+xml", "text/plain", "", "application/octet-stream"):
         assert attachment_disposition("x", inline=True, content_type=ct).startswith("attachment; "), ct
 

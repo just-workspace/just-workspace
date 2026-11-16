@@ -1,7 +1,7 @@
-"""백업·복원 테스트용 가짜 실행기 — docker 없이 스택 하나를 흉내 낸다.
+"""백업·복원 테스트용 가짜 실행기 — docker 없이 스택 하나를 모사한다.
 
-DB 는 "이름 → 내용(바이트)" 사전이다. pg_dump 는 그 내용을 내보내고 pg_restore 는 받아 넣는다.
-볼륨·프로젝트 폴더도 같은 식이다(볼륨은 통째로 한 덩어리, 프로젝트 폴더는 경로 → 내용).
+DB 는 "이름 → 내용(바이트)" 사전이다. pg_dump 는 해당 내용을 출력하고 pg_restore 는 수신하여 저장한다.
+볼륨·프로젝트 폴더도 동일 방식이다(볼륨은 전체가 단일 덩어리, 프로젝트 폴더는 경로 → 내용).
 """
 
 from __future__ import annotations
@@ -33,12 +33,12 @@ def container(name: str, *, running: bool = True, mounts: dict[str, str] | None 
 
 
 class FakeStack:
-    """runner.Runner 구현 — 명령을 해석해 사전을 고친다. events 에 한 일이 순서대로 남는다."""
+    """runner.Runner 구현 — 명령을 해석하여 사전을 수정한다. events 에 수행 내역이 순서대로 기록된다."""
 
     def __init__(self, *, mail: bool = True, gitea: bool = True, nfs: bool = False, hostname: str = "oneoff"):
         self.hostname = hostname
         self.events: list[str] = []
-        self.fail: dict[str, int] = {}                  # argv 에 이 문자열이 있으면 그 종료 코드로 실패
+        self.fail: dict[str, int] = {}                  # argv 에 이 문자열이 포함되면 해당 종료 코드로 실패
         self.dbs: dict[str, bytes] = {"workspace": b"LIVE-DB", "gitea": b"GITEA-DB", "postgres": b""}
         self.users = 7
         self.pg_version = 160004
@@ -174,7 +174,7 @@ class FakeStack:
             return f"{len(self.volumes.get(source, b'')) or 1}\t/v\n".encode()
         if entry == "sh" and "for f in" in rest[1]:
             return "\n".join(c for c in rest[3:] if self._project_has(c)).encode()
-        if entry == "tar":                                   # 뜨기
+        if entry == "tar":                                   # 아카이브 생성
             paths = rest[rest.index("/v") + 1:]
             self.events.append(f"tar-out {source}")
             if not is_project:
@@ -187,7 +187,7 @@ class FakeStack:
                         info.size = len(body)
                         tar.addfile(info, io.BytesIO(body))
             return buf.getvalue()
-        if entry == "sh":                                    # 풀기
+        if entry == "sh":                                    # 아카이브 추출
             script = rest[1]
             self.events.append(f"tar-in {source}")
             if not is_project:

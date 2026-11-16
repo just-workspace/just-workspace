@@ -15,17 +15,17 @@ from app.db.models import (
 from app.chat.link_preview import first_external_url, public_preview, stored_url
 from app.chat import msg22
 
-# 채널 목록 두 번째 줄에 넣는 마지막 메시지 미리보기 길이
+# 채널 목록 둘째 줄에 표시하는 마지막 메시지 미리보기 길이
 PREVIEW_LEN = 200
 
-# 채널별 알림 수준 값. NULL(기본)은 effective_notify_level 이 채널 종류로 푼다.
+# 채널별 알림 수준 값. NULL(기본)은 effective_notify_level 이 채널 종류에 따라 결정한다.
 NOTIFY_LEVELS = ("all", "mentions", "none")
 
 
 def effective_notify_level(level: str | None, channel_type: str) -> str:
-    """멤버행의 notify_level 이 비어 있으면 DM 은 'all', 그 외는 서버 기본값(chat22 server22, 기본 'mentions').
+    """멤버행의 notify_level 이 비어 있으면 DM 은 'all', 그 외는 서버 기본값(chat22 server22, 기본 'mentions')을 적용한다.
 
-    서버 기본값은 프로세스 캐시 — 이 값을 쓰는 서비스 함수가 먼저 `await server22.refresh(db)` 를 부른다.
+    서버 기본값은 프로세스 캐시에 있다 — 이 값을 사용하는 서비스 함수가 먼저 `await server22.refresh(db)` 를 호출한다.
     """
     if level in NOTIFY_LEVELS:
         return level
@@ -36,7 +36,7 @@ def effective_notify_level(level: str | None, channel_type: str) -> str:
 
 
 def effective_muted(muted, muted_until, now: datetime | None = None) -> bool:
-    """음소거 기간(chat22) — muted 이고 muted_until 이 지났으면 음소거 아님(지연 판정, 배치 정리 없음)."""
+    """음소거 기간(chat22) — muted 이며 muted_until 이 경과했으면 음소거 아님(지연 판정, 배치 정리 없음)."""
     if not muted:
         return False
     if muted_until is None:
@@ -55,10 +55,10 @@ def _iso(dt: datetime | None) -> str | None:
 
 
 def main_timeline_filter():
-    """메인 타임라인에 보이는 메시지 — 원 메시지, 또는 "채널에도 보내기" 한 답글.
+    """메인 타임라인에 표시되는 메시지 — 원 메시지, 또는 "채널에도 보내기" 를 적용한 답글.
 
-    미읽음 계산·마지막 메시지 포인터·타임라인 조회가 같은 조건을 써야 배지와 화면이 어긋나지
-    않는다. 기존 행은 auto-migrate 의 DEFAULT FALSE 로 채워지지만 NULL 도 안전하게 받는다.
+    미읽음 계산·마지막 메시지 포인터·타임라인 조회가 동일한 조건을 사용해야 배지와 화면의 불일치가
+    발생하지 않는다. 기존 행은 auto-migrate 의 DEFAULT FALSE 로 채워지나 NULL 도 안전하게 처리한다.
     """
     return or_(
         Message.parent_id.is_(None),
@@ -123,16 +123,16 @@ async def create_channel(
 
 
 async def get_user_channels(db: AsyncSession, user_id: str) -> list[dict]:
-    """내가 속한 채널 목록 + 미읽음·멘션 수 + 마지막 메시지.
+    """호출 사용자가 속한 채널 목록 + 미읽음·멘션 수 + 마지막 메시지.
 
-    쿼리 3개로 끝낸다(채널 수와 무관). (+ 서버 알림 기본값 캐시가 식었으면 1개)
-    1) 채널 + 내 멤버행 + 멤버 수 + 마지막 메시지(channels.last_message_seq 로 1행 조인)
-    2) 미읽음: seq > last_read_seq 인, 내가 보낸 게 아닌·삭제되지 않은 메인 타임라인 메시지 수
+    쿼리 3개로 처리한다(채널 수와 무관). (+ 서버 알림 기본값 캐시가 만료된 경우 1개)
+    1) 채널 + 본인 멤버행 + 멤버 수 + 마지막 메시지(channels.last_message_seq 로 1행 조인)
+    2) 미읽음: seq > last_read_seq 이며 본인이 보내지 않은·삭제되지 않은 메인 타임라인 메시지 수
     3) 멘션: chat_mentions 중 seq > last_read_seq 인 행 수
 
-    예전엔 last_read 를 created_at 으로 환산해 COUNT 두 번 + DISTINCT ON 이었다. seq 비교는
-    같은 ms 충돌이 없고 (channel_id, seq) 인덱스를 그대로 탄다. 스레드 답글은 메인 뷰에
-    안 보여서 채널을 열어도 읽음 처리가 안 되므로 미읽음에서 뺀다(배지가 영영 안 꺼지는 문제).
+    이전에는 last_read 를 created_at 으로 환산하여 COUNT 2회 + DISTINCT ON 을 사용했다. seq 비교는
+    동일 ms 충돌이 없으며 (channel_id, seq) 인덱스를 그대로 사용한다. 스레드 답글은 메인 뷰에
+    표시되지 않아 채널을 열어도 읽음 처리되지 않으므로 미읽음에서 제외한다(배지가 계속 남는 문제).
     """
     from app.chat import server22
     await server22.refresh(db)
@@ -188,7 +188,7 @@ async def get_user_channels(db: AsyncSession, user_id: str) -> list[dict]:
     if not rows:
         return []
 
-    # 미읽음 — 멤버행과 조인해 채널마다 다른 last_read_seq 를 한 쿼리에서 비교
+    # 미읽음 — 멤버행과 조인하여 채널별로 상이한 last_read_seq 를 단일 쿼리에서 비교
     unread_rows = (
         await db.execute(
             select(Message.channel_id, func.count(Message.id))
@@ -241,7 +241,7 @@ async def get_user_channels(db: AsyncSession, user_id: str) -> list[dict]:
             "created_by": ch.created_by,
             "is_archived": ch.is_archived,
             "is_voice": bool(ch.is_voice),
-            # 카테고리·정렬 — 프런트 카테고리 화면이 쓴다. NULL = 카테고리 없음
+            # 카테고리·정렬 — 프런트 카테고리 화면에서 사용. NULL = 카테고리 없음
             "category_id": ch.category_id,
             "position": ch.position,
             "created_at": ch.created_at,
@@ -253,7 +253,7 @@ async def get_user_channels(db: AsyncSession, user_id: str) -> list[dict]:
             "last_read_seq": last_read_seq,
             "last_message_seq": ch.last_message_seq,
             "last_message": last_message,
-            # 채널별 알림 설정 — 기본값은 채널 종류로 푼 실효값을 내려 프런트가 따로 계산하지 않게
+            # 채널별 알림 설정 — 기본값은 채널 종류에 따라 결정한 실효값을 반환하여 프런트의 별도 계산을 불필요하게 함
             "notify_level": effective_notify_level(notify_level, ch.type),
             "muted": effective_muted(muted, muted_until),
             "muted_until": _iso(muted_until) if effective_muted(muted, muted_until) else None,
@@ -262,7 +262,7 @@ async def get_user_channels(db: AsyncSession, user_id: str) -> list[dict]:
             "default_thread_auto_archive_minutes": ch.default_thread_auto_archive_minutes or msg22.DEFAULT_THREAD_ARCHIVE,
         })
 
-    # 최근 대화가 위로. 메시지가 하나도 없는 채널은 생성 시각으로 정렬한다.
+    # 최근 대화 우선 정렬. 메시지가 없는 채널은 생성 시각으로 정렬한다.
     def _sort_key(item: dict):
         lm = item.get("last_message")
         return (lm or {}).get("created_at") or item["created_at"]
@@ -294,7 +294,7 @@ async def delete_channel(db: AsyncSession, channel_id: str) -> bool:
     ch = await db.get(Channel, channel_id)
     if not ch:
         return False
-    # 권한 덮어쓰기는 FK 가 없다(대상이 여러 테이블) — 채널과 같이 지운다
+    # 권한 덮어쓰기는 FK 가 없음(대상이 여러 테이블) — 채널과 함께 삭제한다
     from app.db.models import ChatPermissionOverwrite
     await db.execute(delete(ChatPermissionOverwrite).where(
         ChatPermissionOverwrite.target_kind == "channel", ChatPermissionOverwrite.target_id == channel_id,
@@ -411,13 +411,13 @@ async def create_message(
     flags: int = 0,
     attachments: str | None = None,
 ) -> dict:
-    """메시지 1건 생성. 답글(parent_id)이면 스레드 팔로우도 함께 맞춘다.
+    """메시지 1건 생성. 답글(parent_id)이면 스레드 팔로우도 함께 갱신한다.
 
-    chat22: reply_to_id(인라인 답장 — 호출자가 msg22.validate_reply 로 검사), flags(SILENT·REPLY_PING),
-    attachments(JSON 배열). 답글이 오면 루트 스레드의 보관을 풀고 마지막 활동을 올린다.
+    chat22: reply_to_id(인라인 답장 — 호출자가 msg22.validate_reply 로 검증), flags(SILENT·REPLY_PING),
+    attachments(JSON 배열). 답글 생성 시 루트 스레드의 보관을 해제하고 마지막 활동 시각을 갱신한다.
 
-    `thread_broadcast`("채널에도 보내기")는 답글에만 의미가 있다 — 원 메시지에 오면 무시.
-    답글 작성자는 자기 답글까지 읽은 것으로, 루트 작성자는 자동 팔로우(단, 끊어 둔 사람은 그대로).
+    `thread_broadcast`("채널에도 보내기")는 답글에만 유효하다 — 원 메시지에 지정되면 무시한다.
+    답글 작성자는 본인 답글까지 읽은 것으로 처리하며, 루트 작성자는 자동 팔로우된다(단, 팔로우를 해제한 사용자는 유지).
     """
     thread_broadcast = bool(thread_broadcast and parent_id is not None)
     msg = Message(
@@ -435,8 +435,8 @@ async def create_message(
     )
     db.add(msg)
     await db.flush()
-    # PG 에서는 seq 가 INSERT 의 nextval 로 들어가고 ORM 은 그 컬럼을 expire 만 해두므로
-    # msg.seq 를 그냥 읽으면 async 세션에서 암묵적 IO(MissingGreenlet)가 난다 → 명시 조회.
+    # PG 에서는 seq 가 INSERT 의 nextval 로 설정되고 ORM 은 해당 컬럼을 expire 처리만 하므로
+    # msg.seq 를 직접 읽으면 async 세션에서 암묵적 IO(MissingGreenlet)가 발생한다 → 명시 조회.
     seq = (
         await db.execute(select(Message.seq).where(Message.id == msg.id))
     ).scalar_one()
@@ -444,7 +444,7 @@ async def create_message(
         await _bump_channel_last_message(db, channel_id, seq, msg.created_at, content)
     if parent_id is not None:
         await _auto_follow_on_reply(db, parent_id, channel_id, sender_id, seq)
-        # 보관된 스레드에 답글이 오면 보관 해제(디스코드와 같다)
+        # 보관된 스레드에 답글이 생성되면 보관 해제(디스코드와 동일)
         await db.execute(
             update(Message).where(Message.id == parent_id)
             .values(thread_archived_at=None, thread_activity_at=msg.created_at, updated_at=Message.updated_at)
@@ -463,7 +463,7 @@ async def create_message(
 async def _auto_follow_on_reply(
     db: AsyncSession, root_id: str, channel_id: str, sender_id: str | None, reply_seq: int
 ) -> None:
-    """답글이 달렸다 — 답글 작성자(다시 켜고 읽음 포인터를 이 답글로)·루트 작성자(없으면 추가)."""
+    """답글 생성 시 처리 — 답글 작성자(팔로우를 재활성화하고 읽음 포인터를 이 답글로 설정)·루트 작성자(없으면 추가)."""
     root_sender = (
         await db.execute(select(Message.sender_id).where(Message.id == root_id))
     ).scalar_one_or_none()
@@ -478,10 +478,10 @@ async def _auto_follow_on_reply(
 async def _bump_channel_last_message(
     db: AsyncSession, channel_id: str, seq: int, created_at: datetime, content: str | None
 ) -> None:
-    """channels.last_message_* 를 이 메시지로 올린다 — 단, seq 가 더 큰 쪽이 이미 있으면 그대로.
+    """channels.last_message_* 를 이 메시지로 갱신한다 — 단, seq 가 더 큰 값이 이미 있으면 유지한다.
 
-    워커 8개가 같은 채널에 동시에 쓰면 커밋 순서가 seq 순과 다를 수 있어서 `<` 가드가
-    필요하다. updated_at 은 채널 설정 변경용이라 건드리지 않는다(onupdate 억제).
+    워커 8개가 동일 채널에 동시에 기록하면 커밋 순서가 seq 순서와 다를 수 있으므로 `<` 가드가
+    필요하다. updated_at 은 채널 설정 변경용이므로 변경하지 않는다(onupdate 억제).
     """
     await db.execute(
         update(Channel)
@@ -499,7 +499,7 @@ async def _bump_channel_last_message(
 
 
 async def _recompute_channel_last_message(db: AsyncSession, channel_id: str) -> None:
-    """마지막 메시지가 삭제됐을 때 그 직전 메시지로 포인터를 되감는다. 없으면 NULL."""
+    """마지막 메시지가 삭제된 경우 그 직전 메시지로 포인터를 되돌린다. 없으면 NULL."""
     prev = (
         await db.execute(
             select(Message)
@@ -525,7 +525,7 @@ async def _recompute_channel_last_message(db: AsyncSession, channel_id: str) -> 
 
 
 async def _seq_of(db: AsyncSession, message_id: str | None) -> int | None:
-    """메시지 id 커서를 seq 로 바꾼다. 없는 id 면 None(= 커서 무시, 기존 동작 유지)."""
+    """메시지 id 커서를 seq 로 변환한다. 존재하지 않는 id 이면 None(= 커서 무시, 기존 동작 유지)."""
     if not message_id:
         return None
     return (
@@ -545,13 +545,13 @@ async def get_messages(
 ) -> tuple[list[dict], bool]:
     """채널 메인 타임라인 한 페이지.
 
-    user_id 를 주면 각 메시지에 is_saved(내가 저장했는지)를 붙인다. 답글이 있는 메시지에는
-    thread_participants(최근 답글 순 최대 5명)·last_reply_at 도 붙는다.
+    user_id 지정 시 각 메시지에 is_saved(해당 사용자의 저장 여부)를 포함한다. 답글이 있는 메시지에는
+    thread_participants(최근 답글 순 최대 5명)·last_reply_at 도 포함한다.
 
-    커서는 전부 seq 로 푼다. `before`/`after` 는 메시지 id(기존 프런트 호환),
-    `before_seq`/`after_seq` 는 seq 직접 지정(재접속 복구·캐시 델타용). 둘 다 오면
-    seq 쪽이 이긴다. created_at 커서는 같은 ms 에 두 메시지가 있으면 하나를 건너뛰어서
-    더 쓰지 않는다.
+    커서는 모두 seq 로 변환한다. `before`/`after` 는 메시지 id(기존 프런트 호환),
+    `before_seq`/`after_seq` 는 seq 직접 지정(재접속 복구·캐시 델타용). 둘 다 지정되면
+    seq 쪽이 우선한다. created_at 커서는 동일 ms 에 메시지가 2건 있으면 1건을 누락하므로
+    더 이상 사용하지 않는다.
     """
     q = (
         select(Message, User)
@@ -559,7 +559,7 @@ async def get_messages(
         .where(
             Message.channel_id == channel_id,
             Message.is_deleted == False,  # noqa: E712
-            main_timeline_filter(),   # 답글은 "채널에도 보내기" 한 것만 메인 뷰에
+            main_timeline_filter(),   # 답글은 "채널에도 보내기" 를 적용한 것만 메인 뷰에 표시
         )
     )
 
@@ -627,7 +627,7 @@ async def _build_read_by_map(
 ) -> list[tuple[dict, int | None]]:
     """[(user_info_dict, last_read_seq), ...] — 채널 멤버 전원.
 
-    읽음 포인터가 seq 라서 메시지 테이블 조인 없이 멤버행만 읽으면 된다.
+    읽음 포인터가 seq 이므로 메시지 테이블 조인 없이 멤버행만 조회한다.
     """
     member_rows = (
         await db.execute(
@@ -660,7 +660,7 @@ async def update_message(
     msg.content = content
     msg.is_edited = True
     msg.updated_at = datetime.now(timezone.utc)
-    # 첫 외부 링크가 바뀌면 예전 카드(또는 "지움" 표시)를 버린다 — 새 카드는 라우터가 다시 예약한다
+    # 첫 외부 링크가 변경되면 기존 카드(또는 "지움" 표시)를 제거한다 — 새 카드는 라우터가 다시 예약한다
     if msg.link_preview and stored_url(msg.link_preview) != first_external_url(content):
         msg.link_preview = None
     await db.commit()
@@ -681,9 +681,9 @@ async def soft_delete_message(
     msg.content = ""
     msg.link_preview = None
     msg.updated_at = datetime.now(timezone.utc)
-    # 멘션 배지는 삭제된 메시지를 세면 안 된다 — 행을 지워 카운트 쿼리에 조인을 안 둔다
+    # 멘션 배지는 삭제된 메시지를 집계하면 안 됨 — 행을 삭제하여 카운트 쿼리에 조인을 두지 않는다
     await db.execute(delete(ChatMention).where(ChatMention.message_id == message_id))
-    # 채널 목록의 "마지막 메시지" 가 이 메시지였으면 직전 것으로 되감는다
+    # 채널 목록의 "마지막 메시지" 가 이 메시지였으면 직전 메시지로 되돌린다
     ch = await db.get(Channel, msg.channel_id)
     if ch is not None and ch.last_message_seq is not None and ch.last_message_seq == msg.seq:
         await _recompute_channel_last_message(db, msg.channel_id)
@@ -694,10 +694,10 @@ async def soft_delete_message(
 async def mark_read(
     db: AsyncSession, channel_id: str, user_id: str, message_id: str
 ) -> int | None:
-    """읽음 포인터를 message_id 의 seq 로 올린다. 올린 seq 를 돌려준다(없거나 뒤로 가면 None).
+    """읽음 포인터를 message_id 의 seq 로 전진시킨다. 갱신된 seq 를 반환한다(없거나 후퇴인 경우 None).
 
-    포인터는 단조 증가만 한다 — 스크롤을 올려 옛 메시지를 보다가 mark_read 가 와도
-    미읽음이 되살아나면 안 된다. 메시지가 다른 채널 것이거나 없으면 무시한다.
+    포인터는 단조 증가만 허용한다 — 스크롤을 올려 이전 메시지를 보는 중에 mark_read 가 수신되어도
+    미읽음이 복원되어서는 안 된다. 메시지가 다른 채널 소속이거나 없으면 무시한다.
     """
     seq = (
         await db.execute(
@@ -725,11 +725,11 @@ async def mark_read(
 async def mark_unread(
     db: AsyncSession, channel_id: str, user_id: str, message_id: str
 ) -> int | None:
-    """"여기부터 안 읽음" — 읽음 포인터를 message_id 의 seq 바로 앞으로 **되감는다**.
+    """"여기부터 안 읽음" — 읽음 포인터를 message_id 의 seq 직전으로 **되돌린다**.
 
-    mark_read 와 달리 뒤로 가는 것이 목적이다(이미 그보다 앞이면 그대로). 그 메시지와 그 뒤의
-    메인 타임라인 메시지·멘션이 다시 미읽음으로 센다. 돌려주는 값은 새 포인터(seq - 1);
-    메시지가 다른 채널 것이거나 없으면 None.
+    mark_read 와 달리 후퇴가 목적이다(이미 그보다 앞이면 유지). 해당 메시지와 그 이후의
+    메인 타임라인 메시지·멘션이 다시 미읽음으로 집계된다. 반환값은 새 포인터(seq - 1);
+    메시지가 다른 채널 소속이거나 없으면 None.
     """
     seq = (
         await db.execute(
@@ -748,7 +748,7 @@ async def mark_unread(
             ChannelMember.user_id == user_id,
             or_(ChannelMember.last_read_seq.is_(None), ChannelMember.last_read_seq > new_seq),
         )
-        # 포인터가 가리키는 메시지 id 는 이제 모르니 비운다(백필 로직은 last_read_seq 가 NULL 일 때만 본다)
+        # 포인터가 가리키는 메시지 id 는 더 이상 알 수 없으므로 비운다(백필 로직은 last_read_seq 가 NULL 일 때만 참조)
         .values(last_read_message_id=None, last_read_seq=new_seq)
     )
     await db.commit()
@@ -756,9 +756,9 @@ async def mark_unread(
 
 
 async def get_unread_state(db: AsyncSession, user_id: str, channel_id: str) -> dict:
-    """채널 하나의 {unread_count, mention_count, group_mention} — WS 이벤트 한 건에 쓴다.
+    """채널 하나의 {unread_count, mention_count, group_mention} — WS 이벤트 1건에 사용한다.
 
-    get_user_channels 의 미읽음·멘션 쿼리와 같은 조건이어야 한다.
+    get_user_channels 의 미읽음·멘션 쿼리와 동일한 조건이어야 한다.
     """
     last_read = (
         await db.execute(
@@ -802,10 +802,10 @@ async def update_channel_prefs(
     thread_replies: bool | None = None,
     muted_minutes=...,
 ) -> dict | None:
-    """내 멤버행의 notify_level/muted/기기 알림 세부를 바꾼다. 멤버가 아니면 None. 바뀐 뒤의 실효값을 돌려준다.
+    """본인 멤버행의 notify_level/muted/기기 알림 세부를 변경한다. 멤버가 아니면 None. 변경 후의 실효값을 반환한다.
 
-    muted_minutes(chat22): 정수 = 지금부터 그 분 동안 음소거, None = 내가 끌 때까지, ...(안 줌) = 손대지 않음.
-    muted=False 면 기간도 지운다.
+    muted_minutes(chat22): 정수 = 현재부터 해당 분 동안 음소거, None = 사용자가 직접 해제할 때까지, ...(미지정) = 변경하지 않음.
+    muted=False 이면 기간도 삭제한다.
     """
     from app.chat import server22
     await server22.refresh(db)
@@ -856,7 +856,7 @@ def _prefs_dict(channel_id: str, cm, ch_type: str) -> dict:
 
 
 def _device_prefs(cm) -> dict:
-    """NULL(마이그레이션 직후 등)은 기본값으로 푼다."""
+    """NULL(마이그레이션 직후 등)은 기본값으로 처리한다."""
     return {
         "desktop": cm.pref_desktop is not False,
         "push": cm.pref_push is not False,
@@ -882,7 +882,7 @@ async def get_channel_prefs(db: AsyncSession, channel_id: str, user_id: str) -> 
 
 
 async def get_members_for_notify(db: AsyncSession, channel_id: str) -> list[dict]:
-    """푸시 판단용 멤버 전원 — 한 쿼리. [{user_id, username, display_name, notify_level(실효), muted}]."""
+    """푸시 판단용 멤버 전원 — 단일 쿼리. [{user_id, username, display_name, notify_level(실효), muted}]."""
     from app.chat import server22
     await server22.refresh(db)
     rows = (
@@ -999,8 +999,8 @@ async def search_messages(
     """Search messages the user has access to.
 
     ILIKE 부분일치를 유지한다(한국어 요구사항). session.py 가 messages.content 에
-    pg_trgm GIN(ix_messages_content_trgm) 을 깔아 이 쿼리가 인덱스를 탄다 — 단, trigram
-    특성상 질의가 3글자 미만이면 플래너가 순차 스캔으로 떨어질 수 있다.
+    pg_trgm GIN(ix_messages_content_trgm) 을 생성하므로 이 쿼리는 인덱스를 사용한다 — 단, trigram
+    특성상 질의가 3글자 미만이면 플래너가 순차 스캔을 선택할 수 있다.
     """
     # Get user's channel IDs
     user_channels_q = select(ChannelMember.channel_id).where(
@@ -1038,11 +1038,11 @@ async def search_messages(
 
 # ─── Mentions & Notifications ───
 
-# 사용자 이름에 . - 가 들어갈 수 있다(first-last). 끝의 . - 는 문장부호로 본다 — 프런트 utils/chatMarkdown.ts 와 같게.
+# 사용자 이름에 . - 가 포함될 수 있다(first-last). 끝의 . - 는 문장부호로 간주한다 — 프런트 utils/chatMarkdown.ts 와 동일.
 MENTION_RE = re.compile(r'(?:^|(?<=\s))@(\w(?:[\w.-]*\w)?)')
 
 
-# 채널 전원을 부르는 말. 프런트 utils/chatMarkdown.ts 의 GROUP_MENTIONS 와 같아야 한다.
+# 채널 전원을 호출하는 단어. 프런트 utils/chatMarkdown.ts 의 GROUP_MENTIONS 와 동일해야 한다.
 GROUP_MENTIONS = frozenset({"channel", "all", "here", "everyone", "채널", "전체", "모두"})
 
 
@@ -1052,7 +1052,7 @@ def parse_mentions(content: str) -> list[str]:
 
 
 def split_mentions(names: list[str]) -> tuple[list[str], bool]:
-    """(개인 사용자명들, 그룹 멘션 여부)."""
+    """(개인 사용자명 목록, 그룹 멘션 여부)."""
     group = any(n.lower() in GROUP_MENTIONS for n in names)
     return [n for n in names if n.lower() not in GROUP_MENTIONS], group
 
@@ -1067,8 +1067,8 @@ async def create_notifications_for_mentions(
 ) -> list[dict]:
     """Create Notification rows for valid mentions. Returns list of notification dicts.
 
-    silent(@silent, chat22): 멘션 행(배지)은 남기고 알림(인앱·푸시)은 만들지 않는다 — 돌려주는 것은
-    {"user_id", "silent": True} 만 있는 dict(배지 갱신 대상).
+    silent(@silent, chat22): 멘션 행(배지)은 기록하고 알림(인앱·푸시)은 생성하지 않는다 — 반환값은
+    {"user_id", "silent": True} 만 포함하는 dict(배지 갱신 대상).
     """
     from app.notifications.service import create_notification
 
@@ -1081,14 +1081,14 @@ async def create_notifications_for_mentions(
     from app.chat import server22
     await server22.refresh(db)
 
-    # @everyone·@채널 — MENTION_EVERYONE(그림자 모드에선 예전처럼 누구나, 차이만 기록)
+    # @everyone·@채널 — MENTION_EVERYONE(그림자 모드에서는 기존과 같이 누구나 허용, 차이만 기록)
     from app.chat import permissions as perms
     if is_group and ch is not None and not await perms.allowed(
         db, perms.system_user(sender_id), "mention.everyone", ch,
     ):
         is_group = False
 
-    # 채널 멤버 전원 + 알림 수준(한 쿼리). 'none' 인 사람은 인앱 알림·배지만 받고 푸시는 안 간다.
+    # 채널 멤버 전원 + 알림 수준(단일 쿼리). 'none' 인 사용자는 인앱 알림·배지만 수신하며 푸시는 송신되지 않는다.
     member_rows = (
         await db.execute(
             select(ChannelMember.user_id, ChannelMember.notify_level, ChannelMember.pref_push)
@@ -1096,7 +1096,7 @@ async def create_notifications_for_mentions(
         )
     ).all()
     member_ids = {uid for uid, _lvl, _p in member_rows}
-    # 'none' 이거나 이 채널 기기 푸시를 끈 사람은 인앱 알림만
+    # 'none' 이거나 이 채널의 기기 푸시를 비활성화한 사용자는 인앱 알림만 수신
     push_ok = {
         uid: effective_notify_level(lvl, ch_type) != "none" and pref_push is not False
         for uid, lvl, pref_push in member_rows
@@ -1115,12 +1115,12 @@ async def create_notifications_for_mentions(
     sender = await db.get(User, sender_id)
     sender_name = (sender.display_name or sender.username) if sender else "알 수 없음"
 
-    # 보낸 사람 자신과 비멤버는 제외. 멘션 행과 알림은 같은 대상 집합에 남겨 숫자가 어긋나지 않게.
+    # 발신자 본인과 비멤버는 제외. 멘션 행과 알림은 동일한 대상 집합에 기록하여 수치 불일치를 방지한다.
     targets = [u for u in mentioned_users if u.id != sender_id and u.id in member_ids]
     personal_ids = {u.id for u in targets}
 
-    # @역할 — 사용자 이름이 아닌 것만 역할로 본다(같은 이름이면 사람이 이긴다).
-    # 받는 사람은 개인 멘션처럼 센다(배지·알림). 이미 이름으로 불린 사람은 한 번만.
+    # @역할 — 사용자 이름이 아닌 것만 역할로 간주한다(이름이 동일하면 사용자가 우선).
+    # 수신자는 개인 멘션과 동일하게 집계한다(배지·알림). 이미 이름으로 멘션된 사용자는 1회만 집계.
     found_names = {u.username.lower() for u in mentioned_users}
     role_targets: list[tuple[str, str]] = []   # (user_id, 역할 이름)
     try:
@@ -1143,7 +1143,7 @@ async def create_notifications_for_mentions(
 
     await record_mentions(db, msg_dict, channel_id, list(personal_ids | role_ids_hit))
 
-    # 그룹 멘션(@채널 등) — 이름이 따로 불리지 않은 나머지 멤버 전원
+    # 그룹 멘션(@채널 등) — 이름으로 별도 멘션되지 않은 나머지 멤버 전원
     group_ids: list[str] = []
     if is_group:
         group_ids = [uid for uid in member_ids if uid != sender_id and uid not in personal_ids]
@@ -1158,7 +1158,7 @@ async def create_notifications_for_mentions(
         await record_mentions(db, msg_dict, channel_id, group_ids, is_group=True)
     ch_label = f"#{ch.name}" if ch and ch.type != "dm" else "대화"
 
-    # 답글 안에서 불린 사람은 그 스레드를 자동 팔로우한다(그룹 멘션은 제외 — 전원 구독은 과하다)
+    # 답글에서 멘션된 사용자는 해당 스레드를 자동 팔로우한다(그룹 멘션은 제외 — 전원 구독은 과도함)
     if msg_dict.get("parent_id") and personal_ids:
         await ensure_thread_follows(db, msg_dict["parent_id"], channel_id, list(personal_ids))
 
@@ -1199,10 +1199,10 @@ async def record_mentions(
     user_ids: list[str],
     is_group: bool = False,
 ) -> int:
-    """채널별 멘션 배지용 chat_mentions 행을 남긴다. 남긴 행 수를 돌려준다.
+    """채널별 멘션 배지용 chat_mentions 행을 기록한다. 기록한 행 수를 반환한다.
 
-    msg_dict 는 create_message 가 돌려준 것(id·seq 포함). 같은 메시지로 두 번 불려도
-    유니크 인덱스에 걸리는 행은 건너뛴다 — 재전송·재처리에 안전.
+    msg_dict 는 create_message 의 반환값(id·seq 포함). 동일 메시지로 2회 호출되어도
+    유니크 인덱스에 충돌하는 행은 제외한다 — 재전송·재처리에 안전.
     """
     seq = msg_dict.get("seq")
     message_id = msg_dict.get("id")
@@ -1238,7 +1238,7 @@ async def record_mentions(
 
 
 async def get_mention_count(db: AsyncSession, user_id: str, channel_id: str) -> int:
-    """채널 하나의 미읽음 개인 멘션 수 — 채널 하나만 갱신할 때(WS 이벤트) 쓴다."""
+    """채널 하나의 미읽음 개인 멘션 수 — 채널 하나만 갱신하는 경우(WS 이벤트)에 사용한다."""
     c, _g = await get_mention_state(db, user_id, channel_id)
     return c
 
@@ -1302,7 +1302,7 @@ async def get_saved_ids(db: AsyncSession, user_id: str | None, message_ids: list
 
 
 async def get_thread_meta(db: AsyncSession, root_ids: list[str]) -> dict[str, dict]:
-    """{root_id: {participants: [{id, username, display_name, avatar_url}], last_reply_at}} — 한 쿼리."""
+    """{root_id: {participants: [{id, username, display_name, avatar_url}], last_reply_at}} — 단일 쿼리."""
     if not root_ids:
         return {}
     rows = (await db.execute(
@@ -1338,7 +1338,7 @@ async def get_thread_messages(
 ) -> list[dict]:
     """Get replies to a parent message, oldest first.
 
-    limit 를 넘으면 **최신** limit 개를 준다 — 예전엔 오래된 것부터 잘라, 답글이 많은 스레드에서 최근 답글이 안 보였다.
+    limit 초과 시 **최신** limit 개를 반환한다 — 이전에는 오래된 것부터 잘라, 답글이 많은 스레드에서 최근 답글이 표시되지 않았다.
     """
     rows = (
         await db.execute(
@@ -1367,7 +1367,7 @@ async def get_thread_messages(
         result.append(d)
     await msg22.enrich(db, [(m, d) for (m, _u), d in zip(rows, result)])
     for d in result:
-        d["thread"] = None   # 답글에는 스레드 메타가 없다
+        d["thread"] = None   # 답글에는 스레드 메타 없음
     return result
 
 
@@ -1442,7 +1442,7 @@ async def get_reactions_for_messages(
 # ─── Helpers ───
 
 async def get_message_dict(db: AsyncSession, msg: Message, user_id: str | None = None) -> dict:
-    """메시지 한 건을 목록과 같은 모양으로(답글 수·리액션·스레드 메타 포함). 스레드 패널의 원문용."""
+    """메시지 1건을 목록과 동일한 형식으로 반환한다(답글 수·리액션·스레드 메타 포함). 스레드 패널의 원문용."""
     sender = await db.get(User, msg.sender_id) if msg.sender_id else None
     d = _message_to_dict(msg, sender)
     d["reply_count"] = (await get_thread_reply_count(db, [msg.id])).get(msg.id, 0)
@@ -1471,7 +1471,7 @@ def _message_to_dict(msg: Message, sender: User | None) -> dict:
         "is_deleted": msg.is_deleted,
         "pinned_at": msg.pinned_at.isoformat() if msg.pinned_at else None,
         "pinned_by": msg.pinned_by if msg.pinned_at else None,
-        # 링크 미리보기 카드. 없거나 보낸 사람이 지웠으면 None — 표시 여부는 받는 쪽 설정(chat.link_preview)
+        # 링크 미리보기 카드. 없거나 발신자가 삭제했으면 None — 표시 여부는 수신 측 설정(chat.link_preview)에 따름
         "link_preview": public_preview(getattr(msg, "link_preview", None)),
         "seq": msg.seq,
         "created_at": msg.created_at.isoformat(),
@@ -1485,9 +1485,9 @@ def _message_to_dict(msg: Message, sender: User | None) -> dict:
 
 
 async def get_latest_seq(db: AsyncSession) -> int:
-    """지금까지 부여된 가장 큰 seq. 메시지가 하나도 없으면 0.
+    """현재까지 부여된 최대 seq. 메시지가 없으면 0.
 
-    클라이언트가 자기 채널에 새 메시지가 없어도 커서를 앞으로 옮길 수 있게 쓴다.
+    클라이언트가 본인 채널에 새 메시지가 없어도 커서를 전진시킬 수 있도록 하는 용도이다.
     """
     return (await db.execute(select(func.coalesce(func.max(Message.seq), 0)))).scalar_one()
 
@@ -1498,14 +1498,14 @@ async def get_changes_since(
     since_seq: int,
     limit: int = 500,
 ) -> dict:
-    """재접속 복구: 내가 속한 모든 채널에서 since_seq 이후 생긴 메시지.
+    """재접속 복구: 호출 사용자가 속한 모든 채널에서 since_seq 이후 생성된 메시지.
 
-    스레드 답글도 포함한다(클라이언트가 parent_id 로 라우팅). limit 를 넘으면 목록을
-    비우고 `too_many=True` 만 돌려준다 — 그때는 풀 리프레시가 더 싸다(Matrix 의
-    UnknownPos 리셋, Zulip 의 BAD_EVENT_QUEUE_ID 와 같은 선택).
+    스레드 답글도 포함한다(클라이언트가 parent_id 로 라우팅). limit 초과 시 목록을
+    비우고 `too_many=True` 만 반환한다 — 이 경우 전체 새로고침의 비용이 더 낮다(Matrix 의
+    UnknownPos 리셋, Zulip 의 BAD_EVENT_QUEUE_ID 와 동일한 선택).
 
-    한계: 끊긴 동안의 **편집·삭제·리액션** 은 seq 를 올리지 않아 여기 안 잡힌다.
-    삭제된 메시지는 is_deleted 플래그로 그대로 내려주므로 클라이언트가 지울 수 있다.
+    한계: 연결이 끊긴 동안의 **편집·삭제·리액션** 은 seq 를 증가시키지 않아 여기에 포함되지 않는다.
+    삭제된 메시지는 is_deleted 플래그와 함께 그대로 반환하므로 클라이언트가 제거할 수 있다.
     """
     user_channels_q = select(ChannelMember.channel_id).where(
         ChannelMember.user_id == user_id
@@ -1543,12 +1543,12 @@ async def get_changes_since(
 
 # ─── 저장한 메시지 · 내 스레드 ───
 #
-# 데스크톱 셸의 "모아보기" 열(멘션 · 저장됨 · 스레드)이 쓰는 두 목록이다.
-# 멘션은 이미 알림에 있어서 여기서는 나머지 둘만 다룬다.
+# 데스크톱 셸의 "모아보기" 열(멘션 · 저장됨 · 스레드)이 사용하는 두 목록이다.
+# 멘션은 이미 알림에 포함되므로 여기서는 나머지 둘만 다룬다.
 
 
 async def _decorate(db: AsyncSession, rows: list[Message]) -> list[dict]:
-    """메시지에 보낸 사람 이름과 채널 이름을 붙인다. 카드 한 장에 필요한 최소치다."""
+    """메시지에 발신자 이름과 채널 이름을 추가한다. 카드 1장에 필요한 최소 정보이다."""
     if not rows:
         return []
     sender_ids = {m.sender_id for m in rows if m.sender_id}
@@ -1584,7 +1584,7 @@ async def _decorate(db: AsyncSession, rows: list[Message]) -> list[dict]:
 
 
 async def save_message(db: AsyncSession, user_id: str, message_id: str) -> bool:
-    """저장 토글의 '저장' 쪽. 이미 저장돼 있으면 아무것도 하지 않는다."""
+    """저장 토글의 '저장' 동작. 이미 저장된 경우 no-op."""
     exists = (
         await db.execute(
             select(SavedMessage).where(
@@ -1631,8 +1631,8 @@ async def get_saved_messages(
 
 # ─── 스레드 팔로우 ───
 #
-# 참여(원 글·답글·멘션)하면 자동으로 팔로우되고, 사람이 끊거나 다시 켤 수 있다.
-# "내 스레드" 목록과 스레드 미읽음은 전부 thread_follows 에서 나온다.
+# 참여(원 글·답글·멘션) 시 자동으로 팔로우되며, 사용자가 해제하거나 다시 활성화할 수 있다.
+# "내 스레드" 목록과 스레드 미읽음은 모두 thread_follows 에서 산출한다.
 
 
 async def ensure_thread_follows(
@@ -1643,11 +1643,11 @@ async def ensure_thread_follows(
     refollow: bool = False,
     read_seq: int | None = None,
 ) -> int:
-    """없는 팔로우 행을 만든다. 새로 만든 행 수를 돌려준다.
+    """없는 팔로우 행을 생성한다. 신규 생성한 행 수를 반환한다.
 
-    이미 끊어 둔(followed=False) 사람은 그대로 두는 것이 기본 — `refollow=True` 는 본인이
-    답글을 직접 쓴 경우처럼 다시 켜도 되는 때만. `read_seq` 가 있으면 그 사람의 읽음
-    포인터를 거기까지 올린다(자기 답글은 읽은 것이다). 커밋은 호출자가 한다.
+    이미 해제한(followed=False) 사용자는 유지하는 것이 기본이다 — `refollow=True` 는 본인이
+    답글을 직접 작성한 경우처럼 재활성화가 허용되는 때에만 사용한다. `read_seq` 가 있으면 해당 사용자의 읽음
+    포인터를 그 위치까지 전진시킨다(본인 답글은 읽은 것으로 간주). 커밋은 호출자가 수행한다.
     """
     user_ids = [u for u in dict.fromkeys(user_ids) if u]
     if not user_ids:
@@ -1689,7 +1689,7 @@ async def ensure_thread_follows(
 async def set_thread_follow(
     db: AsyncSession, user_id: str, root_id: str, followed: bool
 ) -> dict | None:
-    """팔로우 켜기/끄기. 루트가 없거나 답글이면 None. {root_id, channel_id, followed}."""
+    """팔로우 활성화/비활성화. 루트가 없거나 답글이면 None. {root_id, channel_id, followed}."""
     root = await db.get(Message, root_id)
     if root is None or root.parent_id is not None:
         return None
@@ -1701,7 +1701,7 @@ async def set_thread_follow(
         )
     ).scalar_one_or_none()
     if tf is None:
-        # 끊기만 하는데 행이 없어도 끊긴 행을 남긴다 — 다음 답글의 자동 팔로우를 막기 위해
+        # 해제만 요청되고 행이 없는 경우에도 해제 상태의 행을 기록한다 — 다음 답글의 자동 팔로우를 차단하기 위함
         tf = ThreadFollow(
             id=str(uuid.uuid4()),
             user_id=user_id,
@@ -1719,9 +1719,9 @@ async def set_thread_follow(
 async def mark_thread_read(
     db: AsyncSession, user_id: str, root_id: str, up_to_seq: int | None = None
 ) -> int | None:
-    """스레드 읽음 — 포인터를 마지막 답글(또는 up_to_seq)로 올린다. 올라간 값, 없으면 None.
+    """스레드 읽음 처리 — 포인터를 마지막 답글(또는 up_to_seq)로 전진시킨다. 갱신된 값을 반환하며, 없으면 None.
 
-    팔로우 행이 없어도 만든다(followed 는 건드리지 않는다 — 읽었다고 구독이 켜지진 않는다).
+    팔로우 행이 없어도 생성한다(followed 는 변경하지 않는다 — 읽음 처리로 구독이 활성화되지는 않는다).
     """
     root = await db.get(Message, root_id)
     if root is None or root.parent_id is not None:
@@ -1759,7 +1759,7 @@ async def mark_thread_read(
 
 
 def _thread_unread_expr(user_col, last_read_col):
-    """팔로우 행 1개에 대한 "미읽음 답글" 조건 — 내 답글·삭제분 제외, seq > last_read_seq."""
+    """팔로우 행 1개에 대한 "미읽음 답글" 조건 — 본인 답글·삭제분 제외, seq > last_read_seq."""
     return and_(
         Message.parent_id == ThreadFollow.root_message_id,
         Message.is_deleted == False,  # noqa: E712
@@ -1771,9 +1771,9 @@ def _thread_unread_expr(user_col, last_read_col):
 async def get_thread_followers_unread(
     db: AsyncSession, root_id: str, exclude_user_id: str | None = None
 ) -> dict[str, int]:
-    """{follower_user_id: unread_replies} — 팔로우가 켜진 사람 전원, 한 쿼리.
+    """{follower_user_id: unread_replies} — 팔로우가 활성화된 사용자 전원, 단일 쿼리.
 
-    새 답글이 생겼을 때 팔로워마다 thread_update 를 보내는 데 쓴다.
+    새 답글 생성 시 팔로워별로 thread_update 를 송신하는 데 사용한다.
     """
     q = (
         select(ThreadFollow.user_id, func.count(Message.id))
@@ -1804,7 +1804,7 @@ async def get_thread_unread_count(db: AsyncSession, user_id: str) -> dict:
 
 
 async def get_thread_follow_state(db: AsyncSession, user_id: str, root_id: str) -> dict:
-    """{followed, unread_replies, last_read_seq} — 스레드 패널을 열 때."""
+    """{followed, unread_replies, last_read_seq} — 스레드 패널을 여는 시점에 사용."""
     tf = (
         await db.execute(
             select(ThreadFollow).where(
@@ -1832,13 +1832,13 @@ async def get_thread_follow_state(db: AsyncSession, user_id: str, root_id: str) 
 async def get_my_threads(
     db: AsyncSession, user_id: str, limit: int = 50
 ) -> list[dict]:
-    """내가 팔로우하는 스레드의 **원 메시지** 목록 — 마지막 답글이 최근인 순.
+    """호출 사용자가 팔로우하는 스레드의 **원 메시지** 목록 — 마지막 답글이 최근인 순.
 
-    항목마다 reply_count · unread_replies · followed · last_reply(마지막 답글 요약)를 붙인다.
-    팔로우는 참여(원 글·답글·멘션)로 자동 생기고 사람이 끊을 수 있다(ThreadFollow 참고).
-    기존 스레드는 db/session.py 의 백필이 참여 이력을 팔로우로 옮겨 놓는다.
+    항목마다 reply_count · unread_replies · followed · last_reply(마지막 답글 요약)를 포함한다.
+    팔로우는 참여(원 글·답글·멘션)로 자동 생성되며 사용자가 해제할 수 있다(ThreadFollow 참고).
+    기존 스레드는 db/session.py 의 백필이 참여 이력을 팔로우로 변환해 둔다.
     """
-    # 스레드마다 마지막 답글 seq (삭제분 제외)
+    # 스레드별 마지막 답글 seq (삭제분 제외)
     last_reply_sq = (
         select(Message.parent_id.label("root_id"), func.max(Message.seq).label("last_seq"))
         .where(Message.parent_id.is_not(None), Message.is_deleted == False)  # noqa: E712
@@ -1879,7 +1879,7 @@ async def get_my_threads(
         ).all():
             last_replies[msg.seq] = (msg, u)
 
-    # 미읽음 답글 수 — 스레드마다 다른 last_read_seq 를 한 쿼리에서 비교
+    # 미읽음 답글 수 — 스레드별로 상이한 last_read_seq 를 단일 쿼리에서 비교
     unread_rows = (
         await db.execute(
             select(ThreadFollow.root_message_id, func.count(Message.id))
@@ -1916,7 +1916,7 @@ async def get_my_threads(
 async def set_pinned(
     db: AsyncSession, message_id: str, user_id: str, pinned: bool
 ) -> dict | None:
-    """메시지 핀/해제. 없거나 삭제된 메시지면 None. 갱신된 메시지 dict 를 돌려준다(이벤트용)."""
+    """메시지 핀/해제. 없거나 삭제된 메시지이면 None. 갱신된 메시지 dict 를 반환한다(이벤트용)."""
     msg = await db.get(Message, message_id)
     if msg is None or msg.is_deleted:
         return None
@@ -1936,7 +1936,7 @@ async def set_pinned(
 
 
 async def create_pin_system_message(db: AsyncSession, msg_id: str, channel_id: str, actor_id: str) -> dict | None:
-    """고정 시스템 줄(chat22) — "OO님이 메시지를 고정했습니다" 자리. 이미 같은 메시지의 줄이 있으면 None(그대로)."""
+    """고정 시스템 줄(chat22) — "OO님이 메시지를 고정했습니다" 자리. 동일 메시지의 줄이 이미 있으면 None(유지)."""
     marker = json.dumps({"kind": "pin", "message_id": msg_id, "actor_id": actor_id}, ensure_ascii=False)
     exists = (await db.execute(
         select(Message.id).where(
@@ -1954,7 +1954,7 @@ async def create_pin_system_message(db: AsyncSession, msg_id: str, channel_id: s
 async def get_pinned_messages(
     db: AsyncSession, channel_id: str, limit: int = 100
 ) -> list[dict]:
-    """채널의 핀 목록 — 최근 핀 순. 핀한 사람 이름을 pinned_by_name 으로 붙인다."""
+    """채널의 핀 목록 — 최근 핀 순. 핀을 설정한 사용자의 이름을 pinned_by_name 으로 포함한다."""
     Pinner = User.__table__.alias("pinner")
     rows = (
         await db.execute(
@@ -2009,7 +2009,7 @@ async def _find_draft(
 async def upsert_draft(
     db: AsyncSession, user_id: str, channel_id: str, parent_id: str | None, content: str
 ) -> dict | None:
-    """임시글 저장. 빈 content 는 삭제와 같다(None 을 돌려준다)."""
+    """임시글 저장. 빈 content 는 삭제와 동일하다(None 반환)."""
     content = content or ""
     existing = await _find_draft(db, user_id, channel_id, parent_id)
     if not content.strip():
@@ -2057,7 +2057,7 @@ async def get_drafts(db: AsyncSession, user_id: str) -> list[dict]:
 
 
 async def dismiss_link_preview(db: AsyncSession, msg: Message) -> dict:
-    """보낸 사람이 미리보기를 지운다. 같은 링크로는 다시 만들지 않게 "지움" 표시를 남긴다."""
+    """발신자가 미리보기를 삭제한다. 동일 링크로 재생성되지 않도록 "지움" 표시를 기록한다."""
     url = stored_url(msg.link_preview) or first_external_url(msg.content)
     msg.link_preview = json.dumps({"dismissed": True, "url": url}, ensure_ascii=False)
     await db.commit()

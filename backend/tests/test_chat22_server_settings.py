@@ -26,7 +26,7 @@ async def test_defaults_permissions_and_update(db, events):
     logs = {x.action for x in (await db.execute(select(AuditLog))).scalars()}
     assert {"chat.server.name", "chat.server.description"} <= logs
     assert any(ev["type"] == "chat_server_settings_changed" for ev in events["all"])
-    # 워크스페이스 MANAGE_CHANNELS 역할이면 일반 사용자도
+    # 워크스페이스 MANAGE_CHANNELS 역할이면 일반 사용자도 가능
     db.add(ChatRole(id="r-ch", name="운영", position=1, permissions=P.MANAGE_CHANNELS))
     db.add(ChatMemberRole(user_id="alice", role_id="r-ch"))
     await db.commit()
@@ -45,7 +45,7 @@ async def test_default_notify_level_applies_to_null_rows(db, events):
     assert lst[ch.id]["notify_level"] == "all" and lst[dm.id]["notify_level"] == "all"
     members = {m["user_id"]: m for m in await service.get_members_for_notify(db, ch.id)}
     assert members["bob"]["notify_level"] == "all"
-    # 명시한 사람 값은 그대로
+    # 사용자가 명시한 값은 유지
     await service.update_channel_prefs(db, ch.id, "bob", notify_level="none")
     assert (await service.get_channel_prefs(db, ch.id, "bob"))["notify_level"] == "none"
     await router22.put_server_settings(body=Body(default_notify_level=None), user=root, db=db)

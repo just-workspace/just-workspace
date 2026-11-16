@@ -1,8 +1,8 @@
 """메일 스레드·서버 필터·라벨·첨부 zip·예약 발송·서명 중복 방지.
 
-IMAP/SMTP/Redis 는 가짜로 바꾼다. 보는 것은
+IMAP/SMTP/Redis 는 모의 객체로 대체한다. 검증 대상은
 - 스레드 id 계산(헤더/서버 THREAD)과 스레드 조회
-- 목록 필터가 IMAP SEARCH 조건·POP3 인덱스 필터로 바뀌는지(POP3 회귀 없음)
+- 목록 필터가 IMAP SEARCH 조건·POP3 인덱스 필터로 변환되는지(POP3 회귀 없음)
 - 라벨 ↔ IMAP 키워드
 - 예약 발송 대기열·발송 루프(이중 발송 방지)·권한
 - 서명 이중 부착 정리
@@ -86,7 +86,7 @@ def test_parse_header_fetch_threads_and_attachment():
 
 
 class FakeImap:
-    """aioimaplib 를 흉내 — select/uid fetch/uid_search/THREAD."""
+    """aioimaplib 모사 — select/uid fetch/uid_search/THREAD."""
 
     def __init__(self, thread_capable: bool):
         self.thread_capable = thread_capable
@@ -105,7 +105,7 @@ class FakeImap:
         return SimpleNamespace(result="OK", lines=[b"THREAD (1 2)(3)"])
 
     async def select(self, mb):
-        self.cur = mb.strip('"')  # 메일함 이름은 따옴표로 감싸져 온다
+        self.cur = mb.strip('"')  # 메일함 이름은 따옴표로 감싸져 전달됨
         return SimpleNamespace(result="OK", lines=[])
 
     async def uid(self, cmd, uids, what):
@@ -180,7 +180,7 @@ async def test_list_messages_passes_filters(db_session, monkeypatch):
     m = res.messages[0]
     assert m.thread_id == "u5" and m.thread_count == 3 and m.labels == ["중요"]
 
-    # 필터를 안 주면 예전과 똑같이 호출(추가 인자 없음)
+    # 필터 미지정 시 기존과 동일하게 호출(추가 인자 없음)
     seen.clear()
     await mail_router.list_messages(
         mailbox_id="INBOX", page=0, limit=50, q="x", account_id=None,
@@ -196,7 +196,7 @@ async def test_pop3_filters_and_thread(monkeypatch):
          "msgid": "<b@x>", "irt": "<a@x>", "refs": "<a@x>", "ctype": "multipart/mixed; b=1"},
         {"uidl": "B", "num": 2, "subject": "other", "from": [{"email": "c@x"}], "date": "2026-10-02",
          "msgid": "<z@x>", "ctype": "text/plain"},
-        # 옛 캐시(스레드 필드 없음)
+        # 이전 캐시(스레드 필드 없음)
         {"uidl": "C", "num": 1, "subject": "hi", "from": [{"email": "a@x"}], "date": "2026-10-01"},
     ]
 
@@ -204,14 +204,14 @@ async def test_pop3_filters_and_thread(monkeypatch):
         return list(index)
 
     async def _state(account_id):
-        return {"B"}, {"A"}          # (읽은 것, 별표한 것)
+        return {"B"}, {"A"}          # (읽은 항목, 별표 항목)
 
     monkeypatch.setattr(pop3_client, "_build_index", _build_index)
     monkeypatch.setattr(pop3_client, "_state", _state)
     acct = SimpleNamespace(id="acc")
 
     out, total = await pop3_client.fetch_messages(acct, "INBOX")
-    assert total == 3 and out[2]["thread_id"] is None  # 옛 캐시도 깨지지 않음
+    assert total == 3 and out[2]["thread_id"] is None  # 이전 캐시도 정상 처리
     out, total = await pop3_client.fetch_messages(acct, "INBOX", unread=True)
     assert [m["id"] for m in out] == ["A", "C"]
     out, _ = await pop3_client.fetch_messages(acct, "INBOX", flagged=True)
@@ -379,9 +379,9 @@ async def test_schedule_send_and_loop(db_session, mail_env):
     lst = await mail_router.list_scheduled(include_done=False, user=user, db=db_session)
     assert [r.subject for r in lst] == ["예약"] and lst[0].status == "pending"
 
-    # 시각 전에는 안 보낸다
+    # 예약 시각 전에는 발송하지 않음
     assert await scheduled.send_due(db_session) == 0
-    # 시각 지나면 한 번만 보낸다(두 번 돌려도)
+    # 예약 시각 경과 후 1회만 발송(2회 실행해도 동일)
     later = datetime.now(timezone.utc) + timedelta(hours=2)
     assert await scheduled.send_due(db_session, now=later) == 1
     assert await scheduled.send_due(db_session, now=later) == 0
@@ -389,7 +389,7 @@ async def test_schedule_send_and_loop(db_session, mail_env):
     row = await db_session.get(MailScheduledSend, res["id"])
     assert row.status == "sent" and row.sent_at
 
-    # 이미 보낸 건 취소 불가
+    # 발송 완료 건은 취소 불가
     with pytest.raises(HTTPException) as e:
         await mail_router.cancel_scheduled(scheduled_id=res["id"], user=user, db=db_session)
     assert e.value.status_code == 409

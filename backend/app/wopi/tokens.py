@@ -23,13 +23,13 @@ def create_wopi_token(
 ) -> str:
     """Create a signed WOPI access token.
 
-    `user_id` 는 편집하는 사람(OnlyOffice 협업 표시·잠금용), `owner_id` 는 경로를 풀 기준이 되는
-    파일 소유자다. 보통 같지만, 공유 링크로 들어온 손님은 계정이 없으므로 링크를 만든 사람이
+    `user_id` 는 편집자(OnlyOffice 협업 표시·잠금용), `owner_id` 는 경로 해석의 기준이 되는
+    파일 소유자이다. 일반적으로 동일하나, 공유 링크로 진입한 게스트는 계정이 없으므로 링크 생성자가
     owner 가 된다.
 
-    `scope` 는 편집 세션·잠금을 묶는 키(없으면 owner_id). 팀 공유 폴더(shared/..) 문서는 누가 열든
-    같은 값("shared")이라야 한 세션에서 같이 편집한다 — app/wopi/router.py session_scope 참고.
-    `link_id` 는 공유 링크로 들어온 손님 토큰에만 — 저장할 때 그 링크가 아직 살아 있는지 다시 본다.
+    `scope` 는 편집 세션·잠금을 구분하는 키(없으면 owner_id). 팀 공유 폴더(shared/..) 문서는 누가 열든
+    동일 값("shared")이어야 한 세션에서 공동 편집한다 — app/wopi/router.py session_scope 참고.
+    `link_id` 는 공유 링크로 진입한 게스트 토큰에만 포함한다 — 저장 시 해당 링크의 유효 여부를 재검증한다.
     """
     data = {
         "user_id": user_id,

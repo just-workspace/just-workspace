@@ -1,6 +1,6 @@
 """간단 변환(라이브러리) — xlsx↔csv, md→docx(pandoc), txt/md→pdf(reportlab), 이미지→pdf(Pillow).
 
-그 밖(오피스·한글 문서 → pdf, docx↔odt 등)은 ws-docconv(LibreOffice) 가 맡는다 — app.mcp.filetools.docconv_client.
+그 외(오피스·한글 문서 → pdf, docx↔odt 등)는 ws-docconv(LibreOffice) 가 담당한다 — app.mcp.filetools.docconv_client.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def decode_text(data: bytes) -> str:
 
 # ── xlsx ↔ csv ────────────────────────────────────────────────
 def xlsx_to_csv(data: bytes, sheet: str = "", all_sheets: bool = False) -> list[tuple[str, bytes]]:
-    """[(시트 이름, csv 바이트)]. 값은 계산된 값(수식 결과 — 엑셀이 저장해 둔 값). UTF-8 BOM(엑셀 한글)."""
+    """[(시트 이름, csv 바이트)]. 값은 계산된 값(수식 결과 — 엑셀이 저장한 값). UTF-8 BOM(엑셀 한글)."""
     from openpyxl import load_workbook
 
     try:
@@ -81,12 +81,12 @@ _NUM = re.compile(r"^-?(0|[1-9]\d{0,14})(\.\d+)?$")
 
 def _csv_value(s: str):
     t = s.strip()
-    if _NUM.match(t):          # "0012" 같은 앞자리 0 은 글자로 둔다(우편번호·코드)
+    if _NUM.match(t):          # "0012" 같은 선행 0 은 문자열로 유지한다(우편번호·코드)
         try:
             return int(t) if "." not in t else float(t)
         except ValueError:
             return s
-    if t.startswith("="):      # csv 의 수식은 실행하지 않는다(CSV 인젝션) — 글자로
+    if t.startswith("="):      # csv 의 수식은 실행하지 않는다(CSV 인젝션) — 문자열로 처리
         return "'" + s
     return s
 
@@ -122,8 +122,8 @@ _PANDOC_FILTER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pando
 
 
 def md_to_docx(data: bytes, plain: bool = False) -> bytes:
-    """문서 안 그림·HTML 로 서버 파일이나 네트워크를 읽지 못하게: 원시 HTML 끄기 + 그림을 글자로 바꾸는 필터.
-    (데비안 pandoc 3.1 의 --sandbox 는 자기 docx 데이터 파일도 못 읽어 쓸 수 없다)"""
+    """문서 내 그림·HTML 을 통한 서버 파일·네트워크 읽기 차단: 원시 HTML 비활성화 + 그림을 텍스트로 변환하는 필터.
+    (데비안 pandoc 3.1 의 --sandbox 는 자체 docx 데이터 파일도 읽지 못해 사용 불가)"""
     text = decode_text(data)
     if len(text) > MAX_TEXT_CHARS:
         raise ConvertError("글이 너무 깁니다", "too_large")
@@ -167,7 +167,7 @@ def _styles():
 
 
 def _inline(s: str) -> str:
-    """마크다운 인라인 → reportlab 미니 마크업(굵게·기울임·코드·링크 글자)."""
+    """마크다운 인라인 → reportlab 미니 마크업(굵게·기울임·코드·링크 텍스트)."""
     s = escape(s)
     s = re.sub(r"`([^`]+)`", r'<font face="Courier">\1</font>', s)
     s = re.sub(r"\*\*(.+?)\*\*|__(.+?)__", lambda m: f"<b>{m.group(1) or m.group(2)}</b>", s)
@@ -319,7 +319,7 @@ def images_to_pdf(images: list[bytes]) -> bytes:
                     raise ConvertError(f"{idx}번째 이미지가 너무 큽니다({im.width}×{im.height})", "too_large")
                 frames = []
                 n = getattr(im, "n_frames", 1)
-                for f in range(min(n, 200)):       # 여러 쪽 TIFF 는 쪽마다
+                for f in range(min(n, 200)):       # 다중 쪽 TIFF 는 쪽 단위로 처리
                     im.seek(f)
                     fr = ImageOps.exif_transpose(im.copy())
                     if fr.mode in ("RGBA", "LA", "P"):

@@ -1,8 +1,8 @@
 """web_fetch — 공개 웹 페이지(또는 PDF 링크) 본문 읽기.
 
-정책은 web_search 와 같다: 개인 데이터 도구가 아니고(NON_DATA_TOOLS), 관리자 허용 목록(allowed_tools)과
-사용자 AI 설정의 "웹" 스위치(TOOL_GROUPS["web"])를 따른다. 결과는 외부 내용이라 신뢰 경계로 감싼다
-(server._UNTRUSTED_SOURCE = external_web) — 그 뒤의 쓰기는 승인 흐름이 경고·자동실행 금지로 다룬다.
+정책은 web_search 와 동일하다: 개인 데이터 도구가 아니며(NON_DATA_TOOLS), 관리자 허용 목록(allowed_tools)과
+사용자 AI 설정의 "웹" 스위치(TOOL_GROUPS["web"])를 따른다. 결과는 외부 내용이므로 신뢰 경계를 적용한다
+(server._UNTRUSTED_SOURCE = external_web) — 이후의 쓰기는 승인 흐름이 경고·자동실행 금지로 처리한다.
 
 SSRF 방어는 app.mcp.filetools.safe_fetch(사설·메타데이터 주소 차단, 리다이렉트마다 재검사, 주소 고정 접속).
 """

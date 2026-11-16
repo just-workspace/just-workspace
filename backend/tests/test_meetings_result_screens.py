@@ -1,7 +1,7 @@
 """회의 결과 화면 백엔드 —
 끝난 링크 410 정보·비밀번호 남은 횟수 헤더·"호스트에게 알리기"·채널 이름.
 
-SQLite(회의·사용자·알림·채널) + 가짜 Redis·LiveKit. 라우터 함수를 직접 부른다.
+SQLite(회의·사용자·알림·채널) + 가짜 Redis·LiveKit. 라우터 함수를 직접 호출한다.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -65,7 +65,7 @@ async def env(monkeypatch):
     monkeypatch.setattr(mr.livekit, "generate_token", lambda **kw: "lk")
     monkeypatch.setattr(mr.livekit, "get_ws_url", lambda: "wss://x/")
 
-    # 실시간·푸시 배달은 끈다(알림 행만 본다)
+    # 실시간·푸시 전달은 비활성화(알림 행만 확인)
     from app.notifications import service as ns
 
     async def _no_deliver(*a, **kw):

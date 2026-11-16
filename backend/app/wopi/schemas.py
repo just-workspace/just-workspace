@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class EditorOpenRequest(BaseModel):
     path: str  # virtual path (e.g. "my/docs/report.docx")
-    editor: str = "auto"  # 옛 API 호환용. 지금은 OnlyOffice 하나뿐이라 무시된다.
+    editor: str = "auto"  # 구 API 호환용. 현재는 OnlyOffice 단일 구성이므로 무시됨.
 
 
 class EditorOpenResponse(BaseModel):

@@ -1,6 +1,6 @@
 """Git(Gitea 프록시) 보강 — 이슈 수정, 언어, 파일별 마지막 커밋, 스타(사용자별 Sudo), 총수.
 
-Gitea HTTP 는 httpx MockTransport 로 흉내 낸다(실제 경로·헤더·쿼리를 본다).
+Gitea HTTP 는 httpx MockTransport 로 모사한다(실제 경로·헤더·쿼리를 확인).
 """
 
 import json
@@ -94,7 +94,7 @@ async def test_languages_percent(fake):
 async def test_contents_with_last_commit(fake):
     plain = await git_router.list_contents("o", "r", path="", ref=None, with_commits=False, user=USER)
     assert all(e.last_commit is None for e in plain)
-    assert not any("path" in c[2] for c in fake.calls)  # 기본은 커밋 조회 안 함
+    assert not any("path" in c[2] for c in fake.calls)  # 기본은 커밋 조회 미수행
     res = await git_router.list_contents("o", "r", path="", ref="dev", with_commits=True, user=USER)
     by = {e.name: e for e in res}
     assert by["a.py"].last_commit.message == "fix a.py" and by["a.py"].last_commit.author_name == "민지"

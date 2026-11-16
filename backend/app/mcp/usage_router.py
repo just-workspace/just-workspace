@@ -1,8 +1,8 @@
 """관리자 › AI 운영 — 사용량·도구 품질·감사 로그.
 
 GET /api/admin/ai/usage?days=7     사용자·그룹·도구·출처별 호출 수, 성공률, 응답 시간, 일별 추이, 쓰기 요청 현황
-GET /api/admin/ai/audit?cursor=    AI 도구 호출·쓰기 감사 기록(최신순). 인자 값은 기록하지 않는다(이름만).
-GET /api/admin/ai/audit.csv        같은 조건의 CSV 내보내기(최대 50,000행)
+GET /api/admin/ai/audit?cursor=    AI 도구 호출·쓰기 감사 기록(최신순). 인자 값은 기록하지 않는다(이름만 기록).
+GET /api/admin/ai/audit.csv        동일 조건의 CSV 내보내기(최대 50,000행)
 """
 
 import csv
@@ -131,7 +131,7 @@ async def ai_usage(days: int = Query(7, ge=1, le=90), admin: User = Depends(requ
         .group_by(McpWriteRequest.status, McpWriteRequest.risk)
     )).all()
     writes = [{"status": s, "risk": r, "count": n} for s, r, n in w_rows]
-    # 쓰기 현황 — 위험도별 실행·되돌림·거부·만료·실패. 되돌린 건은 실행된 뒤 되돌린 것이라 실행에도 센다.
+    # 쓰기 현황 — 위험도별 실행·되돌림·거부·만료·실패. 되돌린 건은 실행 이후 되돌린 것이므로 실행 건수에도 포함한다.
     summary = {r: {"executed": 0, "undone": 0, "rejected": 0, "canceled": 0, "expired": 0, "failed": 0, "pending": 0}
                for r in ("low", "high")}
     for st, risk, n in w_rows:
@@ -149,7 +149,7 @@ async def ai_usage(days: int = Query(7, ge=1, le=90), admin: User = Depends(requ
     )) or 0)
     from app.mcp.writes import UNTRUSTED_WINDOW_SEC
 
-    # 답변 피드백 — 통계만. 이유·의견·첨부된 대화 내용은 여기서 내보내지 않는다.
+    # 답변 피드백 — 통계만 제공. 이유·의견·첨부된 대화 내용은 여기서 반환하지 않는다.
     from app.ai.models import AIMessageFeedback
 
     fb_rows = (await db.execute(
@@ -174,7 +174,7 @@ async def ai_usage(days: int = Query(7, ge=1, le=90), admin: User = Depends(requ
     known = _known_tools()
     write_calls = sum(t["calls"] for name, t in by_tool.items() if name in known and is_write_tool(name))
     users_total = int((await db.scalar(select(func.count()).select_from(User).where(User.is_active.is_(True)))) or 0)
-    # 일별 — 기간의 모든 날(빈 날은 0)
+    # 일별 — 기간 내 모든 날짜(데이터 없는 날은 0)
     today = datetime.now(timezone.utc).date()
     days_list = [(today - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
     return {
@@ -302,7 +302,7 @@ _CSV_MAX = 50_000
 
 
 def _csv_safe(v: str) -> str:
-    """스프레드시트 수식 주입 방지 — =,+,-,@ 로 시작하는 칸은 앞에 ' 를 붙인다."""
+    """스프레드시트 수식 주입 방지 — =,+,-,@ 로 시작하는 셀은 앞에 ' 를 추가한다."""
     return "'" + v if v[:1] in ("=", "+", "-", "@", "\t", "\r") else v
 
 
@@ -310,7 +310,7 @@ def _csv_safe(v: str) -> str:
 async def ai_audit_csv(user_id: str = "", tool: str = "", q: str = "",
                        source: str = "", failed_only: bool = False, days: int = 0,
                        admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
-    """감사 로그 CSV — 화면과 같은 열(시각·사용자·도구·출처·결과·오류 코드). 인자 이름도 넣지 않는다."""
+    """감사 로그 CSV — 화면과 동일한 열(시각·사용자·도구·출처·결과·오류 코드). 인자 이름도 포함하지 않는다."""
     stmt = await _audit_query(db, user_id=user_id, tool=tool, q=q, source=source, failed_only=failed_only, days=days)
     rows = (await db.execute(stmt.order_by(AuditLog.created_at.desc()).limit(_CSV_MAX))).scalars().all()
     names = await _names(db, {r.actor_id for r in rows})

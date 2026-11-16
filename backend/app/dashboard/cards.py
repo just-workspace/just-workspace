@@ -1,11 +1,11 @@
-"""대시보드 카드용 가벼운 조회(큰 화면에서 더 꺼내는 카드).
+"""대시보드 카드용 경량 조회(넓은 화면에서 추가로 표시하는 카드).
 
-- GET /api/dashboard/frequent-channels : 자주 쓰는 채널 — 최근 30일 내가 쓴 메시지 수 순. 내가 속한, 보관 안 된,
-  DM 이 아닌 채널만(그래서 "내가 볼 수 있는 것"만). 미읽음 수는 프런트가 이미 가진 채널 목록에서 붙인다.
-- GET /api/dashboard/recent-wiki       : 최근 위키 — 내가 볼 수 있는 공간(공개 · 내 것 · 멤버)의 페이지를 고친 시각 순.
-  위키 공간 목록(/api/wiki/spaces)과 같은 가시성 규칙.
+- GET /api/dashboard/frequent-channels : 자주 쓰는 채널 — 최근 30일 본인 작성 메시지 수 순. 본인이 소속되어 있고 보관되지 않았으며
+  DM 이 아닌 채널만 대상으로 한다(따라서 "내가 볼 수 있는 것"만 포함). 미읽음 수는 프런트가 이미 보유한 채널 목록에서 결합한다.
+- GET /api/dashboard/recent-wiki       : 최근 위키 — 열람 가능한 공간(공개 · 본인 소유 · 멤버)의 페이지를 수정 시각 순으로 반환한다.
+  위키 공간 목록(/api/wiki/spaces)과 동일한 가시성 규칙을 적용한다.
 
-나머지 새 카드(최근 파일 · 진행 중 회의 · 저장소 · 팀 출석)는 기존 API 로 그린다.
+나머지 신규 카드(최근 파일 · 진행 중 회의 · 저장소 · 팀 출석)는 기존 API 로 표시한다.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 async def frequent_channels(db: AsyncSession, user_id: str, limit: int = 5, days: int = 30) -> list[dict]:
-    """내가 최근 `days` 일 동안 메시지를 많이 쓴 채널 순(같으면 마지막으로 쓴 시각이 최근인 쪽)."""
+    """최근 `days` 일간 본인 작성 메시지 수가 많은 채널 순(동률이면 마지막 작성 시각이 최근인 쪽 우선)."""
     since = datetime.now(timezone.utc) - timedelta(days=days)
     mine = select(ChannelMember.channel_id).where(ChannelMember.user_id == user_id)
     n = func.count(Message.id).label("n")
@@ -49,7 +49,7 @@ async def frequent_channels(db: AsyncSession, user_id: str, limit: int = 5, days
 
 
 async def recent_wiki_pages(db: AsyncSession, user_id: str, limit: int = 5) -> list[dict]:
-    """내가 볼 수 있는 위키 공간의 페이지 — 고친 시각 최신순."""
+    """열람 가능한 위키 공간의 페이지 — 수정 시각 최신순."""
     visible = (
         (WikiSpace.visibility == "public")
         | (WikiSpace.owner_id == user_id)

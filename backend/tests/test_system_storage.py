@@ -1,4 +1,4 @@
-"""관리 › 저장소 상태 — 종류·위치 읽기, 표식·쓰기·잠금 확인, 응답 없는 저장소, 끊긴 시각, 사용자용 조회."""
+"""관리 › 저장소 상태 — 종류·위치 조회, 마커·쓰기·잠금 확인, 무응답 저장소, 단절 시각, 사용자용 조회."""
 
 import json
 import os
@@ -57,16 +57,16 @@ def test_probe_checks_marker_then_writes(tmp_path):
     assert got["total_bytes"] >= got["used_bytes"]
     if os.name != "nt":
         assert got["lock"] is True
-    assert sorted(p.name for p in tmp_path.iterdir()) == [storage_guard.MARKER_NAME]     # 시험 파일은 남지 않는다
+    assert sorted(p.name for p in tmp_path.iterdir()) == [storage_guard.MARKER_NAME]     # 시험 파일은 남지 않음
 
 
 def test_probe_never_writes_where_the_marker_is_missing(tmp_path):
     assert storage_status.probe(str(tmp_path), "inst-1", True) == {"reason": "missing"}
-    assert list(tmp_path.iterdir()) == []            # 끊긴 자리의 빈 폴더에 쓰지 않는다
+    assert list(tmp_path.iterdir()) == []            # 단절된 위치의 빈 폴더에는 쓰지 않음
     _marker(tmp_path, "other-install")
     assert storage_status.probe(str(tmp_path), "inst-1", True) == {"reason": "mismatch"}
     assert storage_status.probe_marker(str(tmp_path), "inst-1", True) == {"reason": "mismatch"}
-    # 표식을 쓰지 않는 설치 — 폴더가 있으면 정상
+    # 저장소 마커를 사용하지 않는 설치 — 폴더가 존재하면 정상
     assert storage_status.probe(str(tmp_path), "", False)["reason"] is None
     assert storage_status.probe(str(tmp_path / "gone"), "", False) == {"reason": "missing"}
     assert storage_status.probe_marker(str(tmp_path / "gone"), "", False) == {"reason": None}
@@ -98,7 +98,7 @@ async def test_unresponsive_storage_does_not_hang_or_pile_up(tmp_path):
     assert status["state"] == "down" and status["reason"] == "unresponsive" and status["free_bytes"] is None
     assert status["checked_at"]
     assert (await prober.status(force=True))["reason"] == "unresponsive"
-    assert len(started) == 1                         # 멈춘 확인은 하나만 둔다
+    assert len(started) == 1                         # 정지된 확인은 하나만 유지
     release.set()
     for _ in range(50):
         status = await prober.status(force=True)
@@ -160,7 +160,7 @@ async def env(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_status, "prober", StorageProber(**kwargs))
     monkeypatch.setattr(storage_status, "light_prober", StorageProber(probe_fn=storage_status.probe_marker, **kwargs))
     monkeypatch.setattr(system_router, "_seen_down", None)
-    # 설치 관리자 없이 구성한 설치가 기본 — 설치 관리자의 답을 쓰는 경우는 테스트가 따로 붙인다
+    # 설치 관리자 없이 구성한 설치가 기본 — 설치 관리자의 응답을 사용하는 경우는 테스트에서 별도로 설정
     monkeypatch.delenv(installer_client.ENV_URL, raising=False)
     monkeypatch.delenv(installer_client.ENV_KEY, raising=False)
     monkeypatch.setattr(storage_status, "_installer_seen", None)
@@ -185,7 +185,7 @@ async def test_storage_api_tracks_when_it_went_down(env):
     assert down["state"] == "down" and down["reason"] == "missing" and down["free_bytes"] is None
     assert down["write"] is None and down["down_since"]
     again = (await client.post("/api/admin/system/storage/recheck")).json()
-    assert again["state"] == "down" and again["down_since"] == down["down_since"]     # 처음 본 시각을 지킨다
+    assert again["state"] == "down" and again["down_since"] == down["down_since"]     # 최초 감지 시각을 유지
 
     _marker(state.root)
     back = (await client.post("/api/admin/system/storage/recheck")).json()
@@ -197,7 +197,7 @@ async def test_kind_and_location_come_from_the_installer_when_it_answers(env, mo
     client, state = env
     _marker(state.root)
     first = (await client.get("/api/admin/system/storage")).json()
-    assert first["source"] == "mountinfo" and first["volume"] is None      # 설치 관리자 없음 → 마운트 정보의 추정
+    assert first["source"] == "mountinfo" and first["volume"] is None      # 설치 관리자 없음 → 마운트 정보 기반 추정
 
     calls: list[str] = []
     answer: dict = {"status": 200, "body": {"kind": "nfs", "location": "nas.example.com:/volume1/workspace",
@@ -215,17 +215,17 @@ async def test_kind_and_location_come_from_the_installer_when_it_answers(env, mo
     assert calls == ["GET /internal/storage shared-key-for-tests"]
     assert (got["kind"], got["location"], got["volume"], got["source"]) == (
         "nfs", "nas.example.com:/volume1/workspace", "ws-storage-data", "installer")
-    assert "install_id" not in got and got["state"] == "ok"                # 연결 판정은 그대로 이 서버가 한다
+    assert "install_id" not in got and got["state"] == "ok"                # 연결 판정은 기존대로 이 서버가 수행
     await client.get("/api/admin/system/storage")
-    assert len(calls) == 1                                                 # 바뀌지 않는 값이라 잠시 기억한다
+    assert len(calls) == 1                                                 # 불변 값이므로 일정 시간 캐시
 
-    # 위치를 모르는 답이면 종류만 쓰고 위치는 추정값을 둔다
+    # 위치를 알 수 없는 응답이면 종류만 사용하고 위치는 추정값을 유지
     answer["body"] = {"kind": "local", "location": None, "volume": "ws-storage-data"}
-    got = (await client.post("/api/admin/system/storage/recheck")).json()   # 다시 확인은 기억한 값을 쓰지 않는다
+    got = (await client.post("/api/admin/system/storage/recheck")).json()   # 재확인은 캐시된 값을 사용하지 않음
     assert len(calls) == 2
     assert got["kind"] == "local" and got["location"] == first["location"] and got["source"] == "installer"
 
-    # 답이 없거나 알 수 없는 답이면 추정으로 떨어지고, 한동안 다시 묻지 않는다
+    # 응답이 없거나 알 수 없는 응답이면 추정으로 fallback 하고, 일정 시간 재조회하지 않음
     for status, body in ((500, {"code": "unexpected_error", "vars": {}}), (404, {"detail": "Not Found"}),
                          (200, {"kind": "tape"})):
         answer.update(status=status, body=body)
@@ -246,8 +246,8 @@ async def test_public_status_for_any_user_and_admin_only_details(env):
     r = await client.get("/api/system/storage-status")
     assert r.status_code == 200 and r.json() == {"guarded": True, "available": False, "reason": "missing"}
     assert r.headers["cache-control"] == "no-store"
-    assert list(state.root.iterdir()) == []          # 사용자용 조회는 저장소에 쓰지 않는다
-    # 사용자 조회가 먼저 봤어도 끊긴 시각이 남는다
+    assert list(state.root.iterdir()) == []          # 사용자용 조회는 저장소에 쓰지 않음
+    # 사용자 조회가 먼저 확인했어도 단절 시각이 유지됨
     state.user = "root"
     assert (await client.get("/api/admin/system/storage")).json()["down_since"]
 

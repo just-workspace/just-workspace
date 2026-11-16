@@ -1,8 +1,8 @@
 """커스텀 이모지(chat22) — 검증·정규화·직렬화. 엔드포인트는 router22.
 
-- 이름 `^[a-z0-9_]{2,32}$`, 워크스페이스 안에서 유일. 본문·리액션에서는 `:name:`.
-- 형식 png·gif·webp·jpeg(Pillow 로 실제 형식을 본다 — 올린 쪽이 말한 Content-Type 은 믿지 않는다), 256KB 이하.
-- 128px 로 축소(정적 이미지만, 비율 유지). 움직이는 gif/webp 는 그대로(프레임 재인코딩은 크기·품질이 나빠진다).
+- 이름 `^[a-z0-9_]{2,32}$`, 워크스페이스 내 유일. 본문·리액션에서는 `:name:`.
+- 형식 png·gif·webp·jpeg(Pillow 로 실제 형식을 확인한다 — 업로드 측이 전달한 Content-Type 은 신뢰하지 않는다), 256KB 이하.
+- 128px 로 축소(정적 이미지만, 비율 유지). 애니메이션 gif/webp 는 원본 유지(프레임 재인코딩은 크기·품질이 저하된다).
 """
 
 from __future__ import annotations
@@ -32,12 +32,12 @@ class EmojiError(ValueError):
 
 
 def normalize(data: bytes) -> tuple[bytes, str, bool]:
-    """(바이트, content_type, animated). Pillow 가 못 열면 bad_type."""
+    """(바이트, content_type, animated). Pillow 가 열지 못하면 bad_type."""
     if len(data) > MAX_BYTES:
         raise EmojiError(413, "too_large", "이모지는 256KB 이하여야 합니다")
     try:
         from PIL import Image
-    except ImportError:   # 의존성에는 있다(requirements Pillow) — 없으면 검증 없이 png 만 받는다
+    except ImportError:   # 의존성에는 포함(requirements Pillow) — 없으면 검증 없이 png 만 허용
         if not data.startswith(b"\x89PNG"):
             raise EmojiError(400, "bad_type", "PNG·GIF·WebP·JPEG 이미지만 올릴 수 있습니다")
         return data, "image/png", False
@@ -99,7 +99,7 @@ def to_dict(e: ChatEmoji, creator: User | None) -> dict:
 
 
 async def check_reaction_emoji(db: AsyncSession, emoji: str) -> bool:
-    """리액션 값 검사 — `:name:` 꼴이면 그 커스텀 이모지가 있어야 한다. 나머지(유니코드)는 그대로 통과."""
+    """리액션 값 검증 — `:name:` 형식이면 해당 커스텀 이모지가 존재해야 한다. 그 외(유니코드)는 그대로 통과."""
     m = CUSTOM_RE.fullmatch(emoji or "")
     if not m:
         return True

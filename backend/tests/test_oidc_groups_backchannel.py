@@ -1,8 +1,8 @@
 """OIDC 제공자 — groups 스코프·클레임 + Back-Channel Logout 1.0.
 
-실제 FastAPI 앱에 authorize → token → userinfo 를 태우고, 로그아웃 경로가 RP 로
-logout_token 을 보내는지 본다. Redis 는 가짜, RP 는 httpx.MockTransport.
-기존 클라이언트(Gitea 형 레거시·claude.ai MCP·데스크톱 앱) 회귀도 같이 확인한다.
+실제 FastAPI 앱에서 authorize → token → userinfo 를 수행하고, 로그아웃 경로가 RP 로
+logout_token 을 전송하는지 확인한다. Redis 는 모의 객체, RP 는 httpx.MockTransport.
+기존 클라이언트(Gitea 형 레거시·claude.ai MCP·데스크톱 앱) 회귀도 함께 확인한다.
 """
 
 import base64
@@ -71,14 +71,14 @@ class FakeRedis:
 
 
 class BrokenRedis(FakeRedis):
-    """세션 레지스트리는 살아 있고 백채널 추적만 못 읽는 상황."""
+    """세션 레지스트리는 정상이고 백채널 추적만 조회 불가한 상황."""
 
     async def smembers(self, k):
         raise ConnectionError("redis down")
 
 
 class RP:
-    """MockTransport 로 받는 RP. ``plan`` 은 시도별 응답(정수=상태코드, 'err'=연결 실패)."""
+    """MockTransport 로 수신하는 RP. ``plan`` 은 시도별 응답(정수=상태코드, 'err'=연결 실패)."""
 
     def __init__(self, plan=None):
         self.plan = list(plan or [])
@@ -118,7 +118,7 @@ async def env(client, monkeypatch):
             "backchannel_logout_uri": LAB_BCL,
             "backchannel_logout_session_required": True,
         },
-        # 운영 .env 의 레거시 Gitea 항목과 같은 모양(scopes 없음, trusted)
+        # 운영 .env 의 레거시 Gitea 항목과 동일한 형태(scopes 없음, trusted)
         "portal-gitea": {
             "secret": "gitea-secret", "trusted": True,
             "redirect_uris": ["https://ws.example.test/git/user/oauth2/portal/callback"],
@@ -212,7 +212,7 @@ async def test_discovery_advertises_groups_and_backchannel(env):
         assert {"groups", "sid", "sub", "email"} <= set(m["claims_supported"])
         assert m["backchannel_logout_supported"] is True
         assert m["backchannel_logout_session_supported"] is True
-        # 기존 필드는 그대로
+        # 기존 필드는 유지
         assert m["issuer"] == ISS
         assert m["id_token_signing_alg_values_supported"] == ["RS256"]
         assert m["jwks_uri"] == f"{ISS}/oauth/jwks.json"
@@ -241,14 +241,14 @@ async def test_admin_marker_kept_first_and_admin_named_group_not_leaked(env):
     g = (await _verify(tok["id_token"], "netlab"))["groups"]
     assert g[0] == "admin" and g[1:] == [n for n in await _group_names(admin)]
 
-    # 비관리자가 "Admin" 이라는 이름의 그룹에 있어도 관리자 표식이 생기면 안 된다.
+    # 비관리자가 "Admin" 이라는 이름의 그룹에 속해도 관리자 표식이 생성되면 안 된다.
     plain = await _user(is_admin=False, groups=["Admin"])
     tok, _ = await _flow(env, plain, "netlab", "openid groups", LAB_CB, secret="lab-secret")
     assert (await _verify(tok["id_token"], "netlab"))["groups"] == []
 
 
 async def test_without_groups_scope_legacy_value_unchanged(env):
-    """Gitea 형 레거시(스코프 목록 없음) — groups 스코프 없이 예전 값 그대로."""
+    """Gitea 형 레거시(스코프 목록 없음) — groups 스코프 없이 기존 값 그대로."""
     cb = env["clients"]["portal-gitea"]["redirect_uris"][0]
     admin = await _user(is_admin=True, groups=["ops"])
     tok, _ = await _flow(env, admin, "portal-gitea", "openid email profile", cb,
@@ -256,7 +256,7 @@ async def test_without_groups_scope_legacy_value_unchanged(env):
     c = await _verify(tok["id_token"], "portal-gitea")
     assert c["groups"] == ["admin"]
     assert c["nonce"] == "n-1" and c["preferred_username"].startswith("u")
-    assert "refresh_token" in tok      # trusted → 기존대로
+    assert "refresh_token" in tok      # trusted → 기존과 동일
     plain = await _user(groups=["ops"])
     tok, _ = await _flow(env, plain, "portal-gitea", "openid email profile", cb,
                          secret="gitea-secret")
@@ -267,7 +267,7 @@ async def test_without_groups_scope_legacy_value_unchanged(env):
 
 
 async def test_restricted_clients_cannot_request_groups(env):
-    """claude-mcp(mcp:read 만)·desktop-app(openid profile email)은 groups 를 못 달라고 한다."""
+    """claude-mcp(mcp:read 만)·desktop-app(openid profile email)은 groups 를 요청할 수 없다."""
     uid = await _user()
     _, cookie = await _login(uid)
     for cid, cb in (("claude-mcp", "https://claude.ai/api/mcp/auth_callback"),
@@ -288,7 +288,7 @@ async def test_desktop_app_regression(env):
     c = await _verify(tok["id_token"], "desktop-app")
     assert c["groups"] == [] and "sid" in c
     assert tok["refresh_token"]
-    # 백채널 RP 가 아니므로 추적하지 않는다
+    # 백채널 RP 가 아니므로 추적하지 않음
     assert not env["redis"].sets.get("bclu:" + uid)
 
 
@@ -338,7 +338,7 @@ async def test_logout_sends_conformant_logout_token(env):
     token = rp.tokens()[0]
     hdr = jwt.get_unverified_header(token)
     assert hdr["typ"] == "logout+jwt" and hdr["alg"] == "RS256" and hdr["kid"]
-    # JWKS 문서에 실린 키로 검증된다(RP 가 하는 그대로)
+    # JWKS 문서에 포함된 키로 검증됨(RP 의 검증 방식과 동일)
     jwks = (await env["client"].get("/oauth/jwks.json")).json()
     jwk = next(k for k in jwks["keys"] if k["kid"] == hdr["kid"])
     pub = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
@@ -347,7 +347,7 @@ async def test_logout_sends_conformant_logout_token(env):
     assert c["sub"] == uid and c["sid"] == idt["sid"]
     assert c["jti"] and isinstance(c["iat"], int) and c["exp"] - c["iat"] <= 120
     assert "nonce" not in c
-    # 추적 기록은 정리된다
+    # 추적 기록은 정리됨
     assert not env["redis"].sets.get("bclu:" + uid)
 
 
@@ -369,7 +369,7 @@ async def test_only_logged_out_session_is_notified(env):
 
 
 async def test_user_wide_revoke_notifies_every_session(env):
-    """비밀번호 변경·재설정·관리자 강제 로그아웃·정지·삭제가 부르는 경로."""
+    """비밀번호 변경·재설정·관리자 강제 로그아웃·정지·삭제가 호출하는 경로."""
     uid = await _user()
     idt1, _ = await _lab_login(env, uid)
     idt2, _ = await _lab_login(env, uid)
@@ -418,7 +418,7 @@ async def test_delivery_failure_does_not_block_logout(env):
     r = await env["client"].post("/api/auth/logout", cookies={"ws_session": cookie})
     assert r.status_code == 200
     assert "ws_session" in r.headers.get("set-cookie", "")       # 쿠키 삭제
-    assert await sess_mod.get_session(sid) is None                # 세션은 이미 끝
+    assert await sess_mod.get_session(sid) is None                # 세션은 이미 종료
     await backchannel.drain()
     assert len(env["rp"].calls) == 3                              # 1 + 재시도 2
 

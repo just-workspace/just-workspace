@@ -1,7 +1,7 @@
 """파일 공유 권한 4단계("보기 · 댓글 · 편집 · 공동 소유") + 파일 댓글.
 
-라우터 함수를 직접 부른다. 저장소 루트는 임시 폴더, DB 는 SQLite.
-alice 가 my/docs(a.txt, sub/b.txt)의 원 소유자이고 bob=보기, carol=댓글, dave=편집, erin=공동 소유, frank=권한 없음.
+라우터 함수를 직접 호출한다. 저장소 루트는 임시 폴더, DB 는 SQLite 를 사용한다.
+alice 가 my/docs(a.txt, sub/b.txt)의 원 소유자이며 bob=보기, carol=댓글, dave=편집, erin=공동 소유, frank=권한 없음이다.
 """
 
 import io
@@ -52,7 +52,7 @@ async def env(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(fs, "VERSIONS_ROOT", tmp_path / ".versions")
     fs._dir_cache.clear()
 
-    # 알림은 실제 전송 대신 기록만
+    # 알림은 실제 전송 대신 기록만 수행
     from app.notifications import service as notif
     notes: list[tuple[str, str]] = []
 
@@ -84,7 +84,7 @@ async def env(tmp_path: Path, monkeypatch):
 
 
 def sp(env, who: str, sub: str = "") -> str:
-    """who 가 보는 공유 경로."""
+    """who 기준의 공유 경로."""
     return f"shared-with-me/{env.sid[who]}" + (f"/{sub}" if sub else "")
 
 
@@ -147,7 +147,7 @@ async def test_write_needs_edit(env, who, ok):
                 await call()
             assert e.value.status_code == 403
     if ok:
-        # 파일은 원 소유자 영역에 놓이고, 덮어쓴 이전본은 소유자 버전으로 남는다
+        # 파일은 원 소유자 영역에 저장되고, 덮어쓰기 이전본은 소유자 버전으로 보존
         assert (env.home / "docs" / "sub" / f"{who}.txt").read_bytes() == b"new"
         assert (env.home / "docs" / "a.txt").read_bytes() == b"overwrite"
         assert (env.home / "docs" / f"new-{who}").is_dir()
@@ -177,7 +177,7 @@ async def test_rename_move_delete_need_owner(env, who, ok):
     target = "sub/a.txt" if ok else "a.txt"
     if ok:
         r = await fr.delete_file(path=sp(env, who, target), permanent=False, user=u, db=env.db)
-        # 원 소유자 휴지통으로, 지운 사람이 남는다
+        # 원 소유자 휴지통으로 이동, 삭제자 기록
         meta = fr._load_trash_meta("alice")
         assert meta[r["trash_name"]]["original_path"] == "my/docs/sub/a.txt"
         assert meta[r["trash_name"]]["deleted_by"] == who
@@ -198,10 +198,10 @@ async def test_coowner_cannot_move_out_of_owner_area(env):
     with pytest.raises(HTTPException) as e:
         await fr.move_file(body=MoveRequest(src=sp(env, "erin", "a.txt"), dst="my"), user=env.u["erin"], db=env.db)
     assert e.value.status_code == 400
-    # 복사는 보기 권한이면 내 파일로 가져올 수 있다(내려받아 올리는 것과 같다)
+    # 복사는 보기 권한으로 내 파일에 가져오기 가능(다운로드 후 업로드와 동일)
     r = await fr.move_file(body=MoveRequest(src=sp(env, "bob", "a.txt"), dst="my", copy=True), user=env.u["bob"], db=env.db)
     assert r["path"] == "my/a.txt" and (env.root / "users" / "bob" / "a.txt").read_text() == "hello"
-    # 보기 권한으로 공유 폴더 안에 복사해 넣기는 안 된다
+    # 보기 권한으로 공유 폴더 내부에 복사 불가
     with pytest.raises(HTTPException) as e:
         await fr.move_file(body=MoveRequest(src="my/a.txt", dst=sp(env, "bob"), copy=True), user=env.u["bob"], db=env.db)
     assert e.value.status_code == 403
@@ -209,7 +209,7 @@ async def test_coowner_cannot_move_out_of_owner_area(env):
 
 @pytest.mark.asyncio
 async def test_legacy_rows_keep_meaning(env):
-    # 예전 행(role 없음): can_write 로 읽는다
+    # 이전 행(role 없음): can_write 로 판정
     row = await env.db.get(FileShare, env.sid["dave"])
     row.role = None
     row.can_write = True
@@ -221,7 +221,7 @@ async def test_legacy_rows_keep_meaning(env):
     await fr.mkdir(body=MkdirRequest(path=sp(env, "dave", "legacy")), user=env.u["dave"], db=env.db)
     with pytest.raises(HTTPException):
         await fr.mkdir(body=MkdirRequest(path=sp(env, "bob", "legacy2")), user=env.u["bob"], db=env.db)
-    # 예전 클라이언트(can_write 만 보냄)도 그대로
+    # 이전 클라이언트(can_write 만 전송)도 동일하게 동작
     await fr.share_with_users(body=fr.ShareUserCreate(path="my/docs", user_ids=["frank"], can_write=True),
                               user=env.u["alice"], db=env.db)
     lst = (await fr.list_user_shares(path="my/docs", user=env.u["alice"], db=env.db))["shares"]
@@ -248,7 +248,7 @@ async def test_channel_and_direct_take_highest(env):
 @pytest.mark.asyncio
 async def test_coowner_reshare_and_owner_protection(env):
     erin, alice = env.u["erin"], env.u["alice"]
-    # 재공유: 원 소유자 영역에 행이 생기고 만든 사람이 남는다
+    # 재공유: 원 소유자 영역에 행 생성, 생성자 기록
     await fr.share_with_users(body=fr.ShareUserCreate(path=sp(env, "erin"), user_ids=["frank"], role="comment"),
                               user=erin, db=env.db)
     row = (await env.db.execute(select(FileShare).where(FileShare.shared_with_user_id == "frank"))).scalar_one()
@@ -260,7 +260,7 @@ async def test_coowner_reshare_and_owner_protection(env):
     manage = {s["user_id"]: s["can_manage"] for s in lst["shares"]}
     assert manage == {"bob": False, "carol": False, "dave": False, "erin": False, "frank": True}
 
-    # 공동 소유 지정은 원 소유자만
+    # 공동 소유 지정은 원 소유자만 가능
     with pytest.raises(HTTPException) as e:
         await fr.share_with_users(body=fr.ShareUserCreate(path=sp(env, "erin"), user_ids=["frank"], role="owner"),
                                   user=erin, db=env.db)
@@ -281,17 +281,17 @@ async def test_coowner_reshare_and_owner_protection(env):
                                   user=erin, db=env.db)
     assert e.value.status_code == 403
     assert acc.share_role(await env.db.get(FileShare, env.sid["bob"])) == "view"
-    # 공동 소유자끼리도 서로의 공동 소유는 못 푼다
+    # 공동 소유자 간에도 상대의 공동 소유는 해제 불가
     with pytest.raises(HTTPException) as e:
         await fr.delete_user_share(share_id=env.sid["erin"], user=erin, db=env.db)
     assert e.value.status_code == 403
 
-    # 자기가 만든 공유는 바꾸고 해제할 수 있다
+    # 본인이 생성한 공유는 변경·해제 가능
     r = await fr.update_user_share(share_id=row.id, body=fr.ShareUserUpdate(role="edit"), user=erin, db=env.db)
     assert r["role"] == "edit" and r["can_write"] is True
     assert (await fr.delete_user_share(share_id=row.id, user=erin, db=env.db))["ok"]
 
-    # 원 소유자는 무엇이든 — 공동 소유 해제 포함
+    # 원 소유자는 전부 가능 — 공동 소유 해제 포함
     await fr.update_user_share(share_id=env.sid["erin"], body=fr.ShareUserUpdate(role="view"), user=alice, db=env.db)
     with pytest.raises(HTTPException):
         await fr.rename_file(body=RenameRequest(path=sp(env, "erin", "a.txt"), new_name="z.txt"), user=erin, db=env.db)
@@ -321,7 +321,7 @@ async def test_rename_by_coowner_keeps_shares_and_comments(env):
     erin = env.u["erin"]
     await fc.create_comment(body=fc.CommentCreate(path=sp(env, "carol", "a.txt"), content="확인 부탁"),
                             user=env.u["carol"], db=env.db)
-    # 공유 루트 자체 이름 바꾸기 — 모든 공유·댓글이 따라간다
+    # 공유 루트 자체 이름 변경 — 모든 공유·댓글이 추종
     r = await fr.rename_file(body=RenameRequest(path=sp(env, "erin"), new_name="문서"), user=erin, db=env.db)
     assert r["path"] == sp(env, "erin")
     paths = {s.file_path for s in (await env.db.execute(select(FileShare))).scalars().all()}
@@ -330,7 +330,7 @@ async def test_rename_by_coowner_keeps_shares_and_comments(env):
     assert {i.name for i in listing["items"]} == {"a.txt", "sub"}
     cm = await fc.list_comments(path="my/문서/a.txt", user=env.u["alice"], db=env.db)
     assert [c["content"] for c in cm["items"]] == ["확인 부탁"]
-    # 원 소유자의 이동도 따라간다
+    # 원 소유자의 이동도 추종
     (env.home / "box").mkdir()
     await fr.move_file(body=MoveRequest(src="my/문서", dst="my/box"), user=env.u["alice"], db=env.db)
     assert {s.file_path for s in (await env.db.execute(select(FileShare))).scalars().all()} == {"my/box/문서"}
@@ -345,7 +345,7 @@ async def test_trash_parks_comments_and_restore_brings_back(env):
     r = await fr.delete_file(path="my/docs/a.txt", permanent=False, user=alice, db=env.db)
     left = (await env.db.execute(select(FileComment))).scalars().all()
     assert [c.file_path for c in left] == [acc.trash_key(r["trash_name"])]
-    # 같은 이름으로 새 파일을 올려도 옛 댓글이 붙지 않는다
+    # 동일 이름으로 새 파일을 업로드해도 이전 댓글은 연결되지 않음
     await fr.upload_file(upload("a.txt"), path="my/docs", upload_id=None, size=0, mtime=None, x_file_mtime=None,
                          user=alice, db=env.db)
     assert (await fc.list_comments(path="my/docs/a.txt", user=alice, db=env.db))["items"] == []
@@ -353,7 +353,7 @@ async def test_trash_parks_comments_and_restore_brings_back(env):
     assert res["ok"]
     restored = [c.file_path for c in (await env.db.execute(select(FileComment))).scalars().all()]
     assert restored == ["my/docs/a (1).txt"]
-    # 공유 폴더 통째 휴지통 → 받은 사람 목록에서 사라지고, 휴지통 비우면 공유·댓글도 정리
+    # 공유 폴더 전체 휴지통 이동 → 수신자 목록에서 제거, 휴지통 비우기 시 공유·댓글도 정리
     await fr.delete_file(path="my/docs", permanent=False, user=alice, db=env.db)
     assert (await fr.shared_with_me(user=env.u["bob"], db=env.db))["items"] == []
     await fr.empty_trash(user=alice, db=env.db)
@@ -366,26 +366,26 @@ async def test_trash_parks_comments_and_restore_brings_back(env):
 
 @pytest.mark.asyncio
 async def test_comment_permissions_and_mentions(env):
-    # 보기 권한은 읽기만
+    # 보기 권한은 읽기만 가능
     with pytest.raises(HTTPException) as e:
         await fc.create_comment(body=fc.CommentCreate(path=sp(env, "bob", "a.txt"), content="안녕"),
                                 user=env.u["bob"], db=env.db)
     assert e.value.status_code == 403
-    # 댓글 권한: 쓰기 + 멘션(파일을 볼 수 있는 bob 에게만 알림 — frank 는 권한 없음)
+    # 댓글 권한: 작성 + 멘션(파일 열람이 가능한 bob 에게만 알림 — frank 는 권한 없음)
     c = await fc.create_comment(body=fc.CommentCreate(path=sp(env, "carol", "a.txt"), content="@bob @frank @alice 봐 주세요"),
                                 user=env.u["carol"], db=env.db)
     assert {m["id"] for m in c["mentions"]} == {"bob", "frank", "alice"}
     assert c["notified"] == 2
     assert dict(env.notes) == {"bob": "/files?view=shared-with-me", "alice": "/files?path=my/docs"}
-    # 소유자 경로·공유 경로 어디서 봐도 같은 댓글
+    # 소유자 경로·공유 경로 어느 쪽에서 조회해도 동일 댓글
     for who, path in (("alice", "my/docs/a.txt"), ("bob", sp(env, "bob", "a.txt")), ("erin", sp(env, "erin", "a.txt"))):
         items = (await fc.list_comments(path=path, user=env.u[who], db=env.db))["items"]
         assert [i["id"] for i in items] == [c["id"]]
         assert items[0]["is_mine"] is False
-    # 편집·공동 소유·소유자도 쓸 수 있다
+    # 편집·공동 소유·소유자도 작성 가능
     for who, path in (("dave", sp(env, "dave", "a.txt")), ("erin", sp(env, "erin", "a.txt")), ("alice", "my/docs/a.txt")):
         await fc.create_comment(body=fc.CommentCreate(path=path, content=f"{who} 의견"), user=env.u[who], db=env.db)
-    # 수정·삭제는 쓴 사람만(원 소유자도 남의 댓글은 못 고친다)
+    # 수정·삭제는 작성자만 가능(원 소유자도 타인의 댓글은 수정 불가)
     for who in ("alice", "erin", "bob"):
         with pytest.raises(HTTPException) as e:
             await fc.update_comment(comment_id=c["id"], body=fc.CommentUpdate(content="x"), user=env.u[who], db=env.db)
@@ -397,7 +397,7 @@ async def test_comment_permissions_and_mentions(env):
     assert e.value.status_code == 404
     u = await fc.update_comment(comment_id=c["id"], body=fc.CommentUpdate(content="고침"), user=env.u["carol"], db=env.db)
     assert u["content"] == "고침" and u["is_edited"] is True
-    # 보기로 내려가면 자기 댓글도 못 고친다
+    # 보기로 강등되면 본인 댓글도 수정 불가
     await fr.update_user_share(share_id=env.sid["carol"], body=fr.ShareUserUpdate(role="view"),
                                user=env.u["alice"], db=env.db)
     with pytest.raises(HTTPException) as e:
@@ -448,7 +448,7 @@ async def test_office_save_rechecks_share(env):
     await wr._recheck_share_edit(tok, "my/docs/a.txt", env.db)          # 편집 권한 — 통과
     await fr.update_user_share(share_id=env.sid["dave"], body=fr.ShareUserUpdate(role="comment"),
                                user=env.u["alice"], db=env.db)
-    with pytest.raises(HTTPException) as e:                               # 내려간 뒤 저장 거부
+    with pytest.raises(HTTPException) as e:                               # 강등 후 저장 거부
         await wr._recheck_share_edit(tok, "my/docs/a.txt", env.db)
     assert e.value.status_code == 403
     # 소유자 본인·공유 링크 손님 토큰은 해당 없음
@@ -475,18 +475,18 @@ async def test_comment_reply_anchor_resolve(env):
     assert top["anchor"] == "시트 3 · D14" and top["parent_id"] is None and top["resolved"] is False
     r1 = await fc.create_comment(body=fc.CommentCreate(path=sp(env, "dave", "a.txt"), content="고쳤어요", parent_id=top["id"]),
                                  user=dave, db=env.db)
-    # 답글의 답글은 최상위에 붙는다
+    # 답글의 답글은 최상위에 연결
     r2 = await fc.create_comment(body=fc.CommentCreate(path="my/docs/a.txt", content="고마워요", parent_id=r1["id"]),
                                  user=env.u["alice"], db=env.db)
     assert r1["parent_id"] == top["id"] and r2["parent_id"] == top["id"]
-    # 다른 파일의 댓글에는 답글을 못 단다
+    # 다른 파일의 댓글에는 답글 작성 불가
     other = await fc.create_comment(body=fc.CommentCreate(path=sp(env, "carol", "sub/b.txt"), content="다른 파일"), user=carol, db=env.db)
     with pytest.raises(HTTPException) as e:
         await fc.create_comment(body=fc.CommentCreate(path=sp(env, "carol", "a.txt"), content="x", parent_id=other["id"]),
                                 user=carol, db=env.db)
     assert e.value.status_code == 404
 
-    # 해결: 댓글 권한 이상 누구나(쓴 사람이 아니어도) · 보기 권한은 403 · 답글은 400
+    # 해결: 댓글 권한 이상이면 누구나 가능(작성자가 아니어도) · 보기 권한은 403 · 답글은 400
     with pytest.raises(HTTPException) as e:
         await fc.resolve_comment(comment_id=top["id"], body=fc.CommentResolve(resolved=True), user=bob, db=env.db)
     assert e.value.status_code == 403
@@ -505,7 +505,7 @@ async def test_comment_reply_anchor_resolve(env):
     res = await fc.resolve_comment(comment_id=top["id"], body=fc.CommentResolve(resolved=False), user=carol, db=env.db)
     assert res["resolved"] is False and res["resolved_by"] is None
 
-    # 최상위를 지우면 답글도 지운다
+    # 최상위 삭제 시 답글도 삭제
     await fc.delete_comment(comment_id=top["id"], user=carol, db=env.db)
     left = (await fc.list_comments(path="my/docs/a.txt", user=env.u["alice"], db=env.db))["items"]
     assert left == []
@@ -515,12 +515,12 @@ async def test_comment_reply_anchor_resolve(env):
 async def test_mentionable_marks_who_can_view(env):
     res = await fc.mentionable_people(path=sp(env, "carol", "a.txt"), q="", limit=20, user=env.u["carol"], db=env.db)
     by = {i["id"]: i["role"] for i in res["items"]}
-    assert "carol" not in by                       # 나 제외
+    assert "carol" not in by                       # 본인 제외
     assert by["alice"] == "owner" and by["bob"] == "view" and by["frank"] is None
-    assert res["items"][-1]["id"] == "frank"       # 볼 수 없는 사람은 뒤로
+    assert res["items"][-1]["id"] == "frank"       # 열람 불가 사용자는 후순위
     res = await fc.mentionable_people(path=sp(env, "carol", "a.txt"), q="@da", limit=8, user=env.u["carol"], db=env.db)
     assert [i["id"] for i in res["items"]] == ["dave"]
-    # 보기 권한은 댓글을 못 쓰니 후보도 못 받는다
+    # 보기 권한은 댓글 작성 불가이므로 후보 조회도 불가
     with pytest.raises(HTTPException) as e:
         await fc.mentionable_people(path=sp(env, "bob", "a.txt"), q="", limit=8, user=env.u["bob"], db=env.db)
     assert e.value.status_code == 403
@@ -533,7 +533,7 @@ async def test_access_request_notifies_original_owner(env):
                                 user=env.u["bob"], db=env.db)
     assert r == {"ok": True, "notified": 1}
     assert env.notes == [("alice", "/files?path=my/docs")]
-    # 이미 그 권한이 있으면 400, 내 파일은 400, 모르는 권한 400, 권한 없는 사람은 404
+    # 해당 권한 기보유 시 400, 본인 파일 400, 미정의 권한 400, 권한 없는 사용자는 404
     for body, who, code in (
         (fc.AccessRequest(path=sp(env, "carol", "a.txt"), role="comment"), "carol", 400),
         (fc.AccessRequest(path="my/docs/a.txt", role="edit"), "alice", 400),
@@ -543,7 +543,7 @@ async def test_access_request_notifies_original_owner(env):
         with pytest.raises(HTTPException) as e:
             await fc.request_access(body=body, user=env.u[who], db=env.db)
         assert e.value.status_code == code
-    # 공유는 바뀌지 않는다
+    # 공유는 변경되지 않음
     assert (await fc.list_comments(path=sp(env, "bob", "a.txt"), user=env.u["bob"], db=env.db))["can_comment"] is False
 
 

@@ -1,12 +1,12 @@
-"""메일 구역 감사 수정 — IMAP 결과 확인·메일함 이름 인용·첨부 소모 시점·서명 자리.
+"""메일 구역 감사 수정 — IMAP 결과 확인·메일함 이름 인용·첨부 소모 시점·서명 위치.
 
-고정하는 것
-- 복사(COPY)가 NO/BAD 면 원본을 지우지 않는다(이동·삭제). 예전엔 결과를 안 보고 지워 메일이 사라졌다.
-- 공백이 든 메일함 이름이 따옴표로 감싸져 나간다(aioimaplib 는 따옴표를 붙여 주지 않는다).
-- 지울 때는 그 UID 만(UID EXPUNGE), UIDPLUS 가 없을 때만 전체 EXPUNGE.
-- 라우터가 실패를 200 으로 돌려주지 않는다.
-- 발송이 실패하면 임시 첨부가 남아 있다(다시 보낼 수 있다).
-- 서명은 인용 머리줄·전달 구분선 앞에 들어간다.
+고정 대상
+- 복사(COPY)가 NO/BAD 면 원본을 삭제하지 않는다(이동·삭제). 기존에는 결과를 확인하지 않고 삭제하여 메일이 소실되었다.
+- 공백이 포함된 메일함 이름이 따옴표로 감싸져 전송된다(aioimaplib 는 따옴표를 자동으로 붙이지 않는다).
+- 삭제 시에는 해당 UID 만(UID EXPUNGE), UIDPLUS 가 없을 때만 전체 EXPUNGE.
+- 라우터가 실패를 200 으로 반환하지 않는다.
+- 발송이 실패하면 임시 첨부가 유지된다(재발송 가능).
+- 서명은 인용 머리줄·전달 구분선 앞에 삽입된다.
 """
 
 import json
@@ -26,7 +26,7 @@ def _r(result="OK", lines=None):
 
 
 class FakeImap:
-    """명령을 적어 두고, 정해 둔 명령만 NO 로 답한다."""
+    """명령을 기록하고, 지정된 명령에만 NO 로 응답한다."""
 
     def __init__(self, fail=(), uidplus=True):
         self.fail = set(fail)
@@ -89,7 +89,7 @@ async def test_move_quotes_names_with_spaces(fake):
     assert await imap_client.move_message(SimpleNamespace(), "My Folder", "7", "전체 편지함") is True
     assert imap.calls[0] == ("select", '"My Folder"')
     assert imap.calls[1] == ("copy", "7", '"전체 편지함"')
-    # 그 UID 만 지운다
+    # 해당 UID 만 삭제
     assert imap.calls[-1] == ("expunge", "7")
     assert "expunge-all" not in imap.names()
 
@@ -101,7 +101,7 @@ async def test_move_quotes_names_with_spaces(fake):
 async def test_move_keeps_original_when_copy_fails(fake):
     imap = fake(FakeImap(fail={"copy"}))
     assert await imap_client.move_message(SimpleNamespace(), "INBOX", "7", "Archive") is False
-    assert imap.names() == ["select", "copy"]  # store(\Deleted)·expunge 가 없다
+    assert imap.names() == ["select", "copy"]  # store(\Deleted)·expunge 없음
 
 
 @pytest.mark.asyncio
@@ -125,7 +125,7 @@ async def test_delete_moves_to_trash_then_expunges_only_that_uid(fake):
     res = await imap_client.delete_message(SimpleNamespace(), "INBOX", "7", "Trash")
     assert res == {"ok": True, "permanent": False}
     assert imap.names() == ["select", "copy", "store", "expunge"]
-    # 휴지통 안에서 지우면 영구 삭제(복사 없음)
+    # 휴지통 내부에서 삭제하면 영구 삭제(복사 없음)
     imap = fake(FakeImap())
     res = await imap_client.delete_message(SimpleNamespace(), "Trash", "7", "Trash")
     assert res == {"ok": True, "permanent": True}
@@ -147,7 +147,7 @@ async def test_update_flags_reports_failure(fake):
     assert await imap_client.update_flags(SimpleNamespace(), "INBOX", "7", add_flags=["\\Seen"]) is True
 
 
-# ─── 라우터: 실패를 200 으로 돌려주지 않는다 ───
+# ─── 라우터: 실패를 200 으로 반환하지 않는다 ───
 
 
 async def _seed_user(db, uid="u1"):
@@ -208,7 +208,7 @@ async def test_delete_endpoint_reports_failure(db_session, monkeypatch):
     with pytest.raises(HTTPException) as e:
         await mail_router.delete_message(message_uid="1", mailbox_id="INBOX", account_id=None, user=user, db=db_session)
     assert e.value.status_code == 500
-    # 메일함 목록을 못 받으면 "휴지통 없음 = 영구 삭제"로 가지 않는다
+    # 메일함 목록 수신 실패 시 "휴지통 없음 = 영구 삭제"로 처리하지 않는다
     _client(monkeypatch, list_fail=True)
     with pytest.raises(HTTPException) as e:
         await mail_router.delete_message(message_uid="1", mailbox_id="INBOX", account_id=None, user=user, db=db_session)
@@ -218,7 +218,7 @@ async def test_delete_endpoint_reports_failure(db_session, monkeypatch):
     assert res["ok"] is True
 
 
-# ─── 임시 첨부는 발송이 끝난 뒤에 지운다 ───
+# ─── 임시 첨부는 발송 완료 후 삭제 ───
 
 
 class FakeRedis:
@@ -261,15 +261,15 @@ async def test_attachment_survives_failed_send(db_session, monkeypatch, tmp_path
     with pytest.raises(HTTPException) as e:
         await mail_router.send_message(body=body, user=user, db=db_session)
     assert e.value.status_code == 502
-    assert (tmp_path / "b1").is_file() and "mailatt:b1" in redis.kv  # 다시 보낼 수 있다
+    assert (tmp_path / "b1").is_file() and "mailatt:b1" in redis.kv  # 재발송 가능
 
     state["fail"] = False
     assert (await mail_router.send_message(body=body, user=user, db=db_session))["ok"] is True
     assert got[0][0]["data"] == b"data"
-    assert not (tmp_path / "b1").exists() and "mailatt:b1" not in redis.kv  # 보낸 뒤에 정리
+    assert not (tmp_path / "b1").exists() and "mailatt:b1" not in redis.kv  # 발송 후 정리
 
 
-# ─── 서명 자리 ───
+# ─── 서명 위치 ───
 
 
 def test_signature_goes_before_quote_head_and_forward_mark():
@@ -281,7 +281,7 @@ def test_signature_goes_before_quote_head_and_forward_mark():
     html, _ = mail_router._insert_signature(fwd, "참고", "S", "S", [])
     assert html.index("참고") < html.index('class="signature"') < html.index("Forwarded message")
 
-    # 머리줄이 없는 인용은 예전처럼 blockquote 앞, 인용이 없으면 끝
+    # 머리줄이 없는 인용은 기존과 동일하게 blockquote 앞, 인용이 없으면 끝
     html, _ = mail_router._insert_signature("<p>x</p><blockquote>q</blockquote>", "x", "S", "S", [])
     assert html.index('class="signature"') < html.index("<blockquote")
     html, _ = mail_router._insert_signature("<p>x</p>", "x", "S", "S", [])

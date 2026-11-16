@@ -1,6 +1,6 @@
-"""회의 예약 시각·길이·호스트 이름이 목록·초대 입장 응답에 실린다.
+"""회의 예약 시각·길이·호스트 이름이 목록·초대 입장 응답에 포함된다.
 
-LiveKit·Redis 는 가짜로 바꾼다. 보는 것은 저장(직렬화)과 응답 매핑이다.
+LiveKit·Redis 는 모의 객체로 대체한다. 검증 대상은 저장(직렬화)과 응답 매핑이다.
 """
 
 import json
@@ -22,7 +22,7 @@ def test_meta_roundtrip_keeps_schedule():
 
 
 def test_old_meta_without_schedule_still_loads():
-    """필드가 생기기 전에 저장된 방(Redis 에 남은 JSON)도 읽힌다."""
+    """필드 추가 이전에 저장된 방(Redis 에 잔존한 JSON)도 조회된다."""
     old = json.dumps({
         "name": "old", "host_user_id": "1", "host_username": "a", "host_display_name": "A",
         "share_token": "t", "created_at": 1.0, "password_hash": None, "chat_channel_id": None, "requests": {},
@@ -36,7 +36,7 @@ def test_parse_scheduled():
     assert p(None) is None
     assert p("nope") is None
     assert p("2026-10-16T14:00:00+09:00").isoformat() == "2026-10-16T14:00:00+09:00"
-    # 시간대가 없으면 예전처럼 UTC 로 본다
+    # 시간대가 없으면 기존과 동일하게 UTC 로 간주
     assert p("2026-10-16T05:00:00").isoformat() == "2026-10-16T05:00:00+00:00"
     assert p("2026-10-16T05:00:00Z").isoformat() == "2026-10-16T05:00:00+00:00"
 
@@ -74,7 +74,7 @@ class _User:
 
 @pytest.fixture()
 async def meeting_db():
-    """목록이 DB 회의 저장소도 읽는다(app/meetings/repo.py) — 빈 SQLite 를 준다."""
+    """목록이 DB 회의 저장소도 조회한다(app/meetings/repo.py) — 빈 SQLite 를 제공한다."""
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
     from app.db.models import Base, MeetingDB, MeetingInvitee, User

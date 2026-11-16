@@ -1,17 +1,17 @@
-"""메시지가 만들어진 뒤의 일 — 실시간 전달·멘션 알림·푸시·스레드 팔로워 알림·임시글 정리.
-REST 와 WS 두 경로가 함께 쓴다.
+"""메시지 생성 이후 처리 — 실시간 전달·멘션 알림·푸시·스레드 팔로워 알림·임시글 정리.
+REST 와 WS 두 경로가 공용으로 사용한다.
 
-예전엔 같은 처리(parse_mentions → 알림 → 발행)가 라우터와 WebSocket 에 따로 있었고,
-웹푸시(app/push/router.py `send_push`)는 정의만 되고 어디서도 불리지 않았다.
+과거에는 동일 처리(parse_mentions → 알림 → 발행)가 라우터와 WebSocket 에 각각 존재했고,
+웹푸시(app/push/router.py `send_push`)는 정의만 있고 어디에서도 호출되지 않았다.
 
 푸시 규칙(채널별 알림 설정 ChannelMember.notify_level · muted, 사용자 상태 DND)
-  - 멘션: 'none' 이 아니면 푸시(접속 중이면 안 함). 인앱 알림·배지는 수준과 무관.
-  - 'all'(DM 기본): 일반 메시지도 오프라인 멤버에게 푸시. muted 면 안 보낸다.
-  - DND 인 사람은 어떤 푸시도 받지 않는다(_push 안 push_allowed).
-  - 스레드 답글은 "채널에도 보내기" 한 것만 채널 메시지로 친다.
-  - 알림 키워드(app/chat/keywords.py)가 걸린 멤버는 멘션과 똑같이 센다(멘션 행 + 멘션 알림).
-  - 인라인 답장(chat22) reply_ping 이면 원문 작성자를 멘션처럼 센다(멘션 행 + 알림, 자기 자신 제외).
-  - @silent(chat22): 멘션 행·배지·실시간 전달은 그대로, 알림(인앱 알림함·푸시)은 만들지 않는다.
+  - 멘션: 'none' 이 아니면 푸시(접속 중이면 미발송). 인앱 알림·배지는 수준과 무관.
+  - 'all'(DM 기본): 일반 메시지도 오프라인 멤버에게 푸시. muted 이면 미발송.
+  - DND 상태인 사용자는 어떤 푸시도 수신하지 않는다(_push 내부 push_allowed).
+  - 스레드 답글은 "채널에도 보내기" 한 것만 채널 메시지로 간주한다.
+  - 알림 키워드(app/chat/keywords.py)가 일치한 멤버는 멘션과 동일하게 집계한다(멘션 행 + 멘션 알림).
+  - 인라인 답장(chat22) reply_ping 이면 원문 작성자를 멘션과 동일하게 집계한다(멘션 행 + 알림, 본인 제외).
+  - @silent(chat22): 멘션 행·배지·실시간 전달은 유지하고, 알림(인앱 알림함·푸시)은 생성하지 않는다.
 """
 
 import asyncio
@@ -33,7 +33,7 @@ async def after_message_created(
     usernames = service.parse_mentions(content or "")   # 그룹 멘션 단어 포함
     if usernames:
         try:
-            # 알림을 만들면 app/notifications/service.py 가 실시간 전달과(오프라인이면) 푸시까지 한다
+            # 알림을 생성하면 app/notifications/service.py 가 실시간 전달과(오프라인이면) 푸시까지 수행한다
             notifs = await service.create_notifications_for_mentions(
                 db, msg, channel_id, sender_id, usernames, silent=silent,
             )
@@ -41,7 +41,7 @@ async def after_message_created(
         except Exception as e:
             logger.warning("멘션 알림 실패(%s): %s", channel_id, e)
 
-    # 인라인 답장 — 원문 작성자에게(답장 대상 멘션 켬). 이미 이름으로 불렸으면 한 번만.
+    # 인라인 답장 — 원문 작성자에게 알림(답장 대상 멘션 활성화). 이미 이름으로 멘션된 경우 1회만 알림.
     try:
         rid = await notify_reply_ping(db, msg, channel_id, sender_id, mentioned_ids, silent)
         if rid:
@@ -49,8 +49,8 @@ async def after_message_created(
     except Exception as e:
         logger.warning("답장 알림 실패(%s): %s", channel_id, e)
 
-    # 알림 키워드(설정 › 채팅) — 멘션처럼 "나를 부른 것"으로 센다. 이미 멘션된 사람은 건너뛴다.
-    # @silent 면 키워드 알림도 없다(배지만 — 키워드는 알림 기능이라 행도 남기지 않는다).
+    # 알림 키워드(설정 › 채팅) — 멘션과 동일하게 "나를 부른 것"으로 집계한다. 이미 멘션된 사용자는 건너뛴다.
+    # @silent 이면 키워드 알림도 생성하지 않는다(배지만 — 키워드는 알림 기능이므로 행도 기록하지 않는다).
     if not silent:
         try:
             from app.chat.keywords import create_notifications_for_keywords
@@ -63,11 +63,11 @@ async def after_message_created(
 
     await emit_to_channel(channel_id, {"type": "new_message", "message": msg})
 
-    # 링크 미리보기 — 첫 외부 링크의 카드를 백그라운드로 만들고 다 되면 link_preview 이벤트
+    # 링크 미리보기 — 첫 외부 링크의 카드를 백그라운드로 생성하고 완료 시 link_preview 이벤트 발행
     from app.chat.link_preview import schedule_for_message
     schedule_for_message(msg)
 
-    # 채널 멘션 배지 — 알림함 이벤트와 별개로, 그 채널의 미읽음 멘션 수를 바로 맞춘다
+    # 채널 멘션 배지 — 알림함 이벤트와 별개로, 해당 채널의 미읽음 멘션 수를 즉시 갱신
     for uid in mentioned_ids:
         try:
             count, group = await service.get_mention_state(db, uid, channel_id)
@@ -79,8 +79,8 @@ async def after_message_created(
 
     parent_id = msg.get("parent_id")
 
-    # 스레드 답글 → 팔로워들에게(보낸 사람 제외) thread_update. 미읽음 수는 팔로워마다 다르다.
-    # 오프라인 팔로워에게는 푸시(채널 알림 설정·DND 존중).
+    # 스레드 답글 → 팔로워(발신자 제외)에게 thread_update 전달. 미읽음 수는 팔로워마다 상이하다.
+    # 오프라인 팔로워에게는 푸시 발송(채널 알림 설정·DND 준수).
     thread_pushed: set[str] = set()
     if parent_id:
         try:
@@ -92,7 +92,7 @@ async def after_message_created(
         except Exception as e:
             logger.debug("thread_update 전달 실패(%s): %s", parent_id, e)
 
-    # 보냈으니 그 자리의 임시글은 끝 — 다른 기기 입력창도 비운다
+    # 전송 완료이므로 해당 위치의 임시글 삭제 — 다른 기기의 입력창도 초기화
     try:
         if sender_id and await service.delete_draft(db, sender_id, channel_id, parent_id):
             await emit_to_user(sender_id, {
@@ -102,8 +102,8 @@ async def after_message_created(
     except Exception as e:
         logger.debug("임시글 정리 실패(%s): %s", channel_id, e)
 
-    # 채널 알림 수준 'all' 인 오프라인 멤버에게 푸시(DM 기본). 멘션된 사람은 이미 알림이 갔다.
-    # 메인 타임라인에 보이는 메시지만 — 보통 답글은 팔로워가 thread_update 로 받는다.
+    # 채널 알림 수준이 'all' 인 오프라인 멤버에게 푸시(DM 기본). 멘션된 사용자에게는 이미 알림이 발송되었다.
+    # 메인 타임라인에 표시되는 메시지만 대상 — 일반 답글은 팔로워가 thread_update 로 수신한다.
     if parent_id and not msg.get("thread_broadcast"):
         return
     if silent:
@@ -120,7 +120,7 @@ async def notify_reply_ping(
 ) -> str | None:
     """reply_ping 인 답장 → 원문 작성자에게 멘션 행 + 알림. 대상 user_id(배지 갱신용) 또는 None.
 
-    자기 글에 답장·원문 작성자가 채널을 나갔음·원문이 지워짐/없음 → 없음. silent 면 멘션 행만(알림 없음).
+    본인 글에 답장·원문 작성자가 채널에서 나감·원문이 삭제됨/없음 → 없음. silent 이면 멘션 행만 생성(알림 없음).
     """
     rt = msg.get("reply_to") or {}
     if not msg.get("reply_ping") or rt.get("state") != "ok" or not rt.get("sender"):
@@ -163,7 +163,7 @@ async def notify_reply_ping(
 async def notify_thread_followers(
     db: AsyncSession, reply: dict, root_id: str, channel_id: str, sender_id: str | None,
 ) -> list[str]:
-    """팔로워에게 thread_update. 받은 팔로워 id 목록을 돌려준다(푸시 판단용)."""
+    """팔로워에게 thread_update 전달. 수신한 팔로워 id 목록을 반환한다(푸시 판단용)."""
     unread_map = await service.get_thread_followers_unread(db, root_id, exclude_user_id=sender_id)
     for uid, unread in unread_map.items():
         await emit_to_user(uid, {
@@ -179,10 +179,10 @@ async def notify_thread_followers(
 def thread_push_targets(members: list[dict], followers: list[str], sender_id: str | None,
                         already_notified: set[str]) -> list[str]:
     """스레드 답글 푸시 대상 — 팔로워 중
-    - 보낸 사람·이미 멘션 알림 받은 사람 제외
-    - 채널 알림 수준 'none' 이거나 음소거면 제외
-    - 이 채널 기기 푸시(push)·스레드 답글(thread_replies) 을 끈 사람 제외
-    (DND·접속 여부는 호출부/_push 가 거른다)
+    - 발신자·이미 멘션 알림을 받은 사용자 제외
+    - 채널 알림 수준이 'none' 이거나 음소거이면 제외
+    - 해당 채널의 기기 푸시(push)·스레드 답글(thread_replies) 을 비활성화한 사용자 제외
+    (DND·접속 여부는 호출부/_push 에서 판정)
     """
     by_id = {m["user_id"]: m for m in members}
     out = []
@@ -202,7 +202,7 @@ async def push_thread_reply(
     db: AsyncSession, msg: dict, root_id: str, channel_id: str, sender_id: str | None,
     content: str, followers: list[str], already_notified: set[str],
 ) -> set[str]:
-    """오프라인 스레드 팔로워에게 웹푸시. 푸시를 보낸(보내려 한) 사용자 집합을 돌려준다."""
+    """오프라인 스레드 팔로워에게 웹푸시. 푸시를 발송한(발송을 시도한) 사용자 집합을 반환한다."""
     if not followers:
         return set()
     ch = await service.get_channel(db, channel_id)
@@ -230,7 +230,7 @@ async def push_channel_message(
     db: AsyncSession, msg: dict, channel_id: str, sender_id: str, content: str,
     already_notified: set[str],
 ) -> None:
-    """notify_level == 'all' 이고 muted 아닌 오프라인 멤버에게 웹푸시. 멤버·접속 조회는 각 한 번."""
+    """notify_level == 'all' 이고 muted 가 아닌 오프라인 멤버에게 웹푸시. 멤버·접속 조회는 각 1회."""
     ch = await service.get_channel(db, channel_id)
     if ch is None:
         return

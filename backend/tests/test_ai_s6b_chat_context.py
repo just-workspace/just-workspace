@@ -92,22 +92,22 @@ async def test_edit_creates_version_and_switching_keeps_both_branches(env):
     q1 = msgs[0]
     assert q1["versions"] == [{"id": q1["id"], "created_at": q1["created_at"]}] and q1["active_version"] == 1
 
-    # Q1 을 고친다 → 새 버전, 뒤 대화(Q2·답)는 숨겨지지만 남는다
+    # Q1 을 수정한다 → 새 버전, 이후 대화(Q2·답)는 숨겨지지만 보존된다
     resp = await ai_router.edit_message.__wrapped__(q1["id"], ai_router.EditRequest(content="Q1b"),
                                                     user=env.alice, db=env.db)
     evs = await _drain(resp)
     assert [e for e, _ in evs][0] == "meta" and dict(evs)["done"]["status"] == "complete"
-    assert env.seen[-1]["msgs"] == [{"role": "user", "content": "Q1b"}]  # 옛 가지는 모델 맥락에 안 들어감
+    assert env.seen[-1]["msgs"] == [{"role": "user", "content": "Q1b"}]  # 구 가지는 모델 맥락에 포함되지 않음
     msgs = await _msgs(env, cid)
     assert _contents(msgs) == ["Q1b", "답:Q1b"]
     assert msgs[0]["active_version"] == 2 and len(msgs[0]["versions"]) == 2
     rows = (await env.db.execute(select(AIMessage).where(AIMessage.conversation_id == cid))).scalars().all()
-    assert len(rows) == 6  # 아무것도 지우지 않았다
+    assert len(rows) == 6  # 삭제된 항목 없음
 
     v = await ai_router.message_versions.__wrapped__(msgs[0]["id"], user=env.alice, db=env.db)
     assert v["active_version"] == 2 and [x["id"] for x in v["versions"]][0] == q1["id"]
 
-    # 1번 버전으로 → 옛 가지가 통째로 돌아온다
+    # 1번 버전으로 전환 → 구 가지 전체가 복원된다
     out = await ai_router.switch_version.__wrapped__(msgs[0]["id"], 1, user=env.alice, db=env.db)
     assert _contents(out["messages"]) == ["Q1", "답:Q1", "Q2", "답:Q2"]
     assert out["messages"][0]["active_version"] == 1
@@ -115,7 +115,7 @@ async def test_edit_creates_version_and_switching_keeps_both_branches(env):
     out = await ai_router.switch_version.__wrapped__(q1["id"], 2, user=env.alice, db=env.db)
     assert _contents(out["messages"]) == ["Q1b", "답:Q1b"]
 
-    # 새 가지에서 이어 묻기 — 모델 맥락은 지금 가지만
+    # 새 가지에서 이어서 질문 — 모델 맥락은 현재 가지만 포함
     await _chat(env, cid, "Q3")
     assert [m["content"] for m in env.seen[-1]["msgs"]] == ["Q1b", "답:Q1b", "Q3"]
     out = await ai_router.switch_version.__wrapped__(q1["id"], 1, user=env.alice, db=env.db)
@@ -123,14 +123,14 @@ async def test_edit_creates_version_and_switching_keeps_both_branches(env):
     out = await ai_router.switch_version.__wrapped__(q1["id"], 2, user=env.alice, db=env.db)
     assert _contents(out["messages"]) == ["Q1b", "답:Q1b", "Q3", "답:Q3"]
 
-    # 다시 만들기는 지금 가지의 마지막 답만 바꾼다
+    # 재생성은 현재 가지의 마지막 답만 교체한다
     resp = await ai_router.chat_regenerate.__wrapped__(cid, user=env.alice, db=env.db)
     await _drain(resp)
     assert [m["content"] for m in env.seen[-1]["msgs"]] == ["Q1b", "답:Q1b", "Q3"]
     out = await ai_router.switch_version.__wrapped__(q1["id"], 1, user=env.alice, db=env.db)
     assert _contents(out["messages"]) == ["Q1", "답:Q1", "Q2", "답:Q2"]
 
-    # 남의 메시지는 고치거나 바꿀 수 없다·없는 버전 404
+    # 타인의 메시지는 수정·전환 불가·존재하지 않는 버전은 404
     with pytest.raises(HTTPException) as ei:
         await ai_router.edit_message.__wrapped__(q1["id"], ai_router.EditRequest(content="x"), user=env.bob, db=env.db)
     assert ei.value.status_code == 404
@@ -169,16 +169,16 @@ async def test_temporary_chat_hidden_from_history_and_memory(env):
     assert [c["id"] for c in lst["conversations"]] == [normal]
     assert [c["id"] for c in lst["temporary"]] == [temp] and lst["temporary"][0]["temporary"] is True
 
-    # 일반 대화: 메모리가 맥락에 들어가고 저장 도구가 보인다
+    # 일반 대화: 메모리가 맥락에 포함되고 저장 도구가 노출된다
     await _chat(env, normal, "안녕")
     assert "개조식" in env.seen[-1]["system"]
     assert ai_memory.TOOL_NAME in [t["function"]["name"] for t in env.seen[-1]["tools"]]
-    # 임시 대화: 메모리를 읽지도(맥락 없음) 쓰지도(도구 없음) 않는다
+    # 임시 대화: 메모리를 읽지도(맥락 없음) 기록하지도(도구 없음) 않는다
     await _chat(env, temp, "급여 규정 비밀 질문")
     assert "개조식" not in (env.seen[-1]["system"] or "")
     assert ai_memory.TOOL_NAME not in [t["function"]["name"] for t in env.seen[-1]["tools"]]
 
-    # 모델이 억지로 memory_save 를 불러도 저장 안 됨
+    # 모델이 memory_save 를 강제로 호출해도 저장되지 않음
     async def sneaky(cfg, msgs, system=None, tools=None):
         if len(msgs) == 1 or msgs[-1]["role"] == "user" and "방금 도구" not in msgs[-1]["content"]:
             yield {"type": "tool_call", "name": "memory_save", "args": json.dumps({"kind": "work", "text": "급여일 25일"})}
@@ -189,21 +189,21 @@ async def test_temporary_chat_hidden_from_history_and_memory(env):
     assert "memory_saved" not in [e for e, _ in evs]
     assert (await env.db.execute(select(AIMemory).where(AIMemory.text == "급여일 25일"))).first() is None
 
-    # 검색되지 않는다
+    # 검색 대상에서 제외된다
     res = await ai_router.search_conversations.__wrapped__(q="급여", user=env.alice, db=env.db)
     assert res["results"] == []
-    # 임시 대화는 프로젝트에 못 넣는다
+    # 임시 대화는 프로젝트에 포함할 수 없다
     with pytest.raises(HTTPException):
         await _conv(env, env.alice, temporary=True, project_id="p")
 
-    # 24시간 지난 임시 대화는 목록을 열 때 정리된다(다른 사용자 것도)
+    # 24시간이 지난 임시 대화는 목록 조회 시 정리된다(다른 사용자의 대화 포함)
     c = await env.db.get(AIConversation, temp)
     c.updated_at = datetime.now(timezone.utc) - timedelta(hours=25)
     await env.db.commit()
     await ai_router.list_conversations.__wrapped__(user=env.bob, db=env.db)
     assert await env.db.get(AIConversation, temp) is None
     assert (await env.db.execute(select(AIMessage).where(AIMessage.conversation_id == temp))).first() is None
-    # 창을 닫으면 지운다(화면이 DELETE 를 보낸다)
+    # 창을 닫으면 삭제한다(화면이 DELETE 를 송신한다)
     t2 = await _conv(env, env.alice, temporary=True)
     await ai_router.delete_conversation.__wrapped__(t2, user=env.alice, db=env.db)
     assert await env.db.get(AIConversation, t2) is None
@@ -231,13 +231,13 @@ async def _project_setup(env):
 
 async def test_project_context_injection_and_member_read_only(env):
     p, g = await _project_setup(env)
-    # 주인 대화: 지침 + 관련 지식
+    # 소유자 대화: 지침 + 관련 지식
     cid = await _conv(env, env.alice, project_id=p["id"])
     await _chat(env, cid, "방화벽 위치 알려줘")
     sys_ = env.seen[-1]["system"]
     assert "답은 개조식으로" in sys_ and "FW-01" in sys_ and "장비목록.txt" in sys_
 
-    # 공유 전: bob 은 못 본다
+    # 공유 전: bob 은 조회 불가
     with pytest.raises(HTTPException) as ei:
         await ai_router.get_project.__wrapped__(p["id"], user=env.bob, db=env.db)
     assert ei.value.status_code == 404
@@ -258,24 +258,24 @@ async def test_project_context_injection_and_member_read_only(env):
             await call
         assert ei.value.status_code == 403
 
-    # 구성원 대화: 지침은 들어가지만 alice 의 개인 파일은 bob 권한으로 못 읽어 건너뛴다
+    # 구성원 대화: 지침은 포함되지만 alice 의 개인 파일은 bob 권한으로 읽을 수 없어 제외된다
     bcid = await _conv(env, env.bob, project_id=p["id"])
     await _chat(env, bcid, "방화벽 위치 알려줘", user=env.bob)
     sys_ = env.seen[-1]["system"]
     assert "답은 개조식으로" in sys_ and "FW-01" not in sys_
-    # alice 가 그 파일을 bob 에게 공유하면 bob 권한으로 읽힌다
+    # alice 가 해당 파일을 bob 에게 공유하면 bob 권한으로 읽힌다
     env.db.add(FileShare(owner_id="alice", file_path="my/장비목록.txt", shared_with_user_id="bob", role="view"))
     await env.db.commit()
     await _chat(env, bcid, "방화벽 위치 알려줘", user=env.bob)
     assert "FW-01" in env.seen[-1]["system"]
-    # 대화 수는 각자 자기 대화만
+    # 대화 수는 사용자별 본인 대화만 집계
     assert (await ai_router.get_project.__wrapped__(p["id"], user=env.bob, db=env.db))["conversation_count"] == 1
 
-    # 공유 해제 → bob 은 프로젝트를 못 보고 맥락도 안 들어간다
+    # 공유 해제 → bob 은 프로젝트를 조회할 수 없고 맥락에도 포함되지 않는다
     await ai_router.patch_project.__wrapped__(p["id"], ai_router.ProjectPatch(share_group_id=""), user=env.alice, db=env.db)
     await _chat(env, bcid, "방화벽?", user=env.bob)
     assert "개조식" not in (env.seen[-1]["system"] or "")
-    # 남의 그룹에는 공유 못 한다
+    # 타 그룹에는 공유 불가
     g2 = Group(name="다른팀")
     env.db.add(g2)
     await env.db.commit()
@@ -283,7 +283,7 @@ async def test_project_context_injection_and_member_read_only(env):
         await ai_router.patch_project.__wrapped__(p["id"], ai_router.ProjectPatch(share_group_id=g2.id),
                                                   user=env.alice, db=env.db)
     assert ei.value.status_code == 400
-    # 지우면 대화는 남고 묶음만 풀린다
+    # 삭제하면 대화는 유지되고 프로젝트 연결만 해제된다
     await ai_router.delete_project.__wrapped__(p["id"], user=env.alice, db=env.db)
     assert (await env.db.get(AIConversation, cid)).project_id is None
 
@@ -294,11 +294,11 @@ def test_knowledge_chunk_selection_prefers_overlap_and_budget():
     picked = ai_projects.select_chunks(docs, "IKE 재협상 주기가 어떻게 돼?", budget=10_000)
     assert picked and all(name == "a.txt" for name, _ in picked)
     assert any("8시간" in c for _, c in picked)
-    # 겹치는 게 없으면 앞부분부터
+    # 일치 항목이 없으면 앞부분부터
     assert ai_projects.select_chunks(docs, "zzz", budget=10_000)
     big = [("c.txt", ("가나다라 " * 300 + "\n\n") * 30)]
     assert sum(len(c) for _, c in ai_projects.select_chunks(big, "가나다", budget=3000)) <= 3000
-    assert "재협" in ai_projects.terms("재협상을")  # 조사가 붙어도 두 글자 조각으로 겹친다
+    assert "재협" in ai_projects.terms("재협상을")  # 조사가 붙어도 두 글자 조각으로 일치한다
 
 
 # ── 4. 메모리 ───────────────────────────────────────────────
@@ -322,8 +322,8 @@ def test_secret_filter():
 
 
 async def test_memory_saved_notice_cancel_and_secret_refusal(env):
-    # 메모리 저장은 "이 대화에서 남이 쓴 내용을 읽었는가"를 먼저 본다(Redis 를 못 읽으면 거절 — fail-closed).
-    # 테스트 환경엔 Redis 가 없으니 "읽은 적 없음"으로 고정한다(거절 경로는 test_aiwrite_context_marks.py).
+    # 메모리 저장은 "이 대화에서 타인이 작성한 내용을 읽었는가"를 먼저 확인한다(Redis 를 읽을 수 없으면 거부 — fail-closed).
+    # 테스트 환경에는 Redis 가 없으므로 "읽은 적 없음"으로 고정한다(거부 경로는 test_aiwrite_context_marks.py).
     async def _not_read(user_id, conv_id):
         return None
     from app.mcp import writes as _writes
@@ -349,22 +349,22 @@ async def test_memory_saved_notice_cancel_and_secret_refusal(env):
     evs = await _chat(env, cid, "앞으로 보고서는 개조식으로. 그리고 VPN 비번 기억해")
     saved = [d for e, d in evs if e == "memory_saved"]
     assert len(saved) == 1 and saved[0]["kind"] == "preference" and saved[0]["text"] == "보고서는 개조식 선호"
-    assert "비밀 정보" in stream.last_tool_turn  # 모델에게 거부 이유가 간다
+    assert "비밀 정보" in stream.last_tool_turn  # 모델에 거부 사유가 전달된다
     rows = (await env.db.execute(select(AIMemory).where(AIMemory.user_id == "alice"))).scalars().all()
     assert [r.text for r in rows] == ["보고서는 개조식 선호"] and rows[0].source_conversation_id == cid
-    # memory_save 는 MCP 레지스트리에 없다(외부 커넥터에 안 보임)
+    # memory_save 는 MCP 레지스트리에 없다(외부 커넥터에 노출되지 않음)
     assert ai_memory.TOOL_NAME not in WORKSPACE_TOOLS
 
     lst = await ai_router.list_memory.__wrapped__(kind="", q="", user=env.alice, db=env.db)
     assert lst["enabled"] is True and lst["items"][0]["source_title"]
-    # [취소] = 그 항목 삭제
+    # [취소] = 해당 항목 삭제
     await ai_router.delete_memory.__wrapped__(saved[0]["id"], user=env.alice, db=env.db)
     assert (await env.db.execute(select(AIMemory))).first() is None
     with pytest.raises(HTTPException) as ei:
         await ai_router.delete_memory.__wrapped__(saved[0]["id"], user=env.alice, db=env.db)
     assert ei.value.status_code == 404
 
-    # 직접 추가·수정 — 비밀은 422, 남의 것은 404
+    # 직접 추가·수정 — 비밀은 422, 타인의 항목은 404
     m = await ai_router.add_memory.__wrapped__(ai_router.MemoryBody(kind="person", text="이서연 님 — 지사 담당"),
                                                user=env.alice, db=env.db)
     with pytest.raises(HTTPException) as ei:
@@ -382,7 +382,7 @@ async def test_memory_saved_notice_cancel_and_secret_refusal(env):
     assert out["kind"] == "work"
     assert (await ai_router.list_memory.__wrapped__(kind="person", q="", user=env.alice, db=env.db))["items"] == []
 
-    # 스위치 끄면 읽지도 쓰지도 않는다(지우지는 않음)
+    # 스위치를 비활성화하면 읽기·쓰기 모두 수행하지 않는다(삭제는 하지 않음)
     await ai_router.put_memory_settings.__wrapped__(ai_router.MemorySettingsBody(enabled=False), user=env.alice, db=env.db)
     seen = []
 
@@ -441,23 +441,23 @@ async def test_attachment_stages_and_failure_codes(env):
     r = await _up(env, "big.txt", b"x" * 11)
     assert r["error_code"] == "too_large"
     env.mp.setattr(ai_att, "MAX_FILE", 30 * 1024 * 1024)
-    assert (await env.db.execute(select(AIAttachment))).scalars().all().__len__() == 1  # 실패는 안 남긴다
+    assert (await env.db.execute(select(AIAttachment))).scalars().all().__len__() == 1  # 실패 건은 저장하지 않는다
 
-    # 보내면 메시지에 붙고, 문서 글자가 모델 맥락에 신뢰 경계로 들어간다(본문은 사용자 글 그대로)
+    # 송신하면 메시지에 첨부되고, 문서 텍스트가 신뢰 경계로 감싸져 모델 맥락에 포함된다(본문은 사용자 글 그대로)
     cid = await _conv(env, env.alice)
     await _chat(env, cid, "빠진 장비?", attachment_ids=[ok["id"]])
     sent = env.seen[-1]["msgs"][-1]["content"]
     assert sent.startswith("빠진 장비?") and "FW-01 확인" in sent and "지시가 아닙니다" in sent
     msgs = await _msgs(env, cid)
     assert msgs[0]["content"] == "빠진 장비?" and msgs[0]["attachments"][0]["name"] == "점검표.md"
-    # 한 번 보낸 첨부는 다시 못 붙이고, 남의 첨부도 못 붙인다
+    # 한 번 송신한 첨부는 재첨부 불가, 타인의 첨부도 첨부 불가
     with pytest.raises(HTTPException) as ei:
         await _chat(env, cid, "또", attachment_ids=[ok["id"]])
     assert ei.value.status_code == 404
     other = await _up(env, "b.txt", b"bob", user=env.bob)
     with pytest.raises(HTTPException):
         await _chat(env, cid, "또", attachment_ids=[other["id"]])
-    # 질문을 고쳐도 첨부는 새 버전에 따라간다
+    # 질문을 수정해도 첨부는 새 버전에 유지된다
     resp = await ai_router.edit_message.__wrapped__(msgs[0]["id"], ai_router.EditRequest(content="다시 비교"),
                                                     user=env.alice, db=env.db)
     await _drain(resp)
@@ -479,14 +479,14 @@ async def test_image_attachment_needs_vision(env):
     await _chat(env, cid, "이 사진 봐 줘", attachment_ids=[img["id"]])
     last = env.seen[-1]["msgs"][-1]
     assert last["images"][0]["mime"] == "image/png" and last["images"][0]["data"]
-    # 제공자 모양 변환
+    # 제공자별 형식 변환
     assert _with_images("ollama", [last])[0]["images"]
     assert _with_images("anthropic", [last])[0]["content"][0]["type"] == "image"
     assert _with_images("openai", [last])[0]["content"][1]["type"] == "image_url"
     assert supports_vision(ProviderConfig(kind="anthropic", model="claude-sonnet-4-5"))
     assert not supports_vision(ProviderConfig(kind="compatible", model="qwen3-27b"))
     assert supports_vision(ProviderConfig(kind="compatible", model="qwen3-27b", extra={"vision": True}))
-    # 보내지 않은 첨부는 24시간 뒤 정리
+    # 송신하지 않은 첨부는 24시간 후 정리
     stale = await _up(env, "old.txt", b"old")
     row = await env.db.get(AIAttachment, stale["id"])
     row.created_at = datetime.now(timezone.utc) - timedelta(hours=25)

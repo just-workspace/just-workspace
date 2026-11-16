@@ -1,9 +1,9 @@
-"""플러그인 SDK 의 register_tool — 도구가 등록한 플러그인의 모듈에 묶여 내장 도구와 같은 판정을 받는다.
+"""플러그인 SDK 의 register_tool — 도구가 등록한 플러그인의 모듈에 귀속되어 내장 도구와 동일한 판정을 받는다.
 
-- 로더가 올리는 동안 등록한 도구는 TOOL_MODULE 에 `도구 → 플러그인 id` 로 들어간다(따로 넣지 않아도 노출된다).
-- 그 모듈이 꺼져 있거나 사용자가 없으면 보이지 않는다(판정을 우회하지 않는다).
-- 내장 도구·다른 플러그인의 도구 이름은 덮어쓰지 못한다.
-- 로드에 실패한 플러그인이 등록한 도구는 남지 않는다.
+- 로더가 로드하는 동안 등록한 도구는 TOOL_MODULE 에 `도구 → 플러그인 id` 로 등록된다(별도로 추가하지 않아도 노출된다).
+- 해당 모듈이 비활성화되어 있거나 사용자가 없으면 노출되지 않는다(판정을 우회하지 않는다).
+- 내장 도구·다른 플러그인의 도구 이름은 덮어쓸 수 없다.
+- 로드에 실패한 플러그인이 등록한 도구는 잔존하지 않는다.
 """
 
 import json
@@ -85,11 +85,11 @@ async def test_tool_is_bound_to_its_plugin_module(loaded):
 async def test_cannot_take_builtin_or_foreign_tool_names(loaded):
     import sys
 
-    # 내장 도구는 그대로다(핸들러도, 모듈도)
+    # 내장 도구는 변경 없음(핸들러·모듈 모두)
     assert reg.WORKSPACE_TOOLS.get("mail_read") is loaded["builtin_mail"]
     assert access.TOOL_MODULE["mail_read"] == "mail"
     assert sys.modules["plugin_pta_router"].RESULTS == {"own": True, "builtin": False, "other": True}
-    # ptb 는 pta 의 도구 이름을 가져가지 못한다
+    # ptb 는 pta 의 도구 이름을 점유할 수 없음
     assert sys.modules["plugin_ptb_router"].RESULTS == {"own": True, "builtin": False, "other": False}
     assert access.TOOL_MODULE["pta_echo"] == "pta"
 
@@ -102,8 +102,8 @@ async def test_failed_plugin_leaves_no_tools(loaded):
 async def test_access_follows_module_state(loaded, monkeypatch):
     admin = SimpleNamespace(id="u1", is_admin=True)
     assert await access.tool_accessible(None, admin, "pta_echo") is True
-    assert await access.tool_accessible(None, None, "pta_echo") is False       # 사용자 없는 호출에는 안 보인다
-    monkeypatch.setitem(registry._module_states, "pta", False)                 # 관리자가 플러그인을 끔
+    assert await access.tool_accessible(None, None, "pta_echo") is False       # 사용자 없는 호출에는 미노출
+    monkeypatch.setitem(registry._module_states, "pta", False)                 # 관리자가 플러그인을 비활성화
     assert await access.tool_accessible(None, admin, "pta_echo") is False
     assert await access.tool_accessible(None, admin, "ptb_echo") is True
 

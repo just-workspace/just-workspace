@@ -1,6 +1,6 @@
 """격리 브라우저(RBI) — 정책 생성·대상 검증·권한·세션 수명·스트림 인증·관리자 API.
 
-docker 는 부르지 않는다(app.rbi.docker 를 가짜로 바꾼다). Redis 도 안 쓴다(가짜 저장소 — tests/rbi_fakes.py).
+docker 는 호출하지 않는다(app.rbi.docker 를 모의 객체로 대체한다). Redis 도 사용하지 않는다(가짜 저장소 — tests/rbi_fakes.py).
 rbi 전용 출처(SSO 홉·쿠키 격리·호스트 제한)는 tests/test_rbi_site.py.
 """
 from __future__ import annotations
@@ -192,7 +192,7 @@ def fake_docker(monkeypatch):
     for n in ("ensure_network", "create_session_container", "published_upstream", "wait_ready",
               "container_state", "established_viewers", "remove_container", "list_session_containers"):
         monkeypatch.setattr(dk, n, getattr(fd, n))
-    # 사이드카가 이 출구들을 건 상태(동적 허용 목록 시험은 tests/test_rbi_egress.py)
+    # 사이드카가 이 출구들을 적용한 상태(동적 허용 목록 시험은 tests/test_rbi_egress.py)
     fd.allow = ["192.168.10.70:80", "192.168.10.70:443", "192.168.10.71:80", "192.168.10.71:443"]
     monkeypatch.setattr(dk, "read_guard_state", lambda: dk.GuardState(ok=True, reason="ok", age=5.0, allow=list(fd.allow)))
     return fd
@@ -205,7 +205,7 @@ def _allow_file(tmp_path, monkeypatch):
 
 
 async def _seed_users(db, *users: User) -> None:
-    """거두기는 세션 소유자 계정이 살아 있는지도 본다 — 계정 행이 없으면 세션을 끝내므로 시험에서도 넣어 둔다."""
+    """정리 작업은 세션 소유자 계정의 존재 여부도 확인한다 — 계정 행이 없으면 세션을 종료하므로 시험에서도 추가해 둔다."""
     for u in users:
         db.add(User(id=u.id, username=u.username, display_name=u.display_name, is_admin=u.is_admin,
                     is_active=True, email=u.email, token_version=0))
@@ -262,7 +262,7 @@ async def test_start_session_creates_hardened_container_with_policies(db_session
     assert args[-2] == "-c" and "zz-rbi-policy.json" in args[-1] and "kasm_startup.sh --wait" in args[-1]
     # 비밀번호는 암호문으로만 저장
     assert "VNC_PW=" in " ".join(args) and s.vnc_password_enc not in " ".join(args)
-    # 같은 사용자가 다시 시작하면 같은 세션
+    # 동일 사용자가 다시 시작하면 동일 세션
     again = await svc.start_session(db_session, ALICE, t, None)
     assert again.id == s.id and len(fake_docker.created) == 1
     # 스트림 인증: 소유자만
@@ -308,17 +308,17 @@ async def test_start_session_limits(db_session, fake_docker, monkeypatch):
 async def test_reaper_ends_exited_idle_and_expired(db_session, fake_docker):
     await _seed_users(db_session, ADMIN, BOB)
     t = await _target(db_session, idle_minutes=1, max_hours=1)
-    s1 = await svc.start_session(db_session, ADMIN, t, None)   # 컨테이너가 죽음
-    # 두 번째 세션은 다른 사용자(BOB 허용)로
+    s1 = await svc.start_session(db_session, ADMIN, t, None)   # 컨테이너가 종료된 경우
+    # 두 번째 세션은 다른 사용자(BOB 허용)로 생성
     svc.apply_target_fields(t, {"allowed_user_ids": [BOB.id]}, creating=False)
     await db_session.commit()
     sb = await svc.start_session(db_session, BOB, t, None)
     fake_docker.running[s1.container_id] = False
-    # BOB: 핑이 오래 끊기고 뷰어도 없다 → idle
+    # BOB: 핑이 장시간 중단되고 뷰어도 없음 → idle
     sb.last_seen_at = datetime.now(timezone.utc) - timedelta(minutes=10)
     await db_session.commit()
     fake_docker.viewers[sb.container_id] = 0
-    # 다른 스택(접두어가 다른 이름)의 세션 컨테이너는 같은 라벨이어도 건드리지 않는다
+    # 다른 스택(접두어가 다른 이름)의 세션 컨테이너는 라벨이 동일해도 대상에서 제외
     fake_docker.orphans = [("deadbeef1234", "ws-rbi-s-orphan"), ("cafebabe5678", "r22e-rbi-s-other"), ("0badf00d9999", "/ws-rbi-s-slash")]
     st = await svc.reap_once(db_session)
     assert st["ended"] == 2 and st["orphans"] == 2
@@ -336,7 +336,7 @@ async def test_reaper_keeps_session_with_viewer_and_kills_expired(db_session, fa
     s = await svc.start_session(db_session, ADMIN, t, None)
     s.last_seen_at = datetime.now(timezone.utc) - timedelta(minutes=30)
     await db_session.commit()
-    fake_docker.viewers[s.container_id] = 1          # 뷰어가 붙어 있으면 핑이 없어도 유지
+    fake_docker.viewers[s.container_id] = 1          # 뷰어가 연결되어 있으면 핑이 없어도 유지
     assert (await svc.reap_once(db_session))["ended"] == 0
     s.started_at = datetime.now(timezone.utc) - timedelta(hours=2)
     await db_session.commit()
@@ -390,17 +390,17 @@ async def test_api_session_flow_and_ownership(db_session, fake_docker):
     body = r.json()
     sid = body["id"]
     assert body["stream_url"] == f"/rbi/{sid}/" and body["status"] == "running"
-    # 세션 시작이 쿠키를 심지 않는다(예전 경로 한정 쿠키 폐지 — rbi 출처 세션 쿠키가 스트림까지 덮는다)
+    # 세션 시작 시 쿠키를 설정하지 않는다(기존 경로 한정 쿠키 폐지 — rbi 출처 세션 쿠키가 스트림까지 포괄)
     assert "set-cookie" not in r.headers
-    # 다른 사용자는 상태도 못 보고 끝내지도 못한다
+    # 다른 사용자는 상태 조회·종료 모두 불가
     assert (await _req(BOB, db_session, "GET", f"/api/rbi/sessions/{sid}")).status_code == 404
     assert (await _req(BOB, db_session, "DELETE", f"/api/rbi/sessions/{sid}")).status_code == 404
     # 소유자 핑
     assert (await _req(ALICE, db_session, "POST", f"/api/rbi/sessions/{sid}/ping")).json()["status"] == "running"
-    # 입장 티켓·enter 는 없어졌다
+    # 입장 티켓·enter 는 제거됨
     assert (await _req(ALICE, db_session, "POST", f"/api/rbi/sessions/{sid}/ticket")).status_code in (404, 405)
     assert (await _req(None, db_session, "GET", f"/api/rbi/enter/{sid}?t=x")).status_code in (404, 405)
-    # 관리자도 세션을 끝낼 수 있다
+    # 관리자도 세션 종료 가능
     r = await _req(ADMIN, db_session, "DELETE", f"/api/rbi/sessions/{sid}")
     assert r.status_code == 200 and r.json()["status"] == "ended" and r.json()["end_reason"] == "admin"
     assert fake_docker.removed
@@ -441,18 +441,18 @@ async def test_internal_stream_auth(db_session, fake_docker, rbi_origin, fake_re
     assert (await _req(None, db_session, "GET", url, headers={"Host": RBI_HOST, "X-Original-URI": f"/rbi/{s.id}/"})).status_code == 401
     ck_bob = await site_cookie(fake_redis, BOB.id)
     assert (await _req(None, db_session, "GET", url, headers={**good, "Cookie": ck_bob})).status_code == 403
-    # 워크스페이스 출처(Host)로는 스트림을 열지 않는다 — 같은 쿠키여도 403
+    # 워크스페이스 출처(Host)로는 스트림을 열지 않는다 — 동일 쿠키여도 403
     assert (await _req(None, db_session, "GET", url, headers={**good, "Host": "ws.test"})).status_code == 403
-    # 모르는 세션·엉뚱한 경로 → 403(auth_request 는 401/403 만 전달)
+    # 미등록 세션·무관한 경로 → 403(auth_request 는 401/403 만 전달)
     assert (await _req(None, db_session, "GET", url, headers={**good, "X-Original-URI": "/rbi/" + "0" * 32 + "/"})).status_code == 403
     assert (await _req(None, db_session, "GET", url, headers={**good, "X-Original-URI": "/api/files"})).status_code == 403
-    # 끝난 세션 → 403
+    # 종료된 세션 → 403
     await svc.stop_session(db_session, s, "user")
     assert (await _req(None, db_session, "GET", url, headers=good)).status_code == 403
 
 
 async def test_internal_stream_auth_rejects_workspace_session_cookie(db_session, fake_docker, rbi_origin, fake_redis, monkeypatch):
-    """워크스페이스 세션 쿠키로는 스트림이 안 열린다(예전엔 받았다) — 그 쿠키는 rbi 출처로 오지도 않지만, 와도 안 본다."""
+    """워크스페이스 세션 쿠키로는 스트림이 열리지 않는다(기존에는 허용) — 해당 쿠키는 rbi 출처로 전송되지도 않으며, 전송되어도 확인하지 않는다."""
     t = await _target(db_session, allowed_user_ids=[ALICE.id])
     s = await svc.start_session(db_session, ALICE, t, None)
     tok = sign_value({"user_id": ALICE.id, "tv": 0, "sid": "x"})
@@ -512,7 +512,7 @@ def test_mirror_container_env_carries_policy_allowlist_idle_and_devtools_1():
     assert json.loads(env["MIRROR_ALLOW"]) == ["192.168.10.70:8080", "10.0.0.9"]
     assert env["MIRROR_IDLE_SECONDS"] == "1200"
     chrome = json.loads(env["RBI_POLICY_JSON"])
-    # 정책 2(금지)면 CDP 가 페이지에 못 붙는다 → 미러는 1. URL 허용목록·다운로드 차단은 픽셀과 같다
+    # 정책 2(금지)면 CDP 가 페이지에 연결할 수 없다 → 미러는 1. URL 허용목록·다운로드 차단은 픽셀과 동일
     assert chrome["DeveloperToolsAvailability"] == 1 and chrome["RemoteDebuggingAllowed"] is True
     assert chrome["URLBlocklist"] == ["*"] and chrome["URLAllowlist"][:2] == ["192.168.10.70:8080", "10.0.0.9"]
     assert chrome["DownloadRestrictions"] == 3 and chrome["AllowFileSelectionDialogs"] is False
@@ -536,7 +536,7 @@ async def test_target_mode_default_and_modes(db_session, fake_docker):
     assert t.mode == "mirror" and svc.target_dict(t)["mode"] == "mirror" and svc.target_dict(t)["modes"] == ["mirror", "pixel"]
     with pytest.raises(ValueError):
         svc.apply_target_fields(t, {"mode": "vnc"}, creating=False)
-    t.mode = None  # 옛 행
+    t.mode = None  # 이전 행
     assert svc.target_mode(t) == "pixel"
 
 
@@ -548,7 +548,7 @@ async def test_start_mirror_session_uses_mirror_image_env_and_auth(db_session, f
     assert svc.get_settings().rbi_mirror_image in args and "kasmweb/chromium:1.18.0" not in args
     assert env["MIRROR_SID"] == s.id and json.loads(env["MIRROR_POLICY"])["co"] is False
     assert "RBI_KASMVNC_YAML" not in env and args[-1] == pol.MIRROR_STARTUP_SCRIPT
-    # nginx 에 넘기는 Authorization 은 에이전트 env 와 같은 값(mirror:<비밀>)
+    # nginx 에 전달하는 Authorization 은 에이전트 env 와 동일한 값(mirror:<비밀>)
     up, authz = svc.stream_auth(s, ALICE.id)
     import base64 as b64
     assert authz == env["MIRROR_AUTH"] and b64.b64decode(authz.split()[1]).decode().startswith("mirror:")
@@ -571,7 +571,7 @@ async def test_api_switch_mode_restarts_session_and_audits(db_session, fake_dock
     r = await _req(ALICE, db_session, "POST", "/api/rbi/sessions", json={"target_id": t.id})
     assert r.status_code == 201 and r.json()["mode"] == "mirror"
     sid = r.json()["id"]
-    # 다른 사용자는 못 바꾼다
+    # 다른 사용자는 변경 불가
     assert (await _req(BOB, db_session, "POST", f"/api/rbi/sessions/{sid}/mode", json={"mode": "pixel"})).status_code == 404
     r = await _req(ALICE, db_session, "POST", f"/api/rbi/sessions/{sid}/mode", json={"mode": "pixel"})
     assert r.status_code == 200, r.text
@@ -607,7 +607,7 @@ async def test_internal_auth_path_must_match_session_mode(db_session, fake_docke
 
 
 async def test_reaper_keeps_container_of_session_still_starting(db_session, fake_docker):
-    """컨테이너는 만들어졌는데 container_id 가 아직 커밋되지 않은 순간에 정리가 돌아도 그 컨테이너를 지우지 않는다."""
+    """컨테이너는 생성되었으나 container_id 가 아직 커밋되지 않은 시점에 정리가 실행되어도 해당 컨테이너를 삭제하지 않는다."""
     t = await _target(db_session)
     name = f"{svc.get_settings().rbi_container_prefix}abcdef012345"
     db_session.add(RbiSession(

@@ -28,8 +28,8 @@ from app.mail.crypto import decrypt_password
 logger = logging.getLogger(__name__)
 
 
-# 선언된 charset이 없거나 틀린 메일(특히 한국어 EUC-KR/CP949) 대비 다중 폴백.
-# latin-1은 어떤 바이트든 디코드되므로 반드시 마지막(정상 charset을 가리지 않게).
+# 선언된 charset이 없거나 잘못된 메일(특히 한국어 EUC-KR/CP949) 대비 다중 폴백.
+# latin-1은 모든 바이트가 디코드되므로 반드시 마지막에 배치(정상 charset이 가려지지 않도록).
 _FALLBACK_CHARSETS = ("utf-8", "cp949", "euc-kr", "iso-2022-kr", "gb18030", "shift_jis", "big5", "latin-1")
 
 
@@ -158,7 +158,7 @@ _CID_SRC_RE = re.compile(r"""(src\s*=\s*['"]?)cid:([^'">\s]+)""", re.IGNORECASE)
 
 
 def _inline_cid_map(msg: EmailMessage) -> dict[str, str]:
-    """Content-ID(cid) → data: URI 지도. 인라인 이미지만, 한도 내에서."""
+    """Content-ID(cid) → data: URI 매핑. 인라인 이미지만, 한도 내에서."""
     cid_map: dict[str, str] = {}
     if not msg.is_multipart():
         return cid_map
@@ -190,7 +190,7 @@ def _inline_cid_map(msg: EmailMessage) -> dict[str, str]:
 
 
 def _rewrite_cid_images(html: str, cid_map: dict[str, str]) -> str:
-    """html_body 의 src="cid:..." 를 data: URI 로 치환(브라우저가 cid: 를 못 읽음)."""
+    """html_body 의 src="cid:..." 를 data: URI 로 치환(브라우저는 cid: 를 해석하지 못함)."""
     if not html or not cid_map:
         return html
 
@@ -258,9 +258,9 @@ def _line_to_str(line) -> str:
 def _q(mailbox: str) -> str:
     """메일함 이름 → IMAP quoted string.
 
-    aioimaplib 는 인자를 공백으로 이어 붙이기만 한다(따옴표를 붙여 주지 않는다). 따옴표 없이 보내면
-    공백이 든 이름("전체 편지함", "Deleted Items")이 두 인자로 갈라져 SELECT/COPY/APPEND 가 BAD 로 끝난다.
-    줄바꿈이 든 이름은 명령 주입이라 거절한다.
+    aioimaplib 는 인자를 공백으로 연결만 한다(따옴표를 추가하지 않는다). 따옴표 없이 전송하면
+    공백이 포함된 이름("전체 편지함", "Deleted Items")이 두 인자로 분리되어 SELECT/COPY/APPEND 가 BAD 로 종료된다.
+    줄바꿈이 포함된 이름은 명령 주입이므로 거부한다.
     """
     s = str(mailbox or "")
     if not s or any(c in s for c in "\r\n\x00"):
@@ -269,7 +269,7 @@ def _q(mailbox: str) -> str:
 
 
 def _ok(resp) -> bool:
-    """aioimaplib 는 NO/BAD 를 예외로 던지지 않고 Response.result 로만 알려 준다 — 반드시 확인한다."""
+    """aioimaplib 는 NO/BAD 를 예외로 발생시키지 않고 Response.result 로만 전달하므로 반드시 확인한다."""
     return getattr(resp, "result", None) == "OK"
 
 
@@ -278,8 +278,8 @@ async def _select(imap, mailbox: str) -> bool:
 
 
 async def _expunge_uid(imap, uid: str) -> bool:
-    """이 UID 만 지운다(UIDPLUS). 그냥 EXPUNGE 는 다른 앱이 지움 표시해 둔 메일까지 같이 지운다.
-    UIDPLUS 가 없는 서버만 예전처럼 전체 EXPUNGE."""
+    """해당 UID 만 삭제한다(UIDPLUS). 일반 EXPUNGE 는 다른 앱이 삭제 표시한 메일까지 함께 삭제한다.
+    UIDPLUS 미지원 서버에서만 기존 방식대로 전체 EXPUNGE."""
     if _supports(imap, "UIDPLUS"):
         return _ok(await imap.uid("expunge", uid))
     return _ok(await imap.expunge())
@@ -367,8 +367,8 @@ def _imap_utf7_decode(s: str) -> str:
 
 
 def _imap_utf7_encode(s: str) -> str:
-    """폴더명 → IMAP modified UTF-7. 한글은 NFC 로 맞춘 뒤 인코드한다 — 맥은 NFD(자모 분리)로 보내서
-    눈에 같은 이름의 폴더가 두 개 생긴다."""
+    """폴더명 → IMAP modified UTF-7. 한글은 NFC 로 정규화한 뒤 인코드한다. 맥은 NFD(자모 분리)로 전송하므로
+    외관상 동일한 이름의 폴더가 두 개 생성된다."""
     s = unicodedata.normalize("NFC", s)
     out, buf = [], []
 
@@ -516,7 +516,7 @@ def _summary_from_header(uid: str, flags: str, header_data: bytes, mailbox: str)
         "received_at": _parse_date(msg.get("Date")),
         "is_unread": "\\Seen" not in flags,
         "is_flagged": "\\Flagged" in flags,
-        # 헤더만 받으므로 추정: multipart/mixed 면 첨부가 있는 메일(서버 필터와 같은 기준)
+        # 헤더만 수신하므로 추정: multipart/mixed 면 첨부가 있는 메일(서버 필터와 동일 기준)
         "has_attachment": ctype.startswith("multipart/mixed"),
         "labels": threads.flags_to_labels(flags),
         "message_id": (msg.get("Message-ID") or "").strip() or None,
@@ -525,7 +525,7 @@ def _summary_from_header(uid: str, flags: str, header_data: bytes, mailbox: str)
 
 
 def _parse_header_fetch(lines, mailbox: str) -> list[dict]:
-    """FETCH (UID FLAGS BODY.PEEK[HEADER]) 응답 → 요약 dict 목록(서버가 준 순서)."""
+    """FETCH (UID FLAGS BODY.PEEK[HEADER]) 응답 → 요약 dict 목록(서버 반환 순서)."""
     messages = []
     current_uid = None
     current_flags = ""
@@ -536,7 +536,7 @@ def _parse_header_fetch(lines, mailbox: str) -> list[dict]:
         # Lines: N FETCH (UID xxx FLAGS (...) BODY[HEADER] {size})
         fetch_match = re.match(r"\d+ FETCH \(.*?UID (\d+).*?FLAGS \(([^)]*)\)", line_str)
         if not fetch_match:
-            # 서버에 따라 FLAGS 가 UID 앞에 온다
+            # 서버에 따라 FLAGS 가 UID 앞에 위치
             m2 = re.match(r"\d+ FETCH \(.*?FLAGS \(([^)]*)\).*?UID (\d+)", line_str)
             if m2:
                 fetch_match = m2
@@ -604,7 +604,7 @@ def build_search_criteria(
     elif flagged is False:
         parts.append("UNFLAGGED")
     if has_attachment is True:
-        # IMAP 에는 "첨부 있음" 검색이 없다 — multipart/mixed 로 근사(대부분의 첨부 메일)
+        # IMAP 에는 "첨부 있음" 검색이 없으므로 multipart/mixed 로 근사(대부분의 첨부 메일)
         parts.append('HEADER Content-Type "multipart/mixed"')
     elif has_attachment is False:
         parts.append('NOT HEADER Content-Type "multipart/mixed"')
@@ -667,7 +667,7 @@ async def fetch_messages(
 
         messages = _parse_header_fetch(fetch_resp.lines, mailbox)
 
-        # 스레드: 서버가 THREAD=REFERENCES 를 지원하면 서버 계산, 아니면 헤더 계산(이미 채움)
+        # 스레드: 서버가 THREAD=REFERENCES 를 지원하면 서버 계산, 아니면 헤더 계산(이미 설정됨)
         tmap = await _server_threads(imap)
         for m in messages:
             m.pop("_root", None)
@@ -689,10 +689,10 @@ async def fetch_messages(
 async def fetch_thread(
     account: MailAccount, mailbox: str, uid: str, extra_mailboxes: list[str] | None = None,
 ) -> dict | None:
-    """한 메일이 속한 스레드의 메일들(오래된 순). 메일이 없으면 None.
+    """한 메일이 속한 스레드의 메일 목록(오래된 순). 메일이 없으면 None.
 
-    기준 메일함은 THREAD=REFERENCES 가 되면 서버 계산, 아니면 루트 Message-ID 로 헤더 검색.
-    extra_mailboxes(예: 보낸편지함)는 헤더 검색으로 같은 대화를 더한다.
+    기준 메일함은 THREAD=REFERENCES 지원 시 서버 계산, 아니면 루트 Message-ID 로 헤더 검색.
+    extra_mailboxes(예: 보낸편지함)는 헤더 검색으로 동일 대화를 추가한다.
     """
     imap = await _connect(account)
     try:
@@ -766,7 +766,7 @@ async def fetch_thread(
 
 
 async def list_labels(account: MailAccount, mailbox: str = "INBOX") -> dict:
-    """메일함에 정의된 키워드(라벨)와 서버가 새 키워드를 허용하는지(PERMANENTFLAGS \\*)."""
+    """메일함에 정의된 키워드(라벨)와 서버의 새 키워드 허용 여부(PERMANENTFLAGS \\*)."""
     imap = await _connect(account)
     try:
         resp = await imap.select(_q(mailbox))
@@ -882,10 +882,10 @@ async def fetch_message(account: MailAccount, mailbox: str, uid: str) -> dict | 
 
 
 async def fetch_raw(account: MailAccount, mailbox: str, uid: str) -> bytes | None:
-    """원본 바이트 그대로. 아카이브(.eml 저장)용이라 플래그를 건드리지 않는다.
+    """원본 바이트 그대로. 아카이브(.eml 저장)용이므로 플래그를 변경하지 않는다.
 
-    fetch_message 는 읽음 처리까지 하므로 재사용할 수 없다 — 백업했다고 안 읽은
-    메일이 읽음으로 바뀌면 안 된다. BODY.PEEK[] 를 쓰는 이유가 그것이다.
+    fetch_message 는 읽음 처리까지 수행하므로 재사용할 수 없다. 백업으로 인해 읽지 않은
+    메일이 읽음으로 변경되어서는 안 된다. BODY.PEEK[] 를 사용하는 이유이다.
     """
     imap = await _connect(account)
     try:
@@ -909,10 +909,10 @@ async def fetch_raw(account: MailAccount, mailbox: str, uid: str) -> bytes | Non
 async def fetch_raw_many(
     account: MailAccount, mailbox: str, uids: list[str]
 ) -> dict[str, bytes]:
-    """여러 UID 의 원본을 연결 하나로 가져온다.
+    """여러 UID 의 원본을 단일 연결로 조회한다.
 
-    fetch_raw 를 반복 호출하면 메일마다 접속·로그인·로그아웃을 다시 해서
-    수십 건만 돼도 게이트웨이 타임아웃(504)이 난다.
+    fetch_raw 를 반복 호출하면 메일마다 접속·로그인·로그아웃을 반복하여
+    수십 건만으로도 게이트웨이 타임아웃(504)이 발생한다.
     """
     if not uids:
         return {}
@@ -975,8 +975,8 @@ async def delete_message(
 ) -> dict:
     """Delete or move message to trash.
 
-    휴지통으로 복사가 안 되면(NO/BAD) 원본을 지우지 않고 ok=False 로 끝낸다 — 예전엔 복사 결과를 보지 않고
-    바로 지움 표시 + EXPUNGE 를 해서, 휴지통 이름에 공백이 있거나 용량이 찼을 때 메일이 영구히 사라졌다.
+    휴지통으로의 복사가 실패하면(NO/BAD) 원본을 삭제하지 않고 ok=False 로 종료한다. 이전에는 복사 결과를 확인하지 않고
+    즉시 삭제 표시 + EXPUNGE 를 수행하여, 휴지통 이름에 공백이 있거나 용량이 초과된 경우 메일이 영구 소실되었다.
     """
     imap = await _connect(account)
     try:
@@ -1009,7 +1009,7 @@ async def move_message(
 ) -> bool:
     """Move message to another mailbox.
 
-    복사가 성공(OK)했을 때만 원본을 지운다. 대상 폴더가 없거나 이름이 깨졌거나 용량이 차면 False — 원본은 그대로.
+    복사가 성공(OK)한 경우에만 원본을 삭제한다. 대상 폴더가 없거나 이름이 손상되었거나 용량이 초과되면 False — 원본은 유지.
     """
     imap = await _connect(account)
     try:
@@ -1086,7 +1086,7 @@ async def rename_mailbox(account: MailAccount, old_name: str, new_name: str) -> 
     """Rename an IMAP mailbox."""
     imap = await _connect(account)
     try:
-        # old_name 은 목록의 id(이미 인코드된 원본), new_name 은 사람이 친 이름
+        # old_name 은 목록의 id(이미 인코드된 원본), new_name 은 사용자 입력 이름
         resp = await imap.rename(_q(old_name), _q(_imap_utf7_encode(new_name)))
         return resp.result == "OK"
     except Exception:

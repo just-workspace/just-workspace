@@ -1,13 +1,13 @@
 """채팅 역할·카테고리·권한 덮어쓰기 API.
 
-계산은 app/chat/permissions.py. 여기는 CRUD·계층 검사·감사 로그·멤버 목록 묶음.
+계산은 app/chat/permissions.py 가 담당한다. 본 모듈은 CRUD·계층 검사·감사 로그·멤버 목록 그룹화를 담당한다.
 
-관리 권한 판정(manage_*): 전역 관리자 → 됨 · 워크스페이스 범위 비트(@everyone ∪ 내 역할) → 됨 ·
-채널 일이면 그 채널의 실효 비트 → 됨. 엔진 모드(legacy/shadow/enforce)와 무관하다 — 역할·덮어쓰기는
-새 기능이라 예전 동작이 없다.
+관리 권한 판정(manage_*): 전역 관리자 → 허용 · 워크스페이스 범위 비트(@everyone ∪ 본인 역할) → 허용 ·
+채널 대상 작업이면 해당 채널의 실효 비트 → 허용. 엔진 모드(legacy/shadow/enforce)와 무관하다 — 역할·덮어쓰기는
+신규 기능이므로 기존 동작이 존재하지 않는다.
 
-계층(디스코드와 같다): 전역 관리자·ADMINISTRATOR 가 아니면 내 최고 역할보다 낮은 역할만 만들고·고치고·
-지우고·부여할 수 있고, 내가 가진 비트만 남에게 줄 수 있다. @everyone 은 position 0, 이름·삭제 불가.
+계층(디스코드와 동일): 전역 관리자·ADMINISTRATOR 가 아니면 본인의 최고 역할보다 낮은 역할만 생성·수정·
+삭제·부여할 수 있으며, 본인이 보유한 비트만 타 사용자에게 부여할 수 있다. @everyone 은 position 0 이며 이름 변경·삭제 불가.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ RESERVED_NAMES = frozenset({"everyone", "here", "channel", "all", "채널", "전
 # ─── 공통 ───
 
 def mention_key(name: str) -> str:
-    """@역할 멘션에 쓰는 이름 — 공백은 '-' 로(MENTION_RE 가 공백을 못 받는다), 대소문자 무시."""
+    """@역할 멘션에 사용하는 이름 — 공백은 '-' 로 치환(MENTION_RE 가 공백을 허용하지 않음), 대소문자 무시."""
     return re.sub(r"\s+", "-", (name or "").strip()).lower()
 
 
@@ -65,7 +65,7 @@ def role_dict(r: ChatRole, member_count: int | None = None) -> dict:
 
 
 async def get_or_create_everyone(db: AsyncSession) -> ChatRole:
-    """@everyone 행. 운영(PG)은 init_db 가 만든다 — 없으면(테스트·SQLite) 여기서 만든다."""
+    """@everyone 행. 운영 환경(PG)에서는 init_db 가 생성한다 — 없는 경우(테스트·SQLite) 여기서 생성한다."""
     ev = await P.everyone_role(db)
     if ev is None:
         ev = ChatRole(id=str(uuid.uuid4()), name="everyone", position=0, permissions=P.DEFAULT_EVERYONE,
@@ -82,7 +82,7 @@ async def _audit(db: AsyncSession, user, action: str, rtype: str, rid: str | Non
 
 
 async def actor_top(db: AsyncSession, user) -> int:
-    """계층 비교용 내 높이. 전역 관리자·ADMINISTRATOR = 무한대."""
+    """계층 비교에 사용하는 호출 사용자의 높이. 전역 관리자·ADMINISTRATOR = 무한대."""
     if getattr(user, "is_admin", False):
         return INF
     ws = await P.workspace_permissions(db, user)
@@ -97,7 +97,7 @@ async def _ws_perms(db: AsyncSession, user) -> int:
 
 
 async def require_ws(db: AsyncSession, user, bit: int) -> int:
-    """워크스페이스 범위 비트가 있어야 한다. 내 실효 비트를 돌려준다(부여 제한 검사용)."""
+    """워크스페이스 범위 비트 보유 필수. 호출 사용자의 실효 비트를 반환한다(부여 제한 검사용)."""
     perms = await _ws_perms(db, user)
     if not perms & bit:
         raise HTTPException(403, "권한이 없습니다")
@@ -105,7 +105,7 @@ async def require_ws(db: AsyncSession, user, bit: int) -> int:
 
 
 async def require_channel(db: AsyncSession, user, ch: Channel, bit: int) -> int:
-    """채널 일 — 워크스페이스 비트 또는 그 채널의 실효 비트. 내 비트(둘의 합)를 돌려준다."""
+    """채널 대상 작업 — 워크스페이스 비트 또는 해당 채널의 실효 비트. 호출 사용자의 비트(양자의 합)를 반환한다."""
     ws = await _ws_perms(db, user)
     if ws & (bit | P.ADMINISTRATOR):
         return ws if not ws & P.ADMINISTRATOR else P.ALL_PERMISSIONS
@@ -134,7 +134,7 @@ async def _role_or_404(db: AsyncSession, role_id: str) -> ChatRole:
 
 async def _below_me(db: AsyncSession, user, role: ChatRole) -> None:
     if role.is_default:
-        return   # @everyone 은 MANAGE_ROLES 가 있으면 누구나 편집(디스코드와 같다)
+        return   # @everyone 은 MANAGE_ROLES 보유 시 누구나 편집 가능(디스코드와 동일)
     if (role.position or 0) >= await actor_top(db, user):
         raise HTTPException(403, "내 최고 역할보다 낮은 역할만 다룰 수 있습니다")
 
@@ -237,7 +237,7 @@ class RolePatch(BaseModel):
 
 
 class RoleOrder(BaseModel):
-    role_ids: list[str]   # 위(높음) → 아래. @everyone 은 넣지 않는다
+    role_ids: list[str]   # 상위(높음) → 하위 순. @everyone 은 포함하지 않음
 
 
 class UserRoles(BaseModel):
@@ -245,7 +245,7 @@ class UserRoles(BaseModel):
 
 
 class SyncGroups(BaseModel):
-    group_ids: list[str] | None = None   # 비우면 아직 역할이 없는 그룹 전부
+    group_ids: list[str] | None = None   # 미지정 시 아직 역할이 없는 그룹 전부 대상
 
 
 class OverwriteBody(BaseModel):
@@ -317,7 +317,7 @@ async def effective_for(
     user_id: str = Query(...), channel_id: str | None = Query(None),
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    """(사용자, 채널)의 실효 권한. 남의 것은 전역 관리자 또는 MANAGE_ROLES."""
+    """(사용자, 채널)의 실효 권한. 타 사용자 조회는 전역 관리자 또는 MANAGE_ROLES 필요."""
     if user_id != user.id and not user.is_admin:
         await require_ws(db, user, P.MANAGE_ROLES)
     target = await db.get(User, user_id)
@@ -336,7 +336,7 @@ async def effective_for(
 async def shadow_stats(
     days: int = Query(7, ge=1, le=40), user: User = Depends(get_current_user),
 ):
-    """그림자 모드 불일치 집계(전환 판단용) — 전역 관리자만."""
+    """그림자 모드 불일치 집계(전환 판단용) — 전역 관리자 전용."""
     if not user.is_admin:
         raise HTTPException(403, "관리자만 볼 수 있습니다")
     return await P.shadow_stats(days)
@@ -362,7 +362,7 @@ async def create_role(body: RoleCreate, user: User = Depends(get_current_user), 
     name = await _check_name(db, body.name)
     group_id = await _check_group(db, body.group_id)
     await get_or_create_everyone(db)
-    # 새 역할은 @everyone 바로 위(position 1) — 나머지를 한 칸씩 올린다(디스코드와 같다)
+    # 신규 역할은 @everyone 바로 위(position 1)에 배치 — 나머지 역할은 한 단계씩 상향(디스코드와 동일)
     await db.execute(update(ChatRole).where(ChatRole.is_default == False).values(position=ChatRole.position + 1))  # noqa: E712
     r = ChatRole(id=str(uuid.uuid4()), name=name, color=_check_color(body.color), icon=body.icon,
                  position=1, permissions=bits, hoist=body.hoist, mentionable=body.mentionable,
@@ -397,13 +397,13 @@ async def update_role(role_id: str, body: RolePatch, user: User = Depends(get_cu
         r.mentionable = body.mentionable
     if "permissions" in fields:
         bits = _bits(body.permissions, "permissions")
-        # 바뀌는 비트만 검사 — 내가 없는 비트가 이미 켜져 있어도 다른 걸 고칠 수는 있다
+        # 변경되는 비트만 검사 — 호출 사용자가 보유하지 않은 비트가 이미 설정되어 있어도 그 외 항목은 수정 가능
         _check_grant(bits ^ int(r.permissions or 0), holder, user)
         r.permissions = bits
     if "group_id" in fields:
         if body.group_id != r.group_id:
             r.group_id = await _check_group(db, body.group_id)
-            if r.group_id:   # 관리되는 역할로 바꾸면 직접 부여 행은 의미가 없다
+            if r.group_id:   # 관리되는 역할로 전환 시 직접 부여 행은 무의미
                 await db.execute(delete(ChatMemberRole).where(ChatMemberRole.role_id == r.id))
     r.updated_at = datetime.now(timezone.utc)
     await db.commit()
@@ -437,7 +437,7 @@ async def delete_role(role_id: str, user: User = Depends(get_current_user), db: 
 
 @router.put("/roles/order")
 async def reorder_roles(body: RoleOrder, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """역할 순서 일괄(위 → 아래). 목록에 없는 역할은 그 아래에 지금 순서대로 붙는다."""
+    """역할 순서 일괄 변경(상위 → 하위). 목록에 없는 역할은 그 아래에 현재 순서대로 배치된다."""
     if not user.is_admin:
         await require_ws(db, user, P.MANAGE_ROLES)
     roles = list((await db.execute(
@@ -528,7 +528,7 @@ async def get_user_roles(target_user_id: str, user: User = Depends(get_current_u
 @router.put("/users/{target_user_id}/roles")
 async def set_user_roles(target_user_id: str, body: UserRoles, user: User = Depends(get_current_user),
                          db: AsyncSession = Depends(get_db)):
-    """직접 부여 역할을 이 목록으로 맞춘다(관리되는 역할은 건드리지 않음 — 넣으면 409)."""
+    """직접 부여 역할을 이 목록과 일치시킨다(관리되는 역할은 변경하지 않음 — 포함 시 409)."""
     if not user.is_admin:
         await require_ws(db, user, P.MANAGE_ROLES)
     want = set(body.role_ids)
@@ -552,9 +552,9 @@ async def set_user_roles(target_user_id: str, body: UserRoles, user: User = Depe
 
 @router.post("/roles/sync-groups")
 async def sync_groups(body: SyncGroups, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """워크스페이스 그룹 → 관리되는 역할(권한 0, 색 없음). 이미 연동된 그룹은 건너뛴다.
+    """워크스페이스 그룹 → 관리되는 역할(권한 0, 색 없음). 이미 연동된 그룹은 제외한다.
 
-    멤버는 따로 복사하지 않는다 — 계산 때 group_members 를 직접 본다(이중 관리 없음).
+    멤버는 별도로 복사하지 않는다 — 계산 시 group_members 를 직접 조회한다(이중 관리 없음).
     """
     if not user.is_admin:
         await require_ws(db, user, P.MANAGE_ROLES)
@@ -735,7 +735,7 @@ async def delete_category_overwrite(category_id: str, subject_kind: str, subject
 # ─── 카테고리 ───
 
 def _cat_dict(c: ChatCategory, archive_id: str | None = None) -> dict:
-    # system = 보관 시스템 카테고리(chat22, app/chat/archive22.py) — 이름만 바꿀 수 있고 삭제·순서 변경 불가
+    # system = 보관 시스템 카테고리(chat22, app/chat/archive22.py) — 이름 변경만 가능하며 삭제·순서 변경 불가
     return {"id": c.id, "name": c.name, "position": c.position or 0, "created_at": c.created_at,
             "system": bool(archive_id) and c.id == archive_id}
 
@@ -789,7 +789,7 @@ async def update_category(category_id: str, body: CategoryPatch, user: User = De
 @router.delete("/categories/{category_id}")
 async def delete_category(category_id: str, user: User = Depends(get_current_user),
                           db: AsyncSession = Depends(get_db)):
-    """채널은 지우지 않는다 — 카테고리 없음으로 옮기고, 그 카테고리의 덮어쓰기는 지운다."""
+    """채널은 삭제하지 않는다 — 카테고리 없음으로 이동시키고, 해당 카테고리의 덮어쓰기는 삭제한다."""
     await _ws_holder(db, user, P.MANAGE_CHANNELS)
     c = await _category_or_404(db, category_id)
     if c.id == await _archive_id(db):
@@ -806,10 +806,10 @@ async def delete_category(category_id: str, user: User = Depends(get_current_use
 
 @router.patch("/layout")
 async def update_layout(body: LayoutBody, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """카테고리 순서·채널의 카테고리/순서 일괄(드래그 정렬).
+    """카테고리 순서·채널의 카테고리/순서 일괄 변경(드래그 정렬).
 
-    카테고리 순서 = 워크스페이스 MANAGE_CHANNELS. 채널 옮기기 = 그 채널의 MANAGE_CHANNELS
-    (채널 owner/admin 은 암묵 보유). DM 은 옮길 수 없다.
+    카테고리 순서 = 워크스페이스 MANAGE_CHANNELS. 채널 이동 = 해당 채널의 MANAGE_CHANNELS
+    (채널 owner/admin 은 암묵 보유). DM 은 이동 불가.
     """
     if body.categories:
         await _ws_holder(db, user, P.MANAGE_CHANNELS)
@@ -831,7 +831,7 @@ async def update_layout(body: LayoutBody, user: User = Depends(get_current_user)
         chans.append((ch, item))
     arc = await _archive_id(db) if body.categories else None
     for item in body.categories:
-        if item.id != arc:   # 시스템(보관) 카테고리 순서 변경은 무시 — 늘 DM 바로 위
+        if item.id != arc:   # 시스템(보관) 카테고리 순서 변경은 무시 — 항상 DM 바로 위
             cats[item.id].position = item.position
     for ch, item in chans:
         ch.category_id = item.category_id
@@ -849,10 +849,10 @@ async def update_layout(body: LayoutBody, user: User = Depends(get_current_user)
 
 @router.get("/channels/{channel_id}/members/by-role")
 async def members_by_role(channel_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """채널 멤버를 hoist 역할별로 묶는다(높은 역할 먼저, 사람은 자기 최고 hoist 역할 한 곳에만).
+    """채널 멤버를 hoist 역할별로 그룹화한다(높은 역할 우선, 사용자는 본인의 최고 hoist 역할 한 곳에만 포함).
 
-    hoist 역할이 없는 사람은 마지막 묶음(role=null). 온라인/오프라인 분리는 프런트가 presence 로 한다.
-    사람마다 color = 색이 있는 최고 역할의 토큰, roles = 내 역할 id(높은 순).
+    hoist 역할이 없는 사용자는 마지막 그룹(role=null)에 포함한다. 온라인/오프라인 분리는 프런트가 presence 로 수행한다.
+    사용자별 color = 색이 있는 최고 역할의 토큰, roles = 해당 사용자의 역할 id(높은 순).
     """
     ch = await db.get(Channel, channel_id)
     if ch is None:
@@ -900,10 +900,10 @@ async def members_by_role(channel_id: str, user: User = Depends(get_current_user
 async def resolve_role_mentions(
     db: AsyncSession, names: list[str], channel: Channel, sender_id: str,
 ) -> list[tuple[ChatRole, list[str]]]:
-    """멘션 이름 중 역할을 찾아 (역할, 받을 채널 멤버 id) 목록. 보낸 사람은 뺀다.
+    """멘션 이름 중 역할을 조회하여 (역할, 수신 대상 채널 멤버 id) 목록을 반환한다. 발신자는 제외한다.
 
-    멘션 가능(mentionable) 역할만 — 아니면 보낸 사람에게 MENTION_EVERYONE 이 있어야 한다(디스코드와 같다).
-    legacy 모드에서는 끈다(예전 동작 = 역할 없음).
+    멘션 가능(mentionable) 역할만 대상 — 그 외에는 발신자에게 MENTION_EVERYONE 이 필요하다(디스코드와 동일).
+    legacy 모드에서는 비활성화한다(기존 동작 = 역할 없음).
     """
     if not names or P.engine_mode() == "legacy" or channel is None:
         return []

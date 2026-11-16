@@ -1,8 +1,8 @@
-"""회귀 — 채널·DM 통화 방 이름(chan-<채널id>)을 선점해 게스트로 들어갈 수 없다.
+"""회귀 — 채널·DM 통화 방 이름(chan-<채널id>)을 선점하여 게스트로 입장할 수 없다.
 
-- 사용자가 만드는 회의는 예약 접두(chan-)를 쓸 수 없다(대소문자·앞뒤 공백 무관)
-- 예전에 선점된 메타가 Redis 에 남아 있어도 공유 링크(게스트) 입장은 거부
-- 진행 중 방 목록·참여자 목록에서 chan- 방은 그 채널 멤버에게만 보인다
+- 사용자가 생성하는 회의는 예약 접두(chan-)를 사용할 수 없다(대소문자·앞뒤 공백 무관)
+- 이전에 선점된 메타가 Redis 에 남아 있어도 공유 링크(게스트) 입장은 거부한다
+- 진행 중 방 목록·참여자 목록에서 chan- 방은 해당 채널 멤버에게만 표시된다
 """
 
 import json
@@ -34,7 +34,7 @@ async def test_store_refuses_reserved_meta(env):
 
 
 async def test_leftover_squatted_meta_cannot_admit_guests(env):
-    # 예전 코드로 만들어진 선점 메타(대기실 꺼짐)가 Redis 에 남아 있는 상황
+    # 이전 코드로 생성된 선점 메타(대기실 비활성화)가 Redis 에 남아 있는 상황
     meta = store.RoomMeta(name="chan-c1", host_user_id="carol", host_username="carol",
                           host_display_name="Carol", waiting_room=False)
     env["redis"].kv[store._RKEY + "chan-c1"] = store._serialize(meta)
@@ -61,7 +61,7 @@ async def test_channel_call_rooms_hidden_from_non_members(env, monkeypatch):
     carol = await _u(env, "carol")
     res = await mr.get_rooms(user=carol, db=env["db"])
     names = [r.name for r in res.rooms]
-    # standup 은 누구 회의인지 모르는 방(메타 없음) — 진행 중이어도 목록에 싣지 않는다
+    # standup 은 소유 회의를 알 수 없는 방(메타 없음) — 진행 중이어도 목록에 포함하지 않음
     assert "chan-c1" not in names and "standup" not in names
 
     bob = await _u(env, "bob")

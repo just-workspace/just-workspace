@@ -1,11 +1,11 @@
-"""SSL 인증서 올리기 모달(관리 › 보안·SSL) — 고른 인증서·개인 키를 저장 전에 읽어 본다.
+"""SSL 인증서 올리기 모달(관리 › 보안·SSL) — 선택한 인증서·개인 키를 저장 전에 검사한다.
 
 - 인증서: PEM(체인이면 첫 번째 = 서버 인증서) 또는 DER. 도메인(SAN DNS 이름, 없으면 CN)·발급자·유효 기간.
-- 개인 키: PEM/DER, 암호 걸린 키는 쓸 수 없다(nginx 가 암호 없이 읽어야 함).
-- 짝: 인증서의 공개 키 == 개인 키의 공개 키.
-- 도메인: 이 워크스페이스 도메인(settings.domain)을 인증서가 덮는가(와일드카드는 한 단계만).
+- 개인 키: PEM/DER, 암호화된 키는 사용 불가(nginx 가 암호 없이 읽어야 함).
+- 키 쌍: 인증서의 공개 키 == 개인 키의 공개 키.
+- 도메인: 본 워크스페이스 도메인(settings.domain)을 인증서가 포함하는지 여부(와일드카드는 한 단계만).
 
-오류는 화면 칸에 붙는 짧은 코드로: cert_invalid · key_invalid · key_encrypted · key_mismatch · domain_mismatch.
+오류는 화면 필드에 표시되는 짧은 코드로 반환: cert_invalid · key_invalid · key_encrypted · key_mismatch · domain_mismatch.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def _utc(dt: datetime) -> str:
 
 
 def parse_cert(data: bytes) -> CertInfo:
-    """인증서 바이트 → CertInfo. 못 읽으면 SslInspectError('cert_invalid')."""
+    """인증서 바이트 → CertInfo. 판독 실패 시 SslInspectError('cert_invalid')."""
     if not data or len(data) > MAX_BYTES:
         raise SslInspectError("cert_invalid", "인증서 파일이 비었거나 너무 큽니다(1MB)")
     cert: x509.Certificate | None = None
@@ -94,7 +94,7 @@ def parse_cert(data: bytes) -> CertInfo:
 
 
 def load_key(data: bytes):
-    """개인 키 바이트 → 키 객체. 암호 걸린 키는 key_encrypted, 못 읽으면 key_invalid."""
+    """개인 키 바이트 → 키 객체. 암호화된 키는 key_encrypted, 판독 실패 시 key_invalid."""
     if not data or len(data) > MAX_BYTES:
         raise SslInspectError("key_invalid", "개인 키 파일이 비었거나 너무 큽니다(1MB)")
     try:
@@ -104,7 +104,7 @@ def load_key(data: bytes):
     except TypeError:
         # 암호가 필요한 키
         raise SslInspectError("key_encrypted", "암호가 걸린 개인 키는 쓸 수 없습니다")
-    except (ValueError, Exception):  # noqa: BLE001 — 형식이 틀린 키(UnsupportedAlgorithm 포함)
+    except (ValueError, Exception):  # noqa: BLE001 — 형식 오류 키(UnsupportedAlgorithm 포함)
         raise SslInspectError("key_invalid", "개인 키로 읽을 수 없습니다")
 
 
@@ -120,7 +120,7 @@ def key_matches(cert: x509.Certificate, key) -> bool:
 
 
 def covers(domains: list[str], host: str) -> bool:
-    """인증서 도메인 목록이 host 를 덮는가 — 와일드카드(*.example.com)는 한 단계만."""
+    """인증서 도메인 목록이 host 를 포함하는지 여부 — 와일드카드(*.example.com)는 한 단계만."""
     host = (host or "").strip().lower().rstrip(".")
     if not host:
         return False
@@ -135,10 +135,10 @@ def covers(domains: list[str], host: str) -> bool:
 
 
 def inspect(cert_data: bytes | None, key_data: bytes | None, domain: str) -> dict:
-    """모달용 결과 — 칸마다 오류 코드를 따로 돌려준다(예외 없음).
+    """모달용 결과 — 필드별 오류 코드를 개별 반환한다(예외 없음).
 
     {cert: {...}|null, cert_error, key_error, key_match: bool|null, domain, domain_match: bool|null, ok}
-    ok = 인증서·키 둘 다 읽혔고 짝이 맞고 도메인을 덮는다 → [올리고 적용] 가능.
+    ok = 인증서·키 모두 판독되고 키 쌍이 일치하며 도메인을 포함한다 → [올리고 적용] 가능.
     """
     out: dict = {"cert": None, "cert_error": None, "key_error": None,
                  "key_match": None, "domain": domain, "domain_match": None, "ok": False}

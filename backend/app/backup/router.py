@@ -34,7 +34,7 @@ class ScheduleUpdate(BaseModel):
     enabled: bool | None = None
     hour_utc: int | None = None       # 0-23 (UTC)
     retention_days: int | None = None
-    include_files: bool | None = None  # 파일 저장소도 백업에 넣는다(로컬 저장소일 때만 뜻이 있다)
+    include_files: bool | None = None  # 파일 저장소도 백업에 포함한다(로컬 저장소일 때만 유효)
 
 
 def _rec_dict(r: BackupRecord) -> dict:
@@ -54,7 +54,7 @@ async def list_backups(user: User = Depends(get_current_user), db: AsyncSession 
     _require_admin(user)
     return {
         "backups": [_rec_dict(r) for r in await backup_service.list_backups(db)],
-        # 백업에는 암호화 키와 비밀번호가 들어 있다 — 화면이 내려받기 옆에 보여 준다
+        # 백업에는 암호화 키와 비밀번호가 포함된다 — 화면에서 내려받기 옆에 표시한다
         "secret_warning": backup_format.SECRET_WARNING,
     }
 
@@ -84,7 +84,7 @@ async def delete_backup(backup_id: str, request: Request = None, user: User = De
 
 @router.get("/{backup_id}/summary")
 async def backup_summary(backup_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """백업의 내용 요약(manifest) — 만든 버전·스키마 버전·들어 있는 항목."""
+    """백업의 내용 요약(manifest) — 생성 버전·스키마 버전·포함 항목."""
     _require_admin(user)
     rec = await db.get(BackupRecord, backup_id)
     if not rec or not rec.path or not Path(rec.path).is_dir():
@@ -97,7 +97,7 @@ async def backup_summary(backup_id: str, user: User = Depends(get_current_user),
 
 @router.post("/{backup_id}/verify")
 async def verify_backup(backup_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """백업의 모든 파일을 manifest 의 SHA-256 과 견준다."""
+    """백업의 모든 파일을 manifest 의 SHA-256 과 대조한다."""
     _require_admin(user)
     rec = await db.get(BackupRecord, backup_id)
     if not rec:
@@ -114,11 +114,11 @@ async def download_backup(backup_id: str, request: Request = None, user: User = 
     if not rec or not rec.path or not Path(rec.path).is_dir():
         raise HTTPException(status_code=404, detail="백업 파일을 찾을 수 없습니다")
     try:
-        # manifest.json 이 첫 멤버여야 요약을 풀지 않고 읽을 수 있다 — 순서를 정해서 넘긴다
+        # manifest.json 이 첫 멤버여야 요약을 추출 없이 읽을 수 있다 — 순서를 지정하여 전달한다
         members = backup_format.pack_order(Path(rec.path))
     except backup_format.BackupError as e:
         raise HTTPException(status_code=409, detail=f"이 백업은 내려받을 수 없습니다: {e}")
-    # DB 덤프 전체(비밀번호 해시·2단계 비밀)와 설정(.env — 암호화 키)이 나간다 — 누가 언제 받았는지 남긴다
+    # DB 덤프 전체(비밀번호 해시·2단계 비밀)와 설정(.env — 암호화 키)이 반출된다 — 수신자와 시각을 기록한다
     await audit.log_action(
         db, user.id, "backup.download", "backup", backup_id, {"name": Path(rec.path).name}, _ip(request),
     )
@@ -166,7 +166,7 @@ async def get_schedule(db) -> dict:
         "hour_utc": int(await _get(db, "backup.hour_utc", "18") or 18),
         "retention_days": int(await _get(db, "backup.retention_days", "30") or 30),
         "include_files": (await _get(db, backup_service.SETTING_INCLUDE_FILES, "true")) == "true",
-        # 백업이 쌓이는 곳(서버 경로, 읽기 전용 표시) — BACKUP_ROOT
+        # 백업 저장 위치(서버 경로, 읽기 전용 표시) — BACKUP_ROOT
         "target": str(backup_service.BACKUP_ROOT),
     }
 

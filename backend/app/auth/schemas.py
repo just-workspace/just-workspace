@@ -10,7 +10,7 @@ class UserResponse(BaseModel):
     username: str
     display_name: str | None
     email: str | None
-    # 주사용(default) 메일계정 주소 — IMAP클라/Exchange 외부연동 시 표출용. 없으면 email.
+    # 주사용(default) 메일계정 주소 — IMAP 클라이언트/Exchange 외부 연동 시 표시용. 없으면 email.
     primary_email: str | None = None
     avatar_url: str | None
     recovery_email: str | None
@@ -19,7 +19,7 @@ class UserResponse(BaseModel):
     last_login_at: datetime | None
     # 마지막 비밀번호 변경 시각 — 프로필 보안 "마지막 변경 N개월 전" 표시용
     password_changed_at: datetime | None = None
-    # 관리자 정책상 2단계 인증 필수인데 아직 등록 전 — /me 에서만 채운다
+    # 관리자 정책상 2단계 인증이 필수이나 미등록 상태 — /me 에서만 설정한다
     totp_setup_required: bool = False
 
     model_config = {"from_attributes": True}
@@ -51,7 +51,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., max_length=password_policy.MAX_LENGTH)
     display_name: str
     recovery_email: str
-    # 관리자 초대 링크(/register?invite=…)로 왔으면 그 토큰 — 가입 방식과 상관없이 바로 승인
+    # 관리자 초대 링크(/register?invite=…)로 진입한 경우의 토큰 — 가입 방식과 무관하게 즉시 승인
     invite_token: str | None = Field(default=None, max_length=128)
 
     @field_validator("username")

@@ -1,7 +1,7 @@
 """격리 브라우저 전용 출처(app/rbi/site.py) — SSO 홉 · 코드 재사용 · 열린 리디렉트 · 쿠키 범위 · rbi 출처의 워크스페이스 API 차단.
 
-실제 앱(app.main)을 그대로 띄워 Host 헤더로 두 출처를 흉내 낸다(ws-nginx 가 Host $host 를 넘기는 것과 같다).
-Redis 는 가짜(tests/rbi_fakes.py), docker 는 부르지 않는다.
+실제 앱(app.main)을 그대로 기동하여 Host 헤더로 두 출처를 모사한다(ws-nginx 가 Host $host 를 전달하는 것과 동일하다).
+Redis 는 모의 객체(tests/rbi_fakes.py), docker 는 호출하지 않는다.
 """
 from __future__ import annotations
 
@@ -108,13 +108,13 @@ async def test_full_sso_hop_sets_host_only_rbi_cookie(app, fake_redis, rbi_origi
     c = cookies["__Host-jw_rbi"]
     assert c["secure"] and c["httponly"] and c["path"] == "/" and "domain" not in c and c["samesite"].lower() == "strict"
     assert int(c["max-age"]) == site.session_ttl()
-    # state 쿠키는 지운다
+    # state 쿠키는 삭제
     assert cookies[site.state_cookie_name()]["value"] in ("", '""')
     assert r3.headers["cache-control"] == "no-store"
     ck = f"__Host-jw_rbi={c['value']}"
     me = await _get(app, RBI_HOST, "/api/rbi/site/me", {"Cookie": ck})
     assert me.status_code == 200 and me.json()["user"]["id"] == alice.id and me.json()["workspace_url"] == WS_ORIGIN
-    # rbi 쿠키로 격리 브라우저 API 가 열린다
+    # rbi 쿠키로 격리 브라우저 API 접근 가능
     t = await _get(app, RBI_HOST, "/api/rbi/targets", {"Cookie": ck})
     assert t.status_code == 200 and t.json()["public_origin"] == RBI_ORIGIN
 
@@ -126,7 +126,7 @@ async def test_sso_requires_workspace_login_and_returns_after(app, fake_redis, r
     assert loc.startswith("/login?redirect=")
     back = unquote(loc.split("redirect=", 1)[1])
     assert back.startswith("/rbi-login?") and parse_qs(urlsplit(back).query)["state"][0] == "s" * 32
-    # 무효 워크스페이스 쿠키도 로그인으로
+    # 무효 워크스페이스 쿠키도 로그인으로 이동
     r = await _get(app, WS_HOST, "/api/rbi/site/sso?state=" + "s" * 32, {"Cookie": "ws_session=forged"})
     assert r.headers["location"].startswith("/login?redirect=")
 
@@ -134,13 +134,13 @@ async def test_sso_requires_workspace_login_and_returns_after(app, fake_redis, r
 async def test_sso_without_state_restarts_on_rbi_origin(app, fake_redis, rbi_origin, alice):
     r = await _get(app, WS_HOST, "/api/rbi/site/sso?return=/z", {"Cookie": await _ws_cookie(fake_redis, alice)})
     assert r.status_code == 302 and r.headers["location"] == f"{RBI_ORIGIN}/auth/login?return=%2Fz"
-    assert not [k for k in fake_redis.kv if k.startswith(site.CODE_PREFIX)]   # 코드를 만들지 않았다
+    assert not [k for k in fake_redis.kv if k.startswith(site.CODE_PREFIX)]   # 코드를 생성하지 않음
 
 
 async def test_code_is_single_use(app, fake_redis, rbi_origin, alice):
     state_hdr, r3, code, q = await _hop(app, fake_redis, alice)
     assert r3.status_code == 302 and "__Host-jw_rbi" in _set_cookies(r3)
-    # 같은 코드를 다시(state 쿠키를 그대로 들고 와도) → 거부
+    # 동일 코드를 재사용(state 쿠키를 그대로 제시해도) → 거부
     again = await _get(app, RBI_HOST, f"/api/rbi/site/callback?{q}", {"Cookie": state_hdr})
     assert again.status_code == 302 and again.headers["location"] == "/?sso_error=code"
     assert "__Host-jw_rbi" not in _set_cookies(again)
@@ -153,7 +153,7 @@ async def test_code_expires(app, fake_redis, rbi_origin, alice):
     r2 = await _get(app, WS_HOST, f"/api/rbi/site/sso?{loc.query}", {"Cookie": await _ws_cookie(fake_redis, alice)})
     cb = urlsplit(r2.headers["location"])
     code = parse_qs(cb.query)["code"][0]
-    # TTL 60초 — 저장할 때 ex 가 그 값이고, 지나면 없다
+    # TTL 60초 — 저장 시 ex 가 해당 값이며, 경과 후에는 없음
     exp = fake_redis.kv[site.CODE_PREFIX + code][1]
     import time
     assert 55 <= exp - time.time() <= 61
@@ -163,7 +163,7 @@ async def test_code_expires(app, fake_redis, rbi_origin, alice):
 
 
 async def test_state_must_match_cookie(app, fake_redis, rbi_origin, alice):
-    """로그인 CSRF — 공격자가 받은 코드를 피해자 브라우저(다른 state 쿠키, 또는 쿠키 없음)에서 쓰지 못한다."""
+    """로그인 CSRF — 공격자가 발급받은 코드를 피해자 브라우저(다른 state 쿠키, 또는 쿠키 없음)에서 사용할 수 없다."""
     _state_hdr, _r3, _c, _q = None, None, None, None
     r1 = await _get(app, RBI_HOST, "/api/rbi/site/login?return=/")
     loc = urlsplit(r1.headers["location"])
@@ -209,7 +209,7 @@ async def test_hop_never_redirects_off_origin(app, fake_redis, rbi_origin, alice
     for ret in ("https://evil.example/x", "//evil.example", "/\\evil.example"):
         _s, r3, _c, _q = await _hop(app, fake_redis, alice, ret=ret.replace("&", "%26"))
         assert r3.status_code == 302 and r3.headers["location"] == "/"
-    # 워크스페이스 쪽: return 이 무엇이든 목적지는 설정된 rbi 출처의 /auth/callback(또는 /auth/login)
+    # 워크스페이스 측: return 값과 무관하게 목적지는 설정된 rbi 출처의 /auth/callback(또는 /auth/login)
     ck = await _ws_cookie(fake_redis, alice, "wsid-2")
     for q in ("state=" + "a" * 32 + "&return=https://evil.example", "state=" + "a" * 32 + "&return=//evil.example",
               "return=https://evil.example", "state=bad&return=//x"):
@@ -223,7 +223,7 @@ async def test_hop_never_redirects_off_origin(app, fake_redis, rbi_origin, alice
 # ── 쿠키 범위 ──
 
 async def test_rbi_cookie_is_not_a_workspace_session(app, fake_redis, rbi_origin, alice):
-    """rbi 세션 쿠키 값은 워크스페이스 API 에서 쿠키로도 Bearer 로도 통하지 않는다(서명 salt 가 다르다)."""
+    """rbi 세션 쿠키 값은 워크스페이스 API 에서 쿠키로도 Bearer 로도 유효하지 않다(서명 salt 가 상이하다)."""
     ck = await site_cookie(fake_redis, alice.id)
     val = ck.split("=", 1)[1]
     for hdr in ({"Cookie": f"ws_session={val}"}, {"Authorization": f"Bearer {val}"}, {"Cookie": ck}):
@@ -234,27 +234,27 @@ async def test_rbi_cookie_is_not_a_workspace_session(app, fake_redis, rbi_origin
 
 
 async def test_rbi_host_ignores_workspace_session(app, fake_redis, rbi_origin, alice):
-    """rbi 출처는 워크스페이스 세션 쿠키·Bearer 를 받지 않는다 — rbi 세션 쿠키만."""
+    """rbi 출처는 워크스페이스 세션 쿠키·Bearer 를 허용하지 않는다 — rbi 세션 쿠키만 허용."""
     ws = await _ws_cookie(fake_redis, alice)
     tok = ws.split("=", 1)[1]
     for hdr in ({"Cookie": ws}, {"Authorization": f"Bearer {tok}"}):
         assert (await _get(app, RBI_HOST, "/api/rbi/targets", hdr)).status_code == 401
         assert (await _get(app, RBI_HOST, "/api/rbi/site/me", hdr)).status_code == 401
-    # 워크스페이스 출처에서는 그 쿠키로 대상 목록(런처)이 열린다
+    # 워크스페이스 출처에서는 해당 쿠키로 대상 목록(런처) 접근 가능
     r = await _get(app, WS_HOST, "/api/rbi/targets", {"Cookie": ws})
     assert r.status_code == 200 and r.json()["public_origin"] == RBI_ORIGIN
 
 
 async def test_forged_or_foreign_rbi_cookie(app, fake_redis, rbi_origin, alice):
-    # 워크스페이스 서명기로 만든 같은 모양 값 → 거부
+    # 워크스페이스 서명기로 생성한 동일 형태 값 → 거부
     forged = sign_value({"rsid": "rs-x", "uid": alice.id})
     assert (await _get(app, RBI_HOST, "/api/rbi/site/me", {"Cookie": f"__Host-jw_rbi={forged}"})).status_code == 401
-    # 서명은 맞지만 Redis 레코드가 없다(로그아웃한 쿠키를 되살림) → 거부
+    # 서명은 유효하나 Redis 레코드가 없음(로그아웃한 쿠키 재사용) → 거부
     ck = await site_cookie(fake_redis, alice.id)
     for k in [k for k in fake_redis.kv if k.startswith(site.SITE_PREFIX)]:
         await fake_redis.delete(k)
     assert (await _get(app, RBI_HOST, "/api/rbi/site/me", {"Cookie": ck})).status_code == 401
-    # rbi 세션 저장소 장애 → 닫는다
+    # rbi 세션 저장소 장애 → 거부
     ck = await site_cookie(fake_redis, alice.id)
     fake_redis.down = True
     assert (await _get(app, RBI_HOST, "/api/rbi/site/me", {"Cookie": ck})).status_code == 401
@@ -270,20 +270,20 @@ async def test_rbi_logout_clears_only_rbi(app, fake_redis, rbi_origin, alice):
     r = await _get(app, RBI_HOST, "/api/rbi/site/logout", {"Cookie": ck, "Origin": RBI_ORIGIN}, method="POST")
     assert r.status_code == 200 and _set_cookies(r)["__Host-jw_rbi"]["value"] in ("", '""')
     assert (await _get(app, RBI_HOST, "/api/rbi/site/me", {"Cookie": ck})).status_code == 401
-    # 워크스페이스 세션은 그대로
+    # 워크스페이스 세션은 유지
     assert await fake_redis.get("sess:wsid-9")
 
 
 async def test_workspace_logout_ends_rbi_session(app, fake_redis, rbi_origin, alice, db_session):
     ck = await site_cookie(fake_redis, alice.id, wsid=await ws_session(fake_redis, alice.id, "wsid-5"))
     assert (await _get(app, RBI_HOST, "/api/rbi/site/me", {"Cookie": ck})).status_code == 200
-    # 워크스페이스 로그아웃(실제 엔드포인트) → 그 sid 가 레지스트리에서 빠진다
+    # 워크스페이스 로그아웃(실제 엔드포인트) → 해당 sid 가 레지스트리에서 제거
     ws_tok = sign_value({"user_id": alice.id, "tv": 0, "sid": "wsid-5"})
     r = await _get(app, WS_HOST, "/api/auth/logout", {"Cookie": f"ws_session={ws_tok}"}, method="POST")
     assert r.status_code == 200
     assert (await _get(app, RBI_HOST, "/api/rbi/site/me", {"Cookie": ck})).status_code == 401
-    assert not [k for k in fake_redis.kv if k.startswith(site.SITE_PREFIX)]   # rbi 세션 레코드도 지웠다
-    # 강제 로그아웃(token_version +1)도 끊는다
+    assert not [k for k in fake_redis.kv if k.startswith(site.SITE_PREFIX)]   # rbi 세션 레코드도 삭제됨
+    # 강제 로그아웃(token_version +1)도 세션 종료
     ck2 = await site_cookie(fake_redis, alice.id)
     alice.token_version = 1
     await db_session.commit()
@@ -302,7 +302,7 @@ async def test_state_changing_rbi_api_needs_rbi_origin_header(app, fake_redis, r
     async with AsyncClient(transport=ASGITransport(app=app), base_url=f"http://{RBI_HOST}") as c:
         r = await c.post("/api/rbi/sessions", headers={"Host": RBI_HOST, "Cookie": ck, "Origin": RBI_ORIGIN,
                                                         "Content-Type": "application/json"}, content=json.dumps({"target_id": "x"}))
-    assert r.status_code == 404   # 인증·출처는 통과, 대상이 없을 뿐
+    assert r.status_code == 404   # 인증·출처는 통과, 대상만 없음
 
 
 # ── rbi 출처에서 워크스페이스 API 차단 ──
@@ -320,7 +320,7 @@ async def test_rbi_host_blocks_workspace_paths(app, fake_redis, rbi_origin, alic
 async def test_rbi_host_guard_case_and_port(app, fake_redis, rbi_origin, alice):
     for host in ("RBI.TEST", "rbi.test:443", "rbi.test:8443"):
         assert (await _get(app, host, "/api/auth/me")).status_code == 404
-    # 워크스페이스 출처에서 rbi 전용 엔드포인트는 없다
+    # 워크스페이스 출처에는 rbi 전용 엔드포인트가 없음
     assert (await _get(app, WS_HOST, "/api/rbi/site/login")).status_code == 404
     assert (await _get(app, WS_HOST, "/api/rbi/site/callback?code=x&state=y")).status_code == 404
     assert (await _get(app, WS_HOST, "/api/rbi/site/me")).status_code == 404

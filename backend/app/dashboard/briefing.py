@@ -1,24 +1,24 @@
-"""대시보드 AI 브리핑 "오늘의 포커스"(옵트인 카드 하나).
+"""대시보드 AI 브리핑 "오늘의 포커스"(옵트인 카드 1개).
 
-입력은 **이 사용자가 볼 수 있는 것만**: 안 읽은 채팅(내 채널) · 안 읽은 메일(내 받은편지함) · 오늘 일정(내 캘린더 범위) ·
-오늘까지 마감인 작업(내가 만들었거나 담당). 다른 사람 데이터·관리자 권한 데이터는 넣지 않는다.
+입력은 **해당 사용자가 열람 가능한 항목만** 사용한다: 읽지 않은 채팅(본인 채널) · 읽지 않은 메일(본인 받은편지함) · 오늘 일정(본인 캘린더 범위) ·
+오늘까지 마감인 작업(본인이 생성했거나 담당). 타 사용자 데이터·관리자 권한 데이터는 포함하지 않는다.
 
-AI 모듈을 그대로 쓴다.
+AI 모듈을 그대로 사용한다.
 - 제공자: ai.config.resolve_provider_for_user(설정 › AI 기본 모델 — 개인 키·워크스페이스 기본·고급)
-- 거버넌스: 외부 상용 제공자면 관리 › AI "외부 AI 개인데이터 허용"(external_allow_data)이 켜져 있어야 한다.
-  꺼져 있으면 브리핑을 만들지 않는다(external_blocked).
-- 한도: 관리 › AI 하루 요청 한도(daily_limit)에 브리핑 생성도 센다(AI 채팅 질문 수 + 오늘 브리핑 생성 수).
-- 동의: 카드의 [켜기]가 브리핑 전용 동의다(사용자별 SystemSetting `ai.user.{id}.dash_briefing`, 언제든 끔).
-  AI 채팅 도구의 데이터 동의(`data_consent`)와는 따로 둔다 — 브리핑을 켠다고 채팅 도구 권한이 넓어지지 않게.
+- 거버넌스: 외부 상용 제공자인 경우 관리 › AI "외부 AI 개인데이터 허용"(external_allow_data)이 활성화되어 있어야 한다.
+  비활성화 상태이면 브리핑을 생성하지 않는다(external_blocked).
+- 한도: 관리 › AI 하루 요청 한도(daily_limit)에 브리핑 생성도 합산한다(AI 채팅 질문 수 + 오늘 브리핑 생성 수).
+- 동의: 카드의 [켜기]가 브리핑 전용 동의이다(사용자별 SystemSetting `ai.user.{id}.dash_briefing`, 언제든 비활성화 가능).
+  AI 채팅 도구의 데이터 동의(`data_consent`)와는 분리한다 — 브리핑 활성화로 채팅 도구 권한이 확대되지 않도록 하기 위함이다.
 
-캐시·비용: 사용자·날짜당 한 번 생성(dash_briefings 한 행). [다시 만들기]는 하루 REGEN_MAX 회.
-자료가 하나도 없으면 AI 를 부르지 않는다(비용 0). 한 번 생성 = AI 요청 1회(입력 자료 상한으로 크기 제한).
+캐시·비용: 사용자·날짜당 1회 생성(dash_briefings 한 행). [다시 만들기]는 하루 REGEN_MAX 회.
+자료가 전혀 없으면 AI 를 호출하지 않는다(비용 0). 1회 생성 = AI 요청 1회(입력 자료 상한으로 크기 제한).
 
-- GET  /api/dashboard/briefing           상태(+ 오늘 것 있으면 내용, 회의 준비 수)
+- GET  /api/dashboard/briefing           상태(+ 오늘 생성분이 있으면 내용, 회의 준비 수)
 - POST /api/dashboard/briefing/enable    {enabled}
-- POST /api/dashboard/briefing/generate  {regenerate}  — 오늘 것이 없으면 만들고, regenerate 면 다시
+- POST /api/dashboard/briefing/generate  {regenerate}  — 오늘 생성분이 없으면 생성하고, regenerate 이면 재생성
 - POST /api/dashboard/briefing/feedback  {value: helpful|not|null}
-모두 ?day_start&day_end(캘린더 시간대의 오늘)를 받는다.
+모두 ?day_start&day_end(캘린더 시간대의 오늘)를 수신한다.
 """
 import asyncio
 import json
@@ -43,9 +43,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/dashboard/briefing", tags=["dashboard"])
 
-REGEN_MAX = 3            # 하루 다시 만들기 횟수
-GEN_TIMEOUT_S = 90       # AI 응답 기다리는 시간
-STALE_GENERATING = timedelta(minutes=3)   # 이보다 오래 "생성 중"이면 멈춘 것으로 보고 다시 시작 허용
+REGEN_MAX = 3            # 일일 재생성 허용 횟수
+GEN_TIMEOUT_S = 90       # AI 응답 대기 시간
+STALE_GENERATING = timedelta(minutes=3)   # 이 시간을 초과해 "생성 중"이면 중단된 것으로 간주하고 재시작 허용
 MAX_CHAT, MAX_MAIL, MAX_TASK = 30, 10, 10
 MAX_ITEM_CHARS = 300
 
@@ -90,7 +90,7 @@ def _iso(d: datetime | None) -> str | None:
 
 
 async def _prep(db: AsyncSession, user: User, s: datetime, e: datetime, row: DashBriefing | None) -> dict | None:
-    """다음 회의(오늘, 아직 안 끝남)의 준비 — 관련 채팅 수(최근 7일 내 채널, 제목이 나온 메시지)·안 읽은 메일 수."""
+    """다음 회의(오늘, 미종료)의 준비 정보 — 관련 채팅 수(최근 7일 내 채널, 제목이 언급된 메시지)·읽지 않은 메일 수."""
     events = await sources.today_events(db, user.id, s, e)
     nm = sources.next_meeting(events)
     if not nm or not nm["title"].strip():
@@ -116,7 +116,7 @@ async def _prep(db: AsyncSession, user: User, s: datetime, e: datetime, row: Das
         "event": nm,
         "last_line": row.prep_line if row is not None and row.prep_event_id == nm["id"] else None,
         "chat": {"count": chat_n, "channel_id": top[0] if top else None, "channel_name": top[1] if top else None},
-        # 메일 수는 브리핑을 만들 때 받은 안 읽은 메일에서 센 값(메일 서버를 GET 마다 두드리지 않는다)
+        # 메일 수는 브리핑 생성 시 수신한 읽지 않은 메일에서 집계한 값이다(GET 마다 메일 서버를 조회하지 않는다)
         "mail": {"count": _prep_mail_count(row, nm["id"])},
     }
 
@@ -181,7 +181,7 @@ def _hm(d: datetime) -> str:
 
 
 async def collect_inputs(db: AsyncSession, user: User, s: datetime, e: datetime) -> tuple[list[dict], dict]:
-    """[{id, label, to, line}] 자료 표 + 회의 준비 문맥. 모두 이 사용자가 볼 수 있는 것."""
+    """[{id, label, to, line}] 자료 표 + 회의 준비 문맥. 모두 해당 사용자가 열람 가능한 항목."""
     srcs: list[dict] = []
 
     def add(label: str, to: str, line: str) -> str:
@@ -230,7 +230,7 @@ def build_prompt(srcs: list[dict], meeting: dict | None, related: list[str]) -> 
 
 
 def parse_output(text: str, srcs: list[dict]) -> tuple[list[dict], str | None]:
-    """AI 응답(JSON) → 화면 항목. 모르는 자료 번호는 버리고, 3개까지. 못 읽으면 ValueError."""
+    """AI 응답(JSON) → 화면 항목. 알 수 없는 자료 번호는 제외하며 최대 3개. 파싱 실패 시 ValueError."""
     m = re.search(r"\{.*\}", text or "", re.S)
     if not m:
         raise ValueError("응답에 JSON 이 없습니다")
@@ -311,7 +311,7 @@ async def enable_briefing(
     day_start: str | None = Query(None), day_end: str | None = Query(None),
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    """켜기/끄기(브리핑 전용 동의). 끄면 오늘 만든 것도 지운다 — 다시 켜면 새로 만든다."""
+    """활성화/비활성화(브리핑 전용 동의). 비활성화 시 오늘 생성분도 삭제한다 — 재활성화 시 새로 생성한다."""
     if body.enabled:
         _cfg, _ext, reason = await _availability(db, user)
         if reason:
@@ -347,7 +347,7 @@ async def generate_briefing(
     now = datetime.now(timezone.utc)
     if row is not None:
         if row.status == "generating" and row.started_at and now - _aware(row.started_at) <= STALE_GENERATING:
-            return await _state(db, user, s, e)   # 다른 탭·기기에서 만드는 중
+            return await _state(db, user, s, e)   # 다른 탭·기기에서 생성 중
         if row.status == "ready" and not body.regenerate:
             return await _state(db, user, s, e)
         if body.regenerate:
@@ -363,7 +363,7 @@ async def generate_briefing(
         row.status, row.started_at, row.feedback, row.feedback_at = "generating", now, None, None
     try:
         await db.commit()
-    except Exception:   # 같은 날 첫 생성이 동시에 두 번 — 먼저 만든 쪽을 따른다
+    except Exception:   # 같은 날 첫 생성의 동시 요청 2건 — 먼저 생성한 쪽을 채택
         await db.rollback()
         return await _state(db, user, s, e)
 
@@ -387,7 +387,7 @@ async def generate_briefing(
                 GEN_TIMEOUT_S,
             )
             items, prep_line = parse_output(text, srcs)
-            # 회의 준비 한 줄은 관련 채팅이 근거 — 근거가 없으면 AI 가 써도 버린다
+            # 회의 준비 한 줄은 관련 채팅을 근거로 함 — 근거가 없으면 AI 가 작성해도 폐기
             if not related:
                 prep_line = None
         except asyncio.TimeoutError:
@@ -398,7 +398,7 @@ async def generate_briefing(
             logger.warning("[dash-briefing] 생성 실패 user=%s: %s", user.id, ex)
             error = "AI 제공자에 연결하지 못했습니다"
     row = await _row(db, user.id, day)
-    if row is None:   # 그 사이에 꺼짐(행 삭제)
+    if row is None:   # 그 사이 비활성화됨(행 삭제)
         return await _state(db, user, s, e)
     if error:
         row.status, row.error = "failed", error
@@ -424,7 +424,7 @@ async def briefing_feedback(
     day_start: str | None = Query(None), day_end: str | None = Query(None),
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    """[도움됨][아님] — 오늘 브리핑에 남긴다(같은 걸 다시 누르면 지움)."""
+    """[도움됨][아님] — 오늘 브리핑에 기록한다(동일 값 재선택 시 삭제)."""
     if body.value not in (None, "helpful", "not"):
         raise HTTPException(status_code=400, detail="value 는 helpful · not · null")
     s, e = sources.parse_day_range(day_start, day_end)

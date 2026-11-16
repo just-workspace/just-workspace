@@ -25,7 +25,7 @@ async def test_start_name_and_list(db, events):
                                        user=await u(db, "bob"), db=db)
     assert meta["name"] is None and meta["display_name"] == "배포 체크리스트를 여기서 정리합시다 — 서버·DB·프런트"[:40]
     assert meta["reply_count"] == 0 and meta["archived"] is False and meta["auto_archive_minutes"] == 4320
-    # 이미 시작된 스레드 이름 바꾸기 — 루트 작성자 아닌 일반 멤버는 안 됨
+    # 이미 시작된 스레드 이름 변경 — 루트 작성자가 아닌 일반 멤버는 불가
     with pytest.raises(HTTPException) as e:
         await router22.start_thread(message_id=root["id"], body=ThreadStart(name="체크"),
                                     user=await u(db, "carol"), db=db)
@@ -39,9 +39,9 @@ async def test_start_name_and_list(db, events):
     it = res["items"][0]
     assert it["root"]["id"] == root["id"] and it["thread"]["reply_count"] == 1
     assert it["last_reply"]["content"] == "DB 끝" and it["last_reply"]["sender"]["id"] == "carol"
-    assert it["followed"] is True and it["unread"] is True     # bob 은 시작하며 팔로우, carol 의 답글 미읽음
+    assert it["followed"] is True and it["unread"] is True     # bob 은 시작 시 팔로우, carol 의 답글 미읽음
     assert {p["id"] for p in it["participants"]} == {"carol"}
-    # 메시지 목록의 루트에도 thread 메타
+    # 메시지 목록의 루트에도 thread 메타 포함
     page = await chat_router.list_messages(channel_id=ch.id, before=None, after=None, before_seq=None,
                                            after_seq=None, around=None, limit=50, user=await u(db, "bob"), db=db)
     r = next(m for m in page["messages"] if m["id"] == root["id"])
@@ -53,7 +53,7 @@ async def test_archive_unarchive_by_reply_and_auto(db, events):
     ch = await service.create_channel(db, "dev", "public", "alice", member_ids=["bob"])
     a = await service.create_message(db, ch.id, "bob", "스레드 A")
     await service.create_message(db, ch.id, "alice", "답", parent_id=a["id"])
-    # 채널 owner(alice)는 남의 스레드도 관리(MANAGE_THREADS 자리)
+    # 채널 owner(alice)는 타 사용자의 스레드도 관리(MANAGE_THREADS 대응)
     meta = await router22.patch_thread(message_id=a["id"], body=ThreadPatch(archived=True),
                                        user=await u(db, "alice"), db=db)
     assert meta["archived"] is True
@@ -62,7 +62,7 @@ async def test_archive_unarchive_by_reply_and_auto(db, events):
     # 보관된 스레드에 답글 → 보관 해제
     await service.create_message(db, ch.id, "bob", "다시", parent_id=a["id"])
     assert len((await _threads(db, ch.id, "bob"))["items"]) == 1
-    # 자동 보관: 마지막 활동 + 60분 지남
+    # 자동 보관: 마지막 활동 + 60분 경과
     await router22.patch_thread(message_id=a["id"], body=ThreadPatch(auto_archive_minutes=60),
                                 user=await u(db, "bob"), db=db)
     old = datetime.now(timezone.utc) - timedelta(hours=3)
@@ -76,7 +76,7 @@ async def test_archive_unarchive_by_reply_and_auto(db, events):
     assert (await _threads(db, cid, "bob"))["items"] == []
     arch = await _threads(db, cid, "bob", archived=True)
     assert arch["items"][0]["thread"]["archived"] is True
-    # 보관 해제하면 자동 보관 시계도 다시
+    # 보관 해제 시 자동 보관 타이머도 초기화
     meta = await router22.patch_thread(message_id=a["id"], body=ThreadPatch(archived=False),
                                        user=await u(db, "bob"), db=db)
     assert meta["archived"] is False

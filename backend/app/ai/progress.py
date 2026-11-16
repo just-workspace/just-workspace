@@ -1,14 +1,14 @@
 """내장 AI 답변의 진행 단계·출처.
 
 - 진행 단계(SSE ``step``): ``{id, kind, label, status, detail, started_at, ended_at}``.
-  kind = search|read|tool|write|think, status = running|done|failed. 같은 id 가 running → done/failed.
-  한 번의 도구 묶음(모델이 한 차례에 부른 도구들) 안에서 같은 도구를 여러 번 부르면 한 단계로 묶는다
+  kind = search|read|tool|write|think, status = running|done|failed. 동일 id 가 running → done/failed 로 전이한다.
+  1회의 도구 묶음(모델이 한 턴에 호출한 도구들) 내에서 동일 도구를 여러 번 호출하면 단일 단계로 병합한다
   ("파일 3개 읽기").
 - 출처(SSE ``citation``): ``{n, kind, id, title, url, snippet, author?, date?}``.
-  kind = mail|file|wiki|board|chat|event|web. url 은 앱 안 링크(웹은 원래 주소), 깊은 링크가 없으면 None.
-  성공한 읽기 도구 결과에서만 만든다. 같은 자료는 같은 번호.
+  kind = mail|file|wiki|board|chat|event|web. url 은 앱 내부 링크(웹은 원래 주소), 딥 링크가 없으면 None.
+  성공한 읽기 도구 결과에서만 생성한다. 동일 자료는 동일 번호.
 
-화면 문구는 한국어로 만든다(서버가 라벨을 만들어 보내는 계약 — 저장된 대화를 다시 열어도 같은 글이 보이게).
+화면 문구는 한국어로 생성한다(서버가 라벨을 생성하여 전달하는 계약 — 저장된 대화를 다시 열어도 동일한 문구가 표시되도록).
 """
 
 from __future__ import annotations
@@ -18,9 +18,9 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
-MAX_CITATIONS = 20       # 답변 하나의 출처 상한
+MAX_CITATIONS = 20       # 답변 1건의 출처 상한
 _SNIPPET = 240
-_EVENTS_PER_CALL = 5     # 일정 목록 한 번에서 출처로 삼을 일정 수
+_EVENTS_PER_CALL = 5     # 일정 목록 1회 조회에서 출처로 사용할 일정 수
 _WEB_PER_CALL = 5
 
 
@@ -29,7 +29,7 @@ def now_iso() -> str:
 
 
 def unwrap(result: Any) -> Any:
-    """신뢰 경계 래퍼({untrusted, source, data})를 벗긴다."""
+    """신뢰 경계 래퍼({untrusted, source, data})를 제거한다."""
     if isinstance(result, dict) and result.get("untrusted") is True and "data" in result:
         return result.get("data")
     return result
@@ -188,7 +188,7 @@ _STATUS_LABELS = {
     "undone": "되돌림",
     "failed": "실패",
 }
-# 선승인 — 카드 결정을 기다리는 동안 단계에 보이는 말
+# 선승인 — 카드 결정 대기 중 단계에 표시되는 문구
 WAITING_DETAIL = "승인 대기 — 아래 카드에서 실행하거나 취소하세요"
 
 
@@ -197,7 +197,7 @@ def status_label(status: str) -> str:
 
 
 def step_outcome(name: str, outcomes: list[tuple[dict, dict]]) -> tuple[str, str]:
-    """(status, detail). outcomes = [(args, execute 결과)]. 전부 실패면 failed, 하나라도 되면 done."""
+    """(status, detail). outcomes = [(args, execute 결과)]. 전부 실패이면 failed, 1건이라도 성공이면 done."""
     oks = [(a, r) for a, r in outcomes if r.get("ok") or r.get("needs_confirmation")]
     fails = [(a, r) for a, r in outcomes if not (r.get("ok") or r.get("needs_confirmation"))]
     if not oks:
@@ -305,7 +305,7 @@ def citations_for(name: str, args: dict, result: Any) -> list[dict]:
 
 
 class CitationTracker:
-    """답변 하나의 출처 번호표 — 같은 (kind, id) 는 같은 번호."""
+    """답변 1건의 출처 번호 표 — 동일 (kind, id) 는 동일 번호."""
 
     def __init__(self, existing: list[dict] | None = None):
         self.items: list[dict] = []

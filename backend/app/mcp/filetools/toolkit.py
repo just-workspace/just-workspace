@@ -24,7 +24,7 @@ RESULT_NOTE = (" The result is saved as a NEW file (the source is never modified
 
 
 def guard(fn):
-    """처리부 예외(code·message 를 가진 것)와 라우터 HTTPException 을 도구 오류로."""
+    """처리부 예외(code·message 보유)와 라우터 HTTPException 을 도구 오류로 변환."""
     @functools.wraps(fn)
     async def wrapper(*a, **kw):
         try:

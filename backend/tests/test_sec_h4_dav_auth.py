@@ -1,4 +1,4 @@
-"""회귀 — CalDAV/CardDAV 는 앱 비밀번호만, 실패는 로그인 잠금에 집계."""
+"""회귀 — CalDAV/CardDAV 는 앱 비밀번호만 허용, 실패는 로그인 잠금에 집계."""
 
 import base64
 
@@ -49,5 +49,5 @@ async def test_failures_count_toward_lockout(db, redis):
     _set_policy(lockout_enabled=True)
     for _ in range(security_policy.LOCKOUT_THRESHOLD):
         assert await authenticate_dav(basic("alice", "guess"), db, "10.0.0.9") is None
-    # 잠긴 뒤에는 맞는 앱 비밀번호도 받지 않는다(메인 로그인과 같은 잠금)
+    # 잠금 이후에는 올바른 앱 비밀번호도 거부한다(메인 로그인과 동일한 잠금)
     assert await authenticate_dav(basic("alice", dav_pw), db, "10.0.0.9") is None

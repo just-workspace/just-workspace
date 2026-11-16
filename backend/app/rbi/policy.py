@@ -1,10 +1,10 @@
-"""세션 컨테이너에 들어가는 정책 파일 — Chromium 관리 정책(JSON) · KasmVNC 설정(YAML) · 환경변수.
+"""세션 컨테이너에 적용되는 정책 파일 — Chromium 관리 정책(JSON) · KasmVNC 설정(YAML) · 환경변수.
 
-순수 함수만 둔다(테스트가 바로 본다). 파일은 service 가 세션별 임시 디렉터리에 써서 읽기 전용으로 마운트한다.
+순수 함수만 포함한다(테스트가 직접 검증한다). 파일은 service 가 세션별 임시 디렉터리에 기록하여 읽기 전용으로 마운트한다.
 
-Chromium 정책 경로: /etc/chromium/policies/managed/*.json (kasmweb/chromium 이미지가 같은 폴더에
-urlblocklist.json(file://* 차단)·default_managed_policy.json 을 두고 있다 — 우리 파일은 거기에 더해진다.
-같은 키가 겹치면 Chromium 은 파일 이름 순으로 뒤의 것이 이긴다 → 우리 파일 이름을 'zz-rbi-policy.json' 으로 둔다).
+Chromium 정책 경로: /etc/chromium/policies/managed/*.json (kasmweb/chromium 이미지가 동일 폴더에
+urlblocklist.json(file://* 차단)·default_managed_policy.json 을 두고 있다 — 본 프로젝트의 파일은 여기에 추가된다.
+동일 키가 중복되면 Chromium 은 파일 이름 순으로 뒤의 것을 우선한다 → 본 프로젝트의 파일 이름을 'zz-rbi-policy.json' 으로 지정한다).
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ _HOST_RE = re.compile(r"^[A-Za-z0-9.-]+(:\d{1,5})?$")
 
 @dataclass
 class TargetPolicy:
-    """대상 하나의 정책 묶음(모델 RbiTarget 의 정책 열과 1:1)."""
+    """대상 하나의 정책 집합(모델 RbiTarget 의 정책 열과 1:1)."""
 
     url: str
     allowed_hosts: list[str] = field(default_factory=list)
@@ -65,12 +65,12 @@ def normalize_url(raw: str) -> str:
 
 
 def target_host(url: str) -> str:
-    """URL 의 호스트(IP 또는 이름). 정책·netfilter 표시에 쓴다."""
+    """URL 의 호스트(IP 또는 이름). 정책·netfilter 표시에 사용한다."""
     return urlsplit(url).hostname or ""
 
 
 def target_is_private_ip(url: str) -> bool:
-    """대상이 사설 IP 인가 — 격리 브라우저의 본래 목적(내부 자산)인지 관리자 화면에서 알려 준다."""
+    """대상의 사설 IP 여부 — 격리 브라우저의 본래 목적(내부 자산)에 해당하는지 관리자 화면에 표시한다."""
     try:
         return ipaddress.ip_address(target_host(url)).is_private
     except ValueError:
@@ -78,7 +78,7 @@ def target_is_private_ip(url: str) -> bool:
 
 
 def normalize_hosts(hosts: list[str] | None, url: str) -> list[str]:
-    """허용 호스트 목록 정리 — 비면 url 의 호스트 하나. 각 항목은 host[:port]."""
+    """허용 호스트 목록 정규화 — 비어 있으면 url 의 호스트 하나. 각 항목은 host[:port]."""
     out: list[str] = []
     for h in hosts or []:
         h = (h or "").strip()
@@ -98,10 +98,10 @@ def normalize_hosts(hosts: list[str] | None, url: str) -> list[str]:
 
 
 def chromium_policy(p: TargetPolicy) -> dict:
-    """Chromium 관리 정책 — 대상 호스트만 열리고, 확장·개발자도구·비밀번호 저장·동기화·인쇄를 끈다.
+    """Chromium 관리 정책 — 대상 호스트만 허용하고, 확장·개발자도구·비밀번호 저장·동기화·인쇄를 비활성화한다.
 
-    URLBlocklist "*" 뒤에 URLAllowlist 가 이긴다(Chromium 정책 규칙). chrome:// 도 막히므로
-    chrome://newtab 과 about:blank 만 허용해 빈 탭이 열려도 오류 화면이 안 뜨게 한다.
+    URLBlocklist "*" 보다 URLAllowlist 가 우선한다(Chromium 정책 규칙). chrome:// 도 차단되므로
+    chrome://newtab 과 about:blank 만 허용하여 빈 탭이 열려도 오류 화면이 표시되지 않도록 한다.
     """
     hosts = normalize_hosts(p.allowed_hosts, p.url)
     allow = []
@@ -130,7 +130,7 @@ def chromium_policy(p: TargetPolicy) -> dict:
         "BrowserGuestModeEnabled": False,
         "SavingBrowserHistoryDisabled": True,
         "IncognitoModeAvailability": 1,
-        # 바깥으로 나가는 것들
+        # 외부 송신 항목
         "MetricsReportingEnabled": False,
         "SafeBrowsingProtectionLevel": 0,
         "TranslateEnabled": False,
@@ -153,7 +153,7 @@ def chromium_policy(p: TargetPolicy) -> dict:
         "DefaultSerialGuardSetting": 2,
         "DefaultFileSystemReadGuardSetting": 2,
         "DefaultFileSystemWriteGuardSetting": 2,
-        # 인쇄는 "PDF 로 저장" 이라는 다운로드 우회 경로다
+        # 인쇄는 "PDF 로 저장" 을 통한 다운로드 우회 경로이다
         "PrintingEnabled": bool(p.downloads),
         # 다운로드·업로드
         "DownloadRestrictions": 0 if p.downloads else 3,
@@ -169,12 +169,12 @@ def chromium_policy_json(p: TargetPolicy) -> str:
 
 
 def kasmvnc_yaml(p: TargetPolicy) -> str:
-    """KasmVNC 서버 설정(/etc/kasmvnc/kasmvnc.yaml 을 통째로 대체).
+    """KasmVNC 서버 설정(/etc/kasmvnc/kasmvnc.yaml 전체를 대체).
 
-    이미지 기본값(자가서명 pem 경로·runtime_configuration)은 그대로 두고 DLP(클립보드)·자동 종료를 더한다.
-    - no_user_session_timeout: 뷰어가 아무도 붙어 있지 않은 채로 N초 → 서버 종료 → 컨테이너 종료(KASMVNC_AUTO_RECOVER=false)
-    - inactive_user_session_timeout: 붙어 있지만 입력이 없는 N초 → 같음
-    백엔드 reaper 는 이걸 믿지 않고 last_seen·수명으로 한 번 더 거둔다(docs/rbi.md "유휴").
+    이미지 기본값(자가서명 pem 경로·runtime_configuration)은 유지하고 DLP(클립보드)·자동 종료를 추가한다.
+    - no_user_session_timeout: 뷰어가 하나도 연결되지 않은 상태로 N초 경과 → 서버 종료 → 컨테이너 종료(KASMVNC_AUTO_RECOVER=false)
+    - inactive_user_session_timeout: 연결되어 있으나 입력이 없는 상태로 N초 경과 → 동일
+    백엔드 reaper 는 이 설정에 의존하지 않고 last_seen·수명으로 재차 정리한다(docs/rbi.md "유휴").
     """
     idle = max(60, int(p.idle_minutes) * 60)
     s2c = "true" if p.clipboard_from_browser else "false"
@@ -217,8 +217,8 @@ def kasmvnc_yaml(p: TargetPolicy) -> str:
 
 
 def container_env(p: TargetPolicy, vnc_password: str) -> dict[str, str]:
-    """세션 컨테이너 환경변수 — 보조 서비스는 모두 끄고, 정책 파일 본문(RBI_POLICY_JSON·RBI_KASMVNC_YAML)을 함께 넘긴다.
-    자세한 설명은 아래 _base_env. 두 정책 텍스트는 시작 셸이 tmpfs 파일로 쓴 뒤 unset 한다."""
+    """세션 컨테이너 환경변수 — 보조 서비스는 모두 비활성화하고, 정책 파일 본문(RBI_POLICY_JSON·RBI_KASMVNC_YAML)을 함께 전달한다.
+    상세 설명은 아래 _base_env 참조. 두 정책 텍스트는 시작 셸이 tmpfs 파일로 기록한 뒤 unset 한다."""
     env = _base_env(p, vnc_password)
     env["RBI_POLICY_JSON"] = chromium_policy_json(p)
     env["RBI_KASMVNC_YAML"] = kasmvnc_yaml(p)
@@ -226,15 +226,15 @@ def container_env(p: TargetPolicy, vnc_password: str) -> dict[str, str]:
 
 
 def _base_env(p: TargetPolicy, vnc_password: str) -> dict[str, str]:
-    """세션 컨테이너 환경변수 — 보조 서비스(오디오·업로드 서버·프린터·스마트카드·웹캠·게임패드)는 모두 끈다.
+    """세션 컨테이너 환경변수 — 보조 서비스(오디오·업로드 서버·프린터·스마트카드·웹캠·게임패드)는 모두 비활성화한다.
 
-    KASM_SVC_SEND_CUT_TEXT / ACCEPT_CUT_TEXT 는 이미지의 vnc_startup.sh 가 Xvnc 명령줄에 그대로 붙이는 값이다
-    (명령줄이 yaml 보다 우선) — 클립보드 정책을 두 겹으로 건다.
+    KASM_SVC_SEND_CUT_TEXT / ACCEPT_CUT_TEXT 는 이미지의 vnc_startup.sh 가 Xvnc 명령줄에 그대로 추가하는 값이다
+    (명령줄이 yaml 보다 우선) — 클립보드 정책을 이중으로 적용한다.
     """
     env = {
         "VNC_PW": vnc_password,
         "LAUNCH_URL": p.url,
-        "KASMVNC_AUTO_RECOVER": "false",          # Xvnc 가 자동 종료(유휴)로 끝나면 컨테이너도 끝난다
+        "KASMVNC_AUTO_RECOVER": "false",          # Xvnc 가 자동 종료(유휴)되면 컨테이너도 종료된다
         "START_PULSEAUDIO": "0",
         "KASM_SVC_AUDIO": "0",
         "KASM_SVC_AUDIO_INPUT": "0",
@@ -267,12 +267,12 @@ def docker_create_args(
 ) -> list[str]:
     """`docker create` 인자 — 비루트(uid 1000)·읽기 전용 루트·cap_drop ALL·no-new-privileges·자원 상한.
 
-    정책 파일(Chromium 관리 정책·kasmvnc.yaml)은 환경변수(RBI_POLICY_JSON·RBI_KASMVNC_YAML)로 넘기고, 그 두 디렉터리를
-    tmpfs 로 덮은 뒤 시작 셸이 파일로 써 놓고 이미지 원래 시작 체인(kasm_default_profile → vnc_startup → kasm_startup)을
-    exec 한다. 백엔드는 컨테이너 안이라 호스트 경로 바인드를 못 쓰고, 읽기 전용 루트는 start 전 `docker cp` 도 거부한다.
-    쓰기가 필요한 곳만 tmpfs(홈·/tmp·/var/run·/var/log·시작 로그). 홈은 세션이 끝나면 함께 사라진다.
-    포트는 `publish_ip::6901`(호스트가 빈 포트를 고른다) — ws-nginx 만 닿는 workspace 브리지 게이트웨이 주소.
-    DNS 는 응답할 수 없는 주소로 보내 이름 풀이가 늘 실패하게 한다(embedded DNS 가 호스트 리졸버로 새는 길 차단).
+    정책 파일(Chromium 관리 정책·kasmvnc.yaml)은 환경변수(RBI_POLICY_JSON·RBI_KASMVNC_YAML)로 전달하고, 해당 두 디렉터리를
+    tmpfs 로 덮은 뒤 시작 셸이 파일로 기록하고 이미지의 원래 시작 체인(kasm_default_profile → vnc_startup → kasm_startup)을
+    exec 한다. 백엔드는 컨테이너 내부에서 동작하므로 호스트 경로 바인드를 사용할 수 없고, 읽기 전용 루트는 start 전 `docker cp` 도 거부한다.
+    쓰기가 필요한 경로만 tmpfs(홈·/tmp·/var/run·/var/log·시작 로그). 홈은 세션 종료 시 함께 삭제된다.
+    포트는 `publish_ip::6901`(호스트가 빈 포트를 선택한다) — ws-nginx 만 도달 가능한 workspace 브리지 게이트웨이 주소.
+    DNS 는 응답 불가능한 주소로 지정하여 이름 해석이 항상 실패하도록 한다(embedded DNS 가 호스트 리졸버로 유출되는 경로 차단).
     """
     args = [
         "create", "--name", name,
@@ -287,7 +287,7 @@ def docker_create_args(
         "--tmpfs", "/var/run:rw,nosuid,nodev,size=16m",
         "--tmpfs", "/var/log:rw,nosuid,nodev,size=16m",
         "--tmpfs", "/dockerstartup/logs:rw,nosuid,nodev,size=16m",
-        # 정책 파일 자리 — 이미지의 urlblocklist.json(file://*)·default_managed_policy.json 은 가려지지만 같은 내용이 우리 정책에 들어 있다
+        # 정책 파일 위치 — 이미지의 urlblocklist.json(file://*)·default_managed_policy.json 은 가려지나 동일 내용이 본 프로젝트 정책에 포함되어 있다
         "--tmpfs", "/etc/chromium/policies/managed:rw,nosuid,nodev,uid=1000,gid=1000,size=1m",
         "--tmpfs", "/etc/kasmvnc:rw,nosuid,nodev,uid=1000,gid=1000,size=1m",
         "--cap-drop", "ALL",
@@ -301,7 +301,7 @@ def docker_create_args(
         "--restart", "no",
         "--label", "app.just-workspace.rbi=session",
     ]
-    # 이름으로 적은 대상 → 저장할 때 고정한 IP(--add-host). DNS 가 없으니 이 이름들만 풀린다(app/rbi/egress.py)
+    # 이름으로 지정한 대상 → 저장 시 고정한 IP(--add-host). DNS 가 없으므로 해당 이름들만 해석된다(app/rbi/egress.py)
     args += list(add_hosts or [])
     for k, v in env.items():
         args += ["-e", f"{k}={v}"]
@@ -309,7 +309,7 @@ def docker_create_args(
     return args
 
 
-#: 세션 컨테이너 시작 셸 — 정책 파일을 tmpfs 에 쓰고(비밀 아님) 이미지 원래 시작 체인을 그대로 exec
+#: 세션 컨테이너 시작 셸 — 정책 파일을 tmpfs 에 기록하고(비밀 아님) 이미지의 원래 시작 체인을 그대로 exec
 STARTUP_SCRIPT = (
     "umask 022; "
     "printf '%s' \"$RBI_POLICY_JSON\" > /etc/chromium/policies/managed/zz-rbi-policy.json; "
@@ -320,10 +320,10 @@ STARTUP_SCRIPT = (
 
 
 # ── 미러 모드(DOM 재구성, 세션 이미지 just-workspace-rbi-mirror — rbi/mirror/) ──
-# 같은 세션 배관(게시 포트 6901·br-wsrbi·netfilter·auth_request)을 그대로 쓰고 컨테이너 안만 바뀐다:
-# KasmVNC 대신 mirror-agent(Node) 가 Chromium 을 --remote-debugging-pipe 로 소유하고 6901(평문 HTTP+WS, 브리지 안 한 홉)에서
-# view · mirror · asset/<sha> · font/<file> · download/<id> · upload/<id> 를 낸다.
-# 사용자 PC 로는 닫힌 어휘(JSON)·재인코딩 WebP·인셋 WebP·고정 폰트 묶음만 간다. 클립보드·다운로드·업로드 정책은 에이전트가 강제한다.
+# 동일한 세션 구성 요소(게시 포트 6901·br-wsrbi·netfilter·auth_request)를 그대로 사용하고 컨테이너 내부만 변경된다:
+# KasmVNC 대신 mirror-agent(Node) 가 Chromium 을 --remote-debugging-pipe 로 소유하고 6901(평문 HTTP+WS, 브리지 내 한 홉)에서
+# view · mirror · asset/<sha> · font/<file> · download/<id> · upload/<id> 를 제공한다.
+# 사용자 PC 로는 닫힌 어휘(JSON)·재인코딩 WebP·인셋 WebP·고정 폰트 번들만 전달된다. 클립보드·다운로드·업로드 정책은 에이전트가 강제한다.
 
 MODES = ("pixel", "mirror")
 MIRROR_HOME = "/home/node"
@@ -337,13 +337,13 @@ def validate_mode(mode: str | None) -> str:
 
 
 def mirror_chromium_policy(p: TargetPolicy) -> dict:
-    """미러 모드 Chromium 정책 — 픽셀 모드와 같되 세 가지만 다르다(URL 허용목록·확장·자격증명·장치 잠금은 그대로).
+    """미러 모드 Chromium 정책 — 픽셀 모드와 동일하되 세 가지만 상이하다(URL 허용목록·확장·자격증명·장치 잠금은 동일).
 
-    - RemoteDebuggingAllowed: True — 에이전트가 CDP 파이프(--remote-debugging-pipe)로 붙어야 한다. 포트는 열지 않으므로
-      바깥에서 디버거에 닿을 길은 없다(파이프는 부모 프로세스=에이전트의 fd 3/4).
-    - DeveloperToolsAvailability: 1 — 2(금지)면 CDP 가 페이지 타깃에 붙지 못해 에이전트가 영원히 기다린다(Target.setAutoAttach 뒤
-      첫 페이지가 안 온다). 헤드리스라 개발자도구 UI 를 열 사람이 없다 — 1 이어도 사용자 표면은 같다.
-    - DownloadDirectory: 미러 이미지의 홈(에이전트가 받은 파일을 정책이 허용할 때만 /download/<id> 로 내준다).
+    - RemoteDebuggingAllowed: True — 에이전트가 CDP 파이프(--remote-debugging-pipe)로 연결해야 한다. 포트는 개방하지 않으므로
+      외부에서 디버거에 도달할 경로는 없다(파이프는 부모 프로세스=에이전트의 fd 3/4).
+    - DeveloperToolsAvailability: 1 — 2(금지)이면 CDP 가 페이지 타깃에 연결하지 못하여 에이전트가 무한 대기한다(Target.setAutoAttach 이후
+      첫 페이지가 수신되지 않는다). 헤드리스이므로 개발자도구 UI 를 열 사용자가 없다 — 1 이어도 사용자 표면은 동일하다.
+    - DownloadDirectory: 미러 이미지의 홈(에이전트가 수신한 파일을 정책이 허용하는 경우에만 /download/<id> 로 제공한다).
     """
     pol_ = chromium_policy(p)
     pol_["RemoteDebuggingAllowed"] = True
@@ -353,17 +353,17 @@ def mirror_chromium_policy(p: TargetPolicy) -> dict:
 
 
 def mirror_agent_policy(p: TargetPolicy) -> dict:
-    """에이전트가 강제하는 정책(MIRROR_POLICY) — ci: 내 PC→브라우저 붙여넣기, co: 브라우저→내 PC 복사, dl·ul: 다운로드·업로드."""
+    """에이전트가 강제하는 정책(MIRROR_POLICY) — ci: 사용자 PC→브라우저 붙여넣기, co: 브라우저→사용자 PC 복사, dl·ul: 다운로드·업로드."""
     return {"ci": bool(p.clipboard_to_browser), "co": bool(p.clipboard_from_browser), "dl": bool(p.downloads), "ul": bool(p.uploads)}
 
 
 def mirror_container_env(p: TargetPolicy, *, sid: str, auth_header: str = "") -> dict[str, str]:
-    """미러 세션 컨테이너 env — 에이전트 설정 + Chromium 정책 본문(시작 셸이 tmpfs 파일로 쓴 뒤 unset).
+    """미러 세션 컨테이너 env — 에이전트 설정 + Chromium 정책 본문(시작 셸이 tmpfs 파일로 기록한 뒤 unset).
 
-    auth_header: ws-nginx 가 auth_request 응답(X-Rbi-Authorization)으로 받아 붙이는 값과 같은 "Basic …".
-    에이전트는 /healthz 말고는 이 값이 없는 요청을 401 로 거절하고, 읽은 뒤 자기 환경에서 지운다(Chromium 자식에 물려주지 않게).
-    MIRROR_ALLOW 는 Chromium URLAllowlist 와 같은 호스트 목록 — 막힌 이동을 신뢰 크롬에 알리는 데 쓴다(차단 자체는 Chromium 정책).
-    MIRROR_IDLE_SECONDS: 뷰어가 없거나 입력이 없는 시간이 이만큼이면 에이전트가 끝난다(컨테이너 종료 → reaper 가 container_exited).
+    auth_header: ws-nginx 가 auth_request 응답(X-Rbi-Authorization)으로 수신하여 추가하는 값과 동일한 "Basic …".
+    에이전트는 /healthz 외에는 이 값이 없는 요청을 401 로 거부하고, 읽은 뒤 자체 환경에서 삭제한다(Chromium 자식 프로세스에 상속되지 않도록 함).
+    MIRROR_ALLOW 는 Chromium URLAllowlist 와 동일한 호스트 목록 — 차단된 이동을 신뢰 크롬에 통지하는 데 사용한다(차단 자체는 Chromium 정책이 수행).
+    MIRROR_IDLE_SECONDS: 뷰어가 없거나 입력이 없는 시간이 이 값에 도달하면 에이전트가 종료된다(컨테이너 종료 → reaper 가 container_exited).
     """
     return {
         "MIRROR_AUTH": auth_header,
@@ -376,13 +376,13 @@ def mirror_container_env(p: TargetPolicy, *, sid: str, auth_header: str = "") ->
         "MIRROR_ALLOW": json.dumps(normalize_hosts(p.allowed_hosts, p.url)),
         "MIRROR_IDLE_SECONDS": str(max(60, int(p.idle_minutes) * 60)),
         "TZ": "Asia/Seoul",
-        # UTF-8 로캘 — 없으면 Chromium 이 한글 이름 파일을 올리기에서 조용히 버린다. 이미지 ENV 와 같은 값(두 겹)
+        # UTF-8 로캘 — 없으면 Chromium 이 한글 이름 파일을 업로드에서 경고 없이 제외한다. 이미지 ENV 와 동일한 값(이중 적용)
         "LANG": "C.UTF-8",
         "RBI_POLICY_JSON": json.dumps(mirror_chromium_policy(p), ensure_ascii=False, indent=2) + "\n",
     }
 
 
-#: 미러 세션 시작 셸 — 정책을 tmpfs 에 쓰고 에이전트를 exec(에이전트가 Chromium 을 자식으로 띄운다)
+#: 미러 세션 시작 셸 — 정책을 tmpfs 에 기록하고 에이전트를 exec(에이전트가 Chromium 을 자식 프로세스로 기동한다)
 MIRROR_STARTUP_SCRIPT = (
     "umask 022; "
     "printf '%s' \"$RBI_POLICY_JSON\" > /etc/chromium/policies/managed/zz-rbi-policy.json; "
@@ -403,11 +403,11 @@ def mirror_docker_create_args(
     dns: str = "0.0.0.0",
     add_hosts: list[str] | None = None,
 ) -> list[str]:
-    """미러 세션 `docker create` 인자 — 픽셀 모드(docker_create_args)와 같은 잠금(비루트·읽기 전용·cap 없음·자원 상한·DNS 없음·IPv6 끔).
+    """미러 세션 `docker create` 인자 — 픽셀 모드(docker_create_args)와 동일한 잠금(비루트·읽기 전용·cap 없음·자원 상한·DNS 없음·IPv6 비활성).
 
-    다른 점: 이미지의 node 사용자(uid 1000), tmpfs 는 /tmp(Chromium 프로필·내려받기·올리기)·홈·정책 폴더만(KasmVNC 경로 없음),
-    포트는 같은 6901 이라 netfilter 의 "ws-nginx → 6901" 규칙과 게시 포트 조회(published_upstream)를 그대로 쓴다.
-    라벨 app.just-workspace.rbi=session 은 같다(reaper 가 고아로 거둔다).
+    차이점: 이미지의 node 사용자(uid 1000), tmpfs 는 /tmp(Chromium 프로필·다운로드·업로드)·홈·정책 폴더만(KasmVNC 경로 없음),
+    포트는 동일한 6901 이므로 netfilter 의 "ws-nginx → 6901" 규칙과 게시 포트 조회(published_upstream)를 그대로 사용한다.
+    라벨 app.just-workspace.rbi=session 은 동일하다(reaper 가 고아로 정리한다).
     """
     args = [
         "create", "--name", name,

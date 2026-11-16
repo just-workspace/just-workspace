@@ -1,4 +1,4 @@
-"""버전·휴지통 만료 — 실제로 지우는 코드라 판정과 경로 범위를 꼼꼼히 본다."""
+"""버전·휴지통 만료 — 실제 삭제를 수행하는 코드이므로 판정과 경로 범위를 엄밀히 검증한다."""
 
 import json
 import os
@@ -23,7 +23,7 @@ def test_newest_is_always_kept():
 
 
 def test_within_last_hour_two_second_spacing():
-    # 0.5초 간격 5개 → 2초 간격만 남는다
+    # 0.5초 간격 5개 → 2초 간격만 유지
     ts = [NOW - i * 500 for i in range(5)]           # NOW, -0.5s, -1s, -1.5s, -2s
     drop = rt.plan_version_expiry(ts, NOW)
     kept = sorted(set(ts) - drop, reverse=True)
@@ -101,10 +101,10 @@ def _mk_versions(root: Path, owner: str, rel: str, stamps: list[int]) -> Path:
 def test_expire_versions_removes_only_planned_and_leaves_others(tmp_path: Path):
     stamps = [NOW - 3 * D - i * 10 * 60_000 for i in range(7)]          # 3일 전, 10분 간격
     vdir = _mk_versions(tmp_path, "u1", "docs/a.txt", [NOW] + stamps)
-    # 스냅샷이 아닌 파일(자릿수 아님)·다른 소유자 트리는 건드리면 안 된다
+    # 스냅샷이 아닌 파일(자릿수 아님)·다른 소유자 트리는 변경 금지
     (vdir / "notes.txt").write_text("keep")
     other = _mk_versions(tmp_path, "u2", "b.bin", [NOW - 1000])
-    # 사용자 저장소(users/) 는 아예 범위 밖
+    # 사용자 저장소(users/) 는 범위 밖
     users = tmp_path / "users" / "u1"
     users.mkdir(parents=True)
     (users / "real.txt").write_text("real")
@@ -159,7 +159,7 @@ def test_remove_within_rejects_outside_path(tmp_path: Path):
     stats = rt.Stats()
     rt.remove_within(outside, root, stats)
     assert outside.exists() and stats.errors == 1 and stats.removed == 0
-    # `..` 로 들어오는 경로도 어휘적 검사에서 걸린다
+    # `..` 를 포함한 경로도 어휘적 검사에서 차단
     rt.remove_within(root / ".." / "precious.txt", root, stats)
     assert outside.exists() and stats.errors == 2
 

@@ -1,4 +1,4 @@
-"""요청 번호(X-Request-ID) 미들웨어 — 헤더 부여·앞단 값 재사용·처리 안 된 예외의 500 JSON."""
+"""요청 번호(X-Request-ID) 미들웨어 — 헤더 부여·프런트 프록시 값 재사용·미처리 예외의 500 JSON."""
 
 import os
 import sys
@@ -8,7 +8,7 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-# Windows 로컬 실행용(파일 색인이 resource 를 import) — 리눅스에선 진짜 모듈을 쓴다
+# Windows 로컬 실행용(파일 색인이 resource 를 import) — 리눅스에서는 실제 모듈 사용
 if os.name == "nt" and "resource" not in sys.modules:
     sys.modules["resource"] = types.ModuleType("resource")
 

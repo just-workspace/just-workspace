@@ -1,10 +1,10 @@
 """Dashboard API router — aggregated summary for the dashboard page.
 
 오늘 브리핑 줄: 인사 아래 칩(안 읽은 메일 · 나를 부른 것 · 오늘 마감(지남) · 다음 회의 ·
-관리자 서비스 이상)과 관리자 운영 띠를 이 한 번의 호출로 그린다. 예전 필드(unread_notifications …)는 그대로 둔다.
+관리자 서비스 이상)과 관리자 운영 띠를 본 호출 1회로 표시한다. 기존 필드(unread_notifications …)는 그대로 유지한다.
 
 - day_start/day_end: 프런트가 캘린더 시간대로 계산한 "오늘" [시작, 끝) ISO. 없으면 UTC 오늘.
-- 메일 안 읽음은 메일 서버(IMAP)에 묻는 값이라 4초 제한·60초 캐시, 못 받으면 null(칩 숨김).
+- 읽지 않은 메일 수는 메일 서버(IMAP) 조회 값이므로 4초 제한·60초 캐시를 적용하며, 수신 실패 시 null(칩 숨김).
 """
 
 import asyncio
@@ -28,14 +28,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
-# "나를 부른 것" — 나에게 직접 온 요청(멘션·스레드 답글·작업 배정·회의/일정 초대). 대시보드 "나에게 온 것" 우선 범위와 같다.
+# "나를 부른 것" — 사용자에게 직접 전달된 요청(멘션·스레드 답글·작업 배정·회의/일정 초대). 대시보드 "나에게 온 것" 우선 범위와 동일.
 PRIORITY_TYPES = ("mention", "thread_reply", "task_assigned", "meeting_invite", "calendar_invite")
-# 서비스 느림 기준 기본값(관리 › 일반 system.latency_warn_ms 가 없을 때 — 관리 개요 타일과 같은 800ms)
+# 서비스 지연 기준 기본값(관리 › 일반 system.latency_warn_ms 미설정 시 — 관리 개요 타일과 동일한 800ms)
 LATENCY_WARN_MS = 800
 
 
 async def _admin_block(db: AsyncSession) -> dict:
-    """관리자 운영 띠: 서비스 n/n · 이상(내려감/느림) · 저장소 · 승인 대기."""
+    """관리자 운영 띠: 서비스 n/n · 이상(중단/지연) · 저장소 · 승인 대기."""
     from app.admin.settings import get_setting
 
     try:
@@ -105,7 +105,7 @@ async def dashboard_summary(
         )
     ) or 0
 
-    # 아래 모듈별 값은 그 모듈이 켜져 있을 때만 읽고 응답에 넣는다 — 꺼졌거나 설치하지 않은 구역의
+    # 아래 모듈별 값은 해당 모듈이 활성화된 경우에만 조회하여 응답에 포함한다 — 비활성화되었거나 미설치된 구역의
     # 값은 0 이 아니라 키 자체가 없다.
     out: dict = {"status": "ok", "unread_notifications": unread_notifs}
 
@@ -142,7 +142,7 @@ async def dashboard_summary(
     active_shares = await db.scalar(
         select(func.count(ShareLink.id)).where(
             ShareLink.created_by == uid,
-            # 모델에 is_active 가 없다 — 만료 전이고 받기 횟수를 다 쓰지 않은 링크를 활성으로 센다.
+            # 모델에 is_active 가 없음 — 만료 전이며 다운로드 횟수를 소진하지 않은 링크를 활성으로 집계.
             or_(ShareLink.expires_at.is_(None), ShareLink.expires_at > now),
             or_(ShareLink.max_downloads.is_(None), ShareLink.download_count < ShareLink.max_downloads),
         )

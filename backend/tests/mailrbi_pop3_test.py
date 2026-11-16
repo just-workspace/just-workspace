@@ -1,7 +1,7 @@
-"""POP3 계정 — 서버 폴더가 필요한 동작(이동·스팸·폴더 관리·필터 적용)은 500 이 아니라 400(이유 문구)으로 거절하고,
-POP3 가 로컬 상태로 지원하는 동작(읽음·별표·삭제)은 그대로 된다.
+"""POP3 계정 — 서버 폴더가 필요한 동작(이동·스팸·폴더 관리·필터 적용)은 500 이 아닌 400(이유 문구)으로 거부하고,
+POP3 가 로컬 상태로 지원하는 동작(읽음·별표·삭제)은 그대로 허용한다.
 
-IMAP/POP3 서버는 부르지 않는다(_get_account·_incoming 을 가짜로 바꾼다).
+IMAP/POP3 서버는 호출하지 않는다(_get_account·_incoming 을 가짜로 대체한다).
 """
 
 from types import SimpleNamespace
@@ -23,7 +23,7 @@ async def _seed_user(db, uid="u1"):
 
 
 class _Spy:
-    """pop3_client 자리에 서서 무엇이 불렸는지 적는다 — 폴더 동작은 불리면 안 된다."""
+    """pop3_client 를 대체하여 호출 내역을 기록한다 — 폴더 동작은 호출되어서는 안 된다."""
 
     def __init__(self):
         self.calls: list[str] = []
@@ -78,13 +78,13 @@ async def test_pop3_folder_management_is_400(db_session, pop3):
     with pytest.raises(HTTPException) as e:
         await mail_router.delete_mailbox(mailbox_name="a", account_id=None, user=user, db=db_session)
     assert _is_pop3_400(e)
-    assert pop3.calls == []  # 서버 쪽 함수는 부르지도 않는다
+    assert pop3.calls == []  # 서버 측 함수는 호출하지 않는다
 
 
 @pytest.mark.asyncio
 async def test_pop3_move_is_400_and_does_not_half_apply(db_session, pop3):
     user = await _seed_user(db_session)
-    # 읽음 + 이동이 같이 온 요청 — 이동을 못 하므로 읽음도 바꾸지 않는다
+    # 읽음 + 이동이 함께 수신된 요청 — 이동이 불가하므로 읽음도 변경하지 않는다
     with pytest.raises(HTTPException) as e:
         await mail_router.update_message(
             message_uid="A", body=MessageUpdateRequest(is_unread=False, mailbox_ids=["Archive"]),
@@ -115,14 +115,14 @@ async def test_pop3_filter_apply_is_400(db_session, pop3):
 
 @pytest.mark.asyncio
 async def test_pop3_supported_actions_still_work(db_session, pop3):
-    """읽음·별표·삭제는 POP3 도 된다(읽음·별표는 로컬 상태, 삭제는 서버 DELE) — 막지 않는다."""
+    """읽음·별표·삭제는 POP3 도 지원한다(읽음·별표는 로컬 상태, 삭제는 서버 DELE) — 차단하지 않는다."""
     user = await _seed_user(db_session)
     r = await mail_router.update_message(
         message_uid="A", body=MessageUpdateRequest(is_unread=False, is_flagged=True),
         mailbox_id="INBOX", account_id=None, user=user, db=db_session,
     )
     assert r == {"ok": True}
-    # 같은 편지함을 가리키는 mailbox_ids 는 이동이 아니다
+    # 동일 편지함을 가리키는 mailbox_ids 는 이동이 아니다
     r = await mail_router.update_message(
         message_uid="A", body=MessageUpdateRequest(is_unread=True, mailbox_ids=["INBOX"]),
         mailbox_id="INBOX", account_id=None, user=user, db=db_session,
@@ -141,7 +141,7 @@ async def test_pop3_supported_actions_still_work(db_session, pop3):
 
 @pytest.mark.asyncio
 async def test_imap_folder_ops_unaffected(db_session, monkeypatch):
-    """IMAP 계정은 그대로 — 가드가 프로토콜만 본다."""
+    """IMAP 계정은 기존대로 동작 — 가드가 프로토콜만 확인한다."""
     user = await _seed_user(db_session)
     spy = _Spy()
 
@@ -176,7 +176,7 @@ async def test_imap_folder_ops_unaffected(db_session, monkeypatch):
 
 
 def test_account_response_carries_protocol():
-    """화면이 POP3 를 알아보는 근거 — 계정 목록 응답에 protocol 이 실린다(옛 행은 imap)."""
+    """화면이 POP3 를 식별하는 근거 — 계정 목록 응답에 protocol 이 포함된다(구 행은 imap)."""
     base = dict(id="a1", display_name="d", email="a@x", imap_host="h", imap_port=110, imap_security="ssl",
                 smtp_host="s", smtp_port=465, smtp_security="ssl", username="u", is_default=True,
                 archive_enabled=False, last_sync_at=None, sync_error=None)

@@ -1,12 +1,12 @@
-"""OnlyOffice 로 여는 두 가지 입구 — 새 문서 만들기, 공유 링크로 같이 편집.
+"""OnlyOffice 로 여는 두 가지 진입 경로 — 새 문서 생성, 공유 링크를 통한 공동 편집.
 
 공유 링크
 ---------
-받는 사람은 계정이 없다. `/s/<token>` 에서 이름을 받고 여기 `shared/{token}/open` 을 부르면,
-링크를 만든 사람을 경로 소유자(owner_id)로, 손님을 편집자(user_id = guest-xxxx)로 삼은
-WOPI 토큰을 준다. 그 뒤로는 OnlyOffice ↔ WOPI 엔드포인트가 일반 편집과 같은 길을 탄다.
-토큰에 담긴 경로는 링크가 가리키는 파일 하나뿐이라 다른 파일로 바꿔 열 수 없다.
-쓰기는 링크에 `can_edit` 가 켜져 있을 때만.
+수신자는 계정이 없다. `/s/<token>` 에서 이름을 입력받고 본 모듈의 `shared/{token}/open` 을 호출하면,
+링크 생성자를 경로 소유자(owner_id)로, 게스트를 편집자(user_id = guest-xxxx)로 지정한
+WOPI 토큰을 발급한다. 이후 OnlyOffice ↔ WOPI 엔드포인트는 일반 편집과 동일한 경로로 동작한다.
+토큰에 포함된 경로는 링크가 가리키는 파일 하나뿐이므로 다른 파일로 변경하여 열 수 없다.
+쓰기는 링크에 `can_edit` 가 활성화된 경우에만 허용한다.
 """
 
 import logging
@@ -66,7 +66,7 @@ class NewOfficeResponse(BaseModel):
 @router.post("/new", response_model=NewOfficeResponse)
 @require_module("files")
 async def new_office_file(req: NewOfficeRequest, user: User = Depends(get_current_user)):
-    """빈 docx/xlsx/pptx 를 만든다. 이름을 먼저 묻지 않고 바로 만들어 연다(제목은 나중에 바꾼다)."""
+    """빈 docx/xlsx/pptx 를 생성한다. 이름을 사전에 입력받지 않고 즉시 생성하여 연다(제목은 이후 변경한다)."""
     try:
         real_dir = resolve_path(req.dir, user)
     except (PathSecurityError, AccessDeniedError) as e:
@@ -89,9 +89,9 @@ async def new_office_file(req: NewOfficeRequest, user: User = Depends(get_curren
 
 
 class SharedOpenRequest(BaseModel):
-    """손님이 스스로 밝히는 이름. 없으면 서버가 지어 준다."""
+    """게스트가 직접 입력하는 이름. 없으면 서버가 생성한다."""
     name: str = ""
-    # 비밀번호 링크면 둘 중 하나: 비밀번호 그대로, 또는 /api/files/shared/{token}/unlock 의 access
+    # 비밀번호 링크이면 둘 중 하나 필요: 비밀번호 원문, 또는 /api/files/shared/{token}/unlock 의 access
     password: str | None = None
     access: str | None = None
 
@@ -119,12 +119,12 @@ async def open_shared(token: str, body: SharedOpenRequest, request: Request = No
     link = await _link_from_token(token, db)
     if link.password_hash:
         from app.files.router import _unlock_ok, check_link_password
-        # 비밀번호를 그대로 보낸 경우에도 /unlock 과 같은 시도 제한을 건다
+        # 비밀번호를 원문으로 전송한 경우에도 /unlock 과 동일한 시도 제한을 적용
         if not (_unlock_ok(token, body.access)
                 or (body.password and await check_link_password(link, body.password, request))):
             raise HTTPException(status_code=401, detail="password_required")
-    # 내려받기 링크의 제한은 편집기로 여는 길에도 같다 — 여기서 받은 토큰이면 WOPI GetFile 로 원본을 그대로
-    # 받을 수 있어서, 예전엔 횟수를 다 쓴 1회용 링크·"다운로드 막음" 링크가 이 길로 뚫렸다.
+    # 다운로드 링크의 제한은 편집기로 여는 경로에도 동일하게 적용한다 — 여기서 발급받은 토큰으로 WOPI GetFile 을 호출하면 원본을 그대로
+    # 받을 수 있어, 이전에는 횟수를 소진한 1회용 링크·"다운로드 막음" 링크가 이 경로로 우회되었다.
     if link.max_downloads and (link.download_count or 0) >= link.max_downloads:
         raise HTTPException(status_code=410, detail="다운로드 횟수를 초과했습니다")
     if link.allow_download is False and not link.can_edit:
@@ -144,7 +144,7 @@ async def open_shared(token: str, body: SharedOpenRequest, request: Request = No
     if not await _check_editor_available("onlyoffice"):
         raise HTTPException(status_code=503, detail="편집기를 지금 쓸 수 없습니다")
 
-    # 이름이 겹쳐도 OnlyOffice 협업 표시에서 구분되게 id 를 따로 둔다.
+    # 이름이 중복되어도 OnlyOffice 협업 표시에서 구분되도록 id 를 별도로 부여.
     guest_id = secrets.token_hex(4)
     guest_name = (body.name or "").strip()[:20] or f"게스트 {guest_id[:4]}"
     can_edit = bool(getattr(link, "can_edit", False))
@@ -173,7 +173,7 @@ async def open_shared(token: str, body: SharedOpenRequest, request: Request = No
 
 
 class SharedInfoResponse(BaseModel):
-    """손님 화면(/s/<token>)이 열기 전에 보여 줄 정보. 다운로드 횟수는 늘리지 않는다."""
+    """게스트 화면(/s/<token>)이 열기 전에 표시할 정보. 다운로드 횟수는 증가시키지 않는다."""
     name: str
     size: int | None = None
     is_office: bool = False
@@ -181,21 +181,21 @@ class SharedInfoResponse(BaseModel):
     allow_download: bool = True
     requires_password: bool = False
     is_multi: bool = False
-    is_folder: bool = False  # 폴더 하나짜리 링크 — /api/files/shared/{token}/list 로 둘러본다
+    is_folder: bool = False  # 단일 폴더 링크 — /api/files/shared/{token}/list 로 탐색
     item_count: int = 1
     expires_at: str | None = None
     downloads_left: int | None = None  # 횟수 제한이 없으면 null
     owner_name: str | None = None
     exists: bool = True
-    # 내려받기가 막힌 링크에서 볼 것이 있나 — 파일 하나면 미리보기 가능 형식(files.router._preview_kind), 폴더면 true,
-    # 묶음(zip)은 false. 비밀번호 링크는 풀기 전엔 모른다(true) — /unlock 응답의 can_preview 가 알려 준다.
+    # 다운로드가 차단된 링크에서 열람 가능한 대상의 유무 — 파일 하나이면 미리보기 가능 형식(files.router._preview_kind), 폴더이면 true,
+    # 묶음(zip)은 false. 비밀번호 링크는 해제 전에는 알 수 없다(true) — /unlock 응답의 can_preview 로 전달된다.
     can_preview: bool = True
 
 
 @router.get("/shared/{token}/info", response_model=SharedInfoResponse)
 async def shared_info(token: str, db: AsyncSession = Depends(get_db)):
-    """공유 링크 정보(인증 없음). 비밀번호 링크면 이름·크기 등 내용 정보는 숨기고
-    requires_password=true 만 알려 준다. 다운로드 횟수는 건드리지 않는다."""
+    """공유 링크 정보(인증 없음). 비밀번호 링크이면 이름·크기 등 내용 정보는 숨기고
+    requires_password=true 만 반환한다. 다운로드 횟수는 변경하지 않는다."""
     import json as _json
     from app.files.router import is_folder_link, link_preview_kind
     link = await _link_from_token(token, db)

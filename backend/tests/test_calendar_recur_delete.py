@@ -1,6 +1,6 @@
 """반복 일정 삭제 범위 — 이 일정만 / 이후 모두 / 반복 전체 + 참석자 취소 알림.
 
-라우터 함수를 직접 부른다(db_session = SQLite). 취소 메일은 가짜로 갈아 끼워 받는 사람만 본다.
+라우터 함수를 직접 호출한다(db_session = SQLite). 취소 메일은 가짜로 대체하여 수신자만 확인한다.
 """
 
 import asyncio
@@ -85,7 +85,7 @@ async def test_scope_following_cuts_series_and_drops_later_exceptions(db_session
     await _seed(db_session)
     owner = await db_session.get(User, "owner")
     ev = await _weekly(db_session)
-    # 뒤쪽 회차 하나는 예외 행(시간 변경)으로 만들어 둔다 — 끊은 뒤 남으면 안 된다
+    # 뒤쪽 회차 하나는 예외 행(시간 변경)으로 생성해 둔다 — 시리즈 절단 후 잔존하면 안 된다
     await service.update_occurrence(db_session, "owner", ev["id"], datetime(2026, 10, 29, 6, tzinfo=UTC),
                                     {"title": "4분기 킥오프", "start": "2026-10-29T08:00:00Z", "end": "2026-10-29T09:00:00Z"})
     r = await _call(db_session, owner, ev["id"], occurrence="2026-10-15T06:00:00Z", scope="following")
@@ -131,12 +131,12 @@ async def test_notify_sends_to_attendees_except_me(db_session, mails):
     ev = await _weekly(db_session)
     r = await _call(db_session, owner, ev["id"], occurrence="2026-10-15T06:00:00Z", scope="this", notify=True)
     assert r["notified"] == 2
-    await asyncio.sleep(0)  # 취소 메일은 뒤에서(create_task) 나간다
+    await asyncio.sleep(0)  # 취소 메일은 백그라운드(create_task)에서 발송
     assert sorted(mails[0]["emails"]) == ["guest@x.io", "outside@ext.com"]
     assert mails[0]["scope"] == "this"
     notes = (await db_session.execute(select(Notification).where(Notification.user_id == "guest"))).scalars().all()
     assert any(n.title == "일정 취소: 4분기 킥오프" for n in notes)
-    # 나(주최자)에게는 알리지 않는다
+    # 본인(주최자)에게는 알리지 않음
     mine = (await db_session.execute(
         select(Notification).where(Notification.user_id == "owner", Notification.title.like("일정 취소%"))
     )).scalars().all()

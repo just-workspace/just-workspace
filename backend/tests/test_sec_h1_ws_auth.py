@@ -1,9 +1,9 @@
-"""회귀 — WebSocket(채팅·위키 협업) 인증이 REST 와 같은 세션 검증을 거친다.
+"""회귀 — WebSocket(채팅·위키 협업) 인증이 REST 와 동일한 세션 검증을 거친다.
 
 - 2단계 인증 전 임시 토큰(purpose=2fa) 거부
 - 강제 로그아웃(token_version 증가)·폐기된 세션(sid) 거부
 - 교차 출처 Origin 의 쿠키 핸드셰이크 거부
-- 위키 협업: 스페이스 권한 없으면 입장 불가, reader 는 문서 변경 프레임을 못 보낸다
+- 위키 협업: 스페이스 권한이 없으면 입장 불가, reader 는 문서 변경 프레임 송신 불가
 """
 
 from types import SimpleNamespace
@@ -79,7 +79,7 @@ async def test_two_factor_temp_token_rejected(db):
     temp = deps.sign_value({"user_id": "alice", "purpose": "2fa"})
     assert await ws_auth.authenticate_ws(_ws(token=temp), db) is None
     assert await ws_auth.authenticate_ws(_ws(cookie=temp), db) is None
-    # purpose 가 붙은 값은 tv/sid 를 흉내 내도 세션이 아니다
+    # purpose 가 포함된 값은 tv/sid 를 위장해도 세션으로 인정하지 않음
     forged = deps.sign_value({"user_id": "alice", "tv": 1, "sid": "sid-ok", "purpose": "2fa"})
     assert await ws_auth.authenticate_ws(_ws(token=forged), db) is None
 
@@ -120,13 +120,13 @@ def _b64(s: str) -> str:
 
 
 async def test_token_via_websocket_protocol_header(db):
-    """토큰을 쿼리 대신 Sec-WebSocket-Protocol 로 — nginx error_log 에 평문으로 남지 않게(L-3)."""
+    """토큰을 쿼리 대신 Sec-WebSocket-Protocol 로 전달 — nginx error_log 에 평문으로 기록되지 않도록 함(L-3)."""
     ws = _ws()
     ws.headers["sec-websocket-protocol"] = f"jw.bearer, jw.token.{_b64(_sess())}"
     u = await ws_auth.authenticate_ws(ws, db)
     assert u is not None and u.id == "alice"
     assert ws_auth.accept_subprotocol(ws) == "jw.bearer"
-    # jw.bearer 없이 토큰만 오면 무시, 깨진 base64 도 무시
+    # jw.bearer 없이 토큰만 수신하면 무시, 손상된 base64 도 무시
     bad = _ws()
     bad.headers["sec-websocket-protocol"] = f"jw.token.{_b64(_sess())}"
     assert await ws_auth.authenticate_ws(bad, db) is None
@@ -134,7 +134,7 @@ async def test_token_via_websocket_protocol_header(db):
     broken = _ws()
     broken.headers["sec-websocket-protocol"] = "jw.bearer, jw.token.%%%"
     assert ws_auth.token_from_protocol(broken) is None
-    # 프로토콜 헤더로 온 2단계 임시 토큰도 거부(같은 검증)
+    # 프로토콜 헤더로 수신한 2단계 임시 토큰도 거부(동일 검증)
     temp = _ws()
     temp.headers["sec-websocket-protocol"] = f"jw.bearer, jw.token.{_b64(deps.sign_value({'user_id': 'alice', 'purpose': '2fa'}))}"
     assert await ws_auth.authenticate_ws(temp, db) is None

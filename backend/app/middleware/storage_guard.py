@@ -1,28 +1,28 @@
-"""저장소 표식 확인 — 표식이 안 보이면 파일 쓰기를 거부한다.
+"""저장소 마커 확인 — 마커가 확인되지 않으면 파일 쓰기를 거부한다.
 
-왜 필요한가
-  파일 저장소가 네트워크 저장소(NFS)나 따로 붙인 디스크일 때, 그 연결이 끊기면 붙이는 자리에는
-  **빈 폴더**만 남는다. 그 상태로 쓰기를 받으면 파일이 서버의 로컬 디스크에 쌓이고, 다시 연결된 뒤에는
-  그 파일들이 가려져 사라진 것처럼 보인다. 그래서 설치할 때 저장소 뿌리에 표식 파일(`.jw-storage`)을
-  하나 써 두고, 그 파일이 안 보이는 동안에는 쓰기를 받지 않는다.
+필요 사유
+  파일 저장소가 네트워크 저장소(NFS)이거나 별도로 마운트한 디스크인 경우, 연결이 끊기면 마운트 지점에는
+  **빈 폴더**만 남는다. 이 상태에서 쓰기를 허용하면 파일이 서버의 로컬 디스크에 누적되고, 재연결 후에는
+  해당 파일이 가려져 소실된 것처럼 보인다. 따라서 설치 시 저장소 루트에 마커 파일(`.jw-storage`)을
+  생성하고, 해당 파일이 확인되지 않는 동안에는 쓰기를 거부한다.
 
-켜는 법
-  `STORAGE_MARKER_REQUIRED=1`(설치 관리자가 넣는다). 없으면 이 미들웨어는 등록되지 않는다 — 표식 없이
-  돌던 기존 설치는 그대로 돈다.
-  `JW_INSTALL_ID` 가 있으면 표식에 적힌 설치 id 도 같아야 한다(다른 설치의 저장소가 붙은 경우를 막는다).
+활성화 방법
+  `STORAGE_MARKER_REQUIRED=1`(설치 관리자가 설정한다). 미설정 시 본 미들웨어는 등록되지 않는다 — 마커 없이
+  운영되던 기존 설치는 그대로 동작한다.
+  `JW_INSTALL_ID` 가 있으면 마커에 기록된 설치 id 도 일치해야 한다(타 설치의 저장소가 마운트된 경우를 차단한다).
 
-막는 요청
-  `GUARDED_PREFIXES` 아래의 POST/PUT/PATCH/DELETE. 읽기는 막지 않는다(끊긴 저장소에서는 어차피 404 다).
+차단 대상 요청
+  `GUARDED_PREFIXES` 하위의 POST/PUT/PATCH/DELETE. 읽기는 차단하지 않는다(연결이 끊긴 저장소에서는 어차피 404 이다).
   응답은 503 + `{"code": "storage_unavailable"}`, `Retry-After: 30`.
 
-응답 없는 저장소
-  NFS 를 `hard` 로 붙이면 서버가 끊긴 동안 그 자리의 읽기는 **오류가 아니라 멈춤**이다(돌아올 때까지 기다린다).
-  표식을 요청 처리 흐름에서 그대로 읽으면 그 요청도, 그 워커의 다른 요청도 함께 멈춘다. 그래서 표식은 따로 둔
-  스레드에서 읽고 `CHECK_TIMEOUT` 안에 답이 없으면 사유 `unresponsive` 로 거부한다. 멈춘 읽기는 하나만 둔다 —
-  답이 오기 전의 요청들은 새로 읽지 않고 바로 거부되고, 저장소가 돌아와 그 읽기가 끝나면 다시 받는다.
+무응답 저장소
+  NFS 를 `hard` 로 마운트하면 서버 연결이 끊긴 동안 해당 지점의 읽기는 **오류가 아니라 정지**이다(복구될 때까지 대기한다).
+  마커를 요청 처리 흐름에서 직접 읽으면 해당 요청과 동일 워커의 다른 요청이 함께 정지한다. 따라서 마커는 별도
+  스레드에서 읽고 `CHECK_TIMEOUT` 내에 응답이 없으면 사유 `unresponsive` 로 거부한다. 정지된 읽기는 하나만 유지한다 —
+  응답 전에 도착한 요청은 새로 읽지 않고 즉시 거부되며, 저장소가 복구되어 해당 읽기가 종료되면 다시 허용한다.
 
 관리자 알림
-  막을 때마다 로그 한 줄, 그리고 10분에 한 번 관리자 전원에게 알림(실패해도 요청 처리에는 영향 없음).
+  차단 시마다 로그 한 줄을 기록하고, 10분에 한 번 관리자 전원에게 알림을 전송한다(실패해도 요청 처리에는 영향 없음).
 """
 from __future__ import annotations
 
@@ -45,11 +45,11 @@ MARKER_NAME = ".jw-storage"
 ERROR_CODE = "storage_unavailable"
 
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-#: 저장소에 파일을 쓰는 API. 경계는 "/" 까지 본다("/api/filesx" 는 해당 없음).
+#: 저장소에 파일을 쓰는 API. 경계는 "/" 까지 확인한다("/api/filesx" 는 해당 없음).
 GUARDED_PREFIXES = ("/api/files", "/api/wopi/files")
 
-CACHE_SECONDS = 5.0        # 표식 확인 결과를 이만큼 재사용한다(요청마다 stat 하지 않게)
-CHECK_TIMEOUT = 3.0        # 표식 읽기가 이만큼 답이 없으면 "응답 없음"으로 보고 거부한다
+CACHE_SECONDS = 5.0        # 마커 확인 결과의 재사용 시간(요청마다 stat 하지 않도록 함)
+CHECK_TIMEOUT = 3.0        # 마커 읽기가 이 시간 동안 응답이 없으면 "응답 없음"으로 판정하여 거부
 ALERT_INTERVAL = 600.0     # 관리자 알림 간격(초)
 _ALERT_KEY = "storage:marker:alerted"
 
@@ -60,15 +60,15 @@ def required(env: dict[str, str] | None = None) -> bool:
 
 
 def check_marker(root: str | os.PathLike, install_id: str = "") -> str | None:
-    """표식이 정상이면 None, 아니면 사유(`missing` | `unreadable` | `mismatch`).
+    """마커가 정상이면 None, 아니면 사유(`missing` | `unreadable` | `mismatch`)를 반환한다.
 
-    끊긴 네트워크 저장소에서는 이 호출이 돌아오지 않을 수 있다 — 요청 처리 흐름에서는 `problem_async` 로 부른다
-    (그쪽이 답 없음을 `unresponsive` 로 바꾼다).
+    연결이 끊긴 네트워크 저장소에서는 본 호출이 반환되지 않을 수 있다 — 요청 처리 흐름에서는 `problem_async` 로 호출한다
+    (해당 함수가 무응답을 `unresponsive` 로 변환한다).
     """
     path = Path(root) / MARKER_NAME
     try:
-        # 먼저 파일 시스템 통계를 묻는다 — NFS 에서 이 호출은 캐시 없이 서버까지 간다. 표식 파일만 읽으면
-        # 서버가 끊긴 직후에는 클라이언트 캐시에서 읽혀 "정상"으로 보인다(그 뒤의 쓰기는 멈춘다).
+        # 파일 시스템 통계를 먼저 조회한다 — NFS 에서 이 호출은 캐시 없이 서버까지 도달한다. 마커 파일만 읽으면
+        # 서버 연결이 끊긴 직후에는 클라이언트 캐시에서 읽혀 "정상"으로 판정된다(이후의 쓰기는 정지한다).
         if hasattr(os, "statvfs"):
             os.statvfs(root)
         raw = path.read_text(encoding="utf-8")
@@ -105,14 +105,14 @@ class StorageMarkerGuard:
         self._checked_at: float | None = None
         self._reason: str | None = None
         self._alerted_at: float | None = None
-        self._probe: concurrent.futures.Future | None = None     # 아직 답이 없는 표식 읽기(하나만 둔다)
+        self._probe: concurrent.futures.Future | None = None     # 아직 응답이 없는 마커 읽기(하나만 유지)
         self._probe_started = 0.0
 
     def _cached(self, now: float) -> bool:
         return self._checked_at is not None and now - self._checked_at < self.cache_seconds
 
     def problem(self) -> str | None:
-        """표식을 그 자리에서 읽는다(캐시 포함). 응답 없는 저장소에서는 돌아오지 않을 수 있다."""
+        """마커를 호출 흐름에서 직접 읽는다(캐시 포함). 무응답 저장소에서는 반환되지 않을 수 있다."""
         now = time.monotonic()
         if self._cached(now):
             return self._reason
@@ -122,15 +122,15 @@ class StorageMarkerGuard:
 
     def _start_probe(self, now: float) -> concurrent.futures.Future:
         future: concurrent.futures.Future = concurrent.futures.Future()
-        # 스레드를 띄우기 **전에** 적어 둔다. 읽기가 아주 빨리 끝나면 스레드가 `_probe` 를 비우는 일이 대입보다
-        # 먼저 일어나고, 그 뒤의 대입이 끝난 future 를 되살려 캐시가 지나도 옛 결과만 돌려주게 된다.
+        # 스레드 기동 **전에** 기록한다. 읽기가 매우 빨리 종료되면 스레드가 `_probe` 를 초기화하는 동작이 대입보다
+        # 먼저 수행되고, 이후의 대입이 종료된 future 를 복원하여 캐시 만료 후에도 이전 결과만 반환하게 된다.
         self._probe = future
         self._probe_started = now
 
         def work() -> None:
             try:
                 reason = self.checker(self.root, self.install_id)
-            except Exception:  # noqa: BLE001 — 읽다 난 어떤 오류든 "못 읽음"
+            except Exception:  # noqa: BLE001 — 읽기 중 발생한 모든 오류는 "읽기 불가"로 처리
                 reason = "unreadable"
             self._reason = reason
             self._checked_at = time.monotonic()
@@ -138,17 +138,17 @@ class StorageMarkerGuard:
                 self._probe = None
             future.set_result(reason)
 
-        # 기본 스레드 풀을 쓰지 않는다 — 멈춘 읽기가 풀의 자리를 차지해 다른 일을 막지 않게.
+        # 기본 스레드 풀 미사용 — 정지된 읽기가 풀의 슬롯을 점유하여 다른 작업을 차단하는 것을 방지
         threading.Thread(target=work, name="storage-marker", daemon=True).start()
         return future
 
     async def problem_async(self) -> str | None:
-        """표식이 정상이면 None, 아니면 사유. 읽기가 `check_timeout` 안에 끝나지 않으면 `unresponsive`."""
+        """마커가 정상이면 None, 아니면 사유를 반환한다. 읽기가 `check_timeout` 내에 종료되지 않으면 `unresponsive`."""
         now = time.monotonic()
         if self._cached(now):
             return self._reason
         probe = self._probe
-        if probe is None or probe.done():      # 끝난 읽기가 남아 있으면(있어서는 안 된다) 새로 읽는다
+        if probe is None or probe.done():      # 종료된 읽기가 남아 있으면(발생해서는 안 되는 상태) 새로 읽는다
             probe = self._start_probe(now)
         remaining = self.check_timeout - (now - self._probe_started)
         if remaining > 0 and not probe.done():
@@ -200,9 +200,9 @@ class StorageMarkerGuard:
 
 
 async def notify_admins(reason: str) -> int:
-    """관리자 전원에게 알림을 남긴다. 보낸 수를 돌려준다(실패하면 0)."""
+    """관리자 전원에게 알림을 기록한다. 전송 건수를 반환한다(실패 시 0)."""
     try:
-        # 워커가 여럿이어도 한 번만 — Redis 에 닿지 못하면 워커마다 한 번
+        # 워커가 여러 개여도 1회만 전송 — Redis 접속 불가 시 워커마다 1회
         try:
             from app.chat.redis_client import get_redis
             r = await get_redis()

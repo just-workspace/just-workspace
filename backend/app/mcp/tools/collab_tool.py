@@ -1,10 +1,10 @@
 """협업 읽기 도구 — 채팅 · 게시판.
 
-전부 **읽기 전용**(mcp:read). 쓰기는 승인 게이트(B단계) 이후에 연다.
+전부 **읽기 전용**(mcp:read). 쓰기는 승인 게이트(B단계) 이후에 허용한다.
 
-★ 채팅은 접근 통제가 특히 중요하다. 채널 목록은 서비스가 사용자 기준으로
-걸러주지만, **메시지 조회는 channel_id 만 받으므로 멤버십을 직접 확인해야 한다.**
-확인을 빼면 채널 id 만 알면 남의 비공개 대화를 읽을 수 있다.
+주의: 채팅은 접근 통제가 특히 중요하다. 채널 목록은 서비스가 사용자 기준으로
+필터링하지만, **메시지 조회는 channel_id 만 받으므로 멤버십을 직접 확인해야 한다.**
+확인을 생략하면 채널 id 만으로 타인의 비공개 대화를 읽을 수 있다.
 """
 
 import logging
@@ -25,7 +25,7 @@ _MAX_ITEMS = 100
 
 
 def _iso(v):
-    """서비스 계층이 datetime 을 그대로 돌려주는 필드가 있다(채널 created_at 등)."""
+    """서비스 계층이 datetime 을 그대로 반환하는 필드가 있다(채널 created_at 등)."""
     return v.isoformat() if isinstance(v, datetime) else v
 
 
@@ -60,24 +60,24 @@ def _oldest_id(msgs: list) -> str | None:
     return msgs[0].get("id")
 
 
-_MSG_MAX = 2_000   # 메시지 하나의 본문 상한(글자) — 나머지는 예산 맞추기가 처리
+_MSG_MAX = 2_000   # 메시지 하나의 본문 상한(글자) — 그 외는 예산 맞추기에서 처리
 
 
 async def chat_read_messages(
     user: User, channel_id: str, limit: int = 50, cursor: str = "", **_: object
 ) -> dict:
-    """채널 메시지(최신 페이지부터). ``cursor`` 를 주면 그보다 **이전** 메시지. 멤버가 아니면 거부.
+    """채널 메시지(최신 페이지부터). ``cursor`` 지정 시 그보다 **이전** 메시지. 멤버가 아니면 거부.
 
-    예산을 넘으면 **최신 메시지를 남기고** 오래된 쪽을 덜어 낸다. 그때 next_cursor 는 실제로 담은 것 중
-    가장 오래된 메시지 id 라서, 이어 부르면 덜어 낸 메시지부터 나온다(건너뜀 없음).
+    예산을 초과하면 **최신 메시지를 유지하고** 오래된 쪽을 제외한다. 이때 next_cursor 는 실제로 포함한 것 중
+    가장 오래된 메시지 id 이므로, 이어서 호출하면 제외된 메시지부터 반환된다(누락 없음).
     """
     n = clamp(limit, 1, _MAX_ITEMS, 50)
     async with async_session() as db:
-        # ★ 멤버십 확인 — get_messages 는 channel_id 만 받고 권한을 보지 않는다.
+        # 주의: 멤버십 확인 — get_messages 는 channel_id 만 받고 권한을 확인하지 않는다.
         if not await chat_svc.is_channel_member(db, channel_id, user.id):
             return err("forbidden", "이 채널의 멤버가 아닙니다")
         msgs, has_more = await chat_svc.get_messages(db, channel_id, before=(cursor or None), limit=n)
-    # 서비스는 오래된 → 최신 순(seq 오름차순)으로 준다
+    # 서비스는 오래된 → 최신 순(seq 오름차순)으로 반환한다
     rows = []
     for m in msgs:
         content = m.get("content")
@@ -100,7 +100,7 @@ async def chat_read_messages(
 async def board_list_posts(
     user: User, board_id: str = "", limit: int = 20, cursor: str = "", **_: object
 ) -> dict:
-    """게시판 글 목록. board_id 가 없으면 게시판 목록을 돌려준다."""
+    """게시판 글 목록. board_id 가 없으면 게시판 목록을 반환한다."""
     n = clamp(limit, 1, _MAX_ITEMS, 20)
     qh = query_hash("board_list_posts", board_id)
     off, cerr = read_cursor(cursor, qh)
@@ -128,7 +128,7 @@ async def board_list_posts(
         for p in posts
     ]
     extras: dict = {"board_id": board_id}
-    # 고정글은 첫 페이지에만 따로 붙인다(페이지마다 반복되면 중복으로 보이고, offset 계산에도 안 들어간다)
+    # 고정글은 첫 페이지에만 별도로 포함한다(페이지마다 반복되면 중복으로 보이며, offset 계산에도 포함되지 않는다)
     if off == 0 and data.get("pinned"):
         extras["pinned"] = [
             drop_empty({"id": p.get("id"), "title": shorten(p.get("title"), 120),
@@ -174,7 +174,7 @@ async def board_search(
 async def board_read_post(user: User, post_id: str, **_: object) -> dict:
     """게시글 본문을 읽는다."""
     async with async_session() as db:
-        # ※ get_post 는 조회수를 1 올린다(원래 화면 조회용 함수다). "글을 봤다" 는 의미라 그대로 둔다.
+        # 참고: get_post 는 조회수를 1 증가시킨다(원래 화면 조회용 함수이다). "글을 봤다" 는 의미이므로 그대로 유지한다.
         post = await board_svc.get_post(db, post_id)
     if not post:
         return err("not_found", f"게시글이 없습니다: {post_id}")
@@ -199,7 +199,7 @@ register(Tool(
         "limit": {"type": "integer", "description": "Channels per page (default 100, max 100).", "default": 100},
         "cursor": CURSOR_PARAM,
     }},
-    # 남이 쓴 글 조각이 섞인다 — 내장 AI 대화 표시만 남긴다(conv_untrusted: MCP 15분 창·래핑 없음)
+    # 타인이 작성한 글 조각이 포함된다 — 내장 AI 대화 표시만 기록한다(conv_untrusted: MCP 15분 창·래핑 없음)
     handler=chat_list_channels, conv_untrusted=True,
 ))
 
@@ -221,7 +221,7 @@ register(Tool(
         },
         "required": ["channel_id"],
     },
-    # 남이 쓴 글이 들어 있다 — 신뢰 경계로 감싸고, 직후의 쓰기는 승인 흐름이 경고·자동 실행 금지로 다룬다
+    # 타인이 작성한 글이 포함된다 — 신뢰 경계로 래핑하고, 직후의 쓰기는 승인 흐름이 경고·자동 실행 금지로 처리한다
     handler=chat_read_messages, untrusted_output=True,
 ))
 
@@ -239,7 +239,7 @@ register(Tool(
             "cursor": CURSOR_PARAM,
         },
     },
-    # 남이 쓴 글 조각이 섞인다 — 내장 AI 대화 표시만 남긴다(conv_untrusted: MCP 15분 창·래핑 없음)
+    # 타인이 작성한 글 조각이 포함된다 — 내장 AI 대화 표시만 기록한다(conv_untrusted: MCP 15분 창·래핑 없음)
     handler=board_list_posts, conv_untrusted=True,
 ))
 
@@ -256,7 +256,7 @@ register(Tool(
         },
         "required": ["query"],
     },
-    # 남이 쓴 글이 들어 있다 — 신뢰 경계로 감싸고, 직후의 쓰기는 승인 흐름이 경고·자동 실행 금지로 다룬다
+    # 타인이 작성한 글이 포함된다 — 신뢰 경계로 래핑하고, 직후의 쓰기는 승인 흐름이 경고·자동 실행 금지로 처리한다
     handler=board_search, untrusted_output=True,
 ))
 
@@ -270,6 +270,6 @@ register(Tool(
         },
         "required": ["post_id"],
     },
-    # 남이 쓴 글이 들어 있다 — 신뢰 경계로 감싸고, 직후의 쓰기는 승인 흐름이 경고·자동 실행 금지로 다룬다
+    # 타인이 작성한 글이 포함된다 — 신뢰 경계로 래핑하고, 직후의 쓰기는 승인 흐름이 경고·자동 실행 금지로 처리한다
     handler=board_read_post, untrusted_output=True,
 ))

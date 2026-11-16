@@ -16,10 +16,10 @@ from app.db.models import (
 
 # ── Helpers ──
 
-# 직렬화 형식이 바뀌면 올린다 — ETag·ctag 가 한 번 전부 바뀌어 휴대폰이 다시 받아 간다.
+# 직렬화 형식 변경 시 값을 올린다 — ETag·ctag 가 전부 1회 변경되어 휴대폰이 재수신한다.
 # RRULE·EXDATE·RECURRENCE-ID·ATTENDEE·VTIMEZONE(캘린더), TITLE·CATEGORIES·PHOTO(연락처) 추가.
-# 이게 없으면 이미 동기화된 반복 일정은 수정되기 전까지 휴대폰에서 계속 한 번짜리로 남는다.
-# p5: 종일 DTSTART·DTEND·EXDATE·RECURRENCE-ID·UNTIL 을 가장 가까운 UTC 자정 기준으로(옛 기기 자정 행이 하루 앞당겨 보이던 것).
+# 이 값이 없으면 이미 동기화된 반복 일정은 수정 전까지 휴대폰에서 단일 일정으로 유지된다.
+# p5: 종일 DTSTART·DTEND·EXDATE·RECURRENCE-ID·UNTIL 을 가장 가까운 UTC 자정 기준으로 변경(과거 기기 자정 행이 하루 앞당겨 표시되던 문제).
 SERIAL_VERSION = "p5"
 
 
@@ -73,7 +73,7 @@ async def get_calendar(db: AsyncSession, cal_id: str) -> CalendarDB | None:
 
 
 async def get_calendar_events(db: AsyncSession, cal_id: str) -> list[CalendarEventDB]:
-    # 회차 단일 수정 행은 마스터 리소스(.ics) 안에 RECURRENCE-ID 로 들어간다 → 따로 내지 않는다
+    # 회차 단일 수정 행은 마스터 리소스(.ics) 안에 RECURRENCE-ID 로 포함된다 → 별도 리소스로 반환하지 않는다
     result = await db.execute(
         select(CalendarEventDB)
         .where(CalendarEventDB.calendar_id == cal_id, CalendarEventDB.parent_event_id.is_(None))
@@ -83,7 +83,7 @@ async def get_calendar_events(db: AsyncSession, cal_id: str) -> list[CalendarEve
 
 
 async def event_ical_text(db: AsyncSession, ev: CalendarEventDB, cal: CalendarDB | None = None) -> str:
-    """마스터 + 참석자 + 회차 예외(EXDATE·RECURRENCE-ID)를 한 VCALENDAR 로."""
+    """마스터 + 참석자 + 회차 예외(EXDATE·RECURRENCE-ID)를 하나의 VCALENDAR 로 구성."""
     from app.calendar.service import ical_items_for
     if cal is None:
         cal = await db.get(CalendarDB, ev.calendar_id)
@@ -113,7 +113,7 @@ async def upsert_event(
     db: AsyncSession, event_id: str, cal_id: str, data: dict,
 ) -> CalendarEventDB:
     """CalDAV PUT. data 는 ical_to_event_bundle 결과({"master", "overrides"}) 또는
-    옛 형식(마스터 필드 dict)."""
+    구 형식(마스터 필드 dict)."""
     from app.calendar.service import save_ical_bundle
     bundle = data if "master" in data else {"master": data, "overrides": []}
     return await save_ical_bundle(db, cal_id, bundle, event_id=event_id)

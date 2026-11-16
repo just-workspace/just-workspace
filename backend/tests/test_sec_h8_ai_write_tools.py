@@ -67,7 +67,7 @@ async def test_model_call_does_not_execute_write_tool(env):
     r = await ai_config.ai_execute_tool(env["db"], "notes_create",
                                         {"title": "x", "content": "y", "space": env["space"]},
                                         alice, provider_external=False)
-    # 실행하지 않고 승인 요청(채팅 카드)만 만든다 — 모델에게는 "실행하지 않았다"가 간다
+    # 실행하지 않고 승인 요청(채팅 카드)만 생성한다 — 모델에는 "실행하지 않았다"가 전달된다
     assert r.get("needs_confirmation") and r["result"]["status"] == "pending_confirmation"
     assert await _pages(env["db"]) == []
 
@@ -103,7 +103,7 @@ async def test_confirm_token_single_use_bound_to_user_and_args(env):
 
 
 async def test_injected_tool_call_in_stream_is_held(env, monkeypatch):
-    # 메일 본문 등으로 유도된 모델이 쓰기 도구를 부르는 상황 — 실행 대신 확인 이벤트만 나간다
+    # 메일 본문 등으로 유도된 모델이 쓰기 도구를 호출하는 상황 — 실행 대신 확인 이벤트만 송신
     calls = {"n": 0}
 
     async def fake_stream(cfg, msgs, system=None, tools=None):
@@ -128,7 +128,7 @@ async def test_injected_tool_call_in_stream_is_held(env, monkeypatch):
                                                     [{"role": "user", "content": "요약해 줘"}]):
         out.append(chunk if isinstance(chunk, str) else chunk.decode())
         if "event: write_request" in out[-1]:
-            break  # 선승인 — 여기서 사용자의 결정을 기다린다(실행되지 않은 채)
+            break  # 선승인 — 이 지점에서 사용자의 결정을 대기한다(미실행 상태)
     text = "".join(out)
     # 확인 토큰 대신 승인 요청 카드 이벤트
     assert "write_request" in text

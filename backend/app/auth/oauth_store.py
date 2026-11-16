@@ -34,8 +34,8 @@ class AuthorizationCode:
     code_challenge_method: str | None = None
     # RFC 8707 resource indicator bound at /authorize, carried to token aud.
     resource: str | None = None
-    # 코드를 내준 워크스페이스 세션 sid — ID 토큰 sid·백채널 로그아웃 추적용.
-    # 기본값 None 이라 배포 직전에 Redis 에 저장된 코드(필드 없음)도 그대로 읽힌다.
+    # 코드를 발급한 워크스페이스 세션 sid — ID 토큰 sid·백채널 로그아웃 추적용.
+    # 기본값이 None 이므로 배포 직전에 Redis 에 저장된 코드(필드 없음)도 그대로 조회된다.
     session_id: str | None = None
 
 
@@ -189,11 +189,11 @@ async def _revoke_chain(db: AsyncSession, row: OAuthRefreshToken) -> None:
 
 
 async def revoke_user_refresh_tokens(db: AsyncSession, user_id: str | None) -> int:
-    """그 사용자의 살아 있는 리프레시 토큰 전부 폐기(커밋은 호출자). user_id=None 이면 전 사용자.
+    """해당 사용자의 유효한 리프레시 토큰 전부 폐기(커밋은 호출자). user_id=None 이면 전체 사용자.
 
-    비밀번호 변경·재설정·관리자 강제 로그아웃·정지는 웹 세션(token_version·sid)만 끊었다.
-    데스크톱 앱·MCP 커넥터의 리프레시 토큰(30일, 회전)은 그대로라, 계정이 털려 비밀번호를
-    바꿔도 그쪽 접근은 계속 살아 있었다. 같은 시점에 함께 끊는다.
+    기존에는 비밀번호 변경·재설정·관리자 강제 로그아웃·정지 시 웹 세션(token_version·sid)만 종료했다.
+    데스크톱 앱·MCP 커넥터의 리프레시 토큰(30일, 회전)은 유지되어, 계정 탈취 후 비밀번호를
+    변경해도 해당 경로의 접근은 계속 유효했다. 동일 시점에 함께 폐기한다.
     """
     from sqlalchemy import update
 
@@ -209,14 +209,14 @@ async def revoke_user_refresh_tokens(db: AsyncSession, user_id: str | None) -> i
         .values(revoked_at=datetime.now(timezone.utc))
         .execution_options(synchronize_session=False)
     )
-    # MCP 는 액세스 토큰에 사용자 token_version 이 없던 시절 발급분도 받는다 — 해제 시각을 남겨
-    # 그 전에 발급된 액세스 토큰까지 거절하게 한다(app.mcp.revocation, Redis 없으면 건너뜀).
+    # MCP 는 액세스 토큰에 사용자 token_version 이 없던 시기의 발급분도 허용한다. 해제 시각을 기록하여
+    # 그 이전에 발급된 액세스 토큰까지 거부하게 한다(app.mcp.revocation, Redis 부재 시 생략).
     try:
         from app.mcp import revocation
 
         for uid, cid in pairs:
             await revocation.mark(uid, cid)
-    except Exception:  # noqa: BLE001 — 표시는 덤이다. 리프레시 폐기는 이미 됐다
+    except Exception:  # noqa: BLE001 — 해제 시각 기록은 부가 처리이다. 리프레시 폐기는 이미 완료됨
         pass
     return res.rowcount or 0
 

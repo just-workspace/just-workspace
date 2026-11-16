@@ -29,7 +29,7 @@ ACTION_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
 
 def _clean_actions(actions: list[dict] | None) -> list[dict] | None:
-    """행동 버튼 정리 — 같은 출처 API 경로(/api/...)만, 최대 4개. 외부 URL 은 버린다."""
+    """행동 버튼 정리 — 동일 출처 API 경로(/api/...)만 허용, 최대 4개. 외부 URL 은 제거한다."""
     if not actions:
         return None
     out = []
@@ -72,7 +72,7 @@ def _notif_to_dict(n: Notification) -> dict:
 
 
 async def get_type_pref(db: AsyncSession, user_id: str, type: str) -> tuple[bool, bool, bool]:
-    """(in_app, push, email). 저장된 행이 없으면 전부 켜짐(하위호환)."""
+    """(in_app, push, email). 저장된 행이 없으면 전체 활성(하위 호환)."""
     row = (await db.execute(
         select(NotificationPref).where(NotificationPref.user_id == user_id, NotificationPref.type == type)
     )).scalars().first()
@@ -96,10 +96,10 @@ async def create_notification(
 ) -> dict:
     """Create a notification and return it as a dict.
 
-    `push=False` 면 인앱(실시간·배지)만 하고 웹푸시는 건너뛴다 — 채널 알림 설정이 'none' 인 멘션.
+    `push=False` 이면 인앱(실시간·배지)만 수행하고 웹푸시는 생략한다 — 채널 알림 설정이 'none' 인 멘션.
     타입별 알림 설정(NotificationPref)을 따른다:
-      - push 끔 → 웹푸시 안 함
-      - in_app 끔 → 기록은 남기되 읽음 상태로 넣고 실시간·배지는 보내지 않는다(활동 수신함에선 보인다)
+      - push 비활성 → 웹푸시 미전송
+      - in_app 비활성 → 기록은 남기되 읽음 상태로 저장하고 실시간·배지는 전송하지 않는다(활동 수신함에는 표시된다)
     """
     ntype = type if type in VALID_TYPES else "system"
     try:
@@ -129,16 +129,16 @@ async def create_notification(
 
 
 async def _deliver(d: dict, push: bool = True, realtime: bool = True) -> None:
-    """만든 알림을 실시간으로 보내고, 그 사용자가 어디에도 접속해 있지 않으면 웹푸시.
+    """생성한 알림을 실시간으로 전송하고, 해당 사용자가 어디에도 접속해 있지 않으면 웹푸시를 전송한다.
 
-    여기서 한 번에 처리하므로 알림을 만드는 쪽(채팅 멘션·캘린더·파일 공유…)은 따로 발행할 필요가 없다.
-    방해 금지(app/chat/presence.py push_allowed)는 _push 안에서 걸러진다.
+    본 함수에서 일괄 처리하므로 알림 생성 측(채팅 멘션·캘린더·파일 공유…)은 별도로 발행할 필요가 없다.
+    방해 금지(app/chat/presence.py push_allowed)는 _push 내부에서 필터링된다.
     """
     from app.realtime.events import emit_to_user, is_connected
 
     if realtime:
-        # quiet = 방해 금지(지금 켜기·일정) 중. 데스크톱 앱은 소켓이 붙어 있어 웹푸시 대신 자체 토스트를 띄우므로
-        # 같은 게이트를 따르게 알려준다(배지·활동 수신함은 그대로). 웹 탭은 이 값을 쓰지 않는다.
+        # quiet = 방해 금지(지금 켜기·일정) 중. 데스크톱 앱은 소켓이 연결되어 있어 웹푸시 대신 자체 토스트를 표시하므로
+        # 동일 게이트를 따르도록 전달한다(배지·활동 수신함은 그대로). 웹 탭은 이 값을 사용하지 않는다.
         try:
             from app.notifications.dnd import push_allowed
             quiet = not await push_allowed(d["user_id"])
@@ -161,7 +161,7 @@ async def _push(d: dict) -> None:
     try:
         from app.notifications.dnd import push_allowed
         if not await push_allowed(d["user_id"]):
-            return   # 방해 금지(지금 켜기·일정) — 인앱 알림은 이미 갔고 푸시만 삼킨다
+            return   # 방해 금지(지금 켜기·일정) — 인앱 알림은 이미 전달되었으며 푸시만 생략한다
         from app.push.router import send_push
         await send_push(d["user_id"], d["title"], d.get("body") or "", d.get("link") or "/")
     except Exception as e:
@@ -176,7 +176,7 @@ async def get_notifications(
     offset: int = 0,
     types: list[str] | None = None,
 ) -> tuple[list[dict], int]:
-    """Get notifications for a user. Returns (notifications, total). types 가 있으면 그 타입만."""
+    """Get notifications for a user. Returns (notifications, total). types 지정 시 해당 타입만 반환."""
     conditions = [Notification.user_id == user_id]
     if unread_only:
         conditions.append(Notification.is_read == False)  # noqa: E712

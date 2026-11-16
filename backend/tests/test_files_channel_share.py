@@ -1,6 +1,6 @@
 """파일 공유 "사람·채널" — 채널 공유 ACL·권한 검사·채팅 알림.
 
-라우터 함수를 직접 부른다. 저장소 루트는 임시 폴더, DB 는 SQLite(채널·멤버 테이블 포함).
+라우터 함수를 직접 호출한다. 저장소 루트는 임시 폴더, DB 는 SQLite(채널·멤버 테이블 포함).
 """
 
 import os
@@ -44,7 +44,7 @@ async def env(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(fs, "VERSIONS_ROOT", tmp_path / ".versions")
     fs._dir_cache.clear()
 
-    # 채팅 알림은 실제 메시지 생성 대신 기록만
+    # 채팅 알림은 실제 메시지 생성 대신 기록만 수행
     from app.chat import router as chat_router
     from app.chat import service as chat_service
     sent: list[tuple[str, str]] = []
@@ -128,7 +128,7 @@ async def test_channel_members_can_browse_others_cannot(env):
     )
     sid = (await fr.list_user_shares(path="my/docs", user=env.u["alice"], db=env.db))["shares"][0]["id"]
 
-    # 멤버(bob): 공유받음에 보이고(어느 채널로 왔는지 포함) 폴더 안을 볼 수 있다
+    # 멤버(bob): 공유받음에 표시되고(경유 채널 포함) 폴더 내부를 조회할 수 있다
     mine = (await fr.shared_with_me(user=env.u["bob"], db=env.db))["items"]
     assert [i["name"] for i in mine] == ["docs"]
     assert mine[0]["via_channel"] == {"id": "dev", "name": "개발"}
@@ -139,14 +139,14 @@ async def test_channel_members_can_browse_others_cannot(env):
     await fr.add_recent(body=RecentRequest(path=f"shared-with-me/{sid}/a.txt"), user=env.u["bob"], db=env.db)
     assert (await fr.list_recent(limit=30, user=env.u["bob"], db=env.db))["items"][0]["name"] == "a.txt"
 
-    # 비멤버(dave)·소유자 본인(alice)은 공유 경로로 못 연다
+    # 비멤버(dave)·소유자 본인(alice)은 공유 경로로 열 수 없다
     for who in ("dave", "alice"):
         with pytest.raises(HTTPException) as e:
             await fr.list_shared_folder(share_id=sid, path="", user=env.u[who], db=env.db)
         assert e.value.status_code == 404
         assert (await fr.shared_with_me(user=env.u[who], db=env.db))["items"] == []
 
-    # 채널에서 나가면 바로 막힌다
+    # 채널에서 나가면 즉시 차단
     from sqlalchemy import delete
     await env.db.execute(delete(ChannelMember).where(ChannelMember.channel_id == "dev", ChannelMember.user_id == "bob"))
     await env.db.commit()

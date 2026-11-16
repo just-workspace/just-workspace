@@ -1,11 +1,11 @@
 """MCP Streamable HTTP 엔드포인트 — JSON-RPC wire 수준 동작.
 
-mcp SDK 를 올릴 때(1.x → 2.x 에서 lowlevel Server 핸들러 등록 방식이 바뀜) 바깥에서 보이는
-동작이 그대로인지 확인한다. 그래서 SDK 의 파이썬 API 를 직접 부르지 않고, 클라이언트가 실제로
-보내는 HTTP/JSON-RPC 요청만으로 검증한다(어느 SDK 버전에서도 같은 테스트가 돌아야 한다).
+mcp SDK 를 상향할 때(1.x → 2.x 에서 lowlevel Server 핸들러 등록 방식이 변경됨) 외부에서 관찰되는
+동작이 동일한지 확인한다. 따라서 SDK 의 파이썬 API 를 직접 호출하지 않고, 클라이언트가 실제로
+전송하는 HTTP/JSON-RPC 요청만으로 검증한다(어느 SDK 버전에서도 동일한 테스트가 실행되어야 한다).
 
-인증·RBAC 는 다른 테스트의 영역이라 여기서는 가짜 authenticate/allowed_tool_names 로 대체하고,
-전송 → 핸들러 → execute_tool → 응답 경로만 본다.
+인증·RBAC 는 다른 테스트의 범위이므로 여기서는 가짜 authenticate/allowed_tool_names 로 대체하고,
+전송 → 핸들러 → execute_tool → 응답 경로만 확인한다.
 """
 
 import contextlib
@@ -34,7 +34,7 @@ def _rpc(method: str, params: dict | None = None, id: int = 1) -> dict:
 
 
 def _parse(resp) -> dict:
-    """JSON 또는 SSE(data: 줄) 응답에서 JSON-RPC 메시지를 꺼낸다."""
+    """JSON 또는 SSE(data: 줄) 응답에서 JSON-RPC 메시지를 추출한다."""
     ctype = resp.headers.get("content-type", "")
     if ctype.startswith("application/json"):
         return resp.json()
@@ -56,7 +56,7 @@ async def _boom_tool(**kwargs):
 
 @pytest.fixture()
 async def mcp_client(monkeypatch):
-    # 가짜 도구 두 개를 레지스트리에 잠깐 등록(사용자 불필요 → DB 없이 실행)
+    # 가짜 도구 두 개를 레지스트리에 임시 등록(사용자 불필요 → DB 없이 실행)
     tools = {
         "t_echo": mcp_registry.Tool(
             name="t_echo", description="echo args",
@@ -96,9 +96,9 @@ async def mcp_client(monkeypatch):
 
     @contextlib.asynccontextmanager
     async def client():
-        # 세션 매니저는 인스턴스당 run() 1회만 허용 → 호출마다 새로 만들어 모듈 전역을 바꿔 끼운다
-        # (운영 코드와 같은 인자: 무상태, SSE 스트림 응답). anyio 태스크 그룹은 fixture 의 yield 를
-        # 넘기면 다른 태스크에서 닫히게 되므로, 테스트 본문 안에서 열고 닫는다.
+        # 세션 매니저는 인스턴스당 run() 1회만 허용 → 호출마다 새로 생성하여 모듈 전역을 교체한다
+        # (운영 코드와 동일한 인자: 무상태, SSE 스트림 응답). anyio 태스크 그룹은 fixture 의 yield 를
+        # 넘기면 다른 태스크에서 닫히므로, 테스트 본문 안에서 열고 닫는다.
         manager = StreamableHTTPSessionManager(app=http_server.mcp_server, json_response=False, stateless=True)
         monkeypatch.setattr(http_server, "session_manager", manager)
         app = Starlette(routes=[
@@ -128,7 +128,7 @@ async def test_tools_list_is_filtered(mcp_client):
     msg = _parse(r)
     assert msg["id"] == 1 and "result" in msg, msg
     tools = {t["name"]: t for t in msg["result"]["tools"]}
-    assert set(tools) == {"t_echo", "t_boom"}          # t_hidden 은 안 보인다
+    assert set(tools) == {"t_echo", "t_boom"}          # t_hidden 은 미노출
     assert tools["t_echo"]["description"] == "echo args"
     assert tools["t_echo"]["inputSchema"]["properties"]["q"]["type"] == "string"
 
@@ -161,7 +161,7 @@ async def test_tool_exception_becomes_ok_false(mcp_client):
         r = await ac.post("/api/mcp/read/", json=_rpc("tools/call", {"name": "t_boom", "arguments": {}}),
                           headers=MCP_HEADERS)
     msg = _parse(r)
-    assert "result" in msg, msg                        # JSON-RPC 오류가 아니라 정상 결과 안의 ok:false
+    assert "result" in msg, msg                        # JSON-RPC 오류가 아닌 정상 결과 내부의 ok:false
     payload = json.loads(msg["result"]["content"][0]["text"])
     assert payload["ok"] is False and "boom" in payload["error"]
 

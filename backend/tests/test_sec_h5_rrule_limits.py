@@ -1,4 +1,4 @@
-"""회귀 — 반복 일정 규칙으로 서버 펼침이 폭주하지 않는다."""
+"""회귀 — 반복 일정 규칙으로 서버 측 전개가 폭주하지 않는다."""
 
 import time
 from datetime import datetime, timedelta, timezone
@@ -44,7 +44,7 @@ def test_sanitize_drops_bad_rule_from_imports():
 
 
 def test_stored_secondly_rule_expansion_is_bounded():
-    # 예전에 저장된(검증 전) 초 단위 규칙도 펼침이 상한에서 멈춘다
+    # 이전에 저장된(검증 전) 초 단위 규칙도 전개가 상한에서 중단됨
     start = datetime(2026, 1, 1, tzinfo=timezone.utc)
     ev = {"id": "e1", "start": start.isoformat(), "end": (start + timedelta(minutes=1)).isoformat(),
           "recurrence_rule": "FREQ=SECONDLY", "all_day": False, "timezone": None}

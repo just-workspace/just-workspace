@@ -5,7 +5,7 @@
   MailAccount(auth_method=oauth) 생성. IMAP/SMTP는 XOAUTH2(access token)로 인증.
 - access token 만료 시 refresh token 으로 자동 갱신(get_access_token).
 
-⚠ 사용자가 Google Cloud / Azure 에서 OAuth 앱을 등록하고 redirect_uri 를 등록해야 함:
+주의: 사용자가 Google Cloud / Azure 에서 OAuth 앱을 등록하고 redirect_uri 를 등록해야 함:
    {APP_URL}/api/mail/oauth/google/callback , {APP_URL}/api/mail/oauth/microsoft/callback
 """
 from __future__ import annotations
@@ -39,8 +39,8 @@ PROVIDERS = {
     "google": {
         "auth": "https://accounts.google.com/o/oauth2/v2/auth",
         "token": "https://oauth2.googleapis.com/token",
-        # contacts.readonly 는 메일과 별개 스코프다. 새로 연동하는 계정은 바로
-        # 연락처를 가져올 수 있고, 기존 연동 계정은 한 번 재연동해야 한다.
+        # contacts.readonly 는 메일과 별개 스코프이다. 신규 연동 계정은 즉시
+        # 연락처를 조회할 수 있고, 기존 연동 계정은 1회 재연동이 필요하다.
         "scope": ("https://mail.google.com/ openid email "
                   "https://www.googleapis.com/auth/contacts.readonly"),
         "imap": ("imap.gmail.com", 993, "ssl"),

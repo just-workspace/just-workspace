@@ -1,29 +1,29 @@
-"""채팅 역할·권한 엔진 — 권한 비트 상수표와 계산 함수, 라우터가 부르는 검사 하나(`allowed`).
+"""채팅 역할·권한 엔진 — 권한 비트 상수표와 계산 함수, 라우터가 호출하는 단일 검사(`allowed`).
 
 설계 문서: docs/chat-permissions.md.
 
-■ 계산 순서(effective_permissions) — 디스코드 순서를 그대로 쓰고, 지금 동작을 지키는 두 단계를 더했다
-  워크스페이스 범위(channel 없음 — 역할·카테고리 관리 같은 것)
+■ 계산 순서(effective_permissions) — 디스코드 순서를 그대로 사용하고, 현재 동작을 유지하는 두 단계를 추가했다
+  워크스페이스 범위(channel 없음 — 역할·카테고리 관리 등)
     1. 전역 관리자(users.is_admin) → 전부
-    2. @everyone ∪ 내 역할들(OR). ADMINISTRATOR 가 있으면 → 전부
+    2. @everyone ∪ 본인 역할(OR). ADMINISTRATOR 가 있으면 → 전부
   채널 범위
-    0. DM → 멤버면 DM_PERMISSIONS(+채널 역할 암묵 권한), 아니면 0. 역할·덮어쓰기는 DM 에 안 먹는다.
-    1. 기본 = @everyone ∪ 내 역할들(OR). ADMINISTRATOR 가 있으면 → 전부(짧은 길)
-    2. [호환] 멤버십 문: 채널 멤버가 아니면 VIEW_CHANNEL 을 뺀다(지금은 공개 채널도 멤버만 본다)
-    3. 카테고리 덮어쓰기(채널이 카테고리에 있으면): @everyone → 역할 합(deny 후 allow) → 사용자
+    0. DM → 멤버이면 DM_PERMISSIONS(+채널 역할 암묵 권한), 아니면 0. 역할·덮어쓰기는 DM 에 적용되지 않는다.
+    1. 기본 = @everyone ∪ 본인 역할(OR). ADMINISTRATOR 가 있으면 → 전부(short-circuit)
+    2. [호환] 멤버십 게이트: 채널 멤버가 아니면 VIEW_CHANNEL 을 제거한다(현재는 공개 채널도 멤버만 조회 가능)
+    3. 카테고리 덮어쓰기(채널이 카테고리에 속한 경우): @everyone → 역할 합(deny 후 allow) → 사용자
     4. 채널 덮어쓰기: @everyone → 역할 합(deny 후 allow) → 사용자
     5. [호환] 채널 역할(channel_members.role) 암묵 권한: owner/admin → MANAGE_CHANNELS·KICK_MEMBERS
     6. 의존 정리: VIEW_CHANNEL 없으면 0 · SEND_MESSAGES 없으면 첨부·임베드·@everyone·투표도 0 ·
        CONNECT 없으면 음성 권한 전부 0
-  짧은 길(short-circuit): ADMINISTRATOR 비트(역할로 받음) = 전부. 채널 owner 는 비트가 아니라
-  "채널 삭제" 같은 owner 전용 동작에서 따로 본다(ACTIONS 의 owner_only). 전역 관리자는 워크스페이스
-  범위에서만 짧은 길이다 — 채널 안(특히 남의 DM·비공개 채널)에서는 지금처럼 특권이 없다.
+  short-circuit: ADMINISTRATOR 비트(역할로 부여) = 전부. 채널 owner 는 비트가 아니라
+  "채널 삭제" 같은 owner 전용 동작에서 별도로 판정한다(ACTIONS 의 owner_only). 전역 관리자는 워크스페이스
+  범위에서만 short-circuit 대상이다 — 채널 내부(특히 타인의 DM·비공개 채널)에서는 현재와 같이 특권이 없다.
 
 ■ 모드(설정 CHAT_PERMISSIONS_ENGINE): legacy | shadow(기본) | enforce
-  shadow 는 예전 검사로 막고 새 엔진을 옆에서 돌려 다르면 `chat_perm_shadow_mismatch` 구조화 로그
-  (사용자·채널 id 는 해시, 본문 없음) + Redis 일별 카운터. 엔진이 실패해도 요청은 예전 검사로 끝난다.
+  shadow 는 예전 검사로 차단 여부를 결정하고 새 엔진을 병행 실행하여 결과가 다르면 `chat_perm_shadow_mismatch` 구조화 로그
+  (사용자·채널 id 는 해시, 본문 없음) + Redis 일별 카운터를 기록한다. 엔진이 실패해도 요청은 예전 검사로 완료된다.
 
-비트 번호는 디스코드와 맞출 필요가 없다(외부 호환 없음). 새 비트는 끝에 붙이고 번호를 재사용하지 않는다.
+비트 번호는 디스코드와 일치시킬 필요가 없다(외부 호환 없음). 새 비트는 끝에 추가하며 번호를 재사용하지 않는다.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ from app.db.models import (
 
 logger = logging.getLogger("app.chat.permissions")
 
-# ─── 권한 비트(상수표 — 이 한 곳에서만 정의) ───
+# ─── 권한 비트(상수표 — 본 위치에서만 정의) ───
 
 VIEW_CHANNEL = 1 << 0
 SEND_MESSAGES = 1 << 1
@@ -57,16 +57,16 @@ EMBED_LINKS = 1 << 5
 ATTACH_FILES = 1 << 6
 ADD_REACTIONS = 1 << 7
 USE_EXTERNAL_EMOJI = 1 << 8      # 예약(커스텀 이모지)
-MENTION_EVERYONE = 1 << 9        # @everyone·@here·@채널 + 멘션 불가 역할도 부르기
-MANAGE_MESSAGES = 1 << 10        # 남의 글 삭제·미리보기 지우기
+MENTION_EVERYONE = 1 << 9        # @everyone·@here·@채널 + 멘션 불가 역할 멘션 포함
+MANAGE_MESSAGES = 1 << 10        # 타인의 글 삭제·미리보기 제거
 PIN_MESSAGES = 1 << 11
 MANAGE_THREADS = 1 << 12
-MANAGE_CHANNELS = 1 << 13        # 채널 수정·탭·카테고리 만들기/정렬
+MANAGE_CHANNELS = 1 << 13        # 채널 수정·탭·카테고리 생성/정렬
 MANAGE_ROLES = 1 << 14           # 역할 CRUD·부여, 덮어쓰기 편집
 MANAGE_EXPRESSIONS = 1 << 15     # 이모지·스티커
 MANAGE_WEBHOOKS = 1 << 16
-CREATE_INVITE = 1 << 17          # 채널에 사람 추가
-KICK_MEMBERS = 1 << 18           # 채널에서 내보내기
+CREATE_INVITE = 1 << 17          # 채널에 멤버 추가
+KICK_MEMBERS = 1 << 18           # 채널에서 멤버 내보내기
 MODERATE_MEMBERS = 1 << 19       # 타임아웃
 VIEW_AUDIT_LOG = 1 << 20
 BYPASS_SLOWMODE = 1 << 21
@@ -75,7 +75,7 @@ USE_COMMANDS = 1 << 23
 CONNECT = 1 << 24                # 음성 채널 접속
 SPEAK = 1 << 25
 STREAM = 1 << 26                 # 화면·카메라·소리 공유
-USE_VAD = 1 << 27                # 끄면 PTT 강제
+USE_VAD = 1 << 27                # 비활성화 시 PTT 강제
 PRIORITY_SPEAKER = 1 << 28
 MUTE_MEMBERS = 1 << 29
 DEAFEN_MEMBERS = 1 << 30
@@ -97,11 +97,11 @@ ALL_PERMISSIONS = 0
 for _v in PERMISSIONS.values():
     ALL_PERMISSIONS |= _v
 
-# 위험 권한 — UI 가 경고를 띄우는 묶음(관리 화면)
+# 위험 권한 — UI 가 경고를 표시하는 그룹(관리 화면)
 DANGEROUS = (ADMINISTRATOR | MANAGE_ROLES | MANAGE_CHANNELS | MANAGE_MESSAGES | KICK_MEMBERS
              | MODERATE_MEMBERS | MANAGE_WEBHOOKS | MENTION_EVERYONE)
 
-# UI 묶음(권한 행렬의 섹션)
+# UI 그룹(권한 행렬의 섹션)
 GROUPS: dict[str, list[str]] = {
     "general": ["VIEW_CHANNEL", "MANAGE_CHANNELS", "MANAGE_ROLES", "MANAGE_EXPRESSIONS", "MANAGE_WEBHOOKS",
                 "VIEW_AUDIT_LOG", "ADMINISTRATOR"],
@@ -113,19 +113,19 @@ GROUPS: dict[str, list[str]] = {
               "MOVE_MEMBERS", "USE_SOUNDBOARD", "REQUEST_TO_SPEAK"],
 }
 
-# @everyone 기본값 = 지금 채널 멤버가 할 수 있는 것 전부(배포 직후 체감 변화 0).
-# 지금 멤버 누구나: 보기·쓰기·답글·첨부·리액션·고정·초대·@everyone·음성 접속/말하기/소리 공유.
+# @everyone 기본값 = 현재 채널 멤버에게 허용된 동작 전부(배포 직후 체감 변화 0).
+# 현재 모든 멤버에게 허용: 보기·쓰기·답글·첨부·리액션·고정·초대·@everyone·음성 접속/말하기/소리 공유.
 DEFAULT_EVERYONE = (
     VIEW_CHANNEL | SEND_MESSAGES | SEND_IN_THREADS | CREATE_THREADS | READ_HISTORY | EMBED_LINKS
     | ATTACH_FILES | ADD_REACTIONS | USE_EXTERNAL_EMOJI | MENTION_EVERYONE | PIN_MESSAGES | CREATE_INVITE
     | SEND_POLLS | USE_COMMANDS | CONNECT | SPEAK | STREAM | USE_VAD | USE_SOUNDBOARD | REQUEST_TO_SPEAK
 )
-# DM 은 역할과 무관하게 고정(디스코드도 서버 역할이 DM 에 안 먹는다)
+# DM 은 역할과 무관하게 고정(디스코드도 서버 역할이 DM 에 적용되지 않는다)
 DM_PERMISSIONS = DEFAULT_EVERYONE
-# 채널 역할(channel_members.role) 암묵 권한 — 지금 owner/admin 이 하는 것: 채널 수정·탭·내보내기.
-# owner 만 하는 채널 삭제는 비트가 아니라 ACTIONS 의 owner_only 로 본다.
-# 원래 설계는 owner 에 MANAGE_MESSAGES 를 암묵 부여하자고 하지만 그건 지금 동작이 아니다(owner 도 남의 글을
-# 못 지운다) → enforce 전환 뒤 별도 결정으로 여기에 한 줄 더하면 된다.
+# 채널 역할(channel_members.role) 암묵 권한 — 현재 owner/admin 에게 허용된 동작: 채널 수정·탭·내보내기.
+# owner 전용인 채널 삭제는 비트가 아니라 ACTIONS 의 owner_only 로 판정한다.
+# 원래 설계는 owner 에게 MANAGE_MESSAGES 를 암묵 부여하는 것이나 이는 현재 동작이 아니다(owner 도 타인의 글을
+# 삭제할 수 없다) → enforce 전환 이후 별도 결정에 따라 본 위치에 한 줄을 추가한다.
 CHANNEL_ROLE_IMPLICIT: dict[str, int] = {
     "owner": MANAGE_CHANNELS | KICK_MEMBERS,
     "admin": MANAGE_CHANNELS | KICK_MEMBERS,
@@ -135,7 +135,7 @@ _SEND_DEPENDENT = ATTACH_FILES | EMBED_LINKS | MENTION_EVERYONE | SEND_POLLS
 _VOICE_DEPENDENT = (SPEAK | STREAM | USE_VAD | PRIORITY_SPEAKER | MUTE_MEMBERS | DEAFEN_MEMBERS | MOVE_MEMBERS
                     | USE_SOUNDBOARD | REQUEST_TO_SPEAK)
 
-# 역할 색 = 우리 토큰 팔레트의 키(hex 금지, 대비 4.5:1 은 토큰이 보장). 팔레트가 늘면 여기에 더한다.
+# 역할 색 = 본 프로젝트 토큰 팔레트의 키(hex 금지, 대비 4.5:1 은 토큰이 보장). 팔레트가 확장되면 본 위치에 추가한다.
 ROLE_COLOR_TOKENS = (
     "primary", "accent", "success", "warning", "danger", "destructive", "muted-foreground", "foreground",
 )
@@ -153,7 +153,7 @@ def names_of(bits: int) -> list[str]:
 
 
 def bits_of(value: Any) -> int:
-    """정수 또는 이름 목록 → 비트. 모르는 이름은 ValueError."""
+    """정수 또는 이름 목록 → 비트. 미등록 이름은 ValueError."""
     if value is None:
         return 0
     if isinstance(value, int):
@@ -173,19 +173,19 @@ def bits_of(value: Any) -> int:
 
 @dataclass
 class PermContext:
-    """effective_permissions 의 입력 — load_context 가 DB 에서 한 번에 채운다."""
+    """effective_permissions 의 입력 — load_context 가 DB 에서 일괄 조회하여 채운다."""
     user_id: str
     is_global_admin: bool = False
     channel: Any = None                      # Channel 또는 None(워크스페이스 범위)
     member_role: str | None = None           # channel_members.role(None = 멤버 아님)
     everyone_permissions: int = DEFAULT_EVERYONE
     everyone_role_id: str | None = None
-    role_ids: set[str] = field(default_factory=set)       # 내 역할(관리되는 역할 포함, @everyone 제외)
-    role_permissions: int = 0                              # 내 역할들 OR
+    role_ids: set[str] = field(default_factory=set)       # 본인 역할(관리되는 역할 포함, @everyone 제외)
+    role_permissions: int = 0                              # 본인 역할의 OR
     category_overwrites: list = field(default_factory=list)  # (subject_kind, subject_id, allow, deny)
     channel_overwrites: list = field(default_factory=list)
-    # 관리자 정책 토글(app/chat/policy.py) — 기본 False = 지금 동작
-    admin_channel_privileges: bool = False   # 전역 관리자 → 채널 안에서도 전부(DM·비공개 포함)
+    # 관리자 정책 토글(app/chat/policy.py) — 기본 False = 현재 동작
+    admin_channel_privileges: bool = False   # 전역 관리자 → 채널 내부에서도 전부(DM·비공개 포함)
     owner_manage_messages: bool = False      # 채널 owner → MANAGE_MESSAGES
 
 
@@ -195,7 +195,7 @@ def _apply_layer(p: int, ows: list, ctx: PermContext) -> int:
     for kind, sid, allow, deny in ows:
         if kind == "role" and (sid == everyone_id or sid == "everyone"):
             p = (p & ~deny) | allow
-    # 역할 합 — deny 를 다 빼고 allow 를 다 더한다(같은 비트면 allow 가 이긴다)
+    # 역할 합 — deny 를 모두 제거한 뒤 allow 를 모두 추가(동일 비트이면 allow 우선)
     r_allow = r_deny = 0
     for kind, sid, allow, deny in ows:
         if kind == "role" and sid in ctx.role_ids:
@@ -240,10 +240,10 @@ def compute_permissions(ctx: PermContext) -> int:
     return p
 
 
-# ─── DB 에서 문맥 읽기 ───
+# ─── DB 에서 문맥 조회 ───
 
 async def user_role_rows(db: AsyncSession, user_id: str) -> list[ChatRole]:
-    """내 역할(직접 부여 + 그룹으로 관리되는 역할). @everyone 은 빠진다. 높은 순."""
+    """본인 역할(직접 부여 + 그룹으로 관리되는 역할). @everyone 은 제외. 높은 순으로 정렬."""
     from app.groups.models import GroupMember
     direct = select(ChatMemberRole.role_id).where(ChatMemberRole.user_id == user_id)
     groups = select(GroupMember.group_id).where(GroupMember.user_id == user_id)
@@ -313,16 +313,16 @@ async def effective_permissions(db: AsyncSession, user, channel_or_id: Channel |
 
 
 # ─── 동작별 검사(예전 규칙 ↔ 새 규칙) ───
-# legacy(f): 지금 라우터에 있던 조건 그대로. new: 필요한 비트(전부 있어야 함) + 예외 조건.
+# legacy(f): 기존 라우터에 있던 조건 그대로. new: 필요한 비트(전부 필요) + 예외 조건.
 
 @dataclass(frozen=True)
 class Action:
     legacy: str                 # member | sender | manager | owner | manager_or_creator | always
-    need: int = 0               # 새 엔진: 모두 필요한 비트
-    sender_ok: bool = False     # 새 엔진: 본인 글이면 비트 없이 됨
-    sender_only: bool = False   # 새 엔진: 본인 글만(수정 — 디스코드도 남의 글은 아무도 못 고친다)
+    need: int = 0               # 새 엔진: 전부 필요한 비트
+    sender_ok: bool = False     # 새 엔진: 본인 글이면 비트 없이 허용
+    sender_only: bool = False   # 새 엔진: 본인 글만 허용(수정 — 디스코드도 타인의 글은 누구도 수정할 수 없다)
     owner_only: bool = False    # 새 엔진: 채널 owner 또는 ADMINISTRATOR
-    creator_ok: bool = False    # 새 엔진: 채널을 만든 사람이면 VIEW 만으로 됨(탭)
+    creator_ok: bool = False    # 새 엔진: 채널 생성자이면 VIEW 만으로 허용(탭)
 
 
 ACTIONS: dict[str, Action] = {
@@ -350,7 +350,7 @@ ACTIONS: dict[str, Action] = {
 
 def _legacy_decision(a: Action, *, member_role, is_sender: bool, is_creator: bool,
                      policy: dict | None = None, is_admin: bool = False) -> bool:
-    # 관리자 정책 토글(app/chat/policy.py) — 예전 규칙에도 같이 얹어 그림자 비교가 어긋나지 않게
+    # 관리자 정책 토글(app/chat/policy.py) — 예전 규칙에도 동일하게 적용하여 그림자 비교 불일치를 방지
     if policy:
         if policy.get("admin_channel_privileges") and is_admin and not a.sender_only:
             return True
@@ -460,11 +460,11 @@ async def shadow_stats(days: int = 7) -> dict:
     return out
 
 
-# ─── 라우터가 부르는 검사 ───
+# ─── 라우터가 호출하는 검사 ───
 
 async def guarded(db: AsyncSession, fn):
-    """PG 에서는 SAVEPOINT 안에서 돌린다 — 엔진 쿼리가 실패해도 요청 트랜잭션이 abort 되지 않게
-    (PG 는 문장 하나가 실패하면 그 트랜잭션의 다음 문장이 전부 실패한다). SQLite 는 그대로."""
+    """PG 에서는 SAVEPOINT 내부에서 실행한다 — 엔진 쿼리가 실패해도 요청 트랜잭션이 abort 되지 않도록 한다
+    (PG 는 문장 하나가 실패하면 해당 트랜잭션의 이후 문장이 전부 실패한다). SQLite 는 그대로 실행한다."""
     try:
         is_pg = db.bind.dialect.name == "postgresql"
     except Exception:
@@ -484,11 +484,11 @@ async def allowed(
     message: Message | None = None,
     member_role: Any = ...,
 ) -> bool:
-    """이 사용자가 이 채널에서 action 을 해도 되나. 모드에 따라 예전/새 판정을 돌려준다.
+    """해당 사용자가 해당 채널에서 action 을 수행할 수 있는지 판정한다. 모드에 따라 예전/새 판정을 반환한다.
 
-    channel 은 Channel 또는 id(없는 채널이면 멤버 아님으로 본다 — 예전 is_channel_member 와 같다).
-    message 를 주면 "본인 글" 여부를 그 글로 판단한다. 예전 검사와 같은 쿼리 순서를 지키려고
-    멤버 역할은 한 번만 읽는다(member_role 을 이미 알면 넘겨 준다).
+    channel 은 Channel 또는 id(존재하지 않는 채널이면 멤버 아님으로 간주한다 — 예전 is_channel_member 와 동일).
+    message 를 지정하면 "본인 글" 여부를 해당 글로 판단한다. 예전 검사와 동일한 쿼리 순서를 유지하기 위해
+    멤버 역할은 1회만 조회한다(member_role 을 이미 알고 있으면 전달한다).
     """
     a = ACTIONS[action]
     mode = engine_mode()
@@ -536,7 +536,7 @@ async def allowed(
 
     try:
         new, ctx = await guarded(db, _compute)
-    except Exception as e:   # 엔진이 깨져도 요청은 예전 판정으로(그림자) / 막음(강제)
+    except Exception as e:   # 엔진 오류 시에도 요청은 예전 판정으로 처리(그림자) / 차단(강제)
         await _report_error(action, e)
         return legacy if mode == "shadow" else False
 
@@ -550,10 +550,10 @@ async def allowed(
 
 
 async def workspace_permissions(db: AsyncSession, user) -> int:
-    """워크스페이스 범위(역할·카테고리 관리) — 새 기능이라 모드와 무관하게 엔진으로 본다."""
+    """워크스페이스 범위(역할·카테고리 관리) — 신규 기능이므로 모드와 무관하게 엔진으로 판정한다."""
     return compute_permissions(await load_context(db, user, None))
 
 
 def system_user(user_id: str) -> SimpleNamespace:
-    """WS·알림처럼 User 객체가 없는 곳에서 allowed() 에 넘길 최소 사용자."""
+    """WS·알림처럼 User 객체가 없는 위치에서 allowed() 에 전달할 최소 사용자 객체."""
     return SimpleNamespace(id=user_id, is_admin=False)

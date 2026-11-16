@@ -108,8 +108,8 @@ def vcard_to_contact_data(vcard_text: str) -> dict | None:
         data["first_name"] = n.value.given or None
         data["last_name"] = n.value.family or None
 
-    # vCard 는 연락처 전체다(CardDAV PUT = 통째 교체). 없는 항목도 빈 값으로 키를 넣는다 —
-    # 예전엔 값이 있을 때만 키를 넣어, 휴대폰에서 전화번호·메모·소속을 지워도 서버에 남았다가 되살아났다.
+    # vCard 는 연락처 전체를 나타낸다(CardDAV PUT = 전체 교체). 없는 항목도 빈 값으로 키를 포함한다 —
+    # 과거에는 값이 있을 때만 키를 포함하여, 휴대폰에서 전화번호·메모·소속을 삭제해도 서버에 남아 복원되었다.
     org = getattr(v, "org", None)
     data["organization"] = None
     if org:
@@ -150,7 +150,7 @@ def vcard_to_contact_data(vcard_text: str) -> dict | None:
                 groups.append(g)
     data["groups"] = groups
 
-    # 사진: 없으면 키를 넣지 않는다 — 사진을 빼고 보내는 클라이언트 때문에 기존 사진이 지워지지 않게
+    # 사진: 없으면 키를 포함하지 않는다 — 사진을 제외하고 송신하는 클라이언트로 인해 기존 사진이 삭제되지 않도록 하기 위함이다
     photo = getattr(v, "photo", None)
     if photo is not None:
         uri = _photo_to_data_uri(photo)
@@ -176,7 +176,7 @@ def _photo_to_data_uri(photo) -> str | None:
         if val.startswith("data:image/"):
             return val
         if val.startswith(("http://", "https://")):
-            return None  # 외부 URL 은 저장하지 않는다
+            return None  # 외부 URL 은 저장하지 않음
         try:
             val = base64.b64decode(val)
         except (ValueError, TypeError):

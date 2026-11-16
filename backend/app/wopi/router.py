@@ -45,8 +45,8 @@ router = APIRouter(prefix="/api/wopi", tags=["wopi"])
 # Extension → editor preference
 _MS_OFFICE_EXTS = {".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt"}
 _ODF_EXTS = {".odt", ".ods", ".odp"}
-# .hwp 는 지원하지 않는다. LibreOffice(Collabora) 필터로만 열렸는데 그 편집기를 걷어냈고,
-# hwpx 는 애초에 필터가 없었다.
+# .hwp 는 지원하지 않는다. LibreOffice(Collabora) 필터로만 열렸는데 해당 편집기를 제거했고,
+# hwpx 는 처음부터 필터가 없었다.
 _ALL_OFFICE_EXTS = _MS_OFFICE_EXTS | _ODF_EXTS
 
 
@@ -54,14 +54,14 @@ _FILE_ID_V2 = "o:"
 
 
 def _encode_file_id(virtual_path: str, owner_id: str | None = None) -> str:
-    """(소유자, 경로) → URL-safe file_id. 문서 서버는 WOPISrc(=file_id)로 편집 세션을 묶으므로
-    소유자를 넣어 서로 다른 사용자의 같은 이름 문서가 한 세션으로 섞이지 않게 한다."""
+    """(소유자, 경로) → URL-safe file_id. 문서 서버는 WOPISrc(=file_id)로 편집 세션을 구분하므로
+    소유자를 포함하여 상이한 사용자의 동일 이름 문서가 한 세션으로 혼합되지 않도록 한다."""
     raw = f"{_FILE_ID_V2}{owner_id}|{virtual_path}" if owner_id else virtual_path
     return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
 
 
 def _decode_file_id_parts(file_id: str) -> tuple[str | None, str]:
-    """file_id → (소유자 또는 None(예전 형식), 경로)."""
+    """file_id → (소유자 또는 None(이전 형식), 경로)."""
     padding = 4 - len(file_id) % 4
     if padding != 4:
         file_id += "=" * padding
@@ -84,23 +84,23 @@ SHARED_SCOPE = "shared"
 
 
 def session_scope(virtual_path: str, owner_id: str) -> str:
-    """편집 세션(file_id)·잠금을 묶는 키.
+    """편집 세션(file_id)·잠금을 구분하는 키.
 
-    내 파일(my/..)은 소유자 id — 사용자마다 같은 이름 문서가 있어도 섞이지 않는다.
-    팀 공유 폴더(shared/..)는 모두에게 같은 파일이라 고정값이다. 예전엔 여기에도 여는 사람 id 를 넣어
-    두 사람이 같은 문서를 열면 편집 세션·잠금이 따로 잡혔고, 나중에 저장한 쪽이 앞사람 편집을 덮어썼다.
+    내 파일(my/..)은 소유자 id — 사용자별로 동일 이름 문서가 있어도 혼합되지 않는다.
+    팀 공유 폴더(shared/..)는 모든 사용자에게 동일한 파일이므로 고정값이다. 이전에는 여기에도 여는 사용자의 id 를 사용하여
+    두 사용자가 같은 문서를 열면 편집 세션·잠금이 별도로 생성되었고, 나중에 저장한 쪽이 상대의 편집을 덮어썼다.
     """
     vp = (virtual_path or "").strip("/")
     return SHARED_SCOPE if vp.startswith("shared/") else owner_id
 
 
 def _token_owner_id(token_data: dict) -> str:
-    """세션·잠금 키. 옛 토큰(scope 없음)은 owner_id — 배포 전에 열린 세션은 옛 file_id·옛 잠금 키로 끝까지 간다."""
+    """세션·잠금 키. 구 토큰(scope 없음)은 owner_id — 배포 전에 열린 세션은 구 file_id·구 잠금 키를 종료 시까지 유지한다."""
     return str(token_data.get("scope") or token_data.get("owner_id") or token_data["user_id"])
 
 
 def _check_token_file(token_data: dict, file_id: str) -> str:
-    """토큰이 이 file_id(소유자·경로)용인지 — 경로를 돌려준다."""
+    """토큰이 해당 file_id(소유자·경로)용인지 검증한다 — 경로를 반환한다."""
     owner, virtual_path = _decode_file_id_parts(file_id)
     if token_data.get("file_path") != virtual_path:
         raise HTTPException(status_code=403, detail="Token/path mismatch")
@@ -114,7 +114,7 @@ def _lock_subject(token_data: dict, virtual_path: str) -> str:
 
 
 def _atomic_write(real_path: Path, body: bytes) -> None:
-    """임시 파일에 쓰고 바꿔치기 — 쓰다 실패해도(디스크 가득·중단) 원본이 잘리지 않는다."""
+    """임시 파일에 기록한 뒤 교체한다 — 기록 중 실패해도(디스크 가득·중단) 원본이 잘리지 않는다."""
     import os
     import secrets
     real_path.parent.mkdir(parents=True, exist_ok=True)
@@ -155,15 +155,15 @@ async def _check_editor_available(editor: str) -> bool:
 
 
 def _select_editor(filename: str, preferred: str) -> str | None:
-    """이 파일을 열 편집기. 지금은 OnlyOffice 하나다.
+    """이 파일을 열 편집기. 현재는 OnlyOffice 하나이다.
 
-    예전에는 Collabora 를 함께 두고 골랐는데, OnlyOffice 가 안 되던 건 OnlyOffice 문제가
-    아니라 우리 쪽 두 가지 버그였다(변수 proxy_pass 가 경로를 통째로 대체 + access_token 을
-    POST 본문이 아니라 쿼리로 보냄). 둘 다 고친 뒤로 Collabora 는 켜지지 않는 채로 남아
-    있었고, 편집기가 둘이면 잠금·버전·저장 경로를 두 벌 검증해야 해서 걷어냈다.
-    한글(.hwp)은 어차피 포기한 포맷이라 남길 이유도 없었다.
+    이전에는 Collabora 를 병행하여 선택했으나, OnlyOffice 가 동작하지 않던 원인은 OnlyOffice 가
+    아니라 본 프로젝트 측 버그 두 가지였다(변수 proxy_pass 가 경로 전체를 대체 + access_token 을
+    POST 본문이 아닌 쿼리로 전송). 둘 다 수정한 이후 Collabora 는 비활성 상태로 남아
+    있었고, 편집기가 둘이면 잠금·버전·저장 경로를 이중으로 검증해야 하므로 제거했다.
+    한글(.hwp)은 지원을 중단한 포맷이므로 유지할 이유도 없었다.
 
-    `preferred` 는 옛 API 호환을 위해 받기만 하고 무시한다.
+    `preferred` 는 구 API 호환을 위해 수신만 하고 무시한다.
     """
     ext = Path(filename).suffix.lower()
     if ext not in _ALL_OFFICE_EXTS:
@@ -171,7 +171,7 @@ def _select_editor(filename: str, preferred: str) -> str | None:
     return "onlyoffice" if settings.onlyoffice_jwt_secret else None
 
 
-# OnlyOffice WOPI app 경로 (확장자 → word/cell/slide). 경로는 버전 무관 안정적.
+# OnlyOffice WOPI app 경로(확장자 → word/cell/slide). 경로는 버전과 무관하게 안정적.
 _ONLYOFFICE_APP_BY_EXT = {
     "doc": "word", "docx": "word", "docm": "word", "dot": "word", "dotx": "word",
     "odt": "word", "rtf": "word", "txt": "word",
@@ -182,9 +182,9 @@ async def _build_editor_url(editor: str, wopi_src: str, token: str, filename: st
     """WOPI 액션 URL (nginx 프록시 경로)."""
     ext = Path(filename).suffix.lower().lstrip(".")
     app = _ONLYOFFICE_APP_BY_EXT.get(ext, "word")
-    # OnlyOffice 는 WOPI 표준대로 access_token 을 **POST 폼 본문**으로만 받는다.
-    # 쿼리스트링에 붙여 GET 하면 404 다. 토큰은 응답의 token/token_ttl 로 따로 내려가고,
-    # 프론트가 폼으로 제출한다.
+    # OnlyOffice 는 WOPI 표준대로 access_token 을 **POST 폼 본문**으로만 수신한다.
+    # 쿼리스트링에 포함해 GET 하면 404 이다. 토큰은 응답의 token/token_ttl 로 별도 전달되고,
+    # 프런트가 폼으로 제출한다.
     path = f"/onlyoffice/hosting/wopi/{app}/edit"
     return f"{path}?WOPISrc={quote(wopi_src, safe='')}"
 
@@ -193,7 +193,7 @@ async def _build_editor_url(editor: str, wopi_src: str, token: str, filename: st
 
 
 async def _token_owner(token_data: dict, db: AsyncSession) -> User:
-    """경로를 풀 기준 사용자. 옛 토큰(owner_id 없음)은 user_id 가 곧 소유자다."""
+    """경로 해석의 기준 사용자. 구 토큰(owner_id 없음)은 user_id 가 곧 소유자이다."""
     owner = await db.get(User, token_data.get("owner_id") or token_data["user_id"])
     if not owner:
         raise HTTPException(status_code=401, detail="User not found")
@@ -201,14 +201,14 @@ async def _token_owner(token_data: dict, db: AsyncSession) -> User:
 
 
 async def _recheck_share_edit(token_data: dict, virtual_path: str, db: AsyncSession) -> None:
-    """공유받은 사람(계정 있음)이 연 편집 토큰이면 저장할 때 권한을 다시 본다.
+    """공유받은 사용자(계정 있음)가 연 편집 토큰이면 저장 시 권한을 재검증한다.
 
-    토큰은 열 때 한 번 발급돼 TTL 동안 살아 있다 — 그 사이 권한이 보기·댓글로 내려가거나 공유가 해제되면
+    토큰은 열 때 1회 발급되어 TTL 동안 유효하다 — 그 사이 권한이 보기·댓글로 하향되거나 공유가 해제되면
     저장을 거부한다. 소유자 본인 토큰은 해당 없음.
 
-    공유 링크 손님(guest-…)은 그 링크를 다시 본다 — 예전엔 건너뛰어, 편집 링크를 회수·만료시켜도
-    이미 받은 토큰으로 TTL(2시간) 동안 계속 저장할 수 있었다. 링크가 없거나(회수) 만료됐거나
-    같이 편집이 꺼졌거나 다른 파일을 가리키면 거부한다. link_id 가 없는 옛 토큰(배포 전 발급)은 그대로 둔다.
+    공유 링크 게스트(guest-…)는 해당 링크를 재검증한다 — 이전에는 생략하여, 편집 링크를 회수·만료시켜도
+    이미 발급된 토큰으로 TTL(2시간) 동안 계속 저장할 수 있었다. 링크가 없거나(회수) 만료되었거나
+    공동 편집이 비활성화되었거나 다른 파일을 가리키면 거부한다. link_id 가 없는 구 토큰(배포 전 발급)은 그대로 허용한다.
     """
     editor_id = str(token_data.get("user_id") or "")
     owner_id = token_data.get("owner_id")
@@ -257,8 +257,8 @@ async def open_editor(
 ):
     """Get editor URL and WOPI token for opening a document.
 
-    공유받은 경로(shared-with-me/..)는 보기 권한 이상이면 열고, 편집 권한 이상일 때만 쓰기 토큰.
-    토큰의 경로·owner 는 원 소유자 기준('my/..', owner_id=소유자) — 원 소유자와 같은 문서 세션에서 같이 편집한다.
+    공유받은 경로(shared-with-me/..)는 보기 권한 이상이면 열고, 편집 권한 이상일 때만 쓰기 토큰을 발급한다.
+    토큰의 경로·owner 는 원 소유자 기준('my/..', owner_id=소유자) — 원 소유자와 동일한 문서 세션에서 공동 편집한다.
     """
     from app.files import access as acc
     token_path, owner_id, permissions = req.path.strip("/"), None, "edit"
@@ -278,7 +278,7 @@ async def open_editor(
         raise HTTPException(status_code=404, detail="File not found")
 
     if owner_id is None and token_path.startswith("users/") and user.is_admin:
-        # 관리자가 "전체 사용자"에서 연 문서 — 소유자가 my/.. 로 연 것과 같은 세션·잠금이 되게 맞춘다
+        # 관리자가 "전체 사용자"에서 연 문서 — 소유자가 my/.. 로 연 경우와 동일한 세션·잠금이 되도록 정규화
         seg = token_path.split("/", 2)
         if len(seg) == 3 and await db.get(User, seg[1]) is not None:
             owner_id, token_path = seg[1], "my/" + seg[2]
@@ -333,7 +333,7 @@ async def lock_status(
 ):
     """Check if a file is currently locked (for UI indicators).
 
-    볼 수 있는 파일만, 소유자 기준 잠금으로 조회한다(남의 같은 이름 문서 잠금을 보지 않는다).
+    조회 가능한 파일만, 소유자 기준 잠금으로 조회한다(타 사용자의 동일 이름 문서 잠금은 조회하지 않는다).
     """
     from app.files import access as acc
     if acc.parse_shared(path):
@@ -420,9 +420,9 @@ async def wopi_get_file(
     if not real_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
-    # media_type 을 안 주면 Starlette 가 파일명으로 추측하는데, 슬림 이미지엔 mime
-    # 데이터베이스가 없어 xlsx/docx/pptx 가 전부 "text/plain; charset=utf-8" 로 나간다.
-    # WOPI GetFile 은 원시 바이트를 그대로 줘야 하므로 octet-stream 으로 고정한다.
+    # media_type 을 지정하지 않으면 Starlette 가 파일명으로 추측하는데, 슬림 이미지에는 mime
+    # 데이터베이스가 없어 xlsx/docx/pptx 가 전부 "text/plain; charset=utf-8" 로 전송된다.
+    # WOPI GetFile 은 원시 바이트를 그대로 반환해야 하므로 octet-stream 으로 고정한다.
     return FileResponse(
         path=str(real_path),
         filename=real_path.name,
@@ -503,7 +503,7 @@ async def wopi_lock_operations(
     can_edit = token_data.get("permissions") == "edit"
 
     if op == "GET_LOCK" and not can_edit:
-        # 보기 전용 토큰에는 현재 잠금 id 를 알려 주지 않는다(남의 잠금을 풀 재료가 된다)
+        # 보기 전용 토큰에는 현재 잠금 id 를 노출하지 않음(타 사용자의 잠금 해제에 악용 가능)
         return Response(status_code=200, headers={"X-WOPI-Lock": ""})
     if op in ("LOCK", "UNLOCK", "REFRESH_LOCK") and not can_edit:
         raise HTTPException(status_code=403, detail="Read-only token")

@@ -1,4 +1,4 @@
-"""올리기·폴더 만들기·이름 바꾸기 직후 바로 색인 — 예전엔 주기 색인(15분)까지 검색에 안 나왔다."""
+"""업로드·폴더 생성·이름 변경 직후 즉시 색인 — 기존에는 주기 색인(15분) 전까지 검색에 노출되지 않았다."""
 
 import os
 import sys
@@ -36,13 +36,13 @@ async def test_quick_index_add_rename_forget(db, tmp_path):
     f = home / "docs" / "보고서.txt"
     f.write_text("x")
     await indexer.quick_index(db, add=[f])
-    assert await _rels(db) == [("u1", "docs/보고서.txt", "")]     # stamp 비움 → 다음 주기가 본문까지
-    # 폴더 이름 바꾸기: 새 경로(하위 포함) 넣고 옛 경로(하위 포함) 뺀다
+    assert await _rels(db) == [("u1", "docs/보고서.txt", "")]     # stamp 비움 → 다음 주기에 본문까지 색인
+    # 폴더 이름 변경: 새 경로(하위 포함) 추가, 이전 경로(하위 포함) 제거
     new = home / "papers"
     (home / "docs").rename(new)
     await indexer.quick_index(db, add=[new], forget=[home / "docs"])
     assert [r[1] for r in await _rels(db)] == ["papers", "papers/보고서.txt"]
-    # 공유 폴더 · 숨김(.trash) 은 안 넣음
+    # 공유 폴더 · 숨김(.trash) 은 색인 제외
     sh = tmp_path / "shared" / "team"
     sh.mkdir(parents=True)
     await indexer.quick_index(db, add=[sh, home / ".trash"])

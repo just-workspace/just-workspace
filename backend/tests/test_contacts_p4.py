@@ -41,7 +41,7 @@ async def test_new_fields_filters_groups(db_session):
     fav = await c_router.list_contacts(q=None, book_id=None, page=0, limit=50, favorite=True, group=None, user=alice, db=db)
     assert [c.name for c in fav["contacts"]] == ["김철수"]
     grp = await c_router.list_contacts(q=None, book_id=None, page=0, limit=50, favorite=None, group="거래처", user=alice, db=db)
-    assert [c.name for c in grp["contacts"]] == ["김철수"]  # "거래처사" 와 헷갈리지 않는다
+    assert [c.name for c in grp["contacts"]] == ["김철수"]  # "거래처사" 와 혼동하지 않음
     groups = await c_router.list_groups(user=alice, db=db)
     assert groups["groups"] == [{"name": "VIP", "count": 1}, {"name": "거래처", "count": 1}, {"name": "거래처사", "count": 1}]
     assert (await c_router.list_groups(user=bob, db=db))["groups"] == []
@@ -54,7 +54,7 @@ async def test_new_fields_filters_groups(db_session):
         await c_router.create_contact(body=ContactCreate(address_book_id="ab-a", name="x", photo="https://evil/x.png"),
                                       user=alice, db=db)
     assert e.value.status_code == 400
-    # 남의 연락처는 수정 못 함
+    # 타 사용자의 연락처는 수정 불가
     with pytest.raises(HTTPException) as e:
         await c_router.update_contact(contact_id=a.id, body=ContactUpdate(is_favorite=True), user=bob, db=db)
     assert e.value.status_code == 404
@@ -100,8 +100,8 @@ async def test_carddav_roundtrip(db_session):
     assert data["photo"].startswith("data:image/png;base64,")
     assert base64.b64decode(data["photo"].split(",", 1)[1]) == base64.b64decode(PNG.split(",", 1)[1])
 
-    # 휴대폰이 사진 없이 PUT → 사진은 유지, 직함·그룹은 휴대폰 값으로
+    # 휴대폰이 사진 없이 PUT → 사진은 유지, 직함·그룹은 휴대폰 값 적용
     no_photo = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:박민지\r\nN:박;민지;;;\r\nTITLE:리드\r\nUID:c1\r\nEND:VCARD\r\n"
     row = await dav_svc.upsert_contact(db, "c1", "ab-a", vcard_to_contact_data(no_photo))
     assert row.photo == PNG and row.title == "리드" and row.groups is None
-    assert row.is_favorite is True  # 서버 전용 필드는 그대로
+    assert row.is_favorite is True  # 서버 전용 필드는 유지

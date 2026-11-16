@@ -11,7 +11,7 @@ from app.config import get_settings
 
 settings = get_settings()
 
-# 아래 `_client()` 함수와 이름이 겹치면 함수가 이 변수를 덮어쓴다 — 이름을 따로 둔다.
+# 아래 `_client()` 함수와 이름이 중복되면 함수가 이 변수를 덮어쓰므로 이름을 분리한다.
 _http: httpx.AsyncClient | None = None
 
 
@@ -26,10 +26,10 @@ def _get_client() -> httpx.AsyncClient:
     return _http
 
 
-# ─── 누구 권한으로 부르나 ───
-# 사용자 요청은 그 사용자 권한(Gitea Sudo)으로만 Gitea 를 부른다. 라우터 의존성(git_identity)이
-# 요청마다 정한다. 설정이 없으면(None) 시스템 호출(관리자 화면·캐시 수집 등) — 사용자 요청 경로에서는
-# 라우터가 반드시 정한다.
+# ─── 호출 권한 주체 ───
+# 사용자 요청은 해당 사용자 권한(Gitea Sudo)으로만 Gitea 를 호출한다. 라우터 의존성(git_identity)이
+# 요청마다 지정한다. 미지정(None)이면 시스템 호출(관리자 화면·캐시 수집 등)이며, 사용자 요청 경로에서는
+# 라우터가 반드시 지정한다.
 _acting_as: contextvars.ContextVar[str | None] = contextvars.ContextVar("gitea_acting_as", default=None)
 
 
@@ -43,7 +43,7 @@ def acting_as() -> str | None:
 
 @contextlib.contextmanager
 def system_call():
-    """사용자와 무관한 수집(공용 캐시 등) — 결과는 반드시 호출자가 사용자 기준으로 걸러야 한다."""
+    """사용자와 무관한 수집(공용 캐시 등) — 결과는 반드시 호출자가 사용자 기준으로 필터링해야 한다."""
     tok = _acting_as.set(None)
     try:
         yield
@@ -52,7 +52,7 @@ def system_call():
 
 
 class _Scoped:
-    """요청마다 현재 사용자의 Sudo 헤더를 붙인다(명시적 Sudo 가 있으면 그대로)."""
+    """요청마다 현재 사용자의 Sudo 헤더를 추가한다(명시적 Sudo 가 있으면 유지)."""
 
     def __init__(self, inner):
         self._inner = inner
@@ -123,8 +123,8 @@ async def _put(path: str, json: dict | None = None) -> dict | list:
     return resp.json()
 
 
-# 라벨 색은 서버가 이 팔레트에서 순환 배정한다 — 클라이언트가 임의 hex 를 보내지
-# 않게 해 저장소마다 색이 제각각으로 번지는 것을 막는다. 다크 배경에서 읽히는 채도.
+# 라벨 색은 서버가 이 팔레트에서 순환 배정한다. 클라이언트의 임의 hex 전송을
+# 차단하여 저장소별 색상 불일치를 방지한다. 다크 배경에서 가독성이 확보되는 채도.
 _LABEL_PALETTE = [
     "#4d8dff", "#22a06b", "#d4a72c", "#e0533d",
     "#8b5cf6", "#0ea5e9", "#ec4899", "#64748b",
@@ -143,10 +143,10 @@ async def search_repos(
 ) -> tuple[list[dict], int]:
     """Search repositories. Returns (repos, total_count).
 
-    public_only: Git 계정이 없는 사용자 — 공개 저장소만(서버가 거른다).
+    public_only: Git 계정이 없는 사용자 — 공개 저장소만(서버에서 필터링).
     """
-    # Gitea /repos/search 는 order 기본값이 asc 라, "updated" 로 정렬하면 가장 오래 안 바뀐 저장소부터 온다.
-    # 시간 기준 정렬은 최신이 먼저(desc), 이름순만 asc.
+    # Gitea /repos/search 는 order 기본값이 asc 이므로 "updated" 로 정렬하면 가장 오래 변경되지 않은 저장소부터 반환된다.
+    # 시간 기준 정렬은 최신 우선(desc), 이름순만 asc.
     order = "asc" if sort == "alpha" else "desc"
     params: dict = {"page": page, "limit": limit, "sort": sort, "order": order}
     if query:
@@ -205,7 +205,7 @@ async def get_contents(
 
 
 def _looks_binary(raw: bytes) -> bool:
-    """글자 파일이 아닌가 — NUL 이 있거나(git 과 같은 기준, 앞 8000바이트) UTF-8 로 풀리지 않는 바이트가 많다."""
+    """텍스트 파일이 아닌지 여부 — NUL 이 있거나(git 과 동일 기준, 앞 8000바이트) UTF-8 로 디코드되지 않는 바이트가 많은 경우."""
     head = raw[:8000]
     if b"\x00" in head:
         return True
@@ -214,7 +214,7 @@ def _looks_binary(raw: bytes) -> bool:
         return False
     except UnicodeDecodeError:
         pass
-    # UTF-8 이 아닌 글자 파일(EUC-KR·Latin-1 등)은 깨진 글자가 섞여도 보여 준다 — 대체 문자가 30% 를 넘으면 바이너리로 본다
+    # UTF-8 이 아닌 텍스트 파일(EUC-KR·Latin-1 등)은 깨진 문자가 포함되어도 표시한다. 대체 문자가 30% 를 초과하면 바이너리로 판정한다
     text = head.decode("utf-8", errors="replace")
     return bool(text) and text.count("\ufffd") / len(text) > 0.3
 
@@ -234,8 +234,8 @@ async def get_file(
         size = data.get("size", 0)
         if content and size <= 1_048_576:  # 1MB
             raw = base64.b64decode(content)
-            # 바이너리(이미지·압축·글꼴…)는 글자로 풀지 않는다 — 예전에는 errors="replace" 로 깨진 글자
-            # 수천 줄을 내려보내 코드 뷰어가 그대로 그렸다. 내용 없음(None)이면 화면이 "원본 내려받기"만 보인다.
+            # 바이너리(이미지·압축·글꼴…)는 텍스트로 디코드하지 않는다. 이전에는 errors="replace" 로 깨진 문자
+            # 수천 줄을 전송하여 코드 뷰어가 그대로 렌더링했다. 내용 없음(None)이면 화면에 "원본 내려받기"만 표시된다.
             if _looks_binary(raw):
                 data["decoded_content"] = None
                 data["binary"] = True
@@ -254,7 +254,7 @@ async def get_file(
 
 
 async def get_branches(owner: str, repo: str) -> list[dict]:
-    """브랜치 전부 — Gitea 는 한 번에 기본 쪽 크기만 준다. 쪽을 넘겨 가며 모은다(상한 500개)."""
+    """전체 브랜치 — Gitea 는 1회에 기본 페이지 크기만 반환한다. 페이지를 순회하며 수집한다(상한 500개)."""
     out: list[dict] = []
     for page in range(1, 11):
         rows = await _get(f"/repos/{owner}/{repo}/branches", {"page": page, "limit": 50})
@@ -287,8 +287,8 @@ async def get_issues(
 ) -> list[dict]:
     params = {"state": state, "page": page, "limit": 20, "type": "issues"}
     if labels:
-        # Gitea 이슈 필터는 라벨 '이름'으로 매칭한다. 프론트가 준 id 목록을
-        # 이름으로 변환해 넘긴다.
+        # Gitea 이슈 필터는 라벨 '이름'으로 매칭한다. 프론트가 전달한 id 목록을
+        # 이름으로 변환하여 전달한다.
         names = await _label_ids_to_names(owner, repo, labels)
         if names:
             params["labels"] = names
@@ -336,7 +336,7 @@ async def create_label(owner: str, repo: str, name: str) -> dict:
 async def replace_issue_labels(
     owner: str, repo: str, index: int, label_ids: list[int]
 ) -> dict:
-    """이슈의 라벨을 통째로 교체(Gitea PUT). 교체 후 최신 이슈를 반환."""
+    """이슈의 라벨을 전체 교체(Gitea PUT). 교체 후 최신 이슈를 반환."""
     await _put(
         f"/repos/{owner}/{repo}/issues/{index}/labels", json={"labels": label_ids}
     )
@@ -412,7 +412,7 @@ async def _patch(path: str, json: dict | None = None) -> dict:
 
 
 async def _total(path: str, params: dict | None = None) -> int | None:
-    """목록 API 의 X-Total-Count(limit=1 로 한 장만 받는다). 헤더가 없으면 None."""
+    """목록 API 의 X-Total-Count(limit=1 로 1건만 조회한다). 헤더가 없으면 None."""
     client = _client()
     p = {"limit": 1, "page": 1, **(params or {})}
     resp = await client.get(path, params=p)
@@ -451,7 +451,7 @@ async def last_commit_for_path(owner: str, repo: str, path: str, ref: str | None
 
 
 def _sudo(username: str) -> dict:
-    # 관리자 토큰으로 그 사용자인 척(Gitea Sudo). 스타는 사용자별이라 필요하다.
+    # 관리자 토큰으로 해당 사용자를 대행한다(Gitea Sudo). 스타는 사용자별이므로 필요하다.
     return {"Sudo": username}
 
 
@@ -476,7 +476,7 @@ async def set_star(owner: str, repo: str, username: str, starred: bool) -> None:
 
 
 async def repo_counts(owner: str, repo: str, default_branch: str | None = None) -> dict:
-    """태그·닫힌 이슈·열린/닫힌 PR·커밋·브랜치 총수(X-Total-Count). 못 얻은 값은 None."""
+    """태그·닫힌 이슈·열린/닫힌 PR·커밋·브랜치 총수(X-Total-Count). 조회 실패한 값은 None."""
     import asyncio as _aio
 
     async def safe(coro):
@@ -509,7 +509,7 @@ async def repo_counts(owner: str, repo: str, default_branch: str | None = None) 
 
 
 async def user_exists(username: str) -> bool:
-    """그 사용자가 Gitea 에 있나(연결된 계정). Sudo 로 /user 를 불러 본다."""
+    """해당 사용자의 Gitea 존재 여부(연결된 계정). Sudo 로 /user 를 호출하여 확인한다."""
     client = _client()
     resp = await client.get("/user", headers=_sudo(username))
     if resp.status_code == 200:
@@ -521,8 +521,8 @@ async def user_exists(username: str) -> bool:
 
 
 async def search_issues_as(username: str, params: dict) -> list[dict]:
-    """그 사용자 눈으로 본 이슈·PR 검색(/repos/issues/search, Sudo).
-    review_requested·assigned·mentioned 는 '그 사용자 기준' 필터라 Sudo 가 있어야 뜻이 맞는다."""
+    """해당 사용자 관점의 이슈·PR 검색(/repos/issues/search, Sudo).
+    review_requested·assigned·mentioned 는 '해당 사용자 기준' 필터이므로 Sudo 가 있어야 의미가 성립한다."""
     client = _client()
     resp = await client.get("/repos/issues/search", params=params, headers=_sudo(username))
     resp.raise_for_status()
@@ -531,16 +531,16 @@ async def search_issues_as(username: str, params: dict) -> list[dict]:
 
 
 async def visible_repo_names(username: str, limit: int = 50) -> set[str]:
-    """그 사용자가 볼 수 있는 저장소 full_name(최근 갱신 순 limit 개, Sudo)."""
+    """해당 사용자가 열람 가능한 저장소 full_name(최근 갱신 순 limit 개, Sudo)."""
     client = _client()
-    # order 를 안 주면 Gitea 기본이 asc 라 "가장 오래 안 바뀐" 저장소부터 온다(search_repos 주석과 같은 함정)
+    # order 미지정 시 Gitea 기본값이 asc 이므로 "가장 오래 안 바뀐" 저장소부터 반환된다(search_repos 주석과 동일한 함정)
     resp = await client.get("/repos/search", params={"limit": limit, "sort": "updated", "order": "desc"}, headers=_sudo(username))
     resp.raise_for_status()
     return {r.get("full_name", "") for r in (resp.json().get("data") or [])}
 
 
 def _is_public_repo(r: dict) -> bool:
-    """계정 없는 사람도 볼 수 있는 저장소 — 공개(private·internal 아님)이고 소유자(조직)도 공개."""
+    """계정이 없는 사용자도 열람 가능한 저장소 — 공개(private·internal 아님)이며 소유자(조직)도 공개."""
     if r.get("private") or r.get("internal"):
         return False
     vis = ((r.get("owner") or {}).get("visibility") or "public").lower()
@@ -556,7 +556,7 @@ async def public_repo_names(limit: int = 50) -> set[str]:
 
 
 async def search_public_issues(params: dict, public: set[str]) -> list[dict]:
-    """최근 이슈·PR 가운데 공개 저장소 것만(관리자 토큰으로 찾고 공개 목록으로 거른다)."""
+    """최근 이슈·PR 중 공개 저장소 항목만(관리자 토큰으로 조회 후 공개 목록으로 필터링)."""
     client = _client()
     resp = await client.get("/repos/issues/search", params=params)
     resp.raise_for_status()

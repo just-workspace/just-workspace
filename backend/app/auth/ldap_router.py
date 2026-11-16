@@ -53,7 +53,7 @@ async def put_ldap(
     _admin(user)
     changed = body.model_dump(exclude_none=True)
     await ldap_client.set_config(db, changed)
-    # 로그인 경로를 바꾸는 설정(서버 주소·검색 필터·자동 가입) — 값은 남기지 않고 바뀐 항목만
+    # 로그인 경로를 변경하는 설정(서버 주소·검색 필터·자동 가입) — 값은 기록하지 않고 변경된 항목만 기록
     await audit.log_action(
         db, user.id, "settings.ldap.update", "settings", "ldap",
         {"keys": sorted(changed), **({"enabled": changed["enabled"]} if "enabled" in changed else {})},

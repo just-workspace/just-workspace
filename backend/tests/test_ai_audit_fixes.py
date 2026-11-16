@@ -1,9 +1,9 @@
 """내장 AI·MCP 구역 감사 수정 회귀.
 
-3  같은 승인 요청을 동시에 두 번 승인해도 핸들러는 한 번만 돈다(되돌리기도). 실행 중에는 거절·수정·만료 불가.
-4  하루 한도 카운터는 Redis 일별 키 — 대화(행)를 지워도 줄지 않는다. Redis 가 없으면 행 수로.
-5  연결을 끊으면 그 전에 발급된 액세스 토큰(iat)을 거절한다.
-7  남이 쓴 글을 돌려주는 읽기 도구는 신뢰 경계로 감싸고 '직전 외부 읽기' 표시를 남긴다.
+3  동일 승인 요청을 동시에 두 번 승인해도 핸들러는 1회만 실행된다(되돌리기도 동일). 실행 중에는 거절·수정·만료 불가.
+4  하루 한도 카운터는 Redis 일별 키 — 대화(행)를 삭제해도 감소하지 않는다. Redis 가 없으면 행 수로 계산.
+5  연결을 해제하면 그 이전에 발급된 액세스 토큰(iat)을 거부한다.
+7  타인이 작성한 글을 반환하는 읽기 도구는 신뢰 경계로 감싸고 '직전 외부 읽기' 표시를 남긴다.
 """
 
 from datetime import timedelta
@@ -50,13 +50,13 @@ async def _pending_high(env):
 
 # ── 3 승인 중복 실행 ─────────────────────────────────────────
 async def test_second_approve_during_execution_runs_handler_once(env):
-    """실행이 도는 동안(상태는 아직 대기) 같은 요청이 또 승인돼도 핸들러는 한 번만 — 메일 두 번 발송 방지."""
+    """실행 중(상태는 아직 대기) 동일 요청이 재승인되어도 핸들러는 1회만 실행 — 메일 중복 발송 방지."""
     rid = await _pending_high(env)
     seen: list = []
 
     async def slow_send(user, to: str, **_):
         LOG.append(("send", to))
-        # 다른 탭·승인 대기함·묶음 실행이 이 순간 같은 요청을 승인·취소·수정한다
+        # 다른 탭·승인 대기함·묶음 실행이 이 시점에 동일 요청을 승인·취소·수정한다
         for fn in (lambda: writes.approve(env["db"], user, rid),
                    lambda: writes.reject(env["db"], user, rid, "늦은 거절"),
                    lambda: writes.reject(env["db"], user, rid, None, cancel=True),
@@ -71,30 +71,30 @@ async def test_second_approve_during_execution_runs_handler_once(env):
                                          handler=slow_send)
     req = await writes.approve(env["db"], env["alice"], rid)
     assert seen == ["conflict"] * 4
-    assert LOG == [("send", "a@x")]                    # 한 번만, 고친 인자가 아니라 승인한 인자로
+    assert LOG == [("send", "a@x")]                    # 1회만, 수정된 인자가 아닌 승인된 인자로 실행
     assert req.status == "executed"
-    with pytest.raises(writes.WriteError):             # 끝난 뒤에도 다시 승인 불가
+    with pytest.raises(writes.WriteError):             # 종료 후에도 재승인 불가
         await writes.approve(env["db"], env["alice"], rid)
     assert LOG == [("send", "a@x")]
 
 
 async def test_claimed_request_is_not_expired_mid_execution(env):
-    """실행 중인 요청은 만료 시각이 지나도 '만료됨'으로 뒤집히지 않는다(유예 뒤에만 정리)."""
+    """실행 중인 요청은 만료 시각이 지나도 '만료됨'으로 전환되지 않는다(유예 이후에만 정리)."""
     rid = await _pending_high(env)
     req = await env["db"].get(McpWriteRequest, rid)
     assert await writes._claim(env["db"], req) is True
-    assert await writes._claim(env["db"], req) is False            # 두 번째는 못 집는다
+    assert await writes._claim(env["db"], req) is False            # 두 번째는 선점 불가
     req.expires_at = writes._now() - timedelta(seconds=5)
     await env["db"].commit()
     assert (await writes.get_owned(env["db"], env["alice"], rid)).status == "pending"
     assert await writes.expire_due(env["db"], "alice") == 0
-    req.expires_at = writes._now() - writes.CLAIM_GRACE - timedelta(seconds=5)   # 서버가 죽어 남은 것
+    req.expires_at = writes._now() - writes.CLAIM_GRACE - timedelta(seconds=5)   # 서버 비정상 종료로 잔존한 요청
     await env["db"].commit()
     assert (await writes.get_owned(env["db"], env["alice"], rid)).status == "expired"
 
 
 async def test_immediate_run_is_claimed_from_creation(env):
-    """묻지 않고 바로 실행하는 요청(MCP low)은 만들 때부터 집힌 상태 — 실행 도중 승인 대기함에서 또 승인 못 한다."""
+    """확인 없이 즉시 실행하는 요청(MCP low)은 생성 시점부터 선점된 상태 — 실행 도중 승인 대기함에서 재승인 불가."""
     inner: list = []
 
     async def low(user, title: str, **_):
@@ -127,7 +127,7 @@ async def test_undo_runs_once_and_restores_on_failure(env):
 
     async def undo_h(user, id: str, **_):
         calls["n"] += 1
-        with pytest.raises(writes.WriteError):         # 되돌리는 중에 또 누름
+        with pytest.raises(writes.WriteError):         # 되돌리기 진행 중 재요청
             await writes.undo(env["db"], user, rid)
         if calls["fail"]:
             return {"error": "지금은 못 지웁니다"}
@@ -139,7 +139,7 @@ async def test_undo_runs_once_and_restores_on_failure(env):
         await writes.undo(env["db"], env["alice"], rid)
     req = await env["db"].get(McpWriteRequest, rid)
     await env["db"].refresh(req)
-    assert req.status == "executed" and calls["n"] == 1          # 실패하면 다시 되돌릴 수 있게 돌려놓는다
+    assert req.status == "executed" and calls["n"] == 1          # 실패 시 재차 되돌릴 수 있도록 상태를 복원한다
     calls["fail"] = False
     req = await writes.undo(env["db"], env["alice"], rid)
     assert req.status == "undone" and calls["n"] == 2
@@ -170,9 +170,9 @@ async def test_quota_counter_survives_row_deletion(db, monkeypatch):  # noqa: F8
         await quota.chat_count(alice)
     await db.commit()
     assert await quota.chat_used(db, alice) == 3
-    await db.execute(delete(AIMessage))                # 임시 대화를 나가면 행이 지워진다
+    await db.execute(delete(AIMessage))                # 임시 대화를 종료하면 행이 삭제된다
     await db.commit()
-    assert await quota.chat_used(db, alice) == 3       # 한도는 되살아나지 않는다
+    assert await quota.chat_used(db, alice) == 3       # 한도는 복원되지 않는다
 
 
 async def test_quota_falls_back_to_rows_without_redis(db, monkeypatch):  # noqa: F811
@@ -190,7 +190,7 @@ async def test_quota_falls_back_to_rows_without_redis(db, monkeypatch):  # noqa:
     db.add(AIMessage(conversation_id=conv.id, user_id="alice", role="user", content="q"))
     db.add(AIMessage(conversation_id=conv.id, user_id="alice", role="assistant", content="a"))
     await db.commit()
-    await quota.chat_count(alice)                      # Redis 없이도 터지지 않는다
+    await quota.chat_count(alice)                      # Redis 없이도 예외가 발생하지 않는다
     assert await quota.chat_used(db, alice) == 1
 
 
@@ -241,9 +241,9 @@ async def test_revocation_rejects_tokens_issued_before_disconnect(monkeypatch):
     issued = int(time.time()) - 60
     assert await revocation.revoked_since("alice", "dcr_x", issued) is False
     await revocation.mark("alice", "dcr_x")
-    assert await revocation.revoked_since("alice", "dcr_x", issued) is True       # 끊기 전에 발급된 토큰
-    assert await revocation.revoked_since("alice", "dcr_x", None) is True         # 발급 시각을 모르면 거절
-    assert await revocation.revoked_since("alice", "dcr_x", time.time() + 5) is False   # 다시 연결해 새로 받은 토큰
+    assert await revocation.revoked_since("alice", "dcr_x", issued) is True       # 해제 전에 발급된 토큰
+    assert await revocation.revoked_since("alice", "dcr_x", None) is True         # 발급 시각을 알 수 없으면 거부
+    assert await revocation.revoked_since("alice", "dcr_x", time.time() + 5) is False   # 재연결하여 새로 발급받은 토큰
     assert await revocation.revoked_since("alice", "dcr_other", issued) is False  # 다른 앱
     assert await revocation.revoked_since("bob", "dcr_x", issued) is False        # 다른 사용자
 
@@ -259,7 +259,7 @@ async def test_revocation_without_redis_is_a_noop(monkeypatch):
 
 
 async def test_mcp_calls_stop_after_disconnect(monkeypatch):
-    """오래 열린 연결(옛 SSE)도 호출마다 다시 본다 — 끊은 뒤에는 도구 목록·호출이 막힌다."""
+    """장시간 열린 연결(구 SSE)도 호출마다 재확인한다 — 해제 후에는 도구 목록·호출이 차단된다."""
     import time
 
     from app.db.models import User
@@ -277,7 +277,7 @@ async def test_mcp_calls_stop_after_disconnect(monkeypatch):
     assert await http_server._disconnected(ctx) is True
 
 
-# ── 7 남이 쓴 글 = 외부 내용 ─────────────────────────────────
+# ── 7 타인이 작성한 글 = 외부 내용 ─────────────────────────────────
 UNTRUSTED_READS = ("chat_read_messages", "board_search", "board_read_post", "notes_search", "notes_read",
                    "calendar_list_events")
 
@@ -289,7 +289,7 @@ def test_workspace_reads_of_others_content_are_untrusted():
         assert reg._UNTRUSTED_SOURCE.get(name), name
         hint = writes.untrusted_hint(name, {"title": "공지"})
         assert hint["kind"] == "workspace" and hint["label"] != name
-    # 제목·이름만 돌려주는 목록 도구는 그대로(승인 창이 불필요하게 늘지 않게)
+    # 제목·이름만 반환하는 목록 도구는 기존대로(승인 창이 불필요하게 증가하지 않도록)
     for name in ("chat_list_channels", "board_list_posts", "notes_list", "calendar_list_calendars", "files_list"):
         assert reg.WORKSPACE_TOOLS[name].untrusted_output is False, name
 
@@ -306,7 +306,7 @@ async def test_attachment_turn_marks_conversation_untrusted(monkeypatch):
     assert seen == [("alice", "conv1", "대화 첨부 파일", "견적서.pdf")]
 
 
-# ── 14 계획 승인 답이 실패하면 권한 모드는 그대로 ────────────
+# ── 14 계획 승인 응답이 실패하면 권한 모드는 유지 ────────────
 async def test_expired_plan_card_does_not_switch_mode(db, monkeypatch):  # noqa: F811
     import time
 
@@ -322,7 +322,7 @@ async def test_expired_plan_card_does_not_switch_mode(db, monkeypatch):  # noqa:
     alice = await db.get(User, "alice")
     rec = await interact.create("alice", "conv1", "msg1", "plan", {"plan": "1. 메일 보내기"})
     exp, stored = interact._local[rec["id"]]
-    stored["expires_at"] = time.time() - 1            # 답변 작업이 죽어 만료 표시를 못 남긴 카드
+    stored["expires_at"] = time.time() - 1            # 답변 작업이 비정상 종료되어 만료 표시를 남기지 못한 카드
     interact._local[rec["id"]] = (exp, stored)
     with pytest.raises(HTTPException) as ei:
         await ai_router.answer_question.__wrapped__(

@@ -1,10 +1,10 @@
 """일정·할일 쓰기 도구.
 
-웹 API 와 같은 판정을 쓴다 — 캘린더·할일 라우터의 엔드포인트 함수를 그대로 부른다
+웹 API 와 동일한 판정을 사용한다 — 캘린더·할일 라우터의 엔드포인트 함수를 그대로 호출한다
 (모듈·그룹 권한(require_module), 캘린더 쓰기 권한(소유·쓰기 공유, 구독 캘린더 거부),
-할일 볼 수 있음(만든 사람·담당)·지우기(만든 사람만)·담당자/채널 검사).
+할일 열람 가능 여부(작성자·담당)·삭제(작성자만)·담당자/채널 검사).
 
-참석자 초대는 열지 않는다(초대 알림이 다른 사람에게 나가므로 별도 판단).
+참석자 초대는 제공하지 않는다(초대 알림이 타인에게 발송되므로 별도 판단 필요).
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def _parse(s: str) -> datetime:
 
 
 def _end_before_start(start, end) -> bool:
-    """끝 < 시작이면 True. 형식 오류는 ValueError, 시간대 있음/없음이 섞이면 비교를 건너뛴다."""
+    """끝 < 시작이면 True. 형식 오류는 ValueError, 시간대 유무가 혼재하면 비교를 생략한다."""
     try:
         return _parse(end) < _parse(start)
     except TypeError:
@@ -66,7 +66,7 @@ async def calendar_create_event(user: User, title: str, start: str, end: str, ca
         async with async_session() as db:
             cal_id = (calendar_id or "").strip()
             if not cal_id:
-                cals = await cal_svc.get_calendars(db, user.id)    # 없으면 기본 캘린더를 만든다
+                cals = await cal_svc.get_calendars(db, user.id)    # 없으면 기본 캘린더를 생성함
                 own = [c for c in cals if c.get("can_write") and not c.get("is_shared")]
                 if not own:
                     return err("not_found", "일정을 넣을 수 있는 캘린더가 없습니다")
@@ -138,8 +138,8 @@ async def calendar_delete_event(user: User, event_id: str, **_: object) -> dict:
 
 
 async def _event_visible(args: dict, user) -> bool:
-    """남에게 보이는 일정인가 — 공유받은 캘린더, 내가 남에게 공유한 캘린더, 참석자가 있는 일정.
-    calendar_id 없이 만드는 일정은 본인 첫 캘린더에 들어간다. 확인하지 못하면 '보인다'(writes.tool_visible)."""
+    """타인에게 노출되는 일정인지 판정 — 공유받은 캘린더, 본인이 타인에게 공유한 캘린더, 참석자가 있는 일정.
+    calendar_id 없이 생성하는 일정은 본인의 첫 캘린더에 저장된다. 확인 불가 시 '노출'로 판정한다(writes.tool_visible)."""
     from sqlalchemy import select
 
     from app.calendar import service as cal_svc
@@ -156,7 +156,7 @@ async def _event_visible(args: dict, user) -> bool:
             if not cal_id:
                 return True
         if not cal_id:
-            # 기본 캘린더 = 본인 것 가운데 쓸 수 있는 첫 번째(calendar_create_event 와 같은 고르기)
+            # 기본 캘린더 = 본인 소유 중 쓰기 가능한 첫 번째(calendar_create_event 와 동일한 선택 기준)
             own = [c for c in await cal_svc.get_calendars(db, user.id) if c.get("can_write") and not c.get("is_shared")]
             if not own:
                 return True
@@ -169,14 +169,14 @@ async def _event_visible(args: dict, user) -> bool:
 
 
 async def _task_visible(args: dict, user) -> bool:
-    """남에게 보이는 할일인가 — 내가 만들고 담당도 나(또는 없음)인 것만 '나만 보는 것'."""
+    """타인에게 노출되는 할일인지 판정 — 본인이 생성하고 담당도 본인(또는 없음)인 것만 '본인 전용'."""
     from app.db.models import TaskDB
 
     async with async_session() as db:
         t = await db.get(TaskDB, str(args.get("task_id") or ""))
         if t is None or t.user_id != user.id or t.assignee_id not in (None, "", user.id):
             return True
-        if t.parent_id:      # 하위 작업은 상위 작업의 담당자·작성자도 본다
+        if t.parent_id:      # 하위 작업은 상위 작업의 담당자·작성자도 열람 가능
             p = await db.get(TaskDB, t.parent_id)
             return p is None or p.user_id != user.id or p.assignee_id not in (None, "", user.id)
         return False
@@ -196,7 +196,7 @@ async def tasks_create(user: User, title: str, description: str = "", due_date: 
     from app.tasks.schemas import TaskCreate
 
     try:
-        # 담당자: 웹 API 와 같은 검사(활성 사용자) + 남에게 배정하면 그 사람에게 '할일 배정' 알림(회의 할 일)
+        # 담당자: 웹 API 와 동일한 검사(활성 사용자) + 타인에게 배정하면 해당 사용자에게 '할일 배정' 알림 발송(회의 할 일)
         body = TaskCreate(title=title, description=(description or None), due_date=(due_date or None),
                           priority=priority or "medium", status=status or "todo", project=(project or None),
                           assignee_id=(assignee_id or None))
@@ -307,7 +307,7 @@ register(Tool(
         },
         "required": ["title", "start", "end"],
     },
-    # 공유 캘린더(받은 것·내가 공유한 것)에 넣으면 남에게 보인다
+    # 공유 캘린더(공유받은 것·본인이 공유한 것)에 추가하면 타인에게 노출됨
     visible_for=_event_visible,
     handler=calendar_create_event, summarizer=_sum_event,
 ))
@@ -345,7 +345,7 @@ register(Tool(
         },
         "required": ["event_id"],
     },
-    # 공유 캘린더의 일정이거나 참석자가 있으면 남에게 보인다
+    # 공유 캘린더의 일정이거나 참석자가 있으면 타인에게 노출됨
     visible_for=_event_visible,
     handler=calendar_update_event, summarizer=_sum_event,
 ))
@@ -360,7 +360,7 @@ register(Tool(
     parameters={"type": "object", "properties": {
         "event_id": {"type": "string", "description": "Event id from calendar_list_events.", "x-label": "일정 id"},
     }, "required": ["event_id"]},
-    # 공유 캘린더의 일정이거나 참석자가 있으면 남이 보던 것이 사라진다
+    # 공유 캘린더의 일정이거나 참석자가 있으면 타인이 열람하던 항목이 삭제됨
     visible_for=_event_visible,
     handler=calendar_delete_event, summarizer=_sum_event,
 ))
@@ -388,7 +388,7 @@ register(Tool(
         },
         "required": ["title"],
     },
-    # 남에게 배정하면 그 사람에게 '할일 배정' 알림이 간다 — 그때만 '남에게 보이는 쓰기'(내 할일은 그대로 자동)
+    # 타인에게 배정하면 해당 사용자에게 '할일 배정' 알림이 발송된다 — 이 경우에만 '타인에게 노출되는 쓰기'로 판정(본인 할일은 기존대로 자동 실행)
     visible_for=lambda a, u=None: str(a.get("assignee_id") or "").strip() not in ("", str(getattr(u, "id", ""))),
     handler=tasks_create, summarizer=_sum_task,
 ))
@@ -424,7 +424,7 @@ register(Tool(
         },
         "required": ["task_id"],
     },
-    # 남이 만들었거나 남에게 배정된 할일이면 남에게 보인다(확인 못 하면 보인다)
+    # 타인이 생성했거나 타인에게 배정된 할일이면 타인에게 노출됨(확인 불가 시 노출로 판정)
     visible_for=_task_visible,
     handler=tasks_update, summarizer=_sum_task,
 ))
@@ -438,6 +438,6 @@ register(Tool(
     parameters={"type": "object", "properties": {
         "task_id": {"type": "string", "description": "Task id from tasks_list.", "x-label": "할일 id"},
     }, "required": ["task_id"]},
-    visible_for=_task_visible,   # tasks_update 와 같은 판정
+    visible_for=_task_visible,   # tasks_update 와 동일한 판정
     handler=tasks_delete, summarizer=_sum_task,
 ))

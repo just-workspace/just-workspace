@@ -1,12 +1,12 @@
-"""외부 메일 앱 자동 설정 — 주소·비밀번호만 넣으면 서버 설정이 채워지게.
+"""외부 메일 앱 자동 설정 — 주소·비밀번호만 입력하면 서버 설정이 자동 입력되도록 한다.
 
 - Thunderbird·삼성 메일 등: autoconfig(`/.well-known/autoconfig/mail/config-v1.1.xml`, `/mail/config-v1.1.xml`)
-- 아웃룩(클래식): POX autodiscover(`/autodiscover/autodiscover.xml`, POST) — DNS `_autodiscover._tcp` SRV 가 이리 보낸다
-- 애플(아이폰·맥): 구성 프로필(.mobileconfig) 내려받기 — 로그인한 본인 주소로만 만든다(비밀번호는 넣지 않는다,
-  설치할 때 기기가 묻는다)
+- 아웃룩(클래식): POX autodiscover(`/autodiscover/autodiscover.xml`, POST) — DNS `_autodiscover._tcp` SRV 가 이 경로를 지정한다
+- 애플(아이폰·맥): 구성 프로필(.mobileconfig) 다운로드 — 로그인한 본인 주소로만 생성한다(비밀번호는 포함하지 않으며,
+  설치 시 기기가 입력을 요구한다)
 - 웹 화면 안내용 JSON(`/api/mail/client-setup`)
 
-내장 메일서버(builtin) 기준. 호스트는 mail.<domain>, IMAP 993(SSL), 보내기 465(SSL)·587(STARTTLS),
+내장 메일서버(builtin) 기준. 호스트는 mail.<domain>, IMAP 993(SSL), 발신 465(SSL)·587(STARTTLS),
 아이디는 메일 주소 전체, 비밀번호는 워크스페이스 비밀번호(2단계 인증 사용자는 앱 비밀번호).
 """
 from __future__ import annotations
@@ -47,7 +47,7 @@ async def _enabled(db: AsyncSession) -> bool:
 
 
 def _own_address(email: str | None) -> str | None:
-    """우리 도메인 주소만 받는다(다른 도메인 설정을 대신 알려 주지 않는다)."""
+    """본 서비스 도메인 주소만 허용한다(타 도메인 설정은 제공하지 않는다)."""
     e = (email or "").strip()
     if not _EMAIL_RE.match(e) or e.rsplit("@", 1)[1].lower() != _domain().lower():
         return None
@@ -64,7 +64,7 @@ def settings_for(email: str) -> dict:
     }
 
 
-# ─── Thunderbird autoconfig (삼성 메일 등도 같은 형식을 찾는다) ───
+# ─── Thunderbird autoconfig (삼성 메일 등도 동일 형식을 조회한다) ───
 
 def _autoconfig_xml() -> str:
     d, h = escape(_domain()), escape(_host())
@@ -160,7 +160,7 @@ async def autodiscover(request: Request, db: AsyncSession = Depends(get_db)):
     m = re.search(r"<EMailAddress>\s*([^<\s]+)\s*</EMailAddress>", body, re.I)
     email = _own_address(m.group(1) if m else request.query_params.get("email"))
     if not email:
-        # 주소를 모르거나 다른 도메인 — 아웃룩은 이걸 "자동 설정 없음"으로 보고 수동 입력으로 넘어간다
+        # 주소 미확인 또는 타 도메인. 아웃룩은 이를 "자동 설정 없음"으로 판정하고 수동 입력으로 전환한다
         raise HTTPException(status_code=404)
     return Response(_autodiscover_xml(email), media_type="application/xml; charset=utf-8")
 
@@ -178,7 +178,7 @@ async def client_setup(user: User = Depends(get_current_user), db: AsyncSession 
 def _mobileconfig(email: str, display_name: str) -> str:
     d, h, e = escape(_domain()), escape(_host()), escape(email)
     name = escape(display_name or email)
-    # 주소별로 고정된 UUID — 다시 받아 설치하면 새 계정이 아니라 기존 프로필을 덮어쓴다
+    # 주소별 고정 UUID. 재다운로드 후 설치하면 새 계정이 아닌 기존 프로필을 덮어쓴다
     base = uuid.uuid5(uuid.NAMESPACE_URL, f"mailto:{email}")
     pid = uuid.uuid5(base, "payload")
     rev = ".".join(reversed(_domain().split(".")))

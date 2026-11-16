@@ -1,14 +1,14 @@
-"""사용자 콘텐츠를 내려보낼 때의 안전 헤더 — 파일 서빙 전 경로가 이 함수 하나를 쓴다.
+"""사용자 콘텐츠 전송 시의 안전 헤더 — 파일 서빙의 모든 경로가 이 함수 하나를 사용한다.
 
-사용자가 올린 파일·받은 메일 첨부는 우리 출처(앱 도메인)에서 내려간다. html·svg·xml·js 같은
-활성 콘텐츠를 브라우저가 그 자리에서 열면 안의 스크립트가 로그인 세션으로 돈다(저장형 XSS).
+사용자가 업로드한 파일·수신 메일 첨부는 본 서비스 출처(앱 도메인)에서 전송된다. html·svg·xml·js 등의
+활성 콘텐츠를 브라우저가 직접 열면 내부 스크립트가 로그인 세션으로 실행된다(저장형 XSS).
 
 규칙
-- 브라우저 안에서 열어 보여 줘도 되는 형식(INLINE_SAFE_TYPES: 이미지·PDF·오디오·비디오)만 inline.
-- 그 밖은 inline 을 요청해도 attachment 로 내리고, 형식도 application/octet-stream 으로 고정.
+- 브라우저 내 표시가 허용되는 형식(INLINE_SAFE_TYPES: 이미지·PDF·오디오·비디오)만 inline.
+- 그 외는 inline 요청이어도 attachment 로 전송하고, 형식도 application/octet-stream 으로 고정.
 - 모든 응답에 X-Content-Type-Options: nosniff.
-- PDF 를 뺀 모든 응답에 Content-Security-Policy: sandbox(스크립트·같은 출처 권한 없음).
-  PDF 는 브라우저 내장 뷰어가 sandbox 문서에서 열리지 않아 뺀다(PDF 안 스크립트는 우리 출처에서 돌지 않는다).
+- PDF 를 제외한 모든 응답에 Content-Security-Policy: sandbox(스크립트·동일 출처 권한 없음).
+  PDF 는 브라우저 내장 뷰어가 sandbox 문서에서 열리지 않아 제외한다(PDF 내 스크립트는 본 서비스 출처에서 실행되지 않는다).
 """
 from __future__ import annotations
 
@@ -43,11 +43,11 @@ def base_type(content_type: str | None) -> str:
 
 
 def inline_allowed(content_type: str | None) -> bool:
-    """inline 으로 내보내도 되는 형식인가(파라미터 `; charset=` 등은 무시, 대소문자 무시)."""
+    """inline 전송이 허용되는 형식인지 여부(파라미터 `; charset=` 등은 무시, 대소문자 무시)."""
     return base_type(content_type) in INLINE_SAFE_TYPES
 
 
-# 슬림 이미지는 시스템 mime 데이터베이스가 없어 webp 등을 모른다 — 안전 형식은 직접 매핑
+# 슬림 이미지에는 시스템 mime 데이터베이스가 없어 webp 등을 인식하지 못함. 안전 형식은 직접 매핑
 _SAFE_BY_EXT = {
     ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
     ".webp": "image/webp", ".bmp": "image/bmp", ".avif": "image/avif", ".pdf": "application/pdf",
@@ -77,7 +77,7 @@ def content_disposition(filename: str | None, inline: bool = False) -> str:
 
 def safe_file_headers(filename: str | None, *, content_type: str | None = None,
                       inline: bool = False) -> tuple[str, dict[str, str]]:
-    """(내보낼 media type, 헤더). content_type 이 없으면 파일 이름으로 추측한다."""
+    """(전송할 media type, 헤더). content_type 이 없으면 파일 이름으로 추정한다."""
     ct = base_type(content_type) or guess_type(filename)
     safe = ct in INLINE_SAFE_TYPES
     media = ct if safe else "application/octet-stream"
@@ -91,8 +91,8 @@ def safe_file_headers(filename: str | None, *, content_type: str | None = None,
 
 
 def svg_image_headers(filename: str | None) -> tuple[str, dict[str, str]]:
-    """SVG 를 <img> 미리보기용으로 — 형식은 image/svg+xml 이지만 주소로 직접 열면 내려받기,
-    sandbox CSP 로 스크립트·같은 출처 권한 없음."""
+    """SVG 를 <img> 미리보기용으로 전송 — 형식은 image/svg+xml 이나 주소로 직접 열면 다운로드되며,
+    sandbox CSP 로 스크립트·동일 출처 권한 없음."""
     return "image/svg+xml", {
         "Content-Disposition": content_disposition(filename or "image.svg", inline=False),
         "X-Content-Type-Options": "nosniff",

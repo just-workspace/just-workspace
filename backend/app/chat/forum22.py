@@ -1,8 +1,8 @@
-"""포럼 채널(chat22) = 게시판(boards) 데이터의 채팅 보기. 글·댓글은 기존 /api/board API 를 그대로 쓴다.
+"""포럼 채널(chat22) = 게시판(boards) 데이터의 채팅 보기. 글·댓글은 기존 /api/board API 를 그대로 사용한다.
 
-채널은 forum_board_id 만 가진다. 새 게시판을 만드는 것은 전사 공용 자원을 늘리는 일이라
+채널은 forum_board_id 만 보유한다. 새 게시판 생성은 전사 공용 자원을 추가하는 동작이므로
 워크스페이스 MANAGE_CHANNELS(기본 = 전역 관리자, perm_compat.can_create_forum_board)가 필요하다.
-기존 게시판을 연결하는 것은 게시판이 이미 모두에게 보이므로 채널을 만들 수 있는 사람이면 된다.
+기존 게시판 연결은 게시판이 이미 전체 사용자에게 공개되어 있으므로 채널 생성 권한만 있으면 가능하다.
 """
 
 from __future__ import annotations

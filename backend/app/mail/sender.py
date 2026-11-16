@@ -1,8 +1,8 @@
-"""메일 보낸 사람 카드(메일 오른쪽 상세 패널).
+"""메일 발신자 카드(메일 오른쪽 상세 패널).
 
-GET /api/mail/sender?email=… → 그 주소가 이 워크스페이스 사용자면 {user: {id, username, display_name, avatar_url}}, 아니면 {user: null}.
-패널의 [채팅]·[통화]가 이 id 로 DM 을 연다. 404 대신 null — 바깥 사람이 보낸 메일이 대부분이라 오류가 아니다.
-돌려주는 값은 채팅 사용자 검색(/api/chat/users)이 이미 모두에게 주는 것과 같다(이메일은 되돌려 주지 않는다).
+GET /api/mail/sender?email=… → 해당 주소가 본 워크스페이스 사용자면 {user: {id, username, display_name, avatar_url}}, 아니면 {user: null}.
+패널의 [채팅]·[통화]가 이 id 로 DM 을 연다. 404 대신 null — 외부 발신 메일이 대부분이므로 오류가 아니다.
+반환 값은 채팅 사용자 검색(/api/chat/users)이 이미 전체 사용자에게 제공하는 것과 동일하다(이메일은 반환하지 않는다).
 """
 
 from __future__ import annotations

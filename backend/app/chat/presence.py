@@ -1,9 +1,9 @@
-"""Chat presence — 연결 여부는 Redis SET, 사람이 고른 상태(자리비움·방해 금지·숨김·커스텀)는 DB.
+"""Chat presence — 연결 여부는 Redis SET, 사용자가 선택한 상태(자리비움·방해 금지·숨김·커스텀)는 DB.
 
 실효 상태(effective_state) 네 가지 + offline:
-  연결 없음 → offline · invisible → offline 로 보임 · dnd(또는 dnd_until 이 미래) → dnd ·
+  연결 없음 → offline · invisible → offline 으로 표시 · dnd(또는 dnd_until 이 미래) → dnd ·
   away → away · auto → online
-만료된 커스텀 상태·DND 는 읽을 때 무시한다(배치 정리 없음). DND 중엔 웹푸시를 보내지 않는다.
+만료된 커스텀 상태·DND 는 조회 시 무시한다(배치 정리 없음). DND 중에는 웹푸시를 발송하지 않는다.
 """
 
 from datetime import datetime, timezone
@@ -38,15 +38,15 @@ async def set_offline(user_id: str) -> None:
 
 
 CONN_KEY = "chat:user:{}:conns"
-# 워커가 죽어 감소가 빠진 카운터가 영원히 남지 않게. 살아 있는 소켓의 ping 이 계속 늘려 준다.
+# 워커 비정상 종료로 감소가 누락된 카운터가 영구 잔존하지 않도록 함. 유지 중인 소켓의 ping 이 만료 시간을 계속 연장한다.
 CONN_TTL = 180
 
 
 async def connection_opened(user_id: str) -> bool:
-    """WS 하나가 열렸다. 이 사용자의 첫 연결(모든 워커 합산)이면 True.
+    """WS 하나가 연결됨. 해당 사용자의 첫 연결(전체 워커 합산)이면 True.
 
-    한 사용자가 탭 여럿·데스크톱 셸로 동시에 붙고, 그 연결들이 서로 다른 워커에 있을 수
-    있다. 워커 메모리만 보고 온라인/오프라인을 정하면 한 탭을 닫았을 때 오프라인이 된다.
+    한 사용자가 여러 탭·데스크톱 셸로 동시에 접속하고, 해당 연결들이 서로 다른 워커에 존재할 수
+    있다. 워커 메모리만으로 온라인/오프라인을 판정하면 탭 하나를 닫았을 때 오프라인으로 처리된다.
     """
     r = await get_redis()
     key = CONN_KEY.format(user_id)
@@ -59,7 +59,7 @@ async def connection_opened(user_id: str) -> bool:
 
 
 async def connection_closed(user_id: str) -> bool:
-    """WS 하나가 닫혔다. 마지막 연결이었으면 오프라인으로 바꾸고 True."""
+    """WS 하나가 종료됨. 마지막 연결이었으면 오프라인으로 전환하고 True."""
     r = await get_redis()
     key = CONN_KEY.format(user_id)
     left = int(await r.decr(key))
@@ -96,21 +96,21 @@ def _now() -> datetime:
 
 
 def _aware(dt: datetime | None) -> datetime | None:
-    # SQLite 는 tz 를 떨어뜨려 돌려주므로 비교 전에 UTC 로 맞춘다
+    # SQLite 는 tz 를 제거하여 반환하므로 비교 전에 UTC 로 정규화
     if dt is not None and dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
 
 
 def is_dnd(status: UserStatus | None, now: datetime | None = None) -> bool:
-    """방해 금지인가 — mode 가 dnd(만료 안 됨) 거나 dnd_until 이 미래."""
+    """방해 금지 여부 — mode 가 dnd(미만료) 이거나 dnd_until 이 미래."""
     if status is None:
         return False
     now = now or _now()
     until = _aware(status.dnd_until)
     if until is not None and until > now:
         return True
-    # dnd 모드인데 until 이 지났으면 풀린 것. until 이 없으면 무기한.
+    # dnd 모드이나 until 이 경과했으면 해제된 상태. until 이 없으면 무기한.
     return status.mode == "dnd" and until is None
 
 
@@ -125,7 +125,7 @@ def custom_status(status: UserStatus | None, now: datetime | None = None) -> tup
 
 
 def effective_state(status: UserStatus | None, connected: bool, now: datetime | None = None) -> str:
-    """'online' | 'away' | 'dnd' | 'offline'. invisible 은 남에게 offline 으로 보인다."""
+    """'online' | 'away' | 'dnd' | 'offline'. invisible 은 타 사용자에게 offline 으로 표시된다."""
     if not connected:
         return "offline"
     if status is None:
@@ -140,7 +140,7 @@ def effective_state(status: UserStatus | None, connected: bool, now: datetime | 
 
 
 def status_to_dict(status: UserStatus | None, connected: bool) -> dict:
-    """GET/PUT /me/status 응답 — 저장된 설정 전부 + 지금의 실효 상태(남에게 보이는 것)."""
+    """GET/PUT /me/status 응답 — 저장된 설정 전부 + 현재 실효 상태(타 사용자에게 표시되는 값)."""
     emoji, text = custom_status(status)
     return {
         "mode": status.mode if status else "auto",
@@ -163,7 +163,7 @@ async def get_status(db: AsyncSession, user_id: str) -> UserStatus | None:
 
 
 async def set_status(db: AsyncSession, user_id: str, **fields) -> UserStatus:
-    """바꿀 필드만 넘긴다(None 도 '비우기' 로 반영). 행이 없으면 만든다."""
+    """변경할 필드만 전달한다(None 도 '비우기' 로 반영). 행이 없으면 생성한다."""
     row = await db.get(UserStatus, user_id)
     if row is None:
         row = UserStatus(user_id=user_id, mode="auto")
@@ -179,7 +179,7 @@ async def set_status(db: AsyncSession, user_id: str, **fields) -> UserStatus:
 
 
 async def push_allowed(user_id: str) -> bool:
-    """웹푸시 게이트 — 방해 금지면 False. DB 를 못 읽으면 보내는 쪽(True)으로 둔다."""
+    """웹푸시 게이트 — 방해 금지이면 False. DB 조회 실패 시 발송 허용(True)으로 처리한다."""
     from app.db.session import async_session
 
     try:
@@ -192,8 +192,8 @@ async def push_allowed(user_id: str) -> bool:
 async def presence_snapshot(db: AsyncSession) -> dict:
     """GET /presence — {online_user_ids(하위호환, invisible 제외), statuses: {uid: {state, emoji, text}}}.
 
-    statuses 에는 연결된 사람 전원 + 상태 행이 있는(커스텀 텍스트가 남아 있을 수 있는) 사람을
-    넣는다. 상태 행은 사람이 한 번이라도 고른 경우에만 생기므로 테이블이 작다.
+    statuses 에는 연결된 사용자 전원 + 상태 행이 있는(커스텀 텍스트가 남아 있을 수 있는) 사용자를
+    포함한다. 상태 행은 사용자가 한 번이라도 선택한 경우에만 생성되므로 테이블 크기가 작다.
     """
     online = set(await get_online_users())
     rows = {
@@ -209,9 +209,9 @@ async def presence_snapshot(db: AsyncSession) -> dict:
 
 
 async def presence_event(db: AsyncSession, user_id: str, connected: bool) -> dict:
-    """presence 브로드캐스트 1건 — websocket.py 의 연결/해제와 상태 변경이 같은 모양을 쓴다.
+    """presence 브로드캐스트 1건 — websocket.py 의 연결/해제와 상태 변경이 동일한 형태를 사용한다.
 
-    `status` 는 예전 프런트(online/offline 두 값)용, `state` 가 네 가지 실효 상태다.
+    `status` 는 이전 프런트(online/offline 두 값)용이며, `state` 가 네 가지 실효 상태이다.
     """
     user = await db.get(User, user_id)
     entry = presence_entry(await db.get(UserStatus, user_id), connected)

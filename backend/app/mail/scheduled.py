@@ -1,11 +1,11 @@
 """예약 발송 — 대기열 저장과 백그라운드 발송 루프.
 
-- 워커 8개가 같이 돌므로 주기마다 Redis 락(jobs.lock.try_acquire)으로 한 워커만 훑는다.
-- 락이 풀린 뒤에도 같은 행을 두 번 보내지 않도록 행 단위로 pending → sending 조건부 UPDATE 로
-  선점한다(rowcount 가 1 인 워커만 보낸다).
-- 보내다가 죽은 행(sending 으로 10분 넘게 남음)은 다음 주기에 failed 로 돌린다 — 이중 발송보다
-  "못 보냄" 표시가 낫다(사용자가 다시 예약할 수 있다).
-- 첨부는 예약 시점에 storage_root/mail_scheduled/<id>/ 로 옮겨 둔다.
+- 워커 8개가 동시에 실행되므로 주기마다 Redis 락(jobs.lock.try_acquire)으로 한 워커만 조회한다.
+- 락 만료 후에도 동일 행을 중복 발송하지 않도록 행 단위로 pending → sending 조건부 UPDATE 로
+  선점한다(rowcount 가 1 인 워커만 발송한다).
+- 발송 중 중단된 행(sending 상태로 10분 초과)은 다음 주기에 failed 로 전환한다. 이중 발송보다
+  "못 보냄" 표시가 적절하다(사용자가 재예약할 수 있다).
+- 첨부는 예약 시점에 storage_root/mail_scheduled/<id>/ 로 이동해 둔다.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ async def _claim(db: AsyncSession, row_id: str) -> bool:
 
 
 async def send_due(db: AsyncSession, now: datetime | None = None, sender=None) -> int:
-    """send_at 이 지난 pending 을 보낸다. 보낸 건수 반환.
+    """send_at 이 경과한 pending 을 발송한다. 발송 건수 반환.
 
     sender: 테스트용 주입(기본은 mail.router.perform_send).
     """
@@ -100,7 +100,7 @@ async def send_due(db: AsyncSession, now: datetime | None = None, sender=None) -
     now = now or datetime.now(timezone.utc)
     send = sender or mail_router.perform_send
 
-    # 보내다 멈춘 행 정리
+    # 발송 중 중단된 행 정리
     await db.execute(
         update(MailScheduledSend)
         .where(MailScheduledSend.status == "sending", MailScheduledSend.send_at < now - _STUCK_AFTER)
@@ -132,7 +132,7 @@ async def send_due(db: AsyncSession, now: datetime | None = None, sender=None) -
         except Exception as e:  # noqa: BLE001
             detail = e.detail if isinstance(e, HTTPException) else str(e)
             row.error = str(detail)[:1000]
-            # 일시 장애(SMTP 연결 등)는 다음 주기에 다시, 횟수 넘으면 실패
+            # 일시 장애(SMTP 연결 등)는 다음 주기에 재시도, 횟수 초과 시 실패
             row.status = "pending" if (row.attempts or 0) < _MAX_ATTEMPTS and not isinstance(e, (HTTPException, FileNotFoundError)) else "failed"
             await db.commit()
             logger.warning("예약 메일 %s 발송 실패: %s", rid, detail)

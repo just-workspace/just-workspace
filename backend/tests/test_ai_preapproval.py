@@ -1,9 +1,9 @@
-"""선승인(Claude Code 식) — 내장 AI 답변은 쓰기 요청이 나오면 사용자의 결정을 기다렸다가 실제 결과로 이어 쓴다.
+"""선승인(Claude Code 방식) — 내장 AI 답변은 쓰기 요청이 발생하면 사용자의 결정을 대기한 뒤 실제 결과로 이어서 작성한다.
 
-- 실행하면: 모델의 다음 차례에 실행 결과(executed)가 들어가고, 카드 상태 이벤트가 다시 나간다.
-- 취소하면: 모델에게 '취소함 — 다시 요청하지 말 것'이 간다(실행 안 됨).
-- 답변을 멈추면: 대기 중인 low 카드는 취소된다.
-- 기다리는 동안 처리된 high 는 대화에 따로 결과 메시지를 붙이지 않는다(답변이 이어서 말한다).
+- 실행 시: 모델의 다음 차례에 실행 결과(executed)가 전달되고, 카드 상태 이벤트가 재송신된다.
+- 취소 시: 모델에 '취소함 — 다시 요청하지 말 것'이 전달된다(실행되지 않음).
+- 답변 중지 시: 대기 중인 low 카드는 취소된다.
+- 대기 중 처리된 high 는 대화에 별도의 결과 메시지를 추가하지 않는다(답변이 이어서 서술한다).
 """
 
 import asyncio
@@ -65,11 +65,11 @@ LOCK = asyncio.Lock()
 
 
 def _serialize(monkeypatch):
-    """테스트는 DB 세션 하나를 같이 쓴다 — 대기 폴링과 '사용자 클릭'이 겹치지 않게 잠근다(운영은 세션이 따로)."""
+    """테스트는 DB 세션 하나를 공유한다 — 대기 폴링과 '사용자 클릭'이 겹치지 않도록 잠금을 적용한다(운영은 세션 분리)."""
     from contextlib import asynccontextmanager
     orig = writes.session
     global LOCK
-    LOCK = asyncio.Lock()   # 테스트마다 새 잠금 — 모듈 수준 잠금은 처음 경합한 테스트의 이벤트 루프에 묶여 다음 테스트에서 터진다
+    LOCK = asyncio.Lock()   # 테스트마다 새 잠금 — 모듈 수준 잠금은 최초로 경합한 테스트의 이벤트 루프에 묶여 다음 테스트에서 예외가 발생한다
 
     @asynccontextmanager
     async def locked():
@@ -80,7 +80,7 @@ def _serialize(monkeypatch):
 
 
 async def _drive(env, user, on_card, monkeypatch):
-    """스트림을 돌리다가 첫 카드가 나오면 on_card(rid) 를 부른다(사용자가 카드를 누름)."""
+    """스트림을 실행하다가 첫 카드가 발생하면 on_card(rid) 를 호출한다(사용자의 카드 클릭에 해당)."""
     _serialize(monkeypatch)
     chunks: list[str] = []
     gen = ai_router._chat_event_stream(env["conv"], user, object(), False, None,
@@ -100,7 +100,7 @@ async def _drive(env, user, on_card, monkeypatch):
         cards = [d for e, d in _events(chunks) if e == "write_request"]
         if cards and rid is None:
             rid = cards[0]["id"]
-            # 결정 전에는 답변이 이어지지 않는다(멈춰서 기다림)
+            # 결정 전에는 답변이 이어지지 않는다(중단 후 대기)
             assert not any(e == "done" for e, _ in _events(chunks))
             async with LOCK:
                 await on_card(rid, task)
@@ -123,9 +123,9 @@ async def test_approve_feeds_real_result(env, monkeypatch):
     rid, evs = await _drive(env, bob, click, monkeypatch)
     assert rid
     assert len((await env["db"].execute(select(WikiPage))).scalars().all()) == 1
-    # 모델의 다음 차례에 실제 실행 결과가 들어갔다
+    # 모델의 다음 차례에 실제 실행 결과가 전달되었다
     assert seen and '"executed"' in seen[0] and "pending_confirmation" not in seen[0]
-    # 카드 상태(실행됨)를 화면에 다시 보냄 + 단계가 대기 → 완료
+    # 카드 상태(실행됨)를 화면에 재송신 + 단계가 대기 → 완료
     cards = [d for e, d in evs if e == "write_request"]
     assert cards[0]["status"] == "pending" and cards[-1]["status"] == "executed"
     steps = [d for e, d in evs if e == "step"]

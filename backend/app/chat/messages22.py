@@ -1,6 +1,6 @@
 """chat22 조회 — 원문 점프(around)·채널 스레드 목록·검색 필터.
 
-직렬화는 service._message_to_dict + msg22.enrich 그대로(목록 단위 한 번에 — N+1 없음).
+직렬화는 service._message_to_dict + msg22.enrich 를 그대로 사용한다(목록 단위 1회 처리 — N+1 없음).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ DEFAULT_TZ = "Asia/Seoul"
 # ─── 원문 점프 ───
 
 async def has_newer(db: AsyncSession, channel_id: str, messages: list[dict]) -> bool:
-    """이 페이지의 마지막 메시지보다 최근 메인 타임라인 메시지가 있나(최근으로 바 표시용)."""
+    """해당 페이지의 마지막 메시지보다 최근인 메인 타임라인 메시지의 존재 여부(최근으로 바 표시용)."""
     from app.chat.service import main_timeline_filter
     if not messages:
         return False
@@ -38,9 +38,9 @@ async def has_newer(db: AsyncSession, channel_id: str, messages: list[dict]) -> 
 
 async def get_messages_around(db: AsyncSession, channel_id: str, around_id: str, limit: int,
                               user_id: str) -> dict | None:
-    """around 메시지를 가운데로 위아래 반씩. 없거나 다른 채널이면 None(404).
+    """around 메시지를 중심으로 전후 절반씩 반환한다. 없거나 다른 채널이면 None(404).
 
-    원문이 스레드 안 답글(채널에도 보내기 아님)이면 메인 타임라인엔 없다 → {messages: [], thread_root_id}.
+    원문이 스레드 내 답글(채널에도 보내기 아님)이면 메인 타임라인에 없다 → {messages: [], thread_root_id}.
     """
     from app.chat import service
     t = await db.get(Message, around_id)
@@ -73,10 +73,10 @@ async def list_channel_threads(
     db: AsyncSession, channel: Channel, user_id: str, *, archived: bool, limit: int,
     before: datetime | None = None,
 ) -> dict:
-    """채널의 스레드(답글이 있거나 명시로 시작된 루트) — 최근 활동순, 보관/활성 따로.
+    """채널의 스레드(답글이 있거나 명시적으로 시작된 루트) — 최근 활동순, 보관/활성 구분.
 
-    보관 = 명시 보관 또는 (마지막 활동 + 자동 보관 분) 지남. 활동 = 마지막 답글·보관 해제·시작·원문 시각 중 최근.
-    계산은 파이썬에서(채널 하나의 스레드 수는 작다 — 수천을 넘으면 thread_activity_at 인덱스로 옮긴다).
+    보관 = 명시적 보관 또는 (마지막 활동 + 자동 보관 분) 경과. 활동 = 마지막 답글·보관 해제·시작·원문 시각 중 최근 값.
+    계산은 Python 에서 수행한다(채널 하나의 스레드 수는 적다 — 수천을 초과하면 thread_activity_at 인덱스로 이전한다).
     """
     from app.chat import service
     reply_sq = (
@@ -212,10 +212,10 @@ async def search(
     after: str | None = None, during: str | None = None, pinned: bool | None = None,
     sort: str = "new", offset: int = 0, limit: int = 25,
 ) -> dict:
-    """디스코드 검색 필터. 내가 멤버인 채널만, 삭제·시스템 줄 제외. 필터끼리는 AND.
+    """디스코드 검색 필터. 본인이 멤버인 채널만 대상, 삭제·시스템 줄 제외. 필터 간에는 AND.
 
-    날짜(before·after·during)는 사용자 시간대(users.timezone, 없으면 Asia/Seoul) 기준 하루.
-    before = 그날 0시 전, after = 그다음 날 0시부터, during = 그날 하루.
+    날짜(before·after·during)는 사용자 시간대(users.timezone, 없으면 Asia/Seoul) 기준 하루 단위.
+    before = 해당일 0시 이전, after = 그다음 날 0시부터, during = 해당일 하루.
     """
     from app.chat import service
     tz = _tz(getattr(user, "timezone", None))

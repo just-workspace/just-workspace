@@ -18,7 +18,7 @@ class TaskCreate(BaseModel):
     assignee_id: str | None = None
     tags: list[str] = []
     project: str | None = Field(None, max_length=100)
-    # 채널에 묶기(채널 탭 "작업"). 내가 멤버인 채널만
+    # 채널 연결(채널 탭 "작업"). 본인이 멤버인 채널만 허용
     channel_id: str | None = None
 
 
@@ -31,11 +31,11 @@ class TaskUpdate(BaseModel):
     calendar_event_id: str | None = None
     sort_order: int | None = None
     parent_id: str | None = None
-    # 보낸 경우에만 바뀐다. null 이면 비운다(담당 해제·프로젝트 없음).
+    # 전달된 경우에만 변경. null 이면 값을 비움(담당 해제·프로젝트 없음).
     assignee_id: str | None = None
     tags: list[str] | None = None
     project: str | None = Field(None, max_length=100)
-    # 보낸 경우에만 바뀐다. null 이면 채널에서 뗀다(만든 사람만)
+    # 전달된 경우에만 변경. null 이면 채널 연결 해제(생성자만 가능)
     channel_id: str | None = None
 
 

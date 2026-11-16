@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 def _build_service_defs() -> list[dict]:
-    """점검 대상 — 설정(.env 의 주소)과 설치된 구역으로 정한다.
+    """점검 대상 — 설정(.env 의 주소)과 설치된 구역으로 결정한다.
 
-    항목의 "zone" 은 그 서비스를 띄우는 구역이다. 설치하지 않은 구역의 서비스는 점검하지
-    않는다 — 컨테이너가 없는 것은 장애가 아니다.
+    항목의 "zone" 은 해당 서비스를 기동하는 구역이다. 미설치 구역의 서비스는 점검하지
+    않는다 — 컨테이너 부재는 장애가 아니다.
     """
     s = get_settings()
     defs = [
@@ -42,8 +42,8 @@ def _build_service_defs() -> list[dict]:
             "internal_only": True,
         },
     ]
-    # 메일서버 헬스: 빌트인이면 mailserver, 아니면 내부 별도 메일서버(MAIL_HEALTH_HOST) 지정 시 그쪽.
-    # 둘 다 아니면(외부 IMAP 클라이언트 모드) 메일서버 항목 자체를 넣지 않음.
+    # 메일서버 헬스: 빌트인이면 mailserver, 아니면 내부 별도 메일서버(MAIL_HEALTH_HOST) 지정 시 해당 호스트.
+    # 둘 다 아니면(외부 IMAP 클라이언트 모드) 메일서버 항목 자체를 포함하지 않음.
     _mail_host = "mailserver:993" if getattr(s, "feature_builtin_mailserver", False) else (getattr(s, "mail_health_host", "") or "")
     if _mail_host:
         if ":" not in _mail_host:
@@ -76,7 +76,7 @@ def _build_service_defs() -> list[dict]:
 
 # In-memory cache
 _cache: list[ServiceStatus] = []
-# 마지막 주기를 마친 시각(epoch 초) — 공개 상태 "확인 10:42:08"
+# 마지막 주기를 완료한 시각(epoch 초) — 공개 상태 "확인 10:42:08"
 _checked_at: float | None = None
 _check_interval = 60  # seconds
 
@@ -116,10 +116,10 @@ async def check_service(svc: dict) -> ServiceStatus:
     )
 
 
-# 워커 8개가 같은 루프를 돈다 — 한 주기에 한 워커만 점검하고(jobs.lock), 결과는 Redis 로 나눠 쓴다.
-# 예전엔 60초마다 외부 점검이 8배로 나갔고, 워커마다 캐시가 달라 대시보드 값이 요청마다 흔들렸다.
+# 워커 8개가 동일 루프를 실행한다 — 한 주기에 한 워커만 점검하고(jobs.lock), 결과는 Redis 로 공유한다.
+# 이전에는 60초마다 외부 점검이 8배로 발생했고, 워커별 캐시가 상이하여 대시보드 값이 요청마다 달라졌다.
 HEALTH_REDIS_KEY = "health:services"
-_TICK = 15          # 이 간격으로 Redis 저장본을 읽는다(점검 자체는 락 TTL 주기)
+_TICK = 15          # 이 간격으로 Redis 저장본을 조회(점검 자체는 락 TTL 주기)
 _LOCK_TTL = _check_interval - 5
 
 
@@ -147,7 +147,7 @@ async def _publish(rows: list[ServiceStatus], checked_at: float) -> None:
         await redis.set(HEALTH_REDIS_KEY, json.dumps({
             "checked_at": checked_at, "services": [r.model_dump() for r in rows],
         }), ex=_check_interval * 3)
-    except Exception as e:  # noqa: BLE001 — 공유 실패해도 내 캐시는 쓴다
+    except Exception as e:  # noqa: BLE001 — 공유 실패 시에도 로컬 캐시는 사용
         logger.debug("헬스 결과 Redis 저장 실패: %s", e)
 
 
@@ -167,10 +167,10 @@ async def _load_shared() -> tuple[list[ServiceStatus], float] | None:
 
 
 async def health_tick() -> bool:
-    """한 번 — 락을 잡은 워커는 점검해 Redis 에 올리고, 나머지는 저장본을 읽는다. 점검했으면 True."""
+    """1회 실행 — 락을 획득한 워커는 점검 후 Redis 에 저장하고, 나머지는 저장본을 조회한다. 점검을 수행했으면 True."""
     global _cache, _checked_at
-    # jobs.lock.try_acquire 는 Redis 장애 때 "안 함"(fail-closed)인데, 헬스는 그때야말로 점검해야 한다
-    # (Redis down 을 보여 줘야 함) — 락을 못 묻는 상황이면 이 워커가 직접 점검한다.
+    # jobs.lock.try_acquire 는 Redis 장애 시 "미수행"(fail-closed)이나, 헬스는 그 경우에 점검이 필요하다
+    # (Redis down 을 표시해야 함) — 락 조회가 불가한 상황이면 이 워커가 직접 점검한다.
     try:
         from app.chat.redis_client import get_redis
         from app.jobs.lock import lock_key
@@ -190,10 +190,10 @@ async def health_tick() -> bool:
 
 
 async def run_health_checker():
-    """Background task: 15초마다 health_tick — 점검은 워커 하나가 약 60초마다.
+    """Background task: 15초마다 health_tick — 점검은 워커 하나가 약 60초마다 수행한다.
 
-    한 주기가 터져도 루프를 놓지 않는다. 예전에 여기서 예외가 한 번 나면 태스크가
-    통째로 죽어 캐시가 영영 비었고, 대시보드는 "서비스 0개 정상" 만 보여 줬다.
+    한 주기에서 예외가 발생해도 루프를 유지한다. 이전에는 여기서 예외가 한 번 발생하면 태스크
+    전체가 종료되어 캐시가 계속 비어 있었고, 대시보드에는 "서비스 0개 정상" 만 표시되었다.
     """
     while True:
         try:
@@ -226,12 +226,12 @@ def get_cached_status() -> list[ServiceStatus]:
     return _cache
 
 
-# ─── 공개 서비스 상태(500 화면 "서비스 상태" — 로그인 전에도 본다) ───
-# 내부 이름(PostgreSQL·Redis)·주소·버전은 내지 않는다. 사용자 쪽 묶음(로그인·메일·채팅…) key 와
-# 상태·응답 시간만. 묶음을 이루는 내부 점검이 하나도 없으면(예: 외부 IMAP 메일) 그 묶음은 빼고,
-# 모듈이 꺼져 있으면 off. 느림 기준은 응답 1초.
+# ─── 공개 서비스 상태(500 화면 "서비스 상태" — 로그인 전에도 조회 가능) ───
+# 내부 이름(PostgreSQL·Redis)·주소·버전은 노출하지 않는다. 사용자 관점 그룹(로그인·메일·채팅…)의 key 와
+# 상태·응답 시간만 제공한다. 그룹을 구성하는 내부 점검이 하나도 없으면(예: 외부 IMAP 메일) 해당 그룹은 제외하고,
+# 모듈이 비활성화되어 있으면 off. 지연 판정 기준은 응답 1초.
 PUBLIC_GROUPS: list[tuple[str, str | None, tuple[str, ...]]] = [
-    # (key, 모듈 id(None = 늘 켜짐), 이 묶음을 이루는 내부 점검 이름)
+    # (key, 모듈 id(None = 상시 활성), 이 그룹을 구성하는 내부 점검 이름)
     ("auth", None, ("PostgreSQL", "Redis")),
     ("mail", "mail", ("Mail Server",)),
     ("chat", "chat", ("PostgreSQL", "Redis")),
@@ -243,7 +243,7 @@ SLOW_MS = 1000
 
 
 def _group_status(parts: list[ServiceStatus]) -> tuple[str, int | None]:
-    """내부 점검 여럿 → (ok|slow|down|checking, 가장 느린 응답 ms)."""
+    """복수의 내부 점검 → (ok|slow|down|checking, 최장 응답 ms)."""
     if any(p.status == "down" for p in parts):
         return "down", None
     if any(p.status != "ok" for p in parts):
@@ -253,7 +253,7 @@ def _group_status(parts: list[ServiceStatus]) -> tuple[str, int | None]:
 
 
 def build_public_status(cache: list[ServiceStatus] | None = None, module_enabled=None, checked_at: float | None = None) -> dict:
-    """{checked_at: ISO|None, services: [{key, status, response_ms}]} — 공개해도 되는 것만."""
+    """{checked_at: ISO|None, services: [{key, status, response_ms}]} — 공개 가능한 항목만 포함한다."""
     from datetime import datetime, timezone
 
     from app.zones import module_installed
@@ -264,7 +264,7 @@ def build_public_status(cache: list[ServiceStatus] | None = None, module_enabled
     out: list[dict] = []
     for key, module_id, names in PUBLIC_GROUPS:
         if module_id and not module_installed(module_id):
-            continue  # 설치하지 않은 구역 — "꺼짐"이 아니라 항목 자체가 없다
+            continue  # 미설치 구역 — "꺼짐"이 아니라 항목 자체가 없음
         if module_id and not module_enabled(module_id):
             out.append({"key": key, "status": "off", "response_ms": None})
             continue

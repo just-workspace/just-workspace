@@ -1,6 +1,6 @@
 """음성채널 무손실 티어 — 릴레이 토큰(HMAC) + POST /api/chat/channels/{id}/voice/relay-token.
 
-test_chat_p4.py 와 같은 방식(SQLite 채팅 테이블만, 라우터 함수 직접 호출). 릴레이 /info 는 monkeypatch.
+test_chat_p4.py 와 동일한 방식(SQLite 채팅 테이블만 사용, 라우터 함수 직접 호출). 릴레이 /info 는 monkeypatch.
 """
 
 import json
@@ -19,7 +19,7 @@ TABLES = [t.__table__ for t in (User, Channel, ChannelMember)]
 # ─── 토큰 ───
 
 def test_known_vector_matches_go():
-    """audiorelay/internal/token/token_test.go TestKnownVector 와 같은 벡터."""
+    """audiorelay/internal/token/token_test.go TestKnownVector 와 동일한 벡터."""
     tok = relay_token.mint("shared-secret", room="voice-r1", uid="u1", name="A", ttl=120, now=1700000000, nonce="x")
     assert tok == (
         "eyJyb29tIjoidm9pY2UtcjEiLCJ1aWQiOiJ1MSIsIm5hbWUiOiJBIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjE3MDAwMDAxMjAsIm5vbmNlIjoieCJ9."
@@ -31,7 +31,7 @@ def test_known_vector_matches_go():
 
 def test_verify_rejects():
     tok = relay_token.mint(SECRET, room="r", uid="u", ttl=10, now=1000)
-    assert relay_token.verify(SECRET, tok, now=1014)["uid"] == "u"  # 5 s 여유 안
+    assert relay_token.verify(SECRET, tok, now=1014)["uid"] == "u"  # 5 s 허용 오차 이내
     with pytest.raises(ValueError, match="expired"):
         relay_token.verify(SECRET, tok, now=1016)
     with pytest.raises(ValueError, match="bad signature"):
@@ -75,7 +75,7 @@ async def db():
 
 @pytest.fixture()
 def relay(monkeypatch):
-    """릴레이 설정 + /info 응답 가짜."""
+    """릴레이 설정 + /info 응답 모의."""
     from app import config as cfg
     s = cfg.get_settings()
     monkeypatch.setattr(s, "audiorelay_secret", SECRET, raising=False)
@@ -150,7 +150,7 @@ async def test_503_when_unconfigured_or_relay_down(db, relay, monkeypatch):
 
     from app import config as cfg
     monkeypatch.setattr(cfg.get_settings(), "audiorelay_secret", SECRET[:31], raising=False)
-    assert not voice_relay.is_configured()               # 기동 검사·릴레이와 같은 최소 길이(32)
+    assert not voice_relay.is_configured()               # 기동 검사·릴레이와 동일한 최소 길이(32)
     monkeypatch.setattr(cfg.get_settings(), "audiorelay_secret", "", raising=False)
     assert not voice_relay.is_configured()
     with pytest.raises(HTTPException) as e:
@@ -159,10 +159,10 @@ async def test_503_when_unconfigured_or_relay_down(db, relay, monkeypatch):
 
 
 async def test_route_registered(client):
-    # 라우터가 앱에 붙어 있으면 인증 없는 호출은 404 가 아니라 401 이다
+    # 라우터가 앱에 등록되어 있으면 인증 없는 호출은 404 가 아니라 401
     r = await client.post("/api/chat/channels/dev/voice/relay-token")
     assert r.status_code == 401
-    # 토큰 payload 는 JSON 이고 사용자 비밀을 담지 않는다
+    # 토큰 payload 는 JSON 이며 사용자 비밀값을 포함하지 않음
     tok = relay_token.mint(SECRET, room="voice-x", uid="u")
     body = json.loads(relay_token._unb64(tok.split(".")[0]))
     assert set(body) == {"room", "uid", "name", "iat", "exp", "nonce"}

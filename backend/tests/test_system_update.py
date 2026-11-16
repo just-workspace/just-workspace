@@ -1,7 +1,7 @@
-"""관리 › 업데이트 API — 설치 관리자의 업데이트 내부 API 를 가짜 transport 로 바꿔 본다.
+"""관리 › 업데이트 API — 설치 관리자의 업데이트 내부 API 를 가짜 transport 로 대체하여 검증한다.
 
-권한(비관리자 403), 대신 부르기(경로·공유 키·본문의 actor), 오류 변환, 설치 관리자 없음/미지원,
-파일 올리기(흘려 넘기기), 기록 내려받기, 감사 기록, 연락처.
+권한(비관리자 403), 대리 호출(경로·공유 키·본문의 actor), 오류 변환, 설치 관리자 없음/미지원,
+파일 업로드(스트리밍 전달), 기록 다운로드, 감사 기록, 연락처.
 계약: docs/update-api.md
 """
 
@@ -10,7 +10,7 @@ import os
 import sys
 import types
 
-if os.name == "nt" and "resource" not in sys.modules:  # 유닉스 전용 모듈을 import 하는 곳이 있다
+if os.name == "nt" and "resource" not in sys.modules:  # 유닉스 전용 모듈을 import 하는 코드가 존재
     sys.modules["resource"] = types.ModuleType("resource")
 
 import httpx
@@ -53,7 +53,7 @@ STATUS = {"current": {"version": "1.0.0", "channel": "stable", "applied_at": Non
 
 
 class FakeInstaller:
-    """내부 API 흉내 — 받은 요청을 적어 두고, 경로별로 정해 둔 응답을 준다."""
+    """내부 API 모사 — 수신한 요청을 기록하고, 경로별로 지정된 응답을 반환한다."""
 
     def __init__(self):
         self.calls: list[dict] = []
@@ -88,7 +88,7 @@ class FakeInstaller:
 
 @pytest.fixture()
 async def env(monkeypatch):
-    """(client, fake, state) — state.user 를 바꿔 호출자를 바꾼다."""
+    """(client, fake, state) — state.user 를 변경하여 호출자를 전환한다."""
     engine = create_async_engine("sqlite+aiosqlite:///", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -174,7 +174,7 @@ async def test_every_admin_route_is_in_the_permission_list():
             assert (method, path) in listed, (method, path)
 
 
-# ─── 대신 부르기 ───
+# ─── 대리 호출 ───
 
 
 async def test_status_is_proxied_with_key(env):
@@ -233,7 +233,7 @@ async def test_no_installer_is_update_unavailable(env, monkeypatch):
 
 
 @pytest.mark.parametrize("reply", [
-    httpx.Response(404, json={"detail": "Not Found"}),          # 이 경로를 모르는 설치 관리자
+    httpx.Response(404, json={"detail": "Not Found"}),          # 이 경로를 지원하지 않는 설치 관리자
     httpx.Response(405, text="Method Not Allowed"),
     httpx.Response(501, json={"code": "not_implemented", "vars": {}}),
     httpx.Response(501, text=""),
@@ -280,7 +280,7 @@ async def test_installer_errors_are_passed_through(env):
     fake.on("GET", f"{P}/jobs/{JOB_ID}", (500, {"code": "boom", "vars": {}}))
     r = await client.get(f"{B}/jobs/{JOB_ID}")
     assert r.status_code == 502 and r.json()["code"] == "installer_error"
-    # 실패한 요청은 감사 로그에 남지 않는다
+    # 실패한 요청은 감사 로그에 기록되지 않음
     assert await _audit(state) == []
 
 

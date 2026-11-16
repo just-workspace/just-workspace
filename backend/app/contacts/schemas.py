@@ -59,7 +59,7 @@ class ContactUpdate(BaseModel):
     phones: list[TypedValue] | None = None
     addresses: list[TypedValue] | None = None
     notes: str | None = None
-    photo: str | None = None  # "" 이면 사진 지움
+    photo: str | None = None  # "" 이면 사진 삭제
     is_favorite: bool | None = None
     groups: list[str] | None = None
     title: str | None = None

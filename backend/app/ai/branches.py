@@ -1,10 +1,10 @@
-"""답변 버전(가지) — 질문을 고치면 그 차례의 새 버전이 생기고, 뒤따르던 메시지는 옛 가지에 남는다.
+"""답변 버전(가지) — 질문을 수정하면 해당 턴의 새 버전이 생성되고, 후속 메시지는 기존 가지에 남는다.
 
-모양: 메시지마다 parent_id(같은 가지에서 바로 앞 메시지, 대화 첫 메시지는 대화 id). 같은 부모를 둔 사용자
-메시지들이 "같은 질문의 버전들"(◀ 2/3 ▶)이다. 형제 가운데 inactive 가 아닌 쪽을 따라 내려가면 지금 가지가 된다.
-버전을 바꿔도 각 메시지의 inactive 는 그대로라 옛 가지로 돌아가면 그 뒤 대화가 그대로 살아난다.
+구조: 메시지마다 parent_id(동일 가지의 직전 메시지, 대화 첫 메시지는 대화 id). 동일 부모를 가진 사용자
+메시지들이 "같은 질문의 버전들"(◀ 2/3 ▶)이다. 형제 중 inactive 가 아닌 쪽을 따라 내려가면 현재 가지가 된다.
+버전을 전환해도 각 메시지의 inactive 는 유지되므로 기존 가지로 복귀하면 이후 대화가 그대로 복원된다.
 
-가지 도입 이전 행(parent_id NULL)은 읽을 때 created_at 순서로 한 줄 가지를 채운다(backfill — 한 번만, 저장).
+가지 도입 이전 행(parent_id NULL)은 조회 시 created_at 순서로 단일 가지를 구성한다(backfill — 1회만, 저장).
 """
 
 from __future__ import annotations
@@ -22,13 +22,13 @@ _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 def _key(m: AIMessage):
     at = m.created_at or _EPOCH
-    if at.tzinfo is None:  # SQLite 는 시간대를 버린다
+    if at.tzinfo is None:  # SQLite 는 시간대 정보를 보존하지 않는다
         at = at.replace(tzinfo=timezone.utc)
     return (at, m.id)
 
 
 async def load_rows(db: AsyncSession, conv_id: str) -> list[AIMessage]:
-    """대화의 모든 메시지(모든 가지). 옛 행이 있으면 한 줄 가지로 채워 저장한다."""
+    """대화의 모든 메시지(모든 가지). 가지 도입 이전 행이 있으면 단일 가지로 구성하여 저장한다."""
     rows = list((await db.execute(
         select(AIMessage).where(AIMessage.conversation_id == conv_id).order_by(AIMessage.created_at.asc())
     )).scalars().all())
@@ -46,7 +46,7 @@ async def load_rows(db: AsyncSession, conv_id: str) -> list[AIMessage]:
 
 
 def active_path(rows: list[AIMessage], conv_id: str) -> list[AIMessage]:
-    """지금 가지 — 대화 뿌리부터 형제 가운데 보이는(inactive 아닌) 가장 최근 것을 따라 내려간다."""
+    """현재 가지 — 대화 루트부터 형제 중 표시 상태(inactive 아님)인 가장 최근 메시지를 따라 내려간다."""
     children: dict[str, list[AIMessage]] = defaultdict(list)
     for m in rows:
         children[m.parent_id or conv_id].append(m)
@@ -68,7 +68,7 @@ def active_path(rows: list[AIMessage], conv_id: str) -> list[AIMessage]:
 
 
 def siblings(rows: list[AIMessage], msg: AIMessage) -> list[AIMessage]:
-    """같은 질문의 버전들(같은 부모·같은 역할), 만든 순서."""
+    """같은 질문의 버전들(동일 부모·동일 역할), 생성 순서."""
     out = [m for m in rows if m.parent_id == msg.parent_id and m.role == msg.role]
     out.sort(key=_key)
     return out
@@ -82,6 +82,6 @@ def versions_info(rows: list[AIMessage], msg: AIMessage) -> tuple[list[dict], in
 
 
 def activate(rows: list[AIMessage], chosen: AIMessage) -> None:
-    """chosen 을 보이는 버전으로 — 형제는 숨긴다(지우지 않는다)."""
+    """chosen 을 표시 버전으로 지정 — 형제는 숨김 처리한다(삭제하지 않는다)."""
     for s in siblings(rows, chosen):
         s.inactive = None if s.id == chosen.id else True

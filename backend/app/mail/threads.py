@@ -1,21 +1,21 @@
-"""메일 스레드·라벨·서명 보조 함수(순수 함수 — IMAP/POP3 클라이언트와 라우터가 같이 쓴다).
+"""메일 스레드·라벨·서명 보조 함수(순수 함수 — IMAP/POP3 클라이언트와 라우터가 공용으로 사용한다).
 
 스레드
-  - 서버가 IMAP THREAD=REFERENCES 를 지원하면 서버가 묶은 결과를 쓴다(제목 없는 답장·끊긴
-    References 도 서버가 알아서 묶는다). thread_id = "u<루트 UID>" (메일함 단위).
-  - 아니면 헤더로 계산: References 의 첫 항목(대화의 맨 처음 메일) → 없으면 In-Reply-To →
-    없으면 자기 Message-ID. thread_id = "h<루트 Message-ID 의 sha1 앞 16자>".
-    같은 대화면 어느 메일함에서 계산해도 값이 같다.
+  - 서버가 IMAP THREAD=REFERENCES 를 지원하면 서버가 구성한 묶음 결과를 사용한다(제목 없는 답장·단절된
+    References 도 서버가 묶는다). thread_id = "u<루트 UID>" (메일함 단위).
+  - 미지원 시 헤더로 계산: References 의 첫 항목(대화의 최초 메일) → 없으면 In-Reply-To →
+    없으면 자신의 Message-ID. thread_id = "h<루트 Message-ID 의 sha1 앞 16자>".
+    동일 대화이면 어느 메일함에서 계산해도 값이 동일하다.
 
 라벨
-  IMAP 키워드(사용자 정의 플래그)로 저장한다. 키워드는 ASCII atom 이어야 해서 한글 라벨은
-  메일함 이름과 같은 수정 UTF-7 로 인코딩하고, 공백은 '_' 로 바꾼다.
+  IMAP 키워드(사용자 정의 플래그)로 저장한다. 키워드는 ASCII atom 이어야 하므로 한글 라벨은
+  메일함 이름과 동일한 수정 UTF-7 로 인코딩하고, 공백은 '_' 로 치환한다.
 
 서명 이중 부착
-  웹 작성기는 보낼 때 `<div class="signature"><p>--</p>…</div>` / "\\n\\n--\\n…" 를 붙인다.
-  예전 초안 본문에 서명이 이미 들어 있으면 이어 쓰기 후 보낼 때 서명이 두 번 붙는다.
-  → 보낼 때 서명 블록이 둘 이상이면 마지막 하나만 남기고, 초안 응답에는 서명을 뺀 본문을
-    같이 준다(프런트가 그걸로 이어 쓰면 애초에 중복이 생기지 않는다).
+  웹 작성기는 발송 시 `<div class="signature"><p>--</p>…</div>` / "\\n\\n--\\n…" 를 부착한다.
+  기존 초안 본문에 서명이 이미 포함된 경우 이어 쓰기 후 발송 시 서명이 2회 부착된다.
+  → 발송 시 서명 블록이 둘 이상이면 마지막 하나만 유지하고, 초안 응답에는 서명을 제거한 본문을
+    함께 반환한다(프런트가 이를 기준으로 이어 쓰면 중복이 발생하지 않는다).
 """
 
 from __future__ import annotations
@@ -116,7 +116,7 @@ def _b64_imap(s: str) -> str:
 
 
 def encode_keyword(label: str) -> str:
-    """사람이 붙인 라벨 → IMAP 키워드 atom (수정 UTF-7, 공백은 '_')."""
+    """사용자가 지정한 라벨 → IMAP 키워드 atom (수정 UTF-7, 공백은 '_')."""
     label = (label or "").strip()
     out: list[str] = []
     buf = ""
@@ -214,7 +214,7 @@ def _signature_spans(html: str) -> list[tuple[int, int]]:
 
 
 def strip_signature_html(html: str | None) -> str | None:
-    """`<div class="signature">…</div>` 블록을 모두 뺀다."""
+    """`<div class="signature">…</div>` 블록을 모두 제거한다."""
     if not html:
         return html
     spans = _signature_spans(html)
@@ -224,7 +224,7 @@ def strip_signature_html(html: str | None) -> str | None:
 
 
 def dedupe_signature_html(html: str | None) -> str | None:
-    """서명 블록이 둘 이상이면 마지막 하나만 남긴다(뒤쪽이 이번에 붙인 서명)."""
+    """서명 블록이 둘 이상이면 마지막 하나만 유지한다(뒤쪽이 이번에 부착한 서명)."""
     if not html:
         return html
     spans = _signature_spans(html)
@@ -247,7 +247,7 @@ def _sig_text_variants(signature_texts: list[str]) -> list[str]:
 
 
 def strip_signature_text(text: str | None, signature_texts: list[str]) -> str | None:
-    """'\\n--\\n<서명>' 꼴로 들어간 알려진 서명을 모두 뺀다."""
+    """'\\n--\\n<서명>' 형식으로 포함된 알려진 서명을 모두 제거한다."""
     if not text:
         return text
     for sig in _sig_text_variants(signature_texts):
@@ -257,7 +257,7 @@ def strip_signature_text(text: str | None, signature_texts: list[str]) -> str | 
 
 
 def dedupe_signature_text(text: str | None, signature_texts: list[str]) -> str | None:
-    """같은 서명이 두 번 이상 들어 있으면 마지막 것만 남긴다."""
+    """동일 서명이 2회 이상 포함된 경우 마지막 것만 유지한다."""
     if not text:
         return text
     for sig in _sig_text_variants(signature_texts):

@@ -1,6 +1,6 @@
 """MCP 도메인 쓰기 도구(파일·메일·일정·할일·위키·게시판·채팅).
 
-도메인마다: low 는 바로 실행 / high 는 승인 대기(승인 전엔 실행 안 함) / 남의 것은 거부 / 되돌리기로 원상복구.
+도메인마다: low 는 즉시 실행 / high 는 승인 대기(승인 전에는 미실행) / 타인 소유 항목은 거부 / 되돌리기로 원상 복구.
 저장소 루트는 임시 폴더, DB 는 SQLite(tests.test_settings_security_p8 의 db 픽스처).
 """
 
@@ -84,7 +84,7 @@ async def env(db, tmp_path: Path, monkeypatch):
     (tmp_path / "users" / "alice" / "docs" / "a.txt").write_text("hello", encoding="utf-8")
     (tmp_path / "users" / "bob" / "secret.txt").write_text("bob only", encoding="utf-8")
 
-    # 알림은 기록만
+    # 알림은 기록만 수행
     from app.notifications import service as nsvc
 
     async def _notif(*a, **k):
@@ -110,7 +110,7 @@ async def call(name: str, args: dict, user: User) -> dict:
 
 
 async def run_low(env, name, args, user=None) -> dict:
-    """low 도구 — 바로 실행돼야 한다. (req_id, result) 반환."""
+    """low 도구 — 즉시 실행되어야 한다. (req_id, result) 반환."""
     r = await call(name, args, user or env["alice"])
     assert r["ok"], r
     assert r["result"]["status"] == "executed", r
@@ -181,7 +181,7 @@ async def test_files_undo_not_after_change_or_forged(env):
     with pytest.raises(writes.WriteError):
         await writes.undo(env["db"], env["alice"], res["request_id"])
     assert f.exists()
-    # 서명 없이 되돌리기 도구로 남의(=만들지 않은) 파일 지우기 → 거부
+    # 서명 없이 되돌리기 도구로 타인의(=본인이 생성하지 않은) 파일 삭제 → 거부
     await run_fail(env, "files_undo_create", {"path": "my/docs/a.txt", "token": "deadbeef"})
     assert (env["root"] / "users" / "alice" / "docs" / "a.txt").exists()
 
@@ -271,7 +271,7 @@ async def test_mail_undo_bound_to_user(mail_env):
     did = res["result"]["draft_id"]
     req = await env["db"].get(McpWriteRequest, res["request_id"])
     tok = writes._uj(req.undo)["args"]["token"]
-    # bob 이 alice 의 서명을 들고 와도 거부(서명은 사용자에 묶임 + 소유 확인)
+    # bob 이 alice 의 서명을 제시해도 거부(서명은 사용자에 귀속 + 소유 확인)
     await run_fail(env, "mail_undo_save_draft", {"draft_id": did, "token": tok}, user=env["bob"])
     assert await env["db"].get(MailDraft, did) is not None
 
@@ -286,7 +286,7 @@ async def test_mail_send_is_high_and_uses_own_account(mail_env):
     uid, frm, payload = env["sent"][0]
     assert uid == "alice" and frm == "alice@x"
     assert payload["to"][0]["email"] == "ext@gmail.com" and payload["text_body"] == "본문"
-    # 형식 오류는 승인 뒤 실행 단계에서 실패로 남는다(보내지 않음)
+    # 형식 오류는 승인 후 실행 단계에서 실패로 기록(발송하지 않음)
     bad = await pend_high(env, "mail_send", {"to": ["not-an-address"]})
     assert (await approve(env, bad)).status == "failed" and len(env["sent"]) == 1
 
@@ -394,8 +394,8 @@ async def test_wiki_create_update_keeps_history_and_undo(wiki_env):
     assert page.content == "v2" and await _versions(env["db"], pid) == 2
     await writes.undo(env["db"], env["alice"], up["request_id"])
     await env["db"].refresh(page)
-    assert page.content == "v1" and await _versions(env["db"], pid) == 3      # 기록은 남는다
-    # 고쳐진 페이지는 '만들기 되돌리기'로 지우지 않는다
+    assert page.content == "v1" and await _versions(env["db"], pid) == 3      # 기록은 보존
+    # 수정된 페이지는 '만들기 되돌리기'로 삭제하지 않음
     with pytest.raises(writes.WriteError):
         await writes.undo(env["db"], env["alice"], res["request_id"])
     res2 = await run_low(env, "notes_create", {"title": "임시", "content": "x"})
@@ -422,7 +422,7 @@ async def test_wiki_reader_denied_and_delete_high(wiki_env):
 # ── 게시판 ────────────────────────────────────────────────────
 @pytest.fixture()
 async def board_env(env):
-    # 댓글 소프트 삭제가 쓰는 greatest() 는 SQLite 에 없다 — 테스트 연결에만 붙인다
+    # 댓글 소프트 삭제가 사용하는 greatest() 는 SQLite 에 없음 — 테스트 연결에만 등록
     raw = await (await env["db"].connection()).get_raw_connection()
     await raw.driver_connection.create_function(
         "greatest", -1, lambda *a: max((x for x in a if x is not None), default=None))
@@ -468,7 +468,7 @@ async def chat_env(env, monkeypatch):
     async def _no_broadcast(*a, **k):
         return None
     monkeypatch.setattr(chat_router, "_broadcast_message", _no_broadcast)
-    # 삭제·수정은 채널에 실시간 이벤트를 보낸다(message_delete·message_update) — 테스트에는 Redis 가 없다
+    # 삭제·수정은 채널에 실시간 이벤트를 송신한다(message_delete·message_update) — 테스트 환경에는 Redis 없음
     monkeypatch.setattr(chat_router, "emit_to_channel", _no_broadcast)
     env["db"].add(Channel(id="dev", name="개발", type="private", created_by="alice"))
     await env["db"].commit()

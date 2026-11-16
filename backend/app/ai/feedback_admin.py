@@ -1,14 +1,14 @@
 """관리자 › AI 운영 › 피드백.
 
-GET    /api/admin/ai/feedback?reason=&attached_only=&days=&cursor=   별로예요 목록(평가·이유·한 줄 의견·쓴 도구·첨부 상태)
-GET    /api/admin/ai/feedback/{id}/snapshot                          첨부된 대화 보기 — 열람은 감사 로그(ai_feedback.view)
-DELETE /api/admin/ai/feedback/{id}/snapshot                          스냅샷만 삭제(평가·이유·의견은 남음)
+GET    /api/admin/ai/feedback?reason=&attached_only=&days=&cursor=   별로예요 목록(평가·이유·한 줄 의견·사용한 도구·첨부 상태)
+GET    /api/admin/ai/feedback/{id}/snapshot                          첨부된 대화 조회 — 열람은 감사 로그(ai_feedback.view)에 기록
+DELETE /api/admin/ai/feedback/{id}/snapshot                          스냅샷만 삭제(평가·이유·의견은 유지)
 
 개인정보 원칙:
-- 대화 내용(conversation_snapshot)은 사용자가 직접 첨부를 고른 경우에만 있고, 90일 뒤 스냅샷만 지운다
-  (app.ai.ops_retention). 이유·의견·평가는 통계로 남는다.
-- 목록은 누가 보냈는지 보이지 않는다(쪽 안에서만 "사용자 A·B…"로 구분). 사용자 id 는 내보내지 않는다.
-- 열람·삭제 감사 기록에는 누가(관리자)·어느 피드백만 남기고 내용 값은 넣지 않는다.
+- 대화 내용(conversation_snapshot)은 사용자가 직접 첨부를 선택한 경우에만 존재하며, 90일 후 스냅샷만 삭제한다
+  (app.ai.ops_retention). 이유·의견·평가는 통계로 유지된다.
+- 목록에는 발신자를 표시하지 않는다(페이지 내에서만 "사용자 A·B…"로 구분). 사용자 id 는 반환하지 않는다.
+- 열람·삭제 감사 기록에는 수행자(관리자)·대상 피드백만 기록하고 내용 값은 포함하지 않는다.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def _reasons(raw: str | None) -> list[str]:
 
 
 def _tools_of(meta: str | None) -> list[str]:
-    """답변 진행 단계에 남은 도구 이름(meta.steps[].tool). 옛 답변은 없다."""
+    """답변 진행 단계에 기록된 도구 이름(meta.steps[].tool). 기존 답변에는 없다."""
     try:
         steps = (json.loads(meta or "{}") or {}).get("steps") or []
     except Exception:  # noqa: BLE001
@@ -81,7 +81,7 @@ def _base(days: int, reason: str, attached_only: bool):
     if days:
         stmt = stmt.where(AIMessageFeedback.updated_at >= _now() - timedelta(days=days))
     if reason:
-        # reasons 는 JSON 배열 문자열 — 키는 고정 목록이라 따옴표 포함 일치로 충분하다
+        # reasons 는 JSON 배열 문자열 — 키가 고정 목록이므로 따옴표 포함 일치로 충분하다
         stmt = stmt.where(AIMessageFeedback.reasons.like(f'%"{reason}"%'))
     if attached_only:
         stmt = stmt.where(AIMessageFeedback.conversation_snapshot.is_not(None))
@@ -126,14 +126,14 @@ async def list_feedback(limit: int = Query(50, ge=1, le=200), cursor: str = "", 
             "snapshot_expires_at": (upd + timedelta(days=SNAPSHOT_TTL_DAYS)).isoformat() if st == "attached" and upd else None,
             "who": who[f.user_id],
         })
-    # 이유별 건수(필터와 무관한 기간 전체 — 칩 메뉴 숫자)
+    # 이유별 건수(필터와 무관한 기간 전체 — 칩 메뉴 수치)
     reason_counts: dict[str, int] = {}
     for (raw,) in (await db.execute(select(AIMessageFeedback.reasons).where(
             AIMessageFeedback.rating == "down",
             *( [AIMessageFeedback.updated_at >= _now() - timedelta(days=days)] if days else [] )).limit(200_000))).all():
         for r in _reasons(raw):
             reason_counts[r] = reason_counts.get(r, 0) + 1
-    # 통계 카드 "대화 내용 첨부"(평가 무관, 기간 안 — 지금 스냅샷이 있는 것)
+    # 통계 카드 "대화 내용 첨부"(평가 무관, 기간 내 — 현재 스냅샷이 존재하는 항목)
     att_q = select(func.count()).select_from(AIMessageFeedback).where(AIMessageFeedback.conversation_snapshot.is_not(None))
     if days:
         att_q = att_q.where(AIMessageFeedback.updated_at >= _now() - timedelta(days=days))
@@ -152,7 +152,7 @@ async def _get(db: AsyncSession, fb_id: str) -> AIMessageFeedback:
 
 @router.get("/feedback/{fb_id}/snapshot")
 async def view_snapshot(fb_id: str, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
-    """첨부된 대화(이 답변까지) — 읽기 전용. 볼 때마다 감사 로그에 남긴다(내용 값은 남기지 않음).
+    """첨부된 대화(해당 답변까지) — 읽기 전용. 조회할 때마다 감사 로그에 기록한다(내용 값은 기록하지 않음).
     스냅샷이 없으면 410 {code: expired|conversation_deleted|admin_deleted|none}."""
     f = await _get(db, fb_id)
     st = snapshot_status(f)
@@ -176,7 +176,7 @@ async def view_snapshot(fb_id: str, admin: User = Depends(require_admin), db: As
 
 @router.delete("/feedback/{fb_id}/snapshot")
 async def delete_snapshot(fb_id: str, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
-    """관리자 화면의 스냅샷만 지운다 — 사용자 대화 원본과 평가·이유·의견은 그대로. 되돌릴 수 없다."""
+    """관리자 화면의 스냅샷만 삭제한다 — 사용자 대화 원본과 평가·이유·의견은 유지. 복원 불가."""
     f = await _get(db, fb_id)
     if f.conversation_snapshot is None:
         return {"id": f.id, "snapshot": snapshot_status(f)}
@@ -189,7 +189,7 @@ async def delete_snapshot(fb_id: str, admin: User = Depends(require_admin), db: 
 
 
 async def expire_snapshots(db: AsyncSession, *, now: datetime | None = None) -> int:
-    """90일 지난 스냅샷만 지운다(평가·이유·의견은 유지). 통계 기간이 흔들리지 않게 updated_at 은 그대로 둔다."""
+    """90일 경과 스냅샷만 삭제한다(평가·이유·의견은 유지). 통계 기간에 영향을 주지 않도록 updated_at 은 변경하지 않는다."""
     cutoff = (now or _now()) - timedelta(days=SNAPSHOT_TTL_DAYS)
     res = await db.execute(update(AIMessageFeedback).where(
         AIMessageFeedback.conversation_snapshot.is_not(None), AIMessageFeedback.updated_at < cutoff,

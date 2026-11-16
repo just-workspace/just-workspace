@@ -1,10 +1,10 @@
 """빌트인 AI 채팅 API (설정/거버넌스/동의/대화 CRUD + 채팅 SSE).
 
 설정 엔드포인트(/config·/governance·/probe-models·/status)는 모듈 게이트 없이
-admin 권한만으로 접근 가능 — 모듈 활성화 전에도 제공자를 구성할 수 있어야 함(닭-달걀 방지).
+admin 권한만으로 접근 가능 — 모듈 활성화 전에도 제공자 구성이 가능해야 함(순환 의존 방지).
 실제 사용 엔드포인트(대화/채팅/동의)에만 @require_module("ai")를 적용.
 
-주의: `from __future__ import annotations` 를 쓰지 말 것 — @require_module 데코레이터
+주의: `from __future__ import annotations` 사용 금지 — @require_module 데코레이터
 래퍼를 통해 FastAPI가 시그니처를 읽을 때, 문자열화된 어노테이션을 registry 네임스페이스에서
 해석하지 못해 Body 모델이 query 파라미터로 오인됨(422 missing body).
 """
@@ -73,10 +73,10 @@ def _load_meta(raw) -> dict:
 
 
 async def _finish_message(conv_id, user_id, msg_id, *, content, status, meta, model, keep_empty, parent_id=None):
-    """스트림이 끝나거나 끊긴 뒤 답변 행을 확정한다. 내용·단계가 없으면 행을 지운다(예전엔 아예 저장 안 함).
+    """스트림 종료 또는 중단 후 답변 행을 확정한다. 내용·단계가 없으면 행을 삭제한다(이전 구현은 저장 자체를 생략).
 
-    created_at 은 끝난 시각으로 — 승인 카드 복원(attachWritesToMessages)이 "요청 시각 이후 첫 답변"에 붙인다.
-    사용자가 먼저 멈춤을 눌러 stopped 가 된 행은 interrupted 로 덮지 않는다.
+    created_at 은 종료 시각으로 설정한다 — 승인 카드 복원(attachWritesToMessages)이 "요청 시각 이후 첫 답변"에 연결한다.
+    사용자가 먼저 멈춤을 선택하여 stopped 가 된 행은 interrupted 로 덮어쓰지 않는다.
     """
     async with async_session() as sdb:
         m = await sdb.get(AIMessage, msg_id)
@@ -87,7 +87,7 @@ async def _finish_message(conv_id, user_id, msg_id, *, content, status, meta, mo
             return
         if m is None:
             if await sdb.get(AIConversation, conv_id) is None:
-                return  # 생성 중에 대화가 지워짐
+                return  # 생성 중 대화가 삭제됨
             m = AIMessage(id=msg_id, conversation_id=conv_id, user_id=user_id, role="assistant",
                           parent_id=parent_id)
             sdb.add(m)
@@ -109,14 +109,14 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
                              parent_id=None, memory_tool=False, msg_id=None, run_ctl=None):
     """provider 스트리밍 + MCP 거버넌스 관문 도구 루프. chat/regenerate/continue 공용.
 
-    진행 단계(step)·출처(citation)·답변 메타(meta: message_id·model·ai_generated)를 보내고,
-    답변 행을 시작할 때 만들어(status streaming) 끝나면 확정한다. 중간에 끊기면 받은 부분을 interrupted 로 남긴다.
-    ``cont`` = 이어 받기 대상 {id, content, meta} — 받은 부분을 마지막 assistant 차례로 보내고 이어 쓰기를 요청,
-    제공자가 거부하면 continue_fallback 을 알리고 처음부터 다시 만든다.
-    ``parent_id`` = 답변을 붙일 사용자 메시지(가지). ``memory_tool`` = 내장 전용 memory_save 를 가로채
-    저장하고 ``memory_saved`` {id, kind, text} 를 보낸다(MCP 레지스트리에 없는 도구).
-    분리 실행(app.ai.runs): ``msg_id`` = 미리 정한 답변 id, ``run_ctl`` 에 ``snapshot`` (지금까지 글·메타)을 걸어
-    작업이 몇 초마다 진행분을 저장하게 한다.
+    진행 단계(step)·출처(citation)·답변 메타(meta: message_id·model·ai_generated)를 송신하고,
+    답변 행을 시작 시점에 생성하여(status streaming) 종료 시 확정한다. 중간에 중단되면 수신분을 interrupted 로 보존한다.
+    ``cont`` = 이어 받기 대상 {id, content, meta} — 수신분을 마지막 assistant 차례로 전달하고 이어 쓰기를 요청하며,
+    제공자가 거부하면 continue_fallback 을 통지하고 처음부터 재생성한다.
+    ``parent_id`` = 답변을 연결할 사용자 메시지(가지). ``memory_tool`` = 내장 전용 memory_save 를 가로채
+    저장하고 ``memory_saved`` {id, kind, text} 를 송신한다(MCP 레지스트리에 없는 도구).
+    분리 실행(app.ai.runs): ``msg_id`` = 사전 지정한 답변 id, ``run_ctl`` 에 ``snapshot`` (현재까지의 본문·메타)을 등록하여
+    작업이 수 초 주기로 진행분을 저장하도록 한다.
     """
     import uuid
 
@@ -131,7 +131,7 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
         "tracker": progress.CitationTracker(),
         "started_at": progress.now_iso(),
         "error": None,
-        "artifacts": [],     # 결과물 카드(SSE artifact) — meta.artifacts 로 저장해 대화를 다시 열어도 복원
+        "artifacts": [],     # 결과물 카드(SSE artifact) — meta.artifacts 로 저장하여 대화 재진입 시에도 복원
         "questions": [],     # ask_user · plan_exit (Claude Code AskUserQuestion · ExitPlanMode) — meta.questions
     }
     if cont:
@@ -163,24 +163,24 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
     if run_ctl is not None:
         run_ctl["snapshot"] = lambda: (_text(), _meta())
 
-    # 외부(상용) AI 로 나가는 대화·도구 결과의 개인정보를 가린다(관리자 설정 ai.gov.mask_pii, 기본 켬)
+    # 외부(상용) AI 로 전송되는 대화·도구 결과의 개인정보를 마스킹한다(관리자 설정 ai.gov.mask_pii, 기본 활성화)
     mask_on = False
     if external:
         try:
             async with async_session() as _gdb:
                 mask_on = bool((await ai_config.get_ai_config(_gdb))["governance"].get("mask_pii", True))
-        except Exception:  # noqa: BLE001 — 설정을 못 읽으면 가리는 쪽으로
+        except Exception:  # noqa: BLE001 — 설정 조회 실패 시 마스킹 적용
             mask_on = True
     from app.ai import pii as _pii
 
-    # 1M 컨텍스트 — 모델 창에 맞춘 예산(app.ai.context). 기록이 창을 넘으면 오래된 차례부터 뺀다.
+    # 1M 컨텍스트 — 모델 창 기준 예산(app.ai.context). 기록이 창을 초과하면 오래된 차례부터 제외한다.
     bud = ai_ctx.budgets(cfg)
     reserved = ai_ctx.est_tokens(system or "") + ai_ctx.est_tokens(json.dumps(tools or [], ensure_ascii=False))
 
     async def _await_writes(waits, results_lines):
-        """선승인 — 이 차례에 만든 쓰기 요청(카드)이 모두 결정될 때까지 답변을 멈추고 기다린다.
-        결정되면 카드 상태를 화면에 다시 보내고, 모델에게 갈 도구 결과를 실제 결과(실행·실패·취소·만료)로 바꾼다.
-        답변을 멈추면(취소) 대기 중인 low 카드는 취소한다."""
+        """선승인 — 이 차례에 생성된 쓰기 요청(카드)이 모두 결정될 때까지 답변을 중지하고 대기한다.
+        결정되면 카드 상태를 화면에 재송신하고, 모델에 전달할 도구 결과를 실제 결과(실행·실패·취소·만료)로 교체한다.
+        답변을 중지하면(취소) 대기 중인 low 카드는 취소한다."""
         from app.mcp import writes as _writes
 
         rids = [w["rid"] for w in waits]
@@ -219,7 +219,7 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
             yield _sse("step", dict(w["step"]))
 
     async def _interact(tc, results_lines):
-        """ask_user · plan_exit — 화면에 질문 카드를 띄우고 답(또는 넘김·만료·멈춤)까지 답변을 멈춘다."""
+        """ask_user · plan_exit — 화면에 질문 카드를 표시하고 응답(또는 넘김·만료·멈춤)까지 답변을 중지한다."""
         from app.mcp import writes as _writes
 
         name = tc.get("name", "")
@@ -293,10 +293,10 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
             if not pending or iteration >= max_iter or not loop_use_tools:
                 return
             results_lines: list = []
-            # 메모리 — 내장 AI 전용 도구. 거버넌스 관문(MCP)을 거치지 않고 여기서 저장한다.
+            # 메모리 — 내장 AI 전용 도구. 거버넌스 관문(MCP)을 경유하지 않고 본 위치에서 저장한다.
             mem_calls = [tc for tc in pending if tc.get("name") == ai_memory.TOOL_NAME]
             pending = [tc for tc in pending if tc.get("name") != ai_memory.TOOL_NAME]
-            # ask_user · plan_exit — 내장 전용. 다른 도구를 다 돈 뒤 사용자에게 묻고 답을 기다린다
+            # ask_user · plan_exit — 내장 전용. 다른 도구의 실행 완료 후 사용자에게 질의하고 응답을 대기한다
             ia_calls = [tc for tc in pending if tc.get("name") in ai_interact.TOOL_NAMES]
             pending = [tc for tc in pending if tc.get("name") not in ai_interact.TOOL_NAMES]
             for tc in mem_calls:
@@ -313,8 +313,8 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
                     continue
                 from app.mcp import writes as _mw
                 if await _mw.conv_untrusted(user.id, conv_id):
-                    # 남이 쓴 내용을 읽은 대화 — 주입된 지시가 메모리에 눌러앉아 다른 대화까지 따라가는 길을 막는다.
-                    # 메모리는 승인 카드 흐름(MCP 쓰기) 밖이라 여기서 저장을 거절하고 사유를 모델에 돌려준다.
+                    # 타인이 작성한 내용을 읽은 대화 — 주입된 지시가 메모리에 상주하여 다른 대화로 전파되는 경로를 차단한다.
+                    # 메모리는 승인 카드 흐름(MCP 쓰기) 밖이므로 여기서 저장을 거부하고 사유를 모델에 반환한다.
                     results_lines.append(f"[{ai_memory.TOOL_NAME}]\n" + json.dumps(
                         {"saved": False, "error_code": "after_untrusted_read",
                          "error": "이 대화에서 외부(남이 쓴) 내용을 읽은 뒤라 메모리에 자동으로 저장하지 않았습니다. "
@@ -334,7 +334,7 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
                 except ai_memory.MemoryError as me:
                     results_lines.append(f"[{ai_memory.TOOL_NAME}]\n" + json.dumps(
                         {"saved": False, "error": me.message}, ensure_ascii=False))
-            # 한 차례에 부른 도구들 — 같은 도구는 한 단계로 묶는다(처음 부른 순서 유지 — 예: "파일 3개 읽기")
+            # 한 차례에 호출된 도구 — 동일 도구는 한 단계로 병합한다(최초 호출 순서 유지 — 예: "파일 3개 읽기")
             groups: list = []
             for tc in pending:
                 name = tc.get("name", "")
@@ -365,36 +365,36 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
                     outcomes: list = []
                     for args in calls:
                         yield _sse("tool_call", {"name": name, "args": args})
-                        # 도구 결과 예산(글자) — 모델 컨텍스트에 맞춘다. 목록 도구는 실행 중에 이 안으로 스스로 맞춘다
-                        # 모델 창 기반 예산(app.ai.context) — 결과 하나 상한과 이번 차례 남은 몫 중 작은 값
+                        # 도구 결과 예산(글자) — 모델 컨텍스트 기준. 목록 도구는 실행 중 해당 범위 내로 자체 조정한다
+                        # 모델 창 기반 예산(app.ai.context) — 결과 1건 상한과 이번 차례 잔여분 중 작은 값
                         room = bud.tool_round - sum(len(x) for x in results_lines)
                         t_budget = max(2_000, min(bud.tool_result, room))
                         with tool_budget.scope(t_budget):
                             res = await ai_config.ai_execute_tool(tdb, name, args, user, provider_external=external,
                                                                   conversation_id=conv_id)
                         if res.get("needs_confirmation") and res.get("write_request_id"):
-                            # 쓰기 도구 — 실행하지 않고 승인 요청을 화면에 넘긴다. low 는 채팅 카드 [실행][수정][취소]
+                            # 쓰기 도구 — 실행하지 않고 승인 요청을 화면에 전달한다. low 는 채팅 카드 [실행][수정][취소]
                             # (POST /api/approvals/{id}/approve 등), high 는 승인 대기함 안내 카드.
                             from app.mcp import writes as _writes
                             try:
                                 _req = await _writes.get_owned(tdb, user, res["write_request_id"])
                                 yield _sse("write_request", _writes.to_dict(_req))
                                 if _req.status == "pending":
-                                    # 선승인(Claude Code 식) — 이 차례의 도구를 다 돈 뒤 결정을 기다렸다가 실제 결과로 바꾼다
+                                    # 선승인(Claude Code 방식) — 이 차례의 도구 실행 완료 후 결정을 대기하고 실제 결과로 교체한다
                                     waits.append({"rid": _req.id, "name": name, "args": args, "budget": t_budget,
                                                   "step": step, "outcomes": outcomes, "oi": len(outcomes),
                                                   "line": len(results_lines)})
                             except _writes.WriteError:
                                 pass
                         elif res.get("needs_confirmation"):
-                            # 승인 흐름 밖의 확인(정책 대기 등) — 옛 확인 토큰
+                            # 승인 흐름 밖의 확인(정책 대기 등) — 구 확인 토큰
                             token = await tool_confirm.issue(user.id, conv_id, name, args)
                             yield _sse("tool_confirm", {"name": name, "args": args, "token": token,
                                                         "expires_in": tool_confirm.TTL})
                         yield _sse("tool_result", {"name": name, "ok": bool(res.get("ok")),
                                                    "pending_confirmation": bool(res.get("needs_confirmation"))})
                         outcomes.append((args, res))
-                        # 만든 문서·묶음 작업 → 결과물 카드
+                        # 생성된 문서·묶음 작업 → 결과물 카드
                         for _ap in ai_artifacts.sse_payloads(name, res):
                             st["artifacts"].append(_ap)
                             yield _sse("artifact", _ap)
@@ -409,10 +409,10 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
                                     yield _sse("citation", st["tracker"].get(n))
                         payload = res.get("result") if res.get("ok") else {
                             "error": res.get("error"),
-                            # response_too_large 등 — 모델이 고쳐 부를 수 있게 코드·힌트도 넘긴다
+                            # response_too_large 등 — 모델이 수정 후 재호출할 수 있도록 코드·힌트도 전달한다
                             **{k: res[k] for k in ("error_code", "hint") if res.get(k)}}
                         head = f"[{name}]" + (f" 출처: {'; '.join(refs)}" if refs else "")
-                        # 예전엔 json.dumps(...)[:4000] 로 잘라 JSON 이 깨졌다 — 구조를 지키며 맞춘다(페이지 정보 맨 앞 유지)
+                        # 이전 구현은 json.dumps(...)[:4000] 로 절단하여 JSON 이 손상되었다 — 구조를 유지하며 조정한다(페이지 정보 맨 앞 유지)
                         results_lines.append(f"{head}\n{tool_budget.result_text(payload, t_budget)}")
                     status, detail = progress.step_outcome(name, outcomes)
                     step.update(status=status, detail=detail, ended_at=progress.now_iso())
@@ -430,7 +430,7 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
     try:
         yield _sse("meta", {"message_id": msg_id, "model": model_name, "ai_generated": True,
                             "mode": "continue" if cont else "new",
-                            # 답이 붙은 사용자 메시지(화면이 방금 보낸 질문에 id 를 달아 수정·버전 단추를 켠다)
+                            # 답변이 연결된 사용자 메시지(화면이 방금 송신한 질문에 id 를 부여하여 수정·버전 버튼을 활성화한다)
                             "parent_id": parent_id})
         if cont:
             yield _sse("partial", {"text": st["prefix"]})
@@ -439,7 +439,7 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
             async for chunk in _loop(c_msgs, None, False, 0):
                 yield chunk
             if st["error"] and not accumulated:
-                # 제공자가 이어 쓰기를 못 받음 — 처음부터 다시 만든다(화면에 알림)
+                # 제공자가 이어 쓰기를 거부함 — 처음부터 재생성한다(화면에 통지)
                 yield _sse("continue_fallback", {"message": st["error"]})
                 st.update(error=None, prefix="", steps=[], tracker=progress.CitationTracker(),
                           started_at=progress.now_iso())
@@ -460,7 +460,7 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
         yield _sse("done", {"message_id": msg_id if (final or keep) else None, "status": status,
                             "model": model_name, "ai_generated": True})
     except (anyio.get_cancelled_exc_class(), GeneratorExit):
-        # 연결이 끊김(사용자 멈춤·네트워크) — 받은 부분까지 저장하고 끝낸다
+        # 연결 종료(사용자 멈춤·네트워크) — 수신분까지 저장하고 종료한다
         with anyio.CancelScope(shield=True):
             try:
                 await _finish_message(conv_id, user.id, msg_id, content=_text(), status="interrupted",
@@ -486,9 +486,9 @@ def _sse_response(gen):
 
 async def _start_chat(conv_id, user, cfg, external, system, tools, use_tools, base_msgs, cont=None,
                       parent_id=None, memory_tool=False):
-    """답변 생성을 분리된 작업으로 띄우고, 응답은 그 Redis Stream 의 구독자로 돌려준다(app.ai.runs).
+    """답변 생성을 분리된 작업으로 기동하고, 응답은 해당 Redis Stream 의 구독자로 반환한다(app.ai.runs).
 
-    연결이 끊겨도(페이지 이동·탭 닫기) 작업은 끝까지 돈다. Redis 를 못 쓰면 예전처럼 연결에 묶인 스트림.
+    연결이 종료되어도(페이지 이동·탭 닫기) 작업은 완료 시까지 실행된다. Redis 사용 불가 시 이전과 같이 연결에 종속된 스트림으로 동작한다.
     """
     import uuid
 
@@ -502,7 +502,7 @@ async def _start_chat(conv_id, user, cfg, external, system, tools, use_tools, ba
 
 
 async def _db_final(msg_id):
-    """스트림이 만료됐거나 작업이 죽었을 때 — DB 의 최종 내용으로 done 을 보낸다(final = 메시지 전체)."""
+    """스트림 만료 또는 작업 비정상 종료 시 — DB 의 최종 내용으로 done 을 송신한다(final = 메시지 전체)."""
     async with async_session() as s:
         m = await s.get(AIMessage, msg_id)
         if m is None:
@@ -534,12 +534,12 @@ class GovernanceUpdate(BaseModel):
     allow_user_keys: bool | None = None
     daily_limit: int | None = None      # 사용자당 최근 24시간 질문 수, 0 = 제한 없음
     retention_days: int | None = None   # 대화 보관 일수, 0 = 무기한
-    mask_pii: bool | None = None                 # 외부 AI 로 보내기 전 개인정보 가리기
+    mask_pii: bool | None = None                 # 외부 AI 전송 전 개인정보 마스킹
     mcp_write_enabled: bool | None = None        # AI 커넥터(claude.ai 등) 쓰기 허용
     mcp_rate_limit_per_min: int | None = None    # 사용자당 분당 도구 호출 한도, 0 = 제한 없음
     audit_retention_years: int | None = None     # AI 감사 기록 보관(1·2·3년)
-    local_only: bool | None = None               # 로컬 모델만 쓰기(외부 AI API 로 아무것도 보내지 않음)
-    code_run_enabled: bool | None = None         # 분석 샌드박스(code_run) 켜기
+    local_only: bool | None = None               # 로컬 모델만 사용(외부 AI API 로 일절 전송하지 않음)
+    code_run_enabled: bool | None = None         # 분석 샌드박스(code_run) 활성화
     code_run_mcp: bool | None = None             # code_run 을 외부 커넥터(MCP)에도 노출
 
 
@@ -564,9 +564,9 @@ class MyProviderUpdate(BaseModel):
 class ConversationCreate(BaseModel):
     title: str | None = None
     system_prompt: str | None = None
-    tools_enabled: bool | None = None  # None 이면 내 도구 기본값(설정 › AI)을 따른다
-    temporary: bool = False            # 임시 대화(기록·메모리·프로젝트 지식 안 씀)
-    project_id: str | None = None      # 프로젝트에 묶기(주인·공유 구성원)
+    tools_enabled: bool | None = None  # None 이면 사용자 도구 기본값(설정 › AI) 적용
+    temporary: bool = False            # 임시 대화(기록·메모리·프로젝트 지식 미사용)
+    project_id: str | None = None      # 프로젝트에 연결(소유자·공유 구성원)
 
 
 class MyAISettingsUpdate(BaseModel):
@@ -576,7 +576,7 @@ class MyAISettingsUpdate(BaseModel):
 
 
 class MyProviderTest(BaseModel):
-    """비우면 저장된 내 설정으로 시험. 값을 주면 저장 전 입력값으로 모델 목록만 조회."""
+    """미지정 시 저장된 사용자 설정으로 시험. 값을 지정하면 저장 전 입력값으로 모델 목록만 조회."""
     kind: str | None = None
     base_url: str | None = None
     api_key: str | None = None
@@ -586,13 +586,13 @@ class ConversationPatch(BaseModel):
     title: str | None = None
     system_prompt: str | None = None
     tools_enabled: bool | None = None
-    project_id: str | None = None      # 프로젝트로 옮기기("" = 빼기)
+    project_id: str | None = None      # 프로젝트로 이동("" = 제외)
 
 
 class ChatRequest(BaseModel):
     content: str
     tools_enabled: bool | None = None  # None이면 대화 설정값 사용
-    attachment_ids: list[str] = []     # POST /api/ai/attachments 로 올린 첨부
+    attachment_ids: list[str] = []     # POST /api/ai/attachments 로 업로드한 첨부
 
 
 # ─── 상태(모듈 게이트 없음) — 프론트 진입점: 위저드 vs 채팅 분기 결정 ───
@@ -614,7 +614,7 @@ async def ai_status(user: User = Depends(get_current_user), db: AsyncSession = D
     return {
         "module_enabled": is_module_enabled("ai"),
         "configured": eff is not None,
-        # 지금 모델이 이미지 첨부를 읽는지(입력창 "이 모델은 이미지를 읽지 못합니다")
+        # 현재 모델의 이미지 첨부 입력 지원 여부(입력창 "이 모델은 이미지를 읽지 못합니다")
         "vision": supports_vision(eff),
         "attachment_max_bytes": ai_att.MAX_FILE,
         "provider_kind": kind,
@@ -625,11 +625,11 @@ async def ai_status(user: User = Depends(get_current_user), db: AsyncSession = D
         "external_allow_data": gov["external_allow_data"],
         "needs_consent": needs_consent,
         "using_personal": is_personal,
-        # 모델 피커: 개인 키로 동작 중이어도 워크스페이스 제공 모델 이름을 보여 준다
+        # 모델 피커: 개인 키로 동작 중이어도 워크스페이스 제공 모델 이름을 표시한다
         "workspace_model": gcfg["model"],
         # "워크스페이스 고급"(관리자가 지정한 경우만) — 설정 › AI 기본 모델 선택지
         "workspace_advanced_model": gcfg.get("advanced_model") or "",
-        # 도구 피커·"도구 N": 이 사용자 AI 가 쓸 수 있는 도구 이름
+        # 도구 피커·"도구 N": 해당 사용자의 AI 가 사용 가능한 도구 이름
         "tools": ai_config.tools_for_user(gov, external),
     }
 
@@ -674,7 +674,7 @@ async def put_governance(body: GovernanceUpdate, user: User = Depends(get_curren
 
 @router.post("/probe-models")
 async def probe_models(body: ProbeModelsRequest, user: User = Depends(get_current_user)):
-    """저장 전 제공자 설정으로 모델 목록 조회(어드민 드롭다운용)."""
+    """저장 전 제공자 설정으로 모델 목록 조회(관리자 드롭다운용)."""
     _require_admin(user)
     if body.kind not in SUPPORTED:
         raise HTTPException(status_code=400, detail=f"unsupported provider: {body.kind}")
@@ -688,9 +688,9 @@ class ConfigTest(BaseModel):
 
 @router.post("/config/test")
 async def test_config(body: ConfigTest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """관리 › AI "워크스페이스 모델" 행의 상태 — 저장된 설정으로 모델 목록을 받아 걸린 시간을 잰다.
+    """관리 › AI "워크스페이스 모델" 행의 상태 — 저장된 설정으로 모델 목록을 조회하고 소요 시간을 측정한다.
 
-    모델이 목록에 있으면 정상, 응답은 왔는데 그 모델이 없으면 not_found, 응답이 없으면 실패.
+    모델이 목록에 있으면 정상, 응답은 수신했으나 해당 모델이 없으면 not_found, 응답이 없으면 실패.
     """
     import time as _time
 
@@ -709,7 +709,7 @@ async def test_config(body: ConfigTest, user: User = Depends(get_current_user), 
 
 @router.get("/models")
 async def get_models(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """저장된 제공자 설정(암호화 키 포함)으로 모델 목록 — 설정 패널에서 키 재입력 없이 사용."""
+    """저장된 제공자 설정(암호화 키 포함)으로 모델 목록 조회 — 설정 패널에서 키 재입력 없이 사용."""
     _require_admin(user)
     cfg = await ai_config.resolve_provider(db)
     if cfg is None:
@@ -766,10 +766,10 @@ async def delete_my_provider(user: User = Depends(get_current_user), db: AsyncSe
 @router.post("/my-provider/test")
 @require_module("ai")
 async def test_my_provider(body: MyProviderTest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """내 API 키 연결 시험(설정 › AI "연결 시험"·"모델 불러오기").
+    """사용자 API 키 연결 시험(설정 › AI "연결 시험"·"모델 불러오기").
 
-    본문에 값이 없으면 저장된 내 설정으로 모델 목록을 받아 보고, 되면 "연결 확인됨" 시각을 남긴다.
-    값이 있으면(저장 전) 그 값으로 목록만 조회한다 — 관리자 전용 /probe-models 의 사용자판.
+    본문에 값이 없으면 저장된 사용자 설정으로 모델 목록을 조회하고, 성공 시 "연결 확인됨" 시각을 기록한다.
+    값이 있으면(저장 전) 해당 값으로 목록만 조회한다 — 관리자 전용 /probe-models 의 사용자용 대응 엔드포인트.
     """
     if not await ai_config.allow_user_keys(db):
         raise HTTPException(status_code=403, detail="관리자가 개인 API 키를 허용하지 않았습니다")
@@ -803,7 +803,7 @@ async def get_my_settings(user: User = Depends(get_current_user), db: AsyncSessi
     allow_keys = gcfg["governance"]["allow_user_keys"]
     personal = (await ai_config.get_user_provider_config(db, user.id)) if allow_keys else None
     personal_ready = bool(personal and personal["configured"])
-    # 실제로 쓰이는 선택(미지정 사용자는 예전 동작: 개인 설정이 있으면 개인)
+    # 실제 적용되는 선택(미지정 사용자는 이전 동작 유지: 개인 설정이 있으면 개인)
     effective = prefs["default_model"] or ("personal" if personal_ready else "workspace")
     if effective == "personal" and not personal_ready:
         effective = "workspace"
@@ -836,7 +836,7 @@ async def put_my_settings(body: MyAISettingsUpdate, user: User = Depends(get_cur
 
 
 async def _enforce_daily_limit(db: AsyncSession, user: User) -> None:
-    """관리 › AI 한도 — 사용자당 하루 생성 횟수(질문·질문 수정·다시 만들기). 대화를 지워도 줄지 않는다(app.ai.quota)."""
+    """관리 › AI 한도 — 사용자당 일일 생성 횟수(질문·질문 수정·다시 만들기). 대화를 삭제해도 감소하지 않는다(app.ai.quota)."""
     limit = (await ai_config.get_ai_config(db))["governance"].get("daily_limit") or 0
     if limit <= 0:
         return
@@ -846,7 +846,7 @@ async def _enforce_daily_limit(db: AsyncSession, user: User) -> None:
 
 
 async def _prune_old_conversations(db: AsyncSession, user: User) -> None:
-    """관리 › AI 대화 보관 — 보관 기간이 지난 내 대화를 지운다(목록을 열 때마다)."""
+    """관리 › AI 대화 보관 — 보관 기간이 경과한 사용자 본인의 대화를 삭제한다(목록 조회 시마다 수행)."""
     days = (await ai_config.get_ai_config(db))["governance"].get("retention_days") or 0
     if days <= 0:
         return
@@ -873,7 +873,7 @@ async def _delete_conversations(db: AsyncSession, ids: list[str]) -> None:
 
 
 async def _sweep_temporary(db: AsyncSession) -> None:
-    """창을 닫아 지우지 못한 임시 대화(모든 사용자, 마지막 활동 24시간 지남)와 보내지 않은 첨부를 정리."""
+    """창 종료로 삭제되지 않은 임시 대화(전체 사용자, 마지막 활동 후 24시간 경과)와 미전송 첨부를 정리."""
     cutoff = datetime.now(timezone.utc) - TEMP_TTL
     ids = [r[0] for r in (await db.execute(
         select(AIConversation.id).where(AIConversation.temporary.is_(True), AIConversation.updated_at < cutoff)
@@ -881,7 +881,7 @@ async def _sweep_temporary(db: AsyncSession) -> None:
     await _delete_conversations(db, ids)
     try:
         await ai_att.sweep(db)
-    except Exception:  # noqa: BLE001 — 정리 실패로 목록이 막히면 안 된다
+    except Exception:  # noqa: BLE001 — 정리 실패가 목록 조회를 차단해서는 안 된다
         pass
 
 
@@ -893,7 +893,7 @@ def _filter_tools_by_prefs(tools: list | None, prefs_tools: dict) -> list | None
 
 
 async def _model_tools(db, user, prefs_tools: dict) -> list | None:
-    """모델에게 보여줄 도구 — 내 설정 + 모듈 on/off·RBAC(MCP 와 같은 관문). 못 쓰는 도구는 아예 안 보여준다."""
+    """모델에 노출할 도구 — 사용자 설정 + 모듈 on/off·RBAC(MCP 와 동일한 관문). 사용 불가 도구는 노출하지 않는다."""
     from app.mcp.access import tool_accessible
 
     tools = _filter_tools_by_prefs(tools_as_ollama_format(), prefs_tools) or []
@@ -904,7 +904,7 @@ async def _model_tools(db, user, prefs_tools: dict) -> list | None:
 @router.get("/my-models")
 @require_module("ai")
 async def get_my_models(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """개인 저장 키로 모델 목록(개인 설정 폼에서 키 재입력 없이)."""
+    """개인 저장 키로 모델 목록 조회(개인 설정 폼에서 키 재입력 없이)."""
     cfg = await ai_config.resolve_user_provider(db, user.id)
     if cfg is None:
         return {"models": []}
@@ -913,8 +913,8 @@ async def get_my_models(user: User = Depends(get_current_user), db: AsyncSession
 
 # ─── 대화 CRUD ───
 def _msg_status(m: AIMessage, live: bool = False) -> str:
-    """저장된 상태 → 화면 상태. NULL(상태 열 도입 이전 행) = complete. streaming 은 생성 작업이 살아 있을 때(하트비트,
-    app.ai.runs)만 그대로 — 화면이 재연결한다. 하트비트가 없으면 끊긴 것(서버 재시작 등 — 이어 받기 대상)."""
+    """저장된 상태 → 화면 상태. NULL(상태 열 도입 이전 행) = complete. streaming 은 생성 작업이 활성 상태일 때(하트비트,
+    app.ai.runs)만 유지한다 — 화면이 재연결한다. 하트비트가 없으면 중단된 것으로 판정한다(서버 재시작 등 — 이어 받기 대상)."""
     st = m.status or "complete"
     if st == "streaming" and not live:
         return "interrupted"
@@ -933,7 +933,7 @@ def _feedback_dict(f) -> dict | None:
 
 
 def _questions_view(qs, status: str) -> list:
-    """저장된 질문 카드 — 답변이 끝났는데 대기로 남은 것(작업이 죽음 등)은 만료로 보인다."""
+    """저장된 질문 카드 — 답변이 종료되었으나 대기 상태로 남은 카드(작업 비정상 종료 등)는 만료로 표시한다."""
     out = [q for q in (qs or []) if isinstance(q, dict)]
     if status != "streaming":
         out = [{**q, "status": "expired"} if q.get("status") == "pending" else q for q in out]
@@ -965,18 +965,18 @@ def _msg_dict(m: AIMessage, fb=None, *, rows=None, atts=None, live: bool = False
 
 
 def _history(rows) -> list[dict]:
-    """제공자에게 보낼 대화 — 빈 assistant 행(진행 중·단계만 있는 답변)은 뺀다(빈 content 는 Anthropic 이 거부)."""
+    """제공자에 전달할 대화 — 빈 assistant 행(진행 중·단계만 있는 답변)은 제외한다(빈 content 는 Anthropic 이 거부)."""
     return [{"role": m.role, "content": m.content} for m in rows
             if m.role in ("user", "assistant") and (m.content or "").strip()]
 
 
 async def _clear_feedback_snapshots(db: AsyncSession, conv_ids: list[str]) -> None:
-    """대화를 지우면 피드백에 첨부한 대화 내용도 지운다(평가·이유 통계는 남긴다)."""
+    """대화 삭제 시 피드백에 첨부된 대화 내용도 삭제한다(평가·이유 통계는 보존)."""
     if not conv_ids:
         return
     from sqlalchemy import update
 
-    # 관리자 › AI 운영 › 피드백 — 첨부가 있던 행은 "사용자가 지움"으로 남긴다. 통계 기간이 흔들리지 않게 updated_at 은 그대로.
+    # 관리자 › AI 운영 › 피드백 — 첨부가 있던 행은 "사용자가 지움"으로 보존한다. 통계 기간에 영향이 없도록 updated_at 은 유지한다.
     await db.execute(update(AIMessageFeedback).where(AIMessageFeedback.conversation_id.in_(conv_ids),
                                                      AIMessageFeedback.conversation_snapshot.is_not(None))
                      .values(conversation_snapshot=None, snapshot_state="conversation_deleted",
@@ -998,7 +998,7 @@ PREVIEW_LEN = 80
 
 
 async def _conv_previews(db: AsyncSession, user_id: str) -> dict[str, str]:
-    """대화별 마지막 메시지 앞부분(모바일 목록 두 번째 줄). 대화당 한 줄, 한 번의 질의."""
+    """대화별 마지막 메시지 앞부분(모바일 목록 두 번째 줄). 대화당 1행, 단일 질의."""
     last = (
         select(AIMessage.conversation_id, func.max(AIMessage.created_at).label("at"))
         .where(AIMessage.user_id == user_id)
@@ -1019,7 +1019,7 @@ async def _conv_previews(db: AsyncSession, user_id: str) -> dict[str, str]:
 @router.get("/conversations")
 @require_module("ai")
 async def list_conversations(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """내 대화. 임시 대화는 일반 목록(conversations)에서 빼고 temporary 로 따로 준다(사이드바 "임시 대화")."""
+    """사용자 본인의 대화. 임시 대화는 일반 목록(conversations)에서 제외하고 temporary 로 별도 반환한다(사이드바 "임시 대화")."""
     await _prune_old_conversations(db, user)
     await _sweep_temporary(db)
     await ai_projects.detach_orphans_for_user(db, user)
@@ -1039,12 +1039,12 @@ async def list_conversations(user: User = Depends(get_current_user), db: AsyncSe
 async def create_conversation(body: ConversationCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     tools_enabled = body.tools_enabled
     if tools_enabled is None:
-        # 내 도구 기본값 중 하나라도 켜져 있으면 도구를 켠 채로 시작
+        # 사용자 도구 기본값 중 하나라도 활성화되어 있으면 도구 활성 상태로 시작
         tools_enabled = any((await ai_config.get_user_ai_prefs(db, user.id))["tools"].values())
     if body.temporary and body.project_id:
         raise HTTPException(status_code=400, detail="임시 대화는 프로젝트에 넣을 수 없습니다")
     if body.project_id:
-        await ai_projects.get_readable(db, user, body.project_id)  # 주인·공유 구성원만(없으면 404)
+        await ai_projects.get_readable(db, user, body.project_id)  # 소유자·공유 구성원만 허용(없으면 404)
     c = AIConversation(
         user_id=user.id, title=(body.title or "새 대화")[:200],
         system_prompt=body.system_prompt or "", tools_enabled=bool(tools_enabled),
@@ -1087,7 +1087,7 @@ async def get_messages(conv_id: str, user: User = Depends(get_current_user), db:
 
 
 async def _branch_messages(db: AsyncSession, user: User, conv_id: str) -> list[dict]:
-    """지금 가지의 메시지만. 사용자 메시지에는 versions·active_version·attachments."""
+    """현재 가지의 메시지만 반환. 사용자 메시지에는 versions·active_version·attachments 포함."""
     rows = await branches.load_rows(db, conv_id)
     path = branches.active_path(rows, conv_id)
     fb_rows = (await db.execute(
@@ -1096,7 +1096,7 @@ async def _branch_messages(db: AsyncSession, user: User, conv_id: str) -> list[d
     )).scalars().all()
     fbs = {f.message_id: f for f in fb_rows}
     atts = await ai_att.for_messages(db, [m.id for m in path if m.role == "user"])
-    # 생성 중인 답변 — 작업이 살아 있으면(하트비트) 빈 글이어도 보여 화면이 재연결하게, 죽었으면 끊김으로
+    # 생성 중인 답변 — 작업이 활성 상태(하트비트)이면 본문이 비어 있어도 표시하여 화면이 재연결하도록 하고, 종료되었으면 중단으로 처리
     live = await ai_runs.alive_set([m.id for m in path if m.role == "assistant" and m.status == "streaming"])
     return [_msg_dict(m, fbs.get(m.id), rows=rows, atts=atts.get(m.id), live=m.id in live) for m in path
             if not (m.role == "assistant" and not m.content and m.status == "streaming" and m.id not in live)]
@@ -1108,7 +1108,7 @@ async def delete_conversation(conv_id: str, user: User = Depends(get_current_use
     c = await db.get(AIConversation, conv_id)
     if not c or c.user_id != user.id:
         raise HTTPException(status_code=404, detail="대화를 찾을 수 없습니다")
-    # 생성 중인 답변은 멈춘다(지운 대화에 답이 다시 생기지 않게)
+    # 생성 중인 답변은 중지한다(삭제된 대화에 답변이 다시 생성되지 않도록)
     for mid in (await db.execute(select(AIMessage.id).where(AIMessage.conversation_id == conv_id,
                                                             AIMessage.status == "streaming"))).scalars().all():
         await ai_runs.request_stop(mid)
@@ -1137,7 +1137,7 @@ async def chat_send(
     external = ai_config._is_external(cfg.kind, cfg.base)
     atts = await _take_attachments(db, user, conv_id, body.attachment_ids, cfg)
 
-    # 사용자 메시지 저장(지금 가지 끝에 붙인다) + 제목/시각 갱신
+    # 사용자 메시지 저장(현재 가지 끝에 추가) + 제목/시각 갱신
     rows = await branches.load_rows(db, conv_id)
     path = branches.active_path(rows, conv_id)
     await _refuse_while_generating(path)
@@ -1160,17 +1160,17 @@ async def chat_send(
 
 
 async def _refuse_while_generating(path: list) -> None:
-    """이 대화에서 답변을 만드는 중이면 새 질문을 받지 않는다(다시 만들기와 같은 409).
+    """해당 대화에서 답변 생성이 진행 중이면 새 질문을 거부한다(다시 만들기와 동일한 409).
 
-    생성은 연결과 분리돼 돈다 — 화면이 멈춤을 전하지 못했거나 다른 탭에서 받는 중인데 또 보내면
-    답변 두 개가 같은 대화에서 동시에 돌았다. 멈춤을 누른 답변은 상태가 stopped 라 여기 걸리지 않는다.
+    생성은 연결과 분리되어 실행된다 — 화면이 멈춤을 전달하지 못했거나 다른 탭에서 수신 중인 상태에서 재전송하면
+    답변 두 개가 동일 대화에서 동시에 실행되었다. 멈춤을 선택한 답변은 상태가 stopped 이므로 본 검사에 해당하지 않는다.
     """
     if await ai_runs.alive_set([m.id for m in path if m.role == "assistant" and m.status == "streaming"]):
         raise HTTPException(status_code=409, detail="답변을 만드는 중입니다 — 끝나거나 멈춘 뒤 다시 보내세요")
 
 
 async def _take_attachments(db: AsyncSession, user: User, conv_id: str, ids: list[str], cfg) -> list:
-    """보낼 첨부를 확인한다. 이미지인데 모델이 못 읽으면 400(입력창이 미리 막지만 서버도 지킨다)."""
+    """전송할 첨부를 검증한다. 이미지인데 모델이 이미지 입력을 미지원하면 400(입력창이 사전 차단하나 서버에서도 검증한다)."""
     try:
         atts = await ai_att.owned_unbound(db, user.id, ids, conv_id)
     except ai_att.AttachError as e:
@@ -1181,15 +1181,15 @@ async def _take_attachments(db: AsyncSession, user: User, conv_id: str, ids: lis
 
 
 async def _provider_history(db: AsyncSession, path: list, cfg) -> list[dict]:
-    """제공자에게 보낼 대화(지금 가지만). 첨부가 있는 사용자 차례는 문서 글자·이미지를 덧붙인다."""
+    """제공자에 전달할 대화(현재 가지만). 첨부가 있는 사용자 차례에는 문서 텍스트·이미지를 추가한다."""
     user_ids = [m.id for m in path if m.role == "user"]
     atts = await ai_att.for_messages(db, user_ids)
     vision = supports_vision(cfg)
     bud = ai_ctx.budgets(cfg)
     last_user = user_ids[-1] if user_ids else None
     if atts and path:
-        # 첨부 문서도 밖에서 온 글일 수 있다 — 도구로 읽은 메일·웹처럼 "외부 내용 읽음"으로 표시해,
-        # 그 안의 지시로 나온 쓰기가 묻지 않고 실행되지 않게 한다(auto 모드의 high·MCP 와 같은 규칙)
+        # 첨부 문서 역시 외부에서 유입된 내용일 수 있다 — 도구로 읽은 메일·웹과 동일하게 "외부 내용 읽음"으로 표시하여,
+        # 해당 내용의 지시로 발생한 쓰기가 확인 없이 실행되지 않도록 한다(auto 모드의 high·MCP 와 동일한 규칙)
         first = next(a[0] for a in atts.values() if a)
         await _mark_context_read(path[0].user_id, path[0].conversation_id, "ai_attachment", first.name)
     out: list[dict] = []
@@ -1207,14 +1207,14 @@ async def _provider_history(db: AsyncSession, path: list, cfg) -> list[dict]:
 
 
 async def _mark_context_read(user_id: str, conv_id: str, kind: str, name: str | None) -> None:
-    """도구를 거치지 않고 모델에게 들어간 자료(첨부·프로젝트 지식) — 쓰기 승인 흐름의 '직전 외부 읽기' 표시."""
+    """도구를 경유하지 않고 모델에 전달된 자료(첨부·프로젝트 지식) — 쓰기 승인 흐름의 '직전 외부 읽기' 표시."""
     try:
         from app.mcp import writes as _writes
 
         hint = _writes.untrusted_hint(kind, {"name": name})
         await _writes.mark_untrusted_read(user_id, conv_id, hint)
-        await _writes.mark_conv_untrusted(user_id, conv_id, hint)   # 남에게 보이는 쓰기 관문(대화 단위)
-    except Exception:  # noqa: BLE001 — 표시 실패가 대화를 막으면 안 된다
+        await _writes.mark_conv_untrusted(user_id, conv_id, hint)   # 타인에게 노출되는 쓰기의 관문(대화 단위)
+    except Exception:  # noqa: BLE001 — 표시 실패가 대화를 차단해서는 안 된다
         pass
 
 
@@ -1222,8 +1222,8 @@ async def _turn_context(db: AsyncSession, user: User, conv: AIConversation, quer
                         cfg=None) -> tuple:
     """이번 차례의 시스템 맥락·도구. (system, tools, use_tools, memory_tool)
 
-    내 지침 + 대화 지침 + 프로젝트 지침·관련 지식(임시 대화 제외) + 메모리(켜져 있고 임시 대화가 아닐 때).
-    메모리 저장 도구(memory_save)는 도구가 켜진 대화에서만 보인다 — MCP 레지스트리에는 없다.
+    내 지침 + 대화 지침 + 프로젝트 지침·관련 지식(임시 대화 제외) + 메모리(활성화되어 있고 임시 대화가 아닌 경우).
+    메모리 저장 도구(memory_save)는 도구가 활성화된 대화에서만 노출된다 — MCP 레지스트리에는 없다.
     """
     prefs = await ai_config.get_user_ai_prefs(db, user.id)
     use_tools = bool(want_tools) and bool(WORKSPACE_TOOLS)
@@ -1243,10 +1243,10 @@ async def _turn_context(db: AsyncSession, user: User, conv: AIConversation, quer
             if block:
                 parts.append(block)
                 if p.owner_id != user.id and (p.instructions or "").strip():
-                    # 남이 쓴 프로젝트 지침이 맥락에 들어갔다 — 지침에 심은 지시가 내 이름으로 글을 내보내지 못하게 표시
+                    # 타인이 작성한 프로젝트 지침이 맥락에 포함됨 — 지침에 삽입된 지시가 사용자 명의로 내용을 외부에 게시하지 못하도록 표시
                     await _mark_context_read(user.id, conv.id, "ai_project_instructions", p.name)
                 if "[프로젝트 지식 파일" in block:
-                    # 지식 파일 본문이 이번 차례에 들어갔다(공유 프로젝트면 남이 고른 파일) — 외부 내용 읽음으로 표시
+                    # 지식 파일 본문이 이번 차례에 포함됨(공유 프로젝트의 경우 타인이 선택한 파일) — 외부 내용 읽음으로 표시
                     await _mark_context_read(user.id, conv.id, "ai_project_knowledge", p.name)
     memory_tool = False
     if not temporary and await ai_memory.is_enabled(db, user.id):
@@ -1279,9 +1279,9 @@ class ToolConfirmBody(BaseModel):
 @require_module("ai")
 async def confirm_tool(body: ToolConfirmBody, user: User = Depends(get_current_user),
                        db: AsyncSession = Depends(get_db)):
-    """AI 가 제안한 쓰기 도구를 사용자가 승인 — 확인 토큰(대화 중 tool_confirm 이벤트)으로 한 번만 실행.
+    """AI 가 제안한 쓰기 도구를 사용자가 승인 — 확인 토큰(대화 중 tool_confirm 이벤트)으로 1회만 실행.
 
-    실행 때도 관리자 허용 목록·내 도구 설정·외부 제공자 데이터 정책과 도구 자체 권한 검사를 그대로 거친다.
+    실행 시에도 관리자 허용 목록·사용자 도구 설정·외부 제공자 데이터 정책과 도구 자체 권한 검사를 동일하게 적용한다.
     """
     try:
         info = await tool_confirm.consume(body.token, user.id)
@@ -1305,11 +1305,11 @@ async def confirm_tool(body: ToolConfirmBody, user: User = Depends(get_current_u
 async def chat_regenerate(
     conv_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    """마지막 assistant 응답을 버리고 다시 생성(claude.ai 재생성)."""
+    """마지막 assistant 응답을 폐기하고 재생성(claude.ai 재생성)."""
     conv = await db.get(AIConversation, conv_id)
     if not conv or conv.user_id != user.id:
         raise HTTPException(status_code=404, detail="대화를 찾을 수 없습니다")
-    # 다시 만들기도 생성 한 번이다 — 예전엔 한도 검사가 없어 한도를 다 쓴 뒤에도 계속 만들 수 있었다
+    # 다시 만들기도 생성 1회로 집계한다 — 이전에는 한도 검사가 없어 한도 소진 후에도 계속 생성할 수 있었다
     await _enforce_daily_limit(db, user)
     cfg, _personal = await ai_config.resolve_provider_for_user(db, user)
     if cfg is None:
@@ -1318,7 +1318,7 @@ async def chat_regenerate(
 
     rows = await branches.load_rows(db, conv_id)
     path = branches.active_path(rows, conv_id)
-    # 지금 가지 끝에 붙은 assistant 메시지들 제거 → 마지막 user 메시지로 끝나게(다른 가지는 그대로)
+    # 현재 가지 끝의 assistant 메시지 제거 → 마지막 user 메시지로 종료되도록 한다(다른 가지는 유지)
     trailing = []
     for m in reversed(path):
         if m.role == "assistant":
@@ -1353,15 +1353,15 @@ _PARTIAL_STATUSES = ("interrupted", "stopped", "streaming")
 async def chat_continue(
     conv_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    """끊긴(interrupted)·멈춘(stopped) 마지막 답변을 이어 받는다 — 같은 메시지 뒤에 붙는다.
+    """중단된(interrupted)·멈춘(stopped) 마지막 답변을 이어 받는다 — 동일 메시지 뒤에 추가된다.
 
-    받은 부분을 마지막 assistant 차례로 보내고 이어 쓰기를 요청한다. 제공자가 거부하면 스트림이
-    ``continue_fallback`` 을 보내고 처음부터 다시 만든다(같은 메시지를 덮어씀).
+    수신분을 마지막 assistant 차례로 전달하고 이어 쓰기를 요청한다. 제공자가 거부하면 스트림이
+    ``continue_fallback`` 을 송신하고 처음부터 재생성한다(동일 메시지를 덮어씀).
     """
     conv = await db.get(AIConversation, conv_id)
     if not conv or conv.user_id != user.id:
         raise HTTPException(status_code=404, detail="대화를 찾을 수 없습니다")
-    # 한도를 다 쓴 뒤에는 이어 받기도 막는다(세지는 않는다 — 끊긴 답을 마저 받는 것이라)
+    # 한도 소진 후에는 이어 받기도 차단한다(집계하지는 않는다 — 중단된 답변의 잔여분 수신이므로)
     await _enforce_daily_limit(db, user)
     cfg, _personal = await ai_config.resolve_provider_for_user(db, user)
     if cfg is None:
@@ -1396,15 +1396,15 @@ async def _owned_assistant_message(db: AsyncSession, user: User, msg_id: str) ->
 @router.post("/messages/{msg_id}/stop")
 @require_module("ai")
 async def mark_stopped(msg_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """사용자가 [멈추기]를 눌렀음을 남긴다(연결 끊김만으로는 멈춤과 네트워크 끊김을 구분 못 한다).
+    """사용자가 [멈추기]를 선택했음을 기록한다(연결 종료만으로는 멈춤과 네트워크 단절을 구분할 수 없다).
 
-    스트림이 먼저 끝나 interrupted 로 저장됐든, 아직 저장 전(streaming)이든 stopped 로 바꾼다.
+    스트림이 먼저 종료되어 interrupted 로 저장된 경우와 저장 전(streaming)인 경우 모두 stopped 로 변경한다.
     """
     m = await _owned_assistant_message(db, user, msg_id)
     if (m.status or "complete") in ("streaming", "interrupted"):
         m.status = "stopped"
         await db.commit()
-    # 생성 작업은 연결과 분리돼 있다 — 어느 워커에서 돌든 Redis 키로 멈춘다(app.ai.runs)
+    # 생성 작업은 연결과 분리되어 있다 — 실행 워커와 무관하게 Redis 키로 중지한다(app.ai.runs)
     await ai_runs.request_stop(m.id)
     return {"id": m.id, "status": _msg_status(m)}
 
@@ -1413,10 +1413,10 @@ async def mark_stopped(msg_id: str, user: User = Depends(get_current_user), db: 
 @require_module("ai")
 async def message_stream(msg_id: str, after: str = "0", user: User = Depends(get_current_user),
                          db: AsyncSession = Depends(get_db)):
-    """생성 중(또는 막 끝난) 답변 이어 받기 — 어느 워커에서든 Redis Stream 을 ``after`` 다음부터.
+    """생성 중(또는 직전에 종료된) 답변 이어 받기 — 워커와 무관하게 Redis Stream 을 ``after`` 다음부터 읽는다.
 
-    SSE 계약은 /chat 과 같다(각 이벤트에 ``id:``). 이미 끝났으면 남은 이벤트 + done 후 종료,
-    스트림이 만료됐거나 작업이 죽었으면 DB 최종 내용으로 done(``final``). 주인만.
+    SSE 계약은 /chat 과 동일하다(각 이벤트에 ``id:``). 이미 종료되었으면 잔여 이벤트 + done 후 종료,
+    스트림이 만료되었거나 작업이 비정상 종료되었으면 DB 최종 내용으로 done(``final``). 소유자만 허용.
     """
     m = await db.get(AIMessage, msg_id)
     if m is not None:
@@ -1444,7 +1444,7 @@ class FeedbackBody(BaseModel):
 async def message_feedback(msg_id: str, body: FeedbackBody, user: User = Depends(get_current_user),
                            db: AsyncSession = Depends(get_db)):
     """답변 👍/👎. 개인정보 결정: 기본은 평가·이유·한 줄 의견만 저장하고,
-    대화 내용은 include_conversation=true 일 때만 이 답변까지 첨부한다. 관리자는 통계만 본다."""
+    대화 내용은 include_conversation=true 일 때만 해당 답변까지 첨부한다. 관리자는 통계만 조회한다."""
     m = await _owned_assistant_message(db, user, msg_id)
     if body.rating not in (None, "up", "down"):
         raise HTTPException(status_code=400, detail="rating 은 up·down·null 중 하나입니다")
@@ -1471,11 +1471,11 @@ async def message_feedback(msg_id: str, body: FeedbackBody, user: User = Depends
         snapshot = json.dumps(upto, ensure_ascii=False)[:_SNAPSHOT_MAX_CHARS]
     f = existing or AIMessageFeedback(message_id=msg_id, conversation_id=m.conversation_id, user_id=user.id)
     f.rating = body.rating
-    # 👍 에는 이유가 없다(이유 칩은 👎 전용)
+    # 👍 평가에는 이유 없음(이유 칩은 👎 전용)
     f.reasons = json.dumps(sorted(set(body.reasons)) if body.rating == "down" else [], ensure_ascii=False)
     f.comment = (body.comment or "").strip()[:1000]
     f.conversation_snapshot = snapshot
-    f.snapshot_state = None   # 새로 보낸 피드백 — 예전 만료·삭제 표시는 지운다
+    f.snapshot_state = None   # 신규 피드백 — 이전 만료·삭제 표시는 초기화한다
     f.model = m.model
     f.updated_at = datetime.now(timezone.utc)
     if existing is None:
@@ -1487,9 +1487,9 @@ async def message_feedback(msg_id: str, body: FeedbackBody, user: User = Depends
 # ─── 질문 수정 → 답변 버전 ───
 class EditRequest(BaseModel):
     content: str
-    keep_attachments: bool = True       # 원래 질문의 첨부를 새 버전에도 붙인다
-    attachment_ids: list[str] = []      # 새로 붙일 첨부
-    keep_attachment_ids: list[str] | None = None  # 원래 첨부 중 이번 버전에 넣을 것만(None = keep_attachments 따름)
+    keep_attachments: bool = True       # 원래 질문의 첨부를 새 버전에도 포함
+    attachment_ids: list[str] = []      # 신규 첨부
+    keep_attachment_ids: list[str] | None = None  # 원래 첨부 중 이번 버전에 포함할 항목만(None = keep_attachments 적용)
 
 
 async def _owned_user_message(db: AsyncSession, user: User, msg_id: str) -> tuple[AIMessage, AIConversation]:
@@ -1506,9 +1506,9 @@ async def _owned_user_message(db: AsyncSession, user: User, msg_id: str) -> tupl
 @require_module("ai")
 async def edit_message(msg_id: str, body: EditRequest, user: User = Depends(get_current_user),
                        db: AsyncSession = Depends(get_db)):
-    """질문 수정 — 같은 차례의 새 버전을 만들고 새 답변을 받는다(SSE 계약은 /chat 과 같다).
+    """질문 수정 — 동일 차례의 새 버전을 생성하고 새 답변을 수신한다(SSE 계약은 /chat 과 동일).
 
-    고친 질문 뒤에 있던 메시지는 옛 가지에 남는다(지우지 않음). ◀ ▶ 로 옛 버전을 고르면 그 뒤 대화가 돌아온다.
+    수정된 질문 뒤의 메시지는 이전 가지에 보존된다(삭제하지 않음). ◀ ▶ 로 이전 버전을 선택하면 이후 대화가 복원된다.
     """
     orig, conv = await _owned_user_message(db, user, msg_id)
     content = (body.content or "").strip()
@@ -1545,7 +1545,7 @@ async def edit_message(msg_id: str, body: EditRequest, user: User = Depends(get_
     await db.commit()
 
     rows = await branches.load_rows(db, conv.id)
-    path = branches.active_path(rows, conv.id)  # 새 버전에서 끝난다
+    path = branches.active_path(rows, conv.id)  # 새 버전에서 종료
     base_msgs = await _provider_history(db, path, cfg)
     system, tools, use_tools, memory_tool = await _turn_context(db, user, conv, content, conv.tools_enabled, cfg=cfg)
     await ai_quota.chat_count(user)
@@ -1556,7 +1556,7 @@ async def edit_message(msg_id: str, body: EditRequest, user: User = Depends(get_
 @router.get("/messages/{msg_id}/versions")
 @require_module("ai")
 async def message_versions(msg_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """같은 질문의 버전들 {versions:[{id, created_at}], active_version(1부터)}."""
+    """동일 질문의 버전 목록 {versions:[{id, created_at}], active_version(1부터)}."""
     m, conv = await _owned_user_message(db, user, msg_id)
     rows = await branches.load_rows(db, conv.id)
     m = next(r for r in rows if r.id == m.id)
@@ -1571,9 +1571,9 @@ async def message_versions(msg_id: str, user: User = Depends(get_current_user), 
 @require_module("ai")
 async def switch_version(msg_id: str, n: int, user: User = Depends(get_current_user),
                          db: AsyncSession = Depends(get_db)):
-    """버전 전환 — msg_id 와 같은 질문의 n번째(1부터) 버전을 보이게 하고 지금 가지의 메시지를 돌려준다.
+    """버전 전환 — msg_id 와 동일한 질문의 n번째(1부터) 버전을 표시 대상으로 설정하고 현재 가지의 메시지를 반환한다.
 
-    (상태를 바꾸는 호출이라 GET 이 아니라 POST 다.)
+    (상태를 변경하는 호출이므로 GET 이 아닌 POST 를 사용한다.)
     """
     m, conv = await _owned_user_message(db, user, msg_id)
     rows = await branches.load_rows(db, conv.id)
@@ -1586,7 +1586,7 @@ async def switch_version(msg_id: str, n: int, user: User = Depends(get_current_u
     return {"messages": await _branch_messages(db, user, conv.id)}
 
 
-# ─── 대화 검색(제목 + 메시지 본문, 내 일반 대화만) ───
+# ─── 대화 검색(제목 + 메시지 본문, 사용자 본인의 일반 대화만) ───
 SEARCH_LIMIT = 30
 
 
@@ -1604,7 +1604,7 @@ def _snippet(text: str, q: str, width: int = 60) -> str:
 @require_module("ai")
 async def search_conversations(q: str = "", user: User = Depends(get_current_user),
                                db: AsyncSession = Depends(get_db)):
-    """사이드바 대화 검색. 임시 대화는 검색되지 않는다. 결과 {results:[{id,title,snippet,match,message_id,
+    """사이드바 대화 검색. 임시 대화는 검색 대상에서 제외된다. 결과 {results:[{id,title,snippet,match,message_id,
     project_id,updated_at}]} — match = title|message, 최근 대화 순."""
     q = (q or "").strip()[:100]
     if not q:
@@ -1648,9 +1648,9 @@ async def upload_attachment(
     file: UploadFile = File(...), conversation_id: str | None = Form(None),
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    """첨부 올리기 — 문서는 바로 글자로 바꾸고(변환 중), 이미지는 임시 보관한다.
+    """첨부 업로드 — 문서는 즉시 텍스트로 변환하고(변환 중), 이미지는 임시 보관한다.
 
-    결과는 언제나 200: 성공 {id, name, size, mime, kind, status:"ready", chars, note, vision}
+    결과는 항상 200: 성공 {id, name, size, mime, kind, status:"ready", chars, note, vision}
     실패 {id:null, name, status:"failed", error_code, error} — error_code ∈ encrypted·distribution·corrupt·
     too_large·unsupported_version·unsupported.
     """
@@ -1673,7 +1673,7 @@ async def upload_attachment(
 @router.delete("/attachments/{att_id}", status_code=204)
 @require_module("ai")
 async def delete_attachment(att_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """보내기 전 첨부 빼기(보낸 첨부는 대화와 함께 지운다)."""
+    """전송 전 첨부 제거(전송된 첨부는 대화와 함께 삭제된다)."""
     from app.ai.models import AIAttachment
 
     a = await db.get(AIAttachment, att_id)
@@ -1697,7 +1697,7 @@ class QuestionAnswerBody(BaseModel):
 @require_module("ai")
 async def answer_question(qid: str, body: QuestionAnswerBody, user: User = Depends(get_current_user),
                           db: AsyncSession = Depends(get_db)):
-    """답하면 기다리던 답변이 이어서 진행한다. 계획 승인이면 권한 모드도 바꾼다."""
+    """응답 시 대기 중이던 답변이 진행을 재개한다. 계획 승인인 경우 권한 모드도 변경한다."""
     import time as _time
 
     from app.mcp import writes as _writes
@@ -1706,16 +1706,16 @@ async def answer_question(qid: str, body: QuestionAnswerBody, user: User = Depen
     cur = await ai_interact.peek(user.id, qid)
     if (cur and cur.get("kind") == "plan" and cur.get("status") == "pending" and not body.skip
             and body.choice in ("acceptEdits", "default")
-            # 만료됐는데 아직 대기로 남은 카드(답변 작업이 죽음)로는 모드를 바꾸지 않는다 — 답은 어차피 409 다
+            # 만료되었으나 대기 상태로 남은 카드(답변 작업 비정상 종료)로는 모드를 변경하지 않는다 — 응답은 어차피 409 로 거부된다
             and _time.time() <= float(cur.get("expires_at") or 0)):
-        # 모드를 먼저 바꾼다 — 답을 저장하는 순간 기다리던 답변이 이어서 쓰기 도구를 부르므로
+        # 모드를 먼저 변경한다 — 응답 저장 즉시 대기 중이던 답변이 재개되어 쓰기 도구를 호출하기 때문이다
         prev_mode = await _writes.get_permission_mode(db, user.id)
         mode = await _writes.set_permission_mode(db, user.id, body.choice)
     try:
         rec = await ai_interact.answer(user.id, qid, body.model_dump())
     except ai_interact.InteractError as e:
         if prev_mode is not None:
-            # 답이 저장되지 않았다(그 사이 만료·다른 탭에서 처리) — 바꿔 둔 모드를 되돌린다
+            # 응답이 저장되지 않음(그 사이 만료·다른 탭에서 처리) — 변경한 모드를 롤백한다
             try:
                 await _writes.set_permission_mode(db, user.id, prev_mode)
             except Exception:  # noqa: BLE001
@@ -1806,7 +1806,7 @@ async def patch_memory(mem_id: str, body: MemoryPatch, user: User = Depends(get_
 @router.delete("/memory/{mem_id}", status_code=204)
 @require_module("ai")
 async def delete_memory(mem_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """한 개 지우기 — 답변 중 "메모리에 저장함 [취소]"도 이것을 부른다."""
+    """1건 삭제 — 답변 중 "메모리에 저장함 [취소]"도 본 엔드포인트를 호출한다."""
     from app.ai.models import AIMemory
 
     m = await db.get(AIMemory, mem_id)
@@ -1820,7 +1820,7 @@ async def delete_memory(mem_id: str, user: User = Depends(get_current_user), db:
 @router.delete("/memory", status_code=204)
 @require_module("ai")
 async def clear_memory(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """전부 지우기."""
+    """전체 삭제."""
     from app.ai.models import AIMemory
 
     await db.execute(delete(AIMemory).where(AIMemory.user_id == user.id))
@@ -1832,7 +1832,7 @@ async def clear_memory(user: User = Depends(get_current_user), db: AsyncSession 
 @require_module("ai")
 async def put_memory_settings(body: MemorySettingsBody, user: User = Depends(get_current_user),
                               db: AsyncSession = Depends(get_db)):
-    """메모리 사용 스위치 — 끄면 읽지도 쓰지도 않는다(지우지는 않음)."""
+    """메모리 사용 스위치 — 비활성화 시 읽기·쓰기를 모두 수행하지 않는다(삭제하지는 않음)."""
     await ai_memory.set_enabled(db, user.id, body.enabled)
     return {"enabled": body.enabled}
 
@@ -1846,8 +1846,8 @@ class ProjectBody(BaseModel):
 class ProjectPatch(BaseModel):
     name: str | None = None
     instructions: str | None = None
-    share_group_id: str | None = None   # "" = 공유 해제(옛 계약 — 그룹 하나)
-    share_group_ids: list[str] | None = None   # 여러 그룹(빈 목록 = 공유 해제). 있으면 share_group_id 보다 우선
+    share_group_id: str | None = None   # "" = 공유 해제(구 계약 — 단일 그룹)
+    share_group_ids: list[str] | None = None   # 복수 그룹(빈 목록 = 공유 해제). 지정 시 share_group_id 보다 우선
 
 
 class ProjectFilesBody(BaseModel):
@@ -1865,7 +1865,7 @@ async def _project_out(db: AsyncSession, user: User, p, role_: str, *, with_file
     n = (await db.execute(select(func.count(AIConversation.id)).where(
         AIConversation.project_id == p.id, AIConversation.user_id == user.id))).scalar_one()
     gids = await ai_projects.share_group_ids(db, p)
-    if role_ != "owner":  # 구성원에게는 자기가 속한 그룹만
+    if role_ != "owner":  # 구성원에게는 본인이 속한 그룹만 반환
         from app.groups.service import user_group_ids
 
         mine = await user_group_ids(db, user.id)
@@ -1878,7 +1878,7 @@ async def _project_out(db: AsyncSession, user: User, p, role_: str, *, with_file
     owner = await db.get(User, p.owner_id)
     owner_name = (getattr(owner, "display_name", None) or getattr(owner, "username", None)) if owner else None
     readable_ids = None
-    if files is not None:  # 지금 보는 사람이 못 읽는 지식 파일(답변에서 빠짐)
+    if files is not None:  # 현재 조회자가 읽을 수 없는 지식 파일(답변에서 제외됨)
         readable_ids = {f.id for f in files if await ai_projects.readable(db, user, f)}
     return ai_projects.to_dict(p, role_, files=files, conv_count=n, groups=groups, owner_name=owner_name,
                                readable_ids=readable_ids)
@@ -1901,7 +1901,7 @@ def _clean_instructions(text: str) -> str:
 @router.get("/projects")
 @require_module("ai")
 async def list_projects(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """내 프로젝트 + 내 그룹에 공유된 프로젝트(role=member, 읽기 전용). 대화 수는 내 대화만."""
+    """사용자 본인의 프로젝트 + 소속 그룹에 공유된 프로젝트(role=member, 읽기 전용). 대화 수는 본인 대화만 집계."""
     out = [await _project_out(db, user, p, r, with_files=False) for p, r in await ai_projects.visible_projects(db, user)]
     return {"projects": out}
 
@@ -1909,7 +1909,7 @@ async def list_projects(user: User = Depends(get_current_user), db: AsyncSession
 @router.get("/projects/share-targets")
 @require_module("ai")
 async def project_share_targets(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """공유할 수 있는 그룹 — 내가 속한 그룹(관리자는 모든 그룹). members = 구성원 수."""
+    """공유 가능한 그룹 — 사용자가 속한 그룹(관리자는 전체 그룹). members = 구성원 수."""
     from app.groups.models import Group, GroupMember
     from app.groups.service import user_group_ids
 
@@ -1967,7 +1967,7 @@ async def patch_project(project_id: str, body: ProjectPatch, user: User = Depend
             if g is None or (not getattr(user, "is_admin", False) and gid not in mine):
                 raise HTTPException(status_code=400, detail="내가 속한 그룹에만 공유할 수 있습니다")
         await ai_projects.set_share_groups(db, p, want)
-        # 공유가 끊겨 못 보게 된 구성원 대화는 각자의 '최근 대화'로
+        # 공유 해제로 접근 불가가 된 구성원 대화는 각자의 '최근 대화'로 이동
         await ai_projects.detach_lost_conversations(db, p)
     p.updated_at = datetime.now(timezone.utc)
     await db.commit()
@@ -1977,7 +1977,7 @@ async def patch_project(project_id: str, body: ProjectPatch, user: User = Depend
 @router.delete("/projects/{project_id}", status_code=204)
 @require_module("ai")
 async def delete_project(project_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """프로젝트 지우기 — 대화는 지우지 않고 묶음만 푼다(구성원 대화 포함). 지식 파일 원본은 그대로."""
+    """프로젝트 삭제 — 대화는 삭제하지 않고 연결만 해제한다(구성원 대화 포함). 지식 파일 원본은 유지."""
     from sqlalchemy import update
 
     from app.ai.models import AIProjectFile
@@ -1996,7 +1996,7 @@ async def delete_project(project_id: str, user: User = Depends(get_current_user)
 @require_module("ai")
 async def add_project_files(project_id: str, body: ProjectFilesBody, user: User = Depends(get_current_user),
                             db: AsyncSession = Depends(get_db)):
-    """지식 파일 추가 — 워크스페이스 파일 경로만 저장(바이트 복사 없음). 주인이 지금 읽을 수 있어야 한다."""
+    """지식 파일 추가 — 워크스페이스 파일 경로만 저장(바이트 복사 없음). 소유자가 현재 읽기 권한을 보유해야 한다."""
     import os as _os
 
     from app.ai.models import AIProjectFile
@@ -2042,7 +2042,7 @@ async def remove_project_file(project_id: str, file_id: str, user: User = Depend
     return await _project_out(db, user, p, "owner", with_files=True)
 
 
-# 보강 엔드포인트(공유 점검·첨부 원본·모델 선택지) — 따로 둔 라우터를 같은 /api/ai 아래에 붙인다
+# 보강 엔드포인트(공유 점검·첨부 원본·모델 선택지) — 별도 라우터를 동일한 /api/ai 하위에 등록한다
 from app.ai.extras_router import router as _extras_router  # noqa: E402
 
 router.include_router(_extras_router)

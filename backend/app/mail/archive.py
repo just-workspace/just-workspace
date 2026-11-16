@@ -1,16 +1,16 @@
-"""외부 메일 아카이브 — 새 메일을 .eml 원본으로 파일 스토리지에 떨궈 둔다.
+"""외부 메일 아카이브 — 새 메일을 .eml 원본으로 파일 스토리지에 저장한다.
 
-지금까지 외부 계정 메일은 우리 쪽에 하나도 안 남았다. 볼 때마다 IMAP 에서
-실시간으로 끌어왔기 때문에, 계정이 정지되거나 해지되면 그대로 사라진다.
+기존에는 외부 계정 메일이 본 서비스 측에 전혀 보존되지 않았다. 조회 시마다 IMAP 에서
+실시간으로 가져왔기 때문에, 계정이 정지되거나 해지되면 그대로 소실된다.
 
-저장 위치를 파일 스토리지로 잡은 이유는, 파일 색인기가 이미 그 트리를 훑고 있어서
-`.eml` 추출기만 붙이면 **메일 본문과 첨부가 기존 파일 검색에 그대로 편입**되기
-때문이다. 별도 메일 검색 시스템을 만들 필요가 없다.
+저장 위치를 파일 스토리지로 정한 이유는, 파일 색인기가 이미 해당 트리를 순회하고 있어
+`.eml` 추출기만 추가하면 **메일 본문과 첨부가 기존 파일 검색에 그대로 편입**되기
+때문이다. 별도 메일 검색 시스템을 구축할 필요가 없다.
 
     my/메일보관/<계정주소>/<YYYY-MM>/<uid>_<제목>.eml
     my/메일보관/<계정주소>/<YYYY-MM>/첨부/<uid>_<파일명>
 
-계정별로 끌 수 있고(MailAccount.archive_enabled) 기본값은 꺼짐이다.
+계정별로 비활성화할 수 있으며(MailAccount.archive_enabled) 기본값은 비활성이다.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 def _client(account: MailAccount):
-    """수신 프로토콜에 맞는 클라이언트. POP3 계정에 IMAP 을 쓰면 110 포트로 IMAP
-    핸드셰이크를 시도하다 그대로 멈춘다(실제로 백필이 그렇게 걸렸다)."""
+    """수신 프로토콜에 맞는 클라이언트. POP3 계정에 IMAP 을 사용하면 110 포트로 IMAP
+    핸드셰이크를 시도하다 그대로 정지한다(실제로 백필이 해당 원인으로 정지한 사례가 있다)."""
     from app.mail import imap_client, pop3_client
     return pop3_client if getattr(account, "protocol", "imap") == "pop3" else imap_client
 
@@ -53,8 +53,8 @@ _USER_ID_RE = re.compile(r"[A-Za-z0-9-]{1,64}")
 
 
 def uid_part(uid) -> str:
-    """메시지 id → 파일 이름 조각. IMAP UID(숫자)는 그대로, 그 밖(POP3 UIDL 은 서버가 정한다)에
-    경로 문자·상위 조각이 섞이면 해시로 바꾼다(같은 id 는 늘 같은 이름 — 중복 저장 판정 유지)."""
+    """메시지 id → 파일 이름 조각. IMAP UID(숫자)는 그대로 사용하고, 그 외(POP3 UIDL 은 서버가 정한다)에
+    경로 문자·상위 조각이 포함되면 해시로 변환한다(동일 id 는 항상 동일 이름 — 중복 저장 판정 유지)."""
     u = str(uid)
     if _UID_RE.fullmatch(u) and u not in (".", "..") and not u.startswith(".."):
         return u
@@ -73,12 +73,12 @@ def _user_root(user_id: str) -> Path:
 
 
 def account_dir(user_id: str, account_email: str) -> Path:
-    """계정 아카이브 루트. 사용자 파일 영역 안이라 파일 탭에서 그대로 보인다."""
+    """계정 아카이브 루트. 사용자 파일 영역 내부이므로 파일 탭에 그대로 표시된다."""
     return _user_root(user_id) / ARCHIVE_DIRNAME / _safe_name(account_email, "account")
 
 
 def ensure_within(path: Path, user_id: str, account_email: str) -> Path:
-    """정규화한 최종 경로가 그 사용자·그 계정 보관 폴더 안인지(심볼릭 링크 포함)."""
+    """정규화한 최종 경로가 해당 사용자·해당 계정 보관 폴더 내부인지 여부(심볼릭 링크 포함)."""
     root = account_dir(user_id, account_email).resolve()
     real = path.resolve()
     if real != root and not real.is_relative_to(root):
@@ -105,7 +105,7 @@ def eml_path(user_id: str, account_email: str, uid: str, subject: str | None,
 
 def save_raw(user_id: str, account_email: str, uid: str, subject: str | None,
              received_at: str | None, raw: bytes) -> dict | None:
-    """이미 받아 온 원본을 저장한다. 이미 있으면 None."""
+    """이미 수신한 원본을 저장한다. 이미 존재하면 None."""
     target = eml_path(user_id, account_email, uid, subject, received_at)
     if target.exists():
         return None
@@ -118,7 +118,7 @@ def save_raw(user_id: str, account_email: str, uid: str, subject: str | None,
 
 async def archive_many(account: MailAccount, messages: list[dict],
                        mailbox: str = "INBOX") -> dict:
-    """여러 건을 연결 하나로 받아 저장한다(백필용)."""
+    """여러 건을 단일 연결로 수신하여 저장한다(백필용)."""
     if not getattr(account, "archive_enabled", False):
         return {"saved": 0, "skipped": len(messages)}
 
@@ -163,10 +163,10 @@ async def archive_message(
     received_at: str | None,
     mailbox: str = "INBOX",
 ) -> dict | None:
-    """메일 하나를 원본 그대로 저장한다. 이미 있으면 건너뛴다.
+    """메일 1건을 원본 그대로 저장한다. 이미 존재하면 건너뛴다.
 
-    폴러에서 불리므로 무슨 일이 있어도 예외를 올리지 않는다 — 아카이브가 실패했다고
-    새 메일 감지가 멈추면 안 된다.
+    폴러에서 호출되므로 어떤 경우에도 예외를 전파하지 않는다. 아카이브 실패로
+    새 메일 감지가 중단되어서는 안 된다.
     """
     if not getattr(account, "archive_enabled", False):
         return None
@@ -193,8 +193,8 @@ async def archive_message(
 
 
 def _save_attachments(raw: bytes, month_dir: Path, uid: str, owner: tuple[str, str] | None = None) -> int:
-    """첨부를 따로 떨군다. 파일 색인기가 PDF·docx 본문까지 이미 읽으므로
-    이렇게만 해두면 첨부 내용으로도 검색된다."""
+    """첨부를 별도 저장한다. 파일 색인기가 PDF·docx 본문까지 이미 처리하므로
+    이 저장만으로 첨부 내용도 검색 대상이 된다."""
     import email
     from email import policy
 
@@ -220,7 +220,7 @@ def _save_attachments(raw: bytes, month_dir: Path, uid: str, owner: tuple[str, s
             att_dir = month_dir / ATTACH_DIRNAME
             att_dir.mkdir(parents=True, exist_ok=True)
             safe = _safe_name(filename, "attachment")
-            # 확장자는 살려 둬야 색인기가 추출기를 고를 수 있다
+            # 확장자를 유지해야 색인기가 추출기를 선택할 수 있음
             suffix = Path(filename).suffix[:16]
             if suffix and not safe.lower().endswith(suffix.lower()):
                 safe = f"{safe}{suffix}"
@@ -237,13 +237,13 @@ def _save_attachments(raw: bytes, month_dir: Path, uid: str, owner: tuple[str, s
 
 # ── 백필 작업 (백그라운드) ────────────────────────────────────
 #
-# IMAP 에서 수백 통을 받아 내리는 데 몇 분이 걸린다. 요청 안에서 하면 nginx 가
-# 120초에 끊어 504 를 준다(실제로 그랬다). 작업은 백그라운드로 돌리고 진행상황만
-# Redis 에 남겨 프런트가 폴링하게 한다.
+# IMAP 에서 수백 통을 수신하는 데 수 분이 소요된다. 요청 내에서 수행하면 nginx 가
+# 120초에 연결을 끊어 504 를 반환한다(실제 발생 사례). 작업은 백그라운드로 실행하고 진행 상황만
+# Redis 에 기록하여 프런트가 폴링하게 한다.
 
 _JOB_KEY = "mail:archive:job:{account_id}"
 _JOB_TTL = 60 * 30
-_CHUNK = 20          # 한 번에 받는 통수 — 메모리와 진행률 갱신 주기의 절충
+_CHUNK = 20          # 1회 수신 통수 — 메모리와 진행률 갱신 주기의 절충
 
 
 async def _job_set(account_id: str, **fields) -> None:
@@ -297,7 +297,7 @@ async def _run_backfill(account: MailAccount, mailbox: str, limit: int) -> None:
 
 
 async def start_backfill(account: MailAccount, mailbox: str, limit: int) -> bool:
-    """이미 돌고 있으면 False. 작업 객체는 붙잡아 둬야 GC 가 중간에 취소하지 않는다."""
+    """이미 실행 중이면 False. 작업 객체는 참조를 유지해야 GC 가 중간에 취소하지 않는다."""
     import asyncio
 
     status = await backfill_status(account.id)

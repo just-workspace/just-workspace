@@ -1,9 +1,9 @@
-"""첫 관리자 만들기(`POST /api/setup/admin`)와 설정 토큰(app/setup/token.py).
+"""첫 관리자 생성(`POST /api/setup/admin`)과 설정 토큰(app/setup/token.py).
 
-- 설치 관리자가 꾸린 설치(JW_INSTALLER_KEY)에서는 관리자가 0명이어도 닫혀 있다.
-- 그 밖에서는 일회용 설정 토큰이 맞아야 한다. 토큰은 DB 에 해시로만 있고(워커·CLI 공통), 관리자가 생기면 사라진다.
-- 비밀번호 하한은 12자.
-- 같은 접두사의 나머지 경로는 관리자 세션 없이는 아무것도 바꾸지 못한다.
+- 설치 관리자가 구성한 설치(JW_INSTALLER_KEY)에서는 관리자가 0명이어도 차단된다.
+- 그 외에는 일회용 설정 토큰이 일치해야 한다. 토큰은 DB 에 해시로만 저장되며(워커·CLI 공통), 관리자가 생성되면 삭제된다.
+- 비밀번호 하한은 12자이다.
+- 동일 접두사의 나머지 경로는 관리자 세션 없이는 어떤 값도 변경할 수 없다.
 """
 
 import asyncio
@@ -25,7 +25,7 @@ GOOD_PASSWORD = "first-admin-pass-7"   # 18자
 
 @pytest.fixture()
 async def factory(tmp_path, monkeypatch):
-    """빈 DB 하나(파일 — 세션 여럿이 같은 DB 를 본다). cli·기동 훅이 쓰는 세션 공장도 이것으로 바꾼다."""
+    """빈 DB 하나(파일 — 여러 세션이 동일 DB 를 참조한다). cli·기동 훅이 사용하는 세션 팩토리도 이것으로 교체한다."""
     import app.db.session as session_mod
 
     monkeypatch.delenv(setup_token.INSTALLER_ENV, raising=False)
@@ -100,11 +100,11 @@ async def test_wrong_token_is_refused(http, factory):
         r = await http.post("/api/setup/admin", json=_body(bad))
         assert r.status_code == 403 and _code(r) == "setup_token_invalid", bad
     assert await _admins(factory) == 0
-    assert await _stored(factory) is not None   # 틀린 시도로 토큰이 사라지지 않는다
+    assert await _stored(factory) is not None   # 잘못된 시도로 토큰이 삭제되지 않음
 
 
 async def test_no_token_issued_means_closed(http, factory):
-    """토큰이 한 번도 발급되지 않은 서버(기동 훅이 못 돈 경우)는 어떤 값으로도 열리지 않는다."""
+    """토큰이 한 번도 발급되지 않은 서버(기동 훅이 실행되지 못한 경우)는 어떤 값으로도 열리지 않는다."""
     for candidate in (None, "", "0" * 64, hashlib.sha256(b"").hexdigest()):
         r = await http.post("/api/setup/admin", json=_body(candidate))
         assert r.status_code == 403 and _code(r) == "setup_token_invalid"
@@ -117,7 +117,7 @@ async def test_right_token_creates_admin_and_is_consumed(http, factory):
     assert r.status_code == 201 and r.json() == {"ok": True, "username": "root1"}
     assert await _admins(factory) == 1
     assert await _stored(factory) is None
-    # 같은 토큰으로 다시 — 관리자가 있으니 닫혔다
+    # 동일 토큰으로 재요청 — 관리자가 존재하므로 차단
     r = await http.post("/api/setup/admin", json=_body(token, username="root2"))
     assert r.status_code == 403 and _code(r) == "admin_exists"
     assert await _admins(factory) == 1
@@ -141,13 +141,13 @@ async def test_reissue_invalidates_previous_token(http, factory):
 
 
 async def test_token_works_across_sessions_like_other_workers(factory):
-    """한 워커(세션)가 발급한 토큰을 다른 워커(세션)가 확인한다 — 저장소가 DB 라 프로세스 메모리에 기대지 않는다."""
+    """한 워커(세션)가 발급한 토큰을 다른 워커(세션)가 검증한다 — 저장소가 DB 이므로 프로세스 메모리에 의존하지 않는다."""
     async with factory() as a:
         token = await setup_token.issue(a)
     async with factory() as b:
         assert await setup_token.matches(b, token)
         assert not await setup_token.matches(b, token + "x")
-    assert not hasattr(setup_token, "_token")   # 모듈에 평문을 들고 있지 않다
+    assert not hasattr(setup_token, "_token")   # 모듈에 평문을 보유하지 않음
 
 
 async def test_same_token_cannot_be_consumed_twice(factory):
@@ -175,7 +175,7 @@ async def test_validation_failure_keeps_token(http, factory):
     ("short-pw-1", False),            # 10자
     ("eleven-ch-1", False),           # 11자
     ("twelve-chr-1", True),           # 12자
-    ("password123!", False),          # 12자지만 흔한 비밀번호
+    ("password123!", False),          # 12자이나 흔한 비밀번호
 ])
 async def test_first_admin_password_minimum_is_12(http, factory, password, ok):
     token = await _issue(factory)
@@ -197,14 +197,14 @@ async def test_password_rule_for_existing_accounts_is_unchanged():
 
 
 async def test_installer_managed_install_is_closed(http, factory, monkeypatch):
-    token = await _issue(factory)   # 토큰이 어쩌다 있어도 소용없다
+    token = await _issue(factory)   # 토큰이 존재하더라도 무효
     monkeypatch.setenv(setup_token.INSTALLER_ENV, "k" * 48)
     r = await http.post("/api/setup/admin", json=_body(token))
     assert r.status_code == 403 and _code(r) == "setup_closed"
     assert await _admins(factory) == 0
     status = (await http.get("/api/setup/status")).json()
     assert status["setup_mode"] == "installer" and status["needs_setup"] is True
-    # 관리자가 생긴 뒤에도 닫혀 있다
+    # 관리자 생성 이후에도 차단 유지
     assert await cli.seed_admin("root1", GOOD_PASSWORD) == "created"
     r = await http.post("/api/setup/admin", json=_body(token, username="root2"))
     assert r.status_code == 403 and _code(r) == "setup_closed"
@@ -223,7 +223,7 @@ async def test_installer_managed_start_does_not_issue_token(factory, monkeypatch
 
 @pytest.fixture()
 def lock(monkeypatch):
-    """Redis 락 대신 — 처음 잡는 쪽만 True."""
+    """Redis 락 대체 — 최초 획득 측만 True."""
     held: set[str] = set()
 
     async def try_acquire(name, ttl):
@@ -269,7 +269,7 @@ async def test_start_with_admin_prints_nothing_and_drops_leftover(factory, lock,
 
 
 async def test_start_without_lock_issues_nothing(factory, monkeypatch):
-    """Redis 가 안 닿으면 락이 안 잡힌다 — 토큰 없이(닫힌 채) 뜬다."""
+    """Redis 에 연결할 수 없으면 락을 획득하지 못한다 — 토큰 없이(차단 상태로) 기동한다."""
     import app.jobs.lock as lock_mod
 
     async def never(name, ttl):
@@ -293,7 +293,7 @@ async def test_cli_setup_token_reissues(factory):
 async def test_cli_setup_token_refused_when_admin_exists(factory):
     await _issue(factory)
     assert await cli.seed_admin("root1", GOOD_PASSWORD) == "created"
-    assert await _stored(factory) is None    # seed-admin 이 남은 토큰을 지운다
+    assert await _stored(factory) is None    # seed-admin 이 잔여 토큰을 삭제
     with pytest.raises(cli.SetupTokenRefused):
         await cli.issue_setup_token()
 
@@ -333,7 +333,7 @@ async def test_attempts_are_rate_limited(http, factory, monkeypatch):
     assert codes[:5] == [403] * 5 and codes[5:] == [429, 429]
 
 
-# ─── 같은 접두사의 다른 경로 ───
+# ─── 동일 접두사의 다른 경로 ───
 
 
 async def test_status_exposes_no_secret(http, factory):
@@ -359,17 +359,17 @@ async def test_status_exposes_no_secret(http, factory):
     ("POST", "/api/setup/services/backend/restart", None),
 ])
 async def test_other_setup_routes_need_a_session_even_with_no_admin(http, factory, method, path, body):
-    """관리자가 0명이어도, 설정 토큰을 알아도 — 세션 없이는 401."""
+    """관리자가 0명이어도, 설정 토큰을 알고 있어도 — 세션 없이는 401."""
     token = await _issue(factory)
     r = await http.request(method, path, json=body, headers={"X-Setup-Token": token})
     assert r.status_code == 401, (path, r.status_code)
     async with factory() as s:
         keys = set((await s.execute(select(SystemSetting.key))).scalars().all())
-    assert keys == {setup_token.KEY}   # 아무 설정도 쓰이지 않았다
+    assert keys == {setup_token.KEY}   # 어떤 설정도 기록되지 않음
 
 
 def test_every_setup_route_is_accounted_for():
-    """접두사 아래에 새 경로가 생기면 이 표에 넣고 인증을 확인하게 한다."""
+    """접두사 아래에 새 경로가 추가되면 이 표에 등록하여 인증을 검증하도록 한다."""
     from app.setup import router as setup_router
 
     seen = {(m, r.path) for r in setup_router.router.routes for m in r.methods if m != "HEAD"}

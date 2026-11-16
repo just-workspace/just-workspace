@@ -47,10 +47,10 @@ async def get_settings_by_prefix(db: AsyncSession, prefix: str) -> dict[str, str
 
 
 async def builtin_mailserver_enabled(db: AsyncSession) -> bool:
-    """내장 메일서버를 쓰는가 — DB(feature.builtin_mailserver, 관리 › 메일의 웹 토글) 우선, env 폴백.
+    """내장 메일서버 사용 여부 — DB(feature.builtin_mailserver, 관리 › 메일의 웹 토글) 우선, env 폴백.
 
-    메일 화면(app/mail/router.py)은 DB 값을 보는데 계정 경로(승인 시 사서함 생성·비밀번호 동기화)는
-    env 만 봐서, 웹에서 "내장"으로 바꿔도 새 사용자 사서함이 안 생겼다(수신 550). 한 규칙으로 맞춘다.
+    메일 화면(app/mail/router.py)은 DB 값을 참조하나 계정 경로(승인 시 사서함 생성·비밀번호 동기화)는
+    env 만 참조하여, 웹에서 "내장"으로 변경해도 신규 사용자 사서함이 생성되지 않았다(수신 550). 단일 규칙으로 통일한다.
     """
     from app.setup import config_store
 

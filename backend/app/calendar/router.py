@@ -98,7 +98,7 @@ async def list_subscriptions(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """내 외부 캘린더 구독 — 이름·색·주소·마지막으로 받은 시각·실패 이유."""
+    """본인의 외부 캘린더 구독 — 이름·색·주소·최종 수신 시각·실패 사유."""
     return await subs.list_subscriptions(db, user.id)
 
 
@@ -109,8 +109,8 @@ async def create_subscription(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """iCal(.ics) 주소 구독 — 바로 한 번 받아 보고, 되면 읽기 전용 캘린더로 붙인다.
-    http/https(webcal) 만, 내부망·사설 주소는 거부(SSRF 방지), 5MB·20초 제한."""
+    """iCal(.ics) 주소 구독 — 즉시 1회 수신하여 성공하면 읽기 전용 캘린더로 등록한다.
+    http/https(webcal) 만 허용, 내부망·사설 주소는 거부(SSRF 방지), 5MB·20초 제한."""
     try:
         return await subs.subscribe(db, user.id, body.url, body.name, body.color)
     except subs.SubscriptionError as e:
@@ -125,8 +125,8 @@ async def preview_subscription(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """구독 추가 전에 주소를 미리 읽어 일정 수·이름을 돌려준다(저장 안 함). 받기 규칙은 구독 추가와 같다
-    (http/https(webcal) 만, 내부망·사설·루프백·링크 로컬 거부, 5MB·20초). 실패는 400/409 {code, message}."""
+    """구독 추가 전에 주소를 사전 조회하여 일정 수·이름을 반환한다(저장하지 않음). 수신 규칙은 구독 추가와 동일하다
+    (http/https(webcal) 만 허용, 내부망·사설·루프백·링크 로컬 거부, 5MB·20초). 실패는 400/409 {code, message}."""
     try:
         return await subs.preview(db, user.id, body.url)
     except subs.SubscriptionError as e:
@@ -141,8 +141,8 @@ async def refresh_subscription(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """지금 새로 받기(구독 행 ⋮ "지금 새로 고침"). 실패해도 200 — 응답의 error 에 이유가 남고 기존 일정은 그대로.
-    마지막 시도 1분 안에 다시 부르면 429 {code: "too_soon", retry_after} (Retry-After 헤더 같음)."""
+    """즉시 재수신(구독 행 ⋮ "지금 새로 고침"). 실패해도 200 — 응답의 error 에 사유가 기록되고 기존 일정은 유지된다.
+    마지막 시도 후 1분 이내에 재호출하면 429 {code: "too_soon", retry_after} (Retry-After 헤더 동일)."""
     cal = await subs.get_owned(db, user.id, calendar_id)
     if not cal:
         raise HTTPException(status_code=404, detail="Subscription not found")
@@ -182,7 +182,7 @@ async def set_calendar_shares(
     try:
         ok = await service.share_calendar(db, user.id, calendar_id, shares)
     except ValueError as e:
-        # 없는 사용자·본인 — 조용히 건너뛰지 않고 알려 준다(아무것도 바뀌지 않는다)
+        # 존재하지 않는 사용자·본인 — 무시하지 않고 오류로 응답(변경 사항 없음)
         raise HTTPException(status_code=400, detail=str(e))
     if not ok:
         raise HTTPException(status_code=404, detail="Calendar not found or no permission")
@@ -280,24 +280,24 @@ async def update_event(
         Query(description="반복 일정 수정 범위 — this(이 회차만, 기본) · following(이 회차와 이후 모두: 시리즈를 둘로 나눈다)"),
     ] = None,
 ):
-    """일정 수정. 반복 일정 한 회차만 바꾸려면 ?occurrence=<회차 시작> 또는 회차 id
-    ('{마스터}_{YYYYmmddTHHMMSS}')로 호출한다 → 회차 예외(RECURRENCE-ID) 행이 생긴다.
+    """일정 수정. 반복 일정의 한 회차만 변경하려면 ?occurrence=<회차 시작> 또는 회차 id
+    ('{마스터}_{YYYYmmddTHHMMSS}')로 호출한다 → 회차 예외(RECURRENCE-ID) 행이 생성된다.
 
-    scope=following(+occurrence 또는 회차 id·회차 예외 행 id): 그 회차부터 끝까지 수정 — 옛 시리즈를 직전에서
-    끊고 새 시리즈를 만든다(한 트랜잭션, 응답 id = 새 시리즈). 이후 구간의 지운 회차는 새 시리즈에서도 지운 채,
-    "이 일정만" 수정한 회차는 새 시리즈의 예외로 옮긴다(그 회차가 새 시리즈에 없으면 버린다). 횟수 반복은
-    규칙을 그대로 보내면 남은 회차만큼으로 줄인다. 첫 회차면 시리즈 전체 수정.
+    scope=following(+occurrence 또는 회차 id·회차 예외 행 id): 해당 회차부터 끝까지 수정 — 기존 시리즈를 직전에서
+    종료하고 새 시리즈를 생성한다(단일 트랜잭션, 응답 id = 새 시리즈). 이후 구간의 삭제된 회차는 새 시리즈에서도 삭제 상태로 유지하고,
+    "이 일정만" 수정한 회차는 새 시리즈의 예외로 이전한다(해당 회차가 새 시리즈에 없으면 폐기한다). 횟수 반복은
+    규칙을 그대로 전송하면 잔여 회차 수로 축소한다. 첫 회차이면 시리즈 전체 수정.
 
-    보낸 칸만 바뀐다. null 을 보내면 비운다(알림 없음·반복 안 함·반복 종료 없음·설명·장소·시간대·회의 링크).
-    제목·시작·끝·종일·캘린더·참석자·상태·exdates 의 null 은 "변경 없음"으로 본다(service._apply_fields)."""
-    # exclude_none 이면 "알림 없음"·"반복 안 함"으로 바꾼 null 이 버려져 저장되지 않았다
+    전송된 필드만 변경된다. null 을 전송하면 값을 비운다(알림 없음·반복 안 함·반복 종료 없음·설명·장소·시간대·회의 링크).
+    제목·시작·끝·종일·캘린더·참석자·상태·exdates 의 null 은 "변경 없음"으로 간주한다(service._apply_fields)."""
+    # exclude_none 사용 시 "알림 없음"·"반복 안 함"으로 변경한 null 이 제거되어 저장되지 않았다
     updates = body.model_dump(exclude_unset=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     master_id, occ = await _resolve_occ(db, event_id, occurrence)
     try:
         if scope == "following":
-            # 회차 예외 행 id 가 오면 마스터·그 회차의 원래 시작으로 바꾼다(삭제와 같은 규칙)
+            # 회차 예외 행 id 가 전달되면 마스터·해당 회차의 원래 시작으로 변환(삭제와 동일 규칙)
             row = await db.get(CalendarEventDB, master_id)
             if row is not None and row.parent_event_id:
                 if occ is None and row.recurrence_id is not None:
@@ -337,15 +337,15 @@ async def delete_event(
 ):
     """일정 삭제.
 
-    - scope 없음: 예전 그대로 — ?occurrence= 또는 회차 id 면 그 회차만(EXDATE), 아니면 일정/시리즈 전체.
-    - scope=this: 그 회차만. occurrence(또는 회차 id) 필요. 회차 예외 행 id 면 그 행을 지우고 EXDATE 로 남긴다.
-    - scope=following: 그 회차부터 끝까지(규칙을 직전에서 끊고 뒤 예외 행 정리). 첫 회차면 전체 삭제.
-    - scope=all: 시리즈 전체(회차 id·예외 행 id 를 줘도 마스터째).
-    notify=true 면 나를 뺀 참석자에게 취소 알림 — 응답 notified = 알린 사람 수.
+    - scope 없음: 기존 동작 유지 — ?occurrence= 또는 회차 id 이면 해당 회차만(EXDATE), 아니면 일정/시리즈 전체.
+    - scope=this: 해당 회차만. occurrence(또는 회차 id) 필요. 회차 예외 행 id 이면 해당 행을 삭제하고 EXDATE 로 기록한다.
+    - scope=following: 해당 회차부터 끝까지(규칙을 직전에서 종료하고 이후 예외 행 정리). 첫 회차이면 전체 삭제.
+    - scope=all: 시리즈 전체(회차 id·예외 행 id 를 지정해도 마스터까지 삭제).
+    notify=true 이면 본인을 제외한 참석자에게 취소 알림 — 응답 notified = 알림 대상자 수.
     """
     master_id, occ = await _resolve_occ(db, event_id, occurrence)
     row = await db.get(CalendarEventDB, master_id)
-    # 회차 예외 행 id 가 오면: 마스터·그 회차 시작으로 바꿔 범위 삭제에 태운다
+    # 회차 예외 행 id 가 전달되면 마스터·해당 회차 시작으로 변환하여 범위 삭제로 처리
     if row is not None and row.parent_event_id and scope in ("following", "all"):
         if occ is None and row.recurrence_id is not None:
             occ = row.recurrence_id
@@ -402,7 +402,7 @@ async def get_freebusy(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """워크스페이스 사용자들의 바쁜 구간(내용 없이 시각만). 모르는 이메일은 known=false."""
+    """워크스페이스 사용자의 바쁜 구간(내용 제외, 시각만). 미등록 이메일은 known=false."""
     try:
         items = await service.freebusy(db, [e for e in emails.split(",") if e.strip()], start, end)
     except ValueError as e:
@@ -461,7 +461,7 @@ async def import_calendar(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """.ics 업로드 → 이 캘린더로 가져오기. 같은 UID 는 덮어쓴다. 응답: {created, updated, skipped}"""
+    """.ics 업로드 → 해당 캘린더로 가져오기. 동일 UID 는 덮어쓴다. 응답: {created, updated, skipped}"""
     raw = await file.read(_ICS_MAX_BYTES + 1)
     if len(raw) > _ICS_MAX_BYTES:
         raise HTTPException(status_code=413, detail="파일이 너무 큽니다(10MB)")

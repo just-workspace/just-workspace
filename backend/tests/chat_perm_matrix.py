@@ -1,8 +1,8 @@
 """채팅 권한 동작 매트릭스 — 스냅샷 테스트(test_chat_perm_snapshot)와 권한 엔진 그림자/강제 비교
-(test_chat_perm_engine)가 같이 쓴다. pytest 가 직접 모으지 않는 도우미 모듈.
+(test_chat_perm_engine)가 공용으로 사용한다. pytest 가 직접 수집하지 않는 보조 모듈.
 
-세계(world) 하나를 SQLite 파일로 한 번 만들고, 경우마다 그 파일을 복사해 새 DB 로 연다
-(채널 삭제처럼 상태를 바꾸는 동작이 다음 경우에 새지 않게).
+세계(world) 하나를 SQLite 파일로 1회 생성하고, 경우마다 해당 파일을 복사하여 새 DB 로 연다
+(채널 삭제처럼 상태를 변경하는 동작이 다음 경우에 영향을 주지 않도록).
 
 행위자(actor):
   own  — 일반 채널 owner(채널을 만든 사람)            · DM 에서는 member
@@ -12,8 +12,8 @@
   gad  — 전역 관리자(is_admin), 멤버 아님
   gam  — 전역 관리자(is_admin), 일반 채널 member       · DM 비멤버
 채널: pub(공개) · prv(비공개) · arc(보관된 공개) · voi(공개 음성) · dm(own↔mem)
-메시지: 채널마다 행위자 전원이 쓴 글 m_<actor>_<ch> 가 하나씩 있다(지금은 비멤버도 자기 글 수정·삭제가
-된다 — 나간 채널의 내 글 — 그 동작까지 박제한다). m_mem_<ch> 가 기본 대상 글(스레드 루트).
+메시지: 채널마다 행위자 전원이 작성한 글 m_<actor>_<ch> 가 하나씩 존재한다(현재는 비멤버도 본인 글 수정·삭제가
+가능하다 — 탈퇴한 채널의 본인 글 — 해당 동작까지 고정한다). m_mem_<ch> 가 기본 대상 글(스레드 루트).
 """
 
 from __future__ import annotations
@@ -102,7 +102,7 @@ async def open_world(tmp_dir: str):
 
 
 def silence_side_effects(monkeypatch, tmp_dir: str) -> None:
-    """Redis·WS·푸시·LiveKit·스토리지를 끊는다(권한 판정만 본다)."""
+    """Redis·WS·푸시·LiveKit·스토리지를 차단한다(권한 판정만 검증)."""
     import app.realtime.events as ev
     from app.chat import notify, voice
     from app.chat import router as chat_router
@@ -132,10 +132,10 @@ def silence_side_effects(monkeypatch, tmp_dir: str) -> None:
 
 
 # ─── 동작 ───
-# 각 동작: async (db, user, ch, actor) -> 결과. 성공이면 200, HTTPException 이면 그 코드.
+# 각 동작: async (db, user, ch, actor) -> 결과. 성공이면 200, HTTPException 이면 해당 코드.
 
 def _other(actor: str) -> str:
-    """'남의 글' 대상 — 보통 mem 의 글, 행위자가 mem 이면 own 의 글."""
+    """'타인의 글' 대상 — 기본은 mem 의 글, 행위자가 mem 이면 own 의 글."""
     return "own" if actor == "mem" else "mem"
 
 
@@ -224,7 +224,7 @@ async def _act(name: str, db, user, ch: str, actor: str):
 
 
 async def seed_defaults(db) -> None:
-    """운영 init_db(_run_chat_roles_migration)와 같은 상태 — @everyone 행 + 기본 카테고리 3개에 채널 배치."""
+    """운영 init_db(_run_chat_roles_migration)와 동일한 상태 — @everyone 행 + 기본 카테고리 3개에 채널 배치."""
     from sqlalchemy import select
     from app.chat.roles import get_or_create_everyone
     from app.db.models import ChatCategory
@@ -255,12 +255,12 @@ async def run_case(name: str, ch: str, actor: str, tmp_dir: str, *, seeded: bool
         await eng.dispose()
 
 
-# ─── 지금 동작 — 손으로 적은 표 ───
-# 열: owner·admin·member·none(비멤버). 값: 200 = 됨, 그 외 = HTTP 코드.
-# 전역 관리자(is_admin)는 채팅 안에서 아무 특권이 없다 — gad 는 none, gam 은 member 열을 따른다.
-OK4 = {"owner": 200, "admin": 200, "member": 200, "none": 403}     # "멤버면 된다"
+# ─── 현재 동작 — 수기 작성 표 ───
+# 열: owner·admin·member·none(비멤버). 값: 200 = 허용, 그 외 = HTTP 코드.
+# 전역 관리자(is_admin)는 채팅 내에서 특권이 없다 — gad 는 none, gam 은 member 열을 따른다.
+OK4 = {"owner": 200, "admin": 200, "member": 200, "none": 403}     # 멤버이면 허용
 ALL = {"owner": 200, "admin": 200, "member": 200, "none": 200}     # 멤버십 검사 없음(본인 글)
-NONE = {"owner": 403, "admin": 403, "member": 403, "none": 403}    # 아무도 못 함
+NONE = {"owner": 403, "admin": 403, "member": 403, "none": 403}    # 전원 불가
 MGR = {"owner": 200, "admin": 200, "member": 403, "none": 403}     # 채널 owner/admin
 
 EXPECTED: dict[str, dict[str, int]] = {
@@ -272,18 +272,18 @@ EXPECTED: dict[str, dict[str, int]] = {
     "file.upload": OK4,
     "file.download": {"owner": 404, "admin": 404, "member": 404, "none": 403},
     "pins.list": OK4,
-    "message.pin": OK4,          # 멤버 누구나 고정
+    "message.pin": OK4,          # 멤버 전원 고정 가능
     "message.unpin": OK4,
     "reaction.toggle": OK4,
-    "message.edit_own": ALL,     # 나간 채널의 내 글도 고칠 수 있다
-    "message.edit_other": NONE,  # owner·admin 도 남의 글은 못 고친다
+    "message.edit_own": ALL,     # 탈퇴한 채널의 본인 글도 수정 가능
+    "message.edit_other": NONE,  # owner·admin 도 타인의 글은 수정 불가
     "message.delete_own": ALL,
-    "message.delete_other": NONE,  # owner·admin 도 남의 글은 못 지운다
+    "message.delete_other": NONE,  # owner·admin 도 타인의 글은 삭제 불가
     "preview.dismiss_own": ALL,
     "preview.dismiss_other": NONE,
     "channel.update": MGR,
     "channel.delete": {"owner": 200, "admin": 403, "member": 403, "none": 403},
-    "member.add": OK4,           # 멤버 누구나 초대
+    "member.add": OK4,           # 멤버 전원 초대 가능
     "member.kick": MGR,
     "member.leave": {"owner": 200, "admin": 200, "member": 200, "none": 404},
     "thread.get": OK4,
@@ -294,16 +294,16 @@ EXPECTED: dict[str, dict[str, int]] = {
     "prefs.get": OK4,
     "prefs.update": OK4,
     "draft.upsert": OK4,
-    "tabs.update": MGR,          # + 채널을 만든 사람(own = owner 라 MGR 과 같다)
+    "tabs.update": MGR,          # + 채널 생성자(own = owner 이므로 MGR 과 동일)
     "voice.join": OK4,
 }
 
-# 채널 종류별 덮어쓰기
+# 채널 종류별 재정의
 OVERRIDES: dict[tuple[str, str], dict[str, int]] = {
-    # DM 엔 탭을 못 단다(멤버 400, 비멤버는 멤버 검사에서 403)
+    # DM 에는 탭 추가 불가(멤버 400, 비멤버는 멤버 검사에서 403)
     ("tabs.update", "dm"): {"owner": 400, "admin": 400, "member": 400, "none": 403},
 }
-# 음성 채널이 아닌 곳에서 음성 접속 — 멤버 400(비멤버는 403 이 먼저)
+# 음성 채널이 아닌 채널에서 음성 접속 — 멤버 400(비멤버는 403 이 우선)
 for _ch in ("pub", "prv", "arc", "dm"):
     OVERRIDES[("voice.join", _ch)] = {"owner": 400, "admin": 400, "member": 400, "none": 403}
 

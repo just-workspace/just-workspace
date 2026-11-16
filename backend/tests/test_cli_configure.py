@@ -1,4 +1,4 @@
-"""`python -m app.cli configure` — 설치 관리자가 DB 에 저장되는 설정(SMTP 보안 방식, AI 제공자)을 넣는다."""
+"""`python -m app.cli configure` — 설치 관리자가 DB 에 저장되는 설정(SMTP 보안 방식, AI 제공자)을 기록한다."""
 
 import io
 
@@ -30,7 +30,7 @@ async def test_configure_sets_smtp_security_and_ai(db):
         assert await get_setting(s, "ai.provider.kind") == "openai"
         assert await get_setting(s, "ai.provider.model") == "some-model"
         stored = await get_setting(s, "ai.provider.api_key")
-        assert stored and "sk-test-value" not in stored          # 키는 암호화해 저장한다
+        assert stored and "sk-test-value" not in stored          # 키는 암호화하여 저장
 
 
 async def test_configure_rejects_unknown_settings(db):

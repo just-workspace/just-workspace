@@ -1,6 +1,6 @@
-"""백업 형식·계획·실행·복원 — docker 없이(가짜 실행기 tests/backup_fakes.py).
+"""백업 형식·계획·실행·복원 — docker 없이 수행(가짜 실행기 tests/backup_fakes.py).
 
-실제 pg_dump/pg_restore 왕복은 여기서 돌지 않는다(docs/data-safety.md 의 "검증").
+실제 pg_dump/pg_restore 왕복은 여기서 수행하지 않는다(docs/data-safety.md 의 "검증").
 """
 
 import io
@@ -68,7 +68,7 @@ def test_pre_update_plan_is_db_and_config_only():
     plan = pl.plan_backup(cfg(), fmt.KIND_PRE_UPDATE)
     assert plan.items == ["db", "config"] and [s.id for s in plan.steps] == ["db.dump", "config.tar"]
     assert plan.steps[0].argv == ("docker", "exec", "ws-postgres", "pg_dump", "-U", "workspace", "-d", "workspace", "-Fc")
-    assert json.loads(json.dumps(plan.to_dict()))["steps"][0]["stdout"] == "db.dump"      # 그대로 JSON 이 된다
+    assert json.loads(json.dumps(plan.to_dict()))["steps"][0]["stdout"] == "db.dump"      # 그대로 JSON 직렬화 가능
 
 
 def test_full_plan_stops_gitea_around_its_copy_and_skips_files_by_default():
@@ -78,7 +78,7 @@ def test_full_plan_stops_gitea_around_its_copy_and_skips_files_by_default():
         "gitea.stop", "gitea.db", "gitea.data", "gitea.start"]
     assert next(s for s in plan.steps if s.id == "gitea.start").always
     assert "files" not in plan.items and plan.skipped["files"] == "not-requested"
-    assert "redis" not in " ".join(ids)                                # Redis 는 뜨지 않는다
+    assert "redis" not in " ".join(ids)                                # Redis 는 덤프하지 않음
     assert "files" in pl.plan_backup(cfg(), include_files=True).items
 
 
@@ -111,7 +111,7 @@ def test_encryption_round_trip_and_wrong_password():
         with pytest.raises(BackupError):
             fmt.decrypt_bytes(blob, bad)
     with pytest.raises(BackupError):
-        fmt.decrypt_bytes(blob[:-1] + bytes([blob[-1] ^ 1]), "correct horse")      # 한 비트만 바뀌어도
+        fmt.decrypt_bytes(blob[:-1] + bytes([blob[-1] ^ 1]), "correct horse")      # 한 비트만 변경되어도
 
 
 def test_secret_fingerprint_does_not_reveal_the_key():
@@ -139,7 +139,7 @@ def test_full_backup_contents_and_manifest(stack, tmp_path):
         assert path.stat().st_mode & 0o077 == 0                          # 소유자만
     assert (result.path / "db.dump").read_bytes() == b"LIVE-DB"
     assert fmt.SECRET_WARNING in m["warnings"]
-    # 코드 저장소는 세웠다가 다시 띄웠다
+    # 코드 저장소는 중지 후 재기동됨
     ev = stack.events
     assert ev.index("stop ws-gitea") < ev.index("pg_dump gitea") < ev.index("start ws-gitea")
     assert stack.containers["ws-gitea"]["State"]["Running"]
@@ -187,7 +187,7 @@ def test_refuses_to_start_without_enough_space(stack, tmp_path, monkeypatch):
     with pytest.raises(BackupError) as info:
         make(stack, tmp_path)
     assert "여유 공간" in str(info.value)
-    assert not any(e.startswith(("pg_dump", "tar-out", "stop")) for e in stack.events)     # 아무것도 시작하지 않았다
+    assert not any(e.startswith(("pg_dump", "tar-out", "stop")) for e in stack.events)     # 아무 작업도 시작되지 않음
     assert list(tmp_path.iterdir()) == []
 
 
@@ -204,7 +204,7 @@ def test_db_dump_failure_fails_the_backup_and_leaves_nothing(stack, tmp_path):
     with pytest.raises(BackupError) as info:
         make(stack, tmp_path)
     assert "db.dump" in str(info.value) and list(tmp_path.iterdir()) == []
-    assert stack.containers["ws-gitea"]["State"]["Running"]            # 세웠던 것은 다시 띄웠다
+    assert stack.containers["ws-gitea"]["State"]["Running"]            # 중지했던 대상은 재기동됨
 
 
 def test_other_item_failure_is_reported_as_partial(stack, tmp_path):
@@ -212,7 +212,7 @@ def test_other_item_failure_is_reported_as_partial(stack, tmp_path):
     result = make(stack, tmp_path)
     assert result.status == "partial" and "gitea" not in result.manifest["items"]
     assert result.manifest["skipped"]["gitea"] == "failed" and any("gitea.data" in f for f in result.failures)
-    assert not (result.path / "gitea-db.dump").exists()                # 반쪽 항목은 남기지 않는다
+    assert not (result.path / "gitea-db.dump").exists()                # 불완전한 항목은 남기지 않음
     assert "start ws-gitea" in stack.events
     assert fmt.verify(fmt.open_backup(result.path)) == []
 
@@ -230,7 +230,7 @@ def test_pack_puts_manifest_first_and_summary_does_not_read_the_rest(stack, tmp_
     with tarfile.open(archive) as tar:
         assert tar.getnames()[0] == "manifest.json"
     assert fmt.verify(fmt.open_backup(archive)) == []
-    # manifest 멤버까지만 남기고 그 뒤를 쓰레기로 바꿔도 요약은 된다 — 나머지를 읽지 않는다는 뜻
+    # manifest 멤버까지만 남기고 이후를 무의미한 데이터로 교체해도 요약은 가능 — 나머지를 읽지 않음을 의미
     with tarfile.open(archive) as tar:
         first = tar.next()
         end = first.offset_data + (first.size + 511) // 512 * 512
@@ -317,7 +317,7 @@ def test_restore_from_archive_replaces_everything_and_keeps_a_safety_dump(stack,
     assert stack.dbs["workspace"] == b"LIVE-DB" and stack.dbs["gitea"] == b"GITEA-DB"
     assert stack.volumes["ws-mail-data"] == b"MAILBOXES" and stack.volumes["ws-storage-data"] == b"FILES"
     assert stack.volumes["ws-gitea-data"] == b"REPOS"
-    assert stack.project[".env"] == b"SECRET_KEY=original\nEDITED=1\n"            # 설정은 달라고 할 때만
+    assert stack.project[".env"] == b"SECRET_KEY=original\nEDITED=1\n"            # 설정은 요청 시에만 복원
     assert "config" not in result.items and calls == ["migrate"]
     assert result.stages == ["verify", "compat", "extract", "safety-dump", "stop", "db-load", "db-swap", "migrate",
                              "items", "start", "check"]
@@ -328,9 +328,9 @@ def test_restore_from_archive_replaces_everything_and_keeps_a_safety_dump(stack,
     assert starts == ["start ws-gitea", "start ws-mailserver", "start ws-sso", "start ws-backend"]
     assert ev.index("stop ws-backend") < ev.index("pg_restore workspace_restore_new") < ev.index("start ws-backend")
     assert ev.index("rename workspace_restore_new→workspace") < ev.index("tar-in ws-mail-data")
-    assert set(stack.dbs) == {"workspace", "gitea", "postgres"}                  # 임시 DB 는 남지 않는다
+    assert set(stack.dbs) == {"workspace", "gitea", "postgres"}                  # 임시 DB 는 남지 않음
     assert Path(result.safety_dump).read_bytes() == b"NEWER-DB"                  # 복원 전 상태
-    assert not list((tmp_path / "work").glob("_restore-*"))                      # 작업 폴더도
+    assert not list((tmp_path / "work").glob("_restore-*"))                      # 작업 폴더도 남지 않음
     assert any("다시 로그인" in n for n in result.notes)
 
 
@@ -349,7 +349,7 @@ def test_restore_refuses_backup_from_a_newer_schema(stack, tmp_path):
 def test_restore_applies_pending_steps_for_an_older_backup(stack, tmp_path):
     result = make(stack, tmp_path, kind=fmt.KIND_PRE_UPDATE)
     m = json.loads((result.path / "manifest.json").read_text(encoding="utf-8"))
-    m["schema_version"] = 0                                                      # 더 낮은 버전에서 만든 백업
+    m["schema_version"] = 0                                                      # 더 낮은 버전에서 생성한 백업
     (result.path / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
     out = restore(stack, result.path, tmp_path, migrate=lambda: (0, SCHEMA_VERSION))
     assert (out.schema_from, out.schema_to) == (0, SCHEMA_VERSION)
@@ -373,15 +373,15 @@ def test_restore_checks_the_encryption_key(stack, tmp_path):
     restore(stack, result.path, tmp_path, env=other, allow_key_mismatch=True)
 
     stack.project[".env"] = b"SECRET_KEY=a-different-key\n"
-    out = restore(stack, result.path, tmp_path, env=other, with_config=True)     # 설정까지 되돌리면 키도 돌아온다
+    out = restore(stack, result.path, tmp_path, env=other, with_config=True)     # 설정까지 복원하면 키도 복원됨
     assert out.config_restored and stack.project[".env"] == b"SECRET_KEY=original\nDB_PASSWORD=pw\n"
     assert any("docker compose up -d" in n for n in out.notes)
-    assert not list(tmp_path.glob("_restore-*"))                                 # 풀어 놓은 설정은 남기지 않는다
+    assert not list(tmp_path.glob("_restore-*"))                                 # 압축 해제한 설정은 남기지 않음
 
 
 def test_restore_needs_the_password_for_protected_config(stack, tmp_path):
     result = make(stack, tmp_path, kind=fmt.KIND_PRE_UPDATE, password="pw-1234")
-    restore(stack, result.path, tmp_path)                                        # 설정을 안 건드리면 암호가 필요 없다
+    restore(stack, result.path, tmp_path)                                        # 설정을 변경하지 않으면 암호 불필요
     for bad in (None, "wrong"):
         with pytest.raises(runner.RestoreError) as info:
             restore(stack, result.path, tmp_path, with_config=True, password=bad)
@@ -397,7 +397,7 @@ def test_failed_load_leaves_the_live_database_alone(stack, tmp_path):
         restore(stack, result.path, tmp_path)
     assert info.value.stage == "db-load" and info.value.state == runner.STATE_UNTOUCHED
     assert stack.dbs["workspace"] == b"NEWER-DB" and "workspace_restore_new" not in stack.dbs
-    assert all(stack.containers[c]["State"]["Running"] for c in ("ws-backend", "ws-sso"))   # 다시 떴다
+    assert all(stack.containers[c]["State"]["Running"] for c in ("ws-backend", "ws-sso"))   # 재기동됨
     assert "db-load" not in info.value.done and "stop" in info.value.done
 
 
@@ -412,7 +412,7 @@ def test_failed_migration_rolls_the_database_back(stack, tmp_path):
         restore(stack, result.path, tmp_path, migrate=boom)
     assert info.value.stage == "migrate" and "단계 2 실패" in info.value.cause
     assert info.value.state == runner.STATE_ROLLED_BACK
-    assert stack.dbs["workspace"] == b"NEWER-DB"                                 # 복원 전 그대로
+    assert stack.dbs["workspace"] == b"NEWER-DB"                                 # 복원 전 상태 유지
     assert set(stack.dbs) == {"workspace", "gitea", "postgres"}
     assert stack.containers["ws-backend"]["State"]["Running"]
 
@@ -434,7 +434,7 @@ def test_item_failure_is_reported_and_services_come_back(stack, tmp_path):
     with pytest.raises(runner.RestoreError) as info:
         restore(stack, result.path, tmp_path)
     assert info.value.stage == "items" and "mail.data" in info.value.cause
-    assert "workspace_restore_old" in info.value.state                           # 복원 전 DB 가 어디 있는지 알려 준다
+    assert "workspace_restore_old" in info.value.state                           # 복원 전 DB 의 위치를 안내
     assert stack.dbs["workspace"] == b"LIVE-DB" and stack.dbs["workspace_restore_old"] == b"NEWER-DB"
     assert all(c["State"]["Running"] for c in stack.containers.values())
 
@@ -489,7 +489,7 @@ def test_cli_create_inspect_verify_list(cli_stack, tmp_path, capsys):
     assert len(json.loads(capsys.readouterr().out.split("\n", 1)[1])) == 1
 
     data = Path(out["path"]).read_bytes()
-    Path(out["path"]).write_bytes(data[: len(data) // 2])                        # 옮기다 끊긴 파일
+    Path(out["path"]).write_bytes(data[: len(data) // 2])                        # 전송 중 중단된 파일
     assert cli.main(["backup", "verify", out["path"]]) == 1
     assert cli.main(["backup", "inspect", str(tmp_path / "nope.jwbak")]) == 1
 
@@ -503,7 +503,7 @@ def test_cli_partial_backup_exit_code(cli_stack, capsys):
 def test_cli_restore_reports_stage_and_exit_code(cli_stack, tmp_path, capsys, monkeypatch):
     assert cli.main(["backup", "create", "--kind", "pre-update", "--json"]) == 0
     path = json.loads(capsys.readouterr().out)["path"]
-    assert cli.main(["restore", path]) == 2                                      # 확인 없이는 하지 않는다
+    assert cli.main(["restore", path]) == 2                                      # 확인 없이는 수행하지 않음
     assert "--yes" in capsys.readouterr().err
 
     monkeypatch.setattr(runner, "_default_migrate", lambda: (1, 1))
@@ -548,7 +548,7 @@ async def test_admin_backup_records_honest_status(db_session, stack, tmp_path, m
 
 
 def test_no_in_app_restore_endpoint():
-    """앱 안의 복원 API 는 없다 — 복원은 backend 를 세우고 하는 일이라 CLI·설치 관리자만 한다."""
+    """앱 내부의 복원 API 는 없다 — 복원은 backend 를 중지하고 수행하는 작업이므로 CLI·설치 관리자만 수행한다."""
     from app.setup import router as setup_router
 
     paths = {r.path for r in setup_router.router.routes}

@@ -1,16 +1,16 @@
-"""방해 금지 일정 — 요일·시간대로 웹푸시를 막는다.
+"""방해 금지 일정 — 요일·시간대 기준으로 웹푸시를 차단한다.
 
-채팅의 방해 금지(app/chat/presence.py: 상태 dnd·dnd_until)는 "지금 켜기" 이고, 이것은 "매일 밤 10시~
-아침 8시" 같은 반복 일정이다. 둘 중 하나라도 걸리면 푸시를 보내지 않는다(인앱 알림은 그대로 간다).
+채팅의 방해 금지(app/chat/presence.py: 상태 dnd·dnd_until)는 "지금 켜기" 이고, 본 모듈은 "매일 밤 10시~
+아침 8시" 같은 반복 일정이다. 둘 중 하나라도 해당하면 푸시를 전송하지 않는다(인앱 알림은 그대로 전달된다).
 
 저장: user_prefs 의 서버 관리 키 `notify.dnd_schedule`
     {"enabled": true, "days": [0,1,2,3,4], "start": "22:00", "end": "08:00", "timezone": "Asia/Seoul"}
-- days: 0=월 … 6=일. **시작하는 요일** 기준이다 — 금 22:00~08:00 이면 토요일 새벽까지 막힌다.
-- end <= start 면 자정을 넘긴다. start == end 면 그 요일 하루 종일.
+- days: 0=월 … 6=일. **시작 요일** 기준이다 — 금 22:00~08:00 이면 토요일 새벽까지 차단된다.
+- end <= start 이면 자정을 넘긴다. start == end 이면 해당 요일 종일.
 - timezone 이 없으면 개인 설정 timezone, 그것도 없으면 Asia/Seoul.
 
-검사 지점: app/push/router.py send_push (모든 웹푸시가 지나는 곳). 채팅 push_allowed 와 알림 서비스
-_push 가 둘 다 send_push 를 부르므로 채팅 모듈을 고치지 않고도 둘 다에 걸린다.
+검사 지점: app/push/router.py send_push (모든 웹푸시의 경유 지점). 채팅 push_allowed 와 알림 서비스
+_push 가 모두 send_push 를 호출하므로 채팅 모듈을 수정하지 않고도 양쪽에 적용된다.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def _tz(name: str | None):
             return ZoneInfo(n)
         except (ZoneInfoNotFoundError, ValueError):
             continue
-    return timezone(timedelta(hours=9))   # 시간대 DB(tzdata)가 없는 이미지 — 한국 시간으로
+    return timezone(timedelta(hours=9))   # 시간대 DB(tzdata)가 없는 이미지 — 한국 시간 적용
 
 
 def _t(s: str) -> time:
@@ -46,7 +46,7 @@ def _t(s: str) -> time:
 
 
 def validate(body: dict) -> dict:
-    """요청 → 저장할 정규화 일정. 잘못되면 400."""
+    """요청 → 저장용 정규화 일정. 유효하지 않으면 400."""
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="객체를 보내야 합니다")
     enabled = bool(body.get("enabled", True))
@@ -67,7 +67,7 @@ def validate(body: dict) -> dict:
 
 
 def in_quiet_hours(schedule: dict | None, now: datetime | None = None, fallback_tz: str | None = None) -> bool:
-    """지금이 방해 금지 시간인가."""
+    """현재 시각이 방해 금지 시간에 해당하는지 여부."""
     if not schedule or not schedule.get("enabled"):
         return False
     try:
@@ -81,16 +81,16 @@ def in_quiet_hours(schedule: dict | None, now: datetime | None = None, fallback_
     local = now.astimezone(_tz(schedule.get("timezone") or fallback_tz))
     t, wd = local.time(), local.weekday()
     yesterday = (local - timedelta(days=1)).weekday()
-    if start == end:                       # 하루 종일
+    if start == end:                       # 종일
         return wd in days
-    if start < end:                        # 같은 날 안
+    if start < end:                        # 동일 날짜 내
         return wd in days and start <= t < end
-    # 자정을 넘김 — 오늘 시작분(start 이후) 또는 어제 시작분(end 이전)
+    # 자정 경과 — 당일 시작분(start 이후) 또는 전일 시작분(end 이전)
     return (wd in days and t >= start) or (yesterday in days and t < end)
 
 
 async def schedule_blocks(user_id: str, now: datetime | None = None) -> bool:
-    """이 사용자에게 지금 푸시를 막아야 하나(일정 기준). DB 를 못 읽으면 막지 않는다."""
+    """해당 사용자에 대한 푸시를 현재 차단해야 하는지 여부(일정 기준). DB 조회 실패 시 차단하지 않는다."""
     try:
         from app.db.session import async_session
         from app.me.prefs import get_prefs
@@ -104,7 +104,7 @@ async def schedule_blocks(user_id: str, now: datetime | None = None) -> bool:
 
 
 async def push_allowed(user_id: str) -> bool:
-    """채팅 방해 금지(지금 켜기)와 일정을 함께 본 푸시 게이트."""
+    """채팅 방해 금지(지금 켜기)와 일정을 함께 확인하는 푸시 게이트."""
     from app.chat.presence import push_allowed as chat_push_allowed
 
     if not await chat_push_allowed(user_id):

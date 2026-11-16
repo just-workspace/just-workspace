@@ -1,11 +1,11 @@
-"""메모리 — AI 가 대화에서 기억해 두는 사용자 정보(선호·업무·사람).
+"""메모리 — AI 가 대화에서 기억하는 사용자 정보(선호·업무·사람).
 
-- 저장 경로는 둘: 설정 › AI › 메모리(직접 추가·수정)와 **내장 AI 전용 도구** ``memory_save``.
-  이 도구는 WORKSPACE_TOOLS(=MCP 레지스트리)에 넣지 않는다 — claude.ai 등 외부 커넥터에는 보이지 않고,
-  내장 AI 채팅 루프(app.ai.router._chat_event_stream)가 이름으로 가로채 직접 처리한다.
+- 저장 경로는 두 가지: 설정 › AI › 메모리(직접 추가·수정)와 **내장 AI 전용 도구** ``memory_save``.
+  본 도구는 WORKSPACE_TOOLS(=MCP 레지스트리)에 등록하지 않는다 — claude.ai 등 외부 커넥터에는 노출되지 않으며,
+  내장 AI 채팅 루프(app.ai.router._chat_event_stream)가 이름으로 가로채어 직접 처리한다.
 - 비밀 거부: 비밀번호·토큰·API 키·개인키·주민등록번호·카드번호는 저장하지 않는다(app.ai.pii 패턴 + 비밀 단어 휴리스틱).
-- 스위치 "메모리 사용"(사용자별, 기본 켬): 끄면 읽지도(시스템 맥락에 안 넣음) 쓰지도(도구 안 보임) 않는다. 지우지는 않는다.
-- 임시 대화는 읽지도 쓰지도 않는다(호출자가 판단).
+- 스위치 "메모리 사용"(사용자별, 기본 활성화): 비활성화 시 읽기(시스템 컨텍스트에 미포함)와 쓰기(도구 미노출)를 모두 수행하지 않는다. 삭제하지는 않는다.
+- 임시 대화에서는 읽기·쓰기를 모두 수행하지 않는다(호출자가 판단).
 """
 
 from __future__ import annotations
@@ -22,11 +22,11 @@ from app.ai.models import AIMemory
 KINDS = ("preference", "work", "person")
 MAX_TEXT = 500
 MAX_ITEMS = 300               # 사용자당 보관 상한
-CONTEXT_BUDGET = 3000         # 시스템 맥락에 넣는 글자 상한
+CONTEXT_BUDGET = 3000         # 시스템 컨텍스트에 포함하는 글자 수 상한
 TOOL_NAME = "memory_save"
 
 
-class MemoryError(Exception):  # noqa: A001 — 모듈 안 이름
+class MemoryError(Exception):  # noqa: A001 — 모듈 내부 이름
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code
@@ -34,15 +34,15 @@ class MemoryError(Exception):  # noqa: A001 — 모듈 안 이름
 
 
 # ── 비밀 거부 ─────────────────────────────────────────────────
-# 비밀 단어 뒤에 값이 붙은 모양 — "비번: hunter2", "password=Abc123!", "API 키는 sk-…".
-# 값은 한글이 섞이지 않은 4자 이상(“비밀번호는 90일마다 바꾼다” 같은 습관 서술은 걸리지 않게).
+# 비밀 단어 뒤에 값이 이어지는 형태 — "비번: hunter2", "password=Abc123!", "API 키는 sk-…".
+# 값은 한글이 포함되지 않은 4자 이상(“비밀번호는 90일마다 바꾼다” 와 같은 습관 서술은 일치하지 않도록).
 _SECRET_WORD = re.compile(
     r"(password|passwd|passphrase|pwd|pin|otp|비밀\s*번호|비번|암호|패스워드|"
     r"token|토큰|api[\s_-]*key|access[\s_-]*key|secret|시크릿|private[\s_-]*key|개인\s*키|인증\s*키|api\s*키)"
     r"\s*(?:[:=：]|은|는|이|가|을|를|is|=)\s*[\"'`]?([^\s가-힣\"'`]{4,})",
     re.IGNORECASE,
 )
-# 값 자체가 비밀 모양 — 서비스 키 접두·JWT·개인키 블록·긴 고엔트로피 문자열
+# 값 자체가 비밀 형태 — 서비스 키 접두·JWT·개인키 블록·긴 고엔트로피 문자열
 _SECRET_VALUE = re.compile(
     r"(sk-[A-Za-z0-9_\-]{16,}|sk-ant-[A-Za-z0-9_\-]{10,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|"
     r"xox[abprs]-[A-Za-z0-9\-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_\-]{30,}|glpat-[A-Za-z0-9_\-]{16,}|"
@@ -60,7 +60,7 @@ def _looks_random(tok: str) -> bool:
 
 
 def secret_reason(text: str) -> str | None:
-    """비밀로 보이면 이유(한국어), 아니면 None."""
+    """비밀로 판단되면 사유(한국어), 아니면 None."""
     if not text:
         return None
     if pii._RRN.search(text):
@@ -127,7 +127,7 @@ async def save(db: AsyncSession, uid: str, kind: str, text: str, source_conversa
     kind, text = validate(kind, text)
     rows = (await db.execute(select(AIMemory).where(AIMemory.user_id == uid))).scalars().all()
     same = next((r for r in rows if r.text == text), None)
-    if same is not None:  # 같은 내용은 하나만
+    if same is not None:  # 동일 내용은 1건만 유지
         if same.kind != kind:
             same.kind = kind
             await db.commit()
@@ -144,7 +144,7 @@ _KIND_LABEL = {"preference": "선호", "work": "업무", "person": "사람"}
 
 
 async def context_block(db: AsyncSession, uid: str, budget: int | None = None) -> str:
-    """시스템 맥락에 넣을 메모리(최근 고친 순, 글자 상한). 꺼져 있으면 빈 문자열."""
+    """시스템 컨텍스트에 포함할 메모리(최근 수정 순, 글자 수 상한). 비활성화 상태이면 빈 문자열."""
     if not await is_enabled(db, uid):
         return ""
     rows = (await db.execute(
@@ -165,7 +165,7 @@ async def context_block(db: AsyncSession, uid: str, budget: int | None = None) -
             + "\n".join(lines))
 
 
-# 모델에게 보이는 도구(OpenAI function 스키마). MCP 레지스트리에는 없다.
+# 모델에 노출되는 도구(OpenAI function 스키마). MCP 레지스트리에는 없다.
 TOOL_SPEC = {
     "type": "function",
     "function": {

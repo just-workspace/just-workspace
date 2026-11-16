@@ -1,8 +1,8 @@
-"""인증·계정·관리자 구역 전수조사 수정 고정.
+"""인증·계정·관리자 구역 전수조사 수정 사항 고정.
 
-- 거절이 남의 메일함을 지우던 것 / 예약어·기존 사서함 이름으로 가입(3·14)
-- 비밀번호 NFKC 정규화가 저장 때만 적용돼 로그인이 안 되던 것(2)
-- 비밀번호 변경·강제 로그아웃·정지 때 OAuth 리프레시 토큰 폐기, 액세스 토큰 tv(4)
+- 거절 시 타 사용자의 메일함이 삭제되던 문제 / 예약어·기존 사서함 이름으로 가입(3·14)
+- 비밀번호 NFKC 정규화가 저장 시에만 적용되어 로그인이 불가하던 문제(2)
+- 비밀번호 변경·강제 로그아웃·정지 시 OAuth 리프레시 토큰 폐기, 액세스 토큰 tv(4)
 - 로그인 기억 기간 상한(7), 내장 메일서버 웹 토글(9), 2단계 코드 대입 잠금·관리자 초기화(1·10)
 - link-login 열린 리다이렉트(11), LDAP 계정의 로컬 비밀번호(13), 최근 로그인(15), 초대 선점(20)
 """
@@ -26,12 +26,12 @@ from app.auth.schemas import RegisterRequest
 from app.db.models import AuditLog, Base, OAuthRefreshToken, SystemSetting, User, UserInvite
 
 LOGIN = datetime(2026, 10, 1, tzinfo=timezone.utc)
-# 한/영 상태로 친 낱자모 — NFKC 로 모양이 바뀐다(호환 자모 → 조합형, 일부는 음절로 합쳐짐)
+# 한/영 상태에서 입력한 낱자모 — NFKC 적용 시 형태가 변경된다(호환 자모 → 조합형, 일부는 음절로 병합)
 JAMO_PW = "ㅔㅁㄴㄴ재ㄱㅇ1!"
 
 
 class _Req:
-    """슬로우API 를 거치지 않고(__wrapped__) 처리기를 직접 부를 때 쓰는 가짜 요청."""
+    """슬로우API 를 거치지 않고(__wrapped__) 처리기를 직접 호출할 때 사용하는 가짜 요청."""
 
     def __init__(self, cookies=None, headers=None):
         self.headers = headers or {}
@@ -70,7 +70,7 @@ async def db(monkeypatch):
 
 
 def _forbid_mail_delete(monkeypatch):
-    """거절 경로가 메일 계정 삭제를 부르면 바로 실패하게."""
+    """거절 경로가 메일 계정 삭제를 호출하면 즉시 실패하도록 한다."""
     from app.mail import mailserver
 
     async def _boom(email):
@@ -83,15 +83,15 @@ def _forbid_mail_delete(monkeypatch):
 
 
 def test_password_changed_by_nfkc_still_verifies():
-    assert unicodedata.normalize("NFKC", JAMO_PW) != JAMO_PW          # 전제: 정규화로 바뀌는 입력
-    stored = hash_password(unicodedata.normalize("NFKC", JAMO_PW))     # 가입·변경이 저장하는 꼴
-    assert verify_password(JAMO_PW, stored)                            # 사용자는 같은 키를 그대로 친다
+    assert unicodedata.normalize("NFKC", JAMO_PW) != JAMO_PW          # 전제: 정규화로 변경되는 입력
+    stored = hash_password(unicodedata.normalize("NFKC", JAMO_PW))     # 가입·변경 시 저장되는 형태
+    assert verify_password(JAMO_PW, stored)                            # 사용자는 동일한 키를 그대로 입력
     assert verify_and_upgrade(JAMO_PW, stored) == (True, None)
     assert not verify_password(JAMO_PW + "x", stored)
 
 
 def test_password_stored_raw_before_normalization_still_verifies():
-    """최초 관리자·시드처럼 원문 그대로 해시한 옛 계정도 계속 들어와야 한다."""
+    """최초 관리자·시드처럼 원문 그대로 해시한 기존 계정도 계속 로그인 가능해야 한다."""
     stored = hash_password(JAMO_PW)
     assert verify_password(JAMO_PW, stored)
     assert verify_and_upgrade(JAMO_PW, stored)[0] is True
@@ -104,7 +104,7 @@ async def test_local_login_accepts_password_as_typed(db):
     await db.commit()
     assert (await auth_router._try_local_login(db, "hangul", JAMO_PW)).id == "h"
     assert await auth_router._try_local_login(db, "hangul", "wrong-password") is None
-    assert await auth_router._try_local_login(db, "nobody", JAMO_PW) is None      # 없는 계정(더미 검증 경로)
+    assert await auth_router._try_local_login(db, "nobody", JAMO_PW) is None      # 존재하지 않는 계정(더미 검증 경로)
 
 
 # ── 13: LDAP 계정의 로컬 비밀번호 ───────────────────────────
@@ -126,15 +126,15 @@ async def test_ldap_account_cannot_use_leftover_local_password(db, monkeypatch):
     await db.commit()
     assert await auth_router._try_local_login(db, "ldapuser", "Correct-Horse-9") is None
     assert (await auth_router._try_local_login(db, "olduser", "Correct-Horse-9")).id == "o"
-    # auth_source 가 비어 있는 옛 계정은 로컬이다(NULL 을 외부 인증으로 몰지 않는다)
+    # auth_source 가 비어 있는 기존 계정은 로컬 계정이다(NULL 을 외부 인증으로 간주하지 않는다)
     assert auth_router.is_local_account(User(username="ancient", auth_source=None))
 
-    # 비밀번호 찾기는 같은 응답을 주되 LDAP 계정에는 토큰을 만들지 않는다
+    # 비밀번호 찾기는 동일한 응답을 반환하되 LDAP 계정에는 토큰을 생성하지 않는다
     from app.auth.schemas import ForgotPasswordRequest
     await auth_router.forgot_password.__wrapped__(_Req(), ForgotPasswordRequest(username="ldapuser"), db)
     assert (await db.get(User, "l")).password_reset_token is None
 
-    # LDAP 을 끄면 LDAP 으로 전환됐던 계정도 남은 로컬 비밀번호로 들어온다(연동을 접었을 때 잠기지 않게)
+    # LDAP 비활성화 시 LDAP 으로 전환되었던 계정도 남아 있는 로컬 비밀번호로 로그인된다(연동 해제 시 잠김 방지)
     state["on"] = False
     assert (await auth_router._try_local_login(db, "ldapuser", "Correct-Horse-9")).id == "l"
 
@@ -180,12 +180,12 @@ async def test_register_blocks_reserved_and_existing_mailbox(db, monkeypatch):
     assert await auth_router._username_blocked(db, "hello", "hello@x")
     assert await auth_router._username_blocked(db, "minji", "minji@x") is None
 
-    # 내장 메일서버에 이미 있는 주소 — 켜져 있을 때만 본다
+    # 내장 메일서버에 이미 존재하는 주소 — 활성화 상태에서만 확인
     async def _exists(email):
         return email.startswith("shared@")
 
     monkeypatch.setattr(ar, "mailbox_exists", _exists)
-    assert await auth_router._username_blocked(db, "shared", "shared@x") is None     # 꺼져 있으면 묻지 않는다
+    assert await auth_router._username_blocked(db, "shared", "shared@x") is None     # 비활성화 상태에서는 조회하지 않음
     db.add(SystemSetting(key="feature.builtin_mailserver", value="1"))
     await db.commit()
     assert await auth_router._username_blocked(db, "shared", "shared@x")
@@ -206,7 +206,7 @@ async def test_mailbox_exists_matches_whole_address(monkeypatch):
     listing = "* jimin@x ( 12K / ~ ) [0%]\n* noreply@x ( 0 / ~ ) [0%]\n    [ aliases -> team@x ]\n"
     monkeypatch.setattr(mailserver, "_docker_exec", lambda *a, **kw: (0, listing))
     assert await ar.mailbox_exists("jimin@x") and await ar.mailbox_exists("NoReply@x")
-    assert not await ar.mailbox_exists("min@x")                        # "jimin@x" 의 일부일 뿐
+    assert not await ar.mailbox_exists("min@x")                        # "jimin@x" 의 일부에 불과함
     monkeypatch.setattr(mailserver, "_docker_exec", lambda *a, **kw: (1, "docker down"))
     assert not await ar.mailbox_exists("jimin@x")
 
@@ -230,10 +230,10 @@ async def test_open_registration_prepares_account(db, monkeypatch):
                                 recovery_email="m@ex.com"), db)
     assert seen == [("minji", False)]
 
-    # 인증 완료 안내 — 이미 쓸 수 있는 계정에 "승인 후" 라고 하지 않는다
+    # 인증 완료 안내 — 이미 사용 가능한 계정에 "승인 후" 로 안내하지 않는다
     u = (await db.execute(select(User).where(User.username == "minji"))).scalar_one()
     u.email_verify_token = auth_router._token_digest("tok")
-    u.email_verify_sent_at = None        # SQLite 는 시간대를 떼고 돌려줘 만료 계산이 안 된다(운영 PG 는 무관)
+    u.email_verify_sent_at = None        # SQLite 는 시간대를 제거하고 반환하여 만료 계산이 불가하다(운영 PG 는 무관)
     await db.commit()
     msg = (await auth_router.verify_email.__wrapped__(_Req(), token="tok", db=db))["message"]
     assert "승인" not in msg and u.email_verified is True
@@ -258,7 +258,7 @@ async def test_invite_cannot_be_used_twice(db, monkeypatch):
 
     r = await auth_router.register.__wrapped__(_Req(), _body("first"), db)
     assert r["invited"] is True
-    # 확인(find_open_invite)을 통과한 뒤 다른 요청이 먼저 썼다 = 선점 실패
+    # 확인(find_open_invite) 통과 후 다른 요청이 먼저 사용 = 선점 실패
     stale = await db.get(UserInvite, inv.id)
     monkeypatch.setattr(ux, "find_open_invite", lambda *_a, **_k: _async(stale))
     with pytest.raises(HTTPException) as e:
@@ -324,7 +324,7 @@ async def test_first_party_token_rejected_after_token_version_bump(db, monkeypat
         return dict(payload)
 
     monkeypatch.setattr(oauth, "verify_access_token", _verify)
-    # 클레임이 없는 옛 토큰 — 배포 순간 끊기면 안 된다
+    # 클레임이 없는 기존 토큰 — 배포 시점에 무효화되면 안 된다
     assert (await deps._user_from_first_party_oauth(db, "t")).id == "kim"
     payload["tv"] = 0
     assert (await deps._user_from_first_party_oauth(db, "t")).id == "kim"
@@ -339,7 +339,7 @@ async def test_first_party_token_rejected_after_token_version_bump(db, monkeypat
 
 
 def test_session_signature_outlives_longest_remember_setting():
-    assert deps.SESSION_MAX_AGE >= 365 * 86400                         # 설정 상한(365일)까지 서명이 살아 있어야
+    assert deps.SESSION_MAX_AGE >= 365 * 86400                         # 설정 상한(365일)까지 서명이 유효해야 함
 
 
 @pytest.mark.asyncio
@@ -424,7 +424,7 @@ async def test_two_factor_verify_refuses_while_locked(db, monkeypatch):
 
     monkeypatch.setattr(security_policy, "check_2fa_lock", _locked)
     temp = deps.sign_value({"user_id": "kim", "purpose": "2fa", "remember_me": False})
-    with pytest.raises(HTTPException) as e:                            # 맞는 코드여도 잠긴 동안은 받지 않는다
+    with pytest.raises(HTTPException) as e:                            # 올바른 코드여도 잠금 중에는 거부
         await auth_router.verify_2fa.__wrapped__(
             _Req(), TwoFactorVerifyRequest(temp_token=temp, code=pyotp.TOTP(secret).now()), db)
     assert e.value.status_code == 429
@@ -434,7 +434,7 @@ async def test_two_factor_verify_refuses_while_locked(db, monkeypatch):
 async def test_admin_reset_two_factor(db):
     admin = await db.get(User, "admin")
     kim = await db.get(User, "kim")
-    with pytest.raises(HTTPException) as e:                            # 안 쓰는 사용자
+    with pytest.raises(HTTPException) as e:                            # 미사용 사용자
         await ux.reset_user_2fa("kim", _Req(), admin=admin, db=db)
     assert e.value.status_code == 400
 
@@ -478,6 +478,6 @@ async def test_background_poll_does_not_refresh_idle_clock(db, monkeypatch):
             path = "/api/notifications/unread-count"
 
     assert (await deps.get_current_user(_R(headers={"x-background": "1"}), ws_session=token, db=db)).id == "kim"
-    assert touched == []                                               # 화면이 스스로 도는 폴링
+    assert touched == []                                               # 화면이 자동 수행하는 폴링
     await deps.get_current_user(_R(), ws_session=token, db=db)
-    assert touched == ["S"]                                            # 사람이 한 요청
+    assert touched == ["S"]                                            # 사용자가 직접 수행한 요청

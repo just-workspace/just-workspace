@@ -15,8 +15,8 @@ from app.db.models import MailAccount
 from app.mail import access_guard
 from app.mail.crypto import decrypt_password
 
-# AI 기본법(2026-01-22 시행) — AI 가 작성·발송한 메일임을 기계가 읽을 수 있게 표시한다(보이지 않는 표시).
-# MCP mail_send 도구가 발송 동안 켠다. 사람이 직접 쓴 메일에는 붙지 않는다.
+# AI 기본법(2026-01-22 시행) — AI 가 작성·발송한 메일임을 기계 판독 가능하게 표시한다(비가시 표시).
+# MCP mail_send 도구가 발송 중 활성화한다. 사용자가 직접 작성한 메일에는 추가되지 않는다.
 AI_GENERATED: ContextVar[str | None] = ContextVar("mail_ai_generated", default=None)
 
 logger = logging.getLogger(__name__)
@@ -138,8 +138,8 @@ async def send_message(
         msg["References"] = " ".join(references)
     if request_read_receipt:
         msg["Disposition-Notification-To"] = account.email
-    # 스레드(받는 쪽·우리 쪽 모두)가 Message-ID 로 묶이므로 직접 붙인다.
-    # MTA 가 붙여 주길 기대하면 외부 SMTP 제출 경로에서는 빠지는 경우가 있다.
+    # 스레드(수신 측·본 서비스 측 모두)가 Message-ID 로 연결되므로 직접 추가한다.
+    # MTA 의 자동 추가에 의존하면 외부 SMTP 제출 경로에서는 누락되는 경우가 있다.
     if not msg.get("Message-ID"):
         from email.utils import make_msgid
         dom = (account.email or "").rpartition("@")[2] or settings.domain

@@ -1,11 +1,11 @@
-"""모델 컨텍스트 창에 맞춘 예산 — 1M 토큰 모델은 넉넉하게, 작은 로컬 모델은 지금처럼 빠듯하게.
+"""모델 컨텍스트 창에 맞춘 예산 — 1M 토큰 모델은 여유 있게, 소형 로컬 모델은 기존과 같이 엄격하게 설정한다.
 
-내장 AI 가 모델에 넣는 것(도구 결과·프로젝트 지식·메모리·첨부 문서·대화 기록)의 상한을 고정 숫자로 두면
-1M 모델에선 자료를 쓸데없이 잘라 먹고, 32K 로컬 모델에선 넘친다. 여기서 한 번에 정한다.
+내장 AI 가 모델에 입력하는 항목(도구 결과·프로젝트 지식·메모리·첨부 문서·대화 기록)의 상한을 고정 수치로 두면
+1M 모델에서는 자료가 불필요하게 절단되고, 32K 로컬 모델에서는 초과한다. 본 모듈에서 일괄 결정한다.
 
-- 창 크기: 관리자가 제공자 extra["context_window"] 를 주면 그 값, 아니면 모델 이름으로 짐작.
-- 글자↔토큰: 한글은 대략 1자≈1토큰, 영문은 3.5자≈1토큰. 예산은 보수적으로(한글 기준) 잡는다.
-- 출력 토큰: 설정이 0(자동)이면 모델에 맞춰 고른다(1M급 32,000 / 다른 Claude 8,192 / 그 밖 4,096).
+- 창 크기: 관리자가 제공자 extra["context_window"] 를 지정하면 해당 값, 아니면 모델 이름으로 추정.
+- 글자↔토큰: 한글은 대략 1자≈1토큰, 영문은 3.5자≈1토큰. 예산은 보수적으로(한글 기준) 산정한다.
+- 출력 토큰: 설정이 0(자동)이면 모델에 맞춰 선택한다(1M급 32,000 / 다른 Claude 8,192 / 그 밖 4,096).
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def context_window(cfg) -> int:
         return 1_000_000
     if kind == "openai":
         return 128_000
-    # 로컬·호환 서버는 띄운 설정(num_ctx 등)을 알 수 없다 — 보수적으로
+    # 로컬·호환 서버는 기동 설정(num_ctx 등)을 확인할 수 없다 — 보수적으로 설정
     return 32_768
 
 
@@ -58,7 +58,7 @@ def output_tokens(cfg) -> int:
 
 
 def est_tokens(text: str) -> int:
-    """대충의 토큰 수(보수적) — ASCII 3.5자당 1, 나머지(한글 등) 1자당 1."""
+    """토큰 수 근사치(보수적) — ASCII 3.5자당 1, 나머지(한글 등) 1자당 1."""
     if not text:
         return 0
     ascii_n = sum(1 for ch in text if ord(ch) < 128)
@@ -73,19 +73,19 @@ def _clamp(v: float, lo: int, hi: int) -> int:
 class Budgets:
     window: int               # 입력 창(토큰)
     output: int               # 응답 최대 토큰
-    tool_result: int          # 도구 결과 하나(글자)
-    tool_round: int           # 한 차례 도구 결과 전체(글자)
+    tool_result: int          # 도구 결과 1건(글자)
+    tool_round: int           # 1턴의 도구 결과 전체(글자)
     knowledge: int            # 프로젝트 관련 지식(글자)
     memory: int               # 사용자 메모리(글자)
-    attach_turn: int          # 최근 사용자 차례 첨부 문서 합계(글자)
-    attach_old_per_file: int  # 지난 차례 첨부 문서 하나(글자)
-    input_tokens: int         # 시스템+도구+기록에 쓸 수 있는 토큰(응답·여유 제외)
+    attach_turn: int          # 최근 사용자 턴 첨부 문서 합계(글자)
+    attach_old_per_file: int  # 이전 턴 첨부 문서 1건(글자)
+    input_tokens: int         # 시스템+도구+기록에 사용 가능한 토큰(응답·여유분 제외)
 
 
 def budgets(cfg) -> Budgets:
     win = context_window(cfg)
     out = output_tokens(cfg)
-    usable = max(8_000, win - out - max(4_000, win // 20))  # 응답 + 5% 여유
+    usable = max(8_000, win - out - max(4_000, win // 20))  # 응답 + 5% 여유분
     return Budgets(
         window=win,
         output=out,
@@ -106,10 +106,10 @@ def _msg_tokens(m: dict) -> int:
 
 
 def fit_history(msgs: list[dict], b: Budgets, reserved_tokens: int = 0) -> tuple[list[dict], int]:
-    """오래된 차례부터 빼서 창에 맞춘다. (남은 기록, 뺀 메시지 수)
+    """오래된 턴부터 제외하여 창에 맞춘다. (잔여 기록, 제외된 메시지 수)
 
-    reserved_tokens: 시스템 맥락·도구 정의·도구 결과 몫으로 비워 둘 토큰.
-    마지막 사용자 차례는 항상 남긴다. 첫 메시지가 user 가 되도록 맞춘다(Anthropic 요구).
+    reserved_tokens: 시스템 컨텍스트·도구 정의·도구 결과용으로 예약할 토큰.
+    마지막 사용자 턴은 항상 유지한다. 첫 메시지가 user 가 되도록 조정한다(Anthropic 요구).
     """
     limit = max(2_000, b.input_tokens - reserved_tokens)
     costs = [_msg_tokens(m) for m in msgs]

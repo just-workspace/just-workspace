@@ -68,9 +68,9 @@ async def delete_address_book(
 # ─── Contacts ───
 
 
-# ── 정적 경로는 /{contact_id} 보다 반드시 위에 둔다 ──
-# FastAPI 는 정의 순서대로 매칭하므로, 아래쪽에 두면 "suggest" 같은 문자열이
-# contact_id 로 잡혀 404 가 난다. export-vcf 가 실제로 그래서 죽어 있었다.
+# ── 정적 경로는 /{contact_id} 보다 반드시 위에 정의한다 ──
+# FastAPI 는 정의 순서대로 매칭하므로, 아래에 정의하면 "suggest" 같은 문자열이
+# contact_id 로 매칭되어 404 가 발생한다. export-vcf 가 실제로 이 원인으로 동작하지 않았다.
 
 # ── GET /api/contacts/suggest — 수신인 자동완성 ──────────────
 
@@ -82,10 +82,10 @@ async def suggest_recipients(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """최근 보낸 수신인 + 내부 사용자 + 주소록을 합친 자동완성.
+    """최근 발신 수신인 + 내부 사용자 + 주소록을 병합한 자동완성.
 
-    회의 초대창과 메일 작성창이 같은 것을 물어보므로 출처를 여기서 합친다.
-    q 가 비어 있으면 최근 수신인 위주로 돌려준다(입력 전 기본 목록).
+    회의 초대창과 메일 작성창이 동일한 질의를 수행하므로 출처를 여기서 병합한다.
+    q 가 비어 있으면 최근 수신인 위주로 반환한다(입력 전 기본 목록).
     """
     return await suggest_service.suggest(db, user.id, q, limit)
 
@@ -185,7 +185,7 @@ async def list_groups(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """내 연락처 그룹 [{name, count}]."""
+    """호출 사용자의 연락처 그룹 [{name, count}]."""
     return {"groups": await service.list_groups(db, user.id)}
 
 
@@ -227,7 +227,7 @@ async def export_one_vcard(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """연락처 한 건을 .vcf 로."""
+    """연락처 1건을 .vcf 로 내보낸다."""
     from urllib.parse import quote
     c = await db.get(ContactDB, contact_id)
     ab = await db.get(AddressBookDB, c.address_book_id) if c else None
@@ -285,8 +285,8 @@ async def update_contact(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # 보낸 칸만 바뀐다. exclude_none 이면 소속·메모·성·이름을 비운 값(null)이 버려져 지워지지 않았다.
-    # 이름·목록·즐겨찾기·주소록의 null 은 서비스가 "변경 없음"으로 본다.
+    # 전송된 필드만 변경된다. exclude_none 사용 시 소속·메모·성·이름을 비운 값(null)이 제외되어 삭제되지 않았다.
+    # 이름·목록·즐겨찾기·주소록의 null 은 서비스가 "변경 없음"으로 처리한다.
     data = body.model_dump(exclude_unset=True)
     for field in ["emails", "phones", "addresses"]:
         if data.get(field):
@@ -294,7 +294,7 @@ async def update_contact(
     if not data:
         raise HTTPException(status_code=400, detail="No fields to update")
     if body.photo == "":
-        data["photo"] = None  # 사진 지움
+        data["photo"] = None  # 사진 삭제
     try:
         ok = await service.update_contact(db, user.id, contact_id, data)
     except ValueError as e:
@@ -340,10 +340,10 @@ async def import_vcf(
     try:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError:
-        # 구형 휴대폰·Outlook 내보내기는 CP949 — latin-1 로 읽으면 이름이 깨진 채 "성공"으로 저장됐다
+        # 구형 휴대폰·Outlook 내보내기는 CP949 — latin-1 로 읽으면 이름이 깨진 상태로 "성공" 저장되었음
         text = content.decode("cp949", errors="replace")
 
-    # 같은 파일을 다시 올려도(중간 오류 뒤 재시도 포함) 두 배가 되지 않게 — 이름·이메일·전화가 전부 같으면 건너뛴다
+    # 동일 파일을 다시 업로드해도(중간 오류 후 재시도 포함) 중복되지 않도록 함 — 이름·이메일·전화가 모두 동일하면 제외한다
     def _key(name, emails, phones) -> tuple:
         vals = lambda items: tuple(sorted(str((x or {}).get("value") or "").strip().lower() for x in (items or [])))  # noqa: E731
         return ((name or "").strip(), vals(emails), vals(phones))
@@ -365,8 +365,8 @@ async def import_vcf(
     skipped = 0
     components = vobject.readComponents(text)
     while True:
-        # 파일 중간이 깨져 있으면 파서가 예외를 낸다 — 예전엔 앞부분만 저장된 채 500 이 났다.
-        # 거기서 멈추고 읽은 데까지의 결과를 돌려준다.
+        # 파일 중간이 손상되어 있으면 파서가 예외를 발생시킨다 — 이전에는 앞부분만 저장된 채 500 이 발생했다.
+        # 해당 지점에서 중단하고 그때까지 읽은 결과를 반환한다.
         try:
             component = next(components)
         except StopIteration:
@@ -394,7 +394,7 @@ async def import_vcf(
             try:
                 result = await service.create_contact(db, user.id, data)
             except ValueError:
-                data.pop("photo", None)  # 너무 큰·이상한 사진은 버리고 나머지는 가져온다
+                data.pop("photo", None)  # 과대·비정상 사진은 제외하고 나머지는 가져온다
                 result = await service.create_contact(db, user.id, data)
         except Exception:  # noqa: BLE001
             await db.rollback()

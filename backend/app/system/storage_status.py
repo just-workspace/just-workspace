@@ -1,11 +1,11 @@
 """파일 저장소 상태 — 종류·위치·연결·쓰기·잠금·여유 공간.
 
-연결 판정은 쓰기 차단(app/middleware/storage_guard.py)과 같은 표식 확인을 쓴다. 끊긴 네트워크 저장소는
-읽기가 오류가 아니라 **멈춤**일 수 있으므로, 저장소를 만지는 일은 전부 따로 둔 스레드에서 하고
-`timeout` 안에 답이 없으면 사유 `unresponsive` 로 본다. 멈춘 확인은 하나만 둔다.
+연결 판정은 쓰기 차단(app/middleware/storage_guard.py)과 동일한 저장소 마커 확인을 사용한다. 단절된 네트워크 저장소는
+읽기가 오류가 아니라 **무응답**일 수 있으므로, 저장소에 접근하는 작업은 전부 별도 스레드에서 수행하고
+`timeout` 안에 응답이 없으면 사유 `unresponsive` 로 판정한다. 무응답 상태의 확인은 하나만 유지한다.
 
-종류와 위치는 저장소를 만지지 않고 읽는다(끊긴 동안에도 답한다) — 설치 관리자가 아는 값(`GET /internal/storage`)을
-먼저 쓰고, 설치 관리자가 없거나 답이 없으면 `/proc/self/mountinfo` 에서 추정한다.
+종류와 위치는 저장소에 접근하지 않고 조회한다(단절 중에도 응답한다) — 설치 관리자가 보유한 값(`GET /internal/storage`)을
+우선 사용하고, 설치 관리자가 없거나 응답이 없으면 `/proc/self/mountinfo` 에서 추정한다.
 """
 from __future__ import annotations
 
@@ -36,14 +36,14 @@ def now_iso() -> str:
 
 
 def _unescape(value: str) -> str:
-    # mountinfo 는 공백·탭·줄바꿈·역슬래시를 8진수로 적는다
+    # mountinfo 는 공백·탭·줄바꿈·역슬래시를 8진수로 표기함
     for code, char in (("\\040", " "), ("\\011", "\t"), ("\\012", "\n"), ("\\134", "\\")):
         value = value.replace(code, char)
     return value
 
 
 def parse_mountinfo(text: str, path: str) -> dict | None:
-    """`path` 를 담은 마운트(가장 긴 마운트 지점) — {mount_point, root, fstype, source}. 못 찾으면 None."""
+    """`path` 를 포함하는 마운트(가장 긴 마운트 지점) — {mount_point, root, fstype, source}. 찾지 못하면 None."""
     path = path.rstrip("/") or "/"
     best: dict | None = None
     for line in text.splitlines():
@@ -54,7 +54,7 @@ def parse_mountinfo(text: str, path: str) -> dict | None:
         mount_point = _unescape(fields[4])
         if not (path == mount_point or mount_point == "/" or path.startswith(mount_point.rstrip("/") + "/")):
             continue
-        # 같은 지점에 겹쳐 붙은 것은 뒤에 적힌 것이 위에 있다
+        # 동일 지점에 중첩 마운트된 경우 뒤에 기록된 항목이 상위
         if best is None or len(mount_point) >= len(best["mount_point"]):
             best = {"mount_point": mount_point, "root": _unescape(fields[3]),
                     "fstype": tail[0], "source": _unescape(tail[1])}
@@ -62,7 +62,7 @@ def parse_mountinfo(text: str, path: str) -> dict | None:
 
 
 def describe(root: str, mountinfo: str | None = None) -> dict:
-    """{kind: local|nfs, location} — 위치는 NFS 면 `서버:/내보낸 경로`, 아니면 호스트 쪽 폴더(알 수 있을 때)."""
+    """{kind: local|nfs, location} — 위치는 NFS 이면 `서버:/내보낸 경로`, 아니면 호스트 측 폴더(확인 가능한 경우)."""
     if mountinfo is None:
         try:
             mountinfo = Path(MOUNTINFO).read_text(encoding="utf-8", errors="replace")
@@ -77,17 +77,17 @@ def describe(root: str, mountinfo: str | None = None) -> dict:
     return {"kind": "local", "location": location}
 
 
-INSTALLER_TIMEOUT = 3.0            # 상태 카드를 붙잡지 않게 짧게
-INSTALLER_CACHE_SECONDS = 60.0     # 종류·위치는 설치 뒤에 바뀌지 않는다
-INSTALLER_RETRY_SECONDS = 15.0     # 답이 없었으면 이 시간 동안은 다시 묻지 않는다
+INSTALLER_TIMEOUT = 3.0            # 상태 카드 표시를 지연시키지 않도록 짧게 설정
+INSTALLER_CACHE_SECONDS = 60.0     # 종류·위치는 설치 후 변경되지 않음
+INSTALLER_RETRY_SECONDS = 15.0     # 응답이 없었으면 이 시간 동안 재조회하지 않음
 _installer_seen: tuple[float, dict | None] | None = None
 
 
 async def installed_description(force: bool = False) -> dict:
-    """설치 관리자가 아는 저장소 — {kind, [location], volume, source: "installer"}.
+    """설치 관리자가 보유한 저장소 정보 — {kind, [location], volume, source: "installer"}.
 
-    컨테이너 안의 마운트 정보로는 호스트 폴더를 정확히 알 수 없는 설치가 있어, 설치 관리자의 답을 먼저 쓴다.
-    설치 관리자가 없거나 답이 없으면 {"volume": None, "source": "mountinfo"} — 호출한 쪽은 `describe` 의 추정을 그대로 둔다.
+    컨테이너 내부의 마운트 정보로는 호스트 폴더를 정확히 알 수 없는 설치가 있어, 설치 관리자의 응답을 우선 사용한다.
+    설치 관리자가 없거나 응답이 없으면 {"volume": None, "source": "mountinfo"} — 호출자는 `describe` 의 추정을 유지한다.
     """
     global _installer_seen
     from app.system import installer_client as installer
@@ -116,11 +116,11 @@ async def installed_description(force: bool = False) -> dict:
     return dict(found) if found is not None else fallback
 
 
-# ─── 확인(저장소를 만진다 — 멈출 수 있다) ───
+# ─── 확인(저장소 접근 — 무응답 가능) ───
 
 
 def write_and_lock(root: str) -> tuple[bool, bool | None]:
-    """작은 파일을 써 보고 잠가 본 뒤 지운다 — (쓰기, 잠금). 잠금을 확인할 수 없는 환경이면 None."""
+    """작은 파일을 기록하고 잠금을 시도한 뒤 삭제한다 — (쓰기, 잠금). 잠금 확인이 불가한 환경이면 None."""
     path = os.path.join(root, f"{PROBE_PREFIX}{os.getpid()}-{secrets.token_hex(4)}")
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
@@ -154,7 +154,7 @@ def write_and_lock(root: str) -> tuple[bool, bool | None]:
 
 
 def probe(root: str, install_id: str, guarded: bool, checker=None) -> dict:
-    """표식 → 여유 공간 → 쓰기·잠금. 표식이 안 보이면 거기서 멈춘다(끊긴 자리의 빈 폴더에 쓰지 않는다)."""
+    """저장소 마커 → 여유 공간 → 쓰기·잠금. 마커가 확인되지 않으면 그 단계에서 중단한다(단절된 위치의 빈 폴더에 기록하지 않는다)."""
     if guarded:
         reason = (checker or storage_guard.check_marker)(root, install_id)
     else:
@@ -171,7 +171,7 @@ def probe(root: str, install_id: str, guarded: bool, checker=None) -> dict:
 
 
 def probe_marker(root: str, install_id: str, guarded: bool, checker=None) -> dict:
-    """표식만 본다(쓰지 않는다) — 여러 사용자가 주기적으로 묻는 가벼운 조회용."""
+    """저장소 마커만 확인한다(기록하지 않는다) — 여러 사용자가 주기적으로 요청하는 경량 조회용."""
     if not guarded:
         return {"reason": None}
     return {"reason": (checker or storage_guard.check_marker)(root, install_id)}
@@ -206,14 +206,14 @@ class StorageProber:
     def _start(self) -> concurrent.futures.Future:
         future: concurrent.futures.Future = concurrent.futures.Future()
         root, install_id, guarded = self.root, self.install_id, self.guarded
-        # 스레드를 띄우기 전에 걸어 둔다 — 확인이 곧바로 끝나도 아래 work 가 이 자리를 비울 수 있게
+        # 스레드 기동 전에 설정 — 확인이 즉시 종료되어도 아래 work 가 이 값을 해제할 수 있도록 함
         self._pending = future
         self._pending_started = time.monotonic()
 
         def work() -> None:
             try:
                 result = dict(self.probe_fn(root, install_id, guarded))
-            except Exception:  # noqa: BLE001 — 확인하다 난 어떤 오류든 "못 읽음"
+            except Exception:  # noqa: BLE001 — 확인 중 발생한 모든 오류는 "못 읽음"으로 처리
                 result = {"reason": "unreadable"}
             result["checked_at"] = now_iso()
             self._last, self._last_at = result, time.monotonic()
@@ -221,7 +221,7 @@ class StorageProber:
                 self._pending = None
             future.set_result(result)
 
-        # 기본 스레드 풀을 쓰지 않는다 — 멈춘 확인이 풀의 자리를 차지하지 않게
+        # 기본 스레드 풀을 사용하지 않음 — 무응답 상태의 확인이 풀의 슬롯을 점유하지 않도록 함
         threading.Thread(target=work, name="storage-status", daemon=True).start()
         return future
 
@@ -244,7 +244,7 @@ class StorageProber:
         return {"reason": "unresponsive", "checked_at": now_iso()}
 
     async def status(self, force: bool = False) -> dict:
-        """화면에 내려가는 상태. 끊긴 시각(down_since)은 호출한 쪽이 덧붙인다."""
+        """화면에 전달되는 상태. 단절 시각(down_since)은 호출자가 추가한다."""
         result = await self.check(force)
         reason = result.get("reason")
         return {

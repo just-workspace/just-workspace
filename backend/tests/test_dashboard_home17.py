@@ -44,13 +44,13 @@ def _msg(ch: str, who: str, ago_days: float = 0, content: str = "x") -> Message:
                    created_at=NOW - timedelta(days=ago_days))
 
 
-# ─── 배치 모양 ───
+# ─── 배치 형태 ───
 
 def test_layout_normalize_drops_unknown_and_duplicates():
     v = normalize_layout({"order": ["inbox", "nope", "inbox", "today"], "hidden": ["store", 3],
                           "size": {"inbox": 1, "today": 3, "x": 2, "cont": True}, "locked": ["notice"]})
     assert v == {"v": 1, "order": ["inbox", "today"], "hidden": ["store"], "size": {"inbox": 1}}
-    # 관리자 기본 배치만 고정 카드를 가진다
+    # 관리자 기본 배치만 고정 카드를 보유
     assert normalize_layout({"locked": ["notice", "zzz"]}, allow_locked=True)["locked"] == ["notice"]
     with pytest.raises(ValueError):
         normalize_layout(["inbox"])
@@ -65,7 +65,7 @@ async def test_prefs_accepts_dash_layout_and_normalizes(db):
     with pytest.raises(HTTPException) as e:
         await mp.patch_prefs({"dash.layout": "inbox"}, user=alice, db=db)
     assert e.value.status_code == 400
-    # dash. 아래 다른 키도 규칙(접두사) 안
+    # dash. 하위의 다른 키도 규칙(접두사) 범위 내
     assert mp.key_allowed("dash.layout") and not mp.key_allowed("dashx.layout")
 
 
@@ -89,7 +89,7 @@ def test_parse_day_range_rejects_far_or_odd_ranges():
     assert sources.parse_day_range(s.isoformat(), e.isoformat()) == (s, e)
     far = NOW + timedelta(days=5)
     ds, de = sources.parse_day_range(far.isoformat(), (far + timedelta(days=1)).isoformat())
-    assert ds <= NOW < de   # 먼 날짜는 받지 않고 UTC 오늘
+    assert ds <= NOW < de   # 먼 날짜는 거부하고 UTC 오늘 적용
     ds, de = sources.parse_day_range(s.isoformat(), (s + timedelta(days=4)).isoformat())
     assert de - ds == timedelta(days=1)
     assert sources.parse_day_range(None, "x")[1] - sources.parse_day_range(None, "x")[0] == timedelta(days=1)
@@ -118,9 +118,9 @@ async def test_task_counts_visible_open_top_level(db):
     db.add_all([
         t(user_id="alice", due_date=s + timedelta(hours=10)),                    # 오늘
         t(user_id="bob", assignee_id="alice", due_date=s + timedelta(hours=11)),  # 담당 — 오늘
-        t(user_id="alice", due_date=s - timedelta(days=2)),                      # 지남
-        t(user_id="alice", due_date=s - timedelta(days=1), status="done"),       # 끝남 — 안 셈
-        t(user_id="bob", due_date=s + timedelta(hours=10)),                      # 남의 것 — 안 셈
+        t(user_id="alice", due_date=s - timedelta(days=2)),                      # 기한 경과
+        t(user_id="alice", due_date=s - timedelta(days=1), status="done"),       # 완료 — 집계 제외
+        t(user_id="bob", due_date=s + timedelta(hours=10)),                      # 타 사용자의 작업 — 집계 제외
         t(user_id="alice", due_date=s + timedelta(days=3)),                      # 나중
     ])
     await db.commit()
@@ -140,7 +140,7 @@ async def test_frequent_people_dm_weighted_and_only_my_active_channels(db):
         db.add(ChannelMember(channel_id=ch, user_id=who))
     db.add_all([_msg("dm-ab", "bob"), _msg("dm-ab", "alice")])           # bob: DM 2 × 3 = 6
     db.add_all([_msg("dev", "alice")] + [_msg("dev", "carol") for _ in range(4)])  # carol: 4
-    db.add_all([_msg("quiet", "dave") for _ in range(9)])                # 내가 안 쓴 채널 — 안 셈
+    db.add_all([_msg("quiet", "dave") for _ in range(9)])                # 본인이 작성하지 않은 채널 — 집계 제외
     db.add_all([_msg("dev", "carol", ago_days=40) for _ in range(9)])    # 30일 밖
     await db.commit()
     assert await home.frequent_people(db, "alice") == [("bob", 6), ("carol", 4)]

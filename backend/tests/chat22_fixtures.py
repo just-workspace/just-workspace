@@ -1,4 +1,4 @@
-"""chat22 테스트 공용 — SQLite(전 테이블), 사용자 4명 + 관리자, 실시간·푸시 가로채기. pytest 가 모으지 않는 도우미."""
+"""chat22 테스트 공용 — SQLite(전 테이블), 사용자 4명 + 관리자, 실시간·푸시 가로채기. pytest 수집 대상이 아닌 보조 모듈."""
 
 from __future__ import annotations
 

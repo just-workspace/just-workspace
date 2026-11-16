@@ -1,13 +1,13 @@
 """개인 설정 서버 저장 — GET/PATCH /api/me/prefs.
 
-사용자당 JSON 한 행(user_prefs). 프런트가 새 설정을 만들 때마다 백엔드를 고치지 않아도 되게
-키는 열어 두되, 아무거나 쌓이지 않게 규칙을 둔다.
+사용자당 JSON 한 행(user_prefs). 프런트에서 새 설정을 추가할 때마다 백엔드를 수정하지 않도록
+키는 개방하되, 무분별한 누적을 막기 위해 규칙을 둔다.
 
 - 키: 영소문자로 시작, 영소문자·숫자·`_`·`.`·`-` 만, 64자 이하.
 - 허용: 아래 TOP_LEVEL_KEYS 이거나 ALLOWED_PREFIXES 로 시작하는 키.
 - 값: JSON 으로 직렬화되는 값, 한 값 4KB 이하. 전체 32KB·키 200개 이하.
-- PATCH 는 합치기(merge): 보낸 키만 바뀌고, 값이 null 이면 그 키를 지운다.
-- 서버가 관리하는 키(SERVER_KEYS)는 PATCH 로 못 쓴다 — 전용 API(방해 금지 일정 등)가 검증해서 쓴다.
+- PATCH 는 병합(merge): 전송한 키만 변경되며, 값이 null 이면 해당 키를 삭제한다.
+- 서버가 관리하는 키(SERVER_KEYS)는 PATCH 로 쓸 수 없다 — 전용 API(방해 금지 일정 등)가 검증 후 기록한다.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ TOP_LEVEL_KEYS = {
     "density",              # comfortable | compact
     "theme",                # dark | light | system
     "language",             # ko | en ...
-    "timezone",             # IANA, 예: Asia/Seoul — 방해 금지 일정 기본 시간대로도 쓴다
+    "timezone",             # IANA, 예: Asia/Seoul — 방해 금지 일정의 기본 시간대로도 사용
     "week_start",           # 0(일)~6 / "mon"
     "date_format",
     "time_format",
@@ -43,13 +43,13 @@ TOP_LEVEL_KEYS = {
 ALLOWED_PREFIXES = (
     "ui.", "mail.", "chat.", "calendar.", "dashboard.", "tabbar.", "files.",
     "editor.", "tasks.", "meetings.", "board.", "wiki.", "notify.", "contacts.", "search.",
-    "ai.",     # AI 설정(권한 모드는 SERVER_KEYS — /api/approvals/mode 가 검증해서 쓴다)
-    "dash.",   # 대시보드 배치(dash.layout — app/dashboard/layout.py 가 모양을 검사)
+    "ai.",     # AI 설정(권한 모드는 SERVER_KEYS — /api/approvals/mode 가 검증 후 기록)
+    "dash.",   # 대시보드 배치(dash.layout — app/dashboard/layout.py 가 형식을 검사)
 )
-# 전용 API 가 검증해서 쓰는 키 — PATCH 로는 못 바꾼다(읽기는 된다)
+# 전용 API 가 검증 후 기록하는 키 — PATCH 로는 변경 불가(읽기는 가능)
 SERVER_KEYS = {"notify.dnd_schedule", "dashboard.checklist_dismissed_at", "ai.permission_mode", "ai.permission_rules"}
-# 값 모양을 서버가 검사·정규화하는 키(서버가 읽어서 쓰는 설정)
-KEYWORDS_KEY = "chat.keywords"   # 채팅 알림 키워드 — 메시지에 나오면 "나를 부른 것"(app/chat/keywords.py)
+# 값 형식을 서버가 검사·정규화하는 키(서버가 읽어서 사용하는 설정)
+KEYWORDS_KEY = "chat.keywords"   # 채팅 알림 키워드 — 메시지에 포함되면 "나를 부른 것"으로 처리(app/chat/keywords.py)
 MAX_KEYWORDS = 20
 MAX_KEYWORD_LEN = 40
 MAX_VALUE_BYTES = 4096
@@ -64,7 +64,7 @@ def key_allowed(key: str) -> bool:
 
 
 def normalize_keywords(v) -> list[str]:
-    """알림 키워드 목록 검사·정리 — 문자열 목록, 앞뒤 공백 제거, 대소문자 무시 중복 제거, 최대 20개·40자."""
+    """알림 키워드 목록 검사·정규화 — 문자열 목록, 앞뒤 공백 제거, 대소문자 무시 중복 제거, 최대 20개·40자."""
     if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
         raise HTTPException(status_code=400, detail="알림 키워드는 문자열 목록이어야 합니다")
     out: list[str] = []
@@ -114,7 +114,7 @@ async def get_prefs(db: AsyncSession, user_id: str) -> dict:
 
 
 async def set_server_pref(db: AsyncSession, user_id: str, key: str, value) -> dict:
-    """서버 관리 키 쓰기(검증은 호출자가 끝낸 뒤). value=None 이면 지운다. 커밋까지 한다."""
+    """서버 관리 키 쓰기(검증은 호출자가 완료한 이후). value=None 이면 삭제한다. 커밋까지 수행한다."""
     row = await db.get(UserPref, user_id)
     data = _load(row)
     if value is None:
@@ -132,7 +132,7 @@ async def set_server_pref(db: AsyncSession, user_id: str, key: str, value) -> di
 
 
 def apply_patch(current: dict, patch: dict) -> dict:
-    """검증하고 합친 결과를 돌려준다. 규칙 위반은 HTTPException(400/413)."""
+    """검증 후 병합한 결과를 반환한다. 규칙 위반은 HTTPException(400/413)."""
     if not isinstance(patch, dict):
         raise HTTPException(status_code=400, detail="객체(JSON object)를 보내야 합니다")
     bad = [k for k in patch if not key_allowed(k)]
@@ -164,7 +164,7 @@ def apply_patch(current: dict, patch: dict) -> dict:
 
 @router.get("/prefs")
 async def read_prefs(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """내 개인 설정 전부. 저장한 적 없으면 빈 객체."""
+    """본인 개인 설정 전체. 저장 이력이 없으면 빈 객체."""
     row = await db.get(UserPref, str(user.id))
     return {
         "prefs": _load(row),
@@ -178,7 +178,7 @@ async def patch_prefs(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """보낸 키만 바꾼다(null 이면 삭제). 요청 몸통은 {"prefs": {...}} 또는 설정 객체 그대로."""
+    """전송한 키만 변경한다(null 이면 삭제). 요청 본문은 {"prefs": {...}} 또는 설정 객체 자체."""
     patch = body.get("prefs") if isinstance(body.get("prefs"), dict) and len(body) == 1 else body
     row = await db.get(UserPref, str(user.id))
     merged = apply_patch(_load(row), patch)

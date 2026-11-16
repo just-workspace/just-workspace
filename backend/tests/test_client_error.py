@@ -1,4 +1,4 @@
-"""화면 쪽 오류 수집(/api/client-error) — 번호 형식·중복 억제·크기 제한."""
+"""화면 측 오류 수집(/api/client-error) — 번호 형식·중복 억제·크기 제한."""
 
 import logging
 

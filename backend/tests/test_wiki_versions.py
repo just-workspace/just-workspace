@@ -1,4 +1,4 @@
-"""위키 버전 묶기·최상위 이동·순환 방지 — 자동 저장이 몇 초마다 PATCH 해도 버전이 폭증하지 않아야 한다."""
+"""위키 버전 병합·최상위 이동·순환 방지 — 자동 저장이 수 초마다 PATCH 해도 버전이 급증하지 않아야 한다."""
 
 from datetime import datetime, timedelta, timezone
 
@@ -49,7 +49,7 @@ async def test_autosave_coalesces_same_author(db):
     for i in range(5):
         await service.update_page(db, p["id"], "alice", content=f"draft {i}")
     vs = await _versions(db, p["id"])
-    # 생성 버전 1 은 원본으로 남고, 연속 저장 5번은 버전 2 하나로 묶인다
+    # 생성 버전 1 은 원본으로 유지되고, 연속 저장 5회는 버전 2 하나로 병합됨
     assert [v[0] for v in vs] == [1, 2]
     assert vs[0][2] == "v1" and vs[1][2] == "draft 4"
     page = await service.get_page(db, p["id"])
@@ -59,15 +59,15 @@ async def test_autosave_coalesces_same_author(db):
 async def test_other_author_or_old_version_makes_new(db):
     p = await _new_page(db)
     await service.update_page(db, p["id"], "alice", content="a")
-    await service.update_page(db, p["id"], "bob", content="b")       # 다른 사람 → 새 버전
-    await service.update_page(db, p["id"], "bob", content="b2")      # 같은 사람 연속 → 묶임
+    await service.update_page(db, p["id"], "bob", content="b")       # 다른 사용자 → 새 버전
+    await service.update_page(db, p["id"], "bob", content="b2")      # 동일 사용자 연속 → 병합
     last = (await db.execute(
         select(WikiPageVersion).where(WikiPageVersion.page_id == p["id"])
         .order_by(WikiPageVersion.version_number.desc()).limit(1)
     )).scalar_one()
     last.created_at = datetime.now(timezone.utc) - timedelta(seconds=service.VERSION_COALESCE_SECONDS + 5)
     await db.commit()
-    await service.update_page(db, p["id"], "bob", content="b3")      # 오래됨 → 새 버전
+    await service.update_page(db, p["id"], "bob", content="b3")      # 시간 경과 → 새 버전
     vs = await _versions(db, p["id"])
     assert [(v[0], v[1], v[2]) for v in vs] == [
         (1, "alice", "v1"), (2, "alice", "a"), (3, "bob", "b2"), (4, "bob", "b3"),
@@ -90,14 +90,14 @@ async def test_move_to_root_and_cycle_guard(db):
         await service.update_page(db, a["id"], "alice", parent_id=a["id"])
     moved = await service.update_page(db, c["id"], "alice", parent_id=None)
     assert moved["parent_id"] is None
-    # 위치만 바꾼 건 버전을 만들지 않는다
+    # 위치만 변경한 경우 버전을 생성하지 않음
     assert [v[0] for v in await _versions(db, c["id"])] == [1]
 
 
 async def test_restore_keeps_latest_version(db):
-    """복원은 10분 묶기에 들어가지 않는다 — 복원 전 최신 본문(v2)이 기록에 남고 복원은 새 버전(v3)."""
+    """복원은 10분 병합 대상에서 제외된다 — 복원 전 최신 본문(v2)이 기록에 유지되고 복원은 새 버전(v3)이 된다."""
     p = await _new_page(db)
-    await service.update_page(db, p["id"], "alice", content="본문 있음")    # v2 (같은 사람·방금)
+    await service.update_page(db, p["id"], "alice", content="본문 있음")    # v2 (동일 사용자·직전)
     await service.restore_page_version(db, p["id"], 1, "alice")
     vs = await _versions(db, p["id"])
     assert [(v[0], v[2]) for v in vs] == [(1, "v1"), (2, "본문 있음"), (3, "v1")]

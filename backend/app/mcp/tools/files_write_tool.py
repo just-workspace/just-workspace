@@ -1,11 +1,11 @@
 """파일 쓰기 도구 — 새 텍스트 파일·새 폴더·복사·이동/이름변경·휴지통·외부 공유 링크.
 
-권한 판정은 웹 API 와 **같은 함수**를 쓴다: 파일 라우터의 엔드포인트 함수(mkdir·move_file·rename_file·
-delete_file·create_share_link)를 그대로 부르고, 새 텍스트 파일은 업로드와 같은 대상 판정
-(_upload_target = 편집 권한 이상)·크기 상한·사용자 할당을 거친다.
+권한 판정은 웹 API 와 **동일 함수**를 사용한다: 파일 라우터의 엔드포인트 함수(mkdir·move_file·rename_file·
+delete_file·create_share_link)를 그대로 호출하며, 새 텍스트 파일은 업로드와 동일한 대상 판정
+(_upload_target = 편집 권한 이상)·크기 상한·사용자 할당을 적용한다.
 
-되돌리기: 만들기(새 파일·새 폴더·복사)는 `files_undo_create`(만든 그대로일 때만 지움),
-이동·이름변경은 `files_move` 로 원위치.
+되돌리기: 생성(새 파일·새 폴더·복사)은 `files_undo_create`(생성 시점과 동일한 상태일 때만 삭제),
+이동·이름변경은 `files_move` 로 원위치 복원.
 """
 
 from __future__ import annotations
@@ -19,15 +19,15 @@ from pathlib import Path
 from app.db.models import User
 from app.db.session import async_session
 from app.mcp.server import Tool, register
-from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 남에게 보이는 쓰기 판정
+from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 타인에게 노출되는 쓰기 판정
 from app.mcp.tools._common import (
     UNDO_HINT, UNDO_TOKEN_PARAM, check_undo_token, err, http_err, undo_token,
 )
 
 logger = logging.getLogger(__name__)
 
-_TEXT_MAX = 5 * 1024 * 1024      # AI 가 한 번에 쓰는 텍스트 상한
-# 텍스트로만 만든다(실행·스크립트 형식은 거절 — 브라우저에서 열리는 html/svg 포함)
+_TEXT_MAX = 5 * 1024 * 1024      # AI 의 1회 텍스트 쓰기 상한
+# 텍스트 형식만 생성한다(실행·스크립트 형식은 거부 — 브라우저에서 열리는 html/svg 포함)
 _TEXT_EXTS = frozenset({
     ".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".yaml", ".yml", ".xml", ".log",
     ".ini", ".toml", ".cfg", ".conf", ".sql", ".rst", ".tex", ".srt", ".vtt",
@@ -38,14 +38,14 @@ _EXPIRES_LABEL = {"1h": "1시간", "1d": "1일", "7d": "7일", "30d": "30일", "
 
 
 def vp_label(vp: object) -> str:
-    """가상경로 → 사람용 "내 파일 › 프로젝트 › 보고서.docx"."""
+    """가상경로 → 표시용 경로 "내 파일 › 프로젝트 › 보고서.docx"."""
     parts = [p for p in str(vp or "").strip("/").split("/") if p]
     if not parts:
         return "(경로 없음)"
     head = _ROOT_LABEL.get(parts[0], parts[0])
     rest = parts[1:]
     if parts[0] == "shared-with-me" and rest:
-        rest = rest[1:]            # 공유 id 는 사람에게 의미 없다
+        rest = rest[1:]            # 공유 id 는 사용자에게 의미 없는 값
     return " › ".join([head, *rest])
 
 
@@ -58,7 +58,7 @@ def _split(vp: str) -> tuple[str, str]:
 
 
 def _fingerprint(real: Path) -> str:
-    """만든 그대로인지 가리는 지문 — 파일은 내용 해시, 폴더는 하위 이름·크기 목록 해시."""
+    """생성 시점과 동일한 상태인지 판별하는 지문 — 파일은 내용 해시, 폴더는 하위 이름·크기 목록 해시."""
     h = hashlib.sha256()
     if real.is_file():
         with open(real, "rb") as f:
@@ -81,7 +81,7 @@ def _router():
 
 
 async def _undo_for(db, user: User, vp: str) -> dict:
-    """방금 만든 항목의 되돌리기 정보(지문 서명)."""
+    """직전 생성 항목의 되돌리기 정보(지문 서명)."""
     from app.files import access as acc
 
     a = await acc.resolve(db, user, vp, "view")
@@ -122,7 +122,7 @@ async def files_write_text(user: User, path: str, content: str, **_: object) -> 
             await file_quota.ensure_room(db, q_user, q_vp, len(data))
 
             def _write():
-                with open(target, "xb") as f:      # 그 사이 생긴 파일도 덮지 않는다
+                with open(target, "xb") as f:      # 그 사이 생성된 파일도 덮어쓰지 않음
                     f.write(data)
             try:
                 await asyncio.to_thread(_write)
@@ -203,7 +203,7 @@ async def files_move(user: User, src: str, dst_folder: str = "", new_name: str =
                 try:
                     r = await fr.rename_file(RenameRequest(path=cur, new_name=new_name), user=user, db=db)
                 except Exception:
-                    if moved:      # 이름 바꾸기가 막히면 옮긴 것도 원위치(반쯤 된 상태를 남기지 않는다)
+                    if moved:      # 이름 변경이 차단되면 이동도 원위치로 복원(부분 적용 상태 방지)
                         try:
                             await fr.move_file(MoveRequest(src=cur, dst=orig_parent), user=user, db=db)
                         except Exception:  # noqa: BLE001
@@ -222,7 +222,7 @@ async def files_move(user: User, src: str, dst_folder: str = "", new_name: str =
     return out
 
 
-# ── 되돌리기: 방금 만든 항목 지우기 ────────────────────────────
+# ── 되돌리기: 직전 생성 항목 삭제 ────────────────────────────
 async def files_undo_create(user: User, path: str, token: str, **_: object) -> dict:
     from app.files import access as acc
     from app.files import activity as act
@@ -252,7 +252,7 @@ async def files_undo_create(user: User, path: str, token: str, **_: object) -> d
     return {"removed": vp}
 
 
-# ── 휴지통으로(high) ──────────────────────────────────────────
+# ── 휴지통 이동(high) ──────────────────────────────────────────
 async def files_delete(user: User, path: str, **_: object) -> dict:
     fr = _router()
     try:
@@ -283,7 +283,7 @@ async def files_share_external(user: User, path: str, expires_in: str = "7d", pa
                 from app.files import access as _acc
 
                 is_dir = (await _acc.resolve(db, user, vp, "view")).real.is_dir()
-            except Exception:  # noqa: BLE001 — 판정은 create_share_link 가 다시 한다
+            except Exception:  # noqa: BLE001 — 판정은 create_share_link 가 재수행
                 pass
             r = await fr.create_share_link(
                 ShareLinkCreate(path="" if is_dir else vp, paths=[vp] if is_dir else None,
@@ -370,7 +370,7 @@ register(Tool(
         },
         "required": ["path", "content"],
     },
-    visible_for=shared_target("path"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
+    visible_for=shared_target("path"),   # 공유 영역이면 타인에게 노출되는 쓰기(외부 내용 읽기 이후에는 사용자 확인 요청)
     handler=files_write_text, previewer=_prev_write_text, summarizer=_sum_path,
 ))
 
@@ -387,7 +387,7 @@ register(Tool(
         },
         "required": ["path"],
     },
-    visible_for=shared_target("path"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
+    visible_for=shared_target("path"),   # 공유 영역이면 타인에게 노출되는 쓰기(외부 내용 읽기 이후에는 사용자 확인 요청)
     handler=files_create_folder, summarizer=_sum_path,
 ))
 
@@ -408,7 +408,7 @@ register(Tool(
         },
         "required": ["src", "dst_folder"],
     },
-    visible_for=shared_target("dst_folder"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
+    visible_for=shared_target("dst_folder"),   # 공유 영역이면 타인에게 노출되는 쓰기(외부 내용 읽기 이후에는 사용자 확인 요청)
     handler=files_copy, summarizer=_sum_copy,
 ))
 
@@ -432,7 +432,7 @@ register(Tool(
         },
         "required": ["src"],
     },
-    visible_for=shared_target("src", "dst_folder"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
+    visible_for=shared_target("src", "dst_folder"),   # 공유 영역이면 타인에게 노출되는 쓰기(외부 내용 읽기 이후에는 사용자 확인 요청)
     handler=files_move, previewer=_prev_move, summarizer=_sum_move,
 ))
 
@@ -469,7 +469,7 @@ register(Tool(
         },
         "required": ["path"],
     },
-    visible_for=shared_target("path"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
+    visible_for=shared_target("path"),   # 공유 영역이면 타인에게 노출되는 쓰기(외부 내용 읽기 이후에는 사용자 확인 요청)
     handler=files_delete, summarizer=_sum_path,
 ))
 
@@ -501,7 +501,7 @@ register(Tool(
         },
         "required": ["path"],
     },
-    # 링크를 아는 누구에게나 보인다 — 외부 내용을 읽은 뒤에는 어떤 모드여도 묻는다(writes.request_write)
+    # 링크를 아는 모든 사람에게 노출된다 — 외부 내용 읽기 이후에는 모드와 무관하게 사용자 확인을 요청한다(writes.request_write)
     visible_to_others=True,
     handler=files_share_external, previewer=_prev_share, summarizer=_sum_share,
 ))

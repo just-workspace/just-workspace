@@ -1,7 +1,7 @@
-"""비밀번호로 들어오는 게스트 참가 신청 — 정답/오답/미입력/시도제한.
+"""비밀번호로 입장하는 게스트 참가 신청 — 정답/오답/미입력/시도제한.
 
-Redis·LiveKit·룸 저장소는 전부 가짜로 갈아끼운다. 여기서 보고 싶은 것은
-`submit_join_request` 의 분기이지 인프라가 아니다.
+Redis·LiveKit·룸 저장소는 전부 모의 객체로 대체한다. 검증 대상은
+`submit_join_request` 의 분기이며 인프라가 아니다.
 """
 
 import pytest
@@ -30,7 +30,7 @@ class FakeRedis:
 
 @pytest.fixture()
 def room(monkeypatch):
-    """비밀번호가 걸린 방 하나와, 그 방을 돌려주는 가짜 저장소."""
+    """비밀번호가 설정된 방 하나와, 그 방을 반환하는 가짜 저장소."""
     meta = store.RoomMeta(
         name="pw-room",
         host_user_id="1",
@@ -93,7 +93,7 @@ async def test_wrong_password_is_rejected_and_counted(room):
 
 @pytest.mark.asyncio
 async def test_no_password_falls_back_to_host_approval(room):
-    """비밀번호가 걸린 방이어도 입력하지 않으면 기존 승인 대기 경로."""
+    """비밀번호가 설정된 방이어도 입력하지 않으면 기존 승인 대기 경로를 따른다."""
     res = await meetings_router.submit_join_request(
         "tok", JoinRequestCreate(nickname="게스트")
     )

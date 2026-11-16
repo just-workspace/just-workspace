@@ -45,7 +45,7 @@ def test_docx_keeps_heading_table_and_order():
     md, meta = docread.read_docx(_docx_bytes())
     assert md.startswith("# 작업 계획")
     assert "| 장비 | IP |" in md and "| FW-01 | 10.0.0.1 |" in md
-    # 표가 문단 사이 제 자리에 온다
+    # 표가 문단 사이의 원래 위치에 배치됨
     assert md.index("방화벽 교체 절차") < md.index("| 장비") < md.index("끝")
     assert meta["tables"] == 1
 
@@ -87,7 +87,7 @@ def test_hwpx_paragraphs_and_table():
     assert md.split("\n\n")[0] == "첫 문단"
     assert "| 가 | 나 |" in md
     assert "둘째 문단" in md
-    # 표 칸 글자가 본문 문단으로 또 나오지 않는다
+    # 표 셀의 글자가 본문 문단으로 중복 출력되지 않음
     assert md.count("가") == 1
     assert meta["tables"] == 1
 
@@ -194,7 +194,7 @@ async def test_notes_read_hides_page_without_role(monkeypatch):
     monkeypatch.setattr(ws, "get_page", get_page)
     monkeypatch.setattr(ws, "get_user_role", no_role)
     r = await notes_tool.notes_read(USER, "p1")
-    assert r["error_code"] == "not_found"        # 존재 여부도 흘리지 않는다
+    assert r["error_code"] == "not_found"        # 존재 여부도 노출하지 않음
 
 
 async def test_notes_read_returns_body(monkeypatch):

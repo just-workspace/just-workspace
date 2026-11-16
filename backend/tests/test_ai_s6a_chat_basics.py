@@ -102,7 +102,7 @@ def test_citations_in_app_urls_and_dedupe():
     web = progress.citations_for("web_search", {}, {"untrusted": True, "data": {"results": [
         {"title": "A", "url": "https://a.example/x", "snippet": "s"}, {"title": "bad", "url": "javascript:alert(1)"}]}})
     assert [x["url"] for x in web] == ["https://a.example/x"]
-    assert progress.citations_for("mail_search", {}, mail) == []  # 검색 결과는 출처로 안 삼는다
+    assert progress.citations_for("mail_search", {}, mail) == []  # 검색 결과는 출처로 사용하지 않는다
     t = progress.CitationTracker()
     assert t.add(f) == (1, True) and t.add(dict(f)) == (1, False) and t.add(w) == (2, True)
 
@@ -146,7 +146,7 @@ async def test_stream_emits_steps_citations_and_persists(env, monkeypatch):
     # 하위호환 이벤트 유지
     assert names.count("tool_call") == 3 and names.count("tool_result") == 3
     assert names[-1] == "done" and dict(evs)["done"]["message_id"] == meta["message_id"]
-    # 모델에게 출처 번호를 알려 준다
+    # 모델에 출처 번호를 전달한다
     tool_turn = seen[1][-1]["content"]
     assert "출처: [1] a.log" in tool_turn and "[n]" in tool_turn
     [m] = await _assistant(env["db"], env["conv"])
@@ -172,7 +172,7 @@ async def test_old_rows_and_empty_answer(env, monkeypatch):
                                                   [{"role": "user", "content": "x"}]))
     assert dict(evs)["done"]["message_id"] is None
     rows = await _assistant(env["db"], env["conv"])
-    assert [r.content for r in rows] == ["옛 답변"]  # 빈 답변 행은 지운다
+    assert [r.content for r in rows] == ["옛 답변"]  # 빈 답변 행은 삭제한다
     out = await ai_router.get_messages.__wrapped__(env["conv"], user=env["alice"], db=env["db"])
     assert out["messages"][0]["status"] == "complete" and out["messages"][0]["steps"] == []
 
@@ -203,7 +203,7 @@ async def test_disconnect_saves_partial_and_stop_marks_stopped(env, monkeypatch)
         got.append(c)
         if "token" in c:
             break
-    await gen.aclose()  # 클라이언트가 끊음
+    await gen.aclose()  # 클라이언트가 연결 종료
     [m] = await _assistant(env["db"], env["conv"])
     assert m.status == "interrupted" and m.content == "앞부분"
     out = await ai_router.mark_stopped.__wrapped__(m.id, user=env["alice"], db=env["db"])
@@ -250,12 +250,12 @@ async def test_continue_appends_to_partial(env, monkeypatch):
     assert dict(evs)["partial"]["text"] == "원인은 IKE"
     msgs, tools = seen[0]
     assert msgs[-2] == {"role": "assistant", "content": "원인은 IKE"} and "이어서" in msgs[-1]["content"]
-    assert tools is None  # 이어 쓰기에는 도구를 다시 부르지 않는다
+    assert tools is None  # 이어 쓰기에서는 도구를 재호출하지 않는다
     await env["db"].refresh(m)
     assert m.content == "원인은 IKE 재협상 주기 불일치입니다." and m.status == "complete"
     saved = json.loads(m.meta)
     assert saved["steps"][0]["id"] == "st1" and saved["citations"][0]["n"] == 1  # 앞 단계·출처 유지
-    # 끝난 답변은 이어 받을 수 없다
+    # 완료된 답변은 이어 받을 수 없다
     with pytest.raises(HTTPException) as ei:
         await ai_router.chat_continue.__wrapped__(env["conv"], user=env["alice"], db=env["db"])
     assert ei.value.status_code == 409
@@ -270,7 +270,7 @@ async def test_continue_falls_back_to_regenerate(env, monkeypatch):
         if calls["n"] == 1:
             yield {"type": "error", "message": "assistant prefill not supported"}
         else:
-            assert msgs[-1]["role"] == "user"  # 받은 부분 없이 처음부터
+            assert msgs[-1]["role"] == "user"  # 수신된 부분 없이 처음부터
             yield {"type": "text", "text": "새로 쓴 전체 답변"}
     monkeypatch.setattr(ai_router, "chat_stream", fake_stream)
     resp = await ai_router.chat_continue.__wrapped__(env["conv"], user=env["alice"], db=env["db"])
@@ -298,14 +298,14 @@ async def test_feedback_privacy_default_and_admin_aggregate(env):
     row = (await db.execute(select(AIMessageFeedback))).scalars().one()
     assert row.conversation_snapshot is None and row.model == "test-model"  # 기본은 대화 내용 저장 안 함
     assert json.loads(row.reasons) == ["inaccurate", "too_long"]
-    # 사용자가 켰을 때만 첨부
+    # 사용자가 활성화한 경우에만 첨부
     await fb(m.id, ai_router.FeedbackBody(rating="down", reasons=["inaccurate"], include_conversation=True),
              user=env["alice"], db=db)
     await db.refresh(row)
     snap = json.loads(row.conversation_snapshot)
     assert [x["content"] for x in snap] == ["비밀 질문", "비밀 답변"]
-    assert (await db.execute(select(AIMessageFeedback))).scalars().all() == [row]  # 한 사람 한 행
-    # 끄고 다시 보내면 첨부도 지운다
+    assert (await db.execute(select(AIMessageFeedback))).scalars().all() == [row]  # 사용자당 한 행
+    # 비활성화 후 재전송하면 첨부도 삭제한다
     await fb(m.id, ai_router.FeedbackBody(rating="down"), user=env["alice"], db=db)
     await db.refresh(row)
     assert row.conversation_snapshot is None
@@ -326,7 +326,7 @@ async def test_feedback_privacy_default_and_admin_aggregate(env):
     assert usage["feedback"] == {"up": 0, "down": 1, "reasons": {"wrong_source": 1}}
     assert "비밀" not in json.dumps(usage, ensure_ascii=False)
 
-    # 대화를 지우면 첨부한 대화 내용도 지우고 통계는 남긴다
+    # 대화를 삭제하면 첨부한 대화 내용도 삭제하고 통계는 유지한다
     await ai_router.delete_conversation.__wrapped__(env["conv"], user=env["alice"], db=db)
     await db.refresh(row)
     assert row.conversation_snapshot is None and row.rating == "down"
@@ -337,7 +337,7 @@ async def test_feedback_privacy_default_and_admin_aggregate(env):
     await db.commit()
     await fb(m2.id, ai_router.FeedbackBody(rating="up", reasons=["too_long"]), user=env["alice"], db=db)
     r2 = (await db.execute(select(AIMessageFeedback).where(AIMessageFeedback.message_id == m2.id))).scalars().one()
-    assert json.loads(r2.reasons) == []  # 👍 에는 이유 없음
+    assert json.loads(r2.reasons) == []  # 긍정 평가에는 이유 없음
     out = await fb(m2.id, ai_router.FeedbackBody(rating=None), user=env["alice"], db=db)
     assert out["feedback"] is None
     assert (await db.execute(select(AIMessageFeedback).where(AIMessageFeedback.message_id == m2.id))).first() is None

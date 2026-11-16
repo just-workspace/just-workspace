@@ -1,7 +1,7 @@
 """Office 편집 도구 — docx_edit · xlsx_edit · pptx_edit (쓰기).
 
 기본은 원본 보존(새 이름 "원본 (수정).docx" 로 저장, 위험도 low). ``overwrite=true`` 면 원본을 덮어쓰며
-위험도 high — 승인 대기함을 거친다(writes.tool_risk 가 tool.risk_for 로 판정). 덮어쓸 때 이전본은 버전 기록.
+위험도 high — 승인 대기함을 거친다(writes.tool_risk 가 tool.risk_for 로 판정). 덮어쓰기 시 이전본은 버전 기록에 보존.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from app.db.models import User
 from app.mcp.filetools import office_ops, store
 from app.mcp.filetools.toolkit import DST_FOLDER_PARAM, OUTPUT_NAME_PARAM, base, guard, risk_overwrite
 from app.mcp.server import Tool, register
-from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 남에게 보이는 쓰기 판정
+from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 타인에게 노출되는 쓰기 판정
 
 OFFICE_MAX = 50 * 1024 * 1024
 
@@ -143,8 +143,8 @@ for _name, _title, _fn, _desc, _ops, _label in (
         parameters=_schema(f"Virtual path of the {_name.split('_')[0]} file.", _ops),
         handler=_fn, summarizer=_sum(_label), previewer=_prev,
     )
-    _t.risk_for = risk_overwrite      # 덮어쓰기면 high (writes.tool_risk)
-    # 저장 폴더가 공유 영역이거나, 공유 영역의 원본을 덮어쓰면 남에게 보이는 쓰기
+    _t.risk_for = risk_overwrite      # 덮어쓰기 시 high (writes.tool_risk)
+    # 저장 폴더가 공유 영역이거나 공유 영역의 원본을 덮어쓰면 타인에게 노출되는 쓰기
     _t.visible_for = lambda a, u=None: (path_shared(a.get("dst_folder"), u)
                                         or (bool(a.get("overwrite")) and path_shared(a.get("path"), u)))
     register(_t)

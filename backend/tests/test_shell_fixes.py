@@ -73,8 +73,8 @@ async def test_search_files_uses_index_scoped_to_user_and_shared(db):
 
     out = await global_search(q="보고서", modules="files", user=alice, db=db)
     urls = {r["title"]: r["url"] for r in out["results"]}
-    assert set(urls) == {"보고서.txt", "보고서 모음", "보고서-루트.txt", "보고서-공용.txt"}   # 남의 것·휴지통 제외
-    assert urls["보고서-루트.txt"] == "/files?path=my"            # 루트 파일 — 예전엔 my/. 이었다
+    assert set(urls) == {"보고서.txt", "보고서 모음", "보고서-루트.txt", "보고서-공용.txt"}   # 타 사용자 항목·휴지통 제외
+    assert urls["보고서-루트.txt"] == "/files?path=my"            # 루트 파일 — 이전에는 my/. 이었음
     assert urls["보고서-공용.txt"].startswith("/files?path=shared/")
     assert all(r["id"].split("/")[0] in ("my", "shared") for r in out["results"])
 
@@ -110,7 +110,7 @@ async def test_subscribe_moves_endpoint_to_current_user(db):
     alice, bob = await db.get(User, "alice"), await db.get(User, "bob")
     sub = pr.PushSubscription(endpoint="https://push.example/abc", keys={"p256dh": "k", "auth": "a"})
     await pr.subscribe(sub, user=alice, db=db)
-    await pr.subscribe(sub, user=bob, db=db)      # 같은 브라우저에 다른 사람이 로그인
+    await pr.subscribe(sub, user=bob, db=db)      # 동일 브라우저에 다른 사용자가 로그인
     await pr.subscribe(sub, user=bob, db=db)      # 멱등
     rows = (await db.execute(select(PushSubscription))).scalars().all()
     assert [(r.user_id, r.endpoint) for r in rows] == [("bob", "https://push.example/abc")]

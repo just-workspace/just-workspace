@@ -11,7 +11,7 @@ from app.files import service as fs
 
 if os.name == "nt" and "resource" not in sys.modules:
     # 라우터 → indexer 가 유닉스 전용 `resource` 를 import 한다. Windows 개발 PC 에서도
-    # 헤더 테스트는 돌아야 하니 빈 모듈을 끼운다(import 시점에만 필요).
+    # 헤더 테스트는 실행되어야 하므로 빈 모듈을 삽입한다(import 시점에만 필요).
     sys.modules["resource"] = types.ModuleType("resource")
 
 
@@ -46,13 +46,13 @@ def test_client_mtime_parsing():
     assert _client_mtime(1_700_000_000_000, "1") == 1_700_000_000_000      # 쿼리 우선
     assert _client_mtime(None, None) is None
     assert _client_mtime(None, "abc") is None
-    assert _client_mtime(1_700_000_000, None) is None                      # 초 단위 실수 → 무시
+    assert _client_mtime(1_700_000_000, None) is None                      # 초 단위 오입력 → 무시
     assert _client_mtime(None, "") is None
 
 
 @pytest.mark.asyncio
 async def test_file_response_304_and_range(tmp_path: Path):
-    """_file_response: If-None-Match → 304, Range → 206, 그냥 GET → 200 + ETag/Accept-Ranges."""
+    """_file_response: If-None-Match → 304, Range → 206, 일반 GET → 200 + ETag/Accept-Ranges."""
     from fastapi import FastAPI, Request
     from httpx import ASGITransport, AsyncClient
     from app.files.router import _file_response

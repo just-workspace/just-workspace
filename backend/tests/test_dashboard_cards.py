@@ -26,7 +26,7 @@ async def db():
     await engine.dispose()
 
 
-_seq = itertools.count(1)   # sqlite 에는 서버 시퀀스가 없다 — 고유 순번을 직접 준다
+_seq = itertools.count(1)   # sqlite 에는 서버 시퀀스가 없음 — 고유 순번을 직접 부여
 
 
 def _msg(ch: str, who: str, ago_days: float = 0, deleted: bool = False) -> Message:
@@ -48,8 +48,8 @@ async def test_frequent_channels_ranks_my_messages_in_my_channels(db):
     db.add(ChannelMember(channel_id="left", user_id="bob"))
     db.add_all([_msg("dev", "alice") for _ in range(3)])
     db.add_all([_msg("ops", "alice") for _ in range(5)])
-    db.add(_msg("ops", "alice", deleted=True))          # 지운 건 안 센다
-    db.add_all([_msg("dev", "bob") for _ in range(10)])  # 남의 메시지는 안 센다
+    db.add(_msg("ops", "alice", deleted=True))          # 삭제된 메시지는 집계하지 않음
+    db.add_all([_msg("dev", "bob") for _ in range(10)])  # 타 사용자의 메시지는 집계하지 않음
     db.add_all([_msg("old", "alice") for _ in range(9)])  # 보관 채널 제외
     db.add_all([_msg("dm1", "alice") for _ in range(9)])  # DM 제외
     db.add_all([_msg("left", "alice") for _ in range(9)])  # 멤버가 아닌 채널 제외
@@ -59,7 +59,7 @@ async def test_frequent_channels_ranks_my_messages_in_my_channels(db):
     items = await cards.frequent_channels(db, "alice")
     assert [(i["id"], i["count"]) for i in items] == [("ops", 5), ("dev", 3)]
     assert items[0]["name"] == "운영" and items[0]["type"] == "private"
-    assert await cards.frequent_channels(db, "bob") == []   # bob 은 dev 멤버가 아니다
+    assert await cards.frequent_channels(db, "bob") == []   # bob 은 dev 멤버가 아님
 
 
 @pytest.mark.asyncio
@@ -88,7 +88,7 @@ async def test_recent_wiki_only_visible_spaces_newest_first(db):
     await db.commit()
 
     items = await cards.recent_wiki_pages(db, "alice")
-    assert [i["id"] for i in items] == ["p2", "p3", "p1"]          # 비밀 공간은 안 보인다
+    assert [i["id"] for i in items] == ["p2", "p3", "p1"]          # 비밀 공간은 표시되지 않음
     assert items[0]["space_name"] == "내 공간" and items[0]["space_id"] == "mine"
     assert items[0]["updated_at"].endswith("+00:00")
     assert [i["id"] for i in await cards.recent_wiki_pages(db, "alice", limit=1)] == ["p2"]

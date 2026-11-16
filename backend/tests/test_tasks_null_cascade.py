@@ -1,4 +1,4 @@
-"""작업 — "마감 없음"·설명 비우기가 반영되고, 부모를 지우면 하위 작업도 지워진다(회귀)."""
+"""작업 — "마감 없음"·설명 비우기가 반영되고, 부모를 삭제하면 하위 작업도 삭제된다(회귀)."""
 
 from datetime import datetime, timezone
 
@@ -41,7 +41,7 @@ async def test_clear_due_date_and_description(db):
     assert r.due_date is None
     r = await tr.update_task(t.id, TaskUpdate(description=None), user=alice, db=db)
     assert r.description in (None, "")
-    # 보내지 않은 칸은 그대로
+    # 전송하지 않은 필드는 유지
     r = await tr.update_task(t.id, TaskUpdate(title="새 제목"), user=alice, db=db)
     assert r.title == "새 제목" and r.due_date is None
 

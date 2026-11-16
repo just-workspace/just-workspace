@@ -1,18 +1,18 @@
-"""백업 형식 — 하나뿐이다.
+"""백업 형식 — 단일 형식만 존재한다.
 
-백업은 **디렉터리** 하나다. 그 안에 `manifest.json` 과 항목별 파일이 평평하게 놓인다.
+백업은 **디렉터리** 하나이다. 그 안에 `manifest.json` 과 항목별 파일이 하위 디렉터리 없이 배치된다.
 
     20260101_030000-full/
-      manifest.json          형식 버전·만든 제품 버전·스키마 버전·시각·항목과 파일별 크기/SHA-256·설치 id·저장소 종류…
+      manifest.json          형식 버전·생성한 제품 버전·스키마 버전·시각·항목과 파일별 크기/SHA-256·설치 id·저장소 종류…
       db.dump                pg_dump -Fc
-      config.tar[.enc]       .env 를 포함한 설정 묶음(암호를 주면 .enc — AES-256-GCM)
+      config.tar[.enc]       .env 를 포함한 설정 묶음(암호 지정 시 .enc — AES-256-GCM)
       mail-config.tar.gz …   항목마다 파일 하나 이상
 
-옮길 때는 그 디렉터리를 **tar 한 개**(`.jwbak`, 압축 없음 — 항목이 이미 압축돼 있다)로 묶는다. `manifest.json` 이
-첫 멤버라서, 요약(`summarize`)은 파일을 풀지 않고 앞부분만 읽는다. 두 모양 모두 `open_backup()` 으로 연다.
+이전 시에는 해당 디렉터리를 **tar 한 개**(`.jwbak`, 압축 없음 — 항목이 이미 압축되어 있다)로 병합한다. `manifest.json` 이
+첫 멤버이므로, 요약(`summarize`)은 파일을 추출하지 않고 앞부분만 읽는다. 두 형태 모두 `open_backup()` 으로 연다.
 
-이 모듈은 표준 라이브러리와 `cryptography` 만 쓴다 — 앱 설정·DB 를 import 하지 않는다(설치 관리자가 그대로 쓸 수 있게).
-무엇을 어떤 명령으로 뜨는지는 app/backup/plan.py, 실행은 app/backup/runner.py.
+본 모듈은 표준 라이브러리와 `cryptography` 만 사용한다 — 앱 설정·DB 를 import 하지 않는다(설치 관리자가 그대로 사용할 수 있도록).
+백업 대상과 사용 명령은 app/backup/plan.py, 실행은 app/backup/runner.py.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ KIND_PRE_UPDATE = "pre-update"      # 업데이트 직전 자동 백업 — db +
 KIND_FULL = "full"                  # 전체 백업·서버 이전용
 KINDS = (KIND_PRE_UPDATE, KIND_FULL)
 
-# 항목 id(순서 = 뜨는 순서). 무엇이 들어가는지는 docs/data-safety.md.
+# 항목 id(순서 = 백업 수행 순서). 포함 내용은 docs/data-safety.md.
 ITEMS = ("db", "config", "mail", "gitea", "plugins-data", "certs", "app-signing", "files")
 
 _NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
@@ -53,10 +53,10 @@ SECRET_WARNING = (
 
 
 class BackupError(Exception):
-    """백업을 읽을 수 없거나 믿을 수 없다(형식·해시·암호)."""
+    """백업을 읽을 수 없거나 신뢰할 수 없다(형식·해시·암호)."""
 
 
-# ─── 파일 다루기 ───
+# ─── 파일 처리 ───
 
 
 def sha256_file(path: Path) -> str:
@@ -76,7 +76,7 @@ def _sha256_stream(f: BinaryIO) -> tuple[str, int]:
 
 
 def restrict(path: Path) -> None:
-    """소유자만 읽고 쓰게(파일 600, 디렉터리 700). 권한 개념이 없는 파일시스템이면 조용히 넘어간다."""
+    """소유자만 읽기·쓰기 허용(파일 600, 디렉터리 700). 권한 개념이 없는 파일시스템이면 무시한다."""
     try:
         os.chmod(path, 0o700 if path.is_dir() else 0o600)
     except OSError:
@@ -84,7 +84,7 @@ def restrict(path: Path) -> None:
 
 
 def secret_fingerprint(secret_key: str) -> str:
-    """암호화 키의 지문 — 값은 드러내지 않고 "같은 키인가"만 견줄 수 있다."""
+    """암호화 키의 지문 — 값은 노출하지 않고 "같은 키인가"만 비교할 수 있다."""
     if not secret_key:
         return ""
     return hashlib.sha256(b"jw-backup-key-fingerprint\0" + secret_key.encode()).hexdigest()[:16]
@@ -100,7 +100,7 @@ def _derive(password: str, salt: bytes) -> bytes:
 
 
 def encrypt_bytes(data: bytes, password: str) -> bytes:
-    """암호로 대칭 암호화한다. 결과 = 머리표 | salt(16) | nonce(12) | 암호문+인증 태그."""
+    """암호로 대칭 암호화한다. 결과 = 헤더 | salt(16) | nonce(12) | 암호문+인증 태그."""
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
     if not password:
@@ -198,7 +198,7 @@ def new_manifest(
 
 
 def add_item(manifest: dict, root: Path, item: str, files: list[tuple[str, str]], **extra: Any) -> None:
-    """항목을 manifest 에 올린다. files = [(파일 이름, 역할)]. 크기·SHA-256 은 여기서 잰다."""
+    """항목을 manifest 에 등록한다. files = [(파일 이름, 역할)]. 크기·SHA-256 은 여기서 계산한다."""
     if item not in ITEMS:
         raise BackupError(f"모르는 항목: {item}")
     entries = []
@@ -296,9 +296,9 @@ def _iter_archive(path: Path) -> Iterator[tuple[tarfile.TarInfo, BinaryIO | None
 
 
 def verify(backup: Backup, *, password: str | None = None) -> list[str]:
-    """모든 파일의 크기·SHA-256 을 manifest 와 견준다. 돌려주는 값: 문제 목록(비면 온전).
+    """모든 파일의 크기·SHA-256 을 manifest 와 대조한다. 반환값: 문제 목록(비어 있으면 정상).
 
-    password 를 주면 암호화된 설정 항목이 그 암호로 풀리는지도 본다.
+    password 를 지정하면 암호화된 설정 항목이 해당 암호로 복호화되는지도 확인한다.
     """
     problems: list[str] = []
     expected = {f["name"]: f for f in backup.manifest.files()}
@@ -340,7 +340,7 @@ def verify(backup: Backup, *, password: str | None = None) -> list[str]:
 
 
 def read_config_tar(backup: Backup, password: str | None = None) -> bytes:
-    """설정 묶음(tar 바이트)을 돌려준다. 암호화돼 있으면 푼다."""
+    """설정 묶음(tar 바이트)을 반환한다. 암호화되어 있으면 복호화한다."""
     entry = backup.manifest.file("config", "config")
     if entry is None:
         raise BackupError("이 백업에는 설정 항목이 없습니다")
@@ -348,11 +348,11 @@ def read_config_tar(backup: Backup, password: str | None = None) -> bytes:
     return decrypt_bytes(blob, password or "") if backup.manifest.config_encrypted else blob
 
 
-# ─── 묶기·풀기 ───
+# ─── 병합·추출 ───
 
 
 def pack(root: Path, dest: Path) -> Path:
-    """백업 디렉터리를 tar 한 개로 묶는다(manifest.json 이 첫 멤버)."""
+    """백업 디렉터리를 tar 한 개로 병합한다(manifest.json 이 첫 멤버)."""
     backup = open_backup(root)
     tmp = dest.with_name(dest.name + ".part")
     with tarfile.open(tmp, "w:") as tar:
@@ -365,12 +365,12 @@ def pack(root: Path, dest: Path) -> Path:
 
 
 def pack_order(root: Path) -> list[str]:
-    """tar 로 묶을 때의 멤버 순서 — manifest.json 이 먼저(내려받기 응답이 `tar -cf - <이 순서>` 로 흘려보낸다)."""
+    """tar 병합 시의 멤버 순서 — manifest.json 이 최우선(내려받기 응답이 `tar -cf - <이 순서>` 로 스트리밍한다)."""
     return [MANIFEST_NAME] + [f["name"] for f in open_backup(root).manifest.files()]
 
 
 def extract(backup: Backup, dest: Path) -> Path:
-    """tar 백업을 디렉터리로 푼다(manifest 에 있는 평평한 일반 파일만 — 그 밖은 거부). 디렉터리 백업이면 그대로 돌려준다."""
+    """tar 백업을 디렉터리로 추출한다(manifest 에 있는, 하위 경로 없는 일반 파일만 허용 — 그 외는 거부). 디렉터리 백업이면 그대로 반환한다."""
     if not backup.is_archive:
         return backup.path
     allowed = {f["name"] for f in backup.manifest.files()} | {MANIFEST_NAME}
@@ -394,9 +394,9 @@ def extract(backup: Backup, dest: Path) -> Path:
 
 
 def summarize(path: str | os.PathLike) -> dict:
-    """백업의 내용 요약 — 풀지 않고 manifest 만 읽는다(설치 마법사의 "백업에서 복원" 확인 화면용).
+    """백업의 내용 요약 — 추출하지 않고 manifest 만 읽는다(설치 마법사의 "백업에서 복원" 확인 화면용).
 
-    사용자 수·데이터 크기 같은 값은 백업을 만들 때 manifest 에 넣어 둔 것이다.
+    사용자 수·데이터 크기 등의 값은 백업 생성 시 manifest 에 기록한 것이다.
     """
     backup = open_backup(path)
     m = backup.manifest.data

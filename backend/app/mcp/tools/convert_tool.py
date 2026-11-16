@@ -1,7 +1,7 @@
-"""files_convert — 형식 바꾸기(쓰기, low). 결과는 새 파일.
+"""files_convert — 형식 변환(쓰기, low). 결과는 새 파일.
 
-간단 변환은 백엔드 안에서(라이브러리): xlsx→csv, csv→xlsx, md/txt→docx(pandoc), md/txt→pdf(reportlab),
-이미지(여러 장)→pdf(Pillow). 그 밖의 오피스·한글(hwp·hwpx) 문서 변환은 ws-docconv(LibreOffice + H2Orestart).
+간단 변환은 백엔드 내부에서 수행(라이브러리): xlsx→csv, csv→xlsx, md/txt→docx(pandoc), md/txt→pdf(reportlab),
+이미지(여러 장)→pdf(Pillow). 그 외 오피스·한글(hwp·hwpx) 문서 변환은 ws-docconv(LibreOffice + H2Orestart).
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from app.db.models import User
 from app.mcp.filetools import containers, convert_ops, store
 from app.mcp.filetools.toolkit import DST_FOLDER_PARAM, OUTPUT_NAME_PARAM, RESULT_NOTE, base, guard
 from app.mcp.server import Tool, register
-from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 남에게 보이는 쓰기 판정
+from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 타인 노출 쓰기 판정
 from app.mcp.tools._common import err
 
 CONVERT_MAX = 100 * 1024 * 1024
@@ -37,7 +37,7 @@ async def files_convert(user: User, to: str, path: str = "", paths: list | None 
         return err("invalid_argument", "path(또는 이미지 여러 장이면 paths)가 필요합니다")
     exts = [os.path.splitext(p)[1].lower() for p in srcs]
 
-    # 이미지 → pdf (여러 장이면 한 PDF 로)
+    # 이미지 → pdf (여러 장이면 하나의 PDF 로 병합)
     if target == "pdf" and all(e in convert_ops.IMAGE_EXTS for e in exts):
         if len(srcs) > convert_ops.MAX_IMAGES:
             return err("invalid_argument", f"이미지는 {convert_ops.MAX_IMAGES}장까지입니다")
@@ -124,6 +124,6 @@ register(Tool(
         "all_sheets": {"type": "boolean", "default": False, "description": "xlsx→csv: one csv per sheet."},
         "output_name": OUTPUT_NAME_PARAM, "dst_folder": DST_FOLDER_PARAM,
     }, "required": ["to"]},
-    visible_for=shared_target("dst_folder"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
+    visible_for=shared_target("dst_folder"),   # 공유 영역이면 타인 노출 쓰기(외부 내용을 읽은 뒤에는 확인을 요청한다)
     handler=files_convert, summarizer=_sum,
 ))

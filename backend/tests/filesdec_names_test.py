@@ -1,9 +1,9 @@
 """`@` 로 시작하는 파일·폴더 이름 허용.
 
-예전엔 "@ 로 시작하면 전부 숨김·거부"였다(NAS 시스템 폴더 때문). 이제 숨김·거부는 알려진 NAS 시스템 이름
-(@Recycle·@eaDir·#recycle …, 대소문자 무시)뿐이고 "@회의록" 은 일반 항목이다 — 만들기·이름 바꾸기·업로드·이동·
-목록·검색·색인·공유 링크 폴더 탐색·zip·사람 공유 하위 경로·휴지통. `.` 으로 시작하는 이름은 그대로 거부.
-숨김 판정은 fs.is_hidden_name 한 곳.
+과거에는 "@ 로 시작하면 전부 숨김·거부"였다(NAS 시스템 폴더 대응). 현재 숨김·거부 대상은 알려진 NAS 시스템 이름
+(@Recycle·@eaDir·#recycle …, 대소문자 무시)뿐이며 "@회의록" 은 일반 항목이다 — 생성·이름 변경·업로드·이동·
+목록·검색·색인·공유 링크 폴더 탐색·zip·사용자 공유 하위 경로·휴지통. `.` 으로 시작하는 이름은 기존대로 거부.
+숨김 판정은 fs.is_hidden_name 단일 지점에서 수행.
 """
 
 import io
@@ -44,7 +44,7 @@ def test_dot_names_still_refused(name):
     assert fs.is_hidden_name(name)
     with pytest.raises(fs.InvalidNameError) as e:
         fs.validate_name(name)
-    assert "@" not in str(e.value)          # 안내 문구가 더는 @ 를 탓하지 않는다
+    assert "@" not in str(e.value)          # 안내 문구가 더 이상 @ 를 원인으로 지목하지 않는다
 
 
 async def _status(coro) -> int:
@@ -59,7 +59,7 @@ async def test_create_rename_upload_move_trash_with_at_names(env):
     # 새 폴더
     await fr.mkdir(body=MkdirRequest(path="my/docs/@회의록"), user=alice, db=db)
     assert (env.home / "docs" / "@회의록").is_dir()
-    # 이름 바꾸기
+    # 이름 변경
     r = await fr.rename_file(body=RenameRequest(path="my/docs/a.txt", new_name="@메모.txt"), user=alice, db=db)
     assert r["new_name"] == "@메모.txt" and (env.home / "docs" / "@메모.txt").read_text() == "hello"
     # 업로드
@@ -67,22 +67,22 @@ async def test_create_rename_upload_move_trash_with_at_names(env):
     r = await fr.upload_file(up, path="my/docs/@회의록", upload_id=None, size=2, mtime=None, x_file_mtime=None,
                              user=alice, db=db)
     assert r["name"] == "@올림.txt" and (env.home / "docs" / "@회의록" / "@올림.txt").read_bytes() == b"up"
-    # 이동(@ 폴더 안으로) · 복사
+    # 이동(@ 폴더 내부로) · 복사
     r = await fr.move_file(body=MoveRequest(src="my/docs/@메모.txt", dst="my/docs/@회의록", copy=False), user=alice, db=db)
     assert r["path"] == "my/docs/@회의록/@메모.txt"
     r = await fr.move_file(body=MoveRequest(src="my/docs/@회의록", dst="my", copy=True), user=alice, db=db)
     assert (env.home / "@회의록" / "@메모.txt").is_file()
-    # 목록에 보인다
+    # 목록에 표시됨
     names = [i.name for i in fs._scan_directory(env.home / "docs", "my/docs")]
     assert "@회의록" in names
     listed = await fr.list_files(path="my/docs/@회의록", user=alice, db=db)
     assert sorted(i.name for i in listed.items) == ["@메모.txt", "@올림.txt"]
-    # 휴지통으로 보냈다가 목록에서 원래 이름으로 보인다
+    # 휴지통으로 이동한 뒤 목록에서 원래 이름으로 표시됨
     await fr.delete_file(path="my/docs/@회의록/@올림.txt", permanent=False, user=alice, db=db)
     assert not (env.home / "docs" / "@회의록" / "@올림.txt").exists()
     trash = await fr.list_trash(user=alice, db=db)
     assert [t.name for t in trash.items] == ["@올림.txt"]
-    # NAS 이름·점 이름은 여전히 400
+    # NAS 이름·점 이름은 기존대로 400
     for bad in ("@Recycle", "@eadir", "#recycle", ".숨김"):
         assert await _status(fr.mkdir(body=MkdirRequest(path=f"my/docs/{bad}"), user=alice, db=db)) == 400
         assert await _status(fr.rename_file(body=RenameRequest(path="my/docs/sub", new_name=bad), user=alice, db=db)) == 400
@@ -92,7 +92,7 @@ async def test_create_rename_upload_move_trash_with_at_names(env):
 
 
 def _tree(home):
-    """@회의록(사용자) + @Recycle·@eaDir·#recycle(NAS) + .secret 이 섞인 폴더."""
+    """@회의록(사용자) + @Recycle·@eaDir·#recycle(NAS) + .secret 이 혼재하는 폴더."""
     d = home / "docs"
     (d / "@회의록").mkdir()
     (d / "@회의록" / "1월.txt").write_text("회의")
@@ -119,7 +119,7 @@ def test_indexer_indexes_at_names_and_skips_nas_folders(env, monkeypatch):
     monkeypatch.setattr(indexer, "STORAGE_ROOT", env.root)
     rows, alive = indexer._scan_scope(env.home, "alice", {})
     assert {"docs/@회의록", "docs/@회의록/1월.txt", "docs/@공지.txt", "docs/a.txt"} <= alive
-    # 예전엔 "." 만 걸러 NAS 휴지통 안 파일까지 색인(검색 노출)됐다
+    # 과거에는 "." 만 제외하여 NAS 휴지통 내 파일까지 색인(검색 노출)되었다
     assert not any("@Recycle" in r or "@eaDir" in r or "#recycle" in r or ".secret" in r for r in alive)
     assert {r["rel_path"] for r in rows} == alive
     quick = {r["rel_path"] for r in indexer._quick_rows(env.home / "docs")}
@@ -149,7 +149,7 @@ async def test_folder_link_browse_download_and_zip(env):
     resp = await fr.download_shared(token=link.token, request=Req(), access=None, inline=False, db=env.db)
     names = zipfile.ZipFile(io.BytesIO(b"".join([c async for c in resp.body_iterator]))).namelist()
     assert sorted(names) == sorted(["docs/@공지.txt", "docs/@회의록/1월.txt", "docs/a.txt", "docs/sub/b.txt"])
-    # @ 이름 자체로도 링크를 만들 수 있다(파일·폴더)
+    # @ 이름 자체로도 링크 생성 가능(파일·폴더)
     one = await fr.create_share_link(body=ShareLinkCreate(path="my/docs/@공지.txt"), user=env.alice, db=env.db)
     resp = await fr.download_shared(token=one.token, request=Req(), access=None, inline=False, db=env.db)
     assert resp.status_code == 200

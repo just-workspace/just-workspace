@@ -1,9 +1,9 @@
 """비밀값 기동 검사 · 생성기(app/security_defaults.py, `python -m app.cli gen-secrets`).
 
-- 예시 파일 그대로·알려진 기본값·짧은 값이면 거부한다.
-- 꺼진 기능의 비밀값은 보지 않는다.
-- 생성기가 만든 값은 검사를 통과한다(둘이 같은 표에서 나온다).
-- 사유 문구·로그에 값이 섞여 나가지 않는다.
+- 예시 파일의 값 그대로이거나 알려진 기본값·짧은 값이면 거부한다.
+- 비활성화된 기능의 비밀값은 검사하지 않는다.
+- 생성기가 생성한 값은 검사를 통과한다(양쪽이 동일한 표에서 파생된다).
+- 사유 문구·로그에 값이 노출되지 않는다.
 """
 
 import json
@@ -17,7 +17,7 @@ from app import security_defaults as sd
 
 PG_URL = "postgresql+asyncpg://workspace:{pw}@postgres:5432/workspace"
 REPO = Path(__file__).resolve().parents[2]
-# backend/ 만 따로 떼어 돌리는 환경에서는 리포 루트 파일이 없다 — 그 둘만 건너뛴다
+# backend/ 만 분리하여 실행하는 환경에는 리포 루트 파일이 없다 — 해당 둘만 생략한다
 needs_repo = pytest.mark.skipif(
     not (REPO / ".env.example").is_file() or not (REPO / "docker-compose.yml").is_file(),
     reason="리포 루트(.env.example, docker-compose.yml)가 없다",
@@ -29,7 +29,7 @@ def _all_zones(_requirement: str) -> bool:
 
 
 def _good_env(**over) -> dict[str, str]:
-    env = sd.generate(sd.names())          # 표의 전부(기본 생성 대상이 아닌 것까지)
+    env = sd.generate(sd.names())          # 표의 전체 항목(기본 생성 대상이 아닌 항목 포함)
     env["COMPOSE_PROFILES"] = "mailserver"
     env["MCP_INTERNAL_TOOLS_ENABLED"] = "true"
     env.update(over)
@@ -80,7 +80,7 @@ def test_known_defaults_rejected(name, value):
     ("SECRET_KEY", "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d"),      # 31자
     ("DB_PASSWORD", "a1b2c3d4e5f6a7b"),                       # 15자
     ("LIVEKIT_API_SECRET", "x9k2m4p7q1"),
-    ("SECRET_KEY", "a" * 64),                                 # 길지만 같은 글자
+    ("SECRET_KEY", "a" * 64),                                 # 길지만 동일 문자 반복
 ])
 def test_short_or_trivial_rejected(name, value):
     assert name in _names(_check(_good_env(**{name: value})))
@@ -89,7 +89,7 @@ def test_short_or_trivial_rejected(name, value):
 def test_required_empty_rejected_optional_empty_ok():
     env = _good_env(SECRET_KEY="", DB_PASSWORD="", INTERNAL_API_KEY="", LIVEKIT_API_KEY="", LIVEKIT_API_SECRET="",
                     ONLYOFFICE_JWT_SECRET="", SANDBOX_TOKEN="")
-    # 필수 둘만 거부 — 나머지는 비어 있으면 그 기능이 꺼진다(안전한 쪽)
+    # 필수 2개만 거부 — 나머지는 비어 있으면 해당 기능이 비활성화된다(안전한 방향)
     assert _names(_check(env)) == {"SECRET_KEY", "DB_PASSWORD"}
 
 
@@ -110,7 +110,7 @@ def test_internal_key_rejects_characters_the_mail_patch_cannot_take():
         assert "INTERNAL_API_KEY" in _names(_check(_good_env(INTERNAL_API_KEY=value)))
 
 
-# ─── 꺼진 기능은 보지 않는다 ───
+# ─── 비활성화된 기능은 검사하지 않음 ───
 
 
 def test_disabled_zone_secrets_are_ignored():
@@ -152,7 +152,7 @@ def test_enforce_raises_and_never_prints_values(monkeypatch):
     text = "\n".join(lines) + str(exc.value)
     assert "SECRET_KEY" in text and "LIVEKIT_API_SECRET" in text
     assert secret not in text and "secret-value-too-short" not in text
-    # 변수마다 한 줄
+    # 변수당 한 줄
     assert sum("거부 — SECRET_KEY" in line for line in lines) == 1
     assert sum("거부 — LIVEKIT_API_SECRET" in line for line in lines) == 1
 
@@ -169,7 +169,7 @@ def test_enforce_escape_hatch_only_warns(monkeypatch):
 
 
 def test_runtime_check_reads_settings_and_rejects_shipped_defaults(monkeypatch):
-    """아무것도 안 채운 설정(코드 기본값)으로는 거부된다 — 운영 기본은 '거부'."""
+    """값을 채우지 않은 설정(코드 기본값)은 거부된다 — 운영 기본은 '거부'."""
     from app.config import Settings
 
     for name in sd.names():
@@ -212,7 +212,7 @@ def test_merge_fills_only_empty_or_placeholder():
         "INTERNAL_API_KEY=",
         "DB_PASSWORD=CHANGE_ME_TO_STRONG_PASSWORD",
         "DATABASE_URL=postgresql+asyncpg://workspace:CHANGE_ME_TO_STRONG_PASSWORD@postgres:5432/workspace",
-        "LIVEKIT_API_KEY=devkey",          # 값이 있다 — 건드리지 않는다(검사가 거부할 뿐)
+        "LIVEKIT_API_KEY=devkey",          # 값이 존재 — 변경하지 않음(검사에서 거부될 뿐)
         "",
     ])
     merged, filled = sd.merge_env(text)
@@ -223,10 +223,10 @@ def test_merge_fills_only_empty_or_placeholder():
     assert env["LIVEKIT_API_KEY"] == "devkey" and "LIVEKIT_API_KEY" not in filled
     assert {"INTERNAL_API_KEY", "DB_PASSWORD", "LIVEKIT_API_SECRET", "SEARXNG_SECRET"} <= set(filled)
     assert sd.weakness(sd.spec("INTERNAL_API_KEY"), env["INTERNAL_API_KEY"]) is None
-    # DATABASE_URL 에 박혀 있던 자리표시자도 같은 비밀번호로 맞춘다
+    # DATABASE_URL 에 포함되어 있던 자리표시자도 동일한 비밀번호로 갱신
     assert env["DATABASE_URL"] == f"postgresql+asyncpg://workspace:{env['DB_PASSWORD']}@postgres:5432/workspace"
     assert "# 주석" in merged
-    # 다시 돌리면 아무것도 바꾸지 않는다(멱등)
+    # 재실행 시 변경 없음(멱등)
     again, filled_again = sd.merge_env(merged)
     assert again == merged and filled_again == []
 
@@ -288,13 +288,13 @@ def test_cli_gen_secrets_merge(tmp_path, capsys):
     env_file.write_text("APP_URL=https://ws.example.com\nSECRET_KEY=\nDB_PASSWORD=keep-this-password-0123\n",
                         encoding="utf-8")
 
-    # 기본: 화면 출력, 파일은 그대로
+    # 기본: 화면 출력, 파일은 미변경
     assert cli.main(["gen-secrets", "--merge", str(env_file)]) == 0
     printed = capsys.readouterr().out
     assert "DB_PASSWORD=keep-this-password-0123" in printed and "SECRET_KEY=\n" not in printed
     assert "SECRET_KEY=\n" in env_file.read_text(encoding="utf-8")
 
-    # --in-place: 파일에 쓰고, 값은 찍지 않는다
+    # --in-place: 파일에 기록하고 값은 출력하지 않음
     assert cli.main(["gen-secrets", "--merge", str(env_file), "--in-place"]) == 0
     captured = capsys.readouterr()
     body = env_file.read_text(encoding="utf-8")

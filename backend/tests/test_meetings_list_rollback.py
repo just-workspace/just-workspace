@@ -1,7 +1,7 @@
-"""회의 목록 DB 조회 실패 뒤에도 같은 세션으로 다음 쿼리를 할 수 있어야 한다(L-5 회귀).
+"""회의 목록 DB 조회 실패 후에도 동일 세션으로 다음 쿼리를 실행할 수 있어야 한다(L-5 회귀).
 
-PostgreSQL 은 실패한 쿼리 뒤 트랜잭션이 abort 되어 다음 쿼리가 InFailedSQLTransaction 으로 500 이 났다.
-조회를 세이브포인트로 감싸 실패 시 그 부분만 되돌린다."""
+PostgreSQL 은 실패한 쿼리 이후 트랜잭션이 abort 되어 다음 쿼리가 InFailedSQLTransaction 으로 500 을 반환했다.
+조회를 세이브포인트로 감싸 실패 시 해당 부분만 롤백한다."""
 
 from datetime import datetime, timezone
 
@@ -31,6 +31,6 @@ async def test_list_visible_failure_is_isolated(monkeypatch):
         out = await mr._list_visible_safe(db, u, datetime.now(timezone.utc))
         assert out == []
         assert seen["nested"] is True            # 세이브포인트 안에서 실행됨
-        assert u.username == "u1"                 # 이미 읽은 객체는 그대로 쓸 수 있다(만료 안 됨)
+        assert u.username == "u1"                 # 이미 읽은 객체는 그대로 사용 가능(만료되지 않음)
         assert (await db.execute(text("SELECT 1"))).scalar() == 1
     await engine.dispose()

@@ -1,11 +1,11 @@
 """서버측 세션 레지스트리 (Redis) — per-device 추적/원격 로그아웃.
 
-각 로그인마다 고유 sid 발급 + IP/hostname/UA/타임스탬프를 Redis에 기록.
+로그인마다 고유 sid 를 발급하고 IP/hostname/UA/타임스탬프를 Redis 에 기록한다.
 - sess:{sid}      -> JSON 세션 레코드 (TTL = 세션 수명, 슬라이딩)
-- usess:{user_id} -> 해당 유저의 sid Set (목록 조회/일괄 취소용)
+- usess:{user_id} -> 해당 사용자의 sid Set (목록 조회/일괄 취소용)
 
-get_current_user가 매 요청 sid 존재를 확인 → 없으면(취소/만료) 401.
-Redis 장애 시에는 fail-open (tv 검사만으로 통과)하여 전체 다운 방지.
+get_current_user 가 매 요청마다 sid 존재를 확인한다 → 없으면(취소/만료) 401.
+Redis 장애 시에는 fail-open(tv 검사만으로 통과)하여 전체 장애를 방지한다.
 """
 
 import asyncio
@@ -25,26 +25,26 @@ logger = logging.getLogger(__name__)
 _SESS = "sess:"
 _USESS = "usess:"
 _TOUCH_INTERVAL = 60          # last_seen 갱신 최소 간격(초) — 매 요청 쓰기 방지
-_USET_TTL = 86400 * 31        # 유저 sid Set 보존 기간
+_USET_TTL = 86400 * 31        # 사용자 sid Set 보존 기간
 
 
 def _bcl():
-    """app.auth.backchannel — 지연 import(이 모듈은 가볍게 유지)."""
+    """app.auth.backchannel — 지연 import(본 모듈의 경량 유지 목적)."""
     from app.auth import backchannel
     return backchannel
 
 
 def client_ip(request: Request) -> str:
-    """실제 클라이언트 IP — 백엔드 전체가 쓰는 단일 규칙(세션·접속 로그·감사 로그·레이트리밋).
+    """실제 클라이언트 IP — 백엔드 전체가 사용하는 단일 규칙(세션·접속 로그·감사 로그·레이트리밋).
 
-    헤더는 **읽지 않는다.** 신뢰 경계는 앞단이 지킨다:
+    헤더는 **읽지 않는다.** 신뢰 경계는 앞단 계층에서 보장한다:
     - ws-nginx 는 앞단 리버스 프록시 연결일 때만 X-Real-IP 를 승격(realip)하고, 뒤로는
-      X-Forwarded-For 를 그 값 하나로 **덮어써** 보낸다.
-    - uvicorn 은 `--proxy-headers --forwarded-allow-ips 172.28.0.2`(ws-nginx 고정 IP)라
-      그 연결에서 온 XFF 만 `request.client` 에 반영한다.
-    그래서 여기서 X-Real-IP/XFF 를 다시 읽으면 LAN·도커망에서 nginx 를 거치지 않고 온
+      X-Forwarded-For 를 그 값 하나로 **덮어써** 전달한다.
+    - uvicorn 은 `--proxy-headers --forwarded-allow-ips 172.28.0.2`(ws-nginx 고정 IP)로 기동하므로
+      해당 연결에서 온 XFF 만 `request.client` 에 반영한다.
+    따라서 여기서 X-Real-IP/XFF 를 다시 읽으면 LAN·도커망에서 nginx 를 경유하지 않은
     요청이 헤더로 IP 를 위조할 수 있게 된다. slowapi 의
-    `get_remote_address` 도 같은 `request.client.host` 를 쓰므로 키가 자동으로 맞는다.
+    `get_remote_address` 도 동일한 `request.client.host` 를 사용하므로 키가 자동으로 일치한다.
     """
     return request.client.host if request.client else ""
 
@@ -58,10 +58,10 @@ def _is_non_public(ip: str) -> bool:
 
 
 async def resolve_hostname(ip: str) -> str:
-    """역방향 DNS(PTR)로 hostname. 실패/사설망이면 빈 문자열. 블로킹이라 executor+타임아웃.
+    """역방향 DNS(PTR)로 hostname 조회. 실패/사설망이면 빈 문자열. 블로킹 호출이므로 executor+타임아웃 사용.
 
     사설·루프백은 조회하지 않는다 — 컨테이너 /etc/hosts 의 `host.docker.internal`
-    같은 내부 별칭이 세션 목록에 기기 이름처럼 찍히는 것을 막는다.
+    같은 내부 별칭이 세션 목록에 기기 이름으로 표시되는 것을 방지한다.
     """
     if not ip or _is_non_public(ip):
         return ""
@@ -101,7 +101,7 @@ async def get_session(sid: str) -> dict | None:
 
 
 async def touch_session(sid: str, rec: dict, ip: str) -> None:
-    """last_seen/ip 갱신 + TTL 슬라이딩. _TOUCH_INTERVAL 이내면 스킵."""
+    """last_seen/ip 갱신 + TTL 슬라이딩. _TOUCH_INTERVAL 이내면 생략."""
     try:
         now = int(time.time())
         if now - int(rec.get("last_seen", 0)) < _TOUCH_INTERVAL and ip == rec.get("ip"):
@@ -128,13 +128,13 @@ async def revoke_session(sid: str) -> bool:
     except Exception as e:
         logger.warning("[sessions] revoke failed: %s", e)
         rec, ok = None, False
-    # OIDC Back-Channel Logout — 이 세션으로 로그인한 외부 RP 에도 알린다(비동기, 실패 무시).
+    # OIDC Back-Channel Logout — 해당 세션으로 로그인한 외부 RP 에도 통지한다(비동기, 실패 무시).
     await _bcl().on_session_revoked(sid, (rec or {}).get("user_id"))
     return ok
 
 
 async def revoke_user_sessions(user_id: str) -> int:
-    """해당 유저의 레지스트리 세션 전부 삭제 (token_version 증가와 병행 사용)."""
+    """해당 사용자의 레지스트리 세션 전부 삭제 (token_version 증가와 병행 사용)."""
     try:
         r = await get_redis()
         sids = await r.smembers(_USESS + user_id)
@@ -167,7 +167,7 @@ async def revoke_all_sessions() -> int:
 
 
 async def list_user_sessions(user_id: str) -> list[dict]:
-    """유저의 활성 세션 목록 (IP/hostname/UA/last_seen). 만료된 sid는 set에서 정리."""
+    """사용자의 활성 세션 목록 (IP/hostname/UA/last_seen). 만료된 sid는 set에서 정리."""
     r = await get_redis()
     sids = await r.smembers(_USESS + user_id)
     out: list[dict] = []

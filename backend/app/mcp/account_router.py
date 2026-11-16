@@ -64,7 +64,7 @@ async def connector_info(user: User = Depends(get_current_user), db=Depends(get_
 # ── PAT (Personal Access Token) ──────────────────────────────
 
 
-# 무기한 토큰은 만들 수 없다 — 30일·90일·1년 중에서
+# 무기한 토큰은 생성 불가 — 30일·90일·1년 중 선택
 TOKEN_EXPIRY_DAYS = (30, 90, 365)
 DEFAULT_TOKEN_DAYS = 90
 
@@ -148,7 +148,7 @@ async def revoke_token(
     if row.revoked_at is None:
         row.revoked_at = datetime.now(timezone.utc)
         await db.commit()
-    await revocation.mark(user.id, f"pat:{row.id}")   # 이미 열려 있는 연결(옛 SSE)도 끊는다
+    await revocation.mark(user.id, f"pat:{row.id}")   # 이미 열려 있는 연결(구 SSE)도 종료한다
     rejected = await _writes.reject_for_client(db, user, f"pat:{row.id}")
     return {"ok": True, "rejected": rejected}
 
@@ -222,15 +222,15 @@ async def revoke_connection(
         raise HTTPException(status_code=404, detail="연결을 찾을 수 없습니다")
     await _revoke_chain(db, row)  # revokes this token + all rotation successors/predecessors
     await db.commit()
-    # 리프레시 토큰만 폐기하면 이미 발급된 액세스 토큰(1시간)은 계속 통한다 — 해제 시각을 남겨 거절한다
+    # 리프레시 토큰만 폐기하면 이미 발급된 액세스 토큰(1시간)은 계속 유효하다 — 해제 시각을 기록해 거부한다
     await revocation.mark(user.id, row.client_id)
     return {"ok": True}
 
 
-# ── 연결된 앱 — MCP 커넥터에 붙은 앱 단위 목록 ─────────
-# OAuth: MCP 리소스(읽기·쓰기 주소)에 발급된 살아 있는 리프레시 토큰을 client_id 로 묶는다.
-# 개인 토큰: 한 번이라도 쓰인(last_used_at) 살아 있는 토큰 하나 = 앱 하나.
-# 행 열쇠(key)는 OAuth 면 client_id, 개인 토큰이면 "pat:<id>" — 쓰기 요청의 client_id 와 같은 값이다.
+# ── 연결된 앱 — MCP 커넥터에 연결된 앱 단위 목록 ─────────
+# OAuth: MCP 리소스(읽기·쓰기 주소)에 발급된 유효한 리프레시 토큰을 client_id 로 묶는다.
+# 개인 토큰: 1회 이상 사용된(last_used_at) 유효한 토큰 하나 = 앱 하나.
+# 행 키(key)는 OAuth 이면 client_id, 개인 토큰이면 "pat:<id>" — 쓰기 요청의 client_id 와 동일한 값이다.
 
 def _aware(dt):
     if dt is None:
@@ -263,7 +263,7 @@ async def list_apps(user: User = Depends(get_current_user), db=Depends(get_db)):
             a["scopes"].update((t.scope or "").split())
         if issued and (a["connected_at"] is None or issued < a["connected_at"]):
             a["connected_at"] = issued
-        # 리프레시 토큰은 쓸 때마다 회전하므로 마지막 발급 = 마지막 사용
+        # 리프레시 토큰은 사용 시마다 회전하므로 마지막 발급 = 마지막 사용
         if issued and (a["last_used_at"] is None or issued > a["last_used_at"]):
             a["last_used_at"] = issued
     out = []
@@ -291,8 +291,8 @@ async def list_apps(user: User = Depends(get_current_user), db=Depends(get_db)):
 
 @router.delete("/apps/{key:path}")
 async def disconnect_app(key: str, user: User = Depends(get_current_user), db=Depends(get_db)):
-    """앱 연결 끊기 — OAuth 면 이 앱의 MCP 리프레시 토큰 사슬 전부, 개인 토큰이면 그 토큰을 폐기.
-    그 연결의 대기 쓰기 요청은 '연결 해제됨' 사유로 거부한다. {ok, rejected}"""
+    """앱 연결 해제 — OAuth 이면 이 앱의 MCP 리프레시 토큰 사슬 전체, 개인 토큰이면 해당 토큰을 폐기한다.
+    해당 연결의 대기 쓰기 요청은 '연결 해제됨' 사유로 거부한다. {ok, rejected}"""
     if key.startswith("pat:"):
         row = (await db.execute(select(McpPersonalToken).where(
             McpPersonalToken.id == key[4:], McpPersonalToken.user_id == user.id,
@@ -313,7 +313,7 @@ async def disconnect_app(key: str, user: User = Depends(get_current_user), db=De
         for r in rows:
             await _revoke_chain(db, r)
         await db.commit()
-    # 이미 발급된 액세스 토큰·열려 있는 연결도 지금부터 거절한다(app.mcp.revocation)
+    # 이미 발급된 액세스 토큰·열려 있는 연결도 이 시점부터 거부한다(app.mcp.revocation)
     await revocation.mark(user.id, key)
     rejected = await _writes.reject_for_client(db, user, key)
     return {"ok": True, "rejected": rejected}

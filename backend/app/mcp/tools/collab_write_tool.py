@@ -1,11 +1,11 @@
 """게시판·채팅 쓰기 도구.
 
-웹 API 와 같은 판정 — 게시판·채팅 라우터의 엔드포인트 함수를 그대로 부른다:
+웹 API 와 동일한 판정 — 게시판·채팅 라우터의 엔드포인트 함수를 그대로 호출한다:
   게시판: 모듈·그룹 권한(require_module), 쓰기 권한(write_permission=admin 이면 관리자만),
-          댓글 허용·댓글 권한, 지우기는 작성자·관리자만(소프트 삭제).
-  채팅:   채널 권한 엔진(perms.allowed "message.send"/"message.reply", 지우기는 "message.delete").
-          실시간 전달·멘션 알림도 웹과 같은 후처리(_broadcast_message)를 탄다.
-공지·필독·고정 설정은 열지 않는다.
+          댓글 허용·댓글 권한, 삭제는 작성자·관리자만(소프트 삭제).
+  채팅:   채널 권한 엔진(perms.allowed "message.send"/"message.reply", 삭제는 "message.delete").
+          실시간 전달·멘션 알림도 웹과 동일한 후처리(_broadcast_message)를 거친다.
+공지·필독·고정 설정은 지원하지 않는다.
 """
 
 from __future__ import annotations
@@ -115,7 +115,7 @@ CHAT_ATTACH_MAX = 10
 
 async def chat_send_message(user: User, channel_id: str, content: str = "", parent_id: str = "",
                             attachments: list | None = None, **_: object) -> dict:
-    """글(선택) + 워크스페이스 파일 첨부(선택). 첨부는 채팅 업로드와 같은 경로(채널 권한·50MB)로 파일 메시지가 된다."""
+    """글(선택) + 워크스페이스 파일 첨부(선택). 첨부는 채팅 업로드와 동일한 경로(채널 권한·50MB)로 파일 메시지가 된다."""
     import io
 
     from starlette.datastructures import Headers, UploadFile
@@ -134,7 +134,7 @@ async def chat_send_message(user: User, channel_id: str, content: str = "", pare
     try:
         async with async_session() as db:
             blobs = []
-            for p in paths:          # 보내기 전에 전부 확인(일부만 올라가지 않게)
+            for p in paths:          # 전송 전에 전부 확인(일부만 업로드되는 것을 방지)
                 vp = p.strip("/")
                 try:
                     real = (await acc.resolve(db, user, vp, "view")).real
@@ -176,7 +176,7 @@ async def chat_undo_send_message(user: User, message_id: str, token: str, **_: o
     try:
         async with async_session() as db:
             msg = await db.get(Message, str(message_id))
-            if not msg or msg.sender_id != user.id:     # 되돌리기는 내 메시지만(관리 권한으로 남의 것 X)
+            if not msg or msg.sender_id != user.id:     # 되돌리기는 본인 메시지만(관리 권한으로 타인의 메시지는 불가)
                 return err("not_found", "메시지가 없습니다")
             await chr_.delete_message(str(message_id), user=user, db=db)
     except Exception as e:  # noqa: BLE001
@@ -205,7 +205,7 @@ register(Tool(
         },
         "required": ["board_id", "title", "content"],
     },
-    # 남에게 보인다 — 외부 내용을 읽은 뒤에는 자동 수락·허용 규칙이어도 묻는다(writes.request_write)
+    # 타인에게 노출된다 — 외부 내용을 읽은 뒤에는 자동 수락·허용 규칙이 적용되어도 확인을 요청한다(writes.request_write)
     visible_to_others=True,
     handler=board_create_post, summarizer=lambda a: _clip(a.get("title")) or "게시글",
 ))
@@ -236,7 +236,7 @@ register(Tool(
         },
         "required": ["post_id", "content"],
     },
-    # 남에게 보인다 — 외부 내용을 읽은 뒤에는 자동 수락·허용 규칙이어도 묻는다(writes.request_write)
+    # 타인에게 노출된다 — 외부 내용을 읽은 뒤에는 자동 수락·허용 규칙이 적용되어도 확인을 요청한다(writes.request_write)
     visible_to_others=True,
     handler=board_add_comment, summarizer=lambda a: f"댓글 · {_clip(a.get('content'), 40)}",
 ))
@@ -262,7 +262,7 @@ register(Tool(
     parameters={"type": "object", "properties": {
         "post_id": {"type": "string", "description": "Post id.", "x-label": "게시글 id"},
     }, "required": ["post_id"]},
-    # 남이 보던 것이 사라진다 — 외부 내용을 읽은 뒤에는 바이패스·오토여도 묻는다
+    # 타인이 열람하던 항목이 삭제된다 — 외부 내용을 읽은 뒤에는 바이패스·오토여도 확인을 요청한다
     visible_to_others=True,
     handler=board_delete_post, summarizer=lambda a: f"게시글 {a.get('post_id', '')}",
 ))
@@ -287,7 +287,7 @@ register(Tool(
         },
         "required": ["channel_id"],
     },
-    # 남에게 보인다 — 외부 내용을 읽은 뒤에는 자동 수락·허용 규칙이어도 묻는다(writes.request_write)
+    # 타인에게 노출된다 — 외부 내용을 읽은 뒤에는 자동 수락·허용 규칙이 적용되어도 확인을 요청한다(writes.request_write)
     visible_to_others=True,
     handler=chat_send_message, summarizer=lambda a: f"채팅 · {_clip(a.get('content'), 40)}",
 ))

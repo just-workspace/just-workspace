@@ -1,10 +1,10 @@
 """AI 운영 정리 작업 — 관리자 › AI 운영.
 
-1. AI 감사 기록 보관: 정책의 1·2·3년(`ai.gov.audit_retention_years`, 기본 1년 — 개인정보 접속기록 최소 1년)을
-   넘긴 AI 감사 행(ai_tool.call · ai_write.* · ai_feedback.*)만 지운다. 다른 감사 기록(사용자 승인 등)은 건드리지 않는다.
-2. 피드백 스냅샷: 첨부된 대화는 90일 뒤 스냅샷만 지운다(평가·이유·의견은 남김) — app.ai.feedback_admin.expire_snapshots.
+1. AI 감사 기록 보존: 정책의 1·2·3년(`ai.gov.audit_retention_years`, 기본 1년 — 개인정보 접속기록 최소 1년)을
+   초과한 AI 감사 행(ai_tool.call · ai_write.* · ai_feedback.*)만 삭제한다. 다른 감사 기록(사용자 승인 등)은 변경하지 않는다.
+2. 피드백 스냅샷: 첨부된 대화는 90일 후 스냅샷만 삭제한다(평가·이유·의견은 유지) — app.ai.feedback_admin.expire_snapshots.
 
-워커 8개 중 락을 잡은 하나만 돈다(app.jobs.lock, files/retention 과 같은 방식). 6시간마다.
+워커 8개 중 락을 획득한 1개만 수행한다(app.jobs.lock, files/retention 과 동일한 방식). 6시간 주기.
 """
 
 from __future__ import annotations

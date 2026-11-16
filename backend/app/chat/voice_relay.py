@@ -1,17 +1,17 @@
 """음성채널 무손실 티어 — 릴레이 입장 토큰 발급.
 
 ``POST /api/chat/channels/{id}/voice/relay-token``  body(선택) ``{"identity": "<LiveKit identity>"}``
-음성 채널 멤버인지 확인하고 ws-audiorelay 가 검증할 짧은 HMAC 토큰(120 s)과 접속 정보를 돌려준다.
-릴레이가 꺼져 있거나(프로파일 미활성·시크릿 없음) 닿지 않으면 503 — 클라이언트는 음악 티어로 내려간다.
+음성 채널 멤버 여부를 확인하고 ws-audiorelay 가 검증할 단기 HMAC 토큰(120 s)과 접속 정보를 반환한다.
+릴레이가 비활성 상태이거나(프로파일 미활성·시크릿 없음) 연결할 수 없으면 503 — 클라이언트는 음악 티어로 fallback 한다.
 
-presence 는 음성 채널과 같은 흐름(app/chat/voice.py)을 그대로 쓴다: 무손실 클라이언트도 LiveKit 방에 들어가
-(Opus 호환 스트림 publish) ``/voice/state`` 로 tier='lossless' 를 알린다. 여기서 받는 ``identity`` 는 그 LiveKit
-identity 로, 내 것인지(voice._owned_identity) 확인한 뒤 토큰 claims 에 실어 릴레이 피어 ↔ LiveKit 참가자를 짝지을 수 있게 한다.
+presence 는 음성 채널과 동일한 흐름(app/chat/voice.py)을 그대로 사용한다: 무손실 클라이언트도 LiveKit 방에 입장하여
+(Opus 호환 스트림 publish) ``/voice/state`` 로 tier='lossless' 를 보고한다. 여기서 수신하는 ``identity`` 는 해당 LiveKit
+identity 이며, 요청자 소유인지(voice._owned_identity) 확인한 뒤 토큰 claims 에 포함하여 릴레이 피어 ↔ LiveKit 참가자를 대응시킬 수 있게 한다.
 
-접속 정보의 정본은 릴레이 자신(``GET http://audiorelay:8090/audiorelay/info``): WebTransport 주소·자가서명 cert_hash 를
-여기서 그대로 전달한다(5 s 캐시). 백엔드는 릴레이의 인증서 상태를 따로 알 필요가 없다.
+접속 정보의 정본은 릴레이 자체(``GET http://audiorelay:8090/audiorelay/info``)이다: WebTransport 주소·자가서명 cert_hash 를
+여기서 그대로 전달한다(5 s 캐시). 백엔드는 릴레이의 인증서 상태를 별도로 파악할 필요가 없다.
 """
-# ※ from __future__ import annotations 금지 — Pydantic 본문 모델이 쿼리로 오인된다(internal_router 참고).
+# from __future__ import annotations 금지 — Pydantic 본문 모델이 쿼리로 오인됨(internal_router 참고).
 
 import logging
 import time
@@ -45,7 +45,7 @@ def is_configured() -> bool:
 
 
 async def fetch_relay_info() -> dict | None:
-    """릴레이 /info. 실패하면 None(캐시는 성공값만)."""
+    """릴레이 /info 조회. 실패 시 None(캐시는 성공값만)."""
     s = get_settings()
     now = time.monotonic()
     if _info_cache["info"] is not None and now - _info_cache["at"] < _INFO_TTL:
@@ -85,7 +85,7 @@ async def issue_relay_token(
     await voice._require_voice_channel(db, channel_id, user)   # 404 / 403 / 400(음성 채널 아님)
     identity = body.identity if body else None
     if identity:
-        await voice._owned_identity(identity, user)             # 내 LiveKit 접속이 아니면 403
+        await voice._owned_identity(identity, user)             # 요청자의 LiveKit 접속이 아니면 403
     info = await fetch_relay_info()
     if info is None:
         raise HTTPException(503, "무손실 릴레이에 연결할 수 없습니다")

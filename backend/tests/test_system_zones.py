@@ -1,7 +1,7 @@
-"""관리 › 구역 API — 설치 관리자 내부 API 를 가짜 transport 로 바꿔 본다.
+"""관리 › 구역 API — 설치 관리자 내부 API 를 가짜 transport 로 대체하여 검증한다.
 
-권한(비관리자 403), 대신 부르기(경로·공유 키·본문), 오류 변환, 설치 관리자 없음, 비밀 가림, 감사 기록,
-설치 관리자의 작업 목록으로 진행 중·최근 작업 이어 받기, 연결 보류와 다시 연결, 인증서 상태·다시 발급.
+권한(비관리자 403), 대리 호출(경로·공유 키·본문), 오류 변환, 설치 관리자 없음, 비밀값 마스킹, 감사 기록,
+설치 관리자의 작업 목록으로 진행 중·최근 작업 인계, 연결 보류와 재연결, 인증서 상태·재발급.
 """
 
 import json
@@ -11,7 +11,7 @@ import sys
 import types
 from datetime import datetime, timedelta, timezone
 
-if os.name == "nt" and "resource" not in sys.modules:  # 유닉스 전용 모듈을 import 하는 곳이 있다
+if os.name == "nt" and "resource" not in sys.modules:  # 유닉스 전용 모듈을 import 하는 코드가 존재
     sys.modules["resource"] = types.ModuleType("resource")
 
 import httpx
@@ -33,7 +33,7 @@ AI_KEY = "sk-ai-secret-do-not-log"
 
 
 class FakeInstaller:
-    """내부 API 흉내 — 받은 요청을 적어 두고, 경로별로 정해 둔 응답을 준다."""
+    """내부 API 모사 — 수신한 요청을 기록하고, 경로별로 지정된 응답을 반환한다."""
 
     def __init__(self):
         self.calls: list[dict] = []
@@ -96,7 +96,7 @@ def job(job_id="a1b2c3d4e5f60718", kind="enable", zone="meetings", status="runni
 
 @pytest.fixture()
 async def env(monkeypatch):
-    """(client, fake, state) — state.user 를 바꿔 호출자를 바꾼다."""
+    """(client, fake, state) — state.user 를 변경하여 호출자를 전환한다."""
     engine = create_async_engine("sqlite+aiosqlite:///", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -163,7 +163,7 @@ async def test_non_admin_gets_403_everywhere(env):
             assert r.status_code == 403, (method, path, r.status_code)
             seen += 1
     assert seen >= 14
-    assert fake.calls == []                      # 설치 관리자까지 가지 않는다
+    assert fake.calls == []                      # 설치 관리자까지 전달되지 않음
     assert await _audit(state) == []
 
 
@@ -186,7 +186,7 @@ async def test_list_merges_declaration_and_installer_state(env):
     assert rows["mail"]["name"]["ko"] == "메일" and rows["mail"]["recommend_mb"] == 1000
     assert rows["meetings"]["ports"] == ["7881/tcp", "7882-7892/udp", "3478/udp", "4433/udp"]
     assert rows["ai"]["fits"] is False and rows["git"]["fits"] is True
-    # 메뉴가 생기는 구역과 아닌 구역
+    # 메뉴가 생성되는 구역과 그렇지 않은 구역
     assert rows["mail"]["menu"] and rows["docs"]["menu"]
     assert not rows["sso"]["menu"] and not rows["rbi"]["menu"]
     assert all(z["job"] is None for z in rows.values())
@@ -240,7 +240,7 @@ async def test_unreachable_installer(env, monkeypatch):
     assert r.status_code == 504 and r.json()["code"] == "installer_timeout"
 
 
-# ─── 대신 부르기 · 오류 변환 ───
+# ─── 대리 호출 · 오류 변환 ───
 
 
 @pytest.mark.asyncio
@@ -253,7 +253,7 @@ async def test_check_is_proxied(env):
     assert r.status_code == 200 and r.json() == report
     call = fake.last("/internal/zones/meetings/check")
     assert call["body"] == {"settings": {"turn": False}} and call["key"] == KEY
-    assert await _audit(state) == []             # 확인은 아무것도 바꾸지 않는다
+    assert await _audit(state) == []             # 확인은 어떤 값도 변경하지 않음
 
 
 @pytest.mark.asyncio
@@ -283,7 +283,7 @@ async def test_installer_errors_are_converted(env):
     fake.on("POST", "/internal/zones/git/enable", (409, {"code": "busy", "vars": {}}))
     assert (await client.post("/api/admin/system/zones/git/enable", json={})).json()["code"] == "busy"
 
-    # 공유 키가 틀리면 설치 관리자는 404 not_found 를 준다 — 화면에는 "받아들이지 않음"
+    # 공유 키가 불일치하면 설치 관리자는 404 not_found 를 반환한다 — 화면에는 "받아들이지 않음"
     fake.on("POST", "/internal/zones/chat/check", (404, {"code": "not_found", "vars": {}}))
     r = await client.post("/api/admin/system/zones/chat/check", json={})
     assert r.status_code == 502 and r.json()["code"] == "installer_rejected"
@@ -295,10 +295,10 @@ async def test_installer_errors_are_converted(env):
     fake.on("POST", "/internal/zones/sso/check", httpx.Response(200, text="not json"))
     r = await client.post("/api/admin/system/zones/sso/check", json={})
     assert r.status_code == 502 and r.json()["code"] == "installer_error"
-    assert await _audit(state) == []             # 받아들여지지 않은 요청은 기록하지 않는다
+    assert await _audit(state) == []             # 수락되지 않은 요청은 기록하지 않음
 
 
-# ─── 켜기 · 끄기 · 감사 기록 · 비밀 가림 ───
+# ─── 활성화 · 비활성화 · 감사 기록 · 비밀값 마스킹 ───
 
 
 @pytest.mark.asyncio
@@ -312,7 +312,7 @@ async def test_enable_tracks_job_audits_and_hides_secrets(env, caplog):
     with caplog.at_level(logging.DEBUG):
         r = await client.post("/api/admin/system/zones/mail/enable", json={"settings": settings})
     assert r.status_code == 202 and r.json()["id"] == running["id"] and r.json()["status"] == "running"
-    assert fake.last("/internal/zones/mail/enable")["body"] == {"settings": settings}     # 설치 관리자에는 그대로
+    assert fake.last("/internal/zones/mail/enable")["body"] == {"settings": settings}     # 설치 관리자에는 원본 그대로 전달
     assert SMTP_PASSWORD not in caplog.text
 
     logs = await _audit(state)
@@ -323,7 +323,7 @@ async def test_enable_tracks_job_audits_and_hides_secrets(env, caplog):
     assert details["settings"]["password"] == "***" and details["settings"]["host"] == "smtp.example.com"
     assert details["job"] == running["id"]
 
-    # 화면을 떠났다 돌아와도 목록이 진행 중인 작업을 알려 준다
+    # 화면 이탈 후 복귀해도 목록이 진행 중인 작업을 반환
     rows = {z["id"]: z for z in (await client.get("/api/admin/system/zones")).json()["zones"]}
     assert rows["mail"]["job"]["id"] == running["id"] and rows["mail"]["job"]["status"] == "running"
     assert rows["mail"]["job"]["stages"][1] == {"id": "configure", "status": "running"}
@@ -344,7 +344,7 @@ async def _rows(client) -> dict:
 
 @pytest.mark.asyncio
 async def test_jobs_come_from_the_installer_not_from_what_this_backend_started(env):
-    """이 backend 가 시작하지 않은 작업(다른 창, 다시 뜬 backend)도 목록에 보인다."""
+    """이 backend 가 시작하지 않은 작업(다른 창, 재기동된 backend)도 목록에 표시된다."""
     client, fake, state = env
     fake.jobs["aaaa1111"] = job("aaaa1111", zone="meetings", started_at=_stamp(timedelta(minutes=2)))
     fake.jobs["old00000"] = job("old00000", zone="meetings", status="failed", started_at=_stamp(timedelta(hours=3)),
@@ -352,10 +352,10 @@ async def test_jobs_come_from_the_installer_not_from_what_this_backend_started(e
     got = await _rows(client)
     assert got["meetings"]["job"]["id"] == "aaaa1111" and got["meetings"]["job"]["status"] == "running"
     assert all(z["job"] is None for k, z in got.items() if k != "meetings")
-    assert not [c for c in fake.calls if c["path"].startswith("/internal/jobs/")]      # 목록 한 번으로 끝난다
+    assert not [c for c in fake.calls if c["path"].startswith("/internal/jobs/")]      # 목록 1회 호출로 완료
     assert fake.last("/internal/jobs")["key"] == KEY
 
-    # 예전 방식으로 적어 둔 작업 id 는 읽을 때 지운다
+    # 이전 방식으로 기록된 작업 id 는 조회 시 삭제
     async with state.factory() as s:
         await system_router.set_setting(s, "system.zonejob.git", json.dumps({"id": "zzzz9999", "kind": "enable"}))
     assert (await _rows(client))["git"]["job"] is None
@@ -375,24 +375,24 @@ async def test_finished_jobs_fade_and_failed_jobs_stay_until_dismissed(env):
                                 error={"cause": "pull_failed", "fix": "see_log", "vars": {}})
 
     got = await _rows(client)
-    assert got["meetings"]["job"]["status"] == "done"          # 방금 끝난 것은 잠시 남는다
-    assert got["git"]["job"] is None                           # 오래전에 끝난 것은 걷힌다
-    assert got["ai"]["job"]["status"] == "failed"              # 실패는 걷을 때까지 남는다
+    assert got["meetings"]["job"]["status"] == "done"          # 방금 종료된 작업은 일정 시간 유지
+    assert got["git"]["job"] is None                           # 오래전에 종료된 작업은 목록에서 제외
+    assert got["ai"]["job"]["status"] == "failed"              # 실패 작업은 숨김 처리 전까지 유지
     assert got["ai"]["job"]["error"]["cause"] == "pull_failed"
     assert got["sso"]["job"] is None
 
     assert (await client.delete("/api/admin/system/zones/ai/job")).status_code == 200
     assert (await _rows(client))["ai"]["job"] is None
-    assert (await _rows(client))["ai"]["job"] is None          # 다시 읽어도 걷힌 채다
+    assert (await _rows(client))["ai"]["job"] is None          # 재조회 시에도 숨김 상태 유지
     assert (await _rows(client))["meetings"]["job"] is not None
 
-    # 그 구역에 새 작업이 생기면 다시 보이고, 걷은 표시는 지워진다
+    # 해당 구역에 새 작업이 생성되면 다시 표시되고, 숨김 표시는 삭제됨
     fake.jobs["dddd4444"] = job("dddd4444", zone="ai", started_at=_stamp(timedelta(seconds=5)))
     assert (await _rows(client))["ai"]["job"]["id"] == "dddd4444"
     async with state.factory() as s:
         assert await system_router.get_settings_by_prefix(s, system_router.DISMISSED_KEY_PREFIX) == {}
 
-    # 진행 중인 작업은 걷을 수 없다
+    # 진행 중인 작업은 숨김 처리 불가
     assert (await client.delete("/api/admin/system/zones/ai/job")).status_code == 200
     assert (await _rows(client))["ai"]["job"]["id"] == "dddd4444"
 
@@ -425,11 +425,11 @@ async def test_jobs_list_is_proxied_with_every_kind(env, monkeypatch):
     r = await client.get("/api/admin/system/jobs")
     assert r.status_code == 200
     jobs = r.json()["jobs"]
-    assert [j["id"] for j in jobs] == ["cert0001", "conn0001"]                  # 새것부터
+    assert [j["id"] for j in jobs] == ["cert0001", "conn0001"]                  # 최신순
     assert jobs[0]["kind"] == "cert" and jobs[0]["zone"] is None and jobs[0]["ports"] == []
     assert "secret_field" not in jobs[0]
     assert jobs[1]["error"]["cause"] == "connection_still_pending"
-    # 인증서 작업은 구역 행에 붙지 않고, 다시 연결 작업은 그 구역에 붙는다
+    # 인증서 작업은 구역 행에 연결되지 않고, 재연결 작업은 해당 구역에 연결됨
     got = await _rows(client)
     assert got["git"]["job"]["kind"] == "reconnect" and got["git"]["job"]["status"] == "failed"
 
@@ -441,14 +441,14 @@ async def test_jobs_list_is_proxied_with_every_kind(env, monkeypatch):
     assert r.status_code == 503 and r.json()["code"] == "installer_unavailable"
 
 
-# ─── 검증된 버전 · 연결 보류 · 다시 연결 ───
+# ─── 검증된 버전 · 연결 보류 · 재연결 ───
 
 
 @pytest.mark.asyncio
 async def test_listing_carries_verified_version_and_pending_state(env):
     client, fake, _ = env
     data = (await client.get("/api/admin/system/zones")).json()
-    assert data["git_verified_version"] is None                # 설치 관리자가 주지 않으면 없음
+    assert data["git_verified_version"] is None                # 설치 관리자가 제공하지 않으면 값 없음
     assert all(z["pending"] is False and z["pending_reason"] is None for z in data["zones"])
 
     base = fake.listing()
@@ -482,7 +482,7 @@ async def test_reconnect_is_proxied_and_audited(env):
         fake.on("POST", "/internal/zones/git/reconnect", (status, {"code": code, "vars": {}}))
         r = await client.post("/api/admin/system/zones/git/reconnect")
         assert r.status_code == status and r.json()["code"] == code and r.json()["detail"] != code
-    assert len(await _audit(state)) == 1                       # 거부된 요청은 기록하지 않는다
+    assert len(await _audit(state)) == 1                       # 거부된 요청은 기록하지 않음
 
     assert (await client.post("/api/admin/system/zones/nope/reconnect")).status_code == 404
     state.user = "alice"
@@ -530,7 +530,7 @@ async def test_cert_state_is_proxied(env, monkeypatch):
     assert (await client.post("/api/admin/system/cert/reissue", json={"mode": "auto"})).status_code == 403
     state.user = "root"
 
-    fake.routes.pop(("GET", "/internal/cert"))                 # 인증서 경로가 없는 예전 설치 관리자
+    fake.routes.pop(("GET", "/internal/cert"))                 # 인증서 경로가 없는 이전 버전 설치 관리자
     r = await client.get("/api/admin/system/cert")
     assert r.status_code == 501 and r.json()["code"] == "installer_unsupported"
 
@@ -579,13 +579,13 @@ async def test_cert_reissue_errors(env):
         fake.on("POST", "/internal/cert/reissue", response)
         r = await client.post("/api/admin/system/cert/reissue", json={"mode": "upload", "cert": CERT_PEM, "key": KEY_PEM})
         assert r.status_code == status and r.json()["code"] == code, code
-        assert r.json()["detail"] != code                      # 사람이 읽을 문구가 있다
+        assert r.json()["detail"] != code                      # 사용자가 읽을 수 있는 문구 포함
     fake.on("POST", "/internal/cert/reissue", (422, {"code": "cert_invalid", "vars": {"checks": checks}}))
     r = await client.post("/api/admin/system/cert/reissue", json={"mode": "upload", "cert": CERT_PEM, "key": KEY_PEM})
-    assert r.json()["vars"]["checks"] == checks                # 검증 실패 항목은 그대로 내려간다
-    assert await _audit(state) == []                           # 시작하지 못한 요청은 기록하지 않는다
+    assert r.json()["vars"]["checks"] == checks                # 검증 실패 항목은 그대로 전달
+    assert await _audit(state) == []                           # 시작되지 않은 요청은 기록하지 않음
 
-    # 너무 큰 파일은 설치 관리자까지 가지 않는다
+    # 크기 초과 파일은 설치 관리자까지 전달되지 않음
     before = len(fake.calls)
     huge = "A" * (system_router.CERT_PEM_MAX + 1)
     r = await client.post("/api/admin/system/cert/reissue", json={"mode": "upload", "cert": huge, "key": KEY_PEM})
@@ -608,7 +608,7 @@ async def test_disable_audits(env):
 @pytest.mark.asyncio
 async def test_settings_never_return_secrets_and_changes_are_audited(env, caplog):
     client, fake, state = env
-    # 설치 관리자가 비밀을 빼고 주는 것이 정상이지만, 혹시 실려 와도 화면까지 가지 않는다
+    # 설치 관리자가 비밀값을 제외하고 반환하는 것이 정상이나, 포함되어 수신되더라도 화면까지 전달하지 않음
     fake.on("GET", "/internal/zones/ai/settings", {
         "zone": "ai", "enabled": True, "detected": {"public_ip": "203.0.113.24"},
         "settings": {"mode": "now", "provider": "anthropic", "api_key": AI_KEY, "model": None}})
@@ -649,7 +649,7 @@ async def test_job_and_log(env):
     r = await client.get("/api/admin/system/jobs/nope1234")
     assert r.status_code == 404 and r.json()["code"] == "job_unknown"
     before = len(fake.calls)
-    r = await client.get("/api/admin/system/jobs/bad.id")       # 영문·숫자만 — 설치 관리자까지 가지 않는다
+    r = await client.get("/api/admin/system/jobs/bad.id")       # 영문·숫자만 허용 — 설치 관리자까지 전달되지 않음
     assert r.status_code == 404 and len(fake.calls) == before
 
     fake.jobs["abcd1234"] = job("abcd1234")
@@ -676,10 +676,10 @@ async def test_probes(env, caplog):
     r = await client.post("/api/admin/system/probe/ai", json={"provider": "anthropic", "api_key": AI_KEY})
     assert r.json()["status"] == "ok" and r.json()["models"] == ["m-1"]
 
-    # 내부 API 에 없는 확인 — 501 로 알린다
+    # 내부 API 에 없는 확인 — 501 로 응답
     r = await client.post("/api/admin/system/probe/mail-records", json={"mail_domain": "example.com"})
     assert r.status_code == 501 and r.json()["code"] == "installer_unsupported"
-    # 생기면 그대로 지나간다
+    # 제공되는 경우 그대로 전달
     records = {"mail_domain": "example.com", "ok": False, "records": [
         {"id": "mx", "name": "example.com", "type": "MX", "expected": "10 mail.example.com", "current": [], "status": "missing"}]}
     fake.on("POST", "/internal/probe/mail-records", records)
@@ -702,14 +702,14 @@ async def test_public_ip_falls_back_to_detected_value(env):
 
 @pytest.mark.asyncio
 async def test_cert_ca_is_passed_with_the_upload_and_on_its_own(env):
-    """사설 CA 의 인증서 — 인증서와 함께 올리거나, 나중에 CA 만 올린다(인증서·개인 키는 그대로)."""
+    """사설 CA 의 인증서 — 인증서와 함께 업로드하거나, 이후 CA 만 업로드한다(인증서·개인 키는 유지)."""
     client, fake, state = env
     ca_pem = "-----BEGIN CERTIFICATE-----\nca-body\n-----END CERTIFICATE-----\n"
     fake.on("POST", "/internal/cert/reissue", (202, cert_job()))
     r = await client.post("/api/admin/system/cert/reissue", json={"mode": "upload", "cert": CERT_PEM, "key": KEY_PEM, "ca": ca_pem})
     assert r.status_code == 202
     assert fake.last("/internal/cert/reissue")["body"] == {"mode": "upload", "cert": CERT_PEM, "key": KEY_PEM, "ca": ca_pem}
-    # 비어 있으면 항목을 싣지 않는다(CA 를 모르는 예전 설치 관리자에도 같은 요청이 간다)
+    # 비어 있으면 항목을 포함하지 않는다(CA 를 지원하지 않는 이전 버전 설치 관리자에도 동일한 요청이 전달된다)
     await client.post("/api/admin/system/cert/reissue", json={"mode": "upload", "cert": CERT_PEM, "key": KEY_PEM, "ca": "  "})
     assert "ca" not in fake.last("/internal/cert/reissue")["body"]
 
@@ -717,13 +717,13 @@ async def test_cert_ca_is_passed_with_the_upload_and_on_its_own(env):
     r = await client.post("/api/admin/system/cert/ca", json={"ca": ca_pem})
     assert r.status_code == 202 and r.json()["id"] == "cert0003" and r.json()["kind"] == "cert"
     assert fake.last("/internal/cert/ca")["body"] == {"ca": ca_pem} and fake.last("/internal/cert/ca")["key"] == KEY
-    r = await client.post("/api/admin/system/cert/ca", json={"ca": ""})            # 걷어 내기
+    r = await client.post("/api/admin/system/cert/ca", json={"ca": ""})            # 제거
     assert r.status_code == 202 and fake.last("/internal/cert/ca")["body"] == {"ca": ""}
     logs = [a for a in await _audit(state) if a.action == "system.cert.ca"]
     assert [json.loads(a.details) for a in logs] == [{"job": "cert0003", "removed": False}, {"job": "cert0003", "removed": True}]
     assert all("ca-body" not in a.details for a in logs)
 
-    # 거부는 그대로 전한다
+    # 거부는 그대로 전달
     checks = [{"id": "ca_issues_cert", "status": "fail", "value": "CN=Other", "fix": {"key": "ca_not_issuer", "vars": {}}}]
     for response, status, code in (((409, {"code": "cert_ca_needs_upload", "vars": {"mode": "auto"}}), 409, "cert_ca_needs_upload"),
                                    ((422, {"code": "cert_invalid", "vars": {"checks": checks}}), 422, "cert_invalid"),
@@ -734,7 +734,7 @@ async def test_cert_ca_is_passed_with_the_upload_and_on_its_own(env):
     assert r.json()["code"] == "busy"
     before = len(fake.calls)
     r = await client.post("/api/admin/system/cert/ca", json={"ca": "A" * (system_router.CERT_PEM_MAX + 1)})
-    assert r.status_code == 413 and len(fake.calls) == before                        # 설치 관리자까지 가지 않는다
+    assert r.status_code == 413 and len(fake.calls) == before                        # 설치 관리자까지 전달되지 않음
 
     state.user = "alice"
     assert (await client.post("/api/admin/system/cert/ca", json={"ca": ca_pem})).status_code == 403
@@ -747,7 +747,7 @@ async def test_cert_state_tells_whether_the_issuing_ca_is_known(env):
     fake.on("GET", "/internal/cert", cert_state(mode="upload", temporary=False, self_signed=False, site_ca=False, ca_uploadable=True))
     data = (await client.get("/api/admin/system/cert")).json()
     assert data["site_ca"] is False and data["ca_uploadable"] is True and data["pending"] == ["git"]
-    # 이 값을 주지 않는 예전 설치 관리자 — 화면이 CA 자리를 보이지 않게 false 로 채운다
+    # 이 값을 제공하지 않는 이전 버전 설치 관리자 — 화면이 CA 입력란을 표시하지 않도록 false 로 설정
     fake.on("GET", "/internal/cert", {k: v for k, v in cert_state().items() if k not in ("site_ca", "ca_uploadable")})
     data = (await client.get("/api/admin/system/cert")).json()
     assert data["site_ca"] is False and data["ca_uploadable"] is False

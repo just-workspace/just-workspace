@@ -70,7 +70,7 @@ settings = get_settings()
 # ── Tool → module map ──────────────────────────────────
 # Maps each registered tool to the module_id that gates it. Tools with no
 # backing module (module_id None) are always available (e.g. web_search).
-# TOOL_MODULE 은 app.mcp.access 로 옮겼다(내장 AI 와 공유). 옛 import 경로 호환용 재수출.
+# TOOL_MODULE 은 app.mcp.access 로 이전했다(내장 AI 와 공유). 구 import 경로 호환용 재수출.
 from app.mcp.access import TOOL_MODULE, module_enabled as _access_module_enabled, tool_accessible  # noqa: E402,F401
 from app.mcp.access import write_enabled as _access_write_enabled  # noqa: E402
 from app.mcp.access import mcp_exposed as _access_mcp_exposed  # noqa: E402
@@ -90,10 +90,10 @@ class McpContext:
     endpoint_scope: str = "mcp:read"
     client_id: str | None = None
     internal: bool = False  # True = static-key internal-tools mode (no user)
-    # 승인 카드·대기함에 보일 요청 출처. claude_app | personal_token
+    # 승인 카드·대기함에 표시할 요청 출처. claude_app | personal_token
     client_name: str | None = None
     client_kind: str | None = None
-    # 토큰 발급 시각(OAuth iat) 또는 연결 시각(개인 토큰) — 그 뒤에 연결을 끊었으면 거절한다(app.mcp.revocation)
+    # 토큰 발급 시각(OAuth iat) 또는 연결 시각(개인 토큰) — 그 이후 연결이 해제되었으면 거부한다(app.mcp.revocation)
     issued_at: float | None = None
 
 
@@ -152,8 +152,8 @@ READ_ENDPOINT = MCPEndpoint(
 
 
 # 쓰기 리소스 — aud ``<app>/api/mcp/write``, mcp:write 필요. 읽기+쓰기 도구를 모두 노출한다.
-# 쓰기 도구는 실행되지 않고 app.mcp.writes 로 간다(low 즉시·high 승인 대기함). 커넥터 URL 을 따로 두어
-# 사용자가 "쓰기 커넥터"를 일부러 연결해야만 쓰기가 열린다(읽기 커넥터는 그대로 읽기 전용).
+# 쓰기 도구는 직접 실행되지 않고 app.mcp.writes 로 전달된다(low 즉시·high 승인 대기함). 커넥터 URL 을 분리하여
+# 사용자가 "쓰기 커넥터"를 명시적으로 연결한 경우에만 쓰기가 허용된다(읽기 커넥터는 읽기 전용 유지).
 WRITE_ENDPOINT = MCPEndpoint(
     path="/api/mcp/write",
     resource=f"{_mcp_base()}/api/mcp/write",
@@ -252,8 +252,8 @@ async def authenticate(request: Request, endpoint: MCPEndpoint) -> McpContext | 
 
     # OAuth Bearer: verify signature + exp + aud + iss.
     # 서명은 RS256(JWKS) — 검증 로직은
-    # oauth_provider.verify_access_token 하나로 모은다. 여기서 알고리즘을
-    # 따로 들고 있으면 provider 와 어긋난다.
+    # oauth_provider.verify_access_token 하나로 통합한다. 여기서 알고리즘을
+    # 별도로 보유하면 provider 와 불일치가 발생한다.
     from app.auth.oauth_provider import verify_access_token
     from app.db.session import async_session
 
@@ -264,7 +264,7 @@ async def authenticate(request: Request, endpoint: MCPEndpoint) -> McpContext | 
                 token,
                 audience=endpoint.resource,  # aud must EQUAL this resource
                 issuer=settings.app_url,
-                # aud 없는 토큰(Gitea SSO 등)은 MCP 에서 거절 — 필수 클레임을 명시.
+                # aud 없는 토큰(Gitea SSO 등)은 MCP 에서 거부 — 필수 클레임을 명시.
                 options={"require": ["aud", "exp", "iss", "sub"]},
             )
     except JWTError as e:
@@ -284,7 +284,7 @@ async def authenticate(request: Request, endpoint: MCPEndpoint) -> McpContext | 
         return None
 
     client_id = payload.get("client_id") or payload.get("azp")
-    # 연결을 끊은 뒤에도 이미 발급된 액세스 토큰(1시간)이 통하던 것을 막는다 — 해제 시각 전에 발급된 토큰은 거절
+    # 연결 해제 후에도 이미 발급된 액세스 토큰(1시간)이 유효하던 문제를 차단한다 — 해제 시각 이전에 발급된 토큰은 거부
     if await revocation.revoked_since(user.id, client_id, payload.get("iat")):
         logger.info("[mcp] bearer rejected: connection revoked (client=%s)", client_id)
         return None
@@ -301,7 +301,7 @@ async def authenticate(request: Request, endpoint: MCPEndpoint) -> McpContext | 
 
 
 async def _client_display_name(client_id: str | None) -> str:
-    """OAuth 클라이언트의 사람용 이름 — DCR 등록 이름(claude.ai 는 "Claude") 또는 정적 클라이언트 id."""
+    """OAuth 클라이언트의 표시용 이름 — DCR 등록 이름(claude.ai 는 "Claude") 또는 정적 클라이언트 id."""
     if not client_id:
         return "AI 커넥터"
     try:
@@ -353,16 +353,16 @@ async def allowed_tool_names(ctx: McpContext) -> set[str]:
 
 
 async def _disconnected(ctx: McpContext) -> bool:
-    """오래 열린 연결(옛 SSE)용 — 연결할 때만 인증하므로, 그 뒤에 사용자가 연결을 끊었는지 호출마다 다시 본다."""
+    """장시간 유지되는 연결(구 SSE)용 — 연결 시에만 인증하므로, 이후 사용자가 연결을 해제했는지 호출마다 재확인한다."""
     if ctx.user is None:
         return False
     return await revocation.revoked_since(ctx.user.id, ctx.client_id, ctx.issued_at)
 
 
 # ── Shared MCP Server (used by BOTH Streamable HTTP and SSE) ───
-# mcp 2.x: 핸들러는 데코레이터 대신 생성자 on_* 인자로 등록하고 (ctx, params) 를 받아
-# 결과 타입(ListToolsResult/CallToolResult)을 직접 돌려준다. 호출자 신원은 전송 계층이
-# 요청마다 _mcp_ctx 에 묶어 둔 것을 그대로 쓴다(ServerRequestContext 는 쓰지 않는다).
+# mcp 2.x: 핸들러는 데코레이터 대신 생성자 on_* 인자로 등록하며 (ctx, params) 를 받아
+# 결과 타입(ListToolsResult/CallToolResult)을 직접 반환한다. 호출자 신원은 전송 계층이
+# 요청마다 _mcp_ctx 에 바인딩한 값을 그대로 사용한다(ServerRequestContext 는 사용하지 않는다).
 async def _list_tools(
     _rctx: ServerRequestContext, _params: PaginatedRequestParams | None
 ) -> ListToolsResult:
@@ -401,7 +401,7 @@ async def _call_tool(_rctx: ServerRequestContext, params: CallToolRequestParams)
             finally:
                 _writes.call_context.reset(_ct)
     text = json.dumps(result, ensure_ascii=False, default=str)
-    # 1.x 와 같은 wire 동작: 도구 오류도 JSON 본문의 ok:false 로만 전달하고 is_error 는 세우지 않는다.
+    # 1.x 와 동일한 wire 동작: 도구 오류도 JSON 본문의 ok:false 로만 전달하고 is_error 는 설정하지 않는다.
     return CallToolResult(content=[TextContent(type="text", text=text)], is_error=False)
 
 
@@ -426,20 +426,20 @@ def _make_asgi_handler(endpoint: MCPEndpoint, *, resolve_sub: bool = False):
     """endpoint 로 인증하는 ASGI 핸들러.
 
     ``resolve_sub``: 베이스 마운트(/api/mcp)용. Starlette ``Mount`` 는 접두어 뒤에
-    슬래시가 오는 경로만 매칭한다(정규식 ``^/api/mcp/read(?P<path>/.*)$``). 그래서
-    클라이언트가 실제로 POST 하는 **슬래시 없는 ``/api/mcp/read``** 는 read 마운트를
-    비껴가 베이스 마운트에 걸리고, 베이스의 resource(``…/api/mcp``)와 토큰의 aud
-    (``…/api/mcp/read``)가 어긋나 **401** 이 된다. ``/api/mcp/write`` 도 같다.
+    슬래시가 오는 경로만 매칭한다(정규식 ``^/api/mcp/read(?P<path>/.*)$``). 따라서
+    클라이언트가 실제로 POST 하는 **슬래시 없는 ``/api/mcp/read``** 는 read 마운트에
+    매칭되지 않고 베이스 마운트에 매칭되며, 베이스의 resource(``…/api/mcp``)와 토큰의 aud
+    (``…/api/mcp/read``)가 불일치하여 **401** 이 된다. ``/api/mcp/write`` 도 동일하다.
 
-    베이스 마운트가 삼킨 경우 남은 경로를 보고 올바른 엔드포인트를 고른다.
+    베이스 마운트에 매칭된 경우 잔여 경로를 확인해 올바른 엔드포인트를 선택한다.
     """
     async def handler(scope: Scope, receive: Receive, send: Send) -> None:
         request = Request(scope, receive)
         ep = endpoint
         if resolve_sub:
-            # Starlette 버전에 따라 Mount 가 scope["path"] 를 잘라주기도 하고
-            # (구버전: "/read") 원본을 그대로 두기도 한다(신버전: "/api/mcp/read").
-            # 둘 다 받아야 한다.
+            # Starlette 버전에 따라 Mount 가 scope["path"] 를 절단하기도 하고
+            # (구버전: "/read") 원본을 유지하기도 한다(신버전: "/api/mcp/read").
+            # 두 형식 모두 처리해야 한다.
             _p = scope.get("path", "").rstrip("/")
             if _p.endswith("/api/mcp/read") or _p == "/read":
                 ep = READ_ENDPOINT
@@ -485,7 +485,7 @@ async def mount_mcp_http(app) -> None:
     )
 
     # 쓰기 엔드포인트. 하위 경로는 Mount, 슬래시 없는 /api/mcp/write 는 베이스 마운트의 resolve_sub 가
-    # WRITE_ENDPOINT 로 인증한다(read 와 같은 방식).
+    # WRITE_ENDPOINT 로 인증한다(read 와 동일한 방식).
     handler = _make_asgi_handler(WRITE_ENDPOINT)
     app.router.routes.append(Mount(WRITE_ENDPOINT.path, app=handler))
     print(
@@ -493,8 +493,8 @@ async def mount_mcp_http(app) -> None:
         f"(resource={WRITE_ENDPOINT.resource}, scope={WRITE_ENDPOINT.required_scope})"
     )
 
-    # resolve_sub=True: 슬래시 없는 /api/mcp/read 가 여기로 흘러들어올 때
-    # read 엔드포인트로 인증하도록 한다(위 docstring 참고).
+    # resolve_sub=True: 슬래시 없는 /api/mcp/read 가 본 마운트에 매칭될 때
+    # read 엔드포인트로 인증한다(위 docstring 참고).
     handler = _make_asgi_handler(PHASE2_ENDPOINT, resolve_sub=True)
     app.router.routes.append(Mount(PHASE2_ENDPOINT.path, app=handler))
     print(

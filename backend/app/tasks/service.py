@@ -1,7 +1,7 @@
 """Tasks service — async SQLAlchemy CRUD.
 
-작업은 만든 사람(user_id, 소유자)의 것이고, 담당자(assignee_id)를 정하면 담당자도 보고 고칠 수 있다.
-삭제·담당자 변경은 소유자만. 남의 작업(소유자도 담당자도 아님)은 없는 것처럼 다룬다.
+작업은 생성자(user_id, 소유자)에게 귀속되며, 담당자(assignee_id)를 지정하면 담당자도 조회·수정할 수 있다.
+삭제·담당자 변경은 소유자만 가능하다. 타인의 작업(소유자도 담당자도 아님)은 존재하지 않는 것으로 처리한다.
 """
 
 import json
@@ -20,7 +20,7 @@ MAX_TAG_LEN = 40
 
 
 class TaskPermissionError(Exception):
-    """보이기는 하지만 그 동작은 소유자만 할 수 있다(담당자가 삭제·재배정 시도)."""
+    """조회는 가능하나 해당 동작은 소유자만 수행할 수 있다(담당자의 삭제·재배정 시도)."""
 
 
 def _tags(t: TaskDB) -> list[str]:
@@ -78,7 +78,7 @@ async def _names(db: AsyncSession, ids: set[str]) -> dict[str, str]:
 
 
 def _visible(user_id: str):
-    """이 사용자가 볼 수 있는 작업 — 내가 만들었거나 내가 담당."""
+    """해당 사용자가 조회 가능한 작업 — 본인이 생성했거나 담당인 작업."""
     return or_(TaskDB.user_id == user_id, TaskDB.assignee_id == user_id)
 
 
@@ -87,7 +87,7 @@ def _mine(t: TaskDB | None, user_id: str) -> bool:
 
 
 async def _load_visible(db: AsyncSession, user_id: str, task_id: str) -> TaskDB | None:
-    """내가 만들었거나 담당인 작업, 또는 그런 작업의 하위 작업(담당자가 체크리스트를 체크할 수 있게)."""
+    """본인이 생성했거나 담당인 작업, 또는 그러한 작업의 하위 작업(담당자가 체크리스트를 체크할 수 있도록 허용)."""
     task = await db.get(TaskDB, task_id)
     if not task:
         return None
@@ -148,11 +148,11 @@ async def get_tasks(
       - None (default): return only top-level tasks (parent_id IS NULL)
       - a task id string: return subtasks of that parent
 
-    보이는 범위는 늘 "내가 만들었거나 내가 담당" 이다. assignee 필터:
-      - "me": 내가 담당인 것 / "none": 담당자 없음 / 사용자 id: 그 사람이 담당인 것(내가 볼 수 있는 것 중)
-    status 는 쉼표로 여러 개 가능(todo,review).
+    조회 범위는 항상 "본인이 생성했거나 담당" 이다. assignee 필터:
+      - "me": 본인이 담당인 작업 / "none": 담당자 없음 / 사용자 id: 해당 사용자가 담당인 작업(조회 가능한 범위 내)
+    status 는 쉼표로 복수 지정 가능(todo,review).
     """
-    # 부모 작업을 볼 수 있다고 호출자가 확인했으면(하위 작업 목록) 하위 작업은 만든 사람과 상관없이 보인다
+    # 호출자가 부모 작업의 조회 가능 여부를 확인한 경우(하위 작업 목록) 하위 작업은 생성자와 무관하게 조회됨
     conditions = [] if (parent_id is not None and parent_visible) else [_visible(user_id)]
 
     # By default only return top-level tasks; when parent_id is given, return subtasks
@@ -178,7 +178,7 @@ async def get_tasks(
         else:
             conditions.append(TaskDB.assignee_id == assignee)
     if tag:
-        # tags_json 은 JSON 배열 문자열 — 따옴표까지 포함해 정확히 그 태그만 맞춘다
+        # tags_json 은 JSON 배열 문자열 — 따옴표까지 포함하여 해당 태그만 정확히 일치시킴
         needle = json.dumps(tag.strip(), ensure_ascii=False)
         conditions.append(TaskDB.tags_json.contains(needle, autoescape=True))
     if project:
@@ -205,7 +205,7 @@ async def get_tasks(
     result = await db.execute(
         select(TaskDB)
         .where(where)
-        # id 2차 기준 — 같은 시각·같은 값끼리 페이지 경계에서 겹치거나 빠지지 않게
+        # id 2차 정렬 기준 — 동일 시각·동일 값 항목이 페이지 경계에서 중복되거나 누락되지 않도록 함
         .order_by(order, TaskDB.id.asc())
         .offset(page * limit)
         .limit(limit)
@@ -239,7 +239,7 @@ async def valid_assignee(db: AsyncSession, assignee_id: str) -> bool:
 
 
 async def _notify_assigned(db: AsyncSession, task: TaskDB, actor_id: str) -> None:
-    """담당 배정 알림 — 자기 자신에게 배정한 건 알리지 않는다. 실패해도 작업 저장은 끝난 뒤다."""
+    """담당 배정 알림 — 본인에게 배정한 경우는 알리지 않는다. 실패하더라도 작업 저장은 이미 완료된 상태이다."""
     if not task.assignee_id or task.assignee_id == actor_id:
         return
     try:
@@ -289,8 +289,8 @@ async def update_task(
     if not task:
         return None
 
-    # 상위 작업 바꾸기 — 만들 때와 같은 규칙. 예전엔 검사가 없어 내 작업을 남의 작업 밑으로 끼워 넣거나
-    # (상대의 하위 목록·진행률에 나타난다) 자기 자신을 상위로 넣어 목록에서 사라지게 할 수 있었다.
+    # 상위 작업 변경 — 생성 시와 동일한 규칙을 적용한다. 이전에는 검사가 없어 본인 작업을 타인의 작업 하위로 삽입하거나
+    # (상대의 하위 목록·진행률에 표시된다) 자기 자신을 상위로 지정하여 목록에서 사라지게 할 수 있었다.
     new_parent = data.get("parent_id")
     if new_parent is not None and new_parent != task.parent_id:
         if new_parent == task.id:
@@ -309,14 +309,14 @@ async def update_task(
     for field in ("title", "priority", "status", "sort_order", "parent_id"):
         if field in data and data[field] is not None:
             setattr(task, field, data[field])
-    # 비울 수 있는 칸 — 보낸 null 은 "없음"(마감 없음·설명 지우기·일정 연결 해제). 예전엔 None 을 건너뛰어
-    # 화면에서 [마감 없음]을 눌러도 서버 응답으로 원래 날짜가 돌아왔다.
+    # 비울 수 있는 필드 — 전달된 null 은 "없음"을 의미한다(마감 없음·설명 삭제·일정 연결 해제). 이전에는 None 을 건너뛰어
+    # 화면에서 [마감 없음]을 선택해도 서버 응답으로 기존 날짜가 반환되었다.
     for field in ("description", "due_date", "calendar_event_id"):
         if field in data:
             v = data[field]
             setattr(task, field, (v or None) if field != "due_date" else v)
 
-    # 새 필드 — 비우기(None·빈 값)도 반영한다
+    # 신규 필드 — 비우기(None·빈 값)도 반영
     reassigned = False
     if "assignee_id" in data:
         if task.user_id != user_id:
@@ -347,13 +347,13 @@ async def delete_task(db: AsyncSession, user_id: str, task_id: str) -> bool:
     if not task:
         return False
     if task.user_id != user_id:
-        # 하위 작업(체크리스트)은 상위 작업을 만든 사람도 지울 수 있다 — 담당자가 추가한 항목을
-        # 소유자가 못 지워 403 이 났다(상위를 통째로 지우는 건 됐다).
+        # 하위 작업(체크리스트)은 상위 작업의 생성자도 삭제할 수 있다 — 담당자가 추가한 항목을
+        # 소유자가 삭제하지 못해 403 이 발생했다(상위 작업 전체 삭제는 가능했다).
         parent = await db.get(TaskDB, task.parent_id) if task.parent_id else None
         if not (parent and parent.user_id == user_id):
             raise TaskPermissionError("작업은 만든 사람만 지울 수 있습니다")
-    # 하위 작업도 함께("하위 작업도 함께 지워집니다") — DB FK(CASCADE)가 없던 운영 DB 에서 고아가 남았다.
-    # FK 가 있어도 앱에서 먼저 지워 DB 마다 결과가 같게. 하위의 하위까지.
+    # 하위 작업도 함께 삭제한다("하위 작업도 함께 지워집니다") — DB FK(CASCADE)가 없던 운영 DB 에서 고아 행이 남았다.
+    # FK 가 있어도 앱에서 먼저 삭제하여 DB 와 무관하게 결과를 동일하게 한다. 하위의 하위까지 포함한다.
     ids, frontier = [], [task.id]
     while frontier:
         rows = (await db.execute(select(TaskDB.id).where(TaskDB.parent_id.in_(frontier)))).scalars().all()
@@ -380,7 +380,7 @@ async def toggle_task(db: AsyncSession, user_id: str, task_id: str) -> dict | No
 
 
 async def list_projects_and_tags(db: AsyncSession, user_id: str) -> dict:
-    """필터 드롭다운용 — 내가 볼 수 있는 작업에 쓰인 프로젝트·태그."""
+    """필터 드롭다운용 — 본인이 조회 가능한 작업에 사용된 프로젝트·태그."""
     rows = (await db.execute(
         select(TaskDB.project, TaskDB.tags_json).where(_visible(user_id))
     )).all()

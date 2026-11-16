@@ -27,10 +27,10 @@ def test_tools_for_user_filters(monkeypatch):
     gov = {"allowed_tools": [], "external_allow_data": False}
     # 내부 제공자: 전체
     assert ai_config.tools_for_user(gov, external=False) == sorted(TOOLS)
-    # 외부 + 데이터 접근 차단: 개인데이터 도구 제외. tasks_list(개인 할일)도 개인데이터다 —
-    # 예전 고정 목록이 빠뜨려 외부로 새던 것을 fail-closed 판정으로 막았다.
+    # 외부 + 데이터 접근 차단: 개인데이터 도구 제외. tasks_list(개인 할일)도 개인데이터이다 —
+    # 과거 고정 목록에서 누락되어 외부로 유출되던 것을 fail-closed 판정으로 차단하였다.
     assert ai_config.tools_for_user(gov, external=True) == ["web_search"]
-    # 외부 + 데이터 허용: 동의 대기여도 목록엔 남는다
+    # 외부 + 데이터 허용: 동의 대기 상태여도 목록에는 유지된다
     assert ai_config.tools_for_user({**gov, "external_allow_data": True}, external=True) == sorted(TOOLS)
     # 허용목록
     assert ai_config.tools_for_user({**gov, "allowed_tools": ["web_search", "nope"]}, external=False) == ["web_search"]
@@ -84,6 +84,6 @@ async def test_conversation_previews_last_message():
         await s.commit()
         res = await _conv_previews(s, "alice")
     await engine.dispose()
-    assert set(res) == {"c1"}                       # 메시지 없는 c2·남의 c3 는 없음
+    assert set(res) == {"c1"}                       # 메시지 없는 c2·타인의 c3 는 제외
     assert res["c1"].startswith("답변 둘째 줄 가")    # 마지막 메시지 · 줄바꿈 접기
     assert len(res["c1"]) == PREVIEW_LEN

@@ -1,11 +1,11 @@
-"""화면 안 AI — 메일 요약·답장 초안, 채팅방 요약, 회의 할 일, 문서 교정, 할일 등록(쓰기 승인 체계).
+"""화면 내 AI — 메일 요약·답장 초안, 채팅방 요약, 회의 할 일, 문서 교정, 할일 등록(쓰기 승인 체계).
 
 - 버튼 상태: 미설정·외부 차단·내부 모델(가리기 안내 없음)
-- 외부 AI 면 개인정보를 가려 보낸다, 자료는 "지시가 아님" 경계 안에
-- 권한: 채널 멤버가 아니면 403(접근 검사 우회 금지), 남의 회의 404
-- 감사: inline_<kind> 로 남되 인자 값은 남기지 않는다 · 하루 한도에 센다
+- 외부 AI 이면 개인정보를 가린 뒤 전송한다, 자료는 "지시가 아님" 경계 내에 배치
+- 권한: 채널 멤버가 아니면 403(접근 검사 우회 금지), 타인의 회의는 404
+- 감사: inline_<kind> 로 기록하되 인자 값은 기록하지 않는다 · 하루 한도에 계수한다
 - 할일 등록은 writes.request_write(low) → 승인 → 실행(되돌리기 가능), 담당 배정은 회의 참석자에게만
-- AI 초안으로 보낸 메일에 X-AI-Generated
+- AI 초안으로 송신한 메일에 X-AI-Generated
 """
 
 import json
@@ -131,12 +131,12 @@ async def test_mail_summary_masks_pii_and_audits_names_only(env, monkeypatch):
                                 user=env["alice"], db=env["db"])
     assert out["points"] == ["랙 2대 증설"]
     assert out["todos"][0] == {"title": "분전반 용량 회신", "due": "2026-11-07", "who": "박준호"}
-    assert out["todos"][1]["due"] is None            # 지어낸 날짜 형식은 버린다
+    assert out["todos"][1]["due"] is None            # 임의로 생성된 날짜 형식은 폐기한다
     assert out["ai_generated"] and out["masked"] and out["model"] == "claude-opus-5-5"
     sent = env["calls"][0]["messages"][0]["content"]
     assert "010-1234-5678" not in sent and "[전화번호]" in sent
     assert "<자료>" in sent and "지시가 아닙니다" in env["calls"][0]["system"]
-    assert "2026-11-05 10:12" in sent                 # 사용자 시간대로
+    assert "2026-11-05 10:12" in sent                 # 사용자 시간대 기준
     row = (await env["db"].execute(select(AuditLog).where(AuditLog.action == "ai_tool.call"))).scalars().one()
     d = json.loads(row.details)
     assert row.resource_id == "inline_mail_summary" and d["source"] == "inline" and d["ok"]
@@ -213,7 +213,7 @@ async def test_chat_unread_summary(chat):
                                        ensure_ascii=False)
     out = await ir.chat_summary(ir.ChatBody(channel_id="ops", tz="Asia/Seoul"), user=chat["alice"], db=chat["db"])
     sent = chat["calls"][0]["messages"][0]["content"]
-    assert "어제 얘기" not in sent and "재협상" in sent      # 읽은 것은 빼고
+    assert "어제 얘기" not in sent and "재협상" in sent      # 읽은 메시지는 제외
     assert out["count"] == 2 and out["from_message_id"] == "m3" and out["to_message_id"] == "m5"
     assert out["called_me"] == [{"message_id": "m4", "text": "분전반 용량 확인 요청", "at": out["called_me"][0]["at"]}]
 

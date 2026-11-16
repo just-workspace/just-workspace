@@ -14,7 +14,7 @@ class NotificationResponse(BaseModel):
     link: str | None = None
     is_read: bool
     created_at: datetime
-    # 보낸 사람·행동(활동 수신함). 예전 알림은 비어 있다.
+    # 발신자·행동(활동 수신함). 이전 알림은 값이 없다.
     actor_id: str | None = None
     actor_name: str | None = None
     action_url: str | None = None

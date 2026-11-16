@@ -1,21 +1,21 @@
-"""파일 댓글 — 공유 권한 '댓글' 단계의 실체.
+"""파일 댓글 — 공유 권한 '댓글' 단계의 구현.
 
-파일은 공유와 같은 식별자로 가리킨다: (원 소유자 id, 소유자 가상경로 'my/..').
-요청 경로는 내 파일(my/..) 또는 공유받은 경로(shared-with-me/<id>/..) 무엇이든 되고, 같은 파일이면 같은 댓글이 보인다.
+파일은 공유와 동일한 식별자로 지정한다: (원 소유자 id, 소유자 가상경로 'my/..').
+요청 경로는 내 파일(my/..)과 공유받은 경로(shared-with-me/<id>/..) 모두 허용하며, 동일 파일이면 동일 댓글이 표시된다.
 
 - 읽기: 보기 권한 이상(소유자 포함)
 - 쓰기: 댓글 권한 이상(댓글·편집·공동 소유)과 소유자
-- 수정·삭제: 쓴 사람만(그리고 지금도 댓글 권한이 있을 때)
-- @멘션: 게시판 댓글과 같은 해석(@아이디) — 그 파일을 볼 수 있는 사람에게만 기존 알림 체계로 알린다
-  (볼 수 없는 사람에게 파일 이름·내용 일부가 새지 않게)
+- 수정·삭제: 작성자만(현재도 댓글 권한을 보유한 경우에 한함)
+- @멘션: 게시판 댓글과 동일한 해석(@아이디) — 해당 파일을 볼 수 있는 사용자에게만 기존 알림 체계로 통지한다
+  (볼 수 없는 사용자에게 파일 이름·내용 일부가 노출되지 않도록 함)
 
-추가된 것:
-- 답글(parent_id — 늘 최상위 댓글에 붙는다) · 위치 조각(anchor, 예 "시트 3 · D14") · 해결(최상위만, 댓글 권한 이상 누구나)
-- GET /comments/mentionable — "@" 후보: 디렉터리 사용자 + 그 파일에 대한 권한(볼 수 없으면 role=null)
-- POST /access-request — 보기 권한인 사람이 원 소유자에게 "댓글/편집 권한 요청" 알림을 보낸다(공유를 바꾸지는 않는다)
+추가 사항:
+- 답글(parent_id — 항상 최상위 댓글에 연결) · 위치 조각(anchor, 예 "시트 3 · D14") · 해결(최상위만, 댓글 권한 이상이면 누구나 가능)
+- GET /comments/mentionable — "@" 후보: 디렉터리 사용자 + 해당 파일에 대한 권한(볼 수 없으면 role=null)
+- POST /access-request — 보기 권한 사용자가 원 소유자에게 "댓글/편집 권한 요청" 알림을 송신한다(공유는 변경하지 않음)
 
-이름 변경·이동·휴지통·복원·영구 삭제 때 따라가는 일은 access.repoint/purge 가 한다.
-팀 공유 폴더(shared/)와 관리자 전체 보기(users/)는 소유자 기준 식별자가 없거나 애매해 지원하지 않는다(400).
+이름 변경·이동·휴지통·복원·영구 삭제 시의 경로 갱신은 access.repoint/purge 가 수행한다.
+팀 공유 폴더(shared/)와 관리자 전체 보기(users/)는 소유자 기준 식별자가 없거나 모호하여 지원하지 않는다(400).
 """
 
 from __future__ import annotations
@@ -42,9 +42,9 @@ MAX_LEN = 4000
 class CommentCreate(BaseModel):
     path: str
     content: str = Field(..., min_length=1, max_length=MAX_LEN)
-    # 답글이면 대상 댓글 id(답글의 답글은 그 최상위 댓글에 붙인다)
+    # 답글인 경우 대상 댓글 id(답글에 대한 답글은 해당 최상위 댓글에 연결)
     parent_id: str | None = None
-    # 위치 조각(오피스 편집기가 셀·쪽 위치를 넘길 때). 사람이 읽는 짧은 글
+    # 위치 조각(오피스 편집기가 셀·쪽 위치를 전달하는 경우). 사람이 읽는 짧은 문자열
     anchor: str | None = Field(None, max_length=200)
 
 
@@ -54,7 +54,7 @@ class CommentResolve(BaseModel):
 
 class AccessRequest(BaseModel):
     path: str
-    # 요청하는 권한(댓글·편집). 공동 소유는 요청 대상이 아니다
+    # 요청 권한(댓글·편집). 공동 소유는 요청 대상에서 제외
     role: str = "comment"
     message: str | None = Field(None, max_length=500)
 
@@ -108,8 +108,8 @@ async def list_comments(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """파일 댓글(오래된 순). can_comment: 내가 댓글을 쓸 수 있나(보기 권한이면 false), role: 내 권한,
-    owner: 원 소유자(보기 권한 안내 "○○ 님에게 권한 요청"), is_original_owner: 내가 원 소유자인가."""
+    """파일 댓글(오래된 순). can_comment: 요청 사용자의 댓글 작성 가능 여부(보기 권한이면 false), role: 요청 사용자의 권한,
+    owner: 원 소유자(보기 권한 안내 "○○ 님에게 권한 요청"), is_original_owner: 요청 사용자의 원 소유자 여부."""
     a = await _target(db, user, path, "view")
     rows = (await db.execute(
         select(FileComment, User)
@@ -139,8 +139,8 @@ async def mentionable_people(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """"@" 후보("이 파일을 볼 수 있는 사람") — 이름·아이디·이메일 앞부분 검색, 나 제외.
-    role = 그 사람의 이 파일 권한(볼 수 없으면 null — 언급해도 알림이 가지 않는다). 볼 수 있는 사람이 먼저."""
+    """"@" 후보("이 파일을 볼 수 있는 사람") — 이름·아이디·이메일 앞부분 검색, 본인 제외.
+    role = 해당 사용자의 이 파일 권한(볼 수 없으면 null — 멘션해도 알림 미발송). 볼 수 있는 사용자를 먼저 정렬."""
     a = await _target(db, user, path, "comment")
     term = (q or "").strip().lstrip("@").lower()
     stmt = select(User).where(User.is_active.is_(True), User.id != user.id)
@@ -171,8 +171,8 @@ async def request_access(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """보기 권한으로 받은 파일에 더 높은 권한(댓글·편집)을 원 소유자에게 요청 — 알림만 보낸다.
-    이미 그 권한 이상이면 400, 공유받지 않은 경로(내 파일)는 400."""
+    """보기 권한으로 공유받은 파일에 대해 상위 권한(댓글·편집)을 원 소유자에게 요청 — 알림만 송신한다.
+    이미 해당 권한 이상이면 400, 공유받지 않은 경로(내 파일)는 400."""
     if body.role not in ("comment", "edit"):
         raise HTTPException(status_code=400, detail="요청할 수 있는 권한은 댓글·편집입니다")
     vp = (body.path or "").strip("/")
@@ -196,7 +196,7 @@ async def request_access(
 
 
 async def _notify_mentions(db: AsyncSession, a: acc.Access, author: User, comment: dict, mentions: list[dict]) -> int:
-    """멘션된 사람 중 그 파일을 볼 수 있는 사람에게만 알림. 보낸 수."""
+    """멘션된 사용자 중 해당 파일을 볼 수 있는 사용자에게만 알림 송신. 송신 건수 반환."""
     from app.notifications.service import create_notification
     name = author.display_name or author.username
     fname = a.real.name
@@ -208,7 +208,7 @@ async def _notify_mentions(db: AsyncSession, a: acc.Access, author: User, commen
         role, share = await acc.role_on(db, target, a.owner_id, a.owner_vpath)
         if not acc.at_least(role, "view"):
             continue
-        # 소유자는 내 파일 폴더로, 받은 사람은 공유받음으로
+        # 소유자는 내 파일 폴더로, 수신자는 공유받음으로 연결
         if target.id == a.owner_id:
             parent = a.owner_vpath.rsplit("/", 1)[0]
             link = f"/files?path={parent}"
@@ -233,7 +233,7 @@ async def create_comment(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """댓글 쓰기 — 댓글 권한 이상·소유자. @아이디 멘션은 그 파일을 볼 수 있는 사람에게 알린다."""
+    """댓글 작성 — 댓글 권한 이상·소유자. @아이디 멘션은 해당 파일을 볼 수 있는 사용자에게 통지한다."""
     content = body.content.strip()
     if not content:
         raise HTTPException(status_code=400, detail="댓글 내용을 입력하세요")
@@ -265,7 +265,7 @@ async def _own_comment(db: AsyncSession, comment_id: str, user: User) -> FileCom
     c = await db.get(FileComment, comment_id)
     if c is None:
         raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다")
-    # 지금도 그 파일에 댓글 권한이 있어야 한다(보기로 내려갔거나 공유가 풀리면 못 고친다)
+    # 현재도 해당 파일에 댓글 권한 필요(보기로 하향되었거나 공유가 해제되면 수정 불가)
     role, _ = await acc.role_on(db, user, c.owner_id, c.file_path)
     if role is None:
         raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다")
@@ -283,7 +283,7 @@ async def resolve_comment(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """해결/다시 열기 — 최상위 댓글만, 그 파일에 댓글 권한 이상이면 누구나(쓴 사람이 아니어도)."""
+    """해결/다시 열기 — 최상위 댓글만 대상, 해당 파일에 댓글 권한 이상이면 누구나 가능(작성자가 아니어도 됨)."""
     c = await db.get(FileComment, comment_id)
     if c is None:
         raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다")
@@ -313,7 +313,7 @@ async def update_comment(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """내 댓글 고치기. 멘션은 다시 해석해 저장만 한다(고칠 때마다 알림을 다시 보내지 않는다)."""
+    """본인 댓글 수정. 멘션은 재해석하여 저장만 한다(수정 시마다 알림을 재송신하지 않음)."""
     content = body.content.strip()
     if not content:
         raise HTTPException(status_code=400, detail="댓글 내용을 입력하세요")
@@ -335,7 +335,7 @@ async def delete_comment(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """내 댓글 지우기(완전 삭제). 최상위를 지우면 답글도 같이 지운다."""
+    """본인 댓글 삭제(완전 삭제). 최상위 댓글 삭제 시 답글도 함께 삭제한다."""
     c = await _own_comment(db, comment_id, user)
     if not c.parent_id:
         for r in (await db.execute(select(FileComment).where(FileComment.parent_id == c.id))).scalars().all():

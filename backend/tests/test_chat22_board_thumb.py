@@ -1,4 +1,4 @@
-"""chat22 포럼 갤러리 — 게시판 글 목록 항목의 thumbnail_url(본문 첫 이미지, 없으면 null). 목록 조회는 조회수를 안 올린다."""
+"""chat22 포럼 갤러리 — 게시판 글 목록 항목의 thumbnail_url(본문 첫 이미지, 없으면 null). 목록 조회는 조회수를 증가시키지 않는다."""
 
 import pytest
 

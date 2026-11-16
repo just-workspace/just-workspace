@@ -91,7 +91,7 @@ class MessageUpdateRequest(BaseModel):
     is_unread: bool | None = None
     is_flagged: bool | None = None
     mailbox_ids: list[str] | None = None  # move to mailbox
-    add_labels: list[str] | None = None  # IMAP 키워드로 붙인다
+    add_labels: list[str] | None = None  # IMAP 키워드로 추가
     remove_labels: list[str] | None = None
 
 
@@ -116,12 +116,12 @@ class SendMessageRequest(BaseModel):
     request_read_receipt: bool = False
     attachments: list[AttachmentRef] | None = None
     # ── 추가 필드 ──
-    send_at: str | None = None  # ISO. 지금보다 뒤면 예약 발송(응답에 scheduled=true, id)
-    # 주면 서버가 서명을 붙인다(본문에 이미 있던 서명 블록은 빼고 하나만)
+    send_at: str | None = None  # ISO. 현재보다 이후면 예약 발송(응답에 scheduled=true, id)
+    # 지정 시 서버가 서명을 추가한다(본문에 이미 있던 서명 블록은 제거하고 하나만 유지)
     signature_id: str | None = None
-    # in_reply_to 가 Message-ID 가 아니라 UID 일 때 원문을 찾을 메일함(기본 INBOX)
+    # in_reply_to 가 Message-ID 가 아닌 UID 일 때 원문을 조회할 메일함(기본 INBOX)
     reply_mailbox_id: str | None = None
-    # 화면 안 AI 답장 초안으로 쓴 메일. 보내기는 사람이 하지만 AI 기본법 표시(X-AI-Generated)를 붙인다
+    # 화면 내 AI 답장 초안으로 작성한 메일. 발송은 사용자가 수행하나 AI 기본법 표시(X-AI-Generated)를 추가한다
     ai_generated: bool = False
 
 
@@ -228,8 +228,8 @@ class DraftSave(BaseModel):
     bcc: list[EmailAddress] = []
     body_html: str | None = None
     body_text: str | None = None
-    signature_id: str | None = None  # 이 초안에 쓸 서명(본문에는 넣지 않는 것을 권장)
-    # 워크스페이스 파일 경로(AI 도구). None = 그대로 둠, [] = 비움
+    signature_id: str | None = None  # 이 초안에 사용할 서명(본문에는 포함하지 않는 것을 권장)
+    # 워크스페이스 파일 경로(AI 도구). None = 유지, [] = 비움
     file_attachments: list[str] | None = None
 
 
@@ -246,10 +246,10 @@ class DraftResponse(BaseModel):
     updated_at: str
     # ── 서명 이중 부착 방지 ──
     signature_id: str | None = None
-    has_signature: bool = False  # 본문에 서명 블록이 이미 들어 있다
-    body_html_without_signature: str | None = None  # 이어 쓰기는 이걸로 하면 중복이 안 생긴다
+    has_signature: bool = False  # 본문에 서명 블록이 이미 포함됨
+    body_html_without_signature: str | None = None  # 이어 쓰기에 이 값을 사용하면 중복이 발생하지 않음
     body_text_without_signature: str | None = None
-    # 초안에 붙은 워크스페이스 파일(경로·이름·크기)과, 단건 조회 때 그것을 작성 창 임시 첨부로 바꾼 것
+    # 초안에 첨부된 워크스페이스 파일(경로·이름·크기)과, 단건 조회 시 이를 작성 창 임시 첨부로 변환한 값
     file_attachments: list[dict] = []
     attachments: list[dict] = []
     attachment_error: str | None = None

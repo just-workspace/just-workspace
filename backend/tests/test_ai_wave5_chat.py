@@ -1,8 +1,8 @@
 """내장 AI 화면 보강 백엔드.
 
-J: 여러 그룹 공유 · 공유 전 점검(못 읽는 파일 경고) · 공유 끊기면 구성원 대화를 '최근 대화'로 · 피커 20개 · 지침 4,000자.
-K: 첨부 원본 내려받기(주인만·보관 만료 410) · 질문 수정 때 첨부 골라 유지 · 모델 선택지별 vision.
-H: 토큰 만료 필수·끝 4자 · 연결된 앱 목록 · 연결 끊으면 대기 쓰기 요청 '연결 해제됨' 거부.
+J: 복수 그룹 공유 · 공유 전 점검(읽을 수 없는 파일 경고) · 공유가 해제되면 구성원 대화를 '최근 대화'로 · 피커 20개 · 지침 4,000자.
+K: 첨부 원본 내려받기(소유자만·보관 만료 410) · 질문 수정 시 첨부 선택 유지 · 모델 선택지별 vision.
+H: 토큰 만료 필수·끝 4자 · 연결된 앱 목록 · 연결을 해제하면 대기 쓰기 요청을 '연결 해제됨'으로 거부.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -51,7 +51,7 @@ async def test_multi_group_share_check_and_detach(env):
     by_name = {g["name"]: g for g in targets["groups"]}
     assert by_name["인프라팀"]["members"] == 2 and by_name["랩실"]["members"] == 1
 
-    # 공유 전 점검 — bob 은 alice 개인 파일 둘 다 못 읽는다(경고만)
+    # 공유 전 점검 — bob 은 alice 개인 파일 둘 다 읽을 수 없다(경고만)
     chk = await ai_extras.project_share_check.__wrapped__(p["id"], group_ids=f"{g1.id},{g2.id}", user=env.alice, db=env.db)
     assert chk["members"] == 1 and chk["blocked_members"] == 1
     assert sorted(f["name"] for f in chk["files"]) == ["장비목록.txt", "정책.txt"]
@@ -59,11 +59,11 @@ async def test_multi_group_share_check_and_detach(env):
     await env.db.commit()
     chk = await ai_extras.project_share_check.__wrapped__(p["id"], group_ids=g1.id, user=env.alice, db=env.db)
     assert [f["name"] for f in chk["files"]] == ["정책.txt"] and chk["files"][0]["blocked"] == 1
-    with pytest.raises(HTTPException) as ei:  # 주인만
+    with pytest.raises(HTTPException) as ei:  # 소유자만
         await ai_extras.project_share_check.__wrapped__(p["id"], group_ids=g1.id, user=env.bob, db=env.db)
     assert ei.value.status_code == 404
 
-    # 여러 그룹에 공유 — 주인은 전부, 구성원은 자기 그룹만 + 공유한 사람 이름 + 못 읽는 파일 표시
+    # 복수 그룹에 공유 — 소유자는 전부, 구성원은 본인 그룹만 + 공유자 이름 + 읽을 수 없는 파일 표시
     out = await ai_router.patch_project.__wrapped__(p["id"], ai_router.ProjectPatch(share_group_ids=[g1.id, g2.id]),
                                                     user=env.alice, db=env.db)
     assert out["shared"] and out["share_group_ids"] == [g1.id, g2.id] and out["owner_name"] == "alice"
@@ -72,7 +72,7 @@ async def test_multi_group_share_check_and_detach(env):
     assert got["share_group_ids"] == [] and got["unreadable_files"] == 1
     assert {f["name"]: f["readable"] for f in got["files"]} == {"장비목록.txt": True, "정책.txt": False}
 
-    # bob 의 프로젝트 대화 → 공유를 끊으면 bob 대화는 '최근 대화'로(묶음 풀림), alice 대화는 그대로
+    # bob 의 프로젝트 대화 → 공유를 해제하면 bob 대화는 '최근 대화'로 이동(프로젝트 연결 해제), alice 대화는 유지
     bcid = await _conv(env, env.bob, project_id=p["id"])
     acid = await _conv(env, env.alice, project_id=p["id"])
     await ai_router.patch_project.__wrapped__(p["id"], ai_router.ProjectPatch(share_group_ids=[g2.id]),
@@ -83,7 +83,7 @@ async def test_multi_group_share_check_and_detach(env):
         await ai_router.get_project.__wrapped__(p["id"], user=env.bob, db=env.db)
     assert ei.value.status_code == 404
 
-    # 그룹에서 빠져 못 보게 된 경우도 대화 목록을 열 때 풀린다
+    # 그룹에서 제외되어 조회할 수 없게 된 경우도 대화 목록 조회 시 연결이 해제된다
     await ai_router.patch_project.__wrapped__(p["id"], ai_router.ProjectPatch(share_group_ids=[g1.id]),
                                               user=env.alice, db=env.db)
     c2 = await _conv(env, env.bob, project_id=p["id"])
@@ -93,7 +93,7 @@ async def test_multi_group_share_check_and_detach(env):
     await env.db.commit()
     lst = await ai_router.list_conversations.__wrapped__(user=env.bob, db=env.db)
     assert {c["id"]: c["project_id"] for c in lst["conversations"]}[c2] is None
-    # 옛 계약(share_group_id 하나)도 그대로 — "" = 해제
+    # 구 계약(share_group_id 하나)도 유지 — "" = 해제
     out = await ai_router.patch_project.__wrapped__(p["id"], ai_router.ProjectPatch(share_group_id=""),
                                                     user=env.alice, db=env.db)
     assert out["shared"] is False and out["share_group_ids"] == []
@@ -123,7 +123,7 @@ async def test_attachment_original_download_owner_only(env):
     assert r.headers["content-disposition"].startswith("attachment")
     r = await ai_extras.attachment_file.__wrapped__(doc["id"], user=env.alice, db=env.db)
     assert r.media_type == "application/octet-stream" and r.headers["content-disposition"].startswith("attachment")
-    with pytest.raises(HTTPException) as ei:  # 남의 첨부
+    with pytest.raises(HTTPException) as ei:  # 타인의 첨부
         await ai_extras.attachment_file.__wrapped__(doc["id"], user=env.bob, db=env.db)
     assert ei.value.status_code == 404
     t = await ai_extras.attachment_text.__wrapped__(doc["id"], user=env.alice, db=env.db)
@@ -225,12 +225,12 @@ async def test_apps_list_and_disconnect_rejects_pending(mcp_env):
     await db.commit()
 
     apps = (await acct.list_apps(user=alice, db=db))["apps"]
-    assert [a["key"] for a in apps] == ["dcr_claude", f"pat:{tok.id}"]  # SSO 클라이언트·안 쓴 토큰은 빠짐
+    assert [a["key"] for a in apps] == ["dcr_claude", f"pat:{tok.id}"]  # SSO 클라이언트·미사용 토큰은 제외
     claude = apps[0]
     assert claude["kind"] == "oauth" and claude["can_write"] is True and claude["pending"] == 2
     assert apps[1]["kind"] == "personal_token" and apps[1]["token_name"] == "lab-runner" and apps[1]["pending"] == 1
 
-    with pytest.raises(HTTPException) as ei:  # 남의 연결
+    with pytest.raises(HTTPException) as ei:  # 타인의 연결
         await acct.disconnect_app("dcr_claude", user=bob, db=db)
     assert ei.value.status_code == 404
     out = await acct.disconnect_app("dcr_claude", user=alice, db=db)
@@ -238,9 +238,9 @@ async def test_apps_list_and_disconnect_rejects_pending(mcp_env):
     for rid in ("wr_a1", "wr_a2"):
         r = await db.get(McpWriteRequest, rid)
         assert r.status == "rejected" and r.reject_reason == "연결 해제됨"
-    assert (await db.get(McpWriteRequest, "wr_b1")).status == "pending"  # bob 것은 그대로
+    assert (await db.get(McpWriteRequest, "wr_b1")).status == "pending"  # bob 의 요청은 유지
     assert (await db.execute(select(OAuthRefreshToken).where(OAuthRefreshToken.token_hash == "h1"))).scalar_one().revoked_at
-    # 개인 토큰 폐기도 그 토큰의 대기 요청을 거부
+    # 개인 토큰 폐기도 해당 토큰의 대기 요청을 거부
     out = await acct.revoke_token(tok.id, user=alice, db=db)
     assert out["rejected"] == 1 and (await db.get(McpWriteRequest, "wr_a3")).reject_reason == "연결 해제됨"
     assert (await acct.list_apps(user=alice, db=db))["apps"] == []

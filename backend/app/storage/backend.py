@@ -1,8 +1,8 @@
 """스토리지 백엔드 추상화 — 로컬/NFS/SMB(파일시스템) + S3/MinIO(오브젝트).
 
-설정은 DB(storage.backend, storage.s3.*) — K8s/배포무관. 기본 filesystem(=현행 /storage, 무변경).
-※ 파일시스템(로컬/NFS/SMB)은 같은 /storage 마운트라 백엔드 코드 동일 — 마운트만 오케스트레이션으로 교체.
-   S3는 앱레벨로 진짜 배포무관(이 추상화 사용).
+설정은 DB(storage.backend, storage.s3.*)에 저장한다 — K8s/배포 방식 무관. 기본값은 filesystem(=현행 /storage, 변경 없음).
+참고: 파일시스템(로컬/NFS/SMB)은 동일한 /storage 마운트이므로 백엔드 코드가 동일하다 — 마운트만 오케스트레이션에서 교체한다.
+   S3 는 앱 레벨에서 배포 방식과 무관하게 동작한다(본 추상화 사용).
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class StorageBackend:
 
 
 class FilesystemBackend(StorageBackend):
-    """로컬/NFS/SMB — /storage 마운트에 직접 쓰기(현행 동작)."""
+    """로컬/NFS/SMB — /storage 마운트에 직접 기록(현행 동작)."""
     def __init__(self, root: str = "/storage"):
         self.root = Path(root)
 
@@ -47,7 +47,7 @@ class FilesystemBackend(StorageBackend):
 
 
 class S3Backend(StorageBackend):
-    """S3 / MinIO 호환 오브젝트 스토리지 (앱레벨, 배포무관)."""
+    """S3 / MinIO 호환 오브젝트 스토리지(앱 레벨, 배포 방식 무관)."""
     def __init__(self, endpoint, region, bucket, access_key, secret_key, prefix=""):
         import boto3
         self.bucket = bucket

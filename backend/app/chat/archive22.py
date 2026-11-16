@@ -1,8 +1,8 @@
-"""보관 시스템 카테고리 — "보관된 프로젝트". 이름은 바꿀 수 있고 삭제·순서 변경은 안 된다(늘 DM 바로 위).
+"""보관 시스템 카테고리 — "보관된 프로젝트". 이름 변경은 가능하며 삭제·순서 변경은 불가하다(항상 DM 바로 위).
 
 id 는 system_settings 'chat.archive_category_id'. PG 는 기동 마이그레이션(session._run_chat_archive_category_migration)
-이 채운다. 비어 있으면(SQLite 테스트·마이그레이션 실패) 처음 읽는 요청이 같은 규칙으로 채운다.
-보관(is_archived) 채널의 category_id 는 옮기지 않는다 — 프런트가 보관 채널을 늘 이 구역에 그린다.
+이 설정한다. 비어 있으면(SQLite 테스트·마이그레이션 실패) 최초 조회 요청이 동일 규칙으로 설정한다.
+보관(is_archived) 채널의 category_id 는 변경하지 않는다 — 프런트가 보관 채널을 항상 이 구역에 표시한다.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ SEED_NAME = "보관"
 
 
 async def get_archive_category_id(db: AsyncSession) -> str | None:
-    """설정에 있고 그 카테고리가 실제로 있을 때만 id."""
+    """설정에 값이 있고 해당 카테고리가 실제로 존재하는 경우에만 id 반환."""
     try:
         row = await db.get(SystemSetting, KEY)
     except Exception:

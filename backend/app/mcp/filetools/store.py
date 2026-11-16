@@ -1,12 +1,12 @@
 """파일 도구의 입출력 — 사용자 권한으로 읽고, 결과는 새 파일로 저장(원본 보존).
 
-* 읽기: ``acc.resolve(..., "view")`` — 웹·MCP 와 같은 권한 판정(공유받은 항목 포함).
-* 저장 기본 폴더: ``my/AI 결과물/YYYY-MM-DD 대화 제목`` (결과물 저장과 같은 규칙 — 날짜는 사용자 시간대,
-  대화가 없으면 "새 대화"). ``dst_folder`` 를 주면 그 폴더(편집 권한 이상).
-* 업로드와 같은 대상 판정(_upload_target)·크기 상한·사용자 할당(quota)을 거친다. 이름이 겹치면 " (2)".
-* 결과 파일 정보는 ``{path, name, size, mime}`` — 결과물 카드가 그대로 붙일 수 있는 모양.
-* 되돌리기: 파일 하나면 그 파일, 여러 개면 묶음 폴더를 ``files_undo_create`` 로(만든 그대로일 때만).
-* 덮어쓰기(고위험 승인 뒤에만): 이전본을 버전 기록으로 남기고 원자적으로 바꾼다.
+* 읽기: ``acc.resolve(..., "view")`` — 웹·MCP 와 동일한 권한 판정(공유받은 항목 포함).
+* 저장 기본 폴더: ``my/AI 결과물/YYYY-MM-DD 대화 제목`` (결과물 저장과 동일한 규칙 — 날짜는 사용자 시간대,
+  대화가 없으면 "새 대화"). ``dst_folder`` 지정 시 해당 폴더(편집 권한 이상).
+* 업로드와 동일한 대상 판정(_upload_target)·크기 상한·사용자 할당(quota)을 적용한다. 이름 충돌 시 " (2)".
+* 결과 파일 정보는 ``{path, name, size, mime}`` — 결과물 카드에 그대로 첨부할 수 있는 형식.
+* 되돌리기: 파일 하나이면 해당 파일, 여러 개이면 묶음 폴더를 ``files_undo_create`` 로 처리(생성 상태 그대로일 때만).
+* 덮어쓰기(고위험 승인 후에만): 이전본을 버전 기록으로 보존하고 원자적으로 교체한다.
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ class OutFile:
 
 
 def session():
-    """DB 세션 진입점 — 테스트가 바꿔 끼운다."""
+    """DB 세션 진입점 — 테스트에서 대체한다."""
     from app.db.session import async_session
 
     return async_session()
@@ -80,7 +80,7 @@ def clean_name(name: str, fallback: str = "결과") -> str:
 
 
 def derived_name(src_path: str, suffix: str, ext: str | None = None) -> str:
-    """원본 이름에서 새 이름 — "보고서.docx" + "수정" → "보고서 (수정).docx"."""
+    """원본 이름에서 새 이름 생성 — "보고서.docx" + "수정" → "보고서 (수정).docx"."""
     base = os.path.basename(str(src_path or "").rstrip("/")) or "파일"
     stem, e = os.path.splitext(base)
     return clean_name(f"{stem} ({suffix}){ext if ext is not None else e}")
@@ -186,7 +186,7 @@ async def save_outputs(user: User, files: list[OutFile], *, dst_folder: str = ""
         for f in files:
             if len(f.data) > max_bytes:
                 raise StoreError("too_large", f"{f.name}: 업로드 상한({max_mb}MB)을 넘습니다")
-        parent_norm, real_dir, a = await fr._upload_target(db, folder, user)   # 편집 권한 이상, 없으면 만든다
+        parent_norm, real_dir, a = await fr._upload_target(db, folder, user)   # 편집 권한 이상, 없으면 생성
         q_user, q_vp = await fr._quota_subject(db, a, user)
         await file_quota.ensure_room(db, q_user, q_vp, sum(len(f.data) for f in files))
         used = {p.name.lower() for p in real_dir.iterdir()} if real_dir.is_dir() else set()
@@ -229,7 +229,7 @@ async def save_outputs(user: User, files: list[OutFile], *, dst_folder: str = ""
 
 
 async def overwrite(user: User, path: str, data: bytes, mime: str | None = None) -> dict:
-    """원본 덮어쓰기(고위험 승인 뒤에만 불린다). 이전본은 버전 기록(내 파일 my/ 영역)에 남긴다."""
+    """원본 덮어쓰기(고위험 승인 후에만 호출된다). 이전본은 버전 기록(내 파일 my/ 영역)에 보존한다."""
     from app.files import access as acc
     from app.files import activity as act
     from app.files import indexer

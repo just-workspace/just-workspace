@@ -18,8 +18,8 @@ from app.middleware.access_log import AccessLogMiddleware
 from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.origin_check import CookieOriginGuard
 from app import zones
-# 구역과 무관하게 스키마는 같다 — 라우터를 올리지 않는 구역의 테이블도 메타데이터에 등록해 둔다
-# (나머지 모델은 app.db.session 이 등록한다). 나중에 구역을 더해도 테이블이 이미 있다.
+# 스키마는 구역과 무관하게 동일하다. 라우터를 등록하지 않는 구역의 테이블도 메타데이터에 등록한다
+# (나머지 모델은 app.db.session 이 등록한다). 이후 구역을 추가해도 테이블이 이미 존재한다.
 from app.backup import models as _backup_models  # noqa: F401
 from app.dashboard import models as _dashboard_models  # noqa: F401
 from app.rbi import models as _rbi_models  # noqa: F401
@@ -30,11 +30,11 @@ from app.version import APP_VERSION  # noqa: E402,F401 — 단일 출처는 리�
 
 
 def _install_log_redaction() -> None:
-    """접근 로그에서 비밀 쿼리 파라미터를 가린다.
+    """접근 로그에서 비밀 쿼리 파라미터를 마스킹한다.
 
-    WOPI 편집기는 access_token 을 쿼리로 달고 백엔드를 호출한다. uvicorn 접근 로그는
-    경로를 통째로 찍으므로, 그대로 두면 유효한 토큰이 로그 파일과 `docker logs` 에
-    평문으로 쌓인다. 로그를 볼 수 있는 사람이 곧 그 파일을 열 수 있게 되는 셈이다.
+    WOPI 편집기는 access_token 을 쿼리에 포함해 백엔드를 호출한다. uvicorn 접근 로그는
+    경로 전체를 기록하므로, 미처리 시 유효한 토큰이 로그 파일과 `docker logs` 에
+    평문으로 누적된다. 로그 열람 권한이 곧 해당 파일의 열람 권한이 된다.
     """
     import logging
     import re
@@ -61,16 +61,16 @@ def _install_log_redaction() -> None:
 
 _install_log_redaction()
 
-# lifespan 이 시작한 백그라운드 루프(설치된 구역 것만 — app/zones.py 의 LOOPS)
+# lifespan 이 기동한 백그라운드 루프(설치된 구역 한정 — app/zones.py 의 LOOPS)
 _tasks: list = []
 
 
 async def _reminder_loop():
     """Periodically check for calendar event reminders (every 60s).
 
-    워커 8개가 같은 초에 깨어나 같은 미발송 일정을 읽으면 알림이 8번 간다
-    (`check_and_send_reminders` 는 SELECT → 알림 생성 → reminder_sent 갱신이라
-    조건부 UPDATE 로 막혀 있지 않다). 한 주기에 한 워커만 돈다.
+    워커 8개가 동일 시각에 기동해 동일한 미발송 일정을 조회하면 알림이 8회 발송된다
+    (`check_and_send_reminders` 는 SELECT → 알림 생성 → reminder_sent 갱신 순서이며
+    조건부 UPDATE 로 보호되지 않는다). 한 주기에 한 워커만 수행한다.
     """
     import logging
     _logger = logging.getLogger(__name__)
@@ -91,7 +91,7 @@ async def _reminder_loop():
 
 
 async def _calendar_subscription_loop():
-    """외부 캘린더 구독(.ics)을 6시간마다 새로 받는다 — 10분마다 깨어 때가 된 것만, 한 워커만."""
+    """외부 캘린더 구독(.ics)을 6시간마다 갱신한다 — 10분 주기로 기동해 갱신 시점이 도래한 항목만, 한 워커만 수행."""
     import logging
     _logger = logging.getLogger(__name__)
     from app.db.session import async_session as _async_session
@@ -125,8 +125,8 @@ async def _backup_loop():
     await asyncio.sleep(60)
     while True:
         try:
-            # ran_today 검사는 커밋 전 경합에 약하다 — 워커 둘이 같은 시각에 들어오면
-            # 백업이 두 번 돈다. 락 TTL 은 백업 소요시간을 덮도록 주기와 비슷하게.
+            # ran_today 검사는 커밋 전 경합에 취약하다. 워커 둘이 동일 시각에 진입하면
+            # 백업이 2회 실행된다. 락 TTL 은 백업 소요 시간을 포괄하도록 주기와 유사하게 설정한다.
             if not await try_acquire("backup:scheduled", ttl=1700):
                 await asyncio.sleep(1800)
                 continue
@@ -153,17 +153,17 @@ async def _backup_loop():
 async def lifespan(app: FastAPI):
     from app.chat.redis_client import get_redis, close_redis
 
-    # 약한·기본 비밀값으로는 뜨지 않는다(app/security_defaults.py — 변수마다 사유 한 줄, 값은 찍지 않는다).
-    # 컨테이너는 entrypoint 가 같은 검사를 먼저 돌려 워커가 뜨기 전에 멈춘다. 여기는 그 밖의 실행 경로용.
+    # 취약·기본 비밀값으로는 기동하지 않는다(app/security_defaults.py — 변수별 사유 1줄, 값은 출력하지 않는다).
+    # 컨테이너에서는 entrypoint 가 동일 검사를 먼저 수행해 워커 기동 전에 중지한다. 본 검사는 그 외 실행 경로용이다.
     from app import security_defaults
     security_defaults.enforce()
 
-    # DB 스키마를 코드가 요구하는 버전에 맞춘다. 컨테이너는 entrypoint 가 워커를 띄우기 전에 먼저 맞춘다 —
-    # 여기서는 보통 버전 확인만 한다. 맞출 수 없으면 예외로 기동을 멈춘다(app/db/migrate.py).
+    # DB 스키마를 코드가 요구하는 버전으로 맞춘다. 컨테이너에서는 entrypoint 가 워커 기동 전에 먼저 수행하므로
+    # 여기서는 통상 버전 확인만 수행한다. 맞출 수 없으면 예외를 발생시켜 기동을 중지한다(app/db/migrate.py).
     await init_db()
 
-    # 첫 기동 관리자 시드 — 사용자가 한 명도 없을 때만. 그 뒤로는 env 에 값이 남아 있어도 아무것도 하지 않고,
-    # 같은 이름의 일반 계정을 관리자로 올리지도 않는다(경고만). 워커 여럿이 동시에 뜨므로 한 워커만.
+    # 최초 기동 시 관리자 시드 — 사용자가 한 명도 없는 경우에만 수행한다. 이후에는 env 에 값이 남아 있어도 no-op 이며,
+    # 동일 이름의 일반 계정을 관리자로 승격하지도 않는다(경고만). 워커 다수가 동시에 기동하므로 한 워커만 수행한다.
     admin_user = os.environ.get("ADMIN_USERNAME")
     admin_pass = os.environ.get("ADMIN_PASSWORD")
     if admin_user and admin_pass:
@@ -172,14 +172,14 @@ async def lifespan(app: FastAPI):
         if await try_acquire("startup:seed-admin", ttl=20):
             try:
                 await seed_admin(admin_user, admin_pass, only_if_empty=True)
-            except Exception as e:  # noqa: BLE001 — 시드 실패로 서비스 전체가 못 뜨면 안 된다
+            except Exception as e:  # noqa: BLE001 — 시드 실패가 서비스 전체의 기동 실패로 이어지면 안 된다
                 print(f"[SEED] 관리자 시드 실패: {type(e).__name__}")
 
-    # 관리자가 아직 없으면(설치 관리자 설치가 아닐 때) 첫 관리자 만들기에 쓸 일회용 설정 토큰을 로그에 찍는다.
+    # 관리자가 아직 없으면(설치 관리자를 통한 설치가 아닌 경우) 최초 관리자 생성에 사용할 일회용 설정 토큰을 로그에 기록한다.
     try:
         from app.setup import token as setup_token
         await setup_token.announce_on_start()
-    except Exception as e:  # noqa: BLE001 — 토큰이 없으면 웹의 첫 관리자 만들기가 닫힌 채로 남는다(안전한 쪽)
+    except Exception as e:  # noqa: BLE001 — 토큰이 없으면 웹의 최초 관리자 생성이 차단된 상태로 유지된다(안전한 쪽)
         print(f"[SETUP] 설정 토큰을 만들지 못했습니다({type(e).__name__}) — python -m app.cli setup-token 으로 발급하세요")
 
     # Load module states from DB
@@ -202,7 +202,7 @@ async def lifespan(app: FastAPI):
         await load_grants(db)
 
     # Mount MCP endpoints for external clients (claude.ai connector, Claude
-    # Desktop, Cursor, etc.): Streamable HTTP (primary) + legacy SSE. AI 구역 것이다.
+    # Desktop, Cursor, etc.): Streamable HTTP (primary) + legacy SSE. AI 구역 소속.
     ai_installed = zones.zone_installed("ai")
     if ai_installed:
         try:
@@ -219,7 +219,7 @@ async def lifespan(app: FastAPI):
             logging.getLogger(__name__).warning("[MCP] SSE mount failed: %s", e)
 
     await get_redis()  # init Redis connection pool
-    # 백그라운드 루프 — 설치된 구역 것만, app/zones.py 의 LOOPS 순서대로
+    # 백그라운드 루프 — 설치된 구역 한정, app/zones.py 의 LOOPS 순서대로 기동
     for loop_fn in zones.active_loops():
         _tasks.append(asyncio.create_task(loop_fn()))
     print(f"[STARTUP] {settings.app_name} started (zones: {', '.join(zones.installed_zone_ids()) or '-'})")
@@ -231,7 +231,7 @@ async def lifespan(app: FastAPI):
     await _flush_buffer()
 
     if ai_installed:
-        # 진행 중인 내장 AI 답변 — 받은 부분까지 interrupted 로 저장(/continue 로 이어 받기). Redis 닫기 전에.
+        # 진행 중인 내장 AI 답변 — 수신한 부분까지 interrupted 로 저장(/continue 로 재개). Redis 종료 전에 수행.
         try:
             from app.ai import runs as _ai_runs
             await _ai_runs.shutdown()
@@ -256,12 +256,12 @@ async def lifespan(app: FastAPI):
     await close_redis()
 
 
-# CORS — 기본은 공개 주소(APP_URL) 하나. allow_credentials=True 와 함께 쓰이므로 허용목록이 곧 신뢰 경계다.
+# CORS — 기본값은 공개 주소(APP_URL) 하나. allow_credentials=True 와 함께 사용되므로 허용 목록이 곧 신뢰 경계이다.
 _cors_origins = [settings.app_url]
 if settings.debug:
     _cors_origins += ["http://localhost:3000", "http://localhost:8000"]   # 개발 서버(DEBUG 일 때만)
-# 번들 빌드 모바일 앱(화면을 앱 안에 넣고 API 만 서버로 부르는 빌드)의 출처 — ALLOW_NATIVE_APP_ORIGINS=true 일 때만.
-# 기본 앱(데스크톱·모바일)은 서버 화면을 그대로 열어 같은 출처라 필요 없다. 목록과 근거: app/auth/ws_auth.py
+# 번들 빌드 모바일 앱(화면을 앱에 내장하고 API 만 서버로 호출하는 빌드)의 출처 — ALLOW_NATIVE_APP_ORIGINS=true 일 때만 허용.
+# 기본 앱(데스크톱·모바일)은 서버 화면을 그대로 로드하여 동일 출처이므로 불필요. 목록과 근거: app/auth/ws_auth.py
 if settings.allow_native_app_origins:
     from app.auth.ws_auth import NATIVE_APP_ORIGINS
     _cors_origins += list(NATIVE_APP_ORIGINS)
@@ -270,9 +270,9 @@ if settings.allow_native_app_origins:
 async def _validation_handler(request: Request, exc: RequestValidationError):
     """422 응답에서 입력값을 제거한다.
 
-    Pydantic v2 는 검증에 실패한 값을 err["input"] 에 담아 보내고, FastAPI 기본
-    핸들러가 그걸 그대로 응답에 싣는다. 비밀번호 정책 위반 시 평문 비밀번호가
-    응답 본문에 노출된다. 위치(loc)와 사유(msg)만 남긴다.
+    Pydantic v2 는 검증에 실패한 값을 err["input"] 에 포함해 전달하고, FastAPI 기본
+    핸들러는 이를 그대로 응답에 포함한다. 비밀번호 정책 위반 시 평문 비밀번호가
+    응답 본문에 노출된다. 위치(loc)와 사유(msg)만 유지한다.
     """
     safe = [
         {"type": e.get("type"), "loc": e.get("loc"), "msg": e.get("msg")}
@@ -288,9 +288,9 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
     )
 
 
-# 라우터가 아닌 앱 직속 경로 — create_app 이 구역 라우터 뒤에 붙인다(등록 순서 유지).
-_dav_discovery = APIRouter()   # 일정 구역: CalDAV/CardDAV 찾기
-_site = APIRouter()            # 늘 있는 것: 자동 발견·앱 내려받기·사이트 설정·브랜딩
+# 라우터가 아닌 앱 직속 경로 — create_app 이 구역 라우터 뒤에 등록한다(등록 순서 유지).
+_dav_discovery = APIRouter()   # 일정 구역: CalDAV/CardDAV 탐색
+_site = APIRouter()            # 상시 등록: 자동 발견·앱 다운로드·사이트 설정·브랜딩
 
 
 # ── .well-known CalDAV/CardDAV discovery ──
@@ -381,7 +381,7 @@ async def app_landing():
         if has_desktop else
         '<p class="s">🖥 데스크탑: 브라우저 주소창의 <b>앱 설치</b> 아이콘으로 설치형 사용.</p>'
     )
-    # NetLab 외부 콘솔 도우미 — 파일은 NetLab 출처가 서빙한다(netlab/helper, /downloads/). 주소가 설정됐을 때만
+    # NetLab 외부 콘솔 도우미 — 파일은 NetLab 출처가 제공한다(netlab/helper, /downloads/). 주소가 설정된 경우에만
     netlab = settings.netlab_url.rstrip('/')
     netlab_block = (
         f'<p class="s">🧪 NetLab 콘솔 도우미: 랩 노드 콘솔을 PuTTY·SecureCRT·MobaXterm·Windows Terminal 로 바로 엽니다. '
@@ -410,36 +410,36 @@ from app.source import LICENSE_ID, public_source_url  # noqa: E402
 
 
 def _public_netlab_url() -> str:
-    """설정된 NetLab 주소를 공개용으로 — https:// 로 시작할 때만, 끝 / 제거. 아니면 빈값."""
+    """설정된 NetLab 주소를 공개용으로 변환 — https:// 로 시작하는 경우에만, 끝의 / 제거. 그 외에는 빈 값."""
     url = (settings.netlab_url or "").strip().rstrip("/")
     return url if url.startswith("https://") else ""
 
 
 async def _signed_in(request: Request, db: AsyncSession) -> bool:
-    """이 요청이 로그인한 사용자의 것인가(세션 쿠키·Bearer). 아니면 조용히 False."""
+    """요청이 로그인한 사용자의 것인지 판정한다(세션 쿠키·Bearer). 아니면 예외 없이 False 반환."""
     if not request.cookies.get("ws_session") and not request.headers.get("authorization"):
         return False
     try:
         from app.auth.deps import get_current_user
         return await get_current_user(request, request.cookies.get("ws_session"), db) is not None
-    except Exception:  # noqa: BLE001 — 만료·위조·저장소 장애 모두 "로그인 안 됨"
+    except Exception:  # noqa: BLE001 — 만료·위조·저장소 장애 모두 미로그인으로 처리
         return False
 
 
 @_site.get("/api/health")
 async def health_check(request: Request, db: AsyncSession = Depends(get_db)):
-    """상태 확인 + 로그인 화면이 그리는 데 필요한 사이트 설정(브랜딩·가입 방식·공지·구역).
+    """상태 확인 + 로그인 화면 렌더링에 필요한 사이트 설정(브랜딩·가입 방식·공지·구역).
 
-    인증 없이 열려 있으므로 **서버 버전은 싣지 않는다** — 로그인한 요청에만 붙인다.
-    (클라이언트 호환 확인용 버전은 /api/platform/capabilities 가 따로 낸다.)
+    비인증으로 공개되므로 **서버 버전은 포함하지 않는다** — 로그인한 요청에만 포함한다.
+    (클라이언트 호환 확인용 버전은 /api/platform/capabilities 가 별도로 제공한다.)
     """
     from app.admin.settings import get_settings_by_prefix
 
     db_vals = await get_settings_by_prefix(db, "branding.")
     gen_vals = await get_settings_by_prefix(db, "general.")
     auth_vals = await get_settings_by_prefix(db, "auth.")
-    # 디자인 대개편용 확장 앱설정 — appcfg.<group>.<key> (예: appcfg.dash.cards).
-    # 공개(비인증)로 노출: 로그인·셸·대시보드·빈상태가 렌더에 필요. 프리픽스 제거해 반환.
+    # 디자인 대개편용 확장 앱 설정 — appcfg.<group>.<key> (예: appcfg.dash.cards).
+    # 공개(비인증) 노출: 로그인·셸·대시보드·빈 상태 렌더링에 필요. 프리픽스를 제거해 반환.
     appcfg = {
         k[len("appcfg."):]: v
         for k, v in (await get_settings_by_prefix(db, "appcfg.")).items()
@@ -459,18 +459,18 @@ async def health_check(request: Request, db: AsyncSession = Depends(get_db)):
         "announcement": gen_vals.get("general.announcement") or "",
         "announcement_type": gen_vals.get("general.announcement_type") or "info",
         "git_visibility": gen_vals.get("general.git_visibility") or "private",
-        # NetLab(별도 출처 랩) 주소 — 레일 '도구' 항목·대시보드 카드가 새 탭으로 연다. https 만(아니면 빈값 → 둘 다 숨김)
+        # NetLab(별도 출처 랩) 주소 — 레일 '도구' 항목·대시보드 카드가 새 탭으로 연다. https 만 허용(아니면 빈 값 → 둘 다 숨김)
         "netlab_url": _public_netlab_url(),
-        # 이 서버가 돌리는 프로그램의 소스 주소와 라이선스 — 로그인 화면·설정이 "소스 코드" 링크로 보여 준다(app/source.py)
+        # 이 서버가 실행하는 프로그램의 소스 주소와 라이선스 — 로그인 화면·설정이 "소스 코드" 링크로 표시한다(app/source.py)
         "source_url": public_source_url(settings.jw_source_url),
         "license": LICENSE_ID,
-        # 설치된 구역 id(JW_ZONES, 비면 전부) — 화면이 없는 구역의 메뉴·진입점을 숨기는 데 쓴다
+        # 설치된 구역 id(JW_ZONES, 비어 있으면 전체) — 화면이 없는 구역의 메뉴·진입점 숨김에 사용
         "zones": zones.installed_zone_ids(),
         "config": appcfg,
     }
     if await _signed_in(request, db):
         out["version"] = APP_VERSION
-        # DB 스키마 버전: 코드가 요구하는 값 / 이 워커가 기동 때 확인한 값(app/db/migrate.py)
+        # DB 스키마 버전: 코드가 요구하는 값 / 이 워커가 기동 시 확인한 값(app/db/migrate.py)
         from app.db.migrate import confirmed_version
         from app.db.schema_version import SCHEMA_VERSION
         out["schema_version"] = {"required": SCHEMA_VERSION, "current": confirmed_version()}
@@ -502,7 +502,7 @@ _WP_MEDIA = {
 
 @_site.get("/api/branding/wallpapers")
 async def list_wallpapers():
-    """공개: 업로드된 로그인 배경 목록(이미지/영상). 프론트가 접속마다 랜덤 선택."""
+    """공개: 업로드된 로그인 배경 목록(이미지/영상). 프런트가 접속마다 무작위 선택."""
     wp_dir = Path(settings.storage_root) / "branding"
     out = []
     if wp_dir.is_dir():
@@ -517,7 +517,7 @@ async def list_wallpapers():
 
 @_site.get("/api/branding/wallpaper/{name}")
 async def serve_wallpaper_named(name: str):
-    """공개: 이름별 배경 서빙(경로 트래버설 차단)."""
+    """공개: 이름별 배경 제공(경로 트래버설 차단)."""
     if "/" in name or "\\" in name or ".." in name or not name.startswith("wallpaper"):
         raise HTTPException(status_code=404, detail="Not found")
     f = Path(settings.storage_root) / "branding" / name
@@ -557,10 +557,10 @@ async def serve_logo():
 
 
 def create_app() -> FastAPI:
-    """앱을 만든다 — 설치된 구역(JW_ZONES)의 라우터·마운트·미들웨어만 올린다.
+    """앱을 생성한다 — 설치된 구역(JW_ZONES)의 라우터·마운트·미들웨어만 등록한다.
 
-    등록 순서는 구역과 무관하게 늘 같다(app/zones.py 의 ROUTERS 순서). 미설치 구역은 그
-    자리가 비는 것뿐이라, JW_ZONES 가 없으면 라우트 집합과 순서가 예전과 같다.
+    등록 순서는 구역과 무관하게 항상 동일하다(app/zones.py 의 ROUTERS 순서). 미설치 구역은 해당
+    위치가 비는 것뿐이므로, JW_ZONES 가 없으면 라우트 집합과 순서가 기존과 동일하다.
     """
     app = FastAPI(
         title=settings.app_name,
@@ -571,18 +571,18 @@ def create_app() -> FastAPI:
     )
 
     if zones.zone_installed("rbi"):
-        # 격리 브라우저 전용 출처(Host = RBI_PUBLIC_ORIGIN)로 온 요청은 /api/rbi/* · nginx 내부 인증 말고 404(ws-nginx 와 이중)
+        # 격리 브라우저 전용 출처(Host = RBI_PUBLIC_ORIGIN)로 수신된 요청은 /api/rbi/* · nginx 내부 인증 외에는 404(ws-nginx 와 이중)
         from app.rbi.site import RbiHostGuard
         app.add_middleware(RbiHostGuard)
-    # 저장소 표식 확인 — STORAGE_MARKER_REQUIRED=1 일 때만. 표식이 안 보이면 파일 쓰기를 503 으로 거부한다
-    # (끊긴 네트워크 저장소 자리의 빈 폴더에 쓰는 사고 방지 — app/middleware/storage_guard.py)
+    # 저장소 마커 확인 — STORAGE_MARKER_REQUIRED=1 일 때만. 마커가 확인되지 않으면 파일 쓰기를 503 으로 거부한다
+    # (연결이 끊긴 네트워크 저장소 위치의 빈 폴더에 기록하는 사고 방지 — app/middleware/storage_guard.py)
     from app.middleware import storage_guard
     if storage_guard.required():
         app.add_middleware(storage_guard.StorageMarkerGuard)
-    # 세션 쿠키로 인증된 상태 변경 요청의 출처 검사(CSRF) — 레이트리밋 안쪽이라 거부된 요청도 한도에 잡히고,
-    # 접속 로그(더 바깥)에 403 으로 남는다. 허용 출처는 CORS 목록과 같은 것을 쓴다(CSRF_ORIGIN_CHECK=false 로 끔)
+    # 세션 쿠키로 인증된 상태 변경 요청의 출처 검사(CSRF) — 레이트리밋 안쪽이므로 거부된 요청도 한도에 산입되고,
+    # 접속 로그(더 바깥)에 403 으로 기록된다. 허용 출처는 CORS 목록과 동일한 것을 사용한다(CSRF_ORIGIN_CHECK=false 로 비활성화)
     app.add_middleware(CookieOriginGuard, allowed_origins=_cors_origins)
-    # 기본 레이트리밋(데코레이터 없는 /api·/oauth 라우트) — CORS 안쪽이라 429 에도 CORS 헤더가 붙는다
+    # 기본 레이트리밋(데코레이터 없는 /api·/oauth 라우트) — CORS 안쪽이므로 429 에도 CORS 헤더가 포함된다
     app.add_middleware(DefaultRateLimitMiddleware)
 
     app.add_middleware(
@@ -594,7 +594,7 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(AccessLogMiddleware)
-    # 요청 번호 — 가장 바깥(마지막에 추가)이라 처리 안 된 예외도 여기서 500 JSON + 번호로 바뀐다
+    # 요청 번호 — 가장 바깥(마지막에 추가)이므로 미처리 예외도 여기서 500 JSON + 번호로 변환된다
     app.add_middleware(RequestIdMiddleware)
 
     app.state.limiter = limiter

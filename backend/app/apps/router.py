@@ -1,4 +1,4 @@
-"""앱(모바일 APK) 브랜드 빌드 — 이 워크스페이스 URL로 server.url을 박은 APK 자동 생성.
+"""앱(모바일 APK) 브랜드 빌드 — 본 워크스페이스 URL을 server.url로 내장한 APK 자동 생성.
 
 빌드는 backend가 docker(소켓)로 jw-android-builder 이미지를 실행해 수행. 산출물은
 ws-storage-data 볼륨의 /storage/apps/workspace-android.apk → 기존 /api/apps/android 로 배포.
@@ -84,8 +84,8 @@ async def build(user: User = Depends(get_current_user), db: AsyncSession = Depen
             await _set(bdb, "app.build.status", "building")
             await _set(bdb, "app.build.error", "")
             await bdb.commit()
-        # 빌드 스크립트는 이미지에 구운 사본이 아니라 리포의 것을 쓴다(코드와 함께 갱신되게).
-        # 서명 키는 별도 볼륨에 영구 보관 — 바뀌면 설치된 앱이 갱신 설치를 거부한다.
+        # 빌드 스크립트는 이미지에 내장된 사본이 아닌 리포의 것을 사용한다(코드와 함께 갱신되도록).
+        # 서명 키는 별도 볼륨에 영구 보관한다 — 변경 시 설치된 앱이 갱신 설치를 거부한다.
         cmd = [
             "docker", "run", "--rm",
             "-v", f"{repo}/apps/mobile:/src:ro",
@@ -131,7 +131,7 @@ async def build_status(user: User = Depends(get_current_user), db: AsyncSession 
 
 # ─── 배포 산출물(관리 › 앱 빌드 "빌드" 목록) ───
 _ARTIFACTS = (
-    # platform, 파일명(storage_root/apps/), 공개 내려받기 주소
+    # platform, 파일명(storage_root/apps/), 공개 다운로드 주소
     ("android", "workspace-android.apk", "/api/apps/android"),
     ("desktop", "workspace-desktop-setup.exe", "/api/apps/desktop"),
 )
@@ -155,6 +155,6 @@ def _artifact_info(platform: str, filename: str, url: str) -> dict:
 
 @router.get("/artifacts")
 async def artifacts(user: User = Depends(get_current_user)):
-    """지금 배포 중인 앱 파일(있으면 크기·수정 시각). iOS 빌드는 지원하지 않는다."""
+    """현재 배포 중인 앱 파일(존재 시 크기·수정 시각). iOS 빌드는 미지원."""
     _admin(user)
     return {"artifacts": [_artifact_info(*a) for a in _ARTIFACTS]}

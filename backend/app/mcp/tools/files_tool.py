@@ -1,7 +1,7 @@
 """File browser tools — list/read/search/stat user storage.
 
 공통 규약: 목록은 cursor/total/has_more/next_cursor, 오류는 err(code, msg).
-files_read 는 문서(docx·xlsx·pptx·pdf·hwp·hwpx)를 구조째(마크다운) 읽고, 내용 해시(sha256)를 준다.
+files_read 는 문서(docx·xlsx·pptx·pdf·hwp·hwpx)를 구조를 유지한 마크다운으로 읽고, 내용 해시(sha256)를 반환한다.
 """
 
 import asyncio
@@ -14,7 +14,7 @@ from app.files import search as fsearch
 from app.files import service as fs
 from app.mcp import docread
 from app.mcp.server import Tool, register
-from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 남에게 보이는 쓰기 판정
+from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 타인 노출 쓰기 판정
 from app.mcp.tools._common import (
     CURSOR_PARAM, PAGINATION_HINT, clamp, err, fit_page, human_size, local_time, query_hash, read_cursor,
     shorten, user_tz,
@@ -29,7 +29,7 @@ _HASH_MAX_FILE = 2 * 1024 * 1024 * 1024
 
 
 def _resolve_file(path: str, user: User):
-    """가상 경로 → 실제 파일. 오류는 err() 사전을 돌려준다."""
+    """가상 경로 → 실제 파일. 오류는 err() 사전으로 반환한다."""
     try:
         real = fs.resolve_path(path, user)
     except Exception as e:  # noqa: BLE001 — HTTPException(403/404) 등
@@ -51,9 +51,9 @@ def _sha256(real) -> str:
     return h.hexdigest()
 
 
-# ── 파일 항목 모양 ─────────────────────────────────────────
+# ── 파일 항목 형식 ─────────────────────────────────────────
 # 기본: path·type·size("2.6MB")·modified(사용자 시간대 "YYYY-MM-DD HH:MM")·snippet(있을 때만, ≤150자).
-# name·parent 는 path 와 겹치고 score 는 모델에게 쓸모가 적어 기본에서 뺐다 — `fields`/`verbose` 로 받는다.
+# name·parent 는 path 와 중복되고 score 는 모델에 대한 효용이 낮아 기본에서 제외했다 — `fields`/`verbose` 로 조회한다.
 _EXTRA_FIELDS = ("name", "parent", "score", "size_bytes", "modified_iso")
 _SNIPPET_MAX = 150
 FILES_SEARCH_DEFAULT_LIMIT = 20
@@ -94,7 +94,7 @@ def _file_item(*, path: str, is_dir: bool, size, modified, tz, want: set[str],
 
 async def files_list(user: User, path: str = "", limit: int = 50, cursor: str = "",
                      fields: object = None, verbose: bool = False, **_: object) -> dict:
-    """디렉터리 목록. `path` 비면 가상 최상위(my / shared). 응답 길이는 예산에 맞춘다(fit_page)."""
+    """디렉터리 목록. `path` 가 비어 있으면 가상 최상위(my / shared). 응답 길이는 예산에 맞춘다(fit_page)."""
     vp = (path or "").strip("/")
     if not vp:
         items = [{"path": "my", "type": "dir"}, {"path": "shared", "type": "dir"}]
@@ -109,7 +109,7 @@ async def files_list(user: User, path: str = "", limit: int = 50, cursor: str = 
     if cerr:
         return cerr
     items = await asyncio.to_thread(fs.list_directory, real, vp)
-    # 폴더 먼저·이름순(대소문자 무시), 같으면 원래 이름 — 페이지마다 같은 순서
+    # 폴더 우선·이름순(대소문자 무시), 동일하면 원래 이름 — 페이지마다 동일한 순서
     items = sorted(items, key=lambda i: (not i.is_dir, i.name.lower(), i.name))
     window = items[off:off + n]
     tz = user_tz(user)
@@ -129,7 +129,7 @@ def _decode_text(data: bytes) -> str | None:
             return data.decode(enc)
         except UnicodeDecodeError:
             continue
-    # 제어문자 비율이 높으면 바이너리로 본다
+    # 제어문자 비율이 높으면 바이너리로 간주한다
     sample = data[:4096]
     if sample and sum(b < 9 or 13 < b < 32 for b in sample) / len(sample) > 0.05:
         return None
@@ -139,9 +139,9 @@ def _decode_text(data: bytes) -> str | None:
 async def files_read(
     user: User, path: str, max_bytes: int = _READ_DEFAULT, offset: int = 0, **_: object
 ) -> dict:
-    """파일 읽기. 텍스트는 그대로, 문서(docx·xlsx·pptx·pdf·hwp·hwpx)는 구조를 살린 마크다운으로.
+    """파일 읽기. 텍스트는 그대로, 문서(docx·xlsx·pptx·pdf·hwp·hwpx)는 구조를 유지한 마크다운으로 반환한다.
 
-    긴 내용은 ``offset`` 부터 ``max_bytes`` 글자 창으로 돌려주고, 남으면 ``truncated``·``next_offset``.
+    긴 내용은 ``offset`` 부터 ``max_bytes`` 글자 창으로 반환하고, 잔여분이 있으면 ``truncated``·``next_offset``.
     """
     real, e = _resolve_file(path, user)
     if e or real is None:
@@ -188,7 +188,7 @@ async def files_read(
 
 
 async def files_stat(user: User, paths: list | None = None, path: str = "", **_: object) -> dict:
-    """파일 크기·수정 시각·sha256. 같은 파일이 여러 곳에 있는지 정확히 가릴 때."""
+    """파일 크기·수정 시각·sha256. 동일 파일이 여러 위치에 존재하는지 정확히 판별할 때 사용."""
     targets = [p for p in (paths or []) if isinstance(p, str)] or ([path] if path else [])
     if not targets:
         return err("invalid_argument", "paths 가 비었습니다")
@@ -215,7 +215,7 @@ async def files_stat(user: User, paths: list | None = None, path: str = "", **_:
                 rec["sha256"] = None
                 rec["note"] = "파일이 커서 해시를 계산하지 않았습니다"
         results.append(rec)
-    # 같은 해시끼리 묶어 바로 보여준다
+    # 동일 해시끼리 묶어 표시한다
     groups: dict[str, list[str]] = {}
     for r in results:
         if r.get("sha256"):
@@ -254,10 +254,10 @@ async def files_search(
     name_only: bool = False,
     **_: object,
 ) -> dict:
-    """색인 기반 파일 검색 — 이름과 **본문**을 함께 보고 점수순. 페이지 넘김 지원.
+    """색인 기반 파일 검색 — 이름과 **본문**을 함께 검색하며 점수순. 페이지 넘김 지원.
 
-    응답은 페이지 정보가 맨 앞이고 항목 단위로 예산에 맞춘다(_common.fit_page). 커서에는 검색어·
-    경로·name_only 해시가 들어 있어 조건이 바뀐 채 이전 커서를 쓰면 invalid_argument.
+    응답은 페이지 정보가 맨 앞이며 항목 단위로 예산에 맞춘다(_common.fit_page). 커서에는 검색어·
+    경로·name_only 해시가 포함되어 조건이 변경된 상태로 이전 커서를 사용하면 invalid_argument.
     """
     q = (query or "").strip()
     if not q:
@@ -291,7 +291,7 @@ async def files_search(
     rows = [
         _file_item(path=it["path"], is_dir=bool(it["is_dir"]), size=it["size"], modified=it["modified_at"],
                    tz=tz, want=want, name=it.get("name"), parent=it.get("parent"), score=it.get("score"),
-                   # 본문에서 걸린 자리 — 왜 이 파일이 나왔는지 판단할 근거(있을 때만)
+                   # 본문에서 일치한 위치 — 해당 파일이 반환된 사유를 판단할 근거(있을 때만)
                    snippet=it.get("snippet"))
         for it in res["items"]
     ]
@@ -301,10 +301,10 @@ async def files_search(
 
 async def files_recent(user: User, limit: int = 20, kind: str = "", cursor: str = "",
                        fields: object = None, verbose: bool = False, **_: object) -> dict:
-    """최근에 바뀐 파일 목록. "어제 그 파일" 같은 요청을 이름 없이 풀 수 있게.
+    """최근 변경된 파일 목록. "어제 그 파일" 같은 요청을 이름 없이 처리할 수 있도록.
 
-    낱말 없는 질의의 점수는 최신 가산(30일 안)·폴더 감점뿐이고, 동점은 수정 시각 → 경로 → id 로
-    갈리므로 색인 검색 순서가 곧 최신순이다 → offset 페이지 넘김이 안정적이다.
+    검색어 없는 질의의 점수는 최신 가산(30일 이내)·폴더 감점뿐이며, 동점은 수정 시각 → 경로 → id 로
+    결정되므로 색인 검색 순서가 곧 최신순이다 → offset 페이지 넘김이 안정적이다.
     """
     n = clamp(limit, 1, 100, 20)
     q = "kind:file"
@@ -344,7 +344,7 @@ register(Tool(
             "verbose": {"type": "boolean", "description": "Include all extra fields (debug). Default false.", "default": False},
         },
     },
-    # 공유 폴더 목록에는 남이 지은 파일 이름이 섞인다 — 내장 AI 대화 표시만(내 폴더는 표시 안 함)
+    # 공유 폴더 목록에는 타인이 지정한 파일 이름이 포함된다 — 내장 AI 대화 표시만(본인 폴더는 표시하지 않음)
     handler=files_list, conv_untrusted=lambda a: path_shared(a.get("path")),
 ))
 
@@ -415,7 +415,7 @@ register(Tool(
         },
         "required": ["query"],
     },
-    # 남이 쓴 글 조각이 섞인다 — 내장 AI 대화 표시만 남긴다(conv_untrusted: MCP 15분 창·래핑 없음)
+    # 타인이 작성한 글 조각이 포함된다 — 내장 AI 대화 표시만 기록한다(conv_untrusted: MCP 15분 창·래핑 없음)
     handler=files_search, conv_untrusted=True,
 ))
 

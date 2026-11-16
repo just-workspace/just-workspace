@@ -1,19 +1,19 @@
 """음성 채널 — 디스코드식 상시 음성 방 + "누가 들어가 있나".
 
-채널(`channels.is_voice`)마다 LiveKit 방 `voice-<채널id>` 하나. 거는 통화(chan-, app/meetings/calls.py)와
-달리 벨이 없고 누르면 바로 붙는다. 토큰·권한은 채널 멤버십과 똑같다(is_channel_member).
+채널(`channels.is_voice`)마다 LiveKit 방 `voice-<채널id>` 하나. 발신 통화(chan-, app/meetings/calls.py)와
+달리 호출음(벨)이 없으며 선택 즉시 접속한다. 토큰·권한은 채널 멤버십과 동일하다(is_channel_member).
 
-접속 상태(presence)는 세 경로로 맞춘다 — 전부 "LiveKit 에 그 방 참가자를 다시 묻는다"로 끝난다.
-1. **클라이언트 보고** `POST .../voice/state`·`/voice/leave` — 들어가자마자·음소거/듣기 끔을 바꿀 때·나갈 때.
-   음소거·듣기 끔·음질 단계는 LiveKit 웹훅이 알려 주지 않으므로 이 경로만이 즉시 반영한다.
-2. **웹훅**(participant_joined/left, room_finished) — app/meetings/calls.py 가 `voice-` 방을 여기로 넘긴다.
-3. **대조 루프**(30초, calls.run_call_state_loop 와 같은 Redis 락) — 놓친 이벤트·죽은 탭 정리.
+접속 상태(presence)는 세 경로로 동기화한다 — 모두 "LiveKit 에 해당 방 참가자를 다시 조회한다"로 귀결된다.
+1. **클라이언트 보고** `POST .../voice/state`·`/voice/leave` — 입장 직후·음소거/듣기 끔 변경 시·퇴장 시.
+   음소거·듣기 끔·음질 단계는 LiveKit 웹훅으로 전달되지 않으므로 이 경로만 즉시 반영한다.
+2. **웹훅**(participant_joined/left, room_finished) — app/meetings/calls.py 가 `voice-` 방을 본 모듈로 전달한다.
+3. **대조 루프**(30초, calls.run_call_state_loop 와 동일한 Redis 락) — 누락된 이벤트·종료된 탭 정리.
 
-상태는 Redis 에 두어 uvicorn 워커 8개가 같은 것을 본다. 바뀐 채널만 채팅 소켓 이벤트
-`voice_state {channel_id, participants:[{identity,user_id,name,avatar_url,muted,deafened,tier,joined_at}], since}` 로 알린다.
+상태는 Redis 에 저장하여 uvicorn 워커 8개가 동일한 값을 참조한다. 변경된 채널만 채팅 소켓 이벤트
+`voice_state {channel_id, participants:[{identity,user_id,name,avatar_url,muted,deafened,tier,joined_at}], since}` 로 전달한다.
 
-identity 는 세션마다 다른 불투명 값(livekit.session_identity)이라, 토큰을 줄 때 identity → 사용자 정보를
-Redis 에 24시간 적어 두고(voice:ident:*) 참가자 목록을 사람으로 바꾼다.
+identity 는 세션마다 상이한 불투명 값(livekit.session_identity)이므로, 토큰 발급 시 identity → 사용자 정보를
+Redis 에 24시간 기록하고(voice:ident:*) 참가자 목록을 사용자 정보로 변환한다.
 """
 
 import json
@@ -64,14 +64,14 @@ async def _require_voice_channel(db: AsyncSession, channel_id: str, user: User):
     return ch
 
 
-# ─── 참가자 목록 만들기 ───
+# ─── 참가자 목록 구성 ───
 
 async def _people(room: str) -> list[dict]:
-    """그 방의 LiveKit 참가자를 사람 정보·상태 깃발과 합친다. 녹화 봇은 뺀다."""
+    """해당 방의 LiveKit 참가자를 사용자 정보·상태 플래그와 병합한다. 녹화 봇은 제외한다."""
     try:
         parts = await livekit.list_participants(room)
     except Exception:
-        return []   # 방이 없다(아무도 없다)
+        return []   # 방 없음(참가자 없음)
     parts = [p for p in parts if not str(p.get("identity", "")).startswith("EG_")]
     if not parts:
         return []
@@ -88,7 +88,7 @@ async def _people(room: str) -> list[dict]:
             "user_id": info.get("user_id"),
             "name": info.get("name") or p.get("name") or "",
             "avatar_url": info.get("avatar_url"),
-            # 클라이언트 보고가 있으면 그것, 없으면 LiveKit 트랙 음소거(마이크 끔 = 트랙 mute)
+            # 클라이언트 보고가 있으면 해당 값, 없으면 LiveKit 트랙 음소거 사용(마이크 끔 = 트랙 mute)
             "muted": bool(fl.get("muted", p.get("mic_muted", False))),
             "deafened": bool(fl.get("deafened", False)),
             "tier": fl.get("tier") or "voice",
@@ -99,7 +99,7 @@ async def _people(room: str) -> list[dict]:
 
 
 async def _apply(channel_id: str, participants: list[dict]) -> None:
-    """한 채널의 상태를 정하고, 바뀌었으면 알린다."""
+    """채널 하나의 상태를 확정하고, 변경된 경우 전달한다."""
     r = await get_redis()
     raw = await r.hget(STATE_KEY, channel_id)
     before = json.loads(raw) if raw else None
@@ -137,7 +137,7 @@ async def clear_room(room: str) -> None:
 
 
 async def reconcile() -> None:
-    """LiveKit 방 목록과 저장된 상태를 맞춘다(calls.run_call_state_loop 가 락 안에서 부른다)."""
+    """LiveKit 방 목록과 저장된 상태를 대조한다(calls.run_call_state_loop 가 락 내부에서 호출)."""
     r = await get_redis()
     known = set(await r.hkeys(STATE_KEY))
     live: set[str] = set()
@@ -152,7 +152,7 @@ async def reconcile() -> None:
 
 
 async def close_channel(channel_id: str) -> None:
-    """채널이 지워졌다 — 방을 닫고 상태를 지운다. 어느 쪽이 실패해도 조용히."""
+    """채널 삭제 시 처리 — 방을 종료하고 상태를 삭제한다. 어느 쪽이 실패해도 무시한다."""
     try:
         if livekit.is_configured():
             await livekit.delete_room(room_of(channel_id))
@@ -165,7 +165,7 @@ async def close_channel(channel_id: str) -> None:
 
 
 async def _owned_identity(identity: str, user: User) -> dict:
-    """이 identity 가 요청자 것인가(토큰 발급 때 적어 둔 것). 아니면 403."""
+    """이 identity 가 요청자 소유인지 확인한다(토큰 발급 시 기록한 값 기준). 아니면 403."""
     r = await get_redis()
     raw = await r.get(IDENT_KEY.format(identity))
     info = json.loads(raw) if raw else None
@@ -182,7 +182,7 @@ async def voice_token(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """음성 채널 입장 토큰. 채널 멤버면 누구나, 벨 없이 바로."""
+    """음성 채널 입장 토큰. 채널 멤버이면 누구나 호출음(벨) 없이 즉시 입장 가능."""
     if not livekit.is_configured():
         raise HTTPException(503, "회의 서버가 설정되지 않았습니다")
     await _require_voice_channel(db, channel_id, user)
@@ -206,7 +206,7 @@ async def voice_state(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """내 음소거·듣기 끔·음질 단계를 알린다(들어간 직후에도 한 번). 그 방 상태를 LiveKit 에 다시 묻고 알린다."""
+    """본인의 음소거·듣기 끔·음질 단계를 보고한다(입장 직후에도 1회). 해당 방 상태를 LiveKit 에 다시 조회하여 전달한다."""
     await _require_voice_channel(db, channel_id, user)
     await _owned_identity(body.identity, user)
     r = await get_redis()
@@ -227,7 +227,7 @@ async def voice_leave(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """나갔다 — 깃발을 지우고 방 상태를 다시 읽는다(웹훅보다 먼저 와도, 뒤에 와도 결과는 같다)."""
+    """퇴장 처리 — 플래그를 삭제하고 방 상태를 다시 조회한다(웹훅보다 먼저 도착하든 나중에 도착하든 결과는 동일)."""
     await _require_voice_channel(db, channel_id, user)
     await _owned_identity(body.identity, user)
     r = await get_redis()
@@ -238,7 +238,7 @@ async def voice_leave(
 
 @router.get("/voice/states")
 async def voice_states(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """내가 속한 음성 채널의 접속 상태 전부 — 화면을 처음 열 때·재접속 때."""
+    """호출 사용자가 속한 음성 채널의 접속 상태 전체 — 화면 최초 진입 시·재접속 시 사용."""
     mine = {c["id"] for c in await service.get_user_channels(db, user.id) if c.get("is_voice")}
     if not mine:
         return {}

@@ -1,6 +1,6 @@
 """채널 탭 — 요약·폴더/위키 연결 권한·파일 목록(메시지+폴더)·회의·작업.
 
-라우터 함수를 직접 부른다. 저장소 루트는 임시 폴더, DB 는 SQLite.
+라우터 함수를 직접 호출한다. 저장소 루트는 임시 폴더, DB 는 SQLite.
 """
 
 import json
@@ -88,12 +88,12 @@ async def test_only_manager_links_folder(env):
 async def test_link_folder_shares_to_channel_and_lists_files(env):
     r = await tabs.update_channel_tabs("dev", tabs.TabsUpdate(folder_path="my/프로젝트/개발"), user=env.u["alice"], db=env.db)
     assert r["folder"]["segments"] == ["프로젝트", "개발"] and r["folder"]["mine"]
-    assert r["files_count"] == 2   # 메시지 파일 1 + 폴더 파일 1(숨김·지운 것 제외)
+    assert r["files_count"] == 2   # 메시지 파일 1 + 폴더 파일 1(숨김·삭제 항목 제외)
     # 폴더 연결 = 채널 공유 행
     share = r["folder"]["share_id"]
     assert (await env.db.get(FileShare, share)).shared_with_channel_id == "dev"
 
-    # 멤버(bob)는 공유받음 경로로 내려받는다 — 소유자 경로는 안 보인다
+    # 멤버(bob)는 공유받음 경로로 내려받는다 — 소유자 경로는 노출되지 않는다
     res = await tabs.channel_files("dev", user=env.u["bob"], db=env.db)
     by = {i["name"]: i for i in res["items"]}
     assert by["release-notes.md"]["source"] == "folder"
@@ -102,7 +102,7 @@ async def test_link_folder_shares_to_channel_and_lists_files(env):
     assert by["배포 체크리스트.pdf"]["source"] == "message" and by["배포 체크리스트.pdf"]["who"] == "Bob"
     assert "gone.txt" not in by
 
-    # 소유자가 채널 공유를 풀면 멤버는 폴더 파일을 못 본다(메시지 파일은 그대로)
+    # 소유자가 채널 공유를 해제하면 멤버는 폴더 파일을 조회할 수 없다(메시지 파일은 유지)
     await fr.delete_user_share(share_id=share, user=env.u["alice"], db=env.db)
     res = await tabs.channel_files("dev", user=env.u["bob"], db=env.db)
     assert [i["source"] for i in res["items"]] == ["message"]
@@ -135,7 +135,7 @@ async def test_meetings_and_tasks_counts(env):
                          status="ended", chat_channel_id="dev"))
     await env.db.commit()
 
-    # 작업은 API 로 채널에 묶는다 — 멤버가 아니면 403
+    # 작업은 API 로 채널에 연결한다 — 멤버가 아니면 403
     t = await tasks_router.create_task(TaskCreate(title="배포 점검", channel_id="dev"), user=env.u["bob"], db=env.db)
     assert t.channel_id == "dev"
     with pytest.raises(HTTPException) as e:
@@ -153,12 +153,12 @@ async def test_meetings_and_tasks_counts(env):
     ts = (await tabs.channel_tasks("dev", user=env.u["alice"], db=env.db))["items"]
     assert [x["title"] for x in ts] == ["배포 점검"] and ts[0]["owner_name"] == "Bob" and ts[0]["can_open"] is False
 
-    # 채널에서 떼기는 만든 사람만
+    # 채널 연결 해제는 생성자만 가능
     up = await tasks_router.update_task(t.id, TaskUpdate(channel_id=None), user=env.u["bob"], db=env.db)
     assert up.channel_id is None
 
 
-# ─── 탭 순서·끄기 · 위키 스페이스 · 지난 회의 · 작업 칩 ───
+# ─── 탭 순서·비활성화 · 위키 스페이스 · 지난 회의 · 작업 칩 ───
 
 
 @pytest.mark.asyncio
@@ -168,18 +168,18 @@ async def test_layout_order_and_hidden(env):
     assert all(x["visible"] for x in s["layout"])
 
     lay = tabs.TabsLayout(order=["tasks", "files", "meetings", "wiki"], hidden=["meetings"])
-    # 멤버는 못 바꾼다
+    # 멤버는 변경 불가
     with pytest.raises(HTTPException) as e:
         await tabs.update_channel_tabs("dev", tabs.TabsUpdate(layout=lay), user=env.u["bob"], db=env.db)
     assert e.value.status_code == 403
     r = await tabs.update_channel_tabs("dev", tabs.TabsUpdate(layout=lay), user=env.u["alice"], db=env.db)
     assert r["layout"] == [{"key": "tasks", "visible": True}, {"key": "files", "visible": True},
                            {"key": "meetings", "visible": False}, {"key": "wiki", "visible": True}]
-    # 채널 멤버 모두에게 같은 순서
+    # 채널 멤버 전원에게 동일한 순서
     s = await tabs.channel_tabs("dev", user=env.u["bob"], db=env.db)
     assert [x["key"] for x in s["layout"]] == ["tasks", "files", "meetings", "wiki"]
 
-    # 빠진 키·모르는 키·중복·메시지는 거절
+    # 누락된 키·미지의 키·중복·메시지는 거부
     for bad in (["files", "wiki"], ["files", "wiki", "meetings", "tasks", "board"],
                 ["files", "files", "meetings", "tasks"], ["messages", "files", "wiki", "meetings"]):
         with pytest.raises(HTTPException) as e:
@@ -194,7 +194,7 @@ async def test_link_wiki_space_and_legacy_page(env):
     await env.db.commit()
     env.db.add(WikiPage(id="pg", space_id="sp", title="배포 체크리스트", slug="deploy", content="", author_id="alice"))
     await env.db.commit()
-    # 예전 페이지 연결만 있어도 그 스페이스로 본다
+    # 이전 방식의 페이지 연결만 있어도 해당 스페이스로 간주
     await tabs.update_channel_tabs("dev", tabs.TabsUpdate(wiki_page_id="pg"), user=env.u["alice"], db=env.db)
     s = await tabs.channel_tabs("dev", user=env.u["bob"], db=env.db)
     assert s["wiki_space"] == {"id": "sp", "name": "개발 팀 스페이스", "pages": 1}
@@ -204,7 +204,7 @@ async def test_link_wiki_space_and_legacy_page(env):
     assert e.value.status_code == 404
     r = await tabs.update_channel_tabs("dev", tabs.TabsUpdate(wiki_space_id="sp"), user=env.u["alice"], db=env.db)
     assert r["wiki_space"]["id"] == "sp"
-    # 떼면 페이지 연결도 같이 떨어진다
+    # 연결 해제 시 페이지 연결도 함께 해제
     r = await tabs.update_channel_tabs("dev", tabs.TabsUpdate(wiki_space_id=None), user=env.u["alice"], db=env.db)
     assert r["wiki_space"] is None and r["wiki"] is None
 
@@ -240,7 +240,7 @@ async def test_past_meetings_and_task_filters(env):
     assert e.value.status_code == 400
 
 
-# ── 연결 해제 = 연결이 만든 공유만 회수 ──
+# ── 연결 해제 = 연결이 생성한 공유만 회수 ──
 
 async def _channel_rows(env):
     from sqlalchemy import select
@@ -249,7 +249,7 @@ async def _channel_rows(env):
 
 @pytest.mark.asyncio
 async def test_unlink_revokes_link_share_only(env):
-    # 사람에게 직접 건 공유(같은 폴더, bob)는 연결과 무관
+    # 사용자에게 직접 설정한 공유(같은 폴더, bob)는 연결과 무관
     await fr.share_with_users(fr.ShareUserCreate(path="my/프로젝트/개발", user_ids=["bob"], role="edit"),
                               user=env.u["alice"], db=env.db)
     r = await tabs.update_channel_tabs("dev", tabs.TabsUpdate(folder_path="my/프로젝트/개발"), user=env.u["alice"], db=env.db)
@@ -264,7 +264,7 @@ async def test_unlink_revokes_link_share_only(env):
 
 @pytest.mark.asyncio
 async def test_unlink_keeps_manual_channel_share(env):
-    # 공유 창에서 먼저 채널에 걸었던 공유 → 연결은 그 행을 쓰고, 풀어도 남는다
+    # 공유 창에서 먼저 채널에 설정한 공유 → 연결은 해당 행을 사용하고, 해제해도 유지된다
     await fr.share_with_users(fr.ShareUserCreate(path="my/프로젝트/개발", channel_ids=["dev"], role="view"),
                               user=env.u["alice"], db=env.db)
     await tabs.update_channel_tabs("dev", tabs.TabsUpdate(folder_path="my/프로젝트/개발"), user=env.u["alice"], db=env.db)
@@ -290,10 +290,10 @@ async def test_switch_folder_revokes_old_and_relink_same_keeps(env):
     other.mkdir(parents=True)
     await tabs.update_channel_tabs("dev", tabs.TabsUpdate(folder_path="my/프로젝트/개발"), user=env.u["alice"], db=env.db)
     first = (await _channel_rows(env))[0].id
-    # 같은 폴더 다시 연결 — 같은 행
+    # 같은 폴더 재연결 — 동일 행
     await tabs.update_channel_tabs("dev", tabs.TabsUpdate(folder_path="my/프로젝트/개발"), user=env.u["alice"], db=env.db)
     assert [r.id for r in await _channel_rows(env)] == [first]
-    # 다른 폴더로 바꾸면 예전 공유는 회수, 새 공유 하나
+    # 다른 폴더로 변경하면 이전 공유는 회수, 새 공유 하나 생성
     await tabs.update_channel_tabs("dev", tabs.TabsUpdate(folder_path="my/다른"), user=env.u["alice"], db=env.db)
     rows = await _channel_rows(env)
     assert len(rows) == 1 and rows[0].file_path == "my/다른" and rows[0].origin == tabs.LINK_ORIGIN
@@ -301,14 +301,14 @@ async def test_switch_folder_revokes_old_and_relink_same_keeps(env):
 
 @pytest.mark.asyncio
 async def test_legacy_rows_inferred_safely(env):
-    """연결 표시(origin)가 없는 공유는 모양이 어떻든 사람이 건 것으로 보고 남긴다 — 회수는 표시된 것만."""
+    """연결 표시(origin)가 없는 공유는 형태와 무관하게 사용자가 설정한 것으로 간주하여 유지한다 — 회수는 표시된 것만."""
     ch = await env.db.get(Channel, "dev")
     cases = [
         (dict(created_by=None, role="view"), False),
         (dict(created_by=None, role=None), False),
-        (dict(created_by="alice", role="view"), False),                      # 공유 창이 만든 행
+        (dict(created_by="alice", role="view"), False),                      # 공유 창이 생성한 행
         (dict(created_by=None, role="edit", can_write=True), False),
-        (dict(created_by=None, role="view", origin=tabs.LINK_ORIGIN), True),  # 연결이 만든 행
+        (dict(created_by=None, role="view", origin=tabs.LINK_ORIGIN), True),  # 연결이 생성한 행
     ]
     for kw, revoked in cases:
         row = FileShare(owner_id="alice", file_path="my/프로젝트/개발", shared_with_channel_id="dev", **kw)

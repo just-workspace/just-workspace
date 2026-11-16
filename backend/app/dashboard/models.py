@@ -1,4 +1,4 @@
-"""대시보드 AI 브리핑("오늘의 포커스") 하루 캐시 — 사용자·날짜당 한 행(새 테이블, create_all 이 만든다)."""
+"""대시보드 AI 브리핑("오늘의 포커스") 하루 캐시 — 사용자·날짜당 한 행(신규 테이블, create_all 이 생성)."""
 
 import uuid
 from datetime import datetime, timezone
@@ -11,7 +11,7 @@ from app.db.models import Base
 
 class DashBriefing(Base):
     __tablename__ = "dash_briefings"
-    # 인덱스는 여기 한 번만(컬럼 index=True 와 겹치면 create_all 이 같은 이름 인덱스 두 번으로 깨진다)
+    # 인덱스는 여기서 1회만 선언(컬럼 index=True 와 중복되면 create_all 이 동일 이름 인덱스 2회 생성으로 실패)
     __table_args__ = (Index("ix_dash_briefings_user_day", "user_id", "day", unique=True),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -25,10 +25,10 @@ class DashBriefing(Base):
     # 회의 준비 — 지난 회의/관련 대화 요약 한 줄(없으면 NULL)
     prep_line: Mapped[str | None] = mapped_column(Text, nullable=True)
     prep_event_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    # 회의 준비 — 생성 때 센, 회의 제목이 들어간 안 읽은 메일 수
+    # 회의 준비 — 생성 시 집계한, 회의 제목이 포함된 읽지 않은 메일 수
     prep_mail: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # 이날 "다시 만들기" 횟수(첫 생성은 세지 않는다)
+    # 해당 일자의 "다시 만들기" 횟수(첫 생성은 미집계)
     regen_count: Mapped[int] = mapped_column(Integer, default=0)
     # helpful | not | NULL
     feedback: Mapped[str | None] = mapped_column(String(8), nullable=True)

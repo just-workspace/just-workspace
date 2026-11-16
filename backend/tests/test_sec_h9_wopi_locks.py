@@ -1,4 +1,4 @@
-"""회귀 — WOPI 잠금·file_id 에 소유자가 들어가 사용자끼리 충돌·탈취가 안 된다."""
+"""회귀 — WOPI 잠금·file_id 에 소유자가 포함되어 사용자 간 충돌·탈취가 발생하지 않는다."""
 
 import pytest
 from fastapi import HTTPException
@@ -53,9 +53,9 @@ async def test_same_name_documents_of_two_users_do_not_share_lock():
     assert a_fid != b_fid
     r = await _op(_tok("alice"), a_fid, "LOCK", lock="L-alice")
     assert r.status_code == 200
-    r = await _op(_tok("bob"), b_fid, "LOCK", lock="L-bob")   # 예전엔 409(같은 키)
+    r = await _op(_tok("bob"), b_fid, "LOCK", lock="L-bob")   # 이전에는 409(동일 키)
     assert r.status_code == 200
-    # 밥은 앨리스 잠금 id 를 볼 수도, 풀 수도 없다
+    # 밥은 앨리스의 잠금 id 를 조회할 수도 해제할 수도 없음
     r = await _op(_tok("bob"), b_fid, "GET_LOCK")
     assert r.headers["X-WOPI-Lock"] == "L-bob"
     assert await locks.get_current_lock_id(locks.subject("alice", PATH)) == "L-alice"
@@ -83,7 +83,7 @@ async def test_view_token_cannot_read_or_change_lock():
 async def test_shared_editor_joins_owners_lock():
     fid = wr._encode_file_id(PATH, "alice")
     await _op(_tok("alice"), fid, "LOCK", lock="L-1")
-    # 공유받은 편집자(토큰 owner=alice, 경로=소유자 기준)는 같은 잠금을 본다
+    # 공유받은 편집자(토큰 owner=alice, 경로=소유자 기준)는 동일한 잠금을 조회한다
     r = await _op(_tok("carol", owner="alice"), fid, "GET_LOCK")
     assert r.headers["X-WOPI-Lock"] == "L-1"
 

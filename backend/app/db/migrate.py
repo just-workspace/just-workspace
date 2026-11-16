@@ -1,15 +1,15 @@
-"""스키마 버전 관리 — 버전 기록(`schema_migrations`)과 순서 있는 변경 단계.
+"""스키마 버전 관리 — 버전 기록(`schema_migrations`)과 순서가 있는 변경 단계.
 
-- 기준선(1): app/db/baseline.py — 버전 기록이 생기기 전의 보정 전부.
+- 기준선(1): app/db/baseline.py — 버전 기록 도입 이전의 보정 전체.
 - 단계(2~): app/db/migrations.py 의 `STEPS`.
 - 코드가 요구하는 버전: app/db/schema_version.py 의 `SCHEMA_VERSION`.
 
-누가 돌리는가:
+실행 주체:
 - `python -m app.cli migrate` (설치 관리자·운영자) — `migrate()`
-- 컨테이너 기동(entrypoint 가 워커를 띄우기 전에 한 번) · 워커 기동(lifespan) — `ensure_schema()`
+- 컨테이너 기동(entrypoint 가 워커 기동 전에 1회) · 워커 기동(lifespan) — `ensure_schema()`
 
-한 번에 하나만 돈다(PostgreSQL 세션 advisory lock). 기다리던 쪽은 잠금을 얻은 뒤 상태를 다시 읽어
-할 일이 없으면 그대로 끝낸다. 단계가 실패하면 `MigrationError` — 삼키지 않는다.
+동시에 하나만 실행된다(PostgreSQL 세션 advisory lock). 대기하던 쪽은 잠금 획득 후 상태를 다시 조회하여
+수행할 작업이 없으면 그대로 종료한다. 단계가 실패하면 `MigrationError` 를 발생시키며 예외를 무시하지 않는다.
 """
 
 from __future__ import annotations
@@ -31,10 +31,10 @@ from app.db.schema_version import BASELINE_VERSION, SCHEMA_VERSION
 ENV_MIGRATE_ON_START = "JW_MIGRATE_ON_START"
 BASELINE_NAME = "기준선"
 
-# 세션 advisory lock 키 — 스키마를 만지는 것은 이 잠금을 쥔 하나뿐이다.
+# 세션 advisory lock 키 — 스키마 변경은 이 잠금을 보유한 하나의 주체만 수행한다.
 MIGRATION_LOCK_KEY = 0x6A77_1D80
 
-# Base.metadata 와 따로 둔다 — create_all 이 이 표를 만들면 "기록 없음"과 "빈 기록"이 섞인다.
+# Base.metadata 와 분리한다 — create_all 이 이 테이블을 생성하면 "기록 없음"과 "빈 기록"을 구분할 수 없다.
 _meta = MetaData()
 schema_migrations = Table(
     "schema_migrations",
@@ -46,12 +46,12 @@ schema_migrations = Table(
     Column("notes", Text, nullable=True),
 )
 
-# 이 프로세스가 마지막으로 확인한 DB 스키마 버전(/api/health 가 보여 준다). 확인 전에는 None.
+# 본 프로세스가 마지막으로 확인한 DB 스키마 버전(/api/health 가 표시). 확인 전에는 None.
 _confirmed_version: int | None = None
 
 
 class MigrationError(Exception):
-    """변경 단계가 실패했다. version/name 은 실패한 단계."""
+    """변경 단계 실패. version/name 은 실패한 단계."""
 
     def __init__(self, version: int, name: str, cause: BaseException | str):
         self.version = version
@@ -62,7 +62,7 @@ class MigrationError(Exception):
 
 
 class SchemaTooNew(Exception):
-    """DB 스키마가 코드가 아는 것보다 높다 — 이미지를 되돌렸는데 DB 는 새것."""
+    """DB 스키마가 코드가 인식하는 버전보다 높다 — 이미지는 롤백했으나 DB 는 신버전인 상태."""
 
     def __init__(self, current: int, required: int):
         self.current = current
@@ -76,7 +76,7 @@ class SchemaTooNew(Exception):
 
 
 class SchemaOutdated(Exception):
-    """DB 스키마가 낮은데 자동 적용이 꺼져 있다."""
+    """DB 스키마가 낮으나 자동 적용이 비활성화되어 있다."""
 
     def __init__(self, current: int, required: int, pending: list[str]):
         self.current = current
@@ -90,7 +90,7 @@ class SchemaOutdated(Exception):
 
 
 class SchemaDrift(Exception):
-    """버전은 맞는데 모델에 있는 테이블·컬럼이 DB 에 없다."""
+    """버전은 일치하나 모델에 있는 테이블·컬럼이 DB 에 없다."""
 
     def __init__(self, missing: list[str]):
         self.missing = missing
@@ -104,7 +104,7 @@ class SchemaDrift(Exception):
 @dataclass
 class State:
     current: int                      # 기록된 최고 버전. 기록이 없으면 0
-    has_tables: bool                  # 제품 테이블(users)이 있는가 — 기록 없이 True 면 버전 기록 이전의 설치
+    has_tables: bool                  # 제품 테이블(users) 존재 여부 — 기록 없이 True 이면 버전 기록 도입 이전의 설치
     applied: list[dict] = field(default_factory=list)
 
     @property
@@ -124,8 +124,8 @@ class Result:
 
 # ─── 모델 등록 ───
 
-# Base 를 상속한 모델이 있는 모듈 전부. 구역과 무관하게 스키마는 같다 — 라우터를 올리지 않는 구역의
-# 테이블도 만든다. 새 모델 파일을 만들면 여기에 더한다(tests/test_schema_migrate.py 가 빠진 것을 잡는다).
+# Base 를 상속한 모델이 있는 모듈 전체. 구역과 무관하게 스키마는 동일하다 — 라우터를 등록하지 않는 구역의
+# 테이블도 생성한다. 모델 파일을 신규 생성하면 여기에 추가한다(tests/test_schema_migrate.py 가 누락을 검출한다).
 MODEL_MODULES = (
     "app.db.models",
     "app.groups.models",
@@ -138,29 +138,29 @@ MODEL_MODULES = (
 
 
 def register_models() -> None:
-    """모든 모델을 Base.metadata 에 올린다(app.main 을 거치지 않는 CLI 에서도 같은 스키마가 되게)."""
+    """모든 모델을 Base.metadata 에 등록한다(app.main 을 거치지 않는 CLI 에서도 동일한 스키마가 되도록)."""
     import importlib
 
     for name in MODEL_MODULES:
         importlib.import_module(name)
 
 
-# 지문에 넣는 타입 속성 — 스키마에 영향을 주는 것만. 값이 None·False 면 적지 않는다.
+# 지문에 포함하는 타입 속성 — 스키마에 영향을 주는 것만 포함한다. 값이 None·False 이면 기록하지 않는다.
 _TYPE_ATTRS = ("length", "precision", "scale", "timezone", "asdecimal", "enums", "collation")
 
 
 def _type_signature(type_) -> str:
-    """컬럼 타입의 표기 — SQLAlchemy 버전·방언에 따라 달라지는 `repr()` 대신 직접 만든다.
+    """컬럼 타입의 표기 — SQLAlchemy 버전·방언에 따라 달라지는 `repr()` 대신 직접 생성한다.
 
-    `repr(type_)` 은 버전마다 인자 표기가 다르고(예: 기본값 인자를 적는지), 방언 전용 타입으로 바뀐 뒤에는
-    클래스 이름도 달라진다. 여기서는 일반 타입의 이름(`__visit_name__`)과 스키마에 영향을 주는 속성만 쓴다.
+    `repr(type_)` 은 버전마다 인자 표기가 상이하고(예: 기본값 인자의 표기 여부), 방언 전용 타입으로 변환된 뒤에는
+    클래스 이름도 달라진다. 여기서는 일반 타입의 이름(`__visit_name__`)과 스키마에 영향을 주는 속성만 사용한다.
     """
-    impl = getattr(type_, "impl", None)          # TypeDecorator 는 감싼 타입으로
+    impl = getattr(type_, "impl", None)          # TypeDecorator 는 래핑한 타입으로 대체
     if impl is not None and not isinstance(impl, type) and hasattr(impl, "__visit_name__"):
         type_ = impl
     name = str(getattr(type_, "__visit_name__", "") or type(type_).__name__).lower()
-    # 타입을 적지 않은 `Mapped[float]` 은 SQLAlchemy 2.0 에서 Float, 2.1 에서 Double 로 잡힌다. 정밀도를 주지 않으면
-    # PostgreSQL 에서는 둘 다 double precision 이라 같은 것으로 적는다.
+    # 타입을 명시하지 않은 `Mapped[float]` 은 SQLAlchemy 2.0 에서 Float, 2.1 에서 Double 로 해석된다. 정밀도를 지정하지 않으면
+    # PostgreSQL 에서는 둘 다 double precision 이므로 동일한 것으로 기록한다.
     if name in ("double", "double_precision") and getattr(type_, "precision", None) is None:
         name = "float"
     parts = []
@@ -178,16 +178,16 @@ def _type_signature(type_) -> str:
 
 
 def models_fingerprint() -> str:
-    """모델(테이블·컬럼·타입·NULL 허용·기본 키)의 지문 — 모델이 바뀌면 값이 바뀐다.
+    """모델(테이블·컬럼·타입·NULL 허용·기본 키)의 지문 — 모델이 변경되면 값이 변경된다.
 
-    환경에 따라 달라지지 않게 한다:
-    - `MODEL_MODULES` 에 정의된 모델의 테이블만 본다. 같은 프로세스에서 다른 코드(플러그인·테스트)가 `Base` 에
-      올린 테이블은 넣지 않는다 — 무엇을 먼저 import 했는지에 따라 값이 달라지면 안 된다.
-    - 타입은 `_type_signature` 로 적는다(SQLAlchemy 버전에 따라 달라지는 `repr()` 을 쓰지 않는다).
+    환경에 따라 달라지지 않도록 한다:
+    - `MODEL_MODULES` 에 정의된 모델의 테이블만 대상으로 한다. 동일 프로세스에서 다른 코드(플러그인·테스트)가 `Base` 에
+      등록한 테이블은 포함하지 않는다 — import 순서에 따라 값이 달라져서는 안 된다.
+    - 타입은 `_type_signature` 로 기록한다(SQLAlchemy 버전에 따라 달라지는 `repr()` 을 사용하지 않는다).
     - 테이블·컬럼은 이름순.
 
-    이 값은 DB 에 기록하지 않는다. 스키마 버전 판정에도 쓰지 않는다 — 개발 중에 "모델을 고치고 변경 단계를
-    빠뜨린" 실수를 테스트가 잡는 데만 쓴다.
+    이 값은 DB 에 기록하지 않는다. 스키마 버전 판정에도 사용하지 않는다 — 개발 중 "모델을 수정하고 변경 단계를
+    누락한" 오류를 테스트가 검출하는 용도로만 사용한다.
     """
     from app.db.models import Base
 
@@ -251,7 +251,7 @@ def all_steps() -> list[tuple[int, str]]:
 
 
 def check_steps() -> None:
-    """단계 번호가 2 부터 1씩 늘고 마지막이 SCHEMA_VERSION 인지. 아니면 ValueError."""
+    """단계 번호가 2 부터 1씩 증가하고 마지막이 SCHEMA_VERSION 인지 검증한다. 아니면 ValueError."""
     versions = [v for v, _ in all_steps()]
     if versions != list(range(BASELINE_VERSION, SCHEMA_VERSION + 1)):
         raise ValueError(
@@ -269,10 +269,10 @@ def pending_steps(current: int) -> list[tuple[int, str]]:
 
 @asynccontextmanager
 async def migration_lock(engine: AsyncEngine):
-    """PostgreSQL 이면 세션 advisory lock 을 잡는다(다른 DB 는 아무것도 안 함).
+    """PostgreSQL 이면 세션 advisory lock 을 획득한다(다른 DB 는 no-op).
 
-    잠금 연결은 끝까지 열어 두고, 끝나면 풀고 닫는다. 풀기에 실패하면 그 연결은 버린다
-    (풀에 돌아가면 잠금을 쥔 채 남는다). 이미 누가 쥐고 있으면 풀릴 때까지 기다린다.
+    잠금 연결은 종료 시까지 유지하고, 종료 시 해제 후 닫는다. 해제에 실패하면 해당 연결은 폐기한다
+    (풀에 반환되면 잠금을 보유한 채 남는다). 이미 다른 주체가 보유 중이면 해제될 때까지 대기한다.
     """
     if engine.dialect.name != "postgresql":
         yield
@@ -332,9 +332,9 @@ async def migrate(
     repair: bool = False,
     log: Callable[[str], None] = print,
 ) -> Result:
-    """대기 중인 단계를 순서대로 적용한다. 실패하면 MigrationError(그 앞 단계까지는 적용된 채 남는다).
+    """대기 중인 단계를 순서대로 적용한다. 실패하면 MigrationError(그 이전 단계까지는 적용된 상태로 남는다).
 
-    repair=True: 버전과 무관하게 기준선 보정(빠진 테이블·컬럼·인덱스 채우기)을 다시 돌린다.
+    repair=True: 버전과 무관하게 기준선 보정(누락된 테이블·컬럼·인덱스 보충)을 재실행한다.
     """
     global _confirmed_version
     from app.db.migrations import STEPS
@@ -375,7 +375,7 @@ async def migrate(
             log(f"[DB] 단계 {step.version} 적용: {step.name}")
             try:
                 if step.transactional:
-                    # 단계와 버전 기록이 한 트랜잭션 — 실패하면 둘 다 없던 일이 된다
+                    # 단계와 버전 기록을 한 트랜잭션으로 처리 — 실패 시 둘 다 롤백
                     async with engine.begin() as conn:
                         await step.apply(conn)
                         await _record(conn, step.version, step.name)
@@ -398,7 +398,7 @@ async def migrate(
 
 
 def auto_migrate_enabled(env: dict[str, str] | None = None) -> bool:
-    """`JW_MIGRATE_ON_START` — 0/false/no/off 면 끈다. 없으면 켠다."""
+    """`JW_MIGRATE_ON_START` — 0/false/no/off 이면 비활성화. 미설정 시 활성화."""
     value = (os.environ if env is None else env).get(ENV_MIGRATE_ON_START, "").strip().lower()
     return value not in ("0", "false", "no", "off")
 
@@ -407,7 +407,7 @@ def _is_connect_error(e: BaseException) -> bool:
     if isinstance(e, (OSError, asyncio.TimeoutError, InterfaceError)):
         return True
     if isinstance(e, (OperationalError, DBAPIError)):
-        # DB 가 아직 안 떴거나 복구 중 — SQL 오류가 아니라 연결 문제만
+        # DB 가 아직 기동되지 않았거나 복구 중인 경우 — SQL 오류가 아닌 연결 문제만 해당
         text_ = str(getattr(e, "orig", e)).lower()
         return isinstance(getattr(e, "orig", None), OSError) or any(
             s in text_ for s in ("connect", "starting up", "shutting down", "in recovery", "connection")
@@ -416,7 +416,7 @@ def _is_connect_error(e: BaseException) -> bool:
 
 
 async def _read_state_waiting(engine: AsyncEngine, wait_seconds: float, log: Callable[[str], None]) -> State:
-    """DB 가 뜰 때까지(연결 오류에 한해) 기다렸다 상태를 읽는다."""
+    """DB 가 기동될 때까지(연결 오류에 한해) 대기한 뒤 상태를 조회한다."""
     deadline = asyncio.get_running_loop().time() + wait_seconds
     attempt = 0
     while True:
@@ -439,12 +439,12 @@ async def ensure_schema(
     env: dict[str, str] | None = None,
     log: Callable[[str], None] = print,
 ) -> int:
-    """기동 때 부른다. DB 스키마가 코드가 요구하는 버전이 되게 하거나, 안 되면 예외로 기동을 막는다.
+    """기동 시 호출한다. DB 스키마를 코드가 요구하는 버전으로 맞추거나, 불가하면 예외로 기동을 차단한다.
 
-    - 같으면: 아무것도 안 한다(잠금도 안 잡는다).
+    - 같으면: 아무 작업도 수행하지 않는다(잠금도 획득하지 않는다).
     - 높으면: SchemaTooNew.
-    - 낮으면: 자동 적용이 켜져 있으면 적용(실패하면 MigrationError), 꺼져 있으면 SchemaOutdated.
-    - verify=True: 버전이 맞아도 모델과 DB 의 테이블·컬럼을 대조해 빠진 것이 있으면 SchemaDrift.
+    - 낮으면: 자동 적용이 활성화되어 있으면 적용(실패하면 MigrationError), 비활성화되어 있으면 SchemaOutdated.
+    - verify=True: 버전이 일치해도 모델과 DB 의 테이블·컬럼을 대조하여 누락이 있으면 SchemaDrift.
     """
     global _confirmed_version
     check_steps()
@@ -467,12 +467,12 @@ async def ensure_schema(
 
 
 def confirmed_version() -> int | None:
-    """이 프로세스가 기동 때 확인한 DB 스키마 버전(확인 전이면 None)."""
+    """본 프로세스가 기동 시 확인한 DB 스키마 버전(확인 전이면 None)."""
     return _confirmed_version
 
 
 async def status(engine: AsyncEngine) -> dict:
-    """현재 버전·대기 단계·기록·빠진 테이블/컬럼 — `migrate --status` 와 관리 화면용."""
+    """현재 버전·대기 단계·기록·누락된 테이블/컬럼 — `migrate --status` 와 관리 화면용."""
     check_steps()
     state = await read_state(engine)
     drift = await find_drift(engine) if state.current else []

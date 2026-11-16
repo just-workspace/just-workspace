@@ -1,8 +1,8 @@
 """도구 응답 잘림 대책 — 완료 기준 1~8 + 라우터 주입.
 
-files_search 는 색인 DB 대신 fsearch.search 를 가짜로 바꿔 돌린다(24건, 점수 동점이 페이지 경계에
-걸리고, 200자 넘는 경로·큰 snippet·한글만 있는 이름 포함). 가짜는 매번 뒤섞은 뒤 실제 SQL 과 같은
-키(점수↓, 수정시각↓, scope·rel_path·id↑)로 정렬한다 — 2차 기준이 있어야 순서가 고정된다는 것까지 본다.
+files_search 는 색인 DB 대신 fsearch.search 를 모의 객체로 대체하여 실행한다(24건, 점수 동점이 페이지 경계에
+걸치고, 200자 초과 경로·큰 snippet·한글만 있는 이름 포함). 모의 객체는 매번 무작위로 섞은 뒤 실제 SQL 과 동일한
+키(점수↓, 수정시각↓, scope·rel_path·id↑)로 정렬한다 — 2차 기준이 있어야 순서가 고정된다는 점까지 확인한다.
 """
 
 import contextlib
@@ -37,12 +37,12 @@ def _dataset() -> list[dict]:
     rows = []
     for i in range(24):
         rows.append(_row(i, score=900.0 - i * 10))
-    # 점수·시각 동점 묶음 — 페이지 경계(5·10·15·20)에 걸치게 3..12, 14..21
+    # 점수·시각 동점 묶음 — 페이지 경계(5·10·15·20)에 걸치도록 3..12, 14..21
     for i in range(3, 13):
         rows[i]["score"], rows[i]["modified_at"] = 777.0, BASE_T
     for i in range(14, 22):
         rows[i]["score"], rows[i]["modified_at"] = 333.0, BASE_T
-    # 200자 넘는 경로
+    # 200자 초과 경로
     rows[7]["path"] = "my/" + "/".join(["아주긴폴더이름입니다_" + str(k) for k in range(18)]) + "/작업계획서_긴경로.hwp"
     assert len(rows[7]["path"]) > 200
     # 큰 snippet
@@ -64,7 +64,7 @@ def fake_search(monkeypatch):
         calls.append({"q": q, "limit": limit, "offset": offset, "name_only": name_only})
         rows = list(data)
         random.shuffle(rows)            # DB 가 동점 순서를 보장하지 않는 상황
-        rows.sort(key=_sort_key)        # build_query 와 같은 결정적 정렬
+        rows.sort(key=_sort_key)        # build_query 와 동일한 결정적 정렬
         return {"total": len(rows), "items": rows[offset:offset + limit], "query": q}
 
     @contextlib.asynccontextmanager
@@ -101,7 +101,7 @@ async def _walk(limit=None, budget=None, query="작업계획서") -> list[str]:
     return paths
 
 
-# ── 1·2. 기본 호출: 언제나 올바른 JSON, 페이지 정보 맨 앞 ───────────
+# ── 1·2. 기본 호출: 항상 유효한 JSON, 페이지 정보 선두 ───────────
 async def test_default_call_valid_json_meta_first(fake_search):
     r = await files_tool.files_search(USER, query="작업계획서")
     back = _valid(r)
@@ -121,7 +121,7 @@ async def test_compact_file_item_shape(fake_search):
         assert "snippet" not in it or (it["snippet"] and len(it["snippet"]) <= 150)
     big = next(it for it in r["results"] if it["path"].endswith("_04.hwp"))
     assert len(big["snippet"]) == 150 and big["snippet"].endswith("…")
-    # fields / verbose 로 예전 필드를 받는다
+    # fields / verbose 로 이전 필드 수신
     r2 = await files_tool.files_search(USER, query="작업계획서", limit=2, fields="name,score,size_bytes")
     assert set(r2["results"][0]) >= {"name", "score", "size_bytes"} and r2["results"][0]["size_bytes"] == 2_700_000
     r3 = await files_tool.files_search(USER, query="작업계획서", limit=1, verbose=True)
@@ -136,7 +136,7 @@ def test_human_size_and_local_time():
     assert _common.local_time(datetime(2025, 2, 24, 13, 27), tz) == "2025-02-24 22:27"   # naive = UTC
 
 
-# ── 3·4·8. 커서를 끝까지 따라가면 중복·누락 없이 24개 ───────────────
+# ── 3·4·8. 커서를 끝까지 추적하면 중복·누락 없이 24개 ───────────────
 async def test_follow_cursor_default_all_24_unique(fake_search):
     paths = await _walk()
     assert len(paths) == 24 and len(set(paths)) == 24
@@ -145,13 +145,13 @@ async def test_follow_cursor_default_all_24_unique(fake_search):
 
 @pytest.mark.parametrize("limit", [5, 7, 10, 24])
 async def test_ties_across_page_boundaries(fake_search, limit):
-    # 동점 묶음(3..12, 14..21)이 5·7·10 단위 경계에 걸친다 — 결과는 항상 같은 순서·같은 집합
+    # 동점 묶음(3..12, 14..21)이 5·7·10 단위 경계에 걸침 — 결과는 항상 동일 순서·동일 집합
     paths = await _walk(limit=limit)
     assert paths == [r["path"] for r in sorted(fake_search.data, key=_sort_key)]
 
 
 async def test_small_budget_long_path_and_snippet_still_complete(fake_search):
-    # 예산이 작아 페이지마다 몇 건씩만 담겨도(truncated) 다 따라가면 24개
+    # 예산이 작아 페이지마다 일부만 포함되어도(truncated) 끝까지 추적하면 24개
     paths = await _walk(budget=1500)
     assert len(paths) == 24 and len(set(paths)) == 24
     assert any(len(p) > 200 for p in paths)
@@ -166,14 +166,14 @@ async def test_truncated_page_next_cursor_points_after_last_kept(fake_search):
     assert e is None and off == r["returned"]
 
 
-# ── 5. 항목 하나가 예산보다 커도 최소 1개 + 줄임 표시 ─────────────────
+# ── 5. 항목 하나가 예산을 초과해도 최소 1개 + 축약 표시 ─────────────────
 def test_single_oversized_item_kept_and_marked():
     items = [{"id": "x1", "path": "my/a.txt", "content": "가" * 10_000}, {"id": "x2", "path": "my/b.txt"}]
     r = _common.fit_page(items, offset=0, total=2, budget=1000, qhash="h")
     assert _common.jlen(r) <= 1000 and list(r)[:5] == META_KEYS
     assert r["returned"] == 1 and r["truncated"] is True and r["has_more"] is True
     it = r["results"][0]
-    assert it["id"] == "x1" and it["path"] == "my/a.txt"            # 식별 필드는 지킨다
+    assert it["id"] == "x1" and it["path"] == "my/a.txt"            # 식별 필드는 보존
     assert it["shortened"] == ["content"] and it["content"].endswith("…")
     assert _common.read_cursor(r["next_cursor"], "h") == (1, None)
 
@@ -214,16 +214,16 @@ async def test_chat_keeps_newest_and_cursor_is_oldest_kept(monkeypatch):
             assert list(r)[:5] == META_KEYS and _common.jlen(r) <= _common.fit_budget()
             ids = [m["id"] for m in r["messages"]]
             if not seen:
-                assert ids[-1] == "m9" and r["truncated"] is True        # 최신은 남긴다
+                assert ids[-1] == "m9" and r["truncated"] is True        # 최신 항목은 유지
             seen = ids + seen
             if not r["has_more"]:
                 break
-            assert r["next_cursor"] == ids[0]                           # 담은 것 중 가장 오래된 id
+            assert r["next_cursor"] == ids[0]                           # 포함된 항목 중 가장 오래된 id
             cursor = r["next_cursor"]
-    assert seen == [f"m{i}" for i in range(10)]                        # 건너뜀·중복 없음
+    assert seen == [f"m{i}" for i in range(10)]                        # 누락·중복 없음
 
 
-# ── 6. 바깥 상한을 낮춰도 형식 유지 + truncated 또는 error ─────────────
+# ── 6. 외부 상한을 낮춰도 형식 유지 + truncated 또는 error ─────────────
 async def test_lowered_outer_cap_via_execute_tool(fake_search):
     with _common.fit_budget_scope(2000):
         res = await server._execute_tool_core("files_search", {"query": "작업계획서"}, USER)
@@ -241,7 +241,7 @@ async def test_mcp_cap_setting_used_without_ai_scope(fake_search, monkeypatch):
 
 async def test_outer_safety_net_returns_response_too_large(monkeypatch):
     async def huge(user, **_):
-        return {"id": "x" * 5000}          # 줄일 수 없는(식별) 필드만 큼
+        return {"id": "x" * 5000}          # 축약 불가한(식별) 필드만 큰 경우
 
     monkeypatch.setitem(server.WORKSPACE_TOOLS, "zz_huge", server.Tool(
         name="zz_huge", description="t", parameters={"type": "object", "properties": {}}, handler=huge))
@@ -252,7 +252,7 @@ async def test_outer_safety_net_returns_response_too_large(monkeypatch):
 
 
 def test_reducer_never_cuts_json_mid_string():
-    # 페이지 정보가 뒤에 있는 옛 모양 + 긴 항목 100개 — 2,000자로 줄여도 올바른 JSON·커서 보정
+    # 페이지 정보가 후미에 있는 이전 형태 + 긴 항목 100개 — 2,000자로 축약해도 유효한 JSON·커서 보정
     items = [{"path": f"my/{i:03d}_" + "가" * 60, "type": "file"} for i in range(100)]
     payload = {"results": items, "total": 100, "returned": 100, "has_more": False, "next_cursor": None}
     text = _common.fit_json_text(payload, 2000)
@@ -263,7 +263,7 @@ def test_reducer_never_cuts_json_mid_string():
 
 
 def test_reducer_window_and_untrusted_wrapper():
-    # files_read 같은 본문 창: content 를 줄이고 next_offset 을 고친다(이어 읽기 유지)
+    # files_read 같은 본문 창: content 를 축약하고 next_offset 을 보정(이어 읽기 유지)
     wrapped = {"untrusted": True, "source": "file_content",
                "data": {"path": "my/a.txt", "sha256": "f" * 64, "content": "본" * 50_000, "offset": 100,
                         "returned_chars": 50_000, "total_chars": 80_000, "truncated": True, "next_offset": 50_100}}
@@ -287,12 +287,12 @@ async def test_budget_is_characters_not_bytes(fake_search):
     with _common.fit_budget_scope(budget + _common.FIT_MARGIN):
         r = await files_tool.files_search(USER, query="가나다")
     text = json.dumps(r, ensure_ascii=False)
-    assert len(text) <= budget                                     # 글자 수로는 예산 안
-    assert len(text.encode("utf-8")) > budget                      # 바이트로 쟀다면 넘쳤을 것
-    # 바이트 기준이었다면 담을 수 있는 수(대략 1/3)보다 많이 담긴다
+    assert len(text) <= budget                                     # 글자 수 기준으로는 예산 이내
+    assert len(text.encode("utf-8")) > budget                      # 바이트 기준이었다면 초과
+    # 바이트 기준이었다면 포함 가능한 수(대략 1/3)보다 많이 포함됨
     per_item_bytes = len(json.dumps(r["results"][0], ensure_ascii=False).encode("utf-8"))
     assert r["returned"] > budget // per_item_bytes
-    assert len(json.dumps(r, ensure_ascii=True)) > budget          # \uXXXX 로 쟀다면 6배
+    assert len(json.dumps(r, ensure_ascii=True)) > budget          # \uXXXX 기준이었다면 6배
 
 
 # ── 커서 ──────────────────────────────────────────────────────
@@ -307,7 +307,7 @@ async def test_cursor_bound_to_query(fake_search):
     junk = await files_tool.files_search(USER, query="작업계획서", cursor="!!!")
     assert junk["error_code"] == "invalid_argument"
     legacy = await files_tool.files_search(USER, query="작업계획서", cursor="5", limit=5)
-    assert fake_search.calls[-1]["offset"] == 5 and legacy["returned"] == 5    # 옛 숫자 커서 하위호환
+    assert fake_search.calls[-1]["offset"] == 5 and legacy["returned"] == 5    # 이전 숫자 커서 하위 호환
 
 
 async def test_name_only_passed_to_search(fake_search):
@@ -330,7 +330,7 @@ def test_build_query_has_deterministic_order():
     assert "lower(file_index.content)" not in where and "coalesce" not in where
 
 
-# ── 라우터: 큰 도구 결과가 올바른 JSON·페이지 정보 맨 앞으로 모델에 들어간다 ─
+# ── 라우터: 큰 도구 결과가 유효한 JSON·페이지 정보 선두 형태로 모델에 전달된다 ─
 def test_tool_result_budget_by_model():
     assert tool_budget.tool_result_budget(SimpleNamespace(kind="anthropic", model="claude-opus-5-5")) == 60_000
     assert tool_budget.tool_result_budget(SimpleNamespace(kind="anthropic", model="claude-sonnet-5-5")) == 60_000
@@ -367,9 +367,9 @@ async def test_router_injects_valid_json_meta_first(fake_search, monkeypatch, db
 
     async def fake_exec(db_, name, args, user, **kw):
         budgets.append(_common.outer_cap())
-        if name == "files_search":           # 실제 도구 — 라우터가 건 예산 안에서 스스로 맞춘다
+        if name == "files_search":           # 실제 도구 — 라우터가 설정한 예산 내에서 자체 조정
             return {"ok": True, "result": await files_tool.files_search(USER, **args)}
-        # 스스로 못 맞추는(옛 모양) 큰 결과 — 라우터가 구조를 지키며 줄인다
+        # 자체 조정이 불가한(이전 형태) 큰 결과 — 라우터가 구조를 유지하며 축약
         items = [{"id": f"t{i}", "title": "가" * 200} for i in range(200)]
         return {"ok": True, "result": {"tasks": items, "total": 200, "returned": 200,
                                        "has_more": False, "next_cursor": None}}

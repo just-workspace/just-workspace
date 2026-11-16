@@ -36,8 +36,8 @@ class ProviderConfig:
     kind: str                       # ollama | openai | anthropic | gemini | compatible
     model: str
     api_key: str = ""
-    base_url: str = ""              # 비우면 DEFAULT_BASE[kind]
-    max_tokens: int = 0             # 0 = 모델에 맞춘 자동(app.ai.context.output_tokens)
+    base_url: str = ""              # 미지정 시 DEFAULT_BASE[kind] 사용
+    max_tokens: int = 0             # 0 = 모델 기준 자동 산정(app.ai.context.output_tokens)
     extra: dict = field(default_factory=dict)
 
     @property
@@ -46,9 +46,9 @@ class ProviderConfig:
 
 
 # ─── 이미지 입력(첨부) ───
-# 공통 메시지에 {"images": [{"mime", "data"(base64)}]} 가 붙어 오면 제공자 모양으로 바꾼다.
-# 모델이 이미지를 읽는지는 이름으로 짐작한다(정확한 능력 조회 API 가 제공자마다 없거나 다르다).
-# 관리자가 extra["vision"] 을 주면 그 값이 우선.
+# 공통 메시지에 {"images": [{"mime", "data"(base64)}]} 가 포함되면 제공자별 형식으로 변환한다.
+# 모델의 이미지 입력 지원 여부는 모델 이름으로 추정한다(정확한 능력 조회 API 가 제공자별로 없거나 상이하다).
+# 관리자가 extra["vision"] 을 지정하면 해당 값을 우선한다.
 _VISION_HINTS = ("vision", "llava", "-vl", "vl-", "_vl", "qwen2.5vl", "qwen2-vl", "qwen3-vl", "gemma3", "gemma-3",
                  "minicpm-v", "pixtral", "llama4", "llama-4", "mistral-small3.1", "mistral-small-3.1", "moondream",
                  "bakllava", "internvl", "glm-4v", "phi-3.5-vision", "phi-4-multimodal", "granite3.2-vision")
@@ -111,16 +111,16 @@ async def _openai_stream(cfg: ProviderConfig, messages, tools):
     if tools:
         payload["tools"] = tools
     url = f"{cfg.base}/v1/chat/completions"
-    # OpenAI 스트리밍은 tool_call 의 arguments 를 여러 delta 로 쪼개 보낸다.
-    # name 은 보통 첫 delta 에만, arguments 는 이어지는 delta 에 조각으로 온다
-    # → index 별로 모아서 스트림이 끝난 뒤 한 번에 방출한다.
-    # (ollama 는 tool_calls 를 한 덩어리로 줘서 이 문제가 안 보였음)
+    # OpenAI 스트리밍은 tool_call 의 arguments 를 여러 delta 로 분할하여 전송한다.
+    # name 은 통상 첫 delta 에만 포함되고, arguments 는 후속 delta 에 분할되어 수신된다.
+    # → index 별로 누적한 뒤 스트림 종료 후 일괄 방출한다.
+    # (ollama 는 tool_calls 를 단일 덩어리로 전달하므로 해당 문제가 드러나지 않았다)
     tool_acc: dict[int, dict] = {}
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        # llama.cpp 라우터 모드는 모델 자식 프로세스가 죽으면(콜드 로드 중 abort 등)
-        # 5xx "upstream error" 를 돌려주고, **다음 요청에서 모델을 다시 올린다.**
-        # 그 한 번을 사용자가 오류로 보게 두지 않고 잠깐 뒤 다시 시도한다.
-        # 토큰을 하나라도 흘린 뒤에는 재시도할 수 없으므로 상태코드 단계에서만.
+        # llama.cpp 라우터 모드는 모델 자식 프로세스가 종료되면(콜드 로드 중 abort 등)
+        # 5xx "upstream error" 를 반환하고, **다음 요청에서 모델을 재적재한다.**
+        # 해당 1회 실패를 사용자에게 오류로 노출하지 않고 짧은 대기 후 재시도한다.
+        # 토큰을 하나라도 송신한 뒤에는 재시도가 불가하므로 상태 코드 단계에서만 수행한다.
         attempts = 0
         while True:
             attempts += 1
@@ -217,9 +217,9 @@ def _openai_tools_to_anthropic(tools) -> list[dict]:
 
 
 def _cache_last_message(conv: list[dict]) -> None:
-    """프롬프트 캐시 — 마지막 메시지 끝에 캐시 지점을 둔다(도구·시스템과 합쳐 최대 3개, 한도 4).
+    """프롬프트 캐시 — 마지막 메시지 끝에 캐시 지점을 설정한다(도구·시스템 포함 최대 3개, 한도 4).
 
-    1M 컨텍스트로 긴 대화·큰 첨부를 매 차례 다시 보내도 앞부분은 캐시 읽기(입력가의 1/20)로 처리된다.
+    1M 컨텍스트에서 긴 대화·대용량 첨부를 매 차례 재전송하더라도 앞부분은 캐시 읽기(입력가의 1/20)로 처리된다.
     """
     if not conv:
         return
@@ -318,7 +318,7 @@ async def chat_stream(cfg: ProviderConfig, messages: list[dict], system: str | N
 
 
 async def chat(cfg: ProviderConfig, messages: list[dict], system: str | None = None) -> str:
-    """비스트리밍 — 전체 텍스트를 모아 반환(요약/분류 등 내부 용도)."""
+    """비스트리밍 — 전체 텍스트를 누적하여 반환(요약/분류 등 내부 용도)."""
     out = []
     async for ev in chat_stream(cfg, messages, system=system):
         if ev["type"] == "text":
@@ -329,7 +329,7 @@ async def chat(cfg: ProviderConfig, messages: list[dict], system: str | None = N
 
 
 async def list_models(cfg: ProviderConfig) -> list[str]:
-    """가능하면 모델 목록 반환(어드민 UI용). 실패 시 빈 목록."""
+    """가능한 경우 모델 목록 반환(관리자 UI용). 실패 시 빈 목록."""
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             if cfg.kind == "ollama":

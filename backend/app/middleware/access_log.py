@@ -65,7 +65,7 @@ def _extract_user_id(request: Request) -> str | None:
     from itsdangerous import URLSafeTimedSerializer, BadSignature
     from app.config import get_settings
 
-    # 이 요청에서 방금 로그인했다(app.auth.router._session_response) — 쿠키는 응답에만 있다
+    # 이 요청에서 방금 로그인한 경우(app.auth.router._session_response) — 쿠키는 응답에만 존재한다
     just_logged_in = (request.scope.get("state") or {}).get("login_user_id")
     if just_logged_in:
         return str(just_logged_in)
@@ -75,7 +75,7 @@ def _extract_user_id(request: Request) -> str | None:
     try:
         settings = get_settings()
         s = URLSafeTimedSerializer(settings.secret_key)
-        # 세션 서명 상한과 같게(예전 7일 — "로그인 기억"으로 더 오래 쓰는 사용자가 익명으로 찍혔다)
+        # 세션 서명 상한과 동일하게 적용(과거 7일 — "로그인 기억"으로 더 오래 사용하는 사용자가 익명으로 기록됐다)
         from app.auth.deps import SESSION_MAX_AGE
         data = s.loads(cookie, max_age=SESSION_MAX_AGE)
         return data.get("user_id") if isinstance(data, dict) else None
@@ -94,7 +94,7 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
         # 실제 클라이언트 IP — 헤더를 직접 읽지 않는다(신뢰 경계는 ws-nginx realip + uvicorn
-        # --forwarded-allow-ips 가 지킨다). 규칙은 auth.sessions.client_ip 하나로 통일.
+        # --forwarded-allow-ips 가 보장한다). 규칙은 auth.sessions.client_ip 하나로 통일.
         ip = client_ip(request)
 
         ua = request.headers.get("user-agent", "")
@@ -171,8 +171,8 @@ async def run_log_cleanup() -> None:
         await asyncio.sleep(delta)
 
         try:
-            # 워커 8개가 같은 시각에 깨어난다 — DELETE 가 8번 겹치면 결과는 같아도
-            # 큰 테이블에서 락 경합만 생긴다. 하나만 돈다.
+            # 워커 8개가 동일 시각에 실행된다 — DELETE 가 8회 중복되면 결과는 동일하나
+            # 큰 테이블에서 락 경합만 발생한다. 하나만 실행한다.
             from app.jobs.lock import try_acquire
             if not await try_acquire("access_log:cleanup", ttl=3600):
                 continue

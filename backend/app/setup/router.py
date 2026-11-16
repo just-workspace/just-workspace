@@ -1,14 +1,14 @@
-"""최초 설정(`/api/setup/*`)과, 같은 접두사 아래의 관리자용 설정 API.
+"""최초 설정(`/api/setup/*`)과, 동일 접두사 아래의 관리자용 설정 API.
 
 - 최초 설정: 관리자가 한 명도 없을 때만 `/setup` 화면이 열린다(`status`·`admin`·`complete`).
-  설치 관리자는 관리자를 직접 만들므로(`seed-admin`) 이 화면을 거치지 않는다 — 설치 관리자 없이 띄우고
-  관리자를 미리 만들지 않은 서버의 첫 화면이다.
-  인증 없이 상태를 바꾸는 것은 `POST /admin` 하나뿐이고, 그것은 설치 관리자 설치에서는 닫혀 있으며 그 밖에서는
-  서버 로그에 찍힌 일회용 설정 토큰을 요구한다(app/setup/token.py). 나머지는 전부 관리자 세션이 필요하다.
-- 관리 화면이 쓰는 것: 로그인 순서(`auth-order`), 저장소 백엔드(`storage`), 내장 메일 플래그(`features`),
+  설치 관리자는 관리자를 직접 생성하므로(`seed-admin`) 이 화면을 거치지 않는다 — 설치 관리자 없이 기동하고
+  관리자를 사전에 생성하지 않은 서버의 첫 화면이다.
+  인증 없이 상태를 변경하는 것은 `POST /admin` 하나뿐이며, 이는 설치 관리자 설치에서는 차단되어 있고 그 외에는
+  서버 로그에 출력된 일회용 설정 토큰을 요구한다(app/setup/token.py). 나머지는 전부 관리자 세션이 필요하다.
+- 관리 화면에서 사용하는 항목: 로그인 순서(`auth-order`), 저장소 백엔드(`storage`), 내장 메일 플래그(`features`),
   컨테이너 상태·재시작(`services`).
 
-백업에서 복원은 여기에 없다(실행 중인 backend 는 자기 DB 를 갈아 끼울 수 없다) — docs/data-safety.md 4절.
+백업에서 복원은 본 모듈에 없다(실행 중인 backend 는 자신의 DB 를 교체할 수 없다) — docs/data-safety.md 4절.
 """
 from __future__ import annotations
 
@@ -34,8 +34,8 @@ from app.setup import token as setup_token
 router = APIRouter(prefix="/api/setup", tags=["setup"])
 settings = get_settings()
 
-# 첫 관리자 비밀번호 하한 — 설치 마법사(installer 의 ADMIN_PASSWORD_MIN)와 같다.
-# 가입·비밀번호 변경의 하한(app/auth/password_policy.py)과는 따로다.
+# 첫 관리자 비밀번호 하한 — 설치 마법사(installer 의 ADMIN_PASSWORD_MIN)와 동일.
+# 가입·비밀번호 변경의 하한(app/auth/password_policy.py)과는 별개.
 FIRST_ADMIN_PASSWORD_MIN = 12
 
 
@@ -49,15 +49,15 @@ async def has_admin(db: AsyncSession) -> bool:
 
 
 async def needs_setup(db: AsyncSession) -> bool:
-    # 최초설정 강제는 '관리자 0명'(진짜 신규 설치)일 때만 — 기존 인스턴스 오작동 방지.
+    # 최초설정 강제는 '관리자 0명'(실제 신규 설치)일 때만 적용 — 기존 인스턴스 오작동 방지.
     return not await has_admin(db)
 
 
 @router.get("/status")
 async def status(db: AsyncSession = Depends(get_db)):
-    """공개 — 프론트 미들웨어가 최초설정 필요 여부 판단용. 비밀값·토큰 유무는 내지 않는다.
+    """공개 — 프런트 미들웨어의 최초설정 필요 여부 판단용. 비밀값·토큰 유무는 노출하지 않는다.
 
-    setup_mode: 첫 관리자를 웹에서 만드는 방식 — `installer`(닫힘, 설치 관리자가 만든다) | `token`(설정 토큰 필요).
+    setup_mode: 첫 관리자를 웹에서 생성하는 방식 — `installer`(차단, 설치 관리자가 생성) | `token`(설정 토큰 필요).
     """
     admin = await has_admin(db)
     return {
@@ -80,11 +80,11 @@ class AdminCreate(BaseModel):
 @router.post("/admin", status_code=201)
 @limiter.limit("5/minute")
 async def create_first_admin(request: Request, body: AdminCreate, db: AsyncSession = Depends(get_db)):
-    """최초 관리자 생성 — 관리자가 0명이고, 설치 관리자 설치가 아니고, 설정 토큰이 맞을 때만.
+    """최초 관리자 생성 — 관리자가 0명이고, 설치 관리자 설치가 아니며, 설정 토큰이 일치할 때만 허용한다.
 
-    - 설치 관리자 설치: 항상 403(`setup_closed`) — 관리자는 설치 관리자가 CLI 로 만든다.
-    - 그 밖: 서버 로그의 설정 토큰(`setup_token`)이 맞아야 한다. 맞으면 토큰은 계정과 한 트랜잭션에서 사라진다.
-    - 시도 횟수는 주소당 분당 5회(틀린 토큰·맞는 토큰 구분 없이).
+    - 설치 관리자 설치: 항상 403(`setup_closed`) — 관리자는 설치 관리자가 CLI 로 생성한다.
+    - 그 외: 서버 로그의 설정 토큰(`setup_token`)이 일치해야 한다. 일치하면 토큰은 계정 생성과 동일 트랜잭션에서 삭제된다.
+    - 시도 횟수는 주소당 분당 5회(토큰 일치 여부와 무관).
     """
     if setup_token.installer_managed():
         raise HTTPException(status_code=403, detail={
@@ -93,7 +93,7 @@ async def create_first_admin(request: Request, body: AdminCreate, db: AsyncSessi
         })
     if await has_admin(db):
         raise HTTPException(status_code=403, detail={"code": "admin_exists", "message": "이미 관리자가 존재합니다"})
-    # 토큰을 먼저 본다 — 토큰 없이 입력 검증 응답만으로 서버를 더듬지 못하게
+    # 토큰을 먼저 검증 — 토큰 없이 입력 검증 응답만으로 서버를 탐색하지 못하도록 함
     if not await setup_token.matches(db, body.setup_token):
         raise HTTPException(status_code=403, detail={
             "code": "setup_token_invalid",
@@ -111,7 +111,7 @@ async def create_first_admin(request: Request, body: AdminCreate, db: AsyncSessi
         raise HTTPException(status_code=400, detail=str(e))
     domain = await cfg.get(db, "general.domain", getattr(settings, "domain", "localhost"))
     if not await setup_token.consume(db, body.setup_token):
-        # 같은 토큰으로 동시에 들어온 다른 요청이 먼저 썼다
+        # 동일 토큰으로 동시에 수신된 다른 요청이 먼저 사용함
         await db.rollback()
         raise HTTPException(status_code=403, detail={"code": "setup_token_invalid", "message": "설정 토큰이 이미 쓰였습니다"})
     user = User(
@@ -127,7 +127,7 @@ async def create_first_admin(request: Request, body: AdminCreate, db: AsyncSessi
     await db.commit()
     try:
         await audit.log_action(db, user.id, "setup.first_admin", "user", str(user.id)[:36], {"username": username}, _ip(request))
-    except Exception:  # noqa: BLE001 — 기록 실패로 만들어진 계정을 실패로 알리지 않는다
+    except Exception:  # noqa: BLE001 — 기록 실패를 이유로 생성 완료된 계정을 실패로 응답하지 않음
         pass
     return {"ok": True, "username": username}
 
@@ -284,7 +284,7 @@ async def restart_service(
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="관리자만 가능합니다")
     from app.setup import orchestrator
-    # 재시작 전에 남긴다 — backend 자신을 재시작하면 응답도 기록도 못 남긴다
+    # 재시작 전에 기록 — backend 자체를 재시작하면 응답도 기록도 남길 수 없음
     await audit.log_action(db, user.id, "service.restart", "service", service[:36], None, _ip(request))
     ok, msg = await orchestrator.restart_service(service)
     if not ok:

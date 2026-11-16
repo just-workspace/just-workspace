@@ -1,8 +1,8 @@
-"""회귀 — Git API 가 관리자 권한으로 사용자 요청을 대신하지 않는다.
+"""회귀 — Git API 가 관리자 권한으로 사용자 요청을 대행하지 않는다.
 
-- 연결된 계정: 모든 Gitea 호출에 그 사용자 Sudo 가 붙는다(비공개 리포 권한은 Gitea 가 판정)
-- 계정 없는 사용자: 공개 리포 읽기만, 쓰기(머지·이슈·리뷰·스타)는 403, 비공개 리포는 404
-- 공용 최근 커밋 캐시는 사용자가 볼 수 있는 리포만 내보낸다
+- 연결된 계정: 모든 Gitea 호출에 해당 사용자 Sudo 가 포함된다(비공개 리포 권한은 Gitea 가 판정)
+- 계정 없는 사용자: 공개 리포 읽기만 허용, 쓰기(머지·이슈·리뷰·스타)는 403, 비공개 리포는 404
+- 공용 최근 커밋 캐시는 사용자가 조회 가능한 리포만 반환한다
 """
 
 import json
@@ -36,7 +36,7 @@ def gitea_mock(monkeypatch):
         if path == "/user":
             return httpx.Response(200 if sudo == "minji" else 404, json={"login": sudo})
         if path == "/repos/corp/secret":
-            # Gitea 쪽 권한 판정 흉내: 관리자(무 Sudo)만 보인다
+            # Gitea 측 권한 판정 모사: 관리자(Sudo 없음)만 조회 가능
             return httpx.Response(200 if sudo is None else 404, json=PRIVATE)
         if path == "/repos/pub/site":
             return httpx.Response(200, json=PUBLIC)
@@ -92,11 +92,11 @@ def test_every_git_route_has_identity_dependency():
 @pytest.mark.asyncio
 async def test_member_calls_go_out_with_own_sudo(gitea_mock):
     r = await _req(MEMBER, "POST", "/api/git/repos/corp/secret/pulls/1/merge", json={"merge_style": "merge"})
-    # 머지 호출에는 반드시 그 사용자 Sudo 가 붙는다(관리자 권한으로 머지하지 않음)
+    # 머지 호출에는 반드시 해당 사용자 Sudo 가 포함된다(관리자 권한으로 머지하지 않음)
     merges = [c for c in gitea_mock if c[1].endswith("/merge")]
     assert merges and all(c[2] == "minji" for c in merges)
     r = await _req(MEMBER, "GET", "/api/git/repos/corp/secret")
-    assert r.status_code == 404  # Gitea 가 그 사용자 권한으로 거절
+    assert r.status_code == 404  # Gitea 가 해당 사용자 권한으로 거부
     user_calls = [c for c in gitea_mock if c[1].startswith("/repos/corp/secret")]
     assert all(c[2] == "minji" for c in user_calls)
 

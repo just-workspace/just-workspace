@@ -1,13 +1,13 @@
 """SSRF 방어 HTTP 가져오기 — web_fetch 전용.
 
-막는 것:
-  * http/https 외 스킴, URL 안 계정정보(user:pass@), 허용 밖 포트
+차단 대상:
+  * http/https 외 스킴, URL 내 계정정보(user:pass@), 허용 범위 밖 포트
   * 사설·루프백·링크로컬(클라우드 메타데이터 169.254.169.254 포함)·CGNAT·멀티캐스트·예약·문서용 대역,
-    IPv6 ULA·사이트로컬, IPv4 매핑/6to4/Teredo 로 감싼 사설 주소
-  * 이름 해석 결과 중 **하나라도** 막힌 주소면 거절(섞어 돌려주는 DNS 대응)
+    IPv6 ULA·사이트로컬, IPv4 매핑/6to4/Teredo 로 캡슐화된 사설 주소
+  * 이름 해석 결과 중 **하나라도** 차단 대상 주소이면 거부(혼합 응답 DNS 대응)
   * DNS 재바인딩: 검사한 주소로 **직접** 접속한다(Host 헤더·TLS SNI 는 원래 이름 — 인증서 검증도 원래 이름)
-  * 리다이렉트는 자동으로 따르지 않고, 매 hop 마다 위 검사를 다시 한다(최대 5번)
-  * 크기(압축 푼 뒤 바이트)·전체 시간 상한, 환경 프록시 무시(trust_env=False)
+  * 리다이렉트는 자동으로 따르지 않고, 매 hop 마다 위 검사를 재수행한다(최대 5회)
+  * 크기(압축 해제 후 바이트)·전체 시간 상한, 환경 프록시 무시(trust_env=False)
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ MAX_REDIRECTS = 5
 DEFAULT_TIMEOUT = 20.0
 USER_AGENT = "Mozilla/5.0 (compatible; JustWorkspace-WebFetch/1.0; +AI assistant page reader)"
 
-# ipaddress 의 is_global 이 놓치는(또는 버전마다 다른) 대역을 명시로 더 막는다
+# ipaddress 의 is_global 이 누락하는(또는 버전별로 상이한) 대역을 명시적으로 추가 차단한다
 _EXTRA_BLOCKED = [ipaddress.ip_network(n) for n in (
     "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12",
     "192.0.0.0/24", "192.0.2.0/24", "192.88.99.0/24", "192.168.0.0/16", "198.18.0.0/15",
@@ -58,7 +58,7 @@ class FetchResult:
 
 
 def blocked_reason(ip_text: str) -> str | None:
-    """주소가 막혀야 하면 이유, 괜찮으면 None."""
+    """주소가 차단 대상이면 사유, 허용이면 None."""
     try:
         ip = ipaddress.ip_address(ip_text.split("%", 1)[0])
     except ValueError:
@@ -120,7 +120,7 @@ def check_url(url: str) -> tuple[str, str, int]:
 
 
 async def _lookup(host: str, port: int) -> list[str]:
-    """이름 해석(테스트가 바꿔 끼운다)."""
+    """이름 해석(테스트에서 대체한다)."""
     loop = asyncio.get_running_loop()
     infos = await loop.getaddrinfo(host, port, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP)
     addrs: list[str] = []
@@ -132,7 +132,7 @@ async def _lookup(host: str, port: int) -> list[str]:
 
 
 async def resolve_public(host: str, port: int) -> list[str]:
-    """이름 → 주소들. 하나라도 막힌 주소면 거절."""
+    """이름 → 주소 목록. 하나라도 차단 대상 주소이면 거부."""
     try:
         ipaddress.ip_address(host)
         addrs = [host]
@@ -149,7 +149,7 @@ async def resolve_public(host: str, port: int) -> list[str]:
         r = blocked_reason(a)
         if r:
             raise FetchError("forbidden", f"내부망 주소로 가는 요청은 막혀 있습니다({host} → {a}: {r})")
-    # IPv4 를 먼저(사내 망에 IPv6 출구가 없을 때가 많다)
+    # IPv4 우선(사내망에 IPv6 출구가 없는 경우가 많다)
     return sorted(addrs, key=lambda a: ":" in a)
 
 
@@ -173,7 +173,7 @@ def _host_header(url: str) -> str:
 
 
 def _transport() -> httpx.AsyncBaseTransport:
-    """테스트가 바꿔 끼운다(MockTransport)."""
+    """테스트에서 대체한다(MockTransport)."""
     return httpx.AsyncHTTPTransport(retries=0)
 
 
@@ -191,8 +191,8 @@ async def fetch(url: str, *, max_bytes: int, timeout: float = DEFAULT_TIMEOUT,
                 accept: str = "text/html,application/xhtml+xml,application/pdf,text/plain;q=0.9,*/*;q=0.5",
                 truncate_ok=lambda ct: ct.startswith("text/") or "html" in ct or "xml" in ct or "json" in ct,
                 ) -> FetchResult:
-    """URL 하나를 안전하게 가져온다. 본문이 max_bytes 를 넘으면: 텍스트류는 잘라서(body_truncated),
-    그 밖(PDF 등)은 too_large 오류."""
+    """URL 하나를 안전하게 가져온다. 본문이 max_bytes 를 초과하면: 텍스트류는 절단(body_truncated),
+    그 외(PDF 등)는 too_large 오류."""
     original = url.strip() if isinstance(url, str) else url
     current = original
     redirects: list[str] = []
@@ -225,7 +225,7 @@ async def fetch(url: str, *, max_bytes: int, timeout: float = DEFAULT_TIMEOUT,
                             raise FetchError("too_large", f"본문이 너무 큽니다({int(clen)} bytes, 상한 {max_bytes})")
                         buf = bytearray()
                         truncated = False
-                        async for chunk in resp.aiter_bytes():      # 압축 푼 뒤 바이트로 센다(압축 폭탄 대비)
+                        async for chunk in resp.aiter_bytes():      # 압축 해제 후 바이트로 계수한다(압축 폭탄 대비)
                             room = max_bytes - len(buf)
                             if len(chunk) > room:
                                 buf.extend(chunk[:room])

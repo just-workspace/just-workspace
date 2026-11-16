@@ -1,7 +1,7 @@
 """파일 보강 — 최근·즐겨찾기·공유 링크(비밀번호·내려받기 막음·묶음·PATCH)·휴지통 단건 삭제·
-버전 작성자/옛 버전 받기·활동 기록·공유받은 폴더 탐색·채널로 공유·이동/복사·손님 링크 정보.
+버전 작성자/이전 버전 내려받기·활동 기록·공유받은 폴더 탐색·채널로 공유·이동/복사·손님 링크 정보.
 
-라우터 함수를 직접 부른다. 저장소 루트는 임시 폴더, DB 는 SQLite.
+라우터 함수를 직접 호출한다. 저장소 루트는 임시 폴더, DB 는 SQLite 를 사용한다.
 """
 
 import io
@@ -31,7 +31,7 @@ from app.files.schemas import (  # noqa: E402
 
 
 class Req:
-    """Request 대용 — headers 만 쓴다."""
+    """Request 대용 — headers 만 사용한다."""
 
     def __init__(self, headers=None):
         self.headers = {k.lower(): v for k, v in (headers or {}).items()}
@@ -78,10 +78,10 @@ async def test_copy_really_copies_and_names_duplicates(env):
     assert r["path"] == "my/docs/a (사본).txt"
     r = await fr.move_file(body=MoveRequest(src="my/docs/a.txt", dst="my/docs", copy=True), user=env.alice, db=env.db)
     assert r["path"] == "my/docs/a (사본 2).txt"
-    assert (env.home / "docs" / "a.txt").read_text() == "hello"  # 원본 그대로
+    assert (env.home / "docs" / "a.txt").read_text() == "hello"  # 원본 유지
     r = await fr.move_file(body=MoveRequest(src="my/docs/a.txt", dst="my", copy=True), user=env.alice, db=env.db)
     assert r["path"] == "my/a.txt" and (env.home / "a.txt").is_file() and (env.home / "docs" / "a.txt").is_file()
-    # 폴더 복사(같은 자리)
+    # 폴더 복사(동일 위치)
     r = await fr.move_file(body=MoveRequest(src="my/docs", dst="my", copy=True), user=env.alice, db=env.db)
     assert r["path"] == "my/docs (사본)" and (env.home / "docs (사본)" / "sub" / "b.txt").is_file()
 
@@ -95,7 +95,7 @@ async def test_move_into_itself_rejected_and_move_works(env):
         await fr.move_file(body=MoveRequest(src="my/docs", dst="my/docs", copy=False), user=env.alice, db=env.db)
     r = await fr.move_file(body=MoveRequest(src="my/docs/a.txt", dst="my", copy=False), user=env.alice, db=env.db)
     assert r["path"] == "my/a.txt" and not (env.home / "docs" / "a.txt").exists()
-    # 이동은 이름이 겹치면 예전처럼 409
+    # 이동은 이름 충돌 시 기존과 동일하게 409 반환
     (env.home / "docs" / "a.txt").write_text("again")
     with pytest.raises(HTTPException) as e:
         await fr.move_file(body=MoveRequest(src="my/docs/a.txt", dst="my", copy=False), user=env.alice, db=env.db)
@@ -113,7 +113,7 @@ async def test_stars_recent_and_list_fields(env):
     stars = (await fr.list_stars(user=env.alice, db=db))["items"]
     assert [s["path"] for s in stars] == ["my/docs/a.txt"] and stars[0]["exists"]
 
-    # bob 의 my/ 는 bob 자기 공간 — alice 파일을 즐겨찾기할 수 없다
+    # bob 의 my/ 는 bob 본인 공간이므로 alice 파일은 즐겨찾기 불가
     with pytest.raises(HTTPException) as e:
         await fr.add_star(body=StarRequest(path="my/docs/a.txt"), user=env.bob, db=db)
     assert e.value.status_code == 404
@@ -155,11 +155,11 @@ async def test_rename_moves_star_and_activity(env):
 @pytest.mark.asyncio
 async def test_activity_permissions(env):
     await act.record(act.canonical_key("my/docs/a.txt", env.alice), "alice", "upload")
-    # bob 은 users/alice 경로를 못 본다(관리자 아님)
+    # bob 은 users/alice 경로 조회 불가(관리자 아님)
     with pytest.raises(HTTPException) as e:
         await fr.file_activity(path="users/alice/docs/a.txt", limit=50, include_children=False, user=env.bob, db=env.db)
     assert e.value.status_code == 403
-    # bob 의 my/docs/a.txt 는 bob 공간이라 alice 기록이 보이지 않는다
+    # bob 의 my/docs/a.txt 는 bob 공간이므로 alice 기록 미노출
     (env.root / "users" / "bob" / "docs").mkdir()
     (env.root / "users" / "bob" / "docs" / "a.txt").write_text("b")
     res = await fr.file_activity(path="my/docs/a.txt", limit=50, include_children=False, user=env.bob, db=env.db)
@@ -185,7 +185,7 @@ async def test_password_link(env):
     assert resp.status_code == 200
     resp = await fr.download_shared(token=link.token, request=Req({"X-Share-Password": "1234"}), access=None, inline=False, db=db)
     assert resp.status_code == 200
-    # 다른 링크 토큰의 access 는 안 통한다
+    # 다른 링크 토큰의 access 는 무효
     other = await fr.create_share_link(body=ShareLinkCreate(path="my/img.png", password="9"), user=env.alice, db=db)
     with pytest.raises(HTTPException):
         await fr.download_shared(token=other.token, request=Req(), access=acc, inline=False, db=db)
@@ -275,7 +275,7 @@ async def test_version_author_and_download(env):
     t0 = datetime.now(timezone.utc) - timedelta(minutes=10)
     db.add(FileActivity(path_key=key, user_id="bob", action="upload", created_at=t0))
     await db.commit()
-    fs.snapshot_version(env.home / "docs" / "a.txt", "alice", "docs/a.txt")   # bob 이 쓴 내용
+    fs.snapshot_version(env.home / "docs" / "a.txt", "alice", "docs/a.txt")   # bob 이 작성한 내용
     db.add(FileActivity(path_key=key, user_id="alice", action="edit",
                         created_at=datetime.now(timezone.utc) + timedelta(seconds=1)))
     await db.commit()
@@ -290,7 +290,7 @@ async def test_version_author_and_download(env):
     assert Path(resp.path).read_text() == "hello"
     with pytest.raises(HTTPException):
         await fr.download_version(request=Req(), path="my/docs/a.txt", version="../../x", user=env.alice)
-    with pytest.raises(HTTPException) as e:  # bob 의 my/ 에는 그 버전이 없다
+    with pytest.raises(HTTPException) as e:  # bob 의 my/ 에는 해당 버전 없음
         await fr.download_version(request=Req(), path="my/docs/a.txt", version=v["version"], user=env.bob)
     assert e.value.status_code == 404
 
@@ -317,9 +317,9 @@ async def test_browse_shared_folder(env):
         with pytest.raises(HTTPException):
             await fr.download_shared_with_me(share_id=s.id, request=Req(), path=bad, user=env.bob, db=db)
     with pytest.raises(HTTPException) as e:
-        await fr.list_shared_folder(share_id=s.id, path="", user=env.alice, db=db)  # 받는 사람이 아님
+        await fr.list_shared_folder(share_id=s.id, path="", user=env.alice, db=db)  # 수신자 아님
     assert e.value.status_code == 404
-    # 최근 열람에 공유 경로도 남는다
+    # 최근 열람에 공유 경로도 기록
     await fr.add_recent(body=RecentRequest(path=f"shared-with-me/{s.id}/sub/b.txt"), user=env.bob, db=db)
     rec = (await fr.list_recent(limit=30, user=env.bob, db=db))["items"]
     assert rec[0]["name"] == "b.txt"
@@ -364,7 +364,7 @@ async def test_share_to_channel(env, monkeypatch):
     assert e.value.status_code == 400
 
 
-# ─── 버전 기록이 이동·이름 바꾸기를 따라가고, 영구 삭제로 함께 지워진다 ───
+# ─── 버전 기록은 이동·이름 변경을 추종하며 영구 삭제 시 함께 삭제 ───
 
 
 @pytest.mark.asyncio
@@ -377,10 +377,10 @@ async def test_versions_follow_rename_move_and_drop_on_delete(env):
     assert len(fs.list_versions("alice", "docs/b.txt")) == 1
     await fr.move_file(body=MoveRequest(src="my/docs/b.txt", dst="my", copy=False), user=env.alice, db=env.db)
     assert len(fs.list_versions("alice", "b.txt")) == 1
-    # 폴더 이동 — 하위 파일 버전 통째로
+    # 폴더 이동 — 하위 파일 버전 전체 포함
     fs.snapshot_version(env.home / "docs" / "sub" / "b.txt", "alice", "docs/sub/b.txt")
     await fr.rename_file(body=RenameRequest(path="my/docs", new_name="papers"), user=env.alice, db=env.db)
     assert len(fs.list_versions("alice", "papers/sub/b.txt")) == 1
-    # 영구 삭제 → 스냅샷도
+    # 영구 삭제 → 스냅샷도 삭제
     await fr.delete_file(path="my/b.txt", permanent=True, user=env.alice, db=env.db)
     assert not (env.root / ".versions" / "alice" / "b.txt").exists()

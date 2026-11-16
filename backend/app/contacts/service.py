@@ -83,7 +83,7 @@ PHOTO_MAX_CHARS = 700_000  # data URI 기준 약 512KB 이미지
 
 
 def clean_photo(v: str | None) -> str | None:
-    """data:image/*;base64,… 만 받는다(외부 URL 은 추적·SSRF 우려로 저장하지 않음)."""
+    """data:image/*;base64,… 만 허용한다(외부 URL 은 추적·SSRF 우려로 저장하지 않음)."""
     if not v:
         return None
     v = v.strip()
@@ -136,7 +136,7 @@ async def get_contacts(
     if favorite is not None:
         conditions.append(ContactDB.is_favorite == favorite)
     if group:
-        # JSON 배열 문자열 안에서 정확히 그 이름("…") 을 찾는다
+        # JSON 배열 문자열 내에서 정확히 해당 이름("…") 을 검색한다
         g = json.dumps(group, ensure_ascii=False).replace('%', '\\%').replace('_', '\\_')
         conditions.append(ContactDB.groups.like(f"%{g}%", escape='\\'))
 
@@ -208,7 +208,7 @@ async def update_contact(
 
     if "name" in data and data["name"] is not None:
         contact.full_name = data["name"]
-    # 비울 수 있는 칸 — 보낸 null·"" 은 "없음"
+    # 비울 수 있는 필드 — 전송된 null·"" 은 "없음" 으로 처리
     if "first_name" in data:
         contact.given_name = data.get("first_name") or None
     if "last_name" in data:
@@ -255,7 +255,7 @@ async def delete_contact(db: AsyncSession, user_id: str, contact_id: str) -> boo
 
 
 async def list_groups(db: AsyncSession, user_id: str) -> list[dict]:
-    """내 주소록들의 그룹 이름과 연락처 수."""
+    """호출 사용자 주소록의 그룹 이름과 연락처 수."""
     res = await db.execute(
         select(ContactDB.groups)
         .join(AddressBookDB, AddressBookDB.id == ContactDB.address_book_id)
@@ -269,7 +269,7 @@ async def list_groups(db: AsyncSession, user_id: str) -> list[dict]:
 
 
 async def workspace_users(db: AsyncSession, q: str | None = None, limit: int = 100, offset: int = 0) -> tuple[list[dict], int]:
-    """연락처 사이드바용 워크스페이스 사용자 목록(활성 사용자만, 공개해도 되는 필드만)."""
+    """연락처 사이드바용 워크스페이스 사용자 목록(활성 사용자만, 공개 가능한 필드만)."""
     from app.db.models import User
     cond = [User.is_active == True]  # noqa: E712
     if q:
@@ -293,7 +293,7 @@ async def workspace_users(db: AsyncSession, q: str | None = None, limit: int = 1
             "email": u.email,
             "avatar_url": u.avatar_url,
         }
-        # 사용자 프로필에 부서·직함·전화가 생기면 그대로 싣는다(다른 작업에서 추가 예정)
+        # 사용자 프로필에 부서·직함·전화가 추가되면 그대로 포함한다(다른 작업에서 추가 예정)
         for extra in ("department", "position", "job_title", "phone"):
             if hasattr(u, extra):
                 d[extra] = getattr(u, extra)

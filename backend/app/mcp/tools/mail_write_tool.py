@@ -1,8 +1,8 @@
 """메일 쓰기 도구 — 임시저장(low)·발송(high).
 
-웹 작성 화면과 같은 경로를 쓴다: 메일 라우터의 save_draft / send_message 를 그대로 부른다
+웹 작성 화면과 동일한 경로를 사용한다: 메일 라우터의 save_draft / send_message 를 그대로 호출한다
 (모듈 사용 여부·그룹 권한(require_module), 본인 계정 확인(_get_account), 서명 정리, 보낸편지함 복사,
-최근 수신인 기록이 웹과 같다). 보내는 계정은 언제나 사용자 본인의 기본 계정이다.
+최근 수신인 기록이 웹과 동일하다). 발신 계정은 항상 사용자 본인의 기본 계정이다.
 """
 
 from __future__ import annotations
@@ -153,7 +153,7 @@ async def mail_undo_save_draft(user: User, draft_id: str, token: str, **_: objec
         return err("forbidden", "이 도구로 만든 임시저장이 아니라 지우지 않습니다")
     try:
         async with async_session() as db:
-            await mr.delete_draft(str(draft_id), user=user, db=db)      # 본인 것만(404)
+            await mr.delete_draft(str(draft_id), user=user, db=db)      # 본인 소유만 대상(404)
     except Exception as e:  # noqa: BLE001
         he = http_err(e)
         if he:
@@ -188,7 +188,7 @@ async def mail_send(user: User, to: object, subject: str = "", body: str = "", c
             refs = None
             if _paths(attachments):
                 try:
-                    metas = await file_attach.resolve(db, user, _paths(attachments))   # 보낼 때 권한·크기 다시
+                    metas = await file_attach.resolve(db, user, _paths(attachments))   # 발송 시점에 권한·크기 재검증
                     refs = [AttachmentRef(**x) for x in await file_attach.to_blobs(db, user, metas)]
                 except file_attach.AttachError as e:
                     return err(e.code, e.message)
@@ -292,7 +292,7 @@ register(Tool(
         },
         "required": ["to"],
     },
-    # 남에게 보인다 — 외부 내용을 읽은 뒤에는 자동 수락·허용 규칙이어도 묻는다(writes.request_write)
+    # 타인에게 노출된다 — 외부 내용 읽기 이후에는 자동 수락·허용 규칙이 있어도 사용자 확인을 요청한다(writes.request_write)
     visible_to_others=True,
     handler=mail_send, previewer=_preview, summarizer=summarize_recipients,
 ))

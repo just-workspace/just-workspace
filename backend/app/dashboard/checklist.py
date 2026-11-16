@@ -1,17 +1,17 @@
 """시작 체크리스트 — 항목별 완료 여부를 서버가 계산한다.
 
-프런트가 "했다고 누른 것"을 저장하는 게 아니라, 서버가 실제 데이터로 판정한다(프로필 사진이 있나,
-채널에 글을 썼나…). 그래서 기기를 바꿔도·다른 경로로 해도 맞게 나온다. 닫기(dismiss)만 사용자 설정
+프런트의 완료 표시를 저장하지 않고 서버가 실제 데이터로 판정한다(프로필 사진 존재 여부,
+채널 메시지 작성 여부 등). 따라서 기기를 변경하거나 다른 경로로 수행해도 결과가 일치한다. 닫기(dismiss)만 사용자 설정
 (user_prefs 의 서버 관리 키 dashboard.checklist_dismissed_at)에 저장한다.
 
 판정 기준
-- profile_photo     : users.avatar_url 이 있다
-- first_message     : DM 이 아닌 채널에 내가 쓴 메시지가 있다
-- invite_colleague  : 내가 회의에 누군가 초대했거나, 내가 만든 채널에 다른 사람이 있거나, (관리자) 초대 링크를 만들었다
-- upload_file       : 내 파일 색인(file_index scope=내 id)에 파일이 하나라도 있다
-- install_app       : 데스크톱/모바일 앱 기기 등록(user_devices, 해지 안 됨)이 있다
-- enable_push       : 웹 푸시 구독이 있다
-- enable_2fa        : 2단계 인증을 켰다
+- profile_photo     : users.avatar_url 존재
+- first_message     : DM 이 아닌 채널에 본인 작성 메시지 존재
+- invite_colleague  : 본인이 회의에 타 사용자를 초대했거나, 본인이 생성한 채널에 타 사용자가 있거나, (관리자) 초대 링크를 생성함
+- upload_file       : 본인 파일 색인(file_index scope=본인 id)에 파일 1개 이상 존재
+- install_app       : 데스크톱/모바일 앱 기기 등록(user_devices, 미해지) 존재
+- enable_push       : 웹 푸시 구독 존재
+- enable_2fa        : 2단계 인증 활성화
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 DISMISS_KEY = "dashboard.checklist_dismissed_at"
 
-# link 는 프런트 실제 경로(예전 /settings/profile·/settings/devices 는 없는 화면이었다). 앱 설치는 내려받기 안내(/api/apps).
+# link 는 프런트의 실제 경로(과거의 /settings/profile·/settings/devices 는 존재하지 않는 화면). 앱 설치는 다운로드 안내(/api/apps).
 ITEMS = [
     ("profile_photo", "프로필 사진 올리기", "/settings/account"),
     ("first_message", "채널에 첫 메시지 보내기", "/chat"),
@@ -53,14 +53,14 @@ ITEMS = [
 async def _exists(db: AsyncSession, stmt) -> bool:
     try:
         return (await db.execute(stmt.limit(1))).first() is not None
-    except Exception as e:   # 그 모듈 테이블이 없는 설치 등 — 안 한 것으로 본다
+    except Exception as e:   # 해당 모듈 테이블이 없는 설치 등 — 미완료로 간주
         logger.debug("체크리스트 판정 실패: %s", e)
         await db.rollback()
         return False
 
 
 def visible_items(user: User) -> list[tuple[str, str, str]]:
-    """이 설치·이 사용자에게 보일 항목 — 꺼졌거나 설치하지 않은 구역의 모듈에 기대는 항목은 뺀다."""
+    """본 설치·해당 사용자에게 표시할 항목 — 비활성화되었거나 미설치된 구역의 모듈에 의존하는 항목은 제외한다."""
     chat, meetings = is_module_enabled("chat"), is_module_enabled("meetings")
     out: list[tuple[str, str, str]] = []
     for item_id, label, link in ITEMS:
@@ -69,7 +69,7 @@ def visible_items(user: User) -> list[tuple[str, str, str]]:
         if item_id == "upload_file" and not is_module_enabled("files"):
             continue
         if item_id == "invite_colleague":
-            # 회의 초대 · 채널 초대 · (관리자) 계정 초대 중 하나 — 셋 다 할 수 없으면 항목을 뺀다
+            # 회의 초대 · 채널 초대 · (관리자) 계정 초대 중 하나 — 셋 모두 불가하면 항목 제외
             if meetings:
                 pass
             elif chat:
@@ -83,7 +83,7 @@ def visible_items(user: User) -> list[tuple[str, str, str]]:
 
 
 async def compute(db: AsyncSession, user: User) -> dict[str, bool]:
-    """항목별 완료 여부. 꺼졌거나 설치하지 않은 구역의 테이블은 읽지 않는다(그 항목은 결과에 없다)."""
+    """항목별 완료 여부. 비활성화되었거나 미설치된 구역의 테이블은 조회하지 않는다(해당 항목은 결과에 미포함)."""
     uid = str(user.id)
     chat, meetings = is_module_enabled("chat"), is_module_enabled("meetings")
     done: dict[str, bool] = {}
@@ -121,7 +121,7 @@ async def _dismissed_at(db: AsyncSession, uid: str) -> str | None:
 
 @router.get("/checklist")
 async def get_checklist(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """시작 체크리스트 — 항목별 done 은 서버 판정. 다 했거나 닫았으면 프런트가 숨기면 된다."""
+    """시작 체크리스트 — 항목별 done 은 서버 판정. 전부 완료했거나 닫은 경우의 숨김 처리는 프런트 담당."""
     done = await compute(db, user)
     items = [{"id": i, "label": label, "link": link, "done": done.get(i, False)} for i, label, link in visible_items(user)]
     n = sum(1 for x in items if x["done"])
@@ -137,7 +137,7 @@ async def get_checklist(user: User = Depends(get_current_user), db: AsyncSession
 
 
 class DismissRequest(BaseModel):
-    undo: bool = False   # true 면 다시 보이기
+    undo: bool = False   # true 이면 재표시
 
 
 @router.post("/checklist/dismiss")
@@ -146,7 +146,7 @@ async def dismiss_checklist(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """체크리스트 닫기(기기 사이 공유). {"undo": true} 면 다시 보이기."""
+    """체크리스트 닫기(기기 간 공유). {"undo": true} 이면 재표시."""
     from app.me.prefs import set_server_pref
 
     value = None if (body and body.undo) else datetime.now(timezone.utc).isoformat()

@@ -1,23 +1,23 @@
 """격리 브라우저 API.
 
 사용자(모듈 rbi 활성 + 대상별 허용 사용자/그룹). 인증은 site.get_rbi_user — rbi 전용 출처(RBI_PUBLIC_ORIGIN)에서는
-그 출처의 세션 쿠키만, 워크스페이스 출처에서는 워크스페이스 세션(런처가 대상 목록을 읽는다). SSO 홉은 app/rbi/site.py.
-  GET    /api/rbi/targets                 쓸 수 있는 대상 + 내 활성 세션 + public_origin
-  POST   /api/rbi/sessions                {target_id, mode?} → 세션(컨테이너 기동, 최대 ~50초). mode: mirror 대상을 pixel 로(폴백)
-  POST   /api/rbi/sessions/{id}/mode      {mode} → 화면 방식 바꾸기(지금 세션을 끝내고 같은 대상으로 새로)
-  GET    /api/rbi/sessions/me[?recent=1]  내 활성 세션(recent=1: 끝난 것까지 최근 10건)
+해당 출처의 세션 쿠키만, 워크스페이스 출처에서는 워크스페이스 세션을 사용한다(런처가 대상 목록을 조회한다). SSO 홉은 app/rbi/site.py.
+  GET    /api/rbi/targets                 사용 가능한 대상 + 본인의 활성 세션 + public_origin
+  POST   /api/rbi/sessions                {target_id, mode?} → 세션(컨테이너 기동, 최대 ~50초). mode: mirror 대상을 pixel 로(fallback)
+  POST   /api/rbi/sessions/{id}/mode      {mode} → 화면 방식 전환(현재 세션을 종료하고 동일 대상으로 신규 생성)
+  GET    /api/rbi/sessions/me[?recent=1]  본인의 활성 세션(recent=1: 종료된 세션까지 최근 10건)
   GET    /api/rbi/sessions/{id}           상태(소유자·관리자)
   POST   /api/rbi/sessions/{id}/ping      화면이 열려 있음(유휴 판정 보조)
-  DELETE /api/rbi/sessions/{id}           끝내기(컨테이너 삭제)
-  (예전 입장 티켓 /ticket·/enter 와 경로 한정 쿠키 ws_rbi_<sid> 는 없앴다 — rbi 출처의 세션 쿠키가 스트림까지 덮는다)
-내부(ws-nginx auth_request 전용 — /api/internal/ 은 nginx 가 바깥에 404)
+  DELETE /api/rbi/sessions/{id}           종료(컨테이너 삭제)
+  (이전의 입장 티켓 /ticket·/enter 와 경로 한정 쿠키 ws_rbi_<sid> 는 제거했다 — rbi 출처의 세션 쿠키가 스트림까지 포함한다)
+내부(ws-nginx auth_request 전용 — /api/internal/ 은 nginx 가 외부에 404)
   GET    /api/internal/rbi/auth           rbi 출처에서만: X-Original-URI 의 세션을 rbi 세션 쿠키의 사용자로 검사 → 204 + X-Rbi-Upstream/X-Rbi-Authorization
 관리자
   GET    /api/admin/rbi                   대상 전체 + 활성 세션 + 상태(이미지·네트워크·netfilter guard)
   POST   /api/admin/rbi/targets · PUT/DELETE /api/admin/rbi/targets/{id}
   GET    /api/admin/rbi/sessions          최근 세션 50건
   DELETE /api/admin/rbi/sessions/{id}     강제 종료
-  대상을 끄거나 지우거나 허용 사용자/그룹을 줄이면 그 대상의 열린 세션 중 권한을 잃은 것을 바로 끝낸다(svc.enforce_access).
+  대상을 비활성화하거나 삭제하거나 허용 사용자/그룹을 축소하면 해당 대상의 열린 세션 중 권한을 상실한 세션을 즉시 종료한다(svc.enforce_access).
 """
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ class ModeBody(BaseModel):
 
 
 class TargetBody(BaseModel):
-    """관리자 대상 생성/수정 — 보낸 필드만 반영(PUT 도 부분 갱신)."""
+    """관리자 대상 생성/수정 — 전송된 필드만 반영(PUT 도 부분 갱신)."""
     key: str | None = None
     name: str | None = None
     url: str | None = None
@@ -72,9 +72,9 @@ class TargetBody(BaseModel):
     memory_mb: int | None = None
     allowed_group_ids: list[str] | None = None
     allowed_user_ids: list[str] | None = None
-    #: 80·443 말고 열 포트(명시한 것만)
+    #: 80·443 외에 개방할 포트(명시한 것만)
     extra_ports: list[int] | None = None
-    #: 워크스페이스 자신의 주소(RP·앱 호스트·게이트웨이 등)를 대상으로 강제 — 경고와 함께 저장(감사에 남는다)
+    #: 워크스페이스 자신의 주소(RP·앱 호스트·게이트웨이 등)를 대상으로 강제 — 경고와 함께 저장(감사에 기록된다)
     force: bool | None = None
 
 
@@ -101,7 +101,7 @@ async def list_targets(user: User = Depends(get_rbi_user), db: AsyncSession = De
     return {
         "targets": out,
         "sessions": [svc.session_dict(s, by_id.get(s.target_id)) for s in mine],
-        # 런처(워크스페이스 /rbi)가 새 탭으로 여는 주소. 비면 전용 출처가 설정되지 않은 것
+        # 런처(워크스페이스 /rbi)가 새 탭으로 여는 주소. 비어 있으면 전용 출처 미설정
         "public_origin": site.public_origin(),
     }
 
@@ -135,7 +135,7 @@ async def switch_session_mode(
     sid: str, body: ModeBody, request: Request,
     user: User = Depends(get_rbi_user), db: AsyncSession = Depends(get_db),
 ):
-    """화면 방식 바꾸기 — 미러가 깨지는 화면에서 픽셀로(또는 다시 미러로). 소유자만. 세션을 새로 띄운다."""
+    """화면 방식 전환 — 미러가 정상 표시되지 않는 화면에서 픽셀로(또는 다시 미러로). 소유자만 가능. 세션을 새로 기동한다."""
     sess = await _owned_session(db, sid, user)
     if sess.user_id != user.id:
         raise HTTPException(status_code=403, detail="내 세션만 바꿀 수 있습니다")
@@ -160,7 +160,7 @@ async def switch_session_mode(
 @router.get("/api/rbi/sessions/me")
 @require_module("rbi")
 async def my_sessions(recent: bool = False, user: User = Depends(get_rbi_user), db: AsyncSession = Depends(get_db)):
-    """내 활성 세션. recent=1 이면 끝난 것까지 최근 10건(단독 앱의 세션 목록)."""
+    """본인의 활성 세션. recent=1 이면 종료된 세션까지 최근 10건(단독 앱의 세션 목록)."""
     by_id = {t.id: t for t in await svc.list_targets(db)}
     rows = await svc.recent_sessions(db, 10, user_id=user.id) if recent else await svc.active_sessions(db, user.id)
     return {"sessions": [svc.session_dict(s, by_id.get(s.target_id)) for s in rows]}
@@ -201,13 +201,13 @@ async def end_session(
 
 @router.get("/api/internal/rbi/auth")
 async def stream_auth(request: Request, db: AsyncSession = Depends(get_db)):
-    """nginx(rbi 출처 server 블록)가 /rbi/<sid>/… 마다 부른다. 소유자면 204 + 업스트림/인증 헤더, 아니면 401/403.
+    """nginx(rbi 출처 server 블록)가 /rbi/<sid>/… 요청마다 호출한다. 소유자이면 204 + 업스트림/인증 헤더, 아니면 401/403.
 
-    rbi 출처에서만 연다(Host — nginx 가 $host 를 넘긴다). 소유자 판정은 rbi 세션 쿠키(__Host-jw_rbi)의 사용자 —
-    워크스페이스 세션 쿠키는 보지 않는다(그 쿠키는 이 출처로 오지도 않는다).
-    업스트림 주소·basic auth 는 응답 헤더로만 nginx 에 가고 사용자에게는 내려가지 않는다.
+    rbi 출처에서만 허용한다(Host — nginx 가 $host 를 전달한다). 소유자 판정은 rbi 세션 쿠키(__Host-jw_rbi)의 사용자 기준 —
+    워크스페이스 세션 쿠키는 확인하지 않는다(해당 쿠키는 본 출처로 전송되지 않는다).
+    업스트림 주소·basic auth 는 응답 헤더로만 nginx 에 전달되며 사용자에게는 전달되지 않는다.
     """
-    # nginx auth_request 는 401/403 만 그대로 전달하고 그 밖(404 포함)은 500 으로 바꾼다 — 없는 세션도 403
+    # nginx auth_request 는 401/403 만 그대로 전달하고 그 외(404 포함)는 500 으로 변환한다 — 존재하지 않는 세션도 403
     if not site.public_origin() or not site.is_rbi_host(request):
         raise HTTPException(status_code=403)
     uri = request.headers.get("x-original-uri", "")
@@ -224,15 +224,15 @@ async def stream_auth(request: Request, db: AsyncSession = Depends(get_db)):
     got = svc.stream_auth(sess, user.id)
     if not got:
         raise HTTPException(status_code=403)
-    # 권한이 회수됐으면 거두기(30초)가 컨테이너를 지우기 전이라도 새 연결(재접속·자산 요청)은 열지 않는다
-    # (요청마다 오므로 결과는 세션별로 몇 초 캐시 — svc.STREAM_ACCESS_TTL)
+    # 권한이 회수된 경우 정리 작업(reaper, 30초)이 컨테이너를 삭제하기 전이라도 신규 연결(재접속·자산 요청)은 허용하지 않는다
+    # (요청마다 호출되므로 결과는 세션별로 수 초간 캐시 — svc.STREAM_ACCESS_TTL)
     if await svc.stream_access_denied(db, sess):
         raise HTTPException(status_code=403)
-    # 방식과 경로가 맞아야 — 픽셀 세션의 KasmVNC 로 미러 경로를, 미러 세션으로 KasmVNC 경로를 보내지 않는다
+    # 방식과 경로가 일치해야 한다 — 픽셀 세션의 KasmVNC 로 미러 경로를, 미러 세션으로 KasmVNC 경로를 전달하지 않는다
     if not svc.path_allowed(sess, uri):
         raise HTTPException(status_code=403)
     upstream, authz = got
-    # 스트림 트래픽이 곧 "쓰고 있다" 는 신호 — 핑과 같은 효과(웹소켓은 한 번만 찍힌다)
+    # 스트림 트래픽 자체가 "쓰고 있다" 는 신호 — 핑과 동일한 효과(웹소켓은 1회만 기록된다)
     await svc.touch(db, sess)
     return Response(status_code=204, headers={"X-Rbi-Upstream": upstream, "X-Rbi-Authorization": authz})
 
@@ -256,7 +256,7 @@ async def admin_overview(admin: User = Depends(require_admin), db: AsyncSession 
 
 
 async def _sync_allow(db: AsyncSession, admin: User, ip: str, key: str, *, before: set[str]) -> None:
-    """DB → 동적 허용 파일(사이드카가 다음 주기에 건다). 출구가 더해지거나 빠졌으면 감사에 남긴다(rbi.allow.add / rbi.allow.remove)."""
+    """DB → 동적 허용 파일(사이드카가 다음 주기에 적용한다). 출구가 추가되거나 제거된 경우 감사에 기록한다(rbi.allow.add / rbi.allow.remove)."""
     after = eg.allow_set(await eg.sync_allow_file(db))
     added, removed = sorted(after - before), sorted(before - after)
     if added:
@@ -306,7 +306,7 @@ async def admin_update_target(
     warnings: list[str] = []
     try:
         svc.apply_target_fields(t, data, creating=False)
-        # 출구에 닿는 값이 바뀌었거나 강제로 다시 저장하면 다시 검증·고정(이름 → IP 도 다시 푼다)
+        # 출구에 영향을 주는 값이 변경되었거나 강제로 재저장하면 재검증·재고정한다(이름 → IP 도 재해석한다)
         if {"url", "allowed_hosts", "extra_ports"} & set(data) or force or not t.egress:
             warnings = await svc.refresh_egress(t, force=force)
     except (ValueError, TypeError) as e:
@@ -320,7 +320,7 @@ async def admin_update_target(
     await audit.log_action(db, admin.id, "rbi.target.update", "rbi_target", t.id,
                            {"key": t.key, "changed": sorted(data.keys()), "forced": force and bool(t.egress_forced), "warnings": warnings}, ip)
     await _sync_allow(db, admin, ip, t.key, before=before_allow)
-    # 끄거나 허용 사용자/그룹을 줄였으면 — 이미 열려 있는 세션도 바로 끝낸다(예전엔 최대 수명까지 계속 쓸 수 있었다)
+    # 비활성화하거나 허용 사용자/그룹을 축소한 경우 — 이미 열려 있는 세션도 즉시 종료한다(이전에는 최대 수명까지 계속 사용할 수 있었다)
     if {"enabled", "allowed_user_ids", "allowed_group_ids"} & set(data):
         await svc.enforce_access(db, target_id=t.id, actor_id=admin.id, ip=ip)
     return svc.target_dict(t, admin=True) | {"warnings": warnings}
@@ -338,7 +338,7 @@ async def admin_delete_target(
     for s in await svc.active_sessions(db):
         if s.target_id == t.id:
             await svc.stop_session(db, s, "admin")
-            # 누가 쓰던 세션이 대상 삭제로 끊겼는지 남긴다(예전엔 세션 종료가 감사에 안 남았다)
+            # 대상 삭제로 종료된 세션의 사용자를 기록한다(이전에는 세션 종료가 감사에 기록되지 않았다)
             await audit.log_action(db, admin.id, "rbi.session.stop", "rbi_session", s.id,
                                    {"target": s.target_key, "by_owner": False, "owner": s.user_id, "cause": "target_removed"}, ip)
     before_allow = eg.allow_set(eg.desired_lines(await svc.list_targets(db)))

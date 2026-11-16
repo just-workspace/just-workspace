@@ -1,7 +1,7 @@
-"""approvals_status — AI 가 자기가 낸 쓰기 요청의 결과를 확인한다.
+"""approvals_status — AI 가 자신이 제출한 쓰기 요청의 결과를 확인한다.
 
-claude.ai 는 high 위험 쓰기(삭제·발송·외부 공유)를 부르면 `pending_approval` + `approval_id` 를
-받는다. 사용자가 승인 대기함에서 처리한 뒤 이 도구로 결과(실행 결과·실패·거부 사유·만료)를 본다.
+claude.ai 는 high 위험 쓰기(삭제·발송·외부 공유)를 호출하면 `pending_approval` + `approval_id` 를
+수신한다. 사용자가 승인 대기함에서 처리한 뒤 이 도구로 결과(실행 결과·실패·거부 사유·만료)를 조회한다.
 """
 
 from app.db.models import User

@@ -1,4 +1,4 @@
-"""회귀 — 레이트리밋 카운터는 워커 공유 저장소(Redis), 기본 한도가 실제로 붙는다."""
+"""회귀 — 레이트리밋 카운터는 워커 공유 저장소(Redis)에 저장되며, 기본 한도가 실제로 적용된다."""
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -34,7 +34,7 @@ async def _codes(app, n, headers=None, path="/api/x"):
 
 
 async def test_default_limit_applies_and_is_shared_between_workers():
-    shared = MemoryStorage()   # 운영에서는 Redis — 워커 둘이 같은 저장소를 본다
+    shared = MemoryStorage()   # 운영 환경에서는 Redis — 워커 2개가 동일 저장소를 참조
     w1, w2 = _app(shared), _app(shared)
     assert await _codes(w1, 2) == [200, 200]
     assert await _codes(w2, 2) == [200, 429]

@@ -1,4 +1,4 @@
-"""외부 캘린더 구독(.ics) — 주소 검사(SSRF) · 받기 제한 · 일정 맞추기 · 읽기 전용."""
+"""외부 캘린더 구독(.ics) — 주소 검사(SSRF) · 수신 제한 · 일정 동기화 · 읽기 전용."""
 
 from datetime import datetime, timedelta, timezone
 
@@ -118,7 +118,7 @@ async def test_resolve_blocks_private_and_mixed(monkeypatch):
     assert await subs.resolve_public("public.example", 443) == ["8.8.8.8"]
 
 
-# ── 받기(가짜 전송) ──
+# ── 수신(가짜 전송) ──
 
 
 def _public_dns(monkeypatch, table: dict[str, str]):
@@ -143,7 +143,7 @@ async def test_fetch_ok_pins_ip_and_keeps_host(monkeypatch):
 
     got = await subs.fetch_ics("https://cal.example.com/h.ics", transport=httpx.MockTransport(handler))
     assert "BEGIN:VCALENDAR" in got.text
-    assert seen["url"].startswith("https://93.184.216.34/")   # 검사한 IP 로 바로 접속(리바인딩 차단)
+    assert seen["url"].startswith("https://93.184.216.34/")   # 검사한 IP 로 직접 접속(리바인딩 차단)
     assert seen["host"] == "cal.example.com"
     assert seen["sni"] == "cal.example.com"
 
@@ -200,7 +200,7 @@ async def test_fetch_too_many_redirects(monkeypatch):
     assert e.value.code == "network"
 
 
-# ── 구독 · 맞추기 · 읽기 전용 ──
+# ── 구독 · 동기화 · 읽기 전용 ──
 
 
 async def _seed(db):
@@ -235,7 +235,7 @@ async def test_subscribe_sync_and_readonly(db_session):
     cal_id = r["id"]
     assert await _titles(db, cal_id) == ["개천절", "한글날"]
 
-    # 참석자·알림은 버린다(우리 사용자 이메일이어도 초대로 안 보이게)
+    # 참석자·알림은 폐기(내부 사용자 이메일이어도 초대로 표시되지 않도록)
     att = (await db.execute(select(CalendarEventAttendee))).scalars().all()
     assert att == []
     evs = (await db.execute(select(CalendarEventDB).where(CalendarEventDB.calendar_id == cal_id))).scalars().all()
@@ -245,22 +245,22 @@ async def test_subscribe_sync_and_readonly(db_session):
     cals = await service.get_calendars(db, "owner")
     sub = next(c for c in cals if c["id"] == cal_id)
     assert sub["is_subscription"] is True and sub["can_write"] is False
-    # 쓸 수 있는 기본 캘린더도 생겼다(구독만 있으면 일정 만들 곳이 없으니)
+    # 쓰기 가능한 기본 캘린더도 생성됨(구독만 있으면 일정을 생성할 캘린더가 없으므로)
     assert any(c["can_write"] for c in cals)
 
-    # 읽기 전용 — 일정 만들기·.ics 가져오기 막힘
+    # 읽기 전용 — 일정 생성·.ics 가져오기 차단
     cal = await db.get(CalendarDB, cal_id)
     assert await service._can_write_calendar(db, "owner", cal) is False
     assert await service.import_ics(db, "owner", cal_id, ICS_V2) is None
 
-    # 다시 받기: 같은 UID 는 덮어쓰고 없어진 것은 지운다
+    # 재수신: 동일 UID 는 덮어쓰고 없어진 항목은 삭제
     cal.source_fetched_at = None
     await db.commit()
     r2 = await subs.refresh(db, cal, fetch=_fake_fetch([ICS_V2]))
     assert r2["error"] is None and r2["fetched_at"]
     assert await _titles(db, cal_id) == ["한글날(대체)"]
 
-    # 실패하면 기존 일정은 두고 이유만 남긴다
+    # 실패 시 기존 일정은 유지하고 사유만 기록
     r3 = await subs.refresh(db, await db.get(CalendarDB, cal_id), fetch=_fake_fetch([subs.SubscriptionError("404")]))
     assert r3["error"] == "404"
     assert r3["fetched_at"] == r2["fetched_at"]
@@ -280,7 +280,7 @@ async def test_subscribe_duplicate_limit_and_failure(db_session, monkeypatch):
     with pytest.raises(subs.SubscriptionError) as e:
         await subs.subscribe(db, "owner", "https://cal.example.com/a.ics", None, None, fetch=_fake_fetch([ICS_V2]))
     assert e.value.code == "duplicate"
-    # 받기 실패면 캘린더를 만들지 않는다
+    # 수신 실패 시 캘린더를 생성하지 않음
     with pytest.raises(subs.SubscriptionError):
         await subs.subscribe(db, "owner", "https://cal.example.com/b.ics", None, None,
                              fetch=_fake_fetch([subs.SubscriptionError("timeout")]))
@@ -313,7 +313,7 @@ def test_manual_wait_seconds():
     assert subs.manual_wait_seconds(CalendarDB(source_checked_at=now - timedelta(seconds=10)), now) == 50
     assert subs.manual_wait_seconds(CalendarDB(source_checked_at=now - timedelta(minutes=1)), now) == 0
     assert subs.manual_wait_seconds(CalendarDB(source_checked_at=now - timedelta(hours=2)), now) == 0
-    # tz 없는 값(SQLite 등)은 UTC 로 본다
+    # tz 없는 값(SQLite 등)은 UTC 로 간주
     naive = (now - timedelta(seconds=30)).replace(tzinfo=None)
     assert subs.manual_wait_seconds(CalendarDB(source_checked_at=naive), now) == 30
 
@@ -353,7 +353,7 @@ async def test_refresh_endpoint_rate_limited(db_session, monkeypatch):
     out = await cal_router.refresh_subscription(calendar_id="sub1", user=owner, db=db)
     assert out["id"] == "sub1" and calls == ["sub1"]
 
-    # 남의 구독은 404
+    # 타 사용자의 구독은 404
     other = await db.get(User, "other")
     with pytest.raises(HTTPException) as e2:
         await cal_router.refresh_subscription(calendar_id="sub1", user=other, db=db)

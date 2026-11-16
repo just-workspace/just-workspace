@@ -13,9 +13,9 @@ LOCK_TTL = 1800  # 30 minutes
 
 
 def subject(owner_id: str, virtual_path: str) -> str:
-    """잠금 대상 — (파일 소유자, 소유자 기준 경로). 사용자마다 같은 이름 문서가 있어도 서로 다른 잠금이다.
+    """잠금 대상 — (파일 소유자, 소유자 기준 경로). 사용자별로 동일 이름 문서가 있어도 상이한 잠금이다.
 
-    공유받은 사람이 연 세션도 토큰의 owner_id·경로가 원 소유자 기준이라 같은 잠금을 본다(같이 편집).
+    공유받은 사용자가 연 세션도 토큰의 owner_id·경로가 원 소유자 기준이므로 동일 잠금을 참조한다(공동 편집).
     """
     if not owner_id:
         raise ValueError("lock subject needs owner")

@@ -21,7 +21,7 @@ async def db(monkeypatch):
         await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=TABLES))
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     import app.db.session as dbs
-    monkeypatch.setattr(dbs, "async_session", factory)   # dnd.schedule_blocks 가 쓰는 세션
+    monkeypatch.setattr(dbs, "async_session", factory)   # dnd.schedule_blocks 가 사용하는 세션
     async with factory() as s:
         for uid in ("alice", "bob"):
             s.add(User(id=uid, username=uid, email=f"{uid}@x", password_hash="x", display_name=uid.capitalize()))
@@ -59,9 +59,9 @@ async def test_actor_and_actions_roundtrip(db, delivered):
                  {"id": "evil", "label": "x", "url": "https://evil.example/"}],
     )
     assert d["type"] == "meeting_invite" and d["actor_name"] == "Alice"
-    assert [a["id"] for a in d["actions"]] == ["accept"]          # 외부 URL 행동은 버린다
+    assert [a["id"] for a in d["actions"]] == ["accept"]          # 외부 URL 행동은 폐기
     assert d["actions"][0]["method"] == "POST"
-    # 예전 호출(추가 인자 없음)도 그대로
+    # 이전 호출(추가 인자 없음)도 동일하게 동작
     old = await nsvc.create_notification(db, "bob", "mention", "멘션")
     assert old["actor_id"] is None and old["actions"] is None and old["action_url"] is None
 
@@ -81,7 +81,7 @@ async def test_type_and_unread_filters_only_mine(db, delivered):
     res = await nr.list_notifications(unread_only=False, limit=20, offset=0, type="mention,thread_reply",
                                       unread=True, user=bob, db=db)
     assert [n.title for n in res["notifications"]] == ["a"]
-    # 남의 알림은 섞이지 않는다
+    # 타인의 알림은 혼입되지 않음
     res = await nr.list_notifications(unread_only=False, limit=20, offset=0, type=None, unread=None, user=bob, db=db)
     assert "남의 것" not in {n.title for n in res["notifications"]}
 
@@ -106,8 +106,8 @@ async def test_type_prefs_gate_push_and_in_app(db, delivered):
     import asyncio
     await asyncio.sleep(0)
     assert a["is_read"] is False
-    assert b["is_read"] is True                       # 인앱 끔 → 배지에 안 잡힌다
-    assert delivered["realtime"].count("bob") == 2    # 인앱 끈 것은 실시간도 없음
+    assert b["is_read"] is True                       # 인앱 비활성 → 배지에 미집계
+    assert delivered["realtime"].count("bob") == 2    # 인앱 비활성 항목은 실시간 전달도 없음
     assert await nsvc.get_unread_count(db, "bob") == 2
 
 
@@ -138,18 +138,18 @@ async def test_dnd_schedule_endpoints_and_push_gate(db, monkeypatch):
     bob = await db.get(User, "bob")
     res = await nr.get_dnd_schedule(user=bob, db=db)
     assert res["schedule"]["enabled"] is False
-    # 하루 종일 매일 → 지금 막힌다
+    # 종일·매일 → 현재 차단됨
     res = await nr.put_dnd_schedule({"enabled": True, "days": list(range(7)), "start": "00:00", "end": "00:00"},
                                     user=bob, db=db)
     assert res["active"] is True
     assert await dnd.schedule_blocks("bob") is True
     assert await dnd.schedule_blocks("alice") is False
 
-    # send_push 가 일정에 걸리면 구독 조회 전에 0 을 돌려준다
+    # send_push 가 일정에 해당하면 구독 조회 전에 0 을 반환
     from app.push import router as pr
     assert await pr.send_push("bob", "t", "b") == 0
 
-    # 개인 설정 PATCH 로는 일정 키를 못 덮어쓴다
+    # 개인 설정 PATCH 로는 일정 키 덮어쓰기 불가
     from app.me import prefs as mp
     with pytest.raises(HTTPException):
         await mp.patch_prefs({"notify.dnd_schedule": {"enabled": False}}, user=bob, db=db)
@@ -173,4 +173,4 @@ async def test_test_push_reports_subscriptions(db, monkeypatch):
     monkeypatch.setattr(pr, "send_push", fake_send)
     res = await nr.test_push(user=bob, db=db)
     assert res["ok"] is True and res["sent"] == 1
-    assert calls == [("bob", True)]                   # 시험 푸시는 방해 금지 일정을 건너뛴다
+    assert calls == [("bob", True)]                   # 시험 푸시는 방해 금지 일정을 적용하지 않음

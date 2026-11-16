@@ -11,8 +11,8 @@ from app.config import get_settings
 
 settings = get_settings()
 
-# 입장 토큰 유효시간. 들어간 뒤에는 LiveKit 서버가 연결 중인 클라이언트에 토큰을 갱신해 주므로
-# 회의 길이와 상관없다. 이 시간은 "토큰을 받고 나서 입장(또는 끊긴 뒤 재입장)할 수 있는 기간"이다.
+# 입장 토큰 유효 시간. 입장 이후에는 LiveKit 서버가 연결 중인 클라이언트의 토큰을 갱신하므로
+# 회의 길이와 무관하다. 이 시간은 "토큰 수신 후 입장(또는 연결 종료 후 재입장)이 가능한 기간"이다.
 TOKEN_TTL = timedelta(hours=6)
 
 
@@ -31,12 +31,12 @@ def get_ws_url() -> str:
 
 
 def session_identity(user_id: str) -> str:
-    """로그인 사용자의 LiveKit identity — 사용자명을 드러내지 않는 불투명 값 + 세션마다 다른 꼬리.
+    """로그인 사용자의 LiveKit identity — 사용자명을 노출하지 않는 불투명 값 + 세션별로 상이한 접미부.
 
-    identity 는 다른 참가자에게 그대로 보인다(SDK participant.identity). 사용자명을 넣으면
-    회의에 들어온 외부 손님에게 계정 이름이 새어 나간다. 표시 이름은 name 으로 따로 준다.
-    꼬리를 세션마다 바꾸는 이유는 같은 사람이 탭·기기 둘로 들어올 때 DUPLICATE_IDENTITY 로
-    서로를 쫓아내지 않게 하려는 것(예전과 같다).
+    identity 는 다른 참가자에게 그대로 노출된다(SDK participant.identity). 사용자명을 포함하면
+    회의에 참가한 외부 게스트에게 계정 이름이 노출된다. 표시 이름은 name 으로 별도 전달한다.
+    접미부를 세션별로 변경하는 이유는 동일 사용자가 탭·기기 2개로 입장할 때 DUPLICATE_IDENTITY 로
+    상호 퇴장시키는 것을 방지하기 위함이다(기존과 동일).
     """
     digest = hmac.new(settings.secret_key.encode(), f"lk-identity:{user_id}".encode(), hashlib.sha256)
     return f"u-{digest.hexdigest()[:12]}-{secrets.token_hex(3)}"
@@ -52,8 +52,8 @@ def generate_token(room: str, identity: str, name: str = "") -> str:
             api.VideoGrants(
                 room_join=True,
                 room=room,
-                # 이 토큰으로는 방을 만들거나 관리할 수 없다(서버 API 권한). 채널 통화의 방
-                # 자동 생성은 입장 시 LiveKit 서버 설정(auto_create)이 하는 것이라 무관하다.
+                # 이 토큰으로는 방을 생성하거나 관리할 수 없다(서버 API 권한). 채널 통화의 방
+                # 자동 생성은 입장 시 LiveKit 서버 설정(auto_create)이 수행하므로 무관하다.
                 room_create=False,
                 room_admin=False,
                 can_publish=True,
@@ -116,7 +116,7 @@ async def list_rooms() -> list[dict]:
 
 
 async def delete_room(name: str) -> None:
-    """LiveKit 방을 닫는다. 아무도 안 들어와 이미 없는 방(not_found)은 지운 것으로 본다."""
+    """LiveKit 방을 닫는다. 입장자가 없어 이미 존재하지 않는 방(not_found)은 삭제된 것으로 간주한다."""
     lk = _get_api()
     try:
         await lk.room.delete_room(api.DeleteRoomRequest(room=name))
@@ -139,7 +139,7 @@ async def list_participants(room: str) -> list[dict]:
                 "identity": p.identity,
                 "name": p.name,
                 "joined_at": p.joined_at,
-                # 마이크 트랙이 음소거인가(음성 채널 presence 의 폴백 — 클라이언트 보고가 없을 때)
+                # 마이크 트랙의 음소거 여부(음성 채널 presence 의 fallback — 클라이언트 보고가 없는 경우)
                 "mic_muted": _mic_muted(p),
             }
             for p in resp.participants
@@ -149,7 +149,7 @@ async def list_participants(room: str) -> list[dict]:
 
 
 def _mic_muted(p) -> bool:
-    """참가자의 마이크(source MICROPHONE) 오디오 트랙이 전부 음소거인가. 마이크 트랙이 없으면 True(소리를 안 보낸다)."""
+    """참가자의 마이크(source MICROPHONE) 오디오 트랙이 전부 음소거인지 여부. 마이크 트랙이 없으면 True(오디오 미송신)."""
     # livekit.protocol.models.TrackSource: UNKNOWN 0 · CAMERA 1 · MICROPHONE 2 · SCREEN_SHARE 3 · SCREEN_SHARE_AUDIO 4
     mic_source = int(getattr(getattr(api, "TrackSource", None), "MICROPHONE", 2))
     try:

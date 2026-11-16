@@ -1,4 +1,4 @@
-"""회귀 — 사용자 콘텐츠(공유 링크·내 파일·첨부)가 우리 출처에서 활성 콘텐츠로 열리지 않는다."""
+"""회귀 — 사용자 콘텐츠(공유 링크·내 파일·첨부)가 본 서비스 출처에서 활성 콘텐츠로 열리지 않는다."""
 
 from pathlib import Path
 
@@ -59,7 +59,7 @@ async def test_file_response_never_serves_html_inline(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_shared_link_inline_preview_blocks_active_content(tmp_path: Path, monkeypatch):
-    """내려받기 막힌 공유 링크 + ?inline=1 — .htm/.svg 는 403, 이미지는 inline 이미지로."""
+    """내려받기가 차단된 공유 링크 + ?inline=1 — .htm/.svg 는 403, 이미지는 inline 이미지로 응답."""
     from fastapi import HTTPException
     from types import SimpleNamespace
     from app.files import router as fr

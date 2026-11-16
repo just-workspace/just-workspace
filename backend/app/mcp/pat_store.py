@@ -36,8 +36,8 @@ def hash_pat(token: str) -> str:
 def clamp_scopes(scopes: list[str] | None, *, allow_write: bool = False) -> list[str]:
     """Restrict requested scopes to the PAT-allowed set.
 
-    기본은 mcp:read 만. 관리자가 AI 쓰기를 허용(allow_write)했고 사용자가 명시적으로 mcp:write 를
-    고른 토큰만 쓰기 권한을 받는다. 쓰기 토큰은 /api/mcp/write 에서만 쓰기 도구가 보이고
+    기본은 mcp:read 만 허용. 관리자가 AI 쓰기를 허용(allow_write)했고 사용자가 명시적으로 mcp:write 를
+    선택한 토큰만 쓰기 권한을 받는다. 쓰기 토큰은 /api/mcp/write 에서만 쓰기 도구가 노출되며
     high 위험 작업은 여전히 승인 대기함을 거친다.
     """
     if not scopes:
@@ -68,7 +68,7 @@ async def create_personal_token(
         user_id=user_id,
         name=name,
         token_hint=token[-4:],
-        # 호출자가 이미 관리자 정책으로 깎아 넘긴다(account_router). 여기서는 허용 집합 밖만 다시 막는다.
+        # 호출자가 관리자 정책으로 이미 제한한 값을 전달한다(account_router). 여기서는 허용 집합 밖만 재차단한다.
         scopes=json.dumps(clamp_scopes(scopes, allow_write=True)),
         expires_at=expires_at,
     )

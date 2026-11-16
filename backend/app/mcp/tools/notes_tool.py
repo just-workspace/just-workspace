@@ -1,4 +1,4 @@
-"""Notes / wiki tools — 검색·읽기 + 쓰기(만들기·고치기·삭제). 권한은 웹 API 와 같은 writer 기준."""
+"""Notes / wiki tools — 검색·읽기 + 쓰기(생성·수정·삭제). 권한은 웹 API 와 동일한 writer 기준."""
 
 import logging
 
@@ -49,12 +49,12 @@ async def _user_spaces(db, user: User) -> list[dict]:
         return []
 
 
-_SEARCH_PER_SPACE = 200   # 공간 하나에서 모으는 최대 결과(페이지 넘김 대상)
+_SEARCH_PER_SPACE = 200   # 공간 하나에서 수집하는 최대 결과 수(페이지 분할 대상)
 _SNIPPET_MAX = 150        # 검색 결과 미리보기(글자)
 
 
 async def notes_search(user: User, query: str, space: str = "", limit: int = 10, cursor: str = "", **_: object) -> dict:
-    """위키 검색. `space` 비면 접근 가능한 모든 공간. 공간별로 번갈아 섞고(round-robin) 페이지로 나눈다."""
+    """위키 검색. `space` 가 비어 있으면 접근 가능한 모든 공간 대상. 공간별로 교대 병합(round-robin)한 뒤 페이지로 분할한다."""
     try:
         from app.wiki import service as wiki_service
     except Exception as e:
@@ -126,7 +126,7 @@ async def notes_read(user: User, page_id: str, max_chars: int = _NOTE_READ_DEFAU
         if not getattr(user, "is_admin", False):
             role = await wiki_service.get_user_role(db, page["space_id"], str(user.id))
             if not role:
-                # 존재 여부도 흘리지 않는다
+                # 존재 여부도 노출하지 않음
                 return err("not_found", f"위키 페이지가 없습니다: {page_id}")
     body = page.get("content") or ""
     window = body[off:off + n]
@@ -196,7 +196,7 @@ async def notes_list(
 
 
 async def _can_write(db, user: User, space_id: str) -> bool:
-    """웹 API(위키 페이지 만들기·고치기·지우기)와 같은 기준 — writer 이상, 관리자는 통과."""
+    """웹 API(위키 페이지 생성·수정·삭제)와 동일한 기준 — writer 이상, 관리자는 통과."""
     from app.wiki import service as wiki_service
 
     if getattr(user, "is_admin", False):
@@ -272,7 +272,7 @@ async def notes_undo_create(user: User, page_id: str, token: str, **_: object) -
 
 async def notes_update(user: User, page_id: str, title: str | None = None, content: str | None = None,
                        **_: object) -> dict:
-    """제목·본문 바꾸기. 고치기 전 본문은 버전 기록에 남는다(항상 새 버전)."""
+    """제목·본문 변경. 수정 전 본문은 버전 기록에 보존한다(항상 새 버전)."""
     from app.wiki import service as wiki_service
 
     if title is None and content is None:
@@ -284,7 +284,7 @@ async def notes_update(user: User, page_id: str, title: str | None = None, conte
         if not page:
             return err("not_found", f"위키 페이지가 없습니다: {page_id}")
         if not await _can_write(db, user, page["space_id"]):
-            # 읽기 권한도 없으면 존재 여부를 흘리지 않는다
+            # 읽기 권한도 없으면 존재 여부를 노출하지 않음
             role = await wiki_service.get_user_role(db, page["space_id"], str(user.id))
             if not role and not getattr(user, "is_admin", False):
                 return err("not_found", f"위키 페이지가 없습니다: {page_id}")
@@ -295,7 +295,7 @@ async def notes_update(user: User, page_id: str, title: str | None = None, conte
             before["title"], new["title"] = page.get("title") or "", title
         if content is not None:
             before["content"], new["content"] = page.get("content") or "", content
-        # AI 의 고침은 10분 묶기 없이 새 버전으로 — 사용자의 직전 버전을 덮어쓰지 않게
+        # AI 의 수정은 10분 병합 없이 새 버전으로 저장 — 사용자의 직전 버전 덮어쓰기 방지
         updated = await wiki_service.update_page(db, str(page_id), str(user.id), force_new_version=True, **new)
     return {"id": page_id, "title": (updated or {}).get("title"), "version": (updated or {}).get("version"),
             "before": before, "_undo": {"tool": "notes_update", "args": {"page_id": page_id, **before}}}
@@ -351,7 +351,7 @@ register(Tool(
         },
         "required": ["query"],
     },
-    # 남이 쓴 글이 들어 있다 — 신뢰 경계로 감싸고, 직후의 쓰기는 승인 흐름이 경고·자동 실행 금지로 다룬다
+    # 타인이 작성한 글 포함 — 신뢰 경계를 적용하며, 직후의 쓰기는 승인 흐름이 경고·자동 실행 금지로 처리한다
     handler=notes_search, untrusted_output=True,
 ))
 
@@ -371,7 +371,7 @@ register(Tool(
         },
         "required": ["page_id"],
     },
-    # 남이 쓴 글이 들어 있다 — 신뢰 경계로 감싸고, 직후의 쓰기는 승인 흐름이 경고·자동 실행 금지로 다룬다
+    # 타인이 작성한 글 포함 — 신뢰 경계를 적용하며, 직후의 쓰기는 승인 흐름이 경고·자동 실행 금지로 처리한다
     handler=notes_read, untrusted_output=True,
 ))
 
@@ -391,7 +391,7 @@ register(Tool(
             "cursor": {"type": "string", "description": "Opaque pagination cursor from a previous response.", "default": ""},
         },
     },
-    # 남이 쓴 제목이 섞인다 — 내장 AI 대화 표시만(MCP 15분 창·래핑 없음)
+    # 타인이 작성한 제목 포함 — 내장 AI 대화 표시만 적용(MCP 15분 창·래핑 없음)
     handler=notes_list, conv_untrusted=True,
 ))
 
@@ -414,7 +414,7 @@ register(Tool(
         },
         "required": ["title", "content"],
     },
-    # 위키 공간은 다른 구성원이 읽는다 — 외부 내용을 읽은 뒤에는 자동 수락·허용 규칙이어도 묻는다
+    # 위키 공간은 다른 구성원이 열람한다 — 외부 내용 읽기 이후에는 자동 수락·허용 규칙이 있어도 사용자 확인을 요청한다
     visible_to_others=True,
     handler=notes_create, summarizer=_sum_note,
 ))
@@ -448,7 +448,7 @@ register(Tool(
         },
         "required": ["page_id"],
     },
-    # 위키 공간은 다른 구성원이 읽는다 — 외부 내용을 읽은 뒤에는 자동 수락·허용 규칙이어도 묻는다
+    # 위키 공간은 다른 구성원이 열람한다 — 외부 내용 읽기 이후에는 자동 수락·허용 규칙이 있어도 사용자 확인을 요청한다
     visible_to_others=True,
     handler=notes_update, previewer=_prev_update, summarizer=_sum_note,
 ))
@@ -463,7 +463,7 @@ register(Tool(
     parameters={"type": "object", "properties": {
         "page_id": {"type": "string", "description": "Page id.", "x-label": "페이지 id"},
     }, "required": ["page_id"]},
-    # 남이 보던 것이 사라진다 — 외부 내용을 읽은 뒤에는 바이패스·오토여도 묻는다
+    # 타인이 열람하던 항목이 삭제된다 — 외부 내용 읽기 이후에는 바이패스·오토 모드에서도 사용자 확인을 요청한다
     visible_to_others=True,
     handler=notes_delete, summarizer=_sum_note,
 ))

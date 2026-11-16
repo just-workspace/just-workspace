@@ -1,8 +1,8 @@
-"""파일 검색 — 색인(file_index) 위에서 질의·랭킹·스니펫을 만든다.
+"""파일 검색 — 색인(file_index)을 대상으로 질의·랭킹·스니펫을 생성한다.
 
 질의 문법
 ---------
-평범한 낱말은 이름/본문에 대한 부분일치다. 앞에 연산자를 붙이면 좁혀진다.
+일반 낱말은 이름/본문에 대한 부분일치로 처리한다. 앞에 연산자를 지정하면 범위가 축소된다.
 
     보고서 ext:pdf                  확장자
     계약 kind:mail                  아카이브된 메일(.eml)
@@ -14,10 +14,10 @@
 
 랭킹
 ----
-이름이 맞는 게 본문이 맞는 것보다 위다. 같은 이름 일치라도 정확히 같음 >
-앞에서 시작 > 중간 포함 순. 거기에 trigram 유사도와 최신순 보정을 더한다.
-한글은 형태소 분석기 없이 tsvector 를 쓰면 토큰이 통째로 잡혀 부분일치가
-안 된다. 그래서 pg_trgm 기반 ILIKE 로 간다.
+이름 일치가 본문 일치보다 상위이다. 동일한 이름 일치 내에서는 완전 일치 >
+전방 일치 > 중간 포함 순이다. 여기에 trigram 유사도와 최신순 보정을 가산한다.
+한글은 형태소 분석기 없이 tsvector 를 사용하면 토큰이 통째로 처리되어 부분일치가
+불가하다. 따라서 pg_trgm 기반 ILIKE 를 사용한다.
 """
 
 import re
@@ -84,7 +84,7 @@ def _parse_date(v: str) -> datetime | None:
 
 def parse_query(raw: str) -> Parsed:
     p = Parsed()
-    # 따옴표로 묶인 구를 먼저 떼어낸다
+    # 따옴표로 묶인 구를 우선 분리
     for m in re.finditer(r'"([^"]+)"', raw):
         p.phrases.append(m.group(1).strip())
     rest = re.sub(r'"[^"]+"', " ", raw)
@@ -132,7 +132,7 @@ def parse_query(raw: str) -> Parsed:
 
 
 def make_snippet(content: str | None, needles: list[str], width: int = 110) -> str | None:
-    """본문에서 검색어 주변을 잘라 온다. 어디서 걸렸는지 보여주는 게 목적."""
+    """본문에서 검색어 주변을 발췌한다. 일치 위치 표시가 목적이다."""
     if not content or not needles:
         return None
     low = content.lower()
@@ -151,11 +151,11 @@ def make_snippet(content: str | None, needles: list[str], width: int = 110) -> s
 
 
 def build_query(scopes: list[str], p: Parsed, limit: int, offset: int, name_only: bool = False):
-    """색인에 대한 SELECT 를 만든다. 점수 계산까지 SQL 안에서 끝낸다.
+    """색인에 대한 SELECT 를 생성한다. 점수 계산까지 SQL 내에서 수행한다.
 
-    name_only=True 면 낱말을 파일 **이름**에서만 찾는다(본문·경로 무시).
-    정렬은 점수 → 수정 시각 → (scope, rel_path, id) 로 끝까지 결정적이다 — 점수 동점이 많아도
-    offset 페이지 경계에서 겹치거나 빠지지 않는다."""
+    name_only=True 면 낱말을 파일 **이름**에서만 검색한다(본문·경로 무시).
+    정렬은 점수 → 수정 시각 → (scope, rel_path, id) 순으로 완전히 결정적이다. 점수 동점이 많아도
+    offset 페이지 경계에서 중복·누락이 발생하지 않는다."""
     needles = p.needles
     name_l = func.lower(FileIndex.name)
     path_l = func.lower(FileIndex.rel_path)
@@ -163,7 +163,7 @@ def build_query(scopes: list[str], p: Parsed, limit: int, offset: int, name_only
 
     conds = [FileIndex.scope.in_(scopes)]
 
-    # 낱말/구는 AND — 검색 엔진처럼 좁혀 들어가는 쪽이 자연스럽다
+    # 낱말/구는 AND 결합. 검색 엔진과 같이 범위를 축소하는 방식이 적합
     for n in needles:
         like = f"%{n.lower()}%"
         if name_only:
@@ -209,16 +209,16 @@ def build_query(scopes: list[str], p: Parsed, limit: int, offset: int, name_only
         )
         score = score + case((path_l.like(mid), 120.0), else_=0.0)
         score = score + case((content_l.like(mid), 90.0), else_=0.0)
-        # 이름 유사도(오타·어순 흔들림 보정)
+        # 이름 유사도(오타·어순 변동 보정)
         score = score + func.similarity(name_l, primary) * 150.0
-        # 나머지 낱말이 이름에 더 걸리면 가산
+        # 나머지 낱말이 이름에 추가로 일치하면 가산
         for n in needles[1:]:
             score = score + case((name_l.like(f"%{n.lower()}%"), 60.0), else_=0.0)
 
-    # 최신 파일 소폭 우대 — 동점일 때만 갈리도록 작게
+    # 최신 파일 소폭 우대. 동점일 때만 영향을 주도록 가중치를 작게 설정
     age_days = func.extract("epoch", func.now() - FileIndex.mtime) / 86400.0
     score = score + func.greatest(0.0, 30.0 - age_days) * 0.5
-    # 폴더는 약간 뒤로(보통 파일을 찾는다)
+    # 폴더는 소폭 후순위(통상 파일이 검색 대상)
     score = score + case((FileIndex.is_dir.is_(True), -40.0), else_=0.0)
 
     stmt = (
@@ -228,7 +228,7 @@ def build_query(scopes: list[str], p: Parsed, limit: int, offset: int, name_only
             FileIndex.mime, FileIndex.content, score.label("score"),
         )
         .where(and_(*conds))
-        # 2차 기준(scope·rel_path·id)이 없으면 같은 점수·같은 시각끼리 순서가 매번 달라질 수 있다
+        # 2차 기준(scope·rel_path·id)이 없으면 동일 점수·동일 시각 항목 간 순서가 매번 달라질 수 있음
         .order_by(score.desc(), FileIndex.mtime.desc(), FileIndex.scope.asc(),
                   FileIndex.rel_path.asc(), FileIndex.id.asc())
         .limit(limit)
@@ -239,7 +239,7 @@ def build_query(scopes: list[str], p: Parsed, limit: int, offset: int, name_only
 
 
 def to_vpath(scope: str, rel_path: str, viewer_id: str) -> str:
-    """색인의 (scope, rel_path) 를 사용자가 보는 가상경로로 되돌린다."""
+    """색인의 (scope, rel_path) 를 사용자에게 표시되는 가상경로로 변환한다."""
     if scope == "shared":
         return f"shared/{rel_path}".rstrip("/")
     if scope == viewer_id:

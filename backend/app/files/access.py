@@ -1,4 +1,4 @@
-"""파일 접근 권한 — 내 영역(my/·shared/·관리자 users/)과 공유받은 경로(shared-with-me/)를 한 규칙으로.
+"""파일 접근 권한 — 내 영역(my/·shared/·관리자 users/)과 공유받은 경로(shared-with-me/)에 동일 규칙을 적용한다.
 
 공유 권한 4단계("보기 · 댓글 · 편집 · 공동 소유"):
 
@@ -7,11 +7,11 @@
 - edit    편집 — 위 + 내용 쓰기(업로드·덮어쓰기·새 폴더·오피스 저장)
 - owner   공동 소유 — 위 + 이름 변경·이동·삭제(원 소유자 휴지통)·재공유·권한 변경
 
-저장 위치는 언제나 원 소유자 영역(users/<owner_id>/..)이고, 공유받은 사람은
-'shared-with-me/<share_id>/<하위경로>' 가상경로로 조작한다. 권한은 그 경로를 덮는(같거나 조상인)
-나의 모든 공유(직접 + 내가 멤버인 채널) 중 가장 높은 것이다.
+저장 위치는 항상 원 소유자 영역(users/<owner_id>/..)이며, 공유받은 사용자는
+'shared-with-me/<share_id>/<하위경로>' 가상경로로 조작한다. 권한은 해당 경로를 포함하는(동일하거나 조상인)
+본인의 모든 공유(직접 + 본인이 멤버인 채널) 중 가장 높은 것이다.
 
-예전 행(role NULL)은 can_write 로 읽는다(편집/보기). can_write 는 role in (edit, owner) 로 늘 맞춘다.
+기존 행(role NULL)은 can_write 로 해석한다(편집/보기). can_write 는 role in (edit, owner) 와 항상 일치시킨다.
 """
 
 from __future__ import annotations
@@ -30,14 +30,14 @@ from app.files import service as fs
 ROLES = ("view", "comment", "edit", "owner")
 RANK = {r: i for i, r in enumerate(ROLES)}
 SHARED_ROOT = "shared-with-me"
-# 휴지통으로 간 항목의 공유·댓글을 잠시 옮겨 두는 가짜 경로 접두어('my/' 가 아니라 절대 열리지 않는다)
+# 휴지통으로 이동한 항목의 공유·댓글을 임시 보관하는 가상 경로 접두어('my/' 가 아니므로 접근 불가)
 TRASH_PREFIX = "trash"
 
 _NEED_LABEL = {"view": "보기", "comment": "댓글", "edit": "편집", "owner": "공동 소유"}
 
 
 def share_role(s: FileShare) -> str:
-    """행의 권한. role 이 비어 있으면(예전 행) can_write 로."""
+    """행의 권한. role 이 비어 있으면(기존 행) can_write 로 판정."""
     r = getattr(s, "role", None)
     if r in RANK:
         return r
@@ -45,7 +45,7 @@ def share_role(s: FileShare) -> str:
 
 
 def normalize_role(role: str | None, can_write: bool | None = None) -> str:
-    """요청 본문의 role(없으면 can_write) → 4단계 중 하나. 모르는 값은 400."""
+    """요청 본문의 role(없으면 can_write) → 4단계 중 하나. 알 수 없는 값은 400."""
     if role is None or role == "":
         return "edit" if can_write else "view"
     if role not in RANK:
@@ -75,7 +75,7 @@ def owner_real(owner_id: str, owner_vpath: str) -> Path:
     """소유자 'my/..' 가상경로 → 실제 경로(users/<owner_id>/rest). 트래버설·my 밖 경로 차단."""
     vp = (owner_vpath or "").strip("/")
     if not vp.startswith("my/"):
-        # 'my' 통째·휴지통 가짜 경로(trash/..)·모르는 루트는 공유 경로로 열 수 없다
+        # 'my' 전체·휴지통 가상 경로(trash/..)·알 수 없는 루트는 공유 경로로 접근 불가
         raise HTTPException(status_code=404, detail="공유를 찾을 수 없습니다")
     rel = vp[len("my/"):]
     base = (fs.STORAGE_ROOT / "users" / owner_id).resolve()
@@ -86,7 +86,7 @@ def owner_real(owner_id: str, owner_vpath: str) -> Path:
 
 
 def shared_sub_real(s: FileShare, sub: str | None) -> Path:
-    """공유 루트(소유자 경로) 아래 sub 경로. 공유 범위 밖으로 못 나간다."""
+    """공유 루트(소유자 경로) 아래 sub 경로. 공유 범위 밖으로의 이탈 불가."""
     base = owner_real(s.owner_id, s.file_path)
     sub = (sub or "").strip("/")
     if not sub:
@@ -94,7 +94,7 @@ def shared_sub_real(s: FileShare, sub: str | None) -> Path:
     real = (base / sub).resolve()
     if not real.is_relative_to(base.resolve()):
         raise HTTPException(status_code=403, detail="Path traversal blocked")
-    if any(fs.is_hidden_name(part) for part in Path(sub).parts):   # 숨김 판정은 service 한 곳
+    if any(fs.is_hidden_name(part) for part in Path(sub).parts):   # 숨김 판정은 service 로 단일화
         raise HTTPException(status_code=404, detail="Not found")
     return real
 
@@ -107,7 +107,7 @@ async def my_channel_ids(db: AsyncSession, user_id: str) -> list[str]:
 
 
 async def accessible_share(db: AsyncSession, share_id: str, user: User) -> FileShare | None:
-    """받는 사람이 열 수 있는 공유 — 나에게 직접 공유했거나, 내가 멤버인 채널에 공유한 것(소유자 본인 제외)."""
+    """수신자가 접근 가능한 공유 — 본인에게 직접 공유되었거나 본인이 멤버인 채널에 공유된 것(소유자 본인 제외)."""
     s = await db.get(FileShare, share_id)
     if s is None or s.owner_id == user.id:
         return None
@@ -121,7 +121,7 @@ async def accessible_share(db: AsyncSession, share_id: str, user: User) -> FileS
 
 
 async def role_on(db: AsyncSession, user: User, owner_id: str, owner_vpath: str) -> tuple[str | None, FileShare | None]:
-    """owner 의 'my/..' 경로에 대한 user 의 권한. 본인이면 owner. 덮는 공유가 없으면 (None, None)."""
+    """owner 의 'my/..' 경로에 대한 user 의 권한. 본인이면 owner. 해당 경로를 포함하는 공유가 없으면 (None, None)."""
     if user.id == owner_id:
         return "owner", None
     chans = await my_channel_ids(db, user.id)
@@ -143,13 +143,13 @@ async def role_on(db: AsyncSession, user: User, owner_id: str, owner_vpath: str)
 
 @dataclass
 class Access:
-    """가상경로 하나를 푼 결과."""
+    """가상경로 하나의 해석 결과."""
     vp: str                    # 요청 가상경로(정규화)
     real: Path                 # 실제 경로
-    role: str                  # 이 경로에 대한 내 권한(내 영역은 owner)
-    owner_id: str | None       # 저장 영역 주인(shared/ 팀 폴더는 None)
+    role: str                  # 이 경로에 대한 요청 사용자의 권한(내 영역은 owner)
+    owner_id: str | None       # 저장 영역 소유자(shared/ 팀 폴더는 None)
     owner_vpath: str | None    # 소유자 기준 'my/..'(댓글·공유 식별자). shared/ 는 None
-    share: FileShare | None    # 공유 경로로 들어왔으면 그 공유(경로 해석 기준)
+    share: FileShare | None    # 공유 경로로 진입한 경우 해당 공유(경로 해석 기준)
     key: str | None            # 활동 기록 정규 키
 
     @property
@@ -163,7 +163,7 @@ class Access:
 
 
 def parse_shared(vp: str) -> tuple[str, str] | None:
-    """'shared-with-me/<sid>[/<sub>]' → (sid, sub). 아니면 None."""
+    """'shared-with-me/<sid>[/<sub>]' → (sid, sub). 해당하지 않으면 None."""
     vp = vp.strip("/")
     if not vp.startswith(SHARED_ROOT + "/"):
         return None
@@ -174,7 +174,7 @@ def parse_shared(vp: str) -> tuple[str, str] | None:
 
 
 async def resolve(db: AsyncSession, user: User, vp: str, need: str = "view") -> Access:
-    """가상경로 → Access. 권한이 need 미만이면 403, 모르는 공유는 404."""
+    """가상경로 → Access. 권한이 need 미만이면 403, 알 수 없는 공유는 404."""
     vp = (vp or "").strip("/")
     parsed = parse_shared(vp)
     if parsed:
@@ -211,14 +211,14 @@ async def resolve(db: AsyncSession, user: User, vp: str, need: str = "view") -> 
                   share=None, key=act.canonical_key(vp, user))
 
 
-# ─── 이름 변경·이동·삭제 뒤 공유·댓글 따라가기 ───
+# ─── 이름 변경·이동·삭제 후 공유·댓글 경로 갱신 ───
 
 
 async def repoint(db: AsyncSession, owner_id: str | None, old_vp: str | None, new_vp: str | None) -> None:
-    """owner 의 old_vp(와 그 아래)를 가리키던 공유·댓글을 new_vp 로 옮긴다.
+    """owner 의 old_vp(및 그 하위)를 가리키던 공유·댓글을 new_vp 로 이전한다.
 
-    옮길 자리(new_vp 아래)에 남아 있던 옛 공유·댓글(같은 경로에 있다 지워진 항목 것)은 먼저 지운다 —
-    안 그러면 고유 인덱스가 깨지고, 예전 수신자에게 새 파일이 열린다.
+    이전 대상 위치(new_vp 하위)에 잔류한 기존 공유·댓글(동일 경로에 있다가 삭제된 항목의 것)은 먼저 삭제한다 —
+    생략 시 고유 인덱스 위반이 발생하고, 이전 수신자에게 새 파일이 노출된다.
     """
     if not owner_id or not old_vp or not new_vp:
         return
@@ -240,7 +240,7 @@ async def repoint(db: AsyncSession, owner_id: str | None, old_vp: str | None, ne
 
 
 async def purge(db: AsyncSession, owner_id: str | None, vp: str | None) -> None:
-    """owner 의 vp(와 그 아래)에 걸린 공유·댓글을 지운다(영구 삭제)."""
+    """owner 의 vp(및 그 하위)에 설정된 공유·댓글을 삭제한다(영구 삭제)."""
     if not owner_id or not vp:
         return
     vp = vp.strip("/")
@@ -252,17 +252,17 @@ async def purge(db: AsyncSession, owner_id: str | None, vp: str | None) -> None:
     await db.commit()
 
 
-# ─── 공유 링크(ShareLink)도 따라간다 ───
+# ─── 공유 링크(ShareLink) 경로 갱신 ───
 #
-# 링크는 만든 사람 기준 가상경로(my/.. 또는 shared/..)를 그대로 저장한다. 예전엔 이름을 바꾸거나 옮기면
-# 링크가 죽고, 지운 뒤 같은 이름으로 새 파일을 올리면 **옛 링크로 새 파일이 열렸다**. 그래서 FileShare 와
-# 같은 규칙으로 따라가게 한다. 휴지통에 있는 동안은 열리지 않는 가짜 경로(link_trash_key)로 옮겨 둔다.
+# 링크는 생성자 기준 가상경로(my/.. 또는 shared/..)를 그대로 저장한다. 과거에는 이름 변경·이동 시
+# 링크가 무효화되었고, 삭제 후 동일 이름으로 새 파일을 업로드하면 **기존 링크로 새 파일이 노출되었다**. 따라서 FileShare 와
+# 동일한 규칙으로 경로를 갱신한다. 휴지통에 있는 동안은 접근 불가한 가상 경로(link_trash_key)로 이전해 둔다.
 #
-# creator_id: my/.. 경로는 만든 사람이 곧 영역 주인이라 꼭 준다. shared/..·휴지통 키는 None(누가 만든 링크든).
+# creator_id: my/.. 경로는 생성자가 곧 영역 소유자이므로 필수로 전달한다. shared/..·휴지통 키는 None(생성자 무관).
 
 
 def link_scope(a: "Access") -> tuple[str | None, str] | None:
-    """Access → 링크가 저장한 (만든 사람, 경로). 링크를 걸 수 없는 경로면 None."""
+    """Access → 링크에 저장된 (생성자, 경로). 링크를 설정할 수 없는 경로이면 None."""
     if a.owner_id and a.owner_vpath:
         return a.owner_id, a.owner_vpath.strip("/")
     if a.vp == "shared" or a.vp.startswith("shared/"):
@@ -271,7 +271,7 @@ def link_scope(a: "Access") -> tuple[str | None, str] | None:
 
 
 def vpath_link_scope(vp: str, user: User) -> tuple[str | None, str] | None:
-    """사용자 가상경로(my/.., shared/.., 관리자 users/<id>/..) → (만든 사람, 링크 경로)."""
+    """사용자 가상경로(my/.., shared/.., 관리자 users/<id>/..) → (생성자, 링크 경로)."""
     vp = (vp or "").strip("/")
     if vp.startswith("my/"):
         return user.id, vp
@@ -293,7 +293,7 @@ def _under(path: str, base: str) -> bool:
 
 
 def _link_path_list(link: ShareLink) -> tuple[list[str], bool]:
-    """(경로들, 묶음 링크인가)."""
+    """(경로 목록, 묶음 링크 여부)."""
     import json
     if link.paths:
         try:
@@ -315,11 +315,11 @@ async def _links_touching(db: AsyncSession, creator_id: str | None, *bases: str)
 
 async def repoint_links(db: AsyncSession, creator_id: str | None, old_vp: str | None, new_vp: str | None,
                         new_creator: str | None = None) -> None:
-    """old_vp(와 그 아래)를 가리키던 링크를 new_vp 로. new_vp 아래에 남아 있던 옛 링크 경로는 지운다
-    (같은 자리에 있다 사라진 항목 것 — 안 지우면 옛 링크로 새 파일이 열린다).
+    """old_vp(및 그 하위)를 가리키던 링크를 new_vp 로 이전한다. new_vp 하위에 잔류한 기존 링크 경로는 삭제한다
+    (동일 위치에 있다가 삭제된 항목의 것 — 삭제하지 않으면 기존 링크로 새 파일이 노출된다).
 
-    new_vp 가 my/.. 인데 링크를 만든 사람이 그 영역 주인(new_creator)이 아니면 따라가지 않고 그 경로를 뺀다
-    (my/ 는 만든 사람 영역으로 풀리므로 엉뚱한 사람 파일을 가리키게 된다). 경로가 하나도 안 남으면 링크를 지운다.
+    new_vp 가 my/.. 인데 링크 생성자가 해당 영역 소유자(new_creator)가 아니면 경로를 갱신하지 않고 해당 경로를 제외한다
+    (my/ 는 생성자 영역으로 해석되므로 다른 사용자의 파일을 가리키게 된다). 남은 경로가 없으면 링크를 삭제한다.
     """
     import json
     if not old_vp or not new_vp:
@@ -328,7 +328,7 @@ async def repoint_links(db: AsyncSession, creator_id: str | None, old_vp: str | 
     if old_vp == new_vp:
         return
     to_my = new_vp.startswith("my/")
-    # 같은 사람 영역 안(my→my, my→휴지통)이면 그 사람 링크만 읽는다. shared/ 가 끼면 누가 만든 링크든 본다.
+    # 동일 사용자 영역 내(my→my, my→휴지통)이면 해당 사용자의 링크만 조회한다. shared/ 가 포함되면 생성자와 무관하게 조회한다.
     dest_owner = new_creator or creator_id
     same_area = bool(creator_id) and (new_vp.startswith(TRASH_PREFIX + "/") or (to_my and dest_owner == creator_id))
     for link in await _links_touching(db, creator_id if same_area else None, old_vp, new_vp):
@@ -342,7 +342,7 @@ async def repoint_links(db: AsyncSession, creator_id: str | None, old_vp: str | 
                     continue
                 out.append(new_vp + p[len(old_vp):])
             elif _under(p, new_vp) and (not to_my or link.created_by == (new_creator or creator_id)):
-                changed = True              # 옮길 자리에 남아 있던 옛 경로
+                changed = True              # 이전 대상 위치에 잔류한 기존 경로
             else:
                 out.append(p)
         if not changed:
@@ -351,7 +351,7 @@ async def repoint_links(db: AsyncSession, creator_id: str | None, old_vp: str | 
             await db.delete(link)
             continue
         if not multi and out[0] != paths[0] and not out[0].startswith(TRASH_PREFIX + "/"):
-            # 파일 하나짜리 링크의 표시 이름(= 받는 쪽 파일 이름)도 새 이름으로
+            # 단일 파일 링크의 표시 이름(= 수신 측 파일 이름)도 새 이름으로 갱신
             link.display_name = out[0].rsplit("/", 1)[-1][:255]
         link.file_path = out[0]
         if multi:
@@ -360,7 +360,7 @@ async def repoint_links(db: AsyncSession, creator_id: str | None, old_vp: str | 
 
 
 async def purge_links(db: AsyncSession, creator_id: str | None, vp: str | None) -> None:
-    """vp(와 그 아래)를 가리키는 링크 경로를 지운다(영구 삭제). 묶음 링크는 그 항목만 빼고, 다 빠지면 링크를 지운다."""
+    """vp(및 그 하위)를 가리키는 링크 경로를 삭제한다(영구 삭제). 묶음 링크는 해당 항목만 제외하며, 모두 제외되면 링크를 삭제한다."""
     import json
     if not vp:
         return
@@ -378,7 +378,7 @@ async def purge_links(db: AsyncSession, creator_id: str | None, vp: str | None) 
 
 
 def _like_prefix(vp: str) -> str:
-    """LIKE 'vp/%' — 경로 속 %, _ 는 글자 그대로."""
+    """LIKE 'vp/%' — 경로 내 %, _ 는 리터럴로 처리."""
     esc = vp.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return esc + "/%"
 

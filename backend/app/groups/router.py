@@ -95,7 +95,7 @@ async def delete_group(group_id: str, user: User = Depends(get_current_user), db
     await db.delete(g)
     await db.commit()
     await groups_service.load_grants(db)
-    # 이 그룹으로 격리 브라우저를 쓰던 사람의 열린 세션을 바로 끝낸다(실패해도 삭제는 그대로)
+    # 이 그룹으로 격리 브라우저를 사용하던 사용자의 열린 세션을 즉시 종료한다(실패해도 삭제는 유지)
     from app.rbi.service import enforce_access_quietly
     await enforce_access_quietly(db, actor_id=user.id)
     await audit.log_action(db, user.id, "group.delete", "group", group_id, {"name": name})
@@ -129,7 +129,7 @@ async def add_member(group_id: str, body: MemberBody, user: User = Depends(get_c
     else:
         db.add(GroupMember(group_id=group_id, user_id=body.user_id, role=body.role))
     await db.commit()
-    # 그룹 소속이 곧 모듈 접근 권한이다(module_grants) — 권한 변경으로 남긴다
+    # 그룹 소속이 곧 모듈 접근 권한(module_grants)이므로 권한 변경으로 기록
     await audit.log_action(
         db, user.id, "group.member_add", "group", group_id, {"user_id": body.user_id, "role": body.role},
     )
@@ -142,7 +142,7 @@ async def remove_member(group_id: str, user_id: str, user: User = Depends(get_cu
     await db.execute(delete(GroupMember).where(
         GroupMember.group_id == group_id, GroupMember.user_id == user_id))
     await db.commit()
-    # 그룹으로 받던 격리 브라우저 권한이 사라졌으면 열린 세션을 바로 끝낸다(실패해도 제거는 그대로)
+    # 그룹으로 부여된 격리 브라우저 권한이 소멸한 경우 열린 세션을 즉시 종료한다(실패해도 제거는 유지)
     from app.rbi.service import enforce_access_quietly
     await enforce_access_quietly(db, user_id=user_id, actor_id=user.id)
     await audit.log_action(db, user.id, "group.member_remove", "group", group_id, {"user_id": user_id})
@@ -159,7 +159,7 @@ async def set_modules(group_id: str, body: ModulesBody, user: User = Depends(get
         db.add(ModuleGrant(group_id=group_id, module_id=mid))
     await db.commit()
     await groups_service.load_grants(db)
-    # 모듈 권한이 바뀌었다 — rbi 권한을 잃은 사람의 열린 격리 브라우저 세션을 바로 끝낸다(실패해도 저장은 그대로)
+    # 모듈 권한 변경 시 rbi 권한을 상실한 사용자의 열린 격리 브라우저 세션을 즉시 종료한다(실패해도 저장은 유지)
     from app.rbi.service import enforce_access_quietly
     await enforce_access_quietly(db, actor_id=user.id)
     await audit.log_action(

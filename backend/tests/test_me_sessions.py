@@ -1,4 +1,4 @@
-"""내 로그인 기기 — 목록(현재 기기 표시·UA 해석)·하나 끊기·나머지 끊기·남의 세션 차단. Redis 는 가짜."""
+"""내 로그인 기기 — 목록(현재 기기 표시·UA 해석)·단건 종료·나머지 종료·타인 세션 차단. Redis 는 모의 객체."""
 
 import json
 
@@ -84,12 +84,12 @@ async def test_list_marks_current_and_hides_raw_sid(redis):
 
     res = await ms.my_sessions(_Req(), ws_session=cookie_a, user=_User("alice"))
     rows = res["sessions"]
-    assert len(rows) == 2 and rows[0]["current"] is True               # 현재 기기가 맨 위
+    assert len(rows) == 2 and rows[0]["current"] is True               # 현재 기기가 최상단
     assert rows[0]["device"] == "Chrome · Windows" and rows[0]["ip"] == "10.0.0.5"
     assert rows[1]["os"] == "iOS" and rows[1]["last_seen_at"]
     assert sid_a not in json.dumps(res) and sid_b not in json.dumps(res)
 
-    # Bearer(번들 앱)로 와도 현재 기기를 안다
+    # Bearer(번들 앱)로 요청해도 현재 기기 식별
     res = await ms.my_sessions(_Req(cookie_a), ws_session=None, user=_User("alice"))
     assert [r["current"] for r in res["sessions"]].count(True) == 1
 
@@ -101,7 +101,7 @@ async def test_revoke_one_and_others(redis):
     sid_c, _ = await _login("alice", SAFARI_IOS)
     sid_bob, _ = await _login("bob", CHROME_WIN)
 
-    # 남의 세션 id 로는 못 끊는다
+    # 타인의 세션 id 로는 종료 불가
     with pytest.raises(HTTPException) as e:
         await ms.revoke_my_session(ms.public_id(sid_bob), _Req(), ws_session=cookie_a, user=_User("alice"))
     assert e.value.status_code == 404

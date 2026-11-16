@@ -1,14 +1,14 @@
-"""채팅 정책 토글(관리자가 사이트에서 고른다) — 권한 엔진(app/chat/permissions.py)이 읽는다.
+"""채팅 정책 토글(관리자가 사이트에서 선택) — 권한 엔진(app/chat/permissions.py)이 조회한다.
 
-system_settings(관리 설정과 같은 key/value 저장소, app/admin/settings.py)에 둔다:
+system_settings(관리 설정과 동일한 key/value 저장소, app/admin/settings.py)에 저장한다:
   chat.policy.admin_channel_privileges  "true"|"false"(기본 false)
-      전역 관리자(users.is_admin)가 채널 안에서도 특권 — DM·비공개 채널 열람·쓰기·남의 글 삭제 등 전부.
-      끄면(기본) 지금 동작: 관리자도 채널 안에서는 멤버 규칙 그대로(워크스페이스 범위 관리만 특권).
+      전역 관리자(users.is_admin)에게 채널 내부에서도 특권 부여 — DM·비공개 채널 열람·쓰기·타인의 글 삭제 등 전부.
+      비활성화 시(기본) 현재 동작: 관리자도 채널 내부에서는 멤버 규칙을 그대로 적용(워크스페이스 범위 관리만 특권).
   chat.policy.owner_manage_messages     "true"|"false"(기본 false)
-      채널 owner 에게 MANAGE_MESSAGES(남의 글 삭제·미리보기 지우기)를 준다.
+      채널 owner 에게 MANAGE_MESSAGES(타인의 글 삭제·미리보기 제거)를 부여한다.
 
-권한 검사는 요청마다 지나가는 길이라 프로세스 메모리에 CACHE_TTL 초 캐시한다(auth/security_policy 와 같은 방식).
-워커 8개 — 바꾼 워커는 즉시, 다른 워커는 최대 CACHE_TTL 초 뒤에 따른다.
+권한 검사는 요청마다 거치는 경로이므로 프로세스 메모리에 CACHE_TTL 초 동안 캐시한다(auth/security_policy 와 동일 방식).
+워커 8개 — 변경한 워커는 즉시, 다른 워커는 최대 CACHE_TTL 초 후에 반영된다.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ async def _read(db: AsyncSession) -> dict[str, bool]:
 
 
 async def get_policy(db: AsyncSession) -> dict[str, bool]:
-    """현재 정책. 읽기 실패(테이블 없음 등)면 기본값 — 권한 검사를 깨뜨리지 않는다."""
+    """현재 정책. 조회 실패(테이블 없음 등) 시 기본값 반환 — 권한 검사를 중단시키지 않는다."""
     hit = _cache.get("p")
     now = time.monotonic()
     if hit and now - hit[0] < CACHE_TTL:
@@ -61,7 +61,7 @@ async def get_policy(db: AsyncSession) -> dict[str, bool]:
 
 
 async def set_policy(db: AsyncSession, actor_id: str, changes: dict[str, bool]) -> dict[str, bool]:
-    """부분 갱신 + 감사 로그(바뀐 키마다 action 'chat.policy.<이름>', details {from, to})."""
+    """부분 갱신 + 감사 로그(변경된 키마다 action 'chat.policy.<이름>', details {from, to})."""
     from app.admin.audit import log_action
     from app.db.models import SystemSetting
     invalidate()

@@ -1,8 +1,8 @@
 """관리 › 보안·SSL "로그인 보호·세션" 정책, 관리 › 저장소·백업 "저장소" 요약·사용자 기본 할당.
 
 - GET/PUT /api/admin/settings/security-policy — app/auth/security_policy.py 가 집행한다.
-  2단계 필수를 켤 때, 그 대상에 드는 관리자 본인이 아직 2단계를 안 켰으면 거부한다
-  (켜자마자 본인이 등록 화면에 갇히는 일을 막는다).
+  2단계 필수 활성화 시, 대상에 포함되는 관리자 본인이 2단계를 아직 활성화하지 않았으면 거부한다
+  (활성화 직후 본인이 등록 화면에서 벗어나지 못하는 상황을 방지한다).
 - GET /api/admin/storage/summary — 저장소 디스크 사용량, 사용자 기본 할당, 휴지통 보관 일수.
 - PUT /api/admin/storage/quota — 사용자 기본 할당(GB, 0 = 제한 없음). app/files/quota.py 가 업로드에서 집행.
 """

@@ -1,4 +1,4 @@
-"""작업 — 담당자·태그·프로젝트·review/urgent, 목록 필터, 배정 알림, 남의 작업 차단."""
+"""작업 — 담당자·태그·프로젝트·review/urgent, 목록 필터, 배정 알림, 타 사용자 작업 차단."""
 
 import pytest
 from fastapi import HTTPException
@@ -50,7 +50,7 @@ async def test_create_with_assignee_tags_project_notifies(db):
     assert t.status == "review" and t.priority == "urgent"
     n = (await db.execute(select(Notification).where(Notification.user_id == "bob"))).scalars().one()
     assert n.type == "task_assigned" and n.actor_id == "alice" and t.id in n.link
-    # 자기 자신에게 배정하면 알림 없음
+    # 본인에게 배정하면 알림 없음
     await tr.create_task(TaskCreate(title="내 일", assignee_id="alice"), user=alice, db=db)
     assert (await db.execute(select(Notification).where(Notification.user_id == "alice"))).first() is None
 
@@ -71,16 +71,16 @@ async def test_filters_and_visibility(db):
     await ts.create_task(db, "carol", {"title": "c2"})
 
     titles = lambda rows: {t["title"] for t in rows[0]}
-    # bob: 담당받은 작업이 기본 목록에 보인다(남이 만들었어도)
+    # bob: 배정받은 작업이 기본 목록에 표시된다(타 사용자가 생성한 경우 포함)
     assert titles(await ts.get_tasks(db, "bob")) == {"a1", "c1"}
     assert titles(await ts.get_tasks(db, "alice")) == {"a1", "a2"}
-    assert titles(await ts.get_tasks(db, "alice", assignee="bob")) == {"a1"}   # 내 것 중 bob 담당만
+    assert titles(await ts.get_tasks(db, "alice", assignee="bob")) == {"a1"}   # 본인 작업 중 bob 담당만
     assert titles(await ts.get_tasks(db, "alice", assignee="none")) == {"a2"}
     assert titles(await ts.get_tasks(db, "bob", assignee="me")) == {"a1", "c1"}
-    assert titles(await ts.get_tasks(db, "alice", tag="infra")) == {"a1"}      # infra-old 는 안 맞는다
+    assert titles(await ts.get_tasks(db, "alice", tag="infra")) == {"a1"}      # infra-old 는 불일치
     assert titles(await ts.get_tasks(db, "alice", project="P")) == {"a1"}
     assert titles(await ts.get_tasks(db, "alice", status="review,done")) == {"a2"}
-    # carol 의 c2 는 alice 가 담당자로 걸러도 안 보인다
+    # carol 의 c2 는 alice 가 담당자로 필터링해도 표시되지 않음
     assert titles(await ts.get_tasks(db, "alice", assignee="carol")) == set()
     facets = await ts.list_projects_and_tags(db, "alice")
     assert facets == {"projects": ["P"], "tags": ["infra", "infra-old"]}
@@ -105,7 +105,7 @@ async def test_assignee_can_update_but_not_delete_or_reassign(db):
     with pytest.raises(HTTPException) as e:
         await tr.delete_task(t["id"], user=bob, db=db)
     assert e.value.status_code == 403
-    # 남(carol)은 아예 없는 작업
+    # 타 사용자(carol)에게는 존재하지 않는 작업
     with pytest.raises(HTTPException) as e:
         await tr.update_task(t["id"], TaskUpdate(status="done"), user=carol, db=db)
     assert e.value.status_code == 404

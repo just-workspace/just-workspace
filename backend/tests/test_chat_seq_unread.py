@@ -1,10 +1,10 @@
 """채팅 데이터 계층 — seq 부여·커서, 미읽음/멘션 카운트, 읽음 포인터.
 
-SQLite(aiosqlite) 위에서 service 함수를 그대로 부른다. PostgreSQL 에서는 DB 시퀀스가
-seq 를 주지만 SQLite 에는 시퀀스가 없어 models 의 before_insert 폴백(max+1)이 대신한다 —
-그래서 "단조 증가·유니크" 라는 계약만 검증하고 값 자체는 가정하지 않는다.
+SQLite(aiosqlite) 상에서 service 함수를 그대로 호출한다. PostgreSQL 에서는 DB 시퀀스가
+seq 를 부여하지만 SQLite 에는 시퀀스가 없어 models 의 before_insert 폴백(max+1)이 대체한다 —
+따라서 "단조 증가·유니크" 라는 계약만 검증하고 값 자체는 가정하지 않는다.
 
-채팅에 필요한 테이블만 만들어 빠르게 돈다.
+채팅에 필요한 테이블만 생성하여 실행 시간을 단축한다.
 """
 
 import pytest
@@ -59,7 +59,7 @@ async def test_seq_is_strictly_increasing_and_in_dict(db):
         m = await service.create_message(db, ch.id, "alice", f"m{i}")
         assert m["seq"] is not None
         seqs.append(m["seq"])
-    # 채널 생성 시 시스템 메시지가 먼저 seq 를 받으므로 그 뒤부터 단조 증가
+    # 채널 생성 시 시스템 메시지가 먼저 seq 를 부여받으므로 그 이후부터 단조 증가
     assert seqs == sorted(seqs) and len(set(seqs)) == len(seqs)
     assert all(b > a for a, b in zip(seqs, seqs[1:]))
 
@@ -76,7 +76,7 @@ async def test_get_messages_after_seq_and_before_seq(db):
     # 시스템 메시지 + m0, m1 — 오래된 것부터
     assert [m["content"] for m in before][-2:] == ["m0", "m1"]
 
-    # 기존 id 커서(after=) 도 seq 로 풀려 같은 결과
+    # 기존 id 커서(after=) 도 seq 로 변환되어 동일한 결과
     after_id, _ = await service.get_messages(db, ch.id, after=ms[2]["id"], limit=2)
     assert [m["id"] for m in after_id] == [m["id"] for m in after]
 
@@ -123,7 +123,7 @@ async def test_get_changes_since_scopes_to_my_channels_and_flags_too_many(db):
 
 async def test_unread_excludes_own_deleted_and_thread_replies(db):
     ch = await _channel(db)
-    # 시스템 메시지 1건이 이미 있다(둘 다에게 미읽음)
+    # 시스템 메시지 1건이 이미 존재(양쪽 모두에게 미읽음)
     m1 = await service.create_message(db, ch.id, "alice", "one")
     await service.create_message(db, ch.id, "bob", "from bob")
     await service.create_message(db, ch.id, "alice", "reply", parent_id=m1["id"])
@@ -145,7 +145,7 @@ async def test_mark_read_is_monotonic_and_clears_unread(db):
     bob = await _chan_for(db, "bob", ch.id)
     assert bob["unread_count"] == 0 and bob["last_read_seq"] == m2["seq"]
 
-    # 옛 메시지로 되돌리는 mark_read 는 무시된다
+    # 이전 메시지로 되돌리는 mark_read 는 무시됨
     assert await service.mark_read(db, ch.id, "bob", m1["id"]) is None
     bob = await _chan_for(db, "bob", ch.id)
     assert bob["last_read_seq"] == m2["seq"] and bob["unread_count"] == 0
@@ -180,7 +180,7 @@ async def test_mentions_counted_until_read_and_dropped_on_delete(db):
     assert [n["user_id"] for n in notifs] == ["bob"]
     assert notifs[0]["channel_id"] == ch.id and notifs[0]["seq"] == m1["seq"]
 
-    # 같은 메시지를 재처리해도 행이 늘지 않는다
+    # 동일 메시지를 재처리해도 행이 증가하지 않음
     assert await service.record_mentions(db, m1, ch.id, ["bob"]) == 0
 
     m2 = await service.create_message(db, ch.id, "alice", "@bob @carol @alice @nobody")
@@ -192,14 +192,14 @@ async def test_mentions_counted_until_read_and_dropped_on_delete(db):
     carol = await _chan_for(db, "carol", ch.id)
     alice = await _chan_for(db, "alice", ch.id)
     assert bob["mention_count"] == 2 and carol["mention_count"] == 1
-    assert alice["mention_count"] == 0  # 자기 멘션은 안 센다
+    assert alice["mention_count"] == 0  # 본인 멘션은 집계하지 않음
     assert await service.get_mention_count(db, "bob", ch.id) == 2
 
-    # m1 까지 읽음 → m2 멘션만 남는다
+    # m1 까지 읽음 → m2 멘션만 남음
     await service.mark_read(db, ch.id, "bob", m1["id"])
     assert (await _chan_for(db, "bob", ch.id))["mention_count"] == 1
 
-    # 멘션 메시지가 삭제되면 배지에서 사라진다
+    # 멘션 메시지가 삭제되면 배지에서 제외됨
     await service.soft_delete_message(db, m2["id"])
     assert (await _chan_for(db, "bob", ch.id))["mention_count"] == 0
     assert (await _chan_for(db, "carol", ch.id))["mention_count"] == 0
@@ -218,7 +218,7 @@ async def test_channel_last_message_denormalized_and_rewound_on_delete(db):
     ch = await _channel(db)
     m1 = await service.create_message(db, ch.id, "alice", "first")
     m2 = await service.create_message(db, ch.id, "bob", "second")
-    # 스레드 답글은 채널의 마지막 메시지를 바꾸지 않는다
+    # 스레드 답글은 채널의 마지막 메시지를 변경하지 않음
     await service.create_message(db, ch.id, "alice", "reply", parent_id=m1["id"])
 
     row = await _chan_for(db, "bob", ch.id)
@@ -239,7 +239,7 @@ async def test_channel_last_message_denormalized_and_rewound_on_delete(db):
 async def test_channels_sorted_by_last_activity(db):
     old = await _channel(db)
     new = await service.create_channel(db, "newer", "public", "alice", member_ids=["bob"])
-    # old 채널에 더 최근 메시지 → 위로 올라와야 한다
+    # old 채널에 더 최근 메시지 → 상위로 이동해야 함
     await service.create_message(db, old.id, "alice", "bump")
     ids = [c["id"] for c in await service.get_user_channels(db, "bob")]
     assert ids.index(old.id) < ids.index(new.id)

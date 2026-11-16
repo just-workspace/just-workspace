@@ -1,9 +1,9 @@
-"""캘린더·연락처·작업 구역 전수조사 수정 고정.
+"""캘린더·연락처·작업 구역 전수조사 수정 사항 고정.
 
-- 예외 회차(이 일정만 수정한 행) 삭제 범위: this/범위 없음 = 그 회차만, all = 시리즈 전체(화면은 범위를 묻는다)
-- 일정 수정: 보낸 null 은 비운다(알림 없음·반복 안 함·반복 종료 없음·설명·장소), 제목·시작·끝 null 은 변경 없음
-- 쓰기 공유 캘린더의 일정 수정, 2년 넘은 반복 일정, 알림(시작 시각·옮긴 회차·회차 링크), 공유 대상 없음 400
-- 연락처: 비우기, CardDAV PUT 통째 교체, vCard 가져오기(중복·CP949·깨진 파일)
+- 예외 회차(이 일정만 수정한 행) 삭제 범위: this/범위 없음 = 해당 회차만, all = 시리즈 전체(화면은 범위를 확인한다)
+- 일정 수정: 전송된 null 은 비운다(알림 없음·반복 안 함·반복 종료 없음·설명·장소), 제목·시작·끝 null 은 변경 없음
+- 쓰기 공유 캘린더의 일정 수정, 2년 넘은 반복 일정, 알림(시작 시각·이동한 회차·회차 링크), 공유 대상 없음 400
+- 연락처: 비우기, CardDAV PUT 전체 교체, vCard 가져오기(중복·CP949·손상 파일)
 - 작업: 상위 소유자의 하위 작업 삭제, parent_id 검증
 """
 
@@ -82,28 +82,28 @@ async def test_delete_exception_row_keeps_series(db_session):
         "start": "2026-10-16T06:00:00Z", "end": "2026-10-16T07:00:00Z", "title": "주간 회의(옮김)"})
     assert "2026-10-16T06:00" in await _starts(db)
 
-    # 화면이 예외 회차에 보내는 것: 범위 "이 일정만" → 그 회차만 사라지고 시리즈는 남는다
+    # 화면이 예외 회차에 전송하는 값: 범위 "이 일정만" → 해당 회차만 삭제되고 시리즈는 유지
     await cal_router.delete_event(event_id=ex_id, occurrence=None, user=owner, db=db, scope="this", notify=False)
     assert await db.get(CalendarEventDB, m["id"]) is not None
     assert await db.get(CalendarEventDB, ex_id) is None
     got = await _starts(db)
-    assert "2026-10-16T06:00" not in got and "2026-10-15T06:00" not in got   # 원래 회차도 되살아나지 않는다
+    assert "2026-10-16T06:00" not in got and "2026-10-15T06:00" not in got   # 원래 회차도 복원되지 않음
     assert got == ["2026-10-01T06:00", "2026-10-08T06:00", "2026-10-22T06:00", "2026-10-29T06:00"]
 
-    # 범위 없이 예외 행 id 만 줘도 같다(시리즈 전체가 아니다)
+    # 범위 없이 예외 행 id 만 전달해도 동일(시리즈 전체가 아님)
     ex2 = await service.update_occurrence(db, "owner", m["id"], datetime(2026, 10, 22, 6, tzinfo=UTC), {"title": "주간 회의 x"})
     await cal_router.delete_event(event_id=ex2, occurrence=None, user=owner, db=db, scope=None, notify=False)
     assert await db.get(CalendarEventDB, m["id"]) is not None
     assert len(await _starts(db)) == 3
 
-    # scope=all 은 문서대로 시리즈 전체 — 그래서 화면은 예외 회차에도 범위를 묻는다
+    # scope=all 은 문서대로 시리즈 전체 — 따라서 화면은 예외 회차에도 범위를 확인한다
     ex3 = await service.update_occurrence(db, "owner", m["id"], datetime(2026, 10, 29, 6, tzinfo=UTC), {"title": "주간 회의 y"})
     await cal_router.delete_event(event_id=ex3, occurrence=None, user=owner, db=db, scope="all", notify=False)
     assert await db.get(CalendarEventDB, m["id"]) is None
     assert await _starts(db) == []
 
 
-# ─── 3. 보낸 null 은 비운다 ───
+# ─── 3. 전송된 null 은 비운다 ───
 
 
 @pytest.mark.asyncio
@@ -115,14 +115,14 @@ async def test_update_null_clears_but_unset_and_guarded_fields_stay(db_session):
                       recurrence_end="2026-10-15T23:59:59Z")
     eid = m["id"]
 
-    # 안 보낸 칸은 그대로
+    # 전송하지 않은 필드는 유지
     await cal_router.update_event(event_id=eid, body=EventUpdate(title="주간 회의 2"), occurrence=None, user=owner, db=db)
     ev = await db.get(CalendarEventDB, eid)
     await db.refresh(ev)
     assert ev.title == "주간 회의 2" and ev.reminder_minutes == 10 and ev.description == "안건"
     assert ev.location == "3층" and ev.recurrence_rule and ev.recurrence_end is not None
 
-    # 반복 종료를 "계속"으로: 규칙에서 UNTIL 을 빼고 recurrence_end=null → 뒤 회차가 다시 나온다
+    # 반복 종료를 "계속"으로 변경: 규칙에서 UNTIL 을 제거하고 recurrence_end=null → 이후 회차가 다시 전개됨
     await cal_router.update_event(
         event_id=eid, body=EventUpdate(recurrence_rule="FREQ=WEEKLY", recurrence_end=None),
         occurrence=None, user=owner, db=db)
@@ -148,7 +148,7 @@ async def test_update_null_clears_but_unset_and_guarded_fields_stay(db_session):
     assert ev.recurrence_rule is None
     assert await _starts(db) == ["2026-10-01T06:00"]
 
-    # 아무것도 안 보내면 400
+    # 아무 필드도 전송하지 않으면 400
     with pytest.raises(HTTPException) as e:
         await cal_router.update_event(event_id=eid, body=EventUpdate(), occurrence=None, user=owner, db=db)
     assert e.value.status_code == 400
@@ -167,20 +167,20 @@ async def test_shared_writer_can_edit_and_move_is_checked(db_session):
     ev = await service.create_event(db, "owner", {
         "calendar_id": "cal-o", "title": "공유 일정", "start": "2026-10-05T01:00:00Z", "end": "2026-10-05T02:00:00Z"})
 
-    # 폼은 같은 calendar_id 를 늘 보낸다
+    # 폼은 동일한 calendar_id 를 항상 전송
     await cal_router.update_event(event_id=ev["id"], body=EventUpdate(calendar_id="cal-o", title="고침"),
                                   occurrence=None, user=guest, db=db)
     row = await db.get(CalendarEventDB, ev["id"])
     await db.refresh(row)
     assert row.title == "고침"
 
-    # 읽기 전용 공유는 여전히 못 고친다
+    # 읽기 전용 공유는 여전히 수정 불가
     with pytest.raises(HTTPException) as e:
         await cal_router.update_event(event_id=ev["id"], body=EventUpdate(calendar_id="cal-o", title="x"),
                                       occurrence=None, user=other, db=db)
     assert e.value.status_code == 404
 
-    # 쓸 수 없는 캘린더로는 못 옮긴다 / 내 캘린더로는 옮긴다
+    # 쓰기 불가 캘린더로는 이동 불가 / 본인 캘린더로는 이동 가능
     with pytest.raises(HTTPException):
         await cal_router.update_event(event_id=ev["id"], body=EventUpdate(calendar_id="cal-x"),
                                       occurrence=None, user=guest, db=db)
@@ -208,12 +208,12 @@ async def test_old_recurring_event_still_shows_and_scan_is_bounded(db_session):
     assert weekly == ["2026-10-01", "2026-10-08", "2026-10-15", "2026-10-22", "2026-10-29"]
     assert [e["start"][:10] for e in evs if e["title"] == "생일"] == ["2026-10-20"]
 
-    # 훑기 상한은 그대로 — 아주 오래된 촘촘한 규칙은 상한에서 멈춘다(끝없이 돌지 않는다)
+    # 순회 상한은 유지 — 매우 오래된 조밀한 규칙은 상한에서 중단된다(무한 반복 방지)
     await service.create_event(db, "owner", {
         "calendar_id": "cal-o", "title": "매시간", "start": "2000-01-01T00:00:00Z", "end": "2000-01-01T00:10:00Z",
         "recurrence_rule": "FREQ=HOURLY"})
     evs = await service.get_events(db, "owner", "2026-10-01T00:00:00Z", "2026-10-31T23:59:59Z")
-    assert [e for e in evs if e["title"] == "매시간"] == []          # 2만 번 훑어도 2026 년에 못 닿는다
+    assert [e for e in evs if e["title"] == "매시간"] == []          # 2만 회 순회해도 2026 년에 도달하지 못함
     evs = await service.get_events(db, "owner", "2000-01-01T00:00:00Z", "2001-01-01T00:00:00Z")
     assert len([e for e in evs if e["title"] == "매시간"]) == rrule_guard.MAX_OCCURRENCES
 
@@ -231,13 +231,13 @@ def _ev(**kw):
 def test_reminder_at_start_fires_within_grace():
     start = datetime(2026, 10, 1, 6, tzinfo=UTC)
     ev = _ev(start=start, end=start + timedelta(hours=1))
-    assert reminder._due_occurrence(ev, start - timedelta(seconds=30)) is None      # 아직
-    assert reminder._due_occurrence(ev, start + timedelta(seconds=20)) == start     # 시작 직후 검사에서 간다
-    assert reminder._due_occurrence(ev, start + timedelta(minutes=6)) is None       # 유예가 지나면 안 보낸다
+    assert reminder._due_occurrence(ev, start - timedelta(seconds=30)) is None      # 시각 미도달
+    assert reminder._due_occurrence(ev, start + timedelta(seconds=20)) == start     # 시작 직후 검사에서 발송
+    assert reminder._due_occurrence(ev, start + timedelta(minutes=6)) is None       # 유예 경과 후에는 발송하지 않음
     ev.reminder_sent = True
     assert reminder._due_occurrence(ev, start + timedelta(seconds=20)) is None
 
-    # 반복 일정의 "시작 시각" 알림 + 같은 회차 두 번 안 보내기
+    # 반복 일정의 "시작 시각" 알림 + 동일 회차 중복 발송 방지
     rec = _ev(start=start, end=start + timedelta(hours=1), recurrence_rule="FREQ=WEEKLY")
     occ = start + timedelta(days=7)
     assert reminder._due_occurrence(rec, occ - timedelta(minutes=1)) is None
@@ -245,7 +245,7 @@ def test_reminder_at_start_fires_within_grace():
     rec.reminder_last_sent_for = occ
     assert reminder._due_occurrence(rec, occ + timedelta(seconds=80)) is None
 
-    # 10분 전 알림은 예전 그대로, 이미 알린 회차가 유예 창에 남아 있어도 다음 회차를 놓치지 않는다
+    # 10분 전 알림은 기존과 동일하며, 이미 알린 회차가 유예 창에 남아 있어도 다음 회차를 누락하지 않는다
     daily = _ev(start=start, end=start + timedelta(hours=1), recurrence_rule="FREQ=DAILY", reminder_minutes=1440)
     daily.reminder_last_sent_for = start + timedelta(days=1)
     assert reminder._due_occurrence(daily, start + timedelta(days=1, seconds=30)) == start + timedelta(days=2)
@@ -257,8 +257,8 @@ def test_reminder_skips_moved_occurrence():
     occ = start + timedelta(days=7)
     now = occ - timedelta(minutes=5)
     assert reminder._due_occurrence(rec, now) == occ
-    assert reminder._due_occurrence(rec, now, moved=[occ]) is None       # 옮긴 회차는 원래 시각에 안 알린다
-    assert reminder._due_occurrence(rec, now, moved=[occ.replace(tzinfo=None)]) is None   # SQLite 의 naive 값도
+    assert reminder._due_occurrence(rec, now, moved=[occ]) is None       # 이동한 회차는 원래 시각에 알리지 않음
+    assert reminder._due_occurrence(rec, now, moved=[occ.replace(tzinfo=None)]) is None   # SQLite 의 naive 값도 동일
 
 
 @pytest.mark.asyncio
@@ -278,14 +278,14 @@ async def test_reminder_link_points_to_occurrence_and_get_event_resolves_it(db_s
     assert got.id == oid and got.is_occurrence and got.original_event_id == m["id"]
     assert got.start[:19] == occ.isoformat()[:19] and got.end[:19] == (occ + timedelta(hours=1)).isoformat()[:19]
 
-    # 남은 못 본다 / 없는 마스터는 404
+    # 타 사용자는 조회 불가 / 존재하지 않는 마스터는 404
     with pytest.raises(HTTPException) as e:
         await cal_router.get_event(event_id=oid, user=guest, db=db)
     assert e.value.status_code == 404
     with pytest.raises(HTTPException):
         await cal_router.get_event(event_id="nope_20261001T060000", user=owner, db=db)
 
-    # 그 회차가 "이 일정만" 수정된 예외면 그 행을 준다
+    # 해당 회차가 "이 일정만" 수정된 예외이면 그 행을 반환
     ex_id = await service.update_occurrence(db, "owner", m["id"], occ, {"title": "주간 회의(옮김)"})
     got = await cal_router.get_event(event_id=oid, user=owner, db=db)
     assert got.id == ex_id and got.is_exception
@@ -332,7 +332,7 @@ async def test_contact_fields_can_be_cleared(db_session):
         notes="메모", title="팀장"), user=owner, db=db)
     await c_router.update_contact(contact_id=c.id, body=ContactUpdate(is_favorite=True), user=owner, db=db)
     got = await c_router.get_contact(contact_id=c.id, user=owner, db=db)
-    assert got.organization == "Acme" and got.notes == "메모" and got.first_name == "철수"   # 안 보낸 칸은 그대로
+    assert got.organization == "Acme" and got.notes == "메모" and got.first_name == "철수"   # 전송하지 않은 필드는 유지
 
     await c_router.update_contact(contact_id=c.id, body=ContactUpdate(
         name=None, organization="", notes="", first_name=None, last_name="", emails=None), user=owner, db=db)
@@ -353,7 +353,7 @@ async def test_carddav_put_replaces_whole_contact(db_session):
     await dav_svc.upsert_contact(db, "c1", "ab", vcard_to_contact_data(VCARD_FULL))
     c = await db.get(ContactDB, "c1")
     assert c.organization == "Acme" and "kim@x.io" in c.emails and "010-1111-2222" in c.phones and c.notes == "memo"
-    # 휴대폰에서 전화·메일·메모·소속을 지우고 올림 → 서버에서도 지워진다
+    # 휴대폰에서 전화·메일·메모·소속을 삭제하고 업로드 → 서버에서도 삭제됨
     await dav_svc.upsert_contact(db, "c1", "ab", vcard_to_contact_data(VCARD_BARE))
     await db.refresh(c)
     assert c.full_name == "Kim" and c.organization is None and c.emails is None and c.phones is None and c.notes is None
@@ -370,7 +370,7 @@ async def test_vcf_import_dedupes_cp949_and_broken_tail(db_session):
     two = (VCARD_FULL + "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Lee\r\nN:Lee;;;;\r\nEND:VCARD\r\n").encode()
     r = await c_router.import_vcf(file=_upload(two), book_id="ab", user=owner, db=db)
     assert (r["imported"], r["skipped"], r["errors"]) == (2, 0, 0)
-    # 같은 파일 다시 → 중복 없음
+    # 동일 파일 재가져오기 → 중복 없음
     r = await c_router.import_vcf(file=_upload(two), book_id="ab", user=owner, db=db)
     assert (r["imported"], r["skipped"]) == (0, 2)
 
@@ -381,7 +381,7 @@ async def test_vcf_import_dedupes_cp949_and_broken_tail(db_session):
     lst = await c_router.list_contacts(q="홍길동", book_id=None, page=0, limit=50, favorite=None, group=None, user=owner, db=db)
     assert [c.name for c in lst["contacts"]] == ["홍길동"]
 
-    # 뒤가 깨진 파일 — 500 이 아니라 읽은 데까지 + errors
+    # 뒷부분이 손상된 파일 — 500 이 아니라 읽은 부분까지 처리 + errors
     broken = ("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Park\r\nN:Park;;;;\r\nEND:VCARD\r\n"
               "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Bad\r\nthis line is not a property\r\n").encode()
     r = await c_router.import_vcf(file=_upload(broken), book_id="ab", user=owner, db=db)
@@ -398,15 +398,15 @@ async def test_parent_owner_deletes_assignee_subtask_and_parent_id_is_validated(
     parent = await t_router.create_task(body=TaskCreate(title="상위", assignee_id="guest"), user=owner, db=db)
     sub = await t_router.create_task(body=TaskCreate(title="담당자가 넣은 항목", parent_id=parent.id), user=guest, db=db)
     assert sub.user_id == "guest"
-    # 상위 작업을 만든 사람은 담당자가 넣은 하위 작업을 지울 수 있다
+    # 상위 작업 생성자는 담당자가 추가한 하위 작업을 삭제할 수 있다
     assert await t_router.delete_task(task_id=sub.id, user=owner, db=db) == {"ok": True}
-    # 담당자는 여전히 남(소유자)의 최상위 작업을 못 지운다
+    # 담당자는 여전히 타 사용자(소유자)의 최상위 작업을 삭제할 수 없다
     with pytest.raises(HTTPException) as e:
         await t_router.delete_task(task_id=parent.id, user=guest, db=db)
     assert e.value.status_code == 403
 
     mine = await t_router.create_task(body=TaskCreate(title="남의 작업"), user=other, db=db)
-    # 남의 작업 밑으로 끼워 넣기 · 자기 자신 · 2단계 · 하위가 있는 작업 옮기기 → 400
+    # 타 사용자의 작업 하위로 삽입 · 자기 자신 · 2단계 · 하위가 있는 작업 이동 → 400
     for tid, pid, user in ((mine.id, parent.id, other), (parent.id, parent.id, owner)):
         with pytest.raises(HTTPException) as e:
             await t_router.update_task(task_id=tid, body=TaskUpdate(parent_id=pid), user=user, db=db)
@@ -418,6 +418,6 @@ async def test_parent_owner_deletes_assignee_subtask_and_parent_id_is_validated(
         with pytest.raises(HTTPException) as e:
             await t_router.update_task(task_id=tid, body=TaskUpdate(parent_id=pid), user=owner, db=db)
         assert e.value.status_code == 400
-    # 정상 이동은 된다
+    # 정상 이동은 허용
     moved = await t_router.update_task(task_id=b.id, body=TaskUpdate(parent_id=a.id), user=owner, db=db)
     assert moved.parent_id == a.id

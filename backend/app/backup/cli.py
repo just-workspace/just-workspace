@@ -2,18 +2,18 @@
 
     backup create [--kind full|pre-update] [--dest DIR] [--include-files] [--pack] [--json]
     backup list [--dest DIR] [--json]
-    backup inspect <백업> [--json]            내용 요약(풀지 않는다, DB·docker 없이)
-    backup verify <백업>                      모든 파일을 manifest 의 SHA-256 과 견준다
-    backup pack <백업 폴더> [<파일>]          tar 한 개(.jwbak)로 묶는다
-    backup extract-config <백업> --out DIR    설정 묶음(.env …)만 꺼낸다(새 서버로 옮길 때, DB·docker 없이)
-    backup plan [--kind …] [--json]           실행할 단계 목록만 보여 준다(설치 관리자용)
+    backup inspect <백업> [--json]            내용 요약(추출하지 않는다, DB·docker 불필요)
+    backup verify <백업>                      모든 파일을 manifest 의 SHA-256 과 대조한다
+    backup pack <백업 폴더> [<파일>]          tar 한 개(.jwbak)로 병합한다
+    backup extract-config <백업> --out DIR    설정 묶음(.env …)만 추출한다(새 서버로 이전 시, DB·docker 불필요)
+    backup plan [--kind …] [--json]           실행할 단계 목록만 출력한다(설치 관리자용)
     restore <백업> [--items a,b] [--with-config] [--yes] [--json]
 
 암호는 명령 인자로 받지 않는다 — `--password-file <파일>` 또는 환경변수 `JW_BACKUP_PASSWORD`.
 
-종료 코드: 0 성공 · 1 실패 · 2 일부 항목이 빠진 백업(무엇이 빠졌는지 출력) / 잘못된 사용법 · 3 확인 질문에서 취소.
-복원은 backend 를 세우므로 실행 중인 backend 안에서는 돌지 않는다 — scripts/restore.sh 가 일회용
-컨테이너에서 부른다.
+종료 코드: 0 성공 · 1 실패 · 2 일부 항목이 누락된 백업(누락 항목 출력) / 잘못된 사용법 · 3 확인 질문에서 취소.
+복원은 backend 를 중지하므로 실행 중인 backend 안에서는 실행할 수 없다 — scripts/restore.sh 가 일회용
+컨테이너에서 호출한다.
 """
 
 from __future__ import annotations
@@ -220,7 +220,7 @@ def _cmd_restore(args) -> int:
 
 
 def add_parsers(sub) -> None:
-    """app/cli.py 의 하위 명령에 backup · restore 를 더한다."""
+    """app/cli.py 의 하위 명령에 backup · restore 를 추가한다."""
     from app.backup.format import KIND_FULL, KINDS
 
     def password_opt(p) -> None:

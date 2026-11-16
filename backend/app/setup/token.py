@@ -1,16 +1,16 @@
-"""첫 관리자 만들기를 지키는 일회용 설정 토큰.
+"""첫 관리자 생성을 보호하는 일회용 설정 토큰.
 
-관리자가 한 명도 없는 서버에서 `POST /api/setup/admin` 은 인증할 계정이 없다. 그래서 "서버 터미널을
+관리자가 한 명도 없는 서버에서 `POST /api/setup/admin` 은 인증할 계정이 없다. 따라서 "서버 터미널을
 볼 수 있는 사람"만 아는 값을 요구한다.
 
-- 설치 관리자가 꾸린 설치(`JW_INSTALLER_KEY` 가 있다)에서는 그 API 가 아예 닫혀 있다 — 관리자는 설치
-  관리자가 `seed-admin` 으로 만든다. 이 모듈은 토큰을 만들지 않는다.
-- 그 밖의 설치(compose 로 직접 띄움)에서는 backend 가 관리자 0명으로 뜰 때마다 토큰을 새로 만들어
-  컨테이너 로그에 한 번 찍는다. `python -m app.cli setup-token` 으로 다시 발급할 수 있다.
-- 저장은 DB(`system_settings` 의 `setup.token_hash`)에 SHA-256 해시로만 한다. 워커가 여럿이어도, backend 밖에서
-  도는 CLI 도 같은 값을 본다. 토큰이 256비트 난수라 느린 해시는 필요 없다.
-- 관리자가 만들어지면 지운다. 웹 경로에서는 "토큰 행 지우기"와 "계정 넣기"가 한 트랜잭션이라 같은 토큰으로
-  두 번 만들 수 없다.
+- 설치 관리자가 구성한 설치(`JW_INSTALLER_KEY` 존재)에서는 해당 API 가 차단되어 있다 — 관리자는 설치
+  관리자가 `seed-admin` 으로 생성한다. 본 모듈은 토큰을 생성하지 않는다.
+- 그 외의 설치(compose 로 직접 기동)에서는 backend 가 관리자 0명 상태로 기동할 때마다 토큰을 새로 생성하여
+  컨테이너 로그에 1회 출력한다. `python -m app.cli setup-token` 으로 재발급할 수 있다.
+- 저장은 DB(`system_settings` 의 `setup.token_hash`)에 SHA-256 해시로만 한다. 워커가 복수여도, backend 외부에서
+  실행되는 CLI 도 동일 값을 조회한다. 토큰이 256비트 난수이므로 느린 해시는 불필요하다.
+- 관리자가 생성되면 삭제한다. 웹 경로에서는 "토큰 행 삭제"와 "계정 삽입"이 한 트랜잭션이므로 동일 토큰으로
+  두 번 생성할 수 없다.
 """
 from __future__ import annotations
 
@@ -28,12 +28,12 @@ KEY = "setup.token_hash"
 INSTALLER_ENV = "JW_INSTALLER_KEY"
 TOKEN_BYTES = 32
 
-MODE_INSTALLER = "installer"   # 웹의 첫 관리자 만들기는 닫혀 있다
-MODE_TOKEN = "token"           # 설정 토큰이 있어야 만든다
+MODE_INSTALLER = "installer"   # 웹의 첫 관리자 생성 차단
+MODE_TOKEN = "token"           # 설정 토큰이 있어야 생성 가능
 
 
 def installer_managed() -> bool:
-    """설치 관리자가 꾸린 설치인가 — 설치 관리자가 `.env` 에 넣는 내부 API 키로 구분한다."""
+    """설치 관리자가 구성한 설치인지 여부 — 설치 관리자가 `.env` 에 기록하는 내부 API 키로 판별한다."""
     return bool(os.environ.get(INSTALLER_ENV, "").strip())
 
 
@@ -51,7 +51,7 @@ async def has_admin(db: AsyncSession) -> bool:
 
 
 async def issue(db: AsyncSession) -> str:
-    """새 토큰을 만들어 해시를 저장하고(이전 토큰은 못 쓰게 된다) 평문을 돌려준다. 커밋까지 한다."""
+    """새 토큰을 생성해 해시를 저장하고(이전 토큰은 무효화된다) 평문을 반환한다. 커밋까지 수행한다."""
     token = secrets.token_urlsafe(TOKEN_BYTES)
     row = await db.get(SystemSetting, KEY)
     if row:
@@ -63,19 +63,19 @@ async def issue(db: AsyncSession) -> str:
 
 
 async def matches(db: AsyncSession, candidate: str | None) -> bool:
-    """받은 값이 저장된 토큰과 같은가(상수 시간 비교). 토큰이 없으면 항상 False."""
+    """수신한 값과 저장된 토큰의 일치 여부(상수 시간 비교). 토큰이 없으면 항상 False."""
     stored = await db.scalar(select(SystemSetting.value).where(SystemSetting.key == KEY))
     given = digest(candidate or "")
-    # 저장된 값이 없어도 비교는 한 번 한다 — 응답 시간으로 "토큰이 있는지"를 가르지 못하게
+    # 저장된 값이 없어도 비교는 1회 수행 — 응답 시간으로 토큰 존재 여부를 판별하지 못하도록 함
     ok = hmac.compare_digest(given, stored or ("0" * len(given)))
     return bool(stored) and bool(candidate) and ok
 
 
 async def consume(db: AsyncSession, candidate: str | None) -> bool:
-    """토큰이 맞으면 그 행을 지우고 True(커밋은 호출한 쪽이 계정과 함께 한다).
+    """토큰이 일치하면 해당 행을 삭제하고 True 를 반환한다(커밋은 호출자가 계정 생성과 함께 수행한다).
 
-    지우기는 해시까지 조건에 넣은 DELETE 한 번이다 — 같은 토큰으로 동시에 들어온 두 요청 가운데 하나만
-    행을 지우고, 다른 하나는 0행이라 거부된다.
+    삭제는 해시까지 조건에 포함한 DELETE 1회이다 — 동일 토큰으로 동시에 수신된 두 요청 중 하나만
+    행을 삭제하고, 다른 하나는 0행이므로 거부된다.
     """
     if not await matches(db, candidate):
         return False
@@ -86,7 +86,7 @@ async def consume(db: AsyncSession, candidate: str | None) -> bool:
 
 
 async def revoke(db: AsyncSession) -> None:
-    """남은 토큰을 지운다(커밋은 호출한 쪽)."""
+    """잔여 토큰을 삭제한다(커밋은 호출자가 수행)."""
     await db.execute(delete(SystemSetting).where(SystemSetting.key == KEY))
 
 
@@ -104,9 +104,9 @@ def banner(token: str) -> str:
 
 
 async def announce_on_start() -> str | None:
-    """기동 때 한 번 — 관리자가 없고 설치 관리자 설치가 아니면 토큰을 새로 만들어 로그에 찍는다.
+    """기동 시 1회 — 관리자가 없고 설치 관리자 설치가 아니면 토큰을 새로 생성하여 로그에 출력한다.
 
-    워커가 여럿 동시에 뜨므로 락을 잡은 워커 하나만 한다. 돌려주는 값은 찍은 토큰(안 찍었으면 None).
+    여러 워커가 동시에 기동하므로 락을 획득한 워커 하나만 수행한다. 반환값은 출력한 토큰(출력하지 않았으면 None).
     """
     from app.db.session import async_session
 
@@ -114,7 +114,7 @@ async def announce_on_start() -> str | None:
         return None
     async with async_session() as db:
         if await has_admin(db):
-            await revoke(db)   # 관리자가 CLI·env 시드로 만들어진 경우 남은 토큰 정리
+            await revoke(db)   # 관리자가 CLI·env 시드로 생성된 경우 잔여 토큰 삭제
             await db.commit()
             return None
         from app.jobs.lock import try_acquire

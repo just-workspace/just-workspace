@@ -1,10 +1,10 @@
 """Mail tools — 검색·본문·첨부 읽기 (IMAP·POP3 공통).
 
-★ 반환값은 **신뢰할 수 없는 외부 입력**이다(메일은 누구나 보낼 수 있다 → 프롬프트 인젝션).
-세 도구 모두 untrusted_output=True 로 신뢰 경계에 감싼다.
+주의: 반환값은 **신뢰할 수 없는 외부 입력**이다(메일은 누구나 발송 가능 → 프롬프트 인젝션).
+세 도구 모두 untrusted_output=True 로 신뢰 경계를 적용한다.
 
-예전엔 imap_client 를 직접 불러 POP3 계정에서는 메일 도구가 동작하지 않았다 →
-mail.router._incoming(account) 로 수신 방식에 맞는 클라이언트를 고른다.
+과거에는 imap_client 를 직접 호출하여 POP3 계정에서 메일 도구가 동작하지 않았다 →
+mail.router._incoming(account) 로 수신 방식에 맞는 클라이언트를 선택한다.
 """
 
 import logging
@@ -21,7 +21,7 @@ from app.mcp.tools._common import (
 
 logger = logging.getLogger(__name__)
 
-_BODY_MAX = 20_000     # 본문이 길면 모델 컨텍스트를 통째로 먹는다
+_BODY_MAX = 20_000     # 본문이 길면 모델 컨텍스트를 전부 소모함
 _ATT_MAX_FILE = 30 * 1024 * 1024
 _ATT_READ_DEFAULT = 20_000
 _ATT_READ_CAP = 200_000
@@ -38,7 +38,7 @@ async def _account(user: User):
 
 async def mail_search(user: User, query: str = "", mailbox: str = "INBOX", limit: int = 10,
                       cursor: str = "", **_: object) -> dict:
-    """받은 메일 검색(최신순). query 가 비면 최근 메일."""
+    """수신 메일 검색(최신순). query 가 비어 있으면 최근 메일 반환."""
     n = clamp(limit, 1, 50, 10)
     qh = query_hash("mail_search", (query or "").strip(), mailbox)
     off, cerr = read_cursor(cursor, qh)
@@ -49,7 +49,7 @@ async def mail_search(user: User, query: str = "", mailbox: str = "INBOX", limit
     except Exception as e:  # noqa: BLE001
         return err("unavailable", f"메일 계정이 설정되지 않았습니다: {e}")
     try:
-        # fetch_messages 는 page*limit 단위라 offset 이 limit 배수가 아니면 앞에서 잘라낸다
+        # fetch_messages 는 page*limit 단위이므로 offset 이 limit 배수가 아니면 앞부분을 잘라낸다
         page, skip = divmod(off, n)
         raw, total = await client.fetch_messages(account, mailbox, page=page, limit=n,
                                                  query=(query.strip() or None))
@@ -60,7 +60,7 @@ async def mail_search(user: User, query: str = "", mailbox: str = "INBOX", limit
     except Exception as e:  # noqa: BLE001
         logger.warning("[mcp] mail_search failed: %s", e)
         return err("unavailable", f"메일 서버 조회 실패: {e}")
-    # IMAP 순서는 메일함 시퀀스(최신순)라 같은 조건이면 페이지마다 같다
+    # IMAP 순서는 메일함 시퀀스(최신순)이므로 동일 조건이면 페이지별 순서가 동일하다
     rows = [
         drop_empty({
             "id": m.get("id"),
@@ -73,7 +73,7 @@ async def mail_search(user: User, query: str = "", mailbox: str = "INBOX", limit
         })
         for m in raw
     ]
-    # 신뢰 경계 래퍼({untrusted, source, data})는 execute_tool 이 씌운다 — 여기서는 data 안을 맞춘다
+    # 신뢰 경계 래퍼({untrusted, source, data})는 execute_tool 이 적용한다 — 여기서는 data 내부만 구성한다
     return fit_page(rows, offset=off, total=int(total or 0), list_key="messages", qhash=qh,
                     extras={"mailbox": mailbox})
 
@@ -88,7 +88,7 @@ def _html_to_text(html: str) -> str:
 
 async def mail_read(user: User, message_id: str, mailbox: str = "INBOX",
                     max_chars: int = _BODY_MAX, offset: int = 0, **_: object) -> dict:
-    """메일 본문 + 첨부 목록(attachment_id 로 mail_read_attachment 에 넘긴다)."""
+    """메일 본문 + 첨부 목록(attachment_id 를 mail_read_attachment 에 전달한다)."""
     n = clamp(max_chars, 500, _BODY_MAX, _BODY_MAX)
     off = clamp(offset, 0, 1 << 40, 0)
     try:
@@ -135,7 +135,7 @@ async def mail_read(user: User, message_id: str, mailbox: str = "INBOX",
 
 async def mail_read_attachment(user: User, message_id: str, attachment_id: str, mailbox: str = "INBOX",
                                max_chars: int = _ATT_READ_DEFAULT, offset: int = 0, **_: object) -> dict:
-    """메일 첨부를 읽는다 — 문서(docx·xlsx·pptx·pdf·hwp·hwpx)는 구조째, 텍스트는 그대로."""
+    """메일 첨부를 읽는다 — 문서(docx·xlsx·pptx·pdf·hwp·hwpx)는 구조 포함, 텍스트는 원문 그대로."""
     n = clamp(max_chars, 200, _ATT_READ_CAP, _ATT_READ_DEFAULT)
     off = clamp(offset, 0, 1 << 40, 0)
     aid = str(attachment_id or "")

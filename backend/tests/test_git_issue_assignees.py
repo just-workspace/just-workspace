@@ -1,6 +1,6 @@
-"""이슈 응답에 담당자(assignees)가 실린다 — 목록·상세·라벨 교체 모두.
+"""이슈 응답에 담당자(assignees)가 포함된다 — 목록·상세·라벨 교체 모두.
 
-Gitea 호출은 가짜로 바꾼다. 여기서 보는 것은 응답 매핑이다("담당 이름").
+Gitea 호출은 모의 객체로 대체한다. 검증 대상은 응답 매핑이다("담당 이름").
 """
 
 import pytest
@@ -46,8 +46,8 @@ def fake_gitea(monkeypatch):
 @pytest.mark.asyncio
 async def test_list_issues_maps_assignees(fake_gitea):
     res = await git_router.list_issues("just", "ws", state="open", page=1, labels=None, user=None)
-    assert [a.login for a in res[0].assignees] == ["haneul"]  # None 항목은 건너뛴다
-    assert res[1].assignees == []  # Gitea 가 null 을 줘도 빈 배열
+    assert [a.login for a in res[0].assignees] == ["haneul"]  # None 항목은 제외
+    assert res[1].assignees == []  # Gitea 가 null 을 반환해도 빈 배열
 
 
 @pytest.mark.asyncio

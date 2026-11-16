@@ -12,9 +12,9 @@ class ChannelCreate(BaseModel):
     type: str = Field("public", pattern=r"^(public|private)$")
     description: str | None = Field(None, max_length=500)
     member_ids: list[str] = Field(default_factory=list)
-    # 음성 채널로 만들기. 종류(public/private)는 그대로 — 멤버십 규칙이 같다.
+    # 음성 채널로 생성. 종류(public/private)는 유지 — 멤버십 규칙 동일.
     voice: bool = False
-    # 포럼 채널(chat22) — 게시판 데이터의 채팅 보기. board_id 가 있으면 그 게시판 연결, 없으면 같은 이름 게시판 생성
+    # 포럼 채널(chat22) — 게시판 데이터의 채팅 보기. board_id 가 있으면 해당 게시판 연결, 없으면 동일 이름의 게시판 생성
     forum: bool = False
     board_id: str | None = None
 
@@ -48,12 +48,12 @@ class MessageCreate(BaseModel):
     message_type: str = Field("text", pattern=r"^(text|file|system)$")
     file_meta: str | None = None
     parent_id: str | None = None
-    # 답글을 채널 타임라인에도 보이게("채널에도 보내기"). parent_id 가 없으면 무시.
+    # 답글을 채널 타임라인에도 표시("채널에도 보내기"). parent_id 가 없으면 무시.
     also_to_channel: bool = False
-    # 인라인 답장(chat22) — 같은 채널(스레드 안이면 같은 스레드) 메시지. reply_ping = 원문 작성자에게 알림
+    # 인라인 답장(chat22) — 동일 채널(스레드 내부이면 동일 스레드)의 메시지. reply_ping = 원문 작성자에게 알림
     reply_to_id: str | None = None
     reply_ping: bool = True
-    # @silent — 푸시·멘션 알림 없음. 본문이 "@silent " 로 시작해도 서버가 떼고 켠다
+    # @silent — 푸시·멘션 알림 없음. 본문이 "@silent " 로 시작하는 경우에도 서버가 해당 접두를 제거하고 활성화한다
     silent: bool = False
 
 
@@ -69,7 +69,7 @@ class ChannelPrefsUpdate(BaseModel):
     push: bool | None = None
     email: bool | None = None
     thread_replies: bool | None = None
-    # 음소거 기간(chat22) — 15·60·180·480·1440, null 을 명시 = 내가 끌 때까지(필드를 안 보내면 그대로)
+    # 음소거 기간(chat22) — 15·60·180·480·1440, null 명시 = 사용자가 직접 해제할 때까지(필드 미전송 시 변경 없음)
     muted_minutes: int | None = None
 
 
@@ -77,12 +77,12 @@ MUTE_MINUTES = (15, 60, 180, 480, 1440)
 
 
 class ThreadReadRequest(BaseModel):
-    # 비우면 마지막 답글까지
+    # 미지정 시 마지막 답글까지
     seq: int | None = Field(None, ge=0)
 
 
 class UserStatusUpdate(BaseModel):
-    """PUT /me/status — 보낸 필드만 바뀐다. null 을 명시하면 그 값을 비운다."""
+    """PUT /me/status — 전송된 필드만 변경된다. null 을 명시하면 해당 값을 비운다."""
     mode: str | None = Field(None, pattern=r"^(auto|away|dnd|invisible)$")
     custom_emoji: str | None = Field(None, max_length=16)
     custom_text: str | None = Field(None, max_length=100)
@@ -159,7 +159,7 @@ class ThreadStart(BaseModel):
 
 
 class ThreadPatch(BaseModel):
-    """보낸 필드만 바뀐다(name: null 을 명시하면 이름 지우기)."""
+    """전송된 필드만 변경된다(name: null 명시 시 이름 삭제)."""
     name: str | None = Field(None, max_length=100)
     archived: bool | None = None
     auto_archive_minutes: int | None = None
@@ -170,7 +170,7 @@ class EmojiRename(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
-    """PATCH /me/profile — 보낸 필드만. null/빈 문자열 = 비우기."""
+    """PATCH /me/profile — 전송된 필드만 변경. null/빈 문자열 = 비우기."""
     bio: str | None = Field(None, max_length=190)
     timezone: str | None = Field(None, max_length=64)
 
@@ -187,11 +187,11 @@ class NotificationReadRequest(BaseModel):
 # ─── Voice channel ───
 
 class VoiceStateUpdate(BaseModel):
-    """내 음성 상태 — 토큰 발급 때 받은 identity 로 나를 가리킨다."""
+    """호출 사용자의 음성 상태 — 토큰 발급 시 수신한 identity 로 본인을 식별한다."""
     identity: str = Field(..., min_length=1, max_length=64)
     muted: bool = False
     deafened: bool = False
-    # 보내는 음질 단계(voice|music|lossless|hires) — 다른 사람 화면의 배지용. 서버는 검증만 한다.
+    # 송신 음질 단계(voice|music|lossless|hires) — 다른 사용자 화면의 배지용. 서버는 검증만 수행한다.
     tier: str = Field("voice", pattern=r"^(voice|music|lossless|hires)$")
 
 
@@ -200,7 +200,7 @@ class VoiceLeave(BaseModel):
 
 
 class ChatServerSettingsUpdate(BaseModel):
-    """PUT /server-settings — 보낸 필드만. null/빈 문자열 = 비우기(default_notify_level 은 기본 mentions 로)."""
+    """PUT /server-settings — 전송된 필드만 변경. null/빈 문자열 = 비우기(default_notify_level 은 기본값 mentions 로 설정)."""
     name: str | None = Field(None, max_length=100)
     description: str | None = Field(None, max_length=500)
     default_notify_level: str | None = Field(None, pattern=r"^(all|mentions|none)$")

@@ -1,10 +1,10 @@
-"""채팅 권한 — 지금 동작 스냅샷(안전 전환의 1단계).
+"""채팅 권한 — 현재 동작 스냅샷(안전 전환의 1단계).
 
-역할·권한 엔진을 넣기 전에 "누가 무엇을 할 수 있나"를 채널 종류(공개·비공개·보관·음성·DM) ×
-행위자(owner·admin·member·비멤버·전역 관리자) × 동작 전부에 대해 박제한다. 엔진이 그림자/강제 모드로
-들어간 뒤에도 이 표가 그대로 통과해야 한다(기본 역할 세트 = 지금 동작).
+역할·권한 엔진 도입 전에 "누가 무엇을 할 수 있나"를 채널 종류(공개·비공개·보관·음성·DM) ×
+행위자(owner·admin·member·비멤버·전역 관리자) × 동작 전체에 대해 고정한다. 엔진이 그림자/강제 모드로
+도입된 이후에도 이 표가 그대로 통과해야 한다(기본 역할 세트 = 현재 동작).
 
-기대값은 tests/chat_perm_matrix.py 의 EXPECTED 표(손으로 적은 것).
+기대값은 tests/chat_perm_matrix.py 의 EXPECTED 표(수기 작성).
 """
 
 import pytest
@@ -25,7 +25,7 @@ async def test_current_behavior(world, action, ch, actor):
 
 
 async def test_group_mention_reaches_all_members(world):
-    """@everyone(그룹 멘션)은 권한 없이 누구나 — 보낸 사람 빼고 채널 멤버 전원에게 그룹 멘션 행이 생긴다."""
+    """@everyone(그룹 멘션)은 권한 없이 누구나 사용 가능 — 발신자를 제외한 채널 멤버 전원에게 그룹 멘션 행이 생성된다."""
     from sqlalchemy import select
     from app.chat import router as r
     from app.chat.schemas import MessageCreate

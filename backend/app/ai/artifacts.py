@@ -1,12 +1,12 @@
-"""결과물 — AI 가 만든 파일·묶음(zip) 작업·만료 링크·내 파일 저장.
+"""결과물 — AI 가 생성한 파일·묶음(zip) 작업·만료 링크·내 파일 저장.
 
-* 파일 하나(docs_create)는 바로 만든다. 여러 개(docs_create_bundle)와 파일 압축(files_zip)은 **서버 작업**
-  (작업 id, 화면을 떠나도 계속) — 진행은 실시간 이벤트 ``ai.artifact_job`` 으로, 끝나면 알림도 남긴다.
-* 묶음 일부가 실패하면 zip 에는 만든 것만 넣고 실패 항목 목록을 남긴다. [이것만 다시] = retry_item.
-* 내려받기 링크는 24시간(서명 exp·sig) + **소유자 로그인** 둘 다 맞아야 한다. 지나면 "링크 만료" →
-  [다시 만들기](저장해 둔 입력으로 다시 생성) 또는 내 파일에서 열기.
-* 내 파일 저장: ``my/AI 결과물/YYYY-MM-DD 대화 제목/`` — 업로드와 같은 대상 판정·크기 상한·사용자 할당.
-* 바이트는 ARTIFACT_DIR(임시)에 24시간, 행은 30일(다시 만들기용 입력 포함).
+* 단일 파일(docs_create)은 즉시 생성한다. 복수 파일(docs_create_bundle)과 파일 압축(files_zip)은 **서버 작업**
+  (작업 id, 화면 이탈 후에도 계속 수행) — 진행 상황은 실시간 이벤트 ``ai.artifact_job`` 으로 전달하고, 완료 시 알림도 기록한다.
+* 묶음 일부가 실패하면 zip 에는 생성된 항목만 포함하고 실패 항목 목록을 기록한다. [이것만 다시] = retry_item.
+* 내려받기 링크는 24시간(서명 exp·sig) + **소유자 로그인** 두 조건을 모두 충족해야 한다. 경과 시 "링크 만료" →
+  [다시 만들기](저장된 입력으로 재생성) 또는 내 파일에서 열기.
+* 내 파일 저장: ``my/AI 결과물/YYYY-MM-DD 대화 제목/`` — 업로드와 동일한 대상 판정·크기 상한·사용자 할당 적용.
+* 바이트는 ARTIFACT_DIR(임시)에 24시간, 행은 30일 보존(재생성용 입력 포함).
 """
 
 from __future__ import annotations
@@ -41,13 +41,13 @@ MAX_BUNDLE = 10
 ROOT_FOLDER = "AI 결과물"
 DEFAULT_TITLE = "새 대화"
 EVENT = "ai.artifact_job"
-# 파일 압축(files_zip) 상한 — 관리자 설정(system_settings)으로 바꿀 수 있다
+# 파일 압축(files_zip) 상한 — 관리자 설정(system_settings)으로 변경 가능
 ZIP_MAX_FILES_KEY = "ai.zip.max_files"
 ZIP_MAX_BYTES_KEY = "ai.zip.max_bytes"
 ZIP_MAX_FILES = 2_000
 ZIP_MAX_BYTES = 2 * 1024 ** 3
 MANIFEST_NAME = "압축 목록.txt"
-_ITEMS_OUT = 200             # 작업 응답에 싣는 항목 상한(실패 항목은 늘 먼저)
+_ITEMS_OUT = 200             # 작업 응답에 포함하는 항목 상한(실패 항목을 항상 우선 배치)
 
 _STORED_EXT = {
     ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".avif", ".mp4", ".mov", ".mkv", ".webm", ".mp3", ".m4a",
@@ -56,7 +56,7 @@ _STORED_EXT = {
 }
 _BAD_NAME = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 
-_build_sem = asyncio.Semaphore(2)     # 워커 하나에서 동시에 만드는 문서 수(CPU)
+_build_sem = asyncio.Semaphore(2)     # 워커 1개에서 동시에 생성하는 문서 수(CPU)
 _tasks: set = set()
 _last_sweep = 0.0
 
@@ -71,14 +71,14 @@ class ArtifactError(Exception):
 
 
 def session():
-    """DB 세션 진입점 — 테스트가 바꿔 끼운다."""
+    """DB 세션 진입점 — 테스트에서 대체한다."""
     from app.db.session import async_session
 
     return async_session()
 
 
 def _spawn(coro) -> None:
-    """백그라운드 작업(테스트가 바꿔 끼워 직접 await 한다)."""
+    """백그라운드 작업(테스트에서 대체하여 직접 await 한다)."""
     t = asyncio.create_task(coro)
     _tasks.add(t)
     t.add_done_callback(_tasks.discard)
@@ -149,7 +149,7 @@ def download_url(a: AIArtifact, absolute: bool = False) -> str:
 
 # ── 상태 · 직렬화 ─────────────────────────────────────────────
 def real_path(a: AIArtifact) -> str:
-    """바이트 위치 — 파일 압축(files_zip)의 zip 은 내 파일에 저장된 그 파일, 나머지는 임시 디렉터리."""
+    """바이트 위치 — 파일 압축(files_zip)의 zip 은 내 파일에 저장된 해당 파일, 그 외는 임시 디렉터리."""
     info = _uj(a.info, {}) or {}
     if info.get("source") == "files" and info.get("real"):
         return info["real"]
@@ -227,7 +227,7 @@ def job_out(job: AIArtifactJob, zip_art: AIArtifact | None = None, absolute: boo
         "kind": job.kind or "docs",
         "name": job.name,
         "status": st,                       # running | done | partial | failed
-        "link_status": st_link,             # ready | expired | failed | None(아직)
+        "link_status": st_link,             # ready | expired | failed | None(미완료)
         "total": int(job.total or len(items)),
         "done": done,
         "ok": ok,
@@ -263,7 +263,7 @@ async def job_view(db, job: AIArtifactJob, absolute: bool = False) -> dict:
     z = await db.get(AIArtifact, job.zip_artifact_id) if job.zip_artifact_id else None
     out = job_out(job, z, absolute, await conversation_title(db, job.conversation_id))
     if (job.kind or "docs") == "docs":
-        # 문서 묶음은 항목마다 미리보기·내려받기 — 항목 수는 MAX_BUNDLE 이하
+        # 문서 묶음은 항목별 미리보기·내려받기 제공 — 항목 수는 MAX_BUNDLE 이하
         for it in out["items"]:
             a = await db.get(AIArtifact, it["artifact_id"]) if it.get("artifact_id") else None
             if a is not None:
@@ -275,7 +275,7 @@ async def job_view(db, job: AIArtifactJob, absolute: bool = False) -> dict:
 
 # ── 정리 ──────────────────────────────────────────────────────
 async def sweep(db, force: bool = False) -> int:
-    """만료 지난 바이트 삭제 + 30일 지난 행 삭제. 워커마다 10분에 한 번."""
+    """만료된 바이트 삭제 + 30일 경과 행 삭제. 워커별 10분에 1회 수행."""
     global _last_sweep
     if not force and time.time() - _last_sweep < 600:
         return 0
@@ -302,9 +302,9 @@ async def sweep(db, force: bool = False) -> int:
     return n
 
 
-# ── 문서 하나 ─────────────────────────────────────────────────
+# ── 단일 문서 ─────────────────────────────────────────────────
 async def _build_into(a: AIArtifact, spec: dict) -> None:
-    """spec 으로 바이트를 만들어 a 에 반영(성공·실패 모두). 커밋은 호출자."""
+    """spec 으로 바이트를 생성하여 a 에 반영(성공·실패 모두). 커밋은 호출자가 수행."""
     try:
         async with _build_sem:
             built = await asyncio.to_thread(docgen.build, spec)
@@ -313,7 +313,7 @@ async def _build_into(a: AIArtifact, spec: dict) -> None:
         a.info = _j(built.info)
         a.status = "ready"
         a.error = None
-    except Exception as e:  # noqa: BLE001 — 실패는 카드(다시 만들기)로 보인다
+    except Exception as e:  # noqa: BLE001 — 실패는 카드(다시 만들기)로 표시된다
         logger.warning("[artifacts] build failed: %s", e, exc_info=True)
         a.status = "failed"
         a.error = (str(e) or e.__class__.__name__)[:500]
@@ -324,7 +324,7 @@ async def _build_into(a: AIArtifact, spec: dict) -> None:
 
 async def create_artifact(db, user_id: str, spec: dict, conversation_id: str | None = None,
                           job_id: str | None = None, item_index: int | None = None) -> AIArtifact:
-    """정리된 입력(docgen.normalize) → 파일 하나."""
+    """정규화된 입력(docgen.normalize) → 단일 파일."""
     fmt = spec["format"]
     a = AIArtifact(id=str(uuid.uuid4()), user_id=user_id, conversation_id=conversation_id, job_id=job_id,
                    item_index=item_index, format=fmt, name=spec["filename"],
@@ -344,7 +344,7 @@ async def get_owned(db, user, aid: str) -> AIArtifact:
 
 
 async def rebuild(db, user, aid: str) -> AIArtifact:
-    """[다시 만들기] — 저장해 둔 입력으로 같은 결과물을 다시 만든다(같은 id, 새 24시간)."""
+    """[다시 만들기] — 저장된 입력으로 동일한 결과물을 재생성한다(동일 id, 신규 24시간)."""
     a = await get_owned(db, user, aid)
     if a.format == "zip" and a.job_id:
         await rebuild_job(db, user, a.job_id)
@@ -353,7 +353,7 @@ async def rebuild(db, user, aid: str) -> AIArtifact:
     if not spec:
         raise ArtifactError("gone", "원래 입력이 남아 있지 않아 다시 만들 수 없습니다", 410)
     await _build_into(a, spec)
-    a.saved_path = a.saved_path   # 저장 기록은 그대로
+    a.saved_path = a.saved_path   # 저장 기록은 유지
     await db.commit()
     if a.job_id and a.item_index is not None:
         job = await db.get(AIArtifactJob, a.job_id)
@@ -377,7 +377,7 @@ def _zip_name(name: str) -> str:
 
 
 async def start_bundle(db, user_id: str, specs: list[dict], name: str, conversation_id: str | None) -> AIArtifactJob:
-    """문서 여러 개 → 작업 id 를 바로 돌려주고 백그라운드에서 만든다."""
+    """복수 문서 → 작업 id 를 즉시 반환하고 백그라운드에서 생성한다."""
     items = [{"index": i, "name": s["filename"], "format": s["format"], "status": "pending",
               "artifact_id": None, "size": 0, "error": None} for i, s in enumerate(specs)]
     job = AIArtifactJob(id=str(uuid.uuid4()), user_id=user_id, conversation_id=conversation_id, kind="docs",
@@ -481,7 +481,7 @@ def _close(job: AIArtifactJob, items: list[dict]) -> None:
 
 
 async def run_job(job_id: str) -> None:
-    """백그라운드 실행 — 종류별로 나눈다. 어떤 오류도 작업을 running 으로 남기지 않는다."""
+    """백그라운드 실행 — 종류별로 분기한다. 어떤 오류에서도 작업을 running 상태로 남기지 않는다."""
     async with session() as db:
         job = await db.get(AIArtifactJob, job_id)
         if job is None:
@@ -530,7 +530,7 @@ async def get_job(db, user, job_id: str) -> AIArtifactJob:
     job = await db.get(AIArtifactJob, job_id)
     if job is None or job.user_id != user.id:
         raise ArtifactError("not_found", "작업이 없습니다", 404)
-    # 워커가 다시 시작돼 멈춘 작업 — 남은 항목을 실패로 닫는다(만든 것만 zip)
+    # 워커 재기동으로 중단된 작업 — 잔여 항목을 실패로 종료한다(생성된 항목만 zip)
     if job.status == "running" and _aware(job.updated_at) < _now() - STALE_JOB:
         items = _uj(job.items, []) or []
         for it in items:
@@ -546,7 +546,7 @@ async def get_job(db, user, job_id: str) -> AIArtifactJob:
 
 
 async def retry_item(db, user, job_id: str, index: int) -> AIArtifactJob:
-    """[이것만 다시] — 실패한 항목 하나를 다시 만들고 zip 을 다시 묶는다."""
+    """[이것만 다시] — 실패한 항목 1건을 재생성하고 zip 을 재구성한다."""
     job = await get_job(db, user, job_id)
     if job.status == "running":
         raise ArtifactError("conflict", "아직 만드는 중입니다", 409)
@@ -575,7 +575,7 @@ async def retry_item(db, user, job_id: str, index: int) -> AIArtifactJob:
 
 
 async def rebuild_job(db, user, job_id: str) -> AIArtifactJob:
-    """만료된 묶음 [다시 만들기] — 전부 다시(백그라운드)."""
+    """만료된 묶음 [다시 만들기] — 전체 재생성(백그라운드)."""
     job = await get_job(db, user, job_id)
     if job.status == "running":
         raise ArtifactError("conflict", "아직 만드는 중입니다", 409)
@@ -594,7 +594,7 @@ async def rebuild_job(db, user, job_id: str) -> AIArtifactJob:
 
 
 # ── 파일 압축(files_zip) ──────────────────────────────────────
-SYNC_MAX_FILES = 500                  # 이 아래(그리고 SYNC_MAX_BYTES 아래)면 바로 만들어 결과를 돌려준다
+SYNC_MAX_FILES = 500                  # 이 값 미만(그리고 SYNC_MAX_BYTES 미만)이면 즉시 생성하여 결과를 반환한다
 SYNC_MAX_BYTES = 200 * 1024 ** 2
 ENCODINGS = ("utf-8", "cp949")
 CONFLICTS = ("preserve_paths", "suffix")
@@ -621,10 +621,10 @@ def _human(n: int) -> str:
 async def collect_files(db, user, *, paths: list[str] | None = None, folder: str | None = None,
                         query: str | None = None, search_path: str = "", name_only: bool = False,
                         max_files: int = ZIP_MAX_FILES, conflict: str = "preserve_paths") -> tuple[list[dict], int]:
-    """입력 → 압축할 항목 [{path, arc, size, status, error}], 상한으로 뺀 수.
+    """입력 → 압축 대상 항목 [{path, arc, size, status, error}], 상한으로 제외된 수.
 
-    폴더는 하위 전체·구조 유지. 검색은 files_search 와 같은 조건으로 끝까지. 못 읽는 경로는 status=forbidden
-    (manifest·skipped 에 '권한 없음'). 이름 충돌은 conflict 모드로(_assign_arcs).
+    폴더는 하위 전체·구조 유지. 검색은 files_search 와 동일한 조건으로 끝까지 수행. 읽기 불가 경로는 status=forbidden
+    (manifest·skipped 에 '권한 없음'). 이름 충돌은 conflict 모드로 처리(_assign_arcs).
     """
     from fastapi import HTTPException
 
@@ -671,7 +671,7 @@ async def collect_files(db, user, *, paths: list[str] | None = None, folder: str
                     continue
                 rel = p.relative_to(real).as_posix()
                 if any(_files_hidden(seg) for seg in rel.split("/")):
-                    continue                     # 숨김(동기화 메타·NAS 시스템 폴더 등)은 넣지 않는다 — 판정은 files.service 한 곳
+                    continue                     # 숨김 항목(동기화 메타·NAS 시스템 폴더 등)은 포함하지 않는다 — 판정은 files.service 로 일원화
                 add(f"{vp}/{rel}", f"{top}/{rel}", p.stat().st_size)
         else:
             add(vp, vp.rsplit("/", 1)[-1], 0, "failed", "없는 파일")
@@ -680,11 +680,11 @@ async def collect_files(db, user, *, paths: list[str] | None = None, folder: str
 
 
 def _assign_arcs(items: list[dict], conflict: str = "preserve_paths") -> None:
-    """zip 안 이름.
+    """zip 내부 이름.
 
-    preserve_paths(기본): 폴더째 넣은 건 구조 유지, 낱개 파일은 이름만 — 같은 이름이 둘 이상이면 원래 상대 경로
-                         (my/·shared/ 머리만 뗀 경로)로 구분. 그래도 겹치면 " (2)".
-    suffix: 낱개 파일은 늘 이름만, 겹치면 "이름 (2).확장자".
+    preserve_paths(기본): 폴더 단위로 추가한 항목은 구조 유지, 개별 파일은 이름만 — 동일 이름이 둘 이상이면 원래 상대 경로
+                         (my/·shared/ 접두만 제거한 경로)로 구분. 그래도 중복되면 " (2)".
+    suffix: 개별 파일은 항상 이름만, 중복되면 "이름 (2).확장자".
     """
     by_name: dict[str, int] = {}
     for it in items:
@@ -730,7 +730,7 @@ async def _search_all(db, user, query: str, path: str, name_only: bool, cap: int
 
 
 def _dst_vp(dst_path: str, zip_name: str) -> str:
-    """dst_path 검사 — my/ 아래 새 .zip 파일만."""
+    """dst_path 검증 — my/ 하위의 신규 .zip 파일만 허용."""
     vp = (dst_path or "").strip().replace("\\", "/").lstrip("/")
     if vp.endswith("/"):
         vp += zip_name
@@ -748,7 +748,7 @@ async def start_files_zip(db, user, *, name: str, conversation_id: str | None, p
                           query=None, search_path: str = "", name_only: bool = False, dst_path: str = "",
                           encoding: str = "utf-8", conflict: str = "preserve_paths", dedupe: bool = False,
                           force_async: bool = False) -> tuple[AIArtifactJob, bool]:
-    """(작업, 바로 끝났는지). 작으면 이 요청 안에서 만들고, 크면 백그라운드 작업 id."""
+    """(작업, 즉시 완료 여부). 소규모이면 본 요청 내에서 생성하고, 대규모이면 백그라운드 작업 id 를 반환."""
     from app.files import quota as file_quota
 
     encoding = (encoding or "utf-8").lower().replace("_", "-")
@@ -767,7 +767,7 @@ async def start_files_zip(db, user, *, name: str, conversation_id: str | None, p
         exists = False
         try:
             exists = (await acc.resolve(db, user, dst, "view")).real.exists()
-        except Exception:  # noqa: BLE001 — 아직 없는 경로(정상)
+        except Exception:  # noqa: BLE001 — 미존재 경로(정상)
             exists = False
         if exists:
             raise ArtifactError("conflict", f"이미 있는 파일입니다: {dst} — 덮어쓰지 않습니다", 409,
@@ -810,7 +810,7 @@ async def _run_files_zip(db, job: AIArtifactJob) -> None:
 
 
 class _CP949Info(zipfile.ZipInfo):
-    """옛 Windows 탐색기 호환 — 이름을 cp949 로(UTF-8 표시 끔). cp949 로 못 쓰는 이름만 UTF-8 + 표시."""
+    """구형 Windows 탐색기 호환 — 이름을 cp949 로 기록(UTF-8 플래그 해제). cp949 로 기록 불가한 이름만 UTF-8 + 플래그."""
 
     def _encodeFilenameFlags(self):  # noqa: N802 — zipfile 내부 훅
         try:
@@ -834,7 +834,7 @@ def _add_to_zip(zf: zipfile.ZipFile, real: Path, arc: str, cp949: bool) -> None:
 
 
 async def _zip_files(db, job: AIArtifactJob, progress: bool = False) -> None:
-    """항목마다 권한을 다시 보고 zip 에 쓴다 → 내 파일(dst 또는 AI 결과물)에 새 파일로 둔다."""
+    """항목별로 권한을 재확인한 후 zip 에 기록한다 → 내 파일(dst 또는 AI 결과물)에 신규 파일로 저장한다."""
     from fastapi import HTTPException
 
     from app.db.models import User
@@ -855,7 +855,7 @@ async def _zip_files(db, job: AIArtifactJob, progress: bool = False) -> None:
     zf = await asyncio.to_thread(zipfile.ZipFile, tmp, "w", zipfile.ZIP_DEFLATED, True, 1)
     try:
         for it in items:
-            # 다시 묶을 때는 이미 담은 것(ready)·중복(deduped)도 다시 본다. 실패·권한 없음은 [이것만 다시](pending)일 때만
+            # 재구성 시에는 이미 포함된 항목(ready)·중복(deduped)도 재확인한다. 실패·권한 없음은 [이것만 다시](pending)인 경우에만 처리
             if it.get("status") not in ("pending", "running", "ready", "deduped"):
                 continue
             try:
@@ -932,7 +932,7 @@ async def _zip_files(db, job: AIArtifactJob, progress: bool = False) -> None:
 
 
 async def _place_zip(db, user, job: AIArtifactJob, z: AIArtifact, tmp: str, meta: dict) -> tuple[str, Path]:
-    """만든 zip 을 내 파일에 새 파일로 — 남의 파일은 덮지 않는다(다시 묶을 때 이 작업이 만든 zip 만 바꾼다)."""
+    """생성한 zip 을 내 파일에 신규 파일로 저장 — 타 파일은 덮어쓰지 않는다(재구성 시 본 작업이 생성한 zip 만 교체한다)."""
     from app.files import activity as act
     from app.files import indexer
     from app.files import quota as file_quota
@@ -940,7 +940,7 @@ async def _place_zip(db, user, job: AIArtifactJob, z: AIArtifact, tmp: str, meta
     from app.files import service as fs
 
     size = os.path.getsize(tmp)
-    if z.saved_path:                                    # [이것만 다시] — 이 작업이 만든 zip 을 바꾼다
+    if z.saved_path:                                    # [이것만 다시] — 본 작업이 생성한 zip 을 교체한다
         vp_parent, name = z.saved_path.rsplit("/", 1)
         own = True
     elif meta.get("dst"):
@@ -968,7 +968,7 @@ async def _place_zip(db, user, job: AIArtifactJob, z: AIArtifact, tmp: str, meta
             os.replace(part, target)
         else:
             try:
-                os.link(part, target)              # 그 사이 생긴 파일도 덮지 않는다
+                os.link(part, target)              # 그 사이 생성된 파일도 덮어쓰지 않는다
             finally:
                 part.unlink(missing_ok=True)
     try:
@@ -1003,7 +1003,7 @@ def _manifest(job: AIArtifactJob, items: list[dict], skipped: int) -> str:
 
 
 async def zip_summary(db, job: AIArtifactJob, absolute: bool = False, with_job: bool = True) -> dict:
-    """files_zip 결과 — 요약이 맨 앞(path·size·files), 그 뒤 skipped·deduped·undo, 카드용 job 은 맨 뒤."""
+    """files_zip 결과 — 요약을 최상단에(path·size·files), 이어서 skipped·deduped·undo, 카드용 job 은 최하단에 배치."""
     view = await job_view(db, job, absolute)
     items = _uj(job.items, []) or []
     meta = _uj(job.meta, {}) or {}
@@ -1060,7 +1060,7 @@ async def quota_room(db, user) -> int | None:
 
 
 async def artifacts_for(db, user, artifact_ids: list[str] | None = None, job_id: str | None = None) -> list[AIArtifact]:
-    """저장할 결과물 — 묶음이면 만든 파일들(파일 압축이면 zip 하나)."""
+    """저장 대상 결과물 — 묶음이면 생성된 파일들(파일 압축이면 zip 1개)."""
     out: list[AIArtifact] = []
     if job_id:
         job = await get_job(db, user, job_id)
@@ -1085,7 +1085,7 @@ async def artifacts_for(db, user, artifact_ids: list[str] | None = None, job_id:
 
 
 async def save_to_files(db, user, arts: list[AIArtifact], job_id: str | None = None) -> dict:
-    """my/AI 결과물/날짜 제목/ 에 복사. 이름이 겹치면 " (2)". 할당이 모자라면 413(HTTPException)."""
+    """my/AI 결과물/날짜 제목/ 에 복사. 이름이 중복되면 " (2)". 할당이 부족하면 413(HTTPException)."""
     from app.files import access as acc
     from app.files import activity as act
     from app.files import indexer
@@ -1128,7 +1128,7 @@ async def save_to_files(db, user, arts: list[AIArtifact], job_id: str | None = N
             job.saved_folder = parent_norm
     await db.commit()
     out = {"folder": parent_norm, "folder_label": _vp_label(parent_norm), "files": saved}
-    # 되돌리기: 새로 만든 폴더면 폴더째, 파일 하나면 그 파일
+    # 되돌리기: 신규 생성한 폴더이면 폴더 전체, 단일 파일이면 해당 파일
     from app.mcp.tools.files_write_tool import _undo_for
 
     if not existed:
@@ -1143,7 +1143,7 @@ ARTIFACT_TOOLS = ("docs_create", "docs_create_bundle", "files_zip")
 
 
 def sse_payloads(tool_name: str, res: dict) -> list[dict]:
-    """도구 결과 → SSE ``artifact`` 이벤트 묶음(채팅 결과물 카드). 메시지 meta.artifacts 에도 같은 모양으로 저장."""
+    """도구 결과 → SSE ``artifact`` 이벤트 목록(채팅 결과물 카드). 메시지 meta.artifacts 에도 동일한 형태로 저장."""
     if tool_name not in ARTIFACT_TOOLS or not isinstance(res, dict) or not res.get("ok"):
         return []
     r = res.get("result") or {}

@@ -26,7 +26,7 @@ async def _seed(db):
     for uid in ("alice", "bob", "carol"):
         db.add(User(id=uid, username=uid, email=f"{uid}@x", password_hash="x", display_name=uid.title()))
     await db.commit()
-    # 읽음 추적 시작을 과거로 — 테스트 글이 전부 추적 대상이 되게
+    # 읽음 추적 시작 시점을 과거로 설정 — 테스트 글 전체를 추적 대상에 포함
     db.add(SystemSetting(key=service.READ_SINCE_KEY,
                          value=(datetime.now(timezone.utc) - timedelta(days=1)).isoformat()))
     await db.commit()
@@ -60,7 +60,7 @@ async def test_is_read_and_unread_counts(db_session):
     assert read == {p1["id"]: True, p2["id"]: False}
     assert (await board_router.unread_counts(user=bob, db=db))["counts"] == {b1: 1, b2: 1}
 
-    # 작성자에게는 자기 글이 읽음
+    # 작성자에게는 본인 글이 읽음 상태
     lst = await board_router.list_posts(board_id=b1, page=1, page_size=20, category=None, sort="latest",
                                         mine=False, user=alice, db=db)
     assert all(p["is_read"] for p in lst["posts"])
@@ -84,7 +84,7 @@ async def test_posts_before_tracking_start_are_read(db_session):
     row = await db.get(Post, old["id"])
     row.created_at = datetime.now(timezone.utc) - timedelta(days=30)
     await db.commit()
-    # 추적 시작 시각이 지금 정해진다 → 그 전 글은 읽음
+    # 추적 시작 시각이 현재로 설정됨 → 그 이전 글은 읽음 처리
     assert (await service.unread_counts(db, "bob")) == {}
     new = await _post(db, b["id"], alice, "새 글")
     assert (await service.unread_counts(db, "bob")) == {b["id"]: 1}
@@ -106,7 +106,7 @@ async def test_comment_mentions_resolve_and_notify(db_session):
     assert notes[0].link == f"/board/{b1}/{p['id']}#comment-{c['id']}"
     lst = await board_router.list_comments(post_id=p["id"], user=bob, db=db)
     assert [m["username"] for m in lst[0]["mentions"]] == ["bob", "carol"]
-    # 이메일 주소 속 @ 는 멘션이 아니다
+    # 이메일 주소 내의 @ 는 멘션이 아님
     c2 = await board_router.create_comment(
         post_id=p["id"], body=CommentCreate(content="메일은 bob@x 로"), user=alice, db=db,
     )
@@ -126,7 +126,7 @@ async def test_mine_filter_and_my_posts(db_session):
     assert [p["id"] for p in lst["posts"]] == [mine1["id"]] and lst["total"] == 1
     my = await board_router.my_posts(page=1, page_size=20, user=bob, db=db)
     assert [p["id"] for p in my["posts"]] == [mine2["id"], mine1["id"]] and my["total"] == 2
-    # 다른 사람 글은 안 섞인다
+    # 타 사용자의 글은 포함되지 않음
     my = await board_router.my_posts(page=1, page_size=20, user=alice, db=db)
     assert [p["title"] for p in my["posts"]] == ["a1"]
 
@@ -142,7 +142,7 @@ async def test_mention_user_search(db_session):
 
 @pytest.mark.asyncio
 async def test_boards_with_posts_has_is_read(db_session):
-    """인덱스 카드(boards-with-posts)도 목록과 같은 규칙으로 is_read 를 붙인다."""
+    """인덱스 카드(boards-with-posts)도 목록과 동일한 규칙으로 is_read 를 부여한다."""
     db = db_session
     b1, b2 = await _seed(db)
     alice, bob = await db.get(User, "alice"), await db.get(User, "bob")

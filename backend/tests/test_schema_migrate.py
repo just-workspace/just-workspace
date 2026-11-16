@@ -1,6 +1,6 @@
-"""스키마 버전 관리(app/db/migrate.py) — SQLite 로 볼 수 있는 것.
+"""스키마 버전 관리(app/db/migrate.py) — SQLite 로 검증 가능한 항목.
 
-PostgreSQL 전용(advisory lock, 트랜잭션 DDL, 기준선의 시퀀스·인덱스)은 tests/test_schema_migrate_pg.py.
+PostgreSQL 전용 항목(advisory lock, 트랜잭션 DDL, 기준선의 시퀀스·인덱스)은 tests/test_schema_migrate_pg.py 에서 검증한다.
 """
 
 import json
@@ -30,7 +30,7 @@ async def eng(tmp_path):
 
 
 def use_steps(monkeypatch, *steps: Step) -> None:
-    """테스트용 단계 목록 — 코드가 요구하는 버전도 그 끝 번호로 맞춘다."""
+    """테스트용 단계 목록 — 코드가 요구하는 버전도 마지막 단계 번호로 설정한다."""
     monkeypatch.setattr(steps_mod, "STEPS", tuple(steps))
     monkeypatch.setattr(mg, "SCHEMA_VERSION", steps[-1].version if steps else sv.BASELINE_VERSION)
 
@@ -60,7 +60,7 @@ def test_check_steps_rejects_gap(monkeypatch):
 
 
 def test_model_modules_cover_every_model_file():
-    """Base 를 상속한 모델 파일은 전부 MODEL_MODULES 에 있어야 한다(빠지면 CLI 가 그 테이블을 안 만든다)."""
+    """Base 를 상속한 모델 파일은 전부 MODEL_MODULES 에 포함되어야 한다(누락 시 CLI 가 해당 테이블을 생성하지 않는다)."""
     app_dir = Path(mg.__file__).resolve().parents[1]
     found = set()
     for path in app_dir.rglob("*.py"):
@@ -70,17 +70,17 @@ def test_model_modules_cover_every_model_file():
 
 
 def test_models_fingerprint_matches_recorded_value():
-    """모델을 고쳤으면 변경 단계가 필요하다.
+    """모델을 수정한 경우 변경 단계가 필요하다.
 
-    실패하면: app/db/migrations.py 에 새 단계를 더하고 SCHEMA_VERSION 을 올린 뒤,
+    실패 시: app/db/migrations.py 에 새 단계를 추가하고 SCHEMA_VERSION 을 증가시킨 뒤,
     app/db/schema_version.py 의 MODELS_FINGERPRINT 를 `python -m app.cli schema-version --fingerprint`
-    값으로 바꾼다(작성법: docs/data-safety.md). 첫 릴리스 전의 변경은 기준선에 들어가므로 지문만 바꾼다.
+    값으로 교체한다(작성법: docs/data-safety.md). 첫 릴리스 이전의 변경은 기준선에 포함되므로 지문만 교체한다.
     """
     assert mg.models_fingerprint() == sv.MODELS_FINGERPRINT
 
 
 def test_models_fingerprint_ignores_tables_registered_by_other_code():
-    """같은 프로세스에서 다른 코드(플러그인·테스트)가 Base 에 테이블을 올려도 지문은 같다 — import 순서에 묶이지 않는다."""
+    """동일 프로세스에서 다른 코드(플러그인·테스트)가 Base 에 테이블을 등록해도 지문은 동일하다 — import 순서에 의존하지 않는다."""
     from sqlalchemy import Column, Integer
 
     from app.db.models import Base
@@ -98,7 +98,7 @@ def test_models_fingerprint_ignores_tables_registered_by_other_code():
 
 
 def test_type_signature_does_not_depend_on_repr():
-    """타입 표기는 SQLAlchemy 의 repr() 이 아니라 일반 타입 이름과 스키마에 영향을 주는 속성으로 만든다."""
+    """타입 표기는 SQLAlchemy 의 repr() 이 아니라 일반 타입 이름과 스키마에 영향을 주는 속성으로 구성한다."""
     import sqlalchemy as sa
     from sqlalchemy.dialects import postgresql
 
@@ -108,12 +108,12 @@ def test_type_signature_does_not_depend_on_repr():
     assert sig(sa.DateTime(timezone=True)) == "datetime(timezone=True)" and sig(sa.DateTime()) == "datetime()"
     assert sig(sa.BigInteger()) == "big_integer()" and sig(sa.LargeBinary()) == "large_binary()"
     assert sig(sa.Numeric(10, 2)) == "numeric(precision=10;scale=2;asdecimal=True)"
-    # 길이·시간대가 다르면 다른 표기
+    # 길이·시간대가 상이하면 표기도 상이
     assert sig(sa.String(36)) != sig(sa.String(64))
-    # 타입을 적지 않은 Mapped[float] 은 SQLAlchemy 판에 따라 Float 또는 Double — 같은 표기
+    # 타입을 명시하지 않은 Mapped[float] 은 SQLAlchemy 버전에 따라 Float 또는 Double — 동일 표기
     assert sig(sa.Float()) == sig(sa.Double()) == "float()"
     assert sig(sa.Float(precision=24)) == "float(precision=24)"
-    # 감싼 타입(TypeDecorator)은 안의 타입으로, 배열은 원소 타입까지
+    # 래핑 타입(TypeDecorator)은 내부 타입으로, 배열은 원소 타입까지 표기
     class Wrapped(sa.TypeDecorator):
         impl = sa.String(20)
         cache_ok = True
@@ -124,7 +124,7 @@ def test_type_signature_does_not_depend_on_repr():
 
 
 def test_models_fingerprint_is_not_part_of_version_checks():
-    """지문은 DB 에 기록하지 않고 버전 판정에도 쓰지 않는다 — 계산법을 바꿔도 기존 설치에 영향이 없다."""
+    """지문은 DB 에 기록하지 않으며 버전 판정에도 사용하지 않는다 — 계산법을 변경해도 기존 설치에 영향이 없다."""
     source = Path(mg.__file__).read_text(encoding="utf-8")
     body = source.split("def models_fingerprint()", 1)[1].split("\ndef ", 1)[1]
     assert "models_fingerprint" not in body and "MODELS_FINGERPRINT" not in source
@@ -144,13 +144,13 @@ async def test_empty_db_gets_baseline(eng):
     assert state.applied[0]["name"] == mg.BASELINE_NAME and state.applied[0]["app_version"]
     assert await mg.find_drift(eng) == []
 
-    again = await mg.migrate(eng, log=quiet)                 # 두 번째는 할 일이 없다
+    again = await mg.migrate(eng, log=quiet)                 # 두 번째 호출은 수행할 작업 없음
     assert again.applied == [] and again.to_version == sv.SCHEMA_VERSION
     assert await scalar(eng, "SELECT count(*) FROM schema_migrations") == sv.SCHEMA_VERSION
 
 
 async def test_legacy_db_is_adopted_without_data_loss(eng):
-    """버전 기록이 없는 기존 설치: 빠진 컬럼을 채우고 기준선으로 표시한다. 행은 그대로."""
+    """버전 기록이 없는 기존 설치: 누락된 컬럼을 보충하고 기준선으로 표시한다. 행은 유지한다."""
     from app.db.models import Base
 
     mg.register_models()
@@ -170,7 +170,7 @@ async def test_legacy_db_is_adopted_without_data_loss(eng):
 
 
 async def test_step_2_adds_the_homes_for_state_that_lived_in_redis(eng):
-    """버전 1 의 DB(표·컬럼이 없다)에 단계 2 를 적용한다 — 기존 행은 그대로, 새 컬럼은 기본값."""
+    """버전 1 의 DB(테이블·컬럼 없음)에 단계 2 를 적용한다 — 기존 행은 유지, 새 컬럼은 기본값."""
     from app.db.models import Base
 
     mg.register_models()
@@ -207,7 +207,7 @@ async def test_step_2_adds_the_homes_for_state_that_lived_in_redis(eng):
 
 
 async def test_pending_steps_apply_in_order(eng, monkeypatch):
-    use_steps(monkeypatch)                                   # 기준선만 있는 DB 에서 시작한다
+    use_steps(monkeypatch)                                   # 기준선만 있는 DB 에서 시작
     await mg.migrate(eng, log=quiet)
     order = []
 
@@ -224,7 +224,7 @@ async def test_pending_steps_apply_in_order(eng, monkeypatch):
     result = await mg.migrate(eng, log=quiet)
     assert order == [2, 3] and result.applied == [(2, "둘"), (3, "셋")]
     assert (await mg.read_state(eng)).current == 3
-    assert (await mg.migrate(eng, log=quiet)).applied == []          # 다시 돌려도 안 돈다
+    assert (await mg.migrate(eng, log=quiet)).applied == []          # 재실행 시에도 미수행
     assert order == [2, 3]
 
 
@@ -255,8 +255,8 @@ async def test_failed_step_stops_and_keeps_earlier_ones(eng, monkeypatch):
         await mg.migrate(eng, log=quiet)
     assert info.value.version == 3 and info.value.name == "셋"
     assert "칸을 만들 수 없음" in str(info.value)
-    assert ran == []                                         # 뒤 단계는 돌지 않는다
-    assert (await mg.read_state(eng)).current == 2           # 앞 단계까지만 기록
+    assert ran == []                                         # 후속 단계는 미실행
+    assert (await mg.read_state(eng)).current == 2           # 선행 단계까지만 기록
 
 
 async def test_step_helpers_are_idempotent(eng):
@@ -287,9 +287,9 @@ async def test_ensure_schema_refuses_when_auto_apply_is_off(eng, value):
     with pytest.raises(mg.SchemaOutdated) as info:
         await mg.ensure_schema(eng, env=env, log=quiet)
     assert "python -m app.cli migrate" in str(info.value)
-    assert (await mg.read_state(eng)).kind == "empty"        # 아무것도 만들지 않았다
+    assert (await mg.read_state(eng)).kind == "empty"        # 생성된 항목 없음
 
-    await mg.migrate(eng, log=quiet)                         # 설치 관리자가 따로 적용하면
+    await mg.migrate(eng, log=quiet)                         # 설치 관리자가 별도로 적용하는 경우
     assert await mg.ensure_schema(eng, env=env, log=quiet) == sv.SCHEMA_VERSION
 
 
@@ -308,16 +308,16 @@ async def test_verify_catches_missing_column_and_repair_fixes_it(eng):
     await mg.migrate(eng, log=quiet)
     async with eng.begin() as conn:
         await conn.execute(text("ALTER TABLE system_settings DROP COLUMN updated_at"))
-    assert await mg.ensure_schema(eng, env={}, log=quiet) == sv.SCHEMA_VERSION   # 워커 기동은 버전만 본다
+    assert await mg.ensure_schema(eng, env={}, log=quiet) == sv.SCHEMA_VERSION   # 워커 기동은 버전만 확인
     with pytest.raises(mg.SchemaDrift) as info:
-        await mg.ensure_schema(eng, verify=True, env={}, log=quiet)              # 컨테이너 기동은 대조한다
+        await mg.ensure_schema(eng, verify=True, env={}, log=quiet)              # 컨테이너 기동은 대조 수행
     assert info.value.missing == ["system_settings.updated_at"]
     await mg.migrate(eng, repair=True, log=quiet)
     assert await mg.ensure_schema(eng, verify=True, env={}, log=quiet) == sv.SCHEMA_VERSION
 
 
 async def test_init_db_does_not_swallow_failures(monkeypatch):
-    """예전에는 다섯 번 재시도한 뒤 예외 없이 서버가 떴다."""
+    """이전에는 5회 재시도 후 예외 없이 서버가 기동되었다."""
     import app.db.session as session_mod
 
     async def boom(engine, **kwargs):
@@ -363,7 +363,7 @@ async def test_lock_is_noop_off_postgres(eng):
 
 @pytest.fixture()
 def cli_engine(tmp_path, monkeypatch):
-    """CLI 는 app.db.session.engine 을 쓴다 — 테스트용 파일 DB 로 바꾼다(명령마다 새 이벤트 루프)."""
+    """CLI 는 app.db.session.engine 을 사용한다 — 테스트용 파일 DB 로 교체한다(명령마다 새 이벤트 루프)."""
     import app.db.session as session_mod
 
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'cli.db'}")
@@ -377,7 +377,7 @@ def test_cli_schema_version_prints_only_the_number(capsys):
 
 
 def test_cli_migrate_check_status_and_apply(cli_engine, capsys):
-    assert cli.main(["migrate", "--check"]) == cli.MIGRATE_FAILED          # 빈 DB: 기준선이 대기 중
+    assert cli.main(["migrate", "--check"]) == cli.MIGRATE_FAILED          # 빈 DB: 기준선 적용 대기 상태
     out = capsys.readouterr().out
     assert "대기" in out and mg.BASELINE_NAME in out
 
@@ -406,12 +406,12 @@ def test_cli_migrate_reports_failed_step(cli_engine, capsys, monkeypatch):
 
 def test_cli_on_start_respects_env_and_too_new(cli_engine, capsys, monkeypatch):
     monkeypatch.setenv(mg.ENV_MIGRATE_ON_START, "0")
-    assert cli.main(["migrate", "--on-start"]) == cli.MIGRATE_FAILED       # 낮은데 자동 적용이 꺼져 있다
+    assert cli.main(["migrate", "--on-start"]) == cli.MIGRATE_FAILED       # 버전이 낮으나 자동 적용 비활성화 상태
     assert "JW_MIGRATE_ON_START" in capsys.readouterr().err
     monkeypatch.delenv(mg.ENV_MIGRATE_ON_START)
     assert cli.main(["migrate", "--on-start"]) == cli.MIGRATE_OK
 
-    monkeypatch.setattr(mg, "SCHEMA_VERSION", 0)                           # 코드가 DB 보다 낡은 상황
+    monkeypatch.setattr(mg, "SCHEMA_VERSION", 0)                           # 코드가 DB 보다 구버전인 상황
     monkeypatch.setattr(mg, "check_steps", lambda: None)
     assert cli.main(["migrate", "--on-start"]) == cli.MIGRATE_TOO_NEW
     assert "복원" in capsys.readouterr().err

@@ -1,15 +1,15 @@
-"""결과물 — 구조화 입력으로 문서를 만든다(docx·xlsx·pptx·pdf). DB·네트워크 없는 순수 함수.
+"""결과물 — 구조화 입력으로 문서를 생성한다(docx·xlsx·pptx·pdf). DB·네트워크를 사용하지 않는 순수 함수.
 
-입력(도구 인자와 같은 모양):
+입력(도구 인자와 동일한 형태):
   공통   title(제목) · filename(확장자 없이, 선택) · subtitle(선택)
   docx·pdf  blocks: [{type: heading|paragraph|list|table|page_break, text, level, items, ordered, header, rows}]
-  xlsx      sheets: [{name, header, rows}]  — 셀 값은 글자·숫자·참거짓·빈값, 또는 {"formula": "=SUM(B2:B5)"}
-  pptx      slides: [{title, bullets, notes, table: {header, rows}}]  — 첫 장은 제목·부제로 자동
+  xlsx      sheets: [{name, header, rows}]  — 셀 값은 문자열·숫자·불리언·빈 값, 또는 {"formula": "=SUM(B2:B5)"}
+  pptx      slides: [{title, bullets, notes, table: {header, rows}}]  — 첫 장은 제목·부제로 자동 생성
 
-* 글자 안의 XML 금지 문자(제어 문자·짝 없는 서로게이트)는 지운다 — 남기면 Office 가 파일을 못 연다.
-* 엑셀 수식은 허용 목록 함수만, 외부 참조·DDE(`[`, `|`, `\\`)는 거절. "=" 로 시작하는 일반 글자는 글자 그대로 둔다
-  (메일 본문에서 온 글자가 수식으로 실행되는 수식 주입 방지).
-* 만든 문서 메타데이터에 "AI 생성"을 남긴다(AI 기본법 표시).
+* 텍스트 내 XML 금지 문자(제어 문자·짝 없는 서로게이트)는 제거한다 — 유지 시 Office 가 파일을 열지 못한다.
+* 엑셀 수식은 허용 목록 함수만 허용하고, 외부 참조·DDE(`[`, `|`, `\\`)는 거부한다. "=" 로 시작하는 일반 텍스트는 문자열 그대로 유지한다
+  (메일 본문에서 유입된 텍스트가 수식으로 실행되는 수식 주입 방지).
+* 생성한 문서의 메타데이터에 "AI 생성"을 기록한다(AI 기본법 표시).
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ FORMATS: dict[str, dict] = {
     "pdf": {"mime": "application/pdf", "label": "PDF 문서"},
 }
 
-MAX_SPEC_CHARS = 2_000_000      # 문서 하나 입력 상한(JSON 글자)
-MAX_TEXT = 20_000               # 칸 하나 글자
+MAX_SPEC_CHARS = 2_000_000      # 문서 1건 입력 상한(JSON 글자 수)
+MAX_TEXT = 20_000               # 셀 1개 글자 수
 MAX_BLOCKS = 2_000
 MAX_TABLE_ROWS = 1_000
 MAX_TABLE_COLS = 30
@@ -53,7 +53,7 @@ _FUNC_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_.]*)\s*\(")
 
 
 class SpecError(ValueError):
-    """입력이 잘못됨 — 모델이 고쳐 다시 부를 수 있다(invalid_argument)."""
+    """입력 오류 — 모델이 수정 후 재호출할 수 있다(invalid_argument)."""
 
     def __init__(self, message: str, code: str = "invalid_argument"):
         super().__init__(message)
@@ -67,7 +67,7 @@ class Built:
     info: dict          # {"pages"|"sheets"|"slides": n}
 
 
-# ── 정리 도우미 ───────────────────────────────────────────────
+# ── 정규화 보조 함수 ───────────────────────────────────────────────
 def clean_text(v, limit: int = MAX_TEXT) -> str:
     if v is None:
         return ""
@@ -76,7 +76,7 @@ def clean_text(v, limit: int = MAX_TEXT) -> str:
 
 
 def safe_filename(name: str, fmt: str, fallback: str = "문서") -> str:
-    """사람이 읽는 파일 이름 + 강제 확장자. 경로 구분자·예약 문자·앞쪽 점은 지운다."""
+    """사람이 읽는 파일 이름 + 강제 확장자. 경로 구분자·예약 문자·선행 점은 제거한다."""
     base = clean_text(name or "", 200).strip()
     if base.lower().endswith("." + fmt):
         base = base[: -(len(fmt) + 1)]
@@ -103,7 +103,7 @@ def _rows(raw, max_rows: int, max_cols: int, cell=None) -> list[list]:
 
 
 def _cell_value(v):
-    """엑셀 칸 값 — 숫자·참거짓은 그대로, 수식 객체는 검사, 나머지는 글자."""
+    """엑셀 셀 값 — 숫자·불리언은 그대로, 수식 객체는 검증, 나머지는 문자열."""
     if v is None or isinstance(v, (bool, int, float)):
         if isinstance(v, float) and (v != v or v in (float("inf"), float("-inf"))):
             return None
@@ -222,7 +222,7 @@ def _slides(raw) -> list[dict]:
 
 
 def normalize(fmt: str, spec: dict) -> dict:
-    """도구 인자 → 검사·정리된 입력. 잘못되면 SpecError."""
+    """도구 인자 → 검증·정규화된 입력. 오류 시 SpecError."""
     fmt = str(fmt or "").lower().lstrip(".")
     if fmt not in FORMATS:
         raise SpecError(f"format 은 {', '.join(FORMATS)} 중 하나여야 합니다(HWP 는 아직 만들 수 없습니다)", "unsupported"
@@ -251,9 +251,9 @@ def normalize(fmt: str, spec: dict) -> dict:
     return out
 
 
-# ── 만들기 ────────────────────────────────────────────────────
+# ── 생성 ────────────────────────────────────────────────────
 def build(spec: dict) -> Built:
-    """정리된 입력(normalize 결과) → 파일 바이트."""
+    """정규화된 입력(normalize 결과) → 파일 바이트."""
     fmt = spec["format"]
     return {"docx": _docx, "xlsx": _xlsx, "pptx": _pptx, "pdf": _pdf}[fmt](spec)
 
@@ -370,11 +370,11 @@ def _xlsx(spec: dict) -> Built:
             for ci, v in enumerate(row, 1):
                 cell = ws.cell(row=r0 + ri, column=ci)
                 if isinstance(v, dict):
-                    cell.value = v["formula"]           # 검사한 수식만
+                    cell.value = v["formula"]           # 검증된 수식만
                 else:
                     cell.value = v
                     if isinstance(v, str) and v[:1] in ("=", "+", "-", "@"):
-                        cell.data_type = "s"           # 글자 그대로(수식 주입 방지)
+                        cell.data_type = "s"           # 문자열 그대로(수식 주입 방지)
         ncols = max([len(s["header"])] + [len(r) for r in s["rows"][:2000]] + [0])
         for ci in range(1, ncols + 1):
             vals = ([s["header"][ci - 1]] if ci <= len(s["header"]) else []) + \
@@ -536,7 +536,7 @@ def _pdf(spec: dict) -> Built:
 
 # ── 미리보기(화면 모달) ────────────────────────────────────────
 def preview(spec: dict, limit_rows: int = 50) -> dict:
-    """정리된 입력의 앞부분 — 화면 미리보기 모달이 그린다(바이트를 다시 읽지 않는다)."""
+    """정규화된 입력의 앞부분 — 화면 미리보기 모달에서 렌더링한다(바이트를 다시 읽지 않는다)."""
     fmt = spec.get("format")
     out = {"format": fmt, "title": spec.get("title") or "", "subtitle": spec.get("subtitle") or ""}
     if fmt in ("docx", "pdf"):

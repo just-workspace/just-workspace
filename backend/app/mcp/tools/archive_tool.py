@@ -1,12 +1,12 @@
-"""zip 보기·풀기 — files_archive_list(읽기) · files_unzip(쓰기 low, 승인 카드).
+"""zip 조회·해제 — files_archive_list(읽기) · files_unzip(쓰기 low, 승인 카드).
 
-풀기 방어:
-  * zip slip — 절대 경로·드라이브·`..`·심볼릭 링크 항목은 건너뛴다(목록에 사유).
-  * zip bomb — 항목 수·총 해제 크기 상한(설정 ai.unzip.max_entries / ai.zip.max_bytes), 큰 항목의 압축률 상한,
-    머리글이 거짓이어도 실제로 쓴 바이트로 다시 잰다.
-  * 덮어쓰지 않는다 — 기본은 zip 이름의 새 폴더에 풀고(되돌리기 = 그 폴더 지우기), 이름이 겹치면 " (2)".
-  * 사용자 할당·업로드 대상 판정은 업로드와 같다.
-한글 이름: UTF-8 표시가 없는 zip(윈도 탐색기)은 cp949 로 다시 읽는다.
+해제 방어:
+  * zip slip — 절대 경로·드라이브·`..`·심볼릭 링크 항목은 건너뛴다(목록에 사유 포함).
+  * zip bomb — 항목 수·총 해제 크기 상한(설정 ai.unzip.max_entries / ai.zip.max_bytes), 대형 항목의 압축률 상한,
+    헤더 값이 허위여도 실제로 기록한 바이트로 재측정한다.
+  * 덮어쓰지 않는다 — 기본은 zip 이름의 새 폴더에 해제하고(되돌리기 = 해당 폴더 삭제), 이름 충돌 시 " (2)".
+  * 사용자 할당·업로드 대상 판정은 업로드와 동일하다.
+한글 이름: UTF-8 표시가 없는 zip(Windows 탐색기)은 cp949 로 재해석한다.
 """
 
 from __future__ import annotations
@@ -21,18 +21,18 @@ from pathlib import Path, PurePosixPath
 from app.db.models import User
 from app.db.session import async_session
 from app.mcp.server import Tool, register
-from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 남에게 보이는 쓰기 판정
+from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 타인 노출 쓰기 판정
 from app.mcp.tools._common import clamp, err, http_err, human_size
 
 UNZIP_MAX_ENTRIES_KEY = "ai.unzip.max_entries"
 UNZIP_MAX_ENTRIES = 10_000
-BOMB_RATIO = 200                     # 1MB 넘는 항목이 이보다 더 줄어 있으면 거절
+BOMB_RATIO = 200                     # 1MB 초과 항목의 압축률이 이 값을 넘으면 거부
 _BAD_SEG = re.compile(r'[\\:*?"<>|\x00-\x1f]')
 _SKIP_TOP = ("__MACOSX",)
 
 
 def entry_name(info: zipfile.ZipInfo) -> str:
-    """UTF-8 표시가 없으면 zipfile 이 cp437 로 읽은 것 — 한국 윈도 zip 은 cp949 다."""
+    """UTF-8 표시가 없으면 zipfile 이 cp437 로 해석한 것 — 한국어 Windows zip 은 cp949 이다."""
     name = info.filename
     if not (info.flag_bits & 0x800):
         try:
@@ -137,7 +137,7 @@ def _unique_name(dirpath: Path, name: str) -> str:
 
 
 def _plan(real: Path, max_entries: int, max_bytes: int) -> tuple[list[tuple[zipfile.ZipInfo, list[str]]], list[dict], int]:
-    """(풀 항목[(info, 조각)], 건너뛴 항목[{name, reason}], 선언된 총 크기). 상한·암호는 ValueError."""
+    """(해제할 항목[(info, 조각)], 건너뛴 항목[{name, reason}], 선언된 총 크기). 상한·암호는 ValueError."""
     with zipfile.ZipFile(real) as zf:
         infos = zf.infolist()
     if len(infos) > max_entries:
@@ -153,7 +153,7 @@ def _plan(real: Path, max_entries: int, max_bytes: int) -> tuple[list[tuple[zipf
             continue
         if not parts or parts[0] in _SKIP_TOP or any(p.startswith(".") for p in parts):
             continue
-        # NAS 시스템 이름(@Recycle·@eaDir …)은 풀어도 목록에 안 보인다 — 판정은 files.service 한 곳, 건너뛴 것은 알린다
+        # NAS 시스템 이름(@Recycle·@eaDir …)은 해제해도 목록에 표시되지 않는다 — 판정은 files.service 한 곳에서 수행하고, 건너뛴 항목은 통지한다
         from app.files import service as _fs
         if any(_fs.is_hidden_name(p) for p in parts):
             skipped.append({"name": name, "reason": "저장 장치가 쓰는 이름(@Recycle 등)이라 건너뜀"})
@@ -171,7 +171,7 @@ def _plan(real: Path, max_entries: int, max_bytes: int) -> tuple[list[tuple[zipf
 
 
 def _extract(real: Path, plan, base: Path, max_bytes: int) -> tuple[list[Path], list[dict]]:
-    """실제로 풀기 — 쓴 바이트로 다시 재고(머리글 거짓 방어), 이미 있는 파일은 덮지 않고 이름을 바꾼다."""
+    """실제 해제 — 기록한 바이트로 재측정하고(헤더 허위 값 방어), 기존 파일은 덮어쓰지 않고 이름을 변경한다."""
     created: list[Path] = []
     renamed: list[dict] = []
     written = 0
@@ -295,7 +295,7 @@ register(Tool(
                             "x-label": "새 폴더에 풀기", "x-editable": True},
         "idempotency_key": {"type": "string"},
     }, "required": ["path"]},
-    # 풀 곳(없으면 zip 이 있는 폴더)이 공유 영역이면 남에게 보이는 쓰기
+    # 해제 위치(없으면 zip 이 있는 폴더)가 공유 영역이면 타인 노출 쓰기
     visible_for=lambda a, u=None: path_shared(a.get("dst_folder") or a.get("path"), u),
     handler=files_unzip, scope="mcp:write", risk="low",
 ))

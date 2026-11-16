@@ -1,6 +1,6 @@
-"""음성 채널 — 채널 깃발·토큰 권한·접속 상태(presence)·웹훅 분기·대조.
+"""음성 채널 — 채널 플래그·토큰 권한·접속 상태(presence)·웹훅 분기·대조.
 
-SQLite + 가짜 Redis·LiveKit. 라우터 함수를 직접 부른다.
+SQLite + 가짜 Redis·LiveKit. 라우터 함수를 직접 호출한다.
 """
 
 import json
@@ -65,7 +65,7 @@ class FakeRedis:
 
 
 class FakeLiveKit:
-    """방 이름 → 참가자 목록. list_participants 는 방이 없으면 예외(실서버의 not_found 와 같다)."""
+    """방 이름 → 참가자 목록. list_participants 는 방이 없으면 예외 발생(실서버의 not_found 와 동일)."""
 
     def __init__(self):
         self.rooms: dict[str, list[dict]] = {}
@@ -99,7 +99,7 @@ async def env(monkeypatch):
     lk = FakeLiveKit()
     monkeypatch.setattr(voice, "get_redis", _get_redis)
     monkeypatch.setattr(calls, "get_redis", _get_redis)
-    # emit_to_channel 은 자기 모듈의 get_redis 를 쓴다
+    # emit_to_channel 은 자체 모듈의 get_redis 를 사용
     from app.realtime import events
     monkeypatch.setattr(events, "get_redis", _get_redis)
     monkeypatch.setattr(voice.livekit, "is_configured", lambda: True)
@@ -108,7 +108,7 @@ async def env(monkeypatch):
     monkeypatch.setattr(voice.livekit, "delete_room", lk.delete_room)
     monkeypatch.setattr(voice.livekit, "generate_token", lambda **kw: f"jwt:{kw['room']}:{kw['identity']}")
     monkeypatch.setattr(voice.livekit, "get_ws_url", lambda: "ws://x/livekit/")
-    # 테스트에선 identity 를 예측 가능하게
+    # 테스트에서는 identity 를 예측 가능하게 설정
     monkeypatch.setattr(voice.livekit, "session_identity", lambda uid: f"u-{uid}-s1")
 
     class _Mgr:
@@ -144,7 +144,7 @@ async def test_create_voice_channel_flag_in_list(env):
     by = {c["id"]: c for c in lst}
     assert by[r["id"]]["is_voice"] is True
     assert by["dev"]["is_voice"] is False
-    # 상세도 깃발을 준다
+    # 상세 조회도 플래그를 반환
     one = await chat_router.get_channel(r["id"], user=env.u["alice"], db=env.db)
     assert one["is_voice"] is True
 
@@ -164,7 +164,7 @@ async def test_token_requires_member_and_voice_channel(env):
     tok = await voice.voice_token("lounge", user=env.u["bob"], db=env.db)
     assert tok["room"] == "voice-lounge" and tok["identity"] == "u-bob-s1"
     assert tok["token"] == "jwt:voice-lounge:u-bob-s1" and tok["livekit_url"] == "ws://x/livekit/"
-    # identity → 사람 정보가 적혔다(presence 가 사람으로 바꿀 때 쓴다)
+    # identity → 사용자 정보가 기록됨(presence 가 사용자로 변환할 때 사용)
     info = json.loads(env.redis.kv["voice:ident:u-bob-s1"])
     assert info["user_id"] == "bob" and info["name"] == "Bob"
 
@@ -183,23 +183,23 @@ async def test_state_builds_presence_and_emits_once_per_change(env):
     ps = st["participants"]
     assert [p["user_id"] for p in ps] == ["alice", "bob"]        # 녹화 봇 제외, 입장 순
     assert ps[0]["tier"] == "music" and ps[0]["muted"] is False
-    # bob 은 보고가 없다 → LiveKit 트랙 음소거를 따른다, 단계는 기본
+    # bob 은 보고가 없음 → LiveKit 트랙 음소거를 따르며, 단계는 기본값
     assert ps[1]["muted"] is True and ps[1]["tier"] == "voice" and ps[1]["name"] == "Bob"
     assert len(_voice_events(env.redis, "lounge")) == 1
 
-    # 같은 상태를 다시 보고하면 이벤트가 안 난다
+    # 동일 상태를 재보고하면 이벤트가 발생하지 않음
     await voice.voice_state("lounge", VoiceStateUpdate(identity="u-alice-s1", muted=False, deafened=False, tier="music"),
                             user=env.u["alice"], db=env.db)
     assert len(_voice_events(env.redis, "lounge")) == 1
 
-    # 듣기 끔 → 바뀐 것만 알림
+    # 듣기 끔 → 변경분만 알림
     st = await voice.voice_state("lounge", VoiceStateUpdate(identity="u-alice-s1", muted=True, deafened=True, tier="music"),
                                  user=env.u["alice"], db=env.db)
     assert st["participants"][0]["deafened"] is True and st["participants"][0]["muted"] is True
     ev = _voice_events(env.redis, "lounge")
     assert len(ev) == 2 and ev[-1]["participants"][0]["deafened"] is True
 
-    # 전체 상태 조회 — 내 음성 채널만
+    # 전체 상태 조회 — 본인 음성 채널만
     allst = await voice.voice_states(user=env.u["alice"], db=env.db)
     assert set(allst) == {"lounge"} and len(allst["lounge"]["participants"]) == 2
     assert await voice.voice_states(user=env.u["eve"], db=env.db) == {}
@@ -226,7 +226,7 @@ async def test_leave_and_webhook_and_reconcile(env):
     await voice.voice_state("lounge", VoiceStateUpdate(identity="u-alice-s1"), user=env.u["alice"], db=env.db)
     assert "lounge" in env.redis.h["voice:state"]
 
-    # 나감 — LiveKit 에서도 빠졌다
+    # 퇴장 — LiveKit 에서도 제외됨
     env.lk.rooms["voice-lounge"] = []
     await voice.voice_leave("lounge", VoiceLeave(identity="u-alice-s1"), user=env.u["alice"], db=env.db)
     assert "lounge" not in env.redis.h.get("voice:state", {})
@@ -234,7 +234,7 @@ async def test_leave_and_webhook_and_reconcile(env):
     ev = _voice_events(env.redis, "lounge")
     assert ev[-1]["participants"] == [] and ev[-1]["since"] is None
 
-    # 웹훅 분기 — refresh_room 이 참가자를 다시 읽는다
+    # 웹훅 분기 — refresh_room 이 참가자를 다시 조회
     env.lk.rooms["voice-lounge"] = [{"identity": "u-alice-s1", "name": "Alice", "joined_at": 30, "mic_muted": False}]
     await voice.refresh_room("voice-lounge")
     assert json.loads(env.redis.h["voice:state"]["lounge"])["participants"][0]["user_id"] == "alice"
@@ -244,7 +244,7 @@ async def test_leave_and_webhook_and_reconcile(env):
     await voice.refresh_room("chan-dev")
     assert env.redis.h.get("voice:state", {}) == {}
 
-    # 대조 — LiveKit 엔 없는데 남은 상태는 지우고, 있는 방은 채운다
+    # 대조 — LiveKit 에 없는데 남은 상태는 삭제하고, 존재하는 방은 채운다
     env.redis.h["voice:state"]["stale"] = json.dumps({"participants": [{"identity": "x"}], "since": 1})
     await voice.reconcile()
     assert set(env.redis.h["voice:state"]) == {"lounge"}

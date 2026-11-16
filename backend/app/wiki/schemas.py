@@ -32,7 +32,7 @@ class PageUpdate(BaseModel):
     parent_id: str | None = None
     sort_order: int | None = None
     is_pinned: bool | None = None
-    # 편집을 시작할 때 본 버전 — 그 사이 다른 사람이 고쳤으면(버전이 다르면) 409 로 덮어쓰기를 막는다. 없으면 검사하지 않는다
+    # 편집 시작 시점의 버전 — 그 사이 타 사용자가 수정했으면(버전 불일치) 409 로 덮어쓰기를 차단. 없으면 검사하지 않음
     base_version: int | None = None
 
 

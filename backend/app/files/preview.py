@@ -20,13 +20,13 @@ TEXT_EXTENSIONS = {
     ".vue", ".jsx", ".tsx", ".sql", ".go", ".rs", ".java",
 }
 PDF_EXTENSIONS = {".pdf"}
-# 오피스 문서 — 편집기가 늦게 뜰 때 "미리보기로 열기"용 글자만 미리보기.
-# 손님 공유 링크 미리보기(can_preview)에는 넣지 않는다 — 로그인 사용자 /preview 에서만.
+# 오피스 문서 — 편집기 로딩이 지연될 때 "미리보기로 열기"용 텍스트 전용 미리보기.
+# 손님 공유 링크 미리보기(can_preview)에는 포함하지 않는다 — 로그인 사용자 /preview 에서만 제공.
 OFFICE_TEXT_EXTENSIONS = {".docx", ".xlsx", ".pptx"}
 
 
 def get_office_text(path: Path) -> str:
-    """docx·xlsx·pptx 의 글자(줄 유지). 파일 색인과 같은 읽기 함수를 쓴다. 너무 크면 빈 글자."""
+    """docx·xlsx·pptx 의 텍스트(줄 유지). 파일 색인과 동일한 읽기 함수를 사용한다. 크기 초과 시 빈 문자열."""
     from app.files import indexer
 
     ext = path.suffix.lower()
@@ -41,9 +41,9 @@ def get_office_text(path: Path) -> str:
     return text[:TEXT_PREVIEW_BYTES]
 
 
-# 글자 미리보기에서 빠지는 요소 세기("[표 1개 · 이미지 2개 생략됨]").
-# 파트 XML 을 정규식으로 센다 — 파싱보다 싸고, 못 읽으면 0. 시트의 칸 글자는 미리보기에 그대로 나오므로
-# xlsx 는 표를 세지 않고 그림만 센다.
+# 텍스트 미리보기에서 제외되는 요소 집계("[표 1개 · 이미지 2개 생략됨]").
+# 파트 XML 을 정규식으로 집계한다 — 파싱보다 비용이 낮고, 읽기 실패 시 0. 시트의 셀 텍스트는 미리보기에 그대로 표시되므로
+# xlsx 는 표를 집계하지 않고 그림만 집계한다.
 _OMIT_PATTERNS = {
     ".docx": (("word/document.xml",), rb"<w:tbl[\s/>]", rb"<(?:w:drawing|w:pict)[\s/>]"),
     ".pptx": (("ppt/slides/slide",), rb"<a:tbl[\s/>]", rb"<p:pic[\s/>]"),
@@ -53,7 +53,7 @@ _OMIT_MAX_PART = 32 * 1024 * 1024
 
 
 def get_office_omitted(path: Path) -> dict:
-    """{tables, images} — 글자 미리보기에서 빠진 표·그림 수. 못 읽으면 0."""
+    """{tables, images} — 텍스트 미리보기에서 제외된 표·그림 수. 읽기 실패 시 0."""
     import re
     import zipfile
 

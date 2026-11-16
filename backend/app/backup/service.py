@@ -1,10 +1,10 @@
-"""관리 화면의 백업 — 기록(BackupRecord)을 남기며 app/backup/runner.py 를 돈다.
+"""관리 화면의 백업 — 기록(BackupRecord)을 저장하며 app/backup/runner.py 를 실행한다.
 
-백업의 형식은 하나다(app/backup/format.py): `BACKUP_ROOT/<시각>-full/` 아래 manifest.json 과 항목별 파일.
-CLI(`python -m app.cli backup create`)·scripts/backup.sh·설치 관리자의 업데이트 전 백업이 같은 형식을 만든다.
+백업 형식은 단일하다(app/backup/format.py): `BACKUP_ROOT/<시각>-full/` 하위의 manifest.json 과 항목별 파일.
+CLI(`python -m app.cli backup create`)·scripts/backup.sh·설치 관리자의 업데이트 전 백업이 동일 형식을 생성한다.
 
-복원은 여기 없다. backend 가 자신을 세우고 DB 를 갈아 끼울 수는 없으므로, 복원은 backend 밖에서
-(`scripts/restore.sh` → `python -m app.cli restore`, 또는 설치 관리자) 한다 — docs/data-safety.md.
+복원은 본 모듈에 없다. backend 가 자신을 중지하고 DB 를 교체할 수는 없으므로, 복원은 backend 외부에서
+(`scripts/restore.sh` → `python -m app.cli restore`, 또는 설치 관리자) 수행한다 — docs/data-safety.md.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 BACKUP_ROOT = Path(os.getenv("BACKUP_ROOT", "/backups"))
 
-# 파일 저장소를 백업에 넣을지(관리 설정). 로컬 저장소일 때만 뜻이 있다 — NFS 면 넣지 않는다.
+# 파일 저장소의 백업 포함 여부(관리 설정). 로컬 저장소인 경우에만 유효 — NFS 이면 포함하지 않음
 SETTING_INCLUDE_FILES = "backup.include_files"
 
 
@@ -37,7 +37,7 @@ async def include_files_setting(db) -> bool:
 
 
 def _components(result: runner.BackupResult) -> dict[str, str]:
-    """기록에 남길 항목별 결과 — ok / skip: 이유 / fail."""
+    """기록에 저장할 항목별 결과 — ok / skip: 이유 / fail."""
     comps = {item: "ok" for item in result.manifest.get("items", {})}
     for item, reason in (result.manifest.get("skipped") or {}).items():
         comps[item] = "fail" if reason == "failed" else f"skip: {reason}"
@@ -45,7 +45,7 @@ def _components(result: runner.BackupResult) -> dict[str, str]:
 
 
 async def run_backup(db, *, kind: str = "manual", user_id: str = "") -> BackupRecord:
-    """전체 백업 하나를 만들고 기록을 남긴다. 실패하면 기록의 status="failed" 와 error 에 이유."""
+    """전체 백업 하나를 생성하고 기록을 저장한다. 실패 시 기록에 status="failed" 와 error(사유)를 저장한다."""
     rec = BackupRecord(status="running", kind=kind, path="", created_by=user_id, components="{}")
     db.add(rec)
     await db.commit()
@@ -61,7 +61,7 @@ async def run_backup(db, *, kind: str = "manual", user_id: str = "") -> BackupRe
         rec.error = "; ".join(result.failures)[:2000]
         await db.commit()
         logger.info("[backup] %s status=%s size=%d", result.path.name, rec.status, rec.size_bytes)
-    except Exception as e:  # noqa: BLE001 — 사전 검사 거부·DB 덤프 실패 등: 기록에 그대로 남긴다
+    except Exception as e:  # noqa: BLE001 — 사전 검사 거부·DB 덤프 실패 등: 기록에 그대로 저장
         rec.status = "failed"
         rec.error = str(e)[:2000]
         await db.commit()
@@ -73,7 +73,7 @@ async def run_backup(db, *, kind: str = "manual", user_id: str = "") -> BackupRe
 
 
 def verify_record(rec: BackupRecord) -> list[str]:
-    """기록이 가리키는 백업의 파일을 manifest 의 해시와 견준다. 돌려주는 값: 문제 목록."""
+    """기록이 가리키는 백업의 파일을 manifest 의 해시와 대조한다. 반환값: 문제 목록."""
     if not rec.path or not Path(rec.path).is_dir():
         return ["백업 파일을 찾을 수 없습니다"]
     try:
@@ -92,7 +92,7 @@ async def delete_backup(db, backup_id: str) -> bool:
     if not rec:
         return False
     try:
-        # 기록의 경로가 백업 위치 바로 아래일 때만 지운다(기록이 엉뚱한 곳을 가리켜도 다른 것을 지우지 않게)
+        # 기록의 경로가 백업 위치 직하위인 경우에만 삭제(기록이 잘못된 경로를 가리켜도 다른 대상을 삭제하지 않도록 함)
         target = Path(rec.path) if rec.path else None
         if target and target.is_dir() and target.parent.resolve() == BACKUP_ROOT.resolve():
             shutil.rmtree(target, ignore_errors=True)

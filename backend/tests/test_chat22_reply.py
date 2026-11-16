@@ -38,7 +38,7 @@ async def test_reply_summary_and_ping(db, events):
     assert [x.message_id for x in m] == [r["id"]]
     n = (await db.execute(select(Notification).where(Notification.user_id == "alice"))).scalars().all()
     assert len(n) == 1 and "답장" in n[0].title
-    # 목록에서도 같은 요약(한 번에 모아 조회)
+    # 목록에서도 동일한 요약(일괄 조회)
     page = await _list(db, ch.id, "carol")
     by_id = {x["id"]: x for x in page["messages"]}
     assert by_id[r["id"]]["reply_to"]["state"] == "ok"
@@ -53,14 +53,14 @@ async def test_reply_ping_off_self_and_silent(db, events):
     await _post(db, ch.id, "bob", "답(알림 끔)", reply_to_id=root["id"], reply_ping=False)
     await _post(db, ch.id, "alice", "내 글에 답", reply_to_id=root["id"])
     assert (await db.execute(select(ChatMention))).scalars().all() == []
-    # @silent 머리말 — 떼고 silent. 멘션 행(배지)은 남고 알림·푸시는 없다
+    # @silent 머리말 — 제거 후 silent 처리. 멘션 행(배지)은 유지되고 알림·푸시는 없음
     s = await _post(db, ch.id, "bob", "@silent 조용히 @alice", reply_to_id=root["id"])
     assert s["silent"] is True and s["content"] == "조용히 @alice"
     rows = (await db.execute(select(ChatMention).where(ChatMention.user_id == "alice"))).scalars().all()
     assert len(rows) == 1
     assert (await db.execute(select(Notification))).scalars().all() == []
     assert events["push"] == []
-    # 배지 갱신 이벤트는 간다
+    # 배지 갱신 이벤트는 발송됨
     assert any(ev.get("type") == "mention_count" for uid, ev in events["user"] if uid == "alice")
 
 
@@ -109,21 +109,21 @@ async def test_around_jump_and_thread_target(db, events):
     assert "m10" in got and len(got) == 10
     assert got.index("m10") == 5            # 위 반 · 아래 반(원문 포함)
     assert res["has_more"] is True and res["has_more_after"] is True
-    # 스레드 안 답글이면 메인엔 없다 → thread_root_id
+    # 스레드 내 답글이면 메인에는 없음 → thread_root_id
     t = await _post(db, ch.id, "bob", "스레드", parent_id=ids[0])
     res = await _list(db, ch.id, "bob", around=t["id"], limit=10)
     assert res["messages"] == [] and res["thread_root_id"] == ids[0]
     with pytest.raises(HTTPException) as e:
         await _list(db, ch.id, "bob", around="nope", limit=10)
     assert e.value.status_code == 404
-    # 위로 페이지(before) 를 넘기면 최근 쪽이 더 있다
+    # 위쪽 페이지(before) 를 조회하면 최근 쪽에 추가 항목이 존재
     page = await _list(db, ch.id, "bob", before=ids[20], limit=5)
     assert page["has_more_after"] is True
 
 
 @pytest.mark.asyncio
 async def test_ws_path_uses_same_rules(db, events, monkeypatch):
-    """WS send_message 도 같은 검사·필드 — create_message 에 reply_to_id·flags 가 들어가는지(직접 호출)."""
+    """WS send_message 도 동일한 검사·필드 — create_message 에 reply_to_id·flags 가 전달되는지 확인(직접 호출)."""
     from app.chat import msg22
     ch = await service.create_channel(db, "gen", "public", "alice", member_ids=["bob"])
     root = await _post(db, ch.id, "alice", "루트")

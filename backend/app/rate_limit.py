@@ -1,11 +1,11 @@
 """Rate limiting configuration.
 
-- 카운터는 Redis 에 둔다 — 백엔드 워커(8개)가 같은 한도를 나눠 쓴다. Redis 가 죽으면 워커별
-  메모리로 잠시 대신 센다(인증이 멈추는 것보다 낫다).
-- 라우트별 한도(@limiter.limit)는 예전처럼 클라이언트 IP 기준.
-- 기본 한도(DefaultRateLimitMiddleware)는 데코레이터가 없는 /api/·/oauth/ 요청 전부에 붙는다.
-  키는 서명이 맞는 세션이면 사용자, 아니면 IP — 사무실 NAT 뒤 여러 사람이 한 IP 를 나눠 써도
-  서로의 한도를 먹지 않고, 세션값을 지어내 키를 바꾸는 우회는 서명 검사로 막는다.
+- 카운터는 Redis 에 저장한다 — 백엔드 워커(8개)가 동일 한도를 공유한다. Redis 장애 시 워커별
+  메모리로 일시 대체하여 집계한다(인증 중단보다 낫다).
+- 라우트별 한도(@limiter.limit)는 기존과 같이 클라이언트 IP 기준.
+- 기본 한도(DefaultRateLimitMiddleware)는 데코레이터가 없는 /api/·/oauth/ 요청 전체에 적용된다.
+  키는 서명이 유효한 세션이면 사용자, 아니면 IP — 사무실 NAT 뒤 여러 사용자가 하나의 IP 를 공유해도
+  서로의 한도를 소진하지 않으며, 세션값을 위조하여 키를 변경하는 우회는 서명 검사로 차단한다.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 _settings = get_settings()
 
-# 저장소 — 기본은 REDIS_URL. 테스트 등은 RATE_LIMIT_STORAGE_URI=memory:// 로 바꿀 수 있다.
+# 저장소 — 기본값은 REDIS_URL. 테스트 등에서는 RATE_LIMIT_STORAGE_URI=memory:// 로 변경 가능.
 def storage_uri() -> str:
     return os.environ.get("RATE_LIMIT_STORAGE_URI") or _settings.redis_url
 
@@ -46,7 +46,7 @@ limiter = Limiter(
 
 DEFAULT_LIMIT = os.environ.get("RATE_LIMIT_DEFAULT", "600/minute")
 _DEFAULT_PREFIXES = ("/api/", "/oauth/")
-# 컨테이너 내부 호출(메일서버 → mail-auth 등)·헬스체크는 기본 한도 밖(자체 한도가 있다)
+# 컨테이너 내부 호출(메일서버 → mail-auth 등)·헬스체크는 기본 한도 적용 제외(자체 한도 보유)
 _EXEMPT_PREFIXES = ("/api/internal/", "/api/health")
 
 
@@ -82,7 +82,7 @@ def default_limit_key(scope) -> str:
 
 
 class DefaultRateLimitMiddleware:
-    """데코레이터 없는 라우트에도 기본 한도 — 순수 ASGI(스트리밍 응답을 건드리지 않는다)."""
+    """데코레이터 없는 라우트에도 기본 한도 적용 — 순수 ASGI(스트리밍 응답을 변경하지 않는다)."""
 
     def __init__(self, app, limit: str | None = None, storage=None):
         self.app = app
@@ -91,7 +91,7 @@ class DefaultRateLimitMiddleware:
         if storage is None:
             try:
                 storage = storage_from_string(STORAGE_URI, **_STORAGE_OPTIONS)
-            except Exception as e:  # 드라이버·URL 문제 — 메모리로
+            except Exception as e:  # 드라이버·URL 문제 — 메모리로 fallback
                 logger.warning("rate limit storage unavailable, using memory: %s", e)
                 storage = MemoryStorage()
         self._limiter = FixedWindowRateLimiter(storage)

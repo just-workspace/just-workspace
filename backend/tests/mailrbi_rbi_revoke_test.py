@@ -1,10 +1,10 @@
-"""격리 브라우저 — 권한 회수·대상 비활성화/삭제·계정 비활성/삭제 때 이미 열린 세션을 끝낸다.
+"""격리 브라우저 — 권한 회수·대상 비활성화/삭제·계정 비활성/삭제 시 이미 열린 세션을 종료한다.
 
-docker·Redis 는 가짜(tests/test_rbi.py · tests/rbi_fakes.py 의 것을 그대로 쓴다). 보는 것은
-- 관리자 대상 API(끄기·허용 사용자/그룹 줄이기·삭제) → 그 자리에서 종료(컨테이너 삭제 · end_reason=admin · 감사에 사유)
-- 대상 API 를 거치지 않는 회수(그룹에서 빠짐 · 모듈 권한 회수 · 계정 비활성/삭제) → 거두기 한 바퀴에 종료
-- 회수된 세션은 거두기 전이라도 스트림 인증(auth_request)이 403
-- 권한이 그대로인 세션은 건드리지 않는다
+docker·Redis 는 가짜(tests/test_rbi.py · tests/rbi_fakes.py 의 구현을 그대로 사용). 검증 항목은
+- 관리자 대상 API(비활성화·허용 사용자/그룹 축소·삭제) → 즉시 종료(컨테이너 삭제 · end_reason=admin · 감사에 사유)
+- 대상 API 를 거치지 않는 회수(그룹 제외 · 모듈 권한 회수 · 계정 비활성/삭제) → 정리 루프 1회 주기에 종료
+- 회수된 세션은 정리 전이라도 스트림 인증(auth_request)이 403
+- 권한이 유지된 세션은 변경하지 않는다
 """
 from __future__ import annotations
 
@@ -92,16 +92,16 @@ async def test_disabling_target_ends_open_sessions_immediately(db_session, fake_
     assert r.status_code == 200, r.text
     await db_session.refresh(s)
     assert _ended_by_admin(s)
-    assert cid in fake_docker.removed          # 컨테이너가 지워져 스트림 연결이 끊긴다
+    assert cid in fake_docker.removed          # 컨테이너가 삭제되어 스트림 연결이 종료된다
     assert await svc.active_sessions(db_session) == []
     assert await _causes(db_session) == ["target_disabled"]
-    # 화면이 받는 상태 — 끝남 + 관리자 종료
+    # 화면이 수신하는 상태 — 종료 + 관리자 종료
     body = (await _req(ALICE, db_session, "GET", f"/api/rbi/sessions/{s.id}")).json()
     assert body["status"] == "ended" and body["end_reason"] == "admin" and body["stream_url"] is None
 
 
 async def test_disabling_target_ends_admins_own_session_too(db_session, fake_docker):
-    """꺼진 대상은 출구(netfilter 허용)도 빠진다 — 관리자 세션이라고 남겨 두지 않는다."""
+    """비활성화된 대상은 출구(netfilter 허용)에서도 제외된다 — 관리자 세션이라도 유지하지 않는다."""
     await _seed_users(db_session, ADMIN)
     t = await _target(db_session)
     s = await svc.start_session(db_session, ADMIN, t, None)
@@ -151,12 +151,12 @@ async def test_removing_group_from_target_ends_member_session(db_session, fake_d
 
 
 async def test_unrelated_target_edit_keeps_sessions(db_session, fake_docker):
-    """정책만 바꾸는 저장(다운로드 허용 등)은 열린 세션을 건드리지 않는다."""
+    """정책만 변경하는 저장(다운로드 허용 등)은 열린 세션에 영향을 주지 않는다."""
     await _seed_users(db_session, ADMIN, ALICE)
     t = await _target(db_session, allowed_user_ids=[ALICE.id])
     s = await svc.start_session(db_session, ALICE, t, None)
     assert (await _req(ADMIN, db_session, "PUT", f"/api/admin/rbi/targets/{t.id}", json={"downloads": True})).status_code == 200
-    # 권한 목록을 그대로 다시 저장해도 유지
+    # 권한 목록을 동일하게 재저장해도 유지
     assert (await _req(ADMIN, db_session, "PUT", f"/api/admin/rbi/targets/{t.id}",
                        json={"allowed_user_ids": [ALICE.id], "enabled": True})).status_code == 200
     await db_session.refresh(s)
@@ -164,7 +164,7 @@ async def test_unrelated_target_edit_keeps_sessions(db_session, fake_docker):
 
 
 async def test_group_membership_removed_is_caught_by_reaper(db_session, fake_docker):
-    """그룹에서 빼는 것은 대상 API 를 거치지 않는다 — 거두기(30초)가 다음 바퀴에 끝낸다."""
+    """그룹 제외는 대상 API 를 거치지 않는다 — 정리 루프(30초)가 다음 주기에 종료한다."""
     await _seed_users(db_session, ADMIN, BOB)
     g = Group(name="netops")
     db_session.add(g)
@@ -174,7 +174,7 @@ async def test_group_membership_removed_is_caught_by_reaper(db_session, fake_doc
     t = await _target(db_session, allowed_group_ids=[g.id])
     s = await svc.start_session(db_session, BOB, t, None)
     fake_docker.viewers[s.container_id] = 1
-    assert (await svc.reap_once(db_session))["ended"] == 0   # 권한이 그대로면 유지
+    assert (await svc.reap_once(db_session))["ended"] == 0   # 권한이 유지되면 세션 유지
     await db_session.delete(gm)
     await db_session.commit()
     st = await svc.reap_once(db_session)
@@ -214,7 +214,7 @@ async def test_deleted_user_session_ended_by_reaper(db_session, fake_docker):
 
 
 async def test_enforce_access_scoped_to_user(db_session, fake_docker):
-    """계정 쪽 코드가 바로 부를 수 있는 진입점 — user_id 로 좁혀 그 사용자의 세션만 본다."""
+    """계정 측 코드가 직접 호출할 수 있는 진입점 — user_id 로 한정하여 해당 사용자의 세션만 확인한다."""
     await _seed_users(db_session, ADMIN, ALICE, BOB)
     t = await _target(db_session, allowed_user_ids=[ALICE.id, BOB.id])
     sa = await svc.start_session(db_session, ALICE, t, None)
@@ -229,13 +229,13 @@ async def test_enforce_access_scoped_to_user(db_session, fake_docker):
 
 
 async def test_recheck_error_does_not_kill_session_nor_break_the_cycle(db_session, fake_docker, monkeypatch):
-    """권한 확인 자체가 실패하면(DB 순간 오류 등) 끊지 않고, 트랜잭션을 되돌려 같은 바퀴의 나머지 처리는 이어 간다."""
+    """권한 확인 자체가 실패하면(DB 일시 오류 등) 종료하지 않고, 트랜잭션을 롤백하여 동일 주기의 나머지 처리를 계속한다."""
     await _seed_users(db_session, ADMIN, ALICE)
     t = await _target(db_session, idle_minutes=1, allowed_user_ids=[ALICE.id])
     s = await svc.start_session(db_session, ADMIN, t, None)
     sa = await svc.start_session(db_session, ALICE, t, None)
     fake_docker.viewers[s.container_id] = 1
-    # ALICE 세션은 유휴 — 권한 확인이 터져도 유휴 종료(조회·커밋)는 그대로 돼야 한다
+    # ALICE 세션은 유휴 상태 — 권한 확인에서 예외가 발생해도 유휴 종료(조회·커밋)는 정상 수행되어야 한다
     sa.last_seen_at = datetime.now(timezone.utc) - timedelta(minutes=10)
     await db_session.commit()
     fake_docker.viewers[sa.container_id] = 0
@@ -260,7 +260,7 @@ async def test_recheck_error_does_not_kill_session_nor_break_the_cycle(db_sessio
     assert sa.status == "ended" and sa.end_reason == "idle"
 
 
-# ── 모듈 rbi 를 전역으로 끔 ──
+# ── 모듈 rbi 전역 비활성화 ──
 
 async def test_module_disabled_ends_all_sessions_including_admin(db_session, fake_docker):
     await _seed_users(db_session, ADMIN, ALICE)
@@ -269,7 +269,7 @@ async def test_module_disabled_ends_all_sessions_including_admin(db_session, fak
     s2 = await svc.start_session(db_session, ALICE, t, None)
     for x in (s1, s2):
         fake_docker.viewers[x.container_id] = 1
-    # DB 값이 권위 — 이 워커의 메모리 값(_module_on 픽스처 = 켜짐)이 낡았어도 끈 것으로 본다
+    # DB 값이 권위 — 이 워커의 메모리 값(_module_on 픽스처 = 활성)이 오래된 값이어도 비활성으로 간주한다
     db_session.add(SystemSetting(key="module.rbi.enabled", value="false"))
     await db_session.commit()
     assert await svc.access_denied_reason(db_session, s1) == "module_disabled"
@@ -287,7 +287,7 @@ async def test_module_disabled_falls_back_to_memory_state(db_session, fake_docke
     t = await _target(db_session)
     s = await svc.start_session(db_session, ADMIN, t, None)
     assert await svc.access_denied_reason(db_session, s) is None
-    monkeypatch.setitem(registry._module_states, "rbi", False)   # DB 에 행이 없으면 메모리 값
+    monkeypatch.setitem(registry._module_states, "rbi", False)   # DB 에 행이 없으면 메모리 값 사용
     assert await svc.access_denied_reason(db_session, s) == "module_disabled"
 
 
@@ -331,14 +331,14 @@ async def test_group_member_removed_ends_rbi_session_immediately(db_session, fak
     await db_session.refresh(sa)
     assert _ended_by_admin(sb) and sa.status == "running"
     assert await _causes(db_session) == ["access_revoked"]
-    # 그룹을 지우면 남은 멤버의 세션도
+    # 그룹을 삭제하면 잔여 멤버의 세션도 종료
     await groups_router.delete_group(group_id=g.id, user=admin, db=db_session)
     await db_session.refresh(sa)
     assert _ended_by_admin(sa)
 
 
 async def test_module_grant_change_ends_rbi_session_immediately(db_session, fake_docker):
-    """rbi 모듈을 특정 그룹에만 주도록 바꾸면, 그 그룹이 아닌 사람의 열린 세션이 끝난다."""
+    """rbi 모듈을 특정 그룹에만 부여하도록 변경하면, 해당 그룹 외 사용자의 열린 세션이 종료된다."""
     await _seed_users(db_session, ADMIN, ALICE)
     g = Group(name="rbi-only")
     db_session.add(g)
@@ -366,7 +366,7 @@ async def test_hook_failure_does_not_break_the_admin_action(db_session, fake_doc
     assert (await db_session.get(User, ALICE.id)).is_active is False
 
 
-# ── 스트림 인증 — 거두기 전이라도 새 연결은 막는다 ──
+# ── 스트림 인증 — 정리 전이라도 신규 연결은 차단한다 ──
 
 async def test_stream_auth_denied_once_access_revoked(db_session, fake_docker, rbi_origin, fake_redis):
     await _seed_users(db_session, ALICE)
@@ -375,13 +375,13 @@ async def test_stream_auth_denied_once_access_revoked(db_session, fake_docker, r
     cookie = await site_cookie(fake_redis, ALICE.id)
     hdr = {"Host": RBI_HOST, "X-Original-URI": f"/rbi/{s.id}/websockify", "Cookie": cookie}
     assert (await _req(None, db_session, "GET", "/api/internal/rbi/auth", headers=hdr)).status_code == 204
-    # 허용 목록에서 빠졌다(대상 API 가 아닌 경로로 DB 가 바뀐 경우) — 세션 행은 아직 running
+    # 허용 목록에서 제외됨(대상 API 가 아닌 경로로 DB 가 변경된 경우) — 세션 행은 아직 running
     svc.apply_target_fields(t, {"allowed_user_ids": []}, creating=False)
     await db_session.commit()
     assert s.status == "running"
-    # 캐시 시간(STREAM_ACCESS_TTL) 안에서는 앞선 결과를 쓴다 — 요청마다 DB 를 다시 보지 않는다
+    # 캐시 시간(STREAM_ACCESS_TTL) 내에서는 이전 결과를 사용한다 — 요청마다 DB 를 재조회하지 않는다
     assert (await _req(None, db_session, "GET", "/api/internal/rbi/auth", headers=hdr)).status_code == 204
-    # 캐시가 지나면 거두기 전이라도 막힌다
+    # 캐시 만료 후에는 정리 전이라도 차단된다
     exp, denied = svc._stream_access_cache[s.id]
     svc._stream_access_cache[s.id] = (exp - svc.STREAM_ACCESS_TTL - 1, denied)
     assert (await _req(None, db_session, "GET", "/api/internal/rbi/auth", headers=hdr)).status_code == 403

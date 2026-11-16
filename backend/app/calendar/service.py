@@ -49,14 +49,14 @@ async def get_calendars(db: AsyncSession, user_id: str) -> list[dict]:
             "is_subscription": sub,
         })
 
-    # Auto-create default calendar if none exist(구독만 있으면 쓸 캘린더가 없으니 그때도 만든다)
+    # Auto-create default calendar if none exist(구독만 있으면 쓰기 가능한 캘린더가 없으므로 이 경우에도 생성)
     if not any(c["can_write"] for c in calendars):
         default = await create_calendar(db, user_id, "내 캘린더", "#3b82f6")
         calendars.append({**default, "is_visible": True, "sort_order": 0,
                           "is_shared": False, "can_write": True})
 
     # Shared calendars
-    # 프론트 사이드바가 "공유받은 캘린더" 묶음·읽기 전용 표시에 쓴다(is_shared·can_write).
+    # 프런트 사이드바가 "공유받은 캘린더" 묶음·읽기 전용 표시에 사용한다(is_shared·can_write).
     shared_result = await db.execute(
         select(CalendarDB, CalendarShareDB.can_write)
         .join(CalendarShareDB, CalendarShareDB.calendar_id == CalendarDB.id)
@@ -148,8 +148,8 @@ async def share_calendar(
     if not cal or cal.user_id != user_id:
         return False
 
-    # 대상을 먼저 다 찾는다 — 예전엔 없는 사용자·본인을 조용히 건너뛰고 ok 를 줘서, 화면엔 공유된 것처럼
-    # 보였다가 창을 다시 열면 사라졌다. 하나라도 못 찾으면 아무것도 바꾸지 않고 ValueError(라우터가 400).
+    # 대상을 먼저 전부 조회한다 — 과거에는 존재하지 않는 사용자·본인을 무시하고 ok 를 반환하여, 화면에는 공유된 것으로
+    # 표시되었다가 창을 다시 열면 사라졌다. 하나라도 찾지 못하면 아무것도 변경하지 않고 ValueError 를 발생시킨다(라우터가 400 응답).
     targets: dict[str, bool] = {}
     for s in shares:
         email = (s.get("email") or "").strip()
@@ -232,7 +232,7 @@ def _parse_iso(s: str) -> datetime:
 
 
 def occurrence_stamp(dt: datetime) -> str:
-    """회차 id 꼬리(UTC). 예: master_20261015T010000"""
+    """회차 id 접미부(UTC). 예: master_20261015T010000"""
     return _utc(dt).strftime("%Y%m%dT%H%M%S")
 
 
@@ -281,7 +281,7 @@ def _event_to_dict(
         "title": event.title,
         "description": event.description,
         "location": event.location,
-        # 시간대 없는 값(SQLite)은 UTC 로 본다 — PostgreSQL 은 원래 aware 라 출력이 같다
+        # 시간대 없는 값(SQLite)은 UTC 로 간주 — PostgreSQL 은 본래 aware 이므로 출력 동일
         "start": _utc(event.start).isoformat() if event.start else "",
         "end": _utc(event.end).isoformat() if event.end else "",
         "all_day": event.all_day,
@@ -300,8 +300,8 @@ def _event_to_dict(
         "exdates": [d.isoformat() for d in parse_exdates(event.exdates)],
         "attendees": att,
         "my_response": my_response,
-        # 회차 단일 수정 행이면 마스터 id·원래 회차 시작. 프런트는 이 행을 독립 일정처럼
-        # 다루면 된다(PATCH/DELETE 가 알아서 회차 예외로 처리한다).
+        # 회차 단일 수정 행이면 마스터 id·원래 회차 시작. 프런트는 이 행을 독립 일정과 동일하게
+        # 처리한다(PATCH/DELETE 가 회차 예외로 처리한다).
         "parent_event_id": event.parent_event_id,
         "recurrence_id": _utc(event.recurrence_id).isoformat() if event.recurrence_id else None,
         "is_exception": bool(event.parent_event_id),
@@ -318,9 +318,9 @@ def _expand_recurring_event(
 ) -> list[dict]:
     """Expand a recurring event into individual occurrences within [range_start, range_end].
 
-    - 시간대가 있으면 그 지역 시각으로 전개한다(서머타임 지역에서 회차 시각 유지).
-    - skip: EXDATE + 회차 단일 수정(RECURRENCE-ID)된 회차 — 빼고 낸다.
-    - recurrence_end: 이 시각 이후 회차는 내지 않는다.
+    - 시간대가 있으면 해당 지역 시각으로 전개한다(서머타임 지역에서 회차 시각 유지).
+    - skip: EXDATE + 회차 단일 수정(RECURRENCE-ID)된 회차 — 제외하고 산출한다.
+    - recurrence_end: 이 시각 이후 회차는 산출하지 않는다.
     """
     rrule_str = strip_rrule_prefix(event_dict.get("recurrence_rule"))
     if not rrule_str:
@@ -345,8 +345,8 @@ def _expand_recurring_event(
     except (ValueError, KeyError, TypeError):
         return [event_dict]
 
-    # 조회 범위 끝까지 펼친다. 예전엔 "시작 + 2년"에서 끊어, 2년 넘은 주간 회의·생일이 달력에서 사라졌다.
-    # 끝없는 규칙은 rrule_guard.iter_bounded 의 훑기·회차 상한이 막는다.
+    # 조회 범위 끝까지 전개한다. 과거에는 "시작 + 2년"에서 중단하여, 2년이 지난 주간 회의·생일이 달력에서 누락되었다.
+    # 무한 규칙은 rrule_guard.iter_bounded 의 탐색·회차 상한으로 차단한다.
     max_end = range_end
     skip_set = {occurrence_stamp(d) for d in (skip or [])}
 
@@ -385,7 +385,7 @@ async def load_attendees(db: AsyncSession, event_ids: list[str]) -> dict[str, li
     if not event_ids:
         return out
     ids = list(event_ids)
-    for i in range(0, len(ids), 1000):  # IN 목록이 너무 길어지지 않게 나눠서
+    for i in range(0, len(ids), 1000):  # IN 목록이 과도하게 길어지지 않도록 분할
         res = await db.execute(
             select(CalendarEventAttendee)
             .where(CalendarEventAttendee.event_id.in_(ids[i:i + 1000]))
@@ -421,7 +421,7 @@ async def _collect_events(
     me: User | None,
     extra_ids: list[str] | None = None,
 ) -> list[dict]:
-    """캘린더들(또는 지정 일정 id들)의 일정을 범위로 모아 반복을 전개한다."""
+    """캘린더(또는 지정 일정 id)의 일정을 범위로 조회하여 반복을 전개한다."""
     if not cal_ids and not extra_ids:
         return []
 
@@ -470,7 +470,7 @@ async def _collect_events(
     masters = list(recur_result.scalars().all())
 
     att_map = await load_attendees(db, [e.id for e in singles] + [e.id for e in masters])
-    # 회차 단일 수정 행의 원래 회차는 전개에서 뺀다(범위 밖으로 옮겨졌어도)
+    # 회차 단일 수정 행의 원래 회차는 전개에서 제외(범위 밖으로 이동된 경우 포함)
     ov_map = await load_overrides(db, [e.id for e in masters]) if masters else {}
 
     events = [
@@ -511,7 +511,7 @@ async def get_events(
     """Get events for the user's calendars within date range.
     Recurring events are expanded into individual occurrences.
 
-    include_invited=True 면 내 캘린더에 없는, 참석자로 초대받은 일정도 함께(is_invited=True).
+    include_invited=True 이면 본인 캘린더에 없는, 참석자로 초대받은 일정도 포함한다(is_invited=True).
     """
     # Get user's calendar IDs (own + shared)
     calendars = await get_calendars(db, user_id)
@@ -545,7 +545,7 @@ async def get_events(
     if include_invited and me is not None and not calendar_id:
         inv_ids = await _invited_event_ids(db, me)
         if inv_ids:
-            # 내 캘린더에 이미 있는 건 빼고
+            # 본인 캘린더에 이미 있는 일정은 제외
             res = await db.execute(
                 select(CalendarEventDB.id).where(
                     CalendarEventDB.id.in_(inv_ids),
@@ -568,7 +568,7 @@ async def _can_write_calendar(db: AsyncSession, user_id: str, cal: CalendarDB | 
     if not cal:
         return False
     if cal.source_url:
-        return False  # 외부 .ics 구독은 읽기 전용 — 다음 갱신 때 덮어써진다
+        return False  # 외부 .ics 구독은 읽기 전용 — 다음 갱신 시 덮어쓰기됨
     if cal.user_id == user_id:
         return True
     share_result = await db.execute(
@@ -610,8 +610,8 @@ async def _is_attendee(db: AsyncSession, user: User, event_id: str) -> bool:
 
 async def get_event(db: AsyncSession, user_id: str, event_id: str) -> dict | None:
     event = await db.get(CalendarEventDB, event_id)
-    # 회차 id('{마스터}_{YYYYmmddTHHMMSS}') — 반복 일정 알림 링크가 그 회차를 가리킨다. 마스터를 주면
-    # 화면이 시리즈 첫 회차(몇 년 전) 날짜로 가 버렸다. 그 회차가 "이 일정만" 수정된 예외 행이면 그 행을 준다.
+    # 회차 id('{마스터}_{YYYYmmddTHHMMSS}') — 반복 일정 알림 링크가 해당 회차를 가리킨다. 마스터를 반환하면
+    # 화면이 시리즈 첫 회차(수년 전) 날짜로 이동했다. 해당 회차가 "이 일정만" 수정된 예외 행이면 그 행을 반환한다.
     occ_start: datetime | None = None
     if not event:
         split = split_occurrence_id(event_id)
@@ -637,7 +637,7 @@ async def get_event(db: AsyncSession, user_id: str, event_id: str) -> dict | Non
     me = await db.get(User, user_id)
     invited = False
     if event.calendar_id not in cal_ids:
-        # 참석자로 초대받은 일정은 읽을 수 있다
+        # 참석자로 초대받은 일정은 조회 가능
         if me is None or not await _is_attendee(db, me, event.parent_event_id or event.id):
             return None
         invited = True
@@ -672,10 +672,10 @@ async def _set_attendees(
     actor_id: str | None = None,
     notify: bool = True,
 ) -> list[str]:
-    """참석자 목록을 통째로 바꾼다. 같은 이메일의 기존 응답은 유지(요청에 response 가 있으면 그걸로).
+    """참석자 목록을 전체 교체한다. 동일 이메일의 기존 응답은 유지한다(요청에 response 가 있으면 해당 값 적용).
 
-    새로 들어온 워크스페이스 사용자 id 를 돌려준다(나 제외) — notify=False 로 부른 쪽이 커밋 뒤에
-    _notify_invites 로 알릴 수 있게(알림 생성은 그 안에서 커밋한다)."""
+    신규 추가된 워크스페이스 사용자 id 를 반환한다(본인 제외) — notify=False 로 호출한 측이 커밋 후
+    _notify_invites 로 알릴 수 있도록 한다(알림 생성은 그 내부에서 커밋한다)."""
     res = await db.execute(
         select(CalendarEventAttendee).where(CalendarEventAttendee.event_id == event.id)
     )
@@ -729,7 +729,7 @@ async def _set_attendees(
 
 
 async def _notify_invites(db: AsyncSession, event: CalendarEventDB, user_ids: list[str]) -> None:
-    """새 참석자에게 초대 알림. create_notification 이 커밋하므로 한 트랜잭션이어야 하는 작업은 끝난 뒤에 부른다."""
+    """신규 참석자에게 초대 알림. create_notification 이 커밋하므로 단일 트랜잭션이어야 하는 작업이 끝난 뒤 호출한다."""
     if not user_ids:
         return
     try:
@@ -785,7 +785,7 @@ def _apply_fields(event: CalendarEventDB, data: dict) -> None:
 
 
 def _touch(event: CalendarEventDB) -> None:
-    # CalDAV ETag·ctag 가 바뀌어야 휴대폰이 다시 받아 간다
+    # CalDAV ETag·ctag 가 변경되어야 휴대폰이 재수신함
     event.updated_at = datetime.now(timezone.utc)
 
 
@@ -847,19 +847,19 @@ async def update_event(
     if not event:
         return False
 
-    # 폼은 캘린더를 안 바꿔도 calendar_id 를 늘 보낸다 — 같은 값이면 이동이 아니다. 예전엔 "본인 소유"만
-    # 통과시켜, 쓰기 권한으로 공유받은 캘린더의 일정은 제목만 고쳐도 404 였다.
+    # 폼은 캘린더를 변경하지 않아도 calendar_id 를 항상 전송한다 — 동일 값이면 이동이 아니다. 과거에는 "본인 소유"만
+    # 허용하여, 쓰기 권한으로 공유받은 캘린더의 일정은 제목만 수정해도 404 가 반환되었다.
     if data.get("calendar_id") is not None and data["calendar_id"] != event.calendar_id:
-        # IDOR 방지 — 이동 대상은 내가 쓸 수 있는 캘린더(소유 또는 쓰기 공유, 구독 제외)여야 한다
+        # IDOR 방지 — 이동 대상은 본인이 쓰기 가능한 캘린더(소유 또는 쓰기 공유, 구독 제외)여야 함
         new_cal = await db.get(CalendarDB, data["calendar_id"])
         if not await _can_write_calendar(db, user_id, new_cal):
             return False
         event.calendar_id = data["calendar_id"]
     old_start = event.start
     _apply_fields(event, data)
-    # 반복 마스터의 시각을 옮기면("모든 일정" 시간 변경) 지운 회차(EXDATE)·예외 회차(RECURRENCE-ID)도
-    # 같은 만큼 옮긴다. 안 옮기면 옛 시각을 가리켜 지운 회차가 새 시각으로 되살아나고, 예외 회차는
-    # 원래 회차와 둘 다 보였다. 프런트가 exdates 를 직접 보냈으면 그 값을 믿는다.
+    # 반복 마스터의 시각을 이동하면("모든 일정" 시간 변경) 삭제된 회차(EXDATE)·예외 회차(RECURRENCE-ID)도
+    # 동일한 간격만큼 이동한다. 이동하지 않으면 이전 시각을 가리켜 삭제된 회차가 새 시각에 복원되고, 예외 회차는
+    # 원래 회차와 중복 표시되었다. 프런트가 exdates 를 직접 전송한 경우 해당 값을 그대로 사용한다.
     if (event.recurrence_rule and not event.parent_event_id and old_start is not None
             and event.start is not None and "exdates" not in data):
         delta = _utc(event.start) - _utc(old_start)
@@ -917,8 +917,8 @@ async def update_occurrence(
         )
         db.add(row)
         await db.flush()
-        # 회차 예외도 마스터의 참석자(응답 포함)를 그대로 갖는다 — 안 그러면 초대받은 사람 목록에서
-        # 그 회차가 사라지고(예외 행은 참석자 행으로만 찾힌다), 다시 보낸 참석자는 "새 초대"로 알림이 또 간다.
+        # 회차 예외도 마스터의 참석자(응답 포함)를 그대로 보유한다 — 그렇지 않으면 초대받은 사용자의 목록에서
+        # 해당 회차가 누락되고(예외 행은 참석자 행으로만 조회된다), 재전송된 참석자는 "새 초대"로 간주되어 알림이 재발송된다.
         res_att = await db.execute(
             select(CalendarEventAttendee).where(CalendarEventAttendee.event_id == master.id)
         )
@@ -928,7 +928,7 @@ async def update_occurrence(
                 response=a.response or "needs-action",
             ))
         await db.flush()
-    # 회차 예외는 반복·캘린더 이동을 갖지 않는다
+    # 회차 예외는 반복·캘린더 이동을 포함하지 않음
     data = {k: v for k, v in data.items() if k not in ("recurrence_rule", "recurrence_end", "exdates", "calendar_id")}
     _apply_fields(row, data)
     if data.get("attendees") is not None:
@@ -942,7 +942,7 @@ async def update_occurrence(
 async def delete_occurrence(
     db: AsyncSession, user_id: str, master_id: str, occ_start: datetime
 ) -> bool:
-    """반복 일정의 한 회차만 삭제 → 마스터 EXDATE 에 추가(회차 예외 행이 있으면 지운다)."""
+    """반복 일정의 한 회차만 삭제 → 마스터 EXDATE 에 추가(회차 예외 행이 있으면 삭제)."""
     master = await _load_writable(db, user_id, master_id)
     if not master or not master.recurrence_rule:
         return False
@@ -975,7 +975,7 @@ async def delete_event(db: AsyncSession, user_id: str, event_id: str) -> bool:
     if not event:
         return False
     if event.parent_event_id:
-        # 회차 예외 행을 지우면 그 회차가 원래대로 되살아나면 안 된다 → EXDATE 로 남긴다
+        # 회차 예외 행을 삭제할 때 해당 회차가 원래대로 복원되어서는 안 됨 → EXDATE 로 기록
         master = await db.get(CalendarEventDB, event.parent_event_id)
         if master and event.recurrence_id:
             exd = parse_exdates(master.exdates)
@@ -993,7 +993,7 @@ async def delete_event(db: AsyncSession, user_id: str, event_id: str) -> bool:
 
 
 def rrule_until_before(rule: str, occ_start: datetime) -> str:
-    """반복 규칙을 이 회차 직전(1초 전)에서 끊는다 — UNTIL/COUNT 를 갈아 끼운다(프런트 rruleUntilBefore 와 같은 규칙)."""
+    """반복 규칙을 해당 회차 직전(1초 전)에서 종료한다 — UNTIL/COUNT 를 교체한다(프런트 rruleUntilBefore 와 동일 규칙)."""
     until = _utc(occ_start) - timedelta(seconds=1)
     parts = [p.strip() for p in (strip_rrule_prefix(rule) or "").split(";") if p.strip()]
     parts = [p for p in parts if not re.match(r"^(UNTIL|COUNT)=", p, re.I)]
@@ -1004,11 +1004,11 @@ def rrule_until_before(rule: str, occ_start: datetime) -> str:
 async def delete_following(
     db: AsyncSession, user_id: str, master_id: str, occ_start: datetime
 ) -> bool:
-    """반복 일정을 이 회차부터 끝까지 지운다(분할 삭제).
+    """반복 일정을 해당 회차부터 끝까지 삭제한다(분할 삭제).
 
-    - 첫 회차(마스터 시작)부터면 시리즈 전체 삭제와 같다.
-    - 아니면 마스터 규칙을 이 회차 직전에서 끊고(UNTIL·recurrence_end), 이 회차 이후의 회차 예외 행과
-      EXDATE 를 정리한다 — 예외 행이 남으면 끊은 뒤에도 그 회차만 떠 있게 된다.
+    - 첫 회차(마스터 시작)부터이면 시리즈 전체 삭제와 동일하다.
+    - 그 외에는 마스터 규칙을 해당 회차 직전에서 종료하고(UNTIL·recurrence_end), 해당 회차 이후의 회차 예외 행과
+      EXDATE 를 정리한다 — 예외 행이 남으면 종료 이후에도 해당 회차만 표시된다.
     """
     master = await _load_writable(db, user_id, master_id)
     if not master or not master.recurrence_rule:
@@ -1030,7 +1030,7 @@ async def delete_following(
 
 
 def _series_rule(rule: str | None, start: datetime, all_day: bool, tz: str | None):
-    """반복 규칙을 그 일정의 시작·시간대로 푼 rrule(전개 _expand_recurring_event 와 같은 기준). 못 풀면 None."""
+    """반복 규칙을 해당 일정의 시작·시간대로 해석한 rrule(전개 _expand_recurring_event 와 동일 기준). 해석 불가 시 None."""
     rrule_str = strip_rrule_prefix(rule)
     if not rrule_str:
         return None
@@ -1043,7 +1043,7 @@ def _series_rule(rule: str | None, start: datetime, all_day: bool, tz: str | Non
 
 
 def _same_local_day(a: datetime, b: datetime, all_day: bool, tz: str | None) -> bool:
-    """두 시각이 그 일정 기준 같은 날인가. 종일은 12시간 안, 시간대를 모르면 24시간 안으로 본다."""
+    """두 시각이 해당 일정 기준으로 같은 날인지 판정한다. 종일은 12시간 이내, 시간대 불명이면 24시간 이내로 간주한다."""
     if all_day:
         return abs(_utc(a) - _utc(b)) < timedelta(hours=12)
     zone = get_zone(tz)
@@ -1052,8 +1052,8 @@ def _same_local_day(a: datetime, b: datetime, all_day: bool, tz: str | None) -> 
     return _utc(a).astimezone(zone).date() == _utc(b).astimezone(zone).date()
 
 
-# 분할 때 보존한 예외 회차가 "따로 고친 적 없는 칸"은 새 시리즈 값을 따른다 — 칸별 수정 기록이 없어서
-# 옛 마스터와 값이 같으면 안 고친 것으로 본다.
+# 분할 시 보존한 예외 회차에서 "따로 고친 적 없는 칸"은 새 시리즈 값을 따른다 — 필드별 수정 기록이 없으므로
+# 기존 마스터와 값이 같으면 수정하지 않은 것으로 간주한다.
 _FOLLOW_FIELDS = ("title", "description", "location", "meeting_url", "reminder_minutes",
                   "timezone", "all_day", "status")
 
@@ -1061,25 +1061,25 @@ _FOLLOW_FIELDS = ("title", "description", "location", "meeting_url", "reminder_m
 async def update_following(
     db: AsyncSession, user_id: str, master_id: str, occ_start: datetime, data: dict
 ) -> str | None:
-    """반복 일정을 이 회차부터 끝까지 수정(분할 수정) — 한 트랜잭션. 새 시리즈 id 반환, 권한 없으면 None.
+    """반복 일정을 해당 회차부터 끝까지 수정(분할 수정) — 단일 트랜잭션. 새 시리즈 id 반환, 권한 없으면 None.
 
-    옛 시리즈는 이 회차 직전에서 끊고(UNTIL·recurrence_end), 이 회차부터는 data 를 반영한 새 시리즈를 만든다.
-    예전엔 프런트가 요청 여러 개(끊기 → 새로 만들기 → 예외 행 삭제 → EXDATE 옮기기)로 나눠 해서, 중간에
-    실패하면 반쯤 된 상태가 남았고 이후 구간의 "이 일정만" 수정은 통째로 버려졌다.
+    기존 시리즈는 해당 회차 직전에서 종료하고(UNTIL·recurrence_end), 해당 회차부터는 data 를 반영한 새 시리즈를 생성한다.
+    과거에는 프런트가 여러 요청(종료 → 신규 생성 → 예외 행 삭제 → EXDATE 이전)으로 나누어 처리하여, 중간에
+    실패하면 부분 적용 상태가 남았고 이후 구간의 "이 일정만" 수정은 전부 소실되었다.
 
-    이후 구간(이 회차 포함)에 남아 있던 것:
-    - 지운 회차(EXDATE): 새 시각만큼 옮겨 새 시리즈에서도 지운 채로 둔다.
-    - 시간대가 바뀌는 분할(시간대 없던 일정에 폼이 시간대를 채워 보내는 경우 포함)은 서머타임 뒤 회차가
-      "옛 시각 + 옮긴 시간"과 한 시간쯤 어긋난다 → 새 시리즈를 실제로 펼쳐 가장 가까운 회차에 맞춘다.
-    - 옛 시리즈에 남는 회차가 하나도 없으면(시작일이 규칙에 안 맞던 시리즈의 첫 회차에서 나눈 경우) 옛 마스터는
-      지우고 새 시리즈만 남긴다(UID 는 물려받는다) — 안 그러면 회차 0개짜리 껍데기가 남는다.
-    - "이 일정만" 수정 행: 새 시리즈의 예외로 옮긴다(원래 회차 = 옛 원래 회차 + 옮긴 시간). 단 이번 수정이
-      날짜를 옮겼거나(요일 변경 등) 규칙이 바뀌어 그 회차가 새 시리즈에 없으면 버린다. 시각을 따로 옮긴 적
-      없는 예외는 새 시각을 따르고, 따로 고친 적 없는 칸(_FOLLOW_FIELDS)은 새 값을 따른다.
-    - 횟수(COUNT) 반복: 규칙을 그대로 보냈으면 새 시리즈는 남은 회차만(5회 → 2 + 5 가 되지 않게).
-    - 참석자: 옛 시리즈의 응답을 그대로 물려받고, 이번에 새로 넣은 사람에게만 초대 알림이 간다
-      (알림은 커밋을 일으키므로 전부 저장한 뒤에 보낸다 — 중간 커밋이 끼면 한 트랜잭션이 깨진다).
-    첫 회차(마스터 시작)부터면 시리즈 전체 수정과 같다.
+    이후 구간(해당 회차 포함)에 남아 있던 항목:
+    - 삭제된 회차(EXDATE): 새 시각만큼 이동하여 새 시리즈에서도 삭제 상태로 유지한다.
+    - 시간대가 변경되는 분할(시간대 없던 일정에 폼이 시간대를 채워 전송하는 경우 포함)은 서머타임 이후 회차가
+      "옛 시각 + 옮긴 시간"과 약 1시간 어긋난다 → 새 시리즈를 실제로 전개하여 가장 가까운 회차에 맞춘다.
+    - 기존 시리즈에 남는 회차가 하나도 없으면(시작일이 규칙에 맞지 않던 시리즈의 첫 회차에서 분할한 경우) 기존 마스터는
+      삭제하고 새 시리즈만 유지한다(UID 는 승계한다) — 그렇지 않으면 회차 0개인 빈 마스터가 남는다.
+    - "이 일정만" 수정 행: 새 시리즈의 예외로 이전한다(원래 회차 = 기존 원래 회차 + 이동 시간). 단, 이번 수정이
+      날짜를 이동했거나(요일 변경 등) 규칙이 변경되어 해당 회차가 새 시리즈에 없으면 폐기한다. 시각을 별도로 이동한 적
+      없는 예외는 새 시각을 따르고, 별도로 수정한 적 없는 필드(_FOLLOW_FIELDS)는 새 값을 따른다.
+    - 횟수(COUNT) 반복: 규칙을 그대로 전송한 경우 새 시리즈는 잔여 회차만 포함한다(5회 → 2 + 5 가 되지 않도록 함).
+    - 참석자: 기존 시리즈의 응답을 그대로 승계하며, 이번에 신규 추가된 참석자에게만 초대 알림을 발송한다
+      (알림은 커밋을 유발하므로 전부 저장한 뒤 발송한다 — 중간 커밋이 발생하면 단일 트랜잭션이 유지되지 않는다).
+    첫 회차(마스터 시작)부터이면 시리즈 전체 수정과 동일하다.
     """
     master = await _load_writable(db, user_id, master_id)
     if not master or not master.recurrence_rule or master.parent_event_id:
@@ -1098,7 +1098,7 @@ async def update_following(
     old_rule = strip_rrule_prefix(master.recurrence_rule)
     old_duration = _utc(master.end) - _utc(master.start)
 
-    # 새 시리즈 = 옛 마스터 사본 + 이번 수정. 검증(반복 규칙·시간대)에서 걸리면 아무것도 바꾸기 전에 끝난다.
+    # 새 시리즈 = 기존 마스터 사본 + 이번 수정. 검증(반복 규칙·시간대)에 실패하면 변경 적용 전에 종료한다.
     new = CalendarEventDB(
         calendar_id=calendar_id,
         title=master.title,
@@ -1121,13 +1121,13 @@ async def update_following(
         new.end = new_start + old_duration
     delta = new_start - occ_start
 
-    # 횟수 반복: 옛 규칙의 COUNT 를 그대로 들고 왔으면 앞 시리즈가 쓴 회차만큼 뺀다(지운 회차도 COUNT 에 든다)
+    # 횟수 반복: 기존 규칙의 COUNT 를 그대로 가져온 경우 앞 시리즈가 소진한 회차 수만큼 차감(삭제된 회차도 COUNT 에 포함)
     old_series = _series_rule(old_rule, master.start, master.all_day, master.timezone)
     before = 0
     if old_series is not None:
         before = sum(1 for _ in rrule_guard.iter_bounded(
             old_series, _utc(master.start), occ_start - timedelta(seconds=1), max_occ=rrule_guard.MAX_SCAN))
-    # 옛 시리즈에 남는 회차가 없다 → 옛 마스터는 껍데기가 되므로 지운다(아래)
+    # 기존 시리즈에 남는 회차 없음 → 기존 마스터는 빈 마스터가 되므로 삭제(아래)
     drop_master = old_series is not None and before == 0
     m_old = re.search(r"(?:^|;)COUNT=(\d+)", old_rule or "", re.I)
     m_new = re.search(r"(?:^|;)COUNT=(\d+)", new.recurrence_rule or "", re.I)
@@ -1144,8 +1144,8 @@ async def update_following(
     all_rows = list(res.scalars().all())
     later_rows = [o for o in all_rows if o.recurrence_id and _utc(o.recurrence_id) >= occ_start]
 
-    # 옛 회차 → 새 시리즈의 대응 회차. 기본은 "옛 시각 + 옮긴 시간"이 새 시리즈에 그대로 있어야 한다.
-    # 전개 기준 시간대가 바뀌면 서머타임 뒤 회차가 그 값과 어긋나므로, 그때만 가장 가까운 회차(2시간 안)에 맞춘다.
+    # 기존 회차 → 새 시리즈의 대응 회차. 기본적으로 "옛 시각 + 옮긴 시간"이 새 시리즈에 그대로 존재해야 한다.
+    # 전개 기준 시간대가 변경되면 서머타임 이후 회차가 해당 값과 어긋나므로, 그 경우에만 가장 가까운 회차(2시간 이내)에 맞춘다.
     old_zone = None if master.all_day else get_zone(master.timezone)
     new_zone = None if new.all_day else get_zone(new.timezone)
     fuzzy = timedelta(hours=2) if str(old_zone) != str(new_zone) else timedelta(0)
@@ -1167,12 +1167,12 @@ async def update_following(
 
     targets = {o.id: _match(_utc(o.recurrence_id) + delta) for o in later_rows}
 
-    # ── 여기부터 바꾼다 ──
+    # ── 여기부터 변경 적용 ──
     db.add(new)
     await db.flush()
 
     if drop_master:
-        # 달력 앱(CalDAV)에는 같은 일정이 바뀐 것으로 보이게 UID 를 물려준다
+        # 캘린더 앱(CalDAV)에서 동일 일정의 변경으로 인식되도록 UID 를 승계
         new.ical_uid = master.ical_uid or master.id
     else:
         master.recurrence_rule = rrule_until_before(master.recurrence_rule, occ_start)
@@ -1180,15 +1180,15 @@ async def update_following(
         master.exdates = dump_exdates([d for d in parse_exdates(master.exdates) if d < occ_start])
 
     if new.recurrence_rule:
-        # 대응 회차를 못 찾은 것은 옮긴 값 그대로 둔다(없는 회차를 가리켜도 해가 없고, 되살아나는 것보다 낫다)
+        # 대응 회차를 찾지 못한 항목은 이동한 값 그대로 유지(존재하지 않는 회차를 가리켜도 무해하며, 삭제된 회차가 복원되는 것보다 낫다)
         new.exdates = dump_exdates([_match(d + delta) or (d + delta) for d in later_exdates])
-        # 방금 옛 시리즈가 알린 회차를 새 시리즈가 또 알리지 않게(시각·알림 설정이 그대로일 때만)
+        # 직전에 기존 시리즈가 알린 회차를 새 시리즈가 중복 알림하지 않도록 함(시각·알림 설정이 동일한 경우에만)
         if (not delta and master.reminder_last_sent_for is not None
                 and new.reminder_minutes == master.reminder_minutes
                 and _utc(master.reminder_last_sent_for) >= occ_start):
             new.reminder_last_sent_for = master.reminder_last_sent_for
 
-    # 참석자: 응답까지 그대로 물려받는다 → 그 뒤 목록을 바꿨으면 새로 들어온 사람만 알림
+    # 참석자: 응답까지 그대로 승계 → 이후 목록이 변경된 경우 신규 추가된 참석자에게만 알림
     res_att = await db.execute(
         select(CalendarEventAttendee).where(CalendarEventAttendee.event_id == master.id)
     )
@@ -1206,18 +1206,18 @@ async def update_following(
     for o in later_rows:
         rid = _utc(o.recurrence_id)
         target = targets[o.id]
-        # 이 회차 자체의 예외 행은 이번 수정이 그 회차를 새로 정하므로 흡수한다
+        # 해당 회차 자체의 예외 행은 이번 수정이 해당 회차를 새로 정의하므로 흡수
         if (_same_instant(rid, occ_start) or target is None
                 or not _same_local_day(rid, target, new.all_day, new.timezone)):
             gone.append(o)
             continue
         if _same_instant(o.start, rid):
-            # 시각을 따로 옮긴 적 없는 예외 — 새 시각을 따른다(길이도 안 바꿨으면 새 길이)
+            # 시각을 별도로 이동한 적 없는 예외 — 새 시각을 따름(길이도 변경하지 않았으면 새 길이 적용)
             o_duration = _utc(o.end) - _utc(o.start)
             o.start = target
             o.end = target + (_utc(new.end) - new_start if o_duration == old_duration else o_duration)
         for f in _FOLLOW_FIELDS:
-            # "" 와 None 은 같은 빈 값(설명·장소). 0(시작 시각 알림)·False 는 값이라 그대로 비교한다
+            # "" 와 None 은 동일한 빈 값(설명·장소). 0(시작 시각 알림)·False 는 유효 값이므로 그대로 비교
             ov, mv = getattr(o, f), getattr(master, f)
             if (None if ov == "" else ov) == (None if mv == "" else mv) and ov != getattr(new, f):
                 setattr(o, f, getattr(new, f))
@@ -1228,7 +1228,7 @@ async def update_following(
         o.calendar_id = new.calendar_id
         _touch(o)
     if drop_master:
-        # 남는 회차가 없으니 앞쪽 예외 행도 가리킬 회차가 없다 — 마스터와 함께 지운다
+        # 남는 회차가 없으므로 앞쪽 예외 행도 가리킬 회차가 없음 — 마스터와 함께 삭제
         gone = [o for o in all_rows if o.parent_event_id == master.id] + [master]
     await _delete_rows(db, gone)
 
@@ -1237,9 +1237,9 @@ async def update_following(
     _touch(new)
     new_id = new.id
     await db.commit()
-    # 초대 알림은 여기서 — create_notification 이 커밋하므로 위 변경이 전부 저장된 뒤여야 한다
+    # 초대 알림은 이 시점에 발송 — create_notification 이 커밋하므로 위 변경이 전부 저장된 이후여야 함
     if invited:
-        await db.refresh(new)  # 커밋으로 만료된 값을 다시 읽어 둔다(알림 문구에 제목·시작이 들어간다)
+        await db.refresh(new)  # 커밋으로 만료된 값을 재조회(알림 문구에 제목·시작 포함)
         await _notify_invites(db, new, invited)
     return new_id
 
@@ -1247,7 +1247,7 @@ async def update_following(
 async def cancellation_targets(
     db: AsyncSession, actor: User, event_id: str
 ) -> tuple[CalendarEventDB | None, list[CalendarEventAttendee]]:
-    """취소 알림 받을 참석자(나 빼고) — 지우기 전에 부른다. 회차 예외 행이면 그 행의 참석자."""
+    """취소 알림을 받을 참석자(본인 제외) — 삭제 전에 호출한다. 회차 예외 행이면 해당 행의 참석자."""
     event = await db.get(CalendarEventDB, event_id)
     if not event:
         return None, []
@@ -1268,9 +1268,9 @@ async def notify_cancellation(
     scope: str,
     occ_start: datetime | None = None,
 ) -> int:
-    """참석자에게 취소 알림 — 내부 사용자는 인앱 알림, 모두에게 취소 메일(METHOD:CANCEL .ics)은 뒤에서.
+    """참석자에게 취소 알림 — 내부 사용자는 인앱 알림, 전체 대상 취소 메일(METHOD:CANCEL .ics)은 후속 처리로 발송한다.
 
-    알림·메일 실패가 삭제를 막지 않는다(삭제는 이미 끝났다). 알린 사람 수를 돌려준다.
+    알림·메일 실패는 삭제를 차단하지 않는다(삭제는 이미 완료된 상태). 알림 대상자 수를 반환한다.
     """
     if not attendees:
         return 0
@@ -1301,7 +1301,7 @@ async def notify_cancellation(
 def cancel_ics(uid: str, title: str, start: datetime, end: datetime | None, organizer_name: str,
                organizer_email: str, emails: list[str], recurrence_id: datetime | None = None,
                whole_series: bool = True) -> str:
-    """iTIP CANCEL — 받는 메일 앱이 일정을 지운다. 한 회차면 RECURRENCE-ID 를 단다."""
+    """iTIP CANCEL — 수신 측 메일 앱이 일정을 삭제한다. 단일 회차이면 RECURRENCE-ID 를 포함한다."""
     def _fmt(dt: datetime) -> str:
         return _utc(dt).strftime("%Y%m%dT%H%M%SZ")
 
@@ -1323,7 +1323,7 @@ def cancel_ics(uid: str, title: str, start: datetime, end: datetime | None, orga
 
 
 async def _send_cancel_mails(emails, title, start, end, uid, organizer_name, organizer_email, scope, occ_start):
-    """시스템 메일로 취소 안내 + .ics(METHOD:CANCEL). SMTP 미설정·실패는 로그만."""
+    """시스템 메일로 취소 안내 + .ics(METHOD:CANCEL) 발송. SMTP 미설정·실패 시 로그만 기록."""
     import asyncio
     import html as _html
     import logging
@@ -1367,7 +1367,7 @@ async def _send_cancel_mails(emails, title, start, end, uid, organizer_name, org
 
 
 async def rsvp(db: AsyncSession, user: User, event_id: str, response: str) -> dict | None:
-    """참석자 본인이 응답. 회차 id 가 오면 마스터에 응답한다. 참석자가 아니면 None."""
+    """참석자 본인의 응답. 회차 id 가 전달되면 마스터에 응답한다. 참석자가 아니면 None."""
     if response not in _RESPONSES:
         raise ValueError("response 는 accepted | declined | tentative | needs-action")
     event = await db.get(CalendarEventDB, event_id)
@@ -1437,10 +1437,10 @@ def _merge_intervals(items: list[tuple[datetime, datetime]]) -> list[tuple[datet
 async def freebusy(
     db: AsyncSession, emails: list[str], start: str, end: str
 ) -> list[dict]:
-    """사용자별 바쁜 구간만 돌려준다(제목·장소 등 내용은 절대 안 내보낸다).
+    """사용자별 바쁜 구간만 반환한다(제목·장소 등 내용은 반환하지 않는다).
 
-    대상: 그 사람 소유 캘린더의 일정 + 참석 수락/미정한 초대 일정.
-    취소된 일정·본인이 거절한 일정은 뺀다.
+    대상: 해당 사용자 소유 캘린더의 일정 + 참석 수락/미정 상태의 초대 일정.
+    취소된 일정·본인이 거절한 일정은 제외한다.
     """
     rs = _utc(_parse_iso(start))
     re_ = _utc(_parse_iso(end))
@@ -1505,7 +1505,7 @@ async def organizer_of(db: AsyncSession, cal: CalendarDB | None) -> dict | None:
 
 
 async def ical_items_for(db: AsyncSession, masters: list[CalendarEventDB], cal: CalendarDB | None) -> list[dict]:
-    """event_to_ical/events_to_ical 에 넘길 묶음(참석자·회차 예외 포함)을 만든다."""
+    """event_to_ical/events_to_ical 에 전달할 묶음(참석자·회차 예외 포함)을 생성한다."""
     ids = [m.id for m in masters]
     ov_map = await load_overrides(db, ids)
     ov_ids = [o.id for lst in ov_map.values() for o in lst]
@@ -1568,7 +1568,7 @@ def _apply_ical_data(ev: CalendarEventDB, data: dict, *, is_override: bool = Fal
             setattr(ev, k, data[k])
     if not is_override:
         ev.exdates = dump_exdates(data.get("exdates") or [])
-    # DAV·가져오기·구독 — 허용 밖 반복 규칙(초·분 단위 등)은 반복 없음으로 저장
+    # DAV·가져오기·구독 — 허용 범위 밖 반복 규칙(초·분 단위 등)은 반복 없음으로 저장
     ev.recurrence_rule = rrule_guard.sanitize_rrule(ev.recurrence_rule)
     if ev.status is None:
         ev.status = "confirmed"
@@ -1583,8 +1583,8 @@ async def save_ical_bundle(
 ) -> CalendarEventDB:
     """iCalendar 묶음(마스터+회차 예외)을 일정으로 저장한다. CalDAV PUT·.ics 가져오기 공용.
 
-    event_id 의 행이 있으면 덮어쓰고, 회차 예외는 들어온 것으로 통째로 맞춘다.
-    참석자는 들어온 목록으로 교체(알림은 보내지 않는다 — 외부 클라이언트 동기화라서).
+    event_id 의 행이 있으면 덮어쓰고, 회차 예외는 수신한 내용으로 전체 교체한다.
+    참석자는 수신한 목록으로 교체한다(외부 클라이언트 동기화이므로 알림은 발송하지 않는다).
     """
     data = bundle["master"]
     ev = await db.get(CalendarEventDB, event_id) if event_id else None
@@ -1601,7 +1601,7 @@ async def save_ical_bundle(
     await db.flush()
     await _set_attendees(db, ev, data.get("attendees") or [], notify=False)
 
-    # 회차 예외 맞추기
+    # 회차 예외 동기화
     res = await db.execute(select(CalendarEventDB).where(CalendarEventDB.parent_event_id == ev.id))
     existing = list(res.scalars().all())
     incoming = bundle.get("overrides") or []
@@ -1639,7 +1639,7 @@ _IMPORT_MAX_EVENTS = 5000
 
 
 async def import_ics(db: AsyncSession, user_id: str, calendar_id: str, text: str) -> dict | None:
-    """.ics 파일을 캘린더로 가져온다. 같은 UID 가 이미 이 캘린더에 있으면 덮어쓴다(중복 방지)."""
+    """.ics 파일을 캘린더로 가져온다. 동일 UID 가 해당 캘린더에 이미 있으면 덮어쓴다(중복 방지)."""
     cal = await db.get(CalendarDB, calendar_id)
     if not await _can_write_calendar(db, user_id, cal):
         return None

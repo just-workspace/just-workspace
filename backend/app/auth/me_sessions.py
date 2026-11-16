@@ -1,10 +1,10 @@
-"""내 로그인 기기 — 내 세션 목록·하나 끊기·나머지 모두 끊기.
+"""내 로그인 기기 — 본인 세션 목록·단일 세션 종료·나머지 전체 종료.
 
-세션 저장 구조(app/auth/sessions.py)를 그대로 쓴다: 로그인마다 sid 하나, Redis `sess:{sid}` 에
-IP·호스트명·UA·만든 시각·마지막 활동, `usess:{user_id}` 에 그 사용자의 sid 묶음. get_current_user 가
-요청마다 sid 가 살아 있는지 보므로 레코드를 지우면 그 기기는 다음 요청에서 401 이 된다.
+세션 저장 구조(app/auth/sessions.py)를 그대로 사용한다: 로그인마다 sid 하나, Redis `sess:{sid}` 에
+IP·호스트명·UA·생성 시각·마지막 활동, `usess:{user_id}` 에 해당 사용자의 sid 집합. get_current_user 가
+요청마다 sid 유효 여부를 확인하므로 레코드를 삭제하면 해당 기기는 다음 요청에서 401 을 수신한다.
 
-sid 원문은 쿠키 안 서명값의 일부라 화면에 내보내지 않고, 목록·삭제는 sid 의 해시 앞 16자(id)로 한다.
+sid 원문은 쿠키 내 서명값의 일부이므로 화면에 노출하지 않으며, 목록·삭제는 sid 해시의 앞 16자(id)로 수행한다.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ def public_id(sid: str) -> str:
 
 
 def current_sid(request: Request, ws_session: str | None) -> str | None:
-    """이 요청을 보낸 세션의 sid (쿠키 또는 Bearer 서명값). OAuth 토큰 요청이면 None."""
+    """본 요청을 송신한 세션의 sid (쿠키 또는 Bearer 서명값). OAuth 토큰 요청이면 None."""
     token = ws_session
     if not token:
         auth = request.headers.get("authorization", "")
@@ -49,7 +49,7 @@ _BROWSERS = [
 
 
 def parse_ua(ua: str) -> dict:
-    """User-Agent → {browser, browser_version, os, device_type, app}. 정확한 판별보다 사람이 알아볼 정도."""
+    """User-Agent → {browser, browser_version, os, device_type, app}. 정확한 판별이 아닌 사용자가 식별 가능한 수준을 목표로 한다."""
     ua = ua or ""
     app = None
     if "Electron/" in ua or "JustWorkspace" in ua:
@@ -117,7 +117,7 @@ async def my_sessions(
     ws_session: str | None = Cookie(None),
     user: User = Depends(get_current_user),
 ):
-    """내 로그인 기기 목록 — 마지막 활동 최근순, 지금 쓰는 기기는 current=true."""
+    """본인 로그인 기기 목록 — 마지막 활동 최근순, 현재 사용 중인 기기는 current=true."""
     cur = current_sid(request, ws_session)
     rows = [session_view(r, cur) for r in await _my_sessions(str(user.id))]
     rows.sort(key=lambda r: (not r["current"], -(datetime.fromisoformat(r["last_seen_at"]).timestamp()
@@ -132,7 +132,7 @@ async def revoke_my_session(
     ws_session: str | None = Cookie(None),
     user: User = Depends(get_current_user),
 ):
-    """내 세션 하나 끊기(그 기기 로그아웃). 남의 세션 id 는 없는 것과 같다(404)."""
+    """본인 세션 하나 종료(해당 기기 로그아웃). 타 사용자의 세션 id 는 미존재로 처리한다(404)."""
     cur = current_sid(request, ws_session)
     for rec in await _my_sessions(str(user.id)):
         if public_id(rec["sid"]) == session_id:
@@ -149,7 +149,7 @@ async def revoke_other_sessions(
     ws_session: str | None = Cookie(None),
     user: User = Depends(get_current_user),
 ):
-    """지금 이 기기만 남기고 내 다른 로그인 전부 끊기."""
+    """현재 기기를 제외한 본인의 다른 로그인 전부 종료."""
     cur = current_sid(request, ws_session)
     n = 0
     for rec in await _my_sessions(str(user.id)):

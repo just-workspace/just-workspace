@@ -1,10 +1,10 @@
-"""화면 쪽 오류 수집 — 오류 화면이 보여 준 요청 번호로 서버 로그에서 찾을 수 있게.
+"""화면 측 오류 수집 — 오류 화면에 표시된 요청 번호로 서버 로그를 검색할 수 있도록 한다.
 
-서버가 낸 오류(500)는 RequestIdMiddleware 가 요청 번호와 트레이스백을 남긴다. 화면 쪽 오류
-(렌더 실패·화면 조각 로드 실패 등)는 브라우저가 같은 꼴(xxxx-xxxx)의 번호를 만들어 보여 주므로,
-그 번호와 오류 내용을 여기로 받아 컨테이너 로그(stdout)에 남긴다.
+서버에서 발생한 오류(500)는 RequestIdMiddleware 가 요청 번호와 트레이스백을 기록한다. 화면 측 오류
+(렌더 실패·화면 조각 로드 실패 등)는 브라우저가 동일 형식(xxxx-xxxx)의 번호를 생성하여 표시하므로,
+해당 번호와 오류 내용을 여기서 수신하여 컨테이너 로그(stdout)에 기록한다.
 
-로그인 전 화면에서도 나므로 인증 없이 열려 있다. 크기 제한·번호 형식 검사·중복 억제를 둔다.
+로그인 전 화면에서도 발생하므로 인증 없이 허용한다. 크기 제한·번호 형식 검사·중복 억제를 적용한다.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ def _clip(v: object, n: int) -> str:
 
 @router.post("/api/client-error", include_in_schema=False)
 async def client_error(request: Request) -> Response:
-    """항상 204. 형식이 틀리거나 같은 번호가 다시 오면 조용히 버린다."""
+    """항상 204. 형식이 올바르지 않거나 동일 번호가 다시 수신되면 무시한다."""
     raw = await request.body()
     if not raw or len(raw) > _MAX_BODY:
         return Response(status_code=204)

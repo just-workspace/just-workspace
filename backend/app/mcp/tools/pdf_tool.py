@@ -1,4 +1,4 @@
-"""PDF 도구 — 정보·폼 칸 읽기(읽기) / 합치기·나누기·쪽 뽑기·회전·쪽 지우기·폼 채우기·워터마크(쓰기, low).
+"""PDF 도구 — 정보·폼 필드 읽기(읽기) / 병합·분할·쪽 추출·회전·쪽 삭제·폼 채우기·워터마크(쓰기, low).
 
 모든 쓰기 결과는 새 파일(원본 보존). 저장 규칙은 app.mcp.filetools.store(기본 "AI 결과물/날짜 대화 제목").
 """
@@ -12,7 +12,7 @@ from app.db.models import User
 from app.mcp.filetools import pdf_ops, store
 from app.mcp.filetools.toolkit import DST_FOLDER_PARAM, OUTPUT_NAME_PARAM, RESULT_NOTE, base, guard
 from app.mcp.server import Tool, register
-from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 남에게 보이는 쓰기 판정
+from app.mcp.tools._common import path_shared, shared_target  # noqa: F401 — 타인에게 노출되는 쓰기 판정
 from app.mcp.tools._common import err
 
 PDF_MAX = 100 * 1024 * 1024
@@ -171,7 +171,7 @@ register(Tool(
                   "x-label": "합칠 PDF"},
         "output_name": OUTPUT_NAME_PARAM, "dst_folder": DST_FOLDER_PARAM,
     }, "required": ["paths"]},
-    visible_for=shared_target("dst_folder"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
+    visible_for=shared_target("dst_folder"),   # 공유 영역이면 타인에게 노출되는 쓰기(외부 내용 읽기 이후에는 사용자 확인 요청)
     handler=pdf_merge, summarizer=_sum("PDF 합치기"),
 ))
 
@@ -190,7 +190,7 @@ register(Tool(
                   "x-label": "몇 쪽씩", "x-editable": True},
         "dst_folder": DST_FOLDER_PARAM,
     }, "required": ["path"]},
-    visible_for=shared_target("dst_folder"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
+    visible_for=shared_target("dst_folder"),   # 공유 영역이면 타인에게 노출되는 쓰기(외부 내용 읽기 이후에는 사용자 확인 요청)
     handler=pdf_split, summarizer=_sum("PDF 나누기"),
 ))
 
@@ -202,7 +202,7 @@ register(Tool(
     parameters={"type": "object", "properties": {
         "path": _P, "pages": _PAGES, "output_name": OUTPUT_NAME_PARAM, "dst_folder": DST_FOLDER_PARAM,
     }, "required": ["path", "pages"]},
-    visible_for=shared_target("dst_folder"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
+    visible_for=shared_target("dst_folder"),   # 공유 영역이면 타인에게 노출되는 쓰기(외부 내용 읽기 이후에는 사용자 확인 요청)
     handler=pdf_extract_pages, summarizer=_sum("PDF 쪽 뽑기"),
 ))
 
@@ -218,7 +218,7 @@ register(Tool(
         "pages": {**_PAGES, "default": ""},
         "output_name": OUTPUT_NAME_PARAM, "dst_folder": DST_FOLDER_PARAM,
     }, "required": ["path"]},
-    visible_for=shared_target("dst_folder"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
+    visible_for=shared_target("dst_folder"),   # 공유 영역이면 타인에게 노출되는 쓰기(외부 내용 읽기 이후에는 사용자 확인 요청)
     handler=pdf_rotate, summarizer=_sum("PDF 쪽 돌리기"),
 ))
 
@@ -230,7 +230,7 @@ register(Tool(
     parameters={"type": "object", "properties": {
         "path": _P, "pages": _PAGES, "output_name": OUTPUT_NAME_PARAM, "dst_folder": DST_FOLDER_PARAM,
     }, "required": ["path", "pages"]},
-    visible_for=shared_target("dst_folder"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
+    visible_for=shared_target("dst_folder"),   # 공유 영역이면 타인에게 노출되는 쓰기(외부 내용 읽기 이후에는 사용자 확인 요청)
     handler=pdf_delete_pages, summarizer=_sum("PDF 쪽 지우기"),
 ))
 
@@ -248,7 +248,7 @@ register(Tool(
                     "x-label": "고정(편집 불가)", "x-editable": True},
         "output_name": OUTPUT_NAME_PARAM, "dst_folder": DST_FOLDER_PARAM,
     }, "required": ["path", "values"]},
-    visible_for=shared_target("dst_folder"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
+    visible_for=shared_target("dst_folder"),   # 공유 영역이면 타인에게 노출되는 쓰기(외부 내용 읽기 이후에는 사용자 확인 요청)
     handler=pdf_fill_form, summarizer=_sum("PDF 서식 채우기"),
 ))
 
@@ -274,6 +274,6 @@ register(Tool(
         "pages": {**_PAGES, "default": ""},
         "output_name": OUTPUT_NAME_PARAM, "dst_folder": DST_FOLDER_PARAM,
     }, "required": ["path"]},
-    visible_for=shared_target("dst_folder"),   # 공유 영역이면 남에게 보이는 쓰기(외부 내용을 읽은 뒤에는 묻는다)
+    visible_for=shared_target("dst_folder"),   # 공유 영역이면 타인에게 노출되는 쓰기(외부 내용 읽기 이후에는 사용자 확인 요청)
     handler=pdf_watermark, summarizer=_sum("PDF 워터마크"),
 ))

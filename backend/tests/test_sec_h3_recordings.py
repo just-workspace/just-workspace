@@ -1,4 +1,4 @@
-"""회귀 — 회의 녹화 목록·다운로드는 그 회의의 호스트·초대 대상(또는 채널 멤버)·관리자만."""
+"""회귀 — 회의 녹화 목록·다운로드는 해당 회의의 호스트·초대 대상(또는 채널 멤버)·관리자만 허용."""
 
 import pytest
 from fastapi import HTTPException
@@ -50,10 +50,10 @@ async def _names(db, uid):
 async def test_list_is_filtered_per_user(env):
     assert await _names(env, "alice") == {"board_20261001-100000.mp4"}
     assert await _names(env, "bob") == {"board_20261001-100000.mp4"}       # 초대 대상
-    assert await _names(env, "carol") == {"legacy_20261002-100000.mp4"}    # 기록 없는 예전 파일 → 방 이름으로 회의 찾음
+    assert await _names(env, "carol") == {"legacy_20261002-100000.mp4"}    # 기록 없는 이전 파일 → 방 이름으로 회의 조회
     assert await _names(env, "dave") == {"chan-c1_20261003-100000.mp4"}    # 채널 멤버
     assert len(await _names(env, "root")) == 4                             # 관리자
-    # 어떤 회의에도 묶이지 않는 파일은 관리자만
+    # 어떤 회의에도 연결되지 않은 파일은 관리자만 허용
     for uid in ("alice", "bob", "carol", "dave"):
         assert "orphan_20261004-100000.mp4" not in await _names(env, uid)
 

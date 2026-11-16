@@ -75,7 +75,7 @@ async def test_disable_policy_checked_before_consuming_code(db):
     with pytest.raises(HTTPException) as e:
         await auth_router.disable_2fa(_request(), TwoFactorDisableRequest(code=codes[0]), user=alice, db=db)
     assert e.value.status_code == 400
-    assert two_factor.remaining(alice) == 10  # 끌 수 없으면 코드도 안 쓴다
+    assert two_factor.remaining(alice) == 10  # 해제 불가 시 코드도 소모하지 않음
 
 
 # ── 비밀번호 규칙 판정 ──
@@ -87,7 +87,7 @@ async def test_disable_policy_checked_before_consuming_code(db):
     ("P@ssw0rd!", True, True, False),
     ("aaaaaaaaaa", True, True, False),
     ("12345678", True, True, False),
-    ("alice2026", True, False, True),       # 아이디를 빼면 4자
+    ("alice2026", True, False, True),       # 아이디를 제외하면 4자
     ("alice@x.io!!", True, False, True),
     ("가을-하늘-연필-바다", True, False, False),
 ])
@@ -95,7 +95,7 @@ def test_password_check_items(pw, length, common, context):
     r = password_policy.check(pw, "alice", "alice@x.io")
     assert (r["length"], r["common"], r["context"]) == (length, common, context)
     assert r["ok"] == (length and not common and not context)
-    # validate 와 같은 기준 — ok 면 validate 도 통과
+    # validate 와 동일 기준 — ok 이면 validate 도 통과
     if r["ok"]:
         password_policy.validate(pw, "alice", "alice@x.io")
     else:
@@ -122,7 +122,7 @@ async def test_keywords_pref_normalized_and_limited(db):
     alice = await db.get(User, "alice")
     r = await mp.patch_prefs({"chat.keywords": [" 배포 ", "장애", "배포", "HOTFIX", "hotfix", ""]}, user=alice, db=db)
     assert r["prefs"]["chat.keywords"] == ["배포", "장애", "HOTFIX"]
-    # 나머지 캘린더·채팅 설정은 접두사 규칙으로 그대로
+    # 나머지 캘린더·채팅 설정은 접두사 규칙에 따라 그대로 통과
     r = await mp.patch_prefs({"calendar.default_view": "week", "calendar.default_reminder": 10,
                               "chat.enter_key": "newline", "chat.link_preview": False,
                               "chat.media_autoexpand": True}, user=alice, db=db)
@@ -142,7 +142,7 @@ def test_keyword_hit():
     assert kw.keyword_hit("배포", ["  "]) is None
 
 
-# ── 알림 키워드: 멘션처럼 센다 ──
+# ── 알림 키워드: 멘션과 동일하게 집계 ──
 
 
 @pytest.mark.asyncio
@@ -157,7 +157,7 @@ async def test_keyword_notifications(db, monkeypatch):
     await db.commit()
     for uid in ("alice", "bob", "carol"):
         db.add(ChannelMember(channel_id="ch1", user_id=uid))
-    # dave 는 키워드가 있어도 채널 멤버가 아니다
+    # dave 는 키워드가 있어도 채널 멤버가 아님
     db.add(UserPref(user_id="bob", data=json.dumps({"chat.keywords": ["배포"]})))
     db.add(UserPref(user_id="carol", data=json.dumps({"chat.keywords": ["장애"]})))
     db.add(UserPref(user_id="dave", data=json.dumps({"chat.keywords": ["배포"]})))
@@ -166,20 +166,20 @@ async def test_keyword_notifications(db, monkeypatch):
 
     msg = {"id": "m1", "seq": 1, "content": "오늘 저녁 배포합니다", "channel_id": "ch1"}
     notifs = await kw.create_notifications_for_keywords(db, msg, "ch1", "alice", msg["content"], set())
-    assert [n["user_id"] for n in notifs] == ["bob"]          # 보낸 사람·비멤버·안 걸린 사람 제외
+    assert [n["user_id"] for n in notifs] == ["bob"]          # 발신자·비멤버·미일치 사용자 제외
     assert notifs[0]["keyword"] == "배포"
     mentions = (await db.execute(select(ChatMention.user_id))).scalars().all()
     assert mentions == ["bob"]
     rows = (await db.execute(select(Notification).where(Notification.user_id == "bob"))).scalars().all()
     assert len(rows) == 1 and rows[0].type == "mention" and "배포" in rows[0].title
 
-    # 이미 멘션으로 알림 받은 사람은 건너뛴다
+    # 이미 멘션으로 알림을 수신한 사용자는 생략
     msg2 = {"id": "m2", "seq": 2, "content": "배포 장애", "channel_id": "ch1"}
     notifs = await kw.create_notifications_for_keywords(db, msg2, "ch1", "alice", msg2["content"], {"bob"})
     assert [n["user_id"] for n in notifs] == ["carol"]
 
 
-# ── 로그인 배경: 4장까지 · 끌어서 순서 ──
+# ── 로그인 배경: 최대 4장 · 드래그로 순서 변경 ──
 
 
 def test_wallpaper_reorder(tmp_path, monkeypatch):
@@ -191,9 +191,9 @@ def test_wallpaper_reorder(tmp_path, monkeypatch):
     assert admin_router._next_wallpaper_index() == 3
     out = admin_router.reorder_wallpapers(["wallpaper-2-333.mp4", "wallpaper-0-111.jpg", "wallpaper-1-222.png"])
     assert out == ["wallpaper-0-333.mp4", "wallpaper-1-111.jpg", "wallpaper-2-222.png"]
-    assert (tmp_path / "wallpaper-0-333.mp4").read_bytes() == b"wallpaper-2-333.mp4"   # 내용은 그대로
+    assert (tmp_path / "wallpaper-0-333.mp4").read_bytes() == b"wallpaper-2-333.mp4"   # 내용은 유지
     assert (tmp_path / "logo.png").exists()
-    with pytest.raises(HTTPException):   # 빠진 것·없는 것은 거부
+    with pytest.raises(HTTPException):   # 누락 항목·존재하지 않는 항목은 거부
         admin_router.reorder_wallpapers(["wallpaper-0-333.mp4"])
     with pytest.raises(HTTPException):
         admin_router.reorder_wallpapers(["wallpaper-0-333.mp4", "wallpaper-0-333.mp4", "wallpaper-2-222.png"])

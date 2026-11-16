@@ -1,6 +1,6 @@
 """PDF 처리(바이트 → 바이트) — pypdf(BSD). 텍스트 워터마크 글꼴은 reportlab 내장 CID 글꼴(한글).
 
-쪽 번호는 사람 기준 1부터. 범위 문법: "3", "1-3", "5-"(끝까지), "-2"(처음부터), 쉼표로 여러 개, "all".
+쪽 번호는 사용자 기준 1부터 시작. 범위 문법: "3", "1-3", "5-"(끝까지), "-2"(처음부터), 쉼표로 복수 지정, "all".
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def _out(writer) -> bytes:
 
 
 def parse_pages(spec, n: int) -> list[int]:
-    """사람용 쪽 지정 → 0부터 번호(순서·중복 유지). 범위를 벗어나면 PdfError."""
+    """사용자용 쪽 지정 → 0부터 시작하는 번호(순서·중복 유지). 범위를 벗어나면 PdfError."""
     if spec is None or (isinstance(spec, str) and spec.strip().lower() in ("", "all", "전체")):
         return list(range(n))
     if isinstance(spec, int):
@@ -140,7 +140,7 @@ def extract(data: bytes, pages) -> bytes:
 
 
 def split(data: bytes, ranges: list | None = None, every: int = 0) -> list[tuple[str, bytes]]:
-    """[(쪽 표시, 바이트)]. ranges = ["1-3","4-"] 또는 every = N쪽씩. 둘 다 없으면 한 쪽씩."""
+    """[(쪽 표시, 바이트)]. ranges = ["1-3","4-"] 또는 every = N쪽 단위. 둘 다 없으면 1쪽 단위."""
     r = _reader(data)
     n = len(r.pages)
     parts: list[tuple[str, list[int]]] = []
@@ -264,7 +264,7 @@ def fill_form(data: bytes, values: dict, flatten: bool = False) -> tuple[bytes, 
     except Exception:  # noqa: BLE001
         pass
     if flatten:
-        # 값을 쪽 내용에 굳히고 칸을 없앤다(더는 고칠 수 없는 제출본)
+        # 값을 쪽 내용에 고정하고 필드를 제거한다(이후 수정 불가한 제출본)
         for page in w.pages:
             if "/Annots" in page:
                 w.update_page_form_field_values(page, vals, auto_regenerate=False, flatten=True)
@@ -372,7 +372,7 @@ def watermark(data: bytes, *, text: str = "", image: bytes | None = None, opacit
         if i not in sel:
             continue
         if page.get("/Rotate"):
-            # 돌아간 쪽은 보이는 방향 기준으로 얹는다(회전을 내용에 반영한 뒤 크기를 잰다)
+            # 회전된 쪽은 표시 방향 기준으로 배치한다(회전을 내용에 반영한 뒤 크기를 측정한다)
             try:
                 page.transfer_rotation_to_content()
             except Exception:  # noqa: BLE001

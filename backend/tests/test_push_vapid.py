@@ -1,6 +1,6 @@
-"""GET /api/push/vapid-key 500 회귀 — py-vapid 1.9 에 없는 메서드를 불렀고, 키도 워커·재시작마다 새로 만들었다.
+"""GET /api/push/vapid-key 500 회귀 — py-vapid 1.9 에 없는 메서드를 호출했고, 키도 워커·재시작마다 새로 생성했다.
 
-이제 env → DB 저장본 → 없으면 만들어 저장. 같은 DB 면 몇 번을 불러도 같은 키, 비공개 키는 pywebpush 가 읽는 형식."""
+현재는 env → DB 저장본 → 없으면 생성하여 저장. 같은 DB 면 몇 번 호출해도 동일한 키, 비공개 키는 pywebpush 가 읽는 형식."""
 
 import base64
 import json
@@ -36,7 +36,7 @@ async def test_generates_once_and_persists(factory, monkeypatch):
     pub = r["vapid_public_key"]
     raw = _dec(pub)
     assert len(raw) == 65 and raw[0] == 4          # 비압축 P-256 점(브라우저 applicationServerKey)
-    # 다른 워커(캐시 없음)도 DB 저장본을 쓴다
+    # 다른 워커(캐시 없음)도 DB 저장본을 사용
     monkeypatch.setattr(push, "_vapid_cache", None)
     async with factory() as db:
         pub2, priv = await push.get_vapid_keys(db)
@@ -44,19 +44,19 @@ async def test_generates_once_and_persists(factory, monkeypatch):
     assert pub2 == pub
     assert json.loads(row.value)["private"] == priv
     assert push.public_from_private(priv) == pub
-    # pywebpush 가 쓰는 py_vapid 가 이 비공개 키를 읽는다
+    # pywebpush 가 사용하는 py_vapid 가 이 비공개 키를 판독
     from py_vapid import Vapid
     assert Vapid.from_string(priv).private_key is not None
 
 
 async def test_lost_race_reads_winner(factory, monkeypatch):
-    """다른 워커가 먼저 저장했으면(INSERT 충돌) 그 키를 쓴다."""
+    """다른 워커가 먼저 저장했으면(INSERT 충돌) 해당 키를 사용한다."""
     winner = push.generate_vapid_keys()
     real_read_once = {"n": 0}
     orig_get = AsyncSession.get
 
     async def get_hides_first(self, cls, key, *a, **kw):
-        # 첫 조회는 "없음" 으로 보이게 → 만들어 INSERT → PK 충돌 → 다시 읽기
+        # 첫 조회는 "없음" 으로 보이도록 처리 → 생성 후 INSERT → PK 충돌 → 재조회
         if cls is SystemSetting and real_read_once["n"] == 0:
             real_read_once["n"] += 1
             return None
@@ -75,5 +75,5 @@ async def test_env_keys_win(factory, monkeypatch):
     s = get_settings()
     monkeypatch.setattr(s, "vapid_private_key", priv)
     async with factory() as db:
-        assert await push.get_vapid_keys(db) == (pub, priv)     # 공개 키는 비공개 키에서 다시 만든다
+        assert await push.get_vapid_keys(db) == (pub, priv)     # 공개 키는 비공개 키에서 재생성
         assert await db.get(SystemSetting, push.VAPID_SETTING_KEY) is None

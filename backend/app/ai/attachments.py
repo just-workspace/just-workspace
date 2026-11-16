@@ -1,11 +1,11 @@
-"""대화 첨부 — 파일·이미지를 메시지에 붙인다.
+"""대화 첨부 — 파일·이미지를 메시지에 첨부한다.
 
-저장 원칙(DB 에 파일 바이트를 넣지 않는다):
-- 메타데이터는 ai_attachments 행. 문서는 app.mcp.docread 로 뽑은 **글자**(상한 MAX_TEXT_CHARS)를 행에 두고
-  모델 맥락에는 글자만 쓴다. 원본 바이트(문서·이미지)는 임시 디렉터리(ATTACH_DIR)에 두고 7일 뒤 지운다 —
-  보낸 메시지의 첨부 칩을 누르면 원본 미리보기·내려받기(주인만).
-- 올리고 보내지 않은 첨부(message_id 없음)는 24시간 뒤 행·파일 모두 지운다(sweep).
-- 8워커가 같은 컨테이너라 /tmp 를 공유한다(메일 첨부 임시 저장과 같은 방식).
+저장 원칙(DB 에 파일 바이트를 저장하지 않는다):
+- 메타데이터는 ai_attachments 행. 문서는 app.mcp.docread 로 추출한 **텍스트**(상한 MAX_TEXT_CHARS)를 행에 저장하고
+  모델 컨텍스트에는 텍스트만 사용한다. 원본 바이트(문서·이미지)는 임시 디렉터리(ATTACH_DIR)에 저장하고 7일 후 삭제한다 —
+  전송된 메시지의 첨부 칩을 선택하면 원본 미리보기·내려받기 가능(소유자만).
+- 업로드 후 전송하지 않은 첨부(message_id 없음)는 24시간 후 행·파일 모두 삭제한다(sweep).
+- 8개 워커가 동일 컨테이너에 있어 /tmp 를 공유한다(메일 첨부 임시 저장과 동일한 방식).
 
 실패 코드: encrypted · distribution · corrupt · too_large · unsupported_version · unsupported (docread.ERROR_CODES).
 """
@@ -26,12 +26,12 @@ from app.ai.models import AIAttachment
 from app.mcp import docread
 
 ATTACH_DIR = os.environ.get("AI_ATTACH_DIR", "/tmp/ws_ai_attachments")
-MAX_FILE = 30 * 1024 * 1024          # 한 개 30MB(문서 해석 상한과 같게)
-MAX_TEXT_CHARS = 800_000             # 문서 하나에서 보관하는 글자(1M 모델이 통째로 읽을 수 있게)
+MAX_FILE = 30 * 1024 * 1024          # 파일당 30MB(문서 해석 상한과 동일)
+MAX_TEXT_CHARS = 800_000             # 문서 1건에서 보관하는 글자 수(1M 모델이 전체를 읽을 수 있도록)
 MAX_PER_MESSAGE = 10
 UNBOUND_TTL = timedelta(hours=24)
 IMAGE_TTL_SEC = 7 * 24 * 3600
-# 모델에게 보내는 첨부 글자 — 이번 질문은 넉넉히, 지난 차례는 앞부분만
+# 모델에 전달하는 첨부 텍스트 — 현재 질문은 충분히, 이전 턴은 앞부분만
 TURN_BUDGET = 40_000
 OLD_TURN_PER_FILE = 4_000
 
@@ -39,7 +39,7 @@ TEXT_EXT = {".txt", ".md", ".markdown", ".csv", ".tsv", ".log", ".json", ".yaml"
 DOC_EXT = set(docread.READERS)
 IMAGE_MIME = {"image/png", "image/jpeg", "image/gif", "image/webp"}
 _IMAGE_EXT = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
-# 오래된 형식 — 확장자는 비슷하지만 읽을 수 없다(구버전 오피스·한글 3.x)
+# 구형 형식 — 확장자는 유사하나 판독 불가(구버전 오피스·한글 3.x)
 _OLD_EXT = {".doc", ".xls", ".ppt"}
 
 
@@ -69,7 +69,7 @@ def _decode_text(data: bytes) -> str:
 
 
 def classify(name: str, mime: str) -> str:
-    """document | image — 지원하지 않으면 AttachError(unsupported·unsupported_version)."""
+    """document | image — 미지원 시 AttachError(unsupported·unsupported_version)."""
     ext = _ext(name)
     m = (mime or "").lower().split(";")[0].strip()
     if ext in _IMAGE_EXT or (not ext and m in IMAGE_MIME):   # 붙여넣은 화면 캡처는 이름에 확장자가 없을 수 있다
@@ -84,7 +84,7 @@ def classify(name: str, mime: str) -> str:
 
 
 def extract(data: bytes, name: str) -> tuple[str, dict]:
-    """문서 → 글자(마크다운). 실패는 AttachError(code)."""
+    """문서 → 텍스트(마크다운). 실패 시 AttachError(code)."""
     ext = _ext(name)
     if ext in TEXT_EXT:
         text, meta = _decode_text(data), {"format": ext.lstrip(".")}
@@ -93,7 +93,7 @@ def extract(data: bytes, name: str) -> tuple[str, dict]:
             text, meta = docread.read_document(data, ext)
         except docread.DocReadError as e:
             raise AttachError(e.code, str(e)) from e
-        except Exception as e:  # noqa: BLE001 — 해석기 내부 오류 = 손상으로 본다
+        except Exception as e:  # noqa: BLE001 — 해석기 내부 오류 = 손상으로 간주
             raise AttachError("corrupt", f"문서를 열 수 없습니다: {e}") from e
     if len(text) > MAX_TEXT_CHARS:
         text = text[:MAX_TEXT_CHARS]
@@ -111,7 +111,7 @@ def _image_mime(name: str, mime: str) -> str:
 
 async def create(db: AsyncSession, user_id: str, name: str, mime: str, data: bytes,
                  conversation_id: str | None = None) -> AIAttachment:
-    """올린 파일을 분류·변환해 행을 만든다. 실패하면 AttachError(행·파일 안 남김)."""
+    """업로드된 파일을 분류·변환하여 행을 생성한다. 실패 시 AttachError(행·파일 미생성)."""
     name = os.path.basename(name or "attachment")[:255] or "attachment"
     if len(data) > MAX_FILE:
         raise AttachError("too_large", f"한 파일은 {MAX_FILE // (1024 * 1024)}MB까지입니다")
@@ -149,7 +149,7 @@ def to_dict(a: AIAttachment) -> dict:
         "id": a.id, "name": a.name, "size": a.size, "mime": a.mime, "kind": a.kind,
         "status": "ready", "chars": meta.get("chars"), "note": meta.get("note"),
         "message_id": a.message_id,
-        # 원본 바이트가 아직 있나(7일 보관) — 없으면 미리보기는 뽑은 글자만, 내려받기 불가
+        # 원본 바이트 존재 여부(7일 보관) — 없으면 미리보기는 추출한 텍스트만, 내려받기 불가
         "has_file": has_file(a.id),
     }
 
@@ -164,7 +164,7 @@ def file_path(att_id: str) -> str | None:
 
 
 async def owned_unbound(db: AsyncSession, user_id: str, ids: list[str], conversation_id: str) -> list[AIAttachment]:
-    """보낼 첨부 — 내 것이고 아직 메시지에 안 붙었으며 다른 대화 것이 아니어야 한다."""
+    """전송 대상 첨부 — 본인 소유이고 메시지에 미연결 상태이며 다른 대화의 첨부가 아니어야 한다."""
     ids = [i for i in dict.fromkeys(ids or []) if isinstance(i, str)]
     if not ids:
         return []
@@ -211,9 +211,9 @@ def image_b64(a: AIAttachment) -> str | None:
 
 def augment(content: str, atts: list[AIAttachment], *, latest: bool, vision: bool,
             turn_budget: int | None = None, old_per_file: int | None = None) -> dict:
-    """제공자에게 보낼 사용자 차례 — 문서 글자는 신뢰 경계로 감싸 본문 뒤에, 이미지는 images 로.
+    """제공자에 전달할 사용자 턴 — 문서 텍스트는 신뢰 경계로 감싸 본문 뒤에, 이미지는 images 로 전달.
 
-    반환 {"content": str, "images": [{"mime","data"}]} (images 는 vision 이 켜졌을 때만).
+    반환 {"content": str, "images": [{"mime","data"}]} (images 는 vision 활성화 시에만).
     """
     parts = [content]
     images: list[dict] = []
@@ -246,7 +246,7 @@ def augment(content: str, atts: list[AIAttachment], *, latest: bool, vision: boo
 
 
 async def sweep(db: AsyncSession) -> int:
-    """보내지 않은 첨부(24시간)·오래된 이미지 파일(7일) 정리. 지운 행 수."""
+    """미전송 첨부(24시간)·오래된 이미지 파일(7일) 정리. 삭제된 행 수 반환."""
     cutoff = datetime.now(timezone.utc) - UNBOUND_TTL
     old = (await db.execute(
         select(AIAttachment.id).where(AIAttachment.message_id.is_(None), AIAttachment.created_at < cutoff)
@@ -288,7 +288,7 @@ async def delete_for_conversations(db: AsyncSession, conv_ids: list[str]) -> Non
 
 
 async def clone_for(db: AsyncSession, src: list[AIAttachment], conversation_id: str, message_id: str) -> list[AIAttachment]:
-    """질문을 고쳐 새 버전을 만들 때 원래 질문의 첨부를 새 메시지에도 붙인다(행 복사, 원본 파일 복사)."""
+    """질문을 수정하여 새 버전을 생성할 때 원래 질문의 첨부를 새 메시지에도 연결한다(행 복사, 원본 파일 복사)."""
     import shutil
 
     out = []

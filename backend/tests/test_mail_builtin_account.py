@@ -1,4 +1,4 @@
-"""내장 메일 가상 계정 — 이메일 없는 사용자는 계정 없음(404)이어야 한다(서버 오류 502 로 보이면 안 됨)."""
+"""내장 메일 가상 계정 — 이메일 없는 사용자는 계정 없음(404)이어야 한다(서버 오류 502 로 표시되면 안 됨)."""
 
 import pytest
 from fastapi import HTTPException
@@ -53,7 +53,7 @@ async def test_get_account_without_email_is_404(monkeypatch):
     with pytest.raises(HTTPException) as e:
         await mail_router._get_account(_DB(), user, None)
     assert e.value.status_code == 404
-    # 예전 목록이 기억하던 builtin-<id> 로 물어도 404
+    # 이전 목록이 보유하던 builtin-<id> 로 요청해도 404
     with pytest.raises(HTTPException) as e2:
         await mail_router._get_account(_DB(), user, "builtin-u-1")
     assert e2.value.status_code == 404

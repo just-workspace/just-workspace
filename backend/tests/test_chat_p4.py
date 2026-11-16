@@ -1,7 +1,7 @@
 """채팅 보강 — 채널별 기기 알림 세부, 스레드 답글 파일 첨부, is_saved, 스레드 참여자·마지막 답글,
-오프라인 스레드 팔로워 푸시(DND·notify_level·muted·기기 설정 존중).
+오프라인 스레드 팔로워 푸시(DND·notify_level·muted·기기 설정 준수).
 
-test_chat_prereq.py 와 같은 방식(SQLite, 채팅 테이블만, Redis 는 monkeypatch).
+test_chat_prereq.py 와 동일한 방식(SQLite, 채팅 테이블만, Redis 는 monkeypatch).
 """
 
 import io
@@ -116,7 +116,7 @@ async def test_push_off_suppresses_all_level_and_mention_push(db, events):
     events["push"].clear()
     await _send(db, ch.id, "alice", "@bob 봐 주세요")
     assert "bob" not in {p[0] for p in events["push"]}
-    # 인앱 알림은 그대로 생긴다
+    # 인앱 알림은 기존대로 생성됨
     from sqlalchemy import select
     n = (await db.execute(select(Notification).where(Notification.user_id == "bob"))).scalars().all()
     assert len(n) == 1
@@ -137,7 +137,7 @@ async def test_thread_reply_pushes_offline_followers_with_rules(db, events):
     await _send(db, ch.id, "bob", "오늘 저녁", parent=root["id"])
     pushed = [p for p in events["push"]]
     targets = {p[0] for p in pushed}
-    # alice 는 접속 중, bob 은 보낸 사람, carol 은 스레드 답글 끔, dave 는 음소거
+    # alice 는 접속 중, bob 은 발신자, carol 은 스레드 답글 비활성, dave 는 음소거
     assert targets == set()
 
     events["online"] = set()
@@ -149,7 +149,7 @@ async def test_thread_reply_pushes_offline_followers_with_rules(db, events):
 
 @pytest.mark.asyncio
 async def test_thread_push_respects_dnd(db, events, monkeypatch):
-    """DND 는 notify._push 안(push_allowed)에서 거른다 — 여기서는 대상 계산이 DND 와 무관함만 본다."""
+    """DND 는 notify._push 내부(push_allowed)에서 필터링한다 — 여기서는 대상 계산이 DND 와 무관함만 확인한다."""
     members = [
         {"user_id": "a", "notify_level": "mentions", "muted": False, "push": True, "thread_replies": True},
         {"user_id": "b", "notify_level": "none", "muted": False, "push": True, "thread_replies": True},
@@ -178,10 +178,10 @@ async def test_messages_have_saved_and_thread_meta(db, events):
     assert by[root["id"]]["last_reply_at"] == last["created_at"]
     assert by[plain["id"]]["thread_participants"] == [] and by[plain["id"]]["last_reply_at"] is None
 
-    # 다른 사람 기준으론 저장 안 됨
+    # 다른 사용자 기준으로는 저장되지 않음
     msgs, _ = await service.get_messages(db, ch.id, user_id="alice")
     assert not any(m["is_saved"] for m in msgs)
-    # user_id 없이 부르면(기존 호출) is_saved 는 False
+    # user_id 없이 호출하면(기존 호출) is_saved 는 False
     msgs, _ = await service.get_messages(db, ch.id)
     assert not any(m["is_saved"] for m in msgs)
 
@@ -204,11 +204,11 @@ async def test_thread_reply_file_upload(db, events, tmp_path: Path, monkeypatch)
     )
     assert msg["parent_id"] == root["id"] and msg["message_type"] == "file"
     timeline, _ = await service.get_messages(db, ch.id)
-    assert msg["id"] not in {m["id"] for m in timeline}  # 답글이라 메인 타임라인엔 없음
+    assert msg["id"] not in {m["id"] for m in timeline}  # 답글이므로 메인 타임라인에는 없음
     thread = await service.get_thread_messages(db, root["id"])
     assert [m["id"] for m in thread] == [msg["id"]]
 
-    # 답글의 답글로 올리면 같은 스레드 루트로 붙는다
+    # 답글의 답글로 업로드하면 동일한 스레드 루트에 연결됨
     up = UploadFile(file=io.BytesIO(b"x"), filename="b.txt")
     msg2 = await chat_router.upload_chat_file(
         channel_id=ch.id, file=up, parent_id=msg["id"], also_to_channel=True, user=bob, db=db,

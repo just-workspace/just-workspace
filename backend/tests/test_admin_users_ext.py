@@ -1,4 +1,4 @@
-"""관리 사용자 — 목록 걸러 보기·status, 일괄 처리, 삭제 안전장치·소유 데이터 처리, 초대 링크, 운영 요약."""
+"""관리 사용자 — 목록 필터·status, 일괄 처리, 삭제 안전장치·소유 데이터 처리, 초대 링크, 운영 요약."""
 
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -56,7 +56,7 @@ async def _admin(db):
 async def test_list_users_compat_and_filters(db):
     admin = await _admin(db)
     rows = await ar.list_users(admin=admin, db=db)
-    assert isinstance(rows, list) and len(rows) == 4                 # 무인자 = 예전처럼 배열
+    assert isinstance(rows, list) and len(rows) == 4                 # 무인자 = 기존과 동일하게 배열
     by = {r["id"]: r for r in rows}
     assert by["admin"]["status"] == "active" and by["new"]["status"] == "pending"
     assert by["gone"]["status"] == "suspended"
@@ -76,7 +76,7 @@ async def test_list_users_compat_and_filters(db):
 
 @pytest.mark.asyncio
 async def test_list_users_multi_status_and_role(db):
-    """관리 사용자 칩: 승인 대기 + 정지 를 함께 고르기(쉼표), 관리자만(role)."""
+    """관리 사용자 칩: 승인 대기 + 정지 를 함께 선택(쉼표), 관리자만(role)."""
     admin = await _admin(db)
     res = await ar.list_users(status="pending,suspended", sort="username", admin=admin, db=db)
     assert [r["id"] for r in res] == ["gone", "new"]
@@ -113,11 +113,11 @@ async def test_bulk_actions(db):
 
     res = await ux.bulk_users(ux.BulkRequest(ids=["kim", "admin"], action="suspend"), _Req(), admin=admin, db=db)
     r = {x["id"]: x for x in res["results"]}
-    assert r["kim"]["ok"] and not r["admin"]["ok"]               # 자기 자신은 정지 못 함
+    assert r["kim"]["ok"] and not r["admin"]["ok"]               # 본인 계정은 정지 불가
     kim = await db.get(User, "kim")
     assert kim.is_active is False and kim.suspended_at is not None
 
-    # 정지된 사람은 거절(삭제) 대상이 아니다 — 가입 대기만
+    # 정지된 사용자는 거절(삭제) 대상이 아니다 — 가입 대기만 해당
     res = await ux.bulk_users(ux.BulkRequest(ids=["kim"], action="reject"), _Req(), admin=admin, db=db)
     assert res["results"][0]["ok"] is False and await db.get(User, "kim") is not None
 
@@ -135,10 +135,10 @@ async def test_bulk_suspend_cannot_remove_last_admin(db):
     db.add(User(id="admin2", username="admin2", email="a2@x", password_hash="x", is_admin=True))
     await db.commit()
     admin2 = await db.get(User, "admin2")
-    # admin2 가 admin 을 정지하면 활성 관리자는 admin2 하나 남는다 → 허용
+    # admin2 가 admin 을 정지하면 활성 관리자는 admin2 하나만 남는다 → 허용
     res = await ux.bulk_users(ux.BulkRequest(ids=["admin"], action="suspend"), _Req(), admin=admin2, db=db)
     assert res["ok"] == 1
-    # admin2 가 자기 자신을 포함해 정지하려 하면 자기 자신은 빠지고 처리된다(남는 관리자 = admin2)
+    # admin2 가 본인을 포함하여 정지를 시도하면 본인은 제외되고 처리된다(잔여 관리자 = admin2)
     res = await ux.bulk_users(ux.BulkRequest(ids=["admin2"], action="suspend"), _Req(), admin=admin2, db=db)
     assert res["ok"] == 0
 
@@ -148,11 +148,11 @@ async def test_delete_guards(db):
     admin = await _admin(db)
     with pytest.raises(HTTPException) as e:
         await ux.delete_user("admin", _Req(), confirm="admin", admin=admin, db=db)
-    assert e.value.status_code == 400                                   # 자기 자신
+    assert e.value.status_code == 400                                   # 본인 계정
     with pytest.raises(HTTPException) as e:
         await ux.delete_user("kim", _Req(), confirm="wrong", admin=admin, db=db)
     assert e.value.status_code == 400                                   # 확인 이름 불일치
-    # 다른 관리자가 마지막 관리자를 지우려는 경우
+    # 다른 관리자가 마지막 관리자를 삭제하려는 경우
     db.add(User(id="admin2", username="admin2", email="a2@x", password_hash="x", is_admin=True, is_active=False))
     await db.commit()
     impact = await ux.user_delete_impact("admin", admin=await db.get(User, "kim"), db=db)
@@ -174,7 +174,7 @@ async def test_delete_transfers_shared_and_clears_assignee(db):
 
     with pytest.raises(HTTPException) as e:
         await ux.delete_user("kim", _Req(), confirm="kim", admin=admin, db=db)
-    assert e.value.status_code == 409                                   # 넘겨받을 사람 없이 멈춤
+    assert e.value.status_code == 409                                   # 인수자 없이 중단
 
     res = await ux.delete_user("kim", _Req(), confirm="kim", transfer_to="admin", admin=admin, db=db)
     assert "kept_outside_db" in res and res["policy"]
@@ -200,7 +200,7 @@ async def test_invites_create_list_revoke(db, monkeypatch):
     assert inv["emailed"] and sent[0][0] == "a@ext.com" and "/register?invite=" in inv["url"]
     token = inv["url"].split("invite=")[1]
     row = await db.get(UserInvite, inv["id"])
-    assert row.token_hash != token and row.token_hash == ux.token_digest(token)   # 원문은 저장 안 함
+    assert row.token_hash != token and row.token_hash == ux.token_digest(token)   # 원문은 저장하지 않음
     assert (await ux.find_open_invite(db, token)).id == inv["id"]
 
     res = await ux.create_invites(ux.InviteCreate(count=2, send_email=False), _Req(), admin=admin, db=db)
@@ -232,7 +232,7 @@ async def test_ops_summary(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_register_with_invite_skips_approval(client, monkeypatch):
-    """초대 링크 가입 — 가입이 닫혀 있어도 되고, 바로 활성. 같은 링크 두 번은 안 된다."""
+    """초대 링크 가입 — 가입이 닫힌 상태에서도 가능하며 즉시 활성. 동일 링크의 재사용은 불가."""
     from app.db.models import SystemSetting
     from app.db.session import async_session
 
@@ -256,10 +256,10 @@ async def test_register_with_invite_skips_approval(client, monkeypatch):
         u = (await s.execute(select(User).where(User.username == "leeinv"))).scalars().one()
         assert u.is_active is True and u.email_verified is True
     r = await client.post("/api/auth/register", json={**body, "username": "leeinv2"})
-    assert r.status_code == 400                                        # 이미 쓴 초대
+    assert r.status_code == 400                                        # 이미 사용된 초대
     r = await client.get(f"/api/auth/invites/{token}")
     assert r.json() == {"valid": False}
-    async with async_session() as s:   # 다른 테스트에 가입 닫힘이 새지 않게
+    async with async_session() as s:   # 가입 닫힘 설정이 다른 테스트에 영향을 주지 않도록
         row = await s.get(SystemSetting, "auth.registration_mode")
         if row is not None:
             await s.delete(row)
@@ -272,7 +272,7 @@ async def _none():
 
 @pytest.mark.asyncio
 async def test_ssl_expiry_sources(monkeypatch, tmp_path):
-    """SSL D-n: 설정한 인증서 파일 → 올린 인증서 → 내부 주소(SNI=공개 이름) → 공개 주소 순. 못 읽으면 None."""
+    """SSL D-n: 설정한 인증서 파일 → 업로드된 인증서 → 내부 주소(SNI=공개 이름) → 공개 주소 순. 읽기 실패 시 None."""
     from app.admin import router as admin_router
 
     na = datetime.now(timezone.utc) + timedelta(days=40, hours=1)
@@ -310,7 +310,7 @@ async def test_ssl_expiry_sources(monkeypatch, tmp_path):
     assert v["source"] == "probe" and seen[0] == ("remote", "10.0.0.5", 8443, "ws.example.com")
     assert v["name"] == "ws.example.com" and v["issuer"] == "Let's Encrypt" and v["not_before"]
 
-    # 3) 아무것도 못 읽음(헤어핀 NAT 없음) → None, 짧게 캐시
+    # 3) 전부 읽기 실패(헤어핀 NAT 없음) → None, 단시간 캐시
     monkeypatch.setattr(ux.settings, "ssl_check_host", "")
     ux._ssl_cache.clear()
     v = await ux.ssl_expiry()
@@ -321,8 +321,8 @@ async def test_ssl_expiry_sources(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_ssl_settings_effective_matches_ops_summary(db, monkeypatch, tmp_path):
-    """보안·SSL 화면(GET /settings/ssl)과 관리 개요(ops-summary)는 같은 인증서 정보를 본다.
-    올린 인증서가 없어도 리버스 프록시(SSL_CHECK_HOST)에서 읽은 인증서가 effective 로 나온다."""
+    """보안·SSL 화면(GET /settings/ssl)과 관리 개요(ops-summary)는 동일한 인증서 정보를 조회한다.
+    업로드된 인증서가 없어도 리버스 프록시(SSL_CHECK_HOST)에서 읽은 인증서가 effective 로 반환된다."""
     na = datetime.now(timezone.utc) + timedelta(days=50, hours=1)
     info = {"not_after": na, "not_before": na - timedelta(days=90), "name": "ws.example.com", "issuer": "Let's Encrypt"}
     monkeypatch.setattr(ux, "_cert_info_from_file", lambda p: None)
@@ -338,7 +338,7 @@ async def test_ssl_settings_effective_matches_ops_summary(db, monkeypatch, tmp_p
     assert page["installed"] is False
     assert page["effective"] == summary["ssl"]
     assert page["effective"]["source"] == "probe" and page["effective"]["days_left"] == 50
-    # 인증서를 지우면(올리기도 같음) 캐시를 비워 두 화면이 바로 새 값을 본다
+    # 인증서를 삭제하면(업로드도 동일) 캐시를 초기화하여 두 화면이 즉시 새 값을 조회한다
     await ar.delete_ssl(admin=admin)
     assert ux._ssl_cache == {}
 
@@ -351,7 +351,7 @@ def test_split_host_port():
 
 @pytest.mark.asyncio
 async def test_reset_link_local_ok_ldap_blocked_and_null_source_is_local(db, monkeypatch):
-    """auth_source 가 비어 있는(컬럼 추가 전) 계정은 로컬 — 재설정 링크를 받을 수 있어야 한다."""
+    """auth_source 가 비어 있는(컬럼 추가 이전) 계정은 로컬 — 재설정 링크를 수신할 수 있어야 한다."""
     from types import SimpleNamespace
 
     admin = await _admin(db)
@@ -366,7 +366,7 @@ async def test_reset_link_local_ok_ldap_blocked_and_null_source_is_local(db, mon
         await ar.admin_password_reset_link("kim", _Req(), admin=admin, db=db)
     assert e.value.status_code == 400
 
-    # NULL 은 NOT NULL 인 테스트 DB 에 못 넣으므로 조회만 바꿔 끼운다
+    # NULL 은 NOT NULL 인 테스트 DB 에 삽입할 수 없으므로 조회만 대체한다
     legacy = SimpleNamespace(id="old", username="old", auth_source=None, recovery_email=None,
                              password_reset_token=None, password_reset_sent_at=None)
 
@@ -386,7 +386,7 @@ async def test_reset_link_local_ok_ldap_blocked_and_null_source_is_local(db, mon
 
 
 def test_auto_migrate_carries_string_server_default():
-    """문자열 server_default 는 ADD COLUMN 에 실려야 기존 행이 채워진다."""
+    """문자열 server_default 는 ADD COLUMN 에 포함되어야 기존 행이 채워진다."""
     from sqlalchemy import create_engine, text
 
     from app.db import baseline

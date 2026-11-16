@@ -1,8 +1,8 @@
 """workspace_context — 오늘 날짜·시간대·사용자 정보.
 
-모델은 오늘 날짜를 모른다. "이번 주 회의", "어제 받은 메일" 같은 요청을 풀려면 기준 시각과
-시간대가 필요하다. 사용자가 누구인지(이름·소속 그룹·관리자 여부)도 함께 준다.
-개인 데이터 도구가 아니다(app.mcp.access.NON_DATA_TOOLS) — 본인 신원 최소 정보만 돌려준다.
+모델은 오늘 날짜를 알지 못한다. "이번 주 회의", "어제 받은 메일" 같은 요청을 처리하려면 기준 시각과
+시간대가 필요하다. 사용자 정보(이름·소속 그룹·관리자 여부)도 함께 반환한다.
+개인 데이터 도구가 아니다(app.mcp.access.NON_DATA_TOOLS) — 본인 신원 최소 정보만 반환한다.
 """
 
 from datetime import datetime
@@ -38,7 +38,7 @@ async def workspace_context(user: User, **_: object) -> dict:
                 .where(GroupMember.user_id == user.id)
             )).scalars().all()
             groups = sorted(str(r) for r in rows if r)
-    except Exception:  # noqa: BLE001 — 그룹을 못 읽어도 날짜는 준다
+    except Exception:  # noqa: BLE001 — 그룹 조회에 실패해도 날짜는 반환한다
         groups = []
     iso = now.isocalendar()
     return {

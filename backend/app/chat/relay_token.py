@@ -1,10 +1,10 @@
 """무손실 음성 릴레이(ws-audiorelay) 토큰 — HMAC-SHA256, 릴레이와 포맷 공유.
 
 형식: ``base64url(JSON claims) "." base64url(HMAC-SHA256(secret, base64url(JSON claims)))``
-claims: ``{"room","uid","name","identity"?,"iat","exp","nonce"}`` (키 순서 고정 — Go 쪽 ``token.Claims`` 와 같다).
+claims: ``{"room","uid","name","identity"?,"iat","exp","nonce"}`` (키 순서 고정 — Go 측 ``token.Claims`` 와 동일).
 
-릴레이는 DB 가 없다. 채널 멤버십은 여기(백엔드)가 발급 전에 확인하고, 릴레이는 서명·만료만 본다.
-벡터: backend/tests/test_voice_relay.py ↔ audiorelay/internal/token/token_test.go (한쪽이 바뀌면 둘 다 깨진다).
+릴레이에는 DB 가 없다. 채널 멤버십은 본 모듈(백엔드)이 발급 전에 확인하고, 릴레이는 서명·만료만 검증한다.
+벡터: backend/tests/test_voice_relay.py ↔ audiorelay/internal/token/token_test.go (한쪽이 변경되면 양쪽 모두 실패한다).
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def room_for_channel(channel_id: str) -> str:
 def mint(secret: str, *, room: str, uid: str, name: str = "", identity: str | None = None, ttl: int = TTL_SECONDS,
          now: int | None = None, nonce: str | None = None) -> str:
     if not secret:
-        raise ValueError("AUDIORELAY_SECRET is empty")  # 길이(≥16) 검사는 voice_relay.is_configured 와 릴레이 기동이 한다
+        raise ValueError("AUDIORELAY_SECRET is empty")  # 길이(≥16) 검사는 voice_relay.is_configured 와 릴레이 기동 시 수행
     iat = int(now if now is not None else time.time())
     claims: dict = {"room": room, "uid": uid, "name": name}
     if identity:
@@ -45,7 +45,7 @@ def mint(secret: str, *, room: str, uid: str, name: str = "", identity: str | No
 
 
 def verify(secret: str, token: str, now: int | None = None) -> dict:
-    """서명·만료 검증(릴레이와 같은 규칙, 5 s 여유). 실패하면 ValueError."""
+    """서명·만료 검증(릴레이와 동일 규칙, 5 s 여유). 실패 시 ValueError."""
     if not secret or "." not in token:
         raise ValueError("malformed")
     enc, sig = token.split(".", 1)

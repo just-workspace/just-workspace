@@ -59,8 +59,8 @@ POP3_NO_FOLDERS = "POP3 계정은 서버에 폴더가 없어 이동·보관·스
 
 
 def _reject_pop3_folder_op(account: MailAccount) -> None:
-    """POP3 는 받은편지함 하나뿐 — 폴더가 필요한 동작은 서버에 보내 보지도 않고 400 으로 답한다.
-    (pop3_client 의 해당 함수는 False 만 돌려줘 예전엔 "실패했습니다" 500 으로 보였다.)"""
+    """POP3 는 받은편지함 하나뿐이므로 폴더가 필요한 동작은 서버에 전송하지 않고 400 으로 응답한다.
+    (pop3_client 의 해당 함수는 False 만 반환하여 이전에는 "실패했습니다" 500 으로 표시되었다.)"""
     if getattr(account, "protocol", "imap") == "pop3":
         raise HTTPException(status_code=400, detail=POP3_NO_FOLDERS)
 
@@ -89,7 +89,7 @@ _settings = get_settings()
 import os as _os
 
 _ATTACH_DIR = "/tmp/ws_mail_attachments"
-# 6시간 — 30분이었을 땐 파일을 붙이고 글을 길게 쓰면 보낼 때 "첨부파일을 찾을 수 없습니다" 가 났다.
+# 6시간. 30분이었을 때는 파일 첨부 후 본문 작성이 길어지면 발송 시 "첨부파일을 찾을 수 없습니다" 오류가 발생했다.
 _ATTACHMENT_TTL = 6 * 60 * 60
 
 
@@ -132,9 +132,9 @@ def _builtin_account(user: User, enabled: bool | None = None) -> MailAccount | N
         enabled = getattr(_settings, "feature_builtin_mailserver", False)
     if not enabled:
         return None
-    # 이메일이 없는 사용자(관리자가 아이디만으로 만든 계정 등)는 내장 메일함이 없다.
-    # 빈 주소로 가상 계정을 만들면 IMAP 로그인이 실패해 /mailboxes 가 502(서버 장애처럼)로 보였다 —
-    # 계정 자체가 없는 것(목록 비고 /mailboxes 404 "메일 계정이 설정되지 않았습니다")으로 다룬다.
+    # 이메일이 없는 사용자(관리자가 아이디만으로 생성한 계정 등)는 내장 메일함이 없다.
+    # 빈 주소로 가상 계정을 생성하면 IMAP 로그인이 실패하여 /mailboxes 가 502(서버 장애처럼)로 표시되었다.
+    # 계정 자체가 없는 것(목록이 비어 있고 /mailboxes 404 "메일 계정이 설정되지 않았습니다")으로 처리한다.
     if not (user.email or "").strip():
         return None
 
@@ -149,7 +149,7 @@ def _builtin_account(user: User, enabled: bool | None = None) -> MailAccount | N
         password_encrypted="",
         is_default=True,
     )
-    # 마스터 인증 표식 — 이 사용자 본인 주소로만. DB·요청 본문 계정에는 생기지 않는다.
+    # 마스터 인증 표식 — 해당 사용자 본인 주소로만 부여. DB·요청 본문 계정에는 생성되지 않는다.
     access_guard.mark_builtin(account, user.email)
     return account
 
@@ -240,7 +240,7 @@ def _account_response(account: MailAccount) -> dict:
         "smtp_security": account.smtp_security,
         "username": account.username,
         "is_default": account.is_default,
-        # 빌트인(워크스페이스 메일)은 이미 우리 서버에 있으니 아카이브 대상이 아니다
+        # 빌트인(워크스페이스 메일)은 이미 본 서버에 저장되어 있으므로 아카이브 대상이 아님
         "archive_enabled": (not is_builtin) and bool(getattr(account, "archive_enabled", False)),
         "is_builtin": is_builtin,
         "last_sync_at": account.last_sync_at.isoformat() if not is_builtin and account.last_sync_at else None,
@@ -625,7 +625,7 @@ async def get_thread(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """이 메일이 속한 스레드의 메일들(오래된 순, 읽음 처리 안 함)."""
+    """이 메일이 속한 스레드의 메일 목록(오래된 순, 읽음 처리 미수행)."""
     account = await _get_account(db, user, account_id)
     extra = []
     if include_sent and getattr(account, "protocol", "imap") != "pop3":
@@ -651,7 +651,7 @@ async def download_all_attachments(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """이 메일의 첨부를 zip 하나로(읽음 처리 안 함)."""
+    """이 메일의 첨부를 zip 하나로 반환(읽음 처리 미수행)."""
     import email as _email
     import io
     import zipfile
@@ -707,7 +707,7 @@ async def reuse_attachments(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """이 메일의 첨부를 보내기용 임시 첨부로 복사 — 다시 보내기·전달 때 원래 첨부를 그대로 싣는다."""
+    """이 메일의 첨부를 발송용 임시 첨부로 복사 — 재발송·전달 시 원본 첨부를 그대로 포함한다."""
     import email as _email
 
     _cleanup_expired_attachments()
@@ -870,7 +870,7 @@ async def update_message(
     db: AsyncSession = Depends(get_db),
 ):
     account = await _get_account(db, user, account_id)
-    # 이동이 섞인 요청은 플래그를 바꾸기 전에 거절한다(반만 적용되지 않게)
+    # 이동이 포함된 요청은 플래그 변경 전에 거부한다(부분 적용 방지)
     if body.mailbox_ids and body.mailbox_ids[0] != mailbox_id:
         _reject_pop3_folder_op(account)
 
@@ -937,13 +937,13 @@ async def delete_message(
     account = await _get_account(db, user, account_id)
 
     # Find trash mailbox
-    # 목록을 못 받았는데 "휴지통 없음"으로 보고 진행하면 영구 삭제가 된다 — 실패로 끝낸다.
+    # 목록 조회에 실패했는데 "휴지통 없음"으로 판정하고 진행하면 영구 삭제가 되므로 실패로 종료한다.
     try:
         mailboxes = await _incoming(account).list_mailboxes(account)
     except Exception as e:
         logger.error("IMAP list_mailboxes failed (delete): %s", e)
         raise HTTPException(status_code=502, detail="메일 서버에 연결할 수 없습니다")
-    # LIST 가 NO/BAD 면 예외 없이 빈 목록이 온다 — 편지함이 하나도 없는 계정은 없으므로 이것도 실패로 본다
+    # LIST 가 NO/BAD 면 예외 없이 빈 목록이 반환된다. 편지함이 하나도 없는 계정은 없으므로 이 경우도 실패로 판정한다
     if not mailboxes:
         raise HTTPException(status_code=502, detail="메일 서버에서 편지함 목록을 받지 못했습니다")
 
@@ -960,7 +960,7 @@ async def delete_message(
     except Exception as e:
         logger.error("delete_message failed: %s", e)
         raise HTTPException(status_code=502, detail="메일 서버에 연결할 수 없습니다")
-    # 클라이언트는 200 이면 목록에서 뺀다 — 못 지웠으면 오류로 알린다(예전엔 ok=false 도 200 이었다).
+    # 클라이언트는 200 이면 목록에서 제거한다. 삭제 실패 시 오류로 응답한다(이전에는 ok=false 도 200 이었다).
     if not (result or {}).get("ok"):
         raise HTTPException(status_code=500, detail="메일을 삭제하지 못했습니다")
     return result
@@ -978,11 +978,11 @@ _FORWARD_MARK = "<p>---------- Forwarded message ----------</p>"
 
 
 def _quote_start(html: str) -> int:
-    """인용·전달 원문이 시작하는 자리(없으면 -1) — 서명은 그 앞에 들어간다.
+    """인용·전달 원문의 시작 위치(없으면 -1) — 서명은 그 앞에 삽입된다.
 
-    작성기의 답장 인용은 `<p>날짜, 보낸 사람:</p><blockquote>…` 라서 `<blockquote` 앞에 넣으면 서명이
-    머리줄과 인용문 사이에 낀다 — 머리줄 문단부터를 인용으로 본다. 전달 원문은 blockquote 가 없어
-    구분선 문단을 찾는다(못 찾으면 예전처럼 끝).
+    작성기의 답장 인용은 `<p>날짜, 보낸 사람:</p><blockquote>…` 형태이므로 `<blockquote` 앞에 삽입하면 서명이
+    머리줄과 인용문 사이에 위치하게 된다. 따라서 머리줄 문단부터를 인용으로 간주한다. 전달 원문은 blockquote 가 없어
+    구분선 문단을 검색한다(없으면 기존과 같이 끝).
     """
     import re as _re
     q = html.lower().find("<blockquote")
@@ -997,9 +997,9 @@ def _quote_start(html: str) -> int:
 
 def _insert_signature(html: str | None, text: str, sig_html: str, sig_text: str,
                       known_texts: list[str]) -> tuple[str | None, str]:
-    """본문에 들어 있던 서명(블록·알려진 서명 텍스트)을 모두 빼고 정확히 하나만 넣는다.
+    """본문에 포함된 서명(블록·알려진 서명 텍스트)을 모두 제거하고 정확히 하나만 삽입한다.
 
-    위치: 원래 서명 블록이 있던 자리 → 없으면 인용(<blockquote) 바로 앞 → 없으면 끝.
+    위치: 기존 서명 블록 위치 → 없으면 인용(<blockquote) 바로 앞 → 없으면 끝.
     """
     block = f'<div class="signature"><p>--</p>{sig_html}</div>'
     if html is not None:
@@ -1018,10 +1018,10 @@ def _insert_signature(html: str | None, text: str, sig_html: str, sig_text: str,
 
 async def _resolve_reply_headers(account: MailAccount, in_reply_to: str | None,
                                  references: list[str], mailbox: str | None) -> tuple[str | None, list[str]]:
-    """프런트가 in_reply_to 에 IMAP UID 를 넣어 보내던 문제 보정.
+    """프런트가 in_reply_to 에 IMAP UID 를 넣어 전송하던 문제 보정.
 
-    Message-ID(<..@..>) 가 아니면 원문 헤더에서 Message-ID·References 를 찾아 넣는다.
-    못 찾으면 잘못된 헤더를 보내지 않도록 비운다(받는 쪽 스레드가 깨지는 원인).
+    Message-ID(<..@..>) 가 아니면 원문 헤더에서 Message-ID·References 를 조회하여 설정한다.
+    조회 실패 시 잘못된 헤더를 전송하지 않도록 비운다(수신 측 스레드 손상의 원인).
     """
     if not in_reply_to:
         return None, references
@@ -1050,8 +1050,8 @@ async def perform_send(db: AsyncSession, user: User, account: MailAccount, paylo
                        attachments: list[dict] | None) -> None:
     """실제 SMTP 발송 + 보낸편지함 복사 + 최근 수신인 기록. 즉시 발송·예약 발송 공용.
 
-    payload["ai_generated"](화면 안 AI 답장 초안으로 쓴 메일)이면 X-AI-Generated 를 붙인다(예약 발송도 payload 로 이어진다).
-    AI 도구 발송(mail_send)처럼 바깥에서 이미 켜 둔 값은 덮지 않는다.
+    payload["ai_generated"](화면 내 AI 답장 초안으로 작성한 메일)이면 X-AI-Generated 를 추가한다(예약 발송도 payload 로 전달된다).
+    AI 도구 발송(mail_send)처럼 외부에서 이미 설정한 값은 덮어쓰지 않는다.
     """
     ai_tok = None
     if payload.get("ai_generated") and not smtp_client.AI_GENERATED.get():
@@ -1081,8 +1081,8 @@ async def perform_send(db: AsyncSession, user: User, account: MailAccount, paylo
     except Exception as e:
         logger.warning("Failed to copy to Sent folder: %s", e)
 
-    # 자동완성용 최근 수신인 기록. 예전에는 브라우저 localStorage 에만 쌓여서
-    # 기기를 바꾸면 사라졌다. 실패해도 발송 결과에는 영향을 주지 않는다.
+    # 자동완성용 최근 수신인 기록. 이전에는 브라우저 localStorage 에만 저장되어
+    # 기기 변경 시 소실되었다. 실패해도 발송 결과에는 영향을 주지 않는다.
     from app.contacts.suggest import record_recipients
     everyone = list(payload["to"]) + list(payload.get("cc") or []) + list(payload.get("bcc") or [])
     await record_recipients(user.id, everyone)
@@ -1114,9 +1114,9 @@ async def send_message(
         if send_at > now + timedelta(days=366):
             raise HTTPException(status_code=400, detail="예약은 1년 안으로만 할 수 있습니다")
         if send_at <= now + timedelta(seconds=30):
-            send_at = None  # 지금 보내는 것과 같다
+            send_at = None  # 즉시 발송과 동일
 
-    # 서명: signature_id 를 주면 서버가 붙인다(중복 제거), 아니면 중복 블록만 정리
+    # 서명: signature_id 지정 시 서버가 추가(중복 제거), 아니면 중복 블록만 정리
     html_body = body.html_body
     text_body = body.text_body or ""
     known = await _signature_texts(db, user.id)
@@ -1174,12 +1174,12 @@ async def send_message(
             used_blobs.append(att_ref.blobId)
 
     async def _consume_blobs() -> None:
-        # 임시 첨부는 발송(또는 예약 등록)이 끝난 뒤에 지운다 — 먼저 지우면 SMTP 가 한 번 실패했을 때
-        # 다시 "보내기"를 눌러도 "첨부파일을 찾을 수 없습니다" 로만 끝났다.
+        # 임시 첨부는 발송(또는 예약 등록) 완료 후 삭제한다. 먼저 삭제하면 SMTP 가 1회 실패했을 때
+        # "보내기"를 다시 눌러도 "첨부파일을 찾을 수 없습니다" 로 종료되었다.
         for bid in used_blobs:
             try:
                 await redis.delete(f"mailatt:{bid}")
-            except Exception:  # noqa: BLE001 — 정리는 TTL 이 마저 한다
+            except Exception:  # noqa: BLE001 — 잔여 정리는 TTL 만료로 처리
                 pass
             try:
                 _os.remove(_attach_path(bid))
@@ -1273,7 +1273,7 @@ async def cancel_scheduled(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """예약 취소. 보내는 중이면 409. 디스크에 옮겨 둔 첨부도 지운다."""
+    """예약 취소. 발송 중이면 409. 디스크로 이동해 둔 첨부도 삭제한다."""
     from sqlalchemy import update as _update
     from app.mail import scheduled as _sched
     row = await db.get(MailScheduledSend, scheduled_id)
@@ -1304,14 +1304,14 @@ async def archive_backfill(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """이미 받아 둔 메일을 거슬러 올라가 아카이브한다.
+    """이미 수신된 메일을 소급하여 아카이브한다.
 
-    폴러는 '앞으로 오는' 메일만 남긴다. 켜기 전에 쌓인 메일은 이걸로 가져온다.
-    이미 저장된 건 건너뛰므로 여러 번 돌려도 안전하다.
+    폴러는 '앞으로 오는' 메일만 저장한다. 활성화 이전에 누적된 메일은 본 기능으로 가져온다.
+    이미 저장된 건은 건너뛰므로 반복 실행해도 안전하다.
 
-    **요청 안에서 끝내지 않는다.** IMAP 에서 수백 통을 받아 내리는 일이라
-    nginx 의 120초 게이트웨이 타임아웃을 넘긴다(실제로 504 가 났다).
-    백그라운드로 던지고 진행상황은 status 엔드포인트로 본다.
+    **요청 내에서 완료하지 않는다.** IMAP 에서 수백 통을 수신하는 작업이므로
+    nginx 의 120초 게이트웨이 타임아웃을 초과한다(실제로 504 가 발생했다).
+    백그라운드로 실행하고 진행 상황은 status 엔드포인트로 조회한다.
     """
     from app.mail import archive as mail_archive
 
@@ -1333,7 +1333,7 @@ async def archive_status(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """백필 진행상황. 프런트가 이걸 폴링해 완료를 알린다."""
+    """백필 진행 상황. 프런트가 이를 폴링하여 완료를 통지한다."""
     from app.mail import archive as mail_archive
 
     account = await _get_account(db, user, account_id)
@@ -1353,8 +1353,8 @@ async def upload_attachment(
 
     _cleanup_expired_attachments()
 
-    # 일반 첨부 15MB — 받는 쪽 서버 한도(보통 20~25MB, base64 로 1.37배)를 넘지 않게.
-    # 그보다 큰 파일은 작성 창이 대용량 첨부(파일함 + 30일 다운로드 링크)로 바꾼다.
+    # 일반 첨부 15MB — 수신 측 서버 한도(통상 20~25MB, base64 로 1.37배)를 초과하지 않도록 설정.
+    # 이보다 큰 파일은 작성 창이 대용량 첨부(파일함 + 30일 다운로드 링크)로 전환한다.
     MAX_FILE_SIZE = 15 * 1024 * 1024
     data = await file.read()
     if len(data) > MAX_FILE_SIZE:
@@ -1365,7 +1365,7 @@ async def upload_attachment(
 
 
 async def _store_temp_attachment(data: bytes, name: str, ctype: str, user_id: str) -> dict:
-    """보내기용 임시 첨부(30분) — 디스크 + redis 메타. 반환은 작성 창 UploadedAttachment 모양."""
+    """발송용 임시 첨부(30분) — 디스크 + redis 메타. 반환 형식은 작성 창 UploadedAttachment 와 동일."""
     import uuid
     import json as _json
     from app.chat.redis_client import get_redis
@@ -1424,7 +1424,7 @@ async def bulk_action(
     target_mailbox = None
     if body.action == "delete":
         mailboxes = await _incoming(account).list_mailboxes(account)
-        # 목록을 못 받았는데 "휴지통 없음"으로 보고 진행하면 영구 삭제가 된다
+        # 목록 조회에 실패했는데 "휴지통 없음"으로 판정하고 진행하면 영구 삭제가 됨
         if not mailboxes:
             raise HTTPException(status_code=502, detail="메일 서버에서 편지함 목록을 받지 못했습니다")
         target_mailbox = next((mb["id"] for mb in mailboxes if mb.get("role") == "trash"), None)
@@ -1438,7 +1438,7 @@ async def bulk_action(
             raise HTTPException(status_code=400, detail="이동할 메일함을 지정해주세요")
         target_mailbox = body.mailbox_id
 
-    # 건마다 결과를 본다 — 예전엔 실패해도 ok 를 돌려줘 화면만 지워지고 메일은 그대로였다.
+    # 건별로 결과를 확인한다. 이전에는 실패해도 ok 를 반환하여 화면에서만 제거되고 메일은 유지되었다.
     failed = 0
     for uid in body.message_ids:
         if body.action == "read":
@@ -1496,9 +1496,9 @@ async def download_attachment(
         raise HTTPException(status_code=404, detail="Attachment not found")
 
     data, content_type, filename = result
-    # inline=1 이면 브라우저가 열어 보여 준다(PDF 미리보기 모달·이미지 썸네일). 기본은 다운로드.
-    # 이미지·PDF 가 아닌 형식(html·svg 등)은 inline 을 요청해도 다운로드로 내린다(http_utils.inline_allowed).
-    # nosniff: 형식을 속인 첨부를 브라우저가 html 로 추측해 실행하지 않게.
+    # inline=1 이면 브라우저가 직접 표시한다(PDF 미리보기 모달·이미지 썸네일). 기본은 다운로드.
+    # 이미지·PDF 가 아닌 형식(html·svg 등)은 inline 요청이어도 다운로드로 전송한다(http_utils.inline_allowed).
+    # nosniff: 형식을 위조한 첨부를 브라우저가 html 로 추정하여 실행하지 않도록 한다.
     from app.files import serve_safety
     media, headers = serve_safety.safe_file_headers(filename, content_type=content_type, inline=inline)
     return Response(content=data, media_type=media, headers=headers)
@@ -1713,12 +1713,12 @@ async def get_draft(
         raise HTTPException(status_code=404, detail="임시보관 메일을 찾을 수 없습니다")
     out = _draft_to_response(draft, await _signature_texts(db, user.id))
     if out.file_attachments:
-        # 작성 창이 바로 보낼 수 있게 임시 첨부로(그때의 권한·크기로 다시 확인)
+        # 작성 창에서 즉시 발송할 수 있도록 임시 첨부로 변환(해당 시점의 권한·크기로 재확인)
         try:
             out.attachments = await _file_attach.to_blobs(db, user, out.file_attachments)
         except _file_attach.AttachError as e:
             out.attachment_error = e.message
-        except Exception:  # noqa: BLE001 — 첨부 실패가 초안 열기를 막지 않게
+        except Exception:  # noqa: BLE001 — 첨부 실패가 초안 열기를 차단하지 않도록 함
             logger.warning("[mail] draft file attachments failed", exc_info=True)
             out.attachment_error = "첨부 파일을 불러오지 못했습니다"
     return out
@@ -1990,7 +1990,7 @@ async def apply_filter_rules(
 ):
     """Apply all active filter rules to messages in the specified mailbox."""
     account = await _get_account(db, user, account_id)
-    # 필터 규칙의 동작은 "폴더로 이동"뿐 — POP3 에선 예전에 0건 이동으로 조용히 끝났다
+    # 필터 규칙의 동작은 "폴더로 이동"뿐이다. POP3 에서는 이전에 0건 이동으로 오류 없이 종료되었다
     _reject_pop3_folder_op(account)
 
     # Fetch active rules

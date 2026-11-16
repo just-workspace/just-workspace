@@ -1,18 +1,18 @@
 """외부 캘린더 구독(.ics) — 설정 › 캘린더 "외부 캘린더 구독" 카드.
 
-iCal(.ics) 주소를 읽기 전용 캘린더로 붙이고 6시간마다 새로 받는다.
+iCal(.ics) 주소를 읽기 전용 캘린더로 등록하고 6시간마다 재수신한다.
 
-- 구독 = calendars 행 + source_url. 그 캘린더는 읽기 전용이다
-  (service._can_write_calendar 가 거르고, CalDAV PUT/DELETE 도 403).
-- 받기(fetch_ics)는 서버가 사용자 대신 외부 주소에 접속하는 일이라 SSRF 를 막는다.
-    · http/https 만(webcal:// 은 https 로 바꿔 받는다 — 같은 것의 다른 이름)
-    · 주소의 호스트를 직접 풀어 **모든** 주소가 공인(global) 이어야 한다. 사설·루프백·링크 로컬·
-      CGNAT·예약·멀티캐스트는 거부. 풀어 둔 IP 로 바로 접속해(호스트 헤더·SNI 는 원래 이름)
-      검사와 접속 사이에 DNS 가 바뀌는 리바인딩을 막는다.
-    · 리다이렉트는 3번까지, 매번 같은 검사를 다시 한다.
-    · 응답 5MB · 접속 5초 · 전체 20초 제한. 자격 증명이 든 주소(user:pass@)는 받지 않는다.
-- 맞추기(sync_events)는 UID 기준 덮어쓰기 + 이번에 없는 일정 삭제. 참석자·알림은 버린다
-  (외부 일정의 참석자 이메일이 우리 사용자와 겹치면 초대로 보이는 것을 막고, 남의 알림을 울리지 않는다).
+- 구독 = calendars 행 + source_url. 해당 캘린더는 읽기 전용이다
+  (service._can_write_calendar 가 차단하고, CalDAV PUT/DELETE 도 403).
+- 수신(fetch_ics)은 서버가 사용자를 대신해 외부 주소에 접속하는 동작이므로 SSRF 를 차단한다.
+    · http/https 만 허용(webcal:// 은 https 로 변환하여 수신한다 — 동일 대상의 별칭)
+    · 주소의 호스트를 직접 해석하여 **모든** 주소가 공인(global) 이어야 한다. 사설·루프백·링크 로컬·
+      CGNAT·예약·멀티캐스트는 거부한다. 해석해 둔 IP 로 직접 접속하여(호스트 헤더·SNI 는 원래 이름)
+      검사와 접속 사이에 DNS 가 변경되는 리바인딩을 차단한다.
+    · 리다이렉트는 3회까지 허용하며, 매회 동일한 검사를 재수행한다.
+    · 응답 5MB · 접속 5초 · 전체 20초 제한. 자격 증명이 포함된 주소(user:pass@)는 거부한다.
+- 동기화(sync_events)는 UID 기준 덮어쓰기 + 이번 수신에 없는 일정 삭제. 참석자·알림은 제거한다
+  (외부 일정의 참석자 이메일이 본 서비스 사용자와 일치할 때 초대로 표시되는 것을 방지하고, 외부 일정의 알림을 발송하지 않는다).
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from app.db.models import CalendarDB, CalendarEventDB
 logger = logging.getLogger(__name__)
 
 REFRESH_EVERY = timedelta(hours=6)
-# "지금 새로 고침"(구독 행 ⋮) 최소 간격 — 남용으로 외부 주소를 두드리지 않게. 마지막 시도(checked_at) 기준
+# "지금 새로 고침"(구독 행 ⋮) 최소 간격 — 남용에 의한 외부 주소 반복 요청 방지. 마지막 시도(checked_at) 기준
 MANUAL_MIN_INTERVAL = timedelta(minutes=1)
 MAX_BYTES = 5 * 1024 * 1024
 CONNECT_TIMEOUT = 5.0
@@ -46,9 +46,9 @@ MAX_URL_LEN = 1000
 
 
 class SubscriptionError(Exception):
-    """받기 실패. code 는 화면에 그대로 붙는 짧은 이유(HTTP 상태 숫자 또는 아래 이름)."""
+    """수신 실패. code 는 화면에 그대로 표시되는 짧은 사유(HTTP 상태 숫자 또는 아래 이름)."""
 
-    # 이름 있는 이유: invalid_url · scheme · blocked · dns · timeout · too_large · network · not_ics · too_many
+    # 이름이 있는 사유: invalid_url · scheme · blocked · dns · timeout · too_large · network · not_ics · too_many
     def __init__(self, code: str, detail: str = ""):
         super().__init__(detail or code)
         self.code = code
@@ -59,7 +59,7 @@ class SubscriptionError(Exception):
 
 
 def normalize_url(raw: str) -> str:
-    """사용자가 넣은 주소를 받을 주소로. 규칙 밖이면 SubscriptionError."""
+    """사용자가 입력한 주소를 수신용 주소로 변환한다. 규칙 위반 시 SubscriptionError."""
     url = (raw or "").strip()
     if not url or len(url) > MAX_URL_LEN:
         raise SubscriptionError("invalid_url", "주소가 비었거나 너무 깁니다")
@@ -82,7 +82,7 @@ def normalize_url(raw: str) -> str:
 
 
 def ip_allowed(ip: str) -> bool:
-    """인터넷 공인 주소만. IPv4 를 품은 IPv6(::ffff:10.0.0.1 등)는 안쪽 IPv4 로 판정한다."""
+    """인터넷 공인 주소만 허용. IPv4 를 내장한 IPv6(::ffff:10.0.0.1 등)는 내부 IPv4 로 판정한다."""
     try:
         addr = ipaddress.ip_address(ip)
     except ValueError:
@@ -98,8 +98,8 @@ def ip_allowed(ip: str) -> bool:
 
 
 async def resolve_public(host: str, port: int) -> list[str]:
-    """호스트를 풀어 공인 주소 목록. 하나라도 사설이면 거부(섞어 두는 리바인딩 수법 차단)."""
-    # IP 를 그대로 쓴 주소
+    """호스트를 해석하여 공인 주소 목록을 반환한다. 하나라도 사설이면 거부(혼합 응답을 이용한 리바인딩 수법 차단)."""
+    # IP 를 직접 기재한 주소
     try:
         ipaddress.ip_address(host)
         literal = [host]
@@ -123,7 +123,7 @@ async def resolve_public(host: str, port: int) -> list[str]:
     return ips
 
 
-# ── 받기 ──
+# ── 수신 ──
 
 
 @dataclass
@@ -153,7 +153,7 @@ async def _get_once(client: httpx.AsyncClient, url: str) -> tuple[int, dict, byt
         "GET", pinned,
         headers={"Host": host_header, "Accept": "text/calendar, text/plain;q=0.8, */*;q=0.1",
                  "User-Agent": "JustWorkspace-Calendar/1.0"},
-        # TLS 는 원래 이름으로(SNI·인증서 검증) — IP 로 접속해도 인증서는 호스트 이름과 맞춘다
+        # TLS 는 원래 이름으로 수행(SNI·인증서 검증) — IP 로 접속해도 인증서는 호스트 이름과 대조
         extensions={"sni_hostname": host} if parts.scheme == "https" else {},
     )
     resp = await client.send(req, stream=True)
@@ -176,7 +176,7 @@ async def _get_once(client: httpx.AsyncClient, url: str) -> tuple[int, dict, byt
 
 
 async def fetch_ics(raw_url: str, *, transport: httpx.AsyncBaseTransport | None = None) -> Fetched:
-    """주소에서 .ics 본문을 받는다. 실패는 SubscriptionError(code=HTTP 상태 또는 이유)."""
+    """주소에서 .ics 본문을 수신한다. 실패 시 SubscriptionError(code=HTTP 상태 또는 사유)."""
     url = normalize_url(raw_url)
     timeout = httpx.Timeout(TOTAL_TIMEOUT, connect=CONNECT_TIMEOUT)
 
@@ -221,11 +221,11 @@ def calendar_name_of(text: str) -> str | None:
     return None
 
 
-# ── 맞추기 ──
+# ── 동기화 ──
 
 
 def _strip_bundle(b: dict) -> dict:
-    """구독 일정은 참석자·알림을 버린다."""
+    """구독 일정은 참석자·알림을 제거한다."""
     def clean(d: dict) -> dict:
         d = dict(d)
         d["attendees"] = []
@@ -238,7 +238,7 @@ def _strip_bundle(b: dict) -> dict:
 
 
 async def sync_events(db: AsyncSession, cal: CalendarDB, text: str) -> dict:
-    """받은 .ics 로 이 캘린더의 일정을 맞춘다 — UID 같으면 덮어쓰고, 이번에 없는 것은 지운다."""
+    """수신한 .ics 로 해당 캘린더의 일정을 동기화한다 — UID 가 같으면 덮어쓰고, 이번 수신에 없는 일정은 삭제한다."""
     from app.calendar import service
     from app.dav.ical_utils import ical_to_event_bundles
 
@@ -265,7 +265,7 @@ async def sync_events(db: AsyncSession, cal: CalendarDB, text: str) -> dict:
         existing_id = by_uid.get(uid) if uid and not uid.startswith("__anon_") else None
         try:
             ev = await service.save_ical_bundle(db, cal.id, b, event_id=existing_id)
-        except Exception as e:  # noqa: BLE001 — 한 일정이 깨져도 나머지는 받는다
+        except Exception as e:  # noqa: BLE001 — 일정 하나가 손상되어도 나머지는 수신
             logger.debug("구독 일정 저장 실패(%s): %s", cal.id, e)
             await db.rollback()
             skipped += 1
@@ -321,7 +321,7 @@ async def list_subscriptions(db: AsyncSession, user_id: str) -> list[dict]:
 
 
 def manual_wait_seconds(cal: CalendarDB, now: datetime | None = None) -> int:
-    """손으로 새로 고칠 수 있을 때까지 남은 초(0 이면 지금 가능). 마지막 시도가 1분 안이면 기다려야 한다."""
+    """수동 새로 고침이 가능해질 때까지 남은 초(0 이면 즉시 가능). 마지막 시도가 1분 이내이면 대기 필요."""
     last = cal.source_checked_at
     if last is None:
         return 0
@@ -333,7 +333,7 @@ def manual_wait_seconds(cal: CalendarDB, now: datetime | None = None) -> int:
 
 
 async def refresh(db: AsyncSession, cal: CalendarDB, *, fetch=fetch_ics) -> dict:
-    """한 구독을 지금 새로 받는다. 실패해도 예외 대신 source_error 에 남기고 기존 일정은 둔다."""
+    """구독 하나를 즉시 재수신한다. 실패해도 예외를 발생시키지 않고 source_error 에 기록하며 기존 일정은 유지한다."""
     now = datetime.now(timezone.utc)
     cal_id = cal.id
     try:
@@ -355,7 +355,7 @@ async def refresh(db: AsyncSession, cal: CalendarDB, *, fetch=fetch_ics) -> dict
 async def subscribe(
     db: AsyncSession, user_id: str, url: str, name: str | None, color: str | None, *, fetch=fetch_ics,
 ) -> dict:
-    """구독 추가 — 먼저 받아 보고(안 되면 SubscriptionError) 캘린더를 만든다."""
+    """구독 추가 — 먼저 수신을 시도하고(실패 시 SubscriptionError) 캘린더를 생성한다."""
     norm = normalize_url(url)
     mine = (
         await db.execute(
@@ -389,9 +389,9 @@ async def subscribe(
 
 
 async def preview(db: AsyncSession, user_id: str, url: str, *, fetch=fetch_ics) -> dict:
-    """구독 추가 모달의 "읽음 · 일정 n개" 확인 줄 — 주소를 미리 받아 일정 수·이름만 돌려준다(저장 안 함).
+    """구독 추가 모달의 "읽음 · 일정 n개" 확인 줄 — 주소를 사전 수신하여 일정 수·이름만 반환한다(저장하지 않음).
 
-    받기는 subscribe 와 같은 fetch_ics(SSRF 검사·크기·시간 제한 그대로)."""
+    수신은 subscribe 와 동일한 fetch_ics 를 사용한다(SSRF 검사·크기·시간 제한 동일)."""
     from app.dav.ical_utils import ical_to_event_bundles
 
     norm = normalize_url(url)
@@ -414,7 +414,7 @@ async def preview(db: AsyncSession, user_id: str, url: str, *, fetch=fetch_ics) 
         "url": norm,
         "name": calendar_name_of(got.text),
         "count": len(masters),
-        # 확인 줄 오른쪽 "2026–2027" — 일정 시작 연도의 처음·끝(일정이 없으면 null)
+        # 확인 줄 오른쪽 "2026–2027" — 일정 시작 연도의 최초·최종 값(일정이 없으면 null)
         "first_year": years[0] if years else None,
         "last_year": years[-1] if years else None,
     }
@@ -428,7 +428,7 @@ async def get_owned(db: AsyncSession, user_id: str, cal_id: str) -> CalendarDB |
 
 
 async def due_ids(db: AsyncSession, now: datetime | None = None, limit: int = 50) -> list[str]:
-    """새로 받을 때가 된 구독(마지막 시도가 6시간 전보다 이른 것) id."""
+    """재수신 시점이 도래한 구독(마지막 시도가 6시간 전보다 이전인 것)의 id."""
     now = now or datetime.now(timezone.utc)
     cutoff = now - REFRESH_EVERY
     rows = (
@@ -446,7 +446,7 @@ async def due_ids(db: AsyncSession, now: datetime | None = None, limit: int = 50
 
 
 async def refresh_due(session_factory) -> int:
-    """한 주기 — 때가 된 구독을 차례로 받는다. 받은 개수."""
+    """1주기 — 시점이 도래한 구독을 순차 수신한다. 수신한 개수를 반환한다."""
     async with session_factory() as db:
         ids = await due_ids(db)
     n = 0

@@ -20,7 +20,7 @@ PLUGIN_DIRS = [PLUGINS_DIR, UPLOADED_DIR]
 
 # Loaded plugin metadata (filled at startup)
 _loaded_plugins: list[dict[str, Any]] = []
-# 로드하지 않은 플러그인과 그 사유(필요한 구역 미설치 등) — 관리 화면 목록에 사유를 보여 준다
+# 로드하지 않은 플러그인과 그 사유(필요한 구역 미설치 등) — 관리 화면 목록에 사유를 표시한다
 _skipped_plugins: list[dict[str, Any]] = []
 # plugin_id → router module (라이프사이클 훅 호출용: on_install/on_enable/on_disable/on_uninstall)
 _hook_modules: dict[str, Any] = {}
@@ -100,7 +100,7 @@ def get_skipped_plugins() -> list[dict[str, Any]]:
 
 
 def missing_zones(manifest: dict) -> list[str]:
-    """manifest 의 "zones"(이 플러그인이 기대는 구역 id 목록) 중 설치되지 않은 것."""
+    """manifest 의 "zones"(본 플러그인이 의존하는 구역 id 목록) 중 미설치 구역."""
     from app.zones import zone_installed
 
     wanted = manifest.get("zones") or []
@@ -116,7 +116,7 @@ async def load_plugins(app: FastAPI) -> None:
     _loaded_plugins.clear()
     _skipped_plugins.clear()
     _hook_modules.clear()
-    sdk.unregister_plugin_tools()      # 다시 읽을 때 옛 등록이 남지 않게
+    sdk.unregister_plugin_tools()      # 재로드 시 이전 등록이 잔존하지 않도록 함
     seen_ids: set[str] = set()
 
     plugin_dirs: list[Path] = []
@@ -154,7 +154,7 @@ async def load_plugins(app: FastAPI) -> None:
             continue
         seen_ids.add(plugin_id)
 
-        # 기대는 구역이 설치되지 않았으면 올리지 않는다(라우터·모델·모듈 목록 모두) — 사유는 로그와 목록에
+        # 의존 구역이 미설치이면 로드하지 않는다(라우터·모델·모듈 목록 모두) — 사유는 로그와 목록에 기록
         missing = missing_zones(manifest)
         if missing:
             logger.warning("[Plugins] %s: 필요한 구역이 설치되지 않아 건너뜀 — %s", plugin_id, ", ".join(missing))
@@ -186,7 +186,7 @@ async def load_plugins(app: FastAPI) -> None:
             sdk.unregister_plugin_tools(plugin_id)
             continue
 
-        # register_tool 로 등록하는 AI 도구는 이 플러그인의 모듈에 묶인다(sdk.loading_plugin)
+        # register_tool 로 등록하는 AI 도구는 본 플러그인의 모듈에 귀속된다(sdk.loading_plugin)
         try:
             with sdk.loading_plugin(plugin_id):
                 router_mod = _import_module_from_path(f"plugin_{plugin_id}_router", router_path)
@@ -226,9 +226,9 @@ async def load_plugins(app: FastAPI) -> None:
             "_folder": plugin_dir.name,
             "_dir": str(plugin_dir),
             "has_frontend": has_frontend,
-            # 페이지가 화면 하단까지 자기 컨트롤로 쓴다 → 셸이 모바일 탭바를 숨긴다.
+            # 페이지가 화면 하단까지 자체 컨트롤로 사용 → 셸이 모바일 탭바를 숨김
             "fullscreen": bool(manifest.get("fullscreen", False)),
-            # 레일·메뉴·플러그인 목록 순서(정수, 작을수록 위). 없으면 None → 폴더 이름순으로 뒤에
+            # 레일·메뉴·플러그인 목록 순서(정수, 작을수록 상위). 없으면 None → 폴더 이름순으로 후순위
             "order": parse_plugin_order(manifest.get("order")),
         }
         if "order" in manifest and plugin_meta["order"] is None:
@@ -245,6 +245,6 @@ async def load_plugins(app: FastAPI) -> None:
         except Exception as e:
             logger.error("[Plugins] %s: on_install 처리 실패: %s", plugin_id, e)
 
-    # 순서: order 있는 것(작은 순) → 없는 것(폴더 이름순). 로드(라우터 마운트)는 폴더 이름순 그대로
+    # 순서: order 가 있는 항목(오름차순) → 없는 항목(폴더 이름순). 로드(라우터 마운트)는 폴더 이름순 유지
     _loaded_plugins.sort(key=plugin_sort_key)
     print(f"[Plugins] loaded {len(_loaded_plugins)} plugin(s): {[p['id'] for p in _loaded_plugins]}")

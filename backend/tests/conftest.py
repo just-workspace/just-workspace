@@ -9,8 +9,8 @@ Shared test fixtures for backend tests.
 import os
 import tempfile
 
-# 앱 엔진(app.db.session)이 쓰는 DB. 메모리 SQLite 는 연결마다 새 DB 라 앱이 만든 테이블이
-# 다음 요청에서 사라진다 → 테스트 실행마다 임시 파일 하나를 쓴다.
+# 앱 엔진(app.db.session)이 사용하는 DB. 메모리 SQLite 는 연결마다 새 DB 이므로 앱이 생성한 테이블이
+# 다음 요청에서 소실된다 → 테스트 실행마다 임시 파일 하나를 사용한다.
 _APP_DB = os.path.join(tempfile.mkdtemp(prefix="jw-test-"), "app.db")
 
 # Set test environment BEFORE any app imports
@@ -21,10 +21,10 @@ os.environ.update({
     "APP_URL": "http://localhost:8000",
     "DOMAIN": "localhost",
     "REDIS_URL": "redis://localhost:6379/0",
-    # 레이트리밋 카운터는 테스트에서 메모리로(운영은 REDIS_URL — 워커 공유)
+    # 레이트리밋 카운터는 테스트에서 메모리에 저장(운영은 REDIS_URL — 워커 공유)
     "RATE_LIMIT_STORAGE_URI": "memory://",
-    # 테스트는 짧은 고정 비밀값을 쓴다 — 기동 검사(app/security_defaults.py)가 거부 대신 경고만 하게.
-    # 운영 기본은 "거부"다(이 변수가 없으면 약한 값으로는 뜨지 않는다).
+    # 테스트는 짧은 고정 비밀값을 사용한다 — 기동 검사(app/security_defaults.py)가 거부 대신 경고만 수행하도록 설정.
+    # 운영 기본값은 "거부"이다(이 변수가 없으면 취약한 값으로는 기동하지 않는다).
     "JW_ALLOW_INSECURE_DEFAULTS": "1",
 })
 
@@ -68,7 +68,7 @@ async def client():
     from app.main import app
     from app.db.session import engine as app_engine
 
-    # lifespan(init_db)은 PostgreSQL 전용 마이그레이션을 돌리므로 건너뛰고, 테이블만 만든다
+    # lifespan(init_db)은 PostgreSQL 전용 마이그레이션을 실행하므로 생략하고, 테이블만 생성한다
     async with app_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

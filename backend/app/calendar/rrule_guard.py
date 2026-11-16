@@ -1,11 +1,11 @@
 """반복 일정 규칙(RRULE) 상한.
 
-반복 규칙 하나로 서버가 회차를 끝없이 펼치지 않게 두 겹으로 막는다.
+반복 규칙 하나로 서버가 회차를 무한 전개하지 않도록 2단계로 차단한다.
 
-1. 저장할 때(check_rrule): 초·분 단위 빈도(SECONDLY·MINUTELY)를 거부하고, 하루 회차 수가
-   24 를 넘는 조합(BYHOUR×BYMINUTE×BYSECOND)도 거부한다. 길이·COUNT·INTERVAL 상한.
-2. 펼칠 때(iter_bounded): 이미 저장된 규칙이나 외부에서 들어온 규칙도 한 번에 훑는 횟수와
-   내는 회차 수에 상한을 둔다.
+1. 저장 시(check_rrule): 초·분 단위 빈도(SECONDLY·MINUTELY)를 거부하고, 하루 회차 수가
+   24 를 초과하는 조합(BYHOUR×BYMINUTE×BYSECOND)도 거부한다. 길이·COUNT·INTERVAL 상한 적용.
+2. 전개 시(iter_bounded): 이미 저장된 규칙이나 외부에서 유입된 규칙에도 1회 탐색 횟수와
+   산출 회차 수에 상한을 적용한다.
 """
 from __future__ import annotations
 
@@ -18,9 +18,9 @@ MAX_COUNT = 5000
 MAX_INTERVAL = 1000
 MAX_PER_DAY = 24
 
-# 펼침 상한
-MAX_OCCURRENCES = 1000     # 한 일정이 한 번의 조회에서 내는 회차
-MAX_SCAN = 20000           # 규칙을 훑는 최대 횟수(조회 범위 앞쪽 회차 포함)
+# 전개 상한
+MAX_OCCURRENCES = 1000     # 한 일정이 1회 조회에서 산출하는 회차 수
+MAX_SCAN = 20000           # 규칙 탐색 최대 횟수(조회 범위 이전 회차 포함)
 
 
 class RRuleRejected(ValueError):
@@ -50,7 +50,7 @@ def _n(v: str | None) -> int:
 
 
 def check_rrule(rule: str | None) -> str | None:
-    """저장해도 되는 규칙인지. 'RRULE:' 접두는 떼고 돌려준다. 안 되면 RRuleRejected."""
+    """저장 가능한 규칙인지 검증한다. 'RRULE:' 접두는 제거하여 반환한다. 불가 시 RRuleRejected."""
     if rule is None:
         return None
     r = rule.strip()
@@ -82,7 +82,7 @@ def check_rrule(rule: str | None) -> str | None:
     else:
         if _n(p.get("BYHOUR")) * per_slot > MAX_PER_DAY:
             raise RRuleRejected("하루 반복 횟수가 너무 많습니다")
-    # 실제로 해석되는지(dateutil)
+    # 실제 해석 가능 여부 확인(dateutil)
     from datetime import timezone
 
     from dateutil.rrule import rrulestr
@@ -96,7 +96,7 @@ def check_rrule(rule: str | None) -> str | None:
 
 
 def sanitize_rrule(rule: str | None) -> str | None:
-    """외부에서 들어온 규칙(DAV·가져오기·구독) — 허용 밖이면 반복 없음으로."""
+    """외부에서 유입된 규칙(DAV·가져오기·구독) — 허용 범위 밖이면 반복 없음으로 처리."""
     try:
         return check_rrule(rule)
     except RRuleRejected:
@@ -105,7 +105,7 @@ def sanitize_rrule(rule: str | None) -> str | None:
 
 def iter_bounded(rule, start: datetime, end: datetime,
                  max_occ: int = MAX_OCCURRENCES, max_scan: int = MAX_SCAN) -> Iterator[datetime]:
-    """[start, end] 회차 — 훑는 횟수·내는 회차 수에 상한."""
+    """[start, end] 회차 — 탐색 횟수·산출 회차 수에 상한 적용."""
     produced = 0
     for i, occ in enumerate(rule):
         if i >= max_scan or occ > end:
@@ -119,7 +119,7 @@ def iter_bounded(rule, start: datetime, end: datetime,
 
 
 def next_after(rule, after: datetime, max_scan: int = MAX_SCAN) -> datetime | None:
-    """after 다음 회차(상한 안에서 못 찾으면 None)."""
+    """after 다음 회차(상한 내에서 찾지 못하면 None)."""
     for i, occ in enumerate(rule):
         if i >= max_scan:
             return None

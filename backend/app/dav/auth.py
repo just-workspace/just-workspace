@@ -1,9 +1,9 @@
 """HTTP Basic Auth for WebDAV clients.
 
-CalDAV/CardDAV 는 앱 비밀번호(설정 › 연결된 앱, 범위 dav)만 받는다. 계정(메인) 비밀번호는
-2단계 인증·로그인 잠금을 거치지 않는 우회로가 되기 때문이다. 전환 기간 설정
-(DAV_ALLOW_ACCOUNT_PASSWORD=true)에서만 계정 비밀번호를 받되, 2단계 인증을 켰거나 정책상
-필수인 계정은 거부한다. 어느 쪽이든 실패는 메인 로그인과 같은 잠금 집계(security_policy)에 들어간다.
+CalDAV/CardDAV 는 앱 비밀번호(설정 › 연결된 앱, 범위 dav)만 허용한다. 계정(메인) 비밀번호는
+2단계 인증·로그인 잠금을 거치지 않는 우회 경로가 되기 때문이다. 전환 기간 설정
+(DAV_ALLOW_ACCOUNT_PASSWORD=true)에서만 계정 비밀번호를 허용하되, 2단계 인증을 활성화했거나 정책상
+필수인 계정은 거부한다. 어느 경우든 실패는 메인 로그인과 동일한 잠금 집계(security_policy)에 포함된다.
 """
 
 import base64

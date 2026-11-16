@@ -2,9 +2,9 @@
 
 아래 고정 해시는 **교체 전** 운영 이미지(passlib 1.7.4, bcrypt 4.0.1)에서
 app.auth.password.hash_password 와 CryptContext(bcrypt_sha256/bcrypt, rounds=5) 로
-만든 것이다. 세 스킴 모두 지금 라이브러리로 검증되고, 구 스킴은 Argon2id 로 이관돼야 한다.
+생성한 것이다. 세 스킴 모두 현재 라이브러리로 검증되고, 구 스킴은 Argon2id 로 이관되어야 한다.
 
-bcrypt 5 는 72바이트 초과 입력에 ValueError 를 내므로(옛 버전은 조용히 잘랐다),
+bcrypt 5 는 72바이트 초과 입력에 ValueError 를 발생시키므로(이전 버전은 경고 없이 절단했다),
 순수 bcrypt 해시의 긴 비밀번호 케이스(long100·long73)가 핵심이다.
 """
 
@@ -63,7 +63,7 @@ def test_legacy_hash_rejects_wrong_password(key, scheme):
     assert verify_password("Z" + pw[1:], h) is False
     assert verify_password("", h) is False
     if scheme == "bcrypt" and len(pw.encode()) >= 72:
-        # 순수 bcrypt 는 앞 72바이트만 보므로 뒤쪽 변형은 "틀린 비밀번호"가 아니다(아래 전용 테스트 참고)
+        # 순수 bcrypt 는 앞 72바이트만 사용하므로 뒤쪽 변형은 "틀린 비밀번호"가 아니다(아래 전용 테스트 참고)
         return
     assert verify_password(pw + "!", h) is False
     assert verify_password(pw[:-1], h) is False
@@ -75,7 +75,7 @@ def test_legacy_schemes_upgrade_to_argon2id(key):
         ok, new_hash = verify_and_upgrade(PASSWORDS[key], LEGACY_HASHES[key][scheme])
         assert ok is True
         assert new_hash is not None and new_hash.startswith("$argon2id$")
-        # 이관된 해시는 잘리지 않은 원문 전체로 검증된다
+        # 이관된 해시는 절단되지 않은 원문 전체로 검증된다
         assert verify_password(PASSWORDS[key], new_hash) is True
         if len(PASSWORDS[key].encode()) > 72:
             assert verify_password(PASSWORDS[key][:72], new_hash) is False
@@ -89,16 +89,16 @@ def test_argon2_hash_is_current_scheme(key):
 
 
 def test_legacy_plain_bcrypt_keeps_72_byte_truncation_semantics():
-    """옛 bcrypt(<5) 는 72바이트 뒤를 무시했다. 그 시절 만든 해시는 그 의미대로 검증돼야 한다.
+    """이전 bcrypt(<5) 는 72바이트 이후를 무시했다. 당시 생성한 해시는 그 의미대로 검증되어야 한다.
 
-    long73 의 해시는 실제로는 앞 72바이트("x"*72)로 만들어진 것이므로 exact72 비밀번호로도 통과한다.
-    (이 느슨함은 로그인 즉시 Argon2id 이관으로 사라진다 — test_legacy_schemes_upgrade_to_argon2id.)
+    long73 의 해시는 실제로는 앞 72바이트("x"*72)로 생성된 것이므로 exact72 비밀번호로도 통과한다.
+    (이 완화된 동작은 로그인 즉시 Argon2id 이관으로 해소된다 — test_legacy_schemes_upgrade_to_argon2id.)
     """
     h73 = LEGACY_HASHES["long73"]["bcrypt"]
     assert verify_password(PASSWORDS["long73"], h73) is True
     assert verify_password(PASSWORDS["exact72"], h73) is True
     assert verify_password("x" * 71, h73) is False
-    # bcrypt_sha256 은 HMAC 으로 먼저 줄이므로 72바이트 의미론이 없다
+    # bcrypt_sha256 은 HMAC 으로 먼저 축약하므로 72바이트 의미론이 없다
     assert verify_password(PASSWORDS["exact72"], LEGACY_HASHES["long73"]["bcrypt_sha256"]) is False
 
 

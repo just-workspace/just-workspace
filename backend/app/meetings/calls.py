@@ -1,19 +1,19 @@
 """채널 통화 상태 — "이 채널에서 지금 N명이 통화 중".
 
-채널 통화는 LiveKit 방 `chan-<채널id>` 로 연다(채팅 헤더의 통화 버튼). 누가 들어가 있는지는
-LiveKit 만 알아서 두 경로로 따라간다.
+채널 통화는 LiveKit 방 `chan-<채널id>` 로 개설한다(채팅 헤더의 통화 버튼). 참가자 정보는
+LiveKit 만 보유하므로 두 경로로 추적한다.
 
-1. **웹훅**(participant_joined / participant_left / room_finished) — LiveKit 이 바로 알려 준다.
+1. **웹훅**(participant_joined / participant_left / room_finished) — LiveKit 이 즉시 통지한다.
    livekit.yaml 의 `webhook.urls` 가 이 엔드포인트를 가리킨다.
    서명(Authorization JWT)을 API 키·시크릿으로 검증한다.
-2. **대조 루프**(30초) — 웹훅을 놓쳤거나(백엔드 재시작 중 등) 순서가 뒤바뀌어도 상태가 틀린 채
-   남지 않게 LiveKit 방 목록을 다시 읽는다. 워커 8개 중 하나만 돈다(Redis 락).
+2. **대조 루프**(30초) — 웹훅이 누락됐거나(백엔드 재시작 중 등) 순서가 뒤바뀌어도 잘못된 상태가
+   유지되지 않도록 LiveKit 방 목록을 다시 조회한다. 워커 8개 중 하나만 실행한다(Redis 락).
 
-두 경로 모두 "그 방의 참가자를 LiveKit 에 다시 물어서" 상태를 정한다. 이벤트 내용만 보고
-+1/-1 하면 중복·누락 이벤트에 숫자가 어긋난다.
+두 경로 모두 "해당 방의 참가자를 LiveKit 에 재조회하여" 상태를 결정한다. 이벤트 내용만으로
++1/-1 을 적용하면 중복·누락 이벤트로 인해 수치가 불일치한다.
 
-상태는 Redis 해시에 두고(화면을 새로 연 사람이 바로 읽는다), 바뀐 채널만 채팅 실시간 이벤트
-`call_state {channel_id, count, names}` 로 알린다.
+상태는 Redis 해시에 저장하고(화면을 새로 연 사용자가 즉시 조회한다), 변경된 채널만 채팅 실시간 이벤트
+`call_state {channel_id, count, names}` 로 통지한다.
 """
 
 import asyncio
@@ -48,16 +48,16 @@ def _channel_of(room: str) -> str | None:
 
 
 async def _people(room: str) -> list[str]:
-    """그 방에 지금 있는 사람 표시 이름들. 녹화(egress) 봇은 뺀다."""
+    """해당 방에 현재 있는 참가자의 표시 이름 목록. 녹화(egress) 봇은 제외한다."""
     try:
         people = await livekit.list_participants(room)
     except Exception:
-        return []   # 방이 이미 없어졌다
+        return []   # 방이 이미 삭제됨
     return [p.get("name") or "" for p in people if not str(p.get("identity", "")).startswith("EG_")]
 
 
 async def _apply(channel_id: str, names: list[str]) -> None:
-    """한 채널의 상태를 정하고, 바뀌었으면 알린다."""
+    """채널 하나의 상태를 결정하고, 변경됐으면 통지한다."""
     r = await get_redis()
     raw = await r.hget(STATE_KEY, channel_id)
     before = json.loads(raw) if raw else None
@@ -87,7 +87,7 @@ async def refresh_room(room: str) -> None:
 
 
 async def reconcile() -> None:
-    """LiveKit 의 방 목록과 저장된 상태를 맞춘다."""
+    """LiveKit 의 방 목록과 저장된 상태를 대조하여 일치시킨다."""
     r = await get_redis()
     known = set(await r.hkeys(STATE_KEY))
     live: set[str] = set()
@@ -109,7 +109,7 @@ async def run_call_state_loop() -> None:
             r = await get_redis()
             if await r.set(LOCK_KEY, "1", nx=True, ex=RECONCILE_INTERVAL - 5):
                 await reconcile()
-                # 음성 채널(voice-) 도 같은 락 안에서 — 워커 하나만 LiveKit 을 두드린다
+                # 음성 채널(voice-) 도 동일한 락 안에서 처리 — 워커 하나만 LiveKit 을 조회한다
                 try:
                     from app.chat import voice
                     await voice.reconcile()
@@ -124,7 +124,7 @@ async def run_call_state_loop() -> None:
 
 @router.post("/livekit/webhook")
 async def livekit_webhook(request: Request):
-    """LiveKit 웹훅. 공개 경로로도 닿지만 서명이 맞지 않으면 401 이다."""
+    """LiveKit 웹훅. 공개 경로로도 도달 가능하나 서명이 일치하지 않으면 401 이다."""
     if not livekit.is_configured():
         raise HTTPException(status_code=404)
     from livekit import api
@@ -138,7 +138,7 @@ async def livekit_webhook(request: Request):
         raise HTTPException(status_code=401, detail="invalid webhook signature")
 
     room = event.room.name if event.room else ""
-    # 음성 채널(voice-<채널id>, app/chat/voice.py) — 회의 저장소·채널 통화와 무관하게 그쪽으로
+    # 음성 채널(voice-<채널id>, app/chat/voice.py) — 회의 저장소·채널 통화와 무관하게 해당 모듈로 전달
     from app.chat import voice as chat_voice
     if room.startswith(chat_voice.PREFIX):
         if event.event in ("participant_joined", "participant_left", "room_started"):
@@ -154,8 +154,8 @@ async def livekit_webhook(request: Request):
         except Exception as e:
             logger.debug("회의 상태 갱신 실패(%s): %s", room, e)
     if room and event.event == "room_finished":
-        # 방이 닫히면 녹화(egress)도 끝난다. 상태 키(24시간 TTL)를 남기면 같은 방을 다시 열 때
-        # 녹화가 안 도는데도 "녹화 중"으로 보이고 새 녹화도 409 로 막힌다.
+        # 방이 닫히면 녹화(egress)도 종료된다. 상태 키(24시간 TTL)가 남으면 동일한 방을 다시 열 때
+        # 녹화가 실행 중이 아님에도 "녹화 중"으로 표시되고 새 녹화도 409 로 차단된다.
         try:
             from app.meetings import store
             await store.clear_active_recording(room)
@@ -172,7 +172,7 @@ async def livekit_webhook(request: Request):
 
 @router.get("/channel-calls")
 async def channel_calls(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """내가 속한 채널 중 지금 통화가 열려 있는 곳. 화면을 처음 열 때·재접속 때 쓴다."""
+    """본인이 속한 채널 중 현재 통화가 열려 있는 채널. 화면 최초 로드·재접속 시 사용한다."""
     from app.chat import service as chat_service
 
     mine = {c["id"] for c in await chat_service.get_user_channels(db, user.id)}

@@ -34,7 +34,7 @@ async def test_netlab_helper_link_hidden_without_https(monkeypatch, url):
     ("javascript:alert(1)", ""),
 ])
 async def test_health_exposes_netlab_url_https_only(client, monkeypatch, url, expected):
-    """레일 '도구' 항목·대시보드 카드가 읽는 공개 주소 — https 만, 끝 / 제거. 비면 프런트가 둘 다 숨긴다."""
+    """레일 '도구' 항목·대시보드 카드가 조회하는 공개 주소 — https 만 허용, 끝의 / 제거. 비어 있으면 프런트가 둘 다 숨긴다."""
     monkeypatch.setattr(settings, "netlab_url", url)
     r = await client.get("/api/health")
     assert r.status_code == 200

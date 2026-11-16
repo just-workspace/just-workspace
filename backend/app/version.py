@@ -1,12 +1,12 @@
 """제품 버전 — 단일 출처는 리포 루트의 `VERSION` 파일.
 
-읽는 순서:
-1. 환경변수 `JW_APP_VERSION`(빌드·배포가 주입한 값)
-2. 이미지에 구워 넣은 `/app/VERSION`(Dockerfile 의 빌드 인자 `JW_APP_VERSION`)
+조회 순서:
+1. 환경변수 `JW_APP_VERSION`(빌드·배포 시 주입한 값)
+2. 이미지에 포함된 `/app/VERSION`(Dockerfile 의 빌드 인자 `JW_APP_VERSION`)
 3. 소스 체크아웃의 리포 루트 `VERSION`(개발·테스트)
-4. 아무것도 없으면 개발 표기 `0.0.0-dev`
+4. 모두 없으면 개발 표기 `0.0.0-dev`
 
-설치 관리자(installer/)도 같은 `VERSION` 파일을 번들에 실어 쓴다.
+설치 관리자(installer/)도 동일한 `VERSION` 파일을 번들에 포함하여 사용한다.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ _VALID = re.compile(r"[0-9A-Za-z][0-9A-Za-z.+\-]{0,63}")
 def _clean(raw: str | None) -> str:
     value = (raw or "").strip()
     if value.startswith("v") and len(value) > 1 and value[1].isdigit():
-        value = value[1:]          # 태그 이름(v1.0.0)을 그대로 넘겨도 된다
+        value = value[1:]          # 태그 이름(v1.0.0)을 그대로 전달해도 허용
     return value if _VALID.fullmatch(value) else ""
 
 

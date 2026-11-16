@@ -1,10 +1,10 @@
-"""대시보드가 모으는 "내가 볼 수 있는 것" 조회 모음 — 오늘 브리핑 칩(summary)과 AI 브리핑이 같이 쓴다.
+"""대시보드가 수집하는 "내가 볼 수 있는 것" 조회 모음 — 오늘 브리핑 칩(summary)과 AI 브리핑이 공용한다.
 
-전부 이 사용자 권한 안의 것만 읽는다.
-- 오늘 일정: 캘린더 서비스 get_events(내 캘린더 + 공유받은 캘린더, 반복 펼침) — 캘린더 화면과 같은 범위
-- 작업: 내가 만들었거나 담당(작업 서비스 _visible)
-- 메일: 내 기본 메일 계정의 받은편지함(IMAP/POP3). 메일 서버로 가는 요청이라 시간 제한과 짧은 캐시를 둔다
-- 채팅: 내가 멤버인 채널의 안 읽은 메시지(채널 목록 미읽음과 같은 조건)
+전부 해당 사용자 권한 범위 내의 항목만 조회한다.
+- 오늘 일정: 캘린더 서비스 get_events(본인 캘린더 + 공유받은 캘린더, 반복 전개) — 캘린더 화면과 동일한 범위
+- 작업: 본인이 생성했거나 담당(작업 서비스 _visible)
+- 메일: 본인 기본 메일 계정의 받은편지함(IMAP/POP3). 메일 서버로 전달되는 요청이므로 시간 제한과 단기 캐시를 적용한다
+- 채팅: 본인이 멤버인 채널의 읽지 않은 메시지(채널 목록 미읽음과 동일한 조건)
 """
 
 from __future__ import annotations
@@ -31,9 +31,9 @@ _MEETING_RE = re.compile(r"(https?://\S+)?/meetings/[\w\-/]+")
 
 
 def parse_day_range(day_start: str | None, day_end: str | None) -> tuple[datetime, datetime]:
-    """프런트가 캘린더 시간대 기준으로 보낸 "오늘" [시작, 끝). 없거나 이상하면 UTC 오늘.
+    """프런트가 캘린더 시간대 기준으로 전달한 "오늘" [시작, 끝). 없거나 비정상이면 UTC 오늘.
 
-    지금 시각에서 너무 먼 값(±36시간 밖)은 받지 않는다 — 하루 단위 캐시·한도를 날짜로 우회하지 못하게.
+    현재 시각에서 과도하게 벗어난 값(±36시간 초과)은 거부한다 — 하루 단위 캐시·한도를 날짜로 우회하지 못하도록 하기 위함이다.
     """
     now = datetime.now(timezone.utc)
     try:
@@ -52,7 +52,7 @@ def parse_day_range(day_start: str | None, day_end: str | None) -> tuple[datetim
 
 
 def meeting_link(ev: dict) -> str | None:
-    """일정 장소·설명에 들어 있는 /meetings/ 주소(대시보드 오늘 카드와 같은 규칙). 같은 출처면 경로만."""
+    """일정 장소·설명에 포함된 /meetings/ 주소(대시보드 오늘 카드와 동일한 규칙). 동일 출처이면 경로만 반환."""
     m = _MEETING_RE.search(f"{ev.get('location') or ''} {ev.get('description') or ''}")
     return m.group(0) if m else None
 
@@ -68,14 +68,14 @@ def _dt(v) -> datetime | None:
 
 
 async def today_events(db: AsyncSession, user_id: str, s: datetime, e: datetime) -> list[dict]:
-    """오늘 [s, e) 와 겹치는 일정(취소 제외) — 종일 먼저, 그다음 시작 순."""
+    """오늘 [s, e) 와 겹치는 일정(취소 제외) — 종일 일정 우선, 이후 시작 시각 순."""
     if not is_module_enabled("calendar"):
         return []
     from app.calendar import service as cal
 
     try:
         evs = await cal.get_events(db, user_id, (s - timedelta(days=1)).isoformat(), (e + timedelta(days=1)).isoformat())
-    except Exception as ex:  # 캘린더 하나가 깨져도 대시보드는 그린다
+    except Exception as ex:  # 캘린더 하나가 손상되어도 대시보드는 표시
         logger.debug("오늘 일정 조회 실패: %s", ex)
         await db.rollback()
         return []
@@ -88,8 +88,8 @@ async def today_events(db: AsyncSession, user_id: str, s: datetime, e: datetime)
             continue
         en = en or st
         if ev.get("all_day"):
-            # 종일은 날짜(UTC 00:00 저장, 끝 날짜 미포함)로 비교한다. 화면의 "오늘" 날짜 = 창 가운데의 UTC 날짜
-            # (시간대 ±12시간 안에서는 그 지역 날짜와 같다)
+            # 종일 일정은 날짜(UTC 00:00 저장, 종료 날짜 미포함)로 비교한다. 화면의 "오늘" 날짜 = 구간 중앙의 UTC 날짜
+            # (시간대 ±12시간 이내에서는 해당 지역 날짜와 동일하다)
             day = (s + (e - s) / 2).date()
             last = (en - timedelta(microseconds=1)).date() if en > st else st.date()
             if not (st.date() <= day <= last):
@@ -102,7 +102,7 @@ async def today_events(db: AsyncSession, user_id: str, s: datetime, e: datetime)
 
 
 def next_meeting(events: list[dict], now: datetime | None = None) -> dict | None:
-    """오늘 일정 가운데 아직 끝나지 않은 가장 이른 시각 일정(종일 제외)."""
+    """오늘 일정 중 아직 종료되지 않은 가장 이른 시각의 일정(종일 제외)."""
     now = now or datetime.now(timezone.utc)
     timed = [ev for ev in events if not ev.get("all_day") and ev["_end"] > now]
     if not timed:
@@ -118,7 +118,7 @@ def next_meeting(events: list[dict], now: datetime | None = None) -> dict | None
 
 
 async def task_counts(db: AsyncSession, user_id: str, s: datetime, e: datetime) -> tuple[int, int]:
-    """(오늘 마감, 지난 마감) — 끝나지 않은, 내가 볼 수 있는 최상위 작업."""
+    """(오늘 마감, 지난 마감) — 미완료이며 본인이 열람 가능한 최상위 작업."""
     if not is_module_enabled("tasks"):
         return 0, 0
     from app.tasks.service import _visible
@@ -130,7 +130,7 @@ async def task_counts(db: AsyncSession, user_id: str, s: datetime, e: datetime) 
 
 
 async def due_tasks(db: AsyncSession, user_id: str, e: datetime, limit: int = 10) -> list[TaskDB]:
-    """오늘까지 마감(지난 것 포함)인 끝나지 않은 작업 — 마감 순."""
+    """오늘까지 마감(지난 것 포함)인 미완료 작업 — 마감 순."""
     if not is_module_enabled("tasks"):
         return []
     from app.tasks.service import _visible
@@ -157,7 +157,7 @@ async def _mail_account(db: AsyncSession, user: User):
 
 
 async def mail_unread(db: AsyncSession, user: User) -> int | None:
-    """받은편지함 안 읽음 수. 계정 없음·모듈 꺼짐·메일 서버 실패면 None(칩을 그리지 않는다). 60초 캐시."""
+    """받은편지함의 읽지 않은 메일 수. 계정 없음·모듈 비활성화·메일 서버 실패 시 None(칩 미표시). 60초 캐시."""
     if not is_module_enabled("mail"):
         return None
     hit = _mail_cache.get(user.id)
@@ -180,7 +180,7 @@ async def mail_unread(db: AsyncSession, user: User) -> int | None:
 
 
 async def unread_mails(db: AsyncSession, user: User, limit: int = 10) -> tuple[str | None, list[dict]]:
-    """(받은편지함 id, 안 읽은 메일 요약 목록) — 최신순. 못 읽으면 (None, [])."""
+    """(받은편지함 id, 읽지 않은 메일 요약 목록) — 최신순. 조회 실패 시 (None, [])."""
     if not is_module_enabled("mail"):
         return None, []
     account = await _mail_account(db, user)
@@ -205,7 +205,7 @@ async def unread_mails(db: AsyncSession, user: User, limit: int = 10) -> tuple[s
 # ─── 채팅 ───
 
 async def unread_chat_messages(db: AsyncSession, user_id: str, limit: int = 30) -> list[dict]:
-    """내 채널(보관 제외)의 안 읽은 메시지 — 최신순. 보낸 사람·채널 이름 포함, 본문은 400자까지."""
+    """본인 채널(보관 제외)의 읽지 않은 메시지 — 최신순. 발신자·채널 이름 포함, 본문은 최대 400자."""
     if not is_module_enabled("chat"):
         return []
     from app.chat.service import main_timeline_filter

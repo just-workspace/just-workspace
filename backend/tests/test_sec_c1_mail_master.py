@@ -1,8 +1,8 @@
-"""회귀 — 외부 메일 계정으로 내부 메일서버 마스터 인증을 쓰지 못한다.
+"""회귀 — 외부 메일 계정으로 내부 메일서버 마스터 인증을 사용할 수 없다.
 
-- 사용자가 만든 계정(host=mailserver, 남의 주소)은 등록 단계에서 400
+- 사용자가 생성한 계정(host=mailserver, 타 사용자 주소)은 등록 단계에서 400
 - 내부망 이름·사설/루프백 IP 는 등록·접속 모두 거부
-- 마스터 로그인은 _builtin_account() 가 만든 본인 내장 메일함 객체에서만
+- 마스터 로그인은 _builtin_account() 가 생성한 본인 내장 메일함 객체에서만 허용
 """
 
 import pytest
@@ -19,7 +19,7 @@ def _master(monkeypatch):
     monkeypatch.setattr(s, "dovecot_master_user", "mastr", raising=False)
     monkeypatch.setattr(s, "dovecot_master_password", "master-secret", raising=False)
     monkeypatch.delenv("MAIL_PRIVATE_HOST_ALLOWLIST", raising=False)
-    # 네트워크 없이 — 공개 이름은 공인 IP 로, 그 외는 사설로 풀린다고 가정
+    # 네트워크 미사용 — 공개 이름은 공인 IP 로, 그 외는 사설 IP 로 해석된다고 가정
     def _fake_resolve(host, port):
         table = {
             "imap.example.com": ["93.184.216.34"],
@@ -88,7 +88,7 @@ def test_db_account_never_gets_master_login():
 
 
 def test_forged_builtin_id_is_not_builtin():
-    # id 를 builtin- 으로 흉내 내도 표식이 없으면 마스터 인증 없음
+    # id 를 builtin- 으로 위장해도 표식이 없으면 마스터 인증 불가
     acc = _ext(id="builtin-u-1")
     assert not access_guard.is_builtin(acc)
 
@@ -98,7 +98,7 @@ def test_builtin_account_master_login_only_for_own_address():
     assert access_guard.is_builtin(acc)
     user, pw, builtin = access_guard.login_credentials(acc, lambda _e: "x")
     assert user == "me@example.org*mastr" and pw == "master-secret" and builtin
-    # 표식이 붙은 객체라도 주소를 바꾸면 마스터 인증이 풀린다
+    # 표식이 있는 객체라도 주소를 변경하면 마스터 인증 해제
     acc.username = "ceo@example.org"
     assert not access_guard.is_builtin(acc)
 
@@ -122,12 +122,12 @@ async def test_create_account_with_mailserver_host_rejected(monkeypatch):
             if hasattr(mail_router.create_account, "__wrapped__") else \
             await mail_router.create_account(body=body, user=_User(), db=None)
     assert e.value.status_code == 400
-    assert called["n"] == 0  # 연결 시도조차 하지 않는다
+    assert called["n"] == 0  # 연결 시도 자체를 수행하지 않음
 
 
 @pytest.mark.asyncio
 async def test_stored_internal_account_cannot_connect():
-    # 예전에 저장된 host=mailserver 레코드 — 접속 직전 검사에서 막힌다(마스터 로그인 미사용)
+    # 이전에 저장된 host=mailserver 레코드 — 접속 직전 검사에서 차단(마스터 로그인 미사용)
     ok, msg = await smtp_client.test_connection(_ext())
     assert ok is False and msg == access_guard.REJECT_MESSAGE
     ok2, _ = await mail_router.imap_client.test_connection(_ext())

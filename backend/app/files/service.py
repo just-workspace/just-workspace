@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 STORAGE_ROOT = Path(settings.storage_root)
 
 # TTL cache: {real_path_str: (timestamp, dir_mtime_ns, [FileItem, ...])}
-# 디렉터리 mtime 을 같이 둔다 — invalidate_cache 는 그 워커에서만 비워지고(uvicorn 워커 8개) 다른 워커는
-# 30초 동안 옛 목록을 줘 새 폴더가 "있다/없다" 번갈아 보였다. 항목 추가·삭제·이름 바꾸기는 부모 mtime 을 바꾼다.
+# 디렉터리 mtime 을 함께 저장한다. invalidate_cache 는 해당 워커에서만 적용되고(uvicorn 워커 8개) 다른 워커는
+# 30초 동안 이전 목록을 반환하여 새 폴더가 "있다/없다" 번갈아 표시된 사례가 있다. 항목 추가·삭제·이름 변경은 부모 mtime 을 변경한다.
 _dir_cache: dict[str, tuple[float, int, list[FileItem]]] = {}
 _CACHE_TTL = 30  # seconds
 
@@ -85,10 +85,10 @@ def resolve_path(virtual_path: str, user: User) -> Path:
 
 
 def compute_etag(st: os.stat_result) -> str:
-    """파일 ETag — mtime(ns)+크기. 내용 해시가 아니라 stat 만으로 나오니 공짜다.
+    """파일 ETag — mtime(ns)+크기. 내용 해시가 아닌 stat 만으로 산출하므로 추가 비용이 없다.
 
-    같은 공식을 목록(`FileItem.etag`)과 다운로드 응답(`ETag` 헤더)이 함께 쓴다.
-    업로드가 클라이언트 mtime 을 보존하므로 같은 파일을 다시 올려도 값이 유지된다.
+    동일한 공식을 목록(`FileItem.etag`)과 다운로드 응답(`ETag` 헤더)이 공용한다.
+    업로드가 클라이언트 mtime 을 보존하므로 동일 파일을 재업로드해도 값이 유지된다.
     """
     return f'"{st.st_mtime_ns:x}-{st.st_size:x}"'
 
@@ -110,10 +110,10 @@ def etag_matches(if_none_match: str | None, etag: str) -> bool:
 
 
 def apply_mtime(target: Path, mtime_ms: int | None) -> None:
-    """클라이언트가 준 수정 시각(epoch ms)을 보존한다. 없으면 그대로(=업로드 시각).
+    """클라이언트가 전달한 수정 시각(epoch ms)을 보존한다. 없으면 변경하지 않는다(=업로드 시각).
 
-    안 하면 서버 mtime=업로드 시각이 되어 동기화 스냅샷이 방금 올린 파일을
-    "서버에서 바뀜" 으로 본다. 같은 공식이 ETag 에도 들어가므로 재업로드에도 값이 유지된다.
+    미적용 시 서버 mtime=업로드 시각이 되어 동기화 스냅샷이 방금 업로드한 파일을
+    "서버에서 바뀜" 으로 판정한다. 동일한 공식이 ETag 에도 사용되므로 재업로드 시에도 값이 유지된다.
     """
     if mtime_ms is None:
         return
@@ -163,10 +163,10 @@ def _rel_of(owner_vpath: str | None) -> str | None:
 
 
 def move_versions(owner_id: str | None, old_owner_vpath: str | None, new_owner_vpath: str | None) -> None:
-    """이름 바꾸기·이동 뒤 버전 스냅샷 폴더도 옮긴다(폴더면 하위 파일 버전 통째로).
+    """이름 변경·이동 후 버전 스냅샷 폴더도 이동한다(폴더면 하위 파일 버전 전체).
 
-    스냅샷이 경로에 묶여 있어 예전엔 옮기면 버전 기록이 사라졌다. 새 자리에 남은 옛 스냅샷
-    (같은 이름으로 지웠던 파일 것)은 지우고 옮긴다. my/ 밖으로 나가면 버전 대상이 아니라 지운다."""
+    스냅샷이 경로에 종속되어 이전에는 이동 시 버전 기록이 소실되었다. 새 위치에 남은 이전 스냅샷
+    (동일 이름으로 삭제된 파일의 것)은 삭제 후 이동한다. my/ 밖으로 이동하면 버전 대상이 아니므로 삭제한다."""
     if not owner_id:
         return
     old_rel, new_rel = _rel_of(old_owner_vpath), _rel_of(new_owner_vpath)
@@ -191,7 +191,7 @@ def move_versions(owner_id: str | None, old_owner_vpath: str | None, new_owner_v
 
 
 def drop_versions(owner_id: str | None, owner_vpath: str | None) -> None:
-    """영구 삭제 뒤 버전 스냅샷도 지운다(예전엔 .versions 에 고아로 남아 저장 공간을 먹었다)."""
+    """영구 삭제 후 버전 스냅샷도 삭제한다(이전에는 .versions 에 고아로 남아 저장 공간을 점유했다)."""
     rel = _rel_of(owner_vpath)
     if not owner_id or not rel:
         return
@@ -258,14 +258,14 @@ def version_count(owner_id: str, relpath: str) -> int:
     return sum(1 for f in vdir.iterdir() if f.is_file() and f.name.isdigit())
 
 
-# 목록에서 감출 항목.
+# 목록에서 숨길 항목.
 #   "."  — 앱 내부용(.trash, .versions) + 유닉스 숨김 관례
-#   NAS 시스템 이름 — QNAP·Synology 가 공유 폴더 안에 만드는 것. NFS 로 그대로 보인다.
-#          "@ 로 시작하면 전부 숨김"으로 막으면 "@회의록" 같은 사용자 이름까지 못 쓰므로
-#          알려진 이름 목록으로만 가린다.
-#          (".@__thumb" 처럼 점으로 시작하는 것은 "." 규칙이 이미 가린다.)
-#          비교는 대소문자 무시 — NAS 펌웨어·프로토콜에 따라 "@recycle" 로도 보인다.
-#          새 시스템 이름이 목록에 보이면 여기 한 곳에만 더한다(목록·검색·색인·공유 링크·zip 이 모두 이 함수를 쓴다).
+#   NAS 시스템 이름 — QNAP·Synology 가 공유 폴더 내에 생성하는 항목. NFS 로 그대로 노출된다.
+#          "@ 로 시작하면 전부 숨김" 방식은 "@회의록" 같은 사용자 이름까지 사용 불가로 만들므로
+#          알려진 이름 목록으로만 숨긴다.
+#          (".@__thumb" 처럼 점으로 시작하는 항목은 "." 규칙이 이미 처리한다.)
+#          비교는 대소문자를 무시한다. NAS 펌웨어·프로토콜에 따라 "@recycle" 로도 표시된다.
+#          새 시스템 이름이 목록에 노출되면 이곳 한 곳에만 추가한다(목록·검색·색인·공유 링크·zip 이 모두 이 함수를 사용한다).
 _HIDDEN_PREFIXES = (".",)
 NAS_SYSTEM_NAMES = frozenset(n.lower() for n in (
     # QNAP
@@ -276,29 +276,29 @@ NAS_SYSTEM_NAMES = frozenset(n.lower() for n in (
 
 
 def is_system_name(name: str) -> bool:
-    """NAS 가 만든 시스템 폴더·파일 이름인가(사용자가 만들 수도, 볼 수도 없다)."""
+    """NAS 가 생성한 시스템 폴더·파일 이름인지 여부(사용자는 생성·열람 불가)."""
     return name.lower() in NAS_SYSTEM_NAMES
 
 
 def is_hidden_name(name: str) -> bool:
-    """목록·검색·색인·공유 링크·zip 에서 감출 이름 — 숨김 판정은 여기 한 곳."""
+    """목록·검색·색인·공유 링크·zip 에서 숨길 이름 — 숨김 판정은 이곳 한 곳에서 수행."""
     return name.startswith(_HIDDEN_PREFIXES) or is_system_name(name)
 
 
-_is_hidden = is_hidden_name   # 예전 이름(같은 모듈·router 가 쓴다)
+_is_hidden = is_hidden_name   # 이전 이름(동일 모듈·router 에서 사용)
 
 
 class InvalidNameError(ValueError):
-    """파일·폴더 이름으로 쓸 수 없는 값. 메시지는 사용자에게 그대로 보인다(한국어)."""
+    """파일·폴더 이름으로 사용할 수 없는 값. 메시지는 사용자에게 그대로 표시된다(한국어)."""
 
 
 def validate_name(raw: str | None) -> str:
-    """새 파일·폴더 이름 검증 — 새 폴더·이름 바꾸기·업로드가 함께 쓴다. 다듬은 이름을 돌려준다.
+    """새 파일·폴더 이름 검증 — 새 폴더·이름 변경·업로드가 공용한다. 정리된 이름을 반환한다.
 
-    규칙을 한곳에 둔 이유: 예전엔 업로드만 검사해 ".메모" 로 이름을 바꾸면 성공했는데도
-    목록(is_hidden_name)에서 사라졌고, 반대로 업로드는 "v1..2.txt" 같은 정상 이름까지 막았다.
-    `..` 는 이름 전체가 그것일 때만 위험하다(경로 구분자는 따로 막는다).
-    "@회의록" 처럼 @ 로 시작하는 이름은 쓸 수 있다 — 막는 것은 NAS 시스템 이름(@Recycle 등)뿐이다.
+    규칙을 한곳에 둔 이유: 이전에는 업로드만 검사하여 ".메모" 로 이름을 변경하면 성공했음에도
+    목록(is_hidden_name)에서 사라졌고, 반대로 업로드는 "v1..2.txt" 같은 정상 이름까지 차단했다.
+    `..` 는 이름 전체가 해당 값일 때만 위험하다(경로 구분자는 별도로 차단한다).
+    "@회의록" 처럼 @ 로 시작하는 이름은 사용 가능하다. 차단 대상은 NAS 시스템 이름(@Recycle 등)뿐이다.
     """
     name = (raw or "").strip()
     if not name:
@@ -345,9 +345,9 @@ def _scan_directory(real_path: Path, virtual_prefix: str) -> list[FileItem]:
                 )
             )
     except PermissionError:
-        # 권한 문제로 목록을 못 읽으면 조용히 빈 목록을 주지 말고 남긴다.
-        # NAS 로 옮긴 뒤 일부 폴더의 POSIX ACL 에 `user:<appuser>:---` 가 박히면
-        # 파일탭이 "이 폴더는 비어 있습니다"만 띄운다 — 조용히 삼키면 원인을 찾기 어렵다.
+        # 권한 문제로 목록 조회에 실패한 경우 기록 없이 빈 목록을 반환하지 않고 로그를 기록한다.
+        # NAS 이전 후 일부 폴더의 POSIX ACL 에 `user:<appuser>:---` 가 설정되면
+        # 파일탭이 "이 폴더는 비어 있습니다"만 표시한다. 기록 없이 처리하면 원인 파악이 어렵다.
         logger.warning("[files] 권한 거부로 목록을 읽지 못함: %s", real_path)
     return items
 

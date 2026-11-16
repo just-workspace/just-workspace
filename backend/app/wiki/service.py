@@ -76,7 +76,7 @@ async def create_space(db: AsyncSession, owner_id: str, **kwargs) -> dict:
 
 
 async def update_space(db: AsyncSession, space_id: str, **kwargs) -> bool:
-    # 설명·아이콘은 null 로 비울 수 있다(이름·공개 범위의 null 은 "안 바꿈")
+    # 설명·아이콘은 null 로 비울 수 있음(이름·공개 범위의 null 은 "변경 없음")
     data = {k: v for k, v in kwargs.items() if v is not None or k in ("description", "icon")}
     if not data:
         return True
@@ -115,7 +115,7 @@ async def get_user_role(db: AsyncSession, space_id: str, user_id: str) -> str | 
 
 
 async def add_member(db: AsyncSession, space_id: str, user_id: str, role: str = "reader"):
-    # 이미 멤버면 역할만 바꾼다(같은 사람을 또 넣으면 유일 제약으로 500 이 났다)
+    # 이미 멤버이면 역할만 변경(동일 사용자를 다시 추가하면 유일 제약으로 500 이 발생했음)
     existing = (await db.execute(
         select(WikiSpaceMember).where(
             WikiSpaceMember.space_id == space_id,
@@ -130,7 +130,7 @@ async def add_member(db: AsyncSession, space_id: str, user_id: str, role: str = 
 
 
 async def update_member(db: AsyncSession, space_id: str, user_id: str, role: str) -> bool:
-    """역할 바꾸기. 그런 멤버가 없으면 False."""
+    """역할 변경. 해당 멤버가 없으면 False."""
     result = await db.execute(
         update(WikiSpaceMember)
         .where(WikiSpaceMember.space_id == space_id, WikiSpaceMember.user_id == user_id)
@@ -147,7 +147,7 @@ async def is_active_user(db: AsyncSession, user_id: str) -> bool:
 
 
 async def get_space_owner(db: AsyncSession, space: WikiSpace) -> dict:
-    """소유자 표시 정보(목록 get_spaces 의 owner 와 같은 모양)."""
+    """소유자 표시 정보(목록 get_spaces 의 owner 와 동일 형태)."""
     row = (await db.execute(
         select(User.username, User.display_name, User.avatar_url).where(User.id == space.owner_id)
     )).first()
@@ -235,11 +235,11 @@ async def get_page(db: AsyncSession, page_id: str) -> dict | None:
 
 
 class WikiMoveError(ValueError):
-    """페이지를 자기 자신·자기 하위·다른 스페이스 아래로 두려 할 때."""
+    """페이지를 자기 자신·자기 하위·다른 스페이스 아래로 이동하려는 경우."""
 
 
 async def _check_parent_space(db: AsyncSession, space_id: str, parent_id: str | None) -> None:
-    """부모는 같은 스페이스의 페이지여야 한다 — 아니면 트리 어디에도 안 보이는 페이지가 된다."""
+    """부모는 동일 스페이스의 페이지여야 한다 — 그렇지 않으면 트리 어디에도 표시되지 않는 페이지가 된다."""
     if not parent_id:
         return
     parent_space = (await db.execute(
@@ -268,18 +268,18 @@ async def create_page(db: AsyncSession, space_id: str, author_id: str, **kwargs)
     return await get_page(db, page.id)
 
 
-# 같은 사람이 이 시간 안에 연달아 저장하면 새 버전을 만들지 않고 직전 버전을 갱신한다
-# (편집 화면이 몇 초마다 자동 저장하므로, 저장마다 버전을 쌓으면 기록이 금방 수백 개가 된다)
+# 동일 사용자가 이 시간 내에 연속 저장하면 새 버전을 생성하지 않고 직전 버전을 갱신한다
+# (편집 화면이 수 초마다 자동 저장하므로, 저장마다 버전을 생성하면 기록이 단시간에 수백 개로 증가한다)
 VERSION_COALESCE_SECONDS = 600
 
 
 async def update_page(
     db: AsyncSession, page_id: str, editor_id: str, *, force_new_version: bool = False, **kwargs
 ) -> dict | None:
-    """force_new_version: 10분 묶기 규칙을 건너뛰고 항상 새 버전을 만든다(버전 복원 —
-    묶으면 직전 최신 버전을 복원 내용으로 덮어써 복원 전 본문이 기록에서 사라진다)."""
+    """force_new_version: 10분 병합 규칙을 생략하고 항상 새 버전을 생성한다(버전 복원 —
+    병합하면 직전 최신 버전을 복원 내용으로 덮어써 복원 전 본문이 기록에서 소실된다)."""
     data = {k: v for k, v in kwargs.items() if v is not None}
-    # parent_id 는 null 이 "최상위로 옮기기" 라는 뜻이라 명시적으로 왔으면 남긴다
+    # parent_id 는 null 이 "최상위로 옮기기" 를 의미하므로 명시적으로 전달된 경우 유지
     move_to_root = "parent_id" in kwargs and kwargs["parent_id"] is None
     if move_to_root:
         data["parent_id"] = None
@@ -293,7 +293,7 @@ async def update_page(
     if not page:
         return None
 
-    # 순환 방지 — 새 부모가 자기 자신이거나 자기 하위면 거절
+    # 순환 방지 — 새 부모가 자기 자신이거나 자기 하위이면 거부
     new_parent = data.get("parent_id")
     if new_parent:
         await _check_parent_space(db, page.space_id, new_parent)
@@ -313,7 +313,7 @@ async def update_page(
         or ("title" in data and data["title"] != page.title)
     )
 
-    # 직전 버전이 같은 작성자·최근이면 그 버전을 덮어쓴다
+    # 직전 버전이 동일 작성자·최근이면 해당 버전을 덮어씀
     last = None
     if content_changed:
         last = (await db.execute(
@@ -327,7 +327,7 @@ async def update_page(
             if created is not None and created.tzinfo is None:
                 created = created.replace(tzinfo=timezone.utc)
             recent = created is not None and (datetime.now(timezone.utc) - created).total_seconds() < VERSION_COALESCE_SECONDS
-            # 첫 버전(생성 시점)은 원본으로 남긴다
+            # 첫 버전(생성 시점)은 원본으로 보존
             if force_new_version or not (last.author_id == editor_id and recent and last.version_number > 1
                                          and last.version_number == page.version):
                 last = None
@@ -437,10 +437,10 @@ async def search_pages(db: AsyncSession, space_id: str, query: str) -> list[dict
 
 # ─── 역링크 ───
 #
-# 본문 안 내부 링크 형식(어느 것이든 잡는다):
+# 본문 내 내부 링크 형식(모든 형식 인식):
 #   - 위키 화면 주소: /wiki?space=<id>&page=<id> (절대 URL·마크다운 링크·HTML href 모두)
 #   - data-page-id="<id>" (편집기 노드)
-#   - [[페이지 제목]] (같은 스페이스, 대소문자 무시)
+#   - [[페이지 제목]] (동일 스페이스, 대소문자 무시)
 
 _PAGE_PARAM_RE = re.compile(r"/wiki[^\s\"'<>)]*?[?&]page=([0-9a-fA-F-]{36})")
 _DATA_ID_RE = re.compile(r"data-page-id=[\"']([0-9a-fA-F-]{36})[\"']")
@@ -448,7 +448,7 @@ _WIKILINK_RE = re.compile(r"\[\[([^\[\]|#]{1,500})(?:[|#][^\[\]]*)?\]\]")
 
 
 def parse_internal_links(content: str) -> tuple[set[str], set[str]]:
-    """본문 → (가리키는 페이지 id 들, [[제목]] 들(소문자))."""
+    """본문 → (참조하는 페이지 id 집합, [[제목]] 집합(소문자))."""
     content = content or ""
     ids = {m.lower() for m in _PAGE_PARAM_RE.findall(content)}
     ids |= {m.lower() for m in _DATA_ID_RE.findall(content)}
@@ -465,7 +465,7 @@ def _snippet(content: str, needle: str, width: int = 60) -> str:
 
 
 async def get_backlinks(db: AsyncSession, page_id: str, user_id: str, is_admin: bool = False) -> list[dict]:
-    """이 페이지를 가리키는 페이지 목록(읽을 수 있는 스페이스만, 최근 수정 순)."""
+    """이 페이지를 참조하는 페이지 목록(읽을 수 있는 스페이스만, 최근 수정 순)."""
     target = await db.get(WikiPage, page_id)
     if not target:
         return []

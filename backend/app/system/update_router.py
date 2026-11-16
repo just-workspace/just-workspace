@@ -1,17 +1,17 @@
 """관리 › 업데이트 API.
 
-- `/api/admin/system/update/*`(관리자만): 설치 관리자의 업데이트 내부 API(`/internal/update/*`)를 대신 부른다.
-  업데이트를 실제로 하는 것은 설치 관리자다 — 여기서는 권한을 확인하고, 누가 했는지(`actor`)를 실어 넘기고,
-  감사 로그를 남긴다. 계약은 docs/update-api.md.
-- `/api/internal/system/update-event`(설치 관리자만): 카운트다운·점검의 시작과 끝을 알려 오면 실시간 소켓으로
-  전 사용자에게 방송하고, 새로 접속한 화면이 물을 수 있게 기억해 둔다.
-- `/api/system/update-notice`(로그인한 누구나): 지금의 예고·점검 상태.
+- `/api/admin/system/update/*`(관리자 전용): 설치 관리자의 업데이트 내부 API(`/internal/update/*`)를 대리 호출한다.
+  업데이트의 실제 수행 주체는 설치 관리자이다 — 본 모듈은 권한을 확인하고, 수행 주체(`actor`)를 포함해 전달하며,
+  감사 로그를 기록한다. 계약은 docs/update-api.md.
+- `/api/internal/system/update-event`(설치 관리자 전용): 카운트다운·점검 모드의 시작과 종료를 수신하면 실시간 소켓으로
+  전체 사용자에게 발행하고, 신규 접속 화면이 조회할 수 있도록 저장한다.
+- `/api/system/update-notice`(로그인한 모든 사용자): 현재의 사전 공지·점검 모드 상태.
 
 오류 응답은 `{"code", "vars", "detail"}`. 설치 관리자 없이 구성했거나(수동 설치) 설치 관리자가 업데이트 API 를
-모르면 `update_unavailable`(`vars.reason` = `no_installer` | `unsupported`)이다.
+지원하지 않으면 `update_unavailable`(`vars.reason` = `no_installer` | `unsupported`)이다.
 """
 
-# ※ from __future__ import annotations 를 넣지 않는다 — FastAPI 가 본문 인자를 쿼리로 오인한다(app/auth/internal_router.py 참조).
+# 주의: from __future__ import annotations 를 추가하지 않는다 — FastAPI 가 본문 인자를 쿼리로 오인한다(app/auth/internal_router.py 참조).
 import hmac
 import json
 import logging
@@ -38,11 +38,11 @@ from app.system.installer_client import InstallerError
 
 logger = logging.getLogger(__name__)
 
-NOTICE_KEY = "system.update.notice"       # 지금의 예고·점검(JSON) — 워커가 여럿이라 DB 에 둔다
-CONTACT_KEY = "system.update.contact"     # 점검 화면에 보일 관리자 연락처 한 줄
+NOTICE_KEY = "system.update.notice"       # 현재의 사전 공지·점검 모드(JSON) — 워커가 복수이므로 DB 에 저장
+CONTACT_KEY = "system.update.contact"     # 점검 화면에 표시할 관리자 연락처 한 줄
 CONTACT_MAX = 200
-UPLOAD_TIMEOUT = 3600.0                   # 묶음·이미지 올리기
-MAINTENANCE_TIMEOUT = 3.0                 # 기억해 둔 예고가 아직 맞는지 물을 때
+UPLOAD_TIMEOUT = 3600.0                   # 오프라인 번들·이미지 업로드
+MAINTENANCE_TIMEOUT = 3.0                 # 저장된 사전 공지의 유효 여부를 조회할 때
 
 ACTIONS = ("start_now", "cancel", "retry", "rollback")
 EVENT_TYPES = ("countdown", "cancelled", "maintenance", "finished")
@@ -73,7 +73,7 @@ MESSAGES = {
 
 
 def unavailable(e: InstallerError) -> InstallerError:
-    """설치 관리자 없음·미지원을 화면이 한 가지로 다루게 바꾼다. 그 밖의 오류는 그대로."""
+    """설치 관리자 부재·미지원을 화면이 단일 사유로 처리하도록 변환한다. 그 외의 오류는 그대로 반환한다."""
     if e.code == "installer_unavailable":
         return InstallerError(503, "update_unavailable", {"reason": "no_installer"})
     if e.code == "installer_unsupported" or (e.code == "installer_error" and e.vars.get("status") == 501):
@@ -88,7 +88,7 @@ def _error_response(e: InstallerError) -> JSONResponse:
 
 
 class UpdateRoute(APIRoute):
-    """InstallerError 를 `{code, vars, detail}` 응답으로 바꾼다."""
+    """InstallerError 를 `{code, vars, detail}` 응답으로 변환한다."""
 
     def get_route_handler(self) -> Callable:
         handler = super().get_route_handler()
@@ -163,7 +163,7 @@ async def put_update_settings(request: Request, response: Response, body: dict =
     job = _dict(effect.get("job"))
     await _audit(db, admin, request, "settings", None, {**sent, "effect": effect.get("channel")})
     if job.get("id"):
-        # 시험판 이전 상태로 복원 — 설정 저장이 곧 복원의 시작이다
+        # 시험판 이전 상태로 복원 — 설정 저장이 곧 복원의 시작임
         await _audit(db, admin, request, "restore", str(job["id"]), {"reason": "beta"})
         response.status_code = 202
     return out
@@ -208,7 +208,7 @@ async def get_update_job_log(job_id: str, tail: int = Query(default=300, ge=1, l
 
 @router.get("/jobs/{job_id}/log/download")
 async def download_update_job_log(job_id: str, admin: User = Depends(require_admin)):
-    """기록 내려받기 — 글자 그대로의 전체 기록."""
+    """기록 다운로드 — 원문 그대로의 전체 기록."""
     _safe(job_id, "job_unknown")
     text = await _raw("GET", f"{P}/jobs/{job_id}/log", params={"format": "text"}, expect_json=False)
     return PlainTextResponse(text, headers={
@@ -246,7 +246,7 @@ async def start_restore(request: Request, body: dict = Body(...), admin: User = 
 
 async def _raw(method: str, path: str, *, params: dict | None = None, content: Any = None,
                headers: dict | None = None, timeout: float = installer.DEFAULT_TIMEOUT, expect_json: bool = True):
-    """JSON 이 아닌 본문을 주고받는 호출(파일 올리기, 기록 내려받기). 오류 변환은 installer_client 와 같다."""
+    """JSON 이 아닌 본문을 송수신하는 호출(파일 업로드, 기록 다운로드). 오류 변환은 installer_client 와 동일하다."""
     if not installer.configured():
         raise InstallerError(503, "installer_unavailable")
     try:
@@ -297,7 +297,7 @@ async def offline_state(admin: User = Depends(require_admin)):
 @router.post("/offline/bundle", status_code=202)
 async def offline_upload_bundle(request: Request, admin: User = Depends(require_admin),
                                 db: AsyncSession = Depends(get_db)):
-    """묶음 파일 올리기 — 본문을 메모리에 쌓지 않고 그대로 흘려 넘긴다."""
+    """오프라인 번들 업로드 — 본문을 메모리에 적재하지 않고 스트림으로 전달한다."""
     name = _filename(request)
     out = await _raw("POST", f"{P}/offline/bundle", content=request.stream(), headers=_upload_headers(request, name),
                      timeout=UPLOAD_TIMEOUT)
@@ -388,7 +388,7 @@ async def get_contact(admin: User = Depends(require_admin), db: AsyncSession = D
 @router.put("/contact")
 async def put_contact(request: Request, body: dict = Body(...), admin: User = Depends(require_admin),
                       db: AsyncSession = Depends(get_db)):
-    """연락처는 여기(DB)에 두고 설치 관리자에도 넘긴다 — backend 가 내려가 있는 동안의 점검 화면이 거기서 읽는다."""
+    """연락처는 본 모듈(DB)에 저장하고 설치 관리자에도 전달한다 — backend 가 중지된 동안의 점검 화면이 설치 관리자에서 조회한다."""
     contact = clean_contact(body.get("contact"))
     if contact:
         await set_setting(db, CONTACT_KEY, contact)
@@ -404,7 +404,7 @@ async def put_contact(request: Request, body: dict = Body(...), admin: User = De
     return {"contact": contact, "synced": synced}
 
 
-# ─── 예고 · 점검 상태(로그인한 누구나) ───
+# ─── 사전 공지 · 점검 모드 상태(로그인한 모든 사용자) ───
 
 
 NONE_NOTICE = {"state": "none", "job": None, "kind": None, "ends_at": None, "started_at": None,
@@ -426,7 +426,7 @@ async def _stored_notice(db: AsyncSession) -> dict | None:
 
 
 async def _still_active() -> bool | None:
-    """기억해 둔 예고·점검이 아직 맞는가 — 설치 관리자의 공개 점검 상태. 물을 수 없으면 None."""
+    """저장된 사전 공지·점검 모드의 유효 여부 — 설치 관리자의 공개 점검 상태. 조회할 수 없으면 None."""
     try:
         live = await installer.request("GET", f"{P}/maintenance", timeout=MAINTENANCE_TIMEOUT)
     except InstallerError:
@@ -443,7 +443,7 @@ async def update_notice(response: Response, user: User = Depends(get_current_use
     contact = await get_setting(db, CONTACT_KEY) or None
     notice = await _stored_notice(db)
     if notice is not None and await _still_active() is False:
-        # 끝났다는 알림을 놓쳤다 — 화면이 갇히지 않게 지운다
+        # 종료 알림을 수신하지 못한 경우 — 화면이 고착되지 않도록 삭제
         await delete_setting(db, NOTICE_KEY)
         notice = None
     if notice is None:
@@ -457,7 +457,7 @@ async def update_notice(response: Response, user: User = Depends(get_current_use
 def _require_installer_key(key: str | None) -> None:
     expected = installer.shared_key()
     if not expected:
-        # 설치 관리자 없이 구성한 설치 — 이 경로는 없는 것과 같다
+        # 설치 관리자 없이 구성한 설치 — 이 경로는 존재하지 않는 것으로 처리
         raise HTTPException(status_code=404, detail="Not found")
     if not key or not hmac.compare_digest(key.encode(), expected.encode()):
         raise HTTPException(status_code=401, detail="Invalid installer key")
@@ -479,7 +479,7 @@ RESULT_TITLES = {
 
 
 async def _notify_admins(db: AsyncSession, result: str, version: str | None, from_version: str | None) -> int:
-    """밤사이 자동 업데이트의 결과를 관리자 전원의 알림에 한 건씩 남긴다."""
+    """야간 자동 업데이트의 결과를 관리자 전원의 알림에 1건씩 기록한다."""
     from app.notifications.service import create_notification
 
     title = RESULT_TITLES.get(result)
@@ -534,13 +534,13 @@ async def update_event(body: dict = Body(...), x_jw_installer_key: str | None = 
         if body.get("trigger") == "auto" and result:
             try:
                 await _notify_admins(db, result, _text(body.get("version"), 40), _text(body.get("from_version"), 40))
-            except Exception as e:  # noqa: BLE001 — 알림을 못 남겨도 방송은 한다
+            except Exception as e:  # noqa: BLE001 — 알림 기록에 실패해도 발행은 수행
                 logger.warning("[update] 관리자 알림을 남기지 못했습니다(%s)", type(e).__name__)
 
     delivered = True
     try:
         await events.emit_to_all(event)
-    except Exception as e:  # noqa: BLE001 — 방송을 못 해도 기억해 둔 상태는 조회로 전해진다
+    except Exception as e:  # noqa: BLE001 — 발행에 실패해도 저장된 상태는 조회로 전달됨
         delivered = False
         logger.warning("[update] 실시간 방송 실패(%s)", type(e).__name__)
     logger.info("[update] 알림 %s job=%s", kind, job)

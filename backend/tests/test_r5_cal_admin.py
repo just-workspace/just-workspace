@@ -55,7 +55,7 @@ async def test_preview_counts_and_names_without_saving(db_session):
     r = await subs.preview(db_session, "owner", "webcal://cal.example.com/kr.ics", fetch=_fetch(ICS))
     assert r == {"url": "https://cal.example.com/kr.ics", "name": "대한민국 공휴일", "count": 2,
                  "first_year": 2026, "last_year": 2027}
-    # 저장하지 않는다
+    # 저장하지 않음
     assert await subs.list_subscriptions(db_session, "owner") == []
 
 
@@ -85,7 +85,7 @@ async def test_preview_empty_calendar_and_errors(db_session):
     "http://[::ffff:10.0.0.1]/x.ics",
 ])
 async def test_preview_blocks_internal_addresses(db_session, url):
-    """실제 fetch_ics 를 거친다 — 사설·루프백·링크 로컬은 접속 전에 거부."""
+    """실제 fetch_ics 를 경유한다 — 사설·루프백·링크 로컬은 접속 전에 거부."""
     await _seed(db_session)
     with pytest.raises(subs.SubscriptionError) as e:
         await subs.preview(db_session, "owner", url)
@@ -190,7 +190,7 @@ def test_covers(domains, host, ok):
     assert ssl_inspect.covers(domains, host) is ok
 
 
-# ── 올리기: 같은 검사를 통과해야 저장 ──
+# ── 올리기: 동일 검사를 통과해야 저장 ──
 
 
 def _upload(data: bytes, name: str) -> UploadFile:

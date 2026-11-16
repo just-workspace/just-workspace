@@ -1,6 +1,6 @@
-"""공유 링크 이메일로 보내기 — 발송은 가짜(_deliver 바꿔 끼움), 실제 메일은 나가지 않는다.
+"""공유 링크 이메일 발송 — 발송은 가짜 구현(_deliver 교체)이며 실제 메일은 송신되지 않는다.
 
-라우터 함수를 직접 부른다. 저장소 루트는 임시 폴더, DB 는 SQLite.
+라우터 함수를 직접 호출한다. 저장소 루트는 임시 폴더, DB 는 SQLite 를 사용한다.
 """
 
 import os
@@ -134,7 +134,7 @@ async def test_hourly_limit(env):
     lid = await _link(env)
     for i in range(se.HOURLY_LIMIT - 1):
         env.db.add(ShareLinkEmail(link_id=lid, sent_by="alice", recipient=f"x{i}@example.com", ok=True))
-    # 한 시간 전 기록은 세지 않는다
+    # 1시간 이전 기록은 집계하지 않음
     env.db.add(ShareLinkEmail(link_id=lid, sent_by="alice", recipient="old@example.com", ok=True,
                               created_at=datetime.now(timezone.utc) - timedelta(hours=2)))
     await env.db.commit()
@@ -151,7 +151,7 @@ async def test_permission_owner_or_editor(env):
     with pytest.raises(HTTPException) as e:
         await _send(env, lid, ["a@example.com"], who="eve")
     assert e.value.status_code == 404
-    # 보기 권한 → 안 됨, 편집 권한 → 됨
+    # 보기 권한 → 불가, 편집 권한 → 가능
     share = FileShare(owner_id="alice", file_path="my/보고서.txt", shared_with_user_id="bob", role="view", created_by="alice")
     env.db.add(share)
     await env.db.commit()

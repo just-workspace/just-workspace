@@ -1,12 +1,12 @@
 """내장 AI ↔ 사용자 상호작용 도구 — Claude Code 의 AskUserQuestion · ExitPlanMode.
 
-- ``ask_user``  : 모델이 선택지를 내밀며 묻는다(질문 1~4개, 선택지 2~4개, 복수 선택, '기타' 직접 입력은 화면이 늘 붙인다).
-- ``plan_exit`` : 계획 모드에서 계획을 내고 실행 승인을 받는다
+- ``ask_user``  : 모델이 선택지를 제시하며 질문한다(질문 1~4개, 선택지 2~4개, 복수 선택, '기타' 직접 입력은 화면이 항상 추가한다).
+- ``plan_exit`` : 계획 모드에서 계획을 제출하고 실행 승인을 받는다
                   (예·편집 자동 수락으로 진행 / 예·하나씩 승인하며 진행 / 아니요·계속 계획 + 피드백).
 
-둘 다 MCP 레지스트리에 없는 내장 전용 도구다. 답변 루프(app.ai.router)가 가로채서
-SSE ``question`` 으로 화면에 띄우고, 사용자가 답할 때까지 답변을 멈춘 채 기다렸다가 답을 도구 결과로 넘긴다.
-상태는 Redis(없으면 프로세스 메모리)에 두고, 메시지 meta.questions 에도 남겨 대화를 다시 열어도 보인다.
+둘 다 MCP 레지스트리에 없는 내장 전용 도구이다. 답변 루프(app.ai.router)가 가로채어
+SSE ``question`` 으로 화면에 표시하고, 사용자가 응답할 때까지 답변을 중단한 상태로 대기한 후 응답을 도구 결과로 전달한다.
+상태는 Redis(없으면 프로세스 메모리)에 저장하고, 메시지 meta.questions 에도 기록하여 대화를 다시 열어도 표시된다.
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ import time
 ASK_TOOL = "ask_user"
 PLAN_TOOL = "plan_exit"
 TOOL_NAMES = (ASK_TOOL, PLAN_TOOL)
-TTL_SEC = 30 * 60          # 답을 기다리는 최대 시간 — 넘으면 expired
-KEEP_SEC = 2 * 3600        # 끝난 뒤 키 보관
+TTL_SEC = 30 * 60          # 응답 대기 최대 시간 — 초과 시 expired
+KEEP_SEC = 2 * 3600        # 종료 후 키 보관 시간
 POLL_SEC = 1.0
 PLAN_CHOICES = ("acceptEdits", "default", "keep_planning")
 
@@ -174,7 +174,7 @@ async def peek(user_id: str, qid: str) -> dict | None:
 
 
 def public(rec: dict) -> dict:
-    """화면(SSE question · meta.questions)에 보낼 모양."""
+    """화면(SSE question · meta.questions)에 전달할 형태."""
     keys = ("id", "kind", "status", "questions", "plan", "answer", "created_at", "expires_at")
     return {k: rec.get(k) for k in keys if k in rec}
 
@@ -189,8 +189,8 @@ async def create(user_id: str, conv_id: str, msg_id: str, kind: str, payload: di
 
 
 async def answer(user_id: str, qid: str, body: dict) -> dict:
-    """사용자의 답. ask: {answers: [{selected: [label], other: str|None}]} — 질문 순서대로.
-    plan: {choice: acceptEdits|default|keep_planning, feedback?}. skip=true 면 답하지 않고 넘김."""
+    """사용자의 응답. ask: {answers: [{selected: [label], other: str|None}]} — 질문 순서대로.
+    plan: {choice: acceptEdits|default|keep_planning, feedback?}. skip=true 이면 응답 없이 건너뜀."""
     rec = await _get(qid)
     if rec is None or rec.get("user_id") != user_id:
         raise InteractError("not_found", "질문이 없습니다")
@@ -238,7 +238,7 @@ async def cancel(user_id: str, qid: str) -> None:
 
 
 async def wait(qid: str, *, poll: float | None = None) -> dict:
-    """답(또는 만료·취소)까지 기다린다. 호출한 쪽이 취소되면 CancelledError 가 그대로 올라간다."""
+    """응답(또는 만료·취소)까지 대기한다. 호출자가 취소되면 CancelledError 가 그대로 전파된다."""
     while True:
         rec = await _get(qid)
         if rec is None:
@@ -253,7 +253,7 @@ async def wait(qid: str, *, poll: float | None = None) -> dict:
 
 
 def model_result(rec: dict) -> dict:
-    """모델에게 갈 도구 결과."""
+    """모델에 전달할 도구 결과."""
     st = rec.get("status")
     if st == "answered" and rec.get("kind") == "ask":
         return {"status": "answered", **(rec.get("answer") or {}),

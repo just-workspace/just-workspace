@@ -1,4 +1,4 @@
-"""헬스 점검은 한 주기에 워커 하나만 — 결과는 Redis 로 나눠 쓴다(L-8: 외부 점검 8배·값 흔들림 회귀)."""
+"""헬스 점검은 한 주기에 워커 하나만 수행 — 결과는 Redis 로 공유한다(L-8: 외부 점검 8배·값 변동 회귀)."""
 
 import pytest
 
@@ -42,10 +42,10 @@ async def test_only_one_worker_checks_and_others_read_shared(redis, monkeypatch)
 
     monkeypatch.setattr(health, "_check_all", fake_check_all)
     assert await health.health_tick() is True          # 첫 워커: 점검
-    # 다른 워커 흉내: 자기 캐시는 비어 있다
+    # 다른 워커 모사: 자체 캐시는 비어 있음
     monkeypatch.setattr(health, "_cache", [])
     monkeypatch.setattr(health, "_checked_at", None)
-    assert await health.health_tick() is False         # 락 있음 → 점검 안 하고 저장본
+    assert await health.health_tick() is False         # 락 존재 → 점검 생략, 저장본 사용
     assert calls["n"] == 1
     assert [s.name for s in health.get_cached_status()] == ["Gitea"]
     assert health.get_cached_status()[0].response_ms == 12

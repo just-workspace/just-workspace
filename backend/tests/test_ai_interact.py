@@ -1,8 +1,8 @@
 """ask_user · plan_exit — Claude Code AskUserQuestion · ExitPlanMode.
 
-- 질문 카드: 답할 때까지 답변이 멈추고, 답(선택지·직접 입력)이 모델에게 간다. 넘김·멈춤도 처리.
-- 검증: 질문 1~4개·선택지 2~4개, 단일 선택 질문에 둘 이상 고르면 거부, 남의 질문엔 답 못 함.
-- 계획 승인: 계획 모드에서만. 승인하면 권한 모드가 바뀌고(답 저장보다 먼저) 모델은 실행으로 넘어간다.
+- 질문 카드: 응답 시까지 답변이 중단되며, 응답(선택지·직접 입력)이 모델에 전달된다. 넘김·멈춤도 처리.
+- 검증: 질문 1~4개·선택지 2~4개, 단일 선택 질문에 2개 이상 선택하면 거부, 타인의 질문에는 응답 불가.
+- 계획 승인: 계획 모드에서만 가능. 승인하면 권한 모드가 변경되고(응답 저장보다 우선) 모델은 실행으로 전환한다.
 """
 
 import asyncio
@@ -50,9 +50,9 @@ async def test_answer_validation_and_owner():
     with pytest.raises(interact.InteractError) as e:
         await interact.answer("bob", rec["id"], {"answers": [{"selected": ["DOCX"]}, {"selected": ["팀"]}]})
     assert e.value.code == "not_found"
-    with pytest.raises(interact.InteractError):   # 단일 선택에 둘
+    with pytest.raises(interact.InteractError):   # 단일 선택에 2개 선택
         await interact.answer("alice", rec["id"], {"answers": [{"selected": ["DOCX"], "other": "HWP"}, {"selected": ["팀"]}]})
-    with pytest.raises(interact.InteractError):   # 답 빠짐
+    with pytest.raises(interact.InteractError):   # 응답 누락
         await interact.answer("alice", rec["id"], {"answers": [{"selected": []}, {"selected": ["팀"]}]})
     done = await interact.answer("alice", rec["id"], {"answers": [{"other": "HWP로"}, {"selected": ["팀", "나", "없는것"]}]})
     assert done["answer"]["answers"][0] == {"question": "어느 형식으로 만들까요?", "selected": [], "other": "HWP로"}
@@ -108,7 +108,7 @@ async def _drive(env, user, on_q):
         if qs and asked is None:
             asked = qs[0]
             assert asked["status"] == "pending"
-            assert not any(e == "done" for e, _ in _events(chunks))   # 답 전에는 멈춰 있다
+            assert not any(e == "done" for e, _ in _events(chunks))   # 응답 전에는 중단 상태
             await on_q(asked, task)
         if task.done():
             break
@@ -169,7 +169,7 @@ async def test_plan_approve_switches_mode_before_resuming(env, monkeypatch):
 
     async def approve(q, _t):
         assert q["kind"] == "plan" and "메일 보내기" in q["plan"]
-        # 엔드포인트와 같은 순서: 모드 먼저 → 답 저장
+        # 엔드포인트와 동일한 순서: 모드 먼저 → 응답 저장
         from app.ai.router import QuestionAnswerBody, answer_question
         out = await answer_question.__wrapped__(q["id"], QuestionAnswerBody(choice="acceptEdits"), user=bob, db=env["db"])
         assert out["mode"] == "acceptEdits"

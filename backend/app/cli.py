@@ -5,21 +5,21 @@ Usage:
     python -m app.cli gen-secrets --format json
     python -m app.cli gen-secrets --only SECRET_KEY DB_PASSWORD
     python -m app.cli gen-secrets --merge .env          # .env 의 빈 비밀값만 채운 내용을 출력
-    python -m app.cli gen-secrets --merge .env --in-place   # 파일에 바로 쓴다
-    python -m app.cli check-secrets                     # 기동 검사와 같은 판정(문제 있으면 종료 코드 1)
-    python -m app.cli seed-admin --username admin       # 관리자 계정 만들기(비밀번호는 물어본다)
-    python -m app.cli reset-admin admin [--disable-2fa] # 관리자 임시 비밀번호 발급(한 번만 출력)
-    python -m app.cli setup-token                       # 첫 관리자 만들기용 설정 토큰 재발급(관리자가 없을 때만)
-    python -m app.cli configure < settings.json         # DB 에 저장되는 설정 넣기(설치 관리자용, 표준 입력 JSON)
-    python -m app.cli migrate                           # DB 스키마 변경 단계 적용(실패하면 종료 코드 1)
-    python -m app.cli migrate --check                   # 적용할 것이 있으면 종료 코드 1 과 목록
+    python -m app.cli gen-secrets --merge .env --in-place   # 파일에 직접 기록
+    python -m app.cli check-secrets                     # 기동 검사와 동일한 판정(문제 발견 시 종료 코드 1)
+    python -m app.cli seed-admin --username admin       # 관리자 계정 생성(비밀번호는 프롬프트로 입력)
+    python -m app.cli reset-admin admin [--disable-2fa] # 관리자 임시 비밀번호 발급(1회만 출력)
+    python -m app.cli setup-token                       # 최초 관리자 생성용 설정 토큰 재발급(관리자가 없는 경우에만)
+    python -m app.cli configure < settings.json         # DB 에 저장되는 설정 입력(설치 관리자용, 표준 입력 JSON)
+    python -m app.cli migrate                           # DB 스키마 변경 단계 적용(실패 시 종료 코드 1)
+    python -m app.cli migrate --check                   # 적용 대상이 있으면 종료 코드 1 과 목록 출력
     python -m app.cli migrate --status [--json]         # 현재 버전·대기 단계·기록
     python -m app.cli schema-version                    # 이 코드가 요구하는 스키마 버전(숫자만)
     python -m app.cli backup create|list|inspect|verify …  # 백업(app/backup/cli.py)
-    python -m app.cli restore <백업>                    # 복원 — backend 밖에서(scripts/restore.sh)
+    python -m app.cli restore <백업>                    # 복원 — backend 외부에서 실행(scripts/restore.sh)
 
-gen-secrets · check-secrets · schema-version 은 DB 없이 돈다(설치 관리자가 컨테이너를 띄우기 전에 부른다).
-스키마 버전과 변경 단계는 docs/data-safety.md.
+gen-secrets · check-secrets · schema-version 은 DB 없이 동작한다(설치 관리자가 컨테이너 기동 전에 호출한다).
+스키마 버전과 변경 단계는 docs/data-safety.md 참고.
 """
 
 import argparse
@@ -43,12 +43,12 @@ async def seed_admin(
     only_if_empty: bool = False,
     promote: bool = False,
 ) -> str:
-    """관리자 계정을 만든다. 돌려주는 값: created | exists | skipped | conflict | promoted.
+    """관리자 계정을 생성한다. 반환값: created | exists | skipped | conflict | promoted.
 
-    - only_if_empty(기동 때 자동 시드): 사용자가 한 명이라도 있으면 아무것도 하지 않는다.
-      매 기동마다 계정을 건드리지 않고, 나중에 같은 이름으로 가입한 일반 계정이 관리자가 되지도 않는다.
-    - 같은 이름의 계정이 이미 있으면 **승격하지 않는다** — 경고만 남긴다. 운영자가 서버에서
-      `seed-admin --promote` 로 명시했을 때만 승격한다(비밀번호는 바꾸지 않는다).
+    - only_if_empty(기동 시 자동 시드): 사용자가 1명이라도 있으면 no-op.
+      기동마다 계정을 변경하지 않으며, 이후 동일 이름으로 가입한 일반 계정이 관리자가 되는 일도 없다.
+    - 동일 이름의 계정이 이미 있으면 **승격하지 않는다** — 경고만 기록한다. 운영자가 서버에서
+      `seed-admin --promote` 로 명시한 경우에만 승격한다(비밀번호는 변경하지 않는다).
     """
     from sqlalchemy import func, select
 
@@ -112,20 +112,20 @@ async def seed_admin(
 
 
 async def _drop_setup_token(session) -> None:
-    """관리자가 생겼으니 웹의 첫 관리자 만들기용 설정 토큰을 지운다(같은 트랜잭션)."""
+    """관리자가 생성되었으므로 웹의 최초 관리자 생성용 설정 토큰을 삭제한다(동일 트랜잭션)."""
     from app.setup import token as setup_token
 
     await setup_token.revoke(session)
 
 
 class SetupTokenRefused(Exception):
-    """setup-token 을 거부한 사유."""
+    """setup-token 거부 사유."""
 
 
 async def issue_setup_token() -> str:
-    """첫 관리자 만들기용 설정 토큰을 새로 발급한다(이전 토큰은 못 쓰게 된다). 저장은 해시만.
+    """최초 관리자 생성용 설정 토큰을 신규 발급한다(이전 토큰은 무효화된다). 해시만 저장한다.
 
-    관리자가 이미 있거나 설치 관리자가 꾸린 설치면 거부한다(`SetupTokenRefused`).
+    관리자가 이미 있거나 설치 관리자가 구성한 설치이면 거부한다(`SetupTokenRefused`).
     """
     from app.db.session import async_session
     from app.setup import token as setup_token
@@ -142,20 +142,20 @@ async def issue_setup_token() -> str:
 
 
 class ResetRefused(Exception):
-    """reset-admin 을 거부한 사유."""
+    """reset-admin 거부 사유."""
 
 
 def generate_temp_password() -> str:
-    """임시 비밀번호 — URL-safe 24자(144비트). 화면에 한 번만 보여 준다."""
+    """임시 비밀번호 — URL-safe 24자(144비트). 화면에 1회만 표시한다."""
     return secrets.token_urlsafe(18)
 
 
 async def reset_admin(username: str, *, disable_2fa: bool = False) -> str:
-    """관리자 계정에 새 임시 비밀번호를 걸고 그 값을 돌려준다(저장은 해시만).
+    """관리자 계정에 새 임시 비밀번호를 설정하고 그 값을 반환한다(해시만 저장).
 
-    - 관리자가 아닌 계정·없는 계정은 거부한다(`ResetRefused`).
-    - 열린 세션·앱 토큰을 전부 끊는다(비밀번호를 잃어버린 게 아니라 빼앗긴 경우일 수 있다).
-    - disable_2fa: 2단계 인증과 복구 코드를 지운다(인증 앱까지 잃어버렸을 때).
+    - 관리자가 아닌 계정·존재하지 않는 계정은 거부한다(`ResetRefused`).
+    - 열린 세션·앱 토큰을 모두 무효화한다(비밀번호 분실이 아니라 탈취된 경우일 수 있다).
+    - disable_2fa: 2단계 인증과 복구 코드를 삭제한다(인증 앱까지 분실한 경우).
     """
     from sqlalchemy import select
 
@@ -191,7 +191,7 @@ async def reset_admin(username: str, *, disable_2fa: bool = False) -> str:
         await session.commit()
         user_id, source = user.id, (user.auth_source or "local")
 
-    # 세션 레지스트리·로그인 잠금은 Redis 에 있다 — 못 닿아도 token_version 으로 이미 끊겼다
+    # 세션 레지스트리·로그인 잠금은 Redis 에 있음 — 접속 실패 시에도 token_version 으로 이미 무효화됨
     try:
         from app.auth import security_policy
         from app.auth import sessions as sess_mod
@@ -223,7 +223,7 @@ def _cmd_gen_secrets(args) -> int:
             if args.in_place:
                 with open(args.merge, "w", encoding="utf-8", newline="") as f:
                     f.write(merged)
-                # 값은 찍지 않는다 — 이름만
+                # 값은 출력하지 않음 — 이름만 출력
                 print(f"{args.merge}: {len(filled)}개 채움" + (f" ({', '.join(filled)})" if filled else ""),
                       file=sys.stderr)
             elif args.format == "json":
@@ -301,15 +301,15 @@ def _cmd_setup_token(args) -> int:
     return 0
 
 
-# 설치 관리자가 넣을 수 있는 설정 키(그 밖은 거부한다)
+# 설치 관리자가 입력할 수 있는 설정 키(그 외는 거부)
 CONFIGURE_SETTINGS = {"smtp.security": ("starttls", "ssl", "none")}
 
 
 async def configure(payload: dict) -> list[str]:
-    """DB 에 저장되는 설정을 넣는다(환경변수로는 줄 수 없는 것). 돌려주는 값: 넣은 항목 이름.
+    """DB 에 저장되는 설정을 입력한다(환경변수로는 지정할 수 없는 항목). 반환값: 입력한 항목 이름.
 
     payload: {"settings": {"smtp.security": "ssl"}, "ai": {"kind", "model", "base_url", "api_key"}}
-    값은 표준 입력으로만 받는다 — API 키가 명령 인자나 환경변수에 남지 않게.
+    값은 표준 입력으로만 수신한다 — API 키가 명령 인자나 환경변수에 남지 않도록 하기 위함이다.
     """
     from app.admin.settings import set_setting
     from app.db.models import Base
@@ -347,17 +347,17 @@ def _cmd_configure(args) -> int:
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
-    print("configured: " + (", ".join(done) if done else "(없음)"))   # 값은 찍지 않는다
+    print("configured: " + (", ".join(done) if done else "(없음)"))   # 값은 출력하지 않음
     return 0
 
 
 # ─── 스키마 ───
 
 # migrate 종료 코드
-MIGRATE_OK = 0          # 적용했거나 할 일이 없다
+MIGRATE_OK = 0          # 적용 완료 또는 적용 대상 없음
 MIGRATE_FAILED = 1      # 단계 실패 / --check 에서 대기 단계 있음
-MIGRATE_TOO_NEW = 3     # DB 가 코드보다 새것 — 백업에서 복원해야 한다
-MIGRATE_DRIFT = 4       # 버전은 맞는데 빠진 테이블·컬럼이 있다(--repair)
+MIGRATE_TOO_NEW = 3     # DB 가 코드보다 최신 — 백업에서 복원 필요
+MIGRATE_DRIFT = 4       # 버전은 일치하나 누락된 테이블·컬럼 존재(--repair)
 
 
 async def _migrate_async(args) -> int:
@@ -417,7 +417,7 @@ async def _migrate_async(args) -> int:
         if isinstance(cause, BaseException):
             err(f"  원인: {type(cause).__name__}: {str(cause).strip()[:2000]}")
         return MIGRATE_FAILED
-    except Exception as e:  # noqa: BLE001 — DB 에 못 닿는 경우 등: 원인을 그대로 보여 주고 실패로 끝낸다
+    except Exception as e:  # noqa: BLE001 — DB 접속 불가 등: 원인을 그대로 출력하고 실패로 종료한다
         err(f"ERROR: 스키마 작업 실패 — {type(e).__name__}: {str(e).strip()[:2000]}")
         return MIGRATE_FAILED
     finally:

@@ -15,13 +15,13 @@ _RKEY = "mtg:room:"
 _TKEY = "mtg:token:"
 _RECKEY = "mtg:rec:"  # 진행 중 녹화(egress) 상태
 # 참가 신청 — 방마다 해시(필드 = 신청 id, 값 = JoinRequest JSON).
-# 예전엔 방 메타 JSON 안(requests)에 넣어 "읽고-고치고-통째로 다시 쓰기"를 했다. 워커가 여럿이라
-# 동시에 온 신청·승인 중 한쪽이 사라졌다(손님은 404, 호스트는 승인한 사람이 다시 대기로). 해시는
-# 필드 단위로 쓰므로 서로 덮지 않는다. 배포 순간 진행 중인 회의의 예전 신청(메타 안)은 읽기만 계속한다.
+# 과거에는 방 메타 JSON 내부(requests)에 저장하여 "읽기-수정-전체 재기록"을 수행했다. 워커가 여러 개이므로
+# 동시에 수신된 신청·승인 중 한쪽이 소실됐다(게스트는 404, 호스트는 승인한 대상이 다시 대기 상태로). 해시는
+# 필드 단위로 기록하므로 상호 덮어쓰기가 발생하지 않는다. 배포 시점에 진행 중인 회의의 기존 신청(메타 내부)은 읽기만 유지한다.
 _QKEY = "mtg:req:"
 # 초대 링크로 입장 신청한 로그인 사용자 — 방마다 해시(필드 = user_id). 회의 목록은 호스트·초대 대상에게만
-# 보이는데, 링크로 들어온 사람(초대 대상이 아님)도 자기가 들어가 있는 회의는 목록에서 보이게 하는 근거다.
-# 링크를 이미 가진 사람만 여기 적히므로 새로 알려 주는 것은 없다.
+# 표시되나, 링크로 입장한 사용자(초대 대상 아님)에게도 본인이 입장한 회의를 목록에 표시하기 위한 근거이다.
+# 링크를 이미 보유한 사용자만 여기에 기록되므로 추가로 노출되는 정보는 없다.
 _LKEY = "mtg:linkusers:"
 
 
@@ -74,17 +74,17 @@ class RoomMeta:
     host_display_name: str
     share_token: str = field(default_factory=lambda: uuid.uuid4().hex)  # full 32hex (brute-force 방지)
     created_at: float = field(default_factory=time.time)
-    # 회의 비밀번호(Argon2id 해시). 맞히면 호스트 승인 없이 바로 들어온다.
+    # 회의 비밀번호(Argon2id 해시). 일치하면 호스트 승인 없이 즉시 입장한다.
     password_hash: str | None = None
     requests: dict[str, JoinRequest] = field(default_factory=dict)
     chat_channel_id: str | None = None
-    # 예약 시각(ISO 8601, 시간대 포함)·길이(분) — 목록 "예정·진행 중·지난" 묶기와 초대 입장 화면 시각 표시용
+    # 예약 시각(ISO 8601, 시간대 포함)·길이(분) — 목록 "예정·진행 중·지난" 분류와 초대 입장 화면 시각 표시용
     scheduled_at: str | None = None
     duration_minutes: int | None = None
-    # 대기실 — 켜져 있으면(기본, 예전 동작) 비밀번호 없이 온 게스트는 호스트 승인을 기다린다.
-    # 끄면 링크만 있으면 바로 들어온다(비밀번호가 걸린 방은 비밀번호는 맞혀야 한다).
+    # 대기실 — 활성화 상태이면(기본, 기존 동작) 비밀번호 없이 접속한 게스트는 호스트 승인을 대기한다.
+    # 비활성화하면 링크만으로 즉시 입장한다(비밀번호가 설정된 방은 비밀번호 일치 필요).
     waiting_room: bool = True
-    # DB 회의 행(app/meetings/repo.py). 예전에 만든 Redis 전용 방은 None.
+    # DB 회의 행(app/meetings/repo.py). 기존에 생성된 Redis 전용 방은 None.
     meeting_id: str | None = None
     max_participants: int = 10
 
@@ -146,7 +146,7 @@ async def create_room_meta(name, host_user_id, host_username, host_display_name,
                            chat_channel_id: str | None = None) -> RoomMeta:
     from app.meetings.schemas import is_reserved_room_name
     if is_reserved_room_name(name):
-        # 채널·DM 통화 방 이름은 회의 메타(공유 링크·게스트 입장)를 가질 수 없다
+        # 채널·DM 통화 방 이름은 회의 메타(공유 링크·게스트 입장)를 보유할 수 없다
         raise ValueError("reserved room name")
     meta = RoomMeta(name=name, host_user_id=host_user_id,
                     host_username=host_username, host_display_name=host_display_name,
@@ -157,21 +157,21 @@ async def create_room_meta(name, host_user_id, host_username, host_display_name,
     if share_token:
         meta.share_token = share_token
     await _save(meta)
-    # 같은 이름으로 새로 만든 회의다(링크도 새것) — 이전 회의에 링크로 들어왔던 사람 기록은 버린다
+    # 동일 이름으로 새로 생성한 회의이다(링크도 신규) — 이전 회의에 링크로 입장했던 사용자 기록은 삭제한다
     r = await get_redis()
     await r.delete(_LKEY + name)
     return meta
 
 
 async def save_room_meta(meta: RoomMeta) -> None:
-    """회의 수정(PATCH) 뒤 Redis 메타를 같이 고친다."""
+    """회의 수정(PATCH) 이후 Redis 메타를 함께 갱신한다."""
     await _save(meta)
 
 
 async def _restore(name: str | None = None, token: str | None = None) -> RoomMeta | None:
-    """Redis 에 없으면 DB 회의 행으로 되살린다(24시간 TTL 이 지난 예약 회의).
+    """Redis 에 없으면 DB 회의 행으로 복원한다(24시간 TTL 이 지난 예약 회의).
 
-    DB 를 못 읽으면 예전처럼 "없음" 으로 둔다 — 회의 입장 경로가 DB 장애로 500 이 되지 않게.
+    DB 조회에 실패하면 기존과 동일하게 "없음" 으로 처리한다 — 회의 입장 경로가 DB 장애로 500 이 되는 것 방지.
     """
     from app.meetings.schemas import is_reserved_room_name
     if name and is_reserved_room_name(name):
@@ -195,7 +195,7 @@ async def _restore(name: str | None = None, token: str | None = None) -> RoomMet
 async def get_room_meta(name: str) -> RoomMeta | None:
     from app.meetings.schemas import is_reserved_room_name
     if is_reserved_room_name(name):
-        return None   # 채널 통화 방은 회의 메타가 없다(예전에 선점된 값이 남아 있어도 무시)
+        return None   # 채널 통화 방은 회의 메타가 없다(과거에 선점된 값이 남아 있어도 무시)
     r = await get_redis()
     s = await r.get(_RKEY + name)
     if s:
@@ -216,7 +216,7 @@ async def get_room_by_token(token: str) -> RoomMeta | None:
 
 
 def _reserved(meta: RoomMeta | None) -> bool:
-    """게스트(공유 링크) 입장은 명시적으로 만든 회의 방만 — 채널·DM 통화 방 이름이면 거부."""
+    """게스트(공유 링크) 입장은 명시적으로 생성한 회의 방만 허용 — 채널·DM 통화 방 이름이면 거부."""
     from app.meetings.schemas import is_reserved_room_name
     return meta is not None and is_reserved_room_name(meta.name)
 
@@ -246,7 +246,7 @@ async def _put_request(room_name: str, req: JoinRequest) -> None:
 
 
 async def _all_requests(meta: RoomMeta) -> dict[str, JoinRequest]:
-    """방의 신청 전부 — 해시가 기준이고, 예전 방식(메타 안)으로 남아 있는 신청을 밑에 깐다."""
+    """방의 신청 전부 — 해시를 기준으로 하며, 기존 방식(메타 내부)으로 남아 있는 신청은 하위 우선순위로 병합한다."""
     out: dict[str, JoinRequest] = dict(meta.requests)
     r = await get_redis()
     for rid, raw in ((await r.hgetall(_QKEY + meta.name)) or {}).items():
@@ -277,7 +277,7 @@ async def get_join_request(room_name: str, request_id: str) -> JoinRequest | Non
     raw = await r.hget(_QKEY + room_name, request_id)
     if raw:
         return _load_request(raw)
-    return meta.requests.get(request_id)   # 배포 전에 받은 신청(메타 안)
+    return meta.requests.get(request_id)   # 배포 전에 수신한 신청(메타 내부)
 
 
 async def get_pending_requests(room_name: str) -> list[JoinRequest]:
@@ -293,7 +293,7 @@ async def set_join_request_status(
 ) -> JoinRequest | None:
     """참가신청 상태 갱신 후 영속화 (approve/deny).
 
-    메타 안에 있던 예전 신청도 여기서 해시로 옮겨 쓴다 — 해시가 메타보다 우선이라 그 뒤로는 해시 값만 읽힌다.
+    메타 내부에 있던 기존 신청도 여기서 해시로 이전하여 기록한다 — 해시가 메타보다 우선하므로 이후에는 해시 값만 조회된다.
     """
     req = await get_join_request(room_name, request_id)
     if not req:

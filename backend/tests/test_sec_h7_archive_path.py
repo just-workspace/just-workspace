@@ -1,4 +1,4 @@
-"""회귀 — 메일 보관(.eml·첨부) 경로는 사용자 본인 보관 폴더를 벗어나지 못한다(POP3 UIDL 조작)."""
+"""회귀 — 메일 보관(.eml·첨부) 경로는 사용자 본인 보관 폴더를 벗어날 수 없다(POP3 UIDL 조작)."""
 
 from email.message import EmailMessage
 from pathlib import Path
@@ -31,7 +31,7 @@ def test_hostile_uidl_stays_in_own_archive(uid, _root):
     own = (_root / "users" / "u1" / archive.ARCHIVE_DIRNAME / "me@example.com").resolve()
     files = [p.resolve() for p in _root.rglob("*") if p.is_file()]
     assert files and all(f.is_relative_to(own) for f in files)
-    # 같은 id 는 같은 이름 — 다시 저장하면 중복으로 건너뛴다
+    # 동일 id 는 동일 이름 — 재저장 시 중복으로 판정하여 생략
     assert archive.save_raw("u1", "me@example.com", uid, "subj", "2026-10-01T00:00:00Z", b"x") is None
 
 

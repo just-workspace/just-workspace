@@ -1,6 +1,6 @@
-"""복구 이메일 변경 절차(app/auth/recovery_email.py) 고정.
+"""복구 이메일 변경 절차(app/auth/recovery_email.py) 동작 고정.
 
-세션만으로는 못 바꾼다: 본인 확인(현재 비밀번호 / LDAP 비밀번호 / 인증 앱 코드) → 새 주소 인증 → 교체 + 옛 주소 알림.
+세션만으로는 변경 불가: 본인 확인(현재 비밀번호 / LDAP 비밀번호 / 인증 앱 코드) → 새 주소 인증 → 교체 + 기존 주소 알림.
 """
 
 import json
@@ -122,7 +122,7 @@ async def _actions(db):
     return (await db.execute(select(AuditLog.action))).scalars().all()
 
 
-# ── 예전 경로는 닫혔다 ──
+# ── 기존 경로는 폐쇄됨 ──
 
 
 @pytest.mark.asyncio
@@ -133,7 +133,7 @@ async def test_profile_patch_no_longer_changes_recovery_email(env):
         await auth_router.update_profile(ProfileUpdateRequest(recovery_email="attacker@evil.example"), user=kim, db=db)
     assert e.value.status_code == 400
     assert (await db.get(User, "kim")).recovery_email == "old@ex.com"
-    # 표시 이름은 그대로 바뀌고, 같은 주소를 그대로 실어 보내는 옛 화면도 깨지지 않는다
+    # 표시 이름은 그대로 변경되며, 동일 주소를 그대로 포함해 송신하는 구 화면도 정상 동작한다
     await auth_router.update_profile(ProfileUpdateRequest(display_name="김", recovery_email="Old@ex.com"), user=kim, db=db)
     kim = await db.get(User, "kim")
     assert kim.display_name == "김" and kim.recovery_email == "old@ex.com"
@@ -171,7 +171,7 @@ async def test_same_address_and_bad_address_rejected(env):
     with pytest.raises(HTTPException) as e:
         await _request(db, email=" OLD@ex.com ", current_password=PW)
     assert e.value.status_code == 400 and mails == []
-    # 주소 하나만 — 여러 주소·표시 이름·헤더 주입 꼴은 전부 거부(To 헤더에 그대로 실린다)
+    # 주소 하나만 허용 — 복수 주소·표시 이름·헤더 주입 형태는 전부 거부(To 헤더에 그대로 포함됨)
     for bad in ("nope", "a@b", "a b@ex.com", "a@ex.com,evil@ex.com", "a@ex.com;evil@ex.com", "a@ex.com, evil@ex.com",
                 "Kim <a@ex.com>", "<a@ex.com>", "a@b@ex.com", "a@ex.com\nBcc: evil@ex.com", '"a"@ex.com',
                 "x" * 320 + "@ex.com"):
@@ -189,12 +189,12 @@ async def test_request_then_confirm(env):
     db, r, mails = env
     res = await _request(db, email=" New@Ex.com", current_password=PW)
     assert res["pending_email"] == "new@ex.com"
-    # 새 주소로만 확인 메일, 아직 아무것도 안 바뀜
+    # 새 주소로만 확인 메일 발송, 아직 변경 사항 없음
     assert [m[0] for m in mails] == ["new@ex.com"]
     assert (await db.get(User, "kim")).recovery_email == "old@ex.com"
     token = _token(mails)
-    assert token not in json.dumps(r.d)                      # Redis 에는 토큰 원문이 없다(해시만)
-    assert all(v for k, v in r.ttls.items() if k.startswith("recovery-email:"))   # 전부 TTL 이 있다
+    assert token not in json.dumps(r.d)                      # Redis 에는 토큰 원문이 없음(해시만 저장)
+    assert all(v for k, v in r.ttls.items() if k.startswith("recovery-email:"))   # 전부 TTL 설정됨
 
     kim = await db.get(User, "kim")
     st = await re_mod.pending(user=kim, db=db)
@@ -203,8 +203,8 @@ async def test_request_then_confirm(env):
     await _confirm(db, token)
     kim = await db.get(User, "kim")
     assert kim.recovery_email == "new@ex.com"
-    assert kim.password_reset_token is None                  # 옛 주소로 나간 재설정 링크는 죽는다
-    # 옛 주소로 알림(새 주소는 싣지 않는다)
+    assert kim.password_reset_token is None                  # 기존 주소로 발송된 재설정 링크는 무효화된다
+    # 기존 주소로 알림(새 주소는 포함하지 않는다)
     assert mails[-1][0] == "old@ex.com" and "변경" in mails[-1][1] and "new@ex.com" not in mails[-1][2]
     acts = await _actions(db)
     assert "user.recovery_email.change_requested" in acts and "user.recovery_email.changed" in acts
@@ -212,7 +212,7 @@ async def test_request_then_confirm(env):
     assert row.actor_id == "kim" and json.loads(row.details) == {"old": "old@ex.com", "new": "new@ex.com"}
     assert (await re_mod.pending(user=kim, db=db))["pending_email"] is None
 
-    # 같은 링크를 다시 누르면(두 번 클릭·새로고침) 실패가 아니라 "이미 적용됨" — 다시 바꾸거나 알리지는 않는다
+    # 동일 링크를 재요청하면(중복 클릭·새로고침) 실패가 아닌 "이미 적용됨" — 재변경·재알림은 수행하지 않는다
     sent = len(mails)
     again = await _confirm(db, token)
     assert again.get("already") is True and len(mails) == sent
@@ -227,7 +227,7 @@ async def test_first_address_has_no_old_notice(env):
     await _request(db, current_password=PW)
     await _confirm(db, _token(mails))
     assert (await db.get(User, "kim")).recovery_email == "new@ex.com"
-    # 옛 복구 주소가 없던 계정 — 워크스페이스 메일함으로 알린다(처음 주소를 몰래 심는 것을 주인이 알 수 있게)
+    # 기존 복구 주소가 없던 계정 — 워크스페이스 메일함으로 알린다(최초 주소의 무단 등록을 계정 소유자가 인지할 수 있도록)
     assert [m[0] for m in mails] == ["new@ex.com", "kim@x"] and "변경" in mails[-1][1]
 
 
@@ -255,7 +255,7 @@ async def test_new_request_kills_previous_link(env):
 @pytest.mark.asyncio
 async def test_link_dies_when_sessions_were_revoked_or_address_changed(env):
     db, _r, mails = env
-    # 요청 뒤 비밀번호 변경·강제 로그아웃(token_version 증가) — 미리 받아 둔 링크는 무효
+    # 요청 후 비밀번호 변경·강제 로그아웃(token_version 증가) — 사전에 발급된 링크는 무효
     await _request(db, current_password=PW)
     kim = await db.get(User, "kim")
     kim.token_version = (kim.token_version or 0) + 1
@@ -264,7 +264,7 @@ async def test_link_dies_when_sessions_were_revoked_or_address_changed(env):
         await _confirm(db, _token(mails))
     assert (await db.get(User, "kim")).recovery_email == "old@ex.com"
 
-    # 요청 뒤 관리자가 주소를 바꿨다 — 옛 요청으로 덮어쓰지 않는다
+    # 요청 후 관리자가 주소를 변경함 — 기존 요청으로 덮어쓰지 않는다
     await _request(db, current_password=PW)
     (await db.get(User, "kim")).recovery_email = "admin-set@ex.com"
     await db.commit()
@@ -321,7 +321,7 @@ async def test_redis_down_refuses(env, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_redis_down_never_reaches_password_check(env, monkeypatch):
-    """잠금을 판정할 수 없으면 비밀번호 검증 자체를 하지 않는다(잠금 없는 대입 창구가 되지 않게)."""
+    """잠금을 판정할 수 없으면 비밀번호 검증 자체를 수행하지 않는다(잠금 없는 대입 공격 경로가 되지 않도록)."""
     db, _r, _m = env
 
     async def _down():
@@ -340,14 +340,14 @@ async def test_redis_down_never_reaches_password_check(env, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_attempts_are_counted_before_verifying(env, monkeypatch):
-    """동시에 쏜 요청들이 모두 "아직 안 잠김"을 보고 통과하지 못한다 — 검증 전에 INCR 로 센다."""
+    """동시에 송신된 요청들이 모두 "아직 안 잠김"을 확인하고 통과하는 것을 방지한다 — 검증 전에 INCR 로 계수한다."""
     import asyncio
 
     db, r, _m = env
     checked = []
 
     async def _slow_wrong(_db, _user, password):
-        checked.append(int(r.d["recovery-email:fail:kim"]))    # 검증 시점에 이미 세어져 있다
+        checked.append(int(r.d["recovery-email:fail:kim"]))    # 검증 시점에 이미 계수됨
         await asyncio.sleep(0)
         return False
 
@@ -357,7 +357,7 @@ async def test_attempts_are_counted_before_verifying(env, monkeypatch):
         return None
 
     from app.admin import audit
-    monkeypatch.setattr(audit, "log_action", _noop)            # 한 세션을 동시에 쓰지 않게
+    monkeypatch.setattr(audit, "log_action", _noop)            # 단일 세션의 동시 사용 방지
     res = await asyncio.gather(*[_request(db, current_password=f"guess{i}") for i in range(12)],
                                return_exceptions=True)
     codes = sorted(e.status_code for e in res)
@@ -365,7 +365,7 @@ async def test_attempts_are_counted_before_verifying(env, monkeypatch):
     assert len(checked) == re_mod.REAUTH_MAX_FAILS and min(checked) >= 1
 
 
-# ── 착지 화면: 보기만(check) → 버튼(confirm) ──
+# ── 착지 화면: 조회만(check) → 버튼(confirm) ──
 
 
 @pytest.mark.asyncio
@@ -373,7 +373,7 @@ async def test_check_does_not_consume_the_link(env):
     db, _r, mails = env
     await _request(db, current_password=PW)
     token = _token(mails)
-    for _ in range(3):                                         # 메일 보안 장비의 미리 열람·새로고침
+    for _ in range(3):                                         # 메일 보안 장비의 사전 열람·새로고침
         assert (await _check(token))["state"] == "pending"
     assert (await db.get(User, "kim")).recovery_email == "old@ex.com"
     assert (await _check("y" * 43))["state"] == "invalid"
@@ -391,18 +391,18 @@ async def test_clear_needs_reauth_then_applies_at_once(env):
         await _request(db, email="", current_password="wrong")
     assert e.value.status_code == 400 and (await db.get(User, "kim")).recovery_email == "old@ex.com"
 
-    await _request(db, email="pending@ex.com", current_password=PW)      # 걸려 있던 변경 요청
+    await _request(db, email="pending@ex.com", current_password=PW)      # 대기 중이던 변경 요청
     pending_token = _token(mails)
     res = await _request(db, email="  ", current_password=PW)
     assert res["cleared"] is True
     kim = await db.get(User, "kim")
     assert kim.recovery_email is None and kim.password_reset_token is None
-    assert mails[-1][0] == "old@ex.com" and "삭제" in mails[-1][1]        # 옛 주소로 알림
+    assert mails[-1][0] == "old@ex.com" and "삭제" in mails[-1][1]        # 기존 주소로 알림
     assert "user.recovery_email.cleared" in await _actions(db)
     assert not any(k.startswith(("recovery-email:tok:", "recovery-email:user:")) for k in r.d)
-    with pytest.raises(HTTPException):                                   # 걸려 있던 링크도 죽는다
+    with pytest.raises(HTTPException):                                   # 대기 중이던 링크도 무효화된다
         await _confirm(db, pending_token)
-    with pytest.raises(HTTPException) as e:                              # 이미 비어 있다
+    with pytest.raises(HTTPException) as e:                              # 이미 빈 값
         await _request(db, email="", current_password=PW)
     assert e.value.status_code == 400
 
@@ -428,12 +428,12 @@ async def test_ldap_account_reauths_against_directory(env, monkeypatch):
     monkeypatch.setattr(ldap_client, "is_enabled", _enabled)
     monkeypatch.setattr(ldap_client, "authenticate_strict", _auth)
     kim = await db.get(User, "kim")
-    kim.auth_source = "ldap"                                 # 남아 있는 옛 로컬 해시(PW)는 통하면 안 된다
+    kim.auth_source = "ldap"                                 # 잔존하는 구 로컬 해시(PW)는 인증에 통과해서는 안 된다
     await db.commit()
     assert await re_mod.reauth_method(db, kim) == "password"
     with pytest.raises(HTTPException):
         await _request(db, current_password=PW)
-    # 디렉터리 장애는 "틀림"이 아니다 — 503, 실패 횟수에 넣지 않는다(장애 동안 사용자가 잠기지 않게)
+    # 디렉터리 장애는 "틀림"이 아니다 — 503, 실패 횟수에 포함하지 않는다(장애 중 사용자 잠금 방지)
     state["down"] = True
     before = int(_r.d.get("recovery-email:fail:kim", 0))
     for _ in range(re_mod.REAUTH_MAX_FAILS + 2):
@@ -447,7 +447,7 @@ async def test_ldap_account_reauths_against_directory(env, monkeypatch):
 
 
 def test_ldap_strict_separates_outage_from_wrong_password(monkeypatch):
-    """ldap_client: 예전 authenticate 는 장애도 None(틀림) — strict 만 LdapUnavailable 로 올린다."""
+    """ldap_client: 기존 authenticate 는 장애도 None(틀림) — strict 만 LdapUnavailable 예외를 발생시킨다."""
     import sys
     import types
 
@@ -471,7 +471,7 @@ def test_ldap_strict_separates_outage_from_wrong_password(monkeypatch):
     assert ldap_client._authenticate_sync(cfg, "kim", "pw") is None
     with pytest.raises(ldap_client.LdapUnavailable):
         ldap_client._authenticate_sync(cfg, "kim", "pw", True)
-    assert ldap_client._authenticate_sync(cfg, "kim", "", True) is None        # 빈 비밀번호는 장애가 아니라 거부
+    assert ldap_client._authenticate_sync(cfg, "kim", "", True) is None        # 빈 비밀번호는 장애가 아닌 거부
 
 
 @pytest.mark.asyncio

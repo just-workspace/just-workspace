@@ -37,28 +37,28 @@ class Tool:
     # so the model treats it as data, never as instructions.
     untrusted_output: bool = False
     # 쓰기 도구의 위험도: "low" = 생성·임시저장·수정(되돌리기 가능), "high" = 삭제·발송·외부 공유.
-    # high 는 어디서 부르든 승인 대기함을 거친다. 읽기 도구에는 의미 없다.
+    # high 는 호출 경로와 무관하게 승인 대기함을 거친다. 읽기 도구에는 의미 없다.
     risk: str = "low"
-    # 화면(승인 카드·대기함)에 보일 사람용 이름. 없으면 name.
+    # 화면(승인 카드·대기함)에 표시할 사용자용 이름. 없으면 name.
     title: str | None = None
     # 쓰기 도구 선택 훅: previewer(args) -> [{field,label,before,after}], summarizer(args) -> str.
-    # 입력 스키마 속성에 "x-label"(한국어 칸 이름)·"x-editable"(카드에서 고칠 칸)·"x-hidden" 을 달 수 있다.
+    # 입력 스키마 속성에 "x-label"(한국어 필드 이름)·"x-editable"(카드에서 수정 가능한 필드)·"x-hidden" 을 지정할 수 있다.
     previewer: Callable[[dict], Any] | None = None
     summarizer: Callable[[dict], Any] | None = None
-    # low 쓰기 가운데 사용자 데이터를 바꾸지 않고 본인만 받는 임시 결과물(24시간 링크)을 만드는 도구
-    # (문서 생성·파일 압축). 내장 AI 에서도 카드 없이 바로 실행하고, 직전 외부 읽기 뒤에도 승인함으로 올리지 않는다.
-    # 기록·감사·멱등은 다른 쓰기와 같다(request_write).
+    # low 쓰기 중 사용자 데이터를 변경하지 않고 본인만 수신하는 임시 결과물(24시간 링크)을 생성하는 도구
+    # (문서 생성·파일 압축). 내장 AI 에서도 카드 없이 즉시 실행하며, 직전 외부 읽기 이후에도 승인 대기함으로 전달하지 않는다.
+    # 기록·감사·멱등은 다른 쓰기와 동일하다(request_write).
     auto_run: bool = False
-    # 다른 사람에게 보이거나 통지가 나가는 쓰기(채팅 발송·게시글·댓글·메일 발송·남에게 배정 등).
-    # 내장 AI 가 같은 대화에서 남이 쓴 내용(untrusted_output)을 읽은 뒤에는 권한 모드·허용 규칙과 상관없이
-    # 승인 카드를 띄운다(주입 → 사칭 발송 방어, writes.request_write). 이름으로 추측하지 않고 여기 명시한다.
-    # 인자·대상에 따라 달라지면 visible_for(args, user) -> bool 을 단다. DB 조회가 필요하면 코루틴이어도 된다
-    # (관문 판정 시점에 await). 판정 실패는 '보인다'로.
+    # 타인에게 노출되거나 통지가 발송되는 쓰기(채팅 발송·게시글·댓글·메일 발송·타인에게 배정 등).
+    # 내장 AI 가 동일 대화에서 타인이 작성한 내용(untrusted_output)을 읽은 뒤에는 권한 모드·허용 규칙과 무관하게
+    # 승인 카드를 표시한다(주입 → 사칭 발송 방어, writes.request_write). 이름으로 추정하지 않고 여기에 명시한다.
+    # 인자·대상에 따라 달라지면 visible_for(args, user) -> bool 을 지정한다. DB 조회가 필요하면 코루틴도 허용한다
+    # (관문 판정 시점에 await). 판정 실패는 '보인다'로 처리한다.
     visible_to_others: bool = False
     visible_for: Callable[[dict, Any], Any] | None = None
-    # 결과에 남이 쓴 글 조각이 섞일 수 있는 도구(목록·검색 미리보기, 입력 파일을 읽는 코드 실행 등).
-    # untrusted_output 과 달리 결과를 감싸지 않고 MCP 15분 창에도 서지 않는다 — 내장 AI 의 대화 단위 표시만
-    # 남긴다('남에게 보이는 쓰기' 관문용). 인자에 따라 달라지면 (args) -> bool.
+    # 결과에 타인이 작성한 글 조각이 포함될 수 있는 도구(목록·검색 미리보기, 입력 파일을 읽는 코드 실행 등).
+    # untrusted_output 과 달리 결과를 래핑하지 않고 MCP 15분 창에도 반영하지 않는다 — 내장 AI 의 대화 단위 표시만
+    # 기록한다('타인 노출 쓰기' 관문용). 인자에 따라 달라지면 (args) -> bool.
     conv_untrusted: Any = False
 
 
@@ -71,7 +71,7 @@ _UNTRUSTED_SOURCE: dict[str, str] = {
     "files_read": "file_content",
     "web_search": "external_web",
     "web_fetch": "external_web",
-    # 워크스페이스 안이지만 다른 사람이 쓴 글(초대장·공유 문서·남이 배정한 할 일 포함)
+    # 워크스페이스 내부이지만 타인이 작성한 글(초대장·공유 문서·타인이 배정한 할 일 포함)
     "chat_read_messages": "chat_messages",
     "board_search": "board_posts",
     "board_read_post": "board_posts",
@@ -158,8 +158,8 @@ async def _execute_tool_core(
     if tool.requires_user:
         call_kwargs["user"] = user
     try:
-        # 필수 인자 누락 등 — 모델이 고쳐서 다시 부를 수 있게 invalid_argument 로.
-        # (도구 안에서 난 TypeError 는 버그이므로 여기서 가리지 않는다)
+        # 필수 인자 누락 등 — 모델이 수정 후 재호출할 수 있도록 invalid_argument 로 반환.
+        # (도구 내부에서 발생한 TypeError 는 버그이므로 여기서 은폐하지 않는다)
         inspect.signature(tool.handler).bind(**call_kwargs)
     except TypeError as e:
         return fail("invalid_argument", f"bad arguments for '{name}': {e}")
@@ -170,7 +170,7 @@ async def _execute_tool_core(
         if code == "internal":
             logger.exception("[mcp] tool %s failed: %s", name, e)
         return fail(code, _exc_message(e))
-    # 도구가 돌려준 {"error": ...} 도 실패로 올린다(예전엔 ok:true 안에 묻혀 있었다)
+    # 도구가 반환한 {"error": ...} 도 실패로 처리한다(기존에는 ok:true 안에 포함되어 있었다)
     if isinstance(result, dict) and isinstance(result.get("error"), str):
         code = result.get("error_code") or _infer_code(result["error"])
         extra = {k: v for k, v in result.items() if k not in ("error", "error_code")}
@@ -188,11 +188,11 @@ async def _execute_tool_core(
 
 
 def _fit_result(name: str, result: Any) -> tuple[Any, dict | None]:
-    """바깥 안전장치 — 도구가 스스로 못 맞춘 결과를 바깥 상한(글자) 안으로 구조를 지키며 줄인다.
+    """바깥 안전장치 — 도구가 자체적으로 맞추지 못한 결과를 구조를 유지하며 바깥 상한(글자) 이내로 축소한다.
 
-    상한은 내장 AI 가 건 예산(fit_budget_scope) 또는 설정 mcp_response_max_chars. 줄여도 안 되면
-    (결과, 오류) 의 오류 쪽을 채운다 → 호출자가 반쯤 잘린 JSON 대신 response_too_large 로 바꾼다.
-    신뢰 경계 래퍼는 그대로 두고 data 안을 줄인다.
+    상한은 내장 AI 가 설정한 예산(fit_budget_scope) 또는 설정 mcp_response_max_chars. 축소로도 불가하면
+    (결과, 오류) 의 오류 쪽을 채운다 → 호출자가 절단된 JSON 대신 response_too_large 로 대체한다.
+    신뢰 경계 래퍼는 유지하고 data 내부를 축소한다.
     """
     from app.mcp.tools import _common
 
@@ -205,7 +205,7 @@ def _fit_result(name: str, result: Any) -> tuple[Any, dict | None]:
 
 
 async def _request_write(tool: "Tool", args: dict, user: User) -> dict:
-    """쓰기 도구 — 직접 실행하지 않고 승인 흐름(app.mcp.writes)으로 보낸다."""
+    """쓰기 도구 — 직접 실행하지 않고 승인 흐름(app.mcp.writes)으로 전달한다."""
     from app.mcp import writes
 
     idem = args.pop("idempotency_key", None)
@@ -224,7 +224,7 @@ async def _request_write(tool: "Tool", args: dict, user: User) -> dict:
 
 
 async def _mark_untrusted(tool: "Tool", user: User, result, *, window: bool = True, args: dict | None = None) -> None:
-    """window=False — conv_untrusted 도구: MCP 15분 창은 건드리지 않고 내장 AI 대화 표시만."""
+    """window=False — conv_untrusted 도구: MCP 15분 창은 변경하지 않고 내장 AI 대화 표시만 기록."""
     try:
         from app.mcp import writes
 
@@ -235,9 +235,9 @@ async def _mark_untrusted(tool: "Tool", user: User, result, *, window: bool = Tr
         if window:
             await writes.mark_untrusted_read(user.id, ctx.client_key if ctx else None, hint)
         if ctx is not None and ctx.source == "ai" and ctx.conversation_id:
-            # 내장 AI — 읽은 내용은 대화 맥락에 계속 남으므로 15분 창과 별개로 대화 단위 표시도 남긴다
+            # 내장 AI — 읽은 내용은 대화 맥락에 계속 유지되므로 15분 창과 별개로 대화 단위 표시도 기록한다
             await writes.mark_conv_untrusted(user.id, ctx.conversation_id, hint)
-    except Exception:  # noqa: BLE001 — 표시 실패가 읽기를 막으면 안 된다
+    except Exception:  # noqa: BLE001 — 표시 실패가 읽기를 차단하면 안 된다
         logger.debug("[mcp] untrusted mark failed", exc_info=True)
 
 
@@ -280,7 +280,7 @@ def _exc_message(e: Exception) -> str:
 
 
 def _infer_code(msg: str) -> str:
-    """error_code 없이 문자열만 돌려주던 옛 도구용 추정."""
+    """error_code 없이 문자열만 반환하던 구 도구용 추정."""
     m = msg.lower()
     if "not found" in m or "없" in m:
         return "not_found"

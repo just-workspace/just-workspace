@@ -36,21 +36,21 @@ async def list_modules(request: Request, db: AsyncSession = Depends(get_db)):
 def _server_features() -> list[str]:
     """모듈 on/off 와 별개로 서버 코드·설정이 결정하는 기능 플래그.
 
-    규칙: **추가만 한다**(Nextcloud OCS capabilities 식). 한 번 내보낸 이름을 빼거나
-    의미를 바꾸면 그 이름을 보고 분기한 옛 클라이언트가 깨진다. 외부 서비스 플래그
-    (livekit·onlyoffice)는 "설정돼 있는가" 만 말하고 URL·키는 절대 싣지 않는다.
+    규칙: **추가만 허용한다**(Nextcloud OCS capabilities 방식). 이미 공개한 이름을 제거하거나
+    의미를 변경하면 해당 이름으로 분기하는 구버전 클라이언트가 오동작한다. 외부 서비스 플래그
+    (livekit·onlyoffice)는 "설정돼 있는가" 만 나타내며 URL·키는 일절 포함하지 않는다.
     """
     from app.config import get_settings
     from app.meetings.livekit import is_configured as livekit_configured
 
     s = get_settings()
     flags: list[str] = [
-        # 같은 사용자의 WS 를 여러 개(탭·데스크톱·모바일 동시) 받는다 — chat/presence.py 가
-        # 연결 수를 세어 첫/마지막 연결만 온라인/오프라인으로 바꾼다.
+        # 동일 사용자의 WS 다중 연결(탭·데스크톱·모바일 동시)을 허용한다 — chat/presence.py 가
+        # 연결 수를 집계하여 최초/최종 연결에서만 온라인/오프라인으로 전환한다.
         "realtime.multi_connection",
         # 다운로드 ETag/304·Range(206) — app/files/router.py _file_response
         "files.ranges",
-        # 분할·이어 올리기 세션 /api/files/upload/sessions — app/files/upload_sessions.py
+        # 분할·재개 업로드 세션 /api/files/upload/sessions — app/files/upload_sessions.py
         "files.chunked_upload",
         # 재접속 복구 커서 /api/chat/changes?since_seq= (메시지 seq)
         "chat.seq_resume",
@@ -58,19 +58,19 @@ def _server_features() -> list[str]:
     if livekit_configured():
         flags.append("meetings.livekit")
     if s.onlyoffice_jwt_secret:
-        # wopi/router.py 의 편집기 선택 기준과 같다 — 시크릿이 있으면 OnlyOffice 가 붙어 있다.
+        # wopi/router.py 의 편집기 선택 기준과 동일하다 — 시크릿이 설정되어 있으면 OnlyOffice 가 연동된 상태이다.
         flags.append("office.onlyoffice")
     return flags
 
 
 @router.get("/api/platform/capabilities")
 async def capabilities(response: Response, db: AsyncSession = Depends(get_db)):
-    """클라이언트(데스크톱·모바일 런처)가 서버를 알아보는 최소 정보.
+    """클라이언트(데스크톱·모바일 런처)가 서버를 식별하기 위한 최소 정보.
 
-    사이트별로 따로 빌드되는 데스크톱과 서명 APK 가 배포되면서 서버/클라이언트 버전이
-    섞이는 게 현실이 됐다. 로그인 전에도 읽을 수 있어야 하므로(런처는 주소만 안다) 인증이
-    없고, 그래서 **민감한 것은 하나도 싣지 않는다** — 도메인·URL·관리자 설정값 금지.
-    모듈은 익명 사용자 기준으로 거른다(`/api/platform/modules` 비로그인과 같은 결과).
+    사이트별로 개별 빌드되는 데스크톱과 서명 APK 가 배포됨에 따라 서버/클라이언트 버전 혼재가
+    실제로 발생한다. 로그인 전에도 조회 가능해야 하므로(런처는 주소만 보유한다) 인증을
+    요구하지 않으며, 따라서 **민감 정보는 일절 포함하지 않는다** — 도메인·URL·관리자 설정값 금지.
+    모듈은 익명 사용자 기준으로 필터링한다(`/api/platform/modules` 비로그인과 동일한 결과).
     """
     from app.main import APP_VERSION  # main 이 이 라우터를 import 하므로 지연 import
     from app.groups import service as gs
@@ -78,7 +78,7 @@ async def capabilities(response: Response, db: AsyncSession = Depends(get_db)):
     modules = await gs.filter_modules(db, None, False, await get_enabled_modules(db))
     enabled = sorted(m["id"] for m in modules if m.get("enabled"))
     features = sorted({*_server_features(), *(f"module.{mid}" for mid in enabled)})
-    # 모듈 토글이 바로 반영돼야 하지만 런처가 매번 때리는 것도 막는다.
+    # 모듈 토글은 즉시 반영되어야 하나, 런처의 매회 요청도 억제해야 한다.
     response.headers["Cache-Control"] = "public, max-age=60"
     return {
         "product": "just-workspace",

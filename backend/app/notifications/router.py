@@ -19,7 +19,7 @@ from app.notifications.schemas import (
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
-# 알림 타입 — 프로필 '알림' 탭에서 채널별(in_app/push/email) 토글. 정의는 service 한 곳.
+# 알림 타입 — 프로필 '알림' 탭에서 채널별(in_app/push/email) 토글. 정의는 service 에서 단일 관리.
 NOTIFICATION_TYPES = service.NOTIFICATION_TYPES
 
 
@@ -50,7 +50,7 @@ async def test_push(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """시험 푸시 — 내 구독 기기 전부에 보낸다. 방해 금지 일정은 건너뛰고(시험이니까), 걸려 있었는지는 알려 준다."""
+    """시험 푸시 — 본인의 구독 기기 전체에 전송한다. 방해 금지 일정은 적용하지 않으며(시험 목적), 일정 해당 여부는 응답에 포함한다."""
     from sqlalchemy import func as _f
 
     from app.db.models import PushSubscription
@@ -77,7 +77,7 @@ async def get_dnd_schedule(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """방해 금지 일정 — 없으면 꺼진 기본값. active 는 지금 일정에 걸려 있는지."""
+    """방해 금지 일정 — 없으면 비활성 기본값. active 는 현재 일정 해당 여부."""
     from app.me.prefs import get_prefs
     from app.notifications import dnd
 
@@ -114,9 +114,9 @@ async def unread_count(
 
 
 async def _emit_unread(db: AsyncSession, user_id: str) -> None:
-    """읽음·삭제 뒤 안 읽은 수를 그 사용자의 모든 탭·기기에 알린다.
+    """읽음·삭제 처리 후 미읽음 수를 해당 사용자의 모든 탭·기기에 통지한다.
 
-    예전에는 DB 만 고쳐서 다른 탭·기기의 벨 배지가 보정 폴링(5분)까지 그대로였다.
+    이전에는 DB 만 갱신하여 다른 탭·기기의 벨 배지가 보정 폴링(5분)까지 갱신되지 않았다.
     실시간 전달 실패는 읽음 처리 자체를 실패시키지 않는다.
     """
     try:
@@ -209,7 +209,7 @@ async def update_prefs(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """알림 채널 선호 upsert(caller 본인만). 알 수 없는 타입은 무시."""
+    """알림 채널 선호 upsert(호출자 본인만). 알 수 없는 타입은 무시."""
     existing = {
         r.type: r for r in (await db.execute(
             select(NotificationPref).where(NotificationPref.user_id == user.id)

@@ -1,18 +1,18 @@
-"""xlsx / pptx 읽기 — 의존성 없이 직접 푼다.
+"""xlsx / pptx 읽기 — 외부 의존성 없이 직접 해석한다.
 
-왜 라이브러리를 안 쓰나
------------------------
-openpyxl·python-pptx 는 각각 수 MB 에 C 확장까지 딸려 오는데, 우리가 필요한 건
-"값과 글자를 꺼내는 것" 뿐이다(파일 검색 색인 — app/files/indexer.py). xlsx·pptx 는 XML 을
-담은 zip 이라 표준 라이브러리만으로 충분히 읽힌다. 편집은 OnlyOffice 가 한다.
+라이브러리 미사용 사유
+----------------------
+openpyxl·python-pptx 는 각각 수 MB 이며 C 확장까지 수반하는데, 본 모듈에 필요한 것은
+"값과 글자의 추출" 뿐이다(파일 검색 색인 — app/files/indexer.py). xlsx·pptx 는 XML 을
+담은 zip 이므로 표준 라이브러리만으로 충분히 읽을 수 있다. 편집은 OnlyOffice 가 수행한다.
 
-가져오지 않는 것(의도적)
-  - 셀 서식(글꼴·색). 스타일 테이블을 따라가려면 styles.xml 전체를 해석해야 하는데,
-    가져와도 우리 서식 모델과 1:1 로 맞지 않아 어설프게 깨진 채로 들어온다.
-  - 차트·도형·SmartArt. 그림은 슬라이드 본문 텍스트만 살린다.
+가져오지 않는 항목(의도적)
+  - 셀 서식(글꼴·색). 스타일 테이블을 참조하려면 styles.xml 전체를 해석해야 하며,
+    가져오더라도 본 프로젝트의 서식 모델과 1:1 로 대응하지 않아 불완전한 상태로 반영된다.
+  - 차트·도형·SmartArt. 그림은 슬라이드 본문 텍스트만 보존한다.
   - 피벗·조건부 서식·매크로.
 
-xlsx 는 수식을 원문 그대로 가져오므로(=SUM(A1:A3)), 우리 수식 엔진이 다시 계산한다.
+xlsx 는 수식을 원문 그대로 가져오므로(=SUM(A1:A3)), 본 프로젝트의 수식 엔진이 재계산한다.
 """
 
 import io
@@ -29,7 +29,7 @@ NS_PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main"
 NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
-# 우리 격자 한계. 이보다 큰 파일은 넘치는 부분을 버리고 알려 준다.
+# 본 프로젝트 격자의 한계. 이보다 큰 파일은 초과분을 제외하고 그 사실을 통지한다.
 MAX_ROWS = 200
 MAX_COLS = 26
 
@@ -68,13 +68,13 @@ def _shared_strings(z: zipfile.ZipFile) -> list[str]:
         return []
     out: list[str] = []
     for si in root.findall(_q(NS_SS, "si")):
-        # <si> 안에 <t> 가 여러 개일 수 있다(서식이 중간에 바뀐 문자열).
+        # <si> 안에 <t> 가 여러 개 존재할 수 있다(서식이 중간에 바뀐 문자열).
         out.append("".join(t.text or "" for t in si.iter(_q(NS_SS, "t"))))
     return out
 
 
 def _first_sheet_path(z: zipfile.ZipFile) -> str:
-    """워크북이 가리키는 첫 시트의 경로. 이름 순서로 찍으면 엉뚱한 시트가 걸린다."""
+    """워크북이 가리키는 첫 시트의 경로. 이름 순서로 선택하면 다른 시트가 선택될 수 있다."""
     try:
         wb = ET.fromstring(z.read("xl/workbook.xml"))
         rels = ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))
@@ -94,9 +94,9 @@ def _first_sheet_path(z: zipfile.ZipFile) -> str:
 
 
 def xlsx_to_seed(data: bytes) -> dict:
-    """xlsx 를 시트 씨앗(`{cells, colW, title}`)으로.
+    """xlsx 를 시트 초기 데이터(`{cells, colW, title}`)로 변환한다.
 
-    반환 형식은 프런트의 Y.Map('cells') 모양 그대로다 — 편집기가 그대로 부어 넣는다.
+    반환 형식은 프런트의 Y.Map('cells') 구조와 동일하다 — 편집기가 변환 없이 적재한다.
     """
     try:
         z = zipfile.ZipFile(io.BytesIO(data))
@@ -126,7 +126,7 @@ def xlsx_to_seed(data: bytes) -> dict:
         f = c.find(_q(NS_SS, "f"))
         formula = (f.text or "").strip() if f is not None else ""
         if formula:
-            # 수식은 원문 그대로 — 우리 엔진이 다시 계산한다.
+            # 수식은 원문 그대로 유지 — 본 프로젝트의 수식 엔진이 재계산한다.
             cells[f"{r}:{col}"] = {"v": "=" + formula}
             continue
 
@@ -150,7 +150,7 @@ def xlsx_to_seed(data: bytes) -> dict:
         if text != "":
             cells[f"{r}:{col}"] = {"v": text}
 
-    # 열 너비 — 엑셀 단위는 "기본 글꼴 문자 수" 라 대략 7px 로 환산한다.
+    # 열 너비 — 엑셀 단위는 "기본 글꼴 문자 수" 이므로 약 7px 로 환산한다.
     col_w: dict[str, int] = {}
     cols_el = root.find(_q(NS_SS, "cols"))
     if cols_el is not None:
@@ -192,7 +192,7 @@ def xlsx_to_seed(data: bytes) -> dict:
 
 
 def _slide_paths(z: zipfile.ZipFile) -> list[str]:
-    """발표 순서대로 슬라이드 경로. 파일 이름 순으로 찍으면 10장 넘을 때 뒤섞인다."""
+    """발표 순서에 따른 슬라이드 경로. 파일 이름 순으로 선택하면 10장을 초과할 때 순서가 어긋난다."""
     try:
         pres = ET.fromstring(z.read("ppt/presentation.xml"))
         rels = ET.fromstring(z.read("ppt/_rels/presentation.xml.rels"))
@@ -216,12 +216,12 @@ def _slide_paths(z: zipfile.ZipFile) -> list[str]:
 
 
 def _shape_text(sp: ET.Element) -> list[str]:
-    """도형 하나의 문단들. <a:p> 가 문단, 그 안의 <a:t> 조각을 이어 붙인다."""
+    """도형 하나의 문단 목록. <a:p> 가 문단이며, 그 안의 <a:t> 조각을 연결한다."""
     paras: list[str] = []
     for p in sp.iter(_q(NS_A, "p")):
         text = "".join(t.text or "" for t in p.iter(_q(NS_A, "t")))
         paras.append(text.strip())
-    # 뒤쪽 빈 문단은 버린다(파워포인트가 습관적으로 남긴다)
+    # 후행 빈 문단은 제거한다(파워포인트가 관례적으로 남김)
     while paras and not paras[-1]:
         paras.pop()
     return paras
@@ -249,8 +249,8 @@ def _notes_for(z: zipfile.ZipFile, slide_path: str) -> str:
                 notes = ET.fromstring(z.read(path))
             except KeyError:
                 return ""
-            # 노트 슬라이드에도 자리 표시자가 여럿 있다. 슬라이드 번호 상자까지 긁어 오면
-            # 모든 장의 노트가 "1", "2" 같은 숫자로 채워진다. 본문 상자만 가져온다.
+            # 노트 슬라이드에도 자리 표시자가 여러 개 존재한다. 슬라이드 번호 상자까지 포함하면
+            # 모든 슬라이드의 노트가 "1", "2" 같은 숫자로 채워진다. 본문 상자만 가져온다.
             out: list[str] = []
             for sp in notes.iter(_q(NS_P, "sp")):
                 kinds = {(ph.get("type") or "body") for ph in sp.iter(_q(NS_P, "ph"))}
@@ -262,7 +262,7 @@ def _notes_for(z: zipfile.ZipFile, slide_path: str) -> str:
 
 
 def pptx_to_seed(data: bytes) -> dict:
-    """pptx 를 슬라이드 씨앗(`{slides: [...]}`)으로."""
+    """pptx 를 슬라이드 초기 데이터(`{slides: [...]}`)로 변환한다."""
     try:
         z = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
@@ -286,15 +286,15 @@ def pptx_to_seed(data: bytes) -> dict:
             else:
                 bodies.append(paras)
 
-        # 자리 표시자 정보가 없는 파일이면 첫 덩어리를 제목으로 본다.
+        # 자리 표시자 정보가 없는 파일이면 첫 텍스트 블록을 제목으로 간주한다.
         if not title and bodies:
             first = bodies.pop(0)
             title = first[0]
             if len(first) > 1:
                 bodies.insert(0, first[1:])
 
-        # 디자인된 장표는 작은 텍스트 상자가 여럿이라 그대로 두면 전부 "두 단" 이 된다.
-        # 양쪽이 모두 여러 줄일 때만 두 단으로 보고, 아니면 한 덩어리로 합친다.
+        # 디자인된 슬라이드는 작은 텍스트 상자가 여러 개여서 그대로 처리하면 전부 "두 단" 이 된다.
+        # 양쪽이 모두 여러 줄일 때만 두 단으로 간주하고, 그 외에는 하나로 병합한다.
         if len(bodies) >= 2 and len(bodies[0]) >= 2 and len(bodies[1]) >= 2:
             body = "\n".join(bodies[0])
             body2 = "\n".join(sum(bodies[1:], []))
@@ -320,8 +320,8 @@ def pptx_to_seed(data: bytes) -> dict:
 
 
 # ── xlsx 쓰기 ───────────────────────────────────────────
-# 내보내기는 값만 담은 최소 워크북을 만든다. 서식까지 옮기려면 styles.xml 을 통째로
-# 만들어야 하는데, 받는 쪽에서 어차피 다시 꾸미는 경우가 대부분이라 값이 먼저다.
+# 내보내기는 값만 포함한 최소 워크북을 생성한다. 서식까지 이전하려면 styles.xml 전체를
+# 생성해야 하는데, 수신 측에서 다시 서식을 지정하는 경우가 대부분이므로 값을 우선한다.
 
 _CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -362,7 +362,7 @@ def _esc(t: str) -> str:
 
 
 def rows_to_xlsx(rows: list[list[str]]) -> bytes:
-    """문자열 표를 xlsx 한 장으로. 숫자로 읽히는 값은 숫자 셀로 넣는다."""
+    """문자열 표를 xlsx 시트 하나로 변환한다. 숫자로 해석되는 값은 숫자 셀로 저장한다."""
     parts: list[str] = []
     for r, row in enumerate(rows):
         cells: list[str] = []

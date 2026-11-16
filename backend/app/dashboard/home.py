@@ -1,15 +1,15 @@
 """홈 대시보드 카드 조회 — 이어서 하기 · 팀 · 내 저장 공간.
 
 - GET /api/dashboard/continue?tab=recent|favorites|shared : "이어서 하기" 한 목록(파일·문서·시트·위키·채널·게시글)
-    recent    = 최근 연 파일(files_recent) + 내가 쓰거나 고친 위키 문서 + 안 읽은 채널
+    recent    = 최근 연 파일(files_recent) + 본인이 작성하거나 수정한 위키 문서 + 읽지 않은 채널
     favorites = 파일 즐겨찾기(file_stars) + 게시글 북마크(post_bookmarks)
-                ※ 모듈별 즐겨찾기 현황: 파일 별표·게시글 북마크만 개인 즐겨찾기가 있다.
-                  위키 is_pinned 는 공간 고정(모두에게), 채팅 고정은 채널 고정, 연락처 즐겨찾기는 사람이라 넣지 않는다.
-    shared    = 나에게 공유된 파일·폴더(files shared-with-me — 사람·채널 공유)
+                ※ 모듈별 즐겨찾기 현황: 파일 별표·게시글 북마크만 개인 즐겨찾기에 해당한다.
+                  위키 is_pinned 는 공간 고정(전체 대상), 채팅 고정은 채널 고정, 연락처 즐겨찾기는 대상이 사람이므로 포함하지 않는다.
+    shared    = 본인에게 공유된 파일·폴더(files shared-with-me — 사람·채널 공유)
   행: {key, kind, name, to, reason, actor?, n?, at, path?, is_dir?}
     reason: opened · edited · edited_by_me · edited_by · shared_by · unread · starred · bookmarked
-  권한: 기존 목록 API 를 그대로 불러 쓴다 — 지워졌거나 권한이 사라진 항목은 그 API 가 이미 뺀다.
-- GET /api/dashboard/team?limit=6 : 최근 30일 자주 대화한 사람(DM ×3 + 내가 글 쓴 채널에서 그 사람 글 ×1) + 상태
+  권한: 기존 목록 API 를 그대로 호출한다 — 삭제되었거나 권한이 소멸한 항목은 해당 API 가 이미 제외한다.
+- GET /api/dashboard/team?limit=6 : 최근 30일 자주 대화한 사용자(DM ×3 + 본인이 글을 작성한 채널에서 해당 사용자의 글 ×1) + 상태
 - GET /api/dashboard/storage      : 내 저장 공간 — 사용량 · 할당(0 = 제한 없음) · 그중 공유한 파일 크기
 """
 
@@ -73,14 +73,14 @@ async def _recent_files(db: AsyncSession, user: User, limit: int) -> list[dict]:
     out = []
     for it in items:
         acc, mod = it.get("accessed_at"), it.get("modified_at")
-        # 연 뒤(또는 연 무렵)에 내용이 바뀌었으면 "편집", 아니면 "열어 봄"
+        # 열람 이후(또는 열람 시점 전후)에 내용이 변경되었으면 "편집", 아니면 "열어 봄"
         edited = bool(acc and mod and mod >= acc[:19])
         out.append(_file_row(it, "edited" if edited else "opened", mod if edited else acc))
     return out
 
 
 async def _recent_wiki(db: AsyncSession, user_id: str, limit: int) -> list[dict]:
-    """내가 쓰거나 고친 적 있는, 지금도 볼 수 있는 위키 문서 — 고친 시각 순. 마지막으로 고친 사람을 이유로."""
+    """본인이 작성하거나 수정한 이력이 있고 현재도 열람 가능한 위키 문서 — 수정 시각 순. 마지막 수정자를 이유로 사용."""
     if not is_module_enabled("wiki"):
         return []
     visible = (
@@ -100,7 +100,7 @@ async def _recent_wiki(db: AsyncSession, user_id: str, limit: int) -> list[dict]
     )).all()
     if not rows:
         return []
-    # 마지막으로 고친 사람 = 가장 큰 버전 번호의 작성자(버전이 없으면 문서 작성자)
+    # 마지막 수정자 = 최대 버전 번호의 작성자(버전이 없으면 문서 작성자)
     ids = [r.id for r in rows]
     last_ver = (
         select(WikiPageVersion.page_id, func.max(WikiPageVersion.version_number).label("vn"))
@@ -230,11 +230,11 @@ async def continue_items(
 # ─── 팀 ───
 
 async def frequent_people(db: AsyncSession, user_id: str, limit: int = 6, days: int = 30) -> list[tuple[str, int]]:
-    """최근 `days` 일 자주 대화한 사람 [(user_id, 점수)] — DM 메시지 ×3, 내가 글 쓴 채널의 그 사람 글 ×1."""
+    """최근 `days` 일간 자주 대화한 사용자 [(user_id, 점수)] — DM 메시지 ×3, 본인이 글을 작성한 채널의 해당 사용자 글 ×1."""
     since = datetime.now(timezone.utc) - timedelta(days=days)
     mine = select(ChannelMember.channel_id).where(ChannelMember.user_id == user_id)
     score: dict[str, int] = {}
-    # DM: 상대의 글과 내 글 모두 그 상대 점수로
+    # DM: 상대의 글과 본인의 글 모두 해당 상대의 점수로 합산
     dm_ids = [r[0] for r in (await db.execute(
         select(Channel.id).where(Channel.type == "dm", Channel.id.in_(mine))
     )).all()]
@@ -254,7 +254,7 @@ async def frequent_people(db: AsyncSession, user_id: str, limit: int = 6, days: 
             p = partners.get(ch)
             if p:
                 score[p] = score.get(p, 0) + 3 * int(n)
-    # 내가 최근 글을 쓴 (DM 아닌) 채널에서 남이 쓴 글
+    # 본인이 최근 글을 작성한 (DM 이 아닌) 채널에서 타 사용자가 작성한 글
     active = select(Message.channel_id).where(
         Message.sender_id == user_id, Message.created_at >= since, Message.channel_id.in_(mine),
     ).distinct()
@@ -278,7 +278,7 @@ async def team(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """자주 대화한 사람(활성 계정만) + 지금 상태(채팅 프레즌스와 같은 값)."""
+    """자주 대화한 사용자(활성 계정만) + 현재 상태(채팅 프레즌스와 동일한 값)."""
     if not is_module_enabled("chat"):
         return {"items": []}
     ranked = await frequent_people(db, str(user.id), limit)
@@ -291,7 +291,7 @@ async def team(
         from app.chat.presence import presence_snapshot
 
         statuses = (await presence_snapshot(db))["statuses"]
-    except Exception as e:  # Redis 가 없으면 상태 없이(오프라인으로) 보인다
+    except Exception as e:  # Redis 미가용 시 상태 없이(오프라인으로) 표시
         logger.debug("프레즌스 실패: %s", e)
         statuses = {}
     out = []
@@ -317,7 +317,7 @@ async def my_storage(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """{used, quota, shared, disk_total} — 바이트. quota 0 = 제한 없음. shared = 내가 사람·채널·링크로 공유한 항목 크기."""
+    """{used, quota, shared, disk_total} — 바이트. quota 0 = 제한 없음. shared = 본인이 사람·채널·링크로 공유한 항목 크기."""
     from app.files import quota as file_quota
     from app.files import service as fs
     from app.files.access import owner_real
@@ -327,7 +327,7 @@ async def my_storage(
     paths = {p for (p,) in (await db.execute(
         select(FileShare.file_path).where(FileShare.owner_id == user.id).limit(500)
     )).all()}
-    # 겹치는 경로(폴더와 그 안 파일)는 바깥 것만 센다
+    # 중첩 경로(폴더와 그 하위 파일)는 상위 항목만 집계
     roots = sorted({p.strip("/") for p in paths if p})
     outer = [p for p in roots if not any(p != q and p.startswith(q + "/") for q in roots)]
 
@@ -358,7 +358,7 @@ async def my_storage(
 # ─── 둘러볼 채널(신규 사용자) ───
 
 async def discover_channels(db: AsyncSession, user_id: str, limit: int = 3) -> list[dict]:
-    """내가 아직 안 들어간 공개 채널(보관 제외) — 멤버 많은 순, 같으면 오늘 메시지 많은 순."""
+    """본인이 아직 참여하지 않은 공개 채널(보관 제외) — 멤버 수 내림차순, 동률이면 오늘 메시지 수 내림차순."""
     mine = select(ChannelMember.channel_id).where(ChannelMember.user_id == user_id)
     members = func.count(func.distinct(ChannelMember.user_id)).label("members")
     rows = (await db.execute(
@@ -400,7 +400,7 @@ async def join_discover_channel(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """둘러볼 채널 [참여] — 공개 채널(보관 안 됨)에만 나를 멤버로 넣는다. 비공개·DM 은 404(있는지도 알리지 않음)."""
+    """둘러볼 채널 [참여] — 공개 채널(미보관)에만 본인을 멤버로 추가한다. 비공개·DM 은 404(존재 여부도 노출하지 않음)."""
     from fastapi import HTTPException
 
     if not is_module_enabled("chat"):
@@ -416,6 +416,6 @@ async def join_discover_channel(
             from app.realtime.socket import manager
 
             await manager.notify_channels_changed([str(user.id)])
-        except Exception as e:  # 실시간 알림 실패는 참여를 되돌리지 않는다
+        except Exception as e:  # 실시간 알림이 실패해도 참여는 롤백하지 않음
             logger.debug("채널 목록 갱신 알림 실패: %s", e)
     return {"ok": True, "channel_id": channel_id, "joined": bool(added)}

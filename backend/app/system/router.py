@@ -411,7 +411,7 @@ async def probe_public_ip(refresh: bool = False, admin: User = Depends(require_a
 # ─── 인증서 ───
 
 CERT_FIELDS = ("managed", "mode", "temporary", "domain", "names", "not_after", "days_left", "issuer", "self_signed",
-               "site_ca", "ca_uploadable", "pending")
+               "site_ca", "ca_uploadable", "pending", "renewal")
 
 
 class CertReissueBody(BaseModel):

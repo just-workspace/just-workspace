@@ -201,6 +201,9 @@ def check_channel(*, current: str, channel_name: str, keys: list, last_sequence:
         data = fetch(f"{base}/{rel}")
         sig = fetch(f"{base}/{rel}{SIG}")
     except FetchError as e:
+        if str(e).startswith("HTTP 404"):
+            # 서버에는 도달하였으나 채널 파일이 없다 — 해당 채널에 공개된 릴리스가 아직 없는 상태(장애 아님)
+            raise CheckError("channel_empty", str(e)) from None
         raise CheckError("channel_unreachable", str(e)) from None
     try:
         channel = verify.verify_channel(data, sig, keys, now=now, expected_channel=channel_name,

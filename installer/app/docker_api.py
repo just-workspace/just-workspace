@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import subprocess
@@ -27,6 +28,13 @@ from app.paths import NETWORK_NAME, PROJECT_NAME, SITE_COMPOSE, Paths
 # docker CLI 에 전달하지 않는 환경변수. compose 는 `--env-file` 보다 실행 측의 환경변수를 우선한다 — 설치 관리자
 # 컨테이너의 값이 스택의 `.env`(버전·저장소·프로파일)를 덮어써서는 안 된다.
 COMPOSE_SHADOWED = ("JW_REGISTRY", "JW_VERSION", "JW_APP_VERSION", "COMPOSE_PROFILES", "COMPOSE_FILE")
+
+# 내부망 주소 배정(/24 기준 호스트 번호) — docker-compose.yml 머리말의 표와 일치해야 한다.
+#   2~99     compose 서비스의 고정 주소
+#   100~104  설치 관리자(첫 번째가 기본, 점유 시 다음 번호)
+# 도커는 주소를 지정하지 않은 컨테이너에 가장 낮은 빈 주소를 배정한다. 상주 컨테이너가 동적 주소를 받으면
+# 아직 기동하지 않은 서비스의 고정 주소를 선점할 수 있으므로, 설치 관리자는 항상 예약 주소를 지정하여 연결한다.
+INSTALLER_HOSTS = range(100, 105)
 
 
 @dataclass
@@ -241,9 +249,53 @@ class Docker:
             out[name] = [p.strip() for p in ports.split(",") if p.strip()]
         return out
 
+    def installer_addresses(self) -> list[str]:
+        """내부망에서 설치 관리자에 예약된 주소(우선순위순). 네트워크가 없거나 대역을 확인할 수 없으면 빈 목록."""
+        data = self.inspect("network", NETWORK_NAME) or {}
+        for conf in (data.get("IPAM") or {}).get("Config") or []:
+            try:
+                net = ipaddress.ip_network(str(conf.get("Subnet") or ""), strict=False)
+            except ValueError:
+                continue
+            if net.version == 4 and net.num_addresses >= 256:
+                base = int(net.network_address)
+                return [str(ipaddress.ip_address(base + host)) for host in INSTALLER_HOSTS]
+        return []
+
     def connect_self(self, alias: str) -> Result:
-        """설치 관리자 자신을 워크스페이스 내부망에 연결한다(이미 연결되어 있으면 유지)."""
+        """설치 관리자 자신을 워크스페이스 내부망에 예약 주소로 연결한다(이미 예약 주소로 연결되어 있으면 유지).
+
+        동적 주소로 연결된 상태(예약 주소 도입 이전 버전이 연결한 것)이면 연결을 해제한 뒤 예약 주소로 재연결한다 —
+        동적 주소는 compose 서비스의 고정 주소와 겹칠 수 있다.
+        """
         data = self.inspect("container", self.self_ref) or {}
-        if NETWORK_NAME in ((data.get("NetworkSettings") or {}).get("Networks") or {}):
-            return Result(0, "already connected")
+        current = ((data.get("NetworkSettings") or {}).get("Networks") or {}).get(NETWORK_NAME)
+        wanted = self.installer_addresses()
+        if current is not None:
+            if not wanted or (current.get("IPAddress") or "") in wanted:
+                return Result(0, "already connected")
+            self.run(["network", "disconnect", NETWORK_NAME, self.self_ref], timeout=60)
+        for address in wanted:
+            r = self.run(["network", "connect", "--alias", alias, "--ip", address, NETWORK_NAME, self.self_ref], timeout=60)
+            if r.ok:
+                return r
         return self.run(["network", "connect", "--alias", alias, NETWORK_NAME, self.self_ref], timeout=60)
+
+    def compose_run(self, service: str, argv: list[str], *, run_args: list[str] | None = None,
+                    env_files: list[str] | None = None, timeout: float = 600.0, on_line=None,
+                    input: str | None = None) -> Result:
+        """compose 서비스의 일회용 컨테이너(`compose run --rm --no-deps`)로 명령을 실행한다.
+
+        compose 의 서비스는 내부망의 고정 주소를 사용한다. 동일 서비스의 컨테이너가 실행 중이면 해당 주소가 점유되어
+        일회용 컨테이너가 "Address already in use" 로 실패하므로, 일회용 실행에서는 고정 주소를 제거하는 compose 조각을
+        추가한다. run_args 는 서비스 이름 앞에 전달할 `compose run` 옵션, env_files 는 추가 `--env-file` 이다.
+        """
+        tmp = self.paths.state / "run"
+        tmp.mkdir(parents=True, exist_ok=True)
+        fragment = tmp / f"run-network-{service}.yml"
+        fragment.write_text(f"services:\n  {service}:\n    networks: !override\n      workspace: {{}}\n", encoding="utf-8")
+        prefix = [*self.compose_prefix(), "-f", fragment.as_posix()]
+        for path in env_files or []:
+            prefix += ["--env-file", path]
+        return self.run([*prefix, "run", "--rm", "--no-deps", *(run_args or []), service, *argv],
+                        timeout=timeout, on_line=on_line, input=input)

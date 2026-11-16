@@ -53,5 +53,8 @@ while :; do
   else
     certbot renew --standalone --quiet
   fi
+  RC=$?
+  # 갱신 시도 결과 기록 — 설치 관리자가 상태 화면에 표시한다(시각·종료 코드).
+  printf '{"at":"%s","rc":%s}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$RC" > /etc/letsencrypt/jw-renew-status.json
   sleep 12h & wait $!
 done

@@ -5,6 +5,11 @@
 ## 선택: certbot, mailserver, gitea, livekit, audiorelay (COMPOSE_PROFILES로 활성화)
 ##
 ## 네트워크: workspace (기본 172.28.0.0/24) 고정 IP — 다른 대역과 겹치면 JW_NET_PREFIX 로 앞 세 자리를 바꾼다(예 172.30.5)
+## 주소 배정(호스트 번호): 2~99 서비스 고정 주소 / 100~104 설치 관리자 예약(app/docker_api.py) / 그 밖은 미사용.
+##   고정 주소가 필요한 것은 nginx(.2 — backend 의 신뢰 프록시, 격리 브라우저 출구 규칙)이나, 도커는 주소 미지정 컨테이너에
+##   가장 낮은 빈 주소를 배정하므로 상주 서비스는 전부 고정 주소를 지정한다(동적 주소가 미기동 서비스의 주소를 선점하는 것을 방지).
+##   .3 은 비워 둔다 — 예약 주소 도입 이전의 설치 관리자가 동적으로 점유하던 주소이다.
+##   일회용 실행(compose run)은 고정 주소를 승계하지 않도록 `networks: !override` 조각을 추가하여 실행한다.
 ## 외부 접근: nginx :80 단일 진입점 + 메일/SSH/WebRTC 직접 바인딩
 ##
 ## 배포 예시:
@@ -276,7 +281,7 @@ services:
           memory: 32M
     networks:
       workspace:
-        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.3
+        ipv4_address: ${JW_NET_PREFIX:-172.28.0}.35
     restart: unless-stopped
 
   # ─── 6. Mail Server (Postfix+Dovecot+Rspamd) — profiles: mailserver ───
@@ -671,6 +676,8 @@ services:
         ws_url: ws://livekit:7880
         insecure: true
         log_level: info
+        cpu_cost:
+          room_composite_cpu_cost: ${EGRESS_ROOM_CPU_COST:-4}
     cap_add:
       - SYS_ADMIN            # 헤드리스 크롬(컴포지트 녹화) 필요
     volumes:
@@ -682,8 +689,10 @@ services:
       resources:
         limits:
           # 룸 합성 녹화 1건이 cpu 4 를 요구한다(egress room_composite_cpu_cost 기본값) — 1.5 면 녹화 요청을 받지 않는다.
+          # 상한이 서버의 코어 수를 초과하면 컨테이너 생성이 거부되므로, 코어 4개 미만 서버에서는 설치 관리자가
+          # EGRESS_CPUS(코어 수)와 EGRESS_ROOM_CPU_COST(녹화 1건의 요구량)를 낮추어 기록한다 — 녹화 품질은 보장되지 않는다.
           memory: 4G
-          cpus: '4'
+          cpus: '${EGRESS_CPUS:-4}'
         reservations:
           memory: 512M
     networks:
@@ -717,6 +726,10 @@ services:
       # extra_hosts 로 도메인을 RP_LAN_IP 로 돌리므로 그 주소 하나만 명시 허용 — 사설망 전체를 여는
       # ALLOW_PRIVATE_IP_ADDRESS 보다 좁다. 형식: "allow <주소>;allow all"(뒤의 all 은 기본값 유지).
       IP_FILTER_RULES: "allow ${RP_LAN_IP:-127.0.0.1};allow all"
+      # 편집기가 접속 주소(extra_hosts 로 내부망의 nginx 를 가리킨다)로 문서를 되가져올 때의 인증서 검증 생략 여부.
+      # 접속 주소의 인증서가 임시(자체 서명)이거나 사설 CA 발급이면 검증에 실패하여 편집기가 열리지 않으므로,
+      # 설치 관리자가 해당 구성에서만 true 로 기록한다. 공인 인증서 구성에서는 false(검증 수행).
+      USE_UNAUTHORIZED_STORAGE: "${ONLYOFFICE_ALLOW_UNTRUSTED_CERT:-false}"
     depends_on:
       backend:
         condition: service_healthy

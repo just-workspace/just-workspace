@@ -14,6 +14,7 @@ admin(관리자 계정) → lock(설치 마법사 잠금)
 from __future__ import annotations
 
 import json
+import os
 import re
 import secrets as pysecrets
 import threading
@@ -26,7 +27,7 @@ from app import certs, dkim, preflight, render, zones
 from app.bundle import Bundle
 from app.catalog import Catalog
 from app.docker_api import Docker
-from app.paths import Paths
+from app.paths import PROJECT_NAME, Paths
 from app.state import Store, now_iso, write_private
 from app.tokens import TokenStore
 
@@ -193,8 +194,22 @@ def generate_secrets(ctx: Context, names: list[str]) -> dict:
     image = f"{ctx.registry}/just-workspace-backend:{ctx.image_tag}"
     values: dict = {}
     if not ctx.docker.image_exists(image):
+        # 최초 설치에서는 이 pull 이 수십 초 이상 소요된다 — pull 단계와 동일한 형태(detail.images)로 진행을 기록한다
         ctx.log(f"backend 이미지를 받습니다: {image}")
-        ctx.docker.pull(image, on_line=ctx.log)
+        row = {"image": image, "status": "pulling", "progress": ""}
+        ctx.detail["images"] = [row]
+        ctx.save()
+        last = [0.0]
+
+        def on_line(line: str) -> None:
+            row["progress"] = line[-120:]
+            if time.monotonic() - last[0] > 1.0:
+                last[0] = time.monotonic()
+                ctx.save()
+
+        pulled = ctx.docker.pull(image, on_line=on_line)
+        row["status"], row["progress"] = ("done" if pulled.ok else "failed"), ""
+        ctx.save()
     if ctx.docker.image_exists(image):
         r = ctx.docker.run(["run", "--rm", "--network", "none", "--entrypoint", "python", image,
                             "-m", "app.cli", "gen-secrets", "--format", "json", "--only", *names], timeout=120)
@@ -268,8 +283,32 @@ def step_config(ctx: Context) -> None:
     r = ctx.docker.compose("config", "-q", timeout=120)
     if not r.ok:
         raise StepError("compose_invalid", "see_log", detail=r.err[-500:])
+    remove_inactive(ctx)
     if render.storage_volume(ctx.answers)["kind"] == "volume":
         prepare_storage(ctx)
+
+
+def remove_inactive(ctx: Context) -> None:
+    """이전 적용이 기동하였으나 현재 구성에서는 활성화되지 않는 서비스의 컨테이너를 삭제한다(데이터 볼륨은 보존).
+
+    적용 실패 후 구역을 제외하고 재적용하는 경우에 해당한다 — 제외된 구역의 컨테이너가 포트·주소·메모리를 점유한 채
+    남는 것을 방지한다. 일회용 컨테이너(`compose run`)의 잔존분도 함께 삭제한다.
+    """
+    r = ctx.docker.run(["ps", "-a", "--filter", f"label=com.docker.compose.project={PROJECT_NAME}", "--format",
+                        '{{.Names}}\t{{.Label "com.docker.compose.service"}}\t{{.Label "com.docker.compose.oneoff"}}'],
+                       timeout=30)
+    if not r.ok:
+        return
+    active = set(ctx.active_services())
+    stale = []
+    for line in r.out.splitlines():
+        name, _, rest = line.partition("\t")
+        service, _, oneoff = rest.partition("\t")
+        if name.strip() and (oneoff.strip() == "True" or (service.strip() and service.strip() not in active)):
+            stale.append(name.strip())
+    if stale:
+        ctx.log("지금 구성에 없는 컨테이너를 정리합니다: " + ", ".join(sorted(stale)))
+        ctx.docker.run(["rm", "-f", *sorted(stale)], timeout=300)
 
 
 def step_storage(ctx: Context) -> None:
@@ -330,8 +369,8 @@ def migrate_database(ctx: Context) -> None:
     backend 기동 전에 여기서 명시적으로 실행하고 종료 코드를 확인한다(backend 는 기동 시 "같음"만 확인하고 통과한다).
     실패 시 backend 를 기동하지 않고 이 단계에서 중단한다 — 원인은 단계 로그에 기록된다.
     """
-    r = ctx.docker.compose("run", "--rm", "--no-deps", "-T", "--entrypoint", "python", "backend",
-                           "-m", "app.cli", "migrate", timeout=1800, on_line=ctx.log)
+    r = ctx.docker.compose_run("backend", ["-m", "app.cli", "migrate"], run_args=["-T", "--entrypoint", "python"],
+                               timeout=1800, on_line=ctx.log)
     if not r.ok:
         ctx.log(r.text[-800:])
         raise StepError("database_migrate_failed", "see_log", exit_code=r.rc)
@@ -393,6 +432,38 @@ def set_site_ca(ctx: Context, chain: str) -> None:
 def read_cert(ctx: Context, name: str) -> str | None:
     r = ctx.docker.helper(["read-cert", "--name", name], volumes=[f"{CERT_VOLUME}:/etc/letsencrypt"], timeout=60)
     return helper_json(r).get("cert")
+
+
+# 인증서 발급 실패의 분류 — (원인 키, 발급 명령의 출력에 포함되는 문자열(소문자)). 위에서부터 판정한다.
+CERT_FAILURES = (
+    # 컨테이너 기동 실패 — 인증 기관에 요청이 도달하기 전의 서버 내부 문제
+    ("cert_service_start_failed", ("error response from daemon", "address already in use", "port is already allocated",
+                                   "failed to set up container networking", "no such image", "pull access denied")),
+    ("cert_rate_limited", ("ratelimited", "too many certificates", "too many failed authorizations", "too many new orders",
+                           "rate limit")),
+    ("cert_dns_mismatch", ("dns problem", "nxdomain", "no valid a records", "no valid ip addresses", "servfail")),
+    ("cert_acme_challenge_failed", ("timeout during connect", "connection refused", "invalid response from",
+                                    "likely firewall problem", "error getting validation data", "unauthorized",
+                                    "connection reset", "no route to host")),
+)
+
+
+def classify_cert_failure(output: str, dns_status: str | None = None) -> str:
+    """인증서 자동 발급 실패의 원인 키 — 발급 명령의 출력으로 분류한다. 분류 불가 시 `cert_issue_failed`."""
+    low = (output or "").lower()
+    for cause, needles in CERT_FAILURES:
+        if any(n in low for n in needles):
+            # 검증 요청이 다른 서버에 도달한 경우(확인 파일 불일치)이며 DNS 불일치가 감지된 상태이면 DNS 를 원인으로 본다
+            if cause == "cert_acme_challenge_failed" and dns_status == "mismatch":
+                return "cert_dns_mismatch"
+            return cause
+    return "cert_issue_failed"
+
+
+def acme_server_args() -> list[str]:
+    """인증 기관의 ACME 디렉터리 주소 지정(`JW_ACME_SERVER`) — 미지정 시 certbot 의 기본값(Let's Encrypt 운영 서버)."""
+    server = (os.environ.get("JW_ACME_SERVER") or "").strip()
+    return ["--server", server] if re.fullmatch(r"https://[A-Za-z0-9._~:/\-]+", server) else []
 
 
 def step_cert(ctx: Context) -> None:
@@ -464,22 +535,45 @@ def step_cert(ctx: Context) -> None:
                "--cert-name", name, "--keep-until-expiring", "--expand"]
     for n in names:
         certbot += ["-d", n]
+    certbot += acme_server_args()
     if ctx.docker.container_status("ws-nginx")["running"]:
-        run = ["run", "--rm", "--no-deps", "--entrypoint", "certbot", "certbot", *certbot,
-               "--webroot", "-w", "/var/www/certbot"]
+        run_args, method = ["--entrypoint", "certbot"], ["--webroot", "-w", "/var/www/certbot"]
     else:
         # nginx 미기동 상태 — certbot 이 80 을 직접 수신
-        run = ["run", "--rm", "--no-deps", "--publish", "80:80", "--entrypoint", "certbot", "certbot", *certbot,
-               "--standalone"]
+        run_args, method = ["--publish", "80:80", "--entrypoint", "certbot"], ["--standalone"]
     ctx.log("인증서를 요청합니다: " + ", ".join(names))
-    r = ctx.docker.compose(*run, timeout=600, on_line=ctx.log)
+    output: list[str] = []
+
+    def on_line(line: str) -> None:
+        output.append(line)
+        ctx.log(line)
+
+    r = ctx.docker.compose_run("certbot", [*certbot, *method], run_args=run_args, timeout=600, on_line=on_line)
     issued = read_cert(ctx, name) if r.ok else None
     if not r.ok or not issued:
         ctx.store.update_facts(cert_issue_failed=True)
-        raise StepError("cert_issue_failed", "cert_retry_or_temporary", names=names, alternative="use_temporary_cert")
+        cause = classify_cert_failure("\n".join([*output, r.err]), ctx.facts.dns_status)
+        raise StepError(cause, "cert_retry_or_temporary", names=names, alternative="use_temporary_cert")
     _place(ctx, name, aliases)
     remember(issued, "auto")
     ctx.log("인증서를 받았습니다")
+
+
+def start_renewal(ctx: Context) -> bool:
+    """인증서 자동 갱신 컨테이너(certbot)를 기동한다 — 자동 발급 구성(certbot 프로파일 활성)에서만 해당한다.
+
+    갱신은 webroot 방식이므로 nginx 가 80 에서 확인 파일 경로를 제공 중이어야 한다(nginx 기동 후 호출한다).
+    기동 실패는 설치를 중단시키지 않고 주의로 기록한다 — 인증서는 이미 발급되어 있고, 설치 관리자가 주기적으로 재기동을 시도한다.
+    """
+    if "certbot" not in ctx.active_services():
+        return False
+    try:
+        ctx.up(["certbot"])
+    except StepError as e:
+        ctx.warn("cert_renewal_not_started", detail=str(e.vars.get("detail") or "")[-200:])
+        return False
+    ctx.log("인증서 자동 갱신 컨테이너를 시작했습니다")
+    return True
 
 
 def configure_backend(ctx: Context) -> None:
@@ -512,6 +606,7 @@ def step_zones(ctx: Context, *, configure: bool = True) -> None:
     r = ctx.docker.connect_self(render.INSTALLER_ALIAS)
     if not r.ok:
         ctx.warn("installer_not_on_network", detail=r.err[-200:])
+    start_renewal(ctx)
 
     rows = [{"id": z, "status": "pending"} for z in ctx.plan.zones]
     ctx.detail["zones"] = rows
@@ -866,7 +961,64 @@ class Engine:
         return state
 
 
-# ─── 인증서 갱신 후 재적재 ───
+# ─── 인증서 갱신 서비스 · 갱신 후 재적재 ───
+
+RENEWAL_CONTAINER = "ws-certbot"
+
+
+def ensure_renewal(engine: Engine) -> str:
+    """자동 발급 설치에서 갱신 컨테이너가 실행 중이 아니면 기동한다. `not_applicable` | `running` | `started` | `failed`.
+
+    설치 관리자가 기동 시와 주기적으로 호출한다. 갱신 컨테이너를 기동하지 않던 버전에서 업데이트한 설치, 수동으로 중지된 경우를 복구한다.
+    """
+    if not engine.store.locked:
+        return "not_applicable"
+    answers, facts = engine.store.load_answers(), engine.store.facts()
+    ctx = engine._context("certwatch", answers, facts)
+    if not (ctx.plan.tls and ctx.plan.cert_mode == "auto"):
+        return "not_applicable"
+    if engine.docker.container_status(RENEWAL_CONTAINER)["running"]:
+        return "running"
+    engine.docker.connect_self(render.INSTALLER_ALIAS)        # 동적 주소로 연결된 상태이면 예약 주소로 이전한다
+    return "started" if start_renewal(ctx) else "failed"
+
+
+def read_cert_state(ctx: Context, name: str) -> tuple[str | None, dict | None]:
+    """(인증서 PEM, 갱신 컨테이너가 기록한 최종 갱신 시도 `{"at", "rc"}`) — 없으면 각각 None."""
+    r = ctx.docker.helper(["read-cert", "--name", name], volumes=[f"{CERT_VOLUME}:/etc/letsencrypt"], timeout=60)
+    data = helper_json(r)
+    record = data.get("renewal")
+    return data.get("cert"), record if isinstance(record, dict) else None
+
+
+def renewal_status(engine: Engine, plan: render.Plan, not_before: str | None, not_after: str | None,
+                   record: dict | None) -> dict:
+    """갱신 서비스의 상태 — 관리 화면·`jw status` 표시용.
+
+    next_renewal_at 은 추정값이다: certbot 은 유효 기간의 1/3 이 남은 시점부터 갱신을 시도한다(12시간 주기 확인).
+    last_run_at·last_result 는 갱신 컨테이너가 갱신 시도마다 기록한 값이다(인증서 볼륨의 상태 파일).
+    """
+    if not (plan.tls and plan.cert_mode == "auto"):
+        return {"applicable": False, "service": "missing", "last_run_at": None, "last_result": None, "next_renewal_at": None}
+    st = engine.docker.container_status(RENEWAL_CONTAINER)
+    service = "running" if st["running"] else ("stopped" if st["exists"] else "missing")
+    next_at = None
+    try:
+        from datetime import datetime
+
+        start = datetime.strptime(not_before or "", "%Y-%m-%dT%H:%M:%SZ")
+        end = datetime.strptime(not_after or "", "%Y-%m-%dT%H:%M:%SZ")
+        next_at = (end - (end - start) / 3).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        pass
+    record = record or {}
+    last_at = record.get("at") if isinstance(record.get("at"), str) else None
+    last_result = None
+    if last_at:
+        last_result = "ok" if record.get("rc") == 0 else "failed"
+    return {"applicable": True, "service": service, "last_run_at": last_at, "last_result": last_result,
+            "next_renewal_at": next_at}
+
 
 
 def reload_after_renewal(engine: Engine) -> str:

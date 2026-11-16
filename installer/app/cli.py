@@ -102,8 +102,27 @@ def cmd_status(args) -> int:
         if step.get("error"):
             line += f"  ← {step['error']['cause']} (해결: {step['error'].get('fix')})"
         print(line)
+    cert = None
+    if svc.store.locked:
+        try:
+            from app import api_cert
+
+            cert = api_cert.manager(svc).status()
+        except Exception:  # noqa: BLE001 — 상태 조회 실패가 명령 실패로 이어져서는 안 됨
+            cert = None
+    if cert and cert.get("managed"):
+        kind = {"auto": "자동 발급", "upload": "올린 인증서", "temporary": "임시(자체 서명)"}.get(cert["mode"], cert["mode"])
+        print(f"인증서: {kind} · 만료 {cert.get('not_after') or '알 수 없음'}"
+              + (f" ({cert['days_left']}일 남음)" if cert.get("days_left") is not None else ""))
+        renewal = cert.get("renewal") or {}
+        if renewal.get("applicable"):
+            service = {"running": "동작 중", "stopped": "멈춤", "missing": "없음"}[renewal["service"]]
+            last = "기록 없음"
+            if renewal.get("last_run_at"):
+                last = f"{renewal['last_run_at']} ({'정상' if renewal.get('last_result') == 'ok' else '실패'})"
+            print(f"자동 갱신: {service} · 마지막 확인 {last} · 다음 갱신 예정 {renewal.get('next_renewal_at') or '알 수 없음'}")
     if args.json:
-        print(json.dumps({"state": st, "apply": apply}, ensure_ascii=False, indent=2))
+        print(json.dumps({"state": st, "apply": apply, "cert": cert}, ensure_ascii=False, indent=2))
     return 0 if apply.get("status") != "failed" else 1
 
 

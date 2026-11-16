@@ -107,6 +107,24 @@ def outbound_address() -> str:
         s.close()
 
 
+CLOUD_METADATA = ("169.254.169.254", 80)      # 주요 클라우드(AWS·GCP·Azure·OpenStack 등)의 인스턴스 메타데이터 주소(링크 로컬)
+RENEW_STATUS = "jw-renew-status.json"         # 갱신 컨테이너가 갱신 시도마다 기록하는 결과(scripts/certbot-entrypoint.sh)
+
+
+def cloud_metadata(timeout: float = 1.0) -> bool:
+    """클라우드 인스턴스 메타데이터 서비스의 응답 여부 — 응답하면 클라우드 서버(사설 주소 + 공인 주소 1:1 NAT)로 판정한다.
+
+    응답 내용은 읽지 않는다(HTTP 응답의 첫 줄 수신 여부만 확인). 사내·가정 환경에서는 이 주소로의 경로가 없어 즉시 실패하거나 시간 초과된다.
+    """
+    try:
+        with socket.create_connection(CLOUD_METADATA, timeout=timeout) as s:
+            s.settimeout(timeout)
+            s.sendall(b"GET / HTTP/1.0\r\nHost: 169.254.169.254\r\n\r\n")
+            return s.recv(5).startswith(b"HTTP/")
+    except OSError:
+        return False
+
+
 def cmd_host_probe(args) -> int:
     ports = {str(p): port_state(int(p)) for p in args.ports.split(",") if p.strip()}
     try:
@@ -122,7 +140,7 @@ def cmd_host_probe(args) -> int:
     except OSError:
         pass
     return _out({"ports": ports, "routes": routes, "outbound_address": outbound_address(),
-                 "gateway": parse_default_gateway(table), "selinux": selinux})
+                 "gateway": parse_default_gateway(table), "selinux": selinux, "cloud": cloud_metadata()})
 
 
 # ─── disk / path / nfs ───
@@ -403,11 +421,17 @@ def cmd_place_cert(args) -> int:
 
 def cmd_read_cert(args) -> int:
     path = os.path.join(args.root, "live", _safe_name(args.name), "fullchain.pem")
+    renewal = None
+    try:
+        with open(os.path.join(args.root, RENEW_STATUS), encoding="utf-8") as f:
+            renewal = json.loads(f.read(2000))
+    except (OSError, ValueError):
+        pass
     try:
         with open(path, encoding="utf-8") as f:
-            return _out({"cert": f.read()})
+            return _out({"cert": f.read(), "renewal": renewal})
     except OSError:
-        return _out({"cert": None})
+        return _out({"cert": None, "renewal": renewal})
 
 
 def cmd_unlink_cert(args) -> int:

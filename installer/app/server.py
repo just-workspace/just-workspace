@@ -18,6 +18,7 @@ from app.state import write_private
 
 WIZARD_PORT = 8443
 CERT_WATCH_SECONDS = 3600
+CERT_WATCH_FIRST_SECONDS = 45       # 기동 후 최초 확인까지의 대기(서버 재부팅 직후 다른 컨테이너의 기동 대기)
 
 
 def ensure_tls(svc: api.Services) -> tuple[str, str, str]:
@@ -35,8 +36,28 @@ def ensure_tls(svc: api.Services) -> tuple[str, str, str]:
     return str(cert_path), str(key_path), certs.fingerprint_sha256(cert_path.read_text(encoding="utf-8"))
 
 
+def guess_host(svc: api.Services) -> tuple[str, bool]:
+    """(접속 주소에 표시할 호스트, 추정 여부). `JW_PUBLIC_HOST` 미지정 시 서버의 주소를 추정한다.
+
+    이전에 감지해 둔 공인 주소 → 호스트 네트워크의 보조 컨테이너로 조회한 아웃바운드 주소 순으로 사용하며, 모두 실패하면 자리표시를 반환한다.
+    """
+    given = (os.environ.get("JW_PUBLIC_HOST") or "").strip()
+    if given:
+        return given, False
+    try:
+        known = svc.store.facts().public_ip
+        if known:
+            return known, True
+        probe = engine.helper_json(svc.docker.helper(["host-probe", "--ports", ""], network="host", timeout=30))
+        if probe.get("outbound_address"):
+            return str(probe["outbound_address"]), True
+    except Exception:  # noqa: BLE001 — 추정 실패 시 자리표시로 대체
+        pass
+    return "<서버 주소>", False
+
+
 def banner(svc: api.Services, fingerprint: str, port: int) -> str:
-    host = os.environ.get("JW_PUBLIC_HOST") or "<서버 주소>"
+    host, guessed = guess_host(svc)
     lines = ["", "=" * 72, f" Just Workspace 설치 관리자 {svc.bundle.version}"]
     if svc.store.locked:
         lines.append(" 설치가 끝난 서버입니다 — 마법사는 잠겨 있습니다.")
@@ -46,6 +67,8 @@ def banner(svc: api.Services, fingerprint: str, port: int) -> str:
             f" 브라우저에서 여세요:  https://{host}:{port}/?token={token}",
             " (설치 토큰은 24시간 동안 유효합니다. 다시 받기: docker exec jw-installer jw token)",
         ]
+        if guessed:
+            lines.append(" (주소는 이 서버에서 추정한 값입니다. 다른 주소로 접속한다면 주소 부분만 바꿔 여세요.)")
     lines += [
         " 이 주소의 인증서는 설치 관리자가 스스로 만든 것이라 브라우저가 경고합니다.",
         " 아래 지문과 같은지 확인하고 계속하세요.",
@@ -56,9 +79,21 @@ def banner(svc: api.Services, fingerprint: str, port: int) -> str:
 
 
 async def cert_watch(svc: api.Services) -> None:
+    # 확인 주기(초) — 기본 1시간. 갱신 직후 재적재까지의 지연을 줄이려면 JW_CERT_WATCH_SECONDS 로 조정한다.
+    try:
+        interval = max(30, int(os.environ.get("JW_CERT_WATCH_SECONDS") or CERT_WATCH_SECONDS))
+    except ValueError:
+        interval = CERT_WATCH_SECONDS
+    delay = min(CERT_WATCH_FIRST_SECONDS, interval)
     while True:
-        await asyncio.sleep(CERT_WATCH_SECONDS)
+        await asyncio.sleep(delay)
+        delay = interval
         try:
+            if svc.engine.running or api_update.manager(svc).running:
+                continue                    # 적용·업데이트 진행 중에는 컨테이너를 조작하지 않는다
+            started = await asyncio.to_thread(engine.ensure_renewal, svc.engine)
+            if started in ("started", "failed"):
+                print(f"[certwatch] 갱신 컨테이너 기동: {started}", flush=True)
             await asyncio.to_thread(engine.reload_after_renewal, svc.engine)
         except Exception as e:  # noqa: BLE001
             print(f"[certwatch] {type(e).__name__}", flush=True)
@@ -103,6 +138,12 @@ def main() -> int:
     internal_port = int(os.environ.get("JW_INTERNAL_PORT", render.INTERNAL_API_PORT))
     svc.local_key()
     print(banner(svc, fingerprint, wizard_port), flush=True)
+    if svc.store.locked:
+        # 동적 주소로 내부망에 연결된 상태(예약 주소 도입 이전 버전이 연결한 것)이면 예약 주소로 이전한다
+        try:
+            svc.docker.connect_self(render.INSTALLER_ALIAS)
+        except Exception as e:  # noqa: BLE001
+            print(f"주의: 내부망 연결을 확인하지 못했습니다({type(e).__name__}).", flush=True)
     if svc.engine.resume():
         print("끊겼던 적용을 이어서 진행합니다.", flush=True)
     if api_update.manager(svc).resume():

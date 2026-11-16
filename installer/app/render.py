@@ -187,6 +187,8 @@ def derive(answers: Answers, facts: Facts, catalog: Catalog) -> Plan:
         cautions.append({"key": "no_system_mail", "vars": {}})
     if meetings_on and not (answers.meetings.public_ip or facts.public_ip):
         cautions.append({"key": "meetings_public_ip_unknown", "vars": {}})
+    if meetings_on and facts.cpus and facts.cpus < RECORDING_CPUS:
+        cautions.append({"key": "meetings_recording_low_cpu", "vars": {"cpus": facts.cpus, "recommend": RECORDING_CPUS}})
     if lossless:
         cautions.append({"key": "lossless_needs_udp_4433", "vars": {}})
     if "rbi" in zones and not is_ip:
@@ -216,6 +218,24 @@ def backend_workers(facts: Facts) -> str:
     if facts.memory_mb and facts.memory_mb < 6 * 1024:
         workers = 2
     return str(workers)
+
+
+RECORDING_CPUS = 4      # 회의 녹화(egress)의 권장 코어 수 = 룸 합성 녹화 1건의 CPU 요구량 기본값
+
+
+def egress_limits(facts: Facts) -> tuple[str, str]:
+    """(`EGRESS_CPUS`, `EGRESS_ROOM_CPU_COST`) — 녹화 컨테이너의 CPU 상한과 룸 합성 녹화 1건의 요구량.
+
+    compose 의 CPU 상한이 서버의 코어 수를 초과하면 도커가 컨테이너 생성을 거부한다. 코어가 권장 수(4) 미만이면 상한을
+    코어 수로, 요구량을 (코어 수 - 1, 최소 1)로 낮춘다 — 요구량이 가용 CPU 를 초과하면 녹화 요청이 전부 거절되기 때문이다.
+    코어 수 미확인 시 빈 값(compose 의 기본값 4 적용).
+    """
+    if not facts.cpus:
+        return "", ""
+    cpus = int(facts.cpus)
+    if cpus >= RECORDING_CPUS:
+        return str(RECORDING_CPUS), str(RECORDING_CPUS)
+    return str(cpus), str(max(1, cpus - 1))
 
 
 # 격리 브라우저의 대상이 될 수 있는 대역(backend 의 RBI_ALLOW_CEILING 기본값과 동일)
@@ -331,9 +351,15 @@ def env_sections(answers: Answers, secrets: dict, facts: Facts, plan: Plan,
         ("AUDIORELAY_WT_PORT", "4433"),
         ("AUDIORELAY_WT_CERT", f"{cert_dir}/fullchain.pem"),
         ("AUDIORELAY_WT_KEY", f"{cert_dir}/privkey.pem"),
+        ("EGRESS_CPUS", egress_limits(facts)[0] if meetings_on else ""),
+        ("EGRESS_ROOM_CPU_COST", egress_limits(facts)[1] if meetings_on else ""),
     ]))
     sections.append(("문서 · AI", [
         ("ONLYOFFICE_JWT_SECRET", s("ONLYOFFICE_JWT_SECRET") if "docs" in zones else ""),
+        # 문서 편집기가 접속 주소로 회귀 접속할 때의 인증서 검증 생략 — 브라우저가 신뢰하지 않는 인증서(임시, 사설 CA)를
+        # 내장 nginx 가 제공하는 구성에 한한다(회귀 접속은 내부망의 nginx 로 고정되어 있다 — HAIRPIN_HOST·RP_LAN_IP)
+        ("ONLYOFFICE_ALLOW_UNTRUSTED_CERT", "true" if "docs" in zones and plan.tls and (
+            plan.cert_mode == "temporary" or (plan.cert_mode == "upload" and facts.site_ca)) else "false"),
         ("SEARXNG_SECRET", s("SEARXNG_SECRET") if "ai" in zones else ""),
         ("SANDBOX_TOKEN", s("SANDBOX_TOKEN") if "ai" in zones else ""),
         ("DOCCONV_TOKEN", s("DOCCONV_TOKEN") if "ai" in zones else ""),

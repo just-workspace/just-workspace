@@ -53,7 +53,7 @@ def test_restore_shows_the_backup_first_and_changes_nothing_without_yes(host, ca
     assert host.restore_calls == []
     inspect = host.runner.find("compose", "run", "backend", "backup", "inspect")[0]
     assert "/srv/backups/full.jwbak:/restore-src:ro" in inspect and "/restore-src" in inspect
-    assert any(a.endswith("run-network.yml") for a in inspect)                # 실행 중인 backend 의 고정 주소와 충돌하지 않도록 한다
+    assert any(a.endswith("run-network-backend.yml") for a in inspect)                # 실행 중인 backend 의 고정 주소와 충돌하지 않도록 한다
 
 
 def test_restore_runs_the_backend_restore_under_maintenance(host, capsys):

@@ -143,7 +143,10 @@ class UpdateManager:
 
     def settings_raw(self) -> dict:
         data = self._read("settings.json", {}) or {}
-        base = {"mode": "manual", "window": {"start": "03:00", "end": "05:00"}, "channel": "stable",
+        # 채널의 기본값은 현재 설치된 버전의 채널이다 — Beta 버전으로 설치한 서버는 Beta 채널을 수신한다
+        # (Stable 채널에는 해당 버전 이후의 릴리스가 없을 수 있다). 사용자가 채널을 선택하면 그 값이 저장되어 우선한다.
+        base = {"mode": "manual", "window": {"start": "03:00", "end": "05:00"},
+                "channel": rel.version_channel(self.current()["version"]),
                 "beta": {"since": None, "restore_point": None}, "contact": None,
                 "auto": {"paused": False, "paused_at": None, "reason": None}, "last_auto": None,
                 "auto_skip_until": None, "next_check_at": None}
@@ -408,7 +411,7 @@ class UpdateManager:
                                        base_url=rel.channel_base_url(self.store.dir))
         except rel.CheckError as e:
             chk.update(last_at=self.iso(), ok=False, error=e.as_dict())
-            if e.code == "unconfigured":
+            if e.code in ("unconfigured", "channel_empty"):
                 chk["available"] = {"state": "none"}
             self._write("check.json", chk)
             return
@@ -1184,23 +1187,20 @@ class UpdateManager:
                      timeout: float = 600, on_line=None, run_args: list[str] | None = None):
         """backend 이미지의 일회용 컨테이너(`compose run`)로 명령을 실행한다. version 지정 시 해당 버전의 이미지를 사용한다.
 
-        compose 의 backend 서비스는 내부망의 고정 주소를 사용한다. 실행 중인 backend 가 해당 주소를 점유하므로
-        일회용 컨테이너에서는 고정 주소를 제거한다(compose 조각 하나를 추가한다) — 그렇지 않으면 "Address already in use" 가 발생한다.
+        일회용 컨테이너는 서비스의 고정 주소를 승계하지 않는다(app/docker_api.py 의 `compose_run`).
         run_args 는 `compose run` 에 추가로 전달할 옵션(마운트할 파일 등)이다.
         """
         tmp = self.dir / "tmp"
         tmp.mkdir(parents=True, exist_ok=True)
-        network = tmp / "run-network.yml"
-        network.write_text("services:\n  backend:\n    networks: !override\n      workspace: {}\n", encoding="utf-8")
-        prefix = [*self.docker.compose_prefix(), "-f", network.as_posix()]
         override = tmp / "run-version.env"
+        env_files = []
         if version:
             write_private(override, f"JW_VERSION={version}\nJW_APP_VERSION={version}\n")
-            prefix += ["--env-file", override.as_posix()]
+            env_files.append(override.as_posix())
         try:
-            return self.docker.run([*prefix, "run", "--rm", "--no-deps", "-T", *(["--user", user] if user else []),
-                                    *(run_args or []), "--entrypoint", "python", "backend", *argv],
-                                   timeout=timeout, on_line=on_line)
+            return self.docker.compose_run(
+                "backend", argv, env_files=env_files, timeout=timeout, on_line=on_line,
+                run_args=["-T", *(["--user", user] if user else []), *(run_args or []), "--entrypoint", "python"])
         finally:
             override.unlink(missing_ok=True)
 

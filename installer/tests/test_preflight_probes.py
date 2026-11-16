@@ -35,7 +35,7 @@ def test_preflight_all_pass(tmp_path, catalog):
     assert [i["id"] for i in report["items"]] == [
         "docker_engine", "docker_compose", "cpu", "memory", "arch", "disk", "time_sync",
         "port_80", "port_443", "port_25", "subnet", "internet", "registry", "selinux"]
-    assert report["facts"] == {"memory_mb": 16384, "cpus": 4, "outbound_address": "192.168.10.20", "gateway": "192.168.10.1"}
+    assert report["facts"] == {"memory_mb": 16384, "cpus": 4, "outbound_address": "192.168.10.20", "cloud": False, "gateway": "192.168.10.1"}
     # 그중 facts 로 보존하는 항목 — 서버 주소와 게이트웨이는 격리 브라우저의 RBI_PROTECTED 에 사용된다
     assert preflight.preflight_facts(report) == {"memory_mb": 16384, "cpus": 4, "host_address": "192.168.10.20", "gateway": "192.168.10.1"}
     assert preflight.preflight_facts({"facts": {"memory_mb": 8, "cpus": None, "outbound_address": None}}) == {"memory_mb": 8}

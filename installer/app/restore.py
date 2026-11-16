@@ -672,10 +672,9 @@ def step_database(ctx: eng.Context) -> None:
     _create_only(ctx, need)
 
     ctx.log("데이터를 되돌립니다: " + ", ".join(items))
-    r = ctx.docker.compose(
-        "run", "--rm", "--no-deps", "-T", "--user", "0", "--entrypoint", "python",
-        "-v", f"{source}:{SOURCE_MOUNT}:ro", "backend",
-        "-m", "app.cli", "restore", SOURCE_MOUNT, "--yes", "--json", "--items", ",".join(items),
+    r = ctx.docker.compose_run(
+        "backend", ["-m", "app.cli", "restore", SOURCE_MOUNT, "--yes", "--json", "--items", ",".join(items)],
+        run_args=["-T", "--user", "0", "--entrypoint", "python", "-v", f"{source}:{SOURCE_MOUNT}:ro"],
         timeout=12 * 3600, on_line=ctx.log)
     report = _json_tail(r.out)
     if not r.ok or not report.get("ok"):

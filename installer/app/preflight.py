@@ -166,6 +166,9 @@ def run(docker: Docker, answers: ans.Answers, catalog: Catalog, *, registry: str
     cpus = int(info.get("NCPU") or 0)
     if cpus and cpus < CPU_MIN:
         items.append(item("cpu", "fail", cpus, "cpu_too_few", min=CPU_MIN))
+    elif cpus < render.RECORDING_CPUS and "meetings" in ans.selected_zones(answers, catalog):
+        # 설치는 가능하다(녹화 컨테이너의 CPU 상한을 코어 수에 맞춘다) — 회의 녹화의 권장 사양 미달만 통지한다
+        items.append(item("cpu", "warn", cpus, "cpu_below_recording", cpus=cpus, recommend=render.RECORDING_CPUS))
     elif cpus:
         items.append(item("cpu", "pass", cpus))
     else:
@@ -287,6 +290,7 @@ def run(docker: Docker, answers: ans.Answers, catalog: Catalog, *, registry: str
         "items": items,
         "facts": {"memory_mb": memory_mb or None, "cpus": cpus or None,
                   "outbound_address": probe.get("outbound_address") or None,
+                  "cloud": bool(probe.get("cloud")),
                   "gateway": probe.get("gateway") or None},
     }
 

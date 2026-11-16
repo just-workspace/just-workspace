@@ -28,7 +28,7 @@ MAX_CERT, MAX_KEY = 200_000, 50_000
 
 def describe(cert_pem: str | None, now: dt.datetime | None = None) -> dict:
     """인증서 1건의 요약 — 만료일·잔여 일수·발급자·이름·자체 서명 여부. 읽기 실패 시 빈 값."""
-    empty = {"not_after": None, "days_left": None, "issuer": None, "names": [], "self_signed": False}
+    empty = {"not_before": None, "not_after": None, "days_left": None, "issuer": None, "names": [], "self_signed": False}
     if not cert_pem:
         return empty
     try:
@@ -44,7 +44,8 @@ def describe(cert_pem: str | None, now: dt.datetime | None = None) -> dict:
                 issuer = str(found[0].value)
                 break
         now = now or dt.datetime.now(dt.timezone.utc)
-        return {"not_after": not_after.strftime("%Y-%m-%dT%H:%M:%SZ"), "days_left": (not_after - now).days,
+        return {"not_before": cert.not_valid_before_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "not_after": not_after.strftime("%Y-%m-%dT%H:%M:%SZ"), "days_left": (not_after - now).days,
                 "issuer": issuer, "names": certs._names(cert), "self_signed": certs.is_self_signed(cert_pem)}
     except Exception:  # noqa: BLE001 — 손상된 파일이어도 상태 조회에는 응답한다
         return empty
@@ -64,7 +65,8 @@ class CertManager:
         ctx = self._ctx(answers)
         plan = ctx.plan
         mode = answers.access.cert
-        info = describe(eng.read_cert(ctx, plan.cert_dir) if plan.domain else None)
+        pem, record = eng.read_cert_state(ctx, plan.cert_dir) if plan.domain else (None, None)
+        info = describe(pem)
         running = next((j for j in self.zones.jobs().values() if j.get("kind") == "cert" and j.get("status") == "running"), None)
         return {
             "managed": plan.tls,
@@ -83,6 +85,8 @@ class CertManager:
             # 발급 CA 를 별도 업로드할 수 있는 설치인지 여부(업로드한 인증서를 사용하며, 그것이 자체 서명이 아닌 경우)
             "ca_uploadable": bool(plan.tls and mode == "upload" and not info["self_signed"]),
             "pending": sorted(zones.pending(self.store)),
+            # 자동 갱신 서비스(자동 발급 설치에만 해당) — 동작 여부·최종 갱신 시도·다음 갱신 예정(추정)
+            "renewal": eng.renewal_status(self.engine, plan, info["not_before"], info["not_after"], record),
             "job": running,
         }
 
@@ -183,16 +187,23 @@ class CertManager:
         zm = self.zones
         zm._stage(job, "reload", "running")
         active = ctx.active_services()
-        if "certbot" in active:
-            ctx.up(["certbot"])                       # 자동 발급으로 전환된 경우 갱신 컨테이너 필요
         ctx.docker.run(["restart", "ws-nginx"], timeout=120)
         ctx.wait_ready("ws-nginx", 120)
+        if "certbot" in active:
+            ctx.docker.connect_self(render.INSTALLER_ALIAS)   # 동적 주소로 연결된 상태이면 예약 주소로 이전한다
+            ctx.up(["certbot"])                       # 자동 발급으로 전환된 경우 갱신 컨테이너 필요(webroot — nginx 기동 후)
+        elif ctx.docker.container_status(eng.RENEWAL_CONTAINER)["exists"]:
+            ctx.stop(["certbot"])                     # 자동 발급에서 다른 방식으로 전환된 경우 갱신 컨테이너 제거
         if ctx.plan.turn and ctx.docker.container_status("ws-livekit")["running"]:
             ctx.docker.run(["restart", "ws-livekit"], timeout=120)
         if "gitea" in active and ctx.docker.container_status("ws-gitea")["running"]:
             # 신뢰 대상 발급 CA 가 추가 또는 제거된 경우 여기서 컨테이너가 재생성된다(변경이 없으면 유지)
             ctx.up(["gitea"])
             ctx.wait_ready("ws-gitea")
+        if "onlyoffice" in active and ctx.docker.container_status("ws-onlyoffice")["running"]:
+            # 인증서 종류가 변경되면 회귀 접속의 인증서 검증 설정이 달라진다(변경이 없으면 유지)
+            ctx.up(["onlyoffice"])
+            ctx.wait_ready("ws-onlyoffice")
         ctx.up(["backend"])                           # `.env` 의 인증서 관련 값 또는 신뢰 대상 CA 가 변경된 경우 재생성
         ctx.wait_ready("ws-backend")
         zm._stage(job, "reload", "done")

@@ -191,13 +191,18 @@ def commands(svc: Services) -> dict:
 
 
 def detected_facts(svc: Services, pre: dict | None) -> dict:
-    """감지값 — 미확인 항목은 null. 연결 형태: 아웃바운드 주소가 공인이면 direct, 사설이면 router(프록시 뒤 여부는 판별 불가)."""
+    """감지값 — 미확인 항목은 null. 연결 형태: 아웃바운드 주소가 공인이면 direct, 사설이면 router(프록시 뒤 여부는 판별 불가).
+
+    사설 주소이더라도 클라우드 메타데이터 서비스가 응답하면(`cloud`) direct 로 판정한다 — 클라우드 서버는 공인 주소가
+    인스턴스에 1:1 로 변환되므로 포트 포워딩 설정이 필요하지 않다(방화벽 규칙만 필요).
+    """
     facts = svc.store.facts()
     lan = ((pre or {}).get("facts") or {}).get("outbound_address") or None
+    cloud = bool(((pre or {}).get("facts") or {}).get("cloud"))
     detected = None
     if lan:
         try:
-            detected = "direct" if ipaddress.ip_address(lan).is_global else "router"
+            detected = "direct" if ipaddress.ip_address(lan).is_global or cloud else "router"
         except ValueError:
             detected = None
     disk = next((i.get("value") for i in (pre or {}).get("items", []) if i.get("id") == "disk"), None)
@@ -205,7 +210,7 @@ def detected_facts(svc: Services, pre: dict | None) -> dict:
     if isinstance(disk, dict):
         free = disk.get("free_gb") if isinstance(disk.get("free_gb"), (int, float)) else None
     return {"memory_mb": facts.memory_mb, "public_ip": facts.public_ip, "lan_ip": lan,
-            "detected_network": detected, "disk_free_gb": free}
+            "detected_network": detected, "cloud": cloud, "disk_free_gb": free}
 
 
 def mail_records(svc: Services, body: dict) -> dict:

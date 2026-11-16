@@ -5,7 +5,7 @@
  *  검색은 커맨드 바 입력 → ?view=search&q=(&board=) 로 결과를 동일 행 규격(56)으로 표시한다.
  *  모바일 인덱스는 동일 카드를 1열로 배치한다.
  * "새 글 N"(카드 머리 메타) = GET /unread-counts. 카드 행 굵게 = boards-with-posts 의 is_read.
- * 보조 보기 "내가 쓴 글"(?view=mine) = GET /my-posts.
+ * 보조 보기 "내가 작성한 글"(?view=mine) = GET /my-posts.
  */
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '~/lib/utils'

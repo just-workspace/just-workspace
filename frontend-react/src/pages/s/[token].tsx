@@ -6,7 +6,7 @@
  *  - 비밀번호 링크: info 가 requires_password 만 반환한다 → "비밀번호 필요" 결과 틀(입력 1개 + 열기)
  *    → POST /api/files/shared/{token}/unlock → access(1시간). 이후 내려받기·편집기 열기에 access 를 첨부한다.
  *  - 같이 편집 링크(can_edit): 표시 이름(기억) → 문서 열기(POST /api/wopi/shared/{token}/open) → 40px 손님 띠 + 편집기.
- *  - 내려받기 링크: [내려받기](GET /api/files/shared/{token}?access=) — 내려받기 차단이면 [미리보기](?inline=1, 새 탭).
+ *  - 내려받기 링크: [다운로드](GET /api/files/shared/{token}?access=) — 내려받기 차단이면 [미리보기](?inline=1, 새 탭).
  *    묶음 링크는 zip 하나. 이 경우 화면 문구는 시안에 없어 동일 틀로 구성.
  *    내려받기가 차단되었고 미리보기도 불가한 형식(이전에 생성한 링크 · info.can_preview=false, 비밀번호 링크는 unlock 응답)이면
  *    [미리보기] 대신 "미리 볼 수 없고 내려받기가 막혀 있습니다" 안내 — 새 탭에 서버 오류(JSON)가 표시되던 무효 링크.
@@ -366,8 +366,8 @@ export default function SharedLinkPage() {
                         ? (
                           <AuthAlert
                             tone="warning"
-                            title={t('share.noPreviewBlocked', '이 형식은 미리 볼 수 없고 내려받기가 막혀 있습니다.')}
-                            description={t('share.noPreviewBlockedHint', '링크를 보낸 사람에게 내려받기를 허용해 달라고 요청하세요.')}
+                            title={t('share.noPreviewBlocked', '이 형식은 미리 볼 수 없고 다운로드가 막혀 있습니다.')}
+                            description={t('share.noPreviewBlockedHint', '링크를 보낸 사람에게 다운로드를 허용해 달라고 요청하십시오.')}
                           />
                         )
                         : (

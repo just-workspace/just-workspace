@@ -96,7 +96,7 @@ describe('메일 요약', () => {
     expect(posts('/api/ai/inline/mail_summary')[0].opts.body).toMatchObject({ message_id: '42', mailbox_id: 'INBOX' })
 
     // 숫자는 mono 조각(UiTrans 슬롯)이므로 텍스트로 탐색하여 버튼 클릭
-    fireEvent.click(screen.getAllByRole('button').find(b => b.textContent === '고른 1개 할일에 등록')!)
+    fireEvent.click(screen.getAllByRole('button').find(b => b.textContent === '선택한 1개 할일에 등록')!)
     await screen.findByText('1개를 할일에 등록했습니다')
     const body = posts('/api/ai/inline/tasks')[0].opts.body
     expect(body.source).toBe('mail')
@@ -104,7 +104,7 @@ describe('메일 요약', () => {
     expect(body.items[0]).toMatchObject({ title: '분전반 여유 용량 회신', due_date: '2026-11-07' })
     expect(body.items[0].idempotency_key).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: '되돌리기' }))
+    fireEvent.click(screen.getByRole('button', { name: '실행 취소' }))
     await waitFor(() => expect(posts('/api/approvals/wr_1/undo')).toHaveLength(1))
   })
 
@@ -138,7 +138,7 @@ describe('답장 초안', () => {
     fireEvent.click(screen.getByRole('radio', { name: '짧게' }))
     expect(await screen.findByText('짧은 초안')).toBeTruthy()
     expect(posts('/api/ai/inline/mail_reply').map(c => c.opts.body.tone)).toEqual(['polite', 'short'])
-    fireEvent.click(screen.getByRole('button', { name: '편집기로 옮기기' }))
+    fireEvent.click(screen.getByRole('button', { name: '편집기로 이동' }))
     expect(onUse).toHaveBeenCalledWith('짧은 초안')
   })
 
@@ -184,7 +184,7 @@ describe('채팅방 요약', () => {
     act(() => requestChatAiSummary('ops', 'm5'))
     expect(await screen.findByText('범위 요약')).toBeTruthy()
     expect(posts('/api/ai/inline/chat_summary')[0].opts.body.from_message_id).toBe('m5')
-    expect(screen.getByRole('region', { name: '채팅방 요약' }).textContent).toMatch(/고른 3개 요약/)
+    expect(screen.getByRole('region', { name: '채팅방 요약' }).textContent).toMatch(/선택한 3개 요약/)
   })
 })
 
@@ -205,7 +205,7 @@ describe('회의 요약 → 할 일', () => {
       return {}
     }
     wrap(<MeetingAiTodos room="infra" title="인프라 정기점검" timeRange="10:00–10:52" />)
-    expect(screen.getByText('회의가 끝났습니다 — 인프라 정기점검')).toBeTruthy()
+    expect(screen.getByText('회의가 종료되었습니다 — 인프라 정기점검')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '요약·할 일 뽑기' }))
     expect(await screen.findByText('팬 경고 1건')).toBeTruthy()
     expect(posts('/api/ai/inline/meeting_summary')[0].opts.body.chat_lines).toEqual([{ name: '박준호', text: '팬 교체 필요' }])

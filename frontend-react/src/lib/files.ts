@@ -45,7 +45,7 @@ const FILES_TEXT_KO: Record<string, string> = {
   'files.linkMeta.oneTime': '1회용',
   'files.linkMeta.password': '비밀번호',
   'files.linkMeta.noDownload': '다운로드 막음',
-  'files.linkMeta.bundle': '{n}개 묶음',
+  'files.linkMeta.bundle': '{n}개 모음',
   'files.linkMeta.downloads': '다운로드 {n}회',
   'files.sidebar.myFiles': '내 파일',
   'files.sidebar.sharedFiles': '공유 파일',

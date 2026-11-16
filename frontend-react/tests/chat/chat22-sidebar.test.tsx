@@ -152,7 +152,7 @@ describe('끌기 patch 계산', () => {
     await waitFor(() => expect(api.calls.some(c => c.url === '/api/chat/layout' && c.opts?.method === 'PATCH')).toBe(true))
     const body = api.calls.find(c => c.url === '/api/chat/layout')!.opts.body
     expect(body.channels.map((c: any) => c.id)).toEqual(['d2', 'd1', 'd3'])
-    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('#시안-리뷰를 ‘디자인 팀’ 첫 번째로 옮겼습니다'))
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('#시안-리뷰를 ‘디자인 팀’ 첫 번째로 이동했습니다'))
   })
   it('실패하면 다시 읽어 되돌리고 토스트', async () => {
     api.handler = (url: string, o?: any) => {
@@ -247,7 +247,7 @@ describe('카테고리 메뉴·대화 상자', () => {
     fireEvent.click(within(sec).getByRole('button', { name: t('chat.side.catMenu') }))
     const items = (await screen.findAllByRole('menuitem')).map(m => m.textContent)
     expect(items.map(x => x?.replace(/(F2|Alt [↑↓])$/, ''))).toEqual([
-      '채널 만들기', '이름 바꾸기', '카테고리 권한', '알림 설정', '위로 옮기기', '아래로 옮기기', '모두 접기', '카테고리 삭제',
+      '채널 만들기', '이름 변경', '카테고리 권한', '알림 설정', '위로 이동', '아래로 이동', '모두 접기', '카테고리 삭제',
     ])
     fireEvent.click(screen.getByRole('menuitem', { name: /카테고리 삭제/ }))
     const dlg = await screen.findByRole('alertdialog')
@@ -260,7 +260,7 @@ describe('카테고리 메뉴·대화 상자', () => {
     fireEvent.click(within(sec).getByRole('button', { name: t('chat.side.catMenu') }))
     const items = (await screen.findAllByRole('menuitem')).map(m => m.textContent || '')
     expect(items.some(x => x.includes('삭제') || x.includes('옮기기'))).toBe(false)
-    expect(items.some(x => x.includes('이름 바꾸기'))).toBe(true)
+    expect(items.some(x => x.includes('이름 변경'))).toBe(true)
   })
   it('F2 → 인라인 이름 바꾸기, Esc 취소 · Enter 저장', async () => {
     renderInRouter(<ChatSidebar />)
@@ -295,7 +295,7 @@ describe('모바일 #m-list · #m-order', () => {
     expect(screen.getByRole('heading', { name: t('chat.side.order.title') })).toBeTruthy()
     fireEvent.click(screen.getByText('시안-리뷰'))
     fireEvent.click(screen.getByRole('button', { name: t('chat.side.order.up', { name: '#시안-리뷰' }) }))
-    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('#시안-리뷰를 ‘디자인 팀’ 첫 번째로 옮겼습니다'))
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('#시안-리뷰를 ‘디자인 팀’ 첫 번째로 이동했습니다'))
     fireEvent.click(screen.getByRole('button', { name: t('chat.side.order.done') }))
     expect(screen.queryByRole('heading', { name: t('chat.side.order.title') })).toBeNull()
   })

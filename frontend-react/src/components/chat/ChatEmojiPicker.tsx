@@ -7,7 +7,7 @@
  * 위에서부터: 검색 36 + 피부색 버튼(펼치면 6칸 radiogroup) → 분류 탭 10(tablist) → 섹션 제목 12/600 + 격자(UiEmojiGrid, role=grid)
  *  → 하단 미리보기 줄 48(28 이모지 · `:이름:` mono · 설명, 데스크톱만). 커스텀 칸 primary/10 · 움직이는 이모지면 "GIF".
  * 키보드: 검색에서 ↓ = 격자 첫 칸, Enter = 첫 결과. 격자 첫 줄 ↑ = 이전 섹션(맨 앞이면 검색), 마지막 줄 ↓ = 다음 섹션. Esc 닫기(포커스 복원).
- * 선택한 이모지는 pushChatEmojiRecent(기본 글리프 또는 ':name:')로 기록 — "자주 쓴" 첫 섹션.
+ * 선택한 이모지는 pushChatEmojiRecent(기본 글리프 또는 ':name:')로 기록 — "자주 사용" 첫 섹션.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'

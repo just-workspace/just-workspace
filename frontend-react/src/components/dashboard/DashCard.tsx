@@ -222,7 +222,7 @@ export interface DashRowProps {
   action?: { label: string; onClick: () => void; variant?: 'default' | 'outline' | 'ghost'; persistent?: boolean; disabled?: boolean }
   /** 아이콘 행동(호버/포커스 시에만 표시) */
   iconAction?: { icon: string; label: string; onClick: () => void }
-  /** 접근성용 접두 문구(예: "안 읽음: ") */
+  /** 접근성용 접두 문구(예: "읽지 않음: ") */
   srPrefix?: string
 }
 

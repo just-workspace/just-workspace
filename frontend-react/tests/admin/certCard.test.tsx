@@ -69,10 +69,10 @@ describe('인증서 카드 — 상태', () => {
     expect(box.textContent).toContain('접속 주소')
     expect(box.textContent).toContain('발급자')
     const warn = screen.getByTestId('cert-temporary')
-    expect(warn.textContent).toContain('지금은 임시 인증서라 브라우저가 경고를 보여 줍니다.')
+    expect(warn.textContent).toContain('현재 임시 인증서라 브라우저에 경고가 표시됩니다.')
     expect(warn.textContent).toContain('보류된 구역 연결 1건을 다시 시도합니다.')
     expect((screen.getByRole('button', { name: '다시 발급' }) as HTMLButtonElement).disabled).toBe(false)
-    expect((screen.getByRole('button', { name: '인증서 올리기' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: '인증서 업로드' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('발급된 인증서: 경고가 없고, 만료가 가까우면 "갱신 필요", 지났으면 "만료됨"', async () => {
@@ -95,7 +95,7 @@ describe('인증서 카드 — 상태', () => {
     api.routes[`GET ${B}/cert`] = () => issued({ mode: 'upload', not_after: days(-3), days_left: -3 })
     render(<AdminCertCard />)
     await screen.findByTestId('cert-card')
-    expect(screen.getByTestId('cert-mode').textContent).toBe('올린 인증서')
+    expect(screen.getByTestId('cert-mode').textContent).toBe('업로드한 인증서')
     expect(screen.getByTestId('cert-expiry').textContent).toContain('만료됨')
   })
 
@@ -105,9 +105,9 @@ describe('인증서 카드 — 상태', () => {
     render(<AdminCertCard onLegacy={onLegacy} />)
     const box = await screen.findByTestId('cert-card')
     expect(box.dataset.state).toBe('proxy')
-    expect(box.textContent).toContain('이 설치의 인증서는 앞단 프록시가 맡습니다.')
+    expect(box.textContent).toContain('이 설치의 인증서는 프런트 프록시가 관리합니다.')
     expect(screen.queryByRole('button', { name: '다시 발급' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '인증서 올리기' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '인증서 업로드' })).toBeNull()
     expect(onLegacy).toHaveBeenLastCalledWith(false)
   })
 
@@ -145,21 +145,21 @@ describe('인증서 카드 — 다시 발급', () => {
     fireEvent.click(await screen.findByRole('button', { name: '다시 발급' }))
     const progress = await screen.findByTestId('cert-job')
     expect(called('POST', `${B}/cert/reissue`)[0].body).toEqual({ mode: 'auto' })
-    expect(progress.textContent).toContain('인증서를 바꾸는 중입니다.')
+    expect(progress.textContent).toContain('인증서를 변경하는 중입니다.')
     expect(screen.getByTestId('cert-stage-issue').textContent).toContain('발급')
     expect(screen.getByTestId('cert-stage-issue').textContent).toContain('진행 중')
-    expect(screen.getByTestId('cert-stage-reload').textContent).toContain('다시 읽히기')
+    expect(screen.getByTestId('cert-stage-reload').textContent).toContain('다시 읽기')
     expect(screen.getByTestId('cert-stage-reconnect').textContent).toContain('구역 다시 연결')
     expect(screen.getByTestId('cert-card').dataset.state).toBe('busy')
     expect((screen.getByRole('button', { name: '다시 발급' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('button', { name: '인증서 올리기' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: '인증서 업로드' }) as HTMLButtonElement).disabled).toBe(true)
 
     const finished = job({ status: 'done', stages: doneStages, finished_at: new Date().toISOString(), warnings: [{ key: 'git_sso_pending', vars: {} }] })
     state = issued()
     api.routes[`GET ${B}/jobs`] = () => ({ jobs: [finished] })
     api.routes[`GET ${B}/jobs/cert1`] = () => finished
     const done = await screen.findByTestId('cert-done')
-    expect(done.textContent).toContain('인증서를 바꿨습니다.')
+    expect(done.textContent).toContain('인증서를 변경했습니다.')
     expect(done.textContent).toContain('코드 저장소의 로그인 연동은 아직 연결되지 않았습니다.')
     await waitFor(() => expect(screen.getByTestId('cert-mode').textContent).toBe("자동 발급 (Let's Encrypt)"))
     expect(screen.queryByTestId('cert-temporary')).toBeNull()
@@ -176,9 +176,9 @@ describe('인증서 카드 — 다시 발급', () => {
     render(<AdminCertCard />)
     fireEvent.click(await screen.findByRole('button', { name: '다시 발급' }))
     const box = await screen.findByTestId('cert-failed')
-    expect(box.textContent).toContain('인증서를 바꾸지 못했습니다.')
+    expect(box.textContent).toContain('인증서를 변경하지 못했습니다.')
     expect(box.textContent).toContain('인증 기관이 ws.example.com의 80번 포트에 접속하지 못했습니다.')
-    expect(box.textContent).toContain('쓰던 인증서는 그대로 있습니다.')
+    expect(box.textContent).toContain('사용하던 인증서는 그대로 유지됩니다.')
     expect(screen.getByTestId('cert-mode').textContent).toBe('임시 인증서 (자체 서명)')
     await waitFor(() => expect((screen.getByRole('button', { name: '다시 발급' }) as HTMLButtonElement).disabled).toBe(false))
   })
@@ -191,9 +191,9 @@ describe('인증서 카드 — 다시 발급', () => {
     expect((await screen.findByTestId('cert-failed')).textContent).toContain('(something_new)')
 
     for (const [code, text] of [
-      ['busy', '다른 작업이 진행 중입니다. 끝난 뒤 다시 시도하세요.'],
-      ['cert_auto_needs_domain', '인증서 자동 발급은 접속 주소가 도메인일 때만 됩니다.'],
-      ['cert_managed_by_proxy', '이 설치의 인증서는 앞단 프록시가 맡아 여기서 바꿀 수 없습니다.'],
+      ['busy', '다른 작업이 진행 중입니다. 완료된 뒤 다시 시도하십시오.'],
+      ['cert_auto_needs_domain', '인증서 자동 발급은 접속 주소가 도메인일 때만 가능합니다.'],
+      ['cert_managed_by_proxy', '이 설치의 인증서는 프런트 프록시가 관리하여 여기서 변경할 수 없습니다.'],
     ] as const) {
       api.routes[`POST ${B}/cert/reissue`] = () => { throw fail(code === 'cert_auto_needs_domain' ? 422 : 409, code) }
       fireEvent.click(screen.getByRole('button', { name: '다시 발급' }))
@@ -209,7 +209,7 @@ describe('인증서 카드 — 다시 발급', () => {
     fireEvent.click(await screen.findByRole('button', { name: '다시 발급' }))
     await waitFor(() => expect(screen.getByTestId('cert-job').textContent).toContain('다시 연결 중'))
     down = false
-    await waitFor(() => expect(screen.getByTestId('cert-job').textContent).toContain('인증서를 바꾸는 중입니다.'))
+    await waitFor(() => expect(screen.getByTestId('cert-job').textContent).toContain('인증서를 변경하는 중입니다.'))
     expect(screen.getByTestId('cert-stage-reconnect').textContent).toContain('진행 중')
   })
 })
@@ -229,7 +229,7 @@ describe('인증서 카드 — 화면을 새로 열었을 때', () => {
     const zoneFail = { ...job({ id: 'z1', kind: 'enable', zone: 'git', status: 'failed', finished_at: hoursAgo(1) }) }
     api.routes[`GET ${B}/jobs`] = () => ({ jobs: [zoneFail, job({ id: 'c2', status: 'failed', finished_at: hoursAgo(2), error: { cause: 'cert_dir_managed', vars: {} } })] })
     const first = render(<AdminCertCard />)
-    expect((await screen.findByTestId('cert-failed')).textContent).toContain('인증서를 두는 자리를 다른 도구가 관리하고 있어 바꾸지 못했습니다.')
+    expect((await screen.findByTestId('cert-failed')).textContent).toContain('인증서 저장 위치를 다른 도구가 관리하고 있어 변경하지 못했습니다.')
     first.unmount()
 
     api.routes[`GET ${B}/jobs`] = () => ({ jobs: [zoneFail, job({ id: 'c3', status: 'failed', finished_at: hoursAgo(30) })] })
@@ -262,13 +262,13 @@ describe('인증서 카드 — 인증서 올리기', () => {
     api.routes[`POST ${B}/cert/reissue`] = () => job({ id: 'cert5' })
     api.routes[`GET ${B}/jobs/cert5`] = () => job({ id: 'cert5' })
     render(<AdminCertCard />)
-    fireEvent.click(await screen.findByRole('button', { name: '인증서 올리기' }))
+    fireEvent.click(await screen.findByRole('button', { name: '인증서 업로드' }))
     const dialog = await screen.findByRole('dialog')
     expect(dialog.textContent).toContain('인증서 파일과 개인 키 파일, 두 개가 필요합니다.')
     expect(dialog.textContent).toContain('개인 키는 이 서버에만 저장됩니다.')
-    const submit = screen.getByRole('button', { name: '올리고 바꾸기' }) as HTMLButtonElement
+    const submit = screen.getByRole('button', { name: '업로드 후 변경' }) as HTMLButtonElement
     expect(submit.disabled).toBe(true)
-    expect(dialog.textContent).toContain('파일 두 개를 골라야 올릴 수 있습니다.')
+    expect(dialog.textContent).toContain('파일 두 개를 선택해야 업로드할 수 있습니다.')
     pick('인증서', file('fullchain.pem', 'CERT-PEM-TEXT'))
     expect(submit.disabled).toBe(true)
     pick('개인 키', file('privkey.pem', 'KEY-PEM-TEXT'))
@@ -291,17 +291,17 @@ describe('인증서 카드 — 인증서 올리기', () => {
       ] })
     }
     render(<AdminCertCard />)
-    fireEvent.click(await screen.findByRole('button', { name: '인증서 올리기' }))
+    fireEvent.click(await screen.findByRole('button', { name: '인증서 업로드' }))
     pick('인증서', file('a.crt', 'A'))
     pick('개인 키', file('a.key', 'B'))
-    fireEvent.click(screen.getByRole('button', { name: '올리고 바꾸기' }))
+    fireEvent.click(screen.getByRole('button', { name: '업로드 후 변경' }))
     const box = await screen.findByTestId('cert-upload-error')
-    expect(box.textContent).toContain('이 파일로는 바꿀 수 없습니다. 쓰던 인증서는 그대로 있습니다.')
+    expect(box.textContent).toContain('이 파일로는 변경할 수 없습니다. 사용하던 인증서는 그대로 유지됩니다.')
     const items = [...box.querySelectorAll('li')]
     expect(items.map(li => li.getAttribute('data-check'))).toEqual(['key_matches', 'domain_covered', 'future'])      // 실패 항목만
     expect(items[0].textContent).toContain('개인 키가 이 인증서와 짝이 맞지 않습니다.')
-    expect(items[1].textContent).toContain('접속 주소 ws.example.com 이(가) 들어 있는 인증서를 올립니다.')
-    expect(items[2].textContent).toContain('이 파일은 쓸 수 없습니다.')
+    expect(items[1].textContent).toContain('접속 주소 ws.example.com 이(가) 포함된 인증서를 업로드합니다.')
+    expect(items[2].textContent).toContain('이 파일은 사용할 수 없습니다.')
     expect(items[2].textContent).toContain('(brand_new_reason)')
     expect(screen.getByRole('dialog')).toBeTruthy()                            // 창은 열린 상태 유지
     expect(screen.queryByTestId('cert-job')).toBeNull()
@@ -311,16 +311,16 @@ describe('인증서 카드 — 인증서 올리기', () => {
 
   it('너무 큰 파일은 보내지 않고, 그 밖의 거부는 이유를 알린다', async () => {
     render(<AdminCertCard />)
-    fireEvent.click(await screen.findByRole('button', { name: '인증서 올리기' }))
+    fireEvent.click(await screen.findByRole('button', { name: '인증서 업로드' }))
     pick('인증서', file('big.pem', 'x'.repeat(certLib.CERT_FILE_MAX + 1)))
     pick('개인 키', file('a.key', 'B'))
-    fireEvent.click(screen.getByRole('button', { name: '올리고 바꾸기' }))
+    fireEvent.click(screen.getByRole('button', { name: '업로드 후 변경' }))
     expect((await screen.findByTestId('cert-upload-error')).textContent).toContain('파일이 너무 큽니다.')
     expect(called('POST', `${B}/cert/reissue`)).toHaveLength(0)
 
     api.routes[`POST ${B}/cert/reissue`] = () => { throw fail(409, 'busy') }
     pick('인증서', file('ok.pem', 'A'))
-    fireEvent.click(screen.getByRole('button', { name: '올리고 바꾸기' }))
+    fireEvent.click(screen.getByRole('button', { name: '업로드 후 변경' }))
     await waitFor(() => expect(screen.getByTestId('cert-upload-error').textContent).toContain('다른 작업이 진행 중입니다.'))
   })
 
@@ -328,15 +328,15 @@ describe('인증서 카드 — 인증서 올리기', () => {
     api.routes[`POST ${B}/cert/reissue`] = () => job({ id: 'cert6' })
     api.routes[`GET ${B}/jobs/cert6`] = () => job({ id: 'cert6' })
     render(<AdminCertCard />)
-    fireEvent.click(await screen.findByRole('button', { name: '인증서 올리기' }))
+    fireEvent.click(await screen.findByRole('button', { name: '인증서 업로드' }))
     const dialog = await screen.findByRole('dialog')
     expect(dialog.textContent).toContain('CA 인증서 (선택)')
-    expect(screen.getByTestId('cert-ca-note').textContent).toContain('공개 인증 기관이 내준 인증서면 비워 둡니다.')
+    expect(screen.getByTestId('cert-ca-note').textContent).toContain('공개 인증 기관이 발급한 인증서면 비워 둡니다.')
     expect(screen.getByTestId('cert-ca-note').textContent).toContain('코드 저장소의 로그인 연동')
     pick('인증서', file('server.crt', 'LEAF'))
     pick('개인 키', file('server.key', 'KEY'))
     pick('CA 인증서 (선택)', file('ca.crt', 'CA-PEM'))
-    fireEvent.click(screen.getByRole('button', { name: '올리고 바꾸기' }))
+    fireEvent.click(screen.getByRole('button', { name: '업로드 후 변경' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(called('POST', `${B}/cert/reissue`)[0].body).toEqual({ mode: 'upload', cert: 'LEAF', key: 'KEY', ca: 'CA-PEM' })
   })
@@ -349,16 +349,16 @@ describe('인증서 카드 — 인증서 올리기', () => {
     render(<AdminCertCard />)
     const notice = await screen.findByTestId('cert-ca-needed')
     expect(notice.textContent).toContain('코드 저장소의 로그인 연동이 보류돼 있습니다.')
-    expect(notice.textContent).toContain('사설 CA 가 내준 인증서라면 그 CA 인증서를 올리세요')
+    expect(notice.textContent).toContain('사설 CA 가 발급한 인증서라면 그 CA 인증서를 업로드하십시오')
     expect(notice.textContent).toContain('공개 인증 기관의 인증서라면 중간 인증서까지 이어 붙인 파일로')
-    expect(screen.getByTestId('cert-ca').textContent).toBe('올리지 않았습니다')
-    fireEvent.click(within(notice).getByRole('button', { name: 'CA 인증서 올리기' }))
+    expect(screen.getByTestId('cert-ca').textContent).toBe('업로드하지 않았습니다')
+    fireEvent.click(within(notice).getByRole('button', { name: 'CA 인증서 업로드' }))
     const dialog = await screen.findByRole('dialog')
     expect(dialog.textContent).toContain('인증서와 개인 키는 그대로 둡니다.')
     expect(screen.queryByLabelText('개인 키')).toBeNull()                       // CA 만 수신
-    const submit = screen.getByRole('button', { name: '올리기' }) as HTMLButtonElement
+    const submit = screen.getByRole('button', { name: '업로드' }) as HTMLButtonElement
     expect(submit.disabled).toBe(true)
-    expect(dialog.textContent).toContain('CA 인증서 파일을 골라야 올릴 수 있습니다.')
+    expect(dialog.textContent).toContain('CA 인증서 파일을 선택해야 업로드할 수 있습니다.')
     pick('CA 인증서 (선택)', file('ca.pem', 'ROOT-CA'))
     fireEvent.click(submit)
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
@@ -377,17 +377,17 @@ describe('인증서 카드 — 인증서 올리기', () => {
       ] })
     }
     const view = render(<AdminCertCard />)
-    fireEvent.click(within(await screen.findByTestId('cert-ca-needed')).getByRole('button', { name: 'CA 인증서 올리기' }))
+    fireEvent.click(within(await screen.findByTestId('cert-ca-needed')).getByRole('button', { name: 'CA 인증서 업로드' }))
     pick('CA 인증서 (선택)', file('other.pem', 'OTHER'))
-    fireEvent.click(screen.getByRole('button', { name: '올리기' }))
+    fireEvent.click(screen.getByRole('button', { name: '업로드' }))
     const box = await screen.findByTestId('cert-upload-error')
-    expect(box.textContent).toContain('이 파일은 쓸 수 없습니다. 바뀐 것은 없습니다.')
-    expect(box.textContent).toContain('이 CA 는 지금 인증서를 내준 CA 가 아닙니다.')
+    expect(box.textContent).toContain('이 파일은 사용할 수 없습니다. 변경된 내용은 없습니다.')
+    expect(box.textContent).toContain('이 CA 는 현재 인증서를 발급한 CA 가 아닙니다.')
     view.unmount()
 
     trusted = true
     render(<AdminCertCard />)
-    expect((await screen.findByTestId('cert-ca')).textContent).toContain('이 서버의 코드 저장소가 이 인증서를 믿습니다.')
+    expect((await screen.findByTestId('cert-ca')).textContent).toContain('이 서버의 코드 저장소가 이 인증서를 신뢰합니다.')
     expect(screen.queryByTestId('cert-ca-needed')).toBeNull()
     expect(screen.getByTestId('cert-upload-ca')).toBeTruthy()                  // 교체 업로드는 가능
   })
@@ -397,7 +397,7 @@ describe('인증서 카드 — 인증서 올리기', () => {
     const view = render(<AdminCertCard />)
     await screen.findByTestId('cert-card')
     expect(screen.queryByTestId('cert-ca')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'CA 인증서 올리기' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'CA 인증서 업로드' })).toBeNull()
     view.unmount()
     api.routes[`GET ${B}/cert`] = () => cert()                                  // 임시 인증서 + 보류 — 안내는 임시 인증서 쪽에서 표시
     render(<AdminCertCard />)
@@ -432,7 +432,7 @@ describe('관리 › 보안 — 인증서 카드와 예전 SSL 카드', () => {
     renderPage()
     expect(await screen.findByTestId('cert-card')).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'SSL 인증서' })).toBeNull()
-    expect(screen.getAllByRole('button', { name: '인증서 올리기' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: '인증서 업로드' })).toHaveLength(1)
   })
 
   it('설치 관리자 없이 구성한 설치는 안내와 함께 예전 SSL 카드가 보인다', async () => {

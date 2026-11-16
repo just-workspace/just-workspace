@@ -1,7 +1,7 @@
 /**
  * 회의 녹화 파일 목록(최소 진입점) — 지난 회의 행 ⋮ "녹화 파일" · 회의 결과 화면 [녹화 파일].
  *  GET /api/meetings/recordings?room=<방 이름> (서버가 열람 가능한 항목만 필터링한다: 호스트·초대 대상·채널 멤버·관리자)
- *  행: 녹화 시각(파일 이름의 YYYYmmdd-HHMMSS) · 크기 · [내려받기](GET /api/meetings/recordings/{파일}, 쿠키 인증 링크).
+ *  행: 녹화 시각(파일 이름의 YYYYmmdd-HHMMSS) · 크기 · [다운로드](GET /api/meetings/recordings/{파일}, 쿠키 인증 링크).
  *  목록이 비어 있으면 안내 한 줄을 표시한다. 키트 UiModal(440) + 행은 목록 카드와 동일한 border 행.
  */
 import { useEffect, useState } from 'react'

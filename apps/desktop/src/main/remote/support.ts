@@ -69,7 +69,7 @@ export class SupportController {
       url = new URL(raw.trim());
       if (url.protocol !== 'https:' && !(url.protocol === 'http:' && /^(localhost|127\.0\.0\.1)$/.test(url.hostname))) throw new Error('https');
     } catch {
-      this.setView({ phase: 'server', server: raw, error: 'https:// 로 시작하는 워크스페이스 주소를 넣으세요' });
+      this.setView({ phase: 'server', server: raw, error: 'https:// 로 시작하는 워크스페이스 주소를 입력하십시오' });
       return;
     }
     this.server = url.origin;
@@ -91,7 +91,7 @@ export class SupportController {
       void this.poll();
     } catch (e) {
       const msg = e instanceof HttpError
-        ? (e.status === 429 ? '코드를 너무 자주 받았습니다. 잠시 후 다시 시도하세요' : e.status === 404 || e.status === 403 ? '이 서버에서는 원격 지원을 쓸 수 없습니다' : e.message)
+        ? (e.status === 429 ? '코드를 너무 자주 받았습니다. 잠시 후 다시 시도하십시오' : e.status === 404 || e.status === 403 ? '이 서버에서는 원격 지원을 사용할 수 없습니다' : e.message)
         : '서버에 연결하지 못했습니다';
       this.setView({ phase: 'error', message: msg });
     }

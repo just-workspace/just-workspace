@@ -51,7 +51,7 @@ function show(v) {
     every(() => { $('act-time').textContent = clock((Date.now() - started) / 1000); });
   } else if (v.phase === 'ended') {
     const denied = v.reason === 'denied';
-    $('end-title').textContent = denied ? '접속을 거부했습니다' : '원격 지원이 끝났습니다';
+    $('end-title').textContent = denied ? '접속을 거부했습니다' : '원격 지원이 종료되었습니다';
     $('end-icon').style.color = denied ? 'hsl(var(--muted-foreground))' : '';
     const parts = [v.requester, !denied && v.durationS != null ? `세션 시간 ${clock(v.durationS)}` : ''].filter(Boolean);
     $('end-meta').textContent = parts.join(' · ');

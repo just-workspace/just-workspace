@@ -33,7 +33,7 @@ import { VoiceStatsPanel } from '~/components/voice/VoiceStatsPanel'
 import { VoiceQualityPanel } from '~/components/voice/VoiceQualityPanel'
 
 const menuStore = createStore<{ open: boolean }>()(() => ({ open: false }))
-/** 사용자 메뉴(상태 바꾸기) 열기 — 프로필 팝아웃 "상태 바꾸기" */
+/** 사용자 메뉴(상태 바꾸기) 열기 — 프로필 팝아웃 "상태 변경" */
 export function openAccountMenu() { menuStore.setState({ open: true }) }
 const closeAccountMenu = () => menuStore.setState({ open: false })
 

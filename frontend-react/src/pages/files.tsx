@@ -392,7 +392,7 @@ export default function FilesPage() {
       if (Array.isArray(err.failed) && err.failed.length) {
         setSelectedItems(new Set(err.failed))
         const names = err.failed.map(p => p.split('/').pop() || p).join(', ')
-        addToast('error', textOr(t, 'files.delete.partial', '{n}개를 지우지 못했습니다: {list}', { n: err.failed.length, list: names })
+        addToast('error', textOr(t, 'files.delete.partial', '{n}개를 삭제하지 못했습니다: {list}', { n: err.failed.length, list: names })
           + (err.data?.detail ? ` (${err.data.detail})` : ''))
         return
       }
@@ -439,7 +439,7 @@ export default function FilesPage() {
         if (file) files.push(file)
       }
     }
-    if (folders) addToast('warning', textOr(t, 'files.upload.folderDropUnsupported', '폴더는 끌어다 놓아 올릴 수 없습니다. 폴더 안의 파일을 골라 올려 주세요'))
+    if (folders) addToast('warning', textOr(t, 'files.upload.folderDropUnsupported', '폴더는 끌어다 놓아 업로드할 수 없습니다. 폴더 안의 파일을 선택해 업로드하십시오'))
     if (files.length) await uploadFiles(files)
   }
   function onMobilePick(e: ChangeEvent<HTMLInputElement>) {

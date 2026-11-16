@@ -1,4 +1,4 @@
-// 설정 › 계정: 아바타 64 + 이름·가입 정보 + [사진 바꾸기], 표시 이름·복구 이메일 2열, CalDAV/CardDAV 읽기 전용 + 복사,
+// 설정 › 계정: 아바타 64 + 이름·가입 정보 + [사진 변경], 표시 이름·복구 이메일 2열, CalDAV/CardDAV 읽기 전용 + 복사,
 // 카드 푸터 [되돌리기][저장]. 아래 로그인된 기기 카드(SettingsDevices — 내 세션 목록·개별 로그아웃).
 // 복구 이메일은 저장 즉시 변경되지 않는다(비밀번호 재설정 링크의 수신 주소 — 세션 탈취만으로 변경되어서는 안 된다):
 // 주소를 수정하면 본인 확인 칸(현재 비밀번호)이 표시되고, 저장하면 새 주소로 확인 메일이 발송된다. 링크를 클릭해야 변경이 적용된다.
@@ -77,8 +77,8 @@ export default function SettingsAccountPage() {
     const email = form.recovery_email.trim()
     if (emailChanged && !proof.trim()) {
       setFieldError({ proof: reauth === 'totp'
-        ? t('settings.account.recovery.codeRequired', '인증 앱 코드를 입력하세요')
-        : t('settings.account.recovery.passwordRequired', '현재 비밀번호를 입력하세요') })
+        ? t('settings.account.recovery.codeRequired', '인증 앱 코드를 입력하십시오')
+        : t('settings.account.recovery.passwordRequired', '현재 비밀번호를 입력하십시오') })
       return
     }
     setSaving(true)
@@ -135,7 +135,7 @@ export default function SettingsAccountPage() {
 
         <form className="grid gap-x-4 gap-y-3.5 sm:grid-cols-2" onSubmit={(e: FormEvent) => { e.preventDefault(); void save() }}>
           <UiInput id="display_name" modelValue={form.display_name} onUpdateModelValue={v => setForm(f => ({ ...f, display_name: v }))} label={t('fields.displayName')} hint={t('settings.account.displayNameHint')} />
-          <UiInput id="recovery_email" modelValue={form.recovery_email} onUpdateModelValue={v => setForm(f => ({ ...f, recovery_email: v }))} type="email" label={t('fields.recoveryEmail')} hint={reauth === 'none' ? t('settings.account.recovery.noReauth', '이 계정은 본인 확인 수단이 없어 직접 바꿀 수 없습니다. 관리자에게 요청하세요.') : t('profile.recoveryEmailHint')} error={fieldError.recovery_email} placeholder={t('register.recoveryEmailPlaceholder')} disabled={reauth === 'none'} />
+          <UiInput id="recovery_email" modelValue={form.recovery_email} onUpdateModelValue={v => setForm(f => ({ ...f, recovery_email: v }))} type="email" label={t('fields.recoveryEmail')} hint={reauth === 'none' ? t('settings.account.recovery.noReauth', '이 계정은 본인 확인 수단이 없어 직접 변경할 수 없습니다. 관리자에게 요청하십시오.') : t('profile.recoveryEmailHint')} error={fieldError.recovery_email} placeholder={t('register.recoveryEmailPlaceholder')} disabled={reauth === 'none'} />
           {/* 주소를 수정한 경우에만 표시 — 본인 확인(현재 비밀번호, 비밀번호 확인이 불가한 계정은 인증 앱 코드) */}
           {emailChanged && reauth !== 'none' && (
             <UiInput
@@ -149,8 +149,8 @@ export default function SettingsAccountPage() {
               required
               label={reauth === 'totp' ? t('settings.account.recovery.code', '인증 앱 코드') : t('settings.account.recovery.password', '현재 비밀번호')}
               hint={form.recovery_email.trim()
-                ? t('settings.account.recovery.proofHint', '복구 이메일을 바꾸려면 본인 확인이 필요합니다. 저장하면 새 주소로 확인 메일을 보내고, 메일의 링크를 눌러야 바뀝니다.')
-                : t('settings.account.recovery.clearHint', '복구 이메일을 지우면 비밀번호를 잊었을 때 재설정 링크를 받을 수 없습니다. 저장하면 바로 지워집니다.')}
+                ? t('settings.account.recovery.proofHint', '복구 이메일을 변경하려면 본인 확인이 필요합니다. 저장하면 새 주소로 확인 메일을 보내고, 메일의 링크를 눌러야 변경됩니다.')
+                : t('settings.account.recovery.clearHint', '복구 이메일을 삭제하면 비밀번호를 잊었을 때 재설정 링크를 받을 수 없습니다. 저장하면 바로 삭제됩니다.')}
               error={fieldError.proof}
               className="sm:col-span-2"
             />
@@ -160,7 +160,7 @@ export default function SettingsAccountPage() {
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-foreground">{t('settings.account.recovery.pendingTitle', '확인 메일을 보냈습니다')}</p>
                 <p className="truncate font-mono text-xs text-muted-foreground">{pendingEmail}</p>
-                <p className="text-xs text-muted-foreground">{t('settings.account.recovery.pendingNote', '메일의 링크를 눌러야 복구 이메일이 바뀝니다. 그 전까지는 지금 주소가 그대로 쓰입니다.')}</p>
+                <p className="text-xs text-muted-foreground">{t('settings.account.recovery.pendingNote', '메일의 링크를 눌러야 복구 이메일이 변경됩니다. 그 전까지는 지금 주소가 그대로 사용됩니다.')}</p>
               </div>
               <button type="button" className="shrink-0 text-xs font-semibold text-primary hover:underline disabled:opacity-60" disabled={cancelling} onClick={() => void cancelPending()}>
                 {t('settings.account.recovery.cancel', '요청 취소')}

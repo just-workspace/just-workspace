@@ -22,8 +22,8 @@ const { resetSharedState } = await import('~/lib/state')
 const Page = (await import('~/pages/s/[token]')).default
 
 const t = (k: string, p?: Record<string, unknown>) => i18n.t(k, p as any)
-const REASON = /미리 볼 수 없어 "다운로드 막음"을 쓸 수 없습니다/
-const DEAD = '이 형식은 미리 볼 수 없고 내려받기가 막혀 있습니다.'
+const REASON = /미리 볼 수 없어 "다운로드 막음"을 사용할 수 없습니다/
+const DEAD = '이 형식은 미리 볼 수 없고 다운로드가 차단되어 있습니다.'
 const item = (name: string, is_dir = false) => ({ name, path: `my/${name}`, is_dir, size: 10, modified_at: null, mime_type: null }) as import('~/composables/useFiles').FileItem
 const link = (o: Record<string, unknown> = {}) => ({
   id: 'L1', token: 'tok', display_name: 'app.zip', file_path: 'my/app.zip', expires_at: null, max_downloads: null,
@@ -75,7 +75,7 @@ describe('링크 만들기 — 미리보기 안 되는 파일', () => {
     expect(call.opts.params).toEqual({ path: 'my/app.zip' })
     const opt = await nodlOption()
     expect(isDisabled(opt)).toBe(true)
-    expect(opt.textContent).toContain('미리보기 안 되는 형식')
+    expect(opt.textContent).toContain('미리보기 미지원 형식')
   })
 
   it('미리보기 되는 파일이면 그대로 고를 수 있다', async () => {

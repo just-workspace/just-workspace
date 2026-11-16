@@ -56,11 +56,11 @@ async function start() {
   if (!info.secureStore) {
     // 암호화 저장소가 없으면 리프레시 토큰을 디스크에 저장할 수 없다.
     // 로그인해도 앱 종료 시 소실되므로 사전에 알린다.
-    els.storeNote.textContent = '자격 증명 저장소를 쓸 수 없습니다';
+    els.storeNote.textContent = '자격 증명 저장소를 사용할 수 없습니다';
     els.login.disabled = true;
     showError(
       '이 기기에서는 로그인 정보를 안전하게 저장할 수 없습니다. ' +
-        '리눅스라면 gnome-keyring 또는 kwallet 을 설치한 뒤 다시 실행하세요.',
+        '리눅스라면 gnome-keyring 또는 kwallet 을 설치한 뒤 다시 실행하십시오.',
     );
   }
 }
@@ -73,7 +73,7 @@ els.login.addEventListener('click', async () => {
   const name = els.device.value.trim();
   if (!name) {
     els.device.focus();
-    showError('기기 이름을 입력해 주세요.');
+    showError('기기 이름을 입력하십시오.');
     return;
   }
   els.authurl.textContent = '';

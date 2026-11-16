@@ -50,7 +50,7 @@ async function loadCred(): Promise<{ deviceId: string; secret: string } | null> 
 }
 
 async function saveCred(c: { deviceId: string; secret: string }): Promise<void> {
-  if (!(await safeStorage.isAsyncEncryptionAvailable())) throw new Error('OS 자격 증명 저장소를 쓸 수 없어 원격 접속을 켤 수 없습니다');
+  if (!(await safeStorage.isAsyncEncryptionAvailable())) throw new Error('OS 자격 증명 저장소를 사용할 수 없어 원격 접속을 활성화할 수 없습니다');
   await fs.writeFile(CRED(), await safeStorage.encryptStringAsync(JSON.stringify(c)), { mode: 0o600 });
 }
 
@@ -92,8 +92,8 @@ export class RemoteHost {
   /** 기기 이름 변경(내 기기 목록·동의 창에 표시되는 이름) */
   async rename(name: string): Promise<RemoteStatus> {
     const n = name.trim().slice(0, 100);
-    if (!n) throw new Error('기기 이름을 넣으세요');
-    if (!this.cred) throw new Error('아직 등록되지 않은 기기입니다. 원격 접속 허용을 먼저 켜세요');
+    if (!n) throw new Error('기기 이름을 입력하십시오');
+    if (!this.cred) throw new Error('아직 등록되지 않은 기기입니다. 원격 접속 허용을 먼저 활성화하십시오');
     const r = await this.api.patchDevice(this.token, this.cred.deviceId, { name: n });
     this.name = r.device.name;
     return this.status();

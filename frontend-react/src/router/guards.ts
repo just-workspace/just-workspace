@@ -149,7 +149,7 @@ export async function setupGuard(to: GuardTarget): Promise<string | null> {
       status = await $fetch<SetupStatus>('/api/setup/status')
       setSharedState('setup-status', status)
     } catch {
-      // 일시 오류(429·5xx·네트워크) — 이번 이동만 "설정 끝남"으로 처리하고 저장하지 않는다(다음 이동에서 재조회).
+      // 일시 오류(429·5xx·네트워크) — 이번 이동만 "설정 완료"으로 처리하고 저장하지 않는다(다음 이동에서 재조회).
       // 과거에는 실패 응답을 그대로 저장하여, 1회 실패 시 새로 고침 전까지 최초 설정 판정이 고정되었다.
       status = { needs_setup: false }
     }

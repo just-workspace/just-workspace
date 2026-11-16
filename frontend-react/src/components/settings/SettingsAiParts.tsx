@@ -1,7 +1,7 @@
 /**
  * 설정 › AI 화면 조각.
  *  · SettingsAiModelChoice — 기본 모델 라디오 행(min 52, 선택 = 1.5 primary 테두리 + primary/0.08)
- *  · SettingsMaskedKey — 저장된 키 가림값 칸(점선 40, mono "sk-…a91f") + [바꾸기]
+ *  · SettingsMaskedKey — 저장된 키 가림값 칸(점선 40, mono "sk-…a91f") + [변경]
  *  · SettingsVerifiedMark — "연결 확인됨 · MM/DD"(success, role=status)
  */
 import { useI18n } from '~/i18n'
@@ -56,11 +56,11 @@ export interface SettingsMaskedKeyProps {
   label: string
   /** 가림값(없으면 ●●●●) */
   hint: string
-  /** [바꾸기] */
+  /** [변경] */
   onChange: () => void
 }
 
-/** 저장된 API 키 가림값 칸 + [바꾸기] */
+/** 저장된 API 키 가림값 칸 + [변경] */
 export function SettingsMaskedKey({ label, hint, onChange }: SettingsMaskedKeyProps) {
   const { t } = useI18n()
   return (

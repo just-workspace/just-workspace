@@ -84,7 +84,7 @@ export function ApprovalExternalWarning({ req, compact, className }: { req: Appr
         <span className="font-semibold">{t('approvals.external.title')}</span>
         {/* 자동 수락·허용 규칙이 있음에도 확인하는 사유 한 줄 — 남에게 보이는 쓰기 관문(서버 ask_reason) */}
         {req.ask_reason === 'visible_after_untrusted' && (
-          <span className="break-words">{t('approvals.external.visibleGate', '외부 내용을 읽은 뒤라 확인합니다. 다른 사람에게 보이는 작업은 자동 수락·허용 규칙이 있어도 묻습니다.')}</span>
+          <span className="break-words">{t('approvals.external.visibleGate', '외부 내용을 읽은 뒤라 확인합니다. 다른 사람에게 표시되는 작업은 자동 수락·허용 규칙이 있어도 묻습니다.')}</span>
         )}
         {(!!parts.length || at) && (
           <span className="break-words text-muted-foreground">

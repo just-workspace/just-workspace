@@ -11,7 +11,7 @@
  *
  * @example
  * <p className="px-1 pb-1 pt-1 text-[12px] font-semibold text-muted-foreground">자주 쓴</p>
- * <UiEmojiGrid ariaLabel="자주 쓴" items={freq} columns={9} activeKey={active}
+ * <UiEmojiGrid ariaLabel="자주 사용" items={freq} columns={9} activeKey={active}
  *   onActive={it => setActive(it?.key ?? null)} onPick={it => insert(it)} onExit={(d, col) => moveSection(d, col)} />
  */
 import { useImperativeHandle, useRef, type HTMLAttributes, type KeyboardEvent, type MouseEvent, type Ref } from 'react'

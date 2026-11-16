@@ -92,7 +92,7 @@ export async function signIn(opts: SignInOptions): Promise<void> {
     if (!tok.refresh_token) {
       // openid 스코프만으로는 서버가 리프레시 토큰을 발급하지 않는다. 이 경우 액세스 토큰
       // 만료(1시간) 후 매번 재로그인이 필요하므로 설정 문제로 판정한다.
-      throw new Error('리프레시 토큰이 발급되지 않았습니다 — 스코프 설정을 확인하세요');
+      throw new Error('리프레시 토큰이 발급되지 않았습니다 — 스코프 설정을 확인하십시오');
     }
     await broker.adopt(tok.access_token, tok.expires_in, tok.refresh_token, tok.scope ?? '');
     await registerDevice(opts.appVersion, opts.deviceName);

@@ -176,7 +176,7 @@ describe('스레드 목록', () => {
     const onOpen = vi.fn(), onToggle = vi.fn()
     render(<ul><ChatThreadRow item={item('a', { unread: true, followed: true })} archivedTab={false} mobile={false} onOpen={onOpen} onToggleFollow={onToggle} /></ul>)
     expect(screen.getByText('“원문 a”').className).toContain('italic')
-    expect(screen.getByRole('img', { name: '안 읽음' })).toBeTruthy()
+    expect(screen.getByRole('img', { name: '읽지 않음' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '팔로우 해제' }))
     expect(onToggle).toHaveBeenCalledTimes(1)
     expect(onOpen).not.toHaveBeenCalled()

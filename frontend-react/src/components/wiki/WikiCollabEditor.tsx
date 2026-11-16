@@ -252,7 +252,7 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
     revokedRef.current = next
     if (readyRef.current) applyEditable()
     if (next === 'none') addToast('error', i18n.t('wiki.collab.accessGone', '이 문서를 볼 권한이 없어졌습니다. 실시간 연결을 끊었습니다.'))
-    else if (next === 'read') addToast('warning', i18n.t('wiki.collab.accessReadonly', '이 문서를 편집할 권한이 없어졌습니다. 읽기 전용으로 바뀝니다.'))
+    else if (next === 'read') addToast('warning', i18n.t('wiki.collab.accessReadonly', '이 문서를 편집할 권한이 없어졌습니다. 읽기 전용으로 변경됩니다.'))
   }
 
   function scheduleSeed(doc: Y.Doc, ms: number) {

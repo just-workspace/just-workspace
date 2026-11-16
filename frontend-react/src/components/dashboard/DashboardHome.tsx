@@ -7,7 +7,7 @@
  * 빈 카드: 주 줄 카드는 제자리 한 행, 나머지는 렌더링하지 않고 맨 아래 점선 상자 "비어 있는 카드 n"에 한 행씩 표시.
  *
  * 편집(mode="user"): 헤더의 layout 버튼 → 편집 바 + 점선 카드(grip 드래그 · 1칸/2칸 · 숨기기) + 오른쪽 320 "카드" 패널.
- *   변경 시마다 /api/me/prefs `dash.layout` 에 즉시 저장(기기 간 동기화). "기본값으로" = 개인 배치를 삭제하여 관리자 기본 배치로 복원.
+ *   변경 시마다 /api/me/prefs `dash.layout` 에 즉시 저장(기기 간 동기화). "기본값으로 복원" = 개인 배치를 삭제하여 관리자 기본 배치로 복원.
  * mode="admin"(관리 › 설정 › 대시보드): 항상 편집 상태, 저장 대상은 관리자 기본 배치(appcfg dash.layout), 패널에서 카드 잠금(관리자 고정).
  */
 import { useZoneInstalled } from '~/composables/useSiteConfig'

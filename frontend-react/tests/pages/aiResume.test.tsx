@@ -79,14 +79,14 @@ describe('AI 이어 받기', () => {
     api.messages = { c1: [{ id: 'q1', role: 'user', content: '길게' }, { id: 'm1', role: 'assistant', content: '앞', status: 'streaming', steps: [], citations: [] }] }
     renderPage()
     await waitFor(() => expect(document.querySelector('.ai-md')?.textContent).toContain('앞부분 뒷부분'))
-    expect(screen.getAllByRole('button', { name: '멈추기' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: '중지' }).length).toBeGreaterThan(0)
     // 다른 화면에 있는 동안 종료되면 토스트(현재는 열람 중이므로 없음)
     await act(async () => {
       live.push(ev('done', { message_id: 'm1', status: 'complete' }, '4-0'))
       live.end()
     })
     await waitFor(() => expect(Object.keys(S.aiStreamStore.getState().runs).length).toBe(0))
-    expect(toastStore.getState().toasts.filter(t => t.message === 'AI 답변이 완료됐습니다').length).toBe(0)
+    expect(toastStore.getState().toasts.filter(t => t.message === 'AI 답변이 완료되었습니다').length).toBe(0)
   })
 
   it('새로고침 뒤 대화를 열면 생성 중인 답변을 처음부터 재연결', async () => {
@@ -101,7 +101,7 @@ describe('AI 이어 받기', () => {
       live.push(ev('token', { text: '처음부터 다시' }, '2-0'))
     })
     await waitFor(() => expect(document.querySelector('.ai-md')?.textContent).toContain('처음부터 다시'))
-    await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: '멈추기' })[0]) })
+    await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: '중지' })[0]) })
     await waitFor(() => expect(api.calls.some(c => c.url === '/api/ai/messages/m7/stop')).toBe(true))
   })
 })

@@ -6,7 +6,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { ApprovalExternalWarning } from '~/components/approvals/ApprovalParts'
 import { ApprovalCard } from '~/components/approvals/ApprovalCard'
 
-const REASON = /다른 사람에게 보이는 작업은 자동 수락·허용 규칙이 있어도 묻습니다/
+const REASON = /다른 사람에게 표시되는 작업은 자동 수락·허용 규칙이 있어도 묻습니다/
 
 function req(over: Partial<ApprovalRequest> = {}): ApprovalRequest {
   const now = new Date().toISOString()

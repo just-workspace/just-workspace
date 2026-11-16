@@ -1,7 +1,7 @@
 /**
  * 끌기 손잡이 + 놓을 위치 선.
  *
- * UiDragHandle — grip-vertical 16 아이콘 버튼(기본 24×24, touch 44). aria-label "순서 바꾸기"(변경 가능).
+ * UiDragHandle — grip-vertical 16 아이콘 버튼(기본 24×24, touch 44). aria-label "순서 변경"(변경 가능).
  *   hoverOnly 면 평소 투명, 부모 행(.group) 호버 · 손잡이 포커스 시에만 표시된다 — 부모에 className="group" 을 지정한다.
  *   키보드: ↑ / ↓ = onMove(-1 | 1) — 실제 순서 변경·aria-live 안내는 호출부(목록)가 수행한다. 끌기(HTML5 draggable·포인터)도 호출부 담당:
  *   나머지 속성(draggable·onDragStart·onPointerDown 등)은 <button> 에 그대로 전달된다.
@@ -26,7 +26,7 @@ export interface UiDragHandleProps extends Omit<ButtonHTMLAttributes<HTMLButtonE
   hoverOnly?: boolean
   /** md 24(기본) · touch 44(모바일 순서 편집) */
   size?: 'md' | 'touch'
-  /** 접근성 이름(기본 "순서 바꾸기") */
+  /** 접근성 이름(기본 "순서 변경") */
   ariaLabel?: string
   ref?: Ref<HTMLButtonElement>
 }

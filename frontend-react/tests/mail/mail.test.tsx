@@ -207,7 +207,7 @@ describe('MailList', () => {
     renderInRouter(<MailList />)
     expect(screen.getByText('할인')).toBeTruthy()
     expect(screen.getByLabelText(/대화|3/, { selector: 'span' }).textContent).toBe('3')
-    const unreadChip = screen.getAllByRole('button').find(b => b.getAttribute('aria-pressed') === 'false' && b.textContent?.startsWith('안 읽음'))!
+    const unreadChip = screen.getAllByRole('button').find(b => b.getAttribute('aria-pressed') === 'false' && b.textContent?.startsWith('읽지 않음'))!
     await act(async () => { fireEvent.click(unreadChip) })
     await waitFor(() => expect(api.calls.some(c => c.url === '/api/mail/messages' && c.opts.params.unread === true)).toBe(true))
   })

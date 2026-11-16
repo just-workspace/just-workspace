@@ -97,12 +97,12 @@ describe('UiTable', () => {
   const rows = [{ port: '80', use: '접속' }, { port: '443', use: '접속' }]
   const columns = [
     { key: 'port', header: '포트', mono: true, cell: (r: typeof rows[number]) => r.port },
-    { key: 'use', header: '쓰임', cell: (r: typeof rows[number]) => r.use },
+    { key: 'use', header: '용도', cell: (r: typeof rows[number]) => r.use },
   ]
 
   it('머리글은 열 머리글, 밀리는 영역은 이름이 있고 키보드로 닿는다', () => {
     render(<UiTable label="열 포트" columns={columns} rows={rows} rowKey={r => r.port} />)
-    expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toEqual(['포트', '쓰임'])
+    expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toEqual(['포트', '용도'])
     expect(screen.getAllByRole('row')).toHaveLength(3)
     const region = screen.getByRole('region', { name: '열 포트' })
     expect(region.getAttribute('tabindex')).toBe('0')
@@ -119,7 +119,7 @@ describe('UiTable', () => {
 describe('UiDisclosure', () => {
   it('머리를 누르면 펼쳐지고 aria-expanded 가 따라간다', () => {
     const onUpdate = vi.fn()
-    render(<UiDisclosure title="저장 폴더 지정" description="기본 폴더를 씁니다" onUpdateOpen={onUpdate}><p>안쪽</p></UiDisclosure>)
+    render(<UiDisclosure title="저장 폴더 지정" description="기본 폴더를 사용합니다" onUpdateOpen={onUpdate}><p>안쪽</p></UiDisclosure>)
     const head = screen.getByRole('button', { name: /저장 폴더 지정/ })
     expect(head.getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByText('안쪽')).toBeNull()
@@ -148,8 +148,8 @@ describe('UiDropzone', () => {
 
   it('버튼으로 고른 파일을 알린다(하나만)', () => {
     const onFiles = vi.fn()
-    const { container } = render(<UiDropzone title="백업 파일을 여기에 끌어다 놓습니다" buttonLabel="파일 고르기" onFiles={onFiles} />)
-    expect(screen.getByRole('button', { name: '파일 고르기' })).toBeTruthy()
+    const { container } = render(<UiDropzone title="백업 파일을 여기에 끌어다 놓습니다" buttonLabel="파일 선택" onFiles={onFiles} />)
+    expect(screen.getByRole('button', { name: '파일 선택' })).toBeTruthy()
     const input = container.querySelector('input[type=file]') as HTMLInputElement
     fireEvent.change(input, { target: { files: [file('a.bak'), file('b.bak')] } })
     expect(onFiles).toHaveBeenCalledTimes(1)
@@ -158,7 +158,7 @@ describe('UiDropzone', () => {
 
   it('끌어다 놓으면 표시가 바뀌고 놓은 파일을 알린다', () => {
     const onFiles = vi.fn()
-    const { container } = render(<UiDropzone title="여기에 놓습니다" buttonLabel="파일 고르기" multiple onFiles={onFiles} />)
+    const { container } = render(<UiDropzone title="여기에 놓습니다" buttonLabel="파일 선택" multiple onFiles={onFiles} />)
     const zone = container.firstElementChild as HTMLElement
     fireEvent.dragOver(zone)
     expect(zone.getAttribute('data-over')).toBe('true')
@@ -169,11 +169,11 @@ describe('UiDropzone', () => {
 
   it('꺼져 있으면 받지 않는다 · 한 줄 모양은 찬 칸을 실선으로', () => {
     const onFiles = vi.fn()
-    const { container, rerender } = render(<UiDropzone title="인증서" buttonLabel="파일 고르기" disabled onFiles={onFiles} />)
+    const { container, rerender } = render(<UiDropzone title="인증서" buttonLabel="파일 선택" disabled onFiles={onFiles} />)
     fireEvent.drop(container.firstElementChild as HTMLElement, { dataTransfer: { files: [file('a.pem')] } })
     expect(onFiles).not.toHaveBeenCalled()
-    expect((screen.getByRole('button', { name: '파일 고르기' }) as HTMLButtonElement).disabled).toBe(true)
-    rerender(<UiDropzone layout="row" filled title="인증서" description="fullchain.pem" buttonLabel="바꾸기" onFiles={onFiles} />)
+    expect((screen.getByRole('button', { name: '파일 선택' }) as HTMLButtonElement).disabled).toBe(true)
+    rerender(<UiDropzone layout="row" filled title="인증서" description="fullchain.pem" buttonLabel="변경" onFiles={onFiles} />)
     expect(screen.getByText('fullchain.pem')).toBeTruthy()
     expect((container.firstElementChild as HTMLElement).className).not.toContain('border-dashed')
   })

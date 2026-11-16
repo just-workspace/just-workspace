@@ -143,7 +143,7 @@ describe('UiMiniCalendar / UiDatePopover', () => {
     const anchor = document.createElement('button')
     document.body.appendChild(anchor)
     const { rerender } = render(<UiDatePopover open anchor={anchor} today="2026-10-23" onPick={onPick} onClose={onClose} />)
-    const dlg = screen.getByRole('dialog', { name: '날짜 고르기' })
+    const dlg = screen.getByRole('dialog', { name: '날짜 선택' })
     expect(dlg.parentElement).toBe(document.body)
     expect(dlg.className).toContain('fixed')
     fireEvent.click(document.querySelector<HTMLElement>('[data-ymd="2026-10-10"]')!)
@@ -158,10 +158,10 @@ describe('UiMiniCalendar / UiDatePopover', () => {
 })
 
 describe('UiDragHandle / UiDropLine', () => {
-  it('이름 "순서 바꾸기" · ↑↓ = onMove · hoverOnly', () => {
+  it('이름 "순서 변경" · ↑↓ = onMove · hoverOnly', () => {
     const onMove = vi.fn()
     render(<UiDragHandle hoverOnly onMove={onMove} />)
-    const b = screen.getByRole('button', { name: '순서 바꾸기' })
+    const b = screen.getByRole('button', { name: '순서 변경' })
     expect(b.className).toContain('opacity-0')
     expect(b.className).toContain('group-hover:opacity-100')
     fireEvent.keyDown(b, { key: 'ArrowUp' })
@@ -184,8 +184,8 @@ describe('UiEmojiGrid', () => {
   ]
 
   it('grid → row(열 수) → gridcell, 셀 40, 커스텀 primary/10 · GIF', () => {
-    render(<UiEmojiGrid ariaLabel="자주 쓴" items={items} columns={9} onPick={() => {}} />)
-    const grid = screen.getByRole('grid', { name: '자주 쓴' })
+    render(<UiEmojiGrid ariaLabel="자주 사용" items={items} columns={9} onPick={() => {}} />)
+    const grid = screen.getByRole('grid', { name: '자주 사용' })
     expect(grid.querySelectorAll('[role=row]')).toHaveLength(2)
     const cells = screen.getAllByRole('gridcell')
     expect(cells[0].className).toContain('h-10')

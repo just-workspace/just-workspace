@@ -77,7 +77,7 @@ export async function startLoopback(): Promise<Listener> {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(
       ok
-        ? page('로그인 완료', '이 창을 닫고 Just Workspace 로 돌아가세요.', '#0f7a84')
+        ? page('로그인 완료', '이 창을 닫고 Just Workspace 로 돌아가십시오.', '#0f7a84')
         : page(
             '로그인이 취소되었습니다',
             result.errorDescription || result.error || '알 수 없는 오류입니다.',
@@ -102,7 +102,7 @@ export async function startLoopback(): Promise<Listener> {
     wait(timeoutMs: number) {
       return new Promise<CallbackResult>((resolve, reject) => {
         const timer = setTimeout(() => {
-          rejectCb?.(new Error('로그인 대기 시간이 지났습니다. 다시 시도해 주세요.'));
+          rejectCb?.(new Error('로그인 대기 시간이 지났습니다. 다시 시도하십시오.'));
         }, timeoutMs);
 
         resolveCb = (r) => {

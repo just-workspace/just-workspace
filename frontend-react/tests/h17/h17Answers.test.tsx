@@ -48,7 +48,7 @@ describe('UiSelect search — 시간대 찾기 칸', () => {
   }
   const names = () => screen.getAllByRole('option').map(o => o.textContent)
 
-  it('목록 위에 찾기 칸(자리표시 "도시나 시간대 찾기"), 열면 포커스', () => {
+  it('목록 위에 찾기 칸(자리표시 "도시나 시간대 검색"), 열면 포커스', () => {
     const box = open()
     expect(box.placeholder).toBe(t('common.tzSearch'))
     expect(document.activeElement).toBe(box)

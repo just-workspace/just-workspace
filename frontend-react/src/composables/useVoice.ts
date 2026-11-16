@@ -216,7 +216,7 @@ async function teardown() {
   const tr = _transport
   _transport = null
   const { channelId, identity } = S()
-  // 하이레조 독점 확인창이 표시 중이면 취소로 닫는다 — 퇴장 이후 [독점하고 켜기]가 눌리면 장치를 점유하게 된다
+  // 하이레조 독점 확인창이 표시 중이면 취소로 닫는다 — 퇴장 이후 [독점하고 활성화]가 눌리면 장치를 점유하게 된다
   S().hiresPrompt?.resolve(false)
   // busy 는 여기서 변경하지 않는다(join/leave 의 finally 가 관리) — 채널 이동 도중 해제되면 연속 클릭이 이중 접속으로 이어진다
   set({
@@ -304,7 +304,7 @@ export async function toggleVoiceDeafen(): Promise<void> {
 
 /**
  * 하이레조 활성화 전 확인(데스크톱 앱, 최초 1회) — 3단계(네이티브 전송)가 장치 이름·형식을 전달하여 호출한다.
- * "다음부터 묻지 않기"가 활성화된 경우 즉시 true 를 반환한다. 사용자가 [독점하고 켜기]를 선택하면 true, [취소]를 선택하면 false 를 반환한다.
+ * "다음부터 묻지 않기"가 활성화된 경우 즉시 true 를 반환한다. 사용자가 [독점하고 활성화]를 선택하면 true, [취소]를 선택하면 false 를 반환한다.
  */
 export function confirmHiresExclusive(deviceName: string, format: string): Promise<boolean> {
   if (S().prefs.hiresAskSkip) return Promise.resolve(true)

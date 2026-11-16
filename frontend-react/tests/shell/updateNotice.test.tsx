@@ -88,7 +88,7 @@ describe('예고 띠', () => {
     expect(band()).toBeNull()
     emit({ type: 'system.update_countdown', job: 'j1', kind: 'update', ends_at: at(252_000), expected_seconds: 240 })
     const el = band()!
-    expect(text(el)).toContain('5분 뒤 업데이트를 시작합니다. 하던 일을 저장하세요.')
+    expect(text(el)).toContain('5분 뒤 업데이트를 시작합니다. 진행 중인 작업을 저장하십시오.')
     expect(text(el)).toContain('진행하는 동안 약 4분 접속할 수 없습니다.')
     expect(text(screen.getByTestId('update-countdown-clock'))).toMatch(/^04:1\d$/)
     expect(el.querySelectorAll('button')).toHaveLength(0)
@@ -112,20 +112,20 @@ describe('예고 띠', () => {
     expect(text(screen.getByTestId('update-countdown-clock'))).not.toBe(clock0)     // 숫자는 매초 변경되고
     expect(text(live)).toBe(before)                                                  // 문장은 유지됨
     act(() => { vi.advanceTimersByTime(12_000) })                                    // 4분대로 진입하면
-    expect(text(live)).toBe('4분 뒤 업데이트를 시작합니다. 하던 일을 저장하세요.')
+    expect(text(live)).toBe('4분 뒤 업데이트를 시작합니다. 진행 중인 작업을 저장하십시오.')
   })
 
   it('1분 안쪽이면 지금 저장하라고 한다', async () => {
     await renderShell()
     emit({ type: 'system.update_countdown', job: 'j1', kind: 'update', ends_at: at(58_000), expected_seconds: 240 })
-    expect(text(band())).toContain('곧 업데이트를 시작합니다. 지금 저장하세요.')
+    expect(text(band())).toContain('곧 업데이트를 시작합니다. 지금 저장하십시오.')
     expect(text(screen.getByTestId('update-countdown-clock'))).toMatch(/^00:5\d$/)
   })
 
   it('예상 중단 시간을 모르면 그 문장은 없다. 복원이면 복원이라고 말한다', async () => {
     await renderShell()
     emit({ type: 'system.update_countdown', job: 'j1', kind: 'restore', ends_at: at(252_000), expected_seconds: null })
-    expect(text(band())).toContain('5분 뒤 이전 버전으로 복원을 시작합니다. 하던 일을 저장하세요.')
+    expect(text(band())).toContain('5분 뒤 이전 버전으로 복원을 시작합니다. 진행 중인 작업을 저장하십시오.')
     expect(text(band())).not.toContain('접속할 수 없습니다')
   })
 
@@ -175,7 +175,7 @@ describe('점검 화면', () => {
     emit({ type: 'system.maintenance', active: true, kind: 'update', started_at: at(-10_000), expected_seconds: 240 })
     const el = maint()!
     expect(text(el)).toContain('업데이트 중입니다')
-    expect(text(el)).toContain('관리자가 워크스페이스를 새 버전으로 바꾸고 있습니다. 끝나면 이 화면이 자동으로 다시 열립니다.')
+    expect(text(el)).toContain('관리자가 워크스페이스를 새 버전으로 변경하고 있습니다. 완료되면 이 화면이 자동으로 다시 열립니다.')
     expect(text(el)).toContain('시작')
     expect(text(el)).toContain('예상 시간4분')
     expect(screen.getByRole('button', { name: '지금 다시 연결' })).toBeTruthy()
@@ -192,7 +192,7 @@ describe('점검 화면', () => {
     emit({ type: 'system.maintenance', active: true, kind: 'update', started_at: at(-600_000), expected_seconds: 240 })
     const late = screen.getByTestId('maintenance-late')
     expect(text(late)).toContain('예상보다 오래 걸리고 있습니다.')
-    expect(text(late)).toContain('계속 이 화면이면 관리자에게 알려 주세요.')
+    expect(text(late)).toContain('이 화면이 계속 표시되면 관리자에게 알려 주십시오.')
     expect(screen.queryByTestId('maintenance-contact')).toBeNull()
 
     // 다음 조회에서 연락처가 수신되면 표시됨
@@ -205,7 +205,7 @@ describe('점검 화면', () => {
     await renderShell()
     emit({ type: 'system.maintenance', active: true, kind: 'restore', started_at: at(0), expected_seconds: null })
     expect(text(maint())).toContain('점검 중입니다')
-    expect(text(maint())).toContain('이전 버전으로 되돌리고 있습니다.')
+    expect(text(maint())).toContain('이전 버전으로 복원하고 있습니다.')
     expect(text(maint())).not.toContain('예상 시간')
   })
 

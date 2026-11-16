@@ -271,7 +271,7 @@ export default function MeetingsIndexPage() {
                   icon="video"
                   title={t('meetings.index.emptyTitle')}
                   // 목록에는 본인이 생성했거나 초대받은 회의만 포함된다(타인이 개설한 진행 중 회의는 미표시) — 빈 화면에서 이를 안내한다
-                  description={t('meetings.index.emptyDescMine', '내가 만들었거나 초대받은 회의가 여기에 보입니다. 지금 시작하거나 회의를 예약해 초대 링크를 보내세요.')}
+                  description={t('meetings.index.emptyDescMine', '내가 만들었거나 초대받은 회의가 여기에 표시됩니다. 지금 시작하거나 회의를 예약해 초대 링크를 보내십시오.')}
                   actionLabel={t('meetings.schedule')}
                   onAction={() => setCreateMode('schedule')}
                 />

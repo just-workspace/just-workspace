@@ -142,7 +142,7 @@ describe('AI 화면', () => {
     const card = await screen.findByRole('region', { name: '쓰기 요청 — 위키 문서 만들기' })
     expect(card.textContent).toContain('랩실 장비')
     expect(screen.getByRole('button', { name: '예' })).toBeTruthy()
-    await waitFor(() => expect(document.body.textContent).toContain('AI 생성 · test-model · 내용을 확인한 뒤 쓰세요'))
+    await waitFor(() => expect(document.body.textContent).toContain('AI 생성 · test-model · 내용을 확인한 뒤 사용하십시오'))
     vi.unstubAllGlobals()
   })
 })

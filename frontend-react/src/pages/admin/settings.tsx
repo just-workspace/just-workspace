@@ -1,7 +1,7 @@
 /**
  * 관리 › 설정 › 일반. 본문 720, 카드별 저장.
  *  ① 로그인 방식(순서·사용 여부) + LDAP 연결 = AdminLoginMethods
- *  ② 대시보드 문구·공지(공지 한 계통 + "보이는 곳": 상단 띠 = general.announcement / 대시보드 = appcfg dash.notice_banner)
+ *  ② 대시보드 문구·공지(공지 한 계통 + "표시 위치": 상단 띠 = general.announcement / 대시보드 = appcfg dash.notice_banner)
  *  ③ 가입·세션·파일 보관
  * 구 딥링크 /admin/settings#ai 는 /admin/ai 로 리다이렉트한다.
  */

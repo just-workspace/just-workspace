@@ -90,7 +90,7 @@ export function WikiSpaceSettings({ space, onClose, onDeleted, onMembers }: Wiki
     if (next === visibility || busy) return
     // 공개 시 되돌리기 전까지 모든 사용자가 열람 가능하므로 1회 확인한다
     if (next === 'public' && !await confirmBox(
-      t('wiki.share.publicConfirm', '이 스페이스를 공개할까요? 워크스페이스의 모든 사용자가 읽을 수 있게 됩니다.'),
+      t('wiki.share.publicConfirm', '이 스페이스를 공개하시겠습니까? 워크스페이스의 모든 사용자가 읽을 수 있게 됩니다.'),
       { confirmLabel: t('wiki.share.publicConfirmLabel', '공개하기') },
     )) return
     setBusy(true)
@@ -98,9 +98,9 @@ export function WikiSpaceSettings({ space, onClose, onDeleted, onMembers }: Wiki
       await updateSpace(space.id, { visibility: next })
       setVisibility(next)
       await fetchSpace(space.id).catch(() => {})
-      addToast('success', t('wiki.share.visibilitySaved', '공개 범위를 바꿨습니다'))
+      addToast('success', t('wiki.share.visibilitySaved', '공개 범위를 변경했습니다'))
     } catch (e: any) {
-      addToast('error', e?.data?.detail || t('wiki.share.visibilityError', '공개 범위를 바꾸지 못했습니다'))
+      addToast('error', e?.data?.detail || t('wiki.share.visibilityError', '공개 범위를 변경하지 못했습니다'))
     } finally {
       setBusy(false)
     }
@@ -124,7 +124,7 @@ export function WikiSpaceSettings({ space, onClose, onDeleted, onMembers }: Wiki
       await updateMember(space.id, m.user_id, role)
     } catch (e: any) {
       setMembers(prev)
-      addToast('error', e?.data?.detail || t('wiki.share.roleError', '역할을 바꾸지 못했습니다'))
+      addToast('error', e?.data?.detail || t('wiki.share.roleError', '역할을 변경하지 못했습니다'))
     } finally {
       setBusy(false)
     }

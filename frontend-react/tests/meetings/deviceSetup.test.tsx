@@ -225,7 +225,7 @@ describe('MeetingsDeviceSetup — 상태', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
   })
 
-  it('출력 선택 미지원(setSinkId 없음) → 스피커 칸 "고를 수 없음" + 알림 줄, 테스트는 가능', async () => {
+  it('출력 선택 미지원(setSinkId 없음) → 스피커 칸 "선택할 수 없음" + 알림 줄, 테스트는 가능', async () => {
     delete (HTMLMediaElement.prototype as any).setSinkId
     getUserMedia.mockResolvedValue(fakeStream())
     renderInRouter(<MeetingsDeviceSetup roomName="방" />)
@@ -238,7 +238,7 @@ describe('MeetingsDeviceSetup — 상태', () => {
 })
 
 describe('MeetingsDeviceSetup — 장치 목록 · 짝 스피커', () => {
-  it('마이크 ▾ → listbox(항목마다 레벨), 블루투스 헤드셋을 고르면 스피커도 따라가고 "함께 바뀜" + 되돌리기', async () => {
+  it('마이크 ▾ → listbox(항목마다 레벨), 블루투스 헤드셋을 고르면 스피커도 따라가고 "함께 변경됨" + 되돌리기', async () => {
     getUserMedia.mockResolvedValue(fakeStream())
     const onJoin = vi.fn()
     renderInRouter(<MeetingsDeviceSetup roomName="방" onJoin={onJoin} />)

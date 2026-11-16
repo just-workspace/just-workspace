@@ -75,7 +75,7 @@ describe('useAiStreams', () => {
     expect(runs().length).toBe(0)
     const t = toastStore.getState().toasts
     expect(t.length).toBe(1)
-    expect(t[0].message).toBe('AI 답변이 완료됐습니다')
+    expect(t[0].message).toBe('AI 답변이 완료되었습니다')
     expect(t[0].action?.label).toBe('대화로 가기')
     void t[0].action!.onClick()
     expect(nav.to).toEqual(['/ai'])

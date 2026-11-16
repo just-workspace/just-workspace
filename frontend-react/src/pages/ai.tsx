@@ -13,7 +13,7 @@
 //
 // 프로젝트 편집 창(지식 파일 연결·피커 20개) · 여러 그룹 공유(읽기 불가 파일 경고) ·
 //  구성원 머리 · 답변에서 제외된 지식 파일 줄 · 공유가 해제된 프로젝트 · 모바일 목록 묶음 · 이미지 썸네일 ·
-//  이미지 미지원 모델이면 전송 차단 + [이미지 읽는 모델로 바꾸기](설정 › AI 기본 모델) · 전송한 첨부 미리보기 ·
+//  이미지 미지원 모델이면 전송 차단 + [이미지 읽는 모델로 변경](설정 › AI 기본 모델) · 전송한 첨부 미리보기 ·
 //  질문 수정 시 첨부 유지/제외 · context_trimmed → 대화 맨 위 "앞부분 N개 메시지는 … 쓰지 않았습니다"(제외된 메시지는 흐리게 표시).
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -589,7 +589,7 @@ export default function Page() {
       // 직전에 전송한 질문에 서버 id 를 부여한다(수정·버전 버튼용)
       onParentId: pid => setMessages(list => list.map(m => (m._uid === userUid && !m.id ? { ...m, id: pid } : m))),
     })
-    // 저장소 등록 시점부터 "받는 중" 상태는 저장소가 관리한다 — 다른 대화로 전환해도 차단되지 않도록 즉시 해제한다
+    // 저장소 등록 시점부터 "다운로드 중" 상태는 저장소가 관리한다 — 다른 대화로 전환해도 차단되지 않도록 즉시 해제한다
     setSending(false)
     try {
       const code = await p
@@ -681,12 +681,12 @@ export default function Page() {
     if (files.length) addFiles(files)
   }
 
-  /** [이미지 빼기] — 첨부한 이미지 전체 제거 */
+  /** [이미지 제거] — 첨부한 이미지 전체 제거 */
   function removeImages() {
     for (const a of attachmentsRef.current.filter(x => x.kind === 'image')) removeAttachment(a)
   }
 
-  /** [이미지 읽는 모델로 바꾸기] — 설정 › AI 기본 모델을 vision 지원 선택지로 변경 */
+  /** [이미지 읽는 모델로 변경] — 설정 › AI 기본 모델을 vision 지원 선택지로 변경 */
   async function switchToVisionModel() {
     const c = visionChoice
     if (!c) return

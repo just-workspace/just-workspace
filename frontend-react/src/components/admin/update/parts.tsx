@@ -79,7 +79,7 @@ export function StepRows({ steps, label, failure }: { steps: StepRowData[]; labe
   )
 }
 
-/** "기록 보기"(펼침) + "기록 내려받기" */
+/** "기록 보기"(펼침) + "로그 다운로드" */
 export function LogButtons({ jobId }: { jobId: string }) {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)

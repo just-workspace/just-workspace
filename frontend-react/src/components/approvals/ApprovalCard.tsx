@@ -7,7 +7,7 @@
  *   executed     : 결과 + [되돌리기] 남은 시간(undo_until 까지, 10분) · undone
  *   canceled · expired · failed · rejected
  * 모든 남은 시간은 서버 시각 기준(offset = server_now − 수신 시점의 클라이언트 시각).
- * 칸으로 수정할 수 없는 값은 "대화로 고치기" — onCompose 로 입력 칸에 문장을 삽입한다.
+ * 칸으로 수정할 수 없는 값은 "대화로 수정" — onCompose 로 입력 칸에 문장을 삽입한다.
  */
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useI18n } from '~/i18n'

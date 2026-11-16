@@ -159,7 +159,7 @@ const hasSubOf = (it: UiMenuItem) => !!it.children || it.panel !== undefined
 
 /**
  * 드롭다운 메뉴(모바일은 바닥 시트).
- * @example <UiMenu label="파일 메뉴" items={[{ key: 'rename', label: '이름 바꾸기', icon: 'edit' }, { key: 'delete', label: '삭제', icon: 'trash', danger: true, separated: true }]} onSelect={run} />
+ * @example <UiMenu label="파일 메뉴" items={[{ key: 'rename', label: '이름 변경', icon: 'edit' }, { key: 'delete', label: '삭제', icon: 'trash', danger: true, separated: true }]} onSelect={run} />
  * @example 하위 메뉴: items={[{ key: 'dnd', label: '방해 금지', children: [{ key: 'dnd-30', label: '30분' }, { key: 'dnd-60', label: '1시간' }] }]}
  * @example 펼침 패널: items={[{ key: 'status', label: '상태 메시지', panelWidth: 320, panel: ({ back }) => <StatusEditor onDone={back} /> }]} subSide="left"
  * @example 설명: { key: 'co-own', label: '공동 소유 지정', disabled: true, description: '원 소유자만 바꿀 수 있습니다' }

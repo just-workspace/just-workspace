@@ -1,9 +1,9 @@
 /**
  * 설정 › 보안 "내 세션"
  * + 모바일 카드 스택.
- * 데스크톱: 카드 머리 = 제목 + "로그인된 기기 N대 · …" + 오른쪽 [이 기기 빼고 모두 로그아웃](32, danger 테두리 0.6).
+ * 데스크톱: 카드 머리 = 제목 + "로그인된 기기 N대 · …" + 오른쪽 [이 기기를 제외하고 모두 로그아웃](32, danger 테두리 0.6).
  *   표 머리 36(11/600 0.06em muted) + 행 SettingsSessionRow. "접속 주소" 칸 = 호스트 이름(없으면 IP), mono.
- * 모바일(md 미만): "로그인된 기기 n" 머리 + 기기 카드(SettingsSessionCard) 스택 + 맨 아래 [이 기기 빼고 모두 로그아웃](outline lg danger).
+ * 모바일(md 미만): "로그인된 기기 n" 머리 + 기기 카드(SettingsSessionCard) 스택 + 맨 아래 [이 기기를 제외하고 모두 로그아웃](outline lg danger).
  * 데이터·동작은 useMySessions(계정 "로그인된 기기" 카드와 공유). 마운트 시 조회한다.
  *
  * @example <SettingsSessionsTable />

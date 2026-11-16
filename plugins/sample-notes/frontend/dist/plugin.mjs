@@ -128,7 +128,7 @@ var g = {
 			]), h(i("textarea", {
 				autocomplete: "off",
 				"onUpdate:modelValue": a[2] ||= (e) => z.value = e,
-				placeholder: "내용을 입력하세요...",
+				placeholder: "내용을 입력하십시오...",
 				class: "flex-1 p-4 bg-transparent resize-none focus:outline-none text-sm leading-relaxed"
 			}, null, 512), [[m, z.value]])])) : (l(), r("div", A, [...a[5] ||= [i("div", { class: "text-center" }, [i("svg", {
 				xmlns: "http://www.w3.org/2000/svg",

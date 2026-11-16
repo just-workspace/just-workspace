@@ -43,7 +43,7 @@ describe('UiModal confirm size', () => {
     expect(screen.getByRole('dialog').className).toContain('sm:max-w-md')
   })
   it("고르기 창 size='680' — lg 는 512 그대로", () => {
-    const { unmount } = render(<UiModal size="680" title="고르기" onClose={() => {}}>본문</UiModal>)
+    const { unmount } = render(<UiModal size="680" title="선택" onClose={() => {}}>본문</UiModal>)
     expect(screen.getByRole('dialog').className).toContain('sm:max-w-[680px]')
     unmount()
     render(<UiModal size="lg" title="폼" onClose={() => {}}>본문</UiModal>)
@@ -192,7 +192,7 @@ describe('UiTabbar', () => {
     ]} />)
     expect(screen.getByRole('button', { name: '홈' }).getAttribute('aria-current')).toBe('page')
     expect(screen.getByRole('button', { name: '채팅 — 6' })).toBeTruthy()
-    expect(screen.getByRole('img', { name: '안 읽음' })).toBeTruthy()
+    expect(screen.getByRole('img', { name: '읽지 않음' })).toBeTruthy()
     const all = screen.getByRole('button', { name: '전체' })
     expect(all.getAttribute('aria-haspopup')).toBe('dialog')
     fireEvent.click(all); expect(onSelect).toHaveBeenCalledWith('all')

@@ -72,7 +72,7 @@ describe('워크스페이스 /rbi 런처', () => {
     unmount()
     platformStore.setState({ modules: MODS(false) as any, loaded: true })
     renderPage()
-    expect(await screen.findByText('격리 브라우저 기능이 꺼져 있습니다')).toBeTruthy()
+    expect(await screen.findByText('격리 브라우저 기능이 비활성화되어 있습니다')).toBeTruthy()
   })
 })
 

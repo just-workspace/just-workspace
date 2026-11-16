@@ -122,8 +122,8 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
   // 파일 하나: 손님 화면에서 미리보기 가능한 형식인지 여부(서버 판정). null = 불가 → "다운로드 막음" 비활성, undefined = 미확인(차단하지 않음)
   const [previewKind, setPreviewKind] = useState<string | null | undefined>(undefined)
   const noPreview = !!single && !single.is_dir && previewKind === null
-  const noPreviewHint = t('files.shareModal.noPreviewShort', '미리보기 안 되는 형식')
-  const noPreviewReason = t('files.shareModal.noPreviewReason', '이 형식은 미리 볼 수 없어 "다운로드 막음"을 쓸 수 없습니다. 막으면 받는 사람이 아무것도 볼 수 없습니다(미리보기는 이미지·PDF·텍스트만).')
+  const noPreviewHint = t('files.shareModal.noPreviewShort', '미리보기 미지원 형식')
+  const noPreviewReason = t('files.shareModal.noPreviewReason', '이 형식은 미리 볼 수 없어 "다운로드 막음"을 사용할 수 없습니다. 막으면 받는 사람이 아무것도 볼 수 없습니다(미리보기는 이미지·PDF·텍스트만).')
   const permOptions = [
     { value: 'view', label: t('files.shareModal.permViewDownload') },
     { value: 'view-nodl', label: t('files.shareModal.permViewNoDownload'), disabled: bundle || noPreview, hint: bundle ? t('files.shareModal.bundleNoPreview') : noPreview ? noPreviewHint : undefined },

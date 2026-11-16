@@ -66,7 +66,7 @@ const CASES: Array<[string, () => ReactElement]> = [
   ['UiRadio', () => <UiRadio value="a" label="가" />],
   ['UiRadioCard', () => <UiRadioCard value="a" title="가" meta="32" />],
   ['UiSegment', () => <UiSegment items={[{ value: 'm', label: '월' }, { value: 'w', label: '주' }]} />],
-  ['UiSelect', () => <UiSelect options={[{ value: 1, label: '하나' }]} label="고르기" />],
+  ['UiSelect', () => <UiSelect options={[{ value: 1, label: '하나' }]} label="선택" />],
   ['UiSkeleton', () => <UiSkeleton preset="list" />],
   ['UiStatusDot', () => <UiStatusDot status="online" />],
   ['UiSwitch', () => <UiSwitch label="알림" />],

@@ -165,7 +165,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
     updateDividerAbove(null)
   }, [loading])
 
-  // "안 읽음으로 표시" — 구분선을 해당 메시지 위로 이동
+  // "읽지 않음으로 표시" — 구분선을 해당 메시지 위로 이동
   const [anchorTick, setAnchorTick] = useState(0)
   useEffect(() => {
     const a = unreadAnchor

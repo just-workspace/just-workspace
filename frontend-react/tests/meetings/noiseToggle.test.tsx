@@ -81,7 +81,7 @@ describe('잡음 제거 토글', () => {
     await m.toggleNoiseCancellation()
     expect(m.meetingsStore.getState()).toMatchObject({ noiseEnabled: true, noiseBusy: false })
     expect(room.options.audioCaptureDefaults.noiseSuppression).toBe(true)
-    expect(toasts.list).toEqual([['error', '잡음 제거를 바꾸지 못했습니다']])
+    expect(toasts.list).toEqual([['error', '잡음 제거를 변경하지 못했습니다']])
   })
 
   it('마이크가 꺼져 있으면 다음에 켤 때 쓰일 값만 바꾼다', async () => {

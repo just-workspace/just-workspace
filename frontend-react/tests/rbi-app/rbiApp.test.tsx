@@ -94,7 +94,7 @@ describe('격리 브라우저 단독 앱 — 로그인', () => {
     api.me = null
     setLocation('?sso_error=code')
     render(<RbiApp />)
-    expect(await screen.findByText('로그인 코드가 만료됐거나 이미 쓰였습니다. 다시 로그인하세요.')).toBeTruthy()
+    expect(await screen.findByText('로그인 코드가 만료됐거나 이미 사용되었습니다. 다시 로그인하십시오.')).toBeTruthy()
     expect(assign).not.toHaveBeenCalled()
     expect(window.history.replaceState).toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '워크스페이스로 로그인' }))
@@ -210,7 +210,7 @@ describe('격리 브라우저 단독 앱 — 세션 화면', () => {
     api.sessions = [PIXEL]
     render(<RbiApp />)
     await screen.findByTitle('Portal')
-    fireEvent.click(screen.getByRole('button', { name: /세션 끝내기/ }))
+    fireEvent.click(screen.getByRole('button', { name: /세션 종료/ }))
     await waitFor(() => expect(api.calls.some(c => c.opts?.method === 'DELETE')).toBe(true))
     expect(await screen.findByTestId('rbi-target-portal')).toBeTruthy()
     expect(screen.queryByTitle('Portal')).toBeNull()
@@ -228,6 +228,6 @@ describe('격리 브라우저 단독 앱 — 세션 화면', () => {
     expect(urls).toContain('POST /api/rbi/site/logout')
     expect(urls.indexOf(`DELETE /api/rbi/sessions/${NEW}`)).toBeLessThan(urls.indexOf('POST /api/rbi/site/logout'))
     expect(assign).not.toHaveBeenCalled()
-    expect(dlg.asked).toContain('진행 중인 세션을 끝내고 로그아웃할까요? 워크스페이스 로그인은 그대로입니다.')
+    expect(dlg.asked).toContain('진행 중인 세션을 종료하고 로그아웃하시겠습니까? 워크스페이스 로그인은 그대로 유지됩니다.')
   })
 })

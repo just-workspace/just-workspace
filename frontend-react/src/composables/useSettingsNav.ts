@@ -1,5 +1,5 @@
 /**
- * /settings/* (개인) 와 /admin/* (관리) 좌측 내비 정의 + "설정 찾기" 검색 색인.
+ * /settings/* (개인) 와 /admin/* (관리) 좌측 내비 정의 + "설정 검색" 검색 색인.
  * 색인은 클라이언트 전용 — 항목 이름·키워드로 필터링하여 해당 페이지로 이동시킨다. 서버 검색 없음.
  *
  * React: const { groups, flat, find, labelFor } = useSettingsNav('settings' | 'admin')   — groups·flat 은 배열 값

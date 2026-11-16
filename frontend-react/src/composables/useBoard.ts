@@ -432,7 +432,7 @@ export async function toggleBookmark(postId: string) {
     return result
   } catch (e: any) {
     console.error('toggleBookmark error:', e)
-    addToast('error', e?.data?.detail || i18n.t('board.post.bookmarkError', '북마크를 바꾸지 못했습니다'))
+    addToast('error', e?.data?.detail || i18n.t('board.post.bookmarkError', '북마크를 변경하지 못했습니다'))
   }
 }
 

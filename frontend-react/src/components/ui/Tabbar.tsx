@@ -22,7 +22,7 @@ export interface UiTabbarTab {
   badge?: number
   /** 안 읽음 점(숫자 없이) — 배지가 있거나 활성 칸이면 숨김 */
   dot?: boolean
-  /** 점 접근성 이름(기본 "안 읽음") */
+  /** 점 접근성 이름(기본 "읽지 않음") */
   dotLabel?: string
   /** aria-label(기본: 배지가 있으면 "이름 — n", 없으면 이름) */
   ariaLabel?: string

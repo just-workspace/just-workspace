@@ -8,7 +8,7 @@
  *
  * 진행 단계 카드(도구 칩 대신) · 본문 [n] 출처 표식 + 출처 칩·미리보기 · 수식(KaTeX) ·
  *  행동 줄(복사 · 추천 · 비추천 · 다시 만들기 … AI 생성 · 모델 · 확인 안내) · 연결 끊김/멈춤 = "이어서 받기" 타일 ·
- *  수신 중 [멈추기].
+ *  수신 중 [중지].
  *
  * 사용자 메시지 아래 [질문 수정] [◀ n/N ▶](버전이 2개 이상인 경우) · 수정 칸(보내기 = 새 버전) ·
  *  첨부 칩 · 답변 중 메모리에 저장한 경우 "메모리에 저장함 — “…” 보기 · 취소" 줄.
@@ -67,7 +67,7 @@ export interface AiMessageItemProps {
   onWriteChange?: (req: ApprovalRequest) => void
   /** AI 질문 카드 응답(ask_user · plan_exit) */
   onQuestionChange?: (q: AiQuestion) => void
-  /** 승인 카드 "대화로 고치기"·"다시 제안" — 입력 칸에 삽입할 문장 */
+  /** 승인 카드 "대화로 수정"·"다시 제안" — 입력 칸에 삽입할 문장 */
   onWriteCompose?: (text: string) => void
   /** 질문 수정 전송(새 버전). 지정 시 "편집"이 입력 칸 대신 제자리 수정 칸을 연다.
    *  keepIds = 원래 첨부 중 이번 버전에 포함할 항목(첨부가 없으면 undefined) */

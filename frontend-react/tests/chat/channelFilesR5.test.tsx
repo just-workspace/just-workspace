@@ -58,8 +58,8 @@ describe('탭 관리 — 위키 스페이스 바꾸기', () => {
       return {}
     }
     renderIn(<ChatChannelTabsManage channelId="c1" channelName="개발" summary={summary()} />)
-    fireEvent.click(screen.getByRole('button', { name: '바꾸기' }))
-    expect(await screen.findByRole('dialog', { name: '위키 스페이스 바꾸기' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '변경' }))
+    expect(await screen.findByRole('dialog', { name: '위키 스페이스 변경' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '탭 관리로 돌아가기' })).toBeTruthy()
     const now = await screen.findByRole('option', { name: /개발 팀 스페이스/ })
     expect(now.getAttribute('aria-selected')).toBe('true')
@@ -70,7 +70,7 @@ describe('탭 관리 — 위키 스페이스 바꾸기', () => {
     const go = screen.getByRole('button', { name: '이 스페이스로' }) as HTMLButtonElement
     expect(go.disabled).toBe(true)
     // 검색으로 필터링
-    fireEvent.change(screen.getByRole('textbox', { name: '스페이스 찾기' }), { target: { value: '기획' } })
+    fireEvent.change(screen.getByRole('textbox', { name: '스페이스 검색' }), { target: { value: '기획' } })
     expect(screen.queryByRole('option', { name: /개발 팀 스페이스/ })).toBeNull()
     fireEvent.click(screen.getByRole('option', { name: /제품 기획/ }))
     expect(go.disabled).toBe(false)
@@ -81,10 +81,10 @@ describe('탭 관리 — 위키 스페이스 바꾸기', () => {
   it('‹ 와 [뒤로] 는 탭 목록으로', async () => {
     api.handler = (url) => (url === '/api/wiki/spaces' ? [] : {})
     renderIn(<ChatChannelTabsManage channelId="c1" channelName="개발" summary={summary()} />)
-    fireEvent.click(screen.getByRole('button', { name: '바꾸기' }))
+    fireEvent.click(screen.getByRole('button', { name: '변경' }))
     fireEvent.click(await screen.findByRole('button', { name: '탭 관리로 돌아가기' }))
     expect(screen.getByRole('dialog', { name: '#개발 탭 관리' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '바꾸기' }))
+    fireEvent.click(screen.getByRole('button', { name: '변경' }))
     fireEvent.click(await screen.findByRole('button', { name: '뒤로' }))
     expect(screen.getByRole('dialog', { name: '#개발 탭 관리' })).toBeTruthy()
   })
@@ -94,21 +94,21 @@ describe('탭 관리 — 연결 해제(핸드오프 15-7)', () => {
   it('푸터 왼쪽 danger 글자 버튼 → 확인형 모달(sm) → [연결 해제] 해야 저장, [취소]면 그대로', async () => {
     api.handler = (url) => (url === '/api/wiki/spaces' ? [] : url === '/api/chat/channels/c1/tabs' ? summary({ wiki_space: null }) : {})
     renderIn(<><ChatChannelTabsManage channelId="c1" channelName="개발" summary={summary()} /><UiDialogHost /></>)
-    fireEvent.click(screen.getByRole('button', { name: '바꾸기' }))
+    fireEvent.click(screen.getByRole('button', { name: '변경' }))
     const unlink = await screen.findByRole('button', { name: '연결 해제' })
     expect(unlink.className).toContain('text-danger')
     expect(unlink.className).toContain('mr-auto')
     const puts = () => api.calls.filter(c => c.url === '/api/chat/channels/c1/tabs' && c.opts?.method === 'PUT')
     // 취소 — 동작 없음
     fireEvent.click(unlink)
-    let dlg = await screen.findByRole('alertdialog', { name: '연결을 해제할까요?' })
+    let dlg = await screen.findByRole('alertdialog', { name: '연결을 해제하시겠습니까?' })
     fireEvent.click(within(dlg).getByRole('button', { name: '취소' }))
-    await waitFor(() => expect(screen.queryByText('연결을 해제할까요?')).toBeNull())
+    await waitFor(() => expect(screen.queryByText('연결을 해제하시겠습니까?')).toBeNull())
     expect(puts()).toHaveLength(0)
     // 확인 — wiki_space_id: null 저장
     fireEvent.click(screen.getByRole('button', { name: '연결 해제' }))
-    dlg = await screen.findByRole('alertdialog', { name: '연결을 해제할까요?' })
-    expect(dlg.textContent).toContain('스페이스와 페이지는 지워지지 않습니다')
+    dlg = await screen.findByRole('alertdialog', { name: '연결을 해제하시겠습니까?' })
+    expect(dlg.textContent).toContain('스페이스와 페이지는 삭제되지 않습니다')
     fireEvent.click(within(dlg).getByRole('button', { name: '연결 해제' }))
     await waitFor(() => expect(puts().some(c => c.opts?.body?.wiki_space_id === null)).toBe(true))
   })

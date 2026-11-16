@@ -107,7 +107,7 @@ describe('배치 합치기', () => {
   })
 })
 
-describe('순서 바꾸기', () => {
+describe('순서 변경', () => {
   const o: CardKey[] = ['inbox', 'today', 'ai', 'cont']
   it('끌어 놓기', () => {
     expect(moveKey(o, 'cont', 'today')).toEqual(['inbox', 'cont', 'today', 'ai'])

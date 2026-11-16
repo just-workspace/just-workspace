@@ -102,7 +102,7 @@ export const aiArtifactsApi = {
   retryItem: (id: string, index: number) => $fetch<AiArtifactJob>(`${base}/jobs/${encodeURIComponent(id)}/items/${index}/retry`, { method: 'POST' }),
   rebuildJob: (id: string) => $fetch<AiArtifactJob>(`${base}/jobs/${encodeURIComponent(id)}/rebuild`, { method: 'POST' }),
   saveJob: (id: string) => $fetch<AiArtifactSaveResult>(`${base}/jobs/${encodeURIComponent(id)}/save`, { method: 'POST' }),
-  /** 파일 화면 [압축해서 내려받기] — files_zip 과 동일한 작업 */
+  /** 파일 화면 [압축하여 다운로드] — files_zip 과 동일한 작업 */
   zip: (body: { paths?: string[]; folder?: string; query?: string; path?: string; zip_name?: string }) =>
     $fetch<AiArtifactJob>(`${base}/zip`, { method: 'POST', body }),
 }
@@ -169,7 +169,7 @@ export function aiMergeArtifacts(list: AiArtifactPayload[]): AiArtifactPayload[]
 }
 
 /**
- * 파일 화면 [압축해서 내려받기] — 서버 압축 작업(files_zip 과 동일한 API)을 시작하고, 전송 패널에 진행률을 표시한 뒤
+ * 파일 화면 [압축하여 다운로드] — 서버 압축 작업(files_zip 과 동일한 API)을 시작하고, 전송 패널에 진행률을 표시한 뒤
  * 완료 시 zip 을 내려받는다. zip 은 내 파일 › AI 결과물 에도 보존된다. 결과 작업을 반환한다(실패 시 throw).
  */
 export async function aiZipAndDownload(

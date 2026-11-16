@@ -98,7 +98,9 @@ export function HomeTab({ status, onReload, onChecked }: { status: UpdateStatus;
   const [resuming, setResuming] = useState(false)
 
   const checking = starting || status.check.state === 'checking'
-  const failed = !checking && status.check.ok === false
+  // 채널 파일 없음(404)은 장애가 아니라 "해당 채널에 공개된 릴리스 없음" 상태로 구분한다
+  const empty = !checking && status.check.ok === false && status.check.error?.code === 'channel_empty'
+  const failed = !checking && status.check.ok === false && !empty
   const a = status.available
   const s = status.settings
   const auto = s.mode === 'auto'
@@ -172,7 +174,7 @@ export function HomeTab({ status, onReload, onChecked }: { status: UpdateStatus;
             <UiIcon name="loader" className="h-4 w-4 animate-spin motion-reduce:animate-none" />{t('admin.update.home.checking')}
           </span>
         )}
-        {!checking && !failed && a.state === 'none' && (
+        {!checking && !failed && !empty && a.state === 'none' && (
           <span role="status" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-success" data-testid="update-latest">
             <UiIcon name="check-circle" className="h-4 w-4" />{t('admin.update.home.latest')}
           </span>
@@ -212,6 +214,12 @@ export function HomeTab({ status, onReload, onChecked }: { status: UpdateStatus;
           {a.reason?.vars?.min_upgrade_from
             ? <UiTrans k="admin.update.home.blocked.body" slots={{ version: <Mono>{String(a.reason.vars.min_upgrade_from)}</Mono> }} />
             : t('admin.update.home.blocked.bodyUnknown')}
+        </UiCallout>
+      )}
+
+      {empty && (
+        <UiCallout tone="neutral" role="status" data-testid="update-channel-empty" title={t('admin.update.home.failed.emptyTitle')}>
+          {t('admin.update.home.failed.emptyBody', { channel: t(`admin.update.channel.${s.channel}.short`) })}
         </UiCallout>
       )}
 

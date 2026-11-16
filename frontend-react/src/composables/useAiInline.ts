@@ -10,6 +10,7 @@ import { useEffect } from 'react'
 import { createStore, useStore } from 'zustand'
 import { fetchInlineStatus, type AiInlineStatus } from '~/utils/aiInline'
 import { authStore } from '~/composables/useAuth'
+import { fetchAppConfig, isZoneInstalled, siteConfigStore } from '~/composables/useSiteConfig'
 
 const TTL = 5 * 60_000
 
@@ -24,7 +25,9 @@ export function loadAiInlineStatus(force = false): Promise<void> {
   if (!force && s.loadedAt && Date.now() - s.loadedAt < TTL) return Promise.resolve()
   if (inflight) return inflight
   aiInlineStore.setState({ loading: true })
-  inflight = fetchInlineStatus()
+  // AI 구역이 설치되지 않은 서버에는 이 경로가 없다(404). 구역 목록을 먼저 확인하고 미설치이면 호출하지 않는다.
+  inflight = (siteConfigStore.getState().loaded ? Promise.resolve() : fetchAppConfig())
+    .then(() => (isZoneInstalled('ai') ? fetchInlineStatus() : null))
     .then(status => aiInlineStore.setState({ status, loadedAt: Date.now(), loading: false }))
     .catch(() => aiInlineStore.setState({ status: null, loadedAt: Date.now(), loading: false }))
     .finally(() => { inflight = null })

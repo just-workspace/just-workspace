@@ -167,7 +167,7 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
     }
   }
 
-  function failure(stepId: string, error: ApplyStep['error']): { title: ReactNode; body: ReactNode } {
+  function failure(stepId: string, error: ApplyStep['error']): { title: ReactNode; body: ReactNode; code: string } {
     const step = { id: stepId, error }
     const cause = step.error?.cause ?? ''
     const vars = { ...(step.error?.vars ?? {}) } as Record<string, unknown>
@@ -182,18 +182,28 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
       vars.p = josa(String(answers.storage.export ?? ''), '을/를')
     } else if (known) {
       key = cause
-      if (cause === 'cert_issue_failed') vars.domain = Array.isArray(vars.names) && vars.names.length ? String(vars.names[0]) : answers.access.domain
+      if (cause.startsWith('cert_')) {
+        vars.domain = Array.isArray(vars.names) && vars.names.length ? String(vars.names[0]) : answers.access.domain
+        if (Array.isArray(vars.names)) vars.names = vars.names.join(', ')
+      }
       if (cause === 'image_pull_failed') vars.p = josa(String(vars.image ?? ''), '을/를')
       if (cause === 'service_not_ready') vars.p = josa(String(vars.container ?? ''), '이/가')
       if (cause === 'admin_username_taken') vars.p = josa(String(vars.username ?? ''), '이/가')
     } else if (step.id === 'zones' && typeof vars.zone === 'string') {
       key = 'zone'
       vars.zone = zoneName(vars.zone)
-    } else {
-      vars.cause = cause
     }
-    return { title: <M k={`apply.fail.${key}.title`} v={vars} />, body: <M k={`apply.fail.${key}.body`} v={vars} /> }
+    return { title: <M k={`apply.fail.${key}.title`} v={vars} />, body: <M k={`apply.fail.${key}.body`} v={vars} />, code: cause }
   }
+  /** 내부 원인 코드는 본문에 노출하지 않고 접힌 영역에만 표시한다 */
+  const failCode = (code: string) => code
+    ? (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer">{t('apply.failDetails')}</summary>
+          <span className="font-mono">{t('apply.failCode', { code })}</span>
+        </details>
+      )
+    : null
 
   // 단계에 들어가기도 전에 멈춘 경우(답변 검증 · 사전 점검) — 실패한 단계가 없다
   const gateFailure = failed && !(state?.steps ?? []).some(s => s.status === 'failed') ? failure(state?.error?.step ?? '', state?.error ?? null) : null
@@ -261,6 +271,7 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
                     <div className="flex flex-col gap-1 text-[13px]">
                       <span className="font-semibold">{fail.title}</span>
                       <span className="text-muted-foreground">{fail.body}</span>
+                      {failCode(fail.code)}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <UiButton type="button" size="sm" icon="refresh" className={btn} disabled={busy} onClick={() => { void retry() }}>{t('apply.retry')}</UiButton>
@@ -307,6 +318,7 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
           )}
         >
           {gateFailure.body}
+          {failCode(gateFailure.code)}
         </UiCallout>
       )}
 

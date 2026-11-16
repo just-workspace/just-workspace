@@ -177,18 +177,68 @@ describe('인증서 카드 — 다시 발급', () => {
     fireEvent.click(await screen.findByRole('button', { name: '다시 발급' }))
     const box = await screen.findByTestId('cert-failed')
     expect(box.textContent).toContain('인증서를 바꾸지 못했습니다.')
-    expect(box.textContent).toContain('인증 기관이 ws.example.com의 80번 포트에 접속하지 못했습니다.')
+    expect(box.textContent).toContain('ws.example.com의 인증서를 발급받지 못했습니다.')
+    expect(box.textContent).not.toContain('80번')
     expect(box.textContent).toContain('쓰던 인증서는 그대로 있습니다.')
     expect(screen.getByTestId('cert-mode').textContent).toBe('임시 인증서 (자체 서명)')
     await waitFor(() => expect((screen.getByRole('button', { name: '다시 발급' }) as HTMLButtonElement).disabled).toBe(false))
   })
 
-  it('모르는 실패 원인은 원인 글자째로, 시작하지 못한 요청은 이유를 알린다', async () => {
+  it('실패 원인별 문구 — 컨테이너 기동 실패를 80번 포트 문제로 안내하지 않는다', async () => {
+    for (const [cause, text] of [
+      ['service_start_failed', '컨테이너를 시작하지 못했습니다.'],
+      ['cert_service_start_failed', '인증서 발급용 컨테이너를 시작하지 못했습니다.'],
+      ['cert_acme_challenge_failed', '인증 기관이 ws.example.com의 80번 포트에서 확인 파일을 받지 못했습니다.'],
+      ['cert_rate_limited', '인증 기관의 발급 한도를 넘었습니다.'],
+      ['cert_dns_mismatch', 'ws.example.com의 DNS가 없거나 이 서버를 가리키지 않습니다.'],
+    ]) {
+      const failed = job({ status: 'failed', finished_at: new Date().toISOString(), error: { cause, vars: {} } })
+      api.routes[`GET ${B}/cert`] = () => cert({ job: null })
+      api.routes[`GET ${B}/jobs`] = () => ({ jobs: [failed] })
+      const view = render(<AdminCertCard />)
+      const box = await screen.findByTestId('cert-failed')
+      expect(box.textContent).toContain(text)
+      expect(screen.getByTestId('cert-fail-code').textContent).toContain(cause)
+      view.unmount()
+    }
+  })
+
+  it('자동 갱신 상태 — 자동 발급 설치에서만 보이고, 항목이 없는 응답에서도 깨지지 않는다', async () => {
+    api.routes[`GET ${B}/cert`] = () => issued({ renewal: { applicable: true, service: 'running', last_run_at: '2026-01-12T00:00:04Z', last_result: 'ok', next_renewal_at: days(50) } })
+    let view = render(<AdminCertCard />)
+    let row = await screen.findByTestId('cert-renewal')
+    expect(row.getAttribute('data-service')).toBe('running')
+    expect(row.textContent).toContain('동작 중')
+    expect(row.textContent).toContain('(정상)')
+    expect(row.textContent).toContain('다음 갱신 예정')
+    view.unmount()
+
+    api.routes[`GET ${B}/cert`] = () => issued({ renewal: { applicable: true, service: 'missing', last_run_at: null, last_result: null, next_renewal_at: null } })
+    view = render(<AdminCertCard />)
+    row = await screen.findByTestId('cert-renewal')
+    expect(row.textContent).toContain('없음')
+    expect(row.textContent).toContain('갱신 서비스가 동작하지 않으면')
+    view.unmount()
+
+    api.routes[`GET ${B}/cert`] = () => cert({ renewal: { applicable: false, service: 'missing', last_run_at: null, last_result: null, next_renewal_at: null } })
+    view = render(<AdminCertCard />)
+    await screen.findByTestId('cert-mode')
+    expect(screen.queryByTestId('cert-renewal')).toBeNull()
+    view.unmount()
+
+    api.routes[`GET ${B}/cert`] = () => issued()
+    render(<AdminCertCard />)
+    await screen.findByTestId('cert-mode')
+    expect(screen.queryByTestId('cert-renewal')).toBeNull()
+  })
+
+  it('모르는 실패 원인은 일반 문구로(코드는 자세히 안에), 시작하지 못한 요청은 이유를 알린다', async () => {
     const failed = job({ status: 'failed', finished_at: new Date().toISOString(), error: { cause: 'something_new', vars: {} } })
     api.routes[`GET ${B}/cert`] = () => cert({ job: null })
     api.routes[`GET ${B}/jobs`] = () => ({ jobs: [failed] })
     render(<AdminCertCard />)
-    expect((await screen.findByTestId('cert-failed')).textContent).toContain('(something_new)')
+    expect((await screen.findByTestId('cert-failed')).textContent).toContain('기록을 확인하고 다시 시도합니다.')
+    expect(screen.getByTestId('cert-fail-code').textContent).toContain('something_new')
 
     for (const [code, text] of [
       ['busy', '다른 작업이 진행 중입니다. 끝난 뒤 다시 시도하세요.'],

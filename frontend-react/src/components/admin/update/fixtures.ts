@@ -45,6 +45,7 @@ export const statuses = {
   latest: () => status(),
   available: () => status({ available: availableUpdate() }),
   checking: () => status({ check: { state: 'checking', last_at: '2026-01-12T00:00:04Z', ok: true, error: null } }),
+  channelEmpty: () => status({ check: { state: 'idle', last_at: '2026-01-12T00:00:04Z', ok: false, error: { code: 'channel_empty', detail: 'HTTP 404' } } }),
   checkFailed: () => status({ check: { state: 'idle', last_at: '2026-01-12T00:00:04Z', ok: false, error: { code: 'channel_unreachable', detail: 'connect timeout' } } }),
   neverChecked: () => status({ check: { state: 'idle', last_at: null, ok: null, error: null } }),
   wait: () => status({

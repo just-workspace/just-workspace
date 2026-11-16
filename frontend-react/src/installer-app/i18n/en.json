@@ -151,6 +151,7 @@
       "compose_missing": "Docker Compose was not found. Install the Compose plugin, then check again.",
       "compose_too_old": "Docker Compose {min} or newer is required. Upgrade the Compose plugin, then check again.",
       "cpu_too_few": "At least {min} processor cores are required.",
+      "cpu_below_recording": "Meeting recording works best with {recommend} or more cores. On this server ({cpus}), recordings may be slow or refused. You can continue.",
       "memory_below_minimum": "Even the core zone alone needs {gb} GB of memory. Add memory to the server, then check again.",
       "memory_insufficient": "The zones you picked recommend {gb} GB of memory. Pick fewer zones or add memory.",
       "arch_unsupported": "This processor type is not supported. Install on a {supported} server.",
@@ -187,9 +188,10 @@
     "networkTitle": "Connection",
     "detected": "Detected: {name}",
     "directTitle": "Directly on a public address",
-    "directDesc": "The server has its own public address, like a cloud server.",
-    "routerTitle": "Behind a router (port forwarding)",
-    "routerDesc": "After you pick zones, we list the ports to open on the router. Adds one step.",
+    "directDesc": "The server has its own public address, or a public address is mapped 1:1 to it, like a cloud server.",
+    "routerTitle": "Private address + NAT (router · port forwarding)",
+    "routerDesc": "A router or NAT device forwards ports to this server. After you pick zones, we list the ports to forward. Adds one step.",
+    "cloudNote": "Detected a cloud server. It uses a private address, but a public address is mapped 1:1 to it, so this counts as 'Directly on a public address'. Open the ports in the cloud firewall (security group).",
     "proxyTitle": "Behind an existing proxy",
     "proxyDesc": "A reverse proxy you already run sits in front. The next screen asks for its address. Adds one step.",
     "certTitle": "Certificate",
@@ -639,6 +641,7 @@
   "summary": {
     "title": "Ready to install",
     "lead": "Nothing has changed on the server yet. Pressing Install applies everything at once.",
+    "leadRetry": "Settings and containers from the earlier install attempt are still on the server. Pressing Install applies your current choices again and cleans up the containers of zones you removed.",
     "fix": "Edit",
     "change": "Change",
     "fixLabel": "Edit {name}",
@@ -655,7 +658,7 @@
     "rowAdvanced": "Advanced settings",
     "network": {
       "direct": "Directly on a public address",
-      "router": "Behind a router (port forwarding)",
+      "router": "Private address + NAT (router · port forwarding)",
       "proxy": "Behind an existing proxy"
     },
     "cert": {
@@ -694,6 +697,8 @@
       "mail_records_pending": "{m}{n}{/m} mail records do not match. Mail you send may be marked as spam.",
       "mail_records_both": "{m}{missing}{/m} mail records are missing and {m}{different}{/m} have a different value. Mail you send may be marked as spam.",
       "cert_temporary": "The install uses a temporary certificate. Browsers show a warning until you issue one from the admin screen.",
+      "docs_temporary_cert": "With a temporary certificate, the document editor may not open because of the certificate warning. Switching to a trusted certificate fixes this.",
+      "meetings_recording_low_cpu": "Meeting recording works best with {m}{recommend}{/m} or more cores. On this server ({m}{cpus}{/m}), recordings may be slow or refused.",
       "quick_downgraded": "Server memory is below what the collaboration bundle recommends, so the minimal bundle is installed.",
       "disk_low": "Free disk space is low. It may fill up soon.",
       "time_not_synchronized": "The server clock is not synchronized. Certificate issuance and sign-in may fail.",
@@ -709,11 +714,12 @@
       "meetings_public_ip_unknown": "The public address for meetings is unknown. People outside may not be able to join meetings.",
       "rbi_needs_dns": "The isolated browser also needs {m}{name}{/m} to point to this server.",
       "dns_mismatch_cert_will_fail": "The address does not point to this server, so automatic certificate issuance will fail.",
-      "router_port_forward": "Forward these ports on your router to this server so it can be reached from outside: {m}{ports}{/m}",
+      "router_port_forward": "Forward these ports on your router or NAT device to this server so it can be reached from outside: {m}{ports}{/m}",
       "lossless_needs_udp_4433": "Lossless audio needs UDP port {m}4433{/m} reachable from outside. Otherwise calls fall back to standard quality.",
       "mail_needs_dns_and_port25": "The built-in mail server needs the mail records of {m}{mail_domain}{/m} and inbound port {m}25{/m} to receive mail.",
       "account_domain_is_mail_domain": "Account mail addresses will look like {m}name@{mail_domain}{/m}.",
-      "side_certs_self_signed": "Names that bypass the proxy ({m}{names}{/m}) got a self-signed certificate."
+      "side_certs_self_signed": "Names that bypass the proxy ({m}{names}{/m}) got a self-signed certificate.",
+      "cert_renewal_not_started": "The automatic certificate renewal container could not be started. The installer keeps retrying. After installation, check the renewal status under Security in the admin screen."
     },
     "seeCheck": "See server check",
     "seeMail": "See mail",
@@ -849,10 +855,32 @@
     "logFailed": "The log could not be loaded.",
     "logLabel": "{step} log",
     "retryFailed": "Could not restart. Press again in a moment.",
+    "failDetails": "Details",
+    "failCode": "Cause code: {code}",
     "fail": {
       "cert_issue_failed": {
-        "title": "The certificate authority could not reach port {m}80{/m} of {m}{domain}{/m}.",
-        "body": "Check that port {m}80{/m} is open on the firewall or router, then try again. If you cannot open it now, finish the install with a temporary (self-signed) certificate and issue one later from the admin screen."
+        "title": "Could not get a certificate for {m}{domain}{/m}.",
+        "body": "Check the certificate authority's response in the log, then try again. If you cannot fix it now, finish the install with a temporary (self-signed) certificate and issue one later from the admin screen."
+      },
+      "cert_service_start_failed": {
+        "title": "Could not start the certificate container.",
+        "body": "It stopped inside the server before any request reached the certificate authority. Check the log, then try again."
+      },
+      "cert_acme_challenge_failed": {
+        "title": "The certificate authority could not fetch the check file from port {m}80{/m} of {m}{domain}{/m}.",
+        "body": "Check that port {m}80{/m} is open to this server on the firewall or port forwarding, then try again. If you cannot open it now, finish the install with a temporary (self-signed) certificate and issue one later from the admin screen."
+      },
+      "cert_rate_limited": {
+        "title": "The certificate authority's issuance limit was exceeded.",
+        "body": "Wait a while and try again, or finish the install with a temporary (self-signed) certificate and issue one later from the admin screen."
+      },
+      "cert_dns_mismatch": {
+        "title": "{m}{domain}{/m} has no DNS record or does not point to this server.",
+        "body": "Point every name in the certificate ({m}{names}{/m}) to this server's public address, then try again. If you cannot do that now, finish the install with a temporary (self-signed) certificate and issue one later from the admin screen."
+      },
+      "database_migrate_failed": {
+        "title": "Could not bring the database up to this version.",
+        "body": "Check the log, then try again. Steps that already finished are not repeated."
       },
       "storage": {
         "title": "The network storage {m}{target}{/m} could not be mounted.",
@@ -927,7 +955,7 @@
         "body": "For network storage, check that the NAS is on and try again, or go back to the review and change where files are kept."
       },
       "other": {
-        "title": "It stopped at this step. ({cause})",
+        "title": "It stopped at this step.",
         "body": "Check the log, then try again. Steps that already finished are not repeated."
       }
     },

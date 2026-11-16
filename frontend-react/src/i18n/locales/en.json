@@ -1782,10 +1782,33 @@
         "other": "Something needs your attention. ({key})"
       },
       "fail": {
-        "cert_issue_failed": "The certificate authority could not reach port 80 of {domain}. Check that port 80 is open on the firewall or router, then try again.",
+        "cert_issue_failed": "Could not get a certificate for {domain}. Check the certificate authority's response in the log, then try again.",
+        "cert_service_start_failed": "Could not start the certificate container. It stopped inside the server before any request reached the certificate authority. Check the log, then try again.",
+        "cert_acme_challenge_failed": "The certificate authority could not fetch the check file from port 80 of {domain}. Check that port 80 is open to this server on the firewall or port forwarding, then try again.",
+        "cert_rate_limited": "The certificate authority's issuance limit was exceeded. Wait a while and try again.",
+        "cert_dns_mismatch": "{domain} has no DNS record or does not point to this server. Point every name in the certificate to this server's public address, then try again.",
+        "service_start_failed": "Could not start a container. Check the log, then try again.",
+        "service_not_ready": "A container did not become ready. Check the log, then try again.",
         "cert_dir_managed": "The place where the certificate is kept is managed by another tool, so it could not be replaced.",
         "cert_invalid": "The uploaded certificate cannot be used. Check the certificate and private key and upload again.",
-        "other": "Check the log and try again. ({cause})"
+        "other": "Check the log and try again.",
+        "details": "Details",
+        "code": "Cause code: {cause}"
+      },
+      "renewal": {
+        "label": "Auto-renewal",
+        "service": {
+          "running": "Running",
+          "stopped": "Stopped",
+          "missing": "Missing"
+        },
+        "lastRun": "last check {time}",
+        "result": {
+          "ok": "OK",
+          "failed": "failed"
+        },
+        "next": "next renewal around {date}",
+        "down": "If the renewal service is not running, the certificate will lapse on its expiry date. Pressing Reissue also restarts the renewal service."
       },
       "error": {
         "busy": "Another task is in progress. Try again when it finishes.",
@@ -2016,12 +2039,15 @@
         },
         "failed": {
           "title": "Couldn't reach the update server",
+          "emptyTitle": "No release has been published on this channel yet",
+          "emptyBody": "Releases on the {channel} channel will appear here. Pick another channel in the Settings tab.",
           "unconfiguredTitle": "Update checks aren't set up",
           "retry": "Check again",
           "offline": "If this server has no internet access, upload a bundle file in {link}Offline update{/link}.",
           "code": {
             "unconfigured": "The installer has no public key to verify release signatures. Add the key, then check again",
             "channel_unreachable": "Connection failed",
+            "channel_empty": "No release has been published on this channel yet",
             "channel_invalid": "The channel file couldn't be trusted (signature or expiry)",
             "manifest_invalid": "The release manifest couldn't be trusted"
           }

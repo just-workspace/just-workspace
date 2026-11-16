@@ -83,6 +83,8 @@ export interface StateResponse {
     public_ip?: string | null
     lan_ip?: string | null
     detected_network?: Network | null
+    /** 클라우드 메타데이터 서비스 감지 여부 — 사설 주소여도 공인 주소가 1:1 로 연결된 서버 */
+    cloud?: boolean
     disk_free_gb?: number | null
   }
   /** 화면에 보여 줄 값(없으면 그 줄을 숨긴다) */

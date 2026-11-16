@@ -87,6 +87,16 @@ describe('현황', () => {
     expect(page.path()).toBe('/admin/update')
   })
 
+  it('채널에 릴리스 없음(404): 장애가 아닌 안내로 보인다', async () => {
+    on('GET', '/status', fx.statuses.channelEmpty())
+    await renderUpdate()
+    const note = await screen.findByTestId('update-channel-empty')
+    expect(text(note)).toContain('이 채널에 공개된 릴리스가 아직 없습니다')
+    expect(screen.queryByTestId('update-check-failed')).toBeNull()
+    expect(screen.queryByText('업데이트 서버에 연결하지 못했습니다')).toBeNull()
+    expect(screen.queryByTestId('update-latest')).toBeNull()
+  })
+
   it('확인 실패의 오프라인 업데이트 링크는 그 탭으로 간다', async () => {
     on('GET', '/status', fx.statuses.checkFailed())
     on('GET', '/offline', fx.offlines.empty())

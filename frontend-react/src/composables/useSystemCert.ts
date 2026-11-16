@@ -21,10 +21,20 @@ export interface CertState {
   site_ca?: boolean
   /** 발급 CA 인증서를 따로 올릴 수 있는 설치(올린 인증서를 쓰고, 자체 서명이 아니다) */
   ca_uploadable?: boolean
+  /** 자동 갱신 상태 — 이 항목을 주지 않는 설치 관리자(이전 버전)도 있다 */
+  renewal?: CertRenewal | null
   /** 인증서 때문에 연결이 보류된 구역 */
   pending: string[]
   /** 진행 중인 인증서 작업 */
   job: ZoneJob | null
+}
+export interface CertRenewal {
+  /** 자동 발급 설치(갱신 서비스가 있어야 하는 설치) */
+  applicable: boolean
+  service: 'running' | 'stopped' | 'missing'
+  last_run_at: string | null
+  last_result: 'ok' | 'failed' | null
+  next_renewal_at: string | null
 }
 /** 올린 인증서 검증 한 줄 — 마법사의 인증서 확인과 같은 꼴 */
 export interface CertCheck { id: string; status: 'pass' | 'warn' | 'fail'; value?: unknown; fix?: { key: string; vars?: Record<string, unknown> } | null }

@@ -22,7 +22,8 @@ const { AiInlineButton } = await import('~/components/aiInline/AiInlineParts')
 const { MailAiSummary, MailAiDraft, _clearMailAiCache } = await import('~/components/mail/MailAiPanels')
 const { ChatAiSummary, MIN_UNREAD, requestChatAiSummary } = await import('~/components/chat/ChatAiSummary')
 const { MeetingAiTodos, _setLastMeetingChat } = await import('~/components/meetings/MeetingAiTodos')
-const { _setAiInlineStatus } = await import('~/composables/useAiInline')
+const { _setAiInlineStatus, loadAiInlineStatus, aiInlineStore } = await import('~/composables/useAiInline')
+const { siteConfigStore } = await import('~/composables/useSiteConfig')
 const { authStore } = await import('~/composables/useAuth')
 const { shortDue, inlineError, hhmm } = await import('~/utils/aiInline')
 const { mailComposeStore, openCompose, takeAiDraft, _resetMailComposeStore } = await import('~/composables/useMailCompose')
@@ -45,6 +46,23 @@ beforeEach(() => {
   authStore.setState({ user: { id: 'me', username: 'hana', display_name: '김하나' } as any })
   _setAiInlineStatus({ ...READY })
   isMobileStore.setState({ isMobile: false })
+})
+
+describe('구역 게이팅', () => {
+  it('AI 구역이 설치되지 않은 서버에서는 상태를 호출하지 않는다', async () => {
+    siteConfigStore.setState({ zones: ['core', 'chat', 'mail'], loaded: true })
+    _setAiInlineStatus(null)
+    await loadAiInlineStatus(true)
+    expect(posts('/api/ai/inline/status')).toHaveLength(0)
+    expect(aiInlineStore.getState().status).toBeNull()
+
+    siteConfigStore.setState({ zones: ['core', 'ai'], loaded: true })
+    api.respond = () => ({ ...READY })
+    await loadAiInlineStatus(true)
+    expect(posts('/api/ai/inline/status')).toHaveLength(1)
+    expect(aiInlineStore.getState().status?.available).toBe(true)
+    siteConfigStore.setState({ zones: null, loaded: false })
+  })
 })
 
 describe('도우미', () => {

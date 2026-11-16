@@ -36,7 +36,8 @@ export const certTiming = { pollMs: 1500 }
 /** 이 코드로 실패하면 설치 관리자가 인증서를 맡지 않는 설치다 */
 const LEGACY_CODES = ['installer_unavailable', 'installer_unsupported']
 const REQUEST_ERRORS = ['busy', 'cert_managed_by_proxy', 'not_installed', 'cert_auto_needs_domain', 'file_too_large', 'cert_invalid', 'cert_ca_needs_upload']
-const FAIL_CAUSES = ['cert_issue_failed', 'cert_dir_managed', 'cert_invalid']
+const FAIL_CAUSES = ['cert_issue_failed', 'cert_service_start_failed', 'cert_acme_challenge_failed', 'cert_rate_limited', 'cert_dns_mismatch',
+  'cert_dir_managed', 'cert_invalid', 'service_start_failed', 'service_not_ready']
 const STAGES = ['issue', 'reload', 'reconnect']
 
 export interface AdminCertCardProps {
@@ -223,6 +224,25 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
       : days != null && days <= 30
         ? { tone: 'warning' as const, text: t('admin.certCard.badge.renew') }
         : null
+  // 자동 갱신 상태(자동 발급 설치만). 이 항목이 없는 응답(이전 설치 관리자)에서는 행을 표시하지 않는다
+  const renewal = cert.renewal && cert.renewal.applicable ? cert.renewal : null
+  const dateOf = (iso: string | null, withTime = false) => {
+    const d = iso ? new Date(iso) : null
+    if (!d || Number.isNaN(d.getTime())) return ''
+    const loc = locale === 'ko' ? 'ko-KR' : 'en-US'
+    return withTime
+      ? d.toLocaleString(loc, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString(loc, { year: 'numeric', month: '2-digit', day: '2-digit' })
+  }
+  const renewalService = renewal && ['running', 'stopped', 'missing'].includes(renewal.service) ? renewal.service : 'missing'
+  const renewalParts = renewal
+    ? [
+        dateOf(renewal.last_run_at, true)
+          ? `${t('admin.certCard.renewal.lastRun', { time: dateOf(renewal.last_run_at, true) })}${renewal.last_result ? `(${t(`admin.certCard.renewal.result.${renewal.last_result === 'ok' ? 'ok' : 'failed'}`)})` : ''}`
+          : '',
+        dateOf(renewal.next_renewal_at) ? t('admin.certCard.renewal.next', { date: dateOf(renewal.next_renewal_at) }) : '',
+      ].filter(Boolean)
+    : []
   const modeKey = cert.mode && ['auto', 'upload', 'temporary', 'proxy'].includes(cert.mode) ? cert.mode : 'unknown'
   const cause = shownJob?.error?.cause || ''
   const failVars = { domain: cert.domain || '', ...(shownJob?.error?.vars as Record<string, unknown> | undefined) }
@@ -245,6 +265,17 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
           <Row label={t('admin.certCard.row.kind')}><span data-testid="cert-mode">{t(`admin.certCard.mode.${modeKey}`)}</span></Row>
           {cert.domain && <Row label={t('admin.certCard.row.domain')}><span className="break-all font-mono">{cert.domain}</span></Row>}
           <Row label={t('admin.certCard.row.expiry')}><span className={cn('font-medium', expiry.tone)} data-testid="cert-expiry">{expiry.text}</span></Row>
+          {renewal && (
+            <Row label={t('admin.certCard.renewal.label')}>
+              <span data-testid="cert-renewal" data-service={renewalService} className="flex flex-col gap-0.5">
+                <span>
+                  <span className={cn('font-medium', renewalService === 'running' ? 'text-success' : 'text-danger')}>{t(`admin.certCard.renewal.service.${renewalService}`)}</span>
+                  {renewalParts.map(part => <span key={part} className="text-muted-foreground"> · {part}</span>)}
+                </span>
+                {renewalService !== 'running' && <span className="text-xs text-muted-foreground">{t('admin.certCard.renewal.down')}</span>}
+              </span>
+            </Row>
+          )}
           {cert.issuer && <Row label={t('admin.certCard.row.issuer')}><span className="break-words">{cert.issuer}{cert.self_signed && !cert.temporary ? ` · ${t('admin.certCard.badge.selfSigned')}` : ''}</span></Row>}
           {cert.names.length > 0 && <Row label={t('admin.certCard.row.names')}><span className="break-all font-mono" data-testid="cert-names">{cert.names.join(', ')}</span></Row>}
           {cert.ca_uploadable && <Row label={t('admin.certCard.row.ca')}><span data-testid="cert-ca" className={cert.site_ca ? '' : 'text-muted-foreground'}>{t(cert.site_ca ? 'admin.certCard.ca.trusted' : 'admin.certCard.ca.none')}</span></Row>}
@@ -303,8 +334,14 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
             <UiCallout tone="danger" role="alert" title={t('admin.certCard.job.failed')} data-testid="cert-failed"
               actions={<UiIconButton label={t('common.close')} icon="close" size="sm" onClick={() => setHidden(shownJob.id)} />}>
               <span className="text-muted-foreground">
-                {t(FAIL_CAUSES.includes(cause) ? `admin.certCard.fail.${cause}` : 'admin.certCard.fail.other', { ...failVars, cause: cause || '—' })}{' '}
+                {t(FAIL_CAUSES.includes(cause) ? `admin.certCard.fail.${cause}` : 'admin.certCard.fail.other', failVars)}{' '}
                 {t('admin.certCard.job.kept')}
+                {cause && (
+                  <details className="mt-1 text-xs" data-testid="cert-fail-code">
+                    <summary className="cursor-pointer">{t('admin.certCard.fail.details')}</summary>
+                    <span className="font-mono">{t('admin.certCard.fail.code', { cause })}</span>
+                  </details>
+                )}
               </span>
             </UiCallout>
           )}

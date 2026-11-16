@@ -46,6 +46,7 @@ function FullDomain() {
   const t = useT()
   const access = useWizard(s => s.answers.access)
   const detected = useWizard(s => s.server?.facts.detected_network ?? null)
+  const cloud = useWizard(s => s.server?.facts.cloud === true)
   const [domain, setDomain] = useState(access.domain)
   // 처음 들어온 화면이면 감지한 연결 형태를 미리 고른다
   const [network, setNetwork] = useState<Network>(access.domain ? access.network : (detected ?? access.network))
@@ -80,6 +81,7 @@ function FullDomain() {
             <UiRadioCard key={n} className="w-full" value={n} title={networkName(n)} description={t(`domain.${n}Desc`)} modelValue={network} onUpdateModelValue={pickNetwork} />
           ))}
         </div>
+        {cloud && <UiCallout variant="plain" tone="neutral" icon="info" role="status">{t('domain.cloudNote')}</UiCallout>}
       </div>
       <div className="flex flex-col gap-3">
         <SubHeading id="cert-h">{t('domain.certTitle')}</SubHeading>

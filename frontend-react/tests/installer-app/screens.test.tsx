@@ -95,6 +95,21 @@ describe('들어오기', () => {
     await heading('설치가 멈췄습니다')
   })
 
+  it('적용이 실패한 뒤 요약으로 돌아가면 서버에 남은 것이 있음을 알린다', async () => {
+    open('resume-failed', '#/summary')
+    await heading('이대로 설치합니다')
+    expect(screen.getByText(/이전 설치 시도에서 만든 설정과 컨테이너가 서버에 남아 있습니다/)).toBeTruthy()
+    expect(screen.queryByText(/아직 서버에 바뀐 것은 없습니다/)).toBeNull()
+  })
+
+  it('클라우드 서버로 감지하면 직접 연결로 안내한다', async () => {
+    open('detect-cloud', '#/domain')
+    await heading('접속 주소와 연결 형태')
+    expect(screen.getByText('감지됨: 공인 주소에 직접 연결')).toBeTruthy()
+    expect(screen.getByText(/클라우드 서버로 감지했습니다/)).toBeTruthy()
+    expect(screen.getByRole('radio', { name: /사설 주소 \+ NAT/ })).toBeTruthy()
+  })
+
   it('적용 중에 돌아오면 진행 상황으로', async () => {
     open('resume-applying')
     await heading('설치가 진행 중입니다')
@@ -545,7 +560,10 @@ describe('적용', () => {
     expect(stepsOf()).toEqual(['config:done', 'pull:done', 'database:done', 'cert:failed', 'zones:pending', 'admin:pending', 'lock:pending'])
     expect(screen.getByText('한 단계에서 멈췄습니다. 앞에서 끝난 단계는 그대로 남아 있습니다.')).toBeTruthy()
     const card = screen.getByRole('alert')
-    expect(card.textContent).toContain('인증 기관이 workspace.example.com의 80번 포트에 접속하지 못했습니다.')
+    expect(card.textContent).toContain('workspace.example.com의 인증서를 발급받지 못했습니다.')
+    // 내부 원인 코드는 접힌 영역에만 표시
+    expect(within(card).getByText('자세히')).toBeTruthy()
+    expect(within(card).getByText('원인 코드: cert_issue_failed')).toBeTruthy()
     expect(within(card).getByRole('link', { name: '요약으로 돌아가 고치기' }).getAttribute('href')).toBe('#/summary')
     expect(within(card).getByRole('button', { name: '기록 내려받기' })).toBeTruthy()
 
@@ -846,7 +864,7 @@ describe('백업에서 복원 — 내용 확인과 완료', () => {
     const sent = vi.spyOn(api, 'restoreApply')
     await ready()
     fireEvent.click(screen.getByRole('button', { name: /연결 형태와 내부 대역/ }))
-    fireEvent.click(screen.getByRole('radio', { name: '공유기 뒤 (포트 포워딩)' }))
+    fireEvent.click(screen.getByRole('radio', { name: '사설 주소 + NAT (공유기 · 포트 포워딩)' }))
     expect(screen.queryByLabelText(/프록시 주소 또는 대역/)).toBeNull()
     fireEvent.click(button('복원'))
     await heading('복원이 끝났습니다')

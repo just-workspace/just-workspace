@@ -8,7 +8,7 @@
  * |---|---|
  * | 들어오기 | token-none · token-wrong · token-expired · locked · resume · resume-applying · resume-failed |
  * | 사전 점검 | preflight-ok · preflight-fail · preflight-memory · preflight-checking (기본: 주의 하나) |
- * | 서버 | mem-6(6 GB) · mem-8 · mem-unknown · detect-router · detect-proxy · no-public-ip |
+ * | 서버 | mem-6(6 GB) · mem-8 · mem-unknown · detect-router · detect-proxy · detect-cloud · no-public-ip |
  * | 접속 주소 | dns-mismatch · dns-unknown · dns-checking |
  * | 인증서 올리기 | cert-domain · cert-key · cert-expired · cert-mail · cert-leaf(발급 CA 없는 서버 인증서 한 장) · cert-ca-bad(올린 CA 가 발급자가 아님) |
  * | 파일 저장 위치 | nfs-unreachable · nfs-export(없는 공유 경로) · nfs-permission · nfs-readonly · nfs-nolock · nfs-lowspace · nfs-checking · path-missing |
@@ -437,7 +437,8 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
       facts: {
         memory_mb: memoryKnown ? memoryMb : null,
         lan_ip: '192.168.10.10',
-        detected_network: has('detect-router') ? 'router' : (has('detect-proxy') ? 'proxy' : null),
+        detected_network: has('detect-cloud') ? 'direct' : (has('detect-router') ? 'router' : (has('detect-proxy') ? 'proxy' : null)),
+        cloud: has('detect-cloud'),
         disk_free_gb: 212,
       },
       info: {

@@ -24,7 +24,8 @@ const PREFLIGHT_CAUTIONS = ['port_25_in_use', 'disk_low', 'time_not_synchronized
 function cautionLink(key: string): { to: RouteId; label: string } | null {
   if (PREFLIGHT_CAUTIONS.includes(key)) return { to: 'check', label: 'summary.seeCheck' }
   if (key.startsWith('mail_records')) return { to: 'mail', label: 'summary.seeMail' }
-  if (key === 'cert_temporary' || key === 'dns_mismatch_cert_will_fail') return { to: 'domain', label: 'summary.seeDomain' }
+  if (key === 'meetings_recording_low_cpu') return { to: 'check', label: 'summary.seeCheck' }
+  if (key === 'cert_temporary' || key === 'docs_temporary_cert' || key === 'dns_mismatch_cert_will_fail') return { to: 'domain', label: 'summary.seeDomain' }
   if (key === 'nfs_space_low') return { to: 'storage', label: 'summary.seeStorage' }
   if (key === 'meetings_public_ip_unknown') return { to: 'meet', label: 'summary.seeMeet' }
   if (key === 'hairpin_not_configured') return { to: 'proxy', label: 'summary.seeProxy' }
@@ -56,6 +57,8 @@ export function SummaryScreen() {
   const preflight = useWizard(s => s.preflight)
   const preflightBusy = useWizard(s => s.preflightBusy)
   const records = useWizard(s => s.records)
+  // 이전 적용 시도가 있었던 서버(phase = applying)에서는 "바뀐 것이 없다"는 문구가 사실과 다름
+  const retried = useWizard(s => s.server?.phase === 'applying')
   const [summary, setSummary] = useState<SummaryResponse | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [starting, setStarting] = useState(false)
@@ -153,7 +156,7 @@ export function SummaryScreen() {
 
   return (
     <WizardShell step="summary">
-      <Heading title={t('summary.title')} lead={t('summary.lead')} />
+      <Heading title={t('summary.title')} lead={t(retried ? 'summary.leadRetry' : 'summary.lead')} />
       <UiCard className="overflow-hidden">
         <dl className="m-0 text-[13px]">
           <Row name={t('summary.rowAddress')} fix="domain"><span className="break-all font-mono">https://{a.domain}</span></Row>

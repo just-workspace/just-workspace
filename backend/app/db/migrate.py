@@ -145,15 +145,59 @@ def register_models() -> None:
         importlib.import_module(name)
 
 
+# 지문에 넣는 타입 속성 — 스키마에 영향을 주는 것만. 값이 None·False 면 적지 않는다.
+_TYPE_ATTRS = ("length", "precision", "scale", "timezone", "asdecimal", "enums", "collation")
+
+
+def _type_signature(type_) -> str:
+    """컬럼 타입의 표기 — SQLAlchemy 버전·방언에 따라 달라지는 `repr()` 대신 직접 만든다.
+
+    `repr(type_)` 은 버전마다 인자 표기가 다르고(예: 기본값 인자를 적는지), 방언 전용 타입으로 바뀐 뒤에는
+    클래스 이름도 달라진다. 여기서는 일반 타입의 이름(`__visit_name__`)과 스키마에 영향을 주는 속성만 쓴다.
+    """
+    impl = getattr(type_, "impl", None)          # TypeDecorator 는 감싼 타입으로
+    if impl is not None and not isinstance(impl, type) and hasattr(impl, "__visit_name__"):
+        type_ = impl
+    name = str(getattr(type_, "__visit_name__", "") or type(type_).__name__).lower()
+    # 타입을 적지 않은 `Mapped[float]` 은 SQLAlchemy 2.0 에서 Float, 2.1 에서 Double 로 잡힌다. 정밀도를 주지 않으면
+    # PostgreSQL 에서는 둘 다 double precision 이라 같은 것으로 적는다.
+    if name in ("double", "double_precision") and getattr(type_, "precision", None) is None:
+        name = "float"
+    parts = []
+    for attr in _TYPE_ATTRS:
+        value = getattr(type_, attr, None)
+        if value is None or value is False or value == []:
+            continue
+        if isinstance(value, (list, tuple)):
+            value = ",".join(str(v) for v in value)
+        parts.append(f"{attr}={value}")
+    item = getattr(type_, "item_type", None)     # ARRAY
+    if item is not None:
+        parts.append(f"item={_type_signature(item)}")
+    return f"{name}({';'.join(parts)})"
+
+
 def models_fingerprint() -> str:
-    """모델(테이블·컬럼·타입·NULL 허용)의 지문 — 모델이 바뀌면 값이 바뀐다."""
+    """모델(테이블·컬럼·타입·NULL 허용·기본 키)의 지문 — 모델이 바뀌면 값이 바뀐다.
+
+    환경에 따라 달라지지 않게 한다:
+    - `MODEL_MODULES` 에 정의된 모델의 테이블만 본다. 같은 프로세스에서 다른 코드(플러그인·테스트)가 `Base` 에
+      올린 테이블은 넣지 않는다 — 무엇을 먼저 import 했는지에 따라 값이 달라지면 안 된다.
+    - 타입은 `_type_signature` 로 적는다(SQLAlchemy 버전에 따라 달라지는 `repr()` 을 쓰지 않는다).
+    - 테이블·컬럼은 이름순.
+
+    이 값은 DB 에 기록하지 않는다. 스키마 버전 판정에도 쓰지 않는다 — 개발 중에 "모델을 고치고 변경 단계를
+    빠뜨린" 실수를 테스트가 잡는 데만 쓴다.
+    """
     from app.db.models import Base
 
     register_models()
+    tables = {m.local_table.name: m.local_table for m in Base.registry.mappers
+              if m.class_.__module__ in MODEL_MODULES and m.local_table is not None}
     lines = []
-    for table in sorted(Base.metadata.tables.values(), key=lambda t: t.name):
-        for col in sorted(table.columns, key=lambda c: c.name):
-            lines.append(f"{table.name}.{col.name}:{col.type!r}:{int(bool(col.nullable))}:{int(bool(col.primary_key))}")
+    for name in sorted(tables):
+        for col in sorted(tables[name].columns, key=lambda c: c.name):
+            lines.append(f"{name}.{col.name}:{_type_signature(col.type)}:{int(bool(col.nullable))}:{int(bool(col.primary_key))}")
     return hashlib.sha256("\n".join(lines).encode()).hexdigest()[:16]
 
 

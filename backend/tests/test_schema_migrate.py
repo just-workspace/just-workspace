@@ -79,6 +79,58 @@ def test_models_fingerprint_matches_recorded_value():
     assert mg.models_fingerprint() == sv.MODELS_FINGERPRINT
 
 
+def test_models_fingerprint_ignores_tables_registered_by_other_code():
+    """같은 프로세스에서 다른 코드(플러그인·테스트)가 Base 에 테이블을 올려도 지문은 같다 — import 순서에 묶이지 않는다."""
+    from sqlalchemy import Column, Integer
+
+    from app.db.models import Base
+
+    before = mg.models_fingerprint()
+    name = "zz_fingerprint_probe"
+    probe = type("FingerprintProbe", (Base,), {"__tablename__": name, "__module__": __name__,
+                                               "id": Column(Integer, primary_key=True)})
+    try:
+        assert name in Base.metadata.tables
+        assert mg.models_fingerprint() == before
+    finally:
+        Base.metadata.remove(Base.metadata.tables[name])
+        Base.registry._dispose_cls(probe)
+
+
+def test_type_signature_does_not_depend_on_repr():
+    """타입 표기는 SQLAlchemy 의 repr() 이 아니라 일반 타입 이름과 스키마에 영향을 주는 속성으로 만든다."""
+    import sqlalchemy as sa
+    from sqlalchemy.dialects import postgresql
+
+    sig = mg._type_signature
+    assert sig(sa.String(36)) == "string(length=36)"
+    assert sig(sa.Text()) == "text()" and sig(sa.Boolean()) == "boolean()"
+    assert sig(sa.DateTime(timezone=True)) == "datetime(timezone=True)" and sig(sa.DateTime()) == "datetime()"
+    assert sig(sa.BigInteger()) == "big_integer()" and sig(sa.LargeBinary()) == "large_binary()"
+    assert sig(sa.Numeric(10, 2)) == "numeric(precision=10;scale=2;asdecimal=True)"
+    # 길이·시간대가 다르면 다른 표기
+    assert sig(sa.String(36)) != sig(sa.String(64))
+    # 타입을 적지 않은 Mapped[float] 은 SQLAlchemy 판에 따라 Float 또는 Double — 같은 표기
+    assert sig(sa.Float()) == sig(sa.Double()) == "float()"
+    assert sig(sa.Float(precision=24)) == "float(precision=24)"
+    # 감싼 타입(TypeDecorator)은 안의 타입으로, 배열은 원소 타입까지
+    class Wrapped(sa.TypeDecorator):
+        impl = sa.String(20)
+        cache_ok = True
+
+    assert sig(Wrapped()) == "string(length=20)"
+    assert sig(postgresql.ARRAY(sa.String(8))) == "array(item=string(length=8))"
+    assert sig(sa.Enum("a", "b", name="kind")) == "enum(length=1;enums=a,b)"
+
+
+def test_models_fingerprint_is_not_part_of_version_checks():
+    """지문은 DB 에 기록하지 않고 버전 판정에도 쓰지 않는다 — 계산법을 바꿔도 기존 설치에 영향이 없다."""
+    source = Path(mg.__file__).read_text(encoding="utf-8")
+    body = source.split("def models_fingerprint()", 1)[1].split("\ndef ", 1)[1]
+    assert "models_fingerprint" not in body and "MODELS_FINGERPRINT" not in source
+    assert "fingerprint" not in {c.name for c in mg.schema_migrations.columns}
+
+
 # ─── 새 DB · 기존 DB ───
 
 

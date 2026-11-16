@@ -1,11 +1,11 @@
 # rbi/mirror 의존성·라이선스
 
-격리 브라우저 미러 모드([docs/rbi.md](../../docs/rbi.md) 6절)의 세션 이미지 `just-workspace-rbi-mirror` 에 들어가는 제3자 구성요소다.
-버전은 `package.json`·`Dockerfile` 의 고정값과 같아야 한다 — 올릴 때 이 표도 함께 고친다. 프로젝트 전체 고지는 리포 루트 `THIRD_PARTY_LICENSES.md`.
+격리 브라우저 미러 모드([docs/rbi.md](../../docs/rbi.md) 6절)의 세션 이미지 `just-workspace-rbi-mirror` 에 포함되는 제3자 구성 요소의 목록이다.
+버전은 `package.json`·`Dockerfile` 의 고정값과 일치해야 한다 — 버전을 갱신하는 경우 이 표도 함께 수정한다. 프로젝트 전체 고지는 리포 루트의 `THIRD_PARTY_LICENSES.md` 에 있다.
 
-npm 의존성에는 GPL 계열이 없다. LGPL 은 libvips 하나 — sharp 가 **별도 공유 라이브러리 패키지**(`@img/sharp-libvips-linux-x64`)로 동적 링크하므로
-교체 가능성이 유지돼 LGPL-3.0 의 고지·소스 안내 의무만 지키면 된다. 세션 이미지에는 데비안 패키지로 GPL-2.0 실행 파일(iproute2)도 들어간다(아래 표).
-**이 이미지를 다시 배포한다면**(레지스트리에 올리는 것 포함) 이 고지와 해당 구성요소의 소스 위치를 함께 제공해야 한다.
+npm 의존성에는 GPL 계열이 없다. LGPL 은 libvips 하나이다 — sharp 가 **별도 공유 라이브러리 패키지**(`@img/sharp-libvips-linux-x64`)로 동적 링크하므로
+교체 가능성이 유지되며, LGPL-3.0 의 고지 및 소스 안내 의무의 이행으로 충분하다. 세션 이미지에는 데비안 패키지로 설치된 GPL-2.0 실행 파일(iproute2)도 포함된다(아래 표).
+**이 이미지를 재배포하는 경우**(레지스트리 게시 포함) 이 고지와 해당 구성 요소의 소스 위치를 함께 제공하여야 한다.
 
 | 패키지 | 버전 | 라이선스 | 용도 |
 |---|---|---|---|
@@ -30,10 +30,10 @@ npm 의존성에는 GPL 계열이 없다. LGPL 은 libvips 하나 — sharp 가 
 | ca-certificates | 20250419~deb12u2 | MPL-2.0 · GPL-2.0+ | |
 | (fonts 빌드 단계만) python3-fonttools 4.38.0 · python3-brotli 1.0.9 | — | MIT · MIT | 최종 이미지에 없음 |
 
-KasmVNC(GPL-2.0)는 이 이미지에 없다. OFL 폰트는 변환(WOFF2)·서브셋 배포가 허용되고 Liberation·Noto 에 예약 글꼴 이름이 없어 원래 이름의 파일을 그대로 쓴다
-(뷰에서는 `jw-<키>` 패밀리 이름으로 부를 뿐 글꼴 자체 이름은 바꾸지 않았다).
+KasmVNC(GPL-2.0)는 이 이미지에 포함되지 않는다. OFL 폰트는 변환(WOFF2)·서브셋 배포가 허용되며, Liberation·Noto 에는 예약 글꼴 이름이 없으므로 원래 이름의 파일을 그대로 사용한다
+(뷰에서는 `jw-<키>` 패밀리 이름으로 참조할 뿐 글꼴 자체의 이름은 변경하지 않았다).
 
-시험 페이지 전용(`devpages/vendor/`, dev 타깃에만 들어감 — prod 이미지에 없음): jsPlumb 2.15.6(MIT/GPL-2.0 이중 — MIT 로 사용), Bootstrap 3.4.1(MIT),
-Font Awesome 4.7(폰트 OFL-1.1 · CSS MIT). 자세한 출처는 `devpages/vendor/README.md`.
+시험 페이지 전용(`devpages/vendor/`, dev 타깃에만 포함 — prod 이미지에는 미포함): jsPlumb 2.15.6(MIT/GPL-2.0 이중 — MIT 로 사용), Bootstrap 3.4.1(MIT),
+Font Awesome 4.7(폰트 OFL-1.1 · CSS MIT). 상세 출처는 `devpages/vendor/README.md` 에 있다.
 
-인코더 메모: WebP 인코딩은 libvips 안의 **libwebp(BSD-3-Clause)**. SVG 래스터는 librsvg(LGPL-2.1+) — 버퍼 입력이라 외부 파일·URL 참조를 따라가지 않는다.
+인코더 참고: WebP 인코딩은 libvips 에 포함된 **libwebp(BSD-3-Clause)**가 수행한다. SVG 래스터화는 librsvg(LGPL-2.1+)가 수행한다 — 버퍼 입력이므로 외부 파일·URL 참조를 추적하지 않는다.

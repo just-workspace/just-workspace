@@ -1,9 +1,9 @@
 # audiorelay — 무손실 음성채널 릴레이
 
-Just Workspace 채팅 음성채널의 **무손실** 음질 단계(PCM 24-bit/48 kHz, 압축 없음)를 나르는 중계 서버. Go 로 쓴 SFU 식 순수 포워더로,
-받은 오디오 프레임을 같은 방의 다른 참가자에게 바이트 그대로 넘긴다(디코딩·트랜스코딩 없음, DB·Redis 의존 없음).
+Just Workspace 채팅 음성채널의 **무손실** 음질 단계(PCM 24-bit/48 kHz, 비압축)를 전송하는 중계 서버이다. Go 로 구현한 SFU 방식의 순수 포워더로,
+수신한 오디오 프레임을 동일한 방의 다른 참가자에게 바이트 단위로 변경 없이 전달한다(디코딩·트랜스코딩 없음, DB·Redis 의존 없음).
 
-- 구조·켜는 법·외부 공개 체크리스트: [docs/voice-lossless.md](../docs/voice-lossless.md)
+- 구조·활성화 절차·외부 공개 점검 목록: [docs/voice-lossless.md](../docs/voice-lossless.md)
 - 프로토콜: [PROTOCOL.md](PROTOCOL.md)
 - 브라우저 클라이언트: `frontend-react/src/lib/lossless/` · 데스크톱 클라이언트: `apps/desktop/src/main/nativeAudio/`
 - 접속 토큰 발급: 백엔드 `POST /api/chat/channels/{id}/voice/relay-token`
@@ -25,8 +25,8 @@ RELAY_SECRET=$(openssl rand -hex 24) RELAY_WT_PUBLIC_URL=https://192.168.10.20:4
 RELAY_WT_SELF_SIGNED_HOSTS=192.168.10.20 go run ./cmd/audiorelay
 ```
 
-환경변수 전체는 `cmd/audiorelay/main.go` 머리 주석에 있다. `RELAY_SECRET` 은 필수(16바이트 이상)이고 `RELAY_WT_PUBLIC_URL` 을 비우면 WebSocket 만 연다.
-워크스페이스에서는 compose 서비스 `audiorelay`(컨테이너 `ws-audiorelay`, `profiles: audiorelay`)로 뜨며, `.env` 의 `AUDIORELAY_*` 가 `RELAY_*` 로 넘어간다.
+환경변수 전체 목록은 `cmd/audiorelay/main.go` 의 머리 주석에 있다. `RELAY_SECRET` 은 필수(16바이트 이상)이며, `RELAY_WT_PUBLIC_URL` 을 지정하지 않으면 WebSocket 만 제공한다.
+워크스페이스에서는 compose 서비스 `audiorelay`(컨테이너 `ws-audiorelay`, `profiles: audiorelay`)로 기동하며, `.env` 의 `AUDIORELAY_*` 가 `RELAY_*` 로 전달된다.
 
 ## 테스트
 
@@ -34,8 +34,8 @@ RELAY_WT_SELF_SIGNED_HOSTS=192.168.10.20 go run ./cmd/audiorelay
 go vet ./... && go test ./...
 ```
 
-`internal/server` 는 WebSocket 왕복(httptest), `internal/wtrelay` 는 실제 QUIC 루프백(자가서명)으로 데이터그램 중계·NACK 재전송을 검증한다.
+`internal/server` 는 WebSocket 왕복(httptest)으로, `internal/wtrelay` 는 실제 QUIC 루프백(자가서명)으로 데이터그램 중계·NACK 재전송을 검증한다.
 
 ## 이미지
 
-`Dockerfile`: `golang:1.27.4-alpine` 빌드 → `gcr.io/distroless/static-debian13:nonroot`(쉘 없음, 65532). 헬스체크는 바이너리의 `-check`.
+`Dockerfile`: `golang:1.27.4-alpine` 빌드 → `gcr.io/distroless/static-debian13:nonroot`(셸 없음, 65532). 헬스체크는 바이너리의 `-check` 를 사용한다.

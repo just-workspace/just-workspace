@@ -1,21 +1,21 @@
-"""설치 관리자 자기 교체 — 일회용 보조 컨테이너에서 돈다(`python -m app.update_swap …`).
+"""설치 관리자 자기 교체 — 일회용 보조 컨테이너에서 실행된다(`python -m app.update_swap …`).
 
-컨테이너는 자기 자신을 바꿀 수 없다. 그래서 설치 관리자는 **자기 이미지로** 보조 컨테이너를 하나 띄우고(docker 소켓과
-데이터 폴더를 붙여서), 그 컨테이너가 다음을 한다.
+컨테이너는 자기 자신을 교체할 수 없다. 따라서 설치 관리자는 **자기 이미지로** 보조 컨테이너 하나를 기동하고(docker 소켓과
+데이터 폴더를 마운트), 해당 컨테이너가 다음을 수행한다.
 
-1. 옛 컨테이너의 구성을 읽는다(이름, 재시작 정책, 게시 포트, 볼륨, 사용자가 준 환경변수, 붙은 네트워크와 별칭).
-2. 옛 컨테이너를 멈추고 이름을 `<이름>-prev` 로 바꾼다.
-3. 같은 구성으로 새 이미지의 컨테이너를 만들고 네트워크를 붙여 시작한다.
-4. 새 컨테이너가 정상(healthy)이고 번들 버전이 기대한 값인지 본다.
-5. 맞으면 옛 컨테이너를 지운다. 아니면 새 컨테이너를 지우고 옛 컨테이너를 제 이름으로 되살려 다시 시작한다.
+1. 기존 컨테이너의 구성을 조회한다(이름, 재시작 정책, 게시 포트, 볼륨, 사용자가 지정한 환경변수, 연결된 네트워크와 별칭).
+2. 기존 컨테이너를 중지하고 이름을 `<이름>-prev` 로 변경한다.
+3. 동일한 구성으로 새 이미지의 컨테이너를 생성하고 네트워크를 연결하여 기동한다.
+4. 새 컨테이너가 정상(healthy)이고 번들 버전이 기대값과 일치하는지 확인한다.
+5. 일치하면 기존 컨테이너를 삭제한다. 불일치하면 새 컨테이너를 삭제하고 기존 컨테이너를 원래 이름으로 복원하여 재기동한다.
 
-결과는 `--result` 파일에 JSON 으로 남긴다. 옮기는 구성은 위 목록이 전부다 — 그 밖의 `docker run` 옵션(자원 제한,
-레이블 등)을 직접 붙여 띄운 설치 관리자라면 교체 뒤 다시 붙여야 한다.
-환경변수는 "옛 이미지가 정한 것"을 빼고 옮긴다(새 이미지의 기본값이 살아야 한다). `JW_IMAGE_TAG` 도 옮기지 않는다 —
-업데이트 뒤에는 이미지 태그가 곧 제품 버전이다. 새 컨테이너에는 `JW_INSTALLER_VERSION=<제품 버전>` 을 넣는다: 승격한
-릴리스의 이미지는 Beta 때 빌드한 것이라 이미지 안의 버전 글자가 Beta 의 것이다.
+결과는 `--result` 파일에 JSON 으로 기록한다. 이전되는 구성은 위 목록이 전부이다 — 그 밖의 `docker run` 옵션(자원 제한,
+레이블 등)을 직접 지정하여 기동한 설치 관리자는 교체 후 재지정이 필요하다.
+환경변수는 "기존 이미지가 정의한 값"을 제외하고 이전한다(새 이미지의 기본값이 유효해야 한다). `JW_IMAGE_TAG` 도 이전하지 않는다 —
+업데이트 후에는 이미지 태그가 곧 제품 버전이다. 새 컨테이너에는 `JW_INSTALLER_VERSION=<제품 버전>` 을 설정한다: 승격한
+릴리스의 이미지는 Beta 시점에 빌드된 것이므로 이미지 내 버전 문자열이 Beta 의 것이다.
 
-표준 라이브러리만 쓴다.
+표준 라이브러리만 사용한다.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def inspect(kind: str, name: str) -> dict | None:
 
 
 def user_env(container: dict, image: dict | None) -> list[str]:
-    """컨테이너의 환경변수 중 사용자가 준 것 — 그 이미지가 정한 값과 같은 것, 버전을 가리키는 것은 뺀다."""
+    """컨테이너의 환경변수 중 사용자가 지정한 것 — 해당 이미지가 정의한 값과 동일한 것, 버전을 지정하는 것은 제외한다."""
     image_env = set((image or {}).get("Config", {}).get("Env") or [])
     return [item for item in (container.get("Config") or {}).get("Env") or []
             if item not in image_env and item.split("=", 1)[0] not in DROP_ENV]
@@ -59,9 +59,9 @@ def user_env(container: dict, image: dict | None) -> list[str]:
 
 def plan_create(container: dict, old_image: dict | None, new_image: str, version: str | None = None,
                 env: list[str] | None = None) -> tuple[list[str], list[tuple[str, list[str]]]]:
-    """옛 컨테이너의 구성 → (`docker create` 인자, 나중에 붙일 네트워크 [(이름, 별칭들)]).
+    """기존 컨테이너의 구성 → (`docker create` 인자, 이후 연결할 네트워크 [(이름, 별칭들)]).
 
-    version 을 주면 `JW_INSTALLER_VERSION` 으로 넣는다 — 새 설치 관리자가 자신을 그 제품 버전으로 안다(app/bundle.py)."""
+    version 지정 시 `JW_INSTALLER_VERSION` 으로 설정한다 — 새 설치 관리자가 자신을 해당 제품 버전으로 인식한다(app/bundle.py)."""
     name = str(container.get("Name") or "").lstrip("/")
     config = container.get("Config") or {}
     host = container.get("HostConfig") or {}
@@ -111,7 +111,7 @@ def plan_create(container: dict, old_image: dict | None, new_image: str, version
 
 
 def swap(container_ref: str, new_image: str, expect_version: str, log, env: list[str] | None = None) -> str | None:
-    """교체한다. 성공하면 None, 실패하면 이유(옛 컨테이너는 되살려 둔다)."""
+    """교체를 수행한다. 성공 시 None, 실패 시 사유(기존 컨테이너는 복원된 상태)."""
     old = inspect("container", container_ref)
     if old is None:
         return "container not found"
@@ -189,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
             except OSError:
                 pass
 
-    time.sleep(1)      # 부른 쪽이 상태를 디스크에 다 쓸 틈
+    time.sleep(1)      # 호출자가 상태를 디스크에 기록 완료할 시간 확보
     env = None
     if args.env_json:
         try:

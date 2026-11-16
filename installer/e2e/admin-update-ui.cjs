@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * 관리 › 업데이트 화면을 눌러서 업데이트 한 번을 끝까지 — 화면 → backend → 설치 관리자 내부 API 경로를 실제로 탄다.
- * 받을 버전이 있는 서버에서 돌린다(가짜 릴리스 환경은 scenarios/u-update.sh).
+ * 관리 › 업데이트 화면을 조작하여 업데이트 1회를 끝까지 수행한다 — 화면 → backend → 설치 관리자 내부 API 경로를 실제로 경유한다.
+ * 수신 가능한 버전이 있는 서버에서 실행한다(모의 릴리스 환경은 scenarios/u-update.sh).
  *
  *   node admin-update-ui.cjs --url https://ws.e2e.example --addr 192.168.10.20 --password-file <파일>
  *        [--user <계정> --user-password-file <파일>] [--out <폴더>] [--chrome <경로>]
  *
- * 창을 둘 연다: 관리자(진행 화면)와 일반 사용자(예고 띠·점검 화면). 일반 사용자 계정은 이 스크립트가 만들어 승인한다.
- * 보는 것: 현황의 새 버전 안내 → 업데이트 시작 → 예고(일반 사용자 창의 띠) → "지금 바로 시작" → 진행(backend 가
- * 내려간 동안의 "다시 연결 중", 일반 사용자 창의 점검 화면) → 완료 → 기록.
- * 필요한 것: playwright-core(NODE_PATH).
+ * 창을 2개 연다: 관리자(진행 화면)와 일반 사용자(사전 공지 띠·점검 모드 화면). 일반 사용자 계정은 본 스크립트가 생성하여 승인한다.
+ * 확인 항목: 현황의 새 버전 안내 → 업데이트 시작 → 사전 공지(일반 사용자 창의 띠) → "지금 바로 시작" → 진행(backend 가
+ * 중지된 동안의 "다시 연결 중", 일반 사용자 창의 점검 모드 화면) → 완료 → 기록.
+ * 필요 사항: playwright-core(NODE_PATH).
  */
 const fs = require('fs')
 const path = require('path')
@@ -57,8 +57,8 @@ const text = async page => (await page.locator('body').innerText().catch(() => '
   const password = fs.readFileSync(opt['password-file'], 'utf8').trim()
   expect('관리자 로그인', (await loginAs(admin, 'admin', password)) === 200)
 
-  // 일반 사용자 — --user 와 --user-password-file 로 받거나, 여기서 가입시키고 관리자가 승인한다
-  // (가입 뒤 메일 주소 확인을 요구하는 설치에서는 미리 만든 계정을 준다)
+  // 일반 사용자 — --user 와 --user-password-file 로 지정하거나, 여기서 가입시킨 후 관리자가 승인한다
+  // (가입 후 메일 주소 확인을 요구하는 설치에서는 사전 생성한 계정을 지정한다)
   let name = opt.user, userPass = opt['user-password-file'] ? fs.readFileSync(opt['user-password-file'], 'utf8').trim() : null
   await user.goto(base + '/login')
   let reg = { status: '-' }
@@ -100,7 +100,7 @@ const text = async page => (await page.locator('body').innerText().catch(() => '
   }
   await admin.getByRole('button', { name: '업데이트 시작' }).first().click()
   await admin.waitForTimeout(1500)
-  // 확인 창이 있으면 진행 단추를 누른다
+  // 확인 창이 있으면 진행 버튼을 클릭한다
   for (let i = 0; i < 3; i++) {
     const dialog = admin.locator('[role="dialog"], [role="alertdialog"]').last()
     if (!(await dialog.count())) break
@@ -123,7 +123,7 @@ const text = async page => (await page.locator('body').innerText().catch(() => '
   const adminCountdown = await text(admin)
   expect('관리자 화면에 예고 안내가 보인다', /남은 시간|곧 업데이트를 시작/.test(adminCountdown), adminCountdown.slice(0, 200))
   await snap(admin, 'countdown')
-  // 일반 사용자 창 — 새로 고치지 않아도 띠가 떠야 한다(실시간 알림)
+  // 일반 사용자 창 — 새로 고침 없이 띠가 표시되어야 한다(실시간 알림)
   let userText = ''
   for (let i = 0; i < 20; i++) {
     userText = await text(user)
@@ -162,7 +162,7 @@ const text = async page => (await page.locator('body').innerText().catch(() => '
   expect('완료 화면', /업데이트가 끝났습니다|업데이트했습니다/.test(done), done.slice(0, 200))
   expect('화면이 오류 화면으로 넘어가지 않았다', !/문제가 발생|오류가 발생했습니다|Something went wrong/.test(done))
   await snap(admin, 'done')
-  // 일반 사용자 창은 점검이 끝나면 스스로 돌아온다
+  // 일반 사용자 창은 점검 모드 종료 시 자동으로 복귀한다
   let back = false
   for (let i = 0; i < 30 && !back; i++) {
     back = !/점검 중입니다|업데이트 중입니다/.test(await text(user))
@@ -181,7 +181,7 @@ const text = async page => (await page.locator('body').innerText().catch(() => '
     await admin.waitForTimeout(3000)
     hist = await text(admin)
   }
-  // 기록의 줄은 올라간 버전과 결과를 보여 준다(이전 버전은 줄을 펼쳐야 나온다)
+  // 기록 행에는 적용된 버전과 결과가 표시된다(이전 버전은 행을 펼쳐야 표시된다)
   expect('기록에 이번 업데이트가 있다', hist.includes(String(target)) && /성공/.test(hist), hist.slice(0, 300))
   await snap(admin, 'history')
   const health = await call(admin, 'GET', '/api/health')

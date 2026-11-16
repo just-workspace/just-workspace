@@ -1,4 +1,4 @@
-"""적용 엔진 — 단계 생성, 순서, 실패 후 재시도, 재시작 후 이어가기, 인증서 실패 → 임시 인증서, 로그 가림."""
+"""적용 엔진 — 단계 생성, 순서, 실패 후 재시도, 재시작 후 재개, 인증서 실패 → 임시 인증서, 로그 마스킹."""
 
 import json
 
@@ -26,13 +26,13 @@ def test_steps_follow_answers(bundle):
     assert plan_for(bundle) == ["config", "pull", "database", "cert", "zones", "admin", "lock"]
     assert plan_for(bundle, storage={"kind": "nfs", "server": "192.168.10.9", "export": "/x"})[1] == "storage"
     assert plan_for(bundle, storage={"kind": "local", "path": "/srv/ws"})[1] == "storage"
-    # 앞단 프록시가 인증서를 맡고, 따로 인증서가 필요한 구역도 없으면 인증서 단계가 없다
+    # 프런트 프록시가 인증서를 담당하고 별도 인증서가 필요한 구역도 없으면 인증서 단계가 생성되지 않는다
     proxy = {"network": "proxy", "cert": "proxy", "proxy_addresses": ["192.168.10.5"]}
     assert "cert" not in plan_for(bundle, access=proxy, preset="minimal")
-    assert "cert" in plan_for(bundle, access=proxy)          # 내장 메일이 인증서를 찾는다
+    assert "cert" in plan_for(bundle, access=proxy)          # 내장 메일이 인증서를 요구한다
 
 
-# ─── 끝까지 ───
+# ─── 전체 수행 ───
 
 
 def test_full_run(tmp_path):
@@ -50,20 +50,20 @@ def test_full_run(tmp_path):
              r.index("network", "connect"), r.index("exec", "ws-backend", "seed-admin")]
     assert order == sorted(order)
 
-    # compose 는 늘 같은 앞머리로 — 프로젝트 폴더는 호스트 경로, 파일은 컨테이너 안 경로
+    # compose 는 항상 동일한 선행 인자를 사용한다 — 프로젝트 폴더는 호스트 경로, 파일은 컨테이너 내부 경로
     up = r.find("compose", "up", "postgres", "redis")[0]
     stack = host.paths.stack.as_posix()
     assert up[:10] == ["compose", "-p", "just-workspace", "--project-directory", "/opt/just-workspace/stack",
                        "-f", f"{stack}/docker-compose.yml", "-f", f"{stack}/docker-compose.site.yml", "--env-file"]
     assert "--no-build" in up
 
-    # 인증서: nginx 가 뜨기 전이라 certbot 이 80 을 직접 듣는다
+    # 인증서: nginx 기동 전이므로 certbot 이 80 포트를 직접 수신 대기한다
     certbot = r.find("compose", "run", "certbot")[0]
     assert "--standalone" in certbot and "--publish" in certbot
     assert certbot[certbot.index("--cert-name") + 1] == "ws.example.com"
     assert [certbot[i + 1] for i, a in enumerate(certbot) if a == "-d"] == ["ws.example.com", "mail.example.com"]
 
-    # 관리자 비밀번호는 인자에 없다(env 파일로 넘기고 지운다), 끝나면 저장해 둔 것도 지운다
+    # 관리자 비밀번호는 인자에 포함되지 않는다(env 파일로 전달 후 삭제). 완료 시 저장해 둔 값도 삭제한다
     seed = r.find("exec", "ws-backend", "seed-admin")[0]
     assert "correct-horse-battery" not in " ".join(seed) and "--env-file" in seed and seed[seed.index("--user") + 1] == "appuser"
     assert not list((host.paths.state / "tmp").glob("*"))
@@ -88,7 +88,7 @@ def test_secrets_never_reach_logs_or_state(tmp_path):
     apply = (host.paths.state / "apply.json").read_text(encoding="utf-8")
     for value in [*secrets, "correct-horse-battery"]:
         assert value not in logs and value not in apply
-    # 명령 인자에도 비밀값이 없다
+    # 명령 인자에도 비밀값이 포함되지 않는다
     argv_text = "\n".join(host.runner.joined())
     for value in [*secrets, "correct-horse-battery"]:
         assert value not in argv_text
@@ -98,7 +98,7 @@ def test_secrets_never_reach_logs_or_state(tmp_path):
 def test_redactor_masks_known_values():
     r = eng.Redactor()
     r.add("supersecretvalue", "tiny")
-    assert r("token=supersecretvalue tiny") == "token=*** tiny"      # 짧은 값은 가리지 않는다(오탐 방지)
+    assert r("token=supersecretvalue tiny") == "token=*** tiny"      # 짧은 값은 마스킹하지 않는다(오탐 방지)
 
 
 def test_secrets_come_from_backend_image_when_available(tmp_path):
@@ -119,15 +119,15 @@ def test_idempotent_second_run_keeps_secrets(tmp_path):
     svc = host.install()
     svc.engine.run()
     before = svc.store.env_secrets()
-    svc.store.set_phase("applying")                    # 잠금을 풀고 한 번 더(운영자가 다시 적용하는 경우)
+    svc.store.set_phase("applying")                    # 잠금을 해제하고 한 차례 더 수행(운영자가 재적용하는 경우)
     svc.store.save_answers(make_answers())
     state = svc.engine.run()
     assert state["status"] == "done"
     assert svc.store.env_secrets() == before
-    assert len(host.runner.find("volume", "create")) == 1          # 볼륨은 한 번만 만든다
+    assert len(host.runner.find("volume", "create")) == 1          # 볼륨은 한 번만 생성한다
 
 
-# ─── 실패 · 재시도 · 이어가기 ───
+# ─── 실패 · 재시도 · 재개 ───
 
 
 def test_failure_then_retry_from_failed_step(tmp_path):
@@ -144,7 +144,7 @@ def test_failure_then_retry_from_failed_step(tmp_path):
     assert images["nginx:1.31"] == "failed" and images["localhost/just-workspace-backend:1.0.0"] == "present"
     assert not svc.store.locked
 
-    # 고친 뒤 실패한 단계부터 — 앞 단계(config)는 다시 돌지 않는다
+    # 수정 후 실패한 단계부터 수행 — 앞 단계(config)는 재실행되지 않는다
     host.runner.on("pull", "nginx:1.31", out="ok")
     host.runner.on("image", "inspect", "nginx:1.31", out="sha256:x")
     config_runs = len(host.runner.find("compose", "config", "-q"))
@@ -153,11 +153,11 @@ def test_failure_then_retry_from_failed_step(tmp_path):
     state = svc.engine.status()
     assert state["status"] == "done", state["error"]
     assert len(host.runner.find("compose", "config", "-q")) == config_runs
-    assert not svc.engine.retry()                       # 실패한 것이 없으면 재시도할 것도 없다
+    assert not svc.engine.retry()                       # 실패한 단계가 없으면 재시도 대상도 없다
 
 
 def test_status_is_running_before_start_returns(tmp_path):
-    """시작·재시도 요청이 돌아온 직후의 상태 조회가 옛 상태(idle·failed)를 보이면 안 된다."""
+    """시작·재시도 요청이 반환된 직후의 상태 조회가 이전 상태(idle·failed)를 반환해서는 안 된다."""
     import threading
 
     host = Host(tmp_path)
@@ -172,13 +172,13 @@ def test_status_is_running_before_start_returns(tmp_path):
 
     assert svc.engine.status()["status"] == "idle"
     assert svc.engine.start()
-    assert svc.engine.status()["status"] == "running"          # 스레드가 아직 아무것도 안 했어도
-    assert not svc.engine.start()                               # 돌고 있으면 또 시작하지 않는다
+    assert svc.engine.status()["status"] == "running"          # 스레드가 아직 아무 작업도 수행하지 않은 경우에도 해당
+    assert not svc.engine.start()                               # 실행 중이면 중복 시작하지 않는다
     gate.set()
     svc.engine._thread.join(30)
     assert svc.engine.status()["status"] == "done"
 
-    # 실패 → 재시도: 돌려준 순간 이미 running 이고, 옛 오류·대안은 지워져 있다
+    # 실패 → 재시도: 반환 시점에 이미 running 이며, 이전 오류·대안은 삭제되어 있다
     svc2_host = Host(tmp_path / "second")
     svc2 = svc2_host.install()
     svc2_host.certbot_ok = False
@@ -200,7 +200,7 @@ def test_status_is_running_before_start_returns(tmp_path):
 
 
 def test_resume_when_stopped_right_after_start(tmp_path):
-    """시작 요청만 기록되고 단계가 하나도 돌기 전에 설치 관리자가 죽은 경우 — 처음부터 돈다."""
+    """시작 요청만 기록되고 단계가 하나도 실행되기 전에 설치 관리자가 종료된 경우 — 처음부터 실행한다."""
     host = Host(tmp_path)
     svc = host.install()
     state = svc.engine.status()
@@ -217,7 +217,7 @@ def test_resume_after_installer_restart(tmp_path):
     host = Host(tmp_path)
     svc = host.install()
 
-    # database 단계 도중 설치 관리자가 죽었다고 치자
+    # database 단계 도중 설치 관리자가 비정상 종료된 상황을 가정한다
     class Crash(BaseException):
         pass
 
@@ -231,7 +231,7 @@ def test_resume_after_installer_restart(tmp_path):
     on_disk = svc.engine.status()
     assert on_disk["status"] == "running" and on_disk["current"] == "database"
 
-    # 새 프로세스 — 같은 디스크 상태에서 이어 간다
+    # 새 프로세스 — 동일한 디스크 상태에서 재개한다
     host.runner.on("compose", "up", "postgres", "redis", fn=host._up)
     svc2 = host.services_obj()
     pulls = len(host.runner.find("pull", "postgres:16"))
@@ -239,10 +239,10 @@ def test_resume_after_installer_restart(tmp_path):
     svc2.engine._thread.join(30)
     state = svc2.engine.status()
     assert state["status"] == "done", state["error"]
-    assert len(host.runner.find("pull", "postgres:16")) == pulls       # 끝난 단계는 다시 하지 않는다
+    assert len(host.runner.find("pull", "postgres:16")) == pulls       # 완료된 단계는 재실행하지 않는다
     marked = [s["id"] for s in state["steps"] if s.get("interrupted")]
-    assert marked == ["database"]                                      # 끊겼던 단계에 표시가 남는다
-    assert not svc2.engine.resume()                                    # 돌던 것이 없으면 아무 일도 없다
+    assert marked == ["database"]                                      # 중단되었던 단계에 표시가 남는다
+    assert not svc2.engine.resume()                                    # 실행 중이던 작업이 없으면 no-op
 
 
 def test_cert_failure_offers_temporary_cert(tmp_path):
@@ -260,9 +260,9 @@ def test_cert_failure_offers_temporary_cert(tmp_path):
     state = svc.engine.status()
     assert state["status"] == "done", state["error"]
     assert svc.store.load_answers().access.cert == "temporary"
-    assert len(host.runner.find("compose", "run", "certbot")) == 1       # 다시 요청하지 않는다
+    assert len(host.runner.find("compose", "run", "certbot")) == 1       # 재요청하지 않는다
     placed = [c for c in host.runner.find("app.helper", "place-cert") if "--link-only" not in c]
-    assert placed and "-i" in placed[-1]                                 # 인증서·키는 표준 입력으로 넘긴다
+    assert placed and "-i" in placed[-1]                                 # 인증서·키는 표준 입력으로 전달한다
     env = envfile.parse(host.paths.env_file.read_text(encoding="utf-8"))
     assert "certbot" not in env["COMPOSE_PROFILES"].split(",")
     assert "Strict-Transport-Security" not in (host.paths.stack / "nginx/site.d/headers.conf").read_text(encoding="utf-8")
@@ -317,7 +317,7 @@ def test_nfs_storage_creates_volume_and_marker(tmp_path):
     assert steps_of(state)[1] == ("storage", "done")
     assert host.volumes["ws-storage-data"]["Options"]["type"] == "nfs"
     marker = host.runner.find("app.helper", "write-marker")[0]
-    # NFS 는 nocopy 로 붙인다 — 도커가 내보내기 뿌리의 소유자·권한을 바꾸려 들지 않게
+    # NFS 는 nocopy 로 마운트한다 — 도커가 내보내기 루트의 소유자·권한을 변경하지 않도록 하기 위함이다
     assert "ws-storage-data:/storage:nocopy" in marker and marker[marker.index("--user") + 1] == "1000:1000"
     assert marker[marker.index("--install-id") + 1] == svc.store.install()["install_id"]
 
@@ -335,7 +335,7 @@ def test_storage_failures(tmp_path):
     err = svc.engine.status()["error"]
     assert err["cause"] == "permission_denied" and err["vars"]["uid_gid"] == "1000:1000"
 
-    # 같은 이름의 볼륨이 다른 옵션으로 이미 있으면 건드리지 않고 멈춘다
+    # 동일 이름의 볼륨이 다른 옵션으로 이미 존재하면 변경하지 않고 중단한다
     host.marker = {"status": "written"}
     host.volumes["ws-storage-data"]["Options"] = {"type": "none", "o": "bind", "device": "/elsewhere"}
     assert svc.engine.retry()
@@ -343,7 +343,7 @@ def test_storage_failures(tmp_path):
     assert svc.engine.status()["error"]["cause"] == "storage_volume_mismatch"
 
 
-# ─── 인증서 갱신 뒤 ───
+# ─── 인증서 갱신 이후 ───
 
 
 def test_reload_after_renewal(tmp_path):
@@ -373,7 +373,7 @@ def test_quick_mode_downgrade_is_recorded(tmp_path):
 
 
 def test_database_step_runs_migrate_before_backend(tmp_path):
-    """DB 가 뜬 뒤 backend 이미지로 migrate 를 명시적으로 돌리고, 그다음에 backend 를 띄운다."""
+    """DB 기동 후 backend 이미지로 migrate 를 명시적으로 실행하고, 그다음 backend 를 기동한다."""
     host = Host(tmp_path)
     svc = host.install()
     assert svc.engine.run()["status"] == "done"
@@ -392,9 +392,9 @@ def test_database_step_fails_when_migrate_fails(tmp_path):
     assert state["status"] == "failed"
     assert state["error"]["step"] == "database" and state["error"]["cause"] == "database_migrate_failed"
     assert state["error"]["vars"]["exit_code"] == 1
-    assert not host.runner.find("compose", "up", "backend")            # backend 는 띄우지 않는다
+    assert not host.runner.find("compose", "up", "backend")            # backend 는 기동하지 않는다
     assert any("column missing" in line for line in svc.engine.read_log("database"))
-    # 고친 뒤 그 단계부터
+    # 수정 후 해당 단계부터 수행
     host.runner.on("compose", "run", "backend", "migrate", out="ok")
     assert svc.engine.retry()
     svc.engine._thread.join(30)
@@ -405,7 +405,7 @@ def test_database_step_fails_when_migrate_fails(tmp_path):
 
 
 def test_rbi_install_writes_this_servers_addresses(tmp_path):
-    """사전 점검이 감지한 서버 주소·게이트웨이가 .env 의 RBI_PROTECTED 로 간다."""
+    """사전 점검이 감지한 서버 주소·게이트웨이가 .env 의 RBI_PROTECTED 에 반영된다."""
     host = Host(tmp_path)
     host.services += ["rbi-netfilter"]
     svc = host.install(addons=["rbi"])
@@ -418,7 +418,7 @@ def test_rbi_install_writes_this_servers_addresses(tmp_path):
 
 
 def test_host_addresses_are_detected_when_preflight_did_not_run(tmp_path):
-    """사전 점검을 거치지 않는 길(복원·나중에 구역 켜기) — 스택 파일을 쓸 때 알아본다. 격리 브라우저가 없으면 묻지 않는다."""
+    """사전 점검을 거치지 않는 경로(복원·추후 구역 활성화) — 스택 파일 기록 시 감지한다. 격리 브라우저가 없으면 조회하지 않는다."""
     host = Host(tmp_path)
     svc = host.install()
     ctx = svc.engine._context("config", svc.store.load_answers(), svc.store.facts())
@@ -430,7 +430,7 @@ def test_host_addresses_are_detected_when_preflight_did_not_run(tmp_path):
     ctx.detect_host_addresses()
     assert len(host.runner.find("app.helper", "host-probe")) == 1
     assert ctx.facts.host_address == "192.168.10.20" and svc.store.facts().gateway == "192.168.10.1"
-    ctx.detect_host_addresses()          # 이미 알면 다시 묻지 않는다
+    ctx.detect_host_addresses()          # 이미 알고 있으면 재조회하지 않는다
     assert len(host.runner.find("app.helper", "host-probe")) == 1
 
 

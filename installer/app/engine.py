@@ -1,14 +1,14 @@
-"""적용 엔진 — 답변대로 서버를 구성한다.
+"""적용 엔진 — 응답에 따라 서버를 구성한다.
 
-- 단계 목록은 답변에서 만든다(`plan_steps`). 각 단계는 상태·시각·실패 원인(키)·해결(키)을 남긴다.
-- 상태는 단계가 바뀔 때마다 디스크(`apply.json`)에 쓴다. 브라우저를 닫아도, 설치 관리자가 재시작해도
-  이어진다(`resume`).
-- 단계는 **멱등**하다 — 이미 된 것은 확인만 하고 지나간다. 그래서 실패한 단계부터 다시 돌려도 안전하다.
-- 로그는 단계별 파일(`logs/<단계>.log`)에 쓰고, 알고 있는 비밀값은 가린다.
+- 단계 목록은 응답에서 생성한다(`plan_steps`). 각 단계는 상태·시각·실패 원인(키)·해결(키)을 기록한다.
+- 상태는 단계 전환 시마다 디스크(`apply.json`)에 기록한다. 브라우저를 닫거나 설치 관리자가 재시작해도
+  이어서 진행한다(`resume`).
+- 단계는 **멱등**하다 — 완료된 항목은 확인만 하고 통과한다. 따라서 실패한 단계부터 재실행해도 안전하다.
+- 로그는 단계별 파일(`logs/<단계>.log`)에 기록하며, 알려진 비밀값은 마스킹한다.
 
-단계: config(설정 파일·비밀 키) → storage(저장소 연결 — NFS·지정 폴더일 때만) → pull(이미지 받기) →
-database(데이터베이스 준비) → cert(인증서 — 앞단 프록시가 맡으면 생략) → zones(구역 시작) →
-admin(관리자 계정) → lock(마법사 잠금)
+단계: config(설정 파일·비밀 키) → storage(저장소 연결 — NFS·지정 폴더인 경우만) → pull(이미지 pull) →
+database(데이터베이스 준비) → cert(인증서 — 프런트 프록시가 담당하면 생략) → zones(구역 기동) →
+admin(관리자 계정) → lock(설치 마법사 잠금)
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ LOG_NAME = re.compile(r"[a-z][a-z0-9_-]{0,40}")      # 단계 로그의 이름(�
 
 
 class StepError(Exception):
-    """단계 실패 — cause 와 fix 는 화면이 문구로 바꾸는 키."""
+    """단계 실패 — cause 와 fix 는 화면이 문구로 변환하는 키."""
 
     def __init__(self, cause: str, fix: str | None = None, **vars):
         super().__init__(cause)
@@ -50,7 +50,7 @@ class StepError(Exception):
 
 
 class Http:
-    """내부망의 서비스에 붙는 작은 HTTP 클라이언트(테스트에서 바꾼다)."""
+    """내부망 서비스에 접속하는 소형 HTTP 클라이언트(테스트에서 교체)."""
 
     def get(self, url: str, headers: dict | None = None, timeout: float = 10.0) -> tuple[int, str]:
         import httpx
@@ -78,20 +78,20 @@ class Context:
     http: Http
     log: Callable[[str], None]
     sleep: Callable[[float], None] = time.sleep
-    detail: dict = field(default_factory=dict)          # 지금 단계의 세부 진행(이미지별·구역별)
+    detail: dict = field(default_factory=dict)          # 현재 단계의 세부 진행(이미지별·구역별)
     save: Callable[[], None] = lambda: None             # detail 을 디스크에 반영
-    env_dirty: bool = False                             # 구역 훅이 .env 값을 바꿨다 → backend 를 다시 띄운다
+    env_dirty: bool = False                             # 구역 훅이 .env 값을 변경함 → backend 재기동
     warnings: list[dict] = field(default_factory=list)
-    redact: Callable[..., None] = lambda *values: None  # 새로 생긴 비밀값을 로그 가림 목록에 넣는다
+    redact: Callable[..., None] = lambda *values: None  # 신규 생성된 비밀값을 로그 마스킹 목록에 추가
     _active: list[str] | None = None
 
-    # ─── 구역 훅이 쓰는 도우미 ───
+    # ─── 구역 훅용 보조 함수 ───
 
     def secrets(self) -> dict:
         return self.store.env_secrets()
 
     def set_env(self, **changes: str) -> None:
-        """구역 훅이 `.env` 에 넣을 값을 정한다(다음 렌더링부터 들어간다)."""
+        """구역 훅이 `.env` 에 기록할 값을 지정한다(다음 렌더링부터 적용)."""
         self.store.update_env_secrets(changes)
         self.env_dirty = True
 
@@ -100,7 +100,7 @@ class Context:
         self.log(f"주의: {key} {vars or ''}")
 
     def active_services(self) -> list[str]:
-        """지금 프로파일에서 켜지는 compose 서비스 — compose 에게 직접 묻는다."""
+        """현재 프로파일에서 활성화되는 compose 서비스 — compose 에 직접 조회한다."""
         if self._active is None:
             r = self.docker.compose("config", "--services", timeout=60)
             if not r.ok:
@@ -121,7 +121,7 @@ class Context:
             raise StepError("service_start_failed", "see_log", services=services, detail=r.err[-300:])
 
     def wait_ready(self, container: str, timeout: float = HEALTH_TIMEOUT) -> None:
-        """컨테이너가 돌고, healthcheck 가 있으면 healthy 가 될 때까지 기다린다."""
+        """컨테이너가 실행 중이고, healthcheck 가 있으면 healthy 가 될 때까지 대기한다."""
         waited = 0.0
         while True:
             st = self.docker.container_status(container)
@@ -140,10 +140,10 @@ class Context:
         self.docker.compose("rm", "-f", *services, timeout=120, on_line=self.log)
 
     def detect_host_addresses(self) -> None:
-        """격리 브라우저를 쓰는데 이 서버의 주소를 아직 모르면 지금 알아본다(`RBI_PROTECTED` 에 들어간다).
+        """격리 브라우저를 사용하나 이 서버의 주소가 미확인이면 이 시점에 감지한다(`RBI_PROTECTED` 에 포함된다).
 
-        새 설치는 사전 점검이 이미 감지해 둔다. 여기는 사전 점검을 거치지 않는 길(백업에서 복원, 나중에 구역 켜기)용이다.
-        알아내지 못하면 그대로 둔다 — 값이 비어도 출구 규칙을 거는 쪽이 자기 주소를 따로 막는다.
+        신규 설치는 사전 점검이 이미 감지한다. 본 함수는 사전 점검을 거치지 않는 경로(백업에서 복원, 설치 후 구역 활성화)용이다.
+        감지 실패 시 그대로 둔다 — 값이 비어 있어도 출구 규칙을 적용하는 측이 자체 주소를 별도로 차단한다.
         """
         if self.facts.host_address or "rbi" not in ans.selected_zones(self.answers, self.catalog):
             return
@@ -156,7 +156,7 @@ class Context:
             self.facts = self.store.update_facts(**found)
 
     def write_stack(self) -> render.Plan:
-        """답변과 지금의 비밀값으로 스택 파일을 다시 쓴다."""
+        """응답과 현재의 비밀값으로 스택 파일을 재작성한다."""
         env_secrets = dict(self.store.env_secrets())
         self.detect_host_addresses()
         render.settle_source_url(self.store, self.facts, self.paths.stack)
@@ -188,7 +188,7 @@ def helper_json(result) -> dict:
 
 
 def generate_secrets(ctx: Context, names: list[str]) -> dict:
-    """비밀값 — backend 이미지의 생성기를 한 번 실행해 받는다. 못 쓰면 번들의 같은 표로 만든다."""
+    """비밀값 — backend 이미지의 생성기를 1회 실행하여 수신한다. 사용 불가 시 번들의 동일 표로 생성한다."""
     sd = ctx.bundle.security_defaults
     image = f"{ctx.registry}/just-workspace-backend:{ctx.image_tag}"
     values: dict = {}
@@ -213,7 +213,7 @@ def generate_secrets(ctx: Context, names: list[str]) -> dict:
 
 
 def prepare_storage(ctx: Context) -> None:
-    """저장소 볼륨을 만들고(없을 때만) 뿌리에 표식 파일을 쓴다."""
+    """저장소 볼륨을 생성하고(없는 경우만) 루트에 저장소 마커 파일을 기록한다."""
     spec = render.storage_volume(ctx.answers)
     install_id = ctx.store.install()["install_id"]
     existing = ctx.docker.volume_inspect(spec["name"])
@@ -227,9 +227,9 @@ def prepare_storage(ctx: Context) -> None:
         if have != spec["opts"]:
             raise StepError("storage_volume_mismatch", "storage_volume_remove_or_keep", volume=spec["name"])
         ctx.log("저장소 볼륨이 이미 있습니다")
-    # 도커 볼륨(새로 만든 빈 볼륨)은 이미지의 /storage 소유권(1000:1000)을 물려받게 그냥 붙인다.
-    # NFS·지정 폴더는 `nocopy` — 도커가 남의 저장소 뿌리의 소유자·권한을 바꾸려 들지 않게 한다
-    # (root 를 낮추는 NFS 내보내기에서는 그 시도가 거절돼 붙이기부터 실패한다).
+    # 도커 볼륨(신규 생성한 빈 볼륨)은 이미지의 /storage 소유권(1000:1000)을 상속하도록 옵션 없이 마운트한다.
+    # NFS·지정 폴더는 `nocopy` — 도커가 외부 저장소 루트의 소유자·권한을 변경하려 시도하지 않도록 한다
+    # (root 권한을 강등하는 NFS 내보내기에서는 해당 시도가 거부되어 마운트부터 실패한다).
     mount = f"{spec['name']}:/storage" + ("" if spec["kind"] == "volume" else ":nocopy")
     r = ctx.docker.helper(["write-marker", "/storage", "--install-id", install_id],
                           volumes=[mount], user=BACKEND_UID_GID, timeout=120)
@@ -303,7 +303,7 @@ def step_pull(ctx: Context) -> None:
         if result.ok:
             row["status"], row["progress"] = "done", ""
         elif ctx.docker.image_exists(image):
-            row["status"], row["progress"] = "present", ""       # 받지는 못했지만 서버에 이미 있다(오프라인 설치)
+            row["status"], row["progress"] = "present", ""       # pull 은 실패했으나 서버에 이미 존재(오프라인 설치)
             ctx.warn("image_not_refreshed", image=image)
         else:
             row["status"] = "failed"
@@ -325,10 +325,10 @@ def step_database(ctx: Context) -> None:
 
 
 def migrate_database(ctx: Context) -> None:
-    """DB 스키마를 이 버전의 코드에 맞춘다 — backend 이미지의 일회용 컨테이너로 `python -m app.cli migrate`.
+    """DB 스키마를 이 버전의 코드에 맞춘다 — backend 이미지의 일회용 컨테이너로 `python -m app.cli migrate` 실행.
 
-    backend 를 띄우기 전에 여기서 명시적으로 돌리고 종료 코드를 본다(backend 는 기동 때 "같음"만 확인하고 지나간다).
-    실패하면 backend 를 띄우지 않고 이 단계에서 멈춘다 — 원인은 단계 로그에 남는다.
+    backend 기동 전에 여기서 명시적으로 실행하고 종료 코드를 확인한다(backend 는 기동 시 "같음"만 확인하고 통과한다).
+    실패 시 backend 를 기동하지 않고 이 단계에서 중단한다 — 원인은 단계 로그에 기록된다.
     """
     r = ctx.docker.compose("run", "--rm", "--no-deps", "-T", "--entrypoint", "python", "backend",
                            "-m", "app.cli", "migrate", timeout=1800, on_line=ctx.log)
@@ -361,7 +361,7 @@ def _place(ctx: Context, name: str, aliases: list[str], cert: str | None = None,
 
 
 def uploaded_ca(ctx: Context) -> str:
-    """따로 올린 CA 인증서(없으면 빈 글자) — 답변 파일의 `access.ca_path`, 아니면 화면·내부 API 가 받아 둔 파일."""
+    """별도 업로드한 CA 인증서(없으면 빈 문자열) — 응답 파일의 `access.ca_path`, 없으면 화면·내부 API 가 수신해 둔 파일."""
     path = ctx.answers.access.ca_path or str(ctx.paths.state / "upload" / "ca.pem")
     try:
         return open(path, encoding="utf-8").read()
@@ -370,23 +370,23 @@ def uploaded_ca(ctx: Context) -> str:
 
 
 def set_site_ca(ctx: Context, chain: str) -> None:
-    """올린 인증서의 발급 CA 를 이 서버의 컨테이너(코드 저장소·backend)가 믿게 한다 — 없으면 걷어 낸다.
+    """업로드한 인증서의 발급 CA 를 이 서버의 컨테이너(코드 저장소·backend)가 신뢰하도록 설정한다 — 없으면 제거한다.
 
-    사설 CA 가 내준 인증서를 올리면 코드 저장소(Gitea)는 접속 주소의 인증서를 믿지 못해 로그인 연동이 보류로 남는다.
-    발급 CA 를 알면(인증서 파일에 체인이 함께 왔거나 CA 인증서를 따로 올렸다 — certs.trust_pem) 그것을 스택 폴더에 두고
-    사이트 조각이 컨테이너의 신뢰 폴더에 붙인다(app/render.py 의 site_compose).
-    서버 인증서 한 장만 올렸으면 믿게 할 CA 를 알 수 없으므로 아무것도 하지 않는다.
+    사설 CA 발급 인증서를 업로드하면 코드 저장소(Gitea)는 접속 주소의 인증서를 신뢰하지 못하여 로그인 연동이 보류된다.
+    발급 CA 가 확인되면(인증서 파일에 체인이 동반되었거나 CA 인증서를 별도 업로드 — certs.trust_pem) 이를 스택 폴더에 저장하고
+    사이트 조각이 컨테이너의 신뢰 저장소에 마운트한다(app/render.py 의 site_compose).
+    서버 인증서 1건만 업로드한 경우 신뢰 대상 CA 를 확인할 수 없으므로 아무 작업도 수행하지 않는다.
     """
     target = ctx.paths.stack / render.SITE_CA_FILE
     have = bool(chain)
     if have:
-        write_private(target, chain, 0o644)             # 컨테이너의 비루트 프로세스가 읽는다(공개 정보다)
+        write_private(target, chain, 0o644)             # 컨테이너의 비루트 프로세스가 읽음(공개 정보)
     else:
         target.unlink(missing_ok=True)
     if ctx.facts.site_ca != have:
         ctx.facts.site_ca = have
         ctx.store.update_facts(site_ca=have)
-        ctx.write_stack()                               # 사이트 조각에 붙이는 줄이 생기거나 사라진다
+        ctx.write_stack()                               # 사이트 조각의 마운트 줄이 추가 또는 제거됨
         ctx.log("올린 인증서의 발급 CA 를 코드 저장소와 backend 가 믿게 합니다" if have else "따로 믿게 한 CA 를 걷어 냅니다")
 
 
@@ -401,14 +401,14 @@ def step_cert(ctx: Context) -> None:
     mode = plan.cert_mode
     existing = read_cert(ctx, name)
     if mode != "upload":
-        set_site_ca(ctx, "")                 # 올린 인증서를 쓰다가 다른 방식으로 바꿨다
+        set_site_ca(ctx, "")                 # 업로드한 인증서 사용 중 다른 방식으로 전환
 
     def remember(cert_pem: str, kind: str) -> None:
         ctx.store.write("cert.json", {"name": name, "kind": kind, "fingerprint": certs.fingerprint_sha256(cert_pem),
                                       "checked_at": now_iso()})
 
     if mode == "proxy":
-        # 웹은 앞단 프록시가 맡는다. 메일·회의 서버가 찾는 자리에는 자체 서명 인증서를 둔다.
+        # 웹은 프런트 프록시가 담당한다. 메일·회의 서버가 조회하는 위치에는 자체 서명 인증서를 배치한다.
         side = names[1:]
         if existing and certs.covers(existing, side):
             _place(ctx, name, aliases)
@@ -468,7 +468,7 @@ def step_cert(ctx: Context) -> None:
         run = ["run", "--rm", "--no-deps", "--entrypoint", "certbot", "certbot", *certbot,
                "--webroot", "-w", "/var/www/certbot"]
     else:
-        # nginx 가 아직 없다 — certbot 이 80 을 직접 듣는다
+        # nginx 미기동 상태 — certbot 이 80 을 직접 수신
         run = ["run", "--rm", "--no-deps", "--publish", "80:80", "--entrypoint", "certbot", "certbot", *certbot,
                "--standalone"]
     ctx.log("인증서를 요청합니다: " + ", ".join(names))
@@ -483,7 +483,7 @@ def step_cert(ctx: Context) -> None:
 
 
 def configure_backend(ctx: Context) -> None:
-    """DB 에 저장되는 설정(외부 SMTP 의 보안 방식, AI 제공자) — backend 의 CLI 에 표준 입력으로 넘긴다."""
+    """DB 에 저장되는 설정(외부 SMTP 의 보안 방식, AI 제공자) — backend 의 CLI 에 표준 입력으로 전달한다."""
     payload: dict = {}
     zones_on = set(ctx.plan.zones)
     if "mail" in zones_on and ctx.answers.mail.kind == "external":
@@ -552,7 +552,7 @@ def step_admin(ctx: Context) -> None:
     admin = ctx.answers.admin
     password = admin.password
     if not password:
-        # 이미 만들고 비밀번호를 지운 뒤 다시 돌린 경우 — 계정이 있는지만 본다
+        # 계정 생성 및 비밀번호 삭제 후 재실행한 경우 — 계정 존재 여부만 확인
         ctx.log("관리자 비밀번호가 남아 있지 않습니다 — 이미 만든 계정으로 봅니다")
         return
     tmp = ctx.paths.state / "tmp" / f"admin-{pysecrets.token_hex(4)}.env"
@@ -688,7 +688,7 @@ class Engine:
         )
 
     def prepare(self) -> tuple[ans.Answers, ans.Facts, list[dict]]:
-        """답변을 읽고(빠른 설치면 묶음을 정하고) 검증한다. 문제가 있으면 `StepError`."""
+        """응답을 읽고(빠른 설치이면 프리셋을 결정하고) 검증한다. 문제가 있으면 `StepError` 발생."""
         try:
             answers = self.store.load_answers()
         except ans.StructureError as e:
@@ -717,7 +717,7 @@ class Engine:
             raise StepError("preflight_failed", "fix_preflight", items=failed)
 
     def steps_for(self, answers: ans.Answers, plan: render.Plan) -> tuple[dict, list[str]]:
-        """(단계 함수 표, 돌릴 단계 id) — 복원은 자기 단계 표를 쓴다(app/restore.py). 엔진의 나머지는 같다."""
+        """(단계 함수 표, 실행할 단계 id) — 복원은 자체 단계 표를 사용한다(app/restore.py). 엔진의 나머지는 동일하다."""
         if answers.mode == "restore":
             from app import restore
 
@@ -727,10 +727,10 @@ class Engine:
     # ─── 실행 ───
 
     def start(self, from_step: str | None = None, *, rerun: tuple[str, ...] = ()) -> bool:
-        """백그라운드로 돌린다. 이미 돌고 있으면 False.
+        """백그라운드로 실행한다. 이미 실행 중이면 False.
 
-        돌려주기 전에 상태를 `running` 으로 써 둔다 — 시작(또는 재시도) 요청에 202 를 받은 화면이 곧바로
-        상태를 물었을 때 옛 `failed`·`idle` 이 보이면 안 된다(화면은 그것을 "끝났다"로 읽는다).
+        반환 전에 상태를 `running` 으로 기록한다 — 시작(또는 재시도) 요청에 202 를 수신한 화면이 즉시
+        상태를 조회했을 때 이전의 `failed`·`idle` 이 노출되어서는 안 된다(화면은 이를 "끝났다"로 해석한다).
         """
         with self._lock:
             if self.running:
@@ -748,11 +748,11 @@ class Engine:
             return True
 
     def resume(self) -> bool:
-        """설치 관리자가 재시작했을 때 — 돌던 적용이 있으면 끊긴 단계부터 잇는다."""
+        """설치 관리자 재시작 시 — 진행 중이던 적용이 있으면 중단된 단계부터 재개한다."""
         state = self.status()
         if state.get("status") != "running":
             return False
-        # 단계가 아직 없으면(시작 직후에 끊겼다) 처음부터 — 단계는 멱등하다
+        # 단계가 아직 없으면(시작 직후 중단) 처음부터 실행 — 단계는 멱등하다
         step = next((s["id"] for s in state["steps"] if s["status"] in ("running", "pending")), None)
         if step is None and state["steps"]:
             return False
@@ -764,7 +764,7 @@ class Engine:
         return self.start(step)
 
     def retry(self, *, use_temporary_cert: bool = False) -> bool:
-        """실패한 단계부터 다시. `use_temporary_cert` 면 임시 인증서로 바꿔 계속한다."""
+        """실패한 단계부터 재실행. `use_temporary_cert` 이면 임시 인증서로 전환하여 계속한다."""
         state = self.status()
         failed = next((s["id"] for s in state.get("steps", []) if s["status"] == "failed"), None)
         if state.get("status") != "failed":
@@ -777,11 +777,11 @@ class Engine:
             answers.access.cert = "temporary"
             self.store.save_answers(answers)
             self.store.update_facts(cert_issue_failed=True)
-            rerun = ("config", "unpack")       # nginx 설정·프로파일이 달라진다(복원에서는 unpack 이 설정을 쓴다)
+            rerun = ("config", "unpack")       # nginx 설정·프로파일이 변경됨(복원에서는 unpack 이 설정을 기록)
         return self.start(failed, rerun=rerun)
 
     def run(self, from_step: str | None = None, rerun: tuple[str, ...] = ()) -> dict:
-        """적용을 끝까지(또는 실패할 때까지) 돌린다. 마지막 상태를 돌려준다."""
+        """적용을 완료(또는 실패) 시점까지 실행한다. 최종 상태를 반환한다."""
         previous = self.status()
         state = {"status": "running", "started_at": previous.get("started_at") or now_iso(), "finished_at": None,
                  "current": None, "error": None, "notes": previous.get("notes", []), "warnings": [],
@@ -819,7 +819,7 @@ class Engine:
             keep = prev is not None and prev["status"] == "done" and i < start_index and step_id not in rerun
             fresh = {"id": step_id, "status": "pending", "started_at": None, "finished_at": None, "error": None, "detail": {}}
             if prev is not None and prev.get("interrupted"):
-                fresh["interrupted"] = True         # 설치 관리자가 재시작해 끊겼던 단계 — 화면이 "이어서 진행"을 알린다
+                fresh["interrupted"] = True         # 설치 관리자 재시작으로 중단되었던 단계 — 화면이 "이어서 진행"을 표시
             steps.append(prev if keep else fresh)
         state["steps"] = steps
         self._save(state)
@@ -847,7 +847,7 @@ class Engine:
                     state["alternatives"] = [{"key": e.vars["alternative"]}]
                 self._save(state)
                 return state
-            except Exception as e:  # noqa: BLE001 — 예상 못 한 오류도 단계 실패로 남긴다
+            except Exception as e:  # noqa: BLE001 — 예상하지 못한 오류도 단계 실패로 기록
                 ctx.log(f"실패(예상하지 못한 오류): {type(e).__name__}: {self.redact(str(e))[:300]}")
                 err = {"cause": "unexpected_error", "fix": "see_log", "vars": {"type": type(e).__name__}}
                 step.update(status="failed", finished_at=now_iso(), error=err)
@@ -866,14 +866,14 @@ class Engine:
         return state
 
 
-# ─── 인증서 갱신 뒤 다시 읽히기 ───
+# ─── 인증서 갱신 후 재적재 ───
 
 
 def reload_after_renewal(engine: Engine) -> str:
-    """인증서가 바뀌었으면 서비스들이 새 파일을 읽게 한다. `unchanged` | `reloaded` | `skipped`.
+    """인증서가 변경되었으면 서비스들이 새 파일을 다시 읽도록 한다. `unchanged` | `reloaded` | `skipped`.
 
-    갱신 자체는 certbot 컨테이너가 한다(12시간마다). 설치 관리자는 주기적으로 지문을 보고, 달라졌으면
-    개인 키 권한을 다시 맞추고 nginx 를 reload, 회의 서버를 재시작한다(메일 서버와 음성 릴레이는 스스로 다시 읽는다).
+    갱신 자체는 certbot 컨테이너가 수행한다(12시간 주기). 설치 관리자는 주기적으로 지문을 확인하고, 변경된 경우
+    개인 키 권한을 재설정한 뒤 nginx 를 reload, 회의 서버를 재시작한다(메일 서버와 음성 릴레이는 자체적으로 다시 읽는다).
     """
     known = engine.store.read("cert.json")
     if not known or not engine.store.locked:

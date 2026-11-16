@@ -1,7 +1,7 @@
 """업데이트 내부 API — `/internal/update/*`(8444, 공유 키 + 내부 대역). 계약은 docs/update-api.md.
 
-`register()` 가 내부 앱에 경로를 붙인다. 키 없이 열리는 것은 공개 점검 상태(`GET /internal/update/maintenance`) 하나이고,
-그것도 내부 대역 검사는 그대로다(바깥에서는 nginx 의 `/maintenance/status` 를 거쳐서만 닿는다).
+`register()` 가 내부 앱에 경로를 등록한다. 키 없이 접근 가능한 것은 공개 점검 모드 상태(`GET /internal/update/maintenance`) 하나이며,
+이 경우에도 내부 대역 검사는 동일하게 적용된다(외부에서는 nginx 의 `/maintenance/status` 를 경유해야만 접근 가능).
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ TICK_SECONDS = 60
 
 
 def manager(svc) -> UpdateManager:
-    """서비스 묶음에 딸린 업데이트 엔진(처음 부를 때 만든다)."""
+    """서비스 집합에 속한 업데이트 엔진(최초 호출 시 생성)."""
     if "updates" not in svc.cache:
         svc.cache["updates"] = UpdateManager(svc.engine, zones=svc.zones, registry=svc.registry,
                                              **svc.cache.get("update_kwargs", {}))
@@ -37,7 +37,7 @@ def offline(svc) -> OfflineManager:
 
 
 async def ticker(svc) -> None:
-    """한 분마다 — 채널 확인 주기와 자동 적용 조건을 본다."""
+    """1분 주기 — 채널 확인 주기와 자동 적용 조건을 검사한다."""
     while True:
         await asyncio.sleep(TICK_SECONDS)
         try:
@@ -47,7 +47,7 @@ async def ticker(svc) -> None:
 
 
 async def _pump(request: Request, consume) -> None:
-    """요청 본문을 메모리에 쌓지 않고 `consume(조각들)` 에 흘려 넣는다(consume 은 다른 스레드에서 돈다)."""
+    """요청 본문을 메모리에 적재하지 않고 `consume(조각들)` 에 스트리밍 전달한다(consume 은 별도 스레드에서 실행)."""
     q: queue.Queue = queue.Queue(maxsize=16)
     stop = threading.Event()
 
@@ -82,7 +82,7 @@ async def _pump(request: Request, consume) -> None:
             if chunk:
                 await asyncio.to_thread(put, chunk)
         await asyncio.to_thread(put, None)
-    except Exception as e:  # noqa: BLE001 — 올리다 끊겼다
+    except Exception as e:  # noqa: BLE001 — 업로드 중 연결 종료
         await asyncio.to_thread(put, e)
     try:
         await task
@@ -221,11 +221,11 @@ def register(app: FastAPI, svc, keyed, client_allowed) -> None:
     def apps():
         return updates().apps()
 
-    # ── 점검 상태 ──
+    # ── 점검 모드 상태 ──
 
     @app.get(f"{P}/maintenance")
     def maintenance(request: Request):
-        """키 없이 — 점검 중인지, 언제 시작했는지, 예상 시간, 연락처뿐이다(버전·단계·오류는 싣지 않는다)."""
+        """키 불필요 — 점검 모드 여부, 시작 시각, 예상 시간, 연락처만 포함한다(버전·단계·오류는 포함하지 않는다)."""
         if not client_allowed(request):
             return JSONResponse({"code": "not_found", "vars": {}}, status_code=404)
         return JSONResponse(updates().maintenance(), headers={"Cache-Control": "no-store"})

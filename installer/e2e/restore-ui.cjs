@@ -1,23 +1,23 @@
 #!/usr/bin/env node
 /**
- * 설치 마법사의 "백업에서 복원"을 **화면을 눌러서** 끝까지 진행한다(Playwright) — 검수 서버 밖(이 PC)에서 돈다.
+ * 설치 마법사의 "백업에서 복원"을 **화면 조작으로** 끝까지 진행한다(Playwright) — 검수 서버 외부(이 PC)에서 실행된다.
  *
  *   node restore-ui.cjs --url https://192.168.10.20:8443 --token XXXXXXXXXXXX --backup ./backup.jwbak [옵션]
  *
- *   --url <주소>        설치 관리자 주소(자체 서명 인증서라 검증하지 않는다)
+ *   --url <주소>        설치 관리자 주소(자체 서명 인증서이므로 검증하지 않는다)
  *   --token <토큰>      설치 토큰
- *   --backup <파일>     올릴 백업 파일(.jwbak) — 이 PC 에 있는 것
- *   --path <경로>       올리는 대신 서버에 있는 파일의 경로를 알려 준다(--backup 대신)
- *   --password-file <파일>  설정이 암호로 보호된 백업일 때(먼저 틀린 암호를 한 번 넣어 본다)
- *   --domain <이름>     복원할 때 바꿀 접속 주소(비우면 백업의 주소 그대로)
- *   --nfs <서버:/경로>  네트워크 저장소를 다시 연결한다(백업이 NFS 였을 때)
+ *   --backup <파일>     업로드할 백업 파일(.jwbak) — 이 PC 에 있는 파일
+ *   --path <경로>       업로드 대신 서버에 있는 파일의 경로를 지정한다(--backup 대신)
+ *   --password-file <파일>  설정이 암호로 보호된 백업인 경우(먼저 틀린 암호를 1회 입력한다)
+ *   --domain <이름>     복원 시 변경할 접속 주소(비우면 백업의 주소 유지)
+ *   --nfs <서버:/경로>  네트워크 저장소를 재연결한다(백업이 NFS 였던 경우)
  *   --expect-files restored|not_included|nfs   완료 화면의 파일 문구                            기본 restored
- *   --stop-at review    내용 확인 화면까지만 보고 끝낸다(복원을 시작하지 않는다)
+ *   --stop-at review    내용 확인 화면까지만 확인하고 종료한다(복원을 시작하지 않는다)
  *   --width <픽셀>      화면 폭                                                                   기본 1280
- *   --out <폴더>        화면 사진을 둘 곳                                                         기본 ./restore-shots
+ *   --out <폴더>        화면 캡처 저장 위치                                                       기본 ./restore-shots
  *   --chrome <경로>     크롬 실행 파일
  *
- * 필요한 것: playwright-core(NODE_PATH 로 찾을 수 있게). 하나라도 어긋나면 종료 코드 1.
+ * 필요 사항: playwright-core(NODE_PATH 로 탐색 가능해야 한다). 하나라도 불일치하면 종료 코드 1.
  */
 const fs = require('fs')
 const path = require('path')
@@ -114,7 +114,7 @@ async function main() {
   if (opt.backup) expect('서버에 저장된 크기 = 올린 크기', file.size_bytes === fs.statSync(opt.backup).size, String(file.size_bytes))
   await snap('file-ok')
   await noOverflow('백업 파일')
-  // 화면에 다시 들어와도 상태가 남아 있다
+  // 화면에 재진입해도 상태가 유지된다
   await page.reload()
   await page.getByText('확인됨', { exact: true }).first().waitFor({ state: 'visible', timeout: 60000 })
   ok('새로 고쳐도 확인된 백업이 남아 있다')
@@ -142,7 +142,7 @@ async function main() {
     const [server, exportPath] = [opt.nfs.slice(0, opt.nfs.indexOf(':')), opt.nfs.slice(opt.nfs.indexOf(':') + 1)]
     if (!fromNfs) await page.getByRole('radio', { name: /네트워크 저장소/ }).click()
     const fields = page.locator('main input')
-    // 서버 주소·공유 경로는 접속 주소 칸보다 앞에 있다. 백업이 NFS 였으면 원래 값이 채워져 있다
+    // 서버 주소·공유 경로는 접속 주소 입력란보다 앞에 위치한다. 백업이 NFS 였으면 원래 값이 입력되어 있다
     if ((await fields.nth(0).inputValue()) !== server) await fields.nth(0).fill(server)
     if ((await fields.nth(1).inputValue()) !== exportPath) await fields.nth(1).fill(exportPath)
     await press('연결 확인')

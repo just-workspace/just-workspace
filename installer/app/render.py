@@ -1,17 +1,17 @@
-"""렌더링 — 답변 + 비밀값 + 감지값 → 스택 파일 내용.
+"""렌더링 — 응답 + 비밀값 + 감지값 → 스택 파일 내용.
 
-순수 함수다(파일·네트워크·시계·난수를 건드리지 않는다). 같은 입력이면 같은 출력이 나온다.
+순수 함수이다(파일·네트워크·시계·난수에 접근하지 않는다). 동일 입력이면 동일 출력을 반환한다.
 
     plan  = derive(answers, facts, catalog)            # 파생값(구역·프로파일·포트·이름·주의)
     files = render(answers, secrets, facts, bundle)     # {스택 안 상대 경로: 내용}
 
-`secrets` 는 `.env` 에 들어가는 비밀값과 설치 관리자가 관리하는 값이다.
+`secrets` 는 `.env` 에 포함되는 비밀값과 설치 관리자가 관리하는 값이다.
 - backend 의 비밀값 표에 있는 이름(SECRET_KEY, DB_PASSWORD …)
 - `SMTP_PASSWORD`(내장 메일의 발신 계정), `JW_INSTALLER_KEY`(내부 API 키), `JW_INSTALL_ID`
-- `DKIM_PRIVATE_KEY`(PEM — 메일 레코드 확인 화면에서 미리 만든 것)
-- 구역 훅이 채우는 값(`GITEA_TOKEN`, `OAUTH_CLIENTS_JSON`)
+- `DKIM_PRIVATE_KEY`(PEM — 메일 레코드 확인 화면에서 사전 생성한 것)
+- 구역 훅이 설정하는 값(`GITEA_TOKEN`, `OAUTH_CLIENTS_JSON`)
 
-경로는 모두 **스택 폴더 기준 상대 경로**다(컨테이너 안 `/data/stack/…`, 호스트 `$JW_HOST_DIR/stack/…`).
+경로는 모두 **스택 폴더 기준 상대 경로**이다(컨테이너 내 `/data/stack/…`, 호스트 `$JW_HOST_DIR/stack/…`).
 """
 
 from __future__ import annotations
@@ -31,23 +31,23 @@ from app.paths import SITE_COMPOSE
 from app.update_release import source_url_override, valid_source_url
 
 HAIRPIN_OFF = "hairpin-off.invalid"
-TURN_TLS_PORT_STANDALONE = 5349      # nginx 가 443 을 쓰는 서버에서 TURN/TLS 를 게시하는 호스트 포트
+TURN_TLS_PORT_STANDALONE = 5349      # nginx 가 443 을 사용하는 서버에서 TURN/TLS 를 게시하는 호스트 포트
 INTERNAL_API_PORT = 8444             # 설치 관리자 내부 API(워크스페이스 내부망 전용)
 INSTALLER_ALIAS = "jw-installer"
 DKIM_SELECTOR = "default"
-# 복원한 설치에서, 백업의 `.env` 에서 그대로 옮겨 온 값들을 담아 두는 자리(`env.secret.json` 안의 사전 하나).
-# 설치 관리자가 스스로 쓰는 변수 가운데서는 `CARRIED_ENV` 만 이 값으로 바꾸고, 다루지 않는 변수는 끝에 덧붙인다.
+# 복원한 설치에서 백업의 `.env` 로부터 그대로 이전한 값을 보관하는 위치(`env.secret.json` 내 사전 1개).
+# 설치 관리자가 자체적으로 기록하는 변수 중에서는 `CARRIED_ENV` 만 이 값으로 교체하고, 관리 대상이 아닌 변수는 끝에 추가한다.
 EXTRA_ENV_KEY = "_extra_env"
 CARRIED_ENV = ("APP_NAME", "DOMAIN", "ADMIN_EMAILS")
 CERT_ROOT = "/etc/letsencrypt/live"
-SITE_CA_FILE = "site-ca/ca.pem"                         # 스택 폴더 기준 — 올린 인증서의 발급 CA(함께 온 체인 + 따로 올린 CA, 적용 엔진이 쓴다)
-SITE_CA_MOUNT = "/etc/ssl/certs/jw-site-ca.pem"         # 컨테이너 안 — 코드 저장소는 시스템 CA 폴더의 파일로 읽고, backend 는 시작할 때 묶음에 더한다
-SITE_CA_SERVICES = ("gitea", "backend")                 # 접속 주소(와 같은 CA 의 주소)로 HTTPS 요청을 보내는 우리 쪽 컨테이너
+SITE_CA_FILE = "site-ca/ca.pem"                         # 스택 폴더 기준 — 업로드한 인증서의 발급 CA(동반된 체인 + 별도 업로드한 CA, 적용 엔진이 기록)
+SITE_CA_MOUNT = "/etc/ssl/certs/jw-site-ca.pem"         # 컨테이너 내 — 코드 저장소는 시스템 CA 폴더의 파일로 읽고, backend 는 기동 시 CA 번들에 추가
+SITE_CA_SERVICES = ("gitea", "backend")                 # 접속 주소(및 동일 CA 의 주소)로 HTTPS 요청을 송신하는 본 프로젝트 컨테이너
 
 # 권한이 600 이어야 하는 파일 / 실행 권한이 필요한 파일
 SECRET_FILES = (".env", "mailserver/config/dovecot-masters.cf", "mailserver/config/postfix-accounts.cf",
                 "mailserver/config/rspamd/dkim/default.private")
-# 이미 있으면 줄 단위로 합치는 파일(메일 계정은 운영 중에 백엔드가 덧붙인다)
+# 이미 존재하면 줄 단위로 병합하는 파일(메일 계정은 운영 중 백엔드가 추가)
 MERGE_FILES = ("mailserver/config/postfix-accounts.cf",)
 
 
@@ -67,11 +67,11 @@ class Plan:
     domain: str                 # 접속 주소
     env_domain: str             # .env 의 DOMAIN(계정 메일 주소의 도메인)
     app_url: str
-    tls: bool                   # 내장 nginx 가 TLS 를 끝낸다
+    tls: bool                   # 내장 nginx 가 TLS 를 종단
     cert_mode: str
     cert_dir: str               # nginx 가 읽는 인증서 폴더 이름(= 접속 주소)
-    cert_names: list[str]       # 인증서에 들어가야 하는 이름(첫 번째가 폴더 이름)
-    cert_aliases: list[str]     # 같은 인증서를 가리키게 할 폴더 이름(서비스마다 찾는 자리가 다르다)
+    cert_names: list[str]       # 인증서에 포함되어야 하는 이름(첫 번째가 폴더 이름)
+    cert_aliases: list[str]     # 동일 인증서를 가리키도록 할 폴더 이름(서비스마다 조회 위치가 상이)
     net_prefix: str
     mail_builtin: bool
     mail_domain: str
@@ -114,7 +114,7 @@ def derive(answers: Answers, facts: Facts, catalog: Catalog) -> Plan:
     if a.cert == "auto" and tls:
         profiles.append("certbot")
 
-    # ── 호스트에 여는 포트 ──
+    # ── 호스트에 게시하는 포트 ──
     ports = catalog.ports(zones)
 
     def drop(*names: str) -> None:
@@ -124,7 +124,7 @@ def derive(answers: Answers, facts: Facts, catalog: Catalog) -> Plan:
 
     if proxy:
         drop("443/tcp")
-    # 평문 LDAP(389)은 이 서버 자신(루프백)에만 연다(LDAP_PLAIN_BIND=127.0.0.1) — 밖으로 여는 포트가 아니다
+    # 평문 LDAP(389)은 이 서버 자신(루프백)에만 게시한다(LDAP_PLAIN_BIND=127.0.0.1) — 외부 게시 포트가 아니다
     drop("389/tcp")
     if mail_on and not mail_builtin:
         drop(*catalog.get("mail").get("ports", []))
@@ -151,11 +151,11 @@ def derive(answers: Answers, facts: Facts, catalog: Catalog) -> Plan:
         if "rbi" in zones:
             cert_names.append(f"rbi.{domain}")
 
-    # ── 컨테이너가 접속 주소로 되돌아올 때의 우회 ──
+    # ── 컨테이너가 접속 주소로 회귀 접속할 때의 우회 ──
     if is_ip or not domain:
         hairpin_host, rp_lan_ip = HAIRPIN_OFF, ""
     elif tls:
-        hairpin_host, rp_lan_ip = domain, f"{net_prefix}.2"        # 내장 nginx 가 443 을 듣는다
+        hairpin_host, rp_lan_ip = domain, f"{net_prefix}.2"        # 내장 nginx 가 443 을 수신
     else:
         singles = [p for p in a.proxy_addresses if "/" not in p]
         if facts.proxy_lan_ip:
@@ -167,7 +167,7 @@ def derive(answers: Answers, facts: Facts, catalog: Catalog) -> Plan:
             if {"git", "docs"} & set(zones):
                 cautions.append({"key": "hairpin_not_configured", "vars": {"domain": domain}})
 
-    # ── 주의 모음 ──
+    # ── 주의 사항 목록 ──
     if a.cert == "temporary":
         cautions.append({"key": "cert_temporary", "vars": {"domain": domain}})
         if "git" in zones:
@@ -209,7 +209,7 @@ def derive(answers: Answers, facts: Facts, catalog: Catalog) -> Plan:
 
 
 def backend_workers(facts: Facts) -> str:
-    """워커 수 — backend entrypoint 와 같은 규칙(min 8, max 2, 코어 수). 메모리가 6GB 미만이면 2."""
+    """워커 수 — backend entrypoint 와 동일 규칙(min 8, max 2, 코어 수). 메모리가 6GB 미만이면 2."""
     if not facts.cpus:
         return ""
     workers = min(8, max(2, int(facts.cpus)))
@@ -218,16 +218,16 @@ def backend_workers(facts: Facts) -> str:
     return str(workers)
 
 
-# 격리 브라우저의 대상이 될 수 있는 대역(backend 의 RBI_ALLOW_CEILING 기본값과 같다)
+# 격리 브라우저의 대상이 될 수 있는 대역(backend 의 RBI_ALLOW_CEILING 기본값과 동일)
 _RBI_PRIVATE = tuple(ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
 
 
 def rbi_protected(facts: Facts) -> str:
-    """`RBI_PROTECTED` — 이 서버의 주소와 기본 게이트웨이(감지한 것만, 사설 주소만).
+    """`RBI_PROTECTED` — 이 서버의 주소와 기본 게이트웨이(감지된 것만, 사설 주소만).
 
-    backend 는 컨테이너 안이라 서버의 주소를 모른다. 이 값이 비어 있으면 backend 는 서버 자신을 가리키는 대상을
-    받아 주고, 출구 규칙을 거는 사이드카가 뒤늦게 거부한다(대상은 저장됐는데 세션이 열리지 않는다).
-    공인 주소는 어차피 대상이 될 수 없어(허용 상한 밖) 적지 않는다.
+    backend 는 컨테이너 내에 있어 서버의 주소를 알 수 없다. 이 값이 비어 있으면 backend 는 서버 자신을 가리키는 대상을
+    허용하고, 출구 규칙을 적용하는 사이드카가 사후에 거부한다(대상은 저장되었으나 세션이 열리지 않는다).
+    공인 주소는 대상이 될 수 없으므로(허용 상한 밖) 기재하지 않는다.
     """
     out: list[str] = []
     for value in (facts.host_address, facts.gateway, facts.proxy_lan_ip):
@@ -252,19 +252,19 @@ def env_sections(answers: Answers, secrets: dict, facts: Facts, plan: Plan,
         ("JW_INSTALL_ID", s("JW_INSTALL_ID")),
         ("JW_REGISTRY", registry),
         ("JW_VERSION", version),
-        # 화면에 보이는 제품 버전 — 이미지에 구운 값보다 우선한다(이미지 태그와 다를 수 있다)
+        # 화면에 표시되는 제품 버전 — 이미지에 내장된 값보다 우선한다(이미지 태그와 상이할 수 있음)
         ("JW_APP_VERSION", app_version or version),
         ("COMPOSE_PROJECT_NAME", "just-workspace"),
         ("DEPLOY_MODE", "standalone" if plan.tls else "external_proxy"),
         ("COMPOSE_PROFILES", ",".join(plan.profiles)),
-        # 맨 앞의 core 는 "빈 값 = 전부 설치" 규칙을 피하려고 늘 적는다(최소 묶음에서도 값이 비지 않게)
+        # 맨 앞의 core 는 "빈 값 = 전부 설치" 규칙을 회피하기 위해 항상 기재한다(최소 프리셋에서도 값이 비지 않도록 함)
         ("JW_ZONES", ",".join(["core", *plan.zones])),
         ("JW_NET_PREFIX", plan.net_prefix),
         ("JW_INSTALLER_URL", f"http://{INSTALLER_ALIAS}:{INTERNAL_API_PORT}"),
         ("JW_INSTALLER_KEY", s("JW_INSTALLER_KEY")),
     ]))
-    # 화면의 "소스 코드" 링크 — 설치 관리자에 준 값(-e JW_SOURCE_URL), 없으면 기억해 둔 값(settle_source_url).
-    # 값이 없으면 줄 자체를 싣지 않는다 — backend 는 변수가 없을 때와 비어 있을 때 모두 원래 리포의 주소를 쓴다.
+    # 화면의 "소스 코드" 링크 — 설치 관리자에 지정한 값(-e JW_SOURCE_URL), 없으면 보존된 값(settle_source_url).
+    # 값이 없으면 해당 줄을 포함하지 않는다 — backend 는 변수가 없는 경우와 비어 있는 경우 모두 원래 리포의 주소를 사용한다.
     source = source_url_override() or valid_source_url(facts.source_url)
     if source:
         sections[-1][1].append(("JW_SOURCE_URL", source))
@@ -302,7 +302,7 @@ def env_sections(answers: Answers, secrets: dict, facts: Facts, plan: Plan,
         ("FEATURE_BUILTIN_MAILSERVER", "true" if plan.mail_builtin else "false"),
         ("DOVECOT_MASTER_USER", "portal" if plan.mail_builtin else ""),
         ("DOVECOT_MASTER_PASSWORD", s("DOVECOT_MASTER_PASSWORD") if plan.mail_builtin else ""),
-        ("MAIL_SSL_TYPE", "letsencrypt"),      # 인증서를 /etc/letsencrypt/live/mail.<도메인>/ 에서 읽는다는 뜻
+        ("MAIL_SSL_TYPE", "letsencrypt"),      # 인증서를 /etc/letsencrypt/live/mail.<도메인>/ 에서 읽음을 의미
         *smtp,
     ]))
 
@@ -343,7 +343,7 @@ def env_sections(answers: Answers, secrets: dict, facts: Facts, plan: Plan,
         sections.append(("격리 브라우저", [
             ("RBI_PUBLIC_ORIGIN", f"https://rbi.{plan.domain}"),
             ("RBI_PUBLISH_IP", f"{plan.net_prefix}.1"),
-            # 워크스페이스 자신의 주소 — 격리 브라우저의 대상으로 받지 않는다(관리자가 강제로 저장할 때만 연다)
+            # 워크스페이스 자체 주소 — 격리 브라우저의 대상으로 허용하지 않는다(관리자가 강제 저장하는 경우만 허용)
             ("RBI_PROTECTED", rbi_protected(facts)),
         ]))
     else:
@@ -360,12 +360,12 @@ def env_sections(answers: Answers, secrets: dict, facts: Facts, plan: Plan,
 
 
 def settle_source_url(store, facts: Facts, stack_dir) -> None:
-    """소스 주소(`JW_SOURCE_URL`)를 감지값에 기억해 둔다 — 스택 파일을 쓰기 직전에 부른다.
+    """소스 주소(`JW_SOURCE_URL`)를 감지값에 보존한다 — 스택 파일 기록 직전에 호출한다.
 
-    스택 파일은 설치 관리자 컨테이너 말고도 쓴다: 업데이트의 `switch` 단계는 새 버전 이미지의 일회용 컨테이너가 쓰고
-    (그 컨테이너에는 사용자가 준 환경변수가 없다), 복원은 새 서버의 설치 관리자가 쓴다. 그때마다 값이 사라지지 않게,
-    한 번 정해진 주소는 상태 폴더에 남긴다. 우선순위: 지금 받은 환경변수 → 기억해 둔 값 → 지금 `.env` 에 적힌 값
-    (이 기억이 없던 버전에서 올라온 설치). 기본값(원래 리포)으로 되돌리려면 그 주소를 직접 준다.
+    스택 파일은 설치 관리자 컨테이너 외에서도 기록한다: 업데이트의 `switch` 단계는 새 버전 이미지의 일회용 컨테이너가 기록하고
+    (해당 컨테이너에는 사용자가 지정한 환경변수가 없다), 복원은 새 서버의 설치 관리자가 기록한다. 각 경우에 값이 소실되지 않도록
+    한 번 확정된 주소는 상태 폴더에 보존한다. 우선순위: 현재 전달된 환경변수 → 보존된 값 → 현재 `.env` 에 기록된 값
+    (이 보존 기능이 없던 버전에서 업그레이드한 설치). 기본값(원래 리포)으로 복원하려면 해당 주소를 직접 지정한다.
     """
     current = ""
     try:
@@ -381,7 +381,7 @@ def settle_source_url(store, facts: Facts, stack_dir) -> None:
 
 
 def carry_extra_env(sections: list[tuple[str, list[tuple[str, str]]]], extra) -> list[tuple[str, list[tuple[str, str]]]]:
-    """백업에서 옮겨 온 값을 얹는다 — 이어 쓰는 변수는 제자리에서 바꾸고, 설치 관리자가 다루지 않는 변수는 끝에 덧붙인다."""
+    """백업에서 이전한 값을 적용한다 — 승계 변수는 제자리에서 교체하고, 설치 관리자의 관리 대상이 아닌 변수는 끝에 추가한다."""
     if not isinstance(extra, dict) or not extra:
         return sections
     managed = {key for _, pairs in sections for key, _ in pairs}
@@ -434,7 +434,7 @@ server {{
     }}
 }}
 """
-    # 임시(자체 서명) 인증서에는 HSTS 를 붙이지 않는다 — 브라우저가 경고를 넘기지 못하게 된다.
+    # 임시(자체 서명) 인증서에는 HSTS 를 적용하지 않는다 — 브라우저에서 경고 우회가 불가능해진다.
     hsts = "" if plan.cert_mode == "temporary" else \
         'add_header Strict-Transport-Security "max-age=31536000" always;\n'
     return {
@@ -451,9 +451,9 @@ def site_compose(plan: Plan, facts: Facts | None = None) -> str:
     if plan.tls:
         services += '  nginx:\n    ports:\n      - "443:443"\n'
     if plan.tls and plan.cert_mode == "upload" and facts is not None and facts.site_ca:
-        # 올린 인증서의 발급 CA 를 컨테이너의 신뢰 폴더에 놓는다 — 사설 CA 가 내준 인증서여도 코드 저장소가 접속 주소로
-        # 되돌아가 로그인 설정 문서를 읽을 수 있고, backend 가 같은 CA 의 주소로 HTTPS 요청을 보낼 수 있다
-        # (공개 CA 에 대한 신뢰는 그대로 두고 더한다).
+        # 업로드한 인증서의 발급 CA 를 컨테이너의 신뢰 저장소에 배치한다 — 사설 CA 발급 인증서여도 코드 저장소가 접속 주소로
+        # 회귀 접속하여 로그인 설정 문서를 읽을 수 있고, backend 가 동일 CA 의 주소로 HTTPS 요청을 송신할 수 있다
+        # (공개 CA 에 대한 신뢰는 유지한 채 추가한다).
         for service in SITE_CA_SERVICES:
             services += f"  {service}:\n    volumes:\n      - ./{SITE_CA_FILE}:{SITE_CA_MOUNT}:ro\n"
     return head + (f"services:\n{services}" if services else "services: {}\n")
@@ -468,7 +468,7 @@ def livekit_yaml(answers: Answers, secrets: dict, facts: Facts, plan: Plan) -> s
         public_ip = v.ipv4(public_ip)
         rtc_ip = f"  use_external_ip: false\n  node_ip: {public_ip}\n"
     else:
-        rtc_ip = "  use_external_ip: true\n"       # 공인 주소를 모른다 — STUN 으로 스스로 찾게 둔다
+        rtc_ip = "  use_external_ip: true\n"       # 공인 주소 미확인 — STUN 으로 자체 탐지하도록 설정
     if plan.turn:
         td = v.domain(plan.turn_domain)
         turn = f"""turn:
@@ -512,7 +512,7 @@ webhook:
 
 
 def ssha512(password: str, salt_seed: str) -> str:
-    """dovecot 의 `{SSHA512}` 해시. 소금은 입력에서 정해진다(같은 입력 → 같은 출력)."""
+    """dovecot 의 `{SSHA512}` 해시. 솔트는 입력에서 결정된다(동일 입력 → 동일 출력)."""
     salt = hashlib.sha256(("jw-salt:" + salt_seed).encode()).digest()[:8]
     digest = hashlib.sha512(password.encode() + salt).digest()
     return "{SSHA512}" + base64.b64encode(digest + salt).decode()
@@ -534,8 +534,8 @@ def mail_files(answers: Answers, secrets: dict, plan: Plan) -> dict[str, str]:
     files: dict[str, str] = {}
     accounts = [f"noreply@{md}|" + ssha512(secrets.get("SMTP_PASSWORD", ""), seed + ":noreply")]
     if answers.admin.username:
-        # 관리자 편지함 자리만 만든다. 로그인은 워크스페이스 비밀번호로 한다(백엔드에 물어본다) —
-        # 여기 해시는 누구도 모르는 값이라 이 줄로는 로그인할 수 없다.
+        # 관리자 편지함 위치만 생성한다. 로그인은 워크스페이스 비밀번호로 수행한다(백엔드에 조회) —
+        # 이 해시는 누구도 알 수 없는 값이므로 이 줄로는 로그인할 수 없다.
         user = v.username(answers.admin.username)
         unusable = hashlib.sha256((seed + ":mailbox:" + user).encode()).hexdigest()
         accounts.append(f"{user}@{md}|" + ssha512(unusable, seed + ":" + user))
@@ -568,7 +568,7 @@ install -o _rspamd -g _rspamd -m 600 /tmp/docker-mailserver/rspamd/dkim/{DKIM_SE
 
 
 def merge_lines(existing: str, rendered: str) -> str:
-    """`MERGE_FILES` — 이미 있는 줄은 그대로 두고, `|` 앞(계정)이 없는 줄만 덧붙인다."""
+    """`MERGE_FILES` — 기존 줄은 유지하고, `|` 앞(계정)이 없는 줄만 추가한다."""
     have = {line.split("|", 1)[0] for line in existing.splitlines() if line.strip()}
     out = [line for line in existing.splitlines() if line.strip()]
     for line in rendered.splitlines():
@@ -580,11 +580,11 @@ def merge_lines(existing: str, rendered: str) -> str:
 # ─── 저장소 볼륨 ───
 
 STORAGE_VOLUME = "ws-storage-data"
-NFS_OPTIONS = "rw,nfsvers=4.1,hard,noatime"      # 잠금이 프로토콜에 든 NFSv4.1 로 고정한다
+NFS_OPTIONS = "rw,nfsvers=4.1,hard,noatime"      # 잠금이 프로토콜에 포함된 NFSv4.1 로 고정
 
 
 def storage_volume(answers: Answers) -> dict:
-    """파일 저장소 볼륨을 어떻게 만들지 — compose 는 이 이름의 볼륨을 `external` 로 쓴다.
+    """파일 저장소 볼륨의 생성 방식 — compose 는 이 이름의 볼륨을 `external` 로 사용한다.
 
     - 도커 볼륨: 옵션 없음
     - 지정 폴더: local 드라이버의 bind 옵션(호스트 경로)
@@ -626,7 +626,7 @@ def render(answers: Answers, secrets: dict, facts: Facts, bundle: Bundle,
     ))
     files[SITE_COMPOSE] = site_compose(plan, facts)
     files.update(nginx_site(answers, plan))
-    # compose 가 폴더째 붙이는 자리 — 비어 있어도 폴더는 있어야 한다
+    # compose 가 폴더 단위로 마운트하는 위치 — 비어 있어도 폴더는 존재해야 한다
     files["nginx/private.d/.keep"] = ""
     files["plugins/.keep"] = ""
     if "meetings" in plan.zones:
@@ -637,12 +637,12 @@ def render(answers: Answers, secrets: dict, facts: Facts, bundle: Bundle,
 
 
 def summarize(files: dict[str, str]) -> list[dict]:
-    """산출물 요약(경로·크기·권한) — 내용은 싣지 않는다."""
+    """산출물 요약(경로·크기·권한) — 내용은 포함하지 않는다."""
     return [{"path": p, "bytes": len(c.encode("utf-8")), "mode": oct(file_mode(p))[2:]} for p, c in sorted(files.items())]
 
 
 def oauth_clients(existing_json: str, client_id: str, entry: dict | None) -> str:
-    """`OAUTH_CLIENTS_JSON` 에서 클라이언트 하나를 넣거나(entry) 뺀다(None). 나머지는 그대로."""
+    """`OAUTH_CLIENTS_JSON` 에서 클라이언트 하나를 추가하거나(entry) 제거한다(None). 나머지는 유지."""
     try:
         clients = json.loads(existing_json or "{}")
         if not isinstance(clients, dict):

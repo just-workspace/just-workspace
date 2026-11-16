@@ -1,14 +1,14 @@
-"""오프라인 업데이트의 준비물 — 묶음 파일과 추가로 필요한 이미지. 계약은 docs/update-api.md 6절.
+"""오프라인 업데이트의 준비물 — 오프라인 번들과 추가로 필요한 이미지. 계약은 docs/update-api.md 6절.
 
-흐름: 묶음을 올리거나 서버의 경로를 지정 → 검증(묶음 서명 → manifest → 파일별 해시, `jwrelease.bundle.verify_bundle`)
-→ 버전 판정(현재보다 높고 한 번에 갈 수 있어야 한다) → 묶음에 들어 있지 않은 남의 이미지 목록 → 그 이미지 파일을
-올리면 `docker load` 하고 맞는 이미지인지 본다 → 전부 갖춰지면 적용(`UpdateManager.apply_offline`).
+흐름: 번들을 업로드하거나 서버의 경로를 지정 → 검증(번들 서명 → manifest → 파일별 해시, `jwrelease.bundle.verify_bundle`)
+→ 버전 판정(현재보다 높고 한 번에 전환 가능해야 한다) → 번들에 포함되지 않은 외부 이미지(third-party) 목록 → 해당 이미지 파일을
+업로드하면 `docker load` 후 일치 여부를 확인한다 → 전부 준비되면 적용(`UpdateManager.apply_offline`).
 
-올린 파일은 상태 폴더의 `update/offline/` 에 둔다. 경로로 지정한 묶음은 복사하지 않고 그 자리에서 읽는다.
+업로드된 파일은 상태 폴더의 `update/offline/` 에 저장한다. 경로로 지정한 번들은 복사하지 않고 해당 위치에서 읽는다.
 
-이미지 파일의 대조: `docker load` 는 레지스트리 다이제스트를 되살리지 못할 수 있다. 그래서 받는 명령이 이미지를
-`저장소:jw-<다이제스트 앞 12자>` 로 이름 붙여 저장하게 하고, 들여온 뒤 그 이름(또는 다이제스트 참조)이 있는지 본다.
-있어야 할 이름이 생기지 않으면 `hash_mismatch` 다.
+이미지 파일의 대조: `docker load` 는 레지스트리 다이제스트를 복원하지 못할 수 있다. 따라서 수신 명령이 이미지를
+`저장소:jw-<다이제스트 앞 12자>` 로 명명하여 저장하도록 하고, load 후 해당 이름(또는 다이제스트 참조)의 존재 여부를 확인한다.
+필요한 이름이 생성되지 않으면 `hash_mismatch` 이다.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ class OfflineManager:
         if self._thread is not None:
             self._thread.join(timeout)
 
-    # ─── 묶음 ───
+    # ─── 오프라인 번들 ───
 
     def _new_bundle(self, source: str, filename: str, path: str, size: int | None, state: str) -> dict:
         with self._lock:
@@ -88,7 +88,7 @@ class OfflineManager:
             return data
 
     def receive(self, chunks: Iterable[bytes], filename: str, total: int | None) -> None:
-        """올리는 묶음을 파일로 받는다(스트리밍). 다 받으면 검증을 뒤에서 시작한다."""
+        """업로드되는 번들을 파일로 수신한다(스트리밍). 수신 완료 시 검증을 백그라운드에서 시작한다."""
         self._require_idle()
         if total is not None and total > UPLOAD_MAX:
             raise UpdateError(413, "too_large", limit=UPLOAD_MAX)
@@ -102,7 +102,7 @@ class OfflineManager:
         generation = self._generation
         size = self._write_stream(chunks, path, total, generation, lambda p: self._patch_bundle(generation, percent=p))
         if size is None:
-            if generation == self._generation:       # 올리다 끊겼다 — 준비물을 비운다
+            if generation == self._generation:       # 업로드 중단 시 준비물을 초기화한다
                 self.clear()
             return
         self._patch_bundle(generation, size_bytes=size, state="verifying", percent=None)
@@ -145,7 +145,7 @@ class OfflineManager:
             return None
 
     def use_path(self, path_text: str) -> None:
-        """서버에 있는 묶음 파일 — 설치 관리자 컨테이너에서 보이는 경로(설치 폴더 = `/data`)여야 한다."""
+        """서버에 있는 오프라인 번들 — 설치 관리자 컨테이너에서 접근 가능한 경로(설치 폴더 = `/data`)여야 한다."""
         self._require_idle()
         self.clear(keep_images=False)
         path = self._container_path(path_text)
@@ -157,7 +157,7 @@ class OfflineManager:
         self._start_verify(self._generation, path)
 
     def _container_path(self, text: str) -> Path | None:
-        """호스트의 설치 폴더 아래 경로로 적어도 받는다(`$JW_HOST_DIR/…` → `/data/…`). 데이터 폴더 밖이면 None."""
+        """호스트의 설치 폴더 하위 경로 표기도 허용한다(`$JW_HOST_DIR/…` → `/data/…`). 데이터 폴더 밖이면 None."""
         paths = self.updates.paths
         host = paths.host_dir.rstrip("/") + "/"
         candidate = Path(str(paths.data) + "/" + text[len(host):]) if text.startswith(host) else Path(text)
@@ -317,7 +317,7 @@ class OfflineManager:
         if bundle and bundle.get("state") == "verified" and self.updates.active() is None:
             current = self.updates.current()["version"]
             if not rel.semver.parse(current) < rel.semver.parse(bundle["version"]):
-                self.clear()                         # 이미 적용했다 — 준비물을 치운다
+                self.clear()                         # 적용 완료 — 준비물을 삭제한다
                 data, bundle = self._state(), None
         rows = self._rows(data)
         blockers = []

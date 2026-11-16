@@ -1,15 +1,15 @@
-"""설치 뒤의 인증서 — 지금 무엇을 쓰고 있는지 보고, 다시 발급하거나 올린 것으로 바꾼다. 내부 API(`/internal/cert*`)가 부른다.
+"""설치 후의 인증서 — 현재 사용 중인 인증서를 조회하고, 재발급하거나 업로드한 것으로 교체한다. 내부 API(`/internal/cert*`)가 호출한다.
 
-임시(자체 서명) 인증서로 설치한 서버를 신뢰되는 인증서로 바꾸는 길이다.
+임시(자체 서명) 인증서로 설치한 서버를 신뢰 가능한 인증서로 전환하는 경로이다.
 
-    reissue(auto)    Let's Encrypt 에 다시 요청한다(접속 주소가 이 서버를 가리키고 80 이 밖에서 닿아야 한다)
-    reissue(upload)  가진 인증서·개인 키를 올린다(검증은 마법사의 인증서 확인과 같다). 사설 CA 가 내준 인증서면 CA 인증서도 함께
-    set_ca           올린 인증서를 쓰는 설치에 발급 CA 인증서만 더하거나 걷어 낸다(인증서·키는 그대로)
+    reissue(auto)    Let's Encrypt 에 재요청한다(접속 주소가 이 서버를 가리키고 80 이 외부에서 접근 가능해야 한다)
+    reissue(upload)  보유한 인증서·개인 키를 업로드한다(검증은 설치 마법사의 인증서 확인과 동일). 사설 CA 발급 인증서이면 CA 인증서도 함께 업로드한다
+    set_ca           업로드한 인증서를 사용하는 설치에 발급 CA 인증서만 추가하거나 제거한다(인증서·키는 유지)
 
-성공하면 nginx 와 회의 서버가 새 인증서를 읽게 하고, **인증서 때문에 보류된 구역 연결**(코드 저장소의 로그인 연동)을
-다시 시도한다. 실패하면 답변·설정을 되돌리고 쓰던 인증서를 다시 놓는다.
+성공 시 nginx 와 회의 서버가 새 인증서를 다시 읽도록 하고, **인증서 문제로 보류된 구역 연결**(코드 저장소의 로그인 연동)을
+재시도한다. 실패 시 응답·설정을 롤백하고 기존 인증서를 복원한다.
 
-작업은 구역 작업과 같은 자리(`jobs.json`)에 남는다: `{"kind": "cert", "zone": null, "stages": issue → reload → reconnect}`.
+작업은 구역 작업과 동일한 위치(`jobs.json`)에 기록된다: `{"kind": "cert", "zone": null, "stages": issue → reload → reconnect}`.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ MAX_CERT, MAX_KEY = 200_000, 50_000
 
 
 def describe(cert_pem: str | None, now: dt.datetime | None = None) -> dict:
-    """인증서 한 장의 요약 — 만료일·남은 날·발급자·이름·자체 서명 여부. 읽지 못하면 빈 값."""
+    """인증서 1건의 요약 — 만료일·잔여 일수·발급자·이름·자체 서명 여부. 읽기 실패 시 빈 값."""
     empty = {"not_after": None, "days_left": None, "issuer": None, "names": [], "self_signed": False}
     if not cert_pem:
         return empty
@@ -46,7 +46,7 @@ def describe(cert_pem: str | None, now: dt.datetime | None = None) -> dict:
         now = now or dt.datetime.now(dt.timezone.utc)
         return {"not_after": not_after.strftime("%Y-%m-%dT%H:%M:%SZ"), "days_left": (not_after - now).days,
                 "issuer": issuer, "names": certs._names(cert), "self_signed": certs.is_self_signed(cert_pem)}
-    except Exception:  # noqa: BLE001 — 깨진 파일이어도 상태 조회는 답한다
+    except Exception:  # noqa: BLE001 — 손상된 파일이어도 상태 조회에는 응답한다
         return empty
 
 
@@ -69,7 +69,7 @@ class CertManager:
         return {
             "managed": plan.tls,
             "mode": mode,
-            # 임시 = 브라우저가 믿지 않는 인증서로 접속을 받고 있다(프록시가 맡는 설치는 해당 없음)
+            # 임시 = 브라우저가 신뢰하지 않는 인증서로 접속을 수신 중(프록시가 담당하는 설치는 해당 없음)
             "temporary": plan.tls and (mode == "temporary" or info["self_signed"]),
             "domain": plan.domain,
             "names": info["names"] or plan.cert_names,
@@ -78,9 +78,9 @@ class CertManager:
             "days_left": info["days_left"],
             "issuer": info["issuer"],
             "self_signed": info["self_signed"],
-            # 이 서버의 컨테이너(코드 저장소·backend)가 믿게 한 발급 CA 가 있는가 — 올린 인증서에 체인이 함께 왔거나 CA 를 따로 올렸다
+            # 이 서버의 컨테이너(코드 저장소·backend)가 신뢰하도록 설정된 발급 CA 의 존재 여부 — 업로드한 인증서에 체인이 동반되었거나 CA 를 별도 업로드한 경우
             "site_ca": bool(plan.tls and mode == "upload" and self.store.facts().site_ca),
-            # 발급 CA 를 따로 올릴 수 있는 설치인가(올린 인증서를 쓰고, 그것이 자체 서명이 아니다)
+            # 발급 CA 를 별도 업로드할 수 있는 설치인지 여부(업로드한 인증서를 사용하며, 그것이 자체 서명이 아닌 경우)
             "ca_uploadable": bool(plan.tls and mode == "upload" and not info["self_signed"]),
             "pending": sorted(zones.pending(self.store)),
             "job": running,
@@ -118,9 +118,9 @@ class CertManager:
         return self.zones._start("cert", None, STAGES, self._run, old, new, cert, key, ca)
 
     def set_ca(self, body: dict) -> dict:
-        """올린 인증서를 쓰는 설치에 발급 CA 인증서만 더한다(빈 값이면 따로 올린 것을 걷어 낸다) — 인증서·키는 그대로.
+        """업로드한 인증서를 사용하는 설치에 발급 CA 인증서만 추가한다(빈 값이면 별도 업로드한 것을 제거한다) — 인증서·키는 유지.
 
-        서버 인증서 한 장만 올려 코드 저장소의 로그인 연동이 보류로 남았을 때, 인증서를 다시 올리지 않고 CA 만 알려 주는 길이다.
+        서버 인증서 1건만 업로드하여 코드 저장소의 로그인 연동이 보류된 경우, 인증서를 재업로드하지 않고 CA 만 지정하는 경로이다.
         """
         if not self.store.locked:
             raise ZoneRequestError(409, "not_installed")
@@ -152,7 +152,7 @@ class CertManager:
     def _run_ca(self, job: dict, answers: ans.Answers, current: str, ca: str) -> None:
         zm = self.zones
         before = self._ca_file().read_text(encoding="utf-8") if self._ca_file().exists() else ""
-        if answers.access.ca_path:                       # 답변 파일로 준 경로보다 방금 올린 것이 우선한다
+        if answers.access.ca_path:                       # 응답 파일로 지정한 경로보다 방금 업로드한 것이 우선
             data = answers.model_dump(mode="json")
             data["access"]["ca_path"] = None
             self.store.save_answers(ans.load(data))
@@ -184,16 +184,16 @@ class CertManager:
         zm._stage(job, "reload", "running")
         active = ctx.active_services()
         if "certbot" in active:
-            ctx.up(["certbot"])                       # 자동 발급으로 바뀌었으면 갱신 컨테이너가 필요하다
+            ctx.up(["certbot"])                       # 자동 발급으로 전환된 경우 갱신 컨테이너 필요
         ctx.docker.run(["restart", "ws-nginx"], timeout=120)
         ctx.wait_ready("ws-nginx", 120)
         if ctx.plan.turn and ctx.docker.container_status("ws-livekit")["running"]:
             ctx.docker.run(["restart", "ws-livekit"], timeout=120)
         if "gitea" in active and ctx.docker.container_status("ws-gitea")["running"]:
-            # 믿게 할 발급 CA 가 생기거나 사라졌으면 여기서 컨테이너가 다시 만들어진다(바뀐 것이 없으면 그대로다)
+            # 신뢰 대상 발급 CA 가 추가 또는 제거된 경우 여기서 컨테이너가 재생성된다(변경이 없으면 유지)
             ctx.up(["gitea"])
             ctx.wait_ready("ws-gitea")
-        ctx.up(["backend"])                           # `.env` 의 인증서에 딸린 값이나 믿게 할 CA 가 바뀌었으면 다시 만들어진다
+        ctx.up(["backend"])                           # `.env` 의 인증서 관련 값 또는 신뢰 대상 CA 가 변경된 경우 재생성
         ctx.wait_ready("ws-backend")
         zm._stage(job, "reload", "done")
 
@@ -231,17 +231,17 @@ class CertManager:
             if not r.ok:
                 raise eng.StepError("compose_invalid", "see_log", detail=r.err[-300:])
             if mode == "upload" and old.access.cert == "auto":
-                # 자동 발급으로 받은 폴더가 그 자리에 있다 — 올린 인증서는 검증을 통과했으니 치우고 놓는다
+                # 자동 발급으로 받은 폴더가 해당 위치에 존재한다 — 업로드한 인증서는 검증을 통과했으므로 삭제 후 배치한다
                 ctx.docker.helper(["drop-cert", "--name", ctx.plan.cert_dir], volumes=volumes, timeout=60)
             eng.step_cert(ctx)
             zm._stage(job, "issue", "done")
 
         error = zm._guard(issue, job, ctx)
         if error is not None:
-            # 되돌린다 — 답변·감지값·설정 파일, 그리고 쓰던 인증서(자동 발급을 시도하며 임시 인증서의 링크를 뗐을 수 있다)
+            # 롤백 — 응답·감지값·설정 파일 및 기존 인증서(자동 발급 시도 중 임시 인증서의 링크가 제거되었을 수 있음)
             self.store.save_answers(old)
             if cert is not None:
-                self._put_ca(old_ca)                      # 쓰던 CA 인증서도 되돌린다(아래 step_cert 가 다시 읽는다)
+                self._put_ca(old_ca)                      # 기존 CA 인증서도 롤백(아래 step_cert 가 다시 읽음)
             self.store.update_facts(cert_issue_failed=old_facts.cert_issue_failed, upload_cert_ok=old_facts.upload_cert_ok)
             if old.access.cert == "temporary":
                 self.store.update_facts(cert_issue_failed=True)

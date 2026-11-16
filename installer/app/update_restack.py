@@ -1,8 +1,8 @@
-"""스택 파일을 이 이미지의 번들로 다시 쓴다 — `python -m app.update_restack`.
+"""스택 파일을 본 이미지의 번들로 재작성한다 — `python -m app.update_restack`.
 
-업데이트의 `switch` 단계가 **새 버전의 설치 관리자 이미지**로 일회용 컨테이너를 띄워 이 명령을 돌린다. 그래서
-compose·nginx 템플릿·구역 선언(번들)과 그것을 `.env`·설정 파일로 바꾸는 코드가 모두 새 버전의 것이다.
-답변·비밀값·감지값은 상태 폴더의 것을 그대로 쓴다(새로 만들지 않는다). 컨테이너는 건드리지 않는다.
+업데이트의 `switch` 단계가 **새 버전의 설치 관리자 이미지**로 일회용 컨테이너를 기동하여 본 명령을 실행한다. 따라서
+compose·nginx 템플릿·구역 선언(번들)과 이를 `.env`·설정 파일로 변환하는 코드가 모두 새 버전의 것이다.
+답변·비밀값·감지값은 상태 폴더의 것을 그대로 사용한다(신규 생성하지 않는다). 컨테이너는 변경하지 않는다.
 
     docker run --rm -v <설치 폴더>:/data -e JW_HOST_DIR=<설치 폴더> -e JW_REGISTRY=… -e JW_IMAGE_TAG=<버전> \
         --entrypoint python <새 설치 관리자 이미지> -m app.update_restack
@@ -27,7 +27,7 @@ def restack(paths: paths_mod.Paths, registry: str, image_tag: str | None) -> dic
     store = Store(paths)
     answers, facts = store.load_answers(), store.facts()
     secrets = dict(store.env_secrets())
-    # 이 컨테이너에는 사용자가 설치 관리자에 준 환경변수가 없다 — 소스 주소는 기억해 둔 값(없으면 지금 `.env` 의 값)을 이어 쓴다
+    # 본 컨테이너에는 사용자가 설치 관리자에 지정한 환경변수가 없다 — 소스 주소는 저장된 값(없으면 현재 `.env` 의 값)을 승계한다
     render.settle_source_url(store, facts, paths.stack)
     plan = render.derive(answers, facts, catalog)
     if plan.mail_builtin:

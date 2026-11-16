@@ -1,12 +1,12 @@
 """설치 토큰과 세션.
 
-- 토큰: 영문 대문자·숫자 12자리(헷갈리는 0/O/1/I 제외), 24시간 뒤 만료.
-- 주소의 `?token=` 이나 `POST /api/session` 으로 확인하면 세션 쿠키를 준다(HttpOnly·Secure).
-- 틀린 것과 만료된 것을 구분해 알려 준다. 5번 틀리면 30초 동안 받지 않는다(무차별 대입 완화).
-- `jw token` 으로 다시 발급하면 옛 토큰은 못 쓴다. 입력해 둔 답과 이미 열린 세션은 그대로다.
-- 설치가 끝나면 토큰과 세션을 모두 없앤다.
+- 토큰: 영문 대문자·숫자 12자리(혼동되는 0/O/1/I 제외), 24시간 후 만료.
+- 주소의 `?token=` 또는 `POST /api/session` 으로 검증되면 세션 쿠키를 발급한다(HttpOnly·Secure).
+- 불일치와 만료를 구분하여 응답한다. 5회 불일치 시 30초간 거부한다(무차별 대입 완화).
+- `jw token` 으로 재발급하면 기존 토큰은 무효가 된다. 입력된 답변과 이미 열린 세션은 유지된다.
+- 설치 완료 시 토큰과 세션을 모두 삭제한다.
 
-토큰은 상태 폴더(root 만 읽는다)에 그대로 둔다 — 재시작 뒤 로그에 다시 보여 줘야 한다.
+토큰은 상태 폴더(root 만 읽기 가능)에 그대로 저장한다 — 재시작 후 로그에 재출력해야 하기 때문이다.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Callable
 
 from app.state import Store
 
-ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"      # 0·O·1·I 없음
+ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"      # 0·O·1·I 제외
 TOKEN_LENGTH = 12
 TOKEN_TTL = 24 * 3600
 MAX_FAILURES = 5
@@ -32,7 +32,7 @@ def generate() -> str:
 
 
 def normalize(candidate: str) -> str:
-    """사람이 옮겨 적은 꼴을 받아 준다 — 소문자, 사이의 공백·줄표."""
+    """사람이 옮겨 적은 형식을 허용한다 — 소문자, 중간의 공백·줄표."""
     return "".join(ch for ch in (candidate or "").upper() if ch not in " -\t")
 
 
@@ -47,7 +47,7 @@ class TokenStore:
         return self.store.read("token.json", {}) or {}
 
     def issue(self) -> str:
-        """새 토큰을 만든다(옛 토큰은 무효). 실패 횟수도 지운다."""
+        """새 토큰을 생성한다(기존 토큰은 무효). 실패 횟수도 초기화한다."""
         token = generate()
         now = self.clock()
         self.store.write("token.json", {"token": token, "created": now, "expires": now + TOKEN_TTL,
@@ -55,7 +55,7 @@ class TokenStore:
         return token
 
     def current(self) -> str | None:
-        """아직 쓸 수 있는 토큰(없거나 만료면 None)."""
+        """유효한 토큰(없거나 만료 시 None)."""
         data = self._data()
         if data.get("token") and self.clock() < data.get("expires", 0):
             return data["token"]
@@ -68,7 +68,7 @@ class TokenStore:
         return self._data().get("expires")
 
     def check(self, candidate: str) -> tuple[str, int]:
-        """(`ok` | `wrong` | `expired` | `locked` | `none`, 다시 시도까지 남은 초)."""
+        """(`ok` | `wrong` | `expired` | `locked` | `none`, 재시도까지 남은 초)."""
         data = self._data()
         now = self.clock()
         if not data.get("token"):
@@ -115,6 +115,6 @@ class TokenStore:
         return False
 
     def revoke_all(self) -> None:
-        """설치가 끝났을 때 — 토큰도 세션도 더는 쓸 수 없다."""
+        """설치 완료 시 — 토큰과 세션 모두 사용 불가."""
         self.store.delete("token.json")
         self.store.delete("sessions.json")

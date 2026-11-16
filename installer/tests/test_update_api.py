@@ -1,4 +1,4 @@
-"""업데이트 내부 API — 응답이 계약 문서(docs/update-api.md)의 예시와 같은 모양인지, 오프라인 준비물, 접근 제어."""
+"""업데이트 내부 API — 응답이 계약 문서(docs/update-api.md)의 예시와 동일한 형식인지, 오프라인 준비물, 접근 제어."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ DOC = "docs/update-api.md"
 
 @pytest.fixture(scope="module")
 def examples(update_api_examples) -> list[dict]:
-    """계약 문서의 JSON 예시(객체인 것) — 문서는 세션에 한 번만 읽는다(tests/conftest.py 의 repo_doc)."""
+    """계약 문서의 JSON 예시(객체인 것) — 문서는 세션당 한 번만 읽는다(tests/conftest.py 의 repo_doc)."""
     return update_api_examples
 
 
@@ -42,7 +42,7 @@ def same_keys(actual: dict, expected: dict, *, ignore: tuple[str, ...] = ()) -> 
     assert set(actual) - set(ignore) == set(expected) - set(ignore) - {"…"}
 
 
-# ─── 계약의 모양 ───
+# ─── 계약의 형식 ───
 
 
 def test_status_settings_and_job_match_the_contract(host, examples):
@@ -137,7 +137,7 @@ def test_restore_points_apps_releases_and_maintenance_match_the_contract(host, e
 
     live = client.get("/internal/update/maintenance")
     doc = example(examples, "phase", "countdown_ends_at")
-    same_keys(live.json(), doc)                       # 버전·단계·오류·사용자 이름이 실릴 자리가 없다
+    same_keys(live.json(), doc)                       # 버전·단계·오류·사용자 이름이 포함될 필드가 없다
     assert live.headers["cache-control"] == "no-store" and live.json()["phase"] == "countdown"
     assert client.put("/internal/update/maintenance/contact", json={"contact": "내선 1234"}).json() == {"contact": "내선 1234"}
     assert client.put("/internal/update/maintenance/contact", json={"contact": "x" * 201}).status_code == 422
@@ -185,7 +185,7 @@ def test_offline_bundle_by_path_extra_images_and_apply(host, examples):
     same_keys(empty, doc)
     assert empty["bundle"] is None and empty["blockers"] == ["bundle_missing"] and empty["accept"] == ".tar"
 
-    # 호스트의 설치 폴더 기준 경로로 적어도 받는다
+    # 호스트의 설치 폴더 기준 경로로 지정해도 수용한다
     r = client.post("/internal/update/offline/bundle-path", json={"path": f"/opt/just-workspace/{bundle.name}"})
     assert r.status_code == 202
     view = r.json()
@@ -196,7 +196,7 @@ def test_offline_bundle_by_path_extra_images_and_apply(host, examples):
     same_keys(rows["postgres"], doc["images"][0])
     assert rows["postgres"]["reason"] == "always" and rows["postgres"]["zone"] is None and rows["postgres"]["state"] == "missing"
     assert rows["onlyoffice"]["reason"] == "zone" and rows["onlyoffice"]["zone"]["id"] == "docs"
-    assert rows["gitea"]["state"] == "not_needed" and rows["gitea"]["zone_enabled"] is False     # 꺼진 구역의 것
+    assert rows["gitea"]["state"] == "not_needed" and rows["gitea"]["zone_enabled"] is False     # 비활성 구역의 항목
     ref = THIRD["core"]["postgres"]
     assert rows["postgres"]["command"] == (f"docker pull {ref} && docker tag {ref} {tag_of(mgr, 'postgres')} && "
                                            f"docker save {tag_of(mgr, 'postgres')} -o postgres.tar")
@@ -204,7 +204,7 @@ def test_offline_bundle_by_path_extra_images_and_apply(host, examples):
     r = client.post("/internal/update/offline/apply", json={"start": "now"})
     assert r.status_code == 409 and r.json() == {"code": "offline_incomplete", "vars": {"blockers": ["images_missing"]}}
 
-    # 이미지 파일 올리기 — 엉뚱한 파일은 불일치, 맞는 파일은 있음
+    # 이미지 파일 업로드 — 무관한 파일은 불일치, 올바른 파일은 있음
     r = client.post("/internal/update/offline/images/postgres", content=b"tag something:else")
     assert r.status_code == 202
     view = client.get("/internal/update/offline").json()
@@ -213,18 +213,18 @@ def test_offline_bundle_by_path_extra_images_and_apply(host, examples):
     assert client.post("/internal/update/offline/images/nope", content=b"x").json()["code"] == "image_unknown"
     for name in ("postgres", "redis", "onlyoffice"):
         client.post(f"/internal/update/offline/images/{name}", content=f"tag {tag_of(mgr, name)}".encode())
-    host.images[THIRD["core"]["nginx"]] = "sha256:already"            # 다이제스트로 이미 있는 것
+    host.images[THIRD["core"]["nginx"]] = "sha256:already"            # 다이제스트 기준으로 이미 존재하는 것
     view = client.get("/internal/update/offline").json()
     assert {i["id"]: i["state"] for i in view["images"]} == {"postgres": "present", "redis": "present", "nginx": "present",
                                                            "onlyoffice": "present", "gitea": "not_needed"}
     assert view["ready"] is True and view["blockers"] == []
-    assert not list((mgr.dir / "offline").glob("image-*.tar"))        # 들여온 파일은 지운다
+    assert not list((mgr.dir / "offline").glob("image-*.tar"))        # 반입 완료한 파일은 삭제한다
 
     with pytest.raises(Killed):
         api_update.offline(host.svc).apply("now", {"id": "u1", "name": "관리자"})
     job = mgr.active()
     assert job["trigger"] == "offline" and job["path"] == ["1.0.1"]
-    assert host.runner.find("pull") == []                              # 받지 않는다 — 묶음에서 들인다
+    assert host.runner.find("pull") == []                              # pull 하지 않는다 — 오프라인 번들에서 반입한다
     assert len(host.runner.find("load", "-i")) >= 3 + len(("backend", "frontend-react", "mailserver", "installer"))
     assert "localhost/just-workspace-backend:1.0.1" in host.images
     pins = (host.paths.stack / "docker-compose.pins.yml").read_text(encoding="utf-8")
@@ -233,8 +233,8 @@ def test_offline_bundle_by_path_extra_images_and_apply(host, examples):
     mgr, job_id = run_to_end(host, mgr, lambda m: m.active())
     assert mgr.job_raw(job_id)["status"] == "done" and mgr.current()["version"] == "1.0.1" and host.schema == 2
     assert mgr.history()["items"][0]["trigger"] == "offline"
-    assert internal_client(host).get("/internal/update/offline").json()["bundle"] is None     # 적용한 준비물은 치운다
-    assert bundle.exists()                                             # 경로로 지정한 파일은 건드리지 않는다
+    assert internal_client(host).get("/internal/update/offline").json()["bundle"] is None     # 적용 완료한 준비물은 삭제한다
+    assert bundle.exists()                                             # 경로로 지정한 파일은 변경하지 않는다
 
 
 def test_offline_upload_is_streamed_to_disk_and_verified(host):
@@ -278,7 +278,7 @@ def test_offline_bundle_rejections(host, tmp_path, case, state, code):
         path = host.releases.bundle(data, "1.0.1")
         raw = bytearray(path.read_bytes())
         at = raw.index(b"image backend 1.0.1")
-        raw[at:at + 5] = b"IMAGE"                       # 서명은 맞지만 파일 해시가 어긋난다
+        raw[at:at + 5] = b"IMAGE"                       # 서명은 유효하나 파일 해시가 불일치한다
         path.write_bytes(bytes(raw))
     elif case == "not_a_bundle":
         path = data / "x.tar"
@@ -288,7 +288,7 @@ def test_offline_bundle_rejections(host, tmp_path, case, state, code):
     elif case == "missing":
         path = data / "nope.tar"
     else:
-        path = tmp_path / "outside.tar"                 # 설치 관리자에게 보이는 폴더 밖
+        path = tmp_path / "outside.tar"                 # 설치 관리자가 접근 가능한 폴더 외부
         path.write_bytes(b"x")
     off.use_path(str(path))
     view = off.view()
@@ -339,22 +339,22 @@ def test_filename_header():
     assert clean_filename(None, "bundle.tar") == "bundle.tar" and clean_filename("%00", "x") == "x"
 
 
-# ─── 문서를 읽는 방식 ───
+# ─── 문서 읽기 방식 ───
 
 
 def test_contract_doc_is_read_once_and_failures_say_what_is_missing(examples, monkeypatch, tmp_path):
     from tests import conftest
 
-    # 같은 문서는 다시 읽지 않는다 — 도는 동안 문서가 바뀌어도 한 실행 안의 테스트는 같은 글을 본다
+    # 동일 문서는 다시 읽지 않는다. 실행 중 문서가 변경되어도 한 실행 내의 테스트는 동일한 내용을 참조한다
     before = conftest.repo_doc.cache_info().misses
     assert conftest.repo_doc(DOC) is conftest.repo_doc(DOC) and conftest.repo_doc.cache_info().misses == before
     assert "\r" not in conftest.repo_doc(DOC)
-    # 없는 문서·예시가 없는 문서·없는 항목은 이유를 말하고 멈춘다
+    # 존재하지 않는 문서·예시가 없는 문서·존재하지 않는 항목은 사유를 알리고 중단한다
     with pytest.raises(pytest.fail.Exception, match="docs/no-such-doc.md 를 읽지 못했다.*리포 전체가 있어야"):
         conftest.repo_doc("docs/no-such-doc.md")
     (tmp_path / "plain.md").write_bytes("﻿# 제목\r\n예시 없음\r\n".encode("utf-8"))
     monkeypatch.setattr(conftest, "REPO_ROOT", tmp_path)
-    assert conftest.repo_doc("plain.md") == "# 제목\n예시 없음\n"                 # BOM·CRLF 는 걷어 낸다
+    assert conftest.repo_doc("plain.md") == "# 제목\n예시 없음\n"                 # BOM·CRLF 는 제거한다
     with pytest.raises(pytest.fail.Exception, match="JSON 예시.*하나도 찾지 못했다"):
         conftest.doc_json_examples("plain.md")
     with pytest.raises(pytest.fail.Exception, match=r"\['no_such_field'\] 항목이 모두 든 JSON 예시가 없다"):

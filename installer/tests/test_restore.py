@@ -1,4 +1,4 @@
-"""백업에서 복원 — 설정 병합 규칙, 버전 판정, 백업 받기(올리기·경로·암호), 단계, 실패·재시도, 무인 경로."""
+"""백업에서 복원 — 설정 병합 규칙, 버전 판정, 백업 수신(업로드·경로·암호), 단계, 실패·재시도, 무인 경로."""
 
 import json
 
@@ -56,7 +56,7 @@ def env_text(env: dict) -> str:
 
 
 class Backup:
-    """가짜 backend CLI — inspect·verify·extract-config·restore 의 답을 정한다."""
+    """모의 backend CLI — inspect·verify·extract-config·restore 의 응답을 지정한다."""
 
     def __init__(self, host: Host, *, summary: dict | None = None, env: dict | None = None, password: str | None = None):
         self.host, self.summary, self.env, self.password = host, dict(summary or SUMMARY), dict(env or OLD_ENV), password
@@ -120,17 +120,17 @@ def test_parse_env_reads_installer_and_hand_written_files():
 
 def test_merge_carries_keys_overrides_address_and_makes_new(bundle, catalog):
     carried = rc.carried_secrets(OLD_ENV, bundle)
-    # 가져오는 것: 암호화 키·DB 비밀번호·구역 키·설치 id·코드 저장소 토큰
+    # 이전하는 항목: 암호화 키·DB 비밀번호·구역 키·설치 id·코드 저장소 토큰
     assert carried["SECRET_KEY"] == OLD_KEY and carried["DB_PASSWORD"] == SECRETS["DB_PASSWORD"]
     assert carried["JW_INSTALL_ID"] == BACKUP_ID and carried["GITEA_TOKEN"] == "b" * 40
-    # 새로 만드는 것: 설치 관리자 내부 키는 가져오지 않는다
+    # 신규 생성 항목: 설치 관리자 내부 키는 이전하지 않는다
     assert "JW_INSTALLER_KEY" not in carried
 
     target = {"domain": "new.example.com", "network": "direct", "cert": "temporary", "storage": {"kind": "local"}}
     answers, secrets = rc.answers_from_backup(OLD_ENV, SUMMARY, target, catalog, bundle)
     assert answers.mode == "restore" and answers.access.domain == "new.example.com"
     assert answers.zones == ["mail", "chat", "calendar", "docs", "git"] and answers.preset is None
-    assert answers.mail.kind == "builtin" and answers.mail.mail_domain == "example.com"       # 메일 도메인은 백업 것
+    assert answers.mail.kind == "builtin" and answers.mail.mail_domain == "example.com"       # 메일 도메인은 백업의 값 사용
     assert answers.git.version == "1.24.0" and answers.advanced.subnet == "172.30.5.0/24"
     assert answers.admin.username == "root" and answers.admin.password is None and secrets == {}
     assert answers.access.acme_email == "ops@example.com"
@@ -140,20 +140,20 @@ def test_merge_carries_keys_overrides_address_and_makes_new(bundle, catalog):
     managed = {k for _, pairs in render.env_sections(answers, {}, facts, plan, version="", registry="", gitea_image="")
                for k, _ in pairs}
     extra = rc.extra_env(OLD_ENV, managed, bundle)
-    # 그대로 옮기는 것: 이어 쓰는 값과 설치 관리자가 다루지 않는 변수. 원래 서버에 딸린 값·비밀·관리 변수는 빠진다
+    # 그대로 이전하는 항목: 계속 사용하는 값과 설치 관리자가 관리하지 않는 변수. 원래 서버에 종속된 값·비밀값·관리 변수는 제외된다
     assert extra == {"APP_NAME": "Acme Workspace", "DOMAIN": "example.com", "ADMIN_EMAILS": "root@example.com",
                      "BRAND_COLOR": "#123456", "OAUTH_DYNAMIC_CLIENTS_MAX": "5"}
 
     files = render.render(answers, {**carried, "JW_INSTALLER_KEY": "n" * 48, render.EXTRA_ENV_KEY: extra}, facts, bundle)
     env = envfile.parse(files[".env"])
-    assert env["SECRET_KEY"] == OLD_KEY and env["JW_INSTALL_ID"] == BACKUP_ID          # 가져온 것
+    assert env["SECRET_KEY"] == OLD_KEY and env["JW_INSTALL_ID"] == BACKUP_ID          # 이전한 항목
     assert env["APP_NAME"] == "Acme Workspace" and env["BRAND_COLOR"] == "#123456"
     assert env["DOMAIN"] == "example.com" and env["ADMIN_EMAILS"] == "root@example.com"
-    assert env["APP_URL"] == "https://new.example.com" and env["GIT_SSH_DOMAIN"] == "new.example.com"   # 덮은 것
+    assert env["APP_URL"] == "https://new.example.com" and env["GIT_SSH_DOMAIN"] == "new.example.com"   # 덮어쓴 항목
     assert env["GITEA_EXTERNAL_URL"] == "https://new.example.com/git/" and env["JW_NET_PREFIX"] == "172.30.5"
     assert env["BACKEND_WORKERS"] == "4" and env["HAIRPIN_HOST"] == "new.example.com" and env["MCP_PUBLIC_URL"] == ""
-    assert env["JW_INSTALLER_KEY"] == "n" * 48 and "GPU_HOST_IP" not in env             # 새로 만든 것 · 옮기지 않는 것
-    assert "certbot" not in env["COMPOSE_PROFILES"]                                    # 임시 인증서 — 새 답변에서 나온다
+    assert env["JW_INSTALLER_KEY"] == "n" * 48 and "GPU_HOST_IP" not in env             # 신규 생성 항목 · 이전하지 않는 항목
+    assert "certbot" not in env["COMPOSE_PROFILES"]                                    # 임시 인증서 — 새 응답(answers)에서 결정된다
 
 
 def test_answers_from_backup_external_mail_proxy_and_ip(bundle, catalog):
@@ -169,7 +169,7 @@ def test_answers_from_backup_external_mail_proxy_and_ip(bundle, catalog):
     assert answers.zones == ["mail", "chat", "meetings"] and answers.meetings.lossless_audio and not answers.meetings.turn
     assert answers.git.version == "verified"
     ip, _ = rc.answers_from_backup(env, summary, {"domain": "192.168.10.50", "network": "direct"}, catalog, bundle)
-    assert ip.meetings.turn is False                      # 주소가 IP 면 중계를 끈다
+    assert ip.meetings.turn is False                      # 주소가 IP 이면 중계를 비활성화한다
     assert rc.turn_enabled("port: 7880\nturn:\n  enabled: true\n  domain: turn.x\n") is True
     assert rc.turn_enabled("turn:\n  enabled: false\n") is False and rc.turn_enabled(None) is None
 
@@ -177,7 +177,7 @@ def test_answers_from_backup_external_mail_proxy_and_ip(bundle, catalog):
 def test_restore_mode_does_not_ask_for_admin(catalog):
     facts = ans.Facts(memory_mb=16384, dns_status="match")
     a = ans.load({"mode": "restore", "access": {"domain": "ws.example.com"}, "zones": ["chat", "meetings"]})
-    assert ans.validate(a, catalog, facts) == []          # 관리자·회의의 공인 주소를 묻지 않는다
+    assert ans.validate(a, catalog, facts) == []          # 관리자·회의의 공인 주소를 요구하지 않는다
     a = ans.load({"mode": "restore", "access": {"domain": "ws.example.com"}, "zones": [],
                   "restore": {"path": "relative/x", "password_file": "/etc/pw"}})
     codes = {(e.field, e.code) for e in ans.validate(a, catalog, facts)}
@@ -200,7 +200,7 @@ def test_version_verdict(summary, expected):
     assert (got["status"], got["reason"]) == expected
 
 
-# ─── 백업 받기 ───
+# ─── 백업 수신 ───
 
 
 def wizard(tmp_path, **kw):
@@ -224,7 +224,7 @@ def test_upload_is_streamed_checked_and_reviewed(tmp_path):
         ("ok", "ready", "ws-backup.jwbak", len(body), "upload")
     saved = svc.paths.state / "restore" / "upload" / "backup.jwbak"
     assert saved.read_bytes() == body and not saved.with_name("backup.jwbak.part").exists()
-    # 백업은 backend 이미지의 일회용 컨테이너에 읽기 전용으로 붙여서 읽는다(호스트 경로)
+    # 백업은 backend 이미지의 일회용 컨테이너에 읽기 전용으로 마운트하여 읽는다(호스트 경로)
     inspect = host.runner.find("app.cli", "backup", "inspect")[0]
     assert "type=bind,source=/opt/just-workspace/state/restore/upload/backup.jwbak,target=/restore-src,readonly" in inspect
     assert inspect[inspect.index("--network") + 1] == "none" and "localhost/just-workspace-backend:1.0.0" in inspect
@@ -257,7 +257,7 @@ def test_rejected_backups(tmp_path):
     backup.summary["config_included"] = True
     assert up()["status"] == "ok"
 
-    # 서버 경로 — 없는 파일, 틀린 경로
+    # 서버 경로 — 존재하지 않는 파일, 잘못된 경로
     backup.inspect = Result(125, "", "docker: Error response from daemon: invalid mount config for type \"bind\": "
                                      "bind source path does not exist: /srv/none.jwbak")
     r = client.post("/api/restore/path", json={"path": "/srv/none.jwbak"}).json()
@@ -278,9 +278,9 @@ def test_password_protected_backup(tmp_path):
     assert not (svc.paths.state / "restore" / "password").exists()
     assert client.post("/api/restore/password", json={"password": "a\nb"}).status_code == 422
     r = client.post("/api/restore/password", json={"password": "open sesame"}).json()
-    assert r["status"] == "ok" and len(host.runner.find("app.cli", "backup", "verify")) == verified   # 해시는 다시 세지 않는다
+    assert r["status"] == "ok" and len(host.runner.find("app.cli", "backup", "verify")) == verified   # 해시는 재계산하지 않는다
     extract = host.runner.find("app.cli", "backup", "extract-config")[-1]
-    assert "--password-file" in extract and "open sesame" not in " ".join(extract)       # 암호는 인자에 싣지 않는다
+    assert "--password-file" in extract and "open sesame" not in " ".join(extract)       # 암호는 인자에 포함하지 않는다
     assert client.post("/api/restore/password", json={"password": "x"}).status_code == 409
 
 
@@ -314,7 +314,7 @@ def test_newer_backup_and_short_memory_block(tmp_path):
     assert ("zones", "memory_insufficient") in {(e["field"], e["code"]) for e in r.json()["vars"]["errors"]}
 
 
-# ─── 저장소: NFS 였던 백업 ───
+# ─── 저장소: NFS 기반 백업 ───
 
 NFS_SUMMARY = {**SUMMARY, "storage": {"kind": "nfs", "server": "nas.example.com", "export": "/volume1/ws"},
                "files_included": False, "files_bytes": None,
@@ -334,14 +334,14 @@ def test_nfs_backup_locks_local_and_checks_marker(tmp_path):
         r = client.post("/api/restore/apply", json=target)
         return {(e["field"], e["code"]) for e in r.json()["vars"]["errors"]} if r.status_code == 422 else r.status_code
 
-    # 로컬은 고를 수 없다
+    # 로컬은 선택 불가
     assert errors({"domain": "old.example.com", "storage": {"kind": "local"}}) == {("storage.kind", "storage_must_be_nfs")}
-    # 다른 공유(표식 없음) · 다른 설치의 공유
+    # 다른 공유(저장소 마커 없음) · 다른 설치의 공유
     assert errors(NFS_TARGET) == {("storage", "storage_marker_missing")}
     backup.marker = {"status": "found", "install_id": "ffffffff-0000-0000-0000-000000000000"}
     assert errors(NFS_TARGET) == {("storage", "storage_other_install")}
 
-    # 화면의 연결 확인(다섯 항목)에도 표식 대조가 붙는다
+    # 화면의 연결 확인(다섯 항목)에도 저장소 마커 대조가 포함된다
     host.runner.on("app.helper", "nfs-test", out=json.dumps({"write": None, "lock": None, "free_bytes": 50 * 1024 ** 3}) + "\n")
     import app.probes as probes_mod
     real = probes_mod.tcp_reachable
@@ -361,7 +361,7 @@ def test_nfs_backup_locks_local_and_checks_marker(tmp_path):
     svc.engine._thread.join(30)
     state = svc.engine.status()
     assert state["status"] == "done", state["error"]
-    assert [s["id"] for s in state["steps"]] == ["unpack", "storage", "pull", "database", "cert", "zones"]   # 파일 되돌리기 없음
+    assert [s["id"] for s in state["steps"]] == ["unpack", "storage", "pull", "database", "cert", "zones"]   # 파일 복원 없음
     assert state["restore"] == {"files": "nfs", "storage_kind": "nfs", "cert": "auto", "domain_changed": False}
     assert host.volumes["ws-storage-data"]["Options"]["device"] == ":/volume1/ws"
     marker = host.runner.find("app.helper", "write-marker")[-1]
@@ -397,7 +397,7 @@ def test_restore_to_new_address_with_files(tmp_path):
     assert state["restore"] == {"files": "restored", "storage_kind": "local", "cert": "temporary", "domain_changed": True}
 
     env = env_of(host)
-    assert env["SECRET_KEY"] == OLD_KEY                                    # 암호화 키는 바뀌지 않는다
+    assert env["SECRET_KEY"] == OLD_KEY                                    # 암호화 키는 변경되지 않는다
     assert env["JW_INSTALL_ID"] == BACKUP_ID != new_installer_id and svc.store.install()["install_id"] == BACKUP_ID
     assert env["APP_URL"] == "https://new.example.com" and env["DOMAIN"] == "example.com"
     assert env["APP_NAME"] == "Acme Workspace" and env["BRAND_COLOR"] == "#123456" and "GPU_HOST_IP" not in env
@@ -408,7 +408,7 @@ def test_restore_to_new_address_with_files(tmp_path):
     r = host.runner
     call = r.find("compose", "run", "backend", "app.cli", "restore")[0]
     assert call[call.index("-v") + 1] == "/srv/backups/ws.jwbak:/restore-src:ro" and call[call.index("--user") + 1] == "0"
-    # 주소가 바뀌었으니 인증서는 되돌리지 않는다. 설정은 병합해서 따로 쓰고, 파일은 파일 단계가 맡는다
+    # 주소가 변경되었으므로 인증서는 복원하지 않는다. 설정은 병합하여 별도로 기록하며, 파일은 파일 단계가 담당한다
     assert call[call.index("--items") + 1] == "db,mail,gitea,plugins-data" and "--with-config" not in call
     created = r.find("compose", "up", "--no-start")[0]
     assert created[-2:] == ["mailserver", "gitea"]
@@ -421,12 +421,12 @@ def test_restore_to_new_address_with_files(tmp_path):
     assert "type=bind,source=/srv/backups/ws.jwbak,target=/restore-src,readonly" in files and "ws-storage-data:/storage" in files
     assert files[files.index("--member") + 1] == "files.tar" and "--user" not in files[:files.index("sha256:selfimage")]
     assert r.index("app.helper", "restore-files") < len(r.calls) and r.find("app.helper", "write-marker")
-    # 코드 저장소의 로그인 원본은 새 주소로 고쳐 쓴다
+    # 코드 저장소의 로그인 원본은 새 주소로 갱신한다
     update = r.find("exec", "ws-gitea", "auth", "update-oauth")[0]
     assert update[update.index("--id") + 1] == "1"
     assert update[update.index("--auto-discover-url") + 1] == "https://new.example.com/oauth/.well-known/openid-configuration"
     assert not r.find("exec", "ws-backend", "seed-admin") and not r.find("exec", "ws-backend", "configure")
-    # 잠금 · 뒷정리
+    # 잠금 · 정리
     assert svc.store.locked and not (svc.paths.state / "restore" / "config").exists()
     assert svc.store.read("restore.json")["summary"]["install_id"] == BACKUP_ID
     logs = "".join(p.read_text(encoding="utf-8") for p in host.paths.logs.glob("*.log"))
@@ -443,7 +443,7 @@ def test_same_address_keeps_certs_and_local_without_files_warns_nothing(tmp_path
     assert "files" not in [s["id"] for s in state["steps"]]
     assert state["restore"]["files"] == "not_included" and state["restore"]["domain_changed"] is False
     call = host.runner.find("compose", "run", "backend", "app.cli", "restore")[0]
-    assert call[call.index("--items") + 1] == "db,mail,gitea,plugins-data,certs"     # 주소가 같고 자동 발급 — 인증서도 되돌린다
+    assert call[call.index("--items") + 1] == "db,mail,gitea,plugins-data,certs"     # 주소가 동일하고 자동 발급 — 인증서도 복원한다
     assert host.runner.find("compose", "up", "--no-start")[0][-3:] == ["mailserver", "gitea", "nginx"]
 
 
@@ -463,7 +463,7 @@ def test_data_restore_failure_then_retry(tmp_path):
     svc.engine._thread.join(60)
     state = svc.engine.status()
     assert state["status"] == "done", state["error"]
-    assert len(host.runner.find("pull")) == pulls                           # 끝난 단계(이미지 받기)는 다시 돌지 않는다
+    assert len(host.runner.find("pull")) == pulls                           # 완료된 단계(이미지 pull)는 재실행되지 않는다
     assert len(host.runner.find("compose", "run", "backend", "app.cli", "restore")) == 2 and svc.store.locked
 
 
@@ -480,12 +480,12 @@ def test_plan_steps_follow_backup_and_target(tmp_path, catalog):
     local = {"domain": "new.example.com", "storage": {"kind": "local"}}
     assert steps(local) == ["unpack", "pull", "database", "files", "cert", "zones"]
     assert steps({**local, "storage": {"kind": "nfs", "server": "nas.example.com", "export": "/v"}}) == \
-        ["unpack", "storage", "pull", "database", "files", "cert", "zones"]          # 로컬 백업을 NFS 로 옮긴다
+        ["unpack", "storage", "pull", "database", "files", "cert", "zones"]          # 로컬 백업을 NFS 로 이전한다
     backup.summary.update(files_included=False)
     mgr.use_path("/srv/ws.jwbak")
     assert steps(local) == ["unpack", "pull", "database", "cert", "zones"]
     proxy = steps({**local, "network": "proxy", "proxy_addresses": ["192.168.10.5"]})
-    assert proxy == ["unpack", "pull", "database", "cert", "zones"]                   # 메일의 인증서 자리는 프록시 뒤에서도 필요하다
+    assert proxy == ["unpack", "pull", "database", "cert", "zones"]                   # 메일의 인증서 위치는 프록시 뒤에서도 필요하다
 
 
 def test_restored_dkim_key_is_kept(tmp_path):
@@ -527,7 +527,7 @@ def test_unattended_restore(tmp_path, monkeypatch, capsys):
     assert cli.main(["apply", "--answers", str(path)]) == 0
     assert "설치가 끝났습니다" in capsys.readouterr().out and svc.store.locked
     assert env_of(host)["SECRET_KEY"] == OLD_KEY and env_of(host)["APP_URL"] == "https://new.example.com"
-    assert cli.main(["apply", "--answers", str(path)]) == 1                                    # 이미 끝난 설치
+    assert cli.main(["apply", "--answers", str(path)]) == 1                                    # 이미 완료된 설치
 
 
 def test_unattended_restore_reports_problems(tmp_path, monkeypatch, capsys):
@@ -554,7 +554,7 @@ def test_unattended_restore_reports_problems(tmp_path, monkeypatch, capsys):
     assert code == 1 and "storage_must_be_nfs" in out
 
 
-# ─── 보조 명령(표식 읽기 · 파일 되돌리기) ───
+# ─── 보조 명령(저장소 마커 조회 · 파일 복원) ───
 
 
 def test_helper_read_marker_and_restore_files(tmp_path, capsys):
@@ -571,7 +571,7 @@ def test_helper_read_marker_and_restore_files(tmp_path, capsys):
     helper.main(["read-marker", str(storage)])
     assert json.loads(capsys.readouterr().out) == {"status": "found", "install_id": BACKUP_ID}
 
-    # 백업(tar) 안의 files.tar 를 저장소에 푼다 — 있던 것은 비우고 백업 시점 그대로
+    # 백업(tar) 내부의 files.tar 를 저장소에 푼다 — 기존 내용은 삭제하고 백업 시점 상태로 복원한다
     inner = io.BytesIO()
     with tarfile.open(fileobj=inner, mode="w") as t:
         for name, data in (("./.jw-storage", b'{"install_id": "x"}'), ("./users/1/a.txt", b"hello"), ("./users/1/b.bin", b"\x00" * 10)):
@@ -589,7 +589,7 @@ def test_helper_read_marker_and_restore_files(tmp_path, capsys):
     out = json.loads(capsys.readouterr().out)
     assert out["status"] == "restored" and out["bytes"] == 15 + len(b'{"install_id": "x"}')
     assert (storage / "users" / "1" / "a.txt").read_bytes() == b"hello" and not (storage / "stale.txt").exists()
-    # 폴더 꼴 백업
+    # 폴더 형식 백업
     folder = tmp_path / "dir-backup"
     folder.mkdir()
     (folder / "files.tar").write_bytes(inner.getvalue())

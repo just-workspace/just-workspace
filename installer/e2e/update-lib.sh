@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# 업데이트 검수 — 공용 함수. lib.sh 다음에 source 한다. **검수 전용 서버 안에서** 돈다.
+# 업데이트 검수 — 공용 함수. lib.sh 다음에 source 한다. **검수 전용 서버 내부에서** 실행된다.
 #
-# 실제 레지스트리·채널 대신 서버 안에 가짜 릴리스 환경을 만든다.
+# 실제 레지스트리·채널 대신 서버 내부에 모의 릴리스 환경을 생성한다.
 #   - 레지스트리: registry:2 컨테이너, 루프백(127.0.0.1:5000)에만 게시
-#   - 채널: 정적 파일 서버(nginx), 도커 브리지 주소(기본 172.17.0.1:8089)에만 게시 — 설치 관리자 컨테이너가 받는다
-#   - 서명 키: 이 서버의 작업 폴더에서 만든 임시 키 쌍. 서버 밖으로 내보내지 않고 리포에 넣지 않는다.
-# 릴리스는 release/jwrelease 명령(make-manifest · publish · promote · bundle)으로 진짜 형식대로 만든다.
+#   - 채널: 정적 파일 서버(nginx), 도커 브리지 주소(기본 172.17.0.1:8089)에만 게시 — 설치 관리자 컨테이너가 접근한다
+#   - 서명 키: 본 서버의 작업 폴더에서 생성한 임시 키 쌍. 서버 외부로 반출하지 않으며 리포에 포함하지 않는다.
+# 릴리스는 release/jwrelease 명령(make-manifest · publish · promote · bundle)으로 실제 형식에 따라 생성한다.
 #
 # 환경변수(선택): E2E_REG(기본 127.0.0.1:5000/jw) · E2E_CHANNEL_ADDR(기본 172.17.0.1:8089)
 
@@ -15,15 +15,15 @@ CHANNEL_URL="http://$CHANNEL_ADDR"
 REL="$E2E_WORK/release"                 # keys/ channel/ manifests/ src-<버전>/
 OUR_IMAGES=(backend frontend-react mailserver sso ldap audiorelay docconv sandbox rbi-netfilter)
 UPD=/api/admin/system/update
-# 가짜 릴리스 환경에서 처음 설치하는 버전. 리포의 VERSION(지금 개발 중인 버전)과 무관하다 — 이 환경의 릴리스 번호(1.0.0, 1.0.1 …)는
-# 검수 스크립트가 정한 것이고, 리포의 VERSION 이 그보다 낮거나 높아도 같은 결과가 나와야 한다.
+# 모의 릴리스 환경에서 최초 설치하는 버전. 리포의 VERSION(현재 개발 중인 버전)과 무관하다. 본 환경의 릴리스 번호(1.0.0, 1.0.1 …)는
+# 검수 스크립트가 정한 값이며, 리포의 VERSION 이 그보다 낮거나 높아도 동일한 결과가 나와야 한다.
 BASE_VERSION=1.0.0
-TOOL_IMAGE="${E2E_TOOL_IMAGE:-just-workspace-installer:$E2E_VERSION}"     # python + cryptography 가 든 이미지
-# 리포의 DB 스키마 버전(S0)과, 검수용 변경 단계를 하나(S1)·둘(S2) 더한 버전
+TOOL_IMAGE="${E2E_TOOL_IMAGE:-just-workspace-installer:$E2E_VERSION}"     # python + cryptography 를 포함한 이미지
+# 리포의 DB 스키마 버전(S0)과, 검수용 변경 단계를 하나(S1)·둘(S2) 추가한 버전
 S0="$(sed -n 's/^SCHEMA_VERSION = \([0-9][0-9]*\).*/\1/p' "$E2E_REPO/backend/app/db/schema_version.py")"
 S1=$((S0 + 1)); S2=$((S0 + 2))
 
-# ─── 가짜 릴리스 환경 ───
+# ─── 모의 릴리스 환경 ───
 
 rel_env_up() {
   mkdir -p "$REL/keys" "$REL/channel" "$REL/manifests"
@@ -48,7 +48,7 @@ rel_env_up() {
 
 rel_env_down() { docker rm -f jw-e2e-registry jw-e2e-channel >/dev/null 2>&1; }
 
-# 릴리스 도구 — 리포의 release/ 를 붙인 일회용 컨테이너에서 돈다(서버에 파이썬 패키지를 깔지 않는다)
+# 릴리스 도구 — 리포의 release/ 를 마운트한 일회용 컨테이너에서 실행한다(서버에 파이썬 패키지를 설치하지 않는다)
 jwrelease() {
   docker run --rm --network host --user "$(id -u):$(id -g)" -v "$E2E_REPO:/src:ro" -v "$REL:/work" -w /src/release \
     -e JWRELEASE_REGISTRY="$REG" -e JWRELEASE_CHANNEL_BASE_URL="$CHANNEL_URL" \
@@ -56,16 +56,16 @@ jwrelease() {
     --entrypoint python "$TOOL_IMAGE" -m jwrelease "$@"
 }
 
-# rel_build <버전> <변형>  — 그 버전의 이미지를 만들어 레지스트리에 올리고 digests.json 을 쓴다.
-#   변형: base(스키마 그대로) · plus1(리포의 단계 뒤에 검수용 변경 단계 하나) · plus2(둘) · broken2(둘째가 일부러 깨진다)
-# backend 와 설치 관리자만 새로 빌드한다(VERSION 과, 검수용 스키마 변경 단계 — 리포에는 없는 패치). 나머지는 같은 이미지에 태그만.
+# rel_build <버전> <변형>  — 해당 버전의 이미지를 빌드해 레지스트리에 게시하고 digests.json 을 기록한다.
+#   변형: base(스키마 동일) · plus1(리포의 단계 뒤에 검수용 변경 단계 하나) · plus2(둘) · broken2(둘째 단계가 의도적으로 실패한다)
+# backend 와 설치 관리자만 새로 빌드한다(VERSION 과, 검수용 스키마 변경 단계 — 리포에는 없는 패치). 나머지는 동일 이미지에 태그만 부여한다.
 rel_build() {
   local ver="$1" variant="${2:-base}" src="$REL/src-$1" n log="$REL/build-$1.log"
   rm -rf "$src"; mkdir -p "$src"
   (cd "$E2E_REPO" && tar -cf - --exclude=./frontend-react/node_modules .) | tar -xf - -C "$src"
   printf '%s\n' "$ver" > "$src/VERSION"
   if [ -n "${E2E_REDIS_REF:-}" ]; then
-    # 이 버전의 compose 에서 캐시(redis) 이미지를 바꾼다 — "남의 이미지가 올라간 릴리스"
+    # 본 버전의 compose 에서 캐시(redis) 이미지를 교체한다 — "외부 이미지(third-party)가 갱신된 릴리스"
     sed -i -E "s#^(    image: )redis:[^ ]+@sha256:[0-9a-f]{64}#\\1$E2E_REDIS_REF#" "$src/docker-compose.yml"
     grep -q "image: $E2E_REDIS_REF" "$src/docker-compose.yml" || { echo "redis 이미지를 바꾸지 못했다"; return 1; }
   fi
@@ -80,7 +80,7 @@ if steps:
     s, n = re.subn(r"(?m)^SCHEMA_VERSION = \d+", f"SCHEMA_VERSION = {base + steps}", s)
     assert n == 1
     open(p, "w", encoding="utf-8").write(s)
-    # 리포의 단계 목록 뒤에 검수용 단계를 잇는다(번호는 리포의 버전 다음부터).
+    # 리포의 단계 목록 뒤에 검수용 단계를 추가한다(번호는 리포의 버전 다음부터).
     first, second = base + 1, base + 2
     if variant == "broken2":
         second_sql = "SELECT * FROM e2e_no_such_table"
@@ -117,9 +117,9 @@ PY
   local base
   for n in "${OUR_IMAGES[@]}"; do
     [ "$n" = backend ] && continue
-    # 태그만 붙인다. 바탕은 — 처음 버전을 낼 때는 소스에서 빌드해 둔 이미지(`localhost/…:<리포의 VERSION>`), 그 뒤로는
-    # 레지스트리에 올려 둔 처음 버전. 서버의 `localhost/…` 태그는 업데이트가 치우므로(어느 복원 지점도 가리키지 않는
-    # 버전의 태그 — 소스에서 빌드해 둔 것도, 켜지 않은 구역의 것도) 처음 버전을 낸 뒤에는 거기에 기대지 않는다.
+    # 태그만 부여한다. 기준 이미지는 최초 버전 게시 시에는 소스에서 빌드해 둔 이미지(`localhost/…:<리포의 VERSION>`), 그 이후에는
+    # 레지스트리에 게시해 둔 최초 버전이다. 서버의 `localhost/…` 태그는 업데이트가 정리하므로(어느 복원 지점도 가리키지 않는
+    # 버전의 태그 — 소스에서 빌드해 둔 것과 활성화하지 않은 구역의 것 포함) 최초 버전 게시 이후에는 해당 태그에 의존하지 않는다.
     base="localhost/just-workspace-$n:$E2E_VERSION"
     if [ "$ver" != "$BASE_VERSION" ]; then
       base="$REG/just-workspace-$n:$BASE_VERSION"
@@ -128,7 +128,7 @@ PY
     docker image inspect "$base" >/dev/null 2>&1 || { echo "바탕 이미지가 없다: $base — build-images.sh 로 먼저 빌드한다" >&2; return 1; }
     [ "$base" = "$REG/just-workspace-$n:$ver" ] || docker tag "$base" "$REG/just-workspace-$n:$ver" || return 1
   done
-  docker tag alpine:latest "$REG/just-workspace-rbi-mirror:$ver"       # 검수 서버에서는 빌드하지 않는 이미지 — 자리만
+  docker tag alpine:latest "$REG/just-workspace-rbi-mirror:$ver"       # 검수 서버에서는 빌드하지 않는 이미지 — 자리 표시용
   {
     printf '{"format":1,"version":"%s","registry":"%s","commit":"e2e","images":{' "$ver" "$REG"
     local first=1 digest
@@ -146,8 +146,8 @@ PY
   echo "$variant" > "$REL/variant-$ver"
 }
 
-# rel_local <버전> — 그 버전의 릴리스 이미지를 이 서버의 이미지 이름으로도 붙인다(소스에서 빌드해 둔 서버에 설치하는 꼴:
-# 우리 이미지는 `localhost/just-workspace-<이름>:<버전>`, 설치 관리자는 `just-workspace-installer:<버전>`).
+# rel_local <버전> — 해당 버전의 릴리스 이미지에 본 서버의 이미지 이름도 부여한다(소스에서 빌드해 둔 서버에 설치하는 형태:
+# 자체 빌드 이미지는 `localhost/just-workspace-<이름>:<버전>`, 설치 관리자는 `just-workspace-installer:<버전>`).
 rel_local() {
   local ver="$1" n
   for n in "${OUR_IMAGES[@]}"; do
@@ -156,7 +156,7 @@ rel_local() {
   docker tag "$REG/just-workspace-installer:$ver" "just-workspace-installer:$ver"
 }
 
-# rel_manifest <버전> <스키마 버전> [make-manifest 에 더할 인자…]
+# rel_manifest <버전> <스키마 버전> [make-manifest 에 추가할 인자…]
 rel_manifest() {
   local ver="$1" schema="$2"; shift 2
   jwrelease make-manifest --version "$ver" --digests "/work/digests-$ver.json" --db-schema "$schema" \
@@ -168,7 +168,7 @@ rel_publish() { local ver="$1" channel="$2"; shift 2; jwrelease publish --repo /
 rel_promote() { local ver="$1"; shift; jwrelease promote --repo /work/channel --version "$ver" --key /work/keys/release.pem "$@"; }
 rel_verify()  { jwrelease verify --repo /work/channel --pubkey /work/keys/release.pub; }
 
-# 레지스트리에서 이미지 하나를 지운다(없는 다이제스트 만들기) / 다시 올린다
+# 레지스트리에서 이미지 하나를 삭제한다(존재하지 않는 다이제스트 생성) / 다시 게시한다
 reg_delete() {
   local name="$1" ver="$2" digest
   digest="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["images"][sys.argv[2]]["digest"])' "$REL/digests-$ver.json" "$name")"
@@ -194,7 +194,7 @@ reg_restore() {
   rm -f "$REL/keep-$name-$built.tar"
 }
 
-# compose 에 고정한 것과 다른 redis 이미지 하나를 받아 `redis:<태그>@sha256:…` 로 돌려준다(오프라인 검수의 "추가 이미지")
+# compose 에 고정한 것과 다른 redis 이미지 하나를 pull 하여 `redis:<태그>@sha256:…` 형식으로 반환한다(오프라인 검수의 "추가 이미지")
 other_redis() {
   local pinned running tag digest
   pinned="$(grep -oE 'redis:[^ ]+@sha256:[0-9a-f]{64}' "$E2E_REPO/docker-compose.yml" | head -1)"
@@ -209,11 +209,11 @@ other_redis() {
 
 # ─── 업데이트 API ───
 
-# 관리 화면이 쓰는 길(backend 의 대신 부르기) — 관리자 쿠키
+# 관리 화면이 사용하는 경로(backend 의 대리 호출) — 관리자 쿠키
 upd()      { ws_api "$1" "$UPD$2" "${3:-}"; }
 upd_code() { ws_api_code "$1" "$UPD$2" "${3:-}"; }
 
-# 설치 관리자의 내부 API 를 호스트에서 직접(backend 가 내려가 있을 때도 된다) — 내부망의 설치 관리자 주소 + 공유 키
+# 설치 관리자의 내부 API 를 호스트에서 직접 호출한다(backend 중지 상태에서도 가능) — 내부망의 설치 관리자 주소 + 공유 키
 iapi() {
   local method="$1" path="$2" body="${3:-}" ip
   ip="$(docker inspect --format '{{with index .NetworkSettings.Networks "just-workspace_workspace"}}{{.IPAddress}}{{end}}' "$INSTALLER" 2>/dev/null)"
@@ -227,7 +227,7 @@ ujob_steps() { ujob "$1" '" ".join(s["id"]+"="+s["status"] for s in d["steps"])'
 active_job() { sudo cat "$E2E_HOST_DIR/state/update/active.json" 2>/dev/null | json_get 'd["job"] or ""'; }
 state_file() { sudo cat "$E2E_HOST_DIR/state/update/$1" 2>/dev/null | json_get "$2"; }
 
-# 작업이 끝날 때까지(상태가 done·failed·cancelled 이고 도는 것이 없을 때까지) 기다린다. 되돌림으로 넘어가면 그것까지.
+# 작업 종료까지 대기한다(상태가 done·failed·cancelled 이고 실행 중인 것이 없을 때까지). 롤백으로 전환되면 롤백 종료까지 대기한다.
 wait_ujob() {
   local id="$1" limit="${2:-1500}" waited=0 st rb
   [ -n "$id" ] && [ "${id#\{}" = "$id" ] || return 1
@@ -238,7 +238,7 @@ wait_ujob() {
       failed)
         rb="$(ujob "$id" 'd.get("rollback_job") or ""')"
         if [ -z "$rb" ]; then
-          # 선택을 기다리는가(choices), 되돌림 작업 자신이 멈췄는가
+          # 선택 대기 상태인지(choices), 롤백 작업 자체가 정지했는지 확인
           [ -n "$(ujob "$id" '",".join(d["choices"])')" ] && return 0
         else
           case "$(ujob "$rb" 'd["status"]')" in done|failed) return 0 ;; esac
@@ -258,7 +258,7 @@ wait_ustatus() {      # wait_ustatus <작업> <상태> [초]
   return 1
 }
 
-# 확인을 시키고 끝날 때까지 기다린다 → available.state
+# 확인을 요청하고 종료까지 대기한다 → available.state
 check_now() {
   iapi POST /check >/dev/null
   local i
@@ -269,15 +269,15 @@ check_now() {
   iapi GET /status | json_get 'd["available"]["state"]'
 }
 
-# 관리자로 로그인한 /api/health 의 버전·스키마
+# 관리자로 로그인한 상태의 /api/health 버전·스키마
 health_version() { ws_api GET /api/health | json_get 'd.get("version")'; }
 health_schema()  { ws_api GET /api/health | json_get 'd["schema_version"]["current"]'; }
 db_schema()      { docker exec ws-backend python -m app.cli migrate --status --json 2>/dev/null | json_get 'd["current"]'; }
 installer_version() { docker exec "$INSTALLER" python -c "from pathlib import Path;from app.bundle import Bundle;print(Bundle(Path('/app/bundle')).version)" 2>/dev/null; }
 installer_image()   { docker inspect --format '{{.Config.Image}}' "$INSTALLER" 2>/dev/null; }
 
-# ─── 중단 시간 재기 ───
-# /api/health(점검 모드에서도 열려 있다 = backend 가 답하는가)와 화면(/)을 0.5초마다 찔러 기록한다.
+# ─── 중단 시간 측정 ───
+# /api/health(점검 모드에서도 열려 있다 = backend 응답 여부)와 화면(/)을 0.5초 간격으로 요청하여 기록한다.
 
 probe_start() {
   PROBE_LOG="$E2E_WORK/probe-$1.log"
@@ -319,7 +319,7 @@ print(f"일반 API 가 503 이던 구간(점검 모드 포함): 합계 {sum(bloc
 PY
 }
 
-# ─── 데이터 넣기·확인 ───
+# ─── 데이터 입력·확인 ───
 
 seed_data() {
   say "데이터 넣기"
@@ -358,5 +358,5 @@ check_data() {
   contains "[$label] 메일" "From:" "$found"
 }
 
-# 검수용 변경 단계가 만든 표가 있는가 — "t" / "f"
+# 검수용 변경 단계가 생성한 테이블의 존재 여부 — "t" / "f"
 marker_table() { docker exec ws-postgres psql -U workspace -d workspace -Atc "SELECT to_regclass('public.e2e_update_marker') IS NOT NULL" 2>/dev/null; }

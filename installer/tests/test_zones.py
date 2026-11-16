@@ -1,4 +1,4 @@
-"""구역 훅 — 기본 동작, Gitea 훅의 순서와 명령, 설치 뒤 켜고 끄기."""
+"""구역 훅 — 기본 동작, Gitea 훅의 순서와 명령, 설치 후 활성화·비활성화."""
 
 import json
 
@@ -26,7 +26,7 @@ def gitea_host(tmp_path) -> Host:
     r.on("exec", "ws-gitea", "auth", "list", fn=lambda argv, i: host.auth_list)
     r.on("exec", "ws-gitea", "auth", "add-oauth", fn=add_oauth)
     r.on("exec", "ws-gitea", "generate-access-token", out=TOKEN + "\n")
-    host.http.responses["http://gitea:3000/api/v1/user"] = 401      # 아직 토큰이 없다
+    host.http.responses["http://gitea:3000/api/v1/user"] = 401      # 토큰 미발급 상태
     return host
 
 
@@ -52,7 +52,7 @@ def test_install_starts_only_services_of_active_profiles(tmp_path):
     assert svc.engine.run()["status"] == "done"
     r = host.runner
     assert r.find("compose", "up", "mailserver") and r.find("compose", "up", "onlyoffice")
-    # 컨테이너가 없는 구역(채팅·일정)은 아무것도 띄우지 않는다
+    # 컨테이너가 없는 구역(채팅·일정)은 아무것도 기동하지 않는다
     ups = [c[c.index("up"):] for c in r.find("compose", "up")]
     assert not any("chat" in u or "calendar" in u for u in ups)
     zone_rows = svc.engine.status()["steps"][4]["detail"]["zones"]
@@ -89,11 +89,11 @@ def test_gitea_hook_order_and_commands(tmp_path):
     ]
     assert order == sorted(order)
     backend_ups = [i for i, c in enumerate(r.calls) if "up" in c and c[-1] == "backend"]
-    assert backend_ups and backend_ups[-1] > order[-1]                   # 연동 값이 들어간 뒤 backend 를 다시 띄운다
+    assert backend_ups and backend_ups[-1] > order[-1]                   # 연동 값 반영 후 backend 를 재기동한다
 
     ini = r.find("exec", "ws-gitea", "environment-to-ini")[0]
     assert ini[ini.index("--user") + 1] == "git" and "--env-file" in ini
-    assert svc.store.env_secrets()["DB_PASSWORD"] not in " ".join(ini)   # DB 비밀번호는 인자에 없다
+    assert svc.store.env_secrets()["DB_PASSWORD"] not in " ".join(ini)   # DB 비밀번호는 인자에 포함되지 않는다
 
     create = r.find("exec", "ws-gitea", "admin", "user", "create")[0]
     assert "--admin" in create and create[create.index("--username") + 1] == "jw-admin" and "--random-password" in create
@@ -105,7 +105,7 @@ def test_gitea_hook_order_and_commands(tmp_path):
     assert oauth[oauth.index("--provider") + 1] == "openidConnect" and oauth[oauth.index("--key") + 1] == "gitea"
     assert oauth[oauth.index("--auto-discover-url") + 1] == "https://ws.example.com/oauth/.well-known/openid-configuration"
 
-    # backend 설정에 주입 — 토큰, OAuth 클라이언트(리다이렉트 주소는 Gitea 의 콜백과 정확히 같아야 한다)
+    # backend 설정에 주입 — 토큰, OAuth 클라이언트(리다이렉트 주소는 Gitea 의 콜백과 정확히 일치해야 한다)
     env = env_of(host)
     assert env["GITEA_TOKEN"] == TOKEN and env["GITEA_URL"] == "http://gitea:3000"
     client = json.loads(env["OAUTH_CLIENTS_JSON"])["gitea"]
@@ -114,9 +114,9 @@ def test_gitea_hook_order_and_commands(tmp_path):
     assert client["secret"] == oauth[oauth.index("--secret") + 1] and len(client["secret"]) == 48
     assert env["JW_ZONES"] == "core,git" and env["COMPOSE_PROFILES"] == "gitea,certbot"
 
-    # 앞단 경로 확인은 nginx 를 거쳐서
+    # 프런트 경로 확인은 nginx 를 경유한다
     assert ("https://nginx/git/api/healthz", {"Host": "ws.example.com"}) in host.http.calls
-    # 토큰은 로그에 남지 않는다
+    # 토큰은 로그에 기록되지 않는다
     logs = "".join(p.read_text(encoding="utf-8") for p in host.paths.logs.glob("*.log"))
     assert TOKEN not in logs and client["secret"] not in logs
 
@@ -125,7 +125,7 @@ def test_gitea_hook_is_idempotent(tmp_path):
     host = gitea_host(tmp_path)
     svc = host.install(preset=None, zones=["git"], mail={})
     svc.engine.run()
-    host.http.responses["http://gitea:3000/api/v1/user"] = 200           # 넣어 둔 토큰이 살아 있다
+    host.http.responses["http://gitea:3000/api/v1/user"] = 200           # 저장된 토큰이 유효하다
     host.runner.on("exec", "ws-gitea", "admin", "user", "create", rc=1, err="user already exists")
     before = env_of(host)
     svc.store.set_phase("applying")
@@ -171,7 +171,7 @@ def test_gitea_version_choice_reaches_compose_env(tmp_path):
     assert env_of(host)["GITEA_IMAGE"] == "gitea/gitea:1.25.2"
 
 
-# ─── 설치 뒤 켜고 끄기 ───
+# ─── 설치 후 활성화·비활성화 ───
 
 
 def installed(tmp_path, **answers):
@@ -216,7 +216,7 @@ def test_enable_failure_leaves_zone_off(tmp_path):
     assert "git" not in svc.zones.enabled()
     after = env_of(host)
     assert after["JW_ZONES"] == before["JW_ZONES"] and after["COMPOSE_PROFILES"] == before["COMPOSE_PROFILES"]
-    assert after["GITEA_TOKEN"] == "" and "ws-gitea" not in host.running        # 컨테이너도 멈춘다
+    assert after["GITEA_TOKEN"] == "" and "ws-gitea" not in host.running        # 컨테이너도 중지한다
     assert host.runner.find("compose", "stop", "gitea")
 
 
@@ -253,7 +253,7 @@ def test_enable_ai_with_provider_passes_key_on_stdin(tmp_path):
     assert "g-secret-key-123" not in " ".join(host.runner.calls[i])
     payload = json.loads(host.runner.inputs[i])
     assert payload["ai"] == {"kind": "gemini", "model": "", "base_url": "", "api_key": "g-secret-key-123"}
-    assert "ai.api_key" not in svc.store.answer_secrets()          # 넣은 뒤에는 보관하지 않는다
+    assert "ai.api_key" not in svc.store.answer_secrets()          # 주입 후에는 보관하지 않는다
     got = svc.zones.get_settings("ai")
     assert got["enabled"] and got["settings"]["mode"] == "now" and got["settings"]["provider"] == "google"
     assert "api_key" not in got["settings"] and got["settings"]["api_key_set"] is False
@@ -266,7 +266,7 @@ def test_disable_keeps_data_volume(tmp_path):
     assert job["status"] == "done", job["error"]
     assert host.runner.find("exec", "ws-gitea", "auth", "delete", "--id", "1")
     assert host.runner.find("compose", "stop", "gitea") and host.runner.find("compose", "rm", "-f", "gitea")
-    assert not host.runner.find("volume", "rm")                          # 데이터 볼륨은 남긴다
+    assert not host.runner.find("volume", "rm")                          # 데이터 볼륨은 보존한다
     assert not any("-v" in c or "--volumes" in c for c in host.runner.find("compose", "rm"))
     env = env_of(host)
     assert "git" not in env["JW_ZONES"].split(",") and env["GITEA_TOKEN"] == ""

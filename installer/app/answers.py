@@ -1,10 +1,10 @@
-"""답변(Answers) — 마법사 상태이자 답변 파일의 형식.
+"""응답(Answers) — 설치 마법사 상태이자 응답 파일의 형식.
 
-- 구조(타입·고를 수 있는 값)는 pydantic 모델이 지킨다. 모르는 항목은 거부한다(오타를 조용히 넘기지 않는다).
-- 뜻(조합·필수·메모리)은 `validate()` 가 **필드별 오류 목록**으로 돌려준다. 문구는 화면이 가진다 — 여기서는
-  `{"field": "access.cert", "code": "cert_auto_behind_proxy", "vars": {...}}` 처럼 키와 값만 낸다.
-- 비밀번호·API 키(`SECRET_FIELDS`)는 저장할 때 따로 떼어 둔다. 내려받는 답변 파일에는 들어가지 않는다.
-- 꺼진 구역의 항목은 검사하지 않고, 렌더링도 쓰지 않는다.
+- 구조(타입·선택 가능 값)는 pydantic 모델이 검증한다. 미정의 항목은 거부한다(오타를 무시하지 않는다).
+- 의미(조합·필수·메모리)는 `validate()` 가 **필드별 오류 목록**으로 반환한다. 문구는 화면 측이 보유하며, 본 모듈은
+  `{"field": "access.cert", "code": "cert_auto_behind_proxy", "vars": {...}}` 형식으로 키와 값만 출력한다.
+- 비밀번호·API 키(`SECRET_FIELDS`)는 저장 시 분리 보관한다. 다운로드용 응답 파일에는 포함되지 않는다.
+- 비활성화된 구역의 항목은 검증하지 않으며 렌더링에도 사용하지 않는다.
 """
 
 from __future__ import annotations
@@ -23,12 +23,12 @@ ADMIN_PASSWORD_MIN = 12
 QUICK_PRESET = "collab"
 FALLBACK_PRESET = "minimal"
 
-# backend/app/ai/providers.py 의 DEFAULT_BASE 와 같은 목록(화면에서 고르는 순서)
+# backend/app/ai/providers.py 의 DEFAULT_BASE 와 동일 목록(화면의 선택 순서)
 AI_PROVIDERS = ("anthropic", "openai", "gemini", "ollama", "compatible")
-AI_KEYLESS = ("ollama", "compatible")        # 키 없이도 되는 제공자(직접 운영하는 서버)
+AI_KEYLESS = ("ollama", "compatible")        # 키 없이 사용 가능한 제공자(자체 운영 서버)
 AI_NEEDS_BASE_URL = ("compatible",)
 
-# (구역, 항목) — 저장할 때 분리하고 내려받기에서 뺀다
+# (구역, 항목) — 저장 시 분리, 다운로드 시 제외
 SECRET_FIELDS: tuple[tuple[str, str], ...] = (
     ("admin", "password"),
     ("mail", "password"),
@@ -45,16 +45,16 @@ class Access(_Model):
     network: Literal["direct", "router", "proxy"] = "direct"
     proxy_addresses: list[str] = Field(default_factory=list)
     cert: Literal["auto", "upload", "temporary", "proxy"] = "auto"
-    acme_email: str | None = None        # 비우면 admin@<도메인>
-    # 답변 파일로 무인 설치할 때의 인증서 파일(컨테이너 안 /data 아래 경로). 화면에서는 올린 파일을 쓴다.
+    acme_email: str | None = None        # 미지정 시 admin@<도메인>
+    # 응답 파일 기반 무인 설치 시의 인증서 파일(컨테이너 내 /data 하위 경로). 화면에서는 업로드한 파일을 사용한다.
     cert_path: str | None = None
     key_path: str | None = None
-    ca_path: str | None = None            # (선택) 사설 CA 가 내준 인증서일 때 그 CA 인증서 — 인증서 파일에 체인이 없을 때만 필요하다
+    ca_path: str | None = None            # (선택) 사설 CA 발급 인증서인 경우의 해당 CA 인증서 — 인증서 파일에 체인이 없을 때만 필요
 
 
 class Storage(_Model):
     kind: Literal["local", "nfs"] = "local"
-    path: str | None = None              # local: 호스트에 이미 있는 폴더(비우면 도커 볼륨)
+    path: str | None = None              # local: 호스트에 이미 존재하는 폴더(미지정 시 도커 볼륨)
     server: str | None = None            # nfs
     export: str | None = None            # nfs
 
@@ -67,7 +67,7 @@ class Mail(_Model):
     security: Literal["starttls", "ssl", "none"] = "starttls"
     username: str | None = None
     password: str | None = None
-    from_address: str | None = None      # 비우면 username(주소 꼴일 때) 또는 noreply@<도메인>
+    from_address: str | None = None      # 미지정 시 username(주소 형식인 경우) 또는 noreply@<도메인>
 
 
 class Meetings(_Model):
@@ -99,10 +99,10 @@ class Admin(_Model):
 
 
 class Restore(_Model):
-    """`mode: restore` 의 답변 파일에서만 쓴다(화면은 백업을 올리거나 경로를 알려 준다)."""
+    """`mode: restore` 의 응답 파일에서만 사용한다(화면에서는 백업을 업로드하거나 경로를 지정한다)."""
 
-    path: str | None = None              # 서버(호스트)에 있는 백업 파일(.jwbak)·폴더의 절대 경로
-    password_file: str | None = None     # 설정이 암호로 보호된 백업 — 암호가 든 파일(컨테이너 안 /data 아래)
+    path: str | None = None              # 서버(호스트)에 존재하는 백업 파일(.jwbak)·폴더의 절대 경로
+    password_file: str | None = None     # 설정이 암호로 보호된 백업 — 암호가 저장된 파일(컨테이너 내 /data 하위)
 
 
 class Answers(_Model):
@@ -110,8 +110,8 @@ class Answers(_Model):
     mode: Literal["new", "quick", "restore"] = "new"
     access: Access = Field(default_factory=Access)
     storage: Storage = Field(default_factory=Storage)
-    preset: str | None = None            # zones 를 비워 두면 이 묶음을 쓴다
-    zones: list[str] | None = None       # 켤 구역 id
+    preset: str | None = None            # zones 미지정 시 이 프리셋 적용
+    zones: list[str] | None = None       # 활성화할 구역 id
     addons: list[str] = Field(default_factory=list)
     mail: Mail = Field(default_factory=Mail)
     meetings: Meetings = Field(default_factory=Meetings)
@@ -136,7 +136,7 @@ class FieldError:
 
 
 class StructureError(ValueError):
-    """모양이 맞지 않는 답변(타입·모르는 항목·고를 수 없는 값)."""
+    """형식이 맞지 않는 응답(타입·미정의 항목·선택 불가 값)."""
 
     def __init__(self, errors: list[FieldError]):
         super().__init__(", ".join(f"{e.field}: {e.code}" for e in errors))
@@ -144,7 +144,7 @@ class StructureError(ValueError):
 
 
 def load(data: dict) -> Answers:
-    """dict → Answers. 모양이 틀리면 `StructureError`."""
+    """dict → Answers. 형식 불일치 시 `StructureError` 발생."""
     if not isinstance(data, dict):
         raise StructureError([FieldError("", "not_an_object")])
     version = data.get("version", ANSWERS_VERSION)
@@ -163,7 +163,7 @@ def load(data: dict) -> Answers:
 
 
 def merge_patch(current: dict, patch: dict) -> dict:
-    """부분 저장 — 사전은 겹쳐 합치고 나머지는 바꿔 끼운다. `null` 은 그 항목을 기본값으로 돌린다."""
+    """부분 저장 — 사전은 중첩 병합하고 그 외는 교체한다. `null` 은 해당 항목을 기본값으로 복원한다."""
     out = dict(current)
     for key, value in patch.items():
         if isinstance(value, dict) and isinstance(out.get(key), dict):
@@ -179,7 +179,7 @@ def merge_patch(current: dict, patch: dict) -> dict:
 
 
 def split(answers: Answers) -> tuple[dict, dict]:
-    """(비밀을 뺀 답변, 비밀) — 비밀은 `{"admin.password": "…"}` 꼴."""
+    """(비밀을 제외한 응답, 비밀) — 비밀은 `{"admin.password": "…"}` 형식."""
     public = answers.model_dump(mode="json")
     secrets: dict[str, str] = {}
     for section, name in SECRET_FIELDS:
@@ -206,7 +206,7 @@ def secrets_present(secrets: dict) -> dict[str, bool]:
 
 
 def selected_zones(answers: Answers, catalog: Catalog) -> list[str]:
-    """켤 구역과 부가 구역(선언 순서). zones 가 없으면 preset, 그것도 없으면 최소 묶음."""
+    """활성화할 구역과 부가 구역(선언 순서). zones 가 없으면 preset, 그것도 없으면 최소 프리셋."""
     if answers.zones is not None:
         base = list(answers.zones)
     else:
@@ -216,26 +216,26 @@ def selected_zones(answers: Answers, catalog: Catalog) -> list[str]:
 
 @dataclass
 class Facts:
-    """검증·렌더링에 쓰는 감지값. 모르면 None."""
+    """검증·렌더링에 사용하는 감지값. 미확인 시 None."""
 
     memory_mb: int | None = None
     cpus: int | None = None
     public_ip: str | None = None
     dns_status: str | None = None          # match | mismatch | unknown
-    cert_issue_failed: bool = False        # 인증서 자동 발급이 실패한 적이 있다
-    upload_cert_ok: bool = False           # 올린 인증서 파일이 검증을 통과했다
-    site_ca: bool = False                  # 올린 인증서의 발급 CA 를 안다(체인이 함께 왔거나 CA 를 따로 올렸다) — 코드 저장소·backend 가 그것을 믿게 한다
-    source_url: str | None = None          # 화면의 "소스 코드" 링크로 넘길 주소 — 설치 관리자에 준 JW_SOURCE_URL 을 기억해 둔 것(render.settle_source_url)
+    cert_issue_failed: bool = False        # 인증서 자동 발급 실패 이력 존재
+    upload_cert_ok: bool = False           # 업로드한 인증서 파일의 검증 통과
+    site_ca: bool = False                  # 업로드한 인증서의 발급 CA 확인됨(체인 동반 또는 CA 별도 업로드) — 코드 저장소·backend 가 이를 신뢰하도록 설정
+    source_url: str | None = None          # 화면의 "소스 코드" 링크에 전달할 주소 — 설치 관리자에 지정된 JW_SOURCE_URL 의 보존값(render.settle_source_url)
     proxy_lan_ip: str | None = None
-    host_address: str | None = None        # 이 서버가 밖으로 나갈 때 쓰는 주소(사전 점검이 감지)
-    gateway: str | None = None             # 이 서버의 기본 게이트웨이(사전 점검이 감지)
+    host_address: str | None = None        # 이 서버의 아웃바운드 주소(사전 점검에서 감지)
+    gateway: str | None = None             # 이 서버의 기본 게이트웨이(사전 점검에서 감지)
 
     def as_dict(self) -> dict:
         return dict(self.__dict__)
 
 
 def resolve_quick(answers: Answers, catalog: Catalog, facts: Facts) -> tuple[Answers, list[dict]]:
-    """빠른 설치의 기본 묶음을 정한다 — 협업 묶음, 메모리가 모자라면 최소 묶음으로 내리고 사유를 남긴다."""
+    """빠른 설치의 기본 프리셋을 결정한다 — 협업 프리셋, 메모리 부족 시 최소 프리셋으로 하향하고 사유를 기록한다."""
     notes: list[dict] = []
     if answers.mode != "quick" or answers.zones is not None:
         return answers, notes
@@ -251,7 +251,7 @@ def resolve_quick(answers: Answers, catalog: Catalog, facts: Facts) -> tuple[Ans
     return resolved, notes
 
 
-# ─── 뜻 검증 ───
+# ─── 의미 검증 ───
 
 
 def _check(errors: list[FieldError], path: str, fn, value, *, required: bool) -> None:
@@ -266,11 +266,11 @@ def _check(errors: list[FieldError], path: str, fn, value, *, required: bool) ->
 
 
 def validate(answers: Answers, catalog: Catalog, facts: Facts | None = None, *, final: bool = True) -> list[FieldError]:
-    """필드별 오류 목록. `final=False`(부분 저장)면 빈 필수 항목은 넘어가고 적힌 값만 본다."""
+    """필드별 오류 목록. `final=False`(부분 저장)이면 비어 있는 필수 항목은 무시하고 입력된 값만 검증한다."""
     facts = facts or Facts()
     errors: list[FieldError] = []
     need = final
-    # 복원: 구역·메일·관리자는 백업에서 온다 — 관리자 계정은 만들지 않으므로 묻지 않는다
+    # 복원: 구역·메일·관리자는 백업에서 가져온다 — 관리자 계정은 생성하지 않으므로 입력을 요구하지 않는다
     restoring = answers.mode == "restore"
 
     # ── 접속 ──
@@ -340,7 +340,7 @@ def validate(answers: Answers, catalog: Catalog, facts: Facts | None = None, *, 
         elif not verdict.ok:
             errors.append(FieldError("zones", "memory_insufficient", verdict.as_dict()))
 
-    # ── 구역별 항목(켜진 구역만) ──
+    # ── 구역별 항목(활성화된 구역만) ──
     if "mail" in chosen:
         m = answers.mail
         if m.kind == "builtin":
@@ -371,7 +371,7 @@ def validate(answers: Answers, catalog: Catalog, facts: Facts | None = None, *, 
         elif ai.provider not in AI_PROVIDERS:
             errors.append(FieldError("ai.provider", "provider_unknown", {"provider": ai.provider}))
         else:
-            _check(errors, "ai.model", v.model_name, ai.model, required=False)   # 모델은 나중에 관리 화면에서 골라도 된다
+            _check(errors, "ai.model", v.model_name, ai.model, required=False)   # 모델은 이후 관리 화면에서 선택 가능
             _check(errors, "ai.base_url", v.http_url, ai.base_url, required=need and ai.provider in AI_NEEDS_BASE_URL)
             if need and not ai.api_key and ai.provider not in AI_KEYLESS:
                 errors.append(FieldError("ai.api_key", "required"))

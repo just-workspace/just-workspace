@@ -1,4 +1,4 @@
-"""사전 점검과 확인(probe) — docker·DNS·HTTP·SMTP 는 모두 가짜."""
+"""사전 점검과 확인(probe) — docker·DNS·HTTP·SMTP 는 모두 모의 구현."""
 
 import datetime as dt
 import json
@@ -36,10 +36,10 @@ def test_preflight_all_pass(tmp_path, catalog):
         "docker_engine", "docker_compose", "cpu", "memory", "arch", "disk", "time_sync",
         "port_80", "port_443", "port_25", "subnet", "internet", "registry", "selinux"]
     assert report["facts"] == {"memory_mb": 16384, "cpus": 4, "outbound_address": "192.168.10.20", "gateway": "192.168.10.1"}
-    # 그 가운데 facts 로 남기는 것 — 서버의 주소와 게이트웨이는 격리 브라우저의 RBI_PROTECTED 에 쓰인다
+    # 그중 facts 로 보존하는 항목 — 서버 주소와 게이트웨이는 격리 브라우저의 RBI_PROTECTED 에 사용된다
     assert preflight.preflight_facts(report) == {"memory_mb": 16384, "cpus": 4, "host_address": "192.168.10.20", "gateway": "192.168.10.1"}
     assert preflight.preflight_facts({"facts": {"memory_mb": 8, "cpus": None, "outbound_address": None}}) == {"memory_mb": 8}
-    # 호스트 네트워크로 띄운 보조 컨테이너에서 포트를 본다 — 인자는 배열로 나간다
+    # 호스트 네트워크로 기동한 보조 컨테이너에서 포트를 확인한다 — 인자는 배열로 전달된다
     probe = runner.find("app.helper", "host-probe")[0]
     assert probe[:4] == ["run", "--rm", "--network", "host"] and "sha256:selfimage" in probe
 
@@ -48,7 +48,7 @@ def test_preflight_all_pass(tmp_path, catalog):
     ({"ServerVersion": "20.10.24"}, "docker_engine", "docker_too_old"),
     ({"NCPU": 1}, "cpu", "cpu_too_few"),
     ({"MemTotal": 2 * 1024 ** 3}, "memory", "memory_below_minimum"),
-    ({"MemTotal": 5 * 1024 ** 3}, "memory", "memory_insufficient"),      # 협업 묶음은 7GB 권장
+    ({"MemTotal": 5 * 1024 ** 3}, "memory", "memory_insufficient"),      # 협업 프리셋은 7GB 권장
     ({"Architecture": "aarch64"}, "arch", "arch_unsupported"),
 ])
 def test_preflight_failures(tmp_path, catalog, info, item_id, fix):
@@ -74,7 +74,7 @@ def test_preflight_ports(tmp_path, catalog):
     items = by_id(run_preflight(docker, catalog))
     assert items["port_80"]["status"] == "fail" and items["port_80"]["fix"]["vars"] == {"port": 80}
     assert items["port_25"]["status"] == "warn" and items["port_25"]["fix"]["vars"]["needed"] is True
-    # 우리 컨테이너가 쓰는 포트면 통과(다시 적용하는 경우)
+    # 본 프로젝트의 컨테이너가 사용하는 포트이면 통과(재적용하는 경우)
     runner.on("ps", "--format", out="ws-nginx\t0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp\nother\t0.0.0.0:25->25/tcp\n")
     items = by_id(run_preflight(docker, catalog))
     assert items["port_80"] == {"id": "port_80", "status": "pass", "value": "own", "fix": None}
@@ -94,12 +94,12 @@ def test_preflight_subnet_conflicts(tmp_path, catalog):
     healthy_host(runner, networks={"bridge": ["172.17.0.0/16"], "other_default": ["172.28.0.0/16"]})
     item = by_id(run_preflight(docker, catalog))["subnet"]
     assert item["status"] == "fail" and item["fix"]["vars"]["conflicts"][0]["name"] == "other_default"
-    # 우리 네트워크는 충돌이 아니다
+    # 본 프로젝트의 네트워크는 충돌이 아니다
     docker, runner, _ = make_docker(tmp_path / "b")
     healthy_host(runner, networks={"just-workspace_workspace": ["172.28.0.0/24"]},
                  routes=[{"dest": "172.28.0.0/24", "iface": "br-abc"}])
     assert by_id(run_preflight(docker, catalog))["subnet"]["status"] == "pass"
-    # 호스트 경로표와 겹침(사내 대역)
+    # 호스트 라우팅 테이블과 중복(사내 대역)
     docker, runner, _ = make_docker(tmp_path / "c")
     healthy_host(runner, routes=[{"dest": "172.28.0.0/22", "iface": "eth1"}])
     item = by_id(run_preflight(docker, catalog))["subnet"]
@@ -132,11 +132,11 @@ def test_parse_default_gateway():
     head = "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n"
     lan = "eth0\t000AA8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0\n"
     assert helper.parse_default_gateway(head + "eth0\t00000000\t010AA8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0\n" + lan) == "192.168.10.1"
-    # 기본 경로가 둘이면 metric 이 낮은 쪽
+    # 기본 경로가 둘이면 metric 이 낮은 쪽 선택 선택
     two = (head + "wlan0\t00000000\tFE0AA8C0\t0003\t0\t0\t600\t00000000\t0\t0\t0\n"
            + "eth0\t00000000\t010AA8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0\n")
     assert helper.parse_default_gateway(two) == "192.168.10.1"
-    # 기본 경로가 없거나(게이트웨이 표시 없음) 표가 비면 빈 문자열
+    # 기본 경로가 없거나(게이트웨이 표시 없음) 테이블이 비어 있으면 빈 문자열
     assert helper.parse_default_gateway(head + lan) == ""
     assert helper.parse_default_gateway(head + "eth0\t00000000\t00000000\t0001\t0\t0\t0\t00000000\t0\t0\t0\n") == ""
     assert helper.parse_default_gateway("") == "" and helper.parse_default_gateway("garbage\nx y z\n") == ""
@@ -155,16 +155,16 @@ def test_public_ip_needs_agreement():
     f = lambda value: (lambda: value)  # noqa: E731
     assert probes.detect_public_ip([f("203.0.113.10"), f("203.0.113.10")])["ip"] == "203.0.113.10"
     assert probes.detect_public_ip([f("203.0.113.10"), f(None), f("203.0.113.10")])["status"] == "detected"
-    # 한 곳만 답하거나 답이 갈리면 모른다
+    # 한 곳만 응답하거나 응답이 불일치하면 판정 불가
     assert probes.detect_public_ip([f("203.0.113.10"), f(None)])["status"] == "unknown"
     assert probes.detect_public_ip([f("203.0.113.10"), f("198.51.100.7")])["status"] == "unknown"
-    # 사설 주소·쓰레기 답은 버린다
+    # 사설 주소·무효 응답은 폐기한다
     assert probes.detect_public_ip([f("192.168.10.5"), f("192.168.10.5"), f("<html>")])["status"] == "unknown"
 
     def boom():
         raise RuntimeError("down")
     assert probes.detect_public_ip([boom, f("203.0.113.10"), f("203.0.113.10")])["ip"] == "203.0.113.10"
-    # 서버의 나가는 주소가 공인 주소면 묻지 않는다
+    # 서버의 아웃바운드 주소가 공인 주소이면 조회하지 않는다
     got = probes.detect_public_ip([boom], local_address="8.8.4.4")
     assert got["ip"] == "8.8.4.4" and got["source"] == "interface"
     assert probes.detect_public_ip([], local_address="192.168.10.20")["status"] == "unknown"
@@ -308,7 +308,7 @@ def test_probe_ai_requests_and_results():
     url, headers = probes.ai_request("anthropic", "sk-ant-x", None)
     assert url == "https://api.anthropic.com/v1/models" and headers["x-api-key"] == "sk-ant-x"
     url, headers = probes.ai_request("gemini", "g-key", None)
-    assert "g-key" not in url and headers == {"x-goog-api-key": "g-key"}      # 키를 주소에 싣지 않는다
+    assert "g-key" not in url and headers == {"x-goog-api-key": "g-key"}      # 키를 주소에 포함하지 않는다
     url, headers = probes.ai_request("compatible", "", "http://192.168.10.30:8000/")
     assert url == "http://192.168.10.30:8000/v1/models" and headers == {}
     with pytest.raises(v.Invalid):
@@ -349,8 +349,8 @@ def test_probe_nfs_success_and_cleanup(tmp_path):
     assert "type=nfs" in create and "device=:/export/ws" in create
     assert any(a.startswith("o=addr=192.168.10.9,") for a in create)
     test = runner.find("app.helper", "nfs-test")[0]
-    assert test[test.index("--user") + 1] == "1000:1000"          # backend 가 쓰는 사용자로 검사한다
-    assert test[test.index("-v") + 1].endswith(":/mnt:nocopy")    # 확인이 내보내기 뿌리의 소유자를 바꾸지 않게
+    assert test[test.index("--user") + 1] == "1000:1000"          # backend 가 사용하는 사용자로 검사한다
+    assert test[test.index("-v") + 1].endswith(":/mnt:nocopy")    # 확인 과정에서 내보내기 루트의 소유자가 변경되지 않도록 한다
     name = create[-1]
     assert runner.find("volume", "rm", name), "임시 볼륨을 지워야 한다"
     assert runner.index("volume", "create") < runner.index("app.helper", "nfs-test") < runner.index("volume", "rm")
@@ -410,7 +410,7 @@ def test_probe_local_path(tmp_path):
     got = probes.probe_local_path(docker, "/srv/workspace")
     assert got == {"status": "ok", "path": "/srv/workspace", "free_gb": 50.0}
     call = runner.find("app.helper", "path-test")[0]
-    # -v 가 아니라 --mount: 없는 폴더를 만들어 버리지 않는다
+    # -v 대신 --mount 사용: 존재하지 않는 폴더를 생성하지 않는다
     assert "type=bind,source=/srv/workspace,target=/probe" in call and "-v" not in call
 
     runner.on("app.helper", "path-test", rc=125, err="invalid mount config: bind source path does not exist: /srv/none")
@@ -422,7 +422,7 @@ def test_probe_local_path(tmp_path):
         probes.probe_local_path(docker, "/srv/x,readonly")
 
 
-# ─── 보조 명령(컨테이너 안에서 도는 것) ───
+# ─── 보조 명령(컨테이너 내부 실행) ───
 
 
 def test_helper_marker(tmp_path, capsys):
@@ -454,7 +454,7 @@ def test_classify_mount_error():
     assert probes.classify_mount_error("mount.nfs: access denied by server while mounting") == "permission_denied"
     assert probes.classify_mount_error("Connection refused") == "unreachable"
     assert probes.classify_mount_error("No route to host") == "unreachable"
-    # NFSv4 서버는 없는 경로와 이 클라이언트에 허용하지 않은 내보내기를 같은 말로 답한다
+    # NFSv4 서버는 존재하지 않는 경로와 본 클라이언트에 허용되지 않은 내보내기에 대해 동일한 메시지로 응답한다
     assert probes.classify_mount_error(
         "failed to mount local volume: mount :/srv/x:/var/lib/docker/volumes/v/_data, flags: 0x400, "
         "data: addr=192.168.10.9,nfsvers=4.1,hard: no such file or directory") == "export_not_found"

@@ -1,4 +1,4 @@
-# 테스트 — docker 없이 로컬에서: cd installer && python -m pytest -q
+# 테스트 — docker 없이 로컬 실행: cd installer && python -m pytest -q
 -r requirements.txt
 pytest
 pytest-asyncio

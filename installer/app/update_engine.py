@@ -1,27 +1,27 @@
-"""업데이트 엔진 — 채널 확인, 적용, 되돌림, 복원 지점, 기록. 계약은 docs/update-api.md.
+"""업데이트 엔진 — 채널 확인, 적용, 롤백, 복원 지점, 기록. 계약은 docs/update-api.md.
 
-상태는 전부 상태 폴더의 `update/` 아래에 둔다(설치 관리자·backend 가 다시 떠도 이어진다):
+상태는 전부 상태 폴더의 `update/` 아래에 저장한다(설치 관리자·backend 가 재기동되어도 유지된다):
 
 | 파일 | 내용 |
 |---|---|
-| `settings.json` | 방식·시간대·채널, 시험판 이전 백업, 자동 업데이트 멈춤, 연락처 |
-| `check.json` | 마지막 확인의 결과, 채널별 순번, 받을 수 있는 버전 |
-| `current.json` | 지금 버전, 적용한 때, 바로 전 버전 |
-| `manifests/<버전>.json` + `.sig` | 검증을 통과한 manifest(적용할 때 다시 검증한다) |
+| `settings.json` | 방식·시간대·채널, 시험판 이전 백업, 자동 업데이트 일시 중지, 연락처 |
+| `check.json` | 마지막 확인 결과, 채널별 순번, 수신 가능한 버전 |
+| `current.json` | 현재 버전, 적용 시각, 직전 버전 |
+| `manifests/<버전>.json` + `.sig` | 검증을 통과한 manifest(적용 시 재검증한다) |
 | `jobs/<id>.json` · `jobs/<id>.log` | 작업과 그 기록 |
-| `active.json` | 진행 중이거나 선택을 기다리는 작업 |
+| `active.json` | 진행 중이거나 선택 대기 중인 작업 |
 | `history.json` | 기록(365일) |
-| `points.json` · `snapshots/<id>/stack/` | 복원 지점과 그때의 스택 파일 |
-| `bundles/<버전>/` | 새 설치 관리자 이미지에서 꺼낸 번들 |
+| `points.json` · `snapshots/<id>/stack/` | 복원 지점과 해당 시점의 스택 파일 |
+| `bundles/<버전>/` | 새 설치 관리자 이미지에서 추출한 번들 |
 
-적용 단계: preflight → backup → pull → migrate → switch → verify. 되돌림·복원: stop → images → restore_db → start → verify.
+적용 단계: preflight → backup → pull → migrate → switch → verify. 롤백·복원: stop → images → restore_db → start → verify.
 
-**번들과 자기 교체.** 새 버전의 compose·nginx 템플릿·구역 선언은 새 설치 관리자 이미지 안에 있다. `pull` 이 그 이미지를
-먼저 받고, `switch` 가 그 이미지의 일회용 컨테이너로 스택 파일을 다시 쓴 다음(`python -m app.update_restack` — 새 버전의
-렌더링 코드가 쓴다) 컨테이너를 바꾼다. backend 는 맨 마지막이다. 그 뒤 설치 관리자 자신을 바꾼다: 작업 상태를 디스크에
-남기고(`ctx.handoff`), 일회용 보조 컨테이너(`python -m app.update_swap`)가 같은 이름·볼륨·포트·환경으로 새 이미지의
-컨테이너를 띄운다. 새 설치 관리자는 기동할 때 작업을 이어받아 `verify` 를 돈다. 교체가 실패하면 보조 컨테이너가 옛
-컨테이너를 되살리고, 옛 설치 관리자는 그 단계를 실패로 기록한다(→ 자동 되돌림).
+**번들과 자기 교체.** 새 버전의 compose·nginx 템플릿·구역 선언은 새 설치 관리자 이미지에 포함된다. `pull` 이 해당 이미지를
+먼저 수신하고, `switch` 가 해당 이미지의 일회용 컨테이너로 스택 파일을 재작성한 다음(`python -m app.update_restack` — 새 버전의
+렌더링 코드가 기록한다) 컨테이너를 교체한다. backend 는 최후에 교체한다. 이후 설치 관리자 자신을 교체한다: 작업 상태를 디스크에
+기록하고(`ctx.handoff`), 일회용 보조 컨테이너(`python -m app.update_swap`)가 동일한 이름·볼륨·포트·환경으로 새 이미지의
+컨테이너를 기동한다. 새 설치 관리자는 기동 시 작업을 인계받아 `verify` 를 수행한다. 교체 실패 시 보조 컨테이너가 기존
+컨테이너를 복원하고, 기존 설치 관리자는 해당 단계를 실패로 기록한다(→ 자동 롤백).
 """
 
 from __future__ import annotations
@@ -47,14 +47,14 @@ UPDATE_STEPS = ("preflight", "backup", "pull", "migrate", "switch", "verify")
 REVERT_STEPS = ("stop", "images", "restore_db", "start", "verify")
 PRE_MIGRATE = ("preflight", "backup", "pull")
 COUNTDOWN_SECONDS = 300
-KEEP_POINTS = 3                      # 일반 복원 지점(pre-update)은 최근 이만큼만 둔다
+KEEP_POINTS = 3                      # 일반 복원 지점(pre-update)은 최근 이 개수만 유지
 RETENTION_DAYS = 365
-DEFAULT_DOWNTIME = 240               # 지난 업데이트의 실측이 없을 때의 예상 중단 시간(초, 버전 하나)
+DEFAULT_DOWNTIME = 240               # 이전 업데이트의 실측값이 없을 때의 예상 중단 시간(초, 버전 1개 기준)
 CHECK_INTERVAL = 6 * 3600
 CHECK_JITTER = 1800
 HANDOFF_WAIT = 300
-KEEP_RUNNING = ("postgres", "redis", "nginx", "certbot")      # 되돌림의 stop 이 세우지 않는 것
-LAST = ("frontend-react", "nginx", "backend")                # switch 에서 맨 뒤에 바꾸는 것(이 순서)
+KEEP_RUNNING = ("postgres", "redis", "nginx", "certbot")      # 롤백의 stop 단계에서 중지하지 않는 대상
+LAST = ("frontend-react", "nginx", "backend")                # switch 에서 최후에 교체하는 대상(이 순서)
 OUR_PREFIX = "just-workspace-"
 FLAG_REL = "nginx/state/maintenance.on"
 PINS_COMPOSE = "docker-compose.pins.yml"
@@ -65,7 +65,7 @@ DEFAULT_PULL_BYTES = 3 * 1024 ** 3
 
 
 class UpdateError(Exception):
-    """API 오류 — `{code, vars}` 로 나간다."""
+    """API 오류 — `{code, vars}` 로 반환된다."""
 
     def __init__(self, status: int, code: str, /, **vars):
         super().__init__(code)
@@ -87,7 +87,7 @@ def seconds_between(a: str | None, b: str | None) -> int | None:
 
 
 def pull_percent(lines: dict) -> int:
-    """`docker pull` 의 줄(계층 id → 마지막 상태)에서 진행률을 어림한다."""
+    """`docker pull` 출력 줄(계층 id → 마지막 상태)에서 진행률을 추정한다."""
     if not lines:
         return 0
     done = sum(1 for s in lines.values() if s in ("Pull complete", "Already exists"))
@@ -276,7 +276,7 @@ class UpdateManager:
             raise UpdateError(409, "busy", job=None)
 
     def put_settings(self, body: dict) -> tuple[dict, bool]:
-        """(응답, 복원을 시작했는가)."""
+        """(응답, 복원 시작 여부)."""
         self._require_installed()
         s = self.settings_raw()
         errors = []
@@ -328,7 +328,7 @@ class UpdateManager:
         if changes:
             self._save_settings(**changes)
         if effect["channel"] in ("to_beta", "to_stable_wait"):
-            # 채널이 바뀌었다 — 옛 채널의 결과를 지우고 새 채널을 확인한다
+            # 채널 변경 시 기존 채널의 결과를 삭제하고 새 채널을 확인한다
             chk = self.check_raw()
             chk["available"] = {"state": "none"}
             self._write("check.json", chk)
@@ -368,7 +368,7 @@ class UpdateManager:
     # ─── 확인 ───
 
     def check(self, *, wait: bool = False) -> None:
-        """채널을 받아 확인한다(뒤에서). 작업이 도는 중이면 `busy`."""
+        """채널을 수신하여 확인한다(백그라운드). 작업 실행 중이면 `busy`."""
         if self.active() is not None and self.active()["status"] != "countdown":
             raise UpdateError(409, "busy", job=self.active_id())
         with self._lock:
@@ -384,7 +384,7 @@ class UpdateManager:
     def _do_check(self) -> None:
         try:
             self._check_once()
-        except Exception as e:  # noqa: BLE001 — 확인 실패가 서버를 멈추면 안 된다
+        except Exception as e:  # noqa: BLE001 — 확인 실패로 서버가 중지되어서는 안 된다
             chk = self.check_raw()
             chk.update(last_at=self.iso(), ok=False, error={"code": "channel_invalid", "detail": type(e).__name__})
             self._write("check.json", chk)
@@ -426,7 +426,7 @@ class UpdateManager:
         (folder / f"{version}.json.sig").write_bytes(sig if isinstance(sig, bytes) else str(sig).encode())
 
     def manifest(self, version: str) -> rel.Manifest:
-        """저장해 둔 manifest — 쓸 때마다 서명을 다시 확인한다."""
+        """저장된 manifest — 사용 시마다 서명을 재검증한다."""
         folder = self.dir / "manifests"
         try:
             raw = (folder / f"{version}.json").read_bytes()
@@ -453,7 +453,7 @@ class UpdateManager:
         return ans.selected_zones(self.store.load_answers(), self.catalog)
 
     def estimate_downtime(self, versions: int = 1) -> int:
-        """예상 중단 시간 — 지난 업데이트의 실측(없으면 기본 추정값) × 거칠 버전 수."""
+        """예상 중단 시간 — 이전 업데이트의 실측값(없으면 기본 추정값) × 경유할 버전 수."""
         for item in self.history_raw():
             if item["kind"] == "update" and item["result"] == "success" and item.get("downtime_seconds"):
                 per = item["downtime_seconds"] / max(1, len(item.get("versions") or [1]))
@@ -461,7 +461,7 @@ class UpdateManager:
         return DEFAULT_DOWNTIME * max(1, versions)
 
     def changed_zones(self, manifest: rel.Manifest) -> list[dict]:
-        """이미지가 바뀌는 구역 중 켜진 것. 우리 이미지는 버전마다 새로 빌드되므로, 우리 이미지를 쓰는 구역은 늘 바뀐다."""
+        """이미지가 변경되는 구역 중 활성화된 것. 자체 빌드 이미지는 버전마다 재빌드되므로, 자체 빌드 이미지를 사용하는 구역은 항상 변경 대상이다."""
         try:
             compose_text = (self.paths.stack / "docker-compose.yml").read_text(encoding="utf-8")
         except OSError:
@@ -476,7 +476,7 @@ class UpdateManager:
         return out
 
     def plugin_warnings(self, manifest: rel.Manifest) -> list[dict]:
-        """새 버전과 맞는지 확인되지 않은 플러그인. manifest 의 `plugin_api` 가 비어 있으면 판정하지 않는다(빈 목록)."""
+        """새 버전과의 호환이 확인되지 않은 플러그인. manifest 의 `plugin_api` 가 비어 있으면 판정하지 않는다(빈 목록)."""
         if not manifest.plugin_api:
             return []
         out = []
@@ -521,7 +521,7 @@ class UpdateManager:
         }
 
     def _after_check(self, current: str) -> None:
-        """Stable 로 돌아와 Stable 이 현재 버전 이상이 됐으면 시험판 이전 백업을 지운다."""
+        """Stable 로 복귀하여 Stable 이 현재 버전 이상이 되면 시험판 이전 백업을 삭제한다."""
         s = self.settings_raw()
         beta_point = s["beta"].get("restore_point")
         if s["channel"] == "stable" and rel.semver.is_stable(current) and (beta_point or s["beta"].get("since")):
@@ -532,7 +532,7 @@ class UpdateManager:
     # ─── 주기 작업(확인 · 자동 적용) ───
 
     def server_offset(self) -> int:
-        """서버 시간의 UTC 차(초). 호스트의 시간대를 보조 컨테이너로 읽는다(한 시간 기억)."""
+        """서버 시간의 UTC 오프셋(초). 호스트의 시간대를 보조 컨테이너로 조회한다(1시간 캐시)."""
         if self._tz is not None and time.monotonic() - self._tz[0] < 3600:
             return self._tz[1]
         offset = None
@@ -555,7 +555,7 @@ class UpdateManager:
         return local.hour * 60 + local.minute
 
     def auto_due(self) -> str | None:
-        """지금 자동 적용을 시작해도 되는가 — 되면 목표 버전, 아니면 None."""
+        """현재 자동 적용을 시작할 수 있는지 판정 — 가능하면 목표 버전, 불가하면 None."""
         s = self.settings_raw()
         available = self.check_raw()["available"]
         if s["mode"] != "auto" or s["auto"]["paused"] or not self.store.locked:
@@ -571,7 +571,7 @@ class UpdateManager:
         return available["version"]
 
     def tick(self) -> None:
-        """한 분마다 불린다 — 확인할 때가 됐으면 확인하고, 자동 적용 조건이 맞으면 예고를 연다."""
+        """1분마다 호출된다 — 확인 시점이 도래하면 확인하고, 자동 적용 조건이 충족되면 사전 공지를 시작한다."""
         if not self.store.locked:
             return
         s = self.settings_raw()
@@ -591,7 +591,7 @@ class UpdateManager:
                 pass
         self.prune_history()
 
-    # ─── 작업 만들기 ───
+    # ─── 작업 생성 ───
 
     def _new_job(self, kind: str, trigger: str, *, from_version, target_version, path, steps, actor, start: str,
                  expected: int | None, **extra) -> dict:
@@ -612,7 +612,7 @@ class UpdateManager:
 
     def _launch(self, job: dict) -> dict:
         if self._read("current.json") is None:
-            self._write("current.json", self.current())      # 설치 관리자가 바뀌어도 "지금 버전"이 흔들리지 않게 적어 둔다
+            self._write("current.json", self.current())      # 설치 관리자가 교체되어도 "지금 버전"이 변하지 않도록 기록
         self._save(job)
         self._set_active(job["id"])
         if job["kind"] != "rollback":
@@ -693,7 +693,7 @@ class UpdateManager:
                 raise UpdateError(409, "action_not_allowed", status=job["status"], allowed=allowed)
             if action in ("start_now", "cancel"):
                 self._actions[job_id] = action
-                if not self.running:           # 예고 중에 설치 관리자가 다시 떴다 — 스레드가 없으면 여기서 잇는다
+                if not self.running:           # 사전 공지 중 설치 관리자가 재기동된 경우 — 스레드가 없으면 여기서 재개한다
                     self._spawn(job_id)
                 elif not self.background:
                     pass
@@ -716,7 +716,7 @@ class UpdateManager:
             return self.public(self.job_raw(job_id))
 
     def _settled(self, job_id: str, done: Callable[[dict], bool], timeout: float = 5.0) -> dict:
-        """예고 제어의 응답 — 스레드가 상태를 바꿀 때까지 잠깐 기다렸다가 돌려준다."""
+        """사전 공지 제어의 응답 — 스레드가 상태를 변경할 때까지 잠시 대기한 후 반환한다."""
         waited = 0.0
         while self.background and waited < timeout:
             job = self.job_raw(job_id)
@@ -729,7 +729,7 @@ class UpdateManager:
     # ─── 알림 · 점검 모드 ───
 
     def notify(self, event: dict) -> None:
-        """backend 에 예고·점검을 알린다. 못 보내도 작업은 계속한다(backend 가 다시 뜨는 중일 수 있다)."""
+        """backend 에 사전 공지·점검 모드를 통지한다. 송신 실패 시에도 작업은 계속한다(backend 가 재기동 중일 수 있다)."""
         key = self.store.env_secrets().get("JW_INSTALLER_KEY", "")
         if not key:
             return
@@ -744,7 +744,7 @@ class UpdateManager:
         return self.paths.stack / FLAG_REL
 
     def set_maintenance(self, on: bool) -> None:
-        """nginx 점검 모드 — 표식 파일이 있으면 nginx 가 일반 요청을 503 으로 막는다(nginx.conf). 다시 읽힐 필요가 없다."""
+        """nginx 점검 모드 — 마커 파일이 있으면 nginx 가 일반 요청을 503 으로 차단한다(nginx.conf). 설정 재로드는 불필요하다."""
         path = self.flag_path()
         try:
             if on:
@@ -789,7 +789,7 @@ class UpdateManager:
                 self._run_update(job)
             else:
                 self._run_revert(job)
-        except Exception as e:  # noqa: BLE001 — 예상 못 한 오류도 작업 실패로 남긴다
+        except Exception as e:  # noqa: BLE001 — 예상하지 못한 오류도 작업 실패로 기록한다
             self._logger(job, "engine")(f"예상하지 못한 오류: {type(e).__name__}: {str(e)[:300]}")
             job = self.job_raw(job_id) or job
             running = next((s for s in job["steps"] if s["status"] == "running"), None)
@@ -814,7 +814,7 @@ class UpdateManager:
                 self.notify({"type": "cancelled", "job": job["id"]})
                 self._history_close(job, "cancelled", version=job["from_version"])
                 if job["trigger"] == "auto":
-                    # 이 시간대는 건너뛴다(멈춤은 아니다)
+                    # 이 시간대는 건너뛴다(일시 중지는 아니다)
                     self._save_settings(auto_skip_until=self.iso(self.now() + timedelta(hours=self._window_hours())))
                 return False
             if action == "start_now" or self.now() >= ends:
@@ -887,7 +887,7 @@ class UpdateManager:
         job["ctx"]["versions"] = versions
 
     def _version_done(self, job: dict, version: str) -> None:
-        stored = self._read("current.json")       # 파일이 없을 때의 기본값은 설치 관리자 자신의 버전이라 여기서는 못 쓴다
+        stored = self._read("current.json")       # 파일이 없을 때의 기본값은 설치 관리자 자신의 버전이므로 여기서는 사용 불가
         index = job["version_index"]
         if not stored or stored.get("version") != version:
             self._write("current.json", {"version": version, "applied_at": self.iso(),
@@ -1010,7 +1010,7 @@ class UpdateManager:
         s = self.settings_raw()
         kind = "pre-update"
         if rel.semver.is_stable(from_version) and rel.semver.is_beta(version) and not s["beta"].get("restore_point"):
-            kind = "pre-beta"        # Beta 로 처음 올리기 직전 — 따로 보관한다
+            kind = "pre-beta"        # Beta 로 최초 전환하기 직전 — 별도 보관한다
         point = {"id": "rp-" + self.now().strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(2), "kind": kind,
                  "version": from_version, "created_at": self.iso(), "size_bytes": info.get("size_bytes"),
                  "backup": info["path"], "schema_version": info.get("schema_version"), "job": job["id"],
@@ -1090,7 +1090,7 @@ class UpdateManager:
         log(f"새 번들을 꺼냈습니다: {dest}")
 
     def _services(self, compose_file: Path | None = None) -> list[str]:
-        """지금 프로파일에서 켜지는 compose 서비스. compose_file 을 주면 그 파일(새 번들)로 본다."""
+        """현재 프로파일에서 활성화되는 compose 서비스. compose_file 지정 시 해당 파일(새 번들)을 기준으로 한다."""
         if compose_file is None:
             r = self.docker.compose("config", "--services", timeout=60)
         else:
@@ -1101,7 +1101,7 @@ class UpdateManager:
         return [line.strip() for line in r.out.splitlines() if line.strip()] if r.ok else []
 
     def needed_images(self, manifest: rel.Manifest, services: list[str]) -> tuple[list[str], dict[str, str]]:
-        """(받을 우리 이미지 이름, 받을 남의 이미지 이름 → 참조). 설치 관리자가 맨 앞."""
+        """(수신할 자체 빌드 이미지 이름, 수신할 외부 이미지(third-party) 이름 → 참조). 설치 관리자가 최우선."""
         active = set(services)
         ours = ["installer"] + [n for n in sorted(manifest.images)
                                 if n != "installer" and (n in active or (n == "rbi-mirror" and "rbi-netfilter" in active))]
@@ -1182,11 +1182,11 @@ class UpdateManager:
 
     def _backend_run(self, argv: list[str], *, version: str | None = None, user: str | None = None,
                      timeout: float = 600, on_line=None, run_args: list[str] | None = None):
-        """backend 이미지의 일회용 컨테이너(`compose run`)로 명령을 돌린다. version 을 주면 그 버전의 이미지로.
+        """backend 이미지의 일회용 컨테이너(`compose run`)로 명령을 실행한다. version 지정 시 해당 버전의 이미지를 사용한다.
 
-        compose 의 backend 서비스는 내부망의 고정 주소를 쓴다. 돌고 있는 backend 가 그 주소를 쥐고 있으므로
-        일회용 컨테이너에서는 고정 주소를 뺀다(compose 조각을 하나 덧붙인다) — 아니면 "Address already in use" 다.
-        run_args 는 `compose run` 에 더 줄 옵션(붙일 파일 등)이다.
+        compose 의 backend 서비스는 내부망의 고정 주소를 사용한다. 실행 중인 backend 가 해당 주소를 점유하므로
+        일회용 컨테이너에서는 고정 주소를 제거한다(compose 조각 하나를 추가한다) — 그렇지 않으면 "Address already in use" 가 발생한다.
+        run_args 는 `compose run` 에 추가로 전달할 옵션(마운트할 파일 등)이다.
         """
         tmp = self.dir / "tmp"
         tmp.mkdir(parents=True, exist_ok=True)
@@ -1205,7 +1205,7 @@ class UpdateManager:
             override.unlink(missing_ok=True)
 
     def _write_pins(self, manifest: rel.Manifest | None, services: list[str]) -> None:
-        """다이제스트로 찾을 수 없는(파일로 들여온) 남의 이미지를 들여온 이름으로 가리키는 compose 조각."""
+        """다이제스트로 조회할 수 없는(파일로 load 한) 외부 이미지(third-party)를 load 시의 이름으로 지정하는 compose 조각."""
         path = self.paths.stack / PINS_COMPOSE
         pins = {}
         for zone in (manifest.third_party if manifest else {}).values():
@@ -1241,7 +1241,7 @@ class UpdateManager:
             waited += 3
 
     def _bring_up(self, log) -> None:
-        """컨테이너를 지금의 스택 파일대로 맞춘다 — 구역, 프런트, nginx, 그리고 **backend 를 맨 마지막에**."""
+        """컨테이너를 현재 스택 파일에 맞춘다 — 구역, 프런트, nginx, 그리고 **backend 를 최후에**."""
         r = self.docker.compose("config", "-q", timeout=120)
         if not r.ok:
             raise fail("compose_invalid", r.err)
@@ -1252,7 +1252,7 @@ class UpdateManager:
             if svc != "certbot":
                 self._wait_ready(f"ws-{svc}")
         self._up(["frontend-react"], log)
-        self._up(["nginx"], log, recreate=True)       # 설정 파일을 bind mount 하므로 다시 만들어야 새 파일을 읽는다
+        self._up(["nginx"], log, recreate=True)       # 설정 파일을 bind mount 하므로 재생성해야 새 파일이 반영된다
         self._wait_ready("ws-nginx", 180)
         log("backend 를 바꿉니다")
         self._up(["backend"], log)
@@ -1289,8 +1289,8 @@ class UpdateManager:
             self._handoff(job, step, image, version, log)
 
     def installer_env(self) -> list[str] | None:
-        """지금 설치 관리자 컨테이너에 사용자가 준 환경변수(이미지가 정한 것은 뺀다). 복원 지점에 적어 둔다 —
-        이 버전으로 되돌아올 때 설치 관리자를 그때의 환경으로 다시 띄운다."""
+        """현재 설치 관리자 컨테이너에 사용자가 지정한 환경변수(이미지가 정의한 것은 제외). 복원 지점에 기록한다 —
+        이 버전으로 롤백할 때 설치 관리자를 당시의 환경으로 재기동한다."""
         container = self.docker.inspect("container", self.docker.self_ref)
         image = self.docker.inspect("image", self.docker.self_image()) if container else None
         if not container or not image:
@@ -1298,7 +1298,7 @@ class UpdateManager:
         return update_swap.user_env(container, image)
 
     def _handoff(self, job: dict, step: dict, image: str, version: str, log, env: list[str] | None = None) -> None:
-        """설치 관리자 자신을 `image` 로 바꾼다. 성공하면 이 프로세스는 여기서 끝난다(새 설치 관리자가 잇는다)."""
+        """설치 관리자 자신을 `image` 로 교체한다. 성공 시 본 프로세스는 여기서 종료된다(새 설치 관리자가 인계받는다)."""
         result = self.dir / "swap-result.json"
         result.unlink(missing_ok=True)
         job["ctx"]["handoff"] = {"to": version, "image": image, "step": step["id"], "state": "pending",
@@ -1346,13 +1346,13 @@ class UpdateManager:
         for svc in self._services():
             if svc != "certbot":
                 self._wait_ready(f"ws-{svc}", 300)
-        # backend 컨테이너가 그 버전의 이미지로 떠 있는가 — 이미지 id 는 저장 방식에 따라 표기가 달라 이름으로 본다
+        # backend 컨테이너가 해당 버전의 이미지로 실행 중인지 확인 — 이미지 id 는 저장 방식에 따라 표기가 상이하므로 이름으로 판정한다
         running = ((self.docker.inspect("container", "ws-backend") or {}).get("Config") or {}).get("Image") or ""
         if running and running.rsplit(":", 1)[-1] != version:
             raise fail("backend_image_mismatch", expected=version, actual=running)
         if self._env_value("JW_APP_VERSION") not in ("", version):
             raise fail("version_mismatch", expected=version, actual=self._env_value("JW_APP_VERSION"))
-        # 컨테이너가 실제로 받은 표시 버전(화면·/api/health 에 보이는 값)
+        # 컨테이너가 실제로 전달받은 표시 버전(화면·/api/health 에 노출되는 값)
         container_env = ((self.docker.inspect("container", "ws-backend") or {}).get("Config") or {}).get("Env") or []
         shown = next((e.split("=", 1)[1] for e in container_env if e.startswith("JW_APP_VERSION=")), "")
         if shown not in ("", version):
@@ -1373,7 +1373,7 @@ class UpdateManager:
         version = job["path"][job["version_index"]]
         self._verify(version, step, log, self.manifest_or_none(version))
 
-    # ─── 되돌림 · 복원 ───
+    # ─── 롤백 · 복원 ───
 
     def _run_revert(self, job: dict) -> None:
         funcs = {"stop": self.revert_stop, "images": self.revert_images, "restore_db": self.revert_restore_db,
@@ -1395,7 +1395,7 @@ class UpdateManager:
         point = self.point(job["ctx"].get("point") or "") or {}
         variables = {k: v for k, v in error.vars.items() if k != "detail"}
         variables.setdefault("backup_location", point.get("backup"))
-        variables.setdefault("manual", "restore_manually")        # 손으로 해야 할 일의 문구 키(docs/data-safety.md 4절)
+        variables.setdefault("manual", "restore_manually")        # 수동 조치 사항의 문구 키(docs/data-safety.md 4절)
         job.update(status="failed", finished_at=self.iso(), choices=["retry"],
                    error={"step": step["id"], "cause": error.cause, "detail": error.vars.get("detail") or "",
                           "vars": variables})
@@ -1446,7 +1446,7 @@ class UpdateManager:
                 self._drop_point(job["restore"]["point"])
                 self._save_settings(channel="stable", beta={"since": None, "restore_point": None})
             chk = self.check_raw()
-            chk["available"] = {"state": "none"}       # 버전이 바뀌었다 — 다음 확인이 다시 채운다
+            chk["available"] = {"state": "none"}       # 버전 변경됨 — 다음 확인 시 재설정된다
             self._write("check.json", chk)
             self._save_settings(next_check_at=None)
 
@@ -1532,10 +1532,10 @@ class UpdateManager:
     def revert_verify(self, job: dict, step: dict, log) -> None:
         self._verify(job["target_version"], step, log, None)
 
-    # ─── 재시작 뒤 잇기 ───
+    # ─── 재시작 후 재개 ───
 
     def resume(self) -> bool:
-        """설치 관리자가 다시 떴을 때 — 돌던 작업이 있으면 잇는다. 자기 교체로 뜬 것이면 그 단계부터."""
+        """설치 관리자 재기동 시 — 실행 중이던 작업이 있으면 재개한다. 자기 교체로 기동된 경우 해당 단계부터 재개한다."""
         job = self.active()
         if job is None or job["status"] not in ("countdown", "running"):
             return False
@@ -1591,7 +1591,7 @@ class UpdateManager:
         self._drop_images()
 
     def _drop_images(self) -> None:
-        """복원 지점이 더는 가리키지 않는 옛 버전의 우리 이미지 태그를 지운다(실패해도 그만)."""
+        """복원 지점이 더 이상 참조하지 않는 이전 버전의 자체 빌드 이미지 태그를 삭제한다(실패는 무시)."""
         keep = {self.current()["version"], self.own_version, *(p["version"] for p in self.points())}
         r = self.docker.run(["image", "ls", "--format", "{{.Repository}}:{{.Tag}}"], timeout=60)
         prefix = f"{self.registry}/{OUR_PREFIX}"
@@ -1601,7 +1601,7 @@ class UpdateManager:
                 self.docker.run(["image", "rm", ref], timeout=120)
 
     def prune_points(self) -> list[str]:
-        """보관 규칙: `pre-update` 는 최근 KEEP_POINTS 개, `pre-beta` 는 따로(Stable 로 돌아올 때까지)."""
+        """보관 규칙: `pre-update` 는 최근 KEEP_POINTS 개, `pre-beta` 는 별도 보관(Stable 로 복귀할 때까지)."""
         normal = [p for p in self.points() if p["kind"] == "pre-update"]
         dropped = [p["id"] for p in normal[KEEP_POINTS:]]
         for point_id in dropped:

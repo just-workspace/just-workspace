@@ -1,8 +1,8 @@
-"""docker·호스트 접근 — 설치 관리자가 바깥을 건드리는 유일한 문.
+"""docker·호스트 접근 — 설치 관리자가 외부에 접근하는 유일한 경로.
 
-- 모든 호출은 `Runner.run(argv)` 하나로 나간다. argv 는 **인자 배열**이고 셸을 거치지 않는다.
-- 테스트는 `Runner` 를 가짜로 바꿔 어떤 명령이 어떤 순서로 나갔는지 본다(tests/fakes.py).
-- compose 는 늘 같은 앞머리로 부른다 — 경로 해석은 app/paths.py 와 docs/installer.md.
+- 모든 호출은 `Runner.run(argv)` 하나를 경유한다. argv 는 **인자 배열**이며 셸을 거치지 않는다.
+- 테스트는 `Runner` 를 모의 객체로 교체하여 명령의 내용과 호출 순서를 검증한다(tests/fakes.py).
+- compose 는 항상 동일한 접두 인자로 호출한다 — 경로 해석은 app/paths.py 와 docs/installer.md.
 
       docker compose -p just-workspace
           --project-directory <호스트의 스택 폴더>      # bind mount 의 상대 경로가 호스트 경로가 된다
@@ -24,8 +24,8 @@ from app.paths import NETWORK_NAME, PROJECT_NAME, SITE_COMPOSE, Paths
 
 
 
-# docker CLI 에 넘기지 않는 환경변수. compose 는 `--env-file` 보다 실행한 쪽의 환경변수를 먼저 본다 — 설치 관리자
-# 컨테이너가 가진 값이 스택의 `.env`(버전·저장소·프로파일)를 덮으면 안 된다.
+# docker CLI 에 전달하지 않는 환경변수. compose 는 `--env-file` 보다 실행 측의 환경변수를 우선한다 — 설치 관리자
+# 컨테이너의 값이 스택의 `.env`(버전·저장소·프로파일)를 덮어써서는 안 된다.
 COMPOSE_SHADOWED = ("JW_REGISTRY", "JW_VERSION", "JW_APP_VERSION", "COMPOSE_PROFILES", "COMPOSE_FILE")
 
 
@@ -50,7 +50,7 @@ class Runner(Protocol):
 
 
 class SubprocessRunner:
-    """실제 docker CLI. argv 의 첫 원소는 `docker` 다음에 오는 것(`["ps", "-a"]`)."""
+    """실제 docker CLI. argv 의 첫 원소는 `docker` 다음에 오는 인자(`["ps", "-a"]`)."""
 
     def __init__(self, binary: str = "docker"):
         self.binary = binary
@@ -75,7 +75,7 @@ class SubprocessRunner:
                 if on_line:
                     try:
                         on_line(line.rstrip("\n"))
-                    except Exception:  # noqa: BLE001 — 진행 표시 실패가 명령을 깨면 안 된다
+                    except Exception:  # noqa: BLE001 — 진행 표시 실패가 명령 실패로 이어져서는 안 됨
                         pass
 
         threads = [threading.Thread(target=pump, args=(proc.stdout, out_lines), daemon=True),
@@ -104,7 +104,7 @@ class Docker:
     def __init__(self, runner: Runner, paths: Paths, *, self_ref: str | None = None):
         self.runner = runner
         self.paths = paths
-        # 설치 관리자 자신의 컨테이너(기본: 호스트 이름 = 컨테이너 id). 보조 컨테이너를 같은 이미지로 띄운다.
+        # 설치 관리자 자체 컨테이너(기본: 호스트 이름 = 컨테이너 id). 보조 컨테이너를 동일 이미지로 기동한다.
         self.self_ref = self_ref or os.environ.get("JW_SELF") or os.environ.get("HOSTNAME") or "jw-installer"
         self._self_image: str | None = None
 
@@ -132,7 +132,7 @@ class Docker:
         stack = self.paths.stack
         argv = ["compose", "-p", PROJECT_NAME, "--project-directory", self.paths.host_stack,
                 "-f", f"{stack.as_posix()}/docker-compose.yml"]
-        # 사이트별 조각(렌더링)과, 파일로 들여온 이미지의 이름 조각(오프라인 업데이트 — app/update_engine.py)
+        # 사이트별 조각(렌더링)과, 파일로 반입한 이미지의 이름 조각(오프라인 업데이트 — app/update_engine.py)
         for extra in (SITE_COMPOSE, "docker-compose.pins.yml"):
             if (stack / extra).exists():
                 argv += ["-f", f"{stack.as_posix()}/{extra}"]
@@ -175,7 +175,7 @@ class Docker:
         return self.run([*cmd, container, *argv], input=input, timeout=timeout)
 
     def self_image(self) -> str:
-        """설치 관리자 자신의 이미지 id — 보조 컨테이너에 쓴다(따로 받을 필요가 없다)."""
+        """설치 관리자 자체 이미지 id — 보조 컨테이너에 사용한다(별도 pull 불필요)."""
         if self._self_image is None:
             data = self.inspect("container", self.self_ref)
             self._self_image = (data or {}).get("Image") or os.environ.get("JW_SELF_IMAGE") or ""
@@ -183,9 +183,9 @@ class Docker:
 
     def helper(self, helper_args: list[str], *, mounts: list[str] | None = None, volumes: list[str] | None = None,
                network: str = "none", user: str | None = None, timeout: float = 120.0) -> Result:
-        """설치 관리자 이미지로 일회용 보조 컨테이너를 띄워 `python -m app.helper …` 를 돌린다.
+        """설치 관리자 이미지로 일회용 보조 컨테이너를 기동하여 `python -m app.helper …` 를 실행한다.
 
-        mounts: `--mount` 값(bind — 출발지가 없으면 실패한다) / volumes: `-v` 값(이름 붙은 볼륨)
+        mounts: `--mount` 값(bind — 원본 경로가 없으면 실패) / volumes: `-v` 값(이름 있는 볼륨)
         """
         image = self.self_image()
         if not image:
@@ -233,7 +233,7 @@ class Docker:
         return out
 
     def published_ports(self) -> dict[str, list[str]]:
-        """{컨테이너 이름: ["0.0.0.0:80->80/tcp", …]} — 우리 컨테이너가 쓰는 포트인지 가릴 때."""
+        """{컨테이너 이름: ["0.0.0.0:80->80/tcp", …]} — 본 프로젝트 컨테이너가 사용하는 포트인지 판별할 때 사용."""
         r = self.run(["ps", "--format", "{{.Names}}\t{{.Ports}}"], timeout=30)
         out: dict[str, list[str]] = {}
         for line in r.out.splitlines() if r.ok else []:
@@ -242,7 +242,7 @@ class Docker:
         return out
 
     def connect_self(self, alias: str) -> Result:
-        """설치 관리자 자신을 워크스페이스 내부망에 붙인다(이미 붙어 있으면 그대로)."""
+        """설치 관리자 자신을 워크스페이스 내부망에 연결한다(이미 연결되어 있으면 유지)."""
         data = self.inspect("container", self.self_ref) or {}
         if NETWORK_NAME in ((data.get("NetworkSettings") or {}).get("Networks") or {}):
             return Result(0, "already connected")

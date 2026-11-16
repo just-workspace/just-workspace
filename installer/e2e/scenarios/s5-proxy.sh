@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# S5 앞단 프록시 뒤 — network proxy, cert proxy. nginx 는 80 평문만 듣고, 프록시 주소에서 온 연결의 X-Real-IP 만 믿는다.
-# 프록시 주소는 192.168.10.0/24 와 이 서버 자신의 주소로 답한다(이 서버에서 보낸 요청이 프록시 노릇을 한다).
+# S5 프런트 프록시 뒤 — network proxy, cert proxy. nginx 는 80 평문만 수신 대기하고, 프록시 주소에서 온 연결의 X-Real-IP 만 신뢰한다.
+# 프록시 주소는 192.168.10.0/24 와 이 서버 자신의 주소로 지정한다(이 서버에서 송신한 요청이 프록시 역할을 한다).
 . "$(dirname "$0")/../lib.sh"
-OTHER_NET=e2e-other-net            # 192.168.20.0/24 — 믿지 않는 대역
+OTHER_NET=e2e-other-net            # 192.168.20.0/24 — 신뢰하지 않는 대역
 
 cleanup_nets() { docker network rm "$OTHER_NET" >/dev/null 2>&1; }
 e2e_reset
@@ -27,7 +27,7 @@ say "평문 80 으로 서비스"
 plain() { curl -s --max-time 30 -H "Host: $E2E_DOMAIN" -H 'X-Forwarded-Proto: https' "$@"; }
 expect "프런트 화면(/)" 200 "$(plain -o /dev/null -w '%{http_code}' "http://$E2E_ADDR/")"
 expect "/api/health" 200 "$(plain -o /dev/null -w '%{http_code}' "http://$E2E_ADDR/api/health")"
-# 로그인 — 세션 쿠키는 Secure 라 curl 이 평문 연결에서는 저장하지 않는다. 응답 머리에서 꺼내 직접 싣는다.
+# 로그인 — 세션 쿠키는 Secure 이므로 curl 이 평문 연결에서는 저장하지 않는다. 응답 헤더에서 추출하여 직접 전송한다.
 body="$E2E_WORK/login.json"
 (umask 077; python3 -c 'import json,sys; print(json.dumps({"username": "admin", "password": open(sys.argv[1]).read().strip()}))' "$(admin_password_file)" > "$body")
 hdr="$(plain -D - -o /dev/null -H 'Content-Type: application/json' -H "Origin: $WS" --data-binary "@$body" "http://$E2E_ADDR/api/auth/login")"
@@ -39,10 +39,10 @@ contains "세션 쿠키는 Secure" "secure" "$(printf '%s' "$hdr" | grep -i '^se
 expect "로그인한 계정은 관리자" True "$(plain -H "Cookie: $cookie" "http://$E2E_ADDR/api/auth/me" | json_get 'd["is_admin"]')"
 
 say "클라이언트 주소 — 프록시 주소에서 온 머리말만 쓴다"
-# 답변의 프록시 주소: 192.168.10.0/24 와 이 서버 자신의 주소. 이 서버에서 직접 보낸 요청이 "프록시가 넘긴 요청" 노릇을 한다.
-# 믿지 않는 출발지는 다른 도커 네트워크의 컨테이너다(nginx 에게는 내부망의 게이트웨이 주소로 보인다).
+# 답변의 프록시 주소: 192.168.10.0/24 와 이 서버 자신의 주소. 이 서버에서 직접 송신한 요청이 "프록시가 넘긴 요청" 역할을 한다.
+# 신뢰하지 않는 출발지는 다른 도커 네트워크의 컨테이너이다(nginx 에는 내부망의 게이트웨이 주소로 보인다).
 docker network create --subnet 192.168.20.0/24 "$OTHER_NET" >/dev/null
-# nginx 접속 로그에서 그 표시(User-Agent)가 찍힌 줄의 $remote_addr(= backend 로 넘기는 X-Forwarded-For 값)
+# nginx 접속 로그에서 해당 표시(User-Agent)가 기록된 줄의 $remote_addr(= backend 로 전달하는 X-Forwarded-For 값)
 seen_as() { docker logs ws-nginx 2>&1 | grep "\"$1\"" | tail -1 | awk '{print $1}'; }
 contains "믿는 주소 목록에 이 서버" "set_real_ip_from  $E2E_ADDR;" "$(sudo cat "$E2E_HOST_DIR/stack/nginx/site.d/http.conf")"
 
@@ -69,7 +69,7 @@ note "다른 출발지 + 두 머리말 → nginx 가 본 주소: $src"
 check "다른 출발지의 머리말은 무시된다" test -n "$src" -a "$src" != 203.0.113.88
 
 say "backend 가 보는 주소"
-# 프록시 주소에서 X-Real-IP 를 실어 로그인 → 세션에 그 주소가 남는다. 다른 출발지에서 위조한 주소는 남지 않는다.
+# 프록시 주소에서 X-Real-IP 를 포함하여 로그인 → 세션에 해당 주소가 기록된다. 다른 출발지에서 위조한 주소는 기록되지 않는다.
 body="$E2E_WORK/login.json"
 (umask 077; python3 -c 'import json,sys; print(json.dumps({"username": "admin", "password": open(sys.argv[1]).read().strip()}))' "$(admin_password_file)" > "$body")
 hdr="$(plain -D - -o /dev/null -H 'X-Real-IP: 203.0.113.77' -H 'Content-Type: application/json' -H "Origin: $WS" --data-binary "@$body" "http://$E2E_ADDR/api/auth/login")"

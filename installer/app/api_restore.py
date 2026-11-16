@@ -1,14 +1,14 @@
-"""복원의 마법사 API — `/api/restore/*` (8443, 세션 필요). 동작은 app/restore.py 가 한다.
+"""복원의 설치 마법사 API — `/api/restore/*` (8443, 세션 필수). 동작은 app/restore.py 가 수행한다.
 
-| 메서드·경로 | 하는 일 |
+| 메서드·경로 | 동작 |
 |---|---|
-| `POST /api/restore/upload` | 백업 파일 올리기(multipart `file` 또는 본문 그대로) — 디스크에 바로 흘려 쓴다. 끝나면 확인까지 하고 답한다 |
-| `POST /api/restore/path` `{"path"}` | 서버(호스트)에 이미 있는 백업 파일·폴더 |
-| `POST /api/restore/password` `{"password"}` | 설정이 암호로 보호된 백업 — 암호를 넣고 다시 확인 |
-| `GET` · `DELETE /api/restore/file` | 받아 둔 백업의 상태 · 버리기 |
+| `POST /api/restore/upload` | 백업 파일 업로드(multipart `file` 또는 본문 그대로) — 디스크에 스트리밍 기록한다. 완료 시 확인까지 수행한 뒤 응답한다 |
+| `POST /api/restore/path` `{"path"}` | 서버(호스트)에 이미 존재하는 백업 파일·폴더 |
+| `POST /api/restore/password` `{"password"}` | 설정이 암호로 보호된 백업 — 암호 입력 후 재확인 |
+| `GET` · `DELETE /api/restore/file` | 수신한 백업의 상태 · 삭제 |
 | `GET /api/restore/review` | 백업의 내용과 버전 판정 |
-| `POST /api/restore/apply` | 새 서버에서 정한 값으로 복원 시작(202) |
-| `GET /api/restore/apply` · `/apply/stream` · `POST /api/restore/apply/retry` | 진행 — 설치 적용과 같은 형태 |
+| `POST /api/restore/apply` | 새 서버에서 지정한 값으로 복원 시작(202) |
+| `GET /api/restore/apply` · `/apply/stream` · `POST /api/restore/apply/retry` | 진행 — 설치 적용과 동일 형식 |
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ class UploadInvalid(Exception):
 
 
 def manager(svc) -> RestoreManager:
-    """서비스 묶음마다 하나 — 접속 주소 확인(DNS)은 마법사의 확인과 같은 길을 쓴다."""
+    """서비스 집합당 하나 — 접속 주소 확인(DNS)은 설치 마법사의 확인과 동일한 경로를 사용한다."""
     if "restore" not in svc.cache:
         def dns_status(domain: str) -> str:
             from app import api, probes
@@ -44,10 +44,10 @@ def manager(svc) -> RestoreManager:
 
 
 def nfs_probe(svc, result: dict, server: str, export: str) -> dict:
-    """복원 중의 NFS 확인 — 다섯 항목이 통과하면 표식 파일의 설치 id 가 백업의 것과 같은지도 본다.
+    """복원 중의 NFS 확인 — 다섯 항목 통과 시 저장소 마커 파일의 설치 id 가 백업의 것과 동일한지도 확인한다.
 
-    백업이 NFS 였는데 표식이 없으면 다른 공유(또는 빈 공유)다 → `marker_missing`.
-    다른 설치의 표식이 있으면 → `other_install`. 새 설치(복원이 아님)에서는 아무것도 더하지 않는다.
+    백업이 NFS 였으나 저장소 마커가 없으면 다른 공유(또는 빈 공유)이다 → `marker_missing`.
+    다른 설치의 저장소 마커가 있으면 → `other_install`. 신규 설치(복원 아님)에서는 추가 검사를 수행하지 않는다.
     """
     mgr = manager(svc)
     if not result.get("ok") or svc.store.answers_public().get("mode") != "restore" or not mgr.ready:
@@ -55,7 +55,7 @@ def nfs_probe(svc, result: dict, server: str, export: str) -> dict:
     try:
         answers = ans.load({"storage": {"kind": "nfs", "server": server, "export": export}})
         verdict = mgr.marker_verdict(answers)
-    except Exception:  # noqa: BLE001 — 표식을 읽지 못하면 판정 없이 둔다(적용 단계가 다시 본다)
+    except Exception:  # noqa: BLE001 — 저장소 마커 읽기 실패 시 판정을 생략한다(적용 단계에서 재확인)
         return result
     result = {**result, "marker": {"status": verdict["status"]}}
     from_nfs = (mgr.summary().get("storage") or {}).get("kind") == "nfs"
@@ -67,7 +67,7 @@ def nfs_probe(svc, result: dict, server: str, export: str) -> dict:
 
 
 async def _receive_multipart(request: Request, target: Path) -> str:
-    """multipart 본문의 `file` 부분을 target 에 흘려 쓴다(메모리·임시 파일에 모으지 않는다). 돌려주는 값: 파일 이름."""
+    """multipart 본문의 `file` 파트를 target 에 스트리밍 기록한다(메모리·임시 파일에 적재하지 않는다). 반환값: 파일 이름."""
     from python_multipart.multipart import MultipartParser, parse_options_header
 
     _, params = parse_options_header(request.headers.get("content-type", ""))
@@ -125,7 +125,7 @@ async def _receive_raw(request: Request, target: Path) -> str:
 
 
 def register(app: FastAPI, svc, *, unlocked, session, stream) -> None:
-    """마법사 앱에 복원 경로를 붙인다. `stream` 은 적용 상태의 SSE 처리기(설치와 같은 것)."""
+    """설치 마법사 앱에 복원 경로를 등록한다. `stream` 은 적용 상태의 SSE 처리기(설치와 동일)."""
 
     @app.exception_handler(RestoreError)
     async def _restore_error(request: Request, exc: RestoreError):
@@ -140,12 +140,12 @@ def register(app: FastAPI, svc, *, unlocked, session, stream) -> None:
         try:
             name = await (_receive_multipart(request, part) if multipart else _receive_raw(request, part))
         except ClientDisconnect:
-            await run_in_threadpool(mgr.abort_upload, part)       # 올리다 취소했다 — 반쪽 파일을 남기지 않는다
+            await run_in_threadpool(mgr.abort_upload, part)       # 업로드 중 취소 — 불완전한 파일을 남기지 않는다
             return JSONResponse({"code": "upload_aborted", "vars": {}}, status_code=400)
         except OSError as e:
             await run_in_threadpool(mgr.abort_upload, part)
             return JSONResponse({"code": "no_space", "vars": {"detail": e.strerror or ""}}, status_code=507)
-        except Exception:  # noqa: BLE001 — 깨진 multipart 본문 등
+        except Exception:  # noqa: BLE001 — 손상된 multipart 본문 등
             await run_in_threadpool(mgr.abort_upload, part)
             return JSONResponse({"code": "upload_invalid", "vars": {}}, status_code=400)
         return await run_in_threadpool(mgr.finish_upload, part, name)

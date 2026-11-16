@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# U 업데이트 — 설치 관리자의 업데이트 실행부를 가짜 릴리스 환경으로 처음부터 끝까지.
-# 사용: u-update.sh <단계…>      단계는 차례로 돈다. 서버의 상태가 단계 사이에 이어지므로 하나씩 불러도 된다.
+# U 업데이트 — 설치 관리자의 업데이트 실행부를 모의 릴리스 환경에서 전 과정 검수한다.
+# 사용: u-update.sh <단계…>      단계는 순서대로 실행된다. 서버 상태가 단계 간에 유지되므로 단계별 개별 호출도 가능하다.
 #
-#   setup   가짜 레지스트리·채널·임시 키, 1.0.0 과 1.0.1(Beta 로 낸 뒤 승격)을 만들고 1.0.0 을 설치, 데이터 넣기
+#   setup   모의 레지스트리·채널·임시 키, 1.0.0 과 1.0.1(Beta 로 게시 후 승격)을 생성하고 1.0.0 을 설치, 데이터 입력
 #   u9      서명·검증: 변조된 채널, 만료, 순번 역행, 다른 키 → 거부
-#   u1      수동 업데이트 1.0.0 → 1.0.1 (예고·점검·자기 교체·데이터·기록, 중단 시간)
+#   u1      수동 업데이트 1.0.0 → 1.0.1 (사전 공지·점검 모드·자기 교체·데이터·기록, 중단 시간)
 #   u7      복원 지점으로 수동 복원(1.0.1 → 1.0.0)
-#   u2      pull 실패(레지스트리에 없는 다이제스트) → 되돌리기 / 다시 시도
-#   u3      DB 변경 실패(일부러 깨진 단계가 든 1.0.2) → 자동 되돌림
-#   r103    1.0.3 릴리스를 낸다(u5 가 없으면 스스로 부른다 — 화면 검수 admin-update-ui.cjs 를 그 전에 돌릴 때 쓴다)
+#   u2      pull 실패(레지스트리에 없는 다이제스트) → 롤백 / 재시도
+#   u3      DB 변경 실패(의도적으로 손상시킨 단계를 포함한 1.0.2) → 자동 롤백
+#   r103    1.0.3 릴리스를 게시한다(u5 가 없으면 자체 호출한다 — 화면 검수 admin-update-ui.cjs 를 그 전에 실행할 때 사용한다)
 #   u5      중간 버전: 1.0.0 → 1.0.1 → 1.0.3
-#   u4      자동 업데이트: 3일 유예 · 시간대 · 실패 뒤 멈춤과 다시 켜기 (1.0.4)
-#   u6      Beta 채널로 올렸다가 Stable 로 — 기다리기와 "시험판 이전 상태로 복원" (1.1.0-beta.1)
-#   u8      오프라인: 레지스트리·채널을 끊고 묶음 파일 + 추가 이미지 파일로 (1.0.5 — E2E_OFFLINE_VERSION 으로 바꾼다)
-#   down    가짜 릴리스 환경 내리기
+#   u4      자동 업데이트: 3일 유예 · 시간대 · 실패 후 일시 중지 및 재활성화 (1.0.4)
+#   u6      Beta 채널로 업데이트한 뒤 Stable 로 전환 — 대기 및 "시험판 이전 상태로 복원" (1.1.0-beta.1)
+#   u8      오프라인: 레지스트리·채널을 차단하고 오프라인 번들 + 추가 이미지 파일로 수행 (1.0.5 — E2E_OFFLINE_VERSION 으로 변경)
+#   down    모의 릴리스 환경 종료
 . "$(dirname "$0")/../lib.sh"
 . "$(dirname "$0")/../update-lib.sh"
 
@@ -22,7 +22,7 @@ keys_install() {
   sudo cp "$REL/keys/release.pub" "$E2E_HOST_DIR/state/update/keys/release.pub"
 }
 
-apply_now() {      # apply_now <버전> → 작업 id (예고 없이)
+apply_now() {      # apply_now <버전> → 작업 id (사전 공지 없음)
   iapi POST /apply "{\"target\":\"$1\",\"start\":\"now\",\"actor\":{\"id\":\"e2e\",\"name\":\"검수\"}}" | json_get 'd.get("id") or d'
 }
 
@@ -40,8 +40,8 @@ stage_setup() {
   check "채널 검증(공개 키)" rel_verify
   note "받을 용량(manifest): $(json_get 'd.get("download_bytes")' < "$REL/manifests/1.0.1-beta.1.json")"
 
-  # 처음 설치는 이 환경의 릴리스(1.0.0)로 한다 — 리포의 VERSION 으로 빌드해 둔 이미지가 아니라.
-  # (그 이미지로 설치하면 설치된 버전이 리포의 VERSION 이 되어, 채널의 1.0.0 과 견준 결과가 VERSION 에 따라 달라진다)
+  # 최초 설치는 본 환경의 릴리스(1.0.0)로 수행한다. 리포의 VERSION 으로 빌드해 둔 이미지는 사용하지 않는다.
+  # (해당 이미지로 설치하면 설치 버전이 리포의 VERSION 이 되어, 채널의 1.0.0 과 비교한 결과가 VERSION 에 따라 달라진다)
   check "$BASE_VERSION 릴리스를 이 서버의 이미지 이름으로" rel_local "$BASE_VERSION"
   E2E_INSTALLER_IMAGE="just-workspace-installer:$BASE_VERSION"
   check "설치 관리자 기동(채널 주소 지정)" installer_start -e "JW_UPDATE_CHANNEL_URL=$CHANNEL_URL"
@@ -50,9 +50,9 @@ stage_setup() {
   check_core
   check "메일 서버 준비" wait_ready ws-mailserver 240
   ws_login
-  # 검수 채널은 이 서버에서 만든 임시 키로 서명했다. 설치 폴더에 그 공개 키를 넣기 전에는:
-  #  - 이미지에 배포처의 공개 키가 들어 있으면(installer/keys/*.pub) 그 키로는 서명이 맞지 않는다 → channel_invalid
-  #  - 들어 있지 않으면 → unconfigured
+  # 검수 채널은 본 서버에서 생성한 임시 키로 서명되어 있다. 설치 폴더에 해당 공개 키를 넣기 전의 동작:
+  #  - 이미지에 배포처의 공개 키가 포함된 경우(installer/keys/*.pub) 그 키로는 서명 검증에 실패한다 → channel_invalid
+  #  - 포함되지 않은 경우 → unconfigured
   if ls "$E2E_REPO"/installer/keys/*.pub >/dev/null 2>&1; then
     say "검수용 공개 키를 넣기 전 — 이미지에 든 키로는 검수 채널을 믿지 않는다"
     before=channel_invalid
@@ -92,7 +92,7 @@ stage_u9() {
   expect "만료된 채널 파일" channel_invalid/expired "$(err)"
   restore_channel
 
-  # 순번 역행 — 새 순번을 한 번 받아들이게 한 뒤 옛 파일을 다시 내민다
+  # 순번 역행 — 새 순번을 한 차례 수용시킨 뒤 이전 파일을 다시 제공한다
   jwrelease refresh --repo /work/channel --key /work/keys/release.pem >/dev/null
   expect "새 순번은 받는다" update "$(check_now)"
   cp -a "$REL/channel" "$keep.newer"
@@ -118,7 +118,7 @@ stage_u1() {
   expect "업데이트 전 버전(/api/health)" 1.0.0 "$(health_version)"
   expect "업데이트 전 스키마" "$S0" "$(health_schema)"
   local t0 job
-  # 화면이 쓰는 길(backend 대신 부르기)로 예고부터
+  # 화면이 사용하는 경로(backend 대리 호출)로 사전 공지부터 수행
   job="$(upd POST /apply '{"target":"1.0.1","start":"countdown"}' | json_get 'd["id"]')"
   note "작업 $job"
   expect "예고 상태" countdown "$(upd GET "/jobs/$job" | json_get 'd["status"]')"
@@ -151,7 +151,7 @@ stage_u1() {
   expect "작업 상태" done "$(ujob "$job" 'd["status"]')"
   expect "단계" "preflight=done backup=done pull=done migrate=done switch=done verify=done" "$(ujob_steps "$job")"
   note "단계별 초: $(ujob "$job" '" ".join(s["id"]+"="+str(int((__import__("datetime").datetime.fromisoformat(s["finished_at"][:-1])-__import__("datetime").datetime.fromisoformat(s["started_at"][:-1])).total_seconds())) for s in d["steps"])')"
-  # 이 릴리스에서 프런트 이미지가 그대로면 프런트는 내려가지 않는다 — 그때는 정적 점검 페이지가 나올 일이 없다
+  # 본 릴리스에서 프런트 이미지가 동일하면 프런트는 중지되지 않는다. 이 경우 정적 점검 페이지는 표시되지 않는다
   if [ -f "$E2E_WORK/probe-saw-static-page" ]; then note "프런트가 내려간 동안 정적 점검 페이지가 나왔다"; else note "화면(/)은 끊기지 않았다 — 정적 점검 페이지는 아래에서 따로 본다"; fi
   expect "설치 관리자 자신도 바뀌었다(버전)" 1.0.1 "$(installer_version)"
   expect "설치 관리자 이미지" localhost/just-workspace-installer:1.0.1 "$(installer_image)"
@@ -179,7 +179,7 @@ stage_u1() {
   stage_page
 }
 
-# 정적 점검 페이지 — 프런트 컨테이너가 없을 때 nginx 가 직접 내준다. 설치 관리자의 내부 API 는 밖으로 열리지 않는다.
+# 정적 점검 페이지 — 프런트 컨테이너가 없을 때 nginx 가 직접 제공한다. 설치 관리자의 내부 API 는 외부에 노출되지 않는다.
 stage_page() {
   say "정적 점검 페이지와 공개 경로"
   docker stop ws-frontend-react >/dev/null
@@ -334,7 +334,7 @@ stage_u4() {
   local base; base="$(health_version)"
   local now young
   now="$(date -u +%s)"
-  # 공개 시각 = 지금부터 3일 전 + 4분 → 4분 뒤에 유예가 끝난다
+  # 공개 시각 = 현재로부터 3일 전 + 4분 → 4분 후 유예 종료
   young="$(date -u -d "@$(( now - 3 * 86400 + 240 ))" +%Y-%m-%dT%H:%M:%SZ)"
   if [ ! -f "$REL/manifests/1.0.4.json" ]; then
     check "1.0.4 이미지" rel_build 1.0.4 plus2
@@ -351,13 +351,13 @@ stage_u4() {
   note "자동 적용 시작 가능 시각: $eligible (지금 $(date -u +%H:%M:%SZ))"
   sleep 75
   expect "유예 전 — 시간대 안이어도 시작하지 않는다" "" "$(active_job)"
-  # 시간대 밖으로 옮기고 유예가 끝나기를 기다린다
+  # 시간대 밖으로 이동시키고 유예 종료까지 대기한다
   upd PUT /settings "{\"window\":{\"start\":\"$far1:00\",\"end\":\"$far2:00\"}}" >/dev/null
   local wait_s=$(( $(date -u -d "$eligible" +%s) - $(date -u +%s) + 70 ))
   [ "$wait_s" -gt 0 ] && { note "유예가 끝날 때까지 ${wait_s}초 기다린다"; sleep "$wait_s"; }
   expect "유예 뒤 — 시간대 밖이면 시작하지 않는다" "" "$(active_job)"
 
-  # 실패하게 해 두고 시간대 안으로 → 예고가 열린다
+  # 실패하도록 설정한 뒤 시간대 안으로 이동 → 사전 공지 개시
   check "레지스트리에서 backend 1.0.4 를 지운다" reg_delete backend 1.0.4
   check "서버에서도 그 이미지를 지운다(파일로 보관)" reg_forget backend 1.0.4 1.0.4
   hour="$(date +%H)"; next="$(printf '%02d' $(( (10#$hour + 2) % 24 )))"
@@ -447,7 +447,7 @@ stage_u8() {
   local OFF="${E2E_OFFLINE_VERSION:-1.0.5}"
   local stage="$REL/stage-$OFF" bundle="$REL/just-workspace-$OFF-offline.tar"
   if [ ! -f "$bundle" ]; then
-    # 이 릴리스는 캐시(redis) 이미지가 올라갔다 — 서버에 없는 "추가 이미지"가 하나 생긴다
+    # 본 릴리스는 캐시(redis) 이미지가 갱신되었다. 서버에 없는 "추가 이미지"가 하나 발생한다
     local other; other="$(other_redis)"
     note "$OFF 의 redis: ${other:-(다른 판을 받지 못했다)}"
     E2E_REDIS_REF="$other" check "$OFF 이미지" rel_build $OFF plus2
@@ -464,11 +464,11 @@ stage_u8() {
     rm -rf "$stage/images"
   fi
   note "묶음 크기: $(du -h "$bundle" | cut -f1)"
-  # 추가 이미지 하나를 파일로 받아 둔다(인터넷이 되는 PC 에서 하는 일) — 캐시(redis)
+  # 추가 이미지 하나를 파일로 확보한다(인터넷 연결이 가능한 PC 에서 수행하는 작업) — 캐시(redis)
   local redis_ref redis_tag
   redis_ref="$(json_get 'd["third_party"]["core"]["redis"]' < "$REL/manifests/$OFF.json")"
   redis_tag="${redis_ref%@*}:jw-$(printf '%s' "${redis_ref#*sha256:}" | cut -c1-12)"
-  # 화면이 알려 주는 명령 그대로(docker pull … && docker tag … && docker save …)
+  # 화면이 안내하는 명령과 동일(docker pull … && docker tag … && docker save …)
   check "redis 를 파일로 저장" bash -c "cd '$REL' && docker pull -q '$redis_ref' >/dev/null && docker tag '$redis_ref' '$redis_tag' && docker save '$redis_tag' -o redis.tar"
   docker save alpine:latest -o "$REL/wrong.tar"
 
@@ -476,15 +476,15 @@ stage_u8() {
   docker stop jw-e2e-registry jw-e2e-channel >/dev/null
   check_now >/dev/null
   expect "온라인 확인은 실패한다" channel_unreachable "$(iapi GET /status | json_get 'd["check"]["error"]["code"]')"
-  # 새 버전의 우리 이미지와 redis 를 서버에서 지운다(묶음·파일에서 들어와야 한다)
+  # 신규 버전의 자체 빌드 이미지와 redis 를 서버에서 삭제한다(오프라인 번들·파일에서 반입되어야 한다)
   docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -F -- ":$OFF" | grep -E ":$OFF\$" | xargs -r docker image rm >/dev/null 2>&1
-  # 다이제스트로 지우면 그 내용을 가리키는 다른 태그까지 사라진다 — 버전마다 새로 빌드한 둘(backend·설치 관리자)만 그렇게 지운다
+  # 다이제스트로 삭제하면 동일 내용을 가리키는 다른 태그까지 제거된다. 버전마다 새로 빌드한 둘(backend·설치 관리자)만 이 방식으로 삭제한다
   python3 -c 'import json,sys; m=json.load(open(sys.argv[1]))["images"]; [print(m[n]) for n in ("backend","installer")]' "$REL/manifests/$OFF.json" | xargs -r docker image rm >/dev/null 2>&1
   expect "새 버전의 backend 이미지는 서버에 없다" 1 "$(docker image inspect "$(json_get 'd["images"]["backend"]' < "$REL/manifests/$OFF.json")" >/dev/null 2>&1; echo $?)"
 
   say "거부되는 묶음"
   sudo mkdir -p "$E2E_HOST_DIR/offline"
-  # 낮은 버전 — 가짜 이미지 파일로 만든 작은 묶음(서명은 진짜)
+  # 낮은 버전 — 모의 이미지 파일로 생성한 소형 오프라인 번들(서명은 실제)
   local low="$REL/stage-low"
   rm -rf "$low"; mkdir -p "$low/images"
   cp "$REL/channel/releases/1.0.0/manifest.json" "$REL/channel/releases/1.0.0/manifest.json.sig" "$low/"
@@ -494,13 +494,13 @@ stage_u8() {
   sudo cp "$REL/low.tar" "$E2E_HOST_DIR/offline/low.tar"
   offline_path() { upd POST /offline/bundle-path "{\"path\":\"$1\"}" >/dev/null; local i; for i in $(seq 1 120); do case "$(upd GET /offline | json_get 'd["bundle"]["state"]')" in uploading|verifying) sleep 2 ;; *) break ;; esac; done; upd GET /offline | json_get 'd["bundle"]["state"]+" "+str((d["bundle"]["error"] or {}).get("code"))'; }
   expect "낮은 버전" "version_too_low version_too_low" "$(offline_path /data/offline/low.tar)"
-  # 다른 키로 서명한 묶음
+  # 다른 키로 서명한 오프라인 번들
   jwrelease bundle index --stage /work/stage-low --key /work/keys/other.pem >/dev/null
   jwrelease bundle pack --stage /work/stage-low -o /work/otherkey.tar >/dev/null
   sudo cp "$REL/otherkey.tar" "$E2E_HOST_DIR/offline/otherkey.tar"
   expect "서명 불일치" "signature_mismatch signature" "$(offline_path /data/offline/otherkey.tar)"
   expect "없는 파일" "file_missing None" "$(offline_path /data/offline/nope.tar)"
-  # 해시 불일치 — 진짜 묶음의 이미지 부분 한 바이트를 바꾼다(끝에서 4KB 앞)
+  # 해시 불일치 — 실제 오프라인 번들의 이미지 부분 1바이트를 변경한다(끝에서 4KB 앞)
   sudo cp --reflink=auto "$bundle" "$E2E_HOST_DIR/offline/tampered.tar"
   local size; size="$(stat -c %s "$bundle")"
   printf '\377' | sudo dd of="$E2E_HOST_DIR/offline/tampered.tar" bs=1 seek=$(( size - 20000 )) conv=notrunc 2>/dev/null

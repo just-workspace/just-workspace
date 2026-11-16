@@ -1,23 +1,23 @@
 """코드 저장소(Gitea) 구역.
 
 install
-  1. 버전 — 렌더링이 `.env` 의 `GITEA_IMAGE` 에 이미 넣었다(verified = compose 의 고정 이미지, latest·지정 = 태그).
-  2. 컨테이너를 띄우고 응답할 때까지 기다린다.
-  3. 초기 설정 — `app.ini` 의 DB 를 워크스페이스의 PostgreSQL(`gitea` 데이터베이스)로 맞추고 다시 띄운다.
-  4. 관리 계정(`jw-admin`)을 만든다. 사람이 로그인하는 계정이 아니라 backend 가 쓰는 계정이다.
+  1. 버전 — 렌더링 단계에서 `.env` 의 `GITEA_IMAGE` 에 이미 기록되어 있다(verified = compose 의 고정 이미지, latest·지정 = 태그).
+  2. 컨테이너를 기동하고 응답할 때까지 대기한다.
+  3. 초기 설정 — `app.ini` 의 DB 를 워크스페이스의 PostgreSQL(`gitea` 데이터베이스)로 설정하고 재기동한다.
+  4. 관리 계정(`jw-admin`)을 생성한다. 사람이 로그인하는 계정이 아니라 backend 가 사용하는 계정이다.
 
 connect
-  5. 관리 토큰을 발급해 backend 설정(`GITEA_TOKEN`)에 넣는다 — backend 는 이 토큰 + Sudo 헤더로 사용자 권한을 대신한다.
+  5. 관리 토큰을 발급하여 backend 설정(`GITEA_TOKEN`)에 기록한다 — backend 는 이 토큰 + Sudo 헤더로 사용자 권한을 대행한다.
   6. 워크스페이스 OAuth 에 클라이언트 `gitea` 를 등록한다(`OAUTH_CLIENTS_JSON`).
-  7. Gitea 에 로그인 원본 `workspace`(OpenID Connect)를 건다.
-  8. 앞단 경로(`/git/`)로 닿는지 확인한다.
-  `.env` 가 바뀌었으므로 엔진이 backend 를 한 번 다시 띄운다.
+  7. Gitea 에 로그인 원본 `workspace`(OpenID Connect)를 등록한다.
+  8. 프런트 경로(`/git/`)로 도달 가능한지 확인한다.
+  `.env` 가 변경되었으므로 엔진이 backend 를 1회 재기동한다.
 
 remove
-  로그인 원본을 지우고, backend 설정에서 토큰·클라이언트를 빼고, 컨테이너를 멈춘다. 데이터 볼륨(`ws-gitea-data`)은 남는다.
+  로그인 원본을 삭제하고, backend 설정에서 토큰·클라이언트를 제거하고, 컨테이너를 중지한다. 데이터 볼륨(`ws-gitea-data`)은 보존된다.
 
-비밀값은 명령 인자에 싣지 않으려고 `--env-file` 과 표준 입력을 쓴다. 예외는 Gitea 의 `auth add-oauth --secret`
-하나다(Gitea CLI 가 다른 길을 주지 않는다) — Gitea 컨테이너 안의 프로세스 목록에 잠깐 보인다.
+비밀값이 명령 인자에 노출되지 않도록 `--env-file` 과 표준 입력을 사용한다. 예외는 Gitea 의 `auth add-oauth --secret`
+하나이다(Gitea CLI 가 다른 방법을 제공하지 않는다) — Gitea 컨테이너 내 프로세스 목록에 일시적으로 노출된다.
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ def install(ctx, zone_id: str) -> None:
     default_install(ctx, zone_id)
     _wait_http(ctx)
 
-    # 초기 설정 — 이미지에 든 environment-to-ini 로 app.ini 를 고친다(값은 env 파일로 넘긴다).
+    # 초기 설정 — 이미지에 포함된 environment-to-ini 로 app.ini 를 수정한다(값은 env 파일로 전달한다).
     s = ctx.secrets()
     tmp = ctx.paths.state / "tmp" / f"gitea-{secrets.token_hex(4)}.env"
     write_private(tmp, "".join(f"{k}={v}\n" for k, v in {
@@ -103,7 +103,7 @@ def install(ctx, zone_id: str) -> None:
 def connect(ctx, zone_id: str) -> None:
     s = ctx.secrets()
 
-    # 관리 토큰 — 이미 넣은 토큰이 살아 있으면 다시 만들지 않는다
+    # 관리 토큰 — 기존 토큰이 유효하면 재생성하지 않는다
     token = s.get("GITEA_TOKEN", "")
     if not token_valid(ctx, token):
         r = _gitea(ctx, "admin", "user", "generate-access-token", "--username", ADMIN_USER,
@@ -133,8 +133,8 @@ def connect(ctx, zone_id: str) -> None:
     if entry != wanted:
         ctx.set_env(OAUTH_CLIENTS_JSON=render.oauth_clients(s.get("OAUTH_CLIENTS_JSON", ""), CLIENT_ID, wanted))
 
-    # Gitea 의 로그인 원본 — 워크스페이스 주소로 되돌아가 설정 문서를 읽으므로 신뢰되는 인증서가 필요하다.
-    # 이미 있으면 지금 값으로 고쳐 쓴다(서버를 옮겨 접속 주소가 바뀌었으면 옛 주소를 가리키고 있다).
+    # Gitea 의 로그인 원본 — 워크스페이스 주소로 접속하여 설정 문서를 조회하므로 신뢰되는 인증서가 필요하다.
+    # 이미 있으면 현재 값으로 갱신한다(서버 이전으로 접속 주소가 변경된 경우 기존 주소를 가리키고 있다).
     discovery = f"{ctx.plan.app_url}/oauth/.well-known/openid-configuration"
     source = ["--name", AUTH_NAME, "--provider", "openidConnect", "--key", CLIENT_ID, "--secret", client_secret,
               "--auto-discover-url", discovery, "--scopes", "openid email profile"]
@@ -149,13 +149,13 @@ def connect(ctx, zone_id: str) -> None:
         clear_pending(ctx.store, zone_id)
         ctx.log("git: 워크스페이스 로그인 연동을 " + ("확인했습니다" if existing is not None else "걸었습니다"))
     else:
-        # 임시 인증서이거나 접속 주소가 아직 이 서버를 가리키지 않으면 여기서 막힌다 — 설치는 계속한다.
-        # 보류로 적어 두고, 인증서를 바꾼 뒤(또는 "다시 연결"로) 다시 시도한다.
+        # 임시 인증서이거나 접속 주소가 아직 본 서버를 가리키지 않으면 여기서 실패한다 — 설치는 계속한다.
+        # 보류로 기록하고, 인증서 교체 후(또는 "다시 연결"로) 재시도한다.
         ctx.log(r.err[-300:])
         mark_pending(ctx, zone_id, "discovery_unreachable")
         ctx.warn("git_sso_pending", reason="discovery_unreachable")
 
-    # 앞단 경로
+    # 프런트 경로
     scheme = "https" if ctx.plan.tls else "http"
     status, _ = ctx.http.get(f"{scheme}://nginx/git/api/healthz", headers={"Host": ctx.plan.domain})
     if status != 200:

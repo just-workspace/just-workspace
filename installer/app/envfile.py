@@ -1,13 +1,13 @@
 """`.env` 읽기·쓰기 — docker compose 의 dotenv 규칙에 맞춘 이스케이프.
 
-compose 는 따옴표 없는 값과 큰따옴표 값 안의 `${...}` 를 **치환**하고, 따옴표 없는 값의 ` #` 뒤를
-주석으로 버린다. 그래서 값은 세 가지 꼴 중 하나로만 쓴다.
+compose 는 따옴표 없는 값과 큰따옴표 값 내부의 `${...}` 를 **치환**하고, 따옴표 없는 값의 ` #` 이후를
+주석으로 처리하여 버린다. 따라서 값은 다음 세 형식 중 하나로만 기록한다.
 
-1. 안전한 글자뿐이면 그대로(`KEY=value`)
-2. 그 밖에는 작은따옴표(`KEY='value'`) — 안쪽은 글자 그대로다(치환·이스케이프 없음)
-3. 값에 작은따옴표가 들어 있으면 큰따옴표 + 역슬래시 이스케이프(`\\\\`, `\\"`, `\\$`)
+1. 안전한 문자만 포함하면 그대로(`KEY=value`)
+2. 그 외에는 작은따옴표(`KEY='value'`) — 내부는 문자 그대로 해석된다(치환·이스케이프 없음)
+3. 값에 작은따옴표가 포함되면 큰따옴표 + 역슬래시 이스케이프(`\\\\`, `\\"`, `\\$`)
 
-줄바꿈·NUL 이 든 값은 받지 않는다(한 줄에 담을 수 없다).
+줄바꿈·NUL 이 포함된 값은 거부한다(한 줄에 기록 불가).
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ class EnvValueError(ValueError):
 
 
 def quote(value: str) -> str:
-    """값 하나를 compose 가 원래대로 읽는 꼴로."""
+    """값 하나를 compose 가 원래 값으로 해석하는 형식으로 변환."""
     if not isinstance(value, str):
         value = str(value)
     if any(ch in value for ch in ("\n", "\r", "\x00")):
@@ -37,7 +37,7 @@ def quote(value: str) -> str:
 
 
 def unquote(raw: str) -> str:
-    """`quote` 의 역 — 이 모듈이 쓴 파일을 다시 읽을 때 쓴다."""
+    """`quote` 의 역변환 — 본 모듈이 기록한 파일을 다시 읽을 때 사용한다."""
     raw = raw.strip()
     if len(raw) >= 2 and raw[0] == raw[-1] == "'":
         return raw[1:-1]
@@ -55,7 +55,7 @@ def unquote(raw: str) -> str:
 
 
 def render(sections: list[tuple[str, list[tuple[str, str]]]]) -> str:
-    """[(제목, [(키, 값), …]), …] → 파일 내용. 키 이름도 검사한다."""
+    """[(제목, [(키, 값), …]), …] → 파일 내용. 키 이름도 검증한다."""
     lines = [
         "# 설치 관리자가 만든 파일입니다. 손으로 고친 값은 다음 적용 때 덮어씁니다.",
         "# 값을 바꾸려면 설치 관리자(관리 화면)를 쓰세요.",
@@ -77,7 +77,7 @@ def render(sections: list[tuple[str, list[tuple[str, str]]]]) -> str:
 
 
 def parse(text: str) -> dict[str, str]:
-    """파일 내용 → {키: 값}. 주석·빈 줄은 건너뛴다."""
+    """파일 내용 → {키: 값}. 주석·빈 줄은 무시한다."""
     values: dict[str, str] = {}
     for line in text.splitlines():
         stripped = line.strip()
@@ -91,7 +91,7 @@ def parse(text: str) -> dict[str, str]:
 
 
 def update(text: str, changes: dict[str, str]) -> str:
-    """기존 내용에서 몇 개 값만 바꾼다 — 있는 줄은 그 자리에서, 없는 키는 끝에 덧붙인다."""
+    """기존 내용에서 일부 값만 변경한다 — 존재하는 줄은 제자리에서 변경하고, 없는 키는 끝에 추가한다."""
     remaining = dict(changes)
     out: list[str] = []
     for line in text.splitlines():

@@ -1,4 +1,4 @@
-"""설치 뒤에 쓰는 `jw` 명령 — 같은 서버에 되돌리기(`jw restore`), 업데이트 채널의 공개 키와 주소."""
+"""설치 후 사용하는 `jw` 명령 — 동일 서버로의 복원(`jw restore`), 업데이트 채널의 공개 키와 주소."""
 
 from __future__ import annotations
 
@@ -49,11 +49,11 @@ def test_restore_shows_the_backup_first_and_changes_nothing_without_yes(host, ca
     assert cli.main(["restore", "/srv/backups/full.jwbak"]) == 1
     out = capsys.readouterr().out
     assert "ws.example.com" in out and "db, mail, files" in out and "gitea" in out and "--yes" in out
-    assert "config" not in out.split("되돌릴 항목:")[1].splitlines()[0]         # 설정은 되돌리지 않는다
+    assert "config" not in out.split("되돌릴 항목:")[1].splitlines()[0]         # 설정은 복원하지 않는다
     assert host.restore_calls == []
     inspect = host.runner.find("compose", "run", "backend", "backup", "inspect")[0]
     assert "/srv/backups/full.jwbak:/restore-src:ro" in inspect and "/restore-src" in inspect
-    assert any(a.endswith("run-network.yml") for a in inspect)                # 돌고 있는 backend 의 고정 주소와 겹치지 않게
+    assert any(a.endswith("run-network.yml") for a in inspect)                # 실행 중인 backend 의 고정 주소와 충돌하지 않도록 한다
 
 
 def test_restore_runs_the_backend_restore_under_maintenance(host, capsys):
@@ -64,9 +64,9 @@ def test_restore_runs_the_backend_restore_under_maintenance(host, capsys):
     assert argv[at + 1:] == ["-m", "app.cli", "restore", "/restore-src", "--yes", "--json"]
     assert "--user" in argv[:at] and argv[argv.index("--user") + 1] == "0"
     assert "/srv/backups/full.jwbak:/restore-src:ro" in argv[:at]
-    assert "--with-config" not in argv                                         # 설정은 설치 관리자의 것이다
-    assert host.flag_seen == [True]                                            # 도는 동안 쓰기를 막는다
-    assert not (host.paths.stack / "nginx/state/maintenance.on").exists()      # 끝나면 푼다
+    assert "--with-config" not in argv                                         # 설정은 설치 관리자 소관이다
+    assert host.flag_seen == [True]                                            # 실행 중에는 쓰기를 차단한다
+    assert not (host.paths.stack / "nginx/state/maintenance.on").exists()      # 종료 시 해제한다
     assert "되돌렸습니다: db, mail, files" in out and "1 → 2" in out and "_pre-restore" in out and "다시 로그인" in out
 
 
@@ -79,8 +79,8 @@ def test_restore_from_the_backup_volume_by_name_with_items_and_password(host, ca
     assert argv[at + 1:] == ["-m", "app.cli", "restore", "/backups/20260110_030000-full", "--yes", "--json", "--items", "db,mail",
                              "--allow-key-mismatch", "--password-file", "/restore-pass"]
     assert "/opt/just-workspace/pass.txt:/restore-pass:ro" in argv[:at]
-    assert not any(":/restore-src:ro" in a for a in argv)                      # 볼륨 안의 것은 따로 붙이지 않는다
-    assert "secret" not in " ".join(argv)                                      # 암호는 명령에 싣지 않는다
+    assert not any(":/restore-src:ro" in a for a in argv)                      # 볼륨 내부의 것은 별도로 마운트하지 않는다
+    assert "secret" not in " ".join(argv)                                      # 암호는 명령에 포함하지 않는다
     printed = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
     assert printed and printed[0]["ok"] is True
 
@@ -93,7 +93,7 @@ def test_restore_reports_the_failed_stage_and_exits_nonzero(host, capsys):
     assert "단계 'migrate'" in err and "단계 2 실패" in err and "원래 DB 로 되돌렸습니다" in err
     assert not (host.paths.stack / "nginx/state/maintenance.on").exists()
 
-    host.restore_reply = Result(137, "", "Killed")                             # 결과 없이 끝났다
+    host.restore_reply = Result(137, "", "Killed")                             # 결과 없이 종료되었다
     assert cli.main(["restore", "/srv/backups/full.jwbak", "--yes"]) == 1
     assert "종료 코드 137" in capsys.readouterr().err
 
@@ -176,7 +176,7 @@ def test_update_key_add_list_remove(host, capsys, tmp_path, monkeypatch):
     assert "지문" in out and "state/update/keys" in out
     assert rel.load_keys(host.svc.store.dir)
 
-    # 표준 입력으로도 받는다 — 둘째 키(다음 키)
+    # 표준 입력으로도 수신한다 — 둘째 키(다음 키)
     second = pem_of(ec.generate_private_key(ec.SECP256R1()))
     monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": io.BytesIO(second)})())
     assert cli.main(["update-key", "add", "-", "--name", "next"]) == 0
@@ -185,7 +185,7 @@ def test_update_key_add_list_remove(host, capsys, tmp_path, monkeypatch):
 
     third = tmp_path / "third.pub"
     third.write_bytes(pem_of(ec.generate_private_key(ec.SECP256R1())))
-    assert cli.main(["update-key", "add", str(third)]) == 1                    # 둘까지(현재·다음)
+    assert cli.main(["update-key", "add", str(third)]) == 1                    # 최대 둘(현재·다음)
     assert "2개까지" in capsys.readouterr().err and not (keys / "third.pub").exists()
 
     assert cli.main(["update-key", "remove", "next.pub"]) == 0
@@ -208,7 +208,7 @@ def test_update_key_rejects_what_is_not_a_public_key(host, capsys, tmp_path):
 
 
 def test_update_key_makes_the_check_work(host):
-    """키가 없어 "구성되지 않음"이던 서버가 키를 넣으면 확인이 된다."""
+    """키가 없어 "구성되지 않음"이던 서버에 키를 추가하면 확인이 수행된다."""
     host.releases.publish("1.0.0")
     host.releases.publish("1.0.1")
     mgr = host.manager()
@@ -228,7 +228,7 @@ def test_update_channel_show_set_reset(host, capsys):
     assert cli.main(["update-channel"]) == 0
     assert "https://releases.example.com" in capsys.readouterr().out
 
-    # 다른 채널로 — 새 채널의 순번이 낮아도(다른 발행자) 받아들이도록 기억한 순번을 지운다
+    # 다른 채널로 전환 — 새 채널의 순번이 낮아도(다른 발행자) 수용하도록 저장된 순번을 삭제한다
     host.releases.publish("1.0.0")
     host.releases.publish("1.0.1")
     mgr = host.manager()
@@ -241,7 +241,7 @@ def test_update_channel_show_set_reset(host, capsys):
     assert mgr.check_raw()["sequence"] == {}
     host.releases.fetched.clear()
     mgr.check()
-    assert mgr.status()["check"]["error"]["code"] == "channel_unreachable"     # 가짜 채널에는 그 주소가 없다
+    assert mgr.status()["check"]["error"]["code"] == "channel_unreachable"     # 모의 채널에는 해당 주소가 없다
     assert host.releases.fetched[0] == "https://mirror.example.com/jw/channels/stable.json"
 
     for bad in ("ftp://x.example.com", "mirror.example.com", "https://user:pw@x.example.com", "https://x.example.com/?a=1",

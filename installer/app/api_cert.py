@@ -1,11 +1,11 @@
-"""인증서의 내부 API — `/internal/cert*` (8444, 공유 키 + 내부 대역). 동작은 app/certctl.py 가 한다.
+"""인증서의 내부 API — `/internal/cert*` (8444, 공유 키 + 내부 대역). 동작은 app/certctl.py 가 수행한다.
 
-| 메서드·경로 | 하는 일 |
+| 메서드·경로 | 동작 |
 |---|---|
-| `GET /internal/cert` | 지금 쓰는 인증서 — 종류·임시 여부·만료일·발급자·이름, 인증서 때문에 보류된 구역 연결 |
-| `POST /internal/cert/reissue` `{"mode": "auto"}` 또는 `{"mode": "upload", "cert", "key", "ca"?}` | 다시 발급 / 올린 인증서로 교체(202 + 작업) |
-| `POST /internal/cert/ca` `{"ca"}` | 올린 인증서를 쓰는 설치에 발급 CA 인증서만 더한다(202 + 작업). `{"ca": ""}` 는 따로 올린 CA 를 걷어 낸다 |
-| `POST /internal/zones/<id>/reconnect` | 보류된 구역 연결을 다시 시도(202 + 작업) |
+| `GET /internal/cert` | 현재 사용 중인 인증서 — 종류·임시 여부·만료일·발급자·이름, 인증서 문제로 보류된 구역 연결 |
+| `POST /internal/cert/reissue` `{"mode": "auto"}` 또는 `{"mode": "upload", "cert", "key", "ca"?}` | 재발급 / 업로드한 인증서로 교체(202 + 작업) |
+| `POST /internal/cert/ca` `{"ca"}` | 업로드한 인증서를 사용하는 설치에 발급 CA 인증서만 추가한다(202 + 작업). `{"ca": ""}` 는 별도 업로드한 CA 를 제거한다 |
+| `POST /internal/zones/<id>/reconnect` | 보류된 구역 연결 재시도(202 + 작업) |
 """
 
 from __future__ import annotations

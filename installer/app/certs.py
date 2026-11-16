@@ -1,6 +1,6 @@
-"""인증서 — 자체 서명 만들기, 올린 파일 검증, 지문.
+"""인증서 — 자체 서명 생성, 업로드한 파일 검증, 지문.
 
-배치 규칙(서비스마다 찾는 폴더 이름이 다르다)은 app/render.py 의 `Plan.cert_dir`·`cert_aliases` 와
+배치 규칙(서비스마다 조회하는 폴더 이름이 상이)은 app/render.py 의 `Plan.cert_dir`·`cert_aliases` 와
 app/helper.py 의 `place-cert` 에 있다.
 """
 
@@ -22,7 +22,7 @@ def _utcnow() -> dt.datetime:
 
 
 def self_signed(names: list[str], *, days: int = 365, common_name: str | None = None) -> tuple[str, str]:
-    """자체 서명 인증서(ECDSA P-256). names 는 도메인 이름이나 IP 주소. (인증서 PEM, 키 PEM)."""
+    """자체 서명 인증서(ECDSA P-256). names 는 도메인 이름 또는 IP 주소. 반환값: (인증서 PEM, 키 PEM)."""
     if not names:
         raise ValueError("이름이 하나는 있어야 합니다")
     key = ec.generate_private_key(ec.SECP256R1())
@@ -52,7 +52,7 @@ def self_signed(names: list[str], *, days: int = 365, common_name: str | None = 
 
 
 def chain_pem(cert_pem: str) -> str:
-    """올린 인증서 파일에서 **첫 장(서버 인증서)을 뺀 나머지** — 함께 온 발급 CA(중간·루트). 없으면 빈 글자."""
+    """업로드한 인증서 파일에서 **첫 번째(서버 인증서)를 제외한 나머지** — 함께 포함된 발급 CA(중간·루트). 없으면 빈 문자열."""
     try:
         chain = x509.load_pem_x509_certificates(cert_pem.encode())
     except Exception:  # noqa: BLE001
@@ -75,18 +75,18 @@ def _is_ca(cert: x509.Certificate) -> bool:
 
 
 def _issued_by(cert: x509.Certificate, issuer: x509.Certificate) -> bool:
-    """`issuer` 가 `cert` 를 직접 서명했는가(이름·서명 둘 다)."""
+    """`issuer` 가 `cert` 를 직접 서명했는지 여부(이름·서명 모두)."""
     try:
         cert.verify_directly_issued_by(issuer)
         return True
-    except Exception:  # noqa: BLE001 — 이름이 다르거나 서명이 안 맞거나 모르는 알고리즘
+    except Exception:  # noqa: BLE001 — 이름 불일치, 서명 불일치 또는 미지원 알고리즘
         return False
 
 
 def trust_pem(cert_pem: str, ca_pem: str | None = None) -> str:
-    """컨테이너가 믿게 할 CA 묶음 — 올린 인증서 파일에 함께 온 발급 CA(첫 장 뒤)와 따로 올린 CA 인증서를 겹치지 않게 합친다.
+    """컨테이너가 신뢰하도록 할 CA 번들 — 업로드한 인증서 파일에 포함된 발급 CA(첫 번째 이후)와 별도 업로드한 CA 인증서를 중복 없이 병합한다.
 
-    둘 다 없으면 빈 글자(믿게 할 CA 를 알 수 없다 — 공개 CA 가 내준 인증서면 필요 없다).
+    둘 다 없으면 빈 문자열(신뢰 대상 CA 확인 불가 — 공개 CA 발급 인증서이면 불필요).
     """
     seen: set[bytes] = set()
     out: list[str] = []
@@ -99,10 +99,10 @@ def trust_pem(cert_pem: str, ca_pem: str | None = None) -> str:
 
 
 def inspect_ca(ca_pem: str, cert_pem: str) -> list[dict]:
-    """따로 올린 CA 인증서 검증 — 검사 줄 목록(`inspect` 의 checks 와 같은 꼴).
+    """별도 업로드한 CA 인증서 검증 — 검사 항목 목록(`inspect` 의 checks 와 동일 형식).
 
-    읽을 수 있는가(`ca_not_pem`) · 전부 CA 인증서인가(`ca_not_a_ca` — 서버 인증서를 잘못 올린 경우) ·
-    서버 인증서(또는 함께 온 체인의 끝)를 내준 CA 가 그 안에 있는가(`ca_not_issuer`).
+    읽기 가능 여부(`ca_not_pem`) · 전부 CA 인증서인지 여부(`ca_not_a_ca` — 서버 인증서를 잘못 업로드한 경우) ·
+    서버 인증서(또는 동반된 체인의 끝)를 발급한 CA 의 포함 여부(`ca_not_issuer`).
     """
     def line(check_id: str, status: str, value=None, fix: str | None = None) -> dict:
         return {"id": check_id, "status": status, "value": value, "fix": {"key": fix, "vars": {}} if fix else None}
@@ -119,8 +119,8 @@ def inspect_ca(ca_pem: str, cert_pem: str) -> list[dict]:
     checks.append(line("ca_is_ca", "pass"))
     chain = _load_all(cert_pem)
     if not chain:
-        return checks                                   # 서버 인증서를 읽지 못했다 — 그쪽 검사가 알린다
-    # 체인의 어느 한 장이라도 올린 CA 가 내준 것이면 이어진다(서버 인증서 → 중간 → 올린 루트)
+        return checks                                   # 서버 인증서 읽기 실패 — 해당 검사에서 보고
+    # 체인 중 하나라도 업로드한 CA 가 발급한 것이면 체인이 연결된다(서버 인증서 → 중간 → 업로드한 루트)
     if any(_issued_by(c, ca) for c in chain for ca in cas):
         checks.append(line("ca_issues_cert", "pass", cas[0].subject.rfc4514_string()))
     else:
@@ -129,7 +129,7 @@ def inspect_ca(ca_pem: str, cert_pem: str) -> list[dict]:
 
 
 def fingerprint_sha256(cert_pem: str) -> str:
-    """`AB:CD:…` 꼴의 SHA-256 지문(첫 인증서)."""
+    """`AB:CD:…` 형식의 SHA-256 지문(첫 번째 인증서)."""
     cert = x509.load_pem_x509_certificates(cert_pem.encode())[0]
     raw = cert.fingerprint(hashes.SHA256()).hex().upper()
     return ":".join(raw[i:i + 2] for i in range(0, len(raw), 2))
@@ -144,7 +144,7 @@ def _names(cert: x509.Certificate) -> list[str]:
 
 
 def name_covered(name: str, patterns: list[str]) -> bool:
-    """인증서 이름 목록이 그 이름을 덮는가(와일드카드는 한 단계만)."""
+    """인증서 이름 목록이 해당 이름을 포함하는지 여부(와일드카드는 한 단계만)."""
     name = name.lower().rstrip(".")
     for pattern in patterns:
         p = pattern.lower().rstrip(".")
@@ -157,14 +157,14 @@ def name_covered(name: str, patterns: list[str]) -> bool:
 
 def inspect(cert_pem: str, key_pem: str, domain: str, *, mail_host: str | None = None,
             ca_pem: str | None = None, now: dt.datetime | None = None) -> dict:
-    """올린 인증서·키(와 따로 올린 CA 인증서) 검증.
+    """업로드한 인증서·키(및 별도 업로드한 CA 인증서) 검증.
 
-    돌려주는 값: {"ok", "checks": [{"id", "status": pass|warn|fail, "value", "fix"}], "names", "not_after",
-    "issuer", "fingerprint", "trust": included|none|self_signed}. 검사: 읽을 수 있는가 · 도메인 포함 · 키 짝 · 만료일 ·
+    반환값: {"ok", "checks": [{"id", "status": pass|warn|fail, "value", "fix"}], "names", "not_after",
+    "issuer", "fingerprint", "trust": included|none|self_signed}. 검사: 읽기 가능 여부 · 도메인 포함 · 키 일치 · 만료일 ·
     발급자 · 발급 CA 유무(warn) · 메일 호스트 이름(warn) · CA 인증서(`inspect_ca`).
 
-    `trust` — 이 서버의 다른 컨테이너(코드 저장소 등)가 이 인증서를 믿게 할 CA 를 아는가: `included`(파일에 체인이
-    함께 왔거나 CA 인증서를 따로 올렸다) · `none`(서버 인증서 한 장뿐 — 공개 CA 면 문제없고, 사설 CA 면 CA 인증서가 필요하다) ·
+    `trust` — 이 서버의 다른 컨테이너(코드 저장소 등)가 이 인증서를 신뢰하도록 할 CA 의 확인 여부: `included`(파일에 체인이
+    동반되었거나 CA 인증서를 별도 업로드) · `none`(서버 인증서 1건뿐 — 공개 CA 이면 문제없으며, 사설 CA 이면 CA 인증서 필요) ·
     `self_signed`.
     """
     now = now or _utcnow()
@@ -231,7 +231,7 @@ def inspect(cert_pem: str, key_pem: str, domain: str, *, mail_host: str | None =
         add("issuer", "pass", issuer)
         trust = "included" if (len(chain) > 1 or (ca_pem or "").strip()) else "none"
         if trust == "none":
-            # 서버 인증서 한 장뿐 — 브라우저도 중간 인증서가 없으면 경고할 수 있고, 사설 CA 면 코드 저장소의 로그인 연동이 보류된다
+            # 서버 인증서 1건뿐 — 중간 인증서가 없으면 브라우저도 경고할 수 있으며, 사설 CA 이면 코드 저장소의 로그인 연동이 보류된다
             add("chain", "warn", fix="cert_chain_missing")
         else:
             add("chain", "pass", len(chain) - 1 + len(_load_all(ca_pem or "")))
@@ -250,7 +250,7 @@ def inspect(cert_pem: str, key_pem: str, domain: str, *, mail_host: str | None =
 
 
 def covers(cert_pem: str, names: list[str], *, min_days: int = 30, now: dt.datetime | None = None) -> bool:
-    """이미 있는 인증서가 그 이름들을 모두 덮고 만료까지 min_days 넘게 남았는가(다시 발급할지 판단)."""
+    """기존 인증서가 해당 이름을 모두 포함하고 만료까지 min_days 를 초과하여 남았는지 여부(재발급 판단용)."""
     try:
         cert = x509.load_pem_x509_certificates(cert_pem.encode())[0]
     except Exception:  # noqa: BLE001

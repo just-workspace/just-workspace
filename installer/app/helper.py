@@ -1,18 +1,18 @@
-"""보조 컨테이너 안에서 도는 작은 명령들 — `python -m app.helper <명령> …`.
+"""보조 컨테이너 내에서 실행되는 소형 명령 — `python -m app.helper <명령> …`.
 
-설치 관리자는 자기 이미지로 일회용 컨테이너를 띄워, 자기 컨테이너에서는 볼 수 없는 것을 본다
-(호스트 네트워크의 포트·경로, 도커 볼륨 안, NFS 볼륨). 표준 라이브러리만 쓴다.
-결과는 표준 출력에 JSON 한 덩어리. 종료 코드 0 = 명령이 돌았다(판정은 JSON 안에), 그 밖 = 명령 자체가 실패.
+설치 관리자는 자체 이미지로 일회용 컨테이너를 기동하여, 자체 컨테이너에서는 확인할 수 없는 대상을 확인한다
+(호스트 네트워크의 포트·경로, 도커 볼륨 내부, NFS 볼륨). 표준 라이브러리만 사용한다.
+결과는 표준 출력에 JSON 1건으로 출력한다. 종료 코드 0 = 명령 실행됨(판정은 JSON 내), 그 외 = 명령 자체의 실패.
 
-| 명령 | 띄우는 방법 | 하는 일 |
+| 명령 | 기동 방법 | 동작 |
 |---|---|---|
-| `host-probe --ports 80,443,25` | `--network host` | 포트 점유(bind 시도), 호스트 경로표, 나가는 주소, 기본 게이트웨이 |
-| `disk <경로>` | 볼륨/폴더를 붙여서 | 여유 공간 |
-| `path-test <경로>` | `--mount type=bind`, uid 1000 | 쓰기·읽기·지우기 |
-| `nfs-test <경로>` | NFS 볼륨, uid 1000 | 쓰기·읽기·지우기, 파일 잠금, 여유 공간 |
-| `write-marker <경로> --install-id <id>` | 저장소 볼륨, uid 1000 | 표식 파일 쓰기 |
-| `read-marker <경로>` | 저장소 볼륨 | 표식 파일 읽기(복원 — 같은 설치의 저장소인지) |
-| `restore-files <백업> <경로> --member <이름>` | 백업(읽기 전용) + 저장소 볼륨, root 로 시작 | 백업 안의 파일 묶음을 저장소에 푼다 |
+| `host-probe --ports 80,443,25` | `--network host` | 포트 점유(bind 시도), 호스트 경로표, 아웃바운드 주소, 기본 게이트웨이 |
+| `disk <경로>` | 볼륨/폴더 마운트 | 여유 공간 |
+| `path-test <경로>` | `--mount type=bind`, uid 1000 | 쓰기·읽기·삭제 |
+| `nfs-test <경로>` | NFS 볼륨, uid 1000 | 쓰기·읽기·삭제, 파일 잠금, 여유 공간 |
+| `write-marker <경로> --install-id <id>` | 저장소 볼륨, uid 1000 | 저장소 마커 파일 기록 |
+| `read-marker <경로>` | 저장소 볼륨 | 저장소 마커 파일 읽기(복원 — 동일 설치의 저장소인지 확인) |
+| `restore-files <백업> <경로> --member <이름>` | 백업(읽기 전용) + 저장소 볼륨, root 로 시작 | 백업 내 파일 아카이브를 저장소에 추출 |
 | `place-cert …` · `read-cert …` | 인증서 볼륨 | 인증서 배치·읽기 |
 """
 
@@ -29,7 +29,7 @@ import time
 
 MARKER_NAME = ".jw-storage"
 LE_ROOT = "/etc/letsencrypt"
-RELAY_GID = 65532          # 무손실 음성 릴레이 컨테이너의 gid — 개인 키를 그룹 읽기로 열어 준다
+RELAY_GID = 65532          # 무손실 음성 릴레이 컨테이너의 gid — 개인 키에 그룹 읽기 권한 부여
 
 
 def _out(data: dict) -> int:
@@ -41,7 +41,7 @@ def _out(data: dict) -> int:
 
 
 def port_state(port: int) -> str:
-    """그 TCP 포트를 지금 누가 듣고 있는가 — 직접 bind 해 본다."""
+    """해당 TCP 포트의 현재 점유 여부 — 직접 bind 를 시도하여 확인한다."""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -76,7 +76,7 @@ def parse_routes(text: str) -> list[dict]:
 
 
 def parse_default_gateway(text: str) -> str:
-    """/proc/net/route → 기본 경로의 게이트웨이 주소(없으면 빈 문자열). 여럿이면 metric 이 가장 낮은 것."""
+    """/proc/net/route → 기본 경로의 게이트웨이 주소(없으면 빈 문자열). 복수이면 metric 이 가장 낮은 것."""
     best: tuple[int, str] | None = None
     for line in text.splitlines()[1:]:
         parts = line.split()
@@ -96,7 +96,7 @@ def parse_default_gateway(text: str) -> str:
 
 
 def outbound_address() -> str:
-    """밖으로 나갈 때 쓰는 호스트 주소(패킷은 보내지 않는다)."""
+    """아웃바운드에 사용되는 호스트 주소(패킷은 송신하지 않는다)."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("203.0.113.1", 9))
@@ -146,7 +146,7 @@ def cmd_disk(args) -> int:
 
 
 def _write_read_delete(folder: str) -> str | None:
-    """쓰기·읽기·지우기. 성공하면 None, 아니면 errno 이름."""
+    """쓰기·읽기·삭제. 성공 시 None, 실패 시 errno 이름."""
     name = os.path.join(folder, f".jw-probe-{os.getpid()}-{int(time.time())}")
     payload = b"just-workspace storage probe\n"
     try:
@@ -209,7 +209,7 @@ def cmd_nfs_test(args) -> int:
     return _out(out)
 
 
-# ─── 저장소 표식 ───
+# ─── 저장소 마커 ───
 
 
 def cmd_write_marker(args) -> int:
@@ -241,7 +241,7 @@ def cmd_write_marker(args) -> int:
 
 
 def cmd_read_marker(args) -> int:
-    """{"status": found|missing|unreadable, "install_id"} — 아무것도 쓰지 않는다."""
+    """{"status": found|missing|unreadable, "install_id"} — 쓰기 작업 없음."""
     path = os.path.join(args.path, MARKER_NAME)
     try:
         with open(path, encoding="utf-8") as f:
@@ -253,15 +253,15 @@ def cmd_read_marker(args) -> int:
     return _out({"status": "found", "install_id": str((data or {}).get("install_id", "")) if isinstance(data, dict) else ""})
 
 
-# ─── 복원: 파일 저장소 되돌리기 ───
+# ─── 복원: 파일 저장소 복원 ───
 #
-# 백업은 폴더이거나 tar 한 개(.jwbak)이고, 파일 저장소는 그 안의 tar(압축 없음) 한 멤버다.
-# 백업 파일은 소유자(root)만 읽을 수 있고 저장소는 backend 의 사용자(uid 1000)가 써야 한다 —
-# root 로 백업을 연 뒤 **권한을 내리고** 푼다(root 를 낮추는 NFS 내보내기에서도 쓸 수 있고, 파일 소유자가 backend 가 된다).
+# 백업은 폴더 또는 tar 1개(.jwbak)이며, 파일 저장소는 그 내부의 tar(무압축) 멤버 1개이다.
+# 백업 파일은 소유자(root)만 읽을 수 있고 저장소는 backend 의 사용자(uid 1000)가 기록해야 한다 —
+# root 로 백업을 연 뒤 **권한을 강등**하고 추출한다(root 권한을 강등하는 NFS 내보내기에서도 사용 가능하며, 파일 소유자가 backend 가 된다).
 
 
 def _open_member(source: str, member: str):
-    """(읽을 파일 객체, 닫을 것들). 백업이 폴더면 그 안의 파일, tar 면 그 멤버."""
+    """(읽을 파일 객체, 닫을 대상 목록). 백업이 폴더이면 그 내부의 파일, tar 이면 해당 멤버."""
     import tarfile
 
     if os.path.isdir(source):
@@ -322,12 +322,12 @@ def cmd_restore_files(args) -> int:
 # ─── 인증서 배치 ───
 #
 # 인증서 볼륨(/etc/letsencrypt)의 배치:
-#   live/<접속 주소>/          nginx · 무손실 음성 릴레이가 읽는다
-#     · 자동 발급: certbot 이 만든 폴더(진짜 파일은 archive/ 에 있다)
-#     · 올린 파일·임시 인증서: jw/<접속 주소>/ 를 가리키는 링크
-#   live/mail.<메일 도메인>   → <접속 주소>    메일 서버가 찾는 자리
-#   live/turn.<접속 주소>     → <접속 주소>    회의 서버(TURN/TLS)가 찾는 자리
-# 링크는 모두 상대 경로라 어느 컨테이너에 붙여도 같은 파일을 가리킨다.
+#   live/<접속 주소>/          nginx · 무손실 음성 릴레이가 읽음
+#     · 자동 발급: certbot 이 생성한 폴더(실제 파일은 archive/ 에 위치)
+#     · 업로드한 파일·임시 인증서: jw/<접속 주소>/ 를 가리키는 링크
+#   live/mail.<메일 도메인>   → <접속 주소>    메일 서버가 조회하는 위치
+#   live/turn.<접속 주소>     → <접속 주소>    회의 서버(TURN/TLS)가 조회하는 위치
+# 링크는 모두 상대 경로이므로 어느 컨테이너에 마운트해도 동일 파일을 가리킨다.
 
 
 def _safe_name(name: str) -> str:
@@ -365,7 +365,7 @@ def cmd_place_cert(args) -> int:
         if os.path.islink(target):
             os.unlink(target)
         elif os.path.isdir(target):
-            # certbot 이 관리하는 폴더가 이미 있다 — 덮지 않는다(자동 발급으로 받은 인증서를 지우게 된다)
+            # certbot 이 관리하는 폴더가 이미 존재 — 덮어쓰지 않는다(자동 발급으로 받은 인증서가 삭제됨)
             return _out({"status": "managed_by_certbot"})
         os.symlink(os.path.join("..", "jw", name), target)
         for path, mode in ((os.path.join(root, "jw"), 0o750), (store, 0o750),
@@ -411,7 +411,7 @@ def cmd_read_cert(args) -> int:
 
 
 def cmd_unlink_cert(args) -> int:
-    """올린 파일·임시 인증서를 가리키던 링크를 뗀다(자동 발급으로 바꿀 때). certbot 폴더는 건드리지 않는다."""
+    """업로드한 파일·임시 인증서를 가리키던 링크를 제거한다(자동 발급으로 전환 시). certbot 폴더는 변경하지 않는다."""
     path = os.path.join(args.root, "live", _safe_name(args.name))
     if os.path.islink(path):
         os.unlink(path)
@@ -420,7 +420,7 @@ def cmd_unlink_cert(args) -> int:
 
 
 def cmd_drop_cert(args) -> int:
-    """그 이름의 인증서를 통째로 치운다(링크·certbot 폴더·갱신 설정). 복원에서, 되돌린 인증서를 쓰지 않게 됐을 때만 부른다."""
+    """해당 이름의 인증서를 전부 삭제한다(링크·certbot 폴더·갱신 설정). 복원에서, 복원한 인증서를 사용하지 않게 된 경우에만 호출한다."""
     import shutil
 
     name = _safe_name(args.name)

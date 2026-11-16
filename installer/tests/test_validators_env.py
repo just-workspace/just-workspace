@@ -24,9 +24,9 @@ def test_domain_accepts_and_normalizes():
     assert v.domain("a-b.c1.example.co.kr") == "a-b.c1.example.co.kr"
     assert v.address("203.0.113.7") == "203.0.113.7"
     with pytest.raises(v.Invalid):
-        v.domain("localhost")          # 점이 없다
+        v.domain("localhost")          # 점 없음
     with pytest.raises(v.Invalid):
-        v.domain("203.0.113.7")        # 주소는 domain 이 아니다(address 로 받는다)
+        v.domain("203.0.113.7")        # 주소는 domain 이 아니다(address 로 처리한다)
 
 
 @pytest.mark.parametrize("value", ["10.0.0.0/8; x", "10.0.0.1 10.0.0.2", "::1", "300.1.1.1", "10.0.0.0/33", "a/24", ""])

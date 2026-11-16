@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# S4 NFS 저장소 — 이 서버 안에 NFS 서버(nfs-kernel-server)를 띄워 내보내기를 만들고, 그 내보내기를 저장소로 설치한다.
-# 확인 다섯 항목(probe)의 실제 결과, 볼륨·표식·업로드 위치, 그리고 NFS 서버가 멈췄을 때 쓰기 거부(503)와 복구.
-# 호스트에 nfs-kernel-server 패키지를 깔고 /etc/exports.d/e2e.exports 를 쓴다(검수 전용 서버에서만).
+# S4 NFS 저장소 — 이 서버 내에 NFS 서버(nfs-kernel-server)를 기동하여 내보내기를 생성하고, 해당 내보내기를 저장소로 설치한다.
+# 확인 다섯 항목(probe)의 실제 결과, 볼륨·마커·업로드 위치, 그리고 NFS 서버 중지 시 쓰기 거부(503)와 복구.
+# 호스트에 nfs-kernel-server 패키지를 설치하고 /etc/exports.d/e2e.exports 를 기록한다(검수 전용 서버에서만).
 . "$(dirname "$0")/../lib.sh"
 NFS_ROOT=/srv/e2e-nfs
 
@@ -13,7 +13,7 @@ fi
 check "nfs-kernel-server 설치" dpkg -s nfs-kernel-server
 sudo systemctl start nfs-server
 e2e_reset
-# 앞선 실행의 저장소 내용(다른 설치의 표식)이 남아 있으면 지운다
+# 이전 실행의 저장소 내용(다른 설치의 마커)이 남아 있으면 삭제한다
 sudo rm -rf "$NFS_ROOT"
 sudo mkdir -p "$NFS_ROOT"/{rw,rwroot,ro,denied,rootonly}
 sudo chown 1000:1000 "$NFS_ROOT/rw" "$NFS_ROOT/rwroot" "$NFS_ROOT/ro" "$NFS_ROOT/denied"

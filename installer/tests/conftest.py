@@ -1,6 +1,6 @@
-"""설치 관리자 테스트 공통 준비 — docker 없이 로컬에서 돈다.
+"""설치 관리자 테스트 공통 준비 — docker 없이 로컬에서 실행된다.
 
-번들은 리포에서 바로 읽고(`Bundle()`), docker·호스트 접근은 `FakeRunner` 로 바꾼다.
+번들은 리포에서 직접 읽고(`Bundle()`), docker·호스트 접근은 `FakeRunner` 로 대체한다.
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-# 제품 버전은 리포 루트의 VERSION 에서 오는데, 그 값은 릴리스마다 바뀐다. 테스트의 기대값·스냅샷이 거기에 묶이지 않게
-# 고정한다(설치 관리자가 실제로 받는 환경변수 — app/bundle.py). 이 변수 없이 VERSION 을 읽는 길은 그 테스트가 직접 지운다.
+# 제품 버전은 리포 루트의 VERSION 에서 오며, 그 값은 릴리스마다 변경된다. 테스트의 기대값·스냅샷이 이에 종속되지 않도록
+# 고정한다(설치 관리자가 실제로 수신하는 환경변수 — app/bundle.py). 이 변수 없이 VERSION 을 읽는 경로의 경우 해당 테스트가 직접 삭제한다.
 TEST_VERSION = "1.0.0"
 os.environ["JW_INSTALLER_VERSION"] = TEST_VERSION
 
@@ -45,11 +45,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 @functools.lru_cache(maxsize=None)
 def repo_doc(relative: str) -> str:
-    """리포의 문서를 읽는다(문서와 코드가 같은 말을 하는지 보는 검사용) — 테스트 실행 한 번에 **한 번만** 읽는다.
+    """리포의 문서를 읽는다(문서와 코드의 내용 일치 여부를 확인하는 검사용) — 테스트 실행 1회당 **한 번만** 읽는다.
 
-    테스트마다 다시 읽으면, 도는 동안 문서를 고치거나 저장하는 순간(반쯤 쓰인 파일)에 걸린 테스트만 깨진다.
-    줄바꿈은 LF 로 맞춘다 — CRLF 로 받은 작업 폴더에서도 같은 결과가 나오게.
-    읽지 못하면 무엇이 어디에 있어야 하는지 알리고 멈춘다.
+    테스트마다 다시 읽으면, 실행 중 문서를 수정·저장하는 순간(일부만 기록된 파일)에 해당한 테스트만 실패한다.
+    줄바꿈은 LF 로 정규화한다 — CRLF 로 체크아웃한 작업 폴더에서도 동일한 결과를 얻기 위함이다.
+    읽기에 실패하면 필요한 파일과 그 위치를 알리고 중단한다.
     """
     path = REPO_ROOT / relative
     try:
@@ -63,7 +63,7 @@ def repo_doc(relative: str) -> str:
 
 
 def doc_json_examples(relative: str) -> list[dict]:
-    """문서의 ```json 블록에 든 예시(객체인 것) — 블록 전체가 JSON 이 아니면 그 안에서 JSON 인 첫 줄을 쓴다."""
+    """문서의 ```json 블록에 포함된 예시(객체인 것) — 블록 전체가 JSON 이 아니면 그 안에서 JSON 인 첫 줄을 사용한다."""
     out = []
     for block in re.findall(r"```json\n(.*?)```", repo_doc(relative), re.S):
         for text in (block, *block.strip().splitlines()):
@@ -81,7 +81,7 @@ def doc_json_examples(relative: str) -> list[dict]:
 
 @pytest.fixture(scope="session")
 def update_api_examples() -> list[dict]:
-    """업데이트 내부 API 계약 문서(docs/update-api.md)의 JSON 예시 — 세션에 한 번 읽는다."""
+    """업데이트 내부 API 계약 문서(docs/update-api.md)의 JSON 예시 — 세션당 한 번 읽는다."""
     return doc_json_examples("docs/update-api.md")
 
 
@@ -101,7 +101,7 @@ def secrets() -> dict:
 
 
 def make_answers(**overrides) -> ans.Answers:
-    """직접 연결 + 자동 인증서 + 협업 묶음 — 가장 흔한 꼴. overrides 는 최상위 항목을 바꾼다."""
+    """직접 연결 + 자동 인증서 + 협업 프리셋 — 가장 일반적인 구성. overrides 는 최상위 항목을 대체한다."""
     data = {
         "mode": "new",
         "access": {"domain": "ws.example.com", "network": "direct", "cert": "auto"},

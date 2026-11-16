@@ -1,11 +1,11 @@
-"""상태 저장 — `/data/state/*.json`. 쓰기는 임시 파일 뒤 바꿔치기(중간에 꺼져도 깨진 파일이 남지 않는다).
+"""상태 저장 — `/data/state/*.json`. 쓰기는 임시 파일 기록 후 교체 방식이다(도중에 중단되어도 손상된 파일이 남지 않는다).
 
 | 파일 | 내용 |
 |---|---|
 | `install.json` | 설치 id, 단계(`wizard` → `applying` → `installed`), 잠금 시각 |
 | `answers.json` | 답변(비밀 제외) |
-| `answers.secret.json` | 답변의 비밀(관리자 비밀번호·SMTP 비밀번호·AI 키) — 쓰고 나면 지운다 |
-| `env.secret.json` | `.env` 에 들어가는 비밀값과 구역 훅이 채운 값 |
+| `answers.secret.json` | 답변의 비밀(관리자 비밀번호·SMTP 비밀번호·AI 키) — 사용 후 삭제한다 |
+| `env.secret.json` | `.env` 에 기록하는 비밀값과 구역 훅이 설정한 값 |
 | `facts.json` | 감지값(메모리·CPU·공인 주소·DNS 확인 결과) |
 | `apply.json` | 적용 단계의 상태 |
 | `token.json` · `sessions.json` | 설치 토큰과 세션 |
@@ -31,7 +31,7 @@ def now_iso() -> str:
 
 
 def write_private(path: Path, text: str, mode: int = 0o600) -> None:
-    """파일을 통째로 바꿔 쓴다(같은 폴더의 임시 파일 → rename). 권한은 mode."""
+    """파일 전체를 교체하여 기록한다(동일 폴더의 임시 파일 → rename). 권한은 mode."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
@@ -114,7 +114,7 @@ class Store:
         return ans.join(self.answers_public(), self.answer_secrets())
 
     def save_answers(self, answers: ans.Answers, *, keep_secrets: bool = True) -> None:
-        """답변을 저장한다. 비밀은 따로 — 이번에 비어 온 비밀은 전에 넣은 값을 그대로 둔다."""
+        """답변을 저장한다. 비밀은 별도 저장 — 이번에 빈 값으로 수신된 비밀은 기존 값을 유지한다."""
         public, secrets = ans.split(answers)
         with _lock:
             merged = {**self.answer_secrets(), **secrets} if keep_secrets else secrets

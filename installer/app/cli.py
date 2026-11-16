@@ -1,22 +1,22 @@
-"""`jw` — 설치 관리자 컨테이너 안에서 쓰는 명령.
+"""`jw` — 설치 관리자 컨테이너 내에서 사용하는 명령.
 
-    jw token                                   설치 토큰 다시 발급(입력해 둔 답은 그대로)
-    jw status                                  어디까지 했는지
-    jw apply --answers <파일> [--dry-run]      답변 파일로 무인 설치(dry-run 은 검증·렌더링까지만)
-    jw render --answers <파일> --out <폴더>    산출물을 폴더에 써 본다(비밀값은 견본)
+    jw token                                   설치 토큰 재발급(입력된 응답은 유지)
+    jw status                                  진행 상태
+    jw apply --answers <파일> [--dry-run]      응답 파일 기반 무인 설치(dry-run 은 검증·렌더링까지만 수행)
+    jw render --answers <파일> --out <폴더>    산출물을 폴더에 기록(비밀값은 견본)
     jw reset-admin <계정> [--disable-2fa]      관리자 임시 비밀번호 발급
-    jw reinstall [--yes]                       처음부터 다시 설치할 수 있게 지운다(--yes 없이는 지울 목록만 보여 준다)
-    jw restore <백업> [--yes]                  설치된 이 서버의 데이터를 백업 시점으로 되돌린다(--yes 없이는 내용만 보여 준다)
-    jw restore --list                          백업 볼륨에 있는 백업 목록
-    jw update-key [list | add <파일> | remove <이름>]   업데이트 채널의 서명을 확인할 공개 키
+    jw reinstall [--yes]                       초기 상태부터 재설치할 수 있도록 삭제(--yes 없이는 삭제 대상 목록만 표시)
+    jw restore <백업> [--yes]                  설치된 이 서버의 데이터를 백업 시점으로 복원(--yes 없이는 내용만 표시)
+    jw restore --list                          백업 볼륨 내 백업 목록
+    jw update-key [list | add <파일> | remove <이름>]   업데이트 채널의 서명 검증용 공개 키
     jw update-channel [<주소> | --reset]       업데이트 채널 주소
 
-답변 파일은 JSON 이다(화면의 "답변 파일 내려받기"와 같은 형식). 비밀은 파일에 적거나 환경변수로 준다:
+응답 파일은 JSON 이다(화면의 "답변 파일 내려받기"와 동일 형식). 비밀은 파일에 기재하거나 환경변수로 지정한다:
 JW_ADMIN_PASSWORD · JW_MAIL_PASSWORD · JW_AI_API_KEY
 
-`"mode": "restore"` 면 백업에서 복원한다 — `restore.path`(서버의 백업 파일 경로)와 이 서버에서 다시 정할 값
-(접속 주소·연결 형태·인증서·저장소·내부 대역)만 적는다. 구역·메일·관리자는 백업에서 온다.
-설정이 암호로 보호된 백업은 `restore.password_file` 또는 환경변수 JW_BACKUP_PASSWORD.
+`"mode": "restore"` 이면 백업에서 복원한다 — `restore.path`(서버의 백업 파일 경로)와 이 서버에서 재지정할 값
+(접속 주소·연결 형태·인증서·저장소·내부 대역)만 기재한다. 구역·메일·관리자는 백업에서 가져온다.
+설정이 암호로 보호된 백업은 `restore.password_file` 또는 환경변수 JW_BACKUP_PASSWORD 를 사용한다.
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ def read_answers(path: str, env: dict | None = None) -> ans.Answers:
 
 
 def sample_secrets(bundle) -> dict:
-    """dry-run·render 용 견본 비밀값(실제 설치에는 쓰지 않는다)."""
+    """dry-run·render 용 견본 비밀값(실제 설치에는 사용하지 않는다)."""
     sd = bundle.security_defaults
     values = sd.generate([*sd.names(default_only=True), "SMTP_PASSWORD"])
     values.update(JW_INSTALL_ID="00000000-0000-0000-0000-000000000000", JW_INSTALLER_KEY="0" * 48)
@@ -138,7 +138,7 @@ def cmd_render(args) -> int:
 
 
 def prepare_restore(svc: api.Services, answers: ans.Answers, env: dict | None = None) -> ans.Answers | None:
-    """답변 파일의 복원 — 백업을 확인하고, 백업 설정과 합친 답변을 돌려준다. 쓸 수 없으면 사유를 찍고 None."""
+    """응답 파일 기반 복원 — 백업을 확인하고, 백업 설정과 병합한 응답을 반환한다. 사용 불가 시 사유를 출력하고 None 반환."""
     from app import api_restore
 
     env = os.environ if env is None else env
@@ -187,7 +187,7 @@ def cmd_apply(args) -> int:
     if args.dry_run:
         facts = svc.store.facts()
         if facts.dns_status is None:
-            facts.dns_status = "unknown"       # dry-run 은 바깥에 묻지 않는다
+            facts.dns_status = "unknown"       # dry-run 은 외부 조회를 수행하지 않음
         errors, plan = _plan_report(svc, answers, facts)
         if errors:
             print("답변에 문제가 있습니다:")
@@ -211,14 +211,14 @@ def cmd_apply(args) -> int:
         if answers.mode == "restore":
             from app import api_restore
 
-            api_restore.manager(svc).discard()       # 확인하려고 꺼내 둔 백업 설정을 남기지 않는다
+            api_restore.manager(svc).discard()       # 확인용으로 추출한 백업 설정을 남기지 않음
         return 0
 
     if svc.store.locked:
         print("설치가 이미 끝났습니다.")
         return 1
     svc.store.save_answers(answers)
-    # 감지값 — 공인 주소와 접속 주소 확인(임시 인증서 허용 여부, 회의 서버 주소에 쓴다)
+    # 감지값 — 공인 주소 및 접속 주소 확인(임시 인증서 허용 여부, 회의 서버 주소에 사용)
     got = api.public_ip(svc)
     try:
         dns = probes.probe_dns(answers.access.domain, got.get("ip"), svc.resolver)
@@ -237,7 +237,7 @@ def cmd_apply(args) -> int:
         if r.status_code == 409:
             print("이미 적용이 돌고 있습니다 — 진행 상황을 따라갑니다")
             via_server = True
-    except Exception:  # noqa: BLE001 — 서버가 떠 있지 않으면 이 프로세스에서 직접 돌린다
+    except Exception:  # noqa: BLE001 — 서버가 기동 중이 아니면 본 프로세스에서 직접 실행
         via_server = False
 
     if not via_server:
@@ -279,11 +279,11 @@ def cmd_reset_admin(args) -> int:
     return r.rc
 
 
-REINSTALL_KEEP = ("tls",)        # 설치 관리자 자신의 인증서 — 지문이 바뀌지 않게 남긴다
+REINSTALL_KEEP = ("tls",)        # 설치 관리자 자체 인증서 — 지문이 변경되지 않도록 보존
 
 
 def reinstall_targets(svc: api.Services) -> dict:
-    """다시 설치하려면 지워야 하는 것 — 워크스페이스의 컨테이너·볼륨·내부망. 이름으로 돌려준다."""
+    """재설치를 위해 삭제해야 하는 대상 — 워크스페이스의 컨테이너·볼륨·내부망. 이름으로 반환한다."""
     from app.engine import CERT_VOLUME
     from app.paths import NETWORK_NAME, PROJECT_NAME
 
@@ -293,17 +293,17 @@ def reinstall_targets(svc: api.Services) -> dict:
     containers = sorted(n for n in r.out.split() if n) if r.ok else []
     r = docker.run(["volume", "ls", "-q", "--filter", label], timeout=30)
     volumes = {n for n in r.out.split() if n} if r.ok else set()
-    for extra in (render.STORAGE_VOLUME, CERT_VOLUME):          # compose 밖에서 만든 볼륨
+    for extra in (render.STORAGE_VOLUME, CERT_VOLUME):          # compose 외부에서 생성한 볼륨
         if docker.volume_inspect(extra) is not None:
             volumes.add(extra)
     network = NETWORK_NAME if docker.inspect("network", NETWORK_NAME) is not None else None
     storage = docker.volume_inspect(render.STORAGE_VOLUME) or {}
-    external = bool((storage.get("Options") or {}).get("type"))  # NFS·지정 폴더 — 볼륨을 지워도 파일은 남는다
+    external = bool((storage.get("Options") or {}).get("type"))  # NFS·지정 폴더 — 볼륨을 삭제해도 파일은 유지됨
     return {"containers": containers, "volumes": sorted(volumes), "network": network, "storage_external": external}
 
 
 def cmd_reinstall(args) -> int:
-    """워크스페이스를 지우고 설치 관리자를 처음 상태로 돌린다. **데이터가 지워진다.**"""
+    """워크스페이스를 삭제하고 설치 관리자를 초기 상태로 복원한다. **데이터가 삭제된다.**"""
     import shutil
 
     svc = _services(args)
@@ -326,7 +326,7 @@ def cmd_reinstall(args) -> int:
     from app.helper import MARKER_NAME
 
     if found["storage_external"]:
-        # 표식이 남아 있으면 다음 설치가 "다른 설치의 저장소"로 보고 멈춘다
+        # 저장소 마커가 남아 있으면 다음 설치가 "다른 설치의 저장소"로 판정하여 중단한다
         docker.run(["run", "--rm", "--network", "none", "--entrypoint", "rm", "-v",
                     f"{render.STORAGE_VOLUME}:/storage:nocopy", docker.self_image(), "-f", f"/storage/{MARKER_NAME}"],
                    timeout=120)
@@ -348,11 +348,11 @@ def cmd_reinstall(args) -> int:
         shutil.rmtree(entry, ignore_errors=True) if entry.is_dir() else entry.unlink(missing_ok=True)
     print("지웠습니다. 설치 관리자를 다시 시작합니다 — 새 설치 토큰은 `docker logs` 의 맨 끝에 나옵니다.")
     sys.stdout.flush()
-    docker.run(["restart", docker.self_ref], timeout=120)       # 이 명령도 여기서 함께 끝난다
+    docker.run(["restart", docker.self_ref], timeout=120)       # 본 명령도 이 시점에 함께 종료
     return 0
 
 
-# ─── 같은 서버에 되돌리기 ───
+# ─── 동일 서버 복원 ───
 
 RESTORE_ERRORS = {
     "not_installed": "설치가 끝난 서버에서만 쓸 수 있습니다. 새 서버로 옮기려면 설치 마법사의 \"백업에서 복원\"을 쓰세요.",
@@ -378,7 +378,7 @@ def _size(n) -> str:
 
 
 def cmd_restore(args) -> int:
-    """설치된 서버의 데이터를 백업 시점으로 되돌린다(설정은 건드리지 않는다). **지금 데이터가 바뀐다.**"""
+    """설치된 서버의 데이터를 백업 시점으로 복원한다(설정은 변경하지 않는다). **현재 데이터가 변경된다.**"""
     from app import api_update
     from app import restore_local as rl
 
@@ -483,7 +483,7 @@ def _key_dir(svc: api.Services) -> Path:
 
 
 def _key_fingerprint(pem: bytes) -> str:
-    """공개 키의 지문 — DER(SubjectPublicKeyInfo)의 SHA-256 앞 16자리. 릴리스를 내는 쪽과 맞대어 볼 때 쓴다."""
+    """공개 키의 지문 — DER(SubjectPublicKeyInfo)의 SHA-256 앞 16자리. 릴리스 배포 측과 대조할 때 사용한다."""
     import hashlib
 
     from cryptography.hazmat.primitives import serialization
@@ -505,7 +505,7 @@ def _print_keys(svc: api.Services) -> None:
     for path in files:
         try:
             print(f"  {path.name}  지문 {_key_fingerprint(path.read_bytes())}")
-        except Exception:  # noqa: BLE001 — 읽지 못하는 파일은 그대로 알린다
+        except Exception:  # noqa: BLE001 — 읽기 불가 파일은 그대로 보고
             print(f"  {path.name}  (공개 키로 읽을 수 없습니다 — 이 파일이 있으면 업데이트 확인이 \"구성되지 않음\"이 됩니다)")
 
 
@@ -602,7 +602,7 @@ def cmd_update_channel(args) -> int:
         if parts.scheme == "http":
             print("주의: http 주소입니다. 채널 파일은 서명으로 확인하므로 변조는 걸러지지만, 무엇을 받는지는 드러납니다.")
         write_private(path, url + "\n")
-    # 채널이 바뀌면 옛 채널에서 기억한 순번·확인 결과는 뜻이 없다(새 채널의 순번이 더 낮을 수 있다)
+    # 채널이 변경되면 이전 채널에서 기록한 순번·확인 결과는 무효이다(새 채널의 순번이 더 낮을 수 있음)
     (svc.store.dir / "update" / "check.json").unlink(missing_ok=True)
     print(f"채널 주소: {rel.channel_base_url(svc.store.dir)}")
     print("앞 채널에서 기억해 둔 확인 결과와 순번을 지웠습니다. 다음 확인(관리 › 업데이트의 \"지금 확인\")부터 쓰입니다.")

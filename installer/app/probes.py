@@ -1,7 +1,7 @@
-"""확인(probe) — 화면의 "확인" 버튼들이 부르는 것.
+"""확인(probe) — 화면의 "확인" 버튼들이 호출하는 기능.
 
-바깥에 닿는 부분(DNS·HTTP·SMTP·docker)은 모두 인자로 받아 테스트에서 바꿀 수 있다.
-결과는 키와 값뿐이다(문구는 화면이 가진다).
+외부에 접근하는 부분(DNS·HTTP·SMTP·docker)은 모두 인자로 전달받아 테스트에서 교체할 수 있다.
+결과는 키와 값만 포함한다(문구는 화면 측이 보유).
 """
 
 from __future__ import annotations
@@ -20,9 +20,9 @@ from app.docker_api import Docker
 
 GB = 1024 ** 3
 NFS_FREE_WARN_GB = 10
-BACKEND_UID_GID = "1000:1000"      # backend 컨테이너가 파일을 쓰는 사용자(backend/Dockerfile 의 appuser)
+BACKEND_UID_GID = "1000:1000"      # backend 컨테이너가 파일을 기록하는 사용자(backend/Dockerfile 의 appuser)
 
-# 공인 주소를 물어볼 곳 — 한 곳에 기대지 않는다. 둘 이상이 같은 답을 해야 믿는다.
+# 공인 주소 조회 대상 — 단일 서비스에 의존하지 않는다. 둘 이상의 응답이 일치해야 신뢰한다.
 PUBLIC_IP_URLS = (
     "https://api.ipify.org",
     "https://checkip.amazonaws.com",
@@ -42,7 +42,7 @@ _NOT_PUBLIC = tuple(ipaddress.ip_network(n) for n in (
 
 
 def is_public_ipv4(value: str) -> bool:
-    """인터넷에서 닿을 수 있는 꼴의 IPv4 인가(사설·통신사 NAT·루프백·링크로컬·멀티캐스트 제외)."""
+    """인터넷에서 접근 가능한 형식의 IPv4 인지 여부(사설·통신사 NAT·루프백·링크로컬·멀티캐스트 제외)."""
     try:
         ip = ipaddress.IPv4Address(value.strip())
     except ValueError:
@@ -71,8 +71,8 @@ def detect_public_ip(fetchers: list[Callable[[], str | None]] | None = None,
                      local_address: str | None = None) -> dict:
     """{"status": detected|unknown, "ip", "agree", "asked"}.
 
-    - 서버의 나가는 주소(local_address)가 공인 주소면 그것이 답이다(NAT 없음).
-    - 아니면 바깥 서비스 여러 곳에 묻고, 같은 답이 둘 이상일 때만 믿는다.
+    - 서버의 아웃바운드 주소(local_address)가 공인 주소이면 해당 값을 사용한다(NAT 없음).
+    - 그 외에는 외부 서비스 여러 곳에 조회하고, 동일 응답이 둘 이상인 경우에만 신뢰한다.
     """
     if local_address and is_public_ipv4(local_address):
         return {"status": "detected", "ip": local_address, "agree": 1, "asked": 0, "source": "interface"}
@@ -96,11 +96,11 @@ def detect_public_ip(fetchers: list[Callable[[], str | None]] | None = None,
 
 class Resolver(Protocol):
     def query(self, name: str, rtype: str) -> list[str]:
-        """레코드 값 목록. 레코드가 없으면 빈 목록, 조회 자체가 실패하면 LookupError."""
+        """레코드 값 목록. 레코드가 없으면 빈 목록, 조회 자체가 실패하면 LookupError 발생."""
 
 
 class DnsResolver:
-    """dnspython — 시스템 설정의 DNS 서버에 묻는다."""
+    """dnspython — 시스템 설정의 DNS 서버에 조회한다."""
 
     def __init__(self, timeout: float = 5.0):
         self.timeout = timeout
@@ -129,7 +129,7 @@ class DnsResolver:
 
 
 def probe_dns(domain: str, public_ip: str | None, resolver: Resolver) -> dict:
-    """접속 주소가 이 서버를 가리키는가 — {"status": match|mismatch|unknown, "addresses", "public_ip", "reason"}."""
+    """접속 주소가 이 서버를 가리키는지 여부 — {"status": match|mismatch|unknown, "addresses", "public_ip", "reason"}."""
     name = v.address(domain)
     if v.is_ip(name):
         status = "match" if public_ip and name == public_ip else "unknown"
@@ -153,7 +153,7 @@ def _record(record_id: str, name: str, rtype: str, expected: str, current: list[
 
 def probe_mail_records(mail_domain: str, public_ip: str | None, dkim_value: str, resolver: Resolver,
                        selector: str = "default") -> dict:
-    """메일 레코드 다섯 개의 기대값과 현재값 — status: ok | missing | different | unknown."""
+    """메일 레코드 5개의 기대값과 현재값 — status: ok | missing | different | unknown."""
     d = v.domain(mail_domain)
     mail_host = f"mail.{d}"
 
@@ -269,7 +269,7 @@ def probe_smtp(host: str, port: int, security: str, username: str, password: str
 
 # ─── AI 제공자 ───
 
-# backend/app/ai/providers.py 의 DEFAULT_BASE 와 같은 주소
+# backend/app/ai/providers.py 의 DEFAULT_BASE 와 동일 주소
 AI_DEFAULT_BASE = {
     "ollama": "http://host.docker.internal:11434",
     "openai": "https://api.openai.com",
@@ -280,7 +280,7 @@ AI_DEFAULT_BASE = {
 
 
 def ai_request(provider: str, api_key: str, base_url: str | None) -> tuple[str, dict]:
-    """키를 확인하는 가벼운 호출(모델 목록) — (주소, 헤더). 키는 헤더로만 보낸다(주소에 싣지 않는다)."""
+    """키 검증용 경량 호출(모델 목록) — (주소, 헤더). 키는 헤더로만 송신한다(주소에 포함하지 않는다)."""
     if provider not in AI_DEFAULT_BASE:
         raise v.Invalid("provider_unknown")
     base = (v.http_url(base_url) if base_url else AI_DEFAULT_BASE[provider]).rstrip("/")
@@ -337,10 +337,10 @@ def _json_tail(text: str) -> dict:
 
 
 def classify_mount_error(text: str) -> str:
-    """NFS 볼륨을 붙이다 난 오류 문구 → 원인.
+    """NFS 볼륨 마운트 중 발생한 오류 문구 → 원인.
 
-    `export_not_found`: 서버에는 닿았는데 그 경로를 붙일 수 없다. NFSv4 서버는 이 클라이언트에 허용하지 않은
-    내보내기를 "없는 경로"로 답하므로, 경로가 틀린 경우와 이 서버의 주소가 허용 목록에 없는 경우가 같은 꼴로 온다.
+    `export_not_found`: 서버에는 도달했으나 해당 경로를 마운트할 수 없다. NFSv4 서버는 이 클라이언트에 허용하지 않은
+    내보내기를 "없는 경로"로 응답하므로, 경로가 잘못된 경우와 이 서버의 주소가 허용 목록에 없는 경우가 동일한 형태로 나타난다.
     """
     low = text.lower()
     if any(k in low for k in ("permission denied", "access denied", "operation not permitted", "not permitted")):
@@ -362,15 +362,15 @@ def tcp_reachable(host: str, port: int, timeout: float = 5.0) -> bool:
 
 def probe_nfs(docker: Docker, server: str, export: str, *, volume_opts: Callable[[str, str], dict],
               reachable: Callable[[str, int], bool] = tcp_reachable) -> dict:
-    """NFS 연결 확인 다섯 단계 — 앞 단계가 실패하면 뒤는 건너뛴다.
+    """NFS 연결 확인 5단계 — 앞 단계가 실패하면 이후 단계는 생략한다.
 
-    ① 서버에 닿는가 ② 붙일 수 있는가 ③ 쓰기·읽기·지우기(backend 가 쓰는 uid/gid 로) ④ 파일 잠금 ⑤ 여유 공간.
-    임시 도커 볼륨(NFS 옵션)을 만들어 보조 컨테이너에서 검사하고 지운다.
-    돌려주는 값: {"ok", "cause": unreachable|export_not_found|permission_denied|read_only|no_locking|null, "steps": [...]}
+    ① 서버 도달 여부 ② 마운트 가능 여부 ③ 쓰기·읽기·삭제(backend 가 사용하는 uid/gid 로) ④ 파일 잠금 ⑤ 여유 공간.
+    임시 도커 볼륨(NFS 옵션)을 생성하여 보조 컨테이너에서 검사한 뒤 삭제한다.
+    반환값: {"ok", "cause": unreachable|export_not_found|permission_denied|read_only|no_locking|null, "steps": [...]}
 
-    볼륨은 `nocopy` 로 붙인다. 그냥 붙이면 도커가 **빈** 볼륨의 뿌리를 이미지 쪽 폴더의 소유자·권한으로 바꾸려 든다 —
-    내보내기 뿌리의 소유자가 확인만으로 바뀌거나(root 를 그대로 받는 내보내기), 그 시도가 거절돼 붙이기부터
-    실패한다(root 를 낮추는 보통의 내보내기). 저장소의 권한은 저장소 관리자가 정한 그대로 두고 본다.
+    볼륨은 `nocopy` 로 마운트한다. 옵션 없이 마운트하면 도커가 **빈** 볼륨의 루트를 이미지 측 폴더의 소유자·권한으로 변경하려 시도한다 —
+    내보내기 루트의 소유자가 확인만으로 변경되거나(root 를 그대로 수용하는 내보내기), 해당 시도가 거부되어 마운트부터
+    실패한다(root 권한을 강등하는 일반적인 내보내기). 저장소의 권한은 저장소 관리자가 지정한 상태를 유지한 채 확인한다.
     """
     server = v.hostname(server)
     export = v.nfs_export(export)
@@ -426,10 +426,10 @@ def probe_nfs(docker: Docker, server: str, export: str, *, volume_opts: Callable
 
 
 def probe_local_path(docker: Docker, path: str) -> dict:
-    """호스트에 이미 있는 폴더인가, backend 가 쓸 수 있는가.
+    """호스트에 이미 존재하는 폴더인지, backend 가 기록할 수 있는지 확인.
 
-    {"status": ok|not_found|not_writable|error, "free_gb"}. `--mount type=bind` 는 출발지가 없으면 실패한다
-    (`-v` 는 없는 폴더를 만들어 버린다).
+    {"status": ok|not_found|not_writable|error, "free_gb"}. `--mount type=bind` 는 원본 경로가 없으면 실패한다
+    (`-v` 는 없는 폴더를 생성한다).
     """
     path = v.host_path(path)
     result = docker.helper(["path-test", "/probe"], mounts=[f"type=bind,source={path},target=/probe"],

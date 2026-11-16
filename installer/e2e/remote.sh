@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# 설치 관리자 실서버 검수 — 이 PC 에서 검수 서버를 부리는 러너.
+# 설치 관리자 실서버 검수 — 이 PC 에서 검수 서버를 제어하는 러너.
 #
-#   remote.sh <ssh 대상> push                     커밋된 상태(HEAD)를 서버의 <원격 폴더>에 올린다(커밋 안 한 변경은 가지 않는다)
-#   remote.sh <ssh 대상> build [서비스…]           서버에서 이미지를 빌드한다(인자가 없으면 우리 이미지 전부 + 설치 관리자)
-#   remote.sh <ssh 대상> run <시나리오> [인자…]    시나리오를 돌린다(scenarios/<이름>.sh)
+#   remote.sh <ssh 대상> push                     커밋된 상태(HEAD)를 서버의 <원격 폴더>에 전송한다(미커밋 변경은 전송되지 않는다)
+#   remote.sh <ssh 대상> build [서비스…]           서버에서 이미지를 빌드한다(인자가 없으면 자체 빌드 이미지 전부 + 설치 관리자)
+#   remote.sh <ssh 대상> run <시나리오> [인자…]    시나리오를 실행한다(scenarios/<이름>.sh)
 #   remote.sh <ssh 대상> all                       push → build → 시나리오 전부
 #
-# <ssh 대상>: `ssh` 가 그대로 받는 이름(예 user@192.168.10.20). 그 계정은 docker 를 쓸 수 있고 sudo 가 비밀번호 없이 돼야 한다.
-# 환경변수: E2E_REMOTE_DIR(기본 ~/jw-src), 그리고 lib.sh 의 E2E_* 는 서버로 그대로 넘어간다.
+# <ssh 대상>: `ssh` 가 그대로 수용하는 이름(예 user@192.168.10.20). 해당 계정은 docker 사용 권한과 비밀번호 없는 sudo 가 필요하다.
+# 환경변수: E2E_REMOTE_DIR(기본 ~/jw-src). lib.sh 의 E2E_* 는 서버로 그대로 전달된다.
 #
-# 검수 서버는 **전용 서버**여야 한다 — 시나리오는 컨테이너·볼륨·설치 폴더를 지우고, NFS 서버 패키지를 깐다.
-# 요건: 리눅스 x86_64, Docker Engine 24+, compose 플러그인 2.20+, 메모리 12GB(전체 묶음), 디스크 40GB.
+# 검수 서버는 **전용 서버**여야 한다 — 시나리오는 컨테이너·볼륨·설치 폴더를 삭제하고, NFS 서버 패키지를 설치한다.
+# 요건: 리눅스 x86_64, Docker Engine 24+, compose 플러그인 2.20+, 메모리 12GB(전체 프리셋), 디스크 40GB.
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,7 +20,7 @@ ACTION="${2:?push | build | run <시나리오> | all}"
 shift 2
 REMOTE_DIR="${E2E_REMOTE_DIR:-jw-src}"
 
-# 서버로 넘길 E2E_* 환경변수
+# 서버로 전달할 E2E_* 환경변수
 forward_env() {
   local out="" name
   for name in $(compgen -e | grep '^E2E_' | grep -v '^E2E_REMOTE_DIR$' || true); do

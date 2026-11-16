@@ -1,9 +1,9 @@
-"""설치 뒤의 구역 관리 — 켜기·끄기·설정 다시 열기. 내부 API(`/internal/*`)가 부른다.
+"""설치 후 구역 관리 — 활성화·비활성화·설정 재편집. 내부 API(`/internal/*`)가 호출한다.
 
-흐름(화면과 같다): 설정 → 메모리·포트 확인(`check`) → 받기/설정/연결 진행(`enable` 이 만든 작업을 조회).
-실패하면 그 구역은 **꺼진 채**로 되돌린다(답변·`.env`·컨테이너).
+흐름(화면과 동일): 설정 → 메모리·포트 확인(`check`) → 수신/설정/연결 진행(`enable` 이 생성한 작업을 조회).
+실패 시 해당 구역은 **비활성화 상태**로 롤백한다(답변·`.env`·컨테이너).
 
-구역 켜기 창이 보내는 값(`settings`)과 답변 항목의 대응:
+구역 활성화 창이 전송하는 값(`settings`)과 답변 항목의 대응:
 
 | 구역 | settings | 답변 |
 |---|---|---|
@@ -24,7 +24,7 @@ from app import engine as eng
 from app import render, zones
 from app.state import now_iso
 
-SECTIONS = ("mail", "meetings", "ai", "git")     # 설정이 있는 구역 = 답변의 같은 이름 항목
+SECTIONS = ("mail", "meetings", "ai", "git")     # 설정이 있는 구역 = 답변의 동일 이름 항목
 PROVIDER_ALIASES = {"google": "gemini"}
 ENABLE_STAGES = ("pull", "configure", "connect")
 DISABLE_STAGES = ("disconnect", "configure")
@@ -38,7 +38,7 @@ class ZoneRequestError(Exception):
 
 
 def settings_to_section(zone_id: str, settings: dict) -> dict:
-    """화면이 보낸 값 → 답변 항목. 모르는 항목은 답변 모델이 거부한다."""
+    """화면이 전송한 값 → 답변 항목. 미정의 항목은 답변 모델이 거부한다."""
     s = dict(settings or {})
     if zone_id == "ai":
         mode = s.pop("mode", None)
@@ -59,7 +59,7 @@ def settings_to_section(zone_id: str, settings: dict) -> dict:
 
 
 def section_to_settings(zone_id: str, answers: ans.Answers, secret_flags: dict) -> dict:
-    """답변 항목 → 화면이 다시 여는 값(비밀은 빼고, 넣어 둔 것이 있는지만 알려 준다)."""
+    """답변 항목 → 화면이 재편집 시 표시하는 값(비밀은 제외하고 설정 여부만 반환한다)."""
     if zone_id not in SECTIONS:
         return {}
     data = getattr(answers, zone_id).model_dump(mode="json")
@@ -105,7 +105,7 @@ class ZoneManager:
         for row in (*out["zones"], *out["addons"]):
             row["enabled"] = row.pop("selected")
             row["has_settings"] = row["id"] in SECTIONS
-            # 켜져 있지만 연결(로그인 연동)이 걸리지 않았다 — 신뢰되는 인증서로 바뀐 뒤 다시 건다
+            # 활성화되어 있으나 연결(로그인 연동)이 설정되지 않은 상태 — 신뢰되는 인증서로 교체된 후 재시도한다
             hold = waiting.get(row["id"]) if row["enabled"] else None
             row["pending"] = hold is not None
             row["pending_reason"] = (hold or {}).get("reason")
@@ -147,7 +147,7 @@ class ZoneManager:
                 for x in e.errors]) from None
 
     def check(self, zone_id: str, settings: dict | None = None) -> dict:
-        """켜도 되는가 — 설정 오류, 메모리, 새로 열리는 포트. 아무것도 바꾸지 않는다."""
+        """활성화 가능 여부 — 설정 오류, 메모리, 신규 개방 포트. 변경은 수행하지 않는다."""
         self._known(zone_id)
         old = self.store.load_answers()
         new = self._with_zone(old, zone_id, settings, on=True)
@@ -192,7 +192,7 @@ class ZoneManager:
     def _save(self, job: dict) -> None:
         jobs = self.jobs()
         jobs[job["id"]] = job
-        for old in sorted(jobs, key=lambda k: jobs[k]["started_at"])[:-20]:      # 최근 20개만 둔다
+        for old in sorted(jobs, key=lambda k: jobs[k]["started_at"])[:-20]:      # 최근 20개만 유지
             jobs.pop(old)
         self.store.write("jobs.json", jobs)
 
@@ -221,7 +221,7 @@ class ZoneManager:
         ctx.wait_ready("ws-backend")
 
     def _apply(self, job: dict, ctx: eng.Context, zone_id: str, *, pull: bool) -> None:
-        """받기 → 설정 → 연결. 실패하면 StepError."""
+        """수신 → 설정 → 연결. 실패 시 StepError."""
         hook = zones.get(zone_id)
         if pull:
             self._stage(job, "pull", "running")
@@ -234,7 +234,7 @@ class ZoneManager:
             self._stage(job, "pull", "done")
         self._stage(job, "configure", "running")
         if ctx.plan.tls or ctx.plan.cert_aliases:
-            eng.step_cert(ctx)          # 구역에 따라 인증서에 들어갈 이름이 늘어난다(mail. · turn.)
+            eng.step_cert(ctx)          # 구역에 따라 인증서에 포함할 이름이 추가된다(mail. · turn.)
         hook.install(ctx, zone_id)
         self._stage(job, "configure", "done")
         self._stage(job, "connect", "running")
@@ -254,7 +254,7 @@ class ZoneManager:
             ctx.log(f"실패(예상하지 못한 오류): {type(e).__name__}")
             return eng.StepError("unexpected_error", "see_log", type=type(e).__name__)
 
-    # ─── 켜기 ───
+    # ─── 활성화 ───
 
     def enable(self, zone_id: str, settings: dict | None = None) -> dict:
         self._require_installed()
@@ -277,7 +277,7 @@ class ZoneManager:
         ctx.log(f"── {zone_id} 켜기 ──")
         error = self._guard(lambda: self._apply(job, ctx, zone_id, pull=True), job, ctx)
         if error is not None:
-            # 꺼진 채로 되돌린다 — 답변·.env·컨테이너
+            # 비활성화 상태로 롤백 — 답변·.env·컨테이너
             self.store.save_answers(old, keep_secrets=False)
             self.store.write("answers.secret.json", old_secrets)
             back = self.engine._context(f"zone-{zone_id}", self.store.load_answers(), self.store.facts())
@@ -286,7 +286,7 @@ class ZoneManager:
             ctx.log(f"{zone_id}: 켜지 못해 꺼진 상태로 되돌렸습니다")
         self._finish(job, ctx, error)
 
-    # ─── 끄기 ───
+    # ─── 비활성화 ───
 
     def disable(self, zone_id: str) -> dict:
         self._require_installed()
@@ -313,7 +313,7 @@ class ZoneManager:
 
         self._finish(job, ctx, self._guard(work, job, ctx))
 
-    # ─── 설정 다시 열기 ───
+    # ─── 설정 재편집 ───
 
     def put_settings(self, zone_id: str, settings: dict) -> dict:
         self._require_installed()
@@ -343,10 +343,10 @@ class ZoneManager:
             ctx.log(f"{zone_id}: 설정을 바꾸지 못해 이전 값으로 되돌렸습니다")
         self._finish(job, ctx, error)
 
-    # ─── 다시 연결 ───
+    # ─── 재연결 ───
 
     def reconnect(self, zone_id: str) -> dict:
-        """보류된 연결(코드 저장소의 로그인 연동)을 다시 시도한다. 여전히 안 되면 작업이 실패로 남는다."""
+        """보류된 연결(코드 저장소의 로그인 연동)을 재시도한다. 계속 실패하면 작업이 실패로 기록된다."""
         self._require_installed()
         self._known(zone_id)
         if zone_id not in self.enabled():

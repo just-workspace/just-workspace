@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# 백업에서 복원(서버 이전) — 원래 서버 꾸미기 → 백업 → 서버 비우기 → 복원 → 확인을 조각으로 나눠 부른다.
-# 화면으로 복원하는 것은 이 PC 의 restore-ui.cjs 가 하고, 이 스크립트는 그 앞뒤(준비·확인)와 API·무인 경로를 맡는다.
+# 백업에서 복원(서버 이전) — 원래 서버 구성 → 백업 → 서버 초기화 → 복원 → 확인을 단계별로 분리하여 호출한다.
+# 화면을 통한 복원은 이 PC 의 restore-ui.cjs 가 수행하고, 본 스크립트는 그 전후(준비·확인)와 API·무인 경로를 담당한다.
 #
-#   restore.sh seed [local|nfs]     설치 → 데이터 넣기(계정 2, 파일, 채팅, 메일, 일정, 암호화된 값) → 전체 백업(+ 암호 보호 사본)
+#   restore.sh seed [local|nfs]     설치 → 데이터 입력(계정 2, 파일, 채팅, 메일, 일정, 암호화된 값) → 전체 백업(+ 암호 보호 사본)
 #                                   결과: $E2E_WORK/restore/{backup.jwbak, backup-enc.jwbak, enc-pass, expect.json, files/}
-#   restore.sh wipe                 워크스페이스·설치 관리자를 지운다(NFS 내보내기의 데이터와 $E2E_WORK/restore 는 남긴다)
-#   restore.sh start                설치 관리자를 띄우고 설치 토큰을 찍는다(화면 검수용)
-#   restore.sh stage                백업을 "서버에 미리 옮겨 둔 파일" 자리(/srv/e2e-restore)에 놓는다
+#   restore.sh wipe                 워크스페이스·설치 관리자를 삭제한다(NFS 내보내기의 데이터와 $E2E_WORK/restore 는 보존)
+#   restore.sh start                설치 관리자를 기동하고 설치 토큰을 출력한다(화면 검수용)
+#   restore.sh stage                백업을 "서버에 미리 옮겨 둔 파일" 자리(/srv/e2e-restore)에 배치한다
 #   restore.sh api [nfs]            마법사 API 로 복원(서버 경로 지정) — 내용 확인·시작·진행
-#   restore.sh unattended           답변 파일(mode: restore)로 무인 복원
+#   restore.sh unattended           응답 파일(mode: restore)로 무인 복원
 #   restore.sh reject               거부 경로 — 형식 아님·손상·암호 없음/틀림/맞음·더 높은 버전·파일 없는 로컬 백업
-#   restore.sh fail-retry           데이터 복원 중 실패(DB 를 멈춤) → 실패 상태 → 재시도로 완료
-#   restore.sh nfs-reject           NFS: 로컬 선택 거부, 다른 공유 거부(표식 없음·다른 설치)
-#   restore.sh verify [nfs]         복원한 서버가 원래 것과 같은지
+#   restore.sh fail-retry           데이터 복원 중 실패(DB 를 중지) → 실패 상태 → 재시도로 완료
+#   restore.sh nfs-reject           NFS: 로컬 선택 거부, 다른 공유 거부(마커 없음·다른 설치)
+#   restore.sh verify [nfs]         복원한 서버가 원본과 동일한지 확인
 #
-# E2E_NEW_DOMAIN 을 주면 복원할 때 접속 주소를 그 이름으로 바꾼다(기본: 백업과 같은 주소).
+# E2E_NEW_DOMAIN 지정 시 복원할 때 접속 주소를 해당 이름으로 변경한다(기본: 백업과 동일한 주소).
 . "$(dirname "$0")/../lib.sh"
 CMD="${1:?seed | wipe | start | stage | api | unattended | reject | fail-retry | nfs-reject | verify}"
 KIND="${2:-local}"
@@ -46,7 +46,7 @@ EOF
   sudo exportfs -ra
 }
 
-# 올린 파일이 저장소에 있는지(이름 → sha256). list_file_hash <이름>
+# 업로드한 파일의 저장소 존재 여부 확인(이름 → sha256). list_file_hash <이름>
 download_hash() {
   ws_curl -b "$UJAR" -o "$R/down.bin" "$WS/api/files/download?path=my/$1" >/dev/null
   sha256sum "$R/down.bin" | cut -d' ' -f1
@@ -58,7 +58,7 @@ seed() {
     e2e_reset
     sudo rm -rf "$NFS_ROOT"; nfs_prepare
     check "설치 관리자 기동" installer_start
-    # NFS + 협업 묶음(메일·채팅·일정)
+    # NFS + 협업 프리셋(메일·채팅·일정)
     python3 - "$E2E_ROOT/answers/nfs.json" > "$R/answers-nfs.json" <<'PY'
 import json,sys
 d=json.load(open(sys.argv[1])); d["preset"]="collab"; d["mail"]={"kind":"builtin","mail_domain":"e2e.example"}
@@ -98,7 +98,7 @@ PY
   local cal
   cal="$(ws_api GET /api/calendar/calendars | json_get 'd["calendars"][0]["id"]')"
   contains "일정" "복원 확인 일정" "$(ws_api POST /api/calendar/events "{\"calendar_id\":\"$cal\",\"title\":\"복원 확인 일정\",\"start\":\"2030-03-04T01:00:00Z\",\"end\":\"2030-03-04T02:00:00Z\"}")"
-  # 암호화 키로 잠근 값을 DB 에 넣어 둔다 — 복원한 서버의 키로 풀리면 키가 유지된 것이다
+  # 암호화 키로 암호화한 값을 DB 에 저장한다 — 복원한 서버의 키로 복호화되면 키가 유지된 것이다
   local plain cipher
   plain="probe-$(head -c 12 /dev/urandom | base64 | tr -d '/+=')"
   cipher="$(docker exec --user appuser -e P="$plain" ws-backend python -c 'import os; from app.mail.crypto import encrypt_password; print(encrypt_password(os.environ["P"]))')"
@@ -166,7 +166,7 @@ stage() {
   note "놓았습니다: $STAGED"
 }
 
-# 대상(새 서버에서 정하는 값)
+# 대상(새 서버에서 지정하는 값)
 target_json() {
   if [ "$KIND" = nfs ]; then
     printf '{"domain":"%s","network":"direct","storage":{"kind":"nfs","server":"%s","export":"%s"}}' "$NEW_DOMAIN" "$E2E_ADDR" "${E2E_NFS_EXPORT:-$NFS_ROOT/rw}"
@@ -237,7 +237,7 @@ reject() {
   head -c 50000 /dev/urandom > "$up/notes.zip"
   r="$(upload "$up/notes.zip")"
   expect "백업이 아닌 파일 → invalid" "invalid not_a_backup" "$(printf '%s' "$r" | json_get 'd["status"]+" "+str(d["reason"])')"
-  # 가운데를 덮어쓴 사본(크기는 같다) → 해시 불일치
+  # 중간을 덮어쓴 사본(크기 동일) → 해시 불일치
   cp "$R/backup.jwbak" "$up/damaged.jwbak"
   printf 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' | dd of="$up/damaged.jwbak" bs=1 seek=$(( $(stat -c %s "$up/damaged.jwbak") / 2 )) conv=notrunc 2>/dev/null
   r="$(upload "$up/damaged.jwbak")"
@@ -263,7 +263,7 @@ reject() {
   check "암호는 상태 폴더 밖으로 나가지 않는다(600)" bash -c "sudo stat -c %a '$E2E_HOST_DIR/state/restore/password' | grep -qx 600"
 
   say "더 높은 버전의 백업"
-  # manifest 의 스키마·제품 버전을 올린 사본(백업 폴더 꼴)
+  # manifest 의 스키마·제품 버전을 올린 사본(백업 폴더 형식)
   local dir="$up/newer"
   rm -rf "$dir"; mkdir -p "$dir"; tar -xf "$R/backup.jwbak" -C "$dir"
   python3 - "$dir/manifest.json" <<'PY'
@@ -291,7 +291,7 @@ fail_retry() {
   expect "백업 확인" ok "$(wapi POST /api/restore/path "{\"path\":\"$STAGED/backup.jwbak\"}" | json_get 'd["status"]')"
   wapi POST /api/restore/apply "$(target_json)" >/dev/null
   expect "POST /api/restore/apply" 202 "$(wcode)"
-  # 데이터 되돌리기가 시작되면 DB 를 멈춘다
+  # 데이터 복원이 시작되면 DB 를 중지한다
   local i cur=""
   for i in $(seq 1 600); do
     cur="$(sudo cat "$E2E_HOST_DIR/state/apply.json" 2>/dev/null | json_get 'd["current"]')"

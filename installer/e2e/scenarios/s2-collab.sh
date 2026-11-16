@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# S2 협업 묶음 — 메일(내장)·채팅·일정·문서.
+# S2 협업 프리셋 — 메일(내장)·채팅·일정·문서.
 # 사용: s2-collab.sh [file|api]
 . "$(dirname "$0")/../lib.sh"
 MODE="${1:-file}"
@@ -9,7 +9,7 @@ e2e_reset
 check "설치 관리자 기동" installer_start
 
 if [ "$MODE" = api ]; then
-  # 메일 레코드 화면이 DKIM 키를 미리 만든다 — 답변을 넣기 전이므로 도메인을 직접 준다
+  # 메일 레코드 화면이 DKIM 키를 사전 생성한다 — 답변 입력 전이므로 도메인을 직접 전달한다
   wizard_login
   rec="$(wapi POST /api/probe/mail-records "{\"mail_domain\":\"$E2E_MAIL_DOMAIN\"}")"
   expect "POST /api/probe/mail-records" 200 "$(wcode)"

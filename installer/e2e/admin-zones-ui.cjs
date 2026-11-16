@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * 설치 뒤 관리 화면(관리 › 구역)에서 구역을 켜고 끈다 — 화면 → backend → 설치 관리자 내부 API 경로를 실제로 탄다.
- * 최소 묶음으로 설치된 서버에서 돌린다: 채팅 켜기 → 코드 저장소 켜기(검증된 버전) → 채팅 끄기.
+ * 설치 후 관리 화면(관리 › 구역)에서 구역을 활성화·비활성화한다 — 화면 → backend → 설치 관리자 내부 API 경로를 실제로 경유한다.
+ * 최소 프리셋으로 설치된 서버에서 실행한다: 채팅 활성화 → 코드 저장소 활성화(검증된 버전) → 채팅 비활성화.
  *
  *   node admin-zones-ui.cjs --url https://ws.e2e.example --addr 192.168.10.20 --password-file <파일> [--out <폴더>] [--chrome <경로>]
  *
- *   --addr   접속 주소가 DNS 에 없을 때 그 이름을 이 주소로 돌린다
- * 필요한 것: playwright-core(NODE_PATH).
+ *   --addr   접속 주소가 DNS 에 없을 때 해당 이름을 이 주소로 해석한다
+ * 필요 사항: playwright-core(NODE_PATH).
  */
 const fs = require('fs')
 const path = require('path')
@@ -31,7 +31,7 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
   const ctx = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 900 }, locale: 'ko-KR' })
   const page = await ctx.newPage()
   const errors = []
-  // 자체 서명 인증서에서는 서비스 워커 등록이 거절된다 — 화면의 오류가 아니다
+  // 자체 서명 인증서에서는 서비스 워커 등록이 거부된다 — 화면의 오류가 아니다
   page.on('pageerror', e => { if (!/ServiceWorker/.test(String(e))) errors.push(String(e).slice(0, 200)) })
   const snap = async n => { shot++; await page.screenshot({ path: path.join(opt.out, `${String(shot).padStart(2, '0')}-${n}.png`), fullPage: true }) }
   const api = p => page.evaluate(async p => { try { const r = await fetch(p, { credentials: 'same-origin' }); return { status: r.status, body: await r.json().catch(() => null) } } catch { return { status: 0, body: null } } }, p)
@@ -46,10 +46,10 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
     await page.getByRole('heading', { name: '구역', exact: true }).first().waitFor({ timeout: 30000 })
     await page.getByRole('switch').first().waitFor({ timeout: 30000 })
   }
-  // 그 이름의 구역 줄에 있는 스위치
+  // 해당 이름의 구역 행에 있는 스위치
   const toggle = name => page.locator('li, tr, [role="row"], div').filter({ has: page.getByText(name, { exact: true }) }).filter({ has: page.getByRole('switch') }).last().getByRole('switch')
 
-  // act(이름, 구역 id, 켤지) — 스위치를 누르고(확인 창이 뜨면 진행 단추를 누른다) 반영될 때까지 본다
+  // act(이름, 구역 id, 활성화 여부) — 스위치를 클릭하고(확인 창이 표시되면 진행 버튼을 클릭한다) 반영될 때까지 확인한다
   const act = async (name, id, on) => {
     console.log(`== ${name} ${on ? '켜기' : '끄기'} ==`)
     if ((await toggle(name).getAttribute('aria-checked')) === String(on)) {
@@ -66,7 +66,7 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
       const buttons = dialog.getByRole('button')
       const labels = await buttons.evaluateAll(b => b.map(x => x.textContent.trim()))
       console.log('   단추: ' + labels.join(' | '))
-      // 진행 단추 = 닫기·취소가 아닌 마지막 단추. 여러 단계 창이면 더 누를 것이 없을 때까지 누른다
+      // 진행 버튼 = 닫기·취소가 아닌 마지막 버튼. 다단계 창이면 클릭할 버튼이 없을 때까지 반복한다
       for (let step = 0; step < 5; step++) {
         const d = page.locator('[role="dialog"], [role="alertdialog"]').last()
         if (!(await d.count())) break
@@ -79,7 +79,7 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
       }
     }
     await snap(`${id}-${on ? 'enable' : 'disable'}-running`)
-    // backend 가 다시 뜨는 동안 화면이 견디는지 — "다시 연결" 안내를 본 적이 있는지 적어 둔다
+    // backend 재기동 중 화면이 유지되는지 확인 — "다시 연결" 안내의 표시 여부를 기록한다
     let sawReconnect = false, sawDown = false, done = false
     const t0 = Date.now()
     while (Date.now() - t0 < 10 * 60 * 1000) {

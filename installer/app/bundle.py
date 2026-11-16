@@ -1,12 +1,12 @@
-"""번들 — 이미지에 실어 온 compose·설정 파일·구역 선언·비밀값 표.
+"""번들 — 이미지에 포함된 compose·설정 파일·구역 선언·비밀값 표.
 
-단일 출처를 복제하지 않는다. 번들의 파일은 **빌드할 때 리포에서 복사**한 것이고(`MANIFEST`,
-`python -m app.bundle build`), 개발·테스트에서는 번들 폴더 없이 리포에서 바로 읽는다.
+단일 출처를 복제하지 않는다. 번들의 파일은 **빌드 시 리포에서 복사**한 것이며(`MANIFEST`,
+`python -m app.bundle build`), 개발·테스트에서는 번들 폴더 없이 리포에서 직접 읽는다.
 
 - `zones.json` ← `backend/app/zones.json` (구역 id·메모리·포트·compose 프로파일)
 - `security_defaults.py` ← `backend/app/security_defaults.py` (비밀값 이름·길이·금지 문자, 생성기)
 - `VERSION` ← 리포 루트 `VERSION`
-- 나머지는 compose 가 bind mount 하는 파일들
+- 그 외는 compose 가 bind mount 하는 파일
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import sys
 from functools import cached_property
 from pathlib import Path
 
-# 번들 안 경로 → 리포 안 경로
+# 번들 내 경로 → 리포 내 경로
 MANIFEST: dict[str, str] = {
     "docker-compose.yml": "docker-compose.yml",
     "VERSION": "VERSION",
@@ -32,11 +32,11 @@ MANIFEST: dict[str, str] = {
     "mailserver/config/user-patches.sh": "mailserver/config/user-patches.sh",
     "mailserver/config/auth-workspace.lua": "mailserver/config/auth-workspace.lua",
     "mailserver/config/dovecot.cf": "mailserver/config/dovecot.cf",
-    # 정적 점검 페이지 — nginx 가 직접 읽는다(업데이트 중에는 frontend 도 바뀌는 중일 수 있다)
+    # 정적 점검 페이지 — nginx 가 직접 읽는다(업데이트 중에는 frontend 도 교체 중일 수 있음)
     "frontend-react/public/maintenance.html": "frontend-react/public/maintenance.html",
 }
 
-# 번들에서 스택으로 **그대로** 복사하는 파일(렌더링이 내용을 바꾸지 않는다)
+# 번들에서 스택으로 **그대로** 복사하는 파일(렌더링이 내용을 변경하지 않음)
 STACK_COPIES: tuple[str, ...] = (
     "docker-compose.yml",
     "nginx/nginx.conf",
@@ -53,7 +53,7 @@ DEV_VERSION = "0.0.0-dev"
 
 
 def repo_root() -> Path:
-    """리포 루트(installer/app/bundle.py 기준 두 단계 위)."""
+    """리포 루트(installer/app/bundle.py 기준 두 단계 상위)."""
     return Path(__file__).resolve().parents[2]
 
 
@@ -87,8 +87,8 @@ class Bundle:
 
     @cached_property
     def version(self) -> str:
-        """제품 버전. 환경변수 `JW_INSTALLER_VERSION` 이 있으면 그것이 우선한다 — 승격(Beta → Stable)은 이미지를 다시 빌드하지
-        않아서 이미지 안의 `VERSION` 은 Beta 의 글자로 남는다. 업데이트가 설치 관리자를 바꿀 때 이 값을 넣어 준다."""
+        """제품 버전. 환경변수 `JW_INSTALLER_VERSION` 이 있으면 해당 값이 우선한다 — 승격(Beta → Stable)은 이미지를 재빌드하지
+        않으므로 이미지 내 `VERSION` 은 Beta 의 문자열로 유지된다. 업데이트가 설치 관리자를 교체할 때 이 값을 지정한다."""
         override = (os.environ.get("JW_INSTALLER_VERSION") or "").strip()
         if override:
             return override
@@ -100,13 +100,13 @@ class Bundle:
 
     @cached_property
     def security_defaults(self):
-        """backend 의 비밀값 표 모듈(표준 라이브러리만 쓴다) — 파일에서 바로 불러온다."""
+        """backend 의 비밀값 표 모듈(표준 라이브러리만 사용) — 파일에서 직접 로드한다."""
         path = self.path("security_defaults.py")
         spec = importlib.util.spec_from_file_location("jw_bundle_security_defaults", path)
         if spec is None or spec.loader is None:
             raise BundleError("비밀값 표를 불러오지 못했습니다")
         module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module      # dataclass 가 모듈을 찾을 수 있어야 한다
+        sys.modules[spec.name] = module      # dataclass 가 모듈을 조회할 수 있어야 함
         spec.loader.exec_module(module)
         return module
 
@@ -122,7 +122,7 @@ class Bundle:
 
     @cached_property
     def gitea_verified_version(self) -> str | None:
-        """그 고정 이미지의 버전 글자 — compose 의 같은 줄 주석(`# 28.3.0 (…)`)에서 읽는다. 없으면 None."""
+        """해당 고정 이미지의 버전 문자열 — compose 의 동일 줄 주석(`# 28.3.0 (…)`)에서 읽는다. 없으면 None."""
         import re
 
         m = re.search(r"\$\{GITEA_IMAGE:-[^}\s]+\}\s*#\s*v?(\d+(?:\.\d+){1,3})", self.read("docker-compose.yml"))
@@ -130,7 +130,7 @@ class Bundle:
 
 
 def build(repo: Path, dest: Path) -> list[str]:
-    """리포에서 번들 폴더를 만든다(이미지 빌드 때 한 번)."""
+    """리포에서 번들 폴더를 생성한다(이미지 빌드 시 1회)."""
     written = []
     for name, src in MANIFEST.items():
         source = repo / src

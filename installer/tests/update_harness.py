@@ -1,6 +1,6 @@
-"""업데이트 엔진 테스트용 — 가짜 채널(실행할 때마다 만든 임시 키로 서명)과 설치가 끝난 가짜 서버.
+"""업데이트 엔진 테스트용 — 모의 채널(실행 시마다 생성한 임시 키로 서명)과 설치가 완료된 모의 서버.
 
-키는 테스트마다 새로 만든다. 리포에는 어떤 키도 두지 않는다.
+키는 테스트마다 새로 생성한다. 리포에는 어떠한 키도 두지 않는다.
 """
 
 from __future__ import annotations
@@ -35,11 +35,11 @@ THIRD = {"core": {"postgres": f"postgres@sha256:{'11' * 32}", "redis": f"redis@s
 
 
 class Killed(BaseException):
-    """설치 관리자 프로세스가 (자기 교체로) 멈춘 것을 흉내 낸다."""
+    """설치 관리자 프로세스가 (자기 교체로) 종료된 상황을 모사한다."""
 
 
 class Releases:
-    """가짜 채널 리포 — 주소 → 바이트."""
+    """모의 채널 리포 — 주소 → 바이트."""
 
     def __init__(self):
         self.key = ec.generate_private_key(ec.SECP256R1())
@@ -89,7 +89,7 @@ class Releases:
         return self.files[url]
 
     def bundle(self, folder: Path, version: str, *, key=None, published: datetime | None = None, **over) -> Path:
-        """오프라인 묶음 파일(우리 이미지만 — 내용은 가짜)."""
+        """오프라인 번들(자체 빌드 이미지만 포함 — 내용은 모의)."""
         manifest = self.manifest(version, published or T0 - timedelta(days=10), **over)
         self.manifests[version] = manifest
         stage = folder / f"stage-{version}"
@@ -107,7 +107,7 @@ class Releases:
 
 
 class UpdateHost(Host):
-    """설치가 끝난 가짜 서버(1.0.0, 협업 묶음)."""
+    """설치가 완료된 모의 서버(1.0.0, 협업 프리셋)."""
 
     def __init__(self, tmp_path: Path, monkeypatch, *, version: str = "1.0.0"):
         super().__init__(tmp_path)
@@ -124,7 +124,7 @@ class UpdateHost(Host):
         self.fail_pull: set[str] = set()
         self.fail_migrate = False
         self.fail_restore = False
-        self.swap = "kill"            # kill(교체 성공 — 프로세스가 멈춘다) | none(보조 컨테이너가 아무것도 못 했다)
+        self.swap = "kill"            # kill(교체 성공 — 프로세스 종료) | none(보조 컨테이너가 아무 작업도 수행하지 못함)
         self.swap_started = False
         self.flag_seen: list[bool] = []
         self.services = ["postgres", "redis", "backend", "frontend-react", "nginx", "mailserver", "onlyoffice"]
@@ -136,7 +136,7 @@ class UpdateHost(Host):
         (self.paths.stack / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
         for name in OUR:
             self.images[f"localhost/just-workspace-{name}:{version}"] = f"sha256:{name}-{version}"
-        self.images["sha256:selfimage"] = "sha256:selfimage"       # 지금 도는 설치 관리자의 이미지
+        self.images["sha256:selfimage"] = "sha256:selfimage"       # 현재 실행 중인 설치 관리자의 이미지
         r = self.runner
         r.on("image", "inspect", fn=self._image_inspect)
         r.on("pull", fn=self._pull)
@@ -167,7 +167,7 @@ class UpdateHost(Host):
             self.swap_started = False
             raise Killed
 
-    # ─── 가짜 docker ───
+    # ─── 모의 docker ───
 
     def write_env(self, version: str) -> None:
         (self.paths.stack / ".env").write_text(
@@ -196,9 +196,9 @@ class UpdateHost(Host):
     def _load(self, argv, _):
         text = Path(argv[-1]).read_bytes().decode()
         m = re.fullmatch(r"image (\S+) (\S+)", text)
-        if m:       # 묶음 안의 우리 이미지
+        if m:       # 오프라인 번들 내의 자체 빌드 이미지
             self.images[f"{REG}/just-workspace-{m.group(1)}:{m.group(2)}"] = f"sha256:{m.group(1)}-{m.group(2)}"
-        elif text.startswith("tag "):       # 추가 이미지 파일 — 들어 있는 이름
+        elif text.startswith("tag "):       # 추가 이미지 파일 — 포함된 이름
             self.images[text[4:].strip()] = "sha256:loaded"
         return "Loaded image\n"
 
@@ -216,9 +216,9 @@ class UpdateHost(Host):
 
     def _migrate(self, argv, _):
         if self.fail_migrate:
-            self.schema += 1          # 앞 단계는 적용된 채 남는다
+            self.schema += 1          # 앞 단계는 적용된 상태로 남는다
             return Result(1, "", "단계 3 실패: column does not exist")
-        assert any(a.endswith("run-network.yml") for a in argv)      # 돌고 있는 backend 의 고정 주소와 겹치지 않게
+        assert any(a.endswith("run-network.yml") for a in argv)      # 실행 중인 backend 의 고정 주소와 충돌하지 않도록 한다
         override = Path(argv[[i for i, a in enumerate(argv) if a == "--env-file"][-1] + 1]).read_text(encoding="utf-8")
         version = re.search(r"JW_VERSION=(.*)", override).group(1)
         self.schema = self.schema_required = int(self.releases.manifests[version].db_schema or self.schema)
@@ -259,7 +259,7 @@ class UpdateHost(Host):
         (folder / name).write_bytes(pem or self.releases.public_pem)
 
     def manager(self, *, own_version: str | None = None, **kw) -> UpdateManager:
-        """새 설치 관리자 프로세스의 엔진(상태는 디스크에서 이어진다)."""
+        """새 설치 관리자 프로세스의 엔진(상태는 디스크에서 유지된다)."""
         self.svc.cache.pop("updates", None)
         self.svc.cache.pop("offline", None)
         self.svc.cache["update_kwargs"] = dict(fetch=self.releases.fetch, post=self.post, now=self.now,
@@ -275,9 +275,9 @@ class UpdateHost(Host):
 
 
 def run_to_end(host: UpdateHost, mgr: UpdateManager, call, *, final_version: str | None = None):
-    """작업을 시작하고, 자기 교체로 프로세스가 멈출 때마다 새 설치 관리자로 이어받아 끝까지 돌린다.
+    """작업을 시작하고, 자기 교체로 프로세스가 종료될 때마다 새 설치 관리자로 인계받아 끝까지 실행한다.
 
-    (마지막 엔진, 처음 만든 작업의 id) 를 돌려준다.
+    (마지막 엔진, 최초 생성한 작업의 id) 를 반환한다.
     """
     job_id = None
     try:

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# S8 수동 설치 — 설치 관리자 없이 README·docs/deployment.md 의 절차 그대로: .env.example 을 채우고 docker compose up.
-# 최소 구성(프로파일 없음), 평문 80 으로 띄워 본다.
-# 관리자는 `.env` 에 적지 않는다 — backend 로그의 설정 토큰으로 웹의 첫 관리자 만들기를 거친다.
+# S8 수동 설치 — 설치 관리자 없이 README·docs/deployment.md 의 절차대로: .env.example 을 작성하고 docker compose up.
+# 최소 구성(프로파일 없음), 평문 80 으로 기동한다.
+# 관리자는 `.env` 에 기록하지 않는다 — backend 로그의 설정 토큰으로 웹의 최초 관리자 생성을 거친다.
 . "$(dirname "$0")/../lib.sh"
 MANUAL="$HOME/e2e-manual"
 
@@ -20,7 +20,7 @@ mkdir -p "$MANUAL"
 (cd "$E2E_REPO" && tar --exclude=./.env --exclude=./.git -cf - .) | tar -xf - -C "$MANUAL"
 cd "$MANUAL" || finish
 cp .env.example .env
-# 도메인 등을 채운다 — 최소 구성, 이 서버의 주소로 평문 접속
+# 도메인 등을 설정한다 — 최소 구성, 이 서버의 주소로 평문 접속
 set_env() { sed -i -E "s|^$1=.*|$1=$2|" .env; grep -q "^$1=" .env || printf '%s=%s\n' "$1" "$2" >> .env; }
 set_env COMPOSE_PROFILES ""
 set_env APP_URL "http://$E2E_ADDR"
@@ -57,7 +57,7 @@ expect "프런트 화면(/)" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$H/"
 expect "/api/health" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$H/api/health")"
 note "/api/health zones: $(curl -s "$H/api/health" | json_get 'd["zones"]') (JW_ZONES 를 비우면 전부)"
 expect "게시 포트" "80/tcp " "$(published_ports | grep -v '^\[' | sed 's/^0\.0\.0\.0://' | tr '\n' ' ')"
-# 설치 관리자가 없는 구성 — 점검 관련 경로가 nginx 기동을 막지 않고, 점검 모드도 걸리지 않는다
+# 설치 관리자가 없는 구성 — 점검 모드 관련 경로가 nginx 기동을 방해하지 않으며, 점검 모드도 적용되지 않는다
 expect "정적 점검 페이지(/maintenance.html)" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$H/maintenance.html")"
 expect "공개 점검 상태는 설치 관리자가 없어 502" 502 "$(curl -s -o /dev/null -w '%{http_code}' "$H/maintenance/status")"
 docker stop ws-frontend-react >/dev/null
@@ -67,7 +67,7 @@ check "그 본문은 점검 페이지다" grep -q 'maintenance/status' "$E2E_WOR
 docker start ws-frontend-react >/dev/null; wait_ready ws-frontend-react 60
 
 say "첫 관리자 — 설정 토큰"
-# 시도는 주소당 분당 5회까지다 — 아래는 정확히 5번 부른다.
+# 시도는 주소당 분당 5회로 제한된다 — 이하에서는 정확히 5회 호출한다.
 log_tokens() { docker logs ws-backend 2>&1 | sed -n 's/.*setup token: \([A-Za-z0-9_-]\{40,\}\).*/\1/p'; }
 setup_post() {  # setup_post <토큰> <비밀번호 파일> → 상태 코드(본문은 first-admin.json)
   local body="$E2E_WORK/setup-admin.json" code
@@ -122,7 +122,7 @@ expect "되돌릴 태그는 업데이트 전의 이미지다" "$before_id" "$(do
 check "되돌릴 정보에 frontend-react 도 있다" grep -q '^frontend-react|' .update-rollback
 expect "업데이트 뒤 /api/health" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$H/api/health")"
 expect "업데이트 뒤 내려받기(데이터 유지)" 200 "$(curl -s -b "$jar" -o "$E2E_WORK/down2.bin" -w '%{http_code}' "$H/api/files/download?path=my/e2e-manual.bin")"
-# 태그를 다른 이미지로 옮겨 두고(새 빌드가 달랐던 것처럼) 되돌리면 적어 둔 ID 로 돌아온다
+# 태그를 다른 이미지로 이동시킨 후(새 빌드가 상이했던 경우를 모사) 롤백하면 기록된 ID 로 복원된다
 docker tag "$(docker inspect ws-frontend-react --format '{{.Image}}')" localhost/just-workspace-backend:latest
 bash scripts/update.sh --rollback > "$E2E_WORK/manual-rollback.log" 2>&1
 rc=$?

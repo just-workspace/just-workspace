@@ -1,20 +1,20 @@
-"""사전 점검 — 설치를 시작해도 되는 서버인지 본다.
+"""사전 점검 — 설치를 시작할 수 있는 서버인지 확인한다.
 
-항목마다 `{"id", "status": pass|warn|fail, "value", "fix": {"key", "vars"} | null}` 을 낸다.
-문구는 화면이 가진다 — 여기서는 키와 값만. `fail` 이 하나라도 있으면 적용할 수 없다.
+항목마다 `{"id", "status": pass|warn|fail, "value", "fix": {"key", "vars"} | null}` 을 출력한다.
+문구는 화면 측이 보유하며, 본 모듈은 키와 값만 출력한다. `fail` 이 하나라도 있으면 적용할 수 없다.
 
-호스트 정보를 얻는 방법(설치 관리자는 컨테이너 안에 있다):
+호스트 정보 수집 방법(설치 관리자는 컨테이너 내에 있다):
 
-| 항목 | 얻는 방법 |
+| 항목 | 수집 방법 |
 |---|---|
-| Docker Engine 버전, CPU 수, 메모리, 아키텍처, SELinux | `docker info` (데몬이 호스트 값을 알려 준다) |
-| Compose 버전 | `docker compose version --short` (이미지에 든 플러그인 — 실제로 쓰는 것) |
-| 디스크 여유(도커 데이터) | 보조 컨테이너에 익명 볼륨을 붙여 `statvfs` — 볼륨은 도커 데이터 폴더와 같은 파일 시스템에 있다 |
-| 디스크 여유(설치 폴더) | 설치 관리자 자신의 `/data` 에 `statvfs` |
-| 시간 동기화 | `adjtimex()` — 커널 시계 상태는 컨테이너에서도 호스트 것이 보인다 |
-| 포트 80·443·25 점유 | `--network host` 보조 컨테이너에서 직접 bind 해 본다. 우리 컨테이너가 쓰는 포트는 `docker ps` 로 가려낸다 |
+| Docker Engine 버전, CPU 수, 메모리, 아키텍처, SELinux | `docker info` (데몬이 호스트 값을 반환) |
+| Compose 버전 | `docker compose version --short` (이미지에 포함된 플러그인 — 실제 사용 대상) |
+| 디스크 여유(도커 데이터) | 보조 컨테이너에 익명 볼륨을 마운트하여 `statvfs` — 볼륨은 도커 데이터 폴더와 동일 파일 시스템에 위치 |
+| 디스크 여유(설치 폴더) | 설치 관리자 자체의 `/data` 에 `statvfs` |
+| 시간 동기화 | `adjtimex()` — 커널 시계 상태는 컨테이너에서도 호스트의 값이 조회된다 |
+| 포트 80·443·25 점유 | `--network host` 보조 컨테이너에서 직접 bind 시도. 본 프로젝트 컨테이너가 사용하는 포트는 `docker ps` 로 판별 |
 | 내부 대역 충돌 | `docker network inspect`(기존 도커 네트워크) + `--network host` 보조 컨테이너의 `/proc/net/route`(호스트 경로표) |
-| 인터넷·이미지 저장소 | 설치 관리자 컨테이너에서 HTTPS 요청(나가는 길은 호스트와 같다) |
+| 인터넷·이미지 저장소 | 설치 관리자 컨테이너에서 HTTPS 요청(아웃바운드 경로는 호스트와 동일) |
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ def item(check_id: str, status: str, value=None, fix: str | None = None, **fix_v
 
 
 def clock_synchronized() -> bool | None:
-    """커널 시계가 동기화돼 있는가(`adjtimex`). 알 수 없으면 None."""
+    """커널 시계의 동기화 여부(`adjtimex`). 확인 불가 시 None."""
     try:
         import ctypes
         import ctypes.util
@@ -100,7 +100,7 @@ def overlaps(a: str, b: str) -> bool:
 
 
 def subnet_conflicts(subnet: str, networks: list[dict], routes: list[dict]) -> list[dict]:
-    """고른 내부 대역과 겹치는 것 — 기존 도커 네트워크, 호스트 경로표(도커 브리지 것은 제외)."""
+    """선택한 내부 대역과 중복되는 대상 — 기존 도커 네트워크, 호스트 경로표(도커 브리지 경로는 제외)."""
     found: list[dict] = []
     docker_subnets: set[str] = set()
     for net in networks:
@@ -117,7 +117,7 @@ def subnet_conflicts(subnet: str, networks: list[dict], routes: list[dict]) -> l
         except ValueError:
             continue
         if normalized in docker_subnets:
-            continue                      # 도커 브리지가 만든 경로 — 위에서 이미 봤다
+            continue                      # 도커 브리지가 생성한 경로 — 위에서 이미 확인
         if overlaps(subnet, dest):
             found.append({"kind": "host_route", "name": route.get("iface"), "subnet": dest})
     return found
@@ -138,7 +138,7 @@ def _helper_json(result) -> dict:
 def run(docker: Docker, answers: ans.Answers, catalog: Catalog, *, registry: str = "localhost",
         reach: Callable[[str], bool] | None = None, clock: Callable[[], bool | None] = clock_synchronized,
         data_free_bytes: Callable[[], int | None] | None = None) -> dict:
-    """사전 점검을 돌린다. {"ok", "items", "facts": {"memory_mb", "cpus"}}"""
+    """사전 점검을 실행한다. {"ok", "items", "facts": {"memory_mb", "cpus"}}"""
     items: list[dict] = []
     info = docker.info()
 
@@ -192,7 +192,7 @@ def run(docker: Docker, answers: ans.Answers, catalog: Catalog, *, registry: str
     else:
         items.append(item("arch", "warn", None, "unknown"))
 
-    # 디스크 — 도커 데이터 폴더(이미지·볼륨)와 설치 폴더 중 작은 쪽
+    # 디스크 — 도커 데이터 폴더(이미지·볼륨)와 설치 폴더 중 작은 값
     docker_free = _helper_json(docker.helper(["disk", "/probe"], volumes=["/probe"], timeout=60)).get("free_bytes")
     if data_free_bytes is None:
         def data_free_bytes():
@@ -265,7 +265,7 @@ def run(docker: Docker, answers: ans.Answers, catalog: Catalog, *, registry: str
     else:
         items.append(item("subnet", "pass", subnet))
 
-    # 인터넷 · 이미지 저장소(오프라인 설치일 수 있어 경고까지만)
+    # 인터넷 · 이미지 저장소(오프라인 설치일 수 있으므로 경고까지만 적용)
     if reach is None:
         reach = _reach
     internet = reach(REGISTRY_PROBE)
@@ -292,18 +292,18 @@ def run(docker: Docker, answers: ans.Answers, catalog: Catalog, *, registry: str
 
 
 
-# 사전 점검이 감지한 값 가운데 facts 로 남기는 것 — {사전 점검의 이름: facts 의 이름}
+# 사전 점검 감지값 중 facts 로 보존하는 항목 — {사전 점검의 이름: facts 의 이름}
 PREFLIGHT_FACTS = {"memory_mb": "memory_mb", "cpus": "cpus", "outbound_address": "host_address", "gateway": "gateway"}
 
 
 def preflight_facts(report: dict) -> dict:
-    """사전 점검 결과에서 facts 로 옮길 값(감지하지 못한 것은 뺀다 — 예전에 감지한 값을 지우지 않는다)."""
+    """사전 점검 결과에서 facts 로 이전할 값(감지 실패 항목은 제외 — 기존 감지값을 삭제하지 않는다)."""
     got = report.get("facts") or {}
     return {PREFLIGHT_FACTS[k]: val for k, val in got.items() if val and k in PREFLIGHT_FACTS}
 
 
 def _reach(url: str) -> bool:
-    """그 주소에 HTTPS 로 닿는가 — 응답 코드는 보지 않는다(저장소는 인증 없이 401 을 준다)."""
+    """해당 주소에 HTTPS 로 접근 가능한지 여부 — 응답 코드는 확인하지 않는다(저장소는 인증 없이 401 을 반환한다)."""
     try:
         import httpx
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * 회의의 "노이즈 제거" 토글이 마이크 트랙의 잡음 억제를 **실제로** 바꾸는지 본다.
- * 회의 구역이 켜진 설치에서 돌린다(scenarios/s10-rbi.sh 의 설치가 회의 구역을 함께 켠다).
+ * 회의의 "노이즈 제거" 토글이 마이크 트랙의 잡음 억제를 **실제로** 변경하는지 확인한다.
+ * 회의 구역이 활성화된 설치에서 실행한다(scenarios/s10-rbi.sh 의 설치가 회의 구역을 함께 활성화한다).
  *
  *   node meeting-noise-ui.cjs --url https://ws.e2e.example --addr 192.168.10.20 --password-file <파일> [--out <폴더>] [--chrome <경로>]
  *
- * Chromium 을 가짜 마이크·카메라(`--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`)로 띄워 회의에 들어가고,
- * 토글을 끄고 켤 때마다 **보내고 있는 마이크 트랙**(RTCRtpSender 의 트랙)의 `getSettings().noiseSuppression` 을 읽는다.
- * Chromium 은 `applyConstraints` 로 이 값을 바꾸지 못한다 — 화면은 트랙을 새 제약으로 다시 잡아 바꿔 끼운다. 그래서 트랙 id 가 바뀌는 것도 본다.
- * 필요한 것: playwright-core(NODE_PATH), 가짜 장치를 지원하는 Chromium, 이 PC 에서 서버의 회의 포트(UDP 7882-7892 또는 TCP 7881)에 닿을 것.
+ * Chromium 을 가짜 마이크·카메라(`--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`)로 기동하여 회의에 참가하고,
+ * 토글을 끄고 켤 때마다 **송신 중인 마이크 트랙**(RTCRtpSender 의 트랙)의 `getSettings().noiseSuppression` 을 조회한다.
+ * Chromium 은 `applyConstraints` 로 이 값을 변경하지 못한다 — 화면은 트랙을 새 제약으로 재획득하여 교체한다. 따라서 트랙 id 의 변경 여부도 확인한다.
+ * 필요 사항: playwright-core(NODE_PATH), 가짜 장치를 지원하는 Chromium, 이 PC 에서 서버의 회의 포트(UDP 7882-7892 또는 TCP 7881)에 도달 가능할 것.
  */
 const fs = require('fs')
 const path = require('path')
@@ -34,7 +34,7 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
     ],
   })
   const ctx = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 900 }, locale: 'ko-KR', permissions: ['microphone', 'camera'] })
-  // 페이지가 만드는 연결을 기억해 둔다 — "보내고 있는 마이크 트랙"을 화면 밖에서 읽으려고
+  // 페이지가 생성하는 연결을 기록한다 — "보내고 있는 마이크 트랙"을 화면 외부에서 조회하기 위함
   await ctx.addInitScript(() => {
     const pcs = (window.__jwPcs = [])
     const Orig = window.RTCPeerConnection
@@ -50,7 +50,7 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
     const r = await fetch(p, { method, credentials: 'same-origin', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined })
     return { status: r.status, body: await r.json().catch(() => null) }
   }, { method, p, body })
-  // 보내고 있는 마이크 트랙 — 살아 있는 연결의 오디오 sender
+  // 송신 중인 마이크 트랙 — 활성 연결의 오디오 sender
   const mic = () => page.evaluate(() => {
     const out = []
     for (const pc of window.__jwPcs || []) {
@@ -76,7 +76,7 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
   await page.goto(base + '/meetings/room/' + encodeURIComponent(room))
   const join = page.getByRole('button', { name: /회의 참여|참여/ }).last()
   await join.waitFor({ timeout: 30000 })
-  await page.waitForTimeout(2000)                       // 장치 목록이 찰 시간
+  await page.waitForTimeout(2000)                       // 장치 목록이 채워질 때까지 대기
   await page.screenshot({ path: path.join(opt.out, '01-device.png') })
   await join.click()
   const toggle = page.locator('button[title="노이즈 제거"]')
@@ -89,7 +89,7 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
   expect('처음에는 켜져 있다 — 단추', (await toggle.getAttribute('aria-pressed')) === 'true')
   expect('처음에는 켜져 있다 — 트랙의 noiseSuppression = true', tracks[0].ns === true, JSON.stringify(tracks[0]))
 
-  // press(기대값) — 토글을 누르고, 단추가 그 상태가 되고 바쁜 표시가 풀릴 때까지 기다린 뒤 트랙을 읽는다
+  // press(기대값) — 토글을 클릭하고, 버튼이 해당 상태가 되고 처리 중 표시가 해제될 때까지 대기한 후 트랙을 조회한다
   const press = async want => {
     const before = (await mic())[0]
     await toggle.click()
@@ -108,7 +108,7 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
   await page.screenshot({ path: path.join(opt.out, '03-off.png') })
   await press(true)
   await press(false)
-  // 마이크를 껐다 켜도(트랙을 새로 잡는다) 고른 값이 유지되는가
+  // 마이크를 껐다 켜도(트랙을 재획득한다) 선택한 값이 유지되는지 확인
   const micOff = page.locator('button[title="마이크 끄기"]'), micOn = page.locator('button[title="마이크 켜기"]')
   await micOff.click()
   await micOn.waitFor({ timeout: 15000 }).then(() => ok('마이크 끄기')).catch(e => bad('마이크 끄기', String(e).slice(0, 120)))

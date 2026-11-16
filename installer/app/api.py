@@ -1,9 +1,9 @@
-"""HTTP API — 마법사용(8443, HTTPS, 세션 필요)과 내부용(8444, 워크스페이스 내부망, 공유 키).
+"""HTTP API — 설치 마법사용(8443, HTTPS, 세션 필수)과 내부용(8444, 워크스페이스 내부망, 공유 키).
 
-두 앱은 **서로 다른 포트**에서 뜬다. 8443 은 호스트에 게시하고, 8444 는 게시하지 않는다 — 브라우저는
-내부 API 에 닿지 못한다. 설치가 끝나면 마법사 API 는 잠긴다(상태 조회만 남는다).
+두 앱은 **서로 다른 포트**에서 기동한다. 8443 은 호스트에 게시하고 8444 는 게시하지 않는다 — 브라우저는
+내부 API 에 접근할 수 없다. 설치 완료 후 설치 마법사 API 는 잠금 상태가 된다(상태 조회만 유지).
 
-오류 응답은 모두 `{"code": "...", "vars": {...}}` 꼴이다. 문구는 화면이 가진다.
+오류 응답은 모두 `{"code": "...", "vars": {...}}` 형식이다. 문구는 화면 측이 보유한다.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ from app.state import Store, now_iso, write_private
 from app.tokens import COOKIE_NAME, SESSION_TTL, TokenStore
 from app.zonectl import ZoneManager, ZoneRequestError
 
-# 받을 이미지 저장소의 기본값 — 이미지(Dockerfile 의 ARG JW_REGISTRY)와 같은 값. 실행할 때 JW_REGISTRY 로 바꾼다.
+# pull 대상 이미지 저장소의 기본값 — 이미지(Dockerfile 의 ARG JW_REGISTRY)와 동일한 값. 실행 시 JW_REGISTRY 로 변경한다.
 DEFAULT_REGISTRY = "ghcr.io/just-workspace"
 
 KEY_HEADER = "x-jw-installer-key"
@@ -62,11 +62,11 @@ class Services:
     smtp_factory: Callable | None = None
     ai_get: Callable | None = None
     preflight_kwargs: dict = field(default_factory=dict)
-    ui_dir: Path | None = None                      # 마법사 화면 번들(installer.html · assets/ · icon.svg)
-    cache: dict = field(default_factory=dict)       # 바뀌지 않는 조회값(자기 컨테이너 이름, 도커 데이터 폴더)
+    ui_dir: Path | None = None                      # 설치 마법사 화면 번들(installer.html · assets/ · icon.svg)
+    cache: dict = field(default_factory=dict)       # 불변 조회값(자체 컨테이너 이름, 도커 데이터 폴더)
 
     def local_key(self) -> str:
-        """같은 컨테이너의 `jw` 명령이 서버에 일을 시킬 때 쓰는 키(상태 폴더의 파일)."""
+        """동일 컨테이너의 `jw` 명령이 서버에 작업을 요청할 때 사용하는 키(상태 폴더의 파일)."""
         path = self.store.dir / "local.key"
         try:
             return path.read_text(encoding="utf-8").strip()
@@ -170,7 +170,7 @@ STEP_ID = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 
 
 def self_name(svc: Services) -> str:
-    """설치 관리자 컨테이너의 이름 — 화면에 보여 줄 명령에 쓴다(못 알아내면 문서의 기본 이름)."""
+    """설치 관리자 컨테이너의 이름 — 화면에 표시할 명령에 사용한다(확인 불가 시 문서의 기본 이름)."""
     if "self_name" not in svc.cache:
         data = svc.docker.inspect("container", svc.docker.self_ref) or {}
         name = str(data.get("Name") or "").lstrip("/")
@@ -179,19 +179,19 @@ def self_name(svc: Services) -> str:
 
 
 def commands(svc: Services) -> dict:
-    """서버 터미널에서 치는 명령 — 화면은 이 글자를 그대로 보여 준다."""
+    """서버 터미널에서 입력하는 명령 — 화면은 이 문자열을 그대로 표시한다."""
     name = self_name(svc)
     return {
         "reissue_token": f"docker exec {name} jw token",
         "reset_admin": f"docker exec {name} jw reset-admin",
-        # 비밀번호는 명령에 적지 않는다 — 셸 변수 JW_ADMIN_PASSWORD 를 그대로 넘긴다(답변 파일은 설치 폴더에 둔다)
+        # 비밀번호는 명령에 기재하지 않는다 — 셸 변수 JW_ADMIN_PASSWORD 를 그대로 전달한다(응답 파일은 설치 폴더에 둔다)
         "install_from_answers": f"docker exec -e JW_ADMIN_PASSWORD {name} jw apply --answers /data/answers.json",
         "reinstall": f"docker exec {name} jw reinstall --yes",
     }
 
 
 def detected_facts(svc: Services, pre: dict | None) -> dict:
-    """감지값 — 모르는 것은 null. 연결 형태: 나가는 주소가 공인이면 direct, 사설이면 router(프록시 뒤인지는 알 수 없다)."""
+    """감지값 — 미확인 항목은 null. 연결 형태: 아웃바운드 주소가 공인이면 direct, 사설이면 router(프록시 뒤 여부는 판별 불가)."""
     facts = svc.store.facts()
     lan = ((pre or {}).get("facts") or {}).get("outbound_address") or None
     detected = None
@@ -209,7 +209,7 @@ def detected_facts(svc: Services, pre: dict | None) -> dict:
 
 
 def mail_records(svc: Services, body: dict) -> dict:
-    """메일 도메인에 등록할 레코드의 기대값과 현재값. DKIM 값은 설치 때 만든(또는 지금 만드는) 키에서 나온다."""
+    """메일 도메인에 등록할 레코드의 기대값과 현재값. DKIM 값은 설치 시 생성한(또는 현재 생성하는) 키에서 산출한다."""
     answers = svc.store.load_answers()
     mail_domain = body.get("mail_domain") or answers.mail.mail_domain or answers.access.domain
     key = dkim.ensure(svc.store, mail_domain)
@@ -218,7 +218,7 @@ def mail_records(svc: Services, body: dict) -> dict:
 
 
 def storage_info(svc: Services) -> dict:
-    """파일 저장소가 무엇인가 — {kind: local|nfs, location, install_id}. 위치는 NFS 면 `서버:/경로`, 아니면 호스트 폴더."""
+    """파일 저장소 정보 — {kind: local|nfs, location, install_id}. 위치는 NFS 이면 `서버:/경로`, 그 외는 호스트 폴더."""
     s = svc.store.load_answers().storage
     if s.kind == "nfs":
         kind, location = "nfs", f"{s.server}:{s.export}"
@@ -231,7 +231,7 @@ def storage_info(svc: Services) -> dict:
 
 
 def default_storage_path(svc: Services) -> str | None:
-    """기본 저장소(도커 볼륨)가 호스트의 어디에 놓이는지 — 도커 데이터 폴더 아래."""
+    """기본 저장소(도커 볼륨)의 호스트 내 위치 — 도커 데이터 폴더 하위."""
     if "docker_root" not in svc.cache:
         svc.cache["docker_root"] = str(svc.docker.info().get("DockerRootDir") or "")
     root = svc.cache["docker_root"]
@@ -268,7 +268,7 @@ def state(svc: Services) -> dict:
 
 # ─── 화면 번들(정적 파일) ───
 
-# 화면은 인라인 스크립트 없이 돈다. 스타일은 속성(style="…")만 인라인을 허용한다(React 가 쓴다).
+# 화면은 인라인 스크립트 없이 동작한다. 스타일은 속성(style="…")에 한해 인라인을 허용한다(React 가 사용).
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; "
        "img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; "
        "base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
@@ -276,14 +276,14 @@ SECURITY_HEADERS = {
     "Content-Security-Policy": CSP,
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
-    "Referrer-Policy": "no-referrer",            # 주소에 설치 토큰이 실려 올 수 있다
+    "Referrer-Policy": "no-referrer",            # 주소에 설치 토큰이 포함될 수 있음
     "Cross-Origin-Opener-Policy": "same-origin",
 }
 NO_UI = "설치 화면 번들이 이 이미지에 없습니다(개발 실행). API 는 그대로 동작합니다.\n"
 
 
 def ui_file(svc: Services, relative: str) -> Path | None:
-    """화면 번들 안의 파일(폴더 밖을 가리키면 None)."""
+    """화면 번들 내 파일(폴더 외부를 가리키면 None)."""
     if svc.ui_dir is None:
         return None
     root = svc.ui_dir.resolve()
@@ -339,7 +339,7 @@ def create_wizard_app(svc: Services) -> FastAPI:
         return {"ok": True}
 
     def page():
-        """화면(SPA) — 세션이 없어도 내준다. 토큰 입력·잠김 안내도 이 화면이 그린다."""
+        """화면(SPA) — 세션이 없어도 제공한다. 토큰 입력·잠금 안내도 이 화면이 표시한다."""
         path = ui_file(svc, "installer.html")
         if path is None:
             return PlainTextResponse(NO_UI, status_code=503)
@@ -349,8 +349,8 @@ def create_wizard_app(svc: Services) -> FastAPI:
     def landing(token: str | None = Query(default=None)):
         if token is None:
             return page()
-        # 토큰이 실린 주소 — 확인하고 토큰 없는 주소로 넘긴다(주소창·방문 기록에 남지 않게).
-        # 맞으면 세션 쿠키를 준다. 틀리면 화면이 사유를 알리도록 상태만 실어 넘긴다(화면이 같은 토큰으로 또 묻지 않게).
+        # 토큰이 포함된 주소 — 검증 후 토큰 없는 주소로 리다이렉트한다(주소창·방문 기록에 남지 않도록 함).
+        # 일치하면 세션 쿠키를 발급한다. 불일치하면 화면이 사유를 표시하도록 상태만 포함하여 리다이렉트한다(화면이 동일 토큰으로 재요청하지 않도록 함).
         if svc.store.locked:
             return RedirectResponse("/", status_code=302)
         try:
@@ -380,7 +380,7 @@ def create_wizard_app(svc: Services) -> FastAPI:
         path = ui_file(svc, f"assets/{name}")
         if path is None:
             raise ApiError(404, "not_found")
-        # 자산 파일 이름에는 내용 해시가 들어 있다 — 바뀌면 이름이 바뀐다
+        # 자산 파일 이름에는 내용 해시가 포함된다 — 내용 변경 시 이름도 변경된다
         return FileResponse(path, headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
     @app.post("/api/session")
@@ -403,7 +403,7 @@ def create_wizard_app(svc: Services) -> FastAPI:
         session(request)
         return state(svc)
 
-    # ── 답변 ──
+    # ── 응답 ──
 
     def answers_view() -> dict:
         answers = svc.store.load_answers()
@@ -423,10 +423,10 @@ def create_wizard_app(svc: Services) -> FastAPI:
         if step is not None and not STEP_ID.fullmatch(step):
             raise ApiError(422, "step_invalid")
         current, _ = ans.split(svc.store.load_answers())
-        merged = ans.load(ans.merge_patch(current, patch))        # 비밀은 patch 에 든 것만 새로 저장된다
+        merged = ans.load(ans.merge_patch(current, patch))        # 비밀은 patch 에 포함된 것만 신규 저장
         svc.store.save_answers(merged)
         if step is not None:
-            svc.store.write("wizard.json", {"step": step})        # 이어 할 화면 — GET /api/state 의 step
+            svc.store.write("wizard.json", {"step": step})        # 재개할 화면 — GET /api/state 의 step
         return answers_view()
 
     @app.get("/api/answers/export", dependencies=[Depends(unlocked)])
@@ -485,7 +485,7 @@ def create_wizard_app(svc: Services) -> FastAPI:
         if report["ok"]:
             write_private(svc.store.dir / "upload" / "cert.pem", cert)
             write_private(svc.store.dir / "upload" / "key.pem", key)
-            # (선택) 사설 CA 의 인증서 — 없이 다시 확인했으면 앞서 받아 둔 것도 치운다
+            # (선택) 사설 CA 의 인증서 — 미포함 상태로 재확인한 경우 기존 수신분도 삭제
             ca_file = svc.store.dir / "upload" / "ca.pem"
             if ca.strip():
                 write_private(ca_file, ca, 0o644)
@@ -508,7 +508,7 @@ def create_wizard_app(svc: Services) -> FastAPI:
         opts = lambda server, export: render.storage_volume(  # noqa: E731
             ans.load({"storage": {"kind": "nfs", "server": server, "export": export}}))["opts"]
         server, export = body.get("server") or s.server or "", body.get("export") or s.export or ""
-        # 복원 중이면 표식 파일의 설치 id 가 백업의 것과 같은지도 본다
+        # 복원 중이면 저장소 마커 파일의 설치 id 가 백업의 것과 동일한지도 확인
         return api_restore.nfs_probe(svc, probes.probe_nfs(svc.docker, server, export, volume_opts=opts), server, export)
 
     @app.post("/api/probe/local-path", dependencies=[Depends(unlocked)])
@@ -589,7 +589,7 @@ def ai_probe(svc: Services, body: dict) -> dict:
 
 
 def create_internal_app(svc: Services) -> FastAPI:
-    """워크스페이스 backend 가 내부망에서 공유 키로 부르는 API. 호스트에 게시하지 않는다."""
+    """워크스페이스 backend 가 내부망에서 공유 키로 호출하는 API. 호스트에 게시하지 않는다."""
     app = FastAPI(title="Just Workspace installer (internal)", docs_url=None, redoc_url=None, openapi_url=None)
     _error_handlers(app)
 
@@ -609,7 +609,7 @@ def create_internal_app(svc: Services) -> FastAPI:
     def keyed(request: Request) -> None:
         expected = svc.store.env_secrets().get("JW_INSTALLER_KEY", "")
         given = request.headers.get(KEY_HEADER, "")
-        # 키가 없으면(설치 전) 닫혀 있다. 워크스페이스 내부 대역 밖에서 온 요청도 받지 않는다.
+        # 키가 없으면(설치 전) 차단한다. 워크스페이스 내부 대역 외부에서 수신한 요청도 거부한다.
         if not expected or not client_allowed(request) or not hmac.compare_digest(given.encode(), expected.encode()):
             raise ApiError(404, "not_found")
 
@@ -631,12 +631,12 @@ def create_internal_app(svc: Services) -> FastAPI:
     def zone_settings(zone_id: str):
         out = svc.zones.get_settings(zone_id)
         if zone_id == "git":
-            out["verified_version"] = svc.bundle.gitea_verified_version      # "검증된 버전"이 몇 버전인지
+            out["verified_version"] = svc.bundle.gitea_verified_version      # "검증된 버전"의 실제 버전 값
         return out
 
     @app.get("/internal/jobs", dependencies=[Depends(keyed)])
     def jobs_list():
-        """구역 작업 — 진행 중인 것과 최근 것(새것부터, 20개까지 기억한다)."""
+        """구역 작업 — 진행 중 및 최근 항목(최신순, 최대 20개 보존)."""
         jobs = sorted(svc.zones.jobs().values(), key=lambda j: j.get("started_at") or "", reverse=True)
         return {"jobs": jobs}
 
@@ -678,7 +678,7 @@ def create_internal_app(svc: Services) -> FastAPI:
             lines = []
         return {"lines": lines}
 
-    # 구역 켜기 창의 "연결 확인"
+    # 구역 활성화 창의 "연결 확인"
     @app.post("/internal/probe/smtp", dependencies=[Depends(keyed)])
     def internal_smtp(body: dict = Body(default={})):
         return smtp_probe(svc, body)
@@ -687,7 +687,7 @@ def create_internal_app(svc: Services) -> FastAPI:
     def internal_ai(body: dict = Body(default={})):
         return ai_probe(svc, body)
 
-    # 설치 뒤의 관리 화면(메일 레코드 표, 회의의 공인 주소)
+    # 설치 후의 관리 화면(메일 레코드 표, 회의의 공인 주소)
     @app.post("/internal/probe/mail-records", dependencies=[Depends(keyed)])
     def internal_mail_records(body: dict = Body(default={})):
         return mail_records(svc, body)
@@ -696,10 +696,10 @@ def create_internal_app(svc: Services) -> FastAPI:
     def internal_public_ip(refresh: bool = False):
         return public_ip(svc, refresh=refresh)
 
-    # 인증서 다시 발급 · 보류된 구역 연결 — app/api_cert.py
+    # 인증서 재발급 · 보류된 구역 연결 — app/api_cert.py
     api_cert.register(app, svc, keyed=keyed)
 
-    # 같은 컨테이너의 `jw` 명령용(루프백 + 상태 폴더의 키)
+    # 동일 컨테이너의 `jw` 명령용(루프백 + 상태 폴더의 키)
     @app.post("/local/apply", dependencies=[Depends(local)], status_code=202)
     def local_apply():
         if svc.store.locked:

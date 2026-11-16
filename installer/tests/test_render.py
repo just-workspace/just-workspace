@@ -1,7 +1,7 @@
-"""렌더링 — 스냅샷(다섯 구성)과 구성별 성질.
+"""렌더링 — 스냅샷(다섯 구성)과 구성별 특성.
 
-스냅샷은 tests/snapshots/<구성>/ 에 있다. 의도한 변경이면 `JW_UPDATE_SNAPSHOTS=1 pytest` 로 다시 만든다.
-번들에서 그대로 복사하는 파일(compose·nginx.conf 등)은 스냅샷에 넣지 않는다(리포 원본이 단일 출처).
+스냅샷은 tests/snapshots/<구성>/ 에 있다. 의도한 변경이면 `JW_UPDATE_SNAPSHOTS=1 pytest` 로 재생성한다.
+번들에서 그대로 복사하는 파일(compose·nginx.conf 등)은 스냅샷에 포함하지 않는다(리포 원본이 단일 출처).
 """
 
 import json
@@ -41,7 +41,7 @@ def build(case: str, bundle, secrets, facts) -> dict[str, str]:
     return generated
 
 
-# 렌더링은 키 내용을 그대로 옮겨 적을 뿐이다 — 스냅샷에는 진짜 키 대신 자리표시자를 쓴다
+# 렌더링은 키 내용을 그대로 기록할 뿐이다. 스냅샷에는 실제 키 대신 자리표시자를 사용한다
 DKIM_KEY = "(test placeholder - not a key)\n"
 
 
@@ -78,7 +78,7 @@ def test_direct_auto_properties(bundle, secrets, facts):
     assert env["ACME_DOMAINS"] == "ws.example.com,mail.example.com"
     assert env["RP_LAN_IP"] == "172.28.0.2" and env["HAIRPIN_HOST"] == "ws.example.com"
     assert env["STORAGE_MARKER_REQUIRED"] == "1"
-    assert env["LIVEKIT_API_SECRET"] == "" and env["SANDBOX_TOKEN"] == ""     # 꺼진 구역의 비밀값은 싣지 않는다
+    assert env["LIVEKIT_API_SECRET"] == "" and env["SANDBOX_TOKEN"] == ""     # 비활성 구역의 비밀값은 포함하지 않는다
     http = files["nginx/site.d/http.conf"]
     assert "ssl_certificate     /etc/letsencrypt/live/ws.example.com/fullchain.pem;" in http
     assert "return 301 https://$host$request_uri;" in http and "set_real_ip_from" not in http
@@ -86,7 +86,7 @@ def test_direct_auto_properties(bundle, secrets, facts):
     assert "Strict-Transport-Security" in files["nginx/site.d/headers.conf"]
     assert '"443:443"' in files[render.SITE_COMPOSE]
     assert "livekit/livekit.yaml" not in files
-    # 번들 파일은 내용 그대로
+    # 번들 파일은 내용 동일
     assert files["docker-compose.yml"] == bundle.read("docker-compose.yml")
     assert files["nginx/nginx.conf"] == bundle.read("nginx/nginx.conf")
 
@@ -119,7 +119,7 @@ def test_proxy_with_several_addresses_turns_hairpin_off(bundle, secrets, facts):
 def test_minimal_properties(bundle, secrets, facts):
     files = render.render(make_answers(**CASES["minimal"]), secrets, facts, bundle)
     env = env_of(files)
-    assert env["JW_ZONES"] == "core"            # 비우면 "전부 설치"로 읽히므로 core 를 적는다
+    assert env["JW_ZONES"] == "core"            # 비워 두면 "전부 설치"로 해석되므로 core 를 기록한다
     assert env["COMPOSE_PROFILES"] == "certbot"
     assert env["FEATURE_BUILTIN_MAILSERVER"] == "false" and env["SMTP_HOST"] == ""
     assert env["DOMAIN"] == "ws.example.com"
@@ -137,7 +137,7 @@ def test_full_properties(bundle, secrets, facts):
     assert env["ACME_DOMAINS"] == "ws.example.com,mail.example.com,turn.ws.example.com,rbi.ws.example.com"
     assert env["GITEA_IMAGE"] == bundle.gitea_verified_image
     assert env["RBI_PUBLIC_ORIGIN"] == "https://rbi.ws.example.com"
-    assert env["RBI_PROTECTED"] == ""          # 서버 주소를 감지하지 못했으면 비운다(지어내지 않는다)
+    assert env["RBI_PROTECTED"] == ""          # 서버 주소를 감지하지 못한 경우 빈 값으로 둔다(임의 생성 금지)
     lk = files["livekit/livekit.yaml"]
     assert "node_ip: 203.0.113.10" in lk and "domain: turn.ws.example.com" in lk
     assert f"api_key: {secrets['LIVEKIT_API_KEY']}" in lk
@@ -145,7 +145,7 @@ def test_full_properties(bundle, secrets, facts):
     plan = render.derive(a, facts, render.Catalog(bundle.zones))
     assert plan.cert_aliases == ["mail.example.com", "turn.ws.example.com"]
     assert {"5349/tcp", "3478/udp", "4433/udp", "25/tcp", "2222/tcp", "636/tcp"} <= set(plan.ports)
-    assert "389/tcp" not in plan.ports                 # 평문 LDAP 은 루프백에만 연다 — 여는 포트로 안내하지 않는다
+    assert "389/tcp" not in plan.ports                 # 평문 LDAP 은 루프백에만 개방한다. 개방 포트 안내 대상에 포함하지 않는다
 
 
 def test_meetings_without_turn_or_lossless(bundle, secrets, facts):
@@ -238,7 +238,7 @@ def test_dkim_public_value():
 
 
 def test_bundle_compose_uses_the_variables_render_writes(bundle):
-    """렌더링이 .env 에 쓰는 변수를 compose 가 실제로 읽는가(이름이 어긋나면 조용히 무시된다)."""
+    """렌더링이 .env 에 기록하는 변수를 compose 가 실제로 읽는지 확인한다(이름이 불일치하면 경고 없이 무시된다)."""
     compose = bundle.read("docker-compose.yml")
     for name in ("JW_NET_PREFIX", "HAIRPIN_HOST", "RP_LAN_IP", "GITEA_IMAGE", "GIT_SSH_DOMAIN", "STORAGE_VOLUME",
                  "LIVEKIT_TURN_TLS_PUBLISH", "ACME_DOMAINS", "MAIL_SSL_TYPE", "JW_REGISTRY", "JW_VERSION",
@@ -251,15 +251,15 @@ def test_bundle_compose_uses_the_variables_render_writes(bundle):
     assert "include /etc/nginx/site.d/headers.conf;" in bundle.read("nginx/security-headers.conf")
 
 
-# ─── 격리 브라우저: 워크스페이스 자신의 주소 ───
+# ─── 격리 브라우저: 워크스페이스 자체 주소 ───
 
 
 @pytest.mark.parametrize("known,expected", [
     (dict(host_address="192.168.10.20", gateway="192.168.10.1"), "192.168.10.20,192.168.10.1"),
     (dict(host_address="192.168.10.20"), "192.168.10.20"),
     (dict(host_address="192.168.10.20", gateway="192.168.10.1", proxy_lan_ip="192.168.10.5"), "192.168.10.20,192.168.10.1,192.168.10.5"),
-    (dict(host_address="192.168.10.20", gateway="192.168.10.20"), "192.168.10.20"),      # 같은 주소는 한 번만
-    (dict(host_address="203.0.113.10", gateway="203.0.113.1"), ""),                    # 공인 주소는 대상이 될 수 없어 적지 않는다
+    (dict(host_address="192.168.10.20", gateway="192.168.10.20"), "192.168.10.20"),      # 동일 주소는 한 번만 기록
+    (dict(host_address="203.0.113.10", gateway="203.0.113.1"), ""),                    # 공인 주소는 대상이 될 수 없으므로 기록하지 않는다
     (dict(host_address="not-an-ip", gateway="127.0.0.1"), ""),
     (dict(), ""),
 ])

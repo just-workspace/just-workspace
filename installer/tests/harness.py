@@ -1,4 +1,4 @@
-"""적용 엔진 테스트용 가짜 서버 — 설치가 끝까지 되는 docker 응답 한 벌."""
+"""적용 엔진 테스트용 모의 서버 — 설치가 끝까지 완료되는 docker 응답 한 세트."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ class FakeHttp:
 
 
 class Host:
-    """가짜 호스트 — 볼륨·인증서·컨테이너 상태를 기억한다."""
+    """모의 호스트 — 볼륨·인증서·컨테이너 상태를 유지한다."""
 
     def __init__(self, tmp_path: Path):
         self.runner = FakeRunner()
@@ -100,7 +100,7 @@ class Host:
             return Result(1, "", "Challenge failed for domain ws.example.com")
         names = [argv[i + 1] for i, a in enumerate(argv) if a == "-d"]
         issued, _key = certs.self_signed(names, days=90)
-        # 진짜 발급처럼 보이게: 발급자가 다른 인증서가 필요하다 → 자체 서명 판정을 속인다
+        # 실제 발급과 동일하게 보이려면 발급자가 다른 인증서가 필요하다 → 자체 서명 판정을 우회한다
         self.cert = issued
         self.issued_by_ca = True
         return "Successfully received certificate.\n"
@@ -117,7 +117,7 @@ class Host:
         return svc
 
     def install(self, svc: api.Services | None = None, **answers) -> api.Services:
-        """답변을 넣고 감지값을 채운 서비스 묶음."""
+        """응답(answers)을 저장하고 감지값을 채운 서비스 집합."""
         svc = svc or self.services_obj()
         svc.store.save_answers(make_answers(**answers))
         svc.store.update_facts(memory_mb=16384, cpus=4, public_ip="203.0.113.10", dns_status="match")

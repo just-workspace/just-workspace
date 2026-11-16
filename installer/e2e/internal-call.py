@@ -1,7 +1,7 @@
-"""내부 API(8444)를 부른다 — backend 컨테이너 안에서 돈다(backend 가 부르는 방식 그대로).
+"""내부 API(8444)를 호출한다 — backend 컨테이너 내에서 실행된다(backend 의 호출 방식과 동일).
 
-주소와 키는 backend 가 받은 환경변수(JW_INSTALLER_URL, JW_INSTALLER_KEY)를 쓴다.
-    E2E_METHOD  E2E_PATH  [E2E_BODY]  [E2E_KEY — 키를 바꿔 볼 때]  [E2E_URL — 주소를 바꿔 볼 때]
+주소와 키는 backend 가 전달받은 환경변수(JW_INSTALLER_URL, JW_INSTALLER_KEY)를 사용한다.
+    E2E_METHOD  E2E_PATH  [E2E_BODY]  [E2E_KEY — 키를 변경하여 시험할 때]  [E2E_URL — 주소를 변경하여 시험할 때]
 출력: "<상태 코드> <본문>"
 """
 import os

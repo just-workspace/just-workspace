@@ -1,4 +1,4 @@
-"""답변 검증 — 모양, 조합 오류, 꺼진 구역 무시, 메모리 판정, 비밀 분리."""
+"""응답(answers) 검증 — 형식, 조합 오류, 비활성 구역 무시, 메모리 판정, 비밀값 분리."""
 
 import pytest
 
@@ -52,7 +52,7 @@ def test_temporary_cert_only_when_dns_does_not_match_or_after_failure(catalog):
     for status in ("mismatch", "unknown"):
         assert ans.validate(a, catalog, ans.Facts(memory_mb=16000, dns_status=status)) == []
     assert ans.validate(a, catalog, ans.Facts(memory_mb=16000, dns_status="match", cert_issue_failed=True)) == []
-    # 아직 확인하지 않았다면 확인부터
+    # 미확인 상태이면 확인이 선행되어야 한다
     assert ("access.cert", "cert_temporary_needs_dns_check") in codes(ans.validate(a, catalog, ans.Facts()))
 
 
@@ -82,10 +82,10 @@ def test_nfs_requires_server_and_export(catalog, facts):
 
 
 def test_disabled_zone_fields_are_ignored(catalog, facts):
-    # 메일 구역이 꺼져 있으면 메일 항목이 엉망이어도 오류가 아니다
+    # 메일 구역이 비활성 상태이면 메일 항목이 유효하지 않아도 오류가 아니다
     a = make_answers(preset=None, zones=["chat"], mail={"kind": "external", "host": "bad host!", "port": 99999})
     assert ans.validate(a, catalog, facts) == []
-    # 켜면 오류
+    # 활성화하면 오류
     a = make_answers(preset=None, zones=["mail"], mail={"kind": "external", "host": "bad host!", "port": 99999})
     got = codes(ans.validate(a, catalog, facts))
     assert ("mail.host", "host_invalid") in got and ("mail.port", "port_invalid") in got
@@ -110,7 +110,7 @@ def test_meetings_rules(catalog, facts):
     assert ("meetings.lossless_audio", "lossless_needs_chat") in codes(ans.validate(a, catalog, facts))
     a = make_answers(preset=None, zones=["meetings"])
     assert ("meetings.public_ip", "required") in codes(ans.validate(a, catalog, ans.Facts(memory_mb=16000, dns_status="match")))
-    assert ans.validate(a, catalog, facts) == []      # 감지값이 있으면 비워도 된다
+    assert ans.validate(a, catalog, facts) == []      # 감지값이 있으면 생략 가능
 
 
 def test_admin_rules(catalog, facts):
@@ -124,13 +124,13 @@ def test_partial_save_skips_missing_required(catalog):
     a = ans.load({"access": {"domain": "ws.example.com"}})
     assert ans.validate(a, catalog, ans.Facts(), final=False) == []
     assert ans.validate(a, catalog, ans.Facts(), final=True) != []
-    # 적힌 값이 틀리면 부분 저장에서도 알려 준다
+    # 입력된 값이 유효하지 않으면 부분 저장에서도 오류를 반환한다
     a = ans.load({"access": {"domain": "not a domain"}})
     assert ("access.domain", "domain_invalid") in codes(ans.validate(a, catalog, ans.Facts(), final=False))
 
 
 def test_restore_mode_is_accepted_without_admin_account(catalog, facts):
-    # 복원은 관리자 계정을 만들지 않는다 — 백업의 계정이 그대로 온다(tests/test_restore.py)
+    # 복원은 관리자 계정을 생성하지 않는다. 백업의 계정이 그대로 이전된다(tests/test_restore.py)
     a = ans.load({"mode": "restore", "access": {"domain": "ws.example.com"}, "zones": []})
     assert ans.validate(a, catalog, facts) == []
 
@@ -148,7 +148,7 @@ def test_unknown_zone_and_preset(catalog, facts):
 def test_nominal_memory_rounds_up_small_shortfall():
     assert nominal_memory_mb(3900) == 4096       # "4GB 서버"
     assert nominal_memory_mb(7820) == 8192
-    assert nominal_memory_mb(3300) == 3300       # 차이가 크면 그대로
+    assert nominal_memory_mb(3300) == 3300       # 차이가 크면 원래 값 유지
     assert nominal_memory_mb(0) == 0
 
 
@@ -178,7 +178,7 @@ def test_quick_mode_defaults_to_collab_and_downgrades(catalog):
     resolved, notes = ans.resolve_quick(a, catalog, ans.Facts(memory_mb=4096))
     assert resolved.zones == [] and resolved.preset == "minimal"
     assert notes[0]["key"] == "quick_downgraded" and notes[0]["vars"]["from"] == "collab"
-    # 구역을 직접 골랐으면 건드리지 않는다
+    # 구역을 직접 선택한 경우 변경하지 않는다
     a = make_answers(mode="quick", zones=["chat"])
     assert ans.resolve_quick(a, catalog, ans.Facts(memory_mb=4096))[0].zones == ["chat"]
 
@@ -192,7 +192,7 @@ def test_zone_listing_marks_fit(catalog):
     assert listing["memory"]["need_mb"] == 5000
 
 
-# ─── 비밀 분리 ───
+# ─── 비밀값 분리 ───
 
 
 def test_split_removes_secrets_and_join_restores():

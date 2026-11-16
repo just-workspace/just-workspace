@@ -1,17 +1,17 @@
-"""백업에서 복원 — 다른 서버에서 만든 백업으로 이 서버에 그대로 옮긴다(docs/installer.md §14).
+"""백업에서 복원 — 타 서버에서 생성한 백업을 이 서버로 이전한다(docs/installer.md §14).
 
 흐름:
-  1. 백업 받기 — 브라우저로 올리거나(상태 폴더에 저장), 서버에 있는 파일의 **호스트 경로**를 알려 준다.
-     어느 쪽이든 설치 관리자는 백업을 직접 열지 않는다. backend 이미지의 일회용 컨테이너에 읽기 전용으로 붙여
-     `python -m app.cli backup inspect|verify|extract-config` 를 부른다(형식의 단일 출처는 backend 다).
-  2. 내용 확인(`review`) — 만든 서버·시각·버전·구역·크기·저장소·파일 포함 여부, 버전 판정.
-  3. 새 서버에서 다시 정하는 것(접속 주소·연결 형태·인증서·파일 저장 위치·내부 대역)만 받아 답변을 만든다.
-     구역·메일·관리자는 묻지 않는다 — 백업의 설정(`.env`)에서 온다(app/restore_config.py).
-  4. 적용 — 설치와 같은 엔진(app/engine.py)이 복원용 단계 표(`STEPS`)로 돈다. 상태·로그·재시도·SSE 가 같다.
+  1. 백업 수신 — 브라우저로 업로드하거나(상태 폴더에 저장), 서버에 있는 파일의 **호스트 경로**를 지정한다.
+     어느 경우에도 설치 관리자는 백업을 직접 열지 않는다. backend 이미지의 일회용 컨테이너에 읽기 전용으로 마운트하여
+     `python -m app.cli backup inspect|verify|extract-config` 를 호출한다(형식의 단일 출처는 backend 이다).
+  2. 내용 확인(`review`) — 생성 서버·시각·버전·구역·크기·저장소·파일 포함 여부, 버전 판정.
+  3. 새 서버에서 재지정하는 항목(접속 주소·연결 형태·인증서·파일 저장 위치·내부 대역)만 입력받아 응답을 생성한다.
+     구역·메일·관리자는 입력을 요구하지 않는다 — 백업의 설정(`.env`)에서 가져온다(app/restore_config.py).
+  4. 적용 — 설치와 동일한 엔진(app/engine.py)이 복원용 단계 표(`STEPS`)로 실행한다. 상태·로그·재시도·SSE 가 동일하다.
 
-단계: unpack(설정 파일 만들기 — 백업 설정 + 새 답변) → storage(NFS·지정 폴더일 때만) → pull(이미지 받기) →
-database(빈 DB 를 띄우고 데이터 되돌리기 — backend CLI `restore`, 이어서 스키마 맞추기) → files(백업에 파일이 있을 때만) →
-cert(인증서) → zones(구역 시작·연결 → 확인 → 마법사 잠금)
+단계: unpack(설정 파일 생성 — 백업 설정 + 새 응답) → storage(NFS·지정 폴더인 경우만) → pull(이미지 pull) →
+database(빈 DB 를 기동하고 데이터 복원 — backend CLI `restore`, 이어서 스키마 정합) → files(백업에 파일이 있는 경우만) →
+cert(인증서) → zones(구역 기동·연결 → 확인 → 설치 마법사 잠금)
 """
 
 from __future__ import annotations
@@ -33,15 +33,15 @@ from app.update_release import valid_source_url
 STEP_ORDER = ("unpack", "storage", "pull", "database", "files", "cert", "zones")
 ARCHIVE_SUFFIX = ".jwbak"
 SOURCE_MOUNT = "/restore-src"
-FILES_MEMBER = "files.tar"                    # 백업 형식이 정한 이름(docs/data-safety.md)
-# backend CLI 로 되돌리는 항목(설정은 병합해서 따로 쓰고, 파일은 files 단계가 맡는다). certs 는 조건부.
+FILES_MEMBER = "files.tar"                    # 백업 형식에서 정의한 이름(docs/data-safety.md)
+# backend CLI 로 복원하는 항목(설정은 병합하여 별도 기록하고, 파일은 files 단계가 담당). certs 는 조건부.
 DATA_ITEMS = ("db", "mail", "gitea", "plugins-data", "app-signing")
 META = "restore.json"
 MAX_PASSWORD = 1024
 
 
 class RestoreError(Exception):
-    """요청을 받을 수 없다 — API 가 `{"code","vars"}` 로 돌려준다."""
+    """요청 수신 불가 — API 가 `{"code","vars"}` 로 반환한다."""
 
     def __init__(self, status: int, code: str, **vars):
         super().__init__(code)
@@ -49,7 +49,7 @@ class RestoreError(Exception):
 
 
 def _json_tail(text: str) -> dict:
-    """출력의 마지막 JSON 덩어리(여러 줄로 찍힌 것도 받는다)."""
+    """출력의 마지막 JSON 블록(여러 줄로 출력된 것도 허용)."""
     text = (text or "").strip()
     if not text:
         return {}
@@ -74,13 +74,13 @@ def _json_tail(text: str) -> dict:
 
 
 class RestoreManager:
-    """백업 하나(올린 파일 또는 서버 경로)를 받아 확인하고, 복원 적용을 시작한다."""
+    """백업 1건(업로드한 파일 또는 서버 경로)을 수신하여 확인하고, 복원 적용을 시작한다."""
 
     def __init__(self, *, paths, store, docker, bundle, catalog, registry: str, image_tag: str,
                  engine: eng.Engine | None = None, dns_status: Callable[[str], str] | None = None):
         self.paths, self.store, self.docker, self.bundle, self.catalog = paths, store, docker, bundle, catalog
         self.registry, self.image_tag = registry, image_tag
-        self.engine = engine                     # 적용을 시작할 때만 쓴다(단계 안에서 만든 관리자에는 없다)
+        self.engine = engine                     # 적용 시작 시에만 사용(단계 내에서 생성한 관리자 객체에는 없음)
         self.dns_status = dns_status or (lambda domain: "unknown")
         self.dir = self.paths.state / "restore"
 
@@ -108,7 +108,7 @@ class RestoreManager:
         return self.dir / "password"
 
     def host_path(self, inside: Path) -> str:
-        """설치 관리자 컨테이너 안의 `/data/…` 경로 → 같은 파일의 호스트 경로(docker 데몬이 읽는 이름)."""
+        """설치 관리자 컨테이너 내의 `/data/…` 경로 → 동일 파일의 호스트 경로(docker 데몬이 해석하는 이름)."""
         rel = inside.relative_to(self.paths.data)
         return str(PurePosixPath(self.paths.host_dir) / PurePosixPath(rel.as_posix()))
 
@@ -126,7 +126,7 @@ class RestoreManager:
         return data
 
     def info(self) -> dict:
-        """화면에 주는 파일 상태 — `RestoreFileInfo`."""
+        """화면에 전달하는 파일 상태 — `RestoreFileInfo`."""
         m = self.meta()
         status = m.get("status") or "none"
         source = m.get("source") or {}
@@ -154,7 +154,7 @@ class RestoreManager:
     # ─── backend 이미지의 일회용 컨테이너 ───
 
     def ensure_backend_image(self, log: Callable[[str], None] = lambda line: None) -> bool:
-        """백업을 읽으려면 backend 이미지가 있어야 한다 — 없으면 그 이미지 하나만 먼저 받는다."""
+        """백업을 읽으려면 backend 이미지가 필요하다 — 없으면 해당 이미지 하나만 먼저 pull 한다."""
         image = self.backend_image()
         if self.docker.image_exists(image):
             return True
@@ -173,23 +173,23 @@ class RestoreManager:
         return self.docker.run([*argv, self.backend_image(), "-m", "app.cli", *args], timeout=timeout)
 
     def installer_schema(self) -> int | None:
-        """이 설치 관리자가 까는 제품의 DB 스키마 버전 — backend 이미지에 묻는다."""
+        """본 설치 관리자가 설치하는 제품의 DB 스키마 버전 — backend 이미지에 조회한다."""
         r = self._cli(["schema-version"], timeout=120)
         try:
             return int(r.out.strip().splitlines()[-1]) if r.ok else None
         except (ValueError, IndexError):
             return None
 
-    # ─── 백업 받기 ───
+    # ─── 백업 수신 ───
 
     def discard(self) -> dict:
-        """받아 둔 백업과 꺼낸 설정을 버린다(서버 경로로 알려 준 원본 파일은 건드리지 않는다)."""
+        """수신한 백업과 추출한 설정을 삭제한다(서버 경로로 지정한 원본 파일은 변경하지 않는다)."""
         shutil.rmtree(self.dir, ignore_errors=True)
         self.store.delete(META)
         return self.info()
 
     def begin_upload(self, name: str, size: int | None) -> Path:
-        """올리기 시작 — 반쪽 파일을 쓸 경로를 돌려준다. 자리가 모자라면 `RestoreError(507)`."""
+        """업로드 시작 — 불완전한 파일을 기록할 경로를 반환한다. 공간 부족 시 `RestoreError(507)` 발생."""
         if self.running:
             raise RestoreError(409, "apply_running")
         self.discard()
@@ -224,7 +224,7 @@ class RestoreManager:
         return self.check(source)
 
     def use_path(self, path: str, password: str | None = None) -> dict:
-        """서버(호스트)에 이미 있는 백업 파일·폴더. 설치 폴더 아래든 다른 곳이든 읽기 전용으로 붙여서 읽는다."""
+        """서버(호스트)에 이미 존재하는 백업 파일·폴더. 설치 폴더 하위 여부와 무관하게 읽기 전용으로 마운트하여 읽는다."""
         if self.running:
             raise RestoreError(409, "apply_running")
         self.discard()
@@ -257,9 +257,9 @@ class RestoreManager:
                 ["--password-file", "/restore-pass"])
 
     def check(self, source: dict, *, verify: bool = True, summary: dict | None = None) -> dict:
-        """받은 백업을 확인한다 — 형식(inspect) → 손상(verify) → 설정 꺼내기(extract-config, 암호).
+        """수신한 백업을 확인한다 — 형식(inspect) → 손상(verify) → 설정 추출(extract-config, 암호).
 
-        결과는 상태 파일에 남고 `info()` 꼴로 돌려준다. 원본은 읽기 전용으로만 붙인다.
+        결과는 상태 파일에 기록하고 `info()` 형식으로 반환한다. 원본은 읽기 전용으로만 마운트한다.
         """
         host = source["host_path"]
         self._save(source=source, status="none", state="checking", reason=None)
@@ -382,13 +382,13 @@ class RestoreManager:
             "blockers": self.blockers(),
         }
 
-    # ─── 답변 만들기 · 시작 ───
+    # ─── 응답 생성 · 시작 ───
 
     def backup_install_id(self) -> str:
         return str(self.summary().get("install_id") or self.backup_env().get("JW_INSTALL_ID") or "")
 
     def build_answers(self, target: dict) -> tuple[ans.Answers, dict, list[ans.FieldError]]:
-        """새 서버에서 정한 값 + 백업 설정 → (답변, 답변의 비밀, 오류). 아무것도 저장하지 않는다."""
+        """새 서버에서 지정한 값 + 백업 설정 → (응답, 응답의 비밀, 오류). 저장 작업 없음."""
         self._require_ready()
         summary, env = self.summary(), self.backup_env()
         target = dict(target)
@@ -403,7 +403,7 @@ class RestoreManager:
             elif domain and v.is_ip(domain):
                 target["cert"] = "temporary"
             else:
-                # 접속 주소가 아직 원래 서버를 가리키면 막지 않고 임시 인증서로 간다
+                # 접속 주소가 아직 원래 서버를 가리키면 차단하지 않고 임시 인증서로 진행
                 target["cert"] = "auto" if self._dns(domain) == "match" else "temporary"
         elif target["cert"] == "temporary" and not (domain and v.is_ip(domain)):
             self._dns(domain)
@@ -430,19 +430,19 @@ class RestoreManager:
     def _dns(self, domain: str) -> str:
         try:
             status = self.dns_status(domain)
-        except Exception:  # noqa: BLE001 — 확인하지 못하면 모르는 것으로 본다(막지 않는다)
+        except Exception:  # noqa: BLE001 — 확인 실패 시 미확인으로 간주한다(차단하지 않음)
             status = "unknown"
         self.store.update_facts(dns_status=status)
         return status
 
     def marker_verdict(self, answers: ans.Answers) -> dict:
-        """NFS 공유의 표식이 백업의 설치와 맞는가 — {"status": match|missing|mismatch|unknown, "install_id"}."""
+        """NFS 공유의 저장소 마커가 백업의 설치와 일치하는지 여부 — {"status": match|missing|mismatch|unknown, "install_id"}."""
         opts = render.storage_volume(answers)["opts"]
         found = read_nfs_marker(self.docker, opts)
         return judge_marker(found, self.backup_install_id())
 
     def prepare(self, target: dict) -> tuple[ans.Answers, dict, list[ans.FieldError]]:
-        """`build_answers` + 저장소 표식 대조(NFS) — 화면의 시작과 답변 파일(무인)이 같이 쓴다."""
+        """`build_answers` + 저장소 마커 대조(NFS) — 화면의 시작과 응답 파일(무인)이 공통으로 사용한다."""
         answers, secrets, errors = self.build_answers(target)
         if not errors and answers.storage.kind == "nfs":
             verdict = self.marker_verdict(answers)
@@ -454,7 +454,7 @@ class RestoreManager:
         return answers, secrets, errors
 
     def start(self, target: dict) -> dict:
-        """복원 시작 — 답변을 만들어 저장하고 엔진을 돌린다. 문제가 있으면 `RestoreError(422, restore_invalid)`."""
+        """복원 시작 — 응답을 생성하여 저장하고 엔진을 실행한다. 문제가 있으면 `RestoreError(422, restore_invalid)` 발생."""
         if self.running:
             raise RestoreError(409, "apply_running")
         answers, secrets, errors = self.prepare(target)
@@ -468,7 +468,7 @@ class RestoreManager:
         return {"started": True}
 
     def cleanup(self) -> None:
-        """끝난 뒤 — 꺼내 둔 설정(암호화 키가 평문으로 들어 있다)·암호·올린 사본을 지운다. 요약은 남긴다."""
+        """완료 후 — 추출해 둔 설정(암호화 키가 평문으로 포함)·암호·업로드한 사본을 삭제한다. 요약은 보존한다."""
         for path in (self.config_dir, self.dir / "upload"):
             shutil.rmtree(path, ignore_errors=True)
         try:
@@ -478,17 +478,17 @@ class RestoreManager:
 
 
 def safe_name(name: str) -> str:
-    """올린 파일의 이름 — 표시용으로만 쓴다(저장 경로에는 쓰지 않는다)."""
+    """업로드한 파일의 이름 — 표시용으로만 사용한다(저장 경로에는 사용하지 않는다)."""
     base = (name or "").replace("\\", "/").rsplit("/", 1)[-1]
     base = "".join(ch for ch in base if ch.isprintable() and ch not in '<>:"|?*')[:120].strip()
     return base or f"backup{ARCHIVE_SUFFIX}"
 
 
-# ─── NFS 표식 ───
+# ─── NFS 저장소 마커 ───
 
 
 def read_nfs_marker(docker, opts: dict) -> dict:
-    """NFS 공유의 표식 파일을 읽는다 — 임시 볼륨으로 붙였다 지운다. {"status": found|missing|unreadable|error, "install_id"}."""
+    """NFS 공유의 저장소 마커 파일을 읽는다 — 임시 볼륨으로 마운트한 뒤 삭제한다. {"status": found|missing|unreadable|error, "install_id"}."""
     name = f"jw-nfs-marker-{pysecrets.token_hex(6)}"
     created = docker.volume_create(name, opts, labels={"jw.temporary": "1"})
     if not created.ok:
@@ -502,7 +502,7 @@ def read_nfs_marker(docker, opts: dict) -> dict:
 
 
 def judge_marker(found: dict, backup_install_id: str) -> dict:
-    """표식과 백업의 설치 id 대조. 표식이 없으면 missing, 다른 설치면 mismatch."""
+    """저장소 마커와 백업의 설치 id 대조. 저장소 마커가 없으면 missing, 다른 설치이면 mismatch."""
     status, marker_id = found.get("status"), found.get("install_id") or ""
     if status == "missing":
         return {"status": "missing", "install_id": None}
@@ -544,7 +544,7 @@ def plan_steps(answers: ans.Answers, plan: render.Plan, store) -> list[str]:
 
 
 def outcome(answers: ans.Answers, store) -> dict:
-    """완료 화면이 문구를 고르는 데 쓰는 값."""
+    """완료 화면이 문구를 선택하는 데 사용하는 값."""
     meta = store.read(META, {}) or {}
     summary = meta.get("summary") or {}
     if _from_nfs(summary):
@@ -558,9 +558,9 @@ def outcome(answers: ans.Answers, store) -> dict:
 
 
 def want_certs(answers: ans.Answers, summary: dict, env: dict) -> bool:
-    """백업의 인증서를 되돌릴 것인가 — 접속 주소가 그대로이고 자동 발급을 쓸 때만(받아 둔 인증서를 이어 쓴다).
+    """백업의 인증서 복원 여부 — 접속 주소가 동일하고 자동 발급을 사용하는 경우에만 복원한다(발급받은 인증서를 계속 사용).
 
-    주소가 바뀌었으면 옛 인증서는 쓸모가 없고, 임시 인증서·프록시 구성은 인증서 볼륨을 새로 채운다.
+    주소가 변경되었으면 이전 인증서는 사용할 수 없으며, 임시 인증서·프록시 구성은 인증서 볼륨을 새로 구성한다.
     """
     return ("certs" in (summary.get("items") or []) and answers.access.cert == "auto"
             and answers.access.domain == rc.backup_host(env, summary))
@@ -582,11 +582,11 @@ def step_unpack(ctx: eng.Context) -> None:
     install = ctx.store.install()
     backup_id = mgr.backup_install_id()
     if backup_id and install["install_id"] != backup_id:
-        install["install_id"] = backup_id               # 저장소 표식과 맞아야 한다 — 백업의 것을 유지한다
+        install["install_id"] = backup_id               # 저장소 마커와 일치해야 함 — 백업의 값을 유지
         ctx.store.write("install.json", install)
         ctx.log("설치 id 를 백업의 것으로 맞췄습니다")
     changes["JW_INSTALL_ID"] = ctx.store.install()["install_id"]
-    # 2) 새로 만드는 값 — 설치 관리자 내부 키, 백업에 없던 비밀값
+    # 2) 신규 생성하는 값 — 설치 관리자 내부 키, 백업에 없던 비밀값
     if not have.get("JW_INSTALLER_KEY"):
         changes["JW_INSTALLER_KEY"] = pysecrets.token_hex(24)
     wanted = [*sd.names(default_only=True), "SMTP_PASSWORD"]
@@ -594,15 +594,15 @@ def step_unpack(ctx: eng.Context) -> None:
     if missing:
         ctx.log(f"백업에 없는 비밀값 {len(missing)}개를 새로 만듭니다")
         changes.update(eng.generate_secrets(ctx, missing))
-    # 3) 그대로 옮기는 설정 — 설치 관리자가 스스로 쓰는 변수는 새 답변에서 다시 만든다
+    # 3) 그대로 이전하는 설정 — 설치 관리자가 자체적으로 기록하는 변수는 새 응답에서 재생성한다
     plan = render.derive(ctx.answers, ctx.facts, ctx.catalog)
     managed = {key for _, pairs in render.env_sections(ctx.answers, {}, ctx.facts, plan, version="", registry="",
                                                         gitea_image="") for key, _ in pairs}
-    managed.add("JW_SOURCE_URL")                       # 값이 없으면 render 가 싣지 않는 변수 — 아래에서 따로 잇는다
+    managed.add("JW_SOURCE_URL")                       # 값이 없으면 render 가 포함하지 않는 변수 — 아래에서 별도로 승계
     extra = rc.extra_env(env, managed, ctx.bundle)
     changes[render.EXTRA_ENV_KEY] = extra
-    # 소스 주소 — 백업을 만든 서버가 고친 판의 소스를 가리키고 있었으면 새 서버에서도 그 주소를 가리켜야 한다.
-    # 새 설치 관리자에 준 값(-e JW_SOURCE_URL)이 있으면 그것이 이긴다(render.settle_source_url).
+    # 소스 주소 — 백업을 생성한 서버가 수정판의 소스를 가리키고 있었으면 새 서버에서도 해당 주소를 가리켜야 한다.
+    # 새 설치 관리자에 지정한 값(-e JW_SOURCE_URL)이 있으면 해당 값이 우선한다(render.settle_source_url).
     carried_source = valid_source_url(env.get("JW_SOURCE_URL"))
     if carried_source:
         ctx.facts.source_url = carried_source
@@ -634,7 +634,7 @@ def step_storage(ctx: eng.Context) -> None:
 
 
 def _create_only(ctx: eng.Context, services: list[str]) -> None:
-    """컨테이너를 만들기만 한다 — 복원이 그 컨테이너의 볼륨을 찾아 채운다(띄우는 것은 구역 단계)."""
+    """컨테이너를 생성만 한다 — 복원이 해당 컨테이너의 볼륨을 찾아 데이터를 기록한다(기동은 구역 단계에서 수행)."""
     if not services:
         return
     r = ctx.docker.compose("up", "--no-start", "--no-deps", "--no-build", *services, timeout=900, on_line=ctx.log)
@@ -686,7 +686,7 @@ def step_database(ctx: eng.Context) -> None:
     ctx.detail["schema"] = report.get("schema")
     ctx.save()
 
-    # 메일 서명 키(DKIM)는 백업의 것을 이어 쓴다 — 등록해 둔 DNS 레코드와 맞아야 한다
+    # 메일 서명 키(DKIM)는 백업의 것을 계속 사용한다 — 등록된 DNS 레코드와 일치해야 한다
     if ctx.plan.mail_builtin and "mail" in items:
         restored = ctx.paths.stack / "mailserver" / "config" / "rspamd" / "dkim" / f"{render.DKIM_SELECTOR}.private"
         try:
@@ -696,7 +696,7 @@ def step_database(ctx: eng.Context) -> None:
         except (OSError, v.Invalid):
             ctx.log("백업에 메일 서명 키가 없습니다 — 새 키를 씁니다(메일 레코드를 다시 등록해야 합니다)")
             ctx.warn("restore_dkim_regenerated", mail_domain=ctx.plan.mail_domain)
-    ctx.write_stack()                    # 메일 설정 폴더가 백업 시점으로 돌아갔다 — 이 버전의 파일을 다시 얹는다
+    ctx.write_stack()                    # 메일 설정 폴더가 백업 시점으로 복원됨 — 이 버전의 파일을 다시 기록
     eng.migrate_database(ctx)
 
 
@@ -721,7 +721,7 @@ def step_files(ctx: eng.Context) -> None:
     ctx.detail["entries"], ctx.detail["bytes"] = data.get("entries"), data.get("bytes")
     ctx.save()
     ctx.log(f"파일 {data.get('entries')}개 항목을 되돌렸습니다")
-    eng.prepare_storage(ctx)             # 표식이 백업에 없던 설치도 있다 — 다시 확인하고 없으면 쓴다
+    eng.prepare_storage(ctx)             # 저장소 마커가 백업에 없던 설치도 존재 — 재확인 후 없으면 기록
 
 
 def step_cert(ctx: eng.Context) -> None:
@@ -730,7 +730,7 @@ def step_cert(ctx: eng.Context) -> None:
         from app import certs
 
         if existing and not certs.is_self_signed(existing):
-            # 백업에서 되돌린 인증서 폴더가 남아 있다(자동 발급 → 임시로 바꿔 재시도한 경우) — 비우고 임시 인증서를 놓는다
+            # 백업에서 복원한 인증서 폴더가 남아 있다(자동 발급 → 임시로 전환하여 재시도한 경우) — 비운 뒤 임시 인증서를 배치한다
             ctx.docker.helper(["drop-cert", "--name", ctx.plan.cert_dir],
                               volumes=[f"{eng.CERT_VOLUME}:/etc/letsencrypt"], timeout=60)
     eng.step_cert(ctx)
@@ -738,10 +738,10 @@ def step_cert(ctx: eng.Context) -> None:
 
 def step_zones(ctx: eng.Context) -> None:
     mgr = _mgr(ctx)
-    # DB 에 저장되는 설정(외부 SMTP 의 보안 방식·AI 제공자)은 백업과 함께 왔다 — 덮어쓰지 않는다
+    # DB 에 저장되는 설정(외부 SMTP 의 보안 방식·AI 제공자)은 백업에 포함되어 있다 — 덮어쓰지 않는다
     eng.step_zones(ctx, configure=False)
 
-    # 확인 — 앞단으로 backend 에 닿는가, 사용자 수가 백업과 같은가
+    # 확인 — 프런트 경유로 backend 에 접근 가능한지, 사용자 수가 백업과 동일한지
     scheme = "https" if ctx.plan.tls else "http"
     status, _ = ctx.http.get(f"{scheme}://nginx/api/health", headers={"Host": ctx.plan.domain})
     if status != 200:

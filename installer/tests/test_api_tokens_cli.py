@@ -1,4 +1,4 @@
-"""설치 토큰·세션, 마법사 API, 내부 API 의 문, `jw` 명령."""
+"""설치 토큰·세션, 마법사 API, 내부 API 접근 제어, `jw` 명령."""
 
 import json
 
@@ -46,7 +46,7 @@ def test_token_ok_wrong_expired(tok):
     assert store.check(token.lower()) == ("ok", 0)
     assert store.check("WRONGWRONG22") == ("wrong", 0)
     clock.now += tokens.TOKEN_TTL + 1
-    assert store.check(token) == ("expired", 0)                 # 맞지만 만료 — 틀린 것과 구분된다
+    assert store.check(token) == ("expired", 0)                 # 일치하지만 만료 — 불일치와 구분된다
     assert store.check("WRONGWRONG22")[0] == "wrong"
     assert store.current() is None
 
@@ -65,11 +65,11 @@ def test_token_lock_after_five_failures(tok):
     for i in range(4):
         assert store.check("BADBADBADBAD") == ("wrong", 0)
     assert store.check("BADBADBADBAD") == ("wrong", tokens.LOCK_SECONDS)
-    status, retry = store.check(token)                           # 잠긴 동안은 맞는 토큰도 받지 않는다
+    status, retry = store.check(token)                           # 잠금 중에는 올바른 토큰도 거부한다
     assert status == "locked" and 0 < retry <= tokens.LOCK_SECONDS + 1
     clock.now += tokens.LOCK_SECONDS + 1
     assert store.check(token) == ("ok", 0)
-    assert store.check("BADBADBADBAD") == ("wrong", 0)           # 성공하면 횟수가 지워진다
+    assert store.check("BADBADBADBAD") == ("wrong", 0)           # 성공 시 횟수가 초기화된다
 
 
 def test_sessions(tok):
@@ -77,7 +77,7 @@ def test_sessions(tok):
     sid = store.new_session()
     assert store.session_valid(sid) and not store.session_valid("nope") and not store.session_valid(None)
     store.issue()
-    assert store.session_valid(sid)                               # 토큰을 다시 받아도 세션은 그대로
+    assert store.session_valid(sid)                               # 토큰을 다시 수신해도 세션은 유지된다
     clock.now += tokens.SESSION_TTL + 1
     assert not store.session_valid(sid)
     sid = store.new_session()
@@ -108,7 +108,7 @@ def wizard(tmp_path):
 def login(svc, client):
     token = svc.tokens.ensure()
     r = client.get("/", params={"token": token}, follow_redirects=False)
-    assert r.status_code == 302 and r.headers["location"] == "/"            # 토큰 없는 주소로 넘긴다
+    assert r.status_code == 302 and r.headers["location"] == "/"            # 토큰이 없는 주소로 리다이렉트한다
     cookie = r.headers["set-cookie"].lower()
     assert "httponly" in cookie and "secure" in cookie and "samesite=strict" in cookie
     return token
@@ -129,8 +129,8 @@ def test_ui_is_served_without_session(wizard):
     assert client.get("/assets/nope.js").status_code == 404
     for escape in ("/assets/../../secret.txt", "/assets/%2e%2e/%2e%2e/secret.txt", "/assets/..%2f..%2fsecret.txt"):
         assert client.get(escape).status_code == 404, escape
-    assert client.get("/api/state").headers["cache-control"] == "no-store"      # API 응답은 저장하지 않는다
-    assert client.get("/api/answers").status_code == 401                         # 화면만 열려 있고 API 는 세션이 있어야 한다
+    assert client.get("/api/state").headers["cache-control"] == "no-store"      # API 응답은 저장되지 않는다
+    assert client.get("/api/answers").status_code == 401                         # 화면만 공개되며 API 는 세션 필수
 
 
 def test_ui_missing_bundle_does_not_break_api(tmp_path):
@@ -152,13 +152,13 @@ def test_state_carries_step_facts_and_commands(wizard):
         "reinstall": "docker exec jw-installer jw reinstall --yes",
     }
     assert st["info"]["git_verified_version"] and st["info"]["git_verified_version"][0].isdigit()
-    assert st["facts"]["detected_network"] is None and st["facts"]["lan_ip"] is None      # 사전 점검 전에는 모른다
-    # 이어 할 단계
+    assert st["facts"]["detected_network"] is None and st["facts"]["lan_ip"] is None      # 사전 점검 전에는 미확정
+    # 재개할 단계
     r = client.put("/api/answers", params={"step": "zones"}, json={"access": {"domain": "ws.example.com"}})
     assert r.status_code == 200 and client.get("/api/state").json()["step"] == "zones"
     assert client.put("/api/answers", params={"step": "../x"}, json={}).status_code == 422
     assert client.put("/api/answers", json={}).status_code == 200 and client.get("/api/state").json()["step"] == "zones"
-    # 연결 형태 — 나가는 주소가 사설이면 router, 공인이면 direct
+    # 연결 형태 — 아웃바운드 주소가 사설이면 router, 공인이면 direct
     for address, expected in (("192.168.10.20", "router"), ("203.0.113.10", "router"), ("8.8.8.8", "direct")):
         svc.store.write("preflight.json", {"ok": True, "items": [{"id": "disk", "value": {"free_gb": 41.5}}],
                                            "facts": {"outbound_address": address}})
@@ -180,7 +180,7 @@ def test_token_login_wrong_expired_locked(wizard):
     svc.tokens.ensure()
     r = client.post("/api/session", json={"token": "WRONGWRONG22"})
     assert r.status_code == 401 and r.json()["code"] == "token_wrong"
-    # 주소에 실린 토큰이 틀리면 사유만 실어 토큰 없는 주소로 넘긴다(쿠키 없음) — 화면이 사유를 알린다
+    # 주소에 포함된 토큰이 불일치하면 사유만 포함하여 토큰 없는 주소로 리다이렉트한다(쿠키 없음). 사유는 화면이 표시한다
     r = client.get("/", params={"token": "WRONGWRONG22"}, follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"] == "/?token_status=wrong" and "set-cookie" not in r.headers
     for _ in range(3):
@@ -200,16 +200,16 @@ def test_answers_partial_save_and_secrets(wizard):
     body = r.json()
     assert body["answers"]["access"]["domain"] == "ws.example.com"
     assert "password" not in body["answers"]["admin"] and body["secrets_set"]["admin.password"] is True
-    # 다음 저장에서 비밀번호를 보내지 않아도 남아 있다
+    # 다음 저장에서 비밀번호를 전송하지 않아도 유지된다
     r = client.put("/api/answers", json={"admin": {"name": "관리자", "username": "admin"}, "preset": "collab",
                                          "mail": {"mail_domain": "example.com"}})
     assert r.json()["secrets_set"]["admin.password"] is True
     assert svc.store.load_answers().admin.password == "correct-horse-battery"
-    # 모양이 틀리면 422 + 필드별 오류, 저장하지 않는다
+    # 형식이 잘못되면 422 + 필드별 오류를 반환하고 저장하지 않는다
     r = client.put("/api/answers", json={"access": {"network": "vpn"}})
     assert r.status_code == 422 and r.json()["code"] == "answers_invalid"
     assert r.json()["vars"]["errors"][0]["field"] == "access.network"
-    # 뜻이 틀린 값은 저장하되 오류로 알려 준다
+    # 의미상 유효하지 않은 값은 저장하되 오류로 반환한다
     r = client.put("/api/answers", json={"access": {"domain": "not a domain"}})
     assert {"field": "access.domain", "code": "domain_invalid", "vars": {}} in r.json()["errors"]
 
@@ -231,7 +231,7 @@ def test_preflight_zones_summary_and_probes(wizard):
     assert zones["memory"]["ok"] and zones["preset_fits"]["full"]
 
     s = client.get("/api/summary").json()
-    assert s["ready"] and s["errors"] == []              # 임시 인증서가 아니면 DNS 확인 없이도 답변은 유효하다
+    assert s["ready"] and s["errors"] == []              # 임시 인증서가 아니면 DNS 확인 없이도 응답(answers)은 유효하다
     r = client.post("/api/probe/dns", json={})
     assert r.json()["status"] == "match" and svc.store.facts().dns_status == "match"
     s = client.get("/api/summary").json()
@@ -242,8 +242,8 @@ def test_preflight_zones_summary_and_probes(wizard):
     mail = client.post("/api/probe/mail-records", json={}).json()
     assert [r["id"] for r in mail["records"]] == ["mx", "a", "spf", "dkim", "dmarc"]
     assert mail["records"][0]["status"] == "ok" and mail["records"][3]["expected"].startswith("v=DKIM1; k=rsa; p=")
-    assert (svc.paths.state / "dkim" / "example.com.pem").exists()            # 적용 전에 만들어 둔다
-    assert not (svc.paths.stack / "mailserver").exists()                       # 서버 구성은 아직 건드리지 않는다
+    assert (svc.paths.state / "dkim" / "example.com.pem").exists()            # 적용 전에 사전 생성한다
+    assert not (svc.paths.stack / "mailserver").exists()                       # 서버 구성은 아직 변경하지 않는다
 
     assert client.post("/api/probe/ai", json={"provider": "google", "api_key": "k"}).json()["status"] == "ok"
     assert client.post("/api/probe/nfs", json={"server": "nas;rm", "export": "/x"}).status_code == 422
@@ -271,7 +271,7 @@ def test_apply_via_api_then_locked(wizard):
     host.install(svc)
     assert client.post("/api/apply").status_code == 202
     svc.engine._thread.join(30)
-    # 끝나면 잠긴다 — 상태 조회만 남고, 세션도 토큰도 없다
+    # 완료 후 잠금 — 상태 조회만 유지되며 세션·토큰은 모두 없다
     locked = client.get("/api/state").json()
     assert {k: locked[k] for k in ("phase", "locked", "version", "url")} == {
         "phase": "installed", "locked": True, "version": svc.bundle.version, "url": "https://ws.example.com"}
@@ -281,7 +281,7 @@ def test_apply_via_api_then_locked(wizard):
         kwargs = {"json": {}} if method != "get" else {}
         r = getattr(client, method)(path, **kwargs)
         assert r.status_code == 423 and r.json()["code"] == "locked", path
-    # 잠긴 뒤에도 화면은 내준다(잠김 안내를 화면이 그린다). 토큰이 실린 주소는 그냥 넘긴다.
+    # 잠금 이후에도 화면은 제공한다(잠김 안내는 화면이 표시한다). 토큰이 포함된 주소는 그대로 리다이렉트한다.
     assert client.get("/").status_code == 200 and 'id="app"' in client.get("/").text
     r = client.get("/", params={"token": "WRONGWRONG22"}, follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"] == "/"
@@ -308,7 +308,7 @@ def test_apply_status_log_and_retry_api(wizard):
     assert svc.engine.status()["status"] == "done"
 
 
-# ─── 내부 API 의 문 ───
+# ─── 내부 API 접근 제어 ───
 
 
 def test_internal_api_needs_key_and_internal_address(tmp_path):
@@ -324,10 +324,10 @@ def test_internal_api_needs_key_and_internal_address(tmp_path):
     assert outside.get("/internal/zones", headers={api.KEY_HEADER: key}).status_code == 404   # 내부 대역 밖
     r = inside.get("/internal/zones", headers={api.KEY_HEADER: key})
     assert r.status_code == 200 and {z["id"] for z in r.json()["zones"] if z["enabled"]} == {"mail", "chat", "calendar", "docs"}
-    # 마법사 앱에는 내부 경로가 아예 없다
+    # 마법사 앱에는 내부 경로가 존재하지 않는다
     wizard_client = TestClient(api.create_wizard_app(svc), base_url="https://testserver")
     assert wizard_client.get("/internal/zones", headers={api.KEY_HEADER: key}).status_code == 404
-    # 같은 컨테이너의 jw 명령용 경로는 루프백 + 로컬 키
+    # 동일 컨테이너의 jw 명령용 경로는 루프백 + 로컬 키
     assert inside.get("/local/apply", headers={api.LOCAL_KEY_HEADER: svc.local_key()}).status_code == 404
     local = TestClient(api.create_internal_app(svc), client=("127.0.0.1", 5000))
     assert local.get("/local/apply", headers={api.LOCAL_KEY_HEADER: svc.local_key()}).json()["status"] == "done"
@@ -350,7 +350,7 @@ def jw(tmp_path, monkeypatch):
     svc = host.services_obj(resolver=FakeResolver({("ws.example.com", "A"): ["203.0.113.10"]}),
                             ip_fetchers=[lambda: "203.0.113.10", lambda: "203.0.113.10"])
     monkeypatch.setattr(cli, "_services", lambda args: svc)
-    monkeypatch.setenv("JW_INTERNAL_PORT", "1")          # 서버가 없다 — 이 프로세스에서 직접 돌린다
+    monkeypatch.setenv("JW_INTERNAL_PORT", "1")          # 서버 없음 — 본 프로세스에서 직접 실행한다
     answers = tmp_path / "answers.json"
     data = json.loads(json.dumps(make_answers().model_dump(mode="json")))
     data["admin"].pop("password")
@@ -381,7 +381,7 @@ def test_jw_dry_run_changes_nothing(jw, capsys, monkeypatch):
 
 def test_jw_dry_run_reports_errors(jw, capsys):
     _, _, answers = jw
-    assert cli.main(["apply", "--answers", str(answers), "--dry-run"]) == 1       # 관리자 비밀번호가 없다
+    assert cli.main(["apply", "--answers", str(answers), "--dry-run"]) == 1       # 관리자 비밀번호 없음
     assert "admin.password: required" in capsys.readouterr().out
 
 
@@ -421,7 +421,7 @@ def test_jw_reinstall_lists_first_then_wipes(jw, capsys, monkeypatch):
     host.volumes.setdefault("ws-certbot-data", {"Name": "ws-certbot-data", "Options": None})
     capsys.readouterr()
 
-    # --yes 없이는 목록만 보여 주고 아무것도 지우지 않는다
+    # --yes 없이는 목록만 출력하고 아무것도 삭제하지 않는다
     assert cli.main(["reinstall"]) == 1
     out = capsys.readouterr().out
     assert "ws-backend" in out and "ws-postgres-data" in out and "ws-storage-data" in out and "--yes" in out
@@ -436,12 +436,12 @@ def test_jw_reinstall_lists_first_then_wipes(jw, capsys, monkeypatch):
     assert host.runner.find("network", "rm", "just-workspace_workspace")
     assert host.runner.find("restart", "jw-self")
     assert not (svc.paths.stack / ".env").exists()
-    assert not svc.store.locked and svc.store.install()["phase"] == "wizard"      # 처음 상태 — 새 토큰으로 다시 시작한다
-    assert (svc.paths.state / "tls" / "cert.pem").exists()                        # 설치 관리자의 인증서는 남는다
+    assert not svc.store.locked and svc.store.install()["phase"] == "wizard"      # 초기 상태 — 새 토큰으로 재시작한다
+    assert (svc.paths.state / "tls" / "cert.pem").exists()                        # 설치 관리자의 인증서는 보존된다
 
 
 def test_internal_api_for_admin_screens(tmp_path):
-    """설치 뒤 관리 화면이 쓰는 것 — 메일 레코드, 공인 주소, 작업 목록, 저장소, 코드 저장소의 검증한 버전."""
+    """설치 후 관리 화면이 사용하는 항목 — 메일 레코드, 공인 주소, 작업 목록, 저장소, 코드 저장소의 검증된 버전."""
     host = Host(tmp_path)
     resolver = FakeResolver({("example.com", "MX"): ["10 mail.example.com"]})
     svc = host.services_obj(resolver=resolver, ip_fetchers=[lambda: "203.0.113.10", lambda: "203.0.113.10"])
@@ -458,7 +458,7 @@ def test_internal_api_for_admin_screens(tmp_path):
     by_id = {r["id"]: r for r in rec["records"]}
     assert set(by_id) == {"mx", "a", "spf", "dkim", "dmarc"} and by_id["mx"]["status"] == "ok"
     from app import dkim
-    assert by_id["dkim"]["expected"] == dkim.ensure(svc.store, "example.com")["record_value"]      # 설치 때 만든 키
+    assert by_id["dkim"]["expected"] == dkim.ensure(svc.store, "example.com")["record_value"]      # 설치 시 생성한 키
 
     assert inside.get("/internal/probe/public-ip").json()["ip"] == "203.0.113.10"
     assert inside.get("/internal/probe/public-ip", params={"refresh": "true"}).json()["status"] == "detected"
@@ -471,7 +471,7 @@ def test_internal_api_for_admin_screens(tmp_path):
     assert inside.get("/internal/jobs").json() == {"jobs": []}
     svc.store.write("jobs.json", {"a": {"id": "a", "zone": "chat", "status": "done", "started_at": "2026-01-01T00:00:00Z"},
                                   "b": {"id": "b", "zone": "git", "status": "running", "started_at": "2026-01-02T00:00:00Z"}})
-    assert [j["id"] for j in inside.get("/internal/jobs").json()["jobs"]] == ["b", "a"]           # 새것부터
+    assert [j["id"] for j in inside.get("/internal/jobs").json()["jobs"]] == ["b", "a"]           # 최신순
 
     version = svc.bundle.gitea_verified_version
     assert version and inside.get("/internal/zones").json()["git_verified_version"] == version
@@ -480,7 +480,7 @@ def test_internal_api_for_admin_screens(tmp_path):
 
 
 def test_state_carries_the_source_url_also_when_locked(wizard, monkeypatch):
-    """"소스 코드" 링크의 주소 — 기본은 원래 리포, 설치 관리자에 준 값이 있으면 그것. 잠긴 뒤에도 준다."""
+    """"소스 코드" 링크의 주소 — 기본값은 원본 리포이며, 설치 관리자에 지정한 값이 있으면 그 값을 사용한다. 잠금 이후에도 제공한다."""
     from app import update_release
 
     _, svc, client = wizard
@@ -499,7 +499,7 @@ def test_env_passes_the_given_source_url_to_the_stack(monkeypatch, bundle, secre
     from app import render
 
     files = render.render(make_answers(), secrets, facts, bundle, registry="localhost")
-    assert "JW_SOURCE_URL" not in files[".env"]                                # 값이 없으면 줄을 싣지 않는다(tests/test_source_url.py)
+    assert "JW_SOURCE_URL" not in files[".env"]                                # 값이 없으면 해당 줄을 포함하지 않는다(tests/test_source_url.py)
     monkeypatch.setenv("JW_SOURCE_URL", "https://git.example.com/acme/workspace")
     files = render.render(make_answers(), secrets, facts, bundle, registry="localhost")
     assert "\nJW_SOURCE_URL=https://git.example.com/acme/workspace\n" in files[".env"]

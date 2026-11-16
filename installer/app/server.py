@@ -1,9 +1,9 @@
 """설치 관리자 서버 — `python -m app.server`.
 
-- 8443: 마법사 API(HTTPS, 자체 서명 인증서 — 첫 기동 때 만들어 상태 폴더에 둔다)
+- 8443: 마법사 API(HTTPS, 자체 서명 인증서 — 최초 기동 시 생성하여 상태 폴더에 저장한다)
 - 8444: 내부 API(평문, 호스트에 게시하지 않는다 — 워크스페이스 내부망과 루프백 전용)
 
-기동하면 로그에 접속 주소(설치 토큰 포함)와 인증서 지문을 찍는다.
+기동 시 로그에 접속 주소(설치 토큰 포함)와 인증서 지문을 출력한다.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ CERT_WATCH_SECONDS = 3600
 
 
 def ensure_tls(svc: api.Services) -> tuple[str, str, str]:
-    """(인증서 경로, 키 경로, 지문). 없으면 만든다(10년)."""
+    """(인증서 경로, 키 경로, 지문). 없으면 생성한다(10년)."""
     cert_path = svc.store.dir / "tls" / "cert.pem"
     key_path = svc.store.dir / "tls" / "key.pem"
     if not (cert_path.exists() and key_path.exists()):
@@ -93,7 +93,7 @@ def main() -> int:
               file=sys.stderr, flush=True)
     svc = api.build_services(paths)
     if not (os.environ.get("JW_INSTALLER_VERSION") or "").strip():
-        # 승격(Beta → Stable)한 이미지는 다시 빌드하지 않아 이미지 안의 VERSION 이 Beta 의 글자다(app/bundle.py)
+        # 승격(Beta → Stable)한 이미지는 재빌드하지 않으므로 이미지 내 VERSION 이 Beta 의 문자열이다(app/bundle.py)
         print(f"알림: JW_INSTALLER_VERSION 이 없어 이미지에 든 버전({svc.bundle.version})을 씁니다. "
               "이미지 태그와 다르면 -e JW_INSTALLER_VERSION=<버전> 을 주고 다시 띄우세요.", flush=True)
     if not os.path.exists("/var/run/docker.sock"):

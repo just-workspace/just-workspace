@@ -1,20 +1,20 @@
-"""업데이트 — 채널을 받아 검증하고 무엇을 할지 정한다.
+"""업데이트 — 채널을 수신·검증하고 수행할 작업을 결정한다.
 
 검증 코드는 복제하지 않는다. 릴리스 도구(`release/jwrelease`)의 `semver`·`model`·`verify`·`bundle` 을
-그대로 쓴다 — 이미지에는 빌드 때 `/app/jwrelease` 로 복사되고, 개발·테스트에서는 리포의 `release/` 에서 읽는다.
+그대로 사용한다 — 이미지에는 빌드 시 `/app/jwrelease` 로 복사되며, 개발·테스트에서는 리포의 `release/` 에서 읽는다.
 
-채널 서버에는 **아무것도 보내지 않는다**: 정적 파일을 GET 할 뿐이고 식별자·버전·통계를 싣지 않는다.
+채널 서버에는 **어떤 정보도 송신하지 않는다**: 정적 파일을 GET 할 뿐이며 식별자·버전·통계를 포함하지 않는다.
 
-설정값(환경변수, 이미지 빌드 인자로 기본값을 굽는다):
+설정값(환경변수, 이미지 빌드 인자로 기본값을 내장한다):
 
-| 이름 | 뜻 | 기본 |
+| 이름 | 의미 | 기본 |
 |---|---|---|
-| `JW_UPDATE_CHANNEL_URL` | 채널 파일·manifest 의 기준 주소. 설치 뒤에 `jw update-channel <주소>` 로 정한 값(상태 폴더의 `update/channel-url`)이 있으면 그것이 우선한다 | 릴리스 도구의 `channel_base_url` |
+| `JW_UPDATE_CHANNEL_URL` | 채널 파일·manifest 의 기준 주소. 설치 후 `jw update-channel <주소>` 로 지정한 값(상태 폴더의 `update/channel-url`)이 있으면 해당 값이 우선한다 | 릴리스 도구의 `channel_base_url` |
 | `JW_UPDATE_PUBKEY_DIR` | 이미지에 내장한 공개 키 폴더(`*.pub`) | `/app/keys` |
-| `JW_UPDATE_OFFLINE_URL` | 오프라인 묶음을 받는 주소 틀(`{version}`·`{filename}`) | 릴리스 도구의 `download_url_template` |
+| `JW_UPDATE_OFFLINE_URL` | 오프라인 번들을 수신하는 주소 템플릿(`{version}`·`{filename}`) | 릴리스 도구의 `download_url_template` |
 
-공개 키는 둘(현재·다음)까지다. 상태 폴더의 `update/keys/*.pub` 가 있으면 그것을 쓰고, 없으면 이미지에 내장한 것을
-쓴다. 하나도 없으면 업데이트 확인은 `unconfigured` 로 답한다.
+공개 키는 최대 2개(현재·다음)이다. 상태 폴더의 `update/keys/*.pub` 가 있으면 그것을 사용하고, 없으면 이미지에 내장한 것을
+사용한다. 하나도 없으면 업데이트 확인은 `unconfigured` 를 반환한다.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from typing import Callable
 
 try:
     import jwrelease  # noqa: F401 — 이미지: /app/jwrelease
-except ImportError:  # 개발·테스트: 리포의 release/ 에서
+except ImportError:  # 개발·테스트: 리포의 release/ 에서 로드 로드
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "release"))
     import jwrelease  # noqa: F401
 
@@ -46,11 +46,11 @@ FETCH_LIMIT = 8 * 1024 * 1024      # 채널 파일·manifest 의 상한(정상 �
 SIG = ".sig"
 
 
-CHANNEL_URL_FILE = "update/channel-url"     # 상태 폴더 기준 — `jw update-channel <주소>` 가 쓴다
+CHANNEL_URL_FILE = "update/channel-url"     # 상태 폴더 기준 — `jw update-channel <주소>` 가 기록한다
 
 
 def channel_url_override(state_dir: Path) -> str | None:
-    """설치 뒤에 `jw update-channel` 로 정한 채널 주소(없으면 None)."""
+    """설치 후 `jw update-channel` 로 지정한 채널 주소(없으면 None)."""
     try:
         text = (state_dir / CHANNEL_URL_FILE).read_text(encoding="utf-8").strip()
     except OSError:
@@ -59,7 +59,7 @@ def channel_url_override(state_dir: Path) -> str | None:
 
 
 def channel_base_url(state_dir: Path | None = None) -> str:
-    """채널 파일의 기준 주소 — 설치 뒤에 정한 것 → 환경변수 → 릴리스 도구의 기본값."""
+    """채널 파일의 기준 주소 — 설치 후 지정한 값 → 환경변수 → 릴리스 도구의 기본값."""
     override = channel_url_override(state_dir) if state_dir is not None else None
     return override or (os.environ.get("JW_UPDATE_CHANNEL_URL") or ReleaseSettings().channel_base_url).rstrip("/")
 
@@ -77,7 +77,7 @@ def offline_download_url(version: str) -> str | None:
 
 
 def valid_source_url(url: str | None) -> str:
-    """소스 주소로 쓸 수 있는 값이면 그대로, 아니면 빈 글자 — http(s) 주소, 공백·따옴표·꺾쇠 없음, 2000자 이하."""
+    """소스 주소로 유효한 값이면 그대로, 아니면 빈 문자열 — http(s) 주소, 공백·따옴표·꺾쇠 없음, 2000자 이하."""
     url = (url or "").strip()
     ok = url.lower().startswith(("https://", "http://")) and len(url) <= 2000 \
         and not any(ch.isspace() or ord(ch) < 32 or ch in "\"'<>" for ch in url)
@@ -85,12 +85,12 @@ def valid_source_url(url: str | None) -> str:
 
 
 def source_url_override() -> str:
-    """설치 관리자에 준 소스 주소(`-e JW_SOURCE_URL=…`) — http(s) 주소가 아니면 빈 글자(= 기본값을 쓴다)."""
+    """설치 관리자에 지정한 소스 주소(`-e JW_SOURCE_URL=…`) — http(s) 주소가 아니면 빈 문자열(= 기본값 사용)."""
     return valid_source_url(os.environ.get("JW_SOURCE_URL"))
 
 
 def source_url() -> str:
-    """이 제품의 소스가 있는 곳 — 화면의 "소스 코드" 링크. 고쳐서 서비스하는 사람은 `JW_SOURCE_URL` 로 바꾼다."""
+    """본 제품의 소스 위치 — 화면의 "소스 코드" 링크. 수정하여 서비스하는 운영자는 `JW_SOURCE_URL` 로 변경한다."""
     return source_url_override() or ReleaseSettings().source_repo_url
 
 
@@ -106,7 +106,7 @@ def version_channel(version: str) -> str:
 
 
 def key_files(state_dir: Path) -> list[Path]:
-    """쓸 공개 키 파일 — 상태 폴더의 것이 있으면 그것만, 없으면 이미지에 내장한 것. 이름순, 둘까지."""
+    """사용할 공개 키 파일 — 상태 폴더에 있으면 그것만, 없으면 이미지에 내장한 것. 이름순, 최대 2개."""
     for folder in (state_dir / "update" / "keys", Path(os.environ.get("JW_UPDATE_PUBKEY_DIR") or "/app/keys")):
         try:
             found = sorted(p for p in folder.iterdir() if p.is_file() and p.suffix in (".pub", ".pem"))
@@ -118,14 +118,14 @@ def key_files(state_dir: Path) -> list[Path]:
 
 
 def load_keys(state_dir: Path) -> list:
-    """공개 키(0~2개). 읽지 못하는 파일이 있으면 `verify.VerifyError`."""
+    """공개 키(0~2개). 읽을 수 없는 파일이 있으면 `verify.VerifyError`."""
     files = key_files(state_dir)
     if not files:
         return []
     return verify.load_public_keys([p.read_bytes() for p in files])
 
 
-# ─── 받기 ───
+# ─── 수신 ───
 
 
 class FetchError(Exception):
@@ -133,7 +133,7 @@ class FetchError(Exception):
 
 
 def http_fetch(url: str) -> bytes:
-    """정적 파일 하나를 받는다. 쿠키·식별자를 싣지 않고, 다른 곳으로 넘기는 응답은 따라가지 않는다."""
+    """정적 파일 하나를 수신한다. 쿠키·식별자를 포함하지 않으며, 리다이렉트 응답은 따르지 않는다."""
     import httpx
 
     try:
@@ -192,7 +192,7 @@ class CheckResult:
 
 def check_channel(*, current: str, channel_name: str, keys: list, last_sequence: int | None, now: datetime,
                   fetch: Callable[[str], bytes] = http_fetch, base_url: str | None = None) -> CheckResult:
-    """채널을 받아 검증하고(서명 → 형식 → 만료 → 순번) 계획을 세운다. 경로의 manifest 도 받아 검증한다."""
+    """채널을 수신하여 검증하고(서명 → 형식 → 만료 → 순번) 계획을 수립한다. 경로상의 manifest 도 수신하여 검증한다."""
     if not keys:
         raise CheckError("unconfigured")
     base = (base_url or channel_base_url()).rstrip("/")
@@ -225,7 +225,7 @@ def check_channel(*, current: str, channel_name: str, keys: list, last_sequence:
 
 
 def resume_from(current: str) -> str:
-    """Stable 로 돌아와 기다릴 때 다시 받기 시작하는 가장 낮은 버전."""
+    """Stable 로 복귀하여 대기할 때 수신을 재개하는 최저 버전."""
     return semver.stable_of(current) if semver.is_beta(current) else current
 
 
@@ -234,7 +234,7 @@ def auto_eligible_at(published: str) -> str:
 
 
 def in_window(start: str, end: str, local_minutes: int) -> bool:
-    """서버 시간(자정부터의 분)이 적용 시간대 안인가. start > end 면 자정을 넘는 시간대."""
+    """서버 시간(자정 기준 분)이 적용 시간대 내인지 판정. start > end 이면 자정을 넘는 시간대."""
     a, b = _minutes(start), _minutes(end)
     if a == b:
         return False

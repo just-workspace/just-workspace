@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# 설치 관리자 실서버 검수 — 공용 함수. **검수할 서버 안에서** 돈다(시나리오 스크립트가 source 한다).
+# 설치 관리자 실서버 검수 — 공용 함수. **검수 대상 서버 내에서** 실행된다(시나리오 스크립트가 source 한다).
 #
-# 이 스크립트들은 서버의 컨테이너·볼륨·설치 폴더를 지운다. 검수 전용 서버에서만 돌린다.
+# 본 스크립트들은 서버의 컨테이너·볼륨·설치 폴더를 삭제한다. 검수 전용 서버에서만 실행한다.
 #
 # 환경변수(전부 선택):
-#   E2E_DOMAIN           접속 주소로 쓸 이름. DNS 에 없어도 된다(curl --resolve 로 붙는다)   기본 ws.e2e.example
+#   E2E_DOMAIN           접속 주소로 사용할 이름. DNS 에 없어도 무방하다(curl --resolve 로 접속)   기본 ws.e2e.example
 #   E2E_MAIL_DOMAIN      메일 도메인                                                         기본 e2e.example
-#   E2E_ADDR             이 서버의 주소                                                      기본 나가는 경로의 주소
+#   E2E_ADDR             이 서버의 주소                                                      기본 아웃바운드 경로의 주소
 #   E2E_HOST_DIR         설치 폴더                                                           기본 /opt/just-workspace
 #   E2E_WORK             작업 폴더(관리자 비밀번호·쿠키·결과)                                기본 ~/e2e-work
-#   E2E_REGISTRY         우리 이미지의 저장소. localhost = 서버에서 빌드한 이미지            기본 localhost
+#   E2E_REGISTRY         자체 빌드 이미지의 저장소. localhost = 서버에서 빌드한 이미지       기본 localhost
 #   E2E_INSTALLER_IMAGE  설치 관리자 이미지                                                  기본 just-workspace-installer:<VERSION>
-#   E2E_IMAGE_TAG        우리 이미지의 태그(비우면 제품 버전)
+#   E2E_IMAGE_TAG        자체 빌드 이미지의 태그(비우면 제품 버전)
 
 set -u
 
@@ -46,7 +46,7 @@ note() { printf '   %s\n' "$*"; }
 ok()   { PASS=$((PASS + 1)); printf '  \033[32mPASS\033[0m %s\n' "$*"; }
 bad()  { FAIL=$((FAIL + 1)); FAILED+=("$1"); printf '  \033[31mFAIL\033[0m %s\n' "$*"; }
 
-# check "이름" 명령…  — 명령이 0 으로 끝나면 통과
+# check "이름" 명령…  — 명령이 0 으로 종료되면 통과
 check() {
   local name="$1"; shift
   if "$@" >/dev/null 2>&1; then ok "$name"; else bad "$name"; fi
@@ -57,7 +57,7 @@ expect() {
   if [ "$2" = "$3" ]; then ok "$1 ($3)"; else bad "$1 — 기대 '$2', 실제 '$3'"; fi
 }
 
-# contains "이름" "찾을 글" "본문"
+# contains "이름" "검색 문자열" "본문"
 contains() {
   case "$3" in *"$2"*) ok "$1" ;; *) bad "$1 — '$2' 가 없다: $(printf '%s' "$3" | head -c 200)" ;; esac
 }
@@ -68,7 +68,7 @@ finish() {
   exit 0
 }
 
-# JSON 에서 값 하나 꺼내기: json_get '<파이썬 식 — d 가 문서>' < 입력
+# JSON 에서 값 하나 추출: json_get '<파이썬 식 — d 가 문서>' < 입력
 json_get() { python3 -c 'import json,sys
 d=json.load(sys.stdin)
 try:
@@ -79,7 +79,7 @@ print(v if not isinstance(v,(dict,list)) else json.dumps(v,ensure_ascii=False))'
 
 # ─── 서버 초기화 ───
 
-# 워크스페이스·설치 관리자의 컨테이너·볼륨·네트워크·설치 폴더를 지운다(이미지는 남긴다).
+# 워크스페이스·설치 관리자의 컨테이너·볼륨·네트워크·설치 폴더를 삭제한다(이미지는 보존).
 e2e_reset() {
   say "초기화"
   local ids
@@ -90,7 +90,7 @@ e2e_reset() {
   docker network rm just-workspace_workspace >/dev/null 2>&1
   ids="$(docker volume ls -q | grep -E '^(ws-|just-workspace_)' || true)"
   [ -n "$ids" ] && docker volume rm -f $ids >/dev/null 2>&1
-  docker volume prune -f >/dev/null 2>&1          # 이름 없는(컨테이너에 딸렸던) 볼륨
+  docker volume prune -f >/dev/null 2>&1          # 이름 없는(컨테이너에 종속되었던) 볼륨
   sudo rm -rf "$E2E_HOST_DIR"
   rm -f "$E2E_WORK"/jar-* "$E2E_WORK"/*.json "$E2E_WORK"/*.out
   note "컨테이너 $(docker ps -aq | wc -l)개, 볼륨 $(docker volume ls -q | wc -l)개 남음"
@@ -98,7 +98,7 @@ e2e_reset() {
 
 # ─── 설치 관리자 ───
 
-# installer_start [docker run 에 더할 인자…]
+# installer_start [docker run 에 추가할 인자…]
 installer_start() {
   sudo mkdir -p "$E2E_HOST_DIR"
   docker run -d --name "$INSTALLER" --restart unless-stopped -p 8443:8443 \
@@ -115,10 +115,10 @@ installer_start() {
 
 jw() { docker exec "$INSTALLER" jw "$@"; }
 
-# 로그에 찍힌 설치 토큰(가장 최근 것)
+# 로그에 출력된 설치 토큰(가장 최근 것)
 installer_token() { docker logs "$INSTALLER" 2>&1 | grep -oE 'token=[A-Z0-9]+' | tail -1 | cut -d= -f2; }
 
-# 관리자 비밀번호 — 난수로 만들어 작업 폴더의 파일에만 둔다
+# 관리자 비밀번호 — 난수로 생성하여 작업 폴더의 파일에만 저장한다
 admin_password_file() {
   local f="$E2E_WORK/admin-pass"
   if [ ! -s "$f" ]; then
@@ -127,7 +127,7 @@ admin_password_file() {
   printf '%s' "$f"
 }
 
-# 답변 파일을 설치 폴더(컨테이너의 /data/e2e/)에 놓는다. 이름·주소는 환경에 맞춰 바꾼다.
+# 응답 파일을 설치 폴더(컨테이너의 /data/e2e/)에 배치한다. 이름·주소는 환경에 맞게 치환한다.
 answers_place() {
   local src="$1" tmp
   tmp="$(mktemp)"
@@ -138,7 +138,7 @@ answers_place() {
   rm -f "$tmp"
 }
 
-# 무인 설치: jw_apply <답변 파일> [jw apply 에 더할 인자…]. 관리자 비밀번호는 env 파일로 넘긴다.
+# 무인 설치: jw_apply <응답 파일> [jw apply 에 추가할 인자…]. 관리자 비밀번호는 env 파일로 전달한다.
 jw_apply() {
   local src="$1"; shift
   answers_place "$src" || return 1
@@ -151,7 +151,7 @@ jw_apply() {
 
 WJAR="$E2E_WORK/jar-wizard"
 
-# wapi <메서드> <경로> [본문 JSON]  → 본문을 찍고, 상태 코드는 $E2E_WORK/wapi.code 에
+# wapi <메서드> <경로> [본문 JSON]  → 본문을 출력하고, 상태 코드는 $E2E_WORK/wapi.code 에 기록
 wapi() {
   local method="$1" path="$2" body="${3:-}"
   local args=(-sk -X "$method" -b "$WJAR" -c "$WJAR" -o "$E2E_WORK/wapi.out" -w '%{http_code}')
@@ -167,12 +167,12 @@ wizard_login() {
   [ "$(wcode)" = 200 ]
 }
 
-# 적용이 끝날 때까지 기다린다(API). wait_apply_api [초]  → done 이면 0
+# 적용 완료까지 대기한다(API). wait_apply_api [초]  → done 이면 0
 wait_apply_api() {
   local limit="${1:-1800}" waited=0 st
   while [ "$waited" -lt "$limit" ]; do
     st="$(wapi GET /api/apply | json_get 'd["status"]')"
-    # 끝나면 잠겨서 423 이 된다 — 그때는 /api/state 로 본다
+    # 완료 시 잠금되어 423 이 반환된다 — 이 경우 /api/state 로 확인한다
     if [ "$(wcode)" = 423 ]; then return 0; fi
     case "$st" in done) return 0 ;; failed) return 1 ;; esac
     sleep 3; waited=$((waited + 3))
@@ -180,7 +180,7 @@ wait_apply_api() {
   return 2
 }
 
-# 적용이 끝날 때까지 기다린다(상태 파일). wait_apply_file [초]  → done 0, failed 1, 시간 초과 2
+# 적용 완료까지 대기한다(상태 파일). wait_apply_file [초]  → done 0, failed 1, 시간 초과 2
 apply_status() { sudo cat "$E2E_HOST_DIR/state/apply.json" 2>/dev/null | json_get 'd["status"]'; }
 apply_error()  { sudo cat "$E2E_HOST_DIR/state/apply.json" 2>/dev/null | json_get 'd["error"]'; }
 wait_apply_file() {
@@ -197,7 +197,7 @@ wait_apply_file() {
 
 UJAR="$E2E_WORK/jar-ws"
 
-# ws_curl <curl 인자…> — 접속 주소를 이 서버로 돌려 붙는다(인증서 검증 없이)
+# ws_curl <curl 인자…> — 접속 주소를 이 서버로 해석하여 접속한다(인증서 검증 생략)
 ws_curl() { curl -sk --max-time 60 --resolve "$E2E_DOMAIN:443:$E2E_ADDR" --resolve "$E2E_DOMAIN:80:$E2E_ADDR" "$@"; }
 ws_code() { ws_curl -o /dev/null -w '%{http_code}' "$@"; }
 
@@ -214,7 +214,7 @@ ws_login() {
   [ "$code" = 200 ]
 }
 
-# 로그인한 채로 부른다: ws_api <메서드> <경로> [본문 JSON]
+# 로그인 상태로 호출: ws_api <메서드> <경로> [본문 JSON]
 ws_api() {
   local method="$1" path="$2" body="${3:-}"
   local args=(-X "$method" -b "$UJAR" -H "Origin: $WS")
@@ -245,7 +245,7 @@ wait_ready() {
 
 env_value() { sudo grep -E "^$1=" "$E2E_HOST_DIR/stack/.env" | head -1 | cut -d= -f2- | sed -e "s/^'//" -e "s/'\$//"; }
 
-# 호스트가 듣는 포트(도커가 게시한 것만): "25/tcp 80/tcp …"
+# 호스트의 수신 대기 포트(도커가 게시한 것만): "25/tcp 80/tcp …"
 published_ports() {
   docker ps --format '{{.Ports}}' | tr ',' '\n' | grep -- '->' | sed -E 's/^ *//' \
     | python3 -c '
@@ -262,7 +262,7 @@ for host,port,proto in sorted(out, key=lambda x:(int(x[1].split("-")[0]),x[2],x[
 
 # ─── 공통 확인 ───
 
-# 기본 묶음이 떴는지 — 시나리오마다 맨 먼저 부른다
+# 기본 구성의 기동 여부 확인 — 시나리오마다 최초에 호출한다
 check_core() {
   say "기본 구성"
   local c
@@ -274,13 +274,13 @@ check_core() {
   expect "/api/health" 200 "$(ws_code "$WS/api/health")"
   check "관리자 로그인" ws_login
   expect "로그인한 계정은 관리자" True "$(ws_api GET /api/auth/me | json_get 'd["is_admin"]')"
-  # 설치 관리자가 꾸린 설치 — 웹의 첫 관리자 만들기는 닫혀 있다(관리자는 설치 관리자가 만든다)
+  # 설치 관리자로 구성한 설치 — 웹의 최초 관리자 생성은 차단되어 있다(관리자는 설치 관리자가 생성한다)
   expect "최초 설정 방식은 installer" installer "$(ws_curl "$WS/api/setup/status" | json_get 'd["setup_mode"]')"
   expect "첫 관리자 API 는 닫혀 있다(403)" 403 "$(first_admin_code)"
   expect "backend 로그에 설정 토큰이 없다" 0 "$(docker logs ws-backend 2>&1 | grep -c 'setup token:')"
 }
 
-# 웹의 첫 관리자 만들기를 불러 본다(설치 관리자 설치에서는 늘 403) — 상태 코드, 본문은 $E2E_WORK/first-admin.json
+# 웹의 최초 관리자 생성을 호출한다(설치 관리자 설치에서는 항상 403) — 상태 코드 반환, 본문은 $E2E_WORK/first-admin.json
 first_admin_code() {
   ws_curl -o "$E2E_WORK/first-admin.json" -w '%{http_code}' -H 'Content-Type: application/json' -H "Origin: $WS" \
     --data-binary '{"username":"intruder","password":"intruder-pass-12345","setup_token":"x"}' "$WS/api/setup/admin"
@@ -296,7 +296,7 @@ check_locked() {
   expect "잠긴 뒤 세션 발급" 423 "$(curl -sk -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"token":"AAAAAAAAAAAA"}' "$WIZARD/api/session")"
 }
 
-# 파일 올리고 내려받아 같은지 본다
+# 파일 업로드 후 다운로드하여 동일 여부를 확인한다
 check_files() {
   say "파일 올리기·내려받기"
   local up="$E2E_WORK/up.bin" down="$E2E_WORK/down.bin" name="e2e-$(date +%s).bin"
@@ -307,7 +307,7 @@ check_files() {
   E2E_LAST_UPLOAD="$name"
 }
 
-# 메모리·디스크 사용량을 찍는다(보고용)
+# 메모리·디스크 사용량을 출력한다(보고용)
 report_usage() {
   say "사용량"
   docker stats --no-stream --format '{{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}' | sort
@@ -316,8 +316,8 @@ report_usage() {
   df -h / | tail -1
 }
 
-# ─── 마법사가 부르는 순서 그대로 설치(API) ───
-# api_install <답변 파일> — 토큰 → 상태 → 사전 점검 → 답변 → 접속 주소 확인 → 구역 → 요약 → 적용 → 진행 조회
+# ─── 마법사의 호출 순서대로 설치(API) ───
+# api_install <응답 파일> — 토큰 → 상태 → 사전 점검 → 답변 → 접속 주소 확인 → 구역 → 요약 → 적용 → 진행 조회
 api_install() {
   local src="$1" body="$E2E_WORK/answers-put.json"
   check "설치 토큰으로 세션 발급" wizard_login
@@ -366,7 +366,7 @@ d=json.load(sys.stdin); d.setdefault("admin",{})["password"]=open(sys.argv[1]).r
   return $rc
 }
 
-# 답변 파일 + jw apply (무인)
+# 응답 파일 + jw apply (무인)
 file_install() {
   local src="$1" t0 rc
   t0=$(date +%s)
@@ -378,7 +378,7 @@ file_install() {
   return $rc
 }
 
-# install <file|api> <답변 파일>
+# install <file|api> <응답 파일>
 install() {
   say "설치 ($1) — $(basename "$2")"
   if [ "$1" = api ]; then api_install "$2"; else file_install "$2"; fi
@@ -394,16 +394,16 @@ for s in d["steps"]:
         print("   %-9s %-7s %d초" % (s["id"], s["status"], (p(s["finished_at"])-p(s["started_at"])).total_seconds()))'
 }
 
-# ─── 내부 API(8444) — backend 가 부르는 방식 그대로 ───
-# backend 컨테이너 안에서, backend 가 받은 JW_INSTALLER_URL·JW_INSTALLER_KEY 로 부른다.
-# internal_api <메서드> <경로> [본문 JSON]  → "<상태 코드> <본문>".  E2E_KEY 를 주면 그 키로 부른다.
+# ─── 내부 API(8444) — backend 의 호출 방식과 동일 ───
+# backend 컨테이너 내에서, backend 가 전달받은 JW_INSTALLER_URL·JW_INSTALLER_KEY 로 호출한다.
+# internal_api <메서드> <경로> [본문 JSON]  → "<상태 코드> <본문>".  E2E_KEY 지정 시 해당 키로 호출한다.
 internal_api() {
   docker exec -i -e E2E_METHOD="$1" -e E2E_PATH="$2" -e E2E_BODY="${3:-}" ${E2E_KEY:+-e "E2E_KEY=$E2E_KEY"} \
     ws-backend python - < "$E2E_ROOT/internal-call.py"
 }
 
-# 구역 작업이 끝날 때까지 기다린다: wait_job <작업 id> [초] → done 0 / failed 1 / 시간 초과 2
-# (켜고 끌 때 backend 가 다시 뜨므로 진행은 상태 파일로 본다)
+# 구역 작업 완료까지 대기한다: wait_job <작업 id> [초] → done 0 / failed 1 / 시간 초과 2
+# (활성화·비활성화 시 backend 가 재기동되므로 진행은 상태 파일로 확인한다)
 job_field() { sudo cat "$E2E_HOST_DIR/state/jobs.json" 2>/dev/null | E2E_JOB="$1" json_get "d[__import__('os').environ['E2E_JOB']]$2"; }
 wait_job() {
   local id="$1" limit="${2:-900}" waited=0 st
@@ -417,7 +417,7 @@ wait_job() {
 
 # ─── 실패·재시도 시나리오용 ───
 
-# 세션 → 사전 점검 → 답변 → 접속 주소 확인까지(적용은 시작하지 않는다). api_prepare <답변 파일>
+# 세션 → 사전 점검 → 답변 → 접속 주소 확인까지 수행(적용은 시작하지 않는다). api_prepare <응답 파일>
 api_prepare() {
   local src="$1" body="$E2E_WORK/answers-put.json"
   wizard_login || return 1
@@ -434,10 +434,10 @@ d=json.load(sys.stdin); d.setdefault("admin",{})["password"]=open(sys.argv[1]).r
   [ "$(wapi GET /api/summary | json_get 'd["ready"]')" = True ]
 }
 
-# 적용 상태에서 값 하나: apply_get '<식 — d 가 GET /api/apply 응답>'
+# 적용 상태에서 값 하나 추출: apply_get '<식 — d 가 GET /api/apply 응답>'
 apply_get() { wapi GET /api/apply | json_get "$1"; }
 
-# 지금 단계가 <단계> 가 될 때까지(또는 끝날 때까지) 기다린다
+# 현재 단계가 <단계> 가 될 때까지(또는 종료될 때까지) 대기한다
 wait_step() {
   local step="$1" limit="${2:-600}" waited=0 cur st
   while [ "$waited" -lt "$limit" ]; do

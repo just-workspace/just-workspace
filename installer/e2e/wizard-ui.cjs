@@ -1,22 +1,22 @@
 #!/usr/bin/env node
 /**
- * 설치 마법사를 **화면을 눌러서** 끝까지 진행한다(Playwright) — 검수 서버 밖(이 PC)에서 돈다.
+ * 설치 마법사를 **화면 조작으로** 끝까지 진행한다(Playwright) — 검수 서버 외부(이 PC)에서 실행된다.
  *
  *   node wizard-ui.cjs --url https://192.168.10.20:8443 --token XXXXXXXXXXXX [옵션]
  *
- *   --url <주소>        설치 관리자 주소(자체 서명 인증서라 검증하지 않는다)
- *   --token <토큰>      설치 토큰(서버의 `docker logs jw-installer`). --locked 일 때는 필요 없다
- *   --flow new|quick    일반 설치(협업 묶음 · 임시 인증서 · 이 서버의 디스크) / 빠른 설치          기본 new
- *   --domain <이름>     접속 주소로 넣을 이름(DNS 에 없어도 된다)                                 기본 ws.e2e.example
+ *   --url <주소>        설치 관리자 주소(자체 서명 인증서이므로 검증하지 않는다)
+ *   --token <토큰>      설치 토큰(서버의 `docker logs jw-installer`). --locked 지정 시 불필요
+ *   --flow new|quick    일반 설치(협업 프리셋 · 임시 인증서 · 이 서버의 디스크) / 빠른 설치          기본 new
+ *   --domain <이름>     접속 주소로 입력할 이름(DNS 미등록 가능)                                  기본 ws.e2e.example
  *   --mail-domain <이름>                                                                         기본 e2e.example
  *   --width <픽셀>      화면 폭(390 이면 휴대폰 폭)                                               기본 1280
- *   --out <폴더>        단계별 화면 사진을 둘 곳                                                  기본 ./wizard-shots
- *   --locked            설치가 끝난 서버의 잠김 화면만 본다
- *   --chrome <경로>     크롬 실행 파일(없으면 playwright 가 가진 것)
+ *   --out <폴더>        단계별 화면 캡처 저장 위치                                                기본 ./wizard-shots
+ *   --locked            설치가 완료된 서버의 잠김 화면만 확인한다
+ *   --chrome <경로>     크롬 실행 파일(미지정 시 playwright 내장본 사용)
  *
- * 필요한 것: playwright-core(NODE_PATH 로 찾을 수 있게). 관리자 비밀번호는 실행할 때 난수로 만들고 찍지 않는다
- * (환경변수 E2E_ADMIN_PASSWORD 를 주면 그것을 쓴다).
- * 끝나면 확인한 것과 콘솔 오류 수를 찍는다. 하나라도 어긋나면 종료 코드 1.
+ * 필요 사항: playwright-core(NODE_PATH 로 탐색 가능해야 한다). 관리자 비밀번호는 실행 시 난수로 생성하며 출력하지 않는다
+ * (환경변수 E2E_ADMIN_PASSWORD 를 지정하면 그 값을 사용한다).
+ * 종료 시 확인 항목과 콘솔 오류 수를 출력한다. 하나라도 불일치하면 종료 코드 1.
  */
 const fs = require('fs')
 const path = require('path')
@@ -84,7 +84,7 @@ async function main() {
     expect(`${name}: 가로로 넘치지 않는다`, wide <= 1, `넘침 ${wide}px`)
   }
 
-  // ─── 잠김 화면만 ───
+  // ─── 잠김 화면 전용 ───
   if (opt.locked) {
     await page.goto(opt.url + '/')
     await heading('설치가 이미 끝났습니다')
@@ -96,7 +96,7 @@ async function main() {
     return finish(browser)
   }
 
-  // ─── 토큰 없이 · 틀린 토큰으로 ───
+  // ─── 토큰 미제공 · 잘못된 토큰 ───
   console.log('== 토큰 화면 ==')
   let res = await page.goto(opt.url + '/')
   expect('세션 없이 / 는 화면을 준다(200)', res.status() === 200, String(res.status()))
@@ -115,12 +115,12 @@ async function main() {
   expect('틀린 토큰의 사유가 보인다', (await page.getByText(/토큰이 맞지 않습니다/).count()) > 0)
   await snap('token-wrong')
 
-  // ─── 토큰으로 들어간다 ───
+  // ─── 토큰으로 진입 ───
   console.log('== 사전 점검 ==')
   await page.goto(`${opt.url}/?token=${encodeURIComponent(opt.token)}`)
   await heading('사전 점검', 60000)
   expect('토큰이 주소에 남지 않는다', !(await page.evaluate(() => window.location.href)).includes(opt.token))
-  // 점검이 끝나 "다음"을 누를 수 있을 때까지
+  // 점검이 완료되어 "다음"을 누를 수 있을 때까지 대기
   await page.waitForFunction(() => {
     const all = [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === '다음')
     const b = all[all.length - 1]
@@ -147,14 +147,14 @@ async function main() {
   if (opt.flow !== 'quick') {
     await heading('접속 주소와 연결 형태')
     await page.getByRole('radio', { name: /공인 주소에 직접 연결/ }).click()
-    // DNS 에 없는 이름이라 "임시 인증서"를 고를 수 있게 된다 — 확인이 끝날 때까지 기다린다
+    // DNS 에 없는 이름이므로 "임시 인증서"를 선택할 수 있게 된다. 확인 완료까지 대기한다
     const temp = page.getByRole('radio', { name: /임시 인증서로 설치하고 나중에 발급/ })
     await temp.waitFor({ state: 'visible', timeout: 60000 })
     await temp.click()
     expect('감지한 연결 형태가 표시된다', (await page.getByText(/감지됨/).count()) > 0)
   }
   else {
-    // 빠른 설치: DNS 에 없는 이름이면 "임시 인증서"를 직접 골라야 넘어간다
+    // 빠른 설치: DNS 에 없는 이름이면 "임시 인증서"를 직접 선택해야 다음 단계로 진행된다
     const temp = page.getByText('임시 인증서로 설치하고 나중에 발급')
     await temp.waitFor({ state: 'visible', timeout: 60000 })
     await temp.click()
@@ -183,11 +183,11 @@ async function main() {
     await next()
   }
 
-  // 메일 화면은 메일 구역이 켜졌을 때만 나온다(빠른 설치도 협업 묶음이면 나온다)
+  // 메일 화면은 메일 구역이 활성화된 경우에만 표시된다(빠른 설치도 협업 프리셋이면 표시된다)
   const settled = () => page.waitForFunction(() => /^#\/(ports|mail|meet|ai|git|admin)/.test(window.location.hash), null, { timeout: 30000 })
   await settled()
   if ((await hash()).startsWith('#/ports')) {
-    // 공유기 뒤로 감지된 경우 — 넘길 포트 안내
+    // 공유기 뒤로 감지된 경우 — 포워딩할 포트 안내
     console.log('== 포트 포워딩 안내 ==')
     const body = await page.locator('main').innerText()
     expect('포트 안내: 넘길 포트(80 · 443)', /80/.test(body) && /443/.test(body))
@@ -223,12 +223,12 @@ async function main() {
   await fillAdmin()
   await snap('admin')
 
-  // ─── 새로 고침 뒤 이어 하기 ───
+  // ─── 새로 고침 후 재개 ───
   console.log('== 새로 고침 뒤 이어 하기 ==')
   await page.reload()
   await heading('관리자 계정', 60000)
   ok('새로 고침해도 하던 화면에 그대로 있다')
-  // 주소를 다시 열면(창을 닫았다 온 경우) 이어 하기 화면이 나온다
+  // 주소를 다시 열면(창을 닫았다가 재접속한 경우) 재개 화면이 표시된다
   await page.goto(opt.url + '/')
   await heading('하던 설치를 이어갑니다', 60000)
   ok('다시 들어오면 이어 하기 화면')
@@ -242,7 +242,7 @@ async function main() {
 
   console.log('== 요약 ==')
   await heading('이대로 설치합니다')
-  // 요약은 사전 점검을 한 번 더 돌린 뒤에 채워진다 — "설치"를 누를 수 있을 때까지 기다린다
+  // 요약은 사전 점검을 한 차례 더 수행한 뒤 채워진다. "설치"를 누를 수 있을 때까지 대기한다
   await page.waitForFunction(() => {
     const all = [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === '설치')
     const b = all[all.length - 1]
@@ -290,7 +290,7 @@ async function main() {
 
 async function finish(browser) {
   await browser.close()
-  // 잠긴 뒤의 API 는 423 을 준다 — 브라우저가 그 응답을 콘솔 오류로 적는 것은 화면의 오류가 아니다
+  // 잠금 이후의 API 는 423 을 반환한다. 브라우저가 해당 응답을 콘솔 오류로 기록하는 것은 화면 오류가 아니다
   const real = consoleErrors.filter(e => !/status of (401|423)/.test(e))
   console.log(`== 콘솔 오류 ${real.length}건 (401·423 응답 알림 ${consoleErrors.length - real.length}건 제외) ==`)
   for (const e of real.slice(0, 10)) console.log('   ' + e)

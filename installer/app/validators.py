@@ -1,7 +1,7 @@
-"""사용자 입력 검증 — 명령 인자·경로·설정 파일에 들어가는 값은 모두 여기를 거친다.
+"""사용자 입력 검증 — 명령 인자·경로·설정 파일에 포함되는 값은 모두 본 모듈을 거친다.
 
-각 함수는 정리된 값을 돌려주고, 받아들일 수 없으면 `Invalid(code)` 를 던진다.
-code 는 화면이 문구로 바꾸는 키다(문구는 화면이 가진다).
+각 함수는 정규화된 값을 반환하고, 허용할 수 없으면 `Invalid(code)` 예외를 발생시킨다.
+code 는 화면이 문구로 변환하는 키이다(문구는 화면이 보유한다).
 """
 
 from __future__ import annotations
@@ -26,12 +26,12 @@ _IMAGE_TAG = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}")
 _MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/\-]{0,127}")
 
-# 저장 폴더로 쓰면 안 되는 호스트 경로(그 자체와 아래 전부)
+# 저장 폴더로 사용 불가한 호스트 경로(자체 및 하위 전부)
 _FORBIDDEN_ROOTS = ("/proc", "/sys", "/dev", "/run", "/boot", "/etc", "/bin", "/sbin", "/lib", "/lib64", "/usr")
 
 
 def domain(value: str) -> str:
-    """접속 주소로 쓰는 도메인 이름(소문자, 점 하나 이상)."""
+    """접속 주소로 사용하는 도메인 이름(소문자, 점 1개 이상)."""
     v = (value or "").strip().lower().rstrip(".")
     if not v:
         raise Invalid("required")
@@ -83,7 +83,7 @@ def hostname(value: str) -> str:
 
 
 def cidr(value: str) -> str:
-    """IPv4 주소 또는 대역(주소 하나면 /32 를 붙이지 않고 그대로 돌려준다)."""
+    """IPv4 주소 또는 대역(단일 주소이면 /32 를 추가하지 않고 그대로 반환한다)."""
     v = (value or "").strip()
     if not v:
         raise Invalid("required")
@@ -96,7 +96,7 @@ def cidr(value: str) -> str:
 
 
 def subnet24(value: str) -> str:
-    """내부 대역 — 사설 IPv4 /24 만. 정규화한 `a.b.c.0/24` 를 돌려준다."""
+    """내부 대역 — 사설 IPv4 /24 만 허용. 정규화한 `a.b.c.0/24` 를 반환한다."""
     v = (value or "").strip()
     try:
         net = ipaddress.IPv4Network(v, strict=False)
@@ -115,7 +115,7 @@ def net_prefix(subnet: str) -> str:
 
 
 def host_path(value: str) -> str:
-    """호스트의 절대 경로(저장 폴더). 셸·마운트 옵션에 뜻이 있는 문자는 받지 않는다."""
+    """호스트의 절대 경로(저장 폴더). 셸·마운트 옵션에서 특수 의미를 갖는 문자는 거부한다."""
     v = (value or "").strip()
     if not v:
         raise Invalid("required")
@@ -133,7 +133,7 @@ def host_path(value: str) -> str:
 
 
 def nfs_export(value: str) -> str:
-    """NFS 내보내기 경로(`/export/share`). 마운트 옵션에 끼어들 수 있는 문자(쉼표·공백·콜론)는 받지 않는다."""
+    """NFS 내보내기 경로(`/export/share`). 마운트 옵션에 삽입될 수 있는 문자(쉼표·공백·콜론)는 거부한다."""
     v = (value or "").strip()
     if not v:
         raise Invalid("required")
@@ -182,7 +182,7 @@ def model_name(value: str) -> str:
 
 
 def http_url(value: str, *, https_only: bool = False) -> str:
-    """기본 주소(base URL) — 스킴·호스트·포트·경로만. 사용자 정보·쿼리는 받지 않는다."""
+    """기본 주소(base URL) — 스킴·호스트·포트·경로만 허용. 사용자 정보·쿼리는 거부한다."""
     from urllib.parse import urlsplit
 
     v = (value or "").strip()
@@ -202,7 +202,7 @@ def http_url(value: str, *, https_only: bool = False) -> str:
 
 
 def single_line(value: str, *, max_len: int = 200) -> str:
-    """표시 이름처럼 자유로운 한 줄 — 제어 문자·줄바꿈만 막는다."""
+    """표시 이름 등 자유 형식의 한 줄 — 제어 문자·줄바꿈만 차단한다."""
     v = (value or "").strip()
     if len(v) > max_len or any(ord(ch) < 32 or ord(ch) == 127 for ch in v):
         raise Invalid("text_invalid")

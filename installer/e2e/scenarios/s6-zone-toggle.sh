@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# S6 설치 후 구역 켜고 끄기 — 최소 묶음으로 설치한 뒤 내부 API 로 채팅 → 문서 → 코드 저장소를 켜고, 문서와 코드 저장소를 끈다.
-# 내부 API 는 backend 가 부르는 방식 그대로(backend 컨테이너 안에서, 받은 주소·키로) 부른다.
+# S6 설치 후 구역 활성화·비활성화 — 최소 프리셋으로 설치한 후 내부 API 로 채팅 → 문서 → 코드 저장소를 활성화하고, 문서와 코드 저장소를 비활성화한다.
+# 내부 API 는 backend 의 호출 방식과 동일하게(backend 컨테이너 내에서, 전달받은 주소·키로) 호출한다.
 . "$(dirname "$0")/../lib.sh"
 
 e2e_reset
@@ -16,7 +16,7 @@ check "호스트에서 8444 로는 붙지 못한다" bash -c "! curl -s --max-ti
 contains "backend 에서 키 없이 health" '"installed":true' "$(internal_api GET /internal/health)"
 expect "backend 에서 키로 구역 목록" 200 "$(internal_api GET /internal/zones | cut -d' ' -f1)"
 expect "틀린 키는 404" 404 "$(E2E_KEY=wrong internal_api GET /internal/zones | cut -d' ' -f1)"
-# 내부 대역 밖(도커 기본 브리지)에서 맞는 키로 불러도 받지 않는다
+# 내부 대역 밖(도커 기본 브리지)에서는 올바른 키로 호출해도 거부된다
 BRIDGE_IP="$(docker inspect -f '{{(index .NetworkSettings.Networks "bridge").IPAddress}}' $INSTALLER)"
 expect "내부 대역 밖에서는 맞는 키로도 404" 404 "$(docker run --rm -i -e E2E_URL="http://$BRIDGE_IP:8444" -e E2E_PATH=/internal/zones \
   -e E2E_KEY="$(env_value JW_INSTALLER_KEY)" --entrypoint python "$E2E_INSTALLER_IMAGE" - < "$E2E_ROOT/internal-call.py" | cut -d' ' -f1)"

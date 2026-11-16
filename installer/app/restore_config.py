@@ -1,18 +1,18 @@
-"""복원의 설정 병합 — 백업의 `.env` + 새 서버에서 다시 정한 값 → 답변(Answers)과 `.env` 에 들어갈 값.
+"""복원의 설정 병합 — 백업의 `.env` + 새 서버에서 재지정한 값 → 답변(Answers)과 `.env` 에 기록할 값.
 
-순수 함수다(파일·docker·네트워크를 건드리지 않는다). 규칙은 세 갈래다(docs/installer.md §14).
+순수 함수이다(파일·docker·네트워크에 접근하지 않는다). 규칙은 세 갈래이다(docs/installer.md §14).
 
-1. **백업에서 가져오는 것** — 옮겨도 바뀌면 안 되는 값
-   - 비밀값 전부: 암호화 키(`SECRET_KEY` — 바뀌면 DB 안의 암호화된 값을 풀 수 없다), `INTERNAL_API_KEY`,
-     DB 비밀번호(코드 저장소의 설정 파일에도 적혀 있다), 구역별 키·토큰, `GITEA_TOKEN`, `OAUTH_CLIENTS_JSON`
-   - 설치 id(`JW_INSTALL_ID`) — 저장소 표식과 맞아야 한다
+1. **백업에서 가져오는 값** — 이전 시에도 변경되어서는 안 되는 값
+   - 비밀값 전부: 암호화 키(`SECRET_KEY` — 변경 시 DB 내 암호화된 값을 복호화할 수 없다), `INTERNAL_API_KEY`,
+     DB 비밀번호(코드 저장소의 설정 파일에도 기록되어 있다), 구역별 키·토큰, `GITEA_TOKEN`, `OAUTH_CLIENTS_JSON`
+   - 설치 id(`JW_INSTALL_ID`) — 저장소 마커와 일치해야 한다
    - 구역 목록, 메일 종류·메일 도메인(`DOMAIN` — 계정의 메일 주소), 외부 SMTP, 코드 저장소 버전, 관리자 주소(`ADMIN_EMAILS`),
      표시 이름(`APP_NAME`), 인증서 연락처
-   - 설치 관리자가 다루지 않는 그 밖의 변수(브랜드·기능 플래그·상한 등)는 그대로 옮긴다(`CARRY_NEVER` 제외)
-2. **새 서버의 답변으로 덮는 것** — 서버·주소에 딸린 값
+   - 설치 관리자가 관리하지 않는 그 밖의 변수(브랜드·기능 플래그·상한 등)는 그대로 이전한다(`CARRY_NEVER` 제외)
+2. **새 서버의 답변으로 대체하는 값** — 서버·주소에 종속된 값
    - 접속 주소(`APP_URL`, `GITEA_EXTERNAL_URL`, `GIT_SSH_DOMAIN`, `RBI_PUBLIC_ORIGIN`, `ACME_DOMAINS` …), 연결 형태·프록시 주소·인증서,
      내부 대역, 저장소 볼륨, 워커 수, 이미지 저장소·버전, 호스트 경로
-3. **새로 만드는 것** — 새 서버 고유 값
+3. **신규 생성하는 값** — 새 서버 고유 값
    - 설치 관리자 내부 API 키(`JW_INSTALLER_KEY`), 설치 토큰·세션·설치 관리자 인증서, 백업에 없던 비밀값
 """
 
@@ -27,24 +27,24 @@ from app.bundle import Bundle
 from app.catalog import Catalog
 from app.render import CARRIED_ENV
 
-# render 가 `.env` 에 쓰는 변수 가운데, 백업 값을 그대로 이어 쓰는 것(나머지 render 변수는 새 답변·감지값에서 다시 만든다)
+# render 가 `.env` 에 기록하는 변수 중 백업 값을 그대로 승계하는 것(나머지 render 변수는 새 답변·감지값에서 재생성한다)
 CARRIED_KEYS = CARRIED_ENV
-# render 가 쓰지 않는 변수 가운데 옮기지 않는 것 — 원래 서버의 호스트·망·주소에 딸린 값, 한 번 쓰고 버리는 값
+# render 가 기록하지 않는 변수 중 이전하지 않는 것 — 원래 서버의 호스트·망·주소에 종속된 값, 일회성 값
 CARRY_NEVER = frozenset({
     "GPU_HOST_IP", "JW_HOST_REPO", "BACKUP_VOLUME", "GITEA_DATA_PATH", "RBI_NETWORK", "RBI_SUBNET", "RBI_IP_RANGE",
     "RBI_BRIDGE", "RBI_MIRROR_IMAGE", "RBI_IMAGE", "AUDIORELAY_WT_SELF_SIGNED_HOSTS", "ADMIN_USERNAME", "ADMIN_PASSWORD",
     "JW_MIGRATE_ON_START", "JW_PROJECT_DIR", "JW_CONTAINER_PREFIX", "MCP_PUBLIC_URL", "DOMAIN_ALIAS", "DATABASE_URL",
 })
-# 새 서버에서 새로 만드는 것 — 백업 값이 있어도 쓰지 않는다
+# 새 서버에서 신규 생성하는 값 — 백업 값이 있어도 사용하지 않는다
 REGENERATED = frozenset({"JW_INSTALLER_KEY", "JW_INSTALLER_URL"})
-# 비밀값 표(backend 의 security_defaults) 밖에서 `.env` 비밀로 다루는 이름
+# 비밀값 표(backend 의 security_defaults) 외에 `.env` 비밀로 취급하는 이름
 EXTRA_SECRET_NAMES = ("SMTP_PASSWORD", "GITEA_TOKEN", "OAUTH_CLIENTS_JSON", "JW_INSTALL_ID")
 
 _GITEA_TAG = re.compile(r"gitea/gitea:([A-Za-z0-9._-]+)")
 
 
 def parse_env(text: str) -> dict[str, str]:
-    """백업의 `.env` → {키: 값}. 설치 관리자가 쓴 파일과 손으로 쓴 파일(따옴표 없는 값 뒤의 주석)을 모두 읽는다."""
+    """백업의 `.env` → {키: 값}. 설치 관리자가 기록한 파일과 수동 작성 파일(따옴표 없는 값 뒤의 주석)을 모두 처리한다."""
     values: dict[str, str] = {}
     for line in text.splitlines():
         stripped = line.strip()
@@ -70,13 +70,13 @@ def secret_names(bundle: Bundle) -> list[str]:
 
 
 def carried_secrets(env: dict[str, str], bundle: Bundle) -> dict[str, str]:
-    """백업에서 가져오는 비밀값(빈 값은 뺀다 — 새 서버에서 만든다)."""
+    """백업에서 가져오는 비밀값(빈 값은 제외 — 새 서버에서 생성한다)."""
     return {name: env[name] for name in secret_names(bundle)
             if env.get(name) and name not in REGENERATED and "\n" not in env[name]}
 
 
 def backup_host(env: dict[str, str], summary: dict) -> str:
-    """백업을 만든 서버의 접속 주소(호스트) — `APP_URL` 에서. 메일 도메인(`DOMAIN`)과 다를 수 있다."""
+    """백업을 생성한 서버의 접속 주소(호스트) — `APP_URL` 에서 추출. 메일 도메인(`DOMAIN`)과 상이할 수 있다."""
     url = env.get("APP_URL") or summary.get("source_url") or ""
     host = re.sub(r"^[a-z]+://", "", url.strip(), flags=re.I).split("/", 1)[0]
     if host.count(":") == 1:
@@ -85,7 +85,7 @@ def backup_host(env: dict[str, str], summary: dict) -> str:
 
 
 def backup_zones(env: dict[str, str], summary: dict, catalog: Catalog) -> tuple[list[str], list[str], list[str]]:
-    """(구역, 부가 구역, 이 설치 관리자가 모르는 구역) — manifest 의 구역 목록, 없으면 `.env` 의 `JW_ZONES`."""
+    """(구역, 부가 구역, 본 설치 관리자가 인식하지 못하는 구역) — manifest 의 구역 목록, 없으면 `.env` 의 `JW_ZONES`."""
     listed = summary.get("zones")
     if not isinstance(listed, list) or not listed:
         listed = [z.strip() for z in (env.get("JW_ZONES") or "").split(",") if z.strip()]
@@ -97,7 +97,7 @@ def backup_zones(env: dict[str, str], summary: dict, catalog: Catalog) -> tuple[
 
 
 def git_version(image: str, bundle: Bundle) -> str:
-    """백업의 `GITEA_IMAGE` → 답변의 `git.version`. 모르는 꼴이면 검증한 버전으로 간다(데이터는 위로만 옮겨진다)."""
+    """백업의 `GITEA_IMAGE` → 답변의 `git.version`. 인식 불가한 형식이면 검증된 버전을 적용한다(데이터는 상위 버전으로만 이전된다)."""
     image = (image or "").strip()
     if not image or image == bundle.gitea_verified_image:
         return "verified"
@@ -116,7 +116,7 @@ def subnet_of(env: dict[str, str]) -> str:
 
 
 def network_of(env: dict[str, str]) -> str | None:
-    """백업의 연결 형태 — 앞단 프록시 뒤였는지만 알 수 있다(직접·공유기는 `.env` 로 가릴 수 없다)."""
+    """백업의 연결 형태 — 프런트 프록시 뒤였는지 여부만 판별 가능하다(직접·공유기는 `.env` 로 구분 불가)."""
     mode = (env.get("DEPLOY_MODE") or "").strip()
     if mode == "external_proxy":
         return "proxy"
@@ -125,11 +125,11 @@ def network_of(env: dict[str, str]) -> str | None:
 
 def answers_from_backup(env: dict[str, str], summary: dict, target: dict, catalog: Catalog, bundle: Bundle,
                         *, turn: bool | None = None) -> tuple[ans.Answers, dict[str, str]]:
-    """백업 설정 + 새 서버에서 정한 값(`target`) → (답변, 답변의 비밀).
+    """백업 설정 + 새 서버에서 지정한 값(`target`) → (답변, 답변의 비밀).
 
     target: {"domain", "network", "proxy_addresses", "cert", "storage": {kind, path, server, export}, "subnet",
-             "restore": {path, password_file}} — 빠진 값은 백업에서(주소·대역) 또는 기본값으로 채운다.
-    구역·메일·회의·코드 저장소·관리자는 묻지 않는다 — 백업에서 온다.
+             "restore": {path, password_file}} — 누락된 값은 백업(주소·대역) 또는 기본값으로 채운다.
+    구역·메일·회의·코드 저장소·관리자는 질의하지 않는다 — 백업에서 가져온다.
     """
     zones, addons, _unknown = backup_zones(env, summary, catalog)
     domain = (target.get("domain") or backup_host(env, summary) or "").strip()
@@ -148,10 +148,10 @@ def answers_from_backup(env: dict[str, str], summary: dict, target: dict, catalo
 
     profiles = {p.strip() for p in (env.get("COMPOSE_PROFILES") or "").split(",") if p.strip()}
     meetings = {
-        # 중계(TURN)는 백업의 회의 서버 설정에서 읽은 값(`turn`). 모르면 켠다 — 주소가 IP 면 렌더링이 끈다
+        # 중계(TURN)는 백업의 회의 서버 설정에서 읽은 값(`turn`). 미상이면 활성화한다 — 주소가 IP 이면 렌더링 단계에서 비활성화된다
         "turn": (True if turn is None else bool(turn)) and not (bool(domain) and v.is_ip(domain)),
         "lossless_audio": "audiorelay" in profiles and "chat" in zones,
-        "public_ip": None,                       # 새 서버의 공인 주소(감지값)를 쓴다
+        "public_ip": None,                       # 새 서버의 공인 주소(감지값) 사용
     }
     admin_user = ""
     first = (env.get("ADMIN_EMAILS") or "").split(",")[0].strip()
@@ -174,7 +174,7 @@ def answers_from_backup(env: dict[str, str], summary: dict, target: dict, catalo
         "addons": addons,
         "mail": mail,
         "meetings": meetings,
-        "ai": {"mode": "later"},                 # AI 제공자 설정은 DB 에 있다(백업과 함께 온다)
+        "ai": {"mode": "later"},                 # AI 제공자 설정은 DB 에 저장된다(백업에 포함)
         "git": {"version": git_version(env.get("GITEA_IMAGE", ""), bundle)},
         "advanced": {"subnet": target.get("subnet") or subnet_of(env)},
         "admin": {"name": admin_user, "username": admin_user},
@@ -188,10 +188,10 @@ def answers_from_backup(env: dict[str, str], summary: dict, target: dict, catalo
 
 
 def extra_env(env: dict[str, str], managed: set[str], bundle: Bundle) -> dict[str, str]:
-    """`.env` 에 그대로 옮길 값 — 이어 쓰는 값(`CARRIED_KEYS`)과 설치 관리자가 다루지 않는 변수.
+    """`.env` 에 그대로 이전할 값 — 승계 값(`CARRIED_KEYS`)과 설치 관리자가 관리하지 않는 변수.
 
-    managed = render 가 스스로 쓰는 변수 이름. 그 변수들은 새 답변에서 다시 만들므로 옮기지 않는다.
-    줄바꿈이 든 값과 빈 값은 옮기지 않는다.
+    managed = render 가 직접 기록하는 변수 이름. 해당 변수는 새 답변에서 재생성하므로 이전하지 않는다.
+    줄바꿈이 포함된 값과 빈 값은 이전하지 않는다.
     """
     secret = set(secret_names(bundle))
     out: dict[str, str] = {}
@@ -208,7 +208,7 @@ def extra_env(env: dict[str, str], managed: set[str], bundle: Bundle) -> dict[st
 
 
 def version_tuple(text: str) -> tuple[int, ...]:
-    """`1.4.0-beta.2` → (1, 4, 0). 숫자가 아닌 뒤쪽은 버린다."""
+    """`1.4.0-beta.2` → (1, 4, 0). 숫자가 아닌 후행 부분은 무시한다."""
     parts = []
     for piece in re.split(r"[.\-+]", (text or "").strip().lstrip("vV")):
         if not piece.isdigit():
@@ -218,9 +218,9 @@ def version_tuple(text: str) -> tuple[int, ...]:
 
 
 def judge_version(summary: dict, *, installer_version: str, installer_schema: int | None) -> dict:
-    """복원할 수 있는 버전인가 — 백업의 스키마·제품 버전이 이 설치 관리자의 것보다 높으면 막는다.
+    """복원 가능한 버전인지 판정 — 백업의 스키마·제품 버전이 본 설치 관리자의 것보다 높으면 차단한다.
 
-    낮거나 같으면 진행한다(복원 뒤 스키마 변경 단계가 차이를 메운다).
+    낮거나 같으면 진행한다(복원 후 스키마 변경 단계가 차이를 보정한다).
     {"status": ok|newer, "reason": null|schema|product}
     """
     schema = summary.get("schema_version")
@@ -233,7 +233,7 @@ def judge_version(summary: dict, *, installer_version: str, installer_schema: in
 
 
 def turn_enabled(livekit_yaml: str | None) -> bool | None:
-    """백업의 회의 서버 설정에서 중계(TURN)가 켜져 있었는지. 파일이 없으면 None."""
+    """백업의 회의 서버 설정에서 중계(TURN)의 활성화 여부. 파일이 없으면 None."""
     if not livekit_yaml:
         return None
     m = re.search(r"^turn:\s*\n(?:[ \t]+.*\n)*?[ \t]+enabled:\s*(true|false)", livekit_yaml + "\n", flags=re.M)

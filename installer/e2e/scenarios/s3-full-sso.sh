@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# S3 전체 묶음 + 애드온(SSO·LDAP) — 메일·채팅·일정·문서·회의·코드 저장소·AI(나중에 연결) + sso.
-# 메모리 12GB 서버를 전제한다.
+# S3 전체 프리셋 + 애드온(SSO·LDAP) — 메일·채팅·일정·문서·회의·코드 저장소·AI(나중에 연결) + sso.
+# 메모리 12GB 서버를 전제로 한다.
 # 사용: s3-full-sso.sh [file|api]
 . "$(dirname "$0")/../lib.sh"
 MODE="${1:-file}"
@@ -57,9 +57,9 @@ auths="$(docker exec -u git ws-gitea gitea --config /data/gitea/conf/app.ini adm
 if printf '%s' "$auths" | grep -q workspace; then
   ok "Gitea 로그인 원본 workspace 등록"
 else
-  # 임시 인증서에서는 Gitea 가 접속 주소의 설정 문서를 믿지 못해 등록이 미뤄진다 — 주의로 남아야 한다
+  # 임시 인증서에서는 Gitea 가 접속 주소의 설정 문서를 신뢰하지 못하여 등록이 보류된다 — 주의 항목으로 기록되어야 한다
   contains "로그인 원본 등록이 미뤄졌고 주의로 남았다(임시 인증서)" git_sso_pending "$(sudo cat "$E2E_HOST_DIR/state/apply.json" | json_get '[w["key"] for w in d["warnings"]]')"
-  # 등록 명령 자체가 이 Gitea 버전에서 통하는지는 내부 주소(인증서 없이 닿는 backend)로 시험 등록해 본 뒤 지운다
+  # 등록 명령 자체가 이 Gitea 버전에서 동작하는지는 내부 주소(인증서 없이 도달 가능한 backend)로 시험 등록한 후 삭제하여 확인한다
   gitea_cli() { docker exec -u git ws-gitea gitea --config /data/gitea/conf/app.ini "$@"; }
   gitea_cli admin auth add-oauth --name e2e-probe --provider openidConnect --key e2e-probe --secret e2e-probe-secret \
     --auto-discover-url http://backend:8000/oauth/.well-known/openid-configuration --scopes "openid email profile" >/dev/null 2>&1

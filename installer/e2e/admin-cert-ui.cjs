@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
- * 설치 뒤 관리 화면에서 인증서 카드·구역의 연결 보류·저장소 상태 카드를 **화면으로** 본다(Playwright, 이 PC 에서).
- * 임시 인증서 + 코드 저장소 구역으로 설치된 서버에서 돌린다.
+ * 설치 후 관리 화면에서 인증서 카드·구역의 연결 보류·저장소 상태 카드를 **화면으로** 확인한다(Playwright, 이 PC 에서 실행).
+ * 임시 인증서 + 코드 저장소 구역으로 설치된 서버에서 실행한다.
  *
  *   node admin-cert-ui.cjs --url https://ws.e2e.example --addr 192.168.10.20 --password-file <파일> [옵션]
  *
- *   --addr <주소>        접속 주소가 DNS 에 없을 때 그 이름을 이 주소로 돌린다
- *   --cert <파일> --key <파일>   올릴 인증서·개인 키(PEM). 주면 "인증서 올리기"까지 한다
- *   --expect-pending yes|no      올린 뒤에도 코드 저장소 연결이 보류로 남는 것이 맞는가(사설 CA 면 yes)   기본 yes
- *   --ca <파일>          그 인증서를 내준 CA 의 인증서(PEM). 주면 보류 안내에서 "CA 인증서 올리기"까지 한다 —
- *                        서버 인증서 한 장만 올린 뒤(--cert 에 체인을 붙이지 않는다) CA 만 따로 올려 연결이 이어지는지
- *   --only cert|zones|storage    한 화면만
- *   --storage nfs|local          저장소 상태 카드에 보일 종류
- *   --storage-down               저장소가 끊긴 상태의 화면(카드·파일 탭 안내·알림 띠)을 본다
- *   --out <폴더>         화면 사진을 둘 곳                                                        기본 ./admin-cert-shots
- * 필요한 것: playwright-core(NODE_PATH).
+ *   --addr <주소>        접속 주소가 DNS 에 없을 때 해당 이름을 이 주소로 해석한다
+ *   --cert <파일> --key <파일>   업로드할 인증서·개인 키(PEM). 지정 시 "인증서 올리기"까지 수행한다
+ *   --expect-pending yes|no      업로드 후에도 코드 저장소 연결이 보류로 남는 것이 정상인지 여부(사설 CA 이면 yes)   기본 yes
+ *   --ca <파일>          해당 인증서를 발급한 CA 의 인증서(PEM). 지정 시 보류 안내에서 "CA 인증서 올리기"까지 수행한다 —
+ *                        서버 인증서 1장만 업로드한 후(--cert 에 체인을 포함하지 않는다) CA 만 별도 업로드하여 연결이 재개되는지 확인
+ *   --only cert|zones|storage    한 화면만 검수
+ *   --storage nfs|local          저장소 상태 카드에 표시될 종류
+ *   --storage-down               저장소 연결이 끊긴 상태의 화면(카드·파일 탭 안내·알림 띠)을 확인한다
+ *   --out <폴더>         화면 캡처 저장 위치                                                      기본 ./admin-cert-shots
+ * 필요 사항: playwright-core(NODE_PATH).
  */
 const fs = require('fs')
 const path = require('path')
@@ -72,7 +72,7 @@ const want = name => !opt.only || opt.only === name
       const end = page.locator('[data-testid=cert-done], [data-testid=cert-failed], [data-testid=cert-upload-error]')
       await page.locator('[data-testid=cert-job]').waitFor({ state: 'visible', timeout: 30000 }).then(() => ok('진행 중인 작업(발급 → 다시 읽히기 → 구역 다시 연결)이 보인다')).catch(() => {})
       await snap('cert-job')
-      // 서버가 인증서를 다시 읽는 동안 연결이 끊길 수 있다 — 끝 상태가 보일 때까지 기다린다
+      // 서버가 인증서를 재로드하는 동안 연결이 끊길 수 있다 — 최종 상태가 표시될 때까지 대기한다
       await end.first().waitFor({ state: 'visible', timeout: 5 * 60 * 1000 }).catch(() => {})
       if (!(await end.count())) { await page.reload(); await end.first().waitFor({ state: 'visible', timeout: 60000 }).catch(() => {}) }
       expect('인증서를 바꿨습니다', await page.locator('[data-testid=cert-done]').count() === 1, (await card.innerText().catch(() => '')).slice(0, 300))
@@ -93,7 +93,7 @@ const want = name => !opt.only || opt.only === name
         await need.getByRole('button', { name: 'CA 인증서 올리기' }).click()
         const dialog = page.locator('[role=dialog]')
         expect('CA 만 받는 창(파일 칸 하나, 인증서·개인 키는 그대로라는 안내)', await dialog.locator('input[type=file]').count() === 1 && /인증서와 개인 키는 그대로/.test(await dialog.innerText()))
-        // 먼저 엉뚱한 파일(서버 인증서) — 창 안에서 거부 사유를 보여 준다
+        // 먼저 잘못된 파일(서버 인증서)을 업로드한다 — 창 내에 거부 사유가 표시된다
         await dialog.locator('input[type=file]').setInputFiles(opt.cert)
         await dialog.locator('button:not([disabled])').last().click()
         const refused = page.locator('[data-testid=cert-upload-error]')

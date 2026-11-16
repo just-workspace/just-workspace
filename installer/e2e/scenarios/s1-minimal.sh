@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# S1 최소 묶음 — 새 설치, 직접 받기, 임시 인증서, 도커 볼륨 저장소, 구역 없음.
-# 사용: s1-minimal.sh [file|api]     file = 답변 파일 + jw apply(무인), api = 마법사가 부르는 순서 그대로
+# S1 최소 프리셋 — 신규 설치, 직접 받기, 임시 인증서, 도커 볼륨 저장소, 구역 없음.
+# 사용: s1-minimal.sh [file|api]     file = 응답 파일 + jw apply(무인), api = 마법사의 호출 순서와 동일
 . "$(dirname "$0")/../lib.sh"
 MODE="${1:-file}"
 
@@ -30,7 +30,7 @@ check_files
 check_locked
 
 say "관리자가 0명이어도 첫 관리자 API 는 닫혀 있다"
-# 관리자 계정을 만들기 전(구역 시작 ~ seed-admin 사이)과 같은 상태를 만든다 — 관리자 표시를 잠시 내린다
+# 관리자 계정 생성 전(구역 시작 ~ seed-admin 사이)과 동일한 상태를 구성한다 — 관리자 표시를 일시 해제한다
 psql_at() { docker exec ws-postgres psql -U workspace -d workspace -At -c "$1"; }
 psql_at "UPDATE users SET is_admin = false WHERE username = 'admin'" >/dev/null
 expect "관리자 0명" 0 "$(psql_at 'SELECT count(*) FROM users WHERE is_admin')"

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# S9 설치 뒤에 터미널에서 하는 일 — 기본 + 코드 저장소, 임시 인증서로 설치한 서버에서:
-#   · 시작 로그의 버전 알림(JW_INSTALLER_VERSION 없이 띄웠을 때)
-#   · jw update-key / jw update-channel — 공개 키가 없어 "구성되지 않음"이던 업데이트 확인이 채널을 받으러 간다
-#   · jw restore — 전체 백업을 같은 서버에 되돌린다(목록, 내용만 보기, 되돌리기, 거부)
-#   · 사설 CA 인증서 — 서버 인증서만 올리면 코드 저장소 연결이 보류로 남고, 발급 CA 를 올리면(나중에 CA 만 · 인증서와 함께 따로 · 이어 붙여) 이어진다.
-#     backend 도 같은 CA 를 믿는다
+# S9 설치 후 터미널에서 수행하는 작업 — 기본 + 코드 저장소, 임시 인증서로 설치한 서버에서:
+#   · 시작 로그의 버전 알림(JW_INSTALLER_VERSION 없이 기동한 경우)
+#   · jw update-key / jw update-channel — 공개 키가 없어 "구성되지 않음"이던 업데이트 확인이 채널 수신을 시도한다
+#   · jw restore — 전체 백업을 동일 서버에 복원한다(목록, 내용만 조회, 복원, 거부)
+#   · 사설 CA 인증서 — 서버 인증서만 업로드하면 코드 저장소 연결이 보류로 남고, 발급 CA 를 업로드하면(이후 CA 만 · 인증서와 함께 별도로 · 이어 붙여서) 재개된다.
+#     backend 도 동일 CA 를 신뢰한다
 # 사용: s9-operate.sh
 . "$(dirname "$0")/../lib.sh"
 OP="$E2E_WORK/operate"
@@ -13,8 +13,8 @@ e2e_reset
 rm -rf "$OP"; mkdir -p "$OP"; chmod 700 "$OP"
 
 say "설치 관리자 시작"
-# 이미지에는 배포처의 공개 키가 들어 있을 수 있다(installer/keys/). "키가 없는 설치"를 보려고 내장 키 폴더를 빈 곳으로 돌린다 —
-# 설치 폴더의 키(state/update/keys/)는 그대로 쓰인다.
+# 이미지에는 배포처의 공개 키가 포함되어 있을 수 있다(installer/keys/). "키가 없는 설치"를 검수하기 위해 내장 키 폴더를 빈 경로로 지정한다 —
+# 설치 폴더의 키(state/update/keys/)는 그대로 사용된다.
 check "설치 관리자 기동(내장 공개 키 없이)" installer_start -e JW_UPDATE_PUBKEY_DIR=/e2e-no-builtin-keys
 contains "버전 환경변수 없이 띄우면 로그에 알린다" "JW_INSTALLER_VERSION 이 없어 이미지에 든 버전($E2E_VERSION)" "$(docker logs $INSTALLER 2>&1)"
 
@@ -40,7 +40,7 @@ update_check() {
 update_check
 expect "공개 키가 없으면 확인은 구성되지 않음" unconfigured "$(update_error)"
 contains "jw update-key 는 키가 없다고 알린다" "공개 키가 없습니다" "$(jw update-key 2>&1)"
-# 검수용 임시 키 — 이 서버의 작업 폴더에만 만들고 끝나면 지운다
+# 검수용 임시 키 — 이 서버의 작업 폴더에만 생성하고 종료 시 삭제한다
 openssl ecparam -name prime256v1 -genkey -noout -out "$OP/release.pem" 2>/dev/null
 openssl ec -in "$OP/release.pem" -pubout -out "$OP/release.pub" 2>/dev/null
 docker exec -i $INSTALLER jw update-key add - < "$OP/release.pem" > "$OP/key-private.out" 2>&1
@@ -66,7 +66,7 @@ update_check
 expect "키를 지우면 다시 구성되지 않음" unconfigured "$(update_error)"
 rm -f "$OP/release.pem" "$OP/release.pub" "$OP/key-private.out"
 
-# ─── 같은 서버에 되돌리기 ───
+# ─── 동일 서버에 복원 ───
 say "jw restore"
 check_files
 kept="$E2E_LAST_UPLOAD"
@@ -89,7 +89,7 @@ jw restore /srv/e2e-no-such-backup.jwbak --yes > "$OP/restore-missing.out" 2>&1;
 jw restore "/srv/a b.jwbak" --yes >/dev/null 2>&1; expect "틀린 경로는 거부" 1 "$?"
 expect "거부한 뒤에도 서비스는 그대로" 200 "$(ws_code "$WS/api/health")"
 
-# 서버의 경로로 — 백업을 파일 하나로 묶어 설치 폴더에 꺼내 두고 그 경로로 읽는다
+# 서버 경로 지정 — 백업을 파일 하나로 패킹하여 설치 폴더에 추출해 두고 해당 경로로 읽는다
 docker exec ws-backend python -m app.cli backup pack "/backups/$backup" /backups/e2e-packed.jwbak >/dev/null 2>&1
 docker cp ws-backend:/backups/e2e-packed.jwbak "$OP/e2e-packed.jwbak" >/dev/null 2>&1
 sudo install -m 600 "$OP/e2e-packed.jwbak" "$E2E_HOST_DIR/e2e-packed.jwbak"
@@ -108,7 +108,7 @@ check "컨테이너 ws-backend 준비" wait_ready ws-backend 180
 check "되돌린 뒤 관리자 로그인(세션은 새로)" ws_login
 expect "백업에 있던 파일은 그대로" 200 "$(ws_curl -b "$UJAR" -o "$OP/kept.bin" -w '%{http_code}' "$WS/api/files/download?path=my/$kept")"
 expect "백업 뒤에 올린 파일은 사라졌다" 404 "$(ws_curl -b "$UJAR" -o /dev/null -w '%{http_code}' "$WS/api/files/download?path=my/$later")"
-check_files                                           # 저장소 표식이 그대로여야 쓰기가 된다
+check_files                                           # 저장소 마커가 유지되어야 쓰기가 가능하다
 check "컨테이너 ws-gitea 준비(되돌린 뒤)" wait_ready ws-gitea 180
 sudo rm -f "$E2E_HOST_DIR/e2e-packed.jwbak" "$OP/e2e-packed.jwbak"
 
@@ -124,7 +124,7 @@ openssl x509 -req -in "$OP/leaf.csr" -CA "$OP/ca.pem" -CAkey "$OP/ca.key" -CAcre
   -extfile "$OP/leaf.ext" -out "$OP/leaf.pem" 2>/dev/null
 check "검수용 CA 와 서버 인증서" openssl verify -CAfile "$OP/ca.pem" "$OP/leaf.pem"
 
-reissue() {   # reissue <인증서 파일…> [--ca <CA 파일>]  → 작업이 끝난 상태(done|failed)
+reissue() {   # reissue <인증서 파일…> [--ca <CA 파일>]  → 작업 종료 상태(done|failed)
   local body reply id
   body="$(python3 -c 'import json,sys
 a = sys.argv[2:]; ca = ""
@@ -138,7 +138,7 @@ print(json.dumps(d))' "$OP/leaf.key" "$@")"
   wait_job "$id" 600
   job_field "$id" '["status"]'
 }
-set_ca() {    # set_ca <CA 파일|-(걷어 내기)>  → 작업이 끝난 상태, 거부되면 "<상태 코드> <코드>"
+set_ca() {    # set_ca <CA 파일|-(제거)>  → 작업 종료 상태, 거부 시 "<상태 코드> <코드>"
   local body reply id
   if [ "$1" = - ]; then body='{"ca":""}'; else body="$(python3 -c 'import json,sys; print(json.dumps({"ca": open(sys.argv[1]).read()}))' "$1")"; fi
   reply="$(internal_api POST /internal/cert/ca "$body")"
@@ -150,8 +150,8 @@ set_ca() {    # set_ca <CA 파일|-(걷어 내기)>  → 작업이 끝난 상태
 cert_field() { internal_api GET /internal/cert | cut -d' ' -f2- | json_get "d[\"$1\"]"; }
 fp() { openssl x509 -noout -fingerprint -sha256 2>/dev/null; }
 gitea_ca() { docker exec ws-gitea cat /etc/ssl/certs/jw-site-ca.pem 2>/dev/null | fp; }
-# backend 가 접속 주소의 인증서를 믿는가 — backend 프로세스(PID 1)가 받은 CA 묶음(SSL_CERT_FILE)으로 nginx 에 TLS 를 맺어 본다.
-# 프로세스의 환경은 같은 사용자(appuser)만 읽을 수 있다
+# backend 가 접속 주소의 인증서를 신뢰하는지 확인 — backend 프로세스(PID 1)가 전달받은 CA 번들(SSL_CERT_FILE)로 nginx 에 TLS 연결을 시도한다.
+# 프로세스의 환경은 동일 사용자(appuser)만 읽을 수 있다
 backend_trusts() {
   docker exec -i -u appuser -e E2E_HOST="$E2E_DOMAIN" ws-backend sh -c 'f="$(tr "\0" "\n" < /proc/1/environ | sed -n "s/^SSL_CERT_FILE=//p")"; [ -n "$f" ] && export SSL_CERT_FILE="$f"; exec python -' <<'PY'
 import os, socket, ssl

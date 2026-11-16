@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# S10 격리 브라우저 — 기본 + 회의 + 격리 브라우저 애드온으로 설치하고, 대상으로 쓸 임시 웹 서버를 띄워 등록한다.
-#   · .env 의 RBI_PROTECTED 에 이 서버의 주소와 기본 게이트웨이가 적혔는가
-#   · 서버 자신을 가리키는 대상은 강제 없이는 거부된다(backend 가 저장 때 막는다)
+# S10 격리 브라우저 — 기본 + 회의 + 격리 브라우저 애드온으로 설치하고, 대상으로 사용할 임시 웹 서버를 기동하여 등록한다.
+#   · .env 의 RBI_PROTECTED 에 이 서버의 주소와 기본 게이트웨이가 기록되었는가
+#   · 서버 자신을 가리키는 대상은 강제 지정 없이는 거부된다(backend 가 저장 시 차단한다)
 #   · LAN 의 다른 호스트를 가리키는 대상은 그대로 저장된다
-# 세션 화면에 대상이 실제로 그려지는지는 이 설치를 남겨 둔 채 이 PC 에서 rbi-session-ui.cjs 로 본다(미러·픽셀, 화면 캡처).
-# 회의 구역은 잡음 제거 화면 검수(meeting-noise-ui.cjs)가 같은 설치를 쓰려고 함께 켠다.
+# 세션 화면에 대상이 실제로 렌더링되는지는 본 설치를 유지한 상태에서 이 PC 의 rbi-session-ui.cjs 로 확인한다(미러·픽셀, 화면 캡처).
+# 회의 구역은 잡음 제거 화면 검수(meeting-noise-ui.cjs)가 동일 설치를 사용하도록 함께 활성화한다.
 #
-# 대상 웹 서버는 "LAN 의 다른 호스트" 여야 한다 — 세션 컨테이너는 이 서버 자신에게 닿지 못한다(호스트 INPUT 을 막는다. 도커 대역도 대상이
-# 될 수 없다). 그래서 네트워크 이름공간 하나를 따로 만들어(veth 한 쌍, 대역 E2E_RBI_NET) 그 안에서 웹 서버를 띄운다.
+# 대상 웹 서버는 "LAN 의 다른 호스트" 여야 한다 — 세션 컨테이너는 이 서버 자신에 도달할 수 없다(호스트 INPUT 을 차단한다. 도커 대역도 대상이
+# 될 수 없다). 따라서 네트워크 네임스페이스 하나를 별도 생성하여(veth 한 쌍, 대역 E2E_RBI_NET) 그 안에서 웹 서버를 기동한다.
 #
-# 사용: s10-rbi.sh          설치 + 대상 등록(설치와 대상 웹 서버를 남긴다)
-#       s10-rbi.sh post     화면 검수 뒤 — 격리 규칙에 대상이 실렸는지, 세션 컨테이너가 남지 않았는지
-#       s10-rbi.sh down     대상 웹 서버를 지운다
+# 사용: s10-rbi.sh          설치 + 대상 등록(설치와 대상 웹 서버를 유지한다)
+#       s10-rbi.sh post     화면 검수 후 — 격리 규칙에 대상이 반영되었는지, 세션 컨테이너가 잔존하지 않는지 확인
+#       s10-rbi.sh down     대상 웹 서버를 삭제한다
 . "$(dirname "$0")/../lib.sh"
 TARGET_PORT=8088
 TARGET_NS=jwe2etgt
-TARGET_NET="${E2E_RBI_NET:-10.211.77}"          # /24 의 앞 세 자리 — 이 서버가 쓰지 않는 사설 대역
+TARGET_NET="${E2E_RBI_NET:-10.211.77}"          # /24 의 앞 세 옥텟 — 이 서버가 사용하지 않는 사설 대역
 TARGET_ADDR="$TARGET_NET.2"
 TARGET_DIR="$E2E_WORK/rbi-target"
 TARGET_MARK="JW-RBI-TARGET-4711"
@@ -41,7 +41,7 @@ if [ "${1:-}" = post ]; then
 ' ' ')"
   modes="$(ws_api GET /api/admin/rbi/sessions | json_get '" ".join(sorted({s["mode"] for s in (d["sessions"] if isinstance(d, dict) else d)}))')"
   expect "끝난 세션의 방식(미러·픽셀)" "mirror pixel" "$modes"
-  # 세션 브리지에서 이 서버 자신으로 가는 길은 막혀 있다
+  # 세션 브리지에서 이 서버 자신으로 향하는 경로는 차단되어 있다
   check "호스트 INPUT 에 세션 브리지 DROP" bash -c "docker exec ws-rbi-netfilter iptables -S INPUT | grep -q -- '-i br-wsrbi -j DROP'"
   finish
 fi
@@ -50,7 +50,7 @@ target_down
 e2e_reset
 say "설치 관리자 시작"
 check "설치 관리자 기동" installer_start
-# 픽셀 방식의 세션 이미지는 남의 이미지다 — 세션을 처음 열 때 받느라 멈추지 않게 미리 받는다
+# 픽셀 방식의 세션 이미지는 외부 이미지(third-party)이다 — 최초 세션 시 pull 로 지연되지 않도록 사전에 pull 한다
 PIXEL_IMAGE="$(sed -n 's/^ *rbi_image: str = "\(.*\)".*/\1/p' "$E2E_REPO/backend/app/config.py")"
 check "픽셀 세션 이미지($PIXEL_IMAGE)" bash -c "docker image inspect '$PIXEL_IMAGE' >/dev/null 2>&1 || docker pull -q '$PIXEL_IMAGE' >/dev/null"
 check "미러 세션 이미지" docker image inspect "localhost/just-workspace-rbi-mirror:$E2E_VERSION"

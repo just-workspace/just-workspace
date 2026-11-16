@@ -1,19 +1,19 @@
-"""경로 — 컨테이너 안 경로와 호스트 경로를 한곳에서 정한다.
+"""경로 — 컨테이너 내 경로와 호스트 경로를 단일 위치에서 정의한다.
 
-설치 관리자는 컨테이너 안에서 돌고, `docker compose` 가 만드는 컨테이너는 호스트에서 돈다.
-같은 폴더를 두 이름으로 부르게 되므로 어느 쪽 이름인지 헷갈리지 않게 여기서만 만든다.
+설치 관리자는 컨테이너 내에서 실행되고, `docker compose` 가 생성하는 컨테이너는 호스트에서 실행된다.
+동일 폴더가 두 이름으로 지칭되므로 혼동을 방지하기 위해 본 모듈에서만 생성한다.
 
-| 뜻 | 컨테이너 안 | 호스트 |
+| 의미 | 컨테이너 내 | 호스트 |
 |---|---|---|
-| 데이터 뿌리 | `/data` (`Paths.data`) | `$JW_HOST_DIR` (`Paths.host_dir`) |
+| 데이터 루트 | `/data` (`Paths.data`) | `$JW_HOST_DIR` (`Paths.host_dir`) |
 | 스택(compose·설정·.env) | `/data/stack` (`Paths.stack`) | `$JW_HOST_DIR/stack` (`Paths.host_stack`) |
-| 상태·로그·비밀 답변 | `/data/state` (`Paths.state`) | `$JW_HOST_DIR/state` |
+| 상태·로그·비밀 응답 | `/data/state` (`Paths.state`) | `$JW_HOST_DIR/state` |
 
-- 설치 관리자 프로세스가 **파일을 읽고 쓸 때**는 컨테이너 안 경로를 쓴다.
-- docker 데몬이 해석하는 값(bind mount 의 출발지, compose 의 `--project-directory`)에는 **호스트 경로**를 쓴다.
-- compose 는 서비스의 `env_file: .env` 를 `--project-directory` 기준으로 **compose 를 실행한 쪽에서** 읽는다.
-  그래서 기동할 때 컨테이너 안에 `$JW_HOST_DIR` → `/data` 심볼릭 링크를 만들어, 호스트 경로 문자열이
-  컨테이너 안에서도 같은 파일을 가리키게 한다(`ensure_host_alias`).
+- 설치 관리자 프로세스가 **파일을 읽고 쓸 때**는 컨테이너 내 경로를 사용한다.
+- docker 데몬이 해석하는 값(bind mount 의 원본 경로, compose 의 `--project-directory`)에는 **호스트 경로**를 사용한다.
+- compose 는 서비스의 `env_file: .env` 를 `--project-directory` 기준으로 **compose 를 실행한 측에서** 읽는다.
+  따라서 기동 시 컨테이너 내에 `$JW_HOST_DIR` → `/data` 심볼릭 링크를 생성하여, 호스트 경로 문자열이
+  컨테이너 내에서도 동일 파일을 가리키도록 한다(`ensure_host_alias`).
 """
 
 from __future__ import annotations
@@ -24,16 +24,16 @@ from pathlib import Path, PurePosixPath
 
 DEFAULT_DATA = "/data"
 DEFAULT_BUNDLE = "/app/bundle"
-PROJECT_NAME = "just-workspace"       # compose 프로젝트 이름(폴더 이름 stack 을 따르지 않게 고정)
+PROJECT_NAME = "just-workspace"       # compose 프로젝트 이름(폴더 이름 stack 을 따르지 않도록 고정)
 NETWORK_NAME = f"{PROJECT_NAME}_workspace"
-SITE_COMPOSE = "docker-compose.site.yml"   # 리포의 compose 에 덧붙이는 사이트별 조각(렌더링이 만든다)
+SITE_COMPOSE = "docker-compose.site.yml"   # 리포의 compose 에 추가하는 사이트별 조각(렌더링이 생성)
 
 
 @dataclass(frozen=True)
 class Paths:
-    data: Path              # 컨테이너 안 데이터 뿌리
-    host_dir: str           # 같은 폴더의 호스트 경로(POSIX 문자열)
-    bundle: Path | None     # 이미지에 든 번들. None 이면 리포에서 직접 읽는다(개발·테스트)
+    data: Path              # 컨테이너 내 데이터 루트
+    host_dir: str           # 동일 폴더의 호스트 경로(POSIX 문자열)
+    bundle: Path | None     # 이미지에 포함된 번들. None 이면 리포에서 직접 읽음(개발·테스트)
 
     @property
     def stack(self) -> Path:
@@ -78,9 +78,9 @@ class HostAliasError(RuntimeError):
 
 
 def ensure_host_alias(paths: Paths) -> None:
-    """컨테이너 안에 `$JW_HOST_DIR` → 데이터 뿌리 심볼릭 링크를 만든다(이미 같으면 그대로).
+    """컨테이너 내에 `$JW_HOST_DIR` → 데이터 루트 심볼릭 링크를 생성한다(이미 동일하면 유지).
 
-    호스트 경로가 컨테이너 안에 이미 다른 것으로 있으면(예: `/usr`) 설치를 계속할 수 없다.
+    호스트 경로가 컨테이너 내에 이미 다른 대상으로 존재하면(예: `/usr`) 설치를 계속할 수 없다.
     """
     host = PurePosixPath(paths.host_dir)
     if not host.is_absolute():

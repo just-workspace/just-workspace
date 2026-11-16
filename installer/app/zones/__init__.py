@@ -1,24 +1,24 @@
 """구역 설치 훅.
 
-구역마다 세 가지 일을 한다. 구역 전용 모듈(`app/zones/<구역 id>.py`)이 있으면 그 모듈의 함수를,
-없으면 기본 동작을 쓴다. 모듈은 필요한 함수만 정의하면 된다(없는 것은 기본 동작).
+구역마다 세 가지 작업을 수행한다. 구역 전용 모듈(`app/zones/<구역 id>.py`)이 있으면 해당 모듈의 함수를,
+없으면 기본 동작을 사용한다. 모듈은 필요한 함수만 정의한다(미정의 함수는 기본 동작).
 
-    install(ctx, zone_id)   컨테이너를 띄우고 초기 설정을 한다
-    connect(ctx, zone_id)   워크스페이스와 잇는다(로그인 연동, 토큰, 앞단 경로 확인)
-    remove(ctx, zone_id)    연결을 끊고 컨테이너를 멈춘다 — **데이터 볼륨은 남긴다**
+    install(ctx, zone_id)   컨테이너를 기동하고 초기 설정을 수행한다
+    connect(ctx, zone_id)   워크스페이스와 연결한다(로그인 연동, 토큰, 프런트 경로 확인)
+    remove(ctx, zone_id)    연결을 해제하고 컨테이너를 중지한다 — **데이터 볼륨은 보존한다**
 
-기본 동작: 그 구역의 compose 서비스(`zones.json` 의 services 중 지금 프로파일에서 켜지는 것)를
-`docker compose up -d` 로 띄우고 준비될 때까지 기다린다. connect 는 할 일이 없고, remove 는 멈추고 지운다.
+기본 동작: 해당 구역의 compose 서비스(`zones.json` 의 services 중 현재 프로파일에서 활성화되는 것)를
+`docker compose up -d` 로 기동하고 준비 완료까지 대기한다. connect 는 수행할 작업이 없고, remove 는 중지 후 삭제한다.
 
-`ctx` 는 app/engine.py 의 `Context` — 훅이 쓰는 것:
+`ctx` 는 app/engine.py 의 `Context` — 훅이 사용하는 항목:
     ctx.zone_services(zone_id)  ctx.up(services)  ctx.wait_ready(container)  ctx.stop(services)
-    ctx.docker.exec(container, argv, user=…, env_file=…, input=…)   인자 배열로만 부른다
+    ctx.docker.exec(container, argv, user=…, env_file=…, input=…)   인자 배열로만 호출한다
     ctx.http.get(url, headers)  내부망의 서비스에 요청
-    ctx.set_env(KEY=value)      `.env` 에 넣을 값(끝나면 backend 를 한 번 다시 띄운다)
+    ctx.set_env(KEY=value)      `.env` 에 기록할 값(완료 후 backend 를 1회 재기동한다)
     ctx.secrets()  ctx.answers  ctx.plan  ctx.log(text)  ctx.warn(key, **vars)
-실패는 `StepError(cause, fix, **vars)` 로 알린다.
+실패는 `StepError(cause, fix, **vars)` 로 통지한다.
 
-훅은 여러 번 불려도 같은 결과가 나와야 한다(실패한 단계부터 다시 돌린다).
+훅은 반복 호출되어도 동일한 결과를 내야 한다(실패한 단계부터 재실행한다).
 """
 
 from __future__ import annotations
@@ -27,11 +27,11 @@ import importlib
 from types import SimpleNamespace
 
 ZONE_START_TIMEOUT = 300
-PENDING = "pending.json"      # 구역 id → {"reason", "since"} — 켜져 있지만 연결(로그인 연동)을 걸지 못한 구역
+PENDING = "pending.json"      # 구역 id → {"reason", "since"} — 활성화되어 있으나 연결(로그인 연동)을 설정하지 못한 구역
 
 
 def pending(store) -> dict:
-    """연결이 보류된 구역. 인증서를 바꾼 뒤(또는 "다시 연결"로) 다시 시도한다."""
+    """연결이 보류된 구역. 인증서 교체 후(또는 "다시 연결"로) 재시도한다."""
     return store.read(PENDING, {}) or {}
 
 
@@ -75,7 +75,7 @@ def default_remove(ctx, zone_id: str) -> None:
 
 
 def get(zone_id: str) -> SimpleNamespace:
-    """구역의 훅 묶음(install·connect·remove)."""
+    """구역의 훅 집합(install·connect·remove)."""
     if not zone_id.replace("_", "").isalnum():
         raise ValueError(f"구역 id 가 올바르지 않습니다: {zone_id!r}")
     try:

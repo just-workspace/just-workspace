@@ -1,18 +1,18 @@
-"""구역 목록·메모리·포트 — `zones.json` 을 읽어 계산만 한다(선언을 여기 복제하지 않는다)."""
+"""구역 목록·메모리·포트 — `zones.json` 을 읽어 계산만 수행한다(선언을 본 모듈에 복제하지 않는다)."""
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
 
-MIN_MEMORY_MB = 4096          # 이보다 작은 서버는 사전 점검에서 실패
-# "4GB 서버"의 실제 MemTotal 은 커널·펌웨어 몫을 뺀 3.7~3.9GB 다. 1GB 단위로 올림한 값이 실측과
-# 이 비율 안에 있으면 그 올림값을 서버의 명목 메모리로 본다.
+MIN_MEMORY_MB = 4096          # 이 값 미만의 서버는 사전 점검에서 실패
+# "4GB 서버"의 실제 MemTotal 은 커널·펌웨어 점유분을 제외한 3.7~3.9GB 이다. 1GB 단위로 올림한 값과 실측의 차이가
+# 이 비율 이내이면 해당 올림값을 서버의 명목 메모리로 간주한다.
 NOMINAL_TOLERANCE = 0.08
 
 
 def nominal_memory_mb(actual_mb: int) -> int:
-    """실측 메모리 → 명목 메모리(1GB 단위 올림, 차이가 8% 안일 때만)."""
+    """실측 메모리 → 명목 메모리(1GB 단위 올림, 차이가 8% 이내인 경우에만)."""
     if actual_mb <= 0:
         return 0
     rounded = math.ceil(actual_mb / 1024) * 1024
@@ -23,9 +23,9 @@ def nominal_memory_mb(actual_mb: int) -> int:
 
 @dataclass(frozen=True)
 class MemoryVerdict:
-    need_mb: int          # 고른 구역의 권장 합계(기본 포함)
+    need_mb: int          # 선택한 구역의 권장 합계(기본 포함)
     have_mb: int          # 서버 실측
-    nominal_mb: int       # 판정에 쓴 명목 값
+    nominal_mb: int       # 판정에 사용한 명목 값
     ok: bool
     below_minimum: bool
 
@@ -77,7 +77,7 @@ class Catalog:
         return total
 
     def profiles(self, selected) -> list[str]:
-        """고른 구역의 compose 프로파일 합집합(선언 순서, 중복 제거)."""
+        """선택한 구역의 compose 프로파일 합집합(선언 순서, 중복 제거)."""
         out: list[str] = []
         for zone_id in self.ordered(selected):
             for profile in self.get(zone_id).get("compose_profiles", []):

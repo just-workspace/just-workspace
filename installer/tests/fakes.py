@@ -1,4 +1,4 @@
-"""가짜 docker — 어떤 명령이 어떤 순서로 나갔는지 기록하고, 정해 둔 답을 돌려준다."""
+"""모의 docker — 전달된 명령과 그 순서를 기록하고, 사전에 지정한 응답을 반환한다."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from app.paths import Paths
 
 
 def seq(*tokens: str):
-    """argv 안에 tokens 가 이 순서로 나오면 참(사이에 다른 인자가 있어도 된다)."""
+    """argv 안에 tokens 가 이 순서로 나타나면 참(사이에 다른 인자가 있어도 무방하다)."""
     def match(argv: list[str]) -> bool:
         i = 0
         for arg in argv:
@@ -27,7 +27,7 @@ class FakeRunner:
         self.rules: list[tuple] = []
 
     def on(self, *tokens: str, out: str = "", rc: int = 0, err: str = "", fn=None, lines: list[str] | None = None):
-        """tokens 가 순서대로 든 명령에 대한 답. 나중에 건 규칙이 먼저 본다(덮어쓰기)."""
+        """tokens 가 순서대로 포함된 명령에 대한 응답. 나중에 등록한 규칙이 먼저 적용된다(덮어쓰기)."""
         self.rules.insert(0, (seq(*tokens), out, rc, err, fn, lines))
         return self
 
@@ -87,7 +87,7 @@ DOCKER_INFO = {
 
 def healthy_host(runner: FakeRunner, *, info: dict | None = None, ports: dict | None = None,
                  routes: list | None = None, networks: dict | None = None, free_gb: float = 200) -> FakeRunner:
-    """사전 점검이 전부 통과하는 서버."""
+    """사전 점검을 전부 통과하는 서버."""
     runner.on("info", "--format", out=json.dumps({**DOCKER_INFO, **(info or {})}))
     runner.on("compose", "version", "--short", out="2.29.7\n")
     runner.on("app.helper", "disk", out=json.dumps({"free_bytes": int(free_gb * 1024 ** 3)}) + "\n")

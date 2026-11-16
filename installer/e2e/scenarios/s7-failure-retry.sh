@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # S7 실패와 재시도.
-#   token    설치 토큰: 틀림 · 다시 발급 · 만료 · 다섯 번 틀리면 잠시 거절
-#   image    이미지 하나를 못 받는다 → 그 단계 실패·원인 키 → 고친 뒤 retry 로 그 단계부터
+#   token    설치 토큰: 불일치 · 재발급 · 만료 · 5회 불일치 시 일시 거부
+#   image    이미지 하나의 pull 실패 → 해당 단계 실패·원인 키 → 수정 후 retry 로 해당 단계부터 재개
 #   restart  적용 도중 설치 관리자를 재시작 → 이어서 완료
 #   cert     인증서 auto → 발급 실패 → use_temporary_cert 로 계속
 # 사용: s7-failure-retry.sh [token|image|restart|cert|all]
@@ -60,7 +60,7 @@ PY
   expect "잠금이 풀리면 맞는 토큰은 된다" 200 "$(session_code "$T3")"
 fi
 
-# ─── 이미지 하나를 못 받는다 ───
+# ─── 이미지 하나의 pull 실패 ───
 if want image; then
   MISSING="0.0.0-e2e-missing"
   e2e_reset

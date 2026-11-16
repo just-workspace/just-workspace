@@ -1,4 +1,4 @@
-"""업데이트 엔진 — 확인·계획, 단계와 실패 분기, 되돌림, 자기 교체, 자동 업데이트, 복원 지점, 기록."""
+"""업데이트 엔진 — 확인·계획, 단계와 실패 분기, 롤백, 자기 교체, 자동 업데이트, 복원 지점, 기록."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def host(tmp_path, monkeypatch) -> UpdateHost:
 
 
 def ready(host: UpdateHost, *versions: str, **publish):
-    """키를 넣고 릴리스를 게시한 뒤 확인까지 마친 엔진."""
+    """키를 설치하고 릴리스를 게시한 뒤 확인까지 완료한 엔진."""
     host.install_keys()
     for version in versions:
         host.releases.publish(version, **publish)
@@ -43,7 +43,7 @@ def test_check_without_public_key_is_unconfigured(host):
     st = mgr.status()
     assert st["check"]["ok"] is False and st["check"]["error"]["code"] == "unconfigured"
     assert st["available"] == {"state": "none"}
-    assert host.releases.fetched == []                # 키가 없으면 받으러 가지도 않는다
+    assert host.releases.fetched == []                # 키가 없으면 조회 자체를 수행하지 않는다
 
 
 def test_check_finds_update_and_sends_nothing_but_gets(host):
@@ -58,7 +58,7 @@ def test_check_finds_update_and_sends_nothing_but_gets(host):
     assert host.releases.fetched[0] == f"{BASE}/channels/stable.json"
     assert all(url.startswith(BASE) and "?" not in url for url in host.releases.fetched)
     assert mgr.check_raw()["sequence"]["stable"] == host.releases.channels["stable"].sequence
-    assert mgr.settings_raw()["next_check_at"] > mgr.iso()         # 다음 확인은 여섯 시간 뒤(+흔들림)
+    assert mgr.settings_raw()["next_check_at"] > mgr.iso()         # 다음 확인은 6시간 후(+지터)
 
 
 def test_plan_none_wait_blocked_and_path(host):
@@ -72,7 +72,7 @@ def test_plan_none_wait_blocked_and_path(host):
     host.releases.publish("1.0.5")
     mgr.check()
     assert mgr.status()["available"]["path"] == ["1.0.5", "1.1.0"]
-    # Beta 를 쓰다가 Stable 로 돌아온 직후 — 채널의 최신이 현재보다 낮다
+    # Beta 사용 후 Stable 로 복귀한 직후 — 채널의 최신 버전이 현재보다 낮다
     mgr._write("current.json", {"version": "1.2.0-beta.1", "applied_at": None, "previous_version": None})
     mgr.check()
     assert mgr.status()["available"] == {"state": "wait", "channel_latest": "1.1.0", "resume_from": "1.2.0"}
@@ -114,7 +114,7 @@ def test_check_rejects_bad_channel_and_keeps_last_good_result(host, case, code, 
         mgr.check()
         good = mgr.status()["available"]
         files.clear()
-        files.update(old)                              # 옛 채널 파일을 다시 내민다
+        files.update(old)                              # 이전 채널 파일을 다시 제공한다
     elif case == "manifest_tampered":
         host.releases.publish("1.0.2")
         files[f"{BASE}/releases/1.0.2/manifest.json"] += b" "
@@ -129,7 +129,7 @@ def test_check_rejects_bad_channel_and_keeps_last_good_result(host, case, code, 
     st = mgr.status()
     assert st["check"]["ok"] is False and st["check"]["error"]["code"] == code
     assert st["check"]["error"].get("kind", "") == kind
-    assert st["available"] == good                    # 실패한 확인은 마지막으로 성공한 결과를 지우지 않는다
+    assert st["available"] == good                    # 실패한 확인은 마지막 성공 결과를 삭제하지 않는다
 
 
 def test_two_public_keys_current_and_next(host):
@@ -138,7 +138,7 @@ def test_two_public_keys_current_and_next(host):
     next_key = ec.generate_private_key(ec.SECP256R1())
     host.install_keys(name="1-current.pub")
     host.install_keys(sign.public_key_pem(next_key), name="2-next.pub")
-    host.releases.publish("1.0.1", key=next_key)       # 다음 키로 서명한 릴리스도 받는다
+    host.releases.publish("1.0.1", key=next_key)       # 다음 키로 서명한 릴리스도 수용한다
     mgr = host.manager()
     mgr.check()
     assert mgr.status()["available"]["version"] == "1.0.1"
@@ -158,7 +158,7 @@ def test_window_and_pull_percent():
 
 def test_manual_update_runs_all_steps_and_hands_over_to_the_new_installer(host):
     mgr = ready(host, "1.0.0", "1.0.1", db_schema=2)
-    with pytest.raises(Killed):                       # switch 끝에서 옛 설치 관리자가 멈춘다
+    with pytest.raises(Killed):                       # switch 종료 시점에 이전 설치 관리자가 종료된다
         mgr.apply("1.0.1", "now", {"id": "u1", "name": "관리자"})
     job = mgr.active()
     assert steps(job) == {"preflight": "done", "backup": "done", "pull": "done", "migrate": "done",
@@ -169,7 +169,7 @@ def test_manual_update_runs_all_steps_and_hands_over_to_the_new_installer(host):
     assert swap[swap.index("--image") + 1] == "localhost/just-workspace-installer:1.0.1"
     assert swap[swap.index("--expect-version") + 1] == "1.0.1" and "/var/run/docker.sock:/var/run/docker.sock" in swap
 
-    new = host.manager(own_version="1.0.1")           # 새 설치 관리자가 떠서 이어받는다
+    new = host.manager(own_version="1.0.1")           # 새 설치 관리자가 기동되어 작업을 인계받는다
     assert new.resume() is True
     job = new.job_raw(job["id"])
     assert job["status"] == "done" and set(steps(job).values()) == {"done"}
@@ -185,14 +185,14 @@ def test_manual_update_runs_all_steps_and_hands_over_to_the_new_installer(host):
              r.index("run", "app.update_swap")]
     assert order == sorted(order)                      # backend 는 맨 마지막, 그 뒤에 설치 관리자
     pulled = [c[-1] for c in r.find("pull")]
-    assert pulled[0].startswith("registry.example.com/jw/just-workspace-installer@sha256:")     # 번들이 든 이미지부터
-    assert any(p.startswith("onlyoffice/documentserver@") for p in pulled)                      # 켜진 구역의 남의 이미지
-    assert not any("gitea" in p for p in pulled)                                                # 꺼진 구역은 받지 않는다
+    assert pulled[0].startswith("registry.example.com/jw/just-workspace-installer@sha256:")     # 번들을 포함한 이미지부터
+    assert any(p.startswith("onlyoffice/documentserver@") for p in pulled)                      # 활성 구역의 외부 이미지(third-party)
+    assert not any("gitea" in p for p in pulled)                                                # 비활성 구역은 pull 하지 않는다
     assert "localhost/just-workspace-backend:1.0.1" in host.images
     migrate = r.find("compose", "run", "backend", "migrate")[0]
-    assert migrate.count("--env-file") == 2            # .env 위에 새 버전만 덮어 새 backend 이미지로 돌린다
+    assert migrate.count("--env-file") == 2            # .env 에 새 버전만 덮어써 새 backend 이미지로 실행한다
 
-    assert host.flag_seen == [True]                    # 백업을 뜨기 전에 점검 모드
+    assert host.flag_seen == [True]                    # 백업 생성 전에 점검 모드 진입
     assert not mgr.flag_path().exists()
     assert host.event_types() == ["maintenance", "finished"]
     assert host.posts[0]["_key"] and host.posts[-1]["result"] == "success" and host.posts[-1]["version"] == "1.0.1"
@@ -214,7 +214,7 @@ def test_manual_update_runs_all_steps_and_hands_over_to_the_new_installer(host):
 
 def test_countdown_cancel_and_start_now(host):
     mgr = ready(host, "1.0.0", "1.0.1")
-    spawn, mgr._spawn = mgr._spawn, lambda job_id: None          # 예고 상태에서 멈춰 둔다
+    spawn, mgr._spawn = mgr._spawn, lambda job_id: None          # 사전 공지 상태에서 정지시켜 둔다
     job = mgr.apply("1.0.1", "countdown", None)
     assert job["status"] == "countdown" and job["countdown"]["seconds"] == 300
     assert mgr.maintenance() == {"active": False, "phase": "countdown", "kind": "update", "started_at": None,
@@ -290,12 +290,12 @@ def test_pull_failure_waits_for_choice_then_retry(host):
     assert job["error"]["vars"]["image"] == "backend"
     images = {i["name"]: i["status"] for i in job["steps"][2]["detail"]["images"]}
     assert images["installer"] == "done" and images["backend"] == "failed"
-    assert mgr.maintenance()["active"] is True and mgr.status()["job"]["id"] == job["id"]      # 선택을 기다리는 동안 점검 유지
+    assert mgr.maintenance()["active"] is True and mgr.status()["job"]["id"] == job["id"]      # 선택 대기 중에는 점검 모드 유지
     assert host.env_version() == "1.0.0" and host.event_types() == ["maintenance"]
     host.fail_pull = set()
     with pytest.raises(Killed):
         mgr.action(job["id"], "retry", None)
-    assert len(host.runner.find("exec", "ws-backend", "backup", "create")) == 1                # 끝난 단계는 다시 돌지 않는다
+    assert len(host.runner.find("exec", "ws-backend", "backup", "create")) == 1                # 완료된 단계는 재실행되지 않는다
     mgr, _ = run_to_end(host, mgr, lambda m: m.active())
     assert mgr.job_raw(job["id"])["status"] == "done" and mgr.current()["version"] == "1.0.1"
 
@@ -315,10 +315,10 @@ def test_pull_failure_then_rollback_changes_nothing(host):
     assert mgr.active() is None and mgr.maintenance()["active"] is False and mgr.current()["version"] == "1.0.0"
     row = mgr.history_entry(job["id"])
     assert row["result"] == "rolled_back" and row["version"] == "1.0.0" and row["rollback"]["result"] == "done"
-    assert len(mgr.history()["items"]) == 1            # 되돌림은 따로 줄을 만들지 않는다
+    assert len(mgr.history()["items"]) == 1            # 롤백은 별도 기록 행을 생성하지 않는다
     assert host.posts[-1]["type"] == "finished" and host.posts[-1]["result"] == "rolled_back"
     assert host.posts[-1]["failed_step"] == "pull"
-    assert mgr.status()["available"]["state"] == "update"      # 받을 버전은 그대로 남는다
+    assert mgr.status()["available"]["state"] == "update"      # 적용 가능한 버전은 그대로 유지된다
 
 
 def test_migrate_failure_rolls_back_automatically_with_db_restore(host):
@@ -327,7 +327,7 @@ def test_migrate_failure_rolls_back_automatically_with_db_restore(host):
     job = mgr.apply("1.0.1", "now", None)
     assert job["status"] == "failed" and job["choices"] == [] and job["error"]["step"] == "migrate"
     assert job["error"]["cause"] == "database_migrate_failed" and "column does not exist" in job["error"]["detail"]
-    rb = mgr.job_raw(job["rollback_job"])              # 실패한 작업의 응답에 되돌림 작업이 이미 실려 있다
+    rb = mgr.job_raw(job["rollback_job"])              # 실패한 작업의 응답에 롤백 작업이 이미 포함되어 있다
     assert rb["status"] == "done" and set(steps(rb).values()) == {"done"}
     r = host.runner
     restore = r.find("compose", "run", "backend", "restore")[0]
@@ -338,13 +338,13 @@ def test_migrate_failure_rolls_back_automatically_with_db_restore(host):
              r.index("compose", "up", "--force-recreate", "nginx"), r.index("compose", "up", "backend")]
     assert order == sorted(order)
     assert host.schema == 1 and host.env_version() == "1.0.0" and mgr.current()["version"] == "1.0.0"
-    assert r.find("run", "app.update_swap") == []      # 설치 관리자는 아직 바뀌지 않았다 — 되돌릴 것도 없다
+    assert r.find("run", "app.update_swap") == []      # 설치 관리자는 아직 교체되지 않았다 — 롤백 대상도 없다
     assert mgr.history_entry(job["id"])["result"] == "rolled_back"
-    assert mgr.status()["auto"]["paused"] is False     # 수동 업데이트의 실패는 자동 업데이트를 멈추지 않는다
+    assert mgr.status()["auto"]["paused"] is False     # 수동 업데이트의 실패는 자동 업데이트를 일시 중지시키지 않는다
 
 
 def test_verify_failure_in_new_installer_rolls_back_and_swaps_installer_back(host):
-    # 설치 관리자를 띄울 때 사용자가 준 환경변수 — 복원 지점에 적어 두었다가 되돌아올 때 그대로 쓴다
+    # 설치 관리자 기동 시 사용자가 지정한 환경변수 — 복원 지점에 기록해 두었다가 롤백 시 그대로 사용한다
     host.runner.on("container", "inspect", "jw-self", out=json.dumps([{
         "Image": "sha256:selfimage", "NetworkSettings": {"Networks": {}},
         "Config": {"Env": ["PATH=/usr/bin", "JW_UPDATE_CHANNEL_URL=https://mirror.example.com", "JW_INSTALLER_VERSION=1.0.0"]}}]))
@@ -356,7 +356,7 @@ def test_verify_failure_in_new_installer_rolls_back_and_swaps_installer_back(hos
     job_id = mgr.active()["id"]
     host.http.responses["http://backend:8000/api/health"] = 500
     new = host.manager(own_version="1.0.1")
-    with pytest.raises(Killed):                        # 되돌림의 start 끝에서 새 설치 관리자가 멈춘다
+    with pytest.raises(Killed):                        # 롤백의 start 종료 시점에 새 설치 관리자가 종료된다
         new.resume()
     job = new.job_raw(job_id)
     assert job["error"]["step"] == "verify" and job["error"]["cause"] == "health_check_failed"
@@ -379,7 +379,7 @@ def test_installer_replace_failure_is_recorded_by_the_old_installer(host):
         mgr.apply("1.0.1", "now", None)
     job_id = mgr.active()["id"]
     (mgr.dir / "swap-result.json").write_text(json.dumps({"ok": False, "error": "new container not ready"}))
-    old = host.manager(own_version="1.0.0")            # 보조 컨테이너가 옛 컨테이너를 되살렸다
+    old = host.manager(own_version="1.0.0")            # 보조 컨테이너가 이전 컨테이너를 복원했다
     old.resume()
     job = old.job_raw(job_id)
     assert job["error"]["step"] == "switch" and job["error"]["cause"] == "installer_replace_failed"
@@ -410,7 +410,7 @@ def test_rollback_failure_is_reported_honestly_and_can_be_retried(host):
     host.fail_restore = False
     done = mgr.action(rb["id"], "retry", None)
     assert done["status"] == "done" and mgr.history_entry(job["id"])["result"] == "rolled_back"
-    assert host.runner.find("compose", "stop").__len__() == 1      # 끝난 단계는 다시 돌지 않는다
+    assert host.runner.find("compose", "stop").__len__() == 1      # 완료된 단계는 재실행되지 않는다
 
 
 def test_interrupted_step_is_rerun_after_installer_restart(host):
@@ -419,7 +419,7 @@ def test_interrupted_step_is_rerun_after_installer_restart(host):
     job = mgr.apply("1.0.1", "now", None)
     raw = mgr.job_raw(job["id"])
     raw.update(status="running", error=None, choices=[])
-    raw["steps"][2]["status"] = "running"              # pull 도중에 설치 관리자가 죽었다
+    raw["steps"][2]["status"] = "running"              # pull 도중 설치 관리자가 비정상 종료되었다
     mgr._save(raw)
     host.fail_pull = set()
     again = host.manager()
@@ -460,7 +460,7 @@ def test_failure_at_second_version_rolls_back_to_the_first(host):
     mgr.check()
     with pytest.raises(Killed):
         mgr.apply("1.0.2", "now", None)
-    host.fail_migrate = True                            # 둘째 버전의 DB 변경이 깨진다
+    host.fail_migrate = True                            # 둘째 버전의 DB 변경이 실패한다
     mgr, job_id = run_to_end(host, mgr, lambda m: m.active())
     job = mgr.job_raw(job_id)
     assert job["status"] == "failed" and job["version_index"] == 1 and job["error"]["step"] == "migrate"
@@ -488,8 +488,8 @@ def auto_host(host, published_days_ago: float, hour_utc: int = 19):
 
 def test_auto_waits_three_days_and_for_the_window(host):
     mgr = auto_host(host, 2.9)
-    assert mgr.auto_due() is None                       # 공개된 지 3일이 안 됐다
-    host.clock += timedelta(hours=3)                    # 3일은 지났지만 07:00 — 시간대 밖
+    assert mgr.auto_due() is None                       # 공개 후 3일 미경과
+    host.clock += timedelta(hours=3)                    # 3일은 경과했으나 07:00 — 시간대 밖
     assert mgr.auto_due() is None
     host.clock += timedelta(hours=20)                   # 다음 날 03:00
     assert mgr.local_minutes() == 3 * 60 and mgr.auto_due() == "1.0.1"
@@ -520,14 +520,14 @@ def test_auto_failure_rolls_back_at_any_step_and_pauses_until_resumed(host):
     host.fail_pull = {"just-workspace-backend@"}
     mgr.tick()
     job = mgr.job_raw(mgr.history_raw()[0]["id"])
-    assert job["status"] == "failed" and job["choices"] == [] and job["rollback_job"]      # migrate 전이어도 자동 되돌림
+    assert job["status"] == "failed" and job["choices"] == [] and job["rollback_job"]      # migrate 이전이어도 자동 롤백
     st = mgr.status()
     assert st["auto"]["paused"] is True and st["auto"]["reason"] == {"job": job["id"], "step": "pull", "version": "1.0.1"}
     assert st["last_auto"]["result"] == "rolled_back" and st["last_auto"]["failed_step"] == "pull"
     assert host.posts[-1]["trigger"] == "auto" and host.posts[-1]["result"] == "rolled_back"
     host.fail_pull = set()
     mgr.tick()
-    assert mgr.active() is None and len(mgr.history_raw()) == 1       # 멈춰 있는 동안에는 다시 시도하지 않는다
+    assert mgr.active() is None and len(mgr.history_raw()) == 1       # 일시 중지 상태에서는 재시도하지 않는다
     assert mgr.auto_resume()["auto"]["paused"] is False
     assert mgr.auto_due() == "1.0.1"
 
@@ -547,7 +547,7 @@ def test_tick_checks_every_six_hours(host):
     mgr = ready(host, "1.0.0")
     count = len(host.releases.fetched)
     mgr.tick()
-    assert len(host.releases.fetched) == count          # 아직 때가 아니다
+    assert len(host.releases.fetched) == count          # 아직 시점 미도래
     host.clock += timedelta(hours=6, minutes=31)
     mgr.tick()
     assert len(host.releases.fetched) > count
@@ -584,14 +584,14 @@ def test_beta_then_back_to_stable_waits_or_restores(host):
     assert mgr.current()["version"] == "1.1.0-beta.1" and mgr.status()["current"]["channel"] == "beta"
     beta_point = mgr.settings()["beta"]["restore_point"]
     assert beta_point["kind"] == "pre-beta" and beta_point["version"] == "1.0.0"
-    # 일반 복원 지점이 밀려나도 시험판 이전 백업은 남는다
+    # 일반 복원 지점이 순환 제거되어도 시험판 이전 백업은 보존된다
     for n in range(2, 2 + KEEP_POINTS + 1):
         host.releases.publish(f"1.1.0-beta.{n}", channels=("beta",), db_schema=2)
         mgr.check()
         mgr, _ = run_to_end(host, mgr, lambda m, n=n: m.apply(f"1.1.0-beta.{n}", "now", None))
     kinds = [p["kind"] for p in mgr.restore_points()["points"]]
     assert kinds == ["pre-update"] * KEEP_POINTS + ["pre-beta"]
-    assert len(host.runner.find("exec", "ws-backend", "rm", "-rf")) == 1          # 밀려난 백업은 지운다
+    assert len(host.runner.find("exec", "ws-backend", "rm", "-rf")) == 1          # 순환 제거된 백업은 삭제한다
 
     out, started = mgr.put_settings({"channel": "stable", "stable_return": "wait"})
     assert started is False and out["effect"]["channel"] == "to_stable_wait"
@@ -626,7 +626,7 @@ def test_pre_beta_backup_is_dropped_once_stable_catches_up(host):
     mgr.put_settings({"channel": "stable"})
     host.releases.publish("1.1.0")
     mgr.check()
-    assert mgr.status()["available"]["version"] == "1.1.0"        # Stable 이 현재 버전 이상이 됐다
+    assert mgr.status()["available"]["version"] == "1.1.0"        # Stable 이 현재 버전 이상이 되었다
     mgr, _ = run_to_end(host, mgr, lambda m: m.apply("1.1.0", "now", None))
     assert mgr.settings()["beta"] == {"since": None, "restore_point": None}
     assert [p["kind"] for p in mgr.restore_points()["points"]] == ["pre-update"]
@@ -648,7 +648,7 @@ def test_manual_restore_to_a_restore_point(host):
     assert row["kind"] == "restore" and row["result"] == "restored" and row["from_version"] == "1.0.1"
     assert host.posts[-1]["result"] == "restored" and host.posts[-1]["kind"] == "restore"
     mgr.check()
-    assert mgr.status()["available"]["version"] == "1.0.1"        # 다시 올릴 수 있다
+    assert mgr.status()["available"]["version"] == "1.0.1"        # 재업데이트 가능
 
 
 def test_restore_failure_offers_only_retry(host):
@@ -663,7 +663,7 @@ def test_restore_failure_offers_only_retry(host):
 def test_restore_point_with_wrong_schema_is_refused(host):
     mgr = ready(host, "1.0.0", "1.0.1", db_schema=2)
     mgr, _ = run_to_end(host, mgr, lambda m: m.apply("1.0.1", "now", None))
-    host.backup_schema[host.backups[0]] = 7             # 백업 파일이 기록과 다르다
+    host.backup_schema[host.backups[0]] = 7             # 백업 파일이 기록과 불일치한다
     job = mgr.start_restore(mgr.restore_points()["points"][0]["id"], "now", None)
     assert job["error"]["cause"] == "restore_point_schema_mismatch"
     assert host.runner.find("compose", "run", "backend", "restore") == []
@@ -693,7 +693,7 @@ def test_history_keeps_one_year_and_downtime_feeds_the_estimate(host):
     items = mgr.history_raw()
     items[0]["downtime_seconds"] = 150
     mgr._write("history.json", items)
-    assert mgr.estimate_downtime(2) == 300              # 지난 업데이트의 실측 × 버전 수
+    assert mgr.estimate_downtime(2) == 300              # 직전 업데이트의 실측값 × 버전 수
     assert mgr.read_log(job_id) and mgr.read_log(job_id, 2) == mgr.read_log(job_id)[-2:]
     host.clock += timedelta(days=364)
     mgr.prune_history()
@@ -737,11 +737,11 @@ def test_swap_plan_carries_name_ports_volumes_env_and_networks():
     assert argv[argv.index("--restart") + 1] == "unless-stopped" and argv[argv.index("-p") + 1] == "8443:8443/tcp"
     assert [argv[i + 1] for i, a in enumerate(argv) if a == "-v"] == container["HostConfig"]["Binds"]
     envs = [argv[i + 1] for i, a in enumerate(argv) if a == "-e"]
-    # 이미지 기본값·옛 태그는 빼고, 제품 버전을 넣는다(승격한 릴리스의 이미지는 Beta 의 글자를 품고 있다)
+    # 이미지 기본값·이전 태그는 제외하고 제품 버전을 포함한다(승격한 릴리스의 이미지에는 Beta 문자열이 포함되어 있다)
     assert envs == ["JW_HOST_DIR=/opt/just-workspace", "JW_REGISTRY=registry.example.com/jw", "JW_INSTALLER_VERSION=1.0.1"]
     assert argv[argv.index("--network") + 1] == "bridge"
     assert networks == [("just-workspace_workspace", ["jw-installer"])]
-    # 되돌아올 때는 복원 지점에 적어 둔 환경을 그대로 쓴다(지금 컨테이너의 것에서 추리지 않는다)
+    # 롤백 시에는 복원 지점에 기록해 둔 환경을 그대로 사용한다(현재 컨테이너의 환경에서 추출하지 않는다)
     argv, _ = update_swap.plan_create(container, image, "sha256:old", "1.0.0", env=["JW_HOST_DIR=/opt/just-workspace", "JW_IMAGE_TAG=x"])
     assert [argv[i + 1] for i, a in enumerate(argv) if a == "-e"] == ["JW_HOST_DIR=/opt/just-workspace", "JW_INSTALLER_VERSION=1.0.0"]
 

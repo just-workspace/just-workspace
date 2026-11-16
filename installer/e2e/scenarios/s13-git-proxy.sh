@@ -9,11 +9,12 @@ e2e_reset
 check "설치 관리자 기동" installer_start
 install file "$E2E_ROOT/answers/proxy-git.json" || { step_seconds; finish; }
 step_seconds
-check_core
 check "컨테이너 ws-gitea 준비" wait_ready ws-gitea 180
 expect "DEPLOY_MODE" external_proxy "$(env_value DEPLOY_MODE)"
 
+# check_core 는 443(TLS 직접 종단)을 전제로 하므로 사용하지 않는다 — 프록시 하단 구성은 80 평문으로 확인한다
 as_proxy() { curl -s --max-time 30 -H "Host: $E2E_DOMAIN" -H "X-Forwarded-Proto: ${PROTO:-https}" "$@"; }
+expect "/api/health(80, 프록시 경유 역할)" 200 "$(as_proxy -o /dev/null -w '%{http_code}' "http://$E2E_ADDR/api/health")"
 TOKEN="$(env_value GITEA_TOKEN)"
 check "관리 토큰" test -n "$TOKEN"
 gapi() { as_proxy -H "Authorization: token $TOKEN" -H 'Content-Type: application/json' "$@"; }

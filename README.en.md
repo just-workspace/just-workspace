@@ -6,7 +6,7 @@ English · [한국어](README.md)
 
 Just Workspace is a self-hosted collaboration workspace. Files, mail, chat, calendar/contacts/tasks, document editing with a wiki and boards, video meetings, code hosting and an AI assistant are provided under a single account and a single web application. The software is installed on one Linux server running Docker, and only the required features are enabled, in units called "zones".
 
-> **The first release (1.0.0) is in preparation.** Prebuilt images and the update channel have not been published. At present, installation requires building the images from source — see [Project Status](#project-status).
+> **Prebuilt images are published under `ghcr.io/just-workspace/`, and updates are delivered through a signed channel.** The public channel is currently Beta. The Stable channel becomes available with the 1.0.0 release — see [Project Status](#project-status).
 
 Most of the documentation is written in Korean. Issues and pull requests may be submitted in English.
 
@@ -65,13 +65,13 @@ docker run -d --name jw-installer --restart unless-stopped \
 docker logs jw-installer
 ```
 
-The value `1.0.0` in the command above applies after the Stable release. The version is to be taken from the latest entry on the releases page and specified identically in both places; before the Stable release, a published Beta version (for example `1.0.0-beta.2`) is to be specified.
+The value `1.0.0` in the command above is an example of a Stable version. The version is to be taken from the latest entry on the releases page and specified identically in both places. Before the Stable release, a published Beta version (for example `1.0.0-beta.4`) is to be specified; a server installed from a Beta version receives updates from the Beta channel.
 
 Opening the address printed in the log (`https://<server address>:8443/?token=…`) in a browser starts the setup wizard. The installer uses a self-signed certificate, and the browser therefore displays a warning; the SHA-256 fingerprint printed in the log is to be compared before proceeding.
 
 - The host folder given to `-v` and `JW_HOST_DIR` must be the **same path**. This folder is the install folder.
 - `JW_INSTALLER_VERSION` must be set to the same version as the image tag; it is the product version that the installer installs.
-- The image above will be published with the first release. Until then, the images are built from source — [docs/install.md](docs/install.md#소스에서-빌드해-설치).
+- Images are published as `ghcr.io/just-workspace/just-workspace-<name>:<version>`. To install from modified source, the images are built from source — [docs/install.md](docs/install.md#소스에서-빌드해-설치).
 - Unattended installation uses an answers file: `docker exec jw-installer jw apply --answers /data/answers.json`.
 - Starting the stack directly with `docker compose`, without the installer, is also supported — [docs/deployment.md](docs/deployment.md).
 
@@ -113,7 +113,7 @@ All operational tasks are performed from the administration screen. Details are 
 
 ## Project Status
 
-The first public release (1.0.0) is in preparation; the project is currently in its Beta phase. Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+The project is currently in its public Beta phase; the first Stable release is 1.0.0. The self-built images are published under `ghcr.io/just-workspace/`, and the update channel is operated publicly as a signed Beta channel. The Stable channel becomes available with the 1.0.0 release. Changes are recorded per version in [CHANGELOG.md](CHANGELOG.md).
 
 **Verified end to end on a dedicated verification server** ([docs/installer.md](docs/installer.md), section 13):
 
@@ -122,13 +122,15 @@ The first public release (1.0.0) is in preparation; the project is currently in 
 - Certificates issued by a private CA: the code hosting sign-in integration is established when the CA certificate is uploaded together with the certificate, or when the CA certificate alone is uploaded afterwards.
 - Isolated browser: the target page is rendered inside the session in both mirror and pixel mode. The noise suppression toggle in meetings changes the noise suppression setting of the microphone track (Chromium).
 - Updates — manual, automatic, stepping through intermediate versions, rollback on failure, restoring to a restore point, the Beta channel, and offline bundles. Releases were produced with the release tool and served from a test channel inside the server.
+- Public path — on a server installed from the public images (`ghcr.io/just-workspace/`), an update, a restore to a restore point and a repeated update were performed through the public Beta channel (the actual channel files and signing key). Preservation of data (accounts, files, chats, mail, events) was confirmed.
+- Certificates — on a server with a public address, automatic issuance from Let's Encrypt, reissuance and `certbot renew --dry-run` were performed. The document editor was confirmed to open under a temporary (self-signed) certificate.
 - A minimal stack started directly, without the installer.
 
 **Not yet verified:**
 
-- Updates against the actual distribution channel and signing key. The image build workflow has run once, on the first Beta tag; the build target of the backend image was changed afterwards and has not yet been run in that workflow (see "알려진 제한 사항" in [docs/releases.md](docs/releases.md)).
-- Actual Let's Encrypt issuance and renewal (only the "issuance failed → continue with a temporary certificate" path was verified).
-- Code hosting sign-in integration with a public CA certificate, and the document editor under a private CA or temporary certificate.
+- Updates through the Stable channel (available from the 1.0.0 release) and an actual promoted release from Beta to Stable. The promotion procedure itself was verified on a test channel.
+- Renewal performed by an actual certificate authority at expiry (a renewal dry run and reloading after a forced renewal were verified).
+- Code hosting sign-in integration with a public CA certificate, and the document editor under a private CA certificate.
 - Input (keyboard, IME, clipboard), downloads and uploads in the isolated browser and a target on an actual LAN, the actual audio quality of noise suppression and browsers other than Chromium, lossless audio, external SMTP and AI provider connections, and storage in a designated host folder.
 - Servers behind a home router (NAT) or an actual front proxy, distributions with SELinux enabled, and non-x86_64 servers.
 

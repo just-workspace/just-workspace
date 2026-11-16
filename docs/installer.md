@@ -465,7 +465,7 @@ compose 는 저장소 볼륨(`ws-storage-data`)을 `external` 로 사용한다. 
 | `pull` | `compose config --images` 의 이미지를 순차적으로 pull 한다(이미지별 진행률 제공). pull 에 실패하더라도 서버에 이미 존재하면 경고로 처리한다 | `image_pull_failed` |
 | `database` | postgres·redis 기동, healthy 대기 → backend 이미지의 일회용 컨테이너로 `python -m app.cli migrate`(DB 스키마를 해당 버전에 맞춘다 — [data-safety.md](data-safety.md)). 종료 코드가 0 이 아니면 backend 를 기동하지 않고 중단한다 | `database_not_ready`, `database_migrate_failed` |
 | `cert` | (프록시가 담당하고 별도로 필요한 이름도 없으면 생략) 발급·배치 | 자동 발급 실패(대안: 임시 인증서) — 발급 명령의 출력으로 분류: `cert_service_start_failed`(발급 컨테이너 기동 실패), `cert_acme_challenge_failed`(인증 기관의 검증 실패), `cert_rate_limited`(발급 한도 초과), `cert_dns_mismatch`(DNS 없음·불일치), 분류 불가 시 `cert_issue_failed`. 그 밖: `cert_invalid`, `cert_upload_missing` |
-| `zones` | backend·frontend·nginx 기동 → 설치 관리자를 내부망에 연결 → (자동 발급이면) 갱신 컨테이너 기동 → 구역별 `install` → 구역별 `connect` → 연동 값이 변경되었으면 backend 재기동 → DB 에 저장되는 설정 반영 | `service_not_ready`, `git_*` |
+| `zones` | backend·frontend·nginx 기동 → 설치 관리자를 내부망에 연결 → (자동 발급이면) 갱신 컨테이너 기동 → 구역별 `install` → 구역별 `connect` → 연동 값이 변경되었으면 backend 재기동 → (문서 구역) 문서 서버의 `/healthcheck` 준비 대기 → DB 에 저장되는 설정 반영 | `service_not_ready`, `git_*` |
 | `admin` | `seed-admin`(비밀번호는 env 파일로 전달 후 삭제한다). 웹의 최초 관리자 생성(`POST /api/setup/admin`)은 설치 관리자가 구성한 설치(`JW_INSTALLER_KEY` 가 설정됨)에서 항상 차단되므로, `zones` 단계에서 backend 가 기동된 후 이 단계가 완료되기 전까지도 외부에서 관리자를 생성할 수 없다 | `admin_username_taken` |
 | `lock` | 단계 `installed`, 토큰·세션 폐기 | |
 
@@ -526,8 +526,8 @@ docker 없이 실행된다. docker·DNS·HTTP·SMTP 는 모의 객체(fake)로 �
 ## 12. 알려진 제한 사항
 
 - **backend 측 호출부**는 `backend/app/system/` 이다. 관리자 권한을 검증하고 내부 API 를 대행 호출하며(`/api/admin/system/zones…`, `/jobs/<id>`, `/probe/…`), 활성화·비활성화·설정 변경을 감사 로그에 기록한다. 화면은 관리 › 구역(`/admin/zones`)이다. `JW_INSTALLER_URL`·`JW_INSTALLER_KEY` 가 비어 있으면(설치 관리자 없이 구성한 설치) 목록은 읽기 전용이며 그 외 요청은 `503 installer_unavailable` 을 반환한다.
-- **코드 저장소의 로그인 연동**(Gitea 의 OpenID Connect 인증 소스)은 접속 주소의 인증서를 **Gitea 컨테이너가** 신뢰할 수 있어야 등록된다. 임시 인증서로 설치하면 "연동 보류" 상태로 유지되며, 신뢰되는 인증서로 교체하면(§15) 재시도한다. 공개 CA 가 아닌 **사설 CA** 가 발급한 인증서는 **발급 CA 가 제공된 경우에만** 연동된다 — 인증서 파일에 체인으로 포함하거나, "CA 인증서(선택)" 항목에 별도로 업로드하거나, 이후에 CA 인증서만 업로드한다(§15의 "사설 CA"). 서버 인증서 1장만 업로드하면 신뢰 대상 CA 를 식별할 수 없어 보류 상태로 유지되며, 화면에 해당 사실과 조치 사항이 표시된다. 해당 CA 를 신뢰하게 되는 대상은 코드 저장소와 backend 컨테이너다 — **문서 편집기**(접속 주소로 회귀 접속해 문서를 읽고 쓴다)의 사설 CA·임시 인증서 환경 동작은 검증되지 않았다.
-- **인증서 자동 발급(Let's Encrypt)의 실제 발급**은 외부에서 80 포트로 도달 가능한 서버에서만 가능하다. 발급 실패 시의 처리 흐름(실패 → 임시 인증서로 계속)만 실서버에서 검증하였다.
+- **코드 저장소의 로그인 연동**(Gitea 의 OpenID Connect 인증 소스)은 접속 주소의 인증서를 **Gitea 컨테이너가** 신뢰할 수 있어야 등록된다. 임시 인증서로 설치하면 "연동 보류" 상태로 유지되며, 신뢰되는 인증서로 교체하면(§15) 재시도한다. 공개 CA 가 아닌 **사설 CA** 가 발급한 인증서는 **발급 CA 가 제공된 경우에만** 연동된다 — 인증서 파일에 체인으로 포함하거나, "CA 인증서(선택)" 항목에 별도로 업로드하거나, 이후에 CA 인증서만 업로드한다(§15의 "사설 CA"). 서버 인증서 1장만 업로드하면 신뢰 대상 CA 를 식별할 수 없어 보류 상태로 유지되며, 화면에 해당 사실과 조치 사항이 표시된다. 해당 CA 를 신뢰하게 되는 대상은 코드 저장소와 backend 컨테이너다. **문서 편집기**(접속 주소로 회귀 접속해 문서를 읽고 쓴다)는 임시 인증서와 발급 CA 가 확인된 사설 CA 인증서 구성에서 회귀 접속의 인증서 검증을 생략한다(`ONLYOFFICE_ALLOW_UNTRUSTED_CERT`). 임시 인증서 환경의 동작은 검증하였고, 사설 CA 인증서 환경의 동작은 검증되지 않았다.
+- **인증서 자동 발급(Let's Encrypt)의 실제 발급**은 외부에서 80 포트로 도달 가능한 서버에서만 가능하다. 공인 주소를 가진 서버에서 자동 발급·[다시 발급]·`certbot renew --dry-run` 을 검증하였고, 발급 실패 시의 처리 흐름(실패 → 임시 인증서로 계속)도 실서버에서 검증하였다.
 - **TURN/TLS**: 직접 수신하는 구성에서는 5349 에 게시되므로, 443 을 전달하는 장비가 없으면 사용되지 않는다(§8).
 - **프런트 프록시 구성**: 프록시는 클라이언트 주소를 `X-Real-IP` 로 전달해야 한다(`X-Forwarded-For` 만으로는 클라이언트 주소로 인정하지 않는다). 메일·회의 인증서는 자체 서명이다 — 신뢰되는 인증서가 필요한 경우 현재는 수동으로 배치해야 한다.
 - **메일 도메인과 접속 주소가 상이한 경우** `DOMAIN` 은 메일 도메인이 된다. backend 가 `DOMAIN` 을 표시 용도로도 사용하는 위치(메일 제목 접두어 등)에는 메일 도메인이 표시된다.
@@ -561,7 +561,7 @@ docker 없이 실행된다. docker·DNS·HTTP·SMTP 는 모의 객체(fake)로 �
 | `rbi_needs_dns` | `name` | 격리 브라우저의 전용 이름도 이 서버를 가리켜야 한다 |
 | `dns_mismatch_cert_will_fail` | `domain` | 접속 주소가 이 서버를 가리키지 않아 자동 발급이 실패한다 |
 
-적용·구역 작업이 기록하는 주의(`warnings`): `git_sso_pending`, `git_front_path_unverified`, `side_certs_self_signed`, `image_not_refreshed`, `installer_not_on_network`, `backend_settings_not_applied`. 복원이 기록하는 주의: `restore_dkim_regenerated`(백업에 메일 서명 키가 없어 신규 생성함), `restore_front_unverified`, `restore_users_mismatch`, `restore_check_skipped`.
+적용·구역 작업이 기록하는 주의(`warnings`): `git_sso_pending`, `git_front_path_unverified`, `side_certs_self_signed`, `image_not_refreshed`, `installer_not_on_network`, `backend_settings_not_applied`, `docs_not_ready`(문서 서버가 240초 이내에 준비되지 않음 — 업데이트·복원에서는 확인 단계의 `detail.warnings` 에 기록). 복원이 기록하는 주의: `restore_dkim_regenerated`(백업에 메일 서명 키가 없어 신규 생성함), `restore_front_unverified`, `restore_users_mismatch`, `restore_check_skipped`.
 
 ## 13. 실서버 검수
 
@@ -621,7 +621,9 @@ node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서
 | `u6` | Beta 채널로 업데이트(시험판 이전 백업을 별도 보관) → Stable 로 전환: 대기(`wait`, 적용 거부) / "시험판 이전 상태로 복원"(그 사이에 작성된 대화는 소실되고 채널은 stable) |
 | `u8` | 레지스트리·채널을 차단한 상태에서: 하위 버전·다른 키·존재하지 않는 파일·1바이트를 변조한 번들을 각각 거부, 오프라인 번들 업로드(nginx → backend → 설치 관리자), 추가 이미지 판정(없음·불일치·있음·불필요), 오프라인 번들과 이미지 파일만으로 적용 |
 
-업데이트에서 검증하지 못한 항목: 실제 배포 채널·실제 서명 키, 인터넷 경유 레지스트리에서의 pull 소요 시간(검수 서버에는 이미지 레이어가 대부분 이미 존재하였다), 수 GB 규모 오프라인 번들의 프런트 프록시 경유 업로드, 플러그인 호환 판정, 설치 관리자를 `docker run` 의 다른 옵션(자원 제한 등)과 함께 기동한 경우의 자기 교체.
+공개 경로의 업데이트: 공개 이미지로 1.0.0-beta.2 를 설치한 서버에서 공개 Beta 채널(실제 채널 파일·서명 키)과 공개 레지스트리로 1.0.0-beta.3 업데이트(화면 조작), 복원 지점으로의 복원, 재업데이트를 수행하였고 데이터 보존을 확인하였다.
+
+업데이트에서 검증하지 못한 항목: Stable 채널로 게시한 실제 승격 릴리스, 수 GB 규모 오프라인 번들의 프런트 프록시 경유 업로드, 플러그인 호환 판정, 설치 관리자를 `docker run` 의 다른 옵션(자원 제한 등)과 함께 기동한 경우의 자기 교체.
 
 모든 시나리오의 기본 구성 확인(`check_core`)은 내부망 주소도 확인한다: 설치 관리자 = 예약 주소(100번), nginx = 2번, 연결된 컨테이너 간 주소 중복 없음.
 

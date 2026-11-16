@@ -232,7 +232,7 @@
 | `countdown` | `status = "countdown"` 일 때 `{"ends_at": "…", "seconds": 300}`. 그 외에는 `null` |
 | `steps[].detail.images` | `pull` 단계의 이미지별 진행 상태. `status`: `pending`/`pulling`/`done`/`failed`, `percent` 0~100 |
 | `steps[].detail.percent` | 그 외 단계의 진행률을 산정할 수 있는 경우(0~100). 산정할 수 없으면 포함하지 않는다 |
-| `steps[].detail` 의 그 외 항목 | `preflight`: `schema {current, target, changes}`·`plugin_warnings`·`free_bytes`, `backup`: `point`(복원 지점 id)·`path`·`size_bytes`, `switch`: `disabled_plugins`, `verify`: `version`·`schema_version`. 롤백에서 수행할 작업이 없어 생략된 단계는 `skipped: true`. 설치 관리자의 재기동으로 재수행된 단계에는 단계 자체에 `interrupted: true` 가 추가된다 |
+| `steps[].detail` 의 그 외 항목 | `preflight`: `schema {current, target, changes}`·`plugin_warnings`·`free_bytes`, `backup`: `point`(복원 지점 id)·`path`·`size_bytes`, `switch`: `disabled_plugins`, `verify`: `version`·`schema_version`·(문서 서버가 240초 이내에 준비되지 않은 경우에 한하여) `warnings: [{"key": "docs_not_ready", "vars": {}}]` — 문서 구역이 활성화된 설치에서 `verify` 는 문서 서버의 `/healthcheck` 가 `true` 를 반환할 때까지 대기한다. 시간 초과는 실패가 아니라 주의이다. 롤백에서 수행할 작업이 없어 생략된 단계는 `skipped: true`. 설치 관리자의 재기동으로 재수행된 단계에는 단계 자체에 `interrupted: true` 가 추가된다 |
 | `error` | 실패 시 `{"step", "cause", "detail", "vars"}`. `cause` 는 문구 키, `detail` 은 원문 한 줄 |
 | `choices` | 현재 관리자가 선택할 수 있는 제어: `retry`, `rollback`. 자동 롤백인 경우 빈 배열 |
 | `rollback_job` | 해당 업데이트의 롤백 작업 id(롤백이 시작된 경우) |
@@ -240,7 +240,7 @@
 | `expected_seconds` | 예상 중단 시간 |
 | `maintenance_started_at` | 점검 모드가 시작된 시각(카운트다운 종료 시점). 시작 전이면 `null` |
 
-`kind` 가 `rollback`·`restore` 인 작업의 단계(id 고정): `stop`(구역 중지) → `images`(이전 이미지로 교체) → `restore_db`(백업으로 DB 복원) → `start`(구역 기동) → `verify`(상태 확인). `rollback` 은 `from_version` 이 실패한 목표 버전, `target_version` 이 복귀 대상 버전이며 `parent_job` 에 롤백 대상 업데이트 작업의 id 가 포함된다. `rollback`·`restore` 가 실패하면 `choices = ["retry"]` 만 제공된다(워크스페이스는 중지된 상태로 유지된다). `error.vars.backup_location` 에 백업 파일의 위치(backend 컨테이너 내 경로)를, `error.vars.manual` 에 수동 조치 사항의 문구 키(`restore_manually`)를 포함한다.
+`kind` 가 `rollback`·`restore` 인 작업의 단계(id 고정): `stop`(구역 중지) → `images`(이전 이미지로 교체) → `restore_db`(백업으로 DB 복원) → `start`(구역 기동) → `verify`(상태 확인). `rollback` 은 `from_version` 이 실패한 목표 버전, `target_version` 이 복귀 대상 버전이며 `parent_job` 에 롤백 대상 업데이트 작업의 id 가 포함된다. `rollback`·`restore` 가 실패하면 `choices = ["retry"]` 만 제공된다(워크스페이스는 중지된 상태로 유지된다). `error.vars.backup_location` 에 백업 파일의 위치(backend 컨테이너 내 경로)를, `error.vars.manual` 에 수동 조치 사항의 문구 키(`restore_manually`)를 포함한다. `rollback`·`restore` 가 완료되면 엔진은 확인 결과(`available`)를 무효화하고 채널을 즉시 재확인한다 — 완료 직후의 현황은 `check.state = "checking"` 이며, 재확인이 끝나면 복귀한 버전 기준의 결과가 표시된다.
 
 `error.cause` 의 값:
 

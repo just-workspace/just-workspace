@@ -22,7 +22,8 @@ Security vulnerabilities are not to be reported in public issues. They are to be
 
 | 버전 | 보안 수정 |
 |---|---|
-| 1.0.x | 첫 공개 릴리스 준비 중 — 릴리스 이후 지원한다 |
+| 1.0.x | Stable 1.0.0 공개 이후 지원한다 |
+| 1.0.0-beta.N | 최신 Beta 에 한하여 수정한다(Beta 채널) |
 | 1.0.0 이전의 소스 | 지원하지 않는다 |
 
 보안 수정은 최신 Stable 버전에 대하여 제공한다. 관리 › 업데이트에서 최신 버전으로 업데이트하여야 한다.

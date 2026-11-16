@@ -196,6 +196,7 @@ def test_cert_status_reports_the_renewal_service(tmp_path):
      None, "cert_acme_challenge_failed"),
     ("Detail: 203.0.113.9: Invalid response from http://ws.example.com/.well-known/acme-challenge/x: 404", "mismatch", "cert_dns_mismatch"),
     ("Some challenges have failed.", None, "cert_issue_failed"),
+    ("Unable to register an account with ACME server.", "mismatch", "cert_dns_mismatch"),
 ])
 def test_cert_failure_is_classified_by_the_issuers_output(output, dns, cause):
     assert eng.classify_cert_failure(output, dns) == cause

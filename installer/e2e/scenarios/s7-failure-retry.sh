@@ -129,7 +129,7 @@ if want cert; then
   wapi POST /api/apply >/dev/null; expect "POST /api/apply" 202 "$(wcode)"
   wait_apply_api 900; expect "적용은 실패로 끝난다" 1 "$?"
   expect "실패한 단계" cert "$(apply_get 'd["error"]["step"]')"
-  expect "원인 키" cert_issue_failed "$(apply_get 'd["error"]["cause"]')"
+  expect "원인 키(DNS 불일치로 분류)" cert_dns_mismatch "$(apply_get 'd["error"]["cause"]')"
   expect "대안" '[{"key": "use_temporary_cert"}]' "$(apply_get 'd["alternatives"]')"
   expect "/api/state 에도 대안이 실린다" '[{"key": "use_temporary_cert"}]' "$(wapi GET /api/state | json_get 'd["apply"]["alternatives"]')"
   check "80 을 잡고 있던 것은 남지 않는다" bash -c "! sudo ss -ltnH | grep -qE ':80\s'"

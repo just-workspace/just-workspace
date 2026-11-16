@@ -457,7 +457,8 @@ def classify_cert_failure(output: str, dns_status: str | None = None) -> str:
             if cause == "cert_acme_challenge_failed" and dns_status == "mismatch":
                 return "cert_dns_mismatch"
             return cause
-    return "cert_issue_failed"
+    # 분류되지 않은 실패이며 접속 주소의 DNS 불일치가 감지된 상태 — 인증 기관이 이름 자체를 거부한 경우(계정 등록 거부 등)를 포함한다
+    return "cert_dns_mismatch" if dns_status == "mismatch" else "cert_issue_failed"
 
 
 def acme_server_args() -> list[str]:

@@ -306,7 +306,7 @@ docker compose -p just-workspace
 |---|---|---|---|
 | `docker_engine` | 24.0 이상 | fail | `docker info` 의 `ServerVersion` |
 | `docker_compose` | 2.20 이상 | fail | `docker compose version --short` — 이미지에 포함된 플러그인(실제 사용 대상) |
-| `cpu` | 2 이상 | fail | `docker info` 의 `NCPU` |
+| `cpu` | 2 이상. 회의 구역을 선택한 경우 4 미만이면 warn(`cpu_below_recording` — 회의 녹화의 권장 사양 미달) | fail/warn | `docker info` 의 `NCPU` |
 | `memory` | 4GB 이상, 선택한 구역의 권장 합계 이상 | fail | `docker info` 의 `MemTotal` |
 | `arch` | `x86_64` | fail | `docker info` 의 `Architecture` |
 | `disk` | 10GB 이상(20GB 미만은 warn) | fail/warn | 도커 데이터: 익명 볼륨을 마운트한 보조 컨테이너에서 여유 공간 측정(볼륨은 도커 데이터 폴더와 동일한 파일 시스템). 설치 폴더: 설치 관리자의 `/data` |
@@ -364,14 +364,32 @@ jw/<접속 주소>/                   업로드한 파일·임시 인증서의 �
 ```
 
 - 인증서에 포함되는 이름: 접속 주소, `mail.<메일 도메인>`(내장 메일), `turn.<접속 주소>`(회의 중계), `rbi.<접속 주소>`(격리 브라우저).
-- `auto`: nginx 가 아직 기동되지 않았으면 certbot 이 80 을 직접 수신하고(standalone), 이미 기동 중이면 webroot 방식으로 발급받는다. 갱신은 certbot 컨테이너가 수행한다.
+- `auto`: nginx 가 아직 기동되지 않았으면 certbot 이 80 을 직접 수신하고(standalone), 이미 기동 중이면 webroot 방식으로 발급받는다. 갱신은 certbot 컨테이너(`ws-certbot`)가 12시간 주기로 수행한다(webroot). 갱신 컨테이너는 `zones` 단계에서 nginx 기동 후 기동하며, 설치 관리자가 기동 직후와 1시간 주기로 실행 여부를 확인하여 실행 중이 아니면 재기동한다. 기동 실패는 주의(`cert_renewal_not_started`)로 기록한다.
+- 인증 기관의 ACME 디렉터리 주소는 설치 관리자의 환경변수 `JW_ACME_SERVER`(https 주소)로 변경할 수 있다. 미지정 시 Let's Encrypt 운영 서버를 사용한다. 갱신은 발급 시 기록된 주소를 사용한다.
 - 무손실 음성 릴레이는 비루트(gid 65532)로 실행되므로 개인 키에 그룹 읽기 권한을 부여한다.
-- **갱신 후 재적용**은 설치 관리자가 담당한다: 1시간마다 인증서 지문을 확인하고, 변경된 경우 권한을 재설정한 후 nginx 를 reload 하고 회의 서버를 재시작한다(메일 서버와 음성 릴레이는 자체적으로 다시 읽는다).
+- **갱신 후 재적용**은 설치 관리자가 담당한다: 1시간마다(`JW_CERT_WATCH_SECONDS` 로 조정) 인증서 지문을 확인하고, 변경된 경우 권한을 재설정한 후 nginx 를 reload 하고 회의 서버를 재시작한다(메일 서버와 음성 릴레이는 자체적으로 다시 읽는다).
+- 갱신 컨테이너는 갱신 시도마다 시각과 종료 코드를 인증서 볼륨의 `jw-renew-status.json` 에 기록한다. `GET /internal/cert` 의 `renewal` 과 `jw status` 가 이를 표시한다(15절).
 - `proxy`: 웹 인증서는 프록시가 담당한다. 메일·회의 서버의 참조 위치에는 **자체 서명** 인증서를 배치한다(주의 `proxy_side_certs_self_signed`).
 
 ### 회의의 TURN/TLS 포트
 
 회의 서버는 TURN/TLS 를 항상 `turns:<이름>:443` 으로 광고한다. 동일 서버에서 nginx 가 443 을 사용하면 충돌하므로, 직접 수신하는 구성(`direct`/`router`)에서는 TURN/TLS 를 호스트의 **5349** 에 게시한다(`LIVEKIT_TURN_TLS_PUBLISH=5349`). 이 경우 외부에서 `turn.<접속 주소>:443` 을 5349 로 전달하는 별도 장비가 없으면 TURN/TLS 는 사용되지 않으며, 회의는 UDP 3478(TURN)·UDP 7882-7892·TCP 7881 로 연결된다. `proxy` 구성에서는 이 서버의 443 이 미사용이므로 443 에 게시한다.
+
+### 내부망 주소 배정
+
+내부망(`just-workspace_workspace`, 기본 `172.28.0.0/24`)의 호스트 번호는 다음과 같이 배정한다.
+
+| 구간 | 용도 |
+|---|---|
+| 2~99 | compose 서비스의 고정 주소(nginx = 2, certbot = 35 등 — `docker-compose.yml`) |
+| 100~104 | 설치 관리자(100 을 사용하며, 점유된 경우 다음 번호) |
+| 그 밖 | 미사용 |
+
+- 도커는 주소를 지정하지 않은 컨테이너에 가장 낮은 빈 주소를 배정한다. 상주 컨테이너가 동적 주소를 받으면 아직 기동하지 않은 서비스의 고정 주소를 선점할 수 있으므로, 상주 서비스와 설치 관리자는 전부 주소를 지정한다.
+- 설치 관리자는 `docker network connect --ip` 로 예약 주소에 연결한다. 동적 주소로 연결된 상태(1.0.0-beta.2 이하가 연결한 것 — 통상 3번)이면 기동 시 연결을 해제하고 예약 주소로 재연결한다. 네트워크는 재생성하지 않는다.
+- 3번은 비워 둔다. 1.0.0-beta.2 이하에서는 certbot 의 고정 주소가 3번이었고 설치 관리자가 이를 동적으로 점유하여 갱신 컨테이너가 기동되지 않았다. 해당 버전에서 업데이트하는 경우 `switch` 단계를 이전 버전의 설치 관리자(3번 점유 상태)가 수행하므로, certbot 의 주소를 35번으로 변경하여 충돌을 제거하였다.
+- 일회용 실행(`compose run` — DB 변경 단계, 복원, 인증서 발급)은 서비스의 고정 주소를 승계하지 않는다. 설치 관리자가 `networks: !override` 조각(`state/run/run-network-<서비스>.yml`)을 추가하여 실행하며, 일회용 컨테이너는 실행 동안에만 동적 주소를 사용한다.
+- 이 네트워크에 다른 컨테이너를 직접 연결하는 경우 `--ip` 로 105번 이상의 주소를 지정한다.
 
 ### 저장소
 
@@ -417,6 +435,8 @@ compose 는 저장소 볼륨(`ws-storage-data`)을 `external` 로 사용한다. 
 | `LIVEKIT_API_KEY`·`SECRET`, `AUDIORELAY_SECRET`, `ONLYOFFICE_JWT_SECRET`, `SANDBOX_TOKEN`, `DOCCONV_TOKEN`, `SEARXNG_SECRET` | 생성 | 해당 구역이 활성화된 경우에만 기록한다 |
 | `LIVEKIT_URL` | 고정 | `http://livekit:7880` |
 | `LIVEKIT_TURN_TLS_PUBLISH` | 파생 | `proxy` → 443, 그 외 → 5349 |
+| `EGRESS_CPUS` / `EGRESS_ROOM_CPU_COST` | 파생 | 회의 녹화 컨테이너의 CPU 상한 / 룸 합성 녹화 1건의 CPU 요구량. 코어 4개 이상이면 4 / 4, 미만이면 코어 수 / (코어 수 - 1, 최소 1). 상한이 코어 수를 초과하면 도커가 컨테이너 생성을 거부한다 |
+| `ONLYOFFICE_ALLOW_UNTRUSTED_CERT` | 파생 | 문서 편집기가 접속 주소로 회귀 접속할 때의 인증서 검증 생략. 내장 nginx 가 임시 인증서 또는 발급 CA 가 확인된 사설 CA 인증서를 제공하는 구성에서만 `true` |
 | `AUDIORELAY_WT_PUBLIC_URL` | 파생 | 무손실 오디오 + 신뢰되는 인증서인 경우 `https://<접속 주소>:4433/audiorelay/wt` |
 | `AUDIORELAY_WT_PORT` / `…_CERT` / `…_KEY` | 고정 / 파생 | 4433 / `live/<접속 주소>/…` |
 | `RBI_PUBLIC_ORIGIN` | 파생 | 격리 브라우저인 경우 `https://rbi.<접속 주소>` |
@@ -440,12 +460,12 @@ compose 는 저장소 볼륨(`ws-storage-data`)을 `external` 로 사용한다. 
 
 | 단계 | 수행 내용 | 대표 실패 원인 |
 |---|---|---|
-| `config` | 비밀값 생성(기존 값은 유지) → 스택 파일 기록 → `compose config -q`. 도커 볼륨 저장소인 경우 이 단계에서 볼륨·마커까지 생성 | `compose_invalid` |
+| `config` | 비밀값 생성(기존 값은 유지 — backend 이미지가 없으면 이 단계에서 pull 하며 진행을 `detail.images` 로 제공) → 스택 파일 기록 → `compose config -q` → 현재 구성에서 활성화되지 않는 서비스의 컨테이너와 잔존 일회용 컨테이너 삭제(실패 후 구역을 제외하고 재적용하는 경우 — 데이터 볼륨은 보존). 도커 볼륨 저장소인 경우 이 단계에서 볼륨·마커까지 생성 | `compose_invalid` |
 | `storage` | (NFS·지정 폴더인 경우에만) 볼륨 생성 + 마커 기록 | `unreachable`, `export_not_found`, `permission_denied`, `read_only`, `storage_other_install`, `storage_volume_mismatch` |
 | `pull` | `compose config --images` 의 이미지를 순차적으로 pull 한다(이미지별 진행률 제공). pull 에 실패하더라도 서버에 이미 존재하면 경고로 처리한다 | `image_pull_failed` |
 | `database` | postgres·redis 기동, healthy 대기 → backend 이미지의 일회용 컨테이너로 `python -m app.cli migrate`(DB 스키마를 해당 버전에 맞춘다 — [data-safety.md](data-safety.md)). 종료 코드가 0 이 아니면 backend 를 기동하지 않고 중단한다 | `database_not_ready`, `database_migrate_failed` |
-| `cert` | (프록시가 담당하고 별도로 필요한 이름도 없으면 생략) 발급·배치 | `cert_issue_failed`(대안: 임시 인증서), `cert_invalid`, `cert_upload_missing` |
-| `zones` | backend·frontend·nginx 기동 → 설치 관리자를 내부망에 연결 → 구역별 `install` → 구역별 `connect` → 연동 값이 변경되었으면 backend 재기동 → DB 에 저장되는 설정 반영 | `service_not_ready`, `git_*` |
+| `cert` | (프록시가 담당하고 별도로 필요한 이름도 없으면 생략) 발급·배치 | 자동 발급 실패(대안: 임시 인증서) — 발급 명령의 출력으로 분류: `cert_service_start_failed`(발급 컨테이너 기동 실패), `cert_acme_challenge_failed`(인증 기관의 검증 실패), `cert_rate_limited`(발급 한도 초과), `cert_dns_mismatch`(DNS 없음·불일치), 분류 불가 시 `cert_issue_failed`. 그 밖: `cert_invalid`, `cert_upload_missing` |
+| `zones` | backend·frontend·nginx 기동 → 설치 관리자를 내부망에 연결 → (자동 발급이면) 갱신 컨테이너 기동 → 구역별 `install` → 구역별 `connect` → 연동 값이 변경되었으면 backend 재기동 → DB 에 저장되는 설정 반영 | `service_not_ready`, `git_*` |
 | `admin` | `seed-admin`(비밀번호는 env 파일로 전달 후 삭제한다). 웹의 최초 관리자 생성(`POST /api/setup/admin`)은 설치 관리자가 구성한 설치(`JW_INSTALLER_KEY` 가 설정됨)에서 항상 차단되므로, `zones` 단계에서 backend 가 기동된 후 이 단계가 완료되기 전까지도 외부에서 관리자를 생성할 수 없다 | `admin_username_taken` |
 | `lock` | 단계 `installed`, 토큰·세션 폐기 | |
 
@@ -536,6 +556,7 @@ docker 없이 실행된다. docker·DNS·HTTP·SMTP 는 모의 객체(fake)로 �
 | `account_domain_is_mail_domain` | `mail_domain` | 계정의 메일 주소는 `<아이디>@<메일 도메인>` 이 된다 |
 | `no_system_mail` | | 메일 구역이 없어 초대·비밀번호 재설정 메일을 발송할 수 없다 |
 | `meetings_public_ip_unknown` | | 회의에 사용할 공인 주소가 확인되지 않는다 |
+| `meetings_recording_low_cpu` | `cpus`, `recommend` | 코어 수가 회의 녹화의 권장 수(4) 미만이다 — 녹화가 지연되거나 거절될 수 있다 |
 | `lossless_needs_udp_4433` | | 무손실 오디오는 UDP 4433 이 외부에서 도달 가능해야 한다 |
 | `rbi_needs_dns` | `name` | 격리 브라우저의 전용 이름도 이 서버를 가리켜야 한다 |
 | `dns_mismatch_cert_will_fail` | `domain` | 접속 주소가 이 서버를 가리키지 않아 자동 발급이 실패한다 |
@@ -575,6 +596,9 @@ node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서
 | `s8-manual` | 설치 관리자 없이 [deployment.md](deployment.md) 의 절차에 따라 최소 구성 기동, 설정 토큰으로 최초 관리자 생성(로그의 토큰은 1개, 토큰 없이 또는 이전 토큰으로는 403, 11자 비밀번호 400, 생성 후 폐기), `scripts/update.sh --no-pull` 로 재빌드 후 교체 및 `--rollback`(업데이트 전에 부여한 태그의 이미지로 이름을 복원한다) |
 | `s9-operate` | 기본 + 코드 저장소 구성에서: 버전 환경변수 없이 기동한 경우의 로그 고지, `jw update-key`(이미지에 포함된 공개 키를 사용하지 않도록 기동해 "키가 없는 설치"에서 검증 — 비공개 키·무관한 파일 거부, 등록하면 확인 결과가 `unconfigured` → 채널 조회로 전환)·`jw update-channel`, `jw restore`(목록, `--yes` 없이는 내용만 출력, 백업 볼륨의 이름·서버 경로, 복원 후 백업 시점의 파일만 존재하고 쓰기 가능, 존재하지 않는 파일·잘못된 경로 거부), 사설 CA 인증서 — 서버 인증서만 업로드하면 코드 저장소 연동이 보류 상태로 유지되고 backend 도 해당 인증서를 신뢰하지 못함 → **CA 인증서만 이후에 업로드하면**(무관한 CA·서버 인증서는 거부) 두 컨테이너에 CA 가 마운트되고 인증 소스가 등록되며 backend 가 접속 주소의 인증서를 신뢰함(공개 CA 번들은 유지) → 제거하면 다시 신뢰하지 못함 → 인증서와 CA 를 두 항목으로 분리해 업로드 → 인증서 파일에 CA 를 체인으로 포함해 업로드(CA 는 1회만 포함됨) |
 | `s10-rbi` + `rbi-session-ui.cjs` | 기본 + 회의 + 격리 브라우저 구성에서: `.env`·backend 의 `RBI_PROTECTED` = 이 서버의 주소·기본 게이트웨이, 서버 자신을 가리키는 대상은 강제 옵션 없이 거부, 다른 호스트(별도로 생성한 네트워크 네임스페이스의 웹 서버)를 가리키는 대상 저장. 화면: 전용 출처로 로그인 홉 → **미러 방식** 세션의 화면에 대상 페이지의 텍스트와 색상이 렌더링됨(미러 문서의 텍스트를 읽고, 캡처에서 대상의 색상 비율을 측정한다) → **픽셀 방식** 세션(외부 세션 이미지)의 화면에 대상 페이지가 렌더링됨(캡처의 색상 비율 — 캡처는 담당자가 1회 육안으로 확인하였다) → 종료한 세션의 화면 경로 403. 이후(`s10-rbi.sh post`): 격리 규칙 상태·출구 규칙에 대상이 포함됨·세션 컨테이너가 잔존하지 않음·호스트 INPUT 의 세션 브리지 차단 |
+| `s11-acme-local` | 임시 인증서로 설치한 서버에서 ACME 시험 서버(Pebble, 내부망에 기동)를 인증 기관으로 지정해: [다시 발급](auto) 작업 성공, nginx 가 신규 인증서 제공, 갱신 컨테이너가 고정 주소(35번)로 실행, `certbot renew --dry-run`, 강제 갱신 후 설치 관리자가 지문 변경을 감지해 nginx 를 reload, 인증서 상태·`jw status` 의 갱신 정보, 중지된 갱신 컨테이너의 재기동 |
+| `s12-low-cpu` | 코어 4개 미만 서버에서 회의 구역 포함 설치: 사전 점검의 `cpu` 경고(`cpu_below_recording`)·요약의 주의, `EGRESS_CPUS` = 코어 수, 녹화 컨테이너의 CPU 상한과 기동 유지, 회의 토큰 발급 |
+| `u-from-public` | 공개된 이전 버전(기본 1.0.0-beta.2)의 이미지로 자동 발급 구성을 설치한 뒤 현재 소스의 빌드로 업데이트: 네트워크 미재생성(id 동일), 설치 관리자가 예약 주소(100번)로 재연결, 갱신 컨테이너가 35번으로 실행, 주소 중복 없음, 데이터 보존, 실행 중인 backend 와 일회용 실행의 공존, 도커 재시작 후 주소 유지 |
 | `meeting-noise-ui.cjs` | 가상 마이크를 사용하는 Chromium 으로 회의에 참가해: "노이즈 제거" 토글을 전환할 때마다 **송신 중인 마이크 트랙**의 `getSettings().noiseSuppression` 이 변경됨(Chromium 은 즉시 변경할 수 없어 트랙을 재획득한다 — 트랙 id 가 변경된다), 반향 제거는 유지, 마이크를 껐다 켜도 선택한 값 유지, 마이크가 꺼지면 토글 잠금 |
 | `wizard-ui.cjs` | 화면 조작으로 일반 설치(협업 프리셋·임시 인증서)와 빠른 설치를 완료 화면까지 수행 — 1280 폭과 390 폭. 토큰이 없는 주소·잘못된 토큰, 사전 점검 14항목, 구역·메모리 합계, 메일 레코드 표, 이어 하기, 요약, 적용, 잠금 화면. 콘솔 오류 없음 |
 | `jw reinstall` | 설치된 서버에서 목록 확인 → `--yes` 로 삭제 후 신규 토큰으로 재시작 |
@@ -599,7 +623,9 @@ node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서
 
 업데이트에서 검증하지 못한 항목: 실제 배포 채널·실제 서명 키, 인터넷 경유 레지스트리에서의 pull 소요 시간(검수 서버에는 이미지 레이어가 대부분 이미 존재하였다), 수 GB 규모 오프라인 번들의 프런트 프록시 경유 업로드, 플러그인 호환 판정, 설치 관리자를 `docker run` 의 다른 옵션(자원 제한 등)과 함께 기동한 경우의 자기 교체.
 
-검증하지 못한 항목: 실제 Let's Encrypt 발급 및 갱신(재발급의 `auto` 포함), 공개 CA 인증서 환경의 Gitea 로그인 연동(사설 CA 는 발급 CA 를 제공해 연동되는 것까지 검증 — `s9-operate`), 사설 CA·임시 인증서 환경의 문서 편집기(편집기가 접속 주소로 회귀 접속해 문서를 읽는 경로 — 발급 CA 를 편집기 컨테이너에는 마운트하지 않는다), 로컬 백업을 NFS 로 이전하는 복원, 수 GB 이상의 백업 업로드, 격리 브라우저의 입력(키보드·한글·클립보드)·다운로드·업로드와 유휴 종료·다중 사용자의 동시 세션(세션 화면에 대상이 렌더링되는 것은 미러·픽셀 방식 모두 검증하였다 — `s10-rbi`), 격리 브라우저의 실제 LAN 대상(검수의 대상은 동일 서버의 다른 네트워크 네임스페이스다), 노이즈 제거의 실제 음질(토글이 트랙의 설정을 변경하는 것까지 검증하였다. Chromium 이외의 브라우저는 검증하지 않았다), 무손실 오디오, 외부 SMTP·AI 제공자 연결, 지정 폴더 저장소, 공유기 하단·실제 프런트 프록시, x86_64 이외의 서버, SELinux 가 활성화된 배포판.
+모든 시나리오의 기본 구성 확인(`check_core`)은 내부망 주소도 확인한다: 설치 관리자 = 예약 주소(100번), nginx = 2번, 연결된 컨테이너 간 주소 중복 없음.
+
+검증하지 못한 항목: 공개 CA 인증서 환경의 Gitea 로그인 연동(사설 CA 는 발급 CA 를 제공해 연동되는 것까지 검증 — `s9-operate`), 사설 CA·임시 인증서 환경의 문서 편집기(편집기가 접속 주소로 회귀 접속해 문서를 읽는 경로 — 발급 CA 를 편집기 컨테이너에는 마운트하지 않는다), 로컬 백업을 NFS 로 이전하는 복원, 수 GB 이상의 백업 업로드, 격리 브라우저의 입력(키보드·한글·클립보드)·다운로드·업로드와 유휴 종료·다중 사용자의 동시 세션(세션 화면에 대상이 렌더링되는 것은 미러·픽셀 방식 모두 검증하였다 — `s10-rbi`), 격리 브라우저의 실제 LAN 대상(검수의 대상은 동일 서버의 다른 네트워크 네임스페이스다), 노이즈 제거의 실제 음질(토글이 트랙의 설정을 변경하는 것까지 검증하였다. Chromium 이외의 브라우저는 검증하지 않았다), 무손실 오디오, 외부 SMTP·AI 제공자 연결, 지정 폴더 저장소, 공유기 하단·실제 프런트 프록시, x86_64 이외의 서버, SELinux 가 활성화된 배포판.
 
 ## 14. 백업에서 복원
 
@@ -709,13 +735,13 @@ docker exec jw-installer jw apply --answers /data/restore.json
 
 | 메서드·경로 | 기능 |
 |---|---|
-| `GET /internal/cert` | `{"managed"(이 서버가 TLS 를 종단하는지 여부), "mode": auto\|upload\|temporary\|proxy, "temporary", "domain", "names", "wanted_names", "not_after", "days_left", "issuer", "self_signed", "site_ca", "ca_uploadable", "pending": [구역 id], "job"}` |
+| `GET /internal/cert` | `{"managed"(이 서버가 TLS 를 종단하는지 여부), "mode": auto\|upload\|temporary\|proxy, "temporary", "domain", "names", "wanted_names", "not_after", "days_left", "issuer", "self_signed", "site_ca", "ca_uploadable", "pending": [구역 id], "renewal", "job"}`. `renewal = {"applicable"(자동 발급 설치 여부), "service": running\|stopped\|missing(갱신 컨테이너), "last_run_at", "last_result": ok\|failed(갱신 컨테이너가 기록한 최종 갱신 시도), "next_renewal_at"(추정 — 유효 기간의 1/3 이 남는 시점)}` |
 | `POST /internal/cert/reissue` `{"mode": "auto"}` | Let's Encrypt 에 재요청한다(접속 주소가 이 서버를 가리키고 80 포트가 외부에서 도달 가능해야 한다) |
 | `POST /internal/cert/reissue` `{"mode": "upload", "cert", "key", "ca"?}` | 보유한 인증서로 교체한다. `ca` 는 사설 CA 의 인증서(선택). 검증은 마법사의 인증서 검증과 동일하며, 실패 시 `422 cert_invalid` + `checks` |
 | `POST /internal/cert/ca` `{"ca"}` | 업로드한 인증서를 사용하는 설치에 **발급 CA 인증서만** 추가한다 — 인증서·개인 키는 유지된다. `{"ca": ""}` 는 별도로 업로드한 CA 를 제거한다. 해당 인증서의 발급 CA 가 아니거나 CA 인증서가 아니면 `422 cert_invalid` + `checks`, 업로드한 인증서를 사용하지 않는 설치이면 `409 cert_ca_needs_upload` |
 | `POST /internal/zones/<id>/reconnect` | 보류된 연동을 재시도한다. 여전히 실패하면 작업이 `failed`(`connection_still_pending`) |
 
-작업(`kind: "cert"`, `zone: null`)의 단계는 `issue`(입력값·설정 변경 후 발급·배치) → `reload`(nginx 재시작, 회의 서버 재시작, 자동 발급이면 갱신 컨테이너 기동, backend 재생성) → `reconnect`(보류된 구역의 `connect` 훅 — 코드 저장소의 로그인 연동) 순이다. `issue` 가 실패하면 입력값·설정을 롤백하고 **기존 인증서를 재배치한다**(자동 발급 시도 과정에서 임시 인증서의 링크가 해제되었을 수 있다). 거부: `409 cert_managed_by_proxy`(프런트 프록시가 담당하는 설치), `422 cert_auto_needs_domain`, `409 busy`.
+작업(`kind: "cert"`, `zone: null`)의 단계는 `issue`(입력값·설정 변경 후 발급·배치) → `reload`(nginx 재시작, 회의 서버 재시작, 자동 발급이면 갱신 컨테이너 기동·그 외 방식이면 제거, 문서 편집기·backend 재생성) → `reconnect`(보류된 구역의 `connect` 훅 — 코드 저장소의 로그인 연동) 순이다. `issue` 가 실패하면 입력값·설정을 롤백하고 **기존 인증서를 재배치한다**(자동 발급 시도 과정에서 임시 인증서의 링크가 해제되었을 수 있다). 거부: `409 cert_managed_by_proxy`(프런트 프록시가 담당하는 설치), `422 cert_auto_needs_domain`, `409 busy`.
 
 **사설 CA.** 공개 CA 가 아닌 CA(사내 CA 등)가 발급한 인증서는, 이 서버의 다른 컨테이너가 접속 주소로 회귀 접속할 때 신뢰되지 않는다. 발급 CA 를 제공하는 방법은 3가지이며 결과는 동일하다.
 
@@ -755,6 +781,8 @@ docker exec jw-installer jw apply --answers /data/restore.json
 | 공개 키 | `<설치 폴더>/state/update/keys/*.pub` — 존재하면 이 키만 사용한다(`jw update-key add` 가 검증 후 등록한다). 없으면 이미지의 `/app/keys/*.pub`(빌드 시 `installer/keys/` 에 배치한 키) | 리포의 `installer/keys/release.pub` |
 | 오프라인 번들 다운로드 주소 | `JW_UPDATE_OFFLINE_URL`(`{version}`·`{filename}`) | 릴리스 도구의 `download_url_template` |
 
+- **수신 채널의 기본값은 설치된 버전의 채널이다.** Beta 버전(`-beta.N`)으로 설치한 서버는 Beta 채널을, Stable 버전으로 설치한 서버는 Stable 채널을 수신한다. 관리 › 업데이트에서 채널을 선택하면 그 값이 저장되어 우선한다. 응답의 `current.channel`(설치된 버전이 속한 채널)과 `settings.channel`(수신 채널)은 별개의 값이다.
+- 채널 파일이 없으면(HTTP 404) 확인은 `channel_empty` 로 종료된다 — 해당 채널에 공개된 릴리스가 아직 없는 상태이며, 화면은 이를 연결 실패(`channel_unreachable`)와 구분하여 표시한다.
 - 공개 키는 **최대 2개**(현재·차기, 파일 이름순)를 허용하며 그중 하나로 검증되면 통과로 처리한다 — 키 교체 절차는 releases.md 의 "키 관리" 참조.
 - 키가 하나도 없으면 확인은 `unconfigured` 로 종료된다(채널을 조회하지 않는다). `installer/keys/` 를 비운 채 빌드한 이미지가 이에 해당한다 — `docker exec -i jw-installer jw update-key add - < release.pub` 로 등록한다(PEM 공개 키 여부를 검증하고 지문을 출력한다. 비공개 키는 거부한다).
 - `jw update-channel <주소>` 는 채널 주소를 변경하고, 이전 채널에서 저장한 확인 결과와 순번을 삭제한다(다른 발행자의 채널은 순번이 더 낮을 수 있다). `--reset` 은 환경변수·이미지의 값으로 복원한다.

@@ -65,6 +65,8 @@ docker run -d --name jw-installer --restart unless-stopped \
 docker logs jw-installer
 ```
 
+The value `1.0.0` in the command above applies after the Stable release. The version is to be taken from the latest entry on the releases page and specified identically in both places; before the Stable release, a published Beta version (for example `1.0.0-beta.2`) is to be specified.
+
 Opening the address printed in the log (`https://<server address>:8443/?token=…`) in a browser starts the setup wizard. The installer uses a self-signed certificate, and the browser therefore displays a warning; the SHA-256 fingerprint printed in the log is to be compared before proceeding.
 
 - The host folder given to `-v` and `JW_HOST_DIR` must be the **same path**. This folder is the install folder.

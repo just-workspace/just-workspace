@@ -38,6 +38,8 @@ Just Workspace 의 환경별 설정값은 스택의 `.env` 파일에 정의한�
 | `JW_INSTALLER_URL` / `JW_INSTALLER_KEY` | (비움) | backend 가 설치 관리자의 내부 API 를 호출하는 주소와 키. 비어 있으면 관리 › 구역·업데이트가 읽기 전용이다 | 고정 / 생성 |
 | `JW_MIGRATE_ON_START` | (비움 = 활성) | `0` 이면 backend 가 기동 시 DB 스키마를 변경하지 않고 버전만 확인한다 — [data-safety.md](data-safety.md) | 수동 |
 | `BACKEND_WORKERS` | (비움) | backend 워커 수. 비우면 `min(8, max(2, 코어 수))` | 파생(메모리 6 GB 미만이면 2) |
+| `EGRESS_CPUS` | `4` | 회의 녹화 컨테이너의 CPU 상한. 서버의 코어 수를 초과하면 컨테이너 생성이 거부된다 | 파생 |
+| `EGRESS_ROOM_CPU_COST` | `4` | 룸 합성 녹화 1건의 CPU 요구량(egress 의 `room_composite_cpu_cost`). 가용 CPU 가 이보다 적으면 녹화 요청이 거절된다 | 파생 |
 | `BACKEND_CPUS` | (비움) | backend 컨테이너의 CPU 상한(예 `4.0`). 비우면 제한 없음 | 수동 |
 | `BACKUP_VOLUME` | `backups-vol` | 백업 저장 볼륨(실제 이름 `ws-backups`). 호스트 경로를 지정해 다른 디스크로 변경할 수 있다 | 수동 |
 | `DEPLOY_MODE` | — | 설치 관리자가 `.env` 에 기록하는 표시값(`standalone`/`external_proxy`). compose 와 backend 는 읽지 않는다 — 직접 구성하는 경우 기재하지 않는다(`.env.example` 에 없다) | 파생 |

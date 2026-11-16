@@ -278,6 +278,19 @@ check_core() {
   expect "최초 설정 방식은 installer" installer "$(ws_curl "$WS/api/setup/status" | json_get 'd["setup_mode"]')"
   expect "첫 관리자 API 는 닫혀 있다(403)" 403 "$(first_admin_code)"
   expect "backend 로그에 설정 토큰이 없다" 0 "$(docker logs ws-backend 2>&1 | grep -c 'setup token:')"
+  [ -n "${E2E_SKIP_NETWORK_CHECK:-}" ] || check_network
+}
+
+# 내부망 주소 — 설치 관리자는 예약 주소(호스트 번호 100), 연결된 컨테이너 간 주소 중복 없음
+E2E_NET=just-workspace_workspace
+net_address() { docker inspect --format "{{with index .NetworkSettings.Networks \"$E2E_NET\"}}{{.IPAddress}}{{end}}" "$1" 2>/dev/null; }
+net_duplicates() {
+  docker network inspect "$E2E_NET" --format '{{range .Containers}}{{println .IPv4Address}}{{end}}' | sed '/^$/d' | sort | uniq -d | tr '\n' ' '
+}
+check_network() {
+  expect "설치 관리자의 내부망 주소는 예약 주소(100번)" 100 "$(net_address "$INSTALLER" | awk -F. '{print $4}')"
+  expect "nginx 의 내부망 주소(2번)" 2 "$(net_address ws-nginx | awk -F. '{print $4}')"
+  expect "내부망 주소 중복 없음" "" "$(net_duplicates)"
 }
 
 # 웹의 최초 관리자 생성을 호출한다(설치 관리자 설치에서는 항상 403) — 상태 코드 반환, 본문은 $E2E_WORK/first-admin.json

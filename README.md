@@ -63,6 +63,8 @@ docker run -d --name jw-installer --restart unless-stopped \
 docker logs jw-installer
 ```
 
+위 명령의 `1.0.0` 은 Stable 공개 이후의 값이다. 버전은 릴리스 페이지의 최신 값을 두 곳에 동일하게 지정하며, Stable 공개 이전에는 공개된 Beta 버전(예: `1.0.0-beta.2`)을 지정한다.
+
 로그에 출력된 주소(`https://<서버 주소>:8443/?token=…`)를 브라우저로 열면 설치 마법사가 시작된다. 설치 관리자의 인증서는 자체 서명 인증서이므로 브라우저에 경고가 표시된다 — 로그의 SHA-256 지문과 대조한 후 진행한다.
 
 - `-v` 의 호스트 폴더와 `JW_HOST_DIR` 은 **동일한 경로**여야 한다. 이 폴더가 설치 폴더이다.

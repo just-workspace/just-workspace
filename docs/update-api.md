@@ -77,7 +77,7 @@
 | `current.previous_version` | 직전 버전(없으면 `null`) |
 | `settings` | 4절의 설정과 동일한 값 |
 | `check.state` | `idle` / `checking` |
-| `check.ok` · `check.error` | 최종 확인의 성공 여부. 실패 시 `error = {"code", "detail"}` — code: `unconfigured`(서명을 검증할 공개 키가 없다 — 채널을 수신하지 않는다. `detail` 은 빈 문자열), `channel_unreachable`(연결 실패), `channel_invalid`(서명·형식·만료·순번 — releases.md 의 `VerifyError` 유형), `manifest_invalid`. 후자의 둘에는 `kind` 가 추가된다: `signature` / `expired` / `rollback`(순번 역행) / `hash` / `content` |
+| `check.ok` · `check.error` | 최종 확인의 성공 여부. 실패 시 `error = {"code", "detail"}` — code: `unconfigured`(서명을 검증할 공개 키가 없다 — 채널을 수신하지 않는다. `detail` 은 빈 문자열), `channel_unreachable`(연결 실패), `channel_empty`(채널 파일 없음(HTTP 404) — 해당 채널에 공개된 릴리스가 아직 없다. 장애가 아니다), `channel_invalid`(서명·형식·만료·순번 — releases.md 의 `VerifyError` 유형), `manifest_invalid`. 후자의 둘에는 `kind` 가 추가된다: `signature` / `expired` / `rollback`(순번 역행) / `hash` / `content` |
 | `available` | 적용 가능한 버전(아래) — 최종적으로 **성공한** 확인의 결과다. 확인이 실패하더라도 삭제하지 않는다 |
 | `job` | 진행 중이거나 관리자의 선택을 대기 중인 작업(5절의 작업 형식과 동일). 없으면 `null` |
 | `auto.paused` | 자동 업데이트가 실패 이후 중지된 상태인지 여부. `reason = {"job", "step", "version"}` |

@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""ws-sandbox — 격리 Python 실행 서버(표준 라이브러리만).
+"""ws-sandbox — 격리 Python 실행 서버(표준 라이브러리만 사용).
 
   POST /run   {"code": str, "timeout": int, "files": [{"name": str, "data": base64}]}   Authorization: Bearer <SANDBOX_TOKEN>
   → {"exit_code", "timed_out", "killed_reason", "stdout", "stderr", "stdout_truncated", "stderr_truncated",
      "files": [{"name", "data"(base64), "size"}], "files_skipped", "duration_ms"}
   GET  /health
 
-격리(겹겹이):
+격리(다중 계층):
   * 컨테이너: 네트워크 없음(network_mode: none), 읽기 전용 루트, /tmp 만 tmpfs, cap 최소(SETUID·SETGID·CHOWN·KILL),
     no-new-privileges, 메모리·CPU·pids 상한(compose).
-  * 실행: 요청마다 새 작업 디렉터리, **슬롯마다 다른 비루트 uid**(동시 실행끼리 서로의 파일을 못 본다),
-    setsid + rlimit(주소공간·CPU·파일 크기·열린 파일·프로세스 수·코어 0), 벽시계 시간 넘으면 프로세스 그룹 + 그 uid 의
-    남은 프로세스를 모두 죽인다. 환경변수는 최소(토큰 없음).
-  * 결과 수집·정리도 그 uid 로 돈다(서버가 사용자 코드가 만든 파일을 직접 따라가지 않는다 — 심볼릭 링크 함정 차단).
-  * 서버 비밀(SANDBOX_TOKEN)이 없으면 모든 실행을 거절한다.
+  * 실행: 요청마다 새 작업 디렉터리, **슬롯마다 상이한 비루트 uid**(동시 실행 간 상호 파일 접근 불가),
+    setsid + rlimit(주소공간·CPU·파일 크기·열린 파일·프로세스 수·코어 0), 벽시계 시간 초과 시 프로세스 그룹 및 해당 uid 의
+    잔여 프로세스를 모두 종료한다. 환경변수는 최소(토큰 없음).
+  * 결과 수집·정리도 해당 uid 로 실행된다(서버가 사용자 코드가 생성한 파일을 직접 추적하지 않는다 — 심볼릭 링크 함정 차단).
+  * 서버 비밀(SANDBOX_TOKEN)이 없으면 모든 실행을 거부한다.
 """
 
 from __future__ import annotations
@@ -108,7 +108,7 @@ def _as_slot(slot: int, args: list[str], *, cwd: str, timeout: float, mem_mb: in
 
 
 def _kill_uid(slot: int) -> None:
-    """그 슬롯 uid 의 남은 프로세스를 전부 죽인다(데몬화·이중 fork 대비). kill(-1) 은 같은 uid 만 닿는다."""
+    """해당 슬롯 uid 의 잔여 프로세스를 전부 종료한다(데몬화·이중 fork 대비). kill(-1) 은 동일 uid 에만 도달한다."""
     try:
         _as_slot(slot, [PYTHON, "-I", "-S", "-c", "import os,signal\ntry: os.kill(-1, signal.SIGKILL)\nexcept Exception: pass"],
                  cwd="/", timeout=10, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -137,7 +137,7 @@ def run_job(code: str, files: list[dict], timeout: int) -> dict:
     slot = _slots.get(timeout=QUEUE_WAIT)
     uid = BASE_UID + slot
     os.makedirs(WORK_ROOT, mode=0o711, exist_ok=True)
-    root = tempfile.mkdtemp(prefix="job-", dir=WORK_ROOT)     # 서버(root) 소유 0700 — 로그만 둔다
+    root = tempfile.mkdtemp(prefix="job-", dir=WORK_ROOT)     # 서버(root) 소유 0700 — 로그만 저장
     work = os.path.join(root, "w")
     t0 = time.monotonic()
     try:
@@ -145,7 +145,7 @@ def run_job(code: str, files: list[dict], timeout: int) -> dict:
         os.mkdir(work, 0o700)
         for d in ("input", "output", ".tmp", ".mpl"):
             os.mkdir(os.path.join(work, d), 0o700)
-        if os.path.isdir(MPL_CACHE):                           # 글꼴 캐시(매번 다시 만들면 몇 초 걸린다)
+        if os.path.isdir(MPL_CACHE):                           # 글꼴 캐시(매번 재생성하면 수 초 소요)
             for n in os.listdir(MPL_CACHE):
                 src = os.path.join(MPL_CACHE, n)
                 if os.path.isfile(src):
@@ -155,12 +155,12 @@ def run_job(code: str, files: list[dict], timeout: int) -> dict:
                 fh.write(f["bytes"])
         with open(os.path.join(work, "main.py"), "w", encoding="utf-8") as fh:
             fh.write(code)
-        # 주인 = 슬롯 uid, 그룹 = 0(서버). 서버는 DAC_OVERRIDE 없이도 그룹 권한으로 들어가 chdir·정리할 수 있고,
-        # 다른 슬롯 uid 는 그룹 0 이 아니라 못 들어온다. 사용자 코드가 새로 만드는 파일은 umask 077(그 uid 만).
+        # 소유자 = 슬롯 uid, 그룹 = 0(서버). 서버는 DAC_OVERRIDE 없이도 그룹 권한으로 진입하여 chdir·정리가 가능하고,
+        # 다른 슬롯 uid 는 그룹 0 이 아니므로 진입할 수 없다. 사용자 코드가 새로 생성하는 파일은 umask 077(해당 uid 전용).
         for dirpath, dirnames, filenames in os.walk(work, topdown=False):
             for n in filenames:
                 fp = os.path.join(dirpath, n)
-                os.chmod(fp, 0o660)  # 주인을 넘기기 전에(넘긴 뒤엔 FOWNER 없이 못 바꾼다)
+                os.chmod(fp, 0o660)  # 소유자 이전 전에 수행(이전 후에는 FOWNER 없이 변경 불가)
                 os.chown(fp, uid, 0)
             os.chmod(dirpath, 0o770)
             os.chown(dirpath, uid, 0)
@@ -189,7 +189,7 @@ def run_job(code: str, files: list[dict], timeout: int) -> dict:
         stderr, se_cut = _read_capped(err_path, OUT_TEXT // 2)
         if rc != 0 and "MemoryError" in stderr:
             killed_reason = killed_reason or "memory_limit"
-        # 결과 파일 — 그 uid 로 모아 JSON 으로 받는다(링크·특수 파일은 건너뜀)
+        # 결과 파일 — 해당 uid 로 수집하여 JSON 으로 수신(링크·특수 파일은 건너뜀)
         collected = {"files": [], "skipped": []}
         try:
             cp = _as_slot(slot, [PYTHON, "-I", "-S", HELPERS, "collect", os.path.join(work, "output"),
@@ -312,7 +312,7 @@ class UnixHTTPServer(ThreadingHTTPServer):
         except FileNotFoundError:
             pass
         self.socket.bind(self.server_address)
-        os.chmod(self.server_address, 0o666)       # 볼륨을 함께 쓰는 백엔드(다른 uid)가 접속
+        os.chmod(self.server_address, 0o666)       # 볼륨을 공유하는 백엔드(다른 uid)가 접속
         self.server_name, self.server_port = "local", 0
 
     def get_request(self):

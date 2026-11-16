@@ -1,8 +1,8 @@
 # ws-sandbox — 격리 Python 분석 실행(code_run 도구)
 #
-# 격리는 compose 설정과 함께 완성된다(docker-compose.yml 의 sandbox 항목):
+# 격리는 compose 설정과 결합되어 완성된다(docker-compose.yml 의 sandbox 항목):
 #   network_mode: none · read_only · tmpfs /tmp · cap_drop ALL + (SETUID SETGID CHOWN KILL) · no-new-privileges ·
-#   mem/cpu/pids 상한. 서버는 root 로 떠서 요청마다 슬롯별 비루트 uid(20001~)로 내려 코드를 돌린다.
+#   mem/cpu/pids 상한. 서버는 root 로 기동하여 요청마다 슬롯별 비루트 uid(20001~)로 권한을 낮춰 코드를 실행한다.
 FROM python:3.14-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -18,12 +18,12 @@ RUN pip install --no-cache-dir -r /opt/sandbox/requirements.txt \
 COPY matplotlibrc /opt/sandbox/matplotlibrc
 COPY server.py helpers.py /opt/sandbox/
 
-# 라이선스 고지 — 이미지를 배포하면 고지도 함께 가야 한다. 세 파일은 빌드 문맥 밖(리포 루트)에 있어
-# 이름 붙인 문맥 `licenses` 로 받는다: compose 의 build.additional_contexts, 직접 빌드할 때는
+# 라이선스 고지 — 이미지 배포 시 고지를 함께 포함해야 한다. 세 파일은 빌드 문맥 밖(리포 루트)에 있으므로
+# 명명된 문맥 `licenses` 로 전달받는다: compose 의 build.additional_contexts, 직접 빌드 시에는
 # `docker build --build-context licenses=<리포 루트> …`.
 COPY --from=licenses --chmod=0644 LICENSE NOTICE THIRD_PARTY_LICENSES.md /licenses/
 
-# 슬롯별 실행 계정(로그인 없음). 글꼴 캐시는 이미지에 미리 만들어 두고 작업마다 복사한다.
+# 슬롯별 실행 계정(로그인 없음). 글꼴 캐시는 이미지에 사전 생성하고 작업마다 복사한다.
 RUN set -eux; \
     for i in 0 1 2 3 4 5 6 7; do uid=$((20001 + i)); \
       groupadd -g "$uid" "sbx$i"; useradd -u "$uid" -g "$uid" -M -d /nonexistent -s /usr/sbin/nologin "sbx$i"; done; \

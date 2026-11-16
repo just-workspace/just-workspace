@@ -1,7 +1,7 @@
-# 메일서버 시작 때 /etc/dovecot/local.conf 로 복사된다(docker-mailserver) → 바꾸면 mailserver force-recreate.
+# 메일서버 기동 시 /etc/dovecot/local.conf 로 복사된다(docker-mailserver) → 변경 시 mailserver force-recreate 필요.
 #
-# 보관함 — 외부 메일 앱(애플 메일·아웃룩·삼성 메일)의 '보관' 버튼이 RFC 6154 \Archive 폴더를 찾는다.
-# 없으면 앱마다 제멋대로 Archive·보관함을 만들어 폴더가 중복된다. 웹 메일의 보관 버튼도 이 폴더를 쓴다.
+# 보관함 — 외부 메일 앱(애플 메일·아웃룩·삼성 메일)의 '보관' 버튼은 RFC 6154 \Archive 폴더를 탐색한다.
+# 없으면 앱마다 Archive·보관함을 임의로 생성해 폴더가 중복된다. 웹 메일의 보관 버튼도 이 폴더를 사용한다.
 namespace inbox {
   mailbox Archive {
     auto = subscribe

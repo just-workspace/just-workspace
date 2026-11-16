@@ -1,8 +1,8 @@
 #!/bin/sh
-# 실행(도커 호스트에서): tar 로 backend/app → $B/backend/app, deploy/rbi-netfilter → $B/nf, 리포 루트의 LICENSE·NOTICE·THIRD_PARTY_LICENSES.md → $B/ 를 풀고 `sh test-propagation.sh`. 운영 이름은 RBI_TEST_STACK=1 이 거부한다.
-# 동적 허용 목록 전파 시험(임시 컨테이너만 — 이름 r22-*, 체인 R22-RBI, 브리지 br-r22rbi. WS-RBI·ws-* 는 건드리지 않는다)
-#   1) 백엔드 코드(app.rbi.egress)가 대상에서 allow.txt 를 쓴다 → 2) 사이드카가 한 주기 안에 체인에 건다 → 실제 트래픽 통과
-#   3) 대상 제거 → 한 주기 안에 규칙이 사라지고 트래픽이 막힌다 · 4) 잘못된 줄·자기 주소(force 없음)·도커 대역·상한 밖은 rejected
+# 실행(도커 호스트에서): tar 로 backend/app → $B/backend/app, deploy/rbi-netfilter → $B/nf, 리포 루트의 LICENSE·NOTICE·THIRD_PARTY_LICENSES.md → $B/ 에 풀고 `sh test-propagation.sh`. 운영 이름은 RBI_TEST_STACK=1 이 거부한다.
+# 동적 허용 목록 전파 시험(임시 컨테이너만 사용 — 이름 r22-*, 체인 R22-RBI, 브리지 br-r22rbi. WS-RBI·ws-* 는 변경하지 않는다)
+#   1) 백엔드 코드(app.rbi.egress)가 대상에서 allow.txt 를 기록한다 → 2) 사이드카가 한 주기 안에 체인에 적용한다 → 실제 트래픽 통과
+#   3) 대상 제거 → 한 주기 안에 규칙이 제거되고 트래픽이 차단된다 · 4) 잘못된 줄·자기 주소(force 없음)·도커 대역·상한 밖은 rejected
 set -u
 B="${B:-/tmp/r22}"   # 이 아래에 backend/(리포 backend) · nf/(리포 deploy/rbi-netfilter) 를 풀어 둔다
 POLL=2
@@ -22,7 +22,7 @@ docker network create --driver bridge --subnet 172.31.222.0/24 --opt com.docker.
   --opt com.docker.network.bridge.enable_icc=false r22-rbi-net >/dev/null || fail net
 mkdir -p $B/allow $B/guard
 
-writer() {  # $1 = 파이썬 대상 목록(url) — 실제 백엔드 코드로 출구 계산·파일 쓰기
+writer() {  # $1 = 파이썬 대상 목록(url) — 실제 백엔드 코드로 출구 계산·파일 기록
   docker run --rm --name r22-writer -e PYTHONDONTWRITEBYTECODE=1 -e RBI_ALLOW_FILE=/run/rbi-allow/allow.txt \
     -e RBI_PROTECTED=192.168.10.20,192.168.10.1 -e SECRET_KEY=x -e DATABASE_URL=sqlite+aiosqlite:///:memory: \
     -v $B/backend:/app -w /app -v $B/allow:/run/rbi-allow --entrypoint python localhost/just-workspace-backend:latest -c "
@@ -62,7 +62,7 @@ ipt -S R22-RBI
 grep -q '"192.168.10.70:80"' $B/guard/state.json || fail "하트비트 allow 에 없음"
 probe && echo "OK  세션 대역 → 192.168.10.70:80 열림" || fail "추가했는데 막힘"
 
-# 잘못된/금지 줄 — 사이드카가 다시 검사(백엔드를 거치지 않고 파일에 직접 넣어 본다)
+# 잘못된/금지 줄 — 사이드카가 재검증(백엔드를 거치지 않고 파일에 직접 기록해 확인한다)
 docker run --rm -v $B/allow:/a alpine sh -c 'printf "# rev=deadbeef\n192.168.10.70:80  # t0\n192.168.10.70:443\n192.168.10.20:22\n172.28.0.5:8000\n8.8.8.8:443\n127.0.0.1:80\n1.2.3:80\n" > /a/allow.txt'
 sleep $((POLL+2))
 cat $B/guard/state.json; echo
@@ -73,7 +73,7 @@ ipt -S R22-RBI | grep -qE -- "-d (192.168.10.20|172.28.0.5|8.8.8.8|127.0.0.1)/" 
 echo "OK  금지·잘못된 줄 5개 거부(rejected 에 이유), 규칙에는 없음"
 grep -q '"allow_rev":"deadbeef"' $B/guard/state.json && echo "OK  allow_rev 반영"
 
-# 대상 제거 → 한 주기 안에 사라진다
+# 대상 제거 → 한 주기 안에 제거된다
 writer ""
 t0=$(date +%s)
 n=0; while [ $n -lt 20 ]; do ipt -S R22-RBI | grep -q -- "-d 192.168.10.70" || break; sleep 0.5; n=$((n+1)); done

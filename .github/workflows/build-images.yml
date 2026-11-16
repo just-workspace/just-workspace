@@ -1,20 +1,20 @@
 name: build-images
 
-# 우리가 빌드하는 이미지를 전부 빌드해 레지스트리에 올리고, 이름 → 다이제스트 표(digests.json)를 산출물로 낸다.
+# 자체 빌드 이미지를 전부 빌드하여 레지스트리에 push 하고, 이름 → 다이제스트 표(digests.json)를 산출물로 생성한다.
 #
-# 여기서 하지 않는 것: 서명, 채널 갱신. 빌드 서버에는 비공개 키를 두지 않는다 — 릴리스를 내는 사람이
-# digests.json 을 내려받아 자기 PC 에서 manifest 를 만들고 서명한다(docs/releases.md).
+# 여기서 수행하지 않는 작업: 서명, 채널 갱신. 빌드 서버에는 비공개 키를 두지 않는다. 릴리스 담당자가
+# digests.json 을 내려받아 자신의 PC 에서 manifest 를 생성하고 서명한다(docs/releases.md).
 #
 # 설정(리포 Variables/Secrets — 전부 선택, 기본은 GHCR + GITHUB_TOKEN):
 #   vars.JW_REGISTRY        레지스트리 호스트 (기본 ghcr.io)
 #   vars.JW_IMAGE_NS        네임스페이스 (기본 리포 소유자)
-#   vars.JW_IMAGE_PREFIX    이미지 이름 앞머리 (기본 just-workspace-) — compose 의 이미지 이름과 같아야 한다
-#   secrets.REGISTRY_USER / secrets.REGISTRY_TOKEN   GHCR 가 아닌 레지스트리일 때의 로그인
+#   vars.JW_IMAGE_PREFIX    이미지 이름 접두사 (기본 just-workspace-) — compose 의 이미지 이름과 동일해야 한다
+#   secrets.REGISTRY_USER / secrets.REGISTRY_TOKEN   GHCR 이외의 레지스트리 사용 시의 로그인 정보
 #
-# 액션은 커밋 SHA 로 고정한다(옆 주석이 그 SHA 의 태그). 올릴 때는 SHA 와 주석을 함께 바꾼다.
+# 액션은 커밋 SHA 로 고정한다(옆 주석이 해당 SHA 의 태그). 버전을 올릴 때는 SHA 와 주석을 함께 변경한다.
 
-# 트리거: Beta 태그(vX.Y.Z-beta.N)와 수동 실행뿐이다. Stable 은 다시 빌드하지 않는다 —
-# 검증을 마친 Beta 의 이미지(같은 다이제스트)를 승격해서만 만든다(docs/releases.md).
+# 트리거: Beta 태그(vX.Y.Z-beta.N)와 수동 실행뿐이다. Stable 은 재빌드하지 않는다 —
+# 검증을 마친 Beta 의 이미지(동일 다이제스트)를 승격하는 방식으로만 생성한다(docs/releases.md).
 on:
   push:
     tags: ["v*-beta.*"]
@@ -80,17 +80,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # context / dockerfile / target 은 docker-compose.yml 의 build 설정과 같아야 한다. 이름 붙인 문맥 licenses 는
-        # 모든 이미지에 같은 값(리포 루트)이라 매트릭스가 아니라 빌드 단계에 한 번 적는다
+        # context / dockerfile / target 은 docker-compose.yml 의 build 설정과 동일해야 한다. 명명 문맥(named context) licenses 는
+        # 모든 이미지에 동일한 값(리포 루트)이므로 매트릭스가 아니라 빌드 단계에 한 번만 지정한다
         # (release/tests/test_workflow.py 가 대조한다). name 은 compose 의 서비스 이름.
         include:
           - name: backend
             context: backend
             dockerfile: backend/Dockerfile
-            # 운영 대상 — 테스트 도구가 든 test 대상은 내보내지 않는다
+            # 운영 대상 — 테스트 도구가 포함된 test 대상은 게시하지 않는다
             target: runtime
-            # 표시 버전의 예비값. 실행할 때 환경변수 JW_APP_VERSION 이 있으면 그것이 우선한다 —
-            # 승격(Beta → Stable)은 이미지를 다시 빌드하지 않으므로 실제 표시 버전은 실행 환경이 넣어야 한다.
+            # 표시 버전의 예비값. 실행 시 환경변수 JW_APP_VERSION 이 있으면 해당 값이 우선한다 —
+            # 승격(Beta → Stable)은 이미지를 재빌드하지 않으므로 실제 표시 버전은 실행 환경에서 지정해야 한다.
             build_args: JW_APP_VERSION
           - name: frontend-react
             context: frontend-react
@@ -107,7 +107,7 @@ jobs:
           - name: audiorelay
             context: audiorelay
             dockerfile: audiorelay/Dockerfile
-            # 표시 버전의 예비값(바이너리에 굽는다). 실행할 때 환경변수 JW_APP_VERSION 이 있으면 그것이 우선한다.
+            # 표시 버전의 예비값(바이너리에 내장한다). 실행 시 환경변수 JW_APP_VERSION 이 있으면 해당 값이 우선한다.
             build_args: VERSION
           - name: docconv
             context: docconv
@@ -122,8 +122,8 @@ jobs:
             context: rbi/mirror
             dockerfile: rbi/mirror/Dockerfile
             target: prod
-          # 설치 관리자 — compose 에 없는 이미지. 컨텍스트는 리포 루트다(번들에 실을 파일이 리포 여기저기에 있다 —
-          # 무엇이 들어가는지는 installer/Dockerfile.dockerignore). 받을 이미지 저장소를 빌드 인자로 굽는다.
+          # 설치 관리자 — compose 에 없는 이미지. 컨텍스트는 리포 루트이다(번들에 포함할 파일이 리포 여러 위치에 분산되어 있다 —
+          # 포함 대상은 installer/Dockerfile.dockerignore 참조). pull 대상 이미지 저장소를 빌드 인자로 내장한다.
           - name: installer
             context: .
             dockerfile: installer/Dockerfile
@@ -188,8 +188,8 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          # 라이선스 고지(LICENSE · NOTICE · THIRD_PARTY_LICENSES.md)를 이미지의 /licenses/ 에 넣는다 — compose 의
-          # build.additional_contexts 와 같은 이름. 리포 루트의 .dockerignore 가 그 파일들만 보낸다.
+          # 라이선스 고지(LICENSE · NOTICE · THIRD_PARTY_LICENSES.md)를 이미지의 /licenses/ 에 포함한다 — compose 의
+          # build.additional_contexts 와 동일한 이름. 리포 루트의 .dockerignore 가 해당 파일만 전달한다.
           build-contexts: licenses=.
           target: ${{ matrix.target || '' }}
           build-args: ${{ steps.args.outputs.list }}
@@ -198,7 +198,7 @@ jobs:
           tags: ${{ env.IMAGE }}:${{ env.VERSION }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
-          # 증명 첨부를 끄면 다이제스트가 linux/amd64 이미지 하나를 바로 가리킨다(색인으로 감싸지지 않는다).
+          # 증명 첨부를 비활성화하면 다이제스트가 linux/amd64 이미지 하나를 직접 가리킨다(색인으로 감싸지 않는다).
           provenance: false
           sbom: false
 

@@ -1,7 +1,7 @@
-"""샌드박스 보조 — 슬롯 uid 로 돈다(서버가 사용자 코드가 만든 파일을 직접 따라가지 않게).
+"""샌드박스 보조 — 슬롯 uid 로 실행된다(서버가 사용자 코드가 생성한 파일을 직접 추적하지 않도록).
 
   collect <output_dir> <max_files> <max_bytes>   → stdout 에 {"files":[{name,data,size}], "skipped":[...]}
-  clean <work_dir>                               → 작업 디렉터리 내용 삭제(권한을 되살려 가며)
+  clean <work_dir>                               → 작업 디렉터리 내용 삭제(권한을 복원하면서)
 """
 
 import base64

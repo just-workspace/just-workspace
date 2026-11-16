@@ -1,4 +1,4 @@
-# ws-sandbox 분석 라이브러리 — 전부 == 고정. 올릴 때는 `pip index versions <pkg>` 로 최신 안정판 확인.
+# ws-sandbox 분석 라이브러리 — 전부 == 고정. 버전 상향 시 `pip index versions <pkg>` 로 최신 안정판 확인.
 numpy==2.5.4
 pandas==3.1.1
 pyarrow==26.0.1

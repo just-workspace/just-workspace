@@ -1,14 +1,14 @@
 # ws-sso — SSO 프로토콜 계층.
-# ★ 이 서비스가 backend 와 분리된 이유(중요):
+# 중요: 이 서비스가 backend 와 분리된 이유
 #   pysaml2 는 pyopenssl<24.3.0 을 요구하고, 그 pyopenssl 은 cryptography<44 를
-#   요구한다. backend 는 cryptography 50 을 쓰고 그 위에 python-jose·Argon2·TLS
-#   검증이 올라가 있어 강등할 수 없다. 별도 venv(=별도 컨테이너)면 충돌이 없다.
-#   (2026-10: pysaml2 7.5.5 가 cryptography>=46.0.5·pyopenssl>=26 으로 풀어 이 충돌은
-#   사라졌다. 분리는 프로토콜 계층 경계로서 유지한다. 버전은 backend 와 맞춘다.)
+#   요구한다. backend 는 cryptography 50 을 사용하며 그 위에 python-jose·Argon2·TLS
+#   검증이 의존하고 있어 버전을 낮출 수 없다. 별도 venv(=별도 컨테이너)면 충돌이 없다.
+#   (2026-10: pysaml2 7.5.5 가 cryptography>=46.0.5·pyopenssl>=26 으로 완화하여 이 충돌은
+#   해소되었다. 분리는 프로토콜 계층 경계로서 유지한다. 버전은 backend 와 일치시킨다.)
 fastapi==0.162.7
 starlette==1.10.0
 uvicorn[standard]==0.54.0
-# SQLAlchemy 2.1: greenlet 이 [asyncio] extra 로 빠졌다 — backend 와 같은 이유로 둘 다 고정
+# SQLAlchemy 2.1: greenlet 이 [asyncio] extra 로 분리되었다 — backend 와 동일한 이유로 둘 다 고정
 sqlalchemy[asyncio]==2.1.8
 greenlet==3.5.6
 asyncpg==0.32.0
@@ -18,9 +18,9 @@ itsdangerous==2.2.0
 httpx==0.28.1
 
 # SAML 2.0 IdP. XML-DSIG 는 직접 구현하지 않는다 — XML Signature Wrapping 은
-# 정석대로 짜도 뚫리는 영역이라 검증된 구현에 맡긴다.
+# 표준 절차대로 구현해도 취약점이 발생하는 영역이므로 검증된 구현을 사용한다.
 pysaml2==7.5.5
 
-# SCIM 2.0 — 스키마 모델과 필터 파서. 필터 문법을 직접 파싱하면 고생한다.
+# SCIM 2.0 — 스키마 모델과 필터 파서. 필터 문법의 직접 파싱은 구현 부담이 크다.
 scim2-models==0.12.4
 scim2-filter-parser==0.7.0

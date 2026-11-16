@@ -259,7 +259,7 @@ docker run -d --name jw-installer --restart unless-stopped \
 - 스크립트는 `localhost/just-workspace-<이름>:<버전>` 과 `just-workspace-installer:<버전>` 을 만든다(검수에 쓰는 것과 같은 스크립트다). `JW_REGISTRY=localhost` 는 설치 관리자에게 서버에 이미 있는 그 이미지를 쓰라고 알린다.
 - 다른 곳에서 만든 구성 요소(데이터베이스, 문서 편집기 등)는 이 경우에도 원 배포처에서 받는다.
 - 격리 브라우저 애드온의 세션 이미지는 무거워서 따로 빌드한다: `bash installer/e2e/build-images.sh rbi-mirror`.
-- 이렇게 설치한 서버는 관리 › 업데이트가 "구성되지 않음"으로 나온다(채널의 서명을 확인할 공개 키가 없다). 쓸 채널이 있으면 `docker exec -i jw-installer jw update-key add - < release.pub` 로 공개 키를 넣는다 — [operate.md](operate.md#2-업데이트)의 "업데이트 확인이 구성되지 않았습니다".
+- 설치 관리자 이미지에는 리포의 `installer/keys/*.pub`(업데이트 채널의 서명을 확인하는 공개 키)가 들어간다. 그 폴더를 비우고 빌드했다면 관리 › 업데이트가 "구성되지 않음"으로 나온다. 다른 채널을 쓰려면 `docker exec -i jw-installer jw update-key add - < release.pub` 로 그 채널의 공개 키를 넣는다(설치 폴더의 키가 이미지의 키보다 우선한다) — [operate.md](operate.md#2-업데이트)의 "업데이트 확인이 구성되지 않았습니다".
 
 ## 3. 설치 뒤 할 일
 

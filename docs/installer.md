@@ -568,7 +568,7 @@ node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서
 | `s6-zone-toggle` | 내부 API 로 채팅 → 문서 → 코드 저장소 켜기, 문서·코드 저장소 끄기. `.env` 의 `JW_ZONES`·`COMPOSE_PROFILES`, `/api/health` 의 zones, 끈 구역의 볼륨 유지. 8443·호스트에서는 내부 API 에 닿지 않고, 틀린 키·내부 대역 밖은 404 |
 | `s7-failure-retry` | 토큰(틀림·재발급·만료·5회 잠금), 없는 이미지 → `pull` 실패·원인 키 → 고친 뒤 그 단계부터, 적용 도중 설치 관리자 재시작 → 이어서 완료, 인증서 자동 발급 실패 → 임시 인증서로 계속 |
 | `s8-manual` | 설치 관리자 없이 [deployment.md](deployment.md) 의 절차대로 최소 구성 기동, 설정 토큰으로 첫 관리자 만들기(로그의 토큰은 하나, 토큰 없이·옛 토큰으로는 403, 11자 비밀번호 400, 만든 뒤 폐기), `scripts/update.sh --no-pull` 로 다시 빌드해 올리기와 `--rollback`(업데이트 전에 붙여 둔 태그의 이미지로 이름을 되돌린다) |
-| `s9-operate` | 기본 + 코드 저장소에서: 버전 환경변수 없이 띄웠을 때의 로그 알림, `jw update-key`(비공개 키·엉뚱한 파일 거부, 넣으면 확인이 `unconfigured` → 채널을 받으러 감)·`jw update-channel`, `jw restore`(목록, `--yes` 없이는 내용만, 백업 볼륨의 이름·서버 경로, 되돌린 뒤 백업 시점의 파일만 남고 쓰기가 됨, 없는 파일·틀린 경로 거부), 사설 CA 인증서(서버 인증서만 올리면 코드 저장소 연결이 보류로 남고, 발급 CA 를 함께 올리면 컨테이너에 CA 가 붙고 로그인 원본이 등록됨) |
+| `s9-operate` | 기본 + 코드 저장소에서: 버전 환경변수 없이 띄웠을 때의 로그 알림, `jw update-key`(이미지에 든 공개 키를 쓰지 않게 띄워 "키가 없는 설치"에서 본다 — 비공개 키·엉뚱한 파일 거부, 넣으면 확인이 `unconfigured` → 채널을 받으러 감)·`jw update-channel`, `jw restore`(목록, `--yes` 없이는 내용만, 백업 볼륨의 이름·서버 경로, 되돌린 뒤 백업 시점의 파일만 남고 쓰기가 됨, 없는 파일·틀린 경로 거부), 사설 CA 인증서(서버 인증서만 올리면 코드 저장소 연결이 보류로 남고, 발급 CA 를 함께 올리면 컨테이너에 CA 가 붙고 로그인 원본이 등록됨) |
 | `wizard-ui.cjs` | 화면을 눌러 일반 설치(협업 묶음·임시 인증서)와 빠른 설치를 완료 화면까지 — 1280 폭과 390 폭. 토큰 없는 주소·틀린 토큰, 사전 점검 14항목, 구역·메모리 합계, 메일 레코드 표, 이어 하기, 요약, 적용, 잠김 화면. 콘솔 오류 없음 |
 | `jw reinstall` | 설치된 서버에서 목록 확인 → `--yes` 로 지우고 새 토큰으로 다시 시작 |
 | `restore` + `restore-ui.cjs` | 서버 이전: 협업 묶음에 계정 2·파일·채팅·메일·일정·암호화된 값을 넣고 전체 백업 → 서버를 체크포인트로 되돌린 뒤 화면으로 올려 복원 → 옛 계정 로그인, 파일 해시, 채팅·메일·일정, DKIM 키, 암호화 값 복호, 설치 id, 잠금. 서버 경로 + 답변 파일(무인, 접속 주소 변경). 거부 경로(형식 아님·손상·끊김·암호 없음/틀림/맞음·더 높은 버전). 데이터 되돌리기 중 DB 정지 → 실패 → 재시도로 완료. NFS: 로컬 선택·빈 공유·다른 설치의 공유 거부, 같은 공유 재연결 뒤 파일 그대로 |
@@ -578,7 +578,7 @@ node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서
 
 | 단계 | 실제 서버에서 확인한 것 |
 |---|---|
-| `setup` | 릴리스 도구로 1.0.0 과 1.0.1-beta.1 을 내고(이미지 올리기 → `make-manifest --resolve-sizes --db-schema` → `publish` → `verify`) Beta 를 Stable 로 승격. 공개 키가 없으면 `unconfigured`, 키를 넣으면 확인이 되고, Beta 릴리스는 stable 채널에 보이지 않다가 승격 뒤에 보인다 |
+| `setup` | 릴리스 도구로 1.0.0 과 1.0.1-beta.1 을 내고(이미지 올리기 → `make-manifest --resolve-sizes --db-schema` → `publish` → `verify`) Beta 를 Stable 로 승격. 검수 채널은 임시 키로 서명한다 — 설치 폴더에 그 공개 키를 넣기 전에는 이미지에 든 키로 서명이 맞지 않아 `channel_invalid`(이미지에 키가 없으면 `unconfigured`), 넣으면 확인이 되고, Beta 릴리스는 stable 채널에 보이지 않다가 승격 뒤에 보인다 |
 | `u9` | 변조한 채널 파일·다른 키로 서명한 채널·만료된 채널·순번이 뒤로 간 채널·변조한 manifest·닿지 않는 채널을 각각 거부하고, 마지막으로 성공한 결과는 그대로 둔다 |
 | `u1` | 수동 업데이트 1.0.0 → 1.0.1(승격한 릴리스): 예고(backend 의 예고 조회·공개 점검 상태에 반영)와 취소, "지금 바로 시작", 점검 모드(일반 API 503 + `Retry-After`, 진행 조회·로그인은 통과), 여섯 단계, 설치 관리자 자기 교체(새 이미지·같은 이름·8443 응답·옛 컨테이너 없음), `/api/health` 의 버전·스키마, 검수용 변경 단계 적용, 넣어 둔 데이터(계정·파일·대화·메일) 보존, 기록·기록 내려받기·복원 지점. 프런트가 없을 때의 정적 점검 페이지, `/maintenance/status` 는 GET 만, 내부 API 는 밖에서 닿지 않음 |
 | `u7` | 복원 지점으로 수동 복원(1.0.1 → 1.0.0): 다섯 단계, DB 복원(검수용 표가 사라짐), 설치 관리자도 이전 이미지·이전 환경으로, 데이터 보존, 다시 받을 수 있음 |
@@ -731,11 +731,11 @@ docker exec jw-installer jw apply --answers /data/restore.json
 | 설정 | 어디서 | 기본 |
 |---|---|---|
 | 채널 주소 | `jw update-channel <주소>` 로 정한 값(`<설치 폴더>/state/update/channel-url`) → 환경변수 `JW_UPDATE_CHANNEL_URL`(이미지 빌드 인자 같은 이름으로 기본값을 굽는다) | 릴리스 도구의 `channel_base_url`(`release/jwrelease/config.py`) |
-| 공개 키 | `<설치 폴더>/state/update/keys/*.pub` — 있으면 이것만 쓴다(`jw update-key add` 가 검증해 넣는다). 없으면 이미지의 `/app/keys/*.pub`(빌드할 때 `installer/keys/` 에 넣은 것) | 리포에는 키가 없다 |
+| 공개 키 | `<설치 폴더>/state/update/keys/*.pub` — 있으면 이것만 쓴다(`jw update-key add` 가 검증해 넣는다). 없으면 이미지의 `/app/keys/*.pub`(빌드할 때 `installer/keys/` 에 넣은 것) | 리포의 `installer/keys/release.pub` |
 | 오프라인 묶음을 받는 주소 | `JW_UPDATE_OFFLINE_URL`(`{version}`·`{filename}`) | 릴리스 도구의 `download_url_template` |
 
 - 공개 키는 **둘까지**(현재·다음, 파일 이름순) 받고 어느 하나로 검증되면 통과시킨다 — 키 교체 절차는 releases.md 의 "키 관리".
-- 키가 하나도 없으면 확인은 `unconfigured` 로 끝난다(채널을 받으러 가지 않는다). 소스로 빌드해 설치한 서버가 그렇다 — `docker exec -i jw-installer jw update-key add - < release.pub` 로 넣는다(PEM 공개 키인지 확인하고 지문을 보여 준다. 비공개 키는 거부한다).
+- 키가 하나도 없으면 확인은 `unconfigured` 로 끝난다(채널을 받으러 가지 않는다). `installer/keys/` 를 비우고 빌드한 이미지가 그렇다 — `docker exec -i jw-installer jw update-key add - < release.pub` 로 넣는다(PEM 공개 키인지 확인하고 지문을 보여 준다. 비공개 키는 거부한다).
 - `jw update-channel <주소>` 는 채널 주소를 바꾸고, 앞 채널에서 기억한 확인 결과와 순번을 지운다(다른 발행자의 채널은 순번이 더 낮을 수 있다). `--reset` 은 환경변수·이미지의 값으로 되돌린다.
 - 확인은 여섯 시간마다 + 0~30분의 흔들림. 채널 서버에는 정적 파일을 GET 할 뿐이고 식별자·버전·통계를 보내지 않는다. 받아들인 채널의 순번(`sequence`)을 기억해, 그보다 낮은 파일은 거부한다.
 - 검증을 통과한 manifest 는 `state/update/manifests/` 에 서명과 함께 두고, **쓸 때마다 서명을 다시 확인한다.**

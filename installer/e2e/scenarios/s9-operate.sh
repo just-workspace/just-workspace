@@ -12,7 +12,9 @@ e2e_reset
 rm -rf "$OP"; mkdir -p "$OP"; chmod 700 "$OP"
 
 say "설치 관리자 시작"
-check "설치 관리자 기동" installer_start
+# 이미지에는 배포처의 공개 키가 들어 있을 수 있다(installer/keys/). "키가 없는 설치"를 보려고 내장 키 폴더를 빈 곳으로 돌린다 —
+# 설치 폴더의 키(state/update/keys/)는 그대로 쓰인다.
+check "설치 관리자 기동(내장 공개 키 없이)" installer_start -e JW_UPDATE_PUBKEY_DIR=/e2e-no-builtin-keys
 contains "버전 환경변수 없이 띄우면 로그에 알린다" "JW_INSTALLER_VERSION 이 없어 이미지에 든 버전($E2E_VERSION)" "$(docker logs $INSTALLER 2>&1)"
 
 install file "$E2E_ROOT/answers/git.json" || { step_seconds; finish; }

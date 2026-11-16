@@ -45,10 +45,19 @@ stage_setup() {
   check_core
   check "메일 서버 준비" wait_ready ws-mailserver 240
   ws_login
-  say "공개 키가 없을 때"
+  # 검수 채널은 이 서버에서 만든 임시 키로 서명했다. 설치 폴더에 그 공개 키를 넣기 전에는:
+  #  - 이미지에 배포처의 공개 키가 들어 있으면(installer/keys/*.pub) 그 키로는 서명이 맞지 않는다 → channel_invalid
+  #  - 들어 있지 않으면 → unconfigured
+  if ls "$E2E_REPO"/installer/keys/*.pub >/dev/null 2>&1; then
+    say "검수용 공개 키를 넣기 전 — 이미지에 든 키로는 검수 채널을 믿지 않는다"
+    before=channel_invalid
+  else
+    say "공개 키가 없을 때"
+    before=unconfigured
+  fi
   iapi POST /check >/dev/null; sleep 3
-  expect "확인 결과" unconfigured "$(iapi GET /status | json_get 'd["check"]["error"]["code"]')"
-  keys_install
+  expect "확인 결과" "$before" "$(iapi GET /status | json_get 'd["check"]["error"]["code"]')"
+  keys_install      # 설치 폴더의 키(state/update/keys/)가 이미지의 키보다 우선한다
   expect "공개 키를 넣은 뒤 — 최신" none "$(check_now)"
   expect "Beta 릴리스는 stable 채널에 보이지 않는다" 1.0.0 "$(json_get 'd["releases"][-1]["version"]' < "$REL/channel/channels/stable.json")"
   check "승격(1.0.1-beta.1 → 1.0.1)" rel_promote 1.0.1-beta.1

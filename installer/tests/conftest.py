@@ -5,7 +5,14 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
+
+# 제품 버전은 리포 루트의 VERSION 에서 오는데, 그 값은 릴리스마다 바뀐다. 테스트의 기대값·스냅샷이 거기에 묶이지 않게
+# 고정한다(설치 관리자가 실제로 받는 환경변수 — app/bundle.py). 이 변수 없이 VERSION 을 읽는 길은 그 테스트가 직접 지운다.
+TEST_VERSION = "1.0.0"
+os.environ["JW_INSTALLER_VERSION"] = TEST_VERSION
 
 from app import answers as ans
 from app.bundle import Bundle

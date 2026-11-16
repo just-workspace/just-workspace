@@ -3,7 +3,7 @@
 Just Workspace exposes its workspace tools as a remote **MCP server** (Model
 Context Protocol, Streamable HTTP). An external AI client that supports custom
 connectors — claude.ai, Claude Desktop, Claude Code and similar — can register
-it and then read (and, if you allow it, write) workspace data on behalf of the
+it and then read (and, where permitted, write) workspace data on behalf of the
 signed-in user. Authentication reuses the workspace's built-in OAuth provider;
 there is no separate auth stack.
 
@@ -47,7 +47,7 @@ clients that were registered with that URL. Use `/api/mcp/read` for new setups.
    writes (see [Writes](#writes)).
 
    **(b) Static client** — add an entry to `OAUTH_CLIENTS_JSON` (`.env`) when
-   you want a fixed Client ID. The Client ID is the map key; the Client Secret
+   a fixed Client ID is required. The Client ID is the map key; the Client Secret
    is its `secret` value:
 
    ```json
@@ -195,7 +195,7 @@ right `risk`, and add it to `TOOL_MODULE`.
 
 ## Optional: a dedicated MCP host
 
-You can serve the connector on its own hostname so that only the MCP paths are
+The connector can be served on its own hostname so that only the MCP paths are
 reachable there. Set `MCP_PUBLIC_URL=https://mcp.example.com` and, on the
 reverse proxy in front of the workspace, create a server for that name that
 forwards **only**:
@@ -210,11 +210,11 @@ ahead of the generic `/api/` block, with buffering off and 24-hour timeouts.
 The hostname needs a public DNS record and a TLS certificate. The AI vendor's
 servers call the connector from the internet, so it must be reachable from
 outside; restricting the source to the vendor's published address ranges on
-your firewall is a reasonable hardening step.
+the firewall is a reasonable hardening step.
 
 ## Internal key (headless agents)
 
 `MCP_INTERNAL_TOOLS_ENABLED=true` together with a non-empty `MCP_API_KEY` makes
 the endpoints accept that key as a bearer token, not bound to any user. It is
-off by default and intended for a trusted internal automation only — leave it
-off unless you need it.
+off by default and intended for a trusted internal automation only — it should
+remain off unless required.

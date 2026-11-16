@@ -49,11 +49,13 @@ cd backend && <venv>/bin/python -m pytest -q
 
 ```bash
 docker build --target test --build-context licenses=. -t just-workspace-backend-test backend
-docker run --rm --entrypoint python -e PYTHONDONTWRITEBYTECODE=1 \
+docker run --rm --user 1000:1000 --entrypoint python -e PYTHONDONTWRITEBYTECODE=1 \
   -v "$PWD:/src:ro" -w /src/backend just-workspace-backend-test -m pytest -q -p no:cacheprovider
 ```
 
-DB 는 임시 SQLite 파일로 대신합니다(`backend/tests/conftest.py`). 실제 PostgreSQL 이 필요한 테스트는 환경변수 `JW_TEST_PG_URL` 이 있을 때만 돕니다.
+`--user 1000:1000` 은 이미지의 실행 사용자다. 빼면 root 로 돌아, 파일 권한을 보는 테스트 하나가 건너뛰어진다.
+
+DB 는 임시 SQLite 파일로 대신합니다(`backend/tests/conftest.py`). 실제 PostgreSQL 이 필요한 테스트는 환경변수 `JW_TEST_PG_URL`(관리용 접속, 예: `postgresql+asyncpg://postgres:<비밀번호>@<호스트>:5432/postgres`)이 있을 때만 돕니다 — 없으면 건너뜁니다.
 
 ### 프런트엔드
 

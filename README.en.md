@@ -109,20 +109,23 @@ Everything is done from the admin screen. Details are in [docs/operate.md](docs/
 
 ## Project status
 
-The version is 1.0.0 and the first public release is being prepared.
+The first public release (1.0.0) is being prepared; the project is currently in its Beta phase. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 **Verified end to end on a dedicated test server** ([docs/installer.md](docs/installer.md), section 13):
 
 - Installation from an answers file and through the setup wizard — the Minimal, Collaboration and Full presets, the SSO and LDAP add-on, NFS storage, and running behind a front proxy.
 - Turning zones on and off after installation, retrying from the failed step, and reinstalling.
+- Certificates issued by a private CA: uploading the CA certificate with the certificate, or the CA certificate alone later, connects the code hosting sign-in integration.
+- Isolated browser: the target page is rendered inside the session in both mirror and pixel mode. The noise suppression toggle in meetings really changes the microphone track's noise suppression (Chromium).
 - Updates — manual, automatic, stepping through intermediate versions, rollback on failure, restoring to a restore point, the Beta channel, and offline bundles. Releases were produced with the release tool and served from a test channel inside the server.
 - A minimal stack started by hand, without the installer.
 
 **Not verified yet:**
 
-- Updates against the real distribution channel and signing key, and an actual run of the image build workflow.
+- Updates against the real distribution channel and signing key. The image build workflow ran once on the first Beta tag, but the backend image's build target was changed afterwards and that change has not run there yet (see "Known limitations" in [docs/releases.md](docs/releases.md)).
 - Real Let's Encrypt issuance and renewal (only the "issuance failed → continue with a temporary certificate" path was checked).
-- Code hosting sign-in integration with a public CA certificate (with a private CA it was verified once the issuing CA is uploaded with the certificate), pixel mode of the isolated browser and what is rendered inside a session (starting and ending a mirror-mode session was verified), lossless audio, external SMTP and AI provider connections, and storage in a custom host folder.
+- Code hosting sign-in integration with a public CA certificate, and the document editor under a private CA or temporary certificate.
+- Input (keyboard, IME, clipboard), downloads and uploads in the isolated browser and a target on a real LAN, the actual audio quality of noise suppression and browsers other than Chromium, lossless audio, external SMTP and AI provider connections, and storage in a custom host folder.
 - Servers behind a home router or a real front proxy, distributions with SELinux enabled, and non-x86_64 servers.
 
 ## License

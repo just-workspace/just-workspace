@@ -150,6 +150,7 @@ docker compose -p just-workspace
 | `access.proxy_addresses` | `proxy` 일 때 프록시 주소(IPv4 또는 CIDR) 목록 |
 | `access.cert` | `auto`(Let's Encrypt) · `upload` · `temporary`(자체 서명 — 접속 주소가 서버를 안 가리키거나 확인할 수 없을 때, 또는 발급이 실패한 뒤에만) · `proxy`(프록시가 처리) |
 | `access.cert_path` / `key_path` | 무인 설치에서 `upload` 일 때의 파일(`/data/` 아래) |
+| `access.ca_path` | (선택) 사설 CA 가 내준 인증서일 때 그 CA 인증서 파일(`/data/` 아래) — 인증서 파일에 발급 CA 가 이어 붙어 있지 않을 때만 필요하다(§15의 "사설 CA") |
 | `storage` | `{"kind":"local"}`(도커 볼륨) · `{"kind":"local","path":"/srv/files"}`(호스트에 이미 있는 폴더) · `{"kind":"nfs","server":"…","export":"/…"}`. DB·메일함은 늘 로컬 |
 | `preset` / `zones` / `addons` | `zones`(켤 구역 id 목록)가 있으면 그것, 없으면 `preset`(`minimal`·`collab`·`full` — `zones.json` 의 presets). `addons` 는 부가 구역(`sso`, `rbi`) |
 | `mail` | `builtin` + `mail_domain`, 또는 `external` + `host`·`port`·`security`(`starttls`/`ssl`/`none`)·`username`·`password` |
@@ -195,7 +196,7 @@ docker compose -p just-workspace
 | `GET /api/probe/public-ip` | 공인 주소 감지 |
 | `POST /api/probe/dns` | 접속 주소가 이 서버를 가리키는가: `match`/`mismatch`(가리키는 주소 포함)/`unknown` |
 | `POST /api/probe/mail-records` | MX·A·SPF·DKIM·DMARC 의 기대값과 현재값: `ok`/`missing`/`different`/`unknown` |
-| `POST /api/probe/cert` `{"cert","key"}` | 올린 인증서 검증(도메인·키 짝·만료·발급자·메일 호스트 이름). 통과하면 보관 |
+| `POST /api/probe/cert` `{"cert","key","ca"?}` | 올린 인증서 검증(도메인·키 짝·만료·발급자·발급 CA 유무·메일 호스트 이름). `ca` 는 사설 CA 의 인증서(선택) — 주면 CA 인증서인지, 올린 인증서를 내준 CA 인지도 본다. 통과하면 보관. 응답의 `trust`: `included`(발급 CA 를 안다)·`none`(서버 인증서 한 장뿐)·`self_signed` |
 | `POST /api/probe/smtp` · `/ai` | 외부 SMTP 로그인 · AI 키 확인 |
 | `POST /api/probe/nfs` · `/local-path` | NFS 다섯 단계 · 로컬 폴더(있는가, 쓸 수 있는가) |
 | `GET /api/summary` | 요약 + 주의 모음 + 열리는 포트 + 단계 목록 + `ready` |
@@ -255,6 +256,7 @@ docker compose -p just-workspace
 | `/internal/update/*` | 업데이트 — 상태·설정·적용·작업·복원 지점·오프라인·기록. 경로와 응답은 [update-api.md](update-api.md). `GET /internal/update/maintenance`(공개 점검 상태)만 키 없이 열린다 |
 | `GET /internal/cert` | 지금 쓰는 인증서 — §15 |
 | `POST /internal/cert/reissue` | 인증서 다시 발급 / 올린 인증서로 교체(202 + 작업) — §15 |
+| `POST /internal/cert/ca` | 올린 인증서의 발급 CA 인증서만 더하거나 걷어 낸다(202 + 작업) — §15 |
 | `POST /internal/zones/<id>/reconnect` | 보류된 구역 연결을 다시 시도(202 + 작업) — §15 |
 
 구역별 `settings`:
@@ -334,7 +336,7 @@ docker compose -p just-workspace
 |---|---|
 | `docker-compose.yml`, `nginx/nginx.conf`, `nginx/security-headers.conf`, `init/init-db.sh`, `scripts/certbot-entrypoint.sh`, `mailserver/config/{user-patches.sh,auth-workspace.lua,dovecot.cf}`, `frontend-react/public/maintenance.html` | 번들에서 **그대로** |
 | `.env` (600) | 아래 표 |
-| `docker-compose.site.yml` | 사이트별 조각 — TLS 를 직접 끝낼 때 nginx 의 `443:443` |
+| `docker-compose.site.yml` | 사이트별 조각 — TLS 를 직접 끝낼 때 nginx 의 `443:443`, 올린 인증서의 발급 CA 를 알 때 코드 저장소·backend 컨테이너에 그 CA 파일을 붙이는 줄(§15의 "사설 CA") |
 | `nginx/site.d/{http,listen-main,listen-rbi,headers}.conf` | 아래 "nginx" |
 | `livekit/livekit.yaml` | 회의 구역일 때 |
 | `mailserver/config/postfix-accounts.cf`, `dovecot-masters.cf`, `rspamd/…`, `user-patches.d/10-dkim.sh` | 내장 메일일 때 |
@@ -427,7 +429,7 @@ compose 는 저장소 볼륨(`ws-storage-data`)을 `external` 로 쓴다. 설치
 | `JW_NET_PREFIX` | 답변 | `advanced.subnet` 의 앞 세 자리 |
 | `JW_REGISTRY` / `JW_VERSION` | 고정 | 설치 관리자의 `JW_REGISTRY` / 제품 버전(또는 `JW_IMAGE_TAG`) |
 | `JW_APP_VERSION` | 고정 | 제품 버전(번들의 `VERSION`) — 화면에 보이는 버전. 이미지에 구운 값보다 우선한다 |
-| `JW_SOURCE_URL` | 고정 | 설치 관리자에 준 `JW_SOURCE_URL`(http·https 주소일 때만). 없으면 빈 값 — backend 가 원래 리포의 주소를 쓴다. 화면의 "소스 코드" 링크 |
+| `JW_SOURCE_URL` | 고정 | 설치 관리자에 준 `JW_SOURCE_URL`(http·https 주소일 때만), 없으면 기억해 둔 값. **값이 없으면 줄 자체를 싣지 않는다** — backend 는 변수가 없을 때와 비어 있을 때 모두 원래 리포의 주소를 쓴다. 화면의 "소스 코드" 링크. 한 번 준 값은 상태 폴더(`facts.json` 의 `source_url`)에 기억해, 환경변수 없이 스택 파일을 다시 쓰는 경우(업데이트의 `switch` 단계 — 새 이미지의 일회용 컨테이너, 설치 관리자를 다른 옵션으로 다시 띄운 뒤의 구역 작업)에도 남는다. 이 기억이 없던 판에서 올라온 설치는 지금 `.env` 에 적힌 값을 이어 쓴다. 원래 리포로 되돌리려면 그 주소를 직접 준다 |
 | `COMPOSE_PROJECT_NAME` | 고정 | `just-workspace` |
 | `STORAGE_MARKER_REQUIRED` / `JW_INSTALL_ID` | 고정 | `1` / 설치 id |
 | `JW_INSTALLER_URL` / `JW_INSTALLER_KEY` | 고정 / 생성 | `http://jw-installer:8444` / 내부 API 키 |
@@ -504,7 +506,7 @@ docker 없이 돈다. docker·DNS·HTTP·SMTP 는 가짜로 바꾼다(`tests/fak
 ## 12. 알려진 한계
 
 - **backend 쪽 호출부**는 `backend/app/system/` 이다. 관리자 권한을 확인하고 내부 API 를 대신 부르며(`/api/admin/system/zones…`, `/jobs/<id>`, `/probe/…`), 켜기·끄기·설정 변경을 감사 로그에 남긴다. 화면은 관리 › 구역(`/admin/zones`). `JW_INSTALLER_URL`·`JW_INSTALLER_KEY` 가 비어 있으면(설치 관리자 없이 구성한 설치) 목록은 읽기 전용이고 나머지는 `503 installer_unavailable` 이다.
-- **코드 저장소의 로그인 연동**(Gitea 의 OpenID Connect 로그인 원본)은 접속 주소의 인증서를 **Gitea 컨테이너가** 믿을 수 있어야 걸린다. 임시 인증서로 설치하면 "연결 보류"로 남고, 신뢰되는 인증서로 바꾸면(§15) 다시 건다. 공개 CA 가 아닌 **사설 CA** 가 내준 인증서는 **발급 CA(체인)를 함께 올렸을 때만** 이어진다(§15의 "사설 CA"). 서버 인증서 한 장만 올리면 믿게 할 CA 를 알 수 없어 보류로 남는다.
+- **코드 저장소의 로그인 연동**(Gitea 의 OpenID Connect 로그인 원본)은 접속 주소의 인증서를 **Gitea 컨테이너가** 믿을 수 있어야 걸린다. 임시 인증서로 설치하면 "연결 보류"로 남고, 신뢰되는 인증서로 바꾸면(§15) 다시 건다. 공개 CA 가 아닌 **사설 CA** 가 내준 인증서는 **발급 CA 를 알려 줬을 때만** 이어진다 — 인증서 파일에 이어 붙이거나, "CA 인증서(선택)" 칸에 따로 올리거나, 나중에 CA 인증서만 올린다(§15의 "사설 CA"). 서버 인증서 한 장만 올리면 믿게 할 CA 를 알 수 없어 보류로 남고, 화면이 그 사실과 할 일을 알린다. 그 CA 를 믿게 되는 것은 코드 저장소와 backend 컨테이너다 — **문서 편집기**(접속 주소로 되돌아와 문서를 읽고 쓴다)를 사설 CA·임시 인증서에서 쓰는 것은 확인하지 못했다.
 - **인증서 자동 발급(Let's Encrypt)의 실제 발급**은 밖에서 80 으로 닿는 서버에서만 된다. 발급이 실패했을 때의 흐름(실패 → 임시 인증서로 계속)만 실서버에서 확인했다.
 - **TURN/TLS**: 직접 받는 구성에서는 5349 에 게시되므로, 443 을 넘겨 주는 장치가 없으면 쓰이지 않는다(§8).
 - **앞단 프록시 구성**: 프록시는 클라이언트 주소를 `X-Real-IP` 로 넘겨야 한다(`X-Forwarded-For` 만으로는 클라이언트 주소로 쓰지 않는다). 메일·회의 인증서는 자체 서명이다 — 신뢰되는 인증서가 필요하면 지금은 손으로 넣어야 한다.
@@ -549,6 +551,9 @@ installer/e2e/remote.sh <ssh 대상> push                 # 커밋된 상태를 
 installer/e2e/remote.sh <ssh 대상> build                # 서버에서 이미지를 소스로 빌드(localhost/just-workspace-<이름>:<VERSION>)
 installer/e2e/remote.sh <ssh 대상> run s1-minimal api   # 시나리오 하나
 installer/e2e/remote.sh <ssh 대상> run s9-operate       # 설치 뒤의 jw 명령(되돌리기·채널 키)과 사설 CA 인증서
+installer/e2e/remote.sh <ssh 대상> run s10-rbi          # 격리 브라우저 + 회의(설치와 대상 웹 서버를 남긴다) → 아래 두 화면 검수 → run s10-rbi post → run s10-rbi down
+node installer/e2e/rbi-session-ui.cjs --url https://<접속 주소> --addr <서버 주소> --password-file <파일>     # 세션 화면(미러·픽셀)
+node installer/e2e/meeting-noise-ui.cjs --url https://<접속 주소> --addr <서버 주소> --password-file <파일>   # 노이즈 제거 토글
 # 화면을 눌러서(Playwright — 이 PC 에서):
 node installer/e2e/wizard-ui.cjs --url https://<서버 주소>:8443 --token <설치 토큰> [--flow quick] [--width 390]
 node installer/e2e/admin-zones-ui.cjs --url https://<접속 주소> --addr <서버 주소> --password-file <파일>
@@ -568,7 +573,9 @@ node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서
 | `s6-zone-toggle` | 내부 API 로 채팅 → 문서 → 코드 저장소 켜기, 문서·코드 저장소 끄기. `.env` 의 `JW_ZONES`·`COMPOSE_PROFILES`, `/api/health` 의 zones, 끈 구역의 볼륨 유지. 8443·호스트에서는 내부 API 에 닿지 않고, 틀린 키·내부 대역 밖은 404 |
 | `s7-failure-retry` | 토큰(틀림·재발급·만료·5회 잠금), 없는 이미지 → `pull` 실패·원인 키 → 고친 뒤 그 단계부터, 적용 도중 설치 관리자 재시작 → 이어서 완료, 인증서 자동 발급 실패 → 임시 인증서로 계속 |
 | `s8-manual` | 설치 관리자 없이 [deployment.md](deployment.md) 의 절차대로 최소 구성 기동, 설정 토큰으로 첫 관리자 만들기(로그의 토큰은 하나, 토큰 없이·옛 토큰으로는 403, 11자 비밀번호 400, 만든 뒤 폐기), `scripts/update.sh --no-pull` 로 다시 빌드해 올리기와 `--rollback`(업데이트 전에 붙여 둔 태그의 이미지로 이름을 되돌린다) |
-| `s9-operate` | 기본 + 코드 저장소에서: 버전 환경변수 없이 띄웠을 때의 로그 알림, `jw update-key`(이미지에 든 공개 키를 쓰지 않게 띄워 "키가 없는 설치"에서 본다 — 비공개 키·엉뚱한 파일 거부, 넣으면 확인이 `unconfigured` → 채널을 받으러 감)·`jw update-channel`, `jw restore`(목록, `--yes` 없이는 내용만, 백업 볼륨의 이름·서버 경로, 되돌린 뒤 백업 시점의 파일만 남고 쓰기가 됨, 없는 파일·틀린 경로 거부), 사설 CA 인증서(서버 인증서만 올리면 코드 저장소 연결이 보류로 남고, 발급 CA 를 함께 올리면 컨테이너에 CA 가 붙고 로그인 원본이 등록됨) |
+| `s9-operate` | 기본 + 코드 저장소에서: 버전 환경변수 없이 띄웠을 때의 로그 알림, `jw update-key`(이미지에 든 공개 키를 쓰지 않게 띄워 "키가 없는 설치"에서 본다 — 비공개 키·엉뚱한 파일 거부, 넣으면 확인이 `unconfigured` → 채널을 받으러 감)·`jw update-channel`, `jw restore`(목록, `--yes` 없이는 내용만, 백업 볼륨의 이름·서버 경로, 되돌린 뒤 백업 시점의 파일만 남고 쓰기가 됨, 없는 파일·틀린 경로 거부), 사설 CA 인증서 — 서버 인증서만 올리면 코드 저장소 연결이 보류로 남고 backend 도 그 인증서를 믿지 못함 → **CA 인증서만 나중에 올리면**(엉뚱한 CA·서버 인증서는 거부) 두 컨테이너에 CA 가 붙고 로그인 원본이 등록되며 backend 가 접속 주소의 인증서를 믿음(공개 CA 묶음은 그대로) → 걷어 내면 다시 믿지 못함 → 인증서와 CA 를 칸 둘로 따로 올리기 → 인증서 파일에 CA 를 이어 붙여 올리기(CA 는 한 번만 실림) |
+| `s10-rbi` + `rbi-session-ui.cjs` | 기본 + 회의 + 격리 브라우저에서: `.env`·backend 의 `RBI_PROTECTED` = 이 서버의 주소·기본 게이트웨이, 서버 자신을 가리키는 대상은 강제 없이 거부, 다른 호스트(따로 만든 네트워크 이름공간의 웹 서버)를 가리키는 대상 저장. 화면: 전용 출처로 로그인 홉 → **미러 방식** 세션의 화면에 대상 페이지의 글자와 색이 그려짐(미러 문서의 글자를 읽고, 캡처에서 대상의 색 비율을 센다) → **픽셀 방식** 세션(남의 세션 이미지)의 화면에 대상 페이지가 그려짐(캡처의 색 비율 — 캡처는 사람이 한 번 봤다) → 끝낸 세션의 화면 경로 403. 그 뒤(`s10-rbi.sh post`): 격리 규칙 상태·출구 규칙에 대상이 실림·세션 컨테이너가 남지 않음·호스트 INPUT 의 세션 브리지 차단 |
+| `meeting-noise-ui.cjs` | 가짜 마이크의 Chromium 으로 회의에 들어가: "노이즈 제거" 토글을 끄고 켤 때마다 **보내고 있는 마이크 트랙**의 `getSettings().noiseSuppression` 이 바뀜(Chromium 은 그 자리에서 못 바꿔 트랙을 다시 잡는다 — 트랙 id 가 바뀐다), 반향 제거는 그대로, 마이크를 껐다 켜도 고른 값 유지, 마이크가 꺼지면 토글 잠김 |
 | `wizard-ui.cjs` | 화면을 눌러 일반 설치(협업 묶음·임시 인증서)와 빠른 설치를 완료 화면까지 — 1280 폭과 390 폭. 토큰 없는 주소·틀린 토큰, 사전 점검 14항목, 구역·메모리 합계, 메일 레코드 표, 이어 하기, 요약, 적용, 잠김 화면. 콘솔 오류 없음 |
 | `jw reinstall` | 설치된 서버에서 목록 확인 → `--yes` 로 지우고 새 토큰으로 다시 시작 |
 | `restore` + `restore-ui.cjs` | 서버 이전: 협업 묶음에 계정 2·파일·채팅·메일·일정·암호화된 값을 넣고 전체 백업 → 서버를 체크포인트로 되돌린 뒤 화면으로 올려 복원 → 옛 계정 로그인, 파일 해시, 채팅·메일·일정, DKIM 키, 암호화 값 복호, 설치 id, 잠금. 서버 경로 + 답변 파일(무인, 접속 주소 변경). 거부 경로(형식 아님·손상·끊김·암호 없음/틀림/맞음·더 높은 버전). 데이터 되돌리기 중 DB 정지 → 실패 → 재시도로 완료. NFS: 로컬 선택·빈 공유·다른 설치의 공유 거부, 같은 공유 재연결 뒤 파일 그대로 |
@@ -592,7 +599,7 @@ node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서
 
 업데이트에서 확인하지 못한 것: 실제 배포 채널·실제 서명 키, 인터넷 너머의 레지스트리에서 받는 시간(검수 서버에서는 이미지 계층이 대부분 이미 있었다), 여러 GB 묶음을 앞단 프록시를 거쳐 올리기, 플러그인 호환 판정, 설치 관리자를 `docker run` 의 다른 옵션(자원 제한 등)과 함께 띄운 경우의 자기 교체.
 
-확인하지 못한 것: 실제 Let's Encrypt 발급과 갱신(다시 발급의 `auto` 포함), 공개 CA 인증서에서의 Gitea 로그인 연동(사설 CA 는 발급 CA 를 함께 올려 이어지는 것까지 확인 — `s9-operate`), 로컬 백업을 NFS 로 옮기는 복원, 수 GB 이상의 백업 올리기, 격리 브라우저의 픽셀 모드와 세션 안에 대상 화면이 실제로 그려지는지(애드온을 켜고 미러 모드 세션 하나가 뜨고 — 세션 이미지로 컨테이너 생성, 전용 출처 로그인, 세션 화면 문서 200, 로그인하지 않은 요청 403 — 끝내면 컨테이너가 사라지는 것까지는 손으로 확인했다. 검수 스크립트는 없다), 무손실 오디오, 외부 SMTP·AI 제공자 연결, 지정 폴더 저장소, 공유기 뒤·실제 앞단 프록시, x86_64 가 아닌 서버, SELinux 가 켜진 배포판.
+확인하지 못한 것: 실제 Let's Encrypt 발급과 갱신(다시 발급의 `auto` 포함), 공개 CA 인증서에서의 Gitea 로그인 연동(사설 CA 는 발급 CA 를 알려 줘 이어지는 것까지 확인 — `s9-operate`), 사설 CA·임시 인증서에서의 문서 편집기(편집기가 접속 주소로 되돌아와 문서를 읽는 길 — 발급 CA 를 편집기 컨테이너에는 붙이지 않는다), 로컬 백업을 NFS 로 옮기는 복원, 수 GB 이상의 백업 올리기, 격리 브라우저의 입력(자판·한글·클립보드)·내려받기·올리기와 유휴 종료·여러 사용자의 동시 세션(세션 화면에 대상이 그려지는 것은 미러·픽셀 모두 확인했다 — `s10-rbi`), 격리 브라우저의 실제 LAN 대상(검수의 대상은 같은 서버의 다른 네트워크 이름공간이다), 노이즈 제거의 실제 음질(토글이 트랙의 설정을 바꾸는 것까지 확인했다. Chromium 이외의 브라우저는 보지 않았다), 무손실 오디오, 외부 SMTP·AI 제공자 연결, 지정 폴더 저장소, 공유기 뒤·실제 앞단 프록시, x86_64 가 아닌 서버, SELinux 가 켜진 배포판.
 
 ## 14. 백업에서 복원
 
@@ -651,7 +658,7 @@ node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서
 
 | 갈래 | 무엇 |
 |---|---|
-| **백업에서 가져온다** | 비밀값 전부 — 암호화 키 `SECRET_KEY`(바뀌면 DB 안의 암호화된 값을 풀 수 없다), `INTERNAL_API_KEY`, `DB_PASSWORD`(코드 저장소의 설정 파일에도 적혀 있다), 구역별 키·토큰, `SMTP_PASSWORD`, `GITEA_TOKEN`, `OAUTH_CLIENTS_JSON`. **설치 id**(`JW_INSTALL_ID` — 저장소 표식과 맞아야 한다. 설치 관리자의 `install.json` 도 이 값으로 바꾼다). 구역 목록, 메일 종류·메일 도메인(`DOMAIN` — 계정의 메일 주소), 외부 SMTP, 코드 저장소 이미지, `ADMIN_EMAILS`, `APP_NAME`, 인증서 연락처. 그리고 설치 관리자가 다루지 않는 변수(브랜드·기능 플래그·상한 등)는 `.env` 끝의 "백업에서 옮겨 온 설정"에 그대로 |
+| **백업에서 가져온다** | 비밀값 전부 — 암호화 키 `SECRET_KEY`(바뀌면 DB 안의 암호화된 값을 풀 수 없다), `INTERNAL_API_KEY`, `DB_PASSWORD`(코드 저장소의 설정 파일에도 적혀 있다), 구역별 키·토큰, `SMTP_PASSWORD`, `GITEA_TOKEN`, `OAUTH_CLIENTS_JSON`. **소스 주소**(`JW_SOURCE_URL` — 고친 판의 소스를 가리키던 서버는 옮긴 뒤에도 그 주소를 가리켜야 한다. 새 설치 관리자에 `-e JW_SOURCE_URL` 을 줬으면 그것이 이긴다). **설치 id**(`JW_INSTALL_ID` — 저장소 표식과 맞아야 한다. 설치 관리자의 `install.json` 도 이 값으로 바꾼다). 구역 목록, 메일 종류·메일 도메인(`DOMAIN` — 계정의 메일 주소), 외부 SMTP, 코드 저장소 이미지, `ADMIN_EMAILS`, `APP_NAME`, 인증서 연락처. 그리고 설치 관리자가 다루지 않는 변수(브랜드·기능 플래그·상한 등)는 `.env` 끝의 "백업에서 옮겨 온 설정"에 그대로 |
 | **새 답변으로 덮는다** | `APP_URL`, `GITEA_EXTERNAL_URL`, `GIT_SSH_DOMAIN`, `RBI_PUBLIC_ORIGIN`, `ACME_DOMAINS`, `DEPLOY_MODE`, `COMPOSE_PROFILES`, `HAIRPIN_HOST`·`RP_LAN_IP`, `JW_NET_PREFIX`, `BACKEND_WORKERS`, `JW_REGISTRY`·`JW_VERSION`, nginx `site.d`, 회의 서버 설정(새 서버의 공인 주소), 저장소 볼륨. 원래 서버에 딸린 값(`GPU_HOST_IP`, `JW_HOST_REPO`, `BACKUP_VOLUME`, `GITEA_DATA_PATH`, `MCP_PUBLIC_URL`, `DOMAIN_ALIAS`, `DATABASE_URL` 등)은 옮기지 않는다 |
 | **새로 만든다** | 설치 관리자 내부 API 키(`JW_INSTALLER_KEY`), 설치 토큰·세션·설치 관리자의 인증서, 백업에 없던 비밀값 |
 
@@ -702,14 +709,28 @@ docker exec jw-installer jw apply --answers /data/restore.json
 
 | 메서드·경로 | 하는 일 |
 |---|---|
-| `GET /internal/cert` | `{"managed"(이 서버가 TLS 를 끝내는가), "mode": auto\|upload\|temporary\|proxy, "temporary", "domain", "names", "wanted_names", "not_after", "days_left", "issuer", "self_signed", "pending": [구역 id], "job"}` |
+| `GET /internal/cert` | `{"managed"(이 서버가 TLS 를 끝내는가), "mode": auto\|upload\|temporary\|proxy, "temporary", "domain", "names", "wanted_names", "not_after", "days_left", "issuer", "self_signed", "site_ca", "ca_uploadable", "pending": [구역 id], "job"}` |
 | `POST /internal/cert/reissue` `{"mode": "auto"}` | Let's Encrypt 에 다시 요청한다(접속 주소가 이 서버를 가리키고 80 이 밖에서 닿아야 한다) |
-| `POST /internal/cert/reissue` `{"mode": "upload", "cert", "key"}` | 가진 인증서로 바꾼다. 검증은 마법사의 인증서 확인과 같고, 걸리면 `422 cert_invalid` + `checks` |
+| `POST /internal/cert/reissue` `{"mode": "upload", "cert", "key", "ca"?}` | 가진 인증서로 바꾼다. `ca` 는 사설 CA 의 인증서(선택). 검증은 마법사의 인증서 확인과 같고, 걸리면 `422 cert_invalid` + `checks` |
+| `POST /internal/cert/ca` `{"ca"}` | 올린 인증서를 쓰는 설치에 **발급 CA 인증서만** 더한다 — 인증서·개인 키는 그대로. `{"ca": ""}` 는 따로 올린 CA 를 걷어 낸다. 그 인증서를 내준 CA 가 아니거나 CA 인증서가 아니면 `422 cert_invalid` + `checks`, 올린 인증서를 쓰지 않는 설치면 `409 cert_ca_needs_upload` |
 | `POST /internal/zones/<id>/reconnect` | 보류된 연결을 다시 시도. 여전히 안 되면 작업이 `failed`(`connection_still_pending`) |
 
 작업(`kind: "cert"`, `zone: null`)의 단계는 `issue`(답변·설정을 바꾸고 발급·배치) → `reload`(nginx 재시작, 회의 서버 재시작, 자동 발급이면 갱신 컨테이너 시작, backend 다시 만들기) → `reconnect`(보류된 구역의 `connect` 훅 — 코드 저장소의 로그인 연동). `issue` 가 실패하면 답변·설정을 되돌리고 **쓰던 인증서를 다시 놓는다**(자동 발급을 시도하며 임시 인증서의 링크를 뗐을 수 있다). 거부: `409 cert_managed_by_proxy`(앞단 프록시가 맡는 설치), `422 cert_auto_needs_domain`, `409 busy`.
 
-**사설 CA.** 올린 인증서 파일에 서버 인증서 말고 다른 인증서(중간·루트 CA)가 이어 붙어 있으면, 첫 장을 뺀 나머지를 `stack/site-ca/ca.pem` 에 두고 사이트 조각(`docker-compose.site.yml`)이 그 파일을 코드 저장소 컨테이너의 `/etc/ssl/certs/jw-site-ca.pem` 으로 붙인다. Gitea(Go)는 시스템의 CA 묶음에 더해 그 폴더의 파일을 읽으므로 공개 CA 에 대한 신뢰는 그대로다. `reload` 단계가 코드 저장소 컨테이너를 다시 만들고, 이어지는 `reconnect` 가 보류된 로그인 연동을 건다. 자동 발급으로 바꾸면 걷어 낸다. 믿게 하는 범위는 **코드 저장소 컨테이너뿐**이다 — backend·문서 편집기 등 다른 컨테이너와 사용자의 브라우저는 해당하지 않는다.
+**사설 CA.** 공개 CA 가 아닌 CA(사내 CA 등)가 내준 인증서는, 이 서버의 다른 컨테이너가 접속 주소로 되돌아올 때 그 인증서를 믿지 못한다. 발급 CA 를 알려 주는 길은 셋이다 — 결과는 같다.
+
+| 길 | 어떻게 |
+|---|---|
+| 인증서 파일에 이어 붙이기 | 서버 인증서 뒤에 중간·루트 CA 를 이어 붙인 PEM 을 올린다. 첫 장을 뺀 나머지를 발급 CA 로 본다 |
+| "CA 인증서(선택)" 칸 | 마법사의 인증서 화면, 관리 › 보안의 인증서 올리기 창. API 로는 `ca`, 답변 파일로는 `access.ca_path` |
+| 나중에 CA 만 | 관리 › 보안의 인증서 카드의 "CA 인증서 올리기"(`POST /internal/cert/ca`) — 서버 인증서 한 장만 올려 연결이 보류로 남았을 때. 인증서·개인 키는 다시 올리지 않는다 |
+
+- 따로 올린 CA 는 검사한다: PEM 인증서인가(`ca_not_pem`, 개인 키면 `ca_is_private_key`), CA 인증서인가(`ca_not_a_ca` — 서버 인증서를 잘못 올린 경우), 올린 인증서나 함께 온 체인의 한 장을 직접 내준 CA 인가(`ca_not_issuer`). 인증서 파일에 발급 CA 가 없고 CA 도 올리지 않았으면 막지 않고 주의(`cert_chain_missing`)로 알린다 — 공개 CA 의 인증서일 수 있다.
+- 알게 된 발급 CA(이어 붙은 것 + 따로 올린 것, 겹치면 한 번만)를 `stack/site-ca/ca.pem` 에 두고, 사이트 조각(`docker-compose.site.yml`)이 그 파일을 **코드 저장소와 backend** 컨테이너의 `/etc/ssl/certs/jw-site-ca.pem` 으로 붙인다. 따로 올린 CA 의 원본은 `state/upload/ca.pem`.
+- Gitea(Go)는 시스템의 CA 묶음에 더해 그 폴더의 파일을 읽는다. backend 는 시작할 때(`entrypoint.sh`) 시스템 CA 묶음과 그 파일을 합친 묶음을 만들어 `SSL_CERT_FILE` 로 가리킨다 — 파이썬의 기본 TLS 설정과 httpx 가 그것을 쓴다. 어느 쪽이든 공개 CA 에 대한 신뢰는 그대로다.
+- `reload` 단계가 두 컨테이너를 다시 만들고, 이어지는 `reconnect` 가 보류된 로그인 연동을 건다. 자동 발급으로 바꾸면 걷어 낸다.
+- `GET /internal/cert` 의 `site_ca`(믿게 한 발급 CA 가 있는가)·`ca_uploadable`(CA 를 따로 올릴 수 있는 설치인가 — 올린 인증서를 쓰고 자체 서명이 아니다)로 화면이 판단한다: 올린 인증서 + `site_ca` 아님 + 보류된 연결이 있으면 "CA 인증서를 올리세요"를 알린다.
+- 믿게 하는 범위는 **코드 저장소와 backend 컨테이너**다. backend 는 설치 관리자가 꾸린 구성에서 자기 접속 주소로 HTTPS 요청을 보내지 않지만(내부 이름으로 부른다), 관리자가 등록한 같은 CA 의 주소(로그아웃 알림을 받을 주소, 외부 메일·LDAP 서버 등)로 나가는 요청이 이 CA 를 믿게 된다. **문서 편집기 등 다른 컨테이너와 사용자의 브라우저는 해당하지 않는다.**
 
 구역 연결이 보류되는 경우는 지금 하나다: 코드 저장소의 로그인 원본 등록(Gitea 가 접속 주소의 인증서를 믿지 못할 때). `GET /internal/zones` 의 그 구역 행에 `pending: true` 가 붙고, 관리 › 구역에 "연결 보류"와 "다시 연결"이 보인다.
 

@@ -69,6 +69,13 @@ def banner(svc: api.Services, fingerprint: str, port: int) -> str:
         ]
         if guessed:
             lines.append(" (주소는 이 서버에서 추정한 값입니다. 다른 주소로 접속한다면 주소 부분만 바꿔 여세요.)")
+            try:
+                import ipaddress
+
+                if ipaddress.ip_address(host).is_private:
+                    lines.append(" (추정한 주소가 사설 주소입니다. 클라우드 서버 등 밖에서 접속한다면 서버의 공인 주소를 쓰세요.)")
+            except ValueError:
+                pass
     lines += [
         " 이 주소의 인증서는 설치 관리자가 스스로 만든 것이라 브라우저가 경고합니다.",
         " 아래 지문과 같은지 확인하고 계속하세요.",

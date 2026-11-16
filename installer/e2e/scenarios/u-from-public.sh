@@ -6,7 +6,7 @@
 # 컨테이너의 고정 주소)로 연결되어 있고, 업데이트의 switch 단계는 그 이전 버전의 설치 관리자가 수행한다.
 #   1. 공개 이미지(E2E_OLD_REGISTRY 의 E2E_OLD_VERSION)를 서버 내부의 모의 레지스트리에 복제하여 설치한다(자동 발급 구성).
 #      실제 인증 기관에는 요청할 수 없으므로, 사설 CA 가 발급한 인증서를 인증서 볼륨에 미리 배치한다(이미 유효한 인증서가 있으면
-#      설치 관리자는 발급을 생략한다) — 갱신 컨테이너의 프로파일(certbot)이 활성화된 설치가 된다.
+#      설치 관리자는 발급을 생략한다 — 만료까지 30일을 초과하여 남은 것이어야 한다) — 갱신 컨테이너의 프로파일(certbot)이 활성화된 설치가 된다.
 #   2. 현재 소스를 E2E_NEW_VERSION 으로 빌드해 모의 Beta 채널에 게시하고 업데이트한다.
 #   3. 업데이트 후: 설치 관리자가 예약 주소(100번)로 재연결됨, 갱신 컨테이너가 고정 주소(35번)로 실행 중, 주소 중복 없음,
 #      네트워크는 재생성되지 않음(id 동일), 데이터 보존, 일회용 실행이 실행 중인 backend 와 충돌하지 않음.
@@ -36,13 +36,13 @@ done
 
 say "유효한 인증서를 인증서 볼륨에 미리 배치(사설 CA 발급)"
 OP="$E2E_WORK/from-public"; rm -rf "$OP"; mkdir -p "$OP"
-openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 30 -subj "/CN=E2E Private CA" \
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 365 -subj "/CN=E2E Private CA" \
   -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
   -keyout "$OP/ca.key" -out "$OP/ca.pem" 2>/dev/null
 openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -subj "/CN=$E2E_DOMAIN" \
   -keyout "$OP/leaf.key" -out "$OP/leaf.csr" 2>/dev/null
 printf 'subjectAltName=DNS:%s\nbasicConstraints=CA:FALSE\n' "$E2E_DOMAIN" > "$OP/ext.cnf"
-openssl x509 -req -in "$OP/leaf.csr" -CA "$OP/ca.pem" -CAkey "$OP/ca.key" -CAcreateserial -days 30 \
+openssl x509 -req -in "$OP/leaf.csr" -CA "$OP/ca.pem" -CAkey "$OP/ca.key" -CAcreateserial -days 90 \
   -extfile "$OP/ext.cnf" -out "$OP/leaf.pem" 2>/dev/null
 check "검수용 CA 와 서버 인증서" openssl verify -CAfile "$OP/ca.pem" "$OP/leaf.pem"
 docker volume create ws-certbot-data >/dev/null

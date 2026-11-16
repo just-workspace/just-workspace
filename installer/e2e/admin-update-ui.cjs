@@ -6,7 +6,8 @@
  *   node admin-update-ui.cjs --url https://ws.e2e.example --addr 192.168.10.20 --password-file <파일>
  *        [--user <계정> --user-password-file <파일>] [--out <폴더>] [--chrome <경로>]
  *
- * 창을 2개 연다: 관리자(진행 화면)와 일반 사용자(사전 공지 띠·점검 모드 화면). 일반 사용자 계정은 본 스크립트가 생성하여 승인한다.
+ * 창을 2개 연다: 관리자(진행 화면)와 일반 사용자(사전 공지 띠·점검 모드 화면). 일반 사용자 계정은 --user 로 지정한다 — 로그인에는
+ * 복구 이메일 인증이 필요하므로, 인증을 마친 계정을 서버에서 미리 준비한다(미지정 시 본 스크립트가 가입·승인하나 인증 전이라 로그인이 거부된다).
  * 확인 항목: 현황의 새 버전 안내 → 업데이트 시작 → 사전 공지(일반 사용자 창의 띠) → "지금 바로 시작" → 진행(backend 가
  * 중지된 동안의 "다시 연결 중", 일반 사용자 창의 점검 모드 화면) → 완료 → 기록.
  * 필요 사항: playwright-core(NODE_PATH).
@@ -72,7 +73,7 @@ const text = async page => (await page.locator('body').innerText().catch(() => '
     if (row) await call(admin, 'POST', `/api/admin/users/${row.id}/approve`)
   }
   const userLogin = await loginAs(user, name, userPass)
-  expect('일반 사용자 로그인', userLogin === 200, `가입 ${reg.status} · 로그인 ${userLogin}`)
+  expect('일반 사용자 로그인', userLogin === 200, `가입 ${reg.status} · 로그인 ${userLogin}` + (userLogin === 403 ? ' — 복구 이메일 인증을 마친 계정을 --user 로 지정한다' : ''))
   await user.goto(base + '/')
   await user.waitForTimeout(3000)
 

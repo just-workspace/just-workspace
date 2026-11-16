@@ -9,6 +9,7 @@ Usage:
     python -m app.cli check-secrets                     # 기동 검사와 같은 판정(문제 있으면 종료 코드 1)
     python -m app.cli seed-admin --username admin       # 관리자 계정 만들기(비밀번호는 물어본다)
     python -m app.cli reset-admin admin [--disable-2fa] # 관리자 임시 비밀번호 발급(한 번만 출력)
+    python -m app.cli setup-token                       # 첫 관리자 만들기용 설정 토큰 재발급(관리자가 없을 때만)
     python -m app.cli configure < settings.json         # DB 에 저장되는 설정 넣기(설치 관리자용, 표준 입력 JSON)
     python -m app.cli migrate                           # DB 스키마 변경 단계 적용(실패하면 종료 코드 1)
     python -m app.cli migrate --check                   # 적용할 것이 있으면 종료 코드 1 과 목록
@@ -90,6 +91,7 @@ async def seed_admin(
                      "(승격하려면 --promote)")
                 return "conflict"
             user.is_admin = True
+            await _drop_setup_token(session)
             await session.commit()
             _log(f"[SEED] User '{username}' promoted to admin")
             return "promoted"
@@ -103,9 +105,40 @@ async def seed_admin(
             is_active=True,
             email_verified=True,
         ))
+        await _drop_setup_token(session)
         await session.commit()
         _log(f"[SEED] Admin '{username}' created ({email})")
         return "created"
+
+
+async def _drop_setup_token(session) -> None:
+    """관리자가 생겼으니 웹의 첫 관리자 만들기용 설정 토큰을 지운다(같은 트랜잭션)."""
+    from app.setup import token as setup_token
+
+    await setup_token.revoke(session)
+
+
+class SetupTokenRefused(Exception):
+    """setup-token 을 거부한 사유."""
+
+
+async def issue_setup_token() -> str:
+    """첫 관리자 만들기용 설정 토큰을 새로 발급한다(이전 토큰은 못 쓰게 된다). 저장은 해시만.
+
+    관리자가 이미 있거나 설치 관리자가 꾸린 설치면 거부한다(`SetupTokenRefused`).
+    """
+    from app.db.session import async_session
+    from app.setup import token as setup_token
+
+    if setup_token.installer_managed():
+        raise SetupTokenRefused("설치 관리자가 꾸린 서버입니다 — 웹의 첫 관리자 만들기는 닫혀 있습니다. "
+                                "관리자는 seed-admin 으로 만듭니다")
+    async with async_session() as session:
+        if await setup_token.has_admin(session):
+            await setup_token.revoke(session)
+            await session.commit()
+            raise SetupTokenRefused("이미 관리자가 있습니다 — 설정 토큰은 필요 없습니다")
+        return await setup_token.issue(session)
 
 
 class ResetRefused(Exception):
@@ -254,6 +287,17 @@ def _cmd_reset_admin(args) -> int:
         return 1
     print(f"[RESET] '{args.username}' 의 임시 비밀번호(지금 한 번만 보입니다 — 로그인한 뒤 바로 바꾸세요):")
     print(password)
+    return 0
+
+
+def _cmd_setup_token(args) -> int:
+    try:
+        token = asyncio.run(issue_setup_token())
+    except SetupTokenRefused as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+    print("[SETUP] 새 설정 토큰(지금 한 번만 보입니다 — 이전 토큰은 더 쓸 수 없습니다). /setup 화면에 넣으세요:")
+    print(token)
     return 0
 
 
@@ -422,6 +466,9 @@ def build_parser() -> argparse.ArgumentParser:
     reset.add_argument("username", help="관리자 아이디")
     reset.add_argument("--disable-2fa", action="store_true", help="2단계 인증·복구 코드도 해제한다")
     reset.set_defaults(func=_cmd_reset_admin)
+
+    st = sub.add_parser("setup-token", help="첫 관리자 만들기용 설정 토큰을 다시 발급한다(관리자가 없을 때만)")
+    st.set_defaults(func=_cmd_setup_token)
 
     conf = sub.add_parser("configure", help="DB 에 저장되는 설정을 표준 입력(JSON)으로 넣는다 — 설치 관리자용")
     conf.set_defaults(func=_cmd_configure)

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # S8 수동 설치 — 설치 관리자 없이 README·docs/deployment.md 의 절차 그대로: .env.example 을 채우고 docker compose up.
 # 최소 구성(프로파일 없음), 평문 80 으로 띄워 본다.
+# 관리자는 `.env` 에 적지 않는다 — backend 로그의 설정 토큰으로 웹의 첫 관리자 만들기를 거친다.
 . "$(dirname "$0")/../lib.sh"
 MANUAL="$HOME/e2e-manual"
 
@@ -25,8 +26,8 @@ set_env COMPOSE_PROFILES ""
 set_env APP_URL "http://$E2E_ADDR"
 set_env DOMAIN "$E2E_ADDR"
 set_env ADMIN_EMAILS "admin@$E2E_MAIL_DOMAIN"
-set_env ADMIN_USERNAME admin
-set_env ADMIN_PASSWORD "$(cat "$(admin_password_file)")"
+set_env ADMIN_USERNAME ""
+set_env ADMIN_PASSWORD ""
 chmod 600 .env
 
 t0=$(date +%s)
@@ -65,11 +66,44 @@ expect "프런트가 없으면 점검 페이지" 503 "$code"
 check "그 본문은 점검 페이지다" grep -q 'maintenance/status' "$E2E_WORK/manual-page.html"
 docker start ws-frontend-react >/dev/null; wait_ready ws-frontend-react 60
 
+say "첫 관리자 — 설정 토큰"
+# 시도는 주소당 분당 5회까지다 — 아래는 정확히 5번 부른다.
+log_tokens() { docker logs ws-backend 2>&1 | sed -n 's/.*setup token: \([A-Za-z0-9_-]\{40,\}\).*/\1/p'; }
+setup_post() {  # setup_post <토큰> <비밀번호 파일> → 상태 코드(본문은 first-admin.json)
+  local body="$E2E_WORK/setup-admin.json" code
+  (umask 077; python3 -c 'import json,sys; print(json.dumps({"username": "admin", "password": open(sys.argv[2]).read().strip(), "setup_token": sys.argv[1]}))' "$1" "$2" > "$body")
+  code="$(curl -s -o "$E2E_WORK/first-admin.json" -w '%{http_code}' -H 'Content-Type: application/json' -H "Origin: $H" --data-binary "@$body" "$H/api/setup/admin")"
+  rm -f "$body"
+  printf '%s' "$code"
+}
+status_get() { curl -s "$H/api/setup/status" | json_get "$1"; }
+expect "최초 설정 필요" True "$(status_get 'd["needs_setup"]')"
+expect "방식은 token" token "$(status_get 'd["setup_mode"]')"
+expect "상태 응답의 항목" "app_name,has_admin,needs_setup,setup_complete,setup_mode" "$(status_get '",".join(sorted(d))')"
+expect "워커가 여럿이어도 로그의 토큰은 하나" 1 "$(log_tokens | wc -l | tr -d ' ')"
+(umask 077; log_tokens | tail -1 > "$E2E_WORK/setup-token-1")
+note "backend 워커 수: $(docker top ws-backend 2>/dev/null | grep -c 'multiprocessing.spawn\|uvicorn')"
+expect "토큰 없이는 403" 403 "$(setup_post "" "$(admin_password_file)")"
+expect "사유는 setup_token_invalid" setup_token_invalid "$(json_get 'd["detail"]["code"]' < "$E2E_WORK/first-admin.json")"
+(umask 077; printf 'eleven-ch-1' > "$E2E_WORK/short-pass")
+expect "맞는 토큰이어도 11자 비밀번호는 400" 400 "$(setup_post "$(cat "$E2E_WORK/setup-token-1")" "$E2E_WORK/short-pass")"
+(umask 077; docker compose exec -T backend python -m app.cli setup-token 2>/dev/null | tail -1 | tr -d ' \r\n' > "$E2E_WORK/setup-token-2")
+check "CLI 로 다시 발급한 토큰은 로그의 것과 다르다" bash -c "[ -s '$E2E_WORK/setup-token-2' ] && ! cmp -s '$E2E_WORK/setup-token-1' '$E2E_WORK/setup-token-2'"
+expect "다시 발급하면 로그의 토큰은 못 쓴다(403)" 403 "$(setup_post "$(cat "$E2E_WORK/setup-token-1")" "$(admin_password_file)")"
+expect "관리자는 아직 없다" False "$(status_get 'd["has_admin"]')"
+expect "새 토큰으로 첫 관리자 만들기(201)" 201 "$(setup_post "$(cat "$E2E_WORK/setup-token-2")" "$(admin_password_file)")"
+expect "관리자가 생겼다" False "$(status_get 'd["needs_setup"]')"
+expect "같은 토큰으로 다시는 403" 403 "$(setup_post "$(cat "$E2E_WORK/setup-token-2")" "$(admin_password_file)")"
+expect "사유는 admin_exists" admin_exists "$(json_get 'd["detail"]["code"]' < "$E2E_WORK/first-admin.json")"
+expect "토큰은 DB 에서 사라졌다" 0 "$(docker exec ws-postgres psql -U workspace -d workspace -At -c "SELECT count(*) FROM system_settings WHERE key = 'setup.token_hash'")"
+docker compose exec -T backend python -m app.cli setup-token >/dev/null 2>&1; expect "관리자가 있으면 setup-token 은 거절" 1 "$?"
+rm -f "$E2E_WORK"/setup-token-* "$E2E_WORK/short-pass" "$E2E_WORK/first-admin.json"
+
 say "관리자 로그인·파일"
 body="$E2E_WORK/login.json"
 (umask 077; python3 -c 'import json,sys; print(json.dumps({"username": "admin", "password": open(sys.argv[1]).read().strip()}))' "$(admin_password_file)" > "$body")
 jar="$E2E_WORK/jar-manual"; rm -f "$jar"
-expect "관리자 로그인(.env 의 ADMIN_USERNAME·ADMIN_PASSWORD)" 200 "$(curl -s -c "$jar" -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -H "Origin: $H" --data-binary "@$body" "$H/api/auth/login")"
+expect "만든 관리자로 로그인" 200 "$(curl -s -c "$jar" -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -H "Origin: $H" --data-binary "@$body" "$H/api/auth/login")"
 rm -f "$body"
 expect "로그인한 계정은 관리자" True "$(curl -s -b "$jar" "$H/api/auth/me" | json_get 'd["is_admin"]')"
 head -c 100000 /dev/urandom > "$E2E_WORK/up.bin"

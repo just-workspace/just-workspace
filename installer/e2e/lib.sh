@@ -274,6 +274,16 @@ check_core() {
   expect "/api/health" 200 "$(ws_code "$WS/api/health")"
   check "관리자 로그인" ws_login
   expect "로그인한 계정은 관리자" True "$(ws_api GET /api/auth/me | json_get 'd["is_admin"]')"
+  # 설치 관리자가 꾸린 설치 — 웹의 첫 관리자 만들기는 닫혀 있다(관리자는 설치 관리자가 만든다)
+  expect "최초 설정 방식은 installer" installer "$(ws_curl "$WS/api/setup/status" | json_get 'd["setup_mode"]')"
+  expect "첫 관리자 API 는 닫혀 있다(403)" 403 "$(first_admin_code)"
+  expect "backend 로그에 설정 토큰이 없다" 0 "$(docker logs ws-backend 2>&1 | grep -c 'setup token:')"
+}
+
+# 웹의 첫 관리자 만들기를 불러 본다(설치 관리자 설치에서는 늘 403) — 상태 코드, 본문은 $E2E_WORK/first-admin.json
+first_admin_code() {
+  ws_curl -o "$E2E_WORK/first-admin.json" -w '%{http_code}' -H 'Content-Type: application/json' -H "Origin: $WS" \
+    --data-binary '{"username":"intruder","password":"intruder-pass-12345","setup_token":"x"}' "$WS/api/setup/admin"
 }
 
 check_locked() {

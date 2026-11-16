@@ -48,7 +48,26 @@ docker compose config --quiet && docker compose up -d
 - 빈 값·예시 값·짧은 값의 비밀값으로는 backend 가 뜨지 않는다 — 로그에 변수 이름과 사유가 나온다([CONFIG.md](CONFIG.md)의 "비밀값").
 - 관리자를 `.env` 에 적지 않고 만들려면 띄운 뒤 `docker compose exec backend python -m app.cli seed-admin --username <아이디>`.
 - `.env` 의 `ADMIN_PASSWORD` 는 관리자가 만들어진 뒤 지운다.
-- **관리자가 한 명도 없는 동안에는 웹의 최초 설정 화면(`/setup`)이 열려 있고, 처음 접속한 사람이 첫 관리자를 만든다.** 밖에서 닿는 서버라면 위 두 방법 가운데 하나로 관리자를 먼저 만든다(설치 관리자는 늘 그렇게 한다). 관리자가 생기면 그 화면은 닫힌다.
+
+### 첫 관리자 만들기
+
+관리자를 만드는 길은 셋이다.
+
+| 방법 | 어떻게 |
+|---|---|
+| 웹의 최초 설정 화면 | 관리자가 없는 서버에 접속하면 `/setup` 이 열린다. **설정 토큰**을 넣어야 계정을 만들 수 있다 |
+| 명령 | `docker compose exec backend python -m app.cli seed-admin --username <아이디>` (비밀번호는 물어본다) |
+| `.env` | `ADMIN_USERNAME` · `ADMIN_PASSWORD` 를 적고 띄운다. 사용자가 한 명도 없을 때만 돈다. 만들어진 뒤 `ADMIN_PASSWORD` 를 지운다 |
+
+설정 토큰은 서버 터미널을 볼 수 있는 사람만 첫 관리자를 만들 수 있게 하는 일회용 값이다.
+
+- backend 가 관리자 없이 뜰 때마다 새로 만들어 로그에 한 번 찍는다 — `docker compose logs backend | grep "setup token"`. backend 를 다시 띄우면 값이 바뀌므로 가장 최근 것을 쓴다.
+- 다시 발급: `docker compose exec backend python -m app.cli setup-token`(이전 값은 못 쓰게 된다).
+- 서버에는 해시만 저장한다. 관리자가 만들어지면(어느 방법으로든) 토큰은 사라지고 그 화면은 닫힌다.
+- 토큰 없이, 또는 틀린 토큰으로는 만들 수 없다(403). 시도는 주소당 분당 5회까지 받는다.
+- 이 화면에서 만드는 관리자 비밀번호는 12자 이상이다.
+
+설치 관리자로 설치한 서버에서는 웹의 첫 관리자 만들기가 아예 닫혀 있다(관리자는 설치 관리자가 만든다).
 
 ## 앞단 프록시
 

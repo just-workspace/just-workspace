@@ -3,6 +3,8 @@
 - 최초 설정: 관리자가 한 명도 없을 때만 `/setup` 화면이 열린다(`status`·`admin`·`complete`).
   설치 관리자는 관리자를 직접 만들므로(`seed-admin`) 이 화면을 거치지 않는다 — 설치 관리자 없이 띄우고
   관리자를 미리 만들지 않은 서버의 첫 화면이다.
+  인증 없이 상태를 바꾸는 것은 `POST /admin` 하나뿐이고, 그것은 설치 관리자 설치에서는 닫혀 있으며 그 밖에서는
+  서버 로그에 찍힌 일회용 설정 토큰을 요구한다(app/setup/token.py). 나머지는 전부 관리자 세션이 필요하다.
 - 관리 화면이 쓰는 것: 로그인 순서(`auth-order`), 저장소 백엔드(`storage`), 내장 메일 플래그(`features`),
   컨테이너 상태·재시작(`services`).
 
@@ -20,14 +22,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.admin import audit
 from app.auth.deps import get_current_user
 from app.auth.sessions import client_ip
+from app.auth import password_policy
 from app.auth.password import hash_password
 from app.config import get_settings
 from app.db.models import User
 from app.db.session import get_db
+from app.rate_limit import limiter
 from app.setup import config_store as cfg
+from app.setup import token as setup_token
 
 router = APIRouter(prefix="/api/setup", tags=["setup"])
 settings = get_settings()
+
+# 첫 관리자 비밀번호 하한 — 설치 마법사(installer 의 ADMIN_PASSWORD_MIN)와 같다.
+# 가입·비밀번호 변경의 하한(app/auth/password_policy.py)과는 따로다.
+FIRST_ADMIN_PASSWORD_MIN = 12
 
 
 def _ip(request: Request | None) -> str | None:
@@ -46,9 +55,13 @@ async def needs_setup(db: AsyncSession) -> bool:
 
 @router.get("/status")
 async def status(db: AsyncSession = Depends(get_db)):
-    """공개 — 프론트 미들웨어가 최초설정 필요 여부 판단용."""
+    """공개 — 프론트 미들웨어가 최초설정 필요 여부 판단용. 비밀값·토큰 유무는 내지 않는다.
+
+    setup_mode: 첫 관리자를 웹에서 만드는 방식 — `installer`(닫힘, 설치 관리자가 만든다) | `token`(설정 토큰 필요).
+    """
     admin = await has_admin(db)
     return {
+        "setup_mode": setup_token.mode(),
         "needs_setup": await needs_setup(db),
         "has_admin": admin,
         "app_name": await cfg.get(db, "branding.site_name", getattr(settings, "app_name", "Workspace")),
@@ -61,22 +74,49 @@ class AdminCreate(BaseModel):
     password: str
     display_name: str | None = None
     email: str | None = None
+    setup_token: str | None = None
 
 
 @router.post("/admin", status_code=201)
-async def create_first_admin(body: AdminCreate, db: AsyncSession = Depends(get_db)):
-    """최초 관리자 생성 — 관리자가 0명일 때만 허용(이후 403). CLI seed-admin 없이 웹에서."""
+@limiter.limit("5/minute")
+async def create_first_admin(request: Request, body: AdminCreate, db: AsyncSession = Depends(get_db)):
+    """최초 관리자 생성 — 관리자가 0명이고, 설치 관리자 설치가 아니고, 설정 토큰이 맞을 때만.
+
+    - 설치 관리자 설치: 항상 403(`setup_closed`) — 관리자는 설치 관리자가 CLI 로 만든다.
+    - 그 밖: 서버 로그의 설정 토큰(`setup_token`)이 맞아야 한다. 맞으면 토큰은 계정과 한 트랜잭션에서 사라진다.
+    - 시도 횟수는 주소당 분당 5회(틀린 토큰·맞는 토큰 구분 없이).
+    """
+    if setup_token.installer_managed():
+        raise HTTPException(status_code=403, detail={
+            "code": "setup_closed",
+            "message": "이 서버의 관리자 계정은 설치 관리자가 만듭니다 — 웹에서는 만들 수 없습니다",
+        })
     if await has_admin(db):
-        raise HTTPException(status_code=403, detail="이미 관리자가 존재합니다")
+        raise HTTPException(status_code=403, detail={"code": "admin_exists", "message": "이미 관리자가 존재합니다"})
+    # 토큰을 먼저 본다 — 토큰 없이 입력 검증 응답만으로 서버를 더듬지 못하게
+    if not await setup_token.matches(db, body.setup_token):
+        raise HTTPException(status_code=403, detail={
+            "code": "setup_token_invalid",
+            "message": "설정 토큰이 맞지 않습니다 — 서버 로그(docker compose logs backend)에서 확인하세요",
+        })
     username = (body.username or "").strip().lower()
     if not re.fullmatch(r"[a-z0-9_.-]{3,32}", username):
         raise HTTPException(status_code=400, detail="아이디는 3~32자 영소문자/숫자/._- 만 허용")
-    if len(body.password) < 8:
-        raise HTTPException(status_code=400, detail="비밀번호는 8자 이상")
+    password = password_policy.normalize(body.password or "")
+    if len(password) < FIRST_ADMIN_PASSWORD_MIN:
+        raise HTTPException(status_code=400, detail=f"비밀번호는 {FIRST_ADMIN_PASSWORD_MIN}자 이상")
+    try:
+        password_policy.validate(password, username)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     domain = await cfg.get(db, "general.domain", getattr(settings, "domain", "localhost"))
+    if not await setup_token.consume(db, body.setup_token):
+        # 같은 토큰으로 동시에 들어온 다른 요청이 먼저 썼다
+        await db.rollback()
+        raise HTTPException(status_code=403, detail={"code": "setup_token_invalid", "message": "설정 토큰이 이미 쓰였습니다"})
     user = User(
         username=username,
-        password_hash=hash_password(body.password),
+        password_hash=hash_password(password),
         display_name=(body.display_name or username).strip(),
         email=(body.email or f"{username}@{domain}").strip(),
         is_admin=True,
@@ -85,6 +125,10 @@ async def create_first_admin(body: AdminCreate, db: AsyncSession = Depends(get_d
     )
     db.add(user)
     await db.commit()
+    try:
+        await audit.log_action(db, user.id, "setup.first_admin", "user", str(user.id)[:36], {"username": username}, _ip(request))
+    except Exception:  # noqa: BLE001 — 기록 실패로 만들어진 계정을 실패로 알리지 않는다
+        pass
     return {"ok": True, "username": username}
 
 

@@ -443,7 +443,7 @@ compose 는 저장소 볼륨(`ws-storage-data`)을 `external` 로 쓴다. 설치
 | `database` | postgres·redis 시작, healthy 대기 → backend 이미지의 일회용 컨테이너로 `python -m app.cli migrate`(DB 스키마를 이 버전에 맞춘다 — [data-safety.md](data-safety.md)). 종료 코드가 0 이 아니면 backend 를 띄우지 않고 멈춘다 | `database_not_ready`, `database_migrate_failed` |
 | `cert` | (프록시가 맡고 따로 필요한 이름도 없으면 생략) 발급·배치 | `cert_issue_failed`(대안: 임시 인증서), `cert_invalid`, `cert_upload_missing` |
 | `zones` | backend·frontend·nginx 시작 → 설치 관리자를 내부망에 연결 → 구역마다 `install` → 구역마다 `connect` → 연동 값이 바뀌었으면 backend 다시 시작 → DB 에 저장되는 설정 넣기 | `service_not_ready`, `git_*` |
-| `admin` | `seed-admin`(비밀번호는 env 파일로 넘기고 지운다) | `admin_username_taken` |
+| `admin` | `seed-admin`(비밀번호는 env 파일로 넘기고 지운다). 웹의 첫 관리자 만들기(`POST /api/setup/admin`)는 설치 관리자가 꾸린 설치(`JW_INSTALLER_KEY` 가 있다)에서 늘 닫혀 있으므로, `zones` 단계에서 backend 가 뜬 뒤 이 단계가 끝나기 전까지도 밖에서 관리자를 만들 수 없다 | `admin_username_taken` |
 | `lock` | 단계 `installed`, 토큰·세션 폐기 | |
 
 - 시작 전에 답변 검증과 사전 점검을 한다. 걸리면 단계 없이 `failed`(`answers_invalid`, `preflight_failed`).
@@ -559,14 +559,14 @@ node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서
 
 | 시나리오 | 실제 서버에서 확인한 것 |
 |---|---|
-| `s1-minimal` (답변 파일 · API) | 최소 묶음 설치 완료, 컨테이너 준비, 프런트·`/api/health`, 관리자 로그인, 파일 올리기·내려받기, 잠금(423), 설치 관리자 재시작 뒤 상태 유지, `jw status`·`jw reset-admin` |
+| `s1-minimal` (답변 파일 · API) | 최소 묶음 설치 완료, 컨테이너 준비, 프런트·`/api/health`, 관리자 로그인, 파일 올리기·내려받기, 잠금(423), 관리자가 0명일 때와 있을 때 모두 웹의 첫 관리자 API 가 닫혀 있음(403 `setup_closed`), 설치 관리자 재시작 뒤 상태 유지, `jw status`·`jw reset-admin` |
 | `s2-collab` (답변 파일 · API) | 내장 메일(IMAP 993 로그인, 내부 발송·수신, DKIM 서명 — 미리 만든 키와 서버의 키가 같음), 문서 편집기 discovery, 채팅 웹소켓, 일정 만들기, 요약의 포트 = 실제 게시 포트(143 은 열리지 않음) |
 | `s3-full-sso` (답변 파일 · API) | 전체 묶음 + SSO·LDAP 가 12GB 에서 기동(유휴 실측 약 1.9GB). 회의 토큰 발급·UDP 게시, Gitea 구역 훅(고정 이미지, PostgreSQL 연결, 관리 계정, 토큰이 backend 에 주입, OAuth 클라이언트, `/git/`·`/api/git/repos`), LDAPS 636·평문 389 는 루프백만. 로그인 원본 등록은 임시 인증서라 미뤄짐(주의) — 명령 자체는 내부 주소로 시험 등록해 확인 |
 | `s4-nfs` | 확인 다섯 항목 통과, 실패 분류(`unreachable`·`export_not_found`·`permission_denied`·`read_only`), 확인이 내보내기 뿌리의 소유자를 바꾸지 않음, root 를 낮추는 내보내기에 설치, 표식·업로드가 NFS 에 쓰임, 서버를 멈추면 쓰기 503(`storage_unavailable`, 3초 안)·다른 API 는 정상, 다시 띄우면 복구. `no_locking` 은 재현하지 못했다(NFSv4.1 은 잠금을 끌 수 없다) |
 | `s5-proxy` | 80 평문만(443 미게시, HSTS 없음), 프록시 주소에서 온 `X-Real-IP` 만 클라이언트 주소로 쓰고 다른 출발지의 머리말은 무시, backend 의 세션 기록에도 그 주소 |
 | `s6-zone-toggle` | 내부 API 로 채팅 → 문서 → 코드 저장소 켜기, 문서·코드 저장소 끄기. `.env` 의 `JW_ZONES`·`COMPOSE_PROFILES`, `/api/health` 의 zones, 끈 구역의 볼륨 유지. 8443·호스트에서는 내부 API 에 닿지 않고, 틀린 키·내부 대역 밖은 404 |
 | `s7-failure-retry` | 토큰(틀림·재발급·만료·5회 잠금), 없는 이미지 → `pull` 실패·원인 키 → 고친 뒤 그 단계부터, 적용 도중 설치 관리자 재시작 → 이어서 완료, 인증서 자동 발급 실패 → 임시 인증서로 계속 |
-| `s8-manual` | 설치 관리자 없이 [deployment.md](deployment.md) 의 절차대로 최소 구성 기동, `scripts/update.sh --no-pull` 로 다시 빌드해 올리기와 `--rollback`(업데이트 전에 붙여 둔 태그의 이미지로 이름을 되돌린다) |
+| `s8-manual` | 설치 관리자 없이 [deployment.md](deployment.md) 의 절차대로 최소 구성 기동, 설정 토큰으로 첫 관리자 만들기(로그의 토큰은 하나, 토큰 없이·옛 토큰으로는 403, 11자 비밀번호 400, 만든 뒤 폐기), `scripts/update.sh --no-pull` 로 다시 빌드해 올리기와 `--rollback`(업데이트 전에 붙여 둔 태그의 이미지로 이름을 되돌린다) |
 | `s9-operate` | 기본 + 코드 저장소에서: 버전 환경변수 없이 띄웠을 때의 로그 알림, `jw update-key`(비공개 키·엉뚱한 파일 거부, 넣으면 확인이 `unconfigured` → 채널을 받으러 감)·`jw update-channel`, `jw restore`(목록, `--yes` 없이는 내용만, 백업 볼륨의 이름·서버 경로, 되돌린 뒤 백업 시점의 파일만 남고 쓰기가 됨, 없는 파일·틀린 경로 거부), 사설 CA 인증서(서버 인증서만 올리면 코드 저장소 연결이 보류로 남고, 발급 CA 를 함께 올리면 컨테이너에 CA 가 붙고 로그인 원본이 등록됨) |
 | `wizard-ui.cjs` | 화면을 눌러 일반 설치(협업 묶음·임시 인증서)와 빠른 설치를 완료 화면까지 — 1280 폭과 390 폭. 토큰 없는 주소·틀린 토큰, 사전 점검 14항목, 구역·메모리 합계, 메일 레코드 표, 이어 하기, 요약, 적용, 잠김 화면. 콘솔 오류 없음 |
 | `jw reinstall` | 설치된 서버에서 목록 확인 → `--yes` 로 지우고 새 토큰으로 다시 시작 |

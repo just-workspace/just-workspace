@@ -29,6 +29,23 @@ expect "80 은 https 로 넘긴다" 301 "$(ws_code "http://$E2E_DOMAIN/")"
 check_files
 check_locked
 
+say "관리자가 0명이어도 첫 관리자 API 는 닫혀 있다"
+# 관리자 계정을 만들기 전(구역 시작 ~ seed-admin 사이)과 같은 상태를 만든다 — 관리자 표시를 잠시 내린다
+psql_at() { docker exec ws-postgres psql -U workspace -d workspace -At -c "$1"; }
+psql_at "UPDATE users SET is_admin = false WHERE username = 'admin'" >/dev/null
+expect "관리자 0명" 0 "$(psql_at 'SELECT count(*) FROM users WHERE is_admin')"
+expect "상태는 최초 설정 필요" True "$(ws_curl "$WS/api/setup/status" | json_get 'd["needs_setup"]')"
+expect "방식은 installer" installer "$(ws_curl "$WS/api/setup/status" | json_get 'd["setup_mode"]')"
+expect "첫 관리자 API 403" 403 "$(first_admin_code)"
+expect "사유는 setup_closed" setup_closed "$(json_get 'd["detail"]["code"]' < "$E2E_WORK/first-admin.json")"
+expect "계정이 만들어지지 않았다" 0 "$(psql_at "SELECT count(*) FROM users WHERE username = 'intruder'")"
+docker exec -u appuser ws-backend python -m app.cli setup-token >/dev/null 2>&1; expect "setup-token 명령은 거절" 1 "$?"
+expect "설정 토큰이 저장되지 않았다" 0 "$(psql_at "SELECT count(*) FROM system_settings WHERE key = 'setup.token_hash'")"
+psql_at "UPDATE users SET is_admin = true WHERE username = 'admin'" >/dev/null
+expect "관리자 표시를 되돌렸다" 1 "$(psql_at 'SELECT count(*) FROM users WHERE is_admin')"
+check "되돌린 뒤 관리자 로그인" ws_login
+expect "관리자가 있을 때도 403" 403 "$(first_admin_code)"
+
 say "여는 포트"
 ports="$(published_ports | tr '\n' ' ')"
 note "게시: $ports"

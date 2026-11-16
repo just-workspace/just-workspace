@@ -8,6 +8,8 @@
  */
 export const PASSWORD_MIN = 8
 export const PASSWORD_RECOMMENDED = 15
+/** 최초 설정 화면에서 만드는 첫 관리자의 하한 — 백엔드 app/setup/router.py, 설치 마법사와 같다 */
+export const FIRST_ADMIN_PASSWORD_MIN = 12
 
 /** common = 흔한·유출 비밀번호 아님(서버 블록리스트 — POST /api/auth/password-check 응답 뒤에만 통과 표시, 설정 › 보안) */
 export type PasswordRuleKey = 'length' | 'distinct' | 'recommended' | 'common'
@@ -37,13 +39,15 @@ export function stripContext(pwLow: string, context: Array<string | null | undef
 export function checkPasswordRules(
   password: string,
   context: Array<string | null | undefined> = [],
+  /** 길이 하한 — 기본은 가입·변경 규칙(8자). 최초 설정의 첫 관리자는 12자(FIRST_ADMIN_PASSWORD_MIN). */
+  min: number = PASSWORD_MIN,
 ): PasswordRuleResult[] {
   const pw = (password ?? '').normalize('NFKC')
   const n = pw.length
   const low = pw.toLowerCase()
   const hasContext = context.some(c => !!c && c.length >= 3)
   return [
-    { key: 'length', ok: n >= PASSWORD_MIN, required: true, n },
+    { key: 'length', ok: n >= min, required: true, n },
     // 문맥 값이 아직 없으면(아이디 미입력) 통과로 본다 — 입력되면 다시 평가
     { key: 'distinct', ok: !hasContext || stripContext(low, context).length >= PASSWORD_MIN, required: true, n },
     { key: 'recommended', ok: n >= PASSWORD_RECOMMENDED, required: false, n },

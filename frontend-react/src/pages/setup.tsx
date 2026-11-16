@@ -1,16 +1,18 @@
 // 최초 설정(FTW): auth 틀(AuthShell) 위, 폼 위에 "단계명 n / 6 + 진행 바".
 // 관리자가 한 명도 없을 때만 열린다 — 설치 관리자 없이 직접 띄우고 관리자를 미리 만들지 않은 서버의 첫 화면.
+// 첫 관리자 만들기는 서버 로그에 찍힌 설정 토큰이 있어야 한다(setup_mode = token).
+// 설치 관리자가 꾸린 서버(setup_mode = installer)에서는 웹에서 만들 수 없다 — 안내만 보여 준다.
 // 관리자 단계 = 이름·아이디·비밀번호(규칙 체크, 확인 칸 대신 보기 토글) + [이전][다음 — 브랜딩].
 // 백업에서 옮겨 오는 일은 여기서 하지 않는다(설치 관리자의 "백업에서 복원") — 시작 단계에 안내만 둔다.
 // 기능 선택 = 토글 목록 한 화면(스위치 즉시 저장 — 실패하면 되돌림).
-import { useState, type FormEvent } from 'react'
-import { $fetch } from '~/lib/api'
+import { useEffect, useState, type FormEvent } from 'react'
+import { $fetch, errorStatus } from '~/lib/api'
 import { useHead } from '~/lib/head'
-import { setSharedState } from '~/lib/state'
+import { getSharedState, setSharedState } from '~/lib/state'
 import { useI18n } from '~/i18n'
 import { nativeLogin } from '~/composables/useAuth'
 import { useSiteConfig } from '~/composables/useSiteConfig'
-import { checkPasswordRules, passwordRulesPass } from '~/utils/passwordRules'
+import { checkPasswordRules, passwordRulesPass, FIRST_ADMIN_PASSWORD_MIN } from '~/utils/passwordRules'
 import { AuthShell } from '~/components/auth/AuthShell'
 import { AuthHeading } from '~/components/auth/AuthHeading'
 import { AuthAlert } from '~/components/auth/AuthAlert'
@@ -38,8 +40,17 @@ export default function Page() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  // 첫 관리자를 웹에서 만드는 방식 — 가드가 받아 둔 상태를 쓰고, 없으면 묻는다. 모르면 토큰 방식으로 본다(서버가 다시 판정한다).
+  const [mode, setMode] = useState<'token' | 'installer'>(() => (getSharedState<any>('setup-status', () => null)?.setup_mode === 'installer' ? 'installer' : 'token'))
+  useEffect(() => {
+    let alive = true
+    $fetch<any>('/api/setup/status').then(s => { if (alive && s?.setup_mode === 'installer') setMode('installer') }).catch(() => { /* 가드가 받은 값으로 둔다 */ })
+    return () => { alive = false }
+  }, [])
+
   const [aUser, setAUser] = useState(''); const [aPass, setAPass] = useState(''); const [aName, setAName] = useState('')
-  const aRules = checkPasswordRules(aPass, [aUser.trim()])
+  const [aToken, setAToken] = useState('')
+  const aRules = checkPasswordRules(aPass, [aUser.trim()], FIRST_ADMIN_PASSWORD_MIN)
   const [bName, setBName] = useState('Just Workspace'); const [bColor, setBColor] = useState('#2563eb')
   const [mailMode, setMailMode] = useState<MailMode>('builtin')
   const MAIL_OPTS = [
@@ -55,10 +66,18 @@ export default function Page() {
     if (!passwordRulesPass(aRules)) { setError(t('setup.errors.passwordRules')); return }
     setBusy(true)
     try {
-      await $fetch('/api/setup/admin', { method: 'POST', body: { username: aUser, password: aPass, display_name: aName || undefined } })
+      await $fetch('/api/setup/admin', { method: 'POST', body: { username: aUser, password: aPass, display_name: aName || undefined, setup_token: aToken.trim() } })
       await nativeLogin(aUser, aPass, true)
       setStep(2)
-    } catch (e: any) { setError(e?.data?.detail || t('setup.errors.adminFailed')) } finally { setBusy(false) }
+    } catch (e: any) {
+      const detail = e?.data?.detail
+      const code = detail && typeof detail === 'object' ? detail.code : undefined
+      if (code === 'setup_closed') setMode('installer')
+      else if (code === 'setup_token_invalid') setError(t('setup.errors.tokenInvalid'))
+      else if (code === 'admin_exists') setError(t('setup.errors.adminExists'))
+      else if (errorStatus(e) === 429) setError(t('setup.errors.tooMany'))
+      else setError((typeof detail === 'string' && detail) || t('setup.errors.adminFailed'))
+    } finally { setBusy(false) }
   }
 
   async function saveBranding() {
@@ -113,6 +132,18 @@ export default function Page() {
     } catch (e: any) { setError(e?.data?.detail || t('setup.errors.finishFailed')) } finally { setBusy(false) }
   }
 
+  // 설치 관리자가 꾸린 서버 — 관리자는 설치 관리자가 만든다. 여기서는 만들 수 없다.
+  if (mode === 'installer' && step < 2) {
+    return (
+      <AuthShell>
+        <AuthHeading title={t('setup.closed.title')} subtitle={t('setup.closed.subtitle')} />
+        <AuthAlert tone="info" title={t('setup.closed.where')} description={t('setup.closed.whereDesc')} />
+        <p className="text-[13px] text-muted-foreground">{t('setup.closed.cliHint')}</p>
+        <UiButton size="lg" variant="outline" className="w-full font-semibold" onClick={() => { window.location.reload() }}>{t('setup.closed.retry')}</UiButton>
+      </AuthShell>
+    )
+  }
+
   return (
     <AuthShell>
       <AuthStepHeader label={steps[step]} step={step + 1} total={steps.length} />
@@ -132,15 +163,23 @@ export default function Page() {
           <AuthHeading title={t('setup.admin.title')} subtitle={t('setup.admin.subtitle')} />
           {error && <AuthAlert tone="danger" title={error} />}
           <form className="flex flex-col gap-[18px]" noValidate onSubmit={(e) => { void createAdmin(e) }}>
-            <UiInput id="setup-admin-name" modelValue={aName} onUpdateModelValue={setAName} size="lg" label={t('authScreens.register.name')} hint={t('setup.admin.nameHint')} autocomplete="name" autoFocus />
+            <div className="flex flex-col gap-1.5">
+              <UiInput id="setup-token" modelValue={aToken} onUpdateModelValue={setAToken} size="lg" mono label={t('setup.token.label')} autocomplete="off" autoCapitalize="none" spellCheck="false" autoFocus />
+              <p className="text-xs leading-normal text-muted-foreground">
+                {t('setup.token.hint')}{' '}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">docker compose logs backend</code>{' · '}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">docker compose exec backend python -m app.cli setup-token</code>
+              </p>
+            </div>
+            <UiInput id="setup-admin-name" modelValue={aName} onUpdateModelValue={setAName} size="lg" label={t('authScreens.register.name')} hint={t('setup.admin.nameHint')} autocomplete="name" />
             <UiInput id="setup-admin-user" modelValue={aUser} onUpdateModelValue={setAUser} size="lg" label={t('authScreens.register.username')} placeholder={t('setup.admin.usernamePlaceholder')} autocomplete="username" autoCapitalize="none" spellCheck="false" />
             <div className="flex flex-col gap-1.5">
               <UiPasswordInput id="setup-admin-pass" modelValue={aPass} onUpdateModelValue={setAPass} size="lg" label={t('authScreens.register.password')} autocomplete="new-password" />
-              <AuthPasswordRules results={aRules} contextLabel={t('authScreens.register.username')} />
+              <AuthPasswordRules results={aRules} contextLabel={t('authScreens.register.username')} min={FIRST_ADMIN_PASSWORD_MIN} />
             </div>
             <div className="mt-1 flex gap-2">
               <UiButton type="button" variant="outline" size="lg" className="px-[18px]" disabled={busy} onClick={() => setStep(0)}>{t('common.prev')}</UiButton>
-              <UiButton type="submit" size="lg" className="flex-1 px-4 font-semibold" disabled={busy || !aUser || !passwordRulesPass(aRules)}>
+              <UiButton type="submit" size="lg" className="flex-1 px-4 font-semibold" disabled={busy || !aUser || !aToken.trim() || !passwordRulesPass(aRules)}>
                 {busy ? t('setup.admin.creating') : t('setup.admin.next')}
               </UiButton>
             </div>

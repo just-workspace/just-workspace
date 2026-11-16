@@ -42,6 +42,7 @@ Please do not report security vulnerabilities in public issues. Use GitHub's pri
 
 - 관리자에게는 2단계 인증을 켠다(관리 화면에서 필수로 정할 수 있다).
 - 관리자 비밀번호를 잃으면 서버 터미널에서 다시 정한다(`docker exec jw-installer jw reset-admin <아이디>`). 서버 터미널에 들어올 수 있는 사람은 관리자가 될 수 있다는 뜻이기도 하다.
+- 첫 관리자는 서버 터미널을 볼 수 있는 사람만 만든다. 설치 관리자로 설치한 서버에서는 설치 관리자가 만들고, 웹의 첫 관리자 만들기(`POST /api/setup/admin`)는 관리자가 없는 동안에도 닫혀 있다. 직접 띄운 서버에서는 backend 로그에 한 번 찍히는 일회용 설정 토큰이 있어야 웹에서 만들 수 있다(해시로만 저장, 관리자가 생기면 폐기, 시도 횟수 제한) — [docs/deployment.md](docs/deployment.md#첫-관리자-만들기). 로그를 모아 두는 곳이 있다면 그 로그를 볼 수 있는 사람도 관리자가 생기기 전까지는 그 토큰을 볼 수 있으니, 직접 띄운 서버는 띄운 뒤 바로 관리자를 만든다.
 
 ### 비밀값
 

@@ -175,6 +175,13 @@ async def lifespan(app: FastAPI):
             except Exception as e:  # noqa: BLE001 — 시드 실패로 서비스 전체가 못 뜨면 안 된다
                 print(f"[SEED] 관리자 시드 실패: {type(e).__name__}")
 
+    # 관리자가 아직 없으면(설치 관리자 설치가 아닐 때) 첫 관리자 만들기에 쓸 일회용 설정 토큰을 로그에 찍는다.
+    try:
+        from app.setup import token as setup_token
+        await setup_token.announce_on_start()
+    except Exception as e:  # noqa: BLE001 — 토큰이 없으면 웹의 첫 관리자 만들기가 닫힌 채로 남는다(안전한 쪽)
+        print(f"[SETUP] 설정 토큰을 만들지 못했습니다({type(e).__name__}) — python -m app.cli setup-token 으로 발급하세요")
+
     # Load module states from DB
     from app.modules.registry import load_module_states
     from app.db.session import async_session

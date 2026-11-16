@@ -270,6 +270,8 @@ docker system df -v         # 이미지·볼륨이 쓰는 공간
 | 밖에서 회의에 들어오지 못한다 | 회의 포트(UDP 7882-7892, UDP 3478, TCP 7881)가 밖에서 닿는지, 관리 › 구역의 회의 설정에서 공인 주소가 맞는지 |
 | 코드 저장소에 "연결 보류" | [1절](#1-구역-켜고-끄기) — 신뢰되는 인증서로 바꾼 뒤 "다시 연결" |
 | 관리자 비밀번호를 잊었다 | `docker exec jw-installer jw reset-admin <아이디>`([install.md](install.md#관리자-비밀번호를-잊었을-때)) |
+| 접속하면 "관리자 계정을 준비하는 중입니다" 가 나온다 | 관리자 계정이 하나도 없다. 설치가 아직 진행 중이면 설치 관리자 화면(`https://<서버 주소>:8443`)에서 끝나기를 기다린다. 설치가 끝난 서버라면(관리자를 모두 지운 경우 등) 서버 터미널에서 만든다: `docker exec -it -u appuser ws-backend python -m app.cli seed-admin --username <아이디>`. 설치 관리자로 설치한 서버는 웹에서 첫 관리자를 만들 수 없다 |
+| 최초 설정 화면이 "설정 토큰"을 묻는다 | 직접 띄운 서버다. `docker compose logs backend \| grep "setup token"` 의 가장 최근 값을 넣는다. 다시 발급: `docker compose exec backend python -m app.cli setup-token`([deployment.md](deployment.md#첫-관리자-만들기)) |
 | 서버(backend)가 뜨지 않고 로그에 비밀값 이름이 나온다 | 약한·기본 비밀값으로는 뜨지 않는다. 직접 띄운 설치에서 생긴다 — [CONFIG.md](CONFIG.md)의 "비밀값" |
 | 서버가 뜨지 않고 "DB 스키마 버전이 … 높습니다" | DB 가 코드보다 새것이다(이미지만 이전 버전으로 되돌린 경우). [data-safety.md](data-safety.md) 5절 |
 | 공유기 뒤 서버에서 안에서는 되는데 밖에서 안 된다 | 공유기의 포트 넘김. 필요한 포트는 [install.md](install.md#포트) |

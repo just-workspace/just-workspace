@@ -7597,6 +7597,18 @@
       "fresh": "New install",
       "restoreHint": "To move a backup from another server, use \"Restore from backup\" in the installer instead of this screen."
     },
+    "token": {
+      "label": "Setup token",
+      "hint": "A one-time value so that only the person who started the server can create the first admin. It is printed once in the server log and can be reissued with a command:"
+    },
+    "closed": {
+      "title": "The admin account is being prepared",
+      "subtitle": "This server was installed with the installer. The installer creates the admin account; it cannot be created on this screen.",
+      "where": "Installation has not finished yet.",
+      "whereDesc": "Check the progress on the installer screen (https://<server address>:8443). When installation finishes, come back to this address and sign in.",
+      "cliHint": "If installation has finished but there is no admin account, create one from the server terminal with seed-admin (see the operations guide).",
+      "retry": "Check again"
+    },
     "admin": {
       "title": "Create the admin account",
       "subtitle": "Use this account to approve users and manage settings.",
@@ -7691,7 +7703,10 @@
       "adminFailed": "Failed to create admin",
       "brandingFailed": "Failed to save branding",
       "mailFailed": "Failed to save mail settings",
-      "finishFailed": "Failed to finish setup"
+      "finishFailed": "Failed to finish setup",
+      "tokenInvalid": "The setup token does not match. Check the most recent value in the server log, or reissue it.",
+      "adminExists": "An admin already exists. Go to the sign-in screen.",
+      "tooMany": "Too many attempts. Try again in a minute."
     }
   },
   "consent": {

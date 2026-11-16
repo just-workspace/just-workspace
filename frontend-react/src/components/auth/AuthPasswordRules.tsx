@@ -12,14 +12,16 @@ export interface AuthPasswordRulesProps {
   results: PasswordRuleResult[]
   /** distinct 규칙 문구에 쓸 대상(아이디 / 이메일) */
   contextLabel?: string
+  /** length 규칙 문구의 하한(기본 PASSWORD_MIN) — checkPasswordRules 에 준 값과 같게 */
+  min?: number
 }
 
-export function AuthPasswordRules({ results, contextLabel }: AuthPasswordRulesProps) {
+export function AuthPasswordRules({ results, contextLabel, min = PASSWORD_MIN }: AuthPasswordRulesProps) {
   const { t } = useI18n()
   function label(r: PasswordRuleResult): string {
     switch (r.key) {
       case 'length':
-        return r.ok ? t('authScreens.rules.length', { min: PASSWORD_MIN }) : t('authScreens.rules.lengthNow', { min: PASSWORD_MIN, n: r.n })
+        return r.ok ? t('authScreens.rules.length', { min }) : t('authScreens.rules.lengthNow', { min, n: r.n })
       case 'distinct':
         return t('authScreens.rules.distinct', { target: contextLabel || t('authScreens.rules.defaultTarget') })
       case 'recommended':

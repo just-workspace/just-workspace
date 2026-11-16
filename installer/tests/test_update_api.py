@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import re
-from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -14,28 +11,23 @@ from app.update_engine import UpdateError
 from app.update_offline import clean_filename
 from tests.update_harness import THIRD, Killed, UpdateHost, internal_client, run_to_end
 
-DOC = Path(__file__).resolve().parents[2] / "docs" / "update-api.md"
+DOC = "docs/update-api.md"
 
 
 @pytest.fixture(scope="module")
-def examples() -> list[dict]:
-    """계약 문서의 JSON 예시(객체인 것)."""
-    out = []
-    for block in re.findall(r"```json\n(.*?)```", DOC.read_text(encoding="utf-8"), re.S):
-        for text in (block, *block.strip().splitlines()):
-            try:
-                data = json.loads(text)
-            except ValueError:
-                continue
-            if isinstance(data, dict):
-                out.append(data)
-                break
-    return out
+def examples(update_api_examples) -> list[dict]:
+    """계약 문서의 JSON 예시(객체인 것) — 문서는 세션에 한 번만 읽는다(tests/conftest.py 의 repo_doc)."""
+    return update_api_examples
 
 
 def example(examples: list[dict], *keys: str, without: tuple[str, ...] = ()) -> dict:
     found = [e for e in examples if all(k in e for k in keys) and not any(k in e for k in without)]
-    assert found, f"계약 문서에 {keys} 가 든 예시가 없다"
+    if not found:
+        near = sorted({k for e in examples for k in e if any(k2 in e for k2 in keys)})
+        pytest.fail(f"{DOC} 에 {list(keys)} 항목이 모두 든 JSON 예시가 없다"
+                    + (f"(없어야 하는 항목: {list(without)})" if without else "")
+                    + f" — 문서의 예시와 코드의 응답 가운데 한쪽만 바뀌었는지 확인한다. 예시 {len(examples)}개, "
+                      f"이 항목들 가운데 하나라도 든 예시의 항목: {near or '없음'}", pytrace=False)
     return found[0]
 
 
@@ -345,3 +337,25 @@ def test_filename_header():
     assert clean_filename("a%20b.tar", "x") == "a b.tar"
     assert clean_filename("..%2F..%2Fetc%2Fpasswd", "x") == "passwd"
     assert clean_filename(None, "bundle.tar") == "bundle.tar" and clean_filename("%00", "x") == "x"
+
+
+# ─── 문서를 읽는 방식 ───
+
+
+def test_contract_doc_is_read_once_and_failures_say_what_is_missing(examples, monkeypatch, tmp_path):
+    from tests import conftest
+
+    # 같은 문서는 다시 읽지 않는다 — 도는 동안 문서가 바뀌어도 한 실행 안의 테스트는 같은 글을 본다
+    before = conftest.repo_doc.cache_info().misses
+    assert conftest.repo_doc(DOC) is conftest.repo_doc(DOC) and conftest.repo_doc.cache_info().misses == before
+    assert "\r" not in conftest.repo_doc(DOC)
+    # 없는 문서·예시가 없는 문서·없는 항목은 이유를 말하고 멈춘다
+    with pytest.raises(pytest.fail.Exception, match="docs/no-such-doc.md 를 읽지 못했다.*리포 전체가 있어야"):
+        conftest.repo_doc("docs/no-such-doc.md")
+    (tmp_path / "plain.md").write_bytes("﻿# 제목\r\n예시 없음\r\n".encode("utf-8"))
+    monkeypatch.setattr(conftest, "REPO_ROOT", tmp_path)
+    assert conftest.repo_doc("plain.md") == "# 제목\n예시 없음\n"                 # BOM·CRLF 는 걷어 낸다
+    with pytest.raises(pytest.fail.Exception, match="JSON 예시.*하나도 찾지 못했다"):
+        conftest.doc_json_examples("plain.md")
+    with pytest.raises(pytest.fail.Exception, match=r"\['no_such_field'\] 항목이 모두 든 JSON 예시가 없다"):
+        example(examples, "no_such_field")

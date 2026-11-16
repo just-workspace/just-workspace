@@ -5,7 +5,11 @@
 
 from __future__ import annotations
 
+import functools
+import json
 import os
+import re
+from pathlib import Path
 
 import pytest
 
@@ -34,6 +38,51 @@ SECRETS = {
     "SEARXNG_SECRET": "33445566778899aabbccddeeff00112233445566778a9bbc",
     "SMTP_PASSWORD": "445566778899aabbccddeeff00112233",
 }
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+@functools.lru_cache(maxsize=None)
+def repo_doc(relative: str) -> str:
+    """리포의 문서를 읽는다(문서와 코드가 같은 말을 하는지 보는 검사용) — 테스트 실행 한 번에 **한 번만** 읽는다.
+
+    테스트마다 다시 읽으면, 도는 동안 문서를 고치거나 저장하는 순간(반쯤 쓰인 파일)에 걸린 테스트만 깨진다.
+    줄바꿈은 LF 로 맞춘다 — CRLF 로 받은 작업 폴더에서도 같은 결과가 나오게.
+    읽지 못하면 무엇이 어디에 있어야 하는지 알리고 멈춘다.
+    """
+    path = REPO_ROOT / relative
+    try:
+        text = path.read_bytes().decode("utf-8-sig")
+    except OSError as e:
+        pytest.fail(f"문서 {relative} 를 읽지 못했다({type(e).__name__}) — 이 검사는 리포 전체가 있어야 돈다"
+                    f"(찾은 자리: {path}). installer/ 만 떼어 내 돌리는 경우 이 문서를 같은 상대 경로에 둔다.", pytrace=False)
+    except UnicodeDecodeError:
+        pytest.fail(f"문서 {relative} 가 UTF-8 이 아니다({path})", pytrace=False)
+    return text.replace("\r\n", "\n")
+
+
+def doc_json_examples(relative: str) -> list[dict]:
+    """문서의 ```json 블록에 든 예시(객체인 것) — 블록 전체가 JSON 이 아니면 그 안에서 JSON 인 첫 줄을 쓴다."""
+    out = []
+    for block in re.findall(r"```json\n(.*?)```", repo_doc(relative), re.S):
+        for text in (block, *block.strip().splitlines()):
+            try:
+                data = json.loads(text)
+            except ValueError:
+                continue
+            if isinstance(data, dict):
+                out.append(data)
+                break
+    if not out:
+        pytest.fail(f"문서 {relative} 에서 JSON 예시(```json 블록)를 하나도 찾지 못했다 — 문서의 형식이 바뀌었는지 확인한다", pytrace=False)
+    return out
+
+
+@pytest.fixture(scope="session")
+def update_api_examples() -> list[dict]:
+    """업데이트 내부 API 계약 문서(docs/update-api.md)의 JSON 예시 — 세션에 한 번 읽는다."""
+    return doc_json_examples("docs/update-api.md")
 
 
 @pytest.fixture(scope="session")

@@ -2,7 +2,7 @@
  * 이어 하기 — 창을 닫은 뒤 동일 주소로 재진입한 경우. 세 가지 형태:
  *  - 입력 중: 입력 진행 위치와 다음 화면. [이어서 하기] · [처음부터 다시]
  *  - 적용 중: 창을 닫은 동안에도 설치가 계속 진행됨. [진행 상황 보기]
- *  - 적용 실패: 중단된 단계. [멈춘 곳 보기]
+ *  - 적용 실패: 중단된 단계. [중단된 단계 보기]
  */
 import { UiButton } from '~/components/ui/Button'
 import { UiCallout } from '~/components/ui/Callout'

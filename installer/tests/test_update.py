@@ -651,6 +651,38 @@ def test_manual_restore_to_a_restore_point(host):
     assert mgr.status()["available"]["version"] == "1.0.1"        # 재업데이트 가능
 
 
+def test_verify_waits_for_docs_server(host):
+    """문서 구역이 활성화된 설치 — 확인 단계는 문서 서버가 준비(`/healthcheck` = true)된 후 완료로 판정한다.
+    상한 내에 준비되지 않으면 업데이트는 완료하고 확인 단계에 주의를 기록한다(롤백하지 않는다)."""
+    from app import engine as eng
+
+    assert "onlyoffice" in host.services
+    replies = [(502, ""), (200, "false"), (200, "true")]
+    real_get = host.http.get
+
+    def get(url, headers=None, timeout=10.0):
+        if url == eng.DOCS_HEALTH_URL:
+            host.http.calls.append((url, {}))
+            return replies.pop(0) if len(replies) > 1 else replies[0]
+        return real_get(url, headers, timeout)
+
+    host.http.get = get
+    mgr = ready(host, "1.0.0", "1.0.1", db_schema=2)
+    mgr, job_id = run_to_end(host, mgr, lambda m: m.apply("1.0.1", "now", None))
+    job = mgr.job_raw(job_id)
+    assert job["status"] == "done" and "warnings" not in job["steps"][-1]["detail"]
+    assert [u for u, _ in host.http.calls].count(eng.DOCS_HEALTH_URL) == 3
+    assert any("문서 서버 준비 확인" in line for line in mgr.read_log(job_id))
+
+    replies[:] = [(502, "")]
+    host.releases.publish("1.0.2", db_schema=2)
+    mgr.check()
+    mgr, job_id = run_to_end(host, mgr, lambda m: m.apply("1.0.2", "now", None))
+    job = mgr.job_raw(job_id)
+    assert job["status"] == "done" and mgr.current()["version"] == "1.0.2"
+    assert job["steps"][-1]["detail"]["warnings"] == [{"key": "docs_not_ready", "vars": {}}]
+
+
 def test_restore_failure_offers_only_retry(host):
     mgr = ready(host, "1.0.0", "1.0.1", db_schema=2)
     mgr, _ = run_to_end(host, mgr, lambda m: m.apply("1.0.1", "now", None))

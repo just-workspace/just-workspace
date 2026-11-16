@@ -441,3 +441,64 @@ def test_host_address_detection_failure_is_not_fatal(tmp_path):
     ctx = svc.engine._context("config", svc.store.load_answers(), svc.store.facts())
     ctx.detect_host_addresses()
     assert ctx.facts.host_address is None
+
+
+# ─── 문서 서버 준비 대기 ───
+
+
+class ScriptedHttp:
+    """문서 서버 상태 확인에 정해진 응답을 순서대로 반환한다(소진되면 마지막 응답 반복). 그 밖의 주소는 200."""
+
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.calls: list[str] = []
+
+    def get(self, url, headers=None, timeout=10.0):
+        self.calls.append(url)
+        if url == eng.DOCS_HEALTH_URL:
+            return self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+        return 200, ""
+
+
+def test_wait_docs_ready_polls_until_true():
+    http = ScriptedHttp([(0, ""), (502, "Bad Gateway"), (200, "false"), (200, "true\n")])
+    slept, lines = [], []
+    assert eng.wait_docs_ready(http, slept.append, lines.append) is True
+    assert http.calls == [eng.DOCS_HEALTH_URL] * 4 and slept == [eng.POLL_SECONDS] * 3
+    assert "준비 확인" in lines[-1]
+
+
+def test_wait_docs_ready_gives_up_after_timeout():
+    http = ScriptedHttp([(502, "")])
+    slept, lines = [], []
+    assert eng.wait_docs_ready(http, slept.append, lines.append, timeout=9, poll=3) is False
+    assert sum(slept) == 9 and len(http.calls) == 4 and "주의" in lines[-1]
+
+
+def test_install_waits_for_docs_server_before_admin(tmp_path):
+    """문서 구역이 포함된 설치 — 구역 단계가 문서 서버의 준비(`/healthcheck` = true)를 확인한 후 다음 단계로 진행한다."""
+    host = Host(tmp_path)
+    host.services.append("onlyoffice")
+    svc = host.install()
+    state = svc.engine.run()
+    assert state["status"] == "done", state["error"]
+    assert eng.DOCS_HEALTH_URL in [u for u, _ in host.http.calls]
+    assert not [w for w in state["warnings"] if w["key"] == "docs_not_ready"]
+
+
+def test_install_without_docs_zone_does_not_wait(tmp_path):
+    host = Host(tmp_path)
+    svc = host.install(preset="minimal")
+    assert svc.engine.run()["status"] == "done"
+    assert eng.DOCS_HEALTH_URL not in [u for u, _ in host.http.calls]
+
+
+def test_docs_server_not_ready_is_a_warning(tmp_path):
+    """문서 서버가 상한 내에 준비되지 않으면 설치는 완료하고 주의(`docs_not_ready`)를 기록한다."""
+    host = Host(tmp_path)
+    host.services.append("onlyoffice")
+    host.http.responses[eng.DOCS_HEALTH_URL] = 502
+    svc = host.install()
+    state = svc.engine.run()
+    assert state["status"] == "done", state["error"]
+    assert [w["key"] for w in state["warnings"]].count("docs_not_ready") == 1

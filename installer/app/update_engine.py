@@ -1343,7 +1343,8 @@ class UpdateManager:
     def _verify(self, version: str, step: dict, log, manifest: rel.Manifest | None) -> None:
         if self.own_version != version:
             raise fail("installer_version_mismatch", installer=self.own_version, expected=version)
-        for svc in self._services():
+        services = self._services()
+        for svc in services:
             if svc != "certbot":
                 self._wait_ready(f"ws-{svc}", 300)
         # backend 컨테이너가 해당 버전의 이미지로 실행 중인지 확인 — 이미지 id 는 저장 방식에 따라 표기가 상이하므로 이름으로 판정한다
@@ -1366,6 +1367,10 @@ class UpdateManager:
         target = manifest.db_schema if manifest is not None and isinstance(manifest.db_schema, int) else None
         if target is not None and schema.get("current") not in (None, target):
             raise fail("schema_mismatch", current=schema.get("current"), required=target)
+        # 문서 구역: 문서 서버가 편집 요청을 처리할 수 있게 된 후 완료로 판정한다(완료 직후 첫 문서 열기의 502 방지).
+        # 상한 내에 준비되지 않으면 주의로 기록하고 완료한다 — 문서 서버의 기동 지연은 롤백 사유가 아니다.
+        if "onlyoffice" in services and not eng.wait_docs_ready(self.engine.http, self.sleep, log):
+            step["detail"]["warnings"] = [{"key": "docs_not_ready", "vars": {}}]
         step["detail"].update(version=version, schema_version=schema.get("current"))
         log(f"확인 완료: 버전 {version}, 스키마 {schema.get('current')}")
 

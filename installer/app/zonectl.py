@@ -240,6 +240,8 @@ class ZoneManager:
         self._stage(job, "connect", "running")
         hook.connect(ctx, zone_id)
         self._restart_backend(ctx)
+        if "onlyoffice" in ctx.zone_services(zone_id) and not eng.wait_docs_ready(ctx.http, ctx.sleep, ctx.log):
+            ctx.warn("docs_not_ready")
         eng.configure_backend(ctx)
         self._stage(job, "connect", "done")
 

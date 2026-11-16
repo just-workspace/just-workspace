@@ -23,7 +23,8 @@ class FakeHttp:
         for prefix, status in self.responses.items():
             if url.startswith(prefix):
                 return status, ""
-        return 200, ""
+        # 문서 서버의 준비 상태 확인은 본문(`true`)으로 판정한다
+        return 200, ("true" if url.endswith("/healthcheck") else "")
 
 
 class Host:

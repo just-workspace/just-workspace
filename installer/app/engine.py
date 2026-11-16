@@ -176,6 +176,31 @@ class Context:
         return self.plan
 
 
+DOCS_HEALTH_URL = "http://onlyoffice/healthcheck"
+DOCS_READY_TIMEOUT = 240
+
+
+def wait_docs_ready(http: Http, sleep: Callable[[float], None], log: Callable[[str], None], *,
+                    timeout: float = DOCS_READY_TIMEOUT, poll: float = POLL_SECONDS) -> bool:
+    """문서 서버(OnlyOffice)가 편집 요청을 처리할 수 있는 상태가 될 때까지 대기한다.
+
+    준비 완료 기준은 `/healthcheck` 의 응답 본문 `true` 이다. 컨테이너의 healthcheck 는 문서 서비스의 기동 완료 이전에
+    통과하는 경우가 있으며, 이 상태에서 문서를 열면 편집기 연결이 502 로 실패한다. 상한(`timeout`)을 초과하면 False 를
+    반환한다 — 호출 측은 주의로 기록하고 작업을 완료한다(문서 서버는 이후 기동을 계속한다).
+    """
+    waited = 0.0
+    while True:
+        status, body = http.get(DOCS_HEALTH_URL, timeout=5.0)
+        if status == 200 and body.strip().lower() == "true":
+            log(f"문서 서버 준비 확인({int(waited)}초 대기)")
+            return True
+        if waited >= timeout:
+            log(f"문서 서버가 {int(timeout)}초 이내에 준비되지 않음(마지막 응답 {status}) — 주의로 기록하고 계속 진행")
+            return False
+        sleep(poll)
+        waited += poll
+
+
 def helper_json(result) -> dict:
     if not result.ok:
         return {}
@@ -640,6 +665,8 @@ def step_zones(ctx: Context, *, configure: bool = True) -> None:
         ctx.log("연동 값이 바뀌어 backend 를 다시 띄웁니다")
         ctx.up(["backend"])
         ctx.wait_ready("ws-backend")
+    if "onlyoffice" in ctx.active_services() and not wait_docs_ready(ctx.http, ctx.sleep, ctx.log):
+        ctx.warn("docs_not_ready")
     if configure:
         configure_backend(ctx)
 

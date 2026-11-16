@@ -1649,7 +1649,7 @@ async def get_ssl_status(
     """SSL 인증서 상태.
 
     installed·subject·… 는 관리 화면에서 업로드한 인증서(/etc/nginx/ssl) 정보, effective 는 실제 사용 중인 인증서
-    (관리 개요 ops-summary 의 ssl 과 동일한 값 — 설정 파일 → 업로드한 인증서 → SSL_CHECK_HOST → 공개 주소 순).
+    (관리 개요 ops-summary 의 ssl 과 동일한 값 — 설치 관리자 → 설정 파일 → 업로드한 인증서 → SSL_CHECK_HOST → 공개 주소 순).
     """
     import subprocess
 

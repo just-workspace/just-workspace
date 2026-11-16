@@ -3,9 +3,10 @@
  * 승인 대기 n · 마지막 백업 · SSL D-n · 서비스 n/n 을 GET /api/admin/ops-summary 1회 호출로 수신한다.
  * 해당 엔드포인트가 없는 구 버전 서버이면 기존 방식대로 API 4개를 병렬 호출한다.
  *
- * SSL: 서버가 인증서 파일·내부 주소·공개 주소 순으로 확인한다. 모두 읽기 실패 시 source/days_left 가 null —
- * 화면은 "확인 불가"(unknown). 헤어핀 NAT 가 없어 서버가 자신의 공개 주소로 접속할 수 없는 환경이 이에 해당한다
- * (서버 설정 SSL_CERT_PATH 또는 SSL_CHECK_HOST 로 해결).
+ * SSL: 서버가 설치 관리자의 인증서 상태(관리 › 보안의 인증서 카드와 동일한 출처) → 인증서 파일 → 내부 주소 → 공개 주소
+ * 순으로 확인한다. 모두 읽기 실패 시 source/days_left 가 null — 화면은 "확인 불가"(unknown). 설치 관리자 없이 구성하였고
+ * 헤어핀 NAT 가 없어 서버가 자신의 공개 주소로 접속할 수 없는 환경이 이에 해당한다(서버 설정 SSL_CERT_PATH 또는 SSL_CHECK_HOST 로 해결).
+ * temporary = 설치 관리자가 판정한 임시(자체 서명) 인증서.
  *
  * React: const { ops, refresh, ensure } = useAdminOps()   — ops 는 값(읽기 전용으로 사용)
  * 컴포넌트 밖: adminOpsStore.getState().ops · refreshAdminOps() · ensureAdminOps()
@@ -21,14 +22,14 @@ export interface AdminOps {
   users: { pending: number; active: number; suspended: number; open_invites: number } | null
   backup: { at: string; status: string } | null | undefined
   /** unknown = 서버가 만료일을 확인하지 못함(확인 불가) */
-  ssl: { installed: boolean; notAfter: string | null; days: number | null; source: string | null; unknown: boolean } | null
+  ssl: { installed: boolean; notAfter: string | null; days: number | null; source: string | null; unknown: boolean; temporary?: boolean } | null
   services: { ok: number; total: number; downNames: string[] } | null
 }
 
 interface OpsSummary {
   users: { pending: number; active: number; suspended: number; open_invites: number }
   backup: { status: string; created_at: string | null; last_success_at?: string | null } | null
-  ssl: { days_left: number | null; not_after: string | null; source: string | null }
+  ssl: { days_left: number | null; not_after: string | null; source: string | null; temporary?: boolean }
   services: { ok: number; down: number; checking?: number; down_names: string[] }
 }
 
@@ -47,6 +48,7 @@ export function fromOpsSummary(r: OpsSummary): AdminOps {
       days: known ? r.ssl.days_left : null,
       source: r.ssl?.source ?? null,
       unknown: !known,
+      temporary: known && !!r.ssl?.temporary,
     },
     services: { ok: sv.ok, total: sv.ok + sv.down + (sv.checking || 0), downNames: sv.down_names || [] },
   }

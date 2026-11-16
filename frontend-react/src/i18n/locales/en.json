@@ -725,6 +725,7 @@
       "manage": "Manage",
       "sslUnknown": "Can't check",
       "sslUnknownHint": "The server couldn't read the certificate expiry. When a front proxy terminates TLS and there is no hairpin NAT, the public address can't be checked. Set SSL_CERT_PATH (certificate file) or SSL_CHECK_HOST (proxy's internal address) on the server.",
+      "sslTemporaryHint": "This is a temporary (self-signed) certificate, so browsers show a warning. Issue or upload a certificate under Admin › Security.",
       "servicesDown": "Down: {names}",
       "openInvites": "{n} open invite(s)"
     },

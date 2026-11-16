@@ -63,4 +63,13 @@ describe('ops-summary → 운영 요약 4칸', () => {
     expect(o.backup).toBeNull()
     expect(o.services?.total).toBe(3)
   })
+
+  it('설치 관리자가 판정한 임시 인증서 표시를 전달한다', async () => {
+    const { fromOpsSummary } = await import('~/composables/useAdminOps')
+    const base = { users: { pending: 0, active: 1, suspended: 0, open_invites: 0 }, backup: null, services: { ok: 1, down: 0, down_names: [] } }
+    const o = fromOpsSummary({ ...base, ssl: { days_left: 89, not_after: '2027-02-01T00:00:00Z', source: 'installer', temporary: true } })
+    expect(o.ssl).toMatchObject({ unknown: false, days: 89, source: 'installer', temporary: true })
+    const n = fromOpsSummary({ ...base, ssl: { days_left: null, not_after: null, source: null, temporary: true } })
+    expect(n.ssl).toMatchObject({ unknown: true, temporary: false })
+  })
 })

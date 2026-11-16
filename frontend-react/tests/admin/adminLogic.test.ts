@@ -74,6 +74,14 @@ describe('개요(dashboard)', () => {
     const unknownSsl = buildOpsTiles({ ...ops, ssl: { installed: false, notAfter: null, days: null, source: null, unknown: true } }, t)
     expect(unknownSsl[2].tone).toBe('neutral')
     expect(unknownSsl[2].value).toBe(t('admin.dashboard.sslUnknown'))
+    // 설치 관리자가 판정한 임시 인증서 — 만료까지 충분하여도 주의, 만료일은 그대로 표시
+    const temp = buildOpsTiles({ ...ops, ssl: { installed: true, notAfter: '2027-01-01T00:00:00Z', days: 60, source: 'installer', unknown: false, temporary: true } }, t)
+    expect(temp[2].tone).toBe('warning')
+    expect(temp[2].hint).toBe(t('admin.dashboard.sslTemporaryHint'))
+    expect(temp[2].value).toBe(t('admin.dashboard.sslDays', { d: 60, date: '01/01' }))
+    const trusted = buildOpsTiles({ ...ops, ssl: { installed: true, notAfter: '2027-01-01T00:00:00Z', days: 60, source: 'installer', unknown: false } }, t)
+    expect(trusted[2].tone).toBe('success')
+    expect(trusted[2].hint).toBeUndefined()
   })
   it('서비스 상태·지연 기준', () => {
     expect(svcState({ status: 'down', response_ms: null }, 800, t).dot).toBe('down')

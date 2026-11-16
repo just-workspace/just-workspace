@@ -66,8 +66,9 @@ export function buildOpsTiles(o: AdminOps, t: T, today = new Date()): OpsTile[] 
       value: !s ? (o.loaded ? failed : '…') : s.unknown || sslDays == null ? t('admin.dashboard.sslUnknown')
         : sslDays < 0 ? t('admin.common.expired')
           : t('admin.dashboard.sslDays', { d: sslDays, date: mmdd(s.notAfter!) }),
-      hint: s?.unknown ? t('admin.dashboard.sslUnknownHint') : undefined,
-      tone: (!s || s.unknown || sslDays == null ? 'neutral' : sslDays < 0 ? 'danger' : sslDays <= 30 ? 'warning' : 'success') as OpsTone,
+      // 임시(자체 서명) 인증서는 만료일과 무관하게 주의 — 관리 › 보안의 인증서 카드와 동일한 판정
+      hint: s?.unknown ? t('admin.dashboard.sslUnknownHint') : s?.temporary ? t('admin.dashboard.sslTemporaryHint') : undefined,
+      tone: (!s || s.unknown || sslDays == null ? 'neutral' : sslDays < 0 ? 'danger' : sslDays <= 30 || s.temporary ? 'warning' : 'success') as OpsTone,
     },
     {
       key: t('admin.dashboard.tileServices'), icon: 'activity', action: t('admin.dashboard.actionStatus'), to: '/admin/system',

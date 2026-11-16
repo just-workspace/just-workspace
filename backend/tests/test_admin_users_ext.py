@@ -314,8 +314,59 @@ async def test_ssl_expiry_sources(monkeypatch, tmp_path):
     monkeypatch.setattr(ux.settings, "ssl_check_host", "")
     ux._ssl_cache.clear()
     v = await ux.ssl_expiry()
-    assert v == {"not_after": None, "not_before": None, "days_left": None, "source": None, "name": None, "issuer": None}
+    assert v == {"not_after": None, "not_before": None, "days_left": None, "source": None, "name": None, "issuer": None,
+                 "temporary": False}
     assert ux._ssl_cache["ttl"] == 300
+    ux._ssl_cache.clear()
+
+
+@pytest.mark.asyncio
+async def test_ssl_expiry_prefers_installer(monkeypatch, tmp_path):
+    """설치 관리자가 관리하는 설치 — 관리 › 보안의 인증서 카드와 동일한 출처(설치 관리자의 인증서 상태)를 우선 사용한다.
+    backend 가 공개 주소로 접속할 수 없는 환경(헤어핀 NAT 없음)에서도 "확인 불가"가 되지 않는다."""
+    import httpx
+
+    from app.admin import router as admin_router
+    from app.system import installer_client
+
+    na = (datetime.now(timezone.utc) + timedelta(days=60, hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    state = {"managed": True, "mode": "temporary", "temporary": True, "domain": "ws.example.com",
+             "names": ["ws.example.com"], "not_after": na, "days_left": 60, "issuer": "Just Workspace"}
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.url.path, request.headers.get(installer_client.KEY_HEADER)))
+        return httpx.Response(200, json=state)
+
+    monkeypatch.setenv(installer_client.ENV_URL, "http://jw-installer:8444")
+    monkeypatch.setenv(installer_client.ENV_KEY, "k" * 48)
+    monkeypatch.setattr(installer_client, "transport", httpx.MockTransport(handler))
+    monkeypatch.setattr(ux, "_cert_info_remote", lambda *a, **k: pytest.fail("공개 주소로 접속하지 않아야 한다"))
+    monkeypatch.setattr(admin_router, "SSL_DIR", tmp_path / "none")
+    monkeypatch.setattr(ux.settings, "app_url", "https://ws.example.com")
+    monkeypatch.setattr(ux.settings, "ssl_cert_path", "")
+    monkeypatch.setattr(ux.settings, "ssl_check_host", "")
+
+    ux._ssl_cache.clear()
+    v = await ux.ssl_expiry()
+    assert seen == [("/internal/cert", "k" * 48)]
+    assert v["source"] == "installer" and v["days_left"] == 60 and v["temporary"] is True
+    assert v["name"] == "ws.example.com" and v["issuer"] == "Just Workspace"
+    assert ux._ssl_cache["ttl"] == 300
+
+    # 프런트 프록시가 TLS 를 담당하는 설치(managed = false) — 기존 순서(파일 → … → 공개 주소)로 넘어간다
+    state.update(managed=False, not_after=None, temporary=False)
+    calls = []
+    monkeypatch.setattr(ux, "_cert_info_remote", lambda host, port=443, sni=None: calls.append(host) or None)
+    ux._ssl_cache.clear()
+    v = await ux.ssl_expiry()
+    assert calls == ["ws.example.com"] and v["source"] is None and v["temporary"] is False
+
+    # 설치 관리자 응답 없음 — 동일하게 다음 출처로 넘어간다
+    monkeypatch.setattr(installer_client, "transport", httpx.MockTransport(lambda r: httpx.Response(503)))
+    ux._ssl_cache.clear(); calls.clear()
+    v = await ux.ssl_expiry()
+    assert calls == ["ws.example.com"] and v["source"] is None
     ux._ssl_cache.clear()
 
 

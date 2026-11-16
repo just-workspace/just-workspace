@@ -614,11 +614,16 @@ async def ssl_expiry() -> dict:
     보안·SSL 화면(GET /settings/ssl 의 effective)이 동일한 값을 사용한다 — 두 화면 간 불일치 방지.
     조회 순서(먼저 판독된 것 사용):
 
+    0. installer — 설치 관리자가 배치·관리하는 인증서(내부 API `GET /internal/cert`). 관리 › 보안의 인증서 카드와
+                   `jw status` 가 사용하는 값과 동일하다. 설치 관리자 없이 구성한 설치이거나 프런트 프록시가 TLS 를
+                   담당하는 설치(managed = false)는 해당하지 않는다
     1. file   — SSL_CERT_PATH(설정)로 지정한 인증서 파일
     2. local  — 관리 화면에서 업로드한 /etc/nginx/ssl/cert.pem
     3. probe  — SSL_CHECK_HOST(내부 주소, 예: 리버스 프록시 사설 IP)에 접속하되 SNI 는 공개 호스트명
     4. remote — 공개 주소(app_url). 헤어핀 NAT 가 없는 망에서는 여기서 실패한다 → 1·3 을 설정
-    판독 실패 시 전부 None(화면은 "확인 불가"). 성공 시 1시간, 실패 시 5분 캐시(인증서 업로드·삭제 시 초기화).
+    판독 실패 시 전부 None(화면은 "확인 불가"). 성공 시 1시간(설치 관리자 값은 인증서 교체 작업이 backend 를 거치지 않고
+    완료되므로 5분), 실패 시 5분 캐시(인증서 업로드·삭제 시 초기화). `temporary` 는 설치 관리자가 임시(자체 서명) 인증서로
+    판정한 경우에만 True 이다.
     """
     now = time.monotonic()
     if _ssl_cache and now - _ssl_cache["at"] < _ssl_cache.get("ttl", _SSL_TTL):
@@ -627,8 +632,11 @@ async def ssl_expiry() -> dict:
 
     from app.admin.router import SSL_DIR
 
-    source, info = None, None
-    if settings.ssl_cert_path:
+    source, info, temporary = None, None, False
+    managed = await _installer_cert()
+    if managed is not None:
+        info, source, temporary = managed, "installer", bool(managed.get("temporary"))
+    if info is None and settings.ssl_cert_path:
         p = Path(settings.ssl_cert_path)
         if p.is_file():
             info, source = await asyncio.to_thread(_cert_info_from_file, p), "file"
@@ -651,9 +659,37 @@ async def ssl_expiry() -> dict:
         "source": source if na else None,
         "name": (info.get("name") or u.hostname or None) if info else None,
         "issuer": (info.get("issuer") or None) if info else None,
+        "temporary": bool(temporary and na),
     }
-    _ssl_cache.update(at=now, value=value, ttl=_SSL_TTL if na else 300)
+    _ssl_cache.update(at=now, value=value, ttl=(300 if source == "installer" else _SSL_TTL) if na else 300)
     return value
+
+
+async def _installer_cert() -> dict | None:
+    """설치 관리자가 관리하는 인증서의 요약 — {not_after, not_before, name, issuer, temporary}. 해당 없음·조회 실패 시 None.
+
+    backend 가 공개 주소로 자신에게 접속하는 방식(헤어핀 NAT 필요)보다 우선한다. 설치 관리자는 배치한 인증서 파일을
+    직접 판독하므로 접속 경로와 무관하게 값을 제공한다.
+    """
+    from app.system import installer_client
+
+    if not installer_client.configured():
+        return None
+    try:
+        data = await installer_client.request("GET", "/internal/cert", timeout=5.0)
+    except installer_client.InstallerError:
+        return None
+    if not isinstance(data, dict) or not data.get("managed") or not isinstance(data.get("not_after"), str):
+        return None
+    try:
+        na = datetime.fromisoformat(data["not_after"].replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if na.tzinfo is None:
+        na = na.replace(tzinfo=timezone.utc)
+    names = data.get("names") if isinstance(data.get("names"), list) else []
+    return {"not_after": na, "not_before": None, "name": data.get("domain") or (str(names[0]) if names else ""),
+            "issuer": data.get("issuer") or "", "temporary": bool(data.get("temporary"))}
 
 
 def clear_ssl_cache() -> None:

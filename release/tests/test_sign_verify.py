@@ -25,14 +25,14 @@ def test_signature_format_is_cosign_sign_blob_compatible(key):
     der = base64.b64decode(sig, validate=True)
     r, s = utils.decode_dss_signature(der)          # DER SEQUENCE { r, s }
     assert 0 < r < 2**256 and 0 < s < 2**256
-    # 미리 계산한 SHA-256 다이제스트에 대한 서명으로도 검증된다 = "blob 의 SHA-256 에 대한 ECDSA"
+    # 사전 계산한 SHA-256 다이제스트에 대한 서명으로도 검증된다 = "blob 의 SHA-256 에 대한 ECDSA"
     digest = hashes.Hash(hashes.SHA256())
     digest.update(DATA)
     key.public.verify(der, digest.finalize(), ec.ECDSA(utils.Prehashed(hashes.SHA256())))
 
 
 def test_verifies_signature_made_by_plain_ecdsa_like_cosign(key):
-    """다른 구현(cosign·openssl)이 낸 서명을 받는 쪽: 표준 ECDSA-SHA256 DER 을 base64 로, 끝에 줄바꿈이 있어도."""
+    """타 구현(cosign·openssl)이 생성한 서명의 수신 측 처리: 표준 ECDSA-SHA256 DER 을 base64 로 인코딩한 형식이며, 끝에 줄바꿈이 있어도 허용."""
     der = key.private.sign(DATA, ec.ECDSA(hashes.SHA256()))
     for form in (base64.b64encode(der), base64.b64encode(der) + b"\n", base64.b64encode(der).decode() + "\r\n"):
         assert verify.verify_signature(DATA, form, [key.public]) == 0
@@ -149,7 +149,7 @@ def test_channel_sequence_rollback_rejected(key):
     data, sig, ch = signed_channel(key, seq_bumps=3)
     assert ch.sequence == 3
     verify.verify_channel(data, sig, [key.public], now=T0, last_sequence=3)      # 같은 순번은 통과
-    verify.verify_channel(data, sig, [key.public], now=T0, last_sequence=None)   # 처음 보는 경우
+    verify.verify_channel(data, sig, [key.public], now=T0, last_sequence=None)   # 최초 확인 시
     with pytest.raises(verify.RollbackError):
         verify.verify_channel(data, sig, [key.public], now=T0, last_sequence=4)
 
@@ -158,7 +158,7 @@ def test_channel_tampered_rejected_before_parsing(key):
     data, sig, _ = signed_channel(key)
     with pytest.raises(verify.SignatureError):
         verify.verify_channel(data.replace(b'"sequence":1', b'"sequence":9'), sig, [key.public], now=T0)
-    with pytest.raises(verify.SignatureError):                 # 형식이 깨진 파일도 서명 오류가 먼저다
+    with pytest.raises(verify.SignatureError):                 # 형식이 손상된 파일도 서명 오류가 우선한다
         verify.verify_channel(b"garbage", sig, [key.public], now=T0)
 
 
@@ -174,9 +174,9 @@ def test_channel_wrong_name_or_bad_content_rejected(key):
 def test_channel_check_order_signature_then_expiry_then_sequence(key, other_key):
     data, sig, _ = signed_channel(key)
     late = T0 + timedelta(days=365)
-    with pytest.raises(verify.SignatureError):                 # 서명이 틀리면 만료보다 먼저
+    with pytest.raises(verify.SignatureError):                 # 서명 불일치는 만료보다 우선
         verify.verify_channel(data, sig, [other_key.public], now=late, last_sequence=99)
-    with pytest.raises(verify.ExpiredError):                   # 만료가 순번보다 먼저
+    with pytest.raises(verify.ExpiredError):                   # 만료가 순번보다 우선
         verify.verify_channel(data, sig, [key.public], now=late, last_sequence=99)
 
 
@@ -197,7 +197,7 @@ def test_manifest_passes_and_hash_mismatch_rejected(key, make_manifest):
     assert verify.verify_manifest(data, sig, [key.public], entry) == m
 
     other = make_manifest("1.0.0", changelog="다른 내용").to_bytes()
-    with pytest.raises(verify.HashMismatchError):              # 서명이 맞아도 채널이 가리킨 파일이 아니면 거부
+    with pytest.raises(verify.HashMismatchError):              # 서명이 유효해도 채널이 참조한 파일이 아니면 거부
         verify.verify_manifest(other, sign.sign_bytes(other, key.private), [key.public], entry)
 
 

@@ -5,7 +5,7 @@ import pytest
 from jwrelease import semver
 from jwrelease.semver import Version, VersionError
 
-# semver.org 11번 항목의 순서 예시 + 제품이 쓰는 꼴
+# semver.org 11번 항목의 순서 예시 + 제품이 사용하는 형식
 ORDERED = [
     "0.9.9",
     "1.0.0-alpha",

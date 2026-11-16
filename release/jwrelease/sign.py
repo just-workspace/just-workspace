@@ -1,11 +1,11 @@
-"""파일 서명 — 릴리스를 내는 사람의 PC 에서만 쓴다(빌드 서버에는 비공개 키가 없다).
+"""파일 서명 — 릴리스 담당자의 PC 에서만 사용한다(빌드 서버에는 비공개 키가 없다).
 
-형식은 `cosign sign-blob --key` 가 내는 것과 같다:
-파일 바이트의 SHA-256 에 대한 ECDSA(P-256) 서명을 ASN.1 DER 로 적고 base64(표준 알파벳, 패딩 있음)로 감싼
-한 줄. `.sig` 파일에는 그 문자열만 들어 있다(줄바꿈 없음).
+형식은 `cosign sign-blob --key` 의 출력과 동일하다:
+파일 바이트의 SHA-256 에 대한 ECDSA(P-256) 서명을 ASN.1 DER 로 인코딩하고 base64(표준 알파벳, 패딩 있음)로 인코딩한
+한 줄. `.sig` 파일에는 해당 문자열만 포함된다(줄바꿈 없음).
 
-비공개 키는 표준 PEM(PKCS#8 또는 SEC1, 암호화 가능)을 받는다. cosign 이 만드는 키 파일
-(`ENCRYPTED SIGSTORE PRIVATE KEY`)은 cosign 고유 포맷이라 여기서 읽지 못한다 — 그 키로는 cosign CLI 로 서명한다.
+비공개 키는 표준 PEM(PKCS#8 또는 SEC1, 암호화 가능)을 지원한다. cosign 이 생성하는 키 파일
+(`ENCRYPTED SIGSTORE PRIVATE KEY`)은 cosign 고유 포맷이므로 본 모듈에서 읽을 수 없다 — 해당 키로는 cosign CLI 로 서명한다.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ SIG_SUFFIX = ".sig"
 
 
 class SigningError(Exception):
-    """서명할 수 없다(키 형식·암호 등)."""
+    """서명 불가(키 형식·암호 등)."""
 
 
 def load_private_key(pem: bytes, password: bytes | None = None) -> ec.EllipticCurvePrivateKey:
@@ -44,7 +44,7 @@ def sign_bytes(data: bytes, key: ec.EllipticCurvePrivateKey) -> bytes:
 
 
 def public_key_pem(key: ec.EllipticCurvePrivateKey) -> bytes:
-    """짝이 되는 공개 키(SPKI PEM — cosign.pub 과 같은 형식)."""
+    """대응하는 공개 키(SPKI PEM — cosign.pub 과 동일한 형식)."""
     return key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
 
 
@@ -53,7 +53,7 @@ def sig_path(path: Path) -> Path:
 
 
 def sign_file(path: Path, key: ec.EllipticCurvePrivateKey) -> Path:
-    """`path` 옆에 `path.sig` 를 쓴다."""
+    """`path` 와 같은 위치에 `path.sig` 를 기록한다."""
     out = sig_path(path)
     out.write_bytes(sign_bytes(path.read_bytes(), key))
     return out

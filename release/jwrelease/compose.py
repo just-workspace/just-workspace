@@ -1,13 +1,13 @@
-"""`docker-compose.yml` 에서 이미지 목록을 뽑는다 — 우리가 빌드하는 것과 남의 것, 구역 매핑.
+"""`docker-compose.yml` 에서 이미지 목록을 추출한다 — 자체 빌드 이미지와 외부 이미지(third-party), 구역 매핑.
 
-표준 라이브러리에 YAML 파서가 없어서 **필요한 범위만** 읽는다:
+표준 라이브러리에 YAML 파서가 없으므로 **필요한 범위만** 파싱한다:
 `services:` 아래 각 서비스의 `image`, `build`(문자열 또는 `context`·`dockerfile`·`target`), `profiles`.
-그 밖의 항목은 들여쓰기만 보고 건너뛴다. 읽는 항목에 앵커·별칭·여러 줄 값이 쓰이면 조용히 틀리지 않고
-ComposeError 로 멈춘다. (테스트가 PyYAML 결과와 대조해 이 읽기를 고정한다.)
+그 밖의 항목은 들여쓰기만 확인하고 건너뛴다. 파싱 대상 항목에 앵커·별칭·여러 줄 값이 사용되면 오류 없이 잘못된 결과를 내는 대신
+ComposeError 로 중단한다. (테스트가 PyYAML 결과와 대조하여 본 파싱 동작을 고정한다.)
 
-- 우리 이미지 = `build:` 가 있는 서비스
-- 남의 이미지 = `build:` 없이 `image:` 만 있는 서비스
-- `${VAR:-기본값}` 은 주어진 환경으로 펼친다(없으면 기본값)
+- 자체 빌드 이미지 = `build:` 가 있는 서비스
+- 외부 이미지 = `build:` 없이 `image:` 만 있는 서비스
+- `${VAR:-기본값}` 은 주어진 환경으로 전개한다(없으면 기본값)
 """
 
 from __future__ import annotations
@@ -20,14 +20,14 @@ DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 
 
 class ComposeError(ValueError):
-    """compose 파일을 읽지 못했거나 릴리스에 쓸 수 없는 내용이다."""
+    """compose 파일 읽기 실패 또는 릴리스에 사용할 수 없는 내용."""
 
 
-# ── 변수 펼치기 ──────────────────────────────────────────────
+# ── 변수 전개 ────────────────────────────────────────────────
 
 
 def expand(text: str, env: Mapping[str, str] | None = None) -> str:
-    """compose 의 변수 표기(`$VAR`, `${VAR}`, `${VAR:-x}`, `${VAR-x}`, `${VAR:?msg}`, `${VAR:+x}`, `$$`)를 펼친다."""
+    """compose 의 변수 표기(`$VAR`, `${VAR}`, `${VAR:-x}`, `${VAR-x}`, `${VAR:?msg}`, `${VAR:+x}`, `$$`)를 전개한다."""
     env = env or {}
     out: list[str] = []
     i, n = 0, len(text)
@@ -88,7 +88,7 @@ def _expand_braced(body: str, env: Mapping[str, str]) -> str:
     raise ComposeError(f"모르는 변수 표기: ${{{body}}}")
 
 
-# ── 필요한 범위의 YAML 읽기 ──────────────────────────────────
+# ── 필요 범위의 YAML 파싱 ────────────────────────────────────
 
 
 def _strip_comment(line: str) -> str:
@@ -133,7 +133,7 @@ def _indent(line: str) -> int:
 
 
 def parse_services(text: str) -> dict[str, dict[str, Any]]:
-    """서비스 이름 → `{"image": str|None, "build": dict|None, "profiles": [str]}` (값은 펼치기 전 원문)."""
+    """서비스 이름 → `{"image": str|None, "build": dict|None, "profiles": [str]}` (값은 전개 전 원문)."""
     if "\t" in text.replace("\r", ""):
         for no, line in enumerate(text.splitlines(), 1):
             if "\t" in line[: len(line) - len(line.lstrip())]:
@@ -156,7 +156,7 @@ def parse_services(text: str) -> dict[str, dict[str, Any]]:
     services: dict[str, dict[str, Any]] = {}
     current: dict[str, Any] | None = None
     key_indent: int | None = None
-    block: str | None = None           # 지금 읽는 하위 블록: "build" | "profiles" | None
+    block: str | None = None           # 현재 파싱 중인 하위 블록: "build" | "profiles" | None
     block_indent: int | None = None
 
     for no, ln in body:
@@ -209,7 +209,7 @@ def parse_services(text: str) -> dict[str, dict[str, Any]]:
         if block_indent is None:
             block_indent = ind
         if ind != block_indent:
-            continue                    # build.args 같은 더 깊은 항목
+            continue                    # build.args 등 더 깊은 항목
         if block == "build":
             m = re.match(r"([A-Za-z0-9_.-]+):(?:\s+(.*))?$", stripped)
             if m and m.group(1) in ("context", "dockerfile", "target"):
@@ -260,7 +260,7 @@ class ImageRef:
         return self.digest is not None
 
     def by_digest(self) -> str:
-        """`저장소@sha256:…` (태그는 뺀다)."""
+        """`저장소@sha256:…` (태그 제외)."""
         if not self.digest:
             raise ComposeError(f"다이제스트가 없다: {self}")
         return f"{self.repository}@{self.digest}"
@@ -305,7 +305,7 @@ class ComposeImage:
 
 
 def read_images(text: str, env: Mapping[str, str] | None = None) -> list[ComposeImage]:
-    """compose 원문 → 서비스별 이미지(파일에 나온 순서)."""
+    """compose 원문 → 서비스별 이미지(파일 내 출현 순서)."""
     out: list[ComposeImage] = []
     for name, svc in parse_services(text).items():
         if svc["image"] is None:
@@ -330,7 +330,7 @@ def third_party_images(images: list[ComposeImage]) -> list[ComposeImage]:
 
 
 def unpinned_third_party(images: list[ComposeImage]) -> list[ComposeImage]:
-    """다이제스트 없이 태그로만(또는 태그도 없이) 고정된 남의 이미지."""
+    """다이제스트 없이 태그로만(또는 태그도 없이) 고정된 외부 이미지."""
     return [i for i in third_party_images(images) if not i.ref.pinned]
 
 
@@ -363,11 +363,11 @@ def third_party_by_zone(
     pins: Mapping[str, str] | None = None,
     resolver: Resolver | None = None,
 ) -> dict[str, dict[str, str]]:
-    """남의 이미지를 구역별로: `{구역: {서비스: "저장소@sha256:…"}}`.
+    """외부 이미지를 구역별로 분류: `{구역: {서비스: "저장소@sha256:…"}}`.
 
-    다이제스트가 없는 이미지는 `pins`(`"저장소:태그"` → `"sha256:…"`)나 `resolver` 로 채운다.
-    둘 다 못 채우면 ComposeError(목록 포함)로 멈춘다 — 태그는 가리키는 내용이 바뀔 수 있어 릴리스에 싣지 않는다.
-    어느 구역에도 속하지 않은 남의 이미지도 오류다(zones.json 에 서비스를 더해야 한다).
+    다이제스트가 없는 이미지는 `pins`(`"저장소:태그"` → `"sha256:…"`)나 `resolver` 로 보완한다.
+    둘 다 보완 불가 시 ComposeError(목록 포함)로 중단한다 — 태그는 참조 대상이 변경될 수 있어 릴리스에 포함하지 않는다.
+    어느 구역에도 속하지 않은 외부 이미지도 오류다(zones.json 에 서비스를 추가해야 한다).
     """
     zone_of = service_zones(zones)
     pins = pins or {}

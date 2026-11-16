@@ -32,7 +32,7 @@ def test_publish_beta_then_verify(tmp_path, key, make_manifest):
     e = ch.releases[0]
     assert (e.version, e.summary, e.manifest_path) == ("1.0.0-beta.1", "첫 시험판", "releases/1.0.0-beta.1/manifest.json")
     assert e.manifest_sha256 == sha256_hex((tmp_path / e.manifest_path).read_bytes())
-    # 파일은 결정적 직렬화 그대로(LF, 끝 줄바꿈 하나)
+    # 파일은 결정적 직렬화 결과와 동일(LF, 끝 줄바꿈 하나)
     raw = (tmp_path / "channels/beta.json").read_bytes()
     assert raw == ch.to_bytes() and b"\r" not in raw
 
@@ -65,13 +65,13 @@ def test_channel_rules_enforced(tmp_path, key, make_manifest):
     with pytest.raises(RepoError):
         publish(tmp_path, make_manifest("1.0.0-beta.1"), "stable", key)      # stable 에 Beta
     with pytest.raises(RepoError):
-        publish(tmp_path, make_manifest("1.0.0"), "beta", key)               # Stable 은 stable 로 낸다
+        publish(tmp_path, make_manifest("1.0.0"), "beta", key)               # Stable 은 stable 로 게시
     publish(tmp_path, make_manifest("1.0.0-beta.1"), "beta", key)
     with pytest.raises(RepoError):
-        publish(tmp_path, make_manifest("1.0.0-beta.1"), "beta", key)        # 같은 버전 다시
-    with pytest.raises(RepoError):                                           # 낸 릴리스의 내용 바꾸기
+        publish(tmp_path, make_manifest("1.0.0-beta.1"), "beta", key)        # 동일 버전 재게시
+    with pytest.raises(RepoError):                                           # 게시된 릴리스의 내용 변경
         publish(tmp_path, make_manifest("1.0.0-beta.1", changelog="바뀜"), "beta", key)
-    assert channelrepo.load_channel(tmp_path, "beta").sequence == 1          # 실패는 아무것도 쓰지 않는다
+    assert channelrepo.load_channel(tmp_path, "beta").sequence == 1          # 실패 시 아무것도 기록하지 않는다
     assert not list(tmp_path.glob("channels/stable*"))
 
 
@@ -86,7 +86,7 @@ def test_refresh_extends_expiry_without_changing_releases(tmp_path, key, make_ma
         assert after.sequence == before[name].sequence + 1
         assert after.releases == before[name].releases
         assert after.expires == format_time(later + timedelta(days=30))
-    # 원래 만료(30일)를 넘긴 시점에도 통과
+    # 원래 만료(30일) 경과 시점에도 통과
     assert check(tmp_path, key, now=T0 + timedelta(days=45)).passed
     with pytest.raises(RepoError):
         channelrepo.refresh(tmp_path / "empty", ("stable",), key=key.private, now=later, expires_days=30)
@@ -131,12 +131,12 @@ def test_publish_without_key_leaves_files_unsigned(tmp_path, key, make_manifest)
     assert sorted(result.unsigned) == ["channels/beta.json", "releases/1.0.0-beta.1/manifest.json"]
     assert not list(tmp_path.rglob("*.sig"))
     assert not check(tmp_path, key, channels=("beta",)).passed
-    for rel in result.unsigned:                       # 나중에 따로 서명하면 통과
+    for rel in result.unsigned:                       # 추후 별도 서명 시 통과
         sign.sign_file(tmp_path / rel, key.private)
     assert check(tmp_path, key, channels=("beta",)).passed
 
 
-# ── 명령줄: 처음부터 끝까지 ──────────────────────────────────
+# ── 명령줄: 전체 흐름 ────────────────────────────────────────
 
 
 def run(*argv):
@@ -156,7 +156,7 @@ def test_cli_full_flow(tmp_path, key, settings, capsys, unpinned_compose_text):
     apps.mkdir()
     (apps / "workspace-desktop-setup.exe").write_bytes(b"installer-bytes")
 
-    # manifest 만들기 — 고정 안 된 남의 이미지가 있으면 실패(리포의 compose 는 전부 고정돼 있어 고정을 뗀 사본으로 본다)
+    # manifest 생성 — 미고정 외부 이미지가 있으면 실패(리포의 compose 는 전부 고정되어 있으므로 고정을 제거한 사본으로 검증한다)
     (work / "unpinned-compose.yml").write_text(unpinned_compose_text, encoding="utf-8", newline="\n")
     args = ["make-manifest", "--version", "1.0.0-beta.1", "--digests", work / "digests.json",
             "--changelog-file", work / "CHANGES.md", "--apps-dir", apps, "-o", work / "manifest.json", "--now", "2026-12-01T09:00:00Z"]
@@ -165,7 +165,7 @@ def test_cli_full_flow(tmp_path, key, settings, capsys, unpinned_compose_text):
     assert "postgres" in capsys.readouterr().err and not (work / "manifest.json").exists()
     assert run(*unpinned, "--pins", work / "pins.json") == 0
     assert Manifest.from_bytes((work / "manifest.json").read_bytes()).third_party["core"]["postgres"] == "postgres@" + PINS["postgres:16.16-alpine"]
-    assert run(*args) == 0                                      # 리포의 compose 그대로면 pins 없이 된다
+    assert run(*args) == 0                                      # 리포의 compose 그대로면 pins 없이 성공
     beta = Manifest.from_bytes((work / "manifest.json").read_bytes())
     assert beta.changelog == "## 1.0.0-beta.1\n\n- 첫 공개 시험판\n" and beta.apps[0].kind == "windows-desktop"
 
@@ -173,12 +173,12 @@ def test_cli_full_flow(tmp_path, key, settings, capsys, unpinned_compose_text):
     assert run("publish", "--repo", repo, "--manifest", work / "manifest.json", "--channel", "beta",
                "--key", priv, "--now", "2026-12-01T09:00:00Z") == 0
     out = capsys.readouterr().out
-    assert "git" in out and "push" in out                       # 무엇을 하면 되는지 알려 준다
-    assert not (repo / ".git").exists()                         # 커밋·푸시는 하지 않는다
+    assert "git" in out and "push" in out                       # 수행할 작업을 안내한다
+    assert not (repo / ".git").exists()                         # 커밋·푸시는 수행하지 않는다
     assert channelrepo.load_channel(repo, "beta").releases[0].summary == "1.0.0-beta.1"
     assert run("verify", "--repo", repo, "--pubkey", pub, "--channel", "beta", "--now", "2026-12-02T00:00:00Z") == 0
 
-    # 승격 — 다이제스트는 그대로, 태그 붙이기 명령은 출력만
+    # 승격 — 다이제스트는 동일, 태그 부여 명령은 출력만 수행
     capsys.readouterr()
     assert run("promote", "--repo", repo, "--version", "1.0.0-beta.1", "--key", priv, "--now", "2026-12-15T09:00:00Z") == 0
     out = capsys.readouterr().out
@@ -187,19 +187,19 @@ def test_cli_full_flow(tmp_path, key, settings, capsys, unpinned_compose_text):
     stable = Manifest.from_bytes((repo / "releases/1.0.0/manifest.json").read_bytes())
     assert stable.images == beta.images and stable.third_party == beta.third_party
     assert stable.version == "1.0.0" and stable.promoted_from == "1.0.0-beta.1"
-    assert (repo / "releases/1.0.0-beta.1/manifest.json").read_bytes() == beta.to_bytes()   # Beta 쪽은 그대로
+    assert (repo / "releases/1.0.0-beta.1/manifest.json").read_bytes() == beta.to_bytes()   # Beta 측은 변경 없음
     assert [r.version for r in channelrepo.load_channel(repo, "stable").releases] == ["1.0.0"]
     assert [r.version for r in channelrepo.load_channel(repo, "beta").releases] == ["1.0.0-beta.1", "1.0.0"]
 
     # 전체 검증, 만료, 만료 갱신
     assert run("verify", "--repo", repo, "--pubkey", pub, "--now", "2026-12-16T00:00:00Z") == 0
-    assert run("verify", "--repo", repo, "--pubkey", pub, "--now", "2027-02-01T00:00:00Z") == 0      # 기본 만료 90일 안
+    assert run("verify", "--repo", repo, "--pubkey", pub, "--now", "2027-02-01T00:00:00Z") == 0      # 기본 만료 90일 이내
     assert run("verify", "--repo", repo, "--pubkey", pub, "--now", "2027-04-01T00:00:00Z") == 1
     assert run("refresh", "--repo", repo, "--key", priv, "--now", "2027-03-10T00:00:00Z") == 0
     assert run("verify", "--repo", repo, "--pubkey", pub, "--now", "2027-04-01T00:00:00Z") == 0
     assert channelrepo.load_channel(repo, "stable").sequence == 2
 
-    # 설치 관리자 쪽 흐름: 채널 → 판정 → manifest
+    # 설치 관리자 측 흐름: 채널 → 판정 → manifest
     keys = verify.load_public_keys([pub.read_bytes()])
     from jwrelease.model import parse_time
 
@@ -233,7 +233,7 @@ def test_cli_sign_and_no_sign(tmp_path, key, make_manifest, capsys):
     repo.mkdir()
     mpath = tmp_path / "manifest.json"
     mpath.write_bytes(make_manifest("1.0.0-beta.1").to_bytes())
-    assert run("publish", "--repo", repo, "--manifest", mpath, "--channel", "beta") == 2          # 키도 --no-sign 도 없음
+    assert run("publish", "--repo", repo, "--manifest", mpath, "--channel", "beta") == 2          # 키와 --no-sign 모두 없음
     now = ("--now", "2026-12-01T09:00:00Z")
     assert run("publish", "--repo", repo, "--manifest", mpath, "--channel", "beta", "--no-sign", *now) == 0
     assert "cosign sign-blob" in capsys.readouterr().out
@@ -246,4 +246,4 @@ def test_cli_sign_and_no_sign(tmp_path, key, make_manifest, capsys):
 def test_cli_images_report(capsys):
     assert run("images") == 0
     out = capsys.readouterr().out
-    assert "rbi-mirror" in out and "target=prod" in out and "다이제스트 없음" not in out      # 남의 이미지는 전부 고정돼 있다
+    assert "rbi-mirror" in out and "target=prod" in out and "다이제스트 없음" not in out      # 외부 이미지는 전부 고정되어 있다

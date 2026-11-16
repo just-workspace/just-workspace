@@ -1,17 +1,17 @@
-"""채널·릴리스 목록 검증과 업그레이드 판정 — 설치 관리자가 그대로 가져다 쓰는 모듈.
+"""채널·릴리스 목록 검증과 업그레이드 판정 — 설치 관리자가 그대로 사용하는 모듈.
 
-의존성은 `cryptography` 하나(+ 같은 패키지의 `model`, `semver` — 둘 다 표준 라이브러리만 쓴다).
-모든 함수는 순수 함수다: 파일·네트워크·시계를 건드리지 않고, 바이트와 "지금 시각"을 인자로 받는다.
+의존성은 `cryptography` 하나(+ 동일 패키지의 `model`, `semver` — 모두 표준 라이브러리만 사용한다).
+모든 함수는 순수 함수다: 파일·네트워크·시계에 접근하지 않으며, 바이트와 "지금 시각"을 인자로 받는다.
 
 채널 검증 순서(`verify_channel`):
-  1. 서명 — 공개 키 1~2개 중 하나로 검증되면 통과(키 교체 기간에는 현재 키와 다음 키를 함께 준다)
-  2. 형식 — 서명이 맞은 뒤에만 해석한다
-  3. 만료 — `expires` 가 지났으면 거부(옛 채널 파일 재사용 차단)
-  4. 순번 — 이전에 받아들인 `sequence` 보다 작으면 거부(롤백 차단)
-그 다음 릴리스 하나를 고르면(`plan_update`) manifest 를 받아 `verify_manifest` 로
-  5. 해시 — 채널 파일에 적힌 SHA-256 과 일치
+  1. 서명 — 공개 키 1~2개 중 하나로 검증되면 통과(키 교체 기간에는 현재 키와 다음 키를 함께 전달한다)
+  2. 형식 — 서명 검증 통과 후에만 해석한다
+  3. 만료 — `expires` 가 경과했으면 거부(이전 채널 파일 재사용 차단)
+  4. 순번 — 이전에 수락한 `sequence` 보다 작으면 거부(롤백 차단)
+이후 릴리스 하나를 선택하면(`plan_update`) manifest 를 수신하여 `verify_manifest` 로
+  5. 해시 — 채널 파일에 기록된 SHA-256 과 일치
   6. 서명
-  7. 내용 — 버전·공개 시각·`min_upgrade_from` 이 채널 파일의 줄과 일치
+  7. 내용 — 버전·공개 시각·`min_upgrade_from` 이 채널 파일의 해당 항목과 일치
 """
 
 from __future__ import annotations
@@ -34,31 +34,31 @@ MAX_PUBLIC_KEYS = 2
 
 
 class VerifyError(Exception):
-    """검증 실패(아래 종류의 부모)."""
+    """검증 실패(아래 종류의 상위 클래스)."""
 
 
 class SignatureError(VerifyError):
-    """서명이 어느 공개 키로도 검증되지 않는다."""
+    """서명이 어느 공개 키로도 검증되지 않음."""
 
 
 class ExpiredError(VerifyError):
-    """채널 파일의 만료 시각이 지났다."""
+    """채널 파일의 만료 시각 경과."""
 
 
 class RollbackError(VerifyError):
-    """채널 파일의 순번이 이전에 본 것보다 작다."""
+    """채널 파일의 순번이 이전에 확인한 값보다 작음."""
 
 
 class HashMismatchError(VerifyError):
-    """파일의 SHA-256 이 기대값과 다르다."""
+    """파일의 SHA-256 이 기대값과 불일치."""
 
 
 class ContentError(VerifyError):
-    """서명은 맞지만 내용이 형식에 맞지 않거나 서로 어긋난다."""
+    """서명은 유효하나 내용이 형식에 부합하지 않거나 상호 불일치."""
 
 
 class UpgradeError(VerifyError):
-    """그 버전으로 갈 수 없다(다운그레이드, 경로 없음 등)."""
+    """해당 버전으로 이행 불가(다운그레이드, 경로 없음 등)."""
 
 
 # ── 서명 ─────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ def decode_signature(signature: bytes | str) -> bytes:
 
 
 def verify_signature(data: bytes, signature: bytes | str, public_keys: Sequence[ec.EllipticCurvePublicKey]) -> int:
-    """어느 한 키로 검증되면 그 키의 순서(0 부터)를 돌려준다. 아니면 SignatureError."""
+    """어느 한 키로 검증되면 해당 키의 순서(0 부터)를 반환한다. 아니면 SignatureError."""
     if not public_keys:
         raise SignatureError("공개 키가 없다")
     der = decode_signature(signature)
@@ -120,10 +120,10 @@ def verify_channel(
     expected_channel: str | None = None,
     last_sequence: int | None = None,
 ) -> Channel:
-    """채널 파일 검증(서명 → 형식 → 만료 → 순번). 통과하면 해석한 채널을 돌려준다.
+    """채널 파일 검증(서명 → 형식 → 만료 → 순번). 통과 시 해석한 채널을 반환한다.
 
-    `last_sequence` 는 이전에 받아들인 채널 파일의 순번이다. 통과한 뒤에는 돌려받은 채널의
-    `sequence` 를 저장해 다음 검증에 넘긴다.
+    `last_sequence` 는 이전에 수락한 채널 파일의 순번이다. 통과 후에는 반환된 채널의
+    `sequence` 를 저장하여 다음 검증에 전달한다.
     """
     if now.tzinfo is None:
         raise ValueError("now 에 시간대가 있어야 한다")
@@ -147,7 +147,7 @@ def verify_manifest(
     public_keys: Sequence[ec.EllipticCurvePublicKey],
     entry: ReleaseEntry,
 ) -> Manifest:
-    """manifest 검증(해시 → 서명 → 채널 파일의 줄과 내용 일치)."""
+    """manifest 검증(해시 → 서명 → 채널 파일의 해당 항목과 내용 일치)."""
     actual = sha256_hex(data)
     if actual != entry.manifest_sha256:
         raise HashMismatchError(f"manifest 해시가 다르다({entry.version}): {actual} ≠ {entry.manifest_sha256}")
@@ -175,7 +175,7 @@ def verify_file_hash(data: bytes, expected_sha256: str, label: str = "파일") -
 
 
 def can_upgrade_directly(current: str, entry: ReleaseEntry) -> bool:
-    """`current` 에서 이 릴리스로 한 번에 올라갈 수 있는가(더 높은 버전이고 `min_upgrade_from` 이상)."""
+    """`current` 에서 이 릴리스로 직접 업그레이드할 수 있는지 여부(더 높은 버전이고 `min_upgrade_from` 이상)."""
     cur, tgt = semver.parse(current), semver.parse(entry.version)
     if not cur < tgt:
         return False
@@ -183,11 +183,11 @@ def can_upgrade_directly(current: str, entry: ReleaseEntry) -> bool:
 
 
 def upgrade_path(current: str, target: str, releases: Sequence[ReleaseEntry]) -> list[str]:
-    """`current` 에서 `target` 까지 차례로 설치할 버전 목록(마지막이 `target`).
+    """`current` 에서 `target` 까지 순차 설치할 버전 목록(마지막이 `target`).
 
-    한 번에 갈 수 있으면 `[target]`. `min_upgrade_from` 때문에 못 가면 그 사이의 릴리스를 거친다 —
-    거치는 횟수가 가장 적은 경로를 고르고, 같은 횟수면 더 높은 버전을 먼저 거친다.
-    이미 그 버전이면 빈 목록. 내려가는 방향이거나 경로가 없으면 UpgradeError.
+    직접 업그레이드가 가능하면 `[target]`. `min_upgrade_from` 으로 인해 불가하면 중간 릴리스를 경유한다 —
+    경유 횟수가 최소인 경로를 선택하며, 횟수가 동일하면 더 높은 버전을 먼저 경유한다.
+    이미 해당 버전이면 빈 목록. 다운그레이드 방향이거나 경로가 없으면 UpgradeError.
     """
     cur, tgt = semver.parse(current), semver.parse(target)
     by_version = {r.version: r for r in releases}
@@ -218,10 +218,10 @@ def upgrade_path(current: str, target: str, releases: Sequence[ReleaseEntry]) ->
     raise UpgradeError(f"{current} 에서 {target} 로 가는 경로가 없다(최소 {need} 필요, 거쳐 갈 릴리스 없음)")
 
 
-ACTION_CURRENT = "current"   # 이미 최신 — 할 일 없음
-ACTION_UPDATE = "update"     # `path` 순서대로 올린다
-ACTION_WAIT = "wait"         # 채널의 최신이 현재보다 낮다(Beta → Stable 전환 직후) — 따라잡을 때까지 기다린다
-ACTION_BLOCKED = "blocked"   # 새 버전이 있지만 갈 경로가 없다
+ACTION_CURRENT = "current"   # 이미 최신 — 수행할 작업 없음
+ACTION_UPDATE = "update"     # `path` 순서대로 업그레이드
+ACTION_WAIT = "wait"         # 채널의 최신이 현재보다 낮음(Beta → Stable 전환 직후) — 채널이 현재 버전에 도달할 때까지 대기
+ACTION_BLOCKED = "blocked"   # 새 버전이 있으나 업그레이드 경로 없음
 
 
 @dataclass(frozen=True)
@@ -229,7 +229,7 @@ class UpdatePlan:
     action: str
     current: str
     target: str | None = None        # 채널의 최신 버전(없으면 None)
-    path: tuple[str, ...] = ()       # ACTION_UPDATE 일 때 차례로 설치할 버전
+    path: tuple[str, ...] = ()       # ACTION_UPDATE 일 때 순차 설치할 버전
     reason: str = ""
 
 
@@ -240,13 +240,13 @@ def latest_release(channel: Channel) -> ReleaseEntry | None:
 
 
 def plan_update(current: str, channel: Channel) -> UpdatePlan:
-    """검증을 통과한 채널과 현재 설치 버전으로 무엇을 할지 정한다.
+    """검증을 통과한 채널과 현재 설치 버전으로 수행할 동작을 결정한다.
 
-    - 채널의 최신이 현재와 같다 → `current`
-    - 최신이 현재보다 높다 → `update` + 경로(없으면 `blocked`)
-    - 최신이 현재보다 낮다 → `wait`. Beta 를 쓰다가 Stable 채널로 바꾼 직후가 이렇다
-      (예: 현재 `1.2.0-beta.3`, Stable 최신 `1.1.4`). 내려가지 않고, Stable 이 현재 버전 이상이
-      되면(`1.2.0` 은 `1.2.0-beta.3` 보다 높다) 그때 올라간다.
+    - 채널의 최신이 현재와 동일 → `current`
+    - 최신이 현재보다 높음 → `update` + 경로(없으면 `blocked`)
+    - 최신이 현재보다 낮음 → `wait`. Beta 사용 중 Stable 채널로 전환한 직후가 이에 해당한다
+      (예: 현재 `1.2.0-beta.3`, Stable 최신 `1.1.4`). 다운그레이드하지 않으며, Stable 이 현재 버전 이상이
+      되면(`1.2.0` 은 `1.2.0-beta.3` 보다 높다) 그 시점에 업그레이드한다.
     """
     semver.parse(current)
     newest = latest_release(channel)

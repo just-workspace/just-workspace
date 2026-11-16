@@ -10,7 +10,7 @@ from conftest import PINS, REPO_ROOT, fake_digest
 ENV = {"JW_REGISTRY": "ghcr.io/just-workspace", "JW_VERSION": "1.0.0"}
 
 # ── 현재 docker-compose.yml 스냅샷 ───────────────────────────
-# compose 의 이미지 구성이 바뀌면 여기가 깨진다 — 워크플로 매트릭스·문서도 함께 고쳐야 한다는 신호다.
+# compose 의 이미지 구성이 변경되면 이 테스트가 실패한다 — 워크플로 매트릭스·문서도 함께 수정해야 함을 의미한다.
 
 OWN_SNAPSHOT = {
     "backend": ("backend", "Dockerfile", "runtime"),
@@ -37,7 +37,7 @@ THIRD_PARTY_SNAPSHOT = {
     "searxng": ("searxng/searxng", "ai"),
 }
 
-# 리포의 compose 는 남의 이미지를 전부 다이제스트로 고정한다(태그는 `이름:태그@sha256:…` 로 함께 남긴다).
+# 리포의 compose 는 외부 이미지를 전부 다이제스트로 고정한다(태그는 `이름:태그@sha256:…` 형식으로 함께 유지한다).
 UNPINNED_SNAPSHOT: set[str] = set()
 TAG_AND_DIGEST = {"postgres", "redis", "nginx", "egress"}
 
@@ -49,7 +49,7 @@ def images(compose_text):
 
 @pytest.fixture(scope="module")
 def unpinned_images(unpinned_compose_text):
-    """다이제스트 고정을 뗀 사본 — 고정이 빠졌을 때의 동작(실패·pins·resolver)을 본다."""
+    """다이제스트 고정을 제거한 사본 — 고정 누락 시의 동작(실패·pins·resolver)을 검증한다."""
     return compose.read_images(unpinned_compose_text, ENV)
 
 
@@ -79,7 +79,7 @@ def test_unpinned_third_party_snapshot(images):
 
 
 def test_repo_pins_match_example_table(images):
-    """compose 에 적은 다이제스트와 예시 표(release/examples/pins.json)가 어긋나지 않게."""
+    """compose 에 기록한 다이제스트와 예시 표(release/examples/pins.json)의 일치 여부 검증."""
     table = json.loads((REPO_ROOT / "release" / "examples" / "pins.json").read_text(encoding="utf-8"))
     in_compose = {i.ref.by_tag(): i.ref.digest for i in compose.third_party_images(images) if i.ref.tag}
     assert in_compose == table
@@ -106,7 +106,7 @@ def test_profiles_read(images):
 
 
 def test_matches_pyyaml(compose_text):
-    """직접 만든 읽기가 PyYAML 과 같은 결과를 내는지(image·build·profiles 전부)."""
+    """자체 구현 파서가 PyYAML 과 동일한 결과를 내는지 검증(image·build·profiles 전부)."""
     yaml = pytest.importorskip("yaml")
     doc = yaml.safe_load(compose_text)
     mine = compose.parse_services(compose_text)
@@ -124,7 +124,7 @@ def test_matches_pyyaml(compose_text):
         assert mine[name]["build"] == expected, name
 
 
-# ── 읽기 규칙 ────────────────────────────────────────────────
+# ── 파싱 규칙 ────────────────────────────────────────────────
 
 SAMPLE = """\
 # 머리말
@@ -200,7 +200,7 @@ def test_matches_pyyaml_on_sample():
         "services:\n  a:\n    image: *anchor\n",                      # 별칭
         "services:\n  a:\n    image: |\n      x\n",                   # 여러 줄 값
         "services:\n  a:\n    image: \"unterminated\n",
-        "services:\n  a:\n    <<: *common\n    image: x:1\n",         # 병합 키 — image 가 다른 데서 올 수 있다
+        "services:\n  a:\n    <<: *common\n    image: x:1\n",         # 병합 키 — image 가 다른 위치에서 유래할 수 있다
         "services:\n  a:\n    build:\n      dockerfile: D\n    image: x\n",   # context 없음
         "services:\n  a:\n\tfoo: 1\n",                                # 탭
         "services:\n  a:\n    image: x:1\n  a:\n    image: y:1\n",    # 중복
@@ -255,7 +255,7 @@ def test_image_ref_rejects(bad):
         ImageRef.parse(bad)
 
 
-# ── 구역별 남의 이미지, 다이제스트 없는 것 처리 ──────────────
+# ── 구역별 외부 이미지, 다이제스트 없는 항목 처리 ────────────
 
 
 def test_unpinned_third_party_fails_by_default(unpinned_images, zones_raw):
@@ -271,7 +271,7 @@ def test_unpinned_filled_from_pins(unpinned_images, zones_raw):
     assert set(out) == {"core", "git", "meetings", "docs", "ai"}
     assert out["core"]["postgres"] == "postgres@" + PINS["postgres:16.16-alpine"]
     assert out["meetings"]["egress"] == "livekit/egress@" + PINS["livekit/egress:v1.15.0"]
-    assert out["core"]["certbot"].startswith("certbot/certbot@sha256:")       # 이미 고정된 것은 그대로
+    assert out["core"]["certbot"].startswith("certbot/certbot@sha256:")       # 이미 고정된 항목은 유지
     assert sum(len(m) for m in out.values()) == 9
     for refs in out.values():
         for ref in refs.values():

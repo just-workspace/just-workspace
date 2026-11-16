@@ -19,11 +19,11 @@ def test_manifest_contents(make_manifest, settings, zones_raw):
     for name, ref in m.images.items():
         assert ref == f"ghcr.io/just-workspace/just-workspace-{name}@{fake_digest('img:' + name)}"
     assert set(m.third_party) == {"core", "git", "meetings", "docs", "ai"}
-    assert re.fullmatch(r"postgres@sha256:[0-9a-f]{64}", m.third_party["core"]["postgres"])   # compose 에 고정된 값 그대로
-    assert m.third_party["core"]["postgres"] != "postgres@" + PINS["postgres:16.16-alpine"]   # pins 는 고정 안 된 것만 채운다
+    assert re.fullmatch(r"postgres@sha256:[0-9a-f]{64}", m.third_party["core"]["postgres"])   # compose 에 고정된 값 그대로 유지
+    assert m.third_party["core"]["postgres"] != "postgres@" + PINS["postgres:16.16-alpine"]   # pins 는 미고정 항목만 보완한다
     assert (m.zones_sha256, m.zones_content) == zones_fingerprint(zones_raw)
     assert m.zones_content == json.loads(zones_raw)
-    # 자리만 있는 항목
+    # 예약만 된 항목(값 없음)
     assert m.db_schema is None and m.plugin_api is None and m.installer_bundle is None
     assert m.offline_bundle is None and m.apps == () and m.promoted_from is None
     Manifest.from_bytes(m.to_bytes())
@@ -35,7 +35,7 @@ def test_same_inputs_same_bytes(make_manifest):
 
 
 def test_repo_compose_needs_no_pins(make_manifest):
-    """리포의 compose 는 남의 이미지를 전부 다이제스트로 고정하므로 pins 없이도 manifest 가 나온다."""
+    """리포의 compose 는 외부 이미지를 전부 다이제스트로 고정하므로 pins 없이도 manifest 가 생성된다."""
     m = make_manifest(pins=None)
     assert all("@sha256:" in ref for refs in m.third_party.values() for ref in refs.values())
 
@@ -180,7 +180,7 @@ def test_promote_keeps_digests_and_changes_only_version_fields(make_manifest):
     stable = builder.promote_manifest(beta, published=T0 + timedelta(days=14))
 
     assert stable.version == "1.2.0" and stable.promoted_from == "1.2.0-beta.3"
-    assert stable.images == beta.images                      # 다이제스트가 한 글자도 바뀌지 않는다
+    assert stable.images == beta.images                      # 다이제스트 완전 동일(변경 없음)
     assert stable.third_party == beta.third_party
     assert (stable.zones_sha256, stable.zones_content) == (beta.zones_sha256, beta.zones_content)
 
@@ -223,7 +223,7 @@ def test_retag_commands_point_at_same_digest(make_manifest):
     assert len(cmds) == len(beta.images)
     by_source = {c[-1]: c for c in cmds}
     for name, ref in beta.images.items():
-        cmd = by_source[ref]                                  # 원본은 Beta 때의 다이제스트 그대로
+        cmd = by_source[ref]                                  # 원본은 Beta 시점의 다이제스트와 동일
         repo = ref.split("@")[0]
         assert cmd == ["docker", "buildx", "imagetools", "create", "--tag", f"{repo}:1.2.0", ref]
     assert not any("build" == c[1] and "imagetools" != c[2] for c in cmds)

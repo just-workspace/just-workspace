@@ -1,4 +1,4 @@
-"""채널 리포 작업 디렉터리 다루기 — 게시·만료 갱신·전체 검증.
+"""채널 리포 작업 디렉터리 처리 — 게시·만료 갱신·전체 검증.
 
 채널 리포의 배치:
 
@@ -6,7 +6,7 @@
     channels/beta.json    channels/beta.json.sig
     releases/<버전>/manifest.json  releases/<버전>/manifest.json.sig
 
-여기 함수들은 파일만 쓴다. git 커밋·푸시는 하지 않는다(사람이 확인하고 한다).
+본 모듈의 함수는 파일만 기록한다. git 커밋·푸시는 수행하지 않는다(릴리스 담당자가 확인 후 수행).
 """
 
 from __future__ import annotations
@@ -34,13 +34,13 @@ from .sign import SIG_SUFFIX, sign_bytes
 
 
 class RepoError(Exception):
-    """채널 리포 작업을 할 수 없다."""
+    """채널 리포 작업 수행 불가."""
 
 
 @dataclass
 class Result:
-    written: list[str] = field(default_factory=list)      # 쓴 파일(리포 기준 상대 경로)
-    unsigned: list[str] = field(default_factory=list)     # 서명이 아직 없는 파일
+    written: list[str] = field(default_factory=list)      # 기록한 파일(리포 기준 상대 경로)
+    unsigned: list[str] = field(default_factory=list)     # 서명 미부여 파일
     notes: list[str] = field(default_factory=list)
 
 
@@ -52,7 +52,7 @@ def _write(repo: Path, rel: str, data: bytes, result: Result) -> None:
 
 
 def _put_signed(repo: Path, rel: str, data: bytes, key: ec.EllipticCurvePrivateKey | None, result: Result) -> None:
-    """파일과 서명을 쓴다. 키가 없으면 옛 서명을 지우고 '서명 필요'로 남긴다."""
+    """파일과 서명을 기록한다. 키가 없으면 기존 서명을 삭제하고 '서명 필요' 상태로 남긴다."""
     _write(repo, rel, data, result)
     sig_rel = rel + SIG_SUFFIX
     if key is not None:
@@ -75,7 +75,7 @@ def load_channel(repo: Path, name: str) -> Channel | None:
 
 
 def channels_for(version: str, channel: str) -> tuple[str, ...]:
-    """이 릴리스를 넣을 채널 파일들. Stable 릴리스는 Beta 채널에도 들어간다."""
+    """이 릴리스를 포함할 채널 파일 목록. Stable 릴리스는 Beta 채널에도 포함된다."""
     if channel not in CHANNELS:
         raise RepoError(f"모르는 채널: {channel}")
     if channel == "stable":
@@ -98,10 +98,10 @@ def publish(
     summary: str = "",
     manifest_sig: bytes | None = None,
 ) -> Result:
-    """manifest 를 `releases/<버전>/` 에 넣고 채널 파일을 갱신(순번 +1, 만료 갱신)·서명한다.
+    """manifest 를 `releases/<버전>/` 에 저장하고 채널 파일을 갱신(순번 +1, 만료 갱신)·서명한다.
 
-    `key` 가 없으면 서명 없이 파일만 쓴다(다른 도구로 서명할 때). `manifest_sig` 는 이미 만들어 둔
-    manifest 서명을 그대로 실을 때 준다.
+    `key` 가 없으면 서명 없이 파일만 기록한다(타 도구로 서명하는 경우). `manifest_sig` 는 사전 생성한
+    manifest 서명을 그대로 포함할 때 지정한다.
     """
     try:
         manifest = Manifest.from_bytes(manifest_bytes)
@@ -194,7 +194,7 @@ def verify_all(
     channels: tuple[str, ...] = CHANNELS,
     last_sequences: dict[str, int] | None = None,
 ) -> Report:
-    """채널 파일과 거기 적힌 모든 manifest 를 검증한다(하나가 틀려도 끝까지 보고 모아서 알린다)."""
+    """채널 파일과 그에 기록된 모든 manifest 를 검증한다(일부 실패 시에도 끝까지 검증하여 오류를 취합·보고한다)."""
     report = Report()
     last_sequences = last_sequences or {}
     seen_manifests: dict[str, str] = {}

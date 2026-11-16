@@ -1,4 +1,4 @@
-# 테스트에 필요한 것(도구 실행에는 필요 없다)
+# 테스트용 의존성(도구 실행에는 불필요)
 -r requirements.txt
 pytest>=8
 jsonschema>=4.18

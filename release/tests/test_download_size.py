@@ -1,4 +1,4 @@
-"""받을 용량(`download_bytes`) — manifest 의 선택 항목, 레지스트리 조회, 명령 옵션. 네트워크 없이 돈다."""
+"""다운로드 용량(`download_bytes`) — manifest 의 선택 항목, 레지스트리 조회, 명령 옵션. 네트워크 없이 실행된다."""
 
 import json
 import urllib.error
@@ -27,7 +27,7 @@ def image_doc(*layer_sizes, config=100):
 
 
 class FakeRegistry:
-    """주소 → manifest 문서. 부른 주소를 기억한다."""
+    """주소 → manifest 문서. 호출된 주소를 기록한다."""
 
     def __init__(self, docs: dict):
         self.docs = docs
@@ -47,7 +47,7 @@ class FakeRegistry:
 def test_download_bytes_is_optional_and_absent_by_default(make_manifest):
     m = make_manifest()
     assert m.download_bytes is None
-    assert "download_bytes" not in json.loads(m.to_bytes())          # 모르면 키를 싣지 않는다 — 옛 manifest 와 같은 바이트
+    assert "download_bytes" not in json.loads(m.to_bytes())          # 미상이면 키를 포함하지 않는다 — 이전 manifest 와 동일한 바이트
     assert Manifest.from_bytes(m.to_bytes()) == m
 
 
@@ -192,7 +192,7 @@ def test_cli_resolve_sizes_failure_only_warns(tmp_path, cli_args, monkeypatch, c
         raise ComposeError(f"{repo}: 크기를 조회하지 못했다(연결 실패)")
 
     monkeypatch.setattr(registry, "image_size", boom)
-    assert run(*cli_args, "--resolve-sizes") == 0                  # 실패해도 manifest 는 만든다
+    assert run(*cli_args, "--resolve-sizes") == 0                  # 실패해도 manifest 는 생성한다
     assert read(tmp_path).download_bytes is None
     assert "download_bytes" not in json.loads((tmp_path / "manifest.json").read_bytes())
     assert "경고" in capsys.readouterr().err

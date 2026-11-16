@@ -1,4 +1,4 @@
-"""manifest 만들기와 승격 — 릴리스를 내는 쪽 도구의 본체(파일 입출력은 호출하는 쪽이 한다)."""
+"""manifest 생성 및 승격 — 릴리스 게시 측 도구의 본체(파일 입출력은 호출자가 수행한다)."""
 
 from __future__ import annotations
 
@@ -16,12 +16,12 @@ APP_KIND_BY_SUFFIX = {".exe": "windows-desktop", ".apk": "android"}
 
 
 class BuildError(ValueError):
-    """manifest 를 만들 수 없다(입력이 서로 맞지 않는다)."""
+    """manifest 생성 불가(입력 간 불일치)."""
 
 
 @dataclass(frozen=True)
 class Digests:
-    """빌드 서버가 낸 `digests.json` — 이름 → (저장소, 다이제스트)."""
+    """빌드 서버가 생성한 `digests.json` — 이름 → (저장소, 다이제스트)."""
 
     version: str
     registry: str
@@ -61,7 +61,7 @@ def file_ref(path: Path, url: str) -> FileRef:
 
 
 def collect_apps(apps_dir: Path, version: str, settings: Settings) -> tuple[AppFile, ...]:
-    """디렉터리의 설치 파일(`.exe` → windows-desktop, `.apk` → android). 종류마다 하나만 허용한다."""
+    """디렉터리의 설치 파일(`.exe` → windows-desktop, `.apk` → android). 종류별로 하나만 허용한다."""
     found: dict[str, AppFile] = {}
     for path in sorted(apps_dir.iterdir()):
         kind = APP_KIND_BY_SUFFIX.get(path.suffix.lower())
@@ -93,14 +93,14 @@ def make_manifest(
     resolver: compose.Resolver | None = None,
     download_bytes: int | None = None,
 ) -> Manifest:
-    """빌드 결과(digests.json)와 compose·zones.json 으로 manifest 를 만든다.
+    """빌드 결과(digests.json)와 compose·zones.json 으로 manifest 를 생성한다.
 
-    확인하는 것:
-    - 버전 꼴, `digests.json` 의 버전과 일치
-    - compose 의 우리 이미지가 `digests.json` 에 전부 있고 저장소 이름이 같다
-    - compose 밖의 추가 이미지(설치 관리자 등)는 설정의 저장소 이름 규칙과 같다
-    - 남의 이미지는 전부 다이제스트로 고정(아니면 `pins`·`resolver` 로 채우고, 못 채우면 실패)
-    - `min_upgrade_from` 이 이 버전보다 높지 않다
+    검증 항목:
+    - 버전 형식, `digests.json` 의 버전과 일치
+    - compose 의 자체 빌드 이미지가 `digests.json` 에 전부 존재하고 저장소 이름이 동일
+    - compose 밖의 추가 이미지(설치 관리자 등)는 설정의 저장소 이름 규칙과 동일
+    - 외부 이미지(third-party)는 전부 다이제스트로 고정(미고정 시 `pins`·`resolver` 로 보완하고, 보완 불가 시 실패)
+    - `min_upgrade_from` 이 이 버전보다 높지 않음
     """
     if not semver.is_product_version(version):
         raise BuildError(f"버전 꼴이 아니다(X.Y.Z 또는 X.Y.Z-beta.N): {version!r}")
@@ -165,7 +165,7 @@ def make_manifest(
 
 
 def total_image_size(manifest: Manifest, size_of) -> int:
-    """manifest 의 모든 이미지(우리 것 + 남의 것)의 압축 크기 합. `size_of(저장소, 다이제스트)` 는 주입한다."""
+    """manifest 의 모든 이미지(자체 빌드 이미지 + 외부 이미지)의 압축 크기 합. `size_of(저장소, 다이제스트)` 는 주입받는다."""
     total = 0
     for ref in sorted(set(manifest.all_image_refs().values())):
         repo, digest = ref.split("@", 1)
@@ -183,10 +183,10 @@ def promote_manifest(
     min_upgrade_from: Any = _KEEP,
     changelog: str | None = None,
 ) -> Manifest:
-    """Beta manifest → Stable manifest. **이미지 다이제스트는 그대로**이고 버전 문자열만 바뀐다.
+    """Beta manifest → Stable manifest. **이미지 다이제스트는 동일**하며 버전 문자열만 변경된다.
 
-    오프라인 묶음은 싣지 않는다 — 묶음 안에 Beta manifest 가 들어 있어서 Stable 용으로 다시 묶어야 한다
-    (이미지를 다시 빌드하는 것은 아니다).
+    오프라인 번들은 포함하지 않는다 — 번들 내부에 Beta manifest 가 포함되어 있어 Stable 용으로 재생성해야 한다
+    (이미지 재빌드는 아니다).
     """
     if not semver.is_beta(beta.version):
         raise BuildError(f"Beta 릴리스가 아니다: {beta.version}")
@@ -209,7 +209,7 @@ def promote_manifest(
 
 
 def retag_commands(manifest: Manifest, tag: str) -> list[list[str]]:
-    """우리 이미지에 버전 태그를 붙이는 명령(다시 빌드하지 않는다 — 같은 다이제스트에 태그만)."""
+    """자체 빌드 이미지에 버전 태그를 부여하는 명령(재빌드 없음 — 동일 다이제스트에 태그만 부여)."""
     out = []
     for name in sorted(manifest.images):
         ref = manifest.images[name]
@@ -219,7 +219,7 @@ def retag_commands(manifest: Manifest, tag: str) -> list[list[str]]:
 
 
 def summary_line(changelog: str) -> str:
-    """변경 내용의 첫 의미 있는 줄(제목 표시 `#`·목록 표시 제거) — 채널 파일의 요약 기본값."""
+    """변경 내용의 첫 유의미한 줄(제목 표시 `#`·목록 표시 제거) — 채널 파일의 요약 기본값."""
     for line in changelog.splitlines():
         text = line.strip().lstrip("#-* ").strip()
         if text:

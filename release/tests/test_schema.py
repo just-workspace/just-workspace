@@ -1,4 +1,4 @@
-"""JSON Schema ↔ 예시 파일 ↔ 파이썬 모델이 서로 같은 형식을 말하는지."""
+"""JSON Schema ↔ 예시 파일 ↔ 파이썬 모델이 동일한 형식을 기술하는지 검증."""
 
 import json
 
@@ -49,7 +49,7 @@ def test_manifest_examples_match_schema_and_model(manifest_validator, name):
 
 
 def test_examples_are_consistent_with_each_other():
-    """채널 예시의 해시는 manifest 예시를 결정적 직렬화한 바이트의 것이고, 승격 예시는 다이제스트가 같다."""
+    """채널 예시의 해시는 manifest 예시를 결정적 직렬화한 바이트의 값이며, 승격 예시는 다이제스트가 동일하다."""
     beta_m = Manifest.from_dict(load(EXAMPLES / "manifest-1.0.0-beta.1.json"))
     stable_m = Manifest.from_dict(load(EXAMPLES / "manifest-1.0.0.json"))
     beta_c = Channel.from_dict(load(EXAMPLES / "channel-beta.json"))
@@ -70,7 +70,7 @@ def test_other_examples_load():
 
 
 def test_generated_files_match_schema(channel_validator, manifest_validator, make_manifest):
-    """도구가 실제로 만드는 바이트가 스키마를 지킨다(예시뿐 아니라)."""
+    """도구가 실제로 생성하는 바이트가 스키마를 준수한다(예시에 한정되지 않음)."""
     beta = make_manifest("1.1.0-beta.2", min_upgrade_from="1.0.0", changelog="변경")
     stable = builder.promote_manifest(beta, published=T0)
     for m in (beta, stable):
@@ -135,7 +135,7 @@ def test_schema_and_model_reject_the_same_bad_manifests(manifest_validator):
         lambda d: d.update(surprise=1),
         lambda d: d.update(download_bytes=-1),
         lambda d: d.update(download_bytes="1288490188"),
-        lambda d: d.update(download_bytes=None),                          # 모르면 null 이 아니라 키를 뺀다
+        lambda d: d.update(download_bytes=None),                          # 미상이면 null 이 아니라 키를 제외한다
     ]
     for bad in _mutations(doc, changes):
         assert not manifest_validator.is_valid(bad), bad

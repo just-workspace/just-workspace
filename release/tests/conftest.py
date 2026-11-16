@@ -1,4 +1,4 @@
-"""공통 준비물. 서명 키는 실행할 때마다 새로 만든다 — 리포에는 어떤 키도 두지 않는다."""
+"""공통 준비 코드. 서명 키는 실행 시마다 새로 생성한다 — 리포에는 어떤 키도 두지 않는다."""
 
 import hashlib
 import re
@@ -59,7 +59,7 @@ def compose_text() -> str:
 
 
 def strip_pins(text: str) -> str:
-    """compose 원문에서 `이름:태그@sha256:…` 의 다이제스트를 뗀다 — "태그로만 고정된 남의 이미지"가 있는 compose 를 만든다."""
+    """compose 원문에서 `이름:태그@sha256:…` 의 다이제스트를 제거한다 — "태그로만 고정된 외부 이미지"가 있는 compose 를 생성한다."""
     out, n = re.subn(r"(image:\s+[\w./-]+:[\w.-]+)@sha256:[0-9a-f]{64}", r"\1", text)
     assert n == len(PINS), n
     return out
@@ -67,7 +67,7 @@ def strip_pins(text: str) -> str:
 
 @pytest.fixture(scope="session")
 def unpinned_compose_text(compose_text) -> str:
-    """리포의 compose 는 남의 이미지를 전부 다이제스트로 고정한다. 고정이 빠졌을 때의 동작은 이 사본으로 본다."""
+    """리포의 compose 는 외부 이미지를 전부 다이제스트로 고정한다. 고정 누락 시의 동작은 이 사본으로 검증한다."""
     return strip_pins(compose_text)
 
 
@@ -85,7 +85,7 @@ def fake_digest(seed: str) -> str:
     return "sha256:" + hashlib.sha256(seed.encode()).hexdigest()
 
 
-# 테스트용 다이제스트 표 — 실제 조회 값이 아니다.
+# 테스트용 다이제스트 표 — 실제 조회 값이 아님.
 PINS = {
     "postgres:16.16-alpine": fake_digest("postgres"),
     "redis:8.8.4-alpine": fake_digest("redis"),

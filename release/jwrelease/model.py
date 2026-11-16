@@ -3,16 +3,16 @@
 서명 대상 바이트(결정적 직렬화) 규칙 — `canonical_bytes()`:
 
 1. JSON 객체의 키는 유니코드 코드포인트 순으로 정렬한다(모든 깊이).
-2. 구분자는 `,` 와 `:` — 공백·들여쓰기·줄바꿈을 넣지 않는다.
-3. 인코딩은 UTF-8(BOM 없음). 비 ASCII 문자는 `\\uXXXX` 로 바꾸지 않고 그대로 쓴다.
-4. 값은 문자열·정수·불리언·null·배열·객체만 쓴다. 실수는 쓰지 않는다(표기가 구현마다 달라진다).
-5. 파일 끝에 줄바꿈(`\\n`, LF) 하나를 붙인다.
-6. 배열의 순서는 의미가 있으므로 그대로 둔다(릴리스 목록은 버전 오름차순으로 만들어 넣는다).
+2. 구분자는 `,` 와 `:` — 공백·들여쓰기·줄바꿈을 포함하지 않는다.
+3. 인코딩은 UTF-8(BOM 없음). 비 ASCII 문자는 `\\uXXXX` 로 변환하지 않고 그대로 기록한다.
+4. 값은 문자열·정수·불리언·null·배열·객체만 사용한다. 실수는 사용하지 않는다(표기가 구현마다 상이하다).
+5. 파일 끝에 줄바꿈(`\\n`, LF) 하나를 추가한다.
+6. 배열의 순서는 의미가 있으므로 유지한다(릴리스 목록은 버전 오름차순으로 생성하여 포함한다).
 
-서명은 **파일에 적힌 바이트 그대로**에 건다. 검증하는 쪽은 받은 바이트를 다시 직렬화하지 않고
-그대로 검증한 뒤에 해석한다 — 위 규칙은 만드는 쪽이 같은 내용에서 늘 같은 바이트를 내기 위한 것이다.
+서명은 **파일에 기록된 바이트 그대로**에 수행한다. 검증 측은 수신한 바이트를 재직렬화하지 않고
+그대로 검증한 후 해석한다 — 위 규칙은 생성 측이 동일 내용에서 항상 동일한 바이트를 생성하기 위한 것이다.
 
-이 모듈은 표준 라이브러리만 쓴다.
+본 모듈은 표준 라이브러리만 사용한다.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ _REL_PATH = re.compile(r"[A-Za-z0-9._+-]+(?:/[A-Za-z0-9._+-]+)*")
 
 
 class FormatError(ValueError):
-    """파일 내용이 형식에 맞지 않는다."""
+    """파일 내용이 형식에 부합하지 않음."""
 
 
 # ── 결정적 직렬화 ─────────────────────────────────────────────
@@ -65,7 +65,7 @@ def _check_plain(value: Any, where: str = "$") -> None:
 
 
 def canonical_bytes(data: Mapping[str, Any]) -> bytes:
-    """서명 대상 바이트. 규칙은 이 모듈 머리말."""
+    """서명 대상 바이트. 규칙은 본 모듈 머리말 참조."""
     _check_plain(data)
     text = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
     return text.encode("utf-8") + b"\n"
@@ -123,7 +123,7 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(microsecond=0)
 
 
-# ── 검사 도우미 ──────────────────────────────────────────────
+# ── 검사 보조 함수 ───────────────────────────────────────────
 
 
 def _need(d: Mapping[str, Any], key: str, kind, where: str):
@@ -190,7 +190,7 @@ def _image_map(d: Any, where: str) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class ReleaseEntry:
-    """채널 파일의 릴리스 한 줄."""
+    """채널 파일의 릴리스 항목 하나."""
 
     version: str
     published: str
@@ -299,7 +299,7 @@ class Channel:
         return None
 
     def with_release(self, entry: ReleaseEntry) -> "Channel":
-        """릴리스를 더한 새 채널(순번·시각은 그대로 — `bumped()` 로 올린다)."""
+        """릴리스를 추가한 새 채널(순번·시각은 유지 — `bumped()` 로 증가시킨다)."""
         if self.find(entry.version):
             raise FormatError(f"{self.channel} 채널에 이미 {entry.version} 이 있다")
         if self.channel == "stable" and not semver.is_stable(entry.version):
@@ -322,7 +322,7 @@ class Channel:
 
 
 def new_channel(name: str) -> Channel:
-    """빈 채널(순번 0 — 게시하면서 `bumped()` 로 1 이 된다). 파일로 쓰지 않는 중간 값이다."""
+    """빈 채널(순번 0 — 게시 시 `bumped()` 로 1 이 된다). 파일로 기록하지 않는 중간 값이다."""
     if name not in CHANNELS:
         raise FormatError(f"모르는 채널 {name!r}")
     epoch = "1970-01-01T00:00:00Z"
@@ -334,7 +334,7 @@ def new_channel(name: str) -> Channel:
 
 @dataclass(frozen=True)
 class FileRef:
-    """내려받는 파일 하나(주소·크기·해시)."""
+    """다운로드 대상 파일 하나(주소·크기·해시)."""
 
     url: str
     size: int
@@ -404,13 +404,13 @@ class Manifest:
     zones_content: dict[str, Any]
     min_upgrade_from: str | None = None
     promoted_from: str | None = None
-    db_schema: int | str | None = None            # 자리 — 값은 backend 가 정한다
-    installer_bundle: FileRef | None = None       # 자리 — compose·템플릿 묶음
+    db_schema: int | str | None = None            # 예약 항목 — 값은 backend 가 결정한다
+    installer_bundle: FileRef | None = None       # 예약 항목 — compose·템플릿 번들
     apps: tuple[AppFile, ...] = ()
     offline_bundle: FileRef | None = None
     changelog: str = ""
-    plugin_api: dict[str, Any] | None = None      # 자리 — 플러그인 호환 범위
-    download_bytes: int | None = None             # 선택 — 이미지 압축 크기의 합. 모르면 키 자체를 싣지 않는다
+    plugin_api: dict[str, Any] | None = None      # 예약 항목 — 플러그인 호환 범위
+    download_bytes: int | None = None             # 선택 — 이미지 압축 크기의 합. 미상이면 키 자체를 포함하지 않는다
     format: int = FORMAT
 
     def to_dict(self) -> dict[str, Any]:
@@ -482,7 +482,7 @@ class Manifest:
         if plugin_api is not None and not isinstance(plugin_api, dict):
             raise FormatError("manifest.plugin_api: 객체 또는 null 이어야 한다")
         download_bytes = None
-        if "download_bytes" in d:       # 선택 항목 — 있으면 정수여야 한다(null 은 받지 않는다: 모르면 키를 뺀다)
+        if "download_bytes" in d:       # 선택 항목 — 존재 시 정수 필수(null 불허: 미상이면 키 제외)
             download_bytes = _size(d["download_bytes"], "manifest.download_bytes")
         ib = d["installer_bundle"]
         ob = d["offline_bundle"]
@@ -510,7 +510,7 @@ class Manifest:
         return cls.from_dict(loads(data))
 
     def all_image_refs(self) -> dict[str, str]:
-        """우리 이미지 + 남의 이미지(구역 무시) 이름 → 참조."""
+        """자체 빌드 이미지 + 외부 이미지(구역 무시) 이름 → 참조."""
         out = dict(self.images)
         for m in self.third_party.values():
             out.update(m)
@@ -532,8 +532,8 @@ def channel_rel_path(channel: str) -> str:
 def zones_fingerprint(raw: bytes) -> tuple[str, dict[str, Any]]:
     """zones.json 원문 → (SHA-256, 내용).
 
-    해시는 원문 바이트가 아니라 **내용을 결정적 직렬화한 바이트**의 것이다 — 줄바꿈·들여쓰기가 달라도
-    같은 값이 나오고, manifest 만 가진 쪽이 `content` 에서 다시 계산해 맞춰 볼 수 있다.
+    해시는 원문 바이트가 아니라 **내용을 결정적 직렬화한 바이트**의 값이다 — 줄바꿈·들여쓰기가 상이해도
+    동일한 값이 산출되며, manifest 만 보유한 측이 `content` 에서 재계산하여 대조할 수 있다.
     """
     content = loads(raw)
     return sha256_hex(canonical_bytes(content)), content

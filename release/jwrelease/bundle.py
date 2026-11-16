@@ -1,24 +1,24 @@
-"""오프라인 묶음 — 인터넷이 없는 서버에 옮겨 설치하기 위한 한 파일(tar).
+"""오프라인 번들 — 인터넷 연결이 없는 서버로 이전하여 설치하기 위한 단일 파일(tar).
 
-묶음 안의 파일:
+번들 내 파일:
 
-    bundle.json            묶음 색인(형식 버전, 제품 버전, 만든 시각, 파일 목록: 경로·크기·SHA-256, 이미지 표)
+    bundle.json            번들 색인(형식 버전, 제품 버전, 생성 시각, 파일 목록: 경로·크기·SHA-256, 이미지 표)
     bundle.json.sig        색인의 서명
-    manifest.json          릴리스 목록 파일(이 묶음을 만들 때의 것 — `offline_bundle` 은 비어 있다)
+    manifest.json          릴리스 목록 파일(본 번들 생성 시점의 것 — `offline_bundle` 은 비어 있음)
     manifest.json.sig
-    images/<이름>.tar      `docker save` 결과(이미지마다 하나)
+    images/<이름>.tar      `docker save` 결과(이미지당 하나)
 
 검증 순서(`verify_bundle`):
-  1. 묶음 서명 — `bundle.json.sig` 로 `bundle.json` 검증
-  2. manifest — 색인에 적힌 해시와 일치 + `manifest.json.sig` 서명 + 색인의 버전·이미지 표와 일치
-  3. 파일별 해시 — 색인의 모든 파일이 있고 크기·SHA-256 이 같으며, 색인에 없는 파일이 없다
+  1. 번들 서명 — `bundle.json.sig` 로 `bundle.json` 검증
+  2. manifest — 색인에 기록된 해시와 일치 + `manifest.json.sig` 서명 + 색인의 버전·이미지 표와 일치
+  3. 파일별 해시 — 색인의 모든 파일이 존재하고 크기·SHA-256 이 동일하며, 색인에 없는 파일이 없음
 
-`docker save`·`docker load` 실행은 여기서 하지 않는다. `save_commands()` 가 명령을 만들어 주고,
-이미 저장된 `images/*.tar` 를 `write_index()` → (서명) → `pack()` 으로 묶는다.
+`docker save`·`docker load` 실행은 본 모듈에서 수행하지 않는다. `save_commands()` 가 명령을 생성하며,
+이미 저장된 `images/*.tar` 를 `write_index()` → (서명) → `pack()` 순으로 번들링한다.
 
-적재 뒤의 이름: `docker load` 는 레지스트리 다이제스트를 되살리지 못한다. 그래서 묶음의 이미지는
-태그로 저장한다 — 우리 이미지는 `저장소:<버전>`, 남의 이미지는 `저장소:jw-<다이제스트 앞 12자>`.
-오프라인 설치는 다이제스트가 아니라 이 태그로 이미지를 가리켜야 한다(색인의 `images[].tag`).
+적재 후의 이름: `docker load` 는 레지스트리 다이제스트를 복원하지 못한다. 따라서 번들의 이미지는
+태그로 저장한다 — 자체 빌드 이미지는 `저장소:<버전>`, 외부 이미지는 `저장소:jw-<다이제스트 앞 12자>`.
+오프라인 설치는 다이제스트가 아닌 이 태그로 이미지를 참조해야 한다(색인의 `images[].tag`).
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ _CHUNK = 1024 * 1024
 
 
 class BundleError(Exception):
-    """묶음을 만들 수 없거나 묶음이 올바르지 않다."""
+    """번들 생성 불가 또는 번들이 유효하지 않음."""
 
 
 def bundle_filename(version: str) -> str:
@@ -50,7 +50,7 @@ def bundle_filename(version: str) -> str:
 
 
 def image_tags(manifest: Manifest, include_third_party: bool = False) -> dict[str, dict[str, str]]:
-    """이름 → `{"ref": 저장소@다이제스트, "tag": 적재 뒤 이름, "file": 묶음 안 경로}`."""
+    """이름 → `{"ref": 저장소@다이제스트, "tag": 적재 후 이름, "file": 번들 내 경로}`."""
     out: dict[str, dict[str, str]] = {}
     for name, ref in sorted(manifest.images.items()):
         repo = ref.split("@", 1)[0]
@@ -67,7 +67,7 @@ def image_tags(manifest: Manifest, include_third_party: bool = False) -> dict[st
 
 
 def save_commands(manifest: Manifest, stage: str, include_third_party: bool = False) -> list[list[str]]:
-    """이미지를 받아 태그를 붙이고 `stage/images/<이름>.tar` 로 저장하는 명령(실행은 하지 않는다)."""
+    """이미지를 pull 하여 태그를 부여하고 `stage/images/<이름>.tar` 로 저장하는 명령(실행은 하지 않는다)."""
     out: list[list[str]] = []
     for name, item in image_tags(manifest, include_third_party).items():
         out.append(["docker", "pull", item["ref"]])
@@ -86,7 +86,7 @@ def _hash_file(path: Path) -> tuple[int, str]:
 
 
 def write_index(stage: Path, created: datetime, include_third_party: bool = False) -> bytes:
-    """`stage` 의 manifest·이미지 파일로 `bundle.json` 을 만들어 쓴다(서명은 따로)."""
+    """`stage` 의 manifest·이미지 파일로 `bundle.json` 을 생성하여 기록한다(서명은 별도 수행)."""
     for rel in (MANIFEST, MANIFEST + SIG_SUFFIX):
         if not (stage / rel).is_file():
             raise BundleError(f"{rel} 이 없다")
@@ -118,12 +118,12 @@ def write_index(stage: Path, created: datetime, include_third_party: bool = Fals
 
 
 def member_order(index: dict[str, Any]) -> list[str]:
-    """묶음 안의 파일 순서 — 색인과 서명이 맨 앞(큰 이미지를 읽기 전에 서명부터 확인한다)."""
+    """번들 내 파일 순서 — 색인과 서명이 최선두(대용량 이미지를 읽기 전에 서명부터 검증한다)."""
     return [INDEX, INDEX + SIG_SUFFIX] + [f["path"] for f in index["files"]]
 
 
 def pack(stage: Path, out: Path) -> list[str]:
-    """`stage` 를 tar 한 파일로 묶는다(순서·소유자·시각을 고정해 같은 입력이면 같은 파일이 나온다)."""
+    """`stage` 를 단일 tar 파일로 번들링한다(순서·소유자·시각을 고정하여 동일 입력에서 동일 파일을 생성한다)."""
     for rel in (INDEX, INDEX + SIG_SUFFIX):
         if not (stage / rel).is_file():
             raise BundleError(f"{rel} 이 없다 — 색인을 만들고 서명한 뒤에 묶는다")
@@ -180,7 +180,7 @@ class BundleInfo:
 
 
 def verify_bundle(path: Path, public_keys) -> BundleInfo:
-    """묶음 검증(묶음 서명 → manifest → 파일별 해시). 순서는 이 모듈 머리말."""
+    """번들 검증(번들 서명 → manifest → 파일별 해시). 순서는 본 모듈 머리말 참조."""
     try:
         tar = tarfile.open(path, "r:")
     except (tarfile.TarError, OSError) as e:
@@ -199,7 +199,7 @@ def verify_bundle(path: Path, public_keys) -> BundleInfo:
                 raise BundleError(f"{name} 이 없다")
             return tar.extractfile(members[name]).read()
 
-        # 1. 묶음 서명
+        # 1. 번들 서명
         index_bytes = read(INDEX)
         try:
             verify.verify_signature(index_bytes, read(INDEX + SIG_SUFFIX), public_keys)

@@ -43,7 +43,7 @@ def test_chain_of_intermediates():
 
 def test_fewest_hops_and_highest_intermediate_preferred():
     releases = [rel("1.0.0"), rel("1.1.0"), rel("1.2.0"), rel("1.3.0"), rel("2.0.0", "1.1.0")]
-    # 1.1.0·1.2.0·1.3.0 어느 것을 거쳐도 2.0.0 으로 갈 수 있다 — 가장 높은 1.3.0 하나만 거친다
+    # 1.1.0·1.2.0·1.3.0 중 어느 것을 경유해도 2.0.0 으로 업그레이드 가능 — 가장 높은 1.3.0 하나만 경유한다
     assert verify.upgrade_path("1.0.0", "2.0.0", releases) == ["1.3.0", "2.0.0"]
 
 
@@ -82,8 +82,8 @@ def test_prerelease_ordering_in_minimum():
 def test_can_upgrade_directly():
     assert verify.can_upgrade_directly("1.1.0", rel("1.2.0", "1.1.0"))
     assert not verify.can_upgrade_directly("1.0.9", rel("1.2.0", "1.1.0"))
-    assert not verify.can_upgrade_directly("1.2.0", rel("1.2.0"))        # 같은 버전
-    assert not verify.can_upgrade_directly("1.3.0", rel("1.2.0"))        # 내려가는 방향
+    assert not verify.can_upgrade_directly("1.2.0", rel("1.2.0"))        # 동일 버전
+    assert not verify.can_upgrade_directly("1.3.0", rel("1.2.0"))        # 다운그레이드 방향
 
 
 # ── plan_update ─────────────────────────────────────────────
@@ -107,17 +107,17 @@ def test_plan_blocked_when_no_path():
 
 
 def test_beta_to_stable_waits_until_stable_catches_up():
-    """Beta 를 쓰다가 Stable 채널로 바꿨다: Stable 이 현재 버전 이상이 될 때까지 내려가지 않고 기다린다."""
+    """Beta 사용 중 Stable 채널로 전환한 경우: Stable 이 현재 버전 이상이 될 때까지 다운그레이드하지 않고 대기한다."""
     current = "1.2.0-beta.3"
     stable_behind = channel("stable", rel("1.0.0"), rel("1.1.4"))
     plan = verify.plan_update(current, stable_behind)
     assert plan.action == verify.ACTION_WAIT and plan.target == "1.1.4" and plan.path == ()
 
-    # 더 낮은 계열의 패치가 나와도 여전히 기다린다
+    # 더 낮은 계열의 패치가 게시되어도 계속 대기
     plan = verify.plan_update(current, channel("stable", rel("1.0.0"), rel("1.1.4"), rel("1.1.5")))
     assert plan.action == verify.ACTION_WAIT
 
-    # Stable 1.2.0 이 나오면(1.2.0 > 1.2.0-beta.3) 올라간다
+    # Stable 1.2.0 이 게시되면(1.2.0 > 1.2.0-beta.3) 업그레이드
     caught_up = channel("stable", rel("1.0.0"), rel("1.1.4"), rel("1.2.0"))
     plan = verify.plan_update(current, caught_up)
     assert plan.action == verify.ACTION_UPDATE and plan.path == ("1.2.0",)

@@ -144,7 +144,7 @@ def test_manifest_rejects_bad_content(make_manifest):
         broken(images={"backend": "ghcr.io/x/backend:1.0.0"}),              # 태그 참조
         broken(images={"backend": "ghcr.io/x/backend@sha256:abc"}),
         broken(third_party={"core": {"postgres": "postgres:16"}}),
-        broken(promoted_from="1.0.0-beta.1"),                               # 이 버전은 Stable 이 아니다
+        broken(promoted_from="1.0.0-beta.1"),                               # 이 버전은 Stable 이 아님
         broken(apps=[{"kind": "ios", "filename": "a", "size": 1, "sha256": "0" * 64, "url": "https://x/a"}]),
         broken(offline_bundle={"url": "ftp://x", "size": 1, "sha256": "0" * 64}),
         broken(unknown=True),

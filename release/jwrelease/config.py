@@ -1,7 +1,7 @@
-"""주소 설정값 — 릴리스가 놓이는 곳을 한 군데에서 정한다.
+"""주소 설정값 — 릴리스 배치 위치를 한 곳에서 정의한다.
 
-기본값은 GitHub 조직 `just-workspace` 기준이다. 다른 곳으로 옮기면 설정 파일(JSON, `--config`)이나
-환경변수(`JWRELEASE_<대문자 이름>`)로 덮는다 — 도구의 코드는 바뀌지 않는다.
+기본값은 GitHub 조직 `just-workspace` 기준이다. 타 위치로 이전하는 경우 설정 파일(JSON, `--config`)이나
+환경변수(`JWRELEASE_<대문자 이름>`)로 재정의한다 — 도구의 코드는 변경되지 않는다.
 우선순위: 환경변수 > 설정 파일 > 기본값.
 """
 
@@ -17,19 +17,19 @@ ENV_PREFIX = "JWRELEASE_"
 
 @dataclass(frozen=True)
 class Settings:
-    # 우리 이미지가 올라가는 레지스트리(호스트/네임스페이스). compose 의 JW_REGISTRY 와 같은 값.
+    # 자체 빌드 이미지를 게시하는 레지스트리(호스트/네임스페이스). compose 의 JW_REGISTRY 와 동일한 값.
     registry: str = "ghcr.io/just-workspace"
-    # 이미지 이름 앞머리 — `<registry>/<image_prefix><서비스>`. compose 의 이미지 이름과 맞춘다.
+    # 이미지 이름 접두어 — `<registry>/<image_prefix><서비스>`. compose 의 이미지 이름과 일치시킨다.
     image_prefix: str = "just-workspace-"
-    # 채널 파일·manifest 를 내려받는 기준 주소(채널 리포의 정적 파일). 뒤에 `channels/stable.json` 등이 붙는다.
+    # 채널 파일·manifest 다운로드의 기준 주소(채널 리포의 정적 파일). 뒤에 `channels/stable.json` 등이 결합된다.
     channel_base_url: str = "https://raw.githubusercontent.com/just-workspace/releases/main"
-    # 채널 리포(사람이 커밋·푸시하는 곳) — 안내 출력에만 쓴다.
+    # 채널 리포(릴리스 담당자가 커밋·푸시하는 위치) — 안내 출력에만 사용한다.
     channel_repo_url: str = "https://github.com/just-workspace/releases"
-    # 소스 리포 — 제품 화면의 "소스 코드" 링크가 가리키는 기본 주소(backend/app/source.py 와 같은 값).
+    # 소스 리포 — 제품 화면의 "소스 코드" 링크가 참조하는 기본 주소(backend/app/source.py 와 동일한 값).
     source_repo_url: str = "https://github.com/just-workspace/just-workspace"
-    # 설치 파일·오프라인 묶음 첨부의 기준 주소. `{version}` 과 `{filename}` 이 채워진다.
+    # 설치 파일·오프라인 번들 첨부의 기준 주소. `{version}` 과 `{filename}` 이 치환된다.
     download_url_template: str = "https://github.com/just-workspace/just-workspace/releases/download/v{version}/{filename}"
-    # 채널 파일 만료까지의 날 수.
+    # 채널 파일 만료까지의 일수.
     expires_days: int = 90
 
     def image_repository(self, service: str) -> str:

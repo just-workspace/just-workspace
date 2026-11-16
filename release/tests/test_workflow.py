@@ -1,4 +1,4 @@
-"""빌드 워크플로가 compose 의 build 설정과 같은 것을 빌드하는지, 서명·비공개 키가 끼어들지 않았는지."""
+"""빌드 워크플로가 compose 의 build 설정과 동일한 대상을 빌드하는지, 서명·비공개 키가 포함되지 않았는지 검증."""
 
 import re
 
@@ -36,20 +36,20 @@ def test_matrix_covers_every_compose_build(matrix, compose_text):
 
 
 def test_installer_builds_from_repo_root(matrix):
-    """설치 관리자 이미지는 리포 루트를 문맥으로 빌드한다(Dockerfile 머리말·docs/installer.md 의 명령과 같다)."""
+    """설치 관리자 이미지는 리포 루트를 빌드 컨텍스트로 빌드한다(Dockerfile 머리말·docs/installer.md 의 명령과 동일)."""
     item = matrix["installer"]
     assert item["context"] == "." and item["dockerfile"] == "installer/Dockerfile"
     assert not item.get("optional")
     assert (REPO_ROOT / item["dockerfile"]).is_file()
-    assert (REPO_ROOT / (item["dockerfile"] + ".dockerignore")).is_file()      # 문맥을 줄이는 목록
-    assert item["build_args_registry"] == "JW_REGISTRY"                        # 받을 이미지 저장소를 굽는다
+    assert (REPO_ROOT / (item["dockerfile"] + ".dockerignore")).is_file()      # 빌드 컨텍스트 축소용 목록
+    assert item["build_args_registry"] == "JW_REGISTRY"                        # pull 대상 이미지 저장소를 빌드 시 내장한다
     dockerfile = (REPO_ROOT / item["dockerfile"]).read_text(encoding="utf-8")
     assert re.search(r"^ARG JW_REGISTRY=", dockerfile, re.MULTILINE)
 
 
 def test_triggers(workflow):
-    on = workflow.get("on", workflow.get(True))            # YAML 1.1 은 `on` 을 불리언으로 읽는다
-    assert on["push"] == {"tags": ["v*-beta.*"]}            # Stable 은 다시 빌드하지 않는다(승격만)
+    on = workflow.get("on", workflow.get(True))            # YAML 1.1 은 `on` 을 불리언으로 해석한다
+    assert on["push"] == {"tags": ["v*-beta.*"]}            # Stable 은 재빌드하지 않는다(승격만 수행)
     assert on["workflow_dispatch"]["inputs"]["version"]["required"] is True
     assert "branches" not in on["push"] and "pull_request" not in on
 
@@ -100,7 +100,7 @@ def test_actions_pinned_to_commit(workflow):
 
 
 def test_no_untrusted_input_interpolated_into_scripts(workflow):
-    """입력값·ref 이름은 env 로만 넘긴다(스크립트 본문에 직접 끼우지 않는다)."""
+    """입력값·ref 이름은 env 로만 전달한다(스크립트 본문에 직접 삽입하지 않는다)."""
     for job in workflow["jobs"].values():
         for step in job["steps"]:
             run = step.get("run", "")
@@ -108,9 +108,9 @@ def test_no_untrusted_input_interpolated_into_scripts(workflow):
 
 
 def test_every_image_carries_the_license_notices(workflow, matrix, compose_text):
-    """우리가 빌드하는 이미지는 모두 LICENSE · NOTICE · THIRD_PARTY_LICENSES.md 를 /licenses/ 에 담는다.
+    """자체 빌드 이미지는 모두 LICENSE · NOTICE · THIRD_PARTY_LICENSES.md 를 /licenses/ 에 포함한다.
 
-    세 파일은 리포 루트에 있다 — compose·워크플로·Dockerfile 이 같은 이름의 문맥(licenses)을 쓰는지 본다.
+    세 파일은 리포 루트에 위치한다 — compose·워크플로·Dockerfile 이 동일한 이름의 빌드 컨텍스트(licenses)를 사용하는지 검증한다.
     """
     services = yaml.safe_load(compose_text)["services"]
     own = {name: svc["build"] for name, svc in services.items() if "build" in svc}
@@ -123,14 +123,14 @@ def test_every_image_carries_the_license_notices(workflow, matrix, compose_text)
     for name, item in matrix.items():
         found = copy.search((REPO_ROOT / item["dockerfile"]).read_text(encoding="utf-8"))
         assert found, name
-        assert bool(found.group(1)) == (item["context"] != "."), name        # 문맥이 리포 루트면 바로 복사한다
-    # 이름 붙인 문맥으로는 고지 파일만 간다
+        assert bool(found.group(1)) == (item["context"] != "."), name        # 빌드 컨텍스트가 리포 루트면 직접 복사한다
+    # 명명된 빌드 컨텍스트로는 고지 파일만 전달된다
     ignore = (REPO_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     assert [line for line in ignore if line and not line.startswith("#")] == ["*", "!LICENSE", "!NOTICE", "!THIRD_PARTY_LICENSES.md"]
 
 
 def test_repo_license_is_agpl_and_package_metadata_agrees():
-    """리포의 라이선스는 AGPL-3.0-or-later 다 — LICENSE 는 FSF 의 문안 그대로, 패키지 메타데이터도 같은 표기."""
+    """리포의 라이선스는 AGPL-3.0-or-later 이다 — LICENSE 는 FSF 의 문안과 동일하며, 패키지 메타데이터도 동일한 표기를 사용한다."""
     import hashlib
     import json
 
@@ -146,7 +146,7 @@ def test_repo_license_is_agpl_and_package_metadata_agrees():
 
 
 def test_source_repo_url_matches_the_backend_default():
-    """제품 화면의 "소스 코드" 링크 — backend 의 기본 주소와 릴리스 도구의 값이 같아야 한다."""
+    """제품 화면의 "소스 코드" 링크 — backend 의 기본 주소와 릴리스 도구의 값이 동일해야 한다."""
     from jwrelease.config import Settings
 
     text = (REPO_ROOT / "backend" / "app" / "source.py").read_text(encoding="utf-8")
@@ -154,15 +154,15 @@ def test_source_repo_url_matches_the_backend_default():
 
 
 def test_backend_release_image_has_no_test_tools(matrix, compose_text):
-    """릴리스로 나가는 backend 이미지는 runtime 대상이고, 테스트 도구는 test 대상(requirements-dev.txt)에만 있다."""
+    """릴리스에 포함되는 backend 이미지는 runtime 대상이며, 테스트 도구는 test 대상(requirements-dev.txt)에만 존재한다."""
     backend = REPO_ROOT / "backend"
     own = {i.service: i for i in compose.own_images(compose.read_images(compose_text, {}))}
     assert own["backend"].build.target == "runtime" and matrix["backend"]["target"] == "runtime"
 
     stages = re.findall(r"^FROM\s+(\S+)\s+AS\s+(\S+)\s*$", (backend / "Dockerfile").read_text(encoding="utf-8"), re.M)
     assert [name for _, name in stages] == ["base", "test", "runtime"]
-    assert dict((name, parent) for parent, name in stages)["runtime"] == "base"     # test 위에 서지 않는다
-    assert stages[-1][1] == "runtime"                                                # --target 없이 빌드해도 운영 이미지
+    assert dict((name, parent) for parent, name in stages)["runtime"] == "base"     # test 스테이지를 기반으로 하지 않는다
+    assert stages[-1][1] == "runtime"                                                # --target 없이 빌드해도 운영 이미지가 생성된다
 
     def names(path):
         lines = (ln.split("#")[0].strip() for ln in path.read_text(encoding="utf-8").splitlines())

@@ -13,7 +13,7 @@ from conftest import T0
 
 
 def stage_dir(tmp_path, manifest, key, include_third_party=False):
-    """docker save 대신 가짜 이미지 파일을 둔 준비 디렉터리."""
+    """docker save 대신 가짜 이미지 파일을 배치한 준비 디렉터리."""
     stage = tmp_path / "stage"
     (stage / "images").mkdir(parents=True)
     (stage / "manifest.json").write_bytes(manifest.to_bytes())
@@ -33,7 +33,7 @@ def build(tmp_path, manifest, key, include_third_party=False):
 
 
 def rewrite(src, dst, change):
-    """묶음을 풀어 `change(이름 → 바이트)` 를 적용하고 다시 묶는다(공격자 흉내)."""
+    """번들을 해제하여 `change(이름 → 바이트)` 를 적용한 후 재번들링한다(공격자 모사)."""
     with tarfile.open(src) as tar:
         files = {m.name: tar.extractfile(m).read() for m in tar}
     change(files)
@@ -80,7 +80,7 @@ def test_bundle_structure(tmp_path, key, make_manifest):
         names = tar.getnames()
         members = tar.getmembers()
     expected_images = sorted(f"images/{n}.tar" for n in m.images)
-    # 색인과 그 서명이 맨 앞, 그 다음은 색인의 파일 목록 순서(경로 오름차순)
+    # 색인과 그 서명이 최선두, 이후는 색인의 파일 목록 순서(경로 오름차순)
     assert names == ["bundle.json", "bundle.json.sig"] + expected_images + ["manifest.json", "manifest.json.sig"]
     assert all(mb.isreg() and mb.uid == 0 and mb.gid == 0 and mb.mtime == int(T0.timestamp()) for mb in members)
 
@@ -128,26 +128,26 @@ def test_verification_order_and_tamper_detection(tmp_path, key, other_key, make_
             bundle.verify_bundle(rewrite(out, tmp_path / "bad.tar", change), [key.public])
         assert needle in str(e.value), str(e.value)
 
-    # 1단계: 색인이 바뀌면 묶음 서명에서 걸린다(이미지를 읽기 전)
+    # 1단계: 색인 변경 시 번들 서명 검증에서 실패(이미지를 읽기 전)
     def edit_index(files):
         files["bundle.json"] = files["bundle.json"].replace(b'"version":"1.0.0"', b'"version":"9.9.9"')
         files["images/backend.tar"] = b"changed too"
 
     expect(edit_index, "묶음 서명")
 
-    # 2단계: manifest 가 바뀌면 색인의 해시와 달라 manifest 단계에서 걸린다
+    # 2단계: manifest 변경 시 색인의 해시와 불일치하여 manifest 단계에서 실패
     def edit_manifest(files):
         files["manifest.json"] = files["manifest.json"].replace(b'"version":"1.0.0"', b'"version":"1.0.1"')
 
     expect(edit_manifest, "manifest")
 
-    # 3단계: 이미지 파일 변조·누락·끼워 넣기
+    # 3단계: 이미지 파일 변조·누락·삽입
     expect(lambda f: f.update({"images/backend.tar": f["images/backend.tar"] + b"x"}), "images/backend.tar")
     expect(lambda f: f.pop("images/sso.tar"), "images/sso.tar")
     expect(lambda f: f.update({"images/evil.tar": b"x"}), "색인에 없는 파일")
     expect(lambda f: f.pop("bundle.json.sig"), "bundle.json.sig")
 
-    # 색인을 통째로 새로 만들어 다른 키로 서명해도 통과하지 못한다
+    # 색인 전체를 재생성하여 다른 키로 서명해도 통과 불가
     def resign(files):
         files["images/backend.tar"] = b"malicious"
         index = json.loads(files["bundle.json"])
@@ -161,7 +161,7 @@ def test_verification_order_and_tamper_detection(tmp_path, key, other_key, make_
 
 
 def test_manifest_inside_bundle_needs_its_own_valid_signature(tmp_path, key, other_key, make_manifest):
-    """색인은 올바른 키로 서명됐더라도 manifest 서명이 틀리면 거부."""
+    """색인이 올바른 키로 서명되었더라도 manifest 서명이 불일치하면 거부."""
     m = make_manifest("1.0.0")
     stage = stage_dir(tmp_path, m, key)
     sign.sign_file(stage / "manifest.json", other_key.private)
@@ -181,7 +181,7 @@ def test_index_refuses_incomplete_stage(tmp_path, key, make_manifest):
     with pytest.raises(BundleError) as e:
         bundle.write_index(stage, T0)
     assert "images/ldap.tar" in str(e.value)
-    with pytest.raises(BundleError):                       # 색인·서명 없이 묶기
+    with pytest.raises(BundleError):                       # 색인·서명 없이 번들링
         bundle.pack(stage, tmp_path / "x.tar")
 
 

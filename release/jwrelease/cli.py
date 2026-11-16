@@ -1,7 +1,7 @@
 """릴리스 도구 명령줄 — `python -m jwrelease <명령>` (또는 `release/tools/jwrelease.py`).
 
 명령: images, make-manifest, sign, publish, promote, verify, refresh, bundle(plan·index·pack·verify)
-어느 명령도 git 커밋·푸시를 하지 않는다. 레지스트리를 건드리는 것은 `promote --run` 과
+어떤 명령도 git 커밋·푸시를 수행하지 않는다. 레지스트리에 접근하는 명령은 `promote --run` 과
 `bundle plan --run`, `make-manifest --resolve-digests`·`--resolve-sizes`(조회만)뿐이다.
 """
 
@@ -174,7 +174,7 @@ def cmd_make_manifest(args) -> int:
         download_bytes=args.download_bytes,
     )
     if args.resolve_sizes:
-        # 크기는 있으면 좋은 값이다 — 조회하지 못하면 경고만 하고 항목을 싣지 않는다(받는 쪽은 그 줄을 숨긴다)
+        # 크기는 선택 값이다. 조회 실패 시 경고만 출력하고 항목을 포함하지 않는다(수신 측은 해당 줄을 숨긴다)
         from dataclasses import replace
 
         from .registry import image_size

@@ -1,6 +1,6 @@
 """버전 비교 — semver 2.0.0 규칙을 그대로 구현한다(외부 의존성 없음).
 
-제품 버전은 두 꼴만 쓴다: Stable `X.Y.Z`, Beta `X.Y.Z-beta.N`.
+제품 버전은 두 형식만 사용한다: Stable `X.Y.Z`, Beta `X.Y.Z-beta.N`.
 비교 자체는 semver 전체 규칙을 따른다(프리릴리스 식별자 비교, 빌드 메타데이터 무시).
 """
 
@@ -22,7 +22,7 @@ _BETA = re.compile(rf"{_NUM}\.{_NUM}\.{_NUM}-beta\.[1-9][0-9]*")
 
 
 class VersionError(ValueError):
-    """버전 문자열이 규칙에 맞지 않는다."""
+    """버전 문자열이 규칙에 부합하지 않음."""
 
 
 @total_ordering
@@ -50,12 +50,12 @@ class Version:
 
     @property
     def base(self) -> "Version":
-        """프리릴리스·빌드 표기를 뗀 `X.Y.Z`."""
+        """프리릴리스·빌드 표기를 제거한 `X.Y.Z`."""
         return Version(self.major, self.minor, self.patch)
 
     def _key(self):
-        # 프리릴리스가 없는 쪽이 더 높다. 식별자는 숫자 < 영숫자, 숫자끼리는 수로, 나머지는 ASCII 순,
-        # 앞부분이 같으면 식별자가 많은 쪽이 높다.
+        # 프리릴리스가 없는 쪽이 상위다. 식별자는 숫자 < 영숫자, 숫자 간에는 수치로, 나머지는 ASCII 순으로 비교하며,
+        # 앞부분이 동일하면 식별자가 많은 쪽이 상위다.
         pre = tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in self.pre)
         return (self.major, self.minor, self.patch, 0 if self.pre else 1, pre)
 
@@ -92,12 +92,12 @@ def compare(a: str, b: str) -> int:
 
 
 def is_stable(text: str) -> bool:
-    """제품의 Stable 꼴(`X.Y.Z`)인가."""
+    """제품의 Stable 형식(`X.Y.Z`) 여부."""
     return isinstance(text, str) and bool(_STABLE.fullmatch(text))
 
 
 def is_beta(text: str) -> bool:
-    """제품의 Beta 꼴(`X.Y.Z-beta.N`, N ≥ 1)인가."""
+    """제품의 Beta 형식(`X.Y.Z-beta.N`, N ≥ 1) 여부."""
     return isinstance(text, str) and bool(_BETA.fullmatch(text))
 
 
@@ -106,7 +106,7 @@ def is_product_version(text: str) -> bool:
 
 
 def stable_of(text: str) -> str:
-    """Beta 버전이 승격되면 갖게 되는 Stable 버전(`1.2.0-beta.3` → `1.2.0`)."""
+    """Beta 버전 승격 시의 Stable 버전(`1.2.0-beta.3` → `1.2.0`)."""
     if not is_beta(text):
         raise VersionError(f"Beta 버전이 아니다: {text!r}")
     return str(Version.parse(text).base)

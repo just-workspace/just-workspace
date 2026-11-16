@@ -580,6 +580,8 @@ node installer/e2e/wizard-ui.cjs --url https://<서버 주소>:8443 --token <설
 node installer/e2e/admin-zones-ui.cjs --url https://<접속 주소> --addr <서버 주소> --password-file <파일>
 installer/e2e/remote.sh <ssh 대상> run u-update setup u9 u1 u7 u2 u3     # 업데이트(모의 릴리스 환경 — 16절). 후속 단계: r103 u5 u4 u6 u8
 node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서버 주소> --password-file <파일>
+node installer/e2e/office-open-ui.cjs --url https://<접속 주소> --addr <서버 주소> --password-file <파일>      # u1·u7 직후
+node installer/e2e/update-home-ui.cjs --url https://<접속 주소> --addr <서버 주소> --password-file <파일> --expect <버전>   # u7 직후
 ```
 
 요구 사항: 리눅스 x86_64, Docker Engine 24+, compose 플러그인 2.20+, 4코어·메모리 12GB·디스크 40GB 이상, 인터넷 아웃바운드 연결(인바운드 경로는 불필요). 접속 주소는 DNS 에 등록되지 않은 이름을 사용하고 서버 주소로 직접 접속한다.
@@ -611,8 +613,10 @@ node installer/e2e/admin-update-ui.cjs --url https://<접속 주소> --addr <서
 |---|---|
 | `setup` | 릴리스 도구로 1.0.0 과 1.0.1-beta.1 을 릴리스하고(이미지 push → `make-manifest --resolve-sizes --db-schema` → `publish` → `verify`) Beta 를 Stable 로 승격. 검수 채널은 임시 키로 서명한다 — 설치 폴더에 해당 공개 키를 등록하기 전에는 이미지에 포함된 키로 서명이 검증되지 않아 `channel_invalid`(이미지에 키가 없으면 `unconfigured`), 등록하면 확인이 성공하며, Beta 릴리스는 stable 채널에 노출되지 않다가 승격 후 노출된다 |
 | `u9` | 변조한 채널 파일·다른 키로 서명한 채널·만료된 채널·순번이 역행한 채널·변조한 manifest·도달 불가한 채널을 각각 거부하며, 마지막으로 성공한 결과는 유지한다 |
-| `u1` | 수동 업데이트 1.0.0 → 1.0.1(승격한 릴리스): 사전 공지(backend 의 공지 조회·공개 점검 상태에 반영)와 취소, "지금 바로 시작", 점검 모드(일반 API 503 + `Retry-After`, 진행 조회·로그인은 통과), 6개 단계, 설치 관리자 자기 교체(신규 이미지·동일 이름·8443 응답·이전 컨테이너 없음), `/api/health` 의 버전·스키마, 검수용 변경 단계 적용, 사전 입력한 데이터(계정·파일·대화·메일) 보존, 기록·기록 다운로드·복원 지점. 프런트가 없는 경우의 정적 점검 페이지, `/maintenance/status` 는 GET 만 허용, 내부 API 는 외부에서 접근 불가 |
-| `u7` | 복원 지점으로 수동 복원(1.0.1 → 1.0.0): 5개 단계, DB 복원(검수용 테이블이 제거됨), 설치 관리자도 이전 이미지·이전 환경으로 복원, 데이터 보존, 재업데이트 가능 |
+| `u1` | 수동 업데이트 1.0.0 → 1.0.1(승격한 릴리스): 사전 공지(backend 의 공지 조회·공개 점검 상태에 반영)와 취소, "지금 바로 시작", 점검 모드(일반 API 503 + `Retry-After`, 진행 조회·로그인은 통과), 6개 단계, 설치 관리자 자기 교체(신규 이미지·동일 이름·8443 응답·이전 컨테이너 없음), `/api/health` 의 버전·스키마, 검수용 변경 단계 적용, 사전 입력한 데이터(계정·파일·대화·메일) 보존, 완료 직후 문서 서버 준비(nginx 경유 `/onlyoffice/healthcheck` = true, 확인 단계에 `docs_not_ready` 없음), 기록·기록 다운로드·복원 지점. 프런트가 없는 경우의 정적 점검 페이지, `/maintenance/status` 는 GET 만 허용, 내부 API 는 외부에서 접근 불가 |
+| `u7` | 복원 지점으로 수동 복원(1.0.1 → 1.0.0): 5개 단계, DB 복원(검수용 테이블이 제거됨), 설치 관리자도 이전 이미지·이전 환경으로 복원, 데이터 보존, 완료 직후 "지금 확인" 없이 확인 결과가 복원 이전 버전(1.0.1)을 표시, 재업데이트 가능 |
+| `office-open-ui.cjs` | 업데이트·복원 완료 직후 새 문서(문서·시트·발표 자료)를 만들어 1회차부터 편집기가 열림(캔버스 있음, 오류 문구·로드 중 표시 없음, `/onlyoffice/` 경로의 5xx 없음) |
+| `update-home-ui.cjs` | 복원 지점 복원 직후 관리 › 업데이트 현황에 "지금 확인" 호출 없이 새 버전이 표시됨 |
 | `u2` | 레지스트리에서 이미지를 삭제해 `pull` 실패 → `failed` + `retry`·`rollback` → 롤백(변경 사항이 없어 3개 단계 생략) / 이미지를 복구한 후 재시도 → 완료 |
 | `u3` | 두 번째 변경 단계가 실패하는 릴리스: `migrate` 실패 → 선택 절차 없이 롤백 → 이전 버전, DB 스키마 버전 원복(선행 적용된 단계의 흔적도 없음), 데이터 보존 |
 | `admin-update-ui.cjs` | 화면 조작으로 1회(1.0.1 → 1.0.3): 현황의 신규 버전 → 내용 보기 → 업데이트 시작 → 일반 사용자 창의 사전 공지 배너 → "지금 바로 시작" → 진행 화면의 단계와 "다시 연결 중" → 일반 사용자 창의 점검 화면과 복귀 → 완료 → 기록. 콘솔 오류 없음 |

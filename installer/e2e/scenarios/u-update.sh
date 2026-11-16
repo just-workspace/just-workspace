@@ -149,6 +149,10 @@ stage_u1() {
   probe_stop
   note "업데이트 한 번: ${took}초"
   expect "작업 상태" done "$(ujob "$job" 'd["status"]')"
+  # 문서 구역: 완료 판정 전에 문서 서버의 준비를 확인한다 — 완료 직후 nginx 경유의 healthcheck 가 바로 true 이어야 한다
+  expect "완료 직후 문서 서버 준비(nginx 경유 /onlyoffice/healthcheck)" true "$(ws_curl "$WS/onlyoffice/healthcheck")"
+  expect "확인 단계에 문서 서버 주의 없음" None "$(ujob "$job" 'd["steps"][-1]["detail"].get("warnings")')"
+  contains "확인 단계 기록에 문서 서버 준비 확인" "문서 서버 준비 확인" "$(ws_curl -b "$UJAR" "$WS$UPD/jobs/$job/log/download")"
   expect "단계" "preflight=done backup=done pull=done migrate=done switch=done verify=done" "$(ujob_steps "$job")"
   note "단계별 초: $(ujob "$job" '" ".join(s["id"]+"="+str(int((__import__("datetime").datetime.fromisoformat(s["finished_at"][:-1])-__import__("datetime").datetime.fromisoformat(s["started_at"][:-1])).total_seconds())) for s in d["steps"])')"
   # 본 릴리스에서 프런트 이미지가 동일하면 프런트는 중지되지 않는다. 이 경우 정적 점검 페이지는 표시되지 않는다
@@ -217,6 +221,10 @@ stage_u7() {
   expect "설치 관리자도 1.0.0 으로" 1.0.0 "$(installer_version)"
   check_data "U7 뒤"
   expect "기록" "restore restored $from" "$(upd GET /history | json_get '" ".join([d["items"][0]["kind"],d["items"][0]["result"],d["items"][0]["from_version"]])')"
+  # 복원 완료 시 설치 관리자가 확인 결과를 무효화하고 즉시 재확인한다 — "지금 확인" 없이 복원 이전 버전이 보여야 한다
+  local i
+  for i in $(seq 1 60); do [ "$(iapi GET /status | json_get 'd["check"]["state"]')" = idle ] && break; sleep 1; done
+  expect "복원 직후(확인 호출 없이) 받을 버전" "update $from" "$(iapi GET /status | json_get 'd["available"]["state"]+" "+str(d["available"].get("version"))')"
   expect "다시 받을 수 있다" update "$(check_now)"
 }
 

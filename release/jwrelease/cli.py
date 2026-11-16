@@ -73,6 +73,14 @@ def _version_arg(args) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
+def _changelog_text(args, version: str) -> str:
+    """--changelog-file 의 내용. --changelog-section 을 지정하면 해당 버전의 절만 추출한다(값을 생략하면 이 릴리스의 버전)."""
+    text = Path(args.changelog_file).read_text(encoding="utf-8").replace("\r\n", "\n")
+    if args.changelog_section is None:
+        return text
+    return builder.changelog_section(text, args.changelog_section or version)
+
+
 def _print_cmds(cmds: list[list[str]]) -> None:
     for cmd in cmds:
         print("  " + " ".join(shlex.quote(c) for c in cmd))
@@ -130,7 +138,9 @@ def cmd_make_manifest(args) -> int:
     digests = builder.Digests.from_bytes(Path(args.digests).read_bytes())
     changelog = args.changelog or ""
     if args.changelog_file:
-        changelog = Path(args.changelog_file).read_text(encoding="utf-8").replace("\r\n", "\n")
+        changelog = _changelog_text(args, version)
+    elif args.changelog_section is not None:
+        raise CliError("--changelog-section 은 --changelog-file 과 함께 지정한다")
     pins = None
     if args.pins:
         pins = json.loads(Path(args.pins).read_text(encoding="utf-8"))
@@ -259,7 +269,9 @@ def cmd_promote(args) -> int:
         kwargs["min_upgrade_from"] = args.min_upgrade_from
     changelog = None
     if args.changelog_file:
-        changelog = Path(args.changelog_file).read_text(encoding="utf-8").replace("\r\n", "\n")
+        changelog = _changelog_text(args, semver.stable_of(args.version))
+    elif args.changelog_section is not None:
+        raise CliError("--changelog-section 은 --changelog-file 과 함께 지정한다")
     stable = builder.promote_manifest(beta, published=_now(args), changelog=changelog, **kwargs)
     if stable.images != beta.images or stable.third_party != beta.third_party:
         raise CliError("내부 오류: 승격에서 이미지가 달라졌다")
@@ -405,7 +417,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--compose", default=str(REPO_ROOT / "docker-compose.yml"))
     sp.add_argument("--zones", default=str(REPO_ROOT / "backend" / "app" / "zones.json"))
     sp.add_argument("--apps-dir", help="앱 설치 파일 디렉터리(.exe, .apk)")
-    sp.add_argument("--changelog-file")
+    sp.add_argument("--changelog-file", help="변경 내용 파일(마크다운). 기본은 파일 전체")
+    sp.add_argument("--changelog-section", nargs="?", const="", metavar="버전",
+                    help="--changelog-file 에서 해당 버전의 절(## <버전>)만 싣는다. 값을 생략하면 이 릴리스의 버전")
     sp.add_argument("--changelog", help="변경 내용(마크다운 문자열)")
     sp.add_argument("--min-upgrade-from", help="이 버전으로 바로 올라올 수 있는 최소 버전(없으면 제약 없음)")
     sp.add_argument("--offline-bundle", help="오프라인 묶음 파일(크기·해시를 적는다)")
@@ -441,7 +455,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--pubkey", action="append", help="Beta manifest 서명 확인용 공개 키(없으면 --key 의 짝)")
     sp.add_argument("--min-upgrade-from")
     sp.add_argument("--no-min-upgrade-from", action="store_true")
-    sp.add_argument("--changelog-file")
+    sp.add_argument("--changelog-file", help="Stable 의 변경 내용 파일(없으면 Beta 의 변경 내용 그대로)")
+    sp.add_argument("--changelog-section", nargs="?", const="", metavar="버전",
+                    help="--changelog-file 에서 해당 버전의 절(## <버전>)만 싣는다. 값을 생략하면 승격 후의 Stable 버전")
     sp.add_argument("--summary")
     sp.add_argument("--run", action="store_true", help="이미지 태그 붙이기 명령을 실제로 실행")
     signing(sp)

@@ -66,7 +66,7 @@ releases/<버전>/manifest.json   releases/<버전>/manifest.json.sig
 | `installer_bundle` | 설치 관리자 번들(compose·템플릿 집합)의 주소·크기·SHA-256 — **예약 항목**. 현재는 `null` 이다: 번들은 설치 관리자 **이미지**(`images.installer`)에 포함되어 있으며, 업데이트는 해당 이미지에서 추출하여 사용한다 |
 | `apps[]` | 앱 설치 파일: `kind`(`windows-desktop`, `android`), `filename`, `size`, `sha256`, `url` |
 | `offline_bundle` | 오프라인 번들의 주소·크기·SHA-256. 없으면 `null` |
-| `changelog` | 변경 내용(마크다운) |
+| `changelog` | 변경 내용(마크다운). 관리 › 업데이트의 해당 버전 항목에 표시된다. 리포의 `CHANGELOG.md` 에서 해당 버전의 절만 싣는다([변경 내용](#변경-내용)) |
 | `plugin_api` | 플러그인 호환 범위 — **예약 항목**. 현재는 `null` |
 | `download_bytes` | **선택.** pull 대상 이미지(자체 빌드 이미지 + 외부 이미지 전체)의 압축 크기 합(바이트, 0 이상의 정수). 값을 알 수 없는 경우 `null` 이 아니라 **키 자체를 포함하지 않는다** — 수신 측은 해당 항목을 표시하지 않는다 |
 
@@ -132,17 +132,18 @@ python -m jwrelease verify --repo . --pubkey cosign.pub
 
 준비 사항: Python 3.10 이상, `pip install -r release/requirements.txt`(`cryptography` 하나). 명령은 `release/` 에서 `python -m jwrelease …` 또는 임의의 위치에서 `python release/tools/jwrelease.py …` 로 실행한다.
 
-1. **버전 상향** — `VERSION` 을 `1.1.0-beta.1` 과 같이 수정하여 커밋한다.
+1. **버전 상향** — `CHANGELOG.md` 에 해당 버전의 절(`## 1.1.0-beta.1`)을 작성하고, `VERSION` 을 `1.1.0-beta.1` 과 같이 수정하여 커밋한다.
 2. **태그** — `git tag v1.1.0-beta.1 && git push <원격> v1.1.0-beta.1`. 태그와 `VERSION` 이 불일치하면 빌드가 중단된다.
 3. **빌드(CI)** — `.github/workflows/build-images.yml` 이 자체 빌드 이미지를 전부 빌드하여 게시하고 `digests.json` 을 산출물로 생성한다. 수동 실행도 가능하다(버전 입력).
 4. **다이제스트 수령** — 해당 실행의 산출물 `digests` 를 내려받는다.
 5. **manifest 생성**
    ```bash
    python -m jwrelease make-manifest --digests digests.json \
-     --changelog-file CHANGES.md --min-upgrade-from 1.0.0 --db-schema 3 --resolve-sizes \
+     --changelog-file ../CHANGELOG.md --changelog-section --min-upgrade-from 1.0.0 --db-schema 3 --resolve-sizes \
      --apps-dir ./apps-out --pins pins.json -o work/manifest.json
    ```
    버전은 `VERSION` 에서 읽는다(`--version` 으로 재지정할 수 있다). `digests.json` 의 버전과 불일치하면 중단된다.
+   `--changelog-section` 은 변경 기록에서 이 릴리스 버전의 절만 싣는다(값을 지정하면 해당 버전의 절). 지정하지 않으면 파일 전체를 싣는다 — 변경 기록 전체를 지정하는 경우에는 반드시 함께 지정한다.
 6. **Beta 게시** — 채널 리포를 복제한 작업 디렉터리에서:
    ```bash
    python -m jwrelease publish --repo ../releases --manifest work/manifest.json --channel beta --key ~/keys/release.pem
@@ -150,8 +151,10 @@ python -m jwrelease verify --repo . --pubkey cosign.pub
    `releases/<버전>/` 을 추가하고 `channels/beta.json` 을 갱신(순번 +1, 만료 갱신)·서명한다. **커밋·푸시는 수행하지 않는다** — 출력된 안내에 따라 `verify` 로 검증한 후 직접 커밋·푸시한다.
 7. **승격** — 시험이 완료되면:
    ```bash
-   python -m jwrelease promote --repo ../releases --version 1.1.0-beta.1 --key ~/keys/release.pem
+   python -m jwrelease promote --repo ../releases --version 1.1.0-beta.1 --key ~/keys/release.pem \
+     --changelog-file ../CHANGELOG.md --changelog-section
    ```
+   `--changelog-file` 을 지정하지 않으면 Beta 의 변경 내용을 그대로 사용한다. `--changelog-section` 의 값을 생략하면 승격 후의 Stable 버전(`1.1.0`)의 절을 싣는다.
    이미지를 재빌드하지 않는다. 버전 문자열만 상이한 manifest(`1.1.0`, `promoted_from` 기록)를 생성하여 `stable.json` 과 `beta.json` 에 추가하고, 동일 다이제스트에 Stable 태그를 부여하는 `docker buildx imagetools create` 명령을 **출력**한다(`--run` 을 지정하면 실행). 이후 검증·커밋·푸시를 수행한다.
    승격한 버전의 git 태그(`v1.1.0`)를 푸시하더라도 CI 는 빌드를 수행하지 않는다(빌드 트리거는 Beta 태그와 수동 실행에 한정된다).
 
@@ -160,12 +163,22 @@ Beta 를 거치지 않고 Stable 을 직접 게시하려면 6번에서 `--channe
 비공개 키의 암호는 환경변수 `JWRELEASE_KEY_PASSWORD` 로 지정하며, 지정하지 않으면 입력을 요구한다.
 다른 도구로 서명하려면 `--no-sign` 으로 파일만 생성한다(서명 대상 파일 목록이 출력된다).
 
+### 변경 내용
+
+리포 루트의 `CHANGELOG.md` 는 **버전별 절**로 구성한다. 릴리스 도구는 해당 버전의 절만 manifest 의 `changelog` 에 싣는다.
+
+- 절의 제목은 `## <버전>` 이다(2단계 제목, 제목의 첫 낱말이 버전과 정확히 일치). 제목 뒤에 날짜 등을 덧붙일 수 있다(`## 1.1.0 (2027-01-10)`).
+- 절은 다음 1·2단계 제목 직전에서 끝난다. 하위 제목(`###`)은 절에 포함된다. 제목 줄 자체는 싣지 않는다 — 화면이 버전을 별도로 표시한다.
+- 절의 첫 줄은 한 문장의 요약으로 작성한다. `publish`·`promote` 는 `--summary` 를 지정하지 않으면 이 줄을 채널 파일의 `summary` 로 사용한다.
+- 해당 버전의 절이 없거나 비어 있으면 `make-manifest`·`promote` 는 중단된다.
+- Stable(`X.Y.Z`)의 절은 해당 Stable 의 전체 요약(주요 기능·설치·업데이트·데이터 안전 등)이며, Beta(`X.Y.Z-beta.N`)의 절은 직전 버전 이후의 변경 사항이다.
+
 ### 명령 요약
 
 | 명령 | 기능 |
 |---|---|
 | `images` | compose 의 이미지 목록 — 자체 빌드 이미지, 외부 이미지, 다이제스트 미지정 이미지 |
-| `make-manifest` | `digests.json` + compose + `zones.json` (+ 앱 파일, 변경 내용, DB 스키마 버전, 다운로드 용량) → `manifest.json` |
+| `make-manifest` | `digests.json` + compose + `zones.json` (+ 앱 파일, 변경 내용 — `--changelog-section` 으로 해당 버전의 절, DB 스키마 버전, 다운로드 용량) → `manifest.json` |
 | `sign` | 파일에 서명(`.sig`) |
 | `publish` | 채널 리포 작업 디렉터리에 릴리스를 추가하고 채널 파일 갱신·서명 |
 | `promote` | Beta 릴리스를 Stable 로 승격 |
@@ -308,7 +321,7 @@ docker·네트워크 없이 실행된다. compose 의 이미지 구성이 변경
 ## 알려진 제한 사항
 
 - **cosign 교차 검증 미수행.** 형식은 일치시켰으나 실제 cosign 으로 서명·검증을 수행하지는 않았다.
-- **빌드 워크플로는 최초 Beta 태그(`v1.0.0-beta.1`)에서 실제로 실행되었다.** 매트릭스의 11개 이미지(자체 빌드 이미지 10개 + 설치 관리자)가 모두 빌드되어 레지스트리에 게시되었다. 다만 이후 backend 이미지의 빌드 대상을 변경하였다 — Dockerfile 을 `base`·`test`·`runtime` 단계로 분리하고 compose 와 워크플로가 `target: runtime` 을 지정하도록 하였다(운영 이미지에서 테스트 도구를 제외하였다). **해당 변경분은 아직 CI 에서 실행되지 않았다.** 검증된 범위는 검수 서버에서 compose 의 동일 설정으로 빌드하여 설치·업데이트 검수에 사용한 것과, `release/tests/test_workflow.py` 가 워크플로와 compose 의 대상 일치 여부를 대조하는 것까지다. 다음 Beta 태그의 실행에서 backend 작업을 확인한다.
+- **빌드 워크플로는 Beta 태그(`v1.0.0-beta.1` 이후)마다 실제로 실행되었다.** 매트릭스의 11개 이미지(자체 빌드 이미지 10개 + 설치 관리자)가 빌드되어 레지스트리에 게시되었으며, backend 이미지의 `runtime` 대상(테스트 도구 제외)도 1.0.0-beta.2 부터 CI 에서 빌드되었다. 공개 이미지로 설치·업데이트를 검증하였다([installer.md](installer.md) 13절).
 - **수동 실행으로 Stable 버전의 빌드가 가능하다.** 트리거는 Beta 태그에 한정되나 수동 실행의 버전 입력은 `X.Y.Z` 도 허용한다(최초 릴리스와 같이 Beta 를 거치지 않는 경우를 위함). 이미 승격한 버전을 수동으로 재빌드하면 태그가 다른 다이제스트를 가리키게 되므로 수행하지 않는다.
 - **compose 해석은 필요한 범위에 한정된다.** `image`·`build`·`profiles` 만 해석한다. 해당 항목에 앵커·병합 키·여러 줄 값을 사용하면 중단된다. `include`·`extends` 로 분할한 compose 는 지원하지 않는다.
 - **`--resolve-digests`·`--resolve-sizes` 는 익명 조회다.** 인증이 필요한 레지스트리의 외부 이미지는 `--pins` 로 지정한다. 조회 값은 해당 시점에 태그가 가리키던 값이므로, 시험한 이미지와의 동일 여부는 담당자가 확인하여야 한다 — compose 에서 다이제스트로 고정하는 방식을 권장한다.

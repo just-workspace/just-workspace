@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
@@ -216,6 +217,39 @@ def retag_commands(manifest: Manifest, tag: str) -> list[list[str]]:
         repo = ref.split("@", 1)[0]
         out.append(["docker", "buildx", "imagetools", "create", "--tag", f"{repo}:{tag}", ref])
     return out
+
+
+_HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
+
+
+def changelog_section(text: str, version: str) -> str:
+    """변경 기록(CHANGELOG.md)에서 해당 버전의 절만 추출한다.
+
+    절은 제목이 `## <버전>` 인 2단계 제목(제목의 첫 낱말이 버전과 정확히 일치 — `## 1.0.0 (2026-12-01)` 도 해당)으로
+    시작하여, 다음 1·2단계 제목 직전에서 끝난다. 제목 줄은 포함하지 않는다(화면이 버전을 별도로 표시한다). 하위 제목(`###`)은
+    포함한다. 앞뒤의 빈 줄은 제거하고 끝에 줄바꿈 하나를 둔다. 절이 없거나 내용이 비어 있으면 BuildError.
+    """
+    lines = text.replace("\r\n", "\n").split("\n")
+    start = None
+    for i, line in enumerate(lines):
+        m = _HEADING.match(line)
+        if not m:
+            continue
+        level, title = len(m.group(1)), m.group(2)
+        if start is None:
+            if level == 2 and title.split(maxsplit=1)[:1] == [version]:
+                start = i + 1
+        elif level <= 2:
+            body = lines[start:i]
+            break
+    else:
+        if start is None:
+            raise BuildError(f"변경 기록에 {version} 의 절(## {version})이 없다")
+        body = lines[start:]
+    out = "\n".join(body).strip("\n")
+    if not out.strip():
+        raise BuildError(f"변경 기록의 {version} 절이 비어 있다")
+    return out + "\n"
 
 
 def summary_line(changelog: str) -> str:

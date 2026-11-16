@@ -216,6 +216,42 @@ def test_cli_full_flow(tmp_path, key, settings, capsys, unpinned_compose_text):
     assert got == stable
 
 
+def test_cli_changelog_section(tmp_path, key, settings, capsys):
+    """--changelog-section — 변경 기록 전체가 아니라 해당 버전의 절만 manifest 와 채널 요약에 싣는다."""
+    priv, _pub = key.write(tmp_path)
+    repo = tmp_path / "channel-repo"
+    repo.mkdir()
+    (tmp_path / "digests.json").write_text(json.dumps(digests_doc("1.0.0-beta.4", settings)), encoding="utf-8")
+    log = tmp_path / "CHANGELOG.md"
+    text = ("# 변경 기록\n\n## 1.0.0\n\n첫 Stable 릴리스.\n\n## 1.0.0-beta.4\n\n네 번째 시험판.\n\n- 수정\n\n"
+            "## 1.0.0-beta.3\n\n- 이전\n")
+    log.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+    base = ["make-manifest", "--version", "1.0.0-beta.4", "--digests", tmp_path / "digests.json",
+            "--changelog-file", log, "-o", tmp_path / "m.json", "--now", "2026-12-01T09:00:00Z"]
+    assert run(*base, "--changelog-section") == 0                        # 값 생략 = 이 릴리스의 버전
+    beta = Manifest.from_bytes((tmp_path / "m.json").read_bytes())
+    assert beta.changelog == "네 번째 시험판.\n\n- 수정\n"
+    assert run(*base, "--changelog-section", "1.0.0-beta.3") == 0
+    assert Manifest.from_bytes((tmp_path / "m.json").read_bytes()).changelog == "- 이전\n"
+    capsys.readouterr()
+    assert run(*base, "--changelog-section", "1.0.0-beta.9") == 2         # 절이 없으면 중단
+    assert "1.0.0-beta.9" in capsys.readouterr().err
+    no_file = [a for a in base if a not in ("--changelog-file", log)]
+    assert run(*no_file, "--changelog-section") == 2                       # 파일 없이 절만 지정할 수 없다
+    assert run(*base) == 0                                                 # 지정하지 않으면 파일 전체(기존 동작)
+    assert Manifest.from_bytes((tmp_path / "m.json").read_bytes()).changelog == text
+    assert run(*base, "--changelog-section") == 0
+    assert run("publish", "--repo", repo, "--manifest", tmp_path / "m.json", "--channel", "beta",
+               "--key", priv, "--now", "2026-12-01T09:00:00Z") == 0
+    assert channelrepo.load_channel(repo, "beta").releases[0].summary == "네 번째 시험판."
+    # 승격: 값을 생략하면 Stable 버전(1.0.0)의 절
+    assert run("promote", "--repo", repo, "--version", "1.0.0-beta.4", "--key", priv, "--changelog-file", log,
+               "--changelog-section", "--now", "2026-12-15T09:00:00Z") == 0
+    stable = Manifest.from_bytes((repo / "releases/1.0.0/manifest.json").read_bytes())
+    assert stable.changelog == "첫 Stable 릴리스.\n"
+    assert [r.summary for r in channelrepo.load_channel(repo, "stable").releases] == ["네 번째 시험판."]
+
+
 def test_cli_promote_refuses_unknown_or_tampered(tmp_path, key, other_key, make_manifest, capsys):
     priv, pub = key.write(tmp_path)
     repo = tmp_path / "repo"

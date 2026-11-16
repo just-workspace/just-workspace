@@ -172,6 +172,58 @@ def test_summary_line():
     assert builder.summary_line("") == ""
 
 
+CHANGELOG = """# 변경 기록
+
+머리말.
+
+## 1.0.0
+
+첫 Stable 릴리스.
+
+### 설치
+
+- 설치 마법사
+
+## 1.0.0-beta.4
+
+1.0.0-beta.3 이후의 수정 사항.
+
+- 문서 서버 준비 대기
+
+## 1.0.0-beta.3 (2026-11-16)
+
+- 인증서 갱신
+
+### 알려진 제한 사항
+
+- 없음
+"""
+
+
+def test_changelog_section_extracts_only_that_version():
+    assert builder.changelog_section(CHANGELOG, "1.0.0-beta.4") == "1.0.0-beta.3 이후의 수정 사항.\n\n- 문서 서버 준비 대기\n"
+    # 하위 제목은 포함, 다음 2단계 제목에서 끝남. 제목 뒤의 덧붙임(날짜)은 허용
+    assert builder.changelog_section(CHANGELOG, "1.0.0") == "첫 Stable 릴리스.\n\n### 설치\n\n- 설치 마법사\n"
+    assert builder.changelog_section(CHANGELOG, "1.0.0-beta.3") == "- 인증서 갱신\n\n### 알려진 제한 사항\n\n- 없음\n"
+    # 줄바꿈 CRLF 도 동일. 요약 줄은 제목이 아니라 절의 첫 문장
+    crlf = CHANGELOG.replace("\n", "\r\n")
+    assert builder.changelog_section(crlf, "1.0.0-beta.4") == builder.changelog_section(CHANGELOG, "1.0.0-beta.4")
+    assert builder.summary_line(builder.changelog_section(CHANGELOG, "1.0.0-beta.4")) == "1.0.0-beta.3 이후의 수정 사항."
+
+
+@pytest.mark.parametrize("version", ["1.0.0-beta.2", "1.0", "1.0.0-beta"])
+def test_changelog_section_missing(version):
+    with pytest.raises(BuildError, match="절"):
+        builder.changelog_section(CHANGELOG, version)
+
+
+def test_changelog_section_empty_or_not_level2():
+    with pytest.raises(BuildError, match="비어"):
+        builder.changelog_section("## 1.0.0\n\n## 0.9.0\n- x\n", "1.0.0")
+    with pytest.raises(BuildError):
+        builder.changelog_section("### 1.0.0\n- x\n", "1.0.0")      # 3단계 제목은 버전 절이 아니다
+
+
 # ── 승격 ─────────────────────────────────────────────────────
 
 

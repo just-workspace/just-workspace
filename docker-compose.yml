@@ -100,6 +100,8 @@ services:
       additional_contexts:
         licenses: .          # LICENSE · NOTICE · THIRD_PARTY_LICENSES.md → 이미지의 /licenses/
       dockerfile: Dockerfile
+      # 운영 이미지 — 테스트 도구(pytest·aiosqlite)는 test 대상에만 있다(backend/Dockerfile)
+      target: runtime
       args:
         # 제품 버전(리포 루트 VERSION). 예: JW_APP_VERSION="$(cat VERSION)" docker compose build backend
         JW_APP_VERSION: ${JW_APP_VERSION:-}

@@ -13,7 +13,7 @@ ENV = {"JW_REGISTRY": "ghcr.io/just-workspace", "JW_VERSION": "1.0.0"}
 # compose 의 이미지 구성이 바뀌면 여기가 깨진다 — 워크플로 매트릭스·문서도 함께 고쳐야 한다는 신호다.
 
 OWN_SNAPSHOT = {
-    "backend": ("backend", "Dockerfile", None),
+    "backend": ("backend", "Dockerfile", "runtime"),
     "frontend-react": ("frontend-react", "Dockerfile", None),
     "mailserver": ("mailserver/image", "Dockerfile", None),
     "sso": ("sso", "Dockerfile", None),

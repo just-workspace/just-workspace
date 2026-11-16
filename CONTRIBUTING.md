@@ -41,8 +41,16 @@ Python 3.14(이미지 기준).
 
 ```bash
 python -m venv <venv>
-<venv>/bin/pip install -r backend/requirements.txt
+<venv>/bin/pip install -r backend/requirements-dev.txt
 cd backend && <venv>/bin/python -m pytest -q
+```
+
+파이썬을 따로 깔지 않고 이미지로 돌릴 수도 있습니다. 테스트 도구는 운영 이미지(`runtime` 대상)에 없고 `test` 대상에만 있습니다. 테스트 코드는 이미지에 넣지 않으므로 리포를 붙여서 돌립니다(일부 테스트는 리포의 문서·다른 폴더를 읽습니다).
+
+```bash
+docker build --target test --build-context licenses=. -t just-workspace-backend-test backend
+docker run --rm --entrypoint python -e PYTHONDONTWRITEBYTECODE=1 \
+  -v "$PWD:/src:ro" -w /src/backend just-workspace-backend-test -m pytest -q -p no:cacheprovider
 ```
 
 DB 는 임시 SQLite 파일로 대신합니다(`backend/tests/conftest.py`). 실제 PostgreSQL 이 필요한 테스트는 환경변수 `JW_TEST_PG_URL` 이 있을 때만 돕니다.

@@ -87,6 +87,8 @@ jobs:
           - name: backend
             context: backend
             dockerfile: backend/Dockerfile
+            # 운영 대상 — 테스트 도구가 든 test 대상은 내보내지 않는다
+            target: runtime
             # 표시 버전의 예비값. 실행할 때 환경변수 JW_APP_VERSION 이 있으면 그것이 우선한다 —
             # 승격(Beta → Stable)은 이미지를 다시 빌드하지 않으므로 실제 표시 버전은 실행 환경이 넣어야 한다.
             build_args: JW_APP_VERSION

@@ -86,7 +86,7 @@ Just Workspace 의 소스는 [AGPL-3.0-or-later](LICENSE) 다(저작권 고지�
 | reportlab | 5.1.0 | BSD | PDF 만들기 |
 | mcp | 2.3.0 | MIT | MCP 서버 SDK |
 | sse-starlette | 3.7.0 | BSD-3-Clause | SSE 전송 |
-| pytest · pytest-asyncio · pytest-cov · aiosqlite | 9.2.0 · 1.5.0 · 7.1.0 · 0.22.1 | MIT · Apache-2.0 · MIT · MIT | 테스트 — 이미지에 설치되지만 실행 중에는 쓰지 않는다 |
+| pytest · pytest-asyncio · pytest-cov · aiosqlite | 9.2.0 · 1.5.0 · 7.1.0 · 0.22.1 | MIT · Apache-2.0 · MIT · MIT | 테스트 — 배포하는 이미지에는 들어가지 않는다(`backend/requirements-dev.txt`, Dockerfile 의 `test` 대상) |
 
 전이 의존성 가운데 permissive 가 아닌 것: certifi(MPL-2.0). 그 밖(aiohappyeyeballs·typing_extensions PSF-2.0 등)은 permissive 다.
 

@@ -1,4 +1,8 @@
-FROM python:3.14-slim
+# 대상(stage) 셋:
+#   base     공통 — 아래 둘이 이 위에 선다
+#   test     base + 테스트 도구(requirements-dev.txt). 테스트 코드는 넣지 않는다 — 리포를 붙여서 돌린다(CONTRIBUTING.md)
+#   runtime  운영 이미지. 맨 끝에 있어 `--target` 없이 빌드해도 이것이 나온다. 릴리스로 나가는 것은 이것뿐이다
+FROM python:3.14-slim AS base
 WORKDIR /app
 
 # Docker CLI (for docker exec to manage mailserver accounts)
@@ -44,3 +48,14 @@ EXPOSE 8000
 ENTRYPOINT ["/entrypoint.sh"]
 # 신뢰 프록시 = ws-nginx 고정 IP(172.28.0.2) — docker-compose.yml 의 command 와 같게 둔다(R7 A2).
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "172.28.0.2", "--timeout-graceful-shutdown", "5"]
+
+
+# ── 테스트 대상 — pytest 계열과 aiosqlite 를 얹는다 ──
+#   docker build --target test --build-context licenses=<리포 루트> -t <이름> backend
+FROM base AS test
+COPY requirements-dev.txt .
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
+
+# ── 운영 대상(기본) ──
+FROM base AS runtime

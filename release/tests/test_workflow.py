@@ -151,3 +151,26 @@ def test_source_repo_url_matches_the_backend_default():
 
     text = (REPO_ROOT / "backend" / "app" / "source.py").read_text(encoding="utf-8")
     assert f'DEFAULT_SOURCE_URL = "{Settings().source_repo_url}"' in text
+
+
+def test_backend_release_image_has_no_test_tools(matrix, compose_text):
+    """릴리스로 나가는 backend 이미지는 runtime 대상이고, 테스트 도구는 test 대상(requirements-dev.txt)에만 있다."""
+    backend = REPO_ROOT / "backend"
+    own = {i.service: i for i in compose.own_images(compose.read_images(compose_text, {}))}
+    assert own["backend"].build.target == "runtime" and matrix["backend"]["target"] == "runtime"
+
+    stages = re.findall(r"^FROM\s+(\S+)\s+AS\s+(\S+)\s*$", (backend / "Dockerfile").read_text(encoding="utf-8"), re.M)
+    assert [name for _, name in stages] == ["base", "test", "runtime"]
+    assert dict((name, parent) for parent, name in stages)["runtime"] == "base"     # test 위에 서지 않는다
+    assert stages[-1][1] == "runtime"                                                # --target 없이 빌드해도 운영 이미지
+
+    def names(path):
+        lines = (ln.split("#")[0].strip() for ln in path.read_text(encoding="utf-8").splitlines())
+        return {re.split(r"[=<>\[ ]", ln, maxsplit=1)[0].lower() for ln in lines if ln and not ln.startswith("-")}
+
+    test_only = {"pytest", "pytest-asyncio", "pytest-cov", "aiosqlite"}
+    assert not names(backend / "requirements.txt") & test_only
+    assert test_only <= names(backend / "requirements-dev.txt")
+    assert "-r requirements.txt" in (backend / "requirements-dev.txt").read_text(encoding="utf-8")
+    dockerfile = (backend / "Dockerfile").read_text(encoding="utf-8")
+    assert dockerfile.index("requirements-dev.txt .") > dockerfile.index("AS test")

@@ -267,7 +267,7 @@ async def remote_status(user: User = Depends(get_current_user), db: AsyncSession
         "org_domain": _org_domain(),
         "support_download": SUPPORT_DOWNLOAD,
         "support_available": exe.is_file(),
-        # 웹 "지원 프로그램 받기" 옆 안내 — 실제 파일 크기와 요구 사항(파일이 없으면 버튼 숨김)
+        # 웹 "지원 프로그램 다운로드" 옆 안내 — 실제 파일 크기와 요구 사항(파일이 없으면 버튼 숨김)
         "support_size": exe.stat().st_size if exe.is_file() else None,
         "support_requirements": SUPPORT_REQUIREMENTS,
         "desktop_download": "/api/apps/desktop",
@@ -293,7 +293,7 @@ async def support_download(db: AsyncSession = Depends(get_db)):
     await _module_on(db)
     p = _support_exe()
     if not p.is_file():
-        raise HTTPException(404, "지원 프로그램이 아직 올라오지 않았습니다")
+        raise HTTPException(404, "지원 프로그램이 아직 업로드되지 않았습니다")
     return FileResponse(p, media_type="application/vnd.microsoft.portable-executable",
                         filename="RemoteSupport.exe", headers={"Cache-Control": "no-cache"})
 
@@ -490,7 +490,7 @@ async def support_join(request: Request, body: JoinBody, user: User = Depends(ge
         RemoteAudit.action == "support.join_failed", RemoteAudit.actor_id == user.id,
         RemoteAudit.at > svc.now() - JOIN_FAIL_WINDOW))
     if (fails or 0) >= JOIN_FAIL_LIMIT:
-        raise HTTPException(429, "코드 입력을 너무 많이 틀렸습니다. 잠시 후 다시 시도하세요")
+        raise HTTPException(429, "코드 입력을 너무 많이 틀렸습니다. 잠시 후 다시 시도하십시오")
     code = svc.normalize_code(body.code)
     s = None
     if code:
@@ -509,9 +509,9 @@ async def support_join(request: Request, body: JoinBody, user: User = Depends(ge
                      **({"burned_codes": burned} if burned else {}))
         await db.commit()
         msg = {
-            "format": "9자리 숫자가 아닙니다. 코드를 다시 확인하세요.",
-            "no_match": "일치하는 지원 요청이 없습니다. 상대방 화면의 코드와 같은지 확인하세요.",
-            "expired": "만료된 코드입니다. 상대방에게 지원 프로그램에서 새 코드를 받으세요.",
+            "format": "9자리 숫자가 아닙니다. 코드를 다시 확인하십시오.",
+            "no_match": "일치하는 지원 요청이 없습니다. 상대방 화면의 코드와 같은지 확인하십시오.",
+            "expired": "만료된 코드입니다. 상대방에게 지원 프로그램에서 새 코드를 받으십시오.",
         }[reason]
         raise HTTPException(422 if reason == "format" else 404, {"code": reason, "message": msg})
     # 1회성: 코드 사용 시점에 소모(해시 삭제) — 동일 코드로 재접속 불가

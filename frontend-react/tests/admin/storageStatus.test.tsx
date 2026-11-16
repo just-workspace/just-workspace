@@ -91,14 +91,14 @@ describe('관리 › 저장소 — 상태 카드', () => {
     api.routes[`GET ${STATUS}`] = () => ({ guarded: true, available: true, reason: null })
     render(<AdminStorageStatus />)
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('파일 저장소와 연결이 끊겨 파일 쓰기가 멈췄습니다.')
+    expect(alert.textContent).toContain('파일 저장소와 연결이 끊겨 파일 쓰기가 중단되었습니다.')
     expect(alert.textContent).toContain('부터')
-    expect(alert.textContent).toContain('사용자는 파일 탭에서 파일을 열거나 올릴 수 없습니다.')
-    expect(alert.textContent).toContain('NAS가 켜져 있는지, 이 서버와 NAS 사이 네트워크가 살아 있는지 확인합니다.')
-    expect(alert.textContent).toContain('연결되면 자동으로 다시 붙습니다.')
+    expect(alert.textContent).toContain('사용자는 파일 탭에서 파일을 열거나 업로드할 수 없습니다.')
+    expect(alert.textContent).toContain('NAS가 켜져 있는지, 이 서버와 NAS 사이 네트워크가 정상인지 확인합니다.')
+    expect(alert.textContent).toContain('연결되면 자동으로 다시 마운트됩니다.')
     expect(screen.getByTestId('storage-reason').textContent).toBe('저장소가 응답하지 않습니다.')
     const conn = screen.getByTestId('storage-conn')
-    expect(conn.textContent).toBe('끊김 · 파일 쓰기와 읽기 멈춤')
+    expect(conn.textContent).toBe('끊김 · 파일 쓰기와 읽기 중단')
     expect(conn.className).toContain('text-danger')
     expect(screen.getByText('확인할 수 없음')).toBeTruthy()
     expect(screen.queryByRole('meter')).toBeNull()
@@ -118,7 +118,7 @@ describe('관리 › 저장소 — 상태 카드', () => {
     api.routes[`GET ${S}`] = () => current
     api.routes[`POST ${S}/recheck`] = () => current
     render(<AdminStorageStatus />)
-    expect((await screen.findByRole('alert')).textContent).toContain('저장소 디스크가 이 서버에 붙어 있는지 확인합니다.')
+    expect((await screen.findByRole('alert')).textContent).toContain('저장소 디스크가 이 서버에 연결되어 있는지 확인합니다.')
     await waitFor(() => expect(called('POST', `${S}/recheck`)).toBeGreaterThan(1))
     current = state({ kind: 'local', location: null })
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
@@ -130,12 +130,12 @@ describe('관리 › 저장소 — 상태 카드', () => {
   it('연결은 됐지만 쓰기나 잠금이 안 되면 경고 색으로 알린다', async () => {
     api.routes[`GET ${S}`] = () => state({ write: false, lock: null })
     const view = render(<AdminStorageStatus />)
-    await waitFor(() => expect(screen.getByTestId('storage-conn').textContent).toBe('연결됨 · 쓰기가 되지 않습니다'))
+    await waitFor(() => expect(screen.getByTestId('storage-conn').textContent).toBe('연결됨 · 쓰기를 할 수 없습니다'))
     expect(screen.getByTestId('storage-conn').className).toContain('text-warning')
     view.unmount()
     api.routes[`GET ${S}`] = () => state({ lock: false })
     render(<AdminStorageStatus />)
-    await waitFor(() => expect(screen.getByTestId('storage-conn').textContent).toBe('연결됨 · 파일 잠금이 되지 않습니다'))
+    await waitFor(() => expect(screen.getByTestId('storage-conn').textContent).toBe('연결됨 · 파일 잠금을 사용할 수 없습니다'))
   })
 
   it('상태를 못 받으면 오류와 다시 시도', async () => {
@@ -154,7 +154,7 @@ describe('관리자 알림 띠', () => {
     inRouter(<LayoutStorageDownBanner />)
     const banner = await screen.findByTestId('storage-down-banner')
     expect(banner.getAttribute('role')).toBe('alert')
-    expect(banner.textContent).toContain('파일 저장소와 연결이 끊겨 파일 쓰기가 멈췄습니다.')
+    expect(banner.textContent).toContain('파일 저장소와 연결이 끊겨 파일 쓰기가 중단되었습니다.')
     expect(screen.getByRole('link', { name: '저장소 상태 보기' }).getAttribute('href')).toBe('/admin/storage')
   })
 
@@ -244,8 +244,8 @@ describe('파일 탭 — 저장소가 끊겼을 때', () => {
     expect(screen.getByRole('heading', { name: '파일' })).toBeTruthy()
     const alert = screen.getByRole('alert')
     expect(alert.textContent).toContain('지금은 파일을 열 수 없습니다')
-    expect(alert.textContent).toContain('파일 저장소와 연결이 끊겼습니다. 관리자에게 알렸습니다. 다시 연결되면 파일은 그대로 보입니다.')
-    expect(screen.getByText('파일 목록, 미리보기, 올리기, 내려받기가 모두 멈춥니다. 채팅과 메일의 첨부도 같은 이유로 열리지 않습니다.')).toBeTruthy()
+    expect(alert.textContent).toContain('파일 저장소와 연결이 끊겼습니다. 관리자에게 알렸습니다. 다시 연결되면 파일은 그대로 표시됩니다.')
+    expect(screen.getByText('파일 목록, 미리보기, 업로드, 다운로드가 모두 중단됩니다. 채팅과 메일의 첨부도 같은 이유로 열리지 않습니다.')).toBeTruthy()
     expect(screen.queryByRole('link', { name: '저장소 상태 보기' })).toBeNull()
     available = true
     fireEvent.click(screen.getByRole('button', { name: '다시 확인' }))
@@ -269,7 +269,7 @@ describe('파일 탭 — 저장소가 끊겼을 때', () => {
     inRouter(<FilesPage />, '/files')
     expect(await screen.findByTestId('files-storage-down')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '업로드' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '새로만들기' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '새로 만들기' })).toBeNull()
     expect(screen.queryByRole('button', { name: '업로드·새로 만들기' })).toBeNull()
     expect(document.querySelector('input[type="file"]')).toBeNull()
 

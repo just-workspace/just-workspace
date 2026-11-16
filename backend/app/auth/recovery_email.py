@@ -122,12 +122,12 @@ async def _reserve_attempt(user_id: str) -> None:
             ttl = REAUTH_LOCK_SECONDS
     except Exception as e:  # noqa: BLE001
         logger.error("[recovery-email] attempt counter unavailable: %s", e)
-        raise HTTPException(status_code=503, detail="잠시 후 다시 시도해주세요")
+        raise HTTPException(status_code=503, detail="잠시 후 다시 시도하십시오")
     if n > REAUTH_MAX_FAILS:
         mins = max(1, (ttl + 59) // 60)
         raise HTTPException(
             status_code=429,
-            detail=f"본인 확인을 여러 번 틀렸습니다. {mins}분 뒤에 다시 시도하세요",
+            detail=f"본인 확인에 여러 번 실패했습니다. {mins}분 후에 다시 시도하십시오",
             headers={"Retry-After": str(max(1, ttl))},
         )
 
@@ -198,11 +198,11 @@ async def _send_confirm_mail(to_email: str, username: str, confirm_url: str) -> 
     await _send(
         to_email,
         f"[{settings.domain}] 복구 이메일 확인",
-        f"{username} 계정의 복구 이메일을 이 주소로 바꾸려는 요청이 있었습니다.\n"
-        f"본인이 요청했다면 아래 링크를 눌러 확인해주세요:\n\n"
+        f"{username} 계정의 복구 이메일을 이 주소로 변경하려는 요청이 있었습니다.\n"
+        f"본인이 요청했다면 아래 링크를 눌러 확인하십시오:\n\n"
         f"{confirm_url}\n\n"
-        f"이 링크는 {PENDING_TTL // 60}분 후 만료됩니다. 확인하기 전에는 아무것도 바뀌지 않습니다.\n"
-        f"본인이 요청하지 않은 경우 이 메일을 무시하세요.",
+        f"이 링크는 {PENDING_TTL // 60}분 후 만료됩니다. 확인하기 전에는 아무것도 변경되지 않습니다.\n"
+        f"본인이 요청하지 않은 경우 이 메일을 무시하십시오.",
     )
 
 
@@ -217,7 +217,7 @@ async def _send_changed_notice(to_email: str, username: str, ip: str, cleared: b
     when = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     what = "삭제되었습니다" if cleared else "다른 주소로 변경되었습니다"
     after = ("이제 이 계정은 비밀번호 재설정 링크를 받을 주소가 없습니다." if cleared
-             else "이제 비밀번호 재설정 링크는 새 주소로만 갑니다.")
+             else "이제 비밀번호 재설정 링크는 새 주소로만 전송됩니다.")
     try:
         await _send(
             to_email,
@@ -225,8 +225,8 @@ async def _send_changed_notice(to_email: str, username: str, ip: str, cleared: b
             f"{username} 계정의 복구 이메일이 {what}.\n"
             f"{after}\n\n"
             f"시각: {when}\nIP: {ip or '-'}\n\n"
-            f"본인이 바꾼 것이 아니라면 바로 {settings.app_url.rstrip('/')}/settings/security 에서 "
-            f"비밀번호를 바꾸고 로그인된 기기를 확인한 뒤 관리자에게 알려주세요.",
+            f"본인이 변경한 것이 아니라면 즉시 {settings.app_url.rstrip('/')}/settings/security 에서 "
+            f"비밀번호를 변경하고 로그인된 기기를 확인한 뒤 관리자에게 알리십시오.",
         )
     except Exception as e:  # noqa: BLE001 — 알림 실패는 변경 자체를 롤백하지 않는다
         logger.warning("[recovery-email] change notice failed for %s: %s", username, e)
@@ -253,7 +253,7 @@ class RecoveryEmailRequest(BaseModel):
         from app.files.share_email import normalize_recipients
         good, _bad = normalize_recipients([v])
         if len(good) != 1:
-            raise ValueError("올바른 이메일 주소를 하나만 입력해주세요")
+            raise ValueError("올바른 이메일 주소를 하나만 입력하십시오")
         return good[0]
 
 
@@ -290,14 +290,14 @@ async def request_change(
     new = body.recovery_email
     old = normalize_email(user.recovery_email)
     if new == old:
-        raise HTTPException(status_code=400, detail="지금 쓰는 복구 이메일과 같은 주소입니다" if new
+        raise HTTPException(status_code=400, detail="현재 사용 중인 복구 이메일과 같은 주소입니다" if new
                             else "등록된 복구 이메일이 없습니다")
 
     method = await reauth_method(db, user)
     if method == "none":
         raise HTTPException(
             status_code=400,
-            detail="이 계정은 비밀번호나 2단계 인증으로 본인 확인을 할 수 없어 복구 이메일을 직접 바꿀 수 없습니다. 관리자에게 요청하세요",
+            detail="이 계정은 비밀번호나 2단계 인증으로 본인 확인을 할 수 없어 복구 이메일을 직접 변경할 수 없습니다. 관리자에게 요청하십시오",
         )
     # 시도를 먼저 집계한다(잠금 상태이면 429, Redis 부재 시 503) — 비밀번호 검증은 그 이후에만 수행
     await _reserve_attempt(user.id)
@@ -307,7 +307,7 @@ async def request_change(
         except Exception as e:  # noqa: BLE001 — 디렉터리 조회 불가: 불일치로 판정하지 않는다
             logger.warning("[recovery-email] reauth backend unavailable for %s: %s", user.username, e)
             await _release_attempt(user.id)
-            raise HTTPException(status_code=503, detail="지금은 비밀번호를 확인할 수 없습니다. 잠시 후 다시 시도해주세요")
+            raise HTTPException(status_code=503, detail="지금은 비밀번호를 확인할 수 없습니다. 잠시 후 다시 시도하십시오")
         fail_msg = "현재 비밀번호가 올바르지 않습니다"
     else:
         ok = _check_totp(user, body.code or "")
@@ -335,7 +335,7 @@ async def request_change(
                                {"old": previous, "method": method}, ip or None)
         if previous:
             await _send_changed_notice(previous, user.username, ip, cleared=True)
-        return {"message": "복구 이메일을 지웠습니다.", "cleared": True, "pending_email": None, "expires_in": 0}
+        return {"message": "복구 이메일을 삭제했습니다.", "cleared": True, "pending_email": None, "expires_in": 0}
 
     token = secrets.token_urlsafe(32)
     digest = _digest(token)
@@ -347,7 +347,7 @@ async def request_change(
         await r.set(_USER + user.id, json.dumps({"digest": digest, "new": new}), ex=PENDING_TTL)
     except Exception as e:  # noqa: BLE001 — 보류 상태 저장 불가 시 진행하지 않는다
         logger.error("[recovery-email] pending store failed: %s", e)
-        raise HTTPException(status_code=503, detail="잠시 후 다시 시도해주세요")
+        raise HTTPException(status_code=503, detail="잠시 후 다시 시도하십시오")
 
     confirm_url = f"{settings.app_url.rstrip('/')}/verify-email?change={token}"
     try:
@@ -358,12 +358,12 @@ async def request_change(
             await _drop_pending(user.id)
         except Exception:  # noqa: BLE001
             pass
-        raise HTTPException(status_code=502, detail="확인 메일을 보내지 못했습니다. 주소를 확인하고 다시 시도해주세요")
+        raise HTTPException(status_code=502, detail="확인 메일을 보내지 못했습니다. 주소를 확인하고 다시 시도하십시오")
 
     from app.admin import audit
     await audit.log_action(db, user.id, "user.recovery_email.change_requested", "user", user.id,
                            {"new": new, "method": method}, _ip(request) or None)
-    return {"message": "새 주소로 확인 메일을 보냈습니다. 메일의 링크를 눌러야 변경이 끝납니다.",
+    return {"message": "새 주소로 확인 메일을 보냈습니다. 메일의 링크를 눌러야 변경이 완료됩니다.",
             "pending_email": new, "expires_in": PENDING_TTL}
 
 
@@ -375,7 +375,7 @@ async def cancel(request: Request, user: User = Depends(get_current_user), db: A
         await _drop_pending(user.id)
     except Exception as e:  # noqa: BLE001
         logger.error("[recovery-email] cancel failed: %s", e)
-        raise HTTPException(status_code=503, detail="잠시 후 다시 시도해주세요")
+        raise HTTPException(status_code=503, detail="잠시 후 다시 시도하십시오")
     if rec:
         from app.admin import audit
         await audit.log_action(db, user.id, "user.recovery_email.change_cancelled", "user", user.id,
@@ -405,7 +405,7 @@ async def check(request: Request, body: RecoveryEmailConfirm):
             return {"state": "done"}
     except Exception as e:  # noqa: BLE001
         logger.error("[recovery-email] check failed: %s", e)
-        raise HTTPException(status_code=503, detail="잠시 후 다시 시도해주세요")
+        raise HTTPException(status_code=503, detail="잠시 후 다시 시도하십시오")
     return {"state": "invalid"}
 
 
@@ -414,14 +414,14 @@ async def check(request: Request, body: RecoveryEmailConfirm):
 async def confirm(request: Request, body: RecoveryEmailConfirm, db: AsyncSession = Depends(get_db)):
     """확인 화면의 버튼 → 실제 교체. 로그인은 요구하지 않는다 — 메일을 다른 기기에서 여는 경우가 흔하고,
     요청 단계에서 이미 본인 확인을 수행했으며 토큰(256비트) 보유가 새 주소의 소유 증명이다."""
-    invalid = HTTPException(status_code=400, detail="유효하지 않거나 만료된 확인 링크입니다. 설정에서 다시 요청해주세요")
+    invalid = HTTPException(status_code=400, detail="유효하지 않거나 만료된 확인 링크입니다. 설정에서 다시 요청하십시오")
     digest = _digest(body.token)
     try:
         from app.rbi.service import take_once
         rec = await take_once(_TOK + digest)     # 1회 한정 — 조회와 동시에 삭제된다
     except Exception as e:  # noqa: BLE001
         logger.error("[recovery-email] confirm lookup failed: %s", e)
-        raise HTTPException(status_code=503, detail="잠시 후 다시 시도해주세요")
+        raise HTTPException(status_code=503, detail="잠시 후 다시 시도하십시오")
     if not rec or not rec.get("uid") or not rec.get("new"):
         # 이미 확정한 링크의 재요청(중복 클릭·새로고침) — 실패로 처리하지 않는다
         if await _done(digest):

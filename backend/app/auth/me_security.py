@@ -108,12 +108,12 @@ async def create_app_password(
 ):
     name = (body.name or "").strip()
     if not name:
-        raise HTTPException(status_code=400, detail="이름을 입력하세요")
+        raise HTTPException(status_code=400, detail="이름을 입력하십시오")
     if len(name) > 100:
-        raise HTTPException(status_code=400, detail="이름은 100자 이하로 입력하세요")
+        raise HTTPException(status_code=400, detail="이름은 100자 이하로 입력하십시오")
     scopes = [s for s in dict.fromkeys(body.scopes or []) if s in APP_PASSWORD_SCOPES]
     if not scopes:
-        raise HTTPException(status_code=400, detail="쓸 곳(메일·캘린더/연락처)을 하나 이상 고르세요")
+        raise HTTPException(status_code=400, detail="사용할 곳(메일·캘린더/연락처)을 하나 이상 선택하십시오")
     count = len((await db.execute(select(AppPassword.id).where(AppPassword.user_id == user.id))).all())
     if count >= MAX_APP_PASSWORDS:
         raise HTTPException(status_code=400, detail=f"앱 비밀번호는 {MAX_APP_PASSWORDS}개까지 만들 수 있습니다")

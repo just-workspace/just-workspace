@@ -159,7 +159,7 @@ const text = async page => (await page.locator('body').innerText().catch(() => '
   expect('backend 가 내려간 동안 진행 화면이 "다시 연결 중"으로 버텼다', !sawDown || sawReconnect, `끊김 ${sawDown} / 안내 ${sawReconnect}`)
   await admin.waitForTimeout(4000)
   const done = await text(admin)
-  expect('완료 화면', /업데이트가 끝났습니다|업데이트했습니다/.test(done), done.slice(0, 200))
+  expect('완료 화면', /업데이트가 완료되었습니다|업데이트했습니다/.test(done), done.slice(0, 200))
   expect('화면이 오류 화면으로 넘어가지 않았다', !/문제가 발생|오류가 발생했습니다|Something went wrong/.test(done))
   await snap(admin, 'done')
   // 일반 사용자 창은 점검 모드 종료 시 자동으로 복귀한다

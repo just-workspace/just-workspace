@@ -82,7 +82,7 @@ cd apps/desktop && JW_SERVER_URL=https://<도메인> npm run dist:support
 3. 관리 › 모듈·플러그인에서 "원격 데스크톱"의 활성화 여부를 확인한다(기본값은 활성화).
 4. 데스크톱 앱을 빌드해 배포한다(`npm run native:build` 로 입력 애드온 `jw_remote_input.node` 가 포함되어야 한다 — [apps/desktop/README.md](../../apps/desktop/README.md)).
 5. 1회성 지원을 사용하려면 `npm run dist:support` 산출물(`release-support/remote-support.exe`)을 서버 저장소의 `apps/remote-support.exe` 로 업로드한다
-   (`docker cp … ws-backend:/storage/apps/remote-support.exe`) → 웹의 [지원 프로그램 받기]가 동작한다.
+   (`docker cp … ws-backend:/storage/apps/remote-support.exe`) → 웹의 [지원 프로그램 다운로드]가 동작한다.
 
 ### 검증 절차
 

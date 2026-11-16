@@ -176,7 +176,7 @@ def _cmd_restore(args) -> int:
     items = [i.strip() for i in args.items.split(",") if i.strip()] if args.items else None
     unknown = [i for i in (items or []) if i not in fmt.ITEMS]
     if unknown:
-        _err("ERROR: 모르는 항목: " + ", ".join(unknown) + f" (쓸 수 있는 항목: {', '.join(fmt.ITEMS)})")
+        _err("ERROR: 알 수 없는 항목: " + ", ".join(unknown) + f" (사용할 수 있는 항목: {', '.join(fmt.ITEMS)})")
         return EXIT_PARTIAL
     try:
         summary = fmt.summarize(args.path)
@@ -187,7 +187,7 @@ def _cmd_restore(args) -> int:
         _print_summary(summary)
     if not args.yes:
         if not sys.stdin.isatty():
-            _err("ERROR: 지금 데이터를 이 백업으로 바꿉니다 — 확인 없이 진행하려면 --yes 를 붙이세요")
+            _err("ERROR: 현재 데이터를 이 백업으로 교체합니다 — 확인 없이 진행하려면 --yes 를 지정하십시오")
             return EXIT_PARTIAL
         if input("\n지금 데이터를 이 백업의 내용으로 바꿉니다. 계속하려면 RESTORE 를 입력하세요: ").strip() != "RESTORE":
             print("취소했습니다")
@@ -235,8 +235,8 @@ def add_parsers(sub) -> None:
                         help="full = 전체(서버 이전용), pre-update = DB 와 설정만(업데이트 직전)")
     create.add_argument("--dest", metavar="DIR", help="백업을 둘 위치(기본: $BACKUP_ROOT 또는 /backups)")
     create.add_argument("--include-files", action="store_true",
-                        help="파일 저장소도 넣는다(로컬 저장소일 때만 — NFS 는 넣지 않는다)")
-    create.add_argument("--pack", action="store_true", help="끝나면 tar 한 개(.jwbak)로 묶는다")
+                        help="파일 저장소도 포함한다(로컬 저장소일 때만 — NFS 는 포함하지 않는다)")
+    create.add_argument("--pack", action="store_true", help="완료되면 tar 한 개(.jwbak)로 묶는다")
     create.add_argument("--skip-space-check", action="store_true", help="여유 공간 검사를 건너뛴다")
     create.add_argument("--json", action="store_true")
     password_opt(create)
@@ -245,7 +245,7 @@ def add_parsers(sub) -> None:
     lst.add_argument("--dest", metavar="DIR")
     lst.add_argument("--json", action="store_true")
 
-    for name, text in (("inspect", "내용 요약(풀지 않는다)"), ("verify", "파일을 manifest 의 해시와 견준다")):
+    for name, text in (("inspect", "내용 요약(풀지 않는다)"), ("verify", "파일을 manifest 의 해시와 비교한다")):
         p = actions.add_parser(name, help=text)
         p.add_argument("path", help="백업 폴더 또는 .jwbak 파일")
         p.add_argument("--json", action="store_true")
@@ -256,12 +256,12 @@ def add_parsers(sub) -> None:
     pack.add_argument("path")
     pack.add_argument("out", nargs="?")
 
-    ext = actions.add_parser("extract-config", help="설정 묶음(.env …)만 꺼낸다")
+    ext = actions.add_parser("extract-config", help="설정 모음(.env …)만 추출한다")
     ext.add_argument("path")
     ext.add_argument("--out", required=True, metavar="DIR")
     password_opt(ext)
 
-    plan = actions.add_parser("plan", help="실행할 단계 목록만 보여 준다")
+    plan = actions.add_parser("plan", help="실행할 단계 목록만 표시한다")
     plan.add_argument("--kind", choices=KINDS, default=KIND_FULL)
     plan.add_argument("--include-files", action="store_true")
     plan.add_argument("--json", action="store_true")
@@ -269,11 +269,11 @@ def add_parsers(sub) -> None:
 
     restore = sub.add_parser("restore", help="백업에서 복원한다(backend 밖에서 — scripts/restore.sh)")
     restore.add_argument("path", help="백업 폴더 또는 .jwbak 파일")
-    restore.add_argument("--items", metavar="a,b", help="이 항목만(기본: 백업에 든 것 전부, 설정 제외)")
+    restore.add_argument("--items", metavar="a,b", help="이 항목만(기본: 백업에 포함된 항목 전체, 설정 제외)")
     restore.add_argument("--with-config", action="store_true",
-                         help="설정(.env — 암호화 키 포함)도 되돌린다")
+                         help="설정(.env — 암호화 키 포함)도 복원한다")
     restore.add_argument("--allow-key-mismatch", action="store_true",
-                         help="백업과 지금의 암호화 키가 달라도 진행한다(암호화된 값은 못 읽게 된다)")
+                         help="백업과 지금의 암호화 키가 달라도 진행한다(암호화된 값은 읽을 수 없게 된다)")
     restore.add_argument("--dest", metavar="DIR", help="작업 폴더·복원 전 덤프를 둘 위치(기본: $BACKUP_ROOT)")
     restore.add_argument("--health-timeout", type=int, default=300, metavar="초")
     restore.add_argument("--yes", action="store_true", help="확인 질문 없이 진행")

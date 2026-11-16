@@ -130,7 +130,7 @@ def validate(password: str, *context: str | None) -> None:
 
     # 유출·흔한 비밀번호 (SHALL). 어간·leet 복원형까지 대조한다.
     if _BLOCKLIST & _stems(low):
-        raise ValueError("너무 흔하거나 유출된 적이 있는 비밀번호입니다. 다른 것을 사용해주세요")
+        raise ValueError("너무 흔하거나 유출된 적이 있는 비밀번호입니다. 다른 것을 사용하십시오")
 
     # 문맥 정보(사용자명/이메일)로 이루어진 비밀번호
     stripped = _strip_context(low, *context)

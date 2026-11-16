@@ -68,7 +68,7 @@ export interface MailComposerProps {
   draftId?: string | null
   /** 목록에서 열려 있던 원문(없으면 msgId 로 조회) */
   original?: Readonly<MessageDetail> | null
-  /** 새 메일 받는 사람 사전 입력(연락처 "메일 쓰기" 등) */
+  /** 새 메일 받는 사람 사전 입력(연락처 "메일 작성" 등) */
   to?: string | null
   /** 화면 내 AI 답장 초안 — 답장 본문 최상단에 삽입. 해당 초안으로 발송 시 서버가 X-AI-Generated 를 부착 */
   aiDraft?: string | null
@@ -437,7 +437,7 @@ export function MailComposer({
     if (sendingRef.current) return
     const c = cur.current
     // 업로드 중인 첨부가 누락된 채 발송되는 것을 방지
-    if (c.uploading) { setError(t('mail.compose.uploadingWait', '첨부를 올리는 중입니다. 다 올라간 뒤에 보내 주세요.')); setScheduleOpen(false); return }
+    if (c.uploading) { setError(t('mail.compose.uploadingWait', '첨부를 업로드하는 중입니다. 업로드가 완료된 뒤에 보내십시오.')); setScheduleOpen(false); return }
     const toList = parseAddresses(c.toField)
     if (toList.length === 0) { setError(t('mail.compose.recipientRequired')); setScheduleOpen(false); return }
     sendingRef.current = true

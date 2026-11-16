@@ -131,7 +131,7 @@ export default function Page() {
     if (useRecovery) {
       // 복구 코드는 영문자·숫자 8개(가운데 줄표·공백은 유무 무관)
       if (code.replace(/[^a-z0-9]/gi, '').length !== 8) {
-        setOtpError(t('authScreens.twoFactor.recoveryFormat', '복구 코드 8자리를 입력하세요 (예: abcd-efgh)'))
+        setOtpError(t('authScreens.twoFactor.recoveryFormat', '복구 코드 8자리를 입력하십시오 (예: abcd-efgh)'))
         return
       }
     } else if (!/^\d{6}$/.test(code)) {
@@ -205,7 +205,7 @@ export default function Page() {
                 size="lg"
                 mono
                 label={t('authScreens.twoFactor.recoveryCode', '복구 코드')}
-                hint={t('authScreens.twoFactor.recoveryHint', '2단계 인증을 켤 때 받은 일회용 코드입니다. 한 번 쓰면 사라집니다.')}
+                hint={t('authScreens.twoFactor.recoveryHint', '2단계 인증을 활성화할 때 받은 일회용 코드입니다. 한 번 사용하면 사라집니다.')}
                 error={otpError}
                 autocomplete="off"
                 autoCapitalize="none"
@@ -240,7 +240,7 @@ export default function Page() {
             <button type="button" className="font-semibold text-primary hover:underline" onClick={toggleRecovery}>
               {useRecovery
                 ? t('authScreens.twoFactor.useApp', '인증 앱 코드로 입력')
-                : t('authScreens.twoFactor.useRecovery', '인증 앱을 쓸 수 없나요? 복구 코드 사용')}
+                : t('authScreens.twoFactor.useRecovery', '인증 앱을 사용할 수 없습니까? 복구 코드 사용')}
             </button>
             <button type="button" className="font-semibold text-primary hover:underline" onClick={backToPassword}>
               {t('authScreens.twoFactor.back')}

@@ -51,7 +51,7 @@ export function getTray(): Tray | null {
  */
 export function setTrayUnread(n: number, win?: BrowserWindow | null): void {
   if (!tray) return;
-  tray.setToolTip(n > 0 ? `just-workspace — 안 읽음 ${n}` : 'just-workspace');
+  tray.setToolTip(n > 0 ? `just-workspace — 읽지 않음 ${n}` : 'just-workspace');
 
   if (process.platform === 'win32') {
     const target = win && !win.isDestroyed() ? win : null;
@@ -63,7 +63,7 @@ export function setTrayUnread(n: number, win?: BrowserWindow | null): void {
         const img = nativeImage.createFromPath(
           path.join(__dirname, '../../assets', file),
         );
-        target.setOverlayIcon(img, `안 읽음 ${n}`);
+        target.setOverlayIcon(img, `읽지 않음 ${n}`);
       }
     }
   } else {

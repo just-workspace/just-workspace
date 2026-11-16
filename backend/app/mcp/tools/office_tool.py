@@ -66,7 +66,7 @@ def _prev(args: dict) -> list[dict]:
             continue
         op = o.get("op")
         if op == "replace":
-            rows.append({"field": "operations", "label": "바꾸기", "before": o.get("find"), "after": o.get("replace")})
+            rows.append({"field": "operations", "label": "변경", "before": o.get("find"), "after": o.get("replace")})
         else:
             desc = {k: v for k, v in o.items() if k != "op"}
             txt = str(desc)
@@ -124,15 +124,15 @@ def _schema(path_desc: str, ops_desc: str) -> dict:
 
 
 for _name, _title, _fn, _desc, _ops, _label in (
-    ("docx_edit", "Word 문서 고치기", docx_edit,
+    ("docx_edit", "Word 문서 수정", docx_edit,
      "Edit a Word (.docx) document: find & replace text, add paragraphs/headings/tables (optionally inside a "
-     "given heading's section so the heading structure stays intact).", _DOCX_OPS, "Word 고치기"),
-    ("xlsx_edit", "Excel 고치기", xlsx_edit,
+     "given heading's section so the heading structure stays intact).", _DOCX_OPS, "Word 수정"),
+    ("xlsx_edit", "Excel 수정", xlsx_edit,
      "Edit an Excel (.xlsx) workbook: write cells/ranges and formulas, add sheets, add simple charts.",
-     _XLSX_OPS, "Excel 고치기"),
-    ("pptx_edit", "PowerPoint 고치기", pptx_edit,
+     _XLSX_OPS, "Excel 수정"),
+    ("pptx_edit", "PowerPoint 수정", pptx_edit,
      "Edit a PowerPoint (.pptx) deck: add slides (title, bullets, notes), replace wording, set a text box.",
-     _PPTX_OPS, "PowerPoint 고치기"),
+     _PPTX_OPS, "PowerPoint 수정"),
 ):
     _t = Tool(
         name=_name, title=_title,

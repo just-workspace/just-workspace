@@ -40,13 +40,13 @@ DISMISS_KEY = "dashboard.checklist_dismissed_at"
 
 # link 는 프런트의 실제 경로(과거의 /settings/profile·/settings/devices 는 존재하지 않는 화면). 앱 설치는 다운로드 안내(/api/apps).
 ITEMS = [
-    ("profile_photo", "프로필 사진 올리기", "/settings/account"),
+    ("profile_photo", "프로필 사진 업로드", "/settings/account"),
     ("first_message", "채널에 첫 메시지 보내기", "/chat"),
     ("invite_colleague", "동료 초대하기", "/meetings"),
-    ("upload_file", "첫 파일 올리기", "/files"),
+    ("upload_file", "첫 파일 업로드", "/files"),
     ("install_app", "앱 설치하기", "/api/apps"),
-    ("enable_push", "알림 켜기", "/settings/notifications"),
-    ("enable_2fa", "2단계 인증 켜기", "/settings/security"),
+    ("enable_push", "알림 활성화", "/settings/notifications"),
+    ("enable_2fa", "2단계 인증 활성화", "/settings/security"),
 ]
 
 

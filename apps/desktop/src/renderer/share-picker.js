@@ -92,7 +92,7 @@ function renderGrid() {
 function renderAction() {
   const picked = state.sources.find((s) => s.id === state.picked);
   $('btn-share').disabled = !picked;
-  $('share-label').textContent = picked ? '공유 시작' : '항목을 선택하세요';
+  $('share-label').textContent = picked ? '공유 시작' : '항목을 선택하십시오';
   $('btn-audio').setAttribute('aria-pressed', String(state.audio));
 }
 

@@ -1,4 +1,4 @@
-"""결과물 API — 카드(미리보기·내려받기·내 파일 저장·다시 만들기)·묶음 작업·파일 화면 [압축해서 내려받기].
+"""결과물 API — 카드(미리보기·내려받기·내 파일 저장·다시 만들기)·묶음 작업·파일 화면 [압축하여 다운로드].
 
 모듈 게이트 없음(MCP 로 생성한 결과물도 동일한 링크로 수신한다). 모든 요청은 로그인한 **소유자**만 허용.
 내려받기는 서명(exp·sig, 24시간)까지 일치해야 한다. 내 파일 저장·파일 압축은 쓰기 체계(request_write)를 경유한다.
@@ -67,13 +67,13 @@ async def download_artifact(aid: str, request: Request, exp: str = "", sig: str 
     if a is None or a.user_id != user.id:
         raise HTTPException(status_code=404, detail="결과물이 없습니다")
     if not arts.check_sig(a, user.id, exp, sig) or arts.state(a) != "ready":
-        raise HTTPException(status_code=410, detail={"code": "expired", "message": "내려받기 링크가 만료됐습니다"})
+        raise HTTPException(status_code=410, detail={"code": "expired", "message": "다운로드 링크가 만료됐습니다"})
     real = Path(arts.real_path(a))
     if a.saved_path and (arts._uj(a.info, {}) or {}).get("source") == "files":
         # 내 파일에 저장된 zip — 현재 권한으로 다시 연다(이동 또는 삭제된 경우 만료로 처리)
         from app.files import access as acc
 
-        gone = HTTPException(status_code=410, detail={"code": "expired", "message": "파일이 옮겨졌거나 지워졌습니다"})
+        gone = HTTPException(status_code=410, detail={"code": "expired", "message": "파일이 이동되었거나 삭제되었습니다"})
         try:
             real = (await acc.resolve(db, user, a.saved_path, "view")).real
         except HTTPException:
@@ -157,7 +157,7 @@ async def save_job(job_id: str, user: User = Depends(get_current_user), db: Asyn
     return {**res, "job": await arts.job_view(db, job)}
 
 
-# ── 파일 화면 [압축해서 내려받기] ────────────────────────────
+# ── 파일 화면 [압축하여 다운로드] ────────────────────────────
 class ZipBody(BaseModel):
     paths: list[str] = []
     folder: str = ""

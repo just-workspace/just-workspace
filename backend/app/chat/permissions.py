@@ -158,13 +158,13 @@ def bits_of(value: Any) -> int:
         return 0
     if isinstance(value, int):
         if value < 0 or value & ~ALL_PERMISSIONS:
-            raise ValueError("모르는 권한 비트")
+            raise ValueError("알 수 없는 권한 비트")
         return value
     out = 0
     for n in value:
         key = str(n).strip().upper()
         if key not in PERMISSIONS:
-            raise ValueError(f"모르는 권한: {n}")
+            raise ValueError(f"알 수 없는 권한: {n}")
         out |= PERMISSIONS[key]
     return out
 

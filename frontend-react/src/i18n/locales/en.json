@@ -37,7 +37,7 @@
     "sending": "Sending...",
     "processing": "Processing...",
     "copy": "Copy",
-    "copied": "Copied!",
+    "copied": "Copied",
     "copyFailed": "Couldn't copy — please select and copy it manually",
     "download": "Download",
     "share": "Share",
@@ -3629,7 +3629,7 @@
     },
     "messages": {
       "loadingMore": "Loading older messages...",
-      "empty": "No messages yet. Send the first message!",
+      "empty": "No messages yet. Send the first message.",
       "newMessages": "New messages",
       "newMessagesHere": "New messages start here",
       "pendingSend": "Waiting · will send when reconnected",

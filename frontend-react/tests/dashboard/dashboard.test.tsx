@@ -271,7 +271,7 @@ describe('오늘의 포커스(AI 브리핑)', () => {
       items: [{ text: 'PR 리뷰가 필요합니다.', sources: [{ label: '#개발', to: '/chat?channel=c1' }] }],
     })
     renderIn(withCtx(<DashboardFocus />).ui)
-    fireEvent.click(await screen.findByRole('button', { name: '켜기' }))
+    fireEvent.click(await screen.findByRole('button', { name: '활성화' }))
     expect(await screen.findByText(/PR 리뷰가 필요합니다/)).toBeTruthy()
     expect(screen.getByRole('link', { name: '#개발' }).getAttribute('href')).toBe('/chat?channel=c1')
     const gen = api.calls.find(c => c.url === '/api/dashboard/briefing/generate')!
@@ -282,7 +282,7 @@ describe('오늘의 포커스(AI 브리핑)', () => {
     api.routes['/api/dashboard/briefing'] = () => st()
     const { ui, report } = withCtx(<DashboardFocus />)
     renderIn(ui)
-    await screen.findByRole('button', { name: '켜기' })
+    await screen.findByRole('button', { name: '활성화' })
     await waitFor(() => expect(report).toHaveBeenLastCalledWith('ai', 'empty', undefined))
   })
   it('회의 준비: 관련 채팅(근거)이 없으면 요약 줄 없이 "관련 채팅 n · 메일 n" 만', async () => {

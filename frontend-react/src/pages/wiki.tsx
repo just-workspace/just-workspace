@@ -423,7 +423,7 @@ export default function WikiPage() {
             baseVersion.current = latest.version
             retry = true
           } else {
-            if (!saveConflict.current) addToast('error', t('wiki.save.conflict', '다른 사람이 이 문서를 먼저 고쳤습니다. 내 변경은 아직 저장되지 않았습니다.'))
+            if (!saveConflict.current) addToast('error', t('wiki.save.conflict', '다른 사람이 이 문서를 먼저 수정했습니다. 내 변경은 아직 저장되지 않았습니다.'))
             saveConflict.current = true
           }
         }
@@ -440,7 +440,7 @@ export default function WikiPage() {
   async function retrySave(): Promise<void> {
     if (!saveConflict.current) { await flushSave(); return }
     const ok = await confirmBox(
-      t('wiki.save.conflictConfirm', '다른 사람이 이 문서를 먼저 고쳤습니다. 내 내용으로 저장하면 그 수정은 버전 기록에만 남습니다.'),
+      t('wiki.save.conflictConfirm', '다른 사람이 이 문서를 먼저 수정했습니다. 내 내용으로 저장하면 그 수정은 버전 기록에만 남습니다.'),
       { title: t('wiki.save.conflictTitle', '저장 충돌'), danger: true, confirmLabel: t('wiki.save.conflictOverwrite', '내 내용으로 저장') },
     )
     if (ok) await flushSave({ force: true })
@@ -471,7 +471,7 @@ export default function WikiPage() {
     if (modeRef.current !== 'edit') return true
     if (await finishEdit({ silent: true })) return true
     const discard = await confirmBox(
-      t('wiki.save.leaveUnsaved', '변경을 저장하지 못했습니다. 저장하지 않고 이동하면 방금 고친 내용이 사라집니다.'),
+      t('wiki.save.leaveUnsaved', '변경을 저장하지 못했습니다. 저장하지 않고 이동하면 방금 수정한 내용이 사라집니다.'),
       { title: t('wiki.save.leaveUnsavedTitle', '저장되지 않은 변경'), danger: true, confirmLabel: t('wiki.save.leaveDiscard', '저장하지 않고 이동') },
     )
     if (!discard) return false

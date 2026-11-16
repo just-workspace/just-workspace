@@ -139,7 +139,7 @@ describe('답변 버전', () => {
     fireEvent.click(await screen.findByRole('button', { name: '질문 수정' }))
     const box = screen.getByLabelText('질문 수정') as HTMLTextAreaElement
     expect(box.value).toBe('보고서 써 줘')
-    expect(document.body.textContent).toContain('보내면 새 답변이 2/2으로 생깁니다')
+    expect(document.body.textContent).toContain('보내면 새 답변이 2/2으로 생성됩니다')
     fireEvent.change(box, { target: { value: '보고서 써 줘. 가용률도' } })
     // 수정 칸의 보내기(입력창 보내기와 구분)
     fireEvent.click(within(box.closest('.rounded-xl') as HTMLElement).getByRole('button', { name: '보내기' }))
@@ -254,7 +254,7 @@ describe('메모리', () => {
     expect(await screen.findByText(/비밀 정보\(비밀번호·토큰·주민번호·카드번호\)는 메모리에 저장하지 않습니다/)).toBeTruthy()
     // 스위치 끄면 빈 상태
     fireEvent.click(screen.getByRole('switch', { name: /메모리 사용/ }))
-    expect(await screen.findByText('메모리를 쓰지 않습니다')).toBeTruthy()
+    expect(await screen.findByText('메모리를 사용하지 않습니다')).toBeTruthy()
     expect(api.calls.some(c => c.url === '/api/ai/memory-settings' && c.opts?.body?.enabled === false)).toBe(true)
   })
 })
@@ -269,13 +269,13 @@ describe('첨부', () => {
       { key: '5', id: null, name: '배포.hwp', size: 2048, status: 'failed', error_code: 'distribution' },
       { key: '6', id: 'y', name: '랙.png', size: 2048, status: 'ready', kind: 'image' },
     ]} />)
-    expect(screen.getByText(/올리는 중/)).toBeTruthy()
-    expect(screen.getByText(/읽을 수 있게 바꾸는 중/)).toBeTruthy()
+    expect(screen.getByText(/업로드 중/)).toBeTruthy()
+    expect(screen.getByText(/읽을 수 있게 변환하는 중/)).toBeTruthy()
     expect(screen.getByText(/읽을 수 있게 변환함/)).toBeTruthy()
     expect(screen.getByText('암호가 걸려 있어 읽지 못했습니다')).toBeTruthy()
     expect(screen.getByText('배포용 문서라 읽지 못했습니다')).toBeTruthy()
     expect(screen.getByText(/이 모델은 이미지를 읽지 못합니다/)).toBeTruthy()
-    expect(screen.getByRole('button', { name: '보안문서.hwp 빼기' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '보안문서.hwp 제거' })).toBeTruthy()
     for (const c of ['encrypted', 'distribution', 'corrupt', 'too_large', 'unsupported_version', 'unsupported']) {
       expect(aiAttachErrorKey(c)).toBe(`ai.attach.err.${c}`)
     }
@@ -299,7 +299,7 @@ describe('첨부', () => {
     })
     // 칩은 모바일(카드 위)·데스크톱(카드 안) 두 위치에 렌더링되고 CSS 로 하나만 표시됨
     expect((await screen.findAllByText('암호가 걸려 있어 읽지 못했습니다')).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('30MB를 넘어 올리지 못했습니다').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('30MB를 넘어 업로드하지 못했습니다').length).toBeGreaterThan(0)
     await screen.findAllByText(/읽을 수 있게 변환함/)
     const { aiUploadAttachment } = await import('~/utils/aiUpload')
     expect((aiUploadAttachment as any).mock.calls.length).toBe(2)  // 큰 파일은 업로드하지 않음

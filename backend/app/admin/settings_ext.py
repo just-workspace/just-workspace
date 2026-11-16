@@ -62,7 +62,7 @@ async def put_security_policy(
         if security_policy.totp_setup_required({"require_2fa": body.require_2fa}, admin):
             raise HTTPException(
                 status_code=400,
-                detail="먼저 내 2단계 인증을 켜세요(설정 › 보안) — 켜지 않으면 바로 등록 화면에 갇힙니다",
+                detail="먼저 내 2단계 인증을 활성화하십시오(설정 › 보안) — 활성화하지 않으면 바로 등록 화면에 갇힙니다",
             )
     try:
         pol = await security_policy.set_policy(

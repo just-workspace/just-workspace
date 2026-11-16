@@ -173,7 +173,7 @@ stage_u1() {
   local row; row="$(upd GET /history | json_get 'd["items"][0]')"
   expect "기록" "$job success manual 1.0.1 1.0.0 관리자" "$(printf '%s' "$row" | json_get '" ".join([d["id"],d["result"],d["trigger"],d["version"],d["from_version"],d["actor"]["name"]])')"
   note "기록의 걸린 시간·중단 시간: $(printf '%s' "$row" | json_get 'str(d["duration_seconds"])+"초 / "+str(d["downtime_seconds"])+"초"')"
-  contains "기록 내려받기" "[verify] 완료" "$(ws_curl -b "$UJAR" "$WS$UPD/jobs/$job/log/download")"
+  contains "로그 다운로드" "[verify] 완료" "$(ws_curl -b "$UJAR" "$WS$UPD/jobs/$job/log/download")"
   expect "복원 지점" "pre-update 1.0.0" "$(upd GET /restore-points | json_get 'd["points"][0]["kind"]+" "+d["points"][0]["version"]')"
   expect "적용된 버전의 변경 내용" "- 1.0.1-beta.1 검수용 릴리스" "$(upd GET /releases/1.0.1 | json_get 'd["changelog"]')"
   stage_page
@@ -273,7 +273,7 @@ stage_u3() {
   expect "선택지 없음(자동 되돌림)" "" "$(ujob "$job" '",".join(d["choices"])')"
   rb="$(ujob "$job" 'd["rollback_job"]')"
   expect "되돌림 작업" "rollback done 1.0.2 1.0.1" "$(ujob "$rb" '" ".join([d["kind"],d["status"],d["from_version"],d["target_version"]])')"
-  expect "되돌림 단계" "stop=done images=done restore_db=done start=done verify=done" "$(ujob_steps "$rb")"
+  expect "롤백 단계" "stop=done images=done restore_db=done start=done verify=done" "$(ujob_steps "$rb")"
   expect "DB 복원은 건너뛰지 않았다" None "$(ujob "$rb" 'd["steps"][2]["detail"].get("skipped")')"
   note "깨진 단계의 원문: $(ujob "$job" 'd["error"]["detail"][-160:]')"
   check "backend 준비" wait_ready ws-backend 180
@@ -378,7 +378,7 @@ stage_u4() {
   check "이미지를 다시 올린다" reg_restore backend 1.0.4
   sleep 130
   expect "멈춰 있는 동안에는 다시 시도하지 않는다" "" "$(active_job)"
-  expect "다시 켜기" False "$(upd POST /auto/resume '{}' | json_get 'd["auto"]["paused"]')"
+  expect "다시 활성화" False "$(upd POST /auto/resume '{}' | json_get 'd["auto"]["paused"]')"
   job=""
   for i in $(seq 1 30); do job="$(active_job)"; [ -n "$job" ] && break; sleep 5; done
   expect "다시 켠 뒤 다음 확인에서 예고" "auto countdown" "$(ujob "$job" 'd["trigger"]+" "+d["status"]')"
@@ -459,7 +459,7 @@ stage_u8() {
     jwrelease bundle plan --manifest /work/stage-$OFF/manifest.json --stage "$stage" | grep -E '^ *docker ' > "$REL/bundle-plan.sh"
     check "docker pull·tag·save" bash -c "[ -s '$REL/bundle-plan.sh' ] && bash -e '$REL/bundle-plan.sh'"
     check "색인 + 서명" jwrelease bundle index --stage /work/stage-$OFF --key /work/keys/release.pem
-    check "묶기" jwrelease bundle pack --stage /work/stage-$OFF -o /work/just-workspace-$OFF-offline.tar
+    check "그룹화" jwrelease bundle pack --stage /work/stage-$OFF -o /work/just-workspace-$OFF-offline.tar
     check "묶음 검증(도구)" jwrelease bundle verify /work/just-workspace-$OFF-offline.tar --pubkey /work/keys/release.pub
     rm -rf "$stage/images"
   fi

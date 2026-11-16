@@ -160,10 +160,10 @@ async def bulk_users(
 
 POLICY = [
     "자기 자신·마지막 활성 관리자는 삭제할 수 없습니다",
-    "공동 콘텐츠(채널·위키·게시글/댓글)는 transfer_to 사용자에게 넘깁니다(없으면 중단)",
+    "공동 콘텐츠(채널·위키·게시글/댓글)는 transfer_to 사용자에게 인계합니다(없으면 중단)",
     "개인 데이터(작업·알림·일정·연락처·채팅 멤버십·기기·푸시 구독 등)는 삭제됩니다",
-    "남의 작업 담당자였으면 담당만 비우고, 접속·감사 로그는 사용자 칸만 비웁니다",
-    "개인 파일 폴더·메일 사서함·Git 계정은 지우지 않습니다 — 관리자가 직접 정리",
+    "타인의 작업 담당자였으면 담당만 비우고, 접속·감사 로그는 사용자 칸만 비웁니다",
+    "개인 파일 폴더·메일 사서함·Git 계정은 삭제하지 않습니다 — 관리자가 직접 정리",
 ]
 
 # (테이블, 컬럼) — 인수 사용자에게 소유를 이전할 공동 콘텐츠
@@ -291,13 +291,13 @@ async def delete_user(
     heir = None
     if transfer_to:
         if transfer_to == user.id:
-            raise HTTPException(status_code=400, detail="넘겨받을 사용자가 삭제 대상과 같습니다")
+            raise HTTPException(status_code=400, detail="인계받을 사용자가 삭제 대상과 같습니다")
         heir = await db.get(User, transfer_to)
         if heir is None or not heir.is_active:
-            raise HTTPException(status_code=400, detail="넘겨받을 사용자를 찾을 수 없습니다(활성 사용자여야 함)")
+            raise HTTPException(status_code=400, detail="인계받을 사용자를 찾을 수 없습니다(활성 사용자여야 함)")
     if impact["transfer_required"] and heir is None:
         raise HTTPException(status_code=409, detail={
-            "message": "공동 콘텐츠가 있어 넘겨받을 사용자(transfer_to)가 필요합니다",
+            "message": "공동 콘텐츠가 있어 인계받을 사용자(transfer_to)가 필요합니다",
             "transfer_required": impact["transfer_required"],
         })
 
@@ -331,7 +331,7 @@ async def delete_user(
     except IntegrityError as e:
         await db.rollback()
         logger.warning("사용자 삭제 실패(%s): %s", username, e)
-        raise HTTPException(status_code=409, detail="연결된 데이터 때문에 삭제하지 못했습니다 — 대신 정지(suspend)를 쓰세요")
+        raise HTTPException(status_code=409, detail="연결된 데이터 때문에 삭제하지 못했습니다 — 대신 정지(suspend)를 사용하십시오")
 
     try:
         from app.auth import sessions as sess_mod
@@ -372,7 +372,7 @@ async def reset_user_2fa(
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
     if not user.totp_secret:
-        raise HTTPException(status_code=400, detail="2단계 인증을 쓰지 않는 사용자입니다")
+        raise HTTPException(status_code=400, detail="2단계 인증을 사용하지 않는 사용자입니다")
     from app.auth import security_policy, two_factor
 
     user.totp_secret = None
@@ -446,7 +446,7 @@ async def _send_invite_mail(db: AsyncSession, to: str, url: str, inviter: str, e
     msg = MIMEText(
         f"{inviter} 님이 {settings.app_name} 에 초대했습니다.\n\n"
         f"아래 링크에서 가입하면 바로 사용할 수 있습니다(승인 대기 없음).\n{url}\n\n"
-        f"링크는 {expires.strftime('%Y-%m-%d')} 까지 한 번만 쓸 수 있습니다.\n\n— {settings.app_name}",
+        f"링크는 {expires.strftime('%Y-%m-%d')} 까지 한 번만 사용할 수 있습니다.\n\n— {settings.app_name}",
         "plain", "utf-8",
     )
     msg["Subject"] = f"[{settings.domain}] {settings.app_name} 초대"
@@ -493,7 +493,7 @@ async def create_invites(
                 emailed = True
             except Exception as e:
                 logger.warning("초대 메일 발송 실패(%s): %s", inv.email, e)
-                err = "메일 발송 실패 — 링크를 직접 전달하세요"
+                err = "메일 발송 실패 — 링크를 직접 전달하십시오"
         out.append({**_invite_dict(inv), "url": url, "emailed": emailed, "email_error": err})
     await audit.log_action(
         db, admin.id, "user.invite", "invite", None,

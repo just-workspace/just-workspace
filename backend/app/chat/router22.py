@@ -226,7 +226,7 @@ async def start_thread(
         from app.chat.perm_compat import can_manage_thread
         ch = await service.get_channel(db, m.channel_id)
         if not await can_manage_thread(db, user, ch, m):
-            raise _err(403, "forbidden", "스레드 이름을 바꿀 권한이 없습니다")
+            raise _err(403, "forbidden", "스레드 이름을 변경할 권한이 없습니다")
     now = datetime.now(timezone.utc)
     if m.thread_started_at is None:
         m.thread_started_at = now
@@ -519,7 +519,7 @@ async def get_chat_policy(user: User = Depends(get_current_user), db: AsyncSessi
 async def put_chat_policy(body: ChatPolicyUpdate, user: User = Depends(get_current_user),
                           db: AsyncSession = Depends(get_db)):
     if not user.is_admin:
-        raise _err(403, "forbidden", "전역 관리자만 바꿀 수 있습니다")
+        raise _err(403, "forbidden", "전역 관리자만 변경할 수 있습니다")
     from app.chat import policy
     changes = {k: getattr(body, k) for k in body.model_fields_set if getattr(body, k) is not None}
     if not changes:
@@ -559,7 +559,7 @@ async def get_server_settings(user: User = Depends(get_current_user), db: AsyncS
 async def put_server_settings(body: ChatServerSettingsUpdate, user: User = Depends(get_current_user),
                               db: AsyncSession = Depends(get_db)):
     if not await _can_edit_server(db, user):
-        raise _err(403, "forbidden", "채팅 서버 설정을 바꿀 권한이 없습니다")
+        raise _err(403, "forbidden", "채팅 서버 설정을 변경할 권한이 없습니다")
     fields = body.model_fields_set
     if not fields:
         raise _err(400, "empty", "변경할 내용이 없습니다")

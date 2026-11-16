@@ -304,7 +304,7 @@ async def update_task(
             select(TaskDB.id).where(TaskDB.parent_id == task.id).limit(1)
         )).first()
         if has_children:
-            raise ValueError("하위 작업이 있는 작업은 다른 작업 밑으로 옮길 수 없습니다")
+            raise ValueError("하위 작업이 있는 작업은 다른 작업 밑으로 이동할 수 없습니다")
 
     for field in ("title", "priority", "status", "sort_order", "parent_id"):
         if field in data and data[field] is not None:
@@ -320,7 +320,7 @@ async def update_task(
     reassigned = False
     if "assignee_id" in data:
         if task.user_id != user_id:
-            raise TaskPermissionError("담당자는 만든 사람만 바꿀 수 있습니다")
+            raise TaskPermissionError("담당자는 만든 사람만 변경할 수 있습니다")
         new = data["assignee_id"] or None
         reassigned = new != task.assignee_id and new is not None
         task.assignee_id = new
@@ -331,7 +331,7 @@ async def update_task(
         task.project = data["project"] or None
     if "channel_id" in data:
         if task.user_id != user_id:
-            raise TaskPermissionError("채널은 만든 사람만 바꿀 수 있습니다")
+            raise TaskPermissionError("채널은 만든 사람만 변경할 수 있습니다")
         task.channel_id = data["channel_id"] or None
 
     task.updated_at = datetime.now(timezone.utc)
@@ -351,7 +351,7 @@ async def delete_task(db: AsyncSession, user_id: str, task_id: str) -> bool:
         # 소유자가 삭제하지 못해 403 이 발생했다(상위 작업 전체 삭제는 가능했다).
         parent = await db.get(TaskDB, task.parent_id) if task.parent_id else None
         if not (parent and parent.user_id == user_id):
-            raise TaskPermissionError("작업은 만든 사람만 지울 수 있습니다")
+            raise TaskPermissionError("작업은 만든 사람만 삭제할 수 있습니다")
     # 하위 작업도 함께 삭제한다("하위 작업도 함께 지워집니다") — DB FK(CASCADE)가 없던 운영 DB 에서 고아 행이 남았다.
     # FK 가 있어도 앱에서 먼저 삭제하여 DB 와 무관하게 결과를 동일하게 한다. 하위의 하위까지 포함한다.
     ids, frontier = [], [task.id]

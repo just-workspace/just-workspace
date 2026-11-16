@@ -181,7 +181,7 @@ async def remove_member(
     # 마지막 멤버가 나가면 누구도 입장할 수 없는 고아 채널(메시지·파일)이 남음 — 나가기 대신 삭제를 사용하도록 유도
     members = await service.get_channel_members(db, channel_id)
     if len(members) == 1 and members[0]["user_id"] == target_user_id:
-        raise HTTPException(409, "마지막 멤버는 채널을 나갈 수 없습니다 — 채널 삭제를 쓰세요")
+        raise HTTPException(409, "마지막 멤버는 채널을 나갈 수 없습니다 — 채널 삭제를 사용하십시오")
     ok = await service.remove_member(db, channel_id, target_user_id)
     if not ok:
         raise HTTPException(404, "멤버를 찾을 수 없습니다")
@@ -632,7 +632,7 @@ async def dismiss_link_preview(
     if not msg or msg.is_deleted:
         raise HTTPException(404, "메시지를 찾을 수 없습니다")
     if not await perms.allowed(db, user, "preview.dismiss", msg.channel_id, message=msg):
-        raise HTTPException(403, "보낸 사람만 미리보기를 지울 수 있습니다")
+        raise HTTPException(403, "보낸 사람만 미리보기를 삭제할 수 있습니다")
     ev = await service.dismiss_link_preview(db, msg)
     await emit_to_channel(msg.channel_id, {"type": "link_preview", **ev, "link_preview": None})
     return {"ok": True}

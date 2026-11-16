@@ -37,7 +37,7 @@ export interface UiDisclosureProps extends Omit<HTMLAttributes<HTMLDivElement>, 
 
 /**
  * 펼침 행.
- * @example <UiDisclosure title="저장 폴더 지정" description="기본 폴더를 씁니다"><UiInput label="저장 폴더" /></UiDisclosure>
+ * @example <UiDisclosure title="저장 폴더 지정" description="기본 폴더를 사용합니다"><UiInput label="저장 폴더" /></UiDisclosure>
  */
 export function UiDisclosure({ title, description, open, defaultOpen = false, onUpdateOpen, leading, trailing, variant = 'card', collapsible = true, strong, className, children, ...rest }: UiDisclosureProps) {
   const [isOpen, setOpen] = useModel(open, defaultOpen, onUpdateOpen)

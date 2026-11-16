@@ -132,10 +132,10 @@ function renderRemote() {
   $('rd-name-save').disabled = !remote.registered || nameInput.value.trim() === (remote.deviceName || '') || !nameInput.value.trim();
   $('rd-unreg').disabled = !remote.registered;
   $('remote-note').textContent = remote.inSession
-    ? '지금 원격 접속 중입니다. 화면 위 막대의 [끊기]로 끝낼 수 있습니다.'
+    ? '지금 원격 접속 중입니다. 화면 위 막대의 [끊기]로 종료할 수 있습니다.'
     : remote.allowRemote
-      ? (remote.registered ? '' : '기기를 등록하지 못했습니다. 잠시 후 다시 켜 보세요.')
-      : (remote.registered ? '' : '켜면 이 PC를 워크스페이스 기기 목록에 등록합니다.');
+      ? (remote.registered ? '' : '기기를 등록하지 못했습니다. 잠시 후 다시 활성화하십시오.')
+      : (remote.registered ? '' : '활성화하면 이 PC를 워크스페이스 기기 목록에 등록합니다.');
   $('remote-note').hidden = !$('remote-note').textContent;
 }
 
@@ -190,7 +190,7 @@ function renderPanel() {
   } else if (!isSync) {
     const label = SECTIONS.find((s) => s.id === current)?.label ?? '';
     $('soon-text').textContent =
-      `${label} 설정은 아직 여기 없습니다. 워크스페이스 화면의 설정에서 바꿀 수 있습니다.`;
+      `${label} 설정은 아직 여기 없습니다. 워크스페이스 화면의 설정에서 변경할 수 있습니다.`;
   }
 }
 
@@ -390,7 +390,7 @@ $('opt-remote').addEventListener('click', async () => {
 });
 $('rd-name').addEventListener('input', () => {
   $('rd-name-hint').classList.remove('err');
-  $('rd-name-hint').textContent = '내 기기 목록과 접속 요청 창에 이 이름이 보입니다.';
+  $('rd-name-hint').textContent = '내 기기 목록과 접속 요청 창에 이 이름이 표시됩니다.';
   renderRemote();
 });
 async function saveName() {
@@ -402,7 +402,7 @@ async function saveName() {
     $('rd-name-hint').textContent = '저장했습니다.';
   } catch (e) {
     $('rd-name-hint').classList.add('err');
-    $('rd-name-hint').textContent = (e && e.message ? String(e.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : '') || '이름을 바꾸지 못했습니다.';
+    $('rd-name-hint').textContent = (e && e.message ? String(e.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : '') || '이름을 변경하지 못했습니다.';
   }
   renderRemote();
 }
@@ -412,13 +412,13 @@ $('rd-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') void sa
 $('rd-unreg').addEventListener('click', () => {
   $('rd-unreg').hidden = true;
   $('rd-confirm').hidden = false;
-  $('rd-danger-desc').textContent = '정말 해지할까요? 진행 중인 원격 접속이 있으면 바로 끊깁니다.';
+  $('rd-danger-desc').textContent = '정말 해지하시겠습니까? 진행 중인 원격 접속이 있으면 바로 끊깁니다.';
   $('rd-unreg-cancel').focus();
 });
 function resetUnreg() {
   $('rd-unreg').hidden = false;
   $('rd-confirm').hidden = true;
-  $('rd-danger-desc').textContent = '내 기기 목록에서 지우고 원격 접속 키를 폐기합니다. 다시 쓰려면 새로 등록해야 합니다.';
+  $('rd-danger-desc').textContent = '내 기기 목록에서 삭제하고 원격 접속 키를 폐기합니다. 다시 사용하려면 새로 등록해야 합니다.';
 }
 $('rd-unreg-cancel').addEventListener('click', resetUnreg);
 $('rd-unreg-ok').addEventListener('click', async () => {
@@ -427,7 +427,7 @@ $('rd-unreg-ok').addEventListener('click', async () => {
     remote = await window.jw.remote.unregister();
     resetUnreg();
   } catch {
-    $('rd-danger-desc').textContent = '해지하지 못했습니다. 네트워크를 확인하고 다시 시도하세요.';
+    $('rd-danger-desc').textContent = '해지하지 못했습니다. 네트워크를 확인하고 다시 시도하십시오.';
   } finally {
     $('rd-unreg-ok').disabled = false;
   }

@@ -69,9 +69,9 @@ class SchemaTooNew(Exception):
         self.required = required
         super().__init__(
             f"DB 스키마 버전({current})이 이 버전의 코드가 요구하는 버전({required})보다 높습니다. "
-            "제품을 이전 버전으로 되돌렸다면 DB 도 그 버전에서 만든 백업으로 복원해야 합니다 "
+            "제품을 이전 버전으로 롤백했다면 DB 도 그 버전에서 만든 백업으로 복원해야 합니다 "
             "(python -m app.cli restore <백업> — docs/data-safety.md). "
-            "되돌린 것이 아니라면 더 새 버전의 이미지로 기동하세요."
+            "롤백한 것이 아니라면 더 새 버전의 이미지로 기동하십시오."
         )
 
 
@@ -85,7 +85,7 @@ class SchemaOutdated(Exception):
         super().__init__(
             f"DB 스키마 버전({current})이 코드가 요구하는 버전({required})보다 낮고 "
             f"{ENV_MIGRATE_ON_START}=0 이라 자동으로 적용하지 않습니다. "
-            "먼저 python -m app.cli migrate 를 실행하세요. 대기 단계: " + ", ".join(pending)
+            "먼저 python -m app.cli migrate 를 실행하십시오. 대기 단계: " + ", ".join(pending)
         )
 
 
@@ -97,7 +97,7 @@ class SchemaDrift(Exception):
         shown = ", ".join(missing[:12]) + (f" 외 {len(missing) - 12}개" if len(missing) > 12 else "")
         super().__init__(
             "DB 에 없는 테이블·컬럼이 있습니다: " + shown
-            + " — python -m app.cli migrate --repair 로 채울 수 있습니다(데이터는 지우지 않습니다)."
+            + " — python -m app.cli migrate --repair 로 채울 수 있습니다(데이터는 삭제하지 않습니다)."
         )
 
 

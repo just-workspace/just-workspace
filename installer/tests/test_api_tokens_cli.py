@@ -389,7 +389,7 @@ def test_jw_apply_and_status(jw, capsys, monkeypatch):
     host, svc, answers = jw
     monkeypatch.setenv("JW_ADMIN_PASSWORD", "correct-horse-battery")
     assert cli.main(["apply", "--answers", str(answers)]) == 0
-    assert "설치가 끝났습니다" in capsys.readouterr().out and svc.store.locked
+    assert "설치가 완료되었습니다" in capsys.readouterr().out and svc.store.locked
     assert cli.main(["status"]) == 0
     assert "lock      done" in capsys.readouterr().out
     assert cli.main(["token"]) == 1

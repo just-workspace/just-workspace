@@ -59,7 +59,7 @@ export function MeetingsDeviceMenu({ onClose }: MeetingsDeviceMenuProps) {
     } catch (e) {
       console.error('[meet] 장치 전환 실패', kind, e)
       // 기존에는 콘솔에만 기록하여, 목록은 새 장치를 가리키나 실제로는 이전 장치가 사용되는 불일치가 있었음
-      addToast('error', t('meetings.device.switchFail', '장치를 바꾸지 못했습니다. 연결을 확인해 주세요'))
+      addToast('error', t('meetings.device.switchFail', '장치를 변경하지 못했습니다. 연결을 확인하십시오'))
       const prev = getActiveDevice(kind)
       if (prev && prev !== id) {
         reverted.current[kind] = prev

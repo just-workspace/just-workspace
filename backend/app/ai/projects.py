@@ -128,7 +128,7 @@ async def get_readable(db: AsyncSession, user: User, project_id: str) -> tuple[A
 async def get_owned(db: AsyncSession, user: User, project_id: str) -> AIProject:
     p, r = await get_readable(db, user, project_id)
     if r != "owner":
-        raise HTTPException(status_code=403, detail="공유받은 프로젝트는 읽기 전용입니다 — 주인만 고칠 수 있습니다")
+        raise HTTPException(status_code=403, detail="공유받은 프로젝트는 읽기 전용입니다 — 주인만 수정할 수 있습니다")
     return p
 
 

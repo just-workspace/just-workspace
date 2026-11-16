@@ -105,7 +105,7 @@ describe('진행 단계', () => {
     expect(screen.getByText('받은 메일 7건')).toBeTruthy()
     expect(screen.getByText('2.1s')).toBeTruthy()
     // AI 생성 표시에 모델 이름
-    expect(document.body.textContent).toContain('AI 생성 · qwen-27b · 내용을 확인한 뒤 쓰세요')
+    expect(document.body.textContent).toContain('AI 생성 · qwen-27b · 내용을 확인한 뒤 사용하십시오')
   })
 
   it('실패한 단계: 경고 요약 + 이유 + "이 결과 없이 계속했습니다"', async () => {
@@ -146,7 +146,7 @@ describe('진행 단계', () => {
     await act(async () => { fireEvent.keyDown(ta, { key: 'Enter' }) })
     const head = await screen.findByRole('button', { expanded: true, name: /메일 검색 “VPN”/ })
     expect(head.textContent).toContain('1/1')
-    expect(screen.getByRole('button', { name: '멈추기' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '중지' })).toBeTruthy()
     await act(async () => { release() })
     await waitFor(() => expect(document.body.textContent).toContain('AI 생성 · live-model'))
     const done = await screen.findByRole('button', { expanded: false, name: /단계 완료/ })
@@ -193,9 +193,9 @@ describe('피드백', () => {
 
     const down = screen.getByRole('button', { name: '별로예요' })
     await act(async () => { fireEvent.click(down) })
-    const dlg = await screen.findByRole('dialog', { name: '어떤 점이 아쉬웠나요?' })
+    const dlg = await screen.findByRole('dialog', { name: '어떤 점이 아쉬웠습니까?' })
     expect(fbCalls()[1].opts.body).toMatchObject({ rating: 'down', reasons: [], include_conversation: false })
-    expect(dlg.textContent).toContain('대화 내용은 아래를 켤 때만 함께 보냅니다')
+    expect(dlg.textContent).toContain('대화 내용은 아래를 활성화할 때만 함께 보냅니다')
     const box = screen.getByRole('checkbox', { name: '이 대화 내용도 함께 보내기' }) as HTMLInputElement
     expect(box.checked).toBe(false)
     await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '사실과 다름' })) })
@@ -203,13 +203,13 @@ describe('피드백', () => {
     await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: '보내기' })) })
     await waitFor(() => expect(fbCalls().length).toBe(3))
     expect(fbCalls()[2].opts.body).toMatchObject({ rating: 'down', reasons: ['inaccurate'], include_conversation: false })
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: '어떤 점이 아쉬웠나요?' })).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '어떤 점이 아쉬웠습니까?' })).toBeNull())
 
     // 다시 싫어요(취소) → 다시 싫어요 → 첨부 켜고 보내기
     await act(async () => { fireEvent.click(down) })
     await waitFor(() => expect(fbCalls()[3].opts.body).toMatchObject({ rating: null }))
     await act(async () => { fireEvent.click(down) })
-    const dlg2 = await screen.findByRole('dialog', { name: '어떤 점이 아쉬웠나요?' })
+    const dlg2 = await screen.findByRole('dialog', { name: '어떤 점이 아쉬웠습니까?' })
     await act(async () => { fireEvent.click(within(dlg2).getByRole('checkbox', { name: '이 대화 내용도 함께 보내기' })) })
     await act(async () => { fireEvent.click(within(dlg2).getByRole('button', { name: '보내기' })) })
     await waitFor(() => expect(fbCalls().at(-1)!.opts.body).toMatchObject({ rating: 'down', include_conversation: true }))
@@ -228,7 +228,7 @@ describe('이어서 받기', () => {
     await openWith([savedAnswer({ content: '원인은 IKE', status: 'interrupted', steps: [], citations: [] })])
     const tile = await screen.findByRole('alert')
     expect(tile.textContent).toContain('답변이 중간에 끊겼습니다')
-    expect(tile.textContent).toContain('받은 부분까지는 저장됐습니다')
+    expect(tile.textContent).toContain('수신한 부분까지는 저장되었습니다')
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '이어서 받기' })) })
     expect(fetchMock).toHaveBeenCalledWith('/api/ai/conversations/c1/continue', expect.objectContaining({ method: 'POST' }))
     await waitFor(() => expect(document.querySelector('.ai-md')?.textContent).toContain('원인은 IKE 재협상 주기 불일치입니다.'))
@@ -237,7 +237,7 @@ describe('이어서 받기', () => {
     vi.unstubAllGlobals()
   })
 
-  it('멈춘 답변은 "답변을 멈췄습니다" + 이어서 받기, 제공자 미지원이면 다시 만들기로 바뀜', async () => {
+  it('멈춘 답변은 "답변을 중지했습니다" + 이어서 받기, 제공자 미지원이면 다시 만들기로 바뀜', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => sseResponse([
       ev('meta', { message_id: 'a1', model: 'm', ai_generated: true, mode: 'continue' }),
       ev('partial', { text: '앞부분' }),
@@ -246,7 +246,7 @@ describe('이어서 받기', () => {
       ev('done', { message_id: 'a1', status: 'complete', model: 'm', ai_generated: true }),
     ])))
     await openWith([savedAnswer({ content: '앞부분', status: 'stopped', steps: [], citations: [] })])
-    expect((await screen.findByRole('alert')).textContent).toContain('답변을 멈췄습니다')
+    expect((await screen.findByRole('alert')).textContent).toContain('답변을 중지했습니다')
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '이어서 받기' })) })
     await waitFor(() => expect(document.querySelector('.ai-md')?.textContent?.trim()).toBe('새 답변 전체'))
     vi.unstubAllGlobals()
@@ -258,7 +258,7 @@ describe('이어서 받기', () => {
       const body = new ReadableStream<Uint8Array>({
         start(ctl) {
           ctl.enqueue(enc.encode(ev('meta', { message_id: 'm-stop', model: 'm', ai_generated: true, mode: 'new' })))
-          ctl.enqueue(enc.encode(ev('token', { text: '받는 중' })))
+          ctl.enqueue(enc.encode(ev('token', { text: '다운로드 중' })))
           opts.signal.addEventListener('abort', () => ctl.error(new DOMException('aborted', 'AbortError')))
         },
       })
@@ -268,10 +268,10 @@ describe('이어서 받기', () => {
     const ta = document.querySelector('textarea')!
     fireEvent.change(ta, { target: { value: '길게 써 줘' } })
     await act(async () => { fireEvent.keyDown(ta, { key: 'Enter' }) })
-    await waitFor(() => expect(document.querySelector('.ai-md')?.textContent).toContain('받는 중'))
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '멈추기' })) })
+    await waitFor(() => expect(document.querySelector('.ai-md')?.textContent).toContain('다운로드 중'))
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '중지' })) })
     await waitFor(() => expect(api.calls.some(c => c.url === '/api/ai/messages/m-stop/stop')).toBe(true))
-    expect((await screen.findByRole('alert')).textContent).toContain('답변을 멈췄습니다')
+    expect((await screen.findByRole('alert')).textContent).toContain('답변을 중지했습니다')
     vi.unstubAllGlobals()
   })
 })

@@ -161,7 +161,7 @@ describe('승인 카드 — low', () => {
     await waitFor(() => expect(screen.getByRole('region', { name: t('approvals.card.executedLabel', { title: '위키 문서 만들기' }) })).toBeTruthy())
   })
 
-  it('편집 칸이 없으면 [수정]은 "대화로 고치기"(입력 칸 문장)', () => {
+  it('편집 칸이 없으면 [수정]은 "대화로 수정"(입력 칸 문장)', () => {
     const onCompose = vi.fn()
     renderCard(req({ editable: [] }), { onCompose })
     fireEvent.click(screen.getByRole('button', { name: t('approvals.card.edit') }))

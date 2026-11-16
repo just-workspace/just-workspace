@@ -88,7 +88,7 @@ async def test_edit_link_and_folder_link_unaffected(env):
     by = {i["name"]: i["preview"] for i in top["items"]}
     assert by["app.zip"] is None and by["r.docx"] is None and by["a.txt"] == "text" and by["pic.png"] == "image"
     e = await _err(fr.download_shared(token=folder.token, request=Req(), access=None, inline=True, sub="app.zip", db=env.db))
-    assert e.status_code == 403 and "미리 볼 수 없" in e.detail and "내려받기가 막혀" in e.detail
+    assert e.status_code == 403 and "미리 볼 수 없" in e.detail and "다운로드가 막혀" in e.detail
     # 묶음(2개 이상)은 미리보기가 없어 거부 — filesdec_followup_test.py
 
 

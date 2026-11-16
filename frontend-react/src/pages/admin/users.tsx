@@ -235,7 +235,7 @@ export default function AdminUsersPage() {
   }
   async function reset2fa(u: AdminUser) {
     if (!await confirmBox(
-      t('admin.users.reset2faBody', '이 사용자의 2단계 인증과 복구 코드를 지우고, 열려 있는 로그인을 모두 끊습니다. 인증 앱을 잃어버린 본인이 요청했는지 확인하세요.'),
+      t('admin.users.reset2faBody', '이 사용자의 2단계 인증과 복구 코드를 삭제하고, 열려 있는 로그인을 모두 끊습니다. 인증 앱을 잃어버린 본인이 요청했는지 확인하십시오.'),
       { title: t('admin.users.reset2faTitle', `${nameOf(u)} — 2단계 인증 초기화`, { name: nameOf(u) }), confirmLabel: t('admin.users.reset2faConfirm', '초기화'), danger: true },
     )) return
     try {

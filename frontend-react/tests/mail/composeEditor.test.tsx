@@ -15,9 +15,9 @@ describe('MailComposeEditor', () => {
   it('빈 본문엔 자리표시(data-placeholder), 툴바 굵게·밑줄은 StarterKit v3 내장 확장으로 동작', async () => {
     const onHtml = vi.fn()
     let handle: any = null
-    render(<MailComposeEditor ref={h => { handle = h }} placeholder="내용을 입력하세요" onUpdateHtml={onHtml} />)
+    render(<MailComposeEditor ref={h => { handle = h }} placeholder="내용을 입력하십시오" onUpdateHtml={onHtml} />)
     const empty = document.querySelector('.mail-compose-editor .ProseMirror p.is-editor-empty')
-    expect(empty?.getAttribute('data-placeholder')).toBe('내용을 입력하세요')
+    expect(empty?.getAttribute('data-placeholder')).toBe('내용을 입력하십시오')
     await act(async () => { handle.setContent('<p>본문</p>') })
     expect(onHtml).toHaveBeenLastCalledWith('<p>본문</p>')   // v3: setContent(content, { emitUpdate: true })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '굵게 (Ctrl B)' })) })

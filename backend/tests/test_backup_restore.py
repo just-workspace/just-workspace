@@ -542,7 +542,7 @@ async def test_admin_backup_records_honest_status(db_session, stack, tmp_path, m
 
     stack.fail["pg_dump -U workspace -d workspace"] = 1
     rec = await service.run_backup(db_session, kind="scheduled")
-    assert rec.status == "failed" and "DB 를 뜨지 못했습니다" in rec.error and rec.path == ""
+    assert rec.status == "failed" and "DB 를 덤프하지 못했습니다" in rec.error and rec.path == ""
 
     assert await service.delete_backup(db_session, rec.id) is True
 

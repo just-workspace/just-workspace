@@ -108,7 +108,7 @@ rm -f "$body"
 expect "로그인한 계정은 관리자" True "$(curl -s -b "$jar" "$H/api/auth/me" | json_get 'd["is_admin"]')"
 head -c 100000 /dev/urandom > "$E2E_WORK/up.bin"
 expect "올리기" 200 "$(curl -s -b "$jar" -H "Origin: $H" -o /dev/null -w '%{http_code}' -F "file=@$E2E_WORK/up.bin;filename=e2e-manual.bin" "$H/api/files/upload?path=my/")"
-expect "내려받기" 200 "$(curl -s -b "$jar" -o "$E2E_WORK/down.bin" -w '%{http_code}' "$H/api/files/download?path=my/e2e-manual.bin")"
+expect "다운로드" 200 "$(curl -s -b "$jar" -o "$E2E_WORK/down.bin" -w '%{http_code}' "$H/api/files/download?path=my/e2e-manual.bin")"
 check "올린 것과 내려받은 것이 같다" cmp "$E2E_WORK/up.bin" "$E2E_WORK/down.bin"
 
 say "scripts/update.sh — 소스로 다시 빌드해 올리기와 이미지 되돌리기"

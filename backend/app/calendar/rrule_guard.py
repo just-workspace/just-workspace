@@ -63,7 +63,7 @@ def check_rrule(rule: str | None) -> str | None:
     p = _parts(r)
     freq = (p.get("FREQ") or "").upper()
     if freq not in ALLOWED_FREQ:
-        raise RRuleRejected("반복 주기는 매시간·매일·매주·매월·매년만 쓸 수 있습니다")
+        raise RRuleRejected("반복 주기는 매시간·매일·매주·매월·매년만 사용할 수 있습니다")
     try:
         interval = int(p.get("INTERVAL") or "1")
         count = int(p["COUNT"]) if "COUNT" in p else None
@@ -78,7 +78,7 @@ def check_rrule(rule: str | None) -> str | None:
     per_slot = _n(p.get("BYMINUTE")) * _n(p.get("BYSECOND"))
     if freq == "HOURLY":
         if per_slot > 1:
-            raise RRuleRejected("매시간 반복은 한 시간에 한 번만 됩니다")
+            raise RRuleRejected("매시간 반복은 한 시간에 한 번만 가능합니다")
     else:
         if _n(p.get("BYHOUR")) * per_slot > MAX_PER_DAY:
             raise RRuleRejected("하루 반복 횟수가 너무 많습니다")

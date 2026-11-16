@@ -148,7 +148,7 @@ async def get_current_user(
     if security_policy.totp_setup_required(pol, user) and security_policy.path_blocked(request.url.path):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="2단계 인증을 먼저 설정하세요 (설정 › 보안)",
+            detail="2단계 인증을 먼저 설정하십시오 (설정 › 보안)",
             headers={"X-Totp-Setup-Required": "1"},
         )
 

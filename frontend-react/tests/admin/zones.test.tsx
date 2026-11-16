@@ -73,7 +73,7 @@ function renderPage() {
 }
 const called = (method: string, url: string) => api.calls.filter(c => c.method === method && c.url === url)
 const zoneRow = (id: string) => screen.getByTestId(`zone-${id}`)
-const toggle = (name: string) => screen.getByRole('switch', { name: `${name} 켜기` })
+const toggle = (name: string) => screen.getByRole('switch', { name: `${name} 활성화` })
 const toasts = () => toastStore.getState().toasts.map((x: any) => `${x.type}:${x.message ?? x.title}`)
 const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } })
 
@@ -93,8 +93,8 @@ describe('관리 › 구역 — 목록', () => {
     expect(screen.getAllByRole('switch')).toHaveLength(8)
     expect(screen.queryByText('상태 감시')).toBeNull()
     expect(zoneRow('mail').dataset.state).toBe('on')
-    expect(screen.getByTestId('zone-mail-status').textContent).toBe('켜짐')
-    expect(screen.getByTestId('zone-meetings-status').textContent).toBe('꺼짐')
+    expect(screen.getByTestId('zone-mail-status').textContent).toBe('사용')
+    expect(screen.getByTestId('zone-meetings-status').textContent).toBe('사용 안 함')
     expect(within(zoneRow('docs')).getByText('+2 GB')).toBeTruthy()
     expect(within(zoneRow('chat')).getByText('추가 없음')).toBeTruthy()
     expect(within(zoneRow('rbi')).getByText('+0.1 GB')).toBeTruthy()
@@ -113,7 +113,7 @@ describe('관리 › 구역 — 목록', () => {
     api.routes[`GET ${B}/zones`] = () => listing({}, {
       installer: { available: false, reason: 'not_configured' }, memory: { need_mb: 7000, have_mb: null, nominal_mb: null, ok: null } })
     renderPage()
-    expect((await screen.findByTestId('zones-readonly')).textContent).toContain('이 설치는 설치 관리자 없이 구성돼 여기서 구역을 바꿀 수 없습니다.')
+    expect((await screen.findByTestId('zones-readonly')).textContent).toContain('이 설치는 설치 관리자 없이 구성돼 여기서 구역을 변경할 수 없습니다.')
     expect(screen.getAllByRole('switch').every(s => (s as HTMLButtonElement).disabled)).toBe(true)
     expect(toggle('메일').getAttribute('aria-checked')).toBe('true')
     expect(screen.queryByRole('button', { name: '메일 설정' })).toBeNull()
@@ -149,28 +149,28 @@ describe('관리 › 구역 — 켜기 창', () => {
     api.routes[`POST ${B}/zones/meetings/enable`] = () => job()
     api.routes[`GET ${B}/jobs/job1`] = () => job()
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '회의 켜기' }))
-    expect(await screen.findByRole('heading', { name: '회의 켜기 · 1/3 설정' })).toBeTruthy()
+    fireEvent.click(await screen.findByRole('switch', { name: '회의 활성화' }))
+    expect(await screen.findByRole('heading', { name: '회의 활성화 · 1/3 설정' })).toBeTruthy()
     expect((await screen.findByTestId('meet-ip')).textContent).toContain('203.0.113.24')
     // 중계를 비활성화하고 무손실을 활성화 — 선택 값이 그대로 전송됨
-    fireEvent.click(screen.getByRole('radio', { name: /쓰지 않음/ }))
+    fireEvent.click(screen.getByRole('radio', { name: /사용 안 함/ }))
     fireEvent.click(screen.getByRole('checkbox', { name: /무손실 오디오/ }))
     fireEvent.click(screen.getByRole('button', { name: '다음' }))
-    expect(await screen.findByRole('heading', { name: '회의 켜기 · 2/3 메모리와 포트 확인' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '회의 활성화 · 2/3 메모리와 포트 확인' })).toBeTruthy()
     expect(called('POST', `${B}/zones/meetings/check`)[0].body).toEqual({ settings: { turn: false, lossless_audio: true } })
-    expect(screen.getByTestId('zone-dialog-memory').textContent).toBe('7 GB → 8 GB · 서버 16 GB 안에 들어옵니다')
+    expect(screen.getByTestId('zone-dialog-memory').textContent).toBe('7 GB → 8 GB · 서버 16 GB 이내입니다')
     expect(screen.getByTestId('zone-dialog-ports').textContent).toBe('TCP 7881 · UDP 7882-7892 · UDP 4433')
     // 이전 단계로 복귀해도 선택 값 유지
     fireEvent.click(screen.getByRole('button', { name: '이전' }))
-    expect(screen.getByRole('radio', { name: /쓰지 않음/ }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('radio', { name: /사용 안 함/ }).getAttribute('aria-checked')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: '다음' }))
-    fireEvent.click(await screen.findByRole('button', { name: '켜기' }))
+    fireEvent.click(await screen.findByRole('button', { name: '활성화' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(called('POST', `${B}/zones/meetings/enable`)[0].body).toEqual({ settings: { turn: false, lossless_audio: true } })
     // 행 안에서 받기·설정·연결
     await waitFor(() => expect(zoneRow('meetings').dataset.state).toBe('busy'))
-    expect(screen.getByTestId('zone-meetings-status').textContent).toBe('켜는 중')
-    expect(screen.getByTestId('zone-meetings-stage-pull').textContent).toContain('받기')
+    expect(screen.getByTestId('zone-meetings-status').textContent).toBe('활성화 중')
+    expect(screen.getByTestId('zone-meetings-stage-pull').textContent).toContain('다운로드')
     expect(screen.getByTestId('zone-meetings-stage-pull').textContent).toContain('완료')
     expect(screen.getByTestId('zone-meetings-stage-configure').textContent).toContain('진행 중')
     expect(screen.getByTestId('zone-meetings-stage-connect').textContent).toContain('대기')
@@ -184,11 +184,11 @@ describe('관리 › 구역 — 켜기 창', () => {
     api.routes[`GET ${B}/zones/meetings/settings`] = () => ({ zone: 'meetings', enabled: false, settings: {}, detected: { public_ip: null } })
     api.routes[`POST ${B}/zones/meetings/check`] = () => check()
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '회의 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: '회의 활성화' }))
     expect((await screen.findByTestId('meet-ip')).textContent).toContain('공인 주소를 확인하지 못했습니다.')
     const next = screen.getByRole('button', { name: '다음' }) as HTMLButtonElement
     expect(next.disabled).toBe(true)
-    expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('공인 주소가 있어야 다음으로 갈 수 있습니다.')
+    expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('공인 주소가 있어야 다음 단계로 진행할 수 있습니다.')
     type('공인 주소', '203.0.113')
     expect(next.disabled).toBe(true)
     type('공인 주소', '203.0.113.9')
@@ -201,11 +201,11 @@ describe('관리 › 구역 — 켜기 창', () => {
   it('메모리를 넘으면 [켜기]가 꺼지고 이유가 보인다', async () => {
     api.routes[`POST ${B}/zones/sso/check`] = () => check({ ports: ['389/tcp', '636/tcp'], memory: { need_mb: 17500, have_mb: 15900, nominal_mb: 16384, ok: false } })
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: 'SSO·LDAP 제공 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: 'SSO·LDAP 제공 활성화' }))
     // 설정이 없는 애드온은 두 단계 — 즉시 메모리와 포트 확인
-    expect(await screen.findByRole('heading', { name: 'SSO·LDAP 제공 켜기 · 1/2 메모리와 포트 확인' })).toBeTruthy()
-    expect((await screen.findByTestId('zone-dialog-memory')).textContent).toBe('켜면 17.5 GB · 이 서버의 메모리 16 GB를 넘어 켤 수 없습니다')
-    expect((screen.getByRole('button', { name: '켜기' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(await screen.findByRole('heading', { name: 'SSO·LDAP 제공 활성화 · 1/2 메모리와 포트 확인' })).toBeTruthy()
+    expect((await screen.findByTestId('zone-dialog-memory')).textContent).toBe('활성화하면 17.5 GB · 이 서버의 메모리 16 GB를 초과하여 활성화할 수 없습니다')
+    expect((screen.getByRole('button', { name: '활성화' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.queryByRole('button', { name: '이전' })).toBeNull()
     expect(called('POST', `${B}/zones/sso/enable`)).toHaveLength(0)
   })
@@ -215,11 +215,11 @@ describe('관리 › 구역 — 켜기 창', () => {
     api.routes[`POST ${B}/zones/rbi/enable`] = () => job({ zone: 'rbi' })
     api.routes[`GET ${B}/jobs/job1`] = () => job({ zone: 'rbi' })
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '격리 브라우저 켜기' }))
-    expect(await screen.findByRole('heading', { name: '격리 브라우저 켜기 · 1/2 메모리와 포트 확인' })).toBeTruthy()
+    fireEvent.click(await screen.findByRole('switch', { name: '격리 브라우저 활성화' }))
+    expect(await screen.findByRole('heading', { name: '격리 브라우저 활성화 · 1/2 메모리와 포트 확인' })).toBeTruthy()
     expect((await screen.findByTestId('zone-dialog-ports')).textContent).toBe('없음')
     expect(screen.getByText('새로 열 포트가 없습니다')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '켜기' }))
+    fireEvent.click(screen.getByRole('button', { name: '활성화' }))
     await waitFor(() => expect(called('POST', `${B}/zones/rbi/enable`)[0]?.body).toEqual({ settings: null }))
     await waitFor(() => expect(zoneRow('rbi').dataset.state).toBe('busy'))
   })
@@ -231,13 +231,13 @@ describe('관리 › 구역 — 켜기 창', () => {
     api.routes[`POST ${B}/probe/smtp`] = () => ({ status, detail: null })
     api.routes[`POST ${B}/zones/mail/check`] = () => check({ ports: [] })
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '메일 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: '메일 활성화' }))
     // 내장: 메일 도메인 필수
     const next = await screen.findByRole('button', { name: '다음' }) as HTMLButtonElement
-    await waitFor(() => expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('메일 도메인을 입력해야 다음으로 갈 수 있습니다.'))
+    await waitFor(() => expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('메일 도메인을 입력해야 다음 단계로 진행할 수 있습니다.'))
     expect(next.disabled).toBe(true)
     fireEvent.click(screen.getByRole('radio', { name: /외부 발신 서버/ }))
-    expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('발신 서버 연결이 확인돼야 다음으로 갈 수 있습니다.')
+    expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('발신 서버 연결이 확인되어야 다음 단계로 진행할 수 있습니다.')
     type('서버 주소', 'smtp.example.com')
     type('계정', 'sender@example.com')
     type('비밀번호', 'pw-1')
@@ -270,7 +270,7 @@ describe('관리 › 구역 — 켜기 창', () => {
       { id: 'spf', name: 'example.com', type: 'TXT', expected: 'v=spf1 mx ~all', current: ['v=spf1 -all'], status: 'different' },
     ] })
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '메일 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: '메일 활성화' }))
     expect(await screen.findByText('메일 주소는 이름@example.com 형태가 됩니다.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '다시 확인' }))
     expect(await screen.findByText('아직 없음')).toBeTruthy()
@@ -287,7 +287,7 @@ describe('관리 › 구역 — 켜기 창', () => {
     api.routes[`GET ${B}/zones/mail/settings`] = () => ({ zone: 'mail', enabled: false, settings: { kind: 'builtin', mail_domain: 'example.com' }, detected: {} })
     api.routes[`POST ${B}/probe/mail-records`] = () => { throw fail(501, 'installer_unsupported') }
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '메일 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: '메일 활성화' }))
     fireEvent.click(await screen.findByRole('button', { name: '다시 확인' }))
     expect(await screen.findByText('이 설치 관리자에서는 레코드를 여기서 확인할 수 없습니다.')).toBeTruthy()
   })
@@ -297,9 +297,9 @@ describe('관리 › 구역 — 켜기 창', () => {
     api.routes[`POST ${B}/probe/ai`] = () => ({ status: 'ok', http_status: 200, models: [] })
     api.routes[`POST ${B}/zones/ai/check`] = () => check()
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: 'AI 도우미 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: 'AI 도우미 활성화' }))
     const next = await screen.findByRole('button', { name: '다음' }) as HTMLButtonElement
-    await waitFor(() => expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('키 연결이 확인돼야 다음으로 갈 수 있습니다.'))
+    await waitFor(() => expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('키 연결이 확인되어야 다음 단계로 진행할 수 있습니다.'))
     expect(next.disabled).toBe(true)
     fireEvent.click(screen.getByRole('radio', { name: 'OpenAI' }))
     type('API 키', 'sk-test')
@@ -319,14 +319,14 @@ describe('관리 › 구역 — 켜기 창', () => {
     api.routes[`GET ${B}/zones/git/settings`] = () => ({ zone: 'git', enabled: false, settings: { version: 'tested', custom_version: null }, detected: {} })
     api.routes[`POST ${B}/zones/git/check`] = () => check({ ports: ['2222/tcp'] })
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 활성화' }))
     const next = await screen.findByRole('button', { name: '다음' }) as HTMLButtonElement
     await waitFor(() => expect(next.disabled).toBe(false))
     expect(screen.queryByText('연동을 확인하지 않은 버전')).toBeNull()
     fireEvent.click(screen.getByRole('radio', { name: /직접 지정/ }))
     expect(screen.getByText('연동을 확인하지 않은 버전')).toBeTruthy()
     expect(next.disabled).toBe(true)
-    expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('받을 버전을 적어야 다음으로 갈 수 있습니다.')
+    expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('다운로드할 버전을 입력해야 다음 단계로 진행할 수 있습니다.')
     type('버전', '1.25.3')
     fireEvent.click(next)
     await waitFor(() => expect(called('POST', `${B}/zones/git/check`)[0]?.body).toEqual({ settings: { version: 'custom', custom_version: '1.25.3' } }))
@@ -337,12 +337,12 @@ describe('관리 › 구역 — 켜기 창', () => {
     api.routes[`GET ${B}/zones/git/settings`] = () => ({ zone: 'git', enabled: false, settings: { version: 'latest' }, detected: {} })
     api.routes[`POST ${B}/zones/git/check`] = () => { throw fail(422, 'settings_invalid', { errors: [{ field: 'version', code: 'invalid_value' }] }) }
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 활성화' }))
     const next = await screen.findByRole('button', { name: '다음' }) as HTMLButtonElement
     await waitFor(() => expect(next.disabled).toBe(false))
     fireEvent.click(next)
     expect((await screen.findByTestId('zone-dialog-error')).textContent).toContain('version: invalid_value')
-    expect(screen.getByRole('heading', { name: '코드 저장소 켜기 · 1/3 설정' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '코드 저장소 활성화 · 1/3 설정' })).toBeTruthy()
   })
 })
 
@@ -366,9 +366,9 @@ describe('관리 › 구역 — 진행 · 실패 · 완료 직후', () => {
       stages: [{ id: 'pull', status: 'done' }, { id: 'configure', status: 'done' }, { id: 'connect', status: 'done' }] })
     await waitFor(() => expect(zoneRow('meetings').dataset.state).toBe('fresh'))
     const fresh = zoneRow('meetings').textContent || ''
-    expect(fresh).toContain('방금 켰습니다. 왼쪽 메뉴에 추가됐습니다.')
+    expect(fresh).toContain('방금 활성화했습니다. 왼쪽 메뉴에 추가됐습니다.')
     expect(fresh).toContain('TCP 7881 · UDP 7882-7892 포트를 공유기나 방화벽에서 열었는지 확인합니다.')
-    expect(screen.getByTestId('zone-meetings-status').textContent).toBe('켜짐')
+    expect(screen.getByTestId('zone-meetings-status').textContent).toBe('사용')
     // 모듈 목록과 설치된 구역을 재조회하여 메뉴에 반영
     await waitFor(() => expect(platformStore.getState().modules).toEqual([{ id: 'meetings', enabled: true }]))
     await waitFor(() => expect(siteConfigStore.getState().zones).toEqual(['mail', 'meetings']))
@@ -387,7 +387,7 @@ describe('관리 › 구역 — 진행 · 실패 · 완료 직후', () => {
     api.routes[`GET ${B}/zones`] = () => listing({ rbi: { enabled: true, job: job({ zone: 'rbi', status: 'done', stages: [] }) } })
     renderPage()
     await waitFor(() => expect(zoneRow('rbi').dataset.state).toBe('fresh'))
-    expect(zoneRow('rbi').textContent).toContain('방금 켰습니다.')
+    expect(zoneRow('rbi').textContent).toContain('방금 활성화했습니다.')
     expect(zoneRow('rbi').textContent).not.toContain('왼쪽 메뉴')
     expect(zoneRow('rbi').textContent).not.toContain('포트를 공유기')
   })
@@ -415,7 +415,7 @@ describe('관리 › 구역 — 진행 · 실패 · 완료 직후', () => {
     expect(zoneRow('meetings').dataset.state).toBe('busy')
     up = true
     await waitFor(() => expect(screen.queryByTestId('zones-reconnecting')).toBeNull())
-    expect(screen.getByTestId('zone-meetings-status').textContent).toBe('켜는 중')
+    expect(screen.getByTestId('zone-meetings-status').textContent).toBe('활성화 중')
   })
 
   it('켜기 실패: 꺼진 채로 남고, 기록 보기·다시 시도·꺼진 채로 두기', async () => {
@@ -427,24 +427,24 @@ describe('관리 › 구역 — 진행 · 실패 · 완료 직후', () => {
     renderPage()
     await waitFor(() => expect(zoneRow('meetings').dataset.state).toBe('failed'))
     const r = within(zoneRow('meetings'))
-    expect(screen.getByTestId('zone-meetings-status').textContent).toBe('켜기 실패')
-    expect(r.getByText('회의에 필요한 이미지를 받지 못했습니다.')).toBeTruthy()
-    expect(zoneRow('meetings').textContent).toContain('이 구역은 꺼진 채로 있고, 다른 구역은 그대로 동작합니다. 서버가 인터넷에 나갈 수 있는지 확인하고 다시 시도합니다.')
+    expect(screen.getByTestId('zone-meetings-status').textContent).toBe('활성화 실패')
+    expect(r.getByText('회의에 필요한 이미지를 다운로드하지 못했습니다.')).toBeTruthy()
+    expect(zoneRow('meetings').textContent).toContain('이 구역은 비활성화된 상태로 유지되고, 다른 구역은 그대로 동작합니다. 서버가 인터넷에 연결할 수 있는지 확인하고 다시 시도합니다.')
     expect(zoneRow('meetings').textContent).not.toContain('오프라인 업데이트')
     expect(toggle('회의').getAttribute('aria-checked')).toBe('false')
     // 기록 보기
-    const logBtn = r.getByRole('button', { name: '기록 보기' })
+    const logBtn = r.getByRole('button', { name: '로그 보기' })
     expect(logBtn.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(logBtn)
     await waitFor(() => expect(screen.getByTestId('zone-meetings-log').textContent).toContain('실패: pull_failed'))
     expect(logBtn.getAttribute('aria-expanded')).toBe('true')
-    expect(r.getByRole('button', { name: '기록 내려받기' })).toBeTruthy()
+    expect(r.getByRole('button', { name: '로그 다운로드' })).toBeTruthy()
     // 다시 시도 — 입력해 둔 설정이 없으므로(화면 재진입 후) 창부터 표시
     fireEvent.click(r.getByRole('button', { name: '다시 시도' }))
-    expect(await screen.findByRole('heading', { name: '회의 켜기 · 1/3 설정' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '회의 활성화 · 1/3 설정' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '취소' }))
     // 꺼진 채로 두기
-    fireEvent.click(r.getByRole('button', { name: '꺼진 채로 두기' }))
+    fireEvent.click(r.getByRole('button', { name: '비활성화 상태로 두기' }))
     await waitFor(() => expect(zoneRow('meetings').dataset.state).toBe('off'))
     expect(called('DELETE', `${B}/zones/meetings/job`)).toHaveLength(1)
   })
@@ -471,10 +471,10 @@ describe('관리 › 구역 — 끄기', () => {
     api.routes[`POST ${B}/zones/docs/disable`] = () => { current = job({ id: 'job9', kind: 'disable', zone: 'docs', stages: [{ id: 'disconnect', status: 'running' }, { id: 'configure', status: 'pending' }] }); return current }
     api.routes[`GET ${B}/jobs/job9`] = () => current
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '문서 편집·위키·게시판 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: '문서 편집·위키·게시판 활성화' }))
     const dialog = await screen.findByRole('alertdialog')
-    expect(within(dialog).getByText('문서 편집·위키·게시판 구역을 끌까요?')).toBeTruthy()
-    expect(screen.getByTestId('zones-off-body').textContent).toBe('메뉴에서 이 구역의 화면이 사라집니다. 메모리 2 GB가 비워집니다. 데이터는 남아 있고, 다시 켜면 그대로 보입니다.')
+    expect(within(dialog).getByText('문서 편집·위키·게시판 구역을 비활성화하시겠습니까?')).toBeTruthy()
+    expect(screen.getByTestId('zones-off-body').textContent).toBe('메뉴에서 이 구역의 화면이 사라집니다. 메모리 2 GB가 비워집니다. 데이터는 남아 있고, 다시 활성화하면 그대로 표시됩니다.')
     // 취소 시 변화 없음
     fireEvent.click(within(dialog).getByRole('button', { name: '취소' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
@@ -482,44 +482,44 @@ describe('관리 › 구역 — 끄기', () => {
     expect(toggle('문서 편집·위키·게시판').getAttribute('aria-checked')).toBe('true')
 
     fireEvent.click(toggle('문서 편집·위키·게시판'))
-    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: '끄기' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: '비활성화' }))
     await waitFor(() => expect(zoneRow('docs').dataset.state).toBe('busy'))
     expect(screen.queryByRole('alertdialog')).toBeNull()
-    expect(screen.getByTestId('zone-docs-status').textContent).toBe('끄는 중')
-    expect(zoneRow('docs').textContent).toContain('열려 있는 화면을 닫고 구역을 멈추는 중입니다. 데이터는 그대로 둡니다.')
+    expect(screen.getByTestId('zone-docs-status').textContent).toBe('비활성화 중')
+    expect(zoneRow('docs').textContent).toContain('열려 있는 화면을 닫고 구역을 중지하는 중입니다. 데이터는 그대로 둡니다.')
     expect(toggle('문서 편집·위키·게시판').getAttribute('aria-checked')).toBe('false')
     expect((toggle('문서 편집·위키·게시판') as HTMLButtonElement).disabled).toBe(true)
 
     current = { ...current, status: 'done', stages: [{ id: 'disconnect', status: 'done' }, { id: 'configure', status: 'done' }] }
     await waitFor(() => expect(zoneRow('docs').dataset.state).toBe('fresh'))
-    expect(zoneRow('docs').textContent).toContain('껐습니다. 데이터는 그대로 있고, 다시 켜면 그대로 보입니다.')
-    expect(screen.getByTestId('zone-docs-status').textContent).toBe('꺼짐')
+    expect(zoneRow('docs').textContent).toContain('비활성화했습니다. 데이터는 그대로 있고, 다시 활성화하면 그대로 표시됩니다.')
+    expect(screen.getByTestId('zone-docs-status').textContent).toBe('사용 안 함')
   })
 
   it('메뉴도 메모리도 없는 구역은 그 문장을 뺀다', async () => {
     api.routes[`GET ${B}/zones`] = () => listing({ chat: { menu: false } })
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '채팅 켜기' }))
-    expect((await screen.findByTestId('zones-off-body')).textContent).toBe('데이터는 남아 있고, 다시 켜면 그대로 보입니다.')
+    fireEvent.click(await screen.findByRole('switch', { name: '채팅 활성화' }))
+    expect((await screen.findByTestId('zones-off-body')).textContent).toBe('데이터는 남아 있고, 다시 활성화하면 그대로 표시됩니다.')
   })
 
   it('끄기 실패: 켜진 채로 남는다', async () => {
     api.routes[`GET ${B}/zones`] = () => listing({ docs: { job: job({ kind: 'disable', zone: 'docs', status: 'failed', stages: [{ id: 'disconnect', status: 'failed' }, { id: 'configure', status: 'pending' }] }) } })
     renderPage()
     await waitFor(() => expect(zoneRow('docs').dataset.state).toBe('failed'))
-    expect(screen.getByTestId('zone-docs-status').textContent).toBe('끄기 실패')
-    expect(zoneRow('docs').textContent).toContain('문서 편집·위키·게시판 구역을 끄지 못했습니다.')
-    expect(zoneRow('docs').textContent).toContain('이 구역은 켜진 채로 있습니다.')
+    expect(screen.getByTestId('zone-docs-status').textContent).toBe('비활성화 실패')
+    expect(zoneRow('docs').textContent).toContain('문서 편집·위키·게시판 구역을 비활성화하지 못했습니다.')
+    expect(zoneRow('docs').textContent).toContain('이 구역은 활성화된 상태로 유지됩니다.')
     expect(toggle('문서 편집·위키·게시판').getAttribute('aria-checked')).toBe('true')
-    expect(within(zoneRow('docs')).queryByRole('button', { name: '꺼진 채로 두기' })).toBeNull()
+    expect(within(zoneRow('docs')).queryByRole('button', { name: '비활성화 상태로 두기' })).toBeNull()
   })
 
   it('다른 작업이 진행 중이면 알린다', async () => {
     api.routes[`POST ${B}/zones/docs/disable`] = () => { throw fail(409, 'busy') }
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '문서 편집·위키·게시판 켜기' }))
-    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: '끄기' }))
-    await waitFor(() => expect(toasts()).toContain('error:다른 작업이 진행 중입니다. 끝난 뒤 다시 시도하세요.'))
+    fireEvent.click(await screen.findByRole('switch', { name: '문서 편집·위키·게시판 활성화' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: '비활성화' }))
+    await waitFor(() => expect(toasts()).toContain('error:다른 작업이 진행 중입니다. 완료된 뒤 다시 시도하십시오.'))
   })
 })
 
@@ -534,10 +534,10 @@ describe('관리 › 구역 — 켜진 구역의 설정 다시 열기', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'AI 도우미 설정' }))
     expect(await screen.findByRole('heading', { name: 'AI 도우미 설정' })).toBeTruthy()
     const save = await screen.findByRole('button', { name: '저장' }) as HTMLButtonElement
-    await waitFor(() => expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('바꾼 내용이 없습니다.'))
+    await waitFor(() => expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('변경한 내용이 없습니다.'))
     expect(save.disabled).toBe(true)
     fireEvent.click(screen.getByRole('radio', { name: /지금 연결/ }))
-    expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('키 연결이 확인돼야 다음으로 갈 수 있습니다.')
+    expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('키 연결이 확인되어야 다음 단계로 진행할 수 있습니다.')
     type('API 키', 'sk-new')
     fireEvent.click(screen.getByRole('button', { name: '연결 확인' }))
     await waitFor(() => expect(save.disabled).toBe(false))
@@ -571,7 +571,7 @@ describe('관리 › 구역 — 켜진 구역의 설정 다시 열기', () => {
     fireEvent.click(await screen.findByRole('button', { name: '메일 설정' }))
     const pw = await screen.findByLabelText('비밀번호') as HTMLInputElement
     expect(pw.value).toBe('')
-    expect(pw.placeholder).toBe('저장된 비밀번호를 씁니다')
+    expect(pw.placeholder).toBe('저장된 비밀번호를 사용합니다')
     type('서버 주소', 'smtp2.example.com')
     fireEvent.click(screen.getByRole('button', { name: '연결 확인' }))
     await waitFor(() => expect(screen.getByTestId('verify-status').textContent).toBe('발신 서버 연결 확인됨'))
@@ -599,7 +599,7 @@ describe('관리 › 구역 — 검증된 버전 · 켜기 전 주의', () => {
     api.routes[`GET ${B}/zones`] = () => listing({}, { git_verified_version: '1.25.3' })
     api.routes[`GET ${B}/zones/git/settings`] = () => ({ zone: 'git', enabled: false, settings: { version: 'tested' }, detected: {}, verified_version: '1.25.4' })
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 활성화' }))
     const tested = await screen.findByRole('radio', { name: /검증된 버전/ })
     await waitFor(() => expect(tested.textContent).toContain('1.25.4'))
     expect(screen.getByRole('radio', { name: /최신/ }).textContent).not.toContain('1.25')
@@ -609,14 +609,14 @@ describe('관리 › 구역 — 검증된 버전 · 켜기 전 주의', () => {
     api.routes[`GET ${B}/zones`] = () => listing({}, { git_verified_version: '1.25.3' })
     api.routes[`GET ${B}/zones/git/settings`] = () => { throw fail(502, 'installer_error') }
     const first = renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 활성화' }))
     expect((await screen.findByRole('radio', { name: /검증된 버전/ })).textContent).toContain('1.25.3')
     first.unmount()
 
     api.routes[`GET ${B}/zones`] = () => listing()
     api.routes[`GET ${B}/zones/git/settings`] = () => ({ zone: 'git', enabled: false, settings: { version: 'tested' }, detected: {} })
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 활성화' }))
     expect((await screen.findByRole('radio', { name: /검증된 버전/ })).textContent).toBe('검증된 버전이 워크스페이스 버전과 연동을 확인한 버전입니다')
   })
 
@@ -633,26 +633,26 @@ describe('관리 › 구역 — 검증된 버전 · 켜기 전 주의', () => {
       ],
     })
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: '코드 저장소 활성화' }))
     fireEvent.click(await screen.findByRole('button', { name: '다음' }))
     const box = await screen.findByTestId('zone-dialog-cautions')
-    expect(box.textContent).toContain('켜기 전에 확인할 것')
+    expect(box.textContent).toContain('활성화 전 확인 사항')
     const items = [...box.querySelectorAll('li')].map(li => li.textContent)
     expect(items).toEqual([
-      '임시 인증서로는 코드 저장소의 로그인 연동이 동작하지 않습니다. 켜지기는 하지만 연결이 보류되고, 인증서를 발급한 뒤 다시 연결할 수 있습니다.',
-      '공유기에서 이 서버로 포트를 넘겨야 밖에서 접속됩니다: TCP 2222 · UDP 7882-7892',
-      '프록시를 거치지 않는 이름(mail.example.com, meet.example.com)에는 자체 서명 인증서를 씁니다. 메일 앱에서 인증서 경고가 뜰 수 있습니다.',
-      '계정의 메일 주소는 아이디@example.com 꼴이 됩니다.',
+      '임시 인증서로는 코드 저장소의 로그인 연동이 동작하지 않습니다. 활성화는 되지만 연동이 보류되고, 인증서를 발급한 뒤 다시 연결할 수 있습니다.',
+      '공유기에서 이 서버로 포트 포워딩을 설정해야 외부에서 접속됩니다: TCP 2222 · UDP 7882-7892',
+      '프록시를 거치지 않는 이름(mail.example.com, meet.example.com)에는 자체 서명 인증서를 사용합니다. 메일 앱에서 인증서 경고가 표시될 수 있습니다.',
+      '계정의 메일 주소는 아이디@example.com 형식이 됩니다.',
       '확인이 필요한 항목이 있습니다. (something_new)',
     ])
     // 주의는 차단하지 않음 — 켜기 가능
-    expect((screen.getByRole('button', { name: '켜기' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: '활성화' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('주의가 없으면 그 상자를 그리지 않는다', async () => {
     api.routes[`POST ${B}/zones/rbi/check`] = () => check()
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: '격리 브라우저 켜기' }))
+    fireEvent.click(await screen.findByRole('switch', { name: '격리 브라우저 활성화' }))
     await screen.findByTestId('zone-dialog-memory')
     expect(screen.queryByTestId('zone-dialog-cautions')).toBeNull()
   })
@@ -677,10 +677,10 @@ describe('관리 › 구역 — 연결 보류 · 다시 연결', () => {
     api.routes[`GET ${B}/zones`] = () => listing(pendingGit)
     renderPage()
     await waitFor(() => expect(zoneRow('git').dataset.state).toBe('pending'))
-    expect(screen.getByTestId('zone-git-status').textContent).toBe('연결 보류')
+    expect(screen.getByTestId('zone-git-status').textContent).toBe('연동 보류')
     const line = screen.getByTestId('zone-git-pending')
-    expect(line.textContent).toContain('연결 보류')
-    expect(line.textContent).toContain('접속 주소의 인증서가 신뢰되는 인증서로 바뀌면 다시 연결할 수 있습니다.')
+    expect(line.textContent).toContain('연동 보류')
+    expect(line.textContent).toContain('접속 주소의 인증서가 신뢰되는 인증서로 변경되면 다시 연결할 수 있습니다.')
     expect(within(line).getByRole('button', { name: '코드 저장소 다시 연결' })).toBeTruthy()
     expect(toggle('코드 저장소').getAttribute('aria-checked')).toBe('true')      // 활성화된 구역
     expect(screen.queryByTestId('zone-mail-pending')).toBeNull()
@@ -717,9 +717,9 @@ describe('관리 › 구역 — 연결 보류 · 다시 연결', () => {
     await waitFor(() => expect(zoneRow('git').dataset.state).toBe('failed'))
     expect(screen.getByTestId('zone-git-status').textContent).toBe('연결 실패')
     expect(zoneRow('git').textContent).toContain('코드 저장소의 로그인 연동을 아직 연결하지 못했습니다.')
-    expect(zoneRow('git').textContent).toContain('이 구역은 켜진 채로 있습니다.')
+    expect(zoneRow('git').textContent).toContain('이 구역은 활성화된 상태로 유지됩니다.')
     expect(screen.queryByTestId('zone-git-pending')).toBeNull()                 // 실패 행이 대신 안내
-    expect(screen.queryByRole('button', { name: '꺼진 채로 두기' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '비활성화 상태로 두기' })).toBeNull()
     fireEvent.click(within(zoneRow('git')).getByRole('button', { name: '다시 시도' }))
     await waitFor(() => expect(called('POST', `${B}/zones/git/reconnect`)).toHaveLength(1))
     await waitFor(() => expect(zoneRow('git').dataset.state).toBe('busy'))
@@ -732,7 +732,7 @@ describe('관리 › 구역 — 연결 보류 · 다시 연결', () => {
     api.routes[`POST ${B}/zones/git/reconnect`] = () => { throw fail(409, 'busy') }
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: '코드 저장소 다시 연결' }))
-    await waitFor(() => expect(toasts()).toEqual(['error:다른 작업이 진행 중입니다. 끝난 뒤 다시 시도하세요.']))
+    await waitFor(() => expect(toasts()).toEqual(['error:다른 작업이 진행 중입니다. 완료된 뒤 다시 시도하십시오.']))
 
     state = 'ok'
     api.routes[`POST ${B}/zones/git/reconnect`] = () => { throw fail(409, 'not_pending') }

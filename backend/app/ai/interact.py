@@ -216,7 +216,7 @@ async def answer(user_id: str, qid: str, body: dict) -> dict:
             if not sel and not other:
                 raise InteractError("invalid_argument", f"답하지 않은 질문이 있습니다: {q['question']}")
             if not q["multiSelect"] and len(sel) + (1 if other else 0) > 1:
-                raise InteractError("invalid_argument", f"하나만 고를 수 있는 질문입니다: {q['question']}")
+                raise InteractError("invalid_argument", f"하나만 선택할 수 있는 질문입니다: {q['question']}")
             ans.append({"question": q["question"], "selected": sel, "other": other})
         rec.update(status="answered", answer={"answers": ans})
     else:

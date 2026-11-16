@@ -409,7 +409,7 @@ async def _notify_done(db, job: AIArtifactJob) -> None:
         if job.kind == "files_zip":
             head = (f"파일 {ok}개를 압축했습니다" if ok == len(items) else f"파일 {ok}/{len(items)}개를 압축했습니다")
         else:
-            head = (f"파일 {ok}개를 다 만들었습니다" if ok == len(items) else f"파일 {ok}/{len(items)}개를 만들었습니다")
+            head = (f"파일 {ok}개를 모두 만들었습니다" if ok == len(items) else f"파일 {ok}/{len(items)}개를 만들었습니다")
         if ok == 0:
             head = "파일을 만들지 못했습니다"
         link = f"/ai?c={job.conversation_id}" if job.conversation_id else "/ai"

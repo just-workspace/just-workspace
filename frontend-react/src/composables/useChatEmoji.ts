@@ -58,7 +58,7 @@ export const EMOJI_CATEGORIES: ReadonlyArray<{ key: EmojiCategoryKey; glyph: str
   { key: 'symbols', glyph: '🔣', groups: [8] },
   { key: 'flags', glyph: '🏁', groups: [9] },
 ]
-/** 사용 이력이 없을 때의 "자주 쓴" 칸 */
+/** 사용 이력이 없을 때의 "자주 사용" 칸 */
 export const DEFAULT_FREQUENT = ['👍', '👀', '🎉', '🔥', '✅', '🙏', '😂', '❤️', '🚀', '💯', '🤔', '👏', '😅', '🙌', '⏰', '📌', '🐛', '☕']
 /** 피부색 수식(1–5) */
 export const SKIN_MODIFIERS = ['\u{1F3FB}', '\u{1F3FC}', '\u{1F3FD}', '\u{1F3FE}', '\u{1F3FF}']

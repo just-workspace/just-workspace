@@ -240,7 +240,7 @@ async def test_waiting_request_notifies_host_with_actions(env, monkeypatch):
     assert "최수아" in n.title and n.type == "meeting_invite"
     assert n.link == "/meetings/room/room%20b"
     acts = json.loads(n.actions_json)
-    assert [a["label"] for a in acts] == ["들이기", "거절"]
+    assert [a["label"] for a in acts] == ["입장 허용", "거절"]
     assert acts[0]["url"] == "/api/meetings/rooms/room%20b/requests/r1/approve"
 
 

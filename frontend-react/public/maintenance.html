@@ -51,7 +51,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>
       </span>
       <h1 id="title" role="status">업데이트 중입니다</h1>
-      <p id="body">관리자가 워크스페이스를 새 버전으로 바꾸고 있습니다. 끝나면 이 화면이 자동으로 다시 열립니다.</p>
+      <p id="body">관리자가 워크스페이스를 새 버전으로 변경하고 있습니다. 완료되면 이 화면이 자동으로 다시 열립니다.</p>
     </div>
     <dl id="facts" hidden>
       <div id="row-started" hidden><dt id="l-started">시작</dt><dd id="started"></dd></div>
@@ -59,7 +59,7 @@
     </dl>
     <div class="late" id="late" hidden>
       <strong id="late-title">예상보다 오래 걸리고 있습니다.</strong>
-      <span><span id="late-body">계속 이 화면이면 관리자에게 알려 주세요.</span> <span id="contact"></span></span>
+      <span><span id="late-body">이 화면이 계속 표시되면 관리자에게 알려 주십시오.</span> <span id="contact"></span></span>
     </div>
     <button type="button" id="retry">지금 다시 연결</button>
   </main>
@@ -72,9 +72,9 @@
         started: 'Started', expected: 'Expected time', late: 'This is taking longer than expected.', lateBody: 'If this screen stays, let your admin know.',
         retry: 'Reconnect now', min: ' min', sec: ' sec'
       } : {
-        title: '업데이트 중입니다', body: '관리자가 워크스페이스를 새 버전으로 바꾸고 있습니다. 끝나면 이 화면이 자동으로 다시 열립니다.',
-        titleRestore: '점검 중입니다', bodyRestore: '관리자가 워크스페이스를 이전 버전으로 되돌리고 있습니다. 끝나면 이 화면이 자동으로 다시 열립니다.',
-        started: '시작', expected: '예상 시간', late: '예상보다 오래 걸리고 있습니다.', lateBody: '계속 이 화면이면 관리자에게 알려 주세요.',
+        title: '업데이트 중입니다', body: '관리자가 워크스페이스를 새 버전으로 변경하고 있습니다. 완료되면 이 화면이 자동으로 다시 열립니다.',
+        titleRestore: '점검 중입니다', bodyRestore: '관리자가 워크스페이스를 이전 버전으로 복원하고 있습니다. 완료되면 이 화면이 자동으로 다시 열립니다.',
+        started: '시작', expected: '예상 시간', late: '예상보다 오래 걸리고 있습니다.', lateBody: '이 화면이 계속 표시되면 관리자에게 알려 주십시오.',
         retry: '지금 다시 연결', min: '분', sec: '초'
       };
       var $ = function (id) { return document.getElementById(id); };

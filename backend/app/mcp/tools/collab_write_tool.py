@@ -191,7 +191,7 @@ def _clip(s: object, n: int = 60) -> str:
 
 register(Tool(
     name="board_create_post",
-    title="게시글 쓰기",
+    title="게시글 작성",
     description="Write a new post on a board (Markdown/plain text). Get board ids from board_list_posts "
                 "without arguments. Pinned/notice/must-read flags are not available.",
     scope="mcp:write", risk="low",
@@ -212,14 +212,14 @@ register(Tool(
 
 register(Tool(
     name="board_undo_create_post",
-    title="쓴 게시글 되돌리기",
+    title="작성한 게시글 실행 취소",
     description="Delete a post that board_create_post just created." + UNDO_HINT,
     scope="mcp:write", risk="low",
     parameters={"type": "object", "properties": {
         "post_id": {"type": "string", "x-label": "게시글 id", "x-hidden": True},
         "token": UNDO_TOKEN_PARAM,
     }, "required": ["post_id", "token"]},
-    handler=board_undo_create_post, summarizer=lambda a: "쓴 게시글 삭제",
+    handler=board_undo_create_post, summarizer=lambda a: "작성한 게시글 삭제",
 ))
 
 register(Tool(
@@ -243,7 +243,7 @@ register(Tool(
 
 register(Tool(
     name="board_undo_add_comment",
-    title="단 댓글 되돌리기",
+    title="단 댓글 실행 취소",
     description="Delete a comment that board_add_comment just created." + UNDO_HINT,
     scope="mcp:write", risk="low",
     parameters={"type": "object", "properties": {
@@ -294,7 +294,7 @@ register(Tool(
 
 register(Tool(
     name="chat_undo_send_message",
-    title="보낸 채팅 되돌리기",
+    title="보낸 채팅 실행 취소",
     description="Delete a message that chat_send_message just sent." + UNDO_HINT,
     scope="mcp:write", risk="low",
     parameters={"type": "object", "properties": {

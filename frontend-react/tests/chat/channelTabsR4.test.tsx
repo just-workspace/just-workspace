@@ -84,12 +84,12 @@ describe('ChatChannelTabsManage', () => {
     const onSaved = vi.fn()
     renderIn(<ChatChannelTabsManage channelId="c1" channelName="개발" summary={summary()} onSaved={onSaved} />)
     expect(screen.getByText('#개발 탭 관리')).toBeTruthy()
-    expect(screen.getByText('회의 모듈 꺼짐 — 관리자에게 요청')).toBeTruthy()
-    const meetSwitch = screen.getByRole('switch', { name: '회의 탭 보이기' })
+    expect(screen.getByText('회의 모듈 사용 안 함 — 관리자에게 요청')).toBeTruthy()
+    const meetSwitch = screen.getByRole('switch', { name: '회의 탭 표시' })
     expect(meetSwitch.hasAttribute('disabled') || meetSwitch.getAttribute('aria-disabled') === 'true').toBe(true)
-    fireEvent.click(screen.getByRole('switch', { name: '작업 탭 보이기' }))
+    fireEvent.click(screen.getByRole('switch', { name: '작업 탭 표시' }))
     // 손잡이 ↑ 로 위키를 파일 위로 이동
-    fireEvent.keyDown(screen.getByRole('button', { name: '위키 탭 옮기기' }), { key: 'ArrowUp' })
+    fireEvent.keyDown(screen.getByRole('button', { name: '위키 탭 이동' }), { key: 'ArrowUp' })
     fireEvent.click(screen.getByRole('button', { name: '저장' }))
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
     const put = api.calls.find(c => c.opts?.method === 'PUT')!

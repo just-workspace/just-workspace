@@ -6,9 +6,9 @@
  *   node admin-cert-ui.cjs --url https://ws.e2e.example --addr 192.168.10.20 --password-file <파일> [옵션]
  *
  *   --addr <주소>        접속 주소가 DNS 에 없을 때 해당 이름을 이 주소로 해석한다
- *   --cert <파일> --key <파일>   업로드할 인증서·개인 키(PEM). 지정 시 "인증서 올리기"까지 수행한다
+ *   --cert <파일> --key <파일>   업로드할 인증서·개인 키(PEM). 지정 시 "인증서 업로드"까지 수행한다
  *   --expect-pending yes|no      업로드 후에도 코드 저장소 연결이 보류로 남는 것이 정상인지 여부(사설 CA 이면 yes)   기본 yes
- *   --ca <파일>          해당 인증서를 발급한 CA 의 인증서(PEM). 지정 시 보류 안내에서 "CA 인증서 올리기"까지 수행한다 —
+ *   --ca <파일>          해당 인증서를 발급한 CA 의 인증서(PEM). 지정 시 보류 안내에서 "CA 인증서 업로드"까지 수행한다 —
  *                        서버 인증서 1장만 업로드한 후(--cert 에 체인을 포함하지 않는다) CA 만 별도 업로드하여 연결이 재개되는지 확인
  *   --only cert|zones|storage    한 화면만 검수
  *   --storage nfs|local          저장소 상태 카드에 표시될 종류
@@ -63,7 +63,7 @@ const want = name => !opt.only || opt.only === name
     if (before && before.temporary) expect('임시 인증서 경고가 보인다', await page.locator('[data-testid=cert-temporary]').count() === 1)
     await snap('cert-card')
     if (opt.cert && opt.key) {
-      await page.getByRole('button', { name: '인증서 올리기' }).click()
+      await page.getByRole('button', { name: '인증서 업로드' }).click()
       const files = page.locator('[role=dialog] input[type=file]')
       await files.nth(0).setInputFiles(opt.cert)
       await files.nth(1).setInputFiles(opt.key)
@@ -80,7 +80,7 @@ const want = name => !opt.only || opt.only === name
       await page.reload()
       await card.waitFor({ state: 'visible', timeout: 60000 })
       const after = (await api('/api/admin/system/cert')).body
-      expect('종류가 "올린 인증서"로 바뀌었다', after && after.mode === 'upload' && /올린 인증서/.test(await card.innerText()), JSON.stringify(after && after.mode))
+      expect('종류가 "업로드한 인증서"로 바뀌었다', after && after.mode === 'upload' && /업로드한 인증서/.test(await card.innerText()), JSON.stringify(after && after.mode))
       expect('임시 인증서 경고가 사라졌다', after && after.temporary === false && await page.locator('[data-testid=cert-temporary]').count() === 0)
       expect(`보류된 구역 연결: ${opt['expect-pending'] === 'yes' ? '남아 있다(사설 CA)' : '없다'}`,
         after && (after.pending.length > 0) === (opt['expect-pending'] === 'yes'), JSON.stringify(after && after.pending))
@@ -89,8 +89,8 @@ const want = name => !opt.only || opt.only === name
         console.log('== 인증서 카드 — CA 인증서만 따로 올리기 ==')
         const need = page.locator('[data-testid=cert-ca-needed]')
         expect('올린 인증서에 발급 CA 가 없어 연결이 보류라는 안내가 보인다', await need.count() === 1 && /로그인 연동이 보류/.test(await need.innerText().catch(() => '')), (await card.innerText()).slice(0, 300))
-        expect('발급 CA 줄: 올리지 않았습니다', /올리지 않았습니다/.test(await page.locator('[data-testid=cert-ca]').innerText().catch(() => '')))
-        await need.getByRole('button', { name: 'CA 인증서 올리기' }).click()
+        expect('발급 CA 줄: 올리지 않았습니다', /업로드하지 않았습니다/.test(await page.locator('[data-testid=cert-ca]').innerText().catch(() => '')))
+        await need.getByRole('button', { name: 'CA 인증서 업로드' }).click()
         const dialog = page.locator('[role=dialog]')
         expect('CA 만 받는 창(파일 칸 하나, 인증서·개인 키는 그대로라는 안내)', await dialog.locator('input[type=file]').count() === 1 && /인증서와 개인 키는 그대로/.test(await dialog.innerText()))
         // 먼저 잘못된 파일(서버 인증서)을 업로드한다 — 창 내에 거부 사유가 표시된다
@@ -112,7 +112,7 @@ const want = name => !opt.only || opt.only === name
         await card.waitFor({ state: 'visible', timeout: 60000 })
         const trusted = (await api('/api/admin/system/cert')).body
         expect('보류됐던 구역 연결이 이어졌다', trusted && trusted.site_ca === true && trusted.pending.length === 0, JSON.stringify(trusted && { site_ca: trusted.site_ca, pending: trusted.pending }))
-        expect('안내가 사라지고 발급 CA 줄이 바뀌었다', await page.locator('[data-testid=cert-ca-needed]').count() === 0 && /믿습니다/.test(await page.locator('[data-testid=cert-ca]').innerText().catch(() => '')))
+        expect('안내가 사라지고 발급 CA 줄이 바뀌었다', await page.locator('[data-testid=cert-ca-needed]').count() === 0 && /신뢰합니다/.test(await page.locator('[data-testid=cert-ca]').innerText().catch(() => '')))
         await snap('cert-ca-after')
       }
     }
@@ -126,7 +126,7 @@ const want = name => !opt.only || opt.only === name
     const git = zones && [...(zones.zones || []), ...(zones.addons || [])].find(z => z.id === 'git')
     const body = await page.locator('body').innerText()
     if (git && git.pending) {
-      expect('코드 저장소 행에 "연결 보류"가 보인다', /연결 보류/.test(body))
+      expect('코드 저장소 행에 "연동 보류"가 보인다', /연동 보류/.test(body))
       expect('"다시 연결" 버튼이 있다', await page.getByRole('button', { name: /다시 연결/ }).count() >= 1)
       await snap('zones-pending')
       await page.getByRole('button', { name: /다시 연결/ }).first().click()
@@ -134,10 +134,10 @@ const want = name => !opt.only || opt.only === name
       await page.waitForTimeout(8000)
       const again = await page.locator('body').innerText()
       expect(`다시 연결 결과가 화면에 보인다(${opt['expect-pending'] === 'yes' ? '아직 연결하지 못함' : '연결됨'})`,
-        opt['expect-pending'] === 'yes' ? /연결하지 못했습니다|연결 실패|연결 보류/.test(again) : /다시 연결했습니다/.test(again) || !/연결 보류/.test(again), again.slice(0, 300))
+        opt['expect-pending'] === 'yes' ? /연결하지 못했습니다|연결 실패|연동 보류/.test(again) : /다시 연결했습니다/.test(again) || !/연동 보류/.test(again), again.slice(0, 300))
       await snap('zones-reconnect')
     } else {
-      expect('코드 저장소는 보류가 아니다(연결됨)', git && git.enabled && !/연결 보류/.test(body), JSON.stringify(git && { enabled: git.enabled, pending: git.pending }))
+      expect('코드 저장소는 보류가 아니다(연결됨)', git && git.enabled && !/연동 보류/.test(body), JSON.stringify(git && { enabled: git.enabled, pending: git.pending }))
       await snap('zones')
     }
     const jobs = await api('/api/admin/system/jobs')
@@ -167,7 +167,7 @@ const want = name => !opt.only || opt.only === name
       await page.goto(base + '/files')
       await page.waitForTimeout(6000)
       const files = await page.locator('body').innerText()
-      expect('파일 탭에 안내가 보인다', /저장소/.test(files) && /(올릴 수 없|응답하지 않|연결|끊)/.test(files), files.replace(/\s+/g, ' ').slice(0, 300))
+      expect('파일 탭에 안내가 보인다', /저장소/.test(files) && /(업로드할 수 없|응답하지 않|연결|끊)/.test(files), files.replace(/\s+/g, ' ').slice(0, 300))
       await snap('files-down')
     }
   }

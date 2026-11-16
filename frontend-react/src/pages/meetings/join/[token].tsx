@@ -297,7 +297,7 @@ function MeetingJoin() {
           setupRef.current?.stopPreview()
           await loadInfo()
           if (alive.current && stepRef.current === 'setup') {
-            addToast('info', t('meetings.join.requestLost', '입장 요청이 만료되었습니다. 다시 신청해 주세요'))
+            addToast('info', t('meetings.join.requestLost', '입장 요청이 만료되었습니다. 다시 신청하십시오'))
           }
         }
         /* 그 외(네트워크 오류)는 다음 주기에 재시도 */

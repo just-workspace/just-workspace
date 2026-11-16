@@ -158,7 +158,7 @@ async def test_maintenance_start_and_finish(env):
     assert state.notified == []
 
 
-@pytest.mark.parametrize("result,word", [("success", "마쳤습니다"), ("rolled_back", "되돌렸습니다"),
+@pytest.mark.parametrize("result,word", [("success", "완료했습니다"), ("rolled_back", "롤백했습니다"),
                                          ("rollback_failed", "실패했습니다")])
 async def test_auto_update_result_notifies_active_admins_once_each(env, result, word):
     client, state = env
@@ -168,7 +168,7 @@ async def test_auto_update_result_notifies_active_admins_once_each(env, result, 
     assert sorted(n["user"] for n in state.notified) == ["boss", "root"]
     assert all(word in n["title"] and n["type"] == "system" and n["link"] == "/admin/update" for n in state.notified)
     if result != "success":
-        assert all("1.0.0" in n["body"] and "멈춰" in n["body"] for n in state.notified)
+        assert all("1.0.0" in n["body"] and "중지되어" in n["body"] for n in state.notified)
 
 
 async def test_broadcast_failure_does_not_fail_the_event(env, monkeypatch):

@@ -348,7 +348,7 @@ async def site_sso(request: Request, db: AsyncSession = Depends(get_db)):
         return _no_store(RedirectResponse(f"/login?redirect={quote(back, safe='')}", status_code=302))
     user, wsid = got
     if not await _module_on(db):
-        return _no_store(PlainTextResponse("격리 브라우저 기능이 꺼져 있습니다", status_code=403))
+        return _no_store(PlainTextResponse("격리 브라우저 기능이 비활성화되어 있습니다", status_code=403))
     code = await issue_code({"uid": user.id, "wsid": wsid, "tv": user.token_version, "state": state, "iat": int(time.time())})
     q = urlencode({"code": code, "state": state})
     return _no_store(RedirectResponse(f"{origin}/auth/callback?{q}", status_code=302))

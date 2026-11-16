@@ -858,7 +858,7 @@ def _comment_to_dict(comment: PostComment, author: User | None) -> dict:
 # 읽음 = (글 열람 기록 PostReadLog) 또는 (본인 작성 글) 또는 (기준 시각 이전 글).
 # 기준 시각 = max(읽음 추적 시작 시각, 해당 게시판 "모두 읽음" 시각).
 # 읽음 추적 시작 시각(system_settings 'board.read_tracking_since')은 최초 사용 시 1회 결정된다 —
-# 기능 도입 이전 글이 전부 "안 읽음"으로 표시되는 것을 방지한다.
+# 기능 도입 이전 글이 전부 "읽지 않음"으로 표시되는 것을 방지한다.
 
 READ_SINCE_KEY = "board.read_tracking_since"
 

@@ -185,11 +185,11 @@ _STATUS_LABELS = {
     "canceled": "취소함",
     "rejected": "거절함",
     "expired": "만료됨 — 실행 안 함",
-    "undone": "되돌림",
+    "undone": "실행 취소됨",
     "failed": "실패",
 }
 # 선승인 — 카드 결정 대기 중 단계에 표시되는 문구
-WAITING_DETAIL = "승인 대기 — 아래 카드에서 실행하거나 취소하세요"
+WAITING_DETAIL = "승인 대기 — 아래 카드에서 실행하거나 취소하십시오"
 
 
 def status_label(status: str) -> str:

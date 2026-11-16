@@ -7,7 +7,7 @@
  * 모달(G 규격, 시안과 동일):
  *  · 켜기 1/2(520, 바깥 클릭으로 닫히지 않음): QR 136(bg-paper) + 설정 키(읽기 전용·복사) + 앱 코드 6자리(lg mono, "000 000").
  *    불일치 시 UiInput error. [다음 — 복구 코드] → POST /api/auth/2fa/enable.
- *  · 켜기 2/2 · 새로 발급 결과(480, 바깥 클릭으로 닫히지 않음): 복구 코드 10개 2열 mono 점선 틀 + [복사][.txt 받기]
+ *  · 켜기 2/2 · 새로 발급 결과(480, 바깥 클릭으로 닫히지 않음): 복구 코드 10개 2열 mono 점선 틀 + [복사][.txt 다운로드]
  *    + "저장했습니다" 체크 후에만 [완료] 가능.
  *  · 끄기(sm, danger): 인증 앱 코드 또는 복구 코드 — 입력 전에는 [끄기] 비활성. POST /api/auth/2fa/disable.
  *  · 새로 발급(480): warning 띠 "남은 코드 n개는 바로 못 쓰게 됩니다" + 인증 앱 코드 → POST /api/auth/2fa/recovery-codes → 2/2 와 동일한 틀.
@@ -313,7 +313,7 @@ export function SettingsTwoFactorSetupModal({ setup, code, codeError, working, o
 }
 
 /**
- * 켜기 2/2 · 새로 발급 결과(시안 #on2) — 480, 바깥 클릭으로 닫히지 않음. 복구 코드 10개 2열 mono 점선 틀 + [복사][.txt 받기],
+ * 켜기 2/2 · 새로 발급 결과(시안 #on2) — 480, 바깥 클릭으로 닫히지 않음. 복구 코드 10개 2열 mono 점선 틀 + [복사][.txt 다운로드],
  * "저장했습니다" 체크 후에만 [완료] 가능.
  */
 export function SettingsTwoFactorCodesModal({ codes, step = true, onCopy, onDownload, onClose }: {
@@ -323,7 +323,7 @@ export function SettingsTwoFactorCodesModal({ codes, step = true, onCopy, onDown
   step?: boolean
   /** [복사] */
   onCopy: () => void
-  /** [.txt 받기] */
+  /** [.txt 다운로드] */
   onDownload: () => void
   /** [완료] · ✕ · Esc */
   onClose: () => void

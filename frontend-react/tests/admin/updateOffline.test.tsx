@@ -53,10 +53,10 @@ describe('오프라인 — 파일 올리기', () => {
   it('빈 상태: 끌어다 놓는 자리와 받는 주소, 적용은 꺼져 있고 이유가 적혀 있다', async () => {
     await open(fx.offlines.empty())
     expect(screen.getByTestId('offline-drop')).toBeTruthy()
-    expect(screen.getByText('묶음 파일을 여기에 끌어다 놓습니다')).toBeTruthy()
-    expect(screen.getByText(/인터넷에 나갈 수 없는 서버는 묶음 파일로 업데이트합니다\./)).toBeTruthy()
+    expect(screen.getByText('오프라인 번들을 여기에 끌어다 놓습니다')).toBeTruthy()
+    expect(screen.getByText(/인터넷에 연결할 수 없는 서버는 오프라인 번들로 업데이트합니다\./)).toBeTruthy()
     expect(screen.getByText('https://downloads.example.com/just-workspace-offline.tar')).toBeTruthy()
-    expect(reason()).toBe('묶음 파일을 올리면 서명과 버전을 확인합니다.')
+    expect(reason()).toBe('오프라인 번들을 업로드하면 서명과 버전을 확인합니다.')
     expect(disabled(applyButton())).toBe(true)
     expect(screen.queryByTestId('offline-verdict')).toBeNull()
     expect(screen.queryByTestId('offline-images')).toBeNull()
@@ -71,29 +71,29 @@ describe('오프라인 — 파일 올리기', () => {
     // 올리는 중
     const card = await screen.findByTestId('offline-file')
     expect(text(card)).toContain('just-workspace-1.1.0-offline.tar')
-    expect(text(card)).toContain('올리는 중 · 0%')
+    expect(text(card)).toContain('업로드 중 · 0%')
     expect(uploads[0].path).toBe(`${B}/offline/bundle`)
     act(() => { uploads[0].progress(62) })
-    expect(text(card)).toContain('올리는 중 · 62%')
+    expect(text(card)).toContain('업로드 중 · 62%')
     expect(within(card).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('62')
     expect(within(card).getByRole('button', { name: '취소' })).toBeTruthy()
-    expect(reason()).toBe('다 올라가면 서명과 버전을 확인합니다.')
+    expect(reason()).toBe('업로드가 완료되면 서명과 버전을 확인합니다.')
     expect(disabled(applyButton())).toBe(true)
 
     // 검증 중
     await act(async () => { uploads[0].resolve(fx.offlines.verifying()) })
     expect(text(screen.getByTestId('offline-file'))).toContain('검증 중 · 서명과 버전을 확인하고 있습니다')
-    expect(reason()).toBe('검증이 끝나면 적용할 수 있습니다.')
+    expect(reason()).toBe('검증이 완료되면 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
 
     // 검증됨(재조회로 확인)
     const verdict = await screen.findByTestId('offline-verdict')
-    expect(text(verdict)).toContain('서명확인됨 · Just Workspace 공식 묶음')
+    expect(text(verdict)).toContain('서명확인됨 · Just Workspace 공식 오프라인 번들')
     expect(text(verdict)).toContain('버전1.0.0 → 1.1.0')
-    expect(text(verdict)).toContain('실린 것Just Workspace 이미지, 데스크톱·모바일 앱 설치 파일')
+    expect(text(verdict)).toContain('포함 항목Just Workspace 이미지, 데스크톱·모바일 앱 설치 파일')
     expect(text(verdict)).toContain('예상 중단 시간4분')
     expect(text(screen.getByTestId('offline-file'))).toContain('2.0 GB')
-    expect(within(screen.getByTestId('offline-file')).getByRole('button', { name: '바꾸기' })).toBeTruthy()
+    expect(within(screen.getByTestId('offline-file')).getByRole('button', { name: '변경' })).toBeTruthy()
     expect(text(screen.getByTestId('offline-tally'))).toBe('필요한 것은 모두 있음')
     expect(reason()).toBe('')
     expect(disabled(applyButton())).toBe(false)
@@ -102,8 +102,8 @@ describe('오프라인 — 파일 올리기', () => {
 
   it('다른 화면에서 올리는 중인 묶음도 올리는 중으로 보인다', async () => {
     await open(fx.offlines.uploading())
-    expect(text(screen.getByTestId('offline-file'))).toContain('올리는 중')
-    expect(reason()).toBe('다 올라가면 서명과 버전을 확인합니다.')
+    expect(text(screen.getByTestId('offline-file'))).toContain('업로드 중')
+    expect(reason()).toBe('업로드가 완료되면 서명과 버전을 확인합니다.')
     expect(disabled(applyButton())).toBe(true)
   })
 
@@ -123,9 +123,9 @@ describe('오프라인 — 파일 올리기', () => {
     const alert = screen.getByTestId('offline-alert')
     expect(alert.getAttribute('role')).toBe('alert')
     expect(text(alert)).toContain('서명이 맞지 않습니다.')
-    expect(text(alert)).toContain('공식 묶음 파일이 아니거나 옮기는 중에 손상됐습니다. 묶음 파일을 다시 받습니다.')
+    expect(text(alert)).toContain('공식 오프라인 번들이 아니거나 전송 중에 손상되었습니다. 오프라인 번들을 다시 다운로드합니다.')
     expect(text(screen.getByTestId('offline-verdict'))).toContain('서명서명 불일치')
-    expect(reason()).toBe('서명이 확인된 묶음 파일만 적용할 수 있습니다.')
+    expect(reason()).toBe('서명이 확인된 오프라인 번들만 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
     expect(screen.queryByTestId('offline-images')).toBeNull()
   })
@@ -134,17 +134,17 @@ describe('오프라인 — 파일 올리기', () => {
     await open(fx.offlines.versionTooLow())
     const alert = screen.getByTestId('offline-alert')
     expect(text(alert)).toContain('지금 버전보다 새 버전이 아닙니다.')
-    expect(text(alert)).toContain('이 묶음은 0.9.0 버전이고 지금은 1.0.0 버전입니다. 버전을 낮추려면 되돌림 탭에서 이전 버전을 복원합니다.')
+    expect(text(alert)).toContain('이 오프라인 번들은 0.9.0 버전이고 현재는 1.0.0 버전입니다. 버전을 낮추려면 롤백 탭에서 이전 버전을 복원합니다.')
     expect(text(screen.getByTestId('offline-verdict'))).toContain('버전0.9.0 · 지금 버전보다 새 버전이 아님')
     expect(text(screen.getByTestId('offline-verdict'))).toContain('서명확인됨')
-    expect(reason()).toBe('지금보다 새 버전의 묶음 파일만 적용할 수 있습니다.')
+    expect(reason()).toBe('지금보다 새 버전의 오프라인 번들만 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
   })
 
   it('묶음이 아니거나 내용이 어긋난 파일', async () => {
     await open(fx.offlines.invalid())
-    expect(text(screen.getByTestId('offline-alert'))).toContain('쓸 수 없는 묶음 파일입니다.')
-    expect(reason()).toBe('검증을 통과한 묶음 파일만 적용할 수 있습니다.')
+    expect(text(screen.getByTestId('offline-alert'))).toContain('사용할 수 없는 오프라인 번들입니다.')
+    expect(reason()).toBe('검증을 통과한 오프라인 번들만 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
   })
 
@@ -153,7 +153,7 @@ describe('오프라인 — 파일 올리기', () => {
     fireEvent.change(screen.getByTestId('offline-drop').querySelector('input[type="file"]')!, { target: { files: [file()] } })
     await screen.findByTestId('offline-file')
     await act(async () => { uploads[0].reject(fx.apiError(413, 'too_large', { limit: 1 })) })
-    expect(toasts()).toEqual(['error:파일이 너무 커서 올릴 수 없습니다. 서버에 옮겨 두고 경로를 지정하세요.'])
+    expect(toasts()).toEqual(['error:파일이 너무 커서 업로드할 수 없습니다. 서버에 복사해 두고 경로를 지정하십시오.'])
     expect(screen.getByTestId('offline-drop')).toBeTruthy()
   })
 })
@@ -166,15 +166,15 @@ describe('오프라인 — 추가로 필요한 이미지', () => {
       ['데이터베이스', '항상 필요', '있음'],
       ['캐시', '항상 필요', '있음'],
       ['웹 서버', '항상 필요', '있음'],
-      ['문서 편집기', '문서 구역 · 켜짐', '있음'],
-      ['회의 서버', '회의 구역 · 꺼짐', '필요 없음'],
-      ['코드 저장소', '코드 저장소 구역 · 꺼짐', '필요 없음'],
+      ['문서 편집기', '문서 구역 · 사용', '있음'],
+      ['회의 서버', '회의 구역 · 사용 안 함', '필요 없음'],
+      ['코드 저장소', '코드 저장소 구역 · 사용 안 함', '필요 없음'],
     ])
     // 행마다 이름이 포함된 버튼, 불필요한 행에는 없음
-    expect(screen.getByRole('button', { name: '데이터베이스 받는 명령 복사' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '문서 편집기 이미지 파일 올리기' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '회의 서버 받는 명령 복사' })).toBeNull()
-    expect(screen.getByText(/묶음 파일에는 Just Workspace 이미지만 들어 있습니다\./)).toBeTruthy()
+    expect(screen.getByRole('button', { name: '데이터베이스 다운로드 명령 복사' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '문서 편집기 이미지 파일 업로드' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '회의 서버 다운로드 명령 복사' })).toBeNull()
+    expect(screen.getByText(/오프라인 번들에는 Just Workspace 이미지만 들어 있습니다\./)).toBeTruthy()
     expect(within(screen.getByTestId('offline-images')).getByRole('table').className).toMatch(/min-w-\[620px\]/)
   })
 
@@ -183,7 +183,7 @@ describe('오프라인 — 추가로 필요한 이미지', () => {
     expect(imageState('onlyoffice')).toBe('없음')
     expect(screen.getByTestId('offline-image-onlyoffice').getAttribute('data-state')).toBe('missing')
     expect(text(screen.getByTestId('offline-tally'))).toBe('아직 갖춰지지 않은 것 1')
-    expect(reason()).toBe('필요한 이미지를 모두 올려야 적용할 수 있습니다.')
+    expect(reason()).toBe('필요한 이미지를 모두 업로드해야 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
     expect(screen.queryByTestId('offline-alert')).toBeNull()
   })
@@ -192,7 +192,7 @@ describe('오프라인 — 추가로 필요한 이미지', () => {
     on('GET', '/offline', seq(fx.offlines.imageVerifying(), fx.offlines.imageVerifying(), fx.offlines.verified()))
     await renderUpdate('/admin/update/offline')
     await waitFor(() => expect(imageState('onlyoffice')).toBe('검증 중'))
-    expect(reason()).toBe('올린 이미지의 검증이 끝나면 적용할 수 있습니다.')
+    expect(reason()).toBe('업로드한 이미지의 검증이 완료되면 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
     await waitFor(() => expect(imageState('onlyoffice')).toBe('있음'))
     expect(disabled(applyButton())).toBe(false)
@@ -203,27 +203,27 @@ describe('오프라인 — 추가로 필요한 이미지', () => {
     expect(imageState('onlyoffice')).toBe('해시 불일치')
     const alert = screen.getByTestId('offline-alert')
     expect(text(alert)).toContain('문서 편집기 이미지의 해시가 맞지 않습니다.')
-    expect(text(alert)).toContain('받는 명령을 다시 복사해 새로 받은 뒤 올립니다.')
-    expect(reason()).toBe('해시가 맞는 이미지를 올려야 적용할 수 있습니다.')
+    expect(text(alert)).toContain('다운로드 명령을 다시 복사해 새로 다운로드한 뒤 업로드합니다.')
+    expect(reason()).toBe('해시가 맞는 이미지를 업로드해야 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
   })
 
   it('받는 명령 복사', async () => {
     await open(fx.offlines.imageMissing())
-    fireEvent.click(screen.getByRole('button', { name: '문서 편집기 받는 명령 복사' }))
+    fireEvent.click(screen.getByRole('button', { name: '문서 편집기 다운로드 명령 복사' }))
     await waitFor(() => expect(clipboard.written).toEqual([fx.extraImages()[3].command]))
-    expect(toasts()).toEqual(['success:받는 명령을 복사했습니다'])
+    expect(toasts()).toEqual(['success:다운로드 명령을 복사했습니다'])
   })
 
   it('이미지 파일 올리기: 그 줄로 올라가고 결과가 반영된다', async () => {
     await open(fx.offlines.imageMissing())
-    fireEvent.click(screen.getByRole('button', { name: '문서 편집기 이미지 파일 올리기' }))
+    fireEvent.click(screen.getByRole('button', { name: '문서 편집기 이미지 파일 업로드' }))
     fireEvent.change(screen.getByTestId('offline-image-input'), { target: { files: [file('onlyoffice.tar')] } })
     await waitFor(() => expect(uploads).toHaveLength(1))
     expect(uploads[0].path).toBe(`${B}/offline/images/onlyoffice`)
     expect(uploads[0].file.name).toBe('onlyoffice.tar')
     act(() => { uploads[0].progress(40) })
-    expect(screen.getByText('올리는 중 · 40%')).toBeTruthy()
+    expect(screen.getByText('업로드 중 · 40%')).toBeTruthy()
     await act(async () => { uploads[0].resolve(fx.offlines.verified()) })
     expect(imageState('onlyoffice')).toBe('있음')
     expect(disabled(applyButton())).toBe(false)
@@ -256,10 +256,10 @@ describe('오프라인 — 서버에 있는 파일 경로', () => {
     await open(fx.offlines.empty())
     pathWay()
     expect(screen.queryByTestId('offline-drop')).toBeNull()
-    expect(value(screen.getByLabelText('서버에 있는 묶음 파일 경로'))).toBe('')
-    expect(screen.getByText('큰 파일은 서버에 먼저 옮겨 두고 경로를 알려 주는 편이 빠릅니다.')).toBeTruthy()
+    expect(value(screen.getByLabelText('서버에 있는 오프라인 번들 경로'))).toBe('')
+    expect(screen.getByText('큰 파일은 서버에 먼저 복사해 두고 경로를 지정하는 편이 빠릅니다.')).toBeTruthy()
     expect(disabled(screen.getByRole('button', { name: '파일 확인' }))).toBe(true)
-    expect(reason()).toBe('경로를 넣고 파일 확인을 눌러야 적용할 수 있습니다.')
+    expect(reason()).toBe('경로를 입력하고 파일 확인을 눌러야 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
   })
 
@@ -268,12 +268,12 @@ describe('오프라인 — 서버에 있는 파일 경로', () => {
     on('POST', '/offline/bundle-path', fx.offlines.pathVerifying())
     on('GET', '/offline', seq(fx.offlines.pathVerifying(), fx.offlines.pathVerified()))
     pathWay()
-    fireEvent.change(screen.getByLabelText('서버에 있는 묶음 파일 경로'), { target: { value: ' /data/in/bundle.tar ' } })
+    fireEvent.change(screen.getByLabelText('서버에 있는 오프라인 번들 경로'), { target: { value: ' /data/in/bundle.tar ' } })
     fireEvent.click(screen.getByRole('button', { name: '파일 확인' }))
 
     expect(text(await screen.findByTestId('offline-path-busy'))).toBe('확인 중 · 파일을 읽고 서명과 버전을 확인하고 있습니다')
     expect(called('POST', '/offline/bundle-path')[0].body).toEqual({ path: '/data/in/bundle.tar' })
-    expect(reason()).toBe('검증이 끝나면 적용할 수 있습니다.')
+    expect(reason()).toBe('검증이 완료되면 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
 
     expect(text(await screen.findByTestId('offline-path-ok'))).toBe('확인됨 · just-workspace-1.1.0-offline.tar · 2.0 GB')
@@ -287,9 +287,9 @@ describe('오프라인 — 서버에 있는 파일 경로', () => {
   it('파일 없음: 칸에 오류가 붙고 적용은 막힌다', async () => {
     await open(fx.offlines.pathMissing())
     // 경로로 지정한 오프라인 번들이 있으면 이 방식으로 열림
-    expect(screen.getByLabelText('서버에 있는 묶음 파일 경로').getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByLabelText('서버에 있는 오프라인 번들 경로').getAttribute('aria-invalid')).toBe('true')
     expect(screen.getByText('이 경로에 파일이 없거나 읽을 권한이 없습니다. 경로와 파일 권한을 확인합니다.')).toBeTruthy()
-    expect(reason()).toBe('읽을 수 있는 묶음 파일 경로를 넣어야 적용할 수 있습니다.')
+    expect(reason()).toBe('읽을 수 있는 오프라인 번들 경로를 입력해야 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
     expect(screen.queryByTestId('offline-verdict')).toBeNull()
   })
@@ -299,14 +299,14 @@ describe('오프라인 — 서버에 있는 파일 경로', () => {
     expect(text(screen.getByTestId('offline-alert'))).toContain('서명이 맞지 않습니다.')
     expect(text(screen.getByTestId('offline-verdict'))).toContain('서명서명 불일치')
     expect(screen.queryByTestId('offline-path-ok')).toBeNull()
-    expect(reason()).toBe('서명이 확인된 묶음 파일만 적용할 수 있습니다.')
+    expect(reason()).toBe('서명이 확인된 오프라인 번들만 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
   })
 
   it('경로 방식의 버전 낮음', async () => {
     await open(fx.offlines.pathVersionTooLow())
-    expect(text(screen.getByTestId('offline-alert'))).toContain('이 묶음은 0.9.0 버전이고 지금은 1.0.0 버전입니다.')
-    expect(reason()).toBe('지금보다 새 버전의 묶음 파일만 적용할 수 있습니다.')
+    expect(text(screen.getByTestId('offline-alert'))).toContain('이 오프라인 번들은 0.9.0 버전이고 현재는 1.0.0 버전입니다.')
+    expect(reason()).toBe('지금보다 새 버전의 오프라인 번들만 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
   })
 
@@ -314,7 +314,7 @@ describe('오프라인 — 서버에 있는 파일 경로', () => {
     await open(fx.offlines.pathImageMissing())
     expect(screen.getByTestId('offline-path-ok')).toBeTruthy()
     expect(imageState('onlyoffice')).toBe('없음')
-    expect(reason()).toBe('필요한 이미지를 모두 올려야 적용할 수 있습니다.')
+    expect(reason()).toBe('필요한 이미지를 모두 업로드해야 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
   })
 })

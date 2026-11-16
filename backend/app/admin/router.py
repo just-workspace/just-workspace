@@ -529,7 +529,7 @@ async def reject_user(
     if user_status(user) != "pending":
         raise HTTPException(
             status_code=400,
-            detail="가입 승인 대기 사용자만 거절할 수 있습니다(정지·활성 사용자는 삭제를 쓰세요)",
+            detail="가입 승인 대기 사용자만 거절할 수 있습니다(정지·활성 사용자는 삭제를 사용하십시오)",
         )
     # 아래에서 삭제되므로 감사 로그용으로 미리 확보한다.
     rejected_username = user.username
@@ -1339,7 +1339,7 @@ def reorder_wallpapers(names: list[str]) -> list[str]:
     names 는 현재 존재하는 파일 이름 전체(순서만 상이). 2단계 이름 변경으로 상호 덮어쓰기를 방지한다."""
     current = _wallpaper_files()
     if sorted(names) != sorted(current) or len(set(names)) != len(names):
-        raise HTTPException(status_code=400, detail="지금 있는 배경 이름 전부를 순서대로 보내야 합니다")
+        raise HTTPException(status_code=400, detail="지금 있는 배경 이름 전체를 순서대로 보내야 합니다")
     tmp: list[tuple[Path, str]] = []
     for i, n in enumerate(names):
         rest = n.split("-", 2)[2] if n.count("-") >= 2 else n.removeprefix("wallpaper")
@@ -1691,7 +1691,7 @@ _SSL_ERR = {
     "cert_invalid": "인증서로 읽을 수 없습니다",
     "domain_mismatch": "인증서가 이 워크스페이스 도메인을 포함하지 않습니다",
     "key_invalid": "개인 키로 읽을 수 없습니다",
-    "key_encrypted": "암호가 걸린 개인 키는 쓸 수 없습니다",
+    "key_encrypted": "암호가 걸린 개인 키는 사용할 수 없습니다",
     "key_mismatch": "인증서와 개인 키의 짝이 맞지 않습니다",
 }
 
@@ -1703,7 +1703,7 @@ async def inspect_ssl(
     admin: User = Depends(require_admin),
 ):
     """업로드 전 사전 검사(저장하지 않음) — 인증서의 도메인·발급자·유효 기간, 키 쌍 일치, 도메인 일치.
-    필드별 오류 코드(cert_error·key_error)를 개별 반환한다. ok 이면 [올리고 적용] 가능."""
+    필드별 오류 코드(cert_error·key_error)를 개별 반환한다. ok 이면 [업로드 후 적용] 가능."""
     from app.admin import ssl_inspect
 
     cert_data = await cert.read(ssl_inspect.MAX_BYTES + 1) if cert else None

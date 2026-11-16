@@ -44,7 +44,7 @@ async def _member_target(db: AsyncSession, space_id: str, member_user_id: str):
     if not space:
         raise HTTPException(404, "스페이스를 찾을 수 없습니다")
     if space.owner_id == member_user_id:
-        raise HTTPException(400, "소유자의 권한은 바꿀 수 없습니다")
+        raise HTTPException(400, "소유자의 권한은 변경할 수 없습니다")
     return space
 
 
@@ -265,7 +265,7 @@ async def update_page(
     base_version = data.pop("base_version", None)
     # 본문·제목을 변경하는 저장만 검사(이동·고정은 버전과 무관)
     if base_version is not None and ("content" in data or "title" in data) and page["version"] != base_version:
-        raise HTTPException(409, "다른 사람이 이 문서를 먼저 고쳤습니다")
+        raise HTTPException(409, "다른 사용자가 이 문서를 먼저 수정했습니다")
     try:
         return await service.update_page(db, page_id, str(user.id), **data)
     except service.WikiMoveError as e:

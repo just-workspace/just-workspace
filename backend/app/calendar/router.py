@@ -150,7 +150,7 @@ async def refresh_subscription(
     if wait > 0:
         raise HTTPException(
             status_code=429,
-            detail={"code": "too_soon", "message": "조금 전에 새로 받았습니다. 잠시 후 다시 시도하세요", "retry_after": wait},
+            detail={"code": "too_soon", "message": "조금 전에 새로 받았습니다. 잠시 후 다시 시도하십시오", "retry_after": wait},
             headers={"Retry-After": str(wait)},
         )
     return await subs.refresh(db, cal)

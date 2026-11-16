@@ -120,7 +120,7 @@ async def _fetch_google(token: str) -> list[dict]:
             )
             if r.status_code == 403:
                 raise SyncError(
-                    "연락처 읽기 권한이 없습니다. 메일 설정에서 이 계정을 한 번 다시 연동해주세요 "
+                    "연락처 읽기 권한이 없습니다. 메일 설정에서 이 계정을 한 번 다시 연동하십시오 "
                     "(연락처 스코프는 메일 스코프와 별개라 재동의가 필요합니다)."
                 )
             if r.status_code >= 400:
@@ -141,7 +141,7 @@ async def _fetch_microsoft(token: str) -> list[dict]:
             r = await client.get(url, headers={"Authorization": f"Bearer {token}"})
             if r.status_code in (401, 403):
                 raise SyncError(
-                    "연락처 읽기 권한이 없습니다. 메일 설정에서 이 계정을 한 번 다시 연동해주세요."
+                    "연락처 읽기 권한이 없습니다. 메일 설정에서 이 계정을 한 번 다시 연동하십시오."
                 )
             if r.status_code >= 400:
                 raise SyncError(f"Microsoft 연락처를 가져오지 못했습니다 ({r.status_code})")

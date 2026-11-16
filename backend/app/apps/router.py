@@ -75,7 +75,7 @@ async def build(user: User = Depends(get_current_user), db: AsyncSession = Depen
     _admin(user)
     repo = os.getenv("JW_HOST_REPO")
     if not repo:
-        raise HTTPException(status_code=400, detail="JW_HOST_REPO 미설정 — compose에 호스트 리포 경로를 지정하세요")
+        raise HTTPException(status_code=400, detail="JW_HOST_REPO 미설정 — compose에 호스트 리포 경로를 지정하십시오")
     url = (await _get(db, "app.target_url") or settings.app_url).rstrip("/")
     app_name = await _get(db, "app.app_name", "Just Workspace")
 

@@ -225,8 +225,8 @@ describe('그 밖 v-model', () => {
   it('UiChip 토글 + onClick', () => {
     const onUpdate = vi.fn()
     const onClick = vi.fn()
-    render(<UiChip label="안 읽음" modelValue={false} onUpdateModelValue={onUpdate} onClick={onClick} />)
-    fireEvent.click(screen.getByRole('button', { name: '안 읽음' }))
+    render(<UiChip label="읽지 않음" modelValue={false} onUpdateModelValue={onUpdate} onClick={onClick} />)
+    fireEvent.click(screen.getByRole('button', { name: '읽지 않음' }))
     expect(onUpdate).toHaveBeenCalledWith(true)
     expect(onClick).toHaveBeenCalled()
   })
@@ -249,7 +249,7 @@ describe('그 밖 v-model', () => {
 
   it('UiMenu 트리거로 열고 항목 고르기', () => {
     const onSelect = vi.fn()
-    render(<UiMenu label="파일 메뉴" items={[{ key: 'rename', label: '이름 바꾸기' }, { key: 'del', label: '삭제', danger: true }]} onSelect={onSelect} />)
+    render(<UiMenu label="파일 메뉴" items={[{ key: 'rename', label: '이름 변경' }, { key: 'del', label: '삭제', danger: true }]} onSelect={onSelect} />)
     fireEvent.click(screen.getByRole('button', { name: '파일 메뉴' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '삭제' }))
     expect(onSelect).toHaveBeenCalledWith('del')

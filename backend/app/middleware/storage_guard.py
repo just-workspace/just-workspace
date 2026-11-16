@@ -172,7 +172,7 @@ class StorageMarkerGuard:
                      reason, scope.get("method"), scope.get("path"))
         self._alert(reason)
         body = json.dumps({
-            "detail": "파일 저장소에 연결되어 있지 않아 저장할 수 없습니다. 잠시 뒤 다시 시도하세요.",
+            "detail": "파일 저장소에 연결되어 있지 않아 저장할 수 없습니다. 잠시 후 다시 시도하십시오.",
             "code": ERROR_CODE,
             "reason": reason,
         }, ensure_ascii=False).encode("utf-8")
@@ -224,8 +224,8 @@ async def notify_admins(reason: str) -> int:
                 await create_notification(
                     db, user_id, "system",
                     "파일 저장소에 연결되어 있지 않습니다",
-                    body="저장소 표식을 확인하지 못해 파일 저장을 막았습니다. 저장소 연결(네트워크 저장소·디스크)을 "
-                         f"확인하세요. (사유: {reason})",
+                    body="저장소 마커를 확인하지 못해 파일 저장을 막았습니다. 저장소 연결(네트워크 저장소·디스크)을 "
+                         f"확인하십시오. (사유: {reason})",
                     link="/admin/storage",
                 )
             return len(admin_ids)

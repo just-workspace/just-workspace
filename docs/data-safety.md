@@ -113,7 +113,7 @@ python -m app.cli schema-version      # 코드가 요구하는 버전 — 숫자
 20260101_030000-full/
   manifest.json
   db.dump                pg_dump -Fc
-  config.tar             설정 묶음(.env 포함). 암호를 주면 config.tar.enc
+  config.tar             설정 모음(.env 포함). 암호를 주면 config.tar.enc
   mail-config.tar.gz     메일 계정·DKIM 키
   mail-data.tar.gz       메일함
   mail-state.tar.gz      메일 상태

@@ -335,7 +335,7 @@ def _prev_share(args: dict) -> list[dict]:
     rows = [{"field": "path", "label": "파일", "before": None, "after": vp_label(args.get("path"))},
             {"field": "expires_in", "label": "만료", "before": None,
              "after": _EXPIRES_LABEL.get(str(args.get("expires_in") or "7d"), args.get("expires_in"))},
-            {"field": "allow_download", "label": "내려받기", "before": None,
+            {"field": "allow_download", "label": "다운로드", "before": None,
              "after": "허용" if args.get("allow_download", True) else "미리보기만"}]
     if args.get("password"):
         rows.append({"field": "password", "label": "비밀번호", "before": None, "after": "설정함"})
@@ -414,7 +414,7 @@ register(Tool(
 
 register(Tool(
     name="files_move",
-    title="파일 이동·이름 바꾸기",
+    title="파일 이동·이름 변경",
     description=(
         "Move a file or folder to another folder and/or rename it. Give `dst_folder` to move, "
         "`new_name` to rename, or both. Shares and comments follow the item. Needs co-owner "
@@ -438,7 +438,7 @@ register(Tool(
 
 register(Tool(
     name="files_undo_create",
-    title="만든 파일 되돌리기",
+    title="만든 파일 실행 취소",
     description="Delete a file/folder that files_write_text, files_create_folder or files_copy just created, "
                 "only if it is unchanged." + UNDO_HINT,
     scope="mcp:write", risk="low",

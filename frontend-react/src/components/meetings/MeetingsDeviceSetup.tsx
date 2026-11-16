@@ -204,7 +204,7 @@ export function MeetingsDeviceSetup({
   /** 진행 중인 장치 요청을 전부 무효화 — 지연 도착한 스트림은 수신 측이 즉시 중지 */
   const invalidatePending = () => { seq.current.init++; seq.current.cam++; seq.current.mic++ }
 
-  // 출력 장치 선택: 브라우저 지원 여부(미지원이면 "고를 수 없음") / 현재 선택 가능 여부(목록까지 있어야 함)
+  // 출력 장치 선택: 브라우저 지원 여부(미지원이면 "선택할 수 없음") / 현재 선택 가능 여부(목록까지 있어야 함)
   const mediaProto = typeof HTMLMediaElement !== 'undefined' ? HTMLMediaElement.prototype : undefined
   const sinkSupported = !!mediaProto && 'setSinkId' in mediaProto
   const sinkOk = sinkSelectable(mediaProto, speakers.length)

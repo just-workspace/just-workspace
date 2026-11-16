@@ -301,7 +301,7 @@ async def update_page(
         seen: set[str] = set()
         while cur and cur not in seen:
             if cur == page_id:
-                raise WikiMoveError("자기 자신이나 하위 페이지 아래로는 옮길 수 없습니다")
+                raise WikiMoveError("자기 자신이나 하위 페이지 아래로는 이동할 수 없습니다")
             seen.add(cur)
             cur = (await db.execute(
                 select(WikiPage.parent_id).where(WikiPage.id == cur)

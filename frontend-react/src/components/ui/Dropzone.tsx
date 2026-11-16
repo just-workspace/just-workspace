@@ -39,7 +39,7 @@ export interface UiDropzoneProps extends Omit<HTMLAttributes<HTMLDivElement>, 't
 
 /**
  * 파일 올리기 영역.
- * @example <UiDropzone title="백업 파일을 여기에 끌어다 놓습니다" buttonLabel="파일 고르기" onFiles={fs => upload(fs[0])} />
+ * @example <UiDropzone title="백업 파일을 여기에 끌어다 놓습니다" buttonLabel="파일 선택" onFiles={fs => upload(fs[0])} />
  */
 export function UiDropzone({ onFiles, title, description, buttonLabel, accept, multiple = false, disabled = false, layout = 'area', filled = false, icon, buttonIcon, className, children, ...rest }: UiDropzoneProps) {
   const input = useRef<HTMLInputElement>(null)

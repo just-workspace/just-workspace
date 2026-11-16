@@ -50,7 +50,7 @@ async def consume(token: str, user_id: str) -> dict:
     try:
         data = _signer().loads(token, max_age=TTL)
     except SignatureExpired:
-        raise ConfirmError("확인 시간이 지났습니다 — 다시 요청하세요")
+        raise ConfirmError("확인 시간이 지났습니다 — 다시 요청하십시오")
     except BadSignature:
         raise ConfirmError("잘못된 확인 요청입니다")
     if not isinstance(data, dict) or data.get("u") != str(user_id):
@@ -62,7 +62,7 @@ async def consume(token: str, user_id: str) -> dict:
         r = await _redis()
         ok = await r.set(f"ai:toolconfirm:{data.get('j')}", "1", ex=TTL, nx=True)
     except Exception:
-        raise ConfirmError("지금은 확인을 처리할 수 없습니다 — 잠시 뒤 다시 시도하세요")
+        raise ConfirmError("지금은 확인을 처리할 수 없습니다 — 잠시 후 다시 시도하십시오")
     if not ok:
         raise ConfirmError("이미 처리된 확인 요청입니다")
     return {"conv_id": data.get("c"), "name": data.get("n"), "args": args}

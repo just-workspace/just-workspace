@@ -138,7 +138,7 @@ async def switch_session_mode(
     """화면 방식 전환 — 미러가 정상 표시되지 않는 화면에서 픽셀로(또는 다시 미러로). 소유자만 가능. 세션을 새로 기동한다."""
     sess = await _owned_session(db, sid, user)
     if sess.user_id != user.id:
-        raise HTTPException(status_code=403, detail="내 세션만 바꿀 수 있습니다")
+        raise HTTPException(status_code=403, detail="내 세션만 변경할 수 있습니다")
     t = await svc.get_target(db, sess.target_id)
     if not t or not await svc.user_can_use(db, user, t):
         raise HTTPException(status_code=404, detail="대상을 찾을 수 없거나 권한이 없습니다")

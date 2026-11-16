@@ -221,7 +221,7 @@ async def _get_account(
 
     raise HTTPException(
         status_code=404,
-        detail="메일 계정이 설정되지 않았습니다. 설정에서 메일 계정을 추가해주세요.",
+        detail="메일 계정이 설정되지 않았습니다. 설정에서 메일 계정을 추가하십시오.",
     )
 
 
@@ -1317,7 +1317,7 @@ async def archive_backfill(
 
     account = await _get_account(db, user, account_id)
     if not getattr(account, "archive_enabled", False):
-        raise HTTPException(status_code=400, detail="이 계정은 아카이브가 꺼져 있습니다")
+        raise HTTPException(status_code=400, detail="이 계정은 아카이브가 비활성화되어 있습니다")
 
     limit = max(1, min(limit, 1000))
     started = await mail_archive.start_backfill(account, mailbox, limit)
@@ -1358,7 +1358,7 @@ async def upload_attachment(
     MAX_FILE_SIZE = 15 * 1024 * 1024
     data = await file.read()
     if len(data) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail="일반 첨부는 15MB까지입니다 — 대용량 첨부로 올려 주세요")
+        raise HTTPException(status_code=413, detail="일반 첨부는 15MB까지입니다 — 대용량 첨부로 업로드하십시오")
 
     return await _store_temp_attachment(data, file.filename or "attachment",
                                         file.content_type or "application/octet-stream", user.id)
@@ -1416,7 +1416,7 @@ async def bulk_action(
     account = await _get_account(db, user, body.account_id)
 
     if not body.message_ids:
-        raise HTTPException(status_code=400, detail="메시지를 선택해주세요")
+        raise HTTPException(status_code=400, detail="메시지를 선택하십시오")
     if body.action in ("spam", "move"):
         _reject_pop3_folder_op(account)
 
@@ -1435,7 +1435,7 @@ async def bulk_action(
             raise HTTPException(status_code=400, detail="스팸 폴더를 찾을 수 없습니다")
     elif body.action == "move":
         if not body.mailbox_id:
-            raise HTTPException(status_code=400, detail="이동할 메일함을 지정해주세요")
+            raise HTTPException(status_code=400, detail="이동할 메일함을 지정하십시오")
         target_mailbox = body.mailbox_id
 
     # 건별로 결과를 확인한다. 이전에는 실패해도 ok 를 반환하여 화면에서만 제거되고 메일은 유지되었다.
@@ -1868,7 +1868,7 @@ async def create_filter_rule(
     if body.match_type not in ("contains", "equals", "starts_with"):
         raise HTTPException(status_code=400, detail="유효하지 않은 매칭 유형")
     if not body.value.strip():
-        raise HTTPException(status_code=400, detail="필터 값을 입력해주세요")
+        raise HTTPException(status_code=400, detail="필터 값을 입력하십시오")
 
     rule = MailFilterRule(
         user_id=user.id,

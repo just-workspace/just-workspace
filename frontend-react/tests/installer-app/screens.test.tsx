@@ -34,7 +34,7 @@ describe('들어오기', () => {
   it('주소에 토큰 없이 들어오면 토큰 화면 — 맞는 토큰을 넣으면 사전 점검으로', async () => {
     open('token-none')
     await heading('설치 토큰을 확인합니다')
-    expect(screen.getByText(/터미널에 나온 주소로 들어오면 이 화면을 거치지 않습니다/)).toBeTruthy()
+    expect(screen.getByText(/터미널에 표시된 주소로 접속하면 이 화면을 거치지 않습니다/)).toBeTruthy()
     expect(screen.getByText(/영문 대문자와 숫자/)).toBeTruthy()
     type('설치 토큰', 'K7QF-93MD-2XTB')
     fireEvent.click(button('확인'))
@@ -51,7 +51,7 @@ describe('들어오기', () => {
     open('token-expired')
     await heading('설치 토큰을 확인합니다')
     expect(screen.getByText('이 토큰은 만료됐습니다.')).toBeTruthy()
-    expect(screen.getByText(/시간이 지나면 쓸 수 없습니다/)).toBeTruthy()
+    expect(screen.getByText(/시간이 지나면 사용할 수 없습니다/)).toBeTruthy()
     expect(screen.getByText('docker exec jw-installer jw token')).toBeTruthy()
     expect(screen.queryByText(/영문 대문자와 숫자/)).toBeNull()
   })
@@ -66,7 +66,7 @@ describe('들어오기', () => {
 
   it('설치가 끝난 서버는 잠김 화면', async () => {
     open('locked')
-    await heading('설치가 이미 끝났습니다')
+    await heading('설치가 이미 완료되었습니다')
     expect(screen.getByRole('link', { name: '로그인 화면으로' }).getAttribute('href')).toBe('https://workspace.example.com')
     // 재설치 명령은 서버가 제공한 문자열 그대로 표시
     expect(screen.getByText(/처음부터 다시 설치하려면/)).toBeTruthy()
@@ -84,15 +84,15 @@ describe('들어오기', () => {
     expect(screen.getByText('접속 주소와 연결까지 입력됨')).toBeTruthy()
     expect(screen.getByText('다음은 파일 저장 위치')).toBeTruthy()
     fireEvent.click(button('이어서 하기'))
-    await heading('파일을 어디에 저장할까요')
+    await heading('파일을 어디에 저장하시겠습니까')
   })
 
   it('적용이 실패한 채 돌아오면 멈춘 곳을 알린다', async () => {
     open('resume-failed')
-    await heading('설치가 멈춰 있습니다')
-    expect(screen.getByText('인증서 발급에서 멈췄습니다.')).toBeTruthy()
-    fireEvent.click(button('멈춘 곳 보기'))
-    await heading('설치가 멈췄습니다')
+    await heading('설치가 중단된 상태입니다')
+    expect(screen.getByText('인증서 발급에서 중단되었습니다.')).toBeTruthy()
+    fireEvent.click(button('중단된 단계 보기'))
+    await heading('설치가 중단되었습니다')
   })
 
   it('적용이 실패한 뒤 요약으로 돌아가면 서버에 남은 것이 있음을 알린다', async () => {
@@ -104,7 +104,7 @@ describe('들어오기', () => {
 
   it('클라우드 서버로 감지하면 직접 연결로 안내한다', async () => {
     open('detect-cloud', '#/domain')
-    await heading('접속 주소와 연결 형태')
+    await heading('접속 주소와 네트워크 구성')
     expect(screen.getByText('감지됨: 공인 주소에 직접 연결')).toBeTruthy()
     expect(screen.getByText(/클라우드 서버로 감지했습니다/)).toBeTruthy()
     expect(screen.getByRole('radio', { name: /사설 주소 \+ NAT/ })).toBeTruthy()
@@ -126,7 +126,7 @@ describe('사전 점검', () => {
     await screen.findByText('통과 13 · 주의 1')
     expect(next().disabled).toBe(false)
     expect(screen.getByText('주의 항목은 그대로 두고 진행할 수 있습니다.')).toBeTruthy()
-    expect(screen.getByText(/내장 메일 서버를 쓰려면 이 프로그램을 먼저 중지해야 합니다/)).toBeTruthy()
+    expect(screen.getByText(/내장 메일 서버를 사용하려면 이 프로그램을 먼저 중지해야 합니다/)).toBeTruthy()
     expect(screen.getByText('16 GB')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '이전' })).toBeNull()
   })
@@ -135,9 +135,9 @@ describe('사전 점검', () => {
     open('preflight-fail', '#/check')
     await screen.findByText('통과 12 · 주의 1 · 실패 1')
     expect(next().disabled).toBe(true)
-    const reason = screen.getByText('실패한 항목을 해결하고 다시 확인해야 다음으로 갈 수 있습니다.')
+    const reason = screen.getByText('실패한 항목을 해결하고 다시 확인해야 다음 단계로 진행할 수 있습니다.')
     expect(next().getAttribute('aria-describedby')).toBe(reason.id)
-    expect(screen.getByText(/쓰지 않는 Docker 이미지와 파일을 지운 뒤 다시 확인합니다/)).toBeTruthy()
+    expect(screen.getByText(/사용하지 않는 Docker 이미지와 파일을 삭제한 뒤 다시 확인합니다/)).toBeTruthy()
   })
 
   it('메모리가 모자라면 실패', async () => {
@@ -150,70 +150,70 @@ describe('사전 점검', () => {
     open('preflight-checking', '#/check')
     await screen.findByText(/확인 중 9/)
     expect(next().disabled).toBe(true)
-    expect(screen.getByText('점검이 끝나면 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('점검이 완료되면 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
   })
 })
 
 describe('시작 방식', () => {
   it('고르는 즉시 단계 목록이 바뀐다', async () => {
     open('', '#/start')
-    await heading('어떻게 시작할까요')
+    await heading('어떻게 시작하시겠습니까')
     const items = () => within(stepList()).getAllByRole('listitem').map(li => li.textContent)
     expect(items().some(x => x?.includes('구역 선택') && !x.includes('건너뜀'))).toBe(true)
     fireEvent.click(screen.getByRole('radio', { name: /빠른 설치/ }))
     expect(items().some(x => x?.includes('구역 선택') && x.includes('건너뜀'))).toBe(true)
     fireEvent.click(screen.getByRole('radio', { name: /백업에서 복원/ }))
-    expect(items().map(x => x?.replace(/^\d+/, '').replace(/(완료|현재 단계|남음)$/, ''))).toEqual(['사전 점검', '시작 방식', '백업 파일 올리기', '내용 확인', '적용'])
+    expect(items().map(x => x?.replace(/^\d+/, '').replace(/(완료|현재 단계|남음)$/, ''))).toEqual(['사전 점검', '시작 방식', '백업 파일 업로드', '내용 확인', '적용'])
   })
 
   it('이전은 사전 점검으로, 다음은 고른 방식의 첫 화면으로', async () => {
     const { store } = open('', '#/start')
-    await heading('어떻게 시작할까요')
+    await heading('어떻게 시작하시겠습니까')
     fireEvent.click(screen.getByRole('radio', { name: /빠른 설치/ }))
     fireEvent.click(next())
     await heading('접속 주소')
     expect(store.getState().answers.mode).toBe('quick')
     expect(screen.getByText('기본값으로 정해지는 것')).toBeTruthy()
     fireEvent.click(button('이전'))
-    await heading('어떻게 시작할까요')
+    await heading('어떻게 시작하시겠습니까')
   })
 })
 
 describe('접속 주소와 연결', () => {
   it('주소가 이 서버를 가리키면 다음으로 — 저장하고 파일 저장 위치로 간다', async () => {
     const { store } = open('', '#/domain')
-    await heading('접속 주소와 연결 형태')
+    await heading('접속 주소와 네트워크 구성')
     expect(next().disabled).toBe(true)
-    expect(screen.getByText('접속 주소를 입력해야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('접속 주소를 입력해야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     type('접속 주소', 'workspace.example.com')
-    expect(screen.getByText('접속 주소 확인이 끝나면 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('접속 주소 확인이 완료되면 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     await screen.findByText('일치')
     expect(screen.getByText('203.0.113.24')).toBeTruthy()
     expect(screen.getByText('감지됨: 공인 주소에 직접 연결')).toBeTruthy()
     expect(screen.queryByRole('radio', { name: /임시 인증서/ })).toBeNull()
     fireEvent.click(next())
-    await heading('파일을 어디에 저장할까요')
+    await heading('파일을 어디에 저장하시겠습니까')
     expect(store.getState().answers.access).toMatchObject({ domain: 'workspace.example.com', network: 'direct', cert: 'auto' })
     expect(store.getState().server?.step).toBe('storage')
   })
 
   it('주소가 다른 곳을 가리키면 자동 발급을 막고 임시 인증서가 나타난다', async () => {
     const { store } = open('dns-mismatch', '#/domain')
-    await heading('접속 주소와 연결 형태')
+    await heading('접속 주소와 네트워크 구성')
     type('접속 주소', 'workspace.example.com')
     await screen.findByText('불일치')
     expect(screen.getByText('198.51.100.7')).toBeTruthy()
     expect((screen.getByRole('radio', { name: /자동 발급/ }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByRole('radio', { name: /임시 인증서로 설치하고 나중에 발급/ }).getAttribute('aria-checked')).toBe('true')
-    expect(screen.getByText(/자동 발급은 접속 주소가 이 서버를 가리키는 것이 확인돼야 고를 수 있습니다/)).toBeTruthy()
+    expect(screen.getByText(/자동 발급은 접속 주소가 이 서버를 가리키는 것이 확인돼야 선택할 수 있습니다/)).toBeTruthy()
     fireEvent.click(next())
-    await heading('파일을 어디에 저장할까요')
+    await heading('파일을 어디에 저장하시겠습니까')
     expect(store.getState().answers.access.cert).toBe('temporary')
   })
 
   it('기존 프록시 뒤를 고르면 인증서는 프록시가 처리 — 다음은 프록시 주소', async () => {
     const { store } = open('', '#/domain')
-    await heading('접속 주소와 연결 형태')
+    await heading('접속 주소와 네트워크 구성')
     type('접속 주소', 'workspace.example.com')
     fireEvent.click(screen.getByRole('radio', { name: /기존 프록시 뒤/ }))
     expect(screen.getByText('프록시가 처리')).toBeTruthy()
@@ -224,25 +224,25 @@ describe('접속 주소와 연결', () => {
     await heading('프록시 주소')
     expect(store.getState().answers.access).toMatchObject({ network: 'proxy', cert: 'proxy' })
     expect(next().disabled).toBe(true)
-    expect(screen.getByText('프록시 주소를 입력해야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('프록시 주소를 입력해야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     type(/프록시 주소 또는 대역/, '192.168.10.300')
     expect(screen.getByText('주소 형식이 맞지 않습니다. 주소 하나 또는 대역으로 입력합니다.')).toBeTruthy()
-    expect(screen.getByText('프록시 주소를 고쳐야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('프록시 주소를 수정해야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     type(/프록시 주소 또는 대역/, '192.168.10.5')
     expect(next().disabled).toBe(false)
     fireEvent.click(button('이전'))
-    await heading('접속 주소와 연결 형태')
+    await heading('접속 주소와 네트워크 구성')
   })
 
   it('빠른 설치 — 메모리가 모자라면 최소 묶음으로 내리고, 주소가 안 맞으면 임시 인증서를 골라야 한다', async () => {
     open('quick,mem-6,dns-unknown', '#/domain')
     await heading('접속 주소')
-    expect(screen.getByText('최소 묶음 · 기본 구역만')).toBeTruthy()
-    expect(screen.getByText(/최소 묶음\(기본 구역만/)).toBeTruthy()
+    expect(screen.getByText('최소 프리셋 · 기본 구역만')).toBeTruthy()
+    expect(screen.getByText(/최소 프리셋\(기본 구역만/)).toBeTruthy()
     type('접속 주소', 'workspace.example.com')
     await screen.findByText('확인 불가')
     expect(next().disabled).toBe(true)
-    expect(screen.getByText('접속 주소를 고치거나 임시 인증서를 골라야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('접속 주소를 수정하거나 임시 인증서를 선택해야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     fireEvent.click(screen.getByLabelText(/임시 인증서로 설치하고 나중에 발급/))
     expect(next().disabled).toBe(false)
     expect(screen.getByText('임시 인증서 · 나중에 발급')).toBeTruthy()
@@ -255,17 +255,17 @@ describe('접속 주소와 연결', () => {
 describe('파일 저장 위치', () => {
   it('이 서버의 디스크는 바로 다음으로 — 네트워크 저장소는 연결 확인이 통과해야 한다', async () => {
     const { store } = open('', '#/storage')
-    await heading('파일을 어디에 저장할까요')
+    await heading('파일을 어디에 저장하시겠습니까')
     expect(next().disabled).toBe(false)
     fireEvent.click(screen.getByRole('radio', { name: /네트워크 저장소/ }))
     expect(next().disabled).toBe(true)
-    expect(screen.getByText('서버 주소와 공유 경로를 넣고 연결 확인을 눌러야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('서버 주소와 공유 경로를 입력하고 연결 확인을 눌러야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     expect(button('연결 확인').disabled).toBe(true)
     type(/서버 주소/, 'nas.example.com')
     type(/공유 경로/, '/volume1/workspace')
     fireEvent.click(button('연결 확인'))
     await screen.findByText('통과 5')
-    expect(screen.getByText('1. 서버에 닿는가')).toBeTruthy()
+    expect(screen.getByText('1. 서버에 연결되는가')).toBeTruthy()
     expect(screen.getByText('5. 여유 공간')).toBeTruthy()
     expect(next().disabled).toBe(false)
     // 값을 변경하면 이전 확인 결과는 무효
@@ -273,19 +273,19 @@ describe('파일 저장 위치', () => {
     expect(next().disabled).toBe(true)
     type(/공유 경로/, '/volume1/workspace')
     fireEvent.click(next())
-    await heading('쓸 구역을 고릅니다')
+    await heading('사용할 구역을 선택합니다')
     expect(store.getState().answers.storage).toMatchObject({ kind: 'nfs', server: 'nas.example.com', export: '/volume1/workspace' })
   })
 
   it.each([
-    ['nfs-unreachable', '1. 서버에 닿는가', /서버에 닿지 않습니다/, 3],
-    ['nfs-permission', '2. 붙일 수 있는가', /NAS가 연결을 거부했습니다/, 2],
-    ['nfs-export', '2. 붙일 수 있는가', /서버에는 닿았지만 이 공유 경로를 붙일 수 없습니다/, 2],
-    ['nfs-readonly', '3. 쓰기·읽기·지우기', /공유 폴더가 읽기 전용입니다/, 1],
+    ['nfs-unreachable', '1. 서버에 연결되는가', /서버에 연결되지 않습니다/, 3],
+    ['nfs-permission', '2. 마운트할 수 있는가', /NAS가 연결을 거부했습니다/, 2],
+    ['nfs-export', '2. 마운트할 수 있는가', /서버에는 연결됐지만 이 공유 경로를 마운트할 수 없습니다/, 2],
+    ['nfs-readonly', '3. 쓰기·읽기·삭제', /공유 폴더가 읽기 전용입니다/, 1],
     ['nfs-nolock', '4. 파일 잠금', /파일 잠금이 동작하지 않습니다/, 0],
   ] as const)('연결 확인 실패(%s) — 원인별 문구와 꺼진 다음', async (scenario, label, text, skippedAfter) => {
     open(scenario, '#/storage')
-    await heading('파일을 어디에 저장할까요')
+    await heading('파일을 어디에 저장하시겠습니까')
     fireEvent.click(screen.getByRole('radio', { name: /네트워크 저장소/ }))
     type(/서버 주소/, 'nas.example.com')
     type(/공유 경로/, '/volume1/workspace')
@@ -297,12 +297,12 @@ describe('파일 저장 위치', () => {
     // 실패한 검사 이후 항목(여유 공간을 제외한 1~4번 중 나머지)과 5번은 확인하지 않음
     expect(screen.getAllByText('확인 안 함')).toHaveLength(skippedAfter + 1)
     expect(next().disabled).toBe(true)
-    expect(screen.getByText('1~4번 검사를 모두 통과해야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('1~4번 검사를 모두 통과해야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
   })
 
   it('여유 공간이 적으면 주의만 하고 막지 않는다', async () => {
     open('nfs-lowspace', '#/storage')
-    await heading('파일을 어디에 저장할까요')
+    await heading('파일을 어디에 저장하시겠습니까')
     fireEvent.click(screen.getByRole('radio', { name: /네트워크 저장소/ }))
     type(/서버 주소/, 'nas.example.com')
     type(/공유 경로/, '/volume1/workspace')
@@ -316,7 +316,7 @@ describe('파일 저장 위치', () => {
 describe('구역 선택', () => {
   it('구역과 숫자는 서버가 준 대로 — 협업 7 GB, 전체 9.5 GB', async () => {
     const { store } = open('', '#/zones')
-    await heading('쓸 구역을 고릅니다')
+    await heading('사용할 구역을 선택합니다')
     const names = Array.from(document.querySelectorAll('[data-zone]')).map(el => el.getAttribute('data-zone'))
     expect(names).toEqual(['mail', 'chat', 'calendar', 'docs', 'meetings', 'git', 'ai'])
     expect(screen.queryByText('상태 감시')).toBeNull()
@@ -325,16 +325,16 @@ describe('구역 선택', () => {
     expect(meter().getAttribute('aria-valuenow')).toBe('7')
     expect(meter().getAttribute('aria-valuemax')).toBe('16')
     expect(screen.getByText(/남는 메모리 9 GB/)).toBeTruthy()
-    expect(screen.getByText('음성 채널은 회의 구역을 함께 골라야 쓸 수 있습니다')).toBeTruthy()
+    expect(screen.getByText('음성 채널은 회의 구역을 함께 선택해야 사용할 수 있습니다')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('radio', { name: '전체' }))
     expect(meter().getAttribute('aria-valuenow')).toBe('9.5')
-    expect(screen.queryByText('음성 채널은 회의 구역을 함께 골라야 쓸 수 있습니다')).toBeNull()
+    expect(screen.queryByText('음성 채널은 회의 구역을 함께 선택해야 사용할 수 있습니다')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /선택 애드온/ }))
     fireEvent.click(screen.getByLabelText(/SSO·LDAP 제공/))
     expect(meter().getAttribute('aria-valuenow')).toBe('10')
     fireEvent.click(screen.getByLabelText(/^메일/))
-    expect(screen.getByRole('radio', { name: '직접 고름' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('radio', { name: '직접 선택' }).getAttribute('aria-checked')).toBe('true')
 
     fireEvent.click(next())
     // 메일을 제외하고 회의를 선택 — 다음은 회의
@@ -345,21 +345,21 @@ describe('구역 선택', () => {
 
   it('권장 메모리가 서버 메모리를 넘으면 다음을 막는다', async () => {
     open('mem-6', '#/zones')
-    await heading('쓸 구역을 고릅니다')
+    await heading('사용할 구역을 선택합니다')
     // 6 GB 서버 — 협업 프리셋(7 GB)이 맞지 않아 최소 프리셋에서 시작
     expect(screen.getByRole('radio', { name: '최소' }).getAttribute('aria-checked')).toBe('true')
     expect(next().disabled).toBe(false)
     fireEvent.click(screen.getByRole('radio', { name: '협업' }))
     expect(next().disabled).toBe(true)
-    expect(screen.getByText('권장 메모리가 서버 메모리를 넘습니다.')).toBeTruthy()
-    expect(screen.getByRole('alert').textContent).toContain('넘습니다. 구역을 줄여야 다음으로 갈 수 있습니다.')
+    expect(screen.getByText('권장 메모리가 서버 메모리를 초과합니다.')).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toContain('초과합니다. 구역을 줄여야 다음 단계로 진행할 수 있습니다.')
     fireEvent.click(screen.getByLabelText(/^문서 편집/))
     expect(next().disabled).toBe(false)
   })
 
   it('공유기 뒤면 다음은 포트 포워딩 안내 — 고른 구역의 포트를 보여 준다', async () => {
     open('router', '#/zones')
-    await heading('쓸 구역을 고릅니다')
+    await heading('사용할 구역을 선택합니다')
     fireEvent.click(next())
     await heading('공유기에서 열 포트')
     expect(screen.getByText('192.168.10.10')).toBeTruthy()
@@ -367,14 +367,14 @@ describe('구역 선택', () => {
     expect(screen.getByText('메일 받기')).toBeTruthy()
     expect(screen.queryByText('7881')).toBeNull()
     fireEvent.click(button('이전'))
-    await heading('쓸 구역을 고릅니다')
+    await heading('사용할 구역을 선택합니다')
   })
 })
 
 describe('메일', () => {
   it('내장 서버 — 레코드 상태를 보여 주고, 맞지 않아도 다음으로 간다', async () => {
     open('ready', '#/mail')
-    await heading('메일을 어떻게 보낼까요')
+    await heading('메일을 어떻게 보내시겠습니까')
     await screen.findByText('아직 없음')
     expect(screen.getByText('값이 다름')).toBeTruthy()
     expect(screen.getAllByText('확인됨')).toHaveLength(3)
@@ -391,10 +391,10 @@ describe('메일', () => {
 
   it('외부 발신 서버 — 연결이 확인돼야 다음으로 간다', async () => {
     const { store } = open('ready', '#/mail')
-    await heading('메일을 어떻게 보낼까요')
+    await heading('메일을 어떻게 보내시겠습니까')
     fireEvent.click(screen.getByRole('radio', { name: /외부 발신 서버/ }))
     expect(next().disabled).toBe(true)
-    expect(screen.getByText('발신 서버 연결이 확인돼야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('발신 서버 연결이 확인되어야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     type('서버 주소', 'smtp.example.com')
     type('계정', 'sender')
     type('비밀번호', 'app-password')
@@ -411,7 +411,7 @@ describe('메일', () => {
 
   it('외부 발신 서버 — 로그인 실패', async () => {
     open('ready,smtp-fail', '#/mail')
-    await heading('메일을 어떻게 보낼까요')
+    await heading('메일을 어떻게 보내시겠습니까')
     fireEvent.click(screen.getByRole('radio', { name: /외부 발신 서버/ }))
     type('서버 주소', 'smtp.example.com')
     type('계정', 'sender')
@@ -428,19 +428,19 @@ describe('관리자 계정', () => {
     const { store } = open('', '#/admin')
     await heading('관리자 계정')
     expect(next().disabled).toBe(true)
-    expect(screen.getByText('이름을 입력해야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('이름을 입력해야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     type(/^이름/, '관리자')
     type(/^아이디/, 'Admin 1')
-    expect(screen.getByText(/쓸 수 없는 글자가 들어 있습니다/)).toBeTruthy()
-    expect(screen.getByText('아이디를 고쳐야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText(/사용할 수 없는 글자가 포함되어 있습니다/)).toBeTruthy()
+    expect(screen.getByText('아이디를 수정해야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     type(/^아이디/, 'admin')
     type('비밀번호', 'correct')
     expect(screen.getByText('12자 이상이어야 합니다. 지금 7자입니다.')).toBeTruthy()
-    expect(screen.getByText('비밀번호가 12자 이상이어야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('비밀번호가 12자 이상이어야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     type('비밀번호', 'correct horse battery')
     type('비밀번호 확인', 'correct horse batter')
     expect(screen.getByText('비밀번호가 일치하지 않습니다.')).toBeTruthy()
-    expect(screen.getByText('두 비밀번호가 같아야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('두 비밀번호가 같아야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     type('비밀번호 확인', 'correct horse battery')
     expect(next().disabled).toBe(false)
     fireEvent.click(next())
@@ -461,15 +461,15 @@ describe('요약', () => {
     expect(screen.getByText('admin@example.com')).toBeTruthy()
     expect(within(screen.getByRole('main')).getByText('AI 도우미')).toBeTruthy()
     expect(within(screen.getByRole('main')).queryByText('AI')).toBeNull()
-    expect(screen.getAllByText('고르지 않음')).toHaveLength(3)
-    expect(screen.getByRole('heading', { name: /넘어온 주의 사항\s*3\s*건/ })).toBeTruthy()
+    expect(screen.getAllByText('선택하지 않음')).toHaveLength(3)
+    expect(screen.getByRole('heading', { name: /이전 단계의 주의 사항\s*3\s*건/ })).toBeTruthy()
     expect(screen.getByRole('link', { name: '사전 점검 보기' }).getAttribute('href')).toBe('#/check?fix=1')
-    expect(screen.getByRole('link', { name: '답변 파일 내려받기' }).getAttribute('download')).toBe('answers.json')
+    expect(screen.getByRole('link', { name: '응답 파일 다운로드' }).getAttribute('download')).toBe('answers.json')
     expect(button('설치').disabled).toBe(false)
 
-    window.location.hash = screen.getByRole('link', { name: '파일 저장 위치 고치기' }).getAttribute('href')!
+    window.location.hash = screen.getByRole('link', { name: '파일 저장 위치 수정' }).getAttribute('href')!
     await act(async () => { window.dispatchEvent(new Event('hashchange')) })
-    await heading('파일을 어디에 저장할까요')
+    await heading('파일을 어디에 저장하시겠습니까')
     expect(screen.queryByRole('button', { name: '다음' })).toBeNull()
     expect(screen.queryByRole('button', { name: '이전' })).toBeNull()
     fireEvent.click(button('요약으로 돌아가기'))
@@ -480,7 +480,7 @@ describe('요약', () => {
     open('ready,full', '#/summary')
     await heading('이대로 설치합니다')
     await screen.findByText('TCP 80 · TCP 443 · TCP 25 · TCP 465 · TCP 587 · TCP 993 · TCP 7881 · UDP 7882-7892 · UDP 3478 · UDP 4433 · TCP 2222 · TCP 389 · TCP 636')
-    expect(screen.getByText(/내장 중계 서버 사용/).textContent).toContain('무손실 오디오 켬')
+    expect(screen.getByText(/내장 중계 서버 사용/).textContent).toContain('무손실 오디오 사용')
     expect(screen.getByText('검증된 버전')).toBeTruthy()
     expect(screen.getByText('나중에 연결')).toBeTruthy()
     expect(screen.getByText(/애드온 SSO·LDAP 제공/)).toBeTruthy()
@@ -492,7 +492,7 @@ describe('요약', () => {
     await screen.findByText('이대로는 설치할 수 없습니다')
     expect(screen.getByText('관리자 비밀번호 항목이 비어 있습니다.')).toBeTruthy()
     expect(button('설치').disabled).toBe(true)
-    expect(screen.getByText('위 항목을 고쳐야 설치할 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('위 항목을 수정해야 설치할 수 있습니다.')).toBeTruthy()
   })
 
   it('사전 점검을 통과하지 못한 서버에서는 설치가 꺼진다', async () => {
@@ -511,8 +511,8 @@ describe('요약', () => {
     expect(button('요약으로 돌아가기').disabled).toBe(true)
     type('내부 대역', '192.168.10.0/24')
     fireEvent.click(button('요약으로 돌아가기'))
-    await screen.findByText('이 서버가 이미 쓰는 네트워크와 겹칩니다. 다른 대역을 입력합니다.')
-    expect(screen.getByText('내부 대역을 고쳐야 돌아갈 수 있습니다.')).toBeTruthy()
+    await screen.findByText('이 서버가 이미 사용하는 네트워크와 겹칩니다. 다른 대역을 입력합니다.')
+    expect(screen.getByText('내부 대역을 수정해야 돌아갈 수 있습니다.')).toBeTruthy()
     type('내부 대역', '172.30.0.0/24')
     fireEvent.click(button('요약으로 돌아가기'))
     await heading('이대로 설치합니다')
@@ -522,11 +522,11 @@ describe('요약', () => {
   it('빠른 설치의 요약 — 묻지 않은 항목은 기본값으로 보이고 고치기가 없다', async () => {
     open('quick-ready', '#/summary')
     await heading('이대로 설치합니다')
-    expect(screen.getByText(/협업 묶음 · 기본, 메일, 채팅/)).toBeTruthy()
+    expect(screen.getByText(/협업 프리셋 · 기본, 메일, 채팅/)).toBeTruthy()
     expect(screen.getAllByText(/· 기본값/).length).toBeGreaterThanOrEqual(3)
-    expect(screen.queryByRole('link', { name: '구역 고치기' })).toBeNull()
-    expect(screen.queryByRole('link', { name: '파일 저장 위치 고치기' })).toBeNull()
-    expect(screen.getByRole('link', { name: '메일 고치기' })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: '구역 수정' })).toBeNull()
+    expect(screen.queryByRole('link', { name: '파일 저장 위치 수정' })).toBeNull()
+    expect(screen.getByRole('link', { name: '메일 수정' })).toBeTruthy()
     expect(screen.queryByText('고급 설정')).toBeNull()
   })
 })
@@ -539,7 +539,7 @@ describe('적용', () => {
     await heading('이대로 설치합니다')
     await waitFor(() => expect(button('설치').disabled).toBe(false))
     fireEvent.click(button('설치'))
-    await heading('설치가 끝났습니다')
+    await heading('설치가 완료되었습니다')
     // 본 서버의 디스크(기본 폴더)이면 "저장소 연결" 단계 없음
     expect(stepsOf()).toEqual(['config:done', 'pull:done', 'database:done', 'cert:done', 'zones:done', 'admin:done', 'lock:done'])
     expect(screen.getByRole('progressbar', { name: '설치 진행' }).getAttribute('aria-valuenow')).toBe('7')
@@ -556,25 +556,25 @@ describe('적용', () => {
     await heading('이대로 설치합니다')
     await waitFor(() => expect(button('설치').disabled).toBe(false))
     fireEvent.click(button('설치'))
-    await heading('설치가 멈췄습니다')
+    await heading('설치가 중단되었습니다')
     expect(stepsOf()).toEqual(['config:done', 'pull:done', 'database:done', 'cert:failed', 'zones:pending', 'admin:pending', 'lock:pending'])
-    expect(screen.getByText('한 단계에서 멈췄습니다. 앞에서 끝난 단계는 그대로 남아 있습니다.')).toBeTruthy()
+    expect(screen.getByText('한 단계에서 중단되었습니다. 앞에서 완료된 단계는 그대로 남아 있습니다.')).toBeTruthy()
     const card = screen.getByRole('alert')
     expect(card.textContent).toContain('workspace.example.com의 인증서를 발급받지 못했습니다.')
     // 내부 원인 코드는 접힌 영역에만 표시
     expect(within(card).getByText('자세히')).toBeTruthy()
     expect(within(card).getByText('원인 코드: cert_issue_failed')).toBeTruthy()
-    expect(within(card).getByRole('link', { name: '요약으로 돌아가 고치기' }).getAttribute('href')).toBe('#/summary')
-    expect(within(card).getByRole('button', { name: '기록 내려받기' })).toBeTruthy()
+    expect(within(card).getByRole('link', { name: '요약으로 돌아가 수정' }).getAttribute('href')).toBe('#/summary')
+    expect(within(card).getByRole('button', { name: '로그 다운로드' })).toBeTruthy()
 
-    const log = within(card).getByRole('button', { name: '기록 보기' })
+    const log = within(card).getByRole('button', { name: '로그 보기' })
     expect(log.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(log)
     expect(log.getAttribute('aria-expanded')).toBe('true')
     await screen.findByText(/failed: connection timed out/)
 
     fireEvent.click(within(card).getByRole('button', { name: '임시 인증서로 계속' }))
-    await heading('설치가 끝났습니다')
+    await heading('설치가 완료되었습니다')
     fireEvent.click(button('완료 화면 열기'))
     // 임시 인증서로 완료했으므로 할 일에 인증서 발급 포함
     expect(await screen.findByText('인증서 발급')).toBeTruthy()
@@ -586,14 +586,14 @@ describe('적용', () => {
     await heading('이대로 설치합니다')
     await waitFor(() => expect(button('설치').disabled).toBe(false))
     fireEvent.click(button('설치'))
-    await heading('설치가 멈췄습니다')
+    await heading('설치가 중단되었습니다')
     expect(stepsOf().slice(0, 3)).toEqual(['config:done', 'storage:failed', 'pull:pending'])
     const card = screen.getByRole('alert')
     expect(card.textContent).toContain('nas.example.com:/volume1/workspace')
-    expect(within(card).getByRole('link', { name: '파일 저장 위치 고치기' }).getAttribute('href')).toBe('#/storage?fix=1')
+    expect(within(card).getByRole('link', { name: '파일 저장 위치 수정' }).getAttribute('href')).toBe('#/storage?fix=1')
     expect(within(card).queryByRole('button', { name: '임시 인증서로 계속' })).toBeNull()
     fireEvent.click(within(card).getByRole('button', { name: '이 단계부터 다시' }))
-    await heading('설치가 끝났습니다')
+    await heading('설치가 완료되었습니다')
     expect(stepsOf()[1]).toBe('storage:done')
   })
 
@@ -621,10 +621,10 @@ describe('백업에서 복원', () => {
 
   it('서버가 아직 지원하지 않으면 그 사실을 알린다', async () => {
     open('', '#/start')
-    await heading('어떻게 시작할까요')
+    await heading('어떻게 시작하시겠습니까')
     fireEvent.click(screen.getByRole('radio', { name: /백업에서 복원/ }))
     fireEvent.click(next())
-    await heading('백업 파일 올리기')
+    await heading('백업 파일 업로드')
     fireEvent.click(screen.getByRole('radio', { name: '서버에 있는 파일 경로' }))
     type(/서버에 있는 백업 파일 경로/, '/srv/backup/a.jwbak')
     fireEvent.click(button('파일 확인'))
@@ -632,14 +632,14 @@ describe('백업에서 복원', () => {
     expect(screen.getAllByText('아직 지원하지 않습니다').length).toBeGreaterThan(0)
     expect(next().disabled).toBe(true)
     fireEvent.click(button('시작 방식으로 돌아가기'))
-    await heading('어떻게 시작할까요')
+    await heading('어떻게 시작하시겠습니까')
   })
 
   it('파일을 확인하고 내용을 본 뒤 복원한다', async () => {
     const { container } = open('restore', '#/file')
-    await heading('백업 파일 올리기')
+    await heading('백업 파일 업로드')
     expect(next().disabled).toBe(true)
-    expect(screen.getByText('백업 파일을 올려야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('백업 파일을 업로드해야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     const input = container.querySelector('input[type=file]') as HTMLInputElement
     fireEvent.change(input, { target: { files: [new File(['x'], 'workspace-backup.jwbak')] } })
     await screen.findByText(/파일이 온전하고, 이 버전에서 복원할 수 있는 백업입니다/)
@@ -647,7 +647,7 @@ describe('백업에서 복원', () => {
 
     await heading('이 백업으로 복원합니다')
     await screen.findByText(/네트워크 저장소 \(NFS\) · nas.example.com:\/volume1\/workspace/)
-    expect(screen.getByText('없음 · 네트워크 저장소의 파일은 백업에 넣지 않습니다')).toBeTruthy()
+    expect(screen.getByText('없음 · 네트워크 저장소의 파일은 백업에 포함하지 않습니다')).toBeTruthy()
     expect((screen.getByRole('radio', { name: /이 서버의 디스크/ }) as HTMLButtonElement).disabled).toBe(true)
     expect(button('복원').disabled).toBe(true)
     expect(screen.getByText('네트워크 저장소 연결이 확인돼야 복원할 수 있습니다.')).toBeTruthy()
@@ -657,19 +657,19 @@ describe('백업에서 복원', () => {
     expect(button('복원').disabled).toBe(false)
     fireEvent.click(button('복원'))
 
-    await heading('복원이 끝났습니다')
+    await heading('복원이 완료되었습니다')
     expect(restoreSteps()).toEqual(['unpack:done', 'storage:done', 'pull:done', 'database:done', 'cert:done', 'zones:done'])
     expect(screen.getByText('백업 풀고 설정 파일 만들기')).toBeTruthy()
-    expect(screen.getByText('데이터 되돌리기')).toBeTruthy()
+    expect(screen.getByText('데이터 복원')).toBeTruthy()
     expect(screen.getByText('구역 시작하고 마법사 잠그기')).toBeTruthy()
-    // 백업에 파일이 없으면 "파일 되돌리기" 단계 없음
-    expect(screen.queryByText('파일 되돌리기')).toBeNull()
+    // 백업에 파일이 없으면 "파일 복원" 단계 없음
+    expect(screen.queryByText('파일 복원')).toBeNull()
     fireEvent.click(button('완료 화면 열기'))
-    expect(await screen.findByText('원래 서버 끄기')).toBeTruthy()
-    expect(screen.getByText(/계정, 비밀번호, 데이터는 원래 서버에서 쓰던 그대로입니다/)).toBeTruthy()
+    expect(await screen.findByText('원래 서버 종료')).toBeTruthy()
+    expect(screen.getByText(/계정, 비밀번호, 데이터는 원래 서버에서 사용하던 그대로입니다/)).toBeTruthy()
     // 원래 서버가 네트워크 저장소를 사용했으면 동일 저장소를 재연결한 것임
     expect(screen.getByText(/네트워크 저장소를 다시 연결했습니다/)).toBeTruthy()
-    expect(screen.getByText('접속 주소 옮기기')).toBeTruthy()
+    expect(screen.getByText('접속 주소 이전')).toBeTruthy()
     expect(screen.queryByText('인증서 발급')).toBeNull()
   })
 
@@ -680,17 +680,17 @@ describe('백업에서 복원', () => {
     expect(screen.getByText('이 버전의 백업은 복원할 수 없습니다.')).toBeTruthy()
     fireEvent.click(button('연결 확인'))
     await screen.findByText('2번 검사 실패')
-    expect(screen.getByText(/새 서버는 주소가 달라서 권한을 다시 줘야 합니다/)).toBeTruthy()
+    expect(screen.getByText(/새 서버는 주소가 달라서 권한을 다시 부여해야 합니다/)).toBeTruthy()
     expect(button('복원').disabled).toBe(true)
   })
 
   it('맞지 않는 파일', async () => {
     const { container } = open('restore,restore-badfile', '#/file')
-    await heading('백업 파일 올리기')
+    await heading('백업 파일 업로드')
     fireEvent.change(container.querySelector('input[type=file]') as HTMLInputElement, { target: { files: [new File(['x'], 'notes.zip')] } })
     await screen.findByText('이 파일로는 복원할 수 없습니다.')
     expect(next().disabled).toBe(true)
-    expect(screen.getByText('복원할 수 있는 백업 파일을 올려야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('복원할 수 있는 백업 파일을 업로드해야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
   })
 })
 
@@ -700,12 +700,12 @@ describe('백업에서 복원 — 파일 상태', () => {
 
   it.each([
     ['restore-badfile', /Just Workspace 백업 파일이 아닙니다/],
-    ['restore-format', /이 설치 관리자가 모르는 형식의 백업입니다/],
-    ['restore-noconfig', /설정이 들어 있지 않은 백업이라 새 서버로 옮길 수 없습니다/],
-    ['restore-corrupt', /옮기는 중에 손상됐습니다/],
+    ['restore-format', /이 설치 관리자가 지원하지 않는 형식의 백업입니다/],
+    ['restore-noconfig', /설정이 포함되지 않은 백업이라 새 서버로 이전할 수 없습니다/],
+    ['restore-corrupt', /전송 중에 손상됐습니다/],
   ])('복원할 수 없는 파일은 사유를 알린다 (%s)', async (scenario, body) => {
     const { container } = open(`restore,${scenario}`, '#/file')
-    await heading('백업 파일 올리기')
+    await heading('백업 파일 업로드')
     pickFile(container)
     await screen.findByText('이 파일로는 복원할 수 없습니다.')
     expect(screen.getByText(body)).toBeTruthy()
@@ -714,10 +714,10 @@ describe('백업에서 복원 — 파일 상태', () => {
 
   it('다 올라간 뒤에는 서버가 확인하는 동안 "확인 중"을 보인다 · 취소하면 처음으로', async () => {
     const { container } = open('restore,restore-checking', '#/file')
-    await heading('백업 파일 올리기')
+    await heading('백업 파일 업로드')
     pickFile(container)
-    await screen.findByText(/확인 중 · 파일이 온전한지 보고 있습니다/)
-    expect(screen.getByText('파일 확인이 끝나면 다음으로 갈 수 있습니다.')).toBeTruthy()
+    await screen.findByText(/확인 중 · 파일이 온전한지 검사하고 있습니다/)
+    expect(screen.getByText('파일 확인이 완료되면 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     expect(next().disabled).toBe(true)
     fireEvent.click(button('취소'))
     await screen.findByText('백업 파일을 여기에 끌어다 놓습니다')
@@ -726,33 +726,33 @@ describe('백업에서 복원 — 파일 상태', () => {
 
   it('올리는 중에는 진행률을 보인다', async () => {
     const { container } = open('restore,restore-uploading', '#/file')
-    await heading('백업 파일 올리기')
+    await heading('백업 파일 업로드')
     pickFile(container)
-    await screen.findByText('올리는 중 · 62%')
-    expect(screen.getByText('다 올라가면 파일을 확인합니다.')).toBeTruthy()
+    await screen.findByText('업로드 중 · 62%')
+    expect(screen.getByText('업로드가 완료되면 파일을 확인합니다.')).toBeTruthy()
   })
 
   it('서버에 빈 공간이 모자라면 얼마가 필요한지 알린다', async () => {
     const { container } = open('restore,restore-nospace', '#/file')
-    await heading('백업 파일 올리기')
+    await heading('백업 파일 업로드')
     pickFile(container)
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('서버에 빈 공간이 모자랍니다. 4.5 GB가 필요한데 1.1 GB만 남았습니다.')
+    expect(alert.textContent).toContain('서버에 여유 공간이 부족합니다. 4.5 GB가 필요한데 1.1 GB만 남았습니다.')
     expect(next().disabled).toBe(true)
   })
 
   it('암호로 보호된 백업 — 틀리면 다시 묻고, 맞으면 다음으로 간다', async () => {
     const { container } = open('restore,restore-password', '#/file')
-    await heading('백업 파일 올리기')
+    await heading('백업 파일 업로드')
     pickFile(container)
     await screen.findByText('암호로 보호된 백업입니다.')
     expect(next().disabled).toBe(true)
-    expect(screen.getByText('백업 암호를 넣고 확인해야 다음으로 갈 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('백업 암호를 입력하고 확인해야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     expect((screen.getByLabelText('백업 암호') as HTMLInputElement).type).toBe('password')
     expect(button('암호 확인').disabled).toBe(true)
     type('백업 암호', 'not-it')
     fireEvent.click(button('암호 확인'))
-    await screen.findByText('암호가 맞지 않습니다. 다시 넣습니다.')
+    await screen.findByText('암호가 맞지 않습니다. 다시 입력합니다.')
     expect(next().disabled).toBe(true)
     type('백업 암호', 'backup-pass')
     fireEvent.click(button('암호 확인'))
@@ -763,7 +763,7 @@ describe('백업에서 복원 — 파일 상태', () => {
 
   it('다시 들어오면 서버가 가진 백업의 상태를 그대로 보인다 · 버릴 수 있다', async () => {
     const { api } = open('restore,restore-kept', '#/file')
-    await heading('백업 파일 올리기')
+    await heading('백업 파일 업로드')
     await screen.findByText('workspace-backup-20260101.jwbak')
     expect(screen.getByText(/파일이 온전하고, 이 버전에서 복원할 수 있는 백업입니다/)).toBeTruthy()
     expect(next().disabled).toBe(false)
@@ -775,7 +775,7 @@ describe('백업에서 복원 — 파일 상태', () => {
 
   it('서버에 있는 경로 — 없는 파일은 입력란에 알리고, 있는 파일은 확인된다', async () => {
     open('restore', '#/file')
-    await heading('백업 파일 올리기')
+    await heading('백업 파일 업로드')
     fireEvent.click(screen.getByRole('radio', { name: '서버에 있는 파일 경로' }))
     type(/서버에 있는 백업 파일 경로/, '/srv/backup/missing.jwbak')
     fireEvent.click(button('파일 확인'))
@@ -797,7 +797,7 @@ describe('백업에서 복원 — 내용 확인과 완료', () => {
 
   it('올려 둔 백업이 없으면 파일 화면으로 돌려보낸다', async () => {
     open('restore,restore-nobackup', '#/review')
-    await heading('백업 파일 올리기')
+    await heading('백업 파일 업로드')
   })
 
   it('서버가 알려 준 막는 사유를 보이고 복원을 막는다', async () => {
@@ -814,9 +814,9 @@ describe('백업에서 복원 — 내용 확인과 완료', () => {
     await heading('이 백업으로 복원합니다')
     fireEvent.click(await screen.findByRole('button', { name: '연결 확인' }))
     await screen.findByText('이 공유로는 복원할 수 없습니다.')
-    expect(screen.getByText(/이 공유에는 원래 서버가 남긴 표식이 없습니다/)).toBeTruthy()
+    expect(screen.getByText(/이 공유에는 원래 서버가 남긴 저장소 마커가 없습니다/)).toBeTruthy()
     expect(screen.queryByText(/번 검사 실패/)).toBeNull()
-    expect(screen.getByText('원래 서버가 쓰던 공유를 연결해야 복원할 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('원래 서버가 사용하던 공유를 연결해야 복원할 수 있습니다.')).toBeTruthy()
     expect(button('복원').disabled).toBe(true)
   })
 
@@ -825,10 +825,10 @@ describe('백업에서 복원 — 내용 확인과 완료', () => {
     await ready()
     fireEvent.click(button('복원'))
     await screen.findByText('이대로는 복원을 시작할 수 없습니다.')
-    expect(screen.getByText(/이 공유에는 원래 서버가 남긴 표식이 없습니다. 다른 공유이거나 비어 있습니다./)).toBeTruthy()
+    expect(screen.getByText(/이 공유에는 원래 서버가 남긴 저장소 마커가 없습니다. 다른 공유이거나 비어 있습니다./)).toBeTruthy()
     // 문구가 정의되지 않은 사유는 코드를 그대로 표시
     expect(screen.getByText('서버가 값을 받지 않았습니다. (domain_unusual)')).toBeTruthy()
-    expect(screen.getByText('위 항목을 고친 뒤 다시 누릅니다.')).toBeTruthy()
+    expect(screen.getByText('위 항목을 수정한 뒤 다시 누릅니다.')).toBeTruthy()
     await heading('이 백업으로 복원합니다')
   })
 
@@ -836,7 +836,7 @@ describe('백업에서 복원 — 내용 확인과 완료', () => {
     const { api } = open('restore,restore-local,restore-proxy', '#/review')
     const sent = vi.spyOn(api, 'restoreApply')
     await ready()
-    const box = screen.getByRole('button', { name: /연결 형태와 내부 대역/ })
+    const box = screen.getByRole('button', { name: /네트워크 구성과 내부 대역/ })
     expect(box.textContent).toContain('기존 프록시 뒤 · 내부 대역 172.28.0.0/24')
     fireEvent.click(box)
     expect((screen.getByLabelText(/프록시 주소 또는 대역/) as HTMLInputElement).value).toBe('192.168.10.5')
@@ -845,10 +845,10 @@ describe('백업에서 복원 — 내용 확인과 완료', () => {
     expect(screen.getByText('프록시 주소를 입력해야 복원할 수 있습니다.')).toBeTruthy()
     type(/프록시 주소 또는 대역/, '192.168.10.5, 192.168.10.6')
     type('내부 대역', '172.30.0.0/16')
-    expect(screen.getByText('내부 대역을 고쳐야 복원할 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('내부 대역을 수정해야 복원할 수 있습니다.')).toBeTruthy()
     type('내부 대역', '172.30.0.0/24')
     fireEvent.click(button('복원'))
-    await heading('복원이 끝났습니다')
+    await heading('복원이 완료되었습니다')
     expect(sent).toHaveBeenCalledWith({
       domain: 'workspace.example.com', storage: { kind: 'local' }, network: 'proxy',
       proxy_addresses: ['192.168.10.5', '192.168.10.6'], subnet: '172.30.0.0/24',
@@ -856,18 +856,18 @@ describe('백업에서 복원 — 내용 확인과 완료', () => {
     // 프록시 뒤이면 인증서 단계 없음
     expect(stepsOf()).toEqual(['unpack:done', 'pull:done', 'database:done', 'files:done', 'zones:done'])
     fireEvent.click(button('완료 화면 열기'))
-    expect(await screen.findByText('백업에 든 파일도 되돌렸습니다.')).toBeTruthy()
+    expect(await screen.findByText('백업에 든 파일도 복원했습니다.')).toBeTruthy()
   })
 
   it('연결 형태를 바꿔 보낸다 · 프록시가 아니면 프록시 주소를 보내지 않는다', async () => {
     const { api } = open('restore,restore-local', '#/review')
     const sent = vi.spyOn(api, 'restoreApply')
     await ready()
-    fireEvent.click(screen.getByRole('button', { name: /연결 형태와 내부 대역/ }))
+    fireEvent.click(screen.getByRole('button', { name: /네트워크 구성과 내부 대역/ }))
     fireEvent.click(screen.getByRole('radio', { name: '사설 주소 + NAT (공유기 · 포트 포워딩)' }))
     expect(screen.queryByLabelText(/프록시 주소 또는 대역/)).toBeNull()
     fireEvent.click(button('복원'))
-    await heading('복원이 끝났습니다')
+    await heading('복원이 완료되었습니다')
     expect(sent).toHaveBeenCalledWith({ domain: 'workspace.example.com', storage: { kind: 'local' }, network: 'router', subnet: '172.28.0.0/24' })
   })
 
@@ -877,12 +877,12 @@ describe('백업에서 복원 — 내용 확인과 완료', () => {
     expect(screen.getByText('파일 없이 복원합니다.')).toBeTruthy()
     expect(screen.getByText('접속 주소가 아직 이 서버를 가리키지 않습니다. 그대로 복원할 수 있습니다.')).toBeTruthy()
     fireEvent.click(button('복원'))
-    await heading('복원이 끝났습니다')
+    await heading('복원이 완료되었습니다')
     fireEvent.click(button('완료 화면 열기'))
     expect(await screen.findByText(/파일 없이 복원했습니다/)).toBeTruthy()
     // 서버가 임시 인증서로 결정함
     expect(screen.getByText('인증서 발급')).toBeTruthy()
-    expect(screen.getByText('원래 서버 끄기')).toBeTruthy()
+    expect(screen.getByText('원래 서버 종료')).toBeTruthy()
   })
 
   it('인증서 발급 실패 — 복원에서도 임시 인증서로 계속할 수 있다', async () => {
@@ -890,10 +890,10 @@ describe('백업에서 복원 — 내용 확인과 완료', () => {
     const retried = vi.spyOn(api, 'restoreRetry')
     await ready()
     fireEvent.click(button('복원'))
-    await heading('복원이 멈췄습니다')
+    await heading('복원이 중단되었습니다')
     expect(stepsOf()).toEqual(['unpack:done', 'pull:done', 'database:done', 'files:done', 'cert:failed', 'zones:pending'])
     fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: /임시 인증서/ }))
-    await heading('복원이 끝났습니다')
+    await heading('복원이 완료되었습니다')
     expect(retried).toHaveBeenCalledWith({ use_temporary_cert: true })
     fireEvent.click(button('완료 화면 열기'))
     expect(await screen.findByText('인증서 발급')).toBeTruthy()
@@ -903,12 +903,12 @@ describe('백업에서 복원 — 내용 확인과 완료', () => {
     open('restore,restore-local,restore-fail', '#/review')
     await ready()
     fireEvent.click(button('복원'))
-    await heading('복원이 멈췄습니다')
+    await heading('복원이 중단되었습니다')
     const card = screen.getByRole('alert')
-    expect(card.textContent).toContain('백업의 데이터를 되돌리다 멈췄습니다.')
+    expect(card.textContent).toContain('백업 데이터 복원 중 중단되었습니다.')
     expect(within(card).getByRole('link', { name: '내용 확인으로 돌아가기' }).getAttribute('href')).toBe('#/review')
     fireEvent.click(within(card).getByRole('button', { name: '이 단계부터 다시' }))
-    await heading('복원이 끝났습니다')
+    await heading('복원이 완료되었습니다')
   })
 })
 
@@ -932,38 +932,38 @@ describe('인증서 올리기 — 사설 CA 의 인증서', () => {
 
   it('서버 인증서 한 장만 올리면 발급 CA 가 없다고 알리고(막지는 않는다), CA 인증서를 올리면 풀린다', async () => {
     const { container, api } = open('ready,upload,cert-leaf', '#/cert')
-    await heading('인증서 올리기')
+    await heading('인증서 업로드')
     expect(screen.getByText('CA 인증서 (선택)')).toBeTruthy()
-    expect(screen.getByTestId('cert-ca-note').textContent).toContain('공개 인증 기관이 내준 인증서면 비워 둡니다.')
+    expect(screen.getByTestId('cert-ca-note').textContent).toContain('공개 인증 기관이 발급한 인증서면 비워 둡니다.')
     const probe = vi.spyOn(api, 'probeCert')
     drop(container, 0, pem('server.crt'))
     drop(container, 1, pem('server.key'))
-    await screen.findByText('인증서 파일에 발급 CA 가 들어 있지 않습니다.')
-    expect(screen.getByText(/사설 CA 가 내준 인증서라면 위의 CA 인증서 칸에/)).toBeTruthy()
-    expect(screen.getByTestId('cert-row-ca').textContent).toContain('들어 있지 않음')
+    await screen.findByText('인증서 파일에 발급 CA 가 포함되어 있지 않습니다.')
+    expect(screen.getByText(/사설 CA 가 발급한 인증서라면 위의 CA 인증서 칸에/)).toBeTruthy()
+    expect(screen.getByTestId('cert-row-ca').textContent).toContain('포함되지 않음')
     expect(next().disabled).toBe(false)                                        // 공개 CA 일 가능성 있음 — 주의에 해당
     expect(probe.mock.calls.at(-1)?.[3] ?? null).toBeNull()
 
     drop(container, 2, pem('ca.crt'))
-    await waitFor(() => expect(screen.getByTestId('cert-row-ca').textContent).toContain('함께 올림'))
-    expect(screen.queryByText('인증서 파일에 발급 CA 가 들어 있지 않습니다.')).toBeNull()
+    await waitFor(() => expect(screen.getByTestId('cert-row-ca').textContent).toContain('함께 업로드함'))
+    expect(screen.queryByText('인증서 파일에 발급 CA 가 포함되어 있지 않습니다.')).toBeNull()
     expect((probe.mock.calls.at(-1)?.[3] as File).name).toBe('ca.crt')         // CA 파일도 함께 확인 요청에 포함
     expect(next().disabled).toBe(false)
 
     // CA 를 제외하면 다시 서버 인증서만으로 확인
-    fireEvent.click(button('CA 인증서 빼기'))
-    await screen.findByText('인증서 파일에 발급 CA 가 들어 있지 않습니다.')
+    fireEvent.click(button('CA 인증서 제거'))
+    await screen.findByText('인증서 파일에 발급 CA 가 포함되어 있지 않습니다.')
     expect(probe.mock.calls.at(-1)?.[3] ?? null).toBeNull()
   })
 
   it('올린 CA 가 그 인증서를 내준 CA 가 아니면 다음으로 갈 수 없다', async () => {
     const { container } = open('ready,upload,cert-leaf,cert-ca-bad', '#/cert')
-    await heading('인증서 올리기')
+    await heading('인증서 업로드')
     drop(container, 0, pem('server.crt'))
     drop(container, 1, pem('server.key'))
     drop(container, 2, pem('other-ca.crt'))
-    await screen.findByText('이 CA 는 올린 인증서를 내준 CA 가 아닙니다.')
-    expect(screen.getByTestId('cert-row-ca').textContent).toContain('이 인증서를 내준 CA 가 아님')
+    await screen.findByText('이 CA 는 업로드한 인증서를 발급한 CA 가 아닙니다.')
+    expect(screen.getByTestId('cert-row-ca').textContent).toContain('이 인증서를 발급한 CA 가 아님')
     expect(next().disabled).toBe(true)
   })
 

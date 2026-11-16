@@ -48,7 +48,7 @@ const TONE_ICON = { warning: 'text-warning', success: 'text-success', primary: '
 
 /**
  * 필터·토글 칩.
- * @example <UiChip label="안 읽음" count={12} modelValue={unread} onUpdateModelValue={setUnread} />
+ * @example <UiChip label="읽지 않음" count={12} modelValue={unread} onUpdateModelValue={setUnread} />
  * @example 팝오버·모달 위 제거 칩: <UiChip variant="static" removable surface="raised" label="긴급" onRemove={…} />
  */
 export function UiChip({

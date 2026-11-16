@@ -276,7 +276,7 @@ async def _await_target_allowed(t: RbiTarget, wait: float | None = None) -> None
     빈 출구(이전 행·검증 실패)도 시작하지 않는다 — 차단된 화면 대신 사유를 통지한다."""
     want = {e.line() for e in eg.load_entries(t.egress)}
     if not want:
-        raise SessionStartError("이 대상의 출구(허용 목적지)가 정해지지 않았습니다 — 관리 › 격리 브라우저에서 대상을 다시 저장하세요", 503)
+        raise SessionStartError("이 대상의 출구(허용 목적지)가 정해지지 않았습니다 — 관리 › 격리 브라우저에서 대상을 다시 저장하십시오", 503)
     if not get_settings().rbi_require_guard:
         return
     deadline = asyncio.get_running_loop().time() + (GUARD_WAIT_SECONDS if wait is None else wait)
@@ -286,7 +286,7 @@ async def _await_target_allowed(t: RbiTarget, wait: float | None = None) -> None
             return
         if asyncio.get_running_loop().time() >= deadline:
             missing = sorted(want - set(g.allow or []))
-            raise SessionStartError(f"격리 규칙이 아직 이 대상을 허용하지 않습니다({', '.join(missing)}) — 잠시 뒤 다시 시도하세요", 503)
+            raise SessionStartError(f"격리 규칙이 아직 이 대상을 허용하지 않습니다({', '.join(missing)}) — 잠시 후 다시 시도하십시오", 503)
         await asyncio.sleep(1.0)
 
 
@@ -304,9 +304,9 @@ async def start_session(db: AsyncSession, user, t: RbiTarget, client_ip: str | N
         if e.target_id == t.id:
             return e
     if existing:
-        raise SessionStartError("이미 다른 대상의 격리 브라우저가 열려 있습니다. 먼저 끝내 주세요", 409)
+        raise SessionStartError("이미 다른 대상의 격리 브라우저가 열려 있습니다. 먼저 종료하십시오", 409)
     if len(await active_sessions(db)) >= s_cfg.rbi_max_sessions:
-        raise SessionStartError(f"동시 세션 상한({s_cfg.rbi_max_sessions})에 닿았습니다. 잠시 뒤 다시 시도하세요", 429)
+        raise SessionStartError(f"동시 세션 상한({s_cfg.rbi_max_sessions})에 도달했습니다. 잠시 후 다시 시도하십시오", 429)
 
     # 네트워크(브리지)를 먼저 보장한다 — 사이드카는 브리지가 있어야 규칙을 적용하고 하트비트를 ok 로 전환한다
     try:
@@ -351,7 +351,7 @@ async def start_session(db: AsyncSession, user, t: RbiTarget, client_ip: str | N
         if not await dk.wait_ready(cid):
             running, code = await dk.container_state(cid)
             what = "미러 에이전트" if want == "mirror" else "KasmVNC"
-            raise dk.DockerError(f"{what} 가 45초 안에 듣기 시작하지 않았습니다" if running else f"세션 컨테이너가 바로 끝났습니다(exit {code})")
+            raise dk.DockerError(f"{what} 가 45초 안에 듣기 시작하지 않았습니다" if running else f"세션 컨테이너가 바로 종료되었습니다(exit {code})")
         sess.status = "running"
         sess.last_seen_at = _now()
         await db.commit()

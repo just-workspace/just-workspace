@@ -37,10 +37,10 @@ export default function Page() {
           if (state === 'pending') setStatus('confirm')
           else if (state === 'done') {
             setStatus('success')
-            setMessage(t('settings.account.recovery.alreadyDone', '이 링크로 복구 이메일을 이미 바꿨습니다.'))
+            setMessage(t('settings.account.recovery.alreadyDone', '이 링크로 복구 이메일을 이미 변경했습니다.'))
           } else {
             setStatus('error')
-            setMessage(t('settings.account.recovery.linkInvalid', '유효하지 않거나 만료된 확인 링크입니다. 설정에서 다시 요청해주세요.'))
+            setMessage(t('settings.account.recovery.linkInvalid', '유효하지 않거나 만료된 확인 링크입니다. 설정에서 다시 요청하십시오.'))
           }
         } catch (e: any) {
           setStatus('error')
@@ -92,13 +92,13 @@ export default function Page() {
           <AuthHeading
             icon="mail"
             title={t('settings.account.recovery.confirmTitle', '복구 이메일 변경 확인')}
-            subtitle={t('settings.account.recovery.confirmBody', '이 주소를 계정의 복구 이메일로 쓰려면 아래 버튼을 누르세요. 누르기 전에는 아무것도 바뀌지 않습니다.')}
+            subtitle={t('settings.account.recovery.confirmBody', '이 주소를 계정의 복구 이메일로 사용하려면 아래 버튼을 누르십시오. 누르기 전에는 아무것도 변경되지 않습니다.')}
           />
           <UiButton size="lg" className="w-full font-semibold" disabled={confirming} onClick={() => void confirmChange()}>
             {t('settings.account.recovery.confirmButton', '복구 이메일 변경 확인')}
           </UiButton>
           <p className="text-[13px] text-muted-foreground">
-            {t('settings.account.recovery.confirmNotMe', '본인이 요청하지 않았다면 이 창을 닫으세요.')}
+            {t('settings.account.recovery.confirmNotMe', '본인이 요청하지 않았다면 이 창을 닫으십시오.')}
           </p>
         </>
       ) : status !== 'loading' && change ? (
@@ -107,8 +107,8 @@ export default function Page() {
             icon={status === 'success' ? 'check' : 'alert-circle'}
             tone={status === 'success' ? 'success' : 'danger'}
             title={status === 'success'
-              ? t('settings.account.recovery.doneTitle', '복구 이메일을 바꿨습니다')
-              : t('settings.account.recovery.failTitle', '복구 이메일을 바꾸지 못했습니다')}
+              ? t('settings.account.recovery.doneTitle', '복구 이메일을 변경했습니다')
+              : t('settings.account.recovery.failTitle', '복구 이메일을 변경하지 못했습니다')}
             subtitle={message}
           />
           <UiButton as="a" href="/settings/account" size="lg" className="w-full font-semibold" onClick={goAccount}>

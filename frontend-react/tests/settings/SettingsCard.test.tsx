@@ -19,7 +19,7 @@ describe('SettingsCard', () => {
     const onSave = vi.fn(); const onReset = vi.fn()
     render(<SettingsCard title="T" changes={2} onSave={onSave} onReset={onReset}>x</SettingsCard>)
     fireEvent.click(screen.getByRole('button', { name: '저장' }))
-    fireEvent.click(screen.getByRole('button', { name: '되돌리기' }))
+    fireEvent.click(screen.getByRole('button', { name: '변경 취소' }))
     expect(onSave).toHaveBeenCalledOnce()
     expect(onReset).toHaveBeenCalledOnce()
   })

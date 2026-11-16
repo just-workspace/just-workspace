@@ -372,21 +372,21 @@ async def app_landing():
     has_desktop = _desktop_path().is_file()
     apk_block = (
         '<img src="/api/apps/android.qr" width="200" height="200" alt="QR" />'
-        '<br><a class="btn" href="/api/apps/android">📱 Android APK 다운로드</a>'
+        '<br><a class="btn" href="/api/apps/android">Android APK 다운로드</a>'
         if has_apk else
         '<p class="s">Android APK가 아직 준비되지 않았습니다.</p>'
     )
     desktop_block = (
-        '<br><a class="btn" href="/api/apps/desktop">🖥 Windows 데스크탑 앱 다운로드</a>'
+        '<br><a class="btn" href="/api/apps/desktop">Windows 데스크탑 앱 다운로드</a>'
         if has_desktop else
-        '<p class="s">🖥 데스크탑: 브라우저 주소창의 <b>앱 설치</b> 아이콘으로 설치형 사용.</p>'
+        '<p class="s">데스크탑: 브라우저 주소창의 <b>앱 설치</b> 아이콘으로 설치형 사용.</p>'
     )
     # NetLab 외부 콘솔 도우미 — 파일은 NetLab 출처가 제공한다(netlab/helper, /downloads/). 주소가 설정된 경우에만
     netlab = settings.netlab_url.rstrip('/')
     netlab_block = (
-        f'<p class="s">🧪 NetLab 콘솔 도우미: 랩 노드 콘솔을 PuTTY·SecureCRT·MobaXterm·Windows Terminal 로 바로 엽니다. '
-        f'관리자 권한 없이 설치, 서명 없는 파일이라 SmartScreen 이 뜨면 <b>추가 정보 → 실행</b>.</p>'
-        f'<a class="btn" href="{html.escape(netlab)}/downloads/netlab-console-setup.exe">🧪 NetLab 콘솔 도우미 (Windows)</a>'
+        f'<p class="s">NetLab 콘솔 도우미: 랩 노드 콘솔을 PuTTY·SecureCRT·MobaXterm·Windows Terminal 로 바로 엽니다. '
+        f'관리자 권한 없이 설치, 서명 없는 파일이라 SmartScreen 이 표시되면 <b>추가 정보 → 실행</b>.</p>'
+        f'<a class="btn" href="{html.escape(netlab)}/downloads/netlab-console-setup.exe">NetLab 콘솔 도우미 (Windows)</a>'
         f'<p class="s"><a href="{html.escape(netlab)}/downloads/netlab-console-setup.exe.sha256" style="color:#9ab">SHA-256</a></p>'
         if netlab.startswith('https://') else ''
     )
@@ -397,11 +397,11 @@ h2{{margin:0 0 8px}} .s{{opacity:.6;font-size:14px;max-width:360px;margin:10px a
 a.btn{{display:inline-block;margin-top:14px;padding:14px 24px;background:#3b82f6;color:#fff;border-radius:10px;text-decoration:none;font-size:16px}}
 img{{margin:22px auto;display:block;background:#fff;padding:10px;border-radius:12px}}</style></head>
 <body><h2>Just Workspace 앱</h2>
-<p class="s">📱 안드로이드: QR 스캔 또는 버튼으로 APK 받기. 설치 시 "출처를 알 수 없는 앱" 1회 허용.</p>
+<p class="s">안드로이드: QR 스캔 또는 버튼으로 APK 다운로드. 설치 시 "출처를 알 수 없는 앱" 1회 허용.</p>
 {apk_block}
-<p class="s">🍎 iOS: Safari로 이 워크스페이스를 열고 <b>공유 → 홈 화면에 추가</b> (PWA 설치).</p>
+<p class="s">iOS: Safari로 이 워크스페이스를 열고 <b>공유 → 홈 화면에 추가</b> (PWA 설치).</p>
 {desktop_block}
-<p class="s">🖥 Windows 앱은 트레이 상주형 — 닫아도 백그라운드 유지하며 알림을 띄웁니다.</p>
+<p class="s">Windows 앱은 트레이 상주형 — 닫아도 백그라운드 유지하며 알림을 표시합니다.</p>
 {netlab_block}
 </body></html>""")
 

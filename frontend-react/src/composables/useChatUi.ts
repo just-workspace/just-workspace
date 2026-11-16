@@ -3,7 +3,7 @@
  * 앱 전역 상태 묶음(zustand store 하나).
  *
  * useChat 비대화를 방지하기 위해 분리했다: 모아보기(스레드·임시 저장·저장한 메시지) 화면, 알림 설정 시트,
- * "안 읽음으로 표시" 로 이동한 새 메시지 구분선, ↑ 로 마지막 본인 메시지 수정, 파일 선택 창 열기 요청.
+ * "읽지 않음으로 표시" 로 이동한 새 메시지 구분선, ↑ 로 마지막 본인 메시지 수정, 파일 선택 창 열기 요청.
  *
  * React: const { collection, setCollection, notifySheetChannelId, ... } = useChatUi()
  *   값 변경 시에는 setter(setCollection·setNotifySheetChannelId·setInviteOpen·setUnreadAnchor·
@@ -23,11 +23,11 @@ export interface ChatUiState {
   notifySheetChannelId: string | null
   /** 멤버 초대 모달 */
   inviteOpen: boolean
-  /** "안 읽음으로 표시" 를 적용한 메시지 — 목록이 새 메시지 구분선을 해당 메시지 위로 이동한다 */
+  /** "읽지 않음으로 표시" 를 적용한 메시지 — 목록이 새 메시지 구분선을 해당 메시지 위로 이동한다 */
   unreadAnchor: { channelId: string; messageId: string } | null
   /** 수정 모드로 열 메시지(컴포저에서 ↑ · 단축키 E) */
   editRequest: string | null
-  /** 컴포저의 파일 선택 창 열기 요청(채널 소개 "파일 올리기" · Ctrl+U). 값 변경 시 연다 */
+  /** 컴포저의 파일 선택 창 열기 요청(채널 소개 "파일 업로드" · Ctrl+U). 값 변경 시 연다 */
   filePickerTick: number
   /** 스레드 패널 넓게 보기 */
   threadWide: boolean

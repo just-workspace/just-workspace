@@ -71,7 +71,7 @@ async def test_upload_name_rules(env):
     assert r["name"] == "v1..2.txt" and (env.home / "docs" / "v1..2.txt").read_bytes() == b"new"
     with pytest.raises(HTTPException) as e:
         await _upload(env, ".env")
-    assert e.value.status_code == 400 and "올릴 수 없는 파일 이름" in e.value.detail
+    assert e.value.status_code == 400 and "업로드할 수 없는 파일 이름" in e.value.detail
     assert await _status(_upload(env, "..")) == 400
     # 경로가 포함되어도 마지막 조각만 사용(탈출 없음)
     r = await _upload(env, "../../evil.txt")

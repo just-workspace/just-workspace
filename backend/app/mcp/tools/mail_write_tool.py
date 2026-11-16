@@ -250,7 +250,7 @@ register(Tool(
 
 register(Tool(
     name="mail_undo_save_draft",
-    title="임시저장 되돌리기",
+    title="임시저장 실행 취소",
     description="Delete a draft that mail_save_draft just created." + UNDO_HINT,
     scope="mcp:write", risk="low",
     parameters={

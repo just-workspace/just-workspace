@@ -525,7 +525,7 @@ def test_unattended_restore(tmp_path, monkeypatch, capsys):
     assert not (svc.paths.state / "restore").exists() and not svc.paths.env_file.exists()      # 아무것도 남기지 않는다
 
     assert cli.main(["apply", "--answers", str(path)]) == 0
-    assert "설치가 끝났습니다" in capsys.readouterr().out and svc.store.locked
+    assert "설치가 완료되었습니다" in capsys.readouterr().out and svc.store.locked
     assert env_of(host)["SECRET_KEY"] == OLD_KEY and env_of(host)["APP_URL"] == "https://new.example.com"
     assert cli.main(["apply", "--answers", str(path)]) == 1                                    # 이미 완료된 설치
 

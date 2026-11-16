@@ -4,7 +4,7 @@
  *  카드(rounded-12): 머리 44 bg-card — mono 12 "n줄 · 크기 · 언어" | 줄바꿈 스위치 · [원본] · [복사] · [Gitea ↗] (각 28, 히트 40)
  *  본문 bg-background, mono 13 / 줄 22: 줄 번호 52(오른쪽 맞춤, 패딩 14) — 클릭 시 해당 줄 링크(#L12)가 복사되고 강조된다,
  *  Shift+클릭 = 범위(#L12-L20). 강조 = warning/0.14 바탕 + 왼쪽 3px warning 바.
- *  아래 안내 12. 1 MB 초과 파일·바이너리는 "원본 내려받기"만 제공한다.
+ *  아래 안내 12. 1 MB 초과 파일·바이너리는 "원본 다운로드"만 제공한다.
  *  구문 색은 토큰: shiki css-variables 테마로 토큰만 수신하고, 색은 GitFileViewer.css 의 --shiki-* 변수를 본 프로젝트 디자인 토큰에 연결한다
  *  (키워드 primary · 문자열 success · 숫자/상수 warning · 주석 muted-foreground). github-light/dark 고정 폐지.
  */

@@ -48,7 +48,7 @@ ENCRYPTION_LABEL = "AES-256-GCM, scrypt(N=32768,r=8,p=1)"
 
 SECRET_WARNING = (
     "이 백업에는 암호화 키(SECRET_KEY)와 DB·서비스 비밀번호가 들어 있습니다. "
-    "백업 파일을 가진 사람은 서버의 모든 데이터를 읽을 수 있습니다 — 접근을 제한된 곳에 두세요."
+    "백업 파일을 가진 사람은 서버의 모든 데이터를 읽을 수 있습니다 — 접근이 제한된 곳에 보관하십시오."
 )
 
 
@@ -176,7 +176,7 @@ def new_manifest(
     created_at: datetime | None = None,
 ) -> dict:
     if kind not in KINDS:
-        raise BackupError(f"모르는 백업 종류: {kind}")
+        raise BackupError(f"알 수 없는 백업 종류: {kind}")
     return {
         "format": FORMAT_VERSION,
         "kind": kind,
@@ -200,11 +200,11 @@ def new_manifest(
 def add_item(manifest: dict, root: Path, item: str, files: list[tuple[str, str]], **extra: Any) -> None:
     """항목을 manifest 에 등록한다. files = [(파일 이름, 역할)]. 크기·SHA-256 은 여기서 계산한다."""
     if item not in ITEMS:
-        raise BackupError(f"모르는 항목: {item}")
+        raise BackupError(f"알 수 없는 항목: {item}")
     entries = []
     for name, role in files:
         if not _NAME_RE.fullmatch(name) or name == MANIFEST_NAME:
-            raise BackupError(f"쓸 수 없는 파일 이름: {name}")
+            raise BackupError(f"사용할 수 없는 파일 이름: {name}")
         path = root / name
         restrict(path)
         entries.append({"name": name, "role": role, "size": path.stat().st_size, "sha256": sha256_file(path)})

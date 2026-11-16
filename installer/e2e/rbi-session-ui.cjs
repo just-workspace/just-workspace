@@ -143,7 +143,7 @@ const TOLERANCE = 12
     console.log('   캡처: ' + shot)
 
     const ended = await call('DELETE', '/api/rbi/sessions/' + sid)
-    expect('세션 끝내기', ended.status === 200 || ended.status === 204, JSON.stringify(ended).slice(0, 200))
+    expect('세션 종료', ended.status === 200 || ended.status === 204, JSON.stringify(ended).slice(0, 200))
     const after = await call('GET', '/api/rbi/sessions/' + sid)
     expect('끝난 세션', after.body && after.body.status === 'ended', JSON.stringify(after).slice(0, 200))
     const gone = await page.evaluate(async sid => (await fetch(`/rbi/${sid}/`, { credentials: 'same-origin' })).status, sid).catch(() => 0)

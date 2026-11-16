@@ -245,7 +245,7 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
         steps = st["steps"]
         step = {"id": f"st{len(steps) + 1}", "tool": name, "kind": "ask",
                 "label": "계획 승인 요청" if kind == "plan" else "사용자에게 질문",
-                "status": "running", "detail": "답을 기다리는 중 — 아래 카드에서 고르세요",
+                "status": "running", "detail": "답을 기다리는 중 — 아래 카드에서 선택하십시오",
                 "started_at": progress.now_iso(), "ended_at": None}
         steps.append(step)
         st["questions"].append(ai_interact.public(rec))
@@ -264,7 +264,7 @@ async def _chat_event_stream(conv_id, user, cfg, external, system, tools, use_to
         st["questions"] = [pub if q.get("id") == rec["id"] else q for q in st["questions"]]
         yield _sse("question", pub)
         stt = done.get("status")
-        label = {"answered": "답함", "skipped": "넘김", "canceled": "멈춤", "expired": "만료됨"}.get(stt, stt)
+        label = {"answered": "답함", "skipped": "넘김", "canceled": "중지됨", "expired": "만료됨"}.get(stt, stt)
         if kind == "plan" and stt == "answered":
             label = "계획 계속 다듬기" if (done.get("answer") or {}).get("choice") == "keep_planning" else "계획 승인"
         step.update(status="done" if stt in ("answered", "skipped") else "failed", detail=label, ended_at=progress.now_iso())
@@ -842,7 +842,7 @@ async def _enforce_daily_limit(db: AsyncSession, user: User) -> None:
         return
     n = await ai_quota.chat_used(db, user)
     if n >= limit:
-        raise HTTPException(status_code=429, detail=f"오늘 AI 요청 한도({limit}회)를 다 썼습니다. 내일 다시 시도하세요")
+        raise HTTPException(status_code=429, detail=f"오늘 AI 요청 한도({limit}회)를 모두 사용했습니다. 내일 다시 시도하십시오")
 
 
 async def _prune_old_conversations(db: AsyncSession, user: User) -> None:
@@ -976,7 +976,7 @@ async def _clear_feedback_snapshots(db: AsyncSession, conv_ids: list[str]) -> No
         return
     from sqlalchemy import update
 
-    # 관리자 › AI 운영 › 피드백 — 첨부가 있던 행은 "사용자가 지움"으로 보존한다. 통계 기간에 영향이 없도록 updated_at 은 유지한다.
+    # 관리자 › AI 운영 › 피드백 — 첨부가 있던 행은 "사용자가 삭제"으로 보존한다. 통계 기간에 영향이 없도록 updated_at 은 유지한다.
     await db.execute(update(AIMessageFeedback).where(AIMessageFeedback.conversation_id.in_(conv_ids),
                                                      AIMessageFeedback.conversation_snapshot.is_not(None))
                      .values(conversation_snapshot=None, snapshot_state="conversation_deleted",
@@ -1166,7 +1166,7 @@ async def _refuse_while_generating(path: list) -> None:
     답변 두 개가 동일 대화에서 동시에 실행되었다. 멈춤을 선택한 답변은 상태가 stopped 이므로 본 검사에 해당하지 않는다.
     """
     if await ai_runs.alive_set([m.id for m in path if m.role == "assistant" and m.status == "streaming"]):
-        raise HTTPException(status_code=409, detail="답변을 만드는 중입니다 — 끝나거나 멈춘 뒤 다시 보내세요")
+        raise HTTPException(status_code=409, detail="답변을 만드는 중입니다 — 완료되거나 중지한 뒤 다시 보내십시오")
 
 
 async def _take_attachments(db: AsyncSession, user: User, conv_id: str, ids: list[str], cfg) -> list:
@@ -1328,7 +1328,7 @@ async def chat_regenerate(
     if not any(m.role == "user" for m in path):
         raise HTTPException(status_code=400, detail="재생성할 사용자 메시지가 없습니다")
     if await ai_runs.alive_set([m.id for m in trailing if m.status == "streaming"]):
-        raise HTTPException(status_code=409, detail="답변을 만드는 중입니다 — 멈춘 뒤 다시 시도하세요")
+        raise HTTPException(status_code=409, detail="답변을 만드는 중입니다 — 중지한 뒤 다시 시도하십시오")
     for m in trailing:
         await db.delete(m)
     if trailing:
@@ -1396,7 +1396,7 @@ async def _owned_assistant_message(db: AsyncSession, user: User, msg_id: str) ->
 @router.post("/messages/{msg_id}/stop")
 @require_module("ai")
 async def mark_stopped(msg_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """사용자가 [멈추기]를 선택했음을 기록한다(연결 종료만으로는 멈춤과 네트워크 단절을 구분할 수 없다).
+    """사용자가 [중지]를 선택했음을 기록한다(연결 종료만으로는 멈춤과 네트워크 단절을 구분할 수 없다).
 
     스트림이 먼저 종료되어 interrupted 로 저장된 경우와 저장 전(streaming)인 경우 모두 stopped 로 변경한다.
     """
@@ -1887,14 +1887,14 @@ async def _project_out(db: AsyncSession, user: User, p, role_: str, *, with_file
 def _clean_name(name: str) -> str:
     v = " ".join((name or "").split())[:ai_projects.MAX_NAME]
     if not v:
-        raise HTTPException(status_code=400, detail="프로젝트 이름을 입력하세요")
+        raise HTTPException(status_code=400, detail="프로젝트 이름을 입력하십시오")
     return v
 
 
 def _clean_instructions(text: str) -> str:
     v = (text or "").strip()
     if len(v) > ai_projects.MAX_INSTRUCTIONS:
-        raise HTTPException(status_code=400, detail=f"{ai_projects.MAX_INSTRUCTIONS:,}자까지 쓸 수 있습니다. 긴 자료는 지식 파일로 올리세요.")
+        raise HTTPException(status_code=400, detail=f"{ai_projects.MAX_INSTRUCTIONS:,}자까지 작성할 수 있습니다. 긴 자료는 지식 파일로 업로드하십시오.")
     return v
 
 
@@ -2006,7 +2006,7 @@ async def add_project_files(project_id: str, body: ProjectFilesBody, user: User 
     have = {(f.storage_owner_id, f.path) for f in existing}
     paths = [x for x in dict.fromkeys(body.paths or []) if isinstance(x, str) and x.strip()]
     if len(paths) > ai_projects.MAX_PICK:
-        raise HTTPException(status_code=400, detail=f"한 번에 {ai_projects.MAX_PICK}개까지 고를 수 있습니다")
+        raise HTTPException(status_code=400, detail=f"한 번에 {ai_projects.MAX_PICK}개까지 선택할 수 있습니다")
     if len(existing) + len(paths) > ai_projects.MAX_FILES:
         raise HTTPException(status_code=400, detail=f"지식 파일은 {ai_projects.MAX_FILES}개까지입니다")
     for vp in paths:

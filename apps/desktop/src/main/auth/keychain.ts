@@ -29,8 +29,8 @@ export async function saveRefreshToken(token: string): Promise<void> {
     // 않는다. 저장을 포기하면 매번 로그인이 필요하나, 평문 토큰을 디스크에 남기는
     // 것보다 안전하다.
     throw new Error(
-      'OS 자격 증명 저장소를 쓸 수 없습니다. 리눅스라면 gnome-keyring 또는 ' +
-        'kwallet 을 설치한 뒤 다시 시도하세요.',
+      'OS 자격 증명 저장소를 사용할 수 없습니다. 리눅스라면 gnome-keyring 또는 ' +
+        'kwallet 을 설치한 뒤 다시 시도하십시오.',
     );
   }
   const enc = await safeStorage.encryptStringAsync(token);

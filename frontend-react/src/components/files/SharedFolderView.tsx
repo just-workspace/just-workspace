@@ -229,7 +229,7 @@ export function SharedFolderView({ token, access, meta, onBlocked, onLocked }: S
                                 {item.is_dir ? t(km.labelKey) : `${formatSize(item.size)} · ${formatStamp(item.modified_at)}`}
                               </span>
                               {!item.is_dir && !item.preview && !allowDownload && (
-                                <span className="sr-only">{t('share.noPreviewBlocked', '이 형식은 미리 볼 수 없고 내려받기가 막혀 있습니다.')}</span>
+                                <span className="sr-only">{t('share.noPreviewBlocked', '이 형식은 미리 볼 수 없고 다운로드가 막혀 있습니다.')}</span>
                               )}
                             </span>
                           </button>
@@ -250,7 +250,7 @@ export function SharedFolderView({ token, access, meta, onBlocked, onLocked }: S
                                   )}
                                   {/* 미리보기 불가 형식 + 내려받기 막힘 = 가능한 동작이 없는 줄 — 사유를 표시한다 */}
                                   {!item.preview && !allowDownload && (
-                                    <span className="whitespace-nowrap text-[11px] text-muted-foreground" title={t('share.noPreviewBlocked', '이 형식은 미리 볼 수 없고 내려받기가 막혀 있습니다.')}>
+                                    <span className="whitespace-nowrap text-[11px] text-muted-foreground" title={t('share.noPreviewBlocked', '이 형식은 미리 볼 수 없고 다운로드가 막혀 있습니다.')}>
                                       {t('share.folder.noPreview', '미리보기 불가')}
                                     </span>
                                   )}

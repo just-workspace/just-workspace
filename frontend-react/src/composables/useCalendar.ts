@@ -257,7 +257,7 @@ export async function updateCalendar(id: string, updates: Partial<CalendarInfo>)
   } catch (e: any) {
     console.error('updateCalendar error:', e)
     // 실패를 무시하면 변경된 것으로 오인된다 — 호출부가 여러 곳이므로 여기서 통지한다
-    addToast('error', detailOf(e) || i18n.t('calendar.error.calendarUpdate', '캘린더를 바꾸지 못했습니다'))
+    addToast('error', detailOf(e) || i18n.t('calendar.error.calendarUpdate', '캘린더를 변경하지 못했습니다'))
   }
 }
 

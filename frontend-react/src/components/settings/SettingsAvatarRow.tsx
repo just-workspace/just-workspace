@@ -1,6 +1,6 @@
 /**
  * 계정 카드 최상단 아바타 줄.
- * 아바타 64 + 이름 15/600 + 역할 12 muted(+ 오류 12 danger), 오른쪽 [사진 바꾸기](32 테두리) — 숨김 파일 입력을 연다.
+ * 아바타 64 + 이름 15/600 + 역할 12 muted(+ 오류 12 danger), 오른쪽 [사진 변경](32 테두리) — 숨김 파일 입력을 연다.
  * 카드 본문 패딩을 음수 여백으로 상쇄해 카드 폭 전체에 하단 선을 표시한다(SettingsCard 본문 첫 자식으로 사용한다).
  *
  * @example <SettingsAvatarRow avatarUrl={u.avatar_url} name="홍길동" role="관리자" uploading={false} onFile={upload} />
@@ -23,7 +23,7 @@ export interface SettingsAvatarRowProps {
   role: string
   /** 업로드 오류 문구 */
   error?: string
-  /** 업로드 중 — 버튼 비활성 + "올리는 중" */
+  /** 업로드 중 — 버튼 비활성 + "업로드 중" */
   uploading?: boolean
   /** 파일 입력 change(파일 선택 후). 처리 후 input.value 초기화는 부모가 담당 */
   onFileChange: (e: ChangeEvent<HTMLInputElement>) => void

@@ -270,7 +270,7 @@ async function sendReply(t: Toast, text: string): Promise<void> {
       kind: 'sync',
       at: Date.now(),
       title: '답장을 보내지 못했습니다',
-      body: `${t.channel || '대화'} — ${e instanceof Error ? e.message : String(e)}. 앱에서 다시 보내 주세요.`,
+      body: `${t.channel || '대화'} — ${e instanceof Error ? e.message : String(e)}. 앱에서 다시 보내십시오.`,
       deepLink: t.deepLink,
     });
   }

@@ -1,8 +1,8 @@
 /**
- * SSL 인증서 올리기 — 관리 › 보안·SSL 카드 헤더 [인증서 올리기].
+ * SSL 인증서 올리기 — 관리 › 보안·SSL 카드 헤더 [인증서 업로드].
  * UiModal 520: 인증서 · 개인 키 두 칸(선택한 파일 행 h-48 / 점선 드롭 영역 h-80).
  * 파일 선택 시 서버가 즉시 판독하여(POST /api/admin/settings/ssl/inspect) 도메인·발급·만료를 회색 상자에 표시.
- * 둘 다 존재하고 쌍이 일치하며 도메인이 일치할 때만 [올리고 적용] 활성화. 쌍 불일치·도메인 불일치는 해당 칸 error.
+ * 둘 다 존재하고 쌍이 일치하며 도메인이 일치할 때만 [업로드 후 적용] 활성화. 쌍 불일치·도메인 불일치는 해당 칸 error.
  * 업로드는 기존 POST /api/admin/settings/ssl 사용(서버도 동일한 검사를 재수행).
  */
 import { useRef, useState, type DragEvent, type ReactNode } from 'react'

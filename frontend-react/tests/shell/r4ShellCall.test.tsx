@@ -158,7 +158,7 @@ describe('미니 통화 창', () => {
     expect(toast.action?.label).toBe(t('meetings.rejoin'))
   })
 
-  it('마지막 사람이면 "통화가 끝났습니다", 행동 없음', async () => {
+  it('마지막 사람이면 "통화가 종료되었습니다", 행동 없음', async () => {
     meetingsStore.setState({ participants: [p('me', '나', { isLocal: true })] as any })
     renderInRouter(<LayoutMiniCall mobile={false} />, '/mail')
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: t('meetings.controls.leave') })) })

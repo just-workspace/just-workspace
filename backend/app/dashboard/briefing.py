@@ -287,7 +287,7 @@ async def _enforce_limit(db: AsyncSession, user: User) -> None:
         DashBriefing.user_id == user.id, DashBriefing.started_at >= since,
     ))).scalar_one()
     if int(n_chat) + int(n_brief or 0) >= limit:
-        raise HTTPException(status_code=429, detail=f"오늘 AI 요청 한도({limit}회)를 다 썼습니다. 내일 다시 시도하세요")
+        raise HTTPException(status_code=429, detail=f"오늘 AI 요청 한도({limit}회)를 모두 사용했습니다. 내일 다시 시도하십시오")
 
 
 # ─── 엔드포인트 ───
@@ -338,7 +338,7 @@ async def generate_briefing(
 ):
     s, e = sources.parse_day_range(day_start, day_end)
     if not await is_enabled(db, user.id):
-        raise HTTPException(status_code=400, detail="브리핑이 꺼져 있습니다")
+        raise HTTPException(status_code=400, detail="브리핑이 비활성화되어 있습니다")
     cfg, external, reason = await _availability(db, user)
     if reason:
         raise HTTPException(status_code=400, detail=reason)
@@ -391,7 +391,7 @@ async def generate_briefing(
             if not related:
                 prep_line = None
         except asyncio.TimeoutError:
-            error = "AI 응답이 늦어 브리핑을 만들지 못했습니다"
+            error = "AI 응답이 지연되어 브리핑을 만들지 못했습니다"
         except ValueError:
             error = "AI 응답을 읽지 못했습니다"
         except Exception as ex:

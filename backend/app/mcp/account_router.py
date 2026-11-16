@@ -99,9 +99,9 @@ async def create_token(
     """Create a PAT (scope clamped to mcp:read). Returns the plaintext token ONCE."""
     name = (body.name or "").strip()
     if not name:
-        raise HTTPException(status_code=400, detail="이름을 입력하세요")
+        raise HTTPException(status_code=400, detail="이름을 입력하십시오")
     if body.expires_days not in TOKEN_EXPIRY_DAYS:
-        raise HTTPException(status_code=400, detail="만료는 30일·90일·1년 중에서 고르세요(무기한 토큰은 만들 수 없습니다)")
+        raise HTTPException(status_code=400, detail="만료는 30일·90일·1년 중에서 선택하십시오(무기한 토큰은 만들 수 없습니다)")
     requested = (body.scope or "").split() or None
     token, row = await pat_store.create_personal_token(
         db, user_id=user.id, name=name[:255],

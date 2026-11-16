@@ -64,21 +64,21 @@ def banner(svc: api.Services, fingerprint: str, port: int) -> str:
     else:
         token = svc.tokens.ensure()
         lines += [
-            f" 브라우저에서 여세요:  https://{host}:{port}/?token={token}",
-            " (설치 토큰은 24시간 동안 유효합니다. 다시 받기: docker exec jw-installer jw token)",
+            f" 브라우저에서 여십시오:  https://{host}:{port}/?token={token}",
+            " (설치 토큰은 24시간 동안 유효합니다. 재발급: docker exec jw-installer jw token)",
         ]
         if guessed:
-            lines.append(" (주소는 이 서버에서 추정한 값입니다. 다른 주소로 접속한다면 주소 부분만 바꿔 여세요.)")
+            lines.append(" (주소는 이 서버에서 추정한 값입니다. 다른 주소로 접속한다면 주소 부분만 변경하여 여십시오.)")
             try:
                 import ipaddress
 
                 if ipaddress.ip_address(host).is_private:
-                    lines.append(" (추정한 주소가 사설 주소입니다. 클라우드 서버 등 밖에서 접속한다면 서버의 공인 주소를 쓰세요.)")
+                    lines.append(" (추정한 주소가 사설 주소입니다. 클라우드 서버 등 외부에서 접속한다면 서버의 공인 주소를 사용하십시오.)")
             except ValueError:
                 pass
     lines += [
         " 이 주소의 인증서는 설치 관리자가 스스로 만든 것이라 브라우저가 경고합니다.",
-        " 아래 지문과 같은지 확인하고 계속하세요.",
+        " 아래 지문과 같은지 확인하고 계속하십시오.",
         f" SHA-256 지문: {fingerprint}",
         "=" * 72, "",
     ]
@@ -132,15 +132,15 @@ def main() -> int:
         print(f"시작할 수 없습니다: {e}", file=sys.stderr, flush=True)
         return 1
     if not os.environ.get("JW_HOST_DIR"):
-        print("주의: JW_HOST_DIR 가 없습니다 — 호스트의 데이터 폴더 경로를 -e JW_HOST_DIR=… 로 알려 주세요.",
+        print("주의: JW_HOST_DIR 가 없습니다 — 호스트의 데이터 폴더 경로를 -e JW_HOST_DIR=… 로 지정하십시오.",
               file=sys.stderr, flush=True)
     svc = api.build_services(paths)
     if not (os.environ.get("JW_INSTALLER_VERSION") or "").strip():
         # 승격(Beta → Stable)한 이미지는 재빌드하지 않으므로 이미지 내 VERSION 이 Beta 의 문자열이다(app/bundle.py)
-        print(f"알림: JW_INSTALLER_VERSION 이 없어 이미지에 든 버전({svc.bundle.version})을 씁니다. "
-              "이미지 태그와 다르면 -e JW_INSTALLER_VERSION=<버전> 을 주고 다시 띄우세요.", flush=True)
+        print(f"알림: JW_INSTALLER_VERSION 이 없어 이미지에 든 버전({svc.bundle.version})을 사용합니다. "
+              "이미지 태그와 다르면 -e JW_INSTALLER_VERSION=<버전> 을 지정하고 다시 실행하십시오.", flush=True)
     if not os.path.exists("/var/run/docker.sock"):
-        print("주의: /var/run/docker.sock 이 붙어 있지 않습니다 — 설치를 진행할 수 없습니다.", file=sys.stderr, flush=True)
+        print("주의: /var/run/docker.sock 이 마운트되어 있지 않습니다 — 설치를 진행할 수 없습니다.", file=sys.stderr, flush=True)
     cert, key, fingerprint = ensure_tls(svc)
     wizard_port = int(os.environ.get("JW_PORT", WIZARD_PORT))
     internal_port = int(os.environ.get("JW_INTERNAL_PORT", render.INTERNAL_API_PORT))

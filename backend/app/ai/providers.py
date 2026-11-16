@@ -133,7 +133,7 @@ async def _openai_stream(cfg: ProviderConfig, messages, tools):
                 if retryable and attempts < 3:
                     await asyncio.sleep(3.0 * attempts)
                     continue
-                hint = " (로컬 LLM 이 응답하지 않습니다 — 모델을 다시 올리는 중일 수 있으니 잠시 후 다시 시도하세요)" if retryable else ""
+                hint = " (로컬 LLM 이 응답하지 않습니다 — 모델을 다시 올리는 중일 수 있으니 잠시 후 다시 시도하십시오)" if retryable else ""
                 yield {"type": "error", "message": f"{resp.status_code}: {body[:300]}{hint}"}
                 return
             break

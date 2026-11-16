@@ -208,7 +208,7 @@ async def compute_egress(url: str, allowed_hosts: list[str], extra_ports: list[i
                 raise ValueError(f"{host} — 호스트 이름 형식이 올바르지 않습니다")
             ips = await resolve_ipv4(host)
             if not ips:
-                raise ValueError(f"{host} — 이름을 풀지 못했습니다(저장할 때 IP 로 고정합니다 — DNS 를 확인하세요)")
+                raise ValueError(f"{host} — 이름을 풀지 못했습니다(저장할 때 IP 로 고정합니다 — DNS 를 확인하십시오)")
             ips = ips[:1]  # 세션 컨테이너의 --add-host 와 동일한 하나로 고정
         for ip in ips:
             a = ipaddress.ip_address(ip)
@@ -220,7 +220,7 @@ async def compute_egress(url: str, allowed_hosts: list[str], extra_ports: list[i
                 raise ValueError(f"{host} → {ip} — 허용 상한(RBI_ALLOW_CEILING) 밖입니다. 사설/LAN 주소만 열 수 있습니다")
             why = _in_protected(ip, prot)
             if why and not force:
-                raise ValueError(f"{host} → {ip} — 워크스페이스 자신의 주소입니다({why}). 꼭 열어야 하면 강제(force)로 저장하세요")
+                raise ValueError(f"{host} → {ip} — 워크스페이스 자신의 주소입니다({why}). 꼭 열어야 하면 강제(force)로 저장하십시오")
             if why:
                 warnings.append(f"{host} → {ip}: 워크스페이스 자신의 주소({why})를 강제로 엽니다")
             elif force:

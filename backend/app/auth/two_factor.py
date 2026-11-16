@@ -124,7 +124,7 @@ async def regenerate_recovery_codes(
 ):
     """복구 코드 신규 발급 — 인증 앱 코드로 본인 확인 후, 기존 코드는 모두 폐기."""
     if not user.totp_secret:
-        raise HTTPException(status_code=400, detail="2단계 인증이 켜져 있지 않습니다")
+        raise HTTPException(status_code=400, detail="2단계 인증이 활성화되어 있지 않습니다")
     if not pyotp.TOTP(user.totp_secret).verify((body.code or "").strip(), valid_window=1):
         raise HTTPException(status_code=400, detail="인증 코드가 올바르지 않습니다")
     codes = issue_new_codes(user)

@@ -246,7 +246,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeDraft])
 
-  // 채널 소개 "파일 올리기" · Ctrl+U — 채널 컴포저만 응답
+  // 채널 소개 "파일 업로드" · Ctrl+U — 채널 컴포저만 응답
   const firstTick = useRef(true)
   useEffect(() => {
     if (firstTick.current) { firstTick.current = false; return }

@@ -51,7 +51,7 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
 
   // act(이름, 구역 id, 활성화 여부) — 스위치를 클릭하고(확인 창이 표시되면 진행 버튼을 클릭한다) 반영될 때까지 확인한다
   const act = async (name, id, on) => {
-    console.log(`== ${name} ${on ? '켜기' : '끄기'} ==`)
+    console.log(`== ${name} ${on ? '활성화' : '끄기'} ==`)
     if ((await toggle(name).getAttribute('aria-checked')) === String(on)) {
       console.log('   이미 그 상태다 — 건너뛴다')
       return

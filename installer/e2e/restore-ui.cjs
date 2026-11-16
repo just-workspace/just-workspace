@@ -74,13 +74,13 @@ async function main() {
   await page.goto(`${opt.url}/?token=${encodeURIComponent(opt.token)}`)
   await heading('사전 점검', 60000)
   await press('다음', 180000)
-  await heading('어떻게 시작할까요')
+  await heading('어떻게 시작하시겠습니까')
   await page.getByRole('radio', { name: /백업에서 복원/ }).click()
   await snap('start')
   await press('다음')
 
   console.log('== 백업 파일 ==')
-  await heading('백업 파일 올리기')
+  await heading('백업 파일 업로드')
   expect('"아직 지원하지 않습니다"가 아니다', (await page.getByText(/아직 지원하지 않습니다/).count()) === 0)
   if (opt.path) {
     await page.getByText('서버에 있는 파일 경로', { exact: true }).click()
@@ -91,7 +91,7 @@ async function main() {
     const size = fs.statSync(opt.backup).size
     await page.locator('input[type=file]').first().setInputFiles(opt.backup)
     // 올리는 중(진행률) → 확인 중 → 확인됨
-    const sawProgress = await page.getByText(/올리는 중|확인 중/).first().waitFor({ state: 'visible', timeout: 30000 }).then(() => true).catch(() => false)
+    const sawProgress = await page.getByText(/업로드 중|확인 중/).first().waitFor({ state: 'visible', timeout: 30000 }).then(() => true).catch(() => false)
     expect('올리는 중·확인 중 상태가 보인다', sawProgress)
     await snap('file-uploading')
     console.log(`   올린 크기 ${size} 바이트`)
@@ -171,19 +171,19 @@ async function main() {
   ok('적용 화면(진행 중)')
   await page.waitForTimeout(6000)
   const running = await page.locator('main').innerText()
-  expect('복원 단계 이름이 보인다', /설정 파일/.test(running) && /데이터 되돌리기/.test(running), running.slice(0, 200))
+  expect('복원 단계 이름이 보인다', /설정 파일/.test(running) && /데이터 복원/.test(running), running.slice(0, 200))
   await snap('apply-running')
   await noOverflow('적용')
-  await page.getByRole('heading', { name: '복원이 끝났습니다' }).first().waitFor({ state: 'visible', timeout: 40 * 60 * 1000 })
+  await page.getByRole('heading', { name: '복원이 완료되었습니다' }).first().waitFor({ state: 'visible', timeout: 40 * 60 * 1000 })
   ok('복원 완료')
   await snap('apply-done')
   const open = page.getByRole('button', { name: '완료 화면 열기' }).or(page.getByRole('link', { name: '완료 화면 열기' }))
   if (await open.count()) await open.first().click()
   await page.getByText('다음에 할 일').waitFor({ timeout: 30000 })
   const done = await page.locator('body').innerText()
-  const want = { restored: /백업에 든 파일도 되돌렸습니다/, not_included: /파일 없이 복원했습니다/, nfs: /네트워크 저장소를 다시 연결했습니다/ }[opt['expect-files']]
+  const want = { restored: /백업에 든 파일도 복원했습니다/, not_included: /파일 없이 복원했습니다/, nfs: /네트워크 저장소를 다시 연결했습니다/ }[opt['expect-files']]
   expect(`완료 화면: 파일 문구(${opt['expect-files']})`, want.test(done), done.slice(0, 300))
-  expect('완료 화면: 할 일(접속 주소 옮기기 · 원래 서버 끄기)', /접속 주소 옮기기/.test(done) && /원래 서버 끄기/.test(done))
+  expect('완료 화면: 할 일(접속 주소 옮기기 · 원래 서버 끄기)', /접속 주소 이전/.test(done) && /원래 서버 종료/.test(done))
   const domain = opt.domain || review.domain
   const href = await page.getByRole('link', { name: /워크스페이스 열기/ }).first().getAttribute('href')
   expect('완료 화면: 워크스페이스 열기가 접속 주소로 간다', href === `https://${domain}`, String(href))
@@ -192,7 +192,7 @@ async function main() {
 
   console.log('== 복원 뒤 잠김 ==')
   await page.goto(opt.url + '/')
-  await heading('설치가 이미 끝났습니다', 60000)
+  await heading('설치가 이미 완료되었습니다', 60000)
   ok('복원 뒤에는 잠김 화면')
   await snap('locked')
   return finish(browser)

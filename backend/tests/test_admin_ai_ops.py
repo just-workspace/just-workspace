@@ -220,7 +220,7 @@ async def test_snapshot_expiry_and_conversation_delete(env):
         await db.refresh(x)
     assert old.conversation_snapshot is None and old.snapshot_state == "expired" and old.comment == "의견"
     assert fresh.conversation_snapshot == "[]" and none.snapshot_state is None
-    # 사용자가 대화를 삭제하면 "사용자가 지움"(첨부가 없던 행은 그대로 '첨부 안 함')
+    # 사용자가 대화를 삭제하면 "사용자가 삭제"(첨부가 없던 행은 그대로 '첨부 안 함')
     conv = AIConversation(user_id="alice", title="t")
     db.add(conv)
     await db.commit()

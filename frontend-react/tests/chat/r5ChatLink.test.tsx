@@ -89,7 +89,7 @@ describe('링크 미리보기 카드', () => {
     expect(chatStore.getState().messages[0].link_preview).toBeNull()
   })
 
-  it('모바일 길게 눌러 시트: 보낸 사람 + 미리보기 있을 때만 "미리보기 지우기"가 "수정" 바로 아래(핸드오프 15-5)', async () => {
+  it('모바일 길게 눌러 시트: 보낸 사람 + 미리보기 있을 때만 "미리보기 삭제"가 "수정" 바로 아래(핸드오프 15-5)', async () => {
     const own = msg({ sender: { id: 'u1', username: 'kim', display_name: '김서연', avatar_url: null } })
     chatStore.setState({ messages: [own as any] })
     api.handler = () => ({ ok: true })
@@ -157,7 +157,7 @@ describe('상태 메시지 이모지 8×2', () => {
     expect(toServer('statusEmojiRecent', [])).toBeNull()
   })
 
-  it('이모지 버튼 → 상자 "최근 · 자주 쓰는" + 16칸, 고른 칸 bg-accent ring-primary, 저장하면 최근에 들어간다', async () => {
+  it('이모지 버튼 → 상자 "최근 · 자주 사용" + 16칸, 고른 칸 bg-accent ring-primary, 저장하면 최근에 들어간다', async () => {
     chatStore.setState({ myStatus: { mode: 'auto', custom_text: '집중 근무 중', custom_emoji: '🎧', custom_expires_at: null, dnd_until: null, state: 'online' } as any })
     api.handler = (url, opts) => (url === '/api/chat/me/status' && opts?.method === 'PUT' ? { mode: 'auto', state: 'online', ...opts.body } : {})
     renderInRouter(<LayoutUserMenu />)

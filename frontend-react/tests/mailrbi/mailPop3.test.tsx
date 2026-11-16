@@ -169,7 +169,7 @@ describe('MailReader 툴바·더보기', () => {
     const r = open('pop3')
     await waitFor(() => expect(screen.getByRole('button', { name: '삭제 (Del)' })).toBeTruthy())
     expect(screen.queryByRole('button', { name: /^보관/ })).toBeNull()
-    expect(screen.getByRole('button', { name: '안 읽음으로 (U)' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '읽지 않음으로 (U)' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '더보기 — 스팸·원문·인쇄' }))
     expect(screen.queryByText('스팸으로')).toBeNull()
     expect(screen.getByText('별표')).toBeTruthy()

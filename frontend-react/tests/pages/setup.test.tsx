@@ -108,7 +108,7 @@ describe('최초 설정 — 설정 토큰', () => {
     type('setup-admin-user', 'root1')
     type('setup-admin-pass', 'first-admin-pass-7')
     fireEvent.click(submit())
-    expect((await screen.findByRole('alert')).textContent).toContain('설정 토큰이 맞지 않습니다')
+    expect((await screen.findByRole('alert')).textContent).toContain('설정 토큰이 일치하지 않습니다')
     expect(screen.getByText('관리자 계정 만들기')).toBeTruthy()
     expect(login.calls).toHaveLength(0)
   })

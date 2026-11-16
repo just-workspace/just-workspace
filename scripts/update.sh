@@ -11,7 +11,8 @@
 #   bash scripts/update.sh --rollback   # 직전 업데이트 때 적어 둔 이미지로 되돌린다
 #
 # 하는 일:
-#   1. 지금 돌고 있는 우리 이미지의 이름과 ID 를 적어 둔다(.update-rollback)
+#   1. 지금 돌고 있는 우리 이미지에 되돌릴 때 쓸 태그(<이름>-rollback)를 붙이고 적어 둔다(.update-rollback)
+#      — 태그가 없으면 새로 빌드하는 순간 옛 이미지가 지워질 수 있다
 #   2. git pull --ff-only
 #   3. 켜진 프로파일의 우리 이미지를 다시 빌드한다
 #   4. docker compose up -d (backend 가 뜰 때 DB 스키마 변경 단계를 적용한다)
@@ -71,12 +72,12 @@ if $ROLLBACK; then
   [[ -s "$ROLLBACK_FILE" ]] || { err "되돌릴 정보가 없습니다($ROLLBACK_FILE)"; exit 1; }
   info "직전 업데이트 때의 이미지로 되돌립니다"
   failed=0
-  while IFS='|' read -r service ref image_id; do
-    [[ -n "$service" && -n "$ref" && -n "$image_id" ]] || continue
-    if docker image inspect "$image_id" >/dev/null 2>&1 && docker tag "$image_id" "$ref"; then
+  while IFS='|' read -r service ref keep image_id; do
+    [[ -n "$service" && -n "$ref" && -n "$keep" ]] || continue
+    if docker image inspect "$keep" >/dev/null 2>&1 && docker tag "$keep" "$ref"; then
       info "  $service → $ref = ${image_id:0:19}"
     else
-      err "  $service: 이전 이미지($image_id)가 서버에 없습니다"
+      err "  $service: 이전 이미지($keep)가 서버에 없습니다"
       failed=$((failed + 1))
     fi
   done < "$ROLLBACK_FILE"
@@ -110,7 +111,14 @@ for svc in "${SERVICES[@]}"; do
   [[ -n "$cid" ]] || continue
   ref="$(docker inspect "$cid" --format '{{.Config.Image}}' 2>/dev/null || true)"
   image_id="$(docker inspect "$cid" --format '{{.Image}}' 2>/dev/null || true)"
-  [[ -n "$ref" && -n "$image_id" ]] && echo "${svc}|${ref}|${image_id}" >> "$ROLLBACK_FILE"
+  [[ -n "$ref" && -n "$image_id" ]] || continue
+  # 되돌릴 때 쓸 이름 — 새로 빌드하면 원래 이름은 새 이미지로 넘어가고, 이름이 없어진 옛 이미지는 지워질 수 있다
+  case "${ref##*/}" in *:*) keep="${ref}-rollback" ;; *) keep="${ref}:rollback" ;; esac
+  if docker tag "$image_id" "$keep" 2>/dev/null; then
+    echo "${svc}|${ref}|${keep}|${image_id}" >> "$ROLLBACK_FILE"
+  else
+    warn "  $svc: 지금 이미지에 되돌릴 때 쓸 태그를 붙이지 못했습니다 — 이 서비스는 되돌릴 수 없습니다"
+  fi
 done
 ok "적어 둠: $ROLLBACK_FILE ($(wc -l < "$ROLLBACK_FILE")개)"
 warn "이 스크립트는 DB 를 백업하지 않습니다 — 아직이면 멈추고 먼저: sudo bash scripts/backup.sh --kind pre-update"

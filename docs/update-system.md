@@ -78,13 +78,13 @@ bash scripts/update.sh --no-pull    # git pull 생략(지금 폴더의 소스로
 bash scripts/update.sh --rollback   # 직전 업데이트 때 적어 둔 이미지로 되돌린다
 ```
 
-지금 돌고 있는 우리 이미지의 이름과 ID 를 `.update-rollback` 에 적어 두고, 켜진 프로파일의 우리 이미지를 다시 빌드해 `docker compose up -d` 한 뒤 backend 의 상태(`/api/health`)를 본다. 다시 뜨는 동안 접속이 잠깐 끊긴다. **자동으로 되돌리지는 않는다** — 실패하면 `--rollback` 을 안내할 뿐이다. 이 스크립트는 DB 를 백업하지 않으므로 먼저 `scripts/backup.sh --kind pre-update` 를 돌린다. `scripts/health.sh` 는 Docker·컨테이너·DB·Redis·API·디스크·NFS·SSL 만료를 점검한다(`--json`).
+지금 돌고 있는 우리 이미지에 되돌릴 때 쓸 태그(`<이름>-rollback`)를 붙여 `.update-rollback` 에 적어 두고, 켜진 프로파일의 우리 이미지를 다시 빌드해 `docker compose up -d` 한 뒤 backend 의 상태(`/api/health`)를 본다. 다시 뜨는 동안 접속이 잠깐 끊긴다. **자동으로 되돌리지는 않는다** — 실패하면 `--rollback` 을 안내할 뿐이다. 이 스크립트는 DB 를 백업하지 않으므로 먼저 `scripts/backup.sh --kind pre-update` 를 돌린다. `scripts/health.sh` 는 Docker·컨테이너·DB·Redis·API·디스크·NFS·SSL 만료를 점검한다(`--json`).
 관리 › 업데이트 화면은 이 구성에서 "여기서 업데이트할 수 없습니다"로 나온다(설치 관리자가 없다).
 
 ## 롤백(수동 설치)
 
 ```bash
-bash scripts/update.sh --rollback          # 적어 둔 이미지 ID 를 원래 이름에 다시 붙이고 컨테이너를 다시 만든다
+bash scripts/update.sh --rollback          # 붙여 둔 -rollback 태그의 이미지를 원래 이름에 다시 붙이고 컨테이너를 다시 만든다
 # 또는 특정 커밋
 git log --oneline -10 && git checkout <해시> && docker compose build && docker compose up -d
 ```

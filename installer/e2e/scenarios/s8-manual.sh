@@ -83,7 +83,8 @@ bash scripts/update.sh --no-pull > "$E2E_WORK/manual-update.log" 2>&1
 rc=$?
 expect "update.sh --no-pull" 0 "$rc"
 [ "$rc" = 0 ] || tail -15 "$E2E_WORK/manual-update.log"
-check "되돌릴 정보에 backend 의 이름과 ID 가 적혔다" grep -q "^backend|localhost/just-workspace-backend:latest|$before_id\$" .update-rollback
+check "되돌릴 정보에 backend 의 이름·되돌릴 태그·ID 가 적혔다" grep -qxF "backend|localhost/just-workspace-backend:latest|localhost/just-workspace-backend:latest-rollback|$before_id" .update-rollback
+expect "되돌릴 태그는 업데이트 전의 이미지다" "$before_id" "$(docker image inspect localhost/just-workspace-backend:latest-rollback --format '{{.Id}}')"
 check "되돌릴 정보에 frontend-react 도 있다" grep -q '^frontend-react|' .update-rollback
 expect "업데이트 뒤 /api/health" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$H/api/health")"
 expect "업데이트 뒤 내려받기(데이터 유지)" 200 "$(curl -s -b "$jar" -o "$E2E_WORK/down2.bin" -w '%{http_code}' "$H/api/files/download?path=my/e2e-manual.bin")"
@@ -93,7 +94,8 @@ bash scripts/update.sh --rollback > "$E2E_WORK/manual-rollback.log" 2>&1
 rc=$?
 expect "update.sh --rollback" 0 "$rc"
 [ "$rc" = 0 ] || tail -15 "$E2E_WORK/manual-rollback.log"
-expect "되돌린 뒤 backend 이미지 = 업데이트 전" "$before_id" "$(docker inspect ws-backend --format '{{.Image}}')"
+expect "되돌린 뒤 이름이 가리키는 이미지 = 업데이트 전" "$before_id" "$(docker image inspect localhost/just-workspace-backend:latest --format '{{.Id}}')"
+expect "되돌린 뒤 backend 컨테이너의 이미지 = 업데이트 전" "$before_id" "$(docker inspect ws-backend --format '{{.Image}}')"
 expect "되돌린 뒤 /api/health" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$H/api/health")"
 
 report_usage

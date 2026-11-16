@@ -162,7 +162,7 @@ onMounted(() => {
         </div>
         <textarea autocomplete="off"
           v-model="editContent"
-          placeholder="내용을 입력하세요..."
+          placeholder="내용을 입력하십시오..."
           class="flex-1 p-4 bg-transparent resize-none focus:outline-none text-sm leading-relaxed"
         />
       </div>

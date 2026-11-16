@@ -4,7 +4,7 @@ import { UiSkeleton } from '~/components/ui/Skeleton'
 import { UiEmptyState } from '~/components/ui/EmptyState'
 import { UiStatusDot } from '~/components/ui/StatusDot'
 import type { ServiceStatus } from '~/composables/useServices'
-import { svcState } from './dashboardTiles'
+import { svcLabel, svcState } from './dashboardTiles'
 
 export interface AdminServiceStatusCardProps {
   /** 서비스 상태 목록(useServices) */
@@ -36,7 +36,7 @@ export function AdminServiceStatusCard({ services, loading, latencyWarnMs }: Adm
             return (
               <div key={s.name} className="flex h-10 items-center gap-2.5 border-b border-border px-[18px] text-[13px] last:border-b-0">
                 <UiStatusDot status={st.dot} label={st.label} />
-                <span className="min-w-0 flex-1 truncate text-foreground">{s.name}</span>
+                <span className="min-w-0 flex-1 truncate text-foreground">{svcLabel(s.name, t)}</span>
                 <span className="text-xs text-muted-foreground">{st.label}</span>
                 <span className="w-14 text-right font-mono text-[11px] text-muted-foreground">{s.response_ms != null ? `${s.response_ms} ms` : '—'}</span>
               </div>

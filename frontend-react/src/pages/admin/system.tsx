@@ -12,6 +12,7 @@ import { useAuth } from '~/composables/useAuth'
 import { useSiteConfig } from '~/composables/useSiteConfig'
 import { useServices, fetchServices } from '~/composables/useServices'
 import { refreshAdminOps } from '~/composables/useAdminOps'
+import { svcLabel } from '~/components/admin/dashboardTiles'
 import { confirmBox } from '~/composables/useDialog'
 import { addToast } from '~/composables/useToast'
 import { AdminPageShell } from '~/components/admin/AdminPageShell'
@@ -100,7 +101,7 @@ export default function AdminSystemPage() {
           return (
             <div key={s.name} className="flex h-10 items-center gap-2.5 border-b border-border px-[18px] text-[13px] last:border-b-0">
               <UiStatusDot status={st.dot} label={st.label} />
-              <span className="min-w-0 flex-1 truncate text-foreground">{s.name}</span>
+              <span className="min-w-0 flex-1 truncate text-foreground">{svcLabel(s.name, t)}</span>
               <span className="text-xs text-muted-foreground">{st.label}</span>
               <span className="w-16 text-right font-mono text-[11px] text-muted-foreground">{s.response_ms != null ? `${s.response_ms} ms` : '—'}</span>
             </div>

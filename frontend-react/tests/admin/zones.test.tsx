@@ -113,7 +113,7 @@ describe('관리 › 구역 — 목록', () => {
     api.routes[`GET ${B}/zones`] = () => listing({}, {
       installer: { available: false, reason: 'not_configured' }, memory: { need_mb: 7000, have_mb: null, nominal_mb: null, ok: null } })
     renderPage()
-    expect((await screen.findByTestId('zones-readonly')).textContent).toContain('이 설치는 설치 관리자 없이 구성돼 여기서 구역을 변경할 수 없습니다.')
+    expect((await screen.findByTestId('zones-readonly')).textContent).toContain('이 설치는 설치 관리자 없이 구성되어 여기서 구역을 변경할 수 없습니다.')
     expect(screen.getAllByRole('switch').every(s => (s as HTMLButtonElement).disabled)).toBe(true)
     expect(toggle('메일').getAttribute('aria-checked')).toBe('true')
     expect(screen.queryByRole('button', { name: '메일 설정' })).toBeNull()
@@ -366,7 +366,7 @@ describe('관리 › 구역 — 진행 · 실패 · 완료 직후', () => {
       stages: [{ id: 'pull', status: 'done' }, { id: 'configure', status: 'done' }, { id: 'connect', status: 'done' }] })
     await waitFor(() => expect(zoneRow('meetings').dataset.state).toBe('fresh'))
     const fresh = zoneRow('meetings').textContent || ''
-    expect(fresh).toContain('방금 활성화했습니다. 왼쪽 메뉴에 추가됐습니다.')
+    expect(fresh).toContain('방금 활성화했습니다. 왼쪽 메뉴에 추가되었습니다.')
     expect(fresh).toContain('TCP 7881 · UDP 7882-7892 포트를 공유기나 방화벽에서 열었는지 확인합니다.')
     expect(screen.getByTestId('zone-meetings-status').textContent).toBe('사용')
     // 모듈 목록과 설치된 구역을 재조회하여 메뉴에 반영
@@ -639,7 +639,7 @@ describe('관리 › 구역 — 검증된 버전 · 켜기 전 주의', () => {
     expect(box.textContent).toContain('활성화 전 확인 사항')
     const items = [...box.querySelectorAll('li')].map(li => li.textContent)
     expect(items).toEqual([
-      '임시 인증서로는 코드 저장소의 로그인 연동이 동작하지 않습니다. 활성화는 되지만 연동이 보류되고, 인증서를 발급한 뒤 다시 연결할 수 있습니다.',
+      '임시 인증서로는 코드 저장소의 로그인 연동이 동작하지 않습니다. 활성화는 되지만 연동이 보류되고, 인증서를 발급한 뒤 다시 연동할 수 있습니다.',
       '공유기에서 이 서버로 포트 포워딩을 설정해야 외부에서 접속됩니다: TCP 2222 · UDP 7882-7892',
       '프록시를 거치지 않는 이름(mail.example.com, meet.example.com)에는 자체 서명 인증서를 사용합니다. 메일 앱에서 인증서 경고가 표시될 수 있습니다.',
       '계정의 메일 주소는 아이디@example.com 형식이 됩니다.',
@@ -680,8 +680,8 @@ describe('관리 › 구역 — 연결 보류 · 다시 연결', () => {
     expect(screen.getByTestId('zone-git-status').textContent).toBe('연동 보류')
     const line = screen.getByTestId('zone-git-pending')
     expect(line.textContent).toContain('연동 보류')
-    expect(line.textContent).toContain('접속 주소의 인증서가 신뢰되는 인증서로 변경되면 다시 연결할 수 있습니다.')
-    expect(within(line).getByRole('button', { name: '코드 저장소 다시 연결' })).toBeTruthy()
+    expect(line.textContent).toContain('접속 주소의 인증서가 신뢰되는 인증서로 변경되면 다시 연동할 수 있습니다.')
+    expect(within(line).getByRole('button', { name: '코드 저장소 다시 연동' })).toBeTruthy()
     expect(toggle('코드 저장소').getAttribute('aria-checked')).toBe('true')      // 활성화된 구역
     expect(screen.queryByTestId('zone-mail-pending')).toBeNull()
   })
@@ -694,18 +694,18 @@ describe('관리 › 구역 — 연결 보류 · 다시 연결', () => {
     api.routes[`POST ${B}/zones/git/reconnect`] = () => connJob()
     api.routes[`GET ${B}/jobs/conn1`] = () => connJob()
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: '코드 저장소 다시 연결' }))
+    fireEvent.click(await screen.findByRole('button', { name: '코드 저장소 다시 연동' }))
     await waitFor(() => expect(zoneRow('git').dataset.state).toBe('busy'))
     expect(called('POST', `${B}/zones/git/reconnect`)).toHaveLength(1)
-    expect(screen.getByTestId('zone-git-status').textContent).toBe('다시 연결 중')
-    expect(screen.getByTestId('zone-git-stage-connect').textContent).toContain('워크스페이스와 연결')
+    expect(screen.getByTestId('zone-git-status').textContent).toBe('다시 연동 중')
+    expect(screen.getByTestId('zone-git-stage-connect').textContent).toContain('워크스페이스와 연동')
     expect(screen.queryByTestId('zone-git-pending')).toBeNull()                 // 진행 중에는 진행 상태만 표시
     expect((toggle('메일') as HTMLButtonElement).disabled).toBe(true)           // 동시 1건
 
     connected = true
     api.routes[`GET ${B}/jobs/conn1`] = () => doneJob
     await waitFor(() => expect(zoneRow('git').dataset.state).toBe('fresh'))
-    expect(zoneRow('git').textContent).toContain('다시 연결했습니다.')
+    expect(zoneRow('git').textContent).toContain('다시 연동했습니다.')
     expect(screen.queryByTestId('zone-git-pending')).toBeNull()
   })
 
@@ -715,8 +715,8 @@ describe('관리 › 구역 — 연결 보류 · 다시 연결', () => {
     api.routes[`GET ${B}/jobs/conn2`] = () => connJob({ id: 'conn2' })
     renderPage()
     await waitFor(() => expect(zoneRow('git').dataset.state).toBe('failed'))
-    expect(screen.getByTestId('zone-git-status').textContent).toBe('연결 실패')
-    expect(zoneRow('git').textContent).toContain('코드 저장소의 로그인 연동을 아직 연결하지 못했습니다.')
+    expect(screen.getByTestId('zone-git-status').textContent).toBe('연동 실패')
+    expect(zoneRow('git').textContent).toContain('코드 저장소의 로그인 연동을 아직 완료하지 못했습니다.')
     expect(zoneRow('git').textContent).toContain('이 구역은 활성화된 상태로 유지됩니다.')
     expect(screen.queryByTestId('zone-git-pending')).toBeNull()                 // 실패 행이 대신 안내
     expect(screen.queryByRole('button', { name: '비활성화 상태로 두기' })).toBeNull()
@@ -731,12 +731,12 @@ describe('관리 › 구역 — 연결 보류 · 다시 연결', () => {
     api.routes[`GET ${B}/zones`] = () => listing(state === 'pending' ? pendingGit : { git: { enabled: true } })
     api.routes[`POST ${B}/zones/git/reconnect`] = () => { throw fail(409, 'busy') }
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: '코드 저장소 다시 연결' }))
+    fireEvent.click(await screen.findByRole('button', { name: '코드 저장소 다시 연동' }))
     await waitFor(() => expect(toasts()).toEqual(['error:다른 작업이 진행 중입니다. 완료된 뒤 다시 시도하십시오.']))
 
     state = 'ok'
     api.routes[`POST ${B}/zones/git/reconnect`] = () => { throw fail(409, 'not_pending') }
-    fireEvent.click(screen.getByRole('button', { name: '코드 저장소 다시 연결' }))
+    fireEvent.click(screen.getByRole('button', { name: '코드 저장소 다시 연동' }))
     await waitFor(() => expect(zoneRow('git').dataset.state).toBe('on'))
     expect(toasts()).toHaveLength(1)
   })
@@ -745,7 +745,7 @@ describe('관리 › 구역 — 연결 보류 · 다시 연결', () => {
     api.routes[`GET ${B}/zones`] = () => listing(pendingGit, { installer: { available: false, reason: 'not_configured' } })
     renderPage()
     await screen.findByTestId('zone-git-pending')
-    expect(screen.queryByRole('button', { name: '코드 저장소 다시 연결' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '코드 저장소 다시 연동' })).toBeNull()
   })
 })
 

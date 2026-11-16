@@ -44,13 +44,13 @@ describe('들어오기', () => {
   it('틀린 토큰 · 만료된 토큰은 구분해서 알린다', async () => {
     const wrong = open('token-wrong')
     await heading('설치 토큰을 확인합니다')
-    expect(screen.getByText('토큰이 맞지 않습니다. 터미널에 표시된 값을 다시 확인합니다.')).toBeTruthy()
+    expect(screen.getByText('토큰이 맞지 않습니다. 터미널에 표시된 값을 다시 확인하십시오.')).toBeTruthy()
     expect(screen.getByText('이 서버에 설치를 시작한 사람만 계속할 수 있습니다.')).toBeTruthy()
     wrong.unmount()
 
     open('token-expired')
     await heading('설치 토큰을 확인합니다')
-    expect(screen.getByText('이 토큰은 만료됐습니다.')).toBeTruthy()
+    expect(screen.getByText('이 토큰은 만료되었습니다.')).toBeTruthy()
     expect(screen.getByText(/시간이 지나면 사용할 수 없습니다/)).toBeTruthy()
     expect(screen.getByText('docker exec jw-installer jw token')).toBeTruthy()
     expect(screen.queryByText(/영문 대문자와 숫자/)).toBeNull()
@@ -81,7 +81,7 @@ describe('들어오기', () => {
   it('입력하던 것이 있으면 이어 하기 — 이어서 하면 그 단계로', async () => {
     open('resume')
     await heading('하던 설치를 이어갑니다')
-    expect(screen.getByText('접속 주소와 연결까지 입력됨')).toBeTruthy()
+    expect(screen.getByText('접속 주소와 네트워크 구성까지 입력됨')).toBeTruthy()
     expect(screen.getByText('다음은 파일 저장 위치')).toBeTruthy()
     fireEvent.click(button('이어서 하기'))
     await heading('파일을 어디에 저장하시겠습니까')
@@ -137,7 +137,7 @@ describe('사전 점검', () => {
     expect(next().disabled).toBe(true)
     const reason = screen.getByText('실패한 항목을 해결하고 다시 확인해야 다음 단계로 진행할 수 있습니다.')
     expect(next().getAttribute('aria-describedby')).toBe(reason.id)
-    expect(screen.getByText(/사용하지 않는 Docker 이미지와 파일을 삭제한 뒤 다시 확인합니다/)).toBeTruthy()
+    expect(screen.getByText(/사용하지 않는 Docker 이미지와 파일을 삭제한 뒤 다시 확인하십시오/)).toBeTruthy()
   })
 
   it('메모리가 모자라면 실패', async () => {
@@ -205,7 +205,7 @@ describe('접속 주소와 연결', () => {
     expect(screen.getByText('198.51.100.7')).toBeTruthy()
     expect((screen.getByRole('radio', { name: /자동 발급/ }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByRole('radio', { name: /임시 인증서로 설치하고 나중에 발급/ }).getAttribute('aria-checked')).toBe('true')
-    expect(screen.getByText(/자동 발급은 접속 주소가 이 서버를 가리키는 것이 확인돼야 선택할 수 있습니다/)).toBeTruthy()
+    expect(screen.getByText(/자동 발급은 접속 주소가 이 서버를 가리키는 것이 확인되어야 선택할 수 있습니다/)).toBeTruthy()
     fireEvent.click(next())
     await heading('파일을 어디에 저장하시겠습니까')
     expect(store.getState().answers.access.cert).toBe('temporary')
@@ -226,7 +226,7 @@ describe('접속 주소와 연결', () => {
     expect(next().disabled).toBe(true)
     expect(screen.getByText('프록시 주소를 입력해야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     type(/프록시 주소 또는 대역/, '192.168.10.300')
-    expect(screen.getByText('주소 형식이 맞지 않습니다. 주소 하나 또는 대역으로 입력합니다.')).toBeTruthy()
+    expect(screen.getByText('주소 형식이 맞지 않습니다. 주소 하나 또는 대역으로 입력하십시오.')).toBeTruthy()
     expect(screen.getByText('프록시 주소를 수정해야 다음 단계로 진행할 수 있습니다.')).toBeTruthy()
     type(/프록시 주소 또는 대역/, '192.168.10.5')
     expect(next().disabled).toBe(false)
@@ -280,7 +280,7 @@ describe('파일 저장 위치', () => {
   it.each([
     ['nfs-unreachable', '1. 서버에 연결되는가', /서버에 연결되지 않습니다/, 3],
     ['nfs-permission', '2. 마운트할 수 있는가', /NAS가 연결을 거부했습니다/, 2],
-    ['nfs-export', '2. 마운트할 수 있는가', /서버에는 연결됐지만 이 공유 경로를 마운트할 수 없습니다/, 2],
+    ['nfs-export', '2. 마운트할 수 있는가', /서버에는 연결되었지만 이 공유 경로를 마운트할 수 없습니다/, 2],
     ['nfs-readonly', '3. 쓰기·읽기·삭제', /공유 폴더가 읽기 전용입니다/, 1],
     ['nfs-nolock', '4. 파일 잠금', /파일 잠금이 동작하지 않습니다/, 0],
   ] as const)('연결 확인 실패(%s) — 원인별 문구와 꺼진 다음', async (scenario, label, text, skippedAfter) => {
@@ -389,7 +389,7 @@ describe('메일', () => {
     expect(next().disabled).toBe(false)
   })
 
-  it('외부 발신 서버 — 연결이 확인돼야 다음으로 간다', async () => {
+  it('외부 발신 서버 — 연결이 확인되어야 다음으로 간다', async () => {
     const { store } = open('ready', '#/mail')
     await heading('메일을 어떻게 보내시겠습니까')
     fireEvent.click(screen.getByRole('radio', { name: /외부 발신 서버/ }))
@@ -418,7 +418,7 @@ describe('메일', () => {
     type('비밀번호', 'wrong')
     fireEvent.click(button('연결 확인'))
     await screen.findByText(/발신 서버가 로그인을 거부했습니다/)
-    expect(screen.getByText('계정과 비밀번호를 확인합니다.')).toBeTruthy()
+    expect(screen.getByText('계정과 비밀번호를 확인하십시오.')).toBeTruthy()
     expect(next().disabled).toBe(true)
   })
 })
@@ -507,11 +507,11 @@ describe('요약', () => {
     open('ready', '#/advanced')
     await heading('고급 설정')
     type('내부 대역', '172.28.0.0/16')
-    expect(screen.getByText('172.28.0.0/24 처럼 /24 대역으로 입력합니다.')).toBeTruthy()
+    expect(screen.getByText('172.28.0.0/24 처럼 /24 대역으로 입력하십시오.')).toBeTruthy()
     expect(button('요약으로 돌아가기').disabled).toBe(true)
     type('내부 대역', '192.168.10.0/24')
     fireEvent.click(button('요약으로 돌아가기'))
-    await screen.findByText('이 서버가 이미 사용하는 네트워크와 겹칩니다. 다른 대역을 입력합니다.')
+    await screen.findByText('이 서버가 이미 사용하는 네트워크와 겹칩니다. 다른 대역을 입력하십시오.')
     expect(screen.getByText('내부 대역을 수정해야 돌아갈 수 있습니다.')).toBeTruthy()
     type('내부 대역', '172.30.0.0/24')
     fireEvent.click(button('요약으로 돌아가기'))
@@ -661,7 +661,7 @@ describe('백업에서 복원', () => {
     expect(screen.getByText('없음 · 네트워크 저장소의 파일은 백업에 포함하지 않습니다')).toBeTruthy()
     expect((screen.getByRole('radio', { name: /이 서버의 디스크/ }) as HTMLButtonElement).disabled).toBe(true)
     expect(button('복원').disabled).toBe(true)
-    expect(screen.getByText('네트워크 저장소 연결이 확인돼야 복원할 수 있습니다.')).toBeTruthy()
+    expect(screen.getByText('네트워크 저장소 연결이 확인되어야 복원할 수 있습니다.')).toBeTruthy()
     fireEvent.click(button('연결 확인'))
     await screen.findByText(/검사 다섯 가지를 통과했습니다/)
     await screen.findByText('일치')
@@ -713,7 +713,7 @@ describe('백업에서 복원 — 파일 상태', () => {
     ['restore-badfile', /Just Workspace 백업 파일이 아닙니다/],
     ['restore-format', /이 설치 관리자가 지원하지 않는 형식의 백업입니다/],
     ['restore-noconfig', /설정이 포함되지 않은 백업이라 새 서버로 이전할 수 없습니다/],
-    ['restore-corrupt', /전송 중에 손상됐습니다/],
+    ['restore-corrupt', /전송 중에 손상되었습니다/],
   ])('복원할 수 없는 파일은 사유를 알린다 (%s)', async (scenario, body) => {
     const { container } = open(`restore,${scenario}`, '#/file')
     await heading('백업 파일 업로드')
@@ -763,7 +763,7 @@ describe('백업에서 복원 — 파일 상태', () => {
     expect(button('암호 확인').disabled).toBe(true)
     type('백업 암호', 'not-it')
     fireEvent.click(button('암호 확인'))
-    await screen.findByText('암호가 맞지 않습니다. 다시 입력합니다.')
+    await screen.findByText('암호가 맞지 않습니다. 다시 입력하십시오.')
     expect(next().disabled).toBe(true)
     type('백업 암호', 'backup-pass')
     fireEvent.click(button('암호 확인'))

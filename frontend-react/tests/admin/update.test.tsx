@@ -169,7 +169,7 @@ describe('설치 관리자 없음 · 미지원', () => {
     on('GET', '/status', () => { throw fx.errors.noInstaller() })
     await renderUpdate()
     const box = await screen.findByTestId('update-unavailable')
-    expect(text(box)).toContain('이 설치는 설치 관리자 없이 구성돼 여기서 업데이트할 수 없습니다')
+    expect(text(box)).toContain('이 설치는 설치 관리자 없이 구성되어 여기서 업데이트할 수 없습니다')
     expect(screen.queryByRole('tab')).toBeNull()
     expect(screen.queryByRole('button', { name: '지금 확인' })).toBeNull()
   })

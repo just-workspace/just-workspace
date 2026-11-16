@@ -73,10 +73,15 @@ export function buildOpsTiles(o: AdminOps, t: T, today = new Date()): OpsTile[] 
     {
       key: t('admin.dashboard.tileServices'), icon: 'activity', action: t('admin.dashboard.actionStatus'), to: '/admin/system',
       value: !sv ? (o.loaded ? failed : '…') : t('admin.dashboard.servicesOk', { ok: sv.ok, total: sv.total }),
-      hint: sv?.downNames.length ? t('admin.dashboard.servicesDown', { names: sv.downNames.join(', ') }) : undefined,
+      hint: sv?.downNames.length ? t('admin.dashboard.servicesDown', { names: sv.downNames.map(n => svcLabel(n, t)).join(', ') }) : undefined,
       tone: (!sv ? 'neutral' : sv.ok === sv.total ? 'success' : 'warning') as OpsTone,
     },
   ]
+}
+
+/** 서비스 표시 이름 — 서버가 전달하는 이름 중 제품명이 아닌 일반 명칭(예: "Mail Server")은 화면 언어로 표시한다 */
+export function svcLabel(name: string, t: T): string {
+  return t(`admin.svc.names.${name}`, name)
 }
 
 /** 서비스 한 줄의 상태 점·글자. 응답이 latencyWarnMs 를 초과하면 "느림" */

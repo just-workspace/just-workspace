@@ -220,7 +220,7 @@ describe('되돌림 — 자동', () => {
     expect(stepStates()).toEqual(['stop:done', 'images:done', 'restore_db:running', 'start:pending', 'verify:pending'])
     expect(text(screen.getByTestId('step-images'))).toBe('이전 이미지로 변경완료')
     expect(text(screen.getByTestId('update-progress-text'))).toBe('전체 5단계 중 2단계 완료')
-    expect(screen.getByText(/복원 대상은 데이터베이스, 설정, 암호화 키입니다\. 파일은 백업하지 않았으며 변경하지도 않습니다\./)).toBeTruthy()
+    expect(screen.getByText(/되돌리는 대상은 데이터베이스, 설정, 암호화 키입니다\. 파일, 메일함의 메일, 코드 저장소는 변경하지 않습니다\./)).toBeTruthy()
     expect(screen.getByRole('tab', { name: '롤백' }).getAttribute('aria-selected')).toBe('true')
   })
 

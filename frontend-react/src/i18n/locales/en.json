@@ -1151,7 +1151,10 @@
       "down": "Down",
       "checking": "Checking",
       "slow": "Slow",
-      "ok": "OK"
+      "ok": "OK",
+      "names": {
+        "Mail Server": "Mail server"
+      }
     },
     "runStatus": {
       "success": "Done",

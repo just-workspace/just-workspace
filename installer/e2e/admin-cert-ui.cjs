@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 설치 후 관리 화면에서 인증서 카드·구역의 연결 보류·저장소 상태 카드를 **화면으로** 확인한다(Playwright, 이 PC 에서 실행).
+ * 설치 후 관리 화면에서 인증서 카드·구역의 연동 보류·저장소 상태 카드를 **화면으로** 확인한다(Playwright, 이 PC 에서 실행).
  * 임시 인증서 + 코드 저장소 구역으로 설치된 서버에서 실행한다.
  *
  *   node admin-cert-ui.cjs --url https://ws.e2e.example --addr 192.168.10.20 --password-file <파일> [옵션]
@@ -70,7 +70,7 @@ const want = name => !opt.only || opt.only === name
       await snap('cert-upload-modal')
       await page.locator('[role=dialog] button:not([disabled])').last().click()
       const end = page.locator('[data-testid=cert-done], [data-testid=cert-failed], [data-testid=cert-upload-error]')
-      await page.locator('[data-testid=cert-job]').waitFor({ state: 'visible', timeout: 30000 }).then(() => ok('진행 중인 작업(발급 → 다시 읽히기 → 구역 다시 연결)이 보인다')).catch(() => {})
+      await page.locator('[data-testid=cert-job]').waitFor({ state: 'visible', timeout: 30000 }).then(() => ok('진행 중인 작업(발급 → 다시 읽히기 → 구역 다시 연동)이 보인다')).catch(() => {})
       await snap('cert-job')
       // 서버가 인증서를 재로드하는 동안 연결이 끊길 수 있다 — 최종 상태가 표시될 때까지 대기한다
       await end.first().waitFor({ state: 'visible', timeout: 5 * 60 * 1000 }).catch(() => {})
@@ -119,7 +119,7 @@ const want = name => !opt.only || opt.only === name
   }
 
   if (want('zones')) {
-    console.log('== 관리 › 구역 — 연결 보류 · 작업 목록 · 검증된 버전 ==')
+    console.log('== 관리 › 구역 — 연동 보류 · 작업 목록 · 검증된 버전 ==')
     await page.goto(base + '/admin/zones')
     await page.getByText('코드 저장소').first().waitFor({ state: 'visible', timeout: 60000 })
     const zones = (await api('/api/admin/system/zones')).body
@@ -127,14 +127,14 @@ const want = name => !opt.only || opt.only === name
     const body = await page.locator('body').innerText()
     if (git && git.pending) {
       expect('코드 저장소 행에 "연동 보류"가 보인다', /연동 보류/.test(body))
-      expect('"다시 연결" 버튼이 있다', await page.getByRole('button', { name: /다시 연결/ }).count() >= 1)
+      expect('"다시 연동" 버튼이 있다', await page.getByRole('button', { name: /다시 연동/ }).count() >= 1)
       await snap('zones-pending')
-      await page.getByRole('button', { name: /다시 연결/ }).first().click()
-      await page.getByText(/다시 연결 중|연결 실패|다시 연결했습니다|연결하지 못했습니다/).first().waitFor({ state: 'visible', timeout: 120000 }).catch(() => {})
+      await page.getByRole('button', { name: /다시 연동/ }).first().click()
+      await page.getByText(/다시 연동 중|연동 실패|다시 연동했습니다|연동하지 못했습니다|완료하지 못했습니다/).first().waitFor({ state: 'visible', timeout: 120000 }).catch(() => {})
       await page.waitForTimeout(8000)
       const again = await page.locator('body').innerText()
-      expect(`다시 연결 결과가 화면에 보인다(${opt['expect-pending'] === 'yes' ? '아직 연결하지 못함' : '연결됨'})`,
-        opt['expect-pending'] === 'yes' ? /연결하지 못했습니다|연결 실패|연동 보류/.test(again) : /다시 연결했습니다/.test(again) || !/연동 보류/.test(again), again.slice(0, 300))
+      expect(`다시 연동 결과가 화면에 보인다(${opt['expect-pending'] === 'yes' ? '아직 연결하지 못함' : '연결됨'})`,
+        opt['expect-pending'] === 'yes' ? /연동하지 못했습니다|완료하지 못했습니다|연동 실패|연동 보류/.test(again) : /다시 연동했습니다/.test(again) || !/연동 보류/.test(again), again.slice(0, 300))
       await snap('zones-reconnect')
     } else {
       expect('코드 저장소는 보류가 아니다(연결됨)', git && git.enabled && !/연동 보류/.test(body), JSON.stringify(git && { enabled: git.enabled, pending: git.pending }))

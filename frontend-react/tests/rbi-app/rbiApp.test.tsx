@@ -94,7 +94,7 @@ describe('격리 브라우저 단독 앱 — 로그인', () => {
     api.me = null
     setLocation('?sso_error=code')
     render(<RbiApp />)
-    expect(await screen.findByText('로그인 코드가 만료됐거나 이미 사용되었습니다. 다시 로그인하십시오.')).toBeTruthy()
+    expect(await screen.findByText('로그인 코드가 만료되었거나 이미 사용되었습니다. 다시 로그인하십시오.')).toBeTruthy()
     expect(assign).not.toHaveBeenCalled()
     expect(window.history.replaceState).toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '워크스페이스로 로그인' }))

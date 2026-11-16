@@ -1,13 +1,13 @@
 /**
  * API 클라이언트 — 전역 `$fetch`(ofetch).
  *
- * - 같은 ofetch 를 쓴다: `body` 객체는 JSON 직렬화, `query`, 응답 자동 파싱, 실패 시 `FetchError`(`.data`·`.status`·`.statusCode`).
+ * - 동일한 ofetch 를 사용한다: `body` 객체는 JSON 직렬화, `query`, 응답 자동 파싱, 실패 시 `FetchError`(`.data`·`.status`·`.statusCode`).
  *   호출 형태: `$fetch<T>(url, { method, body, query, headers, credentials })`.
- * - 웹(same-origin): 아무것도 덧붙이지 않는다(쿠키 세션) — credentials 는 호출부가 준 대로.
- * - 번들 SPA 앱(VITE_API_BASE): `/api`·`/oauth` 만 apiBase 로 + `Authorization: Bearer <ws_token>`.
- *   호출부가 onResponseError 를 안 줬으면 401 에서 토큰을 지우고 /login 으로(공유 링크 손님 제외).
- * - X-Request-ID: 백엔드가 모든 응답에 붙이는 요청 번호를 실패한 FetchError 에 `requestId` 로 실어 둔다
- *   (오류 화면 "요청 번호" 표시용. 본문 `request_id` 가 있으면 그쪽이 우선 — ServerErrorScreen 참조).
+ * - 웹(same-origin): 추가 항목 없음(쿠키 세션) — credentials 는 호출부 지정값을 따른다.
+ * - 번들 SPA 앱(VITE_API_BASE): `/api`·`/oauth` 만 apiBase 로 전달 + `Authorization: Bearer <ws_token>`.
+ *   호출부가 onResponseError 를 지정하지 않은 경우 401 에서 토큰을 삭제하고 /login 으로 이동한다(공유 링크 손님 제외).
+ * - X-Request-ID: 백엔드가 모든 응답에 부여하는 요청 번호를 실패한 FetchError 에 `requestId` 로 기록한다
+ *   (오류 화면 "요청 번호" 표시용. 본문 `request_id` 가 있으면 해당 값 우선 — ServerErrorScreen 참조).
  */
 import { ofetch, FetchError, type $Fetch, type FetchOptions } from 'ofetch'
 import { apiBaseUrl, apiUrl, bundledAuthHeaders } from '~/lib/runtimeConfig'
@@ -15,27 +15,27 @@ import { apiBaseUrl, apiUrl, bundledAuthHeaders } from '~/lib/runtimeConfig'
 export { FetchError }
 export type { FetchOptions }
 
-/** 401 처리 등에서 앱 라우터로 이동할 때 쓰는 함수(라우터가 만들어지면 lib/router 가 주입) */
+/** 401 처리 등에서 앱 라우터로 이동할 때 사용하는 함수(라우터 생성 시 lib/router 가 주입) */
 let _navigate: ((to: string) => void) | null = null
 export function _setApiNavigate(fn: (to: string) => void) { _navigate = fn }
 
 const isApi = (u: unknown): u is string =>
   typeof u === 'string' && (u.startsWith('/api') || u.startsWith('/oauth'))
 
-/** 실패 응답의 X-Request-ID 를 오류 객체에 붙인다 */
+/** 실패 응답의 X-Request-ID 를 오류 객체에 기록한다 */
 function attachRequestId(ctx: { response?: Response; error?: unknown }) {
   const rid = ctx.response?.headers?.get?.('x-request-id')
   if (rid && ctx.error && typeof ctx.error === 'object') {
-    try { (ctx.error as { requestId?: string }).requestId = rid } catch { /* 얼린 객체 */ }
+    try { (ctx.error as { requestId?: string }).requestId = rid } catch { /* 동결(frozen) 객체 */ }
   }
 }
 
 /**
- * 웹(same-origin)에서 세션이 끊긴 응답을 받았다는 신호 — composables/useAuth 가 듣는다.
- * 예전엔 401 처리가 번들 앱 분기 안에만 있어, 웹은 세션이 만료·강제 로그아웃돼도 셸이 그대로 남고
- * 빈 목록·오류 토스트만 반복됐다(새로 고침해야 로그인 화면). 여기서는 알리기만 하고 판단은 useAuth 가 한다 —
- * 401 을 다른 뜻으로 쓰는 요청(공유 링크 비밀번호 등)이 있어 /api/auth/me 로 한 번 확인한 뒤 움직인다.
- * 429·5xx·네트워크 오류는 일시 오류다 — 알리지 않는다.
+ * 웹(same-origin)에서 세션이 무효화된 응답을 수신했다는 신호 — composables/useAuth 가 수신한다.
+ * 기존에는 401 처리가 번들 앱 분기에만 존재하여, 웹은 세션이 만료·강제 로그아웃되어도 셸이 유지되고
+ * 빈 목록·오류 토스트만 반복되었다(새로 고침해야 로그인 화면 표시). 여기서는 통지만 수행하고 판단은 useAuth 가 담당한다 —
+ * 401 을 다른 의미로 사용하는 요청(공유 링크 비밀번호 등)이 있으므로 /api/auth/me 로 1회 확인한 후 처리한다.
+ * 429·5xx·네트워크 오류는 일시 오류이므로 통지하지 않는다.
  */
 export const AUTH_LOST_EVENT = 'jw:auth-lost'
 function notifyAuthLost(request: string, resp?: Response) {
@@ -48,8 +48,8 @@ function notifyAuthLost(request: string, resp?: Response) {
 }
 
 /**
- * 파일 저장소가 끊겨 쓰기가 거부됐다는 신호(503 + code `storage_unavailable`) — composables/useStorageStatus 가 듣는다.
- * 파일 탭은 이 신호로 끊김 안내로 바뀌고, 저장소가 돌아오면 스스로 풀린다.
+ * 파일 저장소 연결이 끊겨 쓰기가 거부되었다는 신호(503 + code `storage_unavailable`) — composables/useStorageStatus 가 수신한다.
+ * 파일 탭은 이 신호로 연결 끊김 안내로 전환되며, 저장소가 복구되면 자동 해제된다.
  */
 export const STORAGE_DOWN_EVENT = 'jw:storage-down'
 export const STORAGE_DOWN_CODE = 'storage_unavailable'
@@ -60,8 +60,8 @@ export function notifyStorageDown(status: number | undefined, data: unknown) {
 }
 
 /**
- * 서버에 닿지 못했다는 신호(연결 실패 또는 502·503·504) — composables/useUpdateNotice 가 듣고, 업데이트 점검 중인지 묻는다.
- * 저장소 끊김(503 `storage_unavailable`)과 호출부가 스스로 끊은 요청은 알리지 않는다.
+ * 서버에 도달하지 못했다는 신호(연결 실패 또는 502·503·504) — composables/useUpdateNotice 가 수신하여 업데이트 점검 중인지 조회한다.
+ * 저장소 연결 끊김(503 `storage_unavailable`)과 호출부가 직접 중단한 요청은 통지하지 않는다.
  */
 export const API_DOWN_EVENT = 'jw:api-down'
 export function notifyApiDown(e: unknown) {
@@ -90,8 +90,8 @@ async function call<T>(request: string, opts: FetchOptions<'json'> = {}): Promis
         onResponseError: (ctx) => {
           if (ctx?.response?.status === 401) {
             try { localStorage.removeItem('ws_token') } catch { /* ignore */ }
-            // 공유 링크로 들어온 손님은 계정이 없다. /api/auth/me 가 401 나는 게 정상이라
-            // 여기서 로그인으로 쫓으면 편집기가 열리자마자 튕긴다.
+            // 공유 링크로 진입한 손님은 계정이 없다. /api/auth/me 의 401 응답이 정상이므로
+            // 여기서 로그인으로 이동시키면 편집기가 열리는 즉시 이탈된다.
             const guest = typeof location !== 'undefined'
               && (location.pathname.startsWith('/s/') || location.search.includes('share='))
             if (!guest && typeof location !== 'undefined' && !location.pathname.startsWith('/login')) _navigate?.('/login')
@@ -106,7 +106,7 @@ async function call<T>(request: string, opts: FetchOptions<'json'> = {}): Promis
   } catch (e) {
     const resp = (e as { response?: Response })?.response
     attachRequestId({ response: resp, error: e })
-    // 번들 앱은 위 onResponseError 가 맡는다 — 웹만
+    // 번들 앱은 위 onResponseError 가 처리한다 — 웹에만 적용
     if (!base && isApi(request)) notifyAuthLost(request, resp)
     if (isApi(request)) notifyStorageDown(resp?.status, (e as { data?: unknown })?.data)
     if (isApi(request)) notifyApiDown(e)
@@ -131,7 +131,7 @@ export const $fetch: AppFetch = Object.assign(
     raw: ((request: string, opts: FetchOptions<any> = {}) => {
       const base = apiBaseUrl()
       if (!base || !isApi(request)) return base$fetch.raw(request, opts)
-      // 번들 앱: 주소만이 아니라 Bearer 도 붙인다(인증이 빠지면 utils/apiDownload 가 401)
+      // 번들 앱: 주소뿐 아니라 Bearer 도 추가한다(인증 누락 시 utils/apiDownload 가 401)
       const auth = bundledAuthHeaders()
       const headers = Object.keys(auth).length ? { ...(opts.headers as Record<string, string> || {}), ...auth } : opts.headers
       return base$fetch.raw(base + request, { ...opts, headers })
@@ -141,13 +141,13 @@ export const $fetch: AppFetch = Object.assign(
   },
 )
 
-/** FetchError 등에서 HTTP 상태 코드를 꺼낸다(없으면 undefined) */
+/** FetchError 등에서 HTTP 상태 코드를 추출한다(없으면 undefined) */
 export function errorStatus(e: unknown): number | undefined {
   const x = e as { statusCode?: number; status?: number; response?: { status?: number } } | null
   return x?.statusCode ?? x?.status ?? x?.response?.status
 }
 
-/** 서버가 준 요청 번호(본문 request_id 우선, 없으면 X-Request-ID 헤더) */
+/** 서버가 반환한 요청 번호(본문 request_id 우선, 없으면 X-Request-ID 헤더) */
 export function errorRequestId(e: unknown): string | undefined {
   const x = e as { data?: { request_id?: unknown }; requestId?: string } | null
   if (x?.data && typeof x.data === 'object' && typeof x.data.request_id === 'string') return x.data.request_id
@@ -155,8 +155,8 @@ export function errorRequestId(e: unknown): string | undefined {
 }
 
 /**
- * `fetch()` 를 직접 써야 하는 곳(스트리밍 진행률 다운로드 등)용 — 주소·인증만 $fetch 와 같은 규칙으로 맞춘다.
- * 웹: 그대로(`credentials` 는 호출부가 준 값). 번들 앱: `/api`·`/oauth` 에 apiBase + Bearer.
+ * `fetch()` 를 직접 사용해야 하는 경우(스트리밍 진행률 다운로드 등)용 — 주소·인증만 $fetch 와 동일한 규칙으로 적용한다.
+ * 웹: 변경 없음(`credentials` 는 호출부 지정값). 번들 앱: `/api`·`/oauth` 에 apiBase + Bearer.
  */
 export function apiRawFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const auth = bundledAuthHeaders()

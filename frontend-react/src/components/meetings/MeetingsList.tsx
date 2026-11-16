@@ -29,7 +29,7 @@ export interface MeetingsListProps {
   onEnd?: (room: MeetingRoomInfo) => void
   onRsvp?: (room: MeetingRoomInfo, response: MeetingRsvp) => void
   onCalendar?: (room: MeetingRoomInfo) => void
-  /** 끝난 회의 ⋮ "녹화 파일" — 없으면 항목 없음 */
+  /** 끝난 회의 ⋮ "녹화 파일" — 미지정 시 항목 미표시 */
   onRecordings?: (room: MeetingRoomInfo) => void
 }
 
@@ -55,7 +55,7 @@ export function MeetingsList({ rooms, now, onJoin, onCopy, onDelete, onEdit, onE
     return parts.filter(Boolean).join(' · ')
   }
 
-  /** 내 응답 표기(초대받은 회의) — 응답 전은 warning 으로 눈에 띄게 */
+  /** 내 응답 표기(초대받은 회의) — 응답 전은 warning 으로 강조 */
   function myResponse(r: MeetingRoomInfo) {
     if (r.is_host || !r.my_response) return null
     const key = r.my_response === 'pending' ? 'pending' : r.my_response
@@ -73,7 +73,7 @@ export function MeetingsList({ rooms, now, onJoin, onCopy, onDelete, onEdit, onE
     const items: UiMenuItem[] = []
     if (v.joinable) items.push({ key: 'join', label: t('meetings.list.join'), icon: 'video' })
     items.push({ key: 'copy', label: t('meetings.list.copyLink'), icon: 'link', disabled: !r.share_token })
-    // 내 응답 — 초대받은 회의(호스트 아님)이고 끝나지 않았을 때
+    // 내 응답 — 초대받은 회의(호스트 아님)이며 종료 전인 경우
     if (!r.is_host && r.my_response && r.meeting_id && !v.ended) {
       items.push({ key: 'rsvp-head', label: t('meetings.rsvp.mine'), heading: true, separated: true })
       for (const k of ['accepted', 'tentative', 'declined'] as const) {

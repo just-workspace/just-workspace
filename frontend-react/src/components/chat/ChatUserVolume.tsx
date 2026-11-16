@@ -1,14 +1,14 @@
 /**
- * 사람별 음량 — 음성 접속자 줄에서 우클릭·길게 누르기로 연다.
- *  머리: 아바타 28 · "○○ 님 음량" 14/600 · 값 mono 13 primary
- *  UiSlider 0–200(5% 단계, 100 눈금) + 아래 0 · 100 · 200(mono 11) → 100% 넘으면 warning 한 줄
+ * 사용자별 음량 — 음성 접속자 행에서 우클릭·길게 누르기로 연다.
+ *  헤더: 아바타 28 · "○○ 님 음량" 14/600 · 값 mono 13 primary
+ *  UiSlider 0–200(5% 단계, 100 눈금) + 아래 0 · 100 · 200(mono 11) → 100% 초과 시 warning 한 행
  *  → (위 선) "나만 음소거" UiSwitch · "기본값(100%)으로".
- * 저장: 개인 설정 chatUserVolumes / chatUserMuted(사용자 id 기준) — 끄는 동안은 화면만, 놓을 때(onCommit) 저장.
- * 실제 소리: lib/voice/userVolume 이 설정을 읽어 LiveKit 원격 참가자 음량(0–2.0, 100% 넘으면 WebAudio 이득)에 적용한다.
+ * 저장: 개인 설정 chatUserVolumes / chatUserMuted(사용자 id 기준) — 드래그 중에는 화면만 갱신하고, 놓는 시점(onCommit)에 저장한다.
+ * 실제 음량: lib/voice/userVolume 이 설정을 읽어 LiveKit 원격 참가자 음량(0–2.0, 100% 초과 시 WebAudio 게인)에 적용한다.
  *
- * SIDEBAR 연결: 접속자 줄에 {...userVolumeTriggerProps({ userId, name, avatarUrl })} 를 펼치면 우클릭·길게 누르기(500ms)로 열린다.
- *  또는 openUserVolume({ userId, name, avatarUrl, anchor: anchorOf(el) }) 를 직접. 그리는 곳(ChatUserVolumeHost)은 pages/chat 에 있다.
- *  자기 자신(내 줄)은 열지 않는다.
+ * SIDEBAR 연결: 접속자 행에 {...userVolumeTriggerProps({ userId, name, avatarUrl })} 를 전개하면 우클릭·길게 누르기(500ms)로 열린다.
+ *  또는 openUserVolume({ userId, name, avatarUrl, anchor: anchorOf(el) }) 를 직접 호출한다. 렌더링 위치(ChatUserVolumeHost)는 pages/chat 이다.
+ *  본인(본인 행)에 대해서는 열지 않는다.
  */
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { createStore, useStore } from 'zustand'
@@ -28,13 +28,13 @@ export interface UserVolumeTarget {
   userId: string
   name: string
   avatarUrl?: string | null
-  /** 화면 좌표 사각형(anchorOf). 없으면 화면 가운데 */
+  /** 화면 좌표 사각형(anchorOf). 없으면 화면 중앙 */
   anchor?: { x: number; y: number; w: number; h: number } | null
 }
 
 const volumeStore = createStore<{ target: UserVolumeTarget | null }>()(() => ({ target: null }))
 
-/** 사람별 음량 열기(내 줄이면 무시) */
+/** 사용자별 음량 열기(본인 행이면 무시) */
 export function openUserVolume(t: UserVolumeTarget) {
   if (t.userId === authStore.getState().user?.id) return
   volumeStore.setState({ target: t })
@@ -43,7 +43,7 @@ export function closeUserVolume() { volumeStore.setState({ target: null }) }
 
 const LONG_PRESS_MS = 500
 
-/** 접속자 줄에 펼칠 속성 — 우클릭(contextmenu) · 터치 길게 누르기 */
+/** 접속자 행에 전개할 속성 — 우클릭(contextmenu) · 터치 길게 누르기 */
 export function userVolumeTriggerProps(t: Omit<UserVolumeTarget, 'anchor'>) {
   let timer: ReturnType<typeof setTimeout> | null = null
   const clear = () => { if (timer) { clearTimeout(timer); timer = null } }
@@ -64,7 +64,7 @@ export function userVolumeTriggerProps(t: Omit<UserVolumeTarget, 'anchor'>) {
   }
 }
 
-/** 지금 열린 사람별 음량 카드 — pages/chat 이 한 번 그린다 */
+/** 현재 열린 사용자별 음량 카드 — pages/chat 에서 1회 렌더링 */
 export function ChatUserVolumeHost() {
   const target = useStore(volumeStore, s => s.target)
   if (!target) return null
@@ -78,7 +78,7 @@ export function ChatUserVolume({ target, onClose }: { target: UserVolumeTarget; 
   const muted = useStore(userPrefsStore, s => userMutedOf(target.userId, s.prefs))
   const [vol, setVol] = useState(saved)
   const dragging = useRef(false)
-  // 다른 곳(다른 탭·서버 동기화)에서 바뀌면 따라간다 — 끄는 동안은 그대로
+  // 다른 곳(다른 탭·서버 동기화)에서 변경되면 반영 — 드래그 중에는 유지
   useEffect(() => { if (!dragging.current) setVol(saved) }, [saved])
 
   const title = t('chat.shell.vol.title', { name: target.name })

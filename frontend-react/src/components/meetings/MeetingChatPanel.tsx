@@ -1,7 +1,7 @@
 /**
  * Meeting-specific chat panel.
  * Uses direct $fetch instead of useChat singleton to avoid interference.
- * ※ 지금 쓰는 곳이 없다(회의 채팅은 MeetingsSidebar 의 DataChannel 채팅).
+ * 참고: 현재 사용처 없음(회의 채팅은 MeetingsSidebar 의 DataChannel 채팅).
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -27,7 +27,7 @@ function formatTime(dateStr: string) {
   return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
 }
 
-/** 채널 메시지를 3초마다 받아 보여 주는 간단한 회의 채팅 패널 */
+/** 채널 메시지를 3초마다 조회해 표시하는 간단한 회의 채팅 패널 */
 export function MeetingChatPanel({ channelId }: MeetingChatPanelProps) {
   const { t } = useI18n()
   const { user } = useAuth()

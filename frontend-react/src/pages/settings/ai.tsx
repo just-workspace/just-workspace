@@ -1,9 +1,9 @@
 // 설정 › AI.
-//  ① 기본 모델 — 라디오 행: 워크스페이스 기본 · 워크스페이스 고급(관리자가 지정했을 때) · 내 API 키. 고르면 바로 저장(PUT /api/ai/my-settings) + "저장됨 ✓".
-//  ② 내 API 키 — 관리자가 허용한 경우만. 제공자 160 + API 키(저장돼 있으면 점선 칸에 가림값 + [바꾸기]),
+//  ① 기본 모델 — 라디오 행: 워크스페이스 기본 · 워크스페이스 고급(관리자가 지정한 경우) · 내 API 키. 선택 즉시 저장(PUT /api/ai/my-settings) + "저장됨 ✓".
+//  ② 내 API 키 — 관리자가 허용한 경우에만 표시. 제공자 160 + API 키(저장된 경우 점선 칸에 마스킹 값 + [바꾸기]),
 //     "연결 확인됨 · MM/DD", 카드 안에 모델·주소 칸, 푸터 = 왼쪽 "키 삭제"(danger) · 오른쪽 [연결 시험][되돌리기][저장]
 //     — 카드별 저장 규칙(변경 없으면 되돌리기·저장 비활성).
-//  ③ 도구 기본값 · 지침 — 스위치 행 바로 저장, 내 지침 텍스트 칸(모든 대화에 붙음, 칸을 벗어나면 저장).
+//  ③ 도구 기본값 · 지침 — 스위치 행 즉시 저장, 내 지침 텍스트 칸(모든 대화에 적용, 칸 이탈 시 저장).
 //  외부 AI 데이터 접근 동의 카드는 ② 개인 키 카드 바로 아래, 스위치 즉시 저장.
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -100,7 +100,7 @@ export default function SettingsAiPage() {
     } catch { /* 무시 */ }
     setSnapshot(snapOf(next ?? myRef.current))
   }
-  // 이벤트 처리기 안에서 "지금" 값
+  // 이벤트 처리기 내부에서 참조하는 현재 값
   const myRef = useRef(myp)
   myRef.current = myp
 
@@ -163,7 +163,7 @@ export default function SettingsAiPage() {
     const d = new Date(s)
     return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(locale === 'ko' ? 'ko-KR' : 'en-US', { month: '2-digit', day: '2-digit' })
   }
-  /** [연결 시험] — 입력 중인 새 값이 있으면 그 값으로 모델 목록만, 아니면 저장된 키로 시험하고 "연결 확인됨" 기록 */
+  /** [연결 시험] — 입력 중인 새 값이 있으면 해당 값으로 모델 목록만 조회, 없으면 저장된 키로 시험하고 "연결 확인됨" 기록 */
   async function testConnection() {
     patch({ testing: true })
     try {

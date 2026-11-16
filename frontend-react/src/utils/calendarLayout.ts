@@ -2,11 +2,11 @@
  * 캘린더 순수 계산 함수 모음(컴포넌트·테스트 공용).
  *
  * - 주 시작 요일(설정›표시 → 로케일 기본)
- * - 주·일 보기 절대 배치: 겹치는 일정을 열(column)로 나눈다
- * - 반복 일정 "이후 모두 삭제" = RRULE 의 UNTIL 을 이 회차 직전으로 되감기
+ * - 주·일 보기 절대 배치: 겹치는 일정을 열(column)로 분할한다
+ * - 반복 일정 "이후 모두 삭제" = RRULE 의 UNTIL 을 해당 회차 직전으로 변경
  * - 일정 색 → 범주 토큰(--cat-N) 바탕 /0.2 + 3px 바. 규칙은 utils/categoryColor
  * - 날짜·시각 함수(startOfDay·addDays·isSameDay·startOfWeek·overlapsDay·fmtTime·toDateInput·toTimeInput·fromInputs)는
- *   전부 **캘린더 시간대**(utils/calTz — 설정 시간대, 빈 값 = 기기) 벽시계 기준이다. 기기 시간대 getter 를 직접 쓰지 말 것.
+ *   전부 **캘린더 시간대**(utils/calTz — 설정 시간대, 빈 값 = 기기) 벽시계 기준이다. 기기 시간대 getter 직접 사용 금지.
  */
 
 import { catColor } from './categoryColor'
@@ -39,7 +39,7 @@ export function startOfDay(d: Date): Date {
   return zStartOfDay(d)
 }
 
-/** n일 뒤 같은 벽시계 시각(캘린더 시간대, 서머타임 날도 24시간 더하기가 아님) */
+/** n일 뒤 같은 벽시계 시각(캘린더 시간대, 서머타임 전환일에도 24시간 가산이 아님) */
 export function addDays(d: Date, n: number): Date {
   return zAddDays(d, n)
 }
@@ -55,7 +55,7 @@ export function startOfWeek(d: Date, weekStart: WeekStartDay): Date {
   return addDays(s, -diff)
 }
 
-/** [day 00:00, 다음날 00:00) 과 겹치는지 */
+/** [day 00:00, 다음날 00:00) 과의 겹침 여부 */
 export function overlapsDay(start: Date, end: Date, day: Date): boolean {
   const ds = startOfDay(day)
   const de = addDays(ds, 1)
@@ -65,11 +65,11 @@ export function overlapsDay(start: Date, end: Date, day: Date): boolean {
 export interface LayoutItem { id: string; start: number; end: number }
 export interface LayoutBox { id: string; col: number; cols: number }
 
-/** 겹침 배치에서 아주 짧은 일정도 최소 이 길이로 본다(ms) */
+/** 겹침 배치에서 매우 짧은 일정에도 적용하는 최소 길이(ms) */
 const MIN_SPAN = 15 * 60 * 1000
 
 /**
- * 같은 날 일정들을 겹침 묶음(cluster)으로 나누고, 묶음 안에서 열을 배정한다.
+ * 같은 날의 일정을 겹침 묶음(cluster)으로 분할하고, 묶음 내에서 열을 배정한다.
  * 결과의 col/cols 로 left = col/cols, width = 1/cols 를 계산한다.
  */
 export function layoutOverlaps(items: LayoutItem[]): LayoutBox[] {
@@ -113,7 +113,7 @@ export function toRRuleUtc(d: Date): string {
 }
 
 /**
- * "이후 모두 삭제": 이 회차 시작 1초 전을 UNTIL 로 두고 COUNT 는 버린다.
+ * "이후 모두 삭제": 해당 회차 시작 1초 전을 UNTIL 로 설정하고 COUNT 는 제거한다.
  * (백엔드에 회차 예외(EXDATE)가 없어 "이 일정만" 은 불가 — 백엔드 갭)
  */
 export function rruleUntilBefore(rrule: string, occurrenceStart: Date): string {
@@ -124,7 +124,7 @@ export function rruleUntilBefore(rrule: string, occurrenceStart: Date): string {
   return parts.join(';')
 }
 
-/** 일정 블록 바탕: 범주 색 / 0.2. 범주면 테마 토큰, 사용자 지정 hex 는 알파를 붙여, 없으면 primary */
+/** 일정 블록 바탕: 범주 색 / 0.2. 범주이면 테마 토큰, 사용자 지정 hex 는 알파 적용, 없으면 primary */
 export function eventBg(color: string | null | undefined, alpha = 0.2): string {
   return catColor(color, alpha)
 }
@@ -139,7 +139,7 @@ export function fmtTime(d: Date): string {
   return zFmtTime(d)
 }
 
-/** "1시간" · "30분" · "1시간 30분" (ko 기준 — 라벨 조각은 호출부가 i18n 으로 준다) */
+/** "1시간" · "30분" · "1시간 30분" (ko 기준 — 라벨 조각은 호출부가 i18n 으로 전달) */
 export function durationParts(startMs: number, endMs: number): { h: number; m: number } {
   const mins = Math.max(0, Math.round((endMs - startMs) / 60000))
   return { h: Math.floor(mins / 60), m: mins % 60 }
@@ -150,21 +150,21 @@ export function gmtLabel(d = new Date()): string {
   return tzGmtLabel(calendarZone(), d)
 }
 
-// ── 반복 규칙 상한(서버 app/calendar/rrule_guard.py 와 같은 규칙) ──
+// ── 반복 규칙 상한(서버 app/calendar/rrule_guard.py 와 동일 규칙) ──
 
-/** 폼에서 고를 수 있는 반복 주기 — 초·분 단위는 없다 */
+/** 폼에서 선택 가능한 반복 주기 — 초·분 단위 없음 */
 export const RECURRENCE_FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const
-/** 반복 횟수 입력 상한(폼 input max 와 같다) */
+/** 반복 횟수 입력 상한(폼 input max 와 동일) */
 export const MAX_RECURRENCE_COUNT = 365
 
-/** 반복 횟수 → 1..MAX_RECURRENCE_COUNT 정수(숫자가 아니면 null = 횟수 지정 안 함) */
+/** 반복 횟수 → 1..MAX_RECURRENCE_COUNT 정수(숫자가 아니면 null = 횟수 미지정) */
 export function clampRecurrenceCount(n: unknown): number | null {
   const v = typeof n === 'number' ? n : parseInt(String(n ?? ''), 10)
   if (!Number.isFinite(v) || v < 1) return null
   return Math.min(MAX_RECURRENCE_COUNT, Math.floor(v))
 }
 
-/** 폼이 만드는 주기만 RRULE FREQ 로 — 그 밖은 null(반복 없음) */
+/** 폼이 생성하는 주기만 RRULE FREQ 로 변환 — 그 밖은 null(반복 없음) */
 export function safeRecurrenceFreq(type: string | null | undefined): typeof RECURRENCE_FREQS[number] | null {
   const f = String(type || '').toUpperCase()
   return (RECURRENCE_FREQS as readonly string[]).includes(f) ? f as typeof RECURRENCE_FREQS[number] : null
@@ -224,14 +224,14 @@ export function toTimeInput(d: Date): string {
   return zFmtTime(d)
 }
 
-/** 'YYYY-MM-DD' + 'HH:MM' → 순간(캘린더 시간대 벽시계). 형식이 틀리면 null */
+/** 'YYYY-MM-DD' + 'HH:MM' → 순간(캘린더 시간대 벽시계). 형식 불일치 시 null */
 export function fromInputs(date: string, time = '00:00'): Date | null {
   return zFromInputs(date, time)
 }
 
 /**
- * 반복 일정을 회차에서 "전체" 로 고칠 때: 회차에서 옮긴 만큼(시작 시각 차이) 마스터를 옮기고,
- * 길이는 새 길이로. (지금까지는 회차의 날짜가 그대로 마스터 시작이 돼 시리즈 첫날이 바뀌었다.)
+ * 반복 일정을 회차에서 "전체" 로 수정할 때: 회차에서 이동한 만큼(시작 시각 차이) 마스터를 이동하고,
+ * 길이는 새 길이로 설정한다. (이전에는 회차의 날짜가 그대로 마스터 시작이 되어 시리즈 첫날이 변경되었다.)
  */
 export function shiftSeries(
   master: { start: Date; end: Date },

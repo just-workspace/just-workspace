@@ -1,11 +1,11 @@
 /**
  * 비밀번호 카드.
  * 제목 + "마지막 변경 YYYY-MM-DD", 2열(현재 비밀번호 전체 폭 / 새 비밀번호 + 규칙 체크 목록),
- * 체크 목록: "8자 이상" · "흔한 비밀번호 아님" · "아이디·이메일과 다름". 길이·아이디는 입력하는 대로,
- * 흔한 비밀번호는 서버 블록리스트라 POST /api/auth/password-check 응답이 온 뒤에만 통과로 표시한다(그 전엔 빈 원).
+ * 체크 목록: "8자 이상" · "흔한 비밀번호 아님" · "아이디·이메일과 다름". 길이·아이디는 입력 즉시 판정하고,
+ * 흔한 비밀번호는 서버 블록리스트이므로 POST /api/auth/password-check 응답 수신 후에만 통과로 표시한다(그 전에는 빈 원).
  * 푸터 = 왼쪽 "바꾸면 다른 기기는 모두 로그아웃됩니다" + 오른쪽 [비밀번호 바꾸기](입력 전 opacity .5).
- * 확인 칸은 시안대로 없음(보기 토글로 대신). 성공하면 머리에 "저장됨 ✓" 2초.
- * 동작(POST /api/auth/change-password)까지 이 컴포넌트가 가진다.
+ * 확인 칸은 시안대로 없음(보기 토글로 대체). 성공 시 머리에 "저장됨 ✓" 2초 표시.
+ * 동작(POST /api/auth/change-password)까지 본 컴포넌트가 담당한다.
  *
  * @example <SettingsPasswordCard />
  */
@@ -21,7 +21,7 @@ import { UiErrorTile } from '~/components/ui/ErrorTile'
 import { UiButton } from '~/components/ui/Button'
 import { SettingsCard } from './SettingsCard'
 
-/** password_changed_at → YYYY-MM-DD(로컬). 없거나 잘못되면 '' */
+/** password_changed_at → YYYY-MM-DD(로컬). 없거나 형식 오류이면 '' */
 export function passwordChangedDay(v: string | null | undefined): string {
   if (!v) return ''
   const d = new Date(v)
@@ -31,7 +31,7 @@ export function passwordChangedDay(v: string | null | undefined): string {
 /** 서버 판정(POST /api/auth/password-check) */
 interface PwCheck { length: boolean; common: boolean; context: boolean; ok: boolean }
 
-/** 체크 목록 결과 — 순서: 8자 이상 · 흔한 비밀번호 아님(서버 응답 뒤) · 아이디·이메일과 다름 */
+/** 체크 목록 결과 — 순서: 8자 이상 · 흔한 비밀번호 아님(서버 응답 후) · 아이디·이메일과 다름 */
 export function settingsPasswordRules(pw: string, context: Array<string | null | undefined>, server: PwCheck | null): PasswordRuleResult[] {
   const p = (pw ?? '').normalize('NFKC')
   const n = p.length
@@ -53,7 +53,7 @@ export function SettingsPasswordCard() {
   const [success, setSuccess] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // 흔한 비밀번호 판정 — 입력이 멈춘 뒤(400ms) 서버에 묻고, 응답이 온 뒤에만 표시한다
+  // 흔한 비밀번호 판정 — 입력 정지 후(400ms) 서버에 조회하고, 응답 수신 후에만 표시한다
   const [server, setServer] = useState<PwCheck | null>(null)
   const checkSeq = useRef(0)
   useEffect(() => {
@@ -68,7 +68,7 @@ export function SettingsPasswordCard() {
           if (r.common) setFieldErr({ newPassword: t('settings.password.commonError') })
           else if (r.context) setFieldErr({ newPassword: t('settings.password.contextError') })
         })
-        .catch(() => { /* 판정 실패 — 저장할 때 서버가 다시 거른다 */ })
+        .catch(() => { /* 판정 실패 — 저장 시 서버가 재검증한다 */ })
     }, 400)
     return () => clearTimeout(timer)
   }, [newPassword, t])

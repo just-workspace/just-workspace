@@ -2,10 +2,10 @@
  * 라우터 도우미 — `useRoute()`·`useRouter()`·`navigateTo()`.
  *
  * 사용: const route = useRoute(); route.path / route.query.tab / route.params.id;  navigateTo('/x')
- * (route 는 렌더 시점 값이다. 경로가 바뀔 때 할 일은 useEffect(..., [route.path]) 로.)
+ * (route 는 렌더 시점 값이다. 경로 변경 시 수행할 작업은 useEffect(..., [route.path]) 로 처리한다.)
  *
- * navigateTo 는 컴포넌트 밖(store·이벤트 처리기)에서도 부를 수 있다.
- * 직전 기록의 주소는 `historyBackPath()` 로 읽는다.
+ * navigateTo 는 컴포넌트 외부(store·이벤트 처리기)에서도 호출 가능하다.
+ * 직전 기록의 주소는 `historyBackPath()` 로 조회한다.
  */
 import { useContext, useMemo } from 'react'
 import { UNSAFE_DataRouterStateContext, useLocation, useParams, type createBrowserRouter } from 'react-router'
@@ -15,15 +15,15 @@ export type AppRouter = ReturnType<typeof createBrowserRouter>
 export type LocationQueryValue = string | null
 export type LocationQuery = Record<string, LocationQueryValue | LocationQueryValue[]>
 
-/** 라우트 메타 — routes.ts 의 handle 에 둔다 */
+/** 라우트 메타 — routes.ts 의 handle 에 정의한다 */
 export interface RouteMeta {
   /** 'default' | 'admin' | 'settings' | false */
   layout?: 'default' | 'admin' | 'settings' | false
-  /** 모바일에서 공용 상단바 대신 페이지 자체 머리를 쓴다 */
+  /** 모바일에서 공용 상단바 대신 페이지 자체 헤더를 사용한다 */
   ownMobileHeader?: boolean
-  /** 데스크톱 공용 상단바를 그리지 않는다(페이지 머리가 맡는다) */
+  /** 데스크톱 공용 상단바를 렌더링하지 않는다(페이지 헤더가 대체) */
   noDesktopTopbar?: boolean
-  /** 페이지 사이드바 하단에 내 계정 패널 — 레일 아바타를 뺀다 */
+  /** 페이지 사이드바 하단에 내 계정 패널 배치 — 레일 아바타는 제외 */
   sidebarAccount?: boolean
   /** catch-all 파라미터 이름([...slug]) */
   catchAll?: string
@@ -66,9 +66,9 @@ export function getAppRouter(): AppRouter | null {
 }
 
 /**
- * 주소창 쿼리를 vue-router 모양으로 맞춘다. vue-router 는 첫 진입 때 history.replace(fullPath) 로
- * 주소를 정규화하므로(새 창으로 연 `?path=my%2Fx` 도 `?path=my/x` 로 보임) 같은 결과를 낸다.
- * 라우터가 보고 있는 주소와 브라우저 주소가 같을 때만(메모리 라우터·이동 중에는 손대지 않음).
+ * 주소창 쿼리를 vue-router 형식으로 정규화한다. vue-router 는 최초 진입 시 history.replace(fullPath) 로
+ * 주소를 정규화하므로(새 창으로 연 `?path=my%2Fx` 도 `?path=my/x` 로 표시됨) 동일한 결과를 낸다.
+ * 라우터가 인식하는 주소와 브라우저 주소가 동일할 때만 수행한다(메모리 라우터·이동 중에는 변경하지 않음).
  */
 function normalizeUrlBar(r: AppRouter) {
   if (typeof window === 'undefined') return
@@ -88,7 +88,7 @@ export function historyBackPath(): string | undefined {
   return _historyPaths.get(idx - 1)
 }
 
-/** vue-router 와 같은 쿼리 파싱(같은 키 반복 = 배열, 값 없는 키 = null) */
+/** vue-router 와 동일한 쿼리 파싱(동일 키 반복 = 배열, 값 없는 키 = null) */
 export function parseQuery(search: string): LocationQuery {
   const q: LocationQuery = {}
   const s = search.startsWith('?') ? search.slice(1) : search
@@ -110,9 +110,9 @@ function decode(s: string): string {
   try { return decodeURIComponent(s.replace(/\+/g, ' ')) } catch { return s }
 }
 
-// ── vue-router(4.x) encoding.ts 와 같은 쿼리 인코딩 ─────────────────────────
-// encodeURIComponent 와 달리 `/`·`=`·`?`·`:`·`@`·`,` 등은 그대로 두고, 쿼리 구분에 쓰이는
-// `&`·`#`·`+`(공백은 `+`)만 인코딩한다. 기존 링크·북마크와 주소창 모양이 같게 하려는 것.
+// ── vue-router(4.x) encoding.ts 와 동일한 쿼리 인코딩 ─────────────────────────
+// encodeURIComponent 와 달리 `/`·`=`·`?`·`:`·`@`·`,` 등은 그대로 두고, 쿼리 구분에 사용되는
+// `&`·`#`·`+`(공백은 `+`)만 인코딩한다. 기존 링크·북마크와 주소창 형식을 동일하게 유지하기 위함.
 function commonEncode(text: string): string {
   let out: string
   try { out = encodeURI(text) } catch { out = encodeURIComponent(text) } // 짝 없는 서로게이트
@@ -137,7 +137,7 @@ export function encodeQueryKey(text: string | number): string {
   return encodeQueryValue(text).replace(/=/g, '%3D')
 }
 
-/** vue-router stringifyQuery 와 같은 결과(undefined 는 뺀다, null 은 키만) */
+/** vue-router stringifyQuery 와 동일한 결과(undefined 는 제외, null 은 키만) */
 export function stringifyQuery(query: Record<string, unknown> | undefined): string {
   if (!query) return ''
   const parts: string[] = []
@@ -153,7 +153,7 @@ export function stringifyQuery(query: Record<string, unknown> | undefined): stri
   return parts.join('&')
 }
 
-/** `?a=b%2Fc` → `?a=b/c` — 같은 값을 vue-router 모양으로 다시 쓴다(빈 쿼리는 '') */
+/** `?a=b%2Fc` → `?a=b/c` — 동일한 값을 vue-router 형식으로 재작성한다(빈 쿼리는 '') */
 export function normalizeSearch(search: string): string {
   const qs = stringifyQuery(parseQuery(search))
   return qs ? '?' + qs : ''
@@ -163,7 +163,7 @@ export function normalizeSearch(search: string): string {
 export function resolve(to: RouteLocationRaw): { fullPath: string; href: string; path: string; query: LocationQuery; hash: string } {
   if (typeof to === 'string') {
     const u = new URL(to, 'http://x')
-    // vue-router 처럼 문자열 쿼리도 한 번 풀었다가 같은 규칙으로 다시 쓴다(…?path=my%2Fx → …?path=my/x)
+    // vue-router 와 동일하게 문자열 쿼리도 한 번 파싱한 뒤 동일 규칙으로 재작성한다(…?path=my%2Fx → …?path=my/x)
     const search = normalizeSearch(u.search)
     const fullPath = u.pathname + search + u.hash
     return { fullPath, href: fullPath, path: u.pathname, query: parseQuery(search), hash: u.hash }
@@ -184,7 +184,7 @@ export interface NavigateOptions {
   open?: { target?: string }
 }
 
-/** 이동 — 컴포넌트 안팎 어디서나 */
+/** 이동 — 컴포넌트 내부·외부 모두에서 사용 가능 */
 export async function navigateTo(to: RouteLocationRaw, opts: NavigateOptions = {}): Promise<void> {
   const target = resolve(to).fullPath
   const isExternal = typeof to === 'string' && /^[a-z][a-z0-9+.-]*:/i.test(to)
@@ -217,7 +217,7 @@ export const routerApi = {
 export function useRoute(): RouteLocation {
   const loc = useLocation()
   const rawParams = useParams()
-  // useMatches 는 데이터 라우터 밖에서 던진다 — 디자인 번들(MemoryRouter)에서도 쓰이게 상태 컨텍스트를 직접 읽는다(없으면 메타 없음)
+  // useMatches 는 데이터 라우터 밖에서 예외를 발생시킨다 — 디자인 번들(MemoryRouter)에서도 사용할 수 있도록 상태 컨텍스트를 직접 읽는다(없으면 메타 없음)
   const matches = useContext(UNSAFE_DataRouterStateContext)?.matches
   return useMemo(() => {
     const meta: RouteMeta = {}
@@ -250,7 +250,7 @@ export function currentPath(): string {
   return _router?.state.location.pathname ?? (typeof location !== 'undefined' ? location.pathname : '/')
 }
 
-/** 쿼리 값 하나를 문자열로(배열이면 첫 값) */
+/** 쿼리 값 하나를 문자열로 변환(배열이면 첫 값) */
 export function queryString(v: LocationQueryValue | LocationQueryValue[] | undefined): string | undefined {
   if (Array.isArray(v)) return v[0] ?? undefined
   return v ?? undefined

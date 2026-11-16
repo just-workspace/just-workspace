@@ -1,13 +1,13 @@
 /**
  * 원문으로 점프.
- * useChatUi.jumpTo(channelId, messageId) 를 누가 부르든(답장 미리보기 · 고정 줄 · 검색 결과 · 고정 목록) 메시지 목록이 이 훅으로 처리한다.
- *  1) 다른 채널이면 그 채널을 연다.
- *  2) 원문이 지금 목록에 있으면 그 줄로 스크롤 + 강조.
- *  3) 없으면 GET ?around= 로 그 위치를 중심으로 다시 불러와 목록을 바꾸고(useChat.replaceMessagesWindow) 점프 → 아래 "이전 메시지를 보고 있습니다 · 최근으로" 바.
- *     스레드 안 원문이면(thread_root_id) 스레드를 연다.
- *  · 아래 끝에 닿으면 fetchMessagesAfter 로 이어 붙인다(다 따라잡으면 실시간으로 돌아간다).
- *  · 최근으로 = 원래 최신 목록 다시(fetchMessages).  · 옛 위치를 보는 중에 내가 보내면 최근으로.
- * 강조: bg-overlay-jump 2초 유지 → 1초 사라짐(reduce-motion 이면 2초 뒤 바로 없음). 상태는 chatJumpStore(행이 읽는다).
+ * useChatUi.jumpTo(channelId, messageId) 의 호출 주체와 무관하게(답장 미리보기 · 고정 줄 · 검색 결과 · 고정 목록) 메시지 목록이 이 훅으로 처리한다.
+ *  1) 다른 채널이면 해당 채널을 연다.
+ *  2) 원문이 현재 목록에 있으면 해당 줄로 스크롤 + 강조.
+ *  3) 없으면 GET ?around= 로 해당 위치를 중심으로 재조회해 목록을 교체하고(useChat.replaceMessagesWindow) 점프 → 아래 "이전 메시지를 보고 있습니다 · 최근으로" 바.
+ *     스레드 내 원문이면(thread_root_id) 스레드를 연다.
+ *  · 하단 끝에 도달하면 fetchMessagesAfter 로 이어 붙인다(최신까지 도달하면 실시간으로 복귀한다).
+ *  · 최근으로 = 원래 최신 목록 재조회(fetchMessages).  · 이전 위치를 열람 중에 본인이 전송하면 최근으로 이동.
+ * 강조: bg-overlay-jump 2초 유지 → 1초 사라짐(reduce-motion 이면 2초 후 즉시 제거). 상태는 chatJumpStore(행이 조회한다).
  */
 import { useEffect, useRef, type RefObject } from 'react'
 import { createStore, useStore } from 'zustand'
@@ -41,7 +41,7 @@ export function flashMessage(id: string) {
   _timers.push(setTimeout(() => chatJumpStore.setState({ id: null, phase: null }), JUMP_HOLD_MS + JUMP_FADE_MS))
 }
 
-/** 목록 안 그 줄로 스크롤 + 강조. 줄이 아직 없으면 false */
+/** 목록 내 해당 줄로 스크롤 + 강조. 줄이 아직 없으면 false */
 export function scrollToMessage(root: HTMLElement | null, id: string): boolean {
   const el = root?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`)
   if (!el) return false
@@ -56,7 +56,7 @@ export type JumpPlan =
   | { kind: 'thread'; rootId: string }
   | { kind: 'missing' }
 
-/** 점프 계획(순수 판단 + 필요하면 around 읽기) — 테스트 */
+/** 점프 계획(순수 판단 + 필요 시 around 조회) — 테스트 */
 export async function planJump(
   channelId: string,
   messageId: string,
@@ -73,13 +73,13 @@ export async function planJump(
 
 export interface UseChatJumpOpts {
   listRef: RefObject<HTMLElement | null>
-  /** 점프 직전 — 목록이 자동 맨 아래 내리기를 끈다 */
+  /** 점프 직전 — 목록의 자동 최하단 스크롤을 비활성화 */
   onBeforeJump?: () => void
   /** 실패 문구 */
   t: (k: string) => string
 }
 
-/** 메시지 목록에서 한 번 쓴다 */
+/** 메시지 목록에서 1회 사용 */
 export function useChatJump({ listRef, onBeforeJump, t }: UseChatJumpOpts) {
   const jumpTarget = useStore(chatUiStore, s => s.jumpTarget)
   const detached = useStore(chatStore, s => s.hasMoreAfter)
@@ -116,14 +116,14 @@ export function useChatJump({ listRef, onBeforeJump, t }: UseChatJumpOpts) {
     return () => { alive = false }
   }, [jumpTarget, listRef])
 
-  // 창을 바꾼 렌더 뒤 그 줄로
+  // 창 교체 렌더 후 해당 줄로 스크롤
   useEffect(() => {
     const id = pendingScroll.current
     if (!id) return
     if (scrollToMessage(listRef.current, id)) pendingScroll.current = null
   }, [messagesRef, listRef])
 
-  // 옛 위치를 보는 중에 내가 보냈다 → 최근으로
+  // 이전 위치를 열람 중에 본인이 전송 → 최근으로 이동
   useEffect(() => onChatEvent((data) => {
     if (data?.type !== 'new_message' || !chatStore.getState().hasMoreAfter) return
     const msg = data.message as ChatMessage | undefined
@@ -138,7 +138,7 @@ export async function jumpToPresent() {
   await fetchMessages()
 }
 
-/** 아래 끝에 닿음 — 옛 위치를 보는 중이면 다음 쪽을 붙인다 */
+/** 하단 끝 도달 — 이전 위치를 열람 중이면 다음 페이지를 추가 */
 export async function loadAfter() {
   const s = chatStore.getState()
   if (!s.hasMoreAfter || chatJumpStore.getState().loadingAfter || !s.selectedChannelId) return
@@ -151,7 +151,7 @@ export async function loadAfter() {
     const list = Array.isArray(page?.messages) ? page.messages : []
     appendMessagesAfter(list, !!page?.has_more_after && list.length > 0)
   } catch {
-    // 이어 읽지 못하면 최신으로 돌아간다(옛 서버 — after_seq 미지원)
+    // 이어서 조회하지 못하면 최신으로 복귀(구 서버 — after_seq 미지원)
     await jumpToPresent()
   } finally {
     chatJumpStore.setState({ loadingAfter: false })

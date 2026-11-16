@@ -1,4 +1,4 @@
-// 옛 주소 호환용 리다이렉트(라우터가 /admin/modules 로 보낸다).
+// 구 주소 호환용 리다이렉트(라우터가 /admin/modules 로 전환).
 import { Navigate } from 'react-router'
 
 export default function Page() {

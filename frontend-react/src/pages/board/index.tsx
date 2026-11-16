@@ -1,9 +1,9 @@
 /**
  * 게시판 인덱스 + 보조 보기(필독 · 북마크 · 검색 결과).
- *  커맨드 바 44: "전체 게시판" | 검색(모든 게시판) + 글쓰기(게시판 고르기)
- *  2열 카드(rounded 12 · card): 머리(이름 14/600 · 전체 보기) + 최근 글 행 48(안 읽음 굵게 / 읽음 foreground·80 · 작성자 · 날짜 mono)
- *  검색은 커맨드 바 입력 → ?view=search&q=(&board=) 로 결과를 같은 행 규격(56)으로 보여 준다.
- *  모바일 인덱스는 같은 카드를 1열로 쌓는다.
+ *  커맨드 바 44: "전체 게시판" | 검색(모든 게시판) + 글쓰기(게시판 선택)
+ *  2열 카드(rounded 12 · card): 머리(이름 14/600 · 전체 보기) + 최근 글 행 48(읽지 않음 굵게 / 읽음 foreground·80 · 작성자 · 날짜 mono)
+ *  검색은 커맨드 바 입력 → ?view=search&q=(&board=) 로 결과를 동일 행 규격(56)으로 표시한다.
+ *  모바일 인덱스는 동일 카드를 1열로 배치한다.
  * "새 글 N"(카드 머리 메타) = GET /unread-counts. 카드 행 굵게 = boards-with-posts 의 is_read.
  * 보조 보기 "내가 쓴 글"(?view=mine) = GET /my-posts.
  */
@@ -99,11 +99,11 @@ export default function BoardIndexPage() {
   const [bookmarks, setBookmarks] = useState<PostSummary[]>([])
   const [loadingList, setLoadingList] = useState(false)
   const [listError, setListError] = useState(false)
-  // 북마크 · 내가 쓴 글 · 검색은 20건씩 — 쪽 번호로 넘긴다(예전엔 첫 20건만 보였다)
+  // 북마크 · 내가 쓴 글 · 검색은 20건 단위 — 쪽 번호로 이동한다(기존에는 첫 20건만 표시됐다)
   const [listPage, setListPage] = useState(1)
   const [listTotal, setListTotal] = useState(0)
   const LIST_PAGE_SIZE = 20
-  // 보기·쪽을 빠르게 바꿀 때 늦게 온 이전 응답을 버린다
+  // 보기·쪽을 빠르게 전환할 때 지연 도착한 이전 응답을 폐기한다
   const listSeq = useRef(0)
   async function loadBookmarks(page = 1) {
     const my = ++listSeq.current
@@ -207,7 +207,7 @@ export default function BoardIndexPage() {
     if (createQ === '1' && authStore.getState().user?.is_admin) setShowCreateModal(true)
   }, [createQ])
 
-  // 글쓰기: 게시판이 하나면 바로, 여럿이면 고르기
+  // 글쓰기: 게시판이 하나면 즉시 이동, 여러 개면 선택
   async function write() {
     const list = boardStore.getState().boards
     if (!list.length) { addToast('info', t('board.write.noBoard')); return }
@@ -317,7 +317,7 @@ export default function BoardIndexPage() {
         ) : (
           /* 인덱스 */
           <>
-            {/* 모바일: 필독 콜아웃(데스크톱은 사이드바에 있다) */}
+            {/* 모바일: 필독 콜아웃(데스크톱은 사이드바에 표시) */}
             {mustReadPosts.length > 0 && (
               <div className="mx-4 mt-3 flex flex-col gap-1 rounded-md border border-warning/35 bg-warning/[0.08] px-3 py-2.5 md:hidden">
                 <NuxtLink to="/board?view=must-read" className="text-xs font-bold text-warning">{t('common.mustRead')} <span className="font-mono">{mustReadPosts.length}</span></NuxtLink>

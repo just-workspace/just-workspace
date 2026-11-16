@@ -1,6 +1,6 @@
 /**
- * 상단바 — 높이 56, 바탕 background, 아래 테두리. 스토어 없이 props 만으로 그린다.
- * (자세한 설명·예시는 아래 컴포넌트 JSDoc)
+ * 상단바 — 높이 56, 바탕 background, 하단 테두리. 스토어 없이 props 만으로 렌더링한다.
+ * (상세 설명·예시는 아래 컴포넌트 JSDoc 참조)
  */
 import type { CSSProperties, ReactNode, Ref } from 'react'
 import { cn } from '~/lib/utils'
@@ -12,25 +12,25 @@ import { UiAvatar } from './Avatar'
 import { UiStatusDot } from './StatusDot'
 
 export interface UiTopbarProps {
-  /** 경로 칸(최대 3: 워크스페이스 / 모듈 / 위치). 마지막 칸이 600 굵게, 3칸일 때 가운데는 foreground/85 */
+  /** 경로 칸(최대 3: 워크스페이스 / 모듈 / 위치). 마지막 칸은 600 굵기, 3칸일 때 가운데는 foreground/85 */
   crumbs?: string[]
-  /** 모바일 모양(제목 한 줄) */
+  /** 모바일 외형(제목 한 줄) */
   mobile?: boolean
   /** 모바일 제목(기본 = crumbs 마지막 칸) */
   title?: string
   /** 사이드바 고정 상태(aria-pressed) */
   pinned?: boolean
-  /** 사이드바 고정 토글 — 있을 때만 데스크톱 왼쪽 버튼을 그린다 */
+  /** 사이드바 고정 토글 — 지정 시에만 데스크톱 왼쪽 버튼 렌더링 */
   onTogglePin?: () => void
-  /** 고정 버튼 이름(기본: 고정 중 "사이드바 고정 풀기" / 아니면 "사이드바 고정") */
+  /** 고정 버튼 이름(기본: 고정 중 "사이드바 고정 풀기" / 그 외 "사이드바 고정") */
   pinLabel?: string
-  /** 이동·검색 열기 — 있을 때만 검색 버튼(데스크톱 240 · 모바일 아이콘) */
+  /** 이동·검색 열기 — 지정 시에만 검색 버튼 표시(데스크톱 240 · 모바일 아이콘) */
   onSearch?: () => void
-  /** 모바일 검색 아이콘 숨김(확장 액션이 돋보기를 가졌을 때) */
+  /** 모바일 검색 아이콘 숨김(확장 액션에 돋보기가 포함된 경우) */
   hideMobileSearch?: boolean
-  /** 벨(활동) 열기 — 있을 때만 데스크톱 벨 */
+  /** 벨(활동) 열기 — 지정 시에만 데스크톱 벨 표시 */
   onBell?: () => void
-  /** 벨 숫자(0 이면 배지 없음, 99 넘으면 99+) */
+  /** 벨 숫자(0 이면 배지 없음, 99 초과 시 99+) */
   bellCount?: number
   /** 활동 패널 열림(aria-pressed) */
   bellPressed?: boolean
@@ -40,34 +40,34 @@ export interface UiTopbarProps {
   actions?: ReactNode
   /** 기본 아바타 버튼의 사용자(이름·사진·상태점 상태) */
   user?: { name: string; avatarUrl?: string | null; status?: string }
-  /** 아바타 버튼 눌렀을 때 */
+  /** 아바타 버튼 클릭 시 호출 */
   onAvatarClick?: () => void
   /** 사용자 메뉴 열림(aria-expanded) */
   avatarExpanded?: boolean
-  /** 아바타 버튼 아래 붙는 메뉴(열림 애니메이션 포함해 쓰는 쪽이 그린다) */
+  /** 아바타 버튼 하단에 부착되는 메뉴(열림 애니메이션 포함하여 사용처가 렌더링) */
   avatarMenu?: ReactNode
   /** 아바타 버튼 + 메뉴를 감싼 상자 ref(바깥 클릭 닫기용) */
   avatarRef?: Ref<HTMLDivElement>
-  /** 아바타 자리를 통째로 바꾸기 */
+  /** 아바타 영역 전체 대체 */
   avatar?: ReactNode
-  /** 노치(safe-area) 위 여백을 주지 않기(위에 다른 띠가 이미 줬을 때) */
+  /** 노치(safe-area) 상단 여백 미적용(상위의 다른 띠가 이미 적용한 경우) */
   noSafeTop?: boolean
   className?: string
   style?: CSSProperties
 }
 
 /**
- * 상단바 — 높이 56, 바탕 background, 아래 테두리. 스토어 없이 props 만으로 그린다.
+ * 상단바 — 높이 56, 바탕 background, 하단 테두리. 스토어 없이 props 만으로 렌더링한다.
  *
  * 데스크톱(mobile=false):
  *   [사이드바 고정 32(onTogglePin 이 있을 때, aria-pressed, Ctrl \)] 경로 3단(워크스페이스 / 모듈 / 위치 — 12, 마지막 칸 600)
  *   … [확장 액션 슬롯] [이동하거나 검색 240 + Ctrl K 키캡(onSearch)] [벨 36 테두리 + primary 숫자 배지(onBell)] [아바타 32 + 상태점]
  * 모바일(mobile=true): 제목 한 줄(16/600, 기본 = 경로 마지막 칸) + [확장 액션] + 검색 아이콘 44(hideMobileSearch 로 숨김) + 아바타.
- *   벨은 그리지 않는다(활동은 탭바 "활동" 탭).
+ *   벨은 렌더링하지 않는다(활동은 탭바 "활동" 탭).
  *
- * 아바타: `user` 를 주면 기본 아바타 버튼(32 + 상태점, aria-haspopup=menu)을 그리고 `avatarMenu` 를 그 아래 붙인다
- * (avatarRef 는 버튼·메뉴를 감싼 상자 — 바깥 클릭 판정용). 완전히 다른 것을 그리려면 `avatar` 슬롯.
- * 문구 기본값은 i18n(shell.topbar.* · shell.palette.*) — 바꾸려면 *Label props.
+ * 아바타: `user` 를 지정하면 기본 아바타 버튼(32 + 상태점, aria-haspopup=menu)을 렌더링하고 `avatarMenu` 를 그 하단에 부착한다
+ * (avatarRef 는 버튼·메뉴를 감싼 상자 — 바깥 클릭 판정용). 전혀 다른 요소를 렌더링하려면 `avatar` 슬롯을 사용한다.
+ * 문구 기본값은 i18n(shell.topbar.* · shell.palette.*) — 변경하려면 *Label props 를 사용한다.
  *
  * @example
  * <UiTopbar crumbs={['워크스페이스', '메일', '받은편지함']} pinned={false} onTogglePin={…} onSearch={openPalette}
@@ -85,8 +85,8 @@ export function UiTopbar({
 
   return (
     <header
-      // 사용자 메뉴가 열린 동안은 헤더를 서랍(z-drawer) 위로 — 메뉴는 이 헤더의 쌓임 맥락에 갇혀 있어,
-      // 평소 값(z-dropdown)이면 본문 오른쪽 패널(활동·작업 상세·발신자 패널)에 가려 안 보였다.
+      // 사용자 메뉴가 열린 동안은 헤더를 서랍(z-drawer) 위로 올린다 — 메뉴는 본 헤더의 쌓임 맥락에 종속되어,
+      // 평상시 값(z-dropdown)에서는 본문 오른쪽 패널(활동·작업 상세·발신자 패널)에 가려 표시되지 않았다.
       className={cn('relative flex h-topbar shrink-0 items-center justify-between gap-3 border-b border-border bg-background pl-4 pr-4 lg:pl-4 lg:pr-6', avatarExpanded ? 'z-topbar-open' : 'z-dropdown', className)}
       style={noSafeTop ? style : { paddingTop: 'env(safe-area-inset-top)', ...style }}
     >
@@ -117,7 +117,7 @@ export function UiTopbar({
       <div className="flex items-center gap-2.5">
         {actions}
         {/* 이동·검색 (Ctrl K) */}
-        {/* 모양은 화면 폭이 아니라 mobile 로 정한다(디자인 툴·좁은 데스크톱 창에서도 시안대로) */}
+        {/* 외형은 화면 폭이 아니라 mobile 로 결정한다(디자인 툴·좁은 데스크톱 창에서도 시안과 동일) */}
         {onSearch && !mobile && (
           <button
             type="button"

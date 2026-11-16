@@ -1,24 +1,24 @@
 #!/bin/sh
-# ws-rbi-netfilter — 격리 브라우저 세션 브리지(기본 br-wsrbi)의 트래픽을 허용 목적지로만 묶는 호스트 iptables 규칙.
+# ws-rbi-netfilter — 격리 브라우저 세션 브리지(기본 br-wsrbi)의 트래픽을 허용 목적지로만 제한하는 호스트 iptables 규칙.
 #
-# 전용 체인 WS-RBI 를 만들고 DOCKER-USER 맨 앞에서 뛰어든다(FORWARD 가 가장 먼저 거치는 체인 — 도커 자체 규칙보다 우선).
-#   세션 → 바깥 : ESTABLISHED,RELATED 통과 · 허용 목적지 TCP 새 연결 통과 · 나머지 전부 DROP
-#                 (인터넷·LAN·다른 도커 브리지·게시 포트 DNAT 로 가는 ws-* 전부)
-#                 허용 목적지 = RBI_ALLOW(고정, 운영자가 .env 에 — 늘 허용) ∪ 동적 목록(RBI_ALLOW_FILE — 백엔드가 켜진 대상에서 만든다)
-#   바깥 → 세션 : ws-nginx 고정 IP(RBI_NGINX_IP)에서 6901 로 가는 새 연결만 통과(도커의 게시 포트 규칙으로 이어짐) · 나머지 DROP
-#   세션 → 호스트: INPUT 체인에서 브리지 입력을 DROP (호스트 sshd·docker-proxy 가 듣는 게시 포트 등)
-# 동적 목록(관리 화면에서 대상을 더하면 재시작 없이): RBI_POLL 초(기본 5)마다 RBI_ALLOW_FILE 을 읽는다. 파일은 백엔드만 쓰는 볼륨
-#   (rbi-allow, 여기서는 읽기 전용)이고 줄마다 다시 검사한다 — 형식(IPv4:포트[ force]) · RBI_ALLOW_CEILING(기본 사설 대역) 안 ·
+# 전용 체인 WS-RBI 를 생성하고 DOCKER-USER 맨 앞에서 점프한다(FORWARD 가 가장 먼저 거치는 체인 — 도커 자체 규칙보다 우선).
+#   세션 → 바깥 : ESTABLISHED,RELATED 통과 · 허용 목적지 TCP 신규 연결 통과 · 나머지 전부 DROP
+#                 (인터넷·LAN·다른 도커 브리지·게시 포트 DNAT 로 향하는 ws-* 전부)
+#                 허용 목적지 = RBI_ALLOW(고정, 운영자가 .env 에 지정 — 상시 허용) ∪ 동적 목록(RBI_ALLOW_FILE — 백엔드가 활성화된 대상에서 생성한다)
+#   바깥 → 세션 : ws-nginx 고정 IP(RBI_NGINX_IP)에서 6901 로 향하는 신규 연결만 통과(도커의 게시 포트 규칙으로 이어짐) · 나머지 DROP
+#   세션 → 호스트: INPUT 체인에서 브리지 입력을 DROP (호스트 sshd·docker-proxy 가 수신 대기하는 게시 포트 등)
+# 동적 목록(관리 화면에서 대상을 추가하면 재시작 없이 반영): RBI_POLL 초(기본 5)마다 RBI_ALLOW_FILE 을 읽는다. 파일은 백엔드만 기록하는 볼륨
+#   (rbi-allow, 여기서는 읽기 전용)이며 줄마다 재검증한다 — 형식(IPv4:포트[ force]) · RBI_ALLOW_CEILING(기본 사설 대역) 범위 안 ·
 #   루프백·링크로컬·멀티캐스트·세션 대역·이 호스트의 도커 브리지 대역(docker0·br-*)·RBI_DENY 거부 · 이 호스트 자신의 주소와
-#   기본 게이트웨이는 "force" 가 붙은 줄만. 거부한 줄은 하트비트의 rejected 에 이유와 함께 싣는다(관리 화면 "격리 규칙 상태").
-# 하트비트: 결과를 RBI_STATE_FILE(사이드카만 쓰는 볼륨 rbi-guard — 백엔드는 읽기 전용)에 매 주기 쓴다 — 오래되면 백엔드가 세션을 띄우지 않는다.
-# 멱등: 체인 내용이 마지막으로 적용한 것과 같고 목록이 그대로면 손대지 않는다(다르거나 사라졌을 때만 flush → 재구성).
-# 종료(SIGTERM): 체인·점프를 걷어낸다(남은 세션은 백엔드 reaper 가 하트비트 만료로 거둔다).
+#   기본 게이트웨이는 "force" 가 붙은 줄만 허용. 거부한 줄은 하트비트의 rejected 에 사유와 함께 기록한다(관리 화면 "격리 규칙 상태").
+# 하트비트: 결과를 RBI_STATE_FILE(사이드카만 기록하는 볼륨 rbi-guard — 백엔드는 읽기 전용)에 매 주기 기록한다 — 오래되면 백엔드가 세션을 기동하지 않는다.
+# 멱등: 체인 내용이 마지막 적용분과 동일하고 목록이 변경되지 않았으면 수정하지 않는다(상이하거나 소실된 경우에만 flush → 재구성).
+# 종료(SIGTERM): 체인·점프를 제거한다(남은 세션은 백엔드 reaper 가 하트비트 만료로 정리한다).
 #
-# ★ 운영 체인을 시험이 건드리지 못하게(실제 사고: 시험 중 `docker run <이미지> sh -c "iptables -S"` 가 ENTRYPOINT 로 이 스크립트를
-#   기본값(체인 WS-RBI)으로 돌렸다 — NET_ADMIN 이 없어 실패했을 뿐):
-#   1) 인자를 받지 않는다 — `docker run <이미지> <명령>` 으로 다른 일을 시키면 아무것도 하지 않고 끝난다(--entrypoint 를 쓸 것).
-#   2) RBI_CHAIN 기본값이 없다 — 운영 compose 가 RBI_CHAIN=WS-RBI 를 명시한다. 비면 아무것도 하지 않고 끝난다.
+# 주의: 시험이 운영 체인을 변경하지 못하도록 하는 보호 장치(실제 사고: 시험 중 `docker run <이미지> sh -c "iptables -S"` 가 ENTRYPOINT 로 이 스크립트를
+#   기본값(체인 WS-RBI)으로 실행했다 — NET_ADMIN 이 없어 실패했을 뿐이다):
+#   1) 인자를 받지 않는다 — `docker run <이미지> <명령>` 으로 다른 작업을 지시하면 아무 동작 없이 종료한다(--entrypoint 를 사용할 것).
+#   2) RBI_CHAIN 기본값이 없다 — 운영 compose 가 RBI_CHAIN=WS-RBI 를 명시한다. 비어 있으면 아무 동작 없이 종료한다.
 #   3) RBI_TEST_STACK=1(시험 스택)이면 운영 이름(체인 WS-RBI·브리지 br-wsrbi)을 거부한다.
 set -u
 
@@ -49,24 +49,24 @@ EXTRA_DENY="${RBI_DENY:-}"
 STATE_FILE="${RBI_STATE_FILE:-/run/rbi-guard/state.json}"
 POLL="${RBI_POLL:-5}"
 CHAIN="$RBI_CHAIN"                    # 기본 WS-RBI(compose 가 명시) · 시험 스택은 다른 이름(예 R22-RBI)
-INGRESS_PORT="${RBI_INGRESS_PORT:-6901}"  # 세션 컨테이너가 듣는 포트(KasmVNC·mirror-agent 모두 6901)
+INGRESS_PORT="${RBI_INGRESS_PORT:-6901}"  # 세션 컨테이너의 수신 포트(KasmVNC·mirror-agent 모두 6901)
 IPT="iptables -w 5"
 case "$POLL" in *[!0-9]*|"") POLL=5 ;; esac
 [ "$POLL" -lt 1 ] && POLL=1
 
-ALLOW=""          # 이번 주기에 실제로 거는 목록(고정 ∪ 검사를 통과한 동적)
+ALLOW=""          # 이번 주기에 실제로 적용하는 목록(고정 ∪ 검사를 통과한 동적)
 DYN_OK=""
 REJECTED=""
 ALLOW_REV=""
 
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) [rbi-netfilter] $*"; }
 
-# 동적 목록 읽기 + 줄마다 검사 → DYN_OK(쉼표 목록) · REJECTED("IP:포트 이유" 를 | 로) · ALLOW_REV
+# 동적 목록 읽기 + 줄 단위 검사 → DYN_OK(쉼표 목록) · REJECTED("IP:포트 이유" 를 | 로 구분) · ALLOW_REV
 load_dynamic() {
     DYN_OK=""; REJECTED=""; ALLOW_REV=""
     [ -r "$ALLOW_FILE" ] || return 0
     ALLOW_REV=$(sed -n 's/^# rev=\([0-9a-f]*\).*/\1/p' "$ALLOW_FILE" | head -1)
-    # 이 호스트의 도커 브리지 대역(세션이 닿으면 안 되는 ws-* 컨테이너) · 자신의 주소 · 기본 게이트웨이
+    # 이 호스트의 도커 브리지 대역(세션이 접근해서는 안 되는 ws-* 컨테이너) · 자신의 주소 · 기본 게이트웨이
     docker_nets=$(ip -4 -o addr show 2>/dev/null | awk '$2=="docker0" || $2 ~ /^br-/ {print $4}' | paste -sd, -)
     self_ips=$(ip -4 -o addr show 2>/dev/null | awk '{split($4,a,"/"); print a[1]}' | paste -sd, -)
     gw=$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')
@@ -114,7 +114,7 @@ rebuild_chain() {
 apply() {
     OK=1; ERR=""
     if ! ip link show "$BRIDGE" >/dev/null 2>&1; then
-        # 브리지는 백엔드가 첫 세션 때 만든다(docker network create). 그때까지는 지킬 것이 없다 — 하트비트는 쓴다.
+        # 브리지는 백엔드가 첫 세션 시 생성한다(docker network create). 그 전까지는 보호 대상이 없다 — 하트비트는 기록한다.
         OK=0; ERR="bridge $BRIDGE not present yet"; RULES=0
         return
     fi
@@ -163,13 +163,13 @@ while :; do
         log "allow list: [$ALLOW]${REJECTED:+ rejected: $REJECTED}"
         [ -z "$ALLOW" ] && log "allow list is empty — sessions have no egress at all"
         prev_allow="$ALLOW"
-        LAST_APPLIED=""   # 목록이 바뀌었다 → 다음 apply 에서 체인을 다시 만든다
+        LAST_APPLIED=""   # 목록 변경됨 → 다음 apply 에서 체인을 재구성한다
     fi
     apply
     write_state
     cur="ok=$OK rules=$RULES ${ERR:+err=$ERR}"
     if [ "$cur" != "$prev" ]; then log "$cur"; prev="$cur"; fi
-    # 동적 목록을 POLL 초마다 본다(관리 화면에서 더한 대상이 한 주기 안에 걸린다). 체인은 목록이 바뀌었거나 어긋났을 때만 다시 만든다
+    # 동적 목록을 POLL 초마다 확인한다(관리 화면에서 추가한 대상이 한 주기 안에 적용된다). 체인은 목록이 변경되었거나 불일치할 때만 재구성한다
     sleep "$POLL" &
     wait $!
 done

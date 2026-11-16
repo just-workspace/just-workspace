@@ -1,6 +1,6 @@
 /**
  * 일정 목록(agenda) 보기: 날짜 머리 36 bg-card 13/600 + "오늘" 틴트 배지, 행 56.
- * 선택한 날짜부터 60일. 빈 상태는 여기(와 날짜 시트)에서만 띄운다 — 그리드 위에는 안 띄움.
+ * 선택한 날짜부터 60일. 빈 상태는 본 보기(와 날짜 시트)에서만 표시한다 — 그리드 위에는 표시하지 않는다.
  */
 import { Fragment, useMemo, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -27,7 +27,7 @@ export function CalendarAgendaView() {
     const from = startOfDay(selectedDate)
     const to = addDays(from, 60)
     const map = new Map<number, Group>()
-    // 종일은 날짜 그대로(eventRange), 정렬도 화면 기준 시작으로
+    // 종일은 날짜 그대로(eventRange) 사용, 정렬도 화면 기준 시작 시각으로 수행
     const list = [...visibleEvents]
       .map(e => ({ e, r: eventRange(e) }))
       .filter(({ r }) => r.end > from && r.start < to)

@@ -1,6 +1,6 @@
 /**
- * 분할 버튼 — 본 동작 버튼 + 붙은 ▾ 메뉴 버튼. 모양은 UiButton 두 개를 한 덩어리로 붙인 것.
- * 메뉴는 UiMenu(모바일은 바닥 시트). ▾ 버튼은 따로 포커스되고 aria-haspopup=menu.
+ * 분할 버튼 — 본 동작 버튼 + 결합된 ▾ 메뉴 버튼. 외형은 UiButton 2개를 하나로 결합한 형태.
+ * 메뉴는 UiMenu(모바일은 바닥 시트). ▾ 버튼은 별도로 포커스되며 aria-haspopup=menu.
  */
 import type { ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -21,7 +21,7 @@ export interface UiSplitButtonProps {
   onClick?: () => void
   /** ▾ 메뉴 항목 */
   items: UiMenuItem[]
-  /** 메뉴 항목 고름 */
+  /** 메뉴 항목 선택 */
   onSelect?: (key: string) => void
   /** ▾ 버튼·메뉴 접근성 이름(기본 "다른 방법") */
   menuLabel?: string
@@ -30,13 +30,13 @@ export interface UiSplitButtonProps {
   /** 메뉴 폭 px(기본 256) */
   menuWidth?: number
   disabled?: boolean
-  /** 본 동작만 끄기 */
+  /** 본 동작만 비활성화 */
   mainDisabled?: boolean
   /** 본 동작 title(툴팁) */
   title?: string
-  /** 바깥 상자 class(폭 등 — 본 버튼이 남는 폭을 채운다) */
+  /** 외부 상자 class(폭 등 — 본 버튼이 잔여 폭을 채움) */
   className?: string
-  /** 본 버튼에 넘길 나머지(data-testid 등) */
+  /** 본 버튼에 전달할 나머지 속성(data-testid 등) */
   mainProps?: Partial<UiButtonProps>
 }
 

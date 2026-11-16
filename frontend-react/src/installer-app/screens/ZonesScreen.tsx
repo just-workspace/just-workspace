@@ -1,7 +1,7 @@
 /**
- * 구역 선택 — 묶음(최소 · 협업 · 전체)으로 한 번에 고르거나 하나씩 고른다.
- * 구역 목록 · 권장 메모리 · 포트 · 필요 관계 · 묶음은 전부 서버가 준 것을 그대로 그린다(화면에 적어 둔 숫자가 없다).
- * 권장 메모리 합계가 서버 메모리를 넘으면 다음으로 갈 수 없다.
+ * 구역 선택 — 프리셋(최소 · 협업 · 전체)으로 일괄 선택하거나 개별 선택한다.
+ * 구역 목록 · 권장 메모리 · 포트 · 필요 관계 · 프리셋은 전부 서버가 전달한 값을 그대로 렌더링한다(화면에 고정 기재한 숫자가 없다).
+ * 권장 메모리 합계가 서버 메모리를 초과하면 다음으로 진행할 수 없다.
  */
 import { useState } from 'react'
 import { UiCallout } from '~/components/ui/Callout'
@@ -70,14 +70,14 @@ export function ZonesScreen() {
   const presetItems = [...Object.keys(catalog.presets), 'custom'].map(p => ({ value: p, label: has(`zones.presets.${p}`) ? t(`zones.presets.${p}`) : p }))
   const nameOf = (id: string) => localized([...catalog.zones, ...catalog.addons].find(z => z.id === id)?.name) || id
 
-  /** 함께 골라야 하는데 빠진 구역 */
+  /** 함께 선택해야 하나 누락된 구역 */
   const missing = (z: ZoneRow) => z.requires.filter(r => !chosen.includes(r))
   const requiresBroken = [...catalog.zones, ...catalog.addons].some(z => chosen.includes(z.id) && missing(z).length > 0)
   const noteOf = (z: ZoneRow): string => {
     if (!chosen.includes(z.id)) return ''
     const lack = missing(z)
     if (lack.length) return t('zones.requires', { names: lack.map(nameOf).join(', ') })
-    // 채팅의 음성 채널은 회의 구역이 있어야 켜진다(없어도 설치는 된다)
+    // 채팅의 음성 채널은 회의 구역이 있어야 활성화됨(없어도 설치는 가능)
     if (z.id === 'chat' && catalog.zones.some(x => x.id === 'meetings') && !zones.includes('meetings')) return t('zones.voiceNeedsMeetings')
     return ''
   }

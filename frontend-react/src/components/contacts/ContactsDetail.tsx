@@ -1,16 +1,16 @@
 /**
  * 연락처 상세.
- * 데스크톱: 본문 패딩 28/40, 폭 680. 머리 = 이니셜 72 · 이름 24/700(-0.02em) · 보조 13.5 muted · [편집] 36 outline · ⋯ 36.
- *   행동 줄 4칸(64, rounded-lg card, 아이콘 18 primary + 12/600): 메일 쓰기 · 채팅 · 통화 · 일정 잡기 — mailto 폐지.
+ * 데스크톱: 본문 패딩 28/40, 폭 680. 헤더 = 이니셜 72 · 이름 24/700(-0.02em) · 보조 13.5 muted · [편집] 36 outline · ⋯ 36.
+ *   행동 행 4칸(64, rounded-lg card, 아이콘 18 primary + 12/600): 메일 쓰기 · 채팅 · 통화 · 일정 잡기 — mailto 폐지.
  *   정보 카드(rounded-lg card): 행 48 = 라벨 100(12 muted) | 값 13.5 | 행동(복사 12/600 primary).
- * 모바일: 상세 상단 바(‹ 연락처 목록으로 · 편집 · ⋯) + 가운데 정렬 머리(80 · 22/700 · 14) + 행동 4칸 + 정보 카드(행 60, 라벨 위 값 아래 15).
- * 채팅·통화는 이메일이 워크스페이스 사용자일 때만 활성(시안 문구).
- * 사진(있으면 이미지, 없으면 이니셜) · 보조 줄 "회사 직함 · 그룹" · ⋯ 메뉴(즐겨찾기 · vCard 내보내기 · 삭제, 모바일은 바닥 시트).
- * "워크스페이스 사용자" 범위의 행은 주소록 연락처가 아니라 편집·⋯ 메뉴 없이 행동 줄만.
+ * 모바일: 상세 상단 바(‹ 연락처 목록으로 · 편집 · ⋯) + 가운데 정렬 헤더(80 · 22/700 · 14) + 행동 4칸 + 정보 카드(행 60, 라벨 위 값 아래 15).
+ * 채팅·통화는 이메일이 워크스페이스 사용자에 해당할 때만 활성화(시안 문구).
+ * 사진(있으면 이미지, 없으면 이니셜) · 보조 행 "회사 직함 · 그룹" · ⋯ 메뉴(즐겨찾기 · vCard 내보내기 · 삭제, 모바일은 바텀시트).
+ * "워크스페이스 사용자" 범위의 행은 주소록 연락처가 아니므로 편집·⋯ 메뉴 없이 행동 행만 표시한다.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결한다(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거한다)
 import { clsx as cx } from 'clsx'
 import { $fetch } from '~/lib/api'
 import { navigateTo } from '~/lib/router'
@@ -32,7 +32,7 @@ interface InfoRow { k: string; v: string; copy?: boolean; mono?: boolean; multil
 
 const actionBtn = 'flex h-16 flex-col items-center justify-center gap-1.5 rounded-lg border border-border bg-card text-xs font-semibold text-foreground transition-colors hover:bg-accent/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-card'
 
-/** 연락처 상세 판(선택 전이면 빈 상태). props 없음 — 상태는 useContacts. */
+/** 연락처 상세 패널(선택 전이면 빈 상태). props 없음 — 상태는 useContacts. */
 export function ContactsDetail() {
   const { t } = useI18n()
   const isMobile = useIsMobile()
@@ -54,14 +54,14 @@ export function ContactsDetail() {
     if (direct || !primaryEmail) return
     setLookingUp(true)
     void findWorkspaceUserId(primaryEmail).then((id) => {
-      // 그 사이 다른 연락처로 바뀌었으면 버린다
+      // 그 사이 다른 연락처로 전환되었으면 결과 폐기
       if (alive) setWsUserId(id)
       setLookingUp(false)
     })
     return () => { alive = false }
   }, [primaryEmail, direct, findWorkspaceUserId])
 
-  /** 보조 줄(시안 "Acme 디자인 리드 · 파트너") */
+  /** 보조 행(시안 "Acme 디자인 리드 · 파트너") */
   const subline = (() => {
     const x = c
     if (!x) return ''
@@ -100,7 +100,7 @@ export function ContactsDetail() {
 
   // ── 행동 ──
   function composeMail() {
-    // 앱 안 작성 창(mailto 폐지) — 데스크톱은 이 화면에 떠 있는 창, 모바일은 /mail/compose?mode=new&to=…
+    // 앱 내 작성 창(mailto 폐지) — 데스크톱은 현재 화면의 플로팅 창, 모바일은 /mail/compose?mode=new&to=…
     if (!primaryEmail) return
     openCompose('new', null, null, { to: primaryEmail })
   }
@@ -119,14 +119,14 @@ export function ContactsDetail() {
   }
 
   async function startCall() {
-    // 채팅 머리의 드롭인 통화와 같은 방(chan-<DM id>)
+    // 채팅 헤더의 드롭인 통화와 동일한 방(chan-<DM id>)
     const id = await dmChannelId()
-    // 같은 탭 회의 화면 — 다른 화면으로 가면 미니 통화 창
+    // 동일 탭 회의 화면 — 다른 화면으로 이동하면 미니 통화 창
     if (id) openRoom(`chan-${id}`)
   }
 
   function schedule() {
-    // 캘린더 새 일정 폼 — 이 사람을 참석자로 미리 넣는다
+    // 캘린더 새 일정 폼 — 해당 사용자를 참석자로 사전 입력
     const query: Record<string, string> = { new: '1' }
     if (primaryEmail) {
       query.attendee = primaryEmail
@@ -188,7 +188,7 @@ export function ContactsDetail() {
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {/* 선택 전: 메일 읽기 판과 같이 세로 가운데 */}
+        {/* 선택 전: 메일 읽기 패널과 동일하게 세로 가운데 정렬 */}
         {!c
           ? (
             <div className="flex h-full items-center justify-center">
@@ -197,7 +197,7 @@ export function ContactsDetail() {
           )
           : (
             <div className="flex max-w-[680px] flex-col gap-5 px-4 pb-8 pt-5 md:px-10 md:pt-7">
-              {/* 머리 */}
+              {/* 헤더 */}
               <div className="flex flex-col items-center gap-1.5 text-center md:flex-row md:gap-[18px] md:text-left">
                 {c.photo
                   ? <img src={c.photo} alt="" className="h-20 w-20 shrink-0 rounded-full object-cover md:h-[72px] md:w-[72px]" />
@@ -217,7 +217,7 @@ export function ContactsDetail() {
                 )}
               </div>
 
-              {/* 행동 줄 4칸 */}
+              {/* 행동 행 4칸 */}
               <div className="grid grid-cols-4 gap-2">
                 {actions.map(a => (
                   <button

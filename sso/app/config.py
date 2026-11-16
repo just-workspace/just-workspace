@@ -6,18 +6,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # backend 와 **동일한 값**이어야 한다. ws_session 쿠키 서명 검증에 쓴다.
-    # (나중에 OIDC 까지 이관하면 이 공유를 끊고 내부 API 로 바꾸는 게 낫다)
-    # 기본값이 없다 — 비어 있거나 약하면 기동을 거부한다(app/secret_guard.py).
+    # backend 와 **동일한 값**이어야 한다. ws_session 쿠키 서명 검증에 사용한다.
+    # (향후 OIDC 까지 이관하면 이 공유를 제거하고 내부 API 로 전환하는 것이 바람직하다)
+    # 기본값 없음 — 비어 있거나 약하면 기동을 거부한다(app/secret_guard.py).
     secret_key: str = ""
 
-    # 같은 postgres. users 는 읽기만 하고, ws-sso 전용 테이블은 따로 만든다.
+    # 동일한 postgres. users 는 읽기 전용이며, ws-sso 전용 테이블은 별도로 생성한다.
     database_url: str = "postgresql+asyncpg://workspace@postgres:5432/workspace"
 
-    # 공개 진입점. SAML 메타데이터의 entityID 와 각 엔드포인트 URL 의 기준이 된다.
-    public_url: str = "http://localhost"   # compose 가 APP_URL 로 넣는다
+    # 공개 진입점. SAML 메타데이터의 entityID 와 각 엔드포인트 URL 의 기준이다.
+    public_url: str = "http://localhost"   # compose 가 APP_URL 로 주입
 
-    # SAML IdP entityID. 관례상 메타데이터 URL 을 쓴다.
+    # SAML IdP entityID. 관례상 메타데이터 URL 을 사용한다.
     saml_entity_id: str = ""
 
     log_level: str = "INFO"

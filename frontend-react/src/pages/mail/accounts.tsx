@@ -1,7 +1,7 @@
 // 메일 계정 관리 — 계정 목록(연결 시험·아카이브·편집·삭제) + 추가/편집 폼(제공자 자동 감지·IMAP/POP3·OAuth 빠른 연결).
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결한다(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거한다)
 import { clsx as cx } from 'clsx'
 import { $fetch } from '~/lib/api'
 import { useHead } from '~/lib/head'
@@ -59,7 +59,7 @@ export default function MailAccountsPage() {
   const hasBuiltin = accounts.some(a => a.is_builtin)
 
   const [form, setFormState] = useState<AccountForm>(emptyForm)
-  // 처리기·타이머가 "지금" 폼을 읽는다
+  // 처리기·타이머가 "현재" 폼을 조회한다
   const formRef = useRef(form)
   formRef.current = form
   function setForm(p: Partial<AccountForm>) {
@@ -67,7 +67,7 @@ export default function MailAccountsPage() {
     setFormState(formRef.current)
   }
 
-  // 이메일 도메인으로 IMAP/SMTP 자동 채움 + 인증 안내 (Outlook식: 이메일만 넣으면 서버 자동)
+  // 이메일 도메인으로 IMAP/SMTP 자동 입력 + 인증 안내 (Outlook식: 이메일만 입력하면 서버 자동 설정)
   async function detectProvider() {
     const email = formRef.current.email.trim()
     if (!email.includes('@')) { setProviderInfo(null); return }
@@ -81,11 +81,11 @@ export default function MailAccountsPage() {
         username: email, // 로그인 사용자명 = 이메일(대부분 동일)
       })
       if (!formRef.current.display_name) setForm({ display_name: p.known ? p.label : email })
-      setShowAdvanced(!p.known) // 알려진 제공자면 서버칸 접기, 미지원이면 펼쳐 수정
+      setShowAdvanced(!p.known) // 알려진 제공자면 서버 입력란 접기, 미지원이면 펼쳐서 수정
     } catch { setProviderInfo(null) } finally { setDetecting(false) }
   }
 
-  // 입력 중에도 도메인이 완성되면 자동 감지(디바운스) — blur 를 기다리지 않는다
+  // 입력 중에도 도메인이 완성되면 자동 감지(디바운스) — blur 를 대기하지 않는다
   const detectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   function onEmailInput() {
     if (detectTimer.current) clearTimeout(detectTimer.current)
@@ -138,14 +138,14 @@ export default function MailAccountsPage() {
     }
     setFormState(formRef.current)
     setProviderInfo(null)
-    setShowAdvanced(true) // 편집은 서버칸 펼침
+    setShowAdvanced(true) // 편집 시 서버 입력란 펼침
     setShowForm(true)
   }
 
   async function saveAccount() {
     setSaving(true)
     try {
-      // Outlook식: 사용자명을 안 건드렸으면 이메일을 그대로 로그인 아이디로 쓴다
+      // Outlook식: 사용자명을 수정하지 않았으면 이메일을 그대로 로그인 아이디로 사용한다
       if (!formRef.current.username.trim()) setForm({ username: formRef.current.email.trim() })
       if (editing) {
         const body: any = { ...formRef.current }
@@ -191,8 +191,8 @@ export default function MailAccountsPage() {
     if (!await confirmBox(t('mail.archive.backfillConfirm'))) return
     setArchiving(acct.id)
     try {
-      // 수백 통을 IMAP 에서 받아 내리는 일이라 요청 안에서 끝나지 않는다(nginx 120초).
-      // 시작만 시키고 진행상황은 폴링한다.
+      // 수백 통을 IMAP 에서 수신하는 작업이라 요청 안에서 완료되지 않는다(nginx 120초).
+      // 시작만 요청하고 진행 상황은 폴링한다.
       await $fetch(`/api/mail/accounts/${acct.id}/archive/backfill?limit=200`, { method: 'POST' })
       addToast('info', t('mail.archive.backfillStarted'))
       void pollBackfill(acct)

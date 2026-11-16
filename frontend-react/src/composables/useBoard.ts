@@ -49,7 +49,7 @@ export interface PostSummary {
   created_at: string
   updated_at: string
   board_name?: string
-  /** 안 읽음 표시. 목록·인덱스 카드·내가 쓴 글 응답에 붙는다(검색·북마크엔 없다 → 필독 기준) */
+  /** 안 읽음 표시. 목록·인덱스 카드·내가 쓴 글 응답에 포함된다(검색·북마크에는 없음 → 필독 기준) */
   is_read?: boolean
 }
 
@@ -92,7 +92,7 @@ export interface CommentInfo {
   created_at: string
   updated_at: string
   replies?: CommentInfo[]
-  /** 서버가 해석한 @멘션(활성 사용자만, 글쓴이 자신 제외) */
+  /** 서버가 해석한 @멘션(활성 사용자만, 작성자 본인 제외) */
   mentions?: MentionUser[]
 }
 
@@ -131,13 +131,13 @@ export interface BoardState {
   selectedCategory: string | null
   sortBy: BoardSort
   mustReadPosts: PostSummary[]
-  /** 게시판별 안 읽은 글 수(GET /unread-counts) — 내 글·연 글·"모두 읽음" 이전 글 제외. null = 아직 모름 */
+  /** 게시판별 안 읽은 글 수(GET /unread-counts) — 본인 글·열람한 글·"모두 읽음" 이전 글 제외. null = 미확인 */
   unreadCounts: Record<string, number> | null
   loadingBoards: boolean
   loadingPosts: boolean
   loadingPost: boolean
   loadingComments: boolean
-  /** 글 목록을 못 받았다(빈 목록과 구분 — 목록 화면이 오류 타일을 그린다) */
+  /** 글 목록 수신 실패(빈 목록과 구분 — 목록 화면이 오류 타일을 렌더링한다) */
   postsError: boolean
 }
 
@@ -164,7 +164,7 @@ const initial = (): BoardState => ({
 export const boardStore = createStore<BoardState>()(() => initial())
 
 let _initialized = false
-// 빠르게 옮겨 다닐 때 늦게 온 이전 응답이 지금 화면을 덮지 않게 — 요청마다 순번을 매겨 마지막 것만 반영한다
+// 빠른 연속 이동 시 지연 도착한 이전 응답이 현재 화면을 덮지 않도록 요청마다 순번을 부여하여 마지막 요청만 반영한다
 let _postsSeq = 0
 let _postSeq = 0
 let _commentsSeq = 0
@@ -272,7 +272,7 @@ export async function fetchPosts(boardId?: string, page?: number) {
 
 export async function fetchPost(postId: string) {
   const my = ++_postSeq
-  // 다른 글이 남아 있으면 비운다(새 주소에서 이전 글 본문이 잠깐 보이지 않게)
+  // 다른 글이 남아 있으면 비운다(새 주소에서 이전 글 본문이 일시적으로 표시되는 것 방지)
   set(get().currentPost && get().currentPost!.id !== postId ? { loadingPost: true, currentPost: null } : { loadingPost: true })
   try {
     const data = await $fetch<PostDetail>(`/api/board/posts/${postId}`)
@@ -286,7 +286,7 @@ export async function fetchPost(postId: string) {
       }))
     }
     set({ currentPost: data })
-    // 글을 열면 서버가 읽음으로 기록한다 — 사이드바 굵게·안 읽은 수를 맞춘다
+    // 글을 열면 서버가 읽음으로 기록한다 — 사이드바 굵게 표시·안 읽은 수를 동기화한다
     void fetchUnreadCounts()
   } catch (e: any) {
     console.error('fetchPost error:', e)
@@ -347,7 +347,7 @@ export async function fetchComments(postId: string) {
   }
 }
 
-/** 글 머리의 "댓글 N" 을 맞춘다(댓글을 달거나 지워도 글은 다시 받지 않는다) */
+/** 글 머리의 "댓글 N" 을 동기화한다(댓글 작성·삭제 시에도 글은 재조회하지 않는다) */
 function bumpCommentCount(postId: string, delta: number) {
   const cur = get().currentPost
   if (cur?.id === postId) set({ currentPost: { ...cur, comment_count: Math.max(0, (cur.comment_count || 0) + delta) } })
@@ -412,7 +412,7 @@ export async function toggleReaction(postId: string, emoji: string) {
     }
   } catch (e: any) {
     console.error('toggleReaction error:', e)
-    // 삼키면 눌러도 아무 일이 없는 것처럼 보인다(리액션을 끈 게시판 403 등)
+    // 오류를 무시하면 조작해도 무반응으로 보인다(리액션을 비활성화한 게시판 403 등)
     addToast('error', e?.data?.detail || i18n.t('board.reaction.error', '리액션을 반영하지 못했습니다'))
   }
 }
@@ -454,7 +454,7 @@ export async function fetchUnreadCounts() {
   }
 }
 
-/** 이 게시판 글을 모두 읽음으로 — 목록 굵게·안 읽은 수를 바로 지운다 */
+/** 이 게시판 글을 모두 읽음으로 처리 — 목록 굵게 표시·안 읽은 수를 즉시 제거한다 */
 export async function markBoardRead(boardId: string) {
   await $fetch(`/api/board/boards/${boardId}/read-all`, { method: 'POST' })
   const mark = (list: PostSummary[]) => list.map(p => (p.board_id === boardId && p.is_read === false ? { ...p, is_read: true } : p))
@@ -463,7 +463,7 @@ export async function markBoardRead(boardId: string) {
     posts: mark(get().posts),
     pinnedPosts: mark(get().pinnedPosts),
   })
-  // 필독은 따로 확인해야 하는 글이라 "모두 읽음"과 별개 — 서버 기준으로 다시 읽는다
+  // 필독은 별도 확인이 필요한 글이므로 "모두 읽음"과 별개 — 서버 기준으로 재조회한다
   void fetchMustRead()
 }
 
@@ -555,7 +555,7 @@ const actions = {
   setSort,
 }
 
-/** 상태 + 동작. 상태는 얕은 비교로 전부 구독한다. */
+/** 상태 + 동작. 상태는 얕은 비교로 전체 구독한다. */
 export function useBoard() {
   const state = useStore(boardStore, useShallow((s: BoardState) => s))
   return { ...state, ...actions }

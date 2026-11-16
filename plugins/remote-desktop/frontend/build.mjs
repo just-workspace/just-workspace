@@ -1,9 +1,9 @@
-// 원격 데스크톱 v2(React) 번들 빌드 — frontend/dist/plugin.mjs 파일 하나.
+// 원격 데스크톱 v2(React) 번들 빌드 — frontend/dist/plugin.mjs 단일 파일.
 //   node plugins/remote-desktop/frontend/build.mjs
-// · react / react-dom / @jw/ui 는 external → 호스트 전역(window.__REACT__ / __REACT_DOM__ / __WS_UI__)으로 바꾼다(frontend-react/docs/plugin-v2.md 4절).
-// · JSX 는 classic(React.createElement) — react/jsx-runtime 치환이 필요 없다.
-// · livekit-client 는 번들에 넣는다(호스트가 전역으로 내주지 않는다) — 코어 frontend-react/node_modules 에서 찾는다.
-// · 도구(esbuild·typescript)는 코어 frontend-react/node_modules 에서 빌려 쓴다(이 폴더에 node_modules 를 두지 않는다).
+// · react / react-dom / @jw/ui 는 external → 호스트 전역(window.__REACT__ / __REACT_DOM__ / __WS_UI__)으로 치환한다(frontend-react/docs/plugin-v2.md 4절).
+// · JSX 는 classic(React.createElement) — react/jsx-runtime 치환이 불필요하다.
+// · livekit-client 는 번들에 포함한다(호스트가 전역으로 제공하지 않는다) — 코어 frontend-react/node_modules 에서 탐색한다.
+// · 도구(esbuild·typescript)는 코어 frontend-react/node_modules 의 것을 사용한다(이 폴더에 node_modules 를 두지 않는다).
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,7 +17,7 @@ const host = resolve(core, 'frontend-react')
 const req = createRequire(resolve(host, 'package.json'))
 const esbuild = req('esbuild')
 
-// 1) 타입 검사(선택: --no-check 로 끈다)
+// 1) 타입 검사(선택: --no-check 로 비활성화)
 if (!process.argv.includes('--no-check')) {
   const tsc = req.resolve('typescript/bin/tsc')
   try {
@@ -62,7 +62,7 @@ code = code
   .replace(new RegExp(`import\\s*([\\w$]+)\\s*from\\s*["']${MOD}["']\\s*;?`, 'g'), (_m, def, mod) => `const ${def}=${map[mod]};`)
   .replace(new RegExp(`import\\s*\\{([^}]*)\\}\\s*from\\s*["']${MOD}["']\\s*;?`, 'g'), (_m, named, mod) => `const{${named.replace(/\bas\b/g, ':')}}=${map[mod]};`)
 
-// 4) 검사 — 남은 bare import 가 없어야 하고 표식이 있어야 한다
+// 4) 검사 — 잔여 bare import 가 없어야 하며 표식이 존재해야 한다
 const left = code.match(/from\s*["'](react[^"']*|@jw\/ui)["']/)
 if (left) { console.error('[remote-desktop] 치환되지 않은 import:', left[0]); process.exit(1) }
 if (!/\bexport\b[^;]*\bjwPlugin\b/.test(code)) { console.error('[remote-desktop] jwPlugin 표식 export 가 없다'); process.exit(1) }

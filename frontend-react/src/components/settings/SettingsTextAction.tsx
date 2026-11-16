@@ -1,7 +1,7 @@
 /**
- * 설정 화면의 글자형 행동 버튼(12/600, 기본 danger).
+ * 설정 화면의 글자형 동작 버튼(12/600, 기본 danger).
  * 예: 로그인된 기기 "로그아웃" · "다른 기기 모두 로그아웃", 2단계 인증 "끄기".
- * 누름 영역은 ::after 로 사방 12px 넓힌다(after:-inset-3). type="button" 고정.
+ * 클릭 영역은 ::after 로 사방 12px 확장한다(after:-inset-3). type="button" 고정.
  *
  * @example <SettingsTextAction disabled={busy} onClick={revoke}>로그아웃</SettingsTextAction>
  */

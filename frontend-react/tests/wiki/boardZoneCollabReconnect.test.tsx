@@ -1,5 +1,5 @@
-// 위키 공동 편집 — 끊긴 사이에 친 글은 재접속 때 내 상태를 통째로 한 번 보내야 상대에게 간다.
-// (예전엔 재접속 때 상대 상태만 요청해, 끊긴 동안의 내 편집이 영영 전달되지 않고 그 뒤 편집도 상대 쪽에서 보류됐다)
+// 위키 공동 편집 — 연결이 끊긴 동안 입력한 내용은 재접속 시 본인 상태 전체를 1회 전송해야 상대에게 전달된다.
+// (기존에는 재접속 시 상대 상태만 요청하여, 끊긴 동안의 본인 편집이 전달되지 않고 이후 편집도 상대 측에서 보류되었다)
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, act } from '@testing-library/react'
 import { createRef } from 'react'
@@ -19,7 +19,7 @@ const { authStore } = await import('~/composables/useAuth')
 const MSG_UPDATE = 0
 const MSG_SYNC_REQUEST = 1
 
-/** 보낸 프레임을 모아 두는 소켓 — drop() 으로 서버가 끊은 것을 흉내 낸다(편집기가 3초 뒤 다시 붙는다) */
+/** 전송한 프레임을 수집하는 소켓 — drop() 으로 서버 측 연결 종료를 모의한다(편집기가 3초 뒤 재접속) */
 class RecSocket {
   static all: RecSocket[] = []
   static OPEN = 1
@@ -60,16 +60,16 @@ describe('WikiCollabEditor 재접속', () => {
   it('끊긴 사이의 편집을 재접속 때 MSG_UPDATE(전체 상태)로 보낸다 — 빈 문서에 적용하면 그 글이 들어 있다', async () => {
     const ref = createRef<Handle>()
     render(<WikiCollabEditor ref={ref} pageId="p1" initialContent="<p>저장본</p>" readonly={false} />)
-    await wait(SYNC_WAIT_MS + 100)   // 혼자 → 저장본으로 시드, 편집 가능
+    await wait(SYNC_WAIT_MS + 100)   // 단독 → 저장본으로 시드, 편집 가능
     const first = RecSocket.all[0]
     expect(first.sent.some(f => f[0] === MSG_SYNC_REQUEST)).toBe(true)
-    // 첫 접속(본문 준비 전)에는 보낼 상태가 없다
+    // 첫 접속(본문 준비 전)에는 전송할 상태 없음
     expect(first.sent.some(f => f[0] === MSG_UPDATE)).toBe(false)
 
-    // 서버가 끊는다 → 끊긴 사이에 입력
+    // 서버가 연결 종료 → 끊긴 동안 입력
     await act(async () => { first.drop() })
     await act(async () => { ref.current!.editor!.commands.insertContent('끊긴 사이 입력') })
-    expect(first.sent.some(f => f[0] === MSG_UPDATE)).toBe(false)   // 닫힌 소켓으로는 안 나간다
+    expect(first.sent.some(f => f[0] === MSG_UPDATE)).toBe(false)   // 닫힌 소켓으로는 전송되지 않음
 
     await wait(3200)   // 3초 뒤 재접속
     const second = RecSocket.all[1]
@@ -78,7 +78,7 @@ describe('WikiCollabEditor 재접속', () => {
     const full = second.sent.find(f => f[0] === MSG_UPDATE)
     expect(full).toBeTruthy()
 
-    // 상대(빈 문서)가 그 프레임 하나만 받아도 저장본 + 끊긴 사이 입력이 다 들어온다. 두 번 받아도 같다(멱등)
+    // 상대(빈 문서)가 해당 프레임 하나만 수신해도 저장본 + 끊긴 동안의 입력이 전부 반영된다. 2회 수신해도 결과 동일(멱등)
     const peer = new Y.Doc()
     Y.applyUpdate(peer, full!.subarray(1))
     const once = peer.getXmlFragment('default').toString()

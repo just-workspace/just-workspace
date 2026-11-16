@@ -1,12 +1,12 @@
 /**
  * 연락처 편집.
- * UiModal 520(모바일 바텀시트). 사진 56(없으면 이니셜) + "사진 추가"(이미지를 256px JPEG 로 줄여 data URI 저장),
+ * UiModal 520(모바일 바텀시트). 사진 56(없으면 이니셜) + "사진 추가"(이미지를 256px JPEG 로 축소해 data URI 저장),
  * 2열 입력(이름 · 회사 · 성 · 이름(given)) + 직함, 이메일·전화는 [종류 ▾ 96][값][✕ 40] 행 + "+ 이메일 추가",
  * 그룹 칩(점 8 + 이름 ✕, 28 · rounded 6 · 테두리) + "+ 그룹"(점선) → 기존 그룹 자동완성 입력,
- * 주소·메모·주소록. 푸터 [삭제(편집일 때, 왼쪽 danger 글자)] … [취소][저장].
+ * 주소·메모·주소록. 푸터 [삭제(편집 시, 왼쪽 danger 텍스트)] … [취소][저장].
  *
  * 열려 있는 동안만 본체(ContactsEditForm)를
- * 마운트해 열릴 때마다 폼을 새로 채운다.
+ * 마운트하여 열 때마다 폼을 새로 초기화한다.
  */
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { useI18n } from '~/i18n'
@@ -36,7 +36,7 @@ interface FormState {
   groups: string[]
 }
 
-/** 이미지 파일 → 정사각 256px JPEG data URI(서버 한도 약 512KB 안쪽) */
+/** 이미지 파일 → 정사각 256px JPEG data URI(서버 한도 약 512KB 이내) */
 async function toPhotoDataUri(file: File): Promise<string> {
   const url = URL.createObjectURL(file)
   try {
@@ -63,7 +63,7 @@ const BASE_TYPES = ['work', 'home', 'other']
 const label = 'text-xs font-semibold text-muted-foreground'
 const addLink = 'self-start rounded-sm text-[13px] font-semibold text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring'
 
-/** 연락처 만들기·편집 모달. showEditModal 이 켜져 있을 때만 그린다(props 없음). */
+/** 연락처 생성·편집 모달. showEditModal 이 활성일 때만 렌더링한다(props 없음). */
 export function ContactsEditModal() {
   const { showEditModal } = useContacts()
   if (!showEditModal) return null
@@ -95,7 +95,7 @@ function initialForm(c: Contact | null, selectedBookId: string | null, firstBook
     organization: '',
     title: '',
     photo: '',
-    // 그룹 범위에서 만들면 그 그룹을 미리 붙인다
+    // 그룹 범위에서 생성하면 해당 그룹을 사전 지정
     groups: groupScope ? [groupScope] : [],
     emails: [{ type: 'work', value: '' }],
     phones: [{ type: 'work', value: '' }],
@@ -116,7 +116,7 @@ function ContactsEditForm() {
   const patch = (p: Partial<FormState>) => setForm(f => ({ ...f, ...p }))
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  // 사진은 바뀌었을 때만 보낸다("" = 지움)
+  // 사진은 변경된 경우에만 전송("" = 삭제)
   const [photoDirty, setPhotoDirty] = useState(false)
   const photoInput = useRef<HTMLInputElement | null>(null)
 
@@ -148,7 +148,7 @@ function ContactsEditForm() {
     setAddingGroup(true)
   }
   useEffect(() => { if (addingGroup) groupEl.current?.focus() }, [addingGroup])
-  /** 지금 입력값으로 그룹을 붙인 새 목록(제출 때 같이 쓰려고 값을 돌려준다) */
+  /** 현재 입력값으로 그룹을 추가한 새 목록(제출 시 함께 사용하도록 값을 반환) */
   function commitGroup(): string[] {
     const g = groupInput.trim().slice(0, 100)
     let next = form.groups
@@ -158,7 +158,7 @@ function ContactsEditForm() {
     return next
   }
   function onGroupKey(e: KeyboardEvent<HTMLInputElement>) {
-    // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 넘기면 마지막 글자가 한 번 더 들어간다
+    // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 통과시키면 마지막 글자가 중복 입력된다
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === 'Enter') { e.preventDefault(); commitGroup() }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setGroupInput(''); setAddingGroup(false) }
@@ -170,7 +170,7 @@ function ContactsEditForm() {
 
   function typeOptions(current: string) {
     const list = BASE_TYPES.map(v => ({ value: v, label: t(`contacts.type.${v}`) }))
-    // 가져온 vCard 의 다른 종류(cell 등)는 지우지 않고 그대로 보여 준다
+    // 가져온 vCard 의 기타 종류(cell 등)는 삭제하지 않고 그대로 표시
     if (current && !BASE_TYPES.includes(current)) list.push({ value: current, label: current })
     return list
   }
@@ -198,7 +198,7 @@ function ContactsEditForm() {
       const data = {
         address_book_id: form.address_book_id,
         name: form.name.trim(),
-        // 비운 값도 보낸다("" = 지움) — undefined 로 빼면 편집에서 소속·메모·성·이름이 지워지지 않았다
+        // 비운 값도 전송한다("" = 삭제) — undefined 로 제외하면 편집 시 소속·메모·성·이름이 삭제되지 않는다
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         organization: form.organization.trim(),
@@ -211,7 +211,7 @@ function ContactsEditForm() {
       if (isEditing) {
         await updateContact(editingContact!.id, {
           ...data,
-          // 직함은 비우면 지운다(""), 사진은 바뀐 경우에만("" = 지움)
+          // 직함은 비우면 삭제(""), 사진은 변경된 경우에만 전송("" = 삭제)
           title: form.title.trim(),
           ...(photoDirty ? { photo: form.photo } : {}),
         })

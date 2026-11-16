@@ -1,12 +1,12 @@
 /**
  * 선택: 데스크톱은 커스텀(40, 셰브런, 목록 = 드롭다운 규격 rounded-lg shadow-md bg-popover 224)
- * 모바일(터치)은 네이티브 <select> 를 그대로 — OS 피커가 더 낫다. 둘 다 같은 겉모습.
- * 옵션 swatch(CSS 색) = 이름 앞 색 견본 10(rounded 3) — 캘린더·라벨 고르기. 네이티브는 고른 값의 견본만 칸 왼쪽에 겹쳐 그린다.
- * search = 목록 위에 찾기 칸(UiInput icon search) — 긴 목록(시간대 등). 데스크톱 목록에만(모바일 OS 피커엔 없음).
- *   열면 찾기 칸에 포커스, ↑↓ Enter Esc 는 칸에서 그대로. match 를 안 주면 라벨 부분 일치(대소문자 무시).
+ * 모바일(터치)은 네이티브 <select> 를 그대로 사용한다 — OS 피커가 더 적합하다. 양쪽 모두 외형은 동일하다.
+ * 옵션 swatch(CSS 색) = 이름 앞 색 견본 10(rounded 3) — 캘린더·라벨 선택용. 네이티브는 선택된 값의 견본만 칸 왼쪽에 겹쳐 렌더링한다.
+ * search = 목록 상단 검색 칸(UiInput icon search) — 긴 목록(시간대 등)용. 데스크톱 목록에만 적용(모바일 OS 피커에는 없음).
+ *   열림 시 검색 칸에 포커스, ↑↓ Enter Esc 는 검색 칸에서 그대로 동작. match 미지정 시 라벨 부분 일치(대소문자 무시).
  *
- * className 은 바깥 묶음에, 나머지 속성은 네이티브 <select>(모바일) 또는 콤보박스 <button>(데스크톱)에 붙는다.
- * ref 도 그 요소(select 또는 button).
+ * className 은 외부 래퍼에, 나머지 속성은 네이티브 <select>(모바일) 또는 콤보박스 <button>(데스크톱)에 적용된다.
+ * ref 도 해당 요소(select 또는 button).
  */
 import { useEffect, useLayoutEffect, useRef, useState, type HTMLAttributes, type KeyboardEvent, type Ref } from 'react'
 import { createPortal } from 'react-dom'
@@ -30,37 +30,37 @@ export interface SelectOption {
 }
 
 export interface UiSelectSearch {
-  /** 찾기 칸 자리표시 */
+  /** 검색 칸 자리표시 문구 */
   placeholder?: string
-  /** 옵션이 검색어에 맞나(빈 검색어는 부르지 않는다). 기본 = 라벨 부분 일치 */
+  /** 옵션의 검색어 일치 여부(빈 검색어로는 호출되지 않음). 기본 = 라벨 부분 일치 */
   match?: (option: SelectOption, query: string) => boolean
 }
 
 export interface UiSelectProps extends Omit<HTMLAttributes<HTMLElement>, 'id' | 'onChange' | 'placeholder'> {
-  /** 고른 값. null = 고르지 않음 */
+  /** 선택된 값. null = 미선택 */
   modelValue?: string | number | null
-  /** 값 바뀜 */
+  /** 값 변경 */
   onUpdateModelValue?: (v: string | number | null) => void
   /** 옵션 목록(필수) */
   options: SelectOption[]
-  /** 칸 id(라벨 for). 없으면 자동 */
+  /** 칸 id(라벨 for). 미지정 시 자동 생성 */
   id?: string
-  /** 위 라벨 */
+  /** 상단 라벨 */
   label?: string
-  /** 아래 도움말 */
+  /** 하단 도움말 */
   hint?: string
   /** 오류 문구 */
   error?: string
-  /** 아무것도 안 골랐을 때 문구. 기본 '선택'(ui.select.placeholder), "" 이면 끔 */
+  /** 미선택 시 표시 문구. 기본 '선택'(ui.select.placeholder), "" 이면 비활성화 */
   placeholder?: string
   /** sm 32 · md 40(기본) · lg 44 */
   size?: 'md' | 'lg' | 'sm'
   disabled?: boolean
   /** 필수 — 라벨 뒤 * */
   required?: boolean
-  /** 네이티브 강제(폼 안 간단한 경우) */
+  /** 네이티브 강제(폼 내 단순한 경우) */
   native?: boolean
-  /** 목록 위 찾기 칸(데스크톱). true 면 기본값으로 */
+  /** 목록 상단 검색 칸(데스크톱). true 이면 기본값 적용 */
   search?: boolean | UiSelectSearch
   /** 네이티브 <select> 또는 콤보박스 <button> */
   ref?: Ref<HTMLElement>
@@ -76,7 +76,7 @@ export function UiSelect({
 }: UiSelectProps) {
   const { t } = useI18n()
   const [model, setModel] = useModel<string | number | null>(modelValue, null, onUpdateModelValue)
-  /** 기본 자리표시('선택') — placeholder="" 로 끌 수 있다 */
+  /** 기본 자리표시('선택') — placeholder="" 로 비활성화 가능 */
   const ph = placeholder ?? t('ui.select.placeholder')
 
   const isMobile = useIsMobile()
@@ -95,7 +95,7 @@ export function UiSelect({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLUListElement | null>(null)
   const searchRef = useRef<HTMLInputElement | null>(null)
-  // 목록은 body 로 포털해 fixed 로 띄운다 — 모달·카드의 overflow 에 갇혀 잘리지 않게(UiMenu 와 같은 방식)
+  // 목록은 body 로 포털하여 fixed 로 표시한다 — 모달·카드의 overflow 에 의한 잘림 방지(UiMenu 와 동일한 방식)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState<{ left: number; top: number; width: number; maxH: number } | null>(null)
   function place() {
@@ -127,9 +127,9 @@ export function UiSelect({
     setQuery('')
     if (next) setActive(Math.max(0, options.findIndex(o => o.value === model)))
   }
-  // 열리면 찾기 칸(있으면) 또는 목록으로 포커스
+  // 열림 시 검색 칸(있는 경우) 또는 목록으로 포커스 이동
   useEffect(() => { if (open) (searchRef.current ?? listRef.current)?.focus() }, [open])
-  // 고른 칸이 보이게
+  // 선택된 칸이 보이도록 처리
   useEffect(() => {
     if (!open || active < 0) return
     const el = listRef.current?.children[active] as HTMLElement | undefined
@@ -137,8 +137,8 @@ export function UiSelect({
   }, [open, active])
 
   /**
-   * 목록을 닫고 콤보박스 버튼으로 포커스를 돌려준다. 목록은 body 포털이라 닫히면 포커스가 body 로 빠진다 —
-   * 그러면 모달 안에서 Esc(모달 닫기)·Tab(모달 안 돌기)이 더 먹지 않았다.
+   * 목록을 닫고 콤보박스 버튼으로 포커스를 복귀시킨다. 목록은 body 포털이므로 닫히면 포커스가 body 로 이탈한다 —
+   * 이 경우 모달 내부에서 Esc(모달 닫기)·Tab(모달 내 순환)이 더 이상 동작하지 않았다.
    */
   function closeList(returnFocus = true) {
     setOpen(false)
@@ -150,15 +150,15 @@ export function UiSelect({
     closeList()
   }
   function onKey(e: KeyboardEvent<HTMLElement>, fromSearch = false) {
-    // 멈추지 않으면 React 이벤트가 포털을 건너 바깥 모달까지 올라가, 목록만 닫으려던 Esc 에 모달째 닫힌다(저장 전 변경 소실)
+    // 전파를 중지하지 않으면 React 이벤트가 포털을 넘어 외부 모달까지 전파되어, 목록만 닫으려던 Esc 로 모달 전체가 닫힌다(저장 전 변경 소실)
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeList(); return }
-    // Tab: 버튼으로 돌아간 뒤 브라우저가 거기서 다음(이전) 칸으로 옮긴다 — 목록에서 그대로 두면 포커스가 body 로 빠진다
+    // Tab: 버튼으로 포커스 복귀 후 브라우저가 해당 위치에서 다음(이전) 칸으로 이동시킨다 — 목록에 그대로 두면 포커스가 body 로 이탈한다
     if (e.key === 'Tab') { closeList(); return }
     const n = shown.length
     if (!n) return
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => (a + 1) % n) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(a => (a - 1 + n) % n) }
-    // 찾기 칸에선 스페이스가 글자
+    // 검색 칸에서는 스페이스를 글자 입력으로 처리
     else if (e.key === 'Enter' || (e.key === ' ' && !fromSearch)) { e.preventDefault(); const o = shown[active]; if (o) choose(o) }
   }
   function onQuery(v: string) {
@@ -167,7 +167,7 @@ export function UiSelect({
   }
   useClickOutside(rootRef, (e) => { if (panelRef.current?.contains(e.target as Node)) return; setOpen(false) })
   useLayoutEffect(() => { if (open) place(); else setPos(null) }, [open])
-  // 찾기로 목록 길이가 바뀌면 자리를 다시 잡는다 — 위로 열린 목록은 줄어든 만큼 버튼에서 떨어졌다
+  // 검색으로 목록 길이가 변경되면 위치를 재계산한다 — 위로 열린 목록은 줄어든 만큼 버튼과 간격이 발생하였다
   const shownCount = shown.length
   useLayoutEffect(() => { if (open) place() }, [shownCount]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -195,7 +195,7 @@ export function UiSelect({
 
       {useNative
         ? (
-          /* 모바일: 네이티브 select (겉모습만 맞춤) */
+          /* 모바일: 네이티브 select (외형만 일치) */
           <div className="relative">
             <select
               {...(rest as HTMLAttributes<HTMLSelectElement>)}
@@ -205,7 +205,7 @@ export function UiSelect({
               id={inputId}
               value={model === null ? '' : String(model)}
               onChange={(e) => {
-                // 옵션의 원래 값(숫자면 숫자)을 돌려준다(DOM 값은 늘 문자열)
+                // 옵션의 원래 값(숫자이면 숫자)을 반환한다(DOM 값은 항상 문자열)
                 const o = options.find(x => String(x.value) === e.target.value)
                 setModel(o ? o.value : e.target.value)
               }}
@@ -242,7 +242,7 @@ export function UiSelect({
               onKeyDown={(e) => {
                 onKeyDown?.(e)
                 if (e.key === 'ArrowDown') { e.preventDefault(); toggle() }
-                // 마우스로 열면 포커스가 이 버튼에 남는다 — 여기서도 Esc 로 목록만 닫는다(바깥 모달·팝오버까지 닫지 않게 멈춘다)
+                // 마우스로 열면 포커스가 본 버튼에 남는다 — 여기서도 Esc 로 목록만 닫는다(외부 모달·팝오버까지 닫히지 않도록 전파 중지)
                 else if (e.key === 'Escape' && open) { e.preventDefault(); e.stopPropagation(); setOpen(false) }
               }}
             >

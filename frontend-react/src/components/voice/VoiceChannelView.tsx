@@ -1,12 +1,12 @@
 /**
- * 음성 채널 본문 — 채널을 열었을 때.
+ * 음성 채널 본문 — 채널 진입 시 표시.
  *  머리 56: 스피커 아이콘 · 이름(16/600) · "{n}명 · 음질은 사람마다 따로"(13 muted) · 오른쪽 [음악 공유](outline sm, 접속 중).
  *  띠(role=alert, VoiceBands) → 본문: 참가자 타일 그리드 `repeat(auto-fill, minmax(220px,1fr))`(모바일 2열).
  *   타일 = 아바타 64 · 이름(+음소거 아이콘) · 음질 배지(tint) · 실제 형식 mono 12 · 상태 한 줄(말하는 중/음소거/듣기만). 말하는 중 = 테두리 success/60 + 아바타 링.
- *   음악 공유 중이면 맨 위 전체 폭 띠(primary 틴트): "○○ 님이 소리를 공유하고 있습니다" · 출처 · 형식 mono · [공유 음량].
- *  들어가기 전: 접속자 아바타 겹침 + "○○ 님이 들어가 있습니다" + [들어가기](lg) + "내 음질: 음성 · 들어가서 바꿀 수 있음".
- *  오른쪽 340 글 채팅(VoiceChatPanel) — 접속 중일 때만. 모바일은 머리 오른쪽 채팅 아이콘으로 전체 화면.
- * 참가자는 서버 presence(voiceStates) 가 바탕, 내가 들어가 있으면 전송(useVoice.peers)의 말하는 중·음소거·공유를 겹친다.
+ *   음악 공유 중에는 최상단 전체 폭 띠(primary 틴트) 표시: "○○ 님이 소리를 공유하고 있습니다" · 출처 · 형식 mono · [공유 음량].
+ *  입장 전: 접속자 아바타 겹침 + "○○ 님이 들어가 있습니다" + [들어가기](lg) + "내 음질: 음성 · 들어가서 바꿀 수 있음".
+ *  오른쪽 340 글 채팅(VoiceChatPanel) — 접속 중에만 표시. 모바일은 머리 오른쪽 채팅 아이콘으로 전체 화면 표시.
+ * 참가자 목록은 서버 presence(voiceStates) 기준이며, 본인이 접속 중이면 전송(useVoice.peers)의 발화·음소거·공유 상태를 병합한다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
@@ -32,7 +32,7 @@ import { VoiceChatPanel } from './VoiceChatPanel'
 export interface VoiceChannelViewProps {
   onBack?: () => void
   onOpenChannels?: () => void
-  /** 오른쪽 자리를 다른 패널(멤버·스레드·검색…)이 쓰는 중 — 글 채팅(340)을 숨긴다(오른쪽 자리는 하나) */
+  /** 오른쪽 영역을 다른 패널(멤버·스레드·검색…)이 사용 중 — 글 채팅(340)을 숨긴다(오른쪽 영역은 단일) */
   chatHidden?: boolean
 }
 
@@ -50,7 +50,7 @@ interface Tile {
 }
 type VicePresenceLike = Pick<VoicePresence, 'identity' | 'name' | 'avatar_url'>
 
-/** 음악 공유 띠의 [공유 음량] — 그 사람 수신 음량 슬라이더(접속 바와 같은 팝 규칙 없이 띠 안에서 펼침) */
+/** 음악 공유 띠의 [공유 음량] — 해당 참가자의 수신 음량 슬라이더(접속 바와 같은 팝 규칙 없이 띠 안에서 펼침) */
 function ShareVolume({ identity, name }: { identity: string; name: string }) {
   const { t } = useI18n()
   const { setPeerVolume } = useVoice()
@@ -84,7 +84,7 @@ export function VoiceChannelView({ onBack, onOpenChannels, chatHidden = false }:
 
   const mine = v.channelId === ch.id
   const live = new Map<string, VoicePeer>(mine ? v.peers.map(p => [p.identity, p]) : [])
-  // 서버 presence 가 바탕. 내가 붙어 있는데 아직 presence 에 없으면(웹훅·소켓 전) 나를 덧붙여 그린다
+  // 서버 presence 기준. 본인이 접속했으나 presence 에 미반영(웹훅·소켓 이전)이면 본인을 추가하여 표시
   const parts: VoicePresence[] = [...(state?.participants ?? [])]
   if (mine && v.identity && !parts.some(p => p.identity === v.identity)) {
     const user = authStore.getState().user
@@ -273,7 +273,7 @@ export function VoiceChannelView({ onBack, onOpenChannels, chatHidden = false }:
             )}
       </div>
 
-      {/* 글 채팅 — 접속 중일 때만(데스크톱 오른쪽 340) */}
+      {/* 글 채팅 — 접속 중에만 표시(데스크톱 오른쪽 340) */}
       {mine && !isMobile && !chatHidden && <VoiceChatPanel channelName={ch.name} />}
     </div>
   )

@@ -1,8 +1,8 @@
 /**
  * 관리자 › AI 운영 — 사용량 · 쓰기 현황·감사 로그·정책(+ 상태·모바일) · 피드백.
- * /admin/ai(설정 › AI — 모델·도구·한도)와는 따로, 운영 그룹에 둔다.
- * 탭은 경로: /admin/ai-ops(사용량) · /writes · /audit · /policy · /feedback. "한도 배분"은 다음 판(비활성 탭).
- * 기간(7·30·90일)은 탭 사이에서 유지된다(같은 라우트라 컴포넌트가 다시 마운트되지 않는다). 정책 탭엔 기간이 없다.
+ * /admin/ai(설정 › AI — 모델·도구·한도)와는 별도로 운영 그룹에 배치한다.
+ * 탭은 경로: /admin/ai-ops(사용량) · /writes · /audit · /policy · /feedback. "한도 배분"은 다음 버전(비활성 탭).
+ * 기간(7·30·90일)은 탭 간에 유지된다(동일 라우트이므로 컴포넌트가 재마운트되지 않는다). 정책 탭에는 기간이 없다.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -32,7 +32,7 @@ export default function AdminAiOpsPage() {
   const [downCount, setDownCount] = useState<number | null>(null)
   const seq = useRef(0)
 
-  // 사용량 응답 하나를 사용량·쓰기 현황·피드백 통계가 같이 쓴다
+  // 사용량 응답 하나를 사용량·쓰기 현황·피드백 통계가 공유한다
   const loadUsage = useCallback(async (d: number) => {
     const my = ++seq.current
     setUsage(s => ({ ...s, loading: true, error: null }))

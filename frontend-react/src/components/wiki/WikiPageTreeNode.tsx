@@ -1,9 +1,9 @@
 /**
  * 위키 페이지 트리 노드.
- *  데스크톱 — 행 32, 들여쓰기 16, 셰브런 16, 선택 = primary/13 + 600, 선택·hover 때 +(하위 페이지)·⋯(메뉴) 24(히트 32).
+ *  데스크톱 — 행 32, 들여쓰기 16, 셰브런 16, 선택 = primary/13 + 600, 선택·hover 시 +(하위 페이지)·⋯(메뉴) 24(히트 32).
  *  모바일   — 행 48, 들여쓰기 20, 셰브런 32×40(히트 40), ⋮ 40 상시.
- *  새 페이지는 모달 없이 트리 안 인라인 입력 행(Enter 만들기 / Esc 취소). 이름 바꾸기도 같은 행 안에서.
- *  끌어서 재정렬: 위 25% = 앞에, 아래 25% = 뒤에, 가운데 = 하위로.
+ *  새 페이지는 모달 없이 트리 내 인라인 입력 행으로 생성(Enter 만들기 / Esc 취소). 이름 변경도 동일 행에서 수행.
+ *  드래그 재정렬: 위 25% = 앞에, 아래 25% = 뒤에, 가운데 = 하위로.
  */
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -19,11 +19,11 @@ export interface WikiPageTreeNodeProps {
   selectedId: string | undefined
   depth: number
   mobile?: boolean
-  /** 쓰기 권한 — 없으면 +·⋯·끌기 없음 */
+  /** 쓰기 권한 — 없으면 +·⋯·드래그 미제공 */
   canWrite?: boolean
-  /** 인라인 새 페이지 행을 띄울 부모 id(이 노드면 첫 자식 자리에) */
+  /** 인라인 새 페이지 행을 표시할 부모 id(이 노드이면 첫 자식 위치) */
   draftParentId?: string | null
-  /** 이름 바꾸는 중인 노드 id */
+  /** 이름 변경 중인 노드 id */
   renamingId?: string | null
   onSelect?: (id: string) => void
   onAddChild?: (id: string) => void
@@ -49,7 +49,7 @@ export function WikiPageTreeNode(props: WikiPageTreeNodeProps) {
   const showDraft = draftParentId === node.id
   const renaming = renamingId === node.id
 
-  // 인라인 입력(새 페이지·이름 바꾸기)
+  // 인라인 입력(새 페이지·이름 변경)
   const [draftTitle, setDraftTitle] = useState('')
   const [renameTitle, setRenameTitle] = useState('')
   const draftInput = useRef<HTMLInputElement | null>(null)
@@ -61,13 +61,13 @@ export function WikiPageTreeNode(props: WikiPageTreeNodeProps) {
     if (renaming) { setRenameTitle(node.title); requestAnimationFrame(() => renameInput.current?.select()) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renaming])
-  // blur 와 Enter 가 겹칠 때 지금 값을 읽는다
+  // blur 와 Enter 가 겹칠 때 현재 값을 참조
   const draftRef = useRef(draftTitle); draftRef.current = draftTitle
   const renameRef = useRef(renameTitle); renameRef.current = renameTitle
   function submitDraft() { const v = draftRef.current.trim(); if (v) onCreateDraft?.(node.id, v); else onCancelDraft?.() }
   function submitRename() { const v = renameRef.current.trim(); if (v && v !== node.title) onRename?.(node.id, v); else onCancelRename?.() }
 
-  // 끌어서 재정렬
+  // 드래그 재정렬
   const [dropPos, setDropPos] = useState<DropPosition | null>(null)
   function onDragStart(e: DragEvent<HTMLDivElement>) {
     if (!canWrite) { e.preventDefault(); return }
@@ -141,7 +141,7 @@ export function WikiPageTreeNode(props: WikiPageTreeNodeProps) {
           <span className={cn('shrink-0', mobile ? 'w-8' : 'w-4')} aria-hidden="true" />
         )}
 
-        {/* 제목 / 이름 바꾸기 */}
+        {/* 제목 / 이름 변경 */}
         {renaming ? (
           <input
             ref={renameInput}
@@ -163,7 +163,7 @@ export function WikiPageTreeNode(props: WikiPageTreeNodeProps) {
 
         {node.is_pinned && !renaming && <UiIcon name="star" filled className="h-3 w-3 shrink-0 text-primary" aria-label={t('wiki.tree.pinned')} />}
 
-        {/* 데스크톱: 선택·hover 때 + ⋯ (24, 히트 32) */}
+        {/* 데스크톱: 선택·hover 시 + ⋯ (24, 히트 32) */}
         {!mobile && canWrite && !renaming ? (
           <>
             <button
@@ -192,7 +192,7 @@ export function WikiPageTreeNode(props: WikiPageTreeNodeProps) {
         ) : null}
       </div>
 
-      {/* 인라인 새 페이지 행(이 노드의 첫 자식 자리) */}
+      {/* 인라인 새 페이지 행(이 노드의 첫 자식 위치) */}
       {showDraft && (
         <div className={cn('flex items-center gap-1 rounded-sm', mobile ? 'h-12 pl-2 pr-1' : 'h-8 px-1')}>
           <span className="shrink-0" style={{ width: `${indent + (mobile ? 20 : 16)}px` }} aria-hidden="true" />

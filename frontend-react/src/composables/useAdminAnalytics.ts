@@ -1,11 +1,11 @@
 /**
  * 관리 분석 데이터(GET /api/admin/analytics/*).
- * 싱글턴이 아니다 — 컴포넌트마다 따로인 지역 상태 hook.
- * 실패하면 빈 값(overview·gitStats·accessLogs = null, 목록 = []). 오류는 던지지 않는다.
+ * 싱글턴이 아니다 — 컴포넌트별로 독립된 지역 상태 hook.
+ * 실패 시 빈 값(overview·gitStats·accessLogs = null, 목록 = []). 예외는 발생시키지 않는다.
  *
  * React: const { overview, dailyVisits, loading, fetchAll, fetchDailyVisits } = useAdminAnalytics()
- *   - 값은 렌더 시점 값. fetch 함수들은 렌더 사이에 같은 참조(useEffect deps 에 넣어도 됨).
- *   - fetchAccessLogs 는 받은 쪽을 돌려준다(상태는 다음 렌더에야 보이므로 반환값으로).
+ *   - 값은 렌더 시점 값. fetch 함수들은 렌더 간 동일 참조(useEffect deps 에 포함 가능).
+ *   - fetchAccessLogs 는 수신한 페이지를 반환한다(상태는 다음 렌더에야 반영되므로 반환값으로 제공).
  */
 import { useMemo, useState } from 'react'
 import { $fetch } from '~/lib/api'
@@ -115,7 +115,7 @@ export function useAdminAnalytics() {
   const [gitStats, setGitStats] = useState<GitStats | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // setter 는 안정적 → 함수 묶음도 한 번만 만든다
+  // setter 는 안정적 → 함수 묶음도 1회만 생성
   const fns = useMemo(() => {
     async function fetchOverview(period = 'today') {
       try { setOverview(await $fetch<AnalyticsOverview>('/api/admin/analytics/overview', { params: { period } })) }

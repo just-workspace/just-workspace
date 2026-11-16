@@ -1,18 +1,18 @@
 /**
- * 첨부 한도 막대: 80×4 · "1.1 / 15 MB" mono. 90% 넘으면 warning.
+ * 첨부 한도 막대: 80×4 · "1.1 / 15 MB" mono. 90% 초과 시 warning.
  */
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거함)
 import { clsx as cx } from 'clsx'
 
 const MB = 1024 * 1024
 
 export interface MailComposeQuotaProps {
-  /** 쓴 바이트 */
+  /** 사용 바이트 */
   used: number
   /** 한도 바이트 */
   max: number
-  /** 올리는 중 */
+  /** 업로드 중 */
   uploading?: boolean
 }
 

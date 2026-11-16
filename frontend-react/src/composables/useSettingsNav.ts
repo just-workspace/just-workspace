@@ -1,6 +1,6 @@
 /**
  * /settings/* (개인) 와 /admin/* (관리) 좌측 내비 정의 + "설정 찾기" 검색 색인.
- * 색인은 클라이언트 전용 — 항목 이름·키워드로 걸러 해당 페이지로 보낸다. 서버 검색 없음.
+ * 색인은 클라이언트 전용 — 항목 이름·키워드로 필터링하여 해당 페이지로 이동시킨다. 서버 검색 없음.
  *
  * React: const { groups, flat, find, labelFor } = useSettingsNav('settings' | 'admin')   — groups·flat 은 배열 값
  */
@@ -15,14 +15,14 @@ import { useI18n } from '~/i18n'
 export interface SettingsNavItem {
   to: string
   label: string
-  /** 보조 글자(mono) 또는 경고 배지 */
+  /** 보조 텍스트(mono) 또는 경고 배지 */
   meta?: string
   metaTone?: 'plain' | 'warning'
   /** 설정 찾기용 키워드 */
   keywords?: string[]
-  /** 모듈이 꺼져 있으면 숨김 */
+  /** 모듈 비활성 시 숨김 */
   module?: string
-  /** 이 구역이 설치되지 않았으면 숨김(켜고 끄는 모듈과 별개 — AI 설정처럼 모듈을 켜기 전에도 보여야 하는 항목) */
+  /** 해당 구역 미설치 시 숨김(활성화/비활성화 대상인 모듈과 별개 — AI 설정처럼 모듈 활성화 전에도 표시되어야 하는 항목) */
   zone?: string
   adminOnly?: boolean
 }
@@ -36,7 +36,7 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
   const { ops, ensure } = useAdminOps()
   const { t } = useI18n()
 
-  // 관리 내비 보조 글자(승인 대기·SSL·서비스) — 관리자만 부른다(비관리자는 403 소음). 마운트 때 한 번.
+  // 관리 내비 보조 텍스트(승인 대기·SSL·서비스) — 관리자인 경우에만 호출한다(비관리자는 불필요한 403 발생). 마운트 시 1회.
   useEffect(() => {
     if (scope === 'admin' && authStore.getState().user?.is_admin) ensure()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,7 +48,7 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
       label: t(`${ns}.label.${id}`),
       keywords: t(`${ns}.kw.${id}`).split(',').map(s => s.trim()).filter(Boolean),
     })
-    // 꺼진 모듈·설치되지 않은 구역의 항목은 뺀다(항목이 다 빠진 묶음은 묶음째)
+    // 비활성 모듈·미설치 구역의 항목은 제외한다(항목이 모두 제외된 묶음은 묶음 전체 제외)
     const shown = (i: SettingsNavItem) => (!i.module || isModuleEnabled(i.module)) && (!i.zone || zoneInstalledIn(zones, i.zone))
     if (scope === 'settings') {
       return [
@@ -72,8 +72,8 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
         ] as SettingsNavItem[] },
       ].map(g => ({ ...g, items: g.items.filter(shown) })).filter(g => g.items.length)
     }
-    // 관리: 설정 9카드를 항목으로 쪼개고 /admin/system 은 "서비스 상태"로 흡수.
-    // 보조 글자는 운영 요약(useAdminOps)에서: 승인 대기 n(경고) · SSL D-n(30일 이하 경고) · 서비스 n/n.
+    // 관리: 설정 9카드를 항목으로 분할하고 /admin/system 은 "서비스 상태"로 통합.
+    // 보조 텍스트는 운영 요약(useAdminOps)에서 조회: 승인 대기 n(경고) · SSL D-n(30일 이하 경고) · 서비스 n/n.
     const o = ops
     const pendingMeta = o.pending ? { meta: String(o.pending), metaTone: 'warning' as const } : {}
     const sslDays = o.ssl?.days
@@ -100,7 +100,7 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
         { to: '/admin/ai', ...L('shell.adminNav', 'ai'), zone: 'ai' },
         { to: '/admin/app-build', ...L('shell.adminNav', 'appBuild') },
       ] },
-      // 격리 브라우저는 따로 묶는다 — 사용자 메뉴(레일·탭·팔레트)에는 없고, 사용자는 전용 출처(rbi.<도메인>)로 바로 들어간다
+      // 격리 브라우저는 별도 묶음으로 분리한다 — 사용자 메뉴(레일·탭·팔레트)에는 없으며, 사용자는 전용 출처(rbi.<도메인>)로 직접 접속한다
       { label: t('shell.adminNav.group.rbi'), items: [
         { to: '/admin/rbi', ...L('shell.adminNav', 'rbi'), zone: 'rbi' },
       ] },
@@ -127,7 +127,7 @@ export function useSettingsNav(scope: 'settings' | 'admin') {
       .filter((x): x is SettingsNavMatch => !!x)
   }, [flat])
 
-  // 가장 길게 맞는 항목(/settings/ai/mcp 는 "AI" 가 아니라 "AI 연동(MCP)")
+  // 최장 일치 항목(/settings/ai/mcp 는 "AI" 가 아니라 "AI 연동(MCP)")
   const labelFor = useCallback((path: string) => flat
     .filter(i => path === i.to || path.startsWith(i.to + '/'))
     .sort((a, b) => b.to.length - a.to.length)[0]?.label ?? '', [flat])

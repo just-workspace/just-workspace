@@ -1,8 +1,8 @@
 /**
  * 렌더 오류 경계.
- * 오류를 콘솔에 남기고 토스트로 알린다. 경계 안쪽 자리에는 오류 타일([다시 시도]·[홈으로])을 그린다 —
- * 예전에는 비워 두기만 해서 빈 화면에 토스트 하나만 남았고, 셸에서 나면 메뉴도 없어 새로고침뿐이었다.
- * 주소(경로·쿼리)가 바뀌면 경계를 다시 연다 — resetKey. 원문 오류 메시지는 콘솔에만(사용자에겐 우리 문구).
+ * 오류를 콘솔에 기록하고 토스트로 표시한다. 경계 내부 영역에는 오류 타일([다시 시도]·[홈으로])을 렌더링한다 —
+ * 이전에는 영역을 비워 두기만 하여 빈 화면에 토스트 하나만 남았고, 셸에서 발생하면 메뉴도 없어 새로고침 외에 방법이 없었다.
+ * 주소(경로·쿼리)가 변경되면 경계를 초기화한다 — resetKey. 원문 오류 메시지는 콘솔에만 기록한다(사용자에게는 본 프로젝트 문구 표시).
  *
  *   scope="app"    → 문구 error.unexpectedError (앱 루트)
  *   scope="layout" → 문구 error.renderError (기본 레이아웃)
@@ -46,7 +46,7 @@ class Boundary extends Component<Props, State> {
         title={i18n.t(app ? 'error.unexpectedError' : 'error.renderError')}
         onRetry={() => this.setState({ failed: false })}
         secondaryLabel={i18n.t('error.goHome')}
-        // 셸째 죽었을 수 있다 — 라우터 이동이 아니라 새로 불러온다
+        // 셸 전체가 중단되었을 수 있으므로 라우터 이동이 아닌 전체 재로드를 수행한다
         onSecondary={() => { window.location.assign('/') }}
       />
     )

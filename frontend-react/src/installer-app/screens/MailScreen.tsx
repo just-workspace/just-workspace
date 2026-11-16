@@ -1,8 +1,8 @@
 /**
  * 메일 — 내장 메일 서버(도메인에 레코드 다섯 개 등록) 또는 외부 발신 서버(SMTP).
- *  - 내장: 메일 도메인을 넣으면 등록할 레코드와 지금 상태를 보여 준다. 레코드가 빠져 있어도 다음으로 갈 수 있다(결과만 분명히 알린다).
- *  - 외부: 서버 주소 · 포트 · 계정 · 비밀번호를 넣고 "연결 확인"이 통과해야 다음으로 간다.
- * 비밀번호는 화면 상태에만 두고, 확인할 때와 다음으로 넘어갈 때만 서버로 보낸다.
+ *  - 내장: 메일 도메인을 입력하면 등록할 레코드와 현재 상태를 표시한다. 레코드가 누락되어도 다음으로 진행할 수 있다(결과만 명확히 안내한다).
+ *  - 외부: 서버 주소 · 포트 · 계정 · 비밀번호를 입력하고 "연결 확인"을 통과해야 다음으로 진행한다.
+ * 비밀번호는 화면 상태에만 보관하고, 확인 시와 다음 단계 이동 시에만 서버로 송신한다.
  */
 import { useEffect, useState } from 'react'
 import { UiButton } from '~/components/ui/Button'
@@ -32,7 +32,7 @@ const RECORD_LOOK: Record<RecordStatus, { icon: string; color: string }> = {
   unknown: { icon: 'alert-triangle', color: 'text-muted-foreground' },
 }
 
-/** 맞지 않는 레코드 수(없음 + 값이 다름) */
+/** 불일치 레코드 수(없음 + 값 상이) */
 export function recordsPending(records: MailRecord[]): { missing: number; different: number; total: number } {
   const missing = records.filter(r => r.status === 'missing').length
   const different = records.filter(r => r.status === 'different').length

@@ -1,6 +1,6 @@
-// 화면 안 AI: 버튼 상태(숨김·비활성+이유·활성) · 메일 요약(요점·할 일 → 고른 n개 등록 → 되돌리기) ·
-// 답장 초안(말투·편집기로 옮기기 → 작성 창에 aiDraft) · 채팅 요약(안 읽은 것 많을 때만, 첫 안읽음부터 범위) ·
-// 회의 할 일(붙잡아 둔 회의 채팅 · 담당자 있는 것만 처음 체크 · 등록에 room·assignee).
+// 화면 내 AI: 버튼 상태(숨김·비활성+사유·활성) · 메일 요약(요점·할 일 → 선택한 n개 등록 → 되돌리기) ·
+// 답장 초안(말투·편집기로 옮기기 → 작성 창에 aiDraft) · 채팅 요약(안 읽은 메시지가 많을 때만, 첫 안읽음부터 범위) ·
+// 회의 할 일(보관해 둔 회의 채팅 · 담당자가 있는 항목만 초기 체크 · 등록에 room·assignee).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -42,7 +42,7 @@ beforeEach(() => {
   api.calls = []
   api.respond = () => ({})
   _clearMailAiCache()
-  // 사용자가 바뀌면 상태를 비우므로 사용자 먼저
+  // 사용자 변경 시 상태를 초기화하므로 사용자를 먼저 설정
   authStore.setState({ user: { id: 'me', username: 'hana', display_name: '김하나' } as any })
   _setAiInlineStatus({ ...READY })
   isMobileStore.setState({ isMobile: false })
@@ -113,7 +113,7 @@ describe('메일 요약', () => {
     expect(screen.getByText(/원문과 다를 수 있습니다/).textContent).toContain('claude-opus-5-5')
     expect(posts('/api/ai/inline/mail_summary')[0].opts.body).toMatchObject({ message_id: '42', mailbox_id: 'INBOX' })
 
-    // 숫자는 mono 조각(UiTrans 슬롯)이라 글자로 찾아 버튼을 누른다
+    // 숫자는 mono 조각(UiTrans 슬롯)이므로 텍스트로 탐색하여 버튼 클릭
     fireEvent.click(screen.getAllByRole('button').find(b => b.textContent === '고른 1개 할일에 등록')!)
     await screen.findByText('1개를 할일에 등록했습니다')
     const body = posts('/api/ai/inline/tasks')[0].opts.body

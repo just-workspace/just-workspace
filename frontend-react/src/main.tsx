@@ -1,7 +1,7 @@
 /**
  * 진입점 — 앱 부팅(플러그인·i18n·color-mode).
  * 순서: 화면폭·화면 배율·컬러 모드 감시 → 현재 언어 메시지 로드 → 전역 노출(플러그인 호스트) → 라우터(첫 이동에서 사용자 정보 await)
- * StrictMode 는 쓰지 않는다 — 앱 수준 싱글턴(실시간 소켓·통화 세션)이 개발 모드 이중 실행으로 두 번 열리지 않게.
+ * StrictMode 는 사용하지 않는다 — 앱 수준 싱글턴(실시간 소켓·통화 세션)이 개발 모드 이중 실행으로 2회 열리는 것을 방지.
  */
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router/dom'
@@ -21,13 +21,13 @@ import { installHostGlobals } from '~/plugins/hostGlobals'
 
 async function boot() {
   installMobileListener()
-  // 화면 배율(루트 zoom) — 첫 그림부터 맞게 렌더 전에
+  // 화면 배율(루트 zoom) — 첫 페인트부터 적용되도록 렌더 전에 설치
   installViewportListener()
   installColorModeListener()
   installBundledAppCleanup()
-  // 재배포 뒤 옛 화면 조각 로드 실패 → 새로고침 한 번
+  // 재배포 후 이전 화면 청크 로드 실패 → 새로고침 1회
   installChunkReload()
-  // 웹은 httpOnly 쿠키만 — 예전 판이 localStorage 에 남긴 세션값을 지운다(번들 앱은 그대로)
+  // 웹은 httpOnly 쿠키만 사용 — 이전 버전이 localStorage 에 남긴 세션값을 삭제한다(번들 앱은 유지)
   clearLegacyWebToken()
   installHostGlobals()
   await initI18n()

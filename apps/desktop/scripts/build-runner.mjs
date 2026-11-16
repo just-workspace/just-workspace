@@ -1,5 +1,5 @@
-// 원격 데스크톱 화면 러너 번들 — src/runner/remote-runner.ts + livekit-client → dist/renderer/remote-runner.js 하나.
-// 러너 창은 샌드박스·contextIsolation 이라 import 가 안 된다 → IIFE 로 묶는다. copy-renderer.mjs 다음에 돈다.
+// 원격 데스크톱 화면 러너 번들 — src/runner/remote-runner.ts + livekit-client → dist/renderer/remote-runner.js 단일 파일.
+// 러너 창은 샌드박스·contextIsolation 이므로 import 를 사용할 수 없다 → IIFE 로 번들링한다. copy-renderer.mjs 다음에 실행된다.
 import { build } from 'esbuild';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

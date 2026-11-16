@@ -7,7 +7,7 @@ cookie.txt
 *.bak-*
 docker-compose.override.yml
 
-# 플러그인 — 리포에는 빌드 도구와 예제만 둔다. 직접 만든 플러그인 폴더는 추적하지 않는다.
+# 플러그인 — 리포에는 빌드 도구와 예제만 둔다. 직접 작성한 플러그인 폴더는 추적하지 않는다.
 plugins/*
 !plugins/build-all.mjs
 !plugins/build-plugin.mjs
@@ -18,20 +18,20 @@ plugins/*
 plugins/remote-desktop/frontend/node_modules/
 plugins/node_modules/
 
-# 설치할 때 환경별로 만들어지는 파일 (예시: livekit/livekit.example.yaml)
+# 설치 시 환경별로 생성되는 파일 (예시: livekit/livekit.example.yaml)
 livekit/livekit.yaml
 nginx/standalone.conf
 nginx/private.d/
 nginx/state/
 
-# 메일 서버 — 계정·키·인증서는 추적하지 않는다. 아래 세 파일은 설정이 아니라 코드라 추적한다
-# (비밀값은 환경변수로만 들어오고 파일에는 자리표시자뿐이다).
+# 메일 서버 — 계정·키·인증서는 추적하지 않는다. 아래 세 파일은 설정이 아니라 코드이므로 추적한다
+# (비밀값은 환경변수로만 전달되며 파일에는 자리표시자만 있다).
 mailserver/config/*
 !mailserver/config/user-patches.sh
 !mailserver/config/auth-workspace.lua
 !mailserver/config/dovecot.cf
 
-# scripts/update.sh 가 적어 두는 되돌릴 이미지 목록
+# scripts/update.sh 가 기록하는 롤백 대상 이미지 목록
 .update-rollback
-# 설치 관리자 테스트의 렌더링 스냅샷 — 견본 값으로 만든 .env 다(비밀값이 아니다)
+# 설치 관리자 테스트의 렌더링 스냅샷 — 견본 값으로 생성한 .env 이다(비밀값 아님)
 !installer/tests/snapshots/**/.env

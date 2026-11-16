@@ -1,27 +1,27 @@
 /**
  * 공유 모달: UiModal 안 "사람·채널 / 링크" 두 탭.
- * 링크 탭: 이 항목(들)의 링크 여러 개(복사 · ⋮ 수정·회수) + 점선 "새 링크" 카드(권한 · 만료 · 비밀번호 · 1회용) → [링크 만들고 복사].
+ * 링크 탭: 해당 항목(들)의 링크 여러 개(복사 · ⋮ 수정·회수) + 점선 "새 링크" 카드(권한 · 만료 · 비밀번호 · 1회용) → [링크 만들고 복사].
  *   권한 = 보기만·다운로드 허용 / 보기만·다운로드 막음(미리보기만) / 편집 가능(오피스 하나). 만료는 서버 범위(없음·1시간·1일·7일).
- *   여러 항목(같은 루트)은 zip 묶음 링크 1개. 폴더 하나만은 서버가 링크를 못 만든다 → 안내.
- *   링크 수정(⋮ "수정")은 행 아래 펼침 폼(PATCH /share/{id}): 권한(다운로드 허용/막음)·만료·비밀번호(바꾸기·해제)·1회용.
+ *   여러 항목(같은 루트)은 zip 묶음 링크 1개. 폴더 하나만은 서버가 링크를 생성할 수 없다 → 안내.
+ *   링크 수정(⋮ "수정")은 행 아래 펼침 폼(PATCH /share/{id}): 권한(다운로드 허용/막음)·만료·비밀번호(변경·해제)·1회용.
  *   비밀번호·다운로드 막음 링크의 주소는 손님 화면 /s/<token>(비밀번호 입력 → 열기, 막음은 미리보기).
- *   파일 하나가 미리보기 안 되는 형식이면 "다운로드 막음"은 비활성 + 이유(받는 사람이 아무것도 못 보는 죽은 링크가 된다).
- *   판정은 서버(GET /share/preview-kind · 목록의 can_block_download) — 손님 화면과 같은 출처. 서버도 400 으로 거절한다.
+ *   파일 하나가 미리보기 불가 형식이면 "다운로드 막음"은 비활성 + 이유 표시(수신자가 아무것도 볼 수 없는 무효 링크가 된다).
+ *   판정은 서버(GET /share/preview-kind · 목록의 can_block_download)가 수행한다 — 손님 화면과 동일한 출처. 서버도 400 으로 거부한다.
  * 사람·채널 탭:
- *   칩 입력(사람 = 아바타 20 + 이름 + 빼기, 채널 = # + 이름) + 권한 120 → 추천 목록(행 40, 채널은 # 타일 24 + "채널 · 멤버 n명")
- *   → "접근 권한이 있는 사람"(행 48: 소유자 / 사람 / 채널 + 권한 드롭다운 32 — 빼기도 여기서)
- *   → [✓ 채팅으로 알리고 메시지 남기기](사람은 DM, 채널은 그 채널) → 바닥 "권한: 보기 · 편집" + [닫기][공유 2명·채널 1].
- *   채널 공유 = 그 채널 멤버 전원(가입·탈퇴 즉시 반영, POST /share-user channel_ids). 예전 "채널로 보내기(파일 복사 첨부)" 칸은
- *   채널 칩 + 채팅 알림으로 대신한다(⋮ "채널로 보내기"는 이 탭을 연다).
- *   남길 말 입력은 시안에 그림이 없어 체크 아래 한 줄 입력으로.
+ *   칩 입력(사람 = 아바타 20 + 이름 + 제거, 채널 = # + 이름) + 권한 120 → 추천 목록(행 40, 채널은 # 타일 24 + "채널 · 멤버 n명")
+ *   → "접근 권한이 있는 사람"(행 48: 소유자 / 사람 / 채널 + 권한 드롭다운 32 — 제거도 여기서 수행)
+ *   → [✓ 채팅으로 알리고 메시지 남기기](사람은 DM, 채널은 해당 채널) → 바닥 "권한: 보기 · 편집" + [닫기][공유 2명·채널 1].
+ *   채널 공유 = 해당 채널 멤버 전원(가입·탈퇴 즉시 반영, POST /share-user channel_ids). 이전의 "채널로 보내기(파일 복사 첨부)" 칸은
+ *   채널 칩 + 채팅 알림으로 대체한다(⋮ "채널로 보내기"는 이 탭을 연다).
+ *   남길 메시지 입력은 시안에 그림이 없어 체크 아래 한 줄 입력으로 구성한다.
  * 권한 4단계(시안 바닥 "권한: 보기 · 댓글 · 편집 · 공동 소유"): 새 사람 권한 120 · 행 권한 드롭다운 모두 4단계.
- *   공동 소유 지정·해제는 원 소유자만(다른 사람에겐 그 항목이 비활성 + 이유). 공동 소유자는 공유받은 항목(shared-with-me/..)을
- *   여기서 재공유·권한 변경할 수 있고, 원 소유자가 준 공유·공동 소유 행은 드롭다운이 잠긴다(can_manage=false — 원 소유자 보호).
- *   공동 소유자 화면의 "소유자" 줄은 원 소유자. 공유받은 항목은 공개 링크를 만들 수 없다(링크 탭 = 빈 상태).
+ *   공동 소유 지정·해제는 원 소유자만 가능하다(그 외 사용자에게는 해당 항목이 비활성 + 이유 표시). 공동 소유자는 공유받은 항목(shared-with-me/..)을
+ *   여기서 재공유·권한 변경할 수 있으며, 원 소유자가 부여한 공유·공동 소유 행은 드롭다운이 잠긴다(can_manage=false — 원 소유자 보호).
+ *   공동 소유자 화면의 "소유자" 줄은 원 소유자를 표시한다. 공유받은 항목은 공개 링크를 생성할 수 없다(링크 탭 = 빈 상태).
  *
  * 이메일로 보내기(시안 없음): 새 링크 카드 아래 "받는 사람 이메일(선택)" 칩 입력 + 메시지 →
- *   받는 사람이 있으면 1차 버튼이 [링크 만들고 보내기 · n명]. 기존 링크는 ⋮ "이메일로 보내기" → 행 아래 펼침(칩·메시지·보내기 + 보낸 기록).
- *   비밀번호는 메일에 안 들어간다(안내 문구). 외부 주소는 칩·기록에 "외부". 한도 20명/회 · 50명/시간(서버).
+ *   받는 사람이 있으면 1차 버튼이 [링크 만들고 보내기 · n명]으로 바뀐다. 기존 링크는 ⋮ "이메일로 보내기" → 행 아래 펼침(칩·메시지·보내기 + 보낸 기록).
+ *   비밀번호는 메일에 포함되지 않는다(안내 문구). 외부 주소는 칩·기록에 "외부"로 표시한다. 한도 20명/회 · 50명/시간(서버).
  *
  * 채팅 모듈도 이 파일을 import 한다(채널 파일 탭 → initialTab="people").
  */
@@ -55,9 +55,9 @@ import { FilesShareEmailInput } from './FileShareEmailInput'
 import { writeClipboard } from '~/lib/clipboard'
 
 export interface FilesFileShareModalProps {
-  /** 공유할 항목(여럿이면 묶음 링크·일괄 공유) */
+  /** 공유 대상 항목(복수이면 묶음 링크·일괄 공유) */
   items: FileItem[]
-  /** 먼저 보일 탭(기본 사람·채널) */
+  /** 최초 표시 탭(기본 사람·채널) */
   initialTab?: 'link' | 'people' | null
   onClose?: () => void
 }
@@ -70,12 +70,12 @@ type Pick =
 const isRole = (v: unknown): v is ShareRole => typeof v === 'string' && (SHARE_ROLES as readonly string[]).includes(v)
 const initial = (s: string) => (s || '?').trim().slice(0, 1).toUpperCase()
 
-/** 링크 행 ⋮ 메뉴(바깥 클릭으로 닫힌다) */
+/** 링크 행 ⋮ 메뉴(바깥 클릭 시 닫힘) */
 function LinkMenu({ open, onToggle, onDismiss, children, label }: { open: boolean; onToggle: () => void; onDismiss: () => void; children: ReactNode; label: string }) {
   const wrap = useRef<HTMLDivElement | null>(null)
   useClickOutside(wrap, () => { if (open) onDismiss() })
   return (
-    // Esc 는 감싸는 칸에서 잡는다 — 메뉴를 연 직후 포커스는 ⋮ 버튼에 있어, 메뉴 칸에만 두면 모달이 받아 공유 창이 통째로 닫혔다
+    // Esc 는 감싸는 요소에서 처리한다 — 메뉴를 연 직후 포커스가 ⋮ 버튼에 있어, 메뉴 요소에만 두면 모달이 수신하여 공유 창 전체가 닫혔다
     <div ref={wrap} className="relative" onKeyDown={(e) => { if (open && e.key === 'Escape') { e.stopPropagation(); onDismiss() } }}>
       <UiIconButton label={label} icon="more-vertical" className="h-[30px] w-[30px]" aria-haspopup="menu" aria-expanded={open} onClick={onToggle} />
       {open && (
@@ -102,10 +102,10 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
   const paths = items.map(i => i.path)
   const bundle = items.length > 1
   const anyShared = items.some(i => !!sharedSubPath(i.path))
-  // 폴더 하나도 링크 가능(받는 쪽은 손님 화면에서 둘러봄). 내 파일·공유 파일 아래만(서버 규칙)
+  // 폴더 하나도 링크 생성 가능(수신자는 손님 화면에서 탐색). 내 파일·공유 파일 하위만 허용(서버 규칙)
   const linkable = !anyShared && (single ? (!single.is_dir || /^(my|shared)\//.test(single.path)) : canBundleLink(paths))
   const isOffice = /\.(docx?|xlsx?|pptx?|odt|ods|odp)$/i.test(single?.name || '')
-  // 사람·채널 공유를 관리할 수 있나 — 내 파일이거나, 공동 소유로 받은 항목
+  // 사람·채널 공유 관리 가능 여부 — 내 파일이거나, 공동 소유로 받은 항목
   const allMine = items.every(i => i.path.startsWith('my/') || (!!sharedSubPath(i.path) && roleAtLeast(i.role, 'owner')))
   const title = single ? t('files.shareModal.titleOne', { name: single.name }) : t('files.shareModal.titleMany', { n: items.length })
   const noLinkTitle = anyShared ? t('files.shareModal.noLinkShared') : single?.is_dir ? t('files.shareModal.noLinkFolder') : t('files.shareModal.noLinkMixed')
@@ -119,7 +119,7 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
   const [password, setPassword] = useState('')
   const [creating, setCreating] = useState(false)
 
-  // 파일 하나: 손님 화면에서 미리 볼 수 있는 형식인가(서버 판정). null = 안 됨 → "다운로드 막음" 비활성, undefined = 모름(막지 않는다)
+  // 파일 하나: 손님 화면에서 미리보기 가능한 형식인지 여부(서버 판정). null = 불가 → "다운로드 막음" 비활성, undefined = 미확인(차단하지 않음)
   const [previewKind, setPreviewKind] = useState<string | null | undefined>(undefined)
   const noPreview = !!single && !single.is_dir && previewKind === null
   const noPreviewHint = t('files.shareModal.noPreviewShort', '미리보기 안 되는 형식')
@@ -173,7 +173,7 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
       })
       const url = urlOf({ token: r.token, can_edit: canEdit, has_password: r.has_password ?? usePassword, allow_download: r.allow_download ?? perm !== 'view-nodl', is_folder: r.is_folder })
       if (newEmails.length && r.id) {
-        // 받는 사람이 있으면 복사 대신 메일로(링크는 행의 [복사]로 언제든)
+        // 받는 사람이 있으면 복사 대신 메일로 발송(링크는 행의 [복사]로 상시 복사 가능)
         await fetchShareLinks()
         try {
           mailToast(await emailShareLink(r.id, newEmails, newEmailMsg.trim() || undefined))
@@ -275,7 +275,7 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
     { value: 'never', label: t('files.expiry.none') },
     ...['1h', '1d', '7d'].map(k => ({ value: k, label: expiryLabel(k, undefined, tr) })),
   ]
-  // 허용 → 막음으로 바꿀 수 없는 링크(미리보기 안 되는 파일 하나)는 그 항목만 비활성. 이미 막혀 있던 옛 링크는 그대로 둔다
+  // 허용 → 막음으로 변경할 수 없는 링크(미리보기 불가 파일 하나)는 해당 항목만 비활성. 이미 막음 상태인 기존 링크는 유지한다
   const cannotBlock = (l: ShareLinkListEntry) => l.can_block_download === false && l.allow_download !== false
   const editPermOptions = (l: ShareLinkListEntry) => [
     { value: 'dl', label: t('files.shareModal.permViewDownload') },
@@ -330,9 +330,9 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
       setShareOwner(info.owner)
     } catch { setShares([]) }
   }
-  // 원 소유자인가 — 공동 소유 지정·해제는 원 소유자만
+  // 원 소유자 여부 — 공동 소유 지정·해제는 원 소유자만 가능
   const isOriginalOwner = items.every(i => i.path.startsWith('my/'))
-  // "소유자" 줄: 공유받은 항목이면 원 소유자, 아니면 나
+  // "소유자" 줄: 공유받은 항목이면 원 소유자, 아니면 본인
   const ownerRow = (() => {
     const o = shareOwner
     if (!isOriginalOwner && o) return { name: o.display_name || o.username, sub: o.email || o.username, avatar: o.avatar_url ?? null }
@@ -412,7 +412,7 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
     focusInput.current = true
   }
   function onInputKey(e: KeyboardEvent<HTMLInputElement>) {
-    if (isComposingKey(e)) return   // 한글 이름 조합 중 Enter 로 추천이 선택되고 조합 글자가 다시 남던 것
+    if (isComposingKey(e)) return   // 한글 이름 조합 중 Enter 로 추천이 선택되고 조합 글자가 다시 남던 문제 방지
     const list = suggestions
     if (e.key === 'ArrowDown' && list.length) { e.preventDefault(); setActiveIdx((activeIdx + 1) % list.length) }
     else if (e.key === 'ArrowUp' && list.length) { e.preventDefault(); setActiveIdx((activeIdx + list.length - 1) % list.length) }
@@ -486,8 +486,8 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
   }
 
   // ── 탭 ──
-  // 기본 탭 = 사람·채널. 링크 탭은 고를 때만 —
-  // 링크 탭이 기본이면 같은 자리의 1차 버튼이 '링크 만들고 복사'가 되어, '공유'를 누르려던 손이 링크를 만든다.
+  // 기본 탭 = 사람·채널. 링크 탭은 선택 시에만 표시한다 —
+  // 링크 탭이 기본이면 동일 위치의 1차 버튼이 '링크 만들고 복사'가 되어, '공유'를 누르려던 사용자가 의도와 달리 링크를 생성한다.
   const [tab, setTab] = useState<string | null>(initialTab ?? 'people')
   const tabs = [
     // 시안 "사람·채널 3" = 소유자(나) 포함
@@ -501,13 +501,13 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
       if (single && !single.is_dir && linkable) {
         void fetchLinkPreviewKind(single.path).then((k) => {
           setPreviewKind(k)
-          if (k === null) setPerm(p => (p === 'view-nodl' ? 'view' : p))   // 그새 골라 둔 "막음"은 되돌린다
+          if (k === null) setPerm(p => (p === 'view-nodl' ? 'view' : p))   // 그사이 선택해 둔 "막음"은 복원한다
         })
       }
       if (!chatStore.getState().channels.length) fetchChannels().catch(() => {})
       try { setDirectory(await searchUsers('')) } catch { /* 이름 대신 "알 수 없는 사용자" */ }
       loadShares()
-      // ⋮ "채널로 보내기"로 열었으면 바로 입력으로
+      // ⋮ "채널로 보내기"로 열린 경우 즉시 입력에 포커스
       if (initialTab === 'people') inputRef.current?.focus()
     })()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -603,7 +603,7 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
                         </div>
                       </form>
                     )}
-                    {/* 이메일로 보내기 + 보낸 기록 — 수정 폼과 같은 펼침 문법 */}
+                    {/* 이메일로 보내기 + 보낸 기록 — 수정 폼과 동일한 펼침 문법 */}
                     {mailing === l.id && (
                       <form className="flex flex-col gap-3 border-t border-border p-3.5" onSubmit={e => sendMail(l, e)} aria-label={t('files.shareEmail.panelTitle')}>
                         {linkInactive(l)
@@ -803,7 +803,7 @@ export function FilesFileShareModal({ items, initialTab = null, onClose }: Files
                 )}
 
                 {/* 접근 권한이 있는 사람: 행 min-h-12 · 아바타 28 · 이름 600 + 보조 12 muted
-                    · 잠긴 행 = lock + 권한 글자, 바꿀 수 있는 행 = [권한 ▾](ghost xs) → UiMenu(머리글 · 체크 · 공동 소유 · 빼기) */}
+                    · 잠긴 행 = lock + 권한 글자, 변경 가능한 행 = [권한 ▾](ghost xs) → UiMenu(머리글 · 체크 · 공동 소유 · 빼기) */}
                 {single && (
                   <div className="flex flex-col">
                     <div className="flex min-h-12 items-center gap-3 border-b border-border/60 py-1.5 text-[13px]">

@@ -1,10 +1,10 @@
 """ws-sso — SSO 프로토콜 계층 (SAML 2.0 IdP · SCIM 2.0).
 
 경계: 이 서비스는 **인증을 수행하지 않는다.** 사용자 원장과 로그인 UI 는 backend 에
-그대로 두고, 여기서는 backend 가 발급한 세션을 검증해 신원을 확인한 뒤 각 프로토콜
-형식으로 재발행한다. 자세한 이유는 app/identity.py 참고.
+유지하고, 여기서는 backend 가 발급한 세션을 검증해 신원을 확인한 뒤 각 프로토콜
+형식으로 재발행한다. 상세 사유는 app/identity.py 참고.
 
-현재 단계: 골격 + 신원 조회 경계 검증. SAML/SCIM 은 이 위에 얹는다.
+현재 단계: 골격 + 신원 조회 경계 검증. SAML/SCIM 은 이 위에 구현한다.
 """
 
 import logging
@@ -18,7 +18,7 @@ from app.config import settings
 logging.basicConfig(level=settings.log_level)
 logger = logging.getLogger(__name__)
 
-# 약한·기본 비밀값으로는 뜨지 않는다. SECRET_KEY 는 세션 쿠키 서명 검증에 쓰여, 값이 알려지면 누구든 로그인한 사용자로 꾸밀 수 있다.
+# 약한 비밀값·기본 비밀값으로는 기동하지 않는다. SECRET_KEY 는 세션 쿠키 서명 검증에 사용되므로, 값이 노출되면 누구든 로그인한 사용자로 위장할 수 있다.
 if not secret_guard.enforce([
     ("SECRET_KEY", settings.secret_key, secret_guard.KEY_MIN, True),
     ("DB_PASSWORD", secret_guard.db_password(settings.database_url) or "", secret_guard.PASSWORD_MIN,
@@ -38,7 +38,7 @@ async def get_db():
 
 @app.get("/sso/health")
 async def health(db: AsyncSession = Depends(get_db)):
-    """DB 연결과 users 가시성까지 확인한다 — 프로세스 생존만 보면 의미가 없다."""
+    """DB 연결과 users 가시성까지 확인한다 — 프로세스 생존 확인만으로는 불충분하다."""
     users = await list_users(db)
     return {
         "status": "ok",
@@ -52,7 +52,7 @@ async def whoami(
     ws_session: str | None = Cookie(None, alias=SESSION_COOKIE),
     db: AsyncSession = Depends(get_db),
 ):
-    """backend 세션 쿠키로 신원을 확인한다 — 서비스 경계가 실제로 도는지 보는 창구."""
+    """backend 세션 쿠키로 신원을 확인한다 — 서비스 경계의 실제 동작을 확인하는 엔드포인트."""
     identity = await resolve_session(db, ws_session)
     if identity is None:
         raise HTTPException(status_code=401, detail="유효한 세션이 없습니다")

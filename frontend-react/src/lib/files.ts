@@ -1,5 +1,5 @@
 /**
- * 파일 모듈 순수 함수 — 유형 판정·표기·선택 범위. 컴포넌트·테스트가 함께 쓴다.
+ * 파일 모듈 순수 함수 — 유형 판정·표기·선택 범위. 컴포넌트·테스트가 공용으로 사용한다.
  *
  * 유형 아이콘 색 체계: 폴더 warning · 문서 primary · 시트 success · 슬라이드 warning ·
  * PDF danger · 이미지/압축 muted. 목록·그리드 동일, aria-label 에 유형 이름.
@@ -22,7 +22,7 @@ export function fileKind(item: KindLike): FileKind {
   return 'file'
 }
 
-/** 유형 → [이름 i18n 키, 색 토큰 클래스, 공용 아이콘 이름(utils/icons.ts)]. 모양은 디자인 그대로를 공용 세트로 올렸다. */
+/** 유형 → [이름 i18n 키, 색 토큰 클래스, 공용 아이콘 이름(utils/icons.ts)]. 아이콘 형태는 디자인 원안 그대로 공용 세트에 등록하였다. */
 export const KIND_META: Record<FileKind, { labelKey: string; tone: string; icon: string }> = {
   folder: { labelKey: 'files.kind.folder', tone: 'text-warning', icon: 'folder' },
   doc: { labelKey: 'files.kind.doc', tone: 'text-primary', icon: 'file-doc' },
@@ -34,7 +34,7 @@ export const KIND_META: Record<FileKind, { labelKey: string; tone: string; icon:
   file: { labelKey: 'files.kind.file', tone: 'text-muted-foreground', icon: 'file' },
 }
 
-/** 표기 번역기(i18n t). 주지 않으면 한국어 기본값(테스트·i18n 밖 호출용) */
+/** 표기 번역기(i18n t). 미지정 시 한국어 기본값(테스트·i18n 밖 호출용) */
 export type FilesTranslate = (key: string, params?: Record<string, string | number>) => string
 const FILES_TEXT_KO: Record<string, string> = {
   'files.expiry.none': '만료 없음',
@@ -57,8 +57,8 @@ const koTranslate: FilesTranslate = (key, params) =>
 const PREVIEW_IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']
 
 /**
- * 문구 파일에 아직 없는 키를 쓸 때 — 없으면(t 가 키를 그대로 돌려주면) 기본 문구에 값을 끼워 돌려준다.
- * (이 앱의 t 는 `t(key, '기본 문구')` 만 기본값을 받고, 값이 든 문구에는 기본값을 못 준다.)
+ * 문구 파일에 아직 없는 키를 사용할 때 — 키가 없으면(t 가 키를 그대로 반환하면) 기본 문구에 값을 치환하여 반환한다.
+ * (본 앱의 t 는 `t(key, '기본 문구')` 형태만 기본값을 받으며, 값이 포함된 문구에는 기본값을 지정할 수 없다.)
  */
 export function textOr(t: (key: string, params?: Record<string, string | number>) => string, key: string, fallback: string, params?: Record<string, string | number>): string {
   const v = t(key, params)
@@ -66,20 +66,20 @@ export function textOr(t: (key: string, params?: Record<string, string | number>
   return fallback.replace(/\{(\w+)\}/g, (_, n: string) => String(params?.[n] ?? ''))
 }
 
-/** IME(한글 등) 조합 중에 온 키인가 — 조합 중 Enter 는 글자를 확정하는 키라 확정·선택 동작에 쓰면 안 된다. */
+/** IME(한글 등) 조합 중 발생한 키 여부 — 조합 중 Enter 는 글자를 확정하는 키이므로 확정·선택 동작에 사용해서는 안 된다. */
 export function isComposingKey(e: { nativeEvent?: { isComposing?: boolean }; keyCode?: number; isComposing?: boolean }): boolean {
   return !!(e.nativeEvent?.isComposing || e.isComposing || e.keyCode === 229)
 }
 
-/** 클릭 = 열기에서 미리보기 모달로 여는 종류. 오피스는 새 탭, 폴더는 들어가기. */
+/** 클릭 = 열기에서 미리보기 모달로 여는 종류. 오피스는 새 탭, 폴더는 진입. */
 export function previewKind(item: KindLike): 'image' | 'pdf' | 'text' | null {
   if (item.is_dir) return null
   const mime = item.mime_type || ''
   if (mime.startsWith('image/')) return 'image'
   if (mime === 'application/pdf') return 'pdf'
   const ext = item.name.split('.').pop()?.toLowerCase() || ''
-  // 형식(mime)을 모르는 항목은 확장자로 — 공유받음 첫 목록은 mime 을 안 준다. 예전엔 직접 공유받은
-  // 이미지·PDF 가 "미리 볼 수 없음"이었다. 서버 미리보기(app/files/preview.py)가 받는 확장자만.
+  // 형식(mime)을 알 수 없는 항목은 확장자로 판정 — 공유받음 첫 목록은 mime 을 제공하지 않는다. 기존에는 직접 공유받은
+  // 이미지·PDF 가 "미리 볼 수 없음"으로 표시되었다. 서버 미리보기(app/files/preview.py)가 허용하는 확장자만 대상.
   if (!mime) {
     if (PREVIEW_IMAGE_EXTS.includes(ext)) return 'image'
     if (ext === 'pdf') return 'pdf'
@@ -113,7 +113,7 @@ export function formatDay(iso: string | null | undefined): string {
   return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
 }
 
-/** 공유 링크 만료 선택지(백엔드 EXPIRES_MAP 범위: 1h·1d·7d·없음) — 라벨에 날짜를 붙인다. */
+/** 공유 링크 만료 선택지(백엔드 EXPIRES_MAP 범위: 1h·1d·7d·없음) — 라벨에 날짜를 추가한다. */
 export const EXPIRY_HOURS: Record<string, number> = { '1h': 1, '1d': 24, '7d': 168 }
 
 export function expiryLabel(key: string, now = new Date(), tr: FilesTranslate = koTranslate): string {
@@ -141,25 +141,25 @@ export function linkMeta(l: { expires_at: string | null; max_downloads: number |
   return parts.join(' · ')
 }
 
-// ─── 공유 링크 이메일로 보내기 — 서버 규칙(app/files/share_email.py)과 같은 한도·형식 ───
+// ─── 공유 링크 이메일 발송 — 서버 규칙(app/files/share_email.py)과 동일한 한도·형식 ───
 
-/** 한 번에 보낼 수 있는 받는 사람 수 */
+/** 1회 발송 가능한 수신자 수 */
 export const SHARE_EMAIL_MAX = 20
 const EMAIL_RE = /^[^@\s,;<>"']+@[^@\s,;<>"']+\.[^@\s,;<>"']+$/
 
-/** 이메일 형식인가(서버와 같은 규칙) */
+/** 이메일 형식 여부(서버와 동일 규칙) */
 export function isEmail(s: string): boolean {
   const v = s.trim()
   return v.length <= 320 && EMAIL_RE.test(v)
 }
 
-/** 입력 칸 글자 → 주소 조각(공백·쉼표·세미콜론으로 나눔, 빈 것 제외) */
+/** 입력 칸 문자열 → 주소 조각(공백·쉼표·세미콜론으로 분리, 빈 항목 제외) */
 export function splitEmails(text: string): string[] {
   return text.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean)
 }
 
 /**
- * 칩 목록에 조각들을 더한다 — 형식이 맞는 것은 소문자로(이미 있으면 건너뜀, max 까지), 틀린 것은 bad, 넘친 것은 overflow.
+ * 칩 목록에 조각들을 추가한다 — 형식이 유효한 항목은 소문자로 변환(이미 있으면 생략, max 까지), 무효한 항목은 bad, 초과분은 overflow.
  */
 export function addEmails(current: string[], parts: string[], max = SHARE_EMAIL_MAX): { list: string[]; bad: string[]; overflow: number } {
   const list = [...current]
@@ -176,7 +176,7 @@ export function addEmails(current: string[], parts: string[], max = SHARE_EMAIL_
 }
 
 /**
- * 워크스페이스 밖 주소인가(칩 표시용 추정) — 디렉터리 사용자 이메일도 아니고 내 메일 도메인도 아니면 외부.
+ * 워크스페이스 외부 주소 여부(칩 표시용 추정) — 디렉터리 사용자 이메일도 아니고 본인 메일 도메인도 아니면 외부.
  * 최종 판정은 서버(발송 기록의 external).
  */
 export function isExternalEmail(email: string, knownEmails: Iterable<string>, myEmail?: string | null): boolean {
@@ -187,16 +187,16 @@ export function isExternalEmail(email: string, knownEmails: Iterable<string>, my
 }
 
 /**
- * 공유 링크 주소 — 같이 편집 링크는 편집기(/s/), 비밀번호·내려받기 막음 링크도 손님 화면(/s/)으로
- * (비밀번호 입력 → unlock → access, 막음은 미리보기 버튼). 그 밖의 링크는 예전처럼 바로 내려받기.
+ * 공유 링크 주소 — 공동 편집 링크는 편집기(/s/), 비밀번호·다운로드 차단 링크도 손님 화면(/s/)으로 연결한다
+ * (비밀번호 입력 → unlock → access, 차단 시 미리보기 버튼). 그 외 링크는 기존과 같이 즉시 다운로드.
  */
 export function shareUrl(origin: string, token: string, canEdit: boolean, opts: { hasPassword?: boolean; allowDownload?: boolean; isFolder?: boolean } = {}): string {
-  // 폴더 링크는 손님 화면에서 둘러본다(바로 zip 이 아니라)
+  // 폴더 링크는 손님 화면에서 탐색한다(즉시 zip 다운로드 아님)
   const guestPage = canEdit || !!opts.hasPassword || opts.allowDownload === false || !!opts.isFolder
   return guestPage ? `${origin}/s/${token}` : `${origin}/api/files/shared/${token}`
 }
 
-/** 활동 기록 action → i18n 키(files.activity.*). 모르는 action 은 other. */
+/** 활동 기록 action → i18n 키(files.activity.*). 미지의 action 은 other. */
 const ACTIVITY_ACTIONS = new Set([
   'upload', 'create', 'mkdir', 'copy', 'edit', 'view', 'rename', 'move', 'delete', 'restore', 'purge',
   'share_link', 'share_link_email', 'share_user', 'share_channel', 'link_download', 'version_restore', 'unshare_user', 'comment',
@@ -208,12 +208,12 @@ export function activityKey(action: string): string {
 /** 공유 권한 4단계 순서 — 보기 < 댓글 < 편집 < 공동 소유 */
 export const SHARE_ROLES = ['view', 'comment', 'edit', 'owner'] as const
 export type ShareRoleName = typeof SHARE_ROLES[number]
-/** role 이 need 이상인가. 공유가 아닌 내 항목(role 없음)은 소유자로 본다. */
+/** role 이 need 이상인지 여부. 공유가 아닌 본인 항목(role 없음)은 소유자로 간주한다. */
 export function roleAtLeast(role: ShareRoleName | null | undefined, need: ShareRoleName): boolean {
   const r = role ?? 'owner'
   return SHARE_ROLES.indexOf(r) >= SHARE_ROLES.indexOf(need)
 }
-/** 예전 서버 응답(role 없음)은 can_write 로 */
+/** 구버전 서버 응답(role 없음)은 can_write 로 판정 */
 export function roleOf(e: { role?: ShareRoleName | null; can_write?: boolean }): ShareRoleName {
   return e.role ?? (e.can_write ? 'edit' : 'view')
 }
@@ -230,14 +230,14 @@ export function sharedSubPath(path: string): { shareId: string; sub: string } | 
   return shareId ? { shareId, sub: sub.join('/') } : null
 }
 
-/** 여러 항목 묶음 링크 — 같은 루트(my/ 또는 shared/)에서만 만들 수 있다(서버 규칙). */
+/** 여러 항목 묶음 링크 — 동일 루트(my/ 또는 shared/)에서만 생성 가능(서버 규칙). */
 export function canBundleLink(paths: string[]): boolean {
   if (paths.length < 2) return false
   const root = paths[0].split('/', 1)[0]
   return (root === 'my' || root === 'shared') && paths.every(p => p.split('/', 1)[0] === root)
 }
 
-/** 같은 항목 묶음의 링크인지(순서 무관) */
+/** 동일 항목 묶음의 링크 여부(순서 무관) */
 export function samePathSet(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) return false
   const s = new Set(a)
@@ -256,7 +256,7 @@ export function rangeBetween(order: string[], anchor: string | null, target: str
   return order.slice(lo, hi + 1)
 }
 
-/** 이동 대상 판정: 자기 자신·자기 하위로는 못 옮기고, 이미 그 폴더에 있으면 의미 없다. */
+/** 이동 대상 판정: 자기 자신·자기 하위로는 이동 불가, 이미 해당 폴더에 있으면 무의미. */
 export function canMoveInto(srcPaths: string[], dst: string): boolean {
   if (!dst) return false
   return srcPaths.every((p) => {
@@ -269,13 +269,13 @@ export function canMoveInto(srcPaths: string[], dst: string): boolean {
 /** 루트 이름 i18n 키(셸·브레드크럼과 같은 표기). */
 export const ROOT_LABELS: Record<string, string> = { my: 'files.sidebar.myFiles', shared: 'files.sidebar.sharedFiles', users: 'files.sidebar.allUsers' }
 
-/** "my/프로젝트/2026" → 위치 표기 "내 파일 / 프로젝트" (마지막 조각 제외 = 들어 있는 폴더) */
+/** "my/프로젝트/2026" → 위치 표기 "내 파일 / 프로젝트" (마지막 조각 제외 = 소속 폴더) */
 export function parentLabel(path: string, tr: FilesTranslate = koTranslate): string {
   const parts = path.split('/').filter(Boolean).slice(0, -1)
   return parts.map((p, i) => (i === 0 && ROOT_LABELS[p] ? tr(ROOT_LABELS[p]) : p)).join(' / ')
 }
 
-/** 앱 안 끌어다 놓기(이동) 데이터 형식. 바깥 파일 끌기(Files)와 구분한다. */
+/** 앱 내부 드래그 앤 드롭(이동) 데이터 형식. 외부 파일 드래그(Files)와 구분한다. */
 export const DRAG_MIME = 'application/x-jw-files'
 
 /** 파일 액션 메뉴 항목(데스크톱 드롭다운·모바일 시트 공통). */

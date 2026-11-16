@@ -1,6 +1,6 @@
 // 채널 탭 — 메시지 · 파일 · 위키 + 더보기(회의 · 작업 · 탭 관리).
-// 서버: /api/chat/channels/{id}/tabs|files|meetings|tasks (backend app/chat/tabs.py). 채팅 상태(useChat)와는 따로 둔다.
-// 상태 없는 요청 묶음이라 store 없이 모듈 함수 + 같은 이름의 hook(useChannelTabs)으로 둔다.
+// 서버: /api/chat/channels/{id}/tabs|files|meetings|tasks (backend app/chat/tabs.py). 채팅 상태(useChat)와는 분리한다.
+// 상태 없는 요청 묶음이므로 store 없이 모듈 함수 + 동일 이름의 hook(useChannelTabs)으로 구성한다.
 import { $fetch } from '~/lib/api'
 
 export type ChannelTabKey = 'messages' | 'files' | 'wiki' | 'meetings' | 'tasks'
@@ -8,7 +8,7 @@ export type ChannelTabKey = 'messages' | 'files' | 'wiki' | 'meetings' | 'tasks'
 export interface ChannelFolder {
   owner_id: string
   owner_name: string
-  /** 내 폴더일 때만 가상경로(my/..) */
+  /** 본인 폴더일 때만 가상경로(my/..) */
   path: string | null
   /** "내 파일" 아래 경로 조각 */
   segments: string[]
@@ -18,7 +18,7 @@ export interface ChannelFolder {
   can_write: boolean
 }
 
-/** 메시지 뒤에 오는 탭(메시지는 늘 처음 · 고정) */
+/** 메시지 뒤에 오는 탭(메시지는 항상 첫 번째 · 고정) */
 export type ChannelTabMovable = 'files' | 'wiki' | 'meetings' | 'tasks'
 
 export interface ChannelTabLayoutItem { key: ChannelTabMovable; visible: boolean }
@@ -26,13 +26,13 @@ export interface ChannelTabLayoutItem { key: ChannelTabMovable; visible: boolean
 export interface ChannelTabsSummary {
   files_count: number
   folder: ChannelFolder | null
-  /** 예전 페이지 연결(있으면) */
+  /** 구 방식 페이지 연결(있는 경우) */
   wiki: { id: string; title: string; space_id: string } | null
-  /** 위키 탭이 보여 주는 스페이스(스페이스 단위 연결) · pages = 페이지 수 */
+  /** 위키 탭이 표시하는 스페이스(스페이스 단위 연결) · pages = 페이지 수 */
   wiki_space?: { id: string; name: string; pages: number } | null
   meetings_upcoming: number
   tasks_open: number
-  /** 탭 순서·끄기 — 채널 멤버 모두에게 같다 */
+  /** 탭 순서·비활성화 — 채널 멤버 전체에 동일 적용 */
   layout?: ChannelTabLayoutItem[]
   can_manage: boolean
 }
@@ -45,7 +45,7 @@ export interface ChannelFileItem {
   at: string | null
   message_id: string | null
   url: string | null
-  /** 폴더 파일의 경로 — 내 폴더면 my/.., 아니면 shared-with-me/<공유>/.. */
+  /** 폴더 파일의 경로 — 본인 폴더이면 my/.., 아니면 shared-with-me/<공유>/.. */
   path: string | null
 }
 
@@ -116,7 +116,7 @@ export async function createTask(channelId: string, title: string, extra?: { pri
   return await $fetch('/api/tasks/', { method: 'POST', body: { title, channel_id: channelId, ...(extra ?? {}) } })
 }
 
-/** 탭 줄 순서: 메시지 + 저장된 순서(빠진 키는 기본 순서로 뒤에) */
+/** 탭 줄 순서: 메시지 + 저장된 순서(누락된 키는 기본 순서로 뒤에 배치) */
 export function orderedTabs(summary: ChannelTabsSummary | null): ChannelTabLayoutItem[] {
   const base: ChannelTabMovable[] = ['files', 'wiki', 'meetings', 'tasks']
   const saved = (summary?.layout ?? []).filter(x => base.includes(x.key))

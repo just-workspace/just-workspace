@@ -1,5 +1,5 @@
-// WASAPI 직접 호출(miniaudio 밖): exclusive 포맷 매트릭스 시험, 장치를 쓰는 세션(프로세스) 목록, 장치 기본 형식.
-// 장치 id 는 IMMDevice::GetId 의 endpoint id 문자열 — miniaudio 의 ma_device_id.wasapi 와 같다.
+// WASAPI 직접 호출(miniaudio 밖): exclusive 포맷 매트릭스 시험, 장치를 사용 중인 세션(프로세스) 목록, 장치 기본 형식.
+// 장치 id 는 IMMDevice::GetId 의 endpoint id 문자열 — miniaudio 의 ma_device_id.wasapi 와 동일하다.
 #pragma once
 #include <string>
 #include <vector>
@@ -39,7 +39,7 @@ std::vector<ExclusiveFormat> probeExclusiveFormats(const std::wstring& id, bool 
                                                    const std::vector<unsigned>& channelsList);
 std::vector<SessionInfo> sessionsOf(const std::wstring& id, bool capture);
 DeviceFormatInfo deviceFormat(const std::wstring& id, bool capture);
-// HRESULT → 사람이 읽을 코드('device_in_use' · 'exclusive_not_allowed' · 'unsupported_format' · 'access_denied' · 'device_invalidated' · 'hr_xxxxxxxx')
+// HRESULT → 판독 가능한 코드('device_in_use' · 'exclusive_not_allowed' · 'unsupported_format' · 'access_denied' · 'device_invalidated' · 'hr_xxxxxxxx')
 std::string hresultCode(long hr);
 
 }  // namespace jw

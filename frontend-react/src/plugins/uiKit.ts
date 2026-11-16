@@ -1,11 +1,11 @@
 /**
  * v2(React) 플러그인용 호스트 UI 키트 — window.__WS_UI__ (작성법: frontend-react/docs/plugin-v2.md "7. 호스트 UI 키트").
- * 플러그인 번들은 react 와 함께 이 키트를 external 로 두고(가상 모듈 '@jw/ui' → window.__WS_UI__) 호스트와 같은 부품을 쓴다.
- * 같은 React 인스턴스·같은 토큰 CSS 라 모양·동작이 호스트 화면과 똑같다.
+ * 플러그인 번들은 react 와 함께 이 키트를 external 로 지정하고(가상 모듈 '@jw/ui' → window.__WS_UI__) 호스트와 동일한 부품을 사용한다.
+ * 동일 React 인스턴스·동일 토큰 CSS 이므로 외형·동작이 호스트 화면과 동일하다.
  *
- * 들어 있는 것: Ui* 부품 전부(셸 전용 UiToast·UiDialogHost 제외 — 호스트가 이미 그린다) + useToast·toast·addToast + useDialog·confirmBox·alertBox·promptBox·choose
+ * 포함 항목: Ui* 부품 전부(셸 전용 UiToast·UiDialogHost 제외 — 호스트가 이미 렌더한다) + useToast·toast·addToast + useDialog·confirmBox·alertBox·promptBox·choose
  * + useUiMentionList.
- * 키를 빼거나 props 를 깨는 변경은 플러그인을 깨므로 version 을 올리고 docs 에 적는다(더하기는 version 그대로).
+ * 키를 제거하거나 props 호환성을 깨는 변경은 플러그인 오동작을 유발하므로 version 을 올리고 docs 에 기록한다(추가는 version 유지).
  */
 import { UiActionSheet } from '~/components/ui/ActionSheet'
 import { UiAppRail } from '~/components/ui/AppRail'
@@ -48,7 +48,7 @@ import { useToast, toast, addToast, removeToast } from '~/composables/useToast'
 import { useDialog, alertBox, confirmBox, promptBox, choose } from '~/composables/useDialog'
 
 export const wsUiKit = {
-  /** 키트 계약 버전 — 키를 빼거나 props 를 깨면 올린다 */
+  /** 키트 계약 버전 — 키를 제거하거나 props 호환성을 깨는 경우 증가시킨다 */
   version: 1 as const,
   UiActionSheet, UiAppRail, UiAvatar, UiBadge, UiButton, UiCard, UiCardContent, UiCardHeader, UiCardTitle,
   UiCheckbox, UiChip, UiEditorToolbar, UiEmptyState, UiErrorTile, UiFab, UiIcon, UiIconButton, UiInput, UiKeycap,

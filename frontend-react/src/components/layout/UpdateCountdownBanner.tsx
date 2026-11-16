@@ -1,7 +1,7 @@
 /**
- * 업데이트 예고 띠 — 카운트다운 동안 앱 어디서든 상단바 아래에 붙는다("하던 일을 저장하세요").
- * 관리자에게만 "지금 바로 시작"·"취소"가 보인다. 일반 사용자에게는 관리 메뉴도 이름도 그리지 않는다.
- * 남은 시간 숫자는 화면 낭독기에 읽히지 않는다(매초 바뀐다) — 낭독되는 것은 분 단위로 바뀌는 문장뿐이다.
+ * 업데이트 사전 공지 띠 — 카운트다운 동안 앱 전 화면의 상단바 아래에 표시된다("하던 일을 저장하세요").
+ * "지금 바로 시작"·"취소"는 관리자에게만 표시한다. 일반 사용자에게는 관리 메뉴와 이름을 모두 표시하지 않는다.
+ * 남은 시간 숫자는 매초 변경되므로 화면 낭독기의 낭독 대상에서 제외한다. 낭독 대상은 분 단위로 변경되는 문장뿐이다.
  */
 import { useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -48,7 +48,7 @@ export function LayoutUpdateCountdownBanner() {
     setBusy(true)
     try {
       await updateApi.jobAction(notice.job, action)
-      // 소켓 이벤트를 기다리지 않고 이 화면부터 바꾼다
+      // 소켓 이벤트를 대기하지 않고 본 화면을 먼저 갱신
       if (action === 'cancel') handleUpdateEvent({ type: 'system.update_cancelled', job: notice.job })
     } catch (e: any) {
       addToast('error', e?.data?.detail || t('shell.update.countdown.failed'))

@@ -1,14 +1,14 @@
 /**
- * 단독 편집기(게시판 쓰기). TipTap StarterKit + 이미지·표.
+ * 단독 편집기(게시판 작성용). TipTap StarterKit + 이미지·표.
  * 데스크톱: 카드(border-input, 포커스 시 ring) 안에 공용 툴바(40) + 본문(min 260).
- * 모바일: 카드 없이 본문만 — 툴바는 호스트 페이지가 키보드 위에 <UiEditorToolbar variant="mobile"> 로 그린다(editor 노출).
- * 이미지·파일 버튼은 호스트가 받는다(onImage) — 게시판은 첨부 업로드 흐름과 같이 간다.
+ * 모바일: 카드 없이 본문만 표시한다. 툴바는 호스트 페이지가 키보드 위에 <UiEditorToolbar variant="mobile"> 로 렌더링한다(editor 노출).
+ * 이미지·파일 버튼은 호스트가 처리한다(onImage). 게시판은 첨부 업로드 흐름과 동일하게 처리한다.
  *
- * TipTap v3: StarterKit 이 밑줄·링크를 기본 포함한다(따로 넣으면 중복 등록 경고). 표는 @tiptap/extension-table 하나에서,
+ * TipTap v3: StarterKit 이 밑줄·링크를 기본 포함한다(별도 추가 시 중복 등록 경고 발생). 표는 @tiptap/extension-table 단일 패키지에서,
  * 자리표시(Placeholder)는 @tiptap/extensions 에서 가져온다.
  *
- * html·onUpdateHtml / text·onUpdateText — 편집기가 값을 내보내기만 한다(들어오는 값은 쓰지 않는다).
- * ref 핸들 = { editor, insertImage }. 호스트가 editor 로 다시 그려야 하면 onUpdateEditor.
+ * html·onUpdateHtml / text·onUpdateText — 편집기는 값을 출력만 한다(입력 값은 사용하지 않는다).
+ * ref 핸들 = { editor, insertImage }. 호스트가 editor 기준으로 재렌더링해야 하는 경우 onUpdateEditor 를 사용한다.
  */
 import { useEffect, useImperativeHandle, useRef, type Ref } from 'react'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
@@ -21,7 +21,7 @@ import { useI18n, i18n } from '~/i18n'
 import { UiEditorToolbar } from '~/components/ui/EditorToolbar'
 import './RichEditor.css'
 
-/** ref 로 쓰는 것 */
+/** ref 로 노출하는 항목 */
 export interface RichEditorHandle {
   readonly editor: Editor | null
   insertImage: (src: string, alt?: string) => void
@@ -30,19 +30,19 @@ export interface RichEditorHandle {
 export interface RichEditorProps {
   initialContent?: string
   placeholder?: string
-  /** 모바일 — 카드·상단 툴바 없이 본문만 */
+  /** 모바일 — 카드·상단 툴바 없이 본문만 표시 */
   bare?: boolean
-  /** v-model:html 의 값(쓰지 않음, 짝 맞춤용) */
+  /** v-model:html 의 값(미사용, 쌍 구성용) */
   html?: string | null
-  /** 본문 HTML 이 바뀔 때 */
+  /** 본문 HTML 변경 시 호출 */
   onUpdateHtml?: (html: string | null) => void
-  /** v-model:text 의 값(쓰지 않음, 짝 맞춤용) */
+  /** v-model:text 의 값(미사용, 쌍 구성용) */
   text?: string
-  /** 본문 글자가 바뀔 때 */
+  /** 본문 텍스트 변경 시 호출 */
   onUpdateText?: (text: string) => void
   /** 툴바 이미지 버튼 */
   onImage?: () => void
-  /** 편집기가 생기거나 사라질 때 — 호스트가 모바일 툴바에 넘긴다 */
+  /** 편집기 생성·제거 시 호출 — 호스트가 모바일 툴바에 전달 */
   onUpdateEditor?: (editor: Editor | null) => void
   className?: string
   ref?: Ref<RichEditorHandle | null>
@@ -53,13 +53,13 @@ export interface RichEditorProps {
  * @example <RichEditor ref={richRef} onUpdateHtml={setHtml} onUpdateText={setText} initialContent={html} bare={isMobile} onImage={pick} />
  */
 export function RichEditor({ initialContent, placeholder, bare = false, onUpdateHtml, onUpdateText, onImage, onUpdateEditor, className, ref }: RichEditorProps) {
-  useI18n()   // 로캘 전환에 다시 그린다
+  useI18n()   // 로캘 전환 시 재렌더링
   const latest = useRef({ placeholder, onUpdateHtml, onUpdateText })
   latest.current = { placeholder, onUpdateHtml, onUpdateText }
 
   const editor = useEditor({
     extensions: [
-      // v3 StarterKit = 밑줄·링크·ListKeymap 포함. 링크는 v2 때처럼 클릭으로 열지 않는다(편집 중 이동 방지)
+      // v3 StarterKit = 밑줄·링크·ListKeymap 포함. 링크는 v2 와 동일하게 클릭으로 열지 않는다(편집 중 이동 방지)
       StarterKit.configure({ link: { openOnClick: false } }),
       Image.configure({ inline: false, allowBase64: false }),
       Placeholder.configure({ placeholder: () => latest.current.placeholder || i18n.t('editor.placeholder') }),
@@ -73,8 +73,8 @@ export function RichEditor({ initialContent, placeholder, bare = false, onUpdate
     },
   })
 
-  // 편집 모드에서 기존 글이 뒤늦게 오면 비어 있을 때만 채운다(첫 값은 건너뜀)
-  // v3 setContent 는 기본으로 update 를 내보낸다 — v2 와 같게 끈다(기존 글을 채우는 것은 "내가 고친 것"이 아니라 임시 저장을 건드리면 안 된다)
+  // 편집 모드에서 기존 글이 지연 수신되면 본문이 비어 있을 때만 채운다(최초 값은 제외)
+  // v3 setContent 는 기본적으로 update 를 발생시킨다 — v2 와 동일하게 비활성화한다(기존 글 채움은 사용자 편집이 아니므로 임시 저장에 영향을 주어서는 안 된다)
   const first = useRef(true)
   useEffect(() => {
     if (first.current) { first.current = false; return }

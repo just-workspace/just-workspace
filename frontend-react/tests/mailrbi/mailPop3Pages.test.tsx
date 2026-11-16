@@ -1,5 +1,5 @@
 // POP3 계정 — 메일 화면의 보관 단축키(E)와 모바일 본문 상단 바의 보관 버튼.
-// POP3 는 보관함이 없어 E 를 먹지 않고(서버 호출 없음) 버튼도 그리지 않는다. IMAP 은 그대로.
+// POP3 는 보관함이 없어 E 를 처리하지 않고(서버 호출 없음) 버튼도 렌더링하지 않는다. IMAP 은 변경 없음.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -51,7 +51,7 @@ async function openList(protocol: 'imap' | 'pop3') {
   const router = createMemoryRouter([{ path: '/mail', element: <MailPage /> }], { initialEntries: ['/mail'] })
   render(<RouterProvider router={router} />)
   await waitFor(() => expect(mailStore.getState().messages.length).toBe(1))
-  // 한 통 선택 — E 는 선택이 있으면 목록의 보관을 부른다
+  // 1통 선택 — E 는 선택이 있으면 목록의 보관을 호출
   await act(async () => { mailStore.setState({ selectedIds: new Set(['1']) }) })
 }
 

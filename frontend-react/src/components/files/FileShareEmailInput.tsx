@@ -1,9 +1,9 @@
 /**
- * 받는 사람 이메일 칩 입력(공유 링크를 이메일로 보내기). 공유 모달 "사람·채널" 칩 입력과 같은 문법
- * (칩 h-7 알약 bg-primary/13 · 추천 목록 행 40 · 키보드 ↑↓ Enter · Backspace 로 마지막 칩 빼기).
- * - 쉼표·공백·세미콜론·Enter·칸 벗어남·붙여넣기로 칩이 된다. 형식이 틀리면 글자를 남기고 아래 오류 문구.
- * - 워크스페이스 사용자는 이름·이메일로 자동완성(/api/auth/users). 밖 주소 칩은 "외부" 표시(최종 판정은 서버 기록).
- * - 한 번에 SHARE_EMAIL_MAX(20)명까지(서버와 같은 한도).
+ * 받는 사람 이메일 칩 입력(공유 링크 이메일 발송). 공유 모달 "사람·채널" 칩 입력과 동일한 문법
+ * (칩 h-7 알약 bg-primary/13 · 추천 목록 행 40 · 키보드 ↑↓ Enter · Backspace 로 마지막 칩 제거).
+ * - 쉼표·공백·세미콜론·Enter·포커스 이탈·붙여넣기로 칩이 생성된다. 형식 오류 시 입력 글자를 유지하고 아래에 오류 문구를 표시한다.
+ * - 워크스페이스 사용자는 이름·이메일로 자동완성한다(/api/auth/users). 외부 주소 칩은 "외부"로 표시한다(최종 판정은 서버 기록).
+ * - 1회 최대 SHARE_EMAIL_MAX(20)명(서버와 동일한 한도).
  */
 import { useEffect, useId, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react'
 import { clsx } from 'clsx'
@@ -15,18 +15,18 @@ import { UiIcon } from '~/components/ui/Icon'
 import { UiAvatar } from '~/components/ui/Avatar'
 
 export interface FilesShareEmailInputProps {
-  /** 칩으로 들어간 주소들(소문자) */
+  /** 칩으로 등록된 주소 목록(소문자) */
   modelValue: string[]
-  /** 칩 목록 바뀜 */
+  /** 칩 목록 변경 시 호출 */
   onUpdateModelValue: (v: string[]) => void
-  /** 아는 사용자(디렉터리) — 외부 표시·이름 표시용. 없으면 자동완성 결과만 */
+  /** 알려진 사용자(디렉터리) — 외부 표시·이름 표시용. 없으면 자동완성 결과만 사용 */
   directory?: DirectoryUser[]
-  /** 위 라벨 */
+  /** 상단 라벨 */
   label?: string
-  /** 아래 도움말(오류가 없을 때) */
+  /** 하단 도움말(오류가 없을 때) */
   hint?: string
   disabled?: boolean
-  /** 칸에 칩이 못 된 글자(형식 오류 등)가 남았는지 — 남았으면 보내기를 막는 데 쓴다 */
+  /** 입력란에 칩으로 변환되지 못한 글자(형식 오류 등)의 잔존 여부 — 잔존 시 발송 차단에 사용 */
   onPendingChange?: (pending: boolean) => void
 }
 
@@ -48,7 +48,7 @@ export function FilesShareEmailInput({ modelValue, onUpdateModelValue, directory
   const byEmail = (e: string) => people.find(u => (u.email || '').toLowerCase() === e)
   const knownEmails = people.map(u => u.email || '')
 
-  // 칸 글자 → 칩
+  // 입력 글자 → 칩 변환
   function commit(text: string, keepBad = true) {
     const parts = splitEmails(text)
     if (!parts.length) { setQ(''); return }
@@ -88,7 +88,7 @@ export function FilesShareEmailInput({ modelValue, onUpdateModelValue, directory
     el.current?.focus()
   }
   function onKey(e: KeyboardEvent<HTMLInputElement>) {
-    // 한글 이름으로 사람을 찾는 중(조합 중) Enter·공백은 글자 확정이다
+    // 한글 이름으로 사용자 검색 중(조합 중) Enter·공백은 글자 확정으로 처리
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === 'ArrowDown' && results.length) { e.preventDefault(); setActive((active + 1) % results.length) }
     else if (e.key === 'ArrowUp' && results.length) { e.preventDefault(); setActive((active + results.length - 1) % results.length) }

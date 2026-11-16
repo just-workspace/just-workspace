@@ -1,17 +1,17 @@
 /**
- * 채팅 첨부 트레이 + 묶음 보내기.
+ * 채팅 첨부 트레이 + 묶음 전송.
  *
- * 여러 첨부를 **메시지 하나로**(디스코드식, 최대 10개 · 파일당 50MB) 보낸다.
- *  - 트레이에 넣을 때는 대기('queued')만 한다(채널·스레드 같음). 항목마다 스포일러(spoiler) · 대체 텍스트(alt).
- *  - 보내기(sendAttachments) = 낙관적 메시지 한 줄(id 'local-up-…', ChatMessage._upload)을 목록 끝에 넣고
- *    chatApi22.postAttachments(본문 · reply_to_id · reply_ping · silent · parent_id · also_to_channel 함께)로 올린다.
- *    진행률은 그 줄의 _upload.progress(0–1). 성공하면 서버 메시지로 바꾸고, 실패 = state 'failed'(retryUpload),
- *    크기 초과(파일 > 50MB 또는 413) = 'too_large'(다시 시도 없음, discardUpload 로 지우기만).
- *  - 옛 서버(/attachments 가 404·405)면 예전 경로(POST /channels/{id}/upload 파일마다)로 떨어진다 — 본문은 따로 보낸다.
+ * 여러 첨부를 **메시지 하나로**(디스코드식, 최대 10개 · 파일당 50MB) 전송한다.
+ *  - 트레이 추가 시에는 대기('queued')만 한다(채널·스레드 동일). 항목별 스포일러(spoiler) · 대체 텍스트(alt).
+ *  - 전송(sendAttachments) = 낙관적 메시지 한 줄(id 'local-up-…', ChatMessage._upload)을 목록 끝에 추가하고
+ *    chatApi22.postAttachments(본문 · reply_to_id · reply_ping · silent · parent_id · also_to_channel 포함)로 업로드한다.
+ *    진행률은 해당 줄의 _upload.progress(0–1). 성공 시 서버 메시지로 교체하고, 실패 = state 'failed'(retryUpload),
+ *    크기 초과(파일 > 50MB 또는 413) = 'too_large'(재시도 불가, discardUpload 로 삭제만 가능).
+ *  - 구 서버(/attachments 가 404·405)에서는 이전 경로(POST /channels/{id}/upload 파일마다)로 fallback 한다 — 본문은 별도 전송한다.
  *
  * React: const { forChannel, addFiles, remove, setSpoiler, setAlt, ... } = useChatAttachments()
- * 컴포넌트 밖: chatAttachmentsStore · addFiles · remove · clear · setSpoiler · setAlt · sendAttachments · retryUpload · discardUpload
- * 예전 API(buildFileMeta · sendThreadFiles · onThreadFileSent · retry)는 하위 호환으로 남긴다.
+ * 컴포넌트 외부: chatAttachmentsStore · addFiles · remove · clear · setSpoiler · setAlt · sendAttachments · retryUpload · discardUpload
+ * 이전 API(buildFileMeta · sendThreadFiles · onThreadFileSent · retry)는 하위 호환을 위해 유지한다.
  */
 import { createStore, useStore } from 'zustand'
 import { i18n } from '~/i18n'
@@ -36,31 +36,31 @@ export interface ChatAttachmentResult {
 export interface ChatAttachment {
   id: string
   channelId: string
-  /** 스레드 답글 첨부면 루트 메시지 id — 채널 트레이와 따로 모인다 */
+  /** 스레드 답글 첨부이면 루트 메시지 id — 채널 트레이와 별도로 관리 */
   parentId: string | null
-  /** 스레드 첨부를 보낼 때 "채널에도 보내기" 값(보내기 시점에 정해진다) */
+  /** 스레드 첨부 전송 시 "채널에도 보내기" 값(전송 시점에 결정) */
   alsoToChannel: boolean
   file: File
   name: string
   size: number
   mimeType: string
   isImage: boolean
-  /** 이미지 썸네일용 object URL (지울 때 revoke) */
+  /** 이미지 썸네일용 object URL (삭제 시 revoke) */
   previewUrl: string | null
   status: ChatAttachmentStatus
   /** 0~100 */
   progress: number
   error: string | null
   result: ChatAttachmentResult | null
-  /** 스포일러로 가림 */
+  /** 스포일러로 숨김 처리 */
   spoiler: boolean
   /** 대체 텍스트 */
   alt: string | null
-  /** 50MB 초과 — 보낼 수 없다 */
+  /** 50MB 초과 — 전송 불가 */
   tooLarge: boolean
 }
 
-// 모듈 싱글톤 — 채널을 오가도 트레이가 사라지지 않게 전 채널을 한 목록에 둔다
+// 모듈 싱글톤 — 채널 전환 시에도 트레이가 유지되도록 전체 채널을 단일 목록에 보관
 export const chatAttachmentsStore = createStore<{ attachments: ChatAttachment[] }>()(() => ({ attachments: [] }))
 const A = () => chatAttachmentsStore.getState().attachments
 const setA = (attachments: ChatAttachment[]) => chatAttachmentsStore.setState({ attachments })
@@ -74,7 +74,7 @@ function isImageFile(file: File): boolean {
   return /\.(jpg|jpeg|png|webp|gif|svg|bmp|avif)$/i.test(file.name)
 }
 
-/** 붙여넣은 이미지는 이름이 전부 image.png 라 시각으로 구분되는 이름을 붙인다 */
+/** 붙여넣은 이미지는 이름이 모두 image.png 이므로 시각으로 구분되는 이름을 부여한다 */
 export function normalizeName(file: File, fromPaste: boolean): string {
   if (!fromPaste || !/^image\.(png|jpe?g|gif|webp)$/i.test(file.name)) return file.name
   const ext = file.name.split('.').pop() || 'png'
@@ -100,7 +100,7 @@ function patch(id: string, p: Partial<ChatAttachment>) {
   setA(next)
 }
 
-/** 백엔드 주소·토큰 — lib/api.ts 와 같은 규칙 */
+/** 백엔드 주소·토큰 — lib/api.ts 와 동일 규칙 */
 function resolveUpload(url: string): { url: string; token: string | null } {
   const base = apiBaseUrl()
   if (!base) return { url, token: null }
@@ -110,7 +110,7 @@ function resolveUpload(url: string): { url: string; token: string | null } {
 }
 
 /**
- * 트레이에 파일을 넣는다(대기). 한 자리(채널 또는 스레드)에 최대 10개 — 넘친 파일은 넣지 않고 알린다.
+ * 트레이에 파일을 추가한다(대기). 한 위치(채널 또는 스레드)당 최대 10개 — 초과 파일은 추가하지 않고 통지한다.
  */
 export function addFiles(channelId: string, files: FileList | File[], opts: { fromPaste?: boolean; parentId?: string | null } = {}) {
   const list = Array.from(files).filter(f => f && f.size >= 0)
@@ -152,7 +152,7 @@ export function addFiles(channelId: string, files: FileList | File[], opts: { fr
 export function setSpoiler(id: string, v: boolean) { patch(id, { spoiler: v }) }
 export function setAlt(id: string, alt: string | null) { patch(id, { alt: alt && alt.trim() ? alt.trim().slice(0, 1024) : null }) }
 
-/** 업로드 중이면 취소하고, 트레이에서 뺀다 */
+/** 업로드 중이면 취소하고 트레이에서 제거 */
 export function remove(id: string) {
   const xhr = _xhrs.get(id)
   if (xhr) { try { xhr.abort() } catch { /* noop */ } _xhrs.delete(id) }
@@ -161,7 +161,7 @@ export function remove(id: string) {
   setA(A().filter(x => x.id !== id))
 }
 
-/** 트레이 항목만 치운다(미리보기 URL 도 놓는다) */
+/** 트레이 항목만 제거(미리보기 URL 도 해제) */
 export function clear(ids: string[], opts: { keepPreview?: boolean } = {}) {
   if (!opts.keepPreview) {
     for (const id of ids) {
@@ -173,13 +173,13 @@ export function clear(ids: string[], opts: { keepPreview?: boolean } = {}) {
   setA(A().filter(x => !set.has(x.id)))
 }
 
-/** 채널(스레드면 그 루트)의 첨부만 */
+/** 채널(스레드이면 해당 루트)의 첨부만 반환 */
 export function selectTray(list: ChatAttachment[], channelId: string | null | undefined, parentId?: string | null): ChatAttachment[] {
   const pid = parentId || null
   return channelId ? list.filter(a => a.channelId === channelId && a.parentId === pid) : []
 }
 
-// ─── 묶음 보내기(낙관적 메시지) ───
+// ─── 묶음 전송(낙관적 메시지) ───
 
 export type UploadState = 'uploading' | 'failed' | 'too_large'
 export interface SendAttachmentsOpts extends SendExtra { content?: string }
@@ -249,7 +249,7 @@ function finish(p: PendingUpload, msg: ChatMessage | null) {
   if (msg && p.parentId) for (const cb of _threadSentListeners) cb(msg)
 }
 
-/** 옛 서버: 파일마다 채팅 업로드(답글이면 parent_id) — 본문은 텍스트 메시지로 먼저 */
+/** 구 서버: 파일마다 채팅 업로드(답글이면 parent_id) — 본문은 텍스트 메시지로 먼저 전송 */
 function legacyUploadOne(p: PendingUpload, it: PendingUpload['items'][number], onProgress: (r: number) => void): Promise<ChatMessage> {
   return new Promise((resolve, reject) => {
     const q = new URLSearchParams()
@@ -292,7 +292,7 @@ async function run(p: PendingUpload) {
     if (p.ctrl?.signal.aborted) return
     if (status === 413) { setUpload(p, { state: 'too_large' }); return }
     if (status === 404 || status === 405) {
-      // 옛 서버 — 본문 따로 + 파일마다
+      // 구 서버 — 본문 별도 전송 + 파일별 업로드
       try {
         if (p.opts.content && !p.parentId) sendMessage(p.opts.content)
         const total = p.items.reduce((s, it) => s + it.size, 0) || 1
@@ -317,8 +317,8 @@ async function run(p: PendingUpload) {
 }
 
 /**
- * 트레이 첨부(ids)를 메시지 하나로 보낸다. 낙관적 줄을 바로 넣고 localId 를 돌려준다.
- * 보낼 수 없으면(첨부 없음 · 11개 이상) null.
+ * 트레이 첨부(ids)를 메시지 하나로 전송한다. 낙관적 줄을 즉시 추가하고 localId 를 반환한다.
+ * 전송 불가(첨부 없음 · 11개 이상)이면 null 을 반환한다.
  */
 export function sendAttachments(channelId: string, ids: string[], opts: SendAttachmentsOpts = {}): string | null {
   const tray = ids.map(id => A().find(a => a.id === id)).filter((a): a is ChatAttachment => !!a)
@@ -339,14 +339,14 @@ export function sendAttachments(channelId: string, ids: string[], opts: SendAtta
   return localId
 }
 
-/** 실패한 낙관적 줄 다시 보내기(크기 초과는 안 됨) */
+/** 실패한 낙관적 줄 재전송(크기 초과는 불가) */
 export function retryUpload(localId: string) {
   const p = _pending.get(localId)
   if (!p) return
   if (p.items.some(it => it.size > MAX_ATTACHMENT_BYTES)) return
   void run(p)
 }
-/** 낙관적 줄 지우기(올리는 중이면 취소) */
+/** 낙관적 줄 삭제(업로드 중이면 취소) */
 export function discardUpload(localId: string) {
   const p = _pending.get(localId)
   if (!p) return
@@ -356,7 +356,7 @@ export function discardUpload(localId: string) {
 /** 테스트용 — 진행 중 목록 */
 export function pendingUploadIds(): string[] { return [..._pending.keys()] }
 
-// ─── 하위 호환(예전 낱개 업로드 흐름) ───
+// ─── 하위 호환(이전 개별 업로드 흐름) ───
 
 function startLegacyThreadUpload(a: ChatAttachment) {
   patch(a.id, { status: 'uploading', progress: 0, error: null, result: null })
@@ -385,14 +385,14 @@ function startLegacyThreadUpload(a: ChatAttachment) {
   xhr.send(form)
 }
 
-/** (하위 호환) 실패한 트레이 항목 다시 — 지금 흐름에선 트레이에 실패가 없다 */
+/** (하위 호환) 실패한 트레이 항목 재시도 — 현재 흐름에서는 트레이에 실패 항목이 없음 */
 export function retry(id: string) {
   const a = A().find(x => x.id === id)
   if (!a || a.status === 'uploading' || !a.parentId) return
   startLegacyThreadUpload(a)
 }
 
-/** (하위 호환) 스레드 트레이의 대기 첨부를 하나씩 답글로 올린다 */
+/** (하위 호환) 스레드 트레이의 대기 첨부를 하나씩 답글로 업로드 */
 export async function sendThreadFiles(ids: string[], alsoToChannel: boolean) {
   for (const id of ids) {
     const a = A().find(x => x.id === id)
@@ -408,7 +408,7 @@ export async function sendThreadFiles(ids: string[], alsoToChannel: boolean) {
   }
 }
 
-/** 스레드 첨부가 답글 메시지로 만들어졌을 때(응답 메시지) — 실시간 이벤트보다 먼저 올 수 있다. 해제 함수를 돌려준다. */
+/** 스레드 첨부가 답글 메시지로 생성된 시점(응답 메시지) — 실시간 이벤트보다 먼저 도착할 수 있다. 해제 함수를 반환한다. */
 export function onThreadFileSent(cb: (msg: any) => void): () => void {
   _threadSentListeners.add(cb)
   return () => { _threadSentListeners.delete(cb) }
@@ -429,7 +429,7 @@ export function useChatAttachments() {
   const attachments = useStore(chatAttachmentsStore, s => s.attachments)
   return {
     attachments,
-    /** 현재 채널(스레드면 그 루트)의 첨부만 — 렌더 시점 목록 */
+    /** 현재 채널(스레드이면 해당 루트)의 첨부만 — 렌더 시점 목록 */
     forChannel: (channelId: string | null | undefined, parentId?: string | null) => selectTray(attachments, channelId, parentId),
     addFiles,
     remove,

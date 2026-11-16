@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""ws-docconv — LibreOffice headless 문서 변환 서버(표준 라이브러리만).
+"""ws-docconv — LibreOffice headless 문서 변환 서버(표준 라이브러리만 사용).
 
   POST /convert?from=<확장자>&to=<pdf|docx|odt|xlsx|ods|pptx|odp>   본문 = 원본 바이트 → 변환 결과 바이트
   GET  /health
 
-* 네트워크 없음(compose network_mode: none). 공유 볼륨의 유닉스 소켓(DOCCONV_LISTEN)으로만 받는다.
-* DOCCONV_TOKEN 이 있으면 X-Docconv-Token 헤더가 같아야 한다.
-* 동시 변환 DOCCONV_CONCURRENCY(기본 2) — 넘치면 DOCCONV_QUEUE_WAIT 초 기다리다 429.
-* 작업마다 새 임시 디렉터리 + 새 LibreOffice 사용자 프로필(템플릿 복사) → 끝나면 통째로 지운다.
-* 시간 DOCCONV_TIMEOUT(기본 120초) 넘으면 프로세스 그룹째 죽이고 504. 크기 DOCCONV_MAX_MB(기본 100).
+* 네트워크 없음(compose network_mode: none). 공유 볼륨의 유닉스 소켓(DOCCONV_LISTEN)으로만 수신한다.
+* DOCCONV_TOKEN 이 있으면 X-Docconv-Token 헤더가 일치해야 한다.
+* 동시 변환 DOCCONV_CONCURRENCY(기본 2) — 초과 시 DOCCONV_QUEUE_WAIT 초 대기 후 429.
+* 작업마다 새 임시 디렉터리 + 새 LibreOffice 사용자 프로필(템플릿 복사) → 완료 후 전체 삭제한다.
+* 시간 DOCCONV_TIMEOUT(기본 120초) 초과 시 프로세스 그룹 전체를 종료하고 504. 크기 DOCCONV_MAX_MB(기본 100).
 * HWP/HWPX 는 H2Orestart 확장(이미지에 --shared 설치)이 읽는다.
 """
 
@@ -206,7 +206,7 @@ class UnixHTTPServer(ThreadingHTTPServer):
         except FileNotFoundError:
             pass
         self.socket.bind(self.server_address)
-        os.chmod(self.server_address, 0o666)      # 볼륨을 함께 쓰는 백엔드(다른 uid)가 접속
+        os.chmod(self.server_address, 0o666)      # 볼륨을 공유하는 백엔드(다른 uid)가 접속
         self.server_name, self.server_port = "local", 0
 
     def get_request(self):

@@ -1,7 +1,7 @@
-/* 설치 마법사의 진입 CSS — 폰트 + Tailwind + 테마(워크스페이스 앱과 같은 토큰).
-   Tailwind 는 마법사가 실제로 쓰는 소스만 훑는다(@source — 이 파일 기준 경로). 워크스페이스 앱 전체(assets/css/app.css)를
-   훑으면 마법사가 쓰지 않는 화면의 클래스까지 실린다. 목록은 installer-bundle-guard.ts 의 INSTALLER_TAILWIND_SOURCES 와 같아야 하고
-   (시험이 대조한다), 목록 밖의 모듈이 번들에 들어오면 빌드가 멈춘다. */
+/* 설치 마법사의 진입 CSS — 폰트 + Tailwind + 테마(워크스페이스 앱과 동일한 토큰).
+   Tailwind 는 마법사가 실제로 사용하는 소스만 스캔한다(@source — 이 파일 기준 경로). 워크스페이스 앱 전체(assets/css/app.css)를
+   스캔하면 마법사가 사용하지 않는 화면의 클래스까지 포함된다. 목록은 installer-bundle-guard.ts 의 INSTALLER_TAILWIND_SOURCES 와 동일해야 하며
+   (테스트가 대조한다), 목록 밖의 모듈이 번들에 포함되면 빌드가 중단된다. */
 @import '../assets/css/fonts.css';
 @import 'tailwindcss' source(none);
 @source '../../installer.html';
@@ -17,7 +17,7 @@
 @source '../utils/icons.ts';
 @import '../assets/css/theme.css';
 
-/* 화면이 바뀔 때 본문이 살짝 올라오며 나타난다. 움직임을 줄이도록 설정한 사람에게는 쓰지 않는다. */
+/* 화면 전환 시 본문이 약간 상승하며 표시된다. 움직임 축소를 설정한 사용자에게는 적용하지 않는다. */
 @keyframes installer-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }

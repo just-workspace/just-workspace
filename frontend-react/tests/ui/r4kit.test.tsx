@@ -130,7 +130,7 @@ describe('UiAppRail', () => {
     expect(onNav).toHaveBeenCalledWith(expect.objectContaining({ id: 'meetings' }), expect.anything())
   })
   it('접힘·펼침에서 아이콘 자리가 같다 — 아이콘 칸·행 여백·머리글 칸의 클래스가 wide 와 무관', () => {
-    // 좌표는 jsdom 이 못 재므로 "자리를 정하는 클래스가 두 모습에서 같다"로 지킨다(가운데 정렬·폭별 여백이 다시 들어오면 깨진다)
+    // 좌표는 jsdom 이 측정할 수 없으므로 "자리를 정하는 클래스가 두 모습에서 같다"로 검증한다(가운데 정렬·폭별 여백이 재도입되면 실패)
     const shape = (wide: boolean) => {
       const { container, unmount } = render(<UiAppRail wide={wide} groups={groups} brand={{ name: 'Workspace' }} avatar={<span>A</span>} userName="하나" footerAction={<button>고정</button>} />)
       const links = [...container.querySelectorAll('nav a')]
@@ -310,7 +310,7 @@ describe('UiMenu 확장', () => {
     const dlg = screen.getByRole('dialog', { name: '상태 메시지' })
     const input = screen.getByRole('textbox', { name: '문구' })
     expect(document.activeElement).toBe(input)
-    // 글자 키는 메뉴 타입어헤드로 가지 않는다
+    // 문자 키는 메뉴 타입어헤드로 전달되지 않음
     fireEvent.keyDown(input, { key: '알' })
     expect(document.activeElement).toBe(input)
     // 마지막 요소에서 Tab → 처음으로(메뉴 닫힘 아님)
@@ -432,7 +432,7 @@ describe('플러그인용 호스트 키트 window.__WS_UI__', () => {
     expect(kit.version).toBe(1)
     for (const k of ['UiButton', 'UiModal', 'UiMenu', 'UiTrans', 'UiMentionList', 'UiTopbar', 'useToast', 'toast', 'useDialog', 'confirmBox']) expect(kit).toHaveProperty(k)
     expect(kit).not.toHaveProperty('UiToast')
-    // 번들이 치환된 모양: const { UiButton } = window.__WS_UI__
+    // 번들이 치환된 형태: const { UiButton } = window.__WS_UI__
     const { UiButton: B } = kit
     const onClick = vi.fn()
     render(<B size="xs" onClick={onClick}>플러그인 버튼</B>)

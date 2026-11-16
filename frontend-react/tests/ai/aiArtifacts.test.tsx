@@ -1,5 +1,5 @@
-// 결과물 카드: 파일 카드·저장(공간 부족)·링크 만료·묶음(부분 실패·이것만 다시)·만드는 중·
-// 모바일, 완료 토스트(카드가 화면에 없을 때만), 도우미 함수, 파일 화면 압축 도우미.
+// 결과물 카드: 파일 카드·저장(공간 부족)·링크 만료·묶음(부분 실패·이것만 다시)·생성 중·
+// 모바일, 완료 토스트(카드가 화면에 없을 때만), 헬퍼 함수, 파일 화면 압축 헬퍼.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -152,7 +152,7 @@ describe('묶음 카드', () => {
     expect(screen.getByText(new RegExp(t('ai.artifact.bundle.keepGoing')))).toBeTruthy()
     act(() => { A.handleArtifactEvent({ type: 'ai.artifact_job', finished: true, job: job({ status: 'done', ok: 3, failed: 0, items: job().items.map(i => ({ ...i, status: 'ready' as const })) }) }) })
     await screen.findByRole('link', { name: t('ai.artifact.bundle.downloadAll') })
-    // 카드가 화면에 있으니 토스트는 없다
+    // 카드가 화면에 있으므로 토스트 없음
     expect(A.aiArtifactToastStore.getState().toasts).toHaveLength(0)
   })
 

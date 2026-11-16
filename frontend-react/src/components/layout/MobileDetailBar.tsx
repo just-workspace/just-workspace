@@ -1,11 +1,11 @@
 /**
  * 모바일 상세 화면 상단 바:
  * 56, ‹(44) · 제목 16/600(+보조 12 mono/muted) · 액션 ≤2(44, ⋯ 로 접기).
- * 상세(본문·문서·작업·연락처·게시글·미리보기)에서는 탭바를 숨긴다 — hideTabbar 가 셸의 mobile-detail-open 을 켠다.
- * 데스크톱(md↑)에서는 렌더하지 않는다(md:hidden). 1차 행동은 하단 고정 바로.
- * 오른쪽 액션은 actions(UiIconButton size="lg" ≤2, 글자 버튼 h-11). 제목 자리를 바꾸려면 titleSlot.
- * 뒤로: 기본은 onBack 후 backTo → router.back → '/'. navigate=false 면 onBack 만 부른다
- *       (같은 라우트 안에서 판을 닫는 상세 — 파일 상세 패널·연락처 상세 등).
+ * 상세(본문·문서·작업·연락처·게시글·미리보기)에서는 탭바를 숨긴다 — hideTabbar 가 셸의 mobile-detail-open 을 활성화한다.
+ * 데스크톱(md↑)에서는 렌더하지 않는다(md:hidden). 1차 행동은 하단 고정 바에 배치한다.
+ * 오른쪽 액션은 actions(UiIconButton size="lg" ≤2, 글자 버튼 h-11). 제목 영역을 교체하려면 titleSlot 을 사용한다.
+ * 뒤로: 기본은 onBack 후 backTo → router.back → '/'. navigate=false 면 onBack 만 호출한다
+ *       (동일 라우트 내에서 패널을 닫는 상세 — 파일 상세 패널·연락처 상세 등).
  */
 import { useEffect, useRef, type ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -24,15 +24,15 @@ export interface LayoutMobileDetailBarProps {
   backLabel?: string
   /** 뒤로 이동 경로. 없으면 router.back(기록 없으면 '/') */
   backTo?: string
-  /** 붙어 있는 동안 모바일 하단 탭바를 숨긴다. 기본 켬 */
+  /** 마운트된 동안 모바일 하단 탭바를 숨긴다. 기본 활성 */
   hideTabbar?: boolean
-  /** false 면 라우터를 움직이지 않고 onBack 만 */
+  /** false 면 라우터를 변경하지 않고 onBack 만 호출 */
   navigate?: boolean
-  /** 붙어 있는 동안 모바일 공용 상단바를 숨긴다(이 바가 화면 머리를 대신한다). 기본 켬 */
+  /** 마운트된 동안 모바일 공용 상단바를 숨긴다(본 바가 화면 머리를 대체한다). 기본 활성 */
   replaceTopbar?: boolean
-  /** 뒤로 버튼을 눌렀을 때 */
+  /** 뒤로 버튼 클릭 시 호출 */
   onBack?: () => void
-  /** 제목 자리 전체를 바꾼다 */
+  /** 제목 영역 전체를 교체 */
   titleSlot?: ReactNode
   /** 오른쪽 액션 ≤2 (UiIconButton size="lg") */
   actions?: ReactNode
@@ -46,7 +46,7 @@ export function LayoutMobileDetailBar({
   const [, setDetailOpen] = useSharedState<boolean>('mobile-detail-open', () => false)
   const isMobile = useIsMobile()
 
-  // watch([hideTabbar, isMobile], immediate) — 켜는 것만. 끄는 것은 언마운트 때.
+  // watch([hideTabbar, isMobile], immediate) — 활성화만 수행. 비활성화는 언마운트 시 수행.
   useEffect(() => { if (hideTabbar && isMobile) setDetailOpen(true) }, [hideTabbar, isMobile, setDetailOpen])
   const hideRef = useRef(hideTabbar)
   hideRef.current = hideTabbar

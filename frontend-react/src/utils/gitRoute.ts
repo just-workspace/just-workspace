@@ -7,7 +7,7 @@
  *  /code/o/r/issues · /issues/91        → 이슈 목록 · 상세
  *  /code/o/r/pulls · /pulls/12          → PR 목록 · 상세
  *  /code/o/r/commits                    → 커밋
- * 브랜치는 경로가 아니라 ?ref= 로 둔다(브랜치 이름에 / 가 들어갈 수 있어 경로와 섞이면 모호하다).
+ * 브랜치는 경로가 아닌 ?ref= 로 지정한다(브랜치 이름에 / 가 포함될 수 있어 경로와 혼재 시 모호함).
  */
 
 export type GitTab = 'code' | 'issues' | 'pulls' | 'commits'

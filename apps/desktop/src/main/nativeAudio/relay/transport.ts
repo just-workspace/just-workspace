@@ -1,12 +1,12 @@
 /**
- * 릴레이 전송(Node/Electron 메인) — WebTransport 기본, WebSocket 폴백. 브라우저 lib/lossless/transport.ts 와 같은 인터페이스·같은 와이어.
+ * 릴레이 전송(Node/Electron 메인) — WebTransport 기본, WebSocket 폴백. 브라우저 lib/lossless/transport.ts 와 동일한 인터페이스·동일한 와이어.
  *
- * WebTransport: @fails-components/webtransport(BSD-3) + http3-quiche 프리빌드(N-API). Node 에 WebTransport API 가 없어 고른 것.
+ * WebTransport: @fails-components/webtransport(BSD-3) + http3-quiche 프리빌드(N-API). Node 에 WebTransport API 가 없어 채택.
  *   선택 근거: 운영 릴레이(LE 인증서) 핸드셰이크 42 ms, 데이터그램 1215 B, 인증서 불일치 호스트는 거부(검증 동작 확인).
- *   ESM 전용이라 CJS 메인에서 dynamic import() 로 올린다. 바이너리는 asarUnpack.
+ *   ESM 전용이므로 CJS 메인에서 dynamic import() 로 로드한다. 바이너리는 asarUnpack.
  * WebSocket: ws(MIT). 토큰은 Sec-WebSocket-Protocol 하위 프로토콜(쿼리 금지 — PROTOCOL.md §4.1).
  *
- * 선택/폴백 정책(브라우저 transportSelector 와 동일): WT 핸드셰이크 1.8 s 안에 안 되면 WS, 60 s 뒤 WT 재시도. 세션이 돈다.
+ * 선택/폴백 정책(브라우저 transportSelector 와 동일): WT 핸드셰이크가 1.8 s 안에 완료되지 않으면 WS, 60 s 뒤 WT 재시도. 세션은 계속 동작한다.
  */
 import { WebSocket } from 'ws';
 import { encodeCtrl, hexToBytes, streamFrame, StreamParser } from './protocol';
@@ -100,11 +100,11 @@ export class WebSocketTransport implements RelayTransport {
 
 /* ───────────── WebTransport(@fails-components) ───────────── */
 
-/** ESM 전용 모듈 — CJS 메인에서 dynamic import() 로 올린다. 타입은 느슨하게(패키지 .d.ts 는 ESM 해석 전용) */
+/** ESM 전용 모듈 — CJS 메인에서 dynamic import() 로 로드한다. 타입은 느슨하게 선언(패키지 .d.ts 는 ESM 해석 전용) */
 type WtModule = { WebTransport: new (url: string, opts?: unknown) => any; quicheLoaded: Promise<unknown> };
 let wtModule: Promise<WtModule | null> | null = null;
 
-/** 모듈을 올려 본다(프리빌드 바이너리가 없거나 로드 실패면 null → WebSocket 만 쓴다) */
+/** 모듈 로드를 시도한다(프리빌드 바이너리가 없거나 로드에 실패하면 null → WebSocket 만 사용한다) */
 export function loadWebTransport(): Promise<WtModule | null> {
   wtModule ??= (async () => {
     try {
@@ -141,12 +141,12 @@ export class WebTransportTransport implements RelayTransport {
   async connect(timeoutMs: number): Promise<void> {
     const m = await loadWebTransport();
     if (!m) throw new Error('webtransport module unavailable');
-    // quicConnectTimeout: 라이브러리 내부 QUIC 타임아웃(기본 8 s)을 우리 핸드셰이크 한도에 맞춘다 — 포기한 뒤 늦게 거부되는 프로미스를 줄인다
+    // quicConnectTimeout: 라이브러리 내부 QUIC 타임아웃(기본 8 s)을 본 모듈의 핸드셰이크 한도에 맞춘다 — 포기 후 지연 거부되는 프로미스를 줄인다
     const opts: Record<string, unknown> = { congestionControl: 'low-latency', quicConnectTimeout: timeoutMs, webTransportConnectTimeout: timeoutMs };
     if (this.certHashHex) opts.serverCertificateHashes = [{ algorithm: 'sha-256', value: hexToBytes(this.certHashHex) }];
     const wt: any = new m.WebTransport(this.url, opts);
     this.wt = wt;
-    // 늦은 거부(타임아웃 뒤 내부 타이머)가 unhandledRejection 으로 새지 않게 미리 받아 둔다
+    // 지연 거부(타임아웃 뒤 내부 타이머)가 unhandledRejection 으로 전파되지 않도록 사전에 catch 를 등록한다
     (wt.ready as Promise<unknown>).catch(() => {});
     (wt.closed as Promise<unknown>).catch(() => {});
     let timedOut = false;
@@ -155,7 +155,7 @@ export class WebTransportTransport implements RelayTransport {
       const ds = wt.datagrams;
       if (typeof ds.maxDatagramSize === 'number' && ds.maxDatagramSize > 0) this._maxDatagram = ds.maxDatagramSize;
       try { (ds as any).outgoingMaxAge = 50; (ds as any).incomingMaxAge = 100; } catch { /* 읽기 전용 */ }
-      // 최신 스펙은 createWritable(); 옛 구현은 writable 속성
+      // 최신 스펙은 createWritable(); 구버전 구현은 writable 속성
       this.dgWriter = typeof ds.createWritable === 'function' ? (await ds.createWritable()).getWriter() : ds.writable.getWriter();
       const bidi: any = await withTimeout(wt.createBidirectionalStream() as Promise<unknown>, timeoutMs, () => new TransportTimeout('webtransport', timeoutMs));
       const sw = bidi.writable.getWriter() as WritableStreamDefaultWriter<Uint8Array>;

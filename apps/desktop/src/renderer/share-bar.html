@@ -9,9 +9,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
 <style>
-  /* 항상-위 프레임리스 창. 회의 창과 별개다.
-     회의 창을 최소화해도 공유는 계속되므로, 중지 버튼이 늘 손에 닿아야 한다.
-     미디어 표면에 붙는 컨트롤이라 라이트 테마에서도 다크로 둔다. */
+  /* 항상-위 프레임리스 창. 회의 창과 별개이다.
+     회의 창을 최소화해도 공유는 유지되므로, 중지 버튼에 항상 접근 가능해야 한다.
+     미디어 표면에 부착되는 컨트롤이므로 라이트 테마에서도 다크를 유지한다. */
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; background: transparent; overflow: hidden; }
   body {
@@ -43,7 +43,7 @@
     cursor: default; -webkit-app-region: no-drag; padding: 0;
   }
   .icon:hover { background: rgba(255, 255, 255, .08); }
-  /* 꺼진 상태는 색만 죽이지 않는다 — 슬래시를 겹쳐 한눈에 보이게 한다. */
+  /* 비활성 상태는 색상 변경만으로 표현하지 않는다 — 슬래시를 겹쳐 즉시 식별되도록 한다. */
   .icon[aria-pressed="false"] { position: relative; }
   .icon[aria-pressed="false"]::after {
     content: ''; position: absolute; left: 7px; right: 7px; top: 50%;

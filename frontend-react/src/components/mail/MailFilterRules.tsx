@@ -1,13 +1,13 @@
 /**
  * 메일 필터 규칙 (설정 › 메일 › 필터 탭).
- * 예전 사이드바 모달(MailFilters)을 설정 화면 안 카드로 옮겼다.
- * 시안엔 필터 탭 내용 그림이 없어 목록 행(행 48·제목 13/600·보조 12) + 모달 폼 공통 규격으로 구성.
- * API: GET/POST/PATCH/DELETE /api/mail/filters, POST /api/mail/filters/apply — 그대로.
- * 쓰는 곳: 개인 설정 › 메일(설정 모듈이 연결한다).
+ * 기존 사이드바 모달(MailFilters)을 설정 화면 내 카드로 이전함.
+ * 시안에 필터 탭 내용이 없어 목록 행(행 48·제목 13/600·보조 12) + 모달 폼 공통 규격으로 구성.
+ * API: GET/POST/PATCH/DELETE /api/mail/filters, POST /api/mail/filters/apply — 변경 없음.
+ * 사용처: 개인 설정 › 메일(설정 모듈이 연결).
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거함)
 import { clsx as cx } from 'clsx'
 import { $fetch } from '~/lib/api'
 import { useMail, mailStore, fetchAccounts, fetchMailboxes } from '~/composables/useMail'
@@ -158,7 +158,7 @@ export function MailFilterRules({ onCount }: MailFilterRulesProps) {
 
   useEffect(() => {
     void fetchRules()
-    // 옮길 폴더 목록 — 설정 화면에서 바로 들어오면 메일함을 아직 안 받았다
+    // 이동 대상 폴더 목록 — 설정 화면으로 직접 진입한 경우 메일함이 아직 조회되지 않은 상태
     void (async () => {
       if (!mailStore.getState().mailboxes.length) {
         if (!mailStore.getState().accounts.length) await fetchAccounts()

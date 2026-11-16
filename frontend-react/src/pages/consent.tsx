@@ -1,10 +1,10 @@
 // OAuth 동의 화면.
 //
-// /oauth/authorize 는 세션이 있어도 곧바로 code 를 내주지 않고, 신뢰되지 않은 클라이언트면 여기로 보낸다.
-// 서명된 요청 토큰(rq)에 원본 authorize 쿼리가 들어 있어서, 승인하면 그 URL 로 되돌아가 이번엔 동의 기록을 통과한다.
+// /oauth/authorize 는 세션이 있어도 즉시 code 를 발급하지 않고, 신뢰되지 않은 클라이언트면 이 화면으로 리다이렉트한다.
+// 서명된 요청 토큰(rq)에 원본 authorize 쿼리가 포함돼 있어, 승인 시 해당 URL 로 복귀하면 동의 기록 검사를 통과한다.
 //
-// 경로가 /oauth/consent 가 아니라 /consent 인 이유: nginx 가 /oauth/ 전체를 백엔드로 프록시하므로 그 아래에 프론트 라우트를 둘 수 없다.
-// API 는 백엔드의 /oauth/consent/{info,decide} 를 그대로 쓴다(/api 접두어 없음).
+// 경로가 /oauth/consent 가 아니라 /consent 인 이유: nginx 가 /oauth/ 전체를 백엔드로 프록시하므로 그 하위에 프런트 라우트를 둘 수 없다.
+// API 는 백엔드의 /oauth/consent/{info,decide} 를 그대로 사용한다(/api 접두어 없음).
 // rq·info·decide·리다이렉트 로직은 OAuth 표준을 따른다.
 import { useEffect, useState } from 'react'
 import { $fetch } from '~/lib/api'
@@ -27,7 +27,7 @@ interface ConsentInfo {
   redirect_uri: string
   scopes: ScopeItem[]
   username: string
-  // RFC 7591 표시용 메타데이터. 서버가 https 검증을 통과한 값만 내려준다.
+  // RFC 7591 표시용 메타데이터. 서버가 https 검증을 통과한 값만 반환한다.
   logo_uri: string | null
   client_uri: string | null
   policy_uri: string | null
@@ -46,7 +46,7 @@ export default function Page() {
   // 앱 카드 타일(로고가 없을 때) — 앱 이름 첫 글자
   const appInitial = (info?.client_name || '?').trim().charAt(0).toUpperCase()
 
-  // redirect_uri 에서 호스트만 뽑아 보여준다 — 사용자가 "어디로 보내지는지"를 판단할 수 있어야 피싱성 클라이언트를 걸러낼 수 있다.
+  // redirect_uri 에서 호스트만 추출해 표시한다 — 사용자가 "어디로 보내지는지"를 판단할 수 있어야 피싱성 클라이언트를 식별할 수 있다.
   const redirectHost = (() => {
     try { return new URL(info?.redirect_uri || '').host } catch { return info?.redirect_uri || '' }
   })()
@@ -74,7 +74,7 @@ export default function Page() {
         method: 'POST', credentials: 'include',
         body: { rq, approve },
       })
-      // 승인이면 authorize 로 되돌아가고, 거부면 클라이언트에 access_denied 를 전달한다.
+      // 승인 시 authorize 로 복귀하고, 거부 시 클라이언트에 access_denied 를 전달한다.
       window.location.href = r.redirect
     } catch (e: any) {
       setError(e?.data?.detail || t('consent.decideFailed'))
@@ -102,7 +102,7 @@ export default function Page() {
             metaSlot={<UiTrans k="consent.connectAs" slots={{ user: <span className="font-semibold text-foreground">{info.username}</span> }} />}
           />
 
-          {/* 동적 등록 클라이언트는 누구나 만들 수 있으므로 명시적으로 경고한다. */}
+          {/* 동적 등록 클라이언트는 누구나 생성할 수 있으므로 명시적으로 경고한다. */}
           {info.dynamic && (
             <AuthAlert tone="warning" title={t('consent.dynamicTitle')}>
               {t('consent.dynamicBody')}
@@ -158,7 +158,7 @@ export default function Page() {
           )}
         </>
       ) : (
-        /* 불러오는 중: 같은 틀의 스켈레톤 */
+        /* 로딩 중: 동일한 틀의 스켈레톤 */
         <div className="flex flex-col gap-[18px]" role="status" aria-label={t('consent.loading')}>
           <div className="flex flex-col gap-2">
             <UiSkeleton className="h-7 w-40" />

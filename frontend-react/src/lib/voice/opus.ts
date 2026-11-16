@@ -1,16 +1,16 @@
 /**
  * Opus 레시피 — 순수 함수. 단위 테스트 대상(tests/voice/opus.test.ts).
  *
- *  음성: 48k mono ~32 kbps, AEC/NS/AGC 켬, DTX 켬, RED 켬, 인밴드 FEC 켬.
- *  음악: 48k stereo 256~510 kbps, CBR, DTX 끔, RED 끔, FEC 끔(CELT 엔 인밴드 FEC 가 없다 — RFC 6716),
+ *  음성: 48k mono ~32 kbps, AEC/NS/AGC 활성화, DTX 활성화, RED 활성화, 인밴드 FEC 활성화.
+ *  음악: 48k stereo 256~510 kbps, CBR, DTX 비활성화, RED 비활성화, FEC 비활성화(CELT 에는 인밴드 FEC 가 없다 — RFC 6716),
  *        forceStereo(stereo=1;sprop-stereo=1). Chrome 155 실측: maxaveragebitrate=510000;cbr=1 → ≈509 kbps.
  *
- *  음성 처리(AEC/NS/AGC)는 단계와 별개인 개인 설정(processingOf). 음악 단계에서 에코 제거를 켜면 모노(크롬이 다운믹스).
- *  음악 공유(화면 소리)는 늘 처리 끔·스테레오.
+ *  음성 처리(AEC/NS/AGC)는 단계와 별개인 개인 설정(processingOf). 음악 단계에서 에코 제거를 활성화하면 모노(크롬이 다운믹스).
+ *  음악 공유(화면 소리)는 항상 처리 비활성화·스테레오.
  *
- * livekit-client 가 해 주는 것: audioPreset.maxBitrate → 원격 SDP(answer)의 maxaveragebitrate · encodings.maxBitrate,
- * forceStereo → 로컬 stereo=1;sprop-stereo=1, dtx → 서버 answer 의 usedtx. 안 해 주는 것(cbr·useinbandfec)은
- * mungeOpusAnswer 로 answer 를 고친다(sdp.ts).
+ * livekit-client 가 처리하는 항목: audioPreset.maxBitrate → 원격 SDP(answer)의 maxaveragebitrate · encodings.maxBitrate,
+ * forceStereo → 로컬 stereo=1;sprop-stereo=1, dtx → 서버 answer 의 usedtx. 처리하지 않는 항목(cbr·useinbandfec)은
+ * mungeOpusAnswer 로 answer 를 수정한다(sdp.ts).
  */
 import type { VoiceSendConfig, VoiceStats, VoiceTier } from './transport'
 
@@ -26,12 +26,12 @@ export function clampMusicBitrate(bps: number): number {
   return Math.min(MUSIC_BITRATE_MAX, Math.max(MUSIC_BITRATE_MIN, v))
 }
 
-/** 이 단계가 LiveKit(Opus)으로 보내는 단계인가 */
+/** 해당 단계가 LiveKit(Opus)으로 송신하는 단계인지 여부 */
 export function isOpusTier(t: VoiceTier): t is 'voice' | 'music' {
   return t === 'voice' || t === 'music'
 }
 
-/** getUserMedia 제약(livekit-client AudioCaptureOptions 와 같은 이름) */
+/** getUserMedia 제약(livekit-client AudioCaptureOptions 와 동일한 이름) */
 export interface OpusCapture {
   echoCancellation: boolean
   noiseSuppression: boolean
@@ -39,16 +39,16 @@ export interface OpusCapture {
   channelCount: number
   sampleRate: number
   deviceId?: string
-  /** 'voiceIsolation' 같은 브라우저 추가 제약은 쓰지 않는다 — 음악에서 소리를 바꾼다 */
+  /** 'voiceIsolation' 같은 브라우저 추가 제약은 사용하지 않는다 — 음악에서 소리를 변형한다 */
 }
 
-/** livekit-client TrackPublishOptions 중 오디오에 관계된 것 */
+/** livekit-client TrackPublishOptions 중 오디오 관련 항목 */
 export interface OpusPublish {
   audioPreset: { maxBitrate: number }
   dtx: boolean
   red: boolean
   forceStereo: boolean
-  /** 접속 전 버퍼 — 음악엔 끔(지연) */
+  /** 접속 전 버퍼 — 음악에서는 비활성화(지연) */
   preConnectBuffer: boolean
 }
 
@@ -61,12 +61,12 @@ export interface OpusFmtp {
   useinbandfec: 0 | 1
 }
 
-/** 음성 처리 실효값 — 비우면 켬 */
+/** 음성 처리 실효값 — 미지정 시 활성화 */
 export function processingOf(cfg: Pick<VoiceSendConfig, 'echoCancellation' | 'noiseSuppression' | 'autoGainControl'>) {
   return { aec: cfg.echoCancellation !== false, ns: cfg.noiseSuppression !== false, agc: cfg.autoGainControl !== false }
 }
 
-/** 음악 단계를 스테레오로 보내나 — 에코 제거를 켜면 브라우저가 모노로 합치니 모노 */
+/** 음악 단계의 스테레오 송신 여부 — 에코 제거를 활성화하면 브라우저가 모노로 병합하므로 모노 */
 export function musicStereo(cfg: VoiceSendConfig): boolean {
   return cfg.tier === 'music' && !processingOf(cfg).aec
 }
@@ -91,14 +91,14 @@ export function fmtpFor(cfg: VoiceSendConfig): OpusFmtp {
   return { maxaveragebitrate: VOICE_BITRATE, stereo: 0, cbr: 0, usedtx: 1, useinbandfec: 1 }
 }
 
-/** 화면 공유 소리(음악 공유)는 늘 음악 레시피 — 비트레이트는 음악 설정값 */
+/** 화면 공유 소리(음악 공유)는 항상 음악 레시피 적용 — 비트레이트는 음악 설정값 */
 export function screenAudioConfig(cfg: VoiceSendConfig): VoiceSendConfig {
   return { ...cfg, tier: 'music', micDeviceId: undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
 }
 
 /**
- * 단계 배지 글자. 예: 'Opus 32k · 모노' / 'Opus 256k · 스테레오' / 'PCM 24/48'. 실측(stats)이 있으면 그걸 우선.
- * 글자 조립만 — 번역이 필요한 단어(모노·스테레오)는 호출자가 넣는다.
+ * 단계 배지 문자열. 예: 'Opus 32k · 모노' / 'Opus 256k · 스테레오' / 'PCM 24/48'. 실측(stats)이 있으면 실측값 우선.
+ * 문자열 조립만 수행 — 번역이 필요한 단어(모노·스테레오)는 호출자가 전달한다.
  */
 export function tierBadge(tier: VoiceTier, cfg: { musicBitrate: number; echoCancellation?: boolean }, stats: Pick<VoiceStats, 'codec' | 'channels' | 'sendBitrate'> | null, words: { mono: string; stereo: string }): string {
   if (tier === 'lossless') return stats?.codec && /^PCM/.test(stats.codec) ? stats.codec : 'PCM 24/48'
@@ -120,8 +120,8 @@ export function formatBitrate(bps: number | null | undefined): string {
 }
 
 /**
- * 목표 대비 실측이 많이 낮으면(70% 아래) 배지 색을 바꾼다(Teams 의 128→48 하향 고지 모델).
- * 음성은 DTX 로 침묵 때 0 에 가까우니 판단하지 않는다.
+ * 목표 대비 실측이 크게 낮으면(70% 미만) 배지 색을 변경한다(Teams 의 128→48 하향 고지 모델).
+ * 음성은 DTX 로 인해 침묵 시 0 에 근접하므로 판정하지 않는다.
  */
 export function isDegraded(tier: VoiceTier, targetBps: number, actualBps: number | null): boolean {
   if (tier !== 'music' || actualBps == null) return false

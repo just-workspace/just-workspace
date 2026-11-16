@@ -1,10 +1,10 @@
 /**
- * 알림 상자 — 화면 안에 머무는 안내(정보·주의·오류·확인됨). 잠깐 떴다 사라지는 것은 UiToast.
- * 상태는 색 + 아이콘 + 글자로 같이 전한다. tone 마다 기본 아이콘이 있고 `icon` 으로 바꾼다.
+ * 알림 상자 — 화면 안에 상주하는 안내(정보·주의·오류·확인됨). 일시 표시 후 사라지는 알림은 UiToast.
+ * 상태는 색 + 아이콘 + 글자로 함께 전달한다. tone 별 기본 아이콘이 있으며 `icon` 으로 변경한다.
  * - variant="box"(기본): 옅은 바탕의 상자. 제목(title) + 본문(children) + 행동(actions).
  * - variant="plain": 바탕 없는 한 줄(입력 아래 확인 결과 등).
- * role 은 기본으로 붙이지 않는다 — 방금 생긴 오류는 role="alert", 조용한 결과는 role="status" 를 호출처가 준다
- * (자주 바뀌는 내용에 붙이면 화면 낭독기가 계속 읽는다).
+ * role 은 기본으로 부여하지 않는다 — 신규 발생 오류는 role="alert", 비긴급 결과는 role="status" 를 호출처가 지정한다
+ * (자주 변경되는 내용에 부여하면 화면 낭독기가 반복 낭독한다).
  */
 import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -17,7 +17,7 @@ export interface UiCalloutProps extends Omit<HTMLAttributes<HTMLDivElement>, 'ti
   tone?: UiCalloutTone
   /** 첫 줄(굵게). 없으면 본문만 */
   title?: ReactNode
-  /** 아이콘 이름. 없으면 tone 기본 아이콘 */
+  /** 아이콘 회전(확인 중) */
   icon?: string
   /** 아이콘을 돌린다(확인 중) */
   spin?: boolean

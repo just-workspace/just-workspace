@@ -14,7 +14,7 @@ export interface BoardPaginationProps {
   onGo?: (page: number) => void
 }
 
-/** 번호 줄에 그릴 것 — 7쪽까지는 전부, 그보다 많으면 처음 · 현재 앞뒤 · 끝 + 말줄임 */
+/** 번호 줄에 표시할 항목 — 7쪽까지는 전부, 초과 시 처음 · 현재 앞뒤 · 끝 + 말줄임 */
 export function boardPageNumbers(current: number, total: number): (number | '...')[] {
   const pages: (number | '...')[] = []
   if (total <= 7) {

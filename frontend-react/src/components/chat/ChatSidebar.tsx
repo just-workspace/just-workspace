@@ -1,14 +1,14 @@
 /**
  * 채팅 사이드바.
- * 데스크톱: 머리 48(워크스페이스 이름 + chevron-down 메뉴 · 오른쪽 32 아이콘 3개 = 내 스레드·임시 저장·저장한 메시지, 새 글 = danger 점)
- *   → 구역(분류 없음 · 사용자 카테고리 · 시스템 "보관된 프로젝트" · 다이렉트 메시지, useChatLayout.buildSections)
- *   → 맨 아래 계정 패널(SHELL 의 ChatAccountPanel — 음성 접속 줄 포함).
- * 음성 접속자 줄 우클릭·길게 누르기 = 사람별 음량(SHELL 의 openUserVolume — 그리는 곳은 pages/chat 의 ChatUserVolumeHost).
- * 모바일: 머리 56(이름 · 검색 44 · ⋯ 44 = 워크스페이스 메뉴 · 순서 편집) → 3칸 버튼 44 → 구역(행 44). 순서 편집은 ChatSidebarOrderMobile.
- * 정렬·이름·만들기는 MANAGE_CHANNELS(useChatRoles.canWorkspace) 가 있어야 보인다. 접힘은 사람마다(localStorage).
- * 끌기(HTML5 DnD): 채널 → 다른 자리(자리 선 UiDropLine) · 다른 카테고리 제목 위(강조 + 600ms 머물면 펼침) · 보관된 프로젝트(= 보관).
- *   카테고리 제목째 끌기(사용자 카테고리만). DM·시스템 카테고리는 끌기 불가. 놓으면 PATCH /layout(useChatLayout), 실패하면 다시 읽어 되돌리고 토스트.
- *   키보드 대안: 채널 행 Alt+Shift+↑↓ · 카테고리 제목 Alt(+Shift)+↑↓ / F2 이름 바꾸기, 결과는 aria-live.
+ * 데스크톱: 헤더 48(워크스페이스 이름 + chevron-down 메뉴 · 오른쪽 32 아이콘 3개 = 내 스레드·임시 저장·저장한 메시지, 신규 항목 = danger 점)
+ *   → 섹션(분류 없음 · 사용자 카테고리 · 시스템 "보관된 프로젝트" · 다이렉트 메시지, useChatLayout.buildSections)
+ *   → 맨 아래 계정 패널(SHELL 의 ChatAccountPanel — 음성 접속 행 포함).
+ * 음성 접속자 행 우클릭·길게 누르기 = 사용자별 음량(SHELL 의 openUserVolume — 렌더링 위치는 pages/chat 의 ChatUserVolumeHost).
+ * 모바일: 헤더 56(이름 · 검색 44 · ⋯ 44 = 워크스페이스 메뉴 · 순서 편집) → 3칸 버튼 44 → 섹션(행 44). 순서 편집은 ChatSidebarOrderMobile.
+ * 정렬·이름 변경·생성은 MANAGE_CHANNELS(useChatRoles.canWorkspace) 권한이 있어야 표시된다. 접힘 상태는 사용자별(localStorage).
+ * 드래그(HTML5 DnD): 채널 → 다른 위치(위치 표시선 UiDropLine) · 다른 카테고리 제목 위(강조 + 600ms 유지 시 펼침) · 보관된 프로젝트(= 보관).
+ *   카테고리 제목 단위 드래그(사용자 카테고리만). DM·시스템 카테고리는 드래그 불가. 드롭 시 PATCH /layout(useChatLayout), 실패 시 재조회로 복원하고 토스트를 표시한다.
+ *   키보드 대안: 채널 행 Alt+Shift+↑↓ · 카테고리 제목 Alt(+Shift)+↑↓ / F2 이름 변경, 결과는 aria-live.
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useStore } from 'zustand'
@@ -46,11 +46,11 @@ import { ChatAccountPanel } from './ChatAccountPanel'
 import { openUserVolume } from './ChatUserVolume'
 
 export interface ChatSidebarProps {
-  /** 채널·모아보기로 이동했다(모바일 단계 전환용) */
+  /** 채널·모아보기로 이동 완료(모바일 단계 전환용) */
   onNavigate?: () => void
-  /** (호환) 새 채널 만들기 — 사이드바가 자체 모달을 띄우므로 쓰지 않는다 */
+  /** (호환) 새 채널 만들기 — 사이드바가 자체 모달을 표시하므로 미사용 */
   onCreateChannel?: () => void
-  /** 모바일 머리 🔍 — 메시지 검색 */
+  /** 모바일 헤더 검색 버튼 — 메시지 검색 */
   onSearch?: () => void
 }
 
@@ -64,7 +64,7 @@ const SKELETON_W = ['46%', '62%', '38%', '54%']
 const HOVER_EXPAND_MS = 600
 const rowDomId = (id: string) => `chat-row-${id}`
 
-/** 떠 있는 고스트(끌기 이미지) — primary/60 테두리 + 그림자. 끌기 시작 순간 만들고 다음 틱에 지운다 */
+/** 드래그 고스트(드래그 이미지) — primary/60 테두리 + 그림자. 드래그 시작 시점에 생성하고 다음 틱에 제거 */
 function setGhost(e: DragEvent<HTMLElement>, text: string) {
   try {
     const g = document.createElement('div')
@@ -74,7 +74,7 @@ function setGhost(e: DragEvent<HTMLElement>, text: string) {
     document.body.appendChild(g)
     e.dataTransfer.setDragImage(g, 16, 16)
     setTimeout(() => g.remove(), 0)
-  } catch { /* 고스트 없이도 끌린다 */ }
+  } catch { /* 고스트 없이도 드래그 가능 */ }
 }
 
 /** 채널 목록(데스크톱 사이드바 · 모바일 첫 화면) */
@@ -83,7 +83,7 @@ export function ChatSidebar({ onNavigate, onSearch }: ChatSidebarProps) {
   const chat = useChat()
   const { channels, selectedChannelId, loadingChannels, channelsError, threadUnread, drafts } = chat
   const collection = useStore(chatUiStore, s => s.collection)
-  // 머리 이름 = 채팅 서버 설정 이름, 비면 사이트 이름 — SETTINGS 연결
+  // 헤더 이름 = 채팅 서버 설정 이름, 비어 있으면 사이트 이름 — SETTINGS 연결
   const appName = useChatServerName()
   const isMobile = useIsMobile()
   const myVoiceId = useStore(voiceStore, s => s.channelId)
@@ -92,7 +92,7 @@ export function ChatSidebar({ onNavigate, onSearch }: ChatSidebarProps) {
   const collapsed = useChatLayout(s => s.collapsed)
   const canManage = useChatRoles(s => canWorkspace(PERM.MANAGE_CHANNELS, s))
 
-  // 앱 시작 — 카테고리·내 워크스페이스 권한
+  // 앱 시작 시 — 카테고리·본인 워크스페이스 권한
   useEffect(() => { void loadCategories(); void loadMyWorkspacePerms() }, [])
 
   const sections = useMemo(
@@ -117,7 +117,7 @@ export function ChatSidebar({ onNavigate, onSearch }: ChatSidebarProps) {
     openUserVolume({ userId: p.user_id, name: p.name, avatarUrl: p.avatar_url, anchor: { x: r.left, y: r.top, w: r.width, h: r.height } })
   }
 
-  // ─── 끌기 ───
+  // ─── 드래그 ───
   const [drag, setDrag] = useState<Drag | null>(null)
   const [over, setOver] = useState<Over | null>(null)
   const expandTimer = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null)
@@ -131,11 +131,11 @@ export function ChatSidebar({ onNavigate, onSearch }: ChatSidebarProps) {
     await chat.selectChannel(id)
     onNavigate?.()
   }
-  // 음성 채널: 누르면 바로 들어가고(벨 없음) 본문도 그 채널로. 실패는 세션이 토스트로 알린다.
+  // 음성 채널: 누르면 즉시 입장하고(벨 없음) 본문도 해당 채널로 전환한다. 실패는 세션이 토스트로 알린다.
   async function onVoice(id: string) {
     void chat.selectChannel(id)
     onNavigate?.()
-    try { await joinVoice(id) } catch { /* 토스트는 useVoice 가 띄웠다 */ }
+    try { await joinVoice(id) } catch { /* 토스트는 useVoice 가 이미 표시 */ }
   }
 
   const draftCount = Object.values(drafts).filter(d => d.content.trim()).length
@@ -147,7 +147,7 @@ export function ChatSidebar({ onNavigate, onSearch }: ChatSidebarProps) {
     onNavigate?.()
   }
 
-  // ─── 옮기기(끌기·키보드 공용) ───
+  // ─── 이동(드래그·키보드 공용) ───
   async function doMoveChannel(c: Channel, toSectionId: string, index: number, refocus = false) {
     try {
       const plan = await moveChannelTo(sections, c.id, toSectionId, index)
@@ -180,7 +180,7 @@ export function ChatSidebar({ onNavigate, onSearch }: ChatSidebarProps) {
     for (const s of sections) if (s.kind !== 'uncategorized') setCollapsed(s.id, true)
   }
 
-  // ─── HTML5 끌기 핸들러 ───
+  // ─── HTML5 드래그 핸들러 ───
   function endDrag() {
     clearExpand()
     setDrag(null)
@@ -214,7 +214,7 @@ export function ChatSidebar({ onNavigate, onSearch }: ChatSidebarProps) {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     setOver(o => (o?.kind === 'header' && o.sectionId === s.id ? o : { kind: 'header', sectionId: s.id }))
-    // 잠시 머물면 펼친다
+    // 일정 시간 유지 시 펼침
     if (s.collapsed && expandTimer.current?.id !== s.id) {
       clearExpand()
       expandTimer.current = { id: s.id, timer: setTimeout(() => { setCollapsed(s.id, false); expandTimer.current = null }, HOVER_EXPAND_MS) }
@@ -229,12 +229,12 @@ export function ChatSidebar({ onNavigate, onSearch }: ChatSidebarProps) {
       if (e.defaultPrevented || !isDropSection(s)) return
       e.preventDefault()
       if (s.kind === 'system') { setOver({ kind: 'header', sectionId: s.id }); return }
-      // 빈 칸·구역 아래 여백 = 맨 아래로
+      // 빈 영역·섹션 아래 여백 = 맨 아래로 이동
       const v = visibleOf(s).filter(c => c.id !== drag.id).length
       setOver(o => (o?.kind === 'row' && o.sectionId === s.id && o.vIndex >= v ? o : { kind: 'row', sectionId: s.id, vIndex: visibleOf(s).length }))
       return
     }
-    // 카테고리 끌기 — 사용자 카테고리 앞/뒤, 보관·DM 위 = 사용자 카테고리 맨 끝, 분류 없음 = 맨 앞
+    // 카테고리 드래그 — 사용자 카테고리 앞/뒤, 보관·DM 위 = 사용자 카테고리 맨 끝, 분류 없음 = 맨 앞
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     let next: Over
@@ -374,7 +374,7 @@ export function ChatSidebar({ onNavigate, onSearch }: ChatSidebarProps) {
 
   return (
     <div className="flex h-full flex-col bg-background md:border-r md:border-border">
-      {/* 머리 */}
+      {/* 헤더 */}
       {isMobile
         ? (
           <>
@@ -489,10 +489,10 @@ export function ChatSidebar({ onNavigate, onSearch }: ChatSidebarProps) {
             </nav>
           )}
 
-      {/* 계정 패널(SHELL ChatAccountPanel — 음성 접속 중이면 위쪽 접속 줄). 모바일은 셸이 탭 바 위에 접속 바를 그린다 */}
+      {/* 계정 패널(SHELL ChatAccountPanel — 음성 접속 중이면 상단에 접속 행 표시). 모바일은 셸이 탭 바 위에 접속 바를 렌더링 */}
       {!isMobile && <ChatAccountPanel />}
 
-      {/* 안내(끌기·키보드 옮기기) */}
+      {/* 안내(드래그·키보드 이동) */}
       <p className="sr-only" aria-live="polite" role="status">{live}</p>
       <p className="sr-only" aria-live="assertive">{liveAssert}</p>
 

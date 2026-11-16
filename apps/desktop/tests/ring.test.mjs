@@ -1,12 +1,12 @@
-// 링버퍼(ring_buffer.h) — 애드온 RingTest 로 실제 C++ 구현을 돈다. 용량 올림·프레임 원자성·랩어라운드·discard·대량 왕복.
+// 링버퍼(ring_buffer.h) — 애드온 RingTest 로 실제 C++ 구현을 실행한다. 용량 올림·프레임 원자성·랩어라운드·discard·대량 왕복.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
-// 애드온은 리포에 들어 있지 않다(빌드 산출물) — 빌드하지 않은 곳에서는 이유를 적고 건너뛴다.
-// 빌드했는데 불러오지 못하는 것(깨진 바이너리 등)은 건너뛰지 않고 실패한다.
-// 애드온이 반드시 있어야 하는 곳(릴리스 빌드)에서는 JW_REQUIRE_NATIVE=1 로 건너뛰기를 실패로 바꾼다.
+// 애드온은 리포에 포함되지 않는다(빌드 산출물) — 빌드하지 않은 환경에서는 사유를 기록하고 건너뛴다.
+// 빌드했으나 로드에 실패하는 경우(손상된 바이너리 등)는 건너뛰지 않고 실패 처리한다.
+// 애드온이 필수인 환경(릴리스 빌드)에서는 JW_REQUIRE_NATIVE=1 로 건너뛰기를 실패로 전환한다.
 let native = null;
 let skip = false;
 try {

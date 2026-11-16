@@ -1,4 +1,4 @@
-// 원격 지원(포터블) 화면 — 메인(src/main/remote/support.ts)이 보내는 상태대로 한 구역만 보인다.
+// 원격 지원(포터블) 화면 — 메인(src/main/remote/support.ts)이 전송하는 상태에 따라 한 구역만 표시한다.
 const $ = (id) => document.getElementById(id);
 const VIEWS = ['server', 'code', 'expired', 'pending', 'active', 'ended', 'error'];
 let timer = null;
@@ -21,7 +21,7 @@ function every(fn) {
 
 function show(v) {
   for (const k of VIEWS) $(`v-${k}`).hidden = k !== v.phase;
-  // 연결 중에는 닫기 단추를 숨긴다 — 끊기는 [세션 끊기] 하나로(창을 닫아도 끊기긴 한다)
+  // 연결 중에는 닫기 버튼을 숨긴다 — 연결 종료는 [세션 끊기] 하나로 한정한다(창을 닫아도 연결은 종료된다)
   $('close').hidden = v.phase === 'active';
   clearInterval(timer);
   if (v.phase === 'server') {
@@ -70,8 +70,8 @@ $('code-copy').addEventListener('click', () => {
   window.rd.support.copy(c);
   $('code-copy-txt').textContent = '복사했습니다';
 });
-// 코드를 끌어 선택해 Ctrl+C·오른쪽 클릭으로 복사해도 숫자만 간다(화면 표기 "482 913 057" 의 공백 없이) —
-// 메신저·웹 입력칸 어디에 붙여도 그대로 맞는다.
+// 코드를 드래그 선택해 Ctrl+C·오른쪽 클릭으로 복사해도 숫자만 복사된다(화면 표기 "482 913 057" 의 공백 제외) —
+// 메신저·웹 입력칸 어디에 붙여 넣어도 그대로 일치한다.
 document.addEventListener('copy', (e) => {
   const sel = window.getSelection();
   const text = sel ? sel.toString() : '';
@@ -82,7 +82,7 @@ document.addEventListener('copy', (e) => {
   e.preventDefault();
   e.clipboardData.setData('text/plain', digits);
 });
-// 코드 글자를 누르면 통째로 복사(버튼과 같음)
+// 코드 글자를 누르면 전체 복사(버튼과 동일)
 $('code').addEventListener('click', () => $('code-copy').click());
 
 for (const id of ['exp-new', 'error-retry']) $(id).addEventListener('click', () => window.rd.support.newCode());

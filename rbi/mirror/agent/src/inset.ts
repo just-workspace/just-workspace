@@ -1,8 +1,8 @@
 /**
- * 인셋 — canvas/video/iframe/embed/shadow host 영역을 WebP 로 10~15fps 찍어 바이너리 프레임으로 보낸다(콘솔도 이것으로).
- * 캡처는 capture-queue 한 줄(우선순위 2, 같은 노드 키는 최신만, 200ms 넘게 기다린 프레임은 버림) — 동시 캡처의 clip 섞임·이동 중 무한 대기를 막는다.
- * 바뀌지 않은 프레임(바이트 해시 같음)은 보내지 않는다. 뷰포트와 겹치는 부분만 찍고, 잘린 위치는 프레임 머리에 적는다.
- * 프레임 머리: [0x01][u32 nodeId][u32 seq][u16 w][u16 h][i16 dx][i16 dy] + webp (dx,dy = 노드 상자 안에서의 위치)
+ * 인셋 — canvas/video/iframe/embed/shadow host 영역을 WebP 로 10~15fps 캡처해 바이너리 프레임으로 전송한다(콘솔도 동일 방식).
+ * 캡처는 capture-queue 직렬 처리(우선순위 2, 동일 노드 키는 최신만, 200ms 넘게 대기한 프레임은 폐기) — 동시 캡처의 clip 혼동·이동 중 무한 대기를 방지한다.
+ * 변경되지 않은 프레임(바이트 해시 동일)은 전송하지 않는다. 뷰포트와 겹치는 부분만 캡처하고, 잘린 위치는 프레임 헤더에 기록한다.
+ * 프레임 헤더: [0x01][u32 nodeId][u32 seq][u16 w][u16 h][i16 dx][i16 dy] + webp (dx,dy = 노드 상자 내 위치)
  */
 import { createHash } from 'node:crypto'
 import { INSET_FRAME_TAG, INSET_HEADER_BYTES } from '../../protocol/vocab.ts'
@@ -19,7 +19,7 @@ export class InsetStreamer {
   constructor(
     private queue: CaptureQueue,
     private targets: () => number[],
-    /** 노드의 지금 뷰포트 사각형 */
+    /** 노드의 현재 뷰포트 사각형 */
     private vrect: (id: number) => Promise<[number, number, number, number] | null>,
     private viewport: () => { w: number; h: number },
     private emit: (buf: Buffer) => void,
@@ -33,7 +33,7 @@ export class InsetStreamer {
   private tick(): void {
     const ids = this.targets()
     for (const id of ids) {
-      if (this.queue.has(`i:${id}`)) continue // 앞 프레임이 아직 — 쌓지 않는다
+      if (this.queue.has(`i:${id}`)) continue // 앞 프레임 미완료 — 누적하지 않음
       let off: [number, number] = [0, 0]
       let size: [number, number] = [0, 0]
       void this.queue.submit({

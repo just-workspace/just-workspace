@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import { toastStore, addToast, toast, removeToast } from '~/composables/useToast'
 
-// useToast 는 hook 이라, 테스트는 같은 store 를 직접 읽는다.
+// useToast 는 hook 이므로 테스트는 동일 store 를 직접 조회한다.
 const useToast = () => ({ toasts: { get value() { return toastStore.getState().toasts } }, addToast, toast, removeToast })
 
 describe('useToast', () => {
@@ -65,11 +65,11 @@ describe('useToast', () => {
     const same = toasts.value.filter(t => t.message === '서버에 연결할 수 없습니다')
     expect(same.length).toBe(1)
     expect(same[0].count).toBe(3)
-    // 다른 내용·다른 종류는 따로 쌓인다
+    // 다른 내용·다른 종류는 별도로 누적됨
     addToast('error', '다른 오류')
     addToast('success', '서버에 연결할 수 없습니다', 0)
     expect(toasts.value.length).toBe(3)
-    // 시간 창이 지나면 새 토스트
+    // 시간 창 경과 후에는 새 토스트
     vi.advanceTimersByTime(11_000)
     const id3 = addToast('error', '서버에 연결할 수 없습니다')
     expect(id3).not.toBe(id1)

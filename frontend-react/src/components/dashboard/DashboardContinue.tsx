@@ -1,9 +1,9 @@
 /**
  * 이어서 하기(기본 2칸): 탭 [최근 연 것 · 즐겨찾기 · 공유받은 것], 두 줄 행 56 =
  * 종류 아이콘 + 이름 / "종류 · 이유"("어제 편집", "○○님이 공유", "○○님이 수정", "안 읽음 3") + 오른쪽 시각.
- * 최근 파일 · 최근 위키 카드를 흡수했다(따로 두지 않음). 행 수 = 상한 − 1(시안).
- * 서버: GET /api/dashboard/continue?tab=… (파일·위키·채널·게시글을 한 목록으로, 볼 수 있는 것만)
- * 세 탭이 모두 비어야 빈 카드(맨 아래 묶음)로 간다.
+ * 최근 파일 · 최근 위키 카드를 통합했다(별도 카드 없음). 행 수 = 상한 − 1(시안).
+ * 서버: GET /api/dashboard/continue?tab=… (파일·위키·채널·게시글을 단일 목록으로, 열람 가능한 항목만)
+ * 세 탭이 모두 비어 있어야 빈 카드(맨 아래 그룹)로 이동한다.
  */
 import { useEffect, useState } from 'react'
 import { $fetch } from '~/lib/api'
@@ -27,7 +27,7 @@ export interface ContinueItem {
 
 const TABS: ContinueTab[] = ['recent', 'favorites', 'shared']
 
-/** 파일 이름 → 종류(문서·시트는 우리 오피스 형식) · 아이콘 · 색 */
+/** 파일 이름 → 종류(문서·시트는 본 프로젝트 오피스 형식) · 아이콘 · 색 */
 export function fileKind(name: string, isDir?: boolean): { kind: 'file' | 'doc' | 'sheet' | 'folder'; icon: string; cls: string; label: string } {
   if (isDir) return { kind: 'folder', icon: 'folder', cls: 'text-muted-foreground', label: name }
   const m = name.toLowerCase().match(/\.([a-z0-9]+)$/)

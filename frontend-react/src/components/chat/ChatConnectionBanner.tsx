@@ -1,5 +1,5 @@
-// 연결 끊김 띠(머리 바로 아래 전체 폭 40, warning/10 + 아래 선 warning/60). 3초 넘게 끊겼을 때만 보인다:
-// 짧은 끊김(서버 재시작·네트워크 전환)마다 깜빡이지 않게.
+// 연결 끊김 띠(헤더 바로 아래 전체 폭 40, warning/10 + 아래 선 warning/60). 3초를 초과해 끊긴 경우에만 표시:
+// 짧은 끊김(서버 재시작·네트워크 전환)마다 깜빡이는 현상 방지.
 import { useEffect, useState } from 'react'
 import { useStore } from 'zustand'
 import { useI18n } from '~/i18n'

@@ -1,10 +1,10 @@
 /**
- * 화면 안 AI 버튼 상태 — /api/ai/inline/status 를 한 번 받아 메일·채팅·회의·문서가 같이 쓴다(5분 캐시).
+ * 화면 내 AI 버튼 상태 — /api/ai/inline/status 를 1회 조회하여 메일·채팅·회의·문서가 공용한다(5분 캐시).
  *
- * 버튼 상태(꺼짐 모양은 기존 관례로 정함):
- *  - AI 모듈 꺼짐(module_off) · 상태를 못 받음 → 버튼을 숨긴다(기능이 없는 것과 같다)
- *  - 제공자 미설정(not_configured) · 외부 AI 데이터 차단(external_blocked) → 버튼은 보이되 비활성 + 이유 툴팁
- *  - 쓸 수 있음 → 활성. 외부 AI 면 결과 패널에 "개인정보는 가려서 보냅니다" 안내
+ * 버튼 상태(비활성 모양은 기존 관례를 따름):
+ *  - AI 모듈 비활성(module_off) · 상태 조회 실패 → 버튼을 숨긴다(기능이 없는 경우와 동일)
+ *  - 제공자 미설정(not_configured) · 외부 AI 데이터 차단(external_blocked) → 버튼은 표시하되 비활성 + 사유 툴팁
+ *  - 사용 가능 → 활성. 외부 AI 이면 결과 패널에 "개인정보는 가려서 보냅니다" 안내
  */
 import { useEffect } from 'react'
 import { createStore, useStore } from 'zustand'
@@ -50,7 +50,7 @@ export function buttonState(status: AiInlineStatus | null): AiInlineButtonState 
   return status.available ? 'ready' : 'disabled'
 }
 
-/** 상태 + 버튼 모양. 마운트할 때 한 번 받는다 */
+/** 상태 + 버튼 모양. 마운트 시 1회 조회한다 */
 export function useAiInline() {
   const status = useStore(aiInlineStore, s => s.status)
   useEffect(() => { void loadAiInlineStatus() }, [])

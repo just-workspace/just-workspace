@@ -1,29 +1,29 @@
 /**
  * 드롭다운 메뉴("⋮ 메뉴 = 데스크톱 드롭다운, 터치 액션 시트(같은 항목·같은 순서)" · 그림자 shadow-md).
  *  데스크톱 — 팝오버: rounded-lg · border · bg-popover · shadow-md · p-1 · 폭 224 · 항목 36(dense 32) · 아이콘 16 · 13px.
- *  모바일   — UiActionSheet(바닥 시트, 항목 48). sheet={false} 면 모바일에서도 팝오버.
- * 두 가지로 연다.
- *  ① 트리거형: trigger({ toggle, open, controls }) 함수 또는 기본 ⋯ 아이콘 버튼. 열림 상태는 이 부품이 가진다.
- *  ② 기준형: anchor(DOMRect·요소)를 주고 부모가 조건부로 붙였다 뗀다(우클릭·트리 노드 ⋯). 마운트 = 열림, 닫힘은 onClose.
- * 키보드: ↑↓ Home End 이동 · Enter/Space 실행 · Esc 닫고 트리거로 포커스 · Tab 닫기 · 글자 입력 = 타입어헤드(앞글자 일치).
- * 바깥 클릭: 트리거형은 문서 pointerdown(클릭이 밑 요소까지 간다), 기준형은 투명 막(우클릭도 닫음).
- * ref 로 { toggle, open, close } 를 쓸 수 있다.
+ *  모바일   — UiActionSheet(바닥 시트, 항목 48). sheet={false} 이면 모바일에서도 팝오버.
+ * 열기 방식은 두 가지이다.
+ *  ① 트리거형: trigger({ toggle, open, controls }) 함수 또는 기본 ⋯ 아이콘 버튼. 열림 상태는 본 컴포넌트가 보유한다.
+ *  ② 기준형: anchor(DOMRect·요소)를 전달하고 부모가 조건부로 마운트·언마운트한다(우클릭·트리 노드 ⋯). 마운트 = 열림, 닫힘은 onClose.
+ * 키보드: ↑↓ Home End 이동 · Enter/Space 실행 · Esc 닫기 후 트리거로 포커스 복귀 · Tab 닫기 · 글자 입력 = 타입어헤드(앞글자 일치).
+ * 바깥 클릭: 트리거형은 문서 pointerdown(클릭이 하위 요소까지 전달된다), 기준형은 투명 막(우클릭 시에도 닫힘).
+ * ref 로 { toggle, open, close } 를 사용할 수 있다.
  *
  * 확장:
- *  ① 항목 description — 이름 아래 한 줄(12 muted, truncate). 비활성 이유 등.
- *  ② 하위 메뉴 — 항목 children. 오른쪽 › 표시, → / Enter / 클릭으로 열고 ← / Esc 로 닫아 부모 항목으로 돌아간다.
- *     마우스는 150ms 머물면 열리고, 다른 항목으로 옮기면 250ms 뒤 닫힌다(대각선으로 옮겨 가는 동안 닫히지 않게).
- *     자리가 없으면 반대쪽으로 뒤집는다(subSide 로 처음 방향). 하위 항목을 고르면 onSelect(하위 key) 후 메뉴 전체가 닫힌다.
- *     모바일 시트에서는 눌러서 한 단계 들어가고 맨 위 "뒤로" 로 나온다.
- *  ③ 자유 내용 — 메뉴 위쪽 content 슬롯, 또는 항목 panel(하위 메뉴 자리에 여는 펼침 패널 — 상태 메시지 편집처럼 입력이 들어간다).
- *     자유 내용 안에서는 메뉴 키보드(↑↓·타입어헤드·Tab 닫기)를 쓰지 않는다 — 입력이 글자를 받고, Tab 은 그 패널 안을 돈다
- *     (포커스 트랩 예외), Esc 는 패널(또는 메뉴)을 닫는다. 패널 안 처음 포커스는 data-autofocus → 첫 포커스 가능 요소.
+ *  ① 항목 description — 이름 하단 한 줄(12 muted, truncate). 비활성 사유 등.
+ *  ② 하위 메뉴 — 항목 children. 오른쪽 › 표시, → / Enter / 클릭으로 열고 ← / Esc 로 닫아 부모 항목으로 복귀한다.
+ *     마우스는 150ms 유지 시 열리고, 다른 항목으로 이동하면 250ms 뒤 닫힌다(대각선 이동 중 닫힘 방지).
+ *     공간이 부족하면 반대쪽으로 전환한다(subSide 로 초기 방향 지정). 하위 항목을 선택하면 onSelect(하위 key) 호출 후 메뉴 전체가 닫힌다.
+ *     모바일 시트에서는 클릭으로 한 단계 진입하고 맨 위 "뒤로" 로 복귀한다.
+ *  ③ 자유 내용 — 메뉴 상단 content 슬롯, 또는 항목 panel(하위 메뉴 위치에 표시하는 펼침 패널 — 상태 메시지 편집처럼 입력을 포함한다).
+ *     자유 내용 내부에서는 메뉴 키보드(↑↓·타입어헤드·Tab 닫기)를 적용하지 않는다 — 입력 요소가 글자를 수신하고, Tab 은 해당 패널 안에서 순환하며
+ *     (포커스 트랩 예외), Esc 는 패널(또는 메뉴)을 닫는다. 패널 내 초기 포커스는 data-autofocus → 첫 포커스 가능 요소.
  *
- * 고른 뒤 닫힘:
- *  · 실행형 항목(checked 없음)·링크(to)·단일 선택(radio — 정렬·보기·권한처럼 묶음에서 하나만) = 고르면 닫힌다.
- *  · 다중 토글(checked 만 있고 radio 아님 — "광고 숨기기"처럼 켜고 끄기) = 메뉴가 열린 채(연달아 여러 개를 켜고 끈다).
- *  · 메뉴 단위 closeOnSelect(true = 모두 닫힘 · false = 모두 열린 채), 항목 단위 keepOpen 이 그보다 우선(링크는 늘 닫힘).
- *  · 클릭·Enter/Space·모바일 시트·하위 메뉴 항목 모두 같은 규칙.
+ * 선택 후 닫힘:
+ *  · 실행형 항목(checked 없음)·링크(to)·단일 선택(radio — 정렬·보기·권한처럼 묶음에서 하나만 선택) = 선택 시 닫힘.
+ *  · 다중 토글(checked 만 있고 radio 아님 — "광고 숨기기"처럼 활성화/비활성화 전환) = 메뉴 열림 유지(여러 항목을 연속 전환한다).
+ *  · 메뉴 단위 closeOnSelect(true = 모두 닫힘 · false = 모두 열림 유지), 항목 단위 keepOpen 이 그보다 우선(링크는 항상 닫힘).
+ *  · 클릭·Enter/Space·모바일 시트·하위 메뉴 항목 모두 동일한 규칙.
  */
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type HTMLAttributes, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
@@ -42,16 +42,16 @@ import { FOCUSABLE, menuItemRole, menuKeepsOpen, useUid } from './internal'
 /** 모바일 시트 "뒤로" 항목 key */
 const SHEET_BACK = '__ui-menu-back'
 
-/** 자유 내용(content·panel) 안에서 일어난 키 입력인가 */
+/** 자유 내용(content·panel) 내부에서 발생한 키 입력 여부 */
 function inFree(target: EventTarget | null): boolean {
   return target instanceof Element && !!target.closest('[data-menu-free]')
 }
 
-/** 자유 내용(panel·content) 함수가 받는 것 */
+/** 자유 내용(panel·content) 함수에 전달되는 인자 */
 export interface UiMenuPanelApi {
   /** 메뉴 전체 닫기 */
   close: () => void
-  /** 하위 패널만 닫고 부모 항목으로(content 에서는 close 와 같음) */
+  /** 하위 패널만 닫고 부모 항목으로 복귀(content 에서는 close 와 동일) */
   back: () => void
 }
 
@@ -63,11 +63,11 @@ export interface UiMenuItem {
   /** 위험 항목(삭제 등) — danger 글자 */
   danger?: boolean
   disabled?: boolean
-  /** 정의하면 menuitemcheckbox(radio 면 menuitemradio) — true 면 ✓ 와 굵게. 다중 토글은 골라도 메뉴가 열린 채 */
+  /** 정의 시 menuitemcheckbox(radio 이면 menuitemradio) — true 이면 ✓ 표시 및 굵은 글자. 다중 토글은 선택 후에도 메뉴 열림 유지 */
   checked?: boolean
-  /** 단일 선택 묶음의 항목(정렬·보기·권한처럼 하나만 고름) — menuitemradio, 고르면 닫힌다. checked 와 같이 쓴다 */
+  /** 단일 선택 묶음의 항목(정렬·보기·권한처럼 하나만 선택) — menuitemradio, 선택 시 닫힘. checked 와 함께 사용 */
   radio?: boolean
-  /** 고른 뒤 메뉴를 열어 둘지(메뉴 closeOnSelect·기본 규칙보다 우선). 링크(to) 항목은 늘 닫힌다 */
+  /** 선택 후 메뉴 열림 유지 여부(메뉴 closeOnSelect·기본 규칙보다 우선). 링크(to) 항목은 항상 닫힘 */
   keepOpen?: boolean
   /** 오른쪽 보조 글자(mono 11, 예: 단축키 "E" · 개수) */
   hint?: string
@@ -75,33 +75,33 @@ export interface UiMenuItem {
   keys?: string[]
   /** 오른쪽 배지(예: "준비 중") */
   badge?: string
-  /** 이 항목 위에 구분선 */
+  /** 본 항목 상단에 구분선 표시 */
   separated?: boolean
-  /** 링크 항목 — 고르면 onSelect 를 부른 뒤 이 경로로 이동한다 */
+  /** 링크 항목 — 선택 시 onSelect 호출 후 해당 경로로 이동 */
   to?: string
-  /** 묶음 머리(고를 수 없는 소제목 — 예: "상태" "정렬") */
+  /** 묶음 머리글(선택 불가 소제목 — 예: "상태" "정렬") */
   heading?: boolean
-  /** 이름 아래 한 줄 설명(12 muted, truncate — 비활성 이유 등) */
+  /** 이름 하단 한 줄 설명(12 muted, truncate — 비활성 사유 등) */
   description?: string
-  /** 하위 메뉴 항목(→ 로 연다). 있으면 이 항목은 고르지 않고 하위 메뉴를 연다 */
+  /** 하위 메뉴 항목(→ 로 열림). 지정 시 본 항목은 선택 대신 하위 메뉴 열기 수행 */
   children?: UiMenuItem[]
-  /** 하위 메뉴 자리에 여는 자유 내용 패널(입력 등). 함수면 { close, back } 을 받는다 */
+  /** 하위 메뉴 위치에 표시하는 자유 내용 패널(입력 등). 함수이면 { close, back } 수신 */
   panel?: ReactNode | ((api: UiMenuPanelApi) => ReactNode)
   /** 하위 메뉴·패널 폭 px(기본 = 메뉴 폭) */
   panelWidth?: number
 }
 
-/** trigger 함수가 받는 것 */
+/** trigger 함수에 전달되는 인자 */
 export interface UiMenuTriggerScope {
   /** 열기/닫기 */
   toggle: () => void
-  /** 지금 열림 */
+  /** 현재 열림 여부 */
   open: boolean
-  /** 메뉴 패널 id(aria-controls 에) */
+  /** 메뉴 패널 id(aria-controls 용) */
   controls: string
 }
 
-/** ref 로 쓰는 것 */
+/** ref 로 노출되는 항목 */
 export interface UiMenuHandle {
   toggle: () => void
   open: () => void
@@ -115,39 +115,39 @@ export interface UiMenuProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title
   label?: string
   /** 모바일 시트 머리글(데스크톱에서는 메뉴 접근성 이름) */
   title?: string
-  /** 기준형: 이 위치에 연다(트리거 없음). undefined 면 트리거형. null = 기준 없음(화면 가운데) */
+  /** 기준형: 해당 위치에 표시(트리거 없음). undefined 이면 트리거형. null = 기준 없음(화면 중앙) */
   anchor?: DOMRect | HTMLElement | null
-  /** 기준 요소의 어느 끝에 맞출지 — end(기본) = 오른쪽 끝 */
+  /** 기준 요소의 정렬 기준 끝 — end(기본) = 오른쪽 끝 */
   align?: 'start' | 'end'
-  /** 아래(기본)/위. 자리가 없으면 반대로 뒤집는다 */
+  /** 아래(기본)/위. 공간 부족 시 반대 방향으로 전환 */
   side?: 'bottom' | 'top'
   /** 팝오버 폭 px(기본 224) */
   width?: number
   /** 항목 32(트리·밀집 목록) */
   dense?: boolean
-  /** 모바일에서 바닥 시트로(기본 켬). false 면 모바일도 팝오버 */
+  /** 모바일에서 바닥 시트 사용(기본 활성화). false 이면 모바일에서도 팝오버 */
   sheet?: boolean
   /** 기본 트리거 아이콘(기본 'more-horizontal') */
   triggerIcon?: string
   /** 기본 트리거 크기(기본 sm 32) */
   triggerSize?: 'sm' | 'md' | 'lg'
-  /** 항목 고름 — 항목 key(하위 메뉴 항목이면 그 key) */
+  /** 항목 선택 — 항목 key(하위 메뉴 항목이면 해당 key) */
   onSelect?: (key: string) => void
   /** 닫힘 */
   onClose?: () => void
   /** 열림 */
   onOpen?: () => void
-  /** 트리거 직접 그리기 */
+  /** 트리거 직접 렌더링 */
   trigger?: (scope: UiMenuTriggerScope) => ReactNode
   /** 모바일 시트 머리글 아이콘 자리 */
   sheetHeader?: ReactNode
-  /** 메뉴 위쪽 자유 내용(입력 등) — 항목 앞에 그린다. 함수면 { close, back } */
+  /** 메뉴 상단 자유 내용(입력 등) — 항목 앞에 렌더링. 함수이면 { close, back } 수신 */
   content?: ReactNode | ((api: UiMenuPanelApi) => ReactNode)
-  /** 하위 메뉴·패널이 처음 열리는 쪽(기본 right). 자리가 없으면 반대로 */
+  /** 하위 메뉴·패널의 초기 열림 방향(기본 right). 공간 부족 시 반대 방향 */
   subSide?: 'right' | 'left'
   /**
-   * 고르면 닫을지. 안 주면 기본 규칙(실행형·radio 는 닫힘, 다중 토글 checked 는 열린 채).
-   * true = 모든 항목 닫힘 · false = 모든 항목 열린 채. 항목 keepOpen 이 우선.
+   * 선택 시 닫힘 여부. 미지정 시 기본 규칙(실행형·radio 는 닫힘, 다중 토글 checked 는 열림 유지).
+   * true = 모든 항목 닫힘 · false = 모든 항목 열림 유지. 항목 keepOpen 이 우선.
    */
   closeOnSelect?: boolean
   /** { toggle, open, close } */
@@ -187,21 +187,21 @@ export function UiMenu({
   const opener = useRef<HTMLElement | null>(null)
   const pendingShow = useRef(false)
 
-  // 리스너·타이머에서 최신 값을 읽는다
+  // 리스너·타이머의 최신 값 조회용
   const L = useRef({ anchor, anchored, useSheet, align, side, width, subSide, closeOnSelect, onSelect, onClose, onOpen })
   L.current = { anchor, anchored, useSheet, align, side, width, subSide, closeOnSelect, onSelect, onClose, onOpen }
 
   function anchorRect(): DOMRect | null {
     const a = L.current.anchor
-    // 화면 배율(루트 zoom) 아래에서 사각형은 화면 좌표 → style 에 넣을 CSS px 로
+    // 화면 배율(루트 zoom) 적용 시 사각형은 화면 좌표 → style 에 넣을 CSS px 로 변환
     if (a instanceof HTMLElement) return toCssRect(a.getBoundingClientRect())
     if (a) return toCssRect(a)
     const r = rootRef.current?.getBoundingClientRect()
     return r ? toCssRect(r) : null
   }
 
-  // 높이는 내용만큼(예전 max-h-80 은 우클릭 메뉴 끝 항목을 잘랐다). 화면보다 길 때만 화면 높이-16 에서 스크롤.
-  // 위치는 아래 → 위로 뒤집기 → 그래도 넘치면 화면 안으로 끌어온다.
+  // 높이는 내용 크기를 따른다(기존 max-h-80 은 우클릭 메뉴의 마지막 항목을 잘랐음). 화면보다 길 때만 화면 높이-16 에서 스크롤.
+  // 위치는 아래 → 위로 전환 → 그래도 초과하면 화면 안쪽으로 보정한다.
   function place() {
     if (L.current.useSheet) return
     const panel = panelRef.current
@@ -210,7 +210,7 @@ export function UiMenu({
     const h = panel.offsetHeight
     const w = L.current.width
     const r = anchorRect()
-    // 기준형인데 기준이 없으면(anchor=null — 모바일 전용 진입점이 데스크톱에서 열린 경우) 화면 가운데
+    // 기준형이나 기준이 없는 경우(anchor=null — 모바일 전용 진입점이 데스크톱에서 열린 경우) 화면 중앙에 배치
     if (!r) { setPos({ left: Math.max(8, (vw - w) / 2), top: Math.max(8, (vh - h) / 2) }); return }
     let left = L.current.align === 'start' ? r.left : r.right - w
     left = Math.max(8, Math.min(left, vw - w - 8))
@@ -238,10 +238,10 @@ export function UiMenu({
     L.current.onOpen?.()
   }
 
-  // 열린 다음 렌더 뒤: 자리 잡기 → 체크된 항목(현재 값)이 있으면 그리로, 없으면 첫 항목에 포커스
-  // (content 에 data-autofocus 가 있으면 그것 — 입력이 들어간 메뉴)
-  // 포커스는 자리가 잡혀 패널이 보인 뒤(pos 가 생긴 렌더)에 준다 — visibility:hidden 인 요소는 focus() 가 무시돼
-  // 마우스로 연 메뉴에서 Esc·↑↓ 가 메뉴에 닿지 않던 문제
+  // 열림 후 렌더 뒤: 위치 계산 → 체크된 항목(현재 값)이 있으면 해당 항목, 없으면 첫 항목에 포커스
+  // (content 에 data-autofocus 가 있으면 해당 요소 — 입력이 포함된 메뉴)
+  // 포커스는 위치가 확정되어 패널이 표시된 뒤(pos 가 생성된 렌더)에 부여한다 — visibility:hidden 인 요소는 focus() 가 무시되어
+  // 마우스로 연 메뉴에서 Esc·↑↓ 가 메뉴에 전달되지 않던 문제 대응
   const pendingFocus = useRef(false)
   useLayoutEffect(() => {
     if (!open || !pendingShow.current) return
@@ -265,7 +265,7 @@ export function UiMenu({
   const subTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const subItem = sub ? items.find(x => x.key === sub.key) : undefined
   const subUid = `${uid}-sub`
-  // 모바일 시트: 하위 메뉴·패널은 한 단계 들어가서 보여 준다
+  // 모바일 시트: 하위 메뉴·패널은 한 단계 진입하여 표시
   const [sheetPath, setSheetPath] = useState<string | null>(null)
   const sheetItem = sheetPath ? items.find(x => x.key === sheetPath) : undefined
 
@@ -339,15 +339,15 @@ export function UiMenu({
       if (row) openSub(it, row, true)
       return
     }
-    // select 를 먼저 — 기준형 부모는 close 에서 메뉴 상태를 비우므로(onSelect 가 사라지기 전에 부른다)
+    // select 를 먼저 호출 — 기준형 부모는 close 에서 메뉴 상태를 비우므로(onSelect 소멸 전에 호출한다)
     L.current.onSelect?.(it.key)
-    // 다중 토글은 열린 채(포커스도 그 항목에 그대로) — 연달아 켜고 끈다
+    // 다중 토글은 열림 유지(포커스도 해당 항목에 유지) — 연속 전환 가능
     if (menuKeepsOpen(it, L.current.closeOnSelect)) return
     close()
     if (it.to) void navigateTo(it.to)
   }
 
-  /** 자유 내용 안 Tab — 그 상자 안에서 돈다 */
+  /** 자유 내용 내부 Tab — 해당 상자 안에서 순환 */
   function trapTab(e: KeyboardEvent<HTMLElement>, box: HTMLElement | null) {
     const els = Array.from(box?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])
     if (!els.length) { e.preventDefault(); return }
@@ -373,7 +373,7 @@ export function UiMenu({
     else if (e.key === 'End') { e.preventDefault(); els[els.length - 1]?.focus() }
   }
 
-  /** 하위 메뉴 항목 고름 — 같은 onSelect(하위 항목 key), 메뉴 전체 닫기(다중 토글은 열린 채) */
+  /** 하위 메뉴 항목 선택 — 동일한 onSelect(하위 항목 key) 호출, 메뉴 전체 닫기(다중 토글은 열림 유지) */
   function pickLeaf(it: UiMenuItem) {
     if (it.disabled || it.heading) return
     L.current.onSelect?.(it.key)
@@ -398,7 +398,7 @@ export function UiMenu({
     const els = menuItems()
     if (!els.length) return
     const cur = els.indexOf(document.activeElement as HTMLElement)
-    // 같은 글자를 거듭 치면 다음 일치로 돈다
+    // 동일 글자를 반복 입력하면 다음 일치 항목으로 순환
     const tp = typed.current
     const same = tp.length > 1 && [...tp].every(c => c === tp[0])
     const needle = same ? tp[0] : tp
@@ -411,7 +411,7 @@ export function UiMenu({
 
   function onKeydown(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return }
-    // 자유 내용(content) 안: 입력이 키를 받는다 — Tab 만 메뉴 안에서 돈다
+    // 자유 내용(content) 내부: 입력 요소가 키를 수신 — Tab 만 메뉴 안에서 순환
     if (inFree(e.target)) { if (e.key === 'Tab') trapTab(e, panelRef.current); return }
     const els = menuItems()
     const cur = document.activeElement as HTMLElement | null
@@ -426,7 +426,7 @@ export function UiMenu({
     else if (e.key.length === 1 && e.key !== ' ' && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); typeahead(e.key) }
   }
 
-  // 문서 리스너는 마운트 동안 한 번 — 최신 함수를 부른다
+  // 문서 리스너는 마운트 동안 1회 등록 — 최신 함수를 호출
   const fns = useRef({ show, close, place, placeSub })
   fns.current = { show, close, place, placeSub }
   useEffect(() => {
@@ -448,12 +448,12 @@ export function UiMenu({
       window.removeEventListener('scroll', onViewport, true)
       if (typedTimer.current) clearTimeout(typedTimer.current)
       if (subTimer.current) clearTimeout(subTimer.current)
-      // 기준형은 부모가 조건부로 떼므로 여기서 연 요소로 돌려준다
+      // 기준형은 부모가 조건부로 언마운트하므로 여기서 메뉴를 연 요소로 포커스 복귀
       if (L.current.anchored && openRef.current && !L.current.useSheet) opener.current?.focus?.()
     }
   }, [])
 
-  // 항목 수가 바뀌면 자리 다시
+  // 항목 수 변경 시 위치 재계산
   const firstLen = useRef(true)
   useLayoutEffect(() => {
     if (firstLen.current) { firstLen.current = false; return }
@@ -469,7 +469,7 @@ export function UiMenu({
   )
 
   return (
-    /* 루트 하나(바깥 className 이 붙도록). 기준형은 자리를 차지하지 않는다(contents) */
+    /* 루트 요소 1개(외부 className 적용 대상). 기준형은 레이아웃 공간을 차지하지 않음(contents) */
     <div {...rest} ref={rootRef} className={cn(anchored ? 'contents' : 'relative inline-flex', className)}>
       {!anchored && (trigger
         ? trigger({ toggle, open, controls: uid })

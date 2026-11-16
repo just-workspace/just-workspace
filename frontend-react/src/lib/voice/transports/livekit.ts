@@ -2,13 +2,13 @@
  * LiveKit(WebRTC Opus) 전송 — 음성·음악 단계. VoiceTransport 구현.
  *
  *  · 캡처·publish 옵션은 lib/voice/opus.ts 레시피, answer 의 cbr/useinbandfec 는 lib/voice/sdp.ts 로 강제.
- *  · 단계를 바꾸면 마이크 트랙을 새로 만들어 다시 publish 한다(제약·stereo 는 트랙 생성 때 정해진다).
- *  · 화면 공유 소리(음악 공유)는 createScreenTracks 로 받은 소리 트랙만 publish(영상은 바로 멈춤), 늘 음악 레시피.
- *    BUNDLE 안에서 opus payload type 의 fmtp 는 구간마다 같아야 하므로, 음악 공유 중엔 answer fmtp 전체가 음악 값이다
- *    (마이크가 음성 단계라도 그동안 DTX·FEC 가 꺼진다 — encodings.maxBitrate 32k 는 그대로).
- *  · 받은 소리는 자체 숨은 <div> 안 <audio> 로 낸다(회의 화면이 없어도 소리가 나야 한다). 듣기 끔 = 요소 muted.
- *  · 통계는 송신 트랙 getRTCStatsReport(sender.getStats) + 수신 트랙 것 → lib/voice/stats.summarizeStats.
- *  · 레벨 미터는 publish 중인 MediaStreamTrack 을 AudioContext 로 갈라 L/R RMS.
+ *  · 단계를 변경하면 마이크 트랙을 재생성해 다시 publish 한다(제약·stereo 는 트랙 생성 시 결정된다).
+ *  · 화면 공유 소리(음악 공유)는 createScreenTracks 로 받은 소리 트랙만 publish(영상은 즉시 중지), 항상 음악 레시피.
+ *    BUNDLE 안에서 opus payload type 의 fmtp 는 구간마다 동일해야 하므로, 음악 공유 중에는 answer fmtp 전체가 음악 값이다
+ *    (마이크가 음성 단계여도 그동안 DTX·FEC 가 비활성화된다 — encodings.maxBitrate 32k 는 유지).
+ *  · 수신한 소리는 자체 숨김 <div> 안의 <audio> 로 재생한다(회의 화면이 없어도 재생되어야 한다). 듣기 끔 = 요소 muted.
+ *  · 통계는 송신 트랙 getRTCStatsReport(sender.getStats) + 수신 트랙의 것 → lib/voice/stats.summarizeStats.
+ *  · 레벨 미터는 publish 중인 MediaStreamTrack 을 AudioContext 로 분기해 L/R RMS 를 산출한다.
  */
 import type {
   LocalAudioTrack, LocalTrack, Participant, RemoteTrack, RemoteTrackPublication, Room as RoomT, Track as TrackT,
@@ -32,7 +32,7 @@ function loadLk(): Promise<LK> {
 
 type Listeners = { [K in keyof VoiceTransportEvents]: Set<VoiceTransportEvents[K]> }
 
-/** getUserMedia 가 "권한 없음·장치 없음" 으로 실패했나(그 밖은 진짜 오류) */
+/** getUserMedia 가 "권한 없음·장치 없음" 으로 실패했는지 여부(그 외는 실제 오류) */
 export function isMicUnavailable(e: unknown): boolean {
   const name = (e as { name?: string } | null)?.name ?? ''
   return /^(NotAllowedError|PermissionDeniedError|SecurityError|NotFoundError|DevicesNotFoundError|NotReadableError|TrackStartError)$/.test(name)
@@ -58,20 +58,20 @@ export class LiveKitVoiceTransport implements VoiceTransport {
   private meterSrc: MediaStreamAudioSourceNode | null = null
   private meterBuf = new Float32Array(1024)
   private meterTrackId: string | null = null
-  /** 마이크 권한이 없어(또는 장치가 없어) 듣기만 — join 은 그래도 성공한다 */
+  /** 마이크 권한이 없어(또는 장치가 없어) 수신 전용 — 이 경우에도 join 은 성공한다 */
   private micDenied = false
 
   micState(): 'ok' | 'denied' { return this.micDenied ? 'denied' : 'ok' }
 
-  /** 한 참가자의 수신 음량(음악 공유 띠 [공유 음량], 0..1) — 그 사람에게 붙인 <audio> 전부. 사람별 음량(setParticipantGain)과 곱한다 */
+  /** 한 참가자의 수신 음량(음악 공유 띠 [공유 음량], 0..1) — 해당 참가자에 연결된 <audio> 전체에 적용. 사용자별 음량(setParticipantGain)과 곱한다 */
   setParticipantVolume(identity: string, volume: number): void {
     this.shareVol.set(identity, Math.max(0, Math.min(1, volume)))
     this.applyVolume(identity)
   }
 
   /**
-   * 사람별 음량(0..2 = 0–200%) — 나만 듣는 음량. 1 이하는 <audio>.volume, 1 을 넘으면
-   * 그 트랙을 WebAudio GainNode 로 돌려 키운다(요소는 음소거한 채 붙여 둔다 — 크롬은 원격 WebRTC 소리가 요소에 붙어 있어야 흐른다).
+   * 사용자별 음량(0..2 = 0–200%) — 본인에게만 적용되는 음량. 1 이하는 <audio>.volume, 1 을 초과하면
+   * 해당 트랙을 WebAudio GainNode 로 우회시켜 증폭한다(요소는 음소거 상태로 연결을 유지한다 — 크롬은 원격 WebRTC 소리가 요소에 연결되어 있어야 흐른다).
    */
   setParticipantGain(identity: string, gain: number): void {
     const g = Math.max(0, Math.min(2, Number.isFinite(gain) ? gain : 1))
@@ -135,12 +135,12 @@ export class LiveKitVoiceTransport implements VoiceTransport {
     return () => { (this.listeners[ev] as Set<VoiceTransportEvents[K]>).delete(fn) }
   }
   private emit<K extends keyof VoiceTransportEvents>(ev: K, ...args: Parameters<VoiceTransportEvents[K]>) {
-    for (const fn of this.listeners[ev]) { try { (fn as (...a: unknown[]) => void)(...args) } catch { /* 리스너 오류는 전송을 막지 않는다 */ } }
+    for (const fn of this.listeners[ev]) { try { (fn as (...a: unknown[]) => void)(...args) } catch { /* 리스너 오류는 전송을 중단시키지 않는다 */ } }
   }
 
   effectiveTier(): VoiceTier {
     const t = this.cfg?.tier ?? 'voice'
-    return isOpusTier(t) ? t : 'music'   // 무손실·하이레조는 아직 없다 → 음악으로 강등
+    return isOpusTier(t) ? t : 'music'   // 무손실·하이레조는 미지원 → 음악으로 강등
   }
 
   // ─── 접속 ───
@@ -155,7 +155,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
     const room = new Room({
       adaptiveStream: false,
       dynacast: false,
-      // 캡처·publish 기본값은 트랙을 직접 만들어 넘기므로 여기선 보조(화면 공유 등)
+      // 캡처·publish 기본값은 트랙을 직접 생성해 전달하므로 여기서는 보조 용도(화면 공유 등)
       publishDefaults: { ...publishFor(this.cfg), videoCodec: 'vp9' },
       audioCaptureDefaults: captureFor(this.cfg),
       ...(this.speakerId() ? { audioOutput: { deviceId: this.speakerId()! } } : {}),
@@ -223,9 +223,9 @@ export class LiveKitVoiceTransport implements VoiceTransport {
   }
 
   /**
-   * 송신 설정 적용은 한 줄로 세운다. 슬라이더를 끌면 setSend 가 겹쳐 들어오는데, 예전엔 publishMic 이 동시에 돌아
-   * 마이크 트랙이 둘 올라가고(하나는 음소거·나가기가 닿지 않는다) 상대가 이중으로 들었다.
-   * 기다리는 동안 더 새 설정이 들어오면 중간 것은 건너뛴다 — 비교 기준은 "실제로 올라가 있는 트랙의 설정"(micCfg).
+   * 송신 설정 적용은 직렬화한다. 슬라이더를 드래그하면 setSend 가 중첩 호출되는데, 이전에는 publishMic 이 동시에 실행되어
+   * 마이크 트랙이 2개 publish 되고(하나는 음소거·퇴장이 적용되지 않는다) 상대가 이중으로 수신했다.
+   * 대기 중 더 최신 설정이 들어오면 중간 설정은 생략한다 — 비교 기준은 "실제로 올라가 있는 트랙의 설정"(micCfg).
    */
   private sendChain: Promise<void> = Promise.resolve()
   private sendGen = 0
@@ -233,7 +233,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
 
   setSend(cfg: VoiceSendConfig): Promise<void> {
     const next = this.normalize(cfg)
-    // 마이크를 바꾸면 한쪽 채널 판정을 다시 한다
+    // 마이크 변경 시 한쪽 채널 판정을 재수행한다
     if (this.monoFallback && next.micDeviceId !== this.monoFallbackDevice) { this.monoFallback = false; this.oneSidedTicks = 0 }
     const prevSpk = this.speakerId()
     this.cfg = next
@@ -249,22 +249,22 @@ export class LiveKitVoiceTransport implements VoiceTransport {
         const changed = !prev || prev.tier !== now.tier || prev.musicBitrate !== now.musicBitrate
           || prev.micDeviceId !== now.micDeviceId
           || prev.echoCancellation !== now.echoCancellation || prev.noiseSuppression !== now.noiseSuppression || prev.autoGainControl !== now.autoGainControl
-        // 마이크 권한이 없어 듣기만이면 [다시 시도] = setSend — 바뀐 게 없어도 다시 만든다
+        // 마이크 권한이 없어 수신 전용이면 [다시 시도] = setSend — 변경 사항이 없어도 재생성한다
         if (changed || this.micDenied) await this.publishMic()
       }
-      // 스피커: 특정 장치 → "기본 장치"로 되돌릴 때도 바꾼다(예전엔 값이 있을 때만 바꿔 옛 장치로 계속 났다)
+      // 스피커: 특정 장치 → "기본 장치"로 복원할 때도 변경한다(이전에는 값이 있을 때만 변경해 이전 장치로 계속 재생되었다)
       const spk = this.speakerId()
       if (spk !== prevSpk && this.room === room) {
         try { await room.switchActiveDevice('audiooutput', spk || 'default') } catch { /* 미지원 브라우저 */ }
         const ctxSink = this.boostCtx as (AudioContext & { setSinkId?: (id: string) => Promise<void> }) | null
-        if (ctxSink?.setSinkId) void ctxSink.setSinkId(spk || '').catch(() => {})   // 100% 넘게 키운 사람 소리도 같은 장치로
+        if (ctxSink?.setSinkId) void ctxSink.setSinkId(spk || '').catch(() => {})   // 100% 초과로 증폭한 사용자 소리도 동일 장치로 출력
       }
     })
     this.sendChain = run.catch(() => {})
     return run
   }
 
-  /** 마이크 트랙을 (다시) 만들어 publish. 기존 트랙은 unpublish + stop */
+  /** 마이크 트랙을 (재)생성해 publish. 기존 트랙은 unpublish + stop */
   private async publishMic() {
     const room = this.room
     const lk = this.lk
@@ -273,18 +273,18 @@ export class LiveKitVoiceTransport implements VoiceTransport {
     const old = this.micTrack
     this.micTrack = null
     this.micCfg = null
-    // 만드는 도중 나갔으면(권한 창이 떠 있는 채 퇴장 등) 트랙을 멈춘다 — 안 그러면 브라우저 마이크 표시가 탭을 닫을 때까지 켜져 있다
+    // 생성 도중 퇴장한 경우(권한 창이 표시된 채 퇴장 등) 트랙을 중지한다 — 생략 시 브라우저 마이크 표시가 탭을 닫을 때까지 유지된다
     const gone = () => this.room !== room
     if (old) {
       try { await room.localParticipant.unpublishTrack(old, true) } catch { /* noop */ }
     }
     let track: LocalAudioTrack
     try {
-      // 한 채널만 쓰는 2채널 장치로 판정됐으면(monoFallback) 모노로 잡는다 — 브라우저가 두 채널을 합쳐 양쪽 귀에 난다
+      // 한 채널만 사용하는 2채널 장치로 판정된 경우(monoFallback) 모노로 캡처한다 — 브라우저가 두 채널을 병합해 양쪽 귀로 재생된다
       track = await lk.createLocalAudioTrack({ ...captureFor(cfg), ...(this.monoFallback ? { channelCount: 1 } : {}) })
       this.micDenied = false
     } catch (e) {
-      // 권한 없음·장치 없음 — 들어가는 건 막지 않는다("권한 없음": 듣기만으로 접속). 그 밖의 오류는 그대로 던진다
+      // 권한 없음·장치 없음 — 입장은 차단하지 않는다("권한 없음": 듣기만으로 접속). 그 외 오류는 그대로 전파한다
       if (isMicUnavailable(e)) { this.micDenied = true; this.emit('peers', this.peers()); return }
       throw e
     }
@@ -295,13 +295,13 @@ export class LiveKitVoiceTransport implements VoiceTransport {
       await room.localParticipant.publishTrack(track, { ...pub, source: lk.Track.Source.Microphone, name: 'microphone' })
     } catch (e) {
       try { track.stop() } catch { /* noop */ }
-      if (gone()) return   // 나가는 중에 끊긴 것 — 오류가 아니다
+      if (gone()) return   // 퇴장 중 연결이 끊긴 경우 — 오류 아님
       throw e
     }
     if (gone()) { try { track.stop() } catch { /* noop */ } return }
     this.micTrack = track
     this.micCfg = cfg
-    // publish 를 기다리는 사이 누른 음소거를 놓치지 않는다
+    // publish 대기 중 입력된 음소거가 누락되지 않도록 반영
     if (track.isMuted !== this.muted) { try { if (this.muted) await track.mute(); else await track.unmute() } catch { /* noop */ } }
     this.snap = null
     this.startMeter(track)
@@ -344,7 +344,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
         suppressLocalAudioPlayback: false,
       })
     } catch {
-      return false   // 사용자가 취소했다
+      return false   // 사용자 취소
     }
     const audio = tracks.find(t => t.kind === lk.Track.Kind.Audio) as LocalAudioTrack | undefined
     for (const t of tracks) if (t !== audio) { try { t.stop() } catch { /* noop */ } }
@@ -352,7 +352,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
     this.screenAudio = audio
     this.applyFmtp()
     await room.localParticipant.publishTrack(audio, { ...publishFor(music), source: lk.Track.Source.ScreenShareAudio, name: 'music' })
-    // 사용자가 브라우저 UI 의 "공유 중지" 를 누르면 트랙이 끝난다
+    // 사용자가 브라우저 UI 의 "공유 중지" 를 누르면 트랙이 종료된다
     audio.on(lk.TrackEvent.Ended, () => { void this.setScreenAudio(false) })
     this.snap = null
     this.emit('peers', this.peers())
@@ -361,8 +361,8 @@ export class LiveKitVoiceTransport implements VoiceTransport {
 
   // ─── 수신 재생 ───
   /**
-   * 한 참가자의 수신 소리를 끈다/켠다(듣기 끔과 별개). 무손실 전송이 같은 사람의 PCM 스트림을 받는 동안
-   * 그 사람의 Opus 호환 트랙을 겹쳐 내지 않기 위해 쓴다. 나중에 구독되는 트랙에도 적용된다.
+   * 한 참가자의 수신 소리를 음소거/해제한다(듣기 끔과 별개). 무손실 전송이 동일 참가자의 PCM 스트림을 수신하는 동안
+   * 해당 참가자의 Opus 호환 트랙이 중복 재생되지 않도록 하는 데 사용한다. 이후 구독되는 트랙에도 적용된다.
    */
   setParticipantAudioMuted(identity: string, muted: boolean): void {
     if (muted) this.silenced.add(identity)
@@ -489,7 +489,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
     const left = rmsToDb(rms(this.meterBuf))
     r.getFloatTimeDomainData(this.meterBuf)
     let right = rmsToDb(rms(this.meterBuf))
-    // 모노 트랙은 두 번째 채널이 비어 있다 — 왼쪽을 그대로
+    // 모노 트랙은 두 번째 채널이 비어 있다 — 왼쪽 값을 그대로 사용
     const mono = (this.micTrack?.mediaStreamTrack.getSettings().channelCount ?? 1) < 2
     if (mono) right = left
     else this.watchOneSided(left, right)
@@ -497,9 +497,9 @@ export class LiveKitVoiceTransport implements VoiceTransport {
   }
 
   /**
-   * 스테레오로 보내는 중인데 한 채널에만 소리가 있다(오디오 인터페이스의 입력 1, 2채널로 보고하는 일부 헤드셋·동글) —
-   * 그대로면 듣는 사람 전원이 한쪽 귀로만 듣는다. 2초쯤 이어지면 모노로 다시 올린다. 장치를 바꾸면 다시 판정한다.
-   * getLevels 는 접속 중 120ms 마다 불린다(useVoice 의 레벨 폴링).
+   * 스테레오로 송신 중인데 한 채널에만 소리가 있는 경우(오디오 인터페이스의 입력 1, 2채널로 보고하는 일부 헤드셋·동글) —
+   * 그대로 두면 청취자 전원이 한쪽 귀로만 듣게 된다. 약 2초간 지속되면 모노로 다시 publish 한다. 장치 변경 시 재판정한다.
+   * getLevels 는 접속 중 120ms 주기로 호출된다(useVoice 의 레벨 폴링).
    */
   private monoFallback = false
   private oneSidedTicks = 0
@@ -509,12 +509,12 @@ export class LiveKitVoiceTransport implements VoiceTransport {
     const hi = Math.max(left, right)
     const lo = Math.min(left, right)
     if (hi > -50 && lo < -70) this.oneSidedTicks++
-    else if (lo > -50) this.oneSidedTicks = 0   // 양쪽 다 소리 — 진짜 스테레오
+    else if (lo > -50) this.oneSidedTicks = 0   // 양쪽 모두 소리 있음 — 실제 스테레오
     if (this.oneSidedTicks < 17) return
     this.oneSidedTicks = 0
     this.monoFallback = true
     this.monoFallbackDevice = this.cfg.micDeviceId
-    this.micCfg = null   // 같은 설정이어도 다시 올리게
+    this.micCfg = null   // 동일 설정이어도 다시 publish 되도록 함
     if (this.cfg) void this.setSend({ ...this.cfg, ...(this.speakerId() ? { speakerDeviceId: this.speakerId() } : {}) } as VoiceSendConfig).catch(() => {})
   }
 

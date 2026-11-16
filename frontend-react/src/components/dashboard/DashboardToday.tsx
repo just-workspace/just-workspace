@@ -1,9 +1,9 @@
 /**
  * 오늘(주 줄 1칸): 오늘 일정 행 56 = 제목 + 메타(끝남 · n분 후 · 장소 · n명) + 시각(mono) +
- * 화상 회의면 [참여](늘 보이는 primary). 지금·곧 할 일정 행은 bg-primary/10 + semibold, 끝난 일정은 muted.
- * 머리 개수 = 오늘 일정 수, "캘린더 ›". 비면 제자리 한 줄 + 그 아래 [일정 만들기](ghost) 하나.
- * 참여는 시작 10분 전부터 끝날 때까지("지금 입장" 규칙). "오늘"·시각은 캘린더 시간대(utils/calTz) 기준.
- * 회의 링크는 일정 장소·설명에 들어 있는 /meetings/ 주소로 찾는다.
+ * 화상 회의이면 [참여](항상 표시되는 primary). 진행 중·임박 일정 행은 bg-primary/10 + semibold, 종료된 일정은 muted.
+ * 헤더 개수 = 오늘 일정 수, "캘린더 ›". 비어 있으면 제자리 한 행 + 그 아래 [일정 만들기](ghost) 하나.
+ * 참여는 시작 10분 전부터 종료 시까지 가능("지금 입장" 규칙). "오늘"·시각은 캘린더 시간대(utils/calTz) 기준.
+ * 회의 링크는 일정 장소·설명에 포함된 /meetings/ 주소로 탐색한다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { $fetch } from '~/lib/api'
@@ -20,7 +20,7 @@ interface Ev {
 }
 
 export interface DashboardTodayProps {
-  /** 오늘 일정 수를 받은 뒤 알림 */
+  /** 오늘 일정 수 수신 후 통지 */
   onCount?: (n: number) => void
 }
 
@@ -50,7 +50,7 @@ export function DashboardToday({ onCount }: DashboardTodayProps) {
 
   async function load() {
     setLoading(true); setError(false)
-    // 캘린더 시간대의 오늘 [00:00, 다음날 00:00). 종일(UTC 00:00 저장)이 경계에 걸려도 빠지지 않게 하루씩 넓혀 받고 화면 기준으로 거른다
+    // 캘린더 시간대의 오늘 [00:00, 다음날 00:00). 종일 일정(UTC 00:00 저장)이 경계에 걸려도 누락되지 않도록 하루씩 넓혀 조회하고 화면 기준으로 필터링한다
     const s = zStartOfDay(zNow())
     const e = zAddDays(s, 1)
     try {
@@ -75,7 +75,7 @@ export function DashboardToday({ onCount }: DashboardTodayProps) {
     return now >= Date.parse(e.start) - 10 * 60_000 && now <= Date.parse(e.end)
   }
   const ended = (e: Ev) => !e.all_day && Date.parse(e.end) < now
-  // 지금 진행 중이거나 다음에 올 첫 일정(시안: 그 행만 강조)
+  // 현재 진행 중이거나 다음에 도래할 첫 일정(시안: 해당 행만 강조)
   const focusId = events.find(e => !e.all_day && Date.parse(e.end) >= now)?.id
 
   function meta(e: Ev): string {

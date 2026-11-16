@@ -1,9 +1,9 @@
 /**
  * 첨부 칩(입력창 · 변환 중/실패).
  *  48 높이 · r10 · 테두리 · 아이콘 20 + 이름 13 / 부가 11.5(mono 크기 · 상태) + [빼기].
- *  올리는 중·변환 중 = 회전 아이콘 · 실패 = danger 테두리·바탕 + 코드별 문구.
- * 이미지는 88×88 썸네일(모바일 64) + 오른쪽 위 [빼기](solid) — 미리보기는 고른 파일의 로컬 주소.
- * 보낸 메시지 안 첨부는 AiSentAttachments(32 칩: 아이콘 14 · 이름 · 크기 mono) — 누르면 원본 미리보기·내려받기.
+ *  업로드 중·변환 중 = 회전 아이콘 · 실패 = danger 테두리·바탕 + 코드별 문구.
+ * 이미지는 88×88 썸네일(모바일 64) + 오른쪽 위 [빼기](solid) — 미리보기는 선택한 파일의 로컬 주소 사용.
+ * 보낸 메시지 내부 첨부는 AiSentAttachments(32 칩: 아이콘 14 · 이름 · 크기 mono) — 클릭 시 원본 미리보기·다운로드.
  */
 import { useEffect, useState } from 'react'
 import { cn } from '~/lib/utils'
@@ -17,9 +17,9 @@ import { aiAttachErrorKey, aiFileIcon, aiFormatBytes, type AiAttachment } from '
 
 export interface AiAttachmentsProps {
   items: AiAttachment[]
-  /** 지금 모델이 이미지를 읽는지(아니면 이미지 칩에 경고) */
+  /** 현재 모델의 이미지 판독 지원 여부(미지원이면 이미지 칩에 경고) */
   vision?: boolean
-  /** 빼기 — 없으면 읽기 전용(메시지 안) */
+  /** 빼기 — 없으면 읽기 전용(메시지 내부) */
   onRemove?: (a: AiAttachment) => void
   /** 모바일 입력창 — 썸네일 64 · 칩 64 높이 · 한 줄 가로 스크롤 */
   compact?: boolean
@@ -34,7 +34,7 @@ export function AiAttachments({ items, vision = true, onRemove, compact, classNa
       {items.map((a) => {
         const busy = a.status === 'uploading' || a.status === 'converting'
         const failed = a.status === 'failed'
-        // 썸네일: 고른 이미지(로컬 미리보기가 있고 실패하지 않음)
+        // 썸네일: 선택한 이미지(로컬 미리보기가 있고 실패하지 않은 경우)
         if (a.kind === 'image' && a.preview && !failed) {
           return (
             <li
@@ -94,7 +94,7 @@ export function AiAttachments({ items, vision = true, onRemove, compact, classNa
   )
 }
 
-/** 보낸 메시지 안 첨부 칩. 누르면 원본 미리보기·내려받기 창 */
+/** 보낸 메시지 내부 첨부 칩. 클릭 시 원본 미리보기·다운로드 창 표시 */
 export function AiSentAttachments({ items, className }: { items: AiAttachment[]; className?: string }) {
   const { t } = useI18n()
   const [open, setOpen] = useState<AiAttachment | null>(null)
@@ -130,7 +130,7 @@ async function fetchBlob(path: string): Promise<Blob | null> {
   } catch { return null }
 }
 
-/** 첨부 원본 미리보기 — 이미지·PDF 는 원본, 문서는 뽑은 글자. 원본이 보관 기간(7일)을 넘겼으면 내려받기 없음 */
+/** 첨부 원본 미리보기 — 이미지·PDF 는 원본, 문서는 추출한 텍스트. 원본이 보관 기간(7일)을 초과했으면 다운로드 미제공 */
 export function AiAttachmentPreview({ attachment, onClose }: { attachment: AiAttachment; onClose: () => void }) {
   const { t } = useI18n()
   const id = attachment.id as string

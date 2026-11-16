@@ -3,11 +3,11 @@
  *  브랜드(타일 28 + 이름 15/600) → mono 500 · 제목 24/700 · 설명 14 → 요청 번호(UiInput readonly mono · 복사) →
  *  [다시 시도(refresh)][서비스 상태 ▴/▾ outline] → 펼치면 UiCard: 머리 "서비스 상태 · 확인 10:42:08 · 새로 확인",
  *  행 40 = StatusDot · 서비스 · 상태 글자 · 응답 시간(mono, 오른쪽 64).
- * 요청 번호: 서버가 500 본문(request_id)·X-Request-ID 헤더로 준 값. 화면 쪽 오류처럼 서버 번호가 없으면
- *   같은 꼴로 만들어 콘솔에 오류와 함께 남긴다(관리자가 브라우저 콘솔에서 찾을 수 있게).
- * 서비스 상태는 공개 헬스 체크만(GET /api/services/public-status — 로그인 전에도, 내부 주소·버전 없음).
- *   "웹·API" 줄은 그 요청 자체로 잰다(응답이 없으면 중단, 나머지 줄은 알 수 없으니 그리지 않는다).
- *   확인 시각은 서버 점검 시각(없으면 받은 시각). 로그인 전이라 관리 화면 링크는 두지 않는다.
+ * 요청 번호: 서버가 500 본문(request_id)·X-Request-ID 헤더로 전달한 값. 화면 측 오류와 같이 서버 번호가 없으면
+ *   동일한 형식으로 생성하여 오류와 함께 콘솔에 기록한다(관리자가 브라우저 콘솔에서 조회할 수 있도록).
+ * 서비스 상태는 공개 헬스 체크만 사용(GET /api/services/public-status — 로그인 전에도 조회 가능, 내부 주소·버전 미포함).
+ *   "웹·API" 줄은 해당 요청 자체로 측정한다(응답이 없으면 중단, 나머지 줄은 상태를 알 수 없으므로 표시하지 않는다).
+ *   확인 시각은 서버 점검 시각(없으면 수신 시각). 로그인 전이므로 관리 화면 링크는 두지 않는다.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -23,7 +23,7 @@ import { UiCard } from '~/components/ui/Card'
 import { UiStatusDot } from '~/components/ui/StatusDot'
 
 export interface AuthServerErrorScreenProps {
-  /** 라우터 오류 경계가 넘기는 오류(statusCode·message·data(원래 오류)·cause) */
+  /** 라우터 오류 경계가 전달하는 오류(statusCode·message·data(원래 오류)·cause) */
   error?: { statusCode?: number; message?: string; data?: any; cause?: any } | null
 }
 
@@ -35,9 +35,9 @@ function shortId() {
 }
 
 /**
- * 오류 객체 어디엔가 실린 서버 요청 번호(본문 request_id · 응답 헤더).
- * React 라우터 오류는 원래 FetchError 를 data 에 담아 오므로
- * 그 안(lib/api 의 errorRequestId — 본문 request_id → X-Request-ID)까지 본다.
+ * 오류 객체 내부에 포함된 서버 요청 번호(본문 request_id · 응답 헤더).
+ * React 라우터 오류는 원래 FetchError 를 data 에 담아 전달하므로
+ * 그 내부(lib/api 의 errorRequestId — 본문 request_id → X-Request-ID)까지 확인한다.
  */
 function serverRequestId(e: any): string {
   if (!e) return ''
@@ -54,16 +54,16 @@ function serverRequestId(e: any): string {
 /** 공개 상태 한 줄(서버) */
 interface PublicSvc { key: string; status: 'ok' | 'slow' | 'down' | 'off' | 'checking'; response_ms: number | null }
 interface PublicStatus { checked_at: string | null; services: PublicSvc[] }
-/** 화면 줄 — web 은 이 화면이 직접 잰다 */
+/** 화면 줄 — web 은 본 화면이 직접 측정한다 */
 export interface ServiceStatusRow { key: string; status: PublicSvc['status']; ms: number | null }
 
-/** 응답 시간 글자 — 1초 이상이면 "1.2 s", 없으면 "—" */
+/** 응답 시간 문자열 — 1초 이상이면 "1.2 s", 없으면 "—" */
 export function serviceMsText(ms: number | null) {
   if (ms === null || ms === undefined) return '—'
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms} ms`
 }
 
-/** 공개 상태 응답(또는 실패) → 화면 줄. 맨 위는 웹·API(이 요청의 왕복 시간) */
+/** 공개 상태 응답(또는 실패) → 화면 줄. 최상단은 웹·API(해당 요청의 왕복 시간) */
 export function serviceRows(res: PublicStatus | null, webMs: number | null): ServiceStatusRow[] {
   if (!res) return [{ key: 'web', status: 'down', ms: null }]
   const web: ServiceStatusRow = { key: 'web', status: webMs !== null && webMs >= 1000 ? 'slow' : 'ok', ms: webMs }
@@ -82,7 +82,7 @@ export function AuthServerErrorScreen({ error }: AuthServerErrorScreenProps) {
 
   const [requestId] = useState(() => serverRequestId(error) || shortId())
   useEffect(() => {
-    // 서버 번호가 없던 오류(화면 쪽)는 같은 번호로 콘솔과 서버 로그(/api/client-error)에 남긴다
+    // 서버 번호가 없는 오류(화면 측)는 동일 번호로 콘솔과 서버 로그(/api/client-error)에 기록한다
     if (!serverRequestId(error)) {
       console.error(`[req ${requestId}]`, error)
       reportClientError(requestId, error?.data ?? error, error?.statusCode)
@@ -92,7 +92,7 @@ export function AuthServerErrorScreen({ error }: AuthServerErrorScreenProps) {
 
   const brandInitial = (appName || 'W').trim().charAt(0).toUpperCase()
 
-  // 오류를 지우고 그 주소로 replace
+  // 오류를 해제하고 해당 주소로 replace
   function retry() { void navigateTo(route.fullPath, { replace: true }) }
 
   // ── 서비스 상태 ──

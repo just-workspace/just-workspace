@@ -25,7 +25,7 @@ describe('미니 통화 창 표시 여부', () => {
     expect(shouldShowMiniCall({ inCall: true, returnPath: '/meetings/room/a', path: '/chat' })).toBe(true)
     expect(shouldShowMiniCall({ inCall: true, returnPath: '/meetings/room/a', path: '/meetings/room/a' })).toBe(false)
     expect(shouldShowMiniCall({ inCall: false, returnPath: '/meetings/room/a', path: '/chat' })).toBe(false)
-    // 손님(돌아갈 경로 없음)은 뜨지 않는다
+    // 손님(복귀 경로 없음)은 표시되지 않음
     expect(shouldShowMiniCall({ inCall: true, returnPath: null, path: '/chat' })).toBe(false)
   })
 })

@@ -76,7 +76,7 @@ describe('브랜딩 대비', () => {
     const c = brandContrast('#3B82F6')!
     expect(c.light).toBeGreaterThan(1)
     expect(contrastBlocked(c)).toBe(false)
-    // B2: 조정 전 4.5 미만이어도 밝기를 자동 조정해 통과 — 조정된 테마는 실제 값을 알려 준다
+    // B2: 조정 전 4.5 미만이어도 밝기 자동 조정으로 통과 — 조정된 테마는 실제 값을 반환
     const grey = brandContrast('#767676')!
     expect(contrastBlocked(grey)).toBe(false)
     expect(grey.light).toBeGreaterThanOrEqual(4.5)

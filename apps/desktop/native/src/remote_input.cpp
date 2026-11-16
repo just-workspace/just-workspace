@@ -1,15 +1,15 @@
 // jw_remote_input — 원격 데스크톱 호스트의 입력 주입(Windows SendInput)과 보안 데스크톱 감지.
 //
-// 호출하는 쪽(src/main/remote/inject.ts)이 이미 형식·범위·속도를 검사한 값만 넘긴다. 여기서도 한 번 더 자른다.
+// 호출자(src/main/remote/inject.ts)가 형식·범위·속도를 이미 검증한 값만 전달한다. 여기서도 범위를 재차 제한한다.
 //  mouseMove(x, y)           x·y = 가상 데스크톱(모든 모니터) 기준 물리 픽셀 좌표
 //  mouseButton(b, down)      b 0=왼쪽 1=가운데 2=오른쪽
-//  wheel(dx, dy)             픽셀(±1200). WHEEL_DELTA(120) 단위로 그대로 넘긴다
+//  wheel(dx, dy)             픽셀(±1200). WHEEL_DELTA(120) 단위로 그대로 전달한다
 //  key(scancode, ext, down)  하드웨어 스캔코드(Set 1) + 확장키 여부
 //  secureDesktop()           입력 데스크톱이 "Default" 가 아니면 true(UAC 동의 창·잠금 화면 = Winlogon).
-//                            일반 사용자 프로세스는 그때 캡처·주입이 막힌다 — 뷰어에 알리는 용도
+//                            일반 사용자 프로세스는 이때 캡처·주입이 차단된다 — 뷰어 통지 용도
 //  virtualScreen()           { x, y, w, h } 가상 데스크톱(물리 픽셀)
-// Ctrl+Alt+Del(SAS)은 SendInput 으로 보낼 수 없다(SendSAS + SYSTEM 서비스 필요) — 1단계 범위 밖.
-// 다른 OS 는 빌드만 되는 스텁(supported() = false).
+// Ctrl+Alt+Del(SAS)은 SendInput 으로 송신할 수 없다(SendSAS + SYSTEM 서비스 필요) — 1단계 범위 밖.
+// 다른 OS 는 빌드만 가능한 스텁(supported() = false).
 #include <napi.h>
 
 #ifdef _WIN32
@@ -69,7 +69,7 @@ Napi::Value MouseMove(const Napi::CallbackInfo& info) {
   const int y = Clamp(info[1].As<Napi::Number>().Int32Value(), r.top, r.bottom - 1);
   INPUT in = {};
   in.type = INPUT_MOUSE;
-  // MOUSEEVENTF_VIRTUALDESK: 0..65535 가 가상 데스크톱 전체(멀티 모니터)에 걸친다
+  // MOUSEEVENTF_VIRTUALDESK: 0..65535 가 가상 데스크톱 전체(멀티 모니터)에 대응한다
   in.mi.dx = static_cast<LONG>(((x - r.left) * 65535LL) / (w - 1));
   in.mi.dy = static_cast<LONG>(((y - r.top) * 65535LL) / (h - 1));
   in.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK;
@@ -146,7 +146,7 @@ Napi::Value Key(const Napi::CallbackInfo& info) {
 Napi::Value SecureDesktop(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 #ifdef _WIN32
-  // 입력 데스크톱을 못 열거나(권한 없음 = Winlogon/보안 데스크톱) 이름이 Default 가 아니면 보안 화면
+  // 입력 데스크톱을 열 수 없거나(권한 없음 = Winlogon/보안 데스크톱) 이름이 Default 가 아니면 보안 화면으로 판정
   HDESK d = OpenInputDesktop(0, FALSE, DESKTOP_READOBJECTS);
   if (!d) return Napi::Boolean::New(env, true);
   wchar_t name[64] = {0};

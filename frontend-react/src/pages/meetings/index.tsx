@@ -2,10 +2,10 @@
  * 회의.
  *  머리: 회의 24/700 + "진행 중 n · 오늘 예정 n" · [지금 시작](outline 40) [회의 예약](primary 40) — 폭 1100.
  *  목록: 진행 중 · 예정(날짜별) · 지난 묶음의 행 + ⋮. 모바일은 FAB → [지금 시작 / 회의 예약] 시트.
- *  만들기 → "예약됨" 시트(링크 복사 · 캘린더 · 채널 공유, 지금 시작이면 "지금 입장"). 같은 이름 409 는 이름 칸 아래 안내.
- *  행 ⋮: 수정(같은 예약 창, PATCH) · 회의 종료 · 내 응답(RSVP) · 캘린더에서 보기(그 날짜).
- *  알림의 회의 초대 수락/거절(useNotifications.runAction)·새 초대 알림이 오면 목록을 다시 받는다.
- * 회의는 같은 탭 회의 화면으로 연다(미니 통화 창).
+ *  생성 → "예약됨" 시트(링크 복사 · 캘린더 · 채널 공유, 지금 시작이면 "지금 입장"). 동일 이름 409 는 이름 칸 아래 안내.
+ *  행 ⋮: 수정(동일 예약 창, PATCH) · 회의 종료 · 내 응답(RSVP) · 캘린더에서 보기(해당 날짜).
+ *  알림의 회의 초대 수락/거절(useNotifications.runAction)·새 초대 알림 수신 시 목록을 재조회한다.
+ * 회의는 동일 탭의 회의 화면으로 연다(미니 통화 창).
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -38,13 +38,13 @@ import { MeetingsInviteModal, type MeetingCreatePayload } from '~/components/mee
 import { MeetingsCreatedSheet } from '~/components/meetings/MeetingsCreatedSheet'
 import { writeClipboard } from '~/lib/clipboard'
 
-// 알림(회의 초대 수락/거절 버튼 · 새 초대)과 맞물리기 — 회의 관련이면 목록을 다시 받는다
+// 알림(회의 초대 수락/거절 버튼 · 새 초대) 연동 — 회의 관련 알림이면 목록을 재조회한다
 function isMeetingNotif(n: any) {
   return n?.type === 'meeting_invite' || (n?.action_url || n?.link || '').startsWith('/meetings')
 }
 function is409(e: any) { return e?.statusCode === 409 || e?.status === 409 || e?.response?.status === 409 }
 
-/** 캘린더에서 보기 — 예약 날짜의 캘린더(호스트는 add_to_calendar 로 만든 일정, 초대받은 사람은 초대 일정이 거기 있다) */
+/** 캘린더에서 보기 — 예약 날짜의 캘린더(호스트는 add_to_calendar 로 생성한 일정, 초대 대상자는 초대 일정이 해당 캘린더에 존재) */
 function calendarPath(scheduledAt?: string | null) {
   if (!scheduledAt) return '/calendar'
   const d = new Date(scheduledAt)
@@ -77,7 +77,7 @@ export default function MeetingsIndexPage() {
     }
   }, [])
 
-  // 1분마다 "시작 n분"·입장 가능 여부를 다시 계산하고, 30초마다 방 목록(참가자 수)을 새로 받는다
+  // 1분마다 "시작 n분"·입장 가능 여부를 재계산하고, 30초마다 방 목록(참가자 수)을 재조회한다
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     if (siteConfigStore.getState().demoMode) return
@@ -89,8 +89,8 @@ export default function MeetingsIndexPage() {
 
   const counts = meetingCounts(rooms, now)
 
-  // 회의는 같은 탭 회의 화면으로 연다(예전 팝업 → 미니 통화 창을 위해). 다른 화면으로 가면 셸이 미니 창을 띄운다.
-  // 호스트 여부는 주소로 넘기지 않는다 — 토큰을 주는 백엔드가 알려 준다.
+  // 회의는 동일 탭의 회의 화면으로 연다(기존 팝업 → 미니 통화 창 지원 목적). 다른 화면으로 이동하면 셸이 미니 창을 표시한다.
+  // 호스트 여부는 주소로 전달하지 않는다 — 토큰을 발급하는 백엔드가 반환한다.
   function openMeetingWindow(roomName: string, shareToken: string) {
     void openRoom(roomName, shareToken ? { st: shareToken } : undefined)
   }
@@ -118,7 +118,7 @@ export default function MeetingsIndexPage() {
       setCreateMode(null)
       setCreated({ room, payload })
     } catch (e: any) {
-      // 같은 이름의 회의를 다른 사람이 갖고 있으면 409 — 창을 닫지 않고 이름 칸에서 알려 준다
+      // 동일 이름의 회의를 다른 사용자가 보유하면 409 — 창을 닫지 않고 이름 칸에 안내를 표시한다
       if (is409(e)) setNameConflict(t('meetings.index.nameTaken'))
       else addToast('error', (typeof e?.data?.detail === 'string' && e.data.detail) || t('meetings.index.createFail'))
     } finally {
@@ -215,7 +215,7 @@ export default function MeetingsIndexPage() {
 
   const notConfigured = !!error && /not configured/i.test(error)
 
-  // 데모 모드 자리표시(시안 밖 — 기존 내용 유지, 글리프만 아이콘으로)
+  // 데모 모드 자리표시(시안 범위 외 — 기존 내용 유지, 글리프만 아이콘으로 대체)
   if (demoMode) {
     return (
       <div className="flex h-full items-center justify-center px-4">
@@ -239,7 +239,7 @@ export default function MeetingsIndexPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      {/* 최대 1100. 유동 레이아웃 뒤로 큰 화면에서 왼쪽에 붙어 빈 상태·목록이 치우쳐 보여 가운데 정렬 */}
+      {/* 최대 1100. 유동 레이아웃 적용 이후 큰 화면에서 왼쪽에 붙어 빈 상태·목록이 치우쳐 보이므로 가운데 정렬 */}
       <div className="mx-auto flex w-full max-w-[1100px] flex-col pb-28 md:gap-4 md:px-7 md:pb-10 md:pt-6">
         {/* 머리 */}
         <div className="flex items-end gap-2.5 px-4 pb-2 pt-3 md:p-0">
@@ -270,7 +270,7 @@ export default function MeetingsIndexPage() {
                 <UiEmptyState
                   icon="video"
                   title={t('meetings.index.emptyTitle')}
-                  // 목록에는 내가 만들었거나 초대받은 회의만 실린다(남이 연 진행 중 회의는 안 보인다) — 빈 화면에서 그걸 알려 준다
+                  // 목록에는 본인이 생성했거나 초대받은 회의만 포함된다(타인이 개설한 진행 중 회의는 미표시) — 빈 화면에서 이를 안내한다
                   description={t('meetings.index.emptyDescMine', '내가 만들었거나 초대받은 회의가 여기에 보입니다. 지금 시작하거나 회의를 예약해 초대 링크를 보내세요.')}
                   actionLabel={t('meetings.schedule')}
                   onAction={() => setCreateMode('schedule')}

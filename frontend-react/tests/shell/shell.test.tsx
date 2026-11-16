@@ -1,5 +1,5 @@
-// 셸 렌더: 로그인 사용자로 기본 레이아웃(데스크톱·모바일 폭)이 사이드바·상단바·탭바를 그리고,
-// 로그인 전 404 는 인증 틀, 로그인 후 404 는 셸 안에 뜨는지. ($fetch 는 가짜 — tests/router/routes.test.tsx 와 같은 방식)
+// 셸 렌더: 로그인 사용자로 기본 레이아웃(데스크톱·모바일 폭)이 사이드바·상단바·탭바를 렌더링하고,
+// 로그인 전 404 는 인증 틀, 로그인 후 404 는 셸 안에 표시되는지 검증. ($fetch 는 모의(mock) — tests/router/routes.test.tsx 와 동일 방식)
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, waitFor, act } from '@testing-library/react'
 import { RouterProvider, createMemoryRouter } from 'react-router'
@@ -69,7 +69,7 @@ describe('기본 셸(로그인 사용자)', () => {
     const router = shellRouter('/files')
     const { container, unmount } = render(<RouterProvider router={router} />)
     await waitFor(() => expect(container.querySelector('[data-testid="page-body"]')).not.toBeNull())
-    // 사이드바: 모듈 목록을 받으면 레일에 항목이 생긴다
+    // 사이드바: 모듈 목록을 수신하면 레일에 항목이 생성됨
     await waitFor(() => expect(container.querySelector('aside a[href="/files"]')).not.toBeNull())
     const aside = container.querySelector('aside')!
     expect(aside.querySelector(`a[aria-label="${t('shell.tab.home')}"]`)).not.toBeNull()
@@ -79,9 +79,9 @@ describe('기본 셸(로그인 사용자)', () => {
     expect(crumb).not.toBeNull()
     expect(crumb!.textContent).toContain(t('shell.topbar.workspace'))
     expect(crumb!.textContent).toContain(t('nav.files'))
-    // 벨(활동)·사용자 메뉴 단추
+    // 벨(활동)·사용자 메뉴 버튼
     expect(container.querySelector(`header button[aria-label="${i18n.t('shell.topbar.userMenuFor', { name: 'Admin' })}"]`)).not.toBeNull()
-    // 하단 탭바는 그려지되 CSS(md:hidden)로 데스크톱에서 숨는다
+    // 하단 탭바는 렌더링되나 CSS(md:hidden)로 데스크톱에서 숨김 처리됨
     const tabbar = container.querySelector(`nav[aria-label="${t('shell.tab.mainMenu')}"]`)
     expect(tabbar).not.toBeNull()
     expect(tabbar!.className).toContain('md:hidden')
@@ -165,7 +165,7 @@ describe('404', () => {
     expect(crumb).not.toBeNull()
     await waitFor(() => expect(crumb!.textContent).toContain(t('error.404.crumb')))
     expect(container.querySelector('main h1')?.textContent).toBe(t('error.404.title'))
-    // (경로 줄은 토대 NotFound 가 window.location 을 넘겨 메모리 라우터에선 '/' — 여기서는 보지 않는다)
+    // (경로 줄은 토대 NotFound 가 window.location 을 전달하므로 메모리 라우터에서는 '/' — 여기서는 확인하지 않음)
     act(() => unmount())
     router.dispose()
   })

@@ -1,7 +1,7 @@
 /**
- * 인앱 다이얼로그 호스트 — useDialog() 의 current 를 그린다. App.tsx 루트에 1회 마운트.
+ * 인앱 다이얼로그 호스트 — useDialog() 의 current 를 렌더링한다. App.tsx 루트에 1회 마운트.
  * 확인형: UiModal confirm 변형(헤더 없는 소형 max-w-sm), 파괴적은 bg-danger, 포커스는 [취소]에서 시작.
- * 다이얼로그 내기는 alertBox / confirmBox / promptBox / choose(~/composables/useDialog).
+ * 다이얼로그 호출은 alertBox / confirmBox / promptBox / choose(~/composables/useDialog).
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useDialog } from '~/composables/useDialog'
@@ -14,14 +14,14 @@ const BTN_DANGER = `${BTN} bg-danger px-4 font-semibold text-background hover:bg
 
 /**
  * 다이얼로그 호스트(전역 1개).
- * @example <UiDialogHost />  — App.tsx 루트에서만. 쓰는 쪽은 `if (await confirmBox('삭제할까요?', { danger: true })) …`
+ * @example <UiDialogHost />  — App.tsx 루트에서만 사용. 호출 측은 `if (await confirmBox('삭제할까요?', { danger: true })) …`
  */
 export function UiDialogHost() {
   const { current } = useDialog()
   const [inputValue, setInputValue] = useState('')
   const inputRef = useRef<HTMLInputElement | null>(null)
 
-  // 프롬프트가 뜨면 기본값을 넣고 입력에 포커스·전체 선택
+  // 프롬프트 표시 시 기본값을 설정하고 입력에 포커스·전체 선택
   const curId = current?.id
   const curKind = current?.kind
   const curDefault = current?.defaultValue
@@ -115,7 +115,7 @@ export function UiDialogHost() {
             autoComplete="off"
             placeholder={current.placeholder}
             className="mt-3 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-hidden placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/35"
-            // 한글 조합 중 Enter 는 글자 확정 — 그대로 확인으로 넘기지 않는다
+            // 한글 조합 중 Enter 는 글자 확정 — 확인 동작으로 전달하지 않는다
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); onConfirm() } }}
           />
         )}

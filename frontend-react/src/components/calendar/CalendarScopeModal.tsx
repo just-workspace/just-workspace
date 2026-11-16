@@ -2,10 +2,10 @@
  * 반복 일정 범위 확인.
  *  삭제: alertdialog 400, 패딩 20 —
  *    제목 15/600 "반복 일정을 삭제할까요?" + 설명 13 '"제목" · 매주 목요일 15:00. 참석자 n명에게 취소 메일이 갑니다.' →
- *    라디오 행 40(테두리 카드, 고르면 1.5px primary + primary/0.08): 이 일정만 (날짜) / 이 일정과 이후 모두 / 반복 전체 →
- *    체크 "참석자에게 취소 알림 보내기"(참석자가 있을 때만) → [취소][삭제 danger].
- *  수정: 시안 그림이 없어 예전 확인형 그대로(라디오 3 + [취소][저장]).
- * "이 일정만" = 회차 예외(삭제는 EXDATE, 수정은 RECURRENCE-ID 행). 가장 좁은 범위라 기본 선택. 포커스는 [취소]부터.
+ *    라디오 행 40(테두리 카드, 선택 시 1.5px primary + primary/0.08): 이 일정만 (날짜) / 이 일정과 이후 모두 / 반복 전체 →
+ *    체크 "참석자에게 취소 알림 보내기"(참석자가 있는 경우에만) → [취소][삭제 danger].
+ *  수정: 시안이 없어 기존 확인형 유지(라디오 3 + [취소][저장]).
+ * "이 일정만" = 회차 예외(삭제는 EXDATE, 수정은 RECURRENCE-ID 행). 가장 좁은 범위이므로 기본 선택. 포커스는 [취소]부터.
  */
 import { eventRange, zp } from '~/utils/calTz'
 import { useState, type KeyboardEvent } from 'react'
@@ -19,11 +19,11 @@ import { UiRadio } from '~/components/ui/Radio'
 
 export interface CalendarScopeModalProps {
   mode: 'delete' | 'edit'
-  /** 첫 회차(마스터)인가 — 지금은 기본 선택에 쓰지 않지만 호출부 호환을 위해 받는다 */
+  /** 첫 회차(마스터) 여부 — 현재 기본 선택에는 사용하지 않으나 호출부 호환을 위해 수신한다 */
   isOccurrence: boolean
-  /** 삭제 설명(제목·반복·시각·참석자 수)에 쓴다 */
+  /** 삭제 설명(제목·반복·시각·참석자 수)에 사용 */
   event?: { title: string; start: string; all_day?: boolean; recurrence_rule: string | null; attendees?: readonly { email: string }[] } | null
-  /** 참석자 수에서 뺄 내 이메일(주최자 본인) */
+  /** 참석자 수에서 제외할 본인 이메일(주최자 본인) */
   myEmail?: string | null
   onClose?: () => void
   /** 범위 확정(notify = 참석자에게 취소 알림) */
@@ -137,7 +137,7 @@ export function CalendarScopeModal({ mode, event, myEmail, onClose, onConfirm }:
     )
   }
 
-  // 수정 — 예전 확인형 그대로
+  // 수정 — 기존 확인형 유지
   return (
     <UiModal
       confirm

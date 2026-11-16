@@ -1,5 +1,5 @@
-// 브랜치 선택("⑂ main ▾"). 고르면 ?ref= 로 라우트를 바꾼다(코드·커밋 탭이 따라 다시 불린다).
-// 브랜치 검색·만들기·태그는 ★백엔드 갭(브랜치 목록만 있음).
+// 브랜치 선택("⑂ main ▾"). 선택 시 ?ref= 로 라우트를 변경한다(코드·커밋 탭이 이에 따라 재조회된다).
+// 브랜치 검색·생성·태그는 백엔드 갭(브랜치 목록만 제공).
 import { useState, type MouseEvent } from 'react'
 import { useI18n } from '~/i18n'
 import { navigateTo, useRoute } from '~/lib/router'
@@ -7,7 +7,7 @@ import { useGit } from '~/composables/useGit'
 import { UiIcon } from '~/components/ui/Icon'
 import { UiMenu, type UiMenuItem } from '~/components/ui/Menu'
 
-/** 브랜치 고르기 버튼 + 메뉴 */
+/** 브랜치 선택 버튼 + 메뉴 */
 export function GitBranchSelector() {
   const { t } = useI18n()
   const { branches, currentBranch, selectedRepo } = useGit()

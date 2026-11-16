@@ -1,14 +1,14 @@
 /**
- * 모달 하나: 제목 15/600 · 헤더 48 · 푸터 56 · 버튼 h-9 [취소][확인] 오른쪽 · ✕ 는 아이콘 버튼 aria-label="닫기".
- * confirm 변형 = 헤더 없는 소형(max-w-sm, p-5) — UiDialogHost 가 쓴다.
- * 모바일(sm 미만)은 바텀시트: rounded-sheet 상단 + 핸들 36×4. Esc 닫기, 포커스 트랩, 닫으면 연 요소로 포커스 복귀.
- * 폭: sm 384 · md 448 · lg 512 · '440'(확인형 넓게 — 회의 "예약됨") · '480'(이동) · '520'(일정·연락처·공유 폼) ·
- *     '680'(목록 + 미리보기 두 열이 넓은 고르기 창) · wide(960 × 90dvh — PDF·이미지 미리보기).
- * 확인형(confirm)도 size 를 받는다 — 기본 sm 384, '400'(반복 일정 삭제 등) · '440' · md · lg 도 그대로.
- * 확인형에서 쓸 수 없는 것: wide(→ 384) · '480' · '520' · '680' 은 폼형 폭이라 확인형에선 그대로 적용되긴 하지만 권장하지 않는다.
+ * 모달 1종: 제목 15/600 · 헤더 48 · 푸터 56 · 버튼 h-9 [취소][확인] 오른쪽 · ✕ 는 아이콘 버튼 aria-label="닫기".
+ * confirm 변형 = 헤더 없는 소형(max-w-sm, p-5) — UiDialogHost 가 사용한다.
+ * 모바일(sm 미만)은 바텀시트: rounded-sheet 상단 + 핸들 36×4. Esc 닫기, 포커스 트랩, 닫힘 시 모달을 연 요소로 포커스 복귀.
+ * 폭: sm 384 · md 448 · lg 512 · '440'(확인형 확장 폭 — 회의 "예약됨") · '480'(이동) · '520'(일정·연락처·공유 폼) ·
+ *     '680'(목록 + 미리보기 2열이 넓은 선택 창) · wide(960 × 90dvh — PDF·이미지 미리보기).
+ * 확인형(confirm)도 size 를 받는다 — 기본 sm 384, '400'(반복 일정 삭제 등) · '440' · md · lg 도 그대로 적용.
+ * 확인형에서 사용 불가: wide(→ 384) · '480' · '520' · '680' 은 폼형 폭이므로 확인형에 그대로 적용은 되나 권장하지 않는다.
  * 모바일: sheet(바텀시트, 기본) · full(전체 화면 시트 — 트리·긴 목록·미리보기). 헤더 오른쪽 actions(닫기 앞), flush = 본문 여백 없음.
- * 마운트 = 열림. 부모가 조건부로 그렸다 뗀다(onClose 에서 상태를 내린다). body 로 포털.
- * 처음 포커스: 안에 data-autofocus 가 있으면 그것, 없으면 첫 포커스 가능 요소.
+ * 마운트 = 열림. 부모가 조건부로 마운트·언마운트한다(onClose 에서 상태를 해제한다). body 로 포털.
+ * 초기 포커스: 내부에 data-autofocus 가 있으면 해당 요소, 없으면 첫 포커스 가능 요소.
  */
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -19,8 +19,8 @@ import { FOCUSABLE } from './internal'
 
 export interface UiModalProps {
   /**
-   * 폭 — sm 384 · md 448 · lg 512 · '400' · '440' · '480' · '520' · '680'(목록 + 미리보기 고르기 창) · wide 960×90dvh.
-   * 기본: 폼형 md, 확인형(confirm) sm(384). 확인형은 wide 를 무시하고 384.
+   * 폭 — sm 384 · md 448 · lg 512 · '400' · '440' · '480' · '520' · '680'(목록 + 미리보기 선택 창) · wide 960×90dvh.
+   * 기본: 폼형 md, 확인형(confirm) sm(384). 확인형은 wide 를 무시하고 384 적용.
    */
   size?: 'sm' | 'md' | 'lg' | '400' | '440' | '480' | '520' | '680' | 'wide'
   /** 모바일 표시 — sheet(바텀시트, 기본) · full(전체 화면) */
@@ -29,19 +29,19 @@ export interface UiModalProps {
   flush?: boolean
   /** 제목 문자열(titleSlot 대신) */
   title?: string
-  /** 확인형(헤더 없음, max-w-sm). 파괴적이면 danger 와 함께 */
+  /** 확인형(헤더 없음, max-w-sm). 파괴적 동작이면 danger 와 함께 사용 */
   confirm?: boolean
   /** role=alertdialog(파괴적 확인) */
   danger?: boolean
-  /** 바깥 클릭으로 닫지 않기 */
+  /** 바깥 클릭에 의한 닫힘 비활성화 */
   persistent?: boolean
   /** 접근성 이름(제목이 titleSlot 일 때) */
   ariaLabel?: string
   /** 닫기(✕ · Esc · 바깥 클릭) */
   onClose?: () => void
-  /** 제목 자리 내용 — title 이 없을 때 */
+  /** 제목 영역 내용 — title 미지정 시 */
   titleSlot?: ReactNode
-  /** 헤더 오른쪽 닫기 앞 버튼들 — 폼형만 */
+  /** 헤더 오른쪽 닫기 버튼 앞의 버튼 — 폼형 전용 */
   actions?: ReactNode
   /** 푸터 — 버튼 h-9 [취소][확인] 오른쪽 정렬 */
   footer?: ReactNode
@@ -69,8 +69,8 @@ export function UiModal({ size, mobile = 'sheet', flush = false, title, confirm 
   const panelRef = useRef<HTMLDivElement | null>(null)
   const closeRef = useRef(onClose)
   closeRef.current = onClose
-  // 안에서 누르기 시작해(입력 글자를 끌어 고르는 등) 스크림에서 뗀 것은 "바깥 클릭" 이 아니다 —
-  // 그 경우에도 click 은 공통 조상인 스크림에서 나서, 예전에는 모달이 닫히고 입력이 사라졌다.
+  // 내부에서 누르기 시작하여(입력 글자를 드래그 선택하는 등) 스크림에서 뗀 경우는 "바깥 클릭" 이 아니다 —
+  // 이 경우에도 click 은 공통 조상인 스크림에서 발생하여, 기존에는 모달이 닫히고 입력이 소실되었다.
   const downInside = useRef(false)
 
   function focusables(): HTMLElement[] {
@@ -88,7 +88,7 @@ export function UiModal({ size, mobile = 'sheet', flush = false, title, confirm 
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null
-    // 확인형은 [취소]부터. data-autofocus 가 있으면 그것, 없으면 첫 포커스 가능 요소.
+    // 확인형은 [취소]부터 포커스. data-autofocus 가 있으면 해당 요소, 없으면 첫 포커스 가능 요소.
     const pref = panelRef.current?.querySelector<HTMLElement>('[data-autofocus]')
     ;(pref ?? focusables()[0] ?? panelRef.current)?.focus()
     return () => { opener?.focus?.() }

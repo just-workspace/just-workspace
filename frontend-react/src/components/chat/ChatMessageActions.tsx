@@ -1,10 +1,10 @@
 /**
  * 메시지 호버 바(디스코드 수치).
  *  모양: 1px · radius 8 · 안쪽 2 · 버튼 32(radius 6) · 아이콘 20 · 구분선 1×24 · 줄 위 −16. 아이콘 호버 1.1배(reduce-motion 제외).
- *  구성: 최근 리액션 3(개인 설정 chatEmojiRecent 앞 3, 없으면 시안 👍 👀 🎉) | 리액션 추가(피커) · 답장 · 스레드로 답장 · 저장 · ⋯
- *  Shift 를 누르고 있으면 고정 · 삭제(danger)가 ⋯ 앞에 바로 보인다(디스코드).
+ *  구성: 최근 리액션 3(개인 설정 chatEmojiRecent 앞 3, 없으면 시안 :+1: :eyes: :tada:) | 리액션 추가(피커) · 답장 · 스레드로 답장 · 저장 · ⋯
+ *  Shift 를 누르고 있는 동안 고정 · 삭제(danger)가 ⋯ 앞에 즉시 표시된다(디스코드).
  *  ⋯ = 수정 · 답장 · 스레드 만들기(이름 붙여 시작) · 고정 · 안 읽음으로 표시 · 링크 복사 · 텍스트 복사 · (다운로드) · 삭제.
- * 동작 실행은 useMessageActionRunner 한 곳 — 모바일 시트(ChatMessageSheet)도 같은 것을 쓴다.
+ * 동작 실행은 useMessageActionRunner 한 곳에서 수행한다 — 모바일 시트(ChatMessageSheet)도 동일 실행기를 사용한다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { createStore, useStore } from 'zustand'
@@ -28,7 +28,7 @@ import { ReactionGlyph } from './ChatReactions'
 import { requestChatAiSummary } from './ChatAiSummary'
 import { aiInlineStore, buttonState } from '~/composables/useAiInline'
 
-/** 최근 리액션이 없을 때 */
+/** 최근 리액션이 없을 때의 기본값 */
 export const DEFAULT_QUICK = ['👍', '👀', '🎉', '✅', '❤️', '😂']
 export function quickReactions(recent: readonly string[] | null | undefined, n = 3): string[] {
   const out = [...(recent || [])].filter(Boolean).slice(0, n)
@@ -36,7 +36,7 @@ export function quickReactions(recent: readonly string[] | null | undefined, n =
   return out
 }
 
-// ─── Shift 누르고 있음(전역 하나) ───
+// ─── Shift 누름 상태(전역 단일) ───
 const shiftStore = createStore<{ held: boolean }>()(() => ({ held: false }))
 let _shiftHooked = false
 function hookShift() {
@@ -114,7 +114,7 @@ export function useMessageActionRunner(o: ActionRunnerOpts) {
           break
         }
         case 'unread': await markUnreadHere(m, t); break
-        // 화면 안 AI — 이 메시지부터 끝까지 요약(목록 위 카드)
+        // 화면 내 AI — 해당 메시지부터 끝까지 요약(목록 위 카드)
         case 'aiSummary': requestChatAiSummary(m.channel_id, m.id); break
         case 'delete': {
           if (!await confirmBox(t('chat.message.deleteConfirm'), { danger: true })) return
@@ -130,7 +130,7 @@ export function useMessageActionRunner(o: ActionRunnerOpts) {
   return { run, react, canDelete, canPin }
 }
 
-/** 여기부터 안 읽음(⋯ · 시트 · Alt+클릭) — 새 메시지 선이 그 줄 위로, 토스트 */
+/** 여기부터 안 읽음(⋯ · 시트 · Alt+클릭) — 새 메시지 선을 해당 줄 위로 이동, 토스트 표시 */
 export async function markUnreadHere(m: Pick<ChatMessage, 'id' | 'channel_id'>, t: (k: string) => string) {
   await markUnread(m.channel_id, m.id)
   setUnreadAnchor({ channelId: m.channel_id, messageId: m.id })
@@ -140,18 +140,18 @@ export async function markUnreadHere(m: Pick<ChatMessage, 'id' | 'channel_id'>, 
 export interface ChatMessageActionsProps {
   message: ChatMessage
   isOwn: boolean
-  /** 보이기(호버·포커스 중) */
+  /** 표시 여부(호버·포커스 중) */
   visible?: boolean
-  /** 내 메시지면 "수정" 항목 */
+  /** 본인 메시지이면 "수정" 항목 표시 */
   canEdit?: boolean
   /** "다운로드" 항목 */
   canDownload?: boolean
-  /** 스레드 패널 안 — "스레드로 답장"·안 읽음 표시를 뺀다 */
+  /** 스레드 패널 내부 — "스레드로 답장"·안 읽음 표시 제외 */
   inThread?: boolean
   onOpenThread?: (messageId: string) => void
   onEdit?: () => void
   onDownload?: () => void
-  /** 메뉴가 열려 있는 동안 바를 붙잡아 두라는 신호 */
+  /** 메뉴가 열려 있는 동안 바를 유지하라는 신호 */
   onHold?: (held: boolean) => void
 }
 
@@ -167,7 +167,7 @@ export function ChatMessageActions({
   const shift = useShiftHeld()
   const pinned = !!message.pinned_at
   const { run, react, canDelete, canPin } = useMessageActionRunner({ message, isOwn, inThread, onOpenThread, onEdit, onDownload })
-  // 화면 안 AI 를 쓸 수 있을 때만 "여기부터 요약"(상태는 목록 위 카드가 받아 둔 값)
+  // 화면 내 AI 사용 가능 시에만 "여기부터 요약" 제공(상태는 목록 위 카드가 수신해 둔 값)
   const aiReady = useStore(aiInlineStore, s => buttonState(s.status) === 'ready')
 
   const [menuOpen, setMenuOpen] = useState(false)

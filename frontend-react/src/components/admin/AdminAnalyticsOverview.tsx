@@ -1,6 +1,6 @@
 /**
  * 관리 개요 › 분석 요약 4칸.
- * 총 방문 · 고유 방문자 · 로그인 방문 · 평균 응답(ms). data 가 null 이면 아무 칸도 그리지 않는다(빈 격자).
+ * 총 방문 · 고유 방문자 · 로그인 방문 · 평균 응답(ms). data 가 null 이면 칸을 렌더링하지 않는다(빈 격자).
  */
 import { useI18n } from '~/i18n'
 import type { AnalyticsOverview } from '~/composables/useAdminAnalytics'

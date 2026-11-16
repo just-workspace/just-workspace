@@ -1,12 +1,12 @@
 /**
- * 업데이트 › 오프라인 업데이트 — 인터넷에 나갈 수 없는 서버를 묶음 파일로 올린다.
+ * 업데이트 › 오프라인 업데이트 — 인터넷 접속이 불가한 서버를 오프라인 번들로 업데이트한다.
  *
- *  1. 묶음 파일을 준다: 브라우저로 올리거나, 서버에 먼저 옮겨 둔 파일의 경로를 알려 준다.
+ *  1. 오프라인 번들 제공: 브라우저로 업로드하거나, 서버에 미리 복사해 둔 파일의 경로를 지정한다.
  *  2. 서버가 서명과 버전을 검증한다(올리는 중 → 검증 중 → 검증됨 / 서명 불일치 / 버전 낮음 / 파일 없음).
- *  3. 묶음에 들어 있지 않은 이미지(데이터베이스·캐시·웹 서버 + 켠 구역의 구성 요소)를 줄마다 올린다.
- *  4. 전부 갖춰져야 "적용"이 켜진다 — 막혀 있는 동안에는 그 이유를 버튼 옆에 적는다.
+ *  3. 번들에 포함되지 않은 이미지(데이터베이스·캐시·웹 서버 + 활성화한 구역의 구성 요소)를 항목별로 업로드한다.
+ *  4. 전부 구비되어야 "적용"이 활성화된다 — 차단된 동안에는 사유를 버튼 옆에 표시한다.
  *
- * 두 방식 모두 같은 검증 결과·같은 차단 규칙을 쓴다.
+ * 두 방식 모두 동일한 검증 결과·동일한 차단 규칙을 사용한다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -115,7 +115,7 @@ export function OfflineTab() {
 
   const uploading = !!upload
   const block = offlineBlock(state, uploading)
-  // 방식마다 아직 아무것도 주지 않았을 때의 안내가 다르다
+  // 아무것도 제공하지 않은 상태의 안내는 방식별로 상이하다
   const reason = block === 'empty' && mode === 'path' ? t('admin.update.offline.block.emptyPath') : block ? t(`admin.update.offline.block.${block}`) : ''
   const shown = bundle && !uploading ? bundle : null
   const judged = !!shown && ['verified', 'signature_mismatch', 'version_too_low'].includes(shown.state)

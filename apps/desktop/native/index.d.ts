@@ -1,4 +1,4 @@
-// jw_native_audio 애드온 타입(src/addon.cpp 정본). 메인 프로세스(src/main/nativeAudio)와 테스트 하네스가 쓴다.
+// jw_native_audio 애드온 타입(src/addon.cpp 정본). 메인 프로세스(src/main/nativeAudio)와 테스트 하네스가 사용한다.
 
 export type SampleFormat = 'u8' | 's16' | 's24' | 's32' | 'f32';
 export type DeviceKind = 'capture' | 'playback';
@@ -6,7 +6,7 @@ export type Backend = 'wasapi' | 'null';
 export type TestSignal = 'none' | 'sweep' | 'noise' | 'ramp';
 
 export interface NativeFormat {
-  /** null 백엔드는 'unknown' 을 돌려준다 */
+  /** null 백엔드는 'unknown' 을 반환한다 */
   format: SampleFormat | 'unknown';
   channels: number;
   sampleRate: number;
@@ -69,7 +69,7 @@ export interface DeviceOptions {
   exclusive?: boolean;
   /** 링버퍼 용량(프레임, 기본 500 ms) */
   ringFrames?: number;
-  /** 테스트: 캡처 데이터를 결정적 신호로 덮는다 */
+  /** 테스트: 캡처 데이터를 결정적 신호로 대체한다 */
   testSignal?: TestSignal;
   seed?: number;
   wasapiUsage?: 'pro_audio' | 'games';
@@ -96,7 +96,7 @@ export interface OpenInfo {
   internalSampleRate?: number;
   internalPeriodFrames?: number;
   internalPeriods?: number;
-  /** miniaudio 변환기가 끼어 있다(포맷·채널·레이트 중 하나가 내부와 다름) */
+  /** miniaudio 변환기 개입 상태(포맷·채널·레이트 중 하나가 내부와 상이) */
   converterActive?: boolean;
   /** exclusive + 레이트·채널 동일 + 포맷 동일(또는 24-in-32 → s24 무손실) */
   bitPerfect?: boolean;
@@ -106,9 +106,9 @@ export interface OpenInfo {
 export interface DeviceStats {
   callbacks: number;
   framesProcessed: number;
-  /** 캡처: 링이 꽉 차 버린 콜백 수 */
+  /** 캡처: 링이 가득 차 폐기된 콜백 수 */
   overruns: number;
-  /** 재생: 링이 비어 0 을 채운 콜백 수 */
+  /** 재생: 링이 비어 0 으로 채운 콜백 수 */
   underruns: number;
   underrunFrames: number;
   ringBytes: number;
@@ -135,14 +135,14 @@ export declare class Device {
   close(): void;
   info(): OpenInfo;
   stats(): DeviceStats;
-  /** 캡처: 링에서 최대 buf.byteLength 바이트를 복사. 돌려주는 값 = 복사한 바이트 */
+  /** 캡처: 링에서 최대 buf.byteLength 바이트를 복사. 반환값 = 복사한 바이트 수 */
   read(buf: Uint8Array): number;
   available(): number;
-  /** 재생: 링에 전부 들어가면 byteLength, 공간이 없으면 0 */
+  /** 재생: 링에 전부 기록되면 byteLength, 공간이 없으면 0 */
   write(buf: Uint8Array): number;
   queued(): number;
   clear(): void;
-  /** 캡처 데이터가 들어왔을 때(콜백 단위로 합쳐서) 부른다 */
+  /** 캡처 데이터 수신 시(콜백 단위로 병합하여) 호출한다 */
   setDataCallback(fn: (() => void) | null): void;
   ringCapacity(): number;
 }
@@ -156,7 +156,7 @@ export declare class Resampler {
   destroy(): void;
 }
 
-/** 단위 테스트용 — ring_buffer.h 그대로 */
+/** 단위 테스트용 — ring_buffer.h 와 동일 */
 export declare class RingTest {
   constructor(capacity: number);
   write(buf: Uint8Array): number;

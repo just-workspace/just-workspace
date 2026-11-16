@@ -2,7 +2,7 @@
  * RTCStatsReport → VoiceStats("증명" 패널). 순수 함수 — 단위 테스트 대상.
  *
  * 송신(outbound-rtp audio): bytesSent 차분으로 비트레이트, codecId → codec(mimeType·clockRate·channels·sdpFmtpLine).
- * remote-inbound-rtp: 상대(SFU)가 본 roundTripTime·jitter·packetsLost.
+ * remote-inbound-rtp: 상대(SFU)가 관측한 roundTripTime·jitter·packetsLost.
  * 수신(inbound-rtp audio): bytesReceived 차분, packetsLost, concealedSamples, jitterBufferDelay/EmittedCount.
  * candidate-pair(succeeded/nominated): currentRoundTripTime 폴백.
  */
@@ -39,8 +39,8 @@ export function opusChannels(codec: string | null, fmtp: string | null, codecCha
 }
 
 /**
- * 송신 리포트(들)과 수신 리포트(들)을 합쳐 한 장으로. 보고서가 여럿이면(마이크 + 화면 공유 소리) 송신은
- * 비트레이트를 합치고 코덱은 첫 오디오 트랙 것을 쓴다.
+ * 송신 리포트(들)와 수신 리포트(들)를 하나로 병합한다. 리포트가 여러 개이면(마이크 + 화면 공유 소리) 송신은
+ * 비트레이트를 합산하고 코덱은 첫 오디오 트랙의 것을 사용한다.
  */
 export function summarizeStats(
   sendReports: Array<Iterable<AnyStat> | RTCStatsReport>,
@@ -68,7 +68,7 @@ export function summarizeStats(
           st.codec = String(codec.mimeType || '').replace(/^audio\//i, '') || null
           st.sampleRate = codec.clockRate != null ? Number(codec.clockRate) : null
           st.fmtp = codec.sdpFmtpLine ? String(codec.sdpFmtpLine) : null
-          // opus 의 RTP 코덱은 늘 48000/2 로 광고된다(RFC 7587) — 실제 인코딩 채널은 fmtp stereo 가 정한다
+          // opus 의 RTP 코덱은 항상 48000/2 로 광고된다(RFC 7587) — 실제 인코딩 채널은 fmtp stereo 가 결정한다
           st.channels = opusChannels(st.codec, st.fmtp, codec.channels != null ? Number(codec.channels) : null)
         }
       } else if (s.type === 'remote-inbound-rtp' && (s.kind === 'audio' || s.mediaType === 'audio')) {
@@ -111,7 +111,7 @@ export function summarizeStats(
   st.packetsLost = lost
   st.concealedSamples = concealed
   st.recvPacketsLost = recvLost
-  // jitterBufferDelay 는 누계(초) — 평균 지연 = 합/건수(48k 샘플 기준이라 ms 로)
+  // jitterBufferDelay 는 누계(초) — 평균 지연 = 합/건수(48k 샘플 기준이므로 ms 로 변환)
   st.jitterBufferMs = jbCount > 0 ? (jbDelay / jbCount) * 1000 : null
   return { stats: st, snap }
 }

@@ -1,4 +1,4 @@
-// lib/rbiMirror(생성된 사본): 엄격 검증기·로컬 에코·원본과 같은지
+// lib/rbiMirror(생성된 사본): 엄격 검증기·로컬 에코·원본과의 동일성
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'

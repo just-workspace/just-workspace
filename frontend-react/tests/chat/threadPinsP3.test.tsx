@@ -1,4 +1,4 @@
-// 스레드 첫 답글 뒤 "따라가기" 알약이 바로 "따라가는 중" · 고정 패널은 열 때마다 받아 "고정한 사람" 이 보인다
+// 스레드 첫 답글 후 "따라가기" 알약이 즉시 "따라가는 중"으로 전환 · 고정 패널은 열 때마다 재조회하여 "고정한 사람" 표시
 import { describe, it, expect, vi } from 'vitest'
 import { render, waitFor } from '@testing-library/react'
 

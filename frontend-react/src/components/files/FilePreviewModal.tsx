@@ -1,7 +1,7 @@
 /**
  * 미리보기 모달: 이미지 · PDF(iframe) · 텍스트(GET /api/files/preview) · 오피스(편집기로 열기) ·
- * 그 밖은 "미리 볼 수 없음 + 다운로드". Esc 닫기 + 열릴 때 포커스, 닫으면 연 요소로 복귀.
- * 마운트 = 열림. 포털 없이 페이지 안에 fixed 로 그린다.
+ * 그 외는 "미리 볼 수 없음 + 다운로드". Esc 닫기 + 열릴 때 포커스, 닫으면 연 요소로 복귀.
+ * 마운트 = 열림. 포털 없이 페이지 안에 fixed 로 렌더링한다.
  */
 import { useZoneInstalled } from '~/composables/useSiteConfig'
 import { useEffect, useRef, useState } from 'react'
@@ -14,7 +14,7 @@ import { UiIconButton } from '~/components/ui/IconButton'
 export interface FilesFilePreviewModalProps {
   item: FileItem
   onClose?: () => void
-  /** 오피스 문서를 편집기로 */
+  /** 오피스 문서를 편집기로 열기 */
   onOpenEditor?: (item: FileItem) => void
 }
 
@@ -25,8 +25,8 @@ export function FilesFilePreviewModal({ item, onClose, onOpenEditor }: FilesFile
   const [textContent, setTextContent] = useState<string | null>(null)
   const [loadingText, setLoadingText] = useState(false)
 
-  // 형식 판정은 lib/files previewKind 한곳 — mime 을 모르는 항목(직접 공유받은 파일)은 확장자로 본다
-  // 문서 구역이 없으면 편집기로 열 수 없다 — 오피스 파일도 "미리 볼 수 없음 + 내려받기"로
+  // 형식 판정은 lib/files previewKind 로 단일화 — mime 을 알 수 없는 항목(직접 공유받은 파일)은 확장자로 판정한다
+  // 문서 구역이 없으면 편집기로 열 수 없다 — 오피스 파일도 "미리 볼 수 없음 + 내려받기"로 처리한다
   const docsOn = useZoneInstalled('docs')
   const previewType = previewKind(item) ?? (docsOn && isOfficeFile(item.name) ? 'office' : null)
 

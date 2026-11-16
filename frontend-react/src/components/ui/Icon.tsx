@@ -1,9 +1,9 @@
 /**
  * 공용 선 아이콘(24 격자 1세트). 이름은 utils/icons.ts ICON_PATHS 키.
- * 글리프(✕ ▾ ⋯ ⋮ ‹ › ★)를 쓰던 자리에 `<UiIcon name="close" className="h-4 w-4" />` 로 대체한다.
- * 크기는 바깥 className(h-/w-)으로 준다. 모르는 이름은 점(dot)으로 그린다.
- * width·height 속성(size, 기본 16)도 함께 낸다 — CSS(Tailwind 클래스·부모 [&>svg] 규칙)가 표현 속성보다 우선하므로
- * 앱 모습은 그대로이고, 클래스가 안 닿는 곳(디자인 캔버스 등)에서도 16px 로 그려진다.
+ * 글리프(✕ ▾ ⋯ ⋮ ‹ › ★)를 사용하던 위치는 `<UiIcon name="close" className="h-4 w-4" />` 로 대체한다.
+ * 크기는 외부 className(h-/w-)으로 지정한다. 미등록 이름은 점(dot)으로 렌더링한다.
+ * width·height 속성(size, 기본 16)도 함께 출력한다 — CSS(Tailwind 클래스·부모 [&>svg] 규칙)가 표현 속성보다 우선하므로
+ * 앱 외형은 동일하며, 클래스가 적용되지 않는 곳(디자인 캔버스 등)에서도 16px 로 렌더링된다.
  */
 import type { SVGAttributes } from 'react'
 import { cn } from '~/lib/utils'
@@ -16,7 +16,7 @@ export interface UiIconProps extends Omit<SVGAttributes<SVGSVGElement>, 'strokeW
   strokeWidth?: number | string
   /** 채운 아이콘(별표 켬 등). 기본은 선만 */
   filled?: boolean
-  /** width·height 속성(기본 16). 클래스(h-/w-/size-)가 있으면 클래스가 이긴다 */
+  /** width·height 속성(기본 16). 클래스(h-/w-/size-)가 있으면 클래스가 우선한다 */
   size?: number | string
 }
 

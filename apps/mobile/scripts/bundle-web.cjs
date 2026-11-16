@@ -1,16 +1,16 @@
 /**
  * 번들 빌드용 웹 산출물 — 웹 프런트(frontend-react)를 이 워크스페이스 주소로 빌드해 www-react/ 에 둔다.
  *
- * 번들 모드는 앱 안에 SPA 를 넣고 API 만 서버로 보낸다(VITE_API_BASE = 사이트 주소, Bearer 토큰).
- * 기본(원격) 모드는 서버 웹을 그대로 여므로 이 단계가 없다 — builder-build.sh 가 JW_WEB_BUNDLE=1 일 때만 부른다.
+ * 번들 모드는 앱에 SPA 를 포함하고 API 만 서버로 전송한다(VITE_API_BASE = 사이트 주소, Bearer 토큰).
+ * 기본(원격) 모드는 서버 웹을 그대로 열므로 이 단계가 없다 — builder-build.sh 가 JW_WEB_BUNDLE=1 일 때만 호출한다.
  *
  *   WS_URL       워크스페이스 주소(필수) → VITE_API_BASE
- *   APP_NAME     앱 이름 → 빌드 브랜딩(런타임은 /api/health 가 덮는다)
- *   JW_WEB_SRC   frontend-react 소스 위치(기본: ../../frontend-react — 리포 그대로일 때)
- *   JW_WEB_OUT   산출물 위치(기본: www-react). capacitor.config.ts 의 webDir 이 JW_WEB_DIR 로 이걸 가리킨다.
+ *   APP_NAME     앱 이름 → 빌드 브랜딩(런타임에는 /api/health 값이 우선한다)
+ *   JW_WEB_SRC   frontend-react 소스 위치(기본: ../../frontend-react — 리포 구조 그대로일 때)
+ *   JW_WEB_OUT   산출물 위치(기본: www-react). capacitor.config.ts 의 webDir 이 JW_WEB_DIR 로 이 위치를 가리킨다.
  *
- * 확인하는 것: index.html 이 있다 / 서비스워커가 없다(vite.config 가 apiBase 있으면 PWA 를 끈다 —
- * 옛 SW 가 구번들을 precache 해 앱 업데이트가 안 먹는 사고 방지).
+ * 검증 항목: index.html 존재 / 서비스워커 부재(vite.config 는 apiBase 가 있으면 PWA 를 비활성화한다 —
+ * 이전 SW 가 구번들을 precache 해 앱 업데이트가 적용되지 않는 사고 방지).
  */
 const fs = require('node:fs');
 const path = require('node:path');

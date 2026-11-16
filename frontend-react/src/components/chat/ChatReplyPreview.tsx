@@ -1,9 +1,9 @@
 /**
- * 답장 미리보기 — 본문 위 한 줄(디스코드 repliedMessage).
- * 높이 22, 글자 14/18. 아바타 16 · 이름 14/600 역할 색 · 요약 14 muted 말줄임(마크다운을 벗긴 글).
+ * 답장 미리보기 — 본문 위 한 행(디스코드 repliedMessage).
+ * 높이 22, 글자 14/18. 아바타 16 · 이름 14/600 역할 색 · 요약 14 muted 말줄임(마크다운을 제거한 텍스트).
  * 연결선(spine): 1.5px border 색 · 거터 36(모바일 30)에서 시작 · 30×10(모바일 26×10) · 왼쪽 위 모서리 6.
  * 원문 상태 4가지: 첨부만 = 종류 아이콘 + "이미지/영상/음성/파일" · 삭제됨 = trash + 기울임 · 불러올 수 없음 = alert-circle · 권한 없음 = lock.
- * 누르면 원문으로 점프(useChatUi.jumpTo → useChatJump).
+ * 누르면 원문으로 이동(useChatUi.jumpTo → useChatJump).
  */
 import { memo } from 'react'
 import { clsx as cn } from 'clsx'
@@ -22,7 +22,7 @@ export type ReplyView =
 
 const ATT_ICON: Record<string, string> = { image: 'image', video: 'video', audio: 'music', file: 'file' }
 
-/** 답장 원문 → 그릴 모양(순수 — 테스트). reply_to 가 없는데 reply_to_id 만 있으면(옛 서버·원문 못 읽음) unavailable */
+/** 답장 원문 → 렌더링 형태(순수 함수 — 테스트 대상). reply_to 없이 reply_to_id 만 있으면(구버전 서버·원문 조회 불가) unavailable */
 export function replyView(msg: Pick<ChatMessage, 'reply_to' | 'reply_to_id'>): ReplyView | null {
   const r: ReplyRef | null | undefined = msg.reply_to
   if (!r) return msg.reply_to_id ? { kind: 'unavailable', icon: 'alert-circle' } : null

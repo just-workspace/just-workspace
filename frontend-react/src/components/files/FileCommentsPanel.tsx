@@ -1,15 +1,15 @@
 /**
  * 파일 댓글 — 상세 패널의 "댓글" 탭.
  * 데스크톱:
- *  맨 위 줄 = "내 권한 [배지]" … "댓글 n"(px-4 py-2.5 12 muted, 아래 선).
+ *  최상단 줄 = "내 권한 [배지]" … "댓글 n"(px-4 py-2.5 12 muted, 아래 선).
  *  행(px-4 py-3, 아래 선 border/60) = 아바타 28 · 이름 13/600 · 시각 mono 11 · (해결됨 success 틴트 배지) / 본문 13 relaxed(@언급 = primary/15 칩)
  *    / 위치 조각 mono 11 muted / 행동 12/600 muted: 답글 · 해결(열린 최상위만) — 보기 권한이면 행동 줄을 숨긴다.
- *  입력(위 선, p-3) = UiTextarea rows 2 + "Ctrl + Enter 로 등록" + [등록](xs). "@" 를 치면 입력 위 UiMentionList
+ *  입력(위 선, p-3) = UiTextarea rows 2 + "Ctrl + Enter 로 등록" + [등록](xs). "@" 입력 시 입력 위에 UiMentionList 를 표시한다
  *    (머리 "이 파일을 볼 수 있는 사람", 보조 = 이메일 · 권한 / "보기 권한 없음", 바닥 안내).
  *  보기 권한 = 입력 자리에 안내 띠(eye) "보기 권한은 댓글을 읽기만 합니다 … [권한 요청]" → 원 소유자에게 알림.
  * 모바일: 행 = 아바타 32 · 이름 14 · 시각 · 본문 15 + 오른쪽 ⋮(답글 · 해결 · 수정 · 삭제), 입력 = UiTextarea 1줄 + 보내기(solid lg).
- * 답글은 최상위 아래 들여 쓴다(왼쪽 54) · "○○ 님에게 답글 ✕" 줄 · 해결된 댓글의 "다시 열기" ·
- *   내 댓글의 수정·삭제(기존 기능) 를 행동 줄 끝에 남김.
+ * 답글은 최상위 댓글 아래에 들여쓰기한다(왼쪽 54) · "○○ 님에게 답글 ✕" 줄 · 해결된 댓글의 "다시 열기" ·
+ *   본인 댓글의 수정·삭제(기존 기능)를 행동 줄 끝에 유지한다.
  */
 import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useI18n } from '~/i18n'
@@ -35,9 +35,9 @@ import { UiTrans } from '~/components/ui/Trans'
 export type FileCommentsState = ReturnType<typeof useFileComments>
 
 export interface FilesFileCommentsPanelProps {
-  /** 댓글을 볼 파일 경로(my/.. 또는 shared-with-me/..) */
+  /** 댓글 조회 대상 파일 경로(my/.. 또는 shared-with-me/..) */
   path: string
-  /** 상세 패널이 이미 가진 댓글 상태(탭 숫자 "댓글 n" 을 같이 쓰려고). 없으면 이 부품이 직접 읽는다 */
+  /** 상세 패널이 이미 보유한 댓글 상태(탭 숫자 "댓글 n" 공유 목적). 없으면 본 컴포넌트가 직접 조회한다 */
   state?: FileCommentsState
 }
 
@@ -66,7 +66,7 @@ export function FilesFileCommentsPanel({ path, state }: FilesFileCommentsPanelPr
   const [replyTo, setReplyTo] = useState<FileComment | null>(null)
   const box = useRef<HTMLTextAreaElement | null>(null)
 
-  // @멘션(그 파일 권한이 붙은 후보)
+  // @멘션(해당 파일 권한이 있는 후보)
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null)
   const mentionRef = useRef<{ start: number; query: string } | null>(null)
   const [candidates, setCandidates] = useState<FileMentionCandidate[]>([])
@@ -148,7 +148,7 @@ export function FilesFileCommentsPanel({ path, state }: FilesFileCommentsPanelPr
     try { await resolve(cm.id, !cm.resolved) } catch (e: any) { addToast('error', e?.data?.detail || t('files.comments.resolveError')) }
   }
 
-  // ── 수정·삭제(내 댓글만) ──
+  // ── 수정·삭제(본인 댓글만) ──
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [saving, setSaving] = useState(false)

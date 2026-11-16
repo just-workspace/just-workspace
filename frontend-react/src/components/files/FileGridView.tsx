@@ -1,7 +1,7 @@
 /**
  * 그리드 보기: 1440 에서 6열 · gap 14 · p 16, 카드 rounded-12 bg-card,
  * 썸네일 4:3(빗금 바탕 + 유형 아이콘 32 / 이미지는 미리보기), 아래 이름 12.5/500 + mono 10.5 시각 + ⋮ 28.
- * 선택 = inset 2px primary + 왼쪽 위 체크 20, 공유됨 = 오른쪽 위 22 타일. 목록과 같은 클릭·선택·끌기 규칙.
+ * 선택 = inset 2px primary + 왼쪽 위 체크 20, 공유됨 = 오른쪽 위 22 타일. 목록과 동일한 클릭·선택·드래그 규칙.
  */
 import type { KeyboardEvent, MouseEvent } from 'react'
 import { clsx } from 'clsx'
@@ -35,7 +35,7 @@ export function FilesFileGridView({ onOpen, onMenu, onDetail, onDropMove, onComm
   const tr: FilesTranslate = (k, p) => t(k, p ?? {})
   const isMobile = useIsMobile()
 
-  // ── 인라인 편집(새 폴더 카드 · 이름 바꾸기) — 목록과 같은 규칙(Enter/Esc) ──
+  // ── 인라인 편집(새 폴더 카드 · 이름 바꾸기) — 목록과 동일한 규칙(Enter/Esc) ──
   const { inlineEdit, editName, setEditName, commitEdit, cancelEdit, setEditInput, isRenaming } = useInlineEdit({ sortedItems, onCommitNewFolder, onCommitRename })
 
   const anySelected = selectedItems.size > 0

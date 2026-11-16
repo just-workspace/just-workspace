@@ -58,7 +58,7 @@ beforeEach(() => {
   })
   ;(globalThis as any).AudioContext = FakeAudioContext
   ;(globalThis as any).MediaStream = undefined
-  // happy-dom 의 srcObject 는 진짜 MediaStream 만 받는다
+  // happy-dom 의 srcObject 는 실제 MediaStream 만 허용
   Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', { configurable: true, get: () => null, set: () => {} })
   sinkDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'setSinkId')
   Object.defineProperty(HTMLMediaElement.prototype, 'setSinkId', { configurable: true, writable: true, value: vi.fn(async () => {}) })
@@ -77,7 +77,7 @@ afterEach(() => {
 
 const joinBtn = () => screen.getByRole('button', { name: t('meetings.device.joinDefault') })
 const micToggleOff = () => screen.getByRole('button', { name: t('meetings.prejoin.ariaMicOff') })
-// 준비됨 = 마이크 토글이 눌릴 수 있을 때(권한 요청 중엔 비활성)
+// 준비됨 = 마이크 토글을 누를 수 있는 상태(권한 요청 중에는 비활성)
 const ready = () => waitFor(() => expect(micToggleOff().hasAttribute('disabled')).toBe(false))
 
 describe('MeetingsDeviceSetup — 상태', () => {
@@ -87,7 +87,7 @@ describe('MeetingsDeviceSetup — 상태', () => {
     renderInRouter(<MeetingsDeviceSetup roomName="방" onJoin={onJoin} />)
     await waitFor(() => expect((screen.getByRole('alert')).textContent).toContain(t('meetings.prejoin.denied.title')))
     expect((screen.getByRole('alert')).textContent).toContain(t('meetings.prejoin.denied.title'))
-    // happy-dom UA 는 Chrome 계열이 아니다 → "그 밖" 한 줄
+    // happy-dom UA 는 Chrome 계열이 아님 → "그 밖" 한 줄
     expect(screen.getByRole('alert').textContent).toMatch(/다시 시도/)
     expect(screen.getByRole('button', { name: t('common.retry') })).toBeTruthy()
     expect(screen.getAllByText(`${t('meetings.device.mic')} · ${t('meetings.prejoin.stNoPerm')}`).length).toBe(1)
@@ -196,7 +196,7 @@ describe('MeetingsDeviceSetup — 상태', () => {
     expect(screen.getByText(t('meetings.prejoin.nodev.noteCam'))).toBeTruthy()
     fireEvent.click(joinBtn())
     expect(onJoin).toHaveBeenCalledWith(expect.objectContaining({ cameraEnabled: false, micEnabled: true, selectedMicId: 'mic1' }))
-    // 다시 시도 → 카메라만 다시 잡는다
+    // 다시 시도 → 카메라만 재획득
     getUserMedia.mockResolvedValueOnce(fakeStream(true, false))
     fireEvent.click(screen.getByRole('button', { name: t('common.retry') }))
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
@@ -252,7 +252,7 @@ describe('MeetingsDeviceSetup — 장치 목록 · 짝 스피커', () => {
     expect(opts.length).toBe(2)
     expect(opts[0].getAttribute('aria-selected')).toBe('true')
     expect(opts[1].textContent).toContain(`WH-1000XM5 Hands-Free (${t('meetings.device.bluetooth')})`)
-    // 다른 마이크도 레벨을 보려고 잡는다
+    // 다른 마이크도 레벨 확인을 위해 획득
     await waitFor(() => expect(getUserMedia).toHaveBeenCalledWith({ audio: { deviceId: { exact: 'bt-mic' } } }))
     getUserMedia.mockResolvedValueOnce(fakeStream(false, true, { cam: 'cam1', mic: 'bt-mic' }))
     fireEvent.click(opts[1])
@@ -281,7 +281,7 @@ describe('MeetingsDeviceSetup — 장치 목록 · 짝 스피커', () => {
     expect(document.activeElement).toBe(spkSel)
     fireEvent.click(spkSel)
     fireEvent.click(screen.getAllByRole('option')[1])
-    // 이제 헤드셋 마이크를 골라도 스피커는 그대로
+    // 이후 헤드셋 마이크를 선택해도 스피커는 유지
     fireEvent.click(screen.getByRole('button', { name: t('meetings.prejoin.ariaMicSelect') }))
     getUserMedia.mockResolvedValueOnce(fakeStream(false, true, { cam: 'cam1', mic: 'bt-mic' }))
     fireEvent.click(screen.getAllByRole('option')[1])

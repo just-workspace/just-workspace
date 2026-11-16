@@ -1,7 +1,7 @@
 /**
- * 저장 안 된 변경 띠: 아래 떠 있는 카드(popover · 그림자 · 1px) — 문구 14/500 + 되돌리기(ghost) · 저장.
- * 디스코드처럼 변경이 있는데 다른 곳으로 가려 하면(settingsStore.requestLeave) 띠를 흔들고 잠시 danger 테두리.
- * reduce-motion 이면 흔들지 않고 테두리만. 섹션 끝에 sticky 로 붙는다(스크롤해도 아래에 보인다).
+ * 미저장 변경 바: 하단 플로팅 카드(popover · 그림자 · 1px) — 문구 14/500 + 되돌리기(ghost) · 저장.
+ * 디스코드와 같이 변경이 있는 상태에서 다른 곳으로 이동을 시도하면(settingsStore.requestLeave) 바를 흔들고 일시적으로 danger 테두리를 표시한다.
+ * reduce-motion 이면 흔들지 않고 테두리만 표시한다. 섹션 끝에 sticky 로 고정한다(스크롤해도 하단에 표시).
  */
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '~/lib/utils'

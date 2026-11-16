@@ -1,11 +1,11 @@
 /**
  * 관리 › 설정 › 보안·SSL. 폼 720.
- *  ⓪ 인증서(AdminCertCard) — 설치 관리자가 인증서를 맡는 설치: 상태, 다시 발급, 인증서 올리기, 진행·실패.
- *     이때 ①은 그리지 않는다(①의 올리기는 설치 관리자가 놓은 인증서를 바꾸지 못한다).
- *     설치 관리자 없이 구성한 설치는 ⓪이 안내 한 줄로 줄고 ①이 예전처럼 보인다.
+ *  ⓪ 인증서(AdminCertCard) — 설치 관리자가 인증서를 관리하는 설치: 상태, 재발급, 인증서 올리기, 진행·실패.
+ *     이 경우 ①은 렌더링하지 않는다(①의 올리기로는 설치 관리자가 배치한 인증서를 교체할 수 없다).
+ *     설치 관리자 없이 구성한 설치에서는 ⓪이 안내 한 줄로 축소되고 ①이 기존과 동일하게 표시된다.
  *  ① SSL 인증서 — 머리 배지(만료 30일 이내 "갱신 필요"), 인증서 행(도메인 600 + "MM/DD 만료 · D-n", 상태 배지).
- *     서버 effective(관리 개요 ops-summary 의 ssl 과 같은 출처) 하나를 보인다. 재발급 버튼은 두지 않는다.
- *     머리 오른쪽 [인증서 올리기](outline) → AdminSslUploadModal(미리 읽기·짝 검사) + 기존 삭제 줄. 자동 발급 버튼은 없다(재발급 버튼 두지 않음).
+ *     서버 effective(관리 개요 ops-summary 의 ssl 과 동일 출처) 하나를 표시한다. 재발급 버튼은 두지 않는다.
+ *     머리 오른쪽 [인증서 올리기](outline) → AdminSslUploadModal(미리 읽기·짝 검사) + 기존 삭제 줄. 자동 발급 버튼은 없다(재발급 버튼 미제공).
  *  ② 로그인 보호 — 2단계 인증 필수 대상 UiSelect(없음/관리자/전체), 연속 실패 잠금, 새 기기 로그인 메일 알림. 즉시 저장.
  *  ③ 세션 — 세션 유지·유휴 로그아웃 선택 + 카드 푸터 저장.
  */
@@ -38,7 +38,7 @@ interface Shown { name: string; issuer: string; notAfter: string; source: string
 
 const SRC_KEY: Record<string, string> = { file: 'srcFile', local: 'srcLocal', probe: 'srcProbe', remote: 'srcRemote' }
 
-/** 보여 줄 인증서 = 서버 effective. effective 가 없는 예전 서버면 올린 인증서 정보로 대신 */
+/** 표시할 인증서 = 서버 effective. effective 가 없는 구버전 서버에서는 업로드된 인증서 정보로 대체 */
 function shownCert(s: Ssl | null): Shown | null {
   if (!s) return null
   const e = s.effective
@@ -50,7 +50,7 @@ function shownCert(s: Ssl | null): Shown | null {
   }
   return null
 }
-// 시안 "10/27 만료 · D-12" — 관리 개요와 같은 MM/DD
+// 시안 "10/27 만료 · D-12" — 관리 개요와 동일한 MM/DD 형식
 function mmdd(iso: string) { const d = new Date(iso); return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}` }
 
 export default function AdminSecurityPage() {
@@ -62,7 +62,7 @@ export default function AdminSecurityPage() {
 
   function flash(set: (v: boolean) => void) { set(true); setTimeout(() => { set(false) }, 2000) }
 
-  // ── ⓪ 설치 관리자가 맡는 인증서인가 — null: 아직 모름 · true: 맡지 않음(① 을 보인다) · false: 맡음(⓪ 만) ──
+  // ── ⓪ 설치 관리자가 인증서를 관리하는지 여부 — null: 미확인 · true: 관리하지 않음(① 표시) · false: 관리함(⓪ 만 표시) ──
   const [legacyCert, setLegacyCert] = useState<boolean | null>(null)
 
   // ── ① 인증서 ──
@@ -122,7 +122,7 @@ export default function AdminSecurityPage() {
     try {
       const g = await $fetch<{ session_remember_days: number }>('/api/admin/settings/general')
       remember = String(g.session_remember_days)
-    } catch { /* 일반 설정을 못 읽으면 기본값 */ }
+    } catch { /* 일반 설정 조회 실패 시 기본값 사용 */ }
     const next = { remember, idle: String(p?.idle_timeout_minutes ?? 0) }
     setSess(next)
     setSessOrig({ ...next })
@@ -170,7 +170,7 @@ export default function AdminSecurityPage() {
       {/* ⓪ 인증서(설치 관리자) */}
       <AdminCertCard onLegacy={setLegacyCert} />
 
-      {/* ① SSL 인증서 — 설치 관리자가 인증서를 맡지 않는 설치에서만 */}
+      {/* ① SSL 인증서 — 설치 관리자가 인증서를 관리하지 않는 설치에서만 표시 */}
       {legacyCert === true && <SettingsCard
         title={t('admin.sslPage.certTitle')}
         description={ssl ? certDesc : ''}

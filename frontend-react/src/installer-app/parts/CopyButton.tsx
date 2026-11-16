@@ -1,5 +1,5 @@
 /**
- * 복사 버튼 — 누르면 글자를 클립보드에 넣고 결과를 짧게 알린다.
+ * 복사 버튼 — 클릭 시 문자열을 클립보드에 복사하고 결과를 짧게 통지한다.
  */
 import { UiIconButton } from '~/components/ui/IconButton'
 import { addToast } from '~/composables/useToast'

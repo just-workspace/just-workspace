@@ -1,12 +1,12 @@
 /**
  * Git 상태(모듈 싱글턴).
- * 화면은 라우트(utils/gitRoute)가 정하고, 이 store 는 "라우트가 가리키는 데이터"만 불러 둔다(딥링크·뒤로 가기·새로고침이 같은 화면).
- * 각 목록은 loading·error 를 따로 가진다(실패를 빈 목록으로 보이지 않게).
+ * 화면은 라우트(utils/gitRoute)가 결정하며, 이 store 는 "라우트가 가리키는 데이터"만 조회해 보관한다(딥링크·뒤로 가기·새로고침 시 동일 화면).
+ * 각 목록은 loading·error 를 개별 보유한다(실패가 빈 목록으로 표시되지 않도록).
  *
  * React: const { repos, selectedRepo, fetchRepos, ... } = useGit()
- *   바깥에서 바꾸는 상태(searchQuery · issueState · labelFilter · pullState)는 setter 를 같이 쓴다:
+ *   외부에서 변경하는 상태(searchQuery · issueState · labelFilter · pullState)는 setter 를 함께 사용한다:
  *   setSearchQuery · setIssueState · setLabelFilter · setPullState
- * 컴포넌트 밖: gitStore.getState() / fetchRepos() 등 모듈 함수 import
+ * 컴포넌트 외부: gitStore.getState() / fetchRepos() 등 모듈 함수 import
  */
 import { createStore } from 'zustand'
 import { $fetch } from '~/lib/api'
@@ -54,18 +54,18 @@ export interface ContentEntry {
   type: 'file' | 'dir' | 'symlink' | 'submodule'
   size: number
   sha: string
-  /** 항목별 마지막 커밋(contents?with_commits=true — 목록을 먼저 그린 뒤 따로 받아 채운다) */
+  /** 항목별 마지막 커밋(contents?with_commits=true — 목록을 먼저 렌더링한 후 별도 조회하여 채운다) */
   last_commit?: LastCommit | null
 }
 
-/** GET /languages 항목(큰 순) */
+/** GET /languages 항목(크기 내림차순) */
 export interface RepoLanguage {
   name: string
   bytes: number
   percent: number
 }
 
-/** GET /stats — 못 얻은 값은 null */
+/** GET /stats — 조회 실패 값은 null */
 export interface RepoStats {
   tags: number | null
   open_issues: number | null
@@ -76,7 +76,7 @@ export interface RepoStats {
   branches: number | null
 }
 
-/** 이슈 수정(PATCH /issues/{n}) — 준 필드만 바뀐다. assignees 는 Gitea 로그인 이름([] = 담당 해제) */
+/** 이슈 수정(PATCH /issues/{n}) — 전달한 필드만 변경된다. assignees 는 Gitea 로그인 이름([] = 담당 해제) */
 export interface IssuePatch {
   title?: string
   body?: string
@@ -125,7 +125,7 @@ export interface Issue {
   state: string
   user: IssueUser | null
   labels: Label[]
-  /** 백엔드가 담당자를 내려 주기 시작한 뒤부터(없으면 빈 배열) */
+  /** 백엔드가 담당자 반환을 지원한 이후부터 제공(없으면 빈 배열) */
   assignees?: IssueUser[]
   comments: number
   created_at: string
@@ -179,7 +179,7 @@ export interface GitState {
   latestCommit: CommitEntry | null
   languages: RepoLanguage[]
   repoStats: RepoStats | null
-  /** 내 스타 여부 — null = 모름(아직 못 읽음), unavailable = Gitea 계정이 없어(409) 쓸 수 없음 */
+  /** 본인 스타 여부 — null = 미상(미조회), unavailable = Gitea 계정 부재(409)로 사용 불가 */
   starred: boolean | null
   starUnavailable: boolean
 
@@ -237,20 +237,20 @@ export const gitStore = createStore<GitState>()(() => initialState())
 const get = () => gitStore.getState()
 const set = (p: Partial<GitState>) => gitStore.setState(p)
 
-// 빠르게 라우트를 옮길 때 늦게 온 응답이 앞 화면을 덮지 않게 — 자원별 요청 번호
+// 라우트를 빠르게 이동할 때 지연 도착한 응답이 앞 화면을 덮어쓰지 않도록 — 자원별 요청 번호
 const seq: Record<string, number> = {}
 function ticket(k: string) { seq[k] = (seq[k] ?? 0) + 1; return seq[k] }
 function stale(k: string, n: number) { return seq[k] !== n }
 
 const PAGE = 30 // Gitea 기본 페이지 크기
 
-/** 테스트용 — 상태를 처음으로 */
+/** 테스트용 — 상태 초기화 */
 export function _resetGitStore() {
   gitStore.setState(initialState(), true)
   for (const k of Object.keys(seq)) delete seq[k]
 }
 
-// 바깥에서 바꾸는 상태
+// 외부에서 변경하는 상태
 export function setSearchQuery(v: string) { set({ searchQuery: v }) }
 export function setIssueState(v: 'open' | 'closed') { set({ issueState: v }) }
 export function setLabelFilter(v: number[]) { set({ labelFilter: v }) }
@@ -279,7 +279,7 @@ export async function fetchRepos(page = 1) {
   }
 }
 
-// ─── 저장소(라우트가 바뀔 때마다 부르되, 같은 저장소면 다시 받지 않는다) ───
+// ─── 저장소(라우트 변경 시마다 호출하되, 동일 저장소이면 재조회하지 않는다) ───
 export async function ensureRepo(owner: string, repo: string, ref?: string | null) {
   const s = get()
   const same = s.selectedRepo
@@ -301,7 +301,7 @@ export async function ensureRepo(owner: string, repo: string, ref?: string | nul
     const data = await $fetch<RepoDetail>(`/api/git/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`)
     if (stale('repo', n)) return
     set({ selectedRepo: data, currentBranch: ref || data.default_branch })
-    // 언어·총수·스타는 화면을 막지 않는다(실패해도 그 부분만 숨김)
+    // 언어·총수·스타는 화면을 차단하지 않는다(실패 시 해당 부분만 숨김)
     void fetchLanguages(); void fetchStats(); void fetchStar()
     await Promise.all([fetchBranches(), fetchLabels(), fetchLatestCommit()])
   } catch (e) {
@@ -360,7 +360,7 @@ export async function fetchStar() {
   }
 }
 
-/** 스타 켜기/끄기. 409(Gitea 계정 없음)면 'unavailable' 을 돌려준다 — 화면이 안내한다 */
+/** 스타 설정/해제. 409(Gitea 계정 없음)이면 'unavailable' 을 반환한다 — 안내는 화면에서 수행한다 */
 export async function toggleStar(): Promise<'ok' | 'unavailable'> {
   const base = repoBase()
   const r = get().selectedRepo
@@ -398,7 +398,7 @@ export async function fetchContents(path = '') {
         return a.name.localeCompare(b.name)
       }),
     })
-    // 항목별 마지막 커밋은 항목마다 Gitea 조회가 들어 느리다 — 목록을 먼저 보이고 뒤에서 채운다
+    // 항목별 마지막 커밋은 항목마다 Gitea 조회가 필요해 느리다 — 목록을 먼저 표시하고 이후에 채운다
     void fillLastCommits(base, params, n)
   } catch (e) {
     if (stale('contents', n)) return
@@ -414,7 +414,7 @@ async function fillLastCommits(base: string, params: Record<string, string>, n: 
     if (stale('contents', n)) return
     const by = new Map(data.map(e => [e.path, e.last_commit ?? null]))
     set({ contents: get().contents.map(e => ({ ...e, last_commit: by.get(e.path) ?? null })) })
-  } catch { /* 세 번째 칸만 빈다 */ }
+  } catch { /* 세 번째 열만 비어 있음 */ }
 }
 
 export async function openFile(path: string) {
@@ -486,7 +486,7 @@ export async function loadIssue(index: number) {
   if (!base) return
   if (get().selectedIssue?.number === index && !get().issueError) return
   const n = ticket('issue')
-  // 목록에 있으면 먼저 그려 둔다(댓글만 기다리게)
+  // 목록에 있으면 먼저 렌더링한다(댓글만 대기하도록)
   set({
     issueLoading: true, issueError: null,
     selectedIssue: get().issues.find(i => i.number === index) ?? null,
@@ -517,7 +517,7 @@ export async function createIssue(title: string, body: string, labelIds: number[
   return created
 }
 
-/** 이슈 수정 — 제목·본문·닫기/다시 열기·담당. 목록과 상세를 함께 맞춘다 */
+/** 이슈 수정 — 제목·본문·닫기/다시 열기·담당. 목록과 상세를 함께 갱신한다 */
 export async function updateIssue(index: number, patch: IssuePatch) {
   const base = repoBase()
   if (!base) return null
@@ -528,7 +528,7 @@ export async function updateIssue(index: number, patch: IssuePatch) {
   if (s.selectedIssue?.number === index) set({ selectedIssue: updated })
   const i = s.issues.findIndex(x => x.number === index)
   if (i >= 0) {
-    // 상태가 바뀌면 지금 보고 있는 목록(열림/닫힘)에서 빠진다
+    // 상태 변경 시 현재 표시 중인 목록(열림/닫힘)에서 제외된다
     if (patch.state && updated.state !== s.issueState) set({ issues: s.issues.filter(x => x.number !== index) })
     else set({ issues: s.issues.map((x, j) => (j === i ? updated : x)) })
   }
@@ -548,12 +548,12 @@ export async function fetchLabels() {
   catch { set({ labels: [] }) }
 }
 
-// 이슈의 라벨을 통째로 교체한다(PATCH 1회 — 체크마다 요청하지 않는다)
+// 이슈의 라벨을 일괄 교체한다(PATCH 1회 — 체크마다 요청하지 않음)
 export async function setIssueLabels(index: number, labelIds: number[]) {
   const base = repoBase()
   if (!base) return
   const updated = await $fetch<Issue>(`${base}/issues/${index}/labels`, { method: 'PATCH', body: { labels: labelIds } })
-  // 목록과 상세를 함께 갱신 — 목록으로 돌아갔을 때 값이 어긋나지 않게
+  // 목록과 상세를 함께 갱신 — 목록 복귀 시 값 불일치 방지
   const s = get()
   if (s.selectedIssue?.number === index) set({ selectedIssue: { ...updated, assignees: updated.assignees ?? s.selectedIssue.assignees } })
   const i = s.issues.findIndex(x => x.number === index)
@@ -659,7 +659,7 @@ const actions = {
 
 type GitHook = Readonly<GitState> & typeof actions & { readonly labelCounts: Map<number, number> }
 
-// labelCounts — 같은 issues 배열이면 다시 세지 않는다
+// labelCounts — 동일 issues 배열이면 재집계하지 않는다
 const countsCache = new WeakMap<ReadonlyArray<Issue>, Map<number, number>>()
 function labelCountsOf(issues: ReadonlyArray<Issue>) {
   let m = countsCache.get(issues)
@@ -667,7 +667,7 @@ function labelCountsOf(issues: ReadonlyArray<Issue>) {
   return m
 }
 
-/** 상태 + 동작(값은 렌더 시점 값). 읽은 필드만 구독한다(useTrackedStore). */
+/** 상태 + 동작(값은 렌더 시점 값). 참조한 필드만 구독한다(useTrackedStore). */
 export function useGit(): GitHook {
   const { track } = useTrackedStore(gitStore)
   const out = { ...actions } as GitHook

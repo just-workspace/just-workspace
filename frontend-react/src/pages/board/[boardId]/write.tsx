@@ -1,10 +1,10 @@
 /**
- * 글쓰기·고치기("전체 페이지 + 공용 편집기 툴바 + 첨부 끌어다 놓기").
+ * 글쓰기·수정("전체 페이지 + 공용 편집기 툴바 + 첨부 끌어다 놓기").
  *  데스크톱: 커맨드 바(새 글 · 게시판 + 임시 저장됨 HH:MM | 취소 · 올리기) → 680 폭
  *    [카테고리 160×40][필독으로 표시][맨 위 고정] / 제목 52(20/700) / 편집기 카드(툴바 40 + 본문 260) / 첨부 드롭 영역 64.
  *  모바일: 56 헤더(✕ 닫기 — 임시 저장 · 새 글 · 게시판 · 올리기 36) / 카테고리·필독 52 / 제목 52 / 본문 / 키보드 위 툴바 48.
- * 임시 저장은 이 브라우저에만(localStorage, 새 글일 때) — 서버 임시글 API 가 없다.
- * 경로 매개변수가 바뀌면 화면을 새로 만든다 — boardId 를 key 로 다시 마운트한다.
+ * 임시 저장은 이 브라우저에만 보관한다(localStorage, 새 글일 때) — 서버 임시글 API 가 없다.
+ * 경로 매개변수가 변경되면 화면을 재생성한다 — boardId 를 key 로 재마운트한다.
  */
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import type { Editor } from '@tiptap/react'
@@ -36,7 +36,7 @@ type Attachment = { name: string; url: string; size?: number }
 function WritePage({ boardId }: { boardId: string }) {
   const { t } = useI18n()
   const route = useRoute()
-  // 마운트 때 한 번 읽는다(같은 경로에서 ?edit 만 바뀌면 다시 읽지 않음) — 마운트 때 값으로 고정
+  // 마운트 시 1회 조회한다(동일 경로에서 ?edit 만 변경되면 재조회하지 않음) — 마운트 시점 값으로 고정
   const [editPostId] = useState(() => queryString(route.query.edit))
   const { appName } = useSiteConfig()
   const router = routerApi
@@ -51,7 +51,7 @@ function WritePage({ boardId }: { boardId: string }) {
   useHead({ title: `${isEditMode ? t('board.write.editTitle') : t('board.write.createTitle')} | ${appName}` })
   useBreadcrumb(board?.name ?? null)
 
-  // 모바일: 쓰는 동안 탭바 숨김(상세 화면 규칙)
+  // 모바일: 작성 중 탭바 숨김(상세 화면 규칙)
   const [, setDetailOpen] = useSharedState<boolean>('mobile-detail-open', () => false)
   useEffect(() => { setDetailOpen(isMobile) }, [isMobile, setDetailOpen])
   useEffect(() => () => { setDetailOpen(false) }, [setDetailOpen])
@@ -89,11 +89,11 @@ function WritePage({ boardId }: { boardId: string }) {
           isPinned: v.isPinned, isMustRead: v.isMustRead, attachments: v.attachments, at: Date.now(),
         }))
         setDraftSavedAt(new Date())
-      } catch { /* 저장소 막힘 — 임시 저장 없이 계속 */ }
+      } catch { /* 저장소 접근 불가 — 임시 저장 없이 계속 */ }
     }, 800)
   }
   function dropDraft() {
-    // 올린 직후 남아 있던 저장 예약이 방금 올린 글을 임시글로 되살리지 않게
+    // 게시 직후 남아 있던 저장 예약이 방금 게시한 글을 임시글로 복원하지 않도록 함
     if (draftTimer.current) { clearTimeout(draftTimer.current); draftTimer.current = null }
     try { localStorage.removeItem(DRAFT_KEY) } catch { /* 무시 */ }
   }
@@ -118,7 +118,7 @@ function WritePage({ boardId }: { boardId: string }) {
           setIsPinned(cur.is_pinned)
           setIsMustRead(cur.is_must_read)
           setInitialContent(cur.content)
-          // 편집기는 "내가 고친 것"만 알려 준다 — 본문을 건드리지 않고(제목·카테고리만 고쳐) 저장해도 되게 저장된 본문으로 채워 둔다
+          // 편집기는 "사용자가 수정한 내용"만 통지한다 — 본문을 수정하지 않고(제목·카테고리만 수정) 저장할 수 있도록 저장된 본문으로 채워 둔다
           setEditorHtml(cur.content)
           setEditorText(textOfHtml(cur.content))
           setAttachments((cur.attachments || []).map(a => ({ ...a })))   // 편집용 사본
@@ -138,12 +138,12 @@ function WritePage({ boardId }: { boardId: string }) {
             setAttachments(Array.isArray(d.attachments) ? d.attachments : [])
             setInitialContent(d.html ?? '')
             setEditorHtml(d.html ?? null)
-            // 글자도 같이 채운다 — 비워 두면 복원 직후 "내용 없음"으로 보여 올리기가 막히고, 제목 없는 임시글은 빈 것으로 지워졌다
+            // 텍스트도 함께 채운다 — 비워 두면 복원 직후 "내용 없음"으로 판정돼 올리기가 차단되고, 제목 없는 임시글은 빈 것으로 간주돼 삭제되는 문제가 있었다
             setEditorText(textOfHtml(d.html))
             setDraftSavedAt(d.at ? new Date(d.at) : null)
             addToast('info', t('board.write.draftRestored'))
           }
-        } catch { /* 깨진 임시글은 무시 */ }
+        } catch { /* 손상된 임시글은 무시 */ }
       }
       setReady(true)
       draftValues.current.ready = true
@@ -188,7 +188,7 @@ function WritePage({ boardId }: { boardId: string }) {
     setAttachments(a => a.filter((_, i) => i !== index))
   }
 
-  // 편집기 툴바의 이미지·파일 버튼: 이미지는 본문에, 그 밖은 첨부로
+  // 편집기 툴바의 이미지·파일 버튼: 이미지는 본문에 삽입, 그 외는 첨부로 처리
   const imageInput = useRef<HTMLInputElement | null>(null)
   async function onImagePick(e: ChangeEvent<HTMLInputElement>) {
     const input = e.target
@@ -216,9 +216,9 @@ function WritePage({ boardId }: { boardId: string }) {
       title: title.trim(),
       content: content as string,
       category,
-      // 고정·필독은 바꿀 수 있는 사람만 보낸다(못 바꾸는 사람이 보내면 서버가 권한 오류로 본다)
+      // 고정·필독은 변경 권한이 있는 사용자만 전송한다(권한 없는 사용자가 전송하면 서버가 권한 오류로 처리한다)
       ...(canSetNotice ? { is_pinned: isPinned, is_must_read: isMustRead } : {}),
-      // 고칠 때는 빈 목록을 그대로 보내야 첨부가 지워진다(null 은 새 글의 "첨부 없음")
+      // 수정 시에는 빈 목록을 그대로 전송해야 첨부가 삭제된다(null 은 새 글의 "첨부 없음")
       attachments: editing ? attachments : (attachments.length > 0 ? attachments : null),
     }
     try {
@@ -240,7 +240,7 @@ function WritePage({ boardId }: { boardId: string }) {
   }
 
   function cancel() {
-    // 새 글은 임시 저장이 남는다("닫기 — 임시 저장")
+    // 새 글은 임시 저장이 유지된다("닫기 — 임시 저장")
     if (window.history.length > 1) router.back()
     else void router.push(`/board/${boardId}`)
   }
@@ -366,7 +366,7 @@ function WritePage({ boardId }: { boardId: string }) {
         </div>
       </div>
 
-      {/* 모바일 키보드 위 툴바(이미지·파일 버튼이 첨부도 받는다) */}
+      {/* 모바일 키보드 위 툴바(이미지·파일 버튼이 첨부도 처리한다) */}
       {isMobile && ready && (
         <UiEditorToolbar editor={richEditor} variant="mobile" tools={['block', '|', 'bold', 'italic', 'strike', '|', 'bullet', 'ordered', '|', 'link', 'quote', 'code', 'table', 'image']} onImage={() => imageInput.current?.click()} />
       )}

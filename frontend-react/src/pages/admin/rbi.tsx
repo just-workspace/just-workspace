@@ -1,7 +1,7 @@
 /**
- * 관리 › 격리 브라우저. 기존 관리 카드 규격(AdminPageShell + SettingsCard)만 쓴다.
- * 대상은 여기서만 더하고 고친다 — 저장하면 출구(허용 목적지)가 검증·고정되고 netfilter 사이드카가 한 주기(5초) 안에 건다(.env 수정·재시작 없음).
- *  1) 격리 규칙 상태: 사이드카 하트비트(적용/미확인·나이) · 지금 걸린 허용 목록 · 원하는데 아직 안 걸린 것 · 사이드카가 거부한 줄 ·
+ * 관리 › 격리 브라우저. 기존 관리 카드 규격(AdminPageShell + SettingsCard)만 사용한다.
+ * 대상의 추가·수정은 이 화면에서만 수행한다 — 저장 시 출구(허용 목적지)가 검증·고정되고 netfilter 사이드카가 한 주기(5초) 안에 적용한다(.env 수정·재시작 불필요).
+ *  1) 격리 규칙 상태: 사이드카 하트비트(적용/미확인·나이) · 현재 적용된 허용 목록 · 요청됐으나 아직 미적용인 항목 · 사이드카가 거부한 줄 ·
  *     고정 허용(RBI_ALLOW)·상한(RBI_ALLOW_CEILING) · 전용 출처 · 이미지 · 네트워크 · 활성 세션 n/max
  *  2) 대상: 목록(이름·주소·사용 스위치·화면 방식·정책·출구) + [대상 추가] → 인라인 폼(식별자·이름·주소·화면 방식·허용 호스트·추가 포트·
  *     정책 스위치·유휴/수명·CPU/메모리·허용 그룹/사용자 ID·강제) — 거부 사유는 서버 문구 그대로, 강제 저장은 경고 토스트
@@ -83,7 +83,7 @@ function toBody(f: Form): Record<string, unknown> {
   }
 }
 
-/** 대상 폼 — TODO: 그룹/사용자 선택이 ID 직접 입력이다(피커로 바꿀 것) */
+/** 대상 폼 — TODO: 그룹/사용자 선택이 ID 직접 입력 방식이다(피커로 교체할 것) */
 function TargetForm({ initial, saving, onSave, onCancel }: { initial: Form; saving: boolean; onSave: (f: Form) => void; onCancel: () => void }) {
   const { t } = useI18n()
   const [f, setF] = useState<Form>(initial)
@@ -94,7 +94,7 @@ function TargetForm({ initial, saving, onSave, onCancel }: { initial: Form; savi
       <UiInput modelValue={f.key} onUpdateModelValue={set('key')} label={t(A + 'key')} hint={t(A + 'keyHint')} placeholder="portal" mono required />
       <UiInput modelValue={f.name} onUpdateModelValue={set('name')} label={t(A + 'name')} placeholder="Intranet Portal" required />
       <UiInput modelValue={f.url} onUpdateModelValue={set('url')} label={t(A + 'url')} hint={t(A + 'urlHint')} placeholder="http://192.168.10.70" mono required className="sm:col-span-2" />
-      {/* 화면 방식 고르기 */}
+      {/* 화면 방식 선택 */}
       <UiSelect modelValue={f.mode} onUpdateModelValue={v => set('mode')((v === 'mirror' ? 'mirror' : 'pixel') as RbiMode)} label={t(A + 'mode')} hint={t(A + 'modeHint')} native className="sm:col-span-2"
         options={[{ value: 'pixel', label: t('rbi.mode.pixel') }, { value: 'mirror', label: t('rbi.mode.mirror') }]} />
       <UiInput modelValue={f.allowed_hosts} onUpdateModelValue={set('allowed_hosts')} label={t(A + 'allowedHosts')} hint={t(A + 'allowedHostsHint')} mono className="sm:col-span-2" />
@@ -105,7 +105,7 @@ function TargetForm({ initial, saving, onSave, onCancel }: { initial: Form; savi
         <UiSwitch modelValue={f.clipboard_from_browser} onUpdateModelValue={set('clipboard_from_browser')} label={t(A + 'clipboardFromBrowser')} />
         <UiSwitch modelValue={f.downloads} onUpdateModelValue={set('downloads')} label={t(A + 'downloads')} />
         <UiSwitch modelValue={f.uploads} onUpdateModelValue={set('uploads')} label={t(A + 'uploads')} />
-        {/* 워크스페이스 자신(RP·앱 호스트·게이트웨이)을 여는 위험한 선택 — 기본 꺼짐, 켜면 경고와 감사 */}
+        {/* 워크스페이스 자신(RP·앱 호스트·게이트웨이)을 여는 위험한 선택 — 기본 비활성, 활성화 시 경고 및 감사 기록 */}
         <UiSwitch modelValue={f.force} onUpdateModelValue={set('force')} label={t(A + 'force')} />
         <p className="text-xs text-muted-foreground">{t(A + 'forceHint')}</p>
       </div>
@@ -260,7 +260,7 @@ export default function AdminRbiPage() {
                     <UiBadge tone="neutral" tint size={18}>{t(A + 'allowedGroups')} {tg.allowed_group_ids.length} · {t(A + 'allowedUsers')} {tg.allowed_user_ids.length}</UiBadge>
                     {tg.egress_forced && <UiBadge tone="warning" tint size={18}>{t(A + 'forcedBadge')}</UiBadge>}
                   </div>
-                  {/* 출구(허용 목적지) — 이름은 저장 때 고정한 IP 와 함께 */}
+                  {/* 출구(허용 목적지) — 이름은 저장 시 고정한 IP 와 함께 표시 */}
                   <p className="font-mono text-xs text-muted-foreground" data-testid={`rbi-egress-${tg.key}`}>
                     {t(A + 'egress')}: {(tg.egress ?? []).map(e => (e.host === e.ip ? `${e.ip}:${e.port}` : `${e.host} → ${e.ip}:${e.port}`)).join(', ') || '—'}
                   </p>

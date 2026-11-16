@@ -2,10 +2,10 @@
  * 키로 공유하는 전역 상태 — `useSharedState(key, init)`.
  *
  * 사용: const [open, setOpen] = useSharedState<boolean>('mobile-detail-open', () => false);  setOpen(true)
- * 밖에서: getSharedState('mobile-detail-open') / setSharedState('mobile-detail-open', true)
+ * 컴포넌트 외부: getSharedState('mobile-detail-open') / setSharedState('mobile-detail-open', true)
  *
- * 같은 키를 쓰는 모든 컴포넌트가 같은 값을 본다(모듈 싱글턴). 새 전역 상태는 되도록
- * 이름 있는 zustand store(`xxxStore`)로 만들고, 이건 키 하나로 값만 나눠 쓸 때 쓴다.
+ * 동일 키를 사용하는 모든 컴포넌트가 동일 값을 참조한다(모듈 싱글턴). 신규 전역 상태는 가급적
+ * 이름 있는 zustand store(`xxxStore`)로 생성하고, 본 함수는 키 하나로 값만 공유하는 경우에 사용한다.
  */
 import { useCallback } from 'react'
 import { create } from 'zustand'
@@ -34,13 +34,13 @@ export function setSharedState<T>(key: string, value: T | ((prev: T) => T)) {
   bag.setState({ values: { ...cur, [key]: next } })
 }
 
-/** 테스트용: 모든 키 비우기 */
+/** 테스트용: 모든 키 초기화 */
 export function resetSharedState() {
   bag.setState({ values: {} })
 }
 
 export function useSharedState<T>(key: string, init?: () => T): [T, (v: T | ((prev: T) => T)) => void] {
-  // 첫 렌더 전에 초기값을 넣는다(렌더 중 setState 경고를 피하려고 store 에 직접 — 구독 전이라 안전)
+  // 첫 렌더 전에 초기값을 설정한다(렌더 중 setState 경고를 피하기 위해 store 에 직접 기록 — 구독 전이므로 안전)
   if (!(key in bag.getState().values) && init) {
     bag.getState().values[key] = init()
   }

@@ -1,14 +1,14 @@
 /**
  * 채팅 사이드바 카테고리·정렬(백엔드 /api/chat/categories · PATCH /layout).
- * 카테고리 API 는 프런트에서 여기서만 부른다.
+ * 카테고리 API 는 프런트에서 본 모듈에서만 호출한다.
  *
  * 구역 순서(위 → 아래):
- *   1. 분류 없음(제목 없는 구역) — category_id 가 없거나 지워진 카테고리의 채널
- *   2. 사용자 카테고리(position 순) — 음성 채널도 섞여 들어갈 수 있다
- *   3. 시스템 "보관된 프로젝트"(layout/meta 의 archive_category_id) — 보관한 채널은 카테고리와 무관하게 여기. 이름만 바꿀 수 있다
+ *   1. 분류 없음(제목 없는 구역) — category_id 가 없거나 삭제된 카테고리의 채널
+ *   2. 사용자 카테고리(position 순) — 음성 채널도 포함될 수 있다
+ *   3. 시스템 "보관된 프로젝트"(layout/meta 의 archive_category_id) — 보관한 채널은 카테고리와 무관하게 이 구역에 속한다. 이름만 변경 가능하다
  *   4. 다이렉트 메시지 — 고정 구역, 사용자 카테고리 대상 아님
- * 접힘은 사람마다(localStorage), 순서·이름은 공통이고 MANAGE_CHANNELS 가 있어야 바꾼다.
- * 접힌 카테고리도 안 읽음·선택 채널은 계속 보인다.
+ * 접힘 상태는 사용자별(localStorage), 순서·이름은 공통이며 MANAGE_CHANNELS 권한이 있어야 변경 가능하다.
+ * 접힌 카테고리에서도 미읽음·선택 채널은 계속 표시된다.
  */
 import { createStore, useStore } from 'zustand'
 import { $fetch } from '~/lib/api'
@@ -29,7 +29,7 @@ interface LayoutState {
   categories: ChatCategory[]
   archiveCategoryId: string | null
   loaded: boolean
-  /** 접힌 카테고리 id(사람마다) — 'dm' · 'archive' · '' (분류 없음 아님) 도 키로 */
+  /** 접힌 카테고리 id(사용자별) — 'dm' · 'archive' · '' (분류 없음 아님) 도 키로 사용 */
   collapsed: Record<string, boolean>
 }
 
@@ -70,7 +70,7 @@ export function setCollapsed(id: string, v: boolean) {
   const c = { ...S().collapsed, [id]: v }
   if (!v) delete c[id]
   set({ collapsed: c })
-  try { localStorage.setItem(LS, JSON.stringify(c)) } catch { /* 기억 못 해도 동작은 같다 */ }
+  try { localStorage.setItem(LS, JSON.stringify(c)) } catch { /* 저장 실패 시에도 동작 동일 */ }
 }
 export const toggleCollapsed = (id: string) => setCollapsed(id, !S().collapsed[id])
 
@@ -119,7 +119,7 @@ export function buildSections(
   return sections
 }
 
-/** 접힌 구역에서도 보이는 채널: 안 읽음·멘션·선택 */
+/** 접힌 구역에서도 표시되는 채널: 미읽음·멘션·선택 */
 export function visibleWhenCollapsed(c: Channel, selectedId: string | null, isBold: (c: Channel) => boolean): boolean {
   return c.id === selectedId || (c.mention_count || 0) > 0 || isBold(c)
 }
@@ -134,7 +134,7 @@ export async function renameCategory(id: string, name: string) {
   set({ categories: S().categories.map(c => (c.id === id ? { ...c, name } : c)) })
   try { await $fetch(`${B}/categories/${id}`, { method: 'PATCH', body: { name } }) } finally { await loadCategories() }
 }
-/** 지운 카테고리 안의 채널은 "분류 없음"으로 간다 — 채널 목록은 호출부가 다시 읽는다 */
+/** 삭제된 카테고리 내 채널은 "분류 없음"으로 이동한다 — 채널 목록은 호출부가 재조회한다 */
 export async function deleteCategory(id: string) {
   await $fetch(`${B}/categories/${id}`, { method: 'DELETE' })
   await loadCategories()
@@ -144,7 +144,7 @@ export interface LayoutPatch {
   categories?: { id: string; position: number }[]
   channels?: { id: string; category_id: string | null; position: number | null }[]
 }
-/** 드래그 정렬 한 번 = PATCH /layout 한 번. 실패하면 호출부가 채널 목록을 다시 읽어 되돌린다 */
+/** 드래그 정렬 1회 = PATCH /layout 1회. 실패 시 호출부가 채널 목록을 재조회해 롤백한다 */
 export async function patchLayout(p: LayoutPatch) {
   if (p.categories?.length) {
     const pos = new Map(p.categories.map(c => [c.id, c.position]))
@@ -153,7 +153,7 @@ export async function patchLayout(p: LayoutPatch) {
   await $fetch(`${B}/layout`, { method: 'PATCH', body: { categories: p.categories || [], channels: p.channels || [] } })
 }
 
-/** 채널을 to 카테고리의 index 자리로 옮길 때 그 카테고리 전체의 새 순서(0,1,2…) */
+/** 채널을 to 카테고리의 index 위치로 이동할 때 해당 카테고리 전체의 새 순서(0,1,2…) */
 export function moveChannelPatch(
   sections: SidebarSection[], channelId: string, toCategoryId: string | null, index: number,
 ): LayoutPatch {
@@ -162,14 +162,14 @@ export function moveChannelPatch(
   list.splice(Math.max(0, Math.min(index, list.length)), 0, channelId)
   return { channels: list.map((id, i) => ({ id, category_id: toCategoryId, position: i })) }
 }
-/** 카테고리를 index 자리로(사용자 카테고리끼리) */
+/** 카테고리를 index 위치로 이동(사용자 카테고리 간) */
 export function moveCategoryPatch(categories: ChatCategory[], categoryId: string, index: number): LayoutPatch {
   const list = categories.filter(c => !c.system && c.id !== categoryId).map(c => c.id)
   list.splice(Math.max(0, Math.min(index, list.length)), 0, categoryId)
   return { categories: list.map((id, i) => ({ id, position: i })) }
 }
 
-/** WS chat_layout_changed — 다시 읽는다(채널 목록은 useChat 이 channel_update 로) */
+/** WS chat_layout_changed — 재조회한다(채널 목록은 useChat 이 channel_update 로 처리) */
 export function handleLayoutEvent(data: { type?: string }) {
   if (data.type === 'chat_layout_changed') void loadCategories()
 }

@@ -1,5 +1,5 @@
-// 관리 › 업데이트 › 오프라인 — 올리기 방식과 경로 방식 각각의 전 상태(올리는 중·검증 중·검증됨·서명 불일치·버전 낮음·파일 없음),
-// 추가로 필요한 이미지의 상태별 표시(있음·없음·검증 중·해시 불일치·필요 없음), 전부 갖춰져야 적용되는 차단.
+// 관리 › 업데이트 › 오프라인 — 업로드 방식과 경로 방식 각각의 전체 상태(올리는 중·검증 중·검증됨·서명 불일치·버전 낮음·파일 없음),
+// 추가로 필요한 이미지의 상태별 표시(있음·없음·검증 중·해시 불일치·필요 없음), 전부 구비되어야 적용되는 차단.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor, within, act } from '@testing-library/react'
 import { api, on, seq, called, fakeFetch, renderUpdate, text, disabled, value, ADMIN, B } from './updateHarness'
@@ -86,7 +86,7 @@ describe('오프라인 — 파일 올리기', () => {
     expect(reason()).toBe('검증이 끝나면 적용할 수 있습니다.')
     expect(disabled(applyButton())).toBe(true)
 
-    // 검증됨(다시 읽어서 안다)
+    // 검증됨(재조회로 확인)
     const verdict = await screen.findByTestId('offline-verdict')
     expect(text(verdict)).toContain('서명확인됨 · Just Workspace 공식 묶음')
     expect(text(verdict)).toContain('버전1.0.0 → 1.1.0')
@@ -170,7 +170,7 @@ describe('오프라인 — 추가로 필요한 이미지', () => {
       ['회의 서버', '회의 구역 · 꺼짐', '필요 없음'],
       ['코드 저장소', '코드 저장소 구역 · 꺼짐', '필요 없음'],
     ])
-    // 줄마다 이름이 들어간 버튼, 필요 없는 줄에는 없다
+    // 행마다 이름이 포함된 버튼, 불필요한 행에는 없음
     expect(screen.getByRole('button', { name: '데이터베이스 받는 명령 복사' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '문서 편집기 이미지 파일 올리기' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '회의 서버 받는 명령 복사' })).toBeNull()
@@ -286,7 +286,7 @@ describe('오프라인 — 서버에 있는 파일 경로', () => {
 
   it('파일 없음: 칸에 오류가 붙고 적용은 막힌다', async () => {
     await open(fx.offlines.pathMissing())
-    // 경로로 준 묶음이 있으면 이 방식으로 열린다
+    // 경로로 지정한 오프라인 번들이 있으면 이 방식으로 열림
     expect(screen.getByLabelText('서버에 있는 묶음 파일 경로').getAttribute('aria-invalid')).toBe('true')
     expect(screen.getByText('이 경로에 파일이 없거나 읽을 권한이 없습니다. 경로와 파일 권한을 확인합니다.')).toBeTruthy()
     expect(reason()).toBe('읽을 수 있는 묶음 파일 경로를 넣어야 적용할 수 있습니다.')
@@ -335,7 +335,7 @@ describe('오프라인 — 차단 판정(순수 계산)', () => {
     expect(b(fx.offlines.imageVerifying())).toBe('image_verifying')
     expect(b(fx.offlines.imageMissing())).toBe('image_missing')
     expect(b(fx.offlines.verified())).toBeNull()
-    // 화면이 보기엔 다 있어도 서버가 준비되지 않았다고 하면 막는다
+    // 화면상 전부 구비되어도 서버가 미준비로 응답하면 차단
     expect(b({ ...fx.offlines.verified(), ready: false })).toBe('image_missing')
   })
 })

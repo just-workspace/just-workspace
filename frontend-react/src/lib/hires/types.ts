@@ -1,6 +1,6 @@
 /**
- * 하이레조(Tier 4) — 데스크톱 앱 프리로드가 내보내는 `window.jwNativeAudio` 의 모양.
- * 정본은 apps/desktop/src/preload/webview.ts(JwNativeAudio) 와 apps/desktop/src/main/nativeAudio/session.ts(결과·통계 타입). 여기는 복제.
+ * 하이레조(Tier 4) — 데스크톱 앱 프리로드가 노출하는 `window.jwNativeAudio` 의 형태.
+ * 정본은 apps/desktop/src/preload/webview.ts(JwNativeAudio) 와 apps/desktop/src/main/nativeAudio/session.ts(결과·통계 타입). 본 파일은 복제본.
  * 브라우저(일반 탭)에는 이 전역이 없다 → lib/hires/register 는 아무것도 등록하지 않는다.
  */
 import type { RelayGrant } from '~/lib/lossless/types'
@@ -133,7 +133,7 @@ declare global {
   interface Window { jwNativeAudio?: JwNativeAudio }
 }
 
-/** 데스크톱 앱 안(프리로드가 전역을 심었다)인가 */
+/** 데스크톱 앱 내부(프리로드가 전역을 주입함) 여부 */
 export function nativeAudioBridge(): JwNativeAudio | null {
   if (typeof window === 'undefined') return null
   const b = window.jwNativeAudio

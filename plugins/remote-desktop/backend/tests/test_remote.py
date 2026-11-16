@@ -1,9 +1,9 @@
 """원격 데스크톱 플러그인 — 기기 등록·권한·동의·1회성 코드(발급·만료·1회성·레이트리밋)·토큰 권한 범위·감사.
 
-코어 backend 이미지 안에서 돈다(app.* 가 import 되는 곳):
+코어 backend 이미지 내부에서 실행한다(app.* 를 import 할 수 있는 환경):
   docker run --rm -v <이 플러그인>:/plug:ro -e PYTHONPATH=/app --entrypoint sh <backend 이미지>     -c 'cd /tmp && python -m pytest -q -p no:cacheprovider -o asyncio_mode=auto /plug/backend/tests'
 
-DB 는 임시 SQLite 파일. LiveKit 서버는 부르지 않는다(방 만들기·닫기를 가짜로). 토큰은 JWT 본문만 풀어 권한을 본다.
+DB 는 임시 SQLite 파일. LiveKit 서버는 호출하지 않는다(방 생성·종료는 가짜로 대체). 토큰은 JWT 본문만 디코드해 권한을 확인한다.
 """
 from __future__ import annotations
 
@@ -90,7 +90,7 @@ def _app():
 _APP = _app()
 
 
-async def _req(user, db, method, url, ip=None, **kw):  # noqa: ARG001 — db 는 옛 호출 모양 유지용
+async def _req(user, db, method, url, ip=None, **kw):  # noqa: ARG001 — db 는 이전 호출 형태 유지용
     _current["user"] = user
     t = ASGITransport(app=_APP, client=(ip or _ip(), 1234))
     async with AsyncClient(transport=t, base_url="http://t") as c:
@@ -104,7 +104,7 @@ async def _fresh(db, model, key):
 
 @pytest.fixture()
 async def db_session():
-    from app.db.models import Base as CoreBase  # 플러그인이 읽는 코어 표(users·system_settings)
+    from app.db.models import Base as CoreBase  # 플러그인이 조회하는 코어 테이블(users·system_settings)
     async with engine.begin() as conn:
         await conn.run_sync(CoreBase.metadata.create_all)
     await rr._ensure_tables()
@@ -159,7 +159,7 @@ async def _register(db, user=ALICE, allow=True, unattended=False):
 async def test_register_and_host_auth(db_session):
     dev, hdr = await _register(db_session)
     row = await _fresh(db_session, RemoteDevice, dev["id"])
-    assert row.host_secret_hash != hdr["X-Remote-Host"].split(":")[1]  # 원문 저장 안 함
+    assert row.host_secret_hash != hdr["X-Remote-Host"].split(":")[1]  # 원문 미저장
     r = await _req(None, db_session, "GET", "/api/remote/host/poll", headers={"X-Remote-Host": f"{dev['id']}:wrong"})
     assert r.status_code == 401
     r = await _req(None, db_session, "GET", "/api/remote/host/poll")
@@ -173,15 +173,15 @@ async def test_reregister_rotates_secret(db_session):
     r = await _req(ALICE, db_session, "POST", "/api/remote/devices", json={"name": "내 PC", "platform": "win32"})
     assert r.json()["device"]["id"] == dev["id"]
     r = await _req(None, db_session, "GET", "/api/remote/host/poll", headers=hdr)
-    assert r.status_code == 401  # 옛 비밀은 죽는다
+    assert r.status_code == 401  # 이전 비밀은 무효
 
 
 async def test_connect_permissions(db_session):
     dev, _ = await _register(db_session)
     r = await _req(BOB, db_session, "POST", f"/api/remote/devices/{dev['id']}/connect")
-    assert r.status_code == 404  # 남의 기기는 존재조차 안 보인다
+    assert r.status_code == 404  # 타 사용자 기기는 존재 여부도 노출되지 않음
     r = await _req(ADMIN, db_session, "POST", f"/api/remote/devices/{dev['id']}/connect")
-    assert r.status_code == 201  # 관리자는 요청 가능(동의는 호스트가)
+    assert r.status_code == 201  # 관리자는 요청 가능(동의는 호스트가 수행)
     r = await _req(ALICE, db_session, "POST", f"/api/remote/devices/{dev['id']}/connect")
     assert r.status_code == 409  # 이미 진행 중
 
@@ -202,7 +202,7 @@ async def test_device_flow_tokens_and_end(db_session, _env):
     dev, hdr = await _register(db_session)
     r = await _req(ALICE, db_session, "POST", f"/api/remote/devices/{dev['id']}/connect")
     sid = r.json()["session"]["id"]
-    # 동의 전엔 뷰어 토큰 없음
+    # 동의 전에는 뷰어 토큰 없음
     r = await _req(ALICE, db_session, "GET", f"/api/remote/sessions/{sid}?token=1")
     assert r.json()["session"]["status"] == "pending" and "livekit" not in r.json()
     r = await _req(None, db_session, "GET", "/api/remote/host/poll", headers=hdr)
@@ -222,7 +222,7 @@ async def test_device_flow_tokens_and_end(db_session, _env):
     vc = _claims(v["token"])["video"]
     assert vc.get("canPublish") in (None, False) and vc["canSubscribe"] is True and vc["canPublishData"] is True
     assert vc["room"] == room and _claims(v["token"])["sub"] == svc.viewer_identity(sid)
-    # 관리자도 남의 세션 화면엔 못 들어간다(요청자만)
+    # 관리자도 타 사용자의 세션 화면에는 접근 불가(요청자만 가능)
     r = await _req(ADMIN, db_session, "GET", f"/api/remote/sessions/{sid}?token=1")
     assert r.status_code == 403
     r = await _req(ALICE, db_session, "POST", f"/api/remote/sessions/{sid}/end")
@@ -262,7 +262,7 @@ async def test_unattended_flag_only_for_owner(db_session):
     dev, hdr = await _register(db_session, unattended=True)
     r = await _req(ADMIN, db_session, "POST", f"/api/remote/devices/{dev['id']}/connect")
     r = await _req(None, db_session, "GET", "/api/remote/host/poll", headers=hdr)
-    assert r.json()["sessions"][0]["auto_allow"] is False  # 관리자 요청은 늘 동의
+    assert r.json()["sessions"][0]["auto_allow"] is False  # 관리자 요청은 항상 동의 필요
     await _req(ADMIN, db_session, "POST", f"/api/remote/sessions/{r.json()['sessions'][0]['id']}/end")
     await _req(ALICE, db_session, "POST", f"/api/remote/devices/{dev['id']}/connect")
     r = await _req(None, db_session, "GET", "/api/remote/host/poll", headers=hdr)
@@ -293,12 +293,12 @@ async def test_support_flow_one_time(db_session, _env):
     j, hdr = await _code(db_session)
     assert len(j["code"]) == 11 and j["code"][3] == "-"
     row = await _fresh(db_session, RemoteSession, j["session_id"])
-    assert row.code_hash and j["code"].replace("-", "") not in row.code_hash  # HMAC 만
+    assert row.code_hash and j["code"].replace("-", "") not in row.code_hash  # HMAC 만 저장
     r = await _req(None, db_session, "GET", "/api/remote/support/poll", headers=hdr)
     assert r.json()["session"]["status"] == "waiting_code"
     r = await _req(BOB, db_session, "POST", "/api/remote/support/join", json={"code": j["code"]})
     assert r.status_code == 201 and r.json()["session"]["status"] == "pending"
-    # 같은 코드 두 번 못 씀
+    # 동일 코드 재사용 불가
     r = await _req(ALICE, db_session, "POST", "/api/remote/support/join", json={"code": j["code"]})
     assert r.status_code == 404
     r = await _req(None, db_session, "GET", "/api/remote/support/poll?since=waiting_code", headers=hdr)
@@ -308,7 +308,7 @@ async def test_support_flow_one_time(db_session, _env):
     r = await _req(BOB, db_session, "GET", f"/api/remote/sessions/{j['session_id']}?token=1")
     assert "livekit" in r.json()
     r = await _req(ALICE, db_session, "GET", f"/api/remote/sessions/{j['session_id']}?token=1")
-    assert r.status_code == 404  # 다른 회원은 못 봄
+    assert r.status_code == 404  # 다른 회원은 조회 불가
     r = await _req(None, db_session, "POST", "/api/remote/support/end", headers=hdr)
     assert r.json()["session"]["status"] == "ended"
 
@@ -321,7 +321,7 @@ async def test_support_code_expiry_and_close(db_session):
     r = await _req(BOB, db_session, "POST", "/api/remote/support/join", json={"code": j["code"]})
     assert r.status_code == 404
     j2, hdr2 = await _code(db_session)
-    await _req(None, db_session, "POST", "/api/remote/support/end", headers=hdr2)  # 프로그램 닫음
+    await _req(None, db_session, "POST", "/api/remote/support/end", headers=hdr2)  # 프로그램 종료
     r = await _req(BOB, db_session, "POST", "/api/remote/support/join", json={"code": j2["code"]})
     assert r.status_code == 404
 
@@ -348,7 +348,7 @@ async def test_support_join_failure_lockout(db_session):
         assert r.status_code == 404
     j, _ = await _code(db_session)
     r = await _req(ALICE, db_session, "POST", "/api/remote/support/join", json={"code": j["code"]})
-    assert r.status_code == 429  # 맞는 코드여도 잠깐 막힘
+    assert r.status_code == 429  # 올바른 코드여도 일시 차단
 
 
 async def test_module_disabled_blocks_everything(db_session, monkeypatch):
@@ -387,7 +387,7 @@ def test_code_helpers():
 
 async def test_support_download_anonymous(db_session):
     r = await _req(None, db_session, "GET", "/api/remote/support/download")
-    assert r.status_code == 404  # 아직 안 올림
+    assert r.status_code == 404  # 아직 업로드 전
     p = rr._support_exe()
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_bytes(b"MZ-test")
@@ -402,7 +402,7 @@ async def test_support_download_anonymous(db_session):
 # ── 화면 보강분 ──
 
 def _variant(code: str, i: int) -> str:
-    """i 번째 자리만 바꾼 코드(한 자리 차이 = 그 코드를 노린 틀린 입력)"""
+    """i 번째 자리만 변경한 코드(한 자리 차이 = 해당 코드를 대상으로 한 오류 입력)"""
     d = code.replace("-", "")
     return d[:i] + str((int(d[i]) + 1) % 10) + d[i + 1:]
 
@@ -415,9 +415,9 @@ async def test_code_burned_after_five_near_misses(db_session):
     row = await _fresh(db_session, RemoteSession, j["session_id"])
     assert row.status == "expired" and row.end_reason == "code_attempts" and row.code_hash is None
     r = await _req(ALICE, db_session, "POST", "/api/remote/support/join", json={"code": j["code"]})
-    assert r.status_code == 404  # 맞는 코드여도 이미 폐기
+    assert r.status_code == 404  # 올바른 코드여도 이미 폐기됨
     r = await _req(None, db_session, "GET", "/api/remote/support/poll", headers=hdr)
-    assert r.json()["session"]["status"] == "expired"  # 지원 프로그램도 폐기를 안다
+    assert r.json()["session"]["status"] == "expired"  # 지원 프로그램도 폐기를 인지
 
 
 async def test_four_near_misses_then_correct_code_works(db_session):
@@ -431,7 +431,7 @@ async def test_four_near_misses_then_correct_code_works(db_session):
 async def test_far_wrong_codes_do_not_burn(db_session):
     j, _ = await _code(db_session)
     d = j["code"].replace("-", "")
-    far = "".join(str((int(c) + 5) % 10) for c in d)  # 모든 자리가 다름
+    far = "".join(str((int(c) + 5) % 10) for c in d)  # 모든 자리가 상이
     for _ in range(6):
         await _req(BOB, db_session, "POST", "/api/remote/support/join", json={"code": far})
     assert (await _fresh(db_session, RemoteSession, j["session_id"])).status == "waiting_code"
@@ -469,7 +469,7 @@ async def test_device_sessions_owner_only(db_session):
     ss = r.json()["sessions"]
     assert [s["status"] for s in ss] == ["denied", "ended"]
     assert ss[1]["requester_email"] == "al@x" and ss[1]["duration_s"] is not None and ss[0]["duration_s"] is None
-    for other in (BOB, ADMIN):  # 남의 기기 기록은 관리자도 이 API 로는 못 본다(감사는 /audit)
+    for other in (BOB, ADMIN):  # 타 사용자 기기 기록은 관리자도 이 API 로는 조회 불가(감사는 /audit)
         r = await _req(other, db_session, "GET", f"/api/remote/devices/{dev['id']}/sessions")
         assert r.status_code == 404
     r = await _req(ALICE, db_session, "GET", f"/api/remote/devices/{dev['id']}/sessions?limit=1")
@@ -499,7 +499,7 @@ async def test_status_support_file_info_and_consent_fields(db_session):
         assert j["support_available"] is True and j["support_size"] == 1234
     finally:
         p.unlink()
-    # 동의 창에 쓸 요청자 이메일·조직 도메인이 호스트 폴링에 실린다
+    # 동의 창에 사용할 요청자 이메일·조직 도메인이 호스트 폴링에 포함된다
     dev, hdr = await _register(db_session)
     await _req(ALICE, db_session, "POST", f"/api/remote/devices/{dev['id']}/connect")
     r = await _req(None, db_session, "GET", "/api/remote/host/poll", headers=hdr)

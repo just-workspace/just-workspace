@@ -24,7 +24,7 @@ import { SourceNotice } from '~/components/SourceNotice'
 
 interface Container { service: string; present: boolean; running: boolean; status: string }
 
-/** 느림 기준 ms — appcfg system.latency_warn_ms(양수) 아니면 800 */
+/** 지연 경고 기준 ms — appcfg system.latency_warn_ms(양수), 그 외에는 800 */
 function latencyWarnMsFrom(config: Record<string, string> | undefined): number {
   const v = Number((config?.['system.latency_warn_ms'] ?? '').trim())
   return Number.isFinite(v) && v > 0 ? v : 800
@@ -133,7 +133,7 @@ export default function AdminSystemPage() {
         ))}
       </section>
 
-      {/* 이 서비스의 라이선스와 소스 코드(고쳐서 서비스하면 JW_SOURCE_URL 을 고친 소스의 주소로 바꾼다) */}
+      {/* 이 서비스의 라이선스와 소스 코드(수정하여 서비스하는 경우 JW_SOURCE_URL 을 수정한 소스의 주소로 변경한다) */}
       <SourceNotice className="px-1" />
     </AdminPageShell>
   )

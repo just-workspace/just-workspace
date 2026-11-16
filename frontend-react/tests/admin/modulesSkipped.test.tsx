@@ -1,4 +1,4 @@
-// 관리 › 모듈·플러그인 — 서버가 올리지 않은 플러그인(목록의 skipped)을 사유와 함께 보여 준다. $fetch 는 가짜.
+// 관리 › 모듈·플러그인 — 서버가 로드하지 않은 플러그인(목록의 skipped)을 사유와 함께 표시. $fetch 는 모의(mock).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -51,11 +51,11 @@ describe('관리 › 모듈·플러그인 — 올리지 않은 플러그인', ()
     const row = await screen.findByTestId('skipped-remote')
     expect(within(row).getByText('원격 지원')).toBeTruthy()
     expect(within(row).getByText(t('admin.modules.skipped.badge'))).toBeTruthy()
-    // 이름을 아는 구역은 이름으로, 모르는 구역은 id 그대로
+    // 이름이 확인되는 구역은 이름으로, 그 외 구역은 id 그대로 표시
     await waitFor(() => expect(within(row).getByText(t('admin.modules.skipped.zoneNotInstalled', { zones: '회의, nope' }))).toBeTruthy())
     expect(within(row).getByRole('button', { name: t('admin.modules.skipped.toZones') })).toBeTruthy()
     expect(screen.getByText(t('admin.modules.skipped.title'))).toBeTruthy()
-    // 올라온 플러그인은 위 목록에 그대로
+    // 로드된 플러그인은 위 목록에 그대로 표시
     expect(screen.getByText('메모')).toBeTruthy()
   })
 

@@ -1,9 +1,9 @@
 /**
- * 캘린더 구독 추가(#icsErr) — 캘린더 왼쪽 목록 "+ 구독 추가"와 설정 › 캘린더 [+ 구독 추가]가 같이 쓴다.
- * UiModal 480: .ics 주소(mono) → 칸을 벗어나면 서버가 바로 읽어(POST /api/calendar/subscriptions/preview)
- * "읽음 · 일정 n개 … 2026–2027" 확인 줄 + 이름 자동 채움 → 이름 · 색 8개(cat-1~8, 원형 28, 고른 것 ring).
- * 못 읽으면 주소 칸 error, [구독 추가] 비활성(#icsErr — 이름·색 칸 없이 주소 칸만).
- * 받기 규칙(SSRF 방지·5MB·20초)은 서버 app/calendar/subscriptions.py 와 같다.
+ * 캘린더 구독 추가(#icsErr) — 캘린더 왼쪽 목록 "+ 구독 추가"와 설정 › 캘린더 [+ 구독 추가]가 공용으로 사용한다.
+ * UiModal 480: .ics 주소(mono) → 칸을 벗어나면 서버가 즉시 조회하여(POST /api/calendar/subscriptions/preview)
+ * "읽음 · 일정 n개 … 2026–2027" 확인 줄 + 이름 자동 입력 → 이름 · 색 8개(cat-1~8, 원형 28, 선택 항목 ring).
+ * 조회 실패 시 주소 칸 error, [구독 추가] 비활성(#icsErr — 이름·색 칸 없이 주소 칸만).
+ * 수신 규칙(SSRF 방지·5MB·20초)은 서버 app/calendar/subscriptions.py 와 동일하다.
  */
 import { useRef, useState, type FormEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -25,7 +25,7 @@ export interface SubscriptionPreview {
   last_year: number | null
 }
 
-/** 만들어진 구독(POST /api/calendar/subscriptions 응답) — 설정 화면 목록 줄과 같은 모양 */
+/** 생성된 구독(POST /api/calendar/subscriptions 응답) — 설정 화면 목록 줄과 동일한 형태 */
 export interface CreatedSubscription {
   id: string
   name: string
@@ -37,7 +37,7 @@ export interface CreatedSubscription {
   is_visible?: boolean
 }
 
-// 시안 색 견본 — Tailwind 가 찾도록 글자 그대로
+// 시안 색 견본 — Tailwind 가 탐지하도록 리터럴 문자열로 기재
 const SWATCH = ['bg-cat-1', 'bg-cat-2', 'bg-cat-3', 'bg-cat-4', 'bg-cat-5', 'bg-cat-6', 'bg-cat-7', 'bg-cat-8'] as const
 
 /** 서버 오류 → 서버 이유 코드 */
@@ -47,7 +47,7 @@ export function subscribeErrorCode(e: unknown): string {
   return 'network'
 }
 
-/** 이유 코드 → 주소 칸 문구 키. 주소를 못 읽은 경우는 모두 시안 문구 하나로 */
+/** 이유 코드 → 주소 칸 문구 키. 주소 조회 실패는 모두 시안 문구 하나로 통일 */
 export function subscribeErrorKey(code: string): string {
   if (code === 'duplicate') return 'calendar.subscribe.duplicate'
   if (code === 'too_many') return 'calendar.subscribe.tooMany'
@@ -55,7 +55,7 @@ export function subscribeErrorKey(code: string): string {
   return 'calendar.subscribe.readError'
 }
 
-/** 확인 줄 오른쪽 연도 — "2026–2027" · 한 해면 "2026" · 없으면 '' */
+/** 확인 줄 오른쪽 연도 — "2026–2027" · 단일 연도면 "2026" · 없으면 '' */
 export function yearRange(p: Pick<SubscriptionPreview, 'first_year' | 'last_year'>): string {
   if (!p.first_year) return ''
   if (!p.last_year || p.last_year === p.first_year) return String(p.first_year)
@@ -63,7 +63,7 @@ export function yearRange(p: Pick<SubscriptionPreview, 'first_year' | 'last_year
 }
 
 export interface CalendarSubscribeModalProps {
-  /** 이미 있는 구독 수 — 기본 색을 순번(범주 1→8)으로 */
+  /** 기존 구독 수 — 기본 색을 순번(범주 1→8)으로 결정 */
   existingCount?: number
   /** 추가됨 */
   onAdded?: (row: CreatedSubscription) => void
@@ -82,7 +82,7 @@ export function CalendarSubscribeModal({ existingCount = 0, onAdded, onClose }: 
   const [reading, setReading] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  // 마지막으로 읽은(읽는 중인) 주소 — 같은 주소로 칸을 다시 벗어나면 또 읽지 않는다. 늦게 온 옛 응답은 버린다.
+  // 마지막으로 조회한(조회 중인) 주소 — 동일 주소로 칸을 다시 벗어나면 재조회하지 않는다. 지연 도착한 이전 응답은 폐기한다.
   const readFor = useRef('')
 
   async function read(raw: string) {
@@ -112,7 +112,7 @@ export function CalendarSubscribeModal({ existingCount = 0, onAdded, onClose }: 
   function onUrl(v: string) {
     setUrl(v)
     if (v.trim() !== readFor.current) {
-      // 주소를 고치면 확인 결과·오류는 다시 읽을 때까지 무효
+      // 주소를 수정하면 확인 결과·오류는 재조회 시까지 무효
       readFor.current = ''
       setPreview(null)
       setError('')
@@ -171,7 +171,7 @@ export function CalendarSubscribeModal({ existingCount = 0, onAdded, onClose }: 
           data-autofocus
         />
 
-        {/* 확인 줄 — 읽는 동안에도 같은 자리·같은 상자(같은 높이)에 스피너 + "읽는 중…", 읽으면 ✓ 읽음 · 일정 n개 */}
+        {/* 확인 줄 — 조회 중에도 동일 위치·동일 상자(동일 높이)에 스피너 + "읽는 중…", 조회 완료 시 ✓ 읽음 · 일정 n개 */}
         {(reading || (preview && !error)) && (
           <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-[13px]" role="status" aria-busy={reading || undefined}>
             {reading || !preview

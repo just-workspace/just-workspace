@@ -1,4 +1,4 @@
-// 플러그인 호스트 — v1(Vue) 어댑터로 공개 sample-notes 실제 빌드물이 뜨는지, v2(React) 계약, 판정 로직.
+// 플러그인 호스트 — v1(Vue) 어댑터로 공개 sample-notes 실제 빌드 산출물이 렌더링되는지, v2(React) 계약, 판정 로직.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -26,7 +26,7 @@ vi.mock('~/lib/api', async (orig) => {
   return { ...real, $fetch }
 })
 
-// UI 키트의 EmptyState 는 여기선 모양만 흉내(이 테스트는 플러그인 경로만 본다)
+// UI 키트의 EmptyState 는 여기서는 형태만 모의(본 테스트는 플러그인 경로만 확인)
 vi.mock('~/components/ui/EmptyState', () => ({
   UiEmptyState: (p: { title?: string }) => <div data-testid="empty-state">{p.title}</div>,
 }))
@@ -75,7 +75,7 @@ describe('계약 버전 판정', () => {
     expect(host.detectApiFromSource('const R = window.__REACT__; export default function P(){}')).toBe(2)
     expect(host.detectApiFromSource('const { jsx } = window.__REACT_DOM__')).toBe(2)
     expect(host.detectApiFromSource('export default function P(){ return null }')).toBeNull()
-    // 둘 다 쓰면 Vue 를 먼저 세워야 평가가 되니 v1
+    // 둘 다 사용하면 Vue 를 먼저 초기화해야 평가되므로 v1
     expect(host.detectApiFromSource('const V = window.__VUE__; const R = window.__REACT__')).toBe(1)
   })
 
@@ -110,9 +110,9 @@ describe('v1(Vue) 어댑터 — 공개 sample-notes 실제 번들', () => {
       fetchSource: async (url) => { expect(url).toBe('/api/plugin-assets/notes/bundle.mjs'); return sampleSource },
       importModule: async (url) => {
         imported.push(url)
-        // 번들 맨 위의 `const {…} = window.__VUE__` 가 돌 때 Vue 가 이미 있어야 한다
+        // 번들 최상단의 `const {…} = window.__VUE__` 실행 시점에 Vue 가 이미 존재해야 함
         expect(typeof (window.__VUE__ as { createApp?: unknown })?.createApp).toBe('function')
-        // 실제 빌드물 바이트 그대로를 data: URL 모듈로(vite 의 루트 밖 파일 제한을 피한다)
+        // 실제 빌드 산출물의 바이트 그대로를 data: URL 모듈로 로드(vite 의 루트 밖 파일 제한 회피)
         return import(/* @vite-ignore */ 'data:text/javascript;base64,' + Buffer.from(sampleSource).toString('base64'))
       },
     })
@@ -132,7 +132,7 @@ describe('v1(Vue) 어댑터 — 공개 sample-notes 실제 번들', () => {
     expect(fetchCalls.some(c => c.url === '/api/plugins/notes' && !c.opts)).toBe(true)
     expect(container.querySelector('[data-plugin-api="1"]')).toBeTruthy()
 
-    // 렌더러가 window.__VUE__ = true 로 덮지 않았다(두 번째 v1 플러그인도 뜨려면 필요)
+    // 렌더러가 window.__VUE__ = true 로 덮어쓰지 않음(두 번째 v1 플러그인 렌더링에도 필요)
     expect(typeof (window.__VUE__ as { createApp?: unknown }).createApp).toBe('function')
 
     // '새 메모' 만들기(+ 버튼) → POST 본문이 번들 그대로
@@ -143,10 +143,10 @@ describe('v1(Vue) 어댑터 — 공개 sample-notes 실제 번들', () => {
     expect(post.url).toBe('/api/plugins/notes')
     expect(post.opts?.body).toEqual({ title: '새 메모', content: '' })
     await waitFor(() => expect(screen.getByText('새 메모')).toBeTruthy())
-    // 선택된 메모가 편집기로
+    // 선택된 메모가 편집기에 표시됨
     await waitFor(() => expect((container.querySelector('input[placeholder="제목"]') as HTMLInputElement)?.value).toBe('새 메모'))
 
-    // user 는 Vue ref — authStore 와 동기화(번들은 user 가 없으면 아무것도 안 그린다)
+    // user 는 Vue ref — authStore 와 동기화(번들은 user 가 없으면 아무것도 렌더링하지 않음)
     act(() => authStore.setState({ user: null }))
     await waitFor(() => expect(screen.queryByText('첫 메모')).toBeNull())
 
@@ -197,7 +197,7 @@ describe('v1(Vue) 어댑터 — 공개 sample-notes 실제 번들', () => {
 // ─────────────────────────────────────────────────────────── v2 + 페이지
 function FakeV2({ pluginApi }: import('~/plugins/pluginHost').PluginPageProps) {
   useEffect(() => {
-    // 해제를 일부러 잊는다 — 호스트 페이지가 지워야 한다
+    // 해제를 의도적으로 누락 — 호스트 페이지가 제거해야 함
     pluginApi.setHeaderActions([{ id: 'run', label: '실행', text: '실행' }], 'fake')
     pluginApi.setTitle('문서 제목', 'fake')
   }, [pluginApi])
@@ -233,9 +233,9 @@ describe('v2(React) 계약 + 페이지', () => {
     expect(getHeaderActions().map(a => a.id)).toEqual(['run'])
     expect(getShellTitle()).toBe('문서 제목')
     expect(importModule).toHaveBeenCalledWith('/api/plugin-assets/fake/bundle.mjs')
-    expect(window.__VUE__).toBe(vueBefore) // v2 는 Vue 를 새로 세우지 않는다
+    expect(window.__VUE__).toBe(vueBefore) // v2 는 Vue 를 새로 초기화하지 않음
 
-    // 다른 플러그인으로 바꾸면 지운다
+    // 다른 플러그인으로 전환하면 제거
     platformStore.setState({ modules: [...platformStore.getState().modules, { id: 'other', name: 'O', icon: 'x', route: '/p/other', type: 'plugin', requires: [], enabled: true }] })
     importModule.mockImplementation(async () => ({ default: () => <p>other</p>, jwPlugin: { api: 2 as const } }))
     await act(async () => { await router.navigate('/p/other') })
@@ -243,7 +243,7 @@ describe('v2(React) 계약 + 페이지', () => {
     expect(getHeaderActions()).toEqual([])
     expect(getShellTitle()).toBe('') // 제목도 원복
 
-    // 다시 등록된 뒤 페이지를 떠나면(언마운트) 지운다
+    // 재등록 후 페이지를 떠나면(언마운트) 제거
     act(() => { host.pluginApiStatics.setHeaderActions([{ id: 'x', label: 'x', icon: 'wand' }]) })
     act(() => { host.pluginApiStatics.setTitle('다른 제목') })
     expect(getHeaderActions().length).toBe(1)

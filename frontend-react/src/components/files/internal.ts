@@ -1,9 +1,9 @@
 /**
- * 파일 목록·그리드가 함께 쓰는 행 동작(두 보기에 같은 코드를 두 번 두지 않고 한 곳에).
+ * 파일 목록·그리드가 공용으로 사용하는 행 동작(두 보기에 동일 코드를 중복하지 않고 단일화).
  * 동작:
- *  - 인라인 편집(새 폴더·이름 바꾸기): inlineEdit 가 바뀌면 이름을 채우고 포커스 + 이름 부분(확장자 제외) 선택. Enter/blur = 확정, Esc = 취소.
- *  - 길게 누르기(터치 500ms, 8px 넘게 움직이면 취소) = 선택 모드 진입, 직후 클릭 한 번은 무시.
- *  - 앱 안 끌기(DRAG_MIME): 선택된 행을 끌면 선택 전체, 아니면 그 행. 폴더 행에만 놓기.
+ *  - 인라인 편집(새 폴더·이름 바꾸기): inlineEdit 변경 시 이름을 채우고 포커스 + 이름 부분(확장자 제외) 선택. Enter/blur = 확정, Esc = 취소.
+ *  - 길게 누르기(터치 500ms, 8px 초과 이동 시 취소) = 선택 모드 진입, 직후 클릭 1회는 무시.
+ *  - 앱 내 드래그(DRAG_MIME): 선택된 행을 드래그하면 선택 전체, 아니면 해당 행. 폴더 행에만 드롭 가능.
  */
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent } from 'react'
 import { useStore } from 'zustand'
@@ -12,7 +12,7 @@ import { getSharedState, setSharedState } from '~/lib/state'
 import { canMoveInto, DRAG_MIME } from '~/lib/files'
 import { filesStore, setInlineEdit, toggleSelect, type FileItem } from '~/composables/useFiles'
 
-/** 끌고 있는 경로(목록·그리드·사이드바가 함께 본다) */
+/** 드래그 중인 경로(목록·그리드·사이드바가 공용으로 참조) */
 const DRAGGING = 'files-dragging'
 const dragging = () => getSharedState<string[]>(DRAGGING, () => [])
 
@@ -47,7 +47,7 @@ export function useInlineEdit(opts: {
   useEffect(() => {
     const p = pendingSelect.current
     const el = editInput.current
-    // 새 이름이 입력에 반영된 뒤에 고른다
+    // 새 이름이 입력에 반영된 이후 선택 수행
     if (!p || !el || el.value !== p.name) return
     pendingSelect.current = null
     el.focus()
@@ -96,7 +96,7 @@ export function useLongPress(onToggle: (item: FileItem) => void) {
     if (!pressTimer.current || !pressStart.current) return
     if (Math.abs(e.clientX - pressStart.current.x) > 8 || Math.abs(e.clientY - pressStart.current.y) > 8) cancelPress()
   }
-  /** 클릭 처리 맨 앞에서 — 길게 누른 직후 클릭이면 true(그 클릭은 무시) */
+  /** 클릭 처리 최선두에서 호출 — 길게 누른 직후의 클릭이면 true(해당 클릭은 무시) */
   function consumeSuppressed() {
     if (suppressClick.current) { suppressClick.current = false; return true }
     return false

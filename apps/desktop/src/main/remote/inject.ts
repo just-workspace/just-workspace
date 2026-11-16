@@ -1,7 +1,7 @@
 /**
  * 검증된 입력 메시지를 네이티브 애드온(jw_remote_input)으로 주입한다.
- * 누른 채로 남은 키·버튼을 기억했다가 세션이 끝나면 전부 뗀다(원격이 끊겨 Shift 가 눌린 채 남는 사고 방지).
- * 보안 화면(UAC·잠금)이 떠 있으면 주입하지 않는다 — 일반 프로세스는 어차피 못 넣고, 뷰어엔 state 로 알린다.
+ * 눌린 상태로 남은 키·버튼을 기록해 두었다가 세션 종료 시 전부 해제한다(원격 연결이 끊겨 Shift 가 눌린 상태로 남는 사고 방지).
+ * 보안 화면(UAC·잠금)이 표시 중이면 주입하지 않는다 — 일반 프로세스는 주입이 불가하며, 뷰어에는 state 로 통지한다.
  */
 import { comboKeys, DEFAULT_LIMITS, type InputMsg, RateLimiter, ratioToPoint, type Rect, SCANCODES } from './protocol';
 
@@ -28,13 +28,13 @@ export class Injector {
     this.screenRect = rect;
   }
 
-  /** 세션이 직접 처리하는 메시지(클립보드)도 같은 버킷으로 속도를 자른다 */
+  /** 세션이 직접 처리하는 메시지(클립보드)에도 동일한 버킷으로 속도를 제한한다 */
   allow(kind: string): boolean {
     return this.limiter.allow(kind);
   }
 
   apply(m: InputMsg, secure: boolean): InjectResult {
-    if (m.t === 'clip' || m.t === 'clipreq' || m.t === 'mon') return 'ignored'; // 세션이 따로 처리
+    if (m.t === 'clip' || m.t === 'clipreq' || m.t === 'mon') return 'ignored'; // 세션이 별도로 처리
     const kind = m.t === 'mm' ? 'mm' : m.t === 'wh' ? 'wh' : 'default';
     if (!this.limiter.allow(kind)) return 'rate';
     if (!this.addon) return 'noaddon';
@@ -76,7 +76,7 @@ export class Injector {
     }
   }
 
-  /** 세션 끝 — 눌린 채 남은 키·버튼을 모두 뗀다 */
+  /** 세션 종료 — 눌린 상태로 남은 키·버튼을 모두 해제한다 */
   releaseAll(): void {
     if (!this.addon) return;
     for (const c of this.keys) { const sc = SCANCODES[c]; if (sc) this.addon.key(sc[0], sc[1], false); }

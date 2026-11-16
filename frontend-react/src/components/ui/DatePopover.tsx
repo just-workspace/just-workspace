@@ -1,16 +1,16 @@
 /**
- * 날짜 고르기 팝오버: 7열 미니 달력.
+ * 날짜 선택 팝오버: 7열 미니 달력.
  * 머리 = 달 이름 13/600 + ‹ › 28(히트 40). 요일 24 muted. 날짜 칸 32 · mono 12.
- *   고른 날 = bg-primary · primary-foreground(600) · 오늘 = 1px ring(primary, inset) · 다른 달 = muted-foreground/60 · 범위 밖 = 40% 비활성.
- * 값은 'YYYY-MM-DD' 문자열(검색 before/after/during 그대로). 날짜 계산은 브라우저 지역 날짜(서버가 하루 경계를 정한다).
+ *   선택한 날 = bg-primary · primary-foreground(600) · 오늘 = 1px ring(primary, inset) · 다른 달 = muted-foreground/60 · 범위 밖 = 40% 비활성.
+ * 값은 'YYYY-MM-DD' 문자열(검색 before/after/during 과 동일 형식). 날짜 계산은 브라우저 지역 날짜 기준이다(하루 경계는 서버가 결정한다).
  *
- * UiMiniCalendar — 달력 본체(인라인). 모바일 시트 안 등에 그대로 넣는다.
- * UiDatePopover  — anchor 아래(자리 없으면 위)에 body 포털 + fixed 로 띄운다(UiMenu·UiSelect 와 같은 방식, z-overlay, shadow-md).
- *   열리면 고른 날(없으면 오늘)에 포커스, Esc = 닫고 anchor 로 포커스, 바깥 클릭 = 닫기, 날짜 고르면 onPick 후 닫힘(closeOnPick).
- * 키보드(role=grid): ←→ 하루 · ↑↓ 일주일 · Home/End 주 처음/끝 · PageUp/PageDown 한 달(Shift = 한 해) · Enter/Space 고르기.
+ * UiMiniCalendar — 달력 본체(인라인). 모바일 시트 내부 등에 그대로 배치한다.
+ * UiDatePopover  — anchor 아래(공간 부족 시 위)에 body 포털 + fixed 로 표시한다(UiMenu·UiSelect 와 동일 방식, z-overlay, shadow-md).
+ *   열리면 선택한 날(없으면 오늘)에 포커스, Esc = 닫고 anchor 로 포커스 복귀, 바깥 클릭 = 닫기, 날짜 선택 시 onPick 후 닫힘(closeOnPick).
+ * 키보드(role=grid): ←→ 하루 · ↑↓ 일주일 · Home/End 주 처음/끝 · PageUp/PageDown 한 달(Shift = 한 해) · Enter/Space 선택.
  *
- * 참고: 캘린더 모듈의 CalendarMiniMonth 는 캘린더 스토어(주 시작·주 보기 강조·캘린더 시간대)에 묶여 있고
- *   "오늘 = 채운 primary · 고른 날 = primary/13" 이라 이 시안(고른 날 primary · 오늘 ring)과 반대여서, 같은 격자 모양으로 새로 그렸다.
+ * 참고: 캘린더 모듈의 CalendarMiniMonth 는 캘린더 스토어(주 시작·주 보기 강조·캘린더 시간대)에 결합되어 있고
+ *   "오늘 = 채운 primary · 고른 날 = primary/13" 이라 본 시안(선택한 날 primary · 오늘 ring)과 반대이므로, 동일한 격자 형태로 신규 구현하였다.
  *
  * @example
  * const [open, setOpen] = useState(false); const btn = useRef<HTMLButtonElement>(null)
@@ -28,7 +28,7 @@ import { UiIcon } from './Icon'
 function pad(n: number) { return n < 10 ? `0${n}` : String(n) }
 /** Date → 'YYYY-MM-DD'(지역) */
 export function toYmd(d: Date): string { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }
-/** 'YYYY-MM-DD' → Date(지역 0시). 틀린 모양이면 null */
+/** 'YYYY-MM-DD' → Date(지역 0시). 형식 불일치 시 null */
 export function fromYmd(s: string | null | undefined): Date | null {
   const m = s ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(s) : null
   if (!m) return null
@@ -37,26 +37,26 @@ export function fromYmd(s: string | null | undefined): Date | null {
 }
 function addDays(d: Date, n: number) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n) }
 function addMonths(d: Date, n: number) {
-  // 31일에서 달을 넘기면 그달 말일로(다음다음 달로 튀지 않게)
+  // 31일에서 월 이동 시 해당 월 말일로 보정(다다음 달로 넘어가는 것 방지)
   const last = new Date(d.getFullYear(), d.getMonth() + n + 1, 0).getDate()
   return new Date(d.getFullYear(), d.getMonth() + n, Math.min(d.getDate(), last))
 }
 
 export interface UiMiniCalendarProps {
-  /** 고른 날 'YYYY-MM-DD' | null */
+  /** 선택한 날 'YYYY-MM-DD' | null */
   value?: string | null
-  /** 날짜 고름 */
+  /** 날짜 선택 시 호출 */
   onPick: (ymd: string) => void
-  /** 고를 수 있는 처음·끝 날('YYYY-MM-DD', 포함) */
+  /** 선택 가능한 시작·종료 날('YYYY-MM-DD', 포함) */
   min?: string
   max?: string
   /** 주 시작 요일(0 = 일, 1 = 월 · 기본 0) */
   weekStart?: 0 | 1
   /** 오늘(테스트·서버 기준일). 기본 = 브라우저 오늘 */
   today?: string
-  /** 처음 열 달(기본 = 고른 날 또는 오늘) */
+  /** 최초 표시 월(기본 = 선택한 날 또는 오늘) */
   initialMonth?: string
-  /** 열릴 때 포커스(팝오버가 켠다) */
+  /** 열릴 때 포커스(팝오버가 활성화) */
   autoFocus?: boolean
   /** 달력 접근성 이름(기본 = 달 이름) */
   ariaLabel?: string
@@ -75,7 +75,7 @@ export function UiMiniCalendar({ value, onPick, min, max, weekStart = 0, today, 
   const gridRef = useRef<HTMLDivElement | null>(null)
   const wantFocus = useRef(autoFocus)
 
-  // 값이 바깥에서 바뀌면 그 달로
+  // 값이 외부에서 변경되면 해당 월로 이동
   const [prevValue, setPrevValue] = useState(value)
   if (value !== prevValue) {
     setPrevValue(value)
@@ -198,20 +198,20 @@ export function UiMiniCalendar({ value, onPick, min, max, weekStart = 0, today, 
 export interface UiDatePopoverProps extends Omit<UiMiniCalendarProps, 'autoFocus' | 'className'> {
   /** 열림 */
   open: boolean
-  /** 닫기(Esc · 바깥 클릭 · 고른 뒤) */
+  /** 닫기(Esc · 바깥 클릭 · 선택 후) */
   onClose: () => void
-  /** 기준 요소(아래 → 자리 없으면 위) */
+  /** 기준 요소(아래 → 공간 부족 시 위) */
   anchor: HTMLElement | null
   /** 아래(기본) / 위 */
   placement?: 'bottom' | 'top'
-  /** 고르면 닫기(기본 켬) */
+  /** 선택 시 닫기(기본 활성화) */
   closeOnPick?: boolean
   /** 팝오버 className */
   className?: string
 }
 
 /**
- * anchor 에 붙는 날짜 고르기 팝오버.
+ * anchor 에 부착되는 날짜 선택 팝오버.
  */
 export function UiDatePopover({ open, onClose, anchor, placement = 'bottom', closeOnPick = true, onPick, className, ariaLabel, ...cal }: UiDatePopoverProps) {
   const { t } = useI18n()
@@ -240,7 +240,7 @@ export function UiDatePopover({ open, onClose, anchor, placement = 'bottom', clo
     return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true) }
   }, [open, anchor, placement])
 
-  // 바깥 누르기 = 닫기(anchor 는 제외 — anchor 의 토글이 따로 닫는다)
+  // 바깥 클릭 = 닫기(anchor 는 제외 — anchor 의 토글이 별도로 닫기 처리)
   useEffect(() => {
     if (!open) return
     const onDown = (e: PointerEvent) => {

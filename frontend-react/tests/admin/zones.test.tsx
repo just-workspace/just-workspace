@@ -1,5 +1,5 @@
-// 관리 › 구역 — 목록(설치 관리자 있음/없음), 켜기 창의 단계와 꺼진 버튼·이유, 메모리 초과 차단, 연결 확인 상태,
-// 진행·실패·완료 직후, 끄기 확인과 끄는 중, 설정 다시 열기, 서버 재시작 견디기. $fetch 는 가짜.
+// 관리 › 구역 — 목록(설치 관리자 있음/없음), 켜기 창의 단계와 비활성 버튼·사유, 메모리 초과 차단, 연결 확인 상태,
+// 진행·실패·완료 직후, 끄기 확인과 끄는 중, 설정 다시 열기, 서버 재시작 중 상태 유지. $fetch 는 모의(mock).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -102,7 +102,7 @@ describe('관리 › 구역 — 목록', () => {
     expect(screen.getByRole('meter', { name: '권장 메모리' })).toBeTruthy()
     expect(toggle('메일').getAttribute('aria-checked')).toBe('true')
     expect(toggle('회의').getAttribute('aria-checked')).toBe('false')
-    // 설정 버튼은 켜져 있고 설정이 있는 구역에만
+    // 설정 버튼은 활성화되어 있고 설정이 있는 구역에만 표시
     expect(screen.getByRole('button', { name: '메일 설정' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '채팅 설정' })).toBeNull()
     expect(screen.queryByRole('button', { name: '회의 설정' })).toBeNull()
@@ -152,7 +152,7 @@ describe('관리 › 구역 — 켜기 창', () => {
     fireEvent.click(await screen.findByRole('switch', { name: '회의 켜기' }))
     expect(await screen.findByRole('heading', { name: '회의 켜기 · 1/3 설정' })).toBeTruthy()
     expect((await screen.findByTestId('meet-ip')).textContent).toContain('203.0.113.24')
-    // 중계를 끄고 무손실을 켠다 — 고른 값이 그대로 간다
+    // 중계를 비활성화하고 무손실을 활성화 — 선택 값이 그대로 전송됨
     fireEvent.click(screen.getByRole('radio', { name: /쓰지 않음/ }))
     fireEvent.click(screen.getByRole('checkbox', { name: /무손실 오디오/ }))
     fireEvent.click(screen.getByRole('button', { name: '다음' }))
@@ -160,7 +160,7 @@ describe('관리 › 구역 — 켜기 창', () => {
     expect(called('POST', `${B}/zones/meetings/check`)[0].body).toEqual({ settings: { turn: false, lossless_audio: true } })
     expect(screen.getByTestId('zone-dialog-memory').textContent).toBe('7 GB → 8 GB · 서버 16 GB 안에 들어옵니다')
     expect(screen.getByTestId('zone-dialog-ports').textContent).toBe('TCP 7881 · UDP 7882-7892 · UDP 4433')
-    // 이전으로 돌아가도 고른 값이 남는다
+    // 이전 단계로 복귀해도 선택 값 유지
     fireEvent.click(screen.getByRole('button', { name: '이전' }))
     expect(screen.getByRole('radio', { name: /쓰지 않음/ }).getAttribute('aria-checked')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: '다음' }))
@@ -175,7 +175,7 @@ describe('관리 › 구역 — 켜기 창', () => {
     expect(screen.getByTestId('zone-meetings-stage-configure').textContent).toContain('진행 중')
     expect(screen.getByTestId('zone-meetings-stage-connect').textContent).toContain('대기')
     expect(toggle('회의').getAttribute('aria-checked')).toBe('true')
-    // 한 번에 하나 — 다른 구역 스위치는 잠긴다
+    // 동시 1건 — 다른 구역 스위치는 잠김
     expect((toggle('코드 저장소') as HTMLButtonElement).disabled).toBe(true)
     expect((toggle('회의') as HTMLButtonElement).disabled).toBe(true)
   })
@@ -202,7 +202,7 @@ describe('관리 › 구역 — 켜기 창', () => {
     api.routes[`POST ${B}/zones/sso/check`] = () => check({ ports: ['389/tcp', '636/tcp'], memory: { need_mb: 17500, have_mb: 15900, nominal_mb: 16384, ok: false } })
     renderPage()
     fireEvent.click(await screen.findByRole('switch', { name: 'SSO·LDAP 제공 켜기' }))
-    // 설정이 없는 애드온은 두 단계 — 곧바로 메모리와 포트 확인
+    // 설정이 없는 애드온은 두 단계 — 즉시 메모리와 포트 확인
     expect(await screen.findByRole('heading', { name: 'SSO·LDAP 제공 켜기 · 1/2 메모리와 포트 확인' })).toBeTruthy()
     expect((await screen.findByTestId('zone-dialog-memory')).textContent).toBe('켜면 17.5 GB · 이 서버의 메모리 16 GB를 넘어 켤 수 없습니다')
     expect((screen.getByRole('button', { name: '켜기' }) as HTMLButtonElement).disabled).toBe(true)
@@ -232,7 +232,7 @@ describe('관리 › 구역 — 켜기 창', () => {
     api.routes[`POST ${B}/zones/mail/check`] = () => check({ ports: [] })
     renderPage()
     fireEvent.click(await screen.findByRole('switch', { name: '메일 켜기' }))
-    // 내장: 메일 도메인이 있어야 한다
+    // 내장: 메일 도메인 필수
     const next = await screen.findByRole('button', { name: '다음' }) as HTMLButtonElement
     await waitFor(() => expect(screen.getByTestId('zone-dialog-reason').textContent).toBe('메일 도메인을 입력해야 다음으로 갈 수 있습니다.'))
     expect(next.disabled).toBe(true)
@@ -250,7 +250,7 @@ describe('관리 › 구역 — 켜기 창', () => {
     fireEvent.click(screen.getByRole('button', { name: '연결 확인' }))
     await waitFor(() => expect(screen.getByTestId('verify-status').textContent).toBe('발신 서버 연결 확인됨'))
     expect(next.disabled).toBe(false)
-    // 확인한 뒤 값을 바꾸면 처음으로
+    // 확인 후 값을 변경하면 처음으로 복귀
     type('비밀번호', 'pw-2')
     expect(next.disabled).toBe(true)
     expect(screen.queryByTestId('verify-status')).toBeNull()
@@ -307,7 +307,7 @@ describe('관리 › 구역 — 켜기 창', () => {
     await waitFor(() => expect(screen.getByTestId('verify-status').textContent).toBe('키 연결 확인됨'))
     expect(called('POST', `${B}/probe/ai`)[0].body).toEqual({ provider: 'openai', api_key: 'sk-test' })
     expect(next.disabled).toBe(false)
-    // 나중에 — 키 없이 간다
+    // 나중에 — 키 없이 진행
     fireEvent.click(screen.getByRole('radio', { name: /나중에/ }))
     expect(screen.queryByLabelText('API 키')).toBeNull()
     expect(next.disabled).toBe(false)
@@ -369,14 +369,14 @@ describe('관리 › 구역 — 진행 · 실패 · 완료 직후', () => {
     expect(fresh).toContain('방금 켰습니다. 왼쪽 메뉴에 추가됐습니다.')
     expect(fresh).toContain('TCP 7881 · UDP 7882-7892 포트를 공유기나 방화벽에서 열었는지 확인합니다.')
     expect(screen.getByTestId('zone-meetings-status').textContent).toBe('켜짐')
-    // 모듈 목록과 설치된 구역을 새로 받아 메뉴에 반영
+    // 모듈 목록과 설치된 구역을 재조회하여 메뉴에 반영
     await waitFor(() => expect(platformStore.getState().modules).toEqual([{ id: 'meetings', enabled: true }]))
     await waitFor(() => expect(siteConfigStore.getState().zones).toEqual(['mail', 'meetings']))
-    // 끝난 뒤에는 더 읽지 않는다
+    // 종료 후에는 추가 조회 없음
     const n = called('GET', `${B}/jobs/job1`).length
     await new Promise(r => setTimeout(r, 80))
     expect(called('GET', `${B}/jobs/job1`).length).toBe(n)
-    // 닫으면 걷힌다
+    // 닫으면 제거됨
     fireEvent.click(within(zoneRow('meetings')).getByRole('button', { name: '닫기' }))
     await waitFor(() => expect(zoneRow('meetings').dataset.state).toBe('on'))
     expect(called('DELETE', `${B}/zones/meetings/job`)).toHaveLength(1)
@@ -439,7 +439,7 @@ describe('관리 › 구역 — 진행 · 실패 · 완료 직후', () => {
     await waitFor(() => expect(screen.getByTestId('zone-meetings-log').textContent).toContain('실패: pull_failed'))
     expect(logBtn.getAttribute('aria-expanded')).toBe('true')
     expect(r.getByRole('button', { name: '기록 내려받기' })).toBeTruthy()
-    // 다시 시도 — 넣어 둔 설정이 없으니(화면을 다시 연 뒤) 창부터
+    // 다시 시도 — 입력해 둔 설정이 없으므로(화면 재진입 후) 창부터 표시
     fireEvent.click(r.getByRole('button', { name: '다시 시도' }))
     expect(await screen.findByRole('heading', { name: '회의 켜기 · 1/3 설정' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '취소' }))
@@ -475,7 +475,7 @@ describe('관리 › 구역 — 끄기', () => {
     const dialog = await screen.findByRole('alertdialog')
     expect(within(dialog).getByText('문서 편집·위키·게시판 구역을 끌까요?')).toBeTruthy()
     expect(screen.getByTestId('zones-off-body').textContent).toBe('메뉴에서 이 구역의 화면이 사라집니다. 메모리 2 GB가 비워집니다. 데이터는 남아 있고, 다시 켜면 그대로 보입니다.')
-    // 취소하면 아무 일도 없다
+    // 취소 시 변화 없음
     fireEvent.click(within(dialog).getByRole('button', { name: '취소' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(called('POST', `${B}/zones/docs/disable`)).toHaveLength(0)
@@ -645,7 +645,7 @@ describe('관리 › 구역 — 검증된 버전 · 켜기 전 주의', () => {
       '계정의 메일 주소는 아이디@example.com 꼴이 됩니다.',
       '확인이 필요한 항목이 있습니다. (something_new)',
     ])
-    // 주의는 막지 않는다 — 켤 수 있다
+    // 주의는 차단하지 않음 — 켜기 가능
     expect((screen.getByRole('button', { name: '켜기' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
@@ -682,14 +682,14 @@ describe('관리 › 구역 — 연결 보류 · 다시 연결', () => {
     expect(line.textContent).toContain('연결 보류')
     expect(line.textContent).toContain('접속 주소의 인증서가 신뢰되는 인증서로 바뀌면 다시 연결할 수 있습니다.')
     expect(within(line).getByRole('button', { name: '코드 저장소 다시 연결' })).toBeTruthy()
-    expect(toggle('코드 저장소').getAttribute('aria-checked')).toBe('true')      // 켜진 구역이다
+    expect(toggle('코드 저장소').getAttribute('aria-checked')).toBe('true')      // 활성화된 구역
     expect(screen.queryByTestId('zone-mail-pending')).toBeNull()
   })
 
   it('[다시 연결] → 행에서 진행 → 연결되면 보류 표시가 걷힌다', async () => {
     let connected = false
     const doneJob = connJob({ status: 'done', stages: [{ id: 'connect', status: 'done' }] })
-    // 끝난 뒤의 목록은 서버가 방금 끝난 작업을 행에 붙여 준다
+    // 종료 후의 목록에는 서버가 방금 종료된 작업을 행에 첨부함
     api.routes[`GET ${B}/zones`] = () => listing(connected ? { git: { enabled: true, job: doneJob } } : pendingGit)
     api.routes[`POST ${B}/zones/git/reconnect`] = () => connJob()
     api.routes[`GET ${B}/jobs/conn1`] = () => connJob()
@@ -699,8 +699,8 @@ describe('관리 › 구역 — 연결 보류 · 다시 연결', () => {
     expect(called('POST', `${B}/zones/git/reconnect`)).toHaveLength(1)
     expect(screen.getByTestId('zone-git-status').textContent).toBe('다시 연결 중')
     expect(screen.getByTestId('zone-git-stage-connect').textContent).toContain('워크스페이스와 연결')
-    expect(screen.queryByTestId('zone-git-pending')).toBeNull()                 // 진행 중에는 진행만 보인다
-    expect((toggle('메일') as HTMLButtonElement).disabled).toBe(true)           // 한 번에 하나
+    expect(screen.queryByTestId('zone-git-pending')).toBeNull()                 // 진행 중에는 진행 상태만 표시
+    expect((toggle('메일') as HTMLButtonElement).disabled).toBe(true)           // 동시 1건
 
     connected = true
     api.routes[`GET ${B}/jobs/conn1`] = () => doneJob
@@ -718,7 +718,7 @@ describe('관리 › 구역 — 연결 보류 · 다시 연결', () => {
     expect(screen.getByTestId('zone-git-status').textContent).toBe('연결 실패')
     expect(zoneRow('git').textContent).toContain('코드 저장소의 로그인 연동을 아직 연결하지 못했습니다.')
     expect(zoneRow('git').textContent).toContain('이 구역은 켜진 채로 있습니다.')
-    expect(screen.queryByTestId('zone-git-pending')).toBeNull()                 // 실패 줄이 대신 말한다
+    expect(screen.queryByTestId('zone-git-pending')).toBeNull()                 // 실패 행이 대신 안내
     expect(screen.queryByRole('button', { name: '꺼진 채로 두기' })).toBeNull()
     fireEvent.click(within(zoneRow('git')).getByRole('button', { name: '다시 시도' }))
     await waitFor(() => expect(called('POST', `${B}/zones/git/reconnect`)).toHaveLength(1))

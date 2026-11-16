@@ -1,7 +1,7 @@
 /**
- * 내장 AI 권한 모드 — Claude Code 와 같은 이름·뜻(GET/PUT /api/approvals/mode).
- *  default 기본(매번 확인) · acceptEdits 편집 자동 수락 · plan 계획(실행 안 함) · auto 오토 · bypassPermissions 바이패스
- * Shift+Tab 순환은 Claude Code 처럼 bypass 를 빼고 돈다(bypass 는 메뉴 + 확인으로만 켠다).
+ * 내장 AI 권한 모드 — Claude Code 와 동일한 이름·의미(GET/PUT /api/approvals/mode).
+ *  default 기본(매번 확인) · acceptEdits 편집 자동 수락 · plan 계획(실행하지 않음) · auto 오토 · bypassPermissions 바이패스
+ * Shift+Tab 순환은 Claude Code 와 같이 bypass 를 제외한다(bypass 는 메뉴 + 확인으로만 활성화).
  */
 import { createStore, useStore } from 'zustand'
 import { $fetch } from '~/lib/api'
@@ -24,7 +24,7 @@ export function loadPermissionMode(force = false) {
   if (permissionStore.getState().loaded && !force) return Promise.resolve()
   loading ??= $fetch<{ mode: PermissionMode }>('/api/approvals/mode')
     .then(r => permissionStore.setState({ mode: PERMISSION_MODES.includes(r.mode) ? r.mode : 'default', loaded: true }))
-    .catch(() => { /* 모르면 기본 */ })
+    .catch(() => { /* 확인 불가 시 기본값 */ })
     .finally(() => { loading = null })
   return loading
 }
@@ -48,7 +48,7 @@ export async function setPermissionMode(mode: PermissionMode): Promise<boolean> 
   }
 }
 
-/** Shift+Tab — 다음 모드(bypass 면 기본으로 돌아온다) */
+/** Shift+Tab — 다음 모드(bypass 이면 기본으로 복귀) */
 export function cyclePermissionMode() {
   const cur = permissionStore.getState().mode
   const i = CYCLE.indexOf(cur)

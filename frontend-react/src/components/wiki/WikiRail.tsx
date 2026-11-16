@@ -2,7 +2,7 @@
  * 위키 오른쪽 레일 240("목차와 정보").
  *  "이 페이지" 목차(왼쪽 1px 선 + 현재 항목 2px primary) · "최근 기록"(v12 정하늘 · 10:44) + 전체 기록 보기.
  *  "이 페이지를 가리키는 곳"(백링크, GET /api/wiki/pages/{id}/backlinks): 12 muted 한 줄에 "제목 · 제목"(시안 그대로),
- *  각 제목은 그 페이지로 가는 링크(다른 스페이스면 "스페이스 › 제목"). 가리키는 곳이 없으면 칸을 숨긴다.
+ *  각 제목은 해당 페이지로 이동하는 링크(타 스페이스이면 "스페이스 › 제목"). 백링크가 없으면 영역을 숨긴다.
  */
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { cn } from '~/lib/utils'
@@ -17,9 +17,9 @@ export interface WikiRailProps {
   toc: TocItem[]
   activeIndex: number
   versions: WikiPageVersion[]
-  /** 지금 페이지 — 백링크를 읽는다 */
+  /** 현재 페이지 — 백링크 조회 대상 */
   pageId?: string | null
-  /** 지금 스페이스 이름 — 같은 스페이스 백링크는 스페이스 이름을 생략 */
+  /** 현재 스페이스 이름 — 동일 스페이스 백링크는 스페이스 이름 생략 */
   spaceName?: string | null
   className?: string
   onJump?: (item: TocItem) => void
@@ -43,7 +43,7 @@ export function WikiRail({ toc, activeIndex, versions, pageId, spaceName, classN
       try {
         const data = await $fetch<{ items: Backlink[] }>(`/api/wiki/pages/${encodeURIComponent(pageId)}/backlinks`)
         if (my === blSeq.current) setBacklinks(data.items || [])
-      } catch { /* 칸만 숨는다 */ }
+      } catch { /* 해당 영역만 숨김 */ }
     })()
   }, [pageId])
 

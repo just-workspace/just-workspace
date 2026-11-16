@@ -1,6 +1,6 @@
 /**
- * 모바일 하단 탭바 — 높이 64 + safe-area, 바탕 card, 위 테두리. 스토어 없이 props 만으로 그린다.
- * (자세한 설명·예시는 아래 컴포넌트 JSDoc)
+ * 모바일 하단 탭바 — 높이 64 + safe-area, 바탕 card, 상단 테두리. 스토어 없이 props 만으로 렌더링한다.
+ * (상세 설명·예시는 아래 컴포넌트 JSDoc 참조)
  */
 import type { ButtonHTMLAttributes, CSSProperties } from 'react'
 import { cn } from '~/lib/utils'
@@ -8,7 +8,7 @@ import { useI18n } from '~/i18n'
 import { UiIcon } from './Icon'
 
 export interface UiTabbarTab {
-  /** 고유 id(onSelect 로 돌려준다) */
+  /** 고유 id(onSelect 로 전달) */
   id: string
   /** 이름(11) */
   label: string
@@ -16,7 +16,7 @@ export interface UiTabbarTab {
   icon: string
   /** 활성(primary 글자 + 타일) */
   active?: boolean
-  /** aria-current="page" 여부(기본 = active). 시트를 여는 칸처럼 활성 모양과 현재 위치가 다를 때 */
+  /** aria-current="page" 여부(기본 = active). 시트를 여는 칸처럼 활성 외형과 현재 위치가 상이한 경우 사용 */
   current?: boolean
   /** 숫자 배지(0·빈 값이면 숨김) */
   badge?: number
@@ -26,18 +26,18 @@ export interface UiTabbarTab {
   dotLabel?: string
   /** aria-label(기본: 배지가 있으면 "이름 — n", 없으면 이름) */
   ariaLabel?: string
-  /** 버튼에 더 줄 속성(aria-haspopup·aria-expanded 등) */
+  /** 버튼에 추가할 속성(aria-haspopup·aria-expanded 등) */
   buttonProps?: ButtonHTMLAttributes<HTMLButtonElement>
 }
 
 export interface UiTabbarProps {
   /** 칸 목록(왼쪽→오른쪽) */
   tabs: UiTabbarTab[]
-  /** 칸을 눌렀을 때 */
+  /** 칸 클릭 시 호출 */
   onSelect?: (id: string) => void
   /** nav 접근성 이름(기본 "주요 메뉴") */
   ariaLabel?: string
-  /** 아래 safe-area 여백을 주지 않기 */
+  /** 하단 safe-area 여백 미적용 */
   noSafeBottom?: boolean
   className?: string
   style?: CSSProperties
@@ -46,12 +46,12 @@ export interface UiTabbarProps {
 const badgeText = (n: number) => (n > 99 ? '99+' : String(n))
 
 /**
- * 모바일 하단 탭바 — 높이 64 + safe-area, 바탕 card, 위 테두리. 스토어 없이 props 만으로 그린다.
- * 칸(보통 5: 홈 · 채팅 · 활동 · 메일 · 전체)은 똑같이 나눈다. 칸 = 아이콘 타일 32(18 아이콘) + 이름 11.
- * 활성 = primary 글자 600 + 타일 primary/16. 배지 = primary 숫자 알약 18(타일 오른쪽 위, card 2px 테두리, 99 넘으면 99+).
- * 점(dot) = 7px foreground 점(안 읽음 — 숫자 없이 있다는 것만, 활성 칸에서는 숨김).
+ * 모바일 하단 탭바 — 높이 64 + safe-area, 바탕 card, 상단 테두리. 스토어 없이 props 만으로 렌더링한다.
+ * 칸(통상 5: 홈 · 채팅 · 활동 · 메일 · 전체)은 균등 분할한다. 칸 = 아이콘 타일 32(18 아이콘) + 이름 11.
+ * 활성 = primary 글자 600 + 타일 primary/16. 배지 = primary 숫자 알약 18(타일 오른쪽 위, card 2px 테두리, 99 초과 시 99+).
+ * 점(dot) = 7px foreground 점(안 읽음 — 숫자 없이 존재 여부만 표시, 활성 칸에서는 숨김).
  *
- * 보이기/숨기기(md 이상 숨김 등)는 쓰는 쪽 className 으로(예: "md:hidden"). 시트·이동 같은 동작도 쓰는 쪽이 onSelect 로.
+ * 표시/숨김(md 이상 숨김 등)은 사용처의 className 으로 지정한다(예: "md:hidden"). 시트·이동 등의 동작도 사용처가 onSelect 로 처리한다.
  *
  * @example
  * <UiTabbar className="md:hidden" onSelect={go} tabs={[

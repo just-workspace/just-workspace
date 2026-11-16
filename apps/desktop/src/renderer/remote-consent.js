@@ -1,4 +1,4 @@
-// 원격 접속 동의 창 — 누가(이름·이메일·조직) 들어오려는지 보여 주고 [허용]/[거부]. 남은 시간이 다 되면 메인이 거부로 처리한다.
+// 원격 접속 동의 창 — 접속 요청자(이름·이메일·조직)를 표시하고 [허용]/[거부]를 받는다. 남은 시간이 만료되면 메인이 거부로 처리한다.
 (async () => {
   const $ = (id) => document.getElementById(id);
   const info = await window.rd.consent.info();
@@ -25,5 +25,5 @@
   $('allow').addEventListener('click', () => window.rd.consent.answer(true));
   $('deny').addEventListener('click', () => window.rd.consent.answer(false));
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') window.rd.consent.answer(false); });
-  $('deny').focus(); // 기본 포커스는 거부 — Enter 연타로 허용되지 않게
+  $('deny').focus(); // 기본 포커스는 거부 — Enter 반복 입력으로 허용되지 않도록 함
 })();

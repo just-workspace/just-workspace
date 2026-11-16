@@ -1,8 +1,8 @@
 /**
  * Ctrl+K 전환기: 폭 640, 헤더 52(검색 아이콘 + "이동하거나 검색 — > 명령 · @ 사람 · # 채널" + Esc 키캡),
- * 첫 화면 = 최근 6(종류 섞음) + 명령 3. 타이핑하면 채널·사람·문서(모듈/설정)·명령 섹션 + 맨 아래 "전체 검색에서 '…' 찾기".
+ * 첫 화면 = 최근 6(종류 혼합) + 명령 3. 입력 시 채널·사람·문서(모듈/설정)·명령 섹션 + 최하단 "전체 검색에서 '…' 찾기".
  * `>` 명령 모드 · `@` 사람(DM) · `#` 채널. 행 40, 선택 행 primary/13 + ↵ 키캡, 푸터 40(↑↓ 이동 · ↵ 열기 · Ctrl ↵ 새 탭).
- * 전체 검색은 기존 /api/search(통합 검색)로 — 검색 전용 페이지는 아직 없어 결과를 팰릿 안 "검색 결과" 섹션으로 보여 준다.
+ * 전체 검색은 기존 /api/search(통합 검색)를 사용한다 — 검색 전용 페이지가 아직 없어 결과를 팰릿 내부 "검색 결과" 섹션에 표시한다.
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
@@ -26,7 +26,7 @@ interface Row { key: string; name: string; kind: string; icon: string; to?: stri
 interface Section { title: string; rows: Row[] }
 
 export interface CommandPaletteProps {
-  /** 닫을 때(Esc·바깥·항목 실행) */
+  /** 닫힘 시 호출(Esc·바깥 클릭·항목 실행) */
   onClose?: () => void
 }
 
@@ -51,9 +51,9 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // 입력 글자를 끌어 고르다 스크림에서 떼면 click 이 스크림에서 난다 — 그건 바깥 클릭이 아니다
+  // 입력 글자를 드래그 선택하다 스크림에서 버튼을 놓으면 click 이 스크림에서 발생한다 — 이는 바깥 클릭으로 처리하지 않는다
   const downInside = useRef(false)
-  // 늦게 온 검색 응답이 최신 결과를 덮지 않게(요청 순번)
+  // 지연 도착한 검색 응답이 최신 결과를 덮어쓰지 않도록 함(요청 순번)
   const searchSeq = useRef(0)
 
   const mode: 'default' | 'command' | 'person' | 'channel' =
@@ -68,7 +68,7 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
   const peopleRows: Row[] = allUsers
     .filter(u => u.username !== user?.username && (!term || match(u.display_name) || match(u.username)))
     .slice(0, 6)
-    // 사람 = DM 열기: 채팅으로 이동한 뒤 useChat().openDM (셸 연결부 — 채팅 내부는 별도 작업)
+    // 사람 = DM 열기: 채팅으로 이동한 후 useChat().openDM 호출(셸 연결부 — 채팅 내부는 별도 작업)
     .map(u => ({ key: `u:${u.username}`, name: u.display_name || u.username, kind: 'DM', icon: 'user', run: async () => { await navigateTo('/chat'); await openDM(u.id) } }))
   const placeRows: Row[] = (() => {
     const mods: Row[] = [home, ...navItems].filter(i => match(i.name)).map(i => ({ key: i.route, name: i.name, kind: t('shell.kind.module'), icon: i.icon || 'dot', to: i.route }))
@@ -101,7 +101,7 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
   const flatRows = sections.flatMap(s => s.rows)
   const showSearchFooter = mode === 'default' && !!term
 
-  // 디바운스 타이머·Enter 가 부르는 검색은 지금 입력값을 본다
+  // 디바운스 타이머·Enter 가 호출하는 검색은 현재 입력값을 참조한다
   const live = useRef({ mode, term })
   live.current = { mode, term }
   async function doSearch() {
@@ -138,7 +138,7 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
     if (e.key === 'ArrowDown' && len) { e.preventDefault(); setActiveIndex((activeIndex + 1) % len); scrollActive() }
     else if (e.key === 'ArrowUp' && len) { e.preventDefault(); setActiveIndex((activeIndex - 1 + len) % len); scrollActive() }
     else if (e.key === 'Enter') {
-      // 한글 조합 중 Enter 는 글자 확정 — 행을 열지 않는다. 버튼에 포커스가 있으면 그 버튼의 클릭에 맡긴다
+      // 한글 조합 중 Enter 는 글자 확정이므로 행을 열지 않는다. 버튼에 포커스가 있으면 해당 버튼의 클릭 처리에 위임한다
       if (e.nativeEvent.isComposing || (e.target instanceof HTMLButtonElement)) return
       e.preventDefault()
       const row = flatRows[activeIndex]
@@ -161,7 +161,7 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
         if (e.target === e.currentTarget && !dragged) emitClose()
       }}
     >
-      {/* 키 처리는 입력 칸이 아니라 대화상자에 — 행·"전체 검색" 버튼을 마우스로 눌러 포커스가 옮겨 가도 Esc·↑↓·Enter 가 먹는다 */}
+      {/* 키 처리는 입력 칸이 아닌 대화상자에서 수행 — 행·"전체 검색" 버튼을 마우스로 클릭해 포커스가 이동해도 Esc·↑↓·Enter 가 동작한다 */}
       <div
         role="dialog"
         aria-label={t('shell.palette.dialogLabel')}

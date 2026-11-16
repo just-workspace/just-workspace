@@ -1,6 +1,6 @@
 /**
- * 짧은 알림 — "복사했습니다" 같은 결과를 화면 아래에 잠깐 보인다.
- * UI 키트의 알림 저장소(useToast)를 그대로 읽어 그리기만 한다(키트의 UiToast 는 워크스페이스 셸에 묶여 있어 쓰지 않는다).
+ * 짧은 알림 — "복사했습니다" 같은 결과를 화면 하단에 잠시 표시한다.
+ * UI 키트의 알림 저장소(useToast)를 그대로 조회하여 렌더링만 수행한다(키트의 UiToast 는 워크스페이스 셸에 종속되어 사용하지 않는다).
  */
 import { useStore } from 'zustand'
 import { removeToast, toastStore } from '~/composables/useToast'

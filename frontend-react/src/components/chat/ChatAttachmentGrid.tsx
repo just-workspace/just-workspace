@@ -1,12 +1,12 @@
 /**
  * 메시지 첨부.
  *  · 이미지 그리드: 6칸 격자 · 간격 4 · radius 8 · 최대 550.
- *    1 = 16:9(크기를 알면 원래 비율, 최대 550×350) · 2 = 반반 정사각 · 3 = 큰 1 + 작은 2 · 4 = 2×2 ·
- *    5–10 = 위 줄 나머지(2 → 위 2 + 아래 3, 디스코드식) + 아래 3씩 · 10장 넘으면 10칸째에 "+N"
- *  · 영상 = 포스터 + 길이 꼬리표 + 아래 컨트롤 36(play/pause) · 소리 = 카드 + 재생 줄 · 파일 카드 radius 8 · 패딩 16
- *  · 스포일러 첨부 = 덮개 + "스포일러" 알약(누르면 보임) · 이미지는 누르면 전체 화면 보기(ChatImageViewer)
+ *    1 = 16:9(크기를 알면 원본 비율, 최대 550×350) · 2 = 반반 정사각 · 3 = 큰 1 + 작은 2 · 4 = 2×2 ·
+ *    5–10 = 위 줄 나머지(2 → 위 2 + 아래 3, 디스코드식) + 아래 3씩 · 10장 초과 시 10칸째에 "+N"
+ *  · 영상 = 포스터 + 길이 라벨 + 하단 컨트롤 36(play/pause) · 오디오 = 카드 + 재생 줄 · 파일 카드 radius 8 · 패딩 16
+ *  · 스포일러 첨부 = 커버 + "스포일러" 알약(클릭 시 표시) · 이미지는 클릭 시 전체 화면 보기(ChatImageViewer)
  *  · 업로드 중(COMPOSER 낙관 메시지 `_upload`): 진행 막대 + 취소 / 실패 = danger 카드 + 다시 시도 / 크기 초과 = 다시 시도 없음
- *  · 옛 단일 file_meta 메시지(attachments 없음)도 1장짜리로 같은 그림.
+ *  · 기존 단일 file_meta 메시지(attachments 없음)도 1장 구성으로 동일하게 표시.
  */
 import { memo, useRef, useState } from 'react'
 import { useStore } from 'zustand'
@@ -26,7 +26,7 @@ export interface ViewAttachment {
   filename: string
   size: number
   mime: string
-  /** 원본(다운로드·전체 화면) — API 경로면 apiUrl 전 */
+  /** 원본(다운로드·전체 화면) — API 경로인 경우 apiUrl 적용 전 값 */
   url: string
   /** 미리보기(그리드 칸) */
   thumb: string
@@ -58,7 +58,7 @@ export function attachmentKind(mime: string | null | undefined, filename: string
   return 'file'
 }
 
-/** 메시지 → 보여 줄 첨부. attachments 가 있으면 그것, 없으면 옛 file_meta 한 장 */
+/** 메시지 → 표시할 첨부. attachments 가 있으면 해당 값, 없으면 기존 file_meta 1건 */
 export function messageAttachments(msg: Pick<ChatMessage, 'id' | 'attachments' | 'file_meta' | 'content' | 'message_type'>): ViewAttachment[] {
   if (Array.isArray(msg.attachments) && msg.attachments.length) {
     return msg.attachments.map((a) => {
@@ -88,12 +88,12 @@ export function messageAttachments(msg: Pick<ChatMessage, 'id' | 'attachments' |
   }]
 }
 
-// ─── 그리드 배치(순수 함수 — 테스트) ───
+// ─── 그리드 배치(순수 함수 — 테스트 대상) ───
 export interface GridCell { span: 2 | 3 | 4 | 6; shape: 'video' | 'square' | 'tall' }
 export interface GridLayout { cells: GridCell[]; more: number }
 export const GRID_MAX = 10
 
-/** n 장 → 6칸 격자의 칸들 + 마지막 칸 "+N"(10장 넘을 때) */
+/** n 장 → 6칸 격자의 칸 목록 + 마지막 칸 "+N"(10장 초과 시) */
 export function gridLayout(n: number): GridLayout {
   if (n <= 0) return { cells: [], more: 0 }
   const shown = Math.min(n, GRID_MAX)
@@ -145,7 +145,7 @@ function fileIcon(ext: string, kind: AttachmentKind): { icon: string; cls: strin
   return { icon: 'file', cls: 'text-muted-foreground' }
 }
 
-/** 스포일러 덮개 */
+/** 스포일러 커버 */
 function SpoilerCover({ onReveal, className }: { onReveal: () => void; className?: string }) {
   const { t } = useI18n()
   return (
@@ -182,7 +182,7 @@ export function FileCard({ a }: { a: ViewAttachment }) {
   )
 }
 
-/** 영상 — 포스터(첫 장면) + 길이 꼬리표 + 아래 컨트롤 36 */
+/** 영상 — 포스터(첫 장면) + 길이 라벨 + 하단 컨트롤 36 */
 function VideoCard({ a }: { a: ViewAttachment }) {
   const { t } = useI18n()
   const ref = useRef<HTMLVideoElement | null>(null)
@@ -245,7 +245,7 @@ function VideoCard({ a }: { a: ViewAttachment }) {
   )
 }
 
-/** 소리 — 카드 + 재생 줄 */
+/** 오디오 — 카드 + 재생 줄 */
 function AudioCard({ a }: { a: ViewAttachment }) {
   const { t } = useI18n()
   const ref = useRef<HTMLAudioElement | null>(null)
@@ -346,12 +346,12 @@ function UploadCard({ info, files }: { info: UploadInfo; files: ViewAttachment[]
 
 export interface ChatAttachmentGridProps {
   message: ChatMessage
-  /** 이미지 칸을 눌렀다(이미지만 모은 목록의 index) */
+  /** 이미지 칸 클릭(이미지만 모은 목록의 index) */
   onOpenImage?: (images: ViewAttachment[], index: number) => void
   className?: string
 }
 
-/** 메시지 첨부 전부(이미지 그리드 · 영상 · 소리 · 파일 · 업로드 상태) */
+/** 메시지 첨부 전체(이미지 그리드 · 영상 · 오디오 · 파일 · 업로드 상태) */
 export const ChatAttachmentGrid = memo(function ChatAttachmentGrid({ message, onOpenImage, className }: ChatAttachmentGridProps) {
   const { t } = useI18n()
   const autoExpand = useStore(userPrefsStore, s => s.prefs.chatMediaAutoExpand)
@@ -365,7 +365,7 @@ export const ChatAttachmentGrid = memo(function ChatAttachmentGrid({ message, on
   const rest = all.filter(a => !images.includes(a))
   const layout = gridLayout(images.length)
   const single = images.length === 1 ? images[0] : null
-  // 하나면 크기를 알 때 원래 비율(최대 550×350)
+  // 단일 이미지이고 크기를 아는 경우 원본 비율 적용(최대 550×350)
   const singleBox = single?.width && single?.height
     ? (() => { const s = Math.min(1, 550 / single.width, 350 / single.height); return { width: Math.round(single.width * s), aspectRatio: `${single.width} / ${single.height}` } })()
     : null

@@ -1,8 +1,8 @@
 /**
- * 권한 행렬(모바일 #m-role-edit): 묶음 제목 12/600(일반·멤버·텍스트·음성) →
- * 행 = 이름 14/500 + 설명 12 muted + 스위치. 위험 권한은 warning 한 줄(스위치 aria-describedby).
- * 내가 가지지 않은 비트는 남에게 못 준다(서버 _check_grant) — 스위치 잠금 + 이유 한 줄.
- * 모바일: 행 56 이상 · 이름 16 · 설명 13(위험이면 경고 문구가 설명 자리) · 스위치.
+ * 권한 행렬(모바일 #m-role-edit): 그룹 제목 12/600(일반·멤버·텍스트·음성) →
+ * 행 = 이름 14/500 + 설명 12 muted + 스위치. 위험 권한은 warning 한 행(스위치 aria-describedby).
+ * 본인이 보유하지 않은 비트는 타 사용자에게 부여 불가(서버 _check_grant) — 스위치 잠금 + 사유 한 행.
+ * 모바일: 행 56 이상 · 이름 16 · 설명 13(위험 권한이면 경고 문구가 설명 위치를 대체) · 스위치.
  */
 import { useId } from 'react'
 import { cn } from '~/lib/utils'
@@ -18,7 +18,7 @@ export interface PermissionMatrixProps {
   onChange: (bits: number) => void
   /** 화면 전체 잠금(계층·관리 권한 없음) */
   locked?: boolean
-  /** 내 워크스페이스 비트(부여 제한) */
+  /** 본인 워크스페이스 비트(부여 제한) */
   myBits: number
   isGlobalAdmin: boolean
   mobile?: boolean

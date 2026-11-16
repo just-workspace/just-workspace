@@ -1,9 +1,9 @@
 /**
- * 대시보드 머리: 왼쪽 h1 24/700 "좋은 아침이에요, 하늘 님" + 날짜 13.5 muted(요약은 칩 줄이 맡는다 — Q8),
+ * 대시보드 헤더: 왼쪽 h1 24/700 "좋은 아침이에요, 하늘 님" + 날짜 13.5 muted(요약은 칩 행이 담당 — Q8),
  * 오른쪽 빠른 만들기 버튼 행 [메일 쓰기][일정][문서][파일 올리기][▾] · 구분선 · layout 아이콘 "대시보드 편집".
  * 3열 미만·모바일은 아이콘 2개(+ 새로 만들기 메뉴 · 편집).
  * 인사 문구는 관리 › 일반 "대시보드 문구·공지"(dash.greeting_mode: date 자동 / custom 직접 / none 숨김).
- * ▾·+ 메뉴 맨 위 항목은 dash.primary_action / primary_href(비우면 없음). 꺼진 모듈 항목은 숨긴다.
+ * ▾·+ 메뉴 최상단 항목은 dash.primary_action / primary_href(비우면 없음). 비활성 모듈 항목은 숨긴다.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -58,12 +58,12 @@ export function DashboardGreeting({ wide, editing, onToggleEdit, noEdit }: Dashb
       : t('greeting.withName', { greeting, name: user?.display_name || user?.username })
   const dateStr = now ? now.toLocaleDateString(locale, { month: 'long', day: 'numeric', weekday: 'long' }) : ''
 
-  const docsOn = useZoneInstalled('docs')   // 문서 편집기는 문서 구역 것
+  const docsOn = useZoneInstalled('docs')   // 문서 편집기는 문서 구역 소속
   function newDoc() {
     const win = window.open('/office/open?new=doc&dir=my', '_blank')
     if (!win) addToast('error', t('files.page.popupBlocked'))
   }
-  // 버튼 행 4개(시안) — 꺼진 모듈은 뺀다
+  // 버튼 행 4개(시안) — 비활성 모듈은 제외
   const main: Action[] = []
   if (isModuleEnabled('mail')) main.push({ key: 'mail', label: t('dashboard.shortcuts.composeMail'), icon: 'mail', run: () => openCompose('new') })
   if (isModuleEnabled('calendar')) main.push({ key: 'event', label: t('dashboard.header.newEvent'), icon: 'calendar', run: () => { void navigateTo('/calendar?new=1') } })
@@ -85,10 +85,10 @@ export function DashboardGreeting({ wide, editing, onToggleEdit, noEdit }: Dashb
   const all = [...main, ...more]
 
   return (
-    // 진짜 낮은 창(실효 높이 < 760)에선 인사 줄을 숨긴다. 버튼은 오른쪽에 남긴다
+    // 실제로 낮은 창(실효 높이 < 760)에서는 인사 행을 숨긴다. 버튼은 오른쪽에 유지한다
     <div className="flex items-end gap-4 low:justify-end">
       <div className="min-w-0 flex-1 low:hidden">
-        {/* 좁은 폭에서 "이름 / 님"처럼 글자 단위로 끊기지 않게 keep-all + balance */}
+        {/* 좁은 폭에서 "이름 / 님"처럼 글자 단위로 줄바꿈되지 않도록 keep-all + balance 적용 */}
         {title && <h1 className="text-2xl font-bold tracking-tight [text-wrap:balance] [word-break:keep-all]">{title}</h1>}
         <p className="mt-1 text-[13.5px] text-muted-foreground">{dateStr}</p>
       </div>

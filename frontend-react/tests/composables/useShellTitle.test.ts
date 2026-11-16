@@ -1,4 +1,4 @@
-// 상단바 제목 덮어쓰기(__WS_SHELL__.setTitle) — 걸기·바꾸기·원복·owner·정리
+// 상단바 제목 덮어쓰기(__WS_SHELL__.setTitle) — 설정·변경·원복·owner·정리
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setTitle, clearTitle, clearAllTitles, getShellTitle, MAX_TITLE_LENGTH } from '~/composables/useShellTitle'
 import { wsShellApi } from '~/composables/useShellHeaderActions'
@@ -35,11 +35,11 @@ describe('상단바 제목', () => {
     expect(getShellTitle()).toBe('B')
     clearTitle('two')
     expect(getShellTitle()).toBe('A')
-    // 같은 owner 를 다시 걸면 맨 뒤로
+    // 동일 owner 를 다시 설정하면 맨 뒤로 이동
     setTitle('B', 'two')
     setTitle('A2', 'one')
     expect(getShellTitle()).toBe('A2')
-    clearTitle('nobody') // 없는 owner 는 아무 일 없음
+    clearTitle('nobody') // 존재하지 않는 owner 는 no-op
     clearAllTitles()
     expect(getShellTitle()).toBe('')
   })

@@ -1,9 +1,9 @@
 /**
  * 커스텀 이모지 관리(모바일 #m-emoji).
- * 제목에 개수("커스텀 이모지 — 12 / 200") · 안내 한 줄(형식 · 크기 · 이름 규칙) + [이모지 올리기](여러 파일).
- * 표 64 / 1fr / 160 / 120 / 48: 그림 36(primary/10) · :이름:(mono, GIF 꼬리표 · 눌러서 이름 바꾸기) · 올린 사람 · 날짜 mono · 삭제.
- * 권한 없음(can_manage false) = banner + 올리기·삭제·이름 바꾸기 잠김. 빈 상태 = 점선 칸.
- * 바꾼 뒤 컴포저 캐시(useChatEmoji.loadCustomEmojis(true))를 갱신한다.
+ * 제목에 개수("커스텀 이모지 — 12 / 200") · 안내 한 행(형식 · 크기 · 이름 규칙) + [이모지 올리기](여러 파일).
+ * 표 64 / 1fr / 160 / 120 / 48: 이미지 36(primary/10) · :이름:(mono, GIF 라벨 · 누르면 이름 변경) · 업로드한 사용자 · 날짜 mono · 삭제.
+ * 권한 없음(can_manage false) = banner + 업로드·삭제·이름 변경 잠금. 빈 상태 = 점선 영역.
+ * 변경 후 컴포저 캐시(useChatEmoji.loadCustomEmojis(true))를 갱신한다.
  */
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useI18n } from '~/i18n'

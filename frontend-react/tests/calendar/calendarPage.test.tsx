@@ -1,5 +1,5 @@
 // 캘린더 화면 렌더: 월 보기 칩(범주 색·빗금) → 칩 클릭 = 읽기 팝오버, 반복 일정 삭제 = 범위 확인(이 일정만 기본) → DELETE ?scope=,
-// 불러오기 실패 = 동기화 오류 띠(그리드 유지), 보기 전환(주·일·일정 목록). ($fetch 는 가짜)
+// 불러오기 실패 = 동기화 오류 띠(그리드 유지), 보기 전환(주·일·일정 목록). ($fetch 는 모의(mock))
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, fireEvent, waitFor, screen } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'
@@ -104,7 +104,7 @@ describe('캘린더 화면', () => {
       const band = await screen.findByRole('status')
       expect(band.textContent).toContain('Kiritimati (UTC+14)')
       expect(screen.getByText('UTC+14 Kiritimati')).toBeTruthy()
-      // 한글 표에 없는 시간대 — 이름만 쓰는 버튼은 영문 + UTC 오프셋
+      // 한글 표에 없는 시간대 — 이름만 표시하는 버튼은 영문 + UTC 오프셋
       fireEvent.click(screen.getByRole('button', { name: t('calendar.tzBand.keep', { city: 'Kiritimati (UTC+14)' }) }))
       await waitFor(() => expect(screen.queryByText(/Kiritimati \(UTC\+14\)/)).toBeNull())
       unmount()

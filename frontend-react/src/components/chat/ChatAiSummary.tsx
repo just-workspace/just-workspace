@@ -1,11 +1,11 @@
 /**
- * 채팅방 요약 — 대화 목록 맨 위(머리 아래, 여백 12) 카드.
- *  카드: 테두리 primary/45 · 바탕 primary/6 · 반지름 10 · 패딩 12×14 · 간격 8.
- *   머리 = ✦ "읽지 않은 48개 요약"(숫자 mono) + [요약 닫기] / 목록 13·21 = 요점, "나를 부름: …(10:31)" 은 굵게 /
- *   꼬리 = [나를 부른 메시지로] 링크 · 오른쪽 "AI 생성 · 09:02–10:44"(mono).
- *  범위: 안 읽은 것 = 목록이 잡아 둔 첫 안읽음부터 끝까지(채널을 열면 바로 읽음 처리돼서 서버 last_read 로는 못 센다),
- *        고른 범위 = 메시지 ⋯ "여기부터 요약"(requestChatAiSummary).
- *  안 읽은 것이 MIN_UNREAD 개 이상일 때만 접힌 버튼 한 줄을 먼저 보여 준다(누르면 요약) — 시안에 진입 그림이 없어 정한 값.
+ * 채팅방 요약 — 대화 목록 최상단(헤더 아래, 여백 12) 카드.
+ *  카드: 테두리 primary/45 · 배경 primary/6 · 반지름 10 · 패딩 12×14 · 간격 8.
+ *   헤더 = ✦ "읽지 않은 48개 요약"(숫자 mono) + [요약 닫기] / 목록 13·21 = 요점, "나를 부름: …(10:31)" 은 굵게 /
+ *   푸터 = [나를 부른 메시지로] 링크 · 오른쪽 "AI 생성 · 09:02–10:44"(mono).
+ *  범위: 안 읽은 메시지 = 목록이 보관한 첫 안읽음부터 끝까지(채널을 열면 즉시 읽음 처리되어 서버 last_read 로는 집계 불가),
+ *        선택 범위 = 메시지 ⋯ "여기부터 요약"(requestChatAiSummary).
+ *  안 읽은 메시지가 MIN_UNREAD 개 이상일 때만 접힌 버튼 한 줄을 먼저 표시(클릭 시 요약) — 시안에 진입 화면이 없어 정한 값.
  */
 import { useEffect, useRef, useState } from 'react'
 import { createStore, useStore } from 'zustand'
@@ -18,7 +18,7 @@ import { useAiInline } from '~/composables/useAiInline'
 import { AiInlineButton, AiInlineErrorLine, AiInlineLoading, AiInlinePrivacy } from '~/components/aiInline/AiInlineParts'
 import { hhmm, inlineError, summarizeChat, type ChatSummary } from '~/utils/aiInline'
 
-/** 이 수 이상 안 읽었을 때 "요약" 버튼 줄을 띄운다 */
+/** 안 읽은 메시지가 이 수 이상일 때 "요약" 버튼 줄 표시 */
 export const MIN_UNREAD = 10
 
 // ─── ⋯ "여기부터 요약" 요청(메시지 메뉴 → 목록 위 카드) ───
@@ -29,9 +29,9 @@ export function requestChatAiSummary(channelId: string, fromMessageId: string) {
 
 export interface ChatAiSummaryProps {
   channelId: string | null
-  /** 목록이 채널을 열 때 잡아 둔 첫 안읽음 메시지 */
+  /** 목록이 채널을 열 때 보관한 첫 안읽음 메시지 */
   firstUnreadId: string | null
-  /** 그때의 안 읽은 수 */
+  /** 해당 시점의 안 읽은 수 */
   unreadCount: number
 }
 
@@ -47,7 +47,7 @@ export function ChatAiSummary({ channelId, firstUnreadId, unreadCount }: ChatAiS
   const [dismissed, setDismissed] = useState(false)
   const seq = useRef(0)
 
-  // 채널이 바뀌면 처음부터
+  // 채널 변경 시 초기화
   useEffect(() => {
     seq.current++
     setMode(null); setData(null); setError(''); setDismissed(false)
@@ -86,7 +86,7 @@ export function ChatAiSummary({ channelId, firstUnreadId, unreadCount }: ChatAiS
 
   if (!channelId || state === 'hidden') return null
 
-  // 접힌 줄 — 안 읽은 것이 많을 때만
+  // 접힌 줄 — 안 읽은 메시지가 많을 때만 표시
   if (!mode) {
     if (dismissed || unreadCount < MIN_UNREAD || !firstUnreadId) return null
     return (

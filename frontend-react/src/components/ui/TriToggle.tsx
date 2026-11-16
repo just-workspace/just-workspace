@@ -2,10 +2,10 @@
  * 3단 토글: 거부 / 상속 / 허용 중 하나.
  * 모양: 1px border · rounded-md 묶음 안 3칸, 칸 32(h-8) · 아이콘 14 + 글자 12, 간격 4, 좌우 10.
  *   선택 바탕 — 거부 ✕ danger/15(글자 danger) · 상속 ／ foreground/20(글자 foreground) · 허용 ✓ success/15(글자 success).
- *   안 고른 칸은 muted-foreground, 호버 bg-overlay-hover.
- * size="touch"(모바일): 칸 44 정사각, 아이콘만(16) — 글자는 aria-label 로만.
- * 접근성: role=radiogroup(ariaLabel = 권한 이름) · 칸 role=radio aria-checked. 고른 칸만 Tab 으로 들어온다(roving).
- *   ←↑ / →↓ = 이전/다음 칸으로 옮기며 고른다(끝에서 돈다) · Home/End = 처음/끝.
+ *   미선택 칸은 muted-foreground, 호버 bg-overlay-hover.
+ * size="touch"(모바일): 칸 44 정사각, 아이콘만(16) — 글자는 aria-label 로만 제공.
+ * 접근성: role=radiogroup(ariaLabel = 권한 이름) · 칸 role=radio aria-checked. 선택된 칸만 Tab 으로 진입한다(roving).
+ *   ←↑ / →↓ = 이전/다음 칸으로 이동하며 선택한다(끝에서 순환) · Home/End = 처음/끝.
  *
  * @example
  * <UiTriToggle ariaLabel="메시지 보내기" modelValue={ov.send} onUpdateModelValue={v => setOv('send', v)} />
@@ -22,15 +22,15 @@ export type UiTriValue = 'deny' | 'inherit' | 'allow'
 export const UI_TRI_VALUES: readonly UiTriValue[] = ['deny', 'inherit', 'allow'] as const
 
 export interface UiTriToggleProps extends Omit<HTMLAttributes<HTMLDivElement>, 'role'> {
-  /** 고른 값. 안 주면 부품이 가진다(처음 = inherit) */
+  /** 선택된 값. 미지정 시 컴포넌트가 내부 보유(초기값 = inherit) */
   modelValue?: UiTriValue
-  /** 값 바뀜 */
+  /** 값 변경 */
   onUpdateModelValue?: (v: UiTriValue) => void
   /** md 32(기본, 아이콘+글자) · touch 44 정사각(아이콘만) */
   size?: 'md' | 'touch'
   /** 묶음 접근성 이름(권한 이름) */
   ariaLabel?: string
-  /** 칸 글자 바꾸기(기본 거부·상속·허용 — i18n ui.kit22) */
+  /** 칸 글자 변경(기본 거부·상속·허용 — i18n ui.kit22) */
   labels?: Partial<Record<UiTriValue, string>>
   disabled?: boolean
 }

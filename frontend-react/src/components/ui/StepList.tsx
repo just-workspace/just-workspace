@@ -1,11 +1,11 @@
 /**
- * 단계 목록 — 여러 화면을 차례로 지나는 흐름의 "지금 어디인지".
- * 단계 상태 네 가지: done(완료) · current(현재) · todo(남음) · skipped(건너뜀). 색만으로 구분하지 않는다 —
+ * 단계 목록 — 여러 화면을 순차 진행하는 흐름에서 현재 위치를 표시한다.
+ * 단계 상태 4종: done(완료) · current(현재) · todo(남음) · skipped(건너뜀). 색만으로 구분하지 않는다 —
  * 완료는 체크, 건너뜀은 줄표 + 취소선 + "건너뜀" 글자, 현재는 채운 번호 + aria-current="step".
- * 번호는 건너뛴 단계를 빼고 매긴다.
- * - variant="list": 세로 목록(<ol>) — 넓은 화면의 옆 칸.
- * - variant="compact": "3/11 단계 이름" 한 줄 + 진행 막대 — 좁은 화면의 위쪽 줄.
- * 문구(상태 이름)는 호출처가 준다(키트는 번역 키를 갖지 않는다).
+ * 번호는 건너뛴 단계를 제외하고 부여한다.
+ * - variant="list": 세로 목록(<ol>) — 넓은 화면의 측면 칸.
+ * - variant="compact": "3/11 단계 이름" 한 줄 + 진행 막대 — 좁은 화면의 상단 줄.
+ * 문구(상태 이름)는 호출처가 전달한다(키트는 번역 키를 보유하지 않는다).
  */
 import type { HTMLAttributes } from 'react'
 import { cn } from '~/lib/utils'
@@ -25,12 +25,12 @@ export interface UiStepListLabels {
   done: string
   current: string
   todo: string
-  /** 건너뛴 단계 오른쪽에 보이는 글자 */
+  /** 건너뛴 단계 오른쪽에 표시되는 글자 */
   skipped: string
 }
 
 export interface UiStepListProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
-  /** 단계(필수) — 건너뛴 것도 자리 그대로 넣는다 */
+  /** 단계(필수) — 건너뛴 단계도 위치 그대로 포함 */
   steps: UiStep[]
   /** 묶음 접근성 이름(필수). 예: '설치 단계' */
   label: string
@@ -40,7 +40,7 @@ export interface UiStepListProps extends Omit<HTMLAttributes<HTMLElement>, 'chil
   variant?: 'list' | 'compact'
 }
 
-/** 건너뛴 단계를 뺀 번호·현재 위치·전체 수 */
+/** 건너뛴 단계를 제외한 번호·현재 위치·전체 수 */
 export function stepPosition(steps: UiStep[]): { numbers: Array<number | null>; now: number; total: number; current: UiStep | null } {
   let n = 0
   const numbers = steps.map(s => (s.state === 'skipped' ? null : ++n))

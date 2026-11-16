@@ -1,11 +1,11 @@
 /**
  * 메시지 한 줄(텍스트 · 첨부 공용).
  * 행 틀 = ChatMessageRow(cozy · compact · mobile), 본문 = ChatMarkdown, 첨부 = ChatAttachmentGrid(+ 이미지 보기 ChatImageViewer).
- *  · 나·내 역할·@everyone 멘션, 또는 나에게 온 답장(reply_to.sender = 나 && reply_ping) → bg-overlay-mention
+ *  · 본인·본인 역할·@everyone 멘션, 또는 본인에게 온 답장(reply_to.sender = 본인 && reply_ping) → bg-overlay-mention
  *  · 데스크톱: 호버·키보드 포커스 바(ChatMessageActions) · 단축키(호버·포커스 중) R 답장 · T 스레드 · S 저장 · E 수정
- *    · Alt+클릭 = 여기부터 안 읽음(새 메시지 선이 그 줄 위로 + 토스트)
+ *    · Alt+클릭 = 여기부터 안 읽음(새 메시지 선이 해당 줄 위로 이동 + 토스트)
  *  · 모바일: 길게 누르기 = 시트(ChatMessageSheet) · 왼쪽으로 밀기 = 답장
- *  · 수정은 컴포저에서(컴포저 위 "메시지 수정 중" 띠) — 여기서는 요청만.
+ *  · 수정은 컴포저에서 수행(컴포저 위 "메시지 수정 중" 띠) — 본 컴포넌트는 요청만 전달.
  */
 import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent as ReactTouchEvent } from 'react'
 import { useStore } from 'zustand'
@@ -32,22 +32,22 @@ import { ChatImageViewer } from './ChatImageViewer'
 
 export interface ChatMessageProps {
   message: ChatMessageT
-  /** 앞 메시지와 묶음(아바타·이름 생략) */
+  /** 앞 메시지와 같은 그룹(아바타·이름 생략) */
   grouped: boolean
   isOwn: boolean
-  /** 묶음의 마지막 — 읽음 표시 */
+  /** 그룹의 마지막 — 읽음 표시 */
   isLastInGroup?: boolean
   /** 스레드 패널 안 */
   inThread?: boolean
-  /** 전송 대기 같은 가짜 메시지 — 액션 없음 */
+  /** 전송 대기 등 가상 메시지 — 액션 없음 */
   readonlyRow?: boolean
-  /** 스레드 패널 맨 위 원 메시지 */
+  /** 스레드 패널 최상단 원본 메시지 */
   root?: boolean
   /** 스레드 열기(메시지 id) */
   onOpenThread?: (messageId: string) => void
-  /** 본문 아래 줄(전송 대기 · 보내기 실패) */
+  /** 본문 아래 줄(전송 대기 · 전송 실패) */
   footer?: ReactNode
-  /** 본문 글자를 흐리게(보내기 실패) */
+  /** 본문 글자를 흐리게 표시(전송 실패) */
   dimBody?: boolean
 }
 
@@ -56,7 +56,7 @@ function isTyping(el: EventTarget | null) {
   return !!n && (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA' || n.isContentEditable)
 }
 
-/** 이 줄을 강조(멘션·답장받음)할지 — 순수 */
+/** 해당 줄의 강조(멘션·답장 수신) 여부 — 순수 함수 */
 export function callsMeRow(
   m: Pick<ChatMessageT, 'content' | 'reply_to' | 'reply_ping'>,
   me: { id?: string | null; username?: string | null },
@@ -132,7 +132,7 @@ export const ChatMessage = memo(function ChatMessage({
   }, [])
 
   // ─── 모바일: 길게 누르기 → 시트, 왼쪽으로 밀기 → 답장 ───
-  // 시트(포털) 안 터치도 React 트리를 따라 이 행까지 올라온다 — 행 DOM 안에서 시작한 것만 센다.
+  // 시트(포털) 내부 터치도 React 트리를 따라 이 행까지 전파됨 — 행 DOM 내부에서 시작한 터치만 집계.
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const touch0 = useRef<{ x: number; y: number; swiping: boolean } | null>(null)
   const [swipeX, setSwipeX] = useState(0)

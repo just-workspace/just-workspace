@@ -45,7 +45,7 @@ describe('상태 메시지 값', () => {
     expect([today.getDate(), today.getHours(), today.getMinutes()]).toEqual([17, 23, 59])
     const later = statusClearAt('time', '15:00', now)!
     expect([later.getDate(), later.getHours()]).toEqual([17, 15])
-    // 이미 지난 시각이면 내일
+    // 이미 경과한 시각이면 내일
     expect(statusClearAt('time', '09:30', now)!.getDate()).toBe(18)
     expect(statusClearAt('time', '25:00', now)).toBeNull()
   })
@@ -84,7 +84,7 @@ describe('사용자 메뉴 상태 메시지 패널', () => {
     expect(panel.textContent).toContain(t('shell.userMenu.presetSick'))
     expect(panel.textContent).toContain(t('shell.userMenu.dndSchedule'))
     expect(panel.textContent).toContain(t('shell.userMenu.appearOffline'))
-    // 패널 안 클릭은 문서까지 가지 않는다(상단바 바깥 클릭이 사용자 메뉴를 닫지 않게)
+    // 패널 내부 클릭은 문서까지 전파되지 않음(상단바 바깥 클릭 처리로 사용자 메뉴가 닫히지 않도록)
     docClick.mockClear()
     fireEvent.click(screen.getByRole('button', { name: new RegExp(t('shell.userMenu.presetMeeting')) }))
     expect(docClick).not.toHaveBeenCalled()

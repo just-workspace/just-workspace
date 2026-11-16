@@ -1,10 +1,10 @@
-"""기동 전 비밀값 검사 — 약한·기본 값이면 뜨지 않는다.
+"""기동 전 비밀값 검사 — 취약한 값이나 기본값이면 기동하지 않는다.
 
-규칙은 backend/app/security_defaults.py 와 같다(이 서비스는 backend 코드를 들고 있지 않아
-작은 사본을 둔다): 비어 있음 · 예시 자리표시자(CHANGE_ME…) · 널리 알려진 기본값 · 길이 미달
-(키 32자, 비밀번호 16자). 값은 찍지 않는다 — 변수 이름과 사유만.
+규칙은 backend/app/security_defaults.py 와 동일하다(본 서비스는 backend 코드를 포함하지 않아
+축약 사본을 둔다): 비어 있음 · 예시 자리표시자(CHANGE_ME…) · 널리 알려진 기본값 · 길이 미달
+(키 32자, 비밀번호 16자). 값은 출력하지 않는다 — 변수 이름과 사유만 출력한다.
 
-탈출구: JW_ALLOW_INSECURE_DEFAULTS=1 이면 경고만 남기고 계속한다(개발·테스트 전용).
+예외 경로: JW_ALLOW_INSECURE_DEFAULTS=1 이면 경고만 기록하고 계속 진행한다(개발·테스트 전용).
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ def db_password(url: str) -> str | None:
 
 
 def enforce(checks: list[tuple[str, str, int, bool]]) -> bool:
-    """checks: (변수 이름, 값, 최소 길이, 필수). 문제가 없거나 탈출구가 켜져 있으면 True."""
+    """checks: (변수 이름, 값, 최소 길이, 필수). 문제가 없거나 예외 경로가 활성화되어 있으면 True."""
     problems = [(name, reason) for name, value, min_len, required in checks
                 if (reason := weakness(value, min_len, required=required))]
     if not problems:

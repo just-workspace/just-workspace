@@ -1,15 +1,15 @@
 /**
  * 활동 수신함 목록:
  * 필터 칩 + 날짜 그룹 + 행(아바타 32/40 + 종류 아이콘 배지, 안 읽음 = 굵게, 읽음 = muted).
- * 데스크톱 패널(400)과 모바일 /activity 페이지가 같은 목록을 쓴다.
+ * 데스크톱 패널(400)과 모바일 /activity 페이지가 동일 목록을 사용한다.
  *
  * - 칩 = 서버 필터(GET /api/notifications?type=a,b). 칩 숫자는 종류별 안 읽은 수(서버 total).
- * - 아바타 = 보낸 사람(actor_name) 첫 글자, 없으면 제목 첫 글자(예전 알림).
- * - 행동 버튼(actions: 회의 초대 수락/거절 등)은 맥락 줄에 텍스트 버튼으로 — 누르면 그 API 를 부르고 읽음 처리.
- *   서버가 "이미 응답했는지"를 알림에 남기지 않아, 이번 화면에서 누른 것만 "완료"로 바뀐다.
- * - 행을 누르면 action_url(없으면 link)로 이동.
+ * - 아바타 = 보낸 사람(actor_name) 첫 글자, 없으면 제목 첫 글자(이전 형식 알림).
+ * - 행동 버튼(actions: 회의 초대 수락/거절 등)은 맥락 줄에 텍스트 버튼으로 표시한다 — 클릭 시 해당 API 를 호출하고 읽음 처리한다.
+ *   서버가 "이미 응답했는지"를 알림에 기록하지 않으므로, 현재 화면에서 누른 항목만 "완료"로 전환된다.
+ * - 행 클릭 시 action_url(없으면 link)로 이동한다.
  *
- * ref 로 markAllAsRead · reload 두 함수를 내놓는다(ActivityListHandle).
+ * ref 로 markAllAsRead · reload 두 함수를 노출한다(ActivityListHandle).
  */
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react'
 import { cn } from '~/lib/utils'
@@ -34,13 +34,13 @@ export interface ActivityListHandle {
 export interface LayoutActivityListProps {
   /** 모바일 페이지면 칩 36·아바타 40·글자 14 */
   mobile?: boolean
-  /** 행을 눌러 이동할 때(패널을 닫는 데 쓴다) */
+  /** 행 클릭으로 이동 시 호출(패널 닫기에 사용) */
   onNavigate?: () => void
   ref?: Ref<ActivityListHandle | null>
 }
 
 type Filter = 'all' | 'mention' | 'thread' | 'task_assigned' | 'share' | 'system'
-// labelKey = i18n 키(렌더에서 t — 로캘 전환에 반응)
+// labelKey = i18n 키(렌더 시 t 적용 — 로캘 전환에 반응)
 const CHIPS: { key: Filter; labelKey: string; types: NotificationType[] | null }[] = [
   { key: 'all', labelKey: 'common.all', types: null },
   { key: 'mention', labelKey: 'notifications.types.mention', types: ['mention'] },
@@ -59,7 +59,7 @@ const TYPE_CTX: Partial<Record<NotificationType, string>> = {
   file_shared: 'nav.files', calendar_invite: 'nav.calendar', new_mail: 'shell.activity.ctxMail', board_must_read: 'shell.activity.ctxBoard',
   system: 'notifications.types.system',
 }
-// 서버 라벨은 한국어 고정이라 아는 id 는 로캘 문구로
+// 서버 라벨은 한국어 고정이므로 알려진 id 는 로캘 문구로 대체
 const ACTION_KEY: Record<string, string> = { accept: 'shell.activity.actionAccept', decline: 'shell.activity.actionDecline', tentative: 'shell.activity.actionTentative' }
 
 type Row = AppNotification
@@ -87,7 +87,7 @@ export function LayoutActivityList({ mobile = false, onNavigate, ref }: LayoutAc
   const { t } = useI18n()
 
   const [filter, setFilter] = useState<Filter>('all')
-  // 서버가 거른 목록 + 실시간으로 끼어든 다른 종류는 한 번 더 거른다
+  // 서버가 필터링한 목록에 실시간으로 유입된 다른 종류는 추가로 필터링한다
   const filtered = useMemo(() => {
     const c = CHIPS.find(x => x.key === filter)!
     return c.types ? notifications.filter((n: Row) => c.types!.includes(n.type)) : notifications
@@ -103,7 +103,7 @@ export function LayoutActivityList({ mobile = false, onNavigate, ref }: LayoutAc
   }, [fetchUnreadTotal])
   const countFor = (c: typeof CHIPS[number]) => (c.types ? chipCounts[c.key] ?? 0 : unreadCount)
 
-  // 안 읽은 수가 바뀌면(새 알림·읽음) 칩 숫자도 다시 — 연달아 바뀌면 한 번만
+  // 안 읽은 수 변경 시(새 알림·읽음) 칩 숫자도 재조회 — 연속 변경 시 1회만 수행
   const countTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const firstCount = useRef(true)
   useEffect(() => {
@@ -157,7 +157,7 @@ export function LayoutActivityList({ mobile = false, onNavigate, ref }: LayoutAc
   }, [fetchNotifications, loadCounts])
   // onMounted(load) + watch(filter, load)
   useEffect(() => { void load() }, [filter]) // eslint-disable-line react-hooks/exhaustive-deps
-  // 닫힐 때 필터를 풀어 둔다 — 다른 곳(재접속 보정 등)이 다시 읽어도 전체가 오게
+  // 닫힐 때 필터를 해제한다 — 다른 경로(재접속 보정 등)에서 재조회해도 전체가 수신되도록
   useEffect(() => () => { if (filterRef.current !== 'all') void fetchNotifications(false, undefined, null) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useImperativeHandle(ref, () => ({ markAllAsRead, reload: load }), [markAllAsRead, load])
 
@@ -172,7 +172,7 @@ export function LayoutActivityList({ mobile = false, onNavigate, ref }: LayoutAc
             count={countFor(c) || undefined}
             modelValue={filter === c.key}
             size={mobile ? 'lg' : 'sm'}
-            // 데스크톱은 떠 있는 활동 패널(card + 그림자) 위
+            // 데스크톱은 플로팅 활동 패널(card + 그림자) 위
             surface={mobile ? 'page' : 'raised'}
             onClick={() => setFilter(c.key)}
           />

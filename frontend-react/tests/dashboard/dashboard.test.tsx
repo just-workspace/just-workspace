@@ -42,7 +42,7 @@ function renderIn(node: ReactNode) {
   const router = createMemoryRouter([{ path: '*', element: node }], { initialEntries: ['/'] })
   return render(<RouterProvider router={router} />)
 }
-/** 카드가 보고하는 상태를 받아 보는 문맥 */
+/** 카드가 보고하는 상태를 수신하는 컨텍스트 */
 function withCtx(node: ReactNode, report = vi.fn()) {
   const ctx = {
     editing: false, maxRows: 5, cols: 3, report, reportHeight: () => {}, spanOf: () => 1 as const, setSpan: () => {}, hide: vi.fn(),
@@ -145,7 +145,7 @@ describe('시작하기 전폭 카드', () => {
     expect(rows.every(r => r.className.includes('h-14'))).toBe(true)
     fireEvent.click(within(card).getByRole('button', { name: '시작하기 숨기기' }))
     expect(ctx.hide).toHaveBeenCalledWith('start')
-    // 서버 닫음(dismiss)은 부르지 않는다 — 편집 패널에서 다시 볼 수 있게
+    // 서버 닫음(dismiss)은 호출하지 않음 — 편집 패널에서 다시 볼 수 있도록 유지
     expect(api.calls.some(c => c.url === '/api/dashboard/checklist/dismiss')).toBe(false)
   })
 })
@@ -240,7 +240,7 @@ describe('오늘 브리핑 칩', () => {
     expect(chips[2]).toMatchObject({ value: '3', sub: '지남 1' })
     expect(chips[3]).toMatchObject({ label: '디자인 리뷰', tone: 'primary', join: '/meetings/room/x' })
     expect(chips[3].value).toContain('10분 후')
-    // 회의가 1시간 넘게 남았으면 [참여] 없이 보통 칩
+    // 회의까지 1시간 넘게 남았으면 [참여] 없이 일반 칩
     const far = briefChips(s, Date.parse('2026-10-18T03:00:00Z'), t, false)
     expect(far.find(c => c.key === 'meeting')).toMatchObject({ tone: undefined, join: null })
     // 관리자가 아니면 서비스 칩 없음
@@ -397,7 +397,7 @@ describe('판 조립', () => {
     const patch = api.calls.find(c => c.url === '/api/me/prefs' && c.opts?.method === 'PATCH')!
     expect(patch.opts?.body['dash.layout'].hidden).toContain('ai')
     expect(patch.opts?.body['dash.layout'].order[0]).toBe('inbox')
-    // 공지는 기본 관리자 고정 — 패널에서 숨길 수 없다
+    // 공지는 기본적으로 관리자 고정 — 패널에서 숨김 불가
     const lockedRow = within(panel).queryByRole('button', { name: '공지 숨기기' })
     if (lockedRow) expect((lockedRow as HTMLButtonElement).disabled).toBe(true)
   })

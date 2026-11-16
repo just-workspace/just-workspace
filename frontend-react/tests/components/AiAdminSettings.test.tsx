@@ -1,5 +1,5 @@
-// AiAdminSettings(관리 › AI 의 본문, 주인 = AI 모듈): 설정·상태를 읽어 모델 행·상태 배지·도구 스위치를 그리고,
-// 도구 묶음 스위치는 즉시 PUT /api/ai/governance(모두 허용이면 빈 목록). $fetch 는 가짜.
+// AiAdminSettings(관리 › AI 의 본문, 소유 = AI 모듈): 설정·상태를 조회하여 모델 행·상태 배지·도구 스위치를 렌더링하고,
+// 도구 묶음 스위치는 즉시 PUT /api/ai/governance(전체 허용이면 빈 목록). $fetch 는 모의(mock).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'

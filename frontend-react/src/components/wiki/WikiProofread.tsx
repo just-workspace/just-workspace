@@ -1,11 +1,11 @@
 /**
  * 위키 편집기 교정 — 편집 머리의 [교정 n](secondary xs, wand) · [문체](ghost xs, type)와
- * 본문 아래 제안 카드(popover 바탕 · 반지름 10 · 패딩 12×14): "✦ 문체 · 2/3" / 원문(취소선 muted) → 고친 문장(success) /
- * 이유 한 줄 / [바꾸기][무시] … [모두 바꾸기]. 색만으로 구분하지 않도록 카드에 종류를 글자로 쓴다.
- *  - [교정] = 맞춤법·띄어쓰기·문체 전부, [문체] = 문체만. 결과는 편집기 꾸밈(utils/proofreadPm)으로 밑줄.
- *  - 입력은 지금 편집기에 있는 글(사용자가 보는 글)만 — 서버는 원문에 그대로 있는 구절의 제안만 돌려준다.
- *  - 바꾸기는 ProseMirror 트랜잭션(insertText) — 공동 편집 상대에게도 그대로 간다. 서식(굵게 등)은 유지된다.
- * 머리 버튼과 카드가 떨어져 있어 상태는 이 모듈의 store 하나로 잇는다.
+ * 본문 아래 제안 카드(popover 바탕 · 반지름 10 · 패딩 12×14): "✦ 문체 · 2/3" / 원문(취소선 muted) → 교정 문장(success) /
+ * 사유 한 줄 / [바꾸기][무시] … [모두 바꾸기]. 색만으로 구분되지 않도록 카드에 종류를 문자로 표기한다.
+ *  - [교정] = 맞춤법·띄어쓰기·문체 전체, [문체] = 문체만. 결과는 편집기 꾸밈(utils/proofreadPm)으로 밑줄 표시한다.
+ *  - 입력은 현재 편집기에 있는 글(사용자에게 표시되는 글)로 한정한다 — 서버는 원문에 그대로 존재하는 구절의 제안만 반환한다.
+ *  - 바꾸기는 ProseMirror 트랜잭션(insertText) — 공동 편집 상대에게도 동일하게 전달된다. 서식(굵게 등)은 유지된다.
+ * 머리 버튼과 카드가 분리되어 있어 상태는 본 모듈의 store 하나로 연결한다.
  */
 import { useEffect } from 'react'
 import { createStore, useStore } from 'zustand'
@@ -28,7 +28,7 @@ interface ProofStore {
   items: ProofItem[]
   active: number
   model: string
-  /** 한 번이라도 돌렸나(0개 결과 안내용) */
+  /** 1회 이상 실행 여부(결과 0개 안내용) */
   ran: boolean
 }
 const initial: ProofStore = { open: false, loading: false, error: '', mode: 'all', items: [], active: 0, model: '', ran: false }
@@ -79,7 +79,7 @@ function removeAt(i: number) {
   proofStore.setState({ items, active: Math.min(i, Math.max(0, items.length - 1)) })
 }
 
-/** 바꾸기 — 성공하면 true(구절을 못 찾으면 false) */
+/** 바꾸기 — 성공 시 true(구절을 찾지 못하면 false) */
 export function applyProof(editor: Editor | null, i: number): boolean {
   if (!editor || editor.isDestroyed) return false
   const { items } = proofStore.getState()
@@ -91,7 +91,7 @@ export function applyProof(editor: Editor | null, i: number): boolean {
   return true
 }
 
-/** 모두 바꾸기 — 뒤에서부터 한 트랜잭션으로. 바꾼 수 */
+/** 모두 바꾸기 — 뒤에서부터 단일 트랜잭션으로 적용. 변경 건수 반환 */
 export function applyAllProof(editor: Editor | null): number {
   if (!editor || editor.isDestroyed) return 0
   const { items } = proofStore.getState()
@@ -101,7 +101,7 @@ export function applyAllProof(editor: Editor | null): number {
   let lastFrom = Infinity
   let n = 0
   for (const { r, i } of order) {
-    if (r!.to > lastFrom) continue   // 겹치는 제안은 건너뛴다
+    if (r!.to > lastFrom) continue   // 겹치는 제안은 생략
     tr = tr.insertText(items[i].fixed, r!.from, r!.to)
     lastFrom = r!.from
     n++
@@ -116,7 +116,7 @@ export function WikiProofreadButtons({ editor, title }: { editor: Editor | null;
   const { t } = useI18n()
   const { status } = useAiInline()
   const { loading, items, ran, mode } = useStore(proofStore)
-  // 편집기가 바뀌거나 편집을 끝내면 지운다
+  // 편집기 변경 또는 편집 종료 시 초기화
   useEffect(() => () => resetProofread(), [editor])
   const count = ran && mode === 'all' ? items.length : null
   return (

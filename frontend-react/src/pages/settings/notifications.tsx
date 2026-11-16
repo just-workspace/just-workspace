@@ -2,8 +2,8 @@
 // 백엔드 /api/notifications/prefs (type 별 in_app·push·email) 그대로 연결 — 서버 9종(시안 7종 + 일정 초대·시스템).
 // 방해 금지 일정: GET/PUT /api/notifications/dnd-schedule. 스위치 = 즉시 저장 + "저장됨 ✓", 요일·시간은 [바꾸기] 모달(시안에 편집 화면이 없어
 //   기존 폼 규격으로 구성). 서버는 일정 하나(요일 묶음 + 시작·끝)만 저장한다.
-// 시험 알림: POST /api/notifications/test(내 푸시 구독 기기 전부). 구독이 없으면 이 브라우저 로컬 알림으로 대신 보여 준다.
-// ★ 채널 모델 차이: 시안 열은 데스크톱·모바일·이메일, 서버는 앱 안(in_app)·푸시(push)·이메일 → 서버 의미대로 표기.
+// 시험 알림: POST /api/notifications/test(내 푸시 구독 기기 전부). 구독이 없으면 이 브라우저의 로컬 알림으로 대체 표시한다.
+// 주의 — 채널 모델 차이: 시안 열은 데스크톱·모바일·이메일, 서버는 앱 안(in_app)·푸시(push)·이메일 → 서버 의미대로 표기.
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
 import { useHead } from '~/lib/head'
@@ -91,7 +91,7 @@ export default function SettingsNotificationsPage() {
       const r = await $fetch<{ ok: boolean; subscriptions: number; sent: number; dnd_scheduled_now: boolean }>('/api/notifications/test', { method: 'POST' })
       if (r.sent > 0) addToast('success', r.dnd_scheduled_now ? t('settings.notifications.testSentDnd', { n: r.sent }) : t('settings.notifications.testSent', { n: r.sent }))
       else {
-        // 서버에 푸시 구독이 없다(이 브라우저 구독 실패 등) — 이 브라우저에서라도 모양을 보여 준다
+        // 서버에 푸시 구독이 없음(이 브라우저 구독 실패 등) — 이 브라우저의 로컬 알림으로 형태를 표시한다
         localTest()
         addToast('warning', r.subscriptions ? t('settings.notifications.testNotDelivered') : t('settings.notifications.testNoSubscription'))
       }
@@ -155,7 +155,7 @@ export default function SettingsNotificationsPage() {
     const e = dndEdit
     if (!e.days.length) { setDndEdit({ ...e, error: t('settings.notifications.dndNoDays') }); return }
     if (!HHMM.test(e.start) || !HHMM.test(e.end)) { setDndEdit({ ...e, error: t('settings.notifications.dndBadTime') }); return }
-    // 편집을 저장하면 켠다(끄려면 스위치)
+    // 편집을 저장하면 활성화한다(비활성화는 스위치로 수행)
     if (await saveDnd({ enabled: true, days: e.days, start: e.start, end: e.end, timezone: dnd?.timezone ?? null })) setDndEdit(x => ({ ...x, open: false }))
   }
 

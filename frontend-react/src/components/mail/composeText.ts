@@ -1,14 +1,14 @@
 /**
- * 메일 작성 글 도우미 — 순수 함수(주소·인용·전달·제목 접두).
- * React 컴포넌트 파일에 컴포넌트 아닌 export 를 섞지 않으려고 따로 둔다(동작·문자열 동일). 테스트: tests/mail/composeText.test.ts
+ * 메일 작성 텍스트 유틸리티 — 순수 함수(주소·인용·전달·제목 접두).
+ * React 컴포넌트 파일에 컴포넌트가 아닌 export 를 혼재시키지 않기 위해 분리함(동작·문자열 동일). 테스트: tests/mail/composeText.test.ts
  */
 import type { EmailAddress, MessageDetail } from '~/composables/useMail'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /**
- * 쉼표로 이은 주소 문자열을 항목으로 자른다 — 큰따옴표·꺾쇠 안의 쉼표는 자르지 않는다.
- * 그냥 split(',') 하면 `"Kim, Minsu" <kim@x.com>` 이 "Kim"(잘못된 주소)과 "Minsu <…>" 로 갈라졌다.
+ * 쉼표로 연결된 주소 문자열을 항목 단위로 분리한다 — 큰따옴표·꺾쇠 내부의 쉼표는 분리 기준에서 제외한다.
+ * 단순 split(',') 을 사용하면 `"Kim, Minsu" <kim@x.com>` 이 "Kim"(잘못된 주소)과 "Minsu <…>" 로 분리되었다.
  */
 export function splitAddressList(raw: string): string[] {
   const out: string[] = []
@@ -26,7 +26,7 @@ export function splitAddressList(raw: string): string[] {
   return out.map(s => s.trim()).filter(Boolean)
 }
 
-/** "이름 <a@b>, c@d" → 주소 목록(형식이 틀린 항목은 버린다) */
+/** "이름 <a@b>, c@d" → 주소 목록(형식이 잘못된 항목은 제외) */
 export function parseAddresses(raw: string): EmailAddress[] {
   if (!raw.trim()) return []
   return splitAddressList(raw).map((entry): EmailAddress | null => {
@@ -39,7 +39,7 @@ export function parseAddresses(raw: string): EmailAddress[] {
 }
 
 export function joinAddrs(list: readonly EmailAddress[]) {
-  // 이름에 쉼표가 있으면 따옴표로 감싼다(주소 목록의 구분 쉼표와 헷갈리지 않게)
+  // 이름에 쉼표가 있으면 따옴표로 감쌈(주소 목록의 구분 쉼표와 혼동 방지)
   const nm = (n: string) => (/[,"<>]/.test(n) ? `"${n.replace(/"/g, '')}"` : n)
   return list.map(a => (a.name ? `${nm(a.name)} <${a.email}>` : a.email)).join(', ')
 }
@@ -47,14 +47,14 @@ export function joinAddrs(list: readonly EmailAddress[]) {
 // ─── 인용 ───
 export function esc(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
 export function textToHtml(t: string) { return t.split(/\r?\n/).map(l => `<p>${esc(l) || '<br>'}</p>`).join('') }
-/** 대용량 첨부 — 파일함에 올리고 30일 다운로드 링크로 보내는 첨부 */
+/** 대용량 첨부 — 파일함에 업로드하고 30일 다운로드 링크로 발송하는 첨부 */
 export interface LargeAttachment { name: string; size: number; url: string; path: string; expiresAt: string | null }
 
 function fmtSize(n: number) {
   return n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1)}GB` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`
 }
 
-/** 본문 끝에 붙이는 대용량 첨부 목록(어느 메일 앱에서 열어도 보이게 표·인라인 스타일만) */
+/** 본문 끝에 부착하는 대용량 첨부 목록(모든 메일 클라이언트에서 표시되도록 표·인라인 스타일만 사용) */
 export function largeAttachmentBlock(list: readonly LargeAttachment[], labels: { title: string; until: (d: string) => string }) {
   if (!list.length) return { html: '', text: '' }
   const until = list.map(l => l.expiresAt).filter(Boolean).sort()[0]
@@ -71,7 +71,7 @@ export function largeAttachmentBlock(list: readonly LargeAttachment[], labels: {
 
 function fmtDate(iso: string | null) { return iso ? new Date(iso).toLocaleString() : '' }
 
-/** HTML → 줄바꿈을 살린 글자(스크립트 실행·이미지 로드 없음 — DOMParser 문서는 죽은 문서다) */
+/** HTML → 줄바꿈을 보존한 텍스트(스크립트 실행·이미지 로드 없음 — DOMParser 문서는 비활성 문서임) */
 export function htmlToPlain(html: string): string {
   const doc = new DOMParser().parseFromString(html || '', 'text/html')
   doc.querySelectorAll('style,script,head,title,template').forEach(e => e.remove())
@@ -85,8 +85,8 @@ export function htmlToPlain(html: string): string {
 }
 
 /**
- * 인용·전달·인쇄에 쓸 본문 글자. text/plain 파트가 없는 메일(HTML 전용 — 국내 웹메일·그룹웨어에 흔하다)은
- * HTML 에서 뽑는다. 예전엔 text_body 만 봐서 그런 메일을 전달하면 본문이 통째로 빠졌다.
+ * 인용·전달·인쇄에 사용할 본문 텍스트. text/plain 파트가 없는 메일(HTML 전용 — 국내 웹메일·그룹웨어에서 흔함)은
+ * HTML 에서 추출한다. 기존에는 text_body 만 조회하여 해당 메일을 전달하면 본문 전체가 누락되었다.
  */
 export function plainBody(msg: { text_body?: string | null; html_body?: string | null }): string {
   if (msg.text_body && msg.text_body.trim()) return msg.text_body
@@ -122,7 +122,7 @@ export function reSubject(s: string | null, prefix: 'Re:' | 'Fwd:') {
   return v.toLowerCase().startsWith(prefix.toLowerCase()) ? v : `${prefix} ${v}`.trim()
 }
 
-/** 답장·전체 답장 받는 사람 — { to, cc } 문자열(전체 답장이면 나·이미 넣은 주소를 뺀 to+cc) */
+/** 답장·전체 답장 받는 사람 — { to, cc } 문자열(전체 답장이면 본인·이미 포함된 주소를 제외한 to+cc) */
 export function replyRecipients(msg: Readonly<MessageDetail>, all: boolean, fromEmail: string): { to: string; cc: string; ccCount: number } {
   const replyTo = msg.reply_to.length > 0 ? msg.reply_to : msg.from_
   const to = joinAddrs(replyTo)

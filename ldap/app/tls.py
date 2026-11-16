@@ -1,17 +1,17 @@
 """LDAPS 인증서 준비.
 
-⚠️ **ldaptor 는 StartTLS 를 지원하지 않는다.** LDAPServer 에 StartTLS 확장 핸들러
+주의: **ldaptor 는 StartTLS 를 지원하지 않는다.** LDAPServer 에 StartTLS 확장 핸들러
 (OID 1.3.6.1.4.1.1466.20037)가 없다. 따라서 암호화 경로는 **LDAPS(636, 암묵적
-TLS)** 하나뿐이다. 장비에서 "389 + StartTLS" 로 설정하면 평문으로 붙는다 —
-반드시 "636 + SSL/LDAPS" 를 골라야 한다.
+TLS)** 가 유일하다. 장비에서 "389 + StartTLS" 로 설정하면 평문으로 접속된다 —
+반드시 "636 + SSL/LDAPS" 를 선택해야 한다.
 
 인증서 우선순위:
-  1. LDAP_TLS_CERT/LDAP_TLS_KEY 로 지정된 파일이 있으면 그걸 쓴다
-     (예: Let's Encrypt 인증서를 마운트해 공인 이름으로 접속시킬 때)
-  2. 없으면 자체 서명 인증서를 만들어 **볼륨에 저장**한다
+  1. LDAP_TLS_CERT/LDAP_TLS_KEY 로 지정된 파일이 있으면 해당 파일을 사용한다
+     (예: Let's Encrypt 인증서를 마운트해 공인 이름으로 접속시키는 경우)
+  2. 없으면 자체 서명 인증서를 생성해 **볼륨에 저장**한다
 
-2번에서 저장이 중요하다. 매 기동마다 새로 만들면 인증서를 신뢰 목록에 넣어둔
-장비(NAS·하이퍼바이저 등)가 재기동 때마다 접속에 실패한다.
+2번에서는 저장이 필수다. 기동마다 재생성하면 인증서를 신뢰 목록에 등록한
+장비(NAS·하이퍼바이저 등)가 재기동마다 접속에 실패한다.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-VALID_DAYS = 3650  # 자체 서명은 길게 — 갱신 절차가 없다
+VALID_DAYS = 3650  # 자체 서명은 장기 유효로 설정 — 갱신 절차 없음
 
 
 def _san_entries(sans: list[str]) -> list:
@@ -81,7 +81,7 @@ def _generate(cert_path: Path, key_path: Path, sans: list[str]) -> None:
 
 
 def ensure_cert() -> tuple[str, str] | None:
-    """(certfile, keyfile) 을 돌려준다. LDAPS 를 못 켜면 None."""
+    """(certfile, keyfile) 을 반환한다. LDAPS 활성화가 불가하면 None."""
     # 1) 외부 지정 인증서
     if settings.ldap_tls_cert and settings.ldap_tls_key:
         c, k = Path(settings.ldap_tls_cert), Path(settings.ldap_tls_key)

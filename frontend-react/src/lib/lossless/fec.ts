@@ -1,6 +1,6 @@
 /**
  * XOR 패리티 4:1 (PROTOCOL.md §3.1). 고정 길이 PCM 프레임 전용.
- * 송신: 프레임 4개(seq 4g..4g+3)마다 XOR 1개. 수신: 그룹에서 정확히 1개가 빠졌을 때 복원.
+ * 송신: 프레임 4개(seq 4g..4g+3)마다 XOR 1개. 수신: 그룹에서 정확히 1개가 누락된 경우 복원.
  */
 import { PARITY_GROUP, groupBase } from './protocol'
 
@@ -9,7 +9,7 @@ export function xorInto(dst: Uint8Array, src: Uint8Array): void {
   for (let i = 0; i < n; i++) dst[i] ^= src[i]
 }
 
-/** 송신 측: 프레임을 넣다가 그룹이 차면 패리티 payload 를 돌려준다 */
+/** 송신 측: 프레임을 누적하다가 그룹이 완성되면 패리티 payload 를 반환한다 */
 export class ParityEncoder {
   private acc: Uint8Array | null = null
   private count = 0
@@ -19,7 +19,7 @@ export class ParityEncoder {
   push(seq: number, payload: Uint8Array): { seq: number; payload: Uint8Array } | null {
     const base = groupBase(seq)
     if (base !== this.base || this.acc === null || this.acc.byteLength !== payload.byteLength) {
-      // 새 그룹(또는 포맷이 바뀌어 길이가 달라짐) — 앞 그룹이 덜 찼으면 버린다
+      // 새 그룹(또는 포맷 변경으로 길이가 달라짐) — 이전 그룹이 미완성이면 폐기한다
       this.base = base
       this.acc = payload.slice()
       this.count = 1
@@ -50,7 +50,7 @@ interface Group {
   recovered: boolean
 }
 
-/** 수신 측: 그룹별로 프레임·패리티를 모아 빠진 1개를 복원 */
+/** 수신 측: 그룹별로 프레임·패리티를 수집하여 누락된 1개를 복원 */
 export class ParityDecoder {
   private groups = new Map<number, Group>()
   constructor(private readonly maxGroups = 16) {}
@@ -68,7 +68,7 @@ export class ParityDecoder {
     return g
   }
 
-  /** 프레임 도착 — 이미 복원됐거나 다른 경로로 받은 건 그대로 둔다 */
+  /** 프레임 도착 — 이미 복원되었거나 다른 경로로 수신한 항목은 유지한다 */
   addFrame(seq: number, payload: Uint8Array): void {
     const g = this.group(groupBase(seq))
     const i = seq - groupBase(seq)
@@ -83,7 +83,7 @@ export class ParityDecoder {
     return this.tryRecover(base)
   }
 
-  /** 프레임이 하나 더 들어온 뒤 호출해도 된다(패리티가 먼저 왔을 때) */
+  /** 프레임이 추가로 도착한 뒤 호출해도 무방하다(패리티가 먼저 도착한 경우) */
   tryRecover(base: number): { seq: number; payload: Uint8Array } | null {
     const g = this.groups.get(base)
     if (!g || g.recovered || !g.parity) return null

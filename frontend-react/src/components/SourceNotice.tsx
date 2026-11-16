@@ -1,9 +1,9 @@
 /**
- * "소스 코드" 링크 — 이 서비스가 돌리는 프로그램의 소스가 있는 곳과 라이선스.
+ * "소스 코드" 링크 — 본 서비스가 실행하는 프로그램의 소스 위치와 라이선스.
  *
- * 이 프로그램은 AGPL-3.0-or-later 로 배포된다. 네트워크로 서비스를 쓰는 사람도 그 서버가 돌리는 판의 소스를
- * 얻을 수 있어야 하므로, 로그인 화면 바닥글과 설정·관리 화면에 이 줄을 둔다.
- * 주소는 서버가 준다(/api/health 의 source_url — 환경변수 JW_SOURCE_URL, 고쳐서 서비스하는 사람이 바꾼다).
+ * 본 프로그램은 AGPL-3.0-or-later 로 배포된다. 네트워크를 통해 서비스를 이용하는 사용자도 해당 서버가 실행하는 버전의 소스를
+ * 취득할 수 있어야 하므로, 로그인 화면 바닥글과 설정·관리 화면에 본 항목을 표시한다.
+ * 주소는 서버가 제공한다(/api/health 의 source_url — 환경변수 JW_SOURCE_URL, 수정하여 서비스하는 운영자가 변경한다).
  */
 import { useI18n } from '~/i18n'
 import { cn } from '~/lib/utils'
@@ -15,7 +15,7 @@ export interface SourceNoticeProps {
   className?: string
 }
 
-/** http(s) 주소만 링크로 쓴다 */
+/** http(s) 주소만 링크로 허용 */
 export function safeSourceUrl(url: string | null | undefined): string {
   const v = (url ?? '').trim()
   return /^https?:\/\/[^\s"'<>]+$/i.test(v) ? v : ''

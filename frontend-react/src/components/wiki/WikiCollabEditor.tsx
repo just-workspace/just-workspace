@@ -1,27 +1,27 @@
 /**
  * 위키 실시간 공동 편집 (Yjs + 서버 릴레이 app/collab/relay.py).
  *
- * 릴레이는 바이트를 그대로 중계할 뿐이라 동기화 규칙은 여기서 정한다. 프레임 첫 바이트가 종류:
+ * 릴레이는 바이트를 그대로 중계할 뿐이므로 동기화 규칙은 본 모듈에서 정의한다. 프레임 첫 바이트가 종류:
  *   0 UPDATE        — 편집 변경분
- *   1 SYNC_REQUEST  — 접속 직후 "내 상태 벡터는 이거다, 모자란 걸 달라"
- *   2 SYNC_RESPONSE — 요청한 쪽에 모자란 변경분
- *   3 AWARENESS     — 프레즌스(누가 어디를 편집 중인지). 아바타·커서 이름표.
- *                     옛 클라이언트는 모르는 종류를 무시하므로 0~2 동작은 그대로다.
- *   4 ACCESS        — 서버가 이 소켓에만 보내는 제어 프레임: [4, 0|1] = 붙어 있는 동안 내 권한이 바뀜(0 읽기 전용 · 1 편집 가능).
- *                     권한이 아예 사라지면 서버가 닫힘 코드 4003 으로 끊는다 — 그때는 재접속하지 않는다.
+ *   1 SYNC_REQUEST  — 접속 직후 자신의 상태 벡터를 전달하고 부족분을 요청
+ *   2 SYNC_RESPONSE — 요청 측에 부족한 변경분
+ *   3 AWARENESS     — 프레즌스(편집 중인 사용자와 위치). 아바타·커서 이름표.
+ *                     구 클라이언트는 미지의 종류를 무시하므로 0~2 동작은 동일하다.
+ *   4 ACCESS        — 서버가 해당 소켓에만 송신하는 제어 프레임: [4, 0|1] = 접속 중 본인 권한 변경(0 읽기 전용 · 1 편집 가능).
+ *                     권한이 완전히 소멸하면 서버가 닫힘 코드 4003 으로 연결을 종료한다 — 이 경우 재접속하지 않는다.
  *
- * 본문 시드: 서버가 Yjs 상태를 저장하지 않으므로 방에 아무도 없으면 저장된 HTML 로 시작한다. **고정
- * clientID(0) 문서에 같은 HTML 을 넣어** 만든 변경분을 적용한다 — 동시에 들어온 사람끼리는 똑같은 Yjs
- * 항목(같은 id)을 만들므로 합쳐도 하나로 남는다.
- * 단, 방에 먼저 편집 중인 사람이 있으면 **시드하지 않고 그 사람의 상태(SYNC_RESPONSE)로 시작한다.**
- * 먼저 온 사람이 시드 뒤 타이핑한 내용은 그 사람 clientID 항목이라, 그게 저장된 HTML 로 다시 시드하면
- * 같은 글이 다른 항목으로 두 벌이 된다(늦게 합류한 쪽 본문 중복·편집 유실 회귀). 그래서 접속 직후
- * SYNC_WAIT_MS 동안 응답을 기다리고, 본문이 담긴 응답이 오면 시드를 건너뛴다. 기다리는 동안은 편집을 막는다.
+ * 본문 시드: 서버가 Yjs 상태를 저장하지 않으므로 방에 접속자가 없으면 저장된 HTML 로 시작한다. **고정
+ * clientID(0) 문서에 동일 HTML 을 삽입하여** 생성한 변경분을 적용한다 — 동시 접속자 간에는 동일한 Yjs
+ * 항목(같은 id)이 생성되므로 병합해도 하나로 유지된다.
+ * 단, 방에 먼저 편집 중인 사용자가 있으면 **시드하지 않고 해당 사용자의 상태(SYNC_RESPONSE)로 시작한다.**
+ * 선행 접속자가 시드 이후 입력한 내용은 해당 접속자의 clientID 항목이므로, 그 내용이 저장된 HTML 로 재시드하면
+ * 동일한 글이 상이한 항목으로 중복된다(후행 합류 측 본문 중복·편집 유실 회귀). 따라서 접속 직후
+ * SYNC_WAIT_MS 동안 응답을 대기하고, 본문이 포함된 응답을 수신하면 시드를 생략한다. 대기 중에는 편집을 차단한다.
  *
- * 툴바·저장 표시는 호스트(pages/wiki)가 그린다.
+ * 툴바·저장 표시는 호스트(pages/wiki)가 렌더링한다.
  *  - ref 핸들: getContent · save · editor · connected · peers · scrollToHeading.
- *  - editor·connected·peers 가 바뀌면 onUpdateState 로 알린다(호스트가 그린다).
- *  - 내 손으로 바꾼 변경은 onChange 로 올려 호스트가 자동 저장한다.
+ *  - editor·connected·peers 변경 시 onUpdateState 로 통지한다(호스트가 렌더링).
+ *  - 로컬 사용자가 직접 수행한 변경은 onChange 로 전달하여 호스트가 자동 저장한다.
  */
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { Editor, EditorContent, generateJSON } from '@tiptap/react'
@@ -30,7 +30,7 @@ import Image from '@tiptap/extension-image'
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table'
 import Collaboration from '@tiptap/extension-collaboration'
 import CollaborationCaret from '@tiptap/extension-collaboration-caret'
-// v3 Collaboration 은 y-prosemirror 포크인 @tiptap/y-tiptap 을 쓴다 — 시드 변환도 같은 구현을 써야 한 가지 바인딩만 남는다
+// v3 Collaboration 은 y-prosemirror 포크인 @tiptap/y-tiptap 을 사용한다 — 시드 변환도 동일 구현을 사용해야 바인딩이 단일로 유지된다
 import { prosemirrorJSONToYXmlFragment } from '@tiptap/y-tiptap'
 import * as Y from 'yjs'
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from 'y-protocols/awareness'
@@ -45,20 +45,20 @@ const MSG_SYNC_REQUEST = 1
 const MSG_SYNC_RESPONSE = 2
 const MSG_AWARENESS = 3
 const MSG_ACCESS = 4
-/** 서버가 "권한 없음" 으로 끊을 때의 닫힘 코드(backend wiki/collab.py) */
+/** 서버가 "권한 없음" 으로 연결을 종료할 때의 닫힘 코드(backend wiki/collab.py) */
 const CLOSE_FORBIDDEN = 4003
 const SEED_ORIGIN = 'seed'
 const REMOTE_ORIGIN = 'remote'
-/** 접속 뒤 먼저 온 사람의 상태를 기다리는 시간 — 응답이 없으면 혼자라고 보고 저장본으로 시드 */
+/** 접속 후 선행 접속자의 상태를 대기하는 시간 — 응답이 없으면 단독 접속으로 간주하고 저장본으로 시드 */
 export const SYNC_WAIT_MS = 700
-/** 접속이 아예 안 될 때(릴레이 꺼짐) 저장본으로 시작하기까지 */
+/** 접속 자체가 불가할 때(릴레이 중지) 저장본으로 시작하기까지의 대기 시간 */
 export const CONNECT_WAIT_MS = 2500
 
-// 프레즌스 색(success·warning 링). 디자인 토큰에서 고른다 — 사용자 id 해시로.
-// awareness 로는 토큰을 푼 #rrggbb 를 보낸다: TipTap v3(y-tiptap 커서 플러그인·CollaborationCaret)는 user.color 가
-// #rrggbb 가 아니면 경고를 찍고 투명으로 그린다(원격 awareness 값을 스타일에 그대로 꽂던 구멍을 막은 것).
+// 프레즌스 색(success·warning 링). 사용자 id 해시로 디자인 토큰에서 선택한다.
+// awareness 로는 토큰을 해석한 #rrggbb 를 송신한다: TipTap v3(y-tiptap 커서 플러그인·CollaborationCaret)는 user.color 가
+// #rrggbb 가 아니면 경고를 출력하고 투명으로 렌더링한다(원격 awareness 값을 스타일에 그대로 삽입하던 취약점을 차단한 조치).
 const PEER_TOKENS = ['--success', '--warning', '--primary'] as const
-// 토큰을 못 푸는 환경(테스트 DOM 등)에서 쓰는 값 — 다크 시안의 success·warning, 기본 브랜드색
+// 토큰 해석이 불가한 환경(테스트 DOM 등)에서 사용하는 값 — 다크 시안의 success·warning, 기본 브랜드색
 const PEER_FALLBACK_HEX = ['#3eb17e', '#e0a22e', '#3b82f6']
 const HEX_RE = /^#[0-9a-fA-F]{6}$/
 
@@ -68,7 +68,7 @@ function rgbToHex(rgb: string): string | null {
   return '#' + [m[1], m[2], m[3]].map(n => Number(n).toString(16).padStart(2, '0')).join('')
 }
 
-/** 디자인 토큰 i 번째를 지금 테마의 #rrggbb 로. 못 풀면 고정값 */
+/** 디자인 토큰 i 번째를 현재 테마의 #rrggbb 로 변환. 해석 실패 시 고정값 */
 export function peerTokenHex(i: number): string {
   const idx = ((i % PEER_TOKENS.length) + PEER_TOKENS.length) % PEER_TOKENS.length
   try {
@@ -83,8 +83,8 @@ export function peerTokenHex(i: number): string {
 }
 
 /**
- * 상대가 보낸 색을 안전한 #rrggbb 로. 옛 클라이언트는 토큰 문자열(hsl(var(--success)))을 보내므로
- * 같은 토큰을 내 쪽에서 풀어 쓴다. 그 밖의 값(임의 문자열)은 첫 색으로 — 스타일에 그대로 들어가지 않는다.
+ * 상대가 송신한 색을 안전한 #rrggbb 로 변환한다. 구 클라이언트는 토큰 문자열(hsl(var(--success)))을 송신하므로
+ * 동일 토큰을 로컬에서 해석하여 사용한다. 그 외의 값(임의 문자열)은 첫 번째 색으로 대체한다 — 스타일에 그대로 삽입되지 않는다.
  */
 export function safePeerColor(color: unknown): string {
   if (typeof color === 'string') {
@@ -95,7 +95,7 @@ export function safePeerColor(color: unknown): string {
   return peerTokenHex(0)
 }
 
-/** 다른 사람의 커서(2px 세로선 + 이름표) — 클래스는 v3 기본(collaboration-carets__*)과 같아 wiki.css 가 그대로 입는다 */
+/** 타 사용자의 커서(2px 세로선 + 이름표) — 클래스가 v3 기본(collaboration-carets__*)과 동일하여 wiki.css 가 그대로 적용된다 */
 export function renderPeerCaret(user: { name?: unknown; color?: unknown }): HTMLElement {
   const color = safePeerColor(user.color)
   const cursor = document.createElement('span')
@@ -109,14 +109,14 @@ export function renderPeerCaret(user: { name?: unknown; color?: unknown }): HTML
   return cursor
 }
 
-/** 다른 사람의 선택 영역 — 배경을 그 사람 색으로(투명도는 wiki.css .ProseMirror-yjs-selection) */
+/** 타 사용자의 선택 영역 — 배경을 해당 사용자의 색으로 지정(투명도는 wiki.css .ProseMirror-yjs-selection) */
 export function renderPeerSelection(user: { color?: unknown }): { class: string; style: string } {
   return { class: 'ProseMirror-yjs-selection', style: `background-color: ${safePeerColor(user.color)}` }
 }
 
 export interface WikiPeer { id: string; name: string; color: string; initial: string }
 
-/** ref 로 쓰는 것. editor·connected·peers 는 읽는 시점의 값 */
+/** ref 로 노출하는 항목. editor·connected·peers 는 읽는 시점의 값 */
 export interface WikiCollabEditorHandle {
   getContent: () => string
   save: () => void
@@ -126,19 +126,19 @@ export interface WikiCollabEditorHandle {
   readonly peers: WikiPeer[]
 }
 
-/** onUpdateState 로 알리는 값(호스트가 그릴 때 읽는다) */
+/** onUpdateState 로 통지하는 값(호스트가 렌더링 시 참조) */
 export interface WikiCollabState { editor: Editor | null; connected: boolean; peers: WikiPeer[] }
 
 export interface WikiCollabEditorProps {
   pageId: string
-  /** 저장된 HTML — 고정 clientID(0) 시드로 넣는다(편집기를 만들 때 한 번) */
+  /** 저장된 HTML — 고정 clientID(0) 시드로 삽입한다(편집기 생성 시 1회) */
   initialContent: string
   readonly: boolean
-  /** save() 를 부르면 본문 HTML */
+  /** save() 호출 시 본문 HTML 전달 */
   onSave?: (content: string) => void
-  /** 내가 바꾼 변경(원격·시드 제외) — 호스트가 자동 저장 디바운스 */
+  /** 로컬 사용자의 변경(원격·시드 제외) — 호스트가 자동 저장 디바운스 */
   onChange?: () => void
-  /** editor·connected·peers 가 바뀔 때 */
+  /** editor·connected·peers 변경 시 */
   onUpdateState?: (state: WikiCollabState) => void
   ref?: Ref<WikiCollabEditorHandle | null>
 }
@@ -157,12 +157,12 @@ function frame(type: number, payload: Uint8Array): Uint8Array<ArrayBuffer> {
 }
 
 /**
- * 위키 공동 편집기(본문만). 툴바는 호스트가 onUpdateState 로 받은 editor 로 <UiEditorToolbar> 를 그린다.
+ * 위키 공동 편집기(본문만). 툴바는 호스트가 onUpdateState 로 수신한 editor 로 <UiEditorToolbar> 를 렌더링한다.
  * @example <WikiCollabEditor ref={editorRef} pageId={id} initialContent={html} readonly={false} onChange={onEditorChange} onUpdateState={setCollab} />
  */
 export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onChange, onUpdateState, ref }: WikiCollabEditorProps) {
   const { t } = useI18n()
-  // 빈 본문 자리표시 — CSS content 는 따옴표 붙은 문자열이어야 해서 JSON.stringify
+  // 빈 본문 자리표시 — CSS content 는 따옴표로 감싼 문자열이어야 하므로 JSON.stringify 적용
   const emptyPlaceholderCss = JSON.stringify(t('wiki.collab.placeholder'))
 
   const [editor, setEditor] = useState<Editor | null>(null)
@@ -174,11 +174,11 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
   const wsRef = useRef<WebSocket | null>(null)
   const awarenessRef = useRef<Awareness | null>(null)
   const connectedRef = useRef(false)
-  // 본문 준비(시드했거나 방 상태를 받음) — 그 전엔 편집 막음
+  // 본문 준비(시드 완료 또는 방 상태 수신) — 그 이전에는 편집 차단
   const readyRef = useRef(false)
   const seedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // 붙어 있는 동안 서버가 권한을 거둠 — 'read' 편집만 막힘(강등), 'none' 볼 권한도 없음(끊김, 재접속 안 함).
-  // 호스트의 readonly 와 별개로 편집을 막는다(호스트는 강등을 모른 채 readonly=false 를 계속 준다)
+  // 접속 중 서버가 권한을 회수함 — 'read' 편집만 차단(강등), 'none' 열람 권한도 없음(연결 종료, 재접속하지 않음).
+  // 호스트의 readonly 와 별개로 편집을 차단한다(호스트는 강등을 인지하지 못한 채 readonly=false 를 계속 전달한다)
   const revokedRef = useRef<null | 'read' | 'none'>(null)
   const extensionsRef = useRef<any[]>([])
   const peersRef = useRef<WikiPeer[]>([])
@@ -204,14 +204,14 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
       const u = state?.user
       if (clientId === mine || !u?.name) return
       const key = u.id || u.name
-      if (seen.has(key)) return   // 같은 사람의 다른 탭
+      if (seen.has(key)) return   // 동일 사용자의 다른 탭
       seen.add(key)
       list.push({ id: key, name: u.name, color: safePeerColor(u.color), initial: String(u.name).trim().charAt(0) })
     })
     setPeerList(list)
   }
 
-  /** 저장된 HTML 을 고정 clientID(0) 로 만든 변경분으로 넣는다. 모든 클라이언트가 같은 항목을 만든다. */
+  /** 저장된 HTML 을 고정 clientID(0) 로 생성한 변경분으로 삽입한다. 모든 클라이언트가 동일한 항목을 생성한다. */
   function seedFromHtml(doc: Y.Doc, extensions: any[]) {
     const html = latest.current.initialContent || ''
     const ed = editorRef.current
@@ -232,7 +232,7 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
     if (seedTimer.current) { clearTimeout(seedTimer.current); seedTimer.current = null }
   }
 
-  /** 본문 준비 완료 — seed=true 면 저장본으로 시드(혼자일 때), false 면 방 상태를 받은 것 */
+  /** 본문 준비 완료 — seed=true 면 저장본으로 시드(단독 접속 시), false 면 방 상태를 수신한 경우 */
   function markReady(doc: Y.Doc, seed: boolean) {
     if (readyRef.current || doc !== ydocRef.current) return
     readyRef.current = true
@@ -241,12 +241,12 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
     applyEditable()
   }
 
-  /** 편집 가능 = 호스트가 허용 + 서버가 권한을 거두지 않음 */
+  /** 편집 가능 = 호스트가 허용 + 서버가 권한을 회수하지 않음 */
   function applyEditable() {
     editorRef.current?.setEditable(!latest.current.readonly && !revokedRef.current)
   }
 
-  /** 서버가 알린 권한 변화 — 편집을 막고(또는 다시 풀고) 한 번 안내한다 */
+  /** 서버가 통지한 권한 변경 — 편집을 차단(또는 재허용)하고 1회 안내한다 */
   function setRevoked(next: null | 'read' | 'none') {
     if (revokedRef.current === next) return
     revokedRef.current = next
@@ -268,25 +268,25 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
 
     socket.onopen = () => {
       setConn(true)
-      // 먼저 와 있던 사람의 편집을 받아 온다(재접속이면 끊긴 동안의 것도)
+      // 선행 접속자의 편집을 수신한다(재접속이면 단절 중의 변경분 포함)
       socket.send(frame(MSG_SYNC_REQUEST, Y.encodeStateVector(doc)))
-      // 끊긴 사이에 내가 친 것은 어디로도 가지 않았다(소켓이 닫혀 있어 버려진다) — 내 상태를 통째로 한 번 보낸다.
-      // 안 보내면 상대는 그 변경을 영영 못 받고, 그 뒤 내 편집도 앞선 구조가 없어 상대 쪽에서 보류된다
-      // (화면이 갈라진 채 서로의 자동 저장이 번갈아 덮어쓴다). Yjs 적용은 멱등이라 이미 가진 쪽에는 무해하고,
-      // 크기는 문서 하나(본문 + 편집 이력)라 재접속 때 한 번 보내기에 부담 없다. 본문 준비 전(빈 문서)엔 보낼 것이 없다.
+      // 단절 중 로컬에서 입력한 내용은 어디에도 전달되지 않았다(소켓이 닫혀 있어 폐기됨) — 로컬 상태 전체를 1회 송신한다.
+      // 송신하지 않으면 상대는 해당 변경을 영구히 수신하지 못하고, 이후 로컬 편집도 선행 구조가 없어 상대 측에서 보류된다
+      // (화면이 불일치한 상태로 양측의 자동 저장이 번갈아 덮어쓴다). Yjs 적용은 멱등이므로 이미 보유한 측에는 무해하며,
+      // 크기는 문서 하나(본문 + 편집 이력)이므로 재접속 시 1회 송신에 부담이 없다. 본문 준비 전(빈 문서)에는 송신할 내용이 없다.
       if (readyRef.current) socket.send(frame(MSG_UPDATE, Y.encodeStateAsUpdate(doc)))
-      // 아직 본문 전이면 응답을 잠깐 기다린다 — 안 오면 혼자, 저장본으로 시드
+      // 본문 준비 전이면 응답을 잠시 대기한다 — 미수신 시 단독 접속으로 간주하고 저장본으로 시드
       scheduleSeed(doc, SYNC_WAIT_MS)
-      // 내 프레즌스를 알린다
+      // 로컬 프레즌스 통지
       const awareness = awarenessRef.current
       if (awareness) socket.send(frame(MSG_AWARENESS, encodeAwarenessUpdate(awareness, [awareness.clientID])))
     }
 
     socket.onclose = (ev?: CloseEvent) => {
       setConn(false)
-      // 본문 준비 전에 끊겼으면 기다리지 않고 저장본으로 시작
+      // 본문 준비 전에 연결이 종료되면 대기 없이 저장본으로 시작
       markReady(doc, true)
-      // 권한이 없어져 서버가 끊은 것 — 다시 붙어 봐야 거절만 반복된다. 읽기 전용으로 두고 멈춘다
+      // 권한 소멸로 서버가 연결을 종료한 경우 — 재접속해도 거부만 반복된다. 읽기 전용으로 두고 중지한다
       if (ev?.code === CLOSE_FORBIDDEN) {
         if (doc === ydocRef.current) setRevoked('none')
         return
@@ -308,18 +308,18 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
         const awareness = awarenessRef.current
         if (type === MSG_UPDATE || type === MSG_SYNC_RESPONSE) {
           Y.applyUpdate(doc, body, REMOTE_ORIGIN)
-          // 먼저 온 사람이 본문을 보내 줬다 — 그 상태로 시작(시드하면 두 벌)
+          // 선행 접속자가 본문을 전달함 — 해당 상태로 시작(시드 시 중복 발생)
           if (!readyRef.current && doc.getXmlFragment('default').length > 0) markReady(doc, false)
         } else if (type === MSG_SYNC_REQUEST) {
-          // 상대에게 모자란 만큼만 돌려준다. 릴레이가 방 전체에 뿌리지만 Yjs 적용은 멱등이라 무해하다.
+          // 상대에게 부족한 분량만 반환한다. 릴레이가 방 전체에 전달하지만 Yjs 적용은 멱등이므로 무해하다.
           const diff = Y.encodeStateAsUpdate(doc, body)
           if (socket.readyState === WebSocket.OPEN) socket.send(frame(MSG_SYNC_RESPONSE, diff))
-          // 새로 온 사람에게 내 프레즌스도 다시 알린다
+          // 신규 접속자에게 로컬 프레즌스도 재통지한다
           if (awareness) socket.send(frame(MSG_AWARENESS, encodeAwarenessUpdate(awareness, [awareness.clientID])))
         } else if (type === MSG_AWARENESS) {
           if (awareness) applyAwarenessUpdate(awareness, body, REMOTE_ORIGIN)
         } else if (type === MSG_ACCESS) {
-          // 서버만 보낸다(서버는 클라이언트가 보낸 이 종류를 중계하지 않는다)
+          // 서버만 송신한다(서버는 클라이언트가 송신한 이 종류를 중계하지 않는다)
           if (doc === ydocRef.current) setRevoked(body[0] === 1 ? null : 'read')
         }
       } catch (e) {
@@ -327,14 +327,14 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
       }
     }
 
-    // Broadcast local updates to peers (시드는 모두가 똑같이 만들므로 보내지 않는다)
+    // Broadcast local updates to peers (시드는 모든 클라이언트가 동일하게 생성하므로 송신하지 않는다)
     const updateHandler = (update: Uint8Array, origin: any) => {
       if (origin !== REMOTE_ORIGIN && origin !== SEED_ORIGIN && socket.readyState === WebSocket.OPEN) {
         socket.send(frame(MSG_UPDATE, update))
       }
     }
     doc.on('update', updateHandler)
-    // 내 커서·상태가 바뀌면(y-protocols 가 15초마다 갱신도 해 준다) 방에 알린다
+    // 로컬 커서·상태 변경 시(y-protocols 가 15초 간격으로 갱신도 수행한다) 방에 통지한다
     const awarenessHandler = ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }, origin: any) => {
       const awareness = awarenessRef.current
       if (origin === REMOTE_ORIGIN || !awareness || socket.readyState !== WebSocket.OPEN) return
@@ -342,14 +342,14 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
     }
     const awarenessAtConnect = awarenessRef.current
     awarenessAtConnect?.on('update', awarenessHandler)
-    // close 때 그 시점의 awareness 에서 off — 같은 객체(재접속은 같은 문서·같은 awareness)
+    // close 시 해당 시점의 awareness 에서 off — 동일 객체(재접속은 동일 문서·동일 awareness)
     socket.addEventListener('close', () => { doc.off('update', updateHandler); awarenessRef.current?.off('update', awarenessHandler) })
   }
 
   function cleanup() {
     clearSeedTimer()
     readyRef.current = false
-    revokedRef.current = null   // 다른 문서로 가면 그 문서의 권한으로 새로 시작
+    revokedRef.current = null   // 다른 문서로 이동하면 해당 문서의 권한으로 새로 시작
     const awareness = awarenessRef.current
     if (awareness) {
       try { removeAwarenessStates(awareness, [awareness.clientID], 'local') } catch { /* 이미 닫힘 */ }
@@ -375,7 +375,7 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
     awarenessRef.current = awareness
     const me = authStore.getState().user
     const myName = me?.display_name || me?.username || i18n.t('wiki.collab.me')
-    // CollaborationCaret 이 이 user 객체를 그대로 awareness 'user' 로 다시 쓴다 — id 까지 같이 넘긴다(같은 사람 여러 탭 묶기)
+    // CollaborationCaret 이 이 user 객체를 그대로 awareness 'user' 로 재기록한다 — id 도 함께 전달한다(동일 사용자의 여러 탭 묶음용)
     const myUser = { id: me?.id ?? '', name: myName, color: colorFor(me?.id ?? myName) }
     awareness.setLocalStateField('user', myUser)
     awareness.on('change', refreshPeers)
@@ -383,7 +383,7 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
     const extensions = [
       StarterKit.configure({
         undoRedo: false, // Yjs handles undo/redo (v2 의 history: false)
-        // v3 StarterKit 은 밑줄·링크를 기본 포함한다(따로 넣으면 중복 등록 경고). 링크는 편집 중 클릭으로 열지 않는다
+        // v3 StarterKit 은 밑줄·링크를 기본 포함한다(별도 추가 시 중복 등록 경고). 링크는 편집 중 클릭으로 열지 않는다
         link: { openOnClick: false },
       }),
       Image.configure({ inline: false, allowBase64: false }),
@@ -400,14 +400,14 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
       }),
     ]
     extensionsRef.current = extensions
-    // content 옵션은 쓰지 않는다 — Collaboration 과 함께 쓰면 클라이언트마다 본문을 따로 넣는다(중복 원인)
-    // 본문 준비(markReady) 전에는 편집을 막는다 — 시드 전에 친 글이 시드와 섞이지 않게
+    // content 옵션은 사용하지 않는다 — Collaboration 과 병용하면 클라이언트마다 본문을 개별 삽입한다(중복 원인)
+    // 본문 준비(markReady) 전에는 편집을 차단한다 — 시드 전 입력이 시드와 섞이는 것을 방지
     const ed = new Editor({ editable: false, extensions })
     setEd(ed)
-    // 접속이 안 되면(릴레이 꺼짐) 조금 기다렸다 저장본으로
+    // 접속 불가 시(릴레이 중지) 일정 시간 대기 후 저장본으로 시작
     scheduleSeed(doc, CONNECT_WAIT_MS)
 
-    // 내 손으로 바꾼 변경만 호스트에 알린다(자동 저장). 원격·시드 변경은 상대가 저장한다.
+    // 로컬 사용자의 변경만 호스트에 통지한다(자동 저장). 원격·시드 변경은 상대 측이 저장한다.
     doc.on('update', (_u: Uint8Array, origin: any) => {
       if (origin !== REMOTE_ORIGIN && origin !== SEED_ORIGIN) latest.current.onChange?.()
     })
@@ -417,7 +417,7 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
   }
 
   function getContent(): string {
-    // 본문 준비 전(방 상태 기다리는 중)엔 편집기가 비어 있다 — 저장본을 돌려줘 빈 본문이 저장되지 않게
+    // 본문 준비 전(방 상태 대기 중)에는 편집기가 비어 있다 — 빈 본문이 저장되지 않도록 저장본을 반환
     if (!readyRef.current) return latest.current.initialContent || ''
     return editorRef.current?.getHTML() || ''
   }
@@ -429,7 +429,7 @@ export function WikiCollabEditor({ pageId, initialContent, readonly, onSave, onC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageId])
 
-  // watch(readonly) — 첫 값은 편집기를 만들 때 이미 반영
+  // watch(readonly) — 첫 값은 편집기 생성 시 이미 반영됨
   const firstReadonly = useRef(true)
   useEffect(() => {
     if (firstReadonly.current) { firstReadonly.current = false; return }

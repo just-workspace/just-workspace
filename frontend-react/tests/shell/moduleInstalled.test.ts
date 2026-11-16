@@ -1,4 +1,4 @@
-// "목록에 없는 모듈은 꺼진 것" 판정 — 서버는 설치하지 않은 구역의 모듈을 목록에서 뺀다.
+// "목록에 없는 모듈은 꺼진 것" 판정 — 서버는 미설치 구역의 모듈을 목록에서 제외한다.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const api = vi.hoisted(() => ({ modules: null as unknown, health: {} as Record<string, unknown> }))
@@ -37,9 +37,9 @@ describe('모듈 판정', () => {
     platformStore.setState({ loaded: true, modules: [mod('files'), mod('chat', false), mod('notes', true, 'plugin')] })
     expect(isModuleEnabled('files')).toBe(true)
     expect(isModuleEnabled('chat')).toBe(false)
-    expect(isModuleEnabled('mail')).toBe(false)      // 설치하지 않은 구역 — 목록에 없다
+    expect(isModuleEnabled('mail')).toBe(false)      // 미설치 구역 — 목록에 없음
     expect(isModuleEnabled('wiki')).toBe(false)
-    expect(isModuleEnabled('notes')).toBe(true)      // 플러그인은 목록에 있으니 그대로
+    expect(isModuleEnabled('notes')).toBe(true)      // 플러그인은 목록에 있으므로 유지
   })
 
   it('목록 모양이 아닌 답은 받은 것으로 치지 않는다(전부 꺼지지 않게 보류 유지)', async () => {
@@ -60,7 +60,7 @@ describe('구역 판정', () => {
     expect(isZoneInstalled('docs')).toBe(true)
     expect(zoneInstalledIn(null, 'ai')).toBe(true)
 
-    api.health = { service: 'WS', config: {} }           // zones 를 주지 않는 서버
+    api.health = { service: 'WS', config: {} }           // zones 를 제공하지 않는 서버
     await fetchAppConfig()
     expect(siteConfigStore.getState().zones).toBeNull()
     expect(isZoneInstalled('docs')).toBe(true)

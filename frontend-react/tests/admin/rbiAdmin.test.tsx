@@ -1,5 +1,5 @@
-// 관리 › 격리 브라우저 — 격리 규칙 상태(지금 걸린 목록·대기·사이드카 거부) · 대상 추가(추가 포트·강제 → 경고) · 거부 사유 ·
-// 사용 스위치 · 출구 표시 · 세션 강제 종료(확인). $fetch 는 가짜.
+// 관리 › 격리 브라우저 — 격리 규칙 상태(현재 적용된 목록·대기·사이드카 거부) · 대상 추가(추가 포트·강제 → 경고) · 거부 사유 ·
+// 사용 스위치 · 출구 표시 · 세션 강제 종료(확인). $fetch 는 모의(mock).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -98,7 +98,7 @@ describe('관리 › 격리 브라우저', () => {
     fireEvent.change(inputs[2], { target: { value: 'http://8.8.8.8' } })
     fireEvent.click(screen.getByRole('button', { name: '저장' }))
     await waitFor(() => expect(toasts()).toContain(`error:${api.fail}`))
-    // 폼은 닫히지 않는다(고쳐서 다시 저장)
+    // 폼은 닫히지 않음(수정 후 재저장)
     expect(screen.getByRole('form', { name: '대상 편집' })).toBeTruthy()
   })
 

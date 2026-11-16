@@ -33,7 +33,7 @@ describe('deleteEventScoped — 반복 일정 범위 삭제', () => {
   it('반복 아님: 그 id 로 DELETE, 범위 없음', async () => {
     await cal.deleteEventScoped(ev('e1'), 'all')
     expect(api.calls[0]).toMatchObject({ url: '/api/calendar/events/e1', opts: { method: 'DELETE', params: {} } })
-    // 지운 뒤 다시 받기
+    // 삭제 후 재조회
     expect(api.calls[1].url).toBe('/api/calendar/events')
   })
 
@@ -77,7 +77,7 @@ describe('updateEventScoped — 반복 일정 범위 수정', () => {
       url: '/api/calendar/events/m1',
       opts: { method: 'PATCH', params: { scope: 'following', occurrence: '2026-10-15T01:00:00.000Z' }, body },
     })
-    // 저장 뒤 다시 받기
+    // 저장 후 재조회
     expect(api.calls[api.calls.length - 1].url).toBe('/api/calendar/events')
   })
 

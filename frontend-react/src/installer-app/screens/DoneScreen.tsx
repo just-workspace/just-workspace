@@ -1,9 +1,9 @@
 /**
- * 완료 — 접속 주소와 다음에 할 일. 설치와 복원의 문구·할 일 목록이 다르다.
- * 할 일은 해당할 때만 보인다(임시 인증서로 설치했을 때의 인증서 발급, 맞지 않는 메일 레코드가 있을 때의 등록).
- * 복원은 파일을 어떻게 했는지(되돌림 · 백업에 없었음 · 같은 네트워크 저장소를 다시 연결)를 한 줄 덧붙인다 —
- * 이 화면은 서버가 잠긴 뒤에 뜨므로 서버에 다시 묻지 않고, 적용 화면이 마지막으로 받은 상태를 쓴다.
- * 이 화면은 설치를 끝낸 그 창에서만 보인다 — 나중에 같은 주소로 다시 들어오면 잠김 화면이 뜬다.
+ * 완료 — 접속 주소와 후속 할 일. 설치와 복원의 문구·할 일 목록이 상이하다.
+ * 할 일은 해당하는 경우에만 표시한다(임시 인증서로 설치한 경우의 인증서 발급, 불일치하는 메일 레코드가 있는 경우의 등록).
+ * 복원은 파일 처리 결과(복원함 · 백업에 없었음 · 동일한 네트워크 저장소를 재연결)를 한 줄 추가한다 —
+ * 이 화면은 서버가 잠긴 이후에 표시되므로 서버에 재조회하지 않고, 적용 화면이 마지막으로 수신한 상태를 사용한다.
+ * 이 화면은 설치를 완료한 해당 창에서만 표시된다 — 이후 동일 주소로 재진입하면 잠김 화면이 표시된다.
  */
 import { UiBadge } from '~/components/ui/Badge'
 import { UiButton } from '~/components/ui/Button'
@@ -14,7 +14,7 @@ import { CenterShell } from '../shell/WizardShell'
 import { useWizard, zoneOn } from '../store'
 import { recordsPending } from './MailScreen'
 
-/** href 가 없으면 관리 화면에 갈 곳이 없는 할 일(서버 밖에서 하는 일) — 누를 수 없는 줄로 그린다 */
+/** href 가 없으면 관리 화면에 이동 대상이 없는 할 일(서버 외부에서 수행하는 일) — 클릭할 수 없는 줄로 렌더링 */
 interface Todo { icon: string; title: string; desc: string; href?: string; caution?: boolean }
 
 export function DoneScreen() {
@@ -29,7 +29,7 @@ export function DoneScreen() {
 
   const url = (appUrl ?? (answers.access.domain ? `https://${answers.access.domain}` : '')).replace(/\/+$/, '')
   const at = (path: string) => `${url}${path}`
-  // 복원의 인증서 방식은 서버가 정했다
+  // 복원의 인증서 방식은 서버가 결정함
   const temporary = restore && outcome ? outcome.cert === 'temporary' : answers.access.cert === 'temporary'
   const pending = records && zoneOn(answers, catalog, 'mail') && answers.mail.kind === 'builtin' ? recordsPending(records).total : 0
 

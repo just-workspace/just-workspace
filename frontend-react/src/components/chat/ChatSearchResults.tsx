@@ -1,16 +1,16 @@
 /**
- * 검색 결과 — 오른쪽 자리 400.
- * 자리: chatStore.showSearchPanel(기존 "search" 패널 자리 — ChatSearchPanel 이 이것을 그린다).
+ * 검색 결과 — 오른쪽 영역 400.
+ * 위치: chatStore.showSearchPanel(기존 "search" 패널 영역 — ChatSearchPanel 이 본 컴포넌트를 렌더링한다).
  *
- * 머리 48+1: (모바일 ‹ 44) search 20 · "검색 결과" 16/600 · 닫기 32(Esc).
- * 모바일: 머리 아래 검색칸(ChatSearchBox mobile — 칩 입력 44 + 필터 칩 줄).
- * 개수 줄: "38개 · from:이도윤 has:링크" 13/600 (aria-live polite) + 정렬 세그먼트 sm(최신 · 오래된).
- * 본문: 채널 묶음 제목 12/600 muted(연속한 같은 채널) → 결과 카드(rounded-lg 1px bg-card p-3, 호버 bg-overlay-hover):
- *   아바타 32 · 이름 14/500(역할 색) · 시각 11 mono · (스레드 답글이면 "스레드" 꼬리표) · "이동" 12/600 primary
+ * 헤더 48+1: (모바일 ‹ 44) search 20 · "검색 결과" 16/600 · 닫기 32(Esc).
+ * 모바일: 헤더 아래 검색란(ChatSearchBox mobile — 칩 입력 44 + 필터 칩 행).
+ * 개수 행: "38개 · from:이도윤 has:링크" 13/600 (aria-live polite) + 정렬 세그먼트 sm(최신 · 오래된).
+ * 본문: 채널 그룹 제목 12/600 muted(연속한 동일 채널) → 결과 카드(rounded-lg 1px bg-card p-3, 호버 bg-overlay-hover):
+ *   아바타 32 · 이름 14/500(역할 색) · 시각 11 mono · (스레드 답글이면 "스레드" 라벨) · "이동" 12/600 primary
  *   → 본문 14 · 일치 부분 bg-warning/30 굵게.
- *   누르면 그 채널을 열고 useChatUi.jumpTo(channelId, messageId) — 스레드 답글이면 스레드를 연다. 모바일은 결과 화면을 닫는다.
- * 아래: 25개씩 쪽 넘김(현재 쪽 bg-overlay-selected 600 · "25개씩" · ‹ ›).
- * 상태: 찾는 중(스켈레톤 4 · aria-busy) · 결과 없음(아이콘 원 48 + 15/600 + 13 설명) · 오류(다시 시도) · 아직 안 찾음(안내).
+ *   누르면 해당 채널을 열고 useChatUi.jumpTo(channelId, messageId) 를 호출한다 — 스레드 답글이면 스레드를 연다. 모바일은 결과 화면을 닫는다.
+ * 아래: 25개 단위 페이지 이동(현재 페이지 bg-overlay-selected 600 · "25개씩" · ‹ ›).
+ * 상태: 검색 중(스켈레톤 4 · aria-busy) · 결과 없음(아이콘 원 48 + 15/600 + 13 설명) · 오류(다시 시도) · 검색 전(안내).
  */
 import { useEffect } from 'react'
 import { clsx as cn } from 'clsx'
@@ -31,7 +31,7 @@ import { UiSegment } from '~/components/ui/Segment'
 import { UiAvatar } from '~/components/ui/Avatar'
 import { ChatSearchBox } from './ChatSearchBox'
 
-/** 결과 시각 — 오늘이면 "오늘 오전 10:02", 어제 "어제 오후 4:40", 아니면 "10월 14일" */
+/** 결과 시각 — 오늘이면 "오늘 오전 10:02", 어제이면 "어제 오후 4:40", 그 외 "10월 14일" */
 export function searchStamp(iso: string, t: (k: string) => string, lang = 'ko-KR', now = new Date()): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
@@ -81,7 +81,7 @@ function ResultCard({ hit, q, onGo }: { hit: SearchHit; q?: string; onGo: (h: Se
   )
 }
 
-/** 검색 결과(오른쪽 자리 / 모바일 전체 화면) */
+/** 검색 결과(오른쪽 영역 / 모바일 전체 화면) */
 export function ChatSearchResults() {
   const { t } = useI18n()
   const mobile = useIsMobile()
@@ -101,7 +101,7 @@ export function ChatSearchResults() {
     const inThread = !!h.parent_id && !h.thread_broadcast
     if (chatStore.getState().selectedChannelId !== h.channel_id) await selectChannel(h.channel_id)
     if (inThread) {
-      // 스레드 답글 — 스레드를 열고(오른쪽 자리를 바꿔 낀다) 그 답글로
+      // 스레드 답글 — 스레드를 열고(오른쪽 영역을 교체) 해당 답글로 이동
       setShowSearchPanel(false)
       await openThread(h.parent_id!)
       jumpTo(h.channel_id, h.id)

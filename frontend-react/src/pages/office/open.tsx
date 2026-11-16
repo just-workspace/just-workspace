@@ -3,11 +3,11 @@
  *  머리 40 bg-card: 브랜드 타일 22 · 파일 이름 600 · 폴더 경로(내 파일 › 프로젝트) muted
  *  가운데: 형식 타일 48(시트 success · 문서 primary · 슬라이드 warning /15) → "파일 여는 중…" 16/600 →
  *          진행 220×4 → "문서 편집기를 불러오고 있습니다 · 10초가 넘으면 [미리보기로 열기]" 13 muted.
- *  편집기 세션을 받으면 이 탭이 편집기로 넘어간다(OnlyOffice 는 WOPI 표준대로 access_token 을 POST 폼으로).
- *  미리보기로 열기 = 같은 탭에서 글자 미리보기(/api/files/preview → type office) — 편집기가 끝내 안 뜨는 경우.
+ *  편집기 세션을 수신하면 이 탭이 편집기로 전환된다(OnlyOffice 는 WOPI 표준에 따라 access_token 을 POST 폼으로 전달).
+ *  미리보기로 열기 = 동일 탭에서 글자 미리보기(/api/files/preview → type office) — 편집기가 최종적으로 표시되지 않는 경우.
  *    미리보기: 머리 48(브랜드 · 형식 아이콘 · 파일명 · "미리보기" 배지 · [편집기 다시 열기][다운로드])
  *    → warning 띠 "글자만 보여 드립니다"(role=status) → bg-paper 종이 760 에 글자, 끝에 "[표 1개 · 이미지 2개 생략됨]"(서버 omitted).
- *  ?path=<가상경로> 또는 ?new=doc|sheet|slide&dir=<폴더>(새 문서를 만들고 연다).
+ *  ?path=<가상경로> 또는 ?new=doc|sheet|slide&dir=<폴더>(새 문서를 생성한 후 연다).
  */
 import { useEffect, useRef, useState } from 'react'
 import { clsx } from 'clsx'
@@ -55,7 +55,7 @@ export default function OfficeOpenPage() {
   const { t } = useI18n()
   const { appName, brandLogo } = useSiteConfig()
 
-  // 처음 주소만 읽는다
+  // 최초 주소만 조회한다
   const [init] = useState(() => {
     const q = route.query
     const newKind = typeof q.new === 'string' && ['doc', 'sheet', 'slide'].includes(q.new) ? q.new as 'doc' | 'sheet' | 'slide' : null
@@ -90,7 +90,7 @@ export default function OfficeOpenPage() {
   const [errorMsg, setErrorMsg] = useState('')
   const [unsupported, setUnsupported] = useState(false)
   const [slow, setSlow] = useState(false)        // 10초 넘음
-  const [barStarted, setBarStarted] = useState(false)  // 진행 막대 — 10초에 걸쳐 90% 까지(편집기 쪽 진행은 알 수 없다)
+  const [barStarted, setBarStarted] = useState(false)  // 진행 막대 — 10초에 걸쳐 90% 까지(편집기 측 진행률은 확인 불가)
   const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   async function open() {
@@ -106,19 +106,19 @@ export default function OfficeOpenPage() {
       if (newKind && !pathRef.current) {
         const made = await $fetch<{ path: string; name: string }>('/api/wopi/new', { method: 'POST', body: { dir: newDir, kind: newKind } })
         setPath(made.path)
-        // 새로 고침해도 같은 문서를 열게 주소를 바꿔 둔다
+        // 새로 고침 시에도 동일 문서를 열도록 주소를 갱신한다
         history.replaceState(history.state, '', `${init.routePath}?path=${encodeURIComponent(made.path)}`)
       }
       if (!pathRef.current) throw new Error(t('office.open.noFile'))
       const session = await openEditor(pathRef.current, 'auto')
-      if (phaseRef.current !== 'opening') return   // 그새 미리보기로 바꿨다
+      if (phaseRef.current !== 'opening') return   // 그 사이 미리보기로 전환됨
       const url = session.editor_url.startsWith('http') ? session.editor_url : window.location.origin + session.editor_url
       if (session.editor === 'onlyoffice') postToEditor(url, session.token, session.token_ttl)
       else window.location.replace(url)
     } catch (e: any) {
       if (phaseRef.current !== 'opening') return
-      // 서버 detail(영문 원문)은 보이지 않는다 — 상태 코드로 한국어 안내.
-      // 지원하지 않는 형식(400)은 다시 시도해도 같으므로 [다시 시도]를 숨기고 미리보기만 둔다.
+      // 서버 detail(영문 원문)은 표시하지 않는다 — 상태 코드 기준으로 한국어 안내.
+      // 미지원 형식(400)은 재시도해도 결과가 동일하므로 [다시 시도]를 숨기고 미리보기만 유지한다.
       const status = Number(e?.statusCode ?? e?.status ?? e?.response?.status ?? 0)
       setUnsupported(status === 400)
       setErrorMsg(status === 400 ? t('office.open.errUnsupported')
@@ -147,7 +147,7 @@ export default function OfficeOpenPage() {
     finally { setPreviewLoading(false) }
   }
   const downloadUrl = `/api/files/download?path=${encodeURIComponent(path)}`
-  // "[표 1개 · 이미지 2개 생략됨]" — 빠진 것만 이어 붙인다
+  // "[표 1개 · 이미지 2개 생략됨]" — 생략된 항목만 연결한다
   const omittedText = (() => {
     if (!omitted) return ''
     const parts = [

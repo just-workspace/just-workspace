@@ -1,5 +1,5 @@
-// 관리 › 업데이트 — 적용 진행(단계 네 상태, 이미지별 진행, 실패의 두 갈래, 중간 버전, 예고 중 "지금 바로"),
-// 되돌림(자동 진행·완료·실패), 수동 복원(목록·확인 창·진행·완료·실패), 시험판 이전 상태로 복원, 서버가 바뀌는 동안 견디기.
+// 관리 › 업데이트 — 적용 진행(단계 네 상태, 이미지별 진행, 실패의 두 분기, 중간 버전, 예고 중 "지금 바로"),
+// 롤백(자동 진행·완료·실패), 수동 복원(목록·확인 창·진행·완료·실패), 시험판 이전 상태로 복원, 서버 교체 중 상태 유지.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { api, on, seq, called, fakeFetch, renderUpdate, text, disabled, ADMIN } from './updateHarness'
@@ -39,7 +39,7 @@ describe('적용 진행', () => {
     expect(text(screen.getByTestId('update-progress-text'))).toBe('전체 6단계 중 2단계 완료')
     expect(screen.getByRole('progressbar', { name: '업데이트 진행' }).getAttribute('aria-valuenow')).toBe('2')
     expect(stepStates()).toEqual(['preflight:done', 'backup:done', 'pull:running', 'migrate:pending', 'switch:pending', 'verify:pending'])
-    // 상태는 아이콘과 글자로도 구분된다
+    // 상태는 아이콘과 텍스트로도 구분됨
     expect(text(screen.getByTestId('step-backup'))).toBe('자동 백업완료')
     expect(text(screen.getByTestId('step-migrate'))).toBe('DB 변경대기')
     expect(text(screen.getByTestId('step-pull'))).toContain('이미지 받기진행 중')
@@ -179,7 +179,7 @@ describe('적용 진행', () => {
     await renderUpdate('/admin/update/apply/job1')
     expect(await title()).toBe('1.1.0 버전으로 업데이트하는 중입니다')
     expect(text(await screen.findByTestId('update-reconnecting'))).toContain('다시 연결 중')
-    // 마지막으로 본 단계는 그대로 남아 있다
+    // 마지막으로 확인된 단계는 그대로 유지
     expect(screen.getByTestId('step-pull').getAttribute('data-status')).toBe('running')
     await waitFor(async () => expect(await title()).toBe('업데이트가 끝났습니다'))
     expect(screen.queryByTestId('update-reconnecting')).toBeNull()
@@ -283,7 +283,7 @@ describe('되돌림 — 수동 복원', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(called('POST', '/restore')).toHaveLength(0)
 
-    // 다른 줄을 고르면 제목이 그 버전이다
+    // 다른 행 선택 시 제목이 해당 버전으로 변경
     fireEvent.click(button(/^1\.1\.4 버전.*복원$/))
     expect(text(await screen.findByRole('alertdialog'))).toContain('1.1.4 버전으로 복원할까요?')
   })
@@ -317,7 +317,7 @@ describe('되돌림 — 수동 복원', () => {
     const failure = screen.getByTestId('update-failure')
     expect(text(failure)).toContain('구역을 다시 시작하지 못했습니다.')
     expect(text(failure)).toContain('워크스페이스는 멈춘 상태입니다.')
-    expect(text(failure)).not.toContain('백업 파일은')          // 위치를 받지 못했으면 그 문장은 없다
+    expect(text(failure)).not.toContain('백업 파일은')          // 위치를 수신하지 못한 경우 해당 문장 없음
     expect(within(failure).getByRole('button', { name: '이 단계부터 다시' })).toBeTruthy()
     expect(stepStates()).toEqual(['stop:done', 'images:done', 'restore_db:done', 'start:failed', 'verify:pending'])
   })
@@ -373,10 +373,10 @@ describe('진행 조회와 제어가 엇갈릴 때', () => {
     await renderUpdate('/admin/update/apply/job1')
     await screen.findByTestId('update-job-countdown')
     hold = true
-    await waitFor(() => expect(called('GET', '/jobs/job1').length).toBeGreaterThan(1))      // 조회 하나가 떠 있다
+    await waitFor(() => expect(called('GET', '/jobs/job1').length).toBeGreaterThan(1))      // 조회 1건이 진행 중
     fireEvent.click(within(screen.getByTestId('update-job-countdown')).getByRole('button', { name: '취소' }))
     await waitFor(async () => expect(await title()).toBe('업데이트를 취소했습니다'))
-    release(fx.jobs.countdown(soon()))                                                        // 늦게 온 옛 답
+    release(fx.jobs.countdown(soon()))                                                        // 지연 도착한 이전 응답
     await new Promise(r => setTimeout(r, 60))
     expect(await title()).toBe('업데이트를 취소했습니다')
   })

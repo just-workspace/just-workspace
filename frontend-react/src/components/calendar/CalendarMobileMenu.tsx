@@ -19,7 +19,7 @@ import { UiInput } from '~/components/ui/Input'
 import { UiButton } from '~/components/ui/Button'
 import { writeClipboard } from '~/lib/clipboard'
 
-/** 모바일 캘린더 목록 시트(mobileMenuOpen 일 때 페이지가 그린다) */
+/** 모바일 캘린더 목록 시트(mobileMenuOpen 일 때 페이지가 렌더링한다) */
 export function CalendarMobileMenu() {
   const { t } = useI18n()
   const { calendars, setMobileMenuOpen, setIcsMode, toggleCalendarVisibility, createCalendar, CALENDAR_COLORS } = useCalendar()
@@ -29,7 +29,7 @@ export function CalendarMobileMenu() {
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState(CALENDAR_COLORS[0])
   const [creating, setCreating] = useState(false)
-  // 새 캘린더 기본 색은 순번대로 범주 1→8 순환
+  // 새 캘린더 기본 색은 순번에 따라 범주 1→8 순환
   function setShowNew(open: boolean) {
     if (open && !showNew) setNewColor(CAT_HEX[catForIndex(calendarStore.getState().calendars.filter(c => !c.is_shared).length).cat - 1])
     setShowNewRaw(open)

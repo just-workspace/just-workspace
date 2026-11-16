@@ -1,9 +1,9 @@
 // 설정 › 캘린더.
 //  ① 보기 카드: 기본 보기 UiSegment(일·주·월·일정) + 주 시작 요일 · 기본 알림 · 시간대 UiSelect(2열).
-//     고르면 바로 저장 + "저장됨 ✓"(카드 저장 규칙 — 선택만 있는 카드). 값은 useUserPrefs → /api/me/prefs
-//     (calendar.default_view · calendar.default_reminder · week_start · timezone). 주 시작·시간대는 설정 › 표시와 같은 값.
+//     선택 즉시 저장 + "저장됨 ✓"(카드 저장 규칙 — 선택만 있는 카드). 값은 useUserPrefs → /api/me/prefs
+//     (calendar.default_view · calendar.default_reminder · week_start · timezone). 주 시작·시간대는 설정 › 표시와 동일한 값.
 //  ② 외부 캘린더 구독 카드: GET/POST /api/calendar/subscriptions, POST …/{id}/refresh(⋮ "지금 새로 고침", 1분 최소 간격 429), PATCH·DELETE /api/calendar/calendars/{id}.
-//     구독은 읽기 전용 캘린더로 붙고 서버가 6시간마다 새로 받는다(SSRF 방지·5MB·20초 — backend app/calendar/subscriptions.py).
+//     구독은 읽기 전용 캘린더로 추가되며 서버가 6시간마다 재수신한다(SSRF 방지·5MB·20초 — backend app/calendar/subscriptions.py).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
 import { useHead } from '~/lib/head'
@@ -127,7 +127,7 @@ export default function SettingsCalendarPage() {
       return
     }
     if (key === 'share') {
-      // 사이드바와 같은 공유 대화 상자(이 화면에도 그려 둔다)
+      // 사이드바와 동일한 공유 대화 상자(이 화면에도 렌더한다)
       openShareModal({ id: sub.id, name: sub.name, color: sub.color, is_visible: sub.is_visible ?? true, sort_order: 0, is_subscription: true })
       return
     }

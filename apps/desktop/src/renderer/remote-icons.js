@@ -1,4 +1,4 @@
-// 원격 데스크톱 창 공용 아이콘 — 웹 키트 아이콘 표(frontend-react/src/utils/icons.ts)에서 이 창들이 쓰는 것만 옮겼다.
+// 원격 데스크톱 창 공용 아이콘 — 웹 키트 아이콘 표(frontend-react/src/utils/icons.ts)에서 이 창들이 사용하는 항목만 이식했다.
 // <span class="icon" data-icon="lock"></span> 을 찾아 SVG 를 채운다(CSP script-src 'self' 안에서 인라인 스크립트 없이).
 (() => {
   const P = {

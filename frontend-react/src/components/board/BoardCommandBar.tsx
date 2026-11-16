@@ -1,7 +1,7 @@
 /**
  * 게시판 커맨드 바 44("파일과 같은 h-11 bg-card").
  *  왼쪽(children: 이름+설명 / 경로 / "새 글 · 게시판" + 임시 저장), 오른쪽(actions: 검색 200 + 글쓰기 / 편집 ⋯ / 취소 올리기).
- *  searchPlaceholder 를 주면 검색 입력(시안 200×32, Enter 로 결과 화면)을 그린다.
+ *  searchPlaceholder 를 지정하면 검색 입력(시안 200×32, Enter 로 결과 화면 이동)을 렌더링한다.
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import { UiIcon } from '~/components/ui/Icon'
@@ -10,7 +10,7 @@ export interface BoardCommandBarProps {
   /** 검색 입력 자리표시 — "이 게시판에서 검색" / "모든 게시판에서 검색" */
   searchPlaceholder?: string
   searchValue?: string
-  /** Enter — 다듬은 검색어 */
+  /** Enter — trim 처리한 검색어 */
   onSearch?: (q: string) => void
   /** 왼쪽 내용 */
   children?: ReactNode

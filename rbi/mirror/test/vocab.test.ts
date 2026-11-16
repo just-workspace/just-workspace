@@ -83,7 +83,7 @@ test('스타일: cursor 는 키워드만, 폰트는 고정 키만', () => {
   assert.equal(validateStyle({ pf: ['Arial'] }, { strict: true }), undefined)
   assert.equal(validateStyle({ pf: ['lsans', 'evil"font'] }, { strict: true }), undefined)
   assert.deepEqual(validateStyle({ pf: ['lsans', 'cjks'], cur: 'pointer' }, { strict: true }), { pf: ['lsans', 'cjks'], cur: 'pointer' })
-  // 폰트 CSS 는 키에서만 만든다
+  // 폰트 CSS 는 키로부터만 생성
   assert.equal(fontFamilyCss(['lmono', 'cjkm']), '"jw-lmono", "jw-cjkm", "jw-dsans", "jw-cjks"')
   for (const k of FONT_KEYS) assert.match(k, /^[a-z]+$/)
 })

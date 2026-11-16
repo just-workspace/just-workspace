@@ -1,5 +1,5 @@
 // 채널 탭 연결·위키 새 페이지·모바일 파일 상세
-// 탭 관리 하위 화면(‹ 제목 · 스페이스 고르기 · 폴더 고르기/들어가기) · 위키 탭 [+] pressed·안내·Esc · 모바일 파일 상세 활동 묶음·전체 목록
+// 탭 관리 하위 화면(‹ 제목 · 스페이스 선택 · 폴더 선택/진입) · 위키 탭 [+] pressed·안내·Esc · 모바일 파일 상세 활동 묶음·전체 목록
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -40,7 +40,7 @@ beforeEach(() => {
   api.handler = () => ({})
   resetSharedState()
   isMobileStore.setState({ isMobile: false })
-  // 탭이 기대는 모듈이 모두 켜진 설치(목록에 없는 모듈은 꺼진 것)
+  // 탭이 의존하는 모듈이 전부 활성화된 설치(목록에 없는 모듈은 비활성으로 간주)
   platformStore.setState({ modules: [{ id: 'files', enabled: true }, { id: 'wiki', enabled: true }, { id: 'meetings', enabled: true }, { id: 'tasks', enabled: true }] as any, loaded: true })
   setUser({ id: 'u1', username: 'haneul', display_name: '정하늘', email: null, primary_email: null, avatar_url: null, recovery_email: null, is_admin: false, last_login_at: null } as any)
 })
@@ -66,10 +66,10 @@ describe('탭 관리 — 위키 스페이스 바꾸기', () => {
     expect(now.textContent).toContain('페이지 42 · 개발팀')
     expect(screen.getByRole('option', { name: /제품 기획/ }).textContent).toContain('페이지 27 · 전체 공개')
     expect(screen.getByText(/지금: 개발 팀 스페이스\./)).toBeTruthy()
-    // 지금 것 그대로면 비활성
+    // 현재 값과 동일하면 비활성
     const go = screen.getByRole('button', { name: '이 스페이스로' }) as HTMLButtonElement
     expect(go.disabled).toBe(true)
-    // 검색으로 거르기
+    // 검색으로 필터링
     fireEvent.change(screen.getByRole('textbox', { name: '스페이스 찾기' }), { target: { value: '기획' } })
     expect(screen.queryByRole('option', { name: /개발 팀 스페이스/ })).toBeNull()
     fireEvent.click(screen.getByRole('option', { name: /제품 기획/ }))
@@ -99,7 +99,7 @@ describe('탭 관리 — 연결 해제(핸드오프 15-7)', () => {
     expect(unlink.className).toContain('text-danger')
     expect(unlink.className).toContain('mr-auto')
     const puts = () => api.calls.filter(c => c.url === '/api/chat/channels/c1/tabs' && c.opts?.method === 'PUT')
-    // 취소 — 아무것도 안 함
+    // 취소 — 동작 없음
     fireEvent.click(unlink)
     let dlg = await screen.findByRole('alertdialog', { name: '연결을 해제할까요?' })
     fireEvent.click(within(dlg).getByRole('button', { name: '취소' }))
@@ -132,20 +132,20 @@ describe('탭 관리 — 파일 폴더 연결', () => {
     renderIn(<ChatChannelTabsManage channelId="c1" channelName="개발" summary={summary()} />)
     fireEvent.click(screen.getByRole('button', { name: '폴더 연결' }))
     expect(await screen.findByRole('dialog', { name: '파일 폴더 연결' })).toBeTruthy()
-    // 내 파일 맨 위 = 연결할 대상 없음
+    // 내 파일 최상위 = 연결 대상 없음
     await screen.findByRole('option', { name: '개발팀' })
     expect((screen.getByRole('button', { name: '이 폴더 연결' }) as HTMLButtonElement).disabled).toBe(true)
-    // › = 들어가기
+    // › = 진입
     fireEvent.click(screen.getByRole('button', { name: '개발팀 열기' }))
     await screen.findByRole('option', { name: '공유' })
     const path = screen.getByRole('navigation', { name: '폴더 경로' })
     expect(within(path).getByText('개발팀').getAttribute('aria-current')).toBe('location')
     expect(within(path).getByRole('button', { name: '내 파일' })).toBeTruthy()
-    // 파일은 행으로 안 나온다
+    // 파일은 행으로 표시되지 않음
     expect(screen.queryByRole('option', { name: 'a.txt' })).toBeNull()
-    // 고른 게 없으면 지금 들어와 있는 폴더
+    // 선택 항목이 없으면 현재 진입한 폴더
     expect(screen.getByRole('button', { name: '"개발팀" 연결' })).toBeTruthy()
-    // 행 = 고르기
+    // 행 = 선택
     fireEvent.click(screen.getByRole('option', { name: '공유' }))
     expect(screen.getByRole('option', { name: '공유' }).getAttribute('aria-selected')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: '"공유" 연결' }))

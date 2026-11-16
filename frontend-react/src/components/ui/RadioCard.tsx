@@ -1,18 +1,18 @@
 /**
  * 카드형 라디오: 선택 = 1.5px primary 테두리 + primary/8 바탕.
- * 안은 children(미리보기 그림)과 제목 + mono 보조.
+ * 내부는 children(미리보기 그림)과 제목 + mono 보조.
  *
- * layout="row"(가로형): 높이 56 한 줄 — 라디오 점 18 · 제목 13/600 · 설명 한 줄(12 muted, 넘치면 …) · 오른쪽 meta.
- * 선택 = border-primary + bg-primary/5. 세로로 쌓아 목록처럼 쓴다(`flex flex-col gap-2` 안에).
+ * layout="row"(가로형): 높이 56 한 줄 — 라디오 점 18 · 제목 13/600 · 설명 한 줄(12 muted, 초과 시 …) · 오른쪽 meta.
+ * 선택 = border-primary + bg-primary/5. 세로로 배치하여 목록 형태로 사용한다(`flex flex-col gap-2` 안에).
  */
 import type { ButtonHTMLAttributes, MouseEvent, ReactNode } from 'react'
 import { cn } from '~/lib/utils'
 import { useModel } from './internal'
 
 export interface UiRadioCardProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'value' | 'title' | 'type' | 'role' | 'disabled' | 'name'> {
-  /** 그룹에서 고른 값 */
+  /** 그룹에서 선택된 값 */
   modelValue?: string | number | null
-  /** 이 카드를 골랐을 때 — 이 카드의 value 로 불린다 */
+  /** 본 카드 선택 시 — 본 카드의 value 로 호출 */
   onUpdateModelValue?: (v: string | number | null) => void
   /** 이 카드의 값(필수) */
   value: string | number
@@ -20,14 +20,14 @@ export interface UiRadioCardProps extends Omit<ButtonHTMLAttributes<HTMLButtonEl
   title: string
   /** card: 제목 옆 mono 보조(예: 56) · row: 오른쪽 끝 mono 글자(metaSlot 이 없을 때) */
   meta?: string
-  /** row 전용 — 오른쪽 끝 자리(배지·아이콘 등). 있으면 meta 대신 그린다 */
+  /** row 전용 — 오른쪽 끝 슬롯(배지·아이콘 등). 지정 시 meta 대신 렌더링 */
   metaSlot?: ReactNode
   /** card: 제목 아래 보조 글 · row: 제목 아래 한 줄(12 muted, truncate) */
   description?: string
   /** card(기본) — 미리보기 그림 + 제목 세로 카드 · row — 높이 56 가로형(점 18 · 제목 · 설명 한 줄 · 오른쪽 meta) */
   layout?: 'card' | 'row'
   disabled?: boolean
-  /** (그려지지 않는다 — 호환용 prop) */
+  /** (렌더링되지 않음 — 호환용 prop) */
   name?: string
   /** card 전용 — 제목 위 미리보기 그림 */
   children?: ReactNode
@@ -63,7 +63,7 @@ export function UiRadioCard({ modelValue, onUpdateModelValue, value, title, meta
           className,
         )}
       >
-        {/* 라디오 점 18 — UiRadio 와 같은 모양(바깥 테두리 + 안 점 8) */}
+        {/* 라디오 점 18 — UiRadio 와 동일한 모양(바깥 테두리 + 안 점 8) */}
         <span
           aria-hidden="true"
           className={cn(

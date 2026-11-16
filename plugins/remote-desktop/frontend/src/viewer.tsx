@@ -1,11 +1,11 @@
 /**
- * 원격 데스크톱 뷰어 — 세션 하나를 화면 전체 위층에 띄운다.
+ * 원격 데스크톱 뷰어 — 세션 하나를 화면 전체 오버레이로 표시한다.
  *
  * 상태: B 상대 승인 대기(30초 카운트다운·요청 취소) → A 연결 중 → 연결됨(+C 품질 저하 · D 보안 화면)
  *       → E 끊김 재연결(최대 5회, 지금 다시 연결) / F 거부·응답 없음 / 종료.
- * 입력: 원격 화면을 누르면 키보드·마우스를 원격으로 잡는다(Ctrl+Alt+Shift 로 빠져나옴). 전체 화면이면 Keyboard Lock API 로
- *       브라우저 단축키(Esc·Alt+Tab 일부·Ctrl+W 등)까지 넘긴다(지원 브라우저만). 이동은 lossy, 나머지는 reliable.
- * 보안: 뷰어 토큰은 송출 금지(구독+데이터), 상대 정체성에서 온 메시지만 받는다. 호스트가 다시 검증·속도 제한한다.
+ * 입력: 원격 화면을 클릭하면 키보드·마우스 입력을 원격으로 캡처한다(Ctrl+Alt+Shift 로 해제). 전체 화면에서는 Keyboard Lock API 로
+ *       브라우저 단축키(Esc·Alt+Tab 일부·Ctrl+W 등)까지 전달한다(지원 브라우저만). 이동은 lossy, 나머지는 reliable.
+ * 보안: 뷰어 토큰은 송출 금지(구독+데이터)이며, 상대 정체성에서 온 메시지만 수신한다. 호스트가 재검증·속도 제한을 수행한다.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Room, RoomEvent, Track, type Participant, type RemoteTrack, type RemoteVideoTrack } from 'livekit-client'
@@ -14,7 +14,7 @@ import type { RemoteApi, RemoteLivekit } from './api'
 import { fmtDuration, hasKey, type T } from './i18n'
 import { decodeHost, encode, fmtRate, isLossy, isReleaseCombo, keyMsg, mouseButton, pointerToRatio, QUALITY_MODES, qualityOf, summarizeStats, TOPIC, wheel, type HostMsg, type QualityMode, type SpecialKey, type StreamStats, type ViewerMsg } from './protocol'
 
-/** 고른 화질은 이 브라우저에 기억한다(다음 접속에도) */
+/** 선택한 화질은 이 브라우저에 저장한다(다음 접속에도 적용) */
 const Q_KEY = 'rd.quality'
 function savedMode(): QualityMode {
   try { const v = localStorage.getItem(Q_KEY); return v === 'sharp' || v === 'smooth' ? v : 'auto' } catch { return 'auto' }
@@ -48,7 +48,7 @@ export function RemoteViewer({ api, t, request, onClose }: { api: RemoteApi; t: 
   const prevStats = useRef<StreamStats | null>(null)
   const [qPanel, setQPanel] = useState(false)
   const [mode, setMode] = useState<QualityMode>(savedMode)
-  /** 호스트가 화질 모드를 아는가(info.q 가 왔나). null = 아직 모름, false = 옛 호스트 */
+  /** 호스트의 화질 모드 지원 여부(info.q 수신 여부). null = 미확인, false = 구버전 호스트 */
   const [hostQ, setHostQ] = useState<boolean | null>(null)
   const [hostState, setHostState] = useState<'ok' | 'secure_desktop' | 'paused'>('ok')
   const [mons, setMons] = useState<Array<{ i: number; name: string }>>([])
@@ -282,7 +282,7 @@ export function RemoteViewer({ api, t, request, onClose }: { api: RemoteApi; t: 
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [send, phase])
-  // 잡힌 동안은 창 전체에서 키를 가로챈다(브라우저 단축키 충돌 최소화). Ctrl+Alt+Shift 로 푼다
+  // 캡처 중에는 창 전체에서 키를 가로챈다(브라우저 단축키 충돌 최소화). Ctrl+Alt+Shift 로 해제한다
   useEffect(() => {
     if (!captured) return
     const onKey = (down: boolean) => (e: KeyboardEvent) => {
@@ -326,7 +326,7 @@ export function RemoteViewer({ api, t, request, onClose }: { api: RemoteApi; t: 
   }
   const special = (k: SpecialKey) => send({ t: 'sk', k })
 
-  // ── 화질 모드 → 호스트(연결을 끊지 않고 인코더만 바뀐다). 보는 창 크기도 보내 작은 창이면 줄여 받는다 ──
+  // ── 화질 모드 → 호스트(연결을 끊지 않고 인코더만 변경된다). 표시 창 크기도 전송해 작은 창에서는 축소 수신한다 ──
   const sendRef = useRef(send)
   sendRef.current = send
   useEffect(() => {
@@ -370,7 +370,7 @@ export function RemoteViewer({ api, t, request, onClose }: { api: RemoteApi; t: 
     <div
       ref={rootRef}
       className="dark"
-      style={{ position: 'fixed', inset: 0, zIndex: 300 /* 호스트 사이드바(250)·상단바(100) 위 — 60 이면 툴바가 깔렸다. 메뉴·툴팁(400)·토스트(500)는 그 위 */, display: 'flex', flexDirection: 'column', background: STAGE_BG, color: 'hsl(var(--foreground))' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 300 /* 호스트 사이드바(250)·상단바(100)보다 위 — 60 이면 툴바가 가려졌다. 메뉴·툴팁(400)·토스트(500)는 그 위 */, display: 'flex', flexDirection: 'column', background: STAGE_BG, color: 'hsl(var(--foreground))' }}
       data-testid="remote-viewer"
     >
       <header style={{ display: 'flex', justifyContent: 'center', padding: '12px 16px 0' }}>

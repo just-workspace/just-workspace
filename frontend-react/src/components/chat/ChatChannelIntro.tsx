@@ -1,7 +1,7 @@
 /**
- * 채널 소개 — 대화 기록 맨 위. 새 채널에서는 컴포저 바로 위에 보인다.
- * 원 64(bg-muted, # 32) + 제목 26/700 "#채널 채널의 시작입니다" + 만든 사람·날짜·설명 16 muted + 첫 행동 3개(멤버 초대 primary · 파일 올리기 · 설명 수정).
- * 버튼은 첫 메시지 20개 이후 숨긴다. 설명 수정은 채널 소유자·관리자만(PATCH /channels/{id} 권한).
+ * 채널 소개 — 대화 기록 최상단. 새 채널에서는 컴포저 바로 위에 표시된다.
+ * 원 64(bg-muted, # 32) + 제목 26/700 "#채널 채널의 시작입니다" + 생성자·날짜·설명 16 muted + 첫 행동 3개(멤버 초대 primary · 파일 올리기 · 설명 수정).
+ * 버튼은 첫 메시지 20개 이후 숨긴다. 설명 수정은 채널 소유자·관리자만 가능하다(PATCH /channels/{id} 권한).
  */
 import { useStore } from 'zustand'
 import { useI18n } from '~/i18n'
@@ -15,11 +15,11 @@ import { UiIcon } from '~/components/ui/Icon'
 
 export interface ChatChannelIntroProps {
   channel: Channel
-  /** 지금까지 메시지 수 — 20 이상이면 첫 행동 버튼을 숨긴다 */
+  /** 현재까지의 메시지 수 — 20 이상이면 첫 행동 버튼 숨김 */
   messageCount: number
 }
 
-/** 채널 소개(# 타일 · 제목 · 만든 사람·날짜·설명 · 첫 행동) */
+/** 채널 소개(# 타일 · 제목 · 생성자·날짜·설명 · 첫 행동) */
 export function ChatChannelIntro({ channel, messageCount }: ChatChannelIntroProps) {
   const { t } = useI18n()
   const allUsers = useStore(chatStore, s => s.allUsers)

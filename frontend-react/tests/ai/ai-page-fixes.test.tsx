@@ -1,4 +1,4 @@
-// 내장 AI 화면 감사 수정 회귀 — 1(저장 전에 실패한 질문의 "다시 시도") · 2(답변이 끝날 때 다른 대화로 끌려감)
+// 내장 AI 화면 감사 수정 회귀 — 1(저장 전 실패한 질문의 "다시 시도") · 2(답변 종료 시 다른 대화로 전환되는 문제)
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -80,7 +80,7 @@ describe('저장 전에 실패한 질문(1)', () => {
     const bodies: any[] = []
     vi.stubGlobal('fetch', vi.fn(async (u: string, o: any) => {
       urls.push(u); bodies.push(o?.body ? JSON.parse(o.body) : null)
-      // 한도 초과 — 서버는 질문을 저장하기 전에 거절한다
+      // 한도 초과 — 서버는 질문 저장 전에 거부함
       return new Response(JSON.stringify({ detail: '오늘 AI 요청 한도(2회)를 다 썼습니다' }), { status: 429, headers: { 'Content-Type': 'application/json' } })
     }))
     renderPage()
@@ -93,8 +93,8 @@ describe('저장 전에 실패한 질문(1)', () => {
     expect(urls[1]).toBe('/api/ai/conversations/c1/chat')
     expect(bodies[1]).toEqual({ content: '둘째 질문' })
     expect(urls.some(u => u.includes('/regenerate'))).toBe(false)
-    expect(screen.getByText('첫 답')).toBeTruthy()                 // 이전 답변은 그대로
-    expect(screen.getAllByText('둘째 질문').length).toBe(1)          // 질문이 두 번 쌓이지 않는다
+    expect(screen.getByText('첫 답')).toBeTruthy()                 // 이전 답변은 유지
+    expect(screen.getAllByText('둘째 질문').length).toBe(1)          // 질문이 중복 누적되지 않음
   })
 
   it('서버에 저장된 질문이면(답만 실패) 예전처럼 /regenerate', async () => {
@@ -107,7 +107,7 @@ describe('저장 전에 실패한 질문(1)', () => {
     await screen.findByText('첫 답')
     await ask('둘째 질문')
     await screen.findByText('제공자 오류')
-    // 그 사이 서버에는 질문이 저장돼 있었다(meta 를 못 받았을 뿐)
+    // 그 사이 서버에는 질문이 저장된 상태(meta 만 미수신)
     api.messages.c1 = [...api.messages.c1, { id: 'q2', role: 'user', content: '둘째 질문', created_at: T0, versions: [{ id: 'q2' }], active_version: 1, attachments: [] }]
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }))
     await waitFor(() => expect(urls.length).toBe(2))
@@ -128,9 +128,9 @@ describe('답변이 끝날 때 화면이 바뀌지 않는다(2)', () => {
     await waitFor(() => expect(screen.queryByText('첫 답')).toBeNull())
     const before = { msgs: msgCalls('c1'), lists: listCalls() }
     await act(async () => { live.push(ev('token', { text: '끝' }) + ev('done', { message_id: 'a2', status: 'complete' })); live.end() })
-    await waitFor(() => expect(listCalls()).toBe(before.lists + 1))   // 목록은 새로 읽는다(제목·순서)
+    await waitFor(() => expect(listCalls()).toBe(before.lists + 1))   // 목록은 재조회(제목·순서)
     await new Promise(r => setTimeout(r, 30))
-    expect(msgCalls('c1')).toBe(before.msgs)                           // 대화를 다시 열지는 않는다
+    expect(msgCalls('c1')).toBe(before.msgs)                           // 대화를 다시 열지는 않음
     expect(screen.queryByText('첫 답')).toBeNull()
   })
 

@@ -8,7 +8,7 @@ export function timeAgo(dateStr: string): string {
   const past = new Date(dateStr).getTime()
   if (isNaN(past)) return ''
 
-  // 문구는 i18n(현재 로캘) — 템플릿 렌더 중 불리면 로캘 전환에 반응
+  // 문구는 i18n(현재 로캘) — 템플릿 렌더 중 호출되면 로캘 전환에 반응
   const { t } = i18n
   const diff = Math.floor((now - past) / 1000)
   if (diff < 60) return t('date.justNow')

@@ -26,7 +26,7 @@ export interface SettingsBrowserPermissionRowProps {
   permLabel: string
   /** 브라우저 이름 */
   browserName: string
-  /** 시험 알림 보내는 중 */
+  /** 시험 알림 송신 중 */
   testing?: boolean
   /** [허용] (perm=default) */
   onAllow?: () => void
@@ -59,7 +59,7 @@ export interface SettingsDndRowProps {
   summary: { when: string; time: string } | null
   /** 켜짐 */
   enabled: boolean
-  /** 지금 방해 금지 시간 안(켜짐일 때 "지금 적용 중" 배지) */
+  /** 현재 방해 금지 시간대 내(켜짐일 때 "지금 적용 중" 배지) */
   activeNow: boolean
   /** "저장됨 ✓" 표시 */
   saved: boolean
@@ -108,7 +108,7 @@ export interface SettingsNotifyMatrixProps {
   value: (type: string) => NotifyPref
   /** 칸 이름(체크박스 aria) */
   channelLabel: Record<NotifyChannel, string>
-  /** 체크 바뀜 */
+  /** 체크 변경 */
   onChange: (type: string, channel: NotifyChannel, v: boolean) => void
 }
 
@@ -131,7 +131,7 @@ export function SettingsNotifyMatrix({ rows, value, channelLabel, onChange }: Se
           role="row"
           className="grid min-h-12 grid-cols-[1fr_56px_56px_56px] items-center border-b border-border px-4 last:border-b-0 sm:px-5 sm:grid-cols-[1fr_96px_96px_96px]"
         >
-          {/* 좁은 폭에서 "메시/지"처럼 글자 단위로 끊기지 않게 keep-all */}
+          {/* 좁은 폭에서 "메시/지"처럼 글자 단위로 줄바꿈되지 않도록 keep-all 적용 */}
           <span className="py-1.5 [word-break:keep-all]"><b className="font-semibold text-foreground">{r.name}</b><br /><span className="text-xs text-muted-foreground">{r.desc}</span></span>
           {CHANNELS.map(k => (
             <span key={k} className="grid place-items-center">
@@ -145,7 +145,7 @@ export function SettingsNotifyMatrix({ rows, value, channelLabel, onChange }: Se
 }
 
 export interface SettingsDndEditModalProps {
-  /** 고른 요일(0=월 … 6=일) */
+  /** 선택된 요일(0=월 … 6=일) */
   days: number[]
   /** 시작 HH:MM */
   start: string
@@ -157,11 +157,11 @@ export interface SettingsDndEditModalProps {
   busy: boolean
   /** 요일 이름 */
   dayName: (d: number) => string
-  /** 요일 칩 누름 */
+  /** 요일 칩 클릭 */
   onToggleDay: (d: number) => void
-  /** 시작 바뀜 */
+  /** 시작 변경 */
   onStart: (v: string) => void
-  /** 끝 바뀜 */
+  /** 끝 변경 */
   onEnd: (v: string) => void
   /** [저장] */
   onSubmit: () => void
@@ -169,7 +169,7 @@ export interface SettingsDndEditModalProps {
   onClose: () => void
 }
 
-/** 방해 금지 일정 바꾸기 모달(시안에 화면 없음 — 기존 폼 규격) */
+/** 방해 금지 일정 변경 모달(시안에 화면 없음 — 기존 폼 규격) */
 export function SettingsDndEditModal({ days, start, end, error, busy, dayName, onToggleDay, onStart, onEnd, onSubmit, onClose }: SettingsDndEditModalProps) {
   const { t } = useI18n()
   return (

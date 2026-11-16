@@ -1,4 +1,4 @@
-// 키트 — UiMenu 고른 뒤 닫힘 규칙(다중 토글은 열린 채 · radio·실행형은 닫힘)
+// 키트 — UiMenu 선택 후 닫힘 규칙(다중 토글은 열린 상태 유지 · radio·실행형은 닫힘)
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -10,7 +10,7 @@ import { isMobileStore } from '~/composables/useIsMobile'
 
 const openMenu = () => fireEvent.click(screen.getByRole('button', { name: '메뉴' }))
 
-/** 정렬(radio) + 다중 토글(checkbox) + 실행형이 섞인 보기 메뉴 */
+/** 정렬(radio) + 다중 토글(checkbox) + 실행형이 혼합된 보기 메뉴 */
 function ViewMenu(props: { onSelect?: (k: string) => void; closeOnSelect?: boolean; extra?: UiMenuItem[] }) {
   const [sort, setSort] = useState('date')
   const [on, setOn] = useState<Record<string, boolean>>({ ads: false, thread: true })

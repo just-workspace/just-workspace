@@ -1,7 +1,7 @@
 /**
  * 상태 점 공용: ● 온라인/정상/Live · ◐ 자리 비움/느림/연결 중 · ⊖ 방해 금지/중단/실패 · ○ 오프라인/꺼짐/예정.
- * 모양 4종이라 색만으로 의미를 주지 않는다. 크기 10(≤32 아바타·행) / 12(≥40 아바타).
- * 아바타 귀퉁이에 올릴 때는 ring 으로 바탕색 2px 링을 준다(bg-background / bg-card).
+ * 모양이 4종이므로 색만으로 의미를 전달하지 않는다. 크기 10(≤32 아바타·행) / 12(≥40 아바타).
+ * 아바타 모서리에 배치할 때는 ring 으로 바탕색 2px 링을 적용한다(bg-background / bg-card).
  */
 import type { HTMLAttributes } from 'react'
 import { cn } from '~/lib/utils'
@@ -14,7 +14,7 @@ export interface UiStatusDotProps extends HTMLAttributes<HTMLSpanElement> {
   status: string
   /** 지름 px — 10(기본) · 12(≥40 아바타) · 8 */
   size?: 10 | 12 | 8
-  /** 접근성 라벨(= title). 없으면 상태별 기본 문구(ui.status.*) */
+  /** 접근성 라벨(= title). 미지정 시 상태별 기본 문구(ui.status.*) */
   label?: string
   /** 바탕색 링(아바타 위). 'background' | 'card' | 'none'(기본) */
   ring?: 'background' | 'card' | 'none'

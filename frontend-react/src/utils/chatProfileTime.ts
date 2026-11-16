@@ -1,9 +1,9 @@
 /**
  * 프로필 팝아웃 "현지 시각과 차이" 한 줄 — 순수 함수.
- * 예) 오전 8:12 · Berlin (UTC+2) · 나보다 7시간 늦음 / 내 것이면 · 내 시간
+ * 예) 오전 8:12 · Berlin (UTC+2) · 나보다 7시간 늦음 / 본인 프로필이면 · 내 시간
  */
 
-/** 그 시간대의 UTC 차(분). 모르는 시간대면 null */
+/** 해당 시간대의 UTC 차(분). 알 수 없는 시간대이면 null */
 export function tzOffsetMinutes(tz: string, at: Date = new Date()): number | null {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
@@ -46,7 +46,7 @@ export function profileClock(tz: string, myTz: string, lang = 'ko-KR', at: Date 
   return { time, city: tzCity(tz), utc: utcLabel(off), diffHours: (off - mine) / 60 }
 }
 
-/** 내 시간대 — 설정값이 있으면 그것, 아니면 브라우저 */
+/** 내 시간대 — 설정값이 있으면 해당 값, 없으면 브라우저 시간대 */
 export function myTimeZone(pref?: string | null): string {
   if (pref && pref !== 'auto') return pref
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' }

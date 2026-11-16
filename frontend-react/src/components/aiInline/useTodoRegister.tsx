@@ -1,6 +1,6 @@
 /**
- * [할일에 등록] 공용 — 고른 항목을 /api/ai/inline/tasks 로(서버가 writes.request_write → 승인 → 실행).
- * 등록 뒤 한 줄: "n개를 할일에 등록했습니다 [되돌리기] [할일 보기]"(10분 안 되돌리기 — 되돌리기 창).
+ * [할일에 등록] 공용 — 선택한 항목을 /api/ai/inline/tasks 로 전송한다(서버가 writes.request_write → 승인 → 실행).
+ * 등록 후 한 줄: "n개를 할일에 등록했습니다 [되돌리기] [할일 보기]"(10분 이내 롤백 가능 — 롤백 허용 시간).
  */
 import { useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -18,7 +18,7 @@ export interface TodoRegisterState {
 export function useTodoRegister(source: 'mail' | 'meeting' | 'chat', room?: string) {
   const { t } = useI18n()
   const [state, setState] = useState<TodoRegisterState>({ busy: false, done: null, error: '' })
-  /** 같은 묶음을 다시 누르면(네트워크 재시도) 같은 키 — 서버가 첫 결과를 돌려준다 */
+  /** 동일 묶음을 다시 누르면(네트워크 재시도) 동일 키 사용 — 서버가 최초 결과를 반환한다 */
   const keys = useRef(new Map<string, string>())
 
   async function register(items: TaskCreateItem[]) {

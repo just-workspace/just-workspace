@@ -1,5 +1,5 @@
 /**
- * 보안 — 웹은 세션값을 localStorage 에 두지 않는다(httpOnly 쿠키만). 번들 앱(apiBase 있음)만 ws_token 저장.
+ * 보안 — 웹은 세션값을 localStorage 에 저장하지 않는다(httpOnly 쿠키만 사용). 번들 앱(apiBase 있음)만 ws_token 저장.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runtimeConfig, storeSessionToken, clearLegacyWebToken } from '~/lib/runtimeConfig'

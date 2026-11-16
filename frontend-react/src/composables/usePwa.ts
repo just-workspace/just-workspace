@@ -2,7 +2,7 @@
  * PWA — 설치 안내 + 푸시 구독.
  *
  * React: const { canInstall, isInstalled, pushSupported, pushSubscribed, init, promptInstall, subscribePush, ... } = usePwa()
- * 컴포넌트 밖: pwaStore.getState(), subscribePush()
+ * 컴포넌트 외부: pwaStore.getState(), subscribePush()
  */
 import { createStore, useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
@@ -25,9 +25,9 @@ export const pwaStore = createStore<PwaState>()(() => ({
 
 let installPromptEvent: any = null
 
-/** 푸시 알림을 눌렀을 때 서비스 워커(public/push-sw.js)가 보내는 이동 주소 — 같은 출처 앱 경로만 받는다 */
+/** 푸시 알림 선택 시 서비스 워커(public/push-sw.js)가 전달하는 이동 주소 — 동일 출처 앱 경로만 허용한다 */
 export function pushTargetPath(url: unknown): string | null {
-  if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//') || url.charCodeAt(1) === 92 /* 역슬래시 — 브라우저가 // 로 읽는다 */ || url.startsWith('/api/')) return null
+  if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//') || url.charCodeAt(1) === 92 /* 역슬래시 — 브라우저가 // 로 해석한다 */ || url.startsWith('/api/')) return null
   return url
 }
 
@@ -35,11 +35,11 @@ let _inited = false
 
 export function initPwa() {
   if (typeof window === 'undefined') return
-  // App.tsx 와 대시보드가 둘 다 부른다 — 리스너는 한 번만
+  // App.tsx 와 대시보드 양쪽에서 호출한다 — 리스너는 1회만 등록
   if (_inited) return
   _inited = true
 
-  // 푸시 알림을 누르면 서비스 워커가 열린 창에 이동을 부탁한다 — 새로 불러오지 않고 라우터로 옮긴다
+  // 푸시 알림 선택 시 서비스 워커가 열린 창에 이동을 요청한다 — 페이지를 다시 로드하지 않고 라우터로 이동한다
   try {
     navigator.serviceWorker?.addEventListener('message', (e: MessageEvent) => {
       const d = e.data as { type?: unknown; url?: unknown } | null
@@ -123,9 +123,9 @@ export async function unsubscribePush(): Promise<boolean> {
 }
 
 /**
- * 로그아웃 직전에 부른다 — 이 브라우저의 푸시 구독을 서버(아직 로그인 상태일 때)와 브라우저 양쪽에서 푼다.
- * 안 풀면 로그아웃한 사람의 알림(제목·본문)이 이 브라우저에 계속 뜬다(공용 PC).
- * 서비스 워커가 없거나 느려도 로그아웃을 붙잡지 않게 길어야 2초만 기다리고, 실패는 삼킨다.
+ * 로그아웃 직전에 호출한다 — 이 브라우저의 푸시 구독을 서버(로그인 상태가 유지되는 동안)와 브라우저 양쪽에서 해제한다.
+ * 해제하지 않으면 로그아웃한 사용자의 알림(제목·본문)이 이 브라우저에 계속 표시된다(공용 PC).
+ * 서비스 워커가 없거나 응답이 지연되어도 로그아웃이 지연되지 않도록 최대 2초만 대기하며, 실패는 무시한다.
  */
 export async function releasePushOnLogout(): Promise<void> {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return

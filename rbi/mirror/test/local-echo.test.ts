@@ -11,7 +11,7 @@ test('타이핑은 바로 보이고, 원격 확인이 맞으면 match', () => {
   e.push(2, { k: 'ins', t: 'd' })
   assert.equal(e.view().value, 'abcd')
   assert.equal(e.reconcile(7, 1, fnv1a('abc'), 3, 3, 3, 'abc'), true)
-  assert.equal(e.view().value, 'abcd') // seq 2 는 아직 예측
+  assert.equal(e.view().value, 'abcd') // seq 2 는 아직 예측 상태
   assert.equal(e.reconcile(7, 2, fnv1a('abcd'), 4, 4, 4, 'abcd'), true)
   assert.equal(e.stats.match, 2)
   assert.equal(e.busy, false)

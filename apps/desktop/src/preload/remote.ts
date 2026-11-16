@@ -1,6 +1,6 @@
 /**
  * 원격 데스크톱 창 전용 프리로드(동의 창·접속 막대·화면 러너·지원 프로그램).
- * 본 앱 프리로드(index.ts)와 따로 둔다 — 이 창들은 필요한 채널만 본다.
+ * 본 앱 프리로드(index.ts)와 분리한다 — 이 창들에는 필요한 채널만 노출한다.
  */
 import { contextBridge, ipcRenderer } from 'electron';
 
@@ -26,7 +26,7 @@ const api = {
     state: (s: 'connected' | 'closed' | 'failed', detail?: string) => ipcRenderer.send('rd:runner:state', s, detail),
     onSend: (fn: (payload: Uint8Array) => void) => on('rd:runner:send', fn),
     onSwitch: (fn: () => void) => on('rd:runner:switch', fn),
-    /** 화질 바꾸기(main/remote/quality.ts QualityParams) */
+    /** 화질 변경(main/remote/quality.ts QualityParams) */
     onQuality: (fn: (q: unknown) => void) => on('rd:runner:quality', fn),
     source: (): Promise<string | null> => ipcRenderer.invoke('rd:runner:source'),
     sources: (): Promise<string[]> => ipcRenderer.invoke('rd:runner:sources'),

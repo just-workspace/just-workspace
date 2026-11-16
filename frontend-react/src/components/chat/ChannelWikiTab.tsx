@@ -1,12 +1,12 @@
 /**
  * 채널 탭 — 위키.
- *  왼쪽 300 = 머리 h-11 "연결된 위키 · {스페이스}" + [+](이 채널에 새 페이지) · 페이지 행 h-12(제목 13 · 작성자 · 날짜 11 muted), 고른 행 bg-accent + 600.
+ *  왼쪽 300 = 헤더 h-11 "연결된 위키 · {스페이스}" + [+](이 채널에 새 페이지) · 페이지 행 h-12(제목 13 · 작성자 · 날짜 11 muted), 선택한 행 bg-accent + 600.
  *  오른쪽 = 읽기 전용 본문(px-10 py-8, 최대 680): 제목 2xl bold + [위키에서 열기](outline xs) · 작성자 · 시각 mono · v버전 · "채널 탭에서는 읽기만".
- * [+]: 누르면 pressed, 목록 위에 UiInput "새 페이지 제목" + 안내 11 muted
- *  ("Enter 만들고 위키 편집으로 · Esc 취소 · {스페이스} 맨 아래에 생깁니다", 키 이름 mono), 목록은 border-t pt-1 로 갈린다.
- *  Enter = 그 스페이스 최상위 맨 아래(sort_order 최대+1)에 만들고 위키 편집으로. Esc 또는 [+] 다시 = 취소.
- * 연결이 없으면 빈 상태 + (관리자) 탭 관리. 모바일(<md)은 목록 → 본문(‹ 목록으로) 한 단계씩,
- *  모바일 [+] 도 같은 입력 줄을 목록 맨 위에 연다.
+ * [+]: 클릭 시 pressed, 목록 위에 UiInput "새 페이지 제목" + 안내 11 muted
+ *  ("Enter 만들고 위키 편집으로 · Esc 취소 · {스페이스} 맨 아래에 생깁니다", 키 이름 mono), 목록은 border-t pt-1 로 구분.
+ *  Enter = 해당 스페이스 최상위 맨 아래(sort_order 최대+1)에 생성 후 위키 편집으로 이동. Esc 또는 [+] 재클릭 = 취소.
+ * 연결이 없으면 빈 상태 + (관리자) 탭 관리. 모바일(<md)은 목록 → 본문(‹ 목록으로) 순으로 한 단계씩 전환,
+ *  모바일 [+] 도 동일한 입력 줄을 목록 최상단에 표시.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import DOMPurify from 'dompurify'
@@ -26,13 +26,13 @@ import { UiInput } from '~/components/ui/Input'
 export interface ChatChannelWikiTabProps {
   /** 연결된 스페이스(없으면 null) */
   space: { id: string; name: string } | null
-  /** 예전 페이지 연결 — 처음 고를 페이지 */
+  /** 기존 페이지 연결 — 최초 선택 페이지 */
   initialPageId?: string | null
   /** 탭 관리 권한 */
   canManage: boolean
   /** 탭 관리 열기 */
   onManage?: () => void
-  /** 페이지를 만들었다(탭 숫자 갱신) */
+  /** 페이지 생성 완료(탭 숫자 갱신) */
   onChanged?: () => void
 }
 

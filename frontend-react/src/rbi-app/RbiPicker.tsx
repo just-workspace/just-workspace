@@ -1,7 +1,7 @@
 /**
- * 대상 고르기(단독 앱, 세션이 없을 때) — 대상 카드(하나 고름) · 화면 방식 · [시작] · 내 최근 세션 목록.
- * 딥 링크 ?target=<key> 면 그 대상을 미리 고르고 [시작] 에 포커스(세션은 사용자가 눌러야 뜬다 — 링크만으로 컨테이너를 띄우지 않는다).
- * 기존 키트(UiCard·UiBadge·UiButton·UiSegment·UiEmptyState)만 쓴다.
+ * 대상 고르기(단독 앱, 세션이 없을 때) — 대상 카드(단일 선택) · 화면 방식 · [시작] · 내 최근 세션 목록.
+ * 딥 링크 ?target=<key> 이면 해당 대상을 사전 선택하고 [시작] 에 포커스(세션은 사용자가 눌러야 생성된다 — 링크만으로 컨테이너를 기동하지 않는다).
+ * 기존 키트(UiCard·UiBadge·UiButton·UiSegment·UiEmptyState)만 사용한다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -37,7 +37,7 @@ export function RbiPicker({ targets, recent, initialKey, starting, onStart, onRe
   const startRef = useRef<HTMLElement>(null)
 
   useEffect(() => { if (sel) setMode(sel.mode ?? 'pixel') }, [sel?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-  // 딥 링크로 왔으면 [시작] 에 포커스
+  // 딥 링크로 진입한 경우 [시작] 에 포커스
   useEffect(() => { if (initialKey && initial) startRef.current?.focus() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

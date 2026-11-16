@@ -16,16 +16,16 @@ export interface SettingsAiModelChoiceRow {
   title: string
   /** 설명 12 muted */
   desc: string
-  /** 고를 수 없음 */
+  /** 선택 불가 */
   disabled: boolean
 }
 
 export interface SettingsAiModelChoiceProps {
-  /** 지금 고른 값 */
+  /** 현재 선택 값 */
   modelValue: string
-  /** 고를 때(바로 저장) */
+  /** 선택 시(즉시 저장) */
   onUpdateModelValue: (v: string) => void
-  /** 행들 */
+  /** 행 목록 */
   rows: SettingsAiModelChoiceRow[]
   /** radiogroup 이름 */
   ariaLabel: string

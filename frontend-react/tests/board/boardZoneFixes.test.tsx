@@ -1,10 +1,10 @@
 // 게시판 구역 전수조사 수정 고정:
-//  글 수정 — 본문을 건드리지 않아도 저장된다 · 고정/필독은 바꿀 수 있는 사람만 보낸다 · 첨부를 다 지우면 빈 목록을 보낸다
-//  임시글 — 제목 없는 임시글이 복원 직후 지워지지 않고, 바로 올릴 수 있다
-//  본문 정화 — 자리·겹침 스타일(position 등)만 지우고 정렬·색은 남긴다
-//  스토어 — 늦게 온 이전 응답을 버린다 · 목록 실패를 빈 목록과 구분한다 · 댓글 수를 맞춘다
-//  댓글 @멘션 — 한글 조합 중 Enter 로 후보를 넣지 않는다
-//  편집 툴바 [본문 ▾] — 목록이 툴바(overflow) 밖 body 에 그려진다
+//  글 수정 — 본문을 변경하지 않아도 저장됨 · 고정/필독은 변경 권한자만 전송 · 첨부를 전부 삭제하면 빈 목록 전송
+//  임시글 — 제목 없는 임시글이 복원 직후 삭제되지 않으며 즉시 등록 가능
+//  본문 정화 — 위치·겹침 스타일(position 등)만 제거하고 정렬·색은 유지
+//  스토어 — 지연 도착한 이전 응답 폐기 · 목록 실패를 빈 목록과 구분 · 댓글 수 동기화
+//  댓글 @멘션 — 한글 조합 중 Enter 로 후보를 삽입하지 않음
+//  편집 툴바 [본문 ▾] — 목록이 툴바(overflow) 밖 body 에 렌더링됨
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -111,7 +111,7 @@ describe('임시글(새 글)', () => {
     localStorage.setItem('board-draft:b1', JSON.stringify({ title: '', html: '<p>본문만 쓴 임시글</p>', category: null, isPinned: false, isMustRead: false, attachments: [], at: Date.now() }))
     const { container } = renderWrite('/board/b1/write')
     await waitFor(() => expect(container.querySelector('[contenteditable="true"]')?.textContent).toContain('본문만 쓴 임시글'))
-    // 임시 저장 디바운스(800ms)가 지난 뒤에도 지워지지 않는다
+    // 임시 저장 디바운스(800ms) 경과 후에도 삭제되지 않음
     await act(async () => { await new Promise(r => setTimeout(r, 950)) })
     expect(JSON.parse(localStorage.getItem('board-draft:b1') || 'null')?.html).toBe('<p>본문만 쓴 임시글</p>')
 
@@ -119,7 +119,7 @@ describe('임시글(새 글)', () => {
     fireEvent.click(screen.getAllByRole('button', { name: i18n.t('board.write.publish') })[0])
     await waitFor(() => expect(postCall()).toBeTruthy())
     expect(postCall()!.opts.body).toMatchObject({ title: '제목', content: '<p>본문만 쓴 임시글</p>', attachments: null })
-    // 올린 뒤에는 임시글이 되살아나지 않는다(남은 저장 예약 취소)
+    // 등록 후에는 임시글이 복원되지 않음(남은 저장 예약 취소)
     await act(async () => { await new Promise(r => setTimeout(r, 950)) })
     expect(localStorage.getItem('board-draft:b1')).toBeNull()
   }, 10_000)

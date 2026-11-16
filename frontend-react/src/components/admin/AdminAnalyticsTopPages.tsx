@@ -1,6 +1,6 @@
 /**
  * 관리 개요 › 상위 페이지 가로 막대.
- * 경로는 30자 넘으면 잘라 '...'. 색 success, 높이 240.
+ * 경로가 30자를 초과하면 절단 후 '...' 표시. 색 success, 높이 240.
  */
 import { useMemo } from 'react'
 import { Bar } from 'react-chartjs-2'

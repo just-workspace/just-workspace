@@ -1,9 +1,9 @@
 // 가입: 이름 · 아이디 · 비밀번호(규칙 실시간 체크, 확인 칸 대신 보기 토글) · 복구 이메일.
-// 백엔드가 복구 이메일로 인증 메일을 보내고 인증 전엔 로그인을 막아(RegisterRequest.recovery_email 필수) 펼친 필수 필드로 둔다.
+// 백엔드가 복구 이메일로 인증 메일을 발송하고 인증 전에는 로그인을 차단하므로(RegisterRequest.recovery_email 필수) 펼친 필수 필드로 둔다.
 //
-// 초대 가입(/register?invite=<token>): GET /api/auth/invites/{token} 으로 확인 → 받는 메일 주소를 복구 이메일에 미리 채우고
-// 가입 요청에 invite_token 을 싣는다. 가입이 닫혀 있어도 초대면 열린다.
-// 링크가 만료·사용됨이면 위에 경고 타일 — 가입이 열려 있으면 일반 가입으로 계속할 수 있다.
+// 초대 가입(/register?invite=<token>): GET /api/auth/invites/{token} 으로 확인 → 수신 메일 주소를 복구 이메일에 사전 입력하고
+// 가입 요청에 invite_token 을 포함한다. 가입이 닫혀 있어도 초대인 경우 허용된다.
+// 링크가 만료·사용됨이면 상단에 경고 타일 표시 — 가입이 열려 있으면 일반 가입으로 계속 진행할 수 있다.
 import { useEffect, useState, type FormEvent } from 'react'
 import { $fetch } from '~/lib/api'
 import { navigateTo, useRoute } from '~/lib/router'
@@ -51,11 +51,11 @@ export default function Page() {
   }
   useEffect(() => {
     void checkInvite()
-    // 마운트 때 한 번
+    // 마운트 시 1회
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 가입이 닫혀 있으면 로그인으로 — 단, 초대 링크로 왔으면 머문다(못 쓰는 링크면 경고만 보이고 제출은 막는다)
+  // 가입이 닫혀 있으면 로그인으로 이동 — 단, 초대 링크로 진입한 경우 유지한다(사용 불가 링크면 경고만 표시하고 제출은 차단)
   useEffect(() => {
     if (registrationMode === 'closed' && !inviteToken) void navigateTo('/login')
   }, [registrationMode, inviteToken])
@@ -70,8 +70,8 @@ export default function Page() {
   const [success, setSuccess] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
 
-  // 계정 메일 주소는 서버의 메일 도메인으로 만들어진다(username@DOMAIN). 접속 주소의 호스트명(ws.example.com)을
-  // 쓰면 미리보기가 틀리고, "복구 이메일은 외부 주소" 검사도 엉뚱한 도메인을 본다. 설정을 못 읽었을 때만 호스트명.
+  // 계정 메일 주소는 서버의 메일 도메인으로 생성된다(username@DOMAIN). 접속 주소의 호스트명(ws.example.com)을
+  // 사용하면 미리보기가 불일치하고, "복구 이메일은 외부 주소" 검사도 잘못된 도메인을 대상으로 한다. 설정 조회 실패 시에만 호스트명 사용.
   const domain = mailDomain && mailDomain !== 'localhost' ? mailDomain : window.location.hostname
   const emailPreview = form.username ? `${form.username.trim().toLowerCase()}@${domain}` : ''
 
@@ -106,7 +106,7 @@ export default function Page() {
         recovery_email: form.recovery_email.trim(),
         ...(invite.state === 'valid' ? { invite_token: inviteToken } : {}),
       })
-      // 가입 방식(open/approval)에 따라 서버가 다른 안내를 준다 — 그대로 보여 준다
+      // 가입 방식(open/approval)에 따라 서버가 상이한 안내를 반환한다 — 그대로 표시한다
       setSuccessMessage(r?.message || t('register.successMessage'))
       setSuccess(true)
     } catch (e: any) {

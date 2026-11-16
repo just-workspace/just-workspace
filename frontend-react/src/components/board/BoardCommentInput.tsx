@@ -1,9 +1,9 @@
 /**
  * 댓글 입력(하단 고정 바).
- * 테두리 input · rounded-xl(12) · min 44 · card 바탕, 자리표시 "댓글 달기 — @로 언급", 오른쪽 등록 32(primary, 비면 50%). Ctrl/⌘+Enter 로 등록.
- * @멘션 자동완성("멘션 칩은 채팅과 같은 규칙"): "@" 뒤 글자로 GET /api/board/mention-users 를 찾아
- * 채팅 컴포저와 같은 후보 목록(아바타 24 · 이름 · @아이디)을 입력 위에 띄운다. ↑↓ 고르기, Enter/Tab 넣기, Esc 닫기.
- * 넣으면 "@아이디 " — 서버가 저장할 때 해석해 멘션 알림을 보낸다(댓글 mentions[]).
+ * 테두리 input · rounded-xl(12) · min 44 · card 바탕, 자리표시 "댓글 달기 — @로 언급", 오른쪽 등록 32(primary, 비어 있으면 50%). Ctrl/⌘+Enter 로 등록.
+ * @멘션 자동완성("멘션 칩은 채팅과 같은 규칙"): "@" 뒤 문자열로 GET /api/board/mention-users 를 조회하여
+ * 채팅 컴포저와 동일한 후보 목록(아바타 24 · 이름 · @아이디)을 입력 위에 표시한다. ↑↓ 선택, Enter/Tab 삽입, Esc 닫기.
+ * 삽입 값은 "@아이디 " — 서버가 저장 시 해석하여 멘션 알림을 발송한다(댓글 mentions[]).
  */
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -16,12 +16,12 @@ import { UiMentionList } from '~/components/ui/MentionList'
 
 export interface BoardCommentInputProps {
   postId: string
-  /** 답글이면 부모 댓글 id */
+  /** 답글인 경우 부모 댓글 id */
   parentId?: string | null
   placeholder?: string
   autofocus?: boolean
   className?: string
-  /** 등록을 마쳤을 때 */
+  /** 등록 완료 시 */
   onDone?: () => void
   /** 답글 취소 */
   onCancel?: () => void
@@ -43,7 +43,7 @@ export function BoardCommentInput({ postId, parentId = null, placeholder, autofo
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`
   }
-  // watch(content, () => nextTick(grow)) — 첫 값은 건너뜀
+  // watch(content, () => nextTick(grow)) — 최초 값은 제외
   const firstGrow = useRef(true)
   useLayoutEffect(() => {
     if (firstGrow.current) { firstGrow.current = false; return }
@@ -105,7 +105,7 @@ export function BoardCommentInput({ postId, parentId = null, placeholder, autofo
   }
 
   function onKeydown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    // 한글 조합 중의 Enter·Tab 은 글자 확정이다 — 여기서 후보를 넣으면 확정 글자가 뒤에 한 번 더 붙는다
+    // 한글 조합 중의 Enter·Tab 은 글자 확정이다 — 여기서 후보를 삽입하면 확정 글자가 뒤에 한 번 더 추가된다
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (open) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setActive((active + 1) % candidates.length); return }
@@ -136,7 +136,7 @@ export function BoardCommentInput({ postId, parentId = null, placeholder, autofo
 
   return (
     <div className={cn('relative flex min-h-11 items-end gap-2 rounded-xl border border-input bg-card py-1.5 pl-3 pr-1.5 transition-[box-shadow,border-color] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30', className)}>
-      {/* 멘션 후보(채팅 컴포저와 같은 목록) */}
+      {/* 멘션 후보(채팅 컴포저와 동일한 목록) */}
       {open && (
         <UiMentionList
           id={listId}

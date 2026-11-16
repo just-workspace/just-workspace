@@ -1,9 +1,9 @@
 /**
  * 데스크톱 커맨드 바: 44 · bg-card · border-b,
  * 순서 경로 → 검색(180) → 보기 세그먼트 → 업로드(outline 32) → 새로 만들기 ▾(primary 32).
- * 선택 모드: 하나라도 고르면 바가 바뀐다 — primary/10 바탕 + primary/35 밑줄, ✕(선택 해제 Esc) · "N개 선택" ·
+ * 선택 모드: 하나 이상 선택하면 바가 전환된다 — primary/10 바탕 + primary/35 밑줄, ✕(선택 해제 Esc) · "N개 선택" ·
  * 공유 · 이동 · 다운로드 · 삭제(32, 12px) · 오른쪽 "모두 선택".
- * 업로드 진행은 전송 패널 한 곳 — 업로드 버튼은 파일 고르기만 연다(진행 모달 폐지).
+ * 업로드 진행 표시는 전송 패널로 단일화한다 — 업로드 버튼은 파일 선택 창만 연다(진행 모달 폐지).
  */
 import { useZoneInstalled } from '~/composables/useSiteConfig'
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
@@ -20,7 +20,7 @@ import { FilesFileTypeIcon } from './FileTypeIcon'
 
 export interface FilesFileCommandBarProps {
   className?: string
-  /** 업로드할 파일을 골랐다 */
+  /** 업로드할 파일 선택 완료 */
   onUpload?: (files: File[]) => void
   onNewFolder?: () => void
   onNewDoc?: () => void
@@ -29,14 +29,14 @@ export interface FilesFileCommandBarProps {
   onBulkShare?: () => void
   onBulkMove?: () => void
   onBulkDownload?: () => void
-  /** 선택 항목을 서버에서 압축해 내려받기(AI 압축과 같은 작업) */
+  /** 선택 항목을 서버에서 압축하여 다운로드(AI 압축과 동일한 작업) */
   onBulkZip?: () => void
-  /** 지금 검색 결과 전부를 압축해 내려받기 */
+  /** 현재 검색 결과 전체를 압축하여 다운로드 */
   onSearchZip?: () => void
   onBulkDelete?: () => void
   /** 휴지통 비우기(휴지통 뷰) */
   onEmptyTrash?: () => void
-  /** 경로 조각에 끌어다 놓음 */
+  /** 경로 조각에 드롭 */
   onDropMove?: (paths: string[], dst: string) => void
 }
 
@@ -79,7 +79,7 @@ export function FilesFileCommandBar(props: FilesFileCommandBarProps) {
   const allSelected = sortedItems.length > 0 && selCount === sortedItems.length
   function clearSelection() { setSelectedItems(new Set()) }
 
-  // ── 새로 만들기 ▾ ── (문서·시트·발표 자료는 문서 구역이 설치됐을 때만)
+  // ── 새로 만들기 ▾ ── (문서·시트·발표 자료는 문서 구역 설치 시에만)
   const docsOn = useZoneInstalled('docs')
   const [showNew, setShowNew] = useState(false)
   const newWrap = useRef<HTMLDivElement | null>(null)
@@ -147,7 +147,7 @@ export function FilesFileCommandBar(props: FilesFileCommandBarProps) {
     )
   }
 
-  // 보통
+  // 기본 모드
   return (
     <div className={cn('flex h-11 shrink-0 items-center gap-2 border-b border-border bg-card pl-3.5 pr-2.5 text-[13px]', className)}>
       <FilesFileBreadcrumb className="min-w-0 flex-1" onDropMove={(p, d) => props.onDropMove?.(p, d)} />
@@ -194,7 +194,7 @@ export function FilesFileCommandBar(props: FilesFileCommandBarProps) {
             >{t('files.commandBar.upload')}</button>
             <input ref={fileInput} type="file" multiple className="hidden" tabIndex={-1} aria-hidden="true" onChange={onPick} />
 
-            {/* Esc 는 감싸는 칸에서 — 포커스가 버튼에 남아 있어 메뉴 칸만으로는 안 닫히고 페이지(선택 해제)로 갔다 */}
+            {/* Esc 는 감싸는 요소에서 처리 — 포커스가 버튼에 남아 있어 메뉴 요소만으로는 닫히지 않고 페이지(선택 해제)로 전달되던 문제 */}
             <div ref={newWrap} className="relative shrink-0" onKeyDown={(e) => { if (showNew && e.key === 'Escape') { e.stopPropagation(); setShowNew(false) } }}>
               <button
                 type="button"

@@ -1,8 +1,8 @@
 /**
- * 네트워크 랩 카드 — 바깥 출처 런처. "열기"만(사용량 요약 없음).
- * 머리: 아이콘 타일 40(router, primary/15) + 제목 15/600 + 호스트(mono 12, 주소에서 뽑음).
- * 본문: 설명 한 줄(13 muted) · 바닥: [열기 ↗](primary sm, 새 탭) ··· "새 탭에서 열립니다"(12 muted).
- * 주소가 없으면 대시보드가 카드를 쓸 수 없는 것으로 친다(DashboardHome defs.lab.on) — 이 컴포넌트는 url 이 있을 때만 그려진다.
+ * 네트워크 랩 카드 — 외부 출처 런처. "열기"만 제공(사용량 요약 없음).
+ * 헤더: 아이콘 타일 40(router, primary/15) + 제목 15/600 + 호스트(mono 12, 주소에서 추출).
+ * 본문: 설명 한 행(13 muted) · 푸터: [열기 ↗](primary sm, 새 탭) ··· "새 탭에서 열립니다"(12 muted).
+ * 주소가 없으면 대시보드가 카드를 사용 불가로 판정한다(DashboardHome defs.lab.on) — 본 컴포넌트는 url 이 있을 때만 렌더링된다.
  */
 import { useI18n } from '~/i18n'
 import { UiIcon } from '~/components/ui/Icon'

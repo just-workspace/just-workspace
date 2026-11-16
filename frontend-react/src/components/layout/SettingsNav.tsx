@@ -1,7 +1,7 @@
 /**
  * 설정·관리 좌측 내비: 240, "설정 찾기" 32 입력,
  * 그룹 라벨 11/600 0.08em, 항목 34(관리 32) rounded-sm, 선택 = primary/13 + 왼쪽 3px 바 + 600, 보조 글자 mono 11 / 경고 틴트 배지.
- * 검색어가 있으면 그룹 대신 일치 항목(키워드 포함)만 보인다.
+ * 검색어가 있으면 그룹 대신 일치 항목(키워드 포함)만 표시한다.
  */
 import { useState, type KeyboardEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -15,7 +15,7 @@ import { UiBadge } from '~/components/ui/Badge'
 
 export interface LayoutSettingsNavProps {
   scope: 'settings' | 'admin'
-  /** 항목을 눌러 이동할 때 */
+  /** 항목 클릭으로 이동 시 호출 */
   onNavigate?: () => void
   className?: string
 }
@@ -27,7 +27,7 @@ export function LayoutSettingsNav({ scope, onNavigate, className }: LayoutSettin
   const [q, setQ] = useState('')
   const results = find(q)
 
-  // 하위 경로 항목이 따로 있으면(/settings/ai/mcp) 그쪽만 켠다 — 가장 길게 맞는 항목 하나
+  // 하위 경로 항목이 별도로 있으면(/settings/ai/mcp) 해당 항목만 활성화한다 — 가장 길게 일치하는 항목 하나
   const matchTo = (path: string) => flat.filter(i => path === i.to || path.startsWith(i.to + '/')).sort((x, y) => y.to.length - x.to.length)[0]?.to
   const activeTo = matchTo(route.path)
   const isActive = (to: string) => to === activeTo

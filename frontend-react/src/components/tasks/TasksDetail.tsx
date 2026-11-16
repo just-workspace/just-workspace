@@ -1,11 +1,11 @@
 /**
  * 작업 상세.
  *  데스크톱 패널: 머리 44(작업 · 링크 복사 · ⋯ 복제·삭제 · ✕) → 제목 17/600 → 속성 격자(80 | 1fr) → 설명 상자 → 하위 작업.
- *  모바일 상세: 제목 20/700 → 상태 세그먼트(40, 균등) → 속성 카드(행 52 + ›) → 하위 작업. 머리 막대는 페이지가 그린다.
+ *  모바일 상세: 제목 20/700 → 상태 세그먼트(40, 균등) → 속성 카드(행 52 + ›) → 하위 작업. 머리 막대는 페이지가 표시한다.
  * 상태는 할 일·진행 중·검토·완료(검토 = primary). 우선순위 긴급(↑↑ danger)·높음·보통·낮음.
- * 담당 = "아바타 이름 · 배정 만든 사람"(시안), 누르면 사람 고르기(나에게 배정 · 담당 없음 · 사람들). 바꾸기는 만든 사람만(서버 규칙).
- * 태그 = TasksTagEditor(자동완성 facets). 프로젝트 = 입력 + 자동완성(같은 격자 규격으로 덧붙인 행).
- * 페이지는 작업마다 key 로 다시 만든다.
+ * 담당 = "아바타 이름 · 배정 만든 사람"(시안), 클릭 시 사용자 선택(나에게 배정 · 담당 없음 · 사람들). 변경은 생성자만 가능하다(서버 규칙).
+ * 태그 = TasksTagEditor(자동완성 facets). 프로젝트 = 입력 + 자동완성(동일 격자 규격으로 추가한 행).
+ * 페이지는 작업마다 key 로 재생성한다.
  */
 import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -33,12 +33,12 @@ export type TaskPatch = Partial<Pick<Task, 'title' | 'description' | 'priority' 
 export interface TasksDetailProps {
   task: Task
   className?: string
-  /** 속성 바꾸기(페이지가 낙관적 갱신 후 저장) */
+  /** 속성 변경(페이지가 낙관적 갱신 후 저장) */
   onPatch?: (data: TaskPatch) => void
   onClose?: () => void
   onDuplicate?: () => void
   onRemove?: () => void
-  /** 하위 작업 수가 바뀜 → 부모 행 n/m 갱신 */
+  /** 하위 작업 수 변경 → 부모 행 n/m 갱신 */
   onSubtasksChanged?: () => void
 }
 
@@ -53,7 +53,7 @@ export function TasksDetail({ task, className, onPatch, onClose, onDuplicate, on
   useEffect(() => { void loadUsers(); void loadFacets() }, [])
   const { t } = useI18n()
 
-  // ── 제목·설명: 직접 고치고 벗어나면 저장 ──
+  // ── 제목·설명: 직접 수정 후 포커스 이탈 시 저장 ──
   const [title, setTitle] = useState(task.title)
   const [description, setDescription] = useState(task.description ?? '')
   useEffect(() => { setTitle(task.title) }, [task.title])
@@ -69,7 +69,7 @@ export function TasksDetail({ task, className, onPatch, onClose, onDuplicate, on
     if (v !== (task.description ?? '')) onPatch?.({ description: v || null })
   }
   function onTitleKey(e: KeyboardEvent<HTMLTextAreaElement>) {
-    // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 넘기면 마지막 글자가 남거나 두 번 들어간다
+    // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 그대로 처리하면 마지막 글자가 남거나 중복 입력된다
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() }
     if (e.key === 'Escape') { setTitle(task.title); e.currentTarget.blur() }
@@ -96,10 +96,10 @@ export function TasksDetail({ task, className, onPatch, onClose, onDuplicate, on
 
   // ── 담당 ──
   const myName = user?.display_name || user?.username || t('tasks.detail.me')
-  /** 담당자는 만든 사람만 바꿀 수 있다(서버 403). 예전 응답(user_id 없음)은 내 작업으로 본다 */
+  /** 담당자는 생성자만 변경할 수 있다(서버 403). 구버전 응답(user_id 없음)은 본인 작업으로 간주한다 */
   const canAssign = !task.user_id || task.user_id === user?.id
   const assigneeName = task.assignee_name || ''
-  /** "배정 박준호" — 만든 사람이 담당자와 다를 때만 */
+  /** "배정 박준호" — 생성자가 담당자와 다른 경우에만 표시 */
   const assignedBy = (() => {
     const owner = task.user_id
     if (!owner || !task.assignee_id || owner === task.assignee_id) return ''
@@ -167,7 +167,7 @@ export function TasksDetail({ task, className, onPatch, onClose, onDuplicate, on
     if (key === 'duplicate') onDuplicate?.()
     if (key === 'delete') onRemove?.()
   }
-  /** v = 지금 입력 값(change 이벤트는 상태 반영 전에 온다) */
+  /** v = 현재 입력 값(change 이벤트는 상태 반영 전에 발생한다) */
   function commitDate(v: string) {
     if (!dateEditingRef.current) return
     dateEditingRef.current = false
@@ -211,7 +211,7 @@ export function TasksDetail({ task, className, onPatch, onClose, onDuplicate, on
     if (v !== (task.project ?? '')) onPatch?.({ project: v || null })
   }
   function onProjectKey(e: KeyboardEvent<HTMLInputElement>) {
-    // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 넘기면 마지막 글자가 남거나 두 번 들어간다
+    // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 그대로 처리하면 마지막 글자가 남거나 중복 입력된다
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() }
     if (e.key === 'Escape') { setProject(task.project ?? ''); e.currentTarget.blur() }
@@ -260,7 +260,7 @@ export function TasksDetail({ task, className, onPatch, onClose, onDuplicate, on
     } catch (err: any) { addToast('error', err?.data?.detail || t('tasks.toast.subAddFailed')) }
   }
   function startEditSub(s: Task) { setEditingSub(s.id); setEditSubTitle(s.title) }
-  // Enter 로 저장한 뒤 따라오는 blur 가 두 번 저장하지 않게
+  // Enter 로 저장한 직후 발생하는 blur 에 의한 중복 저장 방지
   const savingSub = useRef<string | null>(null)
   async function saveSub(s: Task) {
     if (savingSub.current === s.id) return
@@ -283,7 +283,7 @@ export function TasksDetail({ task, className, onPatch, onClose, onDuplicate, on
     } catch { addToast('error', t('tasks.toast.subDeleteFailed')) }
   }
   function onSubKey(e: KeyboardEvent<HTMLInputElement>, s: Task) {
-    // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 넘기면 마지막 글자가 남거나 두 번 들어간다
+    // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 그대로 처리하면 마지막 글자가 남거나 중복 입력된다
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === 'Enter') { e.preventDefault(); void saveSub(s) }
     if (e.key === 'Escape') { savingSub.current = s.id; setEditingSub(null); queueMicrotask(() => { savingSub.current = null }) }

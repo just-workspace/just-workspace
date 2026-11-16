@@ -1,7 +1,7 @@
 /**
- * 채팅 서버 설정(개요 이름·설명 · 알림 기본값) 캐시 — 사이드바 머리 이름과 설정 화면이 같이 읽는다.
- * 네트워크는 chatApi22.fetchServerSettings/updateServerSettings. 서버에 없으면(404) unsupported.
- * useChatServerName(): 이름이 비면 사이트 이름(useSiteConfig appName).
+ * 채팅 서버 설정(개요 이름·설명 · 알림 기본값) 캐시 — 사이드바 헤더 이름과 설정 화면이 공용으로 조회한다.
+ * 네트워크는 chatApi22.fetchServerSettings/updateServerSettings. 서버 미지원이면(404) unsupported.
+ * useChatServerName(): 이름이 비어 있으면 사이트 이름(useSiteConfig appName).
  */
 import { createStore, useStore } from 'zustand'
 import { useEffect } from 'react'
@@ -35,7 +35,7 @@ export async function saveServerSettings(patch: Partial<Omit<ChatServerSettings,
 export function useChatServer<T>(sel: (s: ServerState) => T): T {
   return useStore(chatServerStore, sel)
 }
-/** 채팅 이름(사이드바 머리) — 서버 설정 이름, 비면 사이트 이름 */
+/** 채팅 이름(사이드바 헤더) — 서버 설정 이름, 비어 있으면 사이트 이름 */
 export function useChatServerName(): string {
   const name = useStore(chatServerStore, s => s.settings?.name?.trim() || '')
   const appName = useStore(siteConfigStore, s => s.appName)

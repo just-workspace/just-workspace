@@ -1,7 +1,7 @@
 /**
  * 관리 › 저장소 — 저장소 상태 카드.
  * 종류(이 서버의 디스크 / 네트워크 저장소) · 위치 · 연결 상태(색 + 아이콘 + 글자) · 여유 공간 · 마지막 확인, [다시 확인].
- * 끊겨 있으면 위에 경고 상자가 뜨고, 그동안 15초마다 스스로 다시 확인한다(연결되면 경고가 걷힌다).
+ * 연결이 끊긴 경우 상단에 경고 상자를 표시하고, 해당 기간에는 15초마다 자동으로 재확인한다(연결되면 경고 제거).
  * 값이 없는 줄(위치를 알 수 없는 설치 등)은 숨긴다.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -57,7 +57,7 @@ export function AdminStorageStatus({ className }: { className?: string }) {
       const r = await $fetch<StorageState>(force ? '/api/admin/system/storage/recheck' : '/api/admin/system/storage', force ? { method: 'POST' } : undefined)
       if (!alive.current) return
       setSt(r); setError(false)
-      if (force) void recheckStorage()      // 알림 띠·파일 탭도 같이 맞춘다
+      if (force) void recheckStorage()      // 알림 띠·파일 탭도 함께 갱신
     } catch {
       if (alive.current) setError(true)
     } finally {
@@ -71,7 +71,7 @@ export function AdminStorageStatus({ className }: { className?: string }) {
     return () => { alive.current = false }
   }, [load])
 
-  // 끊겨 있는 동안만 스스로 다시 확인한다
+  // 연결이 끊긴 동안에만 자동 재확인
   const down = st?.state === 'down'
   useEffect(() => {
     if (!down) return

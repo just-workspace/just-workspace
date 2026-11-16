@@ -1,18 +1,18 @@
 /**
- * 공유 링크로 들어오는 문 — `/s/<token>`. 셸 없음(routes.ts layout:false).
+ * 공유 링크 진입점 — `/s/<token>`. 셸 없음(routes.ts layout:false).
  *
  * 화면: 손님 진입 공통 틀(AuthShell) — 브랜드 → 대상 카드 → (표시 이름) → 1차 버튼.
- * 열기 전에 GET /api/wopi/shared/{token}/info(횟수 안 셈)로 대상 카드(이름·공유자·권한 칩·만료)를 그린다.
- *  - 비밀번호 링크: info 가 requires_password 만 알려 준다 → "비밀번호 필요" 결과 틀(입력 1개 + 열기)
- *    → POST /api/files/shared/{token}/unlock → access(1시간). 이후 내려받기·편집기 열기에 access 를 붙인다.
+ * 열기 전에 GET /api/wopi/shared/{token}/info(횟수 미집계)로 대상 카드(이름·공유자·권한 칩·만료)를 렌더한다.
+ *  - 비밀번호 링크: info 가 requires_password 만 반환한다 → "비밀번호 필요" 결과 틀(입력 1개 + 열기)
+ *    → POST /api/files/shared/{token}/unlock → access(1시간). 이후 내려받기·편집기 열기에 access 를 첨부한다.
  *  - 같이 편집 링크(can_edit): 표시 이름(기억) → 문서 열기(POST /api/wopi/shared/{token}/open) → 40px 손님 띠 + 편집기.
- *  - 내려받기 링크: [내려받기](GET /api/files/shared/{token}?access=) — 내려받기 막힘이면 [미리보기](?inline=1, 새 탭).
- *    묶음 링크는 zip 하나. 이 경우 화면 문구는 시안에 없어 같은 틀로 구성.
- *    내려받기가 막혔는데 미리보기도 안 되는 형식(예전에 만든 링크 · info.can_preview=false, 비밀번호 링크는 unlock 응답)이면
- *    [미리보기] 대신 "미리 볼 수 없고 내려받기가 막혀 있습니다" 안내 — 새 탭에 서버 오류(JSON)가 뜨던 죽은 링크.
+ *  - 내려받기 링크: [내려받기](GET /api/files/shared/{token}?access=) — 내려받기 차단이면 [미리보기](?inline=1, 새 탭).
+ *    묶음 링크는 zip 하나. 이 경우 화면 문구는 시안에 없어 동일 틀로 구성.
+ *    내려받기가 차단되었고 미리보기도 불가한 형식(이전에 생성한 링크 · info.can_preview=false, 비밀번호 링크는 unlock 응답)이면
+ *    [미리보기] 대신 "미리 볼 수 없고 내려받기가 막혀 있습니다" 안내 — 새 탭에 서버 오류(JSON)가 표시되던 무효 링크.
  *  - 폴더 링크(info.is_folder): 셸 대신 SharedFolderView(OneDrive식 탐색 — 하위 폴더·파일별 미리보기/받기).
- *    비밀번호 링크는 info 가 내용을 숨기므로, 풀고 나서 /list 를 한 번 불러 보고 되면 폴더 화면으로 간다.
- * 만료·권한 없음·삭제됨·횟수 초과는 같은 결과 화면 틀.
+ *    비밀번호 링크는 info 가 내용을 숨기므로, 잠금 해제 후 /list 를 1회 호출하여 성공하면 폴더 화면으로 전환한다.
+ * 만료·권한 없음·삭제됨·횟수 초과는 동일 결과 화면 틀.
  */
 import { useEffect, useState, type FormEvent, type MouseEvent } from 'react'
 import { useI18n } from '~/i18n'
@@ -50,7 +50,7 @@ interface SharedInfo {
   downloads_left: number | null
   owner_name: string | null
   exists: boolean
-  /** 내려받기 막힌 링크에서 볼 것이 있나(서버 판정 — 구버전 서버면 없음 → 있다고 본다) */
+  /** 내려받기 차단 링크에서 표시할 대상의 존재 여부(서버 판정 — 구버전 서버면 필드 없음 → 존재로 간주) */
   can_preview?: boolean
 }
 
@@ -81,11 +81,11 @@ export default function SharedLinkPage() {
   const [password, setPassword] = useState('')
   const [unlocking, setUnlocking] = useState(false)
   const [pwError, setPwError] = useState('')
-  // 다시 시도해도 소용없는 상태 → 결과 화면
+  // 재시도해도 결과가 동일한 상태 → 결과 화면
   const [blocked, setBlocked] = useState<null | { kind: BlockKind; message: string }>(null)
-  // 비밀번호 링크를 푼 뒤 폴더 링크로 확인됨
+  // 비밀번호 링크 잠금 해제 후 폴더 링크로 확인됨
   const [unlockedFolder, setUnlockedFolder] = useState(false)
-  // 비밀번호 링크를 푼 뒤 서버가 알려 준 미리보기 가능 여부(info 는 풀기 전이라 모른다)
+  // 비밀번호 링크 잠금 해제 후 서버가 반환한 미리보기 가능 여부(info 는 해제 전이라 확인 불가)
   const [unlockedCanPreview, setUnlockedCanPreview] = useState<boolean | null>(null)
 
   const isEdit = !!info?.can_edit
@@ -113,7 +113,7 @@ export default function SharedLinkPage() {
       if (!i.exists) setBlocked({ kind: 'gone', message: '' })
       else if (i.downloads_left === 0) setBlocked({ kind: 'used', message: '' })
     } catch (e: any) {
-      // 만료 링크는 서버가 404 "Link expired"/410 으로 준다
+      // 만료 링크는 서버가 404 "Link expired"/410 으로 반환한다
       if (!blockFrom(e)) setError(t('share.openFailed'))
     } finally {
       setInfoLoading(false)
@@ -121,7 +121,7 @@ export default function SharedLinkPage() {
   }
 
   useEffect(() => {
-    // 지난번에 쓴 이름을 기억해 둔다. 매번 다시 치게 하면 귀찮다.
+    // 직전에 사용한 이름을 저장한다(매번 재입력하는 불편 방지).
     let n = ''
     try { n = localStorage.getItem('ws_guest_name') || '' } catch { /* noop */ }
     if (!n && user?.display_name) n = user.display_name
@@ -171,11 +171,11 @@ export default function SharedLinkPage() {
     setUnlocking(true)
     try {
       const r = await $fetch<{ ok: boolean; access: string | null; can_preview?: boolean; exists?: boolean }>(`/api/files/shared/${token}/unlock`, { method: 'POST', body: { password } })
-      // 원본이 지워졌으면 "삭제됨"이 먼저다(없는 파일을 "미리 볼 수 없는 형식"이라 안내하지 않는다)
+      // 원본이 삭제된 경우 "삭제됨"이 우선한다(존재하지 않는 파일을 "미리 볼 수 없는 형식"으로 안내하지 않는다)
       if (r.exists === false) { setBlocked({ kind: 'gone', message: '' }); setPassword(''); return }
       if (typeof r.can_preview === 'boolean') setUnlockedCanPreview(r.can_preview)
       if (r.access) {
-        // 폴더 링크인지 — 목록이 열리면 폴더(400 = 파일·묶음 링크)
+        // 폴더 링크 여부 판정 — 목록 조회에 성공하면 폴더(400 = 파일·묶음 링크)
         try {
           await $fetch(`/api/files/shared/${token}/list?access=${encodeURIComponent(r.access)}`)
           setUnlockedFolder(true)
@@ -209,7 +209,7 @@ export default function SharedLinkPage() {
       try { localStorage.setItem('ws_guest_name', name.trim()) } catch { /* noop */ }
     } catch (err: any) {
       const status = err?.statusCode || err?.status || 0
-      // 비밀번호 접근 키가 만료(1시간)됐으면 다시 묻는다
+      // 비밀번호 접근 키가 만료(1시간)된 경우 재입력을 요구한다
       if (status === 401) { setAccess(null); setPwError(t('share.passwordExpired')) }
       else if (!blockFrom(err)) setError((typeof err?.data?.detail === 'string' && err.data.detail) || t('share.openFailed'))
     } finally {
@@ -217,7 +217,7 @@ export default function SharedLinkPage() {
     }
   }
 
-  // 내려받기 막힘 + 미리보기도 안 되는 형식 = 볼 수 있는 것이 없다(버튼 대신 안내)
+  // 내려받기 차단 + 미리보기도 불가한 형식 = 표시할 대상 없음(버튼 대신 안내)
   const nothingToSee = !!info && !info.allow_download && !isEdit
     && (info.requires_password ? unlockedCanPreview === false : info.can_preview === false)
 
@@ -283,7 +283,7 @@ export default function SharedLinkPage() {
           ? <UiSkeleton preset="text" rows={3} />
           : !info
             ? (
-              // 정보를 못 받음(네트워크 등)
+              // 정보 조회 실패(네트워크 등)
               <>
                 <AuthHeading title={t('share.title')} />
                 <AuthAlert tone="danger" title={error || t('share.openFailed')} description={t('share.retryLater')} />

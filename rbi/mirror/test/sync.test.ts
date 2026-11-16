@@ -1,4 +1,4 @@
-// frontend-react 의 미러 클라이언트 사본이 원본과 같은가(생성물이 어긋나지 않게). 프런트 폴더가 없으면(이미지 빌드 안) 건너뛴다.
+// frontend-react 의 미러 클라이언트 사본과 원본의 일치 여부 확인(생성물 불일치 방지). 프런트 폴더가 없으면(이미지 빌드 내) 건너뛴다.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'

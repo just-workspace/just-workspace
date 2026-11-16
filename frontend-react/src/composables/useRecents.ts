@@ -1,14 +1,14 @@
 /**
- * Ctrl+K 전환기의 "최근"(최근 6개, 종류 섞음). 클라이언트(localStorage)에만 둔다 — 백엔드 없음.
- * 셸이 라우트 변화마다 모듈 단위로 기록하고, 페이지가 더 정확한 이름(채널·문서·폴더)을 알면 pushRecent 로 덮어쓴다.
+ * Ctrl+K 전환기의 "최근"(최근 6개, 종류 혼합). 클라이언트(localStorage)에만 저장한다 — 백엔드 없음.
+ * 셸이 라우트 변경마다 모듈 단위로 기록하며, 페이지가 더 정확한 이름(채널·문서·폴더)을 알면 pushRecent 로 갱신한다.
  *
  * React: const { recent, pushRecent, removeRecent } = useRecents()   — recent 는 배열 값
- * 컴포넌트 밖: pushRecent(...) / removeRecent(key) 를 import
+ * 컴포넌트 외부: pushRecent(...) / removeRecent(key) 를 import
  */
 import { createStore, useStore } from 'zustand'
 
 export interface RecentItem {
-  /** 고유키(보통 경로) */
+  /** 고유 키(통상 경로) */
   key: string
   name: string
   /** 종류 표시(채널 · DM · 파일 · 위키 · 메일 · 작업 …) */
@@ -48,7 +48,7 @@ export function removeRecent(key: string) {
   save()
 }
 
-/** 테스트용: 다음 사용 때 localStorage 에서 다시 읽게 */
+/** 테스트용: 다음 사용 시 localStorage 에서 재적재 */
 export function _resetRecents() { _loaded = false; recentsStore.setState({ items: [] }) }
 
 export function useRecents() {

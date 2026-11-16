@@ -1,14 +1,14 @@
 /**
- * 표시용 변환 — 메모리·용량·포트. 문구는 만들지 않는다(숫자와 기호만).
+ * 표시용 변환 — 메모리·용량·포트. 문구는 생성하지 않는다(숫자와 기호만).
  */
 import type { ZoneRow, ZonesResponse } from './api/types'
 
-/** 소수 첫째 자리까지, 끝의 .0 은 뗀다 */
+/** 소수 첫째 자리까지 표기, 끝의 .0 은 제거 */
 export function trim1(n: number): string {
   return String(Math.round(n * 10) / 10)
 }
 
-/** 구역의 권장 메모리(MB, 1000 단위로 선언돼 있다) → GB 숫자 */
+/** 구역의 권장 메모리(MB, 1000 단위로 선언됨) → GB 숫자 */
 export function zoneGb(mb: number): number {
   return Math.round(mb / 100) / 10
 }
@@ -35,8 +35,8 @@ export function parsePort(spec: string): Port {
 }
 
 /**
- * 한 줄 포트 표기. 종류가 섞여 있으면 하나하나 종류를 붙이고('TCP 7881 · UDP 3478'),
- * 한 종류뿐이면 TCP 는 숫자만('25 · 465'), UDP 는 종류를 붙인다.
+ * 한 줄 포트 표기. 종류가 혼재하면 항목마다 종류를 표기하고('TCP 7881 · UDP 3478'),
+ * 한 종류뿐이면 TCP 는 숫자만('25 · 465'), UDP 는 종류를 표기한다.
  */
 export function portsLine(specs: string[]): string {
   const ports = specs.map(parsePort)
@@ -44,7 +44,7 @@ export function portsLine(specs: string[]): string {
   return ports.map(p => (mixed || p.proto === 'udp' ? `${p.proto.toUpperCase()} ${p.port}` : p.port)).join(' · ')
 }
 
-/** 고른 구역의 권장 메모리 합계(MB) — 기본 구역 포함 */
+/** 선택한 구역의 권장 메모리 합계(MB) — 기본 구역 포함 */
 export function recommendMb(catalog: ZonesResponse, selected: string[]): number {
   const on = new Set(selected)
   let total = catalog.core.memory_mb.recommend
@@ -52,7 +52,7 @@ export function recommendMb(catalog: ZonesResponse, selected: string[]): number 
   return total
 }
 
-/** 지금 고른 구역이 어느 묶음과 같은가. 같은 것이 없으면 null(직접 고름) */
+/** 현재 선택한 구역과 일치하는 프리셋. 일치 항목이 없으면 null(직접 선택) */
 export function matchPreset(catalog: ZonesResponse, zones: string[]): string | null {
   const key = [...zones].sort().join(',')
   for (const [name, ids] of Object.entries(catalog.presets)) {
@@ -64,7 +64,7 @@ export function matchPreset(catalog: ZonesResponse, zones: string[]): string | n
 export interface PortRow { spec: string; port: string; proto: 'tcp' | 'udp'; zone: string }
 
 /**
- * 열어야 할 포트 — 기본 구역 + 고른 구역. 회의 구역의 중계(3478)와 무손실 오디오(4433)는 켰을 때만 넣는다.
+ * 개방해야 할 포트 — 기본 구역 + 선택한 구역. 회의 구역의 중계(3478)와 무손실 오디오(4433)는 활성화한 경우에만 포함한다.
  * zone 은 구역 id(기본 구역은 core 의 id).
  */
 export function openPorts(catalog: ZonesResponse, selected: string[], opts: { turn: boolean; lossless: boolean }): PortRow[] {
@@ -83,12 +83,12 @@ export function openPorts(catalog: ZonesResponse, selected: string[], opts: { tu
   return rows
 }
 
-/** 주소가 IP 인가(도메인이 아닌가) */
+/** 주소의 IP 여부(도메인이 아닌지) */
 export function isIpAddress(value: string): boolean {
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(value.trim()) || value.includes(':')
 }
 
-/** 주소 하나 또는 대역(CIDR) 꼴인가 — 서버가 다시 검사한다. 여기서는 바로 보여 줄 형식 오류만 */
+/** 단일 주소 또는 대역(CIDR) 형태 여부 — 서버가 재검증한다. 여기서는 즉시 표시할 형식 오류만 판별한다 */
 export function isAddressOrCidr(value: string): boolean {
   const m = value.trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?:\/(\d{1,2}))?$/)
   if (!m) return false
@@ -105,7 +105,7 @@ export function isSubnet24(value: string): boolean {
   return isAddressOrCidr(value) && value.trim().endsWith('/24')
 }
 
-/** 도메인 꼴인가(점이 하나 이상, 허용 글자만) */
+/** 도메인 형태 여부(점이 하나 이상, 허용 문자만) */
 export function isDomain(value: string): boolean {
   return /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(value.trim())
 }
@@ -115,7 +115,7 @@ export function isAccessAddress(value: string): boolean {
   return isDomain(value) || isIpv4(value)
 }
 
-/** 메일 도메인의 기본값 — 접속 주소에서 맨 앞 이름 하나를 뗀다(workspace.example.com → example.com) */
+/** 메일 도메인의 기본값 — 접속 주소에서 맨 앞 이름 하나를 제거(workspace.example.com → example.com) */
 export function defaultMailDomain(domain: string): string {
   const parts = domain.trim().split('.')
   if (!isDomain(domain)) return ''
@@ -127,12 +127,12 @@ export function isUsername(value: string): boolean {
   return /^[a-z0-9][a-z0-9_.-]{2,31}$/.test(value)
 }
 
-/** 이미지 태그 꼴의 버전 */
+/** 이미지 태그 형태의 버전 */
 export function isImageTag(value: string): boolean {
   return /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/.test(value)
 }
 
-/** 서버의 폴더 경로 — / 로 시작하는 전체 경로(맨 위 폴더 자체는 안 된다) */
+/** 서버의 폴더 경로 — / 로 시작하는 전체 경로(최상위 폴더 자체는 불가) */
 export function isHostPath(value: string): boolean {
   const v = value.trim()
   return /^\/[A-Za-z0-9._\-/]*$/.test(v) && v.replace(/\/+$/, '') !== '' && !v.split('/').includes('..')

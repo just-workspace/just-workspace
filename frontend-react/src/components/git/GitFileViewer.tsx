@@ -2,10 +2,10 @@
  * 코드 뷰어.
  *  위: 브랜치 32 + 경로 브레드크럼(저장소 / 폴더 / … / 파일).
  *  카드(rounded-12): 머리 44 bg-card — mono 12 "n줄 · 크기 · 언어" | 줄바꿈 스위치 · [원본] · [복사] · [Gitea ↗] (각 28, 히트 40)
- *  본문 bg-background, mono 13 / 줄 22: 줄 번호 52(오른쪽 맞춤, 패딩 14) — 누르면 그 줄 링크(#L12)가 복사되고 강조,
+ *  본문 bg-background, mono 13 / 줄 22: 줄 번호 52(오른쪽 맞춤, 패딩 14) — 클릭 시 해당 줄 링크(#L12)가 복사되고 강조된다,
  *  Shift+클릭 = 범위(#L12-L20). 강조 = warning/0.14 바탕 + 왼쪽 3px warning 바.
- *  아래 안내 12. 1 MB 넘는 파일·바이너리는 "원본 내려받기"만.
- *  구문 색은 토큰: shiki css-variables 테마로 토큰만 받고, 색은 GitFileViewer.css 의 --shiki-* 변수를 우리 토큰에 묶는다
+ *  아래 안내 12. 1 MB 초과 파일·바이너리는 "원본 내려받기"만 제공한다.
+ *  구문 색은 토큰: shiki css-variables 테마로 토큰만 수신하고, 색은 GitFileViewer.css 의 --shiki-* 변수를 본 프로젝트 디자인 토큰에 연결한다
  *  (키워드 primary · 문자열 success · 숫자/상수 warning · 주석 muted-foreground). github-light/dark 고정 폐지.
  */
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
@@ -97,7 +97,7 @@ export function GitFileViewer({ path }: GitFileViewerProps) {
   useEffect(() => {
     const f = fileContent
     if (!f?.content) { setLines([]); return }
-    // 일단 평문으로 그려 두고(즉시 보이게) 색은 이어서 입힌다
+    // 우선 평문으로 렌더링하고(즉시 표시) 구문 색은 이후 적용한다
     setLines(rawLinesOf(f).map(l => [{ content: l }]))
     const lang = detectLang(f.name)
     if (lang === 'text' || f.content.length > 400_000) return
@@ -109,7 +109,7 @@ export function GitFileViewer({ path }: GitFileViewerProps) {
         const res = await shiki.codeToTokens(f.content!.replace(/\n$/, ''), { lang: lang as any, theme: cssTheme })
         if (gitStore.getState().fileContent !== f) return
         setLines(res.tokens.map(row => row.map(tk => ({ content: tk.content, color: tk.color, fontStyle: tk.fontStyle }))))
-      } catch { /* 모르는 언어 — 평문 유지 */ }
+      } catch { /* 미지원 언어 — 평문 유지 */ }
       finally { setHighlighting(false) }
     })()
   }, [fileContent])
@@ -131,7 +131,7 @@ export function GitFileViewer({ path }: GitFileViewerProps) {
   function isSel(n: number) {
     return !!sel && n >= sel[0] && n <= sel[1]
   }
-  // 처음 열 때(그리고 해시가 바뀔 때) 선택 줄로 스크롤
+  // 최초 열람 시(및 해시 변경 시) 선택 줄로 스크롤
   const selStart = sel?.[0] ?? null
   useEffect(() => {
     if (!lines.length || selStart == null) return
@@ -148,7 +148,7 @@ export function GitFileViewer({ path }: GitFileViewerProps) {
   const encPath = path.split('/').map(encodeURIComponent).join('/')
   const branchSeg = encodeURIComponent(currentBranch || selectedRepo?.default_branch || '')
   const rawUrl = selectedRepo ? `${selectedRepo.html_url}/raw/branch/${branchSeg}/${encPath}` : ''
-  // Gitea 에서 열기 — 지금 강조한 줄 범위를 그대로 넘긴다(Gitea 도 #L12-L20 형식)
+  // Gitea 에서 열기 — 현재 강조한 줄 범위를 그대로 전달한다(Gitea 도 #L12-L20 형식)
   const giteaUrl = selectedRepo ? `${selectedRepo.html_url}/src/branch/${branchSeg}/${encPath}${sel ? lineHash(sel[0], sel[1]) : ''}` : ''
   const langName = (() => {
     if (!fileContent) return ''
@@ -160,7 +160,7 @@ export function GitFileViewer({ path }: GitFileViewerProps) {
     : ''
 
   return (
-    // 코드 상자가 남은 높이를 채우고(안에서 스크롤) 안내문은 그 아래 고정
+    // 코드 상자가 남은 높이를 채우고(내부 스크롤) 안내문은 그 아래에 고정
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 py-4 md:px-6">
         <div className="flex shrink-0 items-center gap-2 text-[13px]">
@@ -169,7 +169,7 @@ export function GitFileViewer({ path }: GitFileViewerProps) {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
-          {/* 머리 44. 모바일은 메타 줄이 잘리지 않게 두 줄(메타 / 줄바꿈·원본·복사·Gitea) */}
+          {/* 머리 44. 모바일은 메타 줄이 잘리지 않도록 두 줄(메타 / 줄바꿈·원본·복사·Gitea) */}
           <div className="flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-border bg-card py-2 pl-3.5 pr-2 text-xs text-muted-foreground sm:h-11 sm:flex-nowrap sm:py-0">
             <span className="min-w-0 font-mono max-sm:w-full sm:truncate">{metaLine}</span>
             <span className="flex-1 max-sm:hidden" />
@@ -221,7 +221,7 @@ export function GitFileViewer({ path }: GitFileViewerProps) {
                       key={i}
                       className={isSel(i + 1) ? 'bg-warning/[0.14] shadow-[inset_3px_0_0_hsl(var(--warning))]' : ''}
                     >
-                      {/* td 기본 패딩 1px 이 줄 높이를 24 로 만들던 것 — py-0 으로 시안 22 */}
+                      {/* td 기본 패딩 1px 로 줄 높이가 24 가 되던 문제 — py-0 으로 시안 22 적용 */}
                       <td className={cn('sticky left-0 w-[52px] min-w-[52px] select-none whitespace-nowrap py-0 pl-0 pr-3.5 text-right align-top', isSel(i + 1) ? '' : 'bg-background')}>
                         <a
                           href={lineHash(i + 1)}

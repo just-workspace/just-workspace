@@ -1,10 +1,10 @@
 /**
  * 슬라이더(20 의 것 확정):
  * 트랙 6(bg-muted, rounded-full) + 채움 primary · 손잡이 16(border-2 primary, bg-background) · 눈금 marks(2×12 muted-foreground).
- * 전체 높이 20(h-5) — 손잡이·트랙을 세로 가운데. 값 글자(예: "120%" mono primary)는 호출부가 옆에 그린다.
- * 접근성: 바깥 div 가 role=slider(tabIndex 0, aria-valuemin/max/now, aria-valuetext = formatValue(값)). 포커스 링은 손잡이에.
+ * 전체 높이 20(h-5) — 손잡이·트랙을 세로 중앙 정렬. 값 글자(예: "120%" mono primary)는 호출부가 옆에 렌더링한다.
+ * 접근성: 외부 div 가 role=slider(tabIndex 0, aria-valuemin/max/now, aria-valuetext = formatValue(값)). 포커스 링은 손잡이에 표시.
  * 키보드: ←↓ / →↑ = step · PageDown / PageUp = pageStep(기본 step×10) · Home / End = min / max.
- * 포인터: 트랙 아무 곳이나 눌러 옮기고 끌면 따라온다(pointer capture). 놓을 때 onCommit(마지막 값) — 저장은 거기서.
+ * 포인터: 트랙의 임의 위치를 눌러 이동하며 드래그 시 추종한다(pointer capture). 놓는 시점에 onCommit(마지막 값) 호출 — 저장은 해당 시점에 수행.
  *
  * @example
  * <UiSlider ariaLabel="박준 님 음량" min={0} max={200} step={5} marks={[100]}
@@ -15,11 +15,11 @@ import { cn } from '~/lib/utils'
 import { useModel } from './internal'
 
 export interface UiSliderProps extends Omit<HTMLAttributes<HTMLDivElement>, 'role' | 'defaultValue' | 'onChange'> {
-  /** 값. 안 주면 부품이 가진다(처음 = min) */
+  /** 값. 미지정 시 컴포넌트가 내부 보유(초기값 = min) */
   modelValue?: number
-  /** 값 바뀜(끄는 동안 계속) */
+  /** 값 변경(드래그 중 연속 호출) */
   onUpdateModelValue?: (v: number) => void
-  /** 끌기를 놓았을 때 · 키보드로 바꿨을 때 — 저장 시점 */
+  /** 드래그 종료 시 · 키보드로 변경 시 — 저장 시점 */
   onCommit?: (v: number) => void
   /** 최소(기본 0) */
   min?: number
@@ -29,13 +29,13 @@ export interface UiSliderProps extends Omit<HTMLAttributes<HTMLDivElement>, 'rol
   step?: number
   /** PageUp/PageDown 단계(기본 step×10) */
   pageStep?: number
-  /** 눈금 값들(예: [100] — 기본값 자리). 트랙 위 세로 막대, aria-hidden */
+  /** 눈금 값 목록(예: [100] — 기본값 위치). 트랙 위 세로 막대, aria-hidden */
   marks?: number[]
-  /** 접근성 이름(필수 — 화면에 라벨이 없으면) */
+  /** 접근성 이름(화면에 라벨이 없으면 필수) */
   ariaLabel?: string
   /** 라벨 요소 id(aria-labelledby) */
   ariaLabelledby?: string
-  /** aria-valuetext 만들기(예: v => `${v}%`). 없으면 숫자 그대로 */
+  /** aria-valuetext 생성 함수(예: v => `${v}%`). 미지정 시 숫자 그대로 */
   formatValue?: (v: number) => string
   disabled?: boolean
 }
@@ -43,7 +43,7 @@ export interface UiSliderProps extends Omit<HTMLAttributes<HTMLDivElement>, 'rol
 function snap(v: number, min: number, max: number, step: number): number {
   const s = step > 0 ? step : 1
   const n = Math.round((v - min) / s) * s + min
-  // 부동소수 꼬리 정리(0.1 단계 등)
+  // 부동소수 오차 자릿수 정리(0.1 단계 등)
   const dec = (String(s).split('.')[1] ?? '').length
   return Math.min(max, Math.max(min, Number(n.toFixed(dec))))
 }
@@ -74,7 +74,7 @@ export function UiSlider({
   function fromPointer(clientX: number): number {
     const r = trackRef.current?.getBoundingClientRect()
     if (!r || r.width <= 0) return value
-    // clientX 와 rect 는 같은 좌표계(배율 무관 — 비율만 쓴다)
+    // clientX 와 rect 는 동일 좌표계(배율 무관 — 비율만 사용)
     const ratio = Math.min(1, Math.max(0, (clientX - r.left) / r.width))
     return min + ratio * span
   }
@@ -140,7 +140,7 @@ export function UiSlider({
       onPointerCancel={onUp}
       onKeyDown={onKey}
     >
-      {/* 손잡이 반지름(8)만큼 안쪽에서 값 비율을 잰다 — 끝값에서 손잡이가 밖으로 나가지 않게 */}
+      {/* 손잡이 반지름(8)만큼 안쪽에서 값 비율을 계산한다 — 끝값에서 손잡이가 외부로 벗어나지 않도록 함 */}
       <div ref={trackRef} className="absolute inset-y-0 left-2 right-2">
         <span aria-hidden="true" className="absolute -inset-x-2 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted" />
         <span aria-hidden="true" className="absolute -left-2 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-primary" style={{ width: `calc(${pct}% + 8px)` }} />

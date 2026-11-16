@@ -61,14 +61,14 @@ describe('접속 바 상태 · 띠 판정', () => {
   it('무손실을 골랐는데 음악으로 보내는 중 = 중계 실패 띠', () => {
     expect(bandsFor({ ...base, wantTier: 'lossless', effectiveTier: 'music' }).map(x => x.kind)).toEqual(['relayFail'])
     expect(bandsFor({ ...base, wantTier: 'lossless', effectiveTier: 'lossless' })).toEqual([])
-    // 아직 연결 중이면 판단하지 않는다
+    // 연결 중에는 판정하지 않음
     expect(bandsFor({ ...base, connectionState: 'connecting', wantTier: 'lossless', effectiveTier: 'music' })).toEqual([])
   })
   it('장치 독점 실패 = danger · 권한 없음 · 스피커 + 음악 이상 = 이어폰 권장', () => {
     expect(bandsFor({ ...base, exclusiveFailed: true })[0]).toMatchObject({ kind: 'exclusiveFail', tone: 'danger' })
     expect(bandsFor({ ...base, listenOnly: true }).map(x => x.kind)).toEqual(['noPermission'])
     expect(bandsFor({ ...base, speakerOutput: 'speaker', effectiveTier: 'music' }).map(x => x.kind)).toEqual(['earphone'])
-    // 음성 단계는 에코 제거가 켜져 있어 스피커라도 띠 없음 · 감지 못 하면 띠 없음
+    // 음성 단계는 에코 제거가 활성화되어 스피커여도 띠 없음 · 감지 불가 시 띠 없음
     expect(bandsFor({ ...base, speakerOutput: 'speaker', effectiveTier: 'voice' })).toEqual([])
     expect(bandsFor({ ...base, speakerOutput: 'unknown', effectiveTier: 'lossless' })).toEqual([])
   })

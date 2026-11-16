@@ -1,5 +1,5 @@
-// 파일·오피스 모듈(r1/files-office) — 메뉴 항목 규칙, 댓글 hook, 목록 클릭·선택·인라인 이름 바꾸기, 전송 패널 머리, 공유 모달 기본 탭,
-// 오피스 여는 중 문구(i18n-t 대체), 공유 링크 손님 화면 분기. ($fetch 는 가짜)
+// 파일·오피스 모듈(r1/files-office) — 메뉴 항목 규칙, 댓글 hook, 목록 클릭·선택·인라인 이름 변경, 전송 패널 머리, 공유 모달 기본 탭,
+// 오피스 여는 중 문구(i18n-t 대체), 공유 링크 손님 화면 분기. ($fetch 는 모의(mock))
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act, renderHook } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'

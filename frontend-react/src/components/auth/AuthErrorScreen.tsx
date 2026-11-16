@@ -1,11 +1,11 @@
 /**
- * 오류 화면 — pages/error(/error 라우트)와 라우터 전역 오류·404 가 같이 쓴다.
- *  로그인 후 404 = 셸 안(mono 404 · 제목 22/700 · 설명 14 + 경로 mono · [홈으로][검색 Ctrl K]).
+ * 오류 화면 — pages/error(/error 라우트)와 라우터 전역 오류·404 가 공용으로 사용한다.
+ *  로그인 후 404 = 셸 내부(mono 404 · 제목 22/700 · 설명 14 + 경로 mono · [홈으로][검색 Ctrl K]).
  *  서버 오류(5xx) = 셸 없는 500 화면(AuthServerErrorScreen, 요청 번호 복사).
- *  그 밖(로그인 전 404·403 등) = 인증 틀(AuthShell) 위 결과 화면(아이콘 타일 40 + 제목 24/700 + 설명 + [다시 시도][홈으로]).
+ *  그 외(로그인 전 404·403 등) = 인증 틀(AuthShell) 위 결과 화면(아이콘 타일 40 + 제목 24/700 + 설명 + [다시 시도][홈으로]).
  *
- * 오류는 prop error 로 받고(없으면 500 취급 — /error 를 직접 방문한 경우),
- * 지우기는 navigateTo(주소, { replace: true }).
+ * 오류는 prop error 로 수신하며(없으면 500 으로 처리 — /error 를 직접 방문한 경우),
+ * 오류 해제는 navigateTo(주소, { replace: true }) 로 수행한다.
  */
 import { useEffect } from 'react'
 import { useI18n } from '~/i18n'
@@ -23,14 +23,14 @@ import { AuthShell } from './AuthShell'
 import { AuthHeading } from './AuthHeading'
 
 export interface AuthErrorScreenProps {
-  /** 전역 오류(라우터 errorElement·404)가 넘기는 오류. 없으면 500 취급 */
+  /** 전역 오류(라우터 errorElement·404)가 전달하는 오류. 없으면 500 으로 처리 */
   error?: { statusCode?: number; message?: string; url?: string; data?: unknown } | null
 }
 
 export function AuthErrorScreen({ error }: AuthErrorScreenProps) {
   const { t } = useI18n()
   const { appName } = useSiteConfig()
-  // 전역 오류 화면은 App 을 거치지 않을 수 있어 사이트 설정(이름·로고)이 비어 있을 수 있다 — 여기서 한 번 받는다(이미 받았으면 그냥 돌아온다)
+  // 전역 오류 화면은 App 을 거치지 않을 수 있어 사이트 설정(이름·로고)이 비어 있을 수 있다 — 여기서 1회 조회한다(이미 조회했으면 즉시 반환)
   useEffect(() => { void fetchAppConfig() }, [])
   const { user } = useAuth()
   const route = useRoute()
@@ -53,7 +53,7 @@ export function AuthErrorScreen({ error }: AuthErrorScreenProps) {
     }
   })()
   const path = err?.url || route.fullPath
-  // 기술 메시지는 기본 문구와 다를 때만 보조로(접어 둔 mono 상자)
+  // 기술 메시지는 기본 문구와 상이한 경우에만 보조로 표시(접힌 mono 상자)
   const detail = (() => {
     const m = err?.message
     if (!m || statusCode === 404 || m === info.description) return ''

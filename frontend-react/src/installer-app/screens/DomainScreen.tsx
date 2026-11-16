@@ -1,10 +1,10 @@
 /**
- * 접속 주소와 연결 — 주소 · 연결 형태 · 인증서. 빠른 설치에서는 주소만 묻고 나머지는 감지한 값과 기본값을 보여 준다.
+ * 접속 주소와 연결 — 주소 · 연결 형태 · 인증서. 빠른 설치에서는 주소만 입력받고 나머지는 감지한 값과 기본값을 표시한다.
  *
  * 인증서 규칙
- *  - 기존 프록시 뒤: 고를 것이 없다(프록시가 처리).
- *  - 자동 발급은 접속 주소가 이 서버를 가리키는 것이 확인됐을 때만 고를 수 있다. 숫자 주소로도 안 된다.
- *  - 임시 인증서는 평소에는 보이지 않고, 자동 발급을 고를 수 없을 때에만 나타난다.
+ *  - 기존 프록시 뒤: 선택 항목이 없다(프록시가 처리).
+ *  - 자동 발급은 접속 주소가 이 서버를 가리키는 것이 확인된 경우에만 선택할 수 있다. 숫자 주소로도 불가하다.
+ *  - 임시 인증서는 평상시 표시되지 않으며, 자동 발급을 선택할 수 없는 경우에만 표시된다.
  */
 import { useState } from 'react'
 import { UiBadge } from '~/components/ui/Badge'
@@ -22,7 +22,7 @@ import { StepNav, useGoNext } from '../shell/StepNav'
 import { Heading, SubHeading, WizardShell } from '../shell/WizardShell'
 import { QUICK_PRESET, quickLowered, serverMemoryMb, useWizard } from '../store'
 
-/** 화면에서 고른 인증서 방식 → 지금 조건에서 실제로 쓸 방식 */
+/** 화면에서 선택한 인증서 방식 → 현재 조건에서 실제로 사용할 방식 */
 export function resolveCert(network: Network, picked: CertMode, autoBlocked: boolean): CertMode {
   if (network === 'proxy') return 'proxy'
   const own = picked === 'proxy' ? 'auto' : picked
@@ -48,7 +48,7 @@ function FullDomain() {
   const detected = useWizard(s => s.server?.facts.detected_network ?? null)
   const cloud = useWizard(s => s.server?.facts.cloud === true)
   const [domain, setDomain] = useState(access.domain)
-  // 처음 들어온 화면이면 감지한 연결 형태를 미리 고른다
+  // 최초 진입 화면이면 감지한 연결 형태를 미리 선택
   const [network, setNetwork] = useState<Network>(access.domain ? access.network : (detected ?? access.network))
   const [picked, setPicked] = useState<CertMode>(access.cert)
   const view = useDnsCheck(domain)
@@ -120,8 +120,8 @@ function FullDomain() {
 }
 
 /**
- * 접속 주소를 저장하고 넘어간다. 서버는 "저장된 접속 주소"를 확인한 결과만 기억하므로(임시 인증서를 허락하는 근거),
- * 저장한 뒤에 한 번 더 확인을 돌려 둔다.
+ * 접속 주소를 저장하고 다음으로 이동한다. 서버는 "저장된 접속 주소"를 확인한 결과만 기억하므로(임시 인증서 허용의 근거),
+ * 저장 후 확인을 한 번 더 실행해 둔다.
  */
 async function saveAddress(goNext: (patch: AnswersPatch) => Promise<boolean>, checkDns: (domain: string) => Promise<void>, patch: AnswersPatch) {
   if (await goNext(patch)) void checkDns(String(patch.access?.domain ?? ''))

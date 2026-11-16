@@ -1,12 +1,12 @@
 /**
- * 업데이트 예고(5분 카운트다운)와 점검 — 앱 셸이 함께 보는 싱글턴.
+ * 업데이트 사전 공지(5분 카운트다운)와 점검 모드 — 앱 셸이 공유하는 싱글턴.
  *
- * 상태가 들어오는 길은 셋이다.
+ * 상태가 유입되는 경로는 세 가지이다.
  *  1. 실시간 소켓: `system.update_countdown` · `system.update_cancelled` · `system.maintenance`.
- *  2. 처음 떴을 때 `/api/system/update-notice` 한 번(새로 접속한 화면).
- *  3. API 호출이 실패했을 때(lib/api 가 알린다) 공개 점검 상태 `/maintenance/status` — 서버가 내려가 있어도 답한다.
+ *  2. 최초 마운트 시 `/api/system/update-notice` 1회 조회(새로 접속한 화면).
+ *  3. API 호출 실패 시(lib/api 가 통지) 공개 점검 상태 `/maintenance/status` 조회 — 서버가 중지된 상태에서도 응답한다.
  *
- * 점검 중에는 5초마다 다시 묻는다. 점검이 끝나고 서버가 답하면 화면을 새로 연다(새 버전의 화면을 받는다).
+ * 점검 중에는 5초마다 재조회한다. 점검이 종료되고 서버가 응답하면 화면을 다시 로드한다(새 버전의 화면 수신).
  * 계약: docs/update-api.md 7·8절
  *
  * React: useUpdateNoticeWatch(로그인했는가);  const { state, endsAt, … } = useUpdateNotice()
@@ -21,13 +21,13 @@ export interface UpdateNoticeState {
   state: NoticeState
   job: string | null
   kind: string | null
-  /** 카운트다운이 끝나는 시각(ms) */
+  /** 카운트다운 종료 시각(ms) */
   endsAt: number | null
-  /** 점검이 시작된 시각(ms) */
+  /** 점검 시작 시각(ms) */
   startedAt: number | null
   expectedSeconds: number | null
   contact: string | null
-  /** 점검이 끝나 서버가 답하기를 기다리는 중 */
+  /** 점검 종료 후 서버 응답을 대기하는 중 */
   reconnecting: boolean
 }
 
@@ -35,7 +35,7 @@ const EMPTY: UpdateNoticeState = { state: 'none', job: null, kind: null, endsAt:
 export const updateNoticeStore = createStore<UpdateNoticeState>()(() => ({ ...EMPTY }))
 
 export const updateNoticeTiming = { pollMs: 5000, checkGapMs: 5000 }
-/** 화면을 새로 여는 일 — 테스트가 바꿔 끼운다 */
+/** 화면 다시 로드 동작 — 테스트에서 교체한다 */
 export const updateNoticeEnv = { reload: () => { if (typeof location !== 'undefined') location.reload() } }
 
 const PUBLIC_STATUS = '/maintenance/status'
@@ -45,7 +45,7 @@ let timer: ReturnType<typeof setTimeout> | null = null
 let listening = false
 let unsubscribe: (() => void) | null = null
 let lastCheck = 0
-let confirmed = false      // 서버가 점검 중이라고 답한 적이 있다(카운트다운 끝의 짐작이 아니라)
+let confirmed = false      // 서버가 점검 중이라고 응답한 이력이 있음(카운트다운 종료에 따른 추정이 아님)
 let ticking = false
 
 const ms = (iso: unknown): number | null => {
@@ -57,7 +57,7 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
 
 interface PublicStatus { active?: boolean; phase?: string; kind?: string | null; started_at?: string | null; expected_seconds?: number | null; countdown_ends_at?: string | null; contact?: string | null }
 
-/** 공개 점검 상태 — 서버가 내려가 있어도 nginx 가 설치 관리자에게서 받아 준다. 물을 수 없으면 null */
+/** 공개 점검 상태 — 서버가 중지된 상태에서도 nginx 가 설치 관리자로부터 받아 전달한다. 조회 불가 시 null */
 async function publicStatus(): Promise<PublicStatus | null> {
   try {
     const r = await fetch(apiUrl(PUBLIC_STATUS), { cache: 'no-store', credentials: 'omit' })
@@ -79,7 +79,7 @@ function schedule() {
   stopTimer()
   const s = updateNoticeStore.getState()
   if (!watchers || s.state === 'none') return
-  // 카운트다운은 끝나는 때에 한 번, 점검은 5초마다
+  // 카운트다운은 종료 시점에 1회, 점검은 5초마다 조회
   const wait = s.state === 'countdown' && s.endsAt ? Math.max(250, s.endsAt - Date.now()) : updateNoticeTiming.pollMs
   timer = setTimeout(() => { void tick() }, Math.min(wait, 2 ** 31 - 1))
 }
@@ -103,15 +103,15 @@ function clear() {
   stopTimer()
 }
 
-/** 점검이 끝났다 — 서버가 답하면 화면을 새로 연다. 아직이면 "다시 연결 중"으로 두고 계속 묻는다 */
+/** 점검 종료 — 서버가 응답하면 화면을 다시 로드한다. 미응답이면 "다시 연결 중" 상태로 두고 조회를 계속한다 */
 async function finish() {
-  if (!confirmed) { clear(); return }      // 점검에 들어간 적이 없다(취소를 놓쳤다) — 쓰던 화면 그대로
+  if (!confirmed) { clear(); return }      // 점검에 진입한 이력이 없음(취소 이벤트 누락) — 기존 화면 유지
   if (await serverUp()) { clear(); updateNoticeEnv.reload(); return }
   updateNoticeStore.setState({ reconnecting: true })
   schedule()
 }
 
-/** 지금 상태를 다시 묻는다 — 공개 점검 상태가 먼저, 그것을 물을 수 없으면 서버의 예고 조회 */
+/** 현재 상태를 재조회한다 — 공개 점검 상태를 우선 조회하고, 조회 불가 시 서버의 사전 공지를 조회한다 */
 export async function tick(): Promise<void> {
   if (ticking) return
   ticking = true
@@ -132,7 +132,7 @@ export async function tick(): Promise<void> {
       if (r?.state !== 'countdown' && r?.state !== 'maintenance' && s.state !== 'none') await finish()
       else applyNotice(r)
     } catch {
-      // 어디에도 물을 수 없다 — 카운트다운이 끝났으면 점검이 시작된 것으로 본다
+      // 모든 경로에서 조회 불가 — 카운트다운이 종료되었으면 점검이 시작된 것으로 간주한다
       if (s.state === 'countdown') enterMaintenance({}, false)
       else schedule()
     }
@@ -156,12 +156,12 @@ function applyNotice(r: NoticeReply | null | undefined) {
   }
 }
 
-/** 처음 한 번 — 새로 접속한 화면이 지금의 예고·점검을 안다 */
+/** 최초 1회 — 새로 접속한 화면이 현재의 사전 공지·점검 상태를 확인한다 */
 export async function loadUpdateNotice(): Promise<void> {
-  try { applyNotice(await $fetch('/api/system/update-notice')) } catch { /* 서버가 없으면 API 실패 신호가 맡는다 */ }
+  try { applyNotice(await $fetch('/api/system/update-notice')) } catch { /* 서버 미응답 시 API 실패 신호가 처리한다 */ }
 }
 
-/** 실시간 소켓 이벤트 — 테스트에서도 직접 부른다 */
+/** 실시간 소켓 이벤트 — 테스트에서도 직접 호출한다 */
 export function handleUpdateEvent(d: any): void {
   if (!d || typeof d.type !== 'string') return
   if (d.type === 'system.update_countdown') {
@@ -194,7 +194,7 @@ export async function reconnectNow(): Promise<void> {
   await tick()
 }
 
-/** 이 컴포넌트가 떠 있는 동안 예고·점검을 지켜본다 */
+/** 본 컴포넌트가 마운트된 동안 사전 공지·점검을 감시한다 */
 export function useUpdateNoticeWatch(enabled = true) {
   useEffect(() => {
     if (!enabled) return
@@ -218,8 +218,8 @@ export function useUpdateNotice() {
   return useStore(updateNoticeStore)
 }
 
-// ─── 점검 화면을 덮지 않는 화면 ───
-// 관리자의 업데이트 진행 화면은 점검 중에도 보여야 한다 — 그 화면이 떠 있는 동안에는 점검 화면을 그리지 않는다.
+// ─── 점검 화면 표시 제외 화면 ───
+// 관리자의 업데이트 진행 화면은 점검 중에도 표시되어야 한다 — 해당 화면이 마운트된 동안에는 점검 화면을 렌더링하지 않는다.
 const exemptStore = createStore<{ count: number }>()(() => ({ count: 0 }))
 export function useMaintenanceExempt(enabled = true) {
   useEffect(() => {
@@ -232,7 +232,7 @@ export function useMaintenanceExempted(): boolean {
   return useStore(exemptStore, s => s.count > 0)
 }
 
-/** 테스트용 — 싱글턴을 처음 상태로 */
+/** 테스트용 — 싱글턴을 초기 상태로 복원 */
 export function _resetUpdateNotice() {
   stopTimer()
   unsubscribe?.(); unsubscribe = null

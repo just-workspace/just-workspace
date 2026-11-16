@@ -26,9 +26,9 @@ describe('플러그인 order', () => {
     const { result } = renderHook(() => useNav())
     const plugin = result.current.groups.find(g => g.key === 'plugin')!
     expect(plugin.items.map(i => i.id)).toEqual(['p-delta', 'p-beta', 'p-alpha', 'p-gamma'])
-    // 레일 항목에 정렬용 order 를 싣지 않는다
+    // 레일 항목에 정렬용 order 를 포함하지 않음
     expect(plugin.items.every(i => !('order' in i))).toBe(true)
-    // 모바일 전체 시트가 쓰는 flat 도 같은 순서
+    // 모바일 전체 시트가 사용하는 flat 도 동일 순서
     expect(result.current.flat.map(i => i.id).filter(id => id.startsWith('p-'))).toEqual(['p-delta', 'p-beta', 'p-alpha', 'p-gamma'])
   })
 

@@ -7,7 +7,7 @@
  * 통계: 1 s 마다 'stats' 이벤트(송신 비트레이트·RTT·피어별 버퍼/손실/복구·릴레이 방 통계) + 릴레이에 클라이언트 통계 보고.
  *
  * 비트퍼펙트 판정: 장치 레이트 == 캡처 컨텍스트 레이트 == 스트림 레이트(송신), 스트림 레이트 == 재생 컨텍스트 레이트(수신).
- * 하나라도 다르면 Chrome 이 리샘플한다 → warning 이벤트 + bitExact=false (배지는 "무손실(리샘플)" 로 낮춰야 한다).
+ * 하나라도 상이하면 Chrome 이 리샘플한다 → warning 이벤트 + bitExact=false (배지는 "무손실(리샘플)" 로 하향 표시해야 한다).
  */
 import captureWorkletUrl from './capture.worklet.ts?worker&url'
 import playbackWorkletUrl from './playback.worklet.ts?worker&url'
@@ -25,23 +25,23 @@ import type {
 } from './types'
 
 export interface LosslessSessionOptions {
-  /** 송신 포맷 기본값. sampleRate 는 장치가 정하므로 여기 값은 "요청"이다(96000 → 안 되면 장치 값) */
+  /** 송신 포맷 기본값. sampleRate 는 장치가 결정하므로 이 값은 "요청"이다(96000 → 불가 시 장치 값) */
   format?: Partial<LosslessFormat>
   bufferPreset?: BufferPreset
-  /** 캡처에 쓸 장치 */
+  /** 캡처에 사용할 장치 */
   deviceId?: string
-  /** 토큰 만료 뒤 재접속·WebTransport 재시도에 쓸 새 grant 를 받아오는 함수(없으면 재시도 생략) */
+  /** 토큰 만료 후 재접속·WebTransport 재시도에 사용할 새 grant 를 조회하는 함수(없으면 재시도 생략) */
   refreshGrant?: () => Promise<RelayGrant>
-  /** 테스트용: getUserMedia 대신 쓸 스트림 */
+  /** 테스트용: getUserMedia 대신 사용할 스트림 */
   mediaStream?: MediaStream
   /** 테스트용: 폴백 뒤 WebTransport 재시도 간격(ms) */
   retryWebTransportAfterMs?: number
   handshakeTimeoutMs?: number
-  /** 테스트용: 환경 판별 덮어쓰기 */
+  /** 테스트용: 환경 판별 재정의 */
   hasWebTransport?: boolean
-  /** 테스트 계측: 보낸 프레임 payload(패킹된 PCM 바이트) — e2e 비트퍼펙트 해시 비교용 */
+  /** 테스트 계측: 송신한 프레임 payload(패킹된 PCM 바이트) — e2e 비트퍼펙트 해시 비교용 */
   onFrameSent?: (seq: number, payload: Uint8Array, ts: number) => void
-  /** 테스트 계측: 받은(복원 포함) 프레임 payload */
+  /** 테스트 계측: 수신한(복원 포함) 프레임 payload */
   onFrameReceived?: (peer: number, seq: number, payload: Uint8Array, recovered: 'none' | 'fec' | 'nack') => void
 }
 
@@ -55,7 +55,7 @@ interface PeerPlayback {
   fec: ParityDecoder
   fecOn: boolean
   expected: number | null
-  /** 빠진 seq → 발견 시각 */
+  /** 누락된 seq → 발견 시각 */
   missing: Map<number, number>
   nacked: Set<number>
   stats: PeerReceiveStats
@@ -133,9 +133,9 @@ export class LosslessSession {
     return this.selector?.fallbackReason ?? null
   }
 
-  /* ───────── 참가 / 떠나기 ───────── */
+  /* ───────── 참가 / 퇴장 ───────── */
 
-  /** grant = relay-token 응답(requestRelayGrant). 캡처를 먼저 올리고 전송을 붙인다 */
+  /** grant = relay-token 응답(requestRelayGrant). 캡처를 먼저 기동한 후 전송을 연결한다 */
   async join(grant: RelayGrant): Promise<void> {
     if (this.state !== 'idle' && this.state !== 'closed' && this.state !== 'failed') throw new Error(`cannot join in state ${this.state}`)
     this.closing = false
@@ -210,7 +210,7 @@ export class LosslessSession {
     throw new Error('relay unreachable over WebTransport and WebSocket')
   }
 
-  /** 전송 하나를 열고 welcome 까지 기다린다 */
+  /** 전송 하나를 열고 welcome 수신까지 대기한다 */
   private async connectAs(kind: TransportKind): Promise<void> {
     const grant = this.grant!
     const tr = createTransport(kind, grant)
@@ -237,7 +237,7 @@ export class LosslessSession {
         this.onTransportClosed(tr, reason)
       }
     })
-    welcome.catch(() => { /* connect 가 먼저 실패하면 welcome 타임아웃은 의미 없다 — 처리된 거부로 둔다 */ })
+    welcome.catch(() => { /* connect 가 먼저 실패하면 welcome 타임아웃은 무의미 — 처리 완료된 거부로 간주한다 */ })
     await tr.connect(timeout)
     await welcome
   }
@@ -273,7 +273,7 @@ export class LosslessSession {
     }
   }
 
-  /** WebSocket 으로 떨어져 있는 동안 주기적으로 WebTransport 를 다시 시도한다(되면 갈아탄다) */
+  /** WebSocket 으로 폴백된 동안 주기적으로 WebTransport 를 재시도한다(성공 시 전환) */
   private scheduleWebTransportRetry(): void {
     if (this.retryTimer) clearTimeout(this.retryTimer)
     const sel = this.selector!
@@ -283,7 +283,7 @@ export class LosslessSession {
       if (this.closing || !sel.shouldRetryWebTransport() || this.transport?.kind !== 'websocket') return
       try {
         if (this.opts.refreshGrant) this.grant = await this.opts.refreshGrant()
-        else if (this.grant && Date.now() / 1000 > this.grantIssuedAt + this.grant.expires_in - 5) return // 토큰 만료 — 새 grant 없이는 못 붙는다
+        else if (this.grant && Date.now() / 1000 > this.grantIssuedAt + this.grant.expires_in - 5) return // 토큰 만료 — 새 grant 없이는 접속 불가
         const old = this.transport
         await this.connectAs('webtransport') // onWelcome 이 교체·old close
         sel.recordHandshake('webtransport', 'ok')
@@ -317,10 +317,10 @@ export class LosslessSession {
         noiseSuppression: false,
         autoGainControl: false,
         ...(this.opts.deviceId ? { deviceId: { exact: this.opts.deviceId } } : {}),
-        // latency 는 lib.dom 에 없지만 Chrome 이 받는다(Cleanfeed·ipDTL 도 ideal 0)
+        // latency 는 lib.dom 에 없으나 Chrome 이 허용한다(Cleanfeed·ipDTL 도 ideal 0)
         ...({ latency: { ideal: 0 } } as Record<string, unknown>),
       }
-      // 96 kHz 를 먼저 청한다 — 브라우저가 장치 레이트를 그대로 주는지는 getSettings() 로 확인(미검증 항목)
+      // 96 kHz 를 우선 요청한다 — 브라우저가 장치 레이트를 그대로 반환하는지는 getSettings() 로 확인(미검증 항목)
       stream = await navigator.mediaDevices.getUserMedia({ audio: { ...base, sampleRate: { ideal: want.sampleRate } } })
     }
     this.stream = stream
@@ -344,9 +344,9 @@ export class LosslessSession {
     const fs = calcFrameSamples(streamRate, fmt.frameMs)
     const src = ctx.createMediaStreamSource(stream)
     const node = new AudioWorkletNode(ctx, 'jw-lossless-capture', {
-      // 모노 마이크(헤드셋 대부분)를 2채널 스트림에 실을 때는 'speakers' — 양쪽에 같은 소리(L=R)로 올린다.
-      // 예전엔 늘 'discrete' 라 모자란 채널이 0 으로 채워져, 무손실로 듣는 사람은 왼쪽 귀로만 들었다.
-      // 채널 수가 맞는 장치는 'discrete' 그대로(섞지 않는다 — 비트 그대로).
+      // 모노 마이크(헤드셋 대부분)를 2채널 스트림에 전달할 때는 'speakers' — 양쪽에 동일 신호(L=R)로 업믹스한다.
+      // 기존에는 항상 'discrete' 였으므로 부족한 채널이 0 으로 채워져, 무손실 수신자는 왼쪽 귀로만 들었다.
+      // 채널 수가 일치하는 장치는 'discrete' 유지(믹싱 없음 — 비트 그대로 보존).
       numberOfInputs: 1, numberOfOutputs: 0, channelCount: fmt.channels, channelCountMode: 'explicit',
       channelInterpretation: deviceChannels < fmt.channels ? 'speakers' : 'discrete',
       processorOptions: { frameSamples: fs, channels: fmt.channels },
@@ -360,7 +360,7 @@ export class LosslessSession {
       level: { peak: [], rms: [] },
     }
     if (!bitExact) this.emit({ type: 'warning', code: 'resampled_capture', message: `device ${deviceRate} Hz → context ${streamRate} Hz (resampled, not bit-exact)` })
-    if (ctx.state !== 'running') { try { await ctx.resume() } catch { /* 제스처 필요 — 호출자가 다시 resume */ } }
+    if (ctx.state !== 'running') { try { await ctx.resume() } catch { /* 제스처 필요 — 호출자가 재차 resume */ } }
     this.emit({ type: 'format', format: fmt, capture: this.capture })
   }
 
@@ -380,7 +380,7 @@ export class LosslessSession {
     this.seq = (this.seq + 1) >>> 0
     this.framesSent++
     if (this.muted) {
-      // 무음 프레임: 헤더만(payload 0) + MUTED. seq 가 이어져 수신자가 NACK 을 쏘지 않는다
+      // 무음 프레임: 헤더만(payload 0) + MUTED. seq 가 연속되므로 수신자가 NACK 을 송신하지 않는다
       const pkt = fragment({ ...h, flags: (h.flags ?? 0) | Flag.Muted }, new Uint8Array(0), this.transport.maxDatagram)[0]
       this.send(pkt)
       this.parity.reset()
@@ -420,7 +420,7 @@ export class LosslessSession {
         break
       }
       case Type.Ping:
-        // 릴레이의 RTT 측정 — 같은 경로로 되돌린다
+        // 릴레이의 RTT 측정 — 동일 경로로 반환한다
         pkt[1] = Type.Pong
         if (reliable) tr.sendReliable(pkt)
         else tr.sendUnreliable(pkt)
@@ -516,11 +516,11 @@ export class LosslessSession {
       if (gap > 0 && gap <= 64) for (let s = pb.expected; s < seq; s++) if (!pb.pushed.has(s)) pb.missing.set(s, arrival)
       pb.expected = seq + 1
     }
-    // FEC 가 없으면 바로 NACK; 있으면 그룹이 닫힐 때까지 기다린다(checkMissing)
+    // FEC 가 없으면 즉시 NACK, 있으면 그룹이 닫힐 때까지 대기한다(checkMissing)
     if (!pb.fecOn) this.flushNacks(pb, [...pb.missing.keys()])
   }
 
-  /** FEC 스트림: 그룹이 지나갔는데(다음 그룹 프레임 도착) 아직 못 채운 seq 는 NACK */
+  /** FEC 스트림: 그룹이 경과했는데도(다음 그룹 프레임 도착) 아직 복원되지 않은 seq 는 NACK */
   private checkMissing(pb: PeerPlayback, now: number): void {
     if (pb.missing.size === 0) return
     const due: number[] = []
@@ -530,7 +530,7 @@ export class LosslessSession {
       if (closed || now - at > 2 * pb.format.frameMs * 4) due.push(s)
     }
     this.flushNacks(pb, due)
-    // 1 s 넘게 묵은 항목은 포기
+    // 1 s 넘게 경과한 항목은 포기
     for (const [s, at] of pb.missing) if (now - at > 1000) pb.missing.delete(s)
   }
 
@@ -565,7 +565,7 @@ export class LosslessSession {
       planar = []
       for (let c = 0; c < pb.format.channels; c++) planar.push(new Float32Array(fs))
     } else if (pb.format.codec === 'flac' || pb.format.codec === 'opus') {
-      // 압축 코덱은 아직 디코더가 없다 — 무음으로 자리만 지킨다(2단계: wasm FLAC)
+      // 압축 코덱은 아직 디코더가 없다 — 무음으로 위치만 유지한다(2단계: wasm FLAC)
       planar = []
       for (let c = 0; c < pb.format.channels; c++) planar.push(new Float32Array(fs))
     } else {
@@ -601,7 +601,7 @@ export class LosslessSession {
 
   private createPlayback(peer: number, fmt: LosslessFormat): PeerPlayback {
     const fs = calcFrameSamples(fmt.sampleRate, fmt.frameMs)
-    // 컨텍스트는 비동기로 뜬다 — 그동안 도착한 프레임은 큐에 쌓아 두고 노드가 생기면 흘려보낸다
+    // 컨텍스트는 비동기로 생성된다 — 그동안 도착한 프레임은 큐에 적재하고 노드 생성 후 전달한다
     const pending: unknown[] = []
     const port = { postMessage: (m: unknown, _t?: Transferable[]) => { pending.push(m) } } as unknown as MessagePort
     const pb: PeerPlayback = {
@@ -674,7 +674,7 @@ export class LosslessSession {
     for (const pb of this.playbacks.values()) if (pb.gain) pb.gain.gain.value = deafened ? 0 : 1
   }
 
-  /** 코덱/비트/프레임 길이 변경(샘플레이트는 장치가 정한다). 패리티 그룹은 새로 시작 */
+  /** 코덱/비트/프레임 길이 변경(샘플레이트는 장치가 결정한다). 패리티 그룹은 새로 시작 */
   setFormat(f: Partial<Pick<LosslessFormat, 'codec' | 'bits' | 'frameMs' | 'fec'>>): void {
     this.requested = { ...this.requested, ...f }
     if (f.codec && !f.bits) this.requested.bits = bitsFor(f.codec)

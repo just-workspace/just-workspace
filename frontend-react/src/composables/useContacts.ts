@@ -2,10 +2,10 @@
  * 연락처(모듈 싱글턴 상태 + 동작). 요청 주소·순서·본문 동일.
  *
  * React: const { contacts, selectedContact, scope, scopeLabel, selectScope, ... } = useContacts()
- *   바깥에서 바꾸는 상태는 setter 를 같이 낸다:
+ *   외부에서 변경하는 상태는 setter 를 함께 제공한다:
  *     selectedContact → setSelectedContact(v) · selectedBookId → setSelectedBookId(v) · sortBy → setSortBy(v)
  *     mobileMenuOpen → setMobileMenuOpen(v) · showEditModal → setShowEditModal(v)
- * 컴포넌트 밖: contactsStore.getState(), 또는 아래 동작 함수를 직접 import.
+ * 컴포넌트 외부: contactsStore.getState(), 또는 아래 동작 함수를 직접 import.
  */
 import { createStore, useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
@@ -44,7 +44,7 @@ export interface Contact {
   groups?: string[]
   /** 직함 */
   title?: string | null
-  /** "워크스페이스 사용자" 범위의 행 — 주소록 연락처가 아니라 편집·삭제·즐겨찾기 없음 */
+  /** "워크스페이스 사용자" 범위의 행 — 주소록 연락처가 아니므로 편집·삭제·즐겨찾기 미지원 */
   workspace_user_id?: string
 }
 
@@ -70,7 +70,7 @@ interface WorkspaceUser {
   phone?: string | null
 }
 
-/** 워크스페이스 사용자 → 목록·상세가 그대로 그릴 수 있는 Contact 꼴 */
+/** 워크스페이스 사용자 → 목록·상세에서 그대로 표시 가능한 Contact 형태 */
 export function workspaceUserToContact(u: WorkspaceUser): Contact {
   return {
     id: `ws:${u.id}`,
@@ -94,7 +94,7 @@ export function workspaceUserToContact(u: WorkspaceUser): Contact {
 }
 
 export interface ExternalAccount { id: string; email: string; provider: string }
-/** /api/contacts/suggest 항목 — 워크스페이스 사용자면 user_id 가 있다 */
+/** /api/contacts/suggest 항목 — 워크스페이스 사용자이면 user_id 포함 */
 interface SuggestItem { email: string; name?: string; user_id?: string; username?: string; sources?: string[] }
 
 export interface ContactsState {
@@ -110,13 +110,13 @@ export interface ContactsState {
   loadingContacts: boolean
   showEditModal: boolean
   editingContact: Contact | null
-  /** 목록 불러오기 실패(실패를 "비어 있음"으로 보이지 않게) */
+  /** 목록 조회 실패(실패가 "비어 있음"으로 표시되지 않도록 구분) */
   contactsError: string
-  /** 목록 정렬("이름순 ▾") — 현재 페이지 안에서만 정렬한다(서버는 이름순) */
+  /** 목록 정렬("이름순 ▾") — 현재 페이지 내에서만 정렬한다(서버는 이름순) */
   sortBy: 'name' | 'org'
   /** 모바일 ⋯ 시트(주소록·가져오기·내보내기) */
   mobileMenuOpen: boolean
-  /** 즐겨찾기·워크스페이스 사용자·그룹 범위(주소록 범위는 selectedBookId 가 맡는다) */
+  /** 즐겨찾기·워크스페이스 사용자·그룹 범위(주소록 범위는 selectedBookId 가 담당) */
   scopeKind: 'all' | 'favorite' | 'workspace' | 'group'
   selectedGroup: string | null
   groups: ContactGroup[]
@@ -153,12 +153,12 @@ export const contactsStore = createStore<ContactsState>()(() => initialState())
 const get = () => contactsStore.getState()
 const set = (p: Partial<ContactsState>) => contactsStore.setState(p)
 
-/** 테스트용: 처음 상태로 */
+/** 테스트용: 초기 상태로 복원 */
 export function _resetContactsStore() {
   contactsStore.setState(initialState(), true)
 }
 
-// ─── 바깥에서 바꾸는 상태의 setter ───
+// ─── 외부에서 변경하는 상태의 setter ───
 
 export function setSelectedContact(c: Contact | null) { set({ selectedContact: c }) }
 export function setSelectedBookId(id: string | null) { set({ selectedBookId: id }) }
@@ -172,7 +172,7 @@ export function contactsTotalPages(s: ContactsState = get()) { return Math.ceil(
 export function contactsHasNextPage(s: ContactsState = get()) { return s.currentPage < contactsTotalPages(s) - 1 }
 export function contactsHasPrevPage(s: ContactsState = get()) { return s.currentPage > 0 }
 
-/** 지금 범위 — 사이드바 강조·빵부스러기·모바일 범위 이름 */
+/** 현재 범위 — 사이드바 강조·브레드크럼·모바일 범위 이름 */
 export function contactsScope(s: ContactsState = get()): ContactScope {
   if (s.selectedBookId) return { kind: 'book', id: s.selectedBookId }
   if (s.scopeKind === 'group' && s.selectedGroup) return { kind: 'group', name: s.selectedGroup }
@@ -181,7 +181,7 @@ export function contactsScope(s: ContactsState = get()): ContactScope {
   return { kind: 'all' }
 }
 
-/** 지금 범위 이름(빵부스러기 3단·모바일 범위 줄) */
+/** 현재 범위 이름(브레드크럼 3단·모바일 범위 줄) */
 export function contactsScopeLabel(s: ContactsState = get(), t: (k: string) => string = k => i18n.t(k)): string {
   const sc = contactsScope(s)
   if (sc.kind === 'book') return s.addressBooks.find(b => b.id === sc.id)?.name ?? ''
@@ -205,7 +205,7 @@ export async function fetchAddressBooks() {
   }
 }
 
-// 검색어·범위를 빠르게 바꾸면 늦게 온 이전 응답이 지금 목록을 덮었다 — 마지막 요청만 반영한다
+// 검색어·범위를 빠르게 변경하면 지연 도착한 이전 응답이 현재 목록을 덮어쓰는 문제가 있었음 — 마지막 요청만 반영
 let contactsSeq = 0
 
 export async function fetchContacts() {
@@ -220,7 +220,7 @@ export async function fetchContacts() {
     if (s.searchQuery.trim()) params.q = s.searchQuery.trim()
 
     if (s.scopeKind === 'workspace') {
-      // 워크스페이스 사용자(활성 사용자만) — 같은 페이지 단위로 받는다
+      // 워크스페이스 사용자(활성 사용자만) — 동일 페이지 단위로 수신
       const data = await $fetch<{ users: WorkspaceUser[]; total: number }>('/api/contacts/workspace-users', {
         params: { q: params.q, limit: s.limit, offset: s.currentPage * s.limit },
       })
@@ -248,7 +248,7 @@ export function selectBook(id: string | null) {
   selectScope(id ? { kind: 'book', id } : { kind: 'all' })
 }
 
-/** 사이드바·모바일 시트의 범위 고르기 */
+/** 사이드바·모바일 시트의 범위 선택 */
 export function selectScope(sc: ContactScope) {
   set({
     selectedBookId: sc.kind === 'book' ? sc.id : null,
@@ -265,7 +265,7 @@ export async function fetchGroups() {
   catch { set({ groups: [] }) }
 }
 
-/** 사이드바 개수 — 한 건씩만 받아 total 을 쓴다 */
+/** 사이드바 개수 — 1건만 수신해 total 을 사용 */
 export async function fetchCounts() {
   const one = async (url: string, params: Record<string, any>) => {
     try { return (await $fetch<{ total: number }>(url, { params: { ...params, limit: 1 } })).total }
@@ -279,7 +279,7 @@ export async function fetchCounts() {
   set({ counts: { all, favorite, workspace } })
 }
 
-/** 즐겨찾기 켜고 끄기 — 목록·상세·개수를 바로 고친다 */
+/** 즐겨찾기 전환 — 목록·상세·개수를 즉시 갱신 */
 export async function toggleFavorite(contact: Contact) {
   if (contact.workspace_user_id) return
   const next = !contact.is_favorite
@@ -289,11 +289,11 @@ export async function toggleFavorite(contact: Contact) {
   if (sel?.id === contact.id) set({ selectedContact: { ...sel, is_favorite: next } })
   const counts = get().counts
   if (counts.favorite != null) set({ counts: { ...counts, favorite: counts.favorite + (next ? 1 : -1) } })
-  // 즐겨찾기 범위에서 끄면 목록에서 빠진다
+  // 즐겨찾기 범위에서 해제하면 목록에서 제외됨
   if (get().scopeKind === 'favorite' && !next) await fetchContacts()
 }
 
-/** 연락처 한 건 vCard 내려받기 */
+/** 연락처 1건 vCard 다운로드 */
 export async function exportOneVcard(contact: Contact) {
   await downloadApi(`/api/contacts/${contact.id}/vcard`, `${(contact.name || 'contact').replace(/[\\/:*?"<>|]/g, '_')}.vcf`)
 }
@@ -328,7 +328,7 @@ export async function deleteAddressBook(id: string) {
     await fetchContacts()
   } catch (e: any) {
     console.error('deleteAddressBook error:', e)
-    // 실패를 삼키면 지워진 줄 안다
+    // 실패를 무시하면 사용자가 삭제된 것으로 오인함
     addToast('error', i18n.t('contacts.error.bookDelete', '주소록을 삭제하지 못했습니다'))
   }
 }
@@ -371,11 +371,11 @@ export async function updateContact(id: string, data: Record<string, any>) {
     })
     await fetchContacts()
     if (get().selectedContact?.id === id) {
-      // 상세 갱신 — 범위에서 빠졌으면(그룹·즐겨찾기 해제) 서버에서 다시 받는다
+      // 상세 갱신 — 범위에서 제외된 경우(그룹·즐겨찾기 해제) 서버에서 재조회
       const updated = get().contacts.find(c => c.id === id)
       if (updated) set({ selectedContact: updated })
       else {
-        try { set({ selectedContact: await $fetch<Contact>(`/api/contacts/${id}`) }) } catch { /* 그대로 */ }
+        try { set({ selectedContact: await $fetch<Contact>(`/api/contacts/${id}`) }) } catch { /* 현재 값 유지 */ }
       }
     }
     if ('groups' in data) fetchGroups()
@@ -422,7 +422,7 @@ export async function syncExternalAccount(acc: ExternalAccount) {
   return r
 }
 
-/** vCard 가져오기 — 선택한 주소록(없으면 첫 주소록)으로. 주소록이 없으면 null */
+/** vCard 가져오기 — 선택한 주소록(없으면 첫 주소록)으로 저장. 주소록이 없으면 null */
 export async function importVcf(file: File): Promise<{ imported: number } | null> {
   const bookId = get().selectedBookId || get().addressBooks[0]?.id
   if (!bookId) return null
@@ -438,7 +438,7 @@ export async function importVcf(file: File): Promise<{ imported: number } | null
   return r
 }
 
-/** vCard 내보내기 — 선택한 주소록(없으면 첫 주소록). 브라우저 다운로드로 넘긴다 */
+/** vCard 내보내기 — 선택한 주소록(없으면 첫 주소록). 브라우저 다운로드로 위임 */
 export function exportVcf(): boolean {
   const bookId = get().selectedBookId || get().addressBooks[0]?.id
   if (!bookId) return false
@@ -451,7 +451,7 @@ export function exportVcf(): boolean {
   return true
 }
 
-/** 이메일이 워크스페이스 사용자면 그 user_id(채팅·통화 행동 줄 활성 조건) */
+/** 이메일이 워크스페이스 사용자의 것이면 해당 user_id(채팅·통화 동작 줄 활성화 조건) */
 export async function findWorkspaceUserId(email: string): Promise<string | null> {
   const e = email.trim().toLowerCase()
   if (!e) return null
@@ -479,7 +479,7 @@ export async function prevPage() {
   }
 }
 
-/** hook 이 돌려주는 동작 — 모듈 함수 그대로(참조 고정) */
+/** hook 이 반환하는 동작 — 모듈 함수 그대로(참조 고정) */
 const actions = {
   setSelectedContact,
   setSelectedBookId,

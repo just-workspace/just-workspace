@@ -1,5 +1,5 @@
-// 알림 권한 배너(채팅 시안 — 대화 위). 첫 메시지를 보낸 뒤에만 뜨고, 브라우저 프롬프트는
-// "알림 켜기"를 눌렀을 때만 나간다. "나중에"는 7일 동안 다시 묻지 않는다.
+// 알림 권한 배너(채팅 시안 — 대화 위). 첫 메시지 전송 후에만 표시되며, 브라우저 프롬프트는
+// "알림 켜기"를 누른 경우에만 호출한다. "나중에"는 7일간 다시 묻지 않는다.
 import { useStore } from 'zustand'
 import { useI18n } from '~/i18n'
 import { acceptNotifyBanner, chatStore, snoozeNotifyBanner } from '~/composables/useChat'

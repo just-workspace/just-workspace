@@ -1,12 +1,12 @@
 /**
  * 역할 편집(모바일 #m-role-edit).
- * 머리: 색 점 + "역할 편집 — 이름" 16/600 (+ 그룹 연결이면 "○○ 그룹에서 자동" 배지).
- * 탭(밑줄형 14/500, 선택 = 2px primary 밑줄): 표시 · 권한 · 멤버 N. @everyone 은 권한만(서버가 권한만 받는다).
+ * 헤더: 색 점 + "역할 편집 — 이름" 16/600 (+ 그룹 연결이면 "○○ 그룹에서 자동" 배지).
+ * 탭(밑줄형 14/500, 선택 = 2px primary 밑줄): 표시 · 권한 · 멤버 N. @everyone 은 권한만(서버가 권한만 수신한다).
  *  - 표시: 이름 · 색(UiColorSwatches, 값 = 서버 토큰 키) + 배경/카드 위 미리보기 · 따로 묶기(hoist) · 멘션 허용 ·
- *    "그룹과 연결"(연결하면 멤버 탭 잠김) · 역할 삭제(확인).
+ *    "그룹과 연결"(연결 시 멤버 탭 잠금) · 역할 삭제(확인).
  *  - 권한: 찾기 + 권한 초기화 + PermissionMatrix.
- *  - 멤버: 찾기 + 멤버 추가(사람 고르기 창) · 행 48(아바타 32 · 이름 14 · 빼기 ✕) — 그룹 연결·잠김이면 "그룹에서 자동".
- * 초안(draft)은 RolesSection 이 가진다 — 여기는 그리기와 즉시 동작(멤버 추가·빼기·삭제)만.
+ *  - 멤버: 찾기 + 멤버 추가(사용자 선택 창) · 행 48(아바타 32 · 이름 14 · 제외 ✕) — 그룹 연결·잠금이면 "그룹에서 자동".
+ * 초안(draft)은 RolesSection 이 보유한다 — 본 컴포넌트는 렌더링과 즉시 동작(멤버 추가·제외·삭제)만 담당한다.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useStore } from 'zustand'
@@ -292,10 +292,10 @@ function MembersTab({ role, locked, managed, mobile }: { role: ChatRole; locked:
   )
 }
 
-/** 사람 고르기 창 — 워크스페이스 사용자 검색 · 행을 누르면 바로 추가(창은 열린 채) */
+/** 사용자 선택 창 — 워크스페이스 사용자 검색 · 행을 누르면 즉시 추가(창은 열린 상태 유지) */
 export function UserPicker({ title, exclude, onPick, onClose, extra }: {
   title: string; exclude: Set<string>; onPick: (userId: string) => void; onClose: () => void
-  /** 사람 목록 위 추가 항목(덮어쓰기 대상 고르기 — 역할) */
+  /** 사용자 목록 위 추가 항목(덮어쓰기 대상 선택 — 역할) */
   extra?: (q: string) => React.ReactNode
 }) {
   const { t } = useI18n()

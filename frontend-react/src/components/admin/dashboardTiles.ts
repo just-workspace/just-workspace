@@ -62,7 +62,7 @@ export function buildOpsTiles(o: AdminOps, t: T, today = new Date()): OpsTile[] 
     },
     {
       key: t('admin.dashboard.tileSsl'), icon: 'shield', action: t('admin.dashboard.actionRenew'), to: '/admin/security',
-      // 서버가 인증서를 못 읽으면(헤어핀 NAT 없이 공개 주소 접속 실패 등) "확인 불가" — 만료로 오해하지 않게 중립색
+      // 서버가 인증서를 읽지 못하면(헤어핀 NAT 없이 공개 주소 접속 실패 등) "확인 불가" — 만료로 오인하지 않도록 중립색 사용
       value: !s ? (o.loaded ? failed : '…') : s.unknown || sslDays == null ? t('admin.dashboard.sslUnknown')
         : sslDays < 0 ? t('admin.common.expired')
           : t('admin.dashboard.sslDays', { d: sslDays, date: mmdd(s.notAfter!) }),
@@ -78,7 +78,7 @@ export function buildOpsTiles(o: AdminOps, t: T, today = new Date()): OpsTile[] 
   ]
 }
 
-/** 서비스 한 줄 상태 점·글자. 응답이 latencyWarnMs 를 넘으면 "느림" */
+/** 서비스 한 줄의 상태 점·글자. 응답이 latencyWarnMs 를 초과하면 "느림" */
 export function svcState(s: { status: string; response_ms: number | null }, latencyWarnMs: number, t: T): { dot: string; label: string } {
   if (s.status === 'down') return { dot: 'down', label: t('admin.svc.down') }
   if (s.status !== 'ok') return { dot: 'connecting', label: t('admin.svc.checking') }
@@ -86,7 +86,7 @@ export function svcState(s: { status: string; response_ms: number | null }, late
   return { dot: 'ok', label: t('admin.svc.ok') }
 }
 
-/** 관리 설정 system.latency_warn_ms(양수) — 없거나 이상하면 800 */
+/** 관리 설정 system.latency_warn_ms(양수) — 없거나 유효하지 않으면 800 */
 export function latencyWarnMsOf(config: Record<string, string> | null | undefined): number {
   const v = Number((config?.['system.latency_warn_ms'] ?? '').trim())
   return Number.isFinite(v) && v > 0 ? v : 800

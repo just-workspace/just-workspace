@@ -1,6 +1,6 @@
 /**
  * 관리 개요 › 최근 로그인 카드.
- * 최근 10건: 이름 · 가린 IP(a.b.x.x) · 상대 시각.
+ * 최근 10건: 이름 · 마스킹한 IP(a.b.x.x) · 상대 시각.
  */
 import { useI18n } from '~/i18n'
 import { UiEmptyState } from '~/components/ui/EmptyState'
@@ -8,7 +8,7 @@ import type { RecentLogin } from '~/composables/useAdminAnalytics'
 import { analyticsTimeAgo, maskIp } from './analyticsFormat'
 
 export interface AdminAnalyticsRecentLoginsProps {
-  /** GET /api/admin/analytics/recent-logins 결과(앞 10건만 그림) */
+  /** GET /api/admin/analytics/recent-logins 결과(앞 10건만 표시) */
   data: RecentLogin[]
 }
 

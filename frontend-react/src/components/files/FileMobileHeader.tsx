@@ -2,7 +2,7 @@
  * 모바일 상단:
  * ‹ 상위 폴더(44) · 폴더 이름 16/600 + 위치 12 muted · 검색(44) · ⋯ 보기·정렬(44).
  * 선택 모드: ‹ 선택 해제 · "N개 선택됨" · "전체 선택"(primary 14/600).
- * 검색: 돋보기를 누르면 같은 줄이 입력창으로 바뀐다(시안에 그림 없음 — 공통 규격 검색 입력).
+ * 검색: 돋보기를 누르면 동일 줄이 입력창으로 전환된다(시안에 그림 없음 — 공통 규격 검색 입력).
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -43,7 +43,7 @@ export function FilesFileMobileHeader({ onOpenViewSheet }: FilesFileMobileHeader
   useEffect(() => {
     if (firstA.current) { firstA.current = false; return }
     if (!searchActive && !searching) setQ('')
-    // 검색 결과가 떠 있다가 밖에서 닫혔다(경로 이동 등) — 검색 칸에 옛 검색어가 남지 않게 같이 닫는다
+    // 검색 결과 표시 중 외부에서 닫힌 경우(경로 이동 등) — 검색 입력에 이전 검색어가 남지 않도록 함께 닫는다
     else if (!searchActive && q.trim()) { if (timer.current) clearTimeout(timer.current); setSearching(false); setQ('') }
   }, [searchActive]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
@@ -92,7 +92,7 @@ export function FilesFileMobileHeader({ onOpenViewSheet }: FilesFileMobileHeader
             </>
           )
           : (
-            // 보통
+            // 기본 모드
             <>
               {parentPath
                 ? <UiIconButton label={t('files.mobile.parentFolder')} icon="chevron-left" size="lg" className={backCls} onClick={() => navigateTo(parentPath)} />

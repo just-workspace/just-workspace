@@ -1,5 +1,5 @@
 /**
- * 카드 본문: p-5 pt-0(머리 아래에 붙는다).
+ * 카드 본문: p-5 pt-0(머리 바로 아래에 밀착).
  */
 import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from '~/lib/utils'

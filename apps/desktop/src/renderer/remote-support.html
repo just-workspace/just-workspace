@@ -48,7 +48,7 @@
     <button class="icon-btn" id="close" aria-label="닫기" title="닫기"><span class="icon" data-icon="close"></span></button>
   </div>
 
-  <!-- 서버 주소(빌드에 구운 주소가 없을 때만) -->
+  <!-- 서버 주소(빌드에 내장된 주소가 없는 경우에만 표시) -->
   <section id="v-server" hidden>
     <span class="label"><span class="icon" data-icon="lock"></span>워크스페이스 주소</span>
     <p class="note" style="margin:0">지원해 줄 회사의 워크스페이스 주소를 넣으세요.</p>
@@ -80,7 +80,7 @@
     <span class="small bottom">새 코드를 받으면 이전 코드로는 접속할 수 없습니다.</span>
   </section>
 
-  <!-- ② 요청 도착(동의 창은 따로 맨 위에 뜬다) -->
+  <!-- ② 요청 도착(동의 창은 별도로 최상위에 표시) -->
   <section id="v-pending" hidden>
     <span class="badge warning" id="pend-badge">응답 대기 0:30</span>
     <span class="h">접속 요청이 왔습니다</span>
@@ -114,7 +114,7 @@
     <button class="btn danger lg bottom" id="active-stop"><span class="icon" data-icon="log-out"></span>세션 끊기</button>
   </section>
 
-  <!-- ④ 종료(거부 포함) — 코드는 이미 폐기됐다. 새 코드는 없다: 다시 받으려면 프로그램을 새로 실행 -->
+  <!-- ④ 종료(거부 포함) — 코드는 이미 폐기된 상태. 새 코드 미발급: 재발급에는 프로그램 재실행 필요 -->
   <section id="v-ended" class="center" hidden>
     <span class="icon ok-icon" id="end-icon" data-icon="check-circle"></span>
     <span class="h" id="end-title">원격 지원이 끝났습니다</span>

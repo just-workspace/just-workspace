@@ -1,5 +1,5 @@
 // 키트 — UiTextarea autoGrow + maxRows(프롬프트 입력)
-// 높이 = 내용(1~maxRows 줄), 포커스와 무관 — 포커스만으로 maxRows 까지 펼치지 않는다. 비면 1줄.
+// 높이 = 내용(1~maxRows 줄), 포커스와 무관 — 포커스만으로 maxRows 까지 확장하지 않는다. 비어 있으면 1줄.
 import { describe, it, expect, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 
@@ -22,7 +22,7 @@ describe('UiTextarea autoGrow', () => {
     expect(ta.dataset.expanded).toBe('false')
     fireEvent.blur(ta)
     expect(ta.style.height).toBe('44px')
-    // 포커스·블러 콜백은 그대로 넘어간다
+    // 포커스·블러 콜백은 그대로 전달됨
     expect(onFocus).toHaveBeenCalledTimes(1)
     expect(onBlur).toHaveBeenCalledTimes(1)
   })
@@ -44,7 +44,7 @@ describe('UiTextarea autoGrow', () => {
     fireEvent.change(ta, { target: { value: '한 줄\n두 줄\n세 줄\n네 줄\n다섯\n여섯\n일곱\n여덟' } })
     expect(ta.style.height).toBe('144px')
     expect(ta.style.overflowY).toBe('auto')
-    // 다 지우면 1줄
+    // 전부 삭제하면 1줄
     setScrollHeight(ta, 42)
     fireEvent.change(ta, { target: { value: '' } })
     expect(ta.style.height).toBe('44px')

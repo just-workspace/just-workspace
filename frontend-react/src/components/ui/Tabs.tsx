@@ -2,10 +2,10 @@
  * 탭: 밑줄형 40(상세 패널은 안쪽 36), 선택 = 글자 600 + 2px primary 밑줄, 카운트 mono,
  * ←→ 이동, 모바일은 가로 스크롤 + 선택 탭이 보이도록 자동 스크롤. 포커스는 inset ring.
  * 항목에 to 가 있으면 라우터 링크(설정·관리 탭), 없으면 modelValue/onUpdateModelValue로 전환.
- * to 탭의 선택 판정: 기본은 경로 앞부분 일치(/a 는 /a/b 에서도 선택). exact(부품 전체 또는 항목별)면 경로가 같을 때만.
- * 정확 일치 탭이 하위 경로 일부에서도 선택돼야 하면 activeOn 에 그 앞부분들을 준다(Git 코드 탭 = 루트 + /tree·/blob).
- * to 의 ?쿼리·#해시는 판정에서 뺀다(이동할 때는 그대로 붙는다).
- * 라우터 안에서만 쓴다(useRoute).
+ * to 탭의 선택 판정: 기본은 경로 접두 일치(/a 는 /a/b 에서도 선택). exact(컴포넌트 전체 또는 항목별)이면 경로가 동일할 때만 선택.
+ * 정확 일치 탭이 일부 하위 경로에서도 선택되어야 하면 activeOn 에 해당 접두 경로를 지정한다(Git 코드 탭 = 루트 + /tree·/blob).
+ * to 의 ?쿼리·#해시는 판정에서 제외한다(이동 시에는 그대로 포함된다).
+ * 라우터 내부에서만 사용한다(useRoute).
  */
 import { useEffect, useRef, type HTMLAttributes, type KeyboardEvent, type ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -23,16 +23,16 @@ export interface TabItem {
   to?: string
   /** 앞 아이콘 */
   icon?: string
-  /** to 탭: 경로가 같을 때만 선택(부품 exact 보다 우선) */
+  /** to 탭: 경로가 동일할 때만 선택(컴포넌트 exact 보다 우선) */
   exact?: boolean
-  /** to 탭: 이 앞부분들로 시작하는 경로에서도 선택 */
+  /** to 탭: 지정한 접두 경로로 시작하는 경로에서도 선택 */
   activeOn?: string[]
 }
 
 export interface UiTabsProps extends Omit<HTMLAttributes<HTMLDivElement>, 'role'> {
-  /** 고른 탭 key(to 없는 탭) */
+  /** 선택된 탭 key(to 없는 탭) */
   modelValue?: string | null
-  /** 탭 바뀜 */
+  /** 탭 변경 */
   onUpdateModelValue?: (v: string | null) => void
   /** 탭 목록(필수) */
   items: TabItem[]
@@ -84,7 +84,7 @@ export function UiTabs({ modelValue, onUpdateModelValue, items, size = 'md', ari
     listRef.current?.querySelectorAll<HTMLElement>('[role=tab]')[j]?.focus()
   }
 
-  // 선택 탭이 보이도록 자동 스크롤(모바일 가로 스크롤) — 처음 + 선택 탭이 바뀔 때
+  // 선택 탭이 보이도록 자동 스크롤(모바일 가로 스크롤) — 최초 및 선택 탭 변경 시
   const activeKey = items.find(isActive)?.key
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })

@@ -1,7 +1,7 @@
 /**
- * 라디오: 18 원, 선택 = inset ring 1.5 primary + 안쪽 9px 점. 네이티브 input 유지(그룹은 같은 name).
- * 그룹의 각 라디오에 같은 modelValue/onUpdateModelValue 와 자기 value 를 준다.
- * className 은 바깥 <label> 에, 나머지 속성은 안쪽 <input> 에. ref 는 안쪽 <input>.
+ * 라디오: 18 원, 선택 = inset ring 1.5 primary + 안쪽 9px 점. 네이티브 input 유지(그룹은 동일 name).
+ * 그룹의 각 라디오에 동일한 modelValue/onUpdateModelValue 와 개별 value 를 전달한다.
+ * className 은 외부 <label> 에, 나머지 속성은 내부 <input> 에 적용된다. ref 는 내부 <input>.
  */
 import type { ChangeEvent, InputHTMLAttributes, ReactNode, Ref } from 'react'
 import { cn } from '~/lib/utils'
@@ -10,22 +10,22 @@ import { useModel, useUid } from './internal'
 type RadioValue = string | number | boolean
 
 export interface UiRadioProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'checked' | 'defaultChecked' | 'name' | 'disabled'> {
-  /** 그룹에서 고른 값 */
+  /** 그룹에서 선택된 값 */
   modelValue?: RadioValue | null
-  /** 이 라디오를 골랐을 때 — 이 라디오의 value 로 불린다 */
+  /** 본 라디오 선택 시 — 본 라디오의 value 로 호출 */
   onUpdateModelValue?: (v: RadioValue | null) => void
   /** 이 라디오의 값(필수) */
   value: RadioValue
   /** 그룹 이름(같은 name) */
   name?: string
-  /** input id. 없으면 자동 */
+  /** input id. 미지정 시 자동 생성 */
   id?: string
-  /** 옆 글자(children 이 있으면 그쪽) */
+  /** 인접 라벨 글자(children 이 있으면 children 우선) */
   label?: string
-  /** 아래 보조 글 */
+  /** 하단 보조 글 */
   description?: string
   disabled?: boolean
-  /** 라벨 자리 내용(label 대신) */
+  /** 라벨 영역 내용(label 대체) */
   children?: ReactNode
   /** 안쪽 <input> */
   ref?: Ref<HTMLInputElement>

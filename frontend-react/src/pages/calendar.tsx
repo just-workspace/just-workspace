@@ -1,10 +1,10 @@
 /**
  * 캘린더
  * 데스크톱: 사이드바 236(bg-card) + 커맨드 바 44(오늘 · ‹ › · 기간 15/600 … 일/주/월/일정 세그먼트 · ⋯).
- * 모바일(<md): 사이드바 대신 FAB(새 일정) + ⋯ 시트(캘린더 목록), 보기 세그먼트 일정/월/주, 월 날짜 탭 = 그날 시트.
+ * 모바일(<md): 사이드바 대신 FAB(새 일정) + ⋯ 시트(캘린더 목록), 보기 세그먼트 일정/월/주, 월 날짜 탭 = 해당 날짜 시트.
  * 시간대 불일치 띠: 상단바 바로 아래·툴바 위 warning 틴트 h-44, [기기 시간대로 바꾸기](outline) · [○○ 그대로](ghost, = 닫기).
- *   툴바 오른쪽에 지금 시간대 mono 표시(항상).
- * 오류는 그리드를 지우지 않고 커맨드 바 아래 동기화 오류 띠 40. 빈 상태는 일정 목록·날짜 시트에서만.
+ *   툴바 오른쪽에 현재 시간대 mono 표시(항상).
+ * 오류 시 그리드를 제거하지 않고 커맨드 바 아래 동기화 오류 띠 40 표시. 빈 상태는 일정 목록·날짜 시트에서만 표시.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -46,11 +46,11 @@ import { CalendarIcsModal } from '~/components/calendar/CalendarIcsModal'
 export default function CalendarPage() {
   const { t, tm, rt, locale } = useI18n()
   const { appName } = useSiteConfig()
-  // 데스크톱 셸(Electron)이 nav=shell 로 범위 열(미니 달력·캘린더 목록)을 가져가면 사이드바를 그리지 않는다.
+  // 데스크톱 셸(Electron)이 nav=shell 로 범위 열(미니 달력·캘린더 목록)을 담당하면 사이드바를 렌더링하지 않는다.
   const { navOwnedByShell } = useDesktopShell()
   const isMobile = useIsMobile()
   const pageRoute = useRoute()
-  // 비동기 처리(마운트 뒤 await)에서 "지금" 라우트를 읽는다
+  // 비동기 처리(마운트 후 await)에서 "현재" 라우트를 조회한다
   const routeRef = useRef<RouteLocation>(pageRoute)
   routeRef.current = pageRoute
   useHead({ title: `${t('nav.calendar')} | ${appName}` })
@@ -79,7 +79,7 @@ export default function CalendarPage() {
     void navigateTo({ query: { ...routeRef.current.query, event: undefined } }, { replace: true })
   }
 
-  // 설정 › 캘린더 "기본 보기"(앱을 연 뒤 처음 한 번)
+  // 설정 › 캘린더 "기본 보기"(앱 실행 후 최초 1회 적용)
   const { prefs } = useUserPrefs()
   const defaultViewRef = useRef(prefs.calendarDefaultView)
   useLayoutEffect(() => { applyDefaultViewOnce(defaultViewRef.current, isMobile) }, [isMobile])
@@ -113,21 +113,21 @@ export default function CalendarPage() {
     if (qDate) openDateFromQuery()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qDate])
-  // 이미 캘린더에 있을 때 알림을 눌러도 열리게
+  // 이미 캘린더 화면에 있을 때 알림을 눌러도 열리도록 함
   useEffect(() => {
     if (firstQ.current.event) { firstQ.current.event = false; return }
     if (qEvent) void openEventFromQuery()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qEvent])
 
-  // watch(selectedDate) → 다시 받기
+  // watch(selectedDate) → 재조회
   const firstSel = useRef(true)
   useEffect(() => {
     if (firstSel.current) { firstSel.current = false; return }
     void fetchEvents()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate])
-  // 화면 폭이 바뀌면 모바일 전용 시트는 닫는다
+  // 화면 폭이 변경되면 모바일 전용 시트를 닫는다
   const firstMob = useRef(true)
   useEffect(() => {
     if (firstMob.current) { firstMob.current = false; return }
@@ -145,7 +145,7 @@ export default function CalendarPage() {
   useEffect(() => () => { closePopover(); closeDaySheet() }, [])
 
   // ── 동기화 오류 띠 ──
-  // 닫으면 다음 오류까지 숨긴다. 일정 API 는 캘린더를 한꺼번에 받으므로 어느 캘린더인지는 가르지 않는다.
+  // 닫으면 다음 오류 발생 시까지 숨긴다. 일정 API 는 캘린더를 일괄 수신하므로 어느 캘린더의 오류인지는 구분하지 않는다.
   const [syncBandHidden, setSyncBandHidden] = useState(false)
   useEffect(() => { if (eventsError) setSyncBandHidden(false) }, [eventsError])
   const lastSyncText = lastSyncedAt ? fmtTime(lastSyncedAt) : ''
@@ -156,7 +156,7 @@ export default function CalendarPage() {
   // ── 시간대 불일치 띠 ──
   const deviceTz = browserTimeZone()
   const prefTz = prefs.timezone || ''
-  // 캘린더가 실제로 쓰는 시간대(설정, 비었거나 잘못됐으면 기기) — 화면 전체가 이 기준(utils/calTz)
+  // 캘린더가 실제 사용하는 시간대(설정값, 비어 있거나 잘못된 경우 기기 시간대) — 화면 전체가 이 기준(utils/calTz)
   const shownTz = calendarZone()
   const [tzKeptNow, setTzKeptNow] = useState('')
   const tzBand = shownTz === prefTz && tzMismatch(prefTz, deviceTz) && tzKeptNow !== `${prefTz}|${deviceTz}` && !tzBandKept(prefTz, deviceTz)
@@ -209,7 +209,7 @@ export default function CalendarPage() {
     openCreateModal(zAtTime(calendarStore.getState().selectedDate, 9))
   }
 
-  // 단축키: T = 오늘(일정 편집 E·삭제 Del·닫기 Esc 는 팝오버가 맡는다)
+  // 단축키: T = 오늘(일정 편집 E·삭제 Del·닫기 Esc 는 팝오버가 처리한다)
   usePageShortcuts(t('nav.calendar'), [
     { keys: ['T'], label: t('calendar.shortcuts.today') },
     { keys: ['E'], label: t('calendar.shortcuts.edit') },
@@ -242,7 +242,7 @@ export default function CalendarPage() {
             }}
             values={{ city: tzPlace(prefTz, locale) }}
           />
-          {/* 띠 버튼은 한 줄 말줄임, 전체 문구는 툴팁(표에 없는 시간대는 "Almaty (UTC+5) 그대로"처럼 길어진다) */}
+          {/* 띠 버튼은 한 줄 말줄임, 전체 문구는 툴팁으로 표시(표에 없는 시간대는 "Almaty (UTC+5) 그대로"처럼 길어진다) */}
           {[
             { key: 'device', variant: 'outline' as const, onClick: switchToDeviceTz, text: t('calendar.tzBand.useDevice', { city: tzPlace(deviceTz, locale), ro: roParticle(tzPlace(deviceTz, locale)) }) },
             { key: 'keep', variant: 'ghost' as const, onClick: keepPrefTz, text: t('calendar.tzBand.keep', { city: tzPlace(prefTz, locale) }) },
@@ -254,7 +254,7 @@ export default function CalendarPage() {
         </div>
       )}
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
-      {/* 사이드바 236 (데스크톱만, 셸이 가져가면 생략) */}
+      {/* 사이드바 236 (데스크톱만, 셸이 담당하면 생략) */}
       {!navOwnedByShell && (
         <aside className="hidden w-[236px] shrink-0 overflow-y-auto border-r border-border bg-card md:block">
           <CalendarSidebar />
@@ -286,7 +286,7 @@ export default function CalendarPage() {
           <UiIconButton label={t('calendar.mobile.menu')} icon="more-horizontal" size="lg" noTooltip onClick={() => setMobileMenuOpen(true)} />
         </div>
 
-        {/* 동기화 오류 띠 40(D4b) — 그리드는 그대로 둔다 */}
+        {/* 동기화 오류 띠 40(D4b) — 그리드는 그대로 유지 */}
         {eventsError && !syncBandHidden && (
           <div
             role="alert"
@@ -329,7 +329,7 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* 모바일 FAB(새 일정) — 날짜 시트가 열려 있으면 시트 안 [+ 새 일정]이 대신한다 */}
+      {/* 모바일 FAB(새 일정) — 날짜 시트가 열려 있으면 시트 안 [+ 새 일정]이 대체한다 */}
       {!sheetDate && <UiFab label={t('calendar.event.newButton')} onClick={newEventFromFab} />}
 
       <CalendarEventPopover />

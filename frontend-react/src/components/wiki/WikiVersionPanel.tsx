@@ -13,7 +13,7 @@ import { UiEmptyState } from '~/components/ui/EmptyState'
 export interface WikiVersionPanelProps {
   versions: WikiPageVersion[]
   selectedNumber: number | null
-  /** version_number → 바로 앞 버전 대비 단어 수 */
+  /** version_number → 직전 버전 대비 단어 수 */
   stats: Record<number, { added: number; removed: number }>
   loading?: boolean
   mobile?: boolean

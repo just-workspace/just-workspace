@@ -1,9 +1,9 @@
 /**
- * 카테고리 ⋯ 메뉴(항목·순서·단축키 글자 그대로).
+ * 카테고리 ⋯ 메뉴(항목·순서·단축키 표기 그대로).
  *  사용자 카테고리(MANAGE_CHANNELS): 채널 만들기 · 이름 바꾸기 F2 · 카테고리 권한 · 알림 설정 › | 위로 옮기기 Alt ↑ · 아래로 옮기기 Alt ↓ · 모두 접기 | 카테고리 삭제
- *  시스템 "보관된 프로젝트": 이름 바꾸기 · 카테고리 권한 · 알림 설정 › | 모두 접기 (삭제·옮기기 없음)
+ *  시스템 "보관된 프로젝트": 이름 바꾸기 · 카테고리 권한 · 알림 설정 › | 모두 접기 (삭제·이동 없음)
  *  권한 없음: 알림 설정 › · 모두 접기
- * 알림 설정 › = 안의 채널 전부에 음소거 기간(채널 메뉴와 같은 6개) + 알림 켜기. 카테고리 권한 = 채팅 설정 category-perm.
+ * 알림 설정 › = 포함된 채널 전체에 음소거 기간(채널 메뉴와 동일한 6개) + 알림 켜기. 카테고리 권한 = 채팅 설정 category-perm.
  */
 import { useI18n } from '~/i18n'
 import { openChatSettings } from '~/composables/useChatUi'
@@ -16,7 +16,7 @@ export interface ChatCategoryMenuProps {
   section: SidebarSection
   anchor: DOMRect | HTMLElement
   canManage: boolean
-  /** 위·아래로 옮길 수 있나(사용자 카테고리 목록 끝이면 false) */
+  /** 위·아래 이동 가능 여부(사용자 카테고리 목록 끝이면 false) */
   canUp: boolean
   canDown: boolean
   onClose: () => void

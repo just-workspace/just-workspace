@@ -1,12 +1,12 @@
 /**
- * 채팅 설정 — 채팅 안 전체 화면. useChatUi.settings 가 있으면 pages/chat 이 띄운다.
+ * 채팅 설정 — 채팅 내 전체 화면. useChatUi.settings 가 있으면 pages/chat 이 표시한다.
  * 데스크톱: 왼쪽 메뉴 300(안쪽 200, 오른쪽 정렬, card) + 본문(px 40 · py 40, 최대 860) — 닫기 ✕(ESC).
  *   메뉴: "<채팅 이름> · 채팅" 개요 · 역할 · 카테고리·채널 권한 · 커스텀 이모지 · 알림 기본값 · (전역 관리자) 서버 전역 정책 |
  *   "내 설정" 프로필 · 음성 · 메시지 표시 · 알림.
  * 섹션: 'overview' | 'roles' | 'channel-perm'(targetId=채널) | 'category-perm'(targetId=카테고리) | 'emoji' | 'notify-default' |
  *   'policy' | 'profile' | 'voice' | 'display' | 'notify'.
- * 저장 안 된 변경(역할 편집)이 있으면 다른 섹션으로 가려 할 때 띠를 흔들고, 닫기(✕·Esc)는 확인 대화 상자.
- * 모바일: 한 화면씩 — 섹션 목록 → 섹션(→ 편집). 열 때 섹션을 주면 바로 그 섹션.
+ * 미저장 변경(역할 편집)이 있으면 다른 섹션으로 이동 시도 시 바를 흔들고, 닫기(✕·Esc)는 확인 대화 상자를 표시한다.
+ * 모바일: 한 화면씩 — 섹션 목록 → 섹션(→ 편집). 열 때 섹션을 지정하면 해당 섹션으로 바로 진입한다.
  */
 import { useEffect, useState } from 'react'
 import { useStore } from 'zustand'
@@ -37,7 +37,7 @@ import { DisplaySection, NotifySection, ProfileSection } from './MySections'
 type NavKey = SettingsSection
 interface NavItem { key: NavKey; label: string }
 
-/** 저장 안 된 변경이 있으면 묻고 닫는다 */
+/** 미저장 변경이 있으면 확인 후 닫는다 */
 export async function closeSettingsGuarded(t: (k: string) => string, onClose: () => void = closeChatSettings): Promise<boolean> {
   if (settingsUiStore.getState().dirty) {
     const ok = await confirmBox(t('chat.settings.dirty.closeConfirm'), { confirmLabel: t('chat.settings.dirty.closeDiscard'), danger: true })
@@ -56,10 +56,10 @@ export function ChatSettingsScreen({ onClose }: { onClose?: () => void } = {}) {
   const isAdmin = useStore(authStore, s => !!s.user?.is_admin)
   const section = normalizeSection(settings?.section)
   const targetId = settings?.targetId ?? null
-  // 모바일: 섹션 목록(null) ↔ 섹션 — 열 때 섹션을 줬으면 그 섹션부터
+  // 모바일: 섹션 목록(null) ↔ 섹션 — 열 때 섹션이 지정되었으면 해당 섹션부터
   const [mobileMenu, setMobileMenu] = useState(false)
 
-  // 데이터 — 열 때 한 번
+  // 데이터 — 열 때 1회 로드
   useEffect(() => {
     if (!settings) return
     void loadRoles(true)
@@ -71,7 +71,7 @@ export function ChatSettingsScreen({ onClose }: { onClose?: () => void } = {}) {
     if (!chatStore.getState().allUsers.length) void fetchAllUsers()
   }, [!!settings]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 모바일 탭바 숨기기
+  // 모바일 탭바 숨김
   useEffect(() => {
     if (!settings || !isMobile) return
     const prev = getSharedState<boolean>('mobile-detail-open', () => false)
@@ -81,7 +81,7 @@ export function ChatSettingsScreen({ onClose }: { onClose?: () => void } = {}) {
 
   const close = () => { void closeSettingsGuarded(t, onClose ?? closeChatSettings) }
 
-  // Esc = 닫기(다른 대화 상자·키 기록 중이면 그쪽이 먼저)
+  // Esc = 닫기(다른 대화 상자·키 기록 중이면 해당 처리가 우선)
   useEffect(() => {
     if (!settings) return
     function onKey(e: KeyboardEvent) {
@@ -111,7 +111,7 @@ export function ChatSettingsScreen({ onClose }: { onClose?: () => void } = {}) {
     { key: 'notify', label: t('chat.settings.nav.notify') },
   ]
   const selNav: NavKey = section === 'category-perm' ? 'channel-perm' : section
-  /** 계정·보안·연결 등 워크스페이스 전체 사용자 설정 — 채팅 밖 /settings */
+  /** 계정·보안·연결 등 워크스페이스 전체 사용자 설정 — 채팅 외부 /settings */
   function openWorkspaceSettings() {
     if (!requestLeave()) return
     closeChatSettings()

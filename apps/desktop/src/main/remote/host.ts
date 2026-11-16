@@ -1,12 +1,12 @@
 /**
- * 내 기기 원격 접속(호스트) — 서버에 원격 데스크톱 플러그인이 켜져 있을 때만 동작한다.
+ * 내 기기 원격 접속(호스트) — 서버에 원격 데스크톱 플러그인이 활성화된 경우에만 동작한다.
  *
- *  - 설정(이 기기에만): allowRemote(원격 접속 허용), unattended(무인 접속). userData/remote.json
- *  - 호스트 비밀은 OS 자격 증명 저장소(safeStorage)로 암호화해 userData/remote-host.bin 에 둔다.
- *  - allowRemote 가 켜지면 기기를 등록하고(비밀 발급) 서버 롱폴링을 돈다. 요청이 오면:
- *      · 무인 접속: 서버가 auto_allow(소유자 본인 요청 + 서버 설정) 이고 이 기기 설정도 켜져 있을 때만 동의 창 없이 연다
- *      · 그 밖: 동의 창(요청자 이름, 30초)
- *  - 동시에 한 세션만. 진행 중이면 새 요청은 거부한다.
+ *  - 설정(이 기기 한정): allowRemote(원격 접속 허용), unattended(무인 접속). userData/remote.json
+ *  - 호스트 비밀은 OS 자격 증명 저장소(safeStorage)로 암호화하여 userData/remote-host.bin 에 저장한다.
+ *  - allowRemote 가 활성화되면 기기를 등록하고(비밀 발급) 서버 롱폴링을 수행한다. 요청 수신 시:
+ *      · 무인 접속: 서버가 auto_allow(소유자 본인 요청 + 서버 설정) 이고 이 기기 설정도 활성화된 경우에만 동의 창 없이 연다
+ *      · 그 외: 동의 창(요청자 이름, 30초)
+ *  - 동시 세션은 하나만 허용. 진행 중이면 새 요청은 거부한다.
  */
 import { app, safeStorage } from 'electron';
 import { promises as fs } from 'node:fs';
@@ -71,7 +71,7 @@ export class RemoteHost {
     this.api = new RemoteApi(serverUrl);
   }
 
-  /** 로그인 직후·앱 시작 때 — 플러그인 유무를 보고 설정대로 켠다 */
+  /** 로그인 직후·앱 시작 시 — 플러그인 유무를 확인하고 설정에 따라 활성화한다 */
   async start(): Promise<void> {
     this.prefs = await loadPrefs();
     this.cred = await loadCred();
@@ -79,7 +79,7 @@ export class RemoteHost {
     if (this.available && this.prefs.allowRemote) await this.goOnline();
   }
 
-  /** 로그아웃 — 루프를 멈추고 진행 중 세션을 끝낸다(등록·비밀은 남긴다) */
+  /** 로그아웃 — 루프를 중지하고 진행 중인 세션을 종료한다(등록·비밀은 유지한다) */
   async stop(): Promise<void> {
     this.running = false;
     await this.session?.stop('signed_out');
@@ -89,7 +89,7 @@ export class RemoteHost {
     return { ...this.prefs, available: this.available, registered: !!this.cred, inSession: !!this.session?.active, deviceName: this.name || this.deviceName() };
   }
 
-  /** 기기 이름 바꾸기(내 기기 목록·동의 창에 보이는 이름) */
+  /** 기기 이름 변경(내 기기 목록·동의 창에 표시되는 이름) */
   async rename(name: string): Promise<RemoteStatus> {
     const n = name.trim().slice(0, 100);
     if (!n) throw new Error('기기 이름을 넣으세요');
@@ -109,7 +109,7 @@ export class RemoteHost {
     }));
   }
 
-  /** 등록 해지 — 서버에서 지우고(키 폐기) 이 PC의 비밀·설정도 지운다. 다시 쓰려면 새로 등록 */
+  /** 등록 해지 — 서버에서 삭제하고(키 폐기) 이 PC의 비밀·설정도 삭제한다. 재사용하려면 신규 등록 필요 */
   async unregister(): Promise<RemoteStatus> {
     this.running = false;
     await this.session?.stop('device_revoked');
@@ -189,18 +189,18 @@ export class RemoteHost {
         this.org = { name: r.org_name ?? this.org.name, domain: r.org_domain ?? this.org.domain };
         known = r.sessions.map(s => `${s.id}:${s.status}`).join(',');
         for (const s of r.sessions) if (s.status === 'pending') void this.onRequest(cred, s);
-        // 서버가 끝낸 세션(관리자 종료·만료)이면 여기서도 내린다
+        // 서버가 종료한 세션(관리자 종료·만료)이면 여기서도 종료한다
         if (this.session?.active && !r.sessions.some(s => s.status === 'active')) {
           await this.session.stop('server_ended');
         }
       } catch (e) {
         if (e instanceof HttpError && (e.status === 401 || e.status === 404)) {
-          // 비밀이 바뀌었거나 기기가 해지됨 → 다시 등록
+          // 비밀이 변경되었거나 기기가 해지됨 → 재등록
           this.cred = null;
           await fs.rm(CRED(), { force: true });
           if (!(await this.ensureRegistered())) { this.running = false; break; }
         } else if (e instanceof HttpError && e.status === 403) {
-          this.available = false; // 플러그인이 꺼졌다
+          this.available = false; // 플러그인 비활성화됨
           this.running = false;
           break;
         }

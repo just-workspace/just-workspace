@@ -1,8 +1,8 @@
 /**
- * 리액션 칩 줄(디스코드 수치).
- * 칩: radius 8 · 패딩 2×6 · 간격 4 · 1px · 이모지 + 수(mono 12). 내가 누른 칩 = primary 테두리 + primary/15.
- * 커스텀 이모지 리액션(`:name:`)은 이미지 16. 툴팁 = 누른 사람 이름(최대 5 + "외 N명").
- * 줄 끝 smile-plus = 이모지 피커(리액션 모드 — useChatUi.setEmojiPicker, 고르면 ChatEmojiPicker 가 toggleReaction).
+ * 리액션 칩 행(디스코드 수치).
+ * 칩: radius 8 · 패딩 2×6 · 간격 4 · 1px · 이모지 + 수(mono 12). 본인이 누른 칩 = primary 테두리 + primary/15.
+ * 커스텀 이모지 리액션(`:name:`)은 이미지 16. 툴팁 = 누른 사용자 이름(최대 5 + "외 N명").
+ * 행 끝 smile-plus = 이모지 피커(리액션 모드 — useChatUi.setEmojiPicker, 선택 시 ChatEmojiPicker 가 toggleReaction 호출).
  */
 import { useStore } from 'zustand'
 import { clsx as cn } from 'clsx'
@@ -15,14 +15,14 @@ import { UiIcon } from '~/components/ui/Icon'
 import { useCustomEmojiUrl } from './ChatMarkdown'
 
 export interface ChatReactionsProps {
-  /** 리액션 묶음(이모지·수·누른 사람) */
+  /** 리액션 그룹(이모지·수·누른 사용자) */
   reactions: ReactionGroup[]
   messageId: string
   size?: 'sm' | 'md'
   className?: string
 }
 
-/** 리액션 글리프 — 유니코드는 글자, 커스텀 :name: 은 이미지(없으면 글자) */
+/** 리액션 글리프 — 유니코드는 문자, 커스텀 :name: 은 이미지(없으면 문자) */
 export function ReactionGlyph({ emoji, className }: { emoji: string; className?: string }) {
   const emojiUrl = useCustomEmojiUrl()
   const name = parseCustomToken(emoji)
@@ -36,7 +36,7 @@ export function ChatReactions({ reactions, messageId, className }: ChatReactions
   const members = useStore(chatStore, s => s.members)
   const allUsers = useStore(chatStore, s => s.allUsers)
 
-  // 누가 리액션했는지 이름 툴팁
+  // 리액션한 사용자 이름 툴팁
   function reactorTitle(r: ReactionGroup): string {
     const names = r.user_ids
       .map((id) => {

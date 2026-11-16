@@ -1,4 +1,4 @@
-// AI 질문 카드(Claude Code AskUserQuestion · ExitPlanMode) — 고르기·기타·여러 질문 넘기기·넘기기·계획 승인.
+// AI 질문 카드(Claude Code AskUserQuestion · ExitPlanMode) — 선택·기타·여러 질문 넘기기·넘기기·계획 승인.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import type { AiQuestion } from '~/utils/aiAssist'

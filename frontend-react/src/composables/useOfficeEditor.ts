@@ -1,7 +1,7 @@
 /**
  * 오피스 편집기(WOPI) 열기·잠금 상태. 상태 없음.
  * React: const { isOfficeFile, openEditor, getLockStatus, OFFICE_EXTENSIONS } = useOfficeEditor()
- * 컴포넌트 밖: 같은 이름 함수를 직접 import(isOfficeFile 은 useFiles 에도 같은 이름이 있어 여기서는 isOfficeFileName 도 낸다).
+ * 컴포넌트 외부: 동일 이름의 함수를 직접 import(isOfficeFile 은 useFiles 에도 동일 이름이 존재하므로 본 모듈은 isOfficeFileName 도 export 한다).
  */
 import { $fetch } from '~/lib/api'
 

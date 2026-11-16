@@ -1,9 +1,9 @@
 /**
- * 카테고리 대화 상자·인라인 편집(#cat-rename · #cat-del) + DM 구역 + 의 새 메시지 고르기.
+ * 카테고리 대화 상자·인라인 편집(#cat-rename · #cat-del) + DM 구역 + 의 새 메시지 대상 선택.
  *  · 만들기(440): 제목 · 설명 · "카테고리 이름" 입력 · 비공개 카테고리 스위치(+ 설명) · [취소][만들기].
- *    비공개면 @everyone 에 VIEW_CHANNEL 거부 덮어쓰기를 넣고 채팅 설정 category-perm 을 연다(고른 역할·멤버를 거기서 더한다).
- *  · 이름 바꾸기: 제목 줄 자리에 28 높이 입력(2px ring) + 오른쪽 "Enter 저장 · Esc 취소". 빈 값·같은 값이면 취소.
- *  · 삭제(alertdialog 440): 안의 채널 이름 목록을 보여 주고 "분류 없음"으로 옮겨진다고 알린다. 채널 목록은 지운 뒤 다시 읽는다.
+ *    비공개인 경우 @everyone 에 VIEW_CHANNEL 거부 덮어쓰기를 추가하고 채팅 설정 category-perm 을 연다(선택한 역할·멤버는 해당 화면에서 추가한다).
+ *  · 이름 바꾸기: 제목 줄 자리에 높이 28 입력(2px ring) + 오른쪽 "Enter 저장 · Esc 취소". 빈 값·동일 값이면 취소한다.
+ *  · 삭제(alertdialog 440): 포함된 채널 이름 목록을 표시하고 "분류 없음"으로 이동됨을 안내한다. 채널 목록은 삭제 후 재조회한다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
@@ -137,7 +137,7 @@ export function ChatCategoryDeleteDialog({ section, onClose }: { section: Sideba
   )
 }
 
-/** 인라인 이름 바꾸기(#cat-rename) — Enter 저장 · Esc 취소 · 포커스 잃으면 저장 */
+/** 인라인 이름 바꾸기(#cat-rename) — Enter 저장 · Esc 취소 · 포커스 상실 시 저장 */
 export function ChatCategoryRename({ section, onDone }: { section: SidebarSection; onDone: () => void }) {
   const { t } = useI18n()
   const [v, setV] = useState(section.name)
@@ -179,7 +179,7 @@ export function ChatCategoryRename({ section, onDone }: { section: SidebarSectio
   )
 }
 
-/** DM 구역 + — 사람 골라 1:1 대화 열기(채널|사용자 탭을 없앤 자리) */
+/** DM 구역 + — 사용자를 선택해 1:1 대화 열기(채널|사용자 탭을 제거한 자리) */
 export function ChatNewDmDialog({ onClose, onOpened }: { onClose: () => void; onOpened?: () => void }) {
   const { t } = useI18n()
   const me = useStore(authStore, s => s.user)

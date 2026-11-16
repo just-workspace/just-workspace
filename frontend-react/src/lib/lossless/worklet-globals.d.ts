@@ -1,5 +1,5 @@
 /**
- * AudioWorkletGlobalScope 전역 — lib.dom 에는 없어서 여기서 선언한다(*.worklet.ts 전용).
+ * AudioWorkletGlobalScope 전역 — lib.dom 에 없으므로 본 파일에서 선언한다(*.worklet.ts 전용).
  */
 declare class AudioWorkletProcessor {
   readonly port: MessagePort

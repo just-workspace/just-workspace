@@ -1,6 +1,6 @@
 /**
- * 고급 설정 — 요약 화면에서만 들어온다. 지금은 내부 네트워크 대역 하나.
- * 대역을 바꾸면 저장한 뒤 사전 점검을 다시 돌려 서버의 다른 네트워크와 겹치는지 본다. 겹치면 돌아갈 수 없다.
+ * 고급 설정 — 요약 화면에서만 진입한다. 현재는 내부 네트워크 대역 하나.
+ * 대역을 변경하면 저장 후 사전 점검을 재실행하여 서버의 다른 네트워크와의 중복 여부를 확인한다. 중복 시 복귀할 수 없다.
  */
 import { useState } from 'react'
 import { UiButton } from '~/components/ui/Button'
@@ -24,7 +24,7 @@ export function AdvancedScreen() {
 
   const value = subnet.trim()
   const formatBad = !isSubnet24(value)
-  // 점검 결과는 저장된 대역에 대한 것 — 입력을 바꾸는 중에는 쓰지 않는다
+  // 점검 결과는 저장된 대역에 대한 것 — 입력 변경 중에는 사용하지 않음
   const clash = value === saved && subnetCheck?.status === 'fail'
   const known = value === saved && subnetCheck != null && subnetCheck.status !== 'checking'
   const error = formatBad ? t('advanced.subnetErrorFormat') : (clash ? t('advanced.subnetErrorClash') : undefined)

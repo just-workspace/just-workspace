@@ -1,9 +1,9 @@
 /**
  * 채널 우클릭(데스크톱)·길게 누르기(모바일 시트) 메뉴.
  * 항목(시안 순서): 읽음으로 표시 · 알림 끄기 › (15분 · 1시간 · 3시간 · 8시간 · 24시간 · 직접 끌 때까지) · 알림 설정 | 채널 편집 · 링크 복사.
- * 음소거 중이면 "알림 끄기 ›" 앞에 "알림 켜기"를 더 둔다(참고 — 시안은 꺼진 상태만 그렸다).
- * 알림 끄기 = chatApi22.muteChannelFor(PATCH prefs muted_minutes) → 채널 목록 muted · muted_until 을 바로 고친다(WS channel_prefs 가 오면 덮어씀).
- * DM 은 채널 편집 없음. 채널 편집은 MANAGE_CHANNELS 가 있을 때만(설정 화면 channel-perm).
+ * 음소거 중이면 "알림 끄기 ›" 앞에 "알림 켜기"를 추가한다(참고 — 시안에는 꺼진 상태만 존재).
+ * 알림 끄기 = chatApi22.muteChannelFor(PATCH prefs muted_minutes) → 채널 목록의 muted · muted_until 을 즉시 갱신한다(WS channel_prefs 수신 시 덮어씀).
+ * DM 은 채널 편집 없음. 채널 편집은 MANAGE_CHANNELS 보유 시에만 제공한다(설정 화면 channel-perm).
  */
 import { useI18n } from '~/i18n'
 import { chatStore, markChannelRead, toggleMute, type Channel } from '~/composables/useChat'

@@ -1,6 +1,6 @@
 /**
- * 재생 AudioWorklet — 피어 1명의 스트림. 지터버퍼(적응형) + PLC 가 렌더 스레드에서 돈다.
- * 프레임은 메인스레드가 디코딩한 planar f32 를 MessagePort 로 넘긴다(SAB 없음).
+ * 재생 AudioWorklet — 피어 1명의 스트림. 지터버퍼(적응형) + PLC 가 렌더 스레드에서 동작한다.
+ * 프레임은 메인스레드가 디코딩한 planar f32 를 MessagePort 로 전달한다(SAB 없음).
  *
  * 메인 → 워크릿: {type:'frame', seq, ts, channels, buf, arrivalMs} · {type:'preset', value} · {type:'reset'}
  * 워크릿 → 메인: {type:'stats', ...JitterStats, fifoMs} 500 ms 마다 · {type:'level', peak[], rms[]} 50 ms 마다

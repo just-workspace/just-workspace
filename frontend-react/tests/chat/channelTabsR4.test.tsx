@@ -40,7 +40,7 @@ const summary = (p: Record<string, any> = {}) => ({
 beforeEach(() => {
   api.calls.length = 0
   api.routes = {}
-  // 탭이 기대는 모듈이 모두 켜진 설치(목록에 없는 모듈은 꺼진 것)
+  // 탭이 의존하는 모듈이 전부 활성화된 설치(목록에 없는 모듈은 비활성으로 간주)
   platformStore.setState({ modules: [{ id: 'files', enabled: true }, { id: 'wiki', enabled: true }, { id: 'meetings', enabled: true }, { id: 'tasks', enabled: true }] as any, loaded: true })
   authStore.setState({ user: { id: 'u1', username: 'kim', display_name: '김서연', is_admin: false } as any, loading: false })
   chatStore.setState({
@@ -58,7 +58,7 @@ describe('visibleChannelTabs', () => {
     expect(visibleChannelTabs(s, () => true)).toEqual(['tasks', 'wiki', 'meetings'])
     expect(visibleChannelTabs(s, (id) => id !== 'meetings')).toEqual(['tasks', 'wiki'])
     expect(visibleChannelTabs({ ...s, wiki_space: null }, () => true)).toEqual(['tasks', 'meetings'])
-    // 예전 서버(layout 없음)는 기본 순서
+    // 구 서버(layout 없음)는 기본 순서
     expect(visibleChannelTabs(summary({ layout: undefined }), () => true)).toEqual(['files', 'wiki', 'meetings', 'tasks'])
   })
 })
@@ -88,7 +88,7 @@ describe('ChatChannelTabsManage', () => {
     const meetSwitch = screen.getByRole('switch', { name: '회의 탭 보이기' })
     expect(meetSwitch.hasAttribute('disabled') || meetSwitch.getAttribute('aria-disabled') === 'true').toBe(true)
     fireEvent.click(screen.getByRole('switch', { name: '작업 탭 보이기' }))
-    // 손잡이 ↑ 로 위키를 파일 위로
+    // 손잡이 ↑ 로 위키를 파일 위로 이동
     fireEvent.keyDown(screen.getByRole('button', { name: '위키 탭 옮기기' }), { key: 'ArrowUp' })
     fireEvent.click(screen.getByRole('button', { name: '저장' }))
     await waitFor(() => expect(onSaved).toHaveBeenCalled())

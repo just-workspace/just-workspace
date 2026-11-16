@@ -9,15 +9,15 @@ import { svcState } from './dashboardTiles'
 export interface AdminServiceStatusCardProps {
   /** 서비스 상태 목록(useServices) */
   services: ServiceStatus[]
-  /** 불러오는 중(목록이 비었을 때만 스켈레톤) */
+  /** 로딩 중(목록이 비어 있을 때만 스켈레톤) */
   loading: boolean
-  /** 이 ms 를 넘으면 "느림"(관리 설정 system.latency_warn_ms, 기본 800) */
+  /** 이 ms 를 초과하면 "느림"(관리 설정 system.latency_warn_ms, 기본 800) */
   latencyWarnMs: number
 }
 
 /**
- * 서비스 상태 카드 — 머리(제목 + [관리] 링크) · 서비스마다 40 행(상태 점 · 이름 · 상태 글자 · 응답 ms).
- * 관리 › 개요의 오른쪽 구역.
+ * 서비스 상태 카드 — 헤더(제목 + [관리] 링크) · 서비스별 40 행(상태 점 · 이름 · 상태 글자 · 응답 ms).
+ * 관리 › 개요의 오른쪽 영역.
  */
 export function AdminServiceStatusCard({ services, loading, latencyWarnMs }: AdminServiceStatusCardProps) {
   const { t } = useI18n()

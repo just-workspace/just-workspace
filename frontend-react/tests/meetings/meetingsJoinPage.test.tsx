@@ -1,7 +1,7 @@
 // 초대 링크 입장 화면 감사 수정 회귀:
-//  - 대기 중 신청·링크가 없어지면(404) "승인 대기 중"으로 남지 않고 만료 화면으로
-//  - [취소]는 서버에도 알린다(호스트 대기실에 유령 신청이 남지 않게)
-//  - 이 화면에서 들어가지 않은 통화(미니 창에 내려 둔 다른 통화)는 화면을 떠나도 끊지 않는다
+//  - 대기 중 신청·링크가 없어지면(404) "승인 대기 중"으로 남지 않고 만료 화면으로 전환
+//  - [취소]는 서버에도 통지(호스트 대기실에 유령 신청이 남지 않도록)
+//  - 이 화면에서 입장하지 않은 통화(미니 창으로 내려 둔 다른 통화)는 화면을 떠나도 종료하지 않음
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'

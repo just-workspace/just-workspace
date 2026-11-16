@@ -1,11 +1,11 @@
 /**
- * vue-i18n 메시지 문법 해석기 — `src/i18n/locales/*.json` 의 메시지를 그 문법 그대로 쓰기 위한 어댑터.
+ * vue-i18n 메시지 문법 해석기 — `src/i18n/locales/*.json` 의 메시지를 해당 문법 그대로 사용하기 위한 어댑터.
  *
- * 지원(vue-i18n v9+ 기본 문법과 같은 결과):
+ * 지원(vue-i18n v9+ 기본 문법과 동일한 결과):
  * - 이름 보간 `{name}` · 목록 보간 `{0}` · 리터럴 `{'@'}` `{'|'}` `{'{'}`
  * - 복수형 `단수 | 복수`, `없음 | 하나 | 여럿` (기본 규칙 = vue-i18n pluralDefault)
  * - 연결 `@:key` · `@:(key)` · `@.lower:key` / `@.upper:` / `@.capitalize:`
- * 값이 없는 보간은 빈 문자열(vue-i18n 과 같음).
+ * 값이 없는 보간은 빈 문자열(vue-i18n 과 동일).
  */
 
 export type Named = Record<string, unknown>
@@ -76,7 +76,7 @@ function parseChoice(src: string): Tok[] {
   return out
 }
 
-/** `|` 로 복수형 선택지를 나눈다(중괄호 안의 `{'|'}` 는 제외) */
+/** `|` 기준으로 복수형 선택지 분리(중괄호 안의 `{'|'}` 는 제외) */
 function splitChoices(src: string): string[] {
   const parts: string[] = []
   let depth = 0
@@ -116,7 +116,7 @@ const MODS: Record<string, (s: string) => string> = {
 export interface FormatOptions {
   named?: Named
   list?: unknown[]
-  /** 복수형 선택 수. 생략하면 vue-i18n 과 같이 -1 */
+  /** 복수형 선택 수. 생략 시 vue-i18n 과 동일하게 -1 */
   plural?: number
   resolve: Resolver
   /** 연결 메시지 깊이(순환 방지) */

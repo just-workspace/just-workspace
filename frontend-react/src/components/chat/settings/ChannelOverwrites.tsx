@@ -1,13 +1,13 @@
 /**
  * 채널·카테고리 권한 덮어쓰기(#perm-cat · 모바일 #m-perm).
- * 위 동기화 banner(채널: 카테고리와 다르면 warn + [동기화] · 카테고리: 동기화된 채널 N개에 함께 적용) →
- * 비공개 스위치(@everyone '채널 보기' 거부 — 채널 수정 API 가 type 을 받지 않아 디스코드식 덮어쓰기로) →
- * 대상 목록 220(@everyone · 역할 · 사람) + [+] / 권한 행(UiTriToggle 거부·상속·허용 → putOverwrite 즉시 저장) →
- * 아래 "○○ 님이 할 수 있는 것" 한 줄(선택 대상의 결과 — 채널 멤버 기준).
- * targetId 가 없으면 카테고리 → 채널 고르기 목록을 먼저 보인다.
+ * 상단 동기화 banner(채널: 카테고리와 다르면 warn + [동기화] · 카테고리: 동기화된 채널 N개에 함께 적용) →
+ * 비공개 스위치(@everyone '채널 보기' 거부 — 채널 수정 API 가 type 을 받지 않아 디스코드식 덮어쓰기로 처리) →
+ * 대상 목록 220(@everyone · 역할 · 사용자) + [+] / 권한 행(UiTriToggle 거부·상속·허용 → putOverwrite 즉시 저장) →
+ * 아래 "○○ 님이 할 수 있는 것" 한 행(선택 대상의 결과 — 채널 멤버 기준).
+ * targetId 가 없으면 카테고리 → 채널 선택 목록을 먼저 표시한다.
  *
- * 동기화(우리 엔진): 카테고리 덮어쓰기 → 채널 덮어쓰기 순으로 겹쳐 계산한다. 그래서 "동기화" = 채널 덮어쓰기를 지워
- * 카테고리 것만 먹게 하는 것(복사해 두면 나중에 카테고리를 바꿔도 채널 사본이 덮어써 어긋난다).
+ * 동기화(본 프로젝트 엔진): 카테고리 덮어쓰기 → 채널 덮어쓰기 순으로 중첩 계산한다. 따라서 "동기화" = 채널 덮어쓰기를 삭제하여
+ * 카테고리 덮어쓰기만 적용되게 하는 것이다(복사해 두면 이후 카테고리 변경 시 채널 사본이 덮어써 불일치가 발생한다).
  * 모바일: 대상 목록 → 대상 화면(44 정사각 3칸 UiTriToggle size touch).
  */
 import { useEffect, useMemo, useState } from 'react'
@@ -41,7 +41,7 @@ export function ChannelOverwrites({ kind, targetId }: { kind: 'channel' | 'categ
   return <OverwriteEditor key={`${kind}:${targetId}`} kind={kind} targetId={targetId} />
 }
 
-// ─── 고르기(카테고리 → 채널) ───
+// ─── 선택(카테고리 → 채널) ───
 function TargetPicker() {
   const { t } = useI18n()
   const { mobile, backToMenu } = useSettingsCtx()
@@ -140,7 +140,7 @@ function OverwriteEditor({ kind, targetId }: { kind: 'channel' | 'category'; tar
   }
   useEffect(() => { void reload(); if (kind === 'channel') void loadMyChannelPerms(targetId) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 카테고리판: 동기화된 채널 목록(채널마다 덮어쓰기를 읽어 본다)
+  // 카테고리용: 동기화된 채널 목록(채널별 덮어쓰기를 조회)
   const inCat = useMemo(() => (kind === 'category' ? channels.filter(c => c.category_id === targetId && c.type !== 'dm') : []), [channels, kind, targetId])
   useEffect(() => {
     if (kind !== 'category' || ows === null) return
@@ -150,7 +150,7 @@ function OverwriteEditor({ kind, targetId }: { kind: 'channel' | 'category'; tar
     return () => { alive = false }
   }, [kind, inCat, ows])
 
-  // 대상 목록: @everyone → 역할(높은 순) → 사람
+  // 대상 목록: @everyone → 역할(높은 순) → 사용자
   const subjects: Subject[] = useMemo(() => {
     const out: Subject[] = []
     if (everyone) out.push({ kind: 'role', id: everyone.id })
@@ -406,7 +406,7 @@ function OverwriteEditor({ kind, targetId }: { kind: 'channel' | 'category'; tar
   )
 }
 
-/** a & b (32비트 넘는 값) */
+/** a & b (32비트 초과 값) */
 function bitsAnd(a: number, b: number): number {
   let r = 0
   for (let i = 0, v = 1; i <= 40; i++, v *= 2) if (hasBit(a, v) && hasBit(b, v)) r += v

@@ -1,5 +1,5 @@
-// 내 상태(GET /api/chat/me/status 응답) → 사용자 메뉴 상태 3칸 값. 서버 effective_state 와 같은 규칙.
-//  invisible → null(아무 칸도 안 켜짐, 점은 offline) · dnd_until 미래 또는 기한 없는 dnd → dnd · away → away · 그 밖 → online
+// 내 상태(GET /api/chat/me/status 응답) → 사용자 메뉴 상태 3칸 값. 서버 effective_state 와 동일 규칙.
+//  invisible → null(선택된 칸 없음, 점은 offline) · dnd_until 미래 또는 기한 없는 dnd → dnd · away → away · 그 외 → online
 import type { MyStatus } from '~/lib/chatEvents'
 
 export type MenuPresence = 'online' | 'away' | 'dnd'
@@ -25,8 +25,8 @@ function pad2(n: number) { return String(n).padStart(2, '0') }
 export function hhmmOf(d: Date) { return `${pad2(d.getHours())}:${pad2(d.getMinutes())}` }
 
 /**
- * 지우기 선택 → 지울 시각. never 면 null.
- * today = 오늘 23:59(현지), time = 오늘 그 시각(이미 지났으면 내일 그 시각). time 값이 틀리면 null.
+ * 지우기 선택 → 삭제 시각. never 면 null.
+ * today = 오늘 23:59(현지), time = 오늘 해당 시각(이미 경과했으면 내일 해당 시각). time 값이 유효하지 않으면 null.
  */
 export function statusClearAt(choice: StatusClear, time: string, now: number): Date | null {
   const d = new Date(now)
@@ -47,7 +47,7 @@ export function statusClearAt(choice: StatusClear, time: string, now: number): D
   }
 }
 
-/** 이미 걸린 만료 시각 → 패널 처음 값(만료 없으면 지우지 않음, 있으면 시각 지정 + 그 시각) */
+/** 설정된 만료 시각 → 패널 초기값(만료 없으면 지우지 않음, 있으면 시각 지정 + 해당 시각) */
 export function statusClearFrom(expiresAt: Date | null): { choice: StatusClear; time: string } {
   return expiresAt ? { choice: 'time', time: hhmmOf(expiresAt) } : { choice: 'never', time: '' }
 }
@@ -63,8 +63,8 @@ export function dndLeft(until: Date | null, now: number): { n: number; unit: 'h'
 export const DND_SEGMENT_MINUTES = [0, 30, 60, 120, 240] as const
 
 /**
- * 지금 방해 금지 상태 → 세그먼트 값. 방해 금지가 아니면 0(끄기),
- * 기한이 있으면 남은 시간을 덮는 가장 짧은 칸, 기한 없는 방해 금지면 null(아무 칸도 안 켜짐).
+ * 현재 방해 금지 상태 → 세그먼트 값. 방해 금지가 아니면 0(끄기),
+ * 기한이 있으면 남은 시간을 포함하는 가장 짧은 칸, 기한 없는 방해 금지면 null(선택된 칸 없음).
  */
 export function dndSegmentValue(dnd: boolean, until: Date | null, now: number): number | null {
   if (!dnd) return 0
@@ -73,14 +73,14 @@ export function dndSegmentValue(dnd: boolean, until: Date | null, now: number): 
   return DND_SEGMENT_MINUTES.find(m => m > 0 && m >= left - 0.5) ?? 240
 }
 
-// ─── 상태 메시지 이모지 고르기(8×2) ───
+// ─── 상태 메시지 이모지 선택(8×2) ───
 
-/** 이모지 고르기 기본 추천(16 — 최근 쓴 것이 없으면 이것만으로 8×2 를 채운다) */
+/** 이모지 선택 기본 추천(16 — 최근 사용 항목이 없으면 이것만으로 8×2 를 채움) */
 export const STATUS_EMOJIS = ['💬', '🎧', '🗓', '🚌', '🍱', '☕', '🤒', '🌴', '🏠', '✈️', '🎯', '🔕', '🚀', '✅', '👀', '🙏']
 /** 8×2 칸 수 */
 export const EMOJI_CELLS = 16
 
-/** 고르기 칸: 최근 쓴 것(최대 8) 먼저, 남은 칸은 기본 추천으로(중복 없이) */
+/** 선택 칸: 최근 사용 항목(최대 8) 우선, 나머지 칸은 기본 추천으로 채움(중복 제외) */
 export function statusEmojiCells(recent: string[]): string[] {
   const out: string[] = []
   for (const e of [...recent.slice(0, 8), ...STATUS_EMOJIS]) {

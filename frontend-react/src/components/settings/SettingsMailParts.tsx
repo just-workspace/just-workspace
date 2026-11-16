@@ -3,9 +3,9 @@
  *  · SettingsMailAccountRow — 계정 행: 메일 타일 36(기본=primary) + 주소(+기본·내장 배지) + 상태 줄 + [다시 연결]/[편집] + ⋮ 메뉴
  *  · SettingsMdnRow — 읽음 확인 요청 응답 기본값 행(선택 180 + 저장됨)
  *  · SettingsSignatureRow — 서명 행: 이름(+기본 배지) + 본문 미리보기 + [기본으로] + 편집·삭제 아이콘
- *  · SettingsSignatureModal — 서명 만들기·고치기 모달
+ *  · SettingsSignatureModal — 서명 생성·수정 모달
  *  · SettingsMailArchiveRow — 외부 계정 .eml 보관 행: 주소 + 상태/백필 진행 + [지난 메일 보관] + 스위치
- *  · SettingsMailDisabledRow — 서버 API 없는 기능(자동 전달·자동 응답)의 꺼진 스위치 행
+ *  · SettingsMailDisabledRow — 서버 API 없는 기능(자동 전달·자동 응답)의 꺼짐 상태 스위치 행
  */
 import { useI18n } from '~/i18n'
 import { cn } from '~/lib/utils'
@@ -40,13 +40,13 @@ export function mailSyncTime(iso: string | null): string {
 export interface SettingsMailAccountRowProps {
   /** 계정 */
   account: MailAccountInfo
-  /** 첫 행이 아니면 위 선 */
+  /** 첫 행이 아니면 상단 선 표시 */
   divided: boolean
   /** ⋮ 메뉴 항목 */
   menuItems: UiMenuItem[]
-  /** ⋮ 메뉴 고름 */
+  /** ⋮ 메뉴 선택 */
   onMenu: (key: string) => void
-  /** [다시 연결]·[편집] — /mail/accounts 로 */
+  /** [다시 연결]·[편집] — /mail/accounts 로 이동 */
   onEdit: () => void
 }
 
@@ -99,7 +99,7 @@ export function SettingsMailAccountRow({ account: a, divided, menuItems, onMenu,
 export interface SettingsMdnRowProps {
   /** ask · always · never */
   modelValue: string
-  /** 바꿈 */
+  /** 변경 */
   onUpdateModelValue: (v: string | number | null) => void
   /** "저장됨 ✓" */
   saved: boolean
@@ -124,7 +124,7 @@ export function SettingsMdnRow({ modelValue, onUpdateModelValue, saved }: Settin
 export interface SettingsSignatureRowProps {
   /** 이름 */
   name: string
-  /** 본문 미리보기(태그 뺀 100자) */
+  /** 본문 미리보기(태그 제거 후 100자) */
   preview: string
   /** 기본 서명 */
   isDefault: boolean
@@ -158,11 +158,11 @@ export function SettingsSignatureRow({ name, preview, isDefault, onSetDefault, o
 export interface SignatureDraft { name: string; html_content: string; is_default: boolean }
 
 export interface SettingsSignatureModalProps {
-  /** 고치는 중(제목이 "서명 편집") */
+  /** 수정 중(제목이 "서명 편집") */
   editing: boolean
   /** 입력 상태 */
   form: SignatureDraft
-  /** 일부 바꾸기 */
+  /** 부분 변경 */
   onChange: (patch: Partial<SignatureDraft>) => void
   /** 오류 문구 */
   error: string
@@ -174,7 +174,7 @@ export interface SettingsSignatureModalProps {
   onClose: () => void
 }
 
-/** 서명 만들기·고치기 모달(md) */
+/** 서명 생성·수정 모달(md) */
 export function SettingsSignatureModal({ editing, form, onChange, error, submitting, onSubmit, onClose }: SettingsSignatureModalProps) {
   const { t } = useI18n()
   return (
@@ -235,7 +235,7 @@ export function SettingsMailArchiveRow({ account: a, progress, busy, onBackfill,
   )
 }
 
-/** 아직 서버 API 가 없는 기능의 꺼진 스위치 행(흐린 제목 + "준비 중") */
+/** 서버 API 가 아직 없는 기능의 꺼짐 상태 스위치 행(흐린 제목 + "준비 중") */
 export function SettingsMailDisabledRow({ title, ariaLabel }: {
   /** 행 제목 */
   title: string

@@ -1,5 +1,5 @@
 /**
- * 캡처 AudioWorklet — 128샘플 렌더 퀀텀을 N샘플 프레임(기본 10 ms)으로 재배치해 메인스레드로 넘긴다.
+ * 캡처 AudioWorklet — 128샘플 렌더 퀀텀을 N샘플 프레임(기본 10 ms)으로 재배치하여 메인스레드로 전달한다.
  * SharedArrayBuffer 없이 MessagePort transfer(Audiomovers 방식). 레벨(peak/rms)은 50 ms 마다.
  *
  * 메시지(워크릿 → 메인): {type:'frame', ts, channels, buf}  ts = 프레임 첫 샘플의 누적 샘플 인덱스
@@ -22,8 +22,8 @@ class CaptureProcessor extends AudioWorkletProcessor {
   private lastLevelAt = 0
   private levelAcc: Float32Array[] | null = null
   /**
-   * 한 채널만 쓰는 2채널 장치(오디오 인터페이스의 입력 1, 2채널로 보고하는 일부 헤드셋·동글) — 그대로 보내면 듣는 사람이 한쪽 귀로만 듣는다.
-   * 한쪽에만 소리가 1.5초 넘게 이어지면 그 채널을 양쪽에 싣는다(dupFrom). 조용하던 채널에 소리가 들어오면 바로 원래대로.
+   * 한 채널만 사용하는 2채널 장치(오디오 인터페이스의 입력 1, 2채널로 보고하는 일부 헤드셋·동글) — 그대로 송신하면 수신자는 한쪽 귀로만 듣게 된다.
+   * 한쪽에만 신호가 1.5초 넘게 지속되면 해당 채널을 양쪽에 복제한다(dupFrom). 무음이던 채널에 신호가 입력되면 즉시 원상 복귀한다.
    */
   private dupFrom = -1
   private oneSidedSec = 0
@@ -57,16 +57,16 @@ class CaptureProcessor extends AudioWorkletProcessor {
     const a = input[0]
     const b = input[1]
     for (let i = 0; i < n; i++) { const x = Math.abs(a[i]); if (x > p0) p0 = x; const y = Math.abs(b[i]); if (y > p1) p1 = y }
-    const LOUD = 0.003    // 약 -50 dBFS — 말소리가 있다
-    const QUIET = 0.0003  // 약 -70 dBFS — 신호가 없다
+    const LOUD = 0.003    // 약 -50 dBFS — 음성 신호 있음
+    const QUIET = 0.0003  // 약 -70 dBFS — 신호 없음
     if (this.dupFrom >= 0) {
-      // 조용하던 쪽에 소리가 들어왔다 — 진짜 스테레오다. 복제를 푼다
+      // 무음이던 채널에 신호 입력 — 실제 스테레오이므로 복제를 해제한다
       const other = this.dupFrom === 0 ? p1 : p0
       if (other > 0.001) { this.dupFrom = -1; this.oneSidedSec = 0; this.port.postMessage({ type: 'monoSource', channel: -1 }) }
       return
     }
     const ch = p0 > LOUD && p1 < QUIET ? 0 : p1 > LOUD && p0 < QUIET ? 1 : -1
-    if (ch < 0) { if (p0 > LOUD && p1 > LOUD) { this.oneSidedSec = 0; this.oneSidedCh = -1 } return }   // 양쪽 다 소리 → 초기화, 양쪽 다 조용 → 유지
+    if (ch < 0) { if (p0 > LOUD && p1 > LOUD) { this.oneSidedSec = 0; this.oneSidedCh = -1 } return }   // 양쪽 모두 신호 있음 → 초기화, 양쪽 모두 무음 → 유지
     if (ch !== this.oneSidedCh) { this.oneSidedCh = ch; this.oneSidedSec = 0 }
     this.oneSidedSec += n / sampleRate
     if (this.oneSidedSec >= 1.5) { this.dupFrom = ch; this.port.postMessage({ type: 'monoSource', channel: ch }) }
@@ -82,7 +82,7 @@ class CaptureProcessor extends AudioWorkletProcessor {
     while (off < n) {
       const take = Math.min(n - off, this.frameSamples - this.fill)
       for (let c = 0; c < this.channels; c++) {
-        // 입력 채널이 모자라면 마지막 채널 복제(모노 장치 → 스테레오 스트림)
+        // 입력 채널이 부족하면 마지막 채널 복제(모노 장치 → 스테레오 스트림)
         const src = input[dup >= 0 ? dup : Math.min(c, input.length - 1)]
         this.acc[c].set(src.subarray(off, off + take), this.fill)
       }

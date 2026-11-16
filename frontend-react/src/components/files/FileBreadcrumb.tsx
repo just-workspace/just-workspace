@@ -1,6 +1,6 @@
 /**
- * 커맨드 바 안 경로("경로는 바 안"):
- * 상위 조각 muted + ›, 현재 600. 상위 조각은 끌어다 놓기(이동) 대상.
+ * 커맨드 바 내 경로("경로는 바 안"):
+ * 상위 조각 muted + ›, 현재 600. 상위 조각은 드래그 앤 드롭(이동) 대상.
  */
 import { Fragment, useState, type DragEvent } from 'react'
 import { useI18n } from '~/i18n'
@@ -12,7 +12,7 @@ import { UiIcon } from '~/components/ui/Icon'
 
 export interface FilesFileBreadcrumbProps {
   className?: string
-  /** 앱 안 끌기를 조각에 놓음 — (옮길 경로들, 대상 폴더) */
+  /** 앱 내 드래그를 조각에 드롭 — (이동할 경로 목록, 대상 폴더) */
   onDropMove?: (paths: string[], dst: string) => void
 }
 

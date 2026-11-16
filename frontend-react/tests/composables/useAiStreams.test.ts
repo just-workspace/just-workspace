@@ -1,4 +1,4 @@
-// 내장 AI 답변 스트림 전역 저장소 — 페이지가 없어도(언마운트) 계속 받고, 끊기면 after 로 재연결, 멈춤만 abort.
+// 내장 AI 답변 스트림 전역 저장소 — 페이지가 없어도(언마운트) 수신을 계속하고, 끊기면 after 로 재연결, 멈춤 시에만 abort.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const api = vi.hoisted(() => ({ calls: [] as { url: string; opts?: any }[] }))
@@ -18,7 +18,7 @@ const { toastStore } = await import('~/composables/useToast')
 
 const ev = (name: string, data: unknown, id?: string) => `${id ? `id: ${id}\n` : ''}event: ${name}\ndata: ${JSON.stringify(data)}\n\n`
 
-/** 손으로 흘려 보내는 SSE 응답 — push 로 덩어리, end 로 닫기, abort 신호면 오류 */
+/** 수동으로 전송하는 SSE 응답 — push 로 청크 전송, end 로 종료, abort 신호 시 오류 */
 function liveResponse(signal?: AbortSignal) {
   const enc = new TextEncoder()
   let ctl!: ReadableStreamDefaultController<Uint8Array>
@@ -61,9 +61,9 @@ describe('useAiStreams', () => {
     live.push(ev('meta', { message_id: 'm1', model: 'x' }, '1-0'))
     live.push(ev('token', { text: '앞' }, '2-0'))
     await until(() => runs()[0]?.msg.content === '앞')
-    S.setAiView(false, null) // 다른 화면으로 — 끊지 않는다
+    S.setAiView(false, null) // 다른 화면으로 이동 — 연결 유지
     expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(false)
-    live.push(ev('artifact', { id: 'a1' }, '3-0')) // 모르는 이벤트도 위치(id)는 기억
+    live.push(ev('artifact', { id: 'a1' }, '3-0')) // 미지의 이벤트도 위치(id)는 기록
     live.push(ev('token', { text: '뒤' }, '4-0'))
     await until(() => runs()[0]?.msg.content === '앞뒤')
     expect(runs()[0].lastId).toBe('4-0')
@@ -101,7 +101,7 @@ describe('useAiStreams', () => {
       if (urls.length === 1) {
         l.push(ev('meta', { message_id: 'm9' }, '1-0')); l.push(ev('token', { text: '가' }, '2-0')); l.end() // 끊김
       } else if (urls.length === 2) {
-        l.push(': ping\n\n'); l.end() // 재연결했지만 또 끊김(이벤트 없음)
+        l.push(': ping\n\n'); l.end() // 재연결했으나 다시 끊김(이벤트 없음)
       } else {
         l.push(ev('token', { text: '나' }, '3-0')); l.push(ev('done', { message_id: 'm9', status: 'complete' }, '4-0')); l.end()
       }

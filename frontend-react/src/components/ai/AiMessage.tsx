@@ -1,7 +1,7 @@
 /**
- * AI 답변 본문 — markdown-it(html 끔·linkify·breaks) + DOMPurify.
- * 코드펜스는 머리(언어 + 복사) + shiki 하이라이트(로드되면, 다크/라이트 테마 따라).
- * 스트리밍 중에는 60ms 간격으로 다시 그린다. 스타일은 AiMessage.css(전역).
+ * AI 답변 본문 — markdown-it(html 비활성·linkify·breaks) + DOMPurify.
+ * 코드펜스는 머리(언어 + 복사) + shiki 하이라이트(로드 완료 시, 다크/라이트 테마 연동).
+ * 스트리밍 중에는 60ms 간격으로 재렌더링한다. 스타일은 AiMessage.css(전역).
  */
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import MarkdownIt from 'markdown-it'
@@ -17,11 +17,11 @@ import { writeClipboard } from '~/lib/clipboard'
 export interface AiMessageProps {
   /** 마크다운 원문 */
   content: string
-  /** 받는 중(다시 그리기를 60ms 로 묶는다) */
+  /** 수신 중(재렌더링을 60ms 단위로 병합) */
   streaming?: boolean
-  /** 이 답변의 출처 번호(본문 [n] 중 이 번호만 버튼이 된다) */
+  /** 이 답변의 출처 번호(본문 [n] 중 해당 번호만 버튼으로 변환) */
   citations?: number[]
-  /** 본문 [n] 을 누름 */
+  /** 본문 [n] 클릭 */
   onCite?: (n: number, el: HTMLElement) => void
 }
 
@@ -30,7 +30,7 @@ export function AiMessage({ content, streaming, citations, onCite }: AiMessagePr
   const colorMode = useColorMode()
   const isDark = colorMode.value === 'dark'
 
-  // 렌더러가 읽는 "지금" 값
+  // 렌더러가 참조하는 현재 값
   const citeKey = (citations ?? []).join(',')
   const live = useRef({ content, isDark, t, nums: new Set(citations ?? []) as ReadonlySet<number> })
   live.current = { content, isDark, t, nums: new Set(citations ?? []) }
@@ -54,7 +54,7 @@ export function AiMessage({ content, streaming, citations, onCite }: AiMessagePr
       return `<div class="ai-cb"><div class="ai-cb-h"><span class="ai-cb-lang">${label}</span>`
         + `<button type="button" class="ai-cb-copy">${m.utils.escapeHtml(live.current.t('ai.message.copy'))}</button></div>${body}</div>`
     }
-    // 수식 $…$ · $$…$$ (KaTeX, 처음 필요할 때 로드) — 코드에는 닿지 않는다
+    // 수식 $…$ · $$…$$ (KaTeX, 최초 필요 시 로드) — 코드에는 미적용
     aiMathPlugin(m, aiKatexLoaded)
     // 출처 표식 [n] → 버튼
     aiCitePlugin(m, () => live.current.nums, n => live.current.t('ai.cite.marker', { n }))
@@ -65,12 +65,12 @@ export function AiMessage({ content, streaming, citations, onCite }: AiMessagePr
   const doRender = useRef(() => {
     const src = live.current.content || ''
     setRendered(DOMPurify.sanitize(md.render(src)))
-    // 수식이 있으면 KaTeX 를 불러온 뒤 한 번 더
-    if (!aiKatexLoaded() && aiHasMath(src)) void getAiKatex().then(() => doRender()).catch(() => { /* 원문 그대로 */ })
+    // 수식이 있으면 KaTeX 로드 후 1회 재렌더링
+    if (!aiKatexLoaded() && aiHasMath(src)) void getAiKatex().then(() => doRender()).catch(() => { /* 원문 유지 */ })
   }).current
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // onMounted: 그리기 → 하이라이터 로드 후 다시
+  // onMounted: 렌더링 → 하이라이터 로드 후 재렌더링
   useEffect(() => {
     let alive = true
     doRender()
@@ -88,7 +88,7 @@ export function AiMessage({ content, streaming, citations, onCite }: AiMessagePr
     }
   }, [doRender])
 
-  // 내용이 바뀌면 다시 그리기를 예약한다 — 첫 실행 없음
+  // 내용 변경 시 재렌더링 예약 — 최초 실행 제외
   const seen = useRef({ content: false, streaming: false, dark: false, cites: false })
   useEffect(() => {
     if (!seen.current.content) { seen.current.content = true; return }
@@ -99,7 +99,7 @@ export function AiMessage({ content, streaming, citations, onCite }: AiMessagePr
       if (timer.current) { clearTimeout(timer.current); timer.current = null }
       doRender()
     }
-    // 내용이 바뀔 때만
+    // 내용 변경 시에만 실행
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content])
   // watch(() => props.streaming, s => { if (!s) doRender() })
@@ -107,7 +107,7 @@ export function AiMessage({ content, streaming, citations, onCite }: AiMessagePr
     if (!seen.current.streaming) { seen.current.streaming = true; return }
     if (!streaming) doRender()
   }, [streaming, doRender])
-  // 출처 번호가 바뀌면(스트림 중 citation 도착) 다시
+  // 출처 번호 변경 시(스트림 중 citation 도착) 재렌더링
   useEffect(() => {
     if (!seen.current.cites) { seen.current.cites = true; return }
     doRender()
@@ -129,7 +129,7 @@ export function AiMessage({ content, streaming, citations, onCite }: AiMessagePr
     if (!btn) return
     const pre = btn.closest('.ai-cb')?.querySelector('pre')
     const code = pre?.textContent || ''
-    void writeClipboard(code).catch(() => { /* 복사 실패 — 버튼 문구만 바뀐다 */ })
+    void writeClipboard(code).catch(() => { /* 복사 실패 — 버튼 문구만 변경 */ })
     const prev = btn.textContent
     btn.textContent = t('ai.message.copied')
     setTimeout(() => { btn.textContent = prev || t('ai.message.copy') }, 1200)

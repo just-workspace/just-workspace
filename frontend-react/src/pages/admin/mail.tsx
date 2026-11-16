@@ -114,7 +114,7 @@ export default function AdminMailPage() {
     lastTestText = t('admin.mail.lastTest', { when, result: lastTest.ok ? t('admin.mail.testOk') : t('admin.mail.testFail') })
   }
 
-  // 시험 메일 — 받는 주소를 묻는 작은 모달
+  // 시험 메일 — 수신 주소 입력용 소형 모달
   const [testOpen, setTestOpen] = useState(false)
   const [testTo, setTestTo] = useState('')
   const [testing, setTesting] = useState(false)

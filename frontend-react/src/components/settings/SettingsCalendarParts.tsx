@@ -2,10 +2,10 @@
  * 설정 › 캘린더 조각:
  *  · SettingsSubscriptionRow — 외부 캘린더 구독 한 줄(min 56): 범주 색 점 10 · 이름 600 + .ics 주소(11 mono, 한 줄) ·
  *    "받음 HH:MM"(mono) 또는 danger 틴트 배지 "받지 못함 · 404" · UiMenu[지금 새로 고침 · 색 바꾸기(하위 메뉴) · 공유 · ─ · 구독 해제].
- *  · subscriptionMenuItems — 구독 ⋮ 메뉴 한 벌. 설정 › 캘린더와 캘린더 사이드바가 같이 쓴다(두 곳 통일, "삭제" 대신 "구독 해제").
- *  · [+ 구독 추가] 모달은 캘린더와 같이 쓰는 components/calendar/CalendarSubscribeModal.
- *  · subscriptionReason — 서버 실패 이유(HTTP 상태 숫자 또는 이름) → 배지 글자.
- *  · refreshSubscriptionNow — "지금 새로 고침" 한 번(토스트 포함). 캘린더 사이드바 구독 행 ⋮ 도 같이 쓴다.
+ *  · subscriptionMenuItems — 구독 ⋮ 메뉴 한 세트. 설정 › 캘린더와 캘린더 사이드바가 공동으로 사용한다(두 곳 통일, "삭제" 대신 "구독 해제").
+ *  · [+ 구독 추가] 모달은 캘린더와 공동으로 사용하는 components/calendar/CalendarSubscribeModal.
+ *  · subscriptionReason — 서버 실패 사유(HTTP 상태 숫자 또는 이름) → 배지 문구.
+ *  · refreshSubscriptionNow — "지금 새로 고침" 1회 수행(토스트 포함). 캘린더 사이드바 구독 행 ⋮ 에서도 공동으로 사용한다.
  */
 import { useI18n } from '~/i18n'
 import { $fetch, errorStatus } from '~/lib/api'
@@ -24,14 +24,14 @@ export interface CalendarSubscription {
   url: string
   fetched_at: string | null
   checked_at: string | null
-  /** 마지막 실패 이유 — "404" 같은 HTTP 상태 또는 timeout·too_large·not_ics·blocked·dns·network */
+  /** 마지막 실패 사유 — "404" 같은 HTTP 상태 또는 timeout·too_large·not_ics·blocked·dns·network */
   error: string | null
   is_visible?: boolean
 }
 
 type T = (k: string, v?: Record<string, unknown>) => string
 
-/** 실패 이유 → 짧은 글자. 숫자(HTTP 상태)는 그대로 */
+/** 실패 사유 → 짧은 문구. 숫자(HTTP 상태)는 그대로 사용 */
 export function subscriptionReason(t: T, code: string | null | undefined): string {
   if (!code) return ''
   if (/^\d{3}$/.test(code)) return code
@@ -41,9 +41,9 @@ export function subscriptionReason(t: T, code: string | null | undefined): strin
 }
 
 /**
- * 구독 "지금 새로 고침" — POST /api/calendar/subscriptions/{id}/refresh + 결과 토스트 + 캘린더 다시 읽기.
- * 1분 안에 다시 누르면 서버가 429 → "받지 못했습니다 · 1분 뒤 다시"(메뉴는 비활성으로 두지 않는다).
- * @returns 새 구독 줄(실패면 null)
+ * 구독 "지금 새로 고침" — POST /api/calendar/subscriptions/{id}/refresh + 결과 토스트 + 캘린더 재조회.
+ * 1분 이내 재요청 시 서버가 429 반환 → "받지 못했습니다 · 1분 뒤 다시"(메뉴는 비활성화하지 않는다).
+ * @returns 새 구독 줄(실패 시 null)
  */
 export async function refreshSubscriptionNow(t: T, sub: { id: string; name: string }): Promise<CalendarSubscription | null> {
   try {
@@ -53,14 +53,14 @@ export async function refreshSubscriptionNow(t: T, sub: { id: string; name: stri
     void fetchCalendars()
     return row
   } catch (e) {
-    // 429 = 서버의 1분 최소 간격(남용 방지) — 기존 일정·상태는 그대로
+    // 429 = 서버의 1분 최소 간격(남용 방지) — 기존 일정·상태는 유지
     const reason = errorStatus(e) === 429 ? 'too_soon' : 'network'
     addToast('error', t('settings.calendarPrefs.refreshFailed', { name: sub.name, reason: subscriptionReason(t, reason) }))
     return null
   }
 }
 
-/** 받은 시각 — 오늘이면 HH:MM, 아니면 MM/DD HH:MM */
+/** 수신 시각 — 오늘이면 HH:MM, 아니면 MM/DD HH:MM */
 export function fetchedTime(iso: string | null | undefined, now = new Date()): string {
   if (!iso) return ''
   const d = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z')
@@ -95,7 +95,7 @@ export function subscriptionColorOf(key: string): string | null {
   return n >= 1 && n <= CAT_HEX.length ? CAT_HEX[n - 1] : null
 }
 
-/** 구독 해제 확인(두 곳 같은 문구) */
+/** 구독 해제 확인(두 곳 동일 문구) */
 export function confirmUnsubscribe(t: T, name: string): Promise<boolean> {
   return confirmBox(t('settings.calendarPrefs.removeBody'), { title: t('settings.calendarPrefs.removeTitle', { name }), confirmLabel: t('settings.calendarPrefs.remove'), danger: true })
 }
@@ -103,7 +103,7 @@ export function confirmUnsubscribe(t: T, name: string): Promise<boolean> {
 export interface SettingsSubscriptionRowProps {
   /** 구독 한 줄 */
   sub: CalendarSubscription
-  /** 진행 중(새로 받는 중 등) — 메뉴 비활성 */
+  /** 진행 중(재수신 중 등) — 메뉴 비활성 */
   busy?: boolean
   /** 메뉴: refresh · color:N(범주 1…8) · share · remove */
   onAction: (key: string) => void

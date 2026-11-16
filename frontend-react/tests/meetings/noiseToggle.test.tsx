@@ -1,6 +1,6 @@
-// 회의의 "노이즈 제거" 토글 — 브라우저 기본 잡음 억제(noiseSuppression)를 켜고 끈다.
-//  - 지금 마이크 트랙의 제약을 바꾼다 / 그 자리에서 못 바꾸는 브라우저면 트랙을 다시 잡는다
-//  - 둘 다 실패하면 상태를 그대로 두고 알린다 / 마이크가 꺼져 있으면 다음에 켤 때 적용되게 기본값만 바꾼다
+// 회의의 "노이즈 제거" 토글 — 브라우저 기본 잡음 억제(noiseSuppression)를 활성화/비활성화한다.
+//  - 현재 마이크 트랙의 제약을 변경 / 즉시 변경이 불가한 브라우저에서는 트랙을 재획득
+//  - 둘 다 실패하면 상태를 유지하고 알림 / 마이크가 꺼져 있으면 다음 활성화 시 적용되도록 기본값만 변경
 //  - 컨트롤 바의 버튼
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
@@ -61,7 +61,7 @@ describe('잡음 제거 토글', () => {
     expect(track.mediaStreamTrack.applyConstraints).toHaveBeenLastCalledWith({ noiseSuppression: false })
     expect(track.restartTrack).not.toHaveBeenCalled()
     expect(m.meetingsStore.getState()).toMatchObject({ noiseEnabled: false, noiseBusy: false })
-    expect(room.options.audioCaptureDefaults.noiseSuppression).toBe(false)      // 마이크를 다시 켜도 같은 값으로
+    expect(room.options.audioCaptureDefaults.noiseSuppression).toBe(false)      // 마이크를 다시 켜도 동일 값 유지
     await m.toggleNoiseCancellation()
     expect(track.mediaStreamTrack.applyConstraints).toHaveBeenLastCalledWith({ noiseSuppression: true })
     expect(m.meetingsStore.getState().noiseEnabled).toBe(true)

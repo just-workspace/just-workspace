@@ -1,13 +1,13 @@
 /**
  * 이모지 피커.
- * 데스크톱 팝오버 420×440 · 모바일 아래 시트 560(8열 · 칸 44). chat.tsx 에 <ChatEmojiPicker /> 하나만 두고
- * useChatUi.emojiPicker 상태로 스스로 뜬다:
- *  - 컴포저: openComposeEmojiPicker(기준 요소, insert) — 고른 글리프(피부색 적용) 또는 ':name: ' 을 insert 로 넘긴다
+ * 데스크톱 팝오버 420×440 · 모바일 하단 시트 560(8열 · 칸 44). chat.tsx 에 <ChatEmojiPicker /> 하나만 두며
+ * useChatUi.emojiPicker 상태에 따라 자체적으로 표시된다:
+ *  - 컴포저: openComposeEmojiPicker(기준 요소, insert) — 선택한 글리프(피부색 적용) 또는 ':name: ' 을 insert 로 전달
  *  - 리액션: setEmojiPicker({ mode: 'react', messageId, anchor: anchorOf(el) }) — toggleReaction(messageId, 글리프 | ':name:')
  * 위에서부터: 검색 36 + 피부색 버튼(펼치면 6칸 radiogroup) → 분류 탭 10(tablist) → 섹션 제목 12/600 + 격자(UiEmojiGrid, role=grid)
- *  → 아래 미리보기 줄 48(28 이모지 · `:이름:` mono · 설명, 데스크톱만). 커스텀 칸 primary/10 · 움직이면 "GIF".
- * 키보드: 검색에서 ↓ = 격자 첫 칸, Enter = 첫 결과. 격자 첫 줄 ↑ = 앞 섹션(맨 앞이면 검색), 마지막 줄 ↓ = 다음 섹션. Esc 닫기(포커스 되돌림).
- * 고른 이모지는 pushChatEmojiRecent(기본 글리프 또는 ':name:') — "자주 쓴" 첫 섹션.
+ *  → 하단 미리보기 줄 48(28 이모지 · `:이름:` mono · 설명, 데스크톱만). 커스텀 칸 primary/10 · 움직이는 이모지면 "GIF".
+ * 키보드: 검색에서 ↓ = 격자 첫 칸, Enter = 첫 결과. 격자 첫 줄 ↑ = 이전 섹션(맨 앞이면 검색), 마지막 줄 ↓ = 다음 섹션. Esc 닫기(포커스 복원).
+ * 선택한 이모지는 pushChatEmojiRecent(기본 글리프 또는 ':name:')로 기록 — "자주 쓴" 첫 섹션.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
@@ -40,7 +40,7 @@ export function openComposeEmojiPicker(el: Element | null, insert: (text: string
 }
 export function closeEmojiPicker() { setEmojiPicker(null) }
 
-/** 팝오버 자리 — 기준의 오른쪽 끝에 맞추고 위(자리 없으면 아래). 화면 안으로 */
+/** 팝오버 위치 — 기준 요소의 오른쪽 끝에 맞추고 위쪽에 배치(공간이 없으면 아래). 화면 안으로 보정 */
 export function placePicker(a: { x: number; y: number; w: number; h: number } | undefined, vw: number, vh: number, w = PICKER_W, h = PICKER_H) {
   if (!a || (!a.w && !a.h)) return { left: Math.max(8, vw - w - 16), top: Math.max(8, vh - h - 96) }
   const left = Math.max(8, Math.min(a.x + a.w - w, vw - w - 8))
@@ -119,18 +119,18 @@ function PickerPanel({ mode, messageId, anchor }: { mode: 'compose' | 'react'; m
   const none = searching && sections.length === 0
   const preview = active?.item ?? sections[0]?.items[0] ?? null
 
-  // 처음 — 검색칸 포커스(모바일은 키보드가 시트를 가리니 하지 않는다)
+  // 최초 표시 — 검색칸 포커스(모바일은 키보드가 시트를 가리므로 수행하지 않음)
 
   function close(restore = true) {
     setEmojiPicker(null)
-    if (restore && opener.current instanceof HTMLElement) { try { opener.current.focus() } catch { /* 사라졌으면 그만 */ } }
+    if (restore && opener.current instanceof HTMLElement) { try { opener.current.focus() } catch { /* 요소가 제거된 경우 무시 */ } }
   }
-  // 바깥 누르기 · Esc
+  // 외부 클릭 · Esc
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       const el = rootRef.current
       const tg = e.target as Element | null
-      // 여는 버튼(data-emoji-toggle)은 자기 클릭으로 닫는다 — 여기서 닫으면 곧바로 다시 열린다
+      // 여는 버튼(data-emoji-toggle)은 자체 클릭으로 닫음 — 여기서 닫으면 즉시 다시 열림
       if (el && !el.contains(tg) && !tg?.closest?.('[data-emoji-toggle]')) close(false)
     }
     document.addEventListener('mousedown', onDown)
@@ -169,7 +169,7 @@ function PickerPanel({ mode, messageId, anchor }: { mode: 'compose' | 'react'; m
     } else if (sections[i + 1]) gridRefs.current[sections[i + 1].key]?.focus(col)
   }
 
-  // 탭 — 그 섹션으로 스크롤 / 스크롤하면 탭 표시가 따라온다
+  // 탭 — 해당 섹션으로 스크롤 / 스크롤 시 탭 표시 연동
   function goTab(key: EmojiCategoryKey) {
     setQ('')
     setTab(key)
@@ -190,7 +190,7 @@ function PickerPanel({ mode, messageId, anchor }: { mode: 'compose' | 'react'; m
     if (cur !== tab) setTab(cur)
   }
 
-  // 자리(데스크톱)
+  // 위치(데스크톱)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   useLayoutEffect(() => {
     if (mobile) return
@@ -204,7 +204,7 @@ function PickerPanel({ mode, messageId, anchor }: { mode: 'compose' | 'react'; m
     return () => window.removeEventListener('resize', place)
   }, [anchor, mobile])
 
-  // 자리를 잡아 보이게 된 뒤에 검색칸으로(visibility:hidden 인 동안은 focus 가 먹지 않는다)
+  // 위치 확정 후 표시된 다음 검색칸에 포커스(visibility:hidden 상태에서는 focus 가 적용되지 않음)
   const placed = !!pos
   useEffect(() => { if (!mobile && placed) searchRef.current?.focus() }, [mobile, placed])
 

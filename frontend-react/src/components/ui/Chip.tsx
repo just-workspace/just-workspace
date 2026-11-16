@@ -1,8 +1,8 @@
 /**
  * 필터 칩: 32 알약, 선택 = primary/13 + border primary/50 + ✓(색만 아님), 카운트 mono.
  * 모바일은 36(size="lg"). 점선 "+ 필터" 는 variant="add". aria-pressed 토글 버튼.
- * 켜짐 값은 modelValue/onUpdateModelValue. 안 주면 칩이 스스로 토글 상태를 가진다.
- * surface="raised": 팝오버·시트·모달(card 바탕 + 그림자) 위에 놓일 때 — 꺼진 칩·✕ 테두리를 border-muted-foreground/35 로(border 토큰은 card 위에서 거의 안 보인다).
+ * 켜짐 값은 modelValue/onUpdateModelValue. 미지정 시 칩이 토글 상태를 자체 보유한다.
+ * surface="raised": 팝오버·시트·모달(card 바탕 + 그림자) 위에 배치될 때 — 꺼진 칩·✕ 테두리를 border-muted-foreground/35 로 적용한다(border 토큰은 card 위에서 거의 식별되지 않는다).
  */
 import type { HTMLAttributes, MouseEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -13,7 +13,7 @@ import { useModel } from './internal'
 export interface UiChipProps extends Omit<HTMLAttributes<HTMLSpanElement>, 'onClick'> {
   /** 켜짐(토글형) */
   modelValue?: boolean
-  /** 켜짐 바뀜 */
+  /** 켜짐 상태 변경 시 호출 */
   onUpdateModelValue?: (v: boolean) => void
   /** 칩 글자(필수) */
   label: string
@@ -23,18 +23,18 @@ export interface UiChipProps extends Omit<HTMLAttributes<HTMLSpanElement>, 'onCl
   icon?: string
   /** sm 28 · md 32(기본) · lg 36(모바일) */
   size?: 'md' | 'lg' | 'sm'
-  /** toggle(기본) · add = 점선 "+ 필터" 버튼(토글 아님) · static(토글 안 함) */
+  /** toggle(기본) · add = 점선 "+ 필터" 버튼(토글 아님) · static(토글 미수행) */
   variant?: 'toggle' | 'add' | 'static'
   /** 선택 색 톤(관리 사용자 "승인 대기" 는 warning, 열림·연결 같은 켜짐 상태는 success). 기본 primary */
   tone?: 'primary' | 'warning' | 'success'
   disabled?: boolean
   /** 제거 가능한 칩(받는이 등) — ✕ 아이콘 버튼, onRemove */
   removable?: boolean
-  /** 칩 클릭(토글 뒤에 불린다) */
+  /** 칩 클릭(토글 이후 호출됨) */
   onClick?: (e: MouseEvent<HTMLButtonElement>) => void
   /** ✕ 클릭 */
   onRemove?: () => void
-  /** 놓인 면 — page(기본, 본문) · raised(팝오버·시트·모달 위: 꺼진 칩·✕ 테두리 muted-foreground/35) */
+  /** 배치 면 — page(기본, 본문) · raised(팝오버·시트·모달 위: 꺼진 칩·✕ 테두리 muted-foreground/35) */
   surface?: 'page' | 'raised'
 }
 
@@ -60,7 +60,7 @@ export function UiChip({
   const h = H[size]
   const offBorder = surface === 'raised' ? 'border-muted-foreground/35' : 'border-border'
   const on = variant === 'toggle' && model
-  // success 톤은 켜짐 상태 자체를 아이콘으로 말한다(✓ 대신 아이콘을 success 색으로)
+  // success 톤은 켜짐 상태를 아이콘으로 표현한다(✓ 대신 아이콘을 success 색으로 표시)
   const onIcon = tone === 'success' && icon ? icon : 'check'
 
   function handleClick(e: MouseEvent<HTMLButtonElement>) {
@@ -94,7 +94,7 @@ export function UiChip({
         <span>{label}</span>
         {count !== undefined && <span className="font-mono font-medium text-muted-foreground">{count}</span>}
       </button>
-      {/* 제거 버튼은 별도 버튼(히트 영역 분리). ✕ 28 → 히트 40 확장은 before 로 */}
+      {/* 제거 버튼은 별도 버튼(히트 영역 분리). ✕ 28 → 히트 40 확장은 before 로 처리 */}
       {removable && (
         <button
           type="button"

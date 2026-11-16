@@ -1,24 +1,24 @@
 /**
  * 상세 패널:
  * 헤더 44(유형 아이콘 · 이름 13/600 · 공유 · 닫기) + 밑줄 탭 정보 / 버전 N / 활동 / 댓글.
- * 버전: 행 = 원 28(작성자 이니셜, 모르면 시계) · v번호 mono 12 + "현재" success 틴트 · 메타 12 muted(시각 · 작성자) ·
- *   옛 버전은 "내려받기"(GET /versions/download) · "이 버전으로 복원"(확인 후). 시안의 "미리보기" 자리는 옛 버전 내려받기로 둔다.
- * 활동 탭: GET /activity(폴더면 하위 포함) — 행 = 원 28 이니셜 · "누가 무엇을" 13 · 시각 mono 12. 시안 그림 없어 버전 행 규격을 따랐다.
- * 헤더에 즐겨찾기 별(채운 별 = 켜짐).
- * 댓글 탭: 내 파일(my/)·공유받은 항목(shared-with-me/)만 — FileCommentsPanel(시안 그림 없음, 게시판 댓글 규격). 보기 권한이면 읽기만.
- * 공유받은 항목: 별(즐겨찾기)은 서버가 내 경로만 받아 숨기고, 공유 버튼은 공동 소유일 때만.
+ * 버전: 행 = 원 28(작성자 이니셜, 미상이면 시계) · v번호 mono 12 + "현재" success 틴트 · 메타 12 muted(시각 · 작성자) ·
+ *   이전 버전은 "내려받기"(GET /versions/download) · "이 버전으로 복원"(확인 후). 시안의 "미리보기" 자리는 이전 버전 내려받기로 대체한다.
+ * 활동 탭: GET /activity(폴더면 하위 포함) — 행 = 원 28 이니셜 · "누가 무엇을" 13 · 시각 mono 12. 시안 그림이 없어 버전 행 규격을 따른다.
+ * 헤더에 즐겨찾기 별(채운 별 = 활성).
+ * 댓글 탭: 내 파일(my/)·공유받은 항목(shared-with-me/)만 — FileCommentsPanel(시안 그림 없음, 게시판 댓글 규격). 보기 권한이면 읽기 전용.
+ * 공유받은 항목: 별(즐겨찾기)은 서버가 본인 경로만 허용하므로 숨기고, 공유 버튼은 공동 소유일 때만 표시한다.
  * 모바일: 전체 화면 푸시 + 탭바 숨김. 상단 바는 셸 LayoutMobileDetailBar(navigate=false — 뒤로 = 패널 닫기).
  *
  * v-model:tab → tab + onUpdateTab.
  *
- * 추가된 것:
- *  폭 360, 탭 순서 = 정보 · 댓글(n) · 버전 · 활동(모바일은 활동 탭 없음). 댓글 수는 패널이 열릴 때 읽는다.
- *  정보 탭 = (공동 소유자면) 맨 위 이름 UiInput + hint "이동·삭제는 원 소유자만", 그 아래 80/1fr 격자:
- *   내 권한(배지 + 할 수 있는 것) · 소유자(아바타 20 + 이름) · 크기 · 수정 · 유형 · 위치 · 공유.
+ * 추가 사항:
+ *  폭 360, 탭 순서 = 정보 · 댓글(n) · 버전 · 활동(모바일은 활동 탭 없음). 댓글 수는 패널이 열릴 때 조회한다.
+ *  정보 탭 = (공동 소유자면) 최상단 이름 UiInput + hint "이동·삭제는 원 소유자만", 그 아래 80/1fr 격자:
+ *   내 권한(배지 + 가능한 동작) · 소유자(아바타 20 + 이름) · 크기 · 수정 · 유형 · 위치 · 공유.
  *  모바일 머리 보조 줄 = "내 권한 · 원 소유자"(공유받은 항목).
- * 모바일은 탭을 늘리지 않고 정보 탭 맨 아래에 "활동" 묶음(최근 5개 + "모두 보기") —
- *  "모두 보기" = 같은 판 안 전체 화면 목록(상단 바 ‹ 활동 · 파일 이름, 뒤로 = 정보로). 행 규격은 데스크톱 활동 탭과 같다.
- *  묶음 머리(12/600 muted + 오른쪽 link xs)는 시안 그림이 없어 기존 패널 머리 규격을 따랐다.
+ * 모바일은 탭을 추가하지 않고 정보 탭 최하단에 "활동" 묶음(최근 5개 + "모두 보기")을 둔다 —
+ *  "모두 보기" = 동일 패널 내 전체 화면 목록(상단 바 ‹ 활동 · 파일 이름, 뒤로 = 정보로). 행 규격은 데스크톱 활동 탭과 동일하다.
+ *  묶음 머리(12/600 muted + 오른쪽 link xs)는 시안 그림이 없어 기존 패널 머리 규격을 따른다.
  */
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { clsx } from 'clsx'
@@ -50,7 +50,7 @@ export type FileDetailTab = 'info' | 'versions' | 'activity' | 'comments'
 
 export interface FilesFileDetailPanelProps {
   item: FileItem
-  /** 지금 탭(기본 info) */
+  /** 현재 탭(기본 info) */
   tab?: FileDetailTab
   onUpdateTab?: (v: FileDetailTab) => void
   onClose?: () => void
@@ -58,14 +58,14 @@ export interface FilesFileDetailPanelProps {
   onShare?: (item: FileItem) => void
   /** 즐겨찾기 별 */
   onStar?: (item: FileItem) => void
-  /** 정보 탭에서 이름을 바꿨다(공동 소유자) — 새 이름·경로가 담긴 항목 */
+  /** 정보 탭에서 이름 변경 완료(공동 소유자) — 새 이름·경로가 포함된 항목 */
   onRenamed?: (item: FileItem) => void
 }
 
 const initialOf = (s: string | null | undefined) => (s || '').trim().slice(0, 1).toUpperCase()
 
 export function FilesFileDetailPanel({ item, tab: tabProp, onUpdateTab, onClose, onShare, onStar, onRenamed }: FilesFileDetailPanelProps) {
-  // defineModel(default 'info') — 부모가 안 주면 자체 상태
+  // defineModel(default 'info') — 부모가 전달하지 않으면 자체 상태 사용
   const [localTab, setLocalTab] = useState<FileDetailTab>('info')
   const tab = tabProp ?? localTab
   const setTab = (v: FileDetailTab) => { setLocalTab(v); onUpdateTab?.(v) }
@@ -82,10 +82,10 @@ export function FilesFileDetailPanel({ item, tab: tabProp, onUpdateTab, onClose,
   const commentable = item.path.startsWith('my/') || sharedIn
   const canShare = !sharedIn || roleAtLeast(item.role, 'owner')
   useEffect(() => { if (!commentable && tab === 'comments') setTab('info') }, [commentable]) // eslint-disable-line react-hooks/exhaustive-deps
-  // 모바일은 활동 탭이 없다
+  // 모바일에는 활동 탭 없음
   useEffect(() => { if (isMobile && tab === 'activity') setTab('info') }, [isMobile]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 댓글 — 탭 숫자 "댓글 n" 을 위해 패널이 열릴 때 읽는다(댓글 탭은 같은 상태를 쓴다)
+  // 댓글 — 탭 숫자 "댓글 n" 표시를 위해 패널이 열릴 때 조회한다(댓글 탭은 동일 상태를 사용)
   const comments = useFileComments(item.path)
   useEffect(() => { if (commentable) void comments.load() }, [item.path, commentable]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -153,7 +153,7 @@ export function FilesFileDetailPanel({ item, tab: tabProp, onUpdateTab, onClose,
       setALoading(false)
     }
   }
-  // 활동을 보여 줄 때만 받는다(파일을 고를 때마다 부르지 않게) — 데스크톱 = 활동 탭, 모바일 = 정보 탭 맨 아래 묶음
+  // 활동 표시 시에만 조회한다(파일 선택마다 호출하지 않도록) — 데스크톱 = 활동 탭, 모바일 = 정보 탭 최하단 묶음
   const showsActivity = tab === 'activity' || (isMobile && tab === 'info')
   useEffect(() => { if (showsActivity && aLoadedFor.current !== item.path) loadActivity() }, [showsActivity, item.path]) // eslint-disable-line react-hooks/exhaustive-deps
   // 모바일 "모두 보기" 전체 화면 목록
@@ -251,7 +251,7 @@ export function FilesFileDetailPanel({ item, tab: tabProp, onUpdateTab, onClose,
           : activityRows(list)
   )
 
-  // 모바일 활동 전체 화면 — 같은 판 안에서 바꿔 그린다
+  // 모바일 활동 전체 화면 — 동일 패널 내에서 전환하여 렌더링
   if (isMobile && allActivity) {
     return (
       <aside aria-label={t('files.detail.tabActivity')} className="fixed inset-0 z-drawer flex flex-col bg-background" onKeyDown={onKey}>
@@ -305,7 +305,7 @@ export function FilesFileDetailPanel({ item, tab: tabProp, onUpdateTab, onClose,
 
       <UiTabs modelValue={tab} onUpdateModelValue={onTabModel} items={tabs} size="sm" ariaLabel={t('files.detail.tabsLabel')} className="border-b border-border px-2" />
 
-      {/* 댓글 — 입력이 바닥에 붙어야 해서 스크롤 영역 밖에 둔다 */}
+      {/* 댓글 — 입력이 하단에 고정되어야 하므로 스크롤 영역 밖에 배치 */}
       {tab === 'comments' && commentable
         ? <FilesFileCommentsPanel path={item.path} state={comments} />
         : (

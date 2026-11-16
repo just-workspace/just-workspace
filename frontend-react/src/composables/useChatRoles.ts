@@ -1,11 +1,11 @@
 /**
  * 채팅 역할·권한 어댑터(백엔드 app/chat/roles.py · permissions.py — 계약 docs/chat-permissions.md).
- * 역할·권한 API 는 프런트에서 **여기서만** 부른다. 화면(멤버 열·자동완성·프로필·설정)은 이 store 를 읽는다.
+ * 역할·권한 API 는 프런트에서 **본 모듈에서만** 호출한다. 화면(멤버 열·자동완성·프로필·설정)은 이 store 를 조회한다.
  *
  * - 역할 색: 서버는 팔레트 토큰 키 8개(permissions.ROLE_COLOR_TOKENS, 순서 고정)로 저장한다.
- *   순서 i → --role-(i+1)(= cat-(i+1)) 로 그린다. roleColorIndex 한 곳.
- * - 실패(엔진 legacy·네트워크)면 "역할 없음"으로 떨어진다: 목록 비움, 관리 권한 = 전역 관리자만.
- * - 실시간 갱신: 서버가 chat_roles_changed 이벤트를 보내면 handleRolesEvent 가 다시 읽는다.
+ *   순서 i → --role-(i+1)(= cat-(i+1)) 로 표시한다. roleColorIndex 한 곳에서 처리한다.
+ * - 실패(엔진 legacy·네트워크) 시 "역할 없음"으로 fallback 한다: 목록 비움, 관리 권한 = 전역 관리자만.
+ * - 실시간 갱신: 서버가 chat_roles_changed 이벤트를 송신하면 handleRolesEvent 가 재조회한다.
  *
  * React: const roles = useStore(chatRolesStore, s => s.roles); await loadRoles()
  */
@@ -15,13 +15,13 @@ import { authStore } from '~/composables/useAuth'
 
 const B = '/api/chat'
 
-/** 서버 ROLE_COLOR_TOKENS 와 같은 순서 — 바꾸면 색이 섞인다 */
+/** 서버 ROLE_COLOR_TOKENS 와 동일 순서 — 변경 시 색 불일치 발생 */
 export const ROLE_COLOR_KEYS = [
   'primary', 'accent', 'success', 'warning', 'danger', 'destructive', 'muted-foreground', 'foreground',
 ] as const
 export type RoleColorKey = typeof ROLE_COLOR_KEYS[number]
 
-/** 토큰 키 → 1…8 (모르는 값·null = 0 = 색 없음). 'cat-N'·'role-N' 도 받는다 */
+/** 토큰 키 → 1…8 (미확인 값·null = 0 = 색 없음). 'cat-N'·'role-N' 도 허용 */
 export function roleColorIndex(key: string | null | undefined): number {
   if (!key) return 0
   const m = /^(?:cat|role)-([1-8])$/.exec(key)
@@ -39,7 +39,7 @@ export function roleChipClass(key: string | null | undefined): string {
   const n = roleColorIndex(key)
   return n ? `bg-role-${n}/15 text-role-${n}` : 'bg-muted text-foreground'
 }
-/** Tailwind 가 동적 클래스를 못 찾으니 전체 목록을 소스에 둔다(글롭 수집용) */
+/** Tailwind 가 동적 클래스를 탐지하지 못하므로 전체 목록을 소스에 명시한다(글롭 수집용) */
 export const ROLE_CLASS_SAFELIST = [
   'text-role-1', 'text-role-2', 'text-role-3', 'text-role-4', 'text-role-5', 'text-role-6', 'text-role-7', 'text-role-8',
   'bg-role-1/15', 'bg-role-2/15', 'bg-role-3/15', 'bg-role-4/15', 'bg-role-5/15', 'bg-role-6/15', 'bg-role-7/15', 'bg-role-8/15',
@@ -52,13 +52,13 @@ export interface ChatRole {
   name: string
   color: string | null
   icon: string | null
-  /** 높을수록 위. @everyone = 0 */
+  /** 높을수록 상위. @everyone = 0 */
   position: number
   permissions: number
   permission_names: string[]
   hoist: boolean
   mentionable: boolean
-  /** 그룹과 연결된 역할 — 멤버는 그룹에서 계산, 멤버 탭 잠김 */
+  /** 그룹과 연결된 역할 — 멤버는 그룹에서 계산, 멤버 탭 잠금 */
   managed: boolean
   group_id: string | null
   is_default: boolean
@@ -81,7 +81,7 @@ export interface RoleMemberGroup {
   members: Array<{ user_id: string; username: string; display_name: string | null; avatar_url: string | null; role: string; is_online?: boolean; roles: string[]; color: string | null }>
 }
 
-/** 권한 비트 — 서버 permissions.py 와 같은 값(BigInt 아님: 1<<40 까지라 Number 로 안전) */
+/** 권한 비트 — 서버 permissions.py 와 동일 값(BigInt 아님: 1<<40 까지이므로 Number 로 안전) */
 export const PERM = {
   VIEW_CHANNEL: 2 ** 0, SEND_MESSAGES: 2 ** 1, SEND_IN_THREADS: 2 ** 2, CREATE_THREADS: 2 ** 3, READ_HISTORY: 2 ** 4,
   EMBED_LINKS: 2 ** 5, ATTACH_FILES: 2 ** 6, ADD_REACTIONS: 2 ** 7, USE_EXTERNAL_EMOJI: 2 ** 8, MENTION_EVERYONE: 2 ** 9,
@@ -92,7 +92,7 @@ export const PERM = {
   DEAFEN_MEMBERS: 2 ** 30, MOVE_MEMBERS: 2 ** 31, USE_SOUNDBOARD: 2 ** 32, REQUEST_TO_SPEAK: 2 ** 33, ADMINISTRATOR: 2 ** 40,
 } as const
 export type PermName = keyof typeof PERM
-/** 비트 검사(32비트 넘는 값이라 & 연산자 대신 산술) */
+/** 비트 검사(32비트 초과 값이므로 & 연산자 대신 산술 사용) */
 export function hasBit(bits: number, bit: number): boolean {
   return Math.floor(bits / bit) % 2 === 1
 }
@@ -105,9 +105,9 @@ interface ChatRolesState {
   roles: ChatRole[]
   loaded: boolean
   catalog: PermissionCatalog | null
-  /** 워크스페이스 범위 내 권한(@everyone ∪ 내 역할) */
+  /** 워크스페이스 범위의 본인 권한(@everyone ∪ 본인 역할) */
   myWorkspacePerms: number
-  /** 채널 id → 내 실효 권한 */
+  /** 채널 id → 본인 실효 권한 */
   myChannelPerms: Record<string, number>
   /** 사용자 id → 역할 id 목록(높은 순) — 프로필·이름 색 */
   userRoles: Record<string, string[]>
@@ -155,30 +155,30 @@ export async function loadMyChannelPerms(channelId: string) {
   try {
     const r = await $fetch<{ permissions: number }>(`${B}/channels/${channelId}/permissions/me`)
     set({ myChannelPerms: { ...S().myChannelPerms, [channelId]: r.permissions } })
-  } catch { /* 모르면 지금 동작(멤버는 거의 다 됨) — canInChannel 이 기본값으로 판단 */ }
+  } catch { /* 미확인 시 현행 동작(멤버는 대부분 허용) — canInChannel 이 기본값으로 판단 */ }
   return S().myChannelPerms[channelId]
 }
 
-/** 워크스페이스 범위 관리 권한(역할·채널·이모지 관리). 전역 관리자·ADMINISTRATOR 는 늘 됨 */
+/** 워크스페이스 범위 관리 권한(역할·채널·이모지 관리). 전역 관리자·ADMINISTRATOR 는 항상 허용 */
 export function canWorkspace(bit: number, s: ChatRolesState = S()): boolean {
   if (isAdmin()) return true
   return hasBit(s.myWorkspacePerms, PERM.ADMINISTRATOR) || hasBit(s.myWorkspacePerms, bit)
 }
-/** 채널 안 권한. 아직 못 읽었으면 fallback(기본: @everyone 기본값 기준 — 멘션·첨부·리액션 됨, 관리 안 됨) */
+/** 채널 내 권한. 미조회 상태이면 fallback(기본: @everyone 기본값 기준 — 멘션·첨부·리액션 허용, 관리 불가) */
 export function canInChannel(channelId: string | null | undefined, bit: number, s: ChatRolesState = S()): boolean {
   if (isAdmin()) return true
   const bits = channelId ? s.myChannelPerms[channelId] : undefined
   if (bits == null) return canWorkspace(bit, s) || hasBit(s.catalog?.default_everyone ?? DEFAULT_EVERYONE_FALLBACK, bit)
   return hasBit(bits, PERM.ADMINISTRATOR) || hasBit(bits, bit)
 }
-// 서버 DEFAULT_EVERYONE 과 같다(catalog 를 못 읽었을 때)
+// 서버 DEFAULT_EVERYONE 과 동일(catalog 조회 실패 시 사용)
 const DEFAULT_EVERYONE_FALLBACK = [
   'VIEW_CHANNEL', 'SEND_MESSAGES', 'SEND_IN_THREADS', 'CREATE_THREADS', 'READ_HISTORY', 'EMBED_LINKS', 'ATTACH_FILES',
   'ADD_REACTIONS', 'USE_EXTERNAL_EMOJI', 'MENTION_EVERYONE', 'PIN_MESSAGES', 'CREATE_INVITE', 'SEND_POLLS', 'USE_COMMANDS',
   'CONNECT', 'SPEAK', 'STREAM', 'USE_VAD', 'USE_SOUNDBOARD', 'REQUEST_TO_SPEAK',
 ].reduce((a, n) => a + PERM[n as PermName], 0)
 
-/** 계층: 내 최고 역할 위치(전역 관리자·ADMINISTRATOR = 무한) — 이보다 위 역할은 잠금 */
+/** 계층: 본인 최고 역할 위치(전역 관리자·ADMINISTRATOR = 무한) — 이보다 상위 역할은 잠금 */
 export function myTopPosition(s: ChatRolesState = S()): number {
   if (isAdmin() || hasBit(s.myWorkspacePerms, PERM.ADMINISTRATOR)) return Infinity
   const me = authStore.getState().user?.id
@@ -205,11 +205,11 @@ export async function loadMemberGroups(channelId: string) {
     const userRoles = { ...S().userRoles }
     for (const g of r.groups) for (const m of g.members) userRoles[m.user_id] = m.roles
     set({ memberGroups: { ...S().memberGroups, [channelId]: r.groups }, userRoles })
-  } catch { /* 없으면 멤버 열은 온라인/오프라인만 */ }
+  } catch { /* 없으면 멤버 열은 온라인/오프라인만 표시 */ }
   return S().memberGroups[channelId]
 }
 
-/** 사람의 이름 색 = 색이 있는 최고 역할 */
+/** 사용자의 이름 색 = 색이 지정된 최고 역할 */
 export function userRoleColor(userId: string, s: ChatRolesState = S()): string | null {
   const ids = s.userRoles[userId]
   if (!ids?.length) return null
@@ -237,9 +237,9 @@ export async function deleteRole(id: string) {
   await $fetch(`${B}/roles/${id}`, { method: 'DELETE' })
   await loadRoles(true)
 }
-/** 위(높음) → 아래. @everyone 은 넣지 않는다 */
+/** 위(높음) → 아래. @everyone 은 포함하지 않는다 */
 export async function reorderRoles(roleIds: string[]) {
-  // 낙관적: 위치를 바로 바꿔 그린다
+  // 낙관적: 위치를 즉시 변경해 표시
   const n = roleIds.length
   set({ roles: S().roles.map(r => { const i = roleIds.indexOf(r.id); return i >= 0 ? { ...r, position: n - i } : r }).sort((a, b) => b.position - a.position) })
   try { await $fetch(`${B}/roles/order`, { method: 'PUT', body: { role_ids: roleIds } }) } finally { await loadRoles(true) }
@@ -264,7 +264,7 @@ export type OverwriteTarget = 'channels' | 'categories'
 export interface PermOverwrite { id?: string; subject_kind: 'role' | 'user'; subject_id: string; allow: number; deny: number }
 export interface OverwriteList {
   overwrites: PermOverwrite[]
-  /** 채널일 때 — 속한 카테고리의 덮어쓰기(동기화 banner 판단) */
+  /** 채널인 경우 — 소속 카테고리의 덮어쓰기(동기화 banner 판단) */
   category_overwrites: PermOverwrite[]
   category_id: string | null
 }
@@ -272,7 +272,7 @@ export async function fetchOverwrites(target: OverwriteTarget, id: string): Prom
   const r = await $fetch<{ overwrites: PermOverwrite[]; category_overwrites?: PermOverwrite[]; category_id?: string | null }>(`${B}/${target}/${id}/permissions`)
   return { overwrites: r.overwrites || [], category_overwrites: r.category_overwrites || [], category_id: r.category_id ?? null }
 }
-/** 채널 덮어쓰기가 카테고리와 같은가(디스코드 "카테고리와 동기화됨") */
+/** 채널 덮어쓰기와 카테고리 덮어쓰기의 일치 여부(디스코드 "카테고리와 동기화됨") */
 export function overwritesInSync(a: PermOverwrite[], b: PermOverwrite[]): boolean {
   const key = (o: PermOverwrite) => `${o.subject_kind}:${o.subject_id}:${o.allow}:${o.deny}`
   const A = a.filter(o => o.allow || o.deny).map(key).sort()
@@ -296,11 +296,11 @@ export function applyTri(o: Pick<PermOverwrite, 'allow' | 'deny'>, bit: number, 
   return { allow: withBit(o.allow, bit, v === 'allow'), deny: withBit(o.deny, bit, v === 'deny') }
 }
 
-// ─── 채팅 정책(전역 관리자만 바꾼다) ───
+// ─── 채팅 정책(전역 관리자만 변경 가능) ───
 export interface ChatPolicy {
   /** 전역 관리자의 채널 안 특권(DM·비공개 채널 열람 포함). 기본 off */
   admin_channel_privileges: boolean
-  /** 채널 owner 에게 남의 글 삭제(MANAGE_MESSAGES). 기본 off */
+  /** 채널 owner 에게 타인 글 삭제 권한 부여(MANAGE_MESSAGES). 기본 off */
   owner_manage_messages: boolean
   can_edit: boolean
 }
@@ -309,7 +309,7 @@ export function updateChatPolicy(patch: Partial<Omit<ChatPolicy, 'can_edit'>>) {
   return $fetch<ChatPolicy>(`${B}/policy`, { method: 'PUT', body: patch })
 }
 
-/** WS 이벤트(chat_roles_changed · chat_member_roles_changed) — useChat.handleWSMessage 가 넘긴다 */
+/** WS 이벤트(chat_roles_changed · chat_member_roles_changed) — useChat.handleWSMessage 가 전달 */
 export function handleRolesEvent(data: { type?: string; channel_id?: string }) {
   if (data.type === 'chat_roles_changed' || data.type === 'chat_member_roles_changed') {
     void loadRoles(true)

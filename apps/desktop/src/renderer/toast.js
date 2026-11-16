@@ -3,7 +3,7 @@
  *
  * Windows OS 토스트에는 인라인 답장 입력이 없다(Electron Notification 이 노출하지
  * 않는다). 디자인이 "OS 가 지원하지 않으면 자체 프레임리스 알림 창" 을 대안으로
- * 두었으므로 이쪽으로 만든다.
+ * 명시했으므로 자체 창으로 구현한다.
  */
 'use strict';
 
@@ -41,7 +41,7 @@ const WARN_ICON =
   'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
   '<path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17.2h.01"/></svg>';
 
-/** 멘션 부분만 브랜드색으로. innerHTML 을 쓰지 않고 노드로 만든다. */
+/** 멘션 부분만 브랜드색으로 표시한다. innerHTML 을 사용하지 않고 노드로 생성한다. */
 function renderText(el, text, mention) {
   el.replaceChildren();
   if (!mention) {
@@ -101,7 +101,7 @@ function build(t) {
   if (t.kind === 'sync') {
     av.innerHTML = WARN_ICON;
   } else if (t.kind === 'notice' && !t.author) {
-    // 사람이 보낸 게 아닌 알림(일정 알림·시스템) — 벨
+    // 사람이 발신하지 않은 알림(일정 알림·시스템) — 벨
     av.style.background = 'var(--brand)';
     av.innerHTML = BELL_ICON;
   } else {
@@ -178,7 +178,7 @@ window.jw.toast.onList((list) => {
   stack.replaceChildren();
   for (const t of list) stack.append(build(t));
 
-  // 스택 높이를 메인에 알려 창을 딱 맞춘다. 투명 영역이 넓으면 그 아래 창을
+  // 스택 높이를 메인에 전달해 창 크기를 정확히 맞춘다. 투명 영역이 넓으면 그 아래 창을
   // 클릭할 수 없다.
   const r = stack.getBoundingClientRect();
   window.jw.toast.resize({

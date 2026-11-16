@@ -1,4 +1,4 @@
-// 음성 채널 접속 경쟁 — 연속 클릭·접속 중 나가기에서 전송이 남거나(고아) 새 세션이 깨지지 않는지
+// 음성 채널 접속 경합 — 연속 클릭·접속 중 나가기에서 전송이 잔류하거나(고아) 새 세션이 손상되지 않는지 검증
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 const api = vi.hoisted(() => ({ calls: [] as string[], gate: null as null | Promise<void> }))
@@ -54,11 +54,11 @@ describe('음성 접속 경쟁', () => {
     await joinVoice('a')
     expect(voiceStore.getState().channelId).toBe('a')
     const p1 = joinVoice('b')
-    const p2 = joinVoice('c')   // 이동 중(busy) — 예전엔 teardown 이 busy 를 풀어 둘 다 접속했다
+    const p2 = joinVoice('c')   // 이동 중(busy) — 기존에는 teardown 이 busy 를 해제하여 둘 다 접속됨
     await Promise.all([p1, p2])
     expect(voiceStore.getState().channelId).toBe('b')
-    expect(made.list).toHaveLength(2)                       // a, b — c 는 만들지 않았다
-    expect((made.list[0] as Fake).leave).toHaveBeenCalled()  // a 는 정리됐다
+    expect(made.list).toHaveLength(2)                       // a, b — c 는 생성되지 않음
+    expect((made.list[0] as Fake).leave).toHaveBeenCalled()  // a 는 정리됨
     expect(voiceStore.getState().busy).toBe(false)
   })
 
@@ -85,7 +85,7 @@ describe('음성 접속 경쟁', () => {
     await joinVoice('b')
     expect(voiceStore.getState().channelId).toBe('b')
     ;(made.list[0] as Fake).fail(new Error('aborted'))
-    await p1            // 조용히 끝난다(던지지 않는다)
+    await p1            // 정상 종료(예외 미발생)
     expect(voiceStore.getState().channelId).toBe('b')
     expect(voiceStore.getState().connectionState).toBe('connected')
     expect((made.list[1] as Fake).leave).not.toHaveBeenCalled()

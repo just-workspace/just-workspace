@@ -1,6 +1,6 @@
 /**
  * 커맨드 바 ⋯("캘린더 메뉴 — 가져오기·내보내기·CalDAV 주소").
- * 공용 UiMenu(드롭다운 224 · 항목 36). 가져오기·내보내기(.ics)는 CalendarIcsModal 을 연다(캘린더 고르기).
+ * 공용 UiMenu(드롭다운 224 · 항목 36). 가져오기·내보내기(.ics)는 CalendarIcsModal 을 연다(캘린더 선택).
  */
 import { useI18n } from '~/i18n'
 import { useAuth } from '~/composables/useAuth'

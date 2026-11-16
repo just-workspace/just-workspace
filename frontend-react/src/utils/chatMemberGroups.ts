@@ -1,10 +1,10 @@
 /**
  * 멤버 열 묶음(디스코드 규칙) — 순수 함수.
  * 순서 = hoist 역할(계층순, 높은 역할 먼저) → 온라인 → 오프라인.
- *  · hoist 역할 묶음에는 그 역할을 최고 hoist 역할로 가진 **온라인** 사람만 들어간다(디스코드와 같다 — 오프라인은 모두 "오프라인").
- *  · 서버 by-role(useChatRoles.loadMemberGroups)이 없거나 실패하면 온라인/오프라인 둘만.
- *  · 묶음 안은 이름순(로캘 비교).
- *  · 1,000명을 넘는 묶음은 처음 3명만 보이고 "N명 더 보기" + 제목 접기 화살표(BIG_GROUP).
+ *  · hoist 역할 묶음에는 해당 역할을 최고 hoist 역할로 가진 **온라인** 사용자만 포함된다(디스코드와 동일 — 오프라인은 모두 "오프라인").
+ *  · 서버 by-role(useChatRoles.loadMemberGroups)이 없거나 실패하면 온라인/오프라인 두 묶음만 사용.
+ *  · 묶음 내부는 이름순(로캘 비교).
+ *  · 1,000명을 초과하는 묶음은 처음 3명만 표시하고 "N명 더 보기" + 제목 접기 화살표(BIG_GROUP).
  */
 import type { ChatRole, RoleMemberGroup } from '~/composables/useChatRoles'
 
@@ -31,7 +31,7 @@ export interface MemberGroup<M extends MemberLike = MemberLike> {
   role: ChatRole | null
   kind: 'role' | 'online' | 'offline'
   members: GroupedMember<M>[]
-  /** 1,000명 넘음 — 미리보기·접기 */
+  /** 1,000명 초과 — 미리보기·접기 */
   big: boolean
 }
 
@@ -74,7 +74,7 @@ export function groupMembers<M extends MemberLike>(
   return out
 }
 
-/** 보일 줄 — 접힘이면 0, 큰 묶음을 다 펼치지 않았으면 처음 3명 */
+/** 표시할 줄 — 접힌 상태이면 0, 큰 묶음을 전부 펼치지 않았으면 처음 3명 */
 export function visibleMembers<M extends MemberLike>(g: MemberGroup<M>, collapsed: boolean, expanded: boolean): GroupedMember<M>[] {
   if (collapsed) return []
   if (g.big && !expanded) return g.members.slice(0, BIG_GROUP_PREVIEW)

@@ -1,11 +1,11 @@
 /**
- * 사이드바 고정 항목의 모아보기 — 스레드 · 임시 저장 · 저장한 메시지. 대화 영역 자리에 뜬다.
+ * 사이드바 고정 항목의 모아보기 — 스레드 · 임시 저장 · 저장한 메시지. 대화 영역 자리에 표시된다.
  * 시안에는 빈 상태만 있고 목록 화면이 없어 목록 행(2줄, min-h-row-2) 규격으로 구성했다.
- * 표시 규칙: 새 답글 = 굵게, 개수는 글자로.
+ * 표시 규칙: 새 답글 = 굵게, 개수는 텍스트로 표기.
  */
 import { useEffect } from 'react'
 import { useStore } from 'zustand'
-// class 를 이어 붙이기만 한다(tailwind-merge 없이 — 뒤에 온 클래스를 지우지 않는다)
+// class 연결만 수행(tailwind-merge 미사용 — 뒤에 오는 클래스를 제거하지 않음)
 import { clsx as cn } from 'clsx'
 import { useI18n } from '~/i18n'
 import { authStore } from '~/composables/useAuth'

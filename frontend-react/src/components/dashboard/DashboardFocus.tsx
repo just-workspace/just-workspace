@@ -1,11 +1,11 @@
 /**
  * 오늘의 포커스 — AI 브리핑 카드(옵트인 · 주 줄 4·5·6열, 3열 이하는 보조 영역 맨 앞).
  *
- * 켜짐: 3줄(번호 mono + 문장 + 출처 링크 xs primary) → "회의 준비" 접이식(회의 10분 전부터 자동 펼침:
- *       지난 회의 한 줄 + 관련 채팅 #채널 n · 메일 n) → 바닥 "09:00 생성 · 내가 볼 수 있는 것만" · 다시 만들기 · [도움됨][아님].
- * 꺼짐(동의 안 함): 설명 2줄 + [켜기][숨기기]. 생성 중: 줄 스켈레톤 3 + "읽는 중…". 실패: danger 한 줄 + [↻ 다시 시도]
- * (어제 것은 보이지 않는다). AI 공급자가 없거나 막혀 있으면 안내.
- * 서버: /api/dashboard/briefing(GET · enable · generate · feedback) — 하루 캐시, 다시 만들기 하루 3번.
+ * 활성: 3줄(번호 mono + 문장 + 출처 링크 xs primary) → "회의 준비" 접이식(회의 10분 전부터 자동 펼침:
+ *       지난 회의 한 줄 + 관련 채팅 #채널 n · 메일 n) → 푸터 "09:00 생성 · 내가 볼 수 있는 것만" · 다시 만들기 · [도움됨][아님].
+ * 비활성(미동의): 설명 2줄 + [켜기][숨기기]. 생성 중: 줄 스켈레톤 3 + "읽는 중…". 실패: danger 한 줄 + [↻ 다시 시도]
+ * (전일 내용은 표시하지 않는다). AI 공급자가 없거나 차단된 경우 안내를 표시한다.
+ * 서버: /api/dashboard/briefing(GET · enable · generate · feedback) — 일 단위 캐시, 다시 만들기는 하루 3회.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { $fetch } from '~/lib/api'
@@ -71,7 +71,7 @@ export function DashboardFocus() {
       setSt(await $fetch<BriefingState>('/api/dashboard/briefing/generate', { method: 'POST', params: todayRange(), body: { regenerate } }))
     } catch (e) {
       addToast('error', errMessage(e, t('dashboard.d17.ai.failed')))
-      try { setSt(await $fetch<BriefingState>('/api/dashboard/briefing', { params: todayRange() })) } catch { /* 그대로 */ }
+      try { setSt(await $fetch<BriefingState>('/api/dashboard/briefing', { params: todayRange() })) } catch { /* 현 상태 유지 */ }
     } finally { setBusy(false) }
   }, [t])
 
@@ -80,13 +80,13 @@ export function DashboardFocus() {
     try {
       const s = await $fetch<BriefingState>('/api/dashboard/briefing', { params: todayRange() })
       setSt(s)
-      // 오늘 첫 브리핑은 카드를 열 때 만든다(다시 만들기 횟수에 넣지 않는다)
+      // 당일 첫 브리핑은 카드를 열 때 생성한다(다시 만들기 횟수에 미포함)
       if (s.enabled && s.available && s.status === 'none') void generate(false)
     } catch { setLoadError(true) }
   }, [generate])
   useEffect(() => { void load() }, [load])
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(id) }, [])
-  // 꺼짐·쓸 수 없음은 'empty' — 주 줄 같은 높이에 맞추지 않는다(제자리 안내는 그대로, 빈 카드 묶음으로도 가지 않는다)
+  // 비활성·사용 불가는 'empty' — 주 줄 동일 높이 맞춤 대상에서 제외한다(제자리 안내는 유지, 빈 카드 그룹으로도 이동하지 않음)
   useCardStatus('ai', loadError ? 'error' : !st ? 'loading' : !st.available || !st.enabled ? 'empty' : 'ready')
 
   async function enable(on: boolean) {
@@ -177,7 +177,7 @@ export function DashboardFocus() {
             </button>
             {prepShown && (
               <ul className="mt-1.5 flex flex-col gap-1 pl-6 text-muted-foreground">
-                {/* 근거(관련 채팅)가 없으면 요약 줄은 빼고 "관련 채팅 n · 메일 n" 만 */}
+                {/* 근거(관련 채팅)가 없으면 요약 행은 제외하고 "관련 채팅 n · 메일 n" 만 표시 */}
                 {prep.last_line && prep.chat.count > 0 && <li>{t('dashboard.d17.ai.prepLast', { text: prep.last_line })}</li>}
                 <li>
                   {t('dashboard.d17.ai.prepChat')}{' '}

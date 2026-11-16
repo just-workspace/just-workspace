@@ -1,11 +1,11 @@
 /**
- * 끌기 손잡이 + 놓을 자리 선.
+ * 끌기 손잡이 + 놓을 위치 선.
  *
- * UiDragHandle — grip-vertical 16 아이콘 버튼(기본 24×24, touch 44). aria-label "순서 바꾸기"(바꿀 수 있음).
- *   hoverOnly 면 평소 투명, 부모 행(.group)에 호버 · 손잡이 포커스 때만 보인다 — 부모에 className="group" 을 붙인다.
- *   키보드: ↑ / ↓ = onMove(-1 | 1) — 실제 순서 바꾸기·aria-live 안내는 호출부(목록)가 한다. 끌기(HTML5 draggable·포인터)도 호출부 몫:
- *   나머지 속성(draggable·onDragStart·onPointerDown 등)은 <button> 에 그대로 붙는다.
- * UiDropLine — 놓을 자리 표시: 2px primary 선 + 왼쪽 8px 원(테두리 2 primary). aria-hidden. 행 사이에 끼워 넣는다.
+ * UiDragHandle — grip-vertical 16 아이콘 버튼(기본 24×24, touch 44). aria-label "순서 바꾸기"(변경 가능).
+ *   hoverOnly 면 평소 투명, 부모 행(.group) 호버 · 손잡이 포커스 시에만 표시된다 — 부모에 className="group" 을 지정한다.
+ *   키보드: ↑ / ↓ = onMove(-1 | 1) — 실제 순서 변경·aria-live 안내는 호출부(목록)가 수행한다. 끌기(HTML5 draggable·포인터)도 호출부 담당:
+ *   나머지 속성(draggable·onDragStart·onPointerDown 등)은 <button> 에 그대로 전달된다.
+ * UiDropLine — 놓을 위치 표시: 2px primary 선 + 왼쪽 8px 원(테두리 2 primary). aria-hidden. 행 사이에 삽입한다.
  *
  * @example
  * <div className="group relative flex h-10 items-center gap-2">
@@ -20,9 +20,9 @@ import { useI18n } from '~/i18n'
 import { UiIcon } from './Icon'
 
 export interface UiDragHandleProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type'> {
-  /** ↑(-1) / ↓(1) 키 — 한 칸 옮기기 */
+  /** ↑(-1) / ↓(1) 키 — 한 칸 이동 */
   onMove?: (delta: -1 | 1) => void
-  /** 부모 .group 호버·포커스 때만 보이기 */
+  /** 부모 .group 호버·포커스 시에만 표시 */
   hoverOnly?: boolean
   /** md 24(기본) · touch 44(모바일 순서 편집) */
   size?: 'md' | 'touch'
@@ -67,7 +67,7 @@ export function UiDragHandle({ onMove, hoverOnly = false, size = 'md', ariaLabel
 export type UiDropLineProps = Omit<HTMLAttributes<HTMLSpanElement>, 'children'>
 
 /**
- * 놓을 자리 선(2px primary + 왼쪽 8px 원). aria-hidden — 안내는 호출부 aria-live.
+ * 놓을 위치 선(2px primary + 왼쪽 8px 원). aria-hidden — 안내는 호출부 aria-live.
  */
 export function UiDropLine({ className, ...rest }: UiDropLineProps) {
   return (

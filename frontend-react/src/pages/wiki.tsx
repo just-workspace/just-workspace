@@ -2,14 +2,14 @@
  * 위키.
  *  데스크톱 3열: 트리 260 / 본문 680(읽기=편집 폭) / 레일 240(목차·최근 기록). 기록 모드는 레일 대신 버전 패널 320.
  *  커맨드 바 44: 경로(스페이스 › 상위 › 제목) · [편집 E] 또는 [함께 편집 아바타 · ✓ 저장됨] · 공유 · ⋯
- *  편집: 공용 서식 툴바 40 + 실시간 공동 편집(Yjs, WikiCollabEditor — 바인딩은 그대로) + 자동 저장.
+ *  편집: 공용 서식 툴바 40 + 실시간 공동 편집(Yjs, WikiCollabEditor — 바인딩은 유지) + 자동 저장.
  *  기록: v 미리보기 띠(warning 틴트) + 변경 표시(추가 success 밑줄 / 삭제 danger 취소선) + 복원 확인.
  *  새 페이지: 모달 없이 트리 안 인라인 행(현재 페이지 아래 / 노드 + = 하위).
- * 주소: /wiki?space=<id>&page=<id> — 링크 공유·뒤로 가기가 된다.
+ * 주소: /wiki?space=<id>&page=<id> — 링크 공유·뒤로 가기를 지원한다.
  *
  * 구현 메모
- *  - 비동기 처리기(자동 저장·주소 동기화)가 "지금" 값을 읽어야 해서 화면 상태 일부는 useState + ref 거울(useRefState).
- *  - 편집 중이면 저장 후 떠나기 → react-router useBlocker(다른 경로로 갈 때만, 쿼리 변경은 제외).
+ *  - 비동기 처리기(자동 저장·주소 동기화)가 현재 값을 조회해야 하므로 화면 상태 일부는 useState + ref 미러(useRefState).
+ *  - 편집 중이면 저장 후 이탈 → react-router useBlocker(다른 경로로 이동할 때만, 쿼리 변경은 제외).
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent, type MutableRefObject } from 'react'
 import { useBlocker } from 'react-router'
@@ -62,7 +62,7 @@ import { writeClipboard } from '~/lib/clipboard'
 type Mode = 'read' | 'edit' | 'history'
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 
-/** useState + 지금 값 ref(비동기 처리기용) */
+/** useState + 현재 값 ref(비동기 처리기용) */
 function useRefState<T>(init: T): [T, (v: T) => void, MutableRefObject<T>] {
   const [v, setV] = useState<T>(init)
   const ref = useRef<T>(v)
@@ -73,12 +73,12 @@ function useRefState<T>(init: T): [T, (v: T) => void, MutableRefObject<T>] {
 // ─── 주소 ↔ 상태 ───
 const LAST_SPACE = 'wiki:last-space'
 function lastSpace(): string | null { try { return localStorage.getItem(LAST_SPACE) } catch { return null } }
-/** 지금 주소의 쿼리(처리기 안에서 읽는다) */
+/** 현재 주소의 쿼리(처리기 내부에서 조회) */
 function curQuery() {
   const r = getAppRouter()
   return parseQuery(r ? r.state.location.search : window.location.search)
 }
-const AUTOSAVE_MS = 4000   // 입력이 멈추고 4초 — 저장마다 버전이 하나씩 쌓이므로(백엔드 갭) 너무 잦지 않게
+const AUTOSAVE_MS = 4000   // 입력 정지 후 4초 — 저장마다 버전이 1개씩 누적되므로(백엔드 갭) 과도한 빈도 방지
 
 function slugOf(title: string) {
   return title.toLowerCase().replace(/[^a-z0-9가-힣]+/g, '-').replace(/^-|-$/g, '') || 'untitled'
@@ -92,7 +92,7 @@ function nameOf(a: { display_name: string | null; username: string } | undefined
   return a ? (a.display_name || a.username) : ''
 }
 
-/** 저장된 본문을 읽기 화면에 넣기 전 정화 — 스크립트(DOMPurify) + 자리·겹침 스타일(position:fixed 로 화면 덮기) */
+/** 저장된 본문을 읽기 화면에 삽입하기 전 정화 — 스크립트(DOMPurify) + 위치·겹침 스타일(position:fixed 로 화면 덮기) */
 function cleanHtml(html: string): string {
   return stripLayoutStyles(DOMPurify.sanitize(html))
 }
@@ -152,7 +152,7 @@ export default function WikiPage() {
 
   const [memberCount, setMemberCount] = useState<number | null>(null)
 
-  // ─── 편집 · 자동 저장 상태(아래 함수들이 쓴다) ───
+  // ─── 편집 · 자동 저장 상태(아래 함수들이 사용) ───
   const editorRef = useRef<WikiCollabEditorHandle | null>(null)
   const [collab, setCollab] = useState<WikiCollabState>({ editor: null, connected: false, peers: [] })
   const liveEditorRef = useRef<Editor | null>(null)
@@ -166,14 +166,14 @@ export default function WikiPage() {
   const lastSavedHtml = useRef('')
   const lastSavedTitle = useRef('')
   const pendingEditId = useRef<string | null>(null)
-  // 편집을 시작할 때(그리고 저장할 때마다) 본 서버 버전 — 저장에 실어 보내 그 사이 남이 고친 것을 덮어쓰지 않게 한다(409)
+  // 편집 시작 시(및 저장 시마다) 확인한 서버 버전 — 저장 요청에 포함하여 그 사이 다른 사용자의 수정을 덮어쓰지 않도록 한다(409)
   const baseVersion = useRef<number | null>(null)
   const saveConflict = useRef(false)
   const startingEdit = useRef(false)
   const openSeq = useRef(0)
   const peersRef = useRef<WikiPeer[]>([])
   peersRef.current = collab.peers
-  const [liveHtml, setLiveHtml] = useState('')   // 편집 중 목차용(입력 멈춘 뒤 갱신)
+  const [liveHtml, setLiveHtml] = useState('')   // 편집 중 목차용(입력 정지 후 갱신)
 
   // ─── 기록 상태 ───
   const [selectedVersion, setSelectedVersion, selectedVersionRef] = useRefState<WikiPageVersion | null>(null)
@@ -184,8 +184,8 @@ export default function WikiPage() {
   /** 편집기 본문. 편집기가 없으면 null */
   function editorContent(): string | null {
     if (editorRef.current) return editorRef.current.getContent()
-    // 화면이 내려가는 중(ref 는 이미 떨어졌고 편집기는 아직 살아 있음)
-    // 편집 불가(= 공동 편집기가 아직 본문 준비 전)면 비어 있으니 저장하지 않는다
+    // 화면 언마운트 진행 중(ref 는 이미 해제되었고 편집기는 아직 유지 중)
+    // 편집 불가(= 공동 편집기가 아직 본문 준비 전)면 내용이 비어 있으므로 저장하지 않는다
     const ed = liveEditorRef.current
     return ed && !ed.isDestroyed && ed.isEditable ? (ed.getHTML() || '') : null
   }
@@ -196,7 +196,7 @@ export default function WikiPage() {
     const qPage = typeof q.page === 'string' ? q.page : null
     const sid = qSpace || W().currentSpace?.id || lastSpace() || W().spaces[0]?.id
     if (!sid) { setCurrentSpace(null); setCurrentPage(null); return }
-    // 편집 중에 다른 문서·스페이스로 가는 길이면 먼저 저장한다. 저장하지 못했고 버리지도 않겠다면 주소를 되돌리고 머문다
+    // 편집 중 다른 문서·스페이스로 이동하는 경우 먼저 저장한다. 저장에 실패했고 폐기도 거부한 경우 주소를 원복하고 현재 화면을 유지한다
     const editing = W().currentPage
     if (modeRef.current === 'edit' && editing && qPage !== editing.id) {
       if (!(await leaveEdit())) {
@@ -204,18 +204,18 @@ export default function WikiPage() {
         return
       }
     }
-    // 주소에 스페이스가 없으면 채워 둔다(그 사이 이어서 불러온다 — 첫 진입 중엔 주소 감시가 꺼져 있다)
+    // 주소에 스페이스가 없으면 보완한다(그 사이 이어서 로드한다 — 최초 진입 중에는 주소 감시가 비활성 상태)
     if (!qSpace) void router.replace({ query: { ...q, space: sid } } as RouteLocationRaw)
 
     if (W().currentSpace?.id !== sid || !W().pageTree.length) {
       try {
         await fetchSpace(sid)
         await fetchPages(sid)
-        try { localStorage.setItem(LAST_SPACE, sid) } catch { /* 저장소 막힘 */ }
+        try { localStorage.setItem(LAST_SPACE, sid) } catch { /* 저장소 차단 */ }
         setMemberCount(null)
         fetchMembers(sid).then(m => { setMemberCount(m.length) }).catch(() => {})
       } catch {
-        // 지워졌거나 권한이 없는 스페이스 — 첫 스페이스로
+        // 삭제되었거나 권한이 없는 스페이스 — 첫 스페이스로 이동
         try { localStorage.removeItem(LAST_SPACE) } catch { /* 무시 */ }
         const first = W().spaces.find(s => s.id !== sid)
         if (first) void router.replace({ query: { space: first.id } })
@@ -235,7 +235,7 @@ export default function WikiPage() {
 
   async function openPage(id: string) {
     if (!(await leaveEdit())) return
-    // 연달아 다른 문서를 누르면 마지막 것만 반영한다(늦게 온 앞 문서가 주소와 다른 본문을 띄우지 않게)
+    // 연속으로 다른 문서를 선택하면 마지막 요청만 반영한다(지연 도착한 이전 문서가 주소와 불일치하는 본문을 표시하지 않도록 함)
     const my = ++openSeq.current
     setMode('read')
     setSelectedVersion(null)
@@ -260,9 +260,9 @@ export default function WikiPage() {
   useEffect(() => {
     if (!authStore.getState().user) return
     ;(async () => {
-      try { await fetchSpaces() } catch { /* 빈 상태로 */ }
+      try { await fetchSpaces() } catch { /* 빈 상태로 처리 */ }
       setCurrentPage(null)
-      setPageTree([])   // 지난 방문의 트리는 낡았을 수 있다 — 다시 받는다
+      setPageTree([])   // 이전 방문의 트리는 최신이 아닐 수 있다 — 재조회한다
       await syncFromRoute()
       setBooting(false)
     })()
@@ -292,7 +292,7 @@ export default function WikiPage() {
     return out
   }, [currentPage?.parent_id, pageTree])
 
-  /** "정하늘 작성 · 김서연 외 2명 수정" — 버전 기록의 작성자에서 만든다(v1 = 처음 쓴 사람). */
+  /** "정하늘 작성 · 김서연 외 2명 수정" — 버전 기록의 작성자에서 생성한다(v1 = 최초 작성자). */
   const metaPeople = useMemo(() => {
     const page = currentPage
     if (!page) return { creator: '', editor: '', others: 0 }
@@ -338,15 +338,15 @@ export default function WikiPage() {
   const connected = collab.connected
   const liveEditor = collab.editor
 
-  /** fresh: 방금 서버에서 받은 문서(새로 만든 직후) — 다시 읽지 않는다 */
+  /** fresh: 방금 서버에서 수신한 문서(생성 직후) — 재조회하지 않는다 */
   async function startEdit(opts: { fresh?: boolean } = {}) {
     let page = W().currentPage
     if (!page || !canWriteNow() || modeRef.current === 'edit' || startingEdit.current) return
     if (!opts.fresh) {
-      // 읽기 화면을 열어 둔 사이 다른 사람이 고쳤을 수 있다 — 옛 본문으로 편집을 시작하면 첫 자동 저장이 그 수정을 덮어쓴다
+      // 읽기 화면을 열어 둔 사이 다른 사용자가 수정했을 수 있다 — 이전 본문으로 편집을 시작하면 첫 자동 저장이 해당 수정을 덮어쓴다
       const id = page.id
       startingEdit.current = true
-      try { await fetchPage(id) } catch { /* 못 읽으면 가진 것으로 시작 — 저장 때 버전 검사(409)가 덮어쓰기를 막는다 */ } finally { startingEdit.current = false }
+      try { await fetchPage(id) } catch { /* 조회 실패 시 보유한 본문으로 시작 — 저장 시 버전 검사(409)가 덮어쓰기를 차단한다 */ } finally { startingEdit.current = false }
       page = W().currentPage
       if (!page || page.id !== id || modeRef.current !== 'read') return
     }
@@ -367,7 +367,7 @@ export default function WikiPage() {
     if (tocTimer.current) clearTimeout(tocTimer.current)
     tocTimer.current = setTimeout(() => { setLiveHtml(editorContent() ?? '') }, 600)
   }
-  // watch(editTitle) — 입력으로 바뀔 때만 의미가 있다(프로그램 대입은 lastSavedTitle 과 같다)
+  // watch(editTitle) — 입력으로 변경될 때만 유효하다(프로그램 대입은 lastSavedTitle 과 동일)
   function onEditTitle(v: string) {
     setEditTitle(v)
     if (modeRef.current !== 'edit' || !W().currentPage || v === lastSavedTitle.current) return
@@ -379,7 +379,7 @@ export default function WikiPage() {
     saveTimer.current = setTimeout(() => { void flushSave() }, AUTOSAVE_MS)
   }
 
-  /** force: 버전 검사 없이 저장(충돌 안내에서 "내 내용으로 저장"을 고른 경우) */
+  /** force: 버전 검사 없이 저장(충돌 안내에서 "내 내용으로 저장"을 선택한 경우) */
   async function flushSave(opts: { force?: boolean } = {}): Promise<void> {
     if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null }
     if (inflight.current) { await inflight.current; if (saveStateRef.current !== 'dirty') return }
@@ -389,7 +389,7 @@ export default function WikiPage() {
     const html: string = html0
     const title = editTitleRef.current.trim() || page.title
     if (html === lastSavedHtml.current && title === lastSavedTitle.current) {
-      // 저장할 것이 없다 — 앞선 실패 표시도 지운다(되돌려서 같아진 경우. 남겨 두면 떠날 때 "저장 못 함"으로 막힌다)
+      // 저장할 내용 없음 — 이전 실패 표시도 제거한다(되돌려서 동일해진 경우. 남겨 두면 이탈 시 "저장 못 함"으로 차단된다)
       if (saveStateRef.current === 'dirty' || saveStateRef.current === 'error') { saveConflict.current = false; setSaveState('saved') }
       return
     }
@@ -411,13 +411,13 @@ export default function WikiPage() {
         if (cur?.id === pageId) setCurrentPage({ ...updated, user_role: cur.user_role })
         const sp = W().currentSpace
         if (body.title && sp) fetchPages(sp.id).catch(() => {})
-        // 저장하는 사이 또 바뀌었으면 dirty 유지
+        // 저장 중 추가 변경이 발생했으면 dirty 유지
         setSaveState((editorContent() ?? html) === html ? 'saved' : 'dirty')
         if (saveStateRef.current === 'dirty') scheduleSave()
       } catch (e) {
         if (errorStatus(e) === 409 && !opts.force) {
-          // 내가 본 버전 뒤에 누가 저장했다. 함께 편집 중인 사람(같은 공동 문서를 보고 있다)이 먼저 저장한 것이거나
-          // 서버 본문이 내 것과 같으면 충돌이 아니다 — 그 버전을 기준으로 다시 저장한다. 아니면 덮어쓰지 않고 묻는다
+          // 확인한 버전 이후에 다른 저장이 발생했다. 공동 편집 중인 사용자(동일 공동 문서를 열람 중)가 먼저 저장한 경우이거나
+          // 서버 본문이 로컬 본문과 동일하면 충돌이 아니다 — 해당 버전을 기준으로 재저장한다. 그 외에는 덮어쓰지 않고 사용자에게 확인한다
           const latest = await $fetch<WikiPageDetail>(`/api/wiki/pages/${pageId}`).catch(() => null)
           if (latest && (latest.content === html || peersRef.current.length > 0) && baseVersion.current !== latest.version) {
             baseVersion.current = latest.version
@@ -436,7 +436,7 @@ export default function WikiPage() {
     if (retry) await flushSave()
   }
 
-  /** "다시 시도" — 충돌이면 덮어쓸지 먼저 묻는다(상대가 고친 내용은 버전 기록에 남는다) */
+  /** "다시 시도" — 충돌이면 덮어쓰기 여부를 먼저 확인한다(상대가 수정한 내용은 버전 기록에 보존된다) */
   async function retrySave(): Promise<void> {
     if (!saveConflict.current) { await flushSave(); return }
     const ok = await confirmBox(
@@ -446,13 +446,13 @@ export default function WikiPage() {
     if (ok) await flushSave({ force: true })
   }
 
-  /** 편집 마치기(완료·페이지 이동·떠날 때). 저장 못 하면 머문다. */
+  /** 편집 종료(완료·페이지 이동·이탈 시). 저장 실패 시 현재 화면을 유지한다. */
   async function finishEdit(opts: { silent?: boolean } = {}): Promise<boolean> {
     if (modeRef.current !== 'edit') return true
     if (saveStateRef.current === 'dirty' || saveStateRef.current === 'error' || saveTimer.current) await flushSave()
-    // 충돌이면(다른 사람이 먼저 고침) 덮어쓸지 묻는다 — 조용한 호출(이동 중)은 leaveEdit 가 따로 묻는다
+    // 충돌이면(다른 사용자가 먼저 수정) 덮어쓰기 여부를 확인한다 — silent 호출(이동 중)은 leaveEdit 가 별도로 확인한다
     if (saveStateRef.current === 'error' && saveConflict.current && !opts.silent) await retrySave()
-    // 저장하지 못했으면 조용한 호출이어도 읽기로 넘어가지 않는다(편집기가 내려가면 고친 내용이 사라진다)
+    // 저장에 실패했으면 silent 호출이어도 읽기로 전환하지 않는다(편집기가 언마운트되면 수정 내용이 소실된다)
     if (saveStateRef.current === 'error') {
       if (!opts.silent && !saveConflict.current) addToast('error', t('wiki.save.failed'))
       return false
@@ -466,7 +466,7 @@ export default function WikiPage() {
     return true
   }
 
-  /** 편집 중인 문서를 떠나도 되나(다른 문서·스페이스·다른 화면). 저장하지 못했으면 버릴지 묻고, 아니라면 머문다. */
+  /** 편집 중인 문서의 이탈 가능 여부(다른 문서·스페이스·다른 화면). 저장에 실패했으면 폐기 여부를 확인하고, 거부 시 현재 화면을 유지한다. */
   async function leaveEdit(): Promise<boolean> {
     if (modeRef.current !== 'edit') return true
     if (await finishEdit({ silent: true })) return true
@@ -482,7 +482,7 @@ export default function WikiPage() {
     return true
   }
 
-  // 지금 함수 묶음(창 리스너·정리에서 부른다)
+  // 현재 함수 묶음(창 리스너·정리에서 호출)
   const fns = useRef({ flushSave, finishEdit, leaveEdit, startEdit, canWriteNow })
   fns.current = { flushSave, finishEdit, leaveEdit, startEdit, canWriteNow }
 
@@ -495,7 +495,7 @@ export default function WikiPage() {
       }
     }
     window.addEventListener('beforeunload', onBeforeUnload)
-    // 정리 때 "그때의" 모드·타이머를 읽는다(ref 객체를 잡아 둔다)
+    // 정리 시 "해당 시점의" 모드·타이머를 조회한다(ref 객체를 캡처해 둔다)
     const live = { mode: modeRef, toc: tocTimer, fns }
     return () => {
       window.removeEventListener('beforeunload', onBeforeUnload)
@@ -505,11 +505,11 @@ export default function WikiPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // onBeforeRouteLeave(async () => { await finishEdit({ silent: true }) }) — 다른 경로로 떠날 때만
+  // onBeforeRouteLeave(async () => { await finishEdit({ silent: true }) }) — 다른 경로로 이탈할 때만
   const blocker = useBlocker(({ currentLocation, nextLocation }) => modeRef.current === 'edit' && currentLocation.pathname !== nextLocation.pathname)
   useEffect(() => {
     if (blocker.state !== 'blocked') return
-    // 저장하지 못했고 버리지도 않겠다면 이동을 취소한다(예전엔 그대로 떠나 고친 내용이 사라졌다)
+    // 저장에 실패했고 폐기도 거부한 경우 이동을 취소한다(이전에는 그대로 이탈하여 수정 내용이 소실되었다)
     void fns.current.leaveEdit().then(ok => { if (ok) blocker.proceed?.(); else blocker.reset?.() }, () => blocker.proceed?.())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocker.state])
@@ -636,7 +636,7 @@ export default function WikiPage() {
     setDraftParentId(W().currentPage?.id ?? null)
   }
   async function createDraft(parentId: string | null, title: string) {
-    // Enter 로 만든 뒤 입력칸이 사라지며 blur 가 또 올 수 있다 — 두 번 만들지 않게
+    // Enter 로 생성한 후 입력칸이 제거되면서 blur 가 추가로 발생할 수 있다 — 중복 생성 방지
     if (draftParentRef.current !== parentId) return
     setDraftParentId(undefined)
     const sp = W().currentSpace
@@ -648,7 +648,7 @@ export default function WikiPage() {
         title, slug: slugOf(title), ...(parentId ? { parent_id: parentId } : {}), sort_order: sort,
       } as any)
       if (page) {
-        // 새 페이지는 바로 편집으로 연다(openPage 가 끝나면)
+        // 새 페이지는 즉시 편집 모드로 연다(openPage 완료 후)
         if (canWriteSpaceNow()) pendingEditId.current = page.id
         goPage(page.id)
       }
@@ -669,7 +669,7 @@ export default function WikiPage() {
       if (sp) await fetchPages(sp.id)
       const cur = W().currentPage
       if (cur?.id === id) {
-        // 이름 바꾸기도 버전을 올린다 — 편집 중이면 기준 버전을 맞춰 다음 자동 저장이 충돌로 보이지 않게
+        // 이름 변경도 버전을 증가시킨다 — 편집 중이면 기준 버전을 갱신하여 다음 자동 저장이 충돌로 판정되지 않도록 한다
         const version = renamed?.version ?? cur.version
         setCurrentPage({ ...cur, title, version })
         if (modeRef.current === 'edit') { setEditTitle(title); lastSavedTitle.current = title; baseVersion.current = version }
@@ -718,7 +718,7 @@ export default function WikiPage() {
     return false
   }
 
-  /** 끌어서 옮기기: 위/아래 = 같은 부모의 앞/뒤, 가운데 = 하위로. 형제 순서는 0..n 으로 다시 매긴다. */
+  /** 끌어서 옮기기: 위/아래 = 동일 부모의 앞/뒤, 가운데 = 하위로 이동. 형제 순서는 0..n 으로 재부여한다. */
   async function movePage({ id, targetId, position }: { id: string; targetId: string; position: DropPosition }) {
     if (id === targetId || isDescendant(id, targetId)) return
     const all = W().pageTree
@@ -727,7 +727,7 @@ export default function WikiPage() {
     const sp = W().currentSpace
     if (!src || !target || !sp) return
     const newParent = position === 'inside' ? target.id : target.parent_id
-    // 최상위로 옮기기(newParent=null)는 백엔드가 받는다(update_page 가 명시한 parent_id=null 을 처리) — 아래 PATCH 가 null 을 보낸다
+    // 최상위로 이동(newParent=null)은 백엔드가 지원한다(update_page 가 명시된 parent_id=null 을 처리) — 아래 PATCH 가 null 을 전송한다
     const siblings = all
       .filter(p => p.parent_id === newParent && p.id !== id)
       .sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title))
@@ -976,7 +976,7 @@ export default function WikiPage() {
               )}
             />
           ) : currentSpace ? (
-            /* 데스크톱 커맨드 바 44 — 스페이스가 없으면 그릴 것이 없어 빈 띠가 되므로 숨긴다 */
+            /* 데스크톱 커맨드 바 44 — 스페이스가 없으면 렌더할 내용이 없어 빈 띠가 되므로 숨긴다 */
             <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border bg-card pl-4 pr-2.5 text-[13px]">
               <nav aria-label={t('board.post.breadcrumb')} className="flex min-w-0 flex-1 items-center gap-1 text-muted-foreground">
                 <button type="button" className="shrink-0 hover:text-foreground" onClick={() => { void router.push({ query: { space: currentSpace.id } }) }}>{currentSpace.name}</button>

@@ -1,5 +1,5 @@
-// 메일 구역 감사 수정 고정 — 늦은 응답 가드, 삭제 뒤 채우기, 실패 알림, HTML 전용 메일 인용, 쉼표 든 이름,
-// 스레드의 메일함:UID 열쇠, 외부 이미지 기본 차단, 수신자 칸 IME·즉시 확정, 보내기 재진입 차단, 체크박스 뒤 단축키.
+// 메일 구역 감사 수정 고정 — 지연 응답 가드, 삭제 후 채우기, 실패 알림, HTML 전용 메일 인용, 쉼표가 포함된 이름,
+// 스레드의 메일함:UID 키, 외부 이미지 기본 차단, 수신자 칸 IME·즉시 확정, 보내기 재진입 차단, 체크박스 뒤 단축키.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor, act, render } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'
@@ -103,7 +103,7 @@ describe('스레드 — 메일함:UID', () => {
       { id: '7', mailbox_ids: ['Sent'] }, { id: '7', mailbox_ids: ['INBOX'] }, { id: '9', mailbox_ids: ['INBOX'] },
     ]
     expect(threadLayout(th, '7', true, 'INBOX').shown).toEqual([th[0], th[2]])
-    // 메일함을 안 주면 예전처럼 번호만
+    // 메일함 미지정 시 기존처럼 번호만 사용
     expect(threadLayout(th, '7', true).shown).toEqual([th[2]])
   })
 })
@@ -121,7 +121,7 @@ describe('MailBody — 외부 리소스', () => {
     fireEvent.click(screen.getByRole('button', { name: '이미지 표시' }))
     expect(frame()).toContain(`content="${mailFrameCsp(true)}"`)
     expect(screen.queryByRole('button', { name: '이미지 표시' })).toBeNull()
-    // 다른 메일을 열면 다시 막는다
+    // 다른 메일을 열면 다시 차단
     rerender(<MailBody message={detail({ id: 'm2', html_body: '<table><tr><td><img src="//t.example/q.gif"></td></tr></table>' })} />)
     expect(frame()).toContain(`content="${mailFrameCsp(false)}"`)
     expect(screen.getByRole('button', { name: '이미지 표시' })).toBeTruthy()
@@ -176,7 +176,7 @@ describe('useMail — 늦은 응답·삭제 뒤 채우기·실패 알림', () =>
     expect(count('/api/mail/messages')).toBe(1)
     expect(mailStore.getState().messages.map(m => m.id)).toEqual(['3'])
     expect(mailStore.getState().totalMessages).toBe(3)
-    // 읽음 표시는 목록을 다시 받지 않는다
+    // 읽음 표시는 목록을 재조회하지 않음
     api.calls = []
     await mail.bulkOn(['3'], 'read')
     expect(count('/api/mail/messages')).toBe(0)
@@ -294,7 +294,7 @@ describe('MailComposer — 보내기 재진입·치던 주소', () => {
 
 describe('메일 화면 단축키 — 체크박스에 포커스가 있어도 동작', () => {
   it('typing(): 체크박스·라디오는 입력 중이 아니다', async () => {
-    // 페이지의 판정 함수는 내보내지 않으므로 같은 규칙을 DOM 으로 확인한다(삭제 단축키가 실제로 닿는지는 아래 통합에서)
+    // 페이지의 판정 함수는 export 되지 않으므로 동일 규칙을 DOM 으로 확인한다(삭제 단축키의 실제 도달 여부는 아래 통합 테스트에서 확인)
     const src = (await import('../../src/pages/mail/index.tsx?raw')).default as string
     expect(src).toMatch(/\['checkbox', 'radio', 'button', 'submit', 'reset'\]/)
   })

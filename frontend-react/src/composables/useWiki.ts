@@ -2,8 +2,8 @@
  * 위키(싱글턴 상태 + API 호출).
  *
  * React: const { spaces, currentPage, fetchPage, ... } = useWiki()
- * 컴포넌트 밖: wikiStore.getState().currentPage, 동작 함수는 모듈 export 를 직접 import.
- * 바깥에서 바꾸는 상태는 setter(setCurrentPage 등)로.
+ * 컴포넌트 외부: wikiStore.getState().currentPage, 동작 함수는 모듈 export 를 직접 import.
+ * 외부에서 변경하는 상태는 setter(setCurrentPage 등)를 사용.
  */
 import { createStore, useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
@@ -106,7 +106,7 @@ export function _resetWikiStore() { wikiStore.setState(initial()) }
 const set = (p: Partial<WikiState>) => wikiStore.setState(p)
 const get = () => wikiStore.getState()
 
-// ─── 바깥에서 바꾸는 상태의 setter ───
+// ─── 외부에서 변경하는 상태의 setter ───
 export function setCurrentSpace(v: WikiSpace | null) { set({ currentSpace: v }) }
 export function setPageTree(v: WikiPageNode[]) { set({ pageTree: v }) }
 export function setCurrentPage(v: WikiPageDetail | null) { set({ currentPage: v }) }
@@ -150,7 +150,7 @@ export async function fetchPages(spaceId: string) {
   set({ pageTree: await $fetch<WikiPageNode[]>(`/api/wiki/spaces/${spaceId}/pages`) })
 }
 
-// 빠르게 옮겨 다닐 때 늦게 온 이전 응답이 지금 문서·버전 목록을 덮지 않게 — 마지막 요청만 반영한다
+// 빠른 이동 시 지연 도착한 이전 응답이 현재 문서·버전 목록을 덮어쓰지 않도록 마지막 요청만 반영
 let _pageSeq = 0
 let _versionsSeq = 0
 let _searchSeq = 0
@@ -217,7 +217,7 @@ export async function addMember(spaceId: string, userId: string, role: string = 
   await $fetch(`/api/wiki/spaces/${spaceId}/members`, { method: 'POST', body: { user_id: userId, role } })
 }
 
-/** 멤버 역할 바꾸기(reader · writer · admin) */
+/** 멤버 역할 변경(reader · writer · admin) */
 export async function updateMember(spaceId: string, userId: string, role: string) {
   await $fetch(`/api/wiki/spaces/${spaceId}/members/${userId}`, { method: 'PATCH', body: { role } })
 }
@@ -244,7 +244,7 @@ const actions = {
   setCurrentSpace, setPageTree, setCurrentPage, setVersions,
 }
 
-/** 상태 + 동작. 상태는 전부 구독한다(위키 화면 하나가 쓴다). */
+/** 상태 + 동작. 상태는 전체 구독(위키 화면 하나가 사용). */
 export function useWiki() {
   const state = useStore(wikiStore, useShallow((s: WikiState) => s))
   return { ...state, ...actions }

@@ -1,7 +1,7 @@
 /**
  * 내 작업: 한 줄 행 44 = 빈 원 아이콘 + 제목 + 마감(mono 11: 지남 n일 danger · 오늘 warning ·
- * 그 뒤 M/D muted) + 호버 [완료](check). 끝나지 않은 최상위 작업을 마감 순(없는 것은 뒤)으로, 행 수 = 상한.
- * 머리 개수 = 남은 작업 수, "작업 보기 ›".
+ * 그 이후 M/D muted) + 호버 [완료](check). 미완료 최상위 작업을 마감 순(마감 없는 항목은 뒤)으로 정렬, 행 수 = 상한.
+ * 헤더 개수 = 남은 작업 수, "작업 보기 ›".
  */
 import { useEffect, useState } from 'react'
 import { $fetch } from '~/lib/api'
@@ -38,7 +38,7 @@ export function DashboardTasks() {
     try {
       const d = await $fetch<{ tasks: Task[] }>('/api/tasks/', { params: { sort_by: 'due_date', sort_dir: 'asc', limit: 50 } })
       const open = (d.tasks || []).filter(t => t.status !== 'done' && !t.parent_id)
-      // 마감 있는 것 먼저(가까운 순), 없는 것은 뒤로
+      // 마감 있는 항목 우선(가까운 순), 없는 항목은 뒤로 배치
       setTasks(open.sort((a, b) => (a.due_date ? 0 : 1) - (b.due_date ? 0 : 1) || (a.due_date ?? '').localeCompare(b.due_date ?? '')))
       setTotal(open.length)
     } catch { setError(true) } finally { setLoading(false) }

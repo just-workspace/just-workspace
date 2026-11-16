@@ -51,9 +51,9 @@ describe('chatRightColumn — 자리 하나', () => {
     // 넓은 화면 멤버 토글은 상시 열(membersOpen)
     expect(nextRightState('members', 'members', true, true)).toMatchObject({ membersOpen: false, showMemberPanel: false })
     expect(nextRightState('members', 'thread', true, false)).toMatchObject({ membersOpen: true, closeThread: true })
-    // 좁으면 덮개
+    // 좁은 화면에서는 덮개
     expect(nextRightState('members', null, false, true)).toMatchObject({ showMemberPanel: true, membersOpen: true })
-    // 스레드 목록을 열면 다른 잠깐 패널은 끄고, 바탕 멤버 열은 그대로
+    // 스레드 목록을 열면 다른 임시 패널은 닫고, 바탕 멤버 열은 유지
     expect(nextRightState('threads', 'search', true, true)).toMatchObject({ threadListOpen: true, showSearchPanel: false, membersOpen: true })
     expect(nextRightState('threads', 'threads', true, true)).toMatchObject({ threadListOpen: false })
     expect(nextRightState('pins', 'members', true, true)).toMatchObject({ showPinsPanel: true })
@@ -218,7 +218,7 @@ describe('ChatHeader 오른쪽 자리 토글', () => {
     await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: t('chat.shell.header.threads') }).find(b => b.hasAttribute('aria-pressed'))!) })
     expect(chatUiStore.getState().threadListOpen).toBe(true)
     expect(screen.getByRole('button', { name: t('chat.shell.header.membersOpen') }).getAttribute('aria-pressed')).toBe('false')
-    // 멤버를 다시 누르면 스레드 목록이 닫히고 멤버가 돌아온다
+    // 멤버를 다시 누르면 스레드 목록이 닫히고 멤버 열이 복원됨
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: t('chat.shell.header.membersOpen') })) })
     expect(chatUiStore.getState().threadListOpen).toBe(false)
     expect(chatUiStore.getState().membersOpen).toBe(true)

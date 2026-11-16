@@ -1,12 +1,12 @@
 /**
- * 전송 선택·폴백 정책 (순수 상태기계 — 세션이 네트워크 결과를 보고하고 다음 시도를 묻는다).
+ * 전송 선택·폴백 정책 (순수 상태기계 — 세션이 네트워크 결과를 보고하고 다음 시도를 조회한다).
  *
  * 결정: **WebTransport 가 기본**, WebSocket 은 WebTransport 가 불가능할 때만 자동 폴백.
  * 폴백 조건
- *  - 브라우저에 WebTransport API 가 없다 / 릴레이가 WebTransport 주소를 안 준다
- *  - UDP 포트가 막혔거나 닿지 않는다(핸드셰이크 타임아웃 ≈ 1.8 s) / 핸드셰이크 실패
- *  - 세션 중 연결이 반복해서 끊긴다(60 s 안에 3회)
- * 폴백 뒤에도 주기적으로(기본 60 s) WebTransport 를 다시 시도해 되면 돌아간다.
+ *  - 브라우저에 WebTransport API 없음 / 릴레이가 WebTransport 주소를 제공하지 않음
+ *  - UDP 포트가 차단되었거나 도달 불가(핸드셰이크 타임아웃 ≈ 1.8 s) / 핸드셰이크 실패
+ *  - 세션 중 연결이 반복 단절됨(60 s 안에 3회)
+ * 폴백 후에도 주기적으로(기본 60 s) WebTransport 를 재시도하여 성공하면 복귀한다.
  */
 import type { TransportKind } from './types'
 
@@ -29,7 +29,7 @@ export interface SelectorEnv {
 export interface SelectorOptions {
   /** WebTransport 핸드셰이크 상한(ms). 결정: 1.5~2 s */
   handshakeTimeoutMs?: number
-  /** 이 시간(ms) 안에 maxLossesInWindow 번 끊기면 "반복 단절" */
+  /** 이 시간(ms) 내에 maxLossesInWindow 회 단절되면 "반복 단절" */
   lossWindowMs?: number
   maxLossesInWindow?: number
   /** 폴백 뒤 WebTransport 재시도 간격(ms) */
@@ -57,7 +57,7 @@ export class TransportSelector {
     else if (!env.webtransportUrl) this._reason = 'no_webtransport_endpoint'
   }
 
-  /** WebTransport 를 쓸 수 있는 환경인가(정적 조건) */
+  /** WebTransport 사용 가능 환경 여부(정적 조건) */
   get webTransportPossible(): boolean {
     return this.env.hasWebTransport && !!this.env.webtransportUrl
   }
@@ -66,7 +66,7 @@ export class TransportSelector {
     return this._active
   }
 
-  /** 현재 WebSocket 을 쓰고 있다면 그 이유(WebTransport 가 활성이면 null) */
+  /** 현재 WebSocket 을 사용 중이면 그 사유(WebTransport 가 활성이면 null) */
   get fallbackReason(): FallbackReason | null {
     return this._active === 'webtransport' ? null : this._reason
   }
@@ -82,12 +82,12 @@ export class TransportSelector {
     return 'webtransport'
   }
 
-  /** 핸드셰이크 결과 보고. ok 가 아니면 다음 next() 는 폴백을 돌려준다 */
+  /** 핸드셰이크 결과 보고. ok 가 아니면 다음 next() 는 폴백을 반환한다 */
   recordHandshake(kind: TransportKind, outcome: HandshakeOutcome): void {
     this._attempts++
     if (outcome === 'ok') {
       this._active = kind
-      if (kind === 'webtransport') this._reason = null // 끊김 이력은 창 안에서 유지한다(재접속 성공이 "반복 단절"을 지우면 안 된다)
+      if (kind === 'webtransport') this._reason = null // 단절 이력은 창 내에서 유지한다(재접속 성공이 "반복 단절"을 초기화해서는 안 된다)
       return
     }
     if (kind === 'webtransport') {
@@ -101,7 +101,7 @@ export class TransportSelector {
     this._active = null
   }
 
-  /** 연결 중 끊김 보고. 반복되면 폴백, 아니면 같은 전송으로 재접속 */
+  /** 연결 중 단절 보고. 반복되면 폴백, 아니면 동일 전송으로 재접속 */
   recordDisconnect(kind: TransportKind): void {
     this._active = null
     if (kind !== 'webtransport') return
@@ -115,7 +115,7 @@ export class TransportSelector {
     }
   }
 
-  /** WebSocket 으로 떨어져 있고, WebTransport 재시도 시점이 됐는가 */
+  /** WebSocket 으로 폴백된 상태이며 WebTransport 재시도 시점에 도달했는지 여부 */
   shouldRetryWebTransport(): boolean {
     return this._active === 'websocket' && this.webTransportPossible && this.o.now() >= this.wtBlockedUntil
   }
@@ -135,7 +135,7 @@ export class TransportSelector {
   }
 }
 
-/** 브라우저 오류 → 결과 분류(WebTransport 는 UDP 차단과 타임아웃을 구분해 주지 않는다 — 메시지로 최대한 가른다) */
+/** 브라우저 오류 → 결과 분류(WebTransport 는 UDP 차단과 타임아웃을 구분하지 않는다 — 메시지로 최대한 분류한다) */
 export function classifyHandshakeError(err: unknown, timedOut: boolean): HandshakeOutcome {
   if (timedOut) return 'timeout'
   const msg = String((err as any)?.message ?? err ?? '').toLowerCase()

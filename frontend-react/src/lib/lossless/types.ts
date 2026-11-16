@@ -1,16 +1,16 @@
 /**
  * 무손실 티어(Tier 3) 브라우저 클라이언트 — 공개 타입.
  *
- * 전송 규격은 audiorelay/PROTOCOL.md. 이 디렉터리는 음성채널 UI(다른 작업자)가 쓰는 라이브러리이고,
- * UI 는 `LosslessSession`(직접) 또는 `LosslessVoiceTransport`(티어 공통 `VoiceTransport` 어댑터)로 붙는다.
+ * 전송 규격은 audiorelay/PROTOCOL.md 참조. 본 디렉터리는 음성채널 UI(별도 작업자 담당)가 사용하는 라이브러리이며,
+ * UI 는 `LosslessSession`(직접) 또는 `LosslessVoiceTransport`(티어 공통 `VoiceTransport` 어댑터)로 연결한다.
  */
 
-/** pcm_s32 = 32-bit 정수(codec 5) — 데스크톱 하이레조가 보낸다. 브라우저는 받아서 재생만(송신은 f32 까지) */
+/** pcm_s32 = 32-bit 정수(codec 5) — 데스크톱 하이레조가 송신. 브라우저는 수신·재생만 수행(송신은 f32 까지) */
 export type LosslessCodec = 'pcm_s16' | 'pcm_s24' | 'pcm_f32' | 'flac' | 'opus' | 'pcm_s32'
 
 export interface LosslessFormat {
   codec: LosslessCodec
-  /** 스트림 샘플레이트. 송신은 장치(트랙) 레이트를 그대로 쓴다 — 리샘플 없음 */
+  /** 스트림 샘플레이트. 송신은 장치(트랙) 레이트를 그대로 사용 — 리샘플 없음 */
   sampleRate: number
   channels: number
   bits: 16 | 24 | 32
@@ -29,7 +29,7 @@ export interface PeerInfo {
   peer: number
   uid: string
   name?: string
-  /** 같은 세션의 LiveKit identity(음성 presence 키). 릴레이 토큰에 identity 를 실었을 때만 */
+  /** 같은 세션의 LiveKit identity(음성 presence 키). 릴레이 토큰에 identity 를 포함한 경우에 한함 */
   identity?: string
   transport: TransportKind | string
 }
@@ -39,7 +39,7 @@ export interface RelayGrant {
   token: string
   expires_in: number
   room: string
-  /** 요청에 실어 보낸 LiveKit identity(검증됨) */
+  /** 요청에 포함해 전송한 LiveKit identity(검증 완료) */
   identity?: string | null
   ws_url: string
   ws_path: string
@@ -48,7 +48,7 @@ export interface RelayGrant {
   protocol?: number
 }
 
-/** 수신 쪽(피어 1명) 통계 — 재생 워크릿의 지터버퍼 + 메인스레드 FEC/NACK 카운터 */
+/** 수신 측(피어 1명) 통계 — 재생 워크릿의 지터버퍼 + 메인스레드 FEC/NACK 카운터 */
 export interface PeerReceiveStats {
   peer: number
   format: LosslessFormat | null
@@ -71,7 +71,7 @@ export interface PeerReceiveStats {
   underruns: number
   dropped: number
   duplicates: number
-  /** 이 피어 스트림이 자기 레이트로 재생되는가(컨텍스트 레이트 == 스트림 레이트) */
+  /** 해당 피어 스트림의 자체 레이트 재생 여부(컨텍스트 레이트 == 스트림 레이트) */
   bitExactPlayback: boolean
   level: { peak: number[]; rms: number[] }
 }
@@ -95,7 +95,7 @@ export interface SessionStats {
   /** 송신 비트레이트(헤더·패리티 포함, 직전 1 s) */
   bitrateOutBps: number
   framesSent: number
-  /** 클라이언트가 재는 릴레이 왕복(오디오 경로) */
+  /** 클라이언트가 측정하는 릴레이 왕복(오디오 경로) */
   rttMs: number
   /** 추정 입-출 지연 = 프레임 + RTT/2 + 버퍼 목표 + 출력 지연(대표 피어) */
   estimatedLatencyMs: number
@@ -103,7 +103,7 @@ export interface SessionStats {
   latencyBreakdown: { frameMs: number; networkMs: number; bufferMs: number; outputMs: number }
   bufferPreset: BufferPreset
   peers: Record<number, PeerReceiveStats>
-  /** 릴레이가 1 s 마다 보내는 방 통계(원문) */
+  /** 릴레이가 1 s 주기로 송신하는 방 통계(원문) */
   relay: RelayRoomStats | null
 }
 
@@ -156,5 +156,5 @@ export type LosslessListener = (ev: LosslessEvent) => void
 
 /*
  * 티어 공통 어댑터 규격은 lib/voice/transport.ts(`VoiceTransport`)가 정본이다.
- * 이 라이브러리는 adapter.ts 에서 그 인터페이스를 구현하고 register.ts 로 'lossless' 단계에 등록한다.
+ * 본 라이브러리는 adapter.ts 에서 해당 인터페이스를 구현하고 register.ts 로 'lossless' 단계에 등록한다.
  */

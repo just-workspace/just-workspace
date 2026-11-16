@@ -1,12 +1,12 @@
 /**
  * 회의 예약 / 지금 시작: UiModal 520(모바일 바텀시트).
  *  회의 이름 → [날짜 1.3fr · 시작 1fr · 길이 1fr] → 초대(사람·이메일 칩 입력) → 비밀번호(선택, 보기 토글) → [취소][예약]
- *  지금 시작(mode="now")은 날짜·시작·길이 줄을 뺀다.
- * 초대 칩: 워크스페이스 사람 = primary/13 알약, 외부 = 테두리 알약 + "외부". ✕ 20(히트 40).
- *  [비밀번호 1fr | "외부 손님은 대기실" 스위치 1fr] → "내 캘린더에 일정으로 추가하고 초대 메일 보내기" 체크(예약일 때).
- * mode="edit": 같은 창으로 회의 수정(PATCH) — 기존 초대 대상은 상세(by-id)에서 받아 칩으로, 뺀 사람은 remove_invitee_ids,
- *  새 사람은 add_invitees. 비밀번호는 비워 두면 그대로, "비밀번호 해제" 체크로 지운다. 캘린더 체크는 없다(호스트 일정은 서버가 따라 옮긴다).
- * ★백엔드 갭: 채널 초대(사람·이메일만) — 그리지 않는다.
+ *  지금 시작(mode="now")은 날짜·시작·길이 줄을 제외한다.
+ * 초대 칩: 워크스페이스 사용자 = primary/13 알약, 외부 = 테두리 알약 + "외부". ✕ 20(히트 40).
+ *  [비밀번호 1fr | "외부 손님은 대기실" 스위치 1fr] → "내 캘린더에 일정으로 추가하고 초대 메일 보내기" 체크(예약 시).
+ * mode="edit": 동일 창에서 회의 수정(PATCH) — 기존 초대 대상은 상세(by-id)에서 수신해 칩으로 표시하고, 제외한 대상은 remove_invitee_ids,
+ *  신규 대상은 add_invitees 로 전달한다. 비밀번호는 비워 두면 유지하고, "비밀번호 해제" 체크로 삭제한다. 캘린더 체크는 없다(호스트 일정은 서버가 함께 이동한다).
+ * 백엔드 갭: 채널 초대(사람·이메일만) — 표시하지 않는다.
  */
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -31,9 +31,9 @@ interface Invitee {
   display_name?: string
   email?: string
   label: string
-  /** 수정 모드: 이미 초대된 사람의 초대 id */
+  /** 수정 모드: 기존 초대 대상의 초대 id */
   inviteeId?: string
-  /** 수정 모드: 그 사람의 응답 */
+  /** 수정 모드: 해당 대상의 응답 */
   response?: string
 }
 
@@ -62,9 +62,9 @@ export interface MeetingsInviteModalProps {
   mode?: 'schedule' | 'now' | 'edit'
   /** 서버 요청 중(버튼 잠금·바깥 클릭 무시) */
   busy?: boolean
-  /** 수정할 회의(mode="edit") */
+  /** 수정 대상 회의(mode="edit") */
   room?: MeetingRoomInfo | null
-  /** 서버가 이름을 거절했을 때(409 같은 이름) 이름 칸 아래에 */
+  /** 서버가 이름을 거부한 경우(409 동일 이름) 이름 칸 아래에 표시 */
   serverNameError?: string
   onClose?: () => void
   onCreate?: (payload: MeetingCreatePayload) => void
@@ -112,7 +112,7 @@ export function MeetingsInviteModal({
   // watch(serverNameError, v => { if (v) nameError = v })
   useEffect(() => { if (serverNameError) setNameError(serverNameError) }, [serverNameError])
 
-  // ── 수정 모드: 지금 값으로 채우기 ──
+  // ── 수정 모드: 현재 값으로 초기화 ──
   const original = useRef<{ title: string; date: string; time: string; duration: number; waiting: boolean; invitees: Invitee[] } | null>(null)
   useEffect(() => {
     const r = room
@@ -148,7 +148,7 @@ export function MeetingsInviteModal({
             inviteeId: i.id,
             response: i.response,
           }))
-        } catch { /* 초대 목록 없이 고친다 */ }
+        } catch { /* 초대 목록 없이 수정 진행 */ }
         finally { if (alive) setLoadingDetail(false) }
       }
       if (!alive) return
@@ -171,7 +171,7 @@ export function MeetingsInviteModal({
       { value: 60, label: t('meetings.invite.duration60') },
       { value: 120, label: t('meetings.invite.duration120') },
     ]
-    // 다른 길이로 저장된 회의(캘린더에서 만든 회의 등)를 고칠 때 그 값도 고를 수 있게
+    // 다른 길이로 저장된 회의(캘린더에서 생성한 회의 등) 수정 시 해당 값도 선택 가능하도록 추가
     const cur = Number(durationMinutes)
     if (cur && !list.some(o => o.value === cur)) list.push({ value: cur, label: t('meetings.invite.durationN', { n: cur }) })
     return list
@@ -203,7 +203,7 @@ export function MeetingsInviteModal({
     if (invitees.some(i => (i.email || '').toLowerCase() === (r.email || '').toLowerCase())) return
     const label = r.display_name || r.name || r.username || r.email
     if (r.id) {
-      // 워크스페이스 계정 — 캘린더 일정까지 만들어 주는 internal 경로
+      // 워크스페이스 계정 — 캘린더 일정까지 생성하는 internal 경로
       setInvitees([...invitees, { type: 'internal', user_id: r.id, username: r.username, display_name: r.display_name || r.name, email: r.email, label }])
     } else {
       setInvitees([...invitees, { type: 'external', email: r.email, label }])
@@ -233,8 +233,8 @@ export function MeetingsInviteModal({
   }
 
   function handleKeydown(e: KeyboardEvent<HTMLInputElement>) {
-    // 한글 조합 중 Enter 는 글자를 확정하는 키다. 그대로 두면 브라우저에 따라 폼이 통째로 제출되거나(초대 없이 회의 생성)
-    // 한 글자 전 검색 결과가 들어가고 마지막 글자가 칸에 남는다 — 조합 확정만 하게 삼킨다.
+    // 한글 조합 중 Enter 는 글자 확정 키이다. 방치 시 브라우저에 따라 폼 전체가 제출되거나(초대 없이 회의 생성)
+    // 한 글자 이전의 검색 결과가 입력되고 마지막 글자가 칸에 남는다 — 조합 확정만 수행하도록 이벤트를 소비한다.
     if (e.key !== 'Escape' && (e.nativeEvent.isComposing || e.keyCode === 229)) {
       if (e.key === 'Enter' || e.nativeEvent.code === 'Enter' || e.nativeEvent.code === 'NumpadEnter') e.preventDefault()
       return
@@ -260,7 +260,7 @@ export function MeetingsInviteModal({
 
   function scheduledIso(): string | null {
     if (!scheduledDate) return null
-    // 로컬 시각 → 시간대 포함 ISO(예전엔 시간대 없이 보내 서버가 UTC 로 읽어 9시간 밀렸다)
+    // 로컬 시각 → 시간대 포함 ISO(과거에는 시간대 없이 송신해 서버가 UTC 로 해석, 9시간 오차 발생)
     const [y, m, d] = scheduledDate.split('-').map(Number)
     const [hh, mm] = (scheduledTime || '00:00').split(':').map(Number)
     return new Date(y, m - 1, d, hh, mm).toISOString()
@@ -282,7 +282,7 @@ export function MeetingsInviteModal({
     })
   }
 
-  /** 수정: 바뀐 것만 보낸다 */
+  /** 수정: 변경된 항목만 송신 */
   function submitEdit() {
     const o = original.current
     const patch: MeetingUpdate = {}
@@ -344,7 +344,7 @@ export function MeetingsInviteModal({
           </div>
         )}
 
-        {/* 초대: 칩 + 입력 한 상자 */}
+        {/* 초대: 칩 + 입력 단일 상자 */}
         <div className="flex flex-col gap-1.5">
           <label htmlFor="meeting-invite-input" className="text-xs font-semibold text-muted-foreground">{t('meetings.invite.inviteLabel')}</label>
           <div className="relative">

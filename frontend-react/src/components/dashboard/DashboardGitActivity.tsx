@@ -1,7 +1,7 @@
 /**
  * Git 활동: 범위 [내 것|전체], Git 계정이 없으면 [전체] 하나(공개 저장소 활동).
  * 두 줄 행 56 = 상태 아이콘(리뷰·병합 PR primary · 열린 이슈 success · 닫힘·커밋 muted) + "PR #482 제목" /
- * "상태 · 작성자"(커밋 묶음은 "main 에 3커밋" / "저장소 · 작성자들") + 시각. 머리 "Git ›".
+ * "상태 · 작성자"(커밋 그룹은 "main 에 3커밋" / "저장소 · 작성자들") + 시각. 헤더 "Git ›".
  * 서버: GET /api/git/activity?scope=mine|all&limit=n (backend app/git/router.py)
  */
 import { useCallback, useEffect, useState } from 'react'
@@ -26,11 +26,11 @@ export interface GitActivityItem {
   repo_name: string
   author: string
   at: string
-  /** commits 묶음: 커밋 수 */
+  /** commits 그룹: 커밋 수 */
   count: number | null
-  /** commits 묶음: 작성자들(앞선 순) */
+  /** commits 그룹: 작성자 목록(앞선 순) */
   authors: string[]
-  /** commits 묶음: 브랜치 */
+  /** commits 그룹: 브랜치 */
   branch: string
 }
 
@@ -73,7 +73,7 @@ export function DashboardGitActivity() {
     try {
       const r = await $fetch<GitActivityResponse>('/api/git/activity', { params: { scope: s, limit } })
       setConnected(r.connected)
-      // 계정이 없으면 "내 것"이 없다 — 범위 [전체] 하나로
+      // 계정이 없으면 "내 것"이 존재하지 않음 — 범위를 [전체] 하나로 전환
       if (!r.connected && s === 'mine') { setScope('all'); return }
       setData(r)
     } catch { setError(true) } finally { setLoading(false) }

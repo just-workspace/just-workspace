@@ -2,9 +2,9 @@
  * "예약됨" 시트.
  *  440 · 패딩 24 · 성공 타일 40 → "회의를 예약했습니다" 17/600 + 요약 13
  *  → 점선 링크 상자(mono) + [링크 복사] → [캘린더에서 보기][채널로 공유] → 안내 12 muted.
- * 지금 시작하는 회의면 안내 자리에 [지금 입장](primary 40).
- * "캘린더에서 보기" = 예약 날짜의 캘린더(예약 창에서 "내 캘린더에 추가"를 켰으면 호스트 일정이 거기 있다).
- * ★백엔드 갭: 채널로 공유(회의 링크를 채널 메시지로 보내는 API 없음) — 비활성 "준비 중".
+ * 즉시 시작하는 회의이면 안내 위치에 [지금 입장](primary 40) 표시.
+ * "캘린더에서 보기" = 예약 날짜의 캘린더(예약 창에서 "내 캘린더에 추가"를 활성화한 경우 호스트 일정이 해당 캘린더에 존재).
+ * 백엔드 미구현: 채널로 공유(회의 링크를 채널 메시지로 전송하는 API 없음) — 비활성 "준비 중".
  */
 import { useI18n } from '~/i18n'
 import { navigateTo } from '~/lib/router'
@@ -20,22 +20,22 @@ export interface MeetingsCreatedSheetProps {
   name: string
   /** 공유 토큰(/meetings/join/{token}) */
   shareToken: string
-  /** 예약 시각(ISO). null = 지금 시작 */
+  /** 예약 시각(ISO). null = 즉시 시작 */
   scheduledAt: string | null
   durationMinutes: number
   inviteCount: number
-  /** 지금 시작한 회의(또는 시작 10분 전 안) → "지금 입장" */
+  /** 즉시 시작한 회의(또는 시작 10분 전 이내) → "지금 입장" */
   joinNow: boolean
   /** 캘린더에서 보기 경로(예약 날짜) */
   calendarTo?: string
-  /** 내 캘린더에 일정으로 추가했는가 — 요약 줄에 표시 */
+  /** 내 캘린더에 일정으로 추가했는지 여부 — 요약 줄에 표시 */
   addedToCalendar?: boolean
   onClose?: () => void
   /** [지금 입장] */
   onJoin?: () => void
 }
 
-/** 회의 만든 뒤 "예약됨" 시트 */
+/** 회의 생성 후 "예약됨" 시트 */
 export function MeetingsCreatedSheet({
   name, shareToken, scheduledAt, durationMinutes, inviteCount, joinNow, calendarTo: calendarToProp, addedToCalendar, onClose, onJoin,
 }: MeetingsCreatedSheetProps) {

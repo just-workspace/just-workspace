@@ -1,4 +1,4 @@
-// 문서 교정: 꾸밈 위치 찾기(같은 구절 k 번째, 블록 경계를 넘는 구절은 못 찾음) · 바꾸기 · 모두 바꾸기(뒤에서부터).
+// 문서 교정: 꾸밈 위치 탐색(동일 구절 k 번째, 블록 경계를 넘는 구절은 탐색 불가) · 바꾸기 · 모두 바꾸기(뒤에서부터).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'

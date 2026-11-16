@@ -1,8 +1,8 @@
 /*
  * 화면 공유 소스 피커.
  *
- * 목록은 메인이 desktopCapturer 로 받아 넘겨준다 — 렌더러에서는 부를 수 없다
- * (Electron 17+ 에서 메인 전용이 됐다).
+ * 목록은 메인이 desktopCapturer 로 조회해 전달한다 — 렌더러에서는 호출할 수 없다
+ * (Electron 17+ 에서 메인 전용으로 변경되었다).
  */
 'use strict';
 
@@ -27,7 +27,7 @@ function renderTabs() {
   $('tab-window').textContent = `창 ${c.window}`;
   $('tab-screen').setAttribute('aria-selected', String(state.tab === 'screen'));
   $('tab-window').setAttribute('aria-selected', String(state.tab === 'window'));
-  // 창 공유는 가려져도 계속 전송된다 — 창 탭에서만 알린다.
+  // 창 공유는 창이 가려져도 계속 전송된다 — 창 탭에서만 안내한다.
   $('note').hidden = state.tab !== 'window';
 }
 
@@ -133,8 +133,8 @@ async function start() {
   const { sources, context } = await window.jw.picker.load();
   state.sources = sources;
   if (context) $('sub').textContent = context;
-  // 주 화면을 미리 골라둔다(디자인 목업도 선택된 상태다). 미리 골라도
-  // 공유는 버튼을 눌러야 시작되므로 실수로 나가지 않는다.
+  // 주 화면을 미리 선택해 둔다(디자인 목업도 선택된 상태이다). 미리 선택해도
+  // 공유는 버튼을 눌러야 시작되므로 의도치 않게 시작되지 않는다.
   const screens = sources.filter((s) => s.kind === 'screen');
   if (screens.length > 0) state.picked = screens[0].id;
   render();

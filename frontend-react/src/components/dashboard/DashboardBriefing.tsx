@@ -1,13 +1,13 @@
 /**
- * 오늘 브리핑 줄 + 관리자 운영 띠.
+ * 오늘 브리핑 행 + 관리자 운영 바.
  *
- * 칩(높이 36, rounded-full, 누르면 해당 화면): 안 읽은 메일 n · 나를 부른 것 n · 오늘 마감 n · 지남 n(지난 것만이면 `지남 n` danger 하나) ·
- * 다음 회의 `제목 14:00 · 10분 후 [참여]`(30분 전부터 primary 테두리 + [참여]) · 관리자만 서비스 이상 n(warning).
- * 0 인 칩은 숨김. 전부 없으면 "오늘은 처리할 것이 없습니다." 한 줄. 모바일은 한 줄 가로 스크롤(줄바꿈 없음).
+ * 칩(높이 36, rounded-full, 누르면 해당 화면으로 이동): 안 읽은 메일 n · 나를 부른 것 n · 오늘 마감 n · 지남 n(지난 것만 있으면 `지남 n` danger 하나) ·
+ * 다음 회의 `제목 14:00 · 10분 후 [참여]`(30분 전부터 primary 테두리 + [참여]) · 관리자 전용 서비스 이상 n(warning).
+ * 0 인 칩은 숨김. 전부 없으면 "오늘은 처리할 것이 없습니다." 한 행. 모바일은 한 행 가로 스크롤(줄바꿈 없음).
  *
- * 운영 띠(관리자만, 높이 40): 운영 · 서비스 n/n 정상 · 이상 내용(warning) · 저장소 used / total · 승인 대기 n · 관리 개요 ›.
- * 모바일은 칩 줄처럼 한 줄 가로 스크롤(줄바꿈·페이드 없음, "관리 개요 ›" 맨 끝).
- * 데이터는 모두 /api/dashboard/summary 한 번(useDashSummary).
+ * 운영 바(관리자 전용, 높이 40): 운영 · 서비스 n/n 정상 · 이상 내용(warning) · 저장소 used / total · 승인 대기 n · 관리 개요 ›.
+ * 모바일은 칩 행과 같이 한 행 가로 스크롤(줄바꿈·페이드 없음, "관리 개요 ›" 맨 끝).
+ * 데이터는 모두 /api/dashboard/summary 1회 호출(useDashSummary).
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -29,7 +29,7 @@ export interface BriefChip {
   sub?: string
   join?: string | null
   tone?: 'primary' | 'warning'
-  /** 글자·숫자 danger(지난 마감만 있을 때) */
+  /** 문자·숫자 danger(지난 마감만 있을 때) */
   danger?: boolean
   to?: string
   onClick?: () => void
@@ -37,7 +37,7 @@ export interface BriefChip {
 
 const hm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 
-/** 요약 → 칩(0 인 것은 뺀다). 순수 함수 — 표 테스트 */
+/** 요약 → 칩(0 인 항목은 제외). 순수 함수 — 표 기반 테스트 */
 export function briefChips(s: DashSummary | null, now: number, t: (k: string, a?: Record<string, unknown>) => string, isAdmin: boolean): BriefChip[] {
   if (!s) return []
   const out: BriefChip[] = []
@@ -49,7 +49,7 @@ export function briefChips(s: DashSummary | null, now: number, t: (k: string, a?
       sub: s.tasks_overdue ? t('dashboard.d17.chip.overdue', { n: s.tasks_overdue }) : undefined, to: '/tasks',
     })
   } else if (s.tasks_overdue) {
-    // 오늘 마감 0 · 지난 것만 — "지남 n" 하나
+    // 오늘 마감 0 · 지난 것만 존재 — "지남 n" 하나
     out.push({ key: 'due', icon: 'check-square', label: t('dashboard.d17.chip.overdueLabel'), value: String(s.tasks_overdue), danger: true, to: '/tasks' })
   }
   const m = s.next_meeting
@@ -105,7 +105,7 @@ export function DashboardBriefingChips({ isAdmin, mobile }: { isAdmin: boolean; 
         return (
           <div role="listitem" key={c.key} className="flex shrink-0 items-center">
             {c.join ? (
-              // [참여]는 칩 안 오른쪽 끝 — 칩 본문(일정)과 따로 누른다
+              // [참여]는 칩 내부 오른쪽 끝 — 칩 본문(일정)과 별도 클릭 대상
               <span className={cn(cls, 'pr-1')}>
                 <NuxtLink to={c.to ?? '/calendar'} className="flex items-center gap-2 focus-visible:outline-hidden">{inner}</NuxtLink>
                 <button
@@ -125,12 +125,12 @@ export function DashboardBriefingChips({ isAdmin, mobile }: { isAdmin: boolean; 
   )
 }
 
-/** 서버가 준 회의 주소(같은 출처면 경로로) */
+/** 서버가 반환한 회의 주소(동일 출처이면 경로로 변환) */
 function meetingPath(u: string): string {
   try { const x = new URL(u, window.location.origin); return x.origin === window.location.origin ? x.pathname : x.href } catch { return u }
 }
 
-/** 이상 한 줄 — "메일 발송 지연 · 1.8s" / "메일 응답 없음" */
+/** 이상 한 행 — "메일 발송 지연 · 1.8s" / "메일 응답 없음" */
 export function issueText(i: ServiceIssue, t: (k: string, a?: Record<string, unknown>) => string): string {
   return i.status === 'slow' && i.response_ms != null
     ? t('dashboard.d17.ops.slow', { name: i.name, s: (i.response_ms / 1000).toFixed(1) })
@@ -147,7 +147,7 @@ export function DashboardOpsBand({ mobile = false }: { mobile?: boolean }) {
     <div
       role="region"
       aria-label={t('dashboard.d17.ops.title')}
-      // 모바일: 칩 줄과 같은 가로 스크롤(줄바꿈 없음 · 페이드 없음) — 항목은 줄지 않고 "관리 개요 ›" 가 맨 끝
+      // 모바일: 칩 행과 동일한 가로 스크롤(줄바꿈 없음 · 페이드 없음) — 항목은 축소되지 않고 "관리 개요 ›" 가 맨 끝에 위치
       className={cn(
         'flex h-10 items-center gap-4 whitespace-nowrap rounded-md border border-border bg-muted/40 px-3.5 text-[13px]',
         mobile ? 'overflow-x-auto [scrollbar-width:none] [&>*]:shrink-0' : 'overflow-hidden',

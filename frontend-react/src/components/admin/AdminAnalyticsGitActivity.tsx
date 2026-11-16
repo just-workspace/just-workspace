@@ -1,6 +1,6 @@
 /**
  * 관리 개요 › Git 활동 카드.
- * 머리 오른쪽에 저장소·이슈·PR 수, 본문은 최근 10건(종류 칩 · 저장소 / 제목 · 사람 · 상대 시각).
+ * 헤더 오른쪽에 저장소·이슈·PR 수, 본문은 최근 10건(종류 칩 · 저장소 / 제목 · 사람 · 상대 시각).
  */
 import { useI18n } from '~/i18n'
 import { UiEmptyState } from '~/components/ui/EmptyState'
@@ -8,9 +8,9 @@ import type { GitActivityItem, GitStats } from '~/composables/useAdminAnalytics'
 import { analyticsTimeAgo } from './analyticsFormat'
 
 export interface AdminAnalyticsGitActivityProps {
-  /** 최근 Git 활동(앞 10건만 그림) */
+  /** 최근 Git 활동(앞 10건만 표시) */
   activity: GitActivityItem[]
-  /** 저장소·이슈·PR 합계. null 이면 머리 숫자 숨김 */
+  /** 저장소·이슈·PR 합계. null 이면 헤더 숫자 숨김 */
   stats: GitStats | null
 }
 

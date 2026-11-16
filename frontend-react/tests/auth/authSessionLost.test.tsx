@@ -1,4 +1,4 @@
-// 인증 구역 수정 고정 — 웹에서 세션이 끊겼을 때(401)만 로그인으로, 429·5xx·네트워크 오류는 일시 오류(상태 유지).
+// 인증 구역 수정 고정 — 웹에서 세션이 끊긴 경우(401)에만 로그인으로 이동, 429·5xx·네트워크 오류는 일시 오류(상태 유지).
 // + 로그인 2단계 화면의 복구 코드 입력.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
@@ -78,9 +78,9 @@ describe('fetchUser — 401 만 미인증', () => {
     await fetchUser()
     expect(authStore.getState().user).toBeNull()
     expect(authUncertain()).toBe(true)
-    // 아직도 실패 → 돌아올 곳을 실어 로그인으로
+    // 여전히 실패 → 복귀 경로를 포함하여 로그인으로 이동
     expect(await authGuard({ path: '/mail', matched: true })).toBe('/login?redirect=%2Fmail')
-    // 한도가 풀렸다 → 그대로 통과
+    // 한도 해제 → 그대로 통과
     api.routes['/api/auth/me'] = () => ME
     expect(await authGuard({ path: '/mail', matched: true })).toBeNull()
     expect(authUncertain()).toBe(false)

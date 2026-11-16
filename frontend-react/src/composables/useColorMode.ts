@@ -1,8 +1,8 @@
 /**
- * 컬러 모드 — @nuxtjs/color-mode(classSuffix '') 와 같은 동작.
- * - 저장 키 `nuxt-color-mode`(localStorage) — 기존 사용자 설정을 그대로 읽는다.
+ * 컬러 모드 — @nuxtjs/color-mode(classSuffix '') 와 동일 동작.
+ * - 저장 키 `nuxt-color-mode`(localStorage) — 기존 사용자 설정을 그대로 조회한다.
  * - preference: 'system' | 'light' | 'dark' (기본 system) · value: 실제 적용값(system 이면 OS 설정, 판별 불가 light)
- * - <html> 에 value 이름의 class('dark' | 'light')를 단다. 첫 적용은 index.html 의 머리 스크립트가 한다(깜빡임 방지).
+ * - <html> 에 value 이름의 class('dark' | 'light')를 부여한다. 최초 적용은 index.html 의 머리 스크립트가 수행한다(깜빡임 방지).
  *
  * React: const colorMode = useColorMode(); colorMode.preference; colorMode.value; colorMode.setPreference('dark')
  */
@@ -48,11 +48,11 @@ export function setColorPreference(p: ColorPreference) {
 }
 
 let _installed = false
-/** OS 테마 변경 감시(preference=system 일 때) — main.tsx 에서 한 번 */
+/** OS 테마 변경 감시(preference=system 일 때) — main.tsx 에서 1회 호출 */
 export function installColorModeListener() {
   if (_installed || typeof window === 'undefined' || !window.matchMedia) return
   _installed = true
-  // 머리 스크립트가 이미 class 를 달았다. store 와 맞춘다.
+  // 머리 스크립트가 이미 class 를 부여함. store 와 동기화
   applyClass(null, colorModeStore.getState().value)
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     const { preference, value: prev } = colorModeStore.getState()

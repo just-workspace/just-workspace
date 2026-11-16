@@ -1,4 +1,4 @@
-// 원시 레코드 → 어휘: 작성자 문자열(폰트 이름·url·비밀번호)이 남지 않는지, 종류별 변환
+// 원시 레코드 → 어휘: 작성자 문자열(폰트 이름·url·비밀번호)의 잔존 여부, 종류별 변환
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { COMPUTED_STYLE_ALLOWLIST, validateNode } from '../protocol/vocab.ts'

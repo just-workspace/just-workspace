@@ -1,14 +1,14 @@
 /**
- * 미러 클라이언트 — 닫힌 어휘를 받아 **스크립트 없는 iframe**(sandbox="allow-same-origin", CSP script-src 'none') 의 문서에 DOM 을 조립한다.
- * 프레임워크 없는 모듈: React 뷰어(frontend-react, 동기화된 사본)와 하네스가 같은 코드를 쓴다.
+ * 미러 클라이언트 — 닫힌 어휘를 수신하여 **스크립트 없는 iframe**(sandbox="allow-same-origin", CSP script-src 'none') 의 문서에 DOM 을 조립한다.
+ * 프레임워크 비의존 모듈: React 뷰어(frontend-react, 동기화된 사본)와 하네스가 동일 코드를 사용한다.
  *
  * 보안 불변식
- *  - 받는 모든 텍스트 메시지는 validateServerMsg(엄격)를 통과한 것만 적용 — 모르는 메시지·필드·값은 거부하고 센다(stats.rejected).
+ *  - 수신하는 모든 텍스트 메시지는 validateServerMsg(엄격)를 통과한 것만 적용 — 미정의 메시지·필드·값은 거부하고 집계한다(stats.rejected).
  *  - 문자열 → DOM 싱크 없음: createElement / createElementNS / createTextNode / textContent / style.setProperty(허용 키) / setAttribute(숫자·검증값) 만.
- *  - 이미지 URL 은 sha 로부터 클라이언트가 조립한다(`${base}/asset/${sha}`). 서버 문자열을 URL 로 쓰는 곳은 없다. 폰트는 view 문서의 @font-face 가 고정 키로만.
- *  - 입력 위젯 값은 텍스트 노드로만 그린다(속성 선택자 키로거 불가). 미러 안에는 포커스 가능한 요소가 없다 — 키는 부모의 숨은 input 이 받는다.
- *  - 상한: 메시지 크기·초당 메시지·노드 수(LIMITS). 인셋 프레임은 머리·WebP 서명을 검사한다.
- *  - 정책: 복사(co)가 꺼져 있으면 미러 선택 복사를 막고, 붙여넣기(ci)가 꺼져 있으면 보내지 않는다(에이전트도 한 번 더 막는다).
+ *  - 이미지 URL 은 sha 로부터 클라이언트가 조립한다(`${base}/asset/${sha}`). 서버 문자열을 URL 로 사용하는 곳은 없다. 폰트는 view 문서의 @font-face 가 고정 키로만.
+ *  - 입력 위젯 값은 텍스트 노드로만 표시한다(속성 선택자 키로거 불가). 미러 내부에는 포커스 가능한 요소가 없다 — 키 입력은 부모의 숨은 input 이 수신한다.
+ *  - 상한: 메시지 크기·초당 메시지·노드 수(LIMITS). 인셋 프레임은 헤더·WebP 서명을 검사한다.
+ *  - 정책: 복사(co)가 비활성화되어 있으면 미러 선택 복사를 차단하고, 붙여넣기(ci)가 비활성화되어 있으면 송신하지 않는다(에이전트에서도 재차 차단).
  */
 import {
   INSET_FRAME_TAG, INSET_HEADER_BYTES, LIMITS, MAX_INSET_FRAME_BYTES, type ClientMsg, type DocInfo, type MsgReject, type NoticeKind, type PolicyInfo, type ServerMsg,
@@ -48,18 +48,18 @@ export interface MirrorClientOptions {
   wsUrl: string
   /** 세션 경로 접두어(끝에 / 없음) — 예: /rbi/<sid>. asset/·download/·upload/ 는 여기서 조립한다 */
   base: string
-  /** 숨은 IME 입력창을 둘 부모 요소 */
+  /** 숨은 IME 입력창을 배치할 부모 요소 */
   imeHost: HTMLElement
   onStats?: (s: MirrorStats) => void
   onLatency?: (s: LatencySample) => void
   onDoc?: (d: DocInfo) => void
   onPolicy?: (p: PolicyInfo) => void
   onNotice?: (n: MirrorNotice) => void
-  /** 원격 alert/confirm/prompt — 신뢰 크롬이 묻는다 */
+  /** 원격 alert/confirm/prompt — 신뢰 크롬이 사용자에게 확인 */
   onDialog?: (d: { k: 'alert' | 'confirm' | 'prompt' | 'beforeunload'; msg: string; def?: string }) => Promise<{ ok: boolean; text?: string }>
-  /** 원격 파일 선택 — 고른 파일(취소면 null) */
+  /** 원격 파일 선택 — 선택된 파일(취소 시 null) */
   onFileChooser?: (multi: boolean) => Promise<File[] | null>
-  /** 연결 상태 바뀜(신뢰 크롬 표시용) */
+  /** 연결 상태 변경(신뢰 크롬 표시용) */
   onConnection?: (connected: boolean, closedReason?: string) => void
 }
 
@@ -68,7 +68,7 @@ interface Entry { node: VNode; el: HTMLElement | SVGSVGElement; spacer?: HTMLEle
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const USER_SCROLL_GRACE_MS = 300
 const TEXT_WIDGETS = new Set(['text', 'password', 'textarea'])
-/** 브라우저가 가져야 하는 단축키(보내지 않는다) */
+/** 브라우저가 처리해야 하는 단축키(원격 송신 제외) */
 function browserReserved(ev: KeyboardEvent): boolean {
   const ctrl = ev.ctrlKey || ev.metaKey
   const k = ev.key.toLowerCase()
@@ -163,7 +163,7 @@ export class MirrorClient {
     }
     ws.onclose = ev => {
       this.stats.connected = false; window.clearInterval(this.pingTimer); this.emitStats()
-      // 4000: 다른 뷰어가 세션을 가져감 — 서로 뺏지 않는다 · 4001: 유휴 종료
+      // 4000: 다른 뷰어가 세션을 인수 — 상호 탈취 금지 · 4001: 유휴 종료
       if (ev.code === 4000 || ev.code === 4001) this.closed = true
       this.opt.onConnection?.(false, ev.code === 4000 ? 'replaced' : ev.code === 4001 ? 'idle' : undefined)
       if (!this.closed) window.setTimeout(() => this.connect(), 1500)
@@ -173,7 +173,7 @@ export class MirrorClient {
 
   stop(): void {
     this.closed = true
-    // React StrictMode 는 effect 를 두 번 돌린다 — 멈춘 클라이언트가 나중의 iframe load 에 다시 붙지 않게
+    // React StrictMode 는 effect 를 2회 실행한다 — 중지된 클라이언트가 이후의 iframe load 에 재연결되지 않도록 방지
     if (this.onLoad) { this.opt.iframe.removeEventListener('load', this.onLoad); this.onLoad = null }
     this.ws?.close()
     this.resizeObs?.disconnect()
@@ -185,7 +185,7 @@ export class MirrorClient {
   private send(m: ClientMsg): number {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return 0
     const s = JSON.stringify(m)
-    // 상한은 바이트(UTF-8) — 넘으면 에이전트가 연결을 끊는다(1009). 긴 것만 인코딩해 잰다
+    // 상한은 바이트(UTF-8) 기준 — 초과 시 에이전트가 연결을 종료한다(1009). 긴 메시지만 인코딩하여 측정
     if (s.length * 3 > LIMITS.maxClientMsgBytes && new TextEncoder().encode(s).length > LIMITS.maxClientMsgBytes) return 0
     this.ws.send(s)
     return 'seq' in m ? m.seq : 0
@@ -206,7 +206,7 @@ export class MirrorClient {
   // ── 수신 ──
   private onMessage(data: string | ArrayBuffer): void {
     this.stats.msgs++
-    // 초당 메시지 상한 — 넘는 것은 버린다(인셋 프레임이 먼저 버려지도록 바이너리는 더 일찍)
+    // 초당 메시지 상한 — 초과분은 폐기(인셋 프레임이 먼저 폐기되도록 바이너리는 더 이른 시점에 폐기)
     const now = performance.now()
     if (now - this.rate.at > 1000) { this.rate.at = now; this.rate.n = 0 }
     this.rate.n++
@@ -291,7 +291,7 @@ export class MirrorClient {
   }
 
   private applyPolicyToFrame(): void {
-    // 복사 정책이 꺼져 있으면 미러 전체를 선택 불가(view 문서 CSS 도 같은 규칙을 이미 건다 — 두 겹)
+    // 복사 정책이 비활성화되어 있으면 미러 전체를 선택 불가로 설정(view 문서 CSS 에도 동일 규칙 적용 — 이중 적용)
     if (this.doc?.body) this.doc.body.style.setProperty('user-select', this.pol.co ? '' : 'none')
   }
 
@@ -317,7 +317,7 @@ export class MirrorClient {
       this.upsert(n)
       touched.push(n)
     }
-    // 부모가 나중에 온 노드를 제자리로(같은 패치 안에서 순서가 섞여 와도)
+    // 부모가 나중에 도착한 노드를 정위치로 이동(동일 패치 내 순서가 뒤섞여 도착한 경우 포함)
     for (const n of touched) this.place(n.id)
     for (const n of touched) { const e = this.entries.get(n.id); if (e?.node.sc) this.applyScroll(e) }
   }
@@ -325,7 +325,7 @@ export class MirrorClient {
   private removeNode(id: number): void {
     const e = this.entries.get(id)
     if (!e) return
-    // 자식이 남아 있으면 루트로 옮겨 두지 않는다 — 서버가 함께 del 을 보낸다. 같이 지워진다(DOM 서브트리)
+    // 자식이 남아 있어도 루트로 옮기지 않는다 — 서버가 del 을 함께 보내므로 동시에 삭제된다(DOM 서브트리)
     e.el.remove()
     this.entries.delete(id)
     const u = this.insetUrls.get(id); if (u) { URL.revokeObjectURL(u); this.insetUrls.delete(id) }
@@ -359,7 +359,7 @@ export class MirrorClient {
 
   private orderKey(el: Element): number { const id = (el as HTMLElement).dataset?.id; const e = id ? this.entries.get(+id) : undefined; return e?.node.o ?? 0 }
 
-  /** 부모 안 제자리(o 순서)에 붙이고 위치·변환을 건다. x,y 는 이미 부모 기준 지역 좌표다 */
+  /** 부모 내 정위치(o 순서)에 삽입하고 위치·변환을 적용한다. x,y 는 이미 부모 기준 지역 좌표이다 */
   private place(id: number): void {
     const e = this.entries.get(id)
     if (!e || !this.root) return
@@ -368,7 +368,7 @@ export class MirrorClient {
     const parentEl = pe ? pe.el : this.root
     const key = n.o ?? 0
     if (e.el.parentNode !== parentEl || !this.inOrder(e.el, key)) {
-      // 대부분 끝에 붙는다(스냅샷은 문서 순서) — 끝 형제부터 본다
+      // 대부분 끝에 추가된다(스냅샷은 문서 순서) — 마지막 형제부터 확인
       const last = this.lastOrdered(parentEl)
       if (!last || this.orderKey(last) <= key) parentEl.insertBefore(e.el, pe?.spacer ?? null)
       else {
@@ -439,7 +439,7 @@ export class MirrorClient {
 
   private applyStyle(el: HTMLElement, s: StyleRec | undefined, n: VNode): void {
     const st = el.style
-    // 전부 setProperty — 문자열 CSS 블록을 쓰는 곳 없음. 값은 validateStyle(엄격)을 통과한 것만 들어온다.
+    // 전부 setProperty 사용 — 문자열 CSS 블록을 사용하는 곳 없음. 값은 validateStyle(엄격)을 통과한 것만 유입된다.
     st.setProperty('background-color', s?.bg ?? '')
     if (s?.bgl?.length) {
       st.setProperty('background-image', s.bgl.map(l => (l.i ? `url("${this.opt.base}/asset/${l.i}")` : l.g ? gradientCss(l.g) : 'none')).join(', '))
@@ -468,7 +468,7 @@ export class MirrorClient {
     st.setProperty('box-shadow', s?.sh ?? '')
     st.setProperty('outline', s?.ol ? `${s.ol[0]}px ${s.ol[1]} ${s.ol[2]}` : '')
     st.setProperty('cursor', s?.cur ?? (n.k === 'text' ? 'text' : ''))
-    // visibility·pointer-events 는 상속된다 — 원격 계산값을 매 노드에 명시해야 부모와 다를 때 맞는다
+    // visibility·pointer-events 는 상속된다 — 부모와 상이한 경우에도 일치하도록 원격 계산값을 노드마다 명시해야 한다
     st.setProperty('visibility', s?.hid ? 'hidden' : 'visible')
     st.setProperty('pointer-events', s?.pe ? 'none' : 'auto')
     st.setProperty('user-select', s?.nosel ? 'none' : '')
@@ -505,7 +505,7 @@ export class MirrorClient {
     const span = (t: string, cls = '') => { const s = d.createElement('span'); if (cls) s.className = cls; s.textContent = t; s.style.pointerEvents = 'none'; return s }
     const focused = this.focusedWidget === n.id && !n.wdis
     switch (n.wk) {
-      // 체크박스·라디오·슬라이더는 Chromium 기본 모양을 상자로 그린다(원격도 같은 Chromium — 색은 기본 accent)
+      // 체크박스·라디오·슬라이더는 Chromium 기본 모양을 상자로 표시한다(원격도 동일한 Chromium — 색은 기본 accent)
       case 'checkbox': case 'radio': {
         el.style.justifyContent = 'center'
         const b = d.createElement('span'), s = b.style, sz = Math.max(8, Math.min(16, Math.min(n.w, n.h) - 1))
@@ -645,7 +645,7 @@ export class MirrorClient {
     this.opt.onNotice?.(n)
   }
 
-  /** 정책이 허용한 다운로드 주소(신뢰 크롬이 링크로 보인다) */
+  /** 정책이 허용한 다운로드 주소(신뢰 크롬이 링크로 표시) */
   downloadUrl(id: string): string { return /^[0-9a-f]{32}$/.test(id) ? `${this.opt.base}/download/${id}` : '' }
 
   private async onDialog(m: Extract<ServerMsg, { t: 'dialog' }>): Promise<void> {
@@ -672,13 +672,13 @@ export class MirrorClient {
     const tg = this.targetOf(ev)
     if (!tg) return { id: 0, rx: ev.clientX, ry: ev.clientY }
     const e = this.entries.get(tg.id)
-    // 텍스트 런 span 이면 그 텍스트 노드 상자 기준(원격 pt() 도 텍스트 노드 상자 기준)
+    // 텍스트 런 span 이면 해당 텍스트 노드 상자 기준(원격 pt() 도 텍스트 노드 상자 기준)
     const box = (e && e.el !== tg.el ? e.el : tg.el) as HTMLElement
     const r = box.getBoundingClientRect()
     return { id: tg.id, rx: Math.round((ev.clientX - r.left) * 10) / 10, ry: Math.round((ev.clientY - r.top) * 10) / 10 }
   }
 
-  /** 누를 때의 기준 — 버튼을 누른 동안 이동·떼기는 이 노드의 누를 때 사각형 기준으로 보낸다(원격도 같은 기준을 기억 — 드래그 과주행 방지) */
+  /** 버튼 누름 시점의 기준 — 버튼을 누른 동안 이동·해제는 이 노드의 누름 시점 사각형 기준으로 송신한다(원격도 동일 기준을 유지 — 드래그 과주행 방지) */
   private anchor: { id: number; left: number; top: number } | null = null
 
   private mouseMsg(type: 'down' | 'up' | 'move', ev: MouseEvent): void {
@@ -696,7 +696,7 @@ export class MirrorClient {
     this.send({ t: 'mouse', type, id, rx, ry, ...base })
   }
 
-  /** 휠: 미러 안에서 그 방향으로 스크롤할 수 있는 상자가 있으면 로컬(스크롤 이벤트로 동기화), 없거나 Ctrl 이면 원격으로 */
+  /** 휠: 미러 내에 해당 방향으로 스크롤 가능한 상자가 있으면 로컬 처리(스크롤 이벤트로 동기화), 없거나 Ctrl 이면 원격으로 전달 */
   private canScrollLocally(ev: WheelEvent): boolean {
     if (ev.ctrlKey || ev.metaKey) return false
     const d = this.doc!
@@ -727,13 +727,13 @@ export class MirrorClient {
       this.mouseMsg('down', ev)
       this.positionIme(e)
       this.ime.focus({ preventScroll: true })
-      // 텍스트 런 위가 아니면 브라우저 기본 동작(선택 시작·네이티브 드래그·가운데 버튼 자동 스크롤)을 막는다 — 드래그는 원격에서 일어난다
+      // 텍스트 런 위가 아니면 브라우저 기본 동작(선택 시작·네이티브 드래그·가운데 버튼 자동 스크롤)을 차단한다 — 드래그는 원격에서 수행된다
       const onText = (ev.target as HTMLElement)?.classList?.contains('t')
       if (!onText || (e && e.node.k === 'widget') || ev.button !== 0) ev.preventDefault()
       if (wasFocus !== this.focusedWidget) for (const id of [wasFocus, this.focusedWidget]) { const w = this.entries.get(id); if (w && w.node.k === 'widget') this.renderWidget(w) }
     })
     d.addEventListener('mouseup', ev => {
-      // 미뤄 둔 이동이 있으면 먼저 — 드래그 마지막 구간이 빠지지 않게
+      // 지연된 이동이 있으면 먼저 송신 — 드래그 마지막 구간 누락 방지
       if (this.moveTimer) { window.clearTimeout(this.moveTimer); this.moveTimer = 0; this.mouseMsg('move', this.lastMoveEv ?? ev) }
       this.mouseMsg('up', ev)
       this.ime.focus({ preventScroll: true })
@@ -750,7 +750,7 @@ export class MirrorClient {
       this.mouseMsg('move', ev)
     })
     d.addEventListener('wheel', ev => {
-      if (this.canScrollLocally(ev)) return // 로컬 스크롤 → scroll 이벤트가 동기화
+      if (this.canScrollLocally(ev)) return // 로컬 스크롤 → scroll 이벤트로 동기화
       ev.preventDefault()
       const { id, rx, ry } = this.rel(ev)
       const k = ev.deltaMode === 1 ? 40 : ev.deltaMode === 2 ? 800 : 1
@@ -762,7 +762,7 @@ export class MirrorClient {
         if (w) this.send({ t: 'mouse', type: 'wheel', id: w.id, rx: w.rx, ry: w.ry, dx: Math.round(w.dx), dy: Math.round(w.dy), mods: w.mods, seq: this.nextSeq('mouse') })
       }, 16)
     }, { passive: false })
-    d.addEventListener('contextmenu', ev => ev.preventDefault()) // 오른쪽 버튼은 mousedown/up 으로 원격에 갔다 — 원격 메뉴(DOM)가 미러로 온다
+    d.addEventListener('contextmenu', ev => ev.preventDefault()) // 오른쪽 버튼은 mousedown/up 으로 원격에 전달됨 — 원격 메뉴(DOM)가 미러로 수신된다
     d.addEventListener('dragstart', ev => ev.preventDefault())
     d.addEventListener('auxclick', ev => ev.preventDefault())
     d.addEventListener('copy', ev => this.onCopy(ev as ClipboardEvent, false))
@@ -779,7 +779,7 @@ export class MirrorClient {
   }
 
   private positionIme(e: Entry | undefined): void {
-    // IME 후보창이 위젯 근처에 뜨도록 숨은 input 을 그 위치로
+    // IME 후보창이 위젯 근처에 표시되도록 숨은 input 을 해당 위치로 이동
     const fr = this.opt.iframe.getBoundingClientRect()
     if (e) {
       const r = (e.el as HTMLElement).getBoundingClientRect()
@@ -813,7 +813,7 @@ export class MirrorClient {
     if (e) this.renderWidget(e)
   }
 
-  /** 복사 — 미러 안 선택이 있으면 그것(네이티브 선택), 없으면 원격 선택(getsel). 정책(co)이 꺼져 있으면 막는다 */
+  /** 복사 — 미러 내 선택이 있으면 해당 선택(네이티브 선택), 없으면 원격 선택(getsel). 정책(co)이 비활성화되어 있으면 차단한다 */
   private onCopy(ev: ClipboardEvent, cut: boolean): void {
     const sel = this.doc?.getSelection()?.toString() ?? ''
     if (!this.pol.co) { ev.preventDefault(); this.opt.onNotice?.({ k: 'blocked-clip-out' }); return }
@@ -838,11 +838,11 @@ export class MirrorClient {
       if (browserReserved(ev)) return
       const ctrl = ev.ctrlKey || ev.metaKey
       const k = ev.key.toLowerCase()
-      // 복사·잘라내기·붙여넣기는 clipboard 이벤트가 처리한다(키를 원격에 보내지 않는다)
+      // 복사·잘라내기·붙여넣기는 clipboard 이벤트가 처리한다(키를 원격에 송신하지 않음)
       if (ctrl && !ev.altKey && (k === 'c' || k === 'x' || k === 'v' || k === 'insert')) return
       if (ev.shiftKey && ev.key === 'Insert') return
       const printable = ev.key.length === 1 && !ctrl && !ev.altKey
-      if (printable) return // beforeinput 이 text 로 보낸다
+      if (printable) return // beforeinput 이 text 로 송신
       ev.preventDefault()
       const text = ev.key === 'Enter' ? '\r' : ev.key === 'Tab' ? '\t' : undefined
       const mods = this.mods(ev)
@@ -865,7 +865,7 @@ export class MirrorClient {
     })
     i.addEventListener('beforeinput', ev => {
       const e = ev as InputEvent
-      if (e.isComposing || e.inputType === 'insertCompositionText') return // IME 가 값을 써야 조합이 된다
+      if (e.isComposing || e.inputType === 'insertCompositionText') return // IME 가 값을 기록해야 조합이 성립함
       if (e.inputType === 'insertText' && e.data) {
         ev.preventDefault()
         const seq = this.nextSeq('text')
@@ -874,7 +874,7 @@ export class MirrorClient {
       } else if (e.inputType === 'insertFromPaste' || e.inputType === 'insertFromDrop') {
         ev.preventDefault() // paste 이벤트에서 처리
       } else {
-        ev.preventDefault() // 줄바꿈·삭제는 keydown 으로 이미 갔다
+        ev.preventDefault() // 줄바꿈·삭제는 keydown 으로 이미 송신됨
       }
     })
     i.addEventListener('paste', ev => {
@@ -882,7 +882,7 @@ export class MirrorClient {
       const text = (ev as ClipboardEvent).clipboardData?.getData('text/plain') ?? ''
       if (!text) return
       if (!this.pol.ci) { this.opt.onNotice?.({ k: 'blocked-clip-in' }); return }
-      // 긴 붙여넣기는 조각으로(서로게이트 쌍을 가르지 않게). 전체 상한을 넘는 뒷부분은 버리고 알린다
+      // 긴 붙여넣기는 분할 송신(서로게이트 쌍 분리 방지). 전체 상한 초과분은 폐기하고 통지
       const all = Array.from(text.slice(0, LIMITS.maxPasteTotal))
       if (text.length > LIMITS.maxPasteTotal) this.opt.onNotice?.({ k: 'limit', detail: 'paste' })
       for (let i = 0; i < all.length; i += LIMITS.maxPasteChars) {

@@ -1,8 +1,8 @@
 /**
- * 서버 전역 정책(사용자 지시 — 전역 관리자에게만 보인다): UiSwitch 두 개, 바로 저장(PUT /api/chat/policy, 감사 로그 chat.policy.*).
- * (1) 전역 관리자에게 채널 안 특권(1:1 대화·비공개 채널 열람 포함) — 기본 꺼짐. 켤 때 개인정보 경고 확인 대화 상자.
- * (2) 채널 소유자가 남의 글을 지울 수 있음 — 기본 꺼짐.
- * 서버가 아직 없으면(404) "서버가 아직 지원하지 않음" banner, can_edit false 면 잠금.
+ * 서버 전역 정책(사용자 지시 — 전역 관리자에게만 표시): UiSwitch 두 개, 즉시 저장(PUT /api/chat/policy, 감사 로그 chat.policy.*).
+ * (1) 전역 관리자에게 채널 내 특권 부여(1:1 대화·비공개 채널 열람 포함) — 기본 비활성. 활성화 시 개인정보 경고 확인 대화 상자 표시.
+ * (2) 채널 소유자가 타 사용자의 메시지를 삭제할 수 있음 — 기본 비활성.
+ * 서버가 미지원이면(404) "서버가 아직 지원하지 않음" banner, can_edit false 이면 잠금.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -14,7 +14,7 @@ import { MobileHeader, SettingsBanner, SettingsHeader, errorText, statusOf, useS
 
 type PolicyKey = 'admin_channel_privileges' | 'owner_manage_messages'
 
-/** 켜기 전에 확인이 필요한가 — (1)을 켤 때만 */
+/** 활성화 전 확인 필요 여부 — (1)을 활성화할 때만 */
 export function policyNeedsConfirm(key: PolicyKey, next: boolean): boolean {
   return key === 'admin_channel_privileges' && next
 }

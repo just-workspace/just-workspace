@@ -1,6 +1,6 @@
 /**
- * e2e 하네스 — Playwright(헤드리스 크롬)가 두 컨텍스트에서 띄워 LosslessSession 을 직접 몬다(백엔드 없이 grant 를 직접 만든다).
- * 비트퍼펙트: 보낸 프레임 payload 해시(FNV-1a) ↔ 받은 프레임 해시를 seq 로 대조. 지연: 같은 머신이라 wall clock 차이.
+ * e2e 하네스 — Playwright(헤드리스 크롬)가 두 컨텍스트에서 로드하여 LosslessSession 을 직접 구동한다(백엔드 없이 grant 를 직접 생성).
+ * 비트퍼펙트: 송신 프레임 payload 해시(FNV-1a) ↔ 수신 프레임 해시를 seq 기준으로 대조. 지연: 동일 머신이므로 wall clock 차이.
  */
 import { LosslessSession, type LosslessSessionOptions } from '~/lib/lossless/session'
 import type { BufferPreset, LosslessEvent, LosslessFormat, RelayGrant } from '~/lib/lossless/types'
@@ -63,7 +63,7 @@ const api = {
   setFormat(f: Partial<LosslessFormat>) { session?.setFormat(f) },
   async leave() { await session?.leave(); session = null },
   async probeCapture() {
-    // 96 kHz 요청 시 장치가 실제로 주는 값(미검증 항목)
+    // 96 kHz 요청 시 장치가 실제로 반환하는 값(미검증 항목)
     const out: Record<string, unknown> = {}
     for (const rate of [96000, 48000]) {
       try {

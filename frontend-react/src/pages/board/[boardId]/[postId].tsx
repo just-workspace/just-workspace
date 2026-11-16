@@ -3,7 +3,7 @@
  *  폭 680 하나 — 배지(필독 솔리드 warning 22) · 제목 26/700 · 메타(아바타 24 · 작성자 · 시각 mono · 조회 N · 오른쪽 북마크)
  *  · 본문 15/1.75 · 첨부 카드 · 리액션 · 댓글 N(1단 답글, @언급 칩) · 댓글 입력.
  *  커맨드 바: 경로(게시판 › 제목) · 편집 · ⋯(삭제·고정·링크 복사). 모바일: 상단 바(북마크 44 · ⋯ 44) + 하단 고정 댓글 바.
- * 경로 매개변수가 바뀌면 화면을 새로 만든다 — boardId·postId 를 key 로 다시 마운트한다.
+ * 경로 매개변수가 변경되면 화면을 재생성한다 — boardId·postId 를 key 로 재마운트한다.
  */
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import DOMPurify from 'dompurify'
@@ -52,19 +52,19 @@ function PostPage({ boardId, postId }: { boardId: string; postId: string }) {
   useBreadcrumb(board?.name ?? null)
 
   useEffect(() => {
-    // 스토어는 화면끼리 함께 쓴다 — 방금 보던 다른 글의 본문·댓글이 새 주소에서 잠깐 보이지 않게 먼저 비운다
+    // 스토어는 화면 간에 공유된다 — 직전에 표시한 다른 글의 본문·댓글이 새 주소에서 잠시 노출되지 않도록 먼저 초기화한다
     if (boardStore.getState().currentPost?.id !== postId) boardStore.setState({ currentPost: null, comments: [], loadingPost: true })
     ;(async () => {
       await init()
       await Promise.all([fetchPost(postId), fetchComments(postId)])
-      // 필독을 열면 서버가 읽음으로 남긴다 — 사이드바 필독 목록을 새로 받는다
+      // 필독 글을 열면 서버가 읽음으로 기록한다 — 사이드바 필독 목록을 재조회한다
       if (boardStore.getState().currentPost?.is_must_read) void fetchMustRead()
     })()
     return () => cleanup()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 알림 링크(#comment-<id>)로 왔으면 댓글이 그려진 뒤 그 댓글로 내려간다(한 번만)
+  // 알림 링크(#comment-<id>)로 진입한 경우 댓글 렌더링 후 해당 댓글로 스크롤한다(1회만)
   const hashDone = useRef(false)
   useEffect(() => {
     if (hashDone.current || loadingComments || !comments.length) return
@@ -74,11 +74,11 @@ function PostPage({ boardId, postId }: { boardId: string; postId: string }) {
     document.getElementById(m[1])?.scrollIntoView({ block: 'center' })
   }, [loadingComments, comments.length])
 
-  /** 본문 정화. 인라인 style 은 정렬 등은 두되 글자색·배경색, 자리·겹침(position 등)은 지운다(다크 테마에서 안 보이는 글 · 화면 덮기 방지). */
+  /** 본문 정화. 인라인 style 은 정렬 등은 유지하되 글자색·배경색, 위치·겹침(position 등)은 제거한다(다크 테마에서 보이지 않는 글 · 화면 덮기 방지). */
   const sanitizedContent = useMemo(() => {
     const raw = currentPost?.content
     if (!raw) return ''
-    // 예전 설정(ALLOW_TAGS/ALLOW_ATTR)은 DOMPurify 가 모르는 옵션이라 실제로는 기본 허용 목록이 쓰였다 — 그 동작을 그대로 둔다.
+    // 기존 설정(ALLOW_TAGS/ALLOW_ATTR)은 DOMPurify 가 인식하지 않는 옵션이어서 실제로는 기본 허용 목록이 적용됐다 — 해당 동작을 그대로 유지한다.
     const clean = DOMPurify.sanitize(raw, {
       FORBID_TAGS: ['script', 'style', 'meta', 'head', 'link', 'object', 'embed', 'form', 'input'],
     })
@@ -94,7 +94,7 @@ function PostPage({ boardId, postId }: { boardId: string; postId: string }) {
   const authorLabel = authorName(currentPost?.author) || t('common.unknownUser')
   const canEdit = !currentPost || !user ? false : (currentPost.author?.id === user.id || !!user.is_admin)
   const canPin = !!user && (board?.notice_permission === 'all' || !!user.is_admin)
-  // 게시판 설정을 아직 모르면(목록 로딩 전) 보여 주고, 꺼 둔 게시판에서는 눌러도 실패할 버튼·입력을 그리지 않는다
+  // 게시판 설정을 아직 알 수 없으면(목록 로딩 전) 표시하고, 비활성화된 게시판에서는 눌러도 실패할 버튼·입력을 렌더링하지 않는다
   const canReact = board ? board.allow_reactions !== false : true
   const canComment = board ? board.allow_comments !== false && (board.comment_permission !== 'admin' || !!user?.is_admin) : true
 
@@ -130,7 +130,7 @@ function PostPage({ boardId, postId }: { boardId: string; postId: string }) {
     if (!p) return
     try {
       await updatePost(postId, { is_pinned: !p.is_pinned })
-      await fetchPost(postId)   // 리액션의 "내가 누름" 표시를 다시 계산
+      await fetchPost(postId)   // 리액션의 "내가 누름" 표시를 재계산
       addToast('success', p.is_pinned ? t('board.post.unpinned') : t('board.post.pinned'))
     } catch (e: any) {
       addToast('error', e?.data?.detail || t('board.post.pinError'))

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-// 순수 함수만 바로 가져온다
+// 순수 함수만 직접 import
 const { notificationTarget, isSafeActionUrl } = await import('~/composables/useNotifications')
 
 describe('활동 알림 이동·행동 주소', () => {

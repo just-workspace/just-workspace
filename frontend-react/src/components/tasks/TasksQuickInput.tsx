@@ -1,8 +1,8 @@
 /**
  * 빠른 입력 한 줄: 44, rounded-10, bg-card, 포커스 ring + ring/30 2px.
- * 입력 중 날짜(primary)·!우선순위(색)·@담당(muted) 토큰을 글자 위에 바로 칠한다 — 투명 글자 입력 + 같은 자리 거울 레이어.
- * Enter = 추가. 자세한 건 상세 패널에서.
- * @담당은 페이지가 사용자로 찾아 담당자로 저장한다(못 찾으면 제목에 남김). @ 가 없으면 나에게 배정.
+ * 입력 중 날짜(primary)·!우선순위(색)·@담당(muted) 토큰을 글자 위에 즉시 착색한다 — 투명 글자 입력 + 동일 위치의 거울 레이어.
+ * Enter = 추가. 세부 사항은 상세 패널에서 처리한다.
+ * @담당은 페이지가 사용자를 조회해 담당자로 저장한다(조회 실패 시 제목에 유지). @ 가 없으면 본인에게 배정한다.
  * ref → { clear, focus }.
  */
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
@@ -23,7 +23,7 @@ export interface TasksQuickInputProps {
   size?: 'md' | 'lg'
   autofocus?: boolean
   className?: string
-  /** Enter — 풀어 낸 결과(제목·마감·우선순위·@담당) */
+  /** Enter — 파싱 결과(제목·마감·우선순위·@담당) */
   onSubmit?: (parsed: QuickParse) => void
   ref?: Ref<TasksQuickInputHandle | null>
 }
@@ -55,7 +55,7 @@ export function TasksQuickInput({ busy = false, size = 'md', autofocus = false, 
   }
   if (cur < text.length) segments.push({ t: text.slice(cur), cls: '' })
 
-  // 긴 입력에서 가로 스크롤을 거울에 맞춘다
+  // 긴 입력에서 가로 스크롤을 거울 레이어와 동기화한다
   function syncScroll() {
     if (mirrorRef.current && inputRef.current) mirrorRef.current.scrollLeft = inputRef.current.scrollLeft
   }
@@ -70,7 +70,7 @@ export function TasksQuickInput({ busy = false, size = 'md', autofocus = false, 
   function focus() { inputRef.current?.focus() }
   useImperativeHandle(ref, () => ({ clear, focus }))
 
-  // 마운트 뒤 포커스. 시트(UiModal) 안에서는 모달이 뒤이어 첫 포커스 요소(닫기)로 옮긴다
+  // 마운트 후 포커스. 시트(UiModal) 안에서는 모달이 이어서 첫 포커스 요소(닫기)로 포커스를 이동시킨다
   useEffect(() => { if (autofocus) focus() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -83,7 +83,7 @@ export function TasksQuickInput({ busy = false, size = 'md', autofocus = false, 
     >
       <UiIcon name="plus" className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2.4} />
       <div className="relative min-w-0 flex-1">
-        {/* 거울: 입력과 같은 글꼴·패딩. 색만 입힌다 */}
+        {/* 거울: 입력과 동일한 글꼴·패딩. 색상만 적용한다 */}
         <div
           ref={mirrorRef}
           aria-hidden="true"
@@ -103,7 +103,7 @@ export function TasksQuickInput({ busy = false, size = 'md', autofocus = false, 
           onScroll={syncScroll}
           onKeyUp={syncScroll}
           onKeyDown={(e) => {
-            // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 넘기면 추가 뒤 마지막 글자가 입력칸에 남는다
+            // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 그대로 처리하면 추가 후 마지막 글자가 입력칸에 남는다
             if (e.nativeEvent.isComposing || e.keyCode === 229) return
             if (e.key === 'Enter') { e.preventDefault(); submit() }
             else if (e.key === 'Escape') clear()

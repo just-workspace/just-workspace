@@ -1,11 +1,11 @@
 /**
- * 폴더 공유 링크 손님 화면(OneDrive식 보기 전용) — pages/s/[token] 이 폴더 링크일 때 띄운다.
+ * 폴더 공유 링크 손님 화면(OneDrive식 보기 전용) — pages/s/[token] 이 폴더 링크일 때 표시한다.
  *
  * 상단 띠(브랜드 · 폴더 이름 · 공유자/만료 · 권한 배지 · [이 폴더 zip]) → 경로(처음 / 하위 / …) → 목록.
- * 목록: GET /api/files/shared/{token}/list?sub=(횟수 안 셈). 폴더 행 = 들어가기, 파일 행 = 미리보기(되는 형식) 또는 내려받기.
- * 받기: GET /api/files/shared/{token}?sub=<파일|폴더>(폴더는 zip). 미리보기는 ?inline=1(서버가 세지 않음).
- * 내려받기 막힘 링크는 미리보기만(이미지·PDF·글자), 내려받기 버튼 없음.
- * 브라우저 뒤로 가기로 위 폴더로 돌아가도록 ?p= 를 history 에 남긴다.
+ * 목록: GET /api/files/shared/{token}/list?sub=(횟수 미집계). 폴더 행 = 진입, 파일 행 = 미리보기(지원 형식) 또는 내려받기.
+ * 받기: GET /api/files/shared/{token}?sub=<파일|폴더>(폴더는 zip). 미리보기는 ?inline=1(서버가 집계하지 않음).
+ * 내려받기 막힘 링크는 미리보기만 제공(이미지·PDF·텍스트), 내려받기 버튼 없음.
+ * 브라우저 뒤로 가기로 상위 폴더로 복귀하도록 ?p= 를 history 에 기록한다.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -39,7 +39,7 @@ export interface SharedFolderViewProps {
   access: string | null
   /** 상단 보조 줄(공유자 · 만료 · 남은 횟수) */
   meta?: string
-  /** 목록을 더는 못 여는 상태(만료·횟수 초과·없음) → 결과 화면으로. 처리했으면 true */
+  /** 목록을 더 이상 열 수 없는 상태(만료·횟수 초과·없음) → 결과 화면으로 전환. 처리한 경우 true 반환 */
   onBlocked?: (e: unknown) => boolean
   /** 비밀번호 접근 키가 만료됨(401) */
   onLocked?: () => void
@@ -64,11 +64,11 @@ export function SharedFolderView({ token, access, meta, onBlocked, onLocked }: S
     return p.toString()
   }, [access])
   const fileHref = (path: string, inline = false) => `/api/files/shared/${token}?${q(inline ? { sub: path, inline: '1' } : { sub: path })}`
-  // 받기는 주소 이동(서버가 attachment 로 준다) — 아이콘 버튼은 <a> 가 아니라서
+  // 받기는 주소 이동으로 처리(서버가 attachment 로 응답) — 아이콘 버튼이 <a> 가 아니기 때문
   const dl = (href: string) => { window.location.href = href }
   const zipHref = (path: string) => (path ? fileHref(path) : `/api/files/shared/${token}${access ? `?${q({})}` : ''}`)
 
-  // 폴더를 빠르게 옮기면 늦게 온 앞 응답이 지금 폴더 목록을 덮는다 — 가장 최근 요청만 반영
+  // 폴더를 빠르게 이동하면 지연 도착한 이전 응답이 현재 폴더 목록을 덮어쓴다 — 가장 최근 요청만 반영
   const loadSeq = useRef(0)
   const load = useCallback(async (s: string) => {
     const seq = ++loadSeq.current
@@ -92,7 +92,7 @@ export function SharedFolderView({ token, access, meta, onBlocked, onLocked }: S
 
   useEffect(() => { void load(sub) }, [sub]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 뒤로 가기 = 위 폴더
+  // 뒤로 가기 = 상위 폴더
   useEffect(() => {
     const onPop = () => setSub(readSub())
     window.addEventListener('popstate', onPop)
@@ -248,7 +248,7 @@ export function SharedFolderView({ token, access, meta, onBlocked, onLocked }: S
                                   {allowDownload && (
                                     <UiIconButton onClick={() => dl(fileHref(item.path))} icon="download" size="sm" label={t('share.folder.downloadOf', { name: item.name })} />
                                   )}
-                                  {/* 미리보기 안 되는 형식 + 내려받기 막힘 = 누를 것이 없는 줄 — 이유를 적는다 */}
+                                  {/* 미리보기 불가 형식 + 내려받기 막힘 = 가능한 동작이 없는 줄 — 사유를 표시한다 */}
                                   {!item.preview && !allowDownload && (
                                     <span className="whitespace-nowrap text-[11px] text-muted-foreground" title={t('share.noPreviewBlocked', '이 형식은 미리 볼 수 없고 내려받기가 막혀 있습니다.')}>
                                       {t('share.folder.noPreview', '미리보기 불가')}

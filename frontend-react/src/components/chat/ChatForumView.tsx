@@ -1,13 +1,13 @@
 /**
- * 포럼 채널 보기(게시판 데이터의 채팅 쪽 보기). Channel.forum_board_id 가 있는 채널을 열면 대화 대신 이것.
- * 채널 탭(메시지·파일·회의·작업)은 없다 — 헤더에는 글 목록/갤러리 전환만(ForumViewToggle — SHELL 이 헤더 자리에 놓는다).
- * 시안에 포럼 그림이 없어 디스코드 포럼 구조를 따랐다(참고):
+ * 포럼 채널 보기(게시판 데이터의 채팅 측 보기). Channel.forum_board_id 가 있는 채널을 열면 대화 대신 본 화면을 표시한다.
+ * 채널 탭(메시지·파일·회의·작업)은 없다 — 헤더에는 글 목록/갤러리 전환만 제공한다(ForumViewToggle — SHELL 이 헤더 자리에 배치).
+ * 시안에 포럼 화면이 없어 디스코드 포럼 구조를 따랐다(참고):
  *   위 줄 48: "새 글"(게시판 글쓰기 화면으로) · 태그 칩(게시판 분류, 전체 + 분류들) · 정렬(최신 글 · 댓글 많은 순 · 조회 많은 순).
  *   글 목록: 카드(rounded-lg 1px bg-card p-3, 호버 bg-overlay-hover) — 고정 pin · 태그 11 · 제목 16/600(안 읽음) · 작성자 아바타 20 + 이름
  *     · message-circle 댓글 수 · "최근 활동 10분 전".
  *   갤러리: 200 이상 칸 격자 · 첫 이미지 썸네일 16:9(없으면 글자 타일) · 제목 14/600 두 줄 · 댓글 수.
- *   글 열기: 오른쪽에 글 + 댓글(스레드처럼, 400 — 좁은 화면·모바일은 전체 화면). "게시판에서 열기"로 게시판 글 화면.
- * 같은 글이 게시판에서도 보인다(데이터 = 게시판). 글·댓글은 useBoard(fetchPost·fetchComments)와 게시판 댓글 부품을 그대로 쓴다.
+ *   글 열기: 오른쪽에 글 + 댓글(스레드와 유사, 400 — 좁은 화면·모바일은 전체 화면). "게시판에서 열기"로 게시판 글 화면 이동.
+ * 동일한 글이 게시판에서도 표시된다(데이터 = 게시판). 글·댓글은 useBoard(fetchPost·fetchComments)와 게시판 댓글 컴포넌트를 그대로 사용한다.
  */
 import { useEffect, useMemo } from 'react'
 import { useStore } from 'zustand'
@@ -34,7 +34,7 @@ import { BoardAttachments } from '~/components/board/BoardAttachments'
 import { BoardCommentList } from '~/components/board/BoardCommentList'
 import { BoardCommentInput } from '~/components/board/BoardCommentInput'
 
-/** 헤더 자리 보기 전환(글 목록 / 갤러리) — SHELL 이 포럼 채널 헤더의 채널 탭 자리에 놓는다 */
+/** 헤더 자리 보기 전환(글 목록 / 갤러리) — SHELL 이 포럼 채널 헤더의 채널 탭 자리에 배치 */
 export function ForumViewToggle({ className }: { className?: string }) {
   const { t } = useI18n()
   const view = useForumView()
@@ -129,7 +129,7 @@ function PostTile({ p, active, onOpen }: { p: ForumPost; active: boolean; onOpen
   )
 }
 
-/** 연 글 + 댓글(오른쪽 400 / 모바일 전체 화면) */
+/** 열린 글 + 댓글(오른쪽 400 / 모바일 전체 화면) */
 function ForumPostPane({ boardId, postId, onClose }: { boardId: string; postId: string; onClose: () => void }) {
   const { t } = useI18n()
   const mobile = useIsMobile()
@@ -179,11 +179,11 @@ function ForumPostPane({ boardId, postId, onClose }: { boardId: string; postId: 
 
 export interface ChatForumViewProps {
   channel: Pick<Channel, 'id' | 'name' | 'forum_board_id'>
-  /** 보기(헤더가 따로 들고 있으면 넘긴다). 없으면 ForumViewToggle 과 같이 쓰는 기억값(사람마다) */
+  /** 보기(헤더가 별도로 보유한 경우 전달). 없으면 ForumViewToggle 과 공유하는 저장값(사용자별) */
   view?: ForumView
 }
 
-/** 포럼 채널 본문(헤더 아래 전부) */
+/** 포럼 채널 본문(헤더 아래 전체) */
 export function ChatForumView({ channel, view: viewProp }: ChatForumViewProps) {
   const { t } = useI18n()
   const mobile = useIsMobile()

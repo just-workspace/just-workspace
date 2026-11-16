@@ -1,5 +1,5 @@
 /**
- * 승인 카드·승인 대기함이 같이 쓰는 조각 — 미리보기 줄, 직전 외부 읽기 경고, 요청한 곳 이름.
+ * 승인 카드·승인 대기함 공용 구성 요소 — 미리보기 줄, 직전 외부 읽기 경고, 요청 출처 이름.
  */
 import { useI18n } from '~/i18n'
 import { cn } from '~/lib/utils'
@@ -8,7 +8,7 @@ import { clockTime, previewValue, type ApprovalPreviewRow, type ApprovalRequest 
 
 type T = (k: string, v?: Record<string, unknown>) => string
 
-/** 요청한 곳(종류) — 내장 AI · AI 커넥터 · 개인 토큰 */
+/** 요청 출처(종류) — 내장 AI · AI 커넥터 · 개인 토큰 */
 export function sourceLabel(t: T, req: Pick<ApprovalRequest, 'source' | 'client_kind'>): string {
   if (req.client_kind === 'claude_app') return t('approvals.source.mcp')
   if (req.client_kind === 'personal_token') return t('approvals.source.token')
@@ -16,7 +16,7 @@ export function sourceLabel(t: T, req: Pick<ApprovalRequest, 'source' | 'client_
   return t('approvals.source.mcp')
 }
 
-/** 클라이언트 이름 — 없으면 종류로 */
+/** 클라이언트 이름 — 없으면 종류로 대체 */
 export function clientLabel(t: T, req: Pick<ApprovalRequest, 'client_name' | 'client_kind'>): string {
   if (req.client_name) return req.client_name
   if (req.client_kind === 'builtin_desktop') return t('approvals.client.desktop')
@@ -27,7 +27,7 @@ export function clientLabel(t: T, req: Pick<ApprovalRequest, 'client_name' | 'cl
 /** 미리보기(diff) 줄 — {field,label,before,after}. before 가 없으면 "+ 값"(추가), 있으면 "이전 → 이후" */
 export function ApprovalPreviewRows({ rows, target, targetLabel, className }: {
   rows: ApprovalPreviewRow[]
-  /** 맨 위 "대상" 줄 */
+  /** 최상단 "대상" 줄 */
   target?: string | null
   targetLabel?: string
   className?: string
@@ -66,7 +66,7 @@ export function ApprovalPreviewRows({ rows, target, targetLabel, className }: {
   )
 }
 
-/** 직전 외부 읽기 경고(B1 상세) — read_external 이 있거나 after_untrusted 일 때 */
+/** 직전 외부 읽기 경고(B1 상세) — read_external 이 있거나 after_untrusted 인 경우 */
 export function ApprovalExternalWarning({ req, compact, className }: { req: ApprovalRequest; compact?: boolean; className?: string }) {
   const { t, locale } = useI18n()
   const ext = req.read_external
@@ -82,7 +82,7 @@ export function ApprovalExternalWarning({ req, compact, className }: { req: Appr
       <UiIcon name="alert-triangle" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
       <div className="flex min-w-0 flex-col gap-1">
         <span className="font-semibold">{t('approvals.external.title')}</span>
-        {/* 자동 수락·허용 규칙인데도 묻는 까닭 한 줄 — 남에게 보이는 쓰기 관문(서버 ask_reason) */}
+        {/* 자동 수락·허용 규칙이 있음에도 확인하는 사유 한 줄 — 남에게 보이는 쓰기 관문(서버 ask_reason) */}
         {req.ask_reason === 'visible_after_untrusted' && (
           <span className="break-words">{t('approvals.external.visibleGate', '외부 내용을 읽은 뒤라 확인합니다. 다른 사람에게 보이는 작업은 자동 수락·허용 규칙이 있어도 묻습니다.')}</span>
         )}

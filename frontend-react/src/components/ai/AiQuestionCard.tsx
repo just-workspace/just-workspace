@@ -1,10 +1,10 @@
 /**
  * AI 질문 카드 — Claude Code 의 AskUserQuestion · ExitPlanMode.
  *
- * ask : 질문마다 선택지(하나 고르기 · 여러 개 고르기) + '기타(직접 입력)'. 질문이 여럿이면 위 칩으로 넘긴다.
- *       숫자 키로 고르고 Enter 로 다음·보내기. [넘기기] = 답하지 않음(모델은 기본값으로 진행하고 가정을 밝힌다).
+ * ask : 질문별 선택지(단일 선택 · 복수 선택) + '기타(직접 입력)'. 질문이 복수이면 상단 칩으로 전환한다.
+ *       숫자 키로 선택하고 Enter 로 다음·전송. [넘기기] = 응답하지 않음(모델은 기본값으로 진행하고 가정을 명시한다).
  * plan: 계획(마크다운) + 1 예·편집 자동 수락으로 진행 / 2 예·하나씩 승인하며 진행 / 3 아니요·계속 계획(피드백).
- * 답하면 기다리던 답변이 이어서 진행한다. 답한 뒤에는 한 줄 요약으로 접힌다.
+ * 응답하면 대기 중이던 답변이 이어서 진행된다. 응답 후에는 한 줄 요약으로 접힌다.
  */
 import { useState, type KeyboardEvent } from 'react'
 import { useI18n } from '~/i18n'
@@ -42,7 +42,7 @@ export function AiQuestionCard({ q, onChange }: { q: AiQuestion; onChange?: (q: 
     } finally { setBusy(false) }
   }
 
-  // ── 답한 뒤·끝난 뒤 — 한 줄 요약 ──
+  // ── 응답 후·종료 후 — 한 줄 요약 ──
   if (q.status !== 'pending') {
     let text = t(`ai.ask.status.${q.status}`)
     if (q.status === 'answered' && q.kind === 'ask') {

@@ -1,11 +1,11 @@
 /**
  * 입력: 라벨 위 12/600 muted, 높이 40(h-10) · 인증/모바일 44(h-11), border-input rounded-md bg-background,
  * 포커스 border-ring + ring-2 ring-ring/35, 오류 border-danger + 아이콘 문구, 비활성 bg-muted/50 opacity-70,
- * 읽기 전용 점선 + 복사 버튼. 도움말과 오류는 입력 아래 같은 자리.
- * variant="bare"(검색 줄 등): 테두리·배경 없음, 높이 44, 포커스 때 링·밑줄 없이 이 부품 바깥 묶음(=줄)의 배경만 bg-accent
- * (:focus-within). 줄이 이 부품보다 크면(앞뒤에 다른 것이 있으면) 그 줄에 직접 focus-within:bg-accent 를 준다.
+ * 읽기 전용 점선 + 복사 버튼. 도움말과 오류는 입력 아래 동일 위치에 표시한다.
+ * variant="bare"(검색 줄 등): 테두리·배경 없음, 높이 44, 포커스 시 링·밑줄 없이 본 컴포넌트 외부 묶음(=줄)의 배경만 bg-accent
+ * (:focus-within). 줄이 본 컴포넌트보다 크면(앞뒤에 다른 요소가 있으면) 해당 줄에 직접 focus-within:bg-accent 를 지정한다.
  *
- * className 은 바깥 묶음(라벨+입력+도움말)에, 나머지 속성(name·maxLength·onKeyDown·onBlur 등)은 안쪽 <input> 에 붙는다.
+ * className 은 외부 묶음(라벨+입력+도움말)에, 나머지 속성(name·maxLength·onKeyDown·onBlur 등)은 안쪽 <input> 에 전달된다.
  * ref 는 안쪽 <input>(focus()·select() 등).
  */
 import type { ChangeEvent, InputHTMLAttributes, ReactNode, Ref } from 'react'
@@ -17,11 +17,11 @@ import { useModel, useUid } from './internal'
 import { writeClipboard } from '~/lib/clipboard'
 
 export interface UiInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'value' | 'defaultValue' | 'type' | 'placeholder' | 'disabled' | 'readOnly' | 'required' | 'autoComplete'> {
-  /** 값. 안 주면 입력이 스스로 값을 가진다 */
+  /** 값. 미지정 시 입력이 값을 자체 보유한다 */
   modelValue?: string | number | null
-  /** 값 바뀜(입력할 때마다, 문자열) */
+  /** 값 변경 시 호출(입력마다, 문자열) */
   onUpdateModelValue?: (v: string) => void
-  /** input id(라벨 for). 없으면 자동 */
+  /** input id(라벨 for). 미지정 시 자동 생성 */
   id?: string
   /** 위 라벨(12/600 muted, 오류면 danger) */
   label?: string
@@ -29,7 +29,7 @@ export interface UiInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>
   hint?: string
   /** 오류 문구 — 테두리 danger + 아래 아이콘 문구, aria-invalid */
   error?: string
-  /** md 40(기본) · lg 44(인증·모바일). variant="bare" 는 늘 44 */
+  /** md 40(기본) · lg 44(인증·모바일). variant="bare" 는 항상 44 */
   size?: 'md' | 'lg'
   /** default(테두리 상자) · bare(테두리·배경 없음, 높이 44, 포커스 시 바깥 줄 배경만 bg-accent — 검색 줄용) */
   variant?: 'default' | 'bare'
@@ -45,15 +45,15 @@ export interface UiInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>
   autocomplete?: string
   /** 숫자·코드·URL 등 mono 로 표기 */
   mono?: boolean
-  /** 읽기 전용일 때 복사 버튼 표시(기본 켬) */
+  /** 읽기 전용일 때 복사 버튼 표시(기본 활성화) */
   copyable?: boolean
   /** 왼쪽 아이콘(utils/icons 이름) */
   icon?: string
-  /** 안쪽 <input> 에 덧붙일 클래스 */
+  /** 안쪽 <input> 에 추가할 클래스 */
   inputClass?: string
-  /** 복사 버튼으로 복사했을 때 */
+  /** 복사 버튼으로 복사 시 호출 */
   onCopied?: () => void
-  /** 입력 칸 오른쪽 안에 겹쳐 둘 내용 */
+  /** 입력 칸 오른쪽 안에 겹쳐 배치할 내용 */
   trailing?: ReactNode
   /** 안쪽 <input> */
   ref?: Ref<HTMLInputElement>
@@ -120,7 +120,7 @@ export function UiInput({
             inputClass,
           )}
         />
-        {/* 읽기 전용 = 점선 + 복사 버튼. 좁은 폭(260~480)에서 "복사"가 두 줄로 꺾이지 않게 nowrap + 최소 56 */}
+        {/* 읽기 전용 = 점선 + 복사 버튼. 좁은 폭(260~480)에서 "복사"가 두 줄로 줄바꿈되지 않도록 nowrap + 최소 56 */}
         {readonly && copyable && (
           <button
             type="button"

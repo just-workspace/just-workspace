@@ -1,8 +1,8 @@
 /**
- * 결과물 묶음 완료 토스트 — 다른 화면(또는 다른 대화)에 있을 때 작업이 끝나면.
+ * 결과물 묶음 완료 토스트 — 다른 화면(또는 다른 대화)에 있는 동안 작업이 완료된 경우 표시.
  *  popover 바탕 · r12 · 그림자 · check-circle 20 success(일부 실패 = alert-circle warning) ·
  *  제목 14/600 "파일 3개를 다 만들었습니다" · 12.5 muted "대화 “…”" · [대화로 가기](primary) [zip 받기](ghost xs) · 닫기.
- *  자리는 공용 토스트와 같다(데스크톱 왼쪽 아래, 모바일 상단바 아래). 셸에 한 번 그린다.
+ *  위치는 공용 토스트와 동일(데스크톱 왼쪽 아래, 모바일 상단바 아래). 셸에 1회 렌더링한다.
  */
 import { createPortal } from 'react-dom'
 import { cn } from '~/lib/utils'

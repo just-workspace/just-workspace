@@ -1,9 +1,9 @@
 /**
- * 관리 › 업데이트 — 계약(docs/update-api.md)대로 만든 가짜 응답 묶음.
+ * 관리 › 업데이트 — 계약(docs/update-api.md)에 따라 작성한 모의 응답 모음.
  *
- * 업데이트 엔진(설치 관리자)이 아직 없어서, 화면은 이 응답들로 확인한다(tests/admin/update*.test.tsx).
- * 화면의 모든 상태가 여기 하나씩 있다 — 엔진을 만들 때 이 모양 그대로 답하면 화면이 그대로 붙는다.
- * 앱 코드는 이 파일을 불러오지 않는다(번들에 들어가지 않는다).
+ * 업데이트 엔진(설치 관리자)이 아직 없으므로 화면은 본 응답들로 검증한다(tests/admin/update*.test.tsx).
+ * 화면의 모든 상태가 여기에 하나씩 정의되어 있다 — 엔진 구현 시 동일한 형식으로 응답하면 화면과 그대로 연동된다.
+ * 앱 코드는 본 파일을 import 하지 않는다(번들 미포함).
  */
 import type {
   AppsReply, Available, ExtraImage, HistoryDetail, HistoryItem, OfflineBundle, OfflineState, ReleaseNotes,
@@ -40,7 +40,7 @@ export const status = (over: Partial<UpdateStatus> = {}): UpdateStatus => ({
   ...over,
 })
 
-/** 현황의 상태들 */
+/** 현황의 상태 목록 */
 export const statuses = {
   latest: () => status(),
   available: () => status({ available: availableUpdate() }),
@@ -55,7 +55,7 @@ export const statuses = {
   blocked: () => status({ available: { state: 'blocked', version: '2.0.0', reason: { code: 'no_upgrade_path', vars: { min_upgrade_from: '1.5.0' } } } }),
   pluginWarning: () => status({ available: availableUpdate({ plugin_warnings: [{ id: 'sample-plugin', name: '샘플 플러그인', reason: 'unverified' }] }) }),
   viaIntermediate: () => status({ available: availableUpdate({ version: '1.2.0', path: ['1.1.0', '1.2.0'] }) }),
-  /** 값이 비어 있는 새 버전 — 줄이 숨는다 */
+  /** 값이 비어 있는 새 버전 — 해당 줄이 숨겨진다 */
   sparse: () => status({ available: availableUpdate({ download_bytes: null, downtime_seconds: null, zones: [], changelog: null }) }),
   auto: () => status({ settings: settings({ mode: 'auto' }) }),
   autoOk: () => status({
@@ -103,18 +103,18 @@ const pulling = () => {
 export const jobs = {
   countdown: (endsAt: string) => job({ status: 'countdown', countdown: { ends_at: endsAt, seconds: 300 }, steps: steps(UPDATE_STEPS, -1), maintenance_started_at: null }),
   pulling: () => job({ steps: pulling() }),
-  /** migrate 전에 실패 — 관리자가 다시/되돌리기 중 고른다 */
+  /** migrate 전 실패 — 관리자가 재시도/롤백 중 선택한다 */
   failedBeforeMigrate: () => job({ status: 'failed', steps: steps(UPDATE_STEPS, 2, true), choices: ['retry', 'rollback'], error: { step: 'pull', cause: 'pull_failed', detail: 'registry timeout', vars: {} } }),
-  /** migrate 부터 실패 — 선택 없이 자동 되돌림 */
+  /** migrate 단계부터의 실패 — 선택 없이 자동 롤백 */
   failedAtMigrate: () => job({ status: 'failed', steps: steps(UPDATE_STEPS, 3, true), choices: [], rollback_job: 'jobrb1', error: { step: 'migrate', cause: 'migrate_failed', detail: 'step 12 failed', vars: {} } }),
-  /** 자동 업데이트는 migrate 전이어도 자동 되돌림 */
+  /** 자동 업데이트는 migrate 전이어도 자동 롤백 */
   autoFailedEarly: () => job({ trigger: 'auto', status: 'failed', steps: steps(UPDATE_STEPS, 2, true), choices: [], rollback_job: 'jobrb1', error: { step: 'pull', cause: 'pull_failed', detail: 'registry timeout', vars: {} } }),
   done: () => job({ status: 'done', steps: steps(UPDATE_STEPS, 6), finished_at: '2026-01-12T01:39:00Z' }),
   cancelled: () => job({ status: 'cancelled', steps: steps(UPDATE_STEPS, -1), maintenance_started_at: null, finished_at: T0 }),
-  /** 중간 버전을 거치는 중 — 1/2 번째 */
+  /** 중간 버전 경유 중 — 1/2 번째 */
   hopFirst: () => job({ target_version: '1.2.0', path: ['1.1.0', '1.2.0'], version_index: 0, steps: pulling() }),
   hopDone: () => job({ status: 'done', target_version: '1.2.0', path: ['1.1.0', '1.2.0'], version_index: 1, steps: steps(UPDATE_STEPS, 6), finished_at: T0 }),
-  // 되돌림 · 복원
+  // 롤백 · 복원
   rollbackRunning: () => job({ id: 'jobrb1', kind: 'rollback', from_version: '1.1.0', target_version: '1.0.0', parent_job: 'job1', steps: steps(BACK_STEPS, 2) }),
   rollbackDone: () => job({ id: 'jobrb1', kind: 'rollback', status: 'done', from_version: '1.1.0', target_version: '1.0.0', parent_job: 'job1', steps: steps(BACK_STEPS, 5), finished_at: T0 }),
   rollbackFailed: () => job({
@@ -161,7 +161,7 @@ const image = (id: string, ko: string, over: Partial<ExtraImage> = {}): ExtraIma
   command: `docker pull example/${id}@sha256:0000 && docker save example/${id} -o ${id}.tar`, filename: `${id}.tar`, ...over,
 })
 
-/** 항상 필요한 셋 + 켠 구역 하나(doc 의 상태를 바꿔 가며 본다) + 꺼진 구역 둘 */
+/** 항상 필요한 3종 + 활성화한 구역 1개(doc 의 상태를 변경하며 확인) + 비활성 구역 2개 */
 export const extraImages = (doc: ExtraImage['state'] = 'present'): ExtraImage[] => [
   image('postgres', '데이터베이스'),
   image('redis', '캐시'),
@@ -198,7 +198,7 @@ export const offlines = {
 // ─── 앱 · 기록 · 변경 내용 ───
 
 export const apps = {
-  /** 실린 것이 없는 버전 */
+  /** 포함된 항목이 없는 버전 */
   none: (): AppsReply => ({ version: '1.0.0', download_page: '/settings/apps', apps: [] }),
   both: (): AppsReply => ({
     version: '1.1.0', download_page: '/settings/apps',
@@ -245,7 +245,7 @@ export const releases = {
     applied_at: '2026-01-11T18:21:40Z', trigger: 'auto', downtime_seconds: 212, previous_version: '1.0.0', disabled_plugins: [],
   }),
   withDisabledPlugins: (): ReleaseNotes => ({ ...releases.plain(), disabled_plugins: [{ id: 'sample-plugin', name: '샘플 플러그인' }] }),
-  /** 처음 설치한 버전 — 적용 기록도 이전 버전도 없다 */
+  /** 최초 설치 버전 — 적용 기록과 이전 버전 모두 없음 */
   firstInstall: (): ReleaseNotes => ({ version: '1.0.0', channel: 'stable', published: null, changelog: '- 첫 릴리스' }),
 }
 
@@ -258,6 +258,6 @@ export const errors = {
   noInstaller: () => apiError(503, 'update_unavailable', { reason: 'no_installer' }),
   unsupported: () => apiError(501, 'update_unavailable', { reason: 'unsupported' }),
   busy: () => apiError(409, 'busy', { job: 'other' }),
-  /** 서버가 바뀌는 중 — 응답이 없다 */
+  /** 서버 교체 중 — 응답 없음 */
   down: () => Object.assign(new Error('fetch failed'), { data: undefined }),
 }

@@ -1,5 +1,5 @@
-// 채팅 설정(SETTINGS) — 권한 행렬 비트(32비트 넘는 비트) · 3단 토글 → allow/deny · 동기화 판정 · 계층 잠금 ·
-// 이모지 이름 검사·오류 문구 · 정책 토글 확인 흐름 · 저장 안 된 변경 띠
+// 채팅 설정(SETTINGS) — 권한 행렬 비트(32비트 초과 비트) · 3단 토글 → allow/deny · 동기화 판정 · 계층 잠금 ·
+// 이모지 이름 검사·오류 문구 · 정책 토글 확인 흐름 · 미저장 변경 띠
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
@@ -249,7 +249,7 @@ describe('정책 토글', () => {
     fireEvent.click(sw)
     await act(async () => { fireEvent.click(await screen.findByRole('button', { name: t('chat.settings.policy.adminConfirmOk') })) })
     await waitFor(() => expect(api.calls.find(c => c.opts.method === 'PUT')?.opts.body).toEqual({ admin_channel_privileges: true }))
-    // (2) 는 확인 없이 바로
+    // (2) 는 확인 없이 즉시 적용
     api.calls = []
     await act(async () => { fireEvent.click(screen.getByRole('switch', { name: new RegExp(t('chat.settings.policy.owner')) })) })
     await waitFor(() => expect(api.calls.find(c => c.opts.method === 'PUT')?.opts.body).toEqual({ owner_manage_messages: true }))
@@ -352,7 +352,7 @@ describe('개요 · 알림 기본값 · 내 설정', () => {
     render(<RouterProvider router={router} />)
     await screen.findByText(t('chat.settings.voice.otherKeys'))
     expect(screen.getByText(t('chat.settings.voice.otherKeys'))).toBeTruthy()
-    // 음질·장치(접속 줄 팝오버와 같은 내용)도 여기 있다
+    // 음질·장치(접속 줄 팝오버와 동일 내용)도 여기에 포함
     expect(screen.getAllByText(t('chat.voice.quality.title')).length).toBeGreaterThan(0)
     expect(screen.getByText(t('chat.settings.voice.muteKey'))).toBeTruthy()
     expect(screen.getByText(t('chat.settings.voice.deafenKey'))).toBeTruthy()

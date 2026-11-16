@@ -1,10 +1,10 @@
 /**
- * 신뢰 상단 줄(단독 앱) — 격리 화면 밖, 원격 페이지가 닿을 수 없는 유일한 UI.
+ * 신뢰 상단 줄(단독 앱) — 격리 화면 밖에 위치하며, 원격 페이지가 접근할 수 없는 유일한 UI.
  *  세션 중: 대상 이름 · 원격 주소(읽기 전용 글자, 링크 아님) · 정책 배지 · 화면 방식(픽셀↔미러) · 연결/지연 · 세션 끝내기 · 사용자 메뉴
  *  세션 없음: 앱 이름 · 사용자 메뉴
- * 키보드: 격리 화면에 포커스가 있을 때 Ctrl+Alt+B 로 이 줄의 첫 단추로 온다(앱이 건다). 이 줄에서 Esc 면 다시 격리 화면으로.
+ * 키보드: 격리 화면에 포커스가 있을 때 Ctrl+Alt+B 입력 시 이 줄의 첫 단추로 포커스 이동(앱이 등록). 이 줄에서 Esc 입력 시 격리 화면으로 복귀.
  * 기존 키트(UiBadge·UiButton·UiSegment·
- *   UiStatusDot·UiMenu·UiKeycap·UiIcon)와 다크 토큰만 쓴다.
+ *   UiStatusDot·UiMenu·UiKeycap·UiIcon)와 다크 토큰만 사용.
  */
 import { type KeyboardEvent, type Ref } from 'react'
 import { useI18n } from '~/i18n'
@@ -21,14 +21,14 @@ import { UiStatusDot } from '~/components/ui/StatusDot'
 export interface RbiTrustedBarProps {
   me: RbiSiteMe | null
   session: RbiSession | null
-  /** 원격 문서 주소(미러: 에이전트가 알려 준 지금 주소, 픽셀: 대상 주소) */
+  /** 원격 문서 주소(미러: 에이전트가 보고한 현재 주소, 픽셀: 대상 주소) */
   url: string
   policy: RbiPolicy | null
   conn: RbiMirrorConn | null
   onSwitchMode: (m: RbiMode) => void
   onEnd: () => void
   onLogout: () => void
-  /** 이 줄에서 Esc — 격리 화면으로 돌아간다 */
+  /** 이 줄에서 Esc — 격리 화면으로 복귀 */
   onEscape?: () => void
   ref?: Ref<HTMLElement>
 }
@@ -72,7 +72,7 @@ export function RbiTrustedBar({ me, session, url, policy, conn, onSwitchMode, on
         <>
           <span className="flex min-w-0 flex-1 items-center gap-1.5" aria-label={t('rbi.mirror.urlLabel')}>
             <UiIcon name="lock" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            {/* 원격 주소는 글자로만 — 링크·클릭 없음 */}
+            {/* 원격 주소는 글자로만 표시 — 링크·클릭 없음 */}
             <span className="min-w-0 truncate font-mono text-xs text-foreground" title={url} data-testid="rbi-bar-url">{url}</span>
           </span>
           <ul className="flex flex-wrap gap-1.5" aria-label={t('rbi.mirror.policyLabel')}>

@@ -2,10 +2,10 @@
 // ≥1024: 사이드바 236 + 목록 340 + 상세(패딩 28/40, 폭 680).
 // 768~1023: 목록 340 + 상세, 사이드바 대신 목록 줄의 ⋯ 시트. <768: 목록 → 상세 전체 화면(탭바 숨김), FAB(새 연락처).
 // 연락처는 메일 모듈의 하위: 레일 활성 = 메일, 상단바 경로 = 메일 / 연락처. 진입은 메일 사이드바·전체 시트·Ctrl+K.
-// 모바일 목록 머리는 ContactsList 범위 줄, 상세는 LayoutMobileDetailBar — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader)
+// 모바일 목록 머리는 ContactsList 범위 줄, 상세는 LayoutMobileDetailBar — 공용 상단바 미사용(routes.ts ownMobileHeader)
 import { useEffect } from 'react'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결한다(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거한다)
 import { clsx as cx } from 'clsx'
 import { useHead } from '~/lib/head'
 import { setSharedState } from '~/lib/state'
@@ -31,10 +31,10 @@ export default function ContactsPage() {
   } = useContacts()
   const isMobile = useIsMobile()
 
-  // 상단바 3단 경로: 워크스페이스 / 메일 / 연락처. 범위(주소록·즐겨찾기·그룹)는 목록 머리가 보여 준다.
+  // 상단바 3단 경로: 워크스페이스 / 메일 / 연락처. 범위(주소록·즐겨찾기·그룹)는 목록 머리에 표시한다.
   useBreadcrumb(t('nav.contacts'))
 
-  // 모바일에서 상세가 열리면 하단 탭바 숨김(목록에선 유지)
+  // 모바일에서 상세가 열리면 하단 탭바 숨김(목록에서는 유지)
   const detailOpen = !!(isMobile && selectedContact)
   useEffect(() => { setSharedState('mobile-detail-open', detailOpen) }, [detailOpen])
   useEffect(() => () => { setSharedState('mobile-detail-open', false); setMobileMenuOpen(false) }, [])
@@ -66,7 +66,7 @@ export default function ContactsPage() {
         <ContactsDetail />
       </main>
 
-      {/* 1024 미만 1차 행동: 목록에서만 FAB(새 연락처). 768~1023 은 사이드바가 없으므로 그 폭에서도 보이게 */}
+      {/* 1024 미만 1차 동작: 목록에서만 FAB(새 연락처). 768~1023 은 사이드바가 없으므로 해당 폭에서도 표시 */}
       {!selectedContact && <UiFab label={t('contacts.sidebar.newContact')} onClick={() => openCreateModal()} />}
       {!isMobile && (
         <button

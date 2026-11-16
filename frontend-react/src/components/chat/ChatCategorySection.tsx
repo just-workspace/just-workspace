@@ -2,9 +2,9 @@
  * 사이드바 구역 하나.
  * 제목 24 · 12/600(모바일 44 · 13/600): button + aria-expanded, 화살표 100ms −90°(reduce-motion 이면 즉시).
  * 오른쪽 ⋯(사용자·시스템 카테고리 — 카테고리 메뉴) · +(채널 만들기 — 이 카테고리로 / DM 은 새 메시지).
- * "분류 없음"은 제목이 없다. 빈 사용자 카테고리는 점선 칸 안내.
- * 끌기 표시: 채널을 다른 카테고리 제목 위로 = 제목 primary/15 + 2px ring + 안내 한 줄, 카테고리 끌기 = 구역 앞/뒤 UiDropLine, 끄는 카테고리 40%.
- * 끌기 동작(HTML5 DnD)·키보드 이동은 ChatSidebar 가 한다 — 이 부품은 그리기와 이벤트 연결만.
+ * "분류 없음"은 제목 없음. 빈 사용자 카테고리는 점선 칸 안내.
+ * 드래그 표시: 채널을 다른 카테고리 제목 위로 = 제목 primary/15 + 2px ring + 안내 한 줄, 카테고리 드래그 = 구역 앞/뒤 UiDropLine, 드래그 중인 카테고리 40%.
+ * 드래그 동작(HTML5 DnD)·키보드 이동은 ChatSidebar 가 담당 — 본 컴포넌트는 렌더링과 이벤트 연결만 수행.
  */
 import type { DragEvent, KeyboardEvent, ReactNode } from 'react'
 import { clsx as cn } from 'clsx'
@@ -18,32 +18,32 @@ export interface ChatCategorySectionProps {
   section: SidebarSection
   mobile?: boolean
   canManage: boolean
-  /** 이름 바꾸는 중(#cat-rename) */
+  /** 이름 변경 중(#cat-rename) */
   renaming?: boolean
   onRenameDone?: () => void
   onToggle: () => void
-  /** ⋯ 메뉴(없으면 ⋯ 안 그림) */
+  /** ⋯ 메뉴(없으면 ⋯ 미표시) */
   onMenu?: (anchor: HTMLElement) => void
-  /** +(없으면 + 안 그림) */
+  /** +(없으면 + 미표시) */
   onAdd?: () => void
   /** 제목 F2 · Alt(+Shift)+↑↓ */
   onRename?: () => void
   onMoveCategory?: (delta: -1 | 1) => void
-  /** 채널을 끌어 이 제목 위에 올림 — 강조 + 안내 */
+  /** 채널을 드래그해 이 제목 위에 올린 상태 — 강조 + 안내 */
   dropHighlight?: boolean
-  /** 카테고리 끌기 자리 선 */
+  /** 카테고리 드래그 위치 선 */
   catLine?: 'before' | 'after' | null
-  /** 끄는 중인 카테고리(40%) */
+  /** 드래그 중인 카테고리(40%) */
   ghosted?: boolean
-  /** 제목 끌기(카테고리째, MANAGE_CHANNELS · 사용자 카테고리만) */
+  /** 제목 드래그(카테고리 단위, MANAGE_CHANNELS · 사용자 카테고리만) */
   headerDraggable?: boolean
   onHeaderDragStart?: (e: DragEvent<HTMLElement>) => void
   onHeaderDragEnd?: (e: DragEvent<HTMLElement>) => void
-  /** 제목 위 끌기(채널 → 맨 아래로 / 카테고리 → 자리 선) */
+  /** 제목 위 드래그(채널 → 맨 아래로 / 카테고리 → 위치 선) */
   onHeaderDragOver?: (e: DragEvent<HTMLElement>) => void
   onHeaderDragLeave?: (e: DragEvent<HTMLElement>) => void
   onHeaderDrop?: (e: DragEvent<HTMLElement>) => void
-  /** 구역 몸통 위 끌기(빈 칸 · 카테고리 자리) */
+  /** 구역 본문 위 드래그(빈 칸 · 카테고리 위치) */
   onBodyDragOver?: (e: DragEvent<HTMLElement>) => void
   onBodyDrop?: (e: DragEvent<HTMLElement>) => void
   children?: ReactNode

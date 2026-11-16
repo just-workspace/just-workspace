@@ -1,4 +1,4 @@
-// 쿼리 직렬화 — vue-router(4.x) 와 같은 주소 모양인지, 기존 링크·딥링크 파싱이 그대로인지.
+// 쿼리 직렬화 — vue-router(4.x) 와 동일한 주소 형태인지, 기존 링크·딥링크 파싱이 유지되는지 검증.
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 import { createBrowserRouter, createMemoryRouter, RouterProvider } from 'react-router'

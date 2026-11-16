@@ -1,14 +1,14 @@
 /**
  * 메일 사이드바.
- * 계정 줄 32 · "새 메일 C" 40 · 폴더 34 · 예약함(예약이 있을 때) · 라벨(서버가 키워드를 지원할 때만) · 맨 아래 "메일 설정 · 필터 · 서명".
- * 라벨 줄: 34 · 색점 8(좌우 4) · muted 글자. 고르면 폴더와 같은 primary/13 + 600, 다시 누르면 끈다.
- * 예전 기능 유지: 다계정 트리(계정별 폴더 지연 조회), 폴더 만들기·이름 바꾸기·삭제(사용자 폴더만).
- * 필터 모달은 /settings/mail 필터 탭으로 옮겼다 — 여기서는 링크만.
- * 맨 아래 "연락처"는 레일에 없는 연락처의 데스크톱 진입점.
+ * 계정 줄 32 · "새 메일 C" 40 · 폴더 34 · 예약함(예약이 있을 때) · 라벨(서버가 키워드를 지원할 때만) · 최하단 "메일 설정 · 필터 · 서명".
+ * 라벨 줄: 34 · 색점 8(좌우 4) · muted 글자. 선택 시 폴더와 동일한 primary/13 + 600, 재선택 시 해제.
+ * 기존 기능 유지: 다계정 트리(계정별 폴더 지연 조회), 폴더 생성·이름 변경·삭제(사용자 폴더만).
+ * 필터 모달은 /settings/mail 필터 탭으로 이전함 — 여기서는 링크만 제공.
+ * 최하단 "연락처"는 레일에 없는 연락처의 데스크톱 진입점.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거함)
 import { clsx as cx } from 'clsx'
 import { useMail, mailStore } from '~/composables/useMail'
 import { usePlatform } from '~/composables/usePlatform'
@@ -28,7 +28,7 @@ const PROTECTED_ROLES = new Set(['inbox', 'sent', 'drafts', 'trash', 'junk', 'ar
 function isProtected(mb: any) { return mb.role && PROTECTED_ROLES.has(mb.role) }
 
 export interface MailSidebarProps {
-  /** 폴더·라벨·링크를 고른 뒤(드로어 닫기) */
+  /** 폴더·라벨·링크 선택 후 호출(드로어 닫기) */
   onNavigate?: () => void
 }
 
@@ -44,7 +44,7 @@ export function MailSidebar({ onNavigate }: MailSidebarProps) {
   } = useMail()
   const emit = () => onNavigate?.()
 
-  // 메일함 불러오기 실패 — 폴더 자리가 그냥 비지 않게 오류 띠 + 다시 시도
+  // 메일함 조회 실패 — 폴더 영역이 빈 상태로 남지 않도록 오류 띠 + 재시도 표시
   async function retryMailboxes() {
     await fetchMailboxes()
     if (!mailStore.getState().mailboxesError) await fetchMessages()
@@ -66,7 +66,7 @@ export function MailSidebar({ onNavigate }: MailSidebarProps) {
     await selectAccountMailbox(accountId, mailboxId)
     emit()
   }
-  // 라벨은 메일함마다(IMAP FLAGS) — 폴더·계정이 바뀌면 다시 받는다
+  // 라벨은 메일함 단위(IMAP FLAGS) — 폴더·계정 변경 시 재조회
   useEffect(() => { void fetchLabels() }, [selectedMailboxId, selectedAccountId, fetchLabels])
   const pendingScheduled = scheduled.filter(s => s.status !== 'sent' && s.status !== 'cancelled').length
   function pickLabel(l: string) {
@@ -102,7 +102,7 @@ export function MailSidebar({ onNavigate }: MailSidebarProps) {
     try { await createMailbox(name) } catch (e: any) { addToast('error', e?.data?.detail || t('mail.folder.createFailed')) }
   }
 
-  // 사용자 폴더 메뉴(⋯) — 이름 바꾸기 인라인 편집
+  // 사용자 폴더 메뉴(⋯) — 이름 변경 인라인 편집
   const [renaming, setRenaming] = useState<string | null>(null)
   const renamingRef = useRef<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
@@ -119,7 +119,7 @@ export function MailSidebar({ onNavigate }: MailSidebarProps) {
     try { await deleteMailbox(mb.id) } catch (e: any) { addToast('error', e?.data?.detail || t('mail.folder.deleteFailed')) }
   }
   async function handleRename(mb: any) {
-    if (renamingRef.current !== mb.id) return // submit 뒤 blur 가 한 번 더 부른다
+    if (renamingRef.current !== mb.id) return // submit 후 blur 가 한 번 더 호출함
     const newName = renameValue.trim()
     startRename(null)
     if (!newName || newName === mb.name) return
@@ -132,7 +132,7 @@ export function MailSidebar({ onNavigate }: MailSidebarProps) {
       {!isMulti && (
         <div className="flex h-8 items-center gap-2 pl-2 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1 truncate">{currentAccount?.email}</span>
-          {/* POP3 는 서버에 폴더를 만들 수 없다(받은편지함 하나) */}
+          {/* POP3 는 서버에 폴더를 생성할 수 없음(받은편지함 하나) */}
           {currentAccount?.protocol !== 'pop3' && <UiIconButton label={t('mail.folder.addTitle')} icon="plus" className="h-7 w-7" onClick={addFolder} />}
         </div>
       )}
@@ -229,7 +229,7 @@ export function MailSidebar({ onNavigate }: MailSidebarProps) {
             </div>
           )}
 
-        {/* 예약함: 예약이 있거나 보고 있을 때만 */}
+        {/* 예약함: 예약이 있거나 조회 중일 때만 표시 */}
         {(pendingScheduled > 0 || scheduledView) && (
           <MailSidebarFolder
             mb={{ id: '__scheduled', name: t('mail.scheduled.title'), role: 'scheduled', unread_count: pendingScheduled, total_count: pendingScheduled }}

@@ -1,5 +1,5 @@
-// 파일 구역 전수조사 수정 고정 — 늦게 온 목록 응답 버리기·읽기 실패 표시, 검색 중 이동/삭제/이름 변경,
-// 여러 개 삭제의 일부 실패, 형식 모르는 항목 미리보기(확장자), 메뉴 Esc, 한글 조합 중 Enter. ($fetch 는 가짜)
+// 파일 구역 전수조사 수정 고정 — 지연 도착한 목록 응답 폐기·읽기 실패 표시, 검색 중 이동/삭제/이름 변경,
+// 복수 삭제의 일부 실패, 형식 미상 항목 미리보기(확장자), 메뉴 Esc, 한글 조합 중 Enter. ($fetch 는 모의(mock))
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -31,7 +31,7 @@ function inRouter(ui: React.ReactElement) {
   const router = createMemoryRouter([{ path: '*', element: ui }], { initialEntries: ['/'] })
   return render(<RouterProvider router={router} />)
 }
-/** 밖에서 풀 수 있는 약속 */
+/** 외부에서 resolve 할 수 있는 Promise */
 function deferred<T>() {
   let resolve!: (v: T) => void
   let reject!: (e: unknown) => void
@@ -165,7 +165,7 @@ describe('미리보기 형식', () => {
     expect(lib.previewKind({ name: '사진.PNG', mime_type: null })).toBe('image')
     expect(lib.previewKind({ name: 'a.pdf', mime_type: null })).toBe('pdf')
     expect(lib.previewKind({ name: 'a.txt', mime_type: null })).toBe('text')
-    expect(lib.previewKind({ name: 'a.heic', mime_type: null })).toBeNull()   // 서버가 못 그리는 형식
+    expect(lib.previewKind({ name: 'a.heic', mime_type: null })).toBeNull()   // 서버가 렌더링할 수 없는 형식
     expect(lib.previewKind({ name: 'a.zip', mime_type: 'application/zip' })).toBeNull()
     expect(lib.previewKind({ name: 'd.png', is_dir: true })).toBeNull()
   })
@@ -192,7 +192,7 @@ describe('Esc · 한글 조합', () => {
     fireEvent.keyDown(more, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
     expect(onClose).not.toHaveBeenCalled()
-    // 메뉴가 닫힌 뒤의 Esc 는 예전처럼 공유 창을 닫는다
+    // 메뉴가 닫힌 뒤의 Esc 는 기존처럼 공유 창을 닫음
     fireEvent.keyDown(more, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
   })

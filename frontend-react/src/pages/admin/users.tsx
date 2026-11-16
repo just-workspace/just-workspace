@@ -1,15 +1,15 @@
 /**
  * 관리 › 사용자 —
  * 헤더 [전체 강제 로그아웃][사용자 초대], 표 위 검색 260 + 상태 칩(승인 대기 n = warning) + 그룹 선택,
- * 선택하면 표 머리에 붙는 일괄 바(AdminUsersBulkBar), 표(AdminUsersTable), 모바일은 카드 스택(AdminUserCard).
+ * 선택 시 표 머리에 부착되는 일괄 바(AdminUsersBulkBar), 표(AdminUsersTable), 모바일은 카드 스택(AdminUserCard).
  *
  * 서버 연결:
- *   목록 = GET /admin/users?q&status(쉼표 여럿)&role&group&sort&page&size → {users,total,page,size} — 검색·필터·정렬·페이지 전부 서버.
+ *   목록 = GET /admin/users?q&status(쉼표로 복수 지정)&role&group&sort&page&size → {users,total,page,size} — 검색·필터·정렬·페이지 전부 서버 처리.
  *   상태 = 행의 status(active·pending·suspended). 칩 숫자(승인 대기)는 운영 요약(ops-summary).
- *   일괄·단건 승인/거절/정지/그룹 추가 = POST /admin/users/bulk(사람마다 결과).
- *   삭제 = ⋮ › 삭제 → AdminUserDeleteModal(delete-impact → 넘겨받을 사람 → 사용자명 입력).
- *   초대 = AdminInviteModal(이메일 여러 개·링크 복사·만료·그룹 + 보낸 초대 목록·회수).
- * 예전처럼 "승인 대기를 늘 맨 위" 정렬은 서버 페이지와 맞지 않아 뺐다 — 승인 대기 칩으로 본다.
+ *   일괄·단건 승인/거절/정지/그룹 추가 = POST /admin/users/bulk(사용자별 결과).
+ *   삭제 = ⋮ › 삭제 → AdminUserDeleteModal(delete-impact → 인계 대상자 → 사용자명 입력).
+ *   초대 = AdminInviteModal(이메일 복수 입력·링크 복사·만료·그룹 + 보낸 초대 목록·회수).
+ * 기존의 "승인 대기를 늘 맨 위" 정렬은 서버 페이지와 부합하지 않아 제거함 — 승인 대기 칩으로 확인.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -76,7 +76,7 @@ export default function AdminUsersPage() {
   const [qDebounced, setQDebounced] = useState('')
   const qTouched = useRef(false)
   useEffect(() => {
-    // watch(q) — 첫 렌더에는 타이머를 걸지 않는다
+    // watch(q) — 첫 렌더에는 타이머를 설정하지 않는다
     if (!qTouched.current) { qTouched.current = true; return }
     const id = setTimeout(() => setQDebounced(q.trim()), 300)
     return () => clearTimeout(id)
@@ -89,7 +89,7 @@ export default function AdminUsersPage() {
   const sortParam = serverSort(sort.key, sort.dir)
 
   const params = userListParams({ q: qDebounced, pending: fPending, admin: fAdmin, suspended: fSuspended, group: fGroup }, sortParam, page)
-  // 이벤트 처리기(일괄 뒤 다시 읽기 등)가 "지금" 쿼리를 쓰도록
+  // 이벤트 처리기(일괄 처리 후 재조회 등)가 "현재" 쿼리를 사용하도록 함
   const paramsRef = useRef(params)
   paramsRef.current = params
 
@@ -100,7 +100,7 @@ export default function AdminUsersPage() {
     try {
       const r = await $fetch<{ users: AdminUser[]; total: number; page: number } | AdminUser[]>('/api/admin/users', { params: paramsRef.current })
       if (seq !== loadSeq.current) return
-      if (Array.isArray(r)) { setUsers(r); setTotal(r.length) } // 예전 서버
+      if (Array.isArray(r)) { setUsers(r); setTotal(r.length) } // 구버전 서버
       else { const list = r.users || []; setUsers(list); setTotal(r.total ?? list.length) }
     } catch { if (seq === loadSeq.current) setLoadError(true) } finally { if (seq === loadSeq.current) setLoading(false) }
   }
@@ -108,7 +108,7 @@ export default function AdminUsersPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void reloadAll() }, [])
 
-  // 거르는 조건이 바뀌면 1쪽부터 / 쪽이 바뀌면 다시 읽기 (둘 다 첫 실행은 건너뜀)
+  // 필터 조건 변경 시 1쪽부터 조회 / 쪽 변경 시 재조회 (둘 다 첫 실행은 생략)
   const filterKey = JSON.stringify([qDebounced, fPending, fAdmin, fSuspended, fGroup, sortParam])
   const prevFilterKey = useRef(filterKey)
   const prevPage = useRef(page)
@@ -119,7 +119,7 @@ export default function AdminUsersPage() {
     prevPage.current = page
     if (filterChanged) {
       clearSel()
-      if (page !== 1) { setPage(1); return } // 쪽 변경이 다시 읽는다
+      if (page !== 1) { setPage(1); return } // 쪽 변경 시 재조회됨
       void load()
     } else if (pageChanged) {
       clearSel(); void load()
@@ -195,7 +195,7 @@ export default function AdminUsersPage() {
     await runBulk(list, 'add_group', t('admin.users.verbAddGroup'), gid)
   }
 
-  // ── 단건 행동(⋮) ──
+  // ── 단건 동작(⋮) ──
   async function approveOne(u: AdminUser) {
     if (u.email_verified === false && !await confirmBox(t('admin.users.confirmApproveUnverified'), { title: t('admin.users.approveOneTitle', { name: nameOf(u) }), confirmLabel: t('admin.users.approve') })) return
     await runBulk([u], 'approve', t('admin.users.approve'))
@@ -228,7 +228,7 @@ export default function AdminUsersPage() {
     if (!await confirmBox(t('admin.users.confirmResetLink'), { title: t('admin.users.resetLink') })) return
     try {
       const r = await $fetch<{ reset_url: string; expires_hours: number }>(`/api/admin/users/${u.id}/password-reset-link`, { method: 'POST' })
-      // 복구 이메일까지 잃어버린 사용자를 구제하는 게 목적이라 링크를 직접 건넨다
+      // 복구 이메일까지 분실한 사용자의 구제가 목적이므로 링크를 직접 전달한다
       try { await writeClipboard(r.reset_url); addToast('success', t('admin.users.resetLinkCopied', { h: r.expires_hours })) }
       catch { await alertBox(r.reset_url) }
     } catch (e: any) { addToast('error', e?.data?.detail || t('admin.users.resetLinkError')) }
@@ -292,7 +292,7 @@ export default function AdminUsersPage() {
     } catch (e: any) { addToast('error', e?.data?.detail || t('admin.users.logoutFailed')) }
   }
 
-  // 부제 = 전체 사용자 수(운영 요약) · 승인 대기 — 운영 요약을 못 받으면 지금 목록 total
+  // 부제 = 전체 사용자 수(운영 요약) · 승인 대기 — 운영 요약 수신 실패 시 현재 목록의 total 사용
   const allUsers = ops.users ? ops.users.active + ops.users.pending + ops.users.suspended : total
   const subtitle = counts.pending
     ? t('admin.users.subtitleWithPending', { n: allUsers, p: counts.pending })
@@ -383,7 +383,7 @@ export default function AdminUsersPage() {
                   ))}
                 </div>
 
-                {/* 페이지(32 버튼 · mono 범위) — 한 쪽이면 숨김 */}
+                {/* 페이지(32 버튼 · mono 범위) — 1쪽뿐이면 숨김 */}
                 {totalPages > 1 && (
                   <div className="flex items-center gap-2">
                     <span className="flex-1 font-mono text-[11px] text-muted-foreground">{rangeText(page, total)}</span>

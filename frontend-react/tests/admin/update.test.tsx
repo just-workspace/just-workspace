@@ -1,5 +1,5 @@
-// 관리 › 업데이트 — 현황(최신/새 버전/확인 중/확인 실패/대기/막힘), 새 버전 안내, 설정, 앱 배포, 기록, 적용된 버전의 변경 내용,
-// 밤사이 자동 업데이트 결과 띠와 "다시 켜기", 설치 관리자 없음/미지원 안내. $fetch 는 가짜, 응답은 계약대로 만든 묶음(fixtures).
+// 관리 › 업데이트 — 현황(최신/새 버전/확인 중/확인 실패/대기/차단), 새 버전 안내, 설정, 앱 배포, 기록, 적용된 버전의 변경 내용,
+// 야간 자동 업데이트 결과 띠와 "다시 켜기", 설치 관리자 없음/미지원 안내. $fetch 는 모의(mock), 응답은 계약에 맞춰 구성한 픽스처(fixtures).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { api, on, seq, called, fakeFetch, renderUpdate, text, disabled, checked, value, ADMIN, MEMBER } from './updateHarness'
@@ -39,7 +39,7 @@ describe('현황', () => {
     expect(screen.getByText(/새 버전이 나오면 알리고, 관리자가 시작합니다/)).toBeTruthy()
     expect(screen.queryByTestId('update-available')).toBeNull()
     expect(screen.queryByTestId('update-paused')).toBeNull()
-    // 탭은 정해진 순서 그대로, 서로 이어진다
+    // 탭은 정해진 순서를 유지하며 서로 연결됨
     expect(screen.getAllByRole('tab').map(x => x.textContent)).toEqual(['현황', '설정', '되돌림', '앱 배포', '기록', '오프라인 업데이트'])
   })
 
@@ -254,7 +254,7 @@ describe('새 버전 안내', () => {
     expect(screen.queryByTestId('update-plugin-warning')).toBeNull()
     expect(screen.queryByTestId('update-hop')).toBeNull()
     expect(screen.getByText(/파일은 백업하지 않고 건드리지도 않습니다/)).toBeTruthy()
-    // 현황 탭이 선택된 채다
+    // 현황 탭이 선택된 상태 유지
     expect(screen.getByRole('tab', { name: '현황' }).getAttribute('aria-selected')).toBe('true')
 
     fireEvent.click(screen.getByRole('button', { name: '업데이트 시작' }))
@@ -461,7 +461,7 @@ describe('앱 배포', () => {
     expect(screen.getByRole('button', { name: 'Windows 데스크톱 앱 내려받기 주소 복사' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Android 모바일 앱 내려받기' })).toBeTruthy()
     expect(value(screen.getByLabelText('사용자에게 알릴 내려받기 주소'))).toBe(`${location.origin}/settings/apps`)
-    // 좁은 화면에서는 표가 가로로 밀린다
+    // 좁은 화면에서는 표가 가로로 넘침
     expect(table.className).toMatch(/min-w-\[620px\]/)
   })
 
@@ -510,7 +510,7 @@ describe('기록', () => {
     expect(text(within(detail).getByTestId('step-preflight'))).toContain('4초')
     expect(text(within(detail).getByTestId('step-restore_db'))).toContain('백업에서 DB 되돌리기')
     expect(within(detail).getByRole('button', { name: '기록 내려받기' })).toBeTruthy()
-    // 다시 누르면 접힌다
+    // 재클릭 시 접힘
     fireEvent.click(button)
     expect(screen.queryByTestId('update-history-detail')).toBeNull()
   })
@@ -586,8 +586,8 @@ describe('순수 계산', () => {
   })
   it('끝나지 않은 작업과 진행 화면 경로', () => {
     expect(sys.isLive(fx.jobs.pulling())).toBe(true)
-    expect(sys.isLive(fx.jobs.failedBeforeMigrate())).toBe(true)      // 관리자의 선택을 기다린다
-    expect(sys.isLive(fx.jobs.failedAtMigrate())).toBe(false)         // 되돌림 작업이 이어받았다
+    expect(sys.isLive(fx.jobs.failedBeforeMigrate())).toBe(true)      // 관리자의 선택 대기
+    expect(sys.isLive(fx.jobs.failedAtMigrate())).toBe(false)         // 롤백 작업이 인계함
     expect(sys.isLive(fx.jobs.done())).toBe(false)
     expect(sys.jobPath(fx.jobs.pulling())).toBe('/admin/update/apply/job1')
     expect(sys.jobPath(fx.jobs.rollbackRunning())).toBe('/admin/update/rollback/jobrb1')

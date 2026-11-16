@@ -1,22 +1,22 @@
 /**
- * 메일 작성 본체. 세 자리에서 같은 로직을 쓴다.
- *  variant="window" : 데스크톱 떠 있는 작성 창 580×640 안(MailComposeWindow 가 제목 줄을 그림)
+ * 메일 작성 본체. 세 위치에서 동일한 로직을 사용한다.
+ *  variant="window" : 데스크톱 플로팅 작성 창 580×640 내부(제목 줄은 MailComposeWindow 가 렌더링)
  *  variant="page"   : 모바일 전체 화면 /mail/compose
  *  variant="inline" : 읽기 화면 본문 아래 인라인 답장
  *
- * 기능: 보낸 계정·이름, 받는이 칩·참조·숨은참조, 서명, 첨부 15MB(넘으면 대용량 첨부 = 파일함 + 30일 링크), 30초 임시 저장(/api/mail/drafts), 읽음 확인 요청,
- * 답장·전체 답장·전달 인용, 임시 보관 메일 이어 쓰기. 닫기 = 임시보관함에 저장(묻지 않음), 버리기는 휴지통 버튼(확인).
- * 서명 이중 부착 방지: 본문엔 서명을 넣지 않고 signature_id 만 보낸다(서버가 본문 속 옛 서명 블록을 지우고 정확히 하나만 넣음).
- *   초안도 signature_id 로 저장하고, 이어 쓸 때는 body_*_without_signature 를 쓴다.
- * 답장은 reply_mailbox_id(원문이 있던 메일함)를 같이 보내 서버가 원문 Message-ID·References 로 대화를 잇는다.
- * 예약 보내기: 작성 창 "보내기 ▾" 메뉴 → 시각 고르기(MailScheduleDialog) → send_at. 예약함은 사이드바.
+ * 기능: 보낸 계정·이름, 받는이 칩·참조·숨은참조, 서명, 첨부 15MB(초과 시 대용량 첨부 = 파일함 + 30일 링크), 30초 임시 저장(/api/mail/drafts), 읽음 확인 요청,
+ * 답장·전체 답장·전달 인용, 임시 보관 메일 이어 쓰기. 닫기 = 임시보관함에 저장(확인 절차 없음), 버리기는 휴지통 버튼(확인 절차 있음).
+ * 서명 이중 부착 방지: 본문에는 서명을 포함하지 않고 signature_id 만 전송한다(서버가 본문 내 기존 서명 블록을 제거하고 정확히 1개만 삽입).
+ *   초안도 signature_id 로 저장하며, 이어 쓸 때는 body_*_without_signature 를 사용한다.
+ * 답장은 reply_mailbox_id(원문이 위치한 메일함)를 함께 전송하며, 서버가 원문 Message-ID·References 로 대화를 연결한다.
+ * 예약 보내기: 작성 창 "보내기 ▾" 메뉴 → 시각 선택(MailScheduleDialog) → send_at. 예약함은 사이드바에 위치한다.
  *
  * ref: { close, send, saveDraft, setReplyAll, focus }
  */
 import { useEffect, useImperativeHandle, useRef, useState, type DragEvent, type KeyboardEvent, type Ref } from 'react'
 import DOMPurify from 'dompurify'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거함)
 import { clsx as cx } from 'clsx'
 import { $fetch } from '~/lib/api'
 import { useAuth } from '~/composables/useAuth'
@@ -40,12 +40,12 @@ import { MailComposeQuota } from '~/components/mail/MailComposeQuota'
 import { MailSignaturePicker } from '~/components/mail/MailSignaturePicker'
 import { MailScheduleDialog } from '~/components/mail/MailScheduleDialog'
 
-/** 일반 첨부 합계 한도 — 넘는 파일은 대용량 첨부(파일함 + 30일 링크)로 바꾼다 */
+/** 일반 첨부 합계 한도 — 초과 파일은 대용량 첨부(파일함 + 30일 링크)로 전환 */
 const MAX_BYTES = 15 * 1024 * 1024
 const LARGE_FOLDER = '메일 대용량 첨부'
 
 export interface MailComposerHandle {
-  /** 닫기(= 쓴 게 있으면 임시보관함에 저장) */
+  /** 닫기(= 작성 내용이 있으면 임시보관함에 저장) */
   close: () => Promise<void>
   /** 보내기 */
   send: () => Promise<void>
@@ -58,7 +58,7 @@ export interface MailComposerHandle {
 }
 
 export interface MailComposerProps {
-  /** window(떠 있는 창) · page(모바일 전체 화면) · inline(본문 아래 인라인 답장) */
+  /** window(플로팅 창) · page(모바일 전체 화면) · inline(본문 아래 인라인 답장) */
   variant: 'window' | 'page' | 'inline'
   /** 새 메일·답장·전체 답장·전달·임시 보관 이어 쓰기 */
   mode: ComposeMode
@@ -66,21 +66,21 @@ export interface MailComposerProps {
   msgId?: string | null
   /** 이어 쓸 임시 보관 메일 id */
   draftId?: string | null
-  /** 목록에서 열려 있던 원문(없으면 msgId 로 받아 온다) */
+  /** 목록에서 열려 있던 원문(없으면 msgId 로 조회) */
   original?: Readonly<MessageDetail> | null
-  /** 새 메일 받는 사람 미리 채우기(연락처 "메일 쓰기" 등) */
+  /** 새 메일 받는 사람 사전 입력(연락처 "메일 쓰기" 등) */
   to?: string | null
-  /** 화면 안 AI 답장 초안 — 답장 본문 맨 위에 채운다. 이 초안으로 보내면 서버가 X-AI-Generated 를 붙인다 */
+  /** 화면 내 AI 답장 초안 — 답장 본문 최상단에 삽입. 해당 초안으로 발송 시 서버가 X-AI-Generated 를 부착 */
   aiDraft?: string | null
-  /** 닫힘(보냄·버림·저장 후) */
+  /** 닫힘(발송·폐기·저장 후) */
   onClose?: () => void
-  /** 보냄 */
+  /** 발송 완료 */
   onSent?: () => void
   /** 제목 줄 문구(제목 입력 또는 모드 이름) */
   onTitle?: (title: string) => void
   /** 인라인 답장의 답장 ↔ 전체 답장 전환 */
   onUpdateMode?: (mode: ComposeMode) => void
-  /** false 면 숨긴다(살아 있는 채로 — 최소화한 작성 창) */
+  /** false 이면 숨김(인스턴스는 유지 — 최소화한 작성 창) */
   show?: boolean
   /** { close, send, saveDraft, setReplyAll, focus } */
   ref?: Ref<MailComposerHandle | null>
@@ -109,14 +109,14 @@ export function MailComposer({
   const [bodyHtml, setBodyHtml] = useState<string | null>(null)
   const [bodyText, setBodyText] = useState('')
   const [initialContent, setInitialContent] = useState('')
-  /** 인라인 답장은 인용을 본문에 넣지 않고 보낼 때 붙인다(시안엔 인용이 안 보인다) */
+  /** 인라인 답장은 인용을 본문에 포함하지 않고 발송 시 부착(시안에 인용 미표시) */
   const hiddenQuote = useRef<{ html: string; text: string } | null>(null)
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([])
   const [largeFiles, setLargeFiles] = useState<LargeAttachment[]>([])
   const [uploading, setUploading] = useState(false)
   const [sending, setSending] = useState(false)
   const [ready, setReady] = useState(false)
-  // 메일 계정이 하나도 없음 — 쓸 수도 없고 임시 저장해도 다시 열 화면이 없다(온보딩만 보임). 쓰기 대신 연결 안내.
+  // 메일 계정 없음 — 작성이 불가하며, 임시 저장해도 다시 열 화면이 없음(온보딩만 표시). 작성 화면 대신 연결 안내 표시.
   const [noAccount, setNoAccount] = useState(false)
   const [error, setError] = useState('')
   const [requestReadReceipt, setRequestReadReceipt] = useState(false)
@@ -126,11 +126,11 @@ export function MailComposer({
   const fileInput = useRef<HTMLInputElement | null>(null)
   const editorRef = useRef<MailComposeEditorHandle | null>(null)
   const [sendMenu, setSendMenu] = useState(false)
-  /** 예약 보내기 시각 고르기 */
+  /** 예약 보내기 시각 선택 */
   const [scheduleOpen, setScheduleOpen] = useState(false)
-  /** 답장 원문이 있던 메일함(창을 연 뒤 폴더를 옮겨도 그대로) */
+  /** 답장 원문이 위치한 메일함(창을 연 후 폴더를 이동해도 유지) */
   const replyMailboxId = useRef<string | null>(null)
-  /** 인라인 답장 Aa — 서식 툴바 펼치기 */
+  /** 인라인 답장 Aa — 서식 툴바 표시 */
   const [showFormat, setShowFormat] = useState(false)
 
   const isPage = variant === 'page'
@@ -163,13 +163,13 @@ export function MailComposer({
 
   const dirty = !!(toField.trim() || subject.trim() || bodyText.trim() || attachments.length || largeFiles.length)
 
-  // 타이머·언마운트·비동기 처리기가 "지금" 값을 읽는 곳
+  // 타이머·언마운트·비동기 처리기가 최신 값을 읽는 참조
   const cur = useRef({ toField, ccField, bccField, subject, bodyHtml, bodyText, signatureId, draftId, attachments, largeFiles, dirty, ready, fromEmail, mode, accountId, fromName, requestReadReceipt, uploading, scheduleOpen })
   cur.current = { toField, ccField, bccField, subject, bodyHtml, bodyText, signatureId, draftId, attachments, largeFiles, dirty, ready, fromEmail, mode, accountId, fromName, requestReadReceipt, uploading, scheduleOpen }
   const cb = useRef({ onClose, onSent, onUpdateMode })
   cb.current = { onClose, onSent, onUpdateMode }
 
-  /** 답장·전체 답장 받는 사람(인라인 답장의 "전체 답장으로" 전환에도 쓴다) */
+  /** 답장·전체 답장 받는 사람(인라인 답장의 "전체 답장으로" 전환에도 사용) */
   function applyReplyRecipients(msg: Readonly<MessageDetail>, all: boolean, from = cur.current.fromEmail) {
     const r = replyRecipients(msg, all, from)
     setToField(r.to)
@@ -196,7 +196,7 @@ export function MailComposer({
     }
   }
 
-  /** 원래 메일의 첨부를 보내기용으로 복사해 붙인다(전달·다시 보내기) */
+  /** 원본 메일의 첨부를 발송용으로 복사해 첨부(전달·다시 보내기) */
   async function reuseAttachments(msg: Readonly<MessageDetail>) {
     if (!msg.attachments?.length || !msgId) return
     try {
@@ -232,10 +232,10 @@ export function MailComposer({
           to: parseAddresses(c.toField),
           cc: parseAddresses(c.ccField),
           bcc: parseAddresses(c.bccField),
-          // 대용량 첨부 링크는 임시 저장본 본문 끝에 박아 둔다(다시 열어도 링크가 남게)
+          // 대용량 첨부 링크는 임시 저장본 본문 끝에 포함(다시 열어도 링크 유지)
           body_html: c.largeFiles.length ? `${c.bodyHtml || ''}${largeBlock(c.largeFiles).html}` : c.bodyHtml,
           body_text: ((c.bodyText || '') + largeBlock(c.largeFiles).text) || null,
-          // 서명은 본문에 넣지 않고 id 로만(""=서명 없음으로 저장)
+          // 서명은 본문에 포함하지 않고 id 로만 저장(""=서명 없음으로 저장)
           signature_id: c.signatureId || '',
         },
       })
@@ -258,7 +258,7 @@ export function MailComposer({
   }
 
   // ─── 초기화 ───
-  /** 보냈거나 버렸으면 true — 화면을 떠날 때 다시 저장하지 않는다 */
+  /** 발송 또는 폐기 완료 시 true — 화면 이탈 시 재저장하지 않음 */
   const finished = useRef(false)
   useEffect(() => {
     let alive = true
@@ -267,14 +267,14 @@ export function MailComposer({
       if (mailStore.getState().accounts.length === 0) await fetchAccounts()
       const ms = mailStore.getState()
       if (!ms.accountsError && ms.accounts.length === 0) {
-        finished.current = true   // 아무것도 임시 저장하지 않는다
+        finished.current = true   // 임시 저장을 수행하지 않음
         if (alive) setNoAccount(true)
         return
       }
       const accId = ms.selectedAccountId || ms.accounts.find(a => a.is_default)?.id || ms.accounts[0]?.id || null
       setAccountId(accId)
       const accEmail = ms.accounts.find(a => a.id === accId)?.email || user?.primary_email || user?.email || ''
-      // 서명 목록은 싱글턴 — 메일을 열 때마다(인라인 답장) 다시 받지 않는다
+      // 서명 목록은 싱글턴 — 메일을 열 때마다(인라인 답장) 재조회하지 않음
       if (mailSignatureStore.getState().signatures.length === 0) await fetchSignatures().catch(() => {})
 
       if (modeProp === 'new' && to) setToField(to)
@@ -290,15 +290,15 @@ export function MailComposer({
           setShowCc((d.cc || []).length > 0)
           setShowBcc((d.bcc || []).length > 0)
           setSubject(d.subject || '')
-          // 서명 뺀 본문으로 이어 쓴다(예전 초안 본문에 박혀 있던 서명 + 보낼 때 붙는 서명 = 이중 서명 방지)
+          // 서명을 제외한 본문으로 이어 씀(기존 초안 본문에 포함된 서명 + 발송 시 부착되는 서명 = 이중 서명 방지)
           const html = d.body_html_without_signature ?? d.body_html
           const text = d.body_text_without_signature ?? d.body_text
           setInitialContent(html || textToHtml(text || ''))
           draftSignature = d.signature_id || null
-          // AI 가 초안에 붙인 워크스페이스 파일(서버가 열 때 임시 첨부로 바꿔 준다)
+          // AI 가 초안에 첨부한 워크스페이스 파일(서버가 열람 시 임시 첨부로 변환)
           if (Array.isArray(d.attachments) && d.attachments.length) setAttachments(d.attachments)
           if (d.attachment_error) addToast('warning', d.attachment_error)
-        } catch { /* 지워진 초안 — 빈 창 */ }
+        } catch { /* 삭제된 초안 — 빈 창 표시 */ }
       } else if (modeProp !== 'new') {
         const msg = await loadOriginal()
         if (msg) {
@@ -309,7 +309,7 @@ export function MailComposer({
             setInitialContent(`<p></p>${f.html}`)
             await reuseAttachments(msg)
           } else if (modeProp === 'resend') {
-            // 다시 보내기 — 받는 사람·제목·본문·첨부를 그대로(원래 본문에 서명이 이미 들어 있어 서명은 붙이지 않는다)
+            // 다시 보내기 — 받는 사람·제목·본문·첨부를 그대로 사용(원본 본문에 서명이 이미 포함되어 서명은 부착하지 않음)
             setToField(joinAddrs(msg.to))
             setCcField(joinAddrs(msg.cc))
             setBccField(joinAddrs(msg.bcc))
@@ -346,7 +346,7 @@ export function MailComposer({
       if (alive) setReady(true)
     })()
     return () => { alive = false }
-    // 마운트 때 한 번
+    // 마운트 시 1회 실행
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -355,15 +355,15 @@ export function MailComposer({
     if (!ready) return
     lastSaved.current = snapshot()
     autoSaveTimer.current = setInterval(() => { void saveDraft() }, 30000)
-    // 떠 있는 창만 바로 쓰게 — 인라인 답장은 메일을 열 때마다 포커스를 뺏으면 J/K 단축키가 막힌다
+    // 플로팅 창만 즉시 입력 가능하도록 포커스 — 인라인 답장은 메일을 열 때마다 포커스를 가져가면 J/K 단축키가 차단됨
     if (variant === 'window') editorRef.current?.focus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready])
 
   useEffect(() => () => {
     if (autoSaveTimer.current) clearInterval(autoSaveTimer.current)
-    // 인라인 답장을 쓰다 다른 메일을 열거나, 창이 화면과 함께 사라질 때 — 쓰던 것을 임시 저장으로 남긴다.
-    // 인라인 답장은 본문을 쓴 게 있을 때만: 받는 사람이 늘 채워져 있어, "전체 답장"·서명만 바꾸고 넘어가도 빈 초안이 쌓였다.
+    // 인라인 답장 작성 중 다른 메일을 열거나 창이 화면과 함께 제거될 때 작성 내용을 임시 저장으로 보존한다.
+    // 인라인 답장은 본문 작성 내용이 있을 때만 저장한다: 받는 사람이 항상 입력되어 있어 "전체 답장"·서명만 변경하고 이동해도 빈 초안이 누적되었다.
     if (!finished.current && cur.current.ready && cur.current.dirty && (variant !== 'inline' || cur.current.bodyText.trim())) void saveDraft()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -381,8 +381,8 @@ export function MailComposer({
   function largeBlock(list: readonly LargeAttachment[]) {
     return largeAttachmentBlock(list, { title: t('mail.compose.largeTitle'), until: d => t('mail.compose.largeUntil', { date: d }) })
   }
-  /** 대용량 첨부 — 내 파일함(메일 대용량 첨부/<시각>)에 올리고 30일 다운로드 링크를 만든다. 폴더를 매번 새로 만들어
-   *  같은 이름 파일이 덮여 예전 링크가 새 파일을 가리키는 일을 막는다. */
+  /** 대용량 첨부 — 사용자 파일함(메일 대용량 첨부/<시각>)에 업로드하고 30일 다운로드 링크를 생성한다. 폴더를 매번 새로 생성하여
+   *  동일 이름 파일이 덮어쓰여 기존 링크가 새 파일을 가리키는 문제를 방지한다. */
   async function uploadLarge(file: File) {
     const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
     const form = new FormData()
@@ -427,16 +427,16 @@ export function MailComposer({
   function pickFiles() { fileInput.current?.click() }
   function onDrop(e: DragEvent) { e.preventDefault(); void handleFiles(e.dataTransfer?.files || null) }
   function removeAttachment(i: number) { setAttachments(a => a.filter((_, j) => j !== i)) }
-  // 목록에서만 뺀다 — 올린 파일·링크는 내 파일함에 남는다(지우려면 파일함에서)
+  // 목록에서만 제외 — 업로드한 파일·링크는 사용자 파일함에 유지됨(삭제는 파일함에서 수행)
   function removeLarge(i: number) { setLargeFiles(l => l.filter((_, j) => j !== i)) }
 
   // ─── 보내기 ───
-  /** 보내는 중 — state(sending)는 다음 그리기에야 바뀌어 Ctrl+Enter 연타를 못 막는다 */
+  /** 발송 중 — state(sending)는 다음 렌더링에서야 갱신되어 Ctrl+Enter 연속 입력을 차단하지 못함 */
   const sendingRef = useRef(false)
   async function send(sendAt: string | null = null) {
     if (sendingRef.current) return
     const c = cur.current
-    // 올리는 중인 첨부가 빠진 채 나가지 않게
+    // 업로드 중인 첨부가 누락된 채 발송되는 것을 방지
     if (c.uploading) { setError(t('mail.compose.uploadingWait', '첨부를 올리는 중입니다. 다 올라간 뒤에 보내 주세요.')); setScheduleOpen(false); return }
     const toList = parseAddresses(c.toField)
     if (toList.length === 0) { setError(t('mail.compose.recipientRequired')); setScheduleOpen(false); return }
@@ -451,7 +451,7 @@ export function MailComposer({
       html += b.html
       text += b.text
     }
-    // 서명은 서버가 signature_id 로 붙인다(인용 바로 앞, 없으면 끝) — 여기서 넣으면 이중 서명
+    // 서명은 서버가 signature_id 로 부착(인용 바로 앞, 없으면 끝) — 여기서 삽입하면 이중 서명 발생
     if (hiddenQuote.current) {
       html += `<br>${hiddenQuote.current.html}`
       text += `\n\n${hiddenQuote.current.text}`
@@ -473,7 +473,7 @@ export function MailComposer({
         signature_id: c.signatureId || null,
         reply_mailbox_id: replyMailboxId.current,
         send_at: sendAt,
-        // AI 초안으로 시작한 답장 — 사람이 고쳐 보내도 AI 기본법 표시를 붙인다(서버 X-AI-Generated)
+        // AI 초안으로 시작한 답장 — 사용자가 수정 후 발송해도 AI 기본법 표시를 부착(서버 X-AI-Generated)
         ...(aiDraft ? { ai_generated: true } : {}),
       })
       finished.current = true
@@ -497,7 +497,7 @@ export function MailComposer({
     finished.current = true
     if (cur.current.dirty) {
       const ok = await saveDraft()
-      // 초안은 첨부를 담지 않는다(업로드 blob 은 짧은 TTL 임시 보관) — 첨부가 있으면 그렇다고 알린다
+      // 초안은 첨부를 포함하지 않음(업로드 blob 은 짧은 TTL 의 임시 보관) — 첨부가 있으면 해당 사실을 안내
       if (ok && cur.current.draftId) {
         if (cur.current.attachments.length) addToast('warning', t('mail.compose.savedToDraftsNoAttachments'))
         else addToast('info', t('mail.compose.savedToDrafts'))
@@ -517,9 +517,9 @@ export function MailComposer({
   function onKeydown(e: KeyboardEvent) {
     if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return
     e.preventDefault()
-    // 예약 시각을 고르는 중이면 즉시 발송으로 새지 않게(대화상자는 포털이지만 React 이벤트는 여기까지 올라온다)
+    // 예약 시각 선택 중에는 즉시 발송으로 이어지지 않도록 차단(대화상자는 포털이지만 React 이벤트는 여기까지 전파됨)
     if (cur.current.scheduleOpen) return
-    // 받는 사람 칸에서 눌렀으면 방금 확정한 칩이 다음 그리기에 반영된다 — 그 뒤에 보낸다
+    // 받는 사람 칸에서 입력한 경우 방금 확정한 칩이 다음 렌더링에 반영됨 — 그 이후에 발송
     setTimeout(() => { void send() }, 0)
   }
   function openSchedule() {
@@ -527,7 +527,7 @@ export function MailComposer({
     setScheduleOpen(true)
   }
 
-  /** 인라인 답장: 단축키 R/A 로 답장·전체 답장을 고른다 */
+  /** 인라인 답장: 단축키 R/A 로 답장·전체 답장 선택 */
   function setReplyAll(all: boolean) {
     if ((cur.current.mode === 'replyAll') !== all) toggleReplyAll()
     editorRef.current?.focus()
@@ -589,7 +589,7 @@ export function MailComposer({
     )
   }
 
-  // ─────────── 계정 없음: 쓰기 대신 연결 안내 ───────────
+  // ─────────── 계정 없음: 작성 화면 대신 연결 안내 ───────────
   if (noAccount) {
     return (
       <div className="flex min-h-0 flex-1 flex-col bg-card" style={show ? undefined : { display: 'none' }}>
@@ -620,7 +620,7 @@ export function MailComposer({
       onDrop={onDrop}
       onDragOver={e => e.preventDefault()}
     >
-      {/* 모바일 상단 56: ✕ · 제목 · 첨부 · 보내기 */}
+      {/* 모바일 상단 56: 닫기 · 제목 · 첨부 · 보내기 */}
       {isPage && (
         <header className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-background px-1">
           <UiIconButton label={t('mail.window.closeSave')} icon="close" size="lg" className="text-foreground" onClick={close} />

@@ -1,6 +1,6 @@
 /**
  * audiorelay 전송 프로토콜 v1 — 24 B 헤더 인코딩/디코딩, 단편화/재조립, NACK·CTRL·PING, 스트림 프레이밍.
- * Go 쪽 정본: audiorelay/internal/proto/proto.go. 필드 순서·크기가 같아야 한다(PROTOCOL.md §1).
+ * Go 측 정본: audiorelay/internal/proto/proto.go. 필드 순서·크기가 동일해야 한다(PROTOCOL.md §1).
  */
 import type { LosslessCodec } from './types'
 
@@ -59,7 +59,7 @@ export function codecByte(c: LosslessCodec): number {
   return Codec[c]
 }
 
-/** 헤더 + payload 를 한 패킷으로 */
+/** 헤더 + payload 를 단일 패킷으로 인코딩 */
 export function encode(h: Partial<Header> & { type: number }, payload?: Uint8Array): Uint8Array {
   const n = payload ? payload.byteLength : 0
   const out = new Uint8Array(HEADER_SIZE + n)
@@ -81,7 +81,7 @@ export function encode(h: Partial<Header> & { type: number }, payload?: Uint8Arr
   return out
 }
 
-/** 헤더 파싱. 버전·길이·단편 카운터가 틀리면 null */
+/** 헤더 파싱. 버전·길이·단편 카운터가 유효하지 않으면 null */
 export function decode(pkt: Uint8Array): Header | null {
   if (pkt.byteLength < HEADER_SIZE || pkt.byteLength > MAX_PACKET) return null
   if (pkt[0] !== VERSION) return null
@@ -108,7 +108,7 @@ export function payloadOf(pkt: Uint8Array): Uint8Array {
   return pkt.subarray(HEADER_SIZE)
 }
 
-/** 데이터그램 한도에 맞춰 프레임을 단편으로 나눈다(WebSocket 은 maxBytes=Infinity → 1개) */
+/** 데이터그램 한도에 맞춰 프레임을 단편으로 분할한다(WebSocket 은 maxBytes=Infinity → 1개) */
 export function fragment(h: Partial<Header> & { type: number }, payload: Uint8Array, maxBytes: number): Uint8Array[] {
   const room = Math.max(1, Math.floor(maxBytes) - HEADER_SIZE)
   if (!Number.isFinite(maxBytes) || payload.byteLength <= room) return [encode({ ...h, fragIdx: 0, fragCnt: 1 }, payload)]
@@ -128,7 +128,7 @@ export interface Reassembled {
 }
 
 /**
- * (src, seq, type) 별로 단편을 모아 프레임을 완성한다. 미완성 항목은 64개까지만 들고 오래된 것부터 버린다.
+ * (src, seq, type) 별로 단편을 수집하여 프레임을 완성한다. 미완성 항목은 64개까지만 보유하고 오래된 항목부터 폐기한다.
  */
 export class Reassembler {
   private pending = new Map<string, { header: Header; parts: (Uint8Array | null)[]; got: number; at: number }>()
@@ -149,7 +149,7 @@ export class Reassembler {
       e.parts[h.fragIdx] = payloadOf(pkt).slice()
       e.got++
     }
-    // 단편 하나라도 재전송이면 완성 프레임도 재전송으로 본다(NACK 복구 집계) — 플래그는 OR
+    // 단편 하나라도 재전송이면 완성 프레임도 재전송으로 간주한다(NACK 복구 집계) — 플래그는 OR
     e.header = { ...e.header, flags: e.header.flags | h.flags }
     if (e.got < h.fragCnt) return null
     this.pending.delete(key)
@@ -201,7 +201,7 @@ export function decodeCtrl<T = any>(payload: Uint8Array): T | null {
   }
 }
 
-/** 8 B 불투명 payload(ms 단위 double) — 돌아온 PONG 에서 RTT 를 뺀다 */
+/** 8 B 불투명 payload(ms 단위 double) — 반환된 PONG 에서 RTT 를 산출한다 */
 export function encodePing(nowMs: number): Uint8Array {
   const p = new Uint8Array(8)
   new DataView(p.buffer).setFloat64(0, nowMs)
@@ -223,7 +223,7 @@ export function streamFrame(pkt: Uint8Array): Uint8Array {
   return out
 }
 
-/** 스트림 청크를 받아 완성된 패킷을 토해내는 파서 */
+/** 스트림 청크를 수신하여 완성된 패킷을 반환하는 파서 */
 export class StreamParser {
   private buf: Uint8Array = new Uint8Array(0)
 

@@ -25,7 +25,7 @@ function simulate(opts: {
   }
   arrivals.sort((a, b) => a.at - b.at)
   const pulled: { kind: string; seq: number | null; t: number }[] = []
-  // 마지막 프레임까지 재생되면 멈춘다(그 뒤는 스트림 종료라 언더런으로 세지 않는다)
+  // 마지막 프레임까지 재생되면 중지(이후는 스트림 종료이므로 언더런으로 집계하지 않음)
   const end = opts.frames * FRAME_MS + 2000
   let ai = 0
   for (clock = 0; clock < end && !(ai >= arrivals.length && jb.stats().depthMs === 0 && clock > 30); clock += FRAME_MS) {
@@ -58,13 +58,13 @@ describe('lossless/jitter buffer', () => {
   it('conceals isolated losses with PLC and keeps sequence continuity', () => {
     const { pulled, stats } = simulate({ frames: 400, delay: (s) => (s % 50 === 25 ? null : 5) })
     const kinds = pulled.map((p) => p.kind)
-    // 손실 1개당 PLC 1~2개(작은 버퍼에선 1프레임 기다려 본 뒤 손실 확정 — 그만큼 깊이가 늘어 다음부턴 즉시)
+    // 손실 1개당 PLC 1~2개(작은 버퍼에서는 1프레임 대기 후 손실 확정 — 그만큼 깊이가 증가하여 이후에는 즉시 확정)
     expect(stats.lost).toBe(8)
     expect(stats.plc).toBeGreaterThanOrEqual(8)
     expect(stats.plc).toBeLessThanOrEqual(16)
     expect(kinds.filter((k) => k === 'plc').length).toBe(stats.plc)
     expect(stats.underruns).toBe(0)
-    // PLC 뒤에는 실제 프레임이 이어진다(재프라이밍 없음)
+    // PLC 이후 실제 프레임이 이어짐(재프라이밍 없음)
     const i = kinds.lastIndexOf('plc')
     expect(kinds[i + 1]).toBe('ok')
     const seqs = pulled.filter((p) => p.kind === 'ok').map((p) => p.seq!)
@@ -72,7 +72,7 @@ describe('lossless/jitter buffer', () => {
   })
 
   it('grows its target under jitter (p95 + 1 frame) and does not underrun once adapted', () => {
-    // 지터: 매 10번째 프레임이 35 ms 늦게 온다(p95 ≈ 30 ms 수준)
+    // 지터: 매 10번째 프레임이 35 ms 지연 도착(p95 ≈ 30 ms 수준)
     let seed = 7
     const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)
     const { pulled, stats } = simulate({ frames: 1500, delay: (s) => 5 + (s % 10 === 0 ? 35 : rnd() * 4) })
@@ -83,20 +83,20 @@ describe('lossless/jitter buffer', () => {
     const tail = pulled.slice(-500)
     expect(tail.filter((p) => p.kind !== 'ok').length).toBe(0)
     expect(stats.played).toBeGreaterThan(1400)
-    // 처음엔 2프레임(20 ms)으로 시작했으니 적응 전 언더런이 몇 번 있을 수 있다 — 상한만 본다
+    // 초기 2프레임(20 ms)으로 시작하므로 적응 전 언더런이 수 회 발생할 수 있음 — 상한만 확인
     expect(stats.underruns).toBeLessThan(8)
   })
 
   it('adds headroom on underrun (once per 500 ms) and decays it after 10 s clean', () => {
-    // 2 s 동안 조용히 오다가 한 번 120 ms 정체, 그 뒤 15 s 깨끗
+    // 2 s 동안 정상 수신 후 1회 120 ms 정체, 이후 15 s 정상
     const { jb, pulled } = simulate({ frames: 1800, delay: (s) => (s >= 200 && s < 212 ? 120 : 5) })
     const s = jb.stats()
     expect(s.underruns).toBeGreaterThanOrEqual(1)
     expect(s.underruns).toBeLessThanOrEqual(2)
-    // 정체 뒤 쌓인 깊이는 "따라잡기" 드롭으로 목표 근처까지 내려온다
+    // 정체 후 누적된 깊이는 "따라잡기" 드롭으로 목표 근처까지 감소
     expect(s.depthMs).toBeLessThanOrEqual(s.targetMs + 3 * FRAME_MS)
     expect(s.dropped).toBeGreaterThan(0)
-    // 헤드룸은 10 s 깨끗하면 1프레임씩 줄어 결국 0
+    // 헤드룸은 10 s 정상 시 1프레임씩 감소하여 최종 0
     expect(s.headroomMs).toBe(0)
     expect(pulled.filter((p) => p.kind === 'ok').length).toBeGreaterThan(1750)
   })
@@ -126,7 +126,7 @@ describe('lossless/jitter buffer', () => {
     expect(kinds.filter((k) => k === 'ok').length).toBe(5)
     jb.push(1, frame(1), 60) // already played
     expect(jb.stats().late).toBe(1)
-    // 고갈: 처음 4프레임은 PLC(페이드), 그 뒤 무음, 100프레임 넘으면 재프라이밍
+    // 고갈: 처음 4프레임은 PLC(페이드), 이후 무음, 100프레임 초과 시 재프라이밍
     const outage: string[] = []
     for (let i = 0; i < 110; i++) {
       clock += 10
@@ -137,7 +137,7 @@ describe('lossless/jitter buffer', () => {
     expect(outage[outage.length - 1]).toBe('priming')
     expect(jb.stats().underruns).toBe(1)
     expect(jb.stats().headroomMs).toBe(FRAME_MS)
-    // 다시 데이터가 오면 새 seq 부터 프라이밍해 재생
+    // 데이터가 재수신되면 새 seq 부터 프라이밍하여 재생
     for (let s = 500; s < 505; s++) jb.push(s, frame(s), clock + s)
     clock += 10
     expect(jb.pull().seq).toBe(500)
@@ -174,12 +174,12 @@ describe('lossless/jitter buffer', () => {
       expect(jb.pull().kind).toBe('ok')
     }
     clock = 40
-    const plc = jb.pull() // 목표 2프레임, 깊이 1 → 한 프레임 기다려 본다
+    const plc = jb.pull() // 목표 2프레임, 깊이 1 → 1프레임 대기
     expect(plc.kind).toBe('plc')
     expect(plc.pcm[0][0]).toBeCloseTo(2) // repeats frame(1) = 2 at the start
     expect(plc.pcm[0][FRAME - 1]).toBeLessThan(1.1) // faded toward 0.5×
     clock = 50
-    const plc2 = jb.pull() // 깊이 1 + 기다림 1 = 목표 → 손실 확정, 전진
+    const plc2 = jb.pull() // 깊이 1 + 대기 1 = 목표 → 손실 확정, 전진
     expect(plc2.kind).toBe('plc')
     expect(plc2.pcm[0][0]).toBeCloseTo(1)
     clock = 60

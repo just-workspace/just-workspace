@@ -1,17 +1,17 @@
 /**
- * 채팅 헤더 검색칸 + 필터 안내 드롭다운 + 날짜.
- * 놓는 자리(헤더 오른쪽 끝)는 SHELL — `<ChatSearchBox />`. 모바일 결과 화면 안에서는 `<ChatSearchBox variant="mobile" />`.
+ * 채팅 헤더 검색란 + 필터 안내 드롭다운 + 날짜.
+ * 배치 위치(헤더 오른쪽 끝)는 SHELL — `<ChatSearchBox />`. 모바일 결과 화면 안에서는 `<ChatSearchBox variant="mobile" />`.
  *
  * 접힘: 160×32 bg-muted rounded-md · search 16 · "검색" 13 muted · "Ctrl F"(맥 "⌘F") mono 11.
- * 펼침(포커스이거나 칩·글자가 있으면): 360 · border-2 ring · bg-card. role=combobox + aria-expanded + aria-controls.
- *   필터 칩 h-24 rounded bg-primary/15 · 키 = primary 600 mono · 값 12. 값 고르는 중인 칩(대기)은 값 없이 키만.
- * 드롭다운(포털 · fixed · 360 · bg-popover p-2 shadow-xl · 검색칸 오른쪽 끝에 맞춘 아래):
- *   필터 목록 = "필터" 12/600 → 행 36(키 mono 13/600 + 설명 13 muted, 고른 행 bg-overlay-selected) → 아래 안내 12.
- *   값 제안 = from/mentions 사람(아바타 20 · 이름 · @아이디) · in 채널 · has 6개 · 날짜는 7열 미니 달력(UiMiniCalendar · KIT).
- * 키보드: 입력 중 `from:` 등 → 칩 · ↑↓ 고르기 · Enter(고른 행 있으면 넣기, 아니면 검색) · Tab 값 넣기 · Backspace(빈 칸) 칩 지우기 · Esc 닫기.
- * Ctrl+F(맥 ⌘F, 디스코드 실측): 채팅 화면(이 칸이 그려진 동안)에서만 브라우저 기본 찾기 대신 이 칸에 포커스.
- *   대화 상자(설정 전체 화면 등)가 열려 있으면 양보한다. Ctrl+K 는 전역 명령 팔레트 그대로(가로채지 않음).
- * Enter → useChatSearch.runSearch → 오른쪽 자리(chatStore.showSearchPanel) 에 ChatSearchResults.
+ * 펼침(포커스 상태이거나 칩·입력 문자가 있는 경우): 360 · border-2 ring · bg-card. role=combobox + aria-expanded + aria-controls.
+ *   필터 칩 h-24 rounded bg-primary/15 · 키 = primary 600 mono · 값 12. 값 선택 중인 칩(대기)은 값 없이 키만 표시.
+ * 드롭다운(포털 · fixed · 360 · bg-popover p-2 shadow-xl · 검색란 오른쪽 끝에 맞춘 아래):
+ *   필터 목록 = "필터" 12/600 → 행 36(키 mono 13/600 + 설명 13 muted, 선택한 행 bg-overlay-selected) → 아래 안내 12.
+ *   값 제안 = from/mentions 사용자(아바타 20 · 이름 · @아이디) · in 채널 · has 6개 · 날짜는 7열 미니 달력(UiMiniCalendar · KIT).
+ * 키보드: 입력 중 `from:` 등 → 칩 · ↑↓ 선택 · Enter(선택한 행이 있으면 삽입, 없으면 검색) · Tab 값 삽입 · Backspace(빈 입력란) 칩 삭제 · Esc 닫기.
+ * Ctrl+F(맥 ⌘F, 디스코드 실측): 채팅 화면(본 검색란이 렌더링된 동안)에서만 브라우저 기본 찾기 대신 본 검색란에 포커스한다.
+ *   대화 상자(설정 전체 화면 등)가 열려 있으면 가로채지 않는다. Ctrl+K 는 전역 명령 팔레트로 유지한다(가로채지 않음).
+ * Enter → useChatSearch.runSearch → 오른쪽 영역(chatStore.showSearchPanel)에 ChatSearchResults.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -33,7 +33,7 @@ import { UiMiniCalendar } from '~/components/ui/DatePopover'
 const MAX_SUGGEST = 8
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
 
-/** 채팅 검색 단축키 — Ctrl+F(맥 ⌘F). 한글 입력기에서도 잡히게 e.code 도 본다 */
+/** 채팅 검색 단축키 — Ctrl+F(맥 ⌘F). 한글 입력기에서도 인식되도록 e.code 도 확인 */
 export function isSearchShortcut(e: Pick<KeyboardEvent, 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey' | 'key' | 'code'>, mac = IS_MAC): boolean {
   const mod = mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
   return mod && !e.shiftKey && !e.altKey && (e.key.toLowerCase() === 'f' || e.code === 'KeyF')
@@ -52,7 +52,7 @@ function channelLabel(c: Channel): string {
 }
 function userName(u: { display_name: string | null; username: string }) { return u.display_name || u.username }
 
-/** 사람·채널 이름 → 칩 값(붙여 넣은 "from:이도윤" 처리) */
+/** 사용자·채널 이름 → 칩 값(붙여 넣은 "from:이도윤" 처리) */
 function resolvers() {
   const s = chatStore.getState()
   return {
@@ -70,14 +70,14 @@ function resolvers() {
 }
 
 export interface ChatSearchBoxProps {
-  /** header = 채팅 헤더(160 → 360 + 드롭다운 포털) · mobile = 결과 화면 위 전체 폭(44, 제안은 아래에 바로) */
+  /** header = 채팅 헤더(160 → 360 + 드롭다운 포털) · mobile = 결과 화면 위 전체 폭(44, 제안은 바로 아래에 표시) */
   variant?: 'header' | 'mobile'
-  /** 그려지자마자 입력에 포커스(모바일 결과 화면을 처음 열 때) */
+  /** 렌더링 즉시 입력에 포커스(모바일 결과 화면 최초 진입 시) */
   autoFocus?: boolean
   className?: string
 }
 
-/** 검색칸 */
+/** 검색란 */
 export function ChatSearchBox({ variant = 'header', autoFocus = false, className }: ChatSearchBoxProps) {
   const { t } = useI18n()
   const mobile = variant === 'mobile'
@@ -100,7 +100,7 @@ export function ChatSearchBox({ variant = 'header', autoFocus = false, className
 
   const dateMode = !!pending && DATE_KEYS.includes(pending)
 
-  // ── 필터 목록(대기 칩 없음): 빈 칸이면 전부, 마지막 낱말이 키 앞부분이면 그것만 ──
+  // ── 필터 목록(대기 칩 없음): 입력이 비어 있으면 전체, 마지막 단어가 키의 접두부이면 해당 키만 ──
   const lastWord = text.endsWith(' ') ? '' : (text.split(' ').pop() || '').toLowerCase()
   const filterRows = useMemo(() => {
     if (pending) return []
@@ -108,7 +108,7 @@ export function ChatSearchBox({ variant = 'header', autoFocus = false, className
     return FILTER_ORDER.filter(k => filterToken(k).startsWith(lastWord) && filterToken(k) !== lastWord)
   }, [pending, lastWord, text])
 
-  // 사람 — 불러온 전체 사용자에서 거르고, 없으면 서버 검색(150ms)
+  // 사용자 — 로드된 전체 사용자에서 필터링하고, 없으면 서버 검색(150ms)
   useEffect(() => {
     if (!pending || !PERSON_KEYS.includes(pending) || allUsers.length || !valueQ.trim()) { setRemoteUsers([]); return }
     const h = setTimeout(() => { searchUsers(valueQ).then(r => setRemoteUsers(r as WorkspaceUser[])).catch(() => setRemoteUsers([])) }, 150)
@@ -149,7 +149,7 @@ export function ChatSearchBox({ variant = 'header', autoFocus = false, className
   const rowsCount = pending ? valueRows.length : filterRows.length
   const showDrop = open && (dateMode || rowsCount > 0 || (!!pending && !dateMode))
 
-  // 목록이 바뀌면 고른 행을 맞춘다(값 제안은 첫 행, 필터 목록은 ↑↓ 전엔 고른 것 없음 — 시안 첫 행 강조는 포커스 그림)
+  // 목록 변경 시 선택 행을 재설정한다(값 제안은 첫 행, 필터 목록은 ↑↓ 입력 전까지 선택 없음 — 시안의 첫 행 강조는 포커스 상태 표현)
   const [prevKey, setPrevKey] = useState('')
   const rowsKey = `${pending}|${rowsCount}|${valueQ}`
   if (rowsKey !== prevKey) { setPrevKey(rowsKey); setActive(pending ? (rowsCount ? 0 : -1) : -1) }
@@ -157,7 +157,7 @@ export function ChatSearchBox({ variant = 'header', autoFocus = false, className
   // ── 동작 ──
   function focusInput() { requestAnimationFrame(() => inputRef.current?.focus()) }
   function pickFilter(k: FilterKey) {
-    // 입력 중이던 "fr" 같은 앞부분은 지운다
+    // 입력 중이던 "fr" 같은 접두부는 제거
     const base = lastWord && filterToken(k).startsWith(lastWord) ? text.slice(0, text.length - lastWord.length) : text
     setSearchText(base)
     if (k === 'pinned') addSearchChip({ key: 'pinned', value: '' })
@@ -182,7 +182,7 @@ export function ChatSearchBox({ variant = 'header', autoFocus = false, className
     return true
   }
   async function submit() {
-    // 다 쓴 "from:a has:link" 글자도 칩으로
+    // 입력 완료된 "from:a has:link" 문자열도 칩으로 변환
     const parsed = parseSearchText(chatSearchStore.getState().text, resolvers())
     for (const c of parsed.chips) addSearchChip(c)
     setSearchText(parsed.text)
@@ -194,7 +194,7 @@ export function ChatSearchBox({ variant = 'header', autoFocus = false, className
   function onChange(v: string) {
     setOpen(true)
     if (pending) {
-      // 값 뒤 빈칸 = 그 값으로 칩(사람·채널은 첫 제안)
+      // 값 뒤 공백 = 해당 값으로 칩 생성(사용자·채널은 첫 제안)
       if (v.endsWith(' ') && v.trim()) {
         if (valueRows[0] && !dateMode) pickValue(valueRows[0].chip)
         else if (!commitRaw(v)) setValueQ(v.trim())
@@ -263,7 +263,7 @@ export function ChatSearchBox({ variant = 'header', autoFocus = false, className
 
   useEffect(() => { if (autoFocus) focusInput() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Ctrl+F / ⌘F(채팅 화면에서만 — 브라우저 찾기 대신) ──
+  // ── Ctrl+F / ⌘F(채팅 화면에서만 — 브라우저 찾기 대체) ──
   useEffect(() => {
     if (mobile) return
     function onKey(e: globalThis.KeyboardEvent) {
@@ -278,7 +278,7 @@ export function ChatSearchBox({ variant = 'header', autoFocus = false, className
     return () => window.removeEventListener('keydown', onKey, true)
   }, [mobile])
 
-  // ── 드롭다운 위치(포털 · 검색칸 오른쪽 끝 아래) ──
+  // ── 드롭다운 위치(포털 · 검색란 오른쪽 끝 아래) ──
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   useLayoutEffect(() => {
     if (mobile || !showDrop) return
@@ -427,7 +427,7 @@ export function ChatSearchBox({ variant = 'header', autoFocus = false, className
             </button>
           )}
         </div>
-        {/* 모바일 필터 칩 줄 — 누르면 그 키로 값 고르기 */}
+        {/* 모바일 필터 칩 행 — 누르면 해당 키로 값 선택 */}
         <div className="flex gap-1.5 overflow-x-auto">
           {MOBILE_FILTER_KEYS.map(k => (
             <button

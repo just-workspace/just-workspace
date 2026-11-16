@@ -1,5 +1,5 @@
 // AI 대화 기본기 2: 답변 버전(◀ n/N ▶·질문 수정), 임시 대화(배너·사이드바·만들기), 프로젝트(카드·구성원 읽기 전용),
-// 메모리 저장 알림 [취소] + 설정 화면 비밀 거부, 첨부(단계·실패 코드), 사이드바 서버 검색. $fetch·fetch·업로드는 가짜.
+// 메모리 저장 알림 [취소] + 설정 화면 비밀 거부, 첨부(단계·실패 코드), 사이드바 서버 검색. $fetch·fetch·업로드는 모의(mock).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -159,7 +159,7 @@ describe('임시 대화', () => {
     await openC1()
     expect(await screen.findByText('급여 규정 질문')).toBeTruthy()
     expect(screen.getByText('창 닫으면 삭제')).toBeTruthy()
-    // 일반 대화 목록엔 임시 대화가 없다
+    // 일반 대화 목록에는 임시 대화 없음
     expect(screen.getAllByText('첫 대화').length).toBeGreaterThan(0)
     // 메시지 없는 대화에서 스위치 켜기
     fireEvent.click(screen.getByRole('switch', { name: '임시 대화' }))
@@ -233,7 +233,7 @@ describe('메모리', () => {
     fireEvent.click(screen.getByRole('button', { name: '취소' }))
     await waitFor(() => expect(api.calls.some(c => c.url === '/api/ai/memory/m1' && c.opts?.method === 'DELETE')).toBe(true))
     expect(await screen.findByText('저장을 취소했습니다')).toBeTruthy()
-    // 방금 보낸 질문에 서버 id 가 달려 수정 단추가 켜진다
+    // 방금 전송한 질문에 서버 id 가 부여되어 수정 버튼이 활성화됨
     expect(screen.getByRole('button', { name: '질문 수정' })).toBeTruthy()
   })
 
@@ -297,12 +297,12 @@ describe('첨부', () => {
     await act(async () => {
       fireEvent.change(input, { target: { files: [new File(['a'], '보안문서.hwp'), new File(['b'], '점검표.md'), big] } })
     })
-    // 칩은 모바일(카드 위)·데스크톱(카드 안) 두 자리에 그려지고 CSS 로 하나만 보인다
+    // 칩은 모바일(카드 위)·데스크톱(카드 안) 두 위치에 렌더링되고 CSS 로 하나만 표시됨
     expect((await screen.findAllByText('암호가 걸려 있어 읽지 못했습니다')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('30MB를 넘어 올리지 못했습니다').length).toBeGreaterThan(0)
     await screen.findAllByText(/읽을 수 있게 변환함/)
     const { aiUploadAttachment } = await import('~/utils/aiUpload')
-    expect((aiUploadAttachment as any).mock.calls.length).toBe(2)  // 큰 파일은 올리지 않는다
+    expect((aiUploadAttachment as any).mock.calls.length).toBe(2)  // 큰 파일은 업로드하지 않음
     fireEvent.change(screen.getByLabelText('메시지'), { target: { value: '비교해 줘' } })
     fireEvent.click(screen.getByRole('button', { name: '보내기' }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())

@@ -35,7 +35,7 @@ describe('brandColor', () => {
     expect(r.light.primary.l).toBeLessThan(r.light.base.l)
     expect(r.light.primary.h).toBe(r.light.base.h)
     expect(r.light.primary.s).toBe(r.light.base.s)
-    // 진한 남색은 라이트에선 그대로, 다크에선 밝힌다
+    // 진한 남색은 라이트에서는 유지, 다크에서는 밝게 조정
     const navy = resolveBrandTheme('#1E3A8A')!
     expect(navy.light.adjusted).toBe(false)
     expect(navy.dark.adjusted).toBe(true)

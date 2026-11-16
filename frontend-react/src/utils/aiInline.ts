@@ -1,7 +1,7 @@
 /**
  * 화면 안 AI(채팅·회의·문서) — API 와 순수 도우미.
- * 서버: backend/app/ai/inline_router.py (/api/ai/inline/*). 결과는 스트리밍이 아니라 한 번에 온다.
- * 모델 이름은 전부 서버 응답에서 온다(여기에 박지 않는다).
+ * 서버: backend/app/ai/inline_router.py (/api/ai/inline/*). 결과는 스트리밍이 아니라 일괄 수신한다.
+ * 모델 이름은 전부 서버 응답에서 수신한다(본 모듈에 하드코딩하지 않음).
  */
 import { $fetch } from '~/lib/api'
 
@@ -11,13 +11,13 @@ export interface AiInlineStatus {
   available: boolean
   reason: AiInlineReason
   external: boolean
-  /** 외부 AI 로 보낼 때 개인정보를 가리는지 */
+  /** 외부 AI 로 전송 시 개인정보 마스킹 여부 */
   mask_pii: boolean
   model: string
   is_admin: boolean
 }
 
-/** 모든 결과에 붙는 공통 꼬리 */
+/** 모든 결과에 포함되는 공통 메타 정보 */
 export interface AiInlineMeta {
   model: string
   ai_generated: boolean
@@ -66,7 +66,7 @@ export interface TaskCreateResult {
 
 export interface AiInlineError { code: string; message: string }
 
-/** 사용자 시간대 — 서버가 메일·채팅 시각을 이 시간대로 모델에 넘긴다 */
+/** 사용자 시간대 — 서버가 메일·채팅 시각을 이 시간대 기준으로 모델에 전달한다 */
 export function userTz(): string | undefined {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined } catch { return undefined }
 }
@@ -99,7 +99,7 @@ export function createInlineTasks(body: { source: 'mail' | 'meeting' | 'chat'; r
   return $fetch<TaskCreateResult>('/api/ai/inline/tasks', { method: 'POST', body })
 }
 
-/** FetchError → {code, message}. 서버 detail 이 {code,message} 거나 문자열이거나, 아예 없을 때(네트워크) */
+/** FetchError → {code, message}. 서버 detail 이 {code,message} 이거나 문자열이거나, 부재(네트워크)인 경우 */
 export function inlineError(e: unknown, fallback: string): AiInlineError {
   const d = (e as { data?: { detail?: unknown } })?.data?.detail
   if (d && typeof d === 'object' && 'message' in (d as Record<string, unknown>)) {
@@ -110,7 +110,7 @@ export function inlineError(e: unknown, fallback: string): AiInlineError {
   return { code: 'network', message: fallback }
 }
 
-/** 날짜 "2026-11-07" → "11-07(금)" (요일은 로캘). 형식이 아니면 그대로 */
+/** 날짜 "2026-11-07" → "11-07(금)" (요일은 로캘). 형식 불일치 시 원문 반환 */
 export function shortDue(iso: string | null | undefined, locale?: string): string {
   if (!iso) return ''
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
@@ -129,7 +129,7 @@ export function hhmm(iso: string | null | undefined): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-/** 한 번 누른 등록이 재시도돼도 두 번 만들지 않게(서버 멱등 키) */
+/** 1회 등록 동작이 재시도되어도 중복 생성되지 않도록 하는 키(서버 멱등 키) */
 export function idemKey(prefix: string, title: string): string {
   const rnd = Math.random().toString(36).slice(2, 10)
   let h = 0
@@ -138,22 +138,22 @@ export function idemKey(prefix: string, title: string): string {
 }
 
 /**
- * 교정 제안을 글에서 찾는다 — 같은 구절이 여러 번이면 from 이후 첫 자리.
- * 편집기(ProseMirror)는 텍스트 오프셋을 문서 위치로 바꿔 쓴다.
+ * 교정 제안을 본문에서 탐색한다 — 동일 구절이 여러 번 나오면 from 이후 첫 위치.
+ * 편집기(ProseMirror)는 텍스트 오프셋을 문서 위치로 변환하여 사용한다.
  */
 export function findOriginal(text: string, original: string, from = 0): number {
   if (!original) return -1
   return text.indexOf(original, from)
 }
 
-/** 등록한 할일 되돌리기 — 쓰기 요청마다 /api/approvals/{id}/undo(실행 후 10분 안) */
+/** 등록한 할일 되돌리기 — 쓰기 요청마다 /api/approvals/{id}/undo 호출(실행 후 10분 이내) */
 export async function undoInlineTasks(requestIds: string[]): Promise<number> {
   let n = 0
   for (const id of requestIds) {
     try {
       await $fetch(`/api/approvals/${encodeURIComponent(id)}/undo`, { method: 'POST' })
       n++
-    } catch { /* 시간 지남 등 — 남은 것만 되돌린다 */ }
+    } catch { /* 시간 경과 등 — 나머지 항목만 되돌린다 */ }
   }
   return n
 }

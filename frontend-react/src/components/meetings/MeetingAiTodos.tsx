@@ -1,11 +1,11 @@
 /**
- * 회의 끝난 뒤 요약 → 할 일 — 회의 종료 화면 오른쪽(데스크톱 aside)·버튼 줄 아래(모바일) 카드.
- *  머리 = 🎥 "회의가 끝났습니다 — {제목}" + 시각(mono) / 진행 줄 = 요약 → 할 일 뽑기 → 골라서 등록(끝난 단계 success ✓, 지금 단계 굵게) /
+ * 회의 종료 후 요약 → 할 일 — 회의 종료 화면 오른쪽(데스크톱 aside)·버튼 줄 아래(모바일) 카드.
+ *  머리 = 카메라 아이콘 + "회의가 끝났습니다 — {제목}" + 시각(mono) / 진행 줄 = 요약 → 할 일 뽑기 → 골라서 등록(완료 단계 success 체크 표시, 현재 단계 굵게) /
  *  본문 = "요약 · 참석 n명 · 회의 채팅 기준" 목록 + "뽑은 할 일 — 체크한 것만 할일에 등록" 체크박스(담당 · 기한 · 배정 알림) /
  *  꼬리 = "담당자가 다른 사람이면 그 사람에게 ‘할일 배정’ 알림이 갑니다." + [할일에 n개 등록].
- *  ※ 받아쓰기(녹취)가 없어 "회의 채팅 기준"으로 — 회의 채팅·채널 메시지·안건으로 요약.
- *  ※ AI 를 회의마다 자동으로 부르지 않는다(비용) — 처음엔 [요약·할 일 뽑기] 버튼, 누르면 진행 줄이 움직인다.
- *  회의 안 채팅(채널 없는 회의)은 나가면 지워지므로 이 모듈이 마지막 채팅을 붙잡아 둔다(lastMeetingChat).
+ *  참고: 받아쓰기(녹취)가 없어 "회의 채팅 기준"으로 처리 — 회의 채팅·채널 메시지·안건으로 요약.
+ *  참고: AI 는 회의마다 자동 호출하지 않음(비용) — 초기에는 [요약·할 일 뽑기] 버튼을 표시하고, 클릭 시 진행 줄이 진행됨.
+ *  회의 내 채팅(채널 없는 회의)은 퇴장 시 삭제되므로 본 모듈이 마지막 채팅을 보존함(lastMeetingChat).
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -20,7 +20,7 @@ import { AiInlineButton, AiInlineErrorLine, AiInlineFoot, AiInlineLoading, AiInl
 import { TodoRegisteredLine, useTodoRegister } from '~/components/aiInline/useTodoRegister'
 import { inlineError, shortDue, summarizeMeeting, type MeetingSummaryResult, type MeetingTodo } from '~/utils/aiInline'
 
-// ─── 회의 안 채팅 붙잡아 두기(나가면 store 가 비운다) ───
+// ─── 회의 내 채팅 보존(퇴장 시 store 가 초기화함) ───
 let lastChat: { room: string | null; lines: { name: string; text: string }[] } = { room: null, lines: [] }
 meetingsStore.subscribe((s, p) => {
   if (s.currentRoomName && s.currentRoomName !== lastChat.room) lastChat = { room: s.currentRoomName, lines: [] }
@@ -28,7 +28,7 @@ meetingsStore.subscribe((s, p) => {
     lastChat = { room: s.currentRoomName || lastChat.room, lines: s.chatMessages.map(m => ({ name: m.sender, text: m.text })) }
   }
 })
-/** 이 방에서 마지막으로 본 회의 안 채팅 */
+/** 해당 방에서 마지막으로 확인된 회의 내 채팅 */
 export function lastMeetingChat(room: string) { return lastChat.room === room ? lastChat.lines : [] }
 /** 테스트용 */
 export function _setLastMeetingChat(room: string, lines: { name: string; text: string }[]) { lastChat = { room, lines } }
@@ -38,7 +38,7 @@ export interface MeetingAiTodosProps {
   title: string
   /** "10:00–10:52" */
   timeRange?: string
-  /** 이 화면이 들어간 시각(서버에 시작 시각이 없을 때 채널 메시지 범위) */
+  /** 본 화면 진입 시각(서버에 시작 시각이 없을 때 채널 메시지 범위로 사용) */
   startedAt?: number
   className?: string
 }

@@ -1,8 +1,8 @@
 /**
  * 회의 녹화 파일 목록(최소 진입점) — 지난 회의 행 ⋮ "녹화 파일" · 회의 결과 화면 [녹화 파일].
- *  GET /api/meetings/recordings?room=<방 이름> (서버가 볼 수 있는 것만 거른다: 호스트·초대 대상·채널 멤버·관리자)
+ *  GET /api/meetings/recordings?room=<방 이름> (서버가 열람 가능한 항목만 필터링한다: 호스트·초대 대상·채널 멤버·관리자)
  *  행: 녹화 시각(파일 이름의 YYYYmmdd-HHMMSS) · 크기 · [내려받기](GET /api/meetings/recordings/{파일}, 쿠키 인증 링크).
- *  비었으면 안내 한 줄. 키트 UiModal(440) + 행은 목록 카드와 같은 border 행.
+ *  목록이 비어 있으면 안내 한 줄을 표시한다. 키트 UiModal(440) + 행은 목록 카드와 동일한 border 행.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -23,7 +23,7 @@ export interface MeetingsRecordingsModalProps {
   onClose: () => void
 }
 
-/** 파일 이름 `<방>_<YYYYmmdd-HHMMSS>.mp4` → "2026-10-18 21:05". 모양이 다르면 수정 시각(mtime) */
+/** 파일 이름 `<방>_<YYYYmmdd-HHMMSS>.mp4` → "2026-10-18 21:05". 형식 불일치 시 수정 시각(mtime) */
 export function recordingWhen(item: MeetingRecordingItem): string {
   const m = /_(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})\d{2}\.\w+$/.exec(item.filename)
   if (m) return `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}`

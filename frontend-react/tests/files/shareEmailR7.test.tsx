@@ -1,4 +1,4 @@
-// 공유 링크를 이메일로 보내기: 주소 규칙(lib/files) · 칩 입력 · 공유 모달(새 링크 + 보내기, 기존 링크 ⋮ 보내기·보낸 기록). $fetch 는 가짜.
+// 공유 링크 이메일 전송: 주소 규칙(lib/files) · 칩 입력 · 공유 모달(새 링크 + 보내기, 기존 링크 ⋮ 보내기·보낸 기록). $fetch 는 모의(mock).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -86,7 +86,7 @@ describe('공유 모달 — 이메일로 보내기', () => {
     fireEvent.change(input, { target: { value: 'nope' } })
     fireEvent.keyDown(input, { key: ',' })
     expect(await screen.findByText(t('files.shareEmail.badEmail', { email: 'nope' }))).toBeTruthy()
-    // 형식 오류 글자가 남아 있으면 보내기 막힘
+    // 형식 오류 문자열이 남아 있으면 보내기 차단
     const btn = screen.getByRole('button', { name: t('files.shareEmail.createSend', { n: 1 }) })
     expect((btn as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(input, { target: { value: 'bob@corp.test' } })
@@ -95,7 +95,7 @@ describe('공유 모달 — 이메일로 보내기', () => {
     expect(screen.getAllByText(t('files.shareEmail.external')).length).toBe(1)
     expect(screen.getByText('Bob')).toBeTruthy()
 
-    // 비밀번호 켜면 "메일에 안 들어감" 안내
+    // 비밀번호 활성화 시 "메일에 안 들어감" 안내 표시
     fireEvent.click(screen.getByRole('switch', { name: t('files.shareModal.password') }))
     fireEvent.change(document.querySelector('input[autocomplete="new-password"]')!, { target: { value: 'pw1234' } })
     expect(screen.getByText(t('files.shareEmail.passwordNote'))).toBeTruthy()

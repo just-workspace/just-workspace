@@ -1,17 +1,17 @@
 /**
  * HiresVoiceTransport — 'hires' 단계(데스크톱 앱 전용)의 VoiceTransport.
  *
- * 구성(합성): LosslessVoiceTransport(= LiveKit presence + 브라우저 무손실 릴레이) 위에 네이티브 엔진(window.jwNativeAudio)을 얹는다.
- *  · LiveKit 방에는 그대로 들어간다 → presence(사이드바·/voice/state)가 다른 단계와 같고, 음성·음악 참가자도 나를 듣는다(Opus 호환 스트림).
- *  · 하이레조가 켜지면 소리는 네이티브 엔진(메인 프로세스)이 WASAPI exclusive 장치 ↔ 릴레이로 직접 보낸다. 브라우저 무손실 세션은 돌지 않는다.
- *    릴레이 피어(identity)가 보이면 그 사람의 LiveKit 트랙은 꺼서(setParticipantAudioMuted) 두 번 들리지 않게 한다 — 무손실 어댑터와 같은 규칙.
- *  · 처음 켤 때 확인창(alertdialog, "다음부터 묻지 않기") — useVoice.confirmHiresExclusive 로 띄운다.
- *  · 장치 독점 실패(다른 앱 점유·정책·포맷) → useVoice.reportExclusiveError({app, device}) 로 danger 띠, 그동안 **무손실 24/48(브라우저)** 로 보낸다
- *    (answers "장치 독점 실패"). [다시 시도] = useVoice.retryHires → setSend(tier 'hires') 가 다시 들어온다.
- *  · 사용자가 확인창에서 [취소]하면 띠 없이 무손실로 보낸다.
+ * 구성(합성): LosslessVoiceTransport(= LiveKit presence + 브라우저 무손실 릴레이) 위에 네이티브 엔진(window.jwNativeAudio)을 결합한다.
+ *  · LiveKit 방에는 그대로 입장한다 → presence(사이드바·/voice/state)가 다른 단계와 동일하며, 음성·음악 참가자도 본인의 음성을 수신한다(Opus 호환 스트림).
+ *  · 하이레조가 활성화되면 오디오는 네이티브 엔진(메인 프로세스)이 WASAPI exclusive 장치 ↔ 릴레이로 직접 전달한다. 브라우저 무손실 세션은 동작하지 않는다.
+ *    릴레이 피어(identity)가 확인되면 해당 참가자의 LiveKit 트랙을 음소거하여(setParticipantAudioMuted) 중복 재생을 방지한다 — 무손실 어댑터와 동일한 규칙.
+ *  · 최초 활성화 시 확인창(alertdialog, "다음부터 묻지 않기") — useVoice.confirmHiresExclusive 로 표시한다.
+ *  · 장치 독점 실패(다른 앱 점유·정책·포맷) → useVoice.reportExclusiveError({app, device}) 로 danger 띠 표시, 그동안 **무손실 24/48(브라우저)** 로 송신한다
+ *    (answers "장치 독점 실패"). [다시 시도] = useVoice.retryHires → setSend(tier 'hires') 가 재호출된다.
+ *  · 사용자가 확인창에서 [취소]하면 띠 없이 무손실로 송신한다.
  *
- * UI 훅은 setHiresUiHooks() 로 바꿀 수 있다(테스트·다른 셸). 기본은 ~/composables/useVoice 를 늦게 import 해 confirmHiresExclusive /
- * reportExclusiveError 가 있으면 쓰고, 없으면(아직 안 들어온 빌드) 바로 켠다/콘솔에 남긴다.
+ * UI 훅은 setHiresUiHooks() 로 교체할 수 있다(테스트·다른 셸). 기본 동작은 ~/composables/useVoice 를 지연 import 하여 confirmHiresExclusive /
+ * reportExclusiveError 가 있으면 사용하고, 없으면(아직 미포함 빌드) 즉시 활성화한다/콘솔에 기록한다.
  */
 import { LosslessVoiceTransport, channelIdFromLiveKitToken, requestRelayGrant } from '~/lib/lossless'
 import type { RelayGrant } from '~/lib/lossless/types'
@@ -23,15 +23,15 @@ import type {
 import { nativeAudioBridge, type HiresDevice, type HiresEvent, type HiresOpenResult, type HiresPeer, type HiresStats, type JwNativeAudio } from './types'
 
 export interface HiresUiHooks {
-  /** 장치 독점 확인(처음 한 번). false 면 사용자가 취소 */
+  /** 장치 독점 확인(최초 1회). false 면 사용자가 취소 */
   confirmExclusive(deviceName: string, formatLine: string): Promise<boolean>
-  /** 독점 실패 띠. null 이면 내린다 */
+  /** 독점 실패 띠. null 이면 해제한다 */
   reportExclusiveError(err: { app: string; device: string } | null): void
 }
 
 let uiHooks: HiresUiHooks | null = null
 
-/** 셸(useVoice)이 아닌 곳에서 쓸 때 훅을 바꾼다. null 이면 기본(useVoice 늦은 import) */
+/** 셸(useVoice) 외의 위치에서 사용할 때 훅을 교체한다. null 이면 기본(useVoice 지연 import) */
 export function setHiresUiHooks(h: HiresUiHooks | null): void {
   uiHooks = h
 }
@@ -50,14 +50,14 @@ async function defaultHooks(): Promise<HiresUiHooks> {
   }
 }
 
-/** 확인창·증명 패널에 쓰는 한 줄: 'PCM 32/192 · 비트퍼펙트 · 12.3 Mbps' (비트레이트는 payload 기준 rate × bits × ch) */
+/** 확인창·증명 패널에 사용하는 한 줄: 'PCM 32/192 · 비트퍼펙트 · 12.3 Mbps' (비트레이트는 payload 기준 rate × bits × ch) */
 export function hiresFormatLine(f: { label: string; rate: number; bits: number; channels: number; bitPerfect: boolean; exclusive: boolean }): string {
   const t = (k: string, a?: Record<string, unknown>) => i18n.t(k, a)
   const quality = f.bitPerfect ? t('chat.voice.hiresEngine.bitPerfect') : f.exclusive ? t('chat.voice.hiresEngine.exclusive') : t('chat.voice.hiresEngine.shared')
   return t('chat.voice.hiresEngine.formatLine', { format: f.label, quality, bitrate: formatBitrate(f.rate * f.bits * f.channels) })
 }
 
-/** 장치 probe 로 "요청 이하에서 가장 좋은" exclusive 포맷을 고른다. probe 가 비면 요청 그대로 */
+/** 장치 probe 로 "요청 이하에서 가장 좋은" exclusive 포맷을 선택한다. probe 결과가 비어 있으면 요청값 그대로 */
 export function pickHiresRequest(dev: HiresDevice | null, want: { rate: number; bits: 16 | 24 | 32; channels: 1 | 2 }): { rate: number; bits: 16 | 24 | 32; channels: 1 | 2; label: string } {
   let rate = want.rate
   let bits = want.bits
@@ -88,7 +88,7 @@ export class HiresVoiceTransport implements VoiceTransport {
   private levels: VoiceLevels = { left: -100, right: -100 }
   private levelTimer: ReturnType<typeof setInterval> | null = null
   private offs: Array<() => void> = []
-  /** 릴레이 피어 → LiveKit identity(그 사람의 Opus 트랙을 꺼 둔다) */
+  /** 릴레이 피어 → LiveKit identity(해당 참가자의 Opus 트랙을 음소거 상태로 유지) */
   private relayPeers = new Map<number, string>()
   private listeners = { state: new Set<VoiceTransportEvents['state']>(), peers: new Set<VoiceTransportEvents['peers']>(), ended: new Set<VoiceTransportEvents['ended']>() }
 
@@ -121,7 +121,7 @@ export class HiresVoiceTransport implements VoiceTransport {
     this.muted = params.muted
     this.identity = params.identity
     this.channelId = params.channelId ?? channelIdFromLiveKitToken(params.token)
-    // LiveKit presence + Opus 호환(음악 레시피)만. 브라우저 무손실 릴레이는 하이레조가 실패했을 때만 켠다
+    // LiveKit presence + Opus 호환(음악 레시피)만 사용. 브라우저 무손실 릴레이는 하이레조 실패 시에만 활성화한다
     await this.inner.join({ ...params, send: { ...params.send, tier: 'music' } })
     await this.startHires()
   }
@@ -133,7 +133,7 @@ export class HiresVoiceTransport implements VoiceTransport {
     this.emit('peers', this.peers())
   }
 
-  /** 네이티브 엔진으로 장치 독점 → 릴레이 접속. 실패하면 띠 + 무손실 */
+  /** 네이티브 엔진으로 장치 독점 → 릴레이 접속. 실패 시 띠 표시 + 무손실 */
   private async startHires(): Promise<void> {
     if (this.opening || this.hiresUp) return
     this.opening = true
@@ -281,7 +281,7 @@ export class HiresVoiceTransport implements VoiceTransport {
     const prev = this.cfg
     this.cfg = cfg
     if (cfg.tier !== 'hires') {
-      // 다른 단계로 — 네이티브만 내려놓는다(useVoice 는 tiers 가 다르면 전송을 통째로 갈아탄다)
+      // 다른 단계로 전환 — 네이티브만 해제한다(useVoice 는 tiers 가 상이하면 전송 전체를 교체한다)
       await this.stopHires()
       await this.inner.setSend(cfg)
       return
@@ -292,7 +292,7 @@ export class HiresVoiceTransport implements VoiceTransport {
       await this.inner.setSend({ ...cfg, tier: 'music' })
       return
     }
-    // [다시 시도](retryHires) 또는 아직 안 켜진 상태 → 다시 시도. 브라우저 무손실이 돌고 있으면 내린다
+    // [다시 시도](retryHires) 또는 아직 미활성 상태 → 재시도. 브라우저 무손실이 동작 중이면 중지한다
     await this.inner.setSend({ ...cfg, tier: 'music' })
     await this.startHires()
   }

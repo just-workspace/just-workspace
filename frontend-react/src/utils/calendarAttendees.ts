@@ -31,8 +31,8 @@ export function attendeeInitial(name: string | null | undefined, email = ''): st
 }
 
 /**
- * [start, end) 와 겹치는 첫 바쁜 구간(겹친 부분만 잘라서). 없으면 null.
- * ignore 와 정확히 같은 구간(수정 중인 이 일정 자신)은 건너뛴다.
+ * [start, end) 와 겹치는 첫 바쁜 구간(겹친 부분만 잘라 반환). 없으면 null.
+ * ignore 와 정확히 일치하는 구간(수정 중인 해당 일정 자체)은 건너뛴다.
  */
 export function firstConflict(
   busy: readonly BusyInterval[],
@@ -58,7 +58,7 @@ export function browserTimeZone(): string {
   return deviceTimeZone()
 }
 
-/** 고를 수 있는 IANA 시간대 목록(지원 안 하는 브라우저면 몇 개만) */
+/** 선택 가능한 IANA 시간대 목록(미지원 브라우저에서는 일부만 제공) */
 export function timeZoneList(): string[] {
   try {
     const fn = (Intl as any).supportedValuesOf
@@ -67,12 +67,12 @@ export function timeZoneList(): string[] {
   return ['UTC', 'Asia/Seoul', 'Asia/Tokyo', 'Asia/Singapore', 'Europe/London', 'Europe/Berlin', 'America/New_York', 'America/Los_Angeles']
 }
 
-/** 그 순간 tz 의 UTC 오프셋(분, 동쪽 +). tz 를 모르면 0 — 계산은 utils/calTz 하나로 */
+/** 그 순간 tz 의 UTC 오프셋(분, 동쪽 +). tz 를 알 수 없으면 0 — 계산은 utils/calTz 로 일원화 */
 export function tzOffsetMinutes(tz: string, at: Date): number {
   try { return zoneOffsetMs(at.getTime(), tz) / 60000 } catch { return 0 }
 }
 
-/** 'GMT+9' 꼴 표기(tz 기준) */
+/** 'GMT+9' 형식 표기(tz 기준) */
 export function tzGmtLabel(tz: string, at = new Date()): string {
   const off = tzOffsetMinutes(tz, at)
   const sign = off >= 0 ? '+' : '-'
@@ -81,8 +81,8 @@ export function tzGmtLabel(tz: string, at = new Date()): string {
 }
 
 /**
- * tz 의 벽시계 'YYYY-MM-DD' + 'HH:MM' → 실제 순간(Date). 형식이 틀리면 null.
- * 서머타임: 없는 시각은 앞으로, 두 번 있는 시각은 앞의 것(utils/calTz zDate).
+ * tz 의 벽시계 'YYYY-MM-DD' + 'HH:MM' → 실제 순간(Date). 형식 불일치 시 null.
+ * 서머타임: 존재하지 않는 시각은 이후 시각으로, 중복되는 시각은 앞선 쪽(utils/calTz zDate).
  */
 export function zonedToDate(date: string, time: string, tz: string): Date | null {
   try { return zFromInputs(date, time, tz) } catch { return null }

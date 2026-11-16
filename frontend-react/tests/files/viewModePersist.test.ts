@@ -1,4 +1,4 @@
-// 파일 그리드/목록 보기는 기기에 기억된다 — 예전엔 새로고침하면 목록으로 돌아갔다
+// 파일 그리드/목록 보기는 기기에 저장됨 — 기존에는 새로고침 시 목록으로 복귀했음
 import { describe, it, expect } from 'vitest'
 import { filesStore, setViewMode, _resetFilesStore } from '~/composables/useFiles'
 

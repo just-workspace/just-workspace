@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-// 순수 함수만 바로 가져온다
+// 순수 함수만 직접 import
 const { fromServer, toServer } = await import('~/composables/useUserPrefs')
 
 describe('개인 설정 서버 키 변환', () => {

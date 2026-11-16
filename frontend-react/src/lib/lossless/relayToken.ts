@@ -1,6 +1,6 @@
 /**
  * 릴레이 입장 토큰 — 백엔드 `POST /api/chat/channels/{id}/voice/relay-token`.
- * 503 이면 릴레이 미설정/다운 → 호출자는 음악 티어로 내려간다(RelayUnavailable).
+ * 503 이면 릴레이 미설정/다운 → 호출자는 음악 티어로 강등한다(RelayUnavailable).
  */
 import { $fetch, errorStatus } from '~/lib/api'
 import { wsUrl } from '~/lib/runtimeConfig'
@@ -18,7 +18,7 @@ export async function requestRelayGrant(channelId: string, identity?: string): P
     const g = await $fetch<RelayGrant>(`/api/chat/channels/${encodeURIComponent(channelId)}/voice/relay-token`, {
       method: 'POST', body: identity ? { identity } : {},
     })
-    // 번들 앱(apiBase)은 현재 창이 아니라 API 호스트로 WS 를 열어야 한다 — 백엔드가 준 절대 URL 대신 경로로 다시 만든다
+    // 번들 앱(apiBase)은 현재 창이 아닌 API 호스트로 WS 를 연결해야 한다 — 백엔드가 반환한 절대 URL 대신 경로로 재구성한다
     return { ...g, ws_url: wsUrl(g.ws_path || '/audiorelay/ws') }
   } catch (e) {
     if (errorStatus(e) === 503) throw new RelayUnavailable()

@@ -41,7 +41,7 @@ test('scancode table: Set 1 codes in range, extended keys flagged', () => {
   assert.deepEqual(P.SCANCODES.Numpad4, [0x4b, false]);
   assert.deepEqual(P.SCANCODES.F12, [0x58, false]);
   assert.deepEqual(P.SCANCODES.MetaLeft, [0x5b, true]);
-  // 확장 여부까지 같은 (스캔코드, ext) 쌍은 한/영(=AltRight)·한자(=ControlRight) 말고는 없어야 한다
+  // 확장 여부까지 동일한 (스캔코드, ext) 쌍은 한/영(=AltRight)·한자(=ControlRight) 외에는 없어야 한다
   const seen = new Map();
   for (const [c, v] of Object.entries(P.SCANCODES)) {
     const k = v.join(':');
@@ -170,7 +170,7 @@ test('quality: 보는 창이 작을 때만 줄이고, 선명 모드는 줄이지
   assert.equal(Q.downscale(cap, null), 1);
   assert.equal(Q.downscale(cap, { w: 2560, h: 1440 }), 1);
   assert.equal(Q.downscale(cap, { w: 1280, h: 720 }), 2);
-  assert.equal(Q.downscale(cap, { w: 100, h: 100 }), 4); // 4배 넘게는 안 줄인다
+  assert.equal(Q.downscale(cap, { w: 100, h: 100 }), 4); // 4배를 초과해 축소하지 않는다
   assert.equal(Q.qualityParams('sharp', cap, { w: 1280, h: 720 }).scale, 1);
   const s = Q.qualityParams('smooth', cap, { w: 1280, h: 720 });
   assert.equal(s.fps, 60);

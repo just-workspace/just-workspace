@@ -1,11 +1,11 @@
 /**
- * 관리 분석 카드의 표시 형식 도우미 — 카드마다 같은 함수를 따로 두지 않고 한 곳에 모았다.
+ * 관리 분석 카드의 표시 형식 유틸리티 — 카드별 중복 정의를 피하고 한 곳에 통합.
  */
 type T = (key: string, params?: Record<string, unknown>) => string
 
 /**
- * 상대 시각. short=true 면 "방금"·"n분 전" 두 단계만(AdminAnalyticsActiveUsers),
- * 아니면 분 → 시간 → 일(RecentLogins·GitActivity). 빈 값은 '-'.
+ * 상대 시각. short=true 이면 "방금"·"n분 전" 두 단계만(AdminAnalyticsActiveUsers),
+ * 그 외에는 분 → 시간 → 일(RecentLogins·GitActivity). 빈 값은 '-'.
  */
 export function analyticsTimeAgo(iso: string, t: T, short = false, now = Date.now()): string {
   if (!iso) return '-'
@@ -18,7 +18,7 @@ export function analyticsTimeAgo(iso: string, t: T, short = false, now = Date.no
   return t('common.daysAgo', { n: Math.floor(hours / 24) })
 }
 
-/** IPv4 는 앞 두 칸만(a.b.x.x), 그 밖은 10자 넘으면 자르고 '...' */
+/** IPv4 는 앞 두 칸만 표시(a.b.x.x), 그 외는 10자 초과 시 절단 후 '...' */
 export function maskIp(ip: string): string {
   const parts = ip.split('.')
   if (parts.length === 4) return `${parts[0]}.${parts[1]}.x.x`

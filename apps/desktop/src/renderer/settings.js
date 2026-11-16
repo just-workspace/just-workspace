@@ -1,8 +1,8 @@
 /*
- * 설정 창 — 지금은 동기화 패널만 실제로 동작한다.
+ * 설정 창 — 현재는 동기화 패널만 실제로 동작한다.
  *
- * 파일 전송 엔진이 아직 없다. 그래서 "최신 상태" 같은 말을 지어내지 않고,
- * 폴더를 고르지 않았으면 고르지 않았다고, 엔진이 아직이면 아직이라고 쓴다.
+ * 파일 전송 엔진은 아직 없다. 따라서 "최신 상태" 와 같은 문구를 임의로 표시하지 않으며,
+ * 폴더 미선택 시에는 미선택으로, 엔진 미구현 시에는 미구현으로 표기한다.
  */
 'use strict';
 
@@ -35,7 +35,7 @@ const SECTIONS = [
   },
 ];
 
-// 원격 접속 영역 — 서버에 원격 데스크톱 플러그인이 있을 때만 메뉴에 넣는다(start 에서)
+// 원격 접속 영역 — 서버에 원격 데스크톱 플러그인이 있을 때만 메뉴에 추가한다(start 에서)
 const REMOTE_SECTION = {
   id: 'remote', label: '원격 접속',
   icon: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
@@ -62,9 +62,9 @@ const STATE_COLOR = {
 
 let current = 'sync';
 let settings = null;
-/** app:info 결과. "정보" 패널이 앱 버전·서버 주소를 적는 데 쓴다. */
+/** app:info 결과. "정보" 패널에서 앱 버전·서버 주소 표기에 사용한다. */
 let appInfo = null;
-/** 서버 확인 결과(버전·기능). 느릴 수 있어 비동기로 채우고, 오면 패널을 다시 그린다. */
+/** 서버 확인 결과(버전·기능). 지연될 수 있으므로 비동기로 채우고, 수신 시 패널을 다시 그린다. */
 let serverCheck = null;
 
 function fmtBytes(n) {
@@ -181,8 +181,8 @@ function renderPanel() {
   $('panel-soon').hidden = isSync || isRemote;
   if (isRemote) { renderRemote(); void renderRemoteLog(); }
   if (current === 'about') {
-    // 사이트별 빌드라 앱/서버 버전이 어긋나는 게 일상이다. 문의 때 이 줄 하나로 끝나게
-    // 둘을 나란히 적는다. 옛 서버(capabilities 없음)면 서버 버전은 '—'.
+    // 사이트별 빌드이므로 앱/서버 버전 불일치가 빈번하다. 문의 시 이 한 줄로 확인할 수 있도록
+    // 둘을 나란히 표기한다. 구버전 서버(capabilities 없음)면 서버 버전은 '—'.
     const host = appInfo ? appInfo.serverUrl.replace(/^https?:\/\//, '') : '—';
     const ver = appInfo ? `v${appInfo.version}` : '—';
     const sver = serverCheck ? (serverCheck.version ? `v${serverCheck.version}` : '—') : '확인 중…';
@@ -236,7 +236,7 @@ function renderStatus() {
       '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--icon-muted)" ' +
       'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
       '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
-    // 한 번이라도 돈 적이 있으면 최신, 아니면 아직 시작 전.
+    // 1회 이상 동기화된 이력이 있으면 최신, 없으면 시작 전.
     const everSynced = folders.some((f) => f.state === 'up_to_date' || f.bytes !== null);
     $('status-title').textContent = everSynced ? '최신 상태' : '아직 시작하지 않음';
   }
@@ -277,7 +277,7 @@ function renderRows() {
     const remote = document.createElement('span');
     remote.className = 'mono';
     remote.textContent = f.remotePath;
-    // 로컬 경로는 툴팁으로. 열이 넷뿐이라 둘 다 보여줄 자리가 없다.
+    // 로컬 경로는 툴팁으로 표시한다. 열이 넷뿐이므로 둘 다 표시할 공간이 없다.
     remote.title = `로컬: ${f.localPath}`;
 
     const size = document.createElement('span');
@@ -354,8 +354,8 @@ $('btn-sync-now').addEventListener('click', async () => {
   }
 });
 
-// 엔진이 파일 하나를 지날 때마다 알려준다. 상태 카드만 갱신하고 표는 건드리지
-// 않는다 — 매 파일마다 표를 다시 그리면 스크롤이 튄다.
+// 엔진이 파일 하나를 처리할 때마다 통지한다. 상태 카드만 갱신하고 표는 변경하지
+// 않는다 — 파일마다 표를 다시 그리면 스크롤 위치가 흔들린다.
 window.jw.sync.onProgress((p) => {
   if (!settings) return;
   const f = settings.folders.find((x) => x.id === p.folderId);
@@ -408,7 +408,7 @@ async function saveName() {
 }
 $('rd-name-save').addEventListener('click', () => void saveName());
 $('rd-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') void saveName(); });
-// 등록 해지는 한 번 더 묻는다(되돌릴 수 없음 — 키가 폐기된다)
+// 등록 해지는 재확인을 거친다(복구 불가 — 키가 폐기된다)
 $('rd-unreg').addEventListener('click', () => {
   $('rd-unreg').hidden = true;
   $('rd-confirm').hidden = false;
@@ -447,7 +447,7 @@ async function start() {
     if (current === 'about') renderPanel();
   });
   if (info.platform === 'darwin') document.documentElement.classList.add('is-mac');
-  // 자동 시작 문구는 플랫폼마다 부르는 이름이 다르다.
+  // 자동 시작 문구는 플랫폼마다 명칭이 다르다.
   $('opt-startup-label').textContent =
     info.platform === 'win32'
       ? 'Windows 시작 시 동기화 자동 시작'

@@ -1,15 +1,15 @@
 /**
- * i18n — vue-i18n 과 같은 사용법을 주는 어댑터. 엔진은 i18next(react-i18next) 를 쓰되
- * 메시지 해석은 vue-i18n 문법(compile.ts)으로 한다.
+ * i18n — vue-i18n 과 동일한 사용법을 제공하는 어댑터. 엔진은 i18next(react-i18next) 를 사용하되
+ * 메시지 해석은 vue-i18n 문법(compile.ts)으로 수행한다.
  *
  * 사용법(컴포넌트):  const { t, te, tm, rt, locale, locales, setLocale } = useI18n()
- * 컴포넌트 밖:  import { i18n } from '~/i18n';  i18n.t('key')
+ * 컴포넌트 외부:  import { i18n } from '~/i18n';  i18n.t('key')
  *
- * t 호출 형태(vue-i18n 과 같음):
+ * t 호출 형태(vue-i18n 과 동일):
  *   t(key) · t(key, { name }) · t(key, count) · t(key, count, { name }) · t(key, { name }, count) · t(key, [a, b]) · t(key, 'default')
  *
- * 언어 결정: 쿠키 `i18n_locale` → 없으면 브라우저 언어(ko/en) → 없으면 ko. 결정값을 쿠키에 남긴다.
- * 메시지 파일은 언어별로 지연 로드한다(첫 화면 전에 현재 언어만 await).
+ * 언어 결정: 쿠키 `i18n_locale` → 없으면 브라우저 언어(ko/en) → 없으면 ko. 결정값은 쿠키에 기록한다.
+ * 메시지 파일은 언어별로 지연 로드한다(첫 화면 이전에 현재 언어만 await).
  * 메시지 원본: src/i18n/locales/*.json.
  */
 import i18next from 'i18next'
@@ -67,14 +67,14 @@ async function ensureMessages(code: string) {
   if (i18next.isInitialized) i18next.addResourceBundle(code, 'translation', mod.default, true, true)
 }
 
-/** 테스트에서 메시지를 직접 넣을 때 */
+/** 테스트에서 메시지를 직접 주입할 때 사용 */
 export function setMessages(code: string, msgs: Messages) {
   messages[code] = msgs
   if (i18next.isInitialized) i18next.addResourceBundle(code, 'translation', msgs, true, true)
 }
 
 let initPromise: Promise<void> | null = null
-/** 앱 시작 시 한 번(main.tsx). 현재 언어 메시지를 받은 뒤 끝난다. */
+/** 앱 시작 시 1회 호출(main.tsx). 현재 언어 메시지 수신 후 완료. */
 export function initI18n(code = detectLocale()): Promise<void> {
   if (initPromise) return initPromise
   initPromise = (async () => {
@@ -123,7 +123,7 @@ function splitArgs(a?: TArg, b?: TArg) {
 function translate(code: string, key: string, a?: TArg, b?: TArg): string {
   const raw = lookup(code, key)
   if (typeof raw !== 'string') {
-    // vue-i18n: 없는 키는 키 문자열(기본 문구를 줬으면 그것)을 돌려준다
+    // vue-i18n: 미존재 키는 키 문자열(기본 문구가 전달된 경우 해당 문구)을 반환
     if (typeof a === 'string') return a
     return key
   }
@@ -136,13 +136,13 @@ function render(code: string, message: unknown, a?: TArg, b?: TArg): string {
 }
 
 export interface I18nApi {
-  /** vue-i18n `t` 와 같은 호출 형태 */
+  /** vue-i18n `t` 와 동일한 호출 형태 */
   t: (key: string, a?: TArg, b?: TArg) => string
-  /** 키가 있는가(vue-i18n `te`) */
+  /** 키 존재 여부(vue-i18n `te`) */
   te: (key: string, locale?: string) => boolean
-  /** 원본 메시지(객체·배열·문자열) — `rt` 로 그린다(vue-i18n `tm`) */
+  /** 원본 메시지(객체·배열·문자열) — `rt` 로 렌더링(vue-i18n `tm`) */
   tm: <T = any>(key: string) => T
-  /** tm 으로 꺼낸 원본 문자열을 보간(vue-i18n `rt`) */
+  /** tm 으로 조회한 원본 문자열을 보간(vue-i18n `rt`) */
   rt: (message: unknown, a?: TArg, b?: TArg) => string
   /** 현재 언어 코드 ('ko' | 'en') */
   locale: string
@@ -170,15 +170,15 @@ export async function setLocale(code: string): Promise<void> {
   await i18next.changeLanguage(code)
 }
 
-/** 언어 변경 구독(컴포넌트 밖 store 용). 해제 함수를 돌려준다. */
+/** 언어 변경 구독(컴포넌트 외부 store 용). 해제 함수를 반환. */
 export function onLocaleChange(fn: (code: string) => void): () => void {
   i18next.on('languageChanged', fn)
   return () => i18next.off('languageChanged', fn)
 }
 
 /**
- * 컴포넌트 밖에서 쓰는 전역 i18n.
- * `i18n.locale` 은 읽을 때마다 현재 값이다.
+ * 컴포넌트 외부에서 사용하는 전역 i18n.
+ * `i18n.locale` 은 조회 시점의 현재 값을 반환한다.
  */
 export const i18n = {
   t: (key: string, a?: TArg, b?: TArg) => translate(currentLocale(), key, a, b),
@@ -190,7 +190,7 @@ export const i18n = {
   setLocale,
 }
 
-/** 컴포넌트용 — 언어가 바뀌면 다시 그린다 */
+/** 컴포넌트용 — 언어 변경 시 재렌더링 */
 export function useI18n(): I18nApi {
   const { i18n: inst } = useTranslation()
   const code = inst.language || DEFAULT_LOCALE

@@ -1,4 +1,4 @@
-// AI 화면 — 답변 생성은 페이지와 무관: 화면을 떠나도(언마운트) 끊지 않고, 다시 열면 생성 중인 답변을 이어 받는다.
+// AI 화면 — 답변 생성은 페이지와 무관: 화면을 떠나도(언마운트) 중단하지 않고, 다시 열면 생성 중인 답변을 이어서 수신한다.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -71,16 +71,16 @@ describe('AI 이어 받기', () => {
       live.push(ev('token', { text: '앞부분' }, '2-0'))
     })
     await waitFor(() => expect(document.querySelector('.ai-md')?.textContent).toContain('앞부분'))
-    view.unmount() // 다른 화면으로
+    view.unmount() // 다른 화면으로 이동
     expect(signal.aborted).toBe(false)
     live.push(ev('token', { text: ' 뒷부분' }, '3-0'))
     await waitFor(() => expect(Object.values(S.aiStreamStore.getState().runs)[0]?.msg.content).toBe('앞부분 뒷부분'))
-    // 돌아옴 — 서버는 아직 streaming(빈 진행분일 수도) → 저장소의 최신 내용으로
+    // 복귀 — 서버는 아직 streaming(진행분이 비어 있을 수 있음) → 저장소의 최신 내용 사용
     api.messages = { c1: [{ id: 'q1', role: 'user', content: '길게' }, { id: 'm1', role: 'assistant', content: '앞', status: 'streaming', steps: [], citations: [] }] }
     renderPage()
     await waitFor(() => expect(document.querySelector('.ai-md')?.textContent).toContain('앞부분 뒷부분'))
     expect(screen.getAllByRole('button', { name: '멈추기' }).length).toBeGreaterThan(0)
-    // 다른 화면에 있는 동안 끝나면 토스트(지금은 보고 있으니 없음)
+    // 다른 화면에 있는 동안 종료되면 토스트(현재는 열람 중이므로 없음)
     await act(async () => {
       live.push(ev('done', { message_id: 'm1', status: 'complete' }, '4-0'))
       live.end()

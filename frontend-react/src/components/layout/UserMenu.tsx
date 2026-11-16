@@ -4,13 +4,13 @@
  * → 테마 세그먼트·언어 → 단축키 도움말(Ctrl /)·관리 콘솔 → 로그아웃. 메뉴 행 36(아이콘 16 + 글자).
  * 상태는 서버(/api/chat/me/status) 기준 — useMyStatus.
  *
- * 상태 메시지 줄: 이모지 · 문구 · "15:00까지 · 방해 금지 1시간" · ›. 누르면 메뉴 왼쪽에 UiMenu 펼침 패널
+ * 상태 메시지 줄: 이모지 · 문구 · "15:00까지 · 방해 금지 1시간" · ›. 선택 시 메뉴 왼쪽에 UiMenu 펼침 패널 표시
  * (자유 내용 + 메뉴 행, 폭 320): 이모지 버튼 + 문구 입력(n / 60) · 빠른 문구 칩 · 지우기 선택(+시각) · [지우기][저장]
  * / 방해 금지 세그먼트(끄기·30분·1·2·4시간) / 방해 금지 일정…(설정 › 알림) / 표시: 오프라인으로 표시.
- *   ※ 테마·언어·관리 콘솔 줄은 디자인 그림에 없지만 기존 기능이라 같은 행 규격으로 남겼다.
- *   이모지 고르기: 이모지 버튼(pressed) → 테두리 상자 "최근 · 자주 쓰는" + 8×2(36 칸).
- *   1줄 = 최근 쓴 것(사용자 단위 서버 저장 ui.status_emoji_recent), 2줄 = 기본 추천 — 최근이 8개보다 적으면 기본 추천으로 채운다.
- *   고른 칸 bg-accent + ring-primary. 전체 이모지 고르기는 없다 — 입력 칸에 직접 붙여 넣기. 8×2 가 들어가게 패널 폭 360(시안).
+ *   참고: 테마·언어·관리 콘솔 줄은 디자인 시안에 없으나 기존 기능이므로 동일 행 규격으로 유지함.
+ *   이모지 선택: 이모지 버튼(pressed) → 테두리 상자 "최근 · 자주 쓰는" + 8×2(36 칸).
+ *   1줄 = 최근 사용 항목(사용자 단위 서버 저장 ui.status_emoji_recent), 2줄 = 기본 추천 — 최근 항목이 8개 미만이면 기본 추천으로 보충함.
+ *   선택한 칸 bg-accent + ring-primary. 전체 이모지 선택기는 미제공 — 입력 칸에 직접 붙여넣기. 8×2 수용을 위해 패널 폭 360(시안).
  */
 import { useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -39,7 +39,7 @@ import { UiButton } from '~/components/ui/Button'
 import { UiMenu, type UiMenuItem } from '~/components/ui/Menu'
 
 export interface LayoutUserMenuProps {
-  /** 메뉴를 닫을 때(항목 선택·Esc) */
+  /** 메뉴 닫힘 시 호출(항목 선택·Esc) */
   onClose?: () => void
 }
 
@@ -115,8 +115,8 @@ export function LayoutUserMenu({ onClose }: LayoutUserMenuProps) {
     const row = rowRef.current?.getBoundingClientRect()
     const menu = rootRef.current?.getBoundingClientRect()
     if (!row || !menu) return
-    // 메뉴 왼쪽 8 · 줄 위 5 에 패널의 오른쪽 위가 오도록(UiMenu 기준형은 기준 오른쪽 끝·아래 4 에 붙는다)
-    // 왼쪽에 자리가 없으면(채팅 목록 아래 계정 패널처럼 메뉴가 화면 왼쪽 끝) 오른쪽에 붙인다 — 안 그러면 패널이 메뉴를 덮는다
+    // 패널의 오른쪽 위 모서리를 메뉴 왼쪽 8 · 줄 위 5 위치에 배치(UiMenu 기준형은 기준 오른쪽 끝·아래 4 에 배치됨)
+    // 왼쪽 공간이 부족하면(채팅 목록 아래 계정 패널처럼 메뉴가 화면 왼쪽 끝에 위치) 오른쪽에 배치 — 미적용 시 패널이 메뉴를 가림
     const fitsLeft = menu.left - 8 - 360 >= 8
     setPanelRight(!fitsLeft)
     setPanelAt(new DOMRect(fitsLeft ? menu.left - 8 : menu.right + 8, row.top - 9, 0, 0))
@@ -187,12 +187,12 @@ export function LayoutUserMenu({ onClose }: LayoutUserMenuProps) {
         </span>
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{displayName}</div>
-          {/* 이메일 · 관리자 — 이메일이 없으면 앞 구분점 없이 역할만 */}
+          {/* 이메일 · 관리자 — 이메일이 없으면 앞 구분점 없이 역할만 표시 */}
           <div className="truncate text-xs text-muted-foreground">{[email, user?.is_admin ? t('common.role.admin') : ''].filter(Boolean).join(' · ')}</div>
         </div>
       </div>
 
-      {/* 상태 메시지 줄 — 누르면 왼쪽에 펼침 패널 */}
+      {/* 상태 메시지 줄 — 선택 시 왼쪽에 펼침 패널 표시 */}
       <button
         ref={rowRef}
         type="button"
@@ -235,7 +235,7 @@ export function LayoutUserMenu({ onClose }: LayoutUserMenuProps) {
           items={panelItems}
           onSelect={onPanelSelect}
           onClose={closePanel}
-          // 포털 안 클릭이 문서까지 올라가면 상단바의 바깥 클릭 처리가 사용자 메뉴째 닫는다 — 패널 안에서 멈춘다
+          // 포털 내부 클릭이 문서까지 전파되면 상단바의 바깥 클릭 처리가 사용자 메뉴 전체를 닫음 — 패널 내부에서 전파 차단
           onClick={(e: ReactMouseEvent) => e.stopPropagation()}
           content={({ close }) => (
             <div className="flex flex-col gap-3 text-[13px]">
@@ -298,7 +298,7 @@ export function LayoutUserMenu({ onClose }: LayoutUserMenuProps) {
                   )
                 })}
               </div>
-              {/* 네이티브 선택 — 펼침 패널(스크롤 상자) 안에서 목록이 잘리지 않게 */}
+              {/* 네이티브 선택 — 펼침 패널(스크롤 상자) 내부에서 목록 잘림 방지 */}
               <UiSelect
                 label={t('shell.userMenu.clearLabel')}
                 modelValue={clearChoice}
@@ -389,7 +389,7 @@ export function LayoutUserMenu({ onClose }: LayoutUserMenuProps) {
         <span className="flex-1">{t('shell.userMenu.shortcuts')}</span>
         <span className="flex gap-0.5"><UiKeycap size={20}>Ctrl</UiKeycap><UiKeycap size={20}>/</UiKeycap></span>
       </button>
-      {/* 격리 브라우저(전용 출처, 새 탭) — 쓸 수 있는 대상이 있을 때만(레일은 '도구' 묶음 external 항목 · 모바일 탭에는 없다) */}
+      {/* 격리 브라우저(전용 출처, 새 탭) — 사용 가능한 대상이 있을 때만 표시(레일은 '도구' 묶음 external 항목 · 모바일 탭에는 미표시) */}
       {rbiUrl && (
         <button type="button" role="menuitem" className={rowCls} onClick={() => { emitClose(); window.open(rbiUrl, '_blank', 'noopener,noreferrer') }}>
           <UiIcon name="shield" className="h-4 w-4 shrink-0 text-muted-foreground" />

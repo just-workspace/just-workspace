@@ -1,14 +1,14 @@
 // ★ 생성됨 — 손으로 고치지 말 것. 원본: rbi/mirror/client/src/local-echo.ts · 동기화: node rbi/mirror/scripts/sync-client.mjs
 /**
- * 로컬 에코(typeahead) — 포커스된 입력칸에 친 글자를 원격 왕복을 기다리지 않고 바로 그린다(Menlo 의 lecho 와 같은 생각).
+ * 로컬 에코(typeahead) — 포커스된 입력란에 입력한 글자를 원격 왕복 대기 없이 즉시 표시한다(Menlo 의 lecho 와 동일한 개념).
  *
- * 모델: 원격이 마지막으로 알려 준 상태(base = 값·선택) 위에, 아직 원격이 적용했다고 확인하지 않은 편집(pending)을 차례로 얹은 것이 화면이다.
- * 원격의 val{iseq, vh} 가 오면:
- *   1) iseq 까지의 편집을 이전 base 에 얹은 "예측값" 의 해시(fnv1a)를 원격 해시와 대조한다 — 맞으면 match, 틀리면 mismatch(원격이 값을 바꿨다: 마스크·자동완성·대문자화…).
- *   2) 어느 쪽이든 원격 상태를 새 base 로 삼고(원격이 진실), iseq 뒤의 편집만 다시 얹는다.
- * 모르는 키(Enter·위아래·Tab·Ctrl 조합·Shift 선택…)가 끼면 그 뒤 예측은 멈춘다(suspended) — 다음 val 이 오면 원격 상태로 돌아간다.
- * 비밀번호 칸은 값 대신 마스킹 문자열(•)로 같은 계산을 한다(원격도 길이만 알려 준다).
- * 조합(IME): 조합 중 글자는 caret 자리에 "임시 구간" 으로 끼워 넣는다(원격 값도 조합 글자를 포함한다). 확정되면 일반 삽입.
+ * 모델: 원격이 마지막으로 통지한 상태(base = 값·선택)에, 원격의 적용 확인이 아직 없는 편집(pending)을 순서대로 적용한 결과가 화면이다.
+ * 원격의 val{iseq, vh} 수신 시:
+ *   1) iseq 까지의 편집을 이전 base 에 적용한 "예측값" 의 해시(fnv1a)를 원격 해시와 대조한다 — 일치하면 match, 불일치하면 mismatch(원격이 값을 변경: 마스크·자동완성·대문자화…).
+ *   2) 어느 경우든 원격 상태를 새 base 로 채택하고(원격이 기준), iseq 이후의 편집만 재적용한다.
+ * 미지원 키(Enter·위아래·Tab·Ctrl 조합·Shift 선택…)가 포함되면 이후 예측을 중단한다(suspended) — 다음 val 수신 시 원격 상태로 복귀한다.
+ * 비밀번호 입력란은 값 대신 마스킹 문자열(•)로 동일한 계산을 수행한다(원격도 길이만 통지).
+ * 조합(IME): 조합 중 글자는 caret 위치에 "임시 구간" 으로 삽입한다(원격 값도 조합 글자를 포함). 확정 시 일반 삽입.
  */
 import { fnv1a } from './vocab'
 
@@ -34,7 +34,7 @@ export function applyOp(s: EchoState, op: EchoOp, mask: boolean, multiline: bool
     case 'ins': {
       let t = mask ? MASK.repeat([...op.t].length) : op.t
       if (!multiline) t = t.replace(/[\r\n]+/g, ' ')
-      // 조합 중이었다면 조합 구간을 지우고 넣는다
+      // 조합 중이었으면 조합 구간을 삭제한 후 삽입
       const base = s.comp ? v.slice(0, s.compAt) + v.slice(s.compAt + s.comp.length) : v
       if (s.comp) { ss = se = s.compAt }
       const nv = base.slice(0, ss) + t + base.slice(se)
@@ -67,7 +67,7 @@ export function applyOp(s: EchoState, op: EchoOp, mask: boolean, multiline: bool
     }
     case 'comp': {
       const t = mask ? MASK.repeat([...op.t].length) : op.t
-      // 앞 조합 구간을 바꿔 끼운다
+      // 직전 조합 구간을 교체
       const at = s.comp ? s.compAt : ss
       const base = s.comp ? v.slice(0, s.compAt) + v.slice(s.compAt + s.comp.length) : v.slice(0, ss) + v.slice(se)
       const nv = base.slice(0, at) + t + base.slice(at)
@@ -88,7 +88,7 @@ export class LocalEcho {
 
   constructor(public mask = false, public multiline = false) {}
 
-  /** 위젯에 포커스 — 원격 표시값으로 시작(caret 은 끝, 다음 val 이 바로잡는다) */
+  /** 위젯에 포커스 — 원격 표시값으로 시작(caret 은 끝, 다음 val 에서 보정) */
   start(id: number, value: string, mask: boolean, multiline: boolean): void {
     if (this.id === id) return
     this.id = id
@@ -100,7 +100,7 @@ export class LocalEcho {
   }
   stop(): void { this.id = 0; this.pending = []; this.suspendedAt = 0 }
 
-  /** 편집 하나(이미 원격으로 보냈고 seq 를 받았다) */
+  /** 편집 하나(원격 송신 완료, seq 수신 완료) */
   push(seq: number, op: EchoOp): void {
     if (!this.id) return
     this.stats.ops++
@@ -109,7 +109,7 @@ export class LocalEcho {
     if (this.pending.length > 500) this.pending.shift()
   }
 
-  /** 원격 확인 — 해시 대조 후 원격 상태로 다시 기준을 잡는다. 맞았으면 true */
+  /** 원격 확인 — 해시 대조 후 원격 상태로 기준을 재설정한다. 일치 시 true */
   reconcile(id: number, iseq: number, vh: number, n: number, ss: number, se: number, v: string | undefined): boolean | null {
     if (id !== this.id) return null
     let pred: EchoState | null = this.base
@@ -126,7 +126,7 @@ export class LocalEcho {
       ok = fnv1a(pred.v) === vh
       if (ok) this.stats.match++; else this.stats.mismatch++
     }
-    // 원격이 진실 — 조합 중이면 원격 값에 조합 구간이 들어 있다(그 위치는 caret 앞으로 본다)
+    // 원격이 기준 — 조합 중이면 원격 값에 조합 구간이 포함된다(해당 위치는 caret 앞으로 간주)
     const comp = pred && pred.comp && ok ? pred.comp : ''
     this.base = { v: remoteV, ss: Math.min(ss, remoteV.length), se: Math.min(se, remoteV.length), comp, compAt: comp ? Math.max(0, Math.min(ss, remoteV.length) - comp.length) : 0 }
     this.pending = keep
@@ -134,7 +134,7 @@ export class LocalEcho {
     return ok
   }
 
-  /** 지금 그릴 것 — 예측할 수 없으면 원격 기준값 그대로 */
+  /** 현재 표시 내용 — 예측 불가 시 원격 기준값 그대로 */
   view(): EchoView {
     let s: EchoState | null = this.base
     for (const p of this.pending) {
@@ -154,7 +154,7 @@ export class LocalEcho {
   get busy(): boolean { return this.pending.length > 0 }
 }
 
-/** 키 → 로컬 에코 편집(모르면 unknown) */
+/** 키 → 로컬 에코 편집(미지원 키는 unknown) */
 export function keyToOp(key: string, mods: number, multiline: boolean): EchoOp | undefined {
   const ctrl = (mods & 2) !== 0 || (mods & 4) !== 0, shift = (mods & 8) !== 0, alt = (mods & 1) !== 0
   if (key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta' || key === 'CapsLock' || key === 'HangulMode' || key === 'HanjaMode' || key === 'Process') return undefined

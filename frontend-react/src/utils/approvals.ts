@@ -1,8 +1,8 @@
 /**
- * AI 쓰기 승인 — 요청 객체 모양과 순수 도우미. 채팅 카드와 승인 대기함이 같이 쓴다.
- * 요청 객체 = backend app/mcp/writes.py to_dict. 시각 판단은 늘 서버 시각 기준:
- *   offset = server_now − 받은 순간의 클라이언트 시각,  서버 지금 = Date.now() + offset.
- * 클라이언트 시계만으로 만료·되돌리기 남은 시간을 세지 않는다(시안 회신 rA-1·rA-4).
+ * AI 쓰기 승인 — 요청 객체 형태와 순수 도우미. 채팅 카드와 승인 대기함이 공용으로 사용한다.
+ * 요청 객체 = backend app/mcp/writes.py to_dict. 시각 판단은 항상 서버 시각 기준:
+ *   offset = server_now − 수신 시점의 클라이언트 시각,  서버 현재 시각 = Date.now() + offset.
+ * 클라이언트 시계만으로 만료·되돌리기 잔여 시간을 계산하지 않는다(시안 회신 rA-1·rA-4).
  */
 
 export type ApprovalStatus = 'pending' | 'executed' | 'failed' | 'rejected' | 'canceled' | 'expired' | 'undone'
@@ -46,7 +46,7 @@ export interface ApprovalRequest {
   preview: ApprovalPreviewRow[]
   editable: ApprovalEditable[]
   read_external?: ApprovalReadExternal | null
-  /** 자동 수락·허용 규칙이어도 묻는 사유 코드 — 'visible_after_untrusted' = 외부 내용을 읽은 뒤의 남에게 보이는 쓰기 */
+  /** 자동 수락·허용 규칙이 있어도 확인을 요청하는 사유 코드 — 'visible_after_untrusted' = 외부 내용을 읽은 뒤 수행하는, 타인에게 노출되는 쓰기 */
   ask_reason?: string | null
   result?: unknown
   error?: string | null
@@ -68,19 +68,19 @@ export interface ApprovalListResponse {
   server_now?: string
 }
 
-/** 서버 시각 − 클라이언트 시각(ms). server_now 가 없거나 깨졌으면 0 */
+/** 서버 시각 − 클라이언트 시각(ms). server_now 가 없거나 유효하지 않으면 0 */
 export function serverOffset(serverNow: string | null | undefined, clientNow: number = Date.now()): number {
   if (!serverNow) return 0
   const t = Date.parse(serverNow)
   return Number.isFinite(t) ? t - clientNow : 0
 }
 
-/** 서버 기준 지금(ms) */
+/** 서버 기준 현재 시각(ms) */
 export function serverNowMs(offset: number, clientNow: number = Date.now()): number {
   return clientNow + offset
 }
 
-/** until 까지 남은 ms(서버 기준). until 이 없으면 null, 지났으면 0 */
+/** until 까지의 잔여 ms(서버 기준). until 이 없으면 null, 경과 시 0 */
 export function remainingMs(until: string | null | undefined, offset: number, clientNow: number = Date.now()): number | null {
   if (!until) return null
   const t = Date.parse(until)
@@ -88,7 +88,7 @@ export function remainingMs(until: string | null | undefined, offset: number, cl
   return Math.max(0, t - serverNowMs(offset, clientNow))
 }
 
-/** mm:ss (한 시간 넘으면 h:mm:ss) */
+/** mm:ss (1시간 초과 시 h:mm:ss) */
 export function formatCountdown(ms: number | null | undefined): string {
   const total = Math.max(0, Math.ceil((ms ?? 0) / 1000))
   const h = Math.floor(total / 3600)
@@ -99,8 +99,8 @@ export function formatCountdown(ms: number | null | undefined): string {
 }
 
 /**
- * 화면에 그릴 상태 — 서버 상태가 pending 이어도 서버 시각으로 만료가 지났으면 expired 로 본다
- * (서버는 다음 조회 때에야 expired 로 바꾼다).
+ * 화면 표시용 상태 — 서버 상태가 pending 이어도 서버 시각 기준으로 만료 시각이 지났으면 expired 로 간주한다
+ * (서버는 다음 조회 시점에야 expired 로 변경한다).
  */
 export function effectiveStatus(req: Pick<ApprovalRequest, 'status' | 'expires_at'>, offset: number, clientNow: number = Date.now()): ApprovalStatus {
   if (req.status !== 'pending') return req.status
@@ -128,7 +128,7 @@ export function approvalIcon(tool: string): string {
   return 'edit'
 }
 
-/** 요청한 곳 아이콘(client_kind) */
+/** 요청 출처 아이콘(client_kind) */
 export function clientIcon(kind: string | null | undefined): string {
   if (kind === 'claude_app') return 'globe'
   if (kind === 'personal_token') return 'monitor'
@@ -146,7 +146,7 @@ export function statusTone(s: ApprovalStatus): 'neutral' | 'primary' | 'success'
   }
 }
 
-/** 전체 인자 보기(2칸 들여쓰기 JSON). idempotency_key 는 사람에게 의미 없어 뺀다 */
+/** 전체 인자 보기(2칸 들여쓰기 JSON). idempotency_key 는 사용자에게 의미가 없어 제외한다 */
 export function prettyArgs(args: Record<string, unknown> | null | undefined): string {
   const { idempotency_key: _k, ...rest } = args || {}
   try { return JSON.stringify(rest, null, 2) } catch { return String(rest) }
@@ -160,7 +160,7 @@ export function previewValue(v: unknown): string {
   return String(v)
 }
 
-/** 결과에서 앱 안 링크(있으면) — 같은 출처 경로만 */
+/** 결과에 포함된 앱 내부 링크(있는 경우) — 동일 출처 경로만 */
 export function resultLink(result: unknown): string | null {
   if (!result || typeof result !== 'object') return null
   const r = result as Record<string, unknown>
@@ -172,7 +172,7 @@ export function resultLink(result: unknown): string | null {
   return null
 }
 
-/** 시각(HH:mm 또는 HH:mm:ss) — 숫자는 JetBrains Mono 로 그린다 */
+/** 시각(HH:mm 또는 HH:mm:ss) — 숫자는 JetBrains Mono 로 표시한다 */
 export function clockTime(iso: string | null | undefined, withSeconds = false, locale = 'ko'): string {
   if (!iso) return ''
   const d = new Date(iso)
@@ -201,9 +201,9 @@ export function shortDateTime(iso: string | null | undefined): string {
 
 
 /**
- * 대화를 다시 열었을 때 승인 카드를 제자리에 되돌린다.
- * 저장된 메시지에는 어떤 쓰기 요청이 나왔는지 기록이 없어서, 요청 시각 바로 뒤의 AI 답변에 붙인다
- * (요청은 답변 스트림 중에 생기고 답변은 스트림 끝에 저장되므로 그 답변이 주인이다). 뒤에 답변이 없으면 마지막 답변.
+ * 대화를 다시 열 때 승인 카드를 원래 위치에 복원한다.
+ * 저장된 메시지에는 어떤 쓰기 요청이 발생했는지 기록이 없으므로, 요청 시각 직후의 AI 답변에 연결한다
+ * (요청은 답변 스트림 중에 생성되고 답변은 스트림 종료 시 저장되므로 해당 답변이 소유자이다). 이후 답변이 없으면 마지막 답변.
  */
 export function attachWritesToMessages<M extends { role: string; created_at?: string | null; writes?: ApprovalRequest[] }>(
   messages: M[], reqs: ApprovalRequest[],

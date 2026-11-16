@@ -115,7 +115,7 @@ describe('구독 추가 모달', () => {
     const cls = row.className
     await act(async () => { resolve({ url: 'https://cal.example.com/kr.ics', name: null, count: 3, first_year: null, last_year: null }) })
     const row2 = screen.getByRole('status')
-    expect(row2).toBe(row)   // 같은 요소(자리 그대로) — 내용만 바뀜
+    expect(row2).toBe(row)   // 동일 요소(위치 유지) — 내용만 변경
     expect(row2.className).toBe(cls)
     expect(row2.querySelector('.animate-spin')).toBeNull()
     expect(row2.textContent).not.toContain(t('calendar.subscribe.reading'))

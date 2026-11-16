@@ -1,7 +1,7 @@
 /**
  * 댓글 한 개("1단 답글 + @멘션, 아바타 24 통일").
  *  아바타 24 · 이름 600 + 시각 mono 11 · 본문 14/1.6(@언급 = accent 바탕 칩) · 행동 줄 12/600 muted(답글 · 수정 · 삭제)
- *  답글은 같은 열 안쪽(아바타 옆)에 이어 붙는다. 답글의 답글은 없다(1단).
+ *  답글은 동일 열 안쪽(아바타 옆)에 이어서 배치된다. 답글의 답글은 지원하지 않는다(1단).
  */
 import { Fragment, useState } from 'react'
 import { cn } from '~/lib/utils'
@@ -19,7 +19,7 @@ export interface BoardCommentItemProps {
   comment: CommentInfo
   postId: string
   depth: number
-  /** 답글 버튼을 보일까(기본 true) */
+  /** 답글 버튼 표시 여부(기본값 true) */
   canReply?: boolean
 }
 
@@ -34,7 +34,7 @@ export function BoardCommentItem({ comment, postId, depth, canReply = true }: Bo
   const [submitting, setSubmitting] = useState(false)
 
   const name = authorName(comment.author) || t('common.unknownUser')
-  // 서버가 해석한 멘션(mentions[])만 칩 — 예전 댓글(mentions 없음)은 글자 그대로의 @언급을 칩으로
+  // 서버가 해석한 멘션(mentions[])만 칩으로 표시 — 이전 댓글(mentions 없음)은 문자 그대로의 @언급을 칩으로 표시
   const parts = splitResolvedMentions(comment.content || '', comment.mentions)
   const canEdit = !user || comment.is_deleted ? false : (comment.author?.id === user.id || user.is_admin)
 

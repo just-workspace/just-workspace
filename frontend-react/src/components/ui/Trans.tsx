@@ -1,6 +1,6 @@
 /**
- * 문구 안 버튼·링크·강조 — 번역 문자열 일부를 React 노드로 그린다. 기존 i18n(vue-i18n 문법 어댑터)과 같은 t 를 거친다.
- * (자세한 설명·예시는 아래 컴포넌트 JSDoc)
+ * 문구 내 버튼·링크·강조 — 번역 문자열 일부를 React 노드로 렌더링한다. 기존 i18n(vue-i18n 문법 어댑터)과 동일한 t 를 거친다.
+ * (상세 설명·예시는 아래 컴포넌트 JSDoc 참조)
  */
 import { Fragment, createElement, type ElementType, type ReactNode } from 'react'
 import { useI18n, type TArg } from '~/i18n'
@@ -11,23 +11,23 @@ export type UiTransSlot = ReactNode | ((children: ReactNode) => ReactNode)
 export interface UiTransProps {
   /** 번역 키(필수) */
   k: string
-  /** 슬롯 이름 → 노드 또는 함수. 문자열의 `{이름}…{/이름}` 또는 `{이름}` 자리에 그린다 */
+  /** 슬롯 이름 → 노드 또는 함수. 문자열의 `{이름}…{/이름}` 또는 `{이름}` 위치에 렌더링 */
   slots?: Record<string, UiTransSlot>
   /** 일반 보간 값(`{name}` → 글자) */
   values?: Record<string, unknown>
   /** 복수형 선택 수(vue-i18n `t(key, count)`) */
   count?: number
-  /** 감쌀 태그(예: 'span' · 'p'). 없으면 Fragment */
+  /** 감쌀 태그(예: 'span' · 'p'). 미지정 시 Fragment */
   as?: ElementType
-  /** 감싼 요소의 class(as 가 없으면 span 으로 감싼다) */
+  /** 감싼 요소의 class(as 미지정 시 span 으로 감쌈) */
   className?: string
 }
 
 const MARK = '\u0001'
 
 /**
- * 번역 결과 문자열(표식 포함)을 슬롯 노드 배열로 바꾸는 순수 함수 — UiTrans 안에서 쓰고, 테스트·비컴포넌트 문맥에서도 쓴다.
- * @param translate (named) => 표식이 들어간 번역 결과
+ * 번역 결과 문자열(표식 포함)을 슬롯 노드 배열로 변환하는 순수 함수 — UiTrans 내부에서 사용하며, 테스트·비컴포넌트 문맥에서도 사용한다.
+ * @param translate (named) => 표식이 포함된 번역 결과
  */
 export function transNodes(translate: (named: Record<string, string>) => string, slots: Record<string, UiTransSlot>): ReactNode[] {
   const named: Record<string, string> = {}
@@ -48,7 +48,7 @@ export function transNodes(translate: (named: Record<string, string>) => string,
     const node = typeof s === 'function' ? (s as (c: ReactNode) => ReactNode)(inner) : s
     return createElement(Fragment, { key: `s${key++}` }, node)
   }
-  /** 닫히지 않은 틀 = 자리 표시자: 슬롯을 그 자리에 두고 뒤따른 내용은 그대로 */
+  /** 닫히지 않은 틀 = 자리 표시자: 슬롯을 해당 위치에 두고 후속 내용은 그대로 유지 */
   const flattenOpen = (f: Frame) => {
     top().children.push(render(f.name!, ''))
     top().children.push(...f.children)
@@ -59,7 +59,7 @@ export function transNodes(translate: (named: Record<string, string>) => string,
     if (p.startsWith('/')) {
       const name = p.slice(1)
       const at = stack.map(f => f.name).lastIndexOf(name)
-      if (at <= 0) return // 짝 없는 닫는 태그는 버린다
+      if (at <= 0) return // 짝 없는 닫는 태그는 폐기
       while (stack.length - 1 > at) flattenOpen(stack.pop()!)
       const f = stack.pop()!
       top().children.push(render(name, textOf(f.children)))
@@ -72,16 +72,16 @@ export function transNodes(translate: (named: Record<string, string>) => string,
 }
 
 /**
- * 문구 안 버튼·링크·강조 — 번역 문자열 일부를 React 노드로 그린다. 기존 i18n(vue-i18n 문법 어댑터)과 같은 t 를 거친다.
+ * 문구 내 버튼·링크·강조 — 번역 문자열 일부를 React 노드로 렌더링한다. 기존 i18n(vue-i18n 문법 어댑터)과 동일한 t 를 거친다.
  *
- * 번역 문자열의 두 형식을 받는다:
- *  - 감싸는 태그 `{open}미리보기로 열기{/open}` → slots.open(안쪽 글자) 를 그린다(함수 슬롯).
- *  - 자리 표시자 `{link}` · `{n}` (닫는 태그 없음) → slots.link 노드를 그 자리에 그린다.
- *    함수 슬롯이면 빈 문자열로 불린다.
- * 보간 `values`·복수 `count` 는 t(k, count, values) 그대로(vue-i18n 규칙). 슬롯 이름과 겹치는 values 는 슬롯이 이긴다.
- * 없는 키는 키 문자열이 그대로 나온다(t 와 같음).
+ * 번역 문자열의 두 형식을 지원한다:
+ *  - 감싸는 태그 `{open}미리보기로 열기{/open}` → slots.open(안쪽 글자) 를 렌더링한다(함수 슬롯).
+ *  - 자리 표시자 `{link}` · `{n}` (닫는 태그 없음) → slots.link 노드를 해당 위치에 렌더링한다.
+ *    함수 슬롯이면 빈 문자열로 호출된다.
+ * 보간 `values`·복수 `count` 는 t(k, count, values) 그대로(vue-i18n 규칙). 슬롯 이름과 중복되는 values 는 슬롯이 우선한다.
+ * 존재하지 않는 키는 키 문자열이 그대로 출력된다(t 와 동일).
  *
- * 감싸는 요소: `as` 를 주면 그 태그(className 은 거기에), 안 주면 Fragment(className 만 주면 span).
+ * 감싸는 요소: `as` 를 지정하면 해당 태그(className 은 해당 태그에 적용), 미지정 시 Fragment(className 만 지정하면 span).
  *
  * @example <UiTrans k="office.slow" slots={{ open: (t) => <UiButton variant="link" size="xs" onClick={openPreview}>{t}</UiButton> }} />
  * @example <UiTrans k="chat.message.repliesN" as="span" slots={{ n: <span className="font-mono">3</span> }} />

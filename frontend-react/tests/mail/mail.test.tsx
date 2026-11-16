@@ -1,4 +1,4 @@
-// 메일 모듈 — 작성 글 도우미, 본문 3경로, 작성기 보내기 본문(가짜 API — 실서버 발송 없음), 목록 행·칩, 작성 창 호스트
+// 메일 모듈 — 작성 글 헬퍼, 본문 3경로, 작성기 보내기 본문(모의 API — 실서버 발송 없음), 목록 행·칩, 작성 창 호스트
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor, act, render } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'
@@ -86,7 +86,7 @@ describe('MailBody 3경로', () => {
   })
   it('B 단순 HTML: 속성 제거 후 prose', () => {
     const { container } = render(<MailBody message={detail({ html_body: '<p onclick="x()" class="a">본문<b>굵게</b></p>' })} dark />)
-    // (happy-dom 의 DOMPurify 결과는 브라우저와 조금 다르다 — 속성 제거만 본다)
+    // (happy-dom 의 DOMPurify 결과는 브라우저와 다소 상이함 — 속성 제거만 확인)
     const html = container.querySelector('.mail-paper--dark .mail-paper-prose')!.innerHTML
     expect(html).toContain('<b>굵게</b>')
     expect(html).not.toContain('onclick')

@@ -1,14 +1,14 @@
 /**
  * 설정 카드.
- * 개인 설정·관리·AI·메일 설정 화면이 같이 쓴다(토대 공용).
+ * 개인 설정·관리·AI·메일 설정 화면이 공동으로 사용한다(토대 공용).
  *
- * 제목 13/600 + 설명 13 muted, 본문, 푸터 [되돌리기][저장](변경 있을 때만 활성).
- * 스위치·선택만 있는 행은 푸터 없이 즉시 저장 + "저장됨 ✓"(saved) 를 쓴다. 토스트는 쓰지 않는다.
+ * 제목 13/600 + 설명 13 muted, 본문, 푸터 [되돌리기][저장](변경이 있을 때만 활성).
+ * 스위치·선택만 있는 행은 푸터 없이 즉시 저장 + "저장됨 ✓"(saved) 를 사용한다. 토스트는 사용하지 않는다.
  * mobileBar: 모바일(md 미만)에서 카드 푸터 대신 화면 하단 고정 저장 바.
- *  · 'save' — [저장] 한 칸. 변경 없으면 흐리게(opacity .5).
+ *  · 'save' — [저장] 한 칸. 변경이 없으면 흐림 처리(opacity .5).
  *  · 'full' — [되돌리기][저장 · 변경 n건].
- *  떠 있는 동안 하단 탭바는 숨긴다. 한 페이지에 저장 카드가 하나일 때만 쓴다.
- * 루트가 둘(카드 + 하단 바)이라 className 등 나머지 속성은 카드(section)에 붙는다.
+ *  표시되는 동안 하단 탭바는 숨긴다. 한 페이지에 저장 카드가 하나인 경우에만 사용한다.
+ * 루트가 둘(카드 + 하단 바)이므로 className 등 나머지 속성은 카드(section)에 적용된다.
  *
  * @example <SettingsCard title="프로필" changes={n} onSave={save} onReset={reset} mobileBar="save">…</SettingsCard>
  */
@@ -27,13 +27,13 @@ export interface SettingsCardProps extends Omit<HTMLAttributes<HTMLElement>, 'ti
   description?: string
   /** 텍스트 필드 카드: 변경 건수. 0 이면 저장 비활성 */
   changes?: number
-  /** 푸터를 그릴지(기본: changes 가 정의돼 있으면 그림) */
+  /** 푸터 표시 여부(기본: changes 가 정의되어 있으면 표시) */
   footer?: boolean
   /** 저장 중(버튼 비활성 + "저장 중") */
   saving?: boolean
   /** 즉시 저장형 행의 "저장됨 ✓" 표시 */
   saved?: boolean
-  /** 본문 패딩 없이(목록·표를 바로 넣을 때) */
+  /** 본문 패딩 제거(목록·표를 직접 배치하는 경우) */
   flush?: boolean
   /** 위험 구역(빨간 테두리·제목) */
   danger?: boolean
@@ -60,7 +60,7 @@ export function SettingsCard({
   const hasFooter = footer ?? changes !== undefined
   const barOn = !!mobileBar && hasFooter && isMobile
 
-  // 하단 바가 떠 있는 동안 셸 탭바를 숨긴다(MobileDetailBar 와 같은 신호 mobile-detail-open)
+  // 하단 바가 표시되는 동안 셸 탭바를 숨긴다(MobileDetailBar 와 동일한 신호 mobile-detail-open)
   const barOnRef = useRef(barOn)
   barOnRef.current = barOn
   useEffect(() => { if (barOn) setSharedState('mobile-detail-open', true) }, [barOn])
@@ -96,7 +96,7 @@ export function SettingsCard({
         )}
       </section>
 
-      {/* 모바일 하단 고정 저장 바 + 본문이 바에 가리지 않게 같은 높이 자리 */}
+      {/* 모바일 하단 고정 저장 바 + 본문이 바에 가려지지 않도록 동일 높이의 여백 확보 */}
       {barOn && (
         <>
           <div className="h-[calc(82px+env(safe-area-inset-bottom))] shrink-0" aria-hidden="true" />

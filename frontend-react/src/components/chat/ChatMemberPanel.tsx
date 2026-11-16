@@ -1,12 +1,12 @@
 /**
  * 멤버 열.
- *  묶음 = hoist 역할(계층순) → 온라인 → 오프라인(utils/chatMemberGroups — by-role 이 없으면 온라인/오프라인만).
- *  묶음 제목: 위 20 · 아래 4, 12/600 muted "역할 — 인원"(button, aria-expanded — 1,000명 넘는 묶음만 접기 화살표).
+ *  그룹 = hoist 역할(계층순) → 온라인 → 오프라인(utils/chatMemberGroups — by-role 이 없으면 온라인/오프라인만).
+ *  그룹 제목: 위 20 · 아래 4, 12/600 muted "역할 — 인원"(button, aria-expanded — 1,000명 초과 그룹만 접기 화살표).
  *  행 42 · 아바타 32 + 상태 점 10 · 이름 16(역할 색 text-role-N, 500) · 상태 한 줄 12 muted. 호버 bg-overlay-hover.
- *  오프라인: 아바타 50% + 이름 muted (디스코드 30% 투명 대신 — 접근성 결정, 글자는 흐리지 않는다).
- *  1,000명 넘는 묶음: 처음 3명 + "N명 더 보기"(32, 테두리).
- *  행 누르면 프로필 팝아웃(useChatUi.setProfilePopout). 머리글 없음(디스코드) — 덮개(1180 미만)는 헤더 토글·Esc 로 닫는다.
- * 모바일(전체 화면): 머리 56(‹ 대화로 · "멤버 N" · 초대) · 제목 13/600 pt-16 · 행 56(아바타 40, 점 12, 상태 13).
+ *  오프라인: 아바타 50% + 이름 muted (디스코드 30% 투명 대신 — 접근성 결정, 글자는 흐리게 처리하지 않음).
+ *  1,000명 초과 그룹: 처음 3명 + "N명 더 보기"(32, 테두리).
+ *  행 클릭 시 프로필 팝아웃(useChatUi.setProfilePopout). 헤더 없음(디스코드) — 오버레이(1180 미만)는 헤더 토글·Esc 로 닫음.
+ * 모바일(전체 화면): 헤더 56(‹ 대화로 · "멤버 N" · 초대) · 제목 13/600 pt-16 · 행 56(아바타 40, 점 12, 상태 13).
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from 'zustand'
@@ -41,13 +41,13 @@ export function ChatMemberPanel({ className }: { className?: string }) {
     if (!channelId) return
     void loadRoles()
     void loadMemberGroups(channelId)
-    // 역할이 바뀌어 묶음이 비워지면(handleRolesEvent) 다시 읽는다
+    // 역할 변경으로 그룹이 비워지면(handleRolesEvent) 재조회
   }, [channelId, members.length, byRoleMissing])
 
   const groups = useMemo(() => {
     const s = chatStore.getState()
     return groupMembers<ChannelMember>(members, id => presenceOf(id, s).state !== 'offline', byRole)
-    // presences·onlineUsers 가 바뀌면 다시 묶는다
+    // presences·onlineUsers 변경 시 그룹 재구성
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [members, byRole, presences, onlineUsers])
 

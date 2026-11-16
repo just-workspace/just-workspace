@@ -1,9 +1,9 @@
 /**
  * 토스트 호스트: 반전색 바탕(foreground/background), 제목 600 + 본문 12 opacity .8,
  * 행동 1개(링크형, --primary-inverse 글자 — 반전 바탕 위 4.5:1 로 보정된 반대 테마 강조색),
- * 아이콘은 종류 색. 데스크톱 왼쪽 아래 24, 모바일은 상단(상단바 아래 8 — 탭바·FAB 와 경쟁하지 않음).
- * role=status(오류는 alert). 오류·수동 닫기 토스트에만 닫기 버튼. 같은 오류가 합쳐지면 제목 뒤에 횟수(mono 11).
- * 앱 루트(App.tsx)에 한 번 그린다. 토스트 내기는 `addToast`/`toast`(~/composables/useToast).
+ * 아이콘은 종류 색. 데스크톱 왼쪽 아래 24, 모바일은 상단(상단바 아래 8 — 탭바·FAB 와 경합하지 않음).
+ * role=status(오류는 alert). 오류·수동 닫기 토스트에만 닫기 버튼 표시. 동일 오류가 병합되면 제목 뒤에 횟수(mono 11) 표시.
+ * 앱 루트(App.tsx)에 1회 렌더링한다. 토스트 생성은 `addToast`/`toast`(~/composables/useToast).
  */
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -30,12 +30,12 @@ const LEAVE_MS = 150
  */
 export function UiToast() {
   const { toasts } = useToast()
-  // 데스크톱 왼쪽 아래는 레일(64)·고정 사이드바(236) 오른쪽으로 24 띄운다 — 레일 하단 아바타를 덮지 않게(QA 토스트)
+  // 데스크톱 왼쪽 아래는 레일(64)·고정 사이드바(236) 오른쪽으로 24 간격을 둔다 — 레일 하단 아바타를 가리지 않도록 함(QA 토스트)
   const { pushes } = useSidebar()
   const { user } = useAuth()
   const leftClass = !user ? 'sm:left-6' : pushes ? 'sm:left-6 md:left-[260px]' : 'sm:left-6 md:left-[88px]'
 
-  // TransitionGroup: 사라진 토스트는 leave 애니메이션 동안 제자리에 남긴다
+  // TransitionGroup: 제거된 토스트는 leave 애니메이션 동안 기존 위치에 유지
   const [rendered, setRendered] = useState<{ t: Toast; leaving: boolean }[]>(() => toasts.map(t => ({ t, leaving: false })))
   useEffect(() => {
     setRendered((prev) => {

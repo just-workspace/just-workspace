@@ -1,5 +1,5 @@
-// 새 이슈("이슈 쓰기"): 수제 rounded-xl 중앙 모달 → UiModal(데스크톱 중앙 · 모바일 바텀시트, G 규격).
-// 제목 · 본문(마크다운) · 라벨(GitLabelPicker — 기존 기능 유지). 실패는 토스트(예전엔 console.error 만).
+// 새 이슈("이슈 쓰기"): 자체 구현 rounded-xl 중앙 모달 → UiModal(데스크톱 중앙 · 모바일 바텀시트, G 규격).
+// 제목 · 본문(마크다운) · 라벨(GitLabelPicker — 기존 기능 유지). 실패는 토스트로 표시(이전에는 console.error 만 수행).
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
 import { useGit } from '~/composables/useGit'
@@ -14,7 +14,7 @@ import { GitLabelPicker } from './GitLabelPicker'
 export interface GitCreateIssueModalProps {
   /** 닫기 */
   onClose?: () => void
-  /** 만들어짐 — 새 이슈 번호 */
+  /** 생성 완료 — 새 이슈 번호 */
   onCreated?: (n: number) => void
 }
 
@@ -28,7 +28,7 @@ export function GitCreateIssueModal({ onClose, onCreated }: GitCreateIssueModalP
   const [labelIds, setLabelIds] = useState<number[]>([])
   const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => { void fetchLabels() }, [fetchLabels]) // 모달을 열 때 라벨을 준비한다
+  useEffect(() => { void fetchLabels() }, [fetchLabels]) // 모달 열림 시 라벨 조회
 
   async function submit() {
     if (!title.trim() || submitting) return

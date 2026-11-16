@@ -1,7 +1,7 @@
 /**
- * 하이레조 켜기 확인 — 데스크톱 앱, 처음 한 번. alertdialog 440:
+ * 하이레조 활성화 확인 — 데스크톱 앱, 최초 1회. alertdialog 440:
  * "하이레조를 켜면 이 장치를 독점합니다" + 장치 이름 굵게 + 지연·이어폰 안내 + 형식 mono 상자 + "다음부터 묻지 않기" + [취소][독점하고 켜기].
- * 열림은 useVoice.hiresPrompt(confirmHiresExclusive 가 넣는다) — 3단계(네이티브 전송)가 장치 이름·형식을 넣어 부른다. 셸(layouts/default)이 그린다.
+ * 열림 상태는 useVoice.hiresPrompt(confirmHiresExclusive 가 설정) — 3단계(네이티브 전송)가 장치 이름·형식을 전달하여 호출한다. 렌더링은 셸(layouts/default)이 수행한다.
  */
 import { useState } from 'react'
 import { useI18n } from '~/i18n'

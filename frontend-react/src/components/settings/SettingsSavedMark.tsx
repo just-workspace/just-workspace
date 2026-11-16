@@ -1,6 +1,6 @@
 /**
- * "저장됨 ✓" 표시(12/600 success, role=status) — 카드 머리 밖에서 즉시 저장 행 옆에 붙일 때.
- * (카드 머리에는 SettingsCard 의 saved prop 을 쓴다.)
+ * "저장됨 ✓" 표시(12/600 success, role=status) — 카드 머리 밖에서 즉시 저장 행 옆에 배치하는 경우에 사용한다.
+ * (카드 머리에는 SettingsCard 의 saved prop 을 사용한다.)
  *
  * @example {saved && <SettingsSavedMark />}
  */

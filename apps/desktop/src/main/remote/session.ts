@@ -1,6 +1,6 @@
 /**
- * 원격 데스크톱 호스트 세션 하나 — 동의를 받은 뒤 LiveKit 방에 화면을 보내고, 뷰어 입력을 받아 주입한다.
- * 내 기기(host.ts)와 1회성 지원(support.ts)이 같이 쓴다. 끝내는 길은 하나(stop): 키 떼기 → 창 닫기 → 서버에 종료 알림.
+ * 원격 데스크톱 호스트 세션 하나 — 동의를 받은 뒤 LiveKit 방에 화면을 송출하고, 뷰어 입력을 수신하여 주입한다.
+ * 내 기기(host.ts)와 1회성 지원(support.ts)이 공용한다. 종료 경로는 하나(stop): 키 해제 → 창 닫기 → 서버에 종료 통지.
  */
 import { BrowserWindow, clipboard, desktopCapturer, ipcMain, screen } from 'electron';
 import type { EndWhy, LivekitInfo } from './api';
@@ -14,7 +14,7 @@ export interface HostSessionOptions {
   requester: string;
   livekit: LivekitInfo;
   addon: InputAddon | null;
-  /** 서버에 종료를 알린다(끊기·창 닫힘·오류 모두). why 는 진단용 사유 */
+  /** 서버에 종료를 통지한다(연결 끊기·창 닫힘·오류 모두). why 는 진단용 사유 */
   notifyEnd: (why: EndWhy) => Promise<void>;
   onClosed?: (reason: string) => void;
 }
@@ -31,21 +31,21 @@ export class HostSession {
   private timers: NodeJS.Timeout[] = [];
   private secure = false;
   private stopped = false;
-  /** 뷰어가 고른 화질(quality.ts) — 모니터를 바꿔도 유지된다 */
+  /** 뷰어가 선택한 화질(quality.ts) — 모니터를 변경해도 유지된다 */
   private quality: { m: QualityMode; vw: number; vh: number } = { m: 'auto', vw: 0, vh: 0 };
   private readonly onInput = (e: Electron.IpcMainEvent, payload: Uint8Array, from: string) => {
     if (e.sender !== this.runner?.webContents) return;
-    if (from !== this.opts.livekit.peer_identity) return; // 상대 정체성에서 온 것만
+    if (from !== this.opts.livekit.peer_identity) return; // 상대 식별자(peer identity)에서 온 것만 허용
     this.handle(payload);
   };
-  /** 러너가 알린 마지막 오류(실패 사유로 서버에 보낸다) */
+  /** 러너가 보고한 마지막 오류(실패 사유로 서버에 송신한다) */
   private lastError = '';
   private readonly onRunnerState = (e: Electron.IpcMainEvent, s: string, detail?: unknown) => {
     if (e.sender !== this.runner?.webContents) return;
     if (typeof detail === 'string' && detail) this.lastError = detail.slice(0, 300);
     if (s === 'connected') { this.applyQuality(); return; }
     if (s === 'failed') {
-      // 실패 사유 앞에 이 PC 화면 구성 진단을 붙인다(서버 감사 기록 client_detail, 300자)
+      // 실패 사유 앞에 이 PC 의 화면 구성 진단을 덧붙인다(서버 감사 기록 client_detail, 300자)
       void this.diagnose().then((d) => { this.lastError = `${d} | ${this.lastError}`.slice(0, 300); void this.stop('runner_failed'); });
       return;
     }
@@ -53,8 +53,8 @@ export class HostSession {
   };
 
   /**
-   * 캡처 실패 진단 — 모니터 수·크기·배율·주 모니터, 화면 소스 수, 작은 미리보기가 실제로 그려지는 소스 수.
-   * 미리보기가 전부 비면 OS·보안 프로그램(화면 캡처 방지·DRM)이 캡처를 막는 쪽, 일부만 비면 그 모니터만 문제.
+   * 캡처 실패 진단 — 모니터 수·크기·배율·주 모니터, 화면 소스 수, 작은 미리보기가 실제로 렌더링되는 소스 수.
+   * 미리보기가 전부 비어 있으면 OS·보안 프로그램(화면 캡처 방지·DRM)이 캡처를 차단하는 경우, 일부만 비어 있으면 해당 모니터만의 문제.
    * 예: "displays 2 (2560x1440@1.5*, 1920x1080@1) sources 2 thumbs 1/2"
    */
   private async diagnose(): Promise<string> {
@@ -63,7 +63,7 @@ export class HostSession {
       const ds = this.displays().map(d => `${Math.round(d.size.width * d.scaleFactor)}x${Math.round(d.size.height * d.scaleFactor)}@${d.scaleFactor}${d.id === prim ? '*' : ''}`);
       const src = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 64, height: 36 } });
       const ok = src.filter(x => !x.thumbnail.isEmpty() && x.thumbnail.toBitmap().some(b => b !== 0)).length;
-      // "키=값" 여러 개는 앞단 웹 방화벽(WAF)이 공격으로 보고 종료 보고 자체를 403 으로 막을 수 있다 — 낱말과 숫자로 쓴다
+      // "키=값" 다수는 프런트 웹 방화벽(WAF)이 공격으로 판정하여 종료 보고 자체를 403 으로 차단할 수 있다 — 단어와 숫자로 기록한다
       return `displays ${ds.length} (${ds.join(', ')}) sources ${src.length} thumbs ${ok}/${src.length}`;
     } catch (e) {
       return `diag-fail ${e instanceof Error ? e.message : String(e)}`.slice(0, 80);
@@ -78,7 +78,7 @@ export class HostSession {
     return screen.getAllDisplays();
   }
 
-  /** 지금 보내는 모니터의 물리 픽셀 영역(SendInput 좌표계). Windows 는 DIP → 물리 변환 */
+  /** 현재 송출 중인 모니터의 물리 픽셀 영역(SendInput 좌표계). Windows 는 DIP → 물리 변환 */
   private currentRect(): Rect {
     const ds = this.displays();
     const d = ds[Math.min(this.displayIndex, ds.length - 1)] ?? screen.getPrimaryDisplay();
@@ -86,7 +86,7 @@ export class HostSession {
     return { x: b.x, y: b.y, width: b.width, height: b.height };
   }
 
-  /** 실제로 잡히는 화면 크기 — 모니터 물리 해상도를 MAX_W×MAX_H 안으로 비율 유지해 줄인 값 */
+  /** 실제 캡처되는 화면 크기 — 모니터 물리 해상도를 MAX_W×MAX_H 이내로 비율을 유지하여 축소한 값 */
   private captureSize(): { w: number; h: number } {
     const r = this.currentRect();
     const k = Math.min(1, MAX_W / r.width, MAX_H / r.height);
@@ -125,15 +125,15 @@ export class HostSession {
   start(): void {
     ipcMain.on('rd:runner:input', this.onInput);
     ipcMain.on('rd:runner:state', this.onRunnerState);
-    // 예전 방식 캡처 폴백용 소스 id(러너 capture() 2·3단계)
+    // 구 방식 캡처 폴백용 소스 id(러너 capture() 2·3단계)
     ipcMain.handle('rd:runner:source', async (e) => (e.sender === this.runner?.webContents ? (await this.pickSource())?.id ?? null : null));
-    // 고른 모니터가 끝내 안 잡히면 러너가 다른 모니터를 차례로 시도한다(4단계) — 화면 소스 id 전부
+    // 선택한 모니터가 끝내 캡처되지 않으면 러너가 다른 모니터를 순차 시도한다(4단계) — 화면 소스 id 전체
     ipcMain.handle('rd:runner:sources', async (e) => {
       if (e.sender !== this.runner?.webContents) return [];
       const src = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
       return src.map(s => s.id);
     });
-    // 러너가 실제로 잡은 소스 — 다른 모니터로 대체됐으면 입력 좌표·모니터 표시를 그 모니터로 맞춘다
+    // 러너가 실제로 캡처한 소스 — 다른 모니터로 대체된 경우 입력 좌표·모니터 표시를 해당 모니터에 맞춘다
     ipcMain.on('rd:runner:used', this.onUsedSource);
     ipcMain.handle('rd:runner:init', (e) => (e.sender === this.runner?.webContents ? {
       ws_url: this.opts.livekit.ws_url, token: this.opts.livekit.token, peer: this.opts.livekit.peer_identity,
@@ -143,13 +143,13 @@ export class HostSession {
     this.runner.on('closed', () => { this.runner = null; void this.stop('runner_closed'); });
     this.closeBar = showBar(this.opts.requester, () => void this.stop('host_stop'));
 
-    // 보안 화면(UAC·잠금) 감지 — 바뀔 때만 뷰어에 알린다
+    // 보안 화면(UAC·잠금) 감지 — 변경 시에만 뷰어에 통지한다
     this.timers.push(setInterval(() => {
       const s = !!this.opts.addon?.secureDesktop();
       if (s !== this.secure) { this.secure = s; this.send({ t: 'state', s: s ? 'secure_desktop' : 'ok' }); }
     }, 1000));
-    // 호스트 클립보드는 자동으로 내보내지 않는다 — 뷰어가 [클립보드 받기](clipreq)를 누를 때만 보낸다(텍스트만, 길이 제한)
-    // 연결 직후·주기적으로 화면 정보
+    // 호스트 클립보드는 자동으로 송신하지 않는다 — 뷰어가 [클립보드 받기](clipreq)를 선택할 때만 송신한다(텍스트만, 길이 제한)
+    // 연결 직후 및 주기적으로 화면 정보 송신
     this.timers.push(setInterval(() => this.sendInfo(), 10_000));
     setTimeout(() => this.sendInfo(), 1500);
   }

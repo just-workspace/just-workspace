@@ -1,9 +1,9 @@
 // 회의 세션 감사 수정 회귀(useMeetings · 회의 화면):
-//  - 접속 세대 번호: 연속 입장은 하나만 붙고, 접속 도중 나가기·화면 이탈이면 뒤늦게 붙지 않는다
-//  - 자동 재입장은 "지금" 마이크·카메라 상태로(음소거한 사람이 다시 송출되지 않게)
-//  - 브라우저의 "공유 중지" → 버튼 상태 동기화 / 저쪽에서 끝남 → remoteEnded / 나가면 배경 효과·녹화 표시 초기화
-//  - 회의 채팅: 보낸 사람은 payload 가 아니라 참가자에서, 문자열 아닌 글은 버린다(사칭·화면 죽음)
-//  - 회의 화면: 이름의 % 로 죽지 않고, 주소의 ?ws=·?t= 를 접속에 쓰지 않는다
+//  - 접속 세대 번호: 연속 입장은 하나만 연결되고, 접속 도중 나가기·화면 이탈 시 뒤늦게 연결되지 않음
+//  - 자동 재입장은 "지금" 마이크·카메라 상태로 수행(음소거한 사용자가 다시 송출되지 않도록)
+//  - 브라우저의 "공유 중지" → 버튼 상태 동기화 / 상대 측 종료 → remoteEnded / 퇴장 시 배경 효과·녹화 표시 초기화
+//  - 회의 채팅: 발신자는 payload 가 아닌 참가자 정보에서 취득, 문자열이 아닌 메시지는 폐기(사칭·화면 크래시)
+//  - 회의 화면: 이름의 % 로 크래시하지 않으며, 주소의 ?ws=·?t= 를 접속에 사용하지 않음
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -18,7 +18,7 @@ interface FakeRoom {
   emit: (ev: string, ...a: any[]) => void
 }
 const rooms: FakeRoom[] = []
-/** true 면 connect() 가 바로 끝난다. false 면 테스트가 connectGate.resolve() 로 끝낸다 */
+/** true 면 connect() 가 즉시 완료된다. false 면 테스트가 connectGate.resolve() 로 완료시킨다 */
 let autoConnect = true
 
 vi.mock('livekit-client', () => {
@@ -64,7 +64,7 @@ vi.mock('~/lib/api', async (orig) => {
   const mod = await orig<typeof import('~/lib/api')>()
   return { ...mod, $fetch: vi.fn() }
 })
-// 장치 확인 화면은 이 테스트의 관심사가 아니다 — [참여] 버튼 하나로 대신한다
+// 장치 확인 화면은 본 테스트의 대상이 아님 — [참여] 버튼 하나로 대체
 vi.mock('~/components/meetings/MeetingsDeviceSetup', () => ({
   MeetingsDeviceSetup: (p: { onJoin?: (o: unknown) => void; busy?: boolean }) => (
     <button data-testid="join" disabled={!!p.busy} onClick={() => p.onJoin?.({ cameraEnabled: false, micEnabled: false })}>join</button>
@@ -121,7 +121,7 @@ describe('접속 세대 번호', () => {
 
   it('화면이 내려가며 cancelPendingJoin — 접속 중인 입장만 접고, 붙어 있는 통화는 그대로', async () => {
     await m.joinRoom('r1', { cameraEnabled: false, micEnabled: false })
-    m.cancelPendingJoin()   // 진행 중인 입장이 없다 — 아무 일도 없어야 한다
+    m.cancelPendingJoin()   // 진행 중인 입장 없음 — no-op 이어야 함
     expect(S().inCall).toBe(true)
     await m.leaveRoom()
 
@@ -138,7 +138,7 @@ describe('접속 세대 번호', () => {
   it('버린 방의 끊김 이벤트는 살아 있는 세션을 지우지 않는다', async () => {
     await m.joinRoom('r1', { cameraEnabled: false, micEnabled: false })
     const stray = new (await import('livekit-client')).Room() as unknown as FakeRoom
-    // 세션의 방이 아닌 방 — 핸들러가 달려 있지 않으므로 직접 흉내 낼 수 없다. 대신 세션 방 자체는 유지되는지 본다.
+    // 세션의 방이 아닌 방 — 핸들러가 등록되어 있지 않아 직접 모의할 수 없음. 대신 세션 방 자체의 유지 여부를 확인.
     expect(stray).not.toBe(S().currentRoom)
     expect(S().connected).toBe(true)
   })
@@ -154,7 +154,7 @@ describe('자동 재입장', () => {
     expect(S().micEnabled).toBe(false)
     expect(S().cameraEnabled).toBe(false)
 
-    rooms[0].emit('disconnected', undefined)   // 되붙는 끊김
+    rooms[0].emit('disconnected', undefined)   // 재연결되는 끊김
     expect(S().connectionState).toBe('rejoining')
     await vi.advanceTimersByTimeAsync(1100)
     await flush()
@@ -266,7 +266,7 @@ describe('회의 화면', () => {
       { path: '/meetings/room/:name', element: <MeetingRoomPage /> },
       { path: '*', element: <div data-testid="elsewhere" /> },
     ], { initialEntries: [path] })
-    setAppRouter(router as any)   // navigateTo 가 이 라우터로 움직이게
+    setAppRouter(router as any)   // navigateTo 가 이 라우터로 동작하도록 설정
     return { router, ...render(<RouterProvider router={router} />) }
   }
 

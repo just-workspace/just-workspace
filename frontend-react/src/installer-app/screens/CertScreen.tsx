@@ -1,9 +1,9 @@
 /**
- * 인증서 올리기 — 가진 인증서를 골랐을 때만 나온다. 파일 두 개(인증서 · 개인 키)를 올리면 서버가 바로 검사한다.
- * 셋째 칸 "CA 인증서(선택)"은 사설 CA 가 내준 인증서일 때만 쓴다 — 인증서 파일에 발급 CA 가 이어 붙어 있지 않으면,
- * 그 CA 를 따로 올려야 이 서버의 코드 저장소가 접속 주소의 인증서를 믿는다(로그인 연동).
- * 검사 결과는 접속 주소 · 메일 호스트 이름 · 개인 키 · 만료일 · 발급자 · 발급 CA 여섯 줄로 보인다.
- * 실패가 있으면 다음으로 갈 수 없고, 주의(메일 이름 빠짐 · 발급 CA 없음 등)는 그대로 갈 수 있다.
+ * 인증서 올리기 — 가진 인증서를 선택한 경우에만 표시된다. 파일 두 개(인증서 · 개인 키)를 업로드하면 서버가 즉시 검사한다.
+ * 셋째 칸 "CA 인증서(선택)"은 사설 CA 가 발급한 인증서일 때만 사용한다 — 인증서 파일에 발급 CA 가 연결되어 있지 않으면,
+ * 해당 CA 를 별도로 업로드해야 이 서버의 코드 저장소가 접속 주소의 인증서를 신뢰한다(로그인 연동).
+ * 검사 결과는 접속 주소 · 메일 호스트 이름 · 개인 키 · 만료일 · 발급자 · 발급 CA 여섯 줄로 표시한다.
+ * 실패가 있으면 다음으로 진행할 수 없으며, 주의(메일 이름 누락 · 발급 CA 없음 등)는 그대로 진행할 수 있다.
  */
 import { useState } from 'react'
 import { UiCallout } from '~/components/ui/Callout'
@@ -64,7 +64,7 @@ export function CertScreen() {
     return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString(locale === 'ko' ? 'ko-KR' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
   }
 
-  // 올린 파일에서 걸린 것 — 실패가 있으면 그것 하나, 없으면 주의를 모두 보인다
+  // 업로드한 파일의 문제 항목 — 실패가 있으면 해당 항목 하나, 없으면 주의를 모두 표시
   const issues = (result?.checks ?? []).filter(c => c.status !== 'pass')
   const failure = issues.find(c => c.status === 'fail')
   const shownList = failure ? [failure] : issues

@@ -1,8 +1,8 @@
 /**
- * 실시간 품질 "증명" — 접속 바 음질 버튼에서 위로 열리는 팝오버 400(모바일 바텀시트).
- * 맨 위 success 상자에 실제 형식(mono 17/600) · 표(왕복 지연 · 버퍼 · 손실·복구 · 중계 · 입력 장치) · L/R 레벨 24칸 ·
- * "받는 중: 사람별 형식" + [안정화]. 값은 useVoice 가 1초마다 폴링한 VoiceStats — 무손실 전송(lib/lossless)이면
- * transport·fallbackReason·format·bufferMs·recovered 가 실측으로 채워진다.
+ * 실시간 품질 "증명" — 접속 바 음질 버튼에서 위쪽으로 열리는 팝오버 400(모바일 바텀시트).
+ * 최상단 success 상자에 실제 형식(mono 17/600) · 표(왕복 지연 · 버퍼 · 손실·복구 · 중계 · 입력 장치) · L/R 레벨 24칸 ·
+ * "받는 중: 사람별 형식" + [안정화]. 값은 useVoice 가 1초 간격으로 폴링한 VoiceStats — 무손실 전송(lib/lossless)이면
+ * transport·fallbackReason·format·bufferMs·recovered 가 실측값으로 채워진다.
  */
 import { useEffect, useState } from 'react'
 import { useStore } from 'zustand'
@@ -23,7 +23,7 @@ function num(v: number | null | undefined, digits = 0): string {
   return v.toFixed(digits)
 }
 
-/** 받는 중 — 사람별 짧은 형식 */
+/** 수신 중 — 참가자별 축약 형식 */
 function shortFmt(tier: VoiceTier): string {
   switch (tier) {
     case 'music': return 'Opus'
@@ -134,7 +134,7 @@ export interface VoiceStatsPanelProps {
 export function VoiceStatsPanel({ anchor, onClose }: VoiceStatsPanelProps) {
   const { t } = useI18n()
   const isMobile = useIsMobile()
-  // 마운트 뒤 anchor ref 가 채워지는 한 틱을 기다린다
+  // 마운트 후 anchor ref 가 채워지기까지 1틱 대기
   const [, tick] = useState(0)
   useEffect(() => { if (!anchor) tick(x => x + 1) }, [anchor])
   if (isMobile) {

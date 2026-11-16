@@ -1,12 +1,12 @@
 /**
  * 받는 사람 칩 + 자동완성.
- * Outlook식 수신자 칩 + 자동완성. modelValue 는 콤마 구분 문자열(기존 compose 로직 무수정 호환).
- * 데스크톱(받는이 칩 26 · 아바타 18 · ✕ 18) / 모바일(칩 32 · ✕ 28). ✕ 는 시각 크기 유지, 히트 영역만 40.
- * 워크스페이스 사람(내 도메인 주소·자동완성 출처 user)은 primary/13 채움 + 이니셜, 바깥 주소는 테두리.
+ * Outlook 방식의 수신자 칩 + 자동완성. modelValue 는 콤마 구분 문자열(기존 compose 로직과 수정 없이 호환).
+ * 데스크톱(받는이 칩 26 · 아바타 18 · 제거 버튼 18) / 모바일(칩 32 · 제거 버튼 28). 제거 버튼은 시각 크기를 유지하고 히트 영역만 40.
+ * 워크스페이스 사용자(자체 도메인 주소·자동완성 출처 user)는 primary/13 채움 + 이니셜, 외부 주소는 테두리.
  */
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거함)
 import { clsx as cx } from 'clsx'
 import { $fetch } from '~/lib/api'
 import { UiIcon } from '~/components/ui/Icon'
@@ -15,14 +15,14 @@ import { splitAddressList } from '~/components/mail/composeText'
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-// 자동완성 — 서버(최근 수신인 + 내부 사용자 + 주소록)를 먼저 보고,
-// 응답이 없거나 오프라인이면 localStorage 기록으로 버틴다.
-// 예전에는 localStorage 만 봐서 기기를 바꾸면 목록이 통째로 사라졌다.
+// 자동완성 — 서버(최근 수신인 + 내부 사용자 + 주소록)를 우선 조회하고,
+// 응답이 없거나 오프라인이면 localStorage 기록으로 fallback 한다.
+// 기존에는 localStorage 만 조회하여 기기 변경 시 목록 전체가 소실되었다.
 interface Recent { name: string; email: string; sources?: string[]; organization?: string }
 
 export function parseEntry(raw: string): { name: string; email: string } {
   const m = raw.match(/^(.*?)<(.+?)>$/)
-  // 쉼표가 든 이름은 따옴표로 감싸 둔다(joinAddrs) — 보여 줄 때는 뗀다
+  // 쉼표가 포함된 이름은 따옴표로 감싸 저장(joinAddrs) — 표시할 때는 제거
   return m ? { name: m[1].trim().replace(/^"|"$/g, ''), email: m[2].trim() } : { name: '', email: raw.trim() }
 }
 function chipLabel(c: string): string { const p = parseEntry(c); return p.name || p.email }
@@ -43,16 +43,16 @@ function pushRecent(e: Recent) {
 export interface MailRecipientFieldProps {
   /** 콤마 구분 주소 문자열 */
   modelValue: string
-  /** 주소 바뀜 */
+  /** 주소 변경 */
   onUpdateModelValue?: (v: string) => void
   /** 왼쪽 라벨(받는이·참조·숨은참조) */
   label: string
   placeholder?: string
-  /** 주소 블록 안에서 자기 테두리를 끈다 */
+  /** 주소 블록 내부에서 자체 테두리 비활성화 */
   borderless?: boolean
   /** md 데스크톱 작성 창 · lg 모바일 전체 화면 */
   size?: 'md' | 'lg'
-  /** 내 메일 도메인 — 같으면 워크스페이스 사람으로 본다 */
+  /** 사용자 메일 도메인 — 동일하면 워크스페이스 사용자로 판정 */
   ownDomain?: string
   /** 받는 사람 줄 오른쪽(참조·숨은참조 링크 등) */
   actions?: ReactNode
@@ -70,11 +70,11 @@ export function MailRecipientField({ modelValue, onUpdateModelValue, label, plac
   const wrapRef = useRef<HTMLDivElement | null>(null)
 
   const chips = useMemo(() => splitAddressList(modelValue || ''), [modelValue])
-  // 이벤트 처리기(blur 뒤 타이머 등)에서 "지금" 값을 읽는다
+  // 이벤트 처리기(blur 후 타이머 등)에서 최신 값을 읽는 참조
   const latest = useRef({ chips, input, modelValue })
   latest.current = { chips, input, modelValue }
   function setChips(arr: string[]) {
-    // 같은 틱에 여러 번 바뀌면(붙여넣기) 앞의 결과 위에 쌓는다
+    // 동일 틱에 여러 번 변경되면(붙여넣기) 직전 결과에 누적
     latest.current = { ...latest.current, chips: arr, modelValue: arr.join(', ') }
     onUpdateModelValue?.(arr.join(', '))
   }
@@ -86,7 +86,7 @@ export function MailRecipientField({ modelValue, onUpdateModelValue, label, plac
     const seq = ++sugSeq.current
     try {
       const data = await $fetch<Recent[]>('/api/contacts/suggest', { params: { q, limit: 8 } })
-      if (seq !== sugSeq.current) return // 늦게 온 응답이 최신 입력을 덮지 않게
+      if (seq !== sugSeq.current) return // 지연 도착한 응답이 최신 입력을 덮어쓰지 않도록 차단
       setRemote(data || [])
     } catch {
       if (seq === sugSeq.current) setRemote([])
@@ -155,9 +155,9 @@ export function MailRecipientField({ modelValue, onUpdateModelValue, label, plac
   function remove(i: number) { const a = [...latest.current.chips]; a.splice(i, 1); setChips(a) }
 
   function onKeydown(e: KeyboardEvent<HTMLInputElement>) {
-    // 한글 조합 중 Enter/Tab 은 조합 확정용이다 — 여기서 칩을 만들면 마지막 글자가 입력 칸에 한 번 더 남는다
+    // 한글 조합 중 Enter/Tab 은 조합 확정용임 — 이 시점에 칩을 생성하면 마지막 글자가 입력 칸에 한 번 더 남음
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
-    // Ctrl+Enter = 보내기(작성기가 받는다) — 치던 주소를 먼저 칩으로 확정해 두고 넘긴다(제안 항목을 고르지 않는다)
+    // Ctrl+Enter = 보내기(작성기가 처리) — 입력 중인 주소를 먼저 칩으로 확정한 후 전달(제안 항목은 선택하지 않음)
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { commitInput(); return }
     if (showSug && suggestions.length) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setSugIndex((sugIndex + 1) % suggestions.length); return }
@@ -173,8 +173,8 @@ export function MailRecipientField({ modelValue, onUpdateModelValue, label, plac
     const txt = e.clipboardData?.getData('text') || ''
     if (/[,;\n]/.test(txt)) { e.preventDefault(); txt.split(/[;\n]+/).flatMap(splitAddressList).forEach(p => addRaw(p)); setInput(''); latest.current = { ...latest.current, input: '' } }
   }
-  // 바로 확정한다 — 예전엔 120ms 뒤라 주소를 치고 곧장 "보내기"를 누르면 그 주소가 빠진 채 나갔다.
-  // (제안 항목은 onMouseDown 에서 preventDefault 하므로 눌러도 blur 가 나지 않는다 — 기다릴 이유가 없다)
+  // 즉시 확정한다 — 기존에는 120ms 후 확정하여 주소 입력 직후 "보내기"를 누르면 해당 주소가 누락된 채 발송되었다.
+  // (제안 항목은 onMouseDown 에서 preventDefault 하므로 클릭해도 blur 가 발생하지 않는다 — 대기할 이유가 없다)
   function onBlur() { commitInput() }
 
   return (
@@ -234,7 +234,7 @@ export function MailRecipientField({ modelValue, onUpdateModelValue, label, plac
           />
         </div>
 
-        {/* 참조·숨은참조 링크 등을 받는 사람 줄 오른쪽에 */}
+        {/* 참조·숨은참조 링크 등을 받는 사람 줄 오른쪽에 배치 */}
         {actions && (
           <div className={cx('absolute right-0 flex items-center gap-2.5', size === 'lg' ? 'top-1.5' : 'top-0.5')}>
             {actions}

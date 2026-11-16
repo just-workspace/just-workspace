@@ -1,6 +1,6 @@
 /**
- * 메시지 불러오는 중 — 아바타 40 원 + 이름 막대 14×128 + 본문 막대 1–2줄(14 높이), 묶음 간격 20, 좌우 16.
- * animate-pulse — reduce-motion 이면 멈춘다. aria-busy 로 읽는 중임을 알린다.
+ * 메시지 로딩 중 — 아바타 40 원 + 이름 막대 14×128 + 본문 막대 1–2줄(14 높이), 그룹 간격 20, 좌우 16.
+ * animate-pulse — reduce-motion 이면 정지. aria-busy 로 로딩 중임을 전달.
  */
 import { useI18n } from '~/i18n'
 

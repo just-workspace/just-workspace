@@ -1,5 +1,5 @@
 // 채팅 승인 카드: 상태 전이(대기 → 실행 → 되돌리기 · 취소 · 수정 → PATCH → 실행),
-// 서버 시각 offset 으로 만료·남은 시간을 센다(클라이언트 시계만 믿지 않음), high 는 대기함 링크.
+// 서버 시각 offset 으로 만료·남은 시간을 계산(클라이언트 시계에만 의존하지 않음), high 는 대기함 링크.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -88,7 +88,7 @@ describe('승인 카드 — low', () => {
   })
 
   it('서버 시각으로 만료가 지났으면 만료 카드(클라이언트 시계로는 아직 남아 있어도)', () => {
-    // 서버가 10분 앞: server_now 기준 만료 5분이 이미 5분 전에 지남 — 클라이언트 시계로만 보면 아직 미래
+    // 서버가 10분 앞: server_now 기준 만료 5분이 이미 5분 전에 경과 — 클라이언트 시계 기준으로는 아직 미래
     const sNow = Date.now() + 10 * MIN
     renderCard(req({ server_now: iso(sNow), expires_at: iso(Date.now() + 5 * MIN) }))
     expect(screen.getByRole('region', { name: t('approvals.card.expiredLabel', { title: '위키 문서 만들기' }) })).toBeTruthy()
@@ -125,7 +125,7 @@ describe('승인 카드 — low', () => {
   })
 
   it('되돌리기 기한이 서버 기준으로 지났으면 버튼을 숨긴다', () => {
-    const sNow = Date.now() + 11 * MIN // 서버가 11분 앞 → undo_until(클라 기준 10분 뒤)이 이미 지남
+    const sNow = Date.now() + 11 * MIN // 서버가 11분 앞 → undo_until(클라이언트 기준 10분 뒤)이 이미 경과
     renderCard(req({ status: 'executed', can_undo: true, executed_at: iso(Date.now()), undo_until: iso(Date.now() + 10 * MIN), server_now: iso(sNow), editable: [] }))
     expect(screen.queryByRole('button', { name: /되돌리기/ })).toBeNull()
   })

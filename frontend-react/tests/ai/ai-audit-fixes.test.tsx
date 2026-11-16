@@ -1,4 +1,4 @@
-// 내장 AI 구역 감사 수정 회귀 — 8(답변 id 를 받기 전 멈춤) · 9(다른 입력 칸의 Esc 는 멈춤이 아니다) · 10(글자와 그림이 같이 든 붙여넣기)
+// 내장 AI 구역 감사 수정 회귀 — 8(답변 id 수신 전 멈춤) · 9(다른 입력 칸의 Esc 는 멈춤이 아님) · 10(텍스트와 이미지가 함께 포함된 붙여넣기)
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 
@@ -43,10 +43,10 @@ describe('답변 id 를 받기 전 멈춤(8)', () => {
     const p = S.startAiRun({ convId: 'c1', url: '/x', body: null, msg: asst() })
     await until(() => !!live)
     const key = runs()[0].key
-    S.stopAiRun(key)                       // 아직 meta 없음 — 멈춤을 전할 id 가 없다
-    expect(signal.aborted).toBe(false)     // 끊으면 서버는 끝까지 만든다
+    S.stopAiRun(key)                       // 아직 meta 없음 — 멈춤을 전달할 id 없음
+    expect(signal.aborted).toBe(false)     // 연결을 끊으면 서버는 끝까지 생성함
     expect(api.calls).toEqual([])
-    expect(runs()[0].active).toBe(false)   // 입력창은 바로 풀린다
+    expect(runs()[0].active).toBe(false)   // 입력창은 즉시 해제
     expect(last.status).toBe('stopped')
     live.push(ev('meta', { message_id: 'm9' }, '1-0') + ev('token', { text: '늦은 글' }, '2-0'))
     expect(await p).toBe(200)
@@ -89,7 +89,7 @@ describe('AiComposer', () => {
     const png = new File(['x'], 'image.png', { type: 'image/png' })
     const withText = fireEvent.paste(ta, { clipboardData: { files: [png], getData: (t: string) => (t === 'text/plain' ? 'A1\tB1' : '') } })
     expect(onFiles).not.toHaveBeenCalled()
-    expect(withText).toBe(true)                                          // preventDefault 하지 않음 — 글자가 들어간다
+    expect(withText).toBe(true)                                          // preventDefault 미호출 — 텍스트가 입력됨
     const onlyFile = fireEvent.paste(ta, { clipboardData: { files: [png], getData: () => '' } })
     expect(onFiles).toHaveBeenCalledWith([png])
     expect(onlyFile).toBe(false)

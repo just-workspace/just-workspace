@@ -32,7 +32,7 @@ export function AuditTab({ days }: { days: number }) {
   const seq = useRef(0)
   const filters: AuditFilters = { q, source, failedOnly, days }
 
-  // 검색어는 잠깐 멈춘 뒤 반영
+  // 검색어는 입력이 잠시 멈춘 후 반영
   useEffect(() => {
     const h = setTimeout(() => setQ(qInput), 300)
     return () => clearTimeout(h)

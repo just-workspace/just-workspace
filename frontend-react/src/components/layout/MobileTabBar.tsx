@@ -1,12 +1,12 @@
 /**
  * 모바일 하단 탭바: 홈 · 채팅 · 활동 · 메일 · 전체.
  * 64 + safe-area, 활성 = primary 글자 + 32 타일 primary/16.
- * 배지: 채팅 = 나를 부른 것(멘션+DM), 활동 = 안 읽은 알림. 메일 = 7px 점(안 읽은 메일이 있을 때 — useMailUnread:
- *   기존 /api/mail/mailboxes 받은편지함 unread_count. 데이터가 오기 전·계정 없음이면 점 없음).
- * 4번째 칸(기본 메일)은 "전체" 시트의 "탭 편집"으로 다른 모듈로 바꿀 수 있다(useUserPrefs.pinnedTab, 서버 동기화).
+ * 배지: 채팅 = 본인이 언급된 건(멘션+DM), 활동 = 안 읽은 알림. 메일 = 7px 점(안 읽은 메일이 있을 때 — useMailUnread:
+ *   기존 /api/mail/mailboxes 받은편지함 unread_count. 데이터 수신 전·계정 없음이면 점 없음).
+ * 4번째 칸(기본 메일)은 "전체" 시트의 "탭 편집"으로 다른 모듈로 교체할 수 있다(useUserPrefs.pinnedTab, 서버 동기화).
  *   교체 대상은 4번째(메일) 칸만. 홈·채팅·활동은 고정, 전체는 항상 마지막.
- * '전체' 시트: rounded-sheet, 핸들 36×4, 소통·문서·기타 3묶음 4열 그리드(타일 48 + 배지). 탭에 있는 모듈은 빼고,
- * 탭 편집 중에는 탭 모듈까지 다 보여 고르게 한다. 시트는 화면 아래 끝까지 덮는다 — 바깥·Esc 로 닫는다.
+ * '전체' 시트: rounded-sheet, 핸들 36×4, 소통·문서·기타 3묶음 4열 그리드(타일 48 + 배지). 탭에 있는 모듈은 제외하고,
+ * 탭 편집 중에는 탭 모듈까지 전부 표시하여 선택할 수 있게 한다. 시트는 화면 하단 끝까지 덮는다 — 바깥·Esc 로 닫는다.
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
@@ -24,14 +24,14 @@ import { UiIcon } from '~/components/ui/Icon'
 import { UiTabbar, type UiTabbarTab } from '~/components/ui/Tabbar'
 import { LayoutNavIcon } from './NavIcon'
 
-/** 탭바 마지막 "전체" 칸 id(모듈 id 와 겹치지 않게) */
+/** 탭바 마지막 "전체" 칸 id(모듈 id 와 중복되지 않도록 지정) */
 const ALL_TAB = '__all'
 
 interface Tab { id: string; route: string; label: string; icon: string; alsoMatch?: string[] }
 interface SheetItem { id: string; name: string; route: string; icon: string; fixed?: boolean }
 
 // 묶음: 소통 = 파일·캘린더·회의·연락처, 문서 = 위키·게시판·작업·Git, 기타 = AI·(플러그인)·프로필·관리.
-// 메일은 4번째 탭을 다른 모듈로 바꿨을 때만 시트에 나온다(소통 맨 앞).
+// 메일은 4번째 탭을 다른 모듈로 교체한 경우에만 시트에 표시된다(소통 맨 앞).
 const SHEET_GROUPS: { key: string; label: string; ids: string[] }[] = [
   { key: 'talk', label: 'shell.tab.groupTalk', ids: ['mail', 'files', 'calendar', 'meetings', 'contacts'] },
   { key: 'docs', label: 'shell.tab.groupDocs', ids: ['wiki', 'board', 'tasks', 'git'] },
@@ -62,7 +62,7 @@ export function LayoutMobileTabBar() {
   })()
 
   const isActive = (r: string) => (r === '/' ? route.path === '/' : route.path === r || route.path.startsWith(r + '/'))
-  // 탭 활성: 하위 경로(alsoMatch — 연락처 → 메일)까지 본다. 전체 시트가 열려 있으면 "전체" 하나만 활성.
+  // 탭 활성: 하위 경로(alsoMatch — 연락처 → 메일)까지 확인한다. 전체 시트가 열려 있으면 "전체" 하나만 활성.
   const routeMatches = (tb: Tab) => isActive(tb.route) || !!tb.alsoMatch?.some(isActive)
   const tabActive = (tb: Tab) => !showAll && routeMatches(tb)
   const badgeFor = (id: string) => (id === 'chat' ? totalMentions : id === 'activity' ? unreadCount : 0)
@@ -84,27 +84,27 @@ export function LayoutMobileTabBar() {
         .filter((m): m is NavItem => !!m && visible(m.id))
         .map(toItem)
       if (g.key === 'other') {
-        // 그 밖의 모듈(메모·플러그인)은 AI 뒤에, 프로필·관리는 맨 끝(탭 편집 대상 아님)
+        // 그 외 모듈(메모·플러그인)은 AI 뒤에, 프로필·관리는 맨 끝에 배치(탭 편집 대상 아님)
         items.push(...mods.filter(m => !known.has(m.id) && visible(m.id)).map(toItem))
         items.push({ id: 'settings', name: t('shell.tab.profile'), route: '/settings', icon: 'user', fixed: true })
         if (user?.is_admin) items.push({ id: 'admin', name: t('nav.admin'), route: '/admin', icon: 'settings', fixed: true })
       }
       return { key: g.key, label: t(g.label), items }
     }).filter(g => g.items.length)
-    // inTabs 는 tabs(= flat·pinnedTab·모듈 켜짐)에서 나온다
+    // inTabs 는 tabs(= flat·pinnedTab·모듈 활성화)에서 파생된다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flat, editing, t, user?.is_admin, pinnedTab, isModuleEnabled])
 
   // 탭 밖 모듈(파일·연락처 등)에 있으면 "전체"가 활성(시안)
   const allActive = showAll || !tabs.some(routeMatches)
   function closeSheet() { setShowAll(false); setEditing(false) }
-  // 시트가 탭바를 덮으므로 열리면 시트로 포커스를 옮긴다(Esc 닫기가 바로 먹게)
+  // 시트가 탭바를 덮으므로 열리면 시트로 포커스를 이동한다(Esc 닫기가 즉시 동작하도록)
   const sheetRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => { if (showAll) sheetRef.current?.focus() }, [showAll])
 
   return (
     <>
-      {/* md:hidden 은 부모가 아니라 여기 둔다(루트가 nav + 포털 두 개). 겉모습은 키트 UiTabbar. */}
+      {/* md:hidden 은 부모가 아닌 여기에 둔다(루트가 nav + 포털 두 개). 외형은 키트 UiTabbar. */}
       <UiTabbar
         className="md:hidden"
         tabs={[

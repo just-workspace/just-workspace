@@ -3,7 +3,7 @@
  *  머리 52: 열림 n / 닫힘 세그먼트 · 라벨 ▾(GitLabelPicker 필터 — 기존 기능 유지) · 담당 ▾ · 새 이슈(primary 32)
  *  행 60: 상태 아이콘 16(열림 success · 닫힘 muted) · 제목 13.5/600 + 라벨 칩 · "#n · 작성자 · 언제" · 댓글 수
  *  모바일: 세그먼트·칩 36, 행 15/600 · 아이콘 18, 새 이슈는 FAB.
- * 담당자 필터는 ★백엔드 갭(이슈 목록 필터 파라미터 없음) — 비활성.
+ * 담당자 필터는 백엔드 갭(이슈 목록 필터 파라미터 없음) — 비활성.
  */
 import { useI18n } from '~/i18n'
 import { timeAgo } from '~/lib/date'
@@ -25,7 +25,7 @@ import { GitLabelPicker } from './GitLabelPicker'
 import { GitLabelChip } from './GitLabelChip'
 
 export interface GitIssueListProps {
-  /** 지금 열린 이슈 번호(행 강조) */
+  /** 현재 열린 이슈 번호(행 강조) */
   selected: number | null
   /** 새 이슈 */
   onCreateIssue?: () => void
@@ -41,7 +41,7 @@ export function GitIssueList({ selected, onCreateIssue }: GitIssueListProps) {
   const { t } = useI18n()
 
   const stateItems = [
-    // 열림/닫힘 수는 GET /stats(없으면 열린 수만 저장소 값). 라벨 필터가 걸리면 목록 수와 다르므로 숨김.
+    // 열림/닫힘 수는 GET /stats(없으면 열린 수만 저장소 값). 라벨 필터 적용 시 목록 수와 상이하므로 숨김.
     { value: 'open', label: t('git.issue.state_open'), count: labelFilter.length ? undefined : (repoStats?.open_issues ?? selectedRepo?.open_issues_count) },
     { value: 'closed', label: t('git.issue.state_closed'), count: labelFilter.length ? undefined : (repoStats?.closed_issues ?? undefined) },
   ]
@@ -74,7 +74,7 @@ export function GitIssueList({ selected, onCreateIssue }: GitIssueListProps) {
         <span className="flex-1" />
         <UiButton size="xs" className="hidden font-semibold md:inline-flex" onClick={() => onCreateIssue?.()}>{t('git.issue.newButton')}</UiButton>
       </div>
-      {/* 선택된 라벨 필터 — 지울 수 있는 칩 */}
+      {/* 선택된 라벨 필터 — 제거 가능한 칩 */}
       {labelFilter.length > 0 && (
         <div className="flex shrink-0 flex-wrap gap-1.5 border-b border-border px-4 pb-2 md:px-3.5 md:pt-2">
           {labelFilter.map(id => (

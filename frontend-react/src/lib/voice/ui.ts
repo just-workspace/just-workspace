@@ -2,9 +2,9 @@
  * 음성채널 화면의 상태 로직 — 순수 함수만. 단위 테스트 대상(tests/voice/voiceUiLogic.test.ts).
  *
  *  · 단계 색(참고): 음성 neutral · 음악 primary · 무손실/하이레조 success(하이레조는 점에 링).
- *  · 접속 바 상태 글자 · 본문 띠(재연결/중계 실패/독점 실패/이어폰/권한 없음) 판정.
- *  · 스피커 출력 감지 휴리스틱(이어폰 권장 띠) — 라벨에 speaker/스피커… 가 있으면 스피커, 헤드폰 계열이면 이어폰, 모르면 unknown(띠 없음).
- *  · 레벨 미터 24칸 · dB 표기 · 무손실 비트레이트 · "안정화" 다음 값 · 실제 형식 글자.
+ *  · 접속 바 상태 문자열 · 본문 띠(재연결/중계 실패/독점 실패/이어폰/권한 없음) 판정.
+ *  · 스피커 출력 감지 휴리스틱(이어폰 권장 띠) — 라벨에 speaker/스피커… 가 있으면 스피커, 헤드폰 계열이면 이어폰, 판별 불가 시 unknown(띠 없음).
+ *  · 레벨 미터 24칸 · dB 표기 · 무손실 비트레이트 · "안정화" 다음 값 · 실제 형식 문자열.
  */
 import { clampMusicBitrate, formatBitrate, VOICE_BITRATE } from './opus'
 import type { VoiceBufferTarget, VoiceConnectionState, VoiceStats, VoiceTier } from './transport'
@@ -26,7 +26,7 @@ export function tierDotClass(tier: VoiceTier): string {
 /** 단계별 예상 지연 */
 export const TIER_LATENCY: Record<VoiceTier, string> = { voice: '~40 ms', music: '~60 ms', lossless: '100–300 ms', hires: '150–300 ms' }
 
-/** 음악 이상이면 에코 제거가 꺼진다 → 이어폰 권장 */
+/** 음악 이상 단계에서는 에코 제거가 비활성화된다 → 이어폰 권장 */
 export function isEarphoneTier(tier: VoiceTier): boolean {
   return tier !== 'voice'
 }
@@ -39,7 +39,7 @@ const SPEAKER_RE = /\b(speaker|speakers|loudspeaker)\b|스피커|built-?in\s*(ou
 const HEADPHONE_RE = /headphone|head-?set|earphone|ear-?bud|buds|airpods|헤드폰|헤드셋|이어폰|이어버드|bluetooth|블루투스|hands-?free|\bbt\b|wh-|wf-|audio-?technica|scarlett|interface/i
 
 /**
- * 고른(또는 기본) 출력 장치 라벨로 스피커인지 판정. enumerateDevices 라벨은 권한이 없으면 비어 있다 → unknown.
+ * 선택된(또는 기본) 출력 장치 라벨로 스피커 여부를 판정한다. enumerateDevices 라벨은 권한이 없으면 비어 있다 → unknown.
  * 헤드폰 단서가 있으면 스피커 단서보다 우선한다("Speakers (Realtek) + Headphones" 같은 복합 라벨).
  */
 export function detectSpeakerOutput(
@@ -68,7 +68,7 @@ export function barStatus(state: VoiceConnectionState, listenOnly: boolean): Bar
   return { key: 'connected', tone: 'success', dot: 'live' }
 }
 
-/** 재연결 중 흐른 초("다시 연결하는 중… 3초") */
+/** 재연결 중 경과한 초("다시 연결하는 중… 3초") */
 export function reconnectSeconds(since: number | null, now: number): number {
   if (!since) return 0
   return Math.max(0, Math.floor((now - since) / 1000))
@@ -81,9 +81,9 @@ export interface VoiceBand { kind: VoiceBandKind; tone: 'warning' | 'danger'; ic
 
 export interface BandInput {
   connectionState: VoiceConnectionState
-  /** 내가 고른 단계 */
+  /** 사용자가 선택한 단계 */
   wantTier: VoiceTier
-  /** 지금 실제로 보내는 단계 */
+  /** 현재 실제 송신 단계 */
   effectiveTier: VoiceTier
   listenOnly: boolean
   speakerOutput: SpeakerOutput
@@ -91,7 +91,7 @@ export interface BandInput {
   exclusiveFailed: boolean
 }
 
-/** 보일 띠(위→아래 순). 같은 종류는 하나만 */
+/** 표시할 띠(위→아래 순). 동일 종류는 하나만 */
 export function bandsFor(i: BandInput): VoiceBand[] {
   const out: VoiceBand[] = []
   if (i.connectionState === 'reconnecting' || i.connectionState === 'rejoining') out.push({ kind: 'reconnect', tone: 'warning', icon: 'wifi-off' })
@@ -102,7 +102,7 @@ export function bandsFor(i: BandInput): VoiceBand[] {
   return out
 }
 
-/** 권한 안내는 브라우저별 한 줄 — UA 로 가른다 */
+/** 권한 안내는 브라우저별 한 줄 — UA 로 구분한다 */
 export type BrowserKind = 'chrome' | 'edge' | 'firefox' | 'safari' | 'other'
 export function browserKind(ua: string): BrowserKind {
   if (/Edg\//.test(ua)) return 'edge'
@@ -134,13 +134,13 @@ export function losslessBitrate(sampleRate: number, bits: number, channels = 2):
   return sampleRate * bits * channels
 }
 
-/** [안정화] — 자동이면 120 고정, 고정이면 한 단계 올린다(끊김이 줄고 지연은 늘어난다) */
+/** [안정화] — 자동이면 120 고정, 고정이면 한 단계 상향한다(끊김은 감소하고 지연은 증가한다) */
 export function stabilizeNext(cur: VoiceBufferTarget): VoiceBufferTarget {
   if (cur === 'auto' || cur === 60) return 120
   return 250
 }
 
-/** 손실률(%) 표기 — 받은 패킷 대비 */
+/** 손실률(%) 표기 — 수신 패킷 대비 */
 export function lossPercent(lost: number | null, total: number | null): string {
   if (lost == null || !total) return '—'
   return `${((lost / Math.max(1, total + lost)) * 100).toFixed(2)}%`
@@ -148,8 +148,8 @@ export function lossPercent(lost: number | null, total: number | null): string {
 
 /**
  * 타일·접속 바의 "실제 형식" 한 줄.
- *  내 것(stats 있음): 'Opus 스테레오 509 kbps' / 'PCM 24/48 · 2.3 Mbps' — 실측 우선.
- *  남의 것(presence 단계만): 'Opus 모노 32 kbps' / 'Opus 스테레오' / 'PCM 24/48' / 'PCM 32/192'.
+ *  본인(stats 있음): 'Opus 스테레오 509 kbps' / 'PCM 24/48 · 2.3 Mbps' — 실측 우선.
+ *  타 참가자(presence 단계만): 'Opus 모노 32 kbps' / 'Opus 스테레오' / 'PCM 24/48' / 'PCM 32/192'.
  */
 export function actualFormat(
   tier: VoiceTier,

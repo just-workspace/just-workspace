@@ -1,5 +1,5 @@
-// 레일 '도구' 묶음 — 네트워크 랩은 NETLAB 주소가 있을 때만, 바깥 출처 새 탭(external).
-// 격리 브라우저도 같은 묶음(쓸 수 있는 대상 + rbi 출처가 있을 때). ($fetch 는 가짜 — tests/shell/shell.test.tsx 와 같은 방식)
+// 레일 '도구' 묶음 — 네트워크 랩은 NETLAB 주소가 있을 때만 표시, 외부 출처 새 탭(external).
+// 격리 브라우저도 동일 묶음(사용 가능한 대상 + rbi 출처가 있을 때). ($fetch 는 모의(mock) — tests/shell/shell.test.tsx 와 동일 방식)
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, waitFor, act } from '@testing-library/react'
 import { RouterProvider, createMemoryRouter } from 'react-router'
@@ -53,7 +53,7 @@ function shellRouter() {
 }
 
 async function renderShell() {
-  // 앱 부팅(App.tsx)이 하는 /api/health 읽기 — netlab_url → siteConfig.netlabUrl
+  // 앱 부팅(App.tsx)이 수행하는 /api/health 조회 — netlab_url → siteConfig.netlabUrl
   await fetchAppConfig()
   const router = shellRouter()
   const r = render(<RouterProvider router={router} />)

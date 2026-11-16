@@ -1,6 +1,6 @@
 /**
- * 멘션 자동완성 목록 — 입력(textarea·input) 위/아래에 붙는 listbox.
- * (자세한 설명·예시는 아래 컴포넌트 JSDoc)
+ * 멘션 자동완성 목록 — 입력(textarea·input) 위/아래에 부착되는 listbox.
+ * (상세 설명·예시는 아래 컴포넌트 JSDoc 참조)
  */
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -22,28 +22,28 @@ export interface UiMentionOption {
   avatarUrl?: string | null
   /** 아바타 글자(기본 = 이름 첫 글자) */
   initial?: string
-  /** 앞 칸을 아바타 대신 이것으로(예: `:` 자동완성의 이모지 24 · 역할 점) */
+  /** 앞 칸의 아바타를 대체할 내용(예: `:` 자동완성의 이모지 24 · 역할 점) */
   leading?: ReactNode
-  /** 오른쪽 꼬리표(예: "역할" · "GIF" · 단축키) — 선택 행의 ↵ 키캡 앞에 붙는다 */
+  /** 오른쪽 꼬리표(예: "역할" · "GIF" · 단축키) — 선택 행의 ↵ 키캡 앞에 배치된다 */
   trailing?: ReactNode
-  /** 고를 수 없음 — 행 60% + aria-disabled, 마우스·Enter 로 골라지지 않는다(↑↓ 로는 지나가며 이유를 읽힌다) */
+  /** 선택 불가 — 행 60% + aria-disabled, 마우스·Enter 로 선택되지 않는다(↑↓ 로는 통과하며 사유가 낭독된다) */
   disabled?: boolean
-  /** 고를 수 없는 이유(12 muted, 보조 글 뒤 · 화면 읽기에도 이어 읽힘) */
+  /** 선택 불가 사유(12 muted, 보조 글 뒤 · 화면 낭독기에서도 이어서 낭독됨) */
   disabledReason?: string
   /** 이름 글자 클래스(예: 역할 색 text-role-N) */
   labelClassName?: string
 }
 
 export interface UiMentionListProps {
-  /** listbox id(입력 aria-controls). 행 id 는 `${id}-${i}` — useUiMentionList().id 를 넘긴다 */
+  /** listbox id(입력 aria-controls). 행 id 는 `${id}-${i}` — useUiMentionList().id 를 전달한다 */
   id: string
   /** 후보 */
   options: UiMentionOption[]
   /** 선택(강조) 행 */
   activeIndex: number
-  /** 마우스로 행 위에 올렸을 때 */
+  /** 마우스 호버 시 호출 */
   onActiveChange?: (i: number) => void
-  /** 행 고름(마우스) — 키보드 고름은 useUiMentionList 가 같은 onPick 을 부른다 */
+  /** 행 선택(마우스) — 키보드 선택은 useUiMentionList 가 동일한 onPick 을 호출한다 */
   onPick: (i: number) => void
   /** 머리글(예: "이 파일을 볼 수 있는 사람") */
   heading?: ReactNode
@@ -68,11 +68,11 @@ export interface UiMentionListController {
   id: string
   active: number
   setActive: (i: number) => void
-  /** 고르기(마우스·키보드 공통) */
+  /** 선택(마우스·키보드 공통) */
   pick: (i: number) => void
-  /** 입력 onKeyDown 맨 앞에서 부른다 — 처리했으면 true(입력의 다른 단축키는 건너뛴다) */
+  /** 입력 onKeyDown 최상단에서 호출한다 — 처리한 경우 true 반환(입력의 다른 단축키는 생략한다) */
   onKeyDown: (e: KeyboardEvent<HTMLElement>) => boolean
-  /** 입력에 펼쳐 줄 aria(role=combobox · aria-expanded · aria-controls · aria-activedescendant · aria-autocomplete) */
+  /** 입력에 전개할 aria(role=combobox · aria-expanded · aria-controls · aria-activedescendant · aria-autocomplete) */
   inputProps: {
     role: 'combobox'
     'aria-autocomplete': 'list'
@@ -83,21 +83,21 @@ export interface UiMentionListController {
 }
 
 /**
- * 멘션 목록 제어 훅 — 후보 수가 바뀌면 선택을 처음으로 돌린다.
+ * 멘션 목록 제어 훅 — 후보 수 변경 시 선택을 첫 항목으로 초기화한다.
  */
 export function useUiMentionList({ count, open, onPick, onClose, idPrefix = 'ui-mention', anyEnter = false, isDisabled }: {
   /** 후보 수 */
   count: number
-  /** 목록이 보이는가(후보 0 이면 키를 가로채지 않는다) */
+  /** 목록 표시 여부(후보 0 이면 키를 가로채지 않는다) */
   open: boolean
-  /** i 번째 고름 */
+  /** i 번째 항목 선택 시 호출 */
   onPick: (i: number) => void
   /** Esc */
   onClose: () => void
   idPrefix?: string
-  /** Shift·Ctrl·⌘ 가 붙은 Enter 도 고르기로(채팅 입력의 예전 동작). 기본은 수식키 없는 Enter 만 */
+  /** Shift·Ctrl·⌘ 조합 Enter 도 선택으로 처리(채팅 입력의 기존 동작). 기본은 수식키 없는 Enter 만 처리 */
   anyEnter?: boolean
-  /** i 번째가 고를 수 없는 행인가(옵션 disabled) — Enter/Tab 을 먹되 onPick 은 부르지 않는다 */
+  /** i 번째 행의 선택 불가 여부(옵션 disabled) — Enter/Tab 은 소비하되 onPick 은 호출하지 않는다 */
   isDisabled?: (i: number) => boolean
 }): UiMentionListController {
   const id = useUid(idPrefix)
@@ -108,7 +108,7 @@ export function useUiMentionList({ count, open, onPick, onClose, idPrefix = 'ui-
   const cur = Math.min(active, Math.max(0, count - 1))
   function onKeyDown(e: KeyboardEvent<HTMLElement>): boolean {
     if (!shown) return false
-    // 한글 조합 중 Enter·Tab 은 IME 것 — 여기서 고르면 조합 중이던 글자가 중복된다
+    // 한글 조합 중 Enter·Tab 은 IME 소관 — 여기서 선택 처리하면 조합 중이던 글자가 중복된다
     if (e.nativeEvent.isComposing || e.keyCode === 229) return false
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive((cur + 1) % count); return true }
     if (e.key === 'ArrowUp') { e.preventDefault(); setActive((cur - 1 + count) % count); return true }
@@ -133,17 +133,17 @@ export function useUiMentionList({ count, open, onPick, onClose, idPrefix = 'ui-
 }
 
 /**
- * 멘션 자동완성 목록 — 입력(textarea·input) 위/아래에 붙는 listbox.
- * 채팅 입력·게시판 댓글·파일 댓글이 같이 쓴다.
+ * 멘션 자동완성 목록 — 입력(textarea·input) 위/아래에 부착되는 listbox.
+ * 채팅 입력·게시판 댓글·파일 댓글이 공용으로 사용한다.
  *
  * 모양: rounded-lg · border · bg-popover · shadow-md. 머리글(11/600 muted) · 행 36(아바타 20 · 이름 13/500 · 보조 글 12 muted)
  *       · 선택 행 bg-accent + 오른쪽 ↵ 키캡 · 바닥 안내 줄(12 muted, 위 테두리).
- *       옵션 슬롯: leading(아바타 자리 대체) · trailing(오른쪽 꼬리표) · disabled + disabledReason(60% + 이유 12 muted,
- *       aria-disabled, 클릭·Enter 로 안 골라짐 — 훅에 isDisabled 를 같이 준다).
- * 키보드: 포커스는 입력에 둔 채(aria-activedescendant) — 입력 onKeyDown 에서 useUiMentionList().onKeyDown(e) 를 먼저 부른다.
- *   ↑↓ 이동(돌기) · Enter/Tab 고르기(Ctrl/⌘+Enter 는 건드리지 않음 — 보내기 단축키, anyEnter 면 그것도 고르기) · Esc 닫기.
- * 위치: anchor 를 주면 그 요소 기준(body 포털, fixed — 위(top, 기본)/아래, 자리가 없으면 뒤집기, 폭 = anchor 폭).
- *   anchor 가 없으면 relative 부모 안 absolute(입력 상자 바로 위/아래, 좌우 꽉 채움).
+ *       옵션 슬롯: leading(아바타 자리 대체) · trailing(오른쪽 꼬리표) · disabled + disabledReason(60% + 사유 12 muted,
+ *       aria-disabled, 클릭·Enter 로 선택 불가 — 훅에 isDisabled 를 함께 지정한다).
+ * 키보드: 포커스는 입력에 유지한다(aria-activedescendant) — 입력 onKeyDown 에서 useUiMentionList().onKeyDown(e) 를 먼저 호출한다.
+ *   ↑↓ 이동(순환) · Enter/Tab 선택(Ctrl/⌘+Enter 는 처리하지 않음 — 전송 단축키, anyEnter 면 해당 조합도 선택) · Esc 닫기.
+ * 위치: anchor 를 지정하면 해당 요소 기준(body 포털, fixed — 위(top, 기본)/아래, 공간 부족 시 반전, 폭 = anchor 폭).
+ *   anchor 가 없으면 relative 부모 안 absolute(입력 상자 바로 위/아래, 좌우 전체 폭).
  *
  * @example
  * const m = useUiMentionList({ count: users.length, open, onPick: i => insert(users[i]), onClose: close })
@@ -163,13 +163,13 @@ export function UiMentionList({
   const boxRef = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null)
 
-  // 선택 행이 보이게
+  // 선택 행 가시 영역 유지
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>(`[id="${id}-${activeIndex}"]`)
     el?.scrollIntoView?.({ block: 'nearest' })
   }, [id, activeIndex])
 
-  // anchor 기준 자리(위 → 자리 없으면 아래, 반대도)
+  // anchor 기준 위치(위 → 공간 부족 시 아래, 반대 방향도 동일)
   useLayoutEffect(() => {
     if (!anchor) return
     const place = () => {

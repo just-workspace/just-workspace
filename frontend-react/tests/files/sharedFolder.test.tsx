@@ -1,4 +1,4 @@
-// 폴더 공유 링크 손님 화면 — 목록·하위 폴더 이동·경로·받기 주소·내려받기 막힘·비밀번호 링크 푼 뒤 폴더 화면.
+// 폴더 공유 링크 손님 화면 — 목록·하위 폴더 이동·경로·받기 주소·다운로드 차단·비밀번호 링크 해제 후 폴더 화면.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'

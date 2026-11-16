@@ -1,28 +1,28 @@
 /**
- * 수집기 — 원격 페이지의 **격리 world**(Page.createIsolatedWorld, 이름 jw-mirror)에서 돈다. 페이지 스크립트는 이 함수·변수에 닿지 못하고
- * (world 마다 JS 전역·프로토타입이 따로다) 우리는 DOM 만 공유한다. 하는 일은 "읽기" 뿐이다(스크롤 지시만 예외).
+ * 수집기 — 원격 페이지의 **격리 world**(Page.createIsolatedWorld, 이름 jw-mirror)에서 실행된다. 페이지 스크립트는 이 함수·변수에 접근할 수 없으며
+ * (world 마다 JS 전역·프로토타입이 분리된다) 수집기와는 DOM 만 공유한다. 수행 내용은 "읽기" 뿐이다(스크롤 지시만 예외).
  *
- * 틱마다 문서 전체(DOMSnapshot.captureSnapshot — 4.5천 노드에 115–135ms)를 다시 읽지 않는다.
- *   MutationObserver(+입력·포커스·애니메이션·이미지 로드·폰트 로드·크기 변경·포인터 이벤트)로 더러운 곳만 표시하고, 틱마다 그곳만 다시 읽는다.
- *   단계: ① 구조(추가·삭제 서브트리) ② 스타일(바뀐 요소만, 상속 속성이 바뀌면 자손까지) ③ 기하(바뀐 요소의 가장 가까운
- *   흐름 밖 조상 = position absolute/fixed 서브트리만, 그런 조상이 없으면 문서 전체) ④ 텍스트(문자 변화·부모 상자 변화)
- *   ⑤ 스크롤 컨테이너 오프셋 ⑥ 검증(페인트는 있었는데 변이가 없을 때 가끔, 뷰포트 안만).
- *   jsPlumb 노드 드래그는 absolute 라 그 노드 서브트리만 다시 잰다.
- * 좌표는 스크롤 불변(모든 스크롤 0 기준) — 문서·컨테이너 스크롤은 노드를 다시 보내지 않는다(fixed 서브트리는 뷰포트 좌표).
- * 결과는 "원시 레코드"(계산 스타일 문자열 그대로)다. 어휘로 바꾸고 검증하는 일은 에이전트(Node, convert.ts)가 한다 — 원시 문자열은 사용자 PC 로 가지 않는다.
- * 비밀번호 칸의 값은 이 함수 밖으로 나가지 않는다(길이만).
+ * 틱마다 문서 전체(DOMSnapshot.captureSnapshot — 4.5천 노드에 115–135ms)를 재조회하지 않는다.
+ *   MutationObserver(+입력·포커스·애니메이션·이미지 로드·폰트 로드·크기 변경·포인터 이벤트)로 변경 지점만 표시하고, 틱마다 해당 지점만 재조회한다.
+ *   단계: ① 구조(추가·삭제 서브트리) ② 스타일(변경된 요소만, 상속 속성이 변경되면 자손까지) ③ 기하(변경된 요소의 가장 가까운
+ *   흐름 밖 조상 = position absolute/fixed 서브트리만, 해당 조상이 없으면 문서 전체) ④ 텍스트(문자 변화·부모 상자 변화)
+ *   ⑤ 스크롤 컨테이너 오프셋 ⑥ 검증(페인트는 있었으나 변이가 없을 때 간헐적으로, 뷰포트 내부만).
+ *   jsPlumb 노드 드래그는 absolute 이므로 해당 노드 서브트리만 재측정한다.
+ * 좌표는 스크롤 불변(모든 스크롤 0 기준) — 문서·컨테이너 스크롤 시 노드를 재전송하지 않는다(fixed 서브트리는 뷰포트 좌표).
+ * 결과는 "원시 레코드"(계산 스타일 문자열 그대로)다. 어휘 변환과 검증은 에이전트(Node, convert.ts)가 수행한다 — 원시 문자열은 사용자 PC 로 전송되지 않는다.
+ * 비밀번호 입력칸의 값은 이 함수 밖으로 전달되지 않는다(길이만).
  *
- * ★ 이 함수는 toString() 으로 원격에 주입된다. 바깥 변수·import 를 참조하면 안 된다.
+ * 주의: 이 함수는 toString() 으로 원격에 주입된다. 외부 변수·import 를 참조해서는 안 된다.
  */
 
 export interface CollectorCfg {
   styles: readonly string[]
   maxNodes: number
-  /** 검증 패스(페인트는 있었는데 변이는 없었을 때) 최소 간격 ms */
+  /** 검증 패스(페인트는 있었으나 변이가 없었을 때) 최소 간격 ms */
   verifyMs: number
 }
 
-/** 원시 레코드(수집기 → 에이전트). 필드 이름은 짧게 — 에이전트 convert.ts 가 해석한다 */
+/** 원시 레코드(수집기 → 에이전트). 필드 이름은 축약형 — 에이전트 convert.ts 가 해석한다 */
 export interface RawRec {
   i: number
   p: number
@@ -34,32 +34,32 @@ export interface RawRec {
   o: number
   /**
    * 기록 부모 기준 지역 배치 [left, top, w, h] — left/top 은 부모의 padding box(스크롤 컨테이너면 스크롤 콘텐츠) 원점 기준,
-   * w/h 는 변환 전 크기. 부모가 움직여도 자식 레코드는 그대로다(부모 하나만 다시 간다).
-   * 뿌리(p=0)는 문서 좌표(스크롤 불변), fixed 뿌리(fr)는 뷰포트 좌표.
+   * w/h 는 변환 전 크기. 부모가 이동해도 자식 레코드는 변경되지 않는다(부모 하나만 재전송된다).
+   * 루트(p=0)는 문서 좌표(스크롤 불변), fixed 루트(fr)는 뷰포트 좌표.
    */
   r: [number, number, number, number]
   /** 부모 기준 지역 2×2 변환 행렬(단위행렬이 아닐 때만) — 상자 중심 기준 */
   m?: [number, number, number, number]
-  /** 계산 스타일(허용목록 순서). 텍스트는 부모 것을 쓴다(ps) */
+  /** 계산 스타일(허용목록 순서). 텍스트는 부모의 값을 사용한다(ps) */
   cs?: string[]
   /** 텍스트의 부모 요소 id(스타일 출처) */
   ps?: number
-  /** position:fixed 뿌리 — r 은 뷰포트 좌표 */
+  /** position:fixed 루트 — r 은 뷰포트 좌표 */
   fr?: 1
   /** 텍스트 줄 런 [x,y,w,h,text] — 텍스트 노드 상자 기준(변환 전) */
   tx?: [number, number, number, number, string][]
-  /** 요소 속성(필요한 것만): src(절대 URL — 에이전트가 자산 sha 로 바꾼다)·type·ph·dis·val·vb */
+  /** 요소 속성(필요한 것만): src(절대 URL — 에이전트가 자산 sha 로 치환한다)·type·ph·dis·val·vb */
   a?: Record<string, string>
   /** 위젯 상태: v 값(password 는 없음), n 길이, c checked, so 선택된 option 텍스트 */
   w?: { v?: string; n?: number; c?: boolean; so?: string }
   /** 스크롤 [scrollWidth, scrollHeight, scrollLeft, scrollTop] */
   sc?: [number, number, number, number]
-  /** svg 원시 기하(뿌리에만) */
+  /** svg 원시 기하(루트에만) */
   g?: RawGeom[]
   /** ::before/::after [content, font-family, font-size, font-weight, color] */
   pb?: [string, string, string, string, string]
   pa?: [string, string, string, string, string]
-  /** 열린 shadow root 가 있다(내용은 미러하지 않음 → 인셋) */
+  /** 열린 shadow root 존재(내용은 미러하지 않음 → 인셋) */
   sh?: 1
 }
 
@@ -86,8 +86,8 @@ export interface TickResult {
 }
 
 /**
- * 원격에 심을 소스. esbuild(tsx 개발 실행)는 함수 안에 __name(…) 도우미 호출을 넣는다 — 원격 world 에는 그 도우미가 없으므로
- * 같은 이름의 항등 함수를 감싸 둔다(tsc 컴파일본에는 없어서 영향 없음).
+ * 원격에 주입할 소스. esbuild(tsx 개발 실행)는 함수 내부에 __name(…) 헬퍼 호출을 삽입한다 — 원격 world 에는 해당 헬퍼가 없으므로
+ * 동일 이름의 항등 함수로 감싼다(tsc 컴파일본에는 없어 영향 없음).
  */
 export function collectorSource(cfg: CollectorCfg): string {
   return `((__name) => (${collectorMain.toString()}))((f) => f)(${JSON.stringify(cfg)})`
@@ -104,11 +104,11 @@ export function collectorMain(cfg: CollectorCfg): void {
   const SVG_KEEP = new Set(['path', 'line', 'rect', 'circle', 'ellipse', 'polyline', 'polygon', 'g', 'text', 'a', 'tspan'])
   const GEOM_ATTRS = ['d', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'width', 'height', 'rx', 'ry', 'cx', 'cy', 'r', 'points', 'transform']
   const PAINT = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'fill-opacity', 'opacity', 'font-size', 'font-weight', 'font-family', 'text-anchor']
-  // 상속되는 것 중 우리가 읽는 것 — 바뀌면 자손도 다시 읽는다
+  // 상속 속성 중 수집 대상 — 변경되면 자손도 재조회한다
   const INHERITED = ['visibility', 'color', 'font-family', 'font-size', 'font-weight', 'font-style', 'text-transform', 'letter-spacing', 'text-align', 'white-space', 'cursor', 'pointer-events', 'fill', 'stroke', 'stroke-width', 'text-anchor']
     .map(k => STY.indexOf(k)).filter(i => i >= 0)
   const TEXT_AFFECT = ['font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'white-space', 'text-transform', 'display'].map(k => STY.indexOf(k)).filter(i => i >= 0)
-  // 바뀌면 남의 배치까지 흔드는 것(우리가 읽는 것 중) — 색·배경·그림자처럼 칠하기만 바뀌면 기하는 다시 재지 않는다
+  // 변경 시 다른 요소의 배치에 영향을 주는 속성(수집 대상 중) — 색·배경·그림자처럼 칠하기만 변경되면 기하는 재측정하지 않는다
   const LAYOUT_AFFECT = ['display', 'position', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'white-space', 'text-transform',
     'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width', 'overflow-x', 'overflow-y'].map(k => STY.indexOf(k)).filter(i => i >= 0)
 
@@ -120,11 +120,11 @@ export function collectorMain(cfg: CollectorCfg): void {
     /** DOM 부모 id(삭제 전파용) */
     dp: number
     text: boolean
-    /** 상자가 있어 기록되는가 */
+    /** 상자가 있어 기록 대상인지 여부 */
     rec: boolean
     /** display:none — 서브트리 없음 */
     hidden: boolean
-    /** 자식을 따로 기록하지 않는 잎(svg·inset·img·widget·shadow host) */
+    /** 자식을 별도로 기록하지 않는 리프(svg·inset·img·widget·shadow host) */
     leaf: boolean
     o: number
     r?: [number, number, number, number]
@@ -138,7 +138,7 @@ export function collectorMain(cfg: CollectorCfg): void {
     sc?: [number, number, number, number]
     tx?: [number, number, number, number, string][]
     txj?: string
-    /** 지역 배치·지역 변환(보내는 값) */
+    /** 지역 배치·지역 변환(전송 값) */
     L?: [number, number, number, number]
     lm?: [number, number, number, number]
     /** 텍스트 지역 런 */
@@ -160,14 +160,14 @@ export function collectorMain(cfg: CollectorCfg): void {
   const dirty = new Set<number>()
   let truncated = false
 
-  // ── 더러움 표식 ──
+  // ── 변경 표시(dirty) ──
   let needFull = true
   let geomAll = false
-  const structDirty = new Set<Node>()         // 추가된 노드 · 자식 목록이 바뀐 부모
-  const styleDirty = new Set<Element>()       // 자기 스타일 다시
-  const deepStyleDirty = new Set<Element>()   // 서브트리 스타일 다시(속성 변화)
-  const stateDirty = new Set<Element>()       // 값·체크·src·svg 내부 — 스타일과 무관하게 다시
-  const textDirty = new Set<Node>()           // 텍스트 노드 · 텍스트 자식을 다시 잴 부모
+  const structDirty = new Set<Node>()         // 추가된 노드 · 자식 목록이 변경된 부모
+  const styleDirty = new Set<Element>()       // 자체 스타일 재조회
+  const deepStyleDirty = new Set<Element>()   // 서브트리 스타일 재조회(속성 변화)
+  const stateDirty = new Set<Element>()       // 값·체크·src·svg 내부 — 스타일과 무관하게 재조회
+  const textDirty = new Set<Node>()           // 텍스트 노드 · 텍스트 자식을 재측정할 부모
   const geomRoots = new Set<Element>()
   const scrollDirty = new Set<Element>()
   const hot = new Map<Element, number>()
@@ -245,14 +245,14 @@ export function collectorMain(cfg: CollectorCfg): void {
   const mo = new MutationObserver(onMut)
   mo.observe(document, { subtree: true, childList: true, attributes: true, characterData: true })
 
-  // 변이가 없는 시각 변화 — 캡처 단계 이벤트로 잡는다(페이지 핸들러와 무관, 막지 않는다)
+  // 변이가 없는 시각 변화 — 캡처 단계 이벤트로 감지한다(페이지 핸들러와 무관하며 이벤트를 차단하지 않는다)
   const evEl = (ev: Event) => (ev.target instanceof Element ? ev.target : null)
   const chainDirty = (n: Node | null) => {
     for (let e = n instanceof Element ? n : n?.parentElement ?? null; e; e = e.parentElement) styleDirty.add(e)
   }
   /**
-   * 이벤트 듣기 — document.open() 은 같은 Document 를 쓰면서 리스너를 모두 지운다(격리 world·__jwm 은 남는다).
-   * 그래서 문서 뿌리가 바뀌면(tick 에서 확인) 다시 붙인다.
+   * 이벤트 수신 — document.open() 은 동일 Document 를 유지하면서 리스너를 모두 제거한다(격리 world·__jwm 은 유지된다).
+   * 따라서 문서 루트가 변경되면(tick 에서 확인) 재등록한다.
    */
   let listenRoot: Element | null = null
   function listen(): void {
@@ -298,7 +298,7 @@ export function collectorMain(cfg: CollectorCfg): void {
     const c = getComputedStyle(el, which)
     const content = c.getPropertyValue('content')
     if (!content || content === 'none' || content === 'normal' || c.getPropertyValue('display') === 'none') return undefined
-    const m = /^"((?:[^"\\]|\\.)*)"$/.exec(content)   // 따옴표 문자열 하나만(카운터·attr()·url() 은 버린다)
+    const m = /^"((?:[^"\\]|\\.)*)"$/.exec(content)   // 따옴표 문자열 하나만 허용(카운터·attr()·url() 은 폐기)
     if (!m) return undefined
     const text = m[1].replace(/\\(.)/g, '$1')
     if (!text.trim()) return undefined
@@ -329,7 +329,7 @@ export function collectorMain(cfg: CollectorCfg): void {
       m: lm ? (c.m ? mul(c.m, lm) : lm) : c.m,
     }
   }
-  /** 요소 el 의 자식들이 쓰는 맥락 */
+  /** 요소 el 의 자식들이 사용하는 컨텍스트 */
   const ctxBelow = (el: Element | null): Ctx => {
     const chain: Element[] = []
     for (let e = el; e; e = e.parentElement) chain.push(e)
@@ -367,7 +367,7 @@ export function collectorMain(cfg: CollectorCfg): void {
     }
     lines.sort((a, b) => a.top - b.top)
     const pre = ws === 'pre' || ws === 'pre-wrap' || ws === 'break-spaces'
-    /** 줄 상자 — 접히는 공백을 다듬었으면 왼쪽 끝을 첫 보이는 글자의 왼쪽으로(앞 공백만큼 글자가 당겨지지 않게) */
+    /** 줄 상자 — 접히는 공백을 제거한 경우 왼쪽 끝을 첫 가시 글자의 왼쪽으로 설정한다(앞 공백만큼 글자가 당겨지지 않도록) */
     const mk = (ln: typeof lines[0], s: string, from: number, to: number): [number, number, number, number, string] => {
       let l = ln.l, r = ln.r
       if (!pre) {
@@ -381,7 +381,7 @@ export function collectorMain(cfg: CollectorCfg): void {
       const rr = rectOf(l, ln.t, r - l, ln.b - ln.t, c)
       return [rr[0], rr[1], rr[2], rr[3], s]
     }
-    // 접히는 공백만 다듬는다(trim() 은 &nbsp; 까지 지워 "▶&nbsp;R1" 의 간격이 사라졌다)
+    // 접히는 공백만 제거한다(trim() 은 &nbsp; 까지 제거해 "▶&nbsp;R1" 의 간격이 소실되었다)
     const trimLine = (s: string) => (pre ? s : s.replace(/^[ \t\n\r\f]+|[ \t\n\r\f]+$/g, ''))
     if (lines.length === 1) {
       const s = trimLine(collapse(data, ws))
@@ -481,10 +481,10 @@ export function collectorMain(cfg: CollectorCfg): void {
   }
   const unsend = (s: St) => { if (s.sent !== undefined) { removedIds.push(s.id); s.sent = undefined } }
 
-  // ── 훑기 ──
+  // ── 순회 ──
   interface Pass { full: boolean; style: number; geom: number; text: number }
 
-  /** 기록 부모 찾기: DOM 조상 중 처음 나오는 기록된 것(숨김·잎 아래면 null = 기록 안 함) */
+  /** 기록 부모 탐색: DOM 조상 중 처음 나오는 기록된 노드(숨김·리프 하위면 null = 기록하지 않음) */
   const recParentOf = (n: Node): number | null => {
     for (let a: Node | null = n.parentNode; a && a !== document; a = a.parentNode) {
       if (a.nodeType === 1 && SKIP.has((a as Element).tagName)) return null
@@ -498,7 +498,7 @@ export function collectorMain(cfg: CollectorCfg): void {
   const orderOf = (n: Node): number => { let i = 0; for (let c = n.parentNode?.firstChild ?? null; c; c = c.nextSibling) { i++; if (c === n) return i } return i }
 
   /**
-   * 새 서브트리(또는 전체) 방문 — 스타일·기하·텍스트를 모두 읽는다.
+   * 새 서브트리(또는 전체) 방문 — 스타일·기하·텍스트를 모두 조회한다.
    */
   function build(n: Node, p: number, dp: number, c: Ctx, pass: Pass, order: number): void {
     if (st.size >= cfg.maxNodes && !idOf.has(n)) { truncated = true; return }
@@ -545,7 +545,7 @@ export function collectorMain(cfg: CollectorCfg): void {
     if (s.o !== o) { s.o = o; touch(s) }
   }
 
-  /** 스타일 다시 읽기. 바뀐 게 있으면 true. 상태(값·속성·svg·의사요소)도 함께 */
+  /** 스타일 재조회. 변경 사항이 있으면 true. 상태(값·속성·svg·의사요소)도 함께 처리 */
   function restyle(s: St, pass: Pass, stateOnly: boolean): { changed: boolean; inherited: boolean; text: boolean; layout: boolean; self: boolean } {
     const el = s.n as Element
     let changed = false, inherited = false, textAffect = false, layout = false, self = false
@@ -568,7 +568,7 @@ export function collectorMain(cfg: CollectorCfg): void {
       const pb = pseudo(el, '::before'), pa = pseudo(el, '::after')
       if (!eqArr(pb, s.pb) || !eqArr(pa, s.pa)) { s.pb = pb; s.pa = pa; touch(s); changed = true; layout = true }
     }
-    // 상태(값·속성·svg) — 자기 상자 안만 바뀐다고 본다(속성 변이로 배치가 바뀌는 건 onMut 이 이미 기하를 걸었다)
+    // 상태(값·속성·svg) — 자체 상자 내부만 변경되는 것으로 간주한다(속성 변이로 배치가 변경되는 경우는 onMut 이 이미 기하를 표시했다)
     const a = attrsOf(el)
     if (JSON.stringify(a) !== JSON.stringify(s.a)) { s.a = a; touch(s); changed = true; self = true }
     if (isWidget(el)) { const w = widgetState(el); if (JSON.stringify(w) !== JSON.stringify(s.w)) { s.w = w; touch(s); changed = true } }
@@ -583,14 +583,14 @@ export function collectorMain(cfg: CollectorCfg): void {
       s.rec = false; unsend(s)
     } else if (s.hidden) {
       s.hidden = false
-      // 다시 보인다 → 자식을 새로 만든다(구조로)
+      // 다시 표시됨 → 자식을 새로 생성한다(구조 단계에서)
       structDirty.add(el)
     }
     if (s.leaf) { const ks = domKids.get(s.id); if (ks) for (const k of Array.from(ks)) removeSubtree(k) }
     return { changed, inherited, text: textAffect, layout, self }
   }
 
-  // ── 지역 배치(부모 기준) — 수집기가 계산한다(부모 이동이 자식 갱신을 만들지 않게) ──
+  // ── 지역 배치(부모 기준) — 수집기가 계산한다(부모 이동이 자식 갱신을 유발하지 않도록) ──
   const inv = (m: number[]): [number, number, number, number] => { const det = m[0] * m[3] - m[1] * m[2] || 1; return [m[3] / det, -m[1] / det, -m[2] / det, m[0] / det] }
   const apply = (m: number[], x: number, y: number): [number, number] => [m[0] * x + m[2] * y, m[1] * x + m[3] * y]
   const isId = (m: number[]) => Math.abs(m[0] - 1) < 1e-4 && Math.abs(m[1]) < 1e-4 && Math.abs(m[2]) < 1e-4 && Math.abs(m[3] - 1) < 1e-4
@@ -626,7 +626,7 @@ export function collectorMain(cfg: CollectorCfg): void {
     return { L: [r2(dx + pw0 / 2 - w0 / 2 - bl), r2(dy + ph0 / 2 - h0 / 2 - bt), r2(w0), r2(h0)], lm: lm && !isId(lm) ? lm.map(r4) as [number, number, number, number] : undefined }
   }
 
-  /** 기하 재기(자기만). 크기가 바뀌었거나 새로 보이게 됐으면 true(→ 텍스트 자식도 다시 잰다) */
+  /** 기하 측정(자체만). 크기가 변경되었거나 새로 표시된 경우 true(→ 텍스트 자식도 재측정한다) */
   function measure(s: St, myCtx: Ctx, parentCtx: Ctx, pass: Pass): boolean {
     const el = s.n as Element
     const cs = s.cs!
@@ -691,7 +691,7 @@ export function collectorMain(cfg: CollectorCfg): void {
     if (j !== s.txj) { s.L = pl.L; s.lm = pl.lm; s.txl = txl; s.txj = j; touch(s) }
   }
 
-  /** 기하 서브트리 재기(스타일은 캐시). 텍스트는 부모 상자가 바뀌었거나 표시됐을 때만 */
+  /** 기하 서브트리 측정(스타일은 캐시). 텍스트는 부모 상자가 변경되었거나 표시된 경우에만 */
   function regeom(el: Element, c: Ctx, pass: Pass): void {
     const s = stOf(el)
     if (!s || s.hidden) return
@@ -707,7 +707,7 @@ export function collectorMain(cfg: CollectorCfg): void {
     }
   }
 
-  /** 부분 기하: 뿌리의 기록 부모를 먼저 재고(지역 배치의 기준) 뿌리 서브트리를 잰다 */
+  /** 부분 기하: 루트의 기록 부모를 먼저 측정하고(지역 배치의 기준) 루트 서브트리를 측정한다 */
   function regeomRoot(el: Element, pass: Pass): void {
     const s = stOf(el)
     if (!s) return
@@ -813,7 +813,7 @@ export function collectorMain(cfg: CollectorCfg): void {
       st.clear(); domKids.clear(); removedIds.length = 0; dirty.clear()
       build(document.documentElement, 0, 0, ROOT_CTX, pass, 1)
     } else {
-      // ① 구조 — 새 노드는 통째로, 자식 목록이 바뀐 부모는 순서만 다시
+      // ① 구조 — 새 노드는 전체를, 자식 목록이 변경된 부모는 순서만 재조회
       for (const n of structDirty) {
         if (!n.isConnected) continue
         const s = stOf(n)
@@ -837,7 +837,7 @@ export function collectorMain(cfg: CollectorCfg): void {
         const s = stOf(el)
         if (s) { const r = restyle(s, pass, true); if (r.layout) markGeom(el); else if (r.self) geomRoots.add(el) }
       }
-      // 다시 보이게 된 요소(②에서 structDirty 에 들어감) — 자식을 새로
+      // 다시 표시된 요소(②에서 structDirty 에 추가됨) — 자식을 새로 생성
       for (const n of structDirty) {
         const s = stOf(n)
         if (s && !s.hidden && !s.leaf && n.nodeType === 1) for (let c = n.firstChild; c; c = c.nextSibling) if (!stOf(c)) visitNew(c, pass)
@@ -855,7 +855,7 @@ export function collectorMain(cfg: CollectorCfg): void {
           for (let ch = t.firstChild; ch; ch = ch.nextSibling) if (ch.nodeType === 3) { const s = stOf(ch); if (s) measureText(s, c, pass) }
         }
       }
-      // ⑤ 스크롤된 컨테이너 — sc 만(자손 좌표는 스크롤 불변이라 그대로)
+      // ⑤ 스크롤된 컨테이너 — sc 만 갱신(자손 좌표는 스크롤 불변이므로 유지)
       for (const el of scrollDirty) {
         const s = stOf(el)
         if (!s || !s.rec || !(el instanceof HTMLElement)) continue
@@ -863,7 +863,7 @@ export function collectorMain(cfg: CollectorCfg): void {
         if (!eqArr(sc, s.sc)) { s.sc = sc; touch(s) }
       }
       if (docScrolled || scrollDirty.size) for (const el of stickies) if (el.isConnected) regeomRoot(el, pass)
-      // ⑥ 검증 — 페인트는 있었는데 아무 표시도 없었다(:hover 류·컨테이너 쿼리·스크립트 없는 시각 변화): 뷰포트 안만, 가끔
+      // ⑥ 검증 — 페인트는 있었으나 표시된 변경이 없음(:hover 류·컨테이너 쿼리·스크립트 없는 시각 변화): 뷰포트 내부만, 간헐적으로 수행
       const nothing = pass.style === 0 && pass.geom === 0 && pass.text === 0
       if (opts.paint) paintSinceVerify = true
       if (nothing && paintSinceVerify && t0 - lastVerify > cfg.verifyMs) {
@@ -881,7 +881,7 @@ export function collectorMain(cfg: CollectorCfg): void {
     }
     structDirty.clear(); deepStyleDirty.clear(); styleDirty.clear(); stateDirty.clear(); textDirty.clear(); geomRoots.clear(); scrollDirty.clear()
     geomAll = false; docScrolled = false
-    // 부모 스타일이 바뀐 텍스트도 보낸다(텍스트 스타일 = 부모 계산값 — 에이전트가 부모 cs 로 바꾼다)
+    // 부모 스타일이 변경된 텍스트도 전송한다(텍스트 스타일 = 부모 계산값 — 에이전트가 부모 cs 로 치환한다)
     const ids = Array.from(dirty)
     dirty.clear()
     const extra: number[] = []
@@ -908,7 +908,7 @@ export function collectorMain(cfg: CollectorCfg): void {
     return JSON.stringify(res)
   }
 
-  /** 노드 id + 상대좌표 → 지금 뷰포트 좌표(입력용). 텍스트면 노드 상자 기준 */
+  /** 노드 id + 상대좌표 → 현재 뷰포트 좌표(입력용). 텍스트면 노드 상자 기준 */
   function pt(id: number, rx: number, ry: number): [number, number] | null {
     const s = st.get(id)
     if (!s || !s.n.isConnected) return null
@@ -917,14 +917,14 @@ export function collectorMain(cfg: CollectorCfg): void {
     const x = b.left + Math.max(0, Math.min(b.width, rx)), y = b.top + Math.max(0, Math.min(b.height, ry))
     return [Math.round(x * 100) / 100, Math.round(y * 100) / 100]
   }
-  /** 노드의 지금 뷰포트 사각형(캡처용) */
+  /** 노드의 현재 뷰포트 사각형(캡처용) */
   function vrect(id: number): [number, number, number, number] | null {
     const s = st.get(id)
     if (!s || !s.n.isConnected || s.text) return null
     const b = (s.n as Element).getBoundingClientRect()
     return [b.left, b.top, b.width, b.height]
   }
-  /** 포인터 아래 사슬이 바뀌면(:hover) 바뀐 요소만 스타일 더러움으로 */
+  /** 포인터 아래 체인이 변경되면(:hover) 변경된 요소만 스타일 변경 대상으로 표시 */
   let hoverChain: Element[] = []
   function pointer(x: number, y: number): void {
     const e = document.elementFromPoint(x, y)
@@ -935,7 +935,7 @@ export function collectorMain(cfg: CollectorCfg): void {
     for (const a of chain) if (!prev.has(a)) styleDirty.add(a)
     hoverChain = chain
   }
-  /** :active·:focus — 누르고 뗄 때 사슬 전체 */
+  /** :active·:focus — 누르기·떼기 시 체인 전체 */
   function active(): void { for (const a of hoverChain) styleDirty.add(a); chainDirty(document.activeElement) }
   function scrollNode(id: number, x: number, y: number): boolean {
     if (id === 0) { window.scrollTo(x, y); return true }

@@ -3,16 +3,16 @@
  *
  * NIST SP 800-63B-4 는 검증자가 입력한 비밀 문자열을 일시적으로 볼 수 있는
  * 수단을 제공해야 한다(SHOULD)고 명시한다. 모바일에서 오타로 인한 재설정
- * 요청을 줄이는 효과가 크다.
+ * 요청 감소에 효과적이다.
  *
- * 입력 규격(UiInput 과 같은 테두리·포커스·오류)을 기본으로 쓰고, 기존 호출처가 넘기는 inputClass 는
- * 그대로 덧붙여 호환한다(비우면 기본 규격). 보기 토글은 32px 아이콘 버튼 — 히트 영역은 세로로 전체 높이.
+ * 입력 규격(UiInput 과 동일한 테두리·포커스·오류)을 기본으로 사용하며, 기존 호출처가 전달하는 inputClass 는
+ * 그대로 추가하여 호환을 유지한다(미지정 시 기본 규격). 표시 토글은 32px 아이콘 버튼 — 히트 영역은 세로 전체 높이.
  *
- * 키 이벤트: onKeyDown·onKeyUp·onBlur 는 안쪽 <input> 에서 그대로 내보낸다.
- * Caps Lock: 입력 중 Caps Lock 상태를 capsLock/onUpdateCapsLock으로 알려 주고,
- * capsLockHint 를 주면 입력 아래에 ↑ 경고(warning 12/500, role=status)를 직접 그린다. 포커스가 빠지면 내린다.
+ * 키 이벤트: onKeyDown·onKeyUp·onBlur 는 내부 <input> 의 이벤트를 그대로 전달한다.
+ * Caps Lock: 입력 중 Caps Lock 상태를 capsLock/onUpdateCapsLock으로 전달하고,
+ * capsLockHint 지정 시 입력 하단에 ↑ 경고(warning 12/500, role=status)를 직접 렌더링한다. 포커스 이탈 시 제거한다.
  *
- * className·나머지 속성은 바깥 묶음(div)에 붙는다(안쪽 <input> 아님). ref 는 안쪽 <input>.
+ * className·나머지 속성은 외부 래퍼(div)에 적용된다(내부 <input> 아님). ref 는 내부 <input>.
  */
 import { useEffect, useRef, useState, type FocusEvent, type HTMLAttributes, type KeyboardEvent, type Ref } from 'react'
 import { cn } from '~/lib/utils'
@@ -24,30 +24,30 @@ import { useModel, useUid } from './internal'
 export interface UiPasswordInputProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onKeyDown' | 'onKeyUp' | 'onBlur' | 'id'> {
   /** 값 */
   modelValue?: string
-  /** 값 바뀜 */
+  /** 값 변경 */
   onUpdateModelValue?: (v: string) => void
-  /** Caps Lock 켜짐 여부(입력 중에만 판단) */
+  /** Caps Lock 활성 여부(입력 중에만 판정) */
   capsLock?: boolean
-  /** Caps Lock 상태 바뀜 */
+  /** Caps Lock 상태 변경 */
   onUpdateCapsLock?: (v: boolean) => void
-  /** input id(라벨 for). 없으면 자동 */
+  /** input id(라벨 for). 미지정 시 자동 생성 */
   id?: string
-  /** 위 라벨 */
+  /** 상단 라벨 */
   label?: string
   /** 오류 문구 */
   error?: string
-  /** 아래 도움말(오류가 없을 때) */
+  /** 하단 도움말(오류가 없을 때) */
   hint?: string
   /** autocomplete(기본 'current-password', 새 비밀번호는 'new-password') */
   autocomplete?: string
   placeholder?: string
-  /** 안쪽 <input> 에 덧붙일 클래스(기존 호출처 호환) */
+  /** 내부 <input> 에 추가할 클래스(기존 호출처 호환) */
   inputClass?: string
-  /** 처음에 포커스 */
+  /** 초기 포커스 부여 */
   autofocus?: boolean
   /** md 40(기본) · lg 44(인증·모바일) */
   size?: 'md' | 'lg'
-  /** Caps Lock 이 켜져 있을 때 입력 아래에 보일 문구 */
+  /** Caps Lock 활성 시 입력 하단에 표시할 문구 */
   capsLockHint?: string
   /** 안쪽 <input> keydown */
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void
@@ -73,7 +73,7 @@ export function UiPasswordInput({
   const [capsLock, setCapsLockModel] = useModel(capsLockProp, false, onUpdateCapsLock)
 
   const caps = useCapsLock()
-  // Caps Lock 상태를 모델에 반영(바뀔 때만)
+  // Caps Lock 상태를 모델에 반영(변경 시에만)
   const first = useRef(true)
   const setCapsRef = useRef(setCapsLockModel)
   setCapsRef.current = setCapsLockModel

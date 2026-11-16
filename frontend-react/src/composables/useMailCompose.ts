@@ -1,21 +1,21 @@
 /**
- * 떠 있는 메일 작성 창.
+ * 플로팅 메일 작성 창.
  *
- * - 데스크톱: 앱 안 오른쪽 아래 580×640 창. 여러 개 열 수 있고 각자 최소화(제목 줄만)·크게 보기 가능.
+ * - 데스크톱: 앱 내 우측 하단 580×640 창. 다중 열기 가능하며 창별 최소화(제목 줄만)·크게 보기 지원.
  *   팝업(window.open) 은 폐지.
- * - 모바일(≤767): 전체 화면 페이지 `/mail/compose` 로 간다(창이 성립하지 않음).
- * - 창 호스트(MailComposeHost)는 앱 루트(토스트·대화상자 호스트 옆)에 있다 — 어느 화면에서 열어도
- *   그 자리에서 뜨고, 메일 화면을 떠나도(레이아웃이 바뀌어도) 창과 쓰던 내용이 그대로 산다.
- *   `/mail?compose=…`(외부 링크·/mail/compose 데스크톱 진입)도 계속 받는다.
- * - 받는 사람 미리 채우기: open('new', null, null, { to }) · `/mail/compose?mode=new&to=…`
+ * - 모바일(≤767): 전체 화면 페이지 `/mail/compose` 로 이동한다(창 구성 불가).
+ * - 창 호스트(MailComposeHost)는 앱 루트(토스트·대화상자 호스트 옆)에 위치한다 — 어느 화면에서 열어도
+ *   해당 위치에 표시되며, 메일 화면을 벗어나도(레이아웃이 변경되어도) 창과 작성 중인 내용이 유지된다.
+ *   `/mail?compose=…`(외부 링크·/mail/compose 데스크톱 진입)도 계속 수신한다.
+ * - 받는 사람 사전 입력: open('new', null, null, { to }) · `/mail/compose?mode=new&to=…`
  *
  * 상태는 모듈 싱글턴(mailComposeStore).
  * React: const { windows, hasWindows, open, close, ... } = useMailCompose()
- * 컴포넌트 밖: import { openCompose, closeCompose, ... } from '~/composables/useMailCompose'
- *   (모듈 수준 이름은 다른 모듈과 겹치지 않게 Compose 를 붙였다)
+ * 컴포넌트 외부: import { openCompose, closeCompose, ... } from '~/composables/useMailCompose'
+ *   (모듈 수준 이름은 타 모듈과의 충돌을 피해 Compose 를 덧붙였다)
  *
- * 로그아웃(user → null) 때 창을 비운다 —
- * 이 모듈이 authStore 구독으로 한다.
+ * 로그아웃(user → null) 시 창을 비운다 —
+ * 본 모듈이 authStore 구독으로 수행한다.
  */
 import { createStore, useStore } from 'zustand'
 import type { ComposeMode, MessageDetail } from '~/composables/useMail'
@@ -29,14 +29,14 @@ export interface ComposeWindow {
   mode: ComposeMode
   /** 답장·전달 원문 id */
   msgId?: string
-  /** 원문(목록에서 열려 있던 것). 없으면 창이 msgId 로 받아온다 */
+  /** 원문(목록에서 열려 있던 것). 없으면 창이 msgId 로 조회한다 */
   original?: Readonly<MessageDetail> | null
   draftId?: string | null
-  /** 새 메일 받는 사람 미리 채우기(쉼표로 여러 명) */
+  /** 새 메일 받는 사람 사전 입력(쉼표로 다수 지정) */
   to?: string
-  /** 화면 안 AI 답장 초안 — 본문에 채우고, 보내면 X-AI-Generated 를 붙인다 */
+  /** 화면 내 AI 답장 초안 — 본문에 입력하고, 발송 시 X-AI-Generated 를 추가한다 */
   aiDraft?: string
-  /** 제목 줄 — 제목 입력이 바뀌면 갱신 */
+  /** 제목 줄 — 제목 입력 변경 시 갱신 */
   title: string
   minimized: boolean
   maximized: boolean
@@ -45,20 +45,20 @@ export interface ComposeWindow {
 export const mailComposeStore = createStore<{ windows: ComposeWindow[] }>()(() => ({ windows: [] }))
 
 /**
- * 앱 초안(DB)이 바뀐 횟수 — 작성기가 저장·삭제·발송할 때 올린다. 임시보관함 목록이 이걸 보고 다시 받는다
- * (예전엔 폴더에 들어올 때만 받아, 보낸 초안이 목록에 남고 방금 닫은 초안은 안 보였다).
+ * 앱 초안(DB) 변경 횟수 — 작성기가 저장·삭제·발송 시 증가시킨다. 임시보관함 목록이 이 값을 감시해 재조회한다
+ * (이전에는 폴더 진입 시에만 조회하여, 발송한 초안이 목록에 남고 방금 닫은 초안은 표시되지 않았다).
  */
 export const mailDraftsStore = createStore<{ rev: number }>()(() => ({ rev: 0 }))
 export function bumpMailDrafts() { mailDraftsStore.setState({ rev: mailDraftsStore.getState().rev + 1 }) }
 let seq = 0
 
-/** 한 번에 펼쳐 둘 창 수. 넘치면 오래된 것부터 최소화(시안엔 수치 없음 — 580 폭 × 2 가 1440 에서 겹치지 않는 한도). */
+/** 동시에 펼쳐 둘 창 수. 초과 시 오래된 것부터 최소화(시안에 수치 없음 — 580 폭 × 2 가 1440 에서 겹치지 않는 한도). */
 const MAX_EXPANDED = 2
 
 const getWindows = () => mailComposeStore.getState().windows
 const setWindows = (windows: ComposeWindow[]) => mailComposeStore.setState({ windows })
 
-/** 테스트용: 창 비우고 번호도 처음부터 */
+/** 테스트용: 창을 비우고 번호도 초기화 */
 export function _resetMailComposeStore() {
   seq = 0
   setWindows([])
@@ -66,8 +66,8 @@ export function _resetMailComposeStore() {
 }
 
 /**
- * 모바일 전체 화면 작성(/mail/compose)으로 넘길 AI 초안 — 본문을 주소에 싣지 않고 원문 id 로 잠깐 맡긴다.
- * 작성 화면이 takeAiDraft 로 한 번 꺼내 간다.
+ * 모바일 전체 화면 작성(/mail/compose)으로 전달할 AI 초안 — 본문을 주소에 포함하지 않고 원문 id 로 임시 보관한다.
+ * 작성 화면이 takeAiDraft 로 1회 인출한다.
  */
 const pendingAiDrafts = new Map<string, string>()
 export function takeAiDraft(msgId: string | null | undefined): string | undefined {
@@ -103,7 +103,7 @@ export function defaultTitle(mode: ComposeMode, subject?: string | null) {
   }
 }
 
-/** 펼친 창이 한도를 넘으면 오래된 것부터 최소화한 새 배열 */
+/** 펼친 창이 한도를 초과하면 오래된 것부터 최소화한 새 배열 */
 function capExpanded(list: ComposeWindow[]): ComposeWindow[] {
   const expanded = list.filter(w => !w.minimized)
   if (expanded.length <= MAX_EXPANDED) return list
@@ -112,8 +112,8 @@ function capExpanded(list: ComposeWindow[]): ComposeWindow[] {
 }
 
 /**
- * 작성 창 열기. 모바일이면 전체 화면 페이지로, 데스크톱이면 지금 화면에 떠 있는 창으로.
- * 같은 원문에 같은 모드의 창이 이미 있으면 그 창을 펼친다(중복 답장 창 방지).
+ * 작성 창 열기. 모바일이면 전체 화면 페이지로, 데스크톱이면 현재 화면의 플로팅 창으로 연다.
+ * 동일 원문에 동일 모드의 창이 이미 있으면 해당 창을 펼친다(중복 답장 창 방지).
  */
 export function openCompose(mode: ComposeMode = 'new', msg?: Readonly<MessageDetail> | null, draftId?: string | null, opts: { to?: string; aiDraft?: string } = {}): string | null {
   const params = buildQuery(mode, msg?.id, draftId, opts.to)
@@ -125,7 +125,7 @@ export function openCompose(mode: ComposeMode = 'new', msg?: Readonly<MessageDet
     navigateTo(`/mail/compose?${params.toString()}`)
     return null
   }
-  // AI 초안을 채우는 창은 늘 새로 연다(이미 쓰던 답장 창의 내용을 덮지 않게)
+  // AI 초안을 입력하는 창은 항상 새로 연다(작성 중인 답장 창의 내용을 덮어쓰지 않도록)
   if (mode !== 'new' && !opts.aiDraft) {
     const key = draftId ? `d:${draftId}` : `m:${msg?.id}`
     const existing = getWindows().find(w => w.mode === mode && (w.draftId ? `d:${w.draftId}` : `m:${w.msgId}`) === key)
@@ -149,7 +149,7 @@ export function openCompose(mode: ComposeMode = 'new', msg?: Readonly<MessageDet
   return id
 }
 
-/** `/mail?compose=mode%3Dreply%26msgId%3D…` 처럼 쿼리로 넘어온 요청을 연다. */
+/** `/mail?compose=mode%3Dreply%26msgId%3D…` 와 같이 쿼리로 전달된 요청을 연다. */
 export function openComposeFromQuery(raw: string) {
   const p = new URLSearchParams(raw)
   const mode = (p.get('mode') as ComposeMode) || 'new'
@@ -193,7 +193,7 @@ export function toggleComposeMaximized(id: string) {
   const w = getWindows().find(x => x.id === id)
   if (!w) return
   const maximized = !w.maximized
-  // 크게 보기는 하나만 — 나머지는 최소화
+  // 크게 보기는 1개만 허용 — 나머지는 최소화
   setWindows(getWindows().map((x) => {
     if (x.id === id) return { ...x, maximized }
     return maximized ? { ...x, minimized: true } : x
@@ -210,10 +210,10 @@ export function setComposeDraftId(id: string, draftId: string | null) {
   if (w) setWindows(getWindows().map(x => (x.id === id ? { ...x, draftId } : x)))
 }
 
-/** 로그아웃 때 — 다음 사용자에게 창이 남지 않게 */
+/** 로그아웃 시 — 다음 사용자에게 창이 남지 않도록 */
 export function resetCompose() { setWindows([]) }
 
-// user 가 바뀌어 null 이 될 때만 창을 비운다
+// user 가 변경되어 null 이 될 때만 창을 비운다
 authStore.subscribe((s, prev) => {
   if (s.user !== prev.user && !s.user) resetCompose()
 })

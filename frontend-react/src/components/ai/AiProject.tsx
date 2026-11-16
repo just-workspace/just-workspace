@@ -1,13 +1,13 @@
 /**
  * 프로젝트.
- *  카드: r12 · card · 18 20 여백 — [폴더 20 primary] 이름 18/600 [나만 보기|공유 배지] … [지침 편집][파일 추가](주인만)
+ *  카드: r12 · card · 18 20 여백 — [폴더 20 primary] 이름 18/600 [나만 보기|공유 배지] … [지침 편집][파일 추가](소유자만)
  *  · 지침(12/600 머리 + 13.5 본문) · 지식 파일 n · 크기(mono) + 칩(파일 종류 아이콘).
  *  공유받은 구성원: [사람들 아이콘] 이름 [공유받음] … "○○ 님이 그룹에 공유" · 지침 · 칩 2개 + "+N" · 읽기 전용 안내.
- * 편집 창: 이름 · 지침(n / 4,000, 넘으면 빨강 + 오류) · 지식 파일 목록(빼기) + [내 파일에서 고르기] — 저장 때 한꺼번에 반영.
- *  피커: 경로(내 파일 › …) · 이 폴더에서 검색 · 체크 줄(이미 들어 있음) · "n개 고름 · 한 번에 최대 20개 · 프로젝트 전체 a/50개".
- *  지식 파일은 복사하지 않고 연결(원본을 고치면 다음 답변부터 반영).
- * 공유 창: 그룹 체크(구성원 수) + 못 읽는 파일 경고(공유는 막지 않음 — 그 사람 답변에서만 빠짐).
- * 답변에서 빠진 지식 파일 줄 · 공유가 끊긴 프로젝트(구성원 쪽).
+ * 편집 창: 이름 · 지침(n / 4,000, 초과 시 빨강 + 오류) · 지식 파일 목록(제거) + [내 파일에서 고르기] — 저장 시 일괄 반영.
+ *  피커: 경로(내 파일 › …) · 이 폴더에서 검색 · 체크 줄(이미 포함됨) · "n개 고름 · 한 번에 최대 20개 · 프로젝트 전체 a/50개".
+ *  지식 파일은 복사하지 않고 연결한다(원본 수정 시 다음 답변부터 반영).
+ * 공유 창: 그룹 체크(구성원 수) + 읽을 수 없는 파일 경고(공유는 차단하지 않음 — 해당 구성원의 답변에서만 제외).
+ * 답변에서 제외된 지식 파일 줄 · 공유가 해제된 프로젝트(구성원 측).
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '~/lib/utils'
@@ -26,7 +26,7 @@ import { UiModal } from '~/components/ui/Modal'
 import { UiTextarea } from '~/components/ui/Textarea'
 import { aiFileIcon, aiFormatBytes, type AiProject, type AiProjectFile } from '~/utils/aiAssist'
 
-/** 서버와 같은 한도(app/ai/projects.py) */
+/** 서버와 동일한 한도(app/ai/projects.py) */
 export const AI_PROJECT_MAX_FILES = 50
 export const AI_PROJECT_MAX_PICK = 20
 export const AI_PROJECT_MAX_INSTRUCTIONS = 4000
@@ -84,7 +84,7 @@ export function AiProjectCard({ project, onEditInstructions, onAddFiles, onRemov
   )
 }
 
-/** 공유받은 구성원이 보는 프로젝트 머리 — 고치는 단추 없음 */
+/** 공유받은 구성원에게 표시되는 프로젝트 머리 — 수정 버튼 없음 */
 function AiProjectMemberCard({ project }: { project: AiProject }) {
   const { t } = useI18n()
   const files = project.files ?? []
@@ -118,7 +118,7 @@ function AiProjectMemberCard({ project }: { project: AiProject }) {
   )
 }
 
-/** 이번 답변에서 권한이 없어 빠진 지식 파일 */
+/** 이번 답변에서 권한 부족으로 제외된 지식 파일 */
 export function AiKnowledgeSkipped({ files }: { files: AiProjectFile[] }) {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
@@ -143,7 +143,7 @@ export function AiKnowledgeSkipped({ files }: { files: AiProjectFile[] }) {
   )
 }
 
-/** 공유가 끊긴 프로젝트(구성원 쪽) */
+/** 공유가 해제된 프로젝트(구성원 측) */
 export function AiProjectGone() {
   const { t } = useI18n()
   return <UiEmptyState variant="panel" icon="ban" title={t('ai.project.goneTitle')} description={t('ai.project.goneDesc')} />
@@ -152,21 +152,21 @@ export function AiProjectGone() {
 export interface AiProjectFormValue {
   name: string
   instructions: string
-  /** 새로 연결할 파일 경로 */
+  /** 신규 연결할 파일 경로 */
   addPaths: string[]
-  /** 뺄 지식 파일 id */
+  /** 제거할 지식 파일 id */
   removeIds: string[]
 }
 
 interface PickedFile { path: string; name: string; size?: number | null }
 
-/** 프로젝트 만들기·편집(이름 · 지침 · 지식 파일). 피커는 같은 자리에서 열린다(창 하나) */
+/** 프로젝트 생성·편집(이름 · 지침 · 지식 파일). 피커는 동일 위치에서 열린다(창 하나) */
 export function AiProjectFormModal({ initial, title, onSubmit, onClose, startPicking }: {
   initial?: { name: string; instructions: string; files?: AiProjectFile[] }
   title: string
   onSubmit: (v: AiProjectFormValue) => Promise<void> | void
   onClose: () => void
-  /** 처음부터 피커를 연다(카드의 [파일 추가]) */
+  /** 처음부터 피커를 연 상태로 시작(카드의 [파일 추가]) */
   startPicking?: boolean
 }) {
   const { t } = useI18n()
@@ -196,7 +196,7 @@ export function AiProjectFormModal({ initial, title, onSubmit, onClose, startPic
         total={total}
         onSubmit={(items) => {
           setPicking(false)
-          // 카드의 [파일 추가]로 바로 연 경우는 고르면 바로 저장
+          // 카드의 [파일 추가]로 직접 연 경우 선택 즉시 저장
           if (startPicking && !added.length && !removed.length) { void submit(items); return }
           setAdded(l => [...l, ...items.filter(x => !l.some(y => y.path === x.path))])
         }}
@@ -260,7 +260,7 @@ export function AiProjectFormModal({ initial, title, onSubmit, onClose, startPic
 interface ShareTarget { id: string; name: string; members?: number }
 interface ShareCheck { members: number; blocked_members: number; files: { id: string; name: string; blocked: number }[] }
 
-/** 공유 — 내가 속한 그룹(여러 개) + 못 읽는 파일 경고. 빈 선택으로 저장 = 공유 해제 */
+/** 공유 — 본인이 속한 그룹(복수) + 읽을 수 없는 파일 경고. 빈 선택으로 저장 = 공유 해제 */
 export function AiProjectShareModal({ project, onSubmit, onClose }: {
   project: AiProject
   onSubmit: (groupIds: string[]) => Promise<void> | void
@@ -275,7 +275,7 @@ export function AiProjectShareModal({ project, onSubmit, onClose }: {
     $fetch<{ groups: ShareTarget[] }>('/api/ai/projects/share-targets', { credentials: 'include' })
       .then(r => setGroups(r?.groups || [])).catch(() => setGroups([]))
   }, [])
-  // 고른 그룹이 바뀌면 잠깐 뒤 점검(경고만)
+  // 선택한 그룹 변경 시 짧은 지연 후 점검(경고만 표시)
   const seq = useRef(0)
   useEffect(() => {
     const my = ++seq.current
@@ -337,13 +337,13 @@ export function AiProjectShareModal({ project, onSubmit, onClose }: {
 
 interface FileItem { name: string; path: string; is_dir: boolean; size?: number }
 
-/** 피커 — 내 파일·팀 폴더를 걸어 들어가 파일을 고른다(/api/files/list). 한 번에 20개, 프로젝트 전체 50개 */
+/** 피커 — 내 파일·팀 폴더를 탐색하여 파일을 선택한다(/api/files/list). 1회 최대 20개, 프로젝트 전체 50개 */
 export function AiProjectFilePicker({ onSubmit, onClose, existingPaths = [], total = 0 }: {
   onSubmit: (items: PickedFile[]) => Promise<void> | void
   onClose: () => void
-  /** 이미 들어 있는 경로(체크된 채 잠김) */
+  /** 이미 포함된 경로(체크된 상태로 잠금) */
   existingPaths?: string[]
-  /** 지금 프로젝트에 든 파일 수 */
+  /** 현재 프로젝트에 포함된 파일 수 */
   total?: number
 }) {
   const { t } = useI18n()

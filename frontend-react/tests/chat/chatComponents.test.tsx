@@ -86,7 +86,7 @@ describe('ChatInput', () => {
     render(<ChatInput />)
     const ta = screen.getByRole('combobox') as HTMLTextAreaElement
     fireEvent.keyDown(ta, { key: 'ArrowUp' })
-    // 컴포저가 요청을 받아 띠 + 본문으로 수정 모드가 된다
+    // 컴포저가 요청을 수신하여 띠 + 본문으로 수정 모드에 진입
     expect(chatUiStore.getState().editRequest).toBeNull()
     expect(chatUiStore.getState().editingMessageId).toBe('a')
     expect(screen.getByText('메시지 수정 중')).toBeTruthy()

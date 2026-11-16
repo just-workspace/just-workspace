@@ -2,7 +2,7 @@
  * 일별 활동 막대 차트.
  * 카드 패딩 16/18, 제목 13/600 + 범례(10px 각진 칸 + 12) 오른쪽, 막대 2계열, 높이 220.
  * 색 = CSS 변수 주입(primary · success), 축 글자 muted-foreground, 격자 border(useChartTokens).
- * ★ 시안의 두 번째 계열 "메시지"는 분석 API 에 일별 메시지 수가 없어 "로그인 방문"(authenticated)으로 둔다.
+ * 참고: 시안의 두 번째 계열 "메시지"는 분석 API 에 일별 메시지 수가 없어 "로그인 방문"(authenticated)으로 대체한다.
  */
 import { useMemo } from 'react'
 import { Bar } from 'react-chartjs-2'
@@ -19,7 +19,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
 export interface AdminAnalyticsDailyChartProps {
   /** 일별 방문(GET /api/admin/analytics/daily-visits) */
   data: DailyVisit[]
-  /** 불러오는 중이면 스켈레톤 */
+  /** 로딩 중이면 스켈레톤 표시 */
   loading?: boolean
 }
 

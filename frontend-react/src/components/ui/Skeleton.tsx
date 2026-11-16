@@ -1,19 +1,19 @@
 /**
  * 스켈레톤: 프리셋 5종 — list(목록 행) · card · table(표 행) · grid(타일) · text(본문 문단).
- * 프리셋 없이 className 만 주면 예전처럼 막대 하나(기존 대시보드 사용처 호환).
- * 300ms 안에 끝나는 로딩은 보이지 않게(.skeleton-delay). 즉시 보여야 하면 delay={false}.
+ * 프리셋 없이 className 만 지정하면 기존과 동일하게 막대 1개(기존 대시보드 사용처 호환).
+ * 300ms 이내에 종료되는 로딩은 표시하지 않는다(.skeleton-delay). 즉시 표시가 필요하면 delay={false}.
  */
 import type { HTMLAttributes } from 'react'
 import { cn } from '~/lib/utils'
 
 export interface UiSkeletonProps extends HTMLAttributes<HTMLDivElement> {
-  /** list(아바타 28 + 두 줄) · card(제목·큰 숫자·본문) · table(36 행) · grid(타일) · text(문단). 없으면 막대 하나 */
+  /** list(아바타 28 + 두 줄) · card(제목·큰 숫자·본문) · table(36 행) · grid(타일) · text(문단). 미지정 시 막대 1개 */
   preset?: 'list' | 'card' | 'table' | 'grid' | 'text'
   /** 행·타일 개수(list/table/grid/text). 기본 3 */
   rows?: number
-  /** 300ms 지연 표시(기본 켬) */
+  /** 300ms 지연 표시(기본 활성화) */
   delay?: boolean
-  /** 카드 틀(border+bg-card)로 감쌀지 */
+  /** 카드 틀(border+bg-card)로 감쌀지 여부 */
   framed?: boolean
 }
 

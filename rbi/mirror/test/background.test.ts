@@ -1,4 +1,4 @@
-// 계산된 background-image → 배경 레이어(어휘). url() 원문은 자산 sha 로만, 그라디언트는 숫자로.
+// 계산된 background-image → 배경 레이어(어휘). url() 원문은 자산 sha 로만, 그라디언트는 숫자로 변환.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseBackground, parseGradient, splitTop } from '../agent/src/background.ts'
@@ -20,7 +20,7 @@ test('Chromium 계산값 그라디언트(격자 배경)', () => {
   assert.deepEqual(r, { k: 'rad', sh: 'circle', sz: 'farthest-corner', at: [30, '%', 50, '%'], st: [['rgb(255, 255, 0)', 0, '%'], ['rgb(0, 128, 0)', 70, '%']] })
   assert.deepEqual((parseGradient('radial-gradient(150px 80px at 10px 20px, rgb(1, 2, 3), rgb(4, 5, 6))') as { sz: unknown }).sz, [150, 'px', 80, 'px'])
   assert.ok(parseGradient('repeating-linear-gradient(45deg, rgb(0, 0, 0) 0px, rgb(0, 0, 0) 5px, rgb(255, 255, 255) 5px, rgb(255, 255, 255) 10px)')?.rep)
-  // 두 위치 정지점은 둘로
+  // 위치가 2개인 정지점은 2개로 분리
   assert.equal(parseGradient('linear-gradient(rgb(1, 2, 3) 10% 20%, rgb(4, 5, 6))')!.st.length, 3)
 })
 

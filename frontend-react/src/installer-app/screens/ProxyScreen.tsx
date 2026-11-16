@@ -1,6 +1,6 @@
 /**
- * 프록시 주소 — 기존 프록시 뒤를 골랐을 때만 나온다. 프록시의 주소(또는 대역)를 받아 그 주소에서 온 접속만 프록시를 거친 것으로 본다.
- * 아래에 프록시 쪽 설정 예시와, 프록시를 거치지 않는 포트 안내를 둔다.
+ * 프록시 주소 — 기존 프록시 뒤를 선택한 경우에만 표시된다. 프록시의 주소(또는 대역)를 입력받아 해당 주소에서 온 접속만 프록시를 경유한 것으로 간주한다.
+ * 하단에 프록시 측 설정 예시와, 프록시를 경유하지 않는 포트 안내를 둔다.
  */
 import { useState } from 'react'
 import { UiCallout } from '~/components/ui/Callout'
@@ -41,7 +41,7 @@ export function ProxyScreen() {
   const list = splitAddresses(text)
   const badFormat = list.length > 0 && !list.every(isAddressOrCidr)
   const blocked = list.length === 0 ? t('proxy.reasonEmpty') : (badFormat ? t('proxy.reasonFormat') : '')
-  // 이 서버의 내부 주소를 알면 예시에 그대로 넣고, 모르면 예시 주소를 쓴다
+  // 이 서버의 내부 주소를 알면 예시에 그대로 사용하고, 알 수 없으면 예시 주소를 사용
   const example = proxyExample(serverIp ?? '192.168.10.10')
 
   return (

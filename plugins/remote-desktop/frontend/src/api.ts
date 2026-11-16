@@ -1,11 +1,11 @@
 /**
- * 원격 데스크톱(뷰어) API — /api/plugins/remote-desktop/*. 호스트 $fetch(pluginApi.$fetch)로 부른다.
+ * 원격 데스크톱(뷰어) API — /api/plugins/remote-desktop/*. 호스트 $fetch(pluginApi.$fetch)로 호출한다.
  *
  * GET    /status                       → { livekit, org_name, org_domain, support_download, support_available, support_size, support_requirements, desktop_download, code_ttl_s, is_admin }
  * GET    /devices[?all=1]               → { devices }
  * PATCH  /devices/{id}                  {allow_remote?, unattended?, name?}
- * POST   /devices/{id}/connect          → { session }   (호스트가 30초 안에 동의해야 열린다)
- * POST   /support/join {code}           → { session }   (피지원자가 동의해야 열린다. 실패 detail = {code: format|no_match|expired, message})
+ * POST   /devices/{id}/connect          → { session }   (호스트가 30초 안에 동의해야 연결된다)
+ * POST   /support/join {code}           → { session }   (피지원자가 동의해야 연결된다. 실패 detail = {code: format|no_match|expired, message})
  * GET    /sessions/{id}[?token=1]       → { session, livekit? }
  * POST   /sessions/{id}/end
  */
@@ -17,7 +17,7 @@ export interface RemoteDevice {
   id: string
   name: string
   platform: string
-  /** 사람이 읽는 OS 이름(예: Windows 11) — 옛 앱이면 빈 값 */
+  /** 사람이 읽는 OS 이름(예: Windows 11) — 구버전 앱이면 빈 값 */
   os_name: string
   owner_id: string
   owner_name: string
@@ -55,7 +55,7 @@ export interface RemoteInfo {
   org_name: string
   support_download: string
   support_available: boolean
-  /** 서버에 올라간 지원 프로그램 실제 크기(바이트). 없으면 null → 받기 버튼을 숨긴다 */
+  /** 서버에 업로드된 지원 프로그램의 실제 크기(바이트). 없으면 null → 받기 버튼 숨김 */
   support_size: number | null
   support_requirements: string
   desktop_download: string
@@ -80,16 +80,16 @@ export function makeApi(f: Fetch) {
 
 export type RemoteApi = ReturnType<typeof makeApi>
 
-/** 입력칸 정리 — 숫자만 남겨 3자리씩 띄운다(지원 프로그램 "482 913 057"·"123-456-789"·문장째 붙여넣기 어느 쪽이든) */
+/** 입력칸 정리 — 숫자만 남겨 3자리씩 공백으로 구분한다(지원 프로그램 "482 913 057"·"123-456-789"·문장 단위 붙여넣기 모두 허용) */
 export function cleanCodeInput(raw: string): string {
-  // 숫자만 뽑아 3자리씩 띄운다 — "접속 코드: 482 913 057"·"482-913-057"·줄바꿈이 섞인 붙여넣기도 그대로 받는다.
-  // (예전엔 글자만 지우고 13자로 잘라, 문장째 붙여넣으면 앞쪽 공백에 밀려 숫자가 잘렸다)
-  // 12자리까지만 둔다 — 넘치면 형식 오류로 보이게(9자리로 몰래 자르지 않는다).
+  // 숫자만 추출해 3자리씩 공백으로 구분한다 — "접속 코드: 482 913 057"·"482-913-057"·줄바꿈이 포함된 붙여넣기도 그대로 허용한다.
+  // (이전에는 문자만 제거하고 13자로 절단해, 문장 단위로 붙여넣으면 앞쪽 공백 때문에 숫자가 절단되었다)
+  // 12자리까지만 유지한다 — 초과 시 형식 오류로 표시되도록 한다(9자리로 암묵적으로 절단하지 않는다).
   const d = raw.replace(/\D/g, '').slice(0, 12)
   return d.replace(/(\d{3})(?=\d)/g, '$1 ')
 }
 
-/** 형식 검사 — 숫자 9자리이고 숫자·공백·하이픈 말고는 없어야 한다 */
+/** 형식 검사 — 숫자 9자리이며 숫자·공백·하이픈 외의 문자가 없어야 한다 */
 export function codeFormatOk(raw: string): boolean {
   return /^[\d\s-]*$/.test(raw) && raw.replace(/\D/g, '').length === 9
 }

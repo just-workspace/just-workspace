@@ -1,7 +1,7 @@
 /**
- * 파일 저장소가 끊겼을 때의 파일 탭 — 목록·올리기·새 폴더 대신 이 안내만 보인다.
- * 일반 사용자: 지금은 열 수 없다는 안내와 [다시 확인]. 관리자: 저장소 화면으로 가는 버튼이 더 있다.
- * 저장소가 돌아오면 composables/useStorageStatus 가 알아채 파일 탭이 원래대로 돌아간다.
+ * 파일 저장소 연결이 끊긴 경우의 파일 탭 — 목록·올리기·새 폴더 대신 본 안내만 표시한다.
+ * 일반 사용자: 현재 열 수 없다는 안내와 [다시 확인]. 관리자: 저장소 화면으로 이동하는 버튼이 추가된다.
+ * 저장소가 복구되면 composables/useStorageStatus 가 감지하여 파일 탭이 원래 상태로 복귀한다.
  */
 import { useI18n } from '~/i18n'
 import { useStorageStatus } from '~/composables/useStorageStatus'

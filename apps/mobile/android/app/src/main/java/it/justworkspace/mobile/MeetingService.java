@@ -20,8 +20,8 @@ import androidx.core.app.ServiceCompat;
 import androidx.core.content.ContextCompat;
 
 /**
- * 회의 중 포그라운드 서비스. 화면이 꺼지거나 앱을 내려도 프로세스와 마이크(·카메라)가 살아 있게 한다.
- * Android 14 부터는 서비스 타입별 권한이 실제로 허용돼 있어야 시작되므로, 허용된 것만 타입에 넣는다.
+ * 회의 중 포그라운드 서비스. 화면이 꺼지거나 앱이 백그라운드로 전환되어도 프로세스와 마이크(·카메라)를 유지한다.
+ * Android 14 부터는 서비스 타입별 권한이 실제로 허용되어 있어야 시작되므로, 허용된 것만 타입에 포함한다.
  */
 public class MeetingService extends Service {
     static final String ACTION_LEAVE = "it.justworkspace.mobile.MEETING_LEAVE";
@@ -45,7 +45,7 @@ public class MeetingService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_LEAVE.equals(intent.getAction())) {
-            // 알림의 "나가기" — 웹이 leaveRoom 을 하고 stop() 을 부른다
+            // 알림의 "나가기" — 웹이 leaveRoom 을 수행하고 stop() 을 호출한다
             MeetingCall.emit("leave", "");
             return START_NOT_STICKY;
         }
@@ -56,13 +56,13 @@ public class MeetingService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (granted(Manifest.permission.RECORD_AUDIO)) type |= ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
             if (video && granted(Manifest.permission.CAMERA)) type |= ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA;
-            // 권한이 하나도 없으면(듣기만 하는 참가) 데이터 동기화 타입으로 살아 있게 한다
+            // 권한이 하나도 없으면(청취 전용 참가) 데이터 동기화 타입으로 유지한다
             if (type == 0) type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC;
         }
         try {
             ServiceCompat.startForeground(this, NOTIF_ID, buildNotification(title), type);
         } catch (RuntimeException e) {
-            // 타입 권한 불일치 등. 서비스 없이도 회의는 앞에서는 계속된다.
+            // 타입 권한 불일치 등. 서비스 없이도 포그라운드에서는 회의가 계속된다.
             MeetingCall.emit("serviceFailed", e.getClass().getSimpleName());
             stopSelf();
             return START_NOT_STICKY;

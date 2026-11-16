@@ -1,8 +1,8 @@
 /**
  * 팀("팀 출석" 대체): 자주 대화한 4~6명, 두 줄 행 56 = 아바타 28 + 상태 점 / 이름 · 상태 문구
- * + 호버 DM(chat 아이콘). 머리 "연락처 ›". 사람 수 = clamp(4, 상한 − 1, 6).
- * 서버: GET /api/dashboard/team (최근 30일 DM ×3 + 내가 글 쓴 채널의 그 사람 글 수, 활성 계정, 채팅 프레즌스 상태)
- * 상태는 채팅 소켓으로 바뀌는 앱 전역 값(chatStore.presences)에 그 사람이 있으면 그것을 앞세운다.
+ * + 호버 DM(chat 아이콘). 헤더 "연락처 ›". 인원 수 = clamp(4, 상한 − 1, 6).
+ * 서버: GET /api/dashboard/team (최근 30일 DM ×3 + 본인이 메시지를 작성한 채널에서 해당 사용자의 메시지 수, 활성 계정, 채팅 프레즌스 상태)
+ * 상태는 채팅 소켓으로 갱신되는 앱 전역 값(chatStore.presences)에 해당 사용자가 있으면 그 값을 우선한다.
  */
 import { useEffect, useState } from 'react'
 import { useStore } from 'zustand'

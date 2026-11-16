@@ -1,4 +1,4 @@
-// 위키 스페이스 공유 — 설정 창에서 공개 범위 전환 · 멤버 추가 · 역할 바꾸기 · 내보내기
+// 위키 스페이스 공유 — 설정 창에서 공개 범위 전환 · 멤버 추가 · 역할 변경 · 내보내기
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, act, waitFor, within } from '@testing-library/react'
 
@@ -12,7 +12,7 @@ vi.mock('~/lib/api', async (orig) => {
   const $fetch = Object.assign(fake, { raw: fake, native: fetch, create: () => fake })
   return { ...real, $fetch }
 })
-// 확인 창은 화면 뿌리의 호스트가 그린다 — 여기선 바로 답한다
+// 확인 창은 화면 루트의 호스트가 렌더링함 — 여기서는 즉시 응답
 const dialog = vi.hoisted(() => ({ answer: true, asked: 0 }))
 vi.mock('~/composables/useDialog', async (orig) => {
   const real = await orig<typeof import('~/composables/useDialog')>()
@@ -67,7 +67,7 @@ describe('WikiSpaceSettings — 공유', () => {
     await open()
     const rows = screen.getAllByRole('listitem')
     expect(rows[0].textContent).toContain('앨리스')
-    expect(within(rows[0]).queryByRole('combobox')).toBeNull()   // 소유자 역할은 못 바꾼다
+    expect(within(rows[0]).queryByRole('combobox')).toBeNull()   // 소유자 역할은 변경 불가
     expect(within(rows[1]).getByRole('combobox')).toBeTruthy()
   })
 
@@ -130,7 +130,7 @@ describe('WikiSpaceSettings — 공유', () => {
     fireEvent.click(pick)
     await waitFor(() => expect(mutations().length).toBe(1))
     expect(mutations()[0]).toMatchObject({ url: '/api/wiki/spaces/s1/members', opts: { method: 'POST', body: { user_id: 'carol', role: 'reader' } } })
-    // 목록을 다시 읽어 새 멤버가 뜬다
+    // 목록을 재조회하여 새 멤버가 표시됨
     await waitFor(() => expect(screen.getAllByRole('listitem').some(li => li.textContent?.includes('캐럴') && within(li).queryByRole('combobox'))).toBe(true))
   })
 

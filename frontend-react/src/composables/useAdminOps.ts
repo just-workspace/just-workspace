@@ -1,13 +1,13 @@
 /**
  * 관리 운영 요약("운영 요약 4칸" + 좌 내비 보조 글자).
- * 승인 대기 n · 마지막 백업 · SSL D-n · 서비스 n/n 을 GET /api/admin/ops-summary 한 번으로 받는다.
- * 그 엔드포인트가 없는 예전 서버면 예전처럼 API 4개를 병렬로 부른다.
+ * 승인 대기 n · 마지막 백업 · SSL D-n · 서비스 n/n 을 GET /api/admin/ops-summary 1회 호출로 수신한다.
+ * 해당 엔드포인트가 없는 구 버전 서버이면 기존 방식대로 API 4개를 병렬 호출한다.
  *
- * SSL: 서버가 인증서 파일·내부 주소·공개 주소 순으로 확인한다. 하나도 못 읽으면 source/days_left 가 null —
- * 화면은 "확인 불가"(unknown). 헤어핀 NAT 가 없어 서버가 자기 공개 주소로 못 붙는 환경이 이 경우다
+ * SSL: 서버가 인증서 파일·내부 주소·공개 주소 순으로 확인한다. 모두 읽기 실패 시 source/days_left 가 null —
+ * 화면은 "확인 불가"(unknown). 헤어핀 NAT 가 없어 서버가 자신의 공개 주소로 접속할 수 없는 환경이 이에 해당한다
  * (서버 설정 SSL_CERT_PATH 또는 SSL_CHECK_HOST 로 해결).
  *
- * React: const { ops, refresh, ensure } = useAdminOps()   — ops 는 값(읽기 전용으로 쓴다)
+ * React: const { ops, refresh, ensure } = useAdminOps()   — ops 는 값(읽기 전용으로 사용)
  * 컴포넌트 밖: adminOpsStore.getState().ops · refreshAdminOps() · ensureAdminOps()
  */
 import { createStore, useStore } from 'zustand'
@@ -15,9 +15,9 @@ import { $fetch } from '~/lib/api'
 
 export interface AdminOps {
   loaded: boolean
-  /** 승인 대기(비활성 + 로그인 이력 없음). null = 불러오기 실패 */
+  /** 승인 대기(비활성 + 로그인 이력 없음). null = 조회 실패 */
   pending: number | null
-  /** 사용자 수(ops-summary). 예전 서버면 null */
+  /** 사용자 수(ops-summary). 구 버전 서버이면 null */
   users: { pending: number; active: number; suspended: number; open_invites: number } | null
   backup: { at: string; status: string } | null | undefined
   /** unknown = 서버가 만료일을 확인하지 못함(확인 불가) */
@@ -67,7 +67,7 @@ export function daysUntil(dateText: string | null | undefined): number | null {
 export const RUN_STATUS_LABEL: Record<string, string> = {
   success: '완료', partial: '일부 실패', running: '진행 중', idle: '대기', failed: '실패', building: '진행 중',
 }
-/** 원시 enum → i18n 키. 화면에서는 t(RUN_STATUS_KEY[s]) 로 쓴다(RUN_STATUS_LABEL 은 기존 호출부·테스트 호환용) */
+/** 원시 enum → i18n 키. 화면에서는 t(RUN_STATUS_KEY[s]) 로 사용한다(RUN_STATUS_LABEL 은 기존 호출부·테스트 호환용) */
 export const RUN_STATUS_KEY: Record<string, string> = {
   success: 'admin.runStatus.success', partial: 'admin.runStatus.partial', running: 'admin.runStatus.running',
   idle: 'admin.runStatus.idle', failed: 'admin.runStatus.failed', building: 'admin.runStatus.building',
@@ -76,10 +76,10 @@ export const RUN_STATUS_TONE: Record<string, 'success' | 'warning' | 'primary' |
   success: 'success', partial: 'warning', running: 'primary', building: 'primary', idle: 'neutral', failed: 'danger',
 }
 
-/** 앱 전역 상태: 운영 요약 값 · 받은 시각 */
+/** 앱 전역 상태: 운영 요약 값 · 수신 시각 */
 export const adminOpsStore = createStore<{ ops: AdminOps; fetchedAt: number }>()(() => ({ ops: { ...EMPTY }, fetchedAt: 0 }))
 
-/** 예전 서버(ops-summary 없음) — 기존 API 4개를 병렬로 */
+/** 구 버전 서버(ops-summary 없음) — 기존 API 4개를 병렬 호출 */
 async function legacy(): Promise<AdminOps> {
   const [users, backups, ssl, svcs] = await Promise.allSettled([
     $fetch<{ is_active: boolean; last_login_at?: string | null }[]>('/api/admin/users/pending'),
@@ -112,7 +112,7 @@ export async function refreshAdminOps(): Promise<void> {
       next = fromOpsSummary(await $fetch<OpsSummary>('/api/admin/ops-summary'))
     } catch (e: any) {
       const status = e?.statusCode ?? e?.response?.status
-      // 엔드포인트가 없을 때만 예전 방식으로 — 권한·서버 오류는 "불러오기 실패"
+      // 엔드포인트가 없는 경우에만 기존 방식 사용 — 권한·서버 오류는 "불러오기 실패" 처리
       next = status === 404 || status === 405 ? await legacy() : { ...EMPTY, loaded: true }
     }
     adminOpsStore.setState({ ops: next, fetchedAt: Date.now() })
@@ -120,7 +120,7 @@ export async function refreshAdminOps(): Promise<void> {
   return inflight
 }
 
-/** 60초 안에 받아 둔 값이 있으면 다시 부르지 않는다(내비가 페이지마다 부른다) */
+/** 60초 이내에 수신한 값이 있으면 재호출하지 않는다(내비가 페이지마다 호출한다) */
 export function ensureAdminOps() {
   if (Date.now() - adminOpsStore.getState().fetchedAt < 60_000) return
   void refreshAdminOps()

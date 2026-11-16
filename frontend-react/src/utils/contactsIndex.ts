@@ -11,7 +11,7 @@ export const HANGUL_KEYS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', '�
 export const LATIN_KEYS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 export const OTHER_KEY = '#'
 
-/** 색인 바 순서(★ ㄱ…ㅎ A #). ★ 은 즐겨찾기(백엔드 갭) 라 제외 */
+/** 색인 바 순서(★ ㄱ…ㅎ A #). ★ 은 즐겨찾기(백엔드 갭)이므로 제외 */
 export const INDEX_ORDER = [...HANGUL_KEYS, ...LATIN_KEYS, OTHER_KEY]
 
 export function indexKeyOf(name: string | null | undefined): string {
@@ -40,7 +40,7 @@ function rank(key: string): number {
 
 export interface IndexedGroup<T> { key: string; items: T[] }
 
-/** 이름으로 정렬·초성 묶기. sortBy='org' 면 회사 → 이름 순(헤더는 여전히 이름 초성) */
+/** 이름 기준 정렬·초성 묶기. sortBy='org' 이면 회사 → 이름 순(헤더는 동일하게 이름 초성) */
 export function groupByIndex<T>(
   items: readonly T[],
   nameOf: (t: T) => string,
@@ -74,8 +74,8 @@ export function initialsOf(name: string | null | undefined): string {
 }
 
 /**
- * 그룹 점 색 — 그룹에 색 필드가 없어 이름으로 고정 배정한다. 범주 색 --cat-1…8.
- * Tailwind 가 utils 를 훑지 않으므로 클래스 대신 CSS 값(hsl(var(--cat-N)))을 돌려준다.
+ * 그룹 점 색 — 그룹에 색 필드가 없어 이름 기준으로 고정 배정한다. 범주 색 --cat-1…8.
+ * Tailwind 가 utils 를 스캔하지 않으므로 클래스 대신 CSS 값(hsl(var(--cat-N)))을 반환한다.
  */
 export function groupDotColor(name: string): string {
   let h = 0

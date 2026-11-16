@@ -1,5 +1,5 @@
-// 라벨 선택 드롭다운 — 목록 필터 · 이슈 상세 · 새 이슈 모달에서 공용.
-// 닫을 때 한 번만 commit 한다(체크마다 요청하지 않는다).
+// 라벨 선택 드롭다운 — 목록 필터 · 이슈 상세 · 새 이슈 모달 공용.
+// 닫을 때 1회만 commit 한다(체크마다 요청하지 않는다).
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
 import { cn } from '~/lib/utils'
@@ -9,17 +9,17 @@ import { labelDot } from '~/utils/labelColor'
 export interface GitLabelPickerProps {
   /** 선택된 label id */
   modelValue: number[]
-  /** 닫을 때 값이 바뀌었으면(commit 직전) */
+  /** 닫을 때 값이 변경된 경우 호출(commit 직전) */
   onUpdateModelValue?: (v: number[]) => void
-  /** 닫을 때 값이 바뀌었으면 한 번 */
+  /** 닫을 때 값이 변경된 경우 1회 호출 */
   onCommit?: (v: number[]) => void
-  /** filter 는 '만들기' 줄을 숨긴다 */
+  /** filter 는 '만들기' 줄을 숨김 */
   mode?: 'assign' | 'filter'
   /** ghost 는 점선 '+ 편집' 칩 트리거 */
   variant?: 'default' | 'ghost'
 }
 
-/** 라벨 고르기(드롭다운) */
+/** 라벨 선택(드롭다운) */
 export function GitLabelPicker({ modelValue, onUpdateModelValue, onCommit, mode = 'assign', variant = 'default' }: GitLabelPickerProps) {
   const { t } = useI18n()
   const { labels, labelCounts, createLabel } = useGit()
@@ -29,7 +29,7 @@ export function GitLabelPicker({ modelValue, onUpdateModelValue, onCommit, mode 
   const [q, setQ] = useState('')
   const [draft, setDraft] = useState<number[]>([...modelValue])
 
-  // 8개를 넘을 때만 검색줄을 보인다
+  // 8개 초과 시에만 검색줄 표시
   const searchable = labels.length > 8
   const s = q.trim().toLowerCase()
   const filtered = s ? labels.filter(l => l.name.toLowerCase().includes(s)) : labels
@@ -39,7 +39,7 @@ export function GitLabelPicker({ modelValue, onUpdateModelValue, onCommit, mode 
     ? (modelValue.length ? t('git.labels.edit') : t('git.labels.add'))
     : t('git.labels.title')
 
-  // 트리거를 열 때마다 현재 값으로 draft 를 맞춘다(외부에서 바뀌었을 수 있음)
+  // 트리거를 열 때마다 현재 값으로 draft 를 동기화한다(외부에서 변경되었을 수 있음)
   function openPicker() {
     setDraft([...modelValue])
     setOpen(true)
@@ -49,7 +49,7 @@ export function GitLabelPicker({ modelValue, onUpdateModelValue, onCommit, mode 
     setDraft(d => (d.includes(id) ? d.filter(x => x !== id) : [...d, id]))
   }
 
-  // 닫을 때 한 번만 커밋한다
+  // 닫을 때 1회만 커밋
   function close() {
     if (!open) return
     setOpen(false); setQ('')
@@ -119,7 +119,7 @@ export function GitLabelPicker({ modelValue, onUpdateModelValue, onCommit, mode 
                 >
                   {draft.includes(l.id) && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-2 w-2"><polyline points="20 6 9 17 4 12" /></svg>}
                 </span>
-                {/* 색은 점에만. 명도 하한을 걸어 어두운 라벨도 보이게 한다 */}
+                {/* 색은 점에만 적용. 명도 하한을 적용하여 어두운 라벨도 식별 가능하게 한다 */}
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: labelDot(l.color) }} />
                 <span className="truncate text-[12.5px]">{l.name}</span>
                 <span className="ml-auto font-mono text-[10.5px] text-muted-foreground/80">

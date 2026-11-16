@@ -1,39 +1,39 @@
 /**
- * 회의 한 번의 통계(회의 종료 화면 "'회의' · 58분 · 참가 6명" · "이번 회의").
- * 들어간 시각부터 나온 시각까지의 분, 그동안 본 최대 참가자 수(나 포함), 본 사람(이름·손님 여부), 회의 채팅 수.
- * 서버 기록이 아니라 이 화면이 본 값이다(서버에는 참석 기록이 없다).
- * key 를 주면 값이 앱 수준(useSharedState)에 남는다 — 회의 화면을 미니 창으로 내렸다 돌아와도 통계가 이어진다.
- * 이 경우 참가자 감시는 이 함수를 부른 화면마다 돈다(회의 화면·미니 창 둘 다 부른다).
+ * 회의 1회의 통계(회의 종료 화면 "'회의' · 58분 · 참가 6명" · "이번 회의").
+ * 입장 시각부터 퇴장 시각까지의 분, 그동안 관측한 최대 참가자 수(본인 포함), 관측한 참가자(이름·손님 여부), 회의 채팅 수.
+ * 서버 기록이 아니라 이 화면이 관측한 값이다(서버에는 참석 기록이 없다).
+ * key 를 지정하면 값이 앱 수준(useSharedState)에 유지된다 — 회의 화면을 미니 창으로 전환했다가 복귀해도 통계가 이어진다.
+ * 이 경우 참가자 감시는 이 함수를 호출한 화면마다 실행된다(회의 화면·미니 창 모두 호출한다).
  *
  * React: const stats = useMeetingSessionStats(() => participants.length, 'meetings-call-stats')
  *   stats.start() / stats.stop() / stats.result(값)
- *   participantCount 는 렌더 때마다 불러 값이 바뀌면 최대값을 올린다(첫 값에는 안 돈다).
- *   stop() 은 leaveRoom 전에 부른다(채팅 수는 그때의 회의 채팅 목록에서 센다).
+ *   participantCount 는 렌더마다 호출하여 값이 변경되면 최대값을 갱신한다(첫 값에는 실행되지 않음).
+ *   stop() 은 leaveRoom 전에 호출한다(채팅 수는 그 시점의 회의 채팅 목록에서 집계한다).
  */
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 import { getSharedState, setSharedState, useSharedState } from '~/lib/state'
 import { meetingsStore } from '~/composables/useMeetings'
 
-/** 회의에서 본 사람 한 명 */
+/** 회의에서 관측한 참가자 1명 */
 export interface MeetingSessionPerson { id: string; name: string; guest: boolean }
 
 export interface MeetingSessionResult {
   minutes: number
   participants: number
-  /** 들어간·나온 시각(epoch ms) */
+  /** 입장·퇴장 시각(epoch ms) */
   startedAt?: number
   endedAt?: number
-  /** 그동안 본 사람(들어온 순서) */
+  /** 그동안 관측한 참가자(입장 순서) */
   people?: MeetingSessionPerson[]
   /** 회의 채팅 메시지 수 */
   chats?: number
 }
 
-/** 손님(공유 링크로 승인받아 들어온 사람) — LiveKit identity 가 guest-<신청 id> */
+/** 손님(공유 링크로 승인받아 입장한 사용자) — LiveKit identity 가 guest-<신청 id> */
 export const isGuestIdentity = (identity: string) => identity.startsWith('guest-')
 
-/** 본 사람 목록에 지금 참가자를 합친다(새 사람만 뒤에, 이름은 최신으로) */
+/** 관측한 참가자 목록에 현재 참가자를 병합한다(신규 참가자만 뒤에 추가, 이름은 최신 값으로 갱신) */
 export function mergeSeenPeople(
   seen: MeetingSessionPerson[],
   now: ReadonlyArray<{ identity: string; name: string }>,
@@ -52,7 +52,7 @@ export function mergeSeenPeople(
 let _localSeq = 0
 
 export function useMeetingSessionStats(participantCount: () => number, key?: string) {
-  // key 가 없으면 이 컴포넌트만의 키
+  // key 가 없으면 이 컴포넌트 전용 키 사용
   const [localKey] = useState(() => `__meeting-session-stats-${++_localSeq}`)
   const base = key ?? localKey
   const kJoined = `${base}-joined`
@@ -71,7 +71,7 @@ export function useMeetingSessionStats(participantCount: () => number, key?: str
     if (getSharedState<number | null>(kJoined) !== null && n > getSharedState<number>(kMax)) setSharedState(kMax, n)
   }, [n, kJoined, kMax])
 
-  // 본 사람 — 들어가 있는 동안 참가자가 바뀔 때마다 합친다
+  // 관측한 참가자 — 입장해 있는 동안 참가자 변경 시마다 병합한다
   const participants = useStore(meetingsStore, s => s.participants)
   useEffect(() => {
     if (getSharedState<number | null>(kJoined) === null) return
@@ -80,7 +80,7 @@ export function useMeetingSessionStats(participantCount: () => number, key?: str
     if (next !== prev) setSharedState(kPeople, next)
   }, [participants, kJoined, kPeople])
 
-  // participantCount 는 렌더마다 새 함수일 수 있으니 최신 것을 쥐고 있는다
+  // participantCount 는 렌더마다 새 함수일 수 있으므로 최신 참조를 유지한다
   const countRef = useRef(participantCount)
   useEffect(() => { countRef.current = participantCount })
 
@@ -91,7 +91,7 @@ export function useMeetingSessionStats(participantCount: () => number, key?: str
     setSharedState<MeetingSessionResult | null>(kResult, null)
   }
 
-  /** 나올 때 부른다(leaveRoom 전). 들어간 적이 없으면 null */
+  /** 퇴장 시 호출한다(leaveRoom 전). 입장한 적이 없으면 null */
   function stop(): MeetingSessionResult | null {
     const joinedAt = getSharedState<number | null>(kJoined)
     if (joinedAt === null || joinedAt === undefined) return null

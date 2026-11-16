@@ -1,16 +1,16 @@
 /**
  * 문서 편집기용 TipTap 확장.
  *
- * TipTap 기본 확장에 없지만 Word 리본에서 자리를 차지하는 것들이다. 글자 크기와
- * 단락 서식(줄 간격·들여쓰기·단락 앞뒤 간격)은 없으면 리본이 반쯤 비어 보인다.
+ * TipTap 기본 확장에는 없으나 Word 리본에 자리가 있는 항목이다. 글자 크기와
+ * 단락 서식(줄 간격·들여쓰기·단락 앞뒤 간격)이 없으면 리본의 절반가량이 비어 보인다.
  *
- * 단락 속성을 하나의 확장(BlockStyle)으로 묶은 이유: 줄 간격·들여쓰기·간격을 각각
- * 확장으로 만들면 같은 노드에 addGlobalAttributes 를 세 번 얹게 되고, 그때마다
- * 스키마가 갈라져 협업 중 문서가 어긋날 여지가 생긴다.
+ * 단락 속성을 하나의 확장(BlockStyle)으로 통합한 이유: 줄 간격·들여쓰기·간격을 각각
+ * 확장으로 구현하면 동일 노드에 addGlobalAttributes 를 세 번 적용하게 되고, 그때마다
+ * 스키마가 분기되어 협업 중 문서 불일치가 발생할 수 있다.
  */
 import { Extension } from '@tiptap/core'
 
-/** 글자 크기 — TextStyle 마크 위에 얹는다. */
+/** 글자 크기 — TextStyle 마크 위에 적용한다. */
 export const FontSize = Extension.create({
   name: 'fontSize',
   addOptions: () => ({ types: ['textStyle'] }),
@@ -64,14 +64,14 @@ export const BlockStyle = Extension.create({
           parseHTML: (el: HTMLElement) => el.style.marginBottom || null,
           renderHTML: (a: any) => (a.spaceAfter ? { style: `margin-bottom:${a.spaceAfter}` } : {}),
         },
-        // 캡션·각주·목차처럼 "이건 이런 문단이다" 를 표시해야 하는 것들이 있다.
-        // 클래스를 스키마에 넣지 않으면 삽입하는 순간 TipTap 이 떼어 버린다.
+        // 캡션·각주·목차처럼 문단 종류를 표시해야 하는 항목이 있다.
+        // 클래스를 스키마에 포함하지 않으면 삽입 시점에 TipTap 이 제거한다.
         cls: {
           default: null,
           parseHTML: (el: HTMLElement) => el.getAttribute('class') || null,
           renderHTML: (a: any) => (a.cls ? { class: a.cls } : {}),
         },
-        // 책갈피 — 상호 참조가 걸 자리. id 가 있어야 문서 안 링크(#이름)가 성립한다.
+        // 책갈피 — 상호 참조의 대상 위치. id 가 있어야 문서 내 링크(#이름)가 성립한다.
         anchor: {
           default: null,
           parseHTML: (el: HTMLElement) => el.getAttribute('id') || null,
@@ -81,7 +81,7 @@ export const BlockStyle = Extension.create({
     }]
   },
   addCommands() {
-    // 선택 영역에 걸친 모든 블록에 같은 값을 준다. Word 의 단락 서식과 같은 감각.
+    // 선택 영역에 걸친 모든 블록에 동일한 값을 적용한다. Word 의 단락 서식과 동일한 동작 방식.
     const setAll = (attr: string) => (value: string | null) => ({ state, chain }: any) => {
       const types: string[] = (this as any).options.types
       let c = chain()
@@ -99,7 +99,7 @@ export const BlockStyle = Extension.create({
   },
 })
 
-/** 용지 규격 (cm). 세로 기준이고 가로는 뒤집어 쓴다. */
+/** 용지 규격 (cm). 세로 기준이며 가로는 값을 맞바꿔 사용한다. */
 export const PAGE_SIZES: Record<string, { w: number; h: number; label: string }> = {
   A4: { w: 21, h: 29.7, label: 'A4 (21 × 29.7cm)' },
   Letter: { w: 21.59, h: 27.94, label: 'Letter (21.59 × 27.94cm)' },
@@ -108,7 +108,7 @@ export const PAGE_SIZES: Record<string, { w: number; h: number; label: string }>
   A3: { w: 29.7, h: 42, label: 'A3 (29.7 × 42cm)' },
 }
 
-/** 여백 프리셋 (cm) — 위/오른쪽/아래/왼쪽. Word 의 기본 목록과 같은 값이다. */
+/** 여백 프리셋 (cm) — 위/오른쪽/아래/왼쪽. Word 의 기본 목록과 동일한 값이다. */
 export const MARGINS: Record<string, { v: [number, number, number, number]; labelKey: string }> = {
   normal: { v: [2.54, 2.54, 2.54, 2.54], labelKey: 'files.office.margin.normal' },
   narrow: { v: [1.27, 1.27, 1.27, 1.27], labelKey: 'files.office.margin.narrow' },
@@ -116,7 +116,7 @@ export const MARGINS: Record<string, { v: [number, number, number, number]; labe
   wide: { v: [2.54, 5.08, 2.54, 5.08], labelKey: 'files.office.margin.wide' },
 }
 
-/** 문서 서식 테마 — 본문 글꼴·크기·줄간격 한 벌. 디자인 탭의 갤러리가 이걸 고른다. */
+/** 문서 서식 테마 — 본문 글꼴·크기·줄간격 한 벌. 디자인 탭의 갤러리에서 선택한다. */
 export interface DocTheme {
   id: string
   /** 이름 i18n 키 */

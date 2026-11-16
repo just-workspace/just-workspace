@@ -1,4 +1,4 @@
-// vue-i18n 문법 어댑터 — locales JSON 을 그대로 쓸 때 vue-i18n 과 같은 결과인지.
+// vue-i18n 문법 어댑터 — locales JSON 을 그대로 사용할 때 vue-i18n 과 동일한 결과인지 검증.
 import { describe, it, expect } from 'vitest'
 import { format, pluralDefault } from '~/i18n/compile'
 import { act, renderHook } from '@testing-library/react'
@@ -56,15 +56,15 @@ describe('i18n 전역', () => {
   })
 })
 
-// i18next 27 · react-i18next 18 로 올린 뒤에도 유지돼야 하는 동작(2026-11 의존성 업그레이드).
-// `t('키', '문구')` 의 두 번째 인자 폴백은 i18next 가 아니라 이 어댑터(translate)가 처리한다 — 엔진 메이저와 무관해야 한다.
+// i18next 27 · react-i18next 18 로 업그레이드한 뒤에도 유지되어야 하는 동작(2026-11 의존성 업그레이드).
+// `t('키', '문구')` 의 두 번째 인자 폴백은 i18next 가 아닌 이 어댑터(translate)가 처리한다 — 엔진 메이저 버전과 무관해야 한다.
 describe('t(키, 기본 문구) 폴백 · 언어 전환 재렌더', () => {
   it('없는 키는 두 번째 인자 문구를, 있는 키는 번역을 돌려준다(전역 i18n)', () => {
     expect(i18n.t('no.such.key', '기본 문구')).toBe('기본 문구')
     expect(i18n.t('no.such.key', '')).toBe('')
     expect(i18n.t('common.confirm', '기본 문구')).not.toBe('기본 문구')
     expect(i18n.t('common.confirm', '기본 문구')).toBe(i18n.t('common.confirm'))
-    // 객체(중간 노드)에 걸린 키도 문자열이 아니므로 기본 문구
+    // 객체(중간 노드)에 해당하는 키도 문자열이 아니므로 기본 문구 반환
     expect(i18n.t('common', '기본 문구')).toBe('기본 문구')
   })
 

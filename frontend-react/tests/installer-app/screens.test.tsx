@@ -1,5 +1,5 @@
-// 설치 마법사 화면(src/installer-app) — 가짜 서버(api/mock.ts)의 시나리오로 각 화면의 상태를 띄워 본다.
-// 들어오기(토큰 · 잠김 · 이어 하기) · 사전 점검 · 시작 방식 · 접속 주소 · 프록시 · 저장 위치 · 구역 · 메일 · 관리자 · 요약 · 적용 · 완료 · 복원.
+// 설치 마법사 화면(src/installer-app) — 모의 서버(api/mock.ts)의 시나리오로 각 화면의 상태를 렌더링하여 검증한다.
+// 진입(토큰 · 잠김 · 이어 하기) · 사전 점검 · 시작 방식 · 접속 주소 · 프록시 · 저장 위치 · 구역 · 메일 · 관리자 · 요약 · 적용 · 완료 · 복원.
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { InstallerApp } from '~/installer-app/InstallerApp'
@@ -68,10 +68,10 @@ describe('들어오기', () => {
     open('locked')
     await heading('설치가 이미 끝났습니다')
     expect(screen.getByRole('link', { name: '로그인 화면으로' }).getAttribute('href')).toBe('https://workspace.example.com')
-    // 다시 설치하는 명령은 서버가 알려 준 글자 그대로 보인다
+    // 재설치 명령은 서버가 제공한 문자열 그대로 표시
     expect(screen.getByText(/처음부터 다시 설치하려면/)).toBeTruthy()
     expect(screen.getByText('docker exec jw-installer jw reinstall --yes')).toBeTruthy()
-    // 소스 코드 링크 — 서버가 준 주소로, 새 창에서
+    // 소스 코드 링크 — 서버가 제공한 주소로, 새 창에서 열림
     const source = screen.getByRole('link', { name: '소스 코드' })
     expect(source.getAttribute('href')).toBe('https://github.com/just-workspace/just-workspace')
     expect(source.getAttribute('rel')).toBe('noopener noreferrer')
@@ -247,7 +247,7 @@ describe('접속 주소와 연결', () => {
     expect(next().disabled).toBe(false)
     expect(screen.getByText('임시 인증서 · 나중에 발급')).toBeTruthy()
     fireEvent.click(next())
-    // 최소 묶음에는 메일이 없다 — 메일 화면을 건너뛰고 관리자 계정으로
+    // 최소 프리셋에는 메일 없음 — 메일 화면을 건너뛰고 관리자 계정으로 이동
     await heading('관리자 계정')
   })
 })
@@ -268,7 +268,7 @@ describe('파일 저장 위치', () => {
     expect(screen.getByText('1. 서버에 닿는가')).toBeTruthy()
     expect(screen.getByText('5. 여유 공간')).toBeTruthy()
     expect(next().disabled).toBe(false)
-    // 값을 바꾸면 앞선 확인은 쓸 수 없다
+    // 값을 변경하면 이전 확인 결과는 무효
     type(/공유 경로/, '/volume2/other')
     expect(next().disabled).toBe(true)
     type(/공유 경로/, '/volume1/workspace')
@@ -294,7 +294,7 @@ describe('파일 저장 위치', () => {
     const row = screen.getByText(label).closest('li')!
     expect(row.getAttribute('data-state')).toBe('fail')
     expect(within(row).getByText('실패')).toBeTruthy()
-    // 실패한 검사 뒤의 것(여유 공간 제외한 1~4번 가운데 남은 것)과 5번은 확인하지 않는다
+    // 실패한 검사 이후 항목(여유 공간을 제외한 1~4번 중 나머지)과 5번은 확인하지 않음
     expect(screen.getAllByText('확인 안 함')).toHaveLength(skippedAfter + 1)
     expect(next().disabled).toBe(true)
     expect(screen.getByText('1~4번 검사를 모두 통과해야 다음으로 갈 수 있습니다.')).toBeTruthy()
@@ -337,7 +337,7 @@ describe('구역 선택', () => {
     expect(screen.getByRole('radio', { name: '직접 고름' }).getAttribute('aria-checked')).toBe('true')
 
     fireEvent.click(next())
-    // 메일을 뺐고 회의를 골랐다 — 다음은 회의
+    // 메일을 제외하고 회의를 선택 — 다음은 회의
     await heading('회의 연결')
     expect(store.getState().answers.zones).toEqual(['chat', 'calendar', 'docs', 'meetings', 'git', 'ai'])
     expect(store.getState().answers.addons).toEqual(['sso'])
@@ -346,7 +346,7 @@ describe('구역 선택', () => {
   it('권장 메모리가 서버 메모리를 넘으면 다음을 막는다', async () => {
     open('mem-6', '#/zones')
     await heading('쓸 구역을 고릅니다')
-    // 6 GB 서버 — 협업 묶음(7 GB)이 맞지 않아 최소 묶음에서 시작한다
+    // 6 GB 서버 — 협업 프리셋(7 GB)이 맞지 않아 최소 프리셋에서 시작
     expect(screen.getByRole('radio', { name: '최소' }).getAttribute('aria-checked')).toBe('true')
     expect(next().disabled).toBe(false)
     fireEvent.click(screen.getByRole('radio', { name: '협업' }))
@@ -381,7 +381,7 @@ describe('메일', () => {
     expect(screen.getByText(/개가 맞지 않습니다. 이대로 설치하면 보낸 메일이 스팸으로 분류될 수 있습니다/)).toBeTruthy()
     expect(screen.getByRole('button', { name: '_dmarc.example.com 값 복사' })).toBeTruthy()
     expect(screen.getByText('v=DMARC1 p=none')).toBeTruthy()
-    // 긴 값은 줄여 보이고 펼칠 수 있다
+    // 긴 값은 축약 표시되며 펼칠 수 있음
     const expand = screen.getAllByRole('button', { name: '펼침' })[0]
     expect(screen.queryByText(/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$/)).toBeNull()
     fireEvent.click(expand)
@@ -404,7 +404,7 @@ describe('메일', () => {
     fireEvent.click(next())
     await heading('관리자 계정')
     expect(store.getState().answers.mail).toMatchObject({ kind: 'external', host: 'smtp.example.com', port: 587, username: 'sender' })
-    // 비밀번호는 서버가 돌려준 답변에 없다 — 서버가 가지고 있다는 표시만 온다
+    // 비밀번호는 서버가 반환한 답변에 없음 — 서버가 보유 중이라는 표시만 수신
     expect(store.getState().answers.mail.password).toBeUndefined()
     expect(store.getState().secretsOnServer['mail.password']).toBe(true)
   })
@@ -540,7 +540,7 @@ describe('적용', () => {
     await waitFor(() => expect(button('설치').disabled).toBe(false))
     fireEvent.click(button('설치'))
     await heading('설치가 끝났습니다')
-    // 이 서버의 디스크(기본 폴더)면 "저장소 연결" 단계가 없다
+    // 본 서버의 디스크(기본 폴더)이면 "저장소 연결" 단계 없음
     expect(stepsOf()).toEqual(['config:done', 'pull:done', 'database:done', 'cert:done', 'zones:done', 'admin:done', 'lock:done'])
     expect(screen.getByRole('progressbar', { name: '설치 진행' }).getAttribute('aria-valuenow')).toBe('7')
     fireEvent.click(button('완료 화면 열기'))
@@ -576,7 +576,7 @@ describe('적용', () => {
     fireEvent.click(within(card).getByRole('button', { name: '임시 인증서로 계속' }))
     await heading('설치가 끝났습니다')
     fireEvent.click(button('완료 화면 열기'))
-    // 임시 인증서로 끝냈으니 할 일에 인증서 발급이 있다
+    // 임시 인증서로 완료했으므로 할 일에 인증서 발급 포함
     expect(await screen.findByText('인증서 발급')).toBeTruthy()
     expect(store.getState().finishedHere).toBe(true)
   })
@@ -662,12 +662,12 @@ describe('백업에서 복원', () => {
     expect(screen.getByText('백업 풀고 설정 파일 만들기')).toBeTruthy()
     expect(screen.getByText('데이터 되돌리기')).toBeTruthy()
     expect(screen.getByText('구역 시작하고 마법사 잠그기')).toBeTruthy()
-    // 백업에 파일이 없으면 "파일 되돌리기" 단계가 없다
+    // 백업에 파일이 없으면 "파일 되돌리기" 단계 없음
     expect(screen.queryByText('파일 되돌리기')).toBeNull()
     fireEvent.click(button('완료 화면 열기'))
     expect(await screen.findByText('원래 서버 끄기')).toBeTruthy()
     expect(screen.getByText(/계정, 비밀번호, 데이터는 원래 서버에서 쓰던 그대로입니다/)).toBeTruthy()
-    // 원래 서버가 네트워크 저장소를 썼으면 같은 저장소를 다시 연결한 것이다
+    // 원래 서버가 네트워크 저장소를 사용했으면 동일 저장소를 재연결한 것임
     expect(screen.getByText(/네트워크 저장소를 다시 연결했습니다/)).toBeTruthy()
     expect(screen.getByText('접속 주소 옮기기')).toBeTruthy()
     expect(screen.queryByText('인증서 발급')).toBeNull()
@@ -826,7 +826,7 @@ describe('백업에서 복원 — 내용 확인과 완료', () => {
     fireEvent.click(button('복원'))
     await screen.findByText('이대로는 복원을 시작할 수 없습니다.')
     expect(screen.getByText(/이 공유에는 원래 서버가 남긴 표식이 없습니다. 다른 공유이거나 비어 있습니다./)).toBeTruthy()
-    // 문구를 모르는 사유는 코드를 그대로 보인다
+    // 문구가 정의되지 않은 사유는 코드를 그대로 표시
     expect(screen.getByText('서버가 값을 받지 않았습니다. (domain_unusual)')).toBeTruthy()
     expect(screen.getByText('위 항목을 고친 뒤 다시 누릅니다.')).toBeTruthy()
     await heading('이 백업으로 복원합니다')
@@ -853,7 +853,7 @@ describe('백업에서 복원 — 내용 확인과 완료', () => {
       domain: 'workspace.example.com', storage: { kind: 'local' }, network: 'proxy',
       proxy_addresses: ['192.168.10.5', '192.168.10.6'], subnet: '172.30.0.0/24',
     })
-    // 프록시 뒤면 인증서 단계가 없다
+    // 프록시 뒤이면 인증서 단계 없음
     expect(stepsOf()).toEqual(['unpack:done', 'pull:done', 'database:done', 'files:done', 'zones:done'])
     fireEvent.click(button('완료 화면 열기'))
     expect(await screen.findByText('백업에 든 파일도 되돌렸습니다.')).toBeTruthy()
@@ -880,7 +880,7 @@ describe('백업에서 복원 — 내용 확인과 완료', () => {
     await heading('복원이 끝났습니다')
     fireEvent.click(button('완료 화면 열기'))
     expect(await screen.findByText(/파일 없이 복원했습니다/)).toBeTruthy()
-    // 서버가 임시 인증서로 정했다
+    // 서버가 임시 인증서로 결정함
     expect(screen.getByText('인증서 발급')).toBeTruthy()
     expect(screen.getByText('원래 서버 끄기')).toBeTruthy()
   })
@@ -941,16 +941,16 @@ describe('인증서 올리기 — 사설 CA 의 인증서', () => {
     await screen.findByText('인증서 파일에 발급 CA 가 들어 있지 않습니다.')
     expect(screen.getByText(/사설 CA 가 내준 인증서라면 위의 CA 인증서 칸에/)).toBeTruthy()
     expect(screen.getByTestId('cert-row-ca').textContent).toContain('들어 있지 않음')
-    expect(next().disabled).toBe(false)                                        // 공개 CA 일 수 있다 — 주의일 뿐이다
+    expect(next().disabled).toBe(false)                                        // 공개 CA 일 가능성 있음 — 주의에 해당
     expect(probe.mock.calls.at(-1)?.[3] ?? null).toBeNull()
 
     drop(container, 2, pem('ca.crt'))
     await waitFor(() => expect(screen.getByTestId('cert-row-ca').textContent).toContain('함께 올림'))
     expect(screen.queryByText('인증서 파일에 발급 CA 가 들어 있지 않습니다.')).toBeNull()
-    expect((probe.mock.calls.at(-1)?.[3] as File).name).toBe('ca.crt')         // CA 파일도 함께 확인에 보낸다
+    expect((probe.mock.calls.at(-1)?.[3] as File).name).toBe('ca.crt')         // CA 파일도 함께 확인 요청에 포함
     expect(next().disabled).toBe(false)
 
-    // CA 를 빼면 다시 서버 인증서만으로 확인한다
+    // CA 를 제외하면 다시 서버 인증서만으로 확인
     fireEvent.click(button('CA 인증서 빼기'))
     await screen.findByText('인증서 파일에 발급 CA 가 들어 있지 않습니다.')
     expect(probe.mock.calls.at(-1)?.[3] ?? null).toBeNull()

@@ -1,11 +1,11 @@
 /**
- * 접속 바(사이드바 하단). 음성 채널에 들어가 있으면 어디서나 보인다(세션은 useVoice 앱 수준 싱글턴).
+ * 접속 바(사이드바 하단). 음성 채널 접속 중에는 모든 화면에 표시한다(세션은 useVoice 앱 수준 싱글턴).
  *  · 데스크톱(사이드바 하단, 채팅 목록 사이드바 또는 셸 사이드바 wide): 1줄 = 상태 점 · 상태(13/600) · "채널 · 워크스페이스"(12) ·
  *    오른쪽 음질 버튼(점 + 단계 + 지연 mono → 음질 상태 팝오버, aria-expanded). 2줄 = 마이크 · 듣기 끔(aria-pressed) · 음질 설정(aria-pressed) · 나가기(danger). 버튼 40.
- *  · 모바일(하단 탭 바 바로 위): 1줄 같은 구성(상태 14) · 2줄 버튼 44 네 칸 균등. 팝오버는 바텀시트.
- *  · compact(셸 사이드바가 레일 64 일 때 — 참고): 같은 버튼을 세로로 쌓는다. 음질 상태는 점 버튼으로.
- *  · 재연결 = 위 테두리 warning 2px + "다시 연결하는 중… N초". 권한 없음 = "듣기만 하는 중" + 마이크 잠김. 연결 중 = 마이크 잠김 · 지연 "—".
- * 받은 소리는 전송이 숨은 <audio> 로 낸다(화면과 무관).
+ *  · 모바일(하단 탭 바 바로 위): 1줄 동일 구성(상태 14) · 2줄 버튼 44 네 칸 균등. 팝오버는 바텀시트.
+ *  · compact(셸 사이드바가 레일 64 일 때 — 참고): 동일 버튼을 세로로 배치한다. 음질 상태는 점 버튼으로 표시.
+ *  · 재연결 = 위 테두리 warning 2px + "다시 연결하는 중… N초". 권한 없음 = "듣기만 하는 중" + 마이크 잠금. 연결 중 = 마이크 잠금 · 지연 "—".
+ * 수신 음성은 전송 계층이 숨김 <audio> 로 출력한다(화면과 무관).
  */
 import { useEffect, useRef, useState } from 'react'
 import { clsx as cn } from 'clsx'
@@ -22,7 +22,7 @@ import { VoiceQualityPanel } from './VoiceQualityPanel'
 export interface VoiceConnectedBarProps {
   /** 모바일(탭 바 위) — 버튼 44 네 칸 */
   mobile?: boolean
-  /** 셸 사이드바 레일(64) 안 — 세로 쌓기 */
+  /** 셸 사이드바 레일(64) 안 — 세로 배치 */
   compact?: boolean
   className?: string
 }
@@ -35,7 +35,7 @@ export function VoiceConnectedBar({ mobile = false, compact = false, className }
   const ch = channels.find(c => c.id === v.channelId)
   const name = ch?.name || t('chat.voice.fallbackName')
 
-  // 재연결 초 세기
+  // 재연결 초 계수
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     if (!v.reconnectSince) return

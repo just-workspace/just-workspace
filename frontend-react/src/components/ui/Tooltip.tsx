@@ -2,11 +2,11 @@
  * 툴팁: 반전색 12/500, 400ms 지연, 포커스에도 표시, 문구 = aria-label, 단축키 키캡 병기.
  * 터치 기기(pointer: coarse)에서는 표시하지 않는다(길게 누르기 = 액션 시트 규칙).
  *
- * 래퍼는 상자를 만들지 않는다(display: contents). 그래서 트리거(버튼 등)에 준 위치·레이아웃 클래스
- * (absolute right-2 top-2, grid 칸 배치 등)가 실제 부모 기준으로 그대로 먹는다.
- * 말풍선은 body 로 포털해 트리거 좌표에 fixed 로 띄운다 → overflow 에 잘리지 않고,
- * 화면 위(아래)로 넘치면 반대쪽으로 자동으로 뒤집는다.
- * 래퍼 자체에 className 을 주면(예: "hidden md:inline-flex") contents 대신 그 표시 방식을 쓴다.
+ * 래퍼는 상자를 생성하지 않는다(display: contents). 따라서 트리거(버튼 등)에 지정한 위치·레이아웃 클래스
+ * (absolute right-2 top-2, grid 칸 배치 등)가 실제 부모 기준으로 그대로 적용된다.
+ * 말풍선은 body 로 포털하여 트리거 좌표에 fixed 로 표시한다 → overflow 에 잘리지 않으며,
+ * 화면 위(아래)로 초과하면 반대쪽으로 자동 전환한다.
+ * 래퍼 자체에 className 을 지정하면(예: "hidden md:inline-flex") contents 대신 해당 표시 방식을 사용한다.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type FocusEvent, type HTMLAttributes, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -20,11 +20,11 @@ export interface UiTooltipProps extends HTMLAttributes<HTMLSpanElement> {
   text: string
   /** 단축키 키캡 목록. 예: ['Ctrl', 'K'] */
   keys?: string[]
-  /** 선호 위치(기본 위). 공간이 없으면 반대쪽으로 뒤집는다 */
+  /** 선호 위치(기본 위). 공간 부족 시 반대쪽으로 전환 */
   side?: 'top' | 'bottom'
   /** 트리거를 block 래퍼로 감쌀 때(래퍼가 상자를 가져야 하는 경우) */
   block?: boolean
-  /** 툴팁 끄기(라벨만 aria 로 남길 때) */
+  /** 툴팁 비활성화(라벨만 aria 로 유지할 때) */
   disabled?: boolean
   /** 트리거(버튼 등) */
   children?: ReactNode
@@ -38,13 +38,13 @@ function isCoarse() {
 }
 
 /**
- * 키보드로 온 포커스인가(:focus-visible). 마우스로 메뉴·모달을 닫으면 포커스가 트리거로 되돌아오는데,
- * 그때마다 툴팁이 떠서 다른 곳을 누를 때까지 남았다 — 키보드 포커스에만 보인다.
- * :focus-visible 을 모르는 환경(옛 브라우저·jsdom)은 예전처럼 보인다.
+ * 키보드에 의한 포커스 여부(:focus-visible). 마우스로 메뉴·모달을 닫으면 포커스가 트리거로 복귀하는데,
+ * 그때마다 툴팁이 표시되어 다른 위치를 클릭할 때까지 유지되었다 — 키보드 포커스에만 표시한다.
+ * :focus-visible 미지원 환경(구형 브라우저·jsdom)에서는 기존과 동일하게 표시한다.
  */
 function focusVisible(el: EventTarget | null): boolean {
   if (!(el instanceof Element)) return true
-  // 실제 포커스가 아닌 이벤트(코드가 직접 쏜 focus)는 판정할 수 없다 — 보인다
+  // 실제 포커스가 아닌 이벤트(코드에서 직접 발생시킨 focus)는 판정 불가 — 표시한다
   if (el.ownerDocument.activeElement !== el) return true
   try { return el.matches(':focus-visible') } catch { return true }
 }
@@ -69,7 +69,7 @@ export function UiTooltip({ text, keys = [], side = 'top', block = false, disabl
   function anchorRect(): DOMRect | null {
     const el = root.current
     if (!el) return null
-    // 화면 배율(루트 zoom) 아래 — 화면 좌표를 style 에 넣을 CSS px 로
+    // 화면 배율(루트 zoom) 적용 시 — 화면 좌표를 style 에 넣을 CSS px 로 변환
     const r = el.getBoundingClientRect()
     if (r.width || r.height) return toCssRect(r)
     const child = el.firstElementChild as HTMLElement | null
@@ -95,7 +95,7 @@ export function UiTooltip({ text, keys = [], side = 'top', block = false, disabl
     timer.current = setTimeout(() => {
       const r = anchorRect()
       if (!r) return
-      // 첫 프레임은 대략 위치(측정 전), 측정 뒤 정확히(아래 layout effect)
+      // 첫 프레임은 근사 위치(측정 전), 측정 후 정확한 위치로 보정(아래 layout effect)
       setPos(p => ({ ...p, left: r.left, top: r.top }))
       setOpen(true)
     }, delay)
@@ -105,7 +105,7 @@ export function UiTooltip({ text, keys = [], side = 'top', block = false, disabl
     setOpen(false)
   }
 
-  // 열린 직후 측정해 정확한 자리로
+  // 열림 직후 측정하여 정확한 위치로 이동
   useLayoutEffect(() => {
     if (open) place()
     // eslint-disable-next-line react-hooks/exhaustive-deps

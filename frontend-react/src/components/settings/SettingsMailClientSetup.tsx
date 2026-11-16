@@ -1,7 +1,7 @@
 /**
- * 설정 › 메일 › 계정 — "메일 앱 연결" 카드. 아웃룩·애플 메일·삼성 메일 같은 외부 앱에 내장 메일 계정을 넣는 안내.
+ * 설정 › 메일 › 계정 — "메일 앱 연결" 카드. 아웃룩·애플 메일·삼성 메일 등 외부 앱에 내장 메일 계정을 등록하는 안내.
  * API: GET /api/mail/client-setup(서버·포트·아이디), GET /api/mail/client-setup/apple.mobileconfig(애플 구성 프로필).
- * 내장 메일 계정이 없으면(404) 카드를 그리지 않는다.
+ * 내장 메일 계정이 없으면(404) 카드를 표시하지 않는다.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'

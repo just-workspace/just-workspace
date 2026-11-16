@@ -1,8 +1,8 @@
 /**
  * 승인 대기함 상세 — 데스크톱 오른쪽 · 만료 · 모바일 상세.
- *  머리(아이콘·제목·위험도·요청 ID) → 요청한 곳·도구·대상·요청 시각·만료 → 직전 외부 읽기 경고 → 바뀌는 내용 → 전체 인자
- *  → 대기면 [거부 사유(선택, AI 에게 전달)][거부][승인], 처리됐으면 결과 줄(+ 되돌리기).
- * 남은 시간은 서버 시각 기준(offset). 버튼 동작은 부모가 API 를 부른다.
+ *  머리(아이콘·제목·위험도·요청 ID) → 요청 출처·도구·대상·요청 시각·만료 → 직전 외부 읽기 경고 → 변경 내용 → 전체 인자
+ *  → 대기 상태이면 [거부 사유(선택, AI 에게 전달)][거부][승인], 처리 완료이면 결과 줄(+ 되돌리기).
+ * 남은 시간은 서버 시각 기준(offset). 버튼 동작의 API 호출은 부모가 담당한다.
  */
 import { useI18n } from '~/i18n'
 import { cn } from '~/lib/utils'
@@ -19,7 +19,7 @@ import {
 
 type T = (k: string, v?: Record<string, unknown>) => string
 
-/** 상태 이름(실행됨 중 사람이 승인한 것은 "승인됨") */
+/** 상태 이름(실행됨 중 사람이 승인한 건은 "승인됨") */
 export function statusLabel(t: T, req: Pick<ApprovalRequest, 'status' | 'decided_at' | 'risk' | 'source'>, s: ApprovalStatus = req.status): string {
   if (s === 'executed' && req.decided_at && (req.risk === 'high' || req.source === 'mcp')) return t('approvals.status.approved')
   return t(`approvals.status.${s}`)
@@ -29,7 +29,7 @@ export interface ApprovalDetailProps {
   req: ApprovalRequest
   /** 서버 시각 − 클라이언트 시각 */
   offset: number
-  /** 처리한 사람 이름 */
+  /** 처리자 이름 */
   userName: string
   reason: string
   onReason: (v: string) => void
@@ -37,7 +37,7 @@ export interface ApprovalDetailProps {
   onApprove?: () => void
   onReject?: () => void
   onUndo?: () => void
-  /** 모바일 — 머리는 상세 바가 맡고, 행동은 아래 고정 2칸 */
+  /** 모바일 — 머리는 상세 바가 담당하고, 행동은 하단 고정 2칸 */
   mobile?: boolean
   className?: string
 }

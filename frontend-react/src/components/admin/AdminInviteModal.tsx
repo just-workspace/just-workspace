@@ -1,9 +1,9 @@
 /**
- * 사용자 초대 모달(관리 › 사용자 머리 [사용자 초대]).
- * 디자인에 화면이 없어 기존 폼·표 규격으로 구성.
- * 탭 두 개: 새 초대(POST /api/admin/invites) · 보낸 초대(GET /api/admin/invites, 열린 초대 회수 DELETE /invites/{id}).
- * 새 초대: 이메일 여러 개(쉼표·줄바꿈) — 비우면 메일 없이 링크만 n개. 만료 일수 · 넣을 그룹 · 초대 메일 보내기.
- * 링크 원문은 만든 직후 이 화면에서만 볼 수 있다(서버는 해시만 저장) → 결과 목록에서 복사.
+ * 사용자 초대 모달(관리 › 사용자 헤더 [사용자 초대]).
+ * 디자인에 해당 화면이 없어 기존 폼·표 규격으로 구성.
+ * 탭 2개: 새 초대(POST /api/admin/invites) · 보낸 초대(GET /api/admin/invites, 열린 초대 회수 DELETE /invites/{id}).
+ * 새 초대: 이메일 복수 입력(쉼표·줄바꿈) — 비우면 메일 없이 링크만 n개 생성. 만료 일수 · 넣을 그룹 · 초대 메일 보내기.
+ * 링크 원문은 생성 직후 본 화면에서만 확인 가능하다(서버는 해시만 저장) → 결과 목록에서 복사.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -26,26 +26,26 @@ import { UiButton } from '~/components/ui/Button'
 import { writeClipboard } from '~/lib/clipboard'
 
 export interface AdminInviteModalProps {
-  /** 넣을 그룹 선택지(관리 › 사용자가 불러 둔 그룹) */
+  /** 넣을 그룹 선택지(관리 › 사용자 화면이 조회해 둔 그룹) */
   groups: { id: string; name: string }[]
   /** 닫기 */
   onClose?: () => void
-  /** 초대를 만들거나 회수했을 때(운영 요약 새로 고침용) */
+  /** 초대 생성 또는 회수 시 호출(운영 요약 갱신용) */
   onChanged?: () => void
 }
 
 interface CreatedInvite { id: string; email: string | null; url: string; emailed: boolean; email_error: string | null; expires_at: string | null }
 interface Invite { id: string; email: string | null; group_id: string | null; expires_at: string | null; used_at: string | null; created_at: string | null; state: 'open' | 'used' | 'expired' | 'revoked' }
 
-/** 이메일 칸 → 주소 목록(공백·쉼표·세미콜론으로 나눔) */
+/** 이메일 칸 → 주소 목록(공백·쉼표·세미콜론으로 분리) */
 export function parseInviteEmails(text: string): string[] {
   return text.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean)
 }
-/** 형식이 틀린 주소들 */
+/** 형식이 올바르지 않은 주소 목록 */
 export function badInviteEmails(list: string[]): string[] {
   return list.filter(e => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e))
 }
-/** 보낸 초대 정렬: 열린 초대 먼저, 그다음 만든 시각 최신순 */
+/** 보낸 초대 정렬: 열린 초대 우선, 이후 생성 시각 최신순 */
 export function sortInvites<T extends { state: string; created_at: string | null }>(list: T[]): T[] {
   return [...list].sort((a, b) => Number(b.state === 'open') - Number(a.state === 'open') || (b.created_at || '').localeCompare(a.created_at || ''))
 }
@@ -112,7 +112,7 @@ export function AdminInviteModal({ groups, onClose, onChanged }: AdminInviteModa
     try { setInvites((await $fetch<{ invites: Invite[] }>('/api/admin/invites')).invites || []) }
     catch { setListError(true) } finally { setListLoading(false) }
   }
-  // onMounted(loadList) + watch(tab → 'list' 이면 다시)
+  // onMounted(loadList) + watch(tab → 'list' 이면 재조회)
   const mounted = useRef(false)
   useEffect(() => {
     if (!mounted.current) { mounted.current = true; void loadList(); return }
@@ -197,7 +197,7 @@ export function AdminInviteModal({ groups, onClose, onChanged }: AdminInviteModa
             </div>
           )
           : (
-            /* 만든 결과: 링크는 지금만 볼 수 있다 */
+            /* 생성 결과: 링크는 이 시점에만 확인 가능 */
             <div className="flex flex-col gap-3 text-[13px]">
               <p className="text-foreground">{t('admin.users.invites.createdLead', { n: created.length })}</p>
               <ul className="-mx-5 border-y border-border">

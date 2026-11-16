@@ -1,5 +1,5 @@
 /**
- * 회의 사이드바 — 참가자 · 대기실(호스트 승인/거절) · 채팅(DataChannel) 탭. 모바일은 영상 위를 덮고, md↑ 는 오른쪽 288.
+ * 회의 사이드바 — 참가자 · 대기실(호스트 승인/거절) · 채팅(DataChannel) 탭. 모바일은 영상 위에 오버레이, md↑ 는 오른쪽 288.
  */
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -9,7 +9,7 @@ import { UiIcon } from '~/components/ui/Icon'
 import type { MeetingsSidebarTab } from '~/components/meetings/MeetingsControls'
 
 export interface MeetingsSidebarProps {
-  /** 지금 탭(v-model:activeTab) */
+  /** 현재 탭(v-model:activeTab) */
   activeTab: MeetingsSidebarTab
   onUpdateActiveTab?: (tab: MeetingsSidebarTab) => void
   /** 닫기(✕) */
@@ -36,20 +36,20 @@ export function MeetingsSidebar({ activeTab, onUpdateActiveTab, onClose }: Meeti
   const [chatInput, setChatInput] = useState('')
   const chatListEl = useRef<HTMLDivElement | null>(null)
 
-  // 대기실 폴링은 룸 페이지(room/[name])가 돈다 — 사이드바가 닫혀 있어도
-  // 컨트롤 바 배지가 갱신돼야 하므로.
+  // 대기실 폴링은 룸 페이지(room/[name])가 수행한다 — 사이드바가 닫힌 상태에서도
+  // 컨트롤 바 배지가 갱신되어야 하기 때문이다.
   useEffect(() => {
     if (isHost) void fetchPendingRequests()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 채팅 탭이 보이는 동안은 읽은 것이다 — 처음부터 채팅 탭으로 열렸을 때, 열어 둔 동안 새 글이 왔을 때도 지운다.
-  // (예전엔 탭을 "바꿀 때"만 지워서, 채팅 버튼으로 열어 읽고 닫아도 배지가 그대로였다)
+  // 채팅 탭이 표시되는 동안은 읽음으로 간주한다 — 최초부터 채팅 탭으로 열린 경우와 열어 둔 동안 새 메시지가 수신된 경우에도 초기화한다.
+  // (과거에는 탭 "전환 시"에만 초기화하여, 채팅 버튼으로 열어 읽고 닫아도 배지가 유지되었다)
   useEffect(() => {
     if (activeTab === 'chat' && unreadChat > 0) clearUnreadChat()
   }, [activeTab, unreadChat, clearUnreadChat])
 
-  // 채팅 자동 스크롤(처음에는 돌지 않는다)
+  // 채팅 자동 스크롤(최초에는 미수행)
   const firstMsgs = useRef(true)
   useEffect(() => {
     if (firstMsgs.current) { firstMsgs.current = false; return }

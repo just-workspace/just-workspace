@@ -1,15 +1,15 @@
 /**
- * HTTP + WebSocket — 단일 포트(6901, 세션 브리지 안 한 홉, ws-nginx 만 닿는다 — netfilter).
+ * HTTP + WebSocket — 단일 포트(6901, 세션 브리지 내부 한 홉, ws-nginx 만 접근 가능 — netfilter).
  *
- *   GET  /healthz              준비 확인(인증 없음 — 컨테이너 안 docker exec 확인용)
+ *   GET  /healthz              준비 확인(인증 없음 — 컨테이너 내부 docker exec 확인용)
  *   GET  /view                 스크립트 없는 미러 문서(CSP: script-src 'none'; sandbox allow-same-origin; img/font 은 이 세션 경로만)
  *   WS   /mirror               어휘 스트림 + 입력
  *   GET  /asset/<sha256>       재인코딩 WebP
- *   GET  /font/<name>.woff2    고정 폰트 묶음(세션 이미지에 구운 것 — 원격 페이지의 폰트가 아니다)
+ *   GET  /font/<name>.woff2    고정 폰트 묶음(세션 이미지에 포함된 것 — 원격 페이지의 폰트가 아니다)
  *   GET  /download/<id32>      정책이 허용한 다운로드(attachment, octet-stream)
  *   POST /upload/<id32>        정책이 허용한 업로드(파일 선택 대화상자 하나에 한 파일씩)
  *   /dev/*                     MIRROR_DEV=1 일 때만(하네스·계측) — 운영 이미지에는 하네스 파일이 없다
- * /healthz 말고는 MIRROR_AUTH(백엔드가 세션마다 만든 basic 값, nginx 가 auth_request 응답으로 붙인다)가 맞아야 한다.
+ * /healthz 외에는 MIRROR_AUTH(백엔드가 세션마다 생성한 basic 값, nginx 가 auth_request 응답으로 부여한다)가 일치해야 한다.
  */
 import http from 'node:http'
 import fs from 'node:fs'
@@ -28,7 +28,7 @@ export interface ServerCfg {
   dev: boolean
   root: string
   fontsDir: string
-  /** 복사 정책이 꺼져 있으면 미러 문서 전체를 선택 불가로(복사의 네이티브 길을 처음부터 막는다) */
+  /** 복사 정책이 비활성 상태면 미러 문서 전체를 선택 불가로 설정한다(네이티브 복사 경로를 원천 차단) */
   noSelect: boolean
   log: (...a: unknown[]) => void
   devApi?: (op: string, url: URL, res: http.ServerResponse) => Promise<void>
@@ -46,12 +46,12 @@ export function loadFonts(dir: string): FontFace[] {
 }
 
 export function fontFaceCss(fonts: FontFace[]): string {
-  // font-display:block — 고정 폰트가 오기 전 다른 폭의 대체 폰트로 잠깐 그리지 않게(겹침 방지)
+  // font-display:block — 고정 폰트 수신 전에 폭이 다른 대체 폰트로 일시 렌더링되지 않도록 한다(겹침 방지)
   return fonts.map(f => `@font-face{font-family:"jw-${f.key}";src:url("font/${f.file}") format("woff2");font-weight:${f.weight};font-style:${f.style};font-display:block${f.range ? `;unicode-range:${f.range}` : ''}}`).join('')
 }
 
 export function viewCsp(nonce: string, host: string | undefined, prefix: string): string {
-  // 이미지·폰트는 이 세션의 asset/·font/ 경로만(호스트 출처 + 경로). 인셋 프레임은 부모가 만든 blob:
+  // 이미지·폰트는 이 세션의 asset/·font/ 경로만 허용(호스트 출처 + 경로). 인셋 프레임은 부모가 생성한 blob:
   const h = host && HOST_RE.test(host) ? host : ''
   const img = h ? `${h}${prefix}/asset/ blob:` : "'self' blob:"
   const font = h ? `${h}${prefix}/font/` : "'self'"
@@ -63,7 +63,7 @@ export function viewCsp(nonce: string, host: string | undefined, prefix: string)
 }
 
 export function viewHtml(nonce: string, fonts: FontFace[], noSelect: boolean): string {
-  // 미러 문서 — 스크립트 없음. 부모(우리 앱)가 contentDocument 를 조립한다. 기본 규칙만 nonce 스타일로.
+  // 미러 문서 — 스크립트 없음. 부모(본 앱)가 contentDocument 를 조립한다. 기본 규칙만 nonce 스타일로 포함.
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>mirror</title>` +
     `<style nonce="${nonce}">${fontFaceCss(fonts)}` +
     `html,body{margin:0;padding:0;overflow:auto;background:#fff}` +

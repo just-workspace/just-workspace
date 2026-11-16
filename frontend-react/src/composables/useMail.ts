@@ -2,13 +2,13 @@
  * 메일(모듈 싱글턴 상태 + 동작). 요청 주소·순서·본문·로그 문구 동일.
  *
  * React: const { messages, selectedMessage, selectMailbox, openMessage, ... } = useMail()
- *   바깥에서 바꾸는 상태는 setter 를 같이 낸다:
+ *   외부에서 변경하는 상태는 setter 를 함께 제공한다:
  *     selectedAccountId → setSelectedAccountId(v) · selectedIds → setSelectedIds(v) · quickFilters → setQuickFilters(v)
  *   (searchQuery 는 setSearchQuery(q))
- * 컴포넌트 밖: mailStore.getState(), 또는 아래 동작 함수를 직접 import.
- * 필드 하나만 보는 컴포넌트는 useStore(mailStore, s => s.field) 로 구독하면 덜 다시 그린다.
+ * 컴포넌트 외부: mailStore.getState(), 또는 아래 동작 함수를 직접 import.
+ * 단일 필드만 참조하는 컴포넌트는 useStore(mailStore, s => s.field) 로 구독하면 재렌더가 감소한다.
  *
- * 목록 행·메일함 객체는 제자리에서 고치지 않고 같은 값을 새 객체로 바꿔 넣는다.
+ * 목록 행·메일함 객체는 직접 수정하지 않고 동일 값의 새 객체로 교체한다.
  */
 import { createStore, useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
@@ -44,9 +44,9 @@ export interface MessageSummary {
   is_unread: boolean
   is_flagged: boolean
   has_attachment: boolean
-  /** IMAP 키워드 라벨(POP3 는 늘 빈 배열) */
+  /** IMAP 키워드 라벨(POP3 는 항상 빈 배열) */
   labels?: string[]
-  /** 서버 THREAD 지원 시 이 메일함 안 같은 대화 메일 수 */
+  /** 서버 THREAD 지원 시 이 메일함 내 동일 대화 메일 수 */
   thread_count?: number | null
 }
 
@@ -119,7 +119,7 @@ export interface MailAccountInfo {
 
 export interface SendResult {
   ok: boolean
-  /** 예약 발송으로 받았으면 true(id·send_at 함께) */
+  /** 예약 발송으로 접수된 경우 true(id·send_at 포함) */
   scheduled?: boolean
   id?: string
   send_at?: string
@@ -142,13 +142,13 @@ export interface SendMessageData {
   references?: string[]
   attachments?: UploadedAttachment[]
   request_read_receipt?: boolean
-  /** ISO — 미래면 서버가 예약 발송으로 받는다 */
+  /** ISO — 미래 시각이면 서버가 예약 발송으로 접수한다 */
   send_at?: string | null
-  /** 서버가 서명을 정확히 하나만 붙인다(본문에는 넣지 않는다) */
+  /** 서버가 서명을 정확히 1개만 추가한다(본문에는 포함하지 않음) */
   signature_id?: string | null
-  /** 답장 원문이 있는 메일함 — 서버가 원문 Message-ID·References 를 찾는다 */
+  /** 답장 원문이 위치한 메일함 — 서버가 원문 Message-ID·References 를 조회한다 */
   reply_mailbox_id?: string | null
-  /** 화면 안 AI 답장 초안으로 쓴 메일 — 서버가 X-AI-Generated 를 붙인다 */
+  /** 화면 내 AI 답장 초안으로 작성한 메일 — 서버가 X-AI-Generated 를 추가한다 */
   ai_generated?: boolean
 }
 
@@ -171,18 +171,18 @@ export interface MailState {
   sending: boolean
   searchQuery: string
   selectedIds: Set<string>
-  /** 실패는 "비어 있음" 으로 보이지 않게 — 목록·본문 각각 오류를 들고 있다가 UiErrorTile 로 보여 준다. */
+  /** 실패가 "비어 있음" 으로 표시되지 않도록 — 목록·본문 각각 오류를 보유하고 UiErrorTile 로 표시한다. */
   listError: string | null
-  /** 계정·메일함 불러오기 실패 — 빈 상태("메일이 없습니다")와 구분해 오류 타일로 보인다 */
+  /** 계정·메일함 조회 실패 — 빈 상태("메일이 없습니다")와 구분하여 오류 타일로 표시한다 */
   accountsError: string | null
   mailboxesError: string | null
   messageError: string | null
-  /** 빠른 칩(안 읽음·별표·첨부) — 서버 필터(unread·flagged·has_attachment)로 보낸다. */
+  /** 빠른 칩(안 읽음·별표·첨부) — 서버 필터(unread·flagged·has_attachment)로 전달한다. */
   quickFilters: MailQuickFilters
-  /** 라벨(IMAP 키워드) — 사이드바 "라벨" 에서 고르면 서버 label 필터. supported=false(POP3·키워드 못 다는 서버)면 UI 를 숨긴다. */
+  /** 라벨(IMAP 키워드) — 사이드바 "라벨" 에서 선택하면 서버 label 필터를 적용한다. supported=false(POP3·키워드 미지원 서버)이면 UI 를 숨긴다. */
   labelFilter: string | null
   labelInfo: { labels: string[]; supported: boolean }
-  /** 예약함(보내기 ▾ "예약 보내기"로 걸어 둔 메일) — 사이드바 항목을 고르면 목록 자리에 예약 목록이 뜬다. */
+  /** 예약함(보내기 ▾ "예약 보내기"로 등록한 메일) — 사이드바 항목 선택 시 목록 영역에 예약 목록을 표시한다. */
   scheduledView: boolean
   scheduled: ScheduledMail[]
   loadingScheduled: boolean
@@ -225,13 +225,13 @@ export const mailStore = createStore<MailState>()(() => initialState())
 const get = () => mailStore.getState()
 const set = (p: Partial<MailState>) => mailStore.setState(p)
 
-// 마지막으로 서버에 보낸 거르기 조합 — 칩 watch 가 같은 조합으로 또 부르지 않게
+// 마지막으로 서버에 전송한 필터 조합 — 칩 watch 가 동일 조합으로 재호출하지 않도록
 let lastFilterKey = ''
 let listSeq = 0
-// 본문 열기 순번 — 늦게 온 응답이 지금 화면(다른 메일·다른 폴더)을 덮지 않게. 폴더·계정을 바꾸면 올린다.
+// 본문 열기 순번 — 지연 도착한 응답이 현재 화면(다른 메일·다른 폴더)을 덮어쓰지 않도록. 폴더·계정 변경 시 증가시킨다.
 let openSeq = 0
 
-/** 테스트용: 처음 상태로 */
+/** 테스트용: 초기 상태로 복원 */
 export function _resetMailStore() {
   lastFilterKey = ''
   listSeq = 0
@@ -239,7 +239,7 @@ export function _resetMailStore() {
   mailStore.setState(initialState(), true)
 }
 
-// ─── 바깥에서 바꾸는 상태의 setter ───
+// ─── 외부에서 변경하는 상태의 setter ───
 
 export function setSelectedAccountId(id: string | null) { set({ selectedAccountId: id }) }
 export function setSelectedIds(ids: Set<string>) { set({ selectedIds: ids }) }
@@ -262,13 +262,13 @@ export function mailSelectedAccount(s: MailState = get()) {
   return s.accounts.find(a => a.id === s.selectedAccountId) || null
 }
 /**
- * 지금 보는 계정이 POP3 인가. POP3 는 서버에 폴더가 없어(받은편지함 하나) 이동·보관·스팸·폴더 관리가 안 된다 —
- * 화면은 이 값으로 해당 버튼·메뉴·스와이프·단축키를 숨긴다(읽음·별표·삭제는 그대로 된다).
+ * 현재 계정의 POP3 여부. POP3 는 서버에 폴더가 없어(받은편지함 하나) 이동·보관·스팸·폴더 관리가 불가하다 —
+ * 화면은 이 값으로 해당 버튼·메뉴·스와이프·단축키를 숨긴다(읽음·별표·삭제는 그대로 가능).
  */
 export function mailIsPop3(s: MailState = get()) {
   return mailSelectedAccount(s)?.protocol === 'pop3'
 }
-/** 보관함(role=archive). 없는 서버면 보관 동작을 비활성으로 보여 준다. */
+/** 보관함(role=archive). 미제공 서버이면 보관 동작을 비활성으로 표시한다. */
 export function mailArchiveMailbox(s: MailState = get()) {
   return s.mailboxes.find(m => m.role === 'archive') || null
 }
@@ -283,8 +283,8 @@ export function mailSelectedIndex(s: MailState = get()) {
 // ─── 내부 도우미 ───
 
 /**
- * 메시지 단위 API(PATCH·DELETE·bulk)가 어느 폴더·계정의 UID 인지 알려 준다.
- * 예전엔 빠져 있어서 서버 기본값(INBOX·기본 계정)으로 처리돼, 다른 폴더·계정에서 읽음·별표·이동·삭제가 엉뚱한 메일에 걸렸다.
+ * 메시지 단위 API(PATCH·DELETE·bulk)에 해당 UID 가 속한 폴더·계정을 전달한다.
+ * 이전에는 누락되어 서버 기본값(INBOX·기본 계정)으로 처리되었고, 다른 폴더·계정에서 읽음·별표·이동·삭제가 무관한 메일에 적용되었다.
  */
 function scopeParams(): Record<string, string> {
   const s = get()
@@ -307,15 +307,15 @@ function errorDetail(e: any): string {
   return st ? `HTTP ${st}` : (e?.message || '')
 }
 
-/** 목록 행 하나를 고친다(새 객체로) */
+/** 목록 행 하나를 갱신한다(새 객체로 교체) */
 function patchMessageRow(id: string, patch: Partial<MessageSummary>) {
   set({ messages: get().messages.map(m => (m.id === id ? { ...m, ...patch } : m)) })
 }
 
-/** 지금 메일함의 unread_count 를 고친다 */
+/** 현재 메일함의 unread_count 를 갱신한다 */
 function patchSelectedMailboxUnread(fn: (n: number) => number) {
   const s = get()
-  // mailboxes 와 mailboxesByAccount[계정] 은 서로 다른 배열이다 — 다계정 트리 숫자도 같이 줄게 둘 다 바꾼다
+  // mailboxes 와 mailboxesByAccount[계정] 은 별개의 배열이다 — 다계정 트리의 수치도 함께 감소하도록 양쪽 모두 갱신한다
   const mailboxes = s.mailboxes.map(m => (m.id === s.selectedMailboxId ? { ...m, unread_count: fn(m.unread_count) } : m))
   const acc = s.selectedAccountId
   set(acc && s.mailboxesByAccount[acc]
@@ -354,9 +354,9 @@ export async function fetchMailboxes() {
     const acc = get().selectedAccountId
     if (acc) params.account_id = acc
     const data = await $fetch<{ mailboxes: Mailbox[] }>('/api/mail/mailboxes', { params })
-    // 다계정 트리는 mailboxesByAccount 를 그린다 — 같이 갱신하지 않으면 삭제·이동·새로고침 뒤에도 안 읽음 수가 옛 값이다
+    // 다계정 트리는 mailboxesByAccount 를 렌더링한다 — 함께 갱신하지 않으면 삭제·이동·새로고침 후에도 안 읽음 수가 이전 값으로 남는다
     if (acc) set({ mailboxesByAccount: { ...get().mailboxesByAccount, [acc]: data.mailboxes } })
-    // 받는 사이 계정을 바꿨으면 평면 목록은 건드리지 않는다(캐시만)
+    // 수신 중 계정이 변경된 경우 평면 목록은 변경하지 않는다(캐시만 갱신)
     if ((get().selectedAccountId || null) !== (acc || null)) return
     set({ mailboxes: data.mailboxes })
     // Auto-select inbox if nothing selected
@@ -376,7 +376,7 @@ export async function fetchMailboxes() {
   }
 }
 
-/** 계정별 메일함 지연 조회(트리 펼칠 때). 캐시되면 재사용. */
+/** 계정별 메일함 지연 조회(트리 펼침 시). 캐시가 있으면 재사용. */
 export async function fetchMailboxesFor(accountId: string): Promise<Mailbox[]> {
   const cached = get().mailboxesByAccount[accountId]
   if (cached) return cached
@@ -404,8 +404,8 @@ export async function selectAccountMailbox(accountId: string, mailboxId: string)
 }
 
 export async function selectMailbox(id: string) {
-  // 칩·라벨은 현재 폴더 범위 — 폴더를 바꾸면 끈다(목록을 받기 전에)
-  openSeq++ // 앞 폴더에서 열던 메일의 응답은 버린다(그 메일이 떠서 이 폴더의 같은 번호 메일에 동작이 걸리는 일 방지)
+  // 칩·라벨은 현재 폴더 범위 — 폴더 변경 시 해제한다(목록 수신 전에)
+  openSeq++ // 이전 폴더에서 열던 메일의 응답은 폐기한다(해당 메일이 표시되어 이 폴더의 동일 번호 메일에 동작이 적용되는 문제 방지)
   set({
     quickFilters: { unread: false, starred: false, attachment: false },
     labelFilter: null,
@@ -436,7 +436,7 @@ export async function fetchMessages() {
     if (s.searchQuery.trim()) {
       params.q = s.searchQuery.trim()
     }
-    // 빠른 칩·라벨은 서버가 거른다(페이지 수·전체 개수도 거른 결과 기준)
+    // 빠른 칩·라벨은 서버에서 필터링한다(페이지 수·전체 개수도 필터링 결과 기준)
     if (s.quickFilters.unread) params.unread = true
     if (s.quickFilters.starred) params.flagged = true
     if (s.quickFilters.attachment) params.has_attachment = true
@@ -447,7 +447,7 @@ export async function fetchMessages() {
       page: number
       limit: number
     }>('/api/mail/messages', { params })
-    if (seq !== listSeq) return // 칩을 빠르게 눌러 뒤에 보낸 요청이 먼저 끝났다
+    if (seq !== listSeq) return // 칩을 연속 조작하여 나중에 보낸 요청이 먼저 완료된 경우
     set({ messages: data.messages, totalMessages: data.total })
   } catch (e: any) {
     if (seq !== listSeq) return
@@ -458,20 +458,20 @@ export async function fetchMessages() {
   }
 }
 
-/** 칩·라벨이 바뀌었을 때 — 지난번과 같은 조합이면 다시 받지 않는다. 첫 페이지부터. */
+/** 칩·라벨 변경 시 — 직전과 동일한 조합이면 재조회하지 않는다. 첫 페이지부터 조회한다. */
 export async function applyFilters() {
   if (filterKey() === lastFilterKey) return
   set({ currentPage: 0 })
   await fetchMessages()
 }
 
-/** 사이드바 라벨 고르기(다시 고르면 끔) */
+/** 사이드바 라벨 선택(재선택 시 해제) */
 export async function setLabelFilter(label: string | null) {
   set({ scheduledView: false, labelFilter: get().labelFilter === label ? null : label })
   await applyFilters()
 }
 
-/** 현재 폴더의 라벨 목록과 서버 지원 여부. 실패하면 라벨 UI 를 숨긴다. */
+/** 현재 폴더의 라벨 목록과 서버 지원 여부. 실패 시 라벨 UI 를 숨긴다. */
 export async function fetchLabels() {
   const s = get()
   const acct = s.accounts.find(a => a.id === s.selectedAccountId)
@@ -484,7 +484,7 @@ export async function fetchLabels() {
   }
 }
 
-/** 라벨 붙이기·떼기(PATCH add_labels/remove_labels). 목록의 labels·사이드바 라벨 목록도 맞춘다. */
+/** 라벨 추가·제거(PATCH add_labels/remove_labels). 목록의 labels·사이드바 라벨 목록도 갱신한다. */
 export async function updateLabels(id: string, add: string[], remove: string[]): Promise<boolean> {
   if (!add.length && !remove.length) return true
   try {
@@ -506,7 +506,7 @@ export async function updateLabels(id: string, add: string[], remove: string[]):
   }
 }
 
-/** 이 메일이 속한 대화(오래된 순, 보낸편지함 포함). 읽음 처리 안 함. 실패하면 null. */
+/** 이 메일이 속한 대화(오래된 순, 보낸편지함 포함). 읽음 처리하지 않음. 실패 시 null. */
 export async function fetchThread(id: string): Promise<MessageSummary[] | null> {
   try {
     const data = await $fetch<{ thread_id: string | null; messages: MessageSummary[] }>(`/api/mail/messages/${encodeURIComponent(id)}/thread`, {
@@ -518,7 +518,7 @@ export async function fetchThread(id: string): Promise<MessageSummary[] | null> 
   }
 }
 
-/** 다른 메일함(보낸편지함 등)에 있을 수 있는 대화 메일 본문 — 스레드의 접힌 행을 펼칠 때 */
+/** 다른 메일함(보낸편지함 등)에 있을 수 있는 대화 메일 본문 — 스레드의 접힌 행을 펼칠 때 사용 */
 export async function fetchMessageIn(id: string, mailboxId: string): Promise<MessageDetail | null> {
   try {
     const params: Record<string, string> = { mailbox_id: mailboxId }
@@ -543,21 +543,21 @@ export async function fetchScheduled() {
   }
 }
 
-/** 사이드바 "예약함" — 목록 자리에 예약 목록 */
+/** 사이드바 "예약함" — 목록 영역에 예약 목록 표시 */
 export function openScheduled() {
   openSeq++
   set({ scheduledView: true, selectedMessage: null, loadingMessage: false, selectedIds: new Set() })
   void fetchScheduled()
 }
 
-/** 예약 시각 바꾸기 — 실패(409 보내는 중 등)는 호출자에게 던진다 */
+/** 예약 시각 변경 — 실패(409 발송 중 등)는 호출자에게 예외로 전달한다 */
 export async function rescheduleMail(id: string, sendAt: string) {
   const row = await $fetch<ScheduledMail>(`/api/mail/scheduled/${encodeURIComponent(id)}`, { method: 'PATCH', body: { send_at: sendAt } })
   set({ scheduled: get().scheduled.map(s => (s.id === id ? row : s)).sort((a, b) => a.send_at.localeCompare(b.send_at)) })
   return row
 }
 
-/** 예약 취소 — 실패(409 보내는 중 등)는 호출자에게 던진다 */
+/** 예약 취소 — 실패(409 발송 중 등)는 호출자에게 예외로 전달한다 */
 export async function cancelScheduled(id: string) {
   await $fetch(`/api/mail/scheduled/${encodeURIComponent(id)}`, { method: 'DELETE' })
   set({ scheduled: get().scheduled.filter(s => s.id !== id) })
@@ -576,7 +576,7 @@ export async function openMessage(id: string) {
     const params: Record<string, any> = { mailbox_id: s.selectedMailboxId || 'INBOX' }
     if (s.selectedAccountId) params.account_id = s.selectedAccountId
     const detail = await $fetch<MessageDetail>(`/api/mail/messages/${id}`, { params })
-    if (seq !== openSeq) return // 그 사이 다른 메일을 열었거나 폴더를 바꿨다
+    if (seq !== openSeq) return // 그사이 다른 메일이 열렸거나 폴더가 변경됨
     set({ selectedMessage: detail })
     // Update unread status in list
     const msg = get().messages.find(m => m.id === id)
@@ -596,8 +596,8 @@ export async function openMessage(id: string) {
 }
 
 /**
- * 딥링크(`/mail/:id`, 모바일 본문 페이지)용 — 계정·폴더 범위를 먼저 맞추고 연다.
- * 목록이 없으면(새로고침 직후) 폴더 목록만 받아 두고 본문을 연다. 목록은 뒤로 갔을 때 다시 받는다.
+ * 딥링크(`/mail/:id`, 모바일 본문 페이지)용 — 계정·폴더 범위를 먼저 맞춘 후 연다.
+ * 목록이 없으면(새로고침 직후) 폴더 목록만 조회한 후 본문을 연다. 목록은 뒤로 이동 시 재조회한다.
  */
 export async function openMessageAt(id: string, mailboxId?: string | null, accountId?: string | null) {
   if (get().accounts.length === 0) await fetchAccounts()
@@ -612,8 +612,8 @@ export async function openMessageAt(id: string, mailboxId?: string | null, accou
 }
 
 /**
- * 읽음/안 읽음을 명시적으로 — 본문 헤더 "안 읽음으로(U)", 스와이프 "읽음 전환" 둘 다 이걸 쓴다.
- * 성공(또는 이미 그 상태)이면 true. 실패는 false — 호출자가 안내한다(예전엔 삼켜서 성공 토스트가 떴다).
+ * 읽음/안 읽음을 명시적으로 설정한다 — 본문 헤더 "안 읽음으로(U)", 스와이프 "읽음 전환" 모두 이 함수를 사용한다.
+ * 성공(또는 이미 해당 상태)이면 true. 실패는 false — 호출자가 안내한다(이전에는 오류를 무시하여 성공 토스트가 표시되었다).
  */
 export async function setUnread(id: string, unread: boolean): Promise<boolean> {
   const s = get()
@@ -647,7 +647,7 @@ export async function toggleRead(id: string): Promise<boolean> {
 export async function toggleStar(id: string): Promise<boolean> {
   const s = get()
   const msg = s.messages.find(m => m.id === id)
-  // 모바일 본문(/mail/:id)은 목록 없이 열릴 수 있다 — 열린 메일 기준으로도 토글
+  // 모바일 본문(/mail/:id)은 목록 없이 열릴 수 있다 — 열린 메일 기준으로도 토글한다
   const current = msg ? msg.is_flagged : s.selectedMessage?.id === id ? s.selectedMessage.is_flagged : null
   if (current === null) return true
   const newFlagged = !current
@@ -670,9 +670,9 @@ export async function toggleStar(id: string): Promise<boolean> {
 }
 
 /**
- * 목록에서 메일이 빠진 뒤(삭제·이동·스팸) — 그 자리를 다음 메일로 채운다.
- * 예전엔 빼기만 해서 한 페이지를 다 지우면 뒤에 메일이 남았는데도 "메일이 없습니다"가 떴다.
- * 마지막 페이지가 비면 앞 페이지로.
+ * 목록에서 메일이 제외된 후(삭제·이동·스팸) — 해당 위치를 다음 메일로 채운다.
+ * 이전에는 제외만 수행하여 한 페이지를 모두 삭제하면 이후 메일이 남아 있어도 "메일이 없습니다"가 표시되었다.
+ * 마지막 페이지가 비면 이전 페이지로 이동한다.
  */
 async function refillAfterRemove() {
   try {
@@ -683,12 +683,12 @@ async function refillAfterRemove() {
       await fetchMessages()
     }
   } catch (e: any) {
-    // 다시 받기가 실패해도 이미 끝난 삭제·이동을 "실패"로 바꾸지 않는다
+    // 재조회가 실패해도 이미 완료된 삭제·이동을 "실패"로 처리하지 않는다
     console.error('refillAfterRemove error:', e)
   }
 }
 
-/** 지움(휴지통으로). 성공하면 true — 실패는 false 로 알린다. */
+/** 삭제(휴지통으로 이동). 성공 시 true — 실패는 false 로 반환한다. */
 export async function deleteMessage(id: string): Promise<boolean> {
   try {
     await $fetch(`/api/mail/messages/${id}`, { method: 'DELETE', params: scopeParams() })
@@ -725,7 +725,7 @@ export async function moveMessage(id: string, mailboxId: string): Promise<boolea
 }
 
 /**
- * 보관(E) — 보관함(role=archive)으로 이동. 서버에 보관함이 없으면 false 를 돌려주고 호출자가 안내한다.
+ * 보관(E) — 보관함(role=archive)으로 이동. 서버에 보관함이 없으면 false 를 반환하고 호출자가 안내한다.
  */
 export async function archiveMessages(ids: string[]): Promise<boolean> {
   const target = mailArchiveMailbox()
@@ -751,7 +751,7 @@ export async function sendMessage(data: SendMessageData): Promise<SendResult> {
       body: { account_id: get().selectedAccountId, ...data },
     })
     if (res?.scheduled) {
-      // 예약 — 보낸편지함은 그대로, 예약함만 다시 받는다
+      // 예약 — 보낸편지함은 유지하고 예약함만 재조회한다
       void fetchScheduled()
       return res
     }
@@ -783,8 +783,8 @@ export function deselectAll() {
 }
 
 /**
- * 여러 통에 한 번에 — read·unread·star·unstar·delete·spam·move. 성공하면 true.
- * 목록에서 먼저 빼 두고(낙관적) 실패하면 다시 받아 온다.
+ * 다중 메일 일괄 처리 — read·unread·star·unstar·delete·spam·move. 성공 시 true.
+ * 목록에서 먼저 제외하고(낙관적) 실패 시 재조회한다.
  */
 export async function bulkOn(ids: string[], action: string, mailboxId?: string): Promise<boolean> {
   if (ids.length === 0) return false
@@ -830,14 +830,14 @@ export async function bulkOn(ids: string[], action: string, mailboxId?: string):
   }
 }
 
-/** 선택된 메일 전부에 — 선택 바. */
+/** 선택된 메일 전체에 적용 — 선택 바. */
 export async function bulkAction(action: string, mailboxId?: string): Promise<boolean> {
   return bulkOn(Array.from(get().selectedIds), action, mailboxId)
 }
 
 /**
- * 쓰기 진입: 데스크톱은 앱 안 떠 있는 작성 창, 모바일은 전체 화면 페이지.
- * 팝업(window.open 900×720)은 폐지. 실제 분기는 useMailCompose.open 이 한다.
+ * 작성 진입: 데스크톱은 앱 내 플로팅 작성 창, 모바일은 전체 화면 페이지.
+ * 팝업(window.open 900×720)은 폐지. 실제 분기는 useMailCompose.open 이 수행한다.
  */
 export function openCompose(mode: ComposeMode = 'new', msg?: Readonly<MessageDetail> | null, draftId?: string) {
   openComposeWindow(mode, msg, draftId)
@@ -848,7 +848,7 @@ export function clearSelectedMessage() {
   set({ selectedMessage: null, messageError: null, loadingMessage: false })
 }
 
-/** 목록 안에서 이전/다음 메일(j/k·모바일 본문 ‹ ›). 목록 끝이면 아무것도 안 함. */
+/** 목록 내 이전/다음 메일(j/k·모바일 본문 ‹ ›). 목록 끝이면 no-op. */
 export async function openAdjacent(delta: 1 | -1) {
   const i = mailSelectedIndex()
   if (!i) return
@@ -870,7 +870,7 @@ export async function prevPage() {
   }
 }
 
-/** 첨부 API 경로(상대) — 주소 붙이기 전 */
+/** 첨부 API 경로(상대) — 주소 결합 전 */
 function attachmentPath(blobId: string, opts: { inline?: boolean } = {}) {
   const s = get()
   let url = `/api/mail/attachments/${encodeURIComponent(blobId)}?mailbox_id=${encodeURIComponent(s.selectedMailboxId || 'INBOX')}`
@@ -880,17 +880,17 @@ function attachmentPath(blobId: string, opts: { inline?: boolean } = {}) {
 }
 
 /**
- * 첨부 URL. inline=true 면 브라우저가 열어 보여 준다(이미지 썸네일·PDF 미리보기).
- * 웹은 상대 주소, 번들 앱은 apiBase 를 붙인다.
+ * 첨부 URL. inline=true 이면 브라우저가 직접 표시한다(이미지 썸네일·PDF 미리보기).
+ * 웹은 상대 주소, 번들 앱은 apiBase 를 결합한다.
  */
 export function attachmentUrl(blobId: string, opts: { inline?: boolean } = {}) {
   return apiUrl(attachmentPath(blobId, opts))
 }
 
 export function downloadAttachment(blobId: string, name: string) {
-  // 번들 앱: 교차 출처 <a download> 는 파일명·인증(Bearer)이 안 붙는다 → $fetch(blob) 로 받는다
+  // 번들 앱: 교차 출처 <a download> 에는 파일명·인증(Bearer)이 적용되지 않는다 → $fetch(blob) 로 수신한다
   if (isBundledApp()) { void downloadApi(attachmentPath(blobId), name).catch(() => {}); return }
-  // window.open 은 팝업 차단에 걸리고 "모두 다운로드" 에서 여러 개를 못 연다 → 숨은 <a download>.
+  // window.open 은 팝업 차단 대상이며 "모두 다운로드" 에서 다중 열기가 불가하다 → 숨김 <a download> 사용.
   const a = document.createElement('a')
   a.href = attachmentUrl(blobId)
   a.download = name
@@ -900,7 +900,7 @@ export function downloadAttachment(blobId: string, name: string) {
   a.remove()
 }
 
-/** "모두 다운로드" — 서버가 이 메일의 첨부를 zip 하나로 묶어 준다(GET /messages/{id}/attachments.zip). */
+/** "모두 다운로드" — 서버가 이 메일의 첨부를 zip 하나로 묶어 반환한다(GET /messages/{id}/attachments.zip). */
 function attachmentsZipPath(messageId: string) {
   const s = get()
   let url = `/api/mail/messages/${encodeURIComponent(messageId)}/attachments.zip?mailbox_id=${encodeURIComponent(s.selectedMailboxId || 'INBOX')}`
@@ -1027,7 +1027,7 @@ export async function refresh() {
   await Promise.all([fetchMailboxes(), fetchMessages()])
 }
 
-/** hook 이 돌려주는 동작 — 모듈 함수 그대로(참조 고정) */
+/** hook 이 반환하는 동작 — 모듈 함수 그대로(참조 고정) */
 const actions = {
   setSelectedAccountId,
   setSelectedIds,
@@ -1084,7 +1084,7 @@ const actions = {
 }
 
 /**
- * 상태 + 동작. 상태 전체를 얕게 구독한다(어느 필드가 바뀌어도 다시 그림).
+ * 상태 + 동작. 상태 전체를 얕게 구독한다(어느 필드가 변경되어도 재렌더).
  * 상태 + computed(totalPages·hasNextPage·hasPrevPage·totalUnread·selectedMailbox·selectedAccount·isPop3·archiveMailbox·selectedIndex) + 동작.
  */
 export function useMail() {

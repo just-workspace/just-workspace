@@ -2,12 +2,12 @@
  * 모바일 액션 시트("바텀시트"): 스크림 + 상단 rounded-sheet(16) + 핸들 36×4,
  * 아래 여백 28 + safe-area. 머리글 두 가지:
  *  · 제목만 — 17/600
- *  · 아이콘 + 이름 + 메타 — 아이콘 28 · 이름 16/600 · 메타 12 muted(" · " 로 잇고 mono 조각 지원), 아래 구분선
- *  · header — 아이콘 자리에 모듈 고유 그림(파일 유형 아이콘 등)을 넣을 때. 이름·메타는 props 그대로.
- * 항목(items) = 48 · 15px · 아이콘 20 · 간격 14(UiMenu 와 같은 항목 형식 — description 이 있으면 56 두 줄, 하위 메뉴 항목은 ›).
+ *  · 아이콘 + 이름 + 메타 — 아이콘 28 · 이름 16/600 · 메타 12 muted(" · " 로 연결, mono 조각 지원), 아래 구분선
+ *  · header — 아이콘 자리에 모듈 고유 그림(파일 유형 아이콘 등)을 배치하는 경우. 이름·메타는 props 그대로.
+ * 항목(items) = 48 · 15px · 아이콘 20 · 간격 14(UiMenu 와 동일한 항목 형식 — description 이 있으면 56 두 줄, 하위 메뉴 항목은 ›).
  * children 은 항목 아래 자유 내용(보기·정렬 시트 등).
- * Esc 닫기 · 포커스 트랩 · ↑↓ 항목 이동 · 닫으면 연 요소로 포커스 복귀.
- * 마운트 = 열림. 부모가 조건부로 그렸다 뗀다(onClose 에서 상태를 내린다). body 로 포털.
+ * Esc 닫기 · 포커스 트랩 · ↑↓ 항목 이동 · 닫으면 시트를 연 요소로 포커스 복귀.
+ * 마운트 = 열림. 부모가 조건부로 렌더링하고 제거한다(onClose 에서 상태를 해제한다). body 로 포털.
  */
 import { Fragment, useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -24,15 +24,15 @@ export interface UiActionSheetProps {
   label: string
   /** 머리글 제목 */
   title?: string
-  /** 머리글 아이콘(utils/icons.ts). header 가 있으면 그쪽 */
+  /** 머리글 아이콘(utils/icons.ts). header 가 있으면 header 우선 */
   icon?: string
-  /** 머리글 메타 — 문자열 또는 조각 배열(" · " 로 잇는다) */
+  /** 머리글 메타 — 문자열 또는 조각 배열(" · " 로 연결) */
   meta?: string | MetaPart[]
   /** 항목(UiMenu 와 같은 형식) */
   items?: UiMenuItem[]
   /** 닫기(스크림 클릭·Esc) */
   onClose?: () => void
-  /** 항목 고름 — 항목 key */
+  /** 항목 선택 — 항목 key */
   onSelect?: (key: string) => void
   /** 머리글 아이콘 자리 그림 */
   header?: ReactNode
@@ -46,8 +46,8 @@ export interface UiActionSheetProps {
  */
 export function UiActionSheet({ label, title, icon, meta, items = [], onClose, onSelect, header, children }: UiActionSheetProps) {
   const panel = useRef<HTMLDivElement | null>(null)
-  // 안에서 누르기 시작해(입력 글자를 끌어 고르는 등) 스크림에서 뗀 것은 "바깥 클릭" 이 아니다 —
-  // 그 경우에도 click 은 공통 조상인 스크림에서 나서, 예전에는 시트가 닫혔다.
+  // 내부에서 누르기 시작해(입력 글자를 드래그 선택하는 등) 스크림에서 뗀 경우는 "바깥 클릭" 이 아니다 —
+  // 이 경우에도 click 은 공통 조상인 스크림에서 발생하므로, 과거에는 시트가 닫혔다.
   const downInside = useRef(false)
 
   const metaParts: { text: string; mono?: boolean }[] = !meta ? [] : (Array.isArray(meta) ? meta : [meta]).map(p => (typeof p === 'string' ? { text: p } : p))

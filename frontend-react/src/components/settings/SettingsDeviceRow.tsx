@@ -18,7 +18,7 @@ export interface SettingsDeviceRowProps {
   meta: string
   /** 역방향 DNS 호스트(있으면 " · 호스트") */
   hostname?: string
-  /** 지금 이 기기 — 오른쪽에 "현재" */
+  /** 현재 기기 — 오른쪽에 "현재" 표시 */
   current?: boolean
   /** 로그아웃 버튼 비활성 */
   disabled?: boolean

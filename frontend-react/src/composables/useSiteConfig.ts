@@ -1,8 +1,8 @@
 /**
- * 사이트 설정(브랜딩·공지·데모 모드 등). /api/health 한 번 읽어 싱글턴.
+ * 사이트 설정(브랜딩·공지·데모 모드 등). /api/health 를 1회 조회하여 싱글턴으로 보관.
  *
  * React: const { appName, brandColor, config, fetchAppConfig, refetchAppConfig } = useSiteConfig()  (값은 일반 값)
- * 컴포넌트 밖: siteConfigStore.getState().appName
+ * 컴포넌트 외부: siteConfigStore.getState().appName
  */
 import { createStore, useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
@@ -22,15 +22,15 @@ export interface SiteConfigState {
   announcementType: string
   gitVisibility: string
   demoMode: boolean
-  /** NetLab(별도 출처 랩) 주소 — 서버가 https 일 때만 준다. 빈값이면 레일 '도구' 항목·대시보드 카드를 숨긴다 */
+  /** NetLab(별도 출처 랩) 주소 — 서버는 https 일 때만 전달한다. 빈 값이면 레일 '도구' 항목·대시보드 카드를 숨긴다 */
   netlabUrl: string
-  /** 이 서버가 돌리는 프로그램의 소스 주소(서버의 JW_SOURCE_URL) — "소스 코드" 링크. 빈값이면 링크를 숨긴다 */
+  /** 이 서버가 구동하는 프로그램의 소스 주소(서버의 JW_SOURCE_URL) — "소스 코드" 링크. 빈 값이면 링크를 숨긴다 */
   sourceUrl: string
   /** 라이선스 표기(SPDX) */
   license: string
   /** 디자인 대개편 확장 설정 — appcfg.* (예: config['dash.cards']). 빈값/부재는 i18n 폴백. */
   config: Record<string, string>
-  /** 설치된 구역 id(서버 /api/health 의 zones). null 이면 아직 모른다(로딩 중이거나 서버가 알려 주지 않음) */
+  /** 설치된 구역 id(서버 /api/health 의 zones). null 이면 미확인(로딩 중이거나 서버가 제공하지 않음) */
   zones: string[] | null
   loaded: boolean
 }
@@ -58,8 +58,8 @@ export const siteConfigStore = createStore<SiteConfigState>()(() => ({
 }))
 
 /**
- * 구역(메일·문서·AI 등 설치 단위)이 설치돼 있는가. 켜고 끄는 모듈이 없는 기능(문서 편집, AI 연동 설정 등)을 가릴 때 쓴다.
- * 구역 목록을 아직 모르면 판정을 미룬다(설치된 것으로 본다).
+ * 구역(메일·문서·AI 등 설치 단위)의 설치 여부. 활성화/비활성화 대상 모듈이 없는 기능(문서 편집, AI 연동 설정 등)을 숨길 때 사용한다.
+ * 구역 목록이 미확인 상태이면 판정을 보류한다(설치된 것으로 간주).
  */
 export function zoneInstalledIn(zones: string[] | null, id: string): boolean {
   return zones === null || zones.includes(id)
@@ -69,7 +69,7 @@ export function isZoneInstalled(id: string): boolean {
   return zoneInstalledIn(siteConfigStore.getState().zones, id)
 }
 
-/** 컴포넌트용 — 구역 목록이 오면 다시 그린다 */
+/** 컴포넌트용 — 구역 목록 수신 시 재렌더링한다 */
 export function useZoneInstalled(id: string): boolean {
   return useStore(siteConfigStore, s => zoneInstalledIn(s.zones, id))
 }

@@ -1,14 +1,14 @@
-// AI 답변 수식 — markdown-it 규칙: 인라인 $…$ · 블록 $$…$$ 를 KaTeX(MIT)로 그린다.
-// 인라인 규칙이라 코드(`…`)·코드펜스 안에는 닿지 않는다. 돈 표기("$5 와 $10")는 수식으로 보지 않는다:
-//  여는 $ 뒤가 공백이면 안 되고, 닫는 $ 앞이 공백이거나 뒤가 숫자면 닫는 $ 가 아니다(pandoc 규칙).
-// KaTeX 는 처음 필요할 때 불러온다(getAiKatex) — 불러오기 전에는 원문을 코드 모양으로 둔다.
+// AI 답변 수식 — markdown-it 규칙: 인라인 $…$ · 블록 $$…$$ 를 KaTeX(MIT)로 렌더링한다.
+// 인라인 규칙이므로 코드(`…`)·코드펜스 내부에는 적용되지 않는다. 금액 표기("$5 와 $10")는 수식으로 간주하지 않는다:
+//  여는 $ 뒤가 공백이면 불가하며, 닫는 $ 앞이 공백이거나 뒤가 숫자이면 닫는 $ 가 아니다(pandoc 규칙).
+// KaTeX 는 최초 필요 시점에 로드한다(getAiKatex) — 로드 전에는 원문을 코드 형태로 표시한다.
 
 type Katex = { renderToString: (tex: string, opts?: Record<string, unknown>) => string }
 
 let _p: Promise<Katex> | null = null
 let _k: Katex | null = null
 
-/** KaTeX(+ CSS) 한 번만 로드 */
+/** KaTeX(+ CSS) 1회만 로드 */
 export function getAiKatex(): Promise<Katex> {
   if (!_p) {
     _p = Promise.all([import('katex'), import('katex/dist/katex.min.css')]).then(([m]) => {
@@ -19,10 +19,10 @@ export function getAiKatex(): Promise<Katex> {
   return _p
 }
 
-/** 이미 불러온 KaTeX(없으면 null) */
+/** 이미 로드된 KaTeX(없으면 null) */
 export function aiKatexLoaded(): Katex | null { return _k }
 
-/** 본문에 수식 표식이 있을 법한지(없으면 KaTeX 를 안 불러온다) */
+/** 본문에 수식 표식이 있을 가능성 여부(없으면 KaTeX 를 로드하지 않는다) */
 export function aiHasMath(src: string): boolean {
   return /\$[^\s$][^$]*\$|\$\$/.test(src || '')
 }
@@ -48,7 +48,7 @@ function renderMath(tex: string, display: boolean, getKatex: () => Katex | null)
 function isWs(code: number) { return code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d }
 function isDigit(code: number) { return code >= 0x30 && code <= 0x39 }
 
-/** markdown-it 플러그인. getKatex 가 null 을 주면 원문을 코드 모양으로 낸다 */
+/** markdown-it 플러그인. getKatex 가 null 을 반환하면 원문을 코드 형태로 출력한다 */
 export function aiMathPlugin(md: any, getKatex: () => Katex | null = aiKatexLoaded) {
   // 인라인 $…$ (그리고 한 줄 안의 $$…$$ = 가운데 정렬 아님, 인라인 디스플레이)
   md.inline.ruler.after('escape', 'ai_math_inline', (state: any, silent: boolean) => {

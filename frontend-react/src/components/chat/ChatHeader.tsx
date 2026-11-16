@@ -1,12 +1,12 @@
 /**
- * 채널 머리.
- * 데스크톱 48 + 아래 1px(= 49, 디스코드 실측): 아이콘 20 · 채널 이름 16/600(누르면 채널 메뉴) · 구분선 · 주제(13 muted 말줄임)
+ * 채널 헤더.
+ * 데스크톱 48 + 아래 1px(= 49, 디스코드 실측): 아이콘 20 · 채널 이름 16/600(클릭 시 채널 메뉴) · 구분선 · 주제(13 muted 말줄임)
  *   · 세그먼트 sm(메시지·파일·회의·작업 — 포럼 채널은 글 목록/갤러리) · 구분선 · 통화 · 스레드 목록 · 고정 · 멤버 토글(각 32, aria-pressed)
  *   · 검색칸 160(포커스 360 — ChatSearchBox, RIGHT). 검색칸이 펼쳐지면 세그먼트는 숨긴다(시안 #search-*).
- *   채팅 화면에는 전역 상단바가 없다(routes.ts noDesktopTopbar) — 위쪽 크롬은 이 머리 하나.
- *   채널 메뉴(이름 버튼): 알림 설정 · 탭 관리(관리 권한) · 채널 나가기 · 채널 삭제(소유자). 시안 머리에 ⋯ 가 없어 이름으로 옮겼다.
- * 모바일 56: ‹ 뒤로(+ 다른 채널 멘션 합계) · 이름 + "멤버 N명 · M명 접속 중"(누르면 멤버) · 스레드 · 멤버 · ⋯(통화·알림·나가기·삭제) — 전부 44.
- * 오른쪽 자리는 하나(utils/chatRightColumn): 새로 연 것이 바꿔 낀다 — openChatPanel.
+ *   채팅 화면에는 전역 상단바가 없다(routes.ts noDesktopTopbar) — 상단 크롬은 본 헤더 하나이다.
+ *   채널 메뉴(이름 버튼): 알림 설정 · 탭 관리(관리 권한) · 채널 나가기 · 채널 삭제(소유자). 시안 헤더에 ⋯ 가 없어 이름 버튼으로 이동했다.
+ * 모바일 56: ‹ 뒤로(+ 다른 채널 멘션 합계) · 이름 + "멤버 N명 · M명 접속 중"(클릭 시 멤버) · 스레드 · 멤버 · ⋯(통화·알림·나가기·삭제) — 전부 44.
+ * 오른쪽 자리는 하나이다(utils/chatRightColumn): 새로 연 패널이 기존 패널을 대체한다 — openChatPanel.
  */
 import { useStore } from 'zustand'
 import { clsx as cn } from 'clsx'
@@ -41,21 +41,21 @@ export type ForumView = 'list' | 'gallery'
 export interface ChatHeaderProps {
   /** 모바일 ‹ 뒤로(목록으로) */
   onBack?: () => void
-  /** 세로 화면(데스크톱): 머리 왼쪽 ☰ — 접힌 채널 목록 서랍을 연다. 없으면 안 그림 */
+  /** 세로 화면(데스크톱): 헤더 왼쪽 ☰ — 접힌 채널 목록 서랍 열기. 없으면 미표시 */
   onOpenChannels?: () => void
   className?: string
-  /** 채널 보기 세그먼트(메시지·파일·회의·작업). 없으면 안 그림(DM) */
+  /** 채널 보기 세그먼트(메시지·파일·회의·작업). 없으면 미표시(DM) */
   tabs?: SegmentItem[] | null
   tab?: string
   onTab?: (v: string) => void
   /** 포럼 채널: 세그먼트 대신 글 목록/갤러리 */
   forumView?: ForumView | null
   onForumView?: (v: ForumView) => void
-  /** 채널 메뉴 "탭 관리"(관리 권한이 있을 때만 준다) */
+  /** 채널 메뉴 "탭 관리"(관리 권한 보유 시에만 전달) */
   onManageTabs?: () => void
 }
 
-/** 지금 오른쪽 자리(store 값으로) */
+/** 현재 오른쪽 자리(store 값 기준) */
 export function currentRightColumn(): RightColumn {
   const s = chatStore.getState()
   const ui = chatUiStore.getState()
@@ -70,14 +70,14 @@ export function currentRightColumn(): RightColumn {
   })
 }
 
-/** 오른쪽 자리 열기/닫기 — 하나만(새로 연 것이 바꿔 낀다). 이미 보이면 닫는다 */
+/** 오른쪽 자리 열기/닫기 — 하나만 유지(새로 연 패널이 기존 패널을 대체). 이미 표시 중이면 닫음 */
 export function openChatPanel(kind: RightOpenKind) {
   const wide = !isMobileNow() && viewportStore.getState().width >= CHAT_MEMBERS_DOCK_MIN
   const n = nextRightState(kind, currentRightColumn(), wide, chatUiStore.getState().membersOpen)
   if (n.closeThread && chatStore.getState().activeThreadId) closeThread()
   setShowSearchPanel(n.showSearchPanel)
   setShowMemberPanel(n.showMemberPanel)
-  setShowPinsPanel(n.showPinsPanel)   // 목록은 ChatPinsPanel 이 열릴 때 읽는다
+  setShowPinsPanel(n.showPinsPanel)   // 목록은 ChatPinsPanel 이 열릴 때 조회
   setThreadListOpen(n.threadListOpen)
   if (n.membersOpen !== chatUiStore.getState().membersOpen) setMembersOpen(n.membersOpen)
 }
@@ -85,7 +85,7 @@ export function openChatPanel(kind: RightOpenKind) {
 const HB = 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-ring'
 const hbCls = (on: boolean) => cn(HB, on ? 'bg-overlay-selected text-foreground' : 'text-muted-foreground hover:bg-overlay-hover hover:text-foreground')
 
-/** 대화 머리 */
+/** 대화 헤더 */
 export function ChatHeader({ onBack, onOpenChannels, className, tabs, tab, onTab, onForumView, onManageTabs }: ChatHeaderProps) {
   const { t } = useI18n()
   const chat = useChat()
@@ -120,7 +120,7 @@ export function ChatHeader({ onBack, onOpenChannels, className, tabs, tab, onTab
   })()
   const topic = isDm ? presenceLine : (ch?.description || '')
 
-  // ‹ 옆 숫자 — 지금 채널을 뺀 내 멘션 + DM 합계
+  // ‹ 옆 숫자 — 현재 채널을 제외한 본인 멘션 + DM 합계
   const otherMentions = Math.max(0, totalMentions - (ch ? channelMentionCount(ch) : 0))
   const backLabel = otherMentions > 0
     ? t('chat.header.backToListMentions', { n: otherMentions })
@@ -128,7 +128,7 @@ export function ChatHeader({ onBack, onOpenChannels, className, tabs, tab, onTab
 
   const callLabel = callState ? t('chat.header.callJoin', { n: callState.count }) : t('chat.shell.header.call')
 
-  // 드롭인 통화 — 채널 전용 LiveKit 방. 같은 탭 회의 화면으로 열고, 채팅으로 돌아오면 미니 통화 창이 통화를 잇는다.
+  // 드롭인 통화 — 채널 전용 LiveKit 방. 동일 탭의 회의 화면으로 열며, 채팅으로 복귀하면 미니 통화 창이 통화를 유지한다.
   function startCall() {
     if (!ch) return
     openRoom(`chan-${ch.id}`)
@@ -143,7 +143,7 @@ export function ChatHeader({ onBack, onOpenChannels, className, tabs, tab, onTab
       ...(mobile ? [{ key: 'pins', label: t('chat.header.pins'), icon: 'pin' }] : []),
       ...(onManageTabs ? [{ key: 'tabs', label: t('chat.tabs.manage') }] : []),
       ...(!isDm ? [{ key: 'leave', label: t('chat.members.leaveChannel'), icon: 'log-out', separated: true }] : []),
-      // 채널 소유자만(DM 제외) — 예전엔 삭제할 곳이 없어 나가면 고아 채널이 남았다
+      // 채널 소유자만 가능(DM 제외) — 이전에는 삭제 경로가 없어 나가면 고아 채널이 남았음
       ...(isOwner ? [{ key: 'delete', label: t('chat.header.deleteChannel'), icon: 'trash', danger: true, separated: isDm }] : []),
     ]
   }
@@ -255,7 +255,7 @@ export function ChatHeader({ onBack, onOpenChannels, className, tabs, tab, onTab
       <div className="hidden shrink-0 items-center gap-2 md:flex">
         {!searchExpanded && isForum && onForumView && (
           <>
-            {/* 보기 전환은 RIGHT 의 ForumViewToggle(사람마다 기억 — useChatForum) */}
+            {/* 보기 전환은 RIGHT 의 ForumViewToggle(사용자별 보존 — useChatForum) */}
             <ForumViewToggle />
             <span className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
           </>

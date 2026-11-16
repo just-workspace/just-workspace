@@ -1,11 +1,11 @@
 /**
- * 색 견본 고르기: 36 원 한 줄(간격 8).
- * 고른 것 = 흰(bg-background 색) 체크 + 2px ring(foreground, offset 2). 마지막 "색 없음" = 점선 원 + ban 아이콘.
+ * 색 견본 선택: 36 원 한 줄(간격 8).
+ * 선택 항목 = 흰(bg-background 색) 체크 + 2px ring(foreground, offset 2). 마지막 "색 없음" = 점선 원 + ban 아이콘.
  * 값 = 옵션 value 문자열 | null(색 없음).
  * 기본 옵션 ROLE_COLOR_OPTIONS = 백엔드 역할 색 키 8개(순서 고정, permissions.ROLE_COLOR_TOKENS) → 견본 bg-role-1…8.
- *   다른 쓰임(라벨·캘린더)은 options 로 {value, colorClass, label} 를 준다(colorClass 는 정적 Tailwind 클래스).
- * 역할 색 키 → 클래스 변환은 roleColorToken / ROLE_BG_CLASS / ROLE_TEXT_CLASS(옛 "cat-N" 키도 받는다).
- * 접근성: role=radiogroup · 원 role=radio(aria-label = 라벨, 기본 "색 N") · 고른 원만 Tab(roving) · ←→↑↓ Home End 로 옮기며 고른다.
+ *   다른 용도(라벨·캘린더)는 options 로 {value, colorClass, label} 를 전달한다(colorClass 는 정적 Tailwind 클래스).
+ * 역할 색 키 → 클래스 변환은 roleColorToken / ROLE_BG_CLASS / ROLE_TEXT_CLASS(구 "cat-N" 키도 허용).
+ * 접근성: role=radiogroup · 원 role=radio(aria-label = 라벨, 기본 "색 N") · 선택된 원만 Tab(roving) · ←→↑↓ Home End 로 이동하며 선택한다.
  *
  * @example
  * <UiColorSwatches ariaLabel="역할 색" modelValue={role.color} onUpdateModelValue={c => patch({ color: c })} />
@@ -32,7 +32,7 @@ export type RoleColorToken = 'role-1' | 'role-2' | 'role-3' | 'role-4' | 'role-5
 /** 백엔드 역할 색 키(순서 고정 — i 번째 → role-(i+1)) */
 export const ROLE_COLOR_KEYS = ['primary', 'accent', 'success', 'warning', 'danger', 'destructive', 'muted-foreground', 'foreground'] as const
 
-/** 역할 토큰 → 바탕 클래스(Tailwind 가 읽도록 정적 문자열) */
+/** 역할 토큰 → 바탕 클래스(Tailwind 가 인식하도록 정적 문자열) */
 export const ROLE_BG_CLASS: Record<RoleColorToken, string> = {
   'role-1': 'bg-role-1', 'role-2': 'bg-role-2', 'role-3': 'bg-role-3', 'role-4': 'bg-role-4',
   'role-5': 'bg-role-5', 'role-6': 'bg-role-6', 'role-7': 'bg-role-7', 'role-8': 'bg-role-8',
@@ -44,8 +44,8 @@ export const ROLE_TEXT_CLASS: Record<RoleColorToken, string> = {
 }
 
 /**
- * 역할 색 키 → role 토큰. 'primary'…'foreground'(백엔드 키) · 'cat-1'…'cat-8' · 'role-1'…'role-8' 를 받는다.
- * 모르는 값·null = null(색 없음).
+ * 역할 색 키 → role 토큰. 'primary'…'foreground'(백엔드 키) · 'cat-1'…'cat-8' · 'role-1'…'role-8' 를 허용한다.
+ * 알 수 없는 값·null = null(색 없음).
  */
 export function roleColorToken(key: string | null | undefined): RoleColorToken | null {
   if (!key) return null
@@ -62,13 +62,13 @@ export const ROLE_COLOR_OPTIONS: UiColorSwatchOption[] = ROLE_COLOR_KEYS.map((va
 }))
 
 export interface UiColorSwatchesProps extends Omit<HTMLAttributes<HTMLDivElement>, 'role'> {
-  /** 고른 값. null = 색 없음 */
+  /** 선택 값. null = 색 없음 */
   modelValue?: string | null
-  /** 값 바뀜 */
+  /** 값 변경 시 호출 */
   onUpdateModelValue?: (v: string | null) => void
   /** 견본(기본 ROLE_COLOR_OPTIONS) */
   options?: UiColorSwatchOption[]
-  /** 마지막 "색 없음" 점선 원(기본 켬) */
+  /** 마지막 "색 없음" 점선 원(기본 활성화) */
   allowNone?: boolean
   /** "색 없음" 이름 */
   noneLabel?: string
@@ -80,7 +80,7 @@ export interface UiColorSwatchesProps extends Omit<HTMLAttributes<HTMLDivElement
 const RING = 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
 
 /**
- * 36 원 색 견본 고르기.
+ * 36 원 색 견본 선택.
  */
 export function UiColorSwatches({
   modelValue, onUpdateModelValue, options = ROLE_COLOR_OPTIONS, allowNone = true, noneLabel, ariaLabel, disabled = false, className, ...rest

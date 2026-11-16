@@ -1,9 +1,9 @@
 /**
  * 모바일 순서 편집 모드.
- * 머리 56: "순서 편집" + [완료] → 안내 한 줄 → 구역(분류 없음 · 사용자 카테고리)마다 제목 줄 44(손잡이 · 화살표 · 이름) + 채널 행 44(손잡이 · 아이콘 · 이름).
- * 행·제목을 누르면 고른 것(ring 2) — 오른쪽에 ↑↓ 44 두 개. 손잡이를 끌어도 옮긴다(포인터 끌기 — 놓을 자리 UiDropLine).
- * DM·보관된 프로젝트는 옮길 수 없어 그리지 않는다. 결과는 아래 role=status 줄(aria-live polite).
- * MANAGE_CHANNELS 가 있을 때만 들어온다(ChatSidebar 의 ⋯ 메뉴 "순서 편집").
+ * 헤더 56: "순서 편집" + [완료] → 안내 한 행 → 섹션(분류 없음 · 사용자 카테고리)마다 제목 행 44(손잡이 · 화살표 · 이름) + 채널 행 44(손잡이 · 아이콘 · 이름).
+ * 행·제목을 누르면 선택 상태(ring 2) — 오른쪽에 ↑↓ 44 두 개. 손잡이 드래그로도 이동한다(포인터 드래그 — 드롭 위치 UiDropLine).
+ * DM·보관된 프로젝트는 이동 불가이므로 렌더링하지 않는다. 결과는 아래 role=status 행(aria-live polite)에 표시한다.
+ * MANAGE_CHANNELS 권한이 있을 때만 진입한다(ChatSidebar 의 ⋯ 메뉴 "순서 편집").
  */
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { clsx as cn } from 'clsx'
@@ -26,7 +26,7 @@ export interface ChatSidebarOrderMobileProps {
 }
 
 type Sel = { kind: 'channel'; id: string } | { kind: 'category'; id: string } | null
-/** 포인터 끌기 중 놓을 자리 */
+/** 포인터 드래그 중 드롭 위치 */
 type Target = { kind: 'channel'; sectionId: string; index: number } | { kind: 'category'; overId: string; after: boolean } | null
 
 export function ChatSidebarOrderMobile({ sections, onDone }: ChatSidebarOrderMobileProps) {
@@ -66,7 +66,7 @@ export function ChatSidebarOrderMobile({ sections, onDone }: ChatSidebarOrderMob
     if (i !== null) await moveCat(id, i)
   }
 
-  // ─── 손잡이 포인터 끌기 ───
+  // ─── 손잡이 포인터 드래그 ───
   function targetAt(x: number, y: number, kind: 'channel' | 'category'): Target {
     const el = document.elementFromPoint(x, y) as HTMLElement | null
     if (!el) return null

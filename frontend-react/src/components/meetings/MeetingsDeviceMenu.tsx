@@ -1,6 +1,6 @@
 /**
- * 회의 중 장치 전환 팝오버. 컨트롤 바의 "장치" 버튼이 연다.
- * 기존 폼 토큰(label + select)만 쓴다 — 시안이 오면 이 자리를 갈아끼운다.
+ * 회의 중 장치 전환 팝오버. 컨트롤 바의 "장치" 버튼으로 연다.
+ * 기존 폼 토큰(label + select)만 사용한다 — 시안 수령 시 본 영역을 교체한다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -10,7 +10,7 @@ import { addToast } from '~/composables/useToast'
 import { UiIcon } from '~/components/ui/Icon'
 
 export interface MeetingsDeviceMenuProps {
-  /** 닫기(✕) */
+  /** 닫기(X 버튼) */
   onClose?: () => void
 }
 
@@ -34,7 +34,7 @@ export function MeetingsDeviceMenu({ onClose }: MeetingsDeviceMenuProps) {
   const speakerTouched = useRef(false)
   const [pairedNotice, setPairedNotice] = useState('')
 
-  // 마운트 때: 감시 시작 → 목록 갱신 → 지금 쓰는 장치(없으면 첫 장치)로 채운다. 채우는 것도 아래 "바뀌면 적용"을 탄다.
+  // 마운트 시: 감시 시작 → 목록 갱신 → 현재 사용 중인 장치(없으면 첫 장치)로 초기화. 초기화도 아래 "바뀌면 적용" 경로를 거침.
   useEffect(() => {
     startListening()
     void (async () => {
@@ -48,7 +48,7 @@ export function MeetingsDeviceMenu({ onClose }: MeetingsDeviceMenuProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 실패해서 되돌린 값 — 되돌리며 다시 "바뀌면 적용"을 타지 않게 한 번 건너뛴다
+  // 실패로 복원한 값 — 복원 시 "바뀌면 적용" 경로를 다시 거치지 않도록 1회 건너뜀
   const reverted = useRef<Partial<Record<Kind, string>>>({})
   async function apply(kind: Kind, id: string) {
     if (!id) return
@@ -58,7 +58,7 @@ export function MeetingsDeviceMenu({ onClose }: MeetingsDeviceMenuProps) {
       await switchActiveDevice(kind, id)
     } catch (e) {
       console.error('[meet] 장치 전환 실패', kind, e)
-      // 예전엔 콘솔에만 남겨, 목록은 새 장치를 가리키는데 실제로는 예전 장치가 쓰이고 있었다
+      // 기존에는 콘솔에만 기록하여, 목록은 새 장치를 가리키나 실제로는 이전 장치가 사용되는 불일치가 있었음
       addToast('error', t('meetings.device.switchFail', '장치를 바꾸지 못했습니다. 연결을 확인해 주세요'))
       const prev = getActiveDevice(kind)
       if (prev && prev !== id) {
@@ -70,7 +70,7 @@ export function MeetingsDeviceMenu({ onClose }: MeetingsDeviceMenuProps) {
     }
   }
 
-  // camId / spkId / micId — 값이 바뀔 때마다 적용
+  // camId / spkId / micId — 값 변경 시마다 적용
   const spkRef = useRef(spkId)
   spkRef.current = spkId
   const outSupportedRef = useRef(audioOutputSupported)

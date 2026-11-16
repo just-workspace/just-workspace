@@ -1,7 +1,7 @@
 /**
- * AI 답변 진행 단계("4단계 완료 · 메일 검색 → … · 18초", 작성 중 펼침, 단계 하나 실패).
- *  카드 r12 · card · border(실패 있으면 warning/45). 머리 = 상태 아이콘 + 요약 + ▾/▴ (aria-expanded).
- *  받는 중에는 펼침이 기본, 끝나면 접힘(사용자가 누르면 그 선택을 따른다). 숫자·시간은 JetBrains Mono.
+ * AI 답변 진행 단계("4단계 완료 · 메일 검색 → … · 18초", 작성 중 펼침, 단계 1개 실패).
+ *  카드 r12 · card · border(실패가 있으면 warning/45). 머리 = 상태 아이콘 + 요약 + ▾/▴ (aria-expanded).
+ *  수신 중에는 펼침이 기본, 종료 시 접힘(사용자가 조작하면 해당 선택을 따른다). 숫자·시간은 JetBrains Mono.
  *  모바일은 요약에서 단계 이름 사슬을 숨긴다("4단계 완료 · 18초").
  */
 import { useEffect, useId, useState, type ReactNode } from 'react'
@@ -14,7 +14,7 @@ import { aiStepSecs, aiStepsSummary } from '~/utils/aiAssist'
 
 export interface AiStepsProps {
   steps: AiStep[]
-  /** 답변을 받는 중 */
+  /** 답변 수신 중 */
   streaming?: boolean
   startedAt?: string | null
   endedAt?: string | null
@@ -33,7 +33,7 @@ export function AiSteps({ steps, streaming, startedAt, endedAt, className }: AiS
   const listId = useId()
   const [userOpen, setUserOpen] = useState<boolean | null>(null)
   const open = userOpen ?? !!streaming
-  // 받는 중이면 1초마다 다시 그려 걸린 시간을 올린다
+  // 수신 중이면 1초마다 재렌더링하여 경과 시간을 갱신한다
   const [now, setNow] = useState(() => Date.now())
   const live = !!streaming && steps.some(s => s.status === 'running')
   useEffect(() => {

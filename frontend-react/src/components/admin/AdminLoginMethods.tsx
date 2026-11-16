@@ -1,10 +1,10 @@
 /**
  * 설정 › 일반 "로그인 방식".
- * 로컬 계정 · LDAP · SSO 의 순서와 사용 여부를 한 카드에(기존 "인증 우선순위"와 LDAP "사용" 체크를 통합).
- * 행 48(rounded-md bg-background) = 끌기 손잡이 + 순번 mono + 이름·설명 + "설정" + 스위치. 순서·스위치는 즉시 저장 + "저장됨 ✓".
+ * 로컬 계정 · LDAP · SSO 의 순서와 사용 여부를 한 카드에 표시(기존 "인증 우선순위"와 LDAP "사용" 체크를 통합).
+ * 행 48(rounded-md bg-background) = 드래그 핸들 + 순번 mono + 이름·설명 + "설정" + 스위치. 순서·스위치는 즉시 저장 + "저장됨 ✓".
  * 아래 "LDAP 연결" 카드(텍스트 필드)는 카드별 저장(되돌리기/저장) + 연결 시험.
- * ★ 백엔드 갭: 로컬 계정 끄기 API 없음(항상 켜짐) · SSO(OIDC) 없음 → 둘 다 스위치 비활성.
- * 루트가 카드 둘(Fragment)이다.
+ * 참고(백엔드 미지원): 로컬 계정 비활성화 API 없음(항상 활성) · SSO(OIDC) 없음 → 둘 다 스위치 비활성.
+ * 루트는 카드 2개(Fragment)이다.
  *
  * @example <AdminLoginMethods />
  */
@@ -32,16 +32,16 @@ const LDAP_EMPTY = {
   base_dn: '', user_filter: '(sAMAccountName={username})', attr_email: 'mail',
   attr_name: 'displayName', auto_provision: true, has_bind_password: false,
 }
-/** LDAP 설정(서버 /api/admin/auth/ldap 모양) */
+/** LDAP 설정(서버 /api/admin/auth/ldap 형식) */
 export type LdapCfg = typeof LDAP_EMPTY
 const LDAP_FIELDS: (keyof LdapCfg)[] = ['host', 'port', 'use_ssl', 'bind_dn', 'bind_password', 'base_dn', 'user_filter', 'attr_email', 'attr_name', 'auto_provision']
 
-/** LDAP 연결 카드 변경 건수(비밀번호는 입력했으면 1, enabled 는 스위치라 제외) */
+/** LDAP 연결 카드 변경 건수(비밀번호는 입력 시 1, enabled 는 스위치이므로 제외) */
 export function ldapChangeCount(ldap: LdapCfg, orig: LdapCfg): number {
   return LDAP_FIELDS.filter(k => k === 'bind_password' ? !!ldap.bind_password : String(ldap[k]) !== String(orig[k])).length
 }
 
-/** 서버 순서(local/ldap 만) → 화면 순서(빠진 것은 뒤에 붙이고 sso 는 맨 끝) */
+/** 서버 순서(local/ldap 만) → 화면 순서(누락 항목은 뒤에 추가하고 sso 는 맨 끝) */
 export function normalizeAuthOrder(order: string[] | undefined): AuthSrc[] {
   const o = (order || []).filter((x): x is AuthSrc => x === 'local' || x === 'ldap')
   if (!o.includes('local')) o.push('local')
@@ -49,7 +49,7 @@ export function normalizeAuthOrder(order: string[] | undefined): AuthSrc[] {
   return [...o, 'sso']
 }
 
-/** 끌어 놓기 결과 순서(sso 는 끝에 고정). 바뀌지 않으면 null */
+/** 드래그 앤 드롭 결과 순서(sso 는 끝에 고정). 변경이 없으면 null */
 export function dropOrder(order: AuthSrc[], src: AuthSrc | null, target: AuthSrc): AuthSrc[] | null {
   if (!src || src === target || src === 'sso' || target === 'sso') return null
   const arr = order.filter(s => s !== 'sso' && s !== src)
@@ -57,7 +57,7 @@ export function dropOrder(order: AuthSrc[], src: AuthSrc | null, target: AuthSrc
   return [...arr, 'sso']
 }
 
-/** 키보드 ↑↓ 이동 결과 순서(sso 는 움직이지 않음). 범위 밖이면 null */
+/** 키보드 ↑↓ 이동 결과 순서(sso 는 이동 불가). 범위 밖이면 null */
 export function moveOrder(order: AuthSrc[], src: AuthSrc, delta: number): AuthSrc[] | null {
   if (src === 'sso') return null
   const arr = order.filter(s => s !== 'sso')
@@ -132,7 +132,7 @@ export function AdminLoginMethods() {
   // ── LDAP 사용 스위치(즉시 저장) ──
   async function setLdapEnabled(v: boolean) {
     try {
-      // 스위치는 사용 여부만 보낸다(편집 중인 텍스트 필드는 카드 저장으로). 백엔드는 보낸 키만 바꾼다.
+      // 스위치는 사용 여부만 전송한다(편집 중인 텍스트 필드는 카드 저장으로 처리). 백엔드는 전송된 키만 변경한다.
       const c = await $fetch<Partial<LdapCfg>>('/api/admin/auth/ldap', { method: 'PUT', credentials: 'include', body: { enabled: v } })
       const en = !!c.enabled
       setLdap(l => ({ ...l, enabled: en }))
@@ -174,7 +174,7 @@ export function AdminLoginMethods() {
   }
 
   function scrollToLdap() { document.getElementById('ldap')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
-  // React Router 는 같은 페이지 #해시 이동 때 그 요소로 스크롤하지 않아 여기서 맞춘다
+  // React Router 는 동일 페이지 #해시 이동 시 해당 요소로 스크롤하지 않으므로 여기서 보정한다
   function scrollToGeneral() { setTimeout(() => document.getElementById('general')?.scrollIntoView({ block: 'start' }), 0) }
 
   return (

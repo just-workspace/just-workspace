@@ -1,15 +1,15 @@
 /**
- * 작성 창 첨부 칩: 36 · rounded-md · 이름 + 크기 mono + ✕ 24(히트 40). 모바일은 40.
+ * 작성 창 첨부 칩: 36 · rounded-md · 이름 + 크기 mono + 제거 버튼 24(히트 40). 모바일은 40.
  */
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거함)
 import { clsx as cx } from 'clsx'
 import type { UploadedAttachment } from '~/composables/useMail'
 import { formatBytes } from '~/utils/mailQuery'
 import { UiIcon } from '~/components/ui/Icon'
 
 export interface MailComposeAttachmentProps {
-  /** 올린 첨부 */
+  /** 업로드된 첨부 */
   att: UploadedAttachment
   /** md 36(데스크톱) · lg 40(모바일) */
   size?: 'md' | 'lg'
@@ -19,7 +19,7 @@ export interface MailComposeAttachmentProps {
   badge?: string
 }
 
-/** 작성 중 첨부 한 개 */
+/** 작성 중인 첨부 1개 */
 export function MailComposeAttachment({ att, size = 'md', onRemove, badge }: MailComposeAttachmentProps) {
   const { t } = useI18n()
   return (

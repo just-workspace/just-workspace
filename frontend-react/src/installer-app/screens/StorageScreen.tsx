@@ -1,7 +1,7 @@
 /**
- * 파일 저장 위치 — 이 서버의 디스크(기본) 또는 네트워크 저장소(NFS). 설치 후에 옮기기 어려운 결정이라 독립 단계다.
- *  - 이 서버의 디스크: 준비할 것이 없다. 원하면 저장 폴더를 지정하고, 지정했으면 그 폴더를 확인해야 한다.
- *  - 네트워크 저장소: 서버 주소와 공유 경로를 넣고 "연결 확인"을 눌러 1~4번 검사를 통과해야 한다.
+ * 파일 저장 위치 — 이 서버의 디스크(기본) 또는 네트워크 저장소(NFS). 설치 후 이전이 어려운 결정이므로 독립 단계로 둔다.
+ *  - 이 서버의 디스크: 사전 준비 사항이 없다. 필요 시 저장 폴더를 지정하며, 지정한 경우 해당 폴더를 확인해야 한다.
+ *  - 네트워크 저장소: 서버 주소와 공유 경로를 입력하고 "연결 확인"을 눌러 1~4번 검사를 통과해야 한다.
  */
 import { useState } from 'react'
 import { UiButton } from '~/components/ui/Button'
@@ -39,13 +39,13 @@ export function StorageScreen() {
 
   const dir = path.trim()
   const dirFormatBad = dir !== '' && !isHostPath(dir)
-  // 전에 저장해 둔 폴더는 이미 확인을 거친 것으로 본다
+  // 이전에 저장한 폴더는 이미 확인을 거친 것으로 간주
   const dirKnownGood = dir !== '' && dir === (saved.path ?? '') && saved.kind === 'local'
   const dirResult = local.key === dir && local.status === 'done' ? local.result : null
   const dirChecking = local.key === dir && local.status === 'checking'
   const dirOk = dirKnownGood || dirResult?.status === 'ok'
   const view = nfsView(nfs, server, exportPath)
-  // 전에 확인하고 저장해 둔 공유를 그대로 두었으면 다시 확인하지 않아도 된다
+  // 이전에 확인 후 저장한 공유를 변경하지 않았으면 재확인 불필요
   const nfsKnownGood = saved.kind === 'nfs' && server.trim() !== '' && server.trim() === (saved.server ?? '') && exportPath.trim() === (saved.export ?? '')
 
   let blocked = ''

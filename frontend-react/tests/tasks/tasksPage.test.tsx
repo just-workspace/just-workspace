@@ -1,5 +1,5 @@
 // 작업: 목록 상태 규칙(upsert·remove), 화면 렌더 — 마감 묶음·집계, 빠른 입력(@담당 → 사용자), 칩 필터 = 서버 재조회,
-// 완료 토글(낙관적), 행 선택 = ?task= + 상세 패널(하위 작업). ($fetch 는 가짜)
+// 완료 토글(낙관적), 행 선택 = ?task= + 상세 패널(하위 작업). ($fetch 는 모의(mock))
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, fireEvent, waitFor, screen } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'
@@ -93,7 +93,7 @@ describe('작업 화면', () => {
     const check = row.querySelector('[role="checkbox"]') as HTMLElement
     await act(async () => { fireEvent.click(check) })
     expect(api.calls.some(c => c.url === '/api/tasks/나중 일/toggle')).toBe(true)
-    // 완료로 바뀌면 "완료" 묶음으로 옮겨 간다(행이 새로 그려진다)
+    // 완료로 변경되면 "완료" 묶음으로 이동(행이 다시 렌더링됨)
     await waitFor(() => expect(screen.getByRole('button', { name: '나중 일' }).querySelector('[role="checkbox"]')!.getAttribute('aria-checked')).toBe('true'))
     expect(screen.getByRole('region', { name: `${t('tasks.statusDone')} 1` })).toBeTruthy()
   })

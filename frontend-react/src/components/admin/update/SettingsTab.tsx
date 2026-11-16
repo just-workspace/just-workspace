@@ -1,10 +1,10 @@
 /**
  * 업데이트 › 설정 — 적용 방식(수동/자동 + 시간대), 채널(안정판/시험판), 점검 화면의 관리자 연락처.
  *
- *  · 자동: 서버 시간 기준 시간대, 나온 지 며칠 지난 릴리스만(서버가 준 값), 실패하면 되돌리고 멈춘다는 안내.
- *  · 안정판 → 시험판: 경고. 시험판 → 안정판: "다음 안정판까지 기다리기" / "시험판 이전 상태로 복원" 중 고른다.
- *    복원은 확인 창을 거쳐 복원 작업을 시작하고 진행 화면으로 간다.
- *  · 안정판으로 돌아와 기다리는 중이면 어느 버전부터 다시 받는지 보여 준다.
+ *  · 자동: 서버 시간 기준 시간대, 공개 후 일정 일수가 경과한 릴리스만 대상(서버 제공 값), 실패 시 롤백 후 중지한다는 안내.
+ *  · 안정판 → 시험판: 경고. 시험판 → 안정판: "다음 안정판까지 기다리기" / "시험판 이전 상태로 복원" 중 선택한다.
+ *    복원은 확인 창을 거쳐 복원 작업을 시작하고 진행 화면으로 이동한다.
+ *  · 안정판으로 복귀하여 대기 중이면 수신을 재개할 버전을 표시한다.
  */
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -63,7 +63,7 @@ export function SettingsTab({ status, onSaved }: { status: UpdateStatus | null; 
   const contactDirty = form.contact.trim() !== base.contact
   const dirty = settingsDirty || contactDirty
   const hours = HOURS.map(h => ({ value: h, label: h }))
-  // 안정판으로 돌아와 기다리는 중 — 방금 저장했거나, 전에 바꿔 둔 상태
+  // 안정판으로 복귀하여 대기 중 — 방금 저장했거나 이전에 변경해 둔 상태
   const waiting = wait ?? (saved.channel === 'stable' && status?.available.state === 'wait' ? status.available : null)
 
   async function save(restore: boolean) {

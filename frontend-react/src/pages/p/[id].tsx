@@ -20,7 +20,7 @@ export default function PluginPage() {
 
   const pluginId = route.params.id as string
 
-  // 모듈이 꺼져 있으면 / 로 — pluginId·loaded 가 바뀔 때만 본다(처음에도)
+  // 모듈이 비활성화 상태이면 / 로 이동 — pluginId·loaded 변경 시에만 확인한다(최초 포함)
   useEffect(() => {
     if (loaded && !isModuleEnabled(pluginId)) {
       void navigateTo('/')
@@ -29,7 +29,7 @@ export default function PluginPage() {
 
   useHead({ title: `${pluginId} | ${appName}` })
 
-  // v2(React) 플러그인에 넘길 API — v1(Vue) 은 PluginHost 가 provide('pluginApi') 로 만든다
+  // v2(React) 플러그인에 전달할 API — v1(Vue) 은 PluginHost 가 provide('pluginApi') 로 생성한다
   const pluginApi = useMemo<PluginApiV2>(() => ({
     version: 2,
     pluginId,
@@ -39,14 +39,14 @@ export default function PluginPage() {
     t,
   }), [pluginId, user, appName, t])
 
-  // 플러그인이 해제를 잊어도 페이지를 떠나거나 다른 플러그인으로 바꾸면 상단바 항목·제목을 지운다(원복)
+  // 플러그인이 해제를 누락해도 페이지를 이탈하거나 다른 플러그인으로 전환하면 상단바 항목·제목을 제거한다(원복)
   useEffect(() => () => { clearAllHeaderActions(); clearAllTitles() }, [pluginId])
 
   if (!user) return null
 
   return (
     <div className="h-full overflow-auto">
-      {/* Dynamic plugin UI — id 가 있으면 항상 컴포넌트를 그린다(아래 빈 상태는 id 가 없을 때뿐) */}
+      {/* Dynamic plugin UI — id 가 있으면 항상 컴포넌트를 렌더한다(아래 빈 상태는 id 가 없는 경우에 한함) */}
       {pluginId ? (
         <PluginHost key={pluginId} pluginId={pluginId} pluginApi={pluginApi} />
       ) : (

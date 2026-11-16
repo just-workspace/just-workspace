@@ -1,4 +1,4 @@
-// 계정 없는 사용자 — /mail?compose=… 가 조용히 버려지지 않고 작성 창이 뜬다(창은 "메일 연결" 안내를 그린다)
+// 계정 없는 사용자 — /mail?compose=… 가 무시되지 않고 작성 창이 표시됨(창은 "메일 연결" 안내를 렌더링)
 import { describe, it, expect, vi } from 'vitest'
 import { render, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'

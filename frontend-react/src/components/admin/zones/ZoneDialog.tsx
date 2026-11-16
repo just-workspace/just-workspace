@@ -2,11 +2,11 @@
  * 구역 켜기 창 · 켜진 구역의 설정 창.
  *
  * 켜기(mode="enable"):
- *   1) 설정 — 설정이 있는 구역만(메일·회의·AI 도우미·코드 저장소). 연결 확인이 필요한 폼은 통과 전까지 [다음]이 꺼지고 이유가 보인다.
- *   2) 메모리와 포트 확인 — 서버가 판정한다. 메모리를 넘으면 [켜기]가 꺼지고 이유가 보인다.
- *      이 구역을 켜서 새로 생기는 주의(인증서·포트·메일 레코드 등)가 있으면 아래에 함께 보인다.
- *   → [켜기]를 누르면 창이 닫히고, 받기·설정·연결 진행은 목록의 그 행에서 이어진다.
- * 설정(mode="settings"): 같은 폼 한 장 + [저장]. 바꾼 내용이 없으면 [저장]이 꺼진다.
+ *   1) 설정 — 설정이 있는 구역만 해당(메일·회의·AI 도우미·코드 저장소). 연결 확인이 필요한 폼은 통과 전까지 [다음]이 비활성화되고 사유가 표시된다.
+ *   2) 메모리와 포트 확인 — 서버가 판정한다. 메모리를 초과하면 [켜기]가 비활성화되고 사유가 표시된다.
+ *      본 구역 활성화로 새로 발생하는 주의 사항(인증서·포트·메일 레코드 등)이 있으면 아래에 함께 표시된다.
+ *   → [켜기]를 누르면 창이 닫히고, 다운로드·설정·연결 진행은 목록의 해당 행에서 계속 표시된다.
+ * 설정(mode="settings"): 동일한 폼 1장 + [저장]. 변경 내용이 없으면 [저장]이 비활성화된다.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -25,12 +25,12 @@ import { ZoneSettingsForm, type VerifyState } from './ZoneSettingsForm'
 export interface ZoneDialogProps {
   zone: ZoneRow
   mode: 'enable' | 'settings'
-  /** 지금 켜진 구역 기준의 메모리(켜기 전 합계) */
+  /** 현재 활성 구역 기준의 메모리(활성화 전 합계) */
   memory: ZoneMemory
-  /** 코드 저장소의 검증된 버전(목록이 알려 준 값 — 설정을 읽으면 그 값이 우선) */
+  /** 코드 저장소의 검증된 버전(목록이 제공한 값 — 설정 조회 시 해당 값이 우선) */
   verifiedVersion?: string | null
   onClose: () => void
-  /** 작업이 시작됐다 — 창은 닫히고 행이 진행을 보여 준다 */
+  /** 작업 시작됨 — 창은 닫히고 행이 진행 상태를 표시한다 */
   onStarted: (job: ZoneJob, settings: ZoneSettings | null) => void
 }
 
@@ -51,7 +51,7 @@ export function ZoneDialog({ zone, mode, memory, verifiedVersion, onClose, onSta
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<{ field: string; code: string }[]>([])
 
-  // 넣어 둔 값과 감지값을 불러온다(꺼진 구역도 지난 값이 남아 있을 수 있다)
+  // 저장된 값과 감지값을 조회한다(비활성 구역에도 이전 값이 남아 있을 수 있다)
   useEffect(() => {
     let alive = true
     if (!hasForm) { void runCheck(null); return }
@@ -110,7 +110,7 @@ export function ZoneDialog({ zone, mode, memory, verifiedVersion, onClose, onSta
 
   async function redetect() {
     setRedetecting(true)
-    try { setDetectedIp((await zonesApi.probePublicIp(true)).ip || null) } catch { /* 그대로 */ } finally { setRedetecting(false) }
+    try { setDetectedIp((await zonesApi.probePublicIp(true)).ip || null) } catch { /* 기존 상태 유지 */ } finally { setRedetecting(false) }
   }
 
   async function submit() {

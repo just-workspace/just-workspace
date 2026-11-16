@@ -1,6 +1,6 @@
 /**
- * 고정 메시지 패널 — 채널 ⋯ "고정 메시지"에서 연다.
- * 시안에 그림이 없어 스레드 패널(400, 머리 53) 골격 + 빈 상태(EmptyState panel) 규격으로 구성했다.
+ * 고정 메시지 패널 — 채널 ⋯ "고정 메시지"에서 진입한다.
+ * 시안에 해당 화면이 없어 스레드 패널(400, 헤더 53) 골격과 빈 상태(EmptyState panel) 규격으로 구성한다.
  */
 import { useEffect } from 'react'
 import { useStore } from 'zustand'
@@ -34,15 +34,15 @@ export function ChatPinsPanel() {
     catch (e: any) { addToast('error', e?.data?.detail || t('error.genericError')) }
   }
 
-  // 답글을 고정한 경우 스레드를 열고 그 답글로, 원 메시지면 대화에서 그 줄로 점프(강조 2초 + "최근으로" 바).
-  // 모바일은 대화가 보이게 패널을 닫는다(데스크톱은 열어 둔 채 점프).
+  // 고정 대상이 답글이면 스레드를 열어 해당 답글로, 원 메시지이면 대화의 해당 행으로 이동한다(강조 2초 + "최근으로" 바).
+  // 모바일은 대화가 보이도록 패널을 닫는다(데스크톱은 패널을 유지한 채 이동).
   function onOpen(m: { id: string; channel_id: string; parent_id: string | null; thread_broadcast?: boolean }) {
     if (m.parent_id && !m.thread_broadcast) { close(); void openThread(m.parent_id).then(() => jumpTo(m.channel_id, m.id)); return }
     if (isMobile) close()
     jumpTo(m.channel_id, m.id)
   }
 
-  // 열 때마다 받는다 — 고정 직후 응답으로 먼저 들어간 항목엔 "고정한 사람" 이름이 없다
+  // 열 때마다 재조회. 고정 직후 응답으로 먼저 반영된 항목에는 "고정한 사람" 이름 누락
   useEffect(() => { void fetchPins() }, [])
 
   return (

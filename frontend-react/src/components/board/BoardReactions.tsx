@@ -1,7 +1,7 @@
 /**
  * 글 리액션.
- * 알약 높이 28(모바일 32) · 테두리 · 내가 누른 것 = primary/60 테두리 + primary/10 바탕 + 수 primary 600.
- * + 알약 → 프리셋 이모지 고르기(시안 그림 없음 — 기존 6종 유지, 히트 40).
+ * 알약 높이 28(모바일 32) · 테두리 · 본인이 선택한 항목 = primary/60 테두리 + primary/10 바탕 + 수 primary 600.
+ * + 알약 → 프리셋 이모지 선택(시안 없음 — 기존 6종 유지, 히트 40).
  */
 import { useRef, useState } from 'react'
 import { cn } from '~/lib/utils'
@@ -17,7 +17,7 @@ export interface BoardReactionsProps {
 
 const PRESET_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']
 
-/** 리액션 알약 줄 + 이모지 고르기 */
+/** 리액션 알약 줄 + 이모지 선택 */
 export function BoardReactions({ reactions, postId }: BoardReactionsProps) {
   const { t } = useI18n()
   const [showPicker, setShowPicker] = useState(false)

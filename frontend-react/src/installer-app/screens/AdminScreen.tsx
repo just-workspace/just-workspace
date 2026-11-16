@@ -1,6 +1,6 @@
 /**
  * 관리자 계정 — 이름 · 아이디 · 비밀번호(두 번). 이 워크스페이스의 첫 계정이다.
- * 비밀번호는 화면 상태에만 두고 다음으로 넘어갈 때 서버로 보낸다. 서버가 이미 가지고 있으면(이어 하기) 비워 둬도 된다.
+ * 비밀번호는 화면 상태에만 보관하고 다음 단계로 이동할 때 서버로 송신한다. 서버가 이미 보유한 경우(이어 하기) 비워 둘 수 있다.
  */
 import { useState } from 'react'
 import { UiInput } from '~/components/ui/Input'
@@ -32,7 +32,7 @@ export function AdminScreen() {
   const short = password !== '' && password.length < PASSWORD_MIN
   const mismatch = !short && again !== '' && again !== password
 
-  // 메일 주소의 도메인 — 내장 메일 서버를 쓰면 메일 도메인, 아니면 접속 주소
+  // 메일 주소의 도메인 — 내장 메일 서버 사용 시 메일 도메인, 그 외 접속 주소
   const mailOn = zoneOn(answers, catalog, 'mail') && answers.mail.kind === 'builtin' && !!answers.mail.mail_domain
   const mailDomain = mailOn ? answers.mail.mail_domain! : (isDomain(answers.access.domain) ? answers.access.domain : '')
   const address = uid && !uidBad && mailDomain ? `${uid}@${mailDomain}` : ''
@@ -47,7 +47,7 @@ export function AdminScreen() {
     else if (again !== password) blocked = t('admin.reasonPasswordMismatch')
   }
 
-  // 재설정 명령은 아이디를 붙여 쓴다 — 아이디가 정해졌을 때만 보인다
+  // 재설정 명령은 아이디를 덧붙여 사용 — 아이디가 확정된 경우에만 표시
   const reset = info?.commands?.reset_admin && uid && !uidBad ? `${info.commands.reset_admin} ${uid}` : null
   return (
     <WizardShell step="admin">

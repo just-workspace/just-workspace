@@ -1,16 +1,16 @@
 /**
  * 작업
  *  데스크톱: 머리(작업 24/700 + 집계 · 목록/보드 세그먼트) → 칩 줄(진행 중 · 우선순위 높음 · + 필터 · 묶기/정렬 ▾)
- *            → 빠른 입력 44 → 마감 묶음 목록(행 48) + 오른쪽 상세 패널 360(작업을 고르면).
- *  모바일: 칩 줄(36) + ⋯(묶기·정렬) → 목록(행 60, 묶음 머리 32) + FAB(새 작업 시트) / 작업을 고르면 전체 화면 상세(탭바 숨김).
- * 좌 200 aside 는 폐지. 데스크톱 셸(Electron)이 넘기는 ?status=·?priority= 는 칩 상태로 받는다.
- * 선택한 작업은 ?task=<id> 로 URL 에 남겨 링크 복사·뒤로 가기가 된다.
- * 필터는 서버로(GET /api/tasks/?assignee=&tag=&project=&status=&priority=) — "마감 지남"만 화면에서 거른다.
+ *            → 빠른 입력 44 → 마감 묶음 목록(행 48) + 오른쪽 상세 패널 360(작업 선택 시).
+ *  모바일: 칩 줄(36) + ⋯(묶기·정렬) → 목록(행 60, 묶음 머리 32) + FAB(새 작업 시트) / 작업 선택 시 전체 화면 상세(탭바 숨김).
+ * 좌 200 aside 는 폐지. 데스크톱 셸(Electron)이 전달하는 ?status=·?priority= 는 칩 상태로 수신한다.
+ * 선택한 작업은 ?task=<id> 로 URL 에 기록하여 링크 복사·뒤로 가기를 지원한다.
+ * 필터는 서버에서 적용(GET /api/tasks/?assignee=&tag=&project=&status=&priority=) — "마감 지남"만 화면에서 필터링한다.
  * 칩 줄: [나에게 배정](assignee=me) · 진행 중 · 우선순위 높음↑ · + 필터(상태·우선순위·담당자·태그·프로젝트).
- *  "나에게 배정" 칩은 기본 꺼짐 — 담당 기능 전에 만든 작업은 담당자가 비어 있어 켜 두면 안 보이기 때문.
- * 빠른 입력 @담당 → 사용자(resolveAssignee)로 저장. @ 가 없으면 나에게 배정. 못 찾으면 @글자를 제목에 남기고 알린다.
- * 보드 보기는 토글 자리만(다음 단계).
- * 모바일 머리: 목록 = 이 페이지 header, 상세 = LayoutMobileDetailBar — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader).
+ *  "나에게 배정" 칩은 기본 비활성 — 담당 기능 도입 전에 생성한 작업은 담당자가 비어 있어 활성화 상태에서는 표시되지 않기 때문.
+ * 빠른 입력 @담당 → 사용자(resolveAssignee)로 저장. @ 가 없으면 나에게 배정. 조회 실패 시 @글자를 제목에 남기고 안내한다.
+ * 보드 보기는 토글 자리만 확보(다음 단계).
+ * 모바일 머리: 목록 = 이 페이지 header, 상세 = LayoutMobileDetailBar — 공용 상단바는 사용하지 않는다(routes.ts ownMobileHeader).
  */
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -59,7 +59,7 @@ function filtersFromQuery(s: unknown, p: unknown) {
 export default function TasksPage() {
   const { t } = useI18n()
   const { appName } = useSiteConfig()
-  useHead({ title: `${t('tasks.heading')} | ${appName}` })   // 화면·내비와 같은 "작업"(옛 키 tasks.title 은 "할 일")
+  useHead({ title: `${t('tasks.heading')} | ${appName}` })   // 화면·내비와 동일한 "작업"(구 키 tasks.title 은 "할 일")
   useBreadcrumb(t('tasks.breadcrumb'))
 
   const {
@@ -74,7 +74,7 @@ export default function TasksPage() {
   routeRef.current = route
 
   // ── 필터(칩 줄) ──
-  // 데스크톱 셸(Electron) 스마트 목록이 고른 값은 쿼리로 넘어온다(첫 값은 초기 상태로)
+  // 데스크톱 셸(Electron) 스마트 목록이 선택한 값은 쿼리로 전달된다(최초 값은 초기 상태로 사용)
   const init = (() => {
     const s = route.query.status, p = route.query.priority
     if (s === undefined && p === undefined) return null
@@ -112,13 +112,13 @@ export default function TasksPage() {
   const [sortBy, setSortBy] = useState<TaskSort>('priority')
   const GROUP_LABEL: Record<TaskGroupBy, string> = { due: t('tasks.group.due'), priority: t('tasks.filterPriority'), none: t('common.none') }
   const SORT_LABEL: Record<TaskSort, string> = { priority: t('tasks.filterPriority'), due: t('tasks.group.due'), created: t('tasks.group.createdOrder') }
-  // 묶음 머리 글자(groupTasks 의 label 은 한국어 기본값이라 key 로 번역)
+  // 묶음 머리 글자(groupTasks 의 label 은 한국어 기본값이므로 key 로 번역)
   function groupLabel(g: { key: string; label: string }) {
     const k = TASK_GROUP_LABEL_KEY[g.key]
     return k ? t(k) : g.label
   }
 
-  // 서버가 이미 걸렀다. 낙관적 갱신으로 조건에서 벗어난 행이 남지 않게 같은 조건을 한 번 더 본다(+ 마감 지남은 여기서만)
+  // 서버에서 이미 필터링된 결과. 낙관적 갱신으로 조건에서 벗어난 행이 남지 않도록 동일 조건을 재적용한다(+ 마감 지남은 여기서만 적용)
   const visible = tasks.filter((x) => {
     if (statusFilter && x.status !== statusFilter) return false
     if (priorityFilter && x.priority !== priorityFilter) return false
@@ -133,8 +133,8 @@ export default function TasksPage() {
   })
   const groups = groupTasks(visible, groupBy, sortBy)
 
-  // 머리 집계(시안 "나에게 배정 12 · 마감 지남 1 · 오늘 2") — 나에게 배정 = 내가 담당인 안 끝난 작업.
-  // 필터를 건 목록으로 세면 숫자가 흔들리므로 필터 없이 읽은 목록으로 센 값을 들고 있는다.
+  // 머리 집계(시안 "나에게 배정 12 · 마감 지남 1 · 오늘 2") — 나에게 배정 = 본인이 담당인 미완료 작업.
+  // 필터 적용 목록으로 집계하면 수치가 변동하므로 필터 없이 조회한 목록으로 집계한 값을 보관한다.
   const [counts, setCounts] = useState({ open: 0, overdue: 0, today: 0 })
   const serverFilters = useMemo<TaskFilters>(() => ({
     status: statusFilter,
@@ -176,12 +176,12 @@ export default function TasksPage() {
     const q = { ...routeRef.current.query }
     if (id) q.task = id
     else delete q.task
-    // 모바일은 상세가 화면 전환이라 뒤로 가기로 닫히게 push, 데스크톱 패널 전환은 replace
+    // 모바일은 상세가 화면 전환이므로 뒤로 가기로 닫히도록 push, 데스크톱 패널 전환은 replace
     const curSel = (routeRef.current.query.task as string) || null
     if (isMobile && id && !curSel) void router.push({ query: q })
     else void router.replace({ query: q })
   }
-  // 링크로 들어왔는데 목록(상위 200)에 없으면 한 건 불러온다
+  // 링크로 진입했으나 목록(상위 200)에 없으면 단건 조회한다
   const hasSelected = !!selected
   useEffect(() => {
     if (!selectedId || loading || hasSelected) return
@@ -203,7 +203,7 @@ export default function TasksPage() {
   async function quickCreate(p: QuickParse) {
     setCreating(true)
     try {
-      // @담당 → 사용자. @ 가 없으면 나에게 배정. 못 찾으면 @글자를 제목에 남기고 담당은 비운다
+      // @담당 → 사용자. @ 가 없으면 나에게 배정. 조회 실패 시 @글자를 제목에 남기고 담당은 비운다
       let assigneeId: string | null = user?.id ?? null
       let title = p.title
       let unresolved = ''
@@ -240,7 +240,7 @@ export default function TasksPage() {
   async function patch(task: Task, data: Partial<Task>) {
     const before = { ...task }
     upsertLocal({ ...task, ...data } as Task)
-    // assignee_name 은 화면 즉시 반영용 — 서버엔 보내지 않는다
+    // assignee_name 은 화면 즉시 반영용 — 서버에는 전송하지 않는다
     const { assignee_name: _n, ...body } = data
     try {
       const saved = await updateTask(task.id, body as any)
@@ -286,7 +286,7 @@ export default function TasksPage() {
   }
 
   async function refreshTask(id: string) {
-    try { upsertLocal(await $fetch<Task>(`/api/tasks/${id}`)) } catch { /* 다음 새로고침에 맞춰진다 */ }
+    try { upsertLocal(await $fetch<Task>(`/api/tasks/${id}`)) } catch { /* 다음 새로고침 시 정합된다 */ }
   }
 
   // ── 메뉴(상태 칩 ▾ · 행 ⋮ · + 필터 · 묶기 · 정렬 · 모바일 ⋯) ──
@@ -389,11 +389,11 @@ export default function TasksPage() {
   const [viewMode, setViewMode] = useState<string | number | null>('list')
   const viewItems = [
     { value: 'list', label: t('tasks.view.list') },
-    // 보드 보기는 토글 자리만(다음 단계)
+    // 보드 보기는 토글 자리만 확보(다음 단계)
     { value: 'board', label: t('tasks.view.board'), disabled: true, ariaLabel: t('tasks.view.boardSoon') },
   ]
 
-  // 모바일 상세가 열리면 탭바 숨김(LayoutMobileDetailBar 가 켠다) — 닫힐 때 원복
+  // 모바일 상세가 열리면 탭바 숨김(LayoutMobileDetailBar 가 활성화) — 닫힐 때 원복
   useEffect(() => { if (!selectedId || !isMobile) setDetailOpen(false) }, [selectedId, isMobile, setDetailOpen])
 
   return (
@@ -403,7 +403,7 @@ export default function TasksPage() {
         className="flex min-w-0 flex-1 flex-col overflow-hidden md:px-7 md:pt-6"
         style={isMobile && selected ? { display: 'none' } : undefined}
       >
-        {/* 머리(모바일, 56 · 제목 "작업" 18/600 + "나에게 배정 n" · ⋯ 묶기·정렬) — 공용 상단바 대신 */}
+        {/* 머리(모바일, 56 · 제목 "작업" 18/600 + "나에게 배정 n" · ⋯ 묶기·정렬) — 공용 상단바 대체 */}
         <header className="flex h-14 shrink-0 items-center border-b border-border pl-4 pr-1 md:hidden">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-semibold leading-6 text-foreground">{t('nav.tasks')}</h1>
@@ -530,7 +530,7 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {/* 상세: 데스크톱 패널 360(768~1023 은 덮는 패널) / 모바일 전체 화면 */}
+      {/* 상세: 데스크톱 패널 360(768~1023 은 오버레이 패널) / 모바일 전체 화면 */}
       {selected && (
         <aside
           aria-label={t('tasks.detailLabel')}

@@ -1,8 +1,8 @@
 /**
  * 새 채널 만들기 모달(이름 · 종류 · 공개/비공개 · 설명 · 멤버).
- * 공용 UiModal 이 아닌 자체 오버레이를 쓴다.
- * 종류: 텍스트 · 음성 · 포럼(= 게시판 데이터의 채팅 보기 — 같은 이름 새 게시판 / 기존 게시판 연결,
- *   chatApi22.createForumChannel). categoryId 를 주면 만든 뒤 그 카테고리 맨 아래로 옮긴다(PATCH /layout — useChatLayout).
+ * 공용 UiModal 이 아닌 자체 오버레이를 사용한다.
+ * 종류: 텍스트 · 음성 · 포럼(= 게시판 데이터의 채팅 보기 — 동일 이름의 새 게시판 / 기존 게시판 연결,
+ *   chatApi22.createForumChannel). categoryId 지정 시 생성 후 해당 카테고리 맨 아래로 이동한다(PATCH /layout — useChatLayout).
  */
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -16,7 +16,7 @@ import { UiSelect } from '~/components/ui/Select'
 
 export interface ChatCreateModalProps {
   onClose?: () => void
-  /** 이 카테고리로 만든다(사이드바 카테고리 +). null·없음 = 분류 없음 */
+  /** 이 카테고리에 생성(사이드바 카테고리 +). null·미지정 = 분류 없음 */
   categoryId?: string | null
 }
 
@@ -31,9 +31,9 @@ export function ChatCreateModal({ onClose, categoryId = null }: ChatCreateModalP
 
   const [name, setName] = useState('')
   const [type, setType] = useState<'public' | 'private'>('public')
-  // 종류 — 음성(글 대신 소리로 모이는 방) · 포럼(게시판 글을 채팅에서)
+  // 종류 — 음성(텍스트 대신 음성으로 참여하는 방) · 포럼(게시판 글을 채팅에서 표시)
   const [kind, setKind] = useState<Kind>('text')
-  // 포럼 게시판: '' = 같은 이름으로 새 게시판, 그 밖 = 기존 게시판 id
+  // 포럼 게시판: '' = 동일 이름으로 새 게시판 생성, 그 외 = 기존 게시판 id
   const [boardId, setBoardId] = useState('')
   const [boards, setBoards] = useState<BoardLite[]>([])
   useEffect(() => {
@@ -42,7 +42,7 @@ export function ChatCreateModal({ onClose, categoryId = null }: ChatCreateModalP
   }, [kind, boards.length])
   const [description, setDescription] = useState('')
   const [memberQuery, setMemberQueryState] = useState('')
-  // 디바운스 타이머는 "그 순간" 값을 읽는다
+  // 디바운스 타이머는 실행 시점의 값을 참조
   const queryRef = useRef('')
   const setMemberQuery = (v: string) => { queryRef.current = v; setMemberQueryState(v) }
   const [memberResults, setMemberResults] = useState<Array<{ id: string; username: string; display_name: string | null; avatar_url: string | null }>>([])
@@ -92,7 +92,7 @@ export function ChatCreateModal({ onClose, categoryId = null }: ChatCreateModalP
       }
       if (categoryId) {
         const pos = chatStore.getState().channels.filter(c => c.category_id === categoryId && c.id !== id).length
-        try { await patchLayout({ channels: [{ id, category_id: categoryId, position: pos }] }); await fetchChannels() } catch { /* 분류 없음에 남는다 */ }
+        try { await patchLayout({ channels: [{ id, category_id: categoryId, position: pos }] }); await fetchChannels() } catch { /* 분류 없음에 유지 */ }
       }
       await selectChannel(id)
       onClose?.()
@@ -104,7 +104,7 @@ export function ChatCreateModal({ onClose, categoryId = null }: ChatCreateModalP
     }
   }
 
-  // body 로 포털 — 세로 화면에서는 채널 목록이 서랍(z-drawer) 안이라, 안에서 그리면 모달이 그 층에 갇혀 셸 메뉴가 막 위에 남는다
+  // body 로 포털 — 세로 화면에서는 채널 목록이 서랍(z-drawer) 내부이므로, 내부에서 렌더링하면 모달이 해당 층에 갇혀 셸 메뉴가 막 위에 남음
   return createPortal(
     <div className="fixed inset-0 z-modal flex items-center justify-center bg-scrim" onClick={(e) => { if (e.target === e.currentTarget) onClose?.() }} role="dialog" aria-modal="true">
       <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-md mx-3 max-h-[90dvh] overflow-y-auto">

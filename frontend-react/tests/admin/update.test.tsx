@@ -17,7 +17,7 @@ const { setUser } = await import('~/composables/useAuth')
 const { toastStore } = await import('~/composables/useToast')
 
 const toasts = () => toastStore.getState().toasts.map((x: any) => `${x.type}:${x.message ?? x.title}`)
-const LOSS = '업데이트 이후에 작성한 메일·대화·일정이 사라집니다. 파일은 그대로입니다.'
+const LOSS = '업데이트 이후의 대화·일정·연락처·할 일·게시판·위키와 계정·관리 설정의 변경은 업데이트 직전 상태로 돌아갑니다. 파일, 메일함의 메일, 코드 저장소는 그대로 유지됩니다.'
 
 beforeEach(() => {
   api.calls = []
@@ -380,7 +380,7 @@ describe('설정', () => {
     const box = screen.getByTestId('update-to-stable')
     expect(text(box)).toContain('안정판으로 돌아오는 방법을 선택합니다.')
     expect(checked(within(box).getByRole('radio', { name: /다음 안정판까지 기다리기/ }))).toBe(true)
-    expect(text(box)).toContain('시험판으로 변경한 이후에 작성한 메일·대화·일정이 사라집니다. 파일은 그대로입니다')
+    expect(text(box)).toContain('시험판으로 변경한 이후의 대화·일정·연락처·할 일·게시판·위키와 계정·관리 설정의 변경은 변경 직전 상태로 돌아갑니다. 파일, 메일함의 메일, 코드 저장소는 그대로 유지됩니다')
 
     fireEvent.click(screen.getByRole('button', { name: '저장' }))
     await waitFor(() => expect(called('PUT', '/settings')).toHaveLength(1))

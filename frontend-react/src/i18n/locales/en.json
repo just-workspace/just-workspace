@@ -2129,7 +2129,7 @@
           "wait": "Wait for the next Stable version",
           "waitDesc": "Keep the current version and update when a newer Stable version is released. Updates are paused until then",
           "restore": "Restore the state from before Beta",
-          "restoreDesc": "Goes back to the backup taken just before switching to Beta. Mail, chats and events written since switching to Beta are lost. Files stay as they are"
+          "restoreDesc": "Goes back to the backup taken just before switching to Beta. Changes to chats, events, contacts, tasks, boards, wiki pages, accounts and admin settings made since switching to Beta are undone. Files, mail in mailboxes and code repositories stay as they are"
         },
         "noRestorePoint": "There's no backup from just before Beta, so it can't be restored",
         "betaRestore": {
@@ -2142,7 +2142,7 @@
       },
       "restore": {
         "title": "Restore a previous version",
-        "lead": "Goes back to the backup made just before an update (database, settings, encryption keys). Mail, chats and events written after the update are lost. Files stay as they are.",
+        "lead": "Goes back to the backup made just before an update (database, settings, encryption keys). Changes to chats, events, contacts, tasks, boards, wiki pages, accounts and admin settings made after the update are undone. Files, mail in mailboxes and code repositories stay as they are.",
         "loadError": "Couldn't load the restore points",
         "table": "Restore points",
         "empty": "There are no backups to restore from. After you update once, the backup taken just before it appears here.",
@@ -2152,7 +2152,7 @@
         "pickAria": "Restore version {version} (backup from {time})",
         "footnote": "If an update fails, it's rolled back automatically without choosing here. Use this page to go back to a previous version after an update has finished.",
         "confirmTitle": "Restore version {version}?",
-        "loss": "Mail, chats and events written after the update are lost. Files stay as they are.",
+        "loss": "Changes to chats, events, contacts, tasks, boards, wiki pages, accounts and admin settings made after the update are undone. Files, mail in mailboxes and code repositories stay as they are.",
         "maint": "Users see the maintenance screen while the restore runs.",
         "countdown": "Starting shows a 5-minute notice bar to users first.",
         "start": "Start restore",
@@ -2209,7 +2209,7 @@
           "lead": "Going back to the previous version the admin chose.",
           "doneLead": "All steps are done.",
           "countdown": "Users are being told the restore starts shortly. Time left",
-          "doneText": "Restored version {version}. Mail, chats and events written after the update are gone, and files stay as they are. Users can sign in again."
+          "doneText": "Restored version {version}. Changes to chats, events, contacts, tasks, boards, wiki pages, accounts and admin settings made after the update were undone; files, mail in mailboxes and code repositories are unchanged. Users can sign in again."
         },
         "beta": {
           "soonTitle": "Restoring the state from before Beta shortly",
@@ -2221,7 +2221,7 @@
           "lead": "Going back to the backup taken just before switching to Beta, and switching the channel to Stable.",
           "doneLead": "All steps are done.",
           "countdown": "Users are being told the restore starts shortly. Time left",
-          "doneText": "Back on Stable version {version}. Mail, chats and events written since switching to Beta are gone, and files stay as they are. The channel is Stable."
+          "doneText": "Back on Stable version {version}. Changes to chats, events, contacts, tasks, boards, wiki pages, accounts and admin settings made since switching to Beta were undone; files, mail in mailboxes and code repositories are unchanged. The channel is Stable."
         }
       },
       "fail": {

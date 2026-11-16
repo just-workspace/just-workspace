@@ -16,7 +16,7 @@ const sys = await import('~/composables/useSystemUpdate')
 const { setUser } = await import('~/composables/useAuth')
 const { toastStore } = await import('~/composables/useToast')
 
-const LOSS = '업데이트 이후에 작성한 메일·대화·일정이 사라집니다. 파일은 그대로입니다.'
+const LOSS = '업데이트 이후의 대화·일정·연락처·할 일·게시판·위키와 계정·관리 설정의 변경은 업데이트 직전 상태로 돌아갑니다. 파일, 메일함의 메일, 코드 저장소는 그대로 유지됩니다.'
 const soon = () => new Date(Date.now() + 252_000).toISOString()
 const stepStates = () => screen.getAllByTestId(/^step-/).map(el => `${el.getAttribute('data-testid')!.slice(5)}:${el.getAttribute('data-status')}`)
 const title = async () => text(await screen.findByTestId('update-job-title'))
@@ -299,7 +299,7 @@ describe('되돌림 — 수동 복원', () => {
     await waitFor(async () => expect(await title()).toBe('1.0.0 버전으로 복원하는 중입니다'))
     expect(screen.getByText('관리자가 선택한 이전 버전으로 복원합니다.')).toBeTruthy()
     await waitFor(async () => expect(await title()).toBe('1.0.0 버전으로 복원했습니다'))
-    expect(text(screen.getByTestId('update-job-done'))).toContain('1.0.0 버전으로 복원했습니다. 업데이트 이후에 작성한 메일·대화·일정은 사라졌고, 파일은 그대로입니다. 사용자는 다시 접속할 수 있습니다.')
+    expect(text(screen.getByTestId('update-job-done'))).toContain('1.0.0 버전으로 복원했습니다. 업데이트 이후의 대화·일정·연락처·할 일·게시판·위키와 계정·관리 설정의 변경은 업데이트 직전 상태로 돌아갔으며, 파일, 메일함의 메일, 코드 저장소는 그대로입니다. 사용자는 다시 접속할 수 있습니다.')
   })
 
   it('복원의 예고는 복원이라고 말한다', async () => {
@@ -332,7 +332,7 @@ describe('되돌림 — 수동 복원', () => {
     on('GET', '/jobs/jobrs2', fx.jobs.betaRestoreDone())
     const b = await renderUpdate('/admin/update/rollback/jobrs2')
     expect(await title()).toBe('시험판 이전 상태로 복원했습니다')
-    expect(text(screen.getByTestId('update-job-done'))).toContain('안정판 1.1.4 버전으로 돌아왔습니다. 시험판으로 변경한 이후에 작성한 메일·대화·일정은 사라졌고, 파일은 그대로입니다. 채널은 안정판입니다.')
+    expect(text(screen.getByTestId('update-job-done'))).toContain('안정판 1.1.4 버전으로 돌아왔습니다. 시험판으로 변경한 이후의 대화·일정·연락처·할 일·게시판·위키와 계정·관리 설정의 변경은 변경 직전 상태로 돌아갔으며, 파일, 메일함의 메일, 코드 저장소는 그대로입니다. 채널은 안정판입니다.')
     b.unmount()
 
     on('GET', '/jobs/jobrs2', fx.jobs.betaRestoreFailed())

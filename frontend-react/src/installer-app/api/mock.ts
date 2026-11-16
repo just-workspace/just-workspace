@@ -10,7 +10,7 @@
  * | 사전 점검 | preflight-ok · preflight-fail · preflight-memory · preflight-checking (기본: 주의 하나) |
  * | 서버 | mem-6(6 GB) · mem-8 · mem-unknown · detect-router · detect-proxy · no-public-ip |
  * | 접속 주소 | dns-mismatch · dns-unknown · dns-checking |
- * | 인증서 올리기 | cert-domain · cert-key · cert-expired · cert-mail |
+ * | 인증서 올리기 | cert-domain · cert-key · cert-expired · cert-mail · cert-leaf(발급 CA 없는 서버 인증서 한 장) · cert-ca-bad(올린 CA 가 발급자가 아님) |
  * | 파일 저장 위치 | nfs-unreachable · nfs-export(없는 공유 경로) · nfs-permission · nfs-readonly · nfs-nolock · nfs-lowspace · nfs-checking · path-missing |
  * | 메일 · AI | records-ok · records-unknown · smtp-fail · ai-fail |
  * | 미리 채운 답변 | router · proxy · upload · full(전체 묶음과 애드온) · quick · quick-ready(빠른 설치 요약 직전) · ready(요약 직전까지 채움) |
@@ -324,7 +324,7 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
     return { ok: marker === 'match', cause: marker === 'missing' ? 'marker_missing' : (marker === 'mismatch' ? 'other_install' : null), steps, marker: { status: marker } }
   }
 
-  function cert(): CertProbe {
+  function cert(withCa = false): CertProbe {
     const c = (id: string, status: 'pass' | 'warn' | 'fail', value: unknown, key?: string) => ({ id, status, value, fix: key ? { key } : null })
     const domain = answers.access.domain || 'workspace.example.com'
     const checks = [
@@ -334,9 +334,14 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
       has('cert-domain') ? c('domain_covered', 'fail', ['other.example.com'], 'cert_domain_missing') : c('domain_covered', 'pass', domain),
       has('cert-expired') ? c('validity', 'fail', '2025-01-31T00:00:00Z', 'cert_expired') : c('validity', 'pass', '2027-06-30T00:00:00Z'),
       c('issuer', 'pass', 'CN=Example CA'),
+      // 서버 인증서 한 장뿐이면 발급 CA 를 모른다 — CA 인증서를 따로 올리면 풀린다
+      has('cert-leaf') && !withCa ? c('chain', 'warn', null, 'cert_chain_missing') : c('chain', 'pass', 1),
+      ...(withCa ? [c('ca_readable', 'pass', 1), c('ca_is_ca', 'pass', null),
+        has('cert-ca-bad') ? c('ca_issues_cert', 'fail', 'CN=Example CA', 'ca_not_issuer') : c('ca_issues_cert', 'pass', 'CN=Example CA')] : []),
       has('cert-mail') || has('cert-domain') ? c('mail_host_covered', 'warn', 'mail.example.com', 'cert_mail_host_missing') : c('mail_host_covered', 'pass', 'mail.example.com'),
     ]
-    return { ok: !checks.some(x => x.status === 'fail'), checks, names: [domain], not_after: has('cert-expired') ? '2025-01-31T00:00:00Z' : '2027-06-30T00:00:00Z', issuer: 'CN=Example CA' }
+    return { ok: !checks.some(x => x.status === 'fail'), checks, names: [domain], not_after: has('cert-expired') ? '2025-01-31T00:00:00Z' : '2027-06-30T00:00:00Z', issuer: 'CN=Example CA',
+      trust: has('cert-leaf') && !withCa ? 'none' : 'included' }
   }
 
   function records(mailDomain: string): MailRecord[] {
@@ -485,7 +490,7 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
       const rs = records(mailDomain)
       return wait({ mail_domain: mailDomain, records: rs, ok: rs.every(r => r.status === 'ok') }, delay * 2)
     },
-    probeCert: () => wait(cert(), delay * 2),
+    probeCert: (_cert, _key, _domain, ca) => wait(cert(!!ca), delay * 2),
     probeSmtp: () => wait(has('smtp-fail') ? { status: 'auth_failed' as const } : { status: 'ok' as const }, delay * 2),
     probeAi: () => wait(has('ai-fail') ? { status: 'auth_failed' as const, http_status: 401, models: [] } : { status: 'ok' as const, http_status: 200, models: ['example-model'] }, delay * 2),
     probeNfs: (server, exportPath) => (has('nfs-checking') ? never() : wait(nfs(server, exportPath), delay * 4)),

@@ -906,3 +906,55 @@ describe('언어', () => {
     await heading('사전 점검')
   })
 })
+
+describe('인증서 올리기 — 사설 CA 의 인증서', () => {
+  const pem = (name: string) => new File(['PEM'], name, { type: 'application/x-pem-file' })
+  const drop = (container: HTMLElement, index: number, file: File) =>
+    fireEvent.change(container.querySelectorAll('input[type=file]')[index], { target: { files: [file] } })
+
+  it('서버 인증서 한 장만 올리면 발급 CA 가 없다고 알리고(막지는 않는다), CA 인증서를 올리면 풀린다', async () => {
+    const { container, api } = open('ready,upload,cert-leaf', '#/cert')
+    await heading('인증서 올리기')
+    expect(screen.getByText('CA 인증서 (선택)')).toBeTruthy()
+    expect(screen.getByTestId('cert-ca-note').textContent).toContain('공개 인증 기관이 내준 인증서면 비워 둡니다.')
+    const probe = vi.spyOn(api, 'probeCert')
+    drop(container, 0, pem('server.crt'))
+    drop(container, 1, pem('server.key'))
+    await screen.findByText('인증서 파일에 발급 CA 가 들어 있지 않습니다.')
+    expect(screen.getByText(/사설 CA 가 내준 인증서라면 위의 CA 인증서 칸에/)).toBeTruthy()
+    expect(screen.getByTestId('cert-row-ca').textContent).toContain('들어 있지 않음')
+    expect(next().disabled).toBe(false)                                        // 공개 CA 일 수 있다 — 주의일 뿐이다
+    expect(probe.mock.calls.at(-1)?.[3] ?? null).toBeNull()
+
+    drop(container, 2, pem('ca.crt'))
+    await waitFor(() => expect(screen.getByTestId('cert-row-ca').textContent).toContain('함께 올림'))
+    expect(screen.queryByText('인증서 파일에 발급 CA 가 들어 있지 않습니다.')).toBeNull()
+    expect((probe.mock.calls.at(-1)?.[3] as File).name).toBe('ca.crt')         // CA 파일도 함께 확인에 보낸다
+    expect(next().disabled).toBe(false)
+
+    // CA 를 빼면 다시 서버 인증서만으로 확인한다
+    fireEvent.click(button('CA 인증서 빼기'))
+    await screen.findByText('인증서 파일에 발급 CA 가 들어 있지 않습니다.')
+    expect(probe.mock.calls.at(-1)?.[3] ?? null).toBeNull()
+  })
+
+  it('올린 CA 가 그 인증서를 내준 CA 가 아니면 다음으로 갈 수 없다', async () => {
+    const { container } = open('ready,upload,cert-leaf,cert-ca-bad', '#/cert')
+    await heading('인증서 올리기')
+    drop(container, 0, pem('server.crt'))
+    drop(container, 1, pem('server.key'))
+    drop(container, 2, pem('other-ca.crt'))
+    await screen.findByText('이 CA 는 올린 인증서를 내준 CA 가 아닙니다.')
+    expect(screen.getByTestId('cert-row-ca').textContent).toContain('이 인증서를 내준 CA 가 아님')
+    expect(next().disabled).toBe(true)
+  })
+
+  it('CA 인증서에 관한 문구가 한국어·영어에 모두 있다', async () => {
+    const { default: ko } = await import('~/installer-app/i18n/ko.json')
+    const { default: en } = await import('~/installer-app/i18n/en.json')
+    for (const m of [ko, en] as any[]) {
+      for (const key of ['caSlot', 'caEmpty', 'caNote', 'caRemove', 'rowCa', 'caOk', 'caMissing', 'caBad']) expect(m.cert[key], key).toBeTruthy()
+      for (const key of ['cert_chain_missing', 'ca_not_pem', 'ca_is_private_key', 'ca_not_a_ca', 'ca_not_issuer']) expect(m.cert.msg[key].title && m.cert.msg[key].body, key).toBeTruthy()
+    }
+  })
+})

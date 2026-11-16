@@ -8,6 +8,8 @@
  *   --addr <주소>        접속 주소가 DNS 에 없을 때 그 이름을 이 주소로 돌린다
  *   --cert <파일> --key <파일>   올릴 인증서·개인 키(PEM). 주면 "인증서 올리기"까지 한다
  *   --expect-pending yes|no      올린 뒤에도 코드 저장소 연결이 보류로 남는 것이 맞는가(사설 CA 면 yes)   기본 yes
+ *   --ca <파일>          그 인증서를 내준 CA 의 인증서(PEM). 주면 보류 안내에서 "CA 인증서 올리기"까지 한다 —
+ *                        서버 인증서 한 장만 올린 뒤(--cert 에 체인을 붙이지 않는다) CA 만 따로 올려 연결이 이어지는지
  *   --only cert|zones|storage    한 화면만
  *   --storage nfs|local          저장소 상태 카드에 보일 종류
  *   --storage-down               저장소가 끊긴 상태의 화면(카드·파일 탭 안내·알림 띠)을 본다
@@ -83,6 +85,36 @@ const want = name => !opt.only || opt.only === name
       expect(`보류된 구역 연결: ${opt['expect-pending'] === 'yes' ? '남아 있다(사설 CA)' : '없다'}`,
         after && (after.pending.length > 0) === (opt['expect-pending'] === 'yes'), JSON.stringify(after && after.pending))
       await snap('cert-after')
+      if (opt.ca) {
+        console.log('== 인증서 카드 — CA 인증서만 따로 올리기 ==')
+        const need = page.locator('[data-testid=cert-ca-needed]')
+        expect('올린 인증서에 발급 CA 가 없어 연결이 보류라는 안내가 보인다', await need.count() === 1 && /로그인 연동이 보류/.test(await need.innerText().catch(() => '')), (await card.innerText()).slice(0, 300))
+        expect('발급 CA 줄: 올리지 않았습니다', /올리지 않았습니다/.test(await page.locator('[data-testid=cert-ca]').innerText().catch(() => '')))
+        await need.getByRole('button', { name: 'CA 인증서 올리기' }).click()
+        const dialog = page.locator('[role=dialog]')
+        expect('CA 만 받는 창(파일 칸 하나, 인증서·개인 키는 그대로라는 안내)', await dialog.locator('input[type=file]').count() === 1 && /인증서와 개인 키는 그대로/.test(await dialog.innerText()))
+        // 먼저 엉뚱한 파일(서버 인증서) — 창 안에서 거부 사유를 보여 준다
+        await dialog.locator('input[type=file]').setInputFiles(opt.cert)
+        await dialog.locator('button:not([disabled])').last().click()
+        const refused = page.locator('[data-testid=cert-upload-error]')
+        await refused.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {})
+        expect('서버 인증서를 CA 로 올리면 거부하고 이유를 알린다', /CA 인증서가 아닙니다/.test(await refused.innerText().catch(() => '')), (await dialog.innerText()).slice(0, 300))
+        await snap('cert-ca-refused')
+        await dialog.locator('input[type=file]').setInputFiles(opt.ca)
+        await snap('cert-ca-modal')
+        await dialog.locator('button:not([disabled])').last().click()
+        await page.locator('[data-testid=cert-job]').waitFor({ state: 'visible', timeout: 30000 }).catch(() => {})
+        const end2 = page.locator('[data-testid=cert-done], [data-testid=cert-failed]')
+        await end2.first().waitFor({ state: 'visible', timeout: 5 * 60 * 1000 }).catch(() => {})
+        if (!(await end2.count())) { await page.reload(); await end2.first().waitFor({ state: 'visible', timeout: 60000 }).catch(() => {}) }
+        expect('CA 인증서를 올린 작업이 끝났다', await page.locator('[data-testid=cert-done]').count() === 1, (await card.innerText().catch(() => '')).slice(0, 300))
+        await page.reload()
+        await card.waitFor({ state: 'visible', timeout: 60000 })
+        const trusted = (await api('/api/admin/system/cert')).body
+        expect('보류됐던 구역 연결이 이어졌다', trusted && trusted.site_ca === true && trusted.pending.length === 0, JSON.stringify(trusted && { site_ca: trusted.site_ca, pending: trusted.pending }))
+        expect('안내가 사라지고 발급 CA 줄이 바뀌었다', await page.locator('[data-testid=cert-ca-needed]').count() === 0 && /믿습니다/.test(await page.locator('[data-testid=cert-ca]').innerText().catch(() => '')))
+        await snap('cert-ca-after')
+      }
     }
   }
 

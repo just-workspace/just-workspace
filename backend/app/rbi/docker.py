@@ -66,7 +66,7 @@ async def ensure_network() -> None:
             if opts.get("com.docker.network.bridge.name") != s.rbi_bridge or not subnet_ok:
                 raise DockerError(
                     f"네트워크 {s.rbi_network} 가 있지만 설정이 다릅니다(bridge={opts.get('com.docker.network.bridge.name')}, "
-                    f"subnet={[c.get('Subnet') for c in cfgs]}). 지우고 다시 만들거나 RBI_* 를 맞추세요"
+                    f"subnet={[c.get('Subnet') for c in cfgs]}). 삭제하고 다시 만들거나 RBI_* 를 맞추십시오"
                 )
         except json.JSONDecodeError:
             pass
@@ -114,7 +114,7 @@ def read_guard_state() -> GuardState:
         with open(path, encoding="utf-8") as f:
             st = json.load(f)
     except FileNotFoundError:
-        return GuardState(ok=False, reason="netfilter 사이드카 상태 파일이 없습니다(ws-rbi-netfilter 가 떠 있나요?)")
+        return GuardState(ok=False, reason="netfilter 사이드카 상태 파일이 없습니다(ws-rbi-netfilter 가 실행 중인지 확인하십시오)")
     except Exception as e:  # noqa: BLE001
         return GuardState(ok=False, reason=f"상태 파일을 읽지 못했습니다: {e}")
     applied = float(st.get("applied_at") or 0)

@@ -191,7 +191,7 @@ async def resolve(db: AsyncSession, user: User, vp: str, need: str = "view") -> 
         return Access(vp=vp, real=real, role=role, owner_id=s.owner_id, owner_vpath=owner_vpath,
                       share=s, key=act.owner_key(s.owner_id, owner_vpath))
     if vp == SHARED_ROOT:
-        raise HTTPException(status_code=400, detail="공유받은 항목을 고르세요")
+        raise HTTPException(status_code=400, detail="공유받은 항목을 선택하십시오")
     try:
         real = fs.resolve_path(vp, user)
     except fs.PathSecurityError:

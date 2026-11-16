@@ -102,12 +102,12 @@ def _sum(args: dict) -> str:
         src = f"{base(src[0])} 외 {len(src) - 1}개" if len(src) > 1 else base(src[0] if src else "")
     else:
         src = base(src)
-    return f"형식 바꾸기 · {src} → {str(args.get('to') or '').upper()}"
+    return f"형식 변경 · {src} → {str(args.get('to') or '').upper()}"
 
 
 register(Tool(
     name="files_convert",
-    title="파일 형식 바꾸기",
+    title="파일 형식 변경",
     description=(
         "Convert a file to another format and save the result as a new file. Supported: " + supported_summary()
         + ". Korean HWP/HWPX documents can be turned into PDF/DOCX. For xlsx→csv pick `sheet` or "

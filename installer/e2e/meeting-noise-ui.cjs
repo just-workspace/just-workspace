@@ -96,7 +96,7 @@ const expect = (n, c, d) => (c ? ok(n) : bad(n, d))
     await page.waitForFunction(w => { const b = document.querySelector('button[title="노이즈 제거"]'); return b && b.getAttribute('aria-pressed') === String(w) && !b.disabled }, want, { timeout: 30000 }).catch(() => {})
     let after = []
     for (let i = 0; i < 20; i++) { after = await mic(); if (after.length === 1 && after[0].ns === want) break; await page.waitForTimeout(500) }
-    const label = want ? '켜기' : '끄기'
+    const label = want ? '활성화' : '끄기'
     expect(`${label} — 단추`, (await toggle.getAttribute('aria-pressed')) === String(want))
     expect(`${label} — 보내는 트랙의 noiseSuppression = ${want}`, after.length === 1 && after[0].ns === want, JSON.stringify(after))
     expect(`${label} — 다른 처리(반향 제거)는 그대로`, after.length === 1 && after[0].ec === before.ec, JSON.stringify({ before, after }))

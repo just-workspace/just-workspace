@@ -393,7 +393,7 @@ class ChannelMember(Base):
     last_read_message_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     # 읽음 포인터를 seq 로 관리. 미읽음 = 이 값보다 큰 seq 의 메시지 수. created_at
     # 환산보다 정확하며, 메시지 테이블 조인 없이 직접 비교할 수 있다. NULL = 읽은 이력 없음.
-    # "안 읽음으로 표시" 는 이 값을 이전으로 되돌린다(mark_unread) — mark_read 만 단조 증가.
+    # "읽지 않음으로 표시" 는 이 값을 이전으로 되돌린다(mark_unread) — mark_read 만 단조 증가.
     last_read_seq: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     # 채널별 알림 수준: 'all'(모든 메시지 푸시) | 'mentions'(멘션만) | 'none'(푸시 없음).
     # NULL = 기본값(DM 은 'all', 그 외 'mentions') — 기존 행은 auto-migrate 로 NULL 이 되므로

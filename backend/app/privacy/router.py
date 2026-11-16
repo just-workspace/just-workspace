@@ -47,7 +47,7 @@ async def unlock(body: UnlockRequest, user: User = Depends(get_current_user)):
     if not await gate.has_pin(user.id):
         raise HTTPException(status_code=400, detail="PIN이 설정되지 않았습니다")
     if await gate.fail_count(user.id) >= _MAX_FAILS:
-        raise HTTPException(status_code=429, detail="시도 횟수 초과 — 잠시 후 다시 시도하세요")
+        raise HTTPException(status_code=429, detail="시도 횟수 초과 — 잠시 후 다시 시도하십시오")
     if not await gate.verify_pin(user.id, (body.pin or "").strip()):
         n = await gate.register_fail(user.id)
         raise HTTPException(status_code=403, detail=f"PIN이 올바르지 않습니다 (남은 시도 {max(0, _MAX_FAILS - n)})")

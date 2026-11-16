@@ -97,7 +97,7 @@ async def create_first_admin(request: Request, body: AdminCreate, db: AsyncSessi
     if not await setup_token.matches(db, body.setup_token):
         raise HTTPException(status_code=403, detail={
             "code": "setup_token_invalid",
-            "message": "설정 토큰이 맞지 않습니다 — 서버 로그(docker compose logs backend)에서 확인하세요",
+            "message": "설정 토큰이 맞지 않습니다 — 서버 로그(docker compose logs backend)에서 확인하십시오",
         })
     username = (body.username or "").strip().lower()
     if not re.fullmatch(r"[a-z0-9_.-]{3,32}", username):
@@ -113,7 +113,7 @@ async def create_first_admin(request: Request, body: AdminCreate, db: AsyncSessi
     if not await setup_token.consume(db, body.setup_token):
         # 동일 토큰으로 동시에 수신된 다른 요청이 먼저 사용함
         await db.rollback()
-        raise HTTPException(status_code=403, detail={"code": "setup_token_invalid", "message": "설정 토큰이 이미 쓰였습니다"})
+        raise HTTPException(status_code=403, detail={"code": "setup_token_invalid", "message": "설정 토큰이 이미 사용되었습니다"})
     user = User(
         username=username,
         password_hash=hash_password(password),

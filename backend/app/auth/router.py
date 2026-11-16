@@ -236,7 +236,7 @@ async def login_post(request: Request, body: LoginRequest, db: AsyncSession = De
         mins = max(1, (wait + 59) // 60)
         raise HTTPException(
             status_code=429,
-            detail=f"로그인 시도가 너무 많습니다. {mins}분 뒤에 다시 시도하세요",
+            detail=f"로그인 시도가 너무 많습니다. {mins}분 후에 다시 시도하십시오",
             headers={"Retry-After": str(wait)},
         )
 
@@ -255,7 +255,7 @@ async def login_post(request: Request, body: LoginRequest, db: AsyncSession = De
     await security_policy.clear_failures(body.username)
 
     if not user.is_active:
-        raise HTTPException(status_code=403, detail="계정이 비활성 상태입니다. 관리자 승인을 기다려주세요.")
+        raise HTTPException(status_code=403, detail="계정이 비활성 상태입니다. 관리자 승인을 기다려 주십시오.")
 
     # 복구 이메일 인증을 완료해야 로그인할 수 있다. 기존에는 email_verified 를
     # 기록만 하고 어디에서도 확인하지 않아, 인증을 생략해도 로그인이 가능했다.
@@ -264,7 +264,7 @@ async def login_post(request: Request, body: LoginRequest, db: AsyncSession = De
         return JSONResponse(
             status_code=403,
             content={
-                "detail": "이메일 인증이 필요합니다. 가입 시 입력한 복구 이메일의 인증 링크를 확인해주세요.",
+                "detail": "이메일 인증이 필요합니다. 가입 시 입력한 복구 이메일의 인증 링크를 확인하십시오.",
                 "code": "email_unverified",
             },
         )
@@ -455,7 +455,7 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
                 await _send_verify_email(body.recovery_email, body.username, verify_url)
             except Exception as e:
                 logger.warning("Failed to send verification email to %s: %s", body.recovery_email, e)
-        return {"message": "가입이 완료되었습니다. 로그인해주세요.", "invited": True}
+        return {"message": "가입이 완료되었습니다. 로그인하십시오.", "invited": True}
 
     # 메일 사서함은 여기서 생성하지 않는다. 승인 전 계정까지 사서함을 발급하면
     # 스팸 가입자가 즉시 본 도메인 주소를 보유하게 된다. approve_user 가
@@ -485,8 +485,8 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
         logger.warning("Failed to send admin registration notification for %s: %s", body.username, e)
 
     if reg_mode == "open":
-        return {"message": "가입이 완료되었습니다. 로그인해주세요."}
-    return {"message": "가입 신청이 완료되었습니다. 복구 이메일로 전송된 인증 링크를 확인해주세요."}
+        return {"message": "가입이 완료되었습니다. 로그인하십시오."}
+    return {"message": "가입 신청이 완료되었습니다. 복구 이메일로 전송된 인증 링크를 확인하십시오."}
 
 
 # ── GET /api/auth/invites/{token} — 초대 링크 확인(가입 화면 사전 입력) ──
@@ -526,7 +526,7 @@ async def verify_email(request: Request, token: str = Query(...), db: AsyncSessi
         if elapsed > 86400:
             raise HTTPException(
                 status_code=400,
-                detail="인증 링크가 만료되었습니다. 로그인 화면에서 인증 메일 재발송을 눌러주세요.",
+                detail="인증 링크가 만료되었습니다. 로그인 화면에서 인증 메일 재발송을 누르십시오.",
             )
 
     user.email_verified = True
@@ -568,7 +568,7 @@ async def resend_verification(
     request: Request, body: ResendVerificationRequest, db: AsyncSession = Depends(get_db)
 ):
     """인증 메일 재발송. 계정 존재 여부가 노출되지 않도록 항상 동일한 응답을 반환한다."""
-    success_msg = "인증 메일을 다시 보냈습니다. 복구 이메일을 확인해주세요."
+    success_msg = "인증 메일을 다시 보냈습니다. 복구 이메일을 확인하십시오."
 
     result = await db.execute(select(User).where(User.username == body.username))
     user = result.scalar_one_or_none()
@@ -580,7 +580,7 @@ async def resend_verification(
         if elapsed < RESEND_COOLDOWN_SEC:
             raise HTTPException(
                 status_code=429,
-                detail=f"잠시 후 다시 시도해주세요. ({int(RESEND_COOLDOWN_SEC - elapsed)}초 남음)",
+                detail=f"잠시 후 다시 시도하십시오. ({int(RESEND_COOLDOWN_SEC - elapsed)}초 남음)",
             )
 
     await issue_verification(user, db)
@@ -603,7 +603,7 @@ async def update_profile(
     if body.recovery_email is not None and body.recovery_email != (user.recovery_email or "").strip().lower():
         raise HTTPException(
             status_code=400,
-            detail="복구 이메일은 현재 비밀번호 확인과 새 주소 인증을 거쳐야 바꿀 수 있습니다",
+            detail="복구 이메일은 현재 비밀번호 확인과 새 주소 인증을 거쳐야 변경할 수 있습니다",
         )
 
     if body.display_name is not None:
@@ -824,7 +824,7 @@ async def reset_password(request: Request, body: ResetPasswordRequest, db: Async
         except Exception as e:
             logger.warning("Failed to sync password reset to mail server for %s: %s", user.email, e)
 
-    return {"message": "비밀번호가 재설정되었습니다. 로그인해주세요."}
+    return {"message": "비밀번호가 재설정되었습니다. 로그인하십시오."}
 
 
 # ── GET /api/auth/users/search — 사용자 검색 ─────────────────
@@ -1052,7 +1052,7 @@ async def disable_2fa(
     from app.auth import security_policy, two_factor
     # 정책 검사를 선행 — 비활성화가 불가한 계정이면 복구 코드를 소모하지 않는다
     if security_policy.totp_required_for(await security_policy.get_policy_cached(db), user):
-        raise HTTPException(status_code=400, detail="관리자 정책상 2단계 인증을 끌 수 없습니다")
+        raise HTTPException(status_code=400, detail="관리자 정책상 2단계 인증을 비활성화할 수 없습니다")
 
     code = (body.code or "").strip()
     totp = pyotp.TOTP(user.totp_secret)
@@ -1090,7 +1090,7 @@ async def verify_2fa(
         mins = max(1, (wait + 59) // 60)
         raise HTTPException(
             status_code=429,
-            detail=f"인증 코드를 여러 번 틀렸습니다. {mins}분 뒤에 다시 시도하세요",
+            detail=f"인증 코드를 여러 번 잘못 입력했습니다. {mins}분 후에 다시 시도하십시오",
             headers={"Retry-After": str(wait)},
         )
 
@@ -1135,10 +1135,10 @@ async def _send_verify_email(
         cfg = await get_smtp_config(db)
 
     msg = MIMEText(
-        f"{username}님, 아래 링크를 클릭하여 이메일을 인증해주세요:\n\n"
+        f"{username}님, 아래 링크를 클릭하여 이메일을 인증하십시오:\n\n"
         f"{verify_url}\n\n"
         f"이 링크는 24시간 후 만료됩니다.\n"
-        f"본인이 요청하지 않은 경우 이 메일을 무시하세요.",
+        f"본인이 요청하지 않은 경우 이 메일을 무시하십시오.",
         "plain",
         "utf-8",
     )
@@ -1162,10 +1162,10 @@ async def _send_recovery_email(
         cfg = await get_smtp_config(db)
 
     msg = MIMEText(
-        f"{username}님, 아래 링크를 클릭하여 비밀번호를 재설정하세요:\n\n"
+        f"{username}님, 아래 링크를 클릭하여 비밀번호를 재설정하십시오:\n\n"
         f"{recovery_link}\n\n"
         f"이 링크는 1시간 후 만료됩니다.\n"
-        f"본인이 요청하지 않은 경우 이 메일을 무시하세요.",
+        f"본인이 요청하지 않은 경우 이 메일을 무시하십시오.",
         "plain",
         "utf-8",
     )
@@ -1198,7 +1198,7 @@ async def _send_admin_registration_notify(
         f"  표시 이름: {display_name or '(없음)'}\n"
         f"  포털 메일: {email}\n"
         f"  복구 이메일: {recovery_email}\n\n"
-        f"포털 관리 페이지에서 승인/거절해주세요:\n"
+        f"포털 관리 페이지에서 승인/거절하십시오:\n"
         f"{settings.app_url}/admin/users",
         "plain",
         "utf-8",

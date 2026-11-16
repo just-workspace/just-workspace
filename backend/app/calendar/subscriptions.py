@@ -71,13 +71,13 @@ def normalize_url(raw: str) -> str:
     if not parts.hostname:
         raise SubscriptionError("invalid_url", "주소에 호스트가 없습니다")
     if parts.username or parts.password:
-        raise SubscriptionError("invalid_url", "아이디·비밀번호가 든 주소는 쓸 수 없습니다")
+        raise SubscriptionError("invalid_url", "아이디·비밀번호가 포함된 주소는 사용할 수 없습니다")
     try:
         port = parts.port
     except ValueError:
-        raise SubscriptionError("invalid_url", "포트가 잘못됐습니다")
+        raise SubscriptionError("invalid_url", "포트가 올바르지 않습니다")
     if port is not None and not (1 <= port <= 65535):
-        raise SubscriptionError("invalid_url", "포트가 잘못됐습니다")
+        raise SubscriptionError("invalid_url", "포트가 올바르지 않습니다")
     return urlunsplit((parts.scheme, parts.netloc, parts.path or "/", parts.query, ""))
 
 
@@ -205,7 +205,7 @@ async def fetch_ics(raw_url: str, *, transport: httpx.AsyncBaseTransport | None 
     except SubscriptionError:
         raise
     except (asyncio.TimeoutError, httpx.TimeoutException):
-        raise SubscriptionError("timeout", "응답이 너무 늦습니다")
+        raise SubscriptionError("timeout", "응답이 지연되고 있습니다")
     except httpx.HTTPError as e:
         raise SubscriptionError("network", f"접속하지 못했습니다: {type(e).__name__}")
 

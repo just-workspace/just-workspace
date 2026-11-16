@@ -87,7 +87,7 @@ async function main() {
   // ─── 잠김 화면 전용 ───
   if (opt.locked) {
     await page.goto(opt.url + '/')
-    await heading('설치가 이미 끝났습니다')
+    await heading('설치가 이미 완료되었습니다')
     ok('잠김 화면')
     expect('로그인 화면으로 가는 링크', await page.getByRole('link', { name: '로그인 화면으로' }).count() === 1)
     expect('다시 설치 명령이 보인다', (await page.getByText(/jw reinstall --yes/).count()) > 0)
@@ -135,7 +135,7 @@ async function main() {
   await next()
 
   console.log('== 시작 방식 ==')
-  await heading('어떻게 시작할까요')
+  await heading('어떻게 시작하시겠습니까')
   await page.getByRole('radio', { name: opt.flow === 'quick' ? /빠른 설치/ : /새로 설치/ }).click()
   await snap('start')
   await next()
@@ -145,7 +145,7 @@ async function main() {
   await page.getByLabel('접속 주소').first().fill(opt.domain)
   await page.keyboard.press('Tab')
   if (opt.flow !== 'quick') {
-    await heading('접속 주소와 연결 형태')
+    await heading('접속 주소와 네트워크 구성')
     await page.getByRole('radio', { name: /공인 주소에 직접 연결/ }).click()
     // DNS 에 없는 이름이므로 "임시 인증서"를 선택할 수 있게 된다. 확인 완료까지 대기한다
     const temp = page.getByRole('radio', { name: /임시 인증서로 설치하고 나중에 발급/ })
@@ -166,14 +166,14 @@ async function main() {
 
   if (opt.flow !== 'quick') {
     console.log('== 저장 위치 ==')
-    await heading('파일을 어디에 저장할까요')
+    await heading('파일을 어디에 저장하시겠습니까')
     await page.getByRole('radio', { name: /이 서버의 디스크/ }).click()
     expect('기본 저장 폴더가 표시된다', (await page.getByText(/volumes\/ws-storage-data/).count()) > 0)
     await snap('storage')
     await next()
 
     console.log('== 구역 ==')
-    await heading('쓸 구역을 고릅니다')
+    await heading('사용할 구역을 선택합니다')
     await page.getByRole('radio', { name: '협업', exact: true }).or(page.getByRole('button', { name: '협업', exact: true })).or(page.getByRole('tab', { name: '협업', exact: true })).first().click()
     const zonesBody = await page.locator('main').innerText()
     expect('구역 목록이 서버 값으로 그려진다(메일 · 채팅 · 문서)', /메일/.test(zonesBody) && /채팅/.test(zonesBody) && /문서/.test(zonesBody))
@@ -196,9 +196,9 @@ async function main() {
     await page.waitForFunction(() => !window.location.hash.startsWith('#/ports'), null, { timeout: 30000 })
     await settled()
   }
-  if ((await hash()).startsWith('#/mail') || await page.getByRole('heading', { name: '메일을 어떻게 보낼까요' }).count()) {
+  if ((await hash()).startsWith('#/mail') || await page.getByRole('heading', { name: '메일을 어떻게 보내시겠습니까' }).count()) {
     console.log('== 메일 ==')
-    await heading('메일을 어떻게 보낼까요')
+    await heading('메일을 어떻게 보내시겠습니까')
     await page.getByRole('radio', { name: /내장 메일 서버/ }).click()
     await page.getByLabel('메일 도메인').fill(opt['mail-domain'])
     await page.getByText('메일 도메인에 등록할 레코드').waitFor({ timeout: 60000 })
@@ -264,7 +264,7 @@ async function main() {
   await page.waitForTimeout(8000)
   await snap('apply-running')
   await noOverflow('적용')
-  await page.getByRole('heading', { name: '설치가 끝났습니다' }).first().waitFor({ state: 'visible', timeout: 25 * 60 * 1000 })
+  await page.getByRole('heading', { name: '설치가 완료되었습니다' }).first().waitFor({ state: 'visible', timeout: 25 * 60 * 1000 })
   ok('적용 완료')
   await snap('apply-done')
   const open = page.getByRole('button', { name: '완료 화면 열기' }).or(page.getByRole('link', { name: '완료 화면 열기' }))
@@ -281,7 +281,7 @@ async function main() {
 
   console.log('== 설치 뒤 잠김 ==')
   await page.goto(opt.url + '/')
-  await heading('설치가 이미 끝났습니다', 60000)
+  await heading('설치가 이미 완료되었습니다', 60000)
   ok('설치 뒤에는 잠김 화면')
   expect('잠김 화면: 다시 설치 명령', (await page.getByText(/jw reinstall --yes/).count()) > 0)
   await snap('locked')

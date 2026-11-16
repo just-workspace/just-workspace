@@ -302,7 +302,7 @@ check_files() {
   local up="$E2E_WORK/up.bin" down="$E2E_WORK/down.bin" name="e2e-$(date +%s).bin"
   head -c 300000 /dev/urandom > "$up"
   expect "올리기" 200 "$(ws_curl -b "$UJAR" -H "Origin: $WS" -o /dev/null -w '%{http_code}' -F "file=@$up;filename=$name" "$WS/api/files/upload?path=my/")"
-  expect "내려받기" 200 "$(ws_curl -b "$UJAR" -o "$down" -w '%{http_code}' "$WS/api/files/download?path=my/$name")"
+  expect "다운로드" 200 "$(ws_curl -b "$UJAR" -o "$down" -w '%{http_code}' "$WS/api/files/download?path=my/$name")"
   check "올린 것과 내려받은 것이 같다" cmp "$up" "$down"
   E2E_LAST_UPLOAD="$name"
 }

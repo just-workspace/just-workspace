@@ -39,16 +39,16 @@ def normalize(data: bytes) -> tuple[bytes, str, bool]:
         from PIL import Image
     except ImportError:   # 의존성에는 포함(requirements Pillow) — 없으면 검증 없이 png 만 허용
         if not data.startswith(b"\x89PNG"):
-            raise EmojiError(400, "bad_type", "PNG·GIF·WebP·JPEG 이미지만 올릴 수 있습니다")
+            raise EmojiError(400, "bad_type", "PNG·GIF·WebP·JPEG 이미지만 업로드할 수 있습니다")
         return data, "image/png", False
     try:
         im = Image.open(io.BytesIO(data))
         fmt = im.format
         im.load()
     except Exception:
-        raise EmojiError(400, "bad_type", "PNG·GIF·WebP·JPEG 이미지만 올릴 수 있습니다")
+        raise EmojiError(400, "bad_type", "PNG·GIF·WebP·JPEG 이미지만 업로드할 수 있습니다")
     if fmt not in _FORMATS:
-        raise EmojiError(400, "bad_type", "PNG·GIF·WebP·JPEG 이미지만 올릴 수 있습니다")
+        raise EmojiError(400, "bad_type", "PNG·GIF·WebP·JPEG 이미지만 업로드할 수 있습니다")
     animated = bool(getattr(im, "is_animated", False) and getattr(im, "n_frames", 1) > 1)
     if animated or (im.width <= SIZE and im.height <= SIZE):
         return data, _FORMATS[fmt], animated

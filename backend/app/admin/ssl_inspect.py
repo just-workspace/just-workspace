@@ -103,7 +103,7 @@ def load_key(data: bytes):
         return serialization.load_der_private_key(data, password=None)
     except TypeError:
         # 암호가 필요한 키
-        raise SslInspectError("key_encrypted", "암호가 걸린 개인 키는 쓸 수 없습니다")
+        raise SslInspectError("key_encrypted", "암호가 걸린 개인 키는 사용할 수 없습니다")
     except (ValueError, Exception):  # noqa: BLE001 — 형식 오류 키(UnsupportedAlgorithm 포함)
         raise SslInspectError("key_invalid", "개인 키로 읽을 수 없습니다")
 
@@ -138,7 +138,7 @@ def inspect(cert_data: bytes | None, key_data: bytes | None, domain: str) -> dic
     """모달용 결과 — 필드별 오류 코드를 개별 반환한다(예외 없음).
 
     {cert: {...}|null, cert_error, key_error, key_match: bool|null, domain, domain_match: bool|null, ok}
-    ok = 인증서·키 모두 판독되고 키 쌍이 일치하며 도메인을 포함한다 → [올리고 적용] 가능.
+    ok = 인증서·키 모두 판독되고 키 쌍이 일치하며 도메인을 포함한다 → [업로드 후 적용] 가능.
     """
     out: dict = {"cert": None, "cert_error": None, "key_error": None,
                  "key_match": None, "domain": domain, "domain_match": None, "ok": False}

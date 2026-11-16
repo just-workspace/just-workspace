@@ -13,7 +13,7 @@
   notification      알림 1건 생성 {notification}
   channel_update    채널 멤버십 변경 — 수신한 워커가 구독 채널을 재조회한다
   channel_read      본인의 다른 기기에서 읽음 처리 {channel_id, seq}
-  channel_unread    본인의 다른 기기에서 "안 읽음으로 표시" 수행 {channel_id, seq, unread_count, mention_count, group_mention}
+  channel_unread    본인의 다른 기기에서 "읽지 않음으로 표시" 수행 {channel_id, seq, unread_count, mention_count, group_mention}
   channel_prefs     채널별 알림 설정 변경 {channel_id, notify_level, muted}
   mention_count     채널 멘션 배지 {channel_id, count, group}
   thread_update     팔로우한 스레드에 답글 등록 {root_id, channel_id, reply, unread_replies}

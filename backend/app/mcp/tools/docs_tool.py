@@ -251,7 +251,7 @@ register(Tool(
 
 register(Tool(
     name="files_zip",
-    title="파일 압축해서 내려받기",
+    title="파일 압축해서 다운로드",
     description=(
         "Zip workspace files into a NEW zip file in the user's files (dst_path, or 'AI 결과물/<date> <title>/'). "
         "Input: `paths` (files or folders, e.g. from files_search/files_list; folders are included recursively "

@@ -46,25 +46,25 @@ CERT_PEM_MAX = 1024 * 1024                 # 업로드하는 인증서·개인 �
 REDACTED = "***"
 
 MESSAGES = {
-    "installer_unavailable": "이 설치는 설치 관리자 없이 구성돼 여기서 구역을 바꿀 수 없습니다.",
+    "installer_unavailable": "이 설치는 설치 관리자 없이 구성돼 여기서 구역을 변경할 수 없습니다.",
     "installer_unreachable": "설치 관리자에 연결하지 못했습니다.",
     "installer_timeout": "설치 관리자가 제때 응답하지 않았습니다.",
     "installer_rejected": "설치 관리자가 요청을 받아들이지 않았습니다.",
     "installer_unsupported": "이 설치 관리자는 이 확인을 지원하지 않습니다.",
-    "installer_error": "설치 관리자에서 오류가 났습니다.",
+    "installer_error": "설치 관리자에서 오류가 발생했습니다.",
     "zone_unknown": "없는 구역입니다.",
     "busy": "다른 작업이 진행 중입니다.",
-    "memory_insufficient": "서버 메모리가 모자라 켤 수 없습니다.",
-    "settings_invalid": "설정 값을 확인하세요.",
-    "already_enabled": "이미 켜져 있습니다.",
-    "not_enabled": "꺼져 있는 구역입니다.",
+    "memory_insufficient": "서버 메모리가 부족하여 활성화할 수 없습니다.",
+    "settings_invalid": "설정 값을 확인하십시오.",
+    "already_enabled": "이미 활성화되어 있습니다.",
+    "not_enabled": "비활성화된 구역입니다.",
     "job_unknown": "작업을 찾을 수 없습니다.",
-    "not_pending": "보류된 연결이 없습니다.",
-    "not_installed": "설치가 끝나지 않았습니다.",
-    "cert_managed_by_proxy": "이 설치의 인증서는 앞단 프록시가 맡습니다.",
-    "cert_invalid": "올린 인증서를 쓸 수 없습니다.",
-    "cert_auto_needs_domain": "인증서 자동 발급은 접속 주소가 도메인일 때만 됩니다.",
-    "cert_ca_needs_upload": "CA 인증서는 올린 인증서를 쓰는 설치에서만 더할 수 있습니다.",
+    "not_pending": "보류된 연동이 없습니다.",
+    "not_installed": "설치가 완료되지 않았습니다.",
+    "cert_managed_by_proxy": "이 설치의 인증서는 프런트 프록시가 맡습니다.",
+    "cert_invalid": "업로드한 인증서를 사용할 수 없습니다.",
+    "cert_auto_needs_domain": "인증서 자동 발급은 접속 주소가 도메인일 때만 가능합니다.",
+    "cert_ca_needs_upload": "CA 인증서는 업로드한 인증서를 사용하는 설치에서만 추가할 수 있습니다.",
     "file_too_large": "파일이 너무 큽니다.",
 }
 
@@ -304,7 +304,7 @@ async def disable_zone(zone_id: str, request: Request, admin: User = Depends(req
 
 @router.delete("/zones/{zone_id}/job")
 async def dismiss_zone_job(zone_id: str, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
-    """종료된 작업(실패·완료 직후)의 표시를 해제한다 — "꺼진 채로 두기"."""
+    """종료된 작업(실패·완료 직후)의 표시를 해제한다 — "비활성화 상태로 두기"."""
     _zone_or_404(zone_id)
     job = _latest_by_zone(await _recent_jobs()).get(zone_id)
     if job is not None and job.get("status") != "running":

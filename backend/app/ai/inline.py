@@ -113,7 +113,7 @@ async def enforce_limits(db, user: User) -> None:
 
     retry = await audit.check_rate(user.id)
     if retry is not None:
-        raise InlineError("rate_limited", f"AI 요청이 너무 잦습니다. {retry}초 뒤에 다시 시도하세요", 429,
+        raise InlineError("rate_limited", f"AI 요청이 너무 잦습니다. {retry}초 후에 다시 시도하십시오", 429,
                           retry_after=retry)
     limit = (await ai_config.get_ai_config(db))["governance"].get("daily_limit") or 0
     if limit <= 0:
@@ -126,7 +126,7 @@ async def enforce_limits(db, user: User) -> None:
         AuditLog.resource_id.like("inline_%"), AuditLog.created_at >= since,
     ))).scalar_one()
     if int(n_chat) + int(n_inline) >= limit:
-        raise InlineError("daily_limit", f"오늘 AI 요청 한도({limit}회)를 다 썼습니다. 내일 다시 시도하세요", 429)
+        raise InlineError("daily_limit", f"오늘 AI 요청 한도({limit}회)를 모두 사용했습니다. 내일 다시 시도하십시오", 429)
 
 
 async def record(user: User, kind: str, *, ok: bool, error_code: str | None, started: float,
@@ -170,12 +170,12 @@ async def _call_model(cfg, system: str, user_text: str, *, mask_on: bool) -> str
         return await asyncio.wait_for(chat(cfg, [{"role": "user", "content": user_text}], system=system),
                                       timeout=GEN_TIMEOUT_S)
     except asyncio.TimeoutError:
-        raise InlineError("timeout", "AI 응답이 너무 늦습니다. 잠시 뒤 다시 시도하세요", 504)
+        raise InlineError("timeout", "AI 응답이 지연되고 있습니다. 잠시 후 다시 시도하십시오", 504)
     except InlineError:
         raise
     except Exception as e:  # noqa: BLE001
         logger.warning("[ai-inline] provider failed: %s", e)
-        raise InlineError("provider_error", "AI 제공자에 연결하지 못했습니다. 잠시 뒤 다시 시도하세요", 502)
+        raise InlineError("provider_error", "AI 제공자에 연결하지 못했습니다. 잠시 후 다시 시도하십시오", 502)
 
 
 def parse_json(text: str) -> dict:
@@ -304,7 +304,7 @@ async def mail_summary(db, user: User, cfg, mask_on: bool, *, message_id: str, m
             todos.append({"title": title, "due": _date(t.get("due")), "who": _str(t.get("who"), 80) or None})
     points = _points(d.get("points"))
     if not points and not todos:
-        raise InlineError("bad_output", "AI 가 요약을 만들지 못했습니다. 다시 시도하세요", 502)
+        raise InlineError("bad_output", "AI 가 요약을 만들지 못했습니다. 다시 시도하십시오", 502)
     return {"points": points, "todos": todos, "clipped": clipped, "model": _model_name(cfg)}
 
 
@@ -332,7 +332,7 @@ async def mail_reply(db, user: User, cfg, mask_on: bool, *, message_id: str, mai
         # JSON 형식을 준수하지 않은 모델 — 응답 텍스트 자체를 초안으로 사용한다(펜스만 제거)
         draft = re.sub(r"^```\w*|```$", "", (raw or "").strip()).strip()
     if not draft:
-        raise InlineError("bad_output", "AI 가 초안을 만들지 못했습니다. 다시 시도하세요", 502)
+        raise InlineError("bad_output", "AI 가 초안을 만들지 못했습니다. 다시 시도하십시오", 502)
     return {"draft": draft[:8_000], "tone": tone, "clipped": clipped, "model": _model_name(cfg)}
 
 
@@ -373,7 +373,7 @@ async def chat_summary(db, user: User, cfg, mask_on: bool, *, channel_id: str, s
 
     tzi = _tz(tz)
     if not await _module_ok(db, user, "chat"):
-        raise InlineError("forbidden", "채팅 기능을 쓸 권한이 없거나 꺼져 있습니다", 403)
+        raise InlineError("forbidden", "채팅 기능을 사용할 권한이 없거나 비활성화되어 있습니다", 403)
     if not await perms.allowed(db, user, "message.read", channel_id):
         raise InlineError("forbidden", "채널 멤버가 아닙니다", 403)
     if scope == "unread":
@@ -382,14 +382,14 @@ async def chat_summary(db, user: User, cfg, mask_on: bool, *, channel_id: str, s
         min_seq, max_seq = int(last or 0) + 1, None
     elif scope == "range":
         if not from_message_id:
-            raise InlineError("invalid_argument", "어디부터 요약할지(from_message_id) 골라 주세요")
+            raise InlineError("invalid_argument", "어디부터 요약할지(from_message_id) 선택하십시오")
         seqs = {}
         for mid in (from_message_id, to_message_id):
             if not mid:
                 continue
             m = await db.get(Message, mid)
             if m is None or m.channel_id != channel_id or m.seq is None:
-                raise InlineError("not_found", "고른 메시지를 찾을 수 없습니다", 404)
+                raise InlineError("not_found", "선택한 메시지를 찾을 수 없습니다", 404)
             seqs[mid] = int(m.seq)
         a = seqs[from_message_id]
         b = seqs.get(to_message_id) if to_message_id else None
@@ -454,7 +454,7 @@ async def chat_summary(db, user: User, cfg, mask_on: bool, *, channel_id: str, s
                 called.append({"message_id": m.id, "text": _str(m.content, 120), "at": _iso(m.created_at)})
                 break
     if not points and not called:
-        raise InlineError("bad_output", "AI 가 요약을 만들지 못했습니다. 다시 시도하세요", 502)
+        raise InlineError("bad_output", "AI 가 요약을 만들지 못했습니다. 다시 시도하십시오", 502)
     others = sum(1 for m, _dn, _un in kept if m.sender_id != user.id)
     return {
         "points": points, "called_me": called, "scope": scope,
@@ -476,7 +476,7 @@ async def meeting_people(db, user: User, room: str):
     from app.meetings import router as meetings_router
 
     if not await _module_ok(db, user, "meetings"):
-        raise InlineError("forbidden", "회의 기능을 쓸 권한이 없거나 꺼져 있습니다", 403)
+        raise InlineError("forbidden", "회의 기능을 사용할 권한이 없거나 비활성화되어 있습니다", 403)
     try:
         summ = await meetings_router.meeting_summary(name=room, user=user, db=db)
     except HTTPException:
@@ -581,7 +581,7 @@ async def meeting_summary(db, user: User, cfg, mask_on: bool, *, room: str, chat
         })
     points = _points(d.get("points"))
     if not points and not todos:
-        raise InlineError("bad_output", "AI 가 요약을 만들지 못했습니다. 다시 시도하세요", 502)
+        raise InlineError("bad_output", "AI 가 요약을 만들지 못했습니다. 다시 시도하십시오", 502)
     return {
         "title": summ.title or room, "points": points, "todos": todos,
         "participants": len(people), "source": "chat" if lines else "agenda",
@@ -600,7 +600,7 @@ async def doc_proofread(db, user: User, cfg, mask_on: bool, *, text: str, mode: 
         raise InlineError("nothing", "교정할 글이 없습니다", 400)
     limit = min(MAX_DOC_CHARS, material_budget(cfg))
     if len(text) > limit:
-        raise InlineError("too_large", f"글이 너무 깁니다(교정 상한 {limit:,}자). 나눠서 교정하세요", 413)
+        raise InlineError("too_large", f"글이 너무 깁니다(교정 상한 {limit:,}자). 나눠서 교정하십시오", 413)
     kinds = "맞춤법(spelling)·띄어쓰기(spacing)·문체(style)" if mode == "all" else "문체(style)만"
     system = (
         "당신은 한국어 문서 교정자입니다.\n" + _BOUNDARY + "\n"
@@ -633,7 +633,7 @@ async def doc_proofread(db, user: User, cfg, mask_on: bool, *, text: str, mode: 
         if len(items) >= MAX_PROOF_ITEMS:
             break
     if not d and raw and raw.strip():
-        raise InlineError("bad_output", "AI 가 교정 결과를 만들지 못했습니다. 다시 시도하세요", 502)
+        raise InlineError("bad_output", "AI 가 교정 결과를 만들지 못했습니다. 다시 시도하십시오", 502)
     return {"items": items, "mode": mode, "model": _model_name(cfg)}
 
 
@@ -651,7 +651,7 @@ async def create_tasks(db, user: User, *, source: str, items: list[dict], room: 
     if source not in SOURCE_LABEL:
         raise InlineError("invalid_argument", "source 는 mail·meeting·chat 중 하나입니다")
     if not items:
-        raise InlineError("invalid_argument", "등록할 할 일을 골라 주세요")
+        raise InlineError("invalid_argument", "등록할 할 일을 선택하십시오")
     if len(items) > MAX_TODOS:
         raise InlineError("invalid_argument", f"한 번에 {MAX_TODOS}개까지 등록할 수 있습니다")
     people: dict[str, str] = {}

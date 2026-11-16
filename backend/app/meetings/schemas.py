@@ -22,9 +22,9 @@ def validate_room_name(name: str) -> str:
     if not n or len(n) > 100:
         raise ValueError("회의 이름은 1~100자여야 합니다")
     if any(ord(c) < 32 or ord(c) == 127 for c in n) or any(c in n for c in "/\\"):
-        raise ValueError("회의 이름에 쓸 수 없는 문자가 있습니다")
+        raise ValueError("회의 이름에 사용할 수 없는 문자가 있습니다")
     if n in (".", "..") or is_reserved_room_name(n):
-        raise ValueError("이 이름은 회의 이름으로 쓸 수 없습니다")
+        raise ValueError("이 이름은 회의 이름으로 사용할 수 없습니다")
     return n
 
 

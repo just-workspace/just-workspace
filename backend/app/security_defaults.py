@@ -119,7 +119,7 @@ def weakness(s: SecretSpec, value: str) -> str | None:
     bad = sorted({ch for ch in value if ch in s.forbid})
     if bad:
         shown = " ".join("공백" if ch in " \t" else ch for ch in bad)
-        return f"쓸 수 없는 문자가 들어 있음({shown})"
+        return f"사용할 수 없는 문자가 들어 있음({shown})"
     return None
 
 

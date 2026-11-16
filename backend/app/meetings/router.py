@@ -607,7 +607,7 @@ async def update_room(
     added: list[MeetingInvitee] = []
     if row is not None:
         if row.status not in repo.ACTIVE:
-            raise HTTPException(status_code=409, detail="끝났거나 취소된 회의는 고칠 수 없습니다")
+            raise HTTPException(status_code=409, detail="종료되었거나 취소된 회의는 수정할 수 없습니다")
         if "title" in fields and body.title is not None:
             row.title = body.title.strip() or row.room_name
             time_changed = True
@@ -632,7 +632,7 @@ async def update_room(
             added = await repo.add_invitees(db, row.id, body.add_invitees)
         await db.commit()
     elif body.add_invitees or body.remove_invitee_ids:
-        raise HTTPException(status_code=400, detail="예약 정보가 없는 방은 초대 대상을 바꿀 수 없습니다")
+        raise HTTPException(status_code=400, detail="예약 정보가 없는 방은 초대 대상을 변경할 수 없습니다")
 
     if meta is not None:
         if "scheduled_at" in fields:
@@ -785,7 +785,7 @@ async def start_recording(name: str, user: User = Depends(get_current_user),
         logger.warning("녹화 시작 실패(%s): %s", name, e)
         raise HTTPException(
             status_code=502,
-            detail="녹화를 시작하지 못했습니다. 녹화 서버가 꺼져 있거나 자원이 부족합니다 — 관리자에게 문의하세요.",
+            detail="녹화를 시작하지 못했습니다. 녹화 서버가 실행 중이 아니거나 자원이 부족합니다 — 관리자에게 문의하십시오.",
         )
     await store.set_active_recording(name, rec["egress_id"], rec["filename"])
     # 파일 ↔ 회의 기록 — 목록·다운로드는 이 회의의 호스트·초대 대상·채널 멤버만 허용
@@ -957,7 +957,7 @@ async def create_token(
     is_host = meta.host_user_id == str(user.id)
     if not is_host and not await _is_invited(db, meta, user):
         # 목록 수신 후 초대에서 제외된 경우 등 — 화면이 이 문구를 그대로 표시한다(대체 경로 안내)
-        raise HTTPException(status_code=403, detail="호스트와 초대받은 사람만 바로 참여할 수 있습니다. 받은 초대 링크로 들어와 주세요")
+        raise HTTPException(status_code=403, detail="호스트와 초대받은 사람만 바로 참여할 수 있습니다. 받은 초대 링크로 참여하십시오")
     # identity 는 세션마다 고유하게 생성 — 동일 사용자가 여러 기기/탭으로 입장해도
     # LiveKit DUPLICATE_IDENTITY 로 상호 퇴장시키며 무한 재접속하는 것 방지.
     # 표시이름(name)만 사용자명 유지.
@@ -1230,15 +1230,15 @@ async def notify_host(token: str, body: JoinNotifyHost):
     r = await get_redis()
     key = f"mtg:notifyhost:{token}"
     if not await r.set(key, "1", ex=_NOTIFY_HOST_WINDOW, nx=True):
-        raise HTTPException(status_code=429, detail="이미 호스트에게 알렸습니다. 잠시 뒤 다시 시도해 주세요")
+        raise HTTPException(status_code=429, detail="이미 호스트에게 알렸습니다. 잠시 후 다시 시도하십시오")
 
     from app.notifications.service import create_notification
-    who = nickname or "손님"
+    who = nickname or "게스트"
     async with repo.session() as db:
         await create_notification(
             db, host_id, "meeting_invite",
             f"{who} 님이 \"{title}\" 초대 링크로 들어오려 합니다",
-            "링크가 만료되었거나 회의가 끝났습니다. 새 링크를 보내 주세요.",
+            "링크가 만료되었거나 회의가 종료되었습니다. 새 링크를 보내 주십시오.",
             link="/meetings",
             actor_name=who,
         )
@@ -1273,7 +1273,7 @@ async def submit_join_request(token: str, body: JoinRequestCreate,
         fails = int(await r.get(fail_key) or 0)
         if fails >= _PW_MAX_FAILS:
             raise HTTPException(
-                status_code=429, detail="시도가 너무 많습니다. 잠시 후 다시 시도해 주세요",
+                status_code=429, detail="시도가 너무 많습니다. 잠시 후 다시 시도하십시오",
                 headers={"X-Attempts-Remaining": "0"},
             )
         if not verify_password(body.password, meta.password_hash):
@@ -1349,7 +1349,7 @@ async def _notify_host_waiting(meta, req_id: str, nickname: str) -> None:
                 link=f"/meetings/room/{quote(meta.name, safe='')}",
                 actor_name=nickname,
                 actions=[
-                    {"id": "approve", "label": "들이기", "method": "POST", "url": f"{base}/approve"},
+                    {"id": "approve", "label": "입장 허용", "method": "POST", "url": f"{base}/approve"},
                     {"id": "deny", "label": "거절", "method": "POST", "url": f"{base}/deny"},
                 ],
             )

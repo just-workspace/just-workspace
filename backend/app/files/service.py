@@ -302,17 +302,17 @@ def validate_name(raw: str | None) -> str:
     """
     name = (raw or "").strip()
     if not name:
-        raise InvalidNameError("이름을 입력하세요")
+        raise InvalidNameError("이름을 입력하십시오")
     if name in (".", ".."):
-        raise InvalidNameError("쓸 수 없는 이름입니다")
+        raise InvalidNameError("사용할 수 없는 이름입니다")
     if "/" in name or "\\" in name:
-        raise InvalidNameError("이름에 / 또는 \\ 는 쓸 수 없습니다")
+        raise InvalidNameError("이름에 / 또는 \\ 는 사용할 수 없습니다")
     if any(ord(ch) < 32 or ch == "\x7f" for ch in name):
-        raise InvalidNameError("이름에 쓸 수 없는 문자가 있습니다")
+        raise InvalidNameError("이름에 사용할 수 없는 문자가 있습니다")
     if is_system_name(name):
-        raise InvalidNameError(f"'{name}' 은(는) 저장 장치가 쓰는 이름이라 쓸 수 없습니다(목록에 보이지 않습니다)")
+        raise InvalidNameError(f"'{name}' 은(는) 저장 장치가 사용하는 이름이라 사용할 수 없습니다(목록에 표시되지 않습니다)")
     if is_hidden_name(name):
-        raise InvalidNameError("이름은 . 으로 시작할 수 없습니다(숨김 항목이 되어 목록에 보이지 않습니다)")
+        raise InvalidNameError("이름은 . 으로 시작할 수 없습니다(숨김 항목이 되어 목록에 표시되지 않습니다)")
     # 파일시스템 한도는 바이트 기준(한글 한 글자 = 3바이트)
     if len(name.encode("utf-8", "surrogatepass")) > 255:
         raise InvalidNameError("이름이 너무 깁니다")

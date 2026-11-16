@@ -20,7 +20,7 @@ _PRESETS: dict[str, dict] = {
         "imap_host": "imap.gmail.com", "imap_port": 993, "imap_security": "ssl",
         "smtp_host": "smtp.gmail.com", "smtp_port": 587, "smtp_security": "starttls",
         "help_url": "https://myaccount.google.com/apppasswords",
-        "guide": "2단계 인증을 켠 뒤 '앱 비밀번호'를 발급해 입력하세요(일반 비밀번호는 거부됩니다).",
+        "guide": "2단계 인증을 활성화한 후 '앱 비밀번호'를 발급해 입력하십시오(일반 비밀번호는 거부됩니다).",
     },
     # ── Naver ──
     "naver.com": {
@@ -28,7 +28,7 @@ _PRESETS: dict[str, dict] = {
         "imap_host": "imap.naver.com", "imap_port": 993, "imap_security": "ssl",
         "smtp_host": "smtp.naver.com", "smtp_port": 587, "smtp_security": "starttls",
         "help_url": "https://mail.naver.com/option/imap",
-        "guide": "네이버 메일 > 환경설정 > IMAP/SMTP 에서 '사용함'으로 설정 후 비밀번호(또는 2단계 인증 시 애플리케이션 비밀번호)를 입력하세요.",
+        "guide": "네이버 메일 > 환경설정 > IMAP/SMTP 에서 '사용함'으로 설정 후 비밀번호(또는 2단계 인증 시 애플리케이션 비밀번호)를 입력하십시오.",
     },
     # ── Kakao / Daum ──
     "daum.net": {
@@ -36,7 +36,7 @@ _PRESETS: dict[str, dict] = {
         "imap_host": "imap.daum.net", "imap_port": 993, "imap_security": "ssl",
         "smtp_host": "smtp.daum.net", "smtp_port": 465, "smtp_security": "ssl",
         "help_url": "https://mail.daum.net",
-        "guide": "다음 메일 > 환경설정 > IMAP/POP3 에서 IMAP 사용을 켠 뒤 비밀번호를 입력하세요.",
+        "guide": "다음 메일 > 환경설정 > IMAP/POP3 에서 IMAP 사용을 활성화한 후 비밀번호를 입력하십시오.",
     },
     "hanmail.net": {"alias": "daum.net"},
     "kakao.com": {
@@ -44,14 +44,14 @@ _PRESETS: dict[str, dict] = {
         "imap_host": "imap.kakao.com", "imap_port": 993, "imap_security": "ssl",
         "smtp_host": "smtp.kakao.com", "smtp_port": 465, "smtp_security": "ssl",
         "help_url": "https://mail.kakao.com",
-        "guide": "카카오 메일 설정에서 IMAP 사용을 켠 뒤 비밀번호를 입력하세요.",
+        "guide": "카카오 메일 설정에서 IMAP 사용을 활성화한 후 비밀번호를 입력하십시오.",
     },
     "nate.com": {
         "label": "네이트", "auth": "password",
         "imap_host": "imap.nate.com", "imap_port": 993, "imap_security": "ssl",
         "smtp_host": "smtp.nate.com", "smtp_port": 465, "smtp_security": "ssl",
         "help_url": "https://mail.nate.com",
-        "guide": "네이트 메일 환경설정에서 IMAP 사용을 켠 뒤 비밀번호를 입력하세요.",
+        "guide": "네이트 메일 환경설정에서 IMAP 사용을 활성화한 후 비밀번호를 입력하십시오.",
     },
     # ── Microsoft ──
     "outlook.com": {
@@ -70,7 +70,7 @@ _PRESETS: dict[str, dict] = {
         "imap_host": "imap.mail.yahoo.com", "imap_port": 993, "imap_security": "ssl",
         "smtp_host": "smtp.mail.yahoo.com", "smtp_port": 587, "smtp_security": "starttls",
         "help_url": "https://login.yahoo.com/account/security/app-passwords",
-        "guide": "앱 비밀번호를 발급해 입력하세요.",
+        "guide": "앱 비밀번호를 발급해 입력하십시오.",
     },
     # ── Apple iCloud ──
     "icloud.com": {
@@ -78,7 +78,7 @@ _PRESETS: dict[str, dict] = {
         "imap_host": "imap.mail.me.com", "imap_port": 993, "imap_security": "ssl",
         "smtp_host": "smtp.mail.me.com", "smtp_port": 587, "smtp_security": "starttls",
         "help_url": "https://support.apple.com/ko-kr/102654",
-        "guide": "Apple ID 에서 앱 전용 암호를 생성해 입력하세요.",
+        "guide": "Apple ID 에서 앱 전용 암호를 생성해 입력하십시오.",
     },
     "me.com": {"alias": "icloud.com"},
 }
@@ -106,7 +106,7 @@ def detect(email: str) -> dict:
         "smtp_host": f"smtp.{domain}" if domain else "",
         "smtp_port": 587, "smtp_security": "starttls",
         "help_url": "",
-        "guide": "알 수 없는 제공자입니다. 서버 정보를 직접 확인해 입력하세요(추정값을 채워두었습니다).",
+        "guide": "알 수 없는 제공자입니다. 서버 정보를 직접 확인해 입력하십시오(추정값을 채워두었습니다).",
     }
 
 

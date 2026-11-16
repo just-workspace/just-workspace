@@ -30,7 +30,7 @@ async def list_notifications(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     type: str | None = Query(None, description="타입 필터, 쉼표로 여러 개(mention,thread_reply)"),
-    unread: bool | None = Query(None, description="true 면 안 읽은 것만(unread_only 와 같음)"),
+    unread: bool | None = Query(None, description="true 면 읽지 않은 것만(unread_only 와 같음)"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

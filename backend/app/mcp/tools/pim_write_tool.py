@@ -314,7 +314,7 @@ register(Tool(
 
 register(Tool(
     name="calendar_undo_create_event",
-    title="만든 일정 되돌리기",
+    title="만든 일정 실행 취소",
     description="Delete an event that calendar_create_event just created." + UNDO_HINT,
     scope="mcp:write", risk="low",
     parameters={"type": "object", "properties": {
@@ -326,7 +326,7 @@ register(Tool(
 
 register(Tool(
     name="calendar_update_event",
-    title="일정 고치기",
+    title="일정 수정",
     description="Change an event's title, time, all-day flag, location or description. Only the fields you "
                 "pass change. Recurring events change as a whole series. " + _DT,
     scope="mcp:write", risk="low",
@@ -395,7 +395,7 @@ register(Tool(
 
 register(Tool(
     name="tasks_undo_create",
-    title="만든 할일 되돌리기",
+    title="만든 할일 실행 취소",
     description="Delete a task that tasks_create just created." + UNDO_HINT,
     scope="mcp:write", risk="low",
     parameters={"type": "object", "properties": {
@@ -407,7 +407,7 @@ register(Tool(
 
 register(Tool(
     name="tasks_update",
-    title="할일 고치기",
+    title="할일 수정",
     description="Change a task: title, description, due date (\"\" = no due date), priority or status. Use "
                 "status=\"done\" to complete it. Only the fields you pass change.",
     scope="mcp:write", risk="low",

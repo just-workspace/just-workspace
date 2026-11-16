@@ -11,7 +11,7 @@
     jw update-key [list | add <파일> | remove <이름>]   업데이트 채널의 서명 검증용 공개 키
     jw update-channel [<주소> | --reset]       업데이트 채널 주소
 
-응답 파일은 JSON 이다(화면의 "답변 파일 내려받기"와 동일 형식). 비밀은 파일에 기재하거나 환경변수로 지정한다:
+응답 파일은 JSON 이다(화면의 "응답 파일 다운로드"와 동일 형식). 비밀은 파일에 기재하거나 환경변수로 지정한다:
 JW_ADMIN_PASSWORD · JW_MAIL_PASSWORD · JW_AI_API_KEY
 
 `"mode": "restore"` 이면 백업에서 복원한다 — `restore.path`(서버의 백업 파일 경로)와 이 서버에서 재지정할 값
@@ -49,9 +49,9 @@ def read_answers(path: str, env: dict | None = None) -> ans.Answers:
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
     except OSError as e:
-        raise SystemExit(f"답변 파일을 읽지 못했습니다: {e}") from None
+        raise SystemExit(f"응답 파일을 읽지 못했습니다: {e}") from None
     except ValueError as e:
-        raise SystemExit(f"답변 파일이 JSON 이 아닙니다: {e}") from None
+        raise SystemExit(f"응답 파일이 JSON 이 아닙니다: {e}") from None
     if isinstance(data, dict):
         for dotted, name in ENV_SECRETS.items():
             section, key = dotted.split(".")
@@ -62,7 +62,7 @@ def read_answers(path: str, env: dict | None = None) -> ans.Answers:
     except ans.StructureError as e:
         for err in e.errors:
             print(f"  {err.field}: {err.code}", file=sys.stderr)
-        raise SystemExit("답변 파일의 모양이 맞지 않습니다") from None
+        raise SystemExit("응답 파일의 형식이 맞지 않습니다") from None
 
 
 def sample_secrets(bundle) -> dict:
@@ -82,7 +82,7 @@ def print_errors(errors) -> None:
 def cmd_token(args) -> int:
     svc = _services(args)
     if svc.store.locked:
-        print("설치가 이미 끝났습니다 — 설치 토큰은 더 필요하지 않습니다.")
+        print("설치가 이미 완료되었습니다 — 설치 토큰은 더 필요하지 않습니다.")
         return 1
     token = TokenStore(svc.store).issue()
     host = os.environ.get("JW_PUBLIC_HOST") or "<서버 주소>"
@@ -133,7 +133,7 @@ def cmd_render(args) -> int:
     out = Path(args.out)
     for rel, content in files.items():
         write_private(out / rel, content, render.file_mode(rel))
-    print(f"{len(files)}개 파일을 {out} 에 썼습니다(비밀값은 견본입니다 — 실제 설치에 쓰지 마세요)")
+    print(f"{len(files)}개 파일을 {out} 에 기록했습니다(비밀값은 견본입니다 — 실제 설치에 사용하지 마십시오)")
     return 0
 
 
@@ -167,7 +167,7 @@ def prepare_restore(svc: api.Services, answers: ans.Answers, env: dict | None = 
               "subnet": answers.advanced.subnet, "restore": answers.restore.model_dump(mode="json")}
     built, secrets, errors = mgr.prepare(target)
     if errors:
-        print("답변에 문제가 있습니다:")
+        print("응답 파일에 문제가 있습니다:")
         print_errors(errors)
         return None
     return ans.join(ans.split(built)[0], secrets)
@@ -178,7 +178,7 @@ def cmd_apply(args) -> int:
     answers = read_answers(args.answers)
     if answers.mode == "restore":
         if svc.store.locked:
-            print("설치가 이미 끝났습니다.")
+            print("설치가 이미 완료되었습니다.")
             return 1
         answers = prepare_restore(svc, answers)
         if answers is None:
@@ -190,13 +190,13 @@ def cmd_apply(args) -> int:
             facts.dns_status = "unknown"       # dry-run 은 외부 조회를 수행하지 않음
         errors, plan = _plan_report(svc, answers, facts)
         if errors:
-            print("답변에 문제가 있습니다:")
+            print("응답 파일에 문제가 있습니다:")
             print_errors(errors)
             return 1
         answers, _ = ans.resolve_quick(answers, svc.catalog, facts)
         files = render.render(answers, sample_secrets(svc.bundle), facts, svc.bundle, registry=svc.registry,
                               image_tag=svc.engine.image_tag)
-        print("검증 통과 — 적용하면 이렇게 됩니다(아무것도 바꾸지 않았습니다)")
+        print("검증 통과 — 적용하면 이렇게 됩니다(아무것도 변경하지 않았습니다)")
         print(f"  접속 주소  {plan.app_url}  (인증서: {plan.cert_mode}, 이름: {', '.join(plan.cert_names)})")
         print(f"  구역       {', '.join(plan.zones) or '(기본만)'}")
         print(f"  프로파일   {', '.join(plan.profiles) or '(없음)'}")
@@ -215,7 +215,7 @@ def cmd_apply(args) -> int:
         return 0
 
     if svc.store.locked:
-        print("설치가 이미 끝났습니다.")
+        print("설치가 이미 완료되었습니다.")
         return 1
     svc.store.save_answers(answers)
     # 감지값 — 공인 주소 및 접속 주소 확인(임시 인증서 허용 여부, 회의 서버 주소에 사용)
@@ -235,7 +235,7 @@ def cmd_apply(args) -> int:
         r = httpx.post(LOCAL_API.format(port=port) + "/local/apply", headers={api.LOCAL_KEY_HEADER: svc.local_key()}, timeout=5)
         via_server = r.status_code == 202
         if r.status_code == 409:
-            print("이미 적용이 돌고 있습니다 — 진행 상황을 따라갑니다")
+            print("이미 적용이 진행 중입니다 — 진행 상황을 따라갑니다")
             via_server = True
     except Exception:  # noqa: BLE001 — 서버가 기동 중이 아니면 본 프로세스에서 직접 실행
         via_server = False
@@ -258,7 +258,7 @@ def cmd_apply(args) -> int:
 
 def _report(st: dict) -> int:
     if st.get("status") == "done":
-        print("설치가 끝났습니다.")
+        print("설치가 완료되었습니다.")
         return 0
     err = st.get("error") or {}
     print(f"실패: {err.get('step', '시작 전')} — {err.get('cause')} (해결: {err.get('fix')})")
@@ -308,18 +308,18 @@ def cmd_reinstall(args) -> int:
 
     svc = _services(args)
     if svc.engine.status().get("status") == "running":
-        print("적용이 돌고 있습니다 — 끝난 뒤에 다시 실행하세요.")
+        print("적용이 진행 중입니다 — 완료된 후 다시 실행하십시오.")
         return 1
     found = reinstall_targets(svc)
-    print("다시 설치하려면 아래를 지웁니다. 워크스페이스의 데이터(계정·파일·메일·대화)가 모두 사라집니다.")
+    print("다시 설치하려면 아래를 삭제합니다. 워크스페이스의 데이터(계정·파일·메일·대화)가 모두 사라집니다.")
     print(f"  컨테이너 {len(found['containers'])}개: {' '.join(found['containers']) or '(없음)'}")
     print(f"  볼륨 {len(found['volumes'])}개: {' '.join(found['volumes']) or '(없음)'}")
     print(f"  내부망: {found['network'] or '(없음)'}")
     print("  설치 폴더의 설정(stack)과 설치 상태(state) — 설치 관리자의 인증서는 남깁니다")
     if found["storage_external"]:
-        print("  파일 저장소가 네트워크 저장소·지정 폴더입니다 — 그 안의 파일은 지우지 않고, 저장소 표식만 지웁니다.")
+        print("  파일 저장소가 네트워크 저장소·지정 폴더입니다 — 그 안의 파일은 삭제하지 않고, 저장소 마커만 삭제합니다.")
     if not args.yes:
-        print("지우려면 --yes 를 붙여 다시 실행하세요. (아무것도 지우지 않았습니다)")
+        print("삭제하려면 --yes 를 붙여 다시 실행하십시오. (아무것도 삭제하지 않았습니다)")
         return 1
 
     docker = svc.docker
@@ -339,14 +339,14 @@ def cmd_reinstall(args) -> int:
     for name in found["volumes"]:
         failed |= not docker.volume_rm(name).ok
     if failed:
-        print("일부를 지우지 못했습니다 — `docker ps -a`, `docker volume ls` 로 남은 것을 확인하고 다시 실행하세요.")
+        print("일부를 삭제하지 못했습니다 — `docker ps -a`, `docker volume ls` 로 남은 것을 확인하고 다시 실행하십시오.")
         return 1
     shutil.rmtree(svc.paths.stack, ignore_errors=True)
     for entry in svc.paths.state.iterdir():
         if entry.name in REINSTALL_KEEP:
             continue
         shutil.rmtree(entry, ignore_errors=True) if entry.is_dir() else entry.unlink(missing_ok=True)
-    print("지웠습니다. 설치 관리자를 다시 시작합니다 — 새 설치 토큰은 `docker logs` 의 맨 끝에 나옵니다.")
+    print("삭제했습니다. 설치 관리자를 다시 시작합니다 — 새 설치 토큰은 `docker logs` 의 맨 끝에 표시됩니다.")
     sys.stdout.flush()
     docker.run(["restart", docker.self_ref], timeout=120)       # 본 명령도 이 시점에 함께 종료
     return 0
@@ -355,11 +355,11 @@ def cmd_reinstall(args) -> int:
 # ─── 동일 서버 복원 ───
 
 RESTORE_ERRORS = {
-    "not_installed": "설치가 끝난 서버에서만 쓸 수 있습니다. 새 서버로 옮기려면 설치 마법사의 \"백업에서 복원\"을 쓰세요.",
-    "apply_running": "설치가 돌고 있습니다 — 끝난 뒤에 다시 실행하세요.",
-    "update_running": "업데이트 작업이 진행 중입니다 — 끝난 뒤에 다시 실행하세요(관리 › 업데이트).",
-    "zone_job_running": "구역 작업이 진행 중입니다 — 끝난 뒤에 다시 실행하세요(관리 › 구역).",
-    "backup_required": "백업을 지정하세요 — 서버의 절대 경로, 또는 백업 볼륨 안의 이름(`jw restore --list`).",
+    "not_installed": "설치가 완료된 서버에서만 사용할 수 있습니다. 새 서버로 이동하려면 설치 마법사의 \"백업에서 복원\"을 사용하십시오.",
+    "apply_running": "설치가 진행 중입니다 — 완료된 후 다시 실행하십시오.",
+    "update_running": "업데이트 작업이 진행 중입니다 — 완료된 후 다시 실행하십시오(관리 › 업데이트).",
+    "zone_job_running": "구역 작업이 진행 중입니다 — 완료된 후 다시 실행하십시오(관리 › 구역).",
+    "backup_required": "백업을 지정하십시오 — 서버의 절대 경로, 또는 백업 볼륨 안의 이름(`jw restore --list`).",
     "backup_name_invalid": "백업 이름이 올바르지 않습니다.",
     "path_invalid": "경로가 올바르지 않습니다(절대 경로, `..`·특수 문자·시스템 폴더는 받지 않습니다).",
     "backup_unreadable": "백업을 읽지 못했습니다.",
@@ -391,7 +391,7 @@ def cmd_restore(args) -> int:
         if args.list:
             rows = rl.list_backups(updates)
             if not rows:
-                print("백업 볼륨에 백업이 없습니다. 서버의 다른 곳에 둔 파일은 절대 경로로 지정하세요.")
+                print("백업 볼륨에 백업이 없습니다. 서버의 다른 곳에 둔 파일은 절대 경로로 지정하십시오.")
                 return 0
             for row in rows:
                 name = str(row.get("path") or "").rsplit("/", 1)[-1]
@@ -420,20 +420,20 @@ def cmd_restore(args) -> int:
           f"버전 {summary.get('product_version') or '?'} · 스키마 버전 {summary.get('schema_version')}")
     print(f"  사용자 {summary.get('users') if summary.get('users') is not None else '?'}명 · "
           f"파일 {'포함' if summary.get('files_included') else '미포함'} · 크기 {_size(summary.get('size_bytes'))}")
-    print(f"  되돌릴 항목: {', '.join(chosen) or '(없음)'}")
+    print(f"  복원할 항목: {', '.join(chosen) or '(없음)'}")
     for item, why in (summary.get("skipped") or {}).items():
         print(f"  백업에 없는 항목: {item} ({why})")
     missing = [i for i in (items or []) if i not in in_backup]
     if missing:
-        print(f"백업에 없는 항목을 골랐습니다: {', '.join(missing)}", file=sys.stderr)
+        print(f"백업에 없는 항목을 선택했습니다: {', '.join(missing)}", file=sys.stderr)
         return 1
     if not chosen:
-        print("되돌릴 항목이 없습니다.", file=sys.stderr)
+        print("복원할 항목이 없습니다.", file=sys.stderr)
         return 1
-    print("이 서버의 지금 데이터를 위 백업의 내용으로 바꿉니다. 백업 뒤에 생긴 계정·파일·메일·대화는 사라집니다.")
-    print("설정(.env)은 건드리지 않습니다. 도는 동안 서비스가 멈추고, 끝나면 모든 사용자가 다시 로그인해야 합니다.")
+    print("이 서버의 현재 데이터를 위 백업의 내용으로 변경합니다. 백업 이후에 생긴 계정·파일·메일·대화는 사라집니다.")
+    print("설정(.env)은 변경하지 않습니다. 실행 중에는 서비스가 중지되고, 완료되면 모든 사용자가 다시 로그인해야 합니다.")
     if not args.yes:
-        print("진행하려면 --yes 를 붙여 다시 실행하세요. (아무것도 바꾸지 않았습니다)")
+        print("진행하려면 --yes 를 붙여 다시 실행하십시오. (아무것도 변경하지 않았습니다)")
         return 1
 
     def log(line: str) -> None:
@@ -454,22 +454,22 @@ def cmd_restore(args) -> int:
             if result.get("state"):
                 print(f"  지금 상태: {result['state']}", file=sys.stderr)
         else:
-            print(f"복원이 끝나지 않았습니다(종료 코드 {result.get('exit_code')}):", file=sys.stderr)
+            print(f"복원이 완료되지 않았습니다(종료 코드 {result.get('exit_code')}):", file=sys.stderr)
             print("  " + str(result.get("error") or "").replace("\n", "\n  "), file=sys.stderr)
-        print("서비스 상태를 확인하세요: docker ps -a --filter name=ws-", file=sys.stderr)
+        print("서비스 상태를 확인하십시오: docker ps -a --filter name=ws-", file=sys.stderr)
         return 1
     schema = result.get("schema") or [None, None]
-    print(f"되돌렸습니다: {', '.join(result.get('items') or [])}")
+    print(f"복원했습니다: {', '.join(result.get('items') or [])}")
     if schema[0] != schema[1]:
         print(f"  스키마 버전 {schema[0]} → {schema[1]}(백업이 옛 버전의 것이라 변경 단계를 적용했습니다)")
     if result.get("safety_dump"):
-        print(f"  복원 전의 DB 는 여기에 떠 두었습니다(백업 볼륨): {result['safety_dump']}")
+        print(f"  복원 전의 DB 는 여기에 보관했습니다(백업 볼륨): {result['safety_dump']}")
     for note in result.get("notes") or []:
         print(f"  참고: {note}")
     st = svc.docker.container_status("ws-backend")
     ready = st["running"] and st["health"] in ("", "healthy")
-    print("backend 가 준비됐습니다. 모든 사용자는 다시 로그인해야 합니다." if ready
-          else "주의: backend 가 아직 준비되지 않았습니다 — docker logs ws-backend 를 확인하세요.")
+    print("backend 가 준비되었습니다. 모든 사용자는 다시 로그인해야 합니다." if ready
+          else "주의: backend 가 아직 준비되지 않았습니다 — docker logs ws-backend 를 확인하십시오.")
     return 0 if ready else 1
 
 
@@ -500,8 +500,8 @@ def _print_keys(svc: api.Services) -> None:
     if not files:
         print("공개 키가 없습니다 — 업데이트 확인은 \"구성되지 않음\"으로 답합니다.")
         return
-    where = "설치 폴더(state/update/keys)" if files[0].parent == _key_dir(svc) else "이미지에 든 것"
-    print(f"쓰는 공개 키 — {where}:")
+    where = "설치 폴더(state/update/keys)" if files[0].parent == _key_dir(svc) else "이미지에 포함된 것"
+    print(f"사용 중인 공개 키 — {where}:")
     for path in files:
         try:
             print(f"  {path.name}  지문 {_key_fingerprint(path.read_bytes())}")
@@ -523,18 +523,18 @@ def cmd_update_key(args) -> int:
             print(f"그 이름의 키가 설치 폴더에 없습니다: {name}", file=sys.stderr)
             return 1
         (folder / name).unlink()
-        print(f"지웠습니다: {name}")
+        print(f"삭제했습니다: {name}")
         _print_keys(svc)
         return 0
     source = args.target or ""
     if not source:
-        print("넣을 공개 키 파일을 주세요: jw update-key add <파일>  (- 는 표준 입력)", file=sys.stderr)
+        print("추가할 공개 키 파일을 지정하십시오: jw update-key add <파일>  (- 는 표준 입력)", file=sys.stderr)
         return 2
     try:
         pem = sys.stdin.buffer.read() if source == "-" else Path(source).read_bytes()
     except OSError as e:
         print(f"키 파일을 읽지 못했습니다: {e}\n  설치 관리자 컨테이너 안의 경로여야 합니다 — 설치 폴더에 두고 /data/<파일> 로 적거나, "
-              "표준 입력으로 주세요: docker exec -i jw-installer jw update-key add - < release.pub", file=sys.stderr)
+              "표준 입력으로 전달하십시오: docker exec -i jw-installer jw update-key add - < release.pub", file=sys.stderr)
         return 1
     if len(pem) > 16 * 1024:
         print("공개 키 파일이 아닙니다(너무 큽니다).", file=sys.stderr)
@@ -546,7 +546,7 @@ def cmd_update_key(args) -> int:
         rel.verify.load_public_keys([pem])
         fingerprint = _key_fingerprint(pem)
     except Exception as e:  # noqa: BLE001 — 릴리스 도구의 검증 오류·형식 오류
-        print(f"쓸 수 있는 공개 키가 아닙니다: {e}", file=sys.stderr)
+        print(f"사용할 수 있는 공개 키가 아닙니다: {e}", file=sys.stderr)
         return 1
     name = args.name or ("release.pub" if source == "-" else Path(source).name)
     if name.endswith(".pem"):
@@ -554,23 +554,23 @@ def cmd_update_key(args) -> int:
     if not name.endswith(".pub"):
         name += ".pub"
     if not KEY_NAME.fullmatch(name):
-        print(f"키 이름이 올바르지 않습니다: {name} (--name 으로 정하세요)", file=sys.stderr)
+        print(f"키 이름이 올바르지 않습니다: {name} (--name 으로 지정하십시오)", file=sys.stderr)
         return 1
     try:
         existing = sorted(p.name for p in folder.iterdir() if p.is_file() and p.suffix in (".pub", ".pem"))
     except OSError:
         existing = []
     if name not in existing and len(existing) >= rel.MAX_KEYS:
-        print(f"공개 키는 {rel.MAX_KEYS}개까지입니다(현재·다음). 먼저 하나를 지우세요: jw update-key remove <이름>", file=sys.stderr)
+        print(f"공개 키는 {rel.MAX_KEYS}개까지입니다(현재·다음). 먼저 하나를 삭제하십시오: jw update-key remove <이름>", file=sys.stderr)
         _print_keys(svc)
         return 1
     folder.mkdir(parents=True, exist_ok=True)
     (folder / name).write_bytes(pem)
     os.chmod(folder / name, 0o644)
-    print(f"넣었습니다: {name}  지문 {fingerprint}")
-    print("이 지문이 릴리스를 내는 쪽이 알린 것과 같은지 확인하세요. 설치 폴더에 키가 있으면 이미지에 든 키는 쓰지 않습니다.")
+    print(f"추가했습니다: {name}  지문 {fingerprint}")
+    print("이 지문이 릴리스를 내는 쪽이 알린 것과 같은지 확인하십시오. 설치 폴더에 키가 있으면 이미지에 포함된 키는 사용하지 않습니다.")
     _print_keys(svc)
-    print("다음 확인(여섯 시간마다, 또는 관리 › 업데이트의 \"지금 확인\")부터 쓰입니다.")
+    print("다음 확인(여섯 시간마다, 또는 관리 › 업데이트의 \"지금 확인\")부터 사용됩니다.")
     return 0
 
 
@@ -597,17 +597,17 @@ def cmd_update_channel(args) -> int:
         except ValueError:
             bad = True
         if bad or any(ch.isspace() or ord(ch) < 32 for ch in url) or len(url) > 2000:
-            print("채널 주소가 올바르지 않습니다 — https://<호스트>[/<경로>] 꼴이어야 합니다.", file=sys.stderr)
+            print("채널 주소가 올바르지 않습니다 — https://<호스트>[/<경로>] 형식이어야 합니다.", file=sys.stderr)
             return 1
         if parts.scheme == "http":
-            print("주의: http 주소입니다. 채널 파일은 서명으로 확인하므로 변조는 걸러지지만, 무엇을 받는지는 드러납니다.")
+            print("주의: http 주소입니다. 채널 파일은 서명으로 확인하므로 변조는 걸러지지만, 무엇을 다운로드하는지는 노출됩니다.")
         write_private(path, url + "\n")
     # 채널이 변경되면 이전 채널에서 기록한 순번·확인 결과는 무효이다(새 채널의 순번이 더 낮을 수 있음)
     (svc.store.dir / "update" / "check.json").unlink(missing_ok=True)
     print(f"채널 주소: {rel.channel_base_url(svc.store.dir)}")
-    print("앞 채널에서 기억해 둔 확인 결과와 순번을 지웠습니다. 다음 확인(관리 › 업데이트의 \"지금 확인\")부터 쓰입니다.")
+    print("이전 채널에서 기억해 둔 확인 결과와 순번을 삭제했습니다. 다음 확인(관리 › 업데이트의 \"지금 확인\")부터 사용됩니다.")
     if not rel.key_files(svc.store.dir):
-        print("공개 키가 없습니다 — 이 채널의 공개 키를 넣으세요: jw update-key add <파일>")
+        print("공개 키가 없습니다 — 이 채널의 공개 키를 추가하십시오: jw update-key add <파일>")
     return 0
 
 
@@ -618,11 +618,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("status", help="설치 진행 상태")
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_status)
-    s = sub.add_parser("apply", help="답변 파일로 설치")
+    s = sub.add_parser("apply", help="응답 파일로 설치")
     s.add_argument("--answers", required=True)
     s.add_argument("--dry-run", action="store_true")
     s.set_defaults(func=cmd_apply)
-    s = sub.add_parser("render", help="산출물을 폴더에 써 본다")
+    s = sub.add_parser("render", help="산출물을 폴더에 기록해 본다")
     s.add_argument("--answers", required=True)
     s.add_argument("--out", required=True)
     s.set_defaults(func=cmd_render)
@@ -630,27 +630,27 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("username")
     s.add_argument("--disable-2fa", action="store_true")
     s.set_defaults(func=cmd_reset_admin)
-    s = sub.add_parser("reinstall", help="처음부터 다시 설치할 수 있게 지운다(데이터 삭제)")
-    s.add_argument("--yes", action="store_true", help="목록을 확인했고 지운다")
+    s = sub.add_parser("reinstall", help="처음부터 다시 설치할 수 있게 삭제한다(데이터 삭제)")
+    s.add_argument("--yes", action="store_true", help="목록을 확인했고 삭제한다")
     s.set_defaults(func=cmd_reinstall)
-    s = sub.add_parser("restore", help="이 서버의 데이터를 백업 시점으로 되돌린다(설정은 그대로)")
+    s = sub.add_parser("restore", help="이 서버의 데이터를 백업 시점으로 복원한다(설정은 그대로)")
     s.add_argument("backup", nargs="?", help="서버에 있는 백업 파일·폴더의 절대 경로, 또는 백업 볼륨 안의 이름")
     s.add_argument("--list", action="store_true", help="백업 볼륨에 있는 백업 목록")
-    s.add_argument("--items", metavar="a,b", help="이 항목만(기본: 백업에 든 것 전부, 설정 제외)")
+    s.add_argument("--items", metavar="a,b", help="이 항목만(기본: 백업에 포함된 것 모두, 설정 제외)")
     s.add_argument("--password-file", metavar="F",
-                   help="암호로 보호된 백업의 암호 파일. 암호는 설정 항목에만 걸리고 이 명령은 설정을 되돌리지 않으므로 없어도 된다")
+                   help="암호로 보호된 백업의 암호 파일. 암호는 설정 항목에만 걸리고 이 명령은 설정을 복원하지 않으므로 없어도 된다")
     s.add_argument("--allow-key-mismatch", action="store_true", help="백업과 이 서버의 암호화 키가 달라도 진행한다")
-    s.add_argument("--yes", action="store_true", help="내용을 확인했고 되돌린다")
-    s.add_argument("--json", action="store_true", help="결과를 JSON 한 줄로도 찍는다")
+    s.add_argument("--yes", action="store_true", help="내용을 확인했고 복원한다")
+    s.add_argument("--json", action="store_true", help="결과를 JSON 한 줄로도 출력한다")
     s.set_defaults(func=cmd_restore)
     s = sub.add_parser("update-key", help="업데이트 채널의 서명을 확인할 공개 키")
     s.add_argument("action", nargs="?", default="list", choices=("list", "add", "remove"))
     s.add_argument("target", nargs="?", help="add: 공개 키 파일(컨테이너 안 경로, - 는 표준 입력) · remove: 키 이름")
     s.add_argument("--name", help="add: 저장할 이름(기본: 파일 이름, 표준 입력이면 release.pub)")
     s.set_defaults(func=cmd_update_key)
-    s = sub.add_parser("update-channel", help="업데이트 채널 주소 보기·바꾸기")
+    s = sub.add_parser("update-channel", help="업데이트 채널 주소 보기·변경")
     s.add_argument("url", nargs="?")
-    s.add_argument("--reset", action="store_true", help="기본값(환경변수 또는 이미지의 값)으로 되돌린다")
+    s.add_argument("--reset", action="store_true", help="기본값(환경변수 또는 이미지의 값)으로 복원한다")
     s.set_defaults(func=cmd_update_channel)
     return p
 

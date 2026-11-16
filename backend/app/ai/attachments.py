@@ -79,7 +79,7 @@ def classify(name: str, mime: str) -> str:
     if ext in DOC_EXT or ext in TEXT_EXT:
         return "document"
     if ext in _OLD_EXT:
-        raise AttachError("unsupported_version", f"구버전 {ext} 형식은 읽지 못합니다 — 최신 형식으로 저장해 올려 주세요")
+        raise AttachError("unsupported_version", f"구버전 {ext} 형식은 읽지 못합니다 — 최신 형식으로 저장해 업로드하십시오")
     raise AttachError("unsupported", f"{ext or '이'} 형식은 읽지 못합니다")
 
 
@@ -98,7 +98,7 @@ def extract(data: bytes, name: str) -> tuple[str, dict]:
     if len(text) > MAX_TEXT_CHARS:
         text = text[:MAX_TEXT_CHARS]
         meta = {**meta, "truncated_document": True,
-                "note": f"문서가 길어 앞 {MAX_TEXT_CHARS:,}자만 씁니다"}
+                "note": f"문서가 길어 앞 {MAX_TEXT_CHARS:,}자만 사용합니다"}
     if not text.strip():
         meta = {**meta, "note": meta.get("note") or "읽을 글자가 없습니다"}
     return text, meta

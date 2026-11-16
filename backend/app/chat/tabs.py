@@ -278,7 +278,7 @@ async def update_channel_tabs(
     if ch.type == "dm":
         raise HTTPException(status_code=400, detail="1:1 대화에는 탭을 연결할 수 없습니다")
     if not await chat_perms.allowed(db, user, "tabs.manage", ch):
-        raise HTTPException(status_code=403, detail="채널 관리자만 탭을 바꿀 수 있습니다")
+        raise HTTPException(status_code=403, detail="채널 관리자만 탭을 변경할 수 있습니다")
     fields = body.model_fields_set
 
     if "folder_path" in fields:

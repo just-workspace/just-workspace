@@ -224,14 +224,14 @@ register(Tool(
 
 register(Tool(
     name="pdf_delete_pages",
-    title="PDF 쪽 지우기",
+    title="PDF 쪽 삭제",
     description="Make a copy of a PDF without the given pages (the original file is kept unchanged)." + RESULT_NOTE,
     scope="mcp:write", risk="low",
     parameters={"type": "object", "properties": {
         "path": _P, "pages": _PAGES, "output_name": OUTPUT_NAME_PARAM, "dst_folder": DST_FOLDER_PARAM,
     }, "required": ["path", "pages"]},
     visible_for=shared_target("dst_folder"),   # 공유 영역이면 타인에게 노출되는 쓰기(외부 내용 읽기 이후에는 사용자 확인 요청)
-    handler=pdf_delete_pages, summarizer=_sum("PDF 쪽 지우기"),
+    handler=pdf_delete_pages, summarizer=_sum("PDF 쪽 삭제"),
 ))
 
 register(Tool(

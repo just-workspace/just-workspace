@@ -54,21 +54,21 @@ MESSAGES = {
     "installer_unreachable": "설치 관리자에 연결하지 못했습니다.",
     "installer_timeout": "설치 관리자가 제때 응답하지 않았습니다.",
     "installer_rejected": "설치 관리자가 요청을 받아들이지 않았습니다.",
-    "installer_error": "설치 관리자에서 오류가 났습니다.",
+    "installer_error": "설치 관리자에서 오류가 발생했습니다.",
     "busy": "다른 작업이 진행 중입니다.",
     "action_not_allowed": "지금은 할 수 없는 동작입니다.",
     "not_available": "받을 수 있는 버전이 없습니다.",
-    "target_stale": "그 사이 받을 버전이 바뀌었습니다. 다시 확인하세요.",
-    "offline_incomplete": "묶음 파일이 검증되지 않았거나 필요한 이미지가 빠져 있습니다.",
+    "target_stale": "그 사이 받을 버전이 변경되었습니다. 다시 확인하십시오.",
+    "offline_incomplete": "오프라인 번들이 검증되지 않았거나 필요한 이미지가 빠져 있습니다.",
     "restore_point_missing": "시험판 이전 백업이 없습니다.",
     "restore_point_unknown": "없는 복원 지점입니다.",
     "job_unknown": "작업을 찾을 수 없습니다.",
     "history_unknown": "기록을 찾을 수 없습니다.",
     "image_unknown": "없는 이미지입니다.",
-    "settings_invalid": "설정 값을 확인하세요.",
+    "settings_invalid": "설정 값을 확인하십시오.",
     "invalid": "요청 형식이 맞지 않습니다.",
     "too_large": "파일이 너무 큽니다.",
-    "no_space": "서버에 받을 자리가 모자랍니다.",
+    "no_space": "서버에 받을 공간이 부족합니다.",
 }
 
 
@@ -472,8 +472,8 @@ def _seconds(value: Any) -> int | None:
 
 
 RESULT_TITLES = {
-    "success": "자동 업데이트를 마쳤습니다",
-    "rolled_back": "자동 업데이트가 실패해 이전 버전으로 되돌렸습니다",
+    "success": "자동 업데이트를 완료했습니다",
+    "rolled_back": "자동 업데이트가 실패해 이전 버전으로 롤백했습니다",
     "rollback_failed": "자동 업데이트와 되돌림이 모두 실패했습니다",
 }
 
@@ -489,7 +489,7 @@ async def _notify_admins(db: AsyncSession, result: str, version: str | None, fro
         body = f"{version} 으로 업데이트했습니다." if version else None
     else:
         now = f"지금은 {from_version} 입니다. " if from_version else ""
-        body = f"{now}자동 업데이트는 멈춰 있습니다. 관리 › 업데이트에서 기록을 확인하고 다시 켭니다."
+        body = f"{now}자동 업데이트는 중지되어 있습니다. 관리 › 업데이트에서 로그를 확인하고 다시 활성화하십시오."
     admin_ids = (await db.execute(
         select(User.id).where(User.is_admin == True, User.is_active == True)  # noqa: E712
     )).scalars().all()

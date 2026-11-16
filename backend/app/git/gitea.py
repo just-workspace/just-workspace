@@ -235,7 +235,7 @@ async def get_file(
         if content and size <= 1_048_576:  # 1MB
             raw = base64.b64decode(content)
             # 바이너리(이미지·압축·글꼴…)는 텍스트로 디코드하지 않는다. 이전에는 errors="replace" 로 깨진 문자
-            # 수천 줄을 전송하여 코드 뷰어가 그대로 렌더링했다. 내용 없음(None)이면 화면에 "원본 내려받기"만 표시된다.
+            # 수천 줄을 전송하여 코드 뷰어가 그대로 렌더링했다. 내용 없음(None)이면 화면에 "원본 다운로드"만 표시된다.
             if _looks_binary(raw):
                 data["decoded_content"] = None
                 data["binary"] = True

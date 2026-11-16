@@ -697,7 +697,7 @@ async def _notify_pending(db, user: User, req: McpWriteRequest) -> None:
             db, user.id, "system",
             title=f"승인 요청 — {who}: {title_tool}",
             body=("직전에 외부 내용을 읽은 뒤의 요청입니다. " if req.after_untrusted else "")
-                 + "승인 대기함에서 확인하세요. 30분 뒤 만료됩니다.",
+                 + "승인 대기함에서 확인하십시오. 30분 후 만료됩니다.",
             link=f"/approvals?id={req.id}",
         )
     except Exception:  # noqa: BLE001
@@ -893,7 +893,7 @@ async def get_owned(db, user: User, req_id: str) -> McpWriteRequest:
     return req
 
 
-BUSY_MSG = "이미 처리 중인 요청입니다 — 잠시 뒤 결과를 확인하세요"
+BUSY_MSG = "이미 처리 중인 요청입니다 — 잠시 후 결과를 확인하십시오"
 
 
 async def approve(db, user: User, req_id: str) -> McpWriteRequest:
@@ -1028,7 +1028,7 @@ async def update_args(db, user: User, req_id: str, args: dict) -> McpWriteReques
             raise WriteError("invalid_argument", f"인자가 맞지 않습니다: {e}")
         if tool_risk(tool, args) != req.risk:
             # 낮은 위험도로 승인받은 요청을 수정하여 덮어쓰기 등 고위험 동작으로 변경하는 것 방지
-            raise WriteError("invalid_argument", "위험도가 바뀌는 수정입니다 — 새 요청으로 다시 하세요")
+            raise WriteError("invalid_argument", "위험도가 변경되는 수정입니다 — 새 요청으로 다시 시도하십시오")
     # 실행 시작 이후에는 인자 변경 불가(승인과 동일한 조건부 UPDATE)
     if not await _cas(db, req, _unclaimed(), args=_j(args),
                       expires_at=_now() + (HIGH_TTL if req.risk == "high" or req.source == "mcp" else LOW_TTL)):
@@ -1042,16 +1042,16 @@ async def undo(db, user: User, req_id: str) -> McpWriteRequest:
     inv = _uj(req.undo)
     until = _aware(req.undo_until)
     if req.status != "executed" or not inv or not until:
-        raise WriteError("conflict", "되돌릴 수 없는 요청입니다")
+        raise WriteError("conflict", "실행 취소할 수 없는 요청입니다")
     if until < _now():
-        raise WriteError("conflict", "되돌리기 시간(10분)이 지났습니다")
+        raise WriteError("conflict", "실행 취소 가능 시간(10분)이 지났습니다")
     # 되돌리기도 1회만 — 먼저 executed → undone 으로 선점하고(조건부 UPDATE), 역연산이 실패하면 원상태로 복원한다
     if not await _cas(db, req, McpWriteRequest.status == "executed", status="undone"):
-        raise WriteError("conflict", "이미 되돌렸거나 되돌리는 중입니다")
+        raise WriteError("conflict", "이미 실행 취소했거나 실행 취소 중입니다")
     result, error, _ = await _run_handler(inv.get("tool", ""), inv.get("args") or {}, user)
     if error:
         await _cas(db, req, McpWriteRequest.status == "undone", status="executed")
-        raise WriteError("internal", f"되돌리기 실패: {error}")
+        raise WriteError("internal", f"실행 취소 실패: {error}")
     req.undo_until = None
     await db.commit()
     await _audit(db, user.id, "ai_write.undone", req)

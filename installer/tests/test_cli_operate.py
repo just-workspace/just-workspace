@@ -49,7 +49,7 @@ def test_restore_shows_the_backup_first_and_changes_nothing_without_yes(host, ca
     assert cli.main(["restore", "/srv/backups/full.jwbak"]) == 1
     out = capsys.readouterr().out
     assert "ws.example.com" in out and "db, mail, files" in out and "gitea" in out and "--yes" in out
-    assert "config" not in out.split("되돌릴 항목:")[1].splitlines()[0]         # 설정은 복원하지 않는다
+    assert "config" not in out.split("복원할 항목:")[1].splitlines()[0]         # 설정은 복원하지 않는다
     assert host.restore_calls == []
     inspect = host.runner.find("compose", "run", "backend", "backup", "inspect")[0]
     assert "/srv/backups/full.jwbak:/restore-src:ro" in inspect and "/restore-src" in inspect
@@ -67,7 +67,7 @@ def test_restore_runs_the_backend_restore_under_maintenance(host, capsys):
     assert "--with-config" not in argv                                         # 설정은 설치 관리자 소관이다
     assert host.flag_seen == [True]                                            # 실행 중에는 쓰기를 차단한다
     assert not (host.paths.stack / "nginx/state/maintenance.on").exists()      # 종료 시 해제한다
-    assert "되돌렸습니다: db, mail, files" in out and "1 → 2" in out and "_pre-restore" in out and "다시 로그인" in out
+    assert "복원했습니다: db, mail, files" in out and "1 → 2" in out and "_pre-restore" in out and "다시 로그인" in out
 
 
 def test_restore_from_the_backup_volume_by_name_with_items_and_password(host, capsys):
@@ -105,7 +105,7 @@ def test_restore_is_not_reported_done_while_backend_is_down(host, capsys):
 
 
 @pytest.mark.parametrize("argv, text", [
-    (["restore"], "백업을 지정하세요"),
+    (["restore"], "백업을 지정하십시오"),
     (["restore", "../etc"], "경로가 올바르지 않습니다"),
     (["restore", "/srv/a b.jwbak"], "경로가 올바르지 않습니다"),
     (["restore", "/etc/shadow"], "경로가 올바르지 않습니다"),

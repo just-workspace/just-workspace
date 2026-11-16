@@ -75,7 +75,7 @@ def _safe_filename(raw_name: str | None) -> str:
     try:
         return fs.validate_name(os.path.basename(raw_name or "upload"))
     except fs.InvalidNameError as e:
-        raise HTTPException(status_code=400, detail=f"올릴 수 없는 파일 이름입니다 — {e}")
+        raise HTTPException(status_code=400, detail=f"업로드할 수 없는 파일 이름입니다 — {e}")
 
 
 def _client_mtime(mtime: int | None, header: str | None) -> int | None:
@@ -890,7 +890,7 @@ async def delete_file(
 ):
     """삭제(기본은 휴지통). 공유받은 경로는 공동 소유자만 가능 — 원 소유자의 휴지통으로 이동하며 실행자를 기록한다."""
     if path.strip("/") in _ROOTS:
-        raise HTTPException(status_code=400, detail="최상위 폴더는 지울 수 없습니다")
+        raise HTTPException(status_code=400, detail="최상위 폴더는 삭제할 수 없습니다")
     a = await acc.resolve(db, user, path, "owner")
     real = a.real
     if not real.exists():
@@ -1092,7 +1092,7 @@ async def rename_file(
 ):
     """이름 변경. 공유받은 경로는 공동 소유자만 가능. 공유·댓글·활동 기록의 경로도 새 이름으로 갱신된다."""
     if body.path.strip("/") in _ROOTS:
-        raise HTTPException(status_code=400, detail="최상위 폴더 이름은 바꿀 수 없습니다")
+        raise HTTPException(status_code=400, detail="최상위 폴더 이름은 변경할 수 없습니다")
     a = await acc.resolve(db, user, body.path, "owner")
     real = a.real
     if not real.exists():
@@ -1145,7 +1145,7 @@ async def move_file(
       공유·댓글은 이동한 위치로 갱신된다(소유자 영역 밖으로 나가면 삭제).
     """
     if not body.copy and body.src.strip("/") in _ROOTS:
-        raise HTTPException(status_code=400, detail="최상위 폴더는 옮길 수 없습니다")
+        raise HTTPException(status_code=400, detail="최상위 폴더는 이동할 수 없습니다")
     src = await acc.resolve(db, user, body.src, "view" if body.copy else "owner")
     src_real = src.real
     if not src_real.exists():
@@ -1153,10 +1153,10 @@ async def move_file(
 
     dst = await acc.resolve(db, user, body.dst, "edit")
     if not body.copy and (src.via_share or dst.via_share) and src.owner_id != dst.owner_id:
-        raise HTTPException(status_code=400, detail="다른 사람 영역으로는 옮길 수 없습니다(복사는 됩니다)")
+        raise HTTPException(status_code=400, detail="다른 사람 영역으로는 이동할 수 없습니다(복사는 가능합니다)")
     dst_real = dst.real
     if src_real.is_dir() and (dst_real == src_real or dst_real.is_relative_to(src_real)):
-        raise HTTPException(status_code=400, detail="폴더를 자기 안으로 옮기거나 복사할 수 없습니다")
+        raise HTTPException(status_code=400, detail="폴더를 자기 안으로 이동하거나 복사할 수 없습니다")
     if not body.copy and dst_real == src_real.parent:
         return {"ok": True, "path": body.src.strip("/")}   # 동일 위치 이동 — no-op
     if dst_real.exists() and not dst_real.is_dir():
@@ -1335,7 +1335,7 @@ async def create_share_link(
                 raise HTTPException(status_code=404, detail=f"찾을 수 없습니다: {vp}")
         root = multi[0].split("/", 1)[0]
         if any(vp.split("/", 1)[0] != root for vp in multi) or root not in ("my", "shared"):
-            raise HTTPException(status_code=400, detail="묶음 링크는 내 파일 또는 공유 파일 한쪽에서만 만들 수 있습니다")
+            raise HTTPException(status_code=400, detail="모음 링크는 내 파일 또는 공유 파일 한쪽에서만 만들 수 있습니다")
         file_path = multi[0]
         display_name = (f"{_check_path(multi[0], user).name}.zip" if len(multi) == 1
                         else f"{_check_path(multi[0], user).name} 외 {len(multi) - 1}개.zip")
@@ -1612,7 +1612,7 @@ async def email_share_link(
     if bad:
         raise HTTPException(status_code=400, detail=f"이메일 형식이 아닙니다: {bad[0]}")
     if not emails:
-        raise HTTPException(status_code=400, detail="받는 사람 이메일을 넣으세요")
+        raise HTTPException(status_code=400, detail="받는 사람 이메일을 입력하십시오")
     if len(emails) > se.MAX_RECIPIENTS:
         raise HTTPException(status_code=400, detail=f"한 번에 {se.MAX_RECIPIENTS}명까지 보낼 수 있습니다")
     message = (body.message or "").strip()
@@ -1623,7 +1623,7 @@ async def email_share_link(
     if exp is not None and (exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)) < now:
         raise HTTPException(status_code=400, detail="만료된 링크는 보낼 수 없습니다")
     if link.max_downloads and (link.download_count or 0) >= link.max_downloads:
-        raise HTTPException(status_code=400, detail="이미 다 쓴 링크는 보낼 수 없습니다")
+        raise HTTPException(status_code=400, detail="이미 모두 사용한 링크는 보낼 수 없습니다")
     used = await se.sent_last_hour(db, user.id, now)
     if used + len(emails) > se.HOURLY_LIMIT:
         left = max(0, se.HOURLY_LIMIT - used)
@@ -1788,7 +1788,7 @@ async def _row_for_manager(db: AsyncSession, share_id: str, user: User) -> FileS
     if role != "owner":
         raise HTTPException(status_code=404, detail="공유를 찾을 수 없습니다")
     if not _can_manage_row(row, user):
-        raise HTTPException(status_code=403, detail="원 소유자가 준 공유·공동 소유는 원 소유자만 바꿀 수 있습니다")
+        raise HTTPException(status_code=403, detail="원 소유자가 준 공유·공동 소유는 원 소유자만 변경할 수 있습니다")
     return row
 
 
@@ -1846,13 +1846,13 @@ async def share_with_users(
     if role == "owner" and not is_owner:
         raise HTTPException(status_code=403, detail="공동 소유 지정은 원 소유자만 할 수 있습니다")
     if not body.user_ids and not body.channel_ids:
-        raise HTTPException(status_code=400, detail="공유할 사람이나 채널을 고르세요")
+        raise HTTPException(status_code=400, detail="공유할 사람이나 채널을 선택하십시오")
     real = a.real
     if not real.exists():
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     from app.modules.registry import is_module_enabled
     if body.channel_ids and not is_module_enabled("chat"):
-        raise HTTPException(status_code=404, detail="채팅을 쓰지 않는 설치입니다 — 채널에는 공유할 수 없습니다")
+        raise HTTPException(status_code=404, detail="채팅을 사용하지 않는 설치입니다 — 채널에는 공유할 수 없습니다")
     from app.chat import service as chat_service
     channel_ids = list(dict.fromkeys(body.channel_ids))
     for cid in channel_ids:
@@ -1868,7 +1868,7 @@ async def share_with_users(
     user_ids = [u for u in dict.fromkeys(body.user_ids) if u not in (user.id, owner_id)]
     existing = [by_user[u] for u in user_ids if u in by_user] + [by_channel[c] for c in channel_ids if c in by_channel]
     if any(not _can_manage_row(r, user) for r in existing):
-        raise HTTPException(status_code=403, detail="원 소유자가 준 공유·공동 소유는 원 소유자만 바꿀 수 있습니다")
+        raise HTTPException(status_code=403, detail="원 소유자가 준 공유·공동 소유는 원 소유자만 변경할 수 있습니다")
     created = 0
     new_users: list[str] = []
     new_channels: list[str] = []
@@ -2180,7 +2180,7 @@ async def unlock_guard(token: str, request: Request | None) -> None:
     except Exception:
         return
     if n >= UNLOCK_MAX_FAILS:
-        raise HTTPException(status_code=429, detail="비밀번호를 여러 번 틀렸습니다. 10분 뒤에 다시 시도하세요")
+        raise HTTPException(status_code=429, detail="비밀번호를 여러 번 틀렸습니다. 10분 후에 다시 시도하십시오")
 
 
 async def unlock_failed(token: str, request: Request | None) -> None:
@@ -2318,8 +2318,8 @@ def _preview_kind(p: Path) -> str | None:
     return None
 
 
-NO_PREVIEW_BLOCK_DETAIL = ("이 형식은 미리 볼 수 없어 내려받기를 막을 수 없습니다"
-                           "(막으면 받는 사람이 아무것도 볼 수 없습니다). 미리보기는 이미지·PDF·텍스트만 됩니다")
+NO_PREVIEW_BLOCK_DETAIL = ("이 형식은 미리 볼 수 없어 다운로드를 막을 수 없습니다"
+                           "(막으면 받는 사람이 아무것도 볼 수 없습니다). 미리보기는 이미지·PDF·텍스트만 지원합니다")
 
 
 def link_single_file(link: ShareLink) -> Path | None:
@@ -2333,8 +2333,8 @@ def link_single_file(link: ShareLink) -> Path | None:
     return real if real.is_file() else None
 
 
-BUNDLE_BLOCK_DETAIL = ("묶음 링크는 미리보기가 없어 내려받기를 막을 수 없습니다"
-                       "(막으면 받는 사람이 아무것도 볼 수 없습니다). 폴더 하나 또는 파일 하나로 링크를 만드세요")
+BUNDLE_BLOCK_DETAIL = ("모음 링크는 미리보기가 없어 다운로드를 막을 수 없습니다"
+                       "(막으면 받는 사람이 아무것도 볼 수 없습니다). 폴더 하나 또는 파일 하나로 링크를 만드십시오")
 
 
 def link_block_refusal(link: ShareLink) -> str | None:
@@ -2481,7 +2481,7 @@ async def download_shared(
 
     blocked = link.allow_download is False
     if blocked and not inline:
-        raise HTTPException(status_code=403, detail="이 링크는 내려받기가 막혀 있습니다(미리보기만 가능)")
+        raise HTTPException(status_code=403, detail="이 링크는 다운로드가 막혀 있습니다(미리보기만 가능)")
 
     # Check download limit
     if link.max_downloads and link.download_count >= link.max_downloads:
@@ -2497,7 +2497,7 @@ async def download_shared(
     multi = _link_paths(link) if link.paths else None
     if target is not None and target.is_dir():
         if blocked:
-            raise HTTPException(status_code=403, detail="이 링크는 내려받기가 막혀 있습니다")
+            raise HTTPException(status_code=403, detail="이 링크는 다운로드가 막혀 있습니다")
         multi, entries_src, real = [sub], [target], None
         zip_name = f"{target.name}.zip"
     elif target is not None:
@@ -2507,7 +2507,7 @@ async def download_shared(
         multi = None
     elif multi:
         if blocked:
-            raise HTTPException(status_code=403, detail="이 링크는 내려받기가 막혀 있습니다")
+            raise HTTPException(status_code=403, detail="이 링크는 다운로드가 막혀 있습니다")
         entries_src = []
         for vp in multi:
             try:
@@ -2527,7 +2527,7 @@ async def download_shared(
         if blocked:
             # 미리보기는 텍스트(JSON)이거나 브라우저 내에서 열어도 안전한 형식(이미지·PDF)만 허용 — svg·html 등은 불가
             if _preview_kind(real) is None:
-                raise HTTPException(status_code=403, detail="이 형식은 미리 볼 수 없고 내려받기가 막혀 있습니다")
+                raise HTTPException(status_code=403, detail="이 형식은 미리 볼 수 없고 다운로드가 막혀 있습니다")
 
     # 다운로드 횟수 원자적 증가 (TOCTOU 방지 — 동시요청 한도 우회 차단)
     # 폴더 링크 내부 파일 미리보기는 내려받기가 아니므로 집계하지 않는다(탐색만으로 1회 링크가 소진되지 않도록 함).
@@ -2894,7 +2894,7 @@ async def share_to_channel(
     import uuid as _uuid
     from app.modules.registry import is_module_enabled
     if not is_module_enabled("chat"):
-        raise HTTPException(status_code=404, detail="채팅을 쓰지 않는 설치입니다 — 채널에는 공유할 수 없습니다")
+        raise HTTPException(status_code=404, detail="채팅을 사용하지 않는 설치입니다 — 채널에는 공유할 수 없습니다")
     from app.chat import service as chat_service
 
     if not await chat_service.is_channel_member(db, body.channel_id, user.id):
@@ -2909,7 +2909,7 @@ async def share_to_channel(
         if not real.is_file():
             raise HTTPException(status_code=400, detail=f"파일만 보낼 수 있습니다: {vp}")
         if real.stat().st_size > _CHANNEL_SHARE_MAX:
-            raise HTTPException(status_code=413, detail=f"50MB 를 넘는 파일은 공유 링크로 보내 주세요: {real.name}")
+            raise HTTPException(status_code=413, detail=f"50MB 를 넘는 파일은 공유 링크로 보내십시오: {real.name}")
         reals.append((vp, real))
 
     from app.chat.router import _broadcast_message

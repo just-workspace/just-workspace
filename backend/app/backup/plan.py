@@ -154,9 +154,9 @@ def plan_backup(cfg: StackConfig, kind: str = KIND_FULL, *, include_files: bool 
                               stdout="db.dump", role="dump"))
         elif item == "config":
             if not cfg.project_dir or not cfg.config_paths:
-                skip(item, "설정 폴더를 찾지 못했습니다(.env 를 따로 보관하세요)")
+                skip(item, "설정 폴더를 찾지 못했습니다(.env 를 따로 보관하십시오)")
                 continue
-            steps.append(Step("config.tar", "config", "설정 묶음(.env 포함)",
+            steps.append(Step("config.tar", "config", "설정 모음(.env 포함)",
                               _tar_out(cfg, cfg.project_dir, cfg.config_paths, gzip=False),
                               stdout="config.tar", role="config", timeout=600))
         elif item == "mail":
@@ -241,24 +241,24 @@ def plan_db_swap(cfg: StackConfig, *, live_exists: bool = True) -> list[Step]:
     if live_exists:
         sql.append(f"ALTER DATABASE {_ident(live)} RENAME TO {_ident(old)}")
     sql.append(f"ALTER DATABASE {_ident(new)} RENAME TO {_ident(live)}")
-    return [Step("db.swap", "db", "DB 바꿔 끼우기", _psql(cfg, *sql), timeout=600)]
+    return [Step("db.swap", "db", "DB 교체", _psql(cfg, *sql), timeout=600)]
 
 
 def plan_db_rollback(cfg: StackConfig, *, swapped: bool) -> list[Step]:
     """복원을 롤백한다. swapped=True 이면 이동해 둔 원래 DB 를 원래 이름으로 복원하고, 아니면 적재 중이던 별도 DB 만 삭제한다."""
     new, old, live = restore_db_name(cfg, "restore_new"), restore_db_name(cfg, "restore_old"), cfg.db_name
     if not swapped:
-        return [Step("db.discard", "db", "올리다 만 DB 지우기",
+        return [Step("db.discard", "db", "올리다 만 DB 삭제",
                      _psql(cfg, f"DROP DATABASE IF EXISTS {_ident(new)} WITH (FORCE)"), always=True, timeout=600)]
     kick = (f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = {_literal(live)} "
             "AND pid <> pg_backend_pid()")
-    return [Step("db.rollback", "db", "원래 DB 로 되돌리기", _psql(
+    return [Step("db.rollback", "db", "원래 DB 로 롤백", _psql(
         cfg, kick, f"DROP DATABASE IF EXISTS {_ident(live)} WITH (FORCE)",
         f"ALTER DATABASE {_ident(old)} RENAME TO {_ident(live)}"), always=True, timeout=600)]
 
 
 def plan_db_cleanup(cfg: StackConfig) -> list[Step]:
-    return [Step("db.cleanup", "db", "옮겨 둔 원래 DB 지우기", _psql(
+    return [Step("db.cleanup", "db", "옮겨 둔 원래 DB 삭제", _psql(
         cfg, f"DROP DATABASE IF EXISTS {_ident(restore_db_name(cfg, 'restore_old'))} WITH (FORCE)"), timeout=600)]
 
 
@@ -305,15 +305,15 @@ def plan_restore_items(cfg: StackConfig, files_by_item: dict[str, dict[str, str]
         roles = files_by_item.get(item, {})
         if item == "mail":
             if "config" in roles:
-                steps.append(Step("mail.config", "mail", "메일 계정·DKIM 키 되돌리기",
+                steps.append(Step("mail.config", "mail", "메일 계정·DKIM 키 복원",
                                   _tar_in(cfg, need(cfg.project_dir, "설정 폴더"),
                                           wipe=f"/v/{cfg.mail_config_path}" if cfg.mail_config_path else None),
                                   stdin=roles["config"], timeout=600))
             if "data" in roles:
-                steps.append(Step("mail.data", "mail", "메일함 되돌리기",
+                steps.append(Step("mail.data", "mail", "메일함 복원",
                                   _tar_in(cfg, need(cfg.mail_data, "메일함 볼륨")), stdin=roles["data"]))
             if "state" in roles:
-                steps.append(Step("mail.state", "mail", "메일 상태 되돌리기",
+                steps.append(Step("mail.state", "mail", "메일 상태 복원",
                                   _tar_in(cfg, need(cfg.mail_state, "메일 상태 볼륨")), stdin=roles["state"]))
         elif item == "gitea":
             if "dump" in roles:
@@ -325,16 +325,16 @@ def plan_restore_items(cfg: StackConfig, files_by_item: dict[str, dict[str, str]
                                   ("docker", "exec", "-i", cfg.postgres, "pg_restore", "-U", cfg.db_user, "-d", db,
                                    "--no-owner", "--no-acl", "--exit-on-error"), stdin=roles["dump"]))
             if "data" in roles:
-                steps.append(Step("gitea.data", "gitea", "코드 저장소 데이터 되돌리기",
+                steps.append(Step("gitea.data", "gitea", "코드 저장소 데이터 복원",
                                   _tar_in(cfg, need(cfg.gitea_data, "코드 저장소 볼륨")), stdin=roles["data"]))
         elif item in ("plugins-data", "certs", "app-signing"):
             source = {"plugins-data": cfg.plugins_data, "certs": cfg.certs, "app-signing": cfg.app_signing}[item]
             if "data" in roles:
-                steps.append(Step(f"{item}.data", item, f"{item} 되돌리기",
+                steps.append(Step(f"{item}.data", item, f"{item} 복원",
                                   _tar_in(cfg, need(source, item + " 볼륨")), stdin=roles["data"]))
         elif item == "files":
             if "data" in roles:
-                steps.append(Step("files.data", "files", "파일 저장소 되돌리기",
+                steps.append(Step("files.data", "files", "파일 저장소 복원",
                                   _tar_in(cfg, need(cfg.storage, "파일 저장소 볼륨"), gzip=False), stdin=roles["data"]))
     return steps
 
@@ -343,5 +343,5 @@ def plan_config_restore(cfg: StackConfig) -> list[Step]:
     """설정 묶음(tar, 표준 입력)을 프로젝트 폴더에 추출한다 — 동일한 이름의 파일만 덮어쓴다."""
     if not cfg.project_dir:
         raise ValueError("설정 폴더 위치를 찾지 못해 복원할 수 없습니다")
-    return [Step("config.restore", "config", "설정 되돌리기(.env 포함)",
+    return [Step("config.restore", "config", "설정 복원(.env 포함)",
                  _tar_in(cfg, cfg.project_dir, gzip=False, wipe=None), stdin="config.tar", timeout=600)]

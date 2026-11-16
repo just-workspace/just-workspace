@@ -75,7 +75,7 @@ async def attachment_text(att_id: str, user: User = Depends(get_current_user), d
 async def model_choices(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """설정 › AI 기본 모델 선택지(workspace · workspace_advanced · personal) — 선택 가능 여부·모델·vision.
 
-    입력창의 "이미지 읽는 모델로 바꾸기" 표시 여부를 결정한다(선택 가능한 항목 중 vision 지원이 있는 경우에만).
+    입력창의 "이미지 읽는 모델로 변경" 표시 여부를 결정한다(선택 가능한 항목 중 vision 지원이 있는 경우에만).
     변경은 기존 PUT /api/ai/my-settings {default_model} 을 사용한다.
     """
     gcfg = await ai_config.get_ai_config(db)

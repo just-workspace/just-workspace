@@ -140,7 +140,7 @@ def apply_patch(current: dict, patch: dict) -> dict:
         raise HTTPException(status_code=400, detail=f"허용되지 않는 설정 키: {', '.join(sorted(bad)[:10])}")
     locked = [k for k in patch if k in SERVER_KEYS]
     if locked:
-        raise HTTPException(status_code=400, detail=f"전용 API 로만 바꿀 수 있는 키: {', '.join(sorted(locked))}")
+        raise HTTPException(status_code=400, detail=f"전용 API 로만 변경할 수 있는 키: {', '.join(sorted(locked))}")
     out = dict(current)
     for k, v in patch.items():
         if v is None:

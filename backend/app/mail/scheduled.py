@@ -104,7 +104,7 @@ async def send_due(db: AsyncSession, now: datetime | None = None, sender=None) -
     await db.execute(
         update(MailScheduledSend)
         .where(MailScheduledSend.status == "sending", MailScheduledSend.send_at < now - _STUCK_AFTER)
-        .values(status="failed", error="발송 중 서버가 재시작돼 확인되지 않았습니다. 다시 예약해 주세요.")
+        .values(status="failed", error="발송 중 서버가 재시작돼 확인되지 않았습니다. 다시 예약하십시오.")
     )
     await db.commit()
 

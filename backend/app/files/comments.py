@@ -236,7 +236,7 @@ async def create_comment(
     """댓글 작성 — 댓글 권한 이상·소유자. @아이디 멘션은 해당 파일을 볼 수 있는 사용자에게 통지한다."""
     content = body.content.strip()
     if not content:
-        raise HTTPException(status_code=400, detail="댓글 내용을 입력하세요")
+        raise HTTPException(status_code=400, detail="댓글 내용을 입력하십시오")
     a = await _target(db, user, body.path, "comment")
     parent_id = None
     if body.parent_id:
@@ -270,7 +270,7 @@ async def _own_comment(db: AsyncSession, comment_id: str, user: User) -> FileCom
     if role is None:
         raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다")
     if c.author_id != user.id:
-        raise HTTPException(status_code=403, detail="내가 쓴 댓글만 고치거나 지울 수 있습니다")
+        raise HTTPException(status_code=403, detail="내가 작성한 댓글만 수정하거나 삭제할 수 있습니다")
     if not acc.at_least(role, "comment"):
         raise acc.deny("comment")
     return c
@@ -316,7 +316,7 @@ async def update_comment(
     """본인 댓글 수정. 멘션은 재해석하여 저장만 한다(수정 시마다 알림을 재송신하지 않음)."""
     content = body.content.strip()
     if not content:
-        raise HTTPException(status_code=400, detail="댓글 내용을 입력하세요")
+        raise HTTPException(status_code=400, detail="댓글 내용을 입력하십시오")
     c = await _own_comment(db, comment_id, user)
     from app.board.service import resolve_mentions
     mentions = await resolve_mentions(db, content, exclude_user_id=user.id)

@@ -82,8 +82,8 @@ ws_api POST /api/auth/logout >/dev/null 2>&1; check "관리자 로그인" ws_log
 contains "jw restore --list 에 그 백업이 있다" "$backup" "$(jw restore --list 2>&1)"
 out="$(jw restore "$backup" 2>&1)"; rc=$?
 expect "--yes 없이는 종료 코드 1" 1 "$rc"
-contains "내용을 보여 준다(되돌릴 항목)" "되돌릴 항목: db" "$out"
-contains "아무것도 바꾸지 않았다고 알린다" "아무것도 바꾸지 않았습니다" "$out"
+contains "내용을 보여 준다(되돌릴 항목)" "복원할 항목: db" "$out"
+contains "아무것도 바꾸지 않았다고 알린다" "아무것도 변경하지 않았습니다" "$out"
 expect "--yes 없이는 백업 뒤의 파일이 그대로다" 200 "$(ws_curl -b "$UJAR" -o /dev/null -w '%{http_code}' "$WS/api/files/download?path=my/$later")"
 jw restore /srv/e2e-no-such-backup.jwbak --yes > "$OP/restore-missing.out" 2>&1; expect "없는 파일은 거부" 1 "$?"
 jw restore "/srv/a b.jwbak" --yes >/dev/null 2>&1; expect "틀린 경로는 거부" 1 "$?"
@@ -94,14 +94,14 @@ docker exec ws-backend python -m app.cli backup pack "/backups/$backup" /backups
 docker cp ws-backend:/backups/e2e-packed.jwbak "$OP/e2e-packed.jwbak" >/dev/null 2>&1
 sudo install -m 600 "$OP/e2e-packed.jwbak" "$E2E_HOST_DIR/e2e-packed.jwbak"
 docker exec ws-backend rm -f /backups/e2e-packed.jwbak
-contains "서버 경로(/data/…)의 백업을 읽는다" "되돌릴 항목: db" "$(jw restore /data/e2e-packed.jwbak 2>&1)"
+contains "서버 경로(/data/…)의 백업을 읽는다" "복원할 항목: db" "$(jw restore /data/e2e-packed.jwbak 2>&1)"
 
 t0=$(date +%s)
 jw restore "$E2E_HOST_DIR/e2e-packed.jwbak" --yes > "$OP/restore.out" 2>&1; rc=$?
 expect "jw restore <서버 경로> --yes" 0 "$rc"
 [ "$rc" = 0 ] || tail -20 "$OP/restore.out"
 note "되돌리기 $(( $(date +%s) - t0 ))초"
-contains "되돌린 항목을 알린다" "되돌렸습니다: db" "$(cat "$OP/restore.out")"
+contains "되돌린 항목을 알린다" "복원했습니다: db" "$(cat "$OP/restore.out")"
 contains "복원 전 DB 덤프의 위치를 알린다" "_pre-restore" "$(cat "$OP/restore.out")"
 check "점검 표식이 남지 않았다" bash -c "! sudo test -e '$E2E_HOST_DIR/stack/nginx/state/maintenance.on'"
 check "컨테이너 ws-backend 준비" wait_ready ws-backend 180

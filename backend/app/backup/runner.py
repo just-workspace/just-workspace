@@ -194,7 +194,7 @@ def discover(runner: Runner, env: dict[str, str] | None = None) -> Discovery:
     backend = _inspect(runner, "container", prefix + "backend")
     base = me or backend
     if base is None:
-        raise BackupError("docker 로 스택을 볼 수 없습니다(backend 컨테이너 안에서, docker 소켓이 붙은 채로 실행하세요)")
+        raise BackupError("docker 로 스택을 볼 수 없습니다(backend 컨테이너 안에서, docker 소켓이 마운트된 상태로 실행하십시오)")
     postgres = _inspect(runner, "container", postgres_name)
     if postgres is None or not _running(postgres):
         raise BackupError(f"DB 컨테이너({postgres_name})가 실행 중이 아닙니다")
@@ -314,7 +314,7 @@ def check_destination(dest: Path, need_bytes: int) -> None:
     need = int(need_bytes * 1.05) + _SPACE_MARGIN
     if free < need:
         raise BackupError(
-            f"백업 위치의 여유 공간이 모자랍니다: 필요 약 {_human(need)}, 남은 공간 {_human(free)} ({dest})"
+            f"백업 위치의 여유 공간이 부족합니다: 필요 약 {_human(need)}, 남은 공간 {_human(free)} ({dest})"
         )
 
 
@@ -405,7 +405,7 @@ def create_backup(
         failures = run_steps(plan.steps, root, runner, log, stop_on_failure=False)
         failed_items = {f.step.item for f in failures if not f.step.always or f.step.stdout}
         if "db" in failed_items:
-            raise BackupError("DB 를 뜨지 못했습니다 — " + "; ".join(str(f) for f in failures if f.step.item == "db"))
+            raise BackupError("DB 를 덤프하지 못했습니다 — " + "; ".join(str(f) for f in failures if f.step.item == "db"))
 
         manifest = fmt.new_manifest(
             kind=kind, product_version=_product_version(), schema_version=_schema_version(),
@@ -480,7 +480,7 @@ def extract_config(path: Path, out_dir: Path, password: str | None = None) -> li
         for member in tar:
             parts = Path(member.name).parts
             if member.name.startswith("/") or ".." in parts or not (member.isfile() or member.isdir()):
-                raise BackupError(f"설정 묶음에 허용되지 않는 항목이 있습니다: {member.name}")
+                raise BackupError(f"설정 모음에 허용되지 않는 항목이 있습니다: {member.name}")
             target = out_dir.joinpath(*parts)
             if member.isdir():
                 target.mkdir(parents=True, exist_ok=True)
@@ -519,8 +519,8 @@ class RestoreResult:
 
 
 STATE_UNTOUCHED = "기존 데이터는 그대로입니다"
-STATE_ROLLED_BACK = "DB 를 복원 전 상태로 되돌렸습니다"
-STATE_ROLLBACK_FAILED = "DB 를 되돌리지 못했습니다 — 복원 전 덤프로 직접 되돌려야 합니다"
+STATE_ROLLED_BACK = "DB 를 복원 전 상태로 롤백했습니다"
+STATE_ROLLBACK_FAILED = "DB 를 롤백하지 못했습니다 — 복원 전 덤프로 직접 복원해야 합니다"
 
 
 def check_compat(manifest: fmt.Manifest, *, schema_version: int, pg_version: int | None,
@@ -529,7 +529,7 @@ def check_compat(manifest: fmt.Manifest, *, schema_version: int, pg_version: int
     if manifest.schema_version > schema_version:
         raise BackupError(
             f"백업의 스키마 버전({manifest.schema_version})이 지금 제품이 아는 버전({schema_version})보다 높습니다 — "
-            f"이 백업을 만든 버전({manifest.data.get('product_version') or '?'}) 이상의 제품에서 복원하세요"
+            f"이 백업을 만든 버전({manifest.data.get('product_version') or '?'}) 이상의 제품에서 복원하십시오"
         )
     theirs = manifest.data.get("postgres_version")
     if "db" in items and theirs and pg_version and theirs // 10000 > pg_version // 10000:
@@ -545,8 +545,8 @@ def check_compat(manifest: fmt.Manifest, *, schema_version: int, pg_version: int
             and theirs_fp != fmt.secret_fingerprint(secret_key):
         raise BackupError(
             "이 백업은 다른 암호화 키(SECRET_KEY)로 만든 것입니다. 지금 키로는 DB 안의 암호화된 값"
-            "(외부 메일 비밀번호·2단계 비밀·저장소 키)을 풀 수 없습니다. 백업의 설정까지 되돌리려면 "
-            "--with-config 를 붙이고, 그래도 진행하려면 --allow-key-mismatch 를 붙이세요"
+            "(외부 메일 비밀번호·2단계 비밀·저장소 키)을 풀 수 없습니다. 백업의 설정까지 복원하려면 "
+            "--with-config 를 지정하고, 그래도 진행하려면 --allow-key-mismatch 를 지정하십시오"
         )
 
 
@@ -646,8 +646,8 @@ def restore_backup(
         stops = pl.restore_stops(cfg, chosen)
         if found.self_container and found.self_container in stops:
             raise BackupError(
-                f"실행 중인 {found.self_container} 안에서는 복원할 수 없습니다(복원하려면 자신을 세워야 합니다). "
-                "서버에서 scripts/restore.sh 를 쓰거나 설치 관리자의 복원을 쓰세요"
+                f"실행 중인 {found.self_container} 안에서는 복원할 수 없습니다(복원하려면 자신을 중지해야 합니다). "
+                "서버에서 scripts/restore.sh 를 사용하거나 설치 관리자의 복원을 사용하십시오"
             )
         files_by_item = {i: {f["role"]: f["name"] for f in manifest.items[i]["files"]} for i in chosen}
         item_steps = pl.plan_restore_items(cfg, files_by_item, chosen)
@@ -786,7 +786,7 @@ def restore_backup(
             raise abort("config", bad, kept)
         stages.append("config")
         result.config_restored = True
-        result.notes.append("설정(.env)을 되돌렸습니다 — 컨테이너에 반영하려면 스택을 다시 만드세요(docker compose up -d)")
+        result.notes.append("설정(.env)을 복원했습니다 — 컨테이너에 반영하려면 스택을 다시 만드십시오(docker compose up -d)")
 
     # 10) 서비스 기동
     log("[restore] 서비스를 다시 띄웁니다")
@@ -807,10 +807,10 @@ def restore_backup(
     # 12) 정리 — 이동해 둔 원래 DB 는 이 단계에서 삭제(안전 덤프는 보존)
     if restore_db:
         if run_steps(pl.plan_db_cleanup(cfg), root, runner, log, stop_on_failure=False):
-            result.notes.append(f"옮겨 둔 원래 DB({pl.restore_db_name(cfg, 'restore_old')})를 지우지 못했습니다 — 직접 지우세요")
+            result.notes.append(f"옮겨 둔 원래 DB({pl.restore_db_name(cfg, 'restore_old')})를 삭제하지 못했습니다 — 직접 삭제하십시오")
     cleanup()
     result.notes.insert(0, "세션은 백업하지 않습니다 — 모든 사용자가 다시 로그인해야 합니다")
     if "files" in chosen and manifest.data.get("install_id"):
-        result.notes.append("파일 저장소의 설치 표식은 백업을 만든 설치의 것입니다 — 설치 id(JW_INSTALL_ID)가 다르면 맞춰야 합니다")
+        result.notes.append("파일 저장소의 설치 마커는 백업을 만든 설치의 것입니다 — 설치 id(JW_INSTALL_ID)가 다르면 맞춰야 합니다")
     log("[restore] 끝났습니다")
     return result

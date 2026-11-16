@@ -79,7 +79,7 @@ class RegisterRequest(BaseModel):
         v = v.strip().lower()
         # Domain-specific recovery email validation is handled by frontend
         if "@" not in v or "." not in v.split("@")[-1]:
-            raise ValueError("올바른 이메일 주소를 입력해주세요")
+            raise ValueError("올바른 이메일 주소를 입력하십시오")
         return v
 
     @field_validator("display_name")
@@ -103,7 +103,7 @@ class ProfileUpdateRequest(BaseModel):
         v = v.strip().lower()
         # Domain-specific recovery email validation is handled by frontend
         if "@" not in v or "." not in v.split("@")[-1]:
-            raise ValueError("올바른 이메일 주소를 입력해주세요")
+            raise ValueError("올바른 이메일 주소를 입력하십시오")
         return v
 
 

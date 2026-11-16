@@ -52,7 +52,7 @@ def quota_error(quota_gb: int | None = None) -> HTTPException:
     q = f"({quota_gb}GB)" if quota_gb else ""
     return HTTPException(
         status_code=413,
-        detail=f"내 파일 할당{q}을 넘습니다. 파일을 정리하거나 관리자에게 문의하세요",
+        detail=f"내 파일 할당{q}을 넘습니다. 파일을 정리하거나 관리자에게 문의하십시오",
     )
 
 

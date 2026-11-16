@@ -128,9 +128,9 @@ async def open_shared(token: str, body: SharedOpenRequest, request: Request = No
     if link.max_downloads and (link.download_count or 0) >= link.max_downloads:
         raise HTTPException(status_code=410, detail="다운로드 횟수를 초과했습니다")
     if link.allow_download is False and not link.can_edit:
-        raise HTTPException(status_code=403, detail="이 링크는 내려받기가 막혀 있습니다(미리보기만 가능)")
+        raise HTTPException(status_code=403, detail="이 링크는 다운로드가 막혀 있습니다(미리보기만 가능)")
     if Path(link.file_path).suffix.lower() not in _ALL_OFFICE_EXTS:
-        raise HTTPException(status_code=400, detail="이 링크는 같이 편집할 수 있는 문서가 아닙니다(내려받기 링크입니다)")
+        raise HTTPException(status_code=400, detail="이 링크는 같이 편집할 수 있는 문서가 아닙니다(다운로드 링크입니다)")
 
     owner = await db.get(User, link.created_by)
     if not owner or not owner.is_active:
@@ -140,9 +140,9 @@ async def open_shared(token: str, body: SharedOpenRequest, request: Request = No
     except (PathSecurityError, AccessDeniedError):
         raise HTTPException(status_code=403, detail="열 수 없는 문서입니다")
     if not real_path.is_file():
-        raise HTTPException(status_code=404, detail="문서가 지워졌거나 옮겨졌습니다")
+        raise HTTPException(status_code=404, detail="문서가 삭제되었거나 이동되었습니다")
     if not await _check_editor_available("onlyoffice"):
-        raise HTTPException(status_code=503, detail="편집기를 지금 쓸 수 없습니다")
+        raise HTTPException(status_code=503, detail="편집기를 지금 사용할 수 없습니다")
 
     # 이름이 중복되어도 OnlyOffice 협업 표시에서 구분되도록 id 를 별도로 부여.
     guest_id = secrets.token_hex(4)

@@ -524,7 +524,7 @@ async def _set_star(owner: str, repo: str, user: User, starred: bool) -> StarSta
         await gitea.set_star(owner, repo, user.username, starred)
     except Exception as e:
         logger.warning("star 변경 실패 %s/%s (%s): %s", owner, repo, user.username, e)
-        raise HTTPException(status_code=409, detail="Gitea 계정을 찾을 수 없어 스타를 바꿀 수 없습니다")
+        raise HTTPException(status_code=409, detail="Gitea 계정을 찾을 수 없어 스타를 변경할 수 없습니다")
     count = None
     try:
         count = (await gitea.get_repo(owner, repo)).get("stars_count")
@@ -766,7 +766,7 @@ async def update_issue(
         if status == 404:
             raise HTTPException(status_code=404, detail="Issue not found")
         if status == 422:
-            raise HTTPException(status_code=400, detail="담당자 이름을 확인하세요")
+            raise HTTPException(status_code=400, detail="담당자 이름을 확인하십시오")
         raise HTTPException(status_code=502, detail="이슈 수정 실패")
     return Issue(
         number=data.get("number", 0),

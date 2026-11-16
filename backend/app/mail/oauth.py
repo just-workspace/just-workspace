@@ -130,7 +130,7 @@ async def get_access_token(account: MailAccount) -> str:
         return account.oauth_access_token
     refresh = decrypt_password(account.oauth_refresh_token or "")
     if not refresh:
-        raise RuntimeError("OAuth refresh token이 없습니다 — 계정을 다시 연결하세요")
+        raise RuntimeError("OAuth refresh token이 없습니다 — 계정을 다시 연결하십시오")
     async with async_session() as db:
         cfg = await _provider_cfg(db, account.oauth_provider or "")
         if not cfg["client_id"]:

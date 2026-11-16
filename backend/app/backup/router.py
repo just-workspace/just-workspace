@@ -117,7 +117,7 @@ async def download_backup(backup_id: str, request: Request = None, user: User = 
         # manifest.json 이 첫 멤버여야 요약을 추출 없이 읽을 수 있다 — 순서를 지정하여 전달한다
         members = backup_format.pack_order(Path(rec.path))
     except backup_format.BackupError as e:
-        raise HTTPException(status_code=409, detail=f"이 백업은 내려받을 수 없습니다: {e}")
+        raise HTTPException(status_code=409, detail=f"이 백업은 다운로드할 수 없습니다: {e}")
     # DB 덤프 전체(비밀번호 해시·2단계 비밀)와 설정(.env — 암호화 키)이 반출된다 — 수신자와 시각을 기록한다
     await audit.log_action(
         db, user.id, "backup.download", "backup", backup_id, {"name": Path(rec.path).name}, _ip(request),

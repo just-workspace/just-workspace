@@ -315,7 +315,7 @@ async def _send_new_device_mail(to: str, username: str, ua: str, ip: str) -> Non
         f"{username} 계정이 새 기기에서 로그인했습니다.\n\n"
         f"기기: {device}\nIP: {ip or '-'}\n시각: {when}\n\n"
         f"본인이 아니라면 {s.app_url.rstrip('/')}/settings/security 에서 그 기기를 로그아웃하고 "
-        f"비밀번호를 바꾸세요."
+        f"비밀번호를 변경하십시오."
     )
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = f"[{s.app_name}] 새 기기 로그인 알림"

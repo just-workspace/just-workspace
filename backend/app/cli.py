@@ -72,10 +72,10 @@ async def seed_admin(
                 )).scalar_one_or_none()
                 if existing is not None and not existing.is_admin:
                     _log(f"[SEED] 경고: '{username}' 계정이 이미 있지만 관리자가 아닙니다 — 승격하지 않습니다. "
-                         "관리 화면에서 직접 권한을 주거나 python -m app.cli seed-admin --promote 를 쓰세요")
+                         "관리 화면에서 직접 권한을 주거나 python -m app.cli seed-admin --promote 를 사용하십시오")
                     return "conflict"
                 _log("[SEED] 이미 사용자가 있어 관리자 시드를 건너뜁니다 "
-                     "(.env 의 ADMIN_USERNAME / ADMIN_PASSWORD 는 지워도 됩니다)")
+                     "(.env 의 ADMIN_USERNAME / ADMIN_PASSWORD 는 삭제해도 됩니다)")
                 return "skipped"
 
         user = (await session.execute(
@@ -131,7 +131,7 @@ async def issue_setup_token() -> str:
     from app.setup import token as setup_token
 
     if setup_token.installer_managed():
-        raise SetupTokenRefused("설치 관리자가 꾸린 서버입니다 — 웹의 첫 관리자 만들기는 닫혀 있습니다. "
+        raise SetupTokenRefused("설치 관리자가 구성한 서버입니다 — 웹의 첫 관리자 만들기는 닫혀 있습니다. "
                                 "관리자는 seed-admin 으로 만듭니다")
     async with async_session() as session:
         if await setup_token.has_admin(session):
@@ -172,20 +172,20 @@ async def reset_admin(username: str, *, disable_2fa: bool = False) -> str:
         if user is None:
             raise ResetRefused(f"'{username}' 계정이 없습니다")
         if not user.is_admin:
-            raise ResetRefused(f"'{username}' 은(는) 관리자 계정이 아닙니다 — 일반 계정은 관리 화면에서 재설정하세요")
+            raise ResetRefused(f"'{username}' 은(는) 관리자 계정이 아닙니다 — 일반 계정은 관리 화면에서 재설정하십시오")
         if user.totp_secret and not disable_2fa:
-            _log("[RESET] 이 계정은 2단계 인증이 켜져 있습니다 — 인증 앱도 없으면 --disable-2fa 를 붙여 다시 실행하세요")
+            _log("[RESET] 이 계정은 2단계 인증이 활성화되어 있습니다 — 인증 앱도 없으면 --disable-2fa 를 추가하여 다시 실행하십시오")
 
         password = generate_temp_password()
         user.password_hash = hash_password(password)
         user.password_changed_at = datetime.now(timezone.utc)
         user.password_reset_token = None
         if not user.is_active:
-            _log("[RESET] 참고: 이 계정은 비활성 상태입니다 — 비밀번호만 바꿨고 활성화하지는 않았습니다")
+            _log("[RESET] 참고: 이 계정은 비활성 상태입니다 — 비밀번호만 변경했고 활성화하지는 않았습니다")
         if disable_2fa and user.totp_secret:
             user.totp_secret = None
             two_factor.clear_codes(user)
-            _log("[RESET] 2단계 인증을 해제했습니다 — 로그인한 뒤 다시 등록하세요")
+            _log("[RESET] 2단계 인증을 해제했습니다 — 로그인한 후 다시 등록하십시오")
         user.token_version = (user.token_version or 0) + 1
         await revoke_user_refresh_tokens(session, user.id)
         await session.commit()
@@ -203,7 +203,7 @@ async def reset_admin(username: str, *, disable_2fa: bool = False) -> str:
         _log(f"[RESET] 세션 레지스트리 정리는 건너뜀({type(e).__name__}) — 기존 세션은 이미 무효입니다")
 
     if source != "local":
-        _log(f"[RESET] 참고: 이 계정은 외부 디렉터리({source}) 계정입니다 — 디렉터리 연동이 켜져 있는 동안은 "
+        _log(f"[RESET] 참고: 이 계정은 외부 디렉터리({source}) 계정입니다 — 디렉터리 연동이 활성화되어 있는 동안은 "
              "로컬 비밀번호로 로그인할 수 없습니다")
     return password
 
@@ -232,11 +232,11 @@ def _cmd_gen_secrets(args) -> int:
                 sys.stdout.write(merged)
             return 0
         if args.in_place:
-            print("ERROR: --in-place 는 --merge <파일> 과 함께 씁니다", file=sys.stderr)
+            print("ERROR: --in-place 는 --merge <파일> 과 함께 사용합니다", file=sys.stderr)
             return 2
         values = sd.generate(only)
     except KeyError as e:
-        print(f"ERROR: 모르는 비밀값 이름: {e.args[0]}\n쓸 수 있는 이름: {', '.join(sd.names())}", file=sys.stderr)
+        print(f"ERROR: 알 수 없는 비밀값 이름: {e.args[0]}\n사용할 수 있는 이름: {', '.join(sd.names())}", file=sys.stderr)
         return 2
     except OSError as e:
         print(f"ERROR: {e}", file=sys.stderr)
@@ -285,7 +285,7 @@ def _cmd_reset_admin(args) -> int:
     except ResetRefused as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
-    print(f"[RESET] '{args.username}' 의 임시 비밀번호(지금 한 번만 보입니다 — 로그인한 뒤 바로 바꾸세요):")
+    print(f"[RESET] '{args.username}' 의 임시 비밀번호(지금 한 번만 표시됩니다 — 로그인한 후 바로 변경하십시오):")
     print(password)
     return 0
 
@@ -296,7 +296,7 @@ def _cmd_setup_token(args) -> int:
     except SetupTokenRefused as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
-    print("[SETUP] 새 설정 토큰(지금 한 번만 보입니다 — 이전 토큰은 더 쓸 수 없습니다). /setup 화면에 넣으세요:")
+    print("[SETUP] 새 설정 토큰(지금 한 번만 표시됩니다 — 이전 토큰은 더 사용할 수 없습니다). /setup 화면에 입력하십시오:")
     print(token)
     return 0
 
@@ -318,7 +318,7 @@ async def configure(payload: dict) -> list[str]:
     settings = payload.get("settings") or {}
     for key, value in settings.items():
         if key not in CONFIGURE_SETTINGS or value not in CONFIGURE_SETTINGS[key]:
-            raise ValueError(f"넣을 수 없는 설정: {key}")
+            raise ValueError(f"입력할 수 없는 설정: {key}")
     ai = payload.get("ai")
 
     async with engine.begin() as conn:
@@ -459,7 +459,7 @@ def build_parser() -> argparse.ArgumentParser:
     seed.add_argument("--password", default="", help="비밀번호 (기본: $ADMIN_PASSWORD, 없으면 물어본다)")
     seed.add_argument("--display-name", default=None, help="표시 이름 (기본: 아이디)")
     seed.add_argument("--promote", action="store_true",
-                      help="같은 이름의 일반 계정이 있으면 관리자로 올린다(비밀번호는 그대로)")
+                      help="같은 이름의 일반 계정이 있으면 관리자로 승격한다(비밀번호는 그대로)")
     seed.set_defaults(func=_cmd_seed_admin)
 
     reset = sub.add_parser("reset-admin", help="관리자 계정에 임시 비밀번호를 발급한다(한 번만 출력)")
@@ -470,13 +470,13 @@ def build_parser() -> argparse.ArgumentParser:
     st = sub.add_parser("setup-token", help="첫 관리자 만들기용 설정 토큰을 다시 발급한다(관리자가 없을 때만)")
     st.set_defaults(func=_cmd_setup_token)
 
-    conf = sub.add_parser("configure", help="DB 에 저장되는 설정을 표준 입력(JSON)으로 넣는다 — 설치 관리자용")
+    conf = sub.add_parser("configure", help="DB 에 저장되는 설정을 표준 입력(JSON)으로 입력한다 — 설치 관리자용")
     conf.set_defaults(func=_cmd_configure)
 
     mig = sub.add_parser("migrate", help="DB 스키마 변경 단계를 적용한다(실패하면 종료 코드 1)")
     mode = mig.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true", help="적용하지 않고, 적용할 것이 있으면 종료 코드 1")
-    mode.add_argument("--status", action="store_true", help="현재 버전·대기 단계·기록을 보여 준다")
+    mode.add_argument("--status", action="store_true", help="현재 버전·대기 단계·기록을 표시한다")
     mode.add_argument("--repair", action="store_true",
                       help="기준선 보정(빠진 테이블·컬럼·인덱스 채우기)을 다시 돌린 뒤 대기 단계를 적용한다")
     mode.add_argument("--on-start", action="store_true",

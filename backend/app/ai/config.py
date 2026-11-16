@@ -449,7 +449,7 @@ async def set_user_ai_prefs(db, uid: str, *, default_model=None, tools=None, ins
     if instructions is not None:
         text = instructions.strip()
         if len(text) > MAX_INSTRUCTIONS:
-            raise ValueError(f"지침은 {MAX_INSTRUCTIONS}자 이하로 써 주세요")
+            raise ValueError(f"지침은 {MAX_INSTRUCTIONS}자 이하로 작성하십시오")
         await _set(db, p + "instructions", text)
     await db.commit()
     return await get_user_ai_prefs(db, uid)

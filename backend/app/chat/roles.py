@@ -120,7 +120,7 @@ def _check_grant(granted: int, holder: int, user) -> None:
         return
     extra = granted & ~holder
     if extra:
-        raise HTTPException(403, f"내가 가진 권한만 줄 수 있습니다: {', '.join(P.names_of(extra))}")
+        raise HTTPException(403, f"내가 가진 권한만 부여할 수 있습니다: {', '.join(P.names_of(extra))}")
 
 
 async def _role_or_404(db: AsyncSession, role_id: str) -> ChatRole:
@@ -384,7 +384,7 @@ async def update_role(role_id: str, body: RolePatch, user: User = Depends(get_cu
     fields = body.model_fields_set
     before = role_dict(r)
     if r.is_default and fields - {"permissions"}:
-        raise HTTPException(400, "@everyone 은 권한만 바꿀 수 있습니다")
+        raise HTTPException(400, "@everyone 은 권한만 변경할 수 있습니다")
     if "name" in fields and body.name is not None:
         r.name = await _check_name(db, body.name, exclude_id=r.id)
     if "color" in fields:
@@ -423,7 +423,7 @@ async def delete_role(role_id: str, user: User = Depends(get_current_user), db: 
         await require_ws(db, user, P.MANAGE_ROLES)
     r = await _role_or_404(db, role_id)
     if r.is_default:
-        raise HTTPException(400, "@everyone 은 지울 수 없습니다")
+        raise HTTPException(400, "@everyone 은 삭제할 수 없습니다")
     await _below_me(db, user, r)
     name = r.name
     await db.execute(delete(ChatMemberRole).where(ChatMemberRole.role_id == r.id))
@@ -452,7 +452,7 @@ async def reorder_roles(body: RoleOrder, user: User = Depends(get_current_user),
     for r in ordered:
         old = r.position or 0
         if new_pos[r.id] != old and (old >= top or new_pos[r.id] >= top):
-            raise HTTPException(403, "내 최고 역할보다 낮은 역할만 옮길 수 있습니다")
+            raise HTTPException(403, "내 최고 역할보다 낮은 역할만 이동할 수 있습니다")
     for r in ordered:
         r.position = new_pos[r.id]
     await db.commit()
@@ -477,7 +477,7 @@ async def _assign(db: AsyncSession, user, r: ChatRole, target_id: str, add: bool
     if r.is_default:
         raise HTTPException(400, "@everyone 은 부여·해제할 수 없습니다")
     if r.group_id:
-        raise HTTPException(409, "그룹과 연동된 역할입니다 — 그룹 멤버십을 바꾸세요")
+        raise HTTPException(409, "그룹과 연동된 역할입니다 — 그룹 멤버십을 변경하십시오")
     await _below_me(db, user, r)
     if await db.get(User, target_id) is None:
         raise HTTPException(404, "사용자를 찾을 수 없습니다")
@@ -793,7 +793,7 @@ async def delete_category(category_id: str, user: User = Depends(get_current_use
     await _ws_holder(db, user, P.MANAGE_CHANNELS)
     c = await _category_or_404(db, category_id)
     if c.id == await _archive_id(db):
-        raise HTTPException(400, {"code": "system_category", "message": "보관 카테고리는 지울 수 없습니다"})
+        raise HTTPException(400, {"code": "system_category", "message": "보관 카테고리는 삭제할 수 없습니다"})
     name = c.name
     await db.execute(update(Channel).where(Channel.category_id == c.id).values(category_id=None))
     await db.execute(delete(ChatPermissionOverwrite).where(
@@ -825,7 +825,7 @@ async def update_layout(body: LayoutBody, user: User = Depends(get_current_user)
         if ch is None:
             raise HTTPException(404, "채널을 찾을 수 없습니다")
         if ch.type == "dm":
-            raise HTTPException(400, "1:1 대화는 카테고리에 넣을 수 없습니다")
+            raise HTTPException(400, "1:1 대화는 카테고리에 추가할 수 없습니다")
         if not user.is_admin:
             await require_channel(db, user, ch, P.MANAGE_CHANNELS)
         chans.append((ch, item))

@@ -229,7 +229,7 @@ async def update_post(
         if v is not None or k in service.NULLABLE_POST_FIELDS
     }
     if updates.get("content") is not None and not updates["content"].strip():
-        raise HTTPException(400, "내용을 입력하세요")
+        raise HTTPException(400, "내용을 입력하십시오")
     if not updates:
         raise HTTPException(400, "변경할 내용이 없습니다")
     result = await service.update_post(db, post_id, **updates)

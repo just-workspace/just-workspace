@@ -421,7 +421,7 @@ register(Tool(
 
 register(Tool(
     name="notes_undo_create",
-    title="만든 위키 페이지 되돌리기",
+    title="만든 위키 페이지 실행 취소",
     description="Delete a wiki page that notes_create just created (only if not edited since)." + UNDO_HINT,
     scope="mcp:write", risk="low",
     parameters={"type": "object", "properties": {
@@ -433,7 +433,7 @@ register(Tool(
 
 register(Tool(
     name="notes_update",
-    title="위키 페이지 고치기",
+    title="위키 페이지 수정",
     description="Replace a wiki page's title and/or full Markdown body (read it with notes_read first and "
                 "send the whole new body). The previous text stays in the page's version history.",
     scope="mcp:write", risk="low",

@@ -246,5 +246,5 @@ async def validate_reply(
             raise ReplyError("reply_other_thread", "같은 스레드의 메시지에만 답장할 수 있습니다")
     else:
         if t.parent_id is not None and not t.thread_broadcast:
-            raise ReplyError("reply_other_thread", "스레드 안 메시지는 그 스레드에서 답장하세요")
+            raise ReplyError("reply_other_thread", "스레드 안 메시지는 그 스레드에서 답장하십시오")
     return t

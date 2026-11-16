@@ -98,7 +98,7 @@ def ensure_host_alias(paths: Paths) -> None:
             if link.resolve() == target.resolve():
                 return
             raise HostAliasError(
-                f"JW_HOST_DIR({link}) 와 같은 경로가 설치 관리자 컨테이너 안에 이미 있습니다 — 다른 폴더를 쓰세요"
+                f"JW_HOST_DIR({link}) 와 같은 경로가 설치 관리자 컨테이너 안에 이미 있습니다 — 다른 폴더를 사용하십시오"
             )
         link.parent.mkdir(parents=True, exist_ok=True)
         os.symlink(target, link, target_is_directory=True)

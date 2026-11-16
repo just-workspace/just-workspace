@@ -30,7 +30,7 @@ async def resolve_forum_board(db: AsyncSession, user, name: str, description: st
         return b.id
     from app.chat.perm_compat import can_create_forum_board
     if not await can_create_forum_board(db, user):
-        raise HTTPException(403, {"code": "forbidden", "message": "새 게시판을 만들 권한이 없습니다 — 기존 게시판을 고르세요"})
+        raise HTTPException(403, {"code": "forbidden", "message": "새 게시판을 만들 권한이 없습니다 — 기존 게시판을 선택하십시오"})
     from app.board import service as board_service
     b = await board_service.create_board(db, name=name[:100], slug=_slug(name), description=(description or None))
     return b["id"]

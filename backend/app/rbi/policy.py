@@ -47,7 +47,7 @@ def normalize_url(raw: str) -> str:
     """대상 주소 검증 — http(s), 호스트는 IP 또는 이름, 자격증명·쿼리 금지."""
     u = (raw or "").strip()
     if not u:
-        raise ValueError("주소를 입력하세요")
+        raise ValueError("주소를 입력하십시오")
     if "://" not in u:
         u = "http://" + u
     p = urlsplit(u)
@@ -56,9 +56,9 @@ def normalize_url(raw: str) -> str:
     if not p.hostname:
         raise ValueError("주소에 호스트가 없습니다")
     if p.username or p.password:
-        raise ValueError("주소에 사용자 정보를 넣을 수 없습니다")
+        raise ValueError("주소에 사용자 정보를 포함할 수 없습니다")
     if p.query or p.fragment:
-        raise ValueError("주소에 쿼리·프래그먼트는 넣을 수 없습니다")
+        raise ValueError("주소에 쿼리·프래그먼트는 포함할 수 없습니다")
     if p.port is not None and not (1 <= p.port <= 65535):
         raise ValueError("포트가 올바르지 않습니다")
     return u.rstrip("/") if not p.path or p.path == "/" else u

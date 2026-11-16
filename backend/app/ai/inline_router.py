@@ -28,7 +28,7 @@ from app.db.session import get_db
 router = APIRouter(prefix="/api/ai/inline", tags=["ai"])
 
 _REASON_MSG = {
-    "module_off": "AI 기능이 꺼져 있습니다",
+    "module_off": "AI 기능이 비활성화되어 있습니다",
     "not_configured": "AI 제공자가 설정되지 않았습니다(관리자에게 문의)",
     "external_blocked": "외부 AI 로 업무 데이터를 보낼 수 없게 막혀 있습니다(관리자 설정)",
 }

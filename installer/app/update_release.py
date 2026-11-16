@@ -76,12 +76,17 @@ def offline_download_url(version: str) -> str | None:
         return None
 
 
-def source_url_override() -> str:
-    """설치 관리자에 준 소스 주소(`-e JW_SOURCE_URL=…`) — http(s) 주소가 아니면 빈 글자(= 기본값을 쓴다)."""
-    url = (os.environ.get("JW_SOURCE_URL") or "").strip()
+def valid_source_url(url: str | None) -> str:
+    """소스 주소로 쓸 수 있는 값이면 그대로, 아니면 빈 글자 — http(s) 주소, 공백·따옴표·꺾쇠 없음, 2000자 이하."""
+    url = (url or "").strip()
     ok = url.lower().startswith(("https://", "http://")) and len(url) <= 2000 \
         and not any(ch.isspace() or ord(ch) < 32 or ch in "\"'<>" for ch in url)
     return url if ok else ""
+
+
+def source_url_override() -> str:
+    """설치 관리자에 준 소스 주소(`-e JW_SOURCE_URL=…`) — http(s) 주소가 아니면 빈 글자(= 기본값을 쓴다)."""
+    return valid_source_url(os.environ.get("JW_SOURCE_URL"))
 
 
 def source_url() -> str:

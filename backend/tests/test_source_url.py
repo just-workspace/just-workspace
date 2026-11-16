@@ -45,3 +45,20 @@ async def test_health_carries_source_url_without_login(client, monkeypatch):
     assert r.json()["source_url"] == DEFAULT_SOURCE_URL and r.json()["license"] == LICENSE_ID
     monkeypatch.setattr(get_settings(), "jw_source_url", "https://git.example.com/acme/workspace")
     assert (await client.get("/api/health")).json()["source_url"] == "https://git.example.com/acme/workspace"
+
+
+@pytest.mark.parametrize("env_value", [None, "", "   "])
+def test_missing_and_empty_env_both_mean_the_default(monkeypatch, env_value):
+    """`.env` 에 줄이 없을 때와 `JW_SOURCE_URL=`(빈 값)일 때 모두 원래 리포의 주소가 나온다.
+
+    설치 관리자는 값이 없으면 줄을 싣지 않지만, 예전 판이 실은 빈 줄이 남아 있는 설치도 있다.
+    """
+    from app.config import Settings
+
+    if env_value is None:
+        monkeypatch.delenv("JW_SOURCE_URL", raising=False)
+    else:
+        monkeypatch.setenv("JW_SOURCE_URL", env_value)
+    assert public_source_url(Settings(_env_file=None).jw_source_url) == DEFAULT_SOURCE_URL
+    monkeypatch.setenv("JW_SOURCE_URL", "https://git.example.com/acme/workspace")
+    assert public_source_url(Settings(_env_file=None).jw_source_url) == "https://git.example.com/acme/workspace"

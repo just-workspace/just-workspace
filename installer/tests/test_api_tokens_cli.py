@@ -499,7 +499,7 @@ def test_env_passes_the_given_source_url_to_the_stack(monkeypatch, bundle, secre
     from app import render
 
     files = render.render(make_answers(), secrets, facts, bundle, registry="localhost")
-    assert "\nJW_SOURCE_URL=\n" in files[".env"]
+    assert "JW_SOURCE_URL" not in files[".env"]                                # 값이 없으면 줄을 싣지 않는다(tests/test_source_url.py)
     monkeypatch.setenv("JW_SOURCE_URL", "https://git.example.com/acme/workspace")
     files = render.render(make_answers(), secrets, facts, bundle, registry="localhost")
     assert "\nJW_SOURCE_URL=https://git.example.com/acme/workspace\n" in files[".env"]

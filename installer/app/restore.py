@@ -28,6 +28,7 @@ from app import render
 from app import restore_config as rc
 from app import validators as v
 from app.state import now_iso, write_private
+from app.update_release import valid_source_url
 
 STEP_ORDER = ("unpack", "storage", "pull", "database", "files", "cert", "zones")
 ARCHIVE_SUFFIX = ".jwbak"
@@ -597,8 +598,15 @@ def step_unpack(ctx: eng.Context) -> None:
     plan = render.derive(ctx.answers, ctx.facts, ctx.catalog)
     managed = {key for _, pairs in render.env_sections(ctx.answers, {}, ctx.facts, plan, version="", registry="",
                                                         gitea_image="") for key, _ in pairs}
+    managed.add("JW_SOURCE_URL")                       # 값이 없으면 render 가 싣지 않는 변수 — 아래에서 따로 잇는다
     extra = rc.extra_env(env, managed, ctx.bundle)
     changes[render.EXTRA_ENV_KEY] = extra
+    # 소스 주소 — 백업을 만든 서버가 고친 판의 소스를 가리키고 있었으면 새 서버에서도 그 주소를 가리켜야 한다.
+    # 새 설치 관리자에 준 값(-e JW_SOURCE_URL)이 있으면 그것이 이긴다(render.settle_source_url).
+    carried_source = valid_source_url(env.get("JW_SOURCE_URL"))
+    if carried_source:
+        ctx.facts.source_url = carried_source
+        ctx.store.update_facts(source_url=carried_source)
     ctx.store.update_env_secrets(changes)
     ctx.log(f"백업의 설정을 가져왔습니다 — 비밀값 {len(rc.carried_secrets(env, ctx.bundle))}개, "
             f"그대로 옮긴 변수 {len(extra)}개")

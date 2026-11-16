@@ -27,6 +27,8 @@ def restack(paths: paths_mod.Paths, registry: str, image_tag: str | None) -> dic
     store = Store(paths)
     answers, facts = store.load_answers(), store.facts()
     secrets = dict(store.env_secrets())
+    # 이 컨테이너에는 사용자가 설치 관리자에 준 환경변수가 없다 — 소스 주소는 기억해 둔 값(없으면 지금 `.env` 의 값)을 이어 쓴다
+    render.settle_source_url(store, facts, paths.stack)
     plan = render.derive(answers, facts, catalog)
     if plan.mail_builtin:
         secrets["DKIM_PRIVATE_KEY"] = dkim.ensure(store, plan.mail_domain)["private_key"]

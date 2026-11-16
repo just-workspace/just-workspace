@@ -28,7 +28,7 @@ from app.answers import Answers, Facts, selected_zones
 from app.bundle import STACK_COPIES, Bundle
 from app.catalog import Catalog
 from app.paths import SITE_COMPOSE
-from app.update_release import source_url_override
+from app.update_release import source_url_override, valid_source_url
 
 HAIRPIN_OFF = "hairpin-off.invalid"
 TURN_TLS_PORT_STANDALONE = 5349      # nginx 가 443 을 쓰는 서버에서 TURN/TLS 를 게시하는 호스트 포트
@@ -262,9 +262,12 @@ def env_sections(answers: Answers, secrets: dict, facts: Facts, plan: Plan,
         ("JW_NET_PREFIX", plan.net_prefix),
         ("JW_INSTALLER_URL", f"http://{INSTALLER_ALIAS}:{INTERNAL_API_PORT}"),
         ("JW_INSTALLER_KEY", s("JW_INSTALLER_KEY")),
-        # 화면의 "소스 코드" 링크 — 설치 관리자에 준 값(-e JW_SOURCE_URL)을 그대로 넘긴다. 비어 있으면 backend 의 기본값(원래 리포)
-        ("JW_SOURCE_URL", source_url_override()),
     ]))
+    # 화면의 "소스 코드" 링크 — 설치 관리자에 준 값(-e JW_SOURCE_URL), 없으면 기억해 둔 값(settle_source_url).
+    # 값이 없으면 줄 자체를 싣지 않는다 — backend 는 변수가 없을 때와 비어 있을 때 모두 원래 리포의 주소를 쓴다.
+    source = source_url_override() or valid_source_url(facts.source_url)
+    if source:
+        sections[-1][1].append(("JW_SOURCE_URL", source))
     sections.append(("앱", [
         ("APP_NAME", "Workspace"),
         ("APP_URL", plan.app_url),
@@ -354,6 +357,27 @@ def env_sections(answers: Answers, secrets: dict, facts: Facts, plan: Plan,
         ("LDAP_PLAIN_BIND", "127.0.0.1"),
     ]))
     return carry_extra_env(sections, secrets.get(EXTRA_ENV_KEY))
+
+
+def settle_source_url(store, facts: Facts, stack_dir) -> None:
+    """소스 주소(`JW_SOURCE_URL`)를 감지값에 기억해 둔다 — 스택 파일을 쓰기 직전에 부른다.
+
+    스택 파일은 설치 관리자 컨테이너 말고도 쓴다: 업데이트의 `switch` 단계는 새 버전 이미지의 일회용 컨테이너가 쓰고
+    (그 컨테이너에는 사용자가 준 환경변수가 없다), 복원은 새 서버의 설치 관리자가 쓴다. 그때마다 값이 사라지지 않게,
+    한 번 정해진 주소는 상태 폴더에 남긴다. 우선순위: 지금 받은 환경변수 → 기억해 둔 값 → 지금 `.env` 에 적힌 값
+    (이 기억이 없던 버전에서 올라온 설치). 기본값(원래 리포)으로 되돌리려면 그 주소를 직접 준다.
+    """
+    current = ""
+    try:
+        for line in (stack_dir / ".env").read_text(encoding="utf-8").splitlines():
+            if line.startswith("JW_SOURCE_URL="):
+                current = envfile.unquote(line.split("=", 1)[1].strip())
+    except OSError:
+        pass
+    want = source_url_override() or valid_source_url(facts.source_url) or valid_source_url(current)
+    if want != (facts.source_url or ""):
+        facts.source_url = want or None
+        store.update_facts(source_url=facts.source_url)
 
 
 def carry_extra_env(sections: list[tuple[str, list[tuple[str, str]]]], extra) -> list[tuple[str, list[tuple[str, str]]]]:

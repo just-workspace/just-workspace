@@ -159,6 +159,7 @@ class Context:
         """답변과 지금의 비밀값으로 스택 파일을 다시 쓴다."""
         env_secrets = dict(self.store.env_secrets())
         self.detect_host_addresses()
+        render.settle_source_url(self.store, self.facts, self.paths.stack)
         self.plan = render.derive(self.answers, self.facts, self.catalog)
         if self.plan.mail_builtin:
             env_secrets["DKIM_PRIVATE_KEY"] = dkim.ensure(self.store, self.plan.mail_domain)["private_key"]

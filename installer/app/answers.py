@@ -224,7 +224,8 @@ class Facts:
     dns_status: str | None = None          # match | mismatch | unknown
     cert_issue_failed: bool = False        # 인증서 자동 발급이 실패한 적이 있다
     upload_cert_ok: bool = False           # 올린 인증서 파일이 검증을 통과했다
-    site_ca: bool = False                  # 올린 인증서에 발급 CA(체인)가 함께 왔다 — 코드 저장소가 그것을 믿게 한다
+    site_ca: bool = False                  # 올린 인증서의 발급 CA 를 안다(체인이 함께 왔거나 CA 를 따로 올렸다) — 코드 저장소·backend 가 그것을 믿게 한다
+    source_url: str | None = None          # 화면의 "소스 코드" 링크로 넘길 주소 — 설치 관리자에 준 JW_SOURCE_URL 을 기억해 둔 것(render.settle_source_url)
     proxy_lan_ip: str | None = None
     host_address: str | None = None        # 이 서버가 밖으로 나갈 때 쓰는 주소(사전 점검이 감지)
     gateway: str | None = None             # 이 서버의 기본 게이트웨이(사전 점검이 감지)

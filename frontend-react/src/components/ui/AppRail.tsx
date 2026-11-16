@@ -1,6 +1,6 @@
 /**
- * 앱 레일 — 데스크톱 왼쪽 모듈 목록. 스토어 없이 props 만으로 그린다.
- * (자세한 설명·예시는 아래 컴포넌트 JSDoc)
+ * 앱 레일 — 데스크톱 왼쪽 모듈 목록. 스토어 없이 props 만으로 렌더링한다.
+ * (상세 설명·예시는 아래 컴포넌트 JSDoc 참조)
  */
 import type { AnchorHTMLAttributes, MouseEvent, ReactNode } from 'react'
 import { useInRouterContext } from 'react-router'
@@ -21,7 +21,7 @@ export interface UiAppRailItem {
   to: string
   /** 현재 화면 */
   active?: boolean
-  /** 숫자 배지(0·빈 값이면 숨김, 99 넘으면 99+) */
+  /** 숫자 배지(0·빈 값이면 숨김, 99 초과 시 99+) */
   badge?: number | string
   /** aria-label(예: 배지가 있을 때 "채팅 — 나를 부른 것 5개"). 없으면 label */
   ariaLabel?: string
@@ -29,14 +29,14 @@ export interface UiAppRailItem {
   live?: boolean
   /** live 점 접근성 이름(기본 "통화 중") */
   liveLabel?: string
-  /** 바깥 출처로 새 탭(target=_blank, rel=noopener) — 오른쪽 12 external-link 아이콘 + 툴팁 "새 탭에서 열기" */
+  /** 외부 출처를 새 탭으로 열기(target=_blank, rel=noopener) — 오른쪽 12 external-link 아이콘 + 툴팁 "새 탭에서 열기" */
   external?: boolean
 }
 
 export interface UiAppRailGroup {
   /** 고유 키 */
   key: string
-  /** 묶음 머리글(wide 에서 11/600 대문자 간격) — 없으면 머리글·구분선 없이(맨 위 홈 묶음) */
+  /** 묶음 머리글(wide 에서 11/600 대문자 간격) — 없으면 머리글·구분선 미표시(최상단 홈 묶음) */
   label?: string
   items: UiAppRailItem[]
 }
@@ -50,15 +50,15 @@ export interface UiAppRailProps {
   groups?: UiAppRailGroup[]
   /** 묶음 없이 항목만(머리글·구분선 없는 한 묶음) — groups 가 있으면 무시 */
   items?: UiAppRailItem[]
-  /** 맨 아래 아바타 자리(26 아바타 + 상태점 링크 등). 없으면 바닥 줄을 그리지 않는다(wide 이고 footerAction 이 있으면 그것만 그린다) */
+  /** 맨 아래 아바타 자리(26 아바타 + 상태점 링크 등). 없으면 하단 줄을 렌더링하지 않는다(wide 이고 footerAction 이 있으면 해당 요소만 렌더링한다) */
   avatar?: ReactNode
   /** wide 일 때 아바타 옆 이름 */
   userName?: string
   /** wide 일 때 바닥 줄 오른쪽 끝(사이드바 고정 버튼 등) */
   footerAction?: ReactNode
-  /** 아바타 줄 위에 끼우는 조각(예: 음성채널 접속 바). 폭은 레일/확장 그대로, 가로 여백 없이 */
+  /** 아바타 줄 위에 삽입하는 요소(예: 음성채널 접속 바). 폭은 레일/확장 폭과 동일, 가로 여백 없음 */
   footerSlot?: ReactNode
-  /** 항목·브랜드를 눌렀을 때(오버레이 확장을 닫는 등) */
+  /** 항목·브랜드 클릭 시 호출(오버레이 확장 닫기 등) */
   onNavigate?: (item: UiAppRailItem | null, e: MouseEvent) => void
   /** <aside> class(폭·위치 덮어쓰기) */
   className?: string
@@ -80,26 +80,26 @@ function RailLink({ to, inRouter, ...rest }: { to: string; inRouter: boolean } &
   return inRouter ? <NuxtLink to={to} {...rest} /> : <a href={to} {...rest} />
 }
 
-/** 아이콘 칸 — 접힘·펼침에서 똑같은 26 칸(브랜드 로고 타일과 같은 왼쪽 기준) */
+/** 아이콘 칸 — 접힘·펼침 상태에서 동일한 26 칸(브랜드 로고 타일과 동일한 왼쪽 기준) */
 const SLOT = 'grid h-[26px] w-[26px] shrink-0 place-items-center'
 
 const badgeText = (b: number | string) => (typeof b === 'number' && b > 99 ? '99+' : String(b))
 const hasBadge = (b: number | string | undefined) => b !== undefined && b !== '' && b !== 0
 
 /**
- * 앱 레일 — 데스크톱 왼쪽 모듈 목록. 스토어 없이 props 만으로 그린다.
+ * 앱 레일 — 데스크톱 왼쪽 모듈 목록. 스토어 없이 props 만으로 렌더링한다.
  * wide=false → 레일 64(아이콘 타일 26 + 묶음 사이 구분선), wide=true → 확장 236(아이콘 20 + 이름 + 묶음 머리글).
  *
- * 아이콘 자리는 두 모습에서 같다(접고 펼 때 아이콘이 1px 도 움직이지 않는다): 브랜드·항목·아바타 모두 왼쪽 여백 6 + 26 칸에 놓고
- * (가운데 정렬·폭별 여백을 쓰지 않는다), 묶음 머리글과 구분선은 같은 높이(20) 칸을 쓴다. 바뀌는 것은 글자와 오른쪽 끝 조각뿐.
+ * 아이콘 위치는 두 형태에서 동일하다(접힘·펼침 전환 시 아이콘이 1px 도 이동하지 않는다): 브랜드·항목·아바타 모두 왼쪽 여백 6 + 26 칸에 배치하고
+ * (가운데 정렬·폭별 여백은 사용하지 않는다), 묶음 머리글과 구분선은 동일한 높이(20) 칸을 사용한다. 변경되는 것은 글자와 오른쪽 끝 요소뿐이다.
  *
  * 항목: 34 높이 · 활성 = 왼쪽 2×14 primary 막대 + 아이콘 타일 primary/16 · primary 글자(wide 는 행 바탕 primary/13 + 600).
- * 배지(badge): primary 숫자 알약 18(99 넘으면 99+) — 레일은 아이콘 오른쪽 위(card 2px 테두리), wide 는 행 오른쪽 끝.
+ * 배지(badge): primary 숫자 알약 18(99 초과 시 99+) — 레일은 아이콘 오른쪽 위(card 2px 테두리), wide 는 행 오른쪽 끝.
  * live: 초록 상태 점(통화 중) — 레일 10(card 링) · wide 8.
  * 맨 위 브랜드(로고 타일 26 + wide 일 때 이름·태그라인), 맨 아래 아바타 슬롯(+ wide 일 때 이름·footerAction).
  *
- * 데이터·스토어 연결(현재 경로로 active 정하기, 채팅 멘션 수, 통화 상태 등)은 쓰는 쪽(layout/Sidebar)이 한다.
- * 링크: 라우터 안이면 앱 링크, 라우터 밖(디자인 툴 등)이면 일반 <a href>.
+ * 데이터·스토어 연결(현재 경로 기준 active 결정, 채팅 멘션 수, 통화 상태 등)은 호출자(layout/Sidebar)가 수행한다.
+ * 링크: 라우터 내부이면 앱 링크, 라우터 외부(디자인 툴 등)이면 일반 <a href>.
  *
  * @example
  * <UiAppRail
@@ -143,7 +143,7 @@ export function UiAppRail({ wide = false, brand, groups, items, avatar, userName
       onClick={e => onNavigate?.(it, e)}
     >
       {it.active && <span className="absolute left-0 h-3.5 w-0.5 rounded-full bg-primary" />}
-      {/* 아이콘 칸 — 두 모습에서 같은 자리·같은 크기(26). 안쪽 타일만 26 ↔ 20 으로 가운데서 바뀐다 */}
+      {/* 아이콘 칸 — 두 형태에서 동일한 위치·동일한 크기(26). 안쪽 타일만 26 ↔ 20 으로 중앙 기준 변경 */}
       <span data-rail-slot="" className={SLOT}>
         <span className={tileClass(it)}>
           <RailIcon name={it.icon} className="h-[18px] w-[18px]" />
@@ -172,7 +172,7 @@ export function UiAppRail({ wide = false, brand, groups, items, avatar, userName
 
   return (
     <aside className={cn('flex h-full flex-col gap-4 overflow-hidden border-r border-border bg-card px-3 py-4', wide ? 'w-sidebar' : 'w-sidebar-rail', className)}>
-      {/* 브랜드: rail 에서는 로고 타일만, wide 에서 텍스트가 따라온다 */}
+      {/* 브랜드: rail 에서는 로고 타일만 표시, wide 에서는 텍스트 추가 표시 */}
       {brand && (
         <RailLink to={brand.to ?? '/'} inRouter={inRouter} className="flex items-center gap-2.5 px-1.5" onClick={e => onNavigate?.(null, e)}>
           <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-md bg-secondary text-[12px] font-semibold text-foreground">
@@ -188,7 +188,7 @@ export function UiAppRail({ wide = false, brand, groups, items, avatar, userName
       <nav aria-label={ariaLabel} className="flex flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden scrollbar-none">
         {list.map(g => (
           <div key={g.key} className="flex flex-col gap-0.5">
-            {/* 머리글 칸 — 머리글(wide)과 구분선(레일)이 같은 높이를 써서 아래 항목의 세로 자리가 같다 */}
+            {/* 머리글 칸 — 머리글(wide)과 구분선(레일)이 동일한 높이를 사용하여 아래 항목의 세로 위치가 동일함 */}
             {g.label != null && (
               <div data-rail-head="" className="flex h-5 shrink-0 items-center px-2">
                 {wide
@@ -201,7 +201,7 @@ export function UiAppRail({ wide = false, brand, groups, items, avatar, userName
         ))}
       </nav>
 
-      {/* 하단 끼움(접속 바 등) — aside 의 px-3 를 상쇄해 가로 끝까지 */}
+      {/* 하단 삽입 요소(접속 바 등) — aside 의 px-3 를 상쇄하여 가로 전체 폭 사용 */}
       {footerSlot != null && <div className="-mx-3 mt-auto shrink-0">{footerSlot}</div>}
 
       {/* 하단: 아바타 + (wide) 이름·오른쪽 액션 */}

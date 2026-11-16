@@ -1,11 +1,11 @@
 /**
  * AI 입력.
  *  데스크톱: 10 24 18 여백 · 폭 680 카드(r12) · [첨부 칩] · 입력 15px · 도구 줄 [첨부][화면 캡처] | [임시 대화] … [■ 36] 또는 [보내기 36].
- *  모바일: 위 선 · 8 8 28 여백 · 한 줄 카드 [입력][첨부 44][보내기 44] — 첨부 칩은 카드 위.
- * 첨부: 끌어다 놓기(놓을 곳 표시 "놓으면 첨부됩니다") · 붙여넣기 · 파일 고르기 · 화면 캡처(getDisplayMedia 한 장).
- *  올리기·변환은 부모가 맡는다(onFiles). 받아쓰기(마이크)는 범위 밖이라 버튼을 두지 않는다.
- * 이미지 썸네일(88 · 모바일 64, 카드 안) · 모델이 이미지를 못 읽으면 보내기 막힘 —
- *  데스크톱: danger 줄 "이 모델(…)은 이미지를 읽지 못합니다…" + [이미지 읽는 모델로 바꾸기](고를 수 있는 vision 모델이 있을 때만) + [이미지 빼기],
+ *  모바일: 상단 선 · 8 8 28 여백 · 한 줄 카드 [입력][첨부 44][보내기 44] — 첨부 칩은 카드 위에 배치.
+ * 첨부: 드래그 앤 드롭(드롭 영역 표시 "놓으면 첨부됩니다") · 붙여넣기 · 파일 선택 · 화면 캡처(getDisplayMedia 1장).
+ *  업로드·변환은 부모가 담당한다(onFiles). 받아쓰기(마이크)는 범위 밖이므로 버튼을 두지 않는다.
+ * 이미지 썸네일(88 · 모바일 64, 카드 내부) · 모델이 이미지 판독을 지원하지 않으면 전송 차단 —
+ *  데스크톱: danger 줄 "이 모델(…)은 이미지를 읽지 못합니다…" + [이미지 읽는 모델로 바꾸기](선택 가능한 vision 모델이 있는 경우에만) + [이미지 빼기],
  *  도구 줄 "보내기 막힘" + 보내기 disabled. 모바일: 한 줄 "이 모델은 이미지를 읽지 못합니다 · 모델 바꾸기 · 이미지 빼기"(danger) + 보내기 disabled.
  *  모바일 도구 줄: [첨부][사진 찍기] 입력 [보내기].
  */
@@ -22,41 +22,41 @@ import { AiPermissionMode } from '~/components/ai/AiPermissionMode'
 import { cyclePermissionMode } from '~/composables/usePermissionMode'
 
 export interface AiComposerHandle {
-  /** 입력 칸에 포커스 */
+  /** 입력 칸에 포커스 설정 */
   focus: () => void
 }
 
 export interface AiComposerProps {
   /** 입력 값(필수) */
   modelValue: string
-  /** 입력 값 바뀜 */
+  /** 입력 값 변경 */
   onUpdateModelValue: (v: string) => void
-  /** 답변 받는 중 — 보내기 대신 멈추기, Esc = 멈추기 */
+  /** 답변 수신 중 — 보내기 대신 멈추기 표시, Esc = 멈추기 */
   busy: boolean
   /** 보내기(Enter · 보내기 버튼) */
   onSend?: () => void
   /** 멈추기(■ · 생성 중 Esc) */
   onStop?: () => void
-  /** 첨부 칩(올리는 중·변환 중·완료·실패) */
+  /** 첨부 칩(업로드 중·변환 중·완료·실패) */
   attachments?: AiAttachment[]
-  /** 파일이 들어옴(끌어다 놓기·붙여넣기·고르기·화면 캡처) — 없으면 첨부 기능을 숨긴다 */
+  /** 파일 수신(드래그 앤 드롭·붙여넣기·파일 선택·화면 캡처) — 미지정 시 첨부 기능 숨김 */
   onFiles?: (files: File[]) => void
-  /** 첨부 빼기 */
+  /** 첨부 제거 */
   onRemoveAttachment?: (a: AiAttachment) => void
-  /** 지금 모델이 이미지를 읽는지 */
+  /** 현재 모델의 이미지 판독 지원 여부 */
   vision?: boolean
-  /** 첨부 한 개 최대 바이트 */
+  /** 첨부 1개당 최대 바이트 */
   maxBytes?: number
-  /** 임시 대화 스위치 — 값과 바뀜(둘 다 있어야 보인다) */
+  /** 임시 대화 스위치 — 값과 변경 핸들러(둘 다 지정해야 표시) */
   temporary?: boolean
   onToggleTemporary?: (v: boolean) => void
-  /** 입력 안내 문구 바꾸기 */
+  /** 입력 안내 문구 대체 */
   placeholder?: string
-  /** 지금 모델 이름(이미지 못 읽음 안내) */
+  /** 현재 모델 이름(이미지 판독 불가 안내용) */
   modelName?: string
-  /** 이미지 읽는 모델로 바꾸기(고를 수 있는 vision 모델이 있을 때만 준다) */
+  /** 이미지 판독 모델로 전환(선택 가능한 vision 모델이 있는 경우에만 전달) */
   onSwitchVisionModel?: () => void
-  /** 첨부한 이미지 모두 빼기 */
+  /** 첨부 이미지 전체 제거 */
   onRemoveImages?: () => void
   /** 권한 모드 칩 + Shift+Tab 순환(Claude Code 권한 모드) */
   permissionMode?: boolean
@@ -70,7 +70,7 @@ function dragHasFiles(e: DragEvent) {
   return Array.from(e.dataTransfer?.types || []).includes('Files')
 }
 
-/** 화면 한 장 캡처 → PNG File. 사용자가 고르기를 취소하면 null */
+/** 화면 1장 캡처 → PNG File. 사용자가 선택을 취소하면 null 반환 */
 async function captureScreen(): Promise<File | null> {
   const md = navigator.mediaDevices as MediaDevices & { getDisplayMedia?: (c?: unknown) => Promise<MediaStream> }
   if (!md?.getDisplayMedia) return null
@@ -113,7 +113,7 @@ export function AiComposer({
     ta.style.height = 'auto'
     ta.style.height = Math.min(ta.scrollHeight, 200) + 'px'
   }, [])
-  // 입력 값이 바뀌면 높이를 다시 맞춘다 — 첫 실행 없음
+  // 입력 값 변경 시 높이 재조정 — 최초 실행 제외
   const first = useRef(true)
   useEffect(() => {
     if (first.current) { first.current = false; return }
@@ -122,7 +122,7 @@ export function AiComposer({
 
   const pending = attachments.some(a => a.status === 'uploading' || a.status === 'converting')
   const readyCount = attachments.filter(a => a.status === 'ready').length
-  // 이미지를 못 읽는 모델 + 이미지 첨부 = 보내기 막힘
+  // 이미지 판독 미지원 모델 + 이미지 첨부 = 전송 차단
   const blocked = !vision && attachments.some(a => a.kind === 'image' && a.status !== 'failed')
   const canSend = !pending && !blocked && (!!modelValue.trim() || readyCount > 0)
 
@@ -138,14 +138,14 @@ export function AiComposer({
     }
   }
 
-  // 생성 중 Esc = 멈추기(모달·메뉴가 먼저 먹으면 그쪽이 우선)
+  // 생성 중 Esc = 멈추기(모달·메뉴가 먼저 처리하면 해당 처리 우선)
   const live = useRef({ busy, onStop })
   live.current = { busy, onStop }
   useEffect(() => {
     function onWinKey(e: globalThis.KeyboardEvent) {
       if (e.key !== 'Escape' || !live.current.busy || e.defaultPrevented) return
-      // 한글 조합을 취소하는 Esc, 그리고 다른 입력 칸(승인 카드 [수정]·질문 카드 '기타'·계획 피드백·질문 수정)에서 누른 Esc 는
-      // 멈춤이 아니다 — 승인을 기다리는 동안은 늘 busy 라, 여기서 멈추면 답변이 끊기고 카드까지 취소됐다.
+      // 한글 조합을 취소하는 Esc, 그리고 다른 입력 칸(승인 카드 [수정]·질문 카드 '기타'·계획 피드백·질문 수정)에서 입력된 Esc 는
+      // 멈춤으로 처리하지 않는다. 승인 대기 중에는 항상 busy 이므로, 여기서 멈추면 답변이 중단되고 카드까지 취소되는 문제가 있었다.
       if (e.isComposing) return
       const tgt = e.target as HTMLElement | null
       if (tgt && tgt !== el.current && typeof tgt.closest === 'function' && tgt.closest('input,textarea,select,[contenteditable="true"]')) return
@@ -157,7 +157,7 @@ export function AiComposer({
 
   useImperativeHandle(ref, () => ({ focus: () => el.current?.focus() }), [])
 
-  // ── 첨부 들어오는 길 ──
+  // ── 첨부 유입 경로 ──
   function onDragEnter(e: DragEvent) {
     if (!onFiles || !dragHasFiles(e)) return
     e.preventDefault()
@@ -186,8 +186,8 @@ export function AiComposer({
     if (!onFiles) return
     const files = Array.from(e.clipboardData?.files || [])
     if (!files.length) return
-    // 엑셀·오피스는 셀·문단을 복사할 때 글자와 함께 그림(PNG)도 클립보드에 넣는다. 파일이 있다고 무조건 첨부로 받으면
-    // 표 글자는 안 들어가고 스크린샷만 붙는다 — 글자가 같이 있으면 글자 붙여넣기를 그대로 둔다.
+    // 엑셀·오피스는 셀·문단 복사 시 텍스트와 함께 이미지(PNG)도 클립보드에 포함한다. 파일 존재만으로 첨부 처리하면
+    // 표의 텍스트는 누락되고 스크린샷만 첨부된다. 텍스트가 함께 있으면 텍스트 붙여넣기를 유지한다.
     if ((e.clipboardData?.getData('text/plain') || '').trim()) return
     e.preventDefault()
     onFiles(files)
@@ -209,7 +209,7 @@ export function AiComposer({
       onDrop={onDrop}
     >
       {dragN !== null && (
-        // 놓을 곳
+        // 드롭 영역
         <div aria-live="polite" className="pointer-events-none absolute inset-x-2 inset-y-1 z-10 mx-auto flex max-w-[680px] flex-col items-center justify-center gap-1.5 rounded-[14px] border-2 border-dashed border-primary bg-primary/[0.08] md:inset-x-6">
           <UiIcon name="upload" className="h-7 w-7 text-primary" />
           <span className="text-sm font-semibold text-foreground">{t('ai.attach.dropTitle')}</span>

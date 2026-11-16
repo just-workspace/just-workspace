@@ -1,10 +1,10 @@
 /**
  * 채널 탭 — 작업.
- *  칩 줄: 열린 작업 n · 나에게 배정 · 완료 n (하나만 고름) — 오른쪽 [작업에서 전체 보기](ghost xs)
- *  빠른 입력(UiInput icon plus): "이 채널에 작업 추가 — 금요일 !높음 @도윤" — 작업 모듈 빠른 입력과 같은 해석(날짜·!우선순위·@담당).
- *    @담당은 이 채널 멤버에서 찾는다(못 찾으면 담당 없이 만들고 알림). @ 가 없으면 담당 없음(예전 채널 작업과 같음).
+ *  칩 줄: 열린 작업 n · 나에게 배정 · 완료 n (단일 선택) — 오른쪽 [작업에서 전체 보기](ghost xs)
+ *  빠른 입력(UiInput icon plus): "이 채널에 작업 추가 — 금요일 !높음 @도윤" — 작업 모듈 빠른 입력과 동일하게 해석(날짜·!우선순위·@담당).
+ *    @담당은 이 채널 멤버에서 조회(조회 실패 시 담당 없이 생성 후 알림). @ 가 없으면 담당 없음(기존 채널 작업과 동일).
  *  목록 행 48(작업 모듈 열): 완료 체크 · 제목 · 상태 배지(tint 18) · 우선순위 · 마감 mono · 담당 아바타 24.
- *  완료 체크·제목 링크는 만든 사람·담당자만(서버 can_open).
+ *  완료 체크·제목 링크는 생성자·담당자에게만 제공(서버 can_open).
  * 서버: GET /api/chat/channels/{id}/tasks?filter=open|mine|done (counts = 칩 숫자)
  */
 import { useCallback, useEffect, useState } from 'react'
@@ -28,7 +28,7 @@ import { UiEmptyState } from '~/components/ui/EmptyState'
 
 export interface ChatChannelTasksTabProps {
   channelId: string
-  /** 작업을 만들거나 끝냈다 — 탭 숫자 갱신 */
+  /** 작업 생성 또는 완료 — 탭 숫자 갱신 */
   onChanged?: () => void
 }
 

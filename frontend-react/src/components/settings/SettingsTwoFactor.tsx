@@ -3,14 +3,14 @@
  *
  * 카드: UiCard 머리(제목 + "로그인할 때 인증 앱의 6자리 코드를 한 번 더 묻습니다" + 상태 틴트 배지 켜짐 success / 꺼짐 neutral),
  *   본문 버튼 — 꺼짐 [켜기] · 켜짐 [복구 코드 새로 발급](outline) [끄기](ghost danger).
- *   관리자가 필수로 정한 계정은 [끄기] 대신 안내 글만(끌 수 없음).
- * 모달(G 규격, 시안 그대로):
- *  · 켜기 1/2(520, 바깥 클릭으로 안 닫힘): QR 136(bg-paper) + 설정 키(읽기 전용·복사) + 앱 코드 6자리(lg mono, "000 000").
- *    틀리면 UiInput error. [다음 — 복구 코드] → POST /api/auth/2fa/enable.
- *  · 켜기 2/2 · 새로 발급 결과(480, 바깥 클릭으로 안 닫힘): 복구 코드 10개 2열 mono 점선 틀 + [복사][.txt 받기]
- *    + "저장했습니다" 체크해야 [완료].
- *  · 끄기(sm, danger): 인증 앱 코드 또는 복구 코드 — 넣기 전엔 [끄기] 비활성. POST /api/auth/2fa/disable.
- *  · 새로 발급(480): warning 띠 "남은 코드 n개는 바로 못 쓰게 됩니다" + 인증 앱 코드 → POST /api/auth/2fa/recovery-codes → 2/2 같은 틀.
+ *   관리자가 필수로 지정한 계정은 [끄기] 대신 안내 문구만 표시(비활성화 불가).
+ * 모달(G 규격, 시안과 동일):
+ *  · 켜기 1/2(520, 바깥 클릭으로 닫히지 않음): QR 136(bg-paper) + 설정 키(읽기 전용·복사) + 앱 코드 6자리(lg mono, "000 000").
+ *    불일치 시 UiInput error. [다음 — 복구 코드] → POST /api/auth/2fa/enable.
+ *  · 켜기 2/2 · 새로 발급 결과(480, 바깥 클릭으로 닫히지 않음): 복구 코드 10개 2열 mono 점선 틀 + [복사][.txt 받기]
+ *    + "저장했습니다" 체크 후에만 [완료] 가능.
+ *  · 끄기(sm, danger): 인증 앱 코드 또는 복구 코드 — 입력 전에는 [끄기] 비활성. POST /api/auth/2fa/disable.
+ *  · 새로 발급(480): warning 띠 "남은 코드 n개는 바로 못 쓰게 됩니다" + 인증 앱 코드 → POST /api/auth/2fa/recovery-codes → 2/2 와 동일한 틀.
  *
  * @example <SettingsTwoFactor autoEnroll={route.query.enroll === '1'} />
  */
@@ -35,7 +35,7 @@ import { UiTrans } from '~/components/ui/Trans'
 import { writeClipboard } from '~/lib/clipboard'
 
 export interface SettingsTwoFactorProps {
-  /** 처음 열 때 꺼져 있으면 바로 켜기 흐름을 연다(관리자 정책으로 등록 유도) */
+  /** 최초 진입 시 꺼져 있으면 즉시 켜기 흐름을 시작한다(관리자 정책에 따른 등록 유도) */
   autoEnroll?: boolean
 }
 
@@ -52,7 +52,7 @@ export function formatOtp(v: string): string {
   const d = v.replace(/\D/g, '').slice(0, 6)
   return d.length > 3 ? `${d.slice(0, 3)} ${d.slice(3)}` : d
 }
-/** 설정 키 표기 — 4글자씩 띄움("JBSW Y3DP …") */
+/** 설정 키 표기 — 4글자 단위 공백 구분("JBSW Y3DP …") */
 export function groupSecret(s: string): string {
   return (s.replace(/\s+/g, '').match(/.{1,4}/g) ?? []).join(' ')
 }
@@ -98,7 +98,7 @@ export function SettingsTwoFactor({ autoEnroll }: SettingsTwoFactorProps) {
       const s = await load()
       if (autoRef.current && s && !s.enabled) void openSetup()
     })()
-    // 마운트 때 한 번
+    // 마운트 시 1회
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -258,7 +258,7 @@ interface CodeStepProps {
 }
 
 /**
- * 켜기 1/2(시안 #on1 · #on1err) — 520, 바깥 클릭으로 안 닫힘. QR 136 + 설정 키(읽기 전용·복사) + 6자리 코드(lg mono).
+ * 켜기 1/2(시안 #on1 · #on1err) — 520, 바깥 클릭으로 닫히지 않음. QR 136 + 설정 키(읽기 전용·복사) + 6자리 코드(lg mono).
  */
 export function SettingsTwoFactorSetupModal({ setup, code, codeError, working, onCode, onNext, onClose }: CodeStepProps & {
   /** /2fa/setup 응답(QR data URL · 비밀키) */
@@ -313,8 +313,8 @@ export function SettingsTwoFactorSetupModal({ setup, code, codeError, working, o
 }
 
 /**
- * 켜기 2/2 · 새로 발급 결과(시안 #on2) — 480, 바깥 클릭으로 안 닫힘. 복구 코드 10개 2열 mono 점선 틀 + [복사][.txt 받기],
- * "저장했습니다" 체크해야 [완료].
+ * 켜기 2/2 · 새로 발급 결과(시안 #on2) — 480, 바깥 클릭으로 닫히지 않음. 복구 코드 10개 2열 mono 점선 틀 + [복사][.txt 받기],
+ * "저장했습니다" 체크 후에만 [완료] 가능.
  */
 export function SettingsTwoFactorCodesModal({ codes, step = true, onCopy, onDownload, onClose }: {
   /** 복구 코드 목록 */
@@ -355,7 +355,7 @@ export function SettingsTwoFactorCodesModal({ codes, step = true, onCopy, onDown
 }
 
 /**
- * 끄기(시안 #off) — sm, danger. 인증 앱 코드 또는 복구 코드를 넣기 전에는 [끄기] 비활성.
+ * 끄기(시안 #off) — sm, danger. 인증 앱 코드 또는 복구 코드 입력 전에는 [끄기] 비활성.
  */
 export function SettingsTwoFactorOffModal({ code, codeError, working, onCode, onDisable, onClose }: CodeStepProps & {
   /** [끄기] · Enter */
@@ -395,11 +395,11 @@ export function SettingsTwoFactorOffModal({ code, codeError, working, onCode, on
 }
 
 /**
- * 복구 코드 새로 발급(시안 #regen) — 480. warning 띠(남은 코드 n개 폐기 · 지금 코드는 보여 줄 수 없음) + 인증 앱 코드.
- * 발급하면 2/2 와 같은 틀(SettingsTwoFactorCodesModal)로 넘어간다.
+ * 복구 코드 새로 발급(시안 #regen) — 480. warning 띠(남은 코드 n개 폐기 · 현재 코드는 표시 불가) + 인증 앱 코드.
+ * 발급 시 2/2 와 동일한 틀(SettingsTwoFactorCodesModal)로 전환한다.
  */
 export function SettingsTwoFactorRegenModal({ remaining, code, codeError, working, onCode, onRegenerate, onClose }: CodeStepProps & {
-  /** 지금 남은 복구 코드 수 */
+  /** 현재 남은 복구 코드 수 */
   remaining: number
   /** [새로 발급] · Enter */
   onRegenerate: () => void

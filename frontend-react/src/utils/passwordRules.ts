@@ -1,17 +1,17 @@
 /**
- * 비밀번호 규칙 실시간 체크. 백엔드 app/auth/password_policy.py(NIST SP 800-63B-4)와 같은 기준:
+ * 비밀번호 규칙 실시간 검사. 백엔드 app/auth/password_policy.py(NIST SP 800-63B-4)와 동일 기준:
  *  - length      8자 이상 (SHALL)                       — 필수
- *  - distinct    아이디·이메일을 빼고도 8자 이상 (문맥 추측 차단) — 필수
- *  - recommended 15자 이상 (SHOULD)                      — 권장(제출 막지 않음)
- * 시안의 "영문·숫자 포함" 은 800-63B-4 가 금지한 구성 규칙(SHALL NOT)이라 넣지 않는다.
- * 블록리스트·연속 문자 같은 나머지 검사는 서버 응답(폼 상단 타일)으로 보여 준다.
+ *  - distinct    아이디·이메일을 제외하고도 8자 이상 (문맥 추측 차단) — 필수
+ *  - recommended 15자 이상 (SHOULD)                      — 권장(제출을 차단하지 않음)
+ * 시안의 "영문·숫자 포함" 은 800-63B-4 가 금지한 구성 규칙(SHALL NOT)이므로 적용하지 않는다.
+ * 블록리스트·연속 문자 등 나머지 검사는 서버 응답(폼 상단 타일)으로 표시한다.
  */
 export const PASSWORD_MIN = 8
 export const PASSWORD_RECOMMENDED = 15
-/** 최초 설정 화면에서 만드는 첫 관리자의 하한 — 백엔드 app/setup/router.py, 설치 마법사와 같다 */
+/** 최초 설정 화면에서 생성하는 첫 관리자의 하한 — 백엔드 app/setup/router.py, 설치 마법사와 동일 */
 export const FIRST_ADMIN_PASSWORD_MIN = 12
 
-/** common = 흔한·유출 비밀번호 아님(서버 블록리스트 — POST /api/auth/password-check 응답 뒤에만 통과 표시, 설정 › 보안) */
+/** common = 흔한·유출 비밀번호 아님(서버 블록리스트 — POST /api/auth/password-check 응답 이후에만 통과 표시, 설정 › 보안) */
 export type PasswordRuleKey = 'length' | 'distinct' | 'recommended' | 'common'
 
 export interface PasswordRuleResult {
@@ -23,7 +23,7 @@ export interface PasswordRuleResult {
   n: number
 }
 
-/** 백엔드 _strip_context 와 같은 규칙으로 문맥 문자열(아이디·이메일·로컬파트)을 뺀 나머지. */
+/** 백엔드 _strip_context 와 동일한 규칙으로 문맥 문자열(아이디·이메일·로컬파트)을 제거한 나머지. */
 export function stripContext(pwLow: string, context: Array<string | null | undefined>): string {
   let out = pwLow
   for (const c of context) {
@@ -48,13 +48,13 @@ export function checkPasswordRules(
   const hasContext = context.some(c => !!c && c.length >= 3)
   return [
     { key: 'length', ok: n >= min, required: true, n },
-    // 문맥 값이 아직 없으면(아이디 미입력) 통과로 본다 — 입력되면 다시 평가
+    // 문맥 값이 아직 없으면(아이디 미입력) 통과로 간주 — 입력 시 재평가
     { key: 'distinct', ok: !hasContext || stripContext(low, context).length >= PASSWORD_MIN, required: true, n },
     { key: 'recommended', ok: n >= PASSWORD_RECOMMENDED, required: false, n },
   ]
 }
 
-/** 필수 규칙을 모두 통과했는지(제출 버튼 활성 조건). */
+/** 필수 규칙 전체 통과 여부(제출 버튼 활성 조건). */
 export function passwordRulesPass(results: PasswordRuleResult[]): boolean {
   return results.every(r => !r.required || r.ok)
 }

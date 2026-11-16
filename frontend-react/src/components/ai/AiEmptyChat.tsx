@@ -1,6 +1,6 @@
 /**
  * 빈 대화: 가운데 정렬 · 간격 20 · 타일 48(r14 secondary + 반짝임 24) · h1 22/700
- *  · 추천 2열 680(간격 10, 카드 14 16 · r12 · 제목 14/600 + 설명 12 muted) · 아래 줄 12 muted(켜진 도구 — 모델 성격).
+ *  · 추천 2열 680(간격 10, 카드 14 16 · r12 · 제목 14/600 + 설명 12 muted) · 하단 줄 12 muted(활성화된 도구 — 모델 성격).
  * 모바일은 1열.
  */
 import { useI18n } from '~/i18n'
@@ -11,9 +11,9 @@ import type { AiStatus } from '~/utils/aiAssist'
 export interface AiEmptyChatProps {
   /** /api/ai/status 응답(모델 성격·도구 이름) */
   status: AiStatus | null
-  /** 이 대화에서 도구가 켜졌는가 */
+  /** 이 대화의 도구 활성화 여부 */
   toolsEnabled: boolean
-  /** 추천 카드 고름 — 카드의 프롬프트 */
+  /** 추천 카드 선택 — 카드의 프롬프트 전달 */
   onPick?: (prompt: string) => void
 }
 

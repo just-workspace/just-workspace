@@ -1,7 +1,7 @@
 /**
  * 네트워크 저장소 연결 확인 — 입력 두 칸(서버 주소 · 공유 경로)과 "연결 확인", 그리고 검사 다섯 가지의 결과.
- * 파일 저장 위치 화면과 복원의 내용 확인 화면이 같이 쓴다.
- * 1~4번(닿는가 · 붙는가 · 쓰기 · 잠금)이 통과해야 진행할 수 있다. 5번(여유 공간)은 보여 주기만 한다.
+ * 파일 저장 위치 화면과 복원의 내용 확인 화면이 공용한다.
+ * 1~4번(도달 · 마운트 · 쓰기 · 잠금)이 통과해야 진행할 수 있다. 5번(여유 공간)은 표시만 한다.
  */
 import { UiButton } from '~/components/ui/Button'
 import { UiInput } from '~/components/ui/Input'
@@ -13,7 +13,7 @@ import type { CheckRow, CheckState } from './CheckList'
 
 export const NFS_STEPS = ['reach', 'mount', 'write', 'lock', 'space'] as const
 
-/** input = 아직 확인 전(또는 확인한 뒤 값을 바꿨다) · error = 확인 요청 자체가 실패 */
+/** input = 아직 확인 전(또는 확인 후 값 변경) · error = 확인 요청 자체가 실패 */
 export type NfsView = 'input' | 'checking' | 'ok' | 'failed' | 'error'
 
 export function nfsView(probe: Probe<NfsProbe>, server: string, exportPath: string): NfsView {

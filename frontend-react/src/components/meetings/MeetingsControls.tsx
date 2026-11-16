@@ -14,15 +14,15 @@ export interface MeetingsControlsProps {
   micEnabled: boolean
   screenShareEnabled: boolean
   blurEnabled?: boolean
-  /** 가상 배경(이미지) 켜짐 — 누르면 해제 */
+  /** 가상 배경(이미지) 활성 상태 — 클릭 시 해제 */
   vbgEnabled?: boolean
   /** 배경 처리 중(블러·가상 배경 공용) */
   blurBusy?: boolean
-  /** 잡음 제거(브라우저 기본 잡음 억제) 켜짐 */
+  /** 잡음 제거(브라우저 기본 잡음 억제) 활성 상태 */
   noiseEnabled?: boolean
   noiseBusy?: boolean
   deviceMenuOpen?: boolean
-  /** 호스트만 녹화 버튼 */
+  /** 녹화 버튼은 호스트에게만 표시 */
   isHost?: boolean
   recording?: boolean
   recordingBusy?: boolean
@@ -54,8 +54,8 @@ export function MeetingsControls(props: MeetingsControlsProps) {
 
   const bgFileInput = useRef<HTMLInputElement | null>(null)
   function onVbgClick() {
-    if (vbgEnabled) props.onSetBackground?.(null)   // 켜져 있으면 해제
-    else bgFileInput.current?.click()                // 아니면 이미지 선택
+    if (vbgEnabled) props.onSetBackground?.(null)   // 활성 상태이면 해제
+    else bgFileInput.current?.click()                // 그 외에는 이미지 선택
   }
   function onBgFileChange(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] || null
@@ -64,9 +64,9 @@ export function MeetingsControls(props: MeetingsControlsProps) {
   }
 
   return (
-    // 스크롤러(버튼 그룹)와 나가기 버튼을 형제로 둔다. 예전엔 나가기가 스크롤 컨테이너 안에
-    // absolute 로 있어서 좁은 화면에서 스크롤하면 다른 버튼 위로 떠다녔다.
-    // 높이는 콘텐츠 기반이라 safe-area 패딩이 잡아먹지 않고 더해진다.
+    // 스크롤러(버튼 그룹)와 나가기 버튼을 형제 요소로 배치한다. 기존에는 나가기 버튼이 스크롤 컨테이너 내부에
+    // absolute 로 배치되어 좁은 화면에서 스크롤 시 다른 버튼 위에 겹쳐 표시되었다.
+    // 높이는 콘텐츠 기반이므로 safe-area 패딩이 높이를 잠식하지 않고 가산된다.
     <div className="flex items-stretch bg-background border-t border-border shrink-0 pb-[env(safe-area-inset-bottom)]">
       <div className="flex-1 min-w-0 flex items-center justify-start sm:justify-center gap-2 sm:gap-3 px-2 sm:px-4 py-2 overflow-x-auto scrollbar-none">
         {/* 카메라 토글 */}
@@ -93,7 +93,7 @@ export function MeetingsControls(props: MeetingsControlsProps) {
           <span className="text-[11px] font-medium text-muted-foreground">{micEnabled ? t('meetings.controls.micOff') : t('meetings.controls.micOn')}</span>
         </div>
 
-        {/* 녹화(호스트 전용) — 모바일 첫 화면에 보이도록 마이크 바로 다음 */}
+        {/* 녹화(호스트 전용) — 모바일 첫 화면에 표시되도록 마이크 바로 다음에 배치 */}
         {isHost && (
           <div className="flex flex-col items-center gap-1">
             <button
@@ -124,7 +124,7 @@ export function MeetingsControls(props: MeetingsControlsProps) {
           <span className="text-[11px] font-medium text-muted-foreground">{screenShareEnabled ? t('meetings.controls.screenStop') : t('meetings.controls.screenShare')}</span>
         </div>
 
-        {/* 잡음 제거 토글 — 브라우저 기본 잡음 억제. 마이크가 켜져 있을 때만 */}
+        {/* 잡음 제거 토글 — 브라우저 기본 잡음 억제. 마이크 활성 시에만 */}
         <div className="flex flex-col items-center gap-1">
           <button
             onClick={() => props.onToggleNoise?.()}
@@ -140,7 +140,7 @@ export function MeetingsControls(props: MeetingsControlsProps) {
           <span className="text-[11px] font-medium text-muted-foreground">{t('meetings.controls.noise')}</span>
         </div>
 
-        {/* 배경 블러 토글 (카메라 켜져 있을 때만, GPU 우선/CPU 폴백) */}
+        {/* 배경 블러 토글 (카메라 활성 시에만, GPU 우선/CPU 폴백) */}
         <div className="flex flex-col items-center gap-1">
           <button
             onClick={() => props.onToggleBlur?.()}
@@ -219,7 +219,7 @@ export function MeetingsControls(props: MeetingsControlsProps) {
         </div>
       </div>
 
-      {/* 나가기 — 스크롤러 밖, 항상 보임 */}
+      {/* 나가기 — 스크롤러 외부, 상시 표시 */}
       <div className="shrink-0 flex flex-col items-center justify-center gap-1 px-2 sm:px-4 border-l border-border">
         <button
           onClick={() => props.onLeave?.()}

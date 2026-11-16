@@ -1,6 +1,6 @@
 /**
- * 권한 모드 칩 — 입력창 도구 줄(Claude Code 의 "⏵⏵ accept edits on · shift+tab to cycle" 자리).
- * 누르면 다섯 모드 메뉴, Shift+Tab(입력창)으로 순환. bypass 는 빨강, auto·acceptEdits 는 강조, plan 은 파랑.
+ * 권한 모드 칩 — 입력창 도구 줄(Claude Code 의 "⏵⏵ accept edits on · shift+tab to cycle" 위치).
+ * 클릭 시 다섯 모드 메뉴 표시, Shift+Tab(입력창)으로 순환. bypass 는 빨강, auto·acceptEdits 는 강조, plan 은 파랑.
  */
 import { useEffect, useState } from 'react'
 import { cn } from '~/lib/utils'

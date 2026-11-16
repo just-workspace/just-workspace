@@ -14,13 +14,13 @@ import { UiIcon } from '~/components/ui/Icon'
 export interface BoardPostRowProps {
   post: PostSummary
   unread: boolean
-  /** 고정 글 묶음에서 왔는지(목록 응답의 pinned) */
+  /** 고정 글 묶음 출처 여부(목록 응답의 pinned) */
   pinned?: boolean
-  /** 검색·북마크처럼 여러 게시판이 섞일 때 게시판 이름 표시 */
+  /** 검색·북마크와 같이 여러 게시판이 혼재할 때 게시판 이름 표시 */
   showBoard?: boolean
 }
 
-/** 게시글 목록 한 행(글로 가는 링크) */
+/** 게시글 목록 한 행(글로 이동하는 링크) */
 export function BoardPostRow({ post, unread, pinned, showBoard }: BoardPostRowProps) {
   const { t } = useI18n()
   const name = authorName(post.author) || t('common.unknownUser')

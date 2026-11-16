@@ -5,12 +5,12 @@
  *                  [브랜드 · 방 제목 26 · 방 정보 14 · (손님) 이름·비밀번호 · 참가 버튼 + 아래 한 줄 · (호스트) 취소].
  *  모바일: 머리 56(뒤로 · 제목 · 보조) → 미리보기 4:3 → 장치 바(세로 3행) → 알림 → 입력 → 하단 고정 [참가].
  *  장치 칸 = 왼쪽 토글(44, 아이콘+글자 켜짐/꺼짐 · 스피커는 테스트) + 오른쪽 선택 버튼("종류 · 상태" / 장치 이름 / ▾).
- *  마이크 칸 아래 20칸 레벨. 목록은 칸 위로 열리는 팝오버(listbox) — 모바일은 하단 시트. 마이크 항목마다 레벨.
- *  막힌 상태(권한 요청 중 · 거부 · 장치 없음 · 다른 앱 사용 중 · http · 끊김)는 미리보기 자리에 "무엇이 막혔나 + 어떻게 + 버튼 1개"(role=alert),
- *  해당 칸은 warning 테두리 + 상태 글자. 참가 버튼은 장치 때문에 잠그지 않는다(손님 이름 비었을 때만) — 아래 한 줄로 어떻게 들어가는지.
+ *  마이크 칸 아래 20칸 레벨. 목록은 칸 위로 열리는 팝오버(listbox) — 모바일은 하단 시트. 마이크 항목마다 레벨 표시.
+ *  차단 상태(권한 요청 중 · 거부 · 장치 없음 · 다른 앱 사용 중 · http · 끊김)는 미리보기 위치에 "무엇이 막혔나 + 어떻게 + 버튼 1개"(role=alert) 표시,
+ *  해당 칸은 warning 테두리 + 상태 글자. 참가 버튼은 장치 사유로 잠그지 않음(손님 이름 미입력 시에만 잠금) — 아래 한 줄에 입장 방식을 안내.
  *  상태 논리(오류 분류 · 짝 스피커 · 잠금 · 레벨)는 prejoin.ts(순수 함수).
  *
- * React: ref 로 { getSelection, stopPreview }. getSelection 은 "실제로 쓸 수 있는" 장치만 켜짐으로 넘긴다(막힌 장치는 꺼짐).
+ * React: ref 로 { getSelection, stopPreview } 노출. getSelection 은 실제 사용 가능한 장치만 켜짐으로 전달한다(차단된 장치는 꺼짐).
  */
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import { cn } from '~/lib/utils'
@@ -30,7 +30,7 @@ import {
   type BrowserName, type DeviceIssue,
 } from './prejoin'
 
-/** 참여할 때 넘기는 장치 선택 */
+/** 참여 시 전달하는 장치 선택 */
 export interface MeetingDeviceSelection {
   cameraEnabled: boolean
   micEnabled: boolean
@@ -39,22 +39,22 @@ export interface MeetingDeviceSelection {
   selectedSpeakerId?: string
 }
 
-/** ref 로 꺼내 쓰는 것 */
+/** ref 로 노출하는 항목 */
 export interface MeetingsDeviceSetupHandle {
-  /** 현재 선택값. 게스트 페이지가 승인 시점에 그대로 써서 즉시 접속한다. */
+  /** 현재 선택값. 게스트 페이지가 승인 시점에 그대로 사용하여 즉시 접속한다. */
   getSelection: () => MeetingDeviceSelection
-  /** 미리보기 스트림·레벨 측정 끄기 */
+  /** 미리보기 스트림·레벨 측정 중지 */
   stopPreview: () => void
 }
 
 export interface MeetingsDeviceSetupProps {
   /** 방 제목 */
   roomName: string
-  /** 참여 버튼 문구(게스트 흐름에선 "참가 신청"). 기본 "참여하기" */
+  /** 참여 버튼 문구(게스트 흐름에서는 "참가 신청"). 기본 "참여하기" */
   joinLabel?: string
-  /** 참여 버튼 잠금 — 손님 이름 미입력만. 장치 상태로는 잠그지 않는다 */
+  /** 참여 버튼 잠금 — 손님 이름 미입력 시에만 적용. 장치 상태로는 잠그지 않음 */
   joinDisabled?: boolean
-  /** 잠긴 이유(버튼 바로 아래). 안 주면 손님 기본 문구 */
+  /** 잠금 사유(버튼 바로 아래). 미지정 시 손님 기본 문구 */
   joinDisabledReason?: string
   /** 신청 전송 중 */
   busy?: boolean
@@ -74,7 +74,7 @@ export interface MeetingsDeviceSetupProps {
   waiting?: boolean
   /** 대기 시작 시각(ms) — 경과 표시 */
   waitingSince?: number | null
-  /** 참여 버튼 자리를 대신하는 내용(호환용 — waiting 이 있으면 그쪽) */
+  /** 참여 버튼 위치를 대체하는 내용(호환용 — waiting 이 있으면 waiting 우선) */
   status?: ReactNode
   onJoin?: (opts: MeetingDeviceSelection) => void
   onCancel?: () => void
@@ -84,7 +84,7 @@ export interface MeetingsDeviceSetupProps {
 type Phase = 'requesting' | 'ready' | 'denied' | 'insecure'
 type Kind = 'mic' | 'cam' | 'spk'
 
-/** 상태 + 동기로 읽을 수 있는 최신값(ref) */
+/** 상태 + 동기적으로 읽을 수 있는 최신값(ref) */
 function useLive<T>(init: T): [T, (v: T) => void, { current: T }] {
   const [val, setVal] = useState(init)
   const ref = useRef(init)
@@ -92,7 +92,7 @@ function useLive<T>(init: T): [T, (v: T) => void, { current: T }] {
   return [val, set, ref]
 }
 
-/** 데스크톱(lg, 1024↑)인가 — 2단 그리드·팝오버 / 아니면 1열·하단 시트 */
+/** 데스크톱(lg, 1024↑) 여부 — 2단 그리드·팝오버 / 그 외 1열·하단 시트 */
 function useDesktop(): boolean {
   const q = '(min-width: 1024px)'
   const [desk, setDesk] = useState(() => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(q).matches : true))
@@ -113,7 +113,7 @@ function stopKind(s: MediaStream | null, kind: 'video' | 'audio') {
   tracks.forEach(tr => tr.stop())
 }
 
-/** 트랙 하나만 든 스트림(둘을 따로 끄기 위해). MediaStream 생성자가 없으면 원본 그대로 */
+/** 트랙 1개만 포함한 스트림(두 트랙을 개별 중지하기 위함). MediaStream 생성자가 없으면 원본 그대로 반환 */
 function streamOf(track: MediaStreamTrack | undefined, orig: MediaStream): MediaStream | null {
   if (!track) return null
   if (typeof MediaStream === 'function') { try { return new MediaStream([track]) } catch { /* 폴백 */ } }
@@ -180,7 +180,7 @@ export function MeetingsDeviceSetup({
   const [selectedMicId, setSelectedMicId, micIdRef] = useLive('')
   const [selectedSpeakerId, setSelectedSpeakerId, spkIdRef] = useLive('')
   const speakerTouched = useRef(false)
-  // 블루투스 짝 스피커로 따라 바꿨을 때(되돌리기용)
+  // 블루투스 짝 스피커로 연동 전환한 경우(복원용)
   const [paired, setPaired] = useState<{ previousSpeakerId: string; name: string } | null>(null)
 
   const [cameraOn, setCameraOn, cameraOnRef] = useLive(true)
@@ -189,7 +189,7 @@ export function MeetingsDeviceSetup({
   const [, setMicStream, micStreamRef] = useLive<MediaStream | null>(null)
   const videoEl = useRef<HTMLVideoElement | null>(null)
 
-  // 레벨: 현재 마이크 + (목록이 열렸을 때) 다른 마이크들
+  // 레벨: 현재 마이크 + (목록이 열린 경우) 다른 마이크
   const [micLevel, setMicLevel] = useState(0)
   const [probeLevels, setProbeLevels] = useState<Record<string, number>>({})
   const audioCtx = useRef<AudioContext | null>(null)
@@ -199,12 +199,12 @@ export function MeetingsDeviceSetup({
   const [openList, setOpenList] = useState<Kind | null>(null)
   const [testing, setTesting] = useState(false)
   const [browser, setBrowser] = useState<BrowserName>('')
-  // 늦게 온 결과(이전 요청)를 버리기 위한 순번
+  // 지연 도착한 결과(이전 요청)를 폐기하기 위한 순번
   const seq = useRef({ init: 0, cam: 0, mic: 0 })
-  /** 진행 중인 장치 요청을 전부 무효로 — 늦게 도착한 스트림은 받는 쪽이 바로 끈다 */
+  /** 진행 중인 장치 요청을 전부 무효화 — 지연 도착한 스트림은 수신 측이 즉시 중지 */
   const invalidatePending = () => { seq.current.init++; seq.current.cam++; seq.current.mic++ }
 
-  // 출력 장치 선택: 브라우저가 지원하는가(아니면 "고를 수 없음") / 지금 고를 수 있는가(목록까지 있어야)
+  // 출력 장치 선택: 브라우저 지원 여부(미지원이면 "고를 수 없음") / 현재 선택 가능 여부(목록까지 있어야 함)
   const mediaProto = typeof HTMLMediaElement !== 'undefined' ? HTMLMediaElement.prototype : undefined
   const sinkSupported = !!mediaProto && 'setSinkId' in mediaProto
   const sinkOk = sinkSelectable(mediaProto, speakers.length)
@@ -232,7 +232,7 @@ export function MeetingsDeviceSetup({
     analyser.current = null
     setMicLevel(0)
   }
-  // 10fps 로 현재 마이크 + 다른 마이크들 레벨
+  // 10fps 로 현재 마이크 + 다른 마이크의 레벨 측정
   useEffect(() => {
     const id = setInterval(() => {
       const an = analyser.current
@@ -261,7 +261,7 @@ export function MeetingsDeviceSetup({
     setProbeLevels({})
   }
 
-  // ── 장치 잡기 ──
+  // ── 장치 획득 ──
   function watchEnded(stream: MediaStream, kind: 'video' | 'audio') {
     const tr = kind === 'video' ? stream.getVideoTracks()[0] : stream.getAudioTracks()[0]
     if (!tr?.addEventListener) return
@@ -295,7 +295,7 @@ export function MeetingsDeviceSetup({
     const id = stream.getAudioTracks()[0]?.getSettings?.()?.deviceId
     if (id && mediaDevicesStore.getState().microphones.some(m => m.deviceId === id)) setSelectedMicId(id)
   }
-  /** 카메라 하나 다시 잡기(장치 바꿈 · 다시 시도 · 다시 연결 · 켜기) */
+  /** 카메라 1개 재획득(장치 변경 · 다시 시도 · 다시 연결 · 켜기) */
   async function acquireCamera(id = camIdRef.current) {
     const my = ++seq.current.cam
     try {
@@ -344,7 +344,7 @@ export function MeetingsDeviceSetup({
       return
     }
     if (!navigator.mediaDevices?.getUserMedia) {
-      // 보안 컨텍스트인데 장치 API 가 없다 — 둘 다 "장치 없음"으로
+      // 보안 컨텍스트이나 장치 API 가 없음 — 둘 다 "장치 없음"으로 처리
       setDebugInfo('no mediaDevices')
       setCamIssue('none')
       setMicIssue('none')
@@ -355,7 +355,7 @@ export function MeetingsDeviceSetup({
     const r = await acquireInitial(c => navigator.mediaDevices.getUserMedia(c))
     if (my !== seq.current.init) { r.stream?.getTracks().forEach(tr => tr.stop()); return }
     setDebugInfo(`camera=${r.camera ?? 'ok'} mic=${r.mic ?? 'ok'}`)
-    // 권한이 없어도 목록은 묻는다(이름 없는 항목이라도 스피커 칸을 채운다)
+    // 권한이 없어도 목록은 조회(이름 없는 항목이라도 스피커 칸을 채움)
     await enumerate()
     if (my !== seq.current.init) { r.stream?.getTracks().forEach(tr => tr.stop()); return }
     if (r.denied) {
@@ -365,7 +365,7 @@ export function MeetingsDeviceSetup({
       return
     }
     if (my !== seq.current.init) { r.stream?.getTracks().forEach(tr => tr.stop()); return }
-    // 먼저 ready 로 — takeCam/takeMic 가 "지금 켜짐" 조건을 본다
+    // 먼저 ready 로 전환 — takeCam/takeMic 가 "지금 켜짐" 조건을 확인함
     setPhase('ready')
     if (r.stream) {
       const v = streamOf(r.stream.getVideoTracks()[0], r.stream)
@@ -378,8 +378,8 @@ export function MeetingsDeviceSetup({
   }
 
   function stopPreview() {
-    // 아직 오는 중인 getUserMedia 결과도 버린다. 이게 없으면 화면이 내려간 뒤(참여·취소) 도착한 스트림이
-    // 아무도 끄지 않는 채 남아, 회의에선 "카메라 꺼짐"인데 카메라 표시등이 켜져 있었다.
+    // 수신 대기 중인 getUserMedia 결과도 폐기한다. 생략 시 화면이 내려간 후(참여·취소) 도착한 스트림이
+    // 중지되지 않은 채 남아, 회의에서는 "카메라 꺼짐"인데 카메라 표시등이 켜진 상태가 발생했다.
     invalidatePending()
     stopKind(camStreamRef.current, 'video')
     stopKind(micStreamRef.current, 'audio')
@@ -390,7 +390,7 @@ export function MeetingsDeviceSetup({
     stopProbes()
   }
 
-  // 미리보기 video 에 스트림 붙이기
+  // 미리보기 video 에 스트림 연결
   const showVideo = phase === 'ready' && cameraOn && !camIssue && !!camStream
   useLayoutEffect(() => {
     const el = videoEl.current
@@ -427,7 +427,7 @@ export function MeetingsDeviceSetup({
     if (changed || micIssueRef.current) { if (phaseRef.current === 'ready' && micOnRef.current) void acquireMic(id) }
     applyPairing(id)
   }
-  /** 블루투스 헤드셋처럼 마이크·스피커가 한 몸인 장치면 스피커도 따라간다 */
+  /** 블루투스 헤드셋처럼 마이크·스피커가 일체형인 장치이면 스피커도 연동 전환 */
   function applyPairing(micId: string) {
     if (!sinkOk) return
     const r = pairSpeaker(micId, spkIdRef.current, speakerTouched.current, pairedSpeakerFor)
@@ -447,7 +447,7 @@ export function MeetingsDeviceSetup({
     speakerTouched.current = true
     setPaired(null)
   }
-  /** 처음 고른 마이크가 헤드셋이면 스피커도(초기값에도 적용) */
+  /** 최초 선택된 마이크가 헤드셋이면 스피커도 연동(초기값에도 적용) */
   const pairedOnce = useRef(false)
   useEffect(() => {
     if (phase !== 'ready' || pairedOnce.current || !selectedMicId) return
@@ -456,7 +456,7 @@ export function MeetingsDeviceSetup({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, selectedMicId])
 
-  /** 미리보기 자리 버튼: 권한 요청 중·거부 = 처음부터 다시, 다른 앱 사용 중·끊김 = 카메라만 다시 */
+  /** 미리보기 위치 버튼: 권한 요청 중·거부 = 처음부터 재시도, 다른 앱 사용 중·끊김 = 카메라만 재시도 */
   function retry() {
     if (phaseRef.current === 'ready') {
       if (camIssueRef.current) void acquireCamera()
@@ -469,7 +469,7 @@ export function MeetingsDeviceSetup({
     window.location.href = httpsUrlFor(window.location)
   }
 
-  /** 스피커 테스트 — 1초 차임. 고른 출력 장치가 있으면 setSinkId */
+  /** 스피커 테스트 — 1초 차임. 선택한 출력 장치가 있으면 setSinkId */
   async function testSpeaker() {
     if (testing || typeof AudioContext === 'undefined') return
     setTesting(true)
@@ -482,13 +482,13 @@ export function MeetingsDeviceSetup({
         scheduleChime(c, dest)
         el = new Audio()
         el.srcObject = dest.stream
-        try { await (el as HTMLAudioElement & { setSinkId: (id: string) => Promise<void> }).setSinkId(spkIdRef.current) } catch { /* 기본 출력으로 */ }
+        try { await (el as HTMLAudioElement & { setSinkId: (id: string) => Promise<void> }).setSinkId(spkIdRef.current) } catch { /* 기본 출력 사용 */ }
         await el.play().catch(() => {})
       } else {
         scheduleChime(c, c.destination)
       }
       await c.resume?.()?.catch?.(() => {})
-    } catch { /* 소리 못 냄 */ }
+    } catch { /* 소리 재생 불가 */ }
     setTimeout(() => {
       el?.pause()
       void c.close().catch(() => {})
@@ -496,7 +496,7 @@ export function MeetingsDeviceSetup({
     }, (CHIME_SECONDS + 0.15) * 1000)
   }
 
-  // ── 장치 바뀜(꽂음·뺌) ──
+  // ── 장치 변경(연결·분리) ──
   useEffect(() => {
     if (phase !== 'ready') return
     if (camIssue === 'none' && cameras.length) void acquireCamera(cameras[0].deviceId)
@@ -514,7 +514,7 @@ export function MeetingsDeviceSetup({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [speakers])
 
-  // ── 마이크 목록이 열리면 다른 마이크들도 잠깐 잡아 레벨을 본다 ──
+  // ── 마이크 목록이 열리면 다른 마이크도 일시 획득하여 레벨 측정 ──
   useEffect(() => {
     if (openList !== 'mic' || phase !== 'ready' || !navigator.mediaDevices?.getUserMedia) return
     let alive = true
@@ -531,7 +531,7 @@ export function MeetingsDeviceSetup({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openList, phase, selectedMicId])
 
-  /** 현재 선택값 — 막힌 장치는 꺼짐으로 */
+  /** 현재 선택값 — 차단된 장치는 꺼짐으로 처리 */
   function getSelection(): MeetingDeviceSelection {
     const ready = phaseRef.current === 'ready'
     return {
@@ -543,7 +543,7 @@ export function MeetingsDeviceSetup({
     }
   }
   function handleJoin() {
-    // 미리보기는 여기서 끄지 않는다. 호스트는 언마운트로 정리, 게스트는 승인 대기 동안 살려 둔다.
+    // 미리보기는 여기서 중지하지 않음. 호스트는 언마운트로 정리하고, 게스트는 승인 대기 동안 유지함.
     onJoin?.(getSelection())
   }
 
@@ -702,7 +702,7 @@ export function MeetingsDeviceSetup({
     : (!insecure && phase !== 'requesting' && !sinkSupported ? { text: t('meetings.prejoin.nosink.notice') } : null)
 
   // 참가 버튼 + 아래 한 줄
-  // 잠김은 손님 이름 미입력(호출부 guestJoinLock)만 — 이유를 버튼 바로 아래에
+  // 잠금은 손님 이름 미입력(호출부 guestJoinLock)에만 적용 — 사유는 버튼 바로 아래에 표시
   const lockReason = joinDisabled ? (joinDisabledReason || t('meetings.prejoin.guestNameLock')) : ''
   const note = joinNoteFor({ phase, cameraOn, micOn, camera: camIssue, mic: micIssue })
   const joinNote = lockReason ? { text: lockReason, cls: 'text-muted-foreground', ic: 'info' } : note ? { text: t(note.key), cls: note.tone === 'warning' ? 'text-warning' : 'text-muted-foreground', ic: note.tone === 'warning' ? 'alert-triangle' : 'info' } : null
@@ -734,7 +734,7 @@ export function MeetingsDeviceSetup({
             {joinNote.text}
           </p>
         )}
-        {/* 접속 중에도 취소할 수 있다 — 화면이 내려가며 진행 중인 입장을 접는다(cancelPendingJoin) */}
+        {/* 접속 중에도 취소 가능 — 화면이 내려가며 진행 중인 입장을 취소함(cancelPendingJoin) */}
         {!compact && cancelable && <UiButton variant="ghost" size="default" className="w-full" onClick={() => onCancel?.()}>{t('common.cancel')}</UiButton>}
       </>
     )
@@ -953,8 +953,8 @@ function DeviceCell({ c, compact, onToggle, onOpen, children }: { c: Cell; compa
 }
 
 /**
- * 장치 목록(listbox/option). 데스크톱 = 칸 위로 여는 팝오버(칸 폭, 최소 340) · 모바일 = 시트 안 행(56).
- * ↑↓ 이동 · Enter/Space 고름 · Esc 닫기(연 버튼으로 포커스) · Tab 닫기. 마이크 항목은 12칸 레벨.
+ * 장치 목록(listbox/option). 데스크톱 = 칸 위로 열리는 팝오버(칸 폭, 최소 340) · 모바일 = 시트 내부 행(56).
+ * ↑↓ 이동 · Enter/Space 선택 · Esc 닫기(연 버튼으로 포커스 이동) · Tab 닫기. 마이크 항목은 12칸 레벨.
  */
 function OptionList({ options, ariaLabel, compact, onPick, onClose, footer }: {
   options: Option[]; ariaLabel: string; compact: boolean; onPick: (id: string) => void; onClose: (focusTrigger: boolean) => void; footer: 'playing' | null

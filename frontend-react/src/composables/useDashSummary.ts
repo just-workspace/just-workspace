@@ -1,9 +1,9 @@
 /**
- * 홈 대시보드 요약 — GET /api/dashboard/summary 한 번으로 칩·운영 띠·카드 개수를 그린다.
- * "오늘"은 캘린더 시간대(utils/calTz) 기준으로 보낸다(day_start/day_end).
+ * 홈 대시보드 요약 — GET /api/dashboard/summary 1회 호출로 칩·운영 띠·카드 개수를 표시한다.
+ * "오늘"은 캘린더 시간대(utils/calTz) 기준으로 전송한다(day_start/day_end).
  *
  * React: const { summary, loading, refresh } = useDashSummary()
- * 컴포넌트 밖: dashSummaryStore.getState().summary · refreshDashSummary() · todayRange()
+ * 컴포넌트 외부: dashSummaryStore.getState().summary · refreshDashSummary() · todayRange()
  */
 import { createStore, useStore } from 'zustand'
 import { $fetch } from '~/lib/api'

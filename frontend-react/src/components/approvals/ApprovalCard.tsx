@@ -1,13 +1,13 @@
 /**
- * 채팅 안 쓰기 승인 카드 — 기본(low·high) · 상태 9종.
+ * 채팅 내 쓰기 승인 카드 — 기본(low·high) · 상태 9종.
  *
- * 내장 AI 스트림의 `write_request` 이벤트가 실어 온 요청 객체(app/mcp/writes.py to_dict)를 그린다.
- *   low  pending : [실행]=approve · [수정]=칸 인라인 편집 → PATCH(다시 계산 중 표시) · [취소]=cancel. 남은 시간(5분).
- *   high pending : "승인 대기함으로 보냄" + 대기함 링크(/approvals?id=). 대기함에서 처리되면 건수 이벤트로 다시 읽어 승인됨·거부됨으로 바꾼다.
+ * 내장 AI 스트림의 `write_request` 이벤트로 전달된 요청 객체(app/mcp/writes.py to_dict)를 렌더링한다.
+ *   low  pending : [실행]=approve · [수정]=칸 인라인 편집 → PATCH(재계산 중 표시) · [취소]=cancel. 남은 시간(5분).
+ *   high pending : "승인 대기함으로 보냄" + 대기함 링크(/approvals?id=). 대기함에서 처리되면 건수 이벤트 수신 시 재조회하여 승인됨·거부됨으로 갱신한다.
  *   executed     : 결과 + [되돌리기] 남은 시간(undo_until 까지, 10분) · undone
  *   canceled · expired · failed · rejected
- * 모든 남은 시간은 서버 시각 기준(offset = server_now − 받은 순간의 클라이언트 시각).
- * 칸으로 못 고치는 값은 "대화로 고치기" — onCompose 로 입력 칸에 문장을 넣는다.
+ * 모든 남은 시간은 서버 시각 기준(offset = server_now − 수신 시점의 클라이언트 시각).
+ * 칸으로 수정할 수 없는 값은 "대화로 고치기" — onCompose 로 입력 칸에 문장을 삽입한다.
  */
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useI18n } from '~/i18n'
@@ -33,15 +33,15 @@ import {
 } from '~/utils/approvals'
 
 export interface ApprovalCardProps {
-  /** 요청 객체(서버가 준 그대로) */
+  /** 요청 객체(서버 응답 원본) */
   request: ApprovalRequest
   /** "○○ 님이 실행" 의 이름 */
   userName?: string
-  /** 대화로 고치기·다시 제안 — 입력 칸에 넣을 문장 */
+  /** 대화로 고치기·다시 제안 — 입력 칸에 삽입할 문장 */
   onCompose?: (text: string) => void
-  /** 요청이 바뀜(서버 응답) — 부모가 메시지에 저장할 때 */
+  /** 요청 변경(서버 응답) — 부모가 메시지에 저장하는 경우 사용 */
   onChange?: (req: ApprovalRequest) => void
-  /** 실행된 뒤 카드 안에 보일 결과(예: files_zip 묶음 카드) — 결과 카드를 따로 띄우지 않고 한 카드로 */
+  /** 실행 후 카드 내부에 표시할 결과(예: files_zip 묶음 카드) — 결과 카드를 별도로 표시하지 않고 한 카드에 포함 */
   result?: ReactNode
 }
 
@@ -70,7 +70,7 @@ function fromField(f: ApprovalEditable, s: string, prev: unknown): unknown {
   return s
 }
 
-/** 칸으로 고칠 수 있는 형식인가(그 밖은 대화로 고치기) */
+/** 칸으로 수정 가능한 형식 여부(그 외는 대화로 고치기) */
 function inlineEditable(f: ApprovalEditable): boolean {
   return ['string', 'integer', 'number', 'boolean', 'array'].includes(f.type) || !!f.enum?.length
 }
@@ -86,7 +86,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
   const reqRef = useRef(req)
   reqRef.current = req
 
-  /** 서버가 준 새 요청 반영 — offset 도 그 응답의 server_now 로 다시 잰다 */
+  /** 서버가 반환한 새 요청 반영 — offset 도 해당 응답의 server_now 로 재계산 */
   function apply(next: ApprovalRequest, announce = true) {
     setReqState(next)
     if (next.server_now) setOffset(serverOffset(next.server_now))
@@ -94,12 +94,12 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
     if (announce) announceApprovalUpdate(next)
   }
 
-  // 부모가 다른 요청 객체를 주면(같은 id 의 새 이벤트) 따른다
+  // 부모가 다른 요청 객체를 전달하면(동일 id 의 새 이벤트) 해당 객체를 적용
   useEffect(() => {
     if (request !== reqRef.current) { setReqState(request); if (request.server_now) setOffset(serverOffset(request.server_now)) }
   }, [request])
 
-  // 다른 곳(대기함·다른 카드)에서 같은 요청이 바뀌면 따른다
+  // 다른 위치(대기함·다른 카드)에서 동일 요청이 변경되면 반영
   useEffect(() => {
     function onUpd(e: Event) {
       const d = (e as CustomEvent<ApprovalRequest>).detail
@@ -110,7 +110,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // high 대기: 대기 건수 이벤트가 오면 대기함에서 처리됐는지 다시 본다
+  // high 대기: 대기 건수 이벤트 수신 시 대기함에서의 처리 여부를 재확인
   const seq = useApprovalsSeq()
   const seqSeen = useRef(seq)
   useEffect(() => {
@@ -118,13 +118,13 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
     seqSeen.current = seq
     const r = reqRef.current
     if (r.status !== 'pending' || (r.risk !== 'high' && r.source !== 'mcp')) return
-    approvalsApi.get(r.id).then(n => apply(n, false)).catch(() => { /* 다음 이벤트 때 */ })
+    approvalsApi.get(r.id).then(n => apply(n, false)).catch(() => { /* 다음 이벤트 시 처리 */ })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seq])
 
   const status0 = req.status
   const ticking = status0 === 'pending' || (status0 === 'executed' && !!req.can_undo)
-  useNowTick(ticking) // 1초마다 다시 그린다 — 시각은 그릴 때의 Date.now() + offset
+  useNowTick(ticking) // 1초마다 재렌더링 — 시각은 렌더링 시점의 Date.now() + offset
   const now = Date.now()
   const status = effectiveStatus(req, offset, now)
   const isHigh = req.risk === 'high'
@@ -143,7 +143,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
       return true
     } catch (e: any) {
       addToast('error', t('approvals.errors.action', { msg: errMsg(e) }))
-      // 이미 처리됨(409) 등 — 서버 상태로 맞춘다
+      // 이미 처리됨(409) 등 — 서버 상태로 동기화
       if (errStatus(e) === 409 || errStatus(e) === 404) approvalsApi.get(req.id).then(n => apply(n, false)).catch(() => {})
       return false
     } finally {
@@ -152,7 +152,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
   }
 
   const approve = (remember?: 'conversation' | 'always') => run('approve', () => approvalsApi.approve(req.id, remember))
-  // Claude Code "아니요, 대신 이렇게" — 사유를 모델에게 넘긴다(거절 + 지시)
+  // Claude Code "아니요, 대신 이렇게" — 사유를 모델에 전달한다(거절 + 지시)
   const [insteadOpen, setInsteadOpen] = useState(false)
   const [instead, setInstead] = useState('')
   const sendInstead = async () => {
@@ -192,7 +192,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
     }
   }
 
-  // ── 그리기 ──
+  // ── 렌더링 ──
   const mono = 'font-mono text-xs text-muted-foreground'
   const header = (opts: { icon: string; iconCls: string; right?: ReactNode; badge?: ReactNode; border?: boolean; muted?: boolean }) => (
     <header className={cn('flex flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-3', opts.border !== false && 'border-b border-border', isMobile && 'px-3.5')}>
@@ -221,7 +221,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
   const link = resultLink(req.result)
   const label = t('approvals.card.label', { title: req.title })
 
-  // 미리보기 다시 계산 중
+  // 미리보기 재계산 중
   if (mode === 'computing') {
     return (
       <section aria-label={t('approvals.card.computingLabel', { title: req.title })} aria-busy="true" className="overflow-hidden rounded-xl border border-border bg-card">
@@ -232,7 +232,7 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
     )
   }
 
-  // [수정] 누른 뒤 — 인라인 편집
+  // [수정] 클릭 후 — 인라인 편집
   if (status === 'pending' && mode === 'edit') {
     return (
       <section aria-label={t('approvals.card.editLabel', { title: req.title })} className="overflow-hidden rounded-xl border border-primary/50 bg-card">
@@ -267,15 +267,15 @@ export function ApprovalCard({ request, userName, onCompose, onChange, result }:
   }
 
   // 대기(내장 AI, low·high) — Claude Code 권한 선택지: 1 예 / 2 이 대화에서 다시 묻지 않기 / 3 항상 허용 / 4 아니요, 대신…
-  // 숫자 키 1~4, Esc = 취소(카드 안에 초점이 있을 때)
+  // 숫자 키 1~4, Esc = 취소(카드 내부에 포커스가 있는 경우)
   if (status === 'pending' && req.source === 'ai') {
     const allOpts: { key: string; label: string; hint?: string; onPick: () => void; tone?: 'primary' | 'danger' }[] = [
       { key: '1', label: t('approvals.choice.yes'), onPick: () => { void approve() }, tone: 'primary' },
       { key: '2', label: t('approvals.choice.yesConversation', { title: req.title }), onPick: () => { void approve('conversation') } },
       { key: '3', label: t('approvals.choice.yesAlways', { title: req.title }), hint: isHigh ? t('approvals.choice.alwaysHighHint') : undefined, onPick: () => { void approve('always') } },
       { key: '4', label: t('approvals.choice.instead'), onPick: () => setInsteadOpen(true), tone: 'danger' },
-      // 외부 내용을 읽은 뒤의 '남에게 보이는 쓰기' 관문 카드 — 허용 규칙을 남겨도 이 대화에서는 계속 묻으므로
-      // "다시 묻지 않기" 두 선택지(2·3)는 내지 않는다(눌러도 효과가 없어 헷갈린다)
+      // 외부 내용을 읽은 뒤의 '남에게 보이는 쓰기' 관문 카드 — 허용 규칙을 저장해도 이 대화에서는 계속 확인하므로
+      // "다시 묻지 않기" 두 선택지(2·3)는 표시하지 않는다(선택해도 효과가 없어 혼동을 유발한다)
     ]
     const opts = allOpts.filter(o => !req.ask_reason || (o.key !== '2' && o.key !== '3'))
     const onKey = (e: KeyboardEvent) => {

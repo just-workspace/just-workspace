@@ -1,16 +1,16 @@
 /**
  * 공용 편집기 툴바("툴바 3종 → 한 규격").
  *  desktop — 40 높이, 아이콘 버튼 32(아이콘 15, 선 2.2). tools 순서대로, '|' 는 구분선, 'block' 은 [본문 ▾] 블록 형식.
- *  mobile  — 48 높이, 키보드 위 한 줄: Aa(펼침) + mobileTools(44) … end(서명 등). Aa 를 누르면 위에 나머지 한 줄(블록 형식 + 나머지 도구).
- * 위키(실시간 공동 편집)·게시판(단독 편집)·메일 작성이 같은 툴바를 쓴다. 편집기에 없는 확장(표·밑줄 등)은 tools 에서 빼면 된다.
- * ※ 시안의 "할 일 목록"·"@언급" 버튼은 편집기 확장(task-list·mention)이 없어 뺐다.
- * 편집기 상태(굵게 켜짐 등)는 편집기 transaction 마다 다시 그린다.
+ *  mobile  — 48 높이, 키보드 위 한 줄: Aa(펼침) + mobileTools(44) … end(서명 등). Aa 클릭 시 위에 나머지 한 줄을 표시한다(블록 형식 + 나머지 도구).
+ * 위키(실시간 공동 편집)·게시판(단독 편집)·메일 작성이 동일한 툴바를 사용한다. 편집기에 없는 확장(표·밑줄 등)은 tools 에서 제외한다.
+ * 참고: 시안의 "할 일 목록"·"@언급" 버튼은 편집기 확장(task-list·mention)이 없어 제외하였다.
+ * 편집기 상태(굵게 켜짐 등)는 편집기 transaction 마다 다시 렌더링한다.
  */
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type HTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { Editor } from '@tiptap/react'
-// 명령 타입(toggleBold·setLink·toggleUnderline 등)은 확장 패키지가 Editor 에 덧붙인다 — 타입만 불러온다.
-// v3 StarterKit 이 링크·밑줄까지 품으므로 한 줄로 충분하다. 표(insertTable)는 편집기마다 넣을지 말지 달라 any 로 부른다.
+// 명령 타입(toggleBold·setLink·toggleUnderline 등)은 확장 패키지가 Editor 에 추가한다 — 타입만 import 한다.
+// v3 StarterKit 이 링크·밑줄까지 포함하므로 한 줄로 충분하다. 표(insertTable)는 편집기별 포함 여부가 상이하여 any 로 호출한다.
 import type {} from '@tiptap/starter-kit'
 import { cn } from '~/lib/utils'
 import { useI18n } from '~/i18n'
@@ -25,21 +25,21 @@ export type EditorToolKey =
   | 'bullet' | 'ordered' | 'link' | 'quote' | 'code' | 'table' | 'image' | 'hr'
 
 export interface UiEditorToolbarProps extends HTMLAttributes<HTMLDivElement> {
-  /** TipTap 편집기(@tiptap/react useEditor 결과). 없으면 데스크톱 도구가 비고 모바일 도구는 눌러도 아무것도 안 한다 */
+  /** TipTap 편집기(@tiptap/react useEditor 결과). 없으면 데스크톱 도구는 비어 있고 모바일 도구는 클릭해도 동작하지 않는다 */
   editor: Editor | null | undefined
   /** desktop(기본, 40) · mobile(48, 키보드 위) */
   variant?: 'desktop' | 'mobile'
   /** 툴바 정렬 — 위키는 가운데(기본), 게시판·메일은 왼쪽 */
   align?: 'center' | 'start'
-  /** 데스크톱 도구 순서('|' = 구분선). 모바일 펼침 줄도 이 목록에서 mobileTools 를 뺀 나머지 */
+  /** 데스크톱 도구 순서('|' = 구분선). 모바일 펼침 줄도 이 목록에서 mobileTools 를 제외한 나머지 */
   tools?: Array<EditorToolKey | '|'>
-  /** 모바일 한 줄에 상시 보일 도구(기본 bold·bullet·link·image) */
+  /** 모바일 한 줄에 상시 표시할 도구(기본 bold·bullet·link·image) */
   mobileTools?: EditorToolKey[]
-  /** 모바일 한 줄의 굵게·기울임을 글자(B · I)로(메일) */
+  /** 모바일 한 줄의 굵게·기울임을 글자(B · I)로 표시(메일) */
   letterMarks?: boolean
-  /** 도구 이름 바꾸기(예: image → "이미지") */
+  /** 도구 이름 변경(예: image → "이미지") */
   labels?: Partial<Record<EditorToolKey, string>>
-  /** 이미지 도구 클릭 — 부르는 쪽이 파일 고르기·업로드를 한다 */
+  /** 이미지 도구 클릭 — 호출자가 파일 선택·업로드를 수행한다 */
   onImage?: () => void
   /** 모바일 한 줄 오른쪽 끝 내용(서명 등) */
   end?: ReactNode
@@ -61,7 +61,7 @@ export function UiEditorToolbar({
 }: UiEditorToolbarProps) {
   const { t } = useI18n()
 
-  // 편집기 상태가 바뀔 때마다 다시 그린다(활성 표시)
+  // 편집기 상태 변경 시마다 다시 렌더링한다(활성 표시)
   const [, bump] = useReducer((x: number) => x + 1, 0)
   useEffect(() => {
     if (!editor) return
@@ -246,7 +246,7 @@ export function UiEditorToolbar({
   )
 }
 
-/** 데스크톱 [본문 ▾] 블록 형식 고르기 — 바깥 클릭으로 닫힌다 */
+/** 데스크톱 [본문 ▾] 블록 형식 선택 — 바깥 클릭 시 닫힘 */
 function BlockSelect({ open, setOpen, disabled, blocks, current, label, onPick }: {
   open: boolean
   setOpen: (v: boolean) => void
@@ -258,8 +258,8 @@ function BlockSelect({ open, setOpen, disabled, blocks, current, label, onPick }
 }) {
   const ref = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLUListElement | null>(null)
-  // 목록은 body 로 포털해 fixed 로 띄운다 — 툴바가 overflow-x-auto(세로도 auto 로 계산된다)라
-  // 안에서 absolute 로 그리면 40 높이 상자에 잘려 보이지 않았다(UiSelect·UiMenu 와 같은 방식)
+  // 목록은 body 로 포털하여 fixed 로 표시한다 — 툴바가 overflow-x-auto(세로도 auto 로 계산된다)이므로
+  // 내부에서 absolute 로 렌더링하면 40 높이 상자에 잘려 표시되지 않았다(UiSelect·UiMenu 와 동일 방식)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   function place() {
     const btn = ref.current?.querySelector('button')
@@ -308,7 +308,7 @@ function BlockSelect({ open, setOpen, disabled, blocks, current, label, onPick }
           aria-label={label}
           className="fixed z-overlay w-40 rounded-lg border border-border bg-popover p-1 text-foreground shadow-md"
           style={pos ? { left: `${pos.left}px`, top: `${pos.top}px` } : { left: 0, top: 0, visibility: 'hidden' }}
-          // 편집기 포커스(선택 영역)를 잃지 않게
+          // 편집기 포커스(선택 영역) 유지
           onMouseDown={e => e.preventDefault()}
         >
           {blocks.map(b => (

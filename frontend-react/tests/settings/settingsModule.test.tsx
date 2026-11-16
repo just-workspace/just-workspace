@@ -1,4 +1,4 @@
-// 개인 설정 모듈 — useMySessions 꾸미기 함수, 문구 끼워 넣기, 비밀번호 날짜, 메일 표기, 화면 조각 렌더
+// 개인 설정 모듈 — useMySessions 표시 가공 함수, 문구 삽입, 비밀번호 날짜, 메일 표기, 화면 조각 렌더
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { i18n } from '~/i18n'
@@ -26,7 +26,7 @@ describe('useMySessions 꾸미기', () => {
     expect(sessionBaseName(t, { ...base, app: 'desktop', os: null })).toBe(t('settings.devices.desktopApp'))
     expect(sessionBaseName(t, { ...base, browser: null, os: null })).toBe(t('settings.account.browserFallback'))
     expect(sessionName(t, { ...base, current: true })).toBe(t('settings.devices.thisDevice', { name: 'Chrome on macOS' }))
-    // 데스크톱 앱은 현재여도 "이 기기" 를 붙이지 않는다
+    // 데스크톱 앱은 현재 세션이어도 "이 기기" 를 표시하지 않음
     expect(sessionName(t, { ...base, current: true, app: 'desktop' })).toBe(t('settings.devices.desktopAppOs', { os: 'macOS' }))
   })
 

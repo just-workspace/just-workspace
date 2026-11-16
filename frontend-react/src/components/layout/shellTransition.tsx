@@ -1,8 +1,8 @@
 /**
- * 셸 내부용 — 들어올 때·나갈 때 클래스를 바꿔 끼우는 전환을 Tailwind 클래스로 만든다(새 애니메이션 라이브러리 없이).
- * 순서: 들어올 때 [enterActive + enterFrom] → 다음 프레임 [enterActive + enterTo] → 끝나면 클래스 없음.
- *                  나갈 때 [leaveActive + leaveFrom] → 다음 프레임 [leaveActive + leaveTo] → duration 뒤 언마운트.
- * children 은 지금 붙일 전환 클래스를 받아 요소 하나를 그리는 함수.
+ * 셸 내부용 — 진입·이탈 시 클래스를 교체하는 전환을 Tailwind 클래스로 구현한다(애니메이션 라이브러리 추가 없음).
+ * 순서: 진입 시 [enterActive + enterFrom] → 다음 프레임 [enterActive + enterTo] → 종료 후 클래스 없음.
+ *       이탈 시 [leaveActive + leaveFrom] → 다음 프레임 [leaveActive + leaveTo] → duration 경과 후 언마운트.
+ * children 은 현재 적용할 전환 클래스를 전달받아 요소 하나를 렌더링하는 함수이다.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
@@ -14,9 +14,9 @@ export interface ShellTransitionProps {
   leaveActive?: string
   leaveFrom?: string
   leaveTo?: string
-  /** 들어올 때(ms) */
+  /** 진입 시간(ms) */
   enterMs: number
-  /** 나갈 때(ms) — 이만큼 기다렸다가 언마운트 */
+  /** 이탈 시간(ms) — 해당 시간만큼 대기 후 언마운트 */
   leaveMs: number
   children: (transitionClass: string) => ReactNode
 }
@@ -46,7 +46,7 @@ export function ShellTransition(p: ShellTransitionProps) {
       })
       tm.t = setTimeout(() => setPhase('hidden'), p.leaveMs + 34)
     }
-    // 길이·클래스는 고정값 — show 만 본다
+    // 길이·클래스는 고정값이므로 show 만 의존성으로 지정
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.show])
 

@@ -1,6 +1,6 @@
 /**
- * 언어 전환과 화면 밝기 전환 — 마법사 어느 화면에서나 보인다.
- * 밝기는 <html> 의 `dark` 클래스로 바꾼다(기본 다크). 고른 값은 이 브라우저에만 기억한다(설정일 뿐 비밀이 아니다).
+ * 언어 전환과 화면 밝기 전환 — 마법사의 모든 화면에 표시된다.
+ * 밝기는 <html> 의 `dark` 클래스로 전환한다(기본 다크). 선택값은 이 브라우저에만 저장한다(설정값일 뿐 비밀이 아니다).
  */
 import { useEffect, useState } from 'react'
 import { UiIconButton } from '~/components/ui/IconButton'
@@ -33,7 +33,7 @@ export function ShellTools() {
   function toggle() {
     const next = theme === 'dark' ? 'light' : 'dark'
     setTheme(next)
-    try { window.localStorage.setItem(THEME_KEY, next) } catch { /* 기억하지 못해도 바꾸기는 된다 */ }
+    try { window.localStorage.setItem(THEME_KEY, next) } catch { /* 저장에 실패해도 전환은 가능 */ }
   }
 
   return (

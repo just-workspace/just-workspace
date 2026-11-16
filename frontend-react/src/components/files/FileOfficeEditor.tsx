@@ -1,8 +1,8 @@
 /**
  * 오피스 편집기 틀: 머리(뒤로 · 파일 이름 · 편집기 이름) + 편집기 iframe.
- * 공유 링크 손님 화면(pages/s/[token])이 쓴다.
- * OnlyOffice 는 WOPI 표준대로 access_token 을 **POST 폼 본문**으로만 받는다 — 숨은 폼을 iframe 을 target 으로 제출한다.
- * 편집기가 postMessage 로 UI_Close/close 를 보내면 닫는다.
+ * 공유 링크 손님 화면(pages/s/[token])에서 사용한다.
+ * OnlyOffice 는 WOPI 표준대로 access_token 을 **POST 폼 본문**으로만 수신한다 — 숨은 폼을 iframe 을 target 으로 하여 제출한다.
+ * 편집기가 postMessage 로 UI_Close/close 를 송신하면 닫는다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -20,11 +20,11 @@ export function FilesFileOfficeEditor({ session, onClose }: FilesFileOfficeEdito
   const formRef = useRef<HTMLFormElement | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // OnlyOffice 는 WOPI 표준대로 access_token 을 **POST 폼 본문**으로만 받는다.
-  // iframe src 에 토큰을 붙여 GET 하면 404 다. Collabora 는 쿼리 방식도 받아줘서
-  // 여태 이 차이가 안 드러났다.
+  // OnlyOffice 는 WOPI 표준대로 access_token 을 **POST 폼 본문**으로만 수신한다.
+  // iframe src 에 토큰을 붙여 GET 하면 404 가 반환된다. Collabora 는 쿼리 방식도 허용하므로
+  // 그동안 이 차이가 드러나지 않았다.
   const isOnlyOffice = session.editor === 'onlyoffice'
-  // 매번 다른 이름이어야 문서를 연달아 열 때 이전 프레임을 재사용하지 않는다.
+  // 매번 다른 이름을 사용해야 문서를 연속으로 열 때 이전 프레임이 재사용되지 않는다.
   const [frameName] = useState(() => `office-frame-${Math.random().toString(36).slice(2, 9)}`)
   // WOPI 의 access_token_ttl 은 "만료 시각(epoch ms)" 이다. 초 단위 TTL 이 아니다.
   const tokenTtlMs = session.token_ttl ? String(Date.now() + session.token_ttl * 1000) : '0'
@@ -49,7 +49,7 @@ export function FilesFileOfficeEditor({ session, onClose }: FilesFileOfficeEdito
       }
     }
     window.addEventListener('message', handlePostMessage)
-    // 폼이 DOM 에 붙은 뒤에 제출해야 target(iframe) 이 잡힌다.
+    // 폼이 DOM 에 추가된 이후 제출해야 target(iframe) 이 인식된다.
     if (isOnlyOffice) formRef.current?.submit()
     return () => window.removeEventListener('message', handlePostMessage)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

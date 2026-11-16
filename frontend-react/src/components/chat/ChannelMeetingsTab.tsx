@@ -1,10 +1,10 @@
 /**
  * 채널 탭 — 회의.
- *  (진행 중 채널 통화가 있으면) success 띠: StatusDot live · "채널 통화 진행 중 · mm:ss" + 참여자 · [참여](sm)
- *  "예정" · "지난 회의" 묶음 = 머리 12/600 muted + UiCard 안 행 min-h-14:
+ *  (진행 중인 채널 통화가 있는 경우) success 띠: StatusDot live · "채널 통화 진행 중 · mm:ss" + 참여자 · [참여](sm)
+ *  "예정" · "지난 회의" 그룹 = 헤더 12/600 muted + UiCard 내부 행 min-h-14:
  *    w-24 mono(굵은 일시 / muted 길이) · 제목 14/600 + 보조 12 muted(호스트) · [링크 복사](outline xs) · UiMenu(캘린더에서 보기 · 링크 복사 · 수정)
- *  아래 [+ 이 채널로 회의 예약](outline sm) → 회의 예약 창(MeetingsInviteModal), 만들면 이 채널에 묶인다(channel_id).
- * 지난 회의 [회의록] 버튼 — 회의록 기능이 없어 빼 두었다. 지난 회의 "참가 n"도 기록이 없어 호스트만 보인다.
+ *  하단 [+ 이 채널로 회의 예약](outline sm) → 회의 예약 창(MeetingsInviteModal). 생성 시 이 채널에 연결된다(channel_id).
+ * 지난 회의 [회의록] 버튼 — 회의록 기능이 없어 제외했다. 지난 회의 "참가 n"도 기록이 없어 호스트만 표시한다.
  * 서버: GET /api/chat/channels/{id}/meetings (items = 예정·진행 중, past = 지난 회의 10개)
  */
 import { useCallback, useEffect, useState } from 'react'
@@ -29,7 +29,7 @@ import { writeClipboard } from '~/lib/clipboard'
 
 export interface ChatChannelMeetingsTabProps {
   channelId: string
-  /** 회의를 만들었다 — 탭 숫자 갱신 */
+  /** 회의 생성 완료 — 탭 숫자 갱신 */
   onChanged?: () => void
 }
 

@@ -2,8 +2,8 @@
  * 채널 탭 — 파일.
  *  줄 44: "연결된 폴더" muted + 굵게 "내 파일 › 프로젝트 › 개발" + muted "· 채널에 올린 파일 포함" … [파일에서 열기 32][업로드 32 primary]
  *  목록 행 48: [종류 타일 28 + 이름 | 올린 사람 · 메시지에서/폴더 160 | 시각 mono 11 120 | ⋮ 40(메시지로 가기·공유·다운로드)]
- *  모바일은 가운데 두 칸을 이름 아래 한 줄로 접는다.
- *  업로드: 내 폴더가 연결돼 있으면 그 폴더로, 아니면 채팅 첨부(메시지 탭으로 넘어가 입력창 첨부 칸에).
+ *  모바일은 가운데 두 칸을 이름 아래 한 줄로 축약한다.
+ *  업로드: 내 폴더가 연결된 경우 해당 폴더로, 아니면 채팅 첨부로 처리한다(메시지 탭으로 전환 후 입력창 첨부 칸에 추가).
  */
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useI18n } from '~/i18n'
@@ -26,9 +26,9 @@ export interface ChatChannelFilesTabProps {
   canManage: boolean
   /** 탭 관리 열기 */
   onManage?: () => void
-  /** 다른 탭으로(메시지로 가기·채팅 첨부) */
+  /** 다른 탭으로 전환(메시지로 가기·채팅 첨부) */
   onSwitch?: (tab: ChannelTabKey) => void
-  /** 폴더에 올림 — 요약 다시 읽기 */
+  /** 폴더에 업로드 완료 — 요약 재조회 */
   onChanged?: () => void
 }
 

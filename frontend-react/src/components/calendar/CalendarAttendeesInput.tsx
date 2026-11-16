@@ -3,7 +3,7 @@
  * 상자 min-h 40 · p 5/8 · gap 6, 칩 28 알약 primary/13
  * (이니셜 20 · 이름 · 상태[가능 = success 점 8 / 겹침 = warning 11/600] · ✕ 20(히트 40)) + "이름·이메일로 추가" 입력.
  * 자동완성 = 워크스페이스 사용자(/api/contacts/workspace-users). 목록에 없는 이메일은 외부 참석자로 추가.
- * 드롭다운은 회의 초대 창(MeetingsInviteModal)과 같은 규격(행 36 · popover · shadow-md).
+ * 드롭다운은 회의 초대 창(MeetingsInviteModal)과 동일한 규격(행 36 · popover · shadow-md).
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
@@ -28,9 +28,9 @@ export interface CalendarAttendeesInputProps {
   /** 참석자 목록(v-model) */
   modelValue: AttendeeChip[]
   onUpdateModelValue?: (v: AttendeeChip[]) => void
-  /** 이메일(소문자) → 'free' | 'busy'(겹침). 없으면 표시 안 함(외부·모름) */
+  /** 이메일(소문자) → 'free' | 'busy'(겹침). 없으면 표시하지 않음(외부·미확인) */
   availability?: Record<string, 'free' | 'busy'>
-  /** 자동완성에서 뺄 이메일(주최자 본인) */
+  /** 자동완성에서 제외할 이메일(주최자 본인) */
   excludeEmail?: string | null
   labelledby?: string
 }
@@ -49,7 +49,7 @@ export function CalendarAttendeesInput({ modelValue, onUpdateModelValue, availab
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const seq = useRef(0)
 
-  // 타이머·blur 지연 처리에서 "지금" 값
+  // 타이머·blur 지연 처리에서 참조하는 현재 값
   const live = useRef({ modelValue, query, results, excludeEmail })
   live.current = { modelValue, query, results, excludeEmail }
   const takenOf = (list: AttendeeChip[]) => new Set(list.map(a => a.email.toLowerCase()))
@@ -118,13 +118,13 @@ export function CalendarAttendeesInput({ modelValue, onUpdateModelValue, availab
   }
 
   function onKeydown(e: KeyboardEvent<HTMLInputElement>) {
-    // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 고르기로 넘기면 마지막 글자가 입력칸에 남아 다시 검색된다
+    // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 선택으로 처리하면 마지막 글자가 입력 칸에 남아 재검색된다
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === 'ArrowDown' && optionCount) { e.preventDefault(); setOpen(true); setActive((active + 1) % optionCount) }
     else if (e.key === 'ArrowUp' && optionCount) { e.preventDefault(); setActive((active - 1 + optionCount) % optionCount) }
     else if (e.key === 'Enter' || e.key === ',') {
-      // 이 칸의 Enter 는 절대 폼 제출로 새지 않는다(자동완성 중 Enter = 고르기). 예전엔 목록이 뜨기 전·결과가
-      // 없을 때 이름만 치고 Enter 를 누르면 참석자 없이 일정이 저장되고 창이 닫혔다.
+      // 이 칸의 Enter 는 폼 제출로 전파되지 않아야 한다(자동완성 중 Enter = 선택). 이전에는 목록 표시 전·결과가
+      // 없을 때 이름만 입력하고 Enter 를 누르면 참석자 없이 일정이 저장되고 창이 닫혔다.
       e.preventDefault()
       if (open && optionCount) pick(active)
       else if (isEmail(query.trim())) addExternal()
@@ -135,15 +135,15 @@ export function CalendarAttendeesInput({ modelValue, onUpdateModelValue, availab
   function onBlur() {
     setTimeout(() => {
       setOpen(false)
-      // 다 쓴 이메일을 두고 나가면 그대로 추가(입력이 사라지는 것 방지)
+      // 입력이 완료된 이메일을 남기고 이탈하면 그대로 추가(입력 소실 방지)
       if (isEmail(live.current.query.trim())) addExternal()
     }, 150)
   }
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
 
-  // ── 목록 위치 ── 모달 본문(overflow-y-auto) 안에 absolute 로 두면 푸터에 잘려 첫 줄만 보였다.
-  // UiSelect·UiMenu 처럼 body 포털 + fixed(z-overlay)로 띄운다: 칸 아래, 자리가 없으면 위.
+  // ── 목록 위치 ── 모달 본문(overflow-y-auto) 안에 absolute 로 배치하면 푸터에 잘려 첫 줄만 표시되었다.
+  // UiSelect·UiMenu 와 같이 body 포털 + fixed(z-overlay)로 표시한다: 칸 아래, 공간이 없으면 위.
   const boxRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null)

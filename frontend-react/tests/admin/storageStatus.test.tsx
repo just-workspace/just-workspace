@@ -1,5 +1,5 @@
-// 저장소 상태 — 관리 › 저장소의 상태 카드(정상·끊김·쓰기 실패), 파일 탭의 끊김 안내와 쓰기 동작 꺼짐,
-// 관리자 알림 띠, 끊김 신호(503 storage_unavailable)와 스스로 풀리기. $fetch 는 가짜.
+// 저장소 상태 — 관리 › 저장소의 상태 카드(정상·끊김·쓰기 실패), 파일 탭의 끊김 안내와 쓰기 동작 비활성화,
+// 관리자 알림 띠, 끊김 신호(503 storage_unavailable)와 자동 해제. $fetch 는 모의(mock).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -108,7 +108,7 @@ describe('관리 › 저장소 — 상태 카드', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
     expect(called('POST', `${S}/recheck`)).toBe(1)
     expect(screen.getByTestId('storage-conn').textContent).toBe('연결됨 · 쓰기와 파일 잠금 정상')
-    // 알림 띠·파일 탭이 보는 상태도 같이 맞춘다
+    // 알림 띠·파일 탭이 참조하는 상태도 함께 갱신
     await waitFor(() => expect(called('GET', STATUS)).toBe(1))
   })
 
@@ -207,7 +207,7 @@ describe('저장소 상태 지켜보기', () => {
     await waitFor(() => expect(called('GET', STATUS)).toBeGreaterThan(2))
     available = true
     await waitFor(() => expect(screen.queryByTestId('storage-down-banner')).toBeNull())
-    // 정상일 때는 간격이 길다 — 곧바로 다시 묻지 않는다
+    // 정상 시에는 간격이 김 — 즉시 재조회하지 않음
     const n = called('GET', STATUS)
     await new Promise(r => setTimeout(r, 80))
     expect(called('GET', STATUS)).toBe(n)

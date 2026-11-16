@@ -1,7 +1,7 @@
 /**
  * 세그먼트 1종: bg-muted 트랙 2px 패딩 + 선택 칸 bg-card(그림자 scrim/30), 32(안 28).
  * 이슈·PR·캘린더 월/주/일·관리 기간·테마 라이트/다크/시스템 공용. 모바일 탭 세그먼트는 size="lg"(40, 안 36).
- * role=radiogroup/radio(단일 선택). 아이콘만 쓰는 칸은 ariaLabel 로 이름을 준다. ←→ 로 이동·선택.
+ * role=radiogroup/radio(단일 선택). 아이콘만 사용하는 칸은 ariaLabel 로 이름을 지정한다. ←→ 로 이동·선택.
  */
 import type { HTMLAttributes, KeyboardEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -16,15 +16,15 @@ export interface SegmentItem {
   icon?: string
   /** 오른쪽 mono 카운트 */
   count?: number | string
-  /** 아이콘만 쓸 때 접근성 이름 */
+  /** 아이콘만 사용할 때의 접근성 이름 */
   ariaLabel?: string
   disabled?: boolean
   /**
-   * 칸 툴팁(UiTooltip). disabled 와 같이 주면 왜 못 고르는지 보여 준다 —
-   * 이때 칸은 aria-disabled 로 남아 호버·포커스를 받는다(눌러도 바뀌지 않음).
+   * 칸 툴팁(UiTooltip). disabled 와 함께 지정하면 선택 불가 사유를 표시한다 —
+   * 이때 칸은 aria-disabled 상태로 유지되어 호버·포커스를 수신한다(클릭해도 값 변경 없음).
    */
   tooltip?: string
-  /** 선택됐을 때 글자색(예: 작업 상태 진행 중 = warning · 완료 = success). 없으면 foreground */
+  /** 선택 시 글자색(예: 작업 상태 진행 중 = warning · 완료 = success). 미지정 시 foreground */
   tone?: 'primary' | 'success' | 'warning' | 'danger'
 }
 
@@ -33,15 +33,15 @@ const TONE_TEXT: Record<NonNullable<SegmentItem['tone']>, string> = {
 }
 
 export interface UiSegmentProps extends Omit<HTMLAttributes<HTMLDivElement>, 'role'> {
-  /** 고른 값 */
+  /** 선택된 값 */
   modelValue?: string | number | null
-  /** 값 바뀜 */
+  /** 값 변경 */
   onUpdateModelValue?: (v: string | number | null) => void
   /** 칸 목록(필수) */
   items: SegmentItem[]
   /** sm 28(안 24, 메뉴 안) · md 32(기본, 안 28) · lg 40(안 36, 모바일) */
   size?: 'sm' | 'md' | 'lg'
-  /** 칸을 균등 폭으로(모바일 탭) */
+  /** 칸을 균등 폭으로 배치(모바일 탭) */
   grow?: boolean
   /** 묶음 접근성 이름 */
   ariaLabel?: string
@@ -75,7 +75,7 @@ export function UiSegment({ modelValue, onUpdateModelValue, items, size = 'md', 
   return (
     <div {...rest} role="radiogroup" aria-label={ariaLabel} className={cn('inline-flex bg-muted', track, grow ? 'flex w-full' : '', className)}>
       {items.map((it, i) => {
-        // 툴팁이 있는 비활성 칸은 disabled 대신 aria-disabled(비활성 버튼은 마우스 이벤트를 안 받아 툴팁이 안 뜬다)
+        // 툴팁이 있는 비활성 칸은 disabled 대신 aria-disabled 사용(비활성 버튼은 마우스 이벤트를 수신하지 않아 툴팁이 표시되지 않음)
         const softDisabled = !!it.disabled && !!it.tooltip
         const btn = (
         <button

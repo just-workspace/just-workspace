@@ -1,6 +1,6 @@
 /**
- * 캘린더 공유 대화 상자(시안 반영 전 예전 마크업 그대로).
- * 이메일 + "쓰기 허용" 으로 추가, 현재 공유 목록에서 권한 토글·해제. showShareModal 이 켜지면 공유 목록을 읽는다.
+ * 캘린더 공유 대화 상자(시안 반영 전 기존 마크업 유지).
+ * 이메일 + "쓰기 허용" 으로 추가, 현재 공유 목록에서 권한 토글·해제. showShareModal 이 활성화되면 공유 목록을 조회한다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -53,12 +53,12 @@ export function CalendarShareModal() {
     const updated = [...shares, { email, can_write: newCanWrite }]
     try {
       await setCalendarShares(sharingCalendar.id, updated)
-      // 서버가 실제로 저장한 목록으로(보낸 목록을 그대로 믿지 않는다)
+      // 서버가 실제 저장한 목록으로 갱신(전송한 목록을 그대로 신뢰하지 않는다)
       setShares(await fetchCalendarShares(sharingCalendar.id))
       setNewEmail('')
       setNewCanWrite(false)
     } catch (e: any) {
-      // 없는 사용자·본인이면 서버가 400 으로 이유를 준다
+      // 존재하지 않는 사용자·본인이면 서버가 400 으로 사유를 반환한다
       setError((typeof e?.data?.detail === 'string' && e.data.detail) || t('calendar.share.setError'))
     }
   }

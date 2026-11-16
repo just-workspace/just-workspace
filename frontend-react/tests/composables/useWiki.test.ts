@@ -1,4 +1,4 @@
-// 위키 store — 요청 주소·본문, 트리 만들기, 지운 페이지 정리
+// 위키 store — 요청 주소·본문, 트리 구성, 삭제된 페이지 정리
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const api = vi.hoisted(() => ({

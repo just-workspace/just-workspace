@@ -29,7 +29,7 @@ export function fmtAppSize(n: number) {
   while (v >= 1024 && i < u.length - 1) { v /= 1024; i++ }
   return `${Math.round(v)} ${u[i]}`
 }
-/** ISO → "MM/DD"(시안 "10/12" — toLocaleDateString(ko) 는 꼬리 점이 붙는다). 파싱 실패 '' */
+/** ISO → "MM/DD"(시안 "10/12" — toLocaleDateString(ko) 는 끝에 마침표가 추가된다). 파싱 실패 시 '' */
 export function fmtDay(s: string | null) {
   if (!s) return ''
   const d = new Date(s)

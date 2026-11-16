@@ -1,4 +1,4 @@
-// 위키 공동 편집기(TipTap v3 + Yjs) — v2 저장 HTML 시드 하위호환, 확장 중복 없음, 가짜 릴레이로 두 편집기 동기화·프레즌스, 커서 색 안전화
+// 위키 공동 편집기(TipTap v3 + Yjs) — v2 저장 HTML 시드 하위호환, 확장 중복 없음, 모의 릴레이로 두 편집기 동기화·프레즌스, 커서 색 안전화
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, act } from '@testing-library/react'
 
@@ -13,8 +13,8 @@ const { WikiCollabEditor, safePeerColor, renderPeerCaret, renderPeerSelection, p
 const { authStore } = await import('~/composables/useAuth')
 
 /**
- * 서버 릴레이(app/collab/relay.py) 흉내 — 한 소켓이 보낸 바이트를 같은 방의 다른 소켓에 그대로 돌린다.
- * 편집기는 프레임 첫 바이트(UPDATE/SYNC/AWARENESS)로 동기화를 스스로 맞추므로 릴레이는 내용을 몰라도 된다.
+ * 서버 릴레이(app/collab/relay.py) 모의 — 한 소켓이 전송한 바이트를 같은 방의 다른 소켓에 그대로 전달한다.
+ * 편집기는 프레임 첫 바이트(UPDATE/SYNC/AWARENESS)로 동기화를 자체 수행하므로 릴레이는 내용을 해석할 필요가 없다.
  */
 class FakeRelaySocket {
   static all: FakeRelaySocket[] = []
@@ -41,7 +41,7 @@ class FakeRelaySocket {
     this.readyState = 3
     FakeRelaySocket.all = FakeRelaySocket.all.filter(s => s !== this)
     for (const fn of this.listeners.close || []) fn()
-    this.onclose = null   // 재접속 타이머를 돌리지 않는다
+    this.onclose = null   // 재접속 타이머를 기동하지 않음
   }
 }
 
@@ -50,7 +50,7 @@ const flush = async (ms = 20) => { await act(async () => { await new Promise(r =
 const V2_HTML = '<h2>제목</h2><p>본문 <strong>굵게</strong> <u>밑줄</u> <a href="https://example.com">링크</a></p>'
   + '<table><tbody><tr><th><p>머리</p></th><th><p>둘</p></th></tr><tr><td><p>a</p></td><td><p>b</p></td></tr></tbody></table><p>끝</p>'
 
-// 전역 WebSocket 대체는 tests/setup.ts 의 afterEach 가 cleanup(언마운트) 뒤에 되돌린다 — 여기서 먼저 되돌리면 언마운트가 WebSocket.OPEN 을 못 읽는다
+// 전역 WebSocket 대체는 tests/setup.ts 의 afterEach 가 cleanup(언마운트) 이후에 복원한다 — 여기서 먼저 복원하면 언마운트 시 WebSocket.OPEN 을 읽을 수 없다
 beforeEach(() => {
   FakeRelaySocket.all = []
   vi.stubGlobal('WebSocket', FakeRelaySocket)
@@ -81,7 +81,7 @@ describe('WikiCollabEditor', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     let state: any = null
     render(<WikiCollabEditor pageId="p1" initialContent={V2_HTML} readonly={false} onUpdateState={s => { state = s }} />)
-    await flush(SYNC_WAIT_MS + 50)   // 방에 아무도 없음 → 기다렸다 저장본으로 시드
+    await flush(SYNC_WAIT_MS + 50)   // 방에 아무도 없음 → 대기 후 저장본으로 시드
     const html = state.editor.getHTML() as string
     expect(html).toContain('<table')
     expect(html).toContain('href="https://example.com"')
@@ -91,7 +91,7 @@ describe('WikiCollabEditor', () => {
     for (const n of ['underline', 'link', 'table', 'tableRow', 'tableCell', 'tableHeader', 'collaboration', 'collaborationCaret']) {
       expect(names.filter(x => x === n), n).toHaveLength(1)
     }
-    expect(names).not.toContain('undoRedo')   // Yjs 가 되돌리기 담당
+    expect(names).not.toContain('undoRedo')   // 되돌리기는 Yjs 가 담당
     expect(warn.mock.calls.map(c => String(c[0])).filter(m => /Duplicate|tiptap/i.test(m))).toEqual([])
     expect(state.connected).toBe(true)
     warn.mockRestore()
@@ -105,7 +105,7 @@ describe('WikiCollabEditor', () => {
     authStore.setState({ user: { id: 'u2', username: 'park', display_name: '박지훈' } as any })
     render(<WikiCollabEditor pageId="p2" initialContent="<p>시작</p>" readonly={false} onUpdateState={s => { b = s }} />)
     await flush(60)
-    // B 는 A 의 상태(SYNC_RESPONSE)로 시작하고 시드하지 않는다 — "시작" 은 하나
+    // B 는 A 의 상태(SYNC_RESPONSE)로 시작하며 시드하지 않음 — "시작" 은 하나
     expect(b.editor.getText()).toBe('시작')
     await act(async () => { a.editor.commands.insertContentAt(a.editor.state.doc.content.size, '<p>A 가 씀</p>') })
     await flush(60)

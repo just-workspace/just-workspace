@@ -1,6 +1,6 @@
-// 히트 영역 확장(before:absolute before:-inset-*)은 그 요소가 relative 여야 자기 둘레만 넓힌다.
-// relative 가 빠지면 가상 요소가 가장 가까운 positioned 조상(행 전체)을 덮어 다른 클릭을 가로챈다
-// (위키 트리: 페이지 제목을 누르면 "하위 페이지 추가"가 눌리던 회귀).
+// 히트 영역 확장(before:absolute before:-inset-*)은 해당 요소가 relative 여야 자체 둘레만 확장한다.
+// relative 가 누락되면 가상 요소가 가장 가까운 positioned 조상(행 전체)을 덮어 다른 클릭을 가로챈다
+// (위키 트리: 페이지 제목 클릭 시 "하위 페이지 추가"가 눌리던 회귀).
 import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'

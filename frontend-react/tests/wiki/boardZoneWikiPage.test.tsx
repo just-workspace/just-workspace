@@ -1,8 +1,8 @@
 // 위키 화면(pages/wiki.tsx) — 전수조사 수정 고정:
-//  편집 시작 때 서버 최신본을 다시 읽는다(열어 둔 탭의 옛 본문으로 남의 수정을 덮어쓰지 않게) · 저장에 base_version 을 싣는다
-//  409(다른 사람이 먼저 고침): 혼자면 덮어쓰지 않고 묻는다 / 함께 편집 중이면 그 버전을 기준으로 다시 저장한다
-//  저장 실패 상태에서 다른 문서로 가려 하면 묻고, 머물기를 고르면 편집 화면·주소가 그대로다
-//  읽기 본문의 자리·겹침 스타일(position:fixed 등)은 지운다
+//  편집 시작 시 서버 최신본을 재조회(열어 둔 탭의 옛 본문으로 타인의 수정을 덮어쓰지 않도록) · 저장에 base_version 포함
+//  409(타인이 먼저 수정): 단독이면 덮어쓰지 않고 확인 요청 / 공동 편집 중이면 해당 버전을 기준으로 재저장
+//  저장 실패 상태에서 다른 문서로 이동하려 하면 확인을 요청하고, 머물기를 선택하면 편집 화면·주소 유지
+//  읽기 본문의 위치·겹침 스타일(position:fixed 등)은 제거
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -35,7 +35,7 @@ vi.mock('~/lib/api', async (orig) => {
   return { ...real, $fetch }
 })
 
-// 공동 편집기는 가짜로(웹소켓·Yjs 없이) — 화면이 넘긴 initialContent 를 보여 주고, 본문은 stub.content
+// 공동 편집기는 모의 구현 사용(웹소켓·Yjs 없이) — 화면이 전달한 initialContent 를 표시하고, 본문은 stub.content
 vi.mock('~/components/wiki/WikiCollabEditor', async () => {
   const React = await import('react')
   function WikiCollabEditor(props: any) {
@@ -84,7 +84,7 @@ async function startEditing() {
   fireEvent.click(editButton())
   await waitFor(() => expect(stub.mounted).not.toBeNull())
 }
-/** 편집기에서 내가 친 것처럼 */
+/** 편집기에서 사용자가 입력한 것처럼 처리 */
 function type(html: string) {
   act(() => { stub.content = html; stub.mounted!.onChange?.() })
 }
@@ -106,7 +106,7 @@ beforeEach(() => {
 describe('위키 편집 — 남의 수정 덮어쓰기 방지', () => {
   it('편집을 누르면 서버 최신본으로 시작하고, 저장에 그 버전(base_version)을 싣는다', async () => {
     await open()
-    // 읽기 화면을 열어 둔 사이 다른 사람이 고쳤다
+    // 읽기 화면을 열어 둔 사이 타인이 수정함
     api.pages.p1 = page('p1', { content: '<p>남이 고친 본문</p>', version: 3 })
     await startEditing()
     expect(stub.mounted!.initialContent).toBe('<p>남이 고친 본문</p>')
@@ -115,9 +115,9 @@ describe('위키 편집 — 남의 수정 덮어쓰기 방지', () => {
     done()
     await waitFor(() => expect(patches()).toHaveLength(1))
     expect(patches()[0]).toEqual({ content: '<p>남이 고친 본문 + 내 수정</p>', base_version: 3 })
-    await waitFor(() => expect(screen.queryByTestId('collab')).toBeNull())   // 저장되면 읽기로
+    await waitFor(() => expect(screen.queryByTestId('collab')).toBeNull())   // 저장되면 읽기로 전환
 
-    // 다음 편집은 방금 저장으로 올라간 버전(4)을 기준으로
+    // 다음 편집은 직전 저장으로 증가한 버전(4)을 기준으로 함
     await startEditing()
     type('<p>두 번째</p>')
     done()
@@ -135,9 +135,9 @@ describe('위키 편집 — 남의 수정 덮어쓰기 방지', () => {
     }
     type('<p>내 수정</p>')
     done()
-    await waitFor(() => expect(dialog.asked).toHaveLength(1))   // 완료 → 충돌 → 덮어쓸지 묻는다(답: 아니오)
+    await waitFor(() => expect(dialog.asked).toHaveLength(1))   // 완료 → 충돌 → 덮어쓰기 여부 확인(답: 아니오)
     expect(patches()).toHaveLength(1)
-    expect(screen.getByTestId('collab')).toBeTruthy()            // 편집 화면에 머문다
+    expect(screen.getByTestId('collab')).toBeTruthy()            // 편집 화면 유지
     expect(api.pages.p1.content).toBe('<p>남의 저장</p>')
 
     dialog.answers = [true]
@@ -175,7 +175,7 @@ describe('위키 편집 — 저장 실패 상태에서 이동', () => {
     type('<p>저장 안 되는 수정</p>')
 
     const other = () => screen.getAllByRole('treeitem').find(r => r.textContent?.includes('문서 p2'))!
-    dialog.answers = [false]   // 머문다
+    dialog.answers = [false]   // 현재 화면 유지
     fireEvent.click(other())
     await waitFor(() => expect(dialog.asked).toHaveLength(1))
     await waitFor(() => expect(router.state.location.search).toContain('page=p1'))
@@ -191,8 +191,8 @@ describe('위키 편집 — 저장 실패 상태에서 이동', () => {
 })
 
 describe('위키 읽기 본문 정화', () => {
-  // 정렬·색 보존과 지우는 속성 목록은 tests/board/boardZoneFixes.test.tsx(stripLayoutStyles)가 본다.
-  // 여기서는 읽기 화면이 그 거름을 실제로 거치는지만 본다(테스트 DOM 에서는 DOMPurify 가 태그를 브라우저와 다르게 다뤄 문단 단위 검사는 하지 않는다).
+  // 정렬·색 보존과 제거 대상 속성 목록은 tests/board/boardZoneFixes.test.tsx(stripLayoutStyles)에서 검증한다.
+  // 여기서는 읽기 화면이 해당 필터를 실제로 거치는지만 확인한다(테스트 DOM 에서는 DOMPurify 가 태그를 브라우저와 다르게 처리하므로 문단 단위 검사는 수행하지 않는다).
   it('position:fixed 같은 자리·겹침 스타일은 읽기 화면에 남지 않는다', async () => {
     api.pages.p1 = page('p1', {
       content: '<p>글</p><a href="https://x.test" style="position:fixed;inset:0;z-index:9999;font-weight:700">덮기</a>',

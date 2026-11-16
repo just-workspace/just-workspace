@@ -1,19 +1,19 @@
 /**
- * 회의 참가 전 화면의 상태 논리 — 순수 함수만. 화면은 MeetingsDeviceSetup.tsx.
+ * 회의 참가 전 화면의 상태 로직 — 순수 함수만 포함. 화면은 MeetingsDeviceSetup.tsx.
  *
  *  · getUserMedia 오류 이름 → 상태(권한 거부 · 다른 앱 사용 중 · 장치 없음)
- *  · 처음 장치 잡기: 둘 다 → 오디오만 → 비디오만 순으로 시도해 "무엇이 막혔나"를 장치별로 가른다
+ *  · 최초 장치 획득: 둘 다 → 오디오만 → 비디오만 순으로 시도해 차단 원인을 장치별로 구분한다
  *  · 출력 장치 선택 가능 여부(setSinkId), http 주소 → https 주소
- *  · 블루투스 헤드셋 마이크를 고르면 같은 몸의 스피커도 따라가기(+되돌리기)
+ *  · 블루투스 헤드셋 마이크 선택 시 동일 기기의 스피커도 연동(+복원)
  *  · 손님 이름 잠금 · 참가 버튼 아래 한 줄 · 레벨 20칸 · 경과 시간 "0:42"
  *
  * 테스트: tests/meetings/prejoin.test.ts
  */
 
-/** 장치가 막힌 이유. null = 정상 */
+/** 장치 차단 사유. null = 정상 */
 export type DeviceIssue = 'denied' | 'inuse' | 'none' | 'lost'
 
-/** getUserMedia 가 던진 오류 → 이유. 알 수 없는 오류는 '장치 없음'으로 다룬다(예전과 같다) */
+/** getUserMedia 가 발생시킨 오류 → 사유. 미확인 오류는 '장치 없음'으로 처리한다(기존 동작과 동일) */
 export function classifyMediaError(err: unknown): DeviceIssue {
   const name = (err as { name?: string } | null)?.name || ''
   switch (name) {
@@ -34,30 +34,30 @@ export function classifyMediaError(err: unknown): DeviceIssue {
 export type GetUserMedia = (c: MediaStreamConstraints) => Promise<MediaStream>
 
 export interface AcquireResult {
-  /** 받은 스트림(둘 다 못 받으면 null) */
+  /** 수신한 스트림(둘 다 수신 실패 시 null) */
   stream: MediaStream | null
-  /** 이 스트림에 비디오/오디오 트랙이 있는가 */
+  /** 해당 스트림의 비디오/오디오 트랙 존재 여부 */
   video: boolean
   audio: boolean
-  /** 카메라·마이크가 막힌 이유(null = 정상) */
+  /** 카메라·마이크 차단 사유(null = 정상) */
   camera: DeviceIssue | null
   mic: DeviceIssue | null
-  /** 둘 다 권한 거부 — 미리보기 자리에 "권한이 꺼져 있습니다" */
+  /** 둘 다 권한 거부 — 미리보기 위치에 "권한이 꺼져 있습니다" 표시 */
   denied: boolean
 }
 
 /**
- * 처음 장치 잡기. 권한 창은 한 번만 뜨게 둘 다 먼저 묻고, 실패하면 오디오만 → 비디오만 순으로 가른다.
+ * 최초 장치 획득. 권한 창이 한 번만 표시되도록 둘 다 먼저 요청하고, 실패 시 오디오만 → 비디오만 순으로 구분한다.
  *  둘 다 OK                       → 정상
- *  둘 다 실패(e1) · 오디오 OK      → 카메라만 e1 이유(권한 거부 · 다른 앱 사용 중 · 없음)
- *  오디오도 실패(e2) · 비디오 OK   → 마이크만 e2 이유
- *  셋 다 실패                     → 둘 중 하나라도 권한 거부면 denied, 아니면 각자 이유
+ *  둘 다 실패(e1) · 오디오 OK      → 카메라만 e1 사유(권한 거부 · 다른 앱 사용 중 · 없음)
+ *  오디오도 실패(e2) · 비디오 OK   → 마이크만 e2 사유
+ *  셋 다 실패                     → 둘 중 하나라도 권한 거부면 denied, 아니면 각각의 사유
  */
 /**
- * 목록·대시보드 [참여]가 갈 곳. 회의 화면(/meetings/room)은 토큰을 직접 받는 사람(호스트·계정으로 초대받은 사람·
- * 채널 통화 멤버)만 들어갈 수 있다. 그 밖에 목록에 실리는 사람은 초대 링크로 이미 들어온 사람뿐이고(서버가 그 사람에게만
- * 자기가 쓴 share_token 을 준다 — 남이 연 진행 중 회의는 목록에 없다), 그 링크의 입장 화면(대기실·비밀번호)으로 보낸다.
- * 돌려주는 값: 초대 링크 경로, 또는 null(회의 화면으로 — 호출부가 openRoom).
+ * 목록·대시보드 [참여]의 이동 대상. 회의 화면(/meetings/room)은 토큰을 직접 수신하는 사용자(호스트·계정으로 초대받은 사용자·
+ * 채널 통화 멤버)만 입장할 수 있다. 그 외에 목록에 포함되는 사용자는 초대 링크로 이미 입장한 사용자뿐이며(서버가 해당 사용자에게만
+ * 본인이 사용한 share_token 을 반환한다 — 타인이 개설한 진행 중 회의는 목록에 없다), 해당 링크의 입장 화면(대기실·비밀번호)으로 이동시킨다.
+ * 반환값: 초대 링크 경로, 또는 null(회의 화면으로 이동 — 호출부가 openRoom 수행).
  */
 export function meetingJoinPath(room: { name: string; is_host?: boolean; my_response?: string | null; share_token?: string | null }): string | null {
   if (room.is_host || room.my_response || room.name.startsWith('chan-')) return null
@@ -106,18 +106,18 @@ export function permissionHintKey(browser: BrowserName, variant: 'long' | 'short
   return `meetings.prejoin.denied.${b}${variant === 'short' ? 'Short' : ''}`
 }
 
-/** 출력 장치를 고를 수 있는 브라우저인가 — setSinkId 가 있고 audiooutput 목록이 있을 때만 */
+/** 출력 장치 선택이 가능한 브라우저 여부 — setSinkId 가 있고 audiooutput 목록이 있는 경우에만 해당 */
 export function sinkSelectable(mediaElementProto: object | undefined, speakerCount: number): boolean {
   return !!mediaElementProto && 'setSinkId' in mediaElementProto && speakerCount > 0
 }
 
-/** http 로 열린 비보안 주소 → 같은 경로의 https 주소(기본 포트가 아니면 포트는 그대로 둔다) */
+/** http 로 열린 비보안 주소 → 동일 경로의 https 주소(기본 포트가 아니면 포트 유지) */
 export function httpsUrlFor(loc: { protocol: string; host: string; pathname: string; search: string; hash: string }): string {
   const host = loc.host.replace(/:80$/, '')
   return `https://${host}${loc.pathname}${loc.search}${loc.hash}`
 }
 
-/** 비보안 컨텍스트(http)인가 — 장치 API 가 아예 없다 */
+/** 비보안 컨텍스트(http) 여부 — 장치 API 자체가 제공되지 않는다 */
 export function isInsecureContext(win: { isSecureContext?: boolean; location?: { protocol: string } } | undefined): boolean {
   if (!win) return false
   if (win.isSecureContext === false) return true
@@ -127,17 +127,17 @@ export function isInsecureContext(win: { isSecureContext?: boolean; location?: {
 export interface PairedSpeaker { deviceId: string; label: string }
 
 export interface PairResult {
-  /** 따라 바꾼 스피커 id */
+  /** 연동 변경된 스피커 id */
   speakerId: string
-  /** 되돌릴 때 복원할 이전 스피커 id */
+  /** 복원 시 적용할 이전 스피커 id */
   previousSpeakerId: string
-  /** 알림에 넣을 헤드셋 이름 */
+  /** 알림에 포함할 헤드셋 이름 */
   name: string
 }
 
 /**
- * 마이크가 바뀌었을 때 스피커도 따라가야 하는가.
- * 사용자가 스피커를 직접 고른 적이 있으면(touched) 건드리지 않는다. 이미 같은 스피커면 알림도 없다.
+ * 마이크 변경 시 스피커 연동 필요 여부를 판정한다.
+ * 사용자가 스피커를 직접 선택한 이력이 있으면(touched) 변경하지 않는다. 이미 동일한 스피커이면 알림도 생략한다.
  */
 export function pairSpeaker(
   micId: string, speakerId: string, touched: boolean, pairedFor: (micId: string) => PairedSpeaker | null,
@@ -148,7 +148,7 @@ export function pairSpeaker(
   return { speakerId: paired.deviceId, previousSpeakerId: speakerId, name: paired.label }
 }
 
-/** 손님 이름 잠금 — 참가 버튼이 잠기는 유일한 경우. 잠기면 이유(i18n 키), 아니면 null */
+/** 손님 이름 잠금 — 참가 버튼이 잠기는 유일한 경우. 잠금 시 사유(i18n 키), 아니면 null */
 export function guestJoinLock(nameRequired: boolean, name: string): string | null {
   if (!nameRequired) return null
   return name.trim() ? null : 'meetings.prejoin.guestNameLock'
@@ -187,7 +187,7 @@ export function meterSegments(level: number, total = 20): MeterSegment[] {
   return Array.from({ length: total }, (_, i) => (i < lit ? (i >= total * 0.85 ? 'peak' : 'on') : 'off'))
 }
 
-/** 시간 도메인 샘플(0~255) → 레벨 0~100(RMS × 300, 예전 값 그대로) */
+/** 시간 도메인 샘플(0~255) → 레벨 0~100(RMS × 300, 기존 값 유지) */
 export function rmsLevel(samples: ArrayLike<number>): number {
   let sum = 0
   for (let i = 0; i < samples.length; i++) {
@@ -204,8 +204,8 @@ export function formatElapsed(ms: number): string {
 }
 
 /**
- * 스피커 테스트 차임(1초 안팎, 비프 대신) — 세 음(C5·E5·G5)이 겹치며 올라가고 부드럽게 사라진다.
- * 그래프만 만든다(실제 재생·출력 장치 지정은 화면 쪽). 총 길이(초)를 돌려준다.
+ * 스피커 테스트 차임(1초 내외, 비프 대체) — 세 음(C5·E5·G5)이 겹치며 상승한 뒤 완만하게 감쇠한다.
+ * 그래프만 생성한다(실제 재생·출력 장치 지정은 화면 측 담당). 총 길이(초)를 반환한다.
  */
 export const CHIME_SECONDS = 1.05
 export function scheduleChime(ctx: BaseAudioContext, out: AudioNode, at = ctx.currentTime): number {

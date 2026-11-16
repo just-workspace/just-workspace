@@ -1,8 +1,8 @@
 /**
  * 데스크톱 캘린더 사이드바: 236 bg-card · [+ 새 일정] 40 primary · 미니 달력 ·
- * "내 캘린더" / "구독"(끝에 "+ 구독 추가" 줄) / "공유받은 캘린더" 34 행(체크 16 + 색 견본 10 + 이름). 공유·삭제는 hover/포커스에만(데스크톱 규칙 C).
- * 구독 행은 hover 에 ⋮ 하나만 — 메뉴 = 지금 새로 고침 · 색 바꾸기 · 공유 · ─ · 구독 해제(설정 › 캘린더와 같은 한 벌).
- * 모바일(<md)에서는 페이지가 이 사이드바를 그리지 않고 FAB + 상단 ⋯ 시트를 쓴다.
+ * "내 캘린더" / "구독"(끝에 "+ 구독 추가" 줄) / "공유받은 캘린더" 34 행(체크 16 + 색 견본 10 + 이름). 공유·삭제는 hover/포커스 시에만 표시(데스크톱 규칙 C).
+ * 구독 행은 hover 시 ⋮ 하나만 표시 — 메뉴 = 지금 새로 고침 · 색 바꾸기 · 공유 · ─ · 구독 해제(설정 › 캘린더와 동일한 구성).
+ * 모바일(<md)에서는 페이지가 본 사이드바를 렌더링하지 않고 FAB + 상단 ⋯ 시트를 사용한다.
  */
 import { useEffect, useState } from 'react'
 import { cn } from '~/lib/utils'
@@ -43,7 +43,7 @@ export function CalendarSidebar() {
   const [newColor, setNewColor] = useState(CALENDAR_COLORS[0])
 
   function setFormOpen(open: boolean) {
-    // 새 캘린더 기본 색은 순번대로 범주 1→8 순환
+    // 새 캘린더 기본 색은 순번에 따라 범주 1→8 순환
     if (open && !showNewForm) {
       const mine = calendarStore.getState().calendars.filter(c => !c.is_shared)
       setNewColor(CAT_HEX[catForIndex(mine.length).cat - 1])
@@ -64,7 +64,7 @@ export function CalendarSidebar() {
       setShowNewForm(false)
     } catch (e: any) {
       console.error('create calendar failed:', e)
-      // 실패를 삼키면 아무 반응이 없다(모바일 시트와 같은 문구)
+      // 실패를 무시하면 사용자에게 아무 반응이 없다(모바일 시트와 동일한 문구)
       addToast('error', t('calendar.sidebar.createFailed'))
     }
   }
@@ -74,7 +74,7 @@ export function CalendarSidebar() {
     await deleteCalendar(cal.id)
   }
 
-  // 구독 ⋮ 메뉴 — 설정 › 캘린더 ⋮ 와 같은 한 벌(subscriptionMenuItems)
+  // 구독 ⋮ 메뉴 — 설정 › 캘린더 ⋮ 와 동일한 구성(subscriptionMenuItems)
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   async function onSubMenu(cal: CalendarInfo, key: string) {
     if (key === 'refresh') { void refreshSubscriptionNow(t, cal); return }

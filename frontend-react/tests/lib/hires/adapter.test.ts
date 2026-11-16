@@ -1,4 +1,4 @@
-// 하이레조 어댑터(lib/hires) — 가짜 window.jwNativeAudio + 가짜 무손실 전송으로 확인창 → 독점 → 릴레이 흐름, 독점 실패 → danger 띠 + 무손실 24/48 강등,
+// 하이레조 어댑터(lib/hires) — 모의 window.jwNativeAudio + 모의 무손실 전송으로 확인창 → 독점 → 릴레이 흐름, 독점 실패 → danger 띠 + 무손실 24/48 강등,
 // 취소 → 띠 없이 무손실, 통계 매핑(PCM 32/192 · 비트퍼펙트), 등록은 브리지가 있을 때만.
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { HiresVoiceTransport, setHiresUiHooks, mapHiresStats, hiresFormatLine, pickHiresRequest } from '~/lib/hires/adapter'
@@ -53,7 +53,7 @@ function fakeBridge(openResult: Partial<Awaited<ReturnType<JwNativeAudio['openHi
   return { bridge, calls, emit, stats }
 }
 
-/** 가짜 LosslessVoiceTransport — 호출만 기록 */
+/** 모의 LosslessVoiceTransport — 호출만 기록 */
 function fakeInner() {
   const calls: { join: unknown[]; setSend: VoiceSendConfig[]; leave: number; muted: Array<[string, boolean]> } = { join: [], setSend: [], leave: 0, muted: [] }
   let tier: 'music' | 'lossless' = 'music'
@@ -88,7 +88,7 @@ describe('HiresVoiceTransport', () => {
     setHiresUiHooks({ confirmExclusive: confirm, reportExclusiveError: report })
     const t = new HiresVoiceTransport(b.bridge, li.inner)
     await t.join(join)
-    // LiveKit 은 음악 레시피로 들어간다(presence), 브라우저 무손실은 켜지 않는다
+    // LiveKit 은 음악 레시피로 접속(presence), 브라우저 무손실은 활성화하지 않음
     expect((li.calls.join[0] as { send: VoiceSendConfig }).send.tier).toBe('music')
     expect(li.calls.setSend.find((c) => c.tier === 'lossless')).toBeUndefined()
     expect(confirm).toHaveBeenCalledWith(dev.name, expect.stringMatching(/^PCM 32\/192 · .+ · 12\.3 Mbps$/))
@@ -107,7 +107,7 @@ describe('HiresVoiceTransport', () => {
     expect(s.bitExact).toBe(true)
     expect(s.recovered).toBe(5)
     expect(s.transport).toBe('webtransport')
-    // 피어가 나가면 LiveKit 트랙을 되살린다
+    // 피어가 나가면 LiveKit 트랙을 복원
     b.emit({ type: 'peer_left', peer: 2, uid: 'u2' })
     expect(li.calls.muted).toContainEqual(['lk-u2', false])
     await t.leave()
@@ -128,7 +128,7 @@ describe('HiresVoiceTransport', () => {
     expect(fb).toMatchObject({ tier: 'lossless', sampleRate: 48000, bitDepth: 24 })
     expect(t.effectiveTier()).toBe('lossless')
     expect(b.calls.close.length).toBe(1)
-    // 다시 시도: 이번엔 성공 — 확인창은 다시 묻지 않는다
+    // 재시도: 이번에는 성공 — 확인창은 다시 표시하지 않음
     b.bridge.openHires = async () => ({ ok: true, exclusive: true, bitPerfect: true, capture: null, playback: null, wire: b.stats.wire, formatLabel: 'PCM 32/192', nominalBps: 1, device: dev.name, attempts: [] })
     await t.setSend({ ...join.send })
     expect(confirm).toHaveBeenCalledTimes(1)

@@ -1,5 +1,5 @@
-// 승인 대기함 — 주소로 고르지 않은 상세(데스크톱 자동 선택)는 한 번 정하면 바뀌지 않는다.
-// 읽는 중에 새 요청이 맨 위에 붙어도 상세·[승인] 대상이 그대로여야 한다(안 읽은 요청을 승인하는 사고 방지).
+// 승인 대기함 — 주소로 선택하지 않은 상세(데스크톱 자동 선택)는 한 번 정해지면 변경되지 않는다.
+// 열람 중 새 요청이 최상단에 추가되어도 상세·[승인] 대상이 유지되어야 한다(미열람 요청을 승인하는 사고 방지).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -64,19 +64,19 @@ describe('승인 대기함 자동 선택', () => {
     render(<RouterProvider router={router} />)
     await waitFor(() => expect(rowOf('a')?.getAttribute('aria-pressed')).toBe('true'))
 
-    // 새 요청 b 가 도착(대기 건수 이벤트 → 조용한 새로 고침, 최신이 맨 위)
+    // 새 요청 b 도착(대기 건수 이벤트 → 백그라운드 새로 고침, 최신이 최상단)
     api.pending = [item('b'), item('a')]
     await act(async () => { approvalsStore.setState({ seq: approvalsStore.getState().seq + 1 } as any) })
     await waitFor(() => expect(rowOf('b')).toBeTruthy())
     expect(rowOf('a')?.getAttribute('aria-pressed')).toBe('true')
     expect(rowOf('b')?.getAttribute('aria-pressed')).toBe('false')
 
-    // 승인은 a 로 간다
+    // 승인은 a 로 전송
     fireEvent.click(screen.getByRole('button', { name: i18n.t('approvals.detail.approve') }))
     await waitFor(() => expect(api.calls.some(c => /\/approve$/.test(c.url))).toBe(true))
     expect(api.calls.filter(c => /\/approve$/.test(c.url)).map(c => c.url)).toEqual(['/api/approvals/a/approve'])
 
-    // 처리한 뒤에도 다음 대기 요청으로 넘어가지 않는다(사용자가 고를 때까지)
+    // 처리 후에도 다음 대기 요청으로 전환하지 않음(사용자가 선택할 때까지)
     api.pending = [item('b')]
     await act(async () => { approvalsStore.setState({ seq: approvalsStore.getState().seq + 1 } as any) })
     await waitFor(() => expect(rowOf('a')?.getAttribute('aria-pressed')).toBe('true'))

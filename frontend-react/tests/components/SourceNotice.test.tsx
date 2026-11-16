@@ -1,4 +1,4 @@
-// "소스 코드" 링크 — 서버가 준 주소로, 새 창에서, 주소가 없거나 http(s) 가 아니면 숨긴다. 로그인 화면 바닥글에도 보인다.
+// "소스 코드" 링크 — 서버가 제공한 주소로, 새 창에서 열며, 주소가 없거나 http(s) 가 아니면 숨김. 로그인 화면 바닥글에도 표시.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { SourceNotice, safeSourceUrl } from '~/components/SourceNotice'

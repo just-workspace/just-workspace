@@ -88,11 +88,11 @@ describe('MeetingsInviteModal', () => {
     const onUpdate = vi.fn(); const onClose = vi.fn()
     render(<MeetingsInviteModal mode="edit" room={room({ meeting_id: 'm1', title: '원래', duration_minutes: 60 })} onUpdate={onUpdate} onClose={onClose} />)
     await waitFor(() => expect(screen.getByText('가')).toBeTruthy())
-    // 아무것도 안 바꾸고 저장 → 닫기만
+    // 변경 없이 저장 → 닫기만 수행
     fireEvent.click(screen.getByRole('button', { name: t('common.save') }))
     expect(onClose).toHaveBeenCalled()
     expect(onUpdate).not.toHaveBeenCalled()
-    // 초대 빼고 제목 바꾸기
+    // 초대 제거 및 제목 변경
     fireEvent.click(screen.getByRole('button', { name: t('meetings.invite.removeInvitee', { name: '가' }) }))
     fireEvent.change(screen.getByLabelText(t('meetings.invite.meetingName')), { target: { value: '새 제목' } })
     fireEvent.click(screen.getByRole('button', { name: t('common.save') }))

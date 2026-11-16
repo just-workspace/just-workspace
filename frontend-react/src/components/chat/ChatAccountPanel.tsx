@@ -1,17 +1,17 @@
 /**
- * 계정 패널 — 채널 목록 아래 떠 있는 카드.
+ * 계정 패널 — 채널 목록 하단의 플로팅 카드.
  *  카드: 인셋 8(m-2 mt-0) · radius 8 · 1px border · bg-card.
- *  ① 음성 접속 중이면 위쪽 접속 줄(아래 선): 상태 점 · 상태 13/600(연결됨 success · PTT 말하는 중 · 재연결 warning) ·
+ *  ① 음성 접속 중이면 상단 접속 줄(아래 선): 상태 점 · 상태 13/600(연결됨 success · PTT 말하는 중 · 재연결 warning) ·
  *     음질 버튼(점 + 단계 + 지연 mono → 음질 상태 팝오버, aria-expanded) · 음질 설정(sliders, aria-pressed) · 나가기(danger) /
- *     아래 "채널 · 워크스페이스" 12 muted. 재연결이면 위 테두리 warning 2px. (접속 바의 마이크·듣기 끔은 아래 계정 줄로)
- *  ② 계정 줄 56: 아바타 32 + 상태 점 10 · 이름 14/600 + 상태 한 줄 12(누르면 사용자 메뉴 — 상태·프로필·설정) ·
+ *     아래 "채널 · 워크스페이스" 12 muted. 재연결 시 위 테두리 warning 2px. (접속 바의 마이크·듣기 끔은 아래 계정 줄로 이동)
+ *  ② 계정 줄 56: 아바타 32 + 상태 점 10 · 이름 14/600 + 상태 한 줄 12(클릭 시 사용자 메뉴 — 상태·프로필·설정) ·
  *     마이크 · 듣기 끔 · 사용자 설정(각 32, 아이콘 20).
  *  PTT(chatVoiceMode='ptt', lib/voice/ptt): 키를 누르고 있는 동안 마이크 success ring + success/15, 상태 줄 "` 키를 누르고 있음",
  *     접속 줄 "눌러서 말하는 중".
- *  단축키(이 화면이 떠 있는 동안): Ctrl+Shift+M 마이크 · Ctrl+Shift+D 듣기 끔.
- * 접속 중 이 카드가 접속 바를 그리므로 셸 사이드바는 그리지 않는다(registerVoiceBarHost).
+ *  단축키(이 화면이 표시된 동안): Ctrl+Shift+M 마이크 · Ctrl+Shift+D 듣기 끔.
+ * 접속 중에는 이 카드가 접속 바를 렌더링하므로 셸 사이드바는 렌더링하지 않는다(registerVoiceBarHost).
  *
- * SIDEBAR 연결: ChatSidebar 맨 아래에 <ChatAccountPanel /> 한 줄(데스크톱). 모바일은 셸이 탭 바 위에 접속 바를 그린다.
+ * SIDEBAR 연결: ChatSidebar 최하단에 <ChatAccountPanel /> 한 줄(데스크톱). 모바일은 셸이 탭 바 위에 접속 바를 렌더링한다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { createStore, useStore } from 'zustand'
@@ -56,7 +56,7 @@ export function ChatAccountPanel({ className }: ChatAccountPanelProps) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   useEffect(() => { setAnchor(cardRef.current) }, [v.statsOpen, v.qualityOpen])
 
-  // 접속 중엔 이 카드가 접속 바다 — 셸 사이드바 하단 바를 끈다
+  // 접속 중에는 이 카드가 접속 바 역할 수행 — 셸 사이드바 하단 바 비활성화
   const inVoice = v.inVoice
   useEffect(() => (inVoice ? registerVoiceBarHost() : undefined), [inVoice])
 
@@ -68,7 +68,7 @@ export function ChatAccountPanel({ className }: ChatAccountPanelProps) {
     return () => clearInterval(id)
   }, [v.reconnectSince])
 
-  // 사용자 메뉴 바깥 누르기
+  // 사용자 메뉴 외부 클릭
   useEffect(() => {
     if (!menuOpen) return
     const onDown = (e: PointerEvent) => {

@@ -2,10 +2,10 @@
  * 파일 사이드바: 236 · p 12/10 · bg-card · 13.5px,
  * 행 34 rounded-8 gap 10 아이콘 16, 선택 primary/13 + 600, 나머지 muted, 오른쪽 메타 11px. 아래 저장 공간 카드(12px, mono 수치, 4px 막대).
  * 뷰: 내 파일 · 공유받음 · 최근 · 즐겨찾기 · 공유 링크 · 휴지통(보관 기간 표기).
- *   "공유 파일"(팀 공유 폴더 shared/)·"전체 사용자"(관리자)는 기존 기능이라 유지 — 시안에 없음.
- *   최근(GET /recent — 파일을 열 때 POST)·즐겨찾기(GET /stars)는 각자 뷰.
- * 행은 끌어다 놓기 대상(내 파일·공유 파일) — 앱 안 끌기(이동)만 받는다.
- * (데스크톱 셸이 위치 열을 그리면 파일 화면은 이 사이드바를 쓰지 않는다 — navOwnedByShell)
+ *   "공유 파일"(팀 공유 폴더 shared/)·"전체 사용자"(관리자)는 기존 기능이므로 유지 — 시안에 없음.
+ *   최근(GET /recent — 파일을 열 때 POST)·즐겨찾기(GET /stars)는 각각 별도 뷰.
+ * 행은 드롭 대상(내 파일·공유 파일) — 앱 내 드래그(이동)만 허용한다.
+ * (데스크톱 셸이 위치 열을 렌더링하면 파일 화면은 이 사이드바를 사용하지 않는다 — navOwnedByShell)
  */
 import { useEffect, useState, type DragEvent } from 'react'
 import { clsx } from 'clsx'
@@ -17,15 +17,15 @@ import { useAuth } from '~/composables/useAuth'
 
 export interface FilesFileSidebarProps {
   className?: string
-  /** 행을 눌러 이동했다 */
+  /** 행을 눌러 이동한 경우 호출 */
   onNavigate?: () => void
-  /** 앱 안 끌기를 행에 놓음 */
+  /** 앱 내 드래그를 행에 드롭 */
   onDropMove?: (paths: string[], dst: string) => void
 }
 
 interface NavRow { key: string; label: string; d: string; meta?: string; path?: string; view?: FilesView; disabled?: boolean }
 
-// path 는 시안 nav 표 그대로
+// path 는 시안 nav 표와 동일
 const D = {
   my: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
   sharedWithMe: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
@@ -74,7 +74,7 @@ export function FilesFileSidebar({ className, onNavigate, onDropMove }: FilesFil
     onNavigate?.()
   }
 
-  // ── 끌어다 놓기(이동) ──
+  // ── 드래그 앤 드롭(이동) ──
   const [dropKey, setDropKey] = useState<string | null>(null)
   function canDrop(row: NavRow, e: DragEvent) {
     return !!row.path && row.path !== 'users' && !!e.dataTransfer?.types.includes(DRAG_MIME)

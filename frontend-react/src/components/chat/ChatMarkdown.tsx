@@ -1,15 +1,15 @@
 /**
- * 채팅 본문 마크다운 그리기.
- * 파싱은 utils/chatMarkdown.parseChatMarkdown(AST) — 여기는 React 요소로만 그린다(innerHTML 없음 → XSS 경로 없음, 링크는 http(s) 만).
+ * 채팅 본문 마크다운 렌더링.
+ * 파싱은 utils/chatMarkdown.parseChatMarkdown(AST) — 본 모듈은 React 요소로만 렌더링한다(innerHTML 없음 → XSS 경로 없음, 링크는 http(s) 만).
  *  · h1 24/700 · h2 20/700 · h3 16/700 · `-#` 13 muted · 목록 들여쓰기 20(• ◦ ▪ / 1.)
- *  · 마스크 링크 [글](주소): primary 밑줄 + 호버·포커스 툴팁에 실제 주소(mono 12). 다른 출처면 처음 한 번 확인(도메인 기억 = 개인 localStorage)
- *  · 스포일러 ||글||: 가림 = bg-foreground 덮개 버튼(aria-expanded) / 펼침 = foreground/20
- *  · 코드 블록: 머리 32(언어 · 복사) · 13/20 mono · 가로 스크롤 · 20줄 넘으면 접고 "N줄 더 보기"
- *    구문 색: 키워드 cat-5 · 문자열 cat-2 · 함수 cat-1 · 주석 muted — 먼저 작은 토크나이저로, shiki(css-variables 테마)가 오면 바꾼다
+ *  · 마스크 링크 [글](주소): primary 밑줄 + 호버·포커스 툴팁에 실제 주소(mono 12). 다른 출처이면 최초 1회 확인(도메인 기억 = 개인 localStorage)
+ *  · 스포일러 ||글||: 가림 = bg-foreground 커버 버튼(aria-expanded) / 펼침 = foreground/20
+ *  · 코드 블록: 헤더 32(언어 · 복사) · 13/20 mono · 가로 스크롤 · 20줄 초과 시 접고 "N줄 더 보기"
+ *    구문 색: 키워드 cat-5 · 문자열 cat-2 · 함수 cat-1 · 주석 muted — 먼저 소형 토크나이저로 처리하고, shiki(css-variables 테마) 로드 후 교체
  *  · 인용 > / >>> : 4px 막대 · 인라인 코드 · 굵게 · 기울임 · 밑줄 · 취소
  *  · 멘션 칩: @사용자·#채널 primary/15 + primary 500 · @역할 role 칩 + "역할 · N명" · 볼 수 없는 채널 muted "# 볼 수 없는 채널"
  *    · @here·@everyone warning/15 + 대상 인원 툴팁
- *  · 커스텀 이모지 :이름: → 이미지 22(본문이 이모지만이면 48 jumbo — 디스코드)
+ *  · 커스텀 이모지 :이름: → 이미지 22(본문이 이모지뿐이면 48 jumbo — 디스코드)
  */
 import { Fragment, memo, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { useStore } from 'zustand'
@@ -30,7 +30,7 @@ import {
   type MdBlock, type MdInline, type MdListItem,
 } from '~/utils/chatMarkdown'
 
-// ─── 외부 링크 확인(처음 한 번) — 도메인 기억은 이 사람 이 브라우저(localStorage) ───
+// ─── 외부 링크 확인(최초 1회) — 도메인 기억은 해당 사용자의 해당 브라우저(localStorage) 단위 ───
 const LS_TRUSTED = 'jw-chat-trusted-domains'
 function trustedDomains(): string[] {
   try { const v = JSON.parse(localStorage.getItem(LS_TRUSTED) || '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
@@ -41,7 +41,7 @@ export function isTrustedDomain(host: string): boolean {
 export function rememberDomain(host: string) {
   const list = trustedDomains()
   if (list.includes(host.toLowerCase())) return
-  try { localStorage.setItem(LS_TRUSTED, JSON.stringify([...list, host.toLowerCase()].slice(-200))) } catch { /* 기억 못 해도 다음에 다시 묻는다 */ }
+  try { localStorage.setItem(LS_TRUSTED, JSON.stringify([...list, host.toLowerCase()].slice(-200))) } catch { /* 저장 실패 시 다음에 다시 확인 */ }
 }
 function hostOf(href: string): string | null {
   try { return new URL(href).host } catch { return null }
@@ -59,7 +59,7 @@ const KEYWORDS = new Set(('abstract as async await break case catch class const 
   + 'select where insert update into values create table drop alter echo then fi done esac').split(' '))
 const HASH_COMMENT = new Set(['py', 'python', 'sh', 'bash', 'shell', 'zsh', 'yaml', 'yml', 'toml', 'ini', 'rb', 'ruby', 'r', 'dockerfile', 'conf', 'powershell', 'ps1'])
 
-/** 작은 토크나이저 — 한 줄 단위(여러 줄 주석은 줄마다 다시 본다). shiki 가 오기 전·모르는 언어 */
+/** 소형 토크나이저 — 한 줄 단위(여러 줄 주석은 줄마다 재판정). shiki 로드 전·미지원 언어에 사용 */
 export function tokenizeLine(line: string, lang = ''): CodeTok[] {
   const out: CodeTok[] = []
   const hash = HASH_COMMENT.has(lang.toLowerCase())
@@ -81,7 +81,7 @@ export function tokenizeLine(line: string, lang = ''): CodeTok[] {
   return out
 }
 
-// shiki css-variables 토큰 색 → 우리 토큰
+// shiki css-variables 토큰 색 → 본 프로젝트 토큰
 function shikiKind(color: string | undefined): CodeTok['k'] {
   if (!color) return ''
   if (color.includes('token-comment')) return 'cm'
@@ -145,7 +145,7 @@ const CodeBlock = memo(function CodeBlock({ lang, code }: { lang: string; code: 
   )
 })
 
-/** 스포일러 — 누르면 펼침(다시 누르면 그대로 — 디스코드) */
+/** 스포일러 — 클릭 시 펼침(다시 클릭해도 유지 — 디스코드) */
 function Spoiler({ children }: { children: ReactNode }) {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
@@ -176,7 +176,7 @@ function MdLink({ href, masked, children }: { href: string; masked: boolean; chi
     window.open(href, '_blank', 'noopener,noreferrer')
   }
   return (
-    // 주소 툴팁은 UiTooltip(body 포털) — 예전엔 메시지 목록(overflow) 안에 absolute 로 그려 마지막 줄에서 잘리고 가로 스크롤을 만들었다
+    // 주소 툴팁은 UiTooltip(body 포털) 사용 — 이전에는 메시지 목록(overflow) 내부에 absolute 로 렌더링하여 마지막 줄에서 잘리고 가로 스크롤이 발생했음
     <UiTooltip text={href} disabled={!masked} side="bottom">
       <a
         href={href}
@@ -191,7 +191,7 @@ function MdLink({ href, masked, children }: { href: string; masked: boolean; chi
 
 const CHIP = 'rounded px-0.5 font-medium'
 
-/** @이름 칩 — 역할 · 그룹(@here/@everyone) · 사람 */
+/** @이름 칩 — 역할 · 그룹(@here/@everyone) · 사용자 */
 function AtChip({ name, group }: { name: string; group: boolean }) {
   const { t } = useI18n()
   const roles = useStore(chatRolesStore, s => s.roles)
@@ -224,7 +224,7 @@ function AtChip({ name, group }: { name: string; group: boolean }) {
   )
 }
 
-/** #채널 칩 — 볼 수 없는(목록에 없는) <#id> 는 muted "# 볼 수 없는 채널", 이름이 맞는 채널이 없는 #글자 는 그대로 */
+/** #채널 칩 — 볼 수 없는(목록에 없는) <#id> 는 muted "# 볼 수 없는 채널", 이름이 일치하는 채널이 없는 #글자 는 그대로 표시 */
 function ChannelChip({ refName, byId }: { refName: string; byId: boolean }) {
   const { t } = useI18n()
   const ch = useStore(chatStore, s => s.channels.find(c => (byId ? c.id === refName : c.name === refName) && c.type !== 'dm') || null)
@@ -336,14 +336,14 @@ function Blocks({ blocks, ctx, lead, tail }: { blocks: MdBlock[]; ctx: Ctx; lead
 
 export interface ChatMarkdownProps {
   content: string
-  /** 첫 문단 맨 앞에 붙일 것(compact 의 이름) */
+  /** 첫 문단 맨 앞에 추가할 요소(compact 의 이름) */
   lead?: ReactNode
-  /** 마지막에 붙일 것("(수정됨)") */
+  /** 마지막에 추가할 요소("(수정됨)") */
   tail?: ReactNode
   className?: string
 }
 
-/** 커스텀 이모지 목록 — 처음 쓰는 곳이 읽기를 시작한다(옛 서버면 빈 목록) */
+/** 커스텀 이모지 목록 — 최초 사용처에서 조회를 시작한다(구버전 서버이면 빈 목록) */
 export function useCustomEmojiUrl(): (name: string) => string | null {
   const custom = useStore(chatEmojiStore, s => s.custom)
   const loaded = useRef(false)

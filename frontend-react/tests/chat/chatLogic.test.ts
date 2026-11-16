@@ -17,7 +17,7 @@ describe('chatMarkdown', () => {
     expect(GROUP_MENTIONS.has('here')).toBe(true)
   })
   it('굵게·코드·링크·인용·멘션 칩', () => {
-    // happy-dom 의 DOMPurify 는 맨 앞 노드를 떨굴 때가 있다(브라우저는 아님) — 앞에 버릴 요소를 둔다
+    // happy-dom 의 DOMPurify 는 선두 노드를 누락하는 경우가 있음(브라우저는 해당 없음) — 앞에 폐기용 요소를 배치
     const html = renderChatMarkdown('`z` a **굵게** `x<y` https://ex.com\n> 인용 @kim', { me: 'kim' })
     expect(html).toContain('<strong>굵게</strong>')
     expect(html).toContain('<code class="chat-inline-code">x&lt;y</code>')

@@ -1,18 +1,18 @@
 /**
- * 홈 대시보드 배치 규칙 — 순수 함수만.
+ * 홈 대시보드 배치 규칙 — 순수 함수만 포함.
  *
- * - 시작하기(신규 사용자)는 주 줄에 넣지 않는다 — 칩 줄 아래·주 줄 위 전폭 카드, 항목은 startColumns 열 격자.
- * - 주 줄: 후보 순서(나에게 온 것 2칸 → 오늘 → 오늘의 포커스 → 이어서 하기 2칸)를 열 수를 넘지 않게 앞에서부터 채운다.
- *   못 들어가는 후보는 건너뛰고 다음 후보를 본다(시안 그대로). 주 줄 같은 높이는 내용 있는 카드끼리만(tierHeights):
- *   빈 상태 카드·AI 꺼짐 카드는 자기 높이. 주 줄에 못 든 후보는 보조 영역 맨 앞.
+ * - 시작하기(신규 사용자)는 주 줄에 포함하지 않는다 — 칩 줄 아래·주 줄 위 전폭 카드, 항목은 startColumns 열 격자.
+ * - 주 줄: 후보 순서(나에게 온 것 2칸 → 오늘 → 오늘의 포커스 → 이어서 하기 2칸)를 열 수를 초과하지 않도록 앞에서부터 배치한다.
+ *   배치 불가한 후보는 건너뛰고 다음 후보를 검사한다(시안과 동일). 주 줄의 동일 높이는 내용이 있는 카드 간에만 적용(tierHeights):
+ *   빈 상태 카드·AI 꺼짐 카드는 자체 높이. 주 줄에 배치되지 못한 후보는 보조 영역 맨 앞.
  *   신규 사용자는 오늘 → 포커스 → 나에게 온 것.
  * - 보조 영역: 열 쌓기 — grid-auto-rows 4px + dense, 카드마다 row span = ceil((높이 + 20) / 4).
  * - 카드 행 수 상한 = 실효 높이 <1000 5행 · <1300 6행 · 그 이상 7행.
- * - 크기 2단계 1칸/2칸(열이 1이면 1칸). 기본 2칸 = 나에게 온 것 · 이어서 하기. 시작하기는 늘 전폭(크기 없음).
+ * - 크기 2단계 1칸/2칸(열이 1이면 1칸). 기본 2칸 = 나에게 온 것 · 이어서 하기. 시작하기는 항상 전폭(크기 없음).
  * - 개인 배치(/api/me/prefs dash.layout) > 관리자 기본 배치(appcfg dash.layout) > 기본 순서.
- *   관리자 고정(locked) 카드는 숨김·크기를 바꿀 수 없다(순서만).
+ *   관리자 고정(locked) 카드는 숨김·크기를 변경할 수 없다(순서만 변경 가능).
  *
- * 값 모양은 백엔드 app/dashboard/layout.py 와 같다.
+ * 값 형태는 백엔드 app/dashboard/layout.py 와 동일하다.
  */
 
 export const CARD_KEYS = [
@@ -27,22 +27,22 @@ export interface DashLayout {
   order?: CardKey[]
   hidden?: CardKey[]
   size?: Partial<Record<CardKey, CardSpan>>
-  /** 관리자 기본 배치에서만 — 모든 사람에게 고정 */
+  /** 관리자 기본 배치 전용 — 모든 사용자에게 고정 */
   locked?: CardKey[]
 }
 
 /** 주 줄 후보 */
 export const PRIMARY: readonly CardKey[] = ['inbox', 'today', 'ai', 'cont']
 export const PRIMARY_NEW: readonly CardKey[] = ['today', 'ai', 'inbox']
-/** 판 밖(주 줄 위) 전폭 카드 — 그리드에 넣지 않는다. 편집 패널 목록에는 있다(숨기기·다시 보기) */
+/** 판 밖(주 줄 위) 전폭 카드 — 그리드에 포함하지 않는다. 편집 패널 목록에는 포함된다(숨기기·다시 보기) */
 export const FULL_WIDTH: readonly CardKey[] = ['start']
 /** 보조 영역 기본 순서(+ 진행 중 회의 + 네트워크 랩) */
 export const REST: readonly CardKey[] = ['tasks', 'mail', 'later', 'team', 'git', 'board', 'notice', 'chans', 'store', 'meet', 'lab']
-/** 신규 사용자 보조 영역(시안 #new: 둘러볼 채널 · 공지 먼저) */
+/** 신규 사용자 보조 영역(시안 #new: 둘러볼 채널 · 공지 우선) */
 export const REST_NEW: readonly CardKey[] = ['discover', 'notice', 'cont', 'tasks', 'mail', 'later', 'team', 'git', 'board', 'chans', 'store', 'meet', 'lab']
 /** 기본 2칸 */
 export const DEFAULT_SPAN: Partial<Record<CardKey, CardSpan>> = { inbox: 2, cont: 2 }
-/** 주 줄 카드 중 비어도 제자리 빈 상태를 보이는 것(나머지는 "비어 있는 카드" 묶음으로) */
+/** 주 줄 카드 중 비어 있어도 제자리에 빈 상태를 표시하는 카드(나머지는 "비어 있는 카드" 묶음으로 이동) */
 export const INLINE_EMPTY: readonly CardKey[] = ['inbox', 'today', 'ai']
 
 /** 카드 행 수 상한(실효 높이) */
@@ -56,8 +56,8 @@ export function startColumns(cols: number): number {
 }
 
 /**
- * 주 줄 카드별 높이: 내용 있는 카드(filled)끼리만 그중 가장 큰 높이로 맞추고, 나머지(빈 상태·AI 꺼짐·로딩)는 자기 높이.
- * 내용 있는 카드가 없으면 모두 자기 높이. 높이를 아직 모르면 fallback.
+ * 주 줄 카드별 높이: 내용이 있는 카드(filled) 간에만 그중 최대 높이로 통일하고, 나머지(빈 상태·AI 꺼짐·로딩)는 자체 높이.
+ * 내용이 있는 카드가 없으면 모두 자체 높이. 높이가 미확정이면 fallback.
  */
 export function tierHeights(
   tier: readonly CardKey[], heights: Partial<Record<CardKey, number>>, filled: (k: CardKey) => boolean, fallback = 240,
@@ -86,7 +86,7 @@ function keys(v: unknown): CardKey[] {
   return out
 }
 
-/** 서버 값 → 배치(모르는 키·형식은 버림). 객체가 아니면 null */
+/** 서버 값 → 배치(미지의 키·형식은 폐기). 객체가 아니면 null */
 export function parseLayout(v: unknown): DashLayout | null {
   let o = v
   if (typeof o === 'string') {
@@ -102,7 +102,7 @@ export function parseLayout(v: unknown): DashLayout | null {
 }
 
 export interface ResolvedLayout {
-  /** 쓸 수 있는 카드 전부(숨김 포함), 보이는 순서 */
+  /** 사용 가능한 카드 전체(숨김 포함), 표시 순서 */
   order: CardKey[]
   hidden: Set<CardKey>
   size: Record<CardKey, CardSpan>
@@ -110,9 +110,9 @@ export interface ResolvedLayout {
 }
 
 /**
- * 기본 순서 위에 저장된 순서를 얹는다. 저장된 순서에 없는 카드(새로 생긴 카드 등)는 기본 순서에서 앞선 카드들 가운데
- * 가장 뒤에 놓인 것 바로 뒤에 끼운다(앞선 카드가 없으면 맨 뒤).
- * @param available 이 사용자가 쓸 수 있는 카드(모듈·권한·신규 여부로 거른 것)
+ * 기본 순서에 저장된 순서를 적용한다. 저장된 순서에 없는 카드(신규 카드 등)는 기본 순서상 선행 카드 중
+ * 가장 뒤에 위치한 카드 바로 뒤에 삽입한다(선행 카드가 없으면 맨 뒤).
+ * @param available 해당 사용자가 사용 가능한 카드(모듈·권한·신규 여부로 필터링한 결과)
  */
 export function mergeOrder(base: readonly CardKey[], saved: readonly CardKey[] | undefined, available: readonly CardKey[]): CardKey[] {
   const avail = new Set(available)
@@ -121,7 +121,7 @@ export function mergeOrder(base: readonly CardKey[], saved: readonly CardKey[] |
   for (let i = 0; i < full.length; i++) {
     const k = full[i]
     if (!avail.has(k) || out.includes(k)) continue
-    // 기본 순서에서 앞선 카드들 가운데 가장 뒤에 놓인 것 바로 뒤에. 앞선 카드가 하나도 없으면 맨 뒤
+    // 기본 순서상 선행 카드 중 가장 뒤에 위치한 카드 바로 뒤에 삽입. 선행 카드가 없으면 맨 뒤
     let at = -1
     for (let j = 0; j < i; j++) at = Math.max(at, out.indexOf(full[j]))
     at = at < 0 ? out.length : at + 1
@@ -130,7 +130,7 @@ export function mergeOrder(base: readonly CardKey[], saved: readonly CardKey[] |
   return out
 }
 
-/** 개인 > 관리자 기본 > 기본 순서로 합친 배치 */
+/** 개인 > 관리자 기본 > 기본 순서로 병합한 배치 */
 export function resolveLayout(opts: {
   available: readonly CardKey[]
   isNew: boolean
@@ -144,7 +144,7 @@ export function resolveLayout(opts: {
   const order = mergeOrder(base, savedOrder, available)
   const hiddenSrc = user ? (user.hidden ?? []) : (admin?.hidden ?? [])
   const hidden = new Set(hiddenSrc.filter(k => !locked.has(k)))
-  // 고정 카드는 관리자가 숨겼더라도 보인다(고정 = 모두에게 보이게)
+  // 고정 카드는 관리자가 숨김 처리해도 표시한다(고정 = 전체 사용자에게 표시)
   const size = {} as Record<CardKey, CardSpan>
   for (const k of CARD_KEYS) {
     const def = DEFAULT_SPAN[k] ?? 1
@@ -155,7 +155,7 @@ export function resolveLayout(opts: {
   return { order, hidden, size, locked }
 }
 
-/** 주 줄(시안: 후보를 순서대로 보며 남은 칸에 들어가면 넣는다). 열이 1이면 주 줄 없음 */
+/** 주 줄(시안: 후보를 순서대로 검사하여 남은 칸에 수용 가능하면 배치한다). 열이 1이면 주 줄 없음 */
 export function planTier(visible: readonly CardKey[], primary: readonly CardKey[], spanOf: (k: CardKey) => number, cols: number): CardKey[] {
   if (cols <= 1) return []
   const cand = visible.filter(k => primary.includes(k))
@@ -168,7 +168,7 @@ export function planTier(visible: readonly CardKey[], primary: readonly CardKey[
   return tier
 }
 
-/** 판에 그릴 순서 = 주 줄 → 주 줄에 못 든 후보 → 나머지(숨김·전폭 카드 제외) */
+/** 판에 렌더링할 순서 = 주 줄 → 주 줄에 배치되지 못한 후보 → 나머지(숨김·전폭 카드 제외) */
 export function drawOrder(visible: readonly CardKey[], tier: readonly CardKey[], primary: readonly CardKey[]): CardKey[] {
   return [
     ...tier,
@@ -177,7 +177,7 @@ export function drawOrder(visible: readonly CardKey[], tier: readonly CardKey[],
   ]
 }
 
-/** 배치를 저장 모양으로(개인 배치 — 고정은 넣지 않는다) */
+/** 배치를 저장 형태로 변환(개인 배치 — 고정은 포함하지 않는다) */
 export function toSaved(r: ResolvedLayout, withLocked = false): DashLayout {
   const size: Partial<Record<CardKey, CardSpan>> = {}
   for (const k of r.order) if (r.size[k] !== (DEFAULT_SPAN[k] ?? 1)) size[k] = r.size[k]
@@ -186,19 +186,19 @@ export function toSaved(r: ResolvedLayout, withLocked = false): DashLayout {
   return out
 }
 
-/** 순서에서 from 을 to 자리로 옮긴다(to 앞에) */
+/** 순서에서 from 을 to 위치로 이동한다(to 앞에 삽입) */
 export function moveKey(order: readonly CardKey[], from: CardKey, to: CardKey): CardKey[] {
   if (from === to) return [...order]
   const rest = order.filter(k => k !== from)
   const at = rest.indexOf(to)
   if (at < 0) return [...order]
   const fromIdx = order.indexOf(from), toIdx = order.indexOf(to)
-  // 뒤로 옮길 때는 대상 뒤에(끌어 놓은 자리를 지나간 것으로)
+  // 뒤로 이동할 때는 대상 뒤에 삽입(드롭 위치를 통과한 것으로 간주)
   rest.splice(fromIdx < toIdx ? at + 1 : at, 0, from)
   return rest
 }
 
-/** 한 칸 앞/뒤로(키보드) */
+/** 한 칸 앞/뒤로 이동(키보드) */
 export function stepKey(order: readonly CardKey[], key: CardKey, delta: -1 | 1): CardKey[] {
   const i = order.indexOf(key), j = i + delta
   if (i < 0 || j < 0 || j >= order.length) return [...order]

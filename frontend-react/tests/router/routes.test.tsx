@@ -1,4 +1,4 @@
-// 라우트 표(기존 주소 57개 + 나중에 더한 화면)가 온전하고, 각각 렌더(자리 표시 포함)되는지.
+// 라우트 표(기존 주소 57개 + 이후 추가한 화면)가 온전하고, 각각 렌더(자리 표시 포함)되는지 검증.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, waitFor, act } from '@testing-library/react'
 import { RouterProvider } from 'react-router'
@@ -18,14 +18,14 @@ vi.mock('~/lib/api', async (orig) => {
     if (url === '/api/auth/me') { if (!apiMock.user) throw Object.assign(new Error('401'), { statusCode: 401 }); return apiMock.user }
     if (url === '/api/setup/status') return { needs_setup: apiMock.needsSetup }
     if (url === '/api/health') return { service: 'Workspace', config: {} }
-    // 모든 화면을 여는 테스트 — 내장 모듈과 표본 플러그인(/p/id-1)이 다 켜진 설치를 흉내 낸다(목록에 없는 모듈은 꺼진 것)
+    // 모든 화면을 여는 테스트 — 내장 모듈과 표본 플러그인(/p/id-1)이 전부 활성화된 설치를 모의한다(목록에 없는 모듈은 비활성으로 간주)
     if (url === '/api/platform/modules') return { modules: ALL_MODULE_IDS.map(id => ({ id, name: id, icon: '', route: `/${id}`, type: id === 'id-1' ? 'plugin' : 'builtin', requires: [], enabled: true })) }
-    // 셸(기본 레이아웃)이 여는 실시간·알림 — 목록 응답은 빈 목록 모양으로
+    // 셸(기본 레이아웃)이 여는 실시간·알림 — 목록 응답은 빈 목록 형태로 반환
     if (url === '/api/chat/channels' || url === '/api/chat/users') return []
     if (url === '/api/chat/drafts' || url === '/api/chat/saved') return { items: [] }
     if (url === '/api/notifications/') return { notifications: [], total: 0 }
     if (url === '/api/notifications/unread-count') return { count: 0 }
-    // /code/owner/repo — 저장소 상세는 owner.login 이 있어야 한다(없으면 던짐)
+    // /code/owner/repo — 저장소 상세는 owner.login 필수(없으면 예외 발생)
     if (url === '/api/git/repos/owner/repo') return { name: 'repo', full_name: 'owner/repo', owner: { login: 'owner' }, default_branch: 'main' }
     // 파일 모듈(r1/files-office): 목록은 { path, items } 모양
     if (url === '/api/files/list') return { path: 'my', items: [] }
@@ -49,12 +49,12 @@ const pagesDir = join(__dirname, '..', '..', 'src', 'pages')
 
 describe('라우트 표', () => {
   it('기존 주소 57개 + 나중에 더한 화면', () => {
-    // 기존 주소 — 북마크·링크가 걸려 있어 수가 줄면 안 된다
+    // 기존 주소 — 북마크·링크가 존재하므로 개수가 감소해서는 안 됨
     const shared = ROUTES.filter(r => !r.reactOnly)
     expect(shared.length).toBe(57)
-    // 나중에 더한 화면
+    // 이후 추가한 화면
     expect(ROUTES.filter(r => r.reactOnly).map(r => r.path).sort()).toEqual(['/admin/ai-ops/*', '/admin/dashboard-layout', '/admin/rbi', '/admin/update/*', '/admin/zones', '/approvals', '/rbi', '/settings/ai/mcp', '/settings/ai/memory', '/settings/calendar', '/settings/chat'])
-    // 경로는 겹치지 않는다
+    // 경로는 중복되지 않음
     expect(new Set(ROUTES.map(r => r.path)).size).toBe(ROUTES.length)
   })
 
@@ -73,7 +73,7 @@ describe('모든 라우트가 렌더된다', () => {
   for (const def of ROUTES) {
     it(`${def.path} (${def.file})`, async () => {
       const url = samplePath(def.path)
-      // /setup 은 최초 설정 전에만 열린다(완료 후엔 / 로 — setup 가드)
+      // /setup 은 최초 설정 전에만 열림(완료 후에는 / 로 이동 — setup 가드)
       apiMock.needsSetup = def.path === '/setup'
       const router = createTestRouter([url])
       const { container, unmount } = render(<RouterProvider router={router} />)
@@ -81,7 +81,7 @@ describe('모든 라우트가 렌더된다', () => {
         expect(router.state.navigation.state).toBe('idle')
         expect(router.state.initialized).toBe(true)
       }, { timeout: 5000 })
-      // 리다이렉트 메타가 있는 옛 주소는 그쪽으로
+      // 리다이렉트 메타가 있는 옛 주소는 해당 경로로 이동
       if (def.redirect) {
         await waitFor(() => expect(router.state.location.pathname).toBe(def.redirect))
       } else {

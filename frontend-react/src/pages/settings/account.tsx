@@ -1,7 +1,7 @@
 // 설정 › 계정: 아바타 64 + 이름·가입 정보 + [사진 바꾸기], 표시 이름·복구 이메일 2열, CalDAV/CardDAV 읽기 전용 + 복사,
 // 카드 푸터 [되돌리기][저장]. 아래 로그인된 기기 카드(SettingsDevices — 내 세션 목록·개별 로그아웃).
-// 복구 이메일은 저장 즉시 바뀌지 않는다(비밀번호 재설정 링크가 가는 주소 — 세션 탈취만으로 바뀌면 안 된다):
-// 주소를 고치면 본인 확인 칸(현재 비밀번호)이 나타나고, 저장하면 새 주소로 확인 메일이 간다. 링크를 눌러야 바뀐다.
+// 복구 이메일은 저장 즉시 변경되지 않는다(비밀번호 재설정 링크의 수신 주소 — 세션 탈취만으로 변경되어서는 안 된다):
+// 주소를 수정하면 본인 확인 칸(현재 비밀번호)이 표시되고, 저장하면 새 주소로 확인 메일이 발송된다. 링크를 클릭해야 변경이 적용된다.
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useI18n } from '~/i18n'
 import { useHead } from '~/lib/head'
@@ -42,7 +42,7 @@ export default function SettingsAccountPage() {
     finally { setAvatarUploading(false); target.value = '' }
   }
 
-  // 프로필 폼(변경 감지) — 사용자 정보가 바뀌면 원본·폼을 다시 채운다(처음에도)
+  // 프로필 폼(변경 감지) — 사용자 정보가 변경되면 원본·폼을 다시 채운다(최초 포함)
   const [original, setOriginal] = useState<ProfileForm>({ display_name: '', recovery_email: '' })
   const [form, setForm] = useState<ProfileForm>({ display_name: '', recovery_email: '' })
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function SettingsAccountPage() {
   const [error, setError] = useState('')
   const [fieldError, setFieldError] = useState<{ recovery_email?: string; proof?: string }>({})
 
-  // 복구 이메일 변경 — 본인 확인 수단(서버가 알려 준다)과 확인 대기 중인 새 주소
+  // 복구 이메일 변경 — 본인 확인 수단(서버가 반환)과 확인 대기 중인 새 주소
   const [reauth, setReauth] = useState<RecoveryReauth>('password')
   const [pendingEmail, setPendingEmail] = useState<string | null>(null)
   const [proof, setProof] = useState('')
@@ -67,7 +67,7 @@ export default function SettingsAccountPage() {
     let alive = true
     getRecoveryEmailPending()
       .then((r) => { if (alive && r) { if (r.reauth) setReauth(r.reauth); setPendingEmail(r.pending_email ?? null) } })
-      .catch(() => { /* 표시용 — 못 읽으면 기본(비밀번호 확인)으로 둔다 */ })
+      .catch(() => { /* 표시용 — 조회 실패 시 기본값(비밀번호 확인)으로 둔다 */ })
     return () => { alive = false }
   }, [])
 
@@ -83,12 +83,12 @@ export default function SettingsAccountPage() {
     }
     setSaving(true)
     try {
-      // 복구 이메일 요청을 먼저 — 이름 저장이 먼저 끝나면 사용자 정보가 다시 읽히며 고치던 주소가 원래 값으로 돌아간다
+      // 복구 이메일 요청을 선행한다 — 이름 저장이 먼저 완료되면 사용자 정보가 재조회되어 수정 중이던 주소가 원래 값으로 복원된다
       if (emailChanged) {
         const r = await requestRecoveryEmailChange(email, reauth === 'totp' ? { code: proof.trim() } : { current_password: proof })
         setProof('')
         if (r?.cleared) {
-          // 주소를 비운 경우 — 확인할 새 주소가 없어 바로 적용된다(사용자 정보가 다시 읽혀 폼이 빈 값으로 맞춰진다)
+          // 주소를 비운 경우 — 확인할 새 주소가 없어 즉시 적용된다(사용자 정보가 재조회되어 폼이 빈 값으로 갱신된다)
           setPendingEmail(null)
         } else {
           setPendingEmail(r?.pending_email || email)
@@ -136,7 +136,7 @@ export default function SettingsAccountPage() {
         <form className="grid gap-x-4 gap-y-3.5 sm:grid-cols-2" onSubmit={(e: FormEvent) => { e.preventDefault(); void save() }}>
           <UiInput id="display_name" modelValue={form.display_name} onUpdateModelValue={v => setForm(f => ({ ...f, display_name: v }))} label={t('fields.displayName')} hint={t('settings.account.displayNameHint')} />
           <UiInput id="recovery_email" modelValue={form.recovery_email} onUpdateModelValue={v => setForm(f => ({ ...f, recovery_email: v }))} type="email" label={t('fields.recoveryEmail')} hint={reauth === 'none' ? t('settings.account.recovery.noReauth', '이 계정은 본인 확인 수단이 없어 직접 바꿀 수 없습니다. 관리자에게 요청하세요.') : t('profile.recoveryEmailHint')} error={fieldError.recovery_email} placeholder={t('register.recoveryEmailPlaceholder')} disabled={reauth === 'none'} />
-          {/* 주소를 고쳤을 때만 — 본인 확인(현재 비밀번호, 비밀번호를 확인할 수 없는 계정은 인증 앱 코드) */}
+          {/* 주소를 수정한 경우에만 표시 — 본인 확인(현재 비밀번호, 비밀번호 확인이 불가한 계정은 인증 앱 코드) */}
           {emailChanged && reauth !== 'none' && (
             <UiInput
               id="recovery_proof"
@@ -171,7 +171,7 @@ export default function SettingsAccountPage() {
           <UiInput modelValue={user?.primary_email || user?.email || null} label={t('fields.email')} disabled />
           <UiInput modelValue={caldav} label={t('profile.caldavLabel')} readonly mono className="sm:col-span-2" />
           <UiInput modelValue={carddav} label={t('profile.carddavLabel')} readonly mono className="sm:col-span-2" />
-          <p className="text-xs text-muted-foreground sm:col-span-2">{/* 한 텍스트 노드로(노드가 갈리면 글자 배치가 1px 어긋남) */}{`${t('profile.syncDescription')} ${t('profile.syncPasswordHint')}`}</p>
+          <p className="text-xs text-muted-foreground sm:col-span-2">{/* 단일 텍스트 노드로 구성(노드가 분리되면 글자 배치가 1px 어긋남) */}{`${t('profile.syncDescription')} ${t('profile.syncPasswordHint')}`}</p>
           {error && <UiErrorTile title={error} noRetry className="sm:col-span-2" />}
         </form>
       </SettingsCard>

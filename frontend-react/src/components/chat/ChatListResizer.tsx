@@ -1,8 +1,8 @@
 /**
- * 채널 목록 폭 손잡이(디스코드 실측) — 목록 오른쪽 가장자리 세로 띠(맞히는 폭 8, 보이는 선은 호버·끄는 동안 primary 2px).
+ * 채널 목록 폭 핸들(디스코드 실측) — 목록 오른쪽 가장자리 세로 띠(히트 영역 폭 8, 표시 선은 호버·드래그 중 primary 2px).
  *  드래그 199–367(CHAT_LIST_WIDTH — 디스코드 사이드바 264–432 에서 레일 64+1 을 뺀 값), 더블클릭 = 기본 298.
  *  키보드: role=separator(aria-orientation vertical, aria-valuenow/min/max) — ←→ 8px, Shift 와 함께 32px, Home/End 최소/최대, Enter 기본값.
- *  끄는 동안은 onPreview(폭)로 화면만 바꾸고, 놓을 때 개인 설정(chatSidebarWidth)에 한 번 저장한다.
+ *  드래그 중에는 onPreview(폭)로 화면만 변경하고, 드롭 시 개인 설정(chatSidebarWidth)에 1회 저장한다.
  */
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { clsx as cn } from 'clsx'
@@ -11,9 +11,9 @@ import { getUiZoom } from '~/composables/useViewport'
 import { CHAT_LIST_WIDTH, clampChatListWidth, setChatSidebarWidth } from '~/composables/useUserPrefs'
 
 export interface ChatListResizerProps {
-  /** 지금 폭(저장값) */
+  /** 현재 폭(저장값) */
   width: number
-  /** 끄는 동안 미리보기 폭 — null 이면 끝 */
+  /** 드래그 중 미리보기 폭 — null 이면 종료 */
   onPreview: (w: number | null) => void
 }
 

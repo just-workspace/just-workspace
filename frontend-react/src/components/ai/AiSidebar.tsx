@@ -1,8 +1,8 @@
 /**
  * AI 대화 사이드바(데스크톱).
- *  [+ 새 대화](primary 36) + [접기] → 대화 검색(서버: 제목+본문, 결과 행 = 제목 + 일치 조각 강조 · 프로젝트/날짜)
- *  → 프로젝트(＋ 만들기, 행 = 폴더/공유 아이콘 · 이름 · 내 대화 수 mono) → 최근 대화(오늘·이번 주·이전, 프로젝트 대화 제외)
- *  → 임시 대화(점선 행 · 눈 감은 아이콘 · "창 닫으면 삭제"). 아래 고정: AI 설정 · 개인 키 · 연결된 도구.
+ *  [+ 새 대화](primary 36) + [접기] → 대화 검색(서버: 제목+본문, 결과 행 = 제목 + 일치 구간 강조 · 프로젝트/날짜)
+ *  → 프로젝트(＋ 만들기, 행 = 폴더/공유 아이콘 · 이름 · 본인 대화 수 mono) → 최근 대화(오늘·이번 주·이전, 프로젝트 대화 제외)
+ *  → 임시 대화(점선 행 · 눈 감은 아이콘 · "창 닫으면 삭제"). 하단 고정: AI 설정 · 개인 키 · 연결된 도구.
  */
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { cn } from '~/lib/utils'
@@ -20,13 +20,13 @@ export interface AiSidebarProps {
   conversations: AiConv[]
   /** 임시 대화 */
   temporary?: AiConv[]
-  /** 볼 수 있는 프로젝트 */
+  /** 조회 가능한 프로젝트 */
   projects?: AiProject[]
   /** 열린 대화 id */
   activeId: string | null
   /** 열린 프로젝트 id */
   activeProjectId?: string | null
-  /** 관리자 — "AI 설정" 링크가 /admin/ai 로 */
+  /** 관리자 — "AI 설정" 링크가 /admin/ai 로 연결 */
   isAdmin?: boolean
   /** 개인 API 키 허용 — "개인 키" 링크 */
   allowUserKeys?: boolean
@@ -36,13 +36,13 @@ export interface AiSidebarProps {
   onCreate?: () => void
   /** 사이드바 접기 */
   onCollapse?: () => void
-  /** 이름 바꾸기(⋯ · 더블클릭) */
+  /** 이름 변경(⋯ · 더블클릭) */
   onRename?: (conv: AiConv) => void
   /** 삭제 */
   onRemove?: (conv: AiConv) => void
   /** 프로젝트 열기 */
   onOpenProject?: (id: string) => void
-  /** 프로젝트 만들기 */
+  /** 프로젝트 생성 */
   onCreateProject?: () => void
 }
 
@@ -74,7 +74,7 @@ export function AiSidebar({
   }, [q])
 
   const projectIds = new Set(projects.map(p => p.id))
-  // 프로젝트 대화는 프로젝트 안에서 — 볼 수 없는 프로젝트(공유 해제 등)의 대화는 최근 대화로
+  // 프로젝트 대화는 프로젝트 내부에 표시 — 조회할 수 없는 프로젝트(공유 해제 등)의 대화는 최근 대화에 포함
   const recent = conversations.filter(c => !c.project_id || !projectIds.has(c.project_id))
   const groups = (['today', 'week', 'earlier'] as const)
     .map(k => ({ key: k, label: t(`ai.sidebar.${k}`), items: recent.filter(c => aiConvGroup(c.updated_at) === k) }))
@@ -109,7 +109,7 @@ export function AiSidebar({
           onClick={() => onSelect?.(c.id)}
           onDoubleClick={() => onRename?.(c)}
         >{c.title || t('ai.untitled')}</button>
-        {/* ⋯: 선택 행은 늘, 나머지는 hover·키보드 포커스 때 */}
+        {/* ⋯: 선택 행은 항상 표시, 그 외는 hover·키보드 포커스 시 표시 */}
         <UiMenu
           items={rowMenu}
           label={t('ai.sidebar.rowMenu')}

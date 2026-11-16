@@ -1,7 +1,7 @@
 /**
  * 체크박스: 18 rounded-5, 해제 = inset ring 1.5 muted-foreground, 체크 = primary 채움 + ✓.
  * 실제 <input type=checkbox> 를 시각적으로 숨기고 라벨로 감싼다(시맨틱·키보드·폼 제출 유지). 히트 영역 40.
- * className 은 바깥 <label> 에, 나머지 속성(name·onChange 등)은 안쪽 <input> 에. ref 는 안쪽 <input>.
+ * className 은 바깥 <label> 에, 나머지 속성(name·onChange 등)은 안쪽 <input> 에 적용한다. ref 는 안쪽 <input>.
  */
 import { useEffect, useRef, type ChangeEvent, type InputHTMLAttributes, type ReactNode, type Ref } from 'react'
 import { cn } from '~/lib/utils'
@@ -11,18 +11,18 @@ import { mergeRefs, useModel, useUid } from './internal'
 export interface UiCheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'type' | 'checked' | 'defaultChecked' | 'disabled' | 'aria-label'> {
   /** 체크 여부 */
   modelValue?: boolean
-  /** 체크 바뀜 */
+  /** 체크 상태 변경 시 호출 */
   onUpdateModelValue?: (v: boolean) => void
-  /** input id. 없으면 자동 */
+  /** input id. 미지정 시 자동 생성 */
   id?: string
-  /** 옆 글자(children 이 있으면 그쪽) */
+  /** 옆 글자(children 이 있으면 children 우선) */
   label?: string
   /** 아래 보조 글(12 muted) */
   description?: string
   disabled?: boolean
   /** 18(기본) · 16(표 안 등 좁은 곳) · 20 */
   size?: 18 | 16 | 20
-  /** 접근성 라벨(라벨 글자 없이 쓸 때) */
+  /** 접근성 라벨(라벨 글자 없이 사용할 때) */
   ariaLabel?: string
   /** 일부 선택(− 표시) */
   indeterminate?: boolean
@@ -45,7 +45,7 @@ export function UiCheckbox({
   const inputId = id ?? uid
   const box = size === 16 ? 'h-4 w-4 rounded-[4px]' : size === 20 ? 'h-5 w-5 rounded-[5px]' : 'h-[18px] w-[18px] rounded-[5px]'
   const inner = useRef<HTMLInputElement | null>(null)
-  // React 는 indeterminate 속성을 모른다 — DOM 속성으로 직접
+  // React 는 indeterminate 속성 미지원 — DOM 속성으로 직접 설정
   useEffect(() => { if (inner.current) inner.current.indeterminate = indeterminate }, [indeterminate])
 
   return (

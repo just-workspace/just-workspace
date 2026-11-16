@@ -1,11 +1,11 @@
 /**
  * 메일 폴더 한 줄: 34 · rounded-sm · 아이콘 16 · 개수 mono 12.
- * 고른 폴더 = primary/13 + 600. 모바일(드로어)은 터치 타깃 40. 플랫 목록·다계정 트리 공용.
- * 표시+선택만 담당하고 폴더 메뉴는 actions.
+ * 선택한 폴더 = primary/13 + 600. 모바일(드로어)은 터치 타깃 40. 플랫 목록·다계정 트리 공용.
+ * 표시와 선택만 담당하며 폴더 메뉴는 actions.
  */
 import type { ReactNode } from 'react'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거함)
 import { clsx as cx } from 'clsx'
 import { MAILBOX_ROLE_KEYS } from '~/utils/mailQuery'
 import { UiIcon } from '~/components/ui/Icon'
@@ -18,15 +18,15 @@ const ICON: Record<string, string> = {
 export interface MailSidebarFolderProps {
   /** 메일함(id·name·role·unread_count·total_count) */
   mb: any
-  /** 고른 폴더 */
+  /** 선택된 폴더 */
   active: boolean
   /** 다계정 트리 들여쓰기 */
   indent?: boolean
-  /** 고름 */
+  /** 선택 시 호출 */
   onSelect?: () => void
   /** 오른쪽 폴더 메뉴 */
   actions?: ReactNode
-  /** 루트에 덧붙일 클래스 */
+  /** 루트에 추가할 클래스 */
   className?: string
 }
 
@@ -35,7 +35,7 @@ export function MailSidebarFolder({ mb, active, indent, onSelect, actions, class
   const { t } = useI18n()
   const label = mb.role && MAILBOX_ROLE_KEYS[mb.role] ? t(MAILBOX_ROLE_KEYS[mb.role]) : mb.name
   const glyph = ICON[mb.role || ''] || 'folder'
-  // 임시보관함·예약함은 안 읽음이 의미 없어 전체 수(시안 "임시보관함 3")
+  // 임시보관함·예약함은 안 읽음 수가 무의미하므로 전체 수 표시(시안 "임시보관함 3")
   const n = mb.role === 'drafts' || mb.role === 'scheduled' ? mb.total_count : mb.unread_count
   const count = n > 0 ? (n > 999 ? '999+' : String(n)) : ''
 

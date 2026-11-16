@@ -1,6 +1,6 @@
 /**
- * 입력 중 표시(디스코드 실측): 컴포저 아래 24 예약 자리 · 점 3개 7px(1.2s) · 12/500 · 이름은 foreground 600.
- * 글이 없어도 자리를 차지해 레이아웃을 밀지 않는다. reduce-motion 이면 점이 움직이지 않는다.
+ * 입력 중 표시(디스코드 실측): 컴포저 아래 24 예약 영역 · 점 3개 7px(1.2s) · 12/500 · 이름은 foreground 600.
+ * 내용이 없어도 영역을 차지하여 레이아웃 밀림을 방지한다. reduce-motion 이면 점 애니메이션을 중지한다.
  */
 import { useStore } from 'zustand'
 import { clsx as cn } from 'clsx'
@@ -8,14 +8,14 @@ import { UiTrans } from '~/components/ui/Trans'
 import { chatStore, type TypingUser } from '~/composables/useChat'
 
 export interface ChatTypingIndicatorProps {
-  /** 입력 중인 사람(useChat().typingUsers) */
+  /** 입력 중인 사용자(useChat().typingUsers) */
   typingUsers: ReadonlyMap<string, TypingUser>
   className?: string
 }
 
 export function ChatTypingIndicator({ typingUsers, className }: ChatTypingIndicatorProps) {
   const allUsers = useStore(chatStore, s => s.allUsers)
-  // 표시 이름으로 — 타이핑 이벤트는 username 만 준다
+  // 표시 이름으로 변환 — 타이핑 이벤트는 username 만 전달
   function nameOf(username: string) {
     const u = allUsers.find(x => x.username === username)
     return u?.display_name || username

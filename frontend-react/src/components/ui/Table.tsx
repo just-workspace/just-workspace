@@ -1,6 +1,6 @@
 /**
- * 표 — 열 정의(columns)와 행(rows)을 받아 그리는 읽기용 표. 정렬·선택은 없다.
- * 좁은 화면에서는 표만 가로로 밀린다(페이지는 밀리지 않는다). 밀리는 영역은 키보드로도 닿게 tabIndex=0 + 이름을 준다.
+ * 표 — 열 정의(columns)와 행(rows)을 받아 렌더링하는 읽기 전용 표. 정렬·선택은 미지원.
+ * 좁은 화면에서는 표만 가로 스크롤된다(페이지는 스크롤되지 않는다). 스크롤 영역은 키보드로도 접근 가능하도록 tabIndex=0 + 이름을 지정한다.
  * 머리글은 <th scope="col">, 숫자·주소·포트 열은 mono.
  */
 import type { HTMLAttributes, Key, ReactNode } from 'react'
@@ -13,9 +13,9 @@ export interface UiTableColumn<T> {
   header: ReactNode
   /** 칸 내용 */
   cell: (row: T, index: number) => ReactNode
-  /** 숫자·주소·포트 등 mono 로 */
+  /** 숫자·주소·포트 등 mono 적용 */
   mono?: boolean
-  /** 칸에 덧붙일 클래스(너비·줄바꿈 등) */
+  /** 칸에 추가할 클래스(너비·줄바꿈 등) */
   className?: string
 }
 
@@ -26,11 +26,11 @@ export interface UiTableProps<T> extends Omit<HTMLAttributes<HTMLDivElement>, 'c
   rows: T[]
   /** 행 key */
   rowKey: (row: T, index: number) => Key
-  /** 표 이름(화면 낭독기용 caption + 밀리는 영역의 이름, 필수) */
+  /** 표 이름(화면 낭독기용 caption + 스크롤 영역의 이름, 필수) */
   label: string
-  /** 표의 최소 너비 클래스(기본 min-w-[480px]) — 이보다 좁으면 가로로 밀린다 */
+  /** 표의 최소 너비 클래스(기본 min-w-[480px]) — 이보다 좁으면 가로 스크롤 */
   minWidthClass?: string
-  /** 행이 없을 때 보일 내용 */
+  /** 행이 없을 때 표시할 내용 */
   empty?: ReactNode
 }
 

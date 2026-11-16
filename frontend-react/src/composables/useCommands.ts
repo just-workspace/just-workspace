@@ -1,9 +1,9 @@
 /**
  * Ctrl+K `>` 명령: 새 일정 · 새 문서 · 새 작업 · 상태 · 방해 금지 · 테마 · 단축키 · 로그아웃.
- * 첫 화면에는 앞의 3개만 보이고, `>` 를 치면 전부. 모듈이 꺼져 있으면 그 명령은 숨긴다.
+ * 첫 화면에는 앞의 3개만 표시하고, `>` 를 입력하면 전체를 표시한다. 모듈이 비활성화된 경우 해당 명령은 숨긴다.
  *
- * "새 일정/새 문서/새 작업"은 해당 모듈로 이동만 한다 — 모듈 화면에서 바로 작성 폼을 여는 진입(쿼리 등)은
- * 모듈 작업 때 연결한다(백엔드/모듈 갭 보고).
+ * "새 일정/새 문서/새 작업"은 해당 모듈로 이동만 한다 — 모듈 화면에서 작성 폼을 직접 여는 진입(쿼리 등)은
+ * 모듈 작업 시 연결한다(백엔드/모듈 갭 보고).
  *
  * React: const { all, primary, search } = useCommands()   — all·primary 는 배열 값
  */
@@ -60,7 +60,7 @@ export function useCommands() {
     if (isAdmin) list.push({ id: 'admin', label: t('shell.userMenu.adminConsole'), icon: 'shield', aliases: ['admin', '관리'], run: () => navigateTo('/admin') })
     list.push({ id: 'logout', label: t('auth.logout'), icon: 'log-out', aliases: ['logout', '나가기'], run: async () => { await logout(); addToast('info', t('shell.cmd.loggedOut')) } })
     return list
-    // colorMode 는 렌더마다 새 객체 — 쓰는 값(value·setPreference)만 본다
+    // colorMode 는 렌더마다 새 객체 — 사용하는 값(value·setPreference)만 참조
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t, calendarOn, presence, setPresence, colorMode.value, isAdmin, logout])
 

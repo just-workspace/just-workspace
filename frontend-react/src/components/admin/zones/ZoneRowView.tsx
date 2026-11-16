@@ -1,7 +1,7 @@
 /**
  * 구역 한 행 — 이름·설명, 권장 메모리, 상태(색 + 아이콘 + 글자), [설정], 켜기 스위치.
- * 진행·결과는 행 안에 펼친다: 켜는 중(받기·설정·연결), 끄는 중, 방금 켰습니다(열 포트 안내), 껐습니다, 실패(다시 시도·기록).
- * 켜져 있지만 로그인 연동이 보류된 구역은 "연결 보류" 배지 + 한 줄 설명 + [다시 연결]. 다시 연결하는 작업도 같은 자리에서 진행을 보인다.
+ * 진행·결과는 행 내부에 펼쳐 표시한다: 켜는 중(받기·설정·연결), 끄는 중, 방금 켰습니다(열 포트 안내), 껐습니다, 실패(다시 시도·기록).
+ * 활성 상태이나 로그인 연동이 보류된 구역은 "연결 보류" 배지 + 한 줄 설명 + [다시 연결]. 재연결 작업도 동일 위치에서 진행 상태를 표시한다.
  */
 import { useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -16,17 +16,17 @@ import { UiProgress } from '~/components/ui/Progress'
 
 export interface ZoneRowViewProps {
   zone: ZoneRow
-  /** 설치 관리자가 없거나 닿지 않아 바꿀 수 없다 */
+  /** 설치 관리자가 없거나 연결되지 않아 변경 불가 */
   readOnly: boolean
-  /** 다른 구역의 작업이 진행 중이다(한 번에 하나) */
+  /** 다른 구역의 작업이 진행 중(동시 1건) */
   locked: boolean
-  /** 서버가 다시 뜨는 중이라 진행을 못 읽고 있다 */
+  /** 서버 재기동 중이어서 진행 상태를 조회하지 못하는 상태 */
   reconnecting: boolean
   onToggle: (on: boolean) => void
   onSettings: () => void
   onRetry: () => void
   onDismiss: () => void
-  /** 보류된 연결을 다시 건다 */
+  /** 보류된 연결을 재시도한다 */
   onReconnect?: () => void
 }
 
@@ -46,7 +46,7 @@ export function ZoneRowView({ zone, readOnly, locked, reconnecting, onToggle, on
   const failed = job?.status === 'failed'
   const done = job?.status === 'done'
   const kind = job?.kind
-  // 연결 보류 — 켜져 있고 지금 도는 작업이 없을 때만 따로 알린다(다시 연결이 실패한 직후에는 실패 줄이 대신 말한다)
+  // 연결 보류 — 활성 상태이고 현재 실행 중인 작업이 없을 때만 별도 표시한다(재연결 실패 직후에는 실패 줄이 대신 안내한다)
   const pending = zone.enabled && !!zone.pending && !active && !failed
 
   const [logOpen, setLogOpen] = useState(false)
@@ -78,7 +78,7 @@ export function ZoneRowView({ zone, readOnly, locked, reconnecting, onToggle, on
         ? { tone: 'text-success', icon: 'check-circle', spin: false, text: t('admin.zones.status.on') }
         : { tone: 'text-muted-foreground', icon: 'minus', spin: false, text: t('admin.zones.status.off') }
 
-  // 스위치는 "되려는 상태"를 보여 준다
+  // 스위치는 목표 상태를 표시한다
   const switchOn = active ? kind !== 'disable' : zone.enabled
   const failedStage = job?.stages?.find(s => s.status === 'failed')?.id
   const failText = kind === 'disable'
@@ -144,7 +144,7 @@ export function ZoneRowView({ zone, readOnly, locked, reconnecting, onToggle, on
       )}
       {active && kind === 'disable' && <p className="px-4 pb-3 text-xs leading-4 text-muted-foreground">{t('admin.zones.offing')}</p>}
 
-      {/* 끝난 직후 */}
+      {/* 종료 직후 */}
       {done && (
         <div className="flex flex-wrap items-center gap-2 px-4 pb-3 text-[13px]" role="status">
           {kind === 'disable' ? (

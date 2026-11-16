@@ -1,9 +1,9 @@
 /**
  * AI 대화 목록(모바일): 머리 56(h1 18/600 "AI" + 대화 검색 44)
  *  · 묶음 머리 11/600(12 16 4) · 행 min 56(제목 15/600 + 미리보기 13 muted 한 줄 · ⋮ 40)
- *  · 오른쪽 아래 확장 FAB "+ 새 대화"(56, 탭바 위). 탭바는 보인다.
- * 검색: 시안은 아이콘만 — 누르면 머리 아래에 검색 입력이 열린다.
- * 묶음 = 프로젝트(폴더 · 공유받음 배지 · 대화 수) → 최근 대화(프로젝트 밖) → 임시 대화(눈 감김 · 창 닫으면 삭제).
+ *  · 우측 하단 확장 FAB "+ 새 대화"(56, 탭바 위). 탭바는 표시된다.
+ * 검색: 시안은 아이콘만 제공 — 클릭 시 머리 아래에 검색 입력이 열린다.
+ * 묶음 = 프로젝트(폴더 · 공유받음 배지 · 대화 수) → 최근 대화(프로젝트 외부) → 임시 대화(눈 감김 · 창 닫으면 삭제).
  */
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { cn } from '~/lib/utils'
@@ -20,17 +20,17 @@ import { aiConvGroup, type AiConv, type AiProject } from '~/utils/aiAssist'
 export interface AiMobileListProps {
   /** 대화 목록(서버 순서) */
   conversations: AiConv[]
-  /** 루트에 덧붙일 클래스 */
+  /** 루트에 추가할 클래스 */
   className?: string
   /** 대화 열기 — id */
   onSelect?: (id: string) => void
   /** 새 대화(FAB) */
   onCreate?: () => void
-  /** 이름 바꾸기 */
+  /** 이름 변경 */
   onRename?: (conv: AiConv) => void
   /** 삭제 */
   onRemove?: (conv: AiConv) => void
-  /** 프로젝트(내 것 + 공유받은 것) */
+  /** 프로젝트(본인 소유 + 공유받은 항목) */
   projects?: AiProject[]
   /** 임시 대화 */
   temporary?: AiConv[]
@@ -53,7 +53,7 @@ export function AiMobileList({ conversations, className, onSelect, onCreate, onR
   useEffect(() => { if (searching) searchEl.current?.focus() }, [searching])
 
   const q = query.trim().toLowerCase()
-  // 프로젝트 대화는 프로젝트 안에서 — 최근 대화에는 프로젝트 밖 대화만(데스크톱 사이드바와 같게)
+  // 프로젝트 대화는 프로젝트 내부에 표시 — 최근 대화에는 프로젝트 외부 대화만 포함(데스크톱 사이드바와 동일)
   const projectIds = new Set(projects.map(p => p.id))
   const recent = conversations.filter(c => !c.project_id || !projectIds.has(c.project_id))
   const filtered = !q

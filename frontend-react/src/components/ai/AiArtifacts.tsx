@@ -9,7 +9,7 @@
  *  만료: 이름 muted + [링크 만료] 배지 + 안내 + [다시 만들기][내 파일에서 열기].
  *  저장 중 / 공간 부족: 상태 띠 / danger 띠 + [다시].
  *
- * 카드는 스스로 서버 상태를 읽는다(대화를 다시 열면 저장된 스냅샷 → GET 으로 최신화, 작업 중이면 실시간 + 3초 조회).
+ * 카드는 서버 상태를 직접 조회한다(대화를 다시 열면 저장된 스냅샷 → GET 으로 최신화, 작업 중이면 실시간 + 3초 조회).
  */
 import { useEffect, useState } from 'react'
 import { cn } from '~/lib/utils'
@@ -143,14 +143,14 @@ export function AiArtifactFileCard({ initial }: { initial: AiArtifact }) {
   const [preview, setPreview] = useState(false)
   useEffect(() => {
     let alive = true
-    aiArtifactsApi.get(initial.id).then((x) => { if (alive) setA(x) }).catch(() => { /* 스냅샷으로 */ })
+    aiArtifactsApi.get(initial.id).then((x) => { if (alive) setA(x) }).catch(() => { /* 스냅샷으로 대체 */ })
     return () => { alive = false }
   }, [initial.id])
   const [save, doSave] = useSave(() => aiArtifactsApi.save(a.id), (r) => { if (r.artifact) setA(r.artifact) })
 
   function rebuild() {
     setBusy(true)
-    aiArtifactsApi.rebuild(a.id).then(setA).catch(() => { /* 카드 상태 그대로 */ }).finally(() => setBusy(false))
+    aiArtifactsApi.rebuild(a.id).then(setA).catch(() => { /* 카드 상태 유지 */ }).finally(() => setBusy(false))
   }
 
   const icon = aiArtifactIcon(a.format)
@@ -226,7 +226,7 @@ export function AiArtifactBundleCard({ initial }: { initial: AiArtifactJob }) {
   const [previewId, setPreviewId] = useState<{ id: string; name: string; url?: string } | null>(null)
 
   useEffect(() => registerJobCard(initial.id), [initial.id])
-  // 처음 한 번 + 작업 중이면 3초마다(소켓이 끊겨도 진행이 보이게)
+  // 최초 1회 + 작업 중이면 3초마다 조회(소켓이 끊겨도 진행 상태가 표시되도록)
   useEffect(() => {
     let alive = true
     let tm: ReturnType<typeof setTimeout> | undefined

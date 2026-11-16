@@ -1,4 +1,4 @@
-// 채널 삭제 — 소유자에게만 머리 ⋯ "채널 삭제"(확인 후 DELETE). 예전엔 화면에 삭제·보관이 없어 지울 길이 없었다.
+// 채널 삭제 — 소유자에게만 머리 ⋯ "채널 삭제" 표시(확인 후 DELETE). 기존에는 화면에 삭제·보관이 없어 삭제 수단이 없었음.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'

@@ -1,9 +1,9 @@
 /**
- * 파일 올리기 영역 — 끌어다 놓거나 버튼으로 고른다. 안쪽에 실제 <input type="file"> 이 있고, 버튼은 그것을 연다
- * (키보드만으로도 고를 수 있다). 끌어다 놓는 동안 테두리·바탕이 바뀐다.
+ * 파일 업로드 영역 — 끌어다 놓거나 버튼으로 선택한다. 내부에 실제 <input type="file"> 이 있으며, 버튼은 해당 input 을 연다
+ * (키보드만으로도 선택 가능하다). 끌어다 놓는 동안 테두리·바탕이 변경된다.
  * - layout="area"(기본): 점선 큰 영역(아이콘 · 안내 · 버튼 · 보조 글).
- * - layout="row": 한 줄(아이콘 · 제목/보조 글 · 버튼) — 파일 여러 칸을 세로로 쌓을 때. `filled` 면 실선 카드로 바뀐다.
- * 고른 파일은 onFiles 로만 알린다(이 부품은 파일을 들고 있지 않는다).
+ * - layout="row": 한 줄(아이콘 · 제목/보조 글 · 버튼) — 파일 칸 여러 개를 세로로 배치할 때. `filled` 면 실선 카드로 변경된다.
+ * 선택한 파일은 onFiles 로만 전달한다(본 컴포넌트는 파일을 보유하지 않는다).
  */
 import { useRef, useState, type DragEvent, type HTMLAttributes, type ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -12,11 +12,11 @@ import { UiIcon } from './Icon'
 import { useUid } from './internal'
 
 export interface UiDropzoneProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title' | 'onDrop'> {
-  /** 파일을 고르거나 놓았을 때 */
+  /** 파일 선택 또는 드롭 시 호출 */
   onFiles: (files: File[]) => void
   /** 안내 글(area: 가운데 한 줄 · row: 제목, 필수) */
   title: ReactNode
-  /** 보조 글(형식 안내·고른 파일 이름 등) */
+  /** 보조 글(형식 안내·선택한 파일 이름 등) */
   description?: ReactNode
   /** 버튼 글자(필수) */
   buttonLabel: string
@@ -27,13 +27,13 @@ export interface UiDropzoneProps extends Omit<HTMLAttributes<HTMLDivElement>, 't
   disabled?: boolean
   /** area(기본) · row */
   layout?: 'area' | 'row'
-  /** row 전용 — 이미 파일이 들어 있는 칸(실선 카드 + 파일 아이콘) */
+  /** row 전용 — 파일이 이미 지정된 칸(실선 카드 + 파일 아이콘) */
   filled?: boolean
   /** 아이콘 이름(기본: 빈 칸 upload · 찬 칸 file) */
   icon?: string
   /** 버튼 왼쪽 아이콘 */
   buttonIcon?: string
-  /** 영역 아래에 덧붙일 내용(진행 막대 등) */
+  /** 영역 아래에 추가할 내용(진행 막대 등) */
   children?: ReactNode
 }
 

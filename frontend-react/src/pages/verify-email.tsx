@@ -1,5 +1,5 @@
 // 이메일 인증: 결과 화면 틀(아이콘 타일 40 + 제목 24/700 + 서버 안내 + 1차 버튼).
-// 확인 중엔 같은 틀의 스켈레톤(제목·문단 자리) — 스피너 대신.
+// 확인 중에는 동일 틀의 스켈레톤(제목·문단 자리) 표시 — 스피너 대체.
 import { useEffect, useState } from 'react'
 import { $fetch } from '~/lib/api'
 import { navigateTo, useRoute } from '~/lib/router'
@@ -17,7 +17,7 @@ export default function Page() {
   const { t } = useI18n()
   const { appName } = useSiteConfig()
   const route = useRoute()
-  // confirm = 복구 이메일 변경 링크가 살아 있고 사람의 확인(버튼)을 기다리는 중
+  // confirm = 복구 이메일 변경 링크가 유효하고 사용자 확인(버튼)을 대기하는 상태
   const [status, setStatus] = useState<'loading' | 'confirm' | 'success' | 'error'>('loading')
   const [confirming, setConfirming] = useState(false)
   const [message, setMessage] = useState('')
@@ -25,13 +25,13 @@ export default function Page() {
   useHead({ title: `${t('authScreens.verify.title')} | ${appName}` })
 
   const token = route.query.token as string
-  // 복구 이메일 변경 확인 링크(/verify-email?change=…, 설정 › 계정에서 요청) — 같은 결과 화면을 쓴다
+  // 복구 이메일 변경 확인 링크(/verify-email?change=…, 설정 › 계정에서 요청) — 동일 결과 화면을 사용한다
   const change = route.query.change as string
   useEffect(() => {
     void (async () => {
       if (change) {
-        // 착지만으로는 확정하지 않는다 — 메일 보안 장비가 링크를 미리 열어 봐도 바뀌지 않게. 여기서는 링크 상태만 보고
-        // (토큰을 쓰지 않는다), 사람이 아래 버튼을 눌러야 확정한다. 확정 뒤 새로고침하면 "이미 적용됨"으로 보인다.
+        // 진입만으로는 확정하지 않는다 — 메일 보안 장비가 링크를 사전 열람해도 변경되지 않도록 한다. 여기서는 링크 상태만 조회하고
+        // (토큰을 소비하지 않는다), 사용자가 아래 버튼을 눌러야 확정한다. 확정 후 새로고침하면 "이미 적용됨"으로 표시된다.
         try {
           const { state } = await checkRecoveryEmailLink(change)
           if (state === 'pending') setStatus('confirm')
@@ -64,12 +64,12 @@ export default function Page() {
         setMessage(e?.data?.detail || t('verifyEmail.errorGeneric'))
       }
     })()
-    // 마운트 때 한 번
+    // 마운트 시 1회
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const goLogin = (e: { preventDefault: () => void }) => { e.preventDefault(); void navigateTo('/login') }
-  // 변경 확인은 이미 가입한 사용자의 일 — 설정 › 계정으로(로그인 전이면 가드가 로그인을 거쳐 데려온다), "가입" 안내는 없다
+  // 변경 확인은 기가입 사용자의 작업 — 설정 › 계정으로 이동(로그인 전이면 가드가 로그인을 거쳐 이동시킨다), "가입" 안내는 표시하지 않는다
   const goAccount = (e: { preventDefault: () => void }) => { e.preventDefault(); void navigateTo('/settings/account') }
 
   async function confirmChange() {

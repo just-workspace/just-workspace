@@ -1,7 +1,7 @@
 /**
- * 음성채널 본문 위 띠 — role=alert. 재연결 · 무손실 중계 실패(→ 음악 강등 + [무손실 다시 시도]) ·
+ * 음성채널 본문 상단 띠 — role=alert. 재연결 · 무손실 중계 실패(→ 음악 강등 + [무손실 다시 시도]) ·
  * 하이레조 장치 독점 실패(danger + [다시 시도]) · 이어폰 권장(출력이 스피커로 감지될 때 + [음성으로 바꾸기]) ·
- * 권한 없음(듣기만 + 브라우저별 한 줄 + [다시 시도]). 판정은 lib/voice/ui.bandsFor(순수 함수).
+ * 권한 없음(듣기 전용 + 브라우저별 한 줄 + [다시 시도]). 판정은 lib/voice/ui.bandsFor(순수 함수).
  * 데스크톱: mx-5 mt-4 · 버튼 오른쪽. 모바일: mx-4 mt-3 · 짧은 설명 · 버튼은 글 아래.
  */
 import { useEffect } from 'react'
@@ -17,7 +17,7 @@ import { bandsFor, browserKind, detectSpeakerOutput, type VoiceBand } from '~/li
 export function useSpeakerOutput() {
   const { speakers, refresh, startListening, stopListening } = useMediaDevices()
   const { prefs } = useVoice()
-  // 라벨은 마이크 권한이 있을 때만 온다(enumerateDevices) — 못 읽으면 unknown → 띠 없음
+  // 라벨은 마이크 권한이 있을 때만 제공된다(enumerateDevices) — 조회 불가 시 unknown → 띠 미표시
   useEffect(() => { void refresh(); startListening(); return () => stopListening() }, [refresh, startListening, stopListening])
   return detectSpeakerOutput(speakers, prefs.speakerDeviceId)
 }

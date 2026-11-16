@@ -2,8 +2,8 @@
  * 이슈 상세.
  *  제목 20/700 + #n(mono muted) · [편집] [이슈 닫기] → 상태 칩 + "작성자 님이 언제 작성 · 담당 이름"
  *  → 라벨 줄(GitLabelPicker ghost — 기존 기능 유지) → 본문 카드(rounded-12) → 댓글 n → 댓글들 → 댓글 쓰기
- * [편집] = 제목·본문을 그 자리에서 고친다(저장 · 취소, Esc 취소, Ctrl+Enter 저장). [이슈 닫기]/[다시 열기] = 상태 PATCH.
- * 담당 = 라벨 줄과 같은 줄 규격(이름 칩 + 점선 "+ 담당 지정" 드롭다운, GitAssigneePicker). 모두 PATCH /issues/{n}.
+ * [편집] = 제목·본문을 인라인으로 수정한다(저장 · 취소, Esc 취소, Ctrl+Enter 저장). [이슈 닫기]/[다시 열기] = 상태 PATCH.
+ * 담당 = 라벨 줄과 동일한 줄 규격(이름 칩 + 점선 "+ 담당 지정" 드롭다운, GitAssigneePicker). 모두 PATCH /issues/{n}.
  */
 import { useEffect, useState, type KeyboardEvent } from 'react'
 import { useI18n } from '~/i18n'

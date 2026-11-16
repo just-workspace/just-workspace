@@ -1,6 +1,6 @@
 // 관리자 › AI 운영 › 피드백 — 통계 카드(대화 내용 없음) · 별로예요 목록 + 첨부된 대화 패널 ·
-// 스냅샷 사라짐 2종·삭제 확인·만료/삭제 행·빈 목록·불러오기 실패·모바일 전체 화면 시트 + 권한(403).
-// 대화 보기는 사용자가 첨부를 고른 행에만 있고, 열 때마다 서버가 감사 로그(ai_feedback.view)를 남긴다.
+// 스냅샷 소실 2종·삭제 확인·만료/삭제 행·빈 목록·조회 실패·모바일 전체 화면 시트 + 권한(403).
+// 대화 보기는 사용자가 첨부를 선택한 행에만 제공되며, 열 때마다 서버가 감사 로그(ai_feedback.view)를 기록한다.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useI18n } from '~/i18n'
 import { useIsMobile } from '~/composables/useIsMobile'
@@ -110,7 +110,7 @@ export function FeedbackTab({ days, usage, onRetryUsage }: { days: number; usage
   const filtered = !!reason || attachedOnly
   const current = panel ? st.items.find(i => i.id === panel.id) ?? null : null
 
-  // ── 대화 칸(행 오른쪽): 첨부 → [대화 보기], 사라짐 → 상태 배지, 첨부 안 함 → 글자 ──
+  // ── 대화 칸(행 오른쪽): 첨부 → [대화 보기], 소실 → 상태 배지, 미첨부 → 글자 ──
   function convCell(r: FeedbackItem, mobile = false): ReactNode {
     if (r.snapshot === 'attached') {
       return <UiButton variant="outline" size={mobile ? 'lg' : 'xs'} icon="eye" onClick={() => void open(r.id)}>{t('aiOps.feedback.view')}</UiButton>

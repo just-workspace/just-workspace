@@ -94,7 +94,7 @@ describe('접힘 보임 규칙', () => {
   it('접혀도 안 읽음·멘션·선택(+ 내 음성 채널)은 보인다', () => {
     const s = buildSections(channels(), cats, 'arch', { k1: true }, names).find(x => x.id === 'k1')!
     expect(dnd.sectionVisibleChannels(s, null, c => (c.unread_count || 0) > 0).map(c => c.id)).toEqual(['d1'])
-    // d1 은 멘션이 있어 늘 보인다
+    // d1 은 멘션이 있어 항상 표시
     expect(dnd.sectionVisibleChannels(s, 'd2', () => false).map(c => c.id)).toEqual(['d1', 'd2'])
     expect(dnd.sectionVisibleChannels(s, null, () => false, 'd3').map(c => c.id)).toEqual(['d1', 'd3'])
   })

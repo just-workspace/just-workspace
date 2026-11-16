@@ -4,11 +4,11 @@
  * - 시작 20 ms. 1 s 마다 도착간격 지터의 p95 + 1프레임으로 자동 목표 재산정.
  * - 언더런이면 즉시 +1프레임 헤드룸(0.5 s 에 1회 상한). 10 s 무언더런이면 헤드룸 −1프레임(하한 = 자동 목표).
  * - "안정화" 프리셋(60/120/250 ms)은 목표 고정.
- * - 깊이가 목표 + 2프레임을 0.5 s 넘게 유지하면 1프레임 드롭(클럭 드리프트·정체 뒤 따라잡기),
- *   목표 − 2프레임 아래로 1 s 넘게 머물면 은닉 프레임 1개 삽입(선제 확장).
- * - 빠진 프레임은 PLC(직전 프레임 반복 + 페이드), 완전 고갈이면 재생 헤드를 멈추고 기다린 뒤 길어지면 재프라이밍.
+ * - 깊이가 목표 + 2프레임을 0.5 s 넘게 유지하면 1프레임 드롭(클럭 드리프트·정체 후 따라잡기),
+ *   목표 − 2프레임 아래로 1 s 넘게 유지되면 은닉 프레임 1개 삽입(선제 확장).
+ * - 누락 프레임은 PLC(직전 프레임 반복 + 페이드), 완전 고갈 시 재생 헤드를 정지하고 대기하며 장기화되면 재프라이밍.
  *
- * 순수 TS — 재생 AudioWorklet 안에서 돈다. 시계는 주입(now: ms).
+ * 순수 TS — 재생 AudioWorklet 내부에서 동작한다. 시계는 주입(now: ms).
  */
 import type { BufferPreset } from './types'
 import { concealFrame, crossfadeIn, PLC_MAX_REPEAT } from './plc'
@@ -61,7 +61,7 @@ interface Stored {
 
 const JITTER_WINDOW = 256
 const MAX_STORED = 1000
-/** 연속 언더런이 이만큼(프레임) 이어지면 스트림이 끊긴 것 — 재프라이밍 */
+/** 연속 언더런이 이 값(프레임)만큼 지속되면 스트림 단절로 판정 — 재프라이밍 */
 const UNDERRUN_REPRIME_FRAMES = 100
 
 export class JitterBuffer {
@@ -114,11 +114,11 @@ export class JitterBuffer {
     this.lowSince = null
   }
 
-  /** 프레임 도착. arrivalMs 는 네트워크 스레드의 시계(차이만 쓴다) */
+  /** 프레임 도착. arrivalMs 는 네트워크 스레드의 시계(차이값만 사용) */
   push(seq: number, pcm: Float32Array[], arrivalMs: number, ts = 0): void {
     this.s.received++
-    // 전송시간 변동(RFC 3550 식): d = 도착시각 − seq×프레임, j = |d − d_prev|. 도착 순서 기준이라
-    // 늦게 온(순서 바뀐) 프레임도 지터로 잡힌다.
+    // 전송시간 변동(RFC 3550 식): d = 도착시각 − seq×프레임, j = |d − d_prev|. 도착 순서 기준이므로
+    // 지연 도착(순서 변경) 프레임도 지터에 반영된다.
     const transit = arrivalMs - seq * this.frameMs
     if (this.lastArrival && Math.abs(seq - this.lastArrival.seq) <= 1024) {
       const j = Math.abs(transit - this.lastArrival.transit)
@@ -139,7 +139,7 @@ export class JitterBuffer {
       return
     }
     if (this.frames.size >= MAX_STORED) {
-      // 재생이 멈춘 채 쌓이기만 한다 — 가장 오래된 것부터 버린다
+      // 재생이 정지된 상태에서 누적만 진행 — 가장 오래된 항목부터 폐기한다
       const oldest = Math.min(...this.frames.keys())
       this.frames.delete(oldest)
       this.s.dropped++
@@ -147,7 +147,7 @@ export class JitterBuffer {
     this.frames.set(seq, { pcm, ts })
   }
 
-  /** 프레임 하나를 꺼낸다(렌더 스레드가 프레임 간격마다 호출) */
+  /** 프레임 하나를 반환한다(렌더 스레드가 프레임 간격마다 호출) */
   pull(): Pulled {
     const now = this.o.now()
     this.maybeRetarget(now)
@@ -199,18 +199,18 @@ export class JitterBuffer {
       return { kind: 'ok', pcm: f.pcm, seq }
     }
 
-    // 헤드 프레임이 없다.
+    // 헤드 프레임 없음.
     if (depth > 0) {
       const maxSeq = Math.max(...this.frames.keys())
       if (maxSeq - seq > 64) {
-        // 너무 멀리 뒤처졌다 — 통째로 건너뛴다
+        // 과도하게 지연됨 — 전체를 건너뛴다
         const minSeq = Math.min(...this.frames.keys())
         this.s.lost += minSeq - seq
         this.nextSeq = minSeq
         return this.pull()
       }
-      // 쌓인 뒤 프레임 + 기다린 프레임이 목표 예산에 닿으면(=이 프레임은 예산을 넘겨 늦었다) 손실로 보고 전진.
-      // 아니면 자리를 지키고 은닉 — 그 사이 깊이가 목표까지 차오른다(NetEQ expand 와 같은 효과).
+      // 누적된 후속 프레임 + 대기한 프레임이 목표 예산에 도달하면(=이 프레임은 예산을 초과하여 지연됨) 손실로 판정하고 전진.
+      // 그렇지 않으면 위치를 유지하고 은닉 — 그동안 깊이가 목표까지 증가한다(NetEQ expand 와 동일한 효과).
       if (depth + this.concealRun >= this.targetFrames) {
         this.nextSeq = seq + 1
         this.s.lost++
@@ -223,7 +223,7 @@ export class JitterBuffer {
       return { kind: 'plc', pcm: concealFrame(this.lastReal, this.o.frameSamples, this.o.channels, this.concealRun), seq: null }
     }
 
-    // 완전 고갈 — 언더런. 헤드는 멈추고(늦게 온 프레임을 버리지 않기 위해) 은닉 → 길어지면 재프라이밍
+    // 완전 고갈 — 언더런. 헤드는 정지하고(지연 도착 프레임을 폐기하지 않기 위함) 은닉 → 장기화되면 재프라이밍
     if (this.concealRun === 0 || now - this.lastUnderrunAt > this.frameMs * 2) {
       this.s.underruns++
       this.cleanSince = now

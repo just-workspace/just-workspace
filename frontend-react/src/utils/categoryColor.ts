@@ -1,10 +1,10 @@
-// 범주 색 — --cat-1…8 토큰을 캘린더·라벨에 쓰는 규칙을 한곳에 모은다.
+// 범주 색 — --cat-1…8 토큰을 캘린더·라벨에 적용하는 규칙을 본 모듈에 통합한다.
 //
-// 저장값은 계속 hex 다(CalDAV calendar-color 로 외부 클라이언트에 그대로 나가므로).
-// 화면에서는 hex 를 범주 번호로 되돌려 테마별 토큰 색(hsl(var(--cat-N)))으로 그린다.
+// 저장값은 hex 를 유지한다(CalDAV calendar-color 로 외부 클라이언트에 그대로 전달되기 때문).
+// 화면에서는 hex 를 범주 번호로 역변환하여 테마별 토큰 색(hsl(var(--cat-N)))으로 표시한다.
 //  - CAT_HEX: 각 범주의 라이트 값 hex. 새 캘린더는 이 값으로 저장한다.
-//  - LEGACY_HEX: 토큰 이전에 쓰던 기본 팔레트 → 가장 가까운 범주. 기존 캘린더도 토큰 색으로 보인다.
-//  - 그 밖의 hex(외부에서 가져온 사용자 지정 색)는 hex 그대로 쓴다.
+//  - LEGACY_HEX: 토큰 도입 이전의 기본 팔레트 → 가장 가까운 범주. 기존 캘린더도 토큰 색으로 표시된다.
+//  - 그 밖의 hex(외부에서 가져온 사용자 지정 색)는 hex 그대로 사용한다.
 
 export const CAT_COUNT = 8
 
@@ -32,12 +32,12 @@ const LEGACY_HEX: Record<string, number> = {
   '#f97316': 3,
 }
 
-/** 범주 이름 i18n 키(common.cat.N) — 이웃 계열을 색만으로 구분하지 않도록 이름을 같이 쓴다 */
+/** 범주 이름 i18n 키(common.cat.N) — 인접 계열을 색만으로 구분하지 않도록 이름을 병기한다 */
 export function catNameKey(n: number): string {
   return `common.cat.${n}`
 }
 
-/** 순번(0부터) → 범주 번호(1…8)와 빗금 여부. 9번째부터 1로 돌아가며 빗금을 얹는다 */
+/** 순번(0부터) → 범주 번호(1…8)와 빗금 여부. 9번째부터 1로 순환하며 빗금을 적용한다 */
 export function catForIndex(i: number): { cat: number; hatched: boolean } {
   const idx = Math.max(0, Math.floor(i))
   return { cat: (idx % CAT_COUNT) + 1, hatched: idx >= CAT_COUNT }
@@ -66,7 +66,7 @@ export function catColor(color: string | null | undefined, alpha?: number): stri
 }
 
 /**
- * 목록 순서대로 빗금이 필요한 항목 id. 앞 순번이 이미 같은 범주를 쓰고 있으면 빗금(9개 이상 순환).
+ * 목록 순서 기준으로 빗금이 필요한 항목 id. 앞 순번이 이미 동일 범주를 사용 중이면 빗금 적용(9개 이상 순환).
  * 범주가 아닌 사용자 지정 hex 는 대상이 아니다.
  */
 export function hatchedIds<T extends { id: string; color: string | null | undefined }>(list: readonly T[]): Set<string> {

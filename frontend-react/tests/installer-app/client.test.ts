@@ -1,4 +1,4 @@
-// 설치 관리자 API 클라이언트(src/installer-app/api/client.ts)가 서버 응답을 화면이 쓰는 꼴로 맞추는 부분,
+// 설치 관리자 API 클라이언트(src/installer-app/api/client.ts)가 서버 응답을 화면용 형태로 정규화하는 부분,
 // 그리고 저장소의 "이어 할 단계 짐작" · "적용을 시작한 직후의 옛 상태 버리기".
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createHttpApi, normalizeState, normalizeSummary } from '~/installer-app/api/client'
@@ -26,7 +26,7 @@ beforeEach(() => {
   calls.length = 0
   replies = {}
   stubFetch()
-  // 상태 흐름 대신 주기적 읽기를 쓰지 않도록 — 이 파일은 흐름을 열지 않는다
+  // 상태 흐름 대신 주기적 조회를 사용하지 않도록 함 — 본 파일은 흐름을 열지 않음
   vi.stubGlobal('EventSource', undefined)
 })
 
@@ -43,7 +43,7 @@ describe('상태와 세션', () => {
     expect(s).toMatchObject({ session: 'ok', phase: 'applying', locked: false })
     expect(s.info.version).toBe('1.4.0')
     expect(s.facts).toEqual({})
-    expect(s.info.commands).toEqual({})          // 명령은 서버가 준 글자만 쓴다 — 화면에 박아 둔 값이 없다
+    expect(s.info.commands).toEqual({})          // 명령은 서버가 제공한 문자열만 사용 — 화면에 하드코딩된 값 없음
     expect(s.info.default_storage_path).toBeUndefined()
   })
 
@@ -105,7 +105,7 @@ describe('답변 · 요약 · 확인', () => {
     replies['POST /api/probe/cert'] = { body: { ok: true, checks: [] } }
     await createHttpApi().probeCert(new File(['CERT PEM'], 'fullchain.pem'), new File(['KEY PEM'], 'privkey.pem'), 'workspace.example.com')
     expect(calls[0].body).toEqual({ cert: 'CERT PEM', key: 'KEY PEM', domain: 'workspace.example.com' })
-    // CA 인증서(선택)를 함께 올리면 그 글자도 보낸다 — 없으면 항목 자체를 싣지 않는다
+    // CA 인증서(선택)를 함께 업로드하면 해당 내용도 전송 — 없으면 항목 자체를 포함하지 않음
     await createHttpApi().probeCert(new File(['CERT PEM'], 'server.crt'), new File(['KEY PEM'], 'server.key'), undefined, new File(['CA PEM'], 'ca.crt'))
     expect(calls[1].body).toEqual({ cert: 'CERT PEM', key: 'KEY PEM', ca: 'CA PEM' })
   })
@@ -117,7 +117,7 @@ describe('답변 · 요약 · 확인', () => {
     replies['GET /api/apply'] = { body: { status: 'running', steps: [], current: 'config', error: null } }
     expect((await api.startApply()).status).toBe('running')
     expect(calls.map(c => `${c.method} ${c.url}`)).toEqual(['POST /api/apply', 'GET /api/apply'])
-    // 이미 돌고 있으면(409) 그 진행을 그대로 보여 준다
+    // 이미 실행 중이면(409) 해당 진행 상태를 그대로 표시
     expect((await api.retryApply({ use_temporary_cert: true })).status).toBe('running')
     expect(calls[2].body).toEqual({ use_temporary_cert: true })
   })
@@ -138,9 +138,9 @@ describe('답변 · 요약 · 확인', () => {
     await api.restoreDiscard()
     const target = { domain: 'workspace.example.com', storage: { kind: 'nfs' as const, server: 'nas.example.com', export: '/volume1/workspace' }, network: 'proxy' as const, proxy_addresses: ['192.168.10.5'], subnet: '172.28.0.0/24' }
     expect((await api.restoreApply(target)).restore?.files).toBe('nfs')
-    // 이미 돌고 있으면(409) 그 진행을 그대로 보여 준다
+    // 이미 실행 중이면(409) 해당 진행 상태를 그대로 표시
     expect((await api.restoreApply(target)).status).toBe('running')
-    // 거부(422)는 사유를 그대로 올린다
+    // 거부(422)는 사유를 그대로 전달
     const refused = await api.restoreApply(target).catch(x => x) as ApiError
     expect(refused.code).toBe('restore_invalid')
     expect(refused.vars.errors).toEqual([{ field: 'storage.kind', code: 'storage_must_be_nfs', vars: {} }])
@@ -201,7 +201,7 @@ describe('이어 할 단계 짐작', () => {
     expect(resumeStep(answers(a => { a.access.domain = 'workspace.example.com'; a.access.network = 'proxy'; a.access.cert = 'proxy' }), null)).toBe('proxy')
     expect(resumeStep(answers(a => { a.access.domain = 'workspace.example.com'; a.zones = ['mail'] }), null)).toBe('mail')
     expect(resumeStep(answers(a => { a.access.domain = 'workspace.example.com'; a.zones = [] }), null)).toBe('admin')
-    // 공유기 뒤 — 구역 다음의 안내 단계(값이 없다)부터
+    // 공유기 뒤 — 구역 다음의 안내 단계(값 없음)부터
     expect(resumeStep(answers(a => { a.access.domain = 'workspace.example.com'; a.access.network = 'router'; a.zones = [] }), null)).toBe('ports')
     expect(resumeStep(answers(a => { a.access.domain = 'workspace.example.com'; a.zones = []; a.admin.username = 'admin' }), null)).toBe('summary')
   })
@@ -237,7 +237,7 @@ describe('적용을 시작한 직후', () => {
     expect(store.getState().applyEpoch).toBe(epoch + 1)
     store.getState().receiveApply(failed)
     expect(store.getState().apply?.status).toBe('running')
-    // 새로 쓴 상태(시각이 다르다)는 실패여도 받아들인다
+    // 새로 기록된 상태(시각이 상이)는 실패여도 수용
     store.getState().receiveApply({ ...failed, updated_at: 'T9' })
     expect(store.getState().apply?.status).toBe('failed')
   })

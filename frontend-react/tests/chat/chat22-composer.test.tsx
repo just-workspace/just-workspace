@@ -87,7 +87,7 @@ describe('멘션 후보', () => {
     expect(items[0].disabledReason).toBe('chat.compose.ac.roleNotMentionable')
     expect(items[1].disabled).toBeFalsy()
     expect(items[1].insert).toBe('@디자인')
-    // MENTION_EVERYONE 이 있으면 멘션 못 하는 역할도 고를 수 있다
+    // MENTION_EVERYONE 이 있으면 멘션 불가 역할도 선택 가능
     expect(mentionCandidates('디', ctx({ roles, canEveryone: true }))[0].disabled).toBe(false)
     const ev = mentionCandidates('every', ctx())
     expect(ev).toHaveLength(1)

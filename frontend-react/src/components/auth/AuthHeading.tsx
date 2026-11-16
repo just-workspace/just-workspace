@@ -1,7 +1,7 @@
 /**
  * 인증 폼 제목: 왼쪽 정렬 24/700 letter-spacing -0.02em + 보조 14 muted(위 6).
- * 40px 아이콘 타일은 결과 화면(재설정 완료·만료·오류)에만 — icon + tone 을 주면 제목 위에 붙는다.
- * 타일 반지름: 디자인의 11px 는 사용 중지한 값 → 10px.
+ * 40px 아이콘 타일은 결과 화면(재설정 완료·만료·오류)에만 사용 — icon + tone 을 지정하면 제목 위에 배치된다.
+ * 타일 반지름: 디자인의 11px 는 사용 중지된 값 → 10px.
  */
 import type { ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -10,11 +10,11 @@ import { UiIcon } from '~/components/ui/Icon'
 export interface AuthHeadingProps {
   title: string
   subtitle?: string
-  /** 보조 문단 자리 — subtitle 대신 */
+  /** 보조 문단 영역 — subtitle 대체 */
   children?: ReactNode
   /** utils/icons 이름. 결과 화면 전용 */
   icon?: string
-  /** 기본 primary */
+  /** 기본값 primary */
   tone?: 'success' | 'warning' | 'danger' | 'primary' | 'muted'
 }
 
@@ -23,7 +23,7 @@ const TONE = {
   warning: 'bg-warning/15 text-warning',
   danger: 'bg-danger/15 text-danger',
   primary: 'bg-primary/15 text-primary',
-  // 회의 종료처럼 좋지도 나쁘지도 않은 결과
+  // 회의 종료와 같이 긍정도 부정도 아닌 결과
   muted: 'bg-muted text-muted-foreground',
 }
 

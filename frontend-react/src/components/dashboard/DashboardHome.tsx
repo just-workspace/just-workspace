@@ -1,14 +1,14 @@
 /**
- * 홈 대시보드 판 — 홈(/)과 관리 › 설정 › 대시보드가 같이 쓴다.
+ * 홈 대시보드 보드 — 홈(/)과 관리 › 설정 › 대시보드가 공용으로 사용한다.
  *
- * 순서: (편집 띠) → 머리(인사·날짜 + 빠른 만들기 · 편집) → (공지 띠) → 오늘 브리핑 칩 → (관리자 운영 띠) → (시작하기 전폭) → 카드 판 → 비어 있는 카드.
- * 카드 판: 열 = lib/fluid dashColumns, 최대 폭 열 × 520 가운데, grid-auto-rows 4px + dense,
- * 주 줄(내용 있는 카드끼리 같은 높이 — 빈 상태·AI 꺼짐은 자기 높이) + 보조 영역(카드마다 row span = ceil((본래 높이 + 20) / 4)) — 규칙은 lib/dashLayout.
- * 빈 카드: 주 줄 카드는 제자리 한 줄, 나머지는 그리지 않고 맨 아래 점선 상자 "비어 있는 카드 n"에 한 줄씩.
+ * 순서: (편집 바) → 헤더(인사·날짜 + 빠른 만들기 · 편집) → (공지 바) → 오늘 브리핑 칩 → (관리자 운영 바) → (시작하기 전폭) → 카드 보드 → 비어 있는 카드.
+ * 카드 보드: 열 = lib/fluid dashColumns, 최대 폭 열 × 520 가운데 정렬, grid-auto-rows 4px + dense,
+ * 주 줄(내용 있는 카드끼리 동일 높이 — 빈 상태·AI 비활성은 자체 높이) + 보조 영역(카드마다 row span = ceil((본래 높이 + 20) / 4)) — 규칙은 lib/dashLayout.
+ * 빈 카드: 주 줄 카드는 제자리 한 행, 나머지는 렌더링하지 않고 맨 아래 점선 상자 "비어 있는 카드 n"에 한 행씩 표시.
  *
- * 편집(mode="user"): 머리의 layout 버튼 → 편집 띠 + 점선 카드(grip 끌기 · 1칸/2칸 · 숨기기) + 오른쪽 320 "카드" 패널.
- *   바꿀 때마다 /api/me/prefs `dash.layout` 에 바로 저장(기기 간 동기화). "기본값으로" = 개인 배치를 지워 관리자 기본 배치로.
- * mode="admin"(관리 › 설정 › 대시보드): 늘 편집, 저장은 관리자 기본 배치(appcfg dash.layout), 패널에서 카드 잠금(관리자 고정).
+ * 편집(mode="user"): 헤더의 layout 버튼 → 편집 바 + 점선 카드(grip 드래그 · 1칸/2칸 · 숨기기) + 오른쪽 320 "카드" 패널.
+ *   변경 시마다 /api/me/prefs `dash.layout` 에 즉시 저장(기기 간 동기화). "기본값으로" = 개인 배치를 삭제하여 관리자 기본 배치로 복원.
+ * mode="admin"(관리 › 설정 › 대시보드): 항상 편집 상태, 저장 대상은 관리자 기본 배치(appcfg dash.layout), 패널에서 카드 잠금(관리자 고정).
  */
 import { useZoneInstalled } from '~/composables/useSiteConfig'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -65,14 +65,14 @@ const DEFAULT_LOCKED: CardKey[] = ['notice']
 interface CardDef {
   title: string
   icon: string
-  /** 쓸 수 있나(모듈·권한) */
+  /** 사용 가능 여부(모듈·권한) */
   on: boolean
   node: () => ReactNode
-  /** 빈 카드 묶음 한 줄: 사유 · 링크 */
+  /** 빈 카드 그룹 한 행: 사유 · 링크 */
   empty: { text: string; link: string; to: string }
 }
 
-/** 저장 상태 표시 없이 바로 저장 — 실패하면 토스트만 */
+/** 저장 상태 표시 없이 즉시 저장 — 실패 시 토스트만 표시 */
 async function saveUserLayout(v: DashLayout | null) {
   await $fetch('/api/me/prefs', { method: 'PATCH', body: { 'dash.layout': v } })
 }
@@ -81,7 +81,7 @@ async function saveAdminLayout(v: DashLayout | null) {
   await refetchAppConfig()
 }
 
-/** 카드 판 여백 — 모바일 16 · 데스크톱 24/28 · 편집 중 데스크톱은 오른쪽 320 패널만큼 더 */
+/** 카드 보드 여백 — 모바일 16 · 데스크톱 24/28 · 편집 중 데스크톱은 오른쪽 320 패널 폭만큼 추가 */
 export function dashPadding(isMobile: boolean, editing: boolean): string {
   if (isMobile) return '16px'
   return editing ? `24px ${320 + 28}px 24px 28px` : '24px 28px'
@@ -108,8 +108,8 @@ export function DashboardHome({ mode = 'user' }: { mode?: 'user' | 'admin' }) {
 
   // ── 카드 정의 ──
   const has = (m: string) => isModuleEnabled(m)
-  const aiZone = useZoneInstalled('ai')   // AI 브리핑 카드는 AI 구역 것(모듈을 켜기 전에도 보이므로 구역으로 판정)
-  // 네트워크 랩 — NETLAB_URL(https)이 있을 때만 쓸 수 있는 카드(기본 보임, 다른 카드처럼 옮기기·숨기기)
+  const aiZone = useZoneInstalled('ai')   // AI 브리핑 카드는 AI 구역 소속(모듈 활성화 전에도 표시되므로 구역으로 판정)
+  // 네트워크 랩 — NETLAB_URL(https)이 있을 때만 사용 가능한 카드(기본 표시, 다른 카드와 같이 이동·숨기기 가능)
   const netlabUrl = useNetLabUrl()
   const defs = useMemo<Record<CardKey, CardDef>>(() => ({
     start: { title: t('dashboard.d17.start.title'), icon: 'check-circle', on: isNew && !admin, node: () => <DashboardStart />, empty: { text: '', link: '', to: '/' } },
@@ -129,7 +129,7 @@ export function DashboardHome({ mode = 'user' }: { mode?: 'user' | 'admin' }) {
     meet: { title: t('dashboard.liveMeetings.title'), icon: 'video', on: has('meetings'), node: () => <DashboardLiveMeetings />, empty: { text: t('dashboard.liveMeetings.empty'), link: t('dashboard.liveMeetings.open'), to: '/meetings' } },
     discover: { title: t('dashboard.d17.discover.title'), icon: 'hash', on: isNew && !admin && has('chat'), node: () => <DashboardDiscover />, empty: { text: t('dashboard.d17.empty.discover'), link: t('dashboard.d17.discover.link'), to: '/chat' } },
     lab: { title: t('dashboard.d17.lab.title'), icon: 'router', on: !!netlabUrl, node: () => (netlabUrl ? <DashboardNetLab url={netlabUrl} /> : null), empty: { text: '', link: '', to: '/' } },
-    // has 는 isModuleEnabled 에 묶여 있다
+    // has 는 isModuleEnabled 에 종속
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [t, isNew, admin, isModuleEnabled, netlabUrl, aiZone])
   const available = useMemo(() => (Object.keys(defs) as CardKey[]).filter(k => defs[k].on), [defs])
@@ -147,7 +147,7 @@ export function DashboardHome({ mode = 'user' }: { mode?: 'user' | 'admin' }) {
       .then(r => setUserLayout(parseLayout(r.prefs?.['dash.layout'])))
       .catch(() => setUserLayout(null))
   }, [admin])
-  // 관리자 화면은 편집 중인 기본 배치를 직접 들고 있다(저장하면 사이트 설정을 다시 읽는다)
+  // 관리자 화면은 편집 중인 기본 배치를 직접 보유한다(저장 시 사이트 설정을 재조회)
   const [adminDraft, setAdminDraft] = useState<DashLayout | null>(null)
   const layout: ResolvedLayout = useMemo(() => resolveLayout({
     available, isNew,
@@ -191,10 +191,10 @@ export function DashboardHome({ mode = 'user' }: { mode?: 'user' | 'admin' }) {
   const tier = planTier(visible, primary, spanOf, cols)
   const order = drawOrder(visible, tier, primary)
   const isEmpty = (k: CardKey) => status[k]?.s === 'empty' && !tier.includes(k) && !INLINE_EMPTY.includes(k)
-  // 관리자 화면에서는 빈 카드도 자리를 보여 준다(배치를 정하는 화면이라)
-  // 편집 중엔 빈 카드도 판에 그린다(관리자 모드와 같이) — 숨기면 카드 안 크기·숨기기 버튼을 쓸 수 없었다
+  // 관리자 화면에서는 빈 카드도 위치를 표시한다(배치를 정하는 화면이므로)
+  // 편집 중에는 빈 카드도 보드에 렌더링한다(관리자 모드와 동일) — 숨기면 카드 내 크기·숨기기 버튼을 사용할 수 없었다
   const empties = admin || editing ? [] : order.filter(isEmpty)
-  // 주 줄 같은 높이는 내용 있는 카드끼리만(빈 상태·AI 꺼짐·로딩·오류는 자기 높이)
+  // 주 줄 동일 높이는 내용 있는 카드끼리만 적용(빈 상태·AI 비활성·로딩·오류는 자체 높이)
   const tierH = tierHeights(tier, heights, k => status[k]?.s === 'ready')
   const rowsOf = (k: CardKey) => rowSpanFor(tier.includes(k) ? (tierH[k] ?? 240) : (heights[k] ?? 200))
   const showStart = visible.includes('start') && defs.start.on
@@ -227,7 +227,7 @@ export function DashboardHome({ mode = 'user' }: { mode?: 'user' | 'admin' }) {
     persist({ ...layout, locked, hidden })
   }
 
-  // 공지(관리 › 일반 "대시보드 문구·공지" — dash.notice_banner). 비우면 렌더 안 함.
+  // 공지(관리 › 일반 "대시보드 문구·공지" — dash.notice_banner). 비우면 렌더링하지 않음.
   const noticeBanner = cfg('dash.notice_banner')
   const noticeLevel = cfg('dash.notice_level') || 'warning'
 
@@ -241,8 +241,8 @@ export function DashboardHome({ mode = 'user' }: { mode?: 'user' | 'admin' }) {
         <div
           ref={measure}
           className="h-full overflow-auto"
-          // 편집 중 데스크톱은 오른쪽 320 패널이 카드·편집 띠([완료])를 덮지 않게 그만큼 비운다
-          // 축약형 padding 과 paddingRight:undefined 를 섞으면 React 가 paddingRight 를 '' 로 지워 오른쪽 여백이 0 이 된다 — 문자열 하나로
+          // 편집 중 데스크톱은 오른쪽 320 패널이 카드·편집 바([완료])를 가리지 않도록 해당 폭만큼 여백을 둔다
+          // 축약형 padding 과 paddingRight:undefined 를 혼용하면 React 가 paddingRight 를 '' 로 제거하여 오른쪽 여백이 0 이 된다 — 문자열 하나로 지정
           style={{ padding: dashPadding(isMobile, editing) }}
         >
           <div className="mx-auto flex flex-col gap-4" style={!isMobile ? { maxWidth: cols * DASH_COL_MAX } : undefined}>
@@ -269,7 +269,7 @@ export function DashboardHome({ mode = 'user' }: { mode?: 'user' | 'admin' }) {
             <DashboardBriefingChips isAdmin={!!user?.is_admin} mobile={isMobile} />
             {user?.is_admin && <DashboardOpsBand mobile={isMobile} />}
 
-            {/* 시작하기 — 주 줄 위 전폭 카드(항목은 열 수에 맞춰 격자) */}
+            {/* 시작하기 — 주 줄 위 전폭 카드(항목은 열 수에 맞춘 격자) */}
             {showStart && <div data-cell="start">{defs.start.node()}</div>}
 
             <div

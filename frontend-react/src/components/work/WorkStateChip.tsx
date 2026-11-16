@@ -24,7 +24,7 @@ export interface WorkStateChipProps extends HTMLAttributes<HTMLSpanElement> {
   size?: 18 | 22
 }
 
-/** 상태 칩(아이콘 + 글자). Git 이슈·PR 머리·목록에서 쓴다 */
+/** 상태 칩(아이콘 + 글자). Git 이슈·PR 머리·목록에서 사용 */
 export function WorkStateChip({ state, label, size = 22, className, ...rest }: WorkStateChipProps) {
   const { t } = useI18n()
   const meta = META[state]

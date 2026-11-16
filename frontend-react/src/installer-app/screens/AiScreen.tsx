@@ -1,6 +1,6 @@
 /**
  * AI 도우미 — 지금 연결(제공자 · 키 · 연결 확인) 또는 나중에.
- * 지금 연결을 골랐으면 연결 확인이 통과해야 다음으로 간다. 키는 화면 상태에만 두고, 확인할 때와 넘어갈 때만 서버로 보낸다.
+ * 지금 연결을 선택한 경우 연결 확인을 통과해야 다음으로 진행한다. 키는 화면 상태에만 보관하고, 확인 시와 다음 단계 이동 시에만 서버로 송신한다.
  */
 import { useState } from 'react'
 import { UiButton } from '~/components/ui/Button'
@@ -16,11 +16,11 @@ import { StepNav, useGoNext } from '../shell/StepNav'
 import { Heading, SubHeading, WizardShell } from '../shell/WizardShell'
 import { aiKeyOf, useWizard } from '../store'
 
-/** 고를 수 있는 제공자(순서대로) */
+/** 선택 가능한 제공자(표시 순서) */
 export const AI_PROVIDERS = ['anthropic', 'openai', 'gemini', 'ollama', 'compatible']
-/** 키 없이도 되는 제공자(직접 운영하는 서버) */
+/** 키 없이 사용 가능한 제공자(직접 운영하는 서버) */
 const KEYLESS = ['ollama', 'compatible']
-/** 서버 주소를 받는 제공자 · 꼭 있어야 하는 제공자 */
+/** 서버 주소를 입력받는 제공자 · 서버 주소가 필수인 제공자 */
 const TAKES_BASE_URL = ['ollama', 'compatible']
 const NEEDS_BASE_URL = ['compatible']
 

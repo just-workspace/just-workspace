@@ -5,9 +5,9 @@
  * 항목은 글리프(glyph) 또는 그림(imageUrl, 커스텀 이모지 — 32/36 contain).
  * 접근성: role=grid(ariaLabel = 섹션 이름) → role=row(columns 개씩) → 칸 <button role=gridcell aria-label=label>.
  *   활성 칸만 Tab(roving). ←→ = 한 칸(줄 넘김) · ↑↓ = 한 줄 · Home/End = 줄 처음/끝 · Ctrl+Home/End = 처음/끝 칸
- *   · Enter/Space(또는 클릭) = onPick. 첫 줄에서 ↑ · 마지막 줄에서 ↓ 는 onExit(방향, 열) — 피커가 옆 섹션으로 넘긴다.
- * onActive(item, index) — 활성 칸이 바뀔 때(미리보기 줄 48 이 쓴다). activeKey 를 주면 제어형(다른 섹션과 활성 하나만 둘 때).
- * handleRef.current.focus(index?) — 피커가 섹션을 옮겨 올 때 그 칸에 포커스.
+ *   · Enter/Space(또는 클릭) = onPick. 첫 줄에서 ↑ · 마지막 줄에서 ↓ 는 onExit(방향, 열) — 피커가 인접 섹션으로 이동시킨다.
+ * onActive(item, index) — 활성 칸 변경 시 호출(미리보기 줄 48 이 사용한다). activeKey 를 지정하면 제어형(다른 섹션과 활성 칸을 하나만 유지할 때).
+ * handleRef.current.focus(index?) — 피커가 섹션을 이동해 올 때 해당 칸에 포커스.
  *
  * @example
  * <p className="px-1 pb-1 pt-1 text-[12px] font-semibold text-muted-foreground">자주 쓴</p>
@@ -35,28 +35,28 @@ export interface UiEmojiItem {
 }
 
 export interface UiEmojiGridHandle {
-  /** index 칸(기본 = 활성 칸 또는 0)에 포커스. 범위를 넘으면 마지막 칸 */
+  /** index 칸(기본 = 활성 칸 또는 0)에 포커스. 범위 초과 시 마지막 칸 */
   focus: (index?: number) => void
 }
 
 export interface UiEmojiGridProps extends Omit<HTMLAttributes<HTMLDivElement>, 'role' | 'onSelect'> {
-  /** 칸들 */
+  /** 칸 목록 */
   items: UiEmojiItem[]
   /** 열 수(기본 md 9 · touch 8) */
   columns?: number
   /** md 40(기본) · touch 44 */
   size?: 'md' | 'touch'
-  /** 활성 칸 key(제어형). 안 주면 부품이 가진다 */
+  /** 활성 칸 key(제어형). 미지정 시 컴포넌트가 자체 보유 */
   activeKey?: string | null
-  /** 활성 칸이 바뀜(호버·키보드) — 미리보기 줄 */
+  /** 활성 칸 변경 시 호출(호버·키보드) — 미리보기 줄 용도 */
   onActive?: (item: UiEmojiItem | null, index: number) => void
-  /** 고름(클릭·Enter·Space) */
+  /** 선택 시 호출(클릭·Enter·Space) */
   onPick: (item: UiEmojiItem, e: MouseEvent<HTMLButtonElement> | KeyboardEvent<HTMLButtonElement>) => void
-  /** 첫 줄 ↑ / 마지막 줄 ↓ — 옆 섹션으로 넘길 때(column = 지금 열 0부터) */
+  /** 첫 줄 ↑ / 마지막 줄 ↓ — 인접 섹션으로 이동할 때(column = 현재 열, 0부터) */
   onExit?: (dir: 'up' | 'down', column: number) => void
   /** 격자(섹션) 접근성 이름 */
   ariaLabel?: string
-  /** 포커스 제어 손잡이 */
+  /** 포커스 제어 핸들 */
   handleRef?: Ref<UiEmojiGridHandle>
 }
 
@@ -98,7 +98,7 @@ export function UiEmojiGrid({
       case 'ArrowLeft': j = Math.max(0, i - 1); break
       case 'ArrowDown':
         if (i + cols < n) j = i + cols
-        else if (i < lastRowStart) j = n - 1 // 마지막 줄이 짧으면 끝 칸으로
+        else if (i < lastRowStart) j = n - 1 // 마지막 줄이 짧으면 끝 칸으로 이동
         else { e.preventDefault(); onExit?.('down', col); return }
         break
       case 'ArrowUp':

@@ -1,9 +1,9 @@
 /**
  * 상단바(56px).
- * 데스크톱: [사이드바 고정(aria-pressed, Ctrl \)] 워크스페이스 / 모듈 / 위치(3단, 위치는 페이지가 useBreadcrumb 로 올림 · 플러그인은 __WS_SHELL__.setTitle)
+ * 데스크톱: [사이드바 고정(aria-pressed, Ctrl \)] 워크스페이스 / 모듈 / 위치(3단, 위치는 페이지가 useBreadcrumb 로 등록 · 플러그인은 __WS_SHELL__.setTitle)
  *           … [이동하거나 검색 240 + Ctrl K 키캡] [벨 36 테두리 → 활동 패널 400, 숫자 배지 primary] [아바타 32 + 상태점 → 사용자 메뉴 288]
- * 모바일: 제목 한 줄 + 검색 아이콘 + 아바타(활동은 탭바 "활동" 탭이 맡는다). 테마 토글은 사용자 메뉴로 옮겼다.
- * 겉모습은 키트 UiTopbar — 이 파일은 경로·알림 수·사용자·플러그인 확장 액션·사용자 메뉴를 잇기만 한다.
+ * 모바일: 제목 한 줄 + 검색 아이콘 + 아바타(활동은 탭바 "활동" 탭이 담당). 테마 토글은 사용자 메뉴로 이전함.
+ * 외형은 키트 UiTopbar 가 담당하며, 본 파일은 경로·알림 수·사용자·플러그인 확장 액션·사용자 메뉴의 연결만 수행함.
  */
 import { useEffect, useRef } from 'react'
 import { cn } from '~/lib/utils'
@@ -27,11 +27,11 @@ import { ShellTransition } from './shellTransition'
 import { LayoutUserMenu } from './UserMenu'
 
 export interface LayoutTopBarProps {
-  /** 모바일 통화 띠가 위에 끼면 노치 여백은 띠 위에서 이미 줬다 */
+  /** 모바일 통화 띠가 상단에 삽입된 경우 노치 여백은 통화 띠 위에서 이미 적용됨 */
   noSafeTop?: boolean
 }
 
-/** UI 키트가 React 합성 이벤트를 주든 DOM 이벤트를 주든 플러그인에는 DOM MouseEvent 로(기존 API) */
+/** UI 키트가 React 합성 이벤트와 DOM 이벤트 중 어느 것을 전달하든 플러그인에는 DOM MouseEvent 로 전달(기존 API) */
 const toNative = (e: unknown) => ((e as { nativeEvent?: MouseEvent })?.nativeEvent ?? e) as MouseEvent
 
 const TONE_TEXT: Record<string, string> = { primary: 'text-primary', warning: 'text-warning', danger: 'text-danger', success: 'text-success' }
@@ -52,7 +52,7 @@ export function LayoutTopBar({ noSafeTop }: LayoutTopBarProps) {
   const { pinned, togglePin } = useSidebar()
   const { home, flat } = useNav()
   const { location: pageLocation } = useBreadcrumb()
-  // 플러그인이 건 제목(window.__WS_SHELL__.setTitle)이 페이지 위치보다 우선 — 데스크톱 경로 마지막 칸 · 모바일 제목
+  // 플러그인이 설정한 제목(window.__WS_SHELL__.setTitle)이 페이지 위치보다 우선 — 데스크톱 경로 마지막 칸 · 모바일 제목
   const shellTitle = useShellTitle()
   const location = shellTitle || pageLocation
   const { activityOpen, toggleActivity, userMenuOpen, setUserMenuOpen, openPalette } = useShell()
@@ -60,7 +60,7 @@ export function LayoutTopBar({ noSafeTop }: LayoutTopBarProps) {
   // 아바타 상태점 — 서버 상태 기준(오프라인으로 표시 중이면 offline)
   const { dot: presence } = useMyStatus()
   const { t } = useI18n()
-  // 플러그인 확장 자리(composables/useShellHeaderActions — window.__WS_SHELL__.setHeaderActions)
+  // 플러그인 확장 영역(composables/useShellHeaderActions — window.__WS_SHELL__.setHeaderActions)
   const { actions: extActions } = useShellHeaderActions()
   const extHasSearch = extActions.some(a => a.icon === 'search')
 
@@ -86,7 +86,7 @@ export function LayoutTopBar({ noSafeTop }: LayoutTopBarProps) {
   }, [startPolling, stopPolling])
 
   // 확장 액션(플러그인): 아이콘 버튼(데스크톱 32 · 모바일 44) 또는 칩(모바일 히트 44).
-  // 칩은 글자가 곧 이름(label 은 아이콘 버튼의 aria-label·툴팁), 톤은 선택 색(primary·warning·success)만.
+  // 칩은 글자가 이름을 겸함(label 은 아이콘 버튼의 aria-label·툴팁). 톤은 선택 색(primary·warning·success)만 허용.
   const actionsNode = user && extActions.length > 0 ? (
     <div className={cn('flex items-center gap-1', isMobile ? '-mr-1.5' : '')}>
       {extActions.map(a => (a.text ? (
@@ -117,7 +117,7 @@ export function LayoutTopBar({ noSafeTop }: LayoutTopBarProps) {
     </div>
   ) : null
 
-  // 표시는 키트(UiTopbar) — 여기서는 경로·알림·사용자·메뉴 상태를 잇기만 한다
+  // 표시는 키트(UiTopbar)가 담당. 여기서는 경로·알림·사용자·메뉴 상태의 연결만 수행
   return (
     <UiTopbar
       mobile={isMobile}

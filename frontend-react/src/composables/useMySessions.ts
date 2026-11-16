@@ -1,11 +1,11 @@
 /**
- * 내 로그인 기기(세션).
- * 설정 › 보안 "내 세션" 표와 설정 › 계정 "로그인된 기기" 카드가 같이 쓴다.
- * GET /api/auth/me/sessions · DELETE …/{id} · POST …/revoke-others. 본인 세션만 다룬다(서버가 호출자로 묶음).
- * 끊은 세션이 지금 이 기기였으면(was_current) 로컬도 정리하고 로그인 화면으로.
+ * 본인 로그인 기기(세션).
+ * 설정 › 보안 "내 세션" 표와 설정 › 계정 "로그인된 기기" 카드가 공용으로 사용한다.
+ * GET /api/auth/me/sessions · DELETE …/{id} · POST …/revoke-others. 본인 세션만 처리한다(서버가 호출자 기준으로 한정).
+ * 종료한 세션이 현재 기기였으면(was_current) 로컬 상태도 정리하고 로그인 화면으로 이동한다.
  *
- * 싱글턴이 아니다 — 컴포넌트 지역 상태 hook.
- * 이름·시각 꾸미기는 순수 함수(sessionBaseName 등)로도 내보낸다(테스트용).
+ * 싱글턴 아님 — 컴포넌트 지역 상태 hook.
+ * 이름·시각 표시 형식화는 순수 함수(sessionBaseName 등)로도 export 한다(테스트용).
  */
 import { useCallback, useMemo, useState } from 'react'
 import { useI18n, type I18nApi } from '~/i18n'
@@ -39,7 +39,7 @@ export function sessionBaseName(t: T, s: MySession): string {
   return s.os ? `${browser} on ${s.os}` : browser
 }
 
-/** 표시 이름 — 지금 이 기기(웹)면 "이 기기 (…)" */
+/** 표시 이름 — 현재 기기(웹)이면 "이 기기 (…)" */
 export function sessionName(t: T, s: MySession): string {
   const base = sessionBaseName(t, s)
   return s.current && s.app !== 'desktop' ? t('settings.devices.thisDevice', { name: base }) : base
@@ -57,7 +57,7 @@ export function sessionIcon(s: MySession): string {
   return s.device_type === 'mobile' || s.device_type === 'tablet' ? 'smartphone' : 'monitor'
 }
 
-/** 마지막 활동 — 5분 안 "지금 활동 중", n분 전, n시간 전, 어제, MM.DD */
+/** 마지막 활동 — 5분 이내 "지금 활동 중", n분 전, n시간 전, 어제, MM.DD */
 export function sessionWhen(t: T, locale: string, iso: string | null, now = Date.now()): string {
   if (!iso) return ''
   const d = new Date(iso)

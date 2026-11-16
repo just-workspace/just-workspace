@@ -1,18 +1,18 @@
 /**
  * 메일 읽기.
- * 데스크톱 오른쪽 판(variant="pane")과 모바일 /mail/:id 본문(variant="page")이 같은 컴포넌트.
+ * 데스크톱 오른쪽 판(variant="pane")과 모바일 /mail/:id 본문(variant="page")이 동일 컴포넌트를 사용한다.
  *  pane : 액션 줄 44(답장·전체 답장·전달 | 보관·삭제·안 읽음·더보기 … n / N) + 본문 카드 + 인라인 답장
- *  page : 상단 바는 페이지(LayoutMobileDetailBar)가, 하단 고정 답장·전체 답장·전달 줄은 여기서
- * 스레드: 본문 카드 위에 같은 대화의 첫 메일 한 줄(44) + "이전 메일 n개 더 보기"(28). 줄을 누르면 그 메일 본문을 펼친다.
- *   GET /messages/{id}/thread(보낸편지함 포함, 읽음 처리 안 함). 펼칠 때만 그 메일이 있는 메일함에서 본문을 받는다.
- * 라벨: 제목 옆 칩(색점 + 중립 테두리 22). 붙이기·떼기는 ⋯ "라벨"(서버가 키워드를 지원할 때만).
+ *  page : 상단 바는 페이지(LayoutMobileDetailBar)가, 하단 고정 답장·전체 답장·전달 줄은 본 컴포넌트가 담당
+ * 스레드: 본문 카드 위에 같은 대화의 첫 메일 한 줄(44) + "이전 메일 n개 더 보기"(28). 줄 선택 시 해당 메일 본문을 펼친다.
+ *   GET /messages/{id}/thread(보낸편지함 포함, 읽음 처리 없음). 펼칠 때만 해당 메일이 위치한 메일함에서 본문을 조회한다.
+ * 라벨: 제목 옆 칩(색점 + 중립 테두리 22). 부착·해제는 ⋯ "라벨"(서버가 키워드를 지원할 때만).
  *
  * ref: { reply, forward, archive, remove, markUnread, star, spam, onMore, mobileMoreItems }
- *   mobileMoreItems 는 모바일 상단 바 ⋯ 메뉴 항목 — 바뀌면 onMobileMoreItems 로도 알린다(React 는 ref 값 변경으로 다시 그리지 않으므로).
+ *   mobileMoreItems 는 모바일 상단 바 ⋯ 메뉴 항목 — 변경 시 onMobileMoreItems 로도 통지한다(React 는 ref 값 변경으로 재렌더링하지 않음).
  */
 import { Fragment, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거함)
 import { clsx as cx } from 'clsx'
 import { useMail, mailStore, mailIsPop3, type MessageDetail, type MessageSummary } from '~/composables/useMail'
 import { useAuth } from '~/composables/useAuth'
@@ -55,18 +55,18 @@ export interface MailReaderHandle {
 export interface MailReaderProps {
   /** pane(데스크톱 오른쪽 판, 기본) · page(모바일 본문 페이지) */
   variant?: 'pane' | 'page'
-  /** 보관함으로 옮김 */
+  /** 보관함으로 이동됨 */
   onArchived?: () => void
-  /** 지움·스팸으로 옮김 */
+  /** 삭제 또는 스팸으로 이동됨 */
   onDeleted?: () => void
-  /** 모바일 ⋯ 항목이 바뀜(페이지 상단 바가 그린다) */
+  /** 모바일 ⋯ 항목 변경(페이지 상단 바가 렌더링) */
   onMobileMoreItems?: (items: UiMenuItem[]) => void
   /**
-   * 보낸 사람(아바타+이름)을 눌렀을 때 — 주면 그 둘이 버튼이 된다.
-   * pages/mail 이 보낸 사람 패널이 붙을 자리가 없을 때만 넘겨 패널을 오버레이로 연다.
+   * 보낸 사람(아바타+이름) 클릭 시 호출 — 지정하면 두 요소가 버튼으로 동작한다.
+   * pages/mail 은 보낸 사람 패널을 배치할 공간이 없을 때만 전달하며, 패널을 오버레이로 연다.
    */
   onSenderClick?: () => void
-  /** 보낸 사람 오버레이가 열려 있음(버튼 aria-expanded) */
+  /** 보낸 사람 오버레이 열림 상태(버튼 aria-expanded) */
   senderPanelOpen?: boolean
   /** { reply, forward, archive, remove, markUnread, star, spam, onMore, mobileMoreItems } */
   ref?: Ref<MailReaderHandle | null>
@@ -124,7 +124,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
     setLoadingHeaders(false)
   }
 
-  // ─── 수신 확인 ─── 설정 › 메일 "읽음 확인 요청에 응답"(read_receipt_default): 매번 묻기 = 배너 · 항상 = 열면 자동 · 보내지 않기 = 배너 숨김
+  // ─── 수신 확인 ─── 설정 › 메일 "읽음 확인 요청에 응답"(read_receipt_default): 매번 묻기 = 배너 · 항상 = 열람 시 자동 · 보내지 않기 = 배너 숨김
   const [mdnSending, setMdnSending] = useState(false)
   async function acceptMdn() {
     if (!msg) return
@@ -141,7 +141,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
     void sendReadReceipt(m.id)
   }, [msg?.id, readReceiptDefault, sendReadReceipt])
 
-  // ─── 화면 안 AI: 요약 패널 · 답장 초안 ───
+  // ─── 화면 내 AI: 요약 패널 · 답장 초안 ───
   const { status: aiStatus } = useAiInline()
   const [aiSumOpen, setAiSumOpen] = useState(false)
   const [aiDraftOpen, setAiDraftOpen] = useState(false)
@@ -161,7 +161,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
   const [threadExpanded, setThreadExpanded] = useState(false)
   const [threadBodies, setThreadBodies] = useState<Record<string, MessageDetail | 'loading' | 'error'>>({})
   const threadSeq = useRef(0)
-  // watch(msg.id) — 다른 메일을 열면 판 상태를 되돌리고 스레드를 다시 받는다
+  // watch(msg.id) — 다른 메일을 열면 판 상태를 초기화하고 스레드를 재조회
   const msgId = msg?.id
   const firstId = useRef(true)
   useEffect(() => {
@@ -180,7 +180,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
     })
   }, [msgId, fetchThread])
   const threadView = msg ? threadLayout(thread, msg.id, threadExpanded, msg.mailbox_ids?.[0] || selectedMailboxId) : { shown: [] as MessageSummary[], hidden: 0 }
-  /** 펼친 본문의 열쇠 — 메일함:UID. UID 만 쓰면 받은편지함 7번과 보낸편지함 7번이 한 줄로 섞인다. */
+  /** 펼친 본문의 키 — 메일함:UID. UID 만 사용하면 받은편지함 7번과 보낸편지함 7번이 동일 항목으로 충돌한다. */
   const tkey = (m: MessageSummary) => `${m.mailbox_ids?.[0] || ''}:${m.id}`
   function bodyOf(m: MessageSummary): MessageDetail | null {
     const v = threadBodies[tkey(m)]
@@ -234,7 +234,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
     else s.add(l)
     setLabelDraft(s)
   }
-  /** 새 라벨을 초안에 넣은 집합(저장 때 같이 쓰려고 돌려준다) */
+  /** 새 라벨을 초안에 추가한 집합(저장 시 함께 사용하도록 반환) */
   function addNewLabel(): Set<string> {
     const v = newLabel.trim()
     if (!v) return labelDraft
@@ -253,18 +253,18 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
     const remove = [...before].filter(l => !draft.has(l))
     const ok = await updateLabels(cur.id, add, remove)
     if (!ok) { addToast('error', t('mail.labels.saveFailed')); return }
-    // 목록에 없던 메일(모바일 본문 등)은 스레드 요약 쪽에 반영
+    // 목록에 없던 메일(모바일 본문 등)은 스레드 요약에 반영
     const here = mailStore.getState().selectedMailboxId || ''
     setThread(th => th.map(m => (m.id === cur.id && (m.mailbox_ids?.[0] || '') === here ? { ...m, labels: [...draft] } : m)))
     setLabelsOpen(false)
   }
 
-  // ─── 행동 ───
-  // 단축키·상단 바가 부르므로 "지금" 열린 메일을 store 에서 읽는다
+  // ─── 동작 ───
+  // 단축키·상단 바가 호출하므로 현재 열린 메일을 store 에서 조회
   const now = () => mailStore.getState().selectedMessage
   async function archive() {
     const m = now()
-    // POP3 는 서버 폴더가 없다 — 버튼·메뉴는 숨겼고 단축키(E)·모바일 상단 바로 들어와도 조용히 넘긴다
+    // POP3 는 서버 폴더가 없음 — 버튼·메뉴는 숨김 처리했으며, 단축키(E)·모바일 상단 바로 진입해도 no-op
     if (!m || mailIsPop3()) return
     if (!mailStore.getState().mailboxes.find(x => x.role === 'archive')) { addToast('warning', t('mail.list.noArchive')); return }
     if (await archiveMessages([m.id])) { addToast('success', t('mail.reader.archived')); onArchived?.() }
@@ -274,7 +274,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
     const m = now()
     if (!m) return
     if (!await confirmBox(t('mail.view.deleteConfirm'), { title: t('mail.list.deleteTitle'), confirmLabel: t('common.delete'), danger: true })) return
-    // 실패했는데 성공처럼 닫지 않는다(예전엔 서버 오류에도 목록으로 돌아갔다)
+    // 실패 시 성공으로 처리해 닫지 않음(기존에는 서버 오류에도 목록으로 복귀)
     if (await deleteMessage(m.id)) onDeleted?.()
     else addToast('error', t('mail.list.actionFailed'))
   }
@@ -307,7 +307,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
     const doc = frame.contentDocument
     if (!doc) { frame.remove(); return }
     const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    // text/plain 파트가 없는 메일(HTML 전용)은 HTML 에서 글자만 뽑는다 — 예전엔 제목만 인쇄됐다
+    // text/plain 파트가 없는 메일(HTML 전용)은 HTML 에서 텍스트만 추출 — 기존에는 제목만 인쇄됨
     const plain = plainBody(m)
     const body = plain ? `<pre style="white-space:pre-wrap;font:inherit">${esc(plain)}</pre>` : ''
     doc.open()
@@ -381,7 +381,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
     { key: 'unread', label: t('mail.reader.unreadKey'), glyph: 'mail-unread', run: markUnread },
   ]
 
-  // 모바일 상단 바(페이지 소유)의 보관·⋯ 와 데스크톱 단축키가 부른다
+  // 모바일 상단 바(페이지 소유)의 보관·⋯ 와 데스크톱 단축키가 호출
   useImperativeHandle(ref, () => ({ reply, forward, archive, remove, markUnread, star, spam, onMore, mobileMoreItems }))
 
   return (
@@ -446,7 +446,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
                       ><UiIcon name="star" filled={msg.is_flagged} /></UiIconButton>
                     </div>
 
-                    {/* 화면 안 AI — 모바일: 제목 아래 버튼 줄 + 요약 카드 */}
+                    {/* 화면 내 AI — 모바일: 제목 아래 버튼 줄 + 요약 카드 */}
                     {isPage && aiMail && (
                       <div className="mt-2 flex items-center gap-1.5">
                         <AiInlineButton status={aiStatus} variant={aiSumOpen ? 'secondary' : 'outline'} size="sm" icon="sparkles" aria-pressed={aiSumOpen} onClick={() => setAiSumOpen(!aiSumOpen)}>{t('aiInline.mail.summarize')}</AiInlineButton>
@@ -509,7 +509,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
                         <div className="flex items-center gap-2.5">
                           {onSenderClick
                             ? (
-                              // 아바타도 같은 동작(키보드·스크린리더는 이름 버튼 하나로 충분해 탭 순서에서 뺀다)
+                              // 아바타도 동일 동작(키보드·스크린리더는 이름 버튼 하나로 충분하므로 탭 순서에서 제외)
                               <button
                                 type="button"
                                 tabIndex={-1}
@@ -633,7 +633,7 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
                       </div>
                     </article>
 
-                    {/* 화면 안 AI 답장 초안(본문 아래) */}
+                    {/* 화면 내 AI 답장 초안(본문 아래) */}
                     {aiMail && aiDraftOpen && (
                       <div className={isPage ? 'mt-4' : ''}>
                         <MailAiDraft mail={aiMail} onClose={() => setAiDraftOpen(false)} onUse={applyAiDraft} />
@@ -664,12 +664,12 @@ export function MailReader({ variant = 'pane', onArchived, onDeleted, onMobileMo
                   </div>
                 )}
               </div>
-              {/* 화면 안 AI 요약 패널 — 데스크톱 오른쪽 340 */}
+              {/* 화면 내 AI 요약 패널 — 데스크톱 오른쪽 340 */}
               {!isPage && aiMail && aiSumOpen && <MailAiSummary key={aiMail.id} mail={aiMail} status={aiStatus} variant="aside" onClose={() => setAiSumOpen(false)} />}
               </div>
             )}
 
-      {/* 라벨 붙이기·떼기(시안 그림 없음 — 체크 목록 + 새 라벨 입력) */}
+      {/* 라벨 부착·해제(시안 없음 — 체크 목록 + 새 라벨 입력) */}
       {labelsOpen && (
         <UiModal
           title={t('mail.labels.edit')}

@@ -1,5 +1,5 @@
-// 위키 공동 편집 시드 — 먼저 편집 중인 사람이 있으면 저장본으로 시드하지 않고 방 상태로 시작한다
-// (늦게 합류한 쪽 본문이 두 벌이 되던 회귀). 혼자면 기다렸다 저장본으로 시드.
+// 위키 공동 편집 시드 — 먼저 편집 중인 사용자가 있으면 저장본으로 시드하지 않고 방 상태로 시작한다
+// (늦게 합류한 쪽의 본문이 중복되던 회귀). 단독이면 대기 후 저장본으로 시드.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, act, cleanup } from '@testing-library/react'
 import * as Y from 'yjs'
@@ -20,7 +20,7 @@ class FakeWS {
   constructor(public url: string) { FakeWS.last = this }
   send(d: Uint8Array) { this.sent.push(d) }
   close() { this.readyState = 3 }
-  addEventListener() { /* close 정리용 — 테스트에선 안 씀 */ }
+  addEventListener() { /* close 정리용 — 테스트에서는 미사용 */ }
   open() { this.readyState = 1; this.onopen?.() }
   push(type: number, payload: Uint8Array) {
     const out = new Uint8Array(payload.length + 1); out[0] = type; out.set(payload, 1)
@@ -45,7 +45,7 @@ afterEach(() => {
 
 describe('WikiCollabEditor 시드', () => {
   it('늦게 합류: 먼저 온 사람의 상태를 받으면 저장본 시드를 하지 않는다(본문 한 벌)', async () => {
-    // 먼저 온 사람: 시드 뒤 직접 친 글이 저장된 상황 — 그 글은 그 사람 clientID 항목
+    // 선행 접속자: 시드 후 직접 입력한 내용이 저장된 상황 — 해당 내용은 그 접속자의 clientID 항목
     const peer = new Y.Doc(); peer.clientID = 4242
     const schema = getSchema([StarterKit])
     prosemirrorJSONToYXmlFragment(schema, generateJSON(SAVED, [StarterKit]), peer.getXmlFragment('default'))

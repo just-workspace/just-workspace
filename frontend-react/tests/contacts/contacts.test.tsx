@@ -41,7 +41,7 @@ describe('연락처 화면', () => {
   it('페이지 마운트: 주소록 → 목록 → 그룹·개수 순으로 받는다', async () => {
     renderInRouter(<ContactsPage />)
     await waitFor(() => expect(api.calls.some(c => c.url === '/api/contacts/groups')).toBe(true))
-    // 사이드바(자식)도 주소록이 비어 있으면 한 번 더 받는다 — 자식 마운트가 먼저
+    // 사이드바(자식)도 주소록이 비어 있으면 1회 추가 조회함 — 자식 마운트가 선행
     const urls = api.calls.map(c => c.url)
     expect(urls.indexOf('/api/contacts/address-books')).toBe(0)
     const list = api.calls.find(c => c.url === '/api/contacts/' && c.opts.params?.page === 0)!

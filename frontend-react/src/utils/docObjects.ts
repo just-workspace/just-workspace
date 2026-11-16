@@ -1,8 +1,8 @@
 /**
- * 문서에 들어가는 "물건들" — 메모 표시 마크, 도형, 차트.
+ * 문서에 삽입되는 개체 — 메모 표시 마크, 도형, 차트.
  *
- * 서식 확장(docExtensions.ts)과 나눈 이유는 성격이 달라서다. 저쪽은 글자·문단에 바르는
- * 속성이고, 여기는 문서에 끼워 넣는 개체다.
+ * 서식 확장(docExtensions.ts)과 분리한 이유는 성격이 상이하기 때문이다. 서식 확장은 글자·문단에 적용하는
+ * 속성이고, 본 모듈은 문서에 삽입하는 개체이다.
  */
 import { Mark, mergeAttributes } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
@@ -10,8 +10,8 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 /**
  * 메모(코멘트) 표시 마크.
  *
- * 메모 본문은 Y.Map('comments') 에 따로 두고, 본문에는 어느 구간에 달렸는지(id)만 남긴다.
- * 본문 안에 메모 내용까지 넣으면 docx 로 내보낼 때 메모가 본문에 섞여 나온다.
+ * 메모 본문은 Y.Map('comments') 에 별도로 저장하고, 문서 본문에는 대상 구간(id)만 기록한다.
+ * 문서 본문에 메모 내용까지 포함하면 docx 내보내기 시 메모가 본문에 섞여 출력된다.
  */
 export const CommentMark = Mark.create({
   name: 'comment',
@@ -40,12 +40,12 @@ export const CommentMark = Mark.create({
 })
 
 /**
- * 변경 내용 추적 — **새로 쓴 내용만** 표시한다.
+ * 변경 내용 추적 — **새로 작성된 내용만** 표시한다.
  *
- * 삭제까지 추적하려면 지워진 글을 문서에 남겨 두고(취소선) 나중에 걷어내야 하는데,
- * 그건 편집 중 트랜잭션을 되돌렸다가 다시 넣는 일이라 CRDT 동기화와 정면으로 부딪힌다.
- * 두 사람이 같은 자리를 고치면 무엇이 원본이었는지 합의할 방법이 없다.
- * 그래서 여기서는 "누가 새로 쓴 부분" 만 표시하고, 지운 내용은 파일 버전 기록에 맡긴다.
+ * 삭제까지 추적하려면 삭제된 글을 문서에 남겨 두었다가(취소선) 이후 제거해야 하는데,
+ * 이는 편집 중 트랜잭션을 롤백한 뒤 재적용하는 작업이므로 CRDT 동기화와 정면으로 충돌한다.
+ * 두 사용자가 같은 위치를 수정하면 원본이 무엇이었는지 합의할 방법이 없다.
+ * 따라서 본 모듈은 "누가 새로 쓴 부분" 만 표시하고, 삭제된 내용은 파일 버전 기록에 위임한다.
  */
 export const trackState = { on: false }
 
@@ -69,7 +69,7 @@ export const TrackChanges = Mark.create({
   },
   addCommands() {
     return {
-      // 모두 적용: 표시만 걷어내면 그대로 본문이 된다.
+      // 모두 적용: 표시만 제거하면 그대로 본문이 된다.
       acceptAllChanges: () => ({ tr, state, dispatch }: any) => {
         if (dispatch) {
           tr.removeMark(0, state.doc.content.size, state.schema.marks.insertion)
@@ -77,7 +77,7 @@ export const TrackChanges = Mark.create({
         }
         return true
       },
-      // 모두 취소: 표시된 구간을 지운다. 뒤에서부터 지워야 앞 위치가 안 밀린다.
+      // 모두 취소: 표시된 구간을 삭제한다. 뒤에서부터 삭제해야 앞쪽 위치가 변하지 않는다.
       rejectAllChanges: () => ({ tr, state, dispatch }: any) => {
         const ranges: { from: number; to: number }[] = []
         state.doc.descendants((node: any, pos: number) => {
@@ -119,9 +119,9 @@ export const TrackChanges = Mark.create({
 })
 
 // ── 수식 ────────────────────────────────────────────────
-// 수식 편집기를 통째로 만들지 않고, 자주 쓰는 표기만 HTML 로 바꾼다. sup/sub 은 이미
-// 스키마에 있는 태그라 그대로 살아남고 docx 로도 옮겨 간다. 이미지로 굽지 않는 이유는
-// 나중에 글자를 고칠 수 있어야 해서다.
+// 수식 편집기 전체를 구현하지 않고, 자주 사용하는 표기만 HTML 로 변환한다. sup/sub 은 이미
+// 스키마에 있는 태그이므로 그대로 보존되며 docx 로도 변환된다. 이미지로 렌더링하지 않는 이유는
+// 이후 글자 수정이 가능해야 하기 때문이다.
 
 const GREEK: Record<string, string> = {
   alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', zeta: 'ζ', eta: 'η',
@@ -143,14 +143,14 @@ function escHtml(t: string): string {
 }
 
 /**
- * 간단한 LaTeX 풍 표기를 HTML 로.
+ * 간단한 LaTeX 풍 표기를 HTML 로 변환.
  *   x^2, a_1, \frac{a}{b}, \sqrt{x}, \alpha, \times …
  */
 export function formulaToHtml(src: string): string {
   let out = ''
   let i = 0
   const readGroup = (): string => {
-    // {...} 면 괄호 안, 아니면 한 글자
+    // {...} 이면 괄호 내부, 아니면 한 글자
     if (src[i] === '{') {
       let depth = 1
       let j = i + 1
@@ -202,9 +202,9 @@ export function formulaToHtml(src: string): string {
 }
 
 // ── 도형 · 차트 ─────────────────────────────────────────
-// 둘 다 편집 가능한 개체가 아니라 **그려진 그림**으로 넣는다. 떠다니는 개체 레이어
-// (위치·크기·앵커·핸들)를 만들려면 편집기 구조를 통째로 바꿔야 하는데, 도형 하나
-// 넣자고 치를 값은 아니다. SVG 라 확대해도 깨지지 않고 docx 로도 그대로 나간다.
+// 둘 다 편집 가능한 개체가 아닌 **렌더링된 그림**으로 삽입한다. 부유 개체 레이어
+// (위치·크기·앵커·핸들)를 구현하려면 편집기 구조 전체를 변경해야 하며, 도형 삽입만을
+// 위한 비용으로는 과도하다. SVG 이므로 확대해도 품질이 유지되고 docx 로도 그대로 내보내진다.
 
 export type ShapeKind = 'rect' | 'circle' | 'triangle' | 'arrow' | 'line' | 'star'
 
@@ -228,8 +228,8 @@ export const SHAPES: { kind: ShapeKind; labelKey: string }[] = [
 ]
 
 function svgDataUri(svg: string): string {
-  // base64 대신 URI 인코딩을 쓴다. 문서 HTML 안에서 사람이 읽을 수 있고, 같은 그림이면
-  // 문자열도 같아 CRDT 병합에서 쓸데없는 차이가 생기지 않는다.
+  // base64 대신 URI 인코딩을 사용한다. 문서 HTML 안에서 사람이 읽을 수 있고, 동일한 그림이면
+  // 문자열도 동일하여 CRDT 병합에서 불필요한 차이가 발생하지 않는다.
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
 }
 
@@ -253,7 +253,7 @@ function esc(t: string): string {
   return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-/** 값 배열로 SVG 차트를 그린다. 차트 라이브러리를 문서 편집기에 끌어들이지 않기 위해서다. */
+/** 값 배열로 SVG 차트를 생성한다. 차트 라이브러리를 문서 편집기에 도입하지 않기 위함이다. */
 export function chartDataUri(spec: ChartSpec): string {
   const W = 460
   const H = 260
@@ -326,7 +326,7 @@ export function chartDataUri(spec: ChartSpec): string {
   )
 }
 
-/** "10, 20, 30" 또는 "1월=10, 2월=20" 을 라벨·값으로 푼다. */
+/** "10, 20, 30" 또는 "1월=10, 2월=20" 을 라벨·값으로 분리한다. */
 export function parseChartInput(raw: string): { labels: string[]; values: number[] } {
   const labels: string[] = []
   const values: number[] = []

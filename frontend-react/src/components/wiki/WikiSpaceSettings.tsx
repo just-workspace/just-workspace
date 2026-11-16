@@ -1,8 +1,8 @@
 /**
  * 스페이스 설정 · 멤버("스페이스 설정 · 멤버 12").
- * 공통 폼 + 행 규격으로 구성했다.
- * 공유: 공개 범위 전환 · 멤버 추가(채팅 설정의 사람 고르기 창 UserPicker 재사용) · 역할 바꾸기 · 내보내기 — 누르는 즉시 반영된다
- * (이름·설명만 "저장" 버튼). 소유자는 멤버 표에 없고 항상 관리자라 맨 위에 고정 행으로만 보여 준다.
+ * 공통 폼 + 행 규격으로 구성한다.
+ * 공유: 공개 범위 전환 · 멤버 추가(채팅 설정의 사용자 선택 창 UserPicker 재사용) · 역할 변경 · 내보내기 — 조작 즉시 반영된다
+ * (이름·설명만 "저장" 버튼). 소유자는 멤버 표에 없고 항상 관리자이므로 최상단 고정 행으로만 표시한다.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -26,7 +26,7 @@ export interface WikiSpaceSettingsProps {
   space: WikiSpace
   onClose?: () => void
   onDeleted?: () => void
-  /** 멤버 수를 읽었을 때 */
+  /** 멤버 수 조회 시 */
   onMembers?: (n: number) => void
 }
 
@@ -44,7 +44,7 @@ export function WikiSpaceSettings({ space, onClose, onDeleted, onMembers }: Wiki
   const [loadError, setLoadError] = useState(false)
 
   const [visibility, setVisibility] = useState(space.visibility === 'public' ? 'public' : 'private')
-  const [busy, setBusy] = useState(false)   // 공개 범위·역할 요청이 겹치지 않게
+  const [busy, setBusy] = useState(false)   // 공개 범위·역할 요청의 중복 방지
   const [picker, setPicker] = useState(false)
 
   const ROLE: Record<string, string> = { admin: t('wiki.role.admin'), writer: t('wiki.role.writer'), reader: t('wiki.role.reader') }
@@ -88,7 +88,7 @@ export function WikiSpaceSettings({ space, onClose, onDeleted, onMembers }: Wiki
 
   async function changeVisibility(next: string) {
     if (next === visibility || busy) return
-    // 공개는 되돌리기 전까지 모든 사용자가 읽게 되므로 한 번 묻는다
+    // 공개 시 되돌리기 전까지 모든 사용자가 열람 가능하므로 1회 확인한다
     if (next === 'public' && !await confirmBox(
       t('wiki.share.publicConfirm', '이 스페이스를 공개할까요? 워크스페이스의 모든 사용자가 읽을 수 있게 됩니다.'),
       { confirmLabel: t('wiki.share.publicConfirmLabel', '공개하기') },
@@ -203,7 +203,7 @@ export function WikiSpaceSettings({ space, onClose, onDeleted, onMembers }: Wiki
                   <li key={m.user_id} className="flex h-row items-center gap-2.5 border-b border-border px-3 last:border-b-0">
                     <UiAvatar src={m.avatar_url} alt={m.display_name || m.username} className="h-7 w-7" />
                     <span className="min-w-0 flex-1 truncate text-[13.5px] text-foreground">{m.display_name || m.username}</span>
-                    {/* 내 역할은 여기서 못 바꾼다 — 스스로 내리면 이 창을 다시 열 수 없다(내보내기도 같은 규칙) */}
+                    {/* 본인 역할은 여기서 변경 불가 — 스스로 강등하면 이 창을 다시 열 수 없다(내보내기도 동일 규칙) */}
                     {isAdmin && m.user_id !== user?.id
                       ? (
                         <UiSelect

@@ -1,11 +1,11 @@
 /**
  * 파일.
- * 데스크톱: 사이드바 236 · 커맨드 바 44(경로 바 안, 선택 모드로 변신) · 목록/그리드 · 상세 패널 320.
+ * 데스크톱: 사이드바 236 · 커맨드 바 44(경로 바 안, 선택 모드로 전환) · 목록/그리드 · 상세 패널 320.
  * 모바일: 상단 56(‹ 상위 · 이름 · 검색 · ⋯ 보기·정렬) · 행 56 + ⋮ 40 상시 · FAB 56 · 선택 바/전송 카드는 탭바 위 8.
- * 클릭 = 열기(이미지·PDF·텍스트 미리보기 모달, 오피스 새 탭, 폴더 들어가기), 상세 = ⋮ "상세 정보" 또는 Space.
- * 공유받은 항목: 미리보기·오피스도 같은 규칙(서버가 권한대로 보기/편집), ⋮ 메뉴·상세 패널(댓글 탭)도 공유받음 화면에서 연다.
- *   공동 소유면 공유·이동(같은 공유 폴더 안)·이름 바꾸기(입력 대화상자)·휴지통(원 소유자 휴지통)까지.
- * 모바일 머리는 FileMobileHeader — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader).
+ * 클릭 = 열기(이미지·PDF·텍스트 미리보기 모달, 오피스 새 탭, 폴더 진입), 상세 = ⋮ "상세 정보" 또는 Space.
+ * 공유받은 항목: 미리보기·오피스도 동일 규칙(서버가 권한에 따라 보기/편집 결정), ⋮ 메뉴·상세 패널(댓글 탭)도 공유받음 화면에서 연다.
+ *   공동 소유면 공유·이동(동일 공유 폴더 내)·이름 바꾸기(입력 대화상자)·휴지통(원 소유자 휴지통)까지 가능하다.
+ * 모바일 머리는 FileMobileHeader — 공용 상단바는 사용하지 않는다(routes.ts ownMobileHeader).
  */
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type MouseEvent } from 'react'
 import { aiArtifactError, aiZipAndDownload } from '~/utils/aiArtifacts'
@@ -63,7 +63,7 @@ const SORTS = [
 export default function FilesPage() {
   const { t } = useI18n()
   const { appName } = useSiteConfig()
-  // 데스크톱 셸이 위치 목록을 그린다.
+  // 데스크톱 셸이 위치 목록을 렌더링한다.
   const { navOwnedByShell } = useDesktopShell()
   useHead({ title: `${t('nav.files')} | ${appName}` })
 
@@ -105,7 +105,7 @@ export default function FilesPage() {
   } = useFiles()
   const { transfers } = useTransfers()
   const { user } = useAuth()
-  // 저장소가 끊기면 목록·올리기 대신 끊김 안내만 보인다(돌아오면 스스로 풀린다)
+  // 저장소 연결이 끊기면 목록·올리기 대신 단절 안내만 표시한다(복구되면 자동 해제)
   useStorageWatch(true)
   const { down: storageDown } = useStorageStatus()
   const wasStorageDown = useRef(false)
@@ -113,7 +113,7 @@ export default function FilesPage() {
     if (storageDown) { wasStorageDown.current = true; return }
     if (!wasStorageDown.current) return
     wasStorageDown.current = false
-    // 끊긴 동안 못 읽은 목록·사용량을 새로 받는다
+    // 단절 중 조회하지 못한 목록·사용량을 재조회한다
     void fetchFiles()
     void fetchStorageInfo()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,10 +127,10 @@ export default function FilesPage() {
   useBreadcrumb(view !== 'files' ? VIEW_LABEL[view] : (breadcrumbs.at(-1)?.label ?? ''))
 
   /**
-   * 셸이 고른 위치로 이동한다.
+   * 셸이 선택한 위치로 이동한다.
    *
-   * 셸은 위치 열을 자기가 그리고 `?path=my|shared|my/<폴더>` 로 넘긴다. 이걸 읽지
-   * 않으면 공유 파일을 눌러도 내 파일이 그대로 남는다. `?view=trash|links|shared-with-me` 는 시안 뷰.
+   * 셸은 위치 열을 직접 렌더링하고 `?path=my|shared|my/<폴더>` 로 전달한다. 이 값을 읽지
+   * 않으면 공유 파일을 선택해도 내 파일이 그대로 유지된다. `?view=trash|links|shared-with-me` 는 시안 뷰.
    */
   const qPath = queryString(route.query.path)
   const qView = queryString(route.query.view)
@@ -144,7 +144,7 @@ export default function FilesPage() {
   // ── 모달·패널 상태 ──
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null)
   const [shareTargets, setShareTargets] = useState<FileItem[] | null>(null)
-  /** 공유 모달을 열 때 먼저 보일 탭(채널로 보내기 = 사람·채널 탭) */
+  /** 공유 모달을 열 때 먼저 표시할 탭(채널로 보내기 = 사람·채널 탭) */
   const [shareTab, setShareTab] = useState<'link' | 'people' | null>(null)
   const [moveTargets, setMoveTargets] = useState<string[] | null>(null)
   const [contextMenu, setContextMenu] = useState<{ item: FileItem; x: number; y: number } | null>(null)
@@ -157,7 +157,7 @@ export default function FilesPage() {
 
   const anyModal = !!(previewFile || shareTargets || moveTargets || contextMenu || showViewSheet || showNewSheet)
 
-  // 상세 패널의 항목은 목록이 새로 고쳐지면(이름 바꾸기 등) 새 객체로 바꿔 둔다
+  // 상세 패널의 항목은 목록이 갱신되면(이름 바꾸기 등) 새 객체로 교체한다
   useEffect(() => {
     setDetailItem((cur) => {
       if (!cur) return cur
@@ -166,11 +166,11 @@ export default function FilesPage() {
     })
   }, [sortedItems])
 
-  // Esc = 선택 해제(시안 "선택 해제 (Esc)") — 모달·메뉴가 열려 있으면 그쪽이 먼저 받는다
+  // Esc = 선택 해제(시안 "선택 해제 (Esc)") — 모달·메뉴가 열려 있으면 해당 요소가 먼저 처리한다
   const keyState = useRef({ anyModal, isMobile, detailItem })
   keyState.current = { anyModal, isMobile, detailItem }
   useEffect(() => {
-    // 셸이 위치를 지정했으면 그쪽으로 연다. 셸은 매번 전체 로드라 여기가 주 경로다.
+    // 셸이 위치를 지정한 경우 해당 위치로 연다. 셸은 매번 전체 로드이므로 여기가 주 경로다.
     const v = qView
     if (isShellView(v)) setView(v)
     else {
@@ -198,19 +198,19 @@ export default function FilesPage() {
       else openFolder(item.path)
       return
     }
-    // 공유받은 항목도 같은 길 — 미리보기·다운로드·오피스 API 가 shared-with-me/ 경로를 권한대로 받는다
+    // 공유받은 항목도 동일 경로 — 미리보기·다운로드·오피스 API 가 shared-with-me/ 경로를 권한에 따라 처리한다
     markRecent(item.path)
     if (docsOn && isOfficeFile(item.name)) { openInlineEditor(item); return }
-    // 이미지·PDF·텍스트는 미리보기, 그 밖은 미리보기 모달의 "미리 볼 수 없음 + 다운로드"
+    // 이미지·PDF·텍스트는 미리보기, 그 외는 미리보기 모달의 "미리 볼 수 없음 + 다운로드"
     setPreviewFile(item)
   }
 
-  // 문서 편집기는 문서 구역 것 — 설치되지 않았으면 "새 문서"·편집으로 열기를 숨기고 오피스 파일은 미리보기(내려받기)로 연다
+  // 문서 편집기는 문서 구역 소속 — 미설치 시 "새 문서"·편집으로 열기를 숨기고 오피스 파일은 미리보기(다운로드)로 연다
   const docsOn = useZoneInstalled('docs')
 
-  // 새 Office 문서 — 빈 docx/xlsx/pptx 를 만들어 바로 OnlyOffice 로 연다.
-  // 이름을 먼저 묻지 않는다(제목은 편집기에서 "다른 이름으로" 또는 파일 목록에서 바꾼다).
-  // 만드는 일은 새 탭(/office/open?new=)이 한다 — 돌아오면 목록을 새로 읽는다.
+  // 새 Office 문서 — 빈 docx/xlsx/pptx 를 생성해 즉시 OnlyOffice 로 연다.
+  // 이름을 먼저 입력받지 않는다(제목은 편집기의 "다른 이름으로" 또는 파일 목록에서 변경한다).
+  // 생성은 새 탭(/office/open?new=)이 수행한다 — 복귀 시 목록을 재조회한다.
   function handleNewDoc(kind: 'doc' | 'sheet' | 'slide' = 'doc') {
     if (openOfficeTab(`/office/open?new=${kind}&dir=${encodeURIComponent(filesStore.getState().currentPath || 'my')}`)) {
       window.addEventListener('focus', () => fetchFiles(), { once: true })
@@ -218,9 +218,9 @@ export default function FilesPage() {
   }
 
   /**
-   * 오피스 문서는 새 탭에서 편집(인라인 iframe 은 해상도 손실). 새 탭은 앱 페이지 /office/open 이
-   * "여는 중" 화면(10초 넘으면 미리보기로 열기)을 그리고 편집기로 넘어간다.
-   * 클릭 제스처 안에서 바로 주소로 열어 팝업 차단을 피한다.
+   * 오피스 문서는 새 탭에서 편집한다(인라인 iframe 은 해상도 손실). 새 탭은 앱 페이지 /office/open 이
+   * "여는 중" 화면(10초 초과 시 미리보기로 열기)을 렌더링한 뒤 편집기로 전환한다.
+   * 클릭 제스처 안에서 즉시 주소로 열어 팝업 차단을 회피한다.
    */
   function openOfficeTab(url: string): boolean {
     const win = window.open(url, '_blank')
@@ -235,16 +235,16 @@ export default function FilesPage() {
   function openMenu(e: MouseEvent, item: FileItem) {
     let x = e.clientX
     let y = e.clientY
-    if (!x && !y) {   // 키보드로 ⋮ 를 누른 경우 — 버튼 아래에
+    if (!x && !y) {   // 키보드로 ⋮ 를 누른 경우 — 버튼 아래에 표시
       const r = (e.target as HTMLElement | null)?.closest('button')?.getBoundingClientRect()
-      // 사각형은 화면 좌표(배율 적용 뒤)라 메뉴 폭·간격도 배율만큼
+      // 사각형은 화면 좌표(배율 적용 후)이므로 메뉴 폭·간격에도 배율을 적용
       const z = getUiZoom()
       if (r) { x = r.right - 224 * z; y = r.bottom + 4 * z }
     }
     setContextMenu({ item, x, y })
   }
 
-  // ── 공유받은 항목(공동 소유) 동작 — 목록 대신 공유받음 화면을 다시 읽는다 ──
+  // ── 공유받은 항목(공동 소유) 동작 — 목록 대신 공유받음 화면을 재조회한다 ──
   async function renameShared(item: FileItem) {
     const name = await promptBox(t('files.rename.prompt'), { title: t('files.action.rename'), defaultValue: item.name, confirmLabel: t('common.save') })
     if (!name || !name.trim() || name.trim() === item.name) return
@@ -267,7 +267,7 @@ export default function FilesPage() {
       addToast('error', e?.data?.detail || t('files.delete.error'))
     }
   }
-  // 이동 대화상자 루트 — 공유받은 항목은 그 공유 폴더 안에서만(서버도 같은 소유자 영역만 허용)
+  // 이동 대화상자 루트 — 공유받은 항목은 해당 공유 폴더 내에서만 허용(서버도 동일 소유자 영역만 허용)
   const moveRoots = (() => {
     const first = moveTargets?.[0]
     const sp = first ? sharedSubPath(first) : null
@@ -359,7 +359,7 @@ export default function FilesPage() {
   async function bulkDownload() {
     const paths = [...selectedItems]
     if (!paths.length) return
-    // 1개면 그대로, 여러 개면 zip 하나로 묶어 다운로드
+    // 1개면 그대로, 여러 개면 zip 하나로 압축해 다운로드
     if (paths.length === 1) {
       const item = sortedItems.find(i => i.path === paths[0])
       downloadFile(paths[0], item?.is_dir ?? false)
@@ -367,7 +367,7 @@ export default function FilesPage() {
       await downloadMultiple(paths)
     }
   }
-  /** 서버에서 압축(파일 수·크기 상한, 권한 재검사, 진행률) → 내려받기. zip 은 내 파일 › AI 결과물에도 남는다 */
+  /** 서버에서 압축(파일 수·크기 상한, 권한 재검사, 진행률) → 다운로드. zip 은 내 파일 › AI 결과물에도 보존된다 */
   async function zipDownload(body: { paths?: string[]; query?: string }, label: string) {
     try {
       const job = await aiZipAndDownload(body, label, { addTransfer, updateProgress, finishTransfer })
@@ -387,7 +387,7 @@ export default function FilesPage() {
       setSelectedItems(new Set())
       toast({ type: 'success', title: t('files.page.trashedMany', { n: paths.length }), action: { label: t('files.page.viewTrash'), onClick: () => setView('trash') } })
     } catch (e: any) {
-      // 일부만 실패 — 지워진 것은 목록에서 빠졌고(deleteItems 가 새로 읽는다) 못 지운 것만 선택으로 남긴다
+      // 일부만 실패 — 삭제된 항목은 목록에서 제외됐고(deleteItems 가 재조회한다) 삭제 실패 항목만 선택 상태로 유지한다
       const err = e as Partial<DeleteItemsError>
       if (Array.isArray(err.failed) && err.failed.length) {
         setSelectedItems(new Set(err.failed))
@@ -425,8 +425,8 @@ export default function FilesPage() {
     e.preventDefault()
     setIsDragOver(false)
     if (storageDown) return
-    // 폴더는 끌어다 놓아 올릴 수 없다(파일 목록에 폴더가 크기 0짜리로 섞여 "네트워크 오류"로 실패했다) — 빼고 알린다.
-    // 항목 판정(webkitGetAsEntry)은 이 이벤트 안에서만 읽을 수 있어 먼저 다 읽어 둔다.
+    // 폴더는 끌어다 놓기로 업로드할 수 없다(파일 목록에 폴더가 크기 0 항목으로 섞여 "네트워크 오류"로 실패했다) — 제외하고 알린다.
+    // 항목 판정(webkitGetAsEntry)은 이 이벤트 안에서만 조회 가능하므로 먼저 전부 읽어 둔다.
     const items = Array.from(e.dataTransfer?.items || [])
     let files = Array.from(e.dataTransfer?.files || [])
     let folders = 0
@@ -598,7 +598,7 @@ export default function FilesPage() {
         </div>
       </div>
 
-      {/* 모바일 떠 있는 요소(탭바 위 8부터 쌓음) */}
+      {/* 모바일 부동 요소(탭바 위 8부터 적층) */}
       {mobileSelecting && (
         <FilesFileMobileSelectBar
           onShare={bulkShare}
@@ -610,7 +610,7 @@ export default function FilesPage() {
       {showFab && <UiFab label={t('files.page.uploadOrNew')} onClick={() => setShowNewSheet(true)} />}
       <input ref={mobileUpload} type="file" multiple className="hidden" tabIndex={-1} aria-hidden="true" onChange={onMobilePick} />
 
-      {/* 전송 진행: 선택 여부와 무관하게 항상 떠 있어야 한다. */}
+      {/* 전송 진행: 선택 여부와 무관하게 항상 표시돼야 한다. */}
       <FilesTransferPanel raised={mobileSelecting} />
 
       {/* 메뉴·모달 */}

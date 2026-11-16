@@ -1,4 +1,4 @@
-// http(비보안 연결)에선 navigator.clipboard 가 없다 — execCommand 폴백, 그것도 안 되면 throw(부르는 쪽이 실패 안내)
+// http(비보안 연결)에서는 navigator.clipboard 없음 — execCommand 폴백, 그것도 실패하면 throw(호출자가 실패 안내)
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { writeClipboard } from '~/lib/clipboard'
 

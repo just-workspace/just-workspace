@@ -1,5 +1,5 @@
 // 관리자 › AI 운영 › 정책 — 화면 구성(개인정보 가리기 · 커넥터 쓰기 · 분당 호출 · 감사 로그 보관 1·2·3년 · 로컬 모델만,
-// AI 생성 표시는 끌 수 없음 안내, [되돌리기][저장]). 저장은 PUT /api/ai/governance(바뀐 값만).
+// AI 생성 표시는 비활성화 불가 안내, [되돌리기][저장]). 저장은 PUT /api/ai/governance(변경된 값만 전송).
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
 import { addToast } from '~/composables/useToast'
@@ -23,7 +23,7 @@ function toForm(g: Governance): Form {
   }
 }
 
-/** 0~10000 정수만 */
+/** 0~10000 정수만 허용 */
 export function parseRate(v: string): number | null {
   if (!/^\d{1,5}$/.test(v.trim())) return null
   const n = Number(v.trim())

@@ -1,9 +1,9 @@
 /**
  * 관리 › 모듈·플러그인.
  * 한 카드 안 행 64 — 타일 36(글자) + 이름(플러그인이면 "플러그인 v" 배지) + 설명 한 줄, 켜짐/꺼짐 글자 + 스위치(즉시 반영) + ⋮.
- * 헤더 1차 = "플러그인 설치"(모달). 설치·삭제 뒤에는 서버 재시작을 기다리는 모달(/api/health 폴링).
- * 플러그인 이름·설명은 서버 목록을 그대로 보여 준다(코드에 개별 플러그인 이름을 적지 않는다).
- * 서버가 올리지 않은 플러그인(목록의 `skipped` — 필요한 구역이 꺼져 있는 것)은 카드 아래에 사유와 함께 따로 보여 준다.
+ * 헤더 1차 = "플러그인 설치"(모달). 설치·삭제 후에는 서버 재시작 대기 모달을 표시한다(/api/health 폴링).
+ * 플러그인 이름·설명은 서버 목록을 그대로 표시한다(코드에 개별 플러그인 이름을 기재하지 않는다).
+ * 서버가 로드하지 않은 플러그인(목록의 `skipped` — 필요한 구역이 비활성화된 경우)은 카드 아래에 사유와 함께 별도로 표시한다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -28,11 +28,11 @@ import { UiMenu, type UiMenuItem } from '~/components/ui/Menu'
 import { UiModal } from '~/components/ui/Modal'
 
 interface PluginInfo { id: string; name: string; version: string; description: string; author: string; enabled: boolean; removable?: boolean }
-/** 서버가 올리지 않은 플러그인 — reason 은 지금 zone_not_installed 하나 */
+/** 서버가 로드하지 않은 플러그인 — reason 은 현재 zone_not_installed 하나 */
 export interface SkippedPlugin { id: string; name: string; reason: string; missing_zones?: string[] }
 interface Row { id: string; name: string; desc: string; enabled: boolean; plugin: boolean; version?: string; removable?: boolean }
 
-// 기본 모듈 설명(시안 문구). 플러그인은 서버가 준 설명.
+// 기본 모듈 설명(시안 문구). 플러그인은 서버가 반환한 설명 사용.
 const DESC_IDS = ['mail', 'chat', 'files', 'calendar', 'contacts', 'board', 'git', 'ai', 'meetings', 'tasks', 'wiki']
 function tile(name: string) { return /^[A-Za-z]{1,3}$/.test(name) ? name : name.charAt(0) }
 
@@ -46,7 +46,7 @@ export default function AdminModulesPage() {
   const { modules } = usePlatform()
   const [plugins, setPlugins] = useState<PluginInfo[]>([])
   const [skipped, setSkipped] = useState<SkippedPlugin[]>([])
-  // 구역 id → 이름(구역 목록을 읽을 수 있을 때만. 못 읽으면 id 그대로 보인다)
+  // 구역 id → 이름(구역 목록 조회 가능 시에만 적용. 조회 실패 시 id 그대로 표시)
   const [zoneNames, setZoneNames] = useState<Record<string, Record<string, string>>>({})
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -71,7 +71,7 @@ export default function AdminModulesPage() {
       if (p.skipped?.length) {
         zonesApi.list()
           .then(z => setZoneNames(Object.fromEntries([...(z.zones || []), ...(z.addons || [])].map(x => [x.id, x.name]))))
-          .catch(() => { /* 이름 없이 id 로 보인다 */ })
+          .catch(() => { /* 이름 없이 id 로 표시 */ })
       }
     } catch { setLoadError(true) } finally { setLoading(false) }
   }
@@ -183,7 +183,7 @@ export default function AdminModulesPage() {
         </section>
       )}
 
-      {/* 올리지 않은 플러그인 — 사유와 함께 */}
+      {/* 로드하지 않은 플러그인 — 사유와 함께 표시 */}
       {skipped.length > 0 && (
         <section className="mt-5" aria-labelledby="skipped-plugins-title">
           <h2 id="skipped-plugins-title" className="mb-1 text-sm font-semibold text-foreground">{t('admin.modules.skipped.title')}</h2>

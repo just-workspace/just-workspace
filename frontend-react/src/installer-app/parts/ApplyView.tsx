@@ -1,8 +1,8 @@
 /**
- * 적용 진행 화면 — 설치와 복원이 같이 쓴다. 단계 목록(완료 · 진행 중 · 실패 · 대기)과 전체 진행 막대,
- * 진행 중인 단계의 세부(이미지별 · 구역별), 실패한 단계의 실패 카드를 그린다.
- * 단계 목록과 상태는 서버가 준 대로다(저장소 연결 같은 단계는 필요할 때만 목록에 들어 있다).
- * 진행 상황은 서버의 상태 흐름으로 받는다. 숫자가 바뀔 때마다 읽어 주지 않도록 진행 부분에는 aria-live 를 두지 않는다.
+ * 적용 진행 화면 — 설치와 복원이 공용한다. 단계 목록(완료 · 진행 중 · 실패 · 대기)과 전체 진행 막대,
+ * 진행 중인 단계의 세부(이미지별 · 구역별), 실패한 단계의 실패 카드를 렌더링한다.
+ * 단계 목록과 상태는 서버가 전달한 그대로이다(저장소 연결 같은 단계는 필요한 경우에만 목록에 포함된다).
+ * 진행 상황은 서버의 상태 흐름으로 수신한다. 숫자 변경 시마다 낭독되지 않도록 진행 부분에는 aria-live 를 두지 않는다.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { UiBadge, type UiBadgeTone } from '~/components/ui/Badge'
@@ -29,7 +29,7 @@ const LOOK: Record<ApplyStepStatus, { icon: string; color: string; tone: UiBadge
 
 export interface ApplyViewProps {
   kind: 'install' | 'restore'
-  /** 실패 카드에서 돌아갈 곳(요약 · 내용 확인) */
+  /** 실패 카드에서 복귀할 화면(요약 · 내용 확인) */
   backTo: 'summary' | 'review'
 }
 
@@ -73,7 +73,7 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
   const [log, setLog] = useState<{ step: string; data: ApplyLog | null; failed: boolean } | null>(null)
   const redirect = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // 상태 흐름을 듣는다(화면을 떠나면 끊는다). 흐름은 끝 상태에서 닫히므로, 다시 시키면(epoch) 새로 듣는다
+  // 상태 흐름을 구독한다(화면 이탈 시 해제). 흐름은 최종 상태에서 닫히므로, 재실행(epoch) 시 새로 구독한다
   useEffect(() => {
     const onState = (s: ApplyState) => store.getState().receiveApply(s)
     return kind === 'restore' ? api.restoreStream(onState) : api.streamApply(onState)
@@ -86,7 +86,7 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
     return () => clearInterval(timer)
   }, [status])
 
-  // 다 끝나면 잠시 뒤 완료 화면으로 — 서버는 이때 마법사를 잠그므로, 이 창에서 끝냈다는 것을 먼저 적어 둔다
+  // 전체 완료 시 잠시 후 완료 화면으로 이동한다 — 서버는 이 시점에 마법사를 잠그므로, 이 창에서 완료했음을 먼저 기록한다
   useEffect(() => {
     if (status !== 'done') return
     store.getState().markFinished()
@@ -128,10 +128,10 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
   }
   const retry = () => act(() => {
     if (kind === 'restore') return api.restoreRetry()
-    // 실패한 단계가 없이 멈췄으면(시작 전 검사) 처음부터 다시 시작한다
+    // 실패한 단계 없이 중단된 경우(시작 전 검사) 처음부터 재시작
     return (state?.steps ?? []).some(s => s.status === 'failed') ? api.retryApply() : api.startApply()
   })
-  /** 임시 인증서로 바꿔 계속 — 서버가 답변의 인증서 방식을 바꾸므로 화면이 들고 있는 답변도 맞춘다(완료 화면의 할 일에 쓰인다) */
+  /** 임시 인증서로 전환하여 계속 — 서버가 답변의 인증서 방식을 변경하므로 화면이 보유한 답변도 일치시킨다(완료 화면의 할 일에 사용) */
   const continueWithTemporaryCert = () => act(async () => {
     const next = kind === 'restore' ? await api.restoreRetry({ use_temporary_cert: true }) : await api.retryApply({ use_temporary_cert: true })
     store.setState(s => ({ answers: { ...s.answers, access: { ...s.answers.access, cert: 'temporary' } } }))
@@ -150,7 +150,7 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
     }
   }
 
-  /** 기록을 파일로 내려받는다(서버가 준 줄을 그대로 글자 파일로) */
+  /** 기록을 파일로 다운로드(서버가 전달한 줄을 그대로 텍스트 파일로 저장) */
   async function downloadLog(step: string) {
     try {
       const data = await api.getApplyLog(step, 5000)
@@ -172,10 +172,10 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
     const cause = step.error?.cause ?? ''
     const vars = { ...(step.error?.vars ?? {}) } as Record<string, unknown>
     let key = 'other'
-    // 원인에 딱 맞는 문구가 있으면 그것이 먼저다(복원의 "다른 저장소" 같은 원인은 저장소 단계에서도 따로 알린다)
+    // 원인에 정확히 대응하는 문구가 있으면 해당 문구를 우선한다(복원의 "다른 저장소" 같은 원인은 저장소 단계에서도 별도로 통지한다)
     const known = has(`apply.fail.${cause}.title`)
     if (step.id === 'storage' && !known) {
-      // 복원을 이어 보는 창은 저장소 이름을 모를 수 있다 — 그때는 이름 없는 문구로
+      // 복원을 이어서 확인하는 창은 저장소 이름을 알 수 없는 경우가 있음 — 이 경우 이름 없는 문구 사용
       const named = answers.storage.kind === 'nfs' && !!answers.storage.server
       key = kind === 'restore' && !named ? 'restore_storage' : (answers.storage.kind === 'nfs' ? 'storage' : 'storage_local')
       vars.target = `${answers.storage.server ?? ''}:${answers.storage.export ?? ''}`
@@ -195,7 +195,7 @@ export function ApplyView({ kind, backTo }: ApplyViewProps) {
     return { title: <M k={`apply.fail.${key}.title`} v={vars} />, body: <M k={`apply.fail.${key}.body`} v={vars} /> }
   }
 
-  // 단계에 들어가기도 전에 멈춘 경우(답변 검증 · 사전 점검) — 실패한 단계가 없다
+  // 단계 진입 전에 중단된 경우(답변 검증 · 사전 점검) — 실패한 단계 없음
   const gateFailure = failed && !(state?.steps ?? []).some(s => s.status === 'failed') ? failure(state?.error?.step ?? '', state?.error ?? null) : null
   const btn = 'h-auto min-h-9 whitespace-normal py-1.5 text-left'
   return (

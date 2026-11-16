@@ -1,9 +1,9 @@
 /**
- * 화면 아래 줄 — [이전] · 이유 문구 · [다음].
- * - "이전"은 지금 흐름에서 실제 직전 단계로 간다.
- * - "다음"이 꺼져 있으면 바로 옆에 왜 꺼졌는지 보인다(버튼의 aria-describedby 로도 이어 준다).
- * - 요약 화면의 "고치기"로 들어왔으면 "다음" 대신 "요약으로 돌아가기"가 된다.
- * - "다음"은 답변을 저장한 뒤에 넘어간다. 저장에 실패하면 그 자리에 남고 이유를 보인다.
+ * 화면 하단 줄 — [이전] · 사유 문구 · [다음].
+ * - "이전"은 현재 흐름의 실제 직전 단계로 이동한다.
+ * - "다음"이 비활성화된 경우 바로 옆에 비활성화 사유를 표시한다(버튼의 aria-describedby 로도 연결한다).
+ * - 요약 화면의 "고치기"로 진입한 경우 "다음" 대신 "요약으로 돌아가기"가 된다.
+ * - "다음"은 답변 저장 후 이동한다. 저장에 실패하면 현재 화면에 머무르며 사유를 표시한다.
  */
 import { useCallback, type ReactNode } from 'react'
 import { UiButton } from '~/components/ui/Button'
@@ -16,19 +16,19 @@ import { applyPatch, flowOf, useWizard, useWizardStore } from '../store'
 
 export interface StepNavProps {
   step: StepId
-  /** 왜 다음으로 못 가는가. 빈 글자면 갈 수 있다 */
+  /** 다음으로 진행할 수 없는 사유. 빈 문자열이면 진행 가능 */
   blocked?: string
-  /** 갈 수 있을 때 옆에 보일 안내(주의는 그대로 두고 갈 수 있다 등) */
+  /** 진행 가능할 때 옆에 표시할 안내(주의는 그대로 두고 진행 가능 등) */
   note?: string
-  /** "다음"을 눌렀을 때 — 저장할 것이 있으면 goNext(patch) 를 부른다 */
+  /** "다음" 클릭 시 호출 — 저장할 내용이 있으면 goNext(patch) 호출 */
   onNext: () => unknown
-  /** "이전" 과 "다음" 사이에 둘 버튼(다시 확인 등) */
+  /** "이전" 과 "다음" 사이에 배치할 버튼(다시 확인 등) */
   extra?: ReactNode
-  /** "이전"을 숨긴다(첫 화면) */
+  /** "이전" 숨김(첫 화면) */
   noPrev?: boolean
 }
 
-/** 저장하고 다음 화면으로 — 다음 단계는 저장된 뒤의 답변으로 정한다(고른 것에 따라 끼어드는 단계가 달라진다) */
+/** 저장 후 다음 화면으로 이동 — 다음 단계는 저장된 이후의 답변으로 결정한다(선택에 따라 삽입되는 단계가 달라진다) */
 export function useGoNext(step: StepId): { fix: boolean; goNext: (patch?: AnswersPatch) => Promise<boolean>; goTo: (id: RouteId) => void } {
   const store = useWizardStore()
   const { fix } = useRoute()

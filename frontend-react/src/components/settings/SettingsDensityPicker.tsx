@@ -1,6 +1,6 @@
 /**
- * 목록 밀도 고르기 — 라디오 카드 3(편안 56 / 기본 48 / 조밀 40) + 행 간격 미리보기.
- * 터치 기기에서는 조밀을 막는다(compactAllowed=false).
+ * 목록 밀도 선택 — 라디오 카드 3(편안 56 / 기본 48 / 조밀 40) + 행 간격 미리보기.
+ * 터치 기기에서는 조밀을 차단한다(compactAllowed=false).
  *
  * @example <SettingsDensityPicker modelValue={density} onUpdateModelValue={setDensity} compactAllowed />
  */
@@ -9,11 +9,11 @@ import type { Density } from '~/composables/useUserPrefs'
 import { UiRadioCard } from '~/components/ui/RadioCard'
 
 export interface SettingsDensityPickerProps {
-  /** 지금 밀도 */
+  /** 현재 밀도 */
   modelValue: Density
-  /** 고를 때 */
+  /** 선택 시 */
   onUpdateModelValue: (v: Density) => void
-  /** 조밀을 고를 수 있는지(터치 기기면 false) */
+  /** 조밀 선택 가능 여부(터치 기기면 false) */
   compactAllowed: boolean
 }
 

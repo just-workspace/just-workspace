@@ -1,11 +1,11 @@
 /**
- * 메일 읽기 화면 안 AI — 요약 패널(요점·내가 할 일 → 고른 n개 할일에 등록)과 답장 초안(말투 정중하게|짧게).
+ * 메일 읽기 화면 내 AI — 요약 패널(요점·내가 할 일 → 선택한 n개를 할일에 등록)과 답장 초안(말투 정중하게|짧게).
  *  - 요약: 데스크톱은 읽기 판 오른쪽 aside 340(카드 바탕·왼쪽 경계선·패딩 20·간격 18), 모바일은 본문 위 카드.
- *  - 내가 할 일: 체크박스(제목 + "기한 11-07(금) · 박준호에게" / "기한 없음"). 기한이 있는 것만 처음에 체크(시안 그대로).
- *    [고른 n개 할일에 등록] → /api/ai/inline/tasks(쓰기 승인 체계 — 버튼이 곧 승인), 등록 뒤 되돌리기.
- *  - 답장 초안: 본문 아래 카드(테두리 primary/50, 머리 = ✦ 답장 초안 + 말투 세그먼트, 꼬리 = 안내 + [버리기][편집기로 옮기기]).
- *    [편집기로 옮기기] = 작성 창(모바일은 전체 화면 작성)에 채운다. 보내기는 사람이 — 보내면 X-AI-Generated 가 붙는다.
- *  - 결과는 메일마다 기억(같은 메일을 다시 열면 다시 부르지 않음). 진행·오류·외부 AI 안내는 공용 조각.
+ *  - 내가 할 일: 체크박스(제목 + "기한 11-07(금) · 박준호에게" / "기한 없음"). 기한이 있는 항목만 초기 선택(시안과 동일).
+ *    [고른 n개 할일에 등록] → /api/ai/inline/tasks(쓰기 승인 체계 — 버튼 클릭이 곧 승인), 등록 후 되돌리기 제공.
+ *  - 답장 초안: 본문 아래 카드(테두리 primary/50, 머리 = 별 모양 표식 + 답장 초안 + 말투 세그먼트, 꼬리 = 안내 + [버리기][편집기로 옮기기]).
+ *    [편집기로 옮기기] = 작성 창(모바일은 전체 화면 작성)에 내용 입력. 발송은 사용자가 수행하며, 발송 시 X-AI-Generated 가 부착됨.
+ *  - 결과는 메일별로 보관(같은 메일을 다시 열어도 재호출하지 않음). 진행·오류·외부 AI 안내는 공용 구성요소 사용.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -42,7 +42,7 @@ export function MailAiSummary({ mail, status, variant = 'aside', onClose }: Mail
   const { t, locale } = useI18n()
   const [data, setDataRaw] = useState<MailSummary | null>(() => sumCache.get(keyOf(mail)) || null)
   const [error, setError] = useState('')
-  // 기한이 있는 할 일만 처음에 고른다(시안: 기한 없음은 해제)
+  // 기한이 있는 할 일만 초기 선택(시안: 기한 없음은 해제)
   const initialPicked = (d: MailSummary | null) => new Set((d?.todos || []).map((td, i) => (td.due ? i : -1)).filter(i => i >= 0))
   const [picked, setPicked] = useState<Set<number>>(() => initialPicked(sumCache.get(keyOf(mail)) || null))
   function setData(d: MailSummary | null) {
@@ -72,7 +72,7 @@ export function MailAiSummary({ mail, status, variant = 'aside', onClose }: Mail
     else void load()
     const s = seq
     return () => { s.current++ }
-    // 메일이 바뀔 때마다
+    // 메일 변경 시마다 실행
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mail.id, mail.mailboxId, mail.accountId])
 
@@ -169,7 +169,7 @@ export function MailAiSummary({ mail, status, variant = 'aside', onClose }: Mail
 export interface MailAiDraftProps {
   mail: MailRef
   onClose: () => void
-  /** [편집기로 옮기기] — 초안 글을 넘긴다 */
+  /** [편집기로 옮기기] — 초안 본문 전달 */
   onUse: (draft: string) => void
 }
 

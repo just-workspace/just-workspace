@@ -1,4 +1,4 @@
-// 반복 일정 편집 회귀: 반복 칸을 안 건드리면 원래 규칙 그대로(UNTIL 재확장 금지),
+// 반복 일정 편집 회귀: 반복 칸을 변경하지 않으면 원래 규칙 유지(UNTIL 재확장 금지),
 // "이 일정과 이후" 는 남은 회차만(COUNT 재시작 금지).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
@@ -74,7 +74,7 @@ describe('UNTIL 보존', () => {
 })
 
 describe('"이 일정과 이후" COUNT', () => {
-  // 남은 회차 계산은 서버로 옮겼다(backend/tests/calsplit_following.py 의 COUNT 테스트) — 프런트는 규칙을 그대로 보낸다
+  // 남은 회차 계산은 서버로 이전함(backend/tests/calsplit_following.py 의 COUNT 테스트) — 프런트는 규칙을 그대로 전송
   it('횟수 반복을 "이 일정과 이후"로 바꾸면 규칙 그대로 PATCH ?scope=following 하나', async () => {
     expect(rruleCount('RRULE:FREQ=DAILY;COUNT=5')).toBe(5)
     const rule = 'FREQ=DAILY;COUNT=5'

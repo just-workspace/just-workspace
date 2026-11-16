@@ -1,8 +1,8 @@
 /**
  * 주·일 보기: 시간 열 56, 1시간 48,
  * 일정은 시작·길이 기준 절대 배치 + 겹침 열, 현재 시각 선(danger 2px + 점 10) + 시간 열 배지, 종일 줄은 날짜를 가로질러 span.
- * 날짜·시각은 전부 캘린더 시간대(utils/calTz) 벽시계 — 서머타임 날도 칸 위치는 벽시계 분, 종일은 날짜 그대로.
- * days=7 이면 주, days=1 이면 일. 빈 칸 클릭 = 그 시각에 새 일정, 일정 클릭 = 읽기 팝오버, 더블클릭 = 편집.
+ * 날짜·시각은 모두 캘린더 시간대(utils/calTz) 벽시계 기준 — 서머타임 적용일에도 칸 위치는 벽시계 분, 종일 일정은 날짜 그대로 적용.
+ * days=7 이면 주, days=1 이면 일. 빈 칸 클릭 = 해당 시각에 새 일정 생성, 일정 클릭 = 읽기 팝오버, 더블클릭 = 편집.
  */
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -30,11 +30,11 @@ interface Block { ev: CalendarEvent; top: number; height: number; left: string; 
 function spansDays(ev: { start: string; end: string; all_day: boolean }) {
   if (ev.all_day) return true
   const s = new Date(ev.start), e = new Date(ev.end)
-  // 날짜가 바뀌고 벽시계로 하루 이상(서머타임 날 23·25시간도 "하루")
+  // 날짜가 변경되고 벽시계 기준 하루 이상인 경우(서머타임 적용일의 23·25시간도 "하루"로 간주)
   return !isSameDay(s, new Date(e.getTime() - 1)) && e.getTime() >= addDays(s, 1).getTime()
 }
 
-/** 범위 첫날부터 몇째 날 칸인가(캘린더 시간대 날짜 차이) — 끝(배타)이 자정이면 그 앞날까지 */
+/** 범위 첫날 기준 날짜 칸 순번(캘린더 시간대 날짜 차이) — 끝(배타)이 자정이면 전날까지 포함 */
 function dayCol(rangeStart: Date, at: number, exclusiveEnd = false): number {
   const n = zDayNumber(at) - zDayNumber(rangeStart)
   return exclusiveEnd && zMinutesOfDay(at) === 0 && zp(at).seconds === 0 ? n : n + (exclusiveEnd ? 1 : 0)
@@ -52,7 +52,7 @@ export function CalendarWeekView({ days = 7 }: CalendarWeekViewProps) {
 
   const DAY_LABELS = (tm('calendar.weekdaysShort') as any[]).map(m => rt(m))
 
-  // 캘린더 시간대가 바뀌면 칸을 다시 계산한다
+  // 캘린더 시간대 변경 시 칸 재계산
   const zone = calendarZone()
   const dayList = useMemo((): Date[] => {
     if (days === 1) return [startOfDay(selectedDate)]
@@ -89,7 +89,7 @@ export function CalendarWeekView({ days = 7 }: CalendarWeekViewProps) {
       })
       .filter(x => x.s < re && x.e > rs)
       .sort((a, b) => a.s - b.s || b.e - a.e)
-    const rowEnds: number[] = [] // 각 줄에서 마지막으로 차지한 열(exclusive)
+    const rowEnds: number[] = [] // 각 줄에서 마지막으로 점유한 열(exclusive)
     const out: Lane[] = []
     const first = new Date(rs)
     for (const x of items) {
@@ -106,7 +106,7 @@ export function CalendarWeekView({ days = 7 }: CalendarWeekViewProps) {
   // ── 시간 일정: 날마다 절대 배치 ──
   const blocksByDay = useMemo((): Block[][] => {
     return dayList.map((day) => {
-      // 그날 [00:00, 다음날 00:00) — 서머타임 날은 23·25시간. 칸 위치는 벽시계 분으로(02:00 이 빠진 날도 03:00 은 03:00 줄)
+      // 해당일 [00:00, 다음날 00:00) — 서머타임 적용일은 23·25시간. 칸 위치는 벽시계 분 기준(02:00 이 누락된 날에도 03:00 은 03:00 줄)
       const ds = startOfDay(day).getTime(), de = addDays(startOfDay(day), 1).getTime()
       const evs = visibleEvents
         .filter(ev => !spansDays(ev))
@@ -138,7 +138,7 @@ export function CalendarWeekView({ days = 7 }: CalendarWeekViewProps) {
     openPopover(ev, e.currentTarget)
   }
 
-  // 처음 열면 현재 시각(오늘이 보일 때) 또는 07:00 으로 스크롤 — 마운트·days 변경 때만
+  // 최초 표시 시 현재 시각(오늘이 표시 범위에 있는 경우) 또는 07:00 으로 스크롤 — 마운트·days 변경 시에만 수행
   const scroller = useRef<HTMLDivElement | null>(null)
   const todayIdxRef = useRef(todayIndex)
   todayIdxRef.current = todayIndex
@@ -151,7 +151,7 @@ export function CalendarWeekView({ days = 7 }: CalendarWeekViewProps) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* 요일 머리 48 */}
+      {/* 요일 헤더 48 */}
       <div className="grid shrink-0 border-b border-border" style={{ gridTemplateColumns: gridCols }}>
         <div className="pl-2 pt-2 font-mono text-[10px] text-muted-foreground">{gmt}</div>
         {dayList.map((day, i) => (
@@ -195,7 +195,7 @@ export function CalendarWeekView({ days = 7 }: CalendarWeekViewProps) {
         <div className="relative grid" style={{ gridTemplateColumns: gridCols, height: `${24 * HOUR_PX}px` }}>
           {/* 시간 열 */}
           <div className="relative">
-            {/* 맨 위(0시) 라벨은 위로 올리지 않는다(종일 줄 밑으로 잘림), 현재 시각 라벨과 겹치는 시 라벨은 숨긴다 */}
+            {/* 최상단(0시) 라벨은 위로 올리지 않음(종일 줄 아래에서 잘림). 현재 시각 라벨과 겹치는 시 라벨은 숨김 */}
             {HOURS.map(h => (
               <div
                 key={h}

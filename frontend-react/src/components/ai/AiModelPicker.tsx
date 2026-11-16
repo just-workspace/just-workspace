@@ -2,8 +2,8 @@
  * 모델 피커 내용:
  *  묶음 머리(11/600 · 0.08em, 10 14 4) "워크스페이스 제공" / "내 API 키"
  *  · 옵션 min 48(이름 600 + 설명 12 muted · 선택 ✓ primary) · 선 아래 "이 대화에서 쓸 도구" + 행 40(이름 + 스위치).
- * 모델·도구 이름은 서버 응답(/api/ai/status)을 그대로 보인다. 대화별 모델 전환은 백엔드에 없어 지금 쓰는 쪽만 고를 수 있다.
- * 도구는 대화마다 켜기/끄기 하나뿐이라 묶음 스위치가 함께 움직인다(백엔드 갭).
+ * 모델·도구 이름은 서버 응답(/api/ai/status)을 그대로 표시한다. 대화별 모델 전환은 백엔드 미지원이므로 현재 사용 중인 쪽만 선택할 수 있다.
+ * 도구는 대화별 활성화/비활성화 하나뿐이므로 묶음 스위치가 함께 연동된다(백엔드 갭).
  */
 import { cn } from '~/lib/utils'
 import { useI18n } from '~/i18n'
@@ -16,13 +16,13 @@ import type { AiStatus } from '~/utils/aiAssist'
 export interface AiModelPickerProps {
   /** /api/ai/status 응답 */
   status: AiStatus
-  /** 이 대화에서 도구가 켜졌는가 */
+  /** 이 대화의 도구 활성화 여부 */
   toolsEnabled: boolean
-  /** 루트에 덧붙일 클래스 */
+  /** 루트에 추가할 클래스 */
   className?: string
-  /** 도구 켜기/끄기 */
+  /** 도구 활성화/비활성화 */
   onToggleTools?: (on: boolean) => void
-  /** 닫기(개인 키 설정으로 갈 때) */
+  /** 닫기(개인 키 설정으로 이동 시) */
   onClose?: () => void
 }
 

@@ -1,15 +1,15 @@
 /**
- * 위키 버전 비교: 옛 버전과 지금 버전의 HTML 을 클라이언트에서 비교해
- * 추가는 <ins>(success 밑줄) · 삭제는 <del>(danger 취소선) 로 표시한 HTML 을 만든다.
+ * 위키 버전 비교: 이전 버전과 현재 버전의 HTML 을 클라이언트에서 비교하여
+ * 추가는 <ins>(success 밑줄) · 삭제는 <del>(danger 취소선) 로 표시한 HTML 을 생성한다.
  *
- * 방식 — 블록(문단·제목·목록 항목 …) 단위로 먼저 맞추고, 바뀐 블록 쌍은 단어 단위로 다시 비교한다.
- * 바뀐 블록의 안쪽 서식(굵게·링크)은 글자만 남긴다 — 비교 표시가 목적이라 감수한다.
- * 백엔드에 diff 가 없어(REVIEW 9-c) 여기서 계산한다. DOMParser 가 있어야 한다(브라우저·happy-dom).
+ * 방식 — 블록(문단·제목·목록 항목 …) 단위로 먼저 대응시키고, 변경된 블록 쌍은 단어 단위로 재비교한다.
+ * 변경된 블록의 내부 서식(굵게·링크)은 텍스트만 유지한다 — 비교 표시가 목적이므로 허용한다.
+ * 백엔드에 diff 가 없어(REVIEW 9-c) 본 모듈에서 계산한다. DOMParser 필요(브라우저·happy-dom).
  */
 
 export type DiffOp<T> = { type: 'equal' | 'delete' | 'insert'; a?: T; b?: T }
 
-/** 두 수열의 LCS 기반 편집 목록. 수천 토큰까지는 충분히 빠르다. */
+/** 두 수열의 LCS 기반 편집 목록. 수천 토큰까지는 성능상 충분하다. */
 export function diffSeq<T>(a: T[], b: T[], eq: (x: T, y: T) => boolean = (x, y) => x === y): DiffOp<T>[] {
   const n = a.length, m = b.length
   // dp[i][j] = a[i..], b[j..] 의 LCS 길이
@@ -49,7 +49,7 @@ function parseBlocks(html: string): Block[] {
   const walk = (el: Element) => {
     for (const child of Array.from(el.children)) {
       const tag = child.tagName.toLowerCase()
-      // 목록·인용은 항목 단위로 들어가 본다(항목 하나 바뀐 것을 목록 전체 교체로 보지 않게)
+      // 목록·인용은 항목 단위로 분해한다(항목 하나의 변경을 목록 전체 교체로 처리하지 않도록)
       if ((tag === 'ul' || tag === 'ol' || tag === 'blockquote') && child.children.length) {
         out.push({ tag: `${tag}:open`, html: `<${tag}>`, text: `<${tag}>` })
         walk(child)
@@ -63,10 +63,10 @@ function parseBlocks(html: string): Block[] {
   return out
 }
 
-/** 단어 단위 비교 결과를 HTML 조각으로. 반환 added/removed 는 단어 수. */
+/** 단어 단위 비교 결과를 HTML 조각으로 변환. 반환값 added/removed 는 단어 수. */
 export function diffWordsHtml(oldText: string, newText: string): { html: string; added: number; removed: number } {
   const ops = diffSeq(tokenizeWords(oldText), tokenizeWords(newText))
-  // 바뀐 단어 사이에 낀 공백(equal)은 같은 쪽으로 흡수 — "<ins>사내</ins> <ins>Git</ins>" 대신 "<ins>사내 Git</ins>"
+  // 변경된 단어 사이의 공백(equal)은 같은 쪽으로 흡수 — "<ins>사내</ins> <ins>Git</ins>" 대신 "<ins>사내 Git</ins>"
   for (let k = 1; k < ops.length - 1; k++) {
     const cur = ops[k], prev = ops[k - 1], next = ops[k + 1]
     if (cur.type === 'equal' && !cur.a!.trim() && prev.type !== 'equal' && prev.type === next.type) {
@@ -95,8 +95,8 @@ export function diffWordsHtml(oldText: string, newText: string): { html: string;
 export interface HtmlDiffResult { html: string; added: number; removed: number }
 
 /**
- * 옛 HTML → 새 HTML 비교 표시. 블록이 통째로 바뀌면 블록 전체를 del/ins 로,
- * 삭제 바로 뒤에 삽입이 오면(= 수정된 문단) 단어 단위로 안쪽을 비교한다.
+ * 이전 HTML → 새 HTML 비교 표시. 블록 전체가 변경되면 블록 전체를 del/ins 로 표시하고,
+ * 삭제 직후 삽입이 오면(= 수정된 문단) 단어 단위로 내부를 비교한다.
  */
 export function diffHtml(oldHtml: string, newHtml: string): HtmlDiffResult {
   const a = parseBlocks(oldHtml || '')
@@ -104,7 +104,7 @@ export function diffHtml(oldHtml: string, newHtml: string): HtmlDiffResult {
   const ops = diffSeq(a, b, (x, y) => x.tag === y.tag && x.text === y.text)
   let html = '', added = 0, removed = 0
   const wrapBlock = (blk: Block, kind: 'del' | 'ins'): string => {
-    if (blk.tag.includes(':')) return blk.html   // 목록 여닫는 태그는 그대로
+    if (blk.tag.includes(':')) return blk.html   // 목록 여닫는 태그는 그대로 유지
     const inner = `<${kind}>${escapeHtml(blk.text)}</${kind}>`
     const t = blk.tag === 'li' ? 'li' : /^h[1-6]$/.test(blk.tag) ? blk.tag : 'p'
     return `<${t}>${inner}</${t}>`

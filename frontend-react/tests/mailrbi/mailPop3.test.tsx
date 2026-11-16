@@ -1,5 +1,5 @@
-// POP3 계정 — 서버에 폴더가 없어 이동·보관·스팸·폴더 만들기를 못 한다. 그 버튼·메뉴·스와이프·단축키 진입을 숨기고,
-// POP3 도 되는 것(읽음·삭제·별표)은 남긴다. IMAP 계정은 그대로다.
+// POP3 계정 — 서버에 폴더가 없어 이동·보관·스팸·폴더 생성 불가. 해당 버튼·메뉴·스와이프·단축키 진입을 숨기고,
+// POP3 에서도 가능한 동작(읽음·삭제·별표)은 유지한다. IMAP 계정은 변경 없음.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'
@@ -73,7 +73,7 @@ describe('mailIsPop3 — 지금 보는 계정의 수신 방식', () => {
     expect(mailIsPop3()).toBe(false)
     mailStore.setState({ accounts: [{ id: 'a1', email: 'x@x', is_default: true }] as any })
     expect(mailIsPop3()).toBe(false)
-    // 여러 계정 — 고른 계정만 본다
+    // 복수 계정 — 선택된 계정만 확인
     mailStore.setState({ accounts: [{ id: 'a1', protocol: 'imap' }, { id: 'a2', protocol: 'pop3' }] as any, selectedAccountId: 'a2' })
     expect(mailIsPop3()).toBe(true)
   })

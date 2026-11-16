@@ -1,10 +1,10 @@
 /**
- * 음질 패널 — 접속 바 [음질 설정]에서 위로 열리는 팝오버 460(모바일 바텀시트).
+ * 음질 패널 — 접속 바 [음질 설정]에서 위쪽으로 열리는 팝오버 460(모바일 바텀시트).
  * 제목 "내가 보내는 음질" + 부제 · 단계 4개(UiRadioCard row, meta = 예상 지연) · 음악 이상이면 warning 한 줄 ·
- * 고급(늘 펼침): 비트레이트 슬라이더(음악 256–510, 무손실은 흐림 + "2.3 Mbps (고정)") · 샘플레이트 44.1/48/96(96 은 웹에서 흐림) ·
+ * 고급(항상 펼침): 비트레이트 슬라이더(음악 256–510, 무손실은 흐림 + "2.3 Mbps (고정)") · 샘플레이트 44.1/48/96(96 은 웹에서 흐림) ·
  * 비트심도 16/24(무손실부터) · 버퍼 목표 [자동 · 60 · 120 · 250 ms]. 모바일 시트: 단계 3개(하이레조 없음) + 버퍼 목표 + 한 줄 안내.
- * 웹에서 하이레조는 disabled + 이유. 무손실은 전송이 등록돼 있을 때만(tierAvailable) 고를 수 있다("준비 중").
- * 장치(마이크·스피커) 고르기는 고급 맨 아래(참고).
+ * 웹에서 하이레조는 disabled + 사유 표시. 무손실은 전송이 등록된 경우에만(tierAvailable) 선택 가능("준비 중").
+ * 장치(마이크·스피커) 선택은 고급 최하단(참고).
  */
 import { useEffect, useState } from 'react'
 import { clsx as cn } from 'clsx'
@@ -30,7 +30,7 @@ import { VoicePopover } from './VoicePopover'
 
 /** 음악 슬라이더 범위(답: 256–510) */
 const SLIDER_MIN = 256_000
-// 네이티브 <select>(모바일)는 value '' 를 자리표시자로 보므로 "기본 장치"는 글자 값으로
+// 네이티브 <select>(모바일)는 value '' 를 자리표시자로 간주하므로 "기본 장치"는 문자열 값으로 지정
 const DEFAULT_DEV = '__default'
 
 export function VoiceQualityContent({ mobile }: { mobile: boolean }) {
@@ -96,7 +96,7 @@ export function VoiceQualityContent({ mobile }: { mobile: boolean }) {
     )
   })
 
-  // 음성 처리 — 단계와 별개(디스코드처럼). 무손실·하이레조는 비트 그대로라 늘 끔(잠금)
+  // 음성 처리 — 단계와 별개(디스코드와 동일). 무손실·하이레조는 비트를 그대로 유지하므로 항상 비활성(잠금)
   const procLocked = lossless
   const aecOn = !procLocked && prefs.echoCancellation !== false
   const procItems = [

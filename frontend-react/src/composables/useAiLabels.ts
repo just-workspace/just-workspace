@@ -1,4 +1,4 @@
-// AI 화면 이름표 — 도구·도구 묶음 이름은 서버가 준 식별자를 번역표로 바꾸고, 표에 없으면 식별자 그대로 보인다.
+// AI 화면 이름표 — 도구·도구 묶음 이름은 서버가 전달한 식별자를 번역표로 변환하고, 표에 없으면 식별자를 그대로 표시한다.
 import { useMemo } from 'react'
 import { useI18n } from '~/i18n'
 import { aiToolGroupKey, aiToolGroups } from '~/utils/aiAssist'

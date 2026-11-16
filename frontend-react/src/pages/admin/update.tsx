@@ -1,12 +1,12 @@
 /**
  * 관리 › 업데이트 — 현황 · 설정 · 되돌림 · 앱 배포 · 기록 · 오프라인 업데이트.
  *
- * 탭은 경로다: /admin/update(현황) · /settings · /rollback · /apps · /history · /offline.
+ * 탭은 경로에 대응한다: /admin/update(현황) · /settings · /rollback · /apps · /history · /offline.
  * 현황 탭 안의 화면: /notes(새 버전 안내) · /apply/<작업>(적용 진행) · /changes/<버전>(적용된 버전의 변경 내용).
- * 되돌림·복원의 진행은 /rollback/<작업>.
+ * 롤백·복원의 진행은 /rollback/<작업>.
  *
- * 업데이트를 실제로 하는 것은 설치 관리자다(docs/update-api.md). 설치 관리자 없이 구성했거나 그 설치 관리자가
- * 업데이트를 모르면, 탭 대신 그 사정을 알리는 안내만 보인다.
+ * 업데이트의 실제 수행 주체는 설치 관리자다(docs/update-api.md). 설치 관리자 없이 구성했거나 해당 설치 관리자가
+ * 업데이트를 지원하지 않으면, 탭 대신 해당 사유의 안내만 표시한다.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -54,7 +54,7 @@ export default function AdminUpdatePage() {
     } catch (e) { setError(e) }
   }, [])
   useEffect(() => { if (user?.is_admin) void load() }, [load, user?.is_admin])
-  // "지금 확인"이 끝날 때까지 다시 읽는다
+  // "지금 확인"이 종료될 때까지 재조회한다
   usePoll(status?.check.state === 'checking', load)
 
   if (!user?.is_admin) return null
@@ -74,7 +74,7 @@ export default function AdminUpdatePage() {
     { key: 'history', label: t('admin.update.tabs.history'), to: `${UPDATE_BASE}/history` },
     { key: 'offline', label: t('admin.update.tabs.offline'), to: `${UPDATE_BASE}/offline` },
   ]
-  // 현황·새 버전 안내는 상태가 있어야 그린다. 나머지 탭은 각자 필요한 것을 읽는다
+  // 현황·새 버전 안내는 상태가 있어야 렌더링한다. 나머지 탭은 각자 필요한 데이터를 조회한다
   const needsStatus = view === 'home' || view === 'notes' || ((view === 'apply' || view === 'changes') && !arg)
   const waiting = needsStatus && !status
   const liveJob = isLive(status?.job) ? status!.job! : null

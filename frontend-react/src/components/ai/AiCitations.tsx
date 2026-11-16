@@ -1,8 +1,8 @@
 /**
- * AI 답변 출처 칩(올렸을 때/눌렀을 때 미리보기, 모바일 가로 스크롤).
+ * AI 답변 출처 칩(호버/클릭 시 미리보기, 모바일 가로 스크롤).
  *  칩 32(모바일 36) r8 · card · border — mono 번호 + 종류 아이콘(primary) + "종류 · 제목"(말줄임, 최대 280).
- *  마우스를 올리면 미리보기, 누르면 고정(다시 누르거나 Esc·바깥 누르면 닫힘). 본문 [n] 을 눌러도 그 칩이 열린다.
- *  미리보기: 보낸 사람·시각·종류 / 발췌 / "메일에서 열기" 등(앱 안 링크, 웹은 새 탭). 링크가 없으면 열기 없음.
+ *  마우스 호버 시 미리보기, 클릭 시 고정(재클릭 또는 Esc·바깥 클릭으로 닫힘). 본문 [n] 클릭으로도 해당 칩이 열린다.
+ *  미리보기: 보낸 사람·시각·종류 / 발췌 / "메일에서 열기" 등(앱 내부 링크, 웹은 새 탭). 링크가 없으면 열기 미제공.
  */
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '~/lib/utils'
@@ -13,7 +13,7 @@ import type { AiCitation } from '~/utils/aiAssist'
 
 export interface AiCitationsProps {
   items: AiCitation[]
-  /** 칩 id 접두사(본문 [n] 이 찾아 포커스) */
+  /** 칩 id 접두사(본문 [n] 이 탐색하여 포커스) */
   idPrefix: string
   /** 고정해 연 칩 번호 */
   openN: number | null
@@ -42,7 +42,7 @@ export function AiCitations({ items, idPrefix, openN, onOpenChange, className }:
   const shownN = openN ?? hoverN
   const shown = items.find(c => c.n === shownN) || null
 
-  // 고정된 미리보기: Esc·바깥 누름으로 닫기
+  // 고정된 미리보기: Esc·바깥 클릭으로 닫기
   useEffect(() => {
     if (openN == null) return
     function onKey(e: KeyboardEvent) {

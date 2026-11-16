@@ -1,4 +1,4 @@
-// 무손실 캡처 워클릿 — 한 채널에만 소리가 실리는 2채널 장치를 양쪽으로 복제하는지("한쪽 귀만 들림")
+// 무손실 캡처 워클릿 — 한 채널에만 신호가 있는 2채널 장치를 양쪽으로 복제하는지 검증("한쪽 귀만 들림")
 import { describe, it, expect, beforeAll } from 'vitest'
 
 type Proc = { process(inputs: Float32Array[][]): boolean; port: { posted: any[]; postMessage(m: any): void; onmessage: unknown } }
@@ -31,7 +31,7 @@ describe('무손실 캡처 — 한쪽 채널만 쓰는 장치', () => {
     run(p, 1.0, 0.2, 0)
     expect(lastFrame(p)).toEqual([expect.closeTo(0.2, 5), expect.closeTo(0.2, 5)])   // 양쪽으로 복제
     expect(p.port.posted.some(m => m.type === 'monoSource' && m.channel === 0)).toBe(true)
-    run(p, 0.1, 0.2, 0.1)                                                 // 진짜 스테레오 신호가 들어왔다
+    run(p, 0.1, 0.2, 0.1)                                                 // 실제 스테레오 신호 입력
     expect(lastFrame(p)).toEqual([expect.closeTo(0.2, 5), expect.closeTo(0.1, 5)])
   })
 
@@ -41,7 +41,7 @@ describe('무손실 캡처 — 한쪽 채널만 쓰는 장치', () => {
     expect(lastFrame(p)).toEqual([expect.closeTo(0.2, 5), expect.closeTo(0.05, 5)])
     expect(p.port.posted.some(m => m.type === 'monoSource')).toBe(false)
     const q = new Ctor({ processorOptions: { frameSamples: 480, channels: 2 } })
-    run(q, 1.0, 0, 0.2); run(q, 2.0, 0, 0); run(q, 0.8, 0, 0.2)           // 말 → 쉼 → 말: 합쳐 1.5초를 넘는다
+    run(q, 1.0, 0, 0.2); run(q, 2.0, 0, 0); run(q, 0.8, 0, 0.2)           // 발화 → 휴지 → 발화: 합계 1.5초 초과
     expect(lastFrame(q)).toEqual([expect.closeTo(0.2, 5), expect.closeTo(0.2, 5)])
   })
 })

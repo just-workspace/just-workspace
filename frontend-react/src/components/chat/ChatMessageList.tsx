@@ -1,12 +1,12 @@
 /**
  * 메시지 목록.
- * 아래 정렬(메시지가 적으면 컴포저 바로 위에 붙는다). 메시지 열은 대화 열 전체 폭.
- *  · 날짜 구분선: 1px + 가운데 12/600 칩(radius 8, 바탕색) · 새 메시지 선: danger + 오른쪽 "새" 꼬리표 10 굵게
+ * 하단 정렬(메시지가 적으면 컴포저 바로 위에 배치). 메시지 열은 대화 열 전체 폭.
+ *  · 날짜 구분선: 1px + 가운데 12/600 칩(radius 8, 배경색) · 새 메시지 선: danger + 오른쪽 "새" 라벨 10 굵게
  *  · 위 띠 32(아래 모서리만 radius 8): "새 메시지 N개 · 시각부터 / 읽음으로 표시"
- *  · 아래 떠 있는 바: "이전 메시지를 보고 있습니다 · 최근으로"(위로 한 화면 넘게 올렸거나 점프한 옛 창을 보는 중 — ChatJumpBar)
- *  · 묶음 = 같은 사람 · 5분 · 사이에 날짜/새 메시지/시스템 줄 없음 · 답장은 늘 새 묶음(utils/chatGrouping)
- *  · 점프(useChatJump): 원문으로 스크롤 + 강조, 목록에 없으면 그 위치 창으로 바꿔 불러온다. 옛 창 아래 끝에 닿으면 이어 읽는다.
- *  · 채널 소개(#empty)는 기록 맨 위 · 끊긴 동안 보낸 메시지는 흐리게 + "전송 대기" · 못 보낸 것은 "보내지 못했습니다 · 다시 보내기 · 삭제"
+ *  · 하단 플로팅 바: "이전 메시지를 보고 있습니다 · 최근으로"(위로 한 화면 넘게 스크롤했거나 점프한 과거 창을 보는 중 — ChatJumpBar)
+ *  · 그룹 = 같은 사용자 · 5분 · 사이에 날짜/새 메시지/시스템 줄 없음 · 답장은 항상 새 그룹(utils/chatGrouping)
+ *  · 점프(useChatJump): 원문으로 스크롤 + 강조, 목록에 없으면 해당 위치의 창으로 교체하여 조회. 과거 창 아래 끝에 도달하면 이어서 조회.
+ *  · 채널 소개(#empty)는 기록 최상단 · 연결이 끊긴 동안 보낸 메시지는 흐리게 + "전송 대기" · 전송 실패 메시지는 "보내지 못했습니다 · 다시 보내기 · 삭제"
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from 'zustand'
@@ -30,7 +30,7 @@ export interface ChatMessageListProps {
   loading: boolean
   hasMore: boolean
   loadingMore: boolean
-  /** 위 끝 근처까지 스크롤 — 이전 메시지 더 읽기 */
+  /** 위 끝 근처까지 스크롤 — 이전 메시지 추가 조회 */
   onLoadMore?: () => void
   /** 스레드 열기 */
   onOpenThread?: (messageId: string) => void
@@ -40,7 +40,7 @@ function sameDay(a: string, b: string): boolean {
   return new Date(a).toDateString() === new Date(b).toDateString()
 }
 
-/** 날짜 구분선 글 — 오늘 · 어제 · "2026년 10월 22일 목요일" */
+/** 날짜 구분선 텍스트 — 오늘 · 어제 · "2026년 10월 22일 목요일" */
 export function dayLabel(iso: string, t: (k: string) => string, lang = 'ko-KR', now = new Date()): string {
   const d = new Date(iso)
   if (d.toDateString() === now.toDateString()) return t('common.today')
@@ -61,7 +61,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
   const unreadAnchor = useStore(chatUiStore, s => s.unreadAnchor)
   const { display } = useChatDisplay()
 
-  // 끊긴 동안 보낸 메시지(전송 대기) — 이 채널 것만, 맨 아래에
+  // 연결이 끊긴 동안 보낸 메시지(전송 대기) — 현재 채널 분만, 맨 아래에 표시
   const pending = useMemo(() =>
     outbox
       .filter(o => o.channelId === selectedChannelId)
@@ -90,7 +90,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
 
   const { detached } = useChatJump({ listRef, onBeforeJump: () => { autoScroll.current = false }, t })
 
-  // ─── "새 메시지" 구분선 — 채널 진입 시 unread 개수를 스냅샷해 첫 안읽음 위치를 고정 ───
+  // ─── "새 메시지" 구분선 — 채널 진입 시 unread 개수를 스냅샷으로 보관해 첫 안읽음 위치를 고정 ───
   const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null)
   const [unreadSnapshot, setUnreadSnapshot] = useState(0)
   const [dividerAbove, setDividerAbove] = useState(false)
@@ -133,7 +133,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight
     const atBottom = dist < 100
     autoScroll.current = atBottom && !L.current.detached
-    // 맨 아래를 보고 있는지 useChat 에 알린다 — 읽음 처리 기준. 옛 창 끝은 "맨 아래"가 아니다
+    // 맨 아래를 보고 있는지 여부를 useChat 에 전달 — 읽음 처리 기준. 과거 창의 끝은 "맨 아래"로 보지 않음
     setViewAtBottom(atBottom && !L.current.detached)
     setFarFromBottom(dist > el.clientHeight)
     updateDividerAbove()
@@ -147,7 +147,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
     scrollToBottom()
   }
 
-  // 채널이 바뀌면 구분선을 비운다(첫 실행 제외)
+  // 채널 변경 시 구분선 초기화(첫 실행 제외)
   const firstCh = useRef(true)
   useEffect(() => {
     if (firstCh.current) { firstCh.current = false; return }
@@ -155,7 +155,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
     autoScroll.current = true
   }, [selectedChannelId])
 
-  // 다 불러오면: 첫 안읽음 스냅샷 · 맨 아래로 · 구분선 위치(첫 실행 제외)
+  // 로드 완료 시: 첫 안읽음 스냅샷 · 맨 아래로 스크롤 · 구분선 위치(첫 실행 제외)
   const firstLoad = useRef(true)
   useEffect(() => {
     if (firstLoad.current) { firstLoad.current = false; return }
@@ -165,7 +165,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
     updateDividerAbove(null)
   }, [loading])
 
-  // "안 읽음으로 표시" — 구분선을 그 메시지 위로 옮긴다
+  // "안 읽음으로 표시" — 구분선을 해당 메시지 위로 이동
   const [anchorTick, setAnchorTick] = useState(0)
   useEffect(() => {
     const a = unreadAnchor
@@ -182,7 +182,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
     if (anchorTick) updateDividerAbove()
   }, [anchorTick])
 
-  // 새 메시지가 늘면(맨 아래를 보고 있을 때만) 따라 내려간다
+  // 새 메시지 증가 시(맨 아래를 보고 있는 경우에만) 맨 아래로 스크롤
   const prevLen = useRef(messages.length)
   useEffect(() => {
     const o = prevLen.current
@@ -195,7 +195,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
     prevPending.current = pending.length
     if (pending.length > o) scrollToBottom()
   }, [pending.length])
-  // 이름 역할 색·@역할 칩·채널 권한은 멤버 열이 닫혀 있어도 필요하다 — 채널을 열 때 한 번 읽는다
+  // 이름 역할 색·@역할 칩·채널 권한은 멤버 열이 닫혀 있어도 필요 — 채널을 열 때 1회 조회
   useEffect(() => {
     if (!selectedChannelId) return
     void loadRoles()
@@ -203,18 +203,18 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
     void loadMyChannelPerms(selectedChannelId)
   }, [selectedChannelId])
   useEffect(() => { scrollToBottom() }, [])
-  // 컴포저 위 띠(답장·@everyone)·첨부 줄이 생겨 목록 칸이 줄어도 맨 아래를 보고 있었으면 맨 아래에 붙여 둔다(디스코드)
+  // 컴포저 위 띠(답장·@everyone)·첨부 줄이 생겨 목록 영역이 줄어도, 맨 아래를 보고 있었으면 맨 아래 위치를 유지(디스코드)
   useEffect(() => {
     const el = listRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
     const ro = new ResizeObserver(() => { if (autoScroll.current) scrollToBottom() })
     ro.observe(el)
-    // 안쪽 내용도 본다 — 링크 미리보기 카드·리액션 줄·이미지가 늦게 커지면 마지막 메시지가 화면 아래로 밀렸다
+    // 내부 콘텐츠도 관찰 — 링크 미리보기 카드·리액션 줄·이미지가 뒤늦게 커지면 마지막 메시지가 화면 아래로 밀리는 문제가 있었음
     if (el.firstElementChild) ro.observe(el.firstElementChild)
     return () => ro.disconnect()
   }, [])
 
-  // ─── 묶음·날짜 ───
+  // ─── 그룹·날짜 ───
   const grouped = useMemo(() => groupedFlags(messages, firstUnreadId), [messages, firstUnreadId])
   function showDayDivider(idx: number): boolean {
     if (idx === 0) return !hasMore
@@ -234,7 +234,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      {/* 화면 안 AI 채팅방 요약 — 머리 아래 카드 */}
+      {/* 화면 내 AI 채팅방 요약 — 헤더 아래 카드 */}
       <ChatAiSummary channelId={selectedChannelId} firstUnreadId={firstUnreadId} unreadCount={unreadSnapshot} />
       <div ref={listRef} role="feed" aria-label={t('chat.msg.list.feed')} aria-busy={loading || loadingMore} className="flex-1 overflow-y-auto" onScroll={onScroll}>
         <div className="flex min-h-full flex-col justify-end pb-2 pt-2">
@@ -242,7 +242,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
 
           {loading
             ? (
-              /* 불러오는 중 — 아바타 40 + 줄 막대 */
+              /* 로딩 중 — 아바타 40 + 줄 막대 */
               <div className="skeleton-delay flex flex-col gap-5 px-4" aria-busy="true" data-skeleton="">
                 {[['w-3/4', 'w-1/2'], ['w-2/3'], ['w-1/2', 'w-2/5'], ['w-1/2']].map((rows, i) => (
                   <div key={i} className="flex gap-4">
@@ -287,7 +287,7 @@ export function ChatMessageList({ messages, loading, hasMore, loadingMore, onLoa
                   </div>
                 ))}
 
-                {/* 전송 대기 · 보내지 못함 */}
+                {/* 전송 대기 · 전송 실패 */}
                 {pending.map(({ msg: p, failed }) => (
                   <ChatMessage
                     key={p.id}

@@ -1,5 +1,5 @@
 // 내장 AI 화면 보강: 프로젝트 편집·피커 · 공유 상태 · 첨부 · 길이 초과 안내 · 설정 › AI 연동(MCP).
-// $fetch·fetch·업로드·apiRawFetch 는 가짜.
+// $fetch·fetch·업로드·apiRawFetch 는 모의(mock).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -220,7 +220,7 @@ describe('공유 상태', () => {
     fireEvent.click(await screen.findByRole('button', { name: /인프라 운영/ }))
     expect(await screen.findByText('김하나 님이 인프라팀에 공유')).toBeTruthy()
     expect(screen.getByText('+1')).toBeTruthy()
-    // 프로젝트 대화를 열고 답을 받으면 마지막 답 위에 빠진 파일 줄
+    // 프로젝트 대화를 열고 답변을 수신하면 마지막 답변 위에 누락 파일 줄 표시
     api.messages.c1 = [
       { id: 'q1', role: 'user', content: '빠진 장비?', created_at: T0, versions: [{ id: 'q1' }], active_version: 1, attachments: [] },
       { id: 'a1', role: 'assistant', content: 'L3 스위치 2대', created_at: T0, status: 'complete' },

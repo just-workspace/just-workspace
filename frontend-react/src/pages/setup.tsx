@@ -1,10 +1,10 @@
 // 최초 설정(FTW): auth 틀(AuthShell) 위, 폼 위에 "단계명 n / 6 + 진행 바".
-// 관리자가 한 명도 없을 때만 열린다 — 설치 관리자 없이 직접 띄우고 관리자를 미리 만들지 않은 서버의 첫 화면.
-// 첫 관리자 만들기는 서버 로그에 찍힌 설정 토큰이 있어야 한다(setup_mode = token).
-// 설치 관리자가 꾸린 서버(setup_mode = installer)에서는 웹에서 만들 수 없다 — 안내만 보여 준다.
+// 관리자가 한 명도 없을 때만 열린다 — 설치 관리자 없이 직접 기동하고 관리자를 사전 생성하지 않은 서버의 첫 화면.
+// 첫 관리자 생성에는 서버 로그에 기록된 설정 토큰이 필요하다(setup_mode = token).
+// 설치 관리자가 구성한 서버(setup_mode = installer)에서는 웹에서 생성할 수 없다 — 안내만 표시한다.
 // 관리자 단계 = 이름·아이디·비밀번호(규칙 체크, 확인 칸 대신 보기 토글) + [이전][다음 — 브랜딩].
-// 백업에서 옮겨 오는 일은 여기서 하지 않는다(설치 관리자의 "백업에서 복원") — 시작 단계에 안내만 둔다.
-// 기능 선택 = 토글 목록 한 화면(스위치 즉시 저장 — 실패하면 되돌림).
+// 백업에서의 이전은 여기서 수행하지 않는다(설치 관리자의 "백업에서 복원") — 시작 단계에 안내만 둔다.
+// 기능 선택 = 토글 목록 한 화면(스위치 즉시 저장 — 실패 시 원복).
 import { useEffect, useState, type FormEvent } from 'react'
 import { $fetch, errorStatus } from '~/lib/api'
 import { useHead } from '~/lib/head'
@@ -32,7 +32,7 @@ export default function Page() {
   const { t } = useI18n()
   useHead({ title: `${t('setup.title')} | ${appName}` })
 
-  // 가드(router/guards.ts)와 같은 공유 상태('setup-status')
+  // 가드(router/guards.ts)와 동일한 공유 상태('setup-status')
   const setSetupStatus = (v: any) => setSharedState<any>('setup-status', v)
 
   const steps = [t('setup.steps.start'), t('setup.steps.admin'), t('setup.steps.branding'), t('setup.steps.mail'), t('setup.steps.features'), t('setup.steps.done')]
@@ -40,11 +40,11 @@ export default function Page() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  // 첫 관리자를 웹에서 만드는 방식 — 가드가 받아 둔 상태를 쓰고, 없으면 묻는다. 모르면 토큰 방식으로 본다(서버가 다시 판정한다).
+  // 첫 관리자를 웹에서 생성하는 방식 — 가드가 조회해 둔 상태를 사용하고, 없으면 조회한다. 확인 불가 시 토큰 방식으로 간주한다(서버가 재판정).
   const [mode, setMode] = useState<'token' | 'installer'>(() => (getSharedState<any>('setup-status', () => null)?.setup_mode === 'installer' ? 'installer' : 'token'))
   useEffect(() => {
     let alive = true
-    $fetch<any>('/api/setup/status').then(s => { if (alive && s?.setup_mode === 'installer') setMode('installer') }).catch(() => { /* 가드가 받은 값으로 둔다 */ })
+    $fetch<any>('/api/setup/status').then(s => { if (alive && s?.setup_mode === 'installer') setMode('installer') }).catch(() => { /* 가드가 조회한 값을 유지 */ })
     return () => { alive = false }
   }, [])
 
@@ -96,7 +96,7 @@ export default function Page() {
     catch (e: any) { setError(e?.data?.detail || t('setup.errors.mailFailed')) } finally { setBusy(false) }
   }
 
-  // 기능 선택 — 토글 목록 한 화면. 이름·설명은 시안 문구, 목록에 없는 모듈은 서버 이름.
+  // 기능 선택 — 토글 목록 한 화면. 이름·설명은 시안 문구, 목록에 없는 모듈은 서버 이름 사용.
   const FEAT: Record<string, { t: string; d: string }> = {
     mail: { t: t('setup.modules.items.mail.title'), d: t('setup.modules.items.mail.desc') },
     chat: { t: t('setup.modules.items.chat.title'), d: t('setup.modules.items.chat.desc') },
@@ -127,12 +127,12 @@ export default function Page() {
     try {
       await $fetch('/api/setup/complete', { method: 'POST' })
       setSetupStatus({ needs_setup: false })
-      // 하드 리로드 — 활성화된 모듈이 nav에 즉시 반영되도록
+      // 하드 리로드 — 활성화된 모듈을 nav에 즉시 반영하기 위함
       window.location.href = '/'
     } catch (e: any) { setError(e?.data?.detail || t('setup.errors.finishFailed')) } finally { setBusy(false) }
   }
 
-  // 설치 관리자가 꾸린 서버 — 관리자는 설치 관리자가 만든다. 여기서는 만들 수 없다.
+  // 설치 관리자가 구성한 서버 — 관리자는 설치 관리자가 생성한다. 여기서는 생성 불가.
   if (mode === 'installer' && step < 2) {
     return (
       <AuthShell>

@@ -1,8 +1,8 @@
 /**
- * 문서 교정 표시 — ProseMirror 꾸밈(decoration) 플러그인. 문서 내용은 건드리지 않는다.
- *  빨강 물결 = 맞춤법, 주황 물결 = 띄어쓰기, 파랑(바탕 primary/15 + 아래 2px) = 문체. 지금 보는 제안은 테두리를 더한다.
- *  제안은 원문 구절(original)로 들고 있다가 문서가 바뀔 때마다 다시 찾는다 — 같은 구절이 여러 번이면 k 번째 제안 = k 번째 자리.
- *  공동 편집(Yjs) 중 남이 고쳐 구절이 사라지면 그 제안은 표시되지 않는다(바꾸기도 막힌다).
+ * 문서 교정 표시 — ProseMirror 꾸밈(decoration) 플러그인. 문서 내용은 변경하지 않는다.
+ *  빨강 물결 = 맞춤법, 주황 물결 = 띄어쓰기, 파랑(바탕 primary/15 + 아래 2px) = 문체. 현재 열람 중인 제안에는 테두리를 추가한다.
+ *  제안은 원문 구절(original)로 보유하고 문서 변경 시마다 재탐색한다 — 동일 구절이 여러 번 나오면 k 번째 제안 = k 번째 위치.
+ *  공동 편집(Yjs) 중 타 사용자의 수정으로 구절이 사라지면 해당 제안은 표시되지 않는다(바꾸기도 차단).
  */
 import { Plugin, PluginKey, type EditorState } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
@@ -30,7 +30,7 @@ export function docText(doc: PmNode): { text: string; map: number[] } {
   return { text, map }
 }
 
-/** 제안마다 문서 범위 — 못 찾으면 null. 한 글자 덩어리(같은 글 노드 줄) 안에서만 찾는다 */
+/** 제안별 문서 범위 — 탐색 실패 시 null. 한 글자 덩어리(같은 글 노드 줄) 안에서만 탐색 */
 export function locate(doc: PmNode, items: readonly ProofItem[]): ({ from: number; to: number } | null)[] {
   const { text, map } = docText(doc)
   const cursor = new Map<string, number>()
@@ -76,7 +76,7 @@ export function proofDecorations(state: EditorState, ps: ProofState | undefined)
   return DecorationSet.create(state.doc, decos)
 }
 
-/** 플러그인 — onPick(i): 꾸밈을 누르면 그 제안을 연다 */
+/** 플러그인 — onPick(i): 꾸밈 클릭 시 해당 제안을 연다 */
 export function proofreadPlugin(onPick: (i: number) => void) {
   return new Plugin<ProofState>({
     key: proofKey,

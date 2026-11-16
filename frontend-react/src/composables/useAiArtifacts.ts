@@ -1,18 +1,18 @@
 /**
  * 결과물 묶음 작업 — 실시간 진행 상태 싱글턴 + 완료 토스트.
  *
- * 서버가 작업을 진행하며 사용자 소켓으로 {type:"ai.artifact_job", job, finished} 를 보낸다(알림과 같은 /ws/chat 채널).
- *  - 카드(AiArtifacts)는 jobsStore 의 최신 값을 그린다(소켓이 끊겼을 때는 카드가 직접 조회한다).
- *  - 끝났는데(finished) 그 작업의 카드가 화면에 없으면(다른 화면·다른 대화) 완료 토스트를 띄운다.
+ * 서버가 작업을 진행하며 사용자 소켓으로 {type:"ai.artifact_job", job, finished} 를 송신한다(알림과 동일한 /ws/chat 채널).
+ *  - 카드(AiArtifacts)는 jobsStore 의 최신 값을 렌더링한다(소켓 단절 시에는 카드가 직접 조회한다).
+ *  - 종료되었으나(finished) 해당 작업의 카드가 화면에 없으면(다른 화면·다른 대화) 완료 토스트를 표시한다.
  *
- * 셸(DefaultLayout)에서 ensureAiArtifacts() 한 번. 토스트는 <AiArtifactToasts /> 가 그린다.
+ * 셸(DefaultLayout)에서 ensureAiArtifacts() 를 1회 호출한다. 토스트는 <AiArtifactToasts /> 가 렌더링한다.
  */
 import { createStore, useStore } from 'zustand'
 import { onChatEvent } from '~/composables/useChat'
 import type { AiArtifactJob } from '~/utils/aiArtifacts'
 
 export const AI_ARTIFACT_EVENT = 'ai.artifact_job'
-/** 다른 화면에서 [대화로 가기] — AI 화면이 이 대화를 연다(detail: conversation id) */
+/** 다른 화면에서 [대화로 가기] — AI 화면이 해당 대화를 연다(detail: conversation id) */
 export const AI_OPEN_CONVERSATION_EVENT = 'jw:ai-open-conversation'
 const TOAST_MS = 8000
 
@@ -22,7 +22,7 @@ export const aiArtifactToastStore = createStore<{ toasts: AiArtifactJob[] }>()((
 const _mounted = new Map<string, number>()
 const _timers = new Map<string, ReturnType<typeof setTimeout>>()
 
-/** 카드가 화면에 있는 동안 등록(그 작업의 완료 토스트는 띄우지 않는다). 해제 함수를 돌려준다 */
+/** 카드가 화면에 있는 동안 등록한다(해당 작업의 완료 토스트는 표시하지 않는다). 해제 함수를 반환한다 */
 export function registerJobCard(id: string): () => void {
   _mounted.set(id, (_mounted.get(id) ?? 0) + 1)
   return () => {
@@ -50,7 +50,7 @@ function showToast(job: AiArtifactJob) {
   _timers.set(job.id, setTimeout(() => dismissArtifactToast(job.id), TOAST_MS))
 }
 
-/** 소켓 이벤트(테스트도 직접 부른다) */
+/** 소켓 이벤트 처리(테스트에서도 직접 호출) */
 export function handleArtifactEvent(data: any) {
   if (data?.type !== AI_ARTIFACT_EVENT || !data.job?.id) return
   const job = data.job as AiArtifactJob
@@ -82,7 +82,7 @@ export function useAiArtifactToasts(): AiArtifactJob[] {
   return useStore(aiArtifactToastStore, s => s.toasts)
 }
 
-/** 대화 열기 — AI 화면에 있으면 그 자리에서, 아니면 /ai?c= 로 */
+/** 대화 열기 — AI 화면이면 현재 화면에서, 아니면 /ai?c= 로 이동 */
 export function openAiConversation(id: string, navigate: (to: string) => unknown, onAiPage: boolean) {
   if (onAiPage && typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(AI_OPEN_CONVERSATION_EVENT, { detail: id }))

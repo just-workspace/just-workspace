@@ -83,7 +83,7 @@ describe('module-guard.global', () => {
     expect(moduleGuard({ path: '/mailbox', matched: true })).toBeNull()
     expect(moduleGuard({ path: '/code/a/b', matched: true })).toBe('/')
     expect(moduleGuard({ path: '/p/notes', matched: true })).toBe('/')
-    expect(moduleGuard({ path: '/chat', matched: true })).toBe('/') // 목록에 없으면 꺼짐(설치하지 않은 구역)
+    expect(moduleGuard({ path: '/chat', matched: true })).toBe('/') // 목록에 없으면 비활성(미설치 구역)
   })
   it('목록에 없는 모듈 화면은 / — 코어 화면·켜진 모듈·켜진 플러그인은 그대로', () => {
     platformStore.setState({ loaded: true, modules: [
@@ -147,7 +147,7 @@ describe('setup.global', () => {
   it('상태는 한 번만 묻고, 실패하면 설정 끝난 것으로', async () => {
     api.setup = new Error('down')
     expect(await setupGuard({ path: '/setup', matched: true })).toBe('/')
-    // 실패한 답은 기억하지 않는다(일시 오류일 수 있다) — 다음 이동에서 다시 묻는다
+    // 실패한 응답은 캐시하지 않음(일시 오류일 수 있음) — 다음 이동에서 재조회
     await setupGuard({ path: '/', matched: true })
     expect(api.calls.filter(c => c === '/api/setup/status').length).toBe(2)
   })

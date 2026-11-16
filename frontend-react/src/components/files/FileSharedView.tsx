@@ -1,14 +1,14 @@
 /**
- * 공유받음 뷰 — 다른 사람이 나에게 공유한 파일·폴더(/api/files/shared-with-me).
+ * 공유받음 뷰 — 다른 사용자가 본인에게 공유한 파일·폴더(/api/files/shared-with-me).
  * 시안 그림 없음 → 공통 규격(조밀 40 / 모바일 56). 열: 이름 · 소유자 · 수정 · 크기 · 다운로드.
- * 공유받은 폴더는 안으로 들어가 탐색한다(GET /shared-with-me/{id}/list?path=). 위 줄 36 에 경로(공유받음 › 폴더 › 하위),
- * 파일 클릭은 부모(openItem)가 연다 — 미리보기·오피스(권한대로 보기/편집), 다운로드 버튼은 그대로.
- * 권한 4단계: 이름 옆 배지 = 내 권한(댓글·편집·공동 소유, 보기는 배지 없음 — 예전 "편집 가능" 배지 자리). 행 끝 ⋮ 열(40)·우클릭 =
- *   파일 메뉴(부모 FileContextMenu — 권한에 맞는 항목만: 공동 소유면 공유·이동·이름 바꾸기·휴지통). 시안 그림 없음 → 내 파일 목록 ⋮ 규격.
+ * 공유받은 폴더는 내부로 진입하여 탐색한다(GET /shared-with-me/{id}/list?path=). 상단 줄 36 에 경로(공유받음 › 폴더 › 하위)를 표시하며,
+ * 파일 클릭은 부모(openItem)가 처리한다 — 미리보기·오피스(권한에 따라 보기/편집), 다운로드 버튼은 유지한다.
+ * 권한 4단계: 이름 옆 배지 = 내 권한(댓글·편집·공동 소유, 보기는 배지 없음 — 이전 "편집 가능" 배지 자리). 행 끝 ⋮ 열(40)·우클릭 =
+ *   파일 메뉴(부모 FileContextMenu — 권한에 해당하는 항목만: 공동 소유면 공유·이동·이름 바꾸기·휴지통). 시안 그림 없음 → 내 파일 목록 ⋮ 규격.
  * ref → { reload }.
  * 첫 목록 데스크톱 열 = 아이콘 40 · 이름 · 공유한 사람(아바타 20) 120 · 내 권한(틴트 배지 18 —
  *   보기 neutral · 댓글 primary · 편집 success · 공동 소유 warning) 128 · 받은 날 mono 110 · ⋮(more-horizontal) 40. 머리 36 · 행 40.
- *   내려받기는 ⋮ 메뉴로(시안에 열 없음).
+ *   내려받기는 ⋮ 메뉴에서 제공한다(시안에 열 없음).
  */
 import { Fragment, useEffect, useImperativeHandle, useState, type MouseEvent, type Ref } from 'react'
 import { useI18n } from '~/i18n'
@@ -41,10 +41,10 @@ export function FilesFileSharedView({ onOpen, onMenu, ref }: FilesFileSharedView
     setError('')
     try { await fetchSharedWithMe() } catch (e: any) { setError(e?.data?.detail || t('files.shared.loadError')) }
   }
-  // 폴더 안 상태는 모듈 싱글턴이지만 루트 항목은 이 화면이 들고 있다 — 다시 붙으면 첫 목록부터
+  // 폴더 내부 상태는 모듈 싱글턴이지만 루트 항목은 본 화면이 보유한다 — 재마운트 시 첫 목록부터 표시
   useEffect(() => { if (sharedBrowse) closeSharedFolder(); load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 지금 들어가 있는 공유 루트(경로 조각·하위 이동에 쓴다)
+  // 현재 진입한 공유 루트(경로 조각·하위 이동에 사용)
   const [rootEntry, setRootEntry] = useState<SharedWithMeEntry | null>(null)
   async function enter(entry: SharedWithMeEntry, sub = '') {
     setError('')
@@ -67,9 +67,9 @@ export function FilesFileSharedView({ onOpen, onMenu, ref }: FilesFileSharedView
     const b = sharedBrowse
     onMenu?.(e, { ...it, role: it.role ?? b?.role, owner: it.owner ?? (b ? { id: null, name: b.owner } : null) })
   }
-  // 공동 소유자가 이 화면에서 지운·옮긴 항목을 다시 읽을 때 쓰는 루트 항목을 잃지 않게 — 폴더 안이면 rootEntry 유지
+  // 공동 소유자가 본 화면에서 삭제·이동한 항목을 재조회할 때 사용하는 루트 항목이 유실되지 않도록 — 폴더 내부이면 rootEntry 유지
   useImperativeHandle(ref, () => ({ reload: load }))
-  /** 폴더 안 행: 하위 폴더는 들어가고, 파일은 부모가 연다(내려받기 + 최근 기록) */
+  /** 폴더 내부 행: 하위 폴더는 진입하고, 파일은 부모가 연다(내려받기 + 최근 기록) */
   function openInside(item: FileItem) {
     const b = sharedBrowse
     if (!b || !rootEntry) return

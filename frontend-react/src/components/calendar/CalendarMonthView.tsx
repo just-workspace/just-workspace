@@ -31,11 +31,11 @@ export function CalendarMonthView() {
   const raw = (tm('calendar.weekdaysShort') as any[]).map(m => rt(m))
   const DAY_LABELS = [...raw.slice(weekStart), ...raw.slice(0, weekStart)]
 
-  // 컴포넌트가 처음 만들어진 시점의 오늘
+  // 컴포넌트 최초 생성 시점의 오늘
   const [today] = useState(() => zNow())
 
   const weeks: DayCell[][] = (() => {
-    // 캘린더 시간대의 그달
+    // 캘린더 시간대 기준의 해당 월
     const d = zp(selectedDate)
     const year = d.year
     const month = d.month
@@ -105,7 +105,7 @@ export function CalendarMonthView() {
                 )}
                 onClick={() => onCellClick(day)}
               >
-                {/* 날짜 숫자(모바일 28 · 데스크톱 24). 키보드 진입점(클릭은 칸으로 올라가 칸 동작 = 모바일 날짜 시트 / 데스크톱 새 일정). 히트 영역은 칸 전체 */}
+                {/* 날짜 숫자(모바일 28 · 데스크톱 24). 키보드 진입점(클릭은 칸으로 전파되어 칸 동작 = 모바일 날짜 시트 / 데스크톱 새 일정). 히트 영역은 칸 전체 */}
                 <button
                   type="button"
                   aria-label={cellAria(day)}

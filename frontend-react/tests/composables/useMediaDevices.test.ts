@@ -37,8 +37,8 @@ describe('normalizeDeviceList', () => {
     ], '마이크')
 
     expect(out).toHaveLength(2)
-    expect(out[0].deviceId).toBe('abc123')      // 가상 항목이 아니라 실제 장치가 남는다
-    expect(out[0].isDefault).toBe(true)         // 기본이라는 사실은 물려받는다
+    expect(out[0].deviceId).toBe('abc123')      // 가상 항목이 아닌 실제 장치가 유지됨
+    expect(out[0].isDefault).toBe(true)         // 기본 장치 여부는 승계됨
     expect(out[0].isBluetooth).toBe(true)
     expect(out[1].deviceId).toBe('def456')
     expect(out[1].isBluetooth).toBe(false)

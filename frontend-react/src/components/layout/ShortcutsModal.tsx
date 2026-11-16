@@ -1,6 +1,6 @@
 /**
- * 단축키 도움말(Ctrl /). 키캡은 UiKeycap 20 하나.
- * 모듈 묶음은 각 페이지가 usePageShortcuts('메일', [...]) 로 등록 — 지금 화면의 묶음이 맨 위에 온다.
+ * 단축키 도움말(Ctrl /). 키캡은 UiKeycap 20 단일 규격.
+ * 모듈 묶음은 각 페이지가 usePageShortcuts('메일', [...]) 로 등록한다 — 현재 화면의 묶음이 최상단에 표시된다.
  */
 import { useI18n } from '~/i18n'
 import { useShell } from '~/composables/useShell'

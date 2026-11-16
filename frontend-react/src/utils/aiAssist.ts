@@ -1,11 +1,11 @@
 // AI 화면 순수 함수 — 대화 날짜 묶음 · 도구 묶음 · SSE 조각 해석 · 내보내기(테스트: tests/utils/aiAssist.test.ts).
-// 모델·도구 이름은 전부 서버 응답에서 온다. 여기에는 이름을 박아 두지 않는다.
+// 모델·도구 이름은 전부 서버 응답에서 수신한다. 본 모듈에는 이름을 하드코딩하지 않는다.
 
 export type AiConvGroup = 'today' | 'week' | 'earlier'
 
 const WEEK_MS = 7 * 24 * 3600 * 1000
 
-/** 대화 목록 묶음(오늘 · 이번 주 · 이전). 시각이 없으면 이전 */
+/** 대화 목록 묶음(오늘 · 이번 주 · 이전). 시각이 없으면 이전으로 분류 */
 import type { ApprovalRequest } from '~/utils/approvals'
 import type { AiArtifactPayload } from '~/utils/aiArtifacts'
 export function aiConvGroup(updatedAt: string | null | undefined, now: Date = new Date()): AiConvGroup {
@@ -37,9 +37,9 @@ export function aiToolGroups(names: string[]): { key: string; tools: string[] }[
 export interface AiSseEvent { event: string; data: any; id?: string }
 
 /**
- * SSE 버퍼에서 끝난 이벤트(빈 줄로 끝난 덩어리)를 꺼낸다. 남은 반쪽은 rest 로 돌려준다.
- * data 가 JSON 이 아니면 빈 객체. `id:` (서버 Redis stream id — 재연결 after)가 있으면 id 로.
- * 주석만 있는 덩어리(": ping" — 유휴 연결 유지)는 건너뛴다.
+ * SSE 버퍼에서 완료된 이벤트(빈 줄로 끝난 블록)를 추출한다. 미완료 잔여분은 rest 로 반환한다.
+ * data 가 JSON 이 아니면 빈 객체. `id:` (서버 Redis stream id — 재연결 after)가 있으면 id 로 설정한다.
+ * 주석만 있는 블록(": ping" — 유휴 연결 유지)은 건너뛴다.
  */
 export function aiParseSse(buf: string): { events: AiSseEvent[]; rest: string } {
   const events: AiSseEvent[] = []
@@ -65,7 +65,7 @@ export function aiParseSse(buf: string): { events: AiSseEvent[]; rest: string } 
   return { events, rest }
 }
 
-/** 대화 내보내기(마크다운). 이름표는 호출 쪽이 번역해서 넘긴다 */
+/** 대화 내보내기(마크다운). 이름표는 호출자가 번역하여 전달한다 */
 export function aiExportMarkdown(
   title: string,
   messages: { role: string; content: string }[],
@@ -99,9 +99,9 @@ export interface AiStatus {
   using_personal?: boolean
   /** 워크스페이스 제공 모델 이름(개인 키로 동작 중이어도) */
   workspace_model?: string
-  /** 이 사용자 AI 가 쓸 수 있는 도구 이름 */
+  /** 이 사용자의 AI 가 사용 가능한 도구 이름 */
   tools?: string[]
-  /** 지금 모델이 이미지 첨부를 읽는지 */
+  /** 현재 모델의 이미지 첨부 판독 가능 여부 */
   vision?: boolean
   /** 첨부 한 개 최대 바이트(30MB) */
   attachment_max_bytes?: number
@@ -115,9 +115,9 @@ export interface AiConv {
   updated_at?: string | null
   /** 마지막 메시지 앞부분 */
   preview?: string
-  /** 임시 대화(기록·메모리·프로젝트 지식 안 씀, 나가면 삭제) */
+  /** 임시 대화(기록·메모리·프로젝트 지식 미사용, 이탈 시 삭제) */
   temporary?: boolean
-  /** 묶인 프로젝트 */
+  /** 연결된 프로젝트 */
   project_id?: string | null
 }
 
@@ -131,11 +131,11 @@ export interface AiMsg {
   created_at?: string | null
   streaming?: boolean
   tools?: AiToolRun[]
-  /** 답한 모델 이름(저장된 기록에도 있다. 옛 기록은 없음) */
+  /** 응답한 모델 이름(저장된 기록에도 포함. 이전 기록에는 없음) */
   model?: string | null
   /** AI 생성 답변(AI 기본법 표시) */
   ai_generated?: boolean
-  /** 답변 상태 — complete · interrupted(끊김) · stopped(멈춤). 받는 중엔 streaming 플래그 */
+  /** 답변 상태 — complete · interrupted(끊김) · stopped(멈춤). 수신 중에는 streaming 플래그 */
   status?: 'complete' | 'interrupted' | 'stopped'
   /** 진행 단계(SSE step) */
   steps?: AiStep[]
@@ -144,20 +144,20 @@ export interface AiMsg {
   /** 답변 시작·끝 시각(단계 요약 "18초") */
   started_at?: string | null
   ended_at?: string | null
-  /** 내 피드백 */
+  /** 스트림 오류(본문과 별도로 오류 타일에 표시) */
   feedback?: AiFeedback | null
-  /** 스트림 오류(본문과 따로 오류 타일로 보인다) */
+  /** 사용자에 의한 중지 */
   error?: string
-  /** 사용자가 멈춤 */
+  /** 이 응답 중 AI 가 요청한 쓰기(스트림 write_request — 채팅 승인 카드). 저장된 기록에는 없음 */
   stopped?: boolean
-  /** 이 응답 중 AI 가 요청한 쓰기(스트림 write_request — 채팅 승인 카드). 저장된 기록엔 없다 */
+  /** 동일 질문의 버전 목록(사용자 메시지) + 현재 표시 중인 번호(1부터) */
   writes?: ApprovalRequest[]
   /** 같은 질문의 버전들(사용자 메시지) + 지금 보이는 번호(1부터) */
   versions?: { id: string; created_at?: string | null }[]
   active_version?: number
-  /** 사용자 메시지 첨부 */
+  /** 이 답변 중 메모리에 저장한 항목(스트림 memory_saved). 저장된 기록에는 없음 */
   attachments?: AiAttachment[]
-  /** 이 답변 중 메모리에 저장한 것(스트림 memory_saved). 저장된 기록엔 없다 */
+  /** 생성한 결과물(스트림 artifact · 저장된 기록 meta.artifacts) */
   memories?: AiMemorySaved[]
   /** 만든 결과물(스트림 artifact · 저장된 기록 meta.artifacts) */
   artifacts?: AiArtifactPayload[]
@@ -179,7 +179,7 @@ export interface AiQuestion {
   expires_at?: number
 }
 
-/** 첨부(서버 POST /api/ai/attachments 결과 + 화면 진행 상태) */
+/** 화면 전용 — 업로드 중 행의 키 */
 export type AiAttachStage = 'uploading' | 'converting' | 'ready' | 'failed'
 export type AiAttachErrorCode = 'encrypted' | 'distribution' | 'corrupt' | 'too_large' | 'unsupported_version' | 'unsupported'
 export const AI_ATTACH_ERROR_CODES: AiAttachErrorCode[] = ['encrypted', 'distribution', 'corrupt', 'too_large', 'unsupported_version', 'unsupported']
@@ -196,13 +196,13 @@ export interface AiAttachment {
   error?: string
   /** 화면 전용 — 올리는 중 행 열쇠 */
   key?: string
-  /** 화면 전용 — 입력창 이미지 썸네일(로컬 object URL) */
+  /** 서버 원본 보존 여부(7일 보관) — 전송된 첨부 칩의 미리보기·내려받기 */
   preview?: string
   /** 서버에 원본이 아직 있나(7일 보관) — 보낸 첨부 칩의 미리보기·내려받기 */
   has_file?: boolean
 }
 
-/** 설정 › AI 기본 모델 선택지(GET /api/ai/model-choices) */
+/** 현재 조회자의 읽기 가능 여부(읽기 불가 시 답변에서 제외). 목록 응답에는 없음 */
 export interface AiModelChoice {
   key: 'workspace' | 'workspace_advanced' | 'personal'
   available: boolean
@@ -225,7 +225,7 @@ export interface AiMemoryItem {
 
 export interface AiProjectFile {
   id: string; name: string; path: string; size?: number | null
-  /** 지금 보는 사람이 읽을 수 있나(못 읽으면 답변에서 빠짐). 목록 응답엔 없다 */
+  /** 공유 대상 그룹(소유자 = 전부, 구성원 = 본인이 속한 그룹만) */
   readable?: boolean
 }
 export interface AiProject {
@@ -237,12 +237,12 @@ export interface AiProject {
   shared: boolean
   share_group_id?: string | null
   share_group_name?: string | null
-  /** 공유 대상 그룹(주인 = 전부, 구성원 = 자기가 속한 그룹만) */
+  /** 공유한 사용자(소유자) 이름 — 구성원 머리 "김하나 님이 인프라팀에 공유" */
   share_group_ids?: string[]
   share_groups?: { id: string; name: string }[]
-  /** 공유한 사람(주인) 이름 — 구성원 머리 "김하나 님이 인프라팀에 공유" */
+  /** 본인이 읽을 수 없는 지식 파일 수(상세 응답만) */
   owner_name?: string | null
-  /** 내가 못 읽는 지식 파일 수(상세 응답만) */
+  /** 첨부 한도(서버 기본값과 동일하게 유지) */
   unreadable_files?: number
   conversation_count: number
   files?: AiProjectFile[]
@@ -271,7 +271,7 @@ export function aiFormatBytes(n: number | null | undefined): string {
   return `${(v / (1024 * 1024)).toFixed(1)} MB`
 }
 
-/** 파일 이름 → 아이콘 이름 */
+/** 첨부 실패 코드 → i18n 키(알 수 없는 코드는 unsupported) */
 export function aiFileIcon(name: string, kind?: string): string {
   const ext = (name.split('.').pop() || '').toLowerCase()
   if (kind === 'image' || ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return 'file-image'
@@ -307,7 +307,7 @@ export interface AiStep {
   ended_at?: string | null
 }
 
-/** 출처(SSE citation). url 은 앱 안 링크(웹은 원래 주소), 깊은 링크가 없으면 null */
+/** 단계 목록에 갱신을 적용한다(동일 id 는 교체, 새 id 는 뒤에 추가) */
 export interface AiCitation {
   n: number
   kind: 'mail' | 'file' | 'wiki' | 'board' | 'chat' | 'event' | 'web'
@@ -329,7 +329,7 @@ export interface AiFeedback {
   include_conversation?: boolean
 }
 
-/** 단계 목록에 갱신을 넣는다(같은 id 는 바꿔 끼움, 새 id 는 뒤에) */
+/** 출처 목록에 추가한다(동일 n 은 교체), n 순 정렬 */
 export function aiApplyStep(list: AiStep[] | undefined, step: AiStep): AiStep[] {
   const cur = list ?? []
   const at = cur.findIndex(s => s.id === step.id)
@@ -339,13 +339,13 @@ export function aiApplyStep(list: AiStep[] | undefined, step: AiStep): AiStep[] 
   return next
 }
 
-/** 출처 목록에 더한다(같은 n 은 바꿔 끼움), n 순 */
+/** 단계 요약 — 총 단계·실패 수·진행 중 단계·소요 초(시작~끝, 없으면 단계 시각) */
 export function aiApplyCitation(list: AiCitation[] | undefined, c: AiCitation): AiCitation[] {
   const cur = (list ?? []).filter(x => x.n !== c.n)
   return [...cur, c].sort((a, b) => a.n - b.n)
 }
 
-/** 단계 요약 — 총 단계·실패 수·진행 중 단계·걸린 초(시작~끝, 없으면 단계 시각) */
+/** 한 단계의 소요 시간(초, 소수 한 자리). 진행 중이면 현재까지 */
 export function aiStepsSummary(steps: AiStep[], startedAt?: string | null, endedAt?: string | null, now: number = Date.now()) {
   const total = steps.length
   const failed = steps.filter(s => s.status === 'failed').length

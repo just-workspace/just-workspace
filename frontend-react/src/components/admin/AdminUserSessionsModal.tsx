@@ -1,6 +1,6 @@
 /**
  * 관리 › 사용자 ⋮ › 세션 보기 모달.
- * 상태(목록·불러오기·오류)는 페이지가 가지고, 이 조각은 그리기만 한다.
+ * 상태(목록·로딩·오류)는 페이지가 보유하며, 본 컴포넌트는 렌더링만 수행한다.
  * 행 56: 기기 아이콘 32 · 기기 이름(UA 추정) · IP(mono) · 호스트 · 마지막 활동 · [로그아웃]. 푸터 [모든 기기에서 로그아웃][닫기].
  */
 import { useI18n } from '~/i18n'
@@ -13,18 +13,18 @@ import { UiButton } from '~/components/ui/Button'
 import { deviceHint, fmtTs, nameOf, type AdminSessionInfo, type AdminUser } from './adminUsers'
 
 export interface AdminUserSessionsModalProps {
-  /** 세션을 보는 사용자(없으면 제목 이름 비움·푸터 로그아웃 숨김) */
+  /** 세션 조회 대상 사용자(없으면 제목 이름 공란·푸터 로그아웃 숨김) */
   user: AdminUser | null
   /** 세션 목록 */
   sessions: AdminSessionInfo[]
-  /** 불러오는 중 */
+  /** 로딩 중 */
   loading: boolean
-  /** 불러오기 실패 */
+  /** 조회 실패 */
   error: boolean
   onClose?: () => void
   /** 다시 시도 */
   onRetry?: () => void
-  /** 세션 하나 끊기 */
+  /** 세션 1개 종료 */
   onRevoke?: (s: AdminSessionInfo) => void
   /** 모든 기기에서 로그아웃 */
   onLogoutAll?: (u: AdminUser) => void

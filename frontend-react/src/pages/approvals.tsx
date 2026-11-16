@@ -1,6 +1,6 @@
 // 승인 대기함 — 목록 + 상세, 대기/처리 기록 탭, 거부 사유, 외부 내용 경고 · 빈·오류·로딩·만료·모바일 390 목록→상세.
-//  - 대기 = AI 가 요청한 위험 작업(high) 또는 외부 AI 커넥터(MCP)에서 온 쓰기. 승인하기 전에는 아무것도 실행되지 않는다.
-//  - ?id= 는 그 요청을 고른다(벨 알림·토스트·채팅 카드 링크). 대기 목록에 없으면(이미 처리·만료) 따로 불러 상세에 보인다.
+//  - 대기 = AI 가 요청한 위험 작업(high) 또는 외부 AI 커넥터(MCP)에서 수신한 쓰기 요청. 승인 전에는 아무것도 실행되지 않는다.
+//  - ?id= 는 해당 요청을 선택한다(벨 알림·토스트·채팅 카드 링크). 대기 목록에 없으면(이미 처리·만료) 별도로 조회해 상세에 표시한다.
 //  - 남은 시간은 서버 시각 기준(목록·상세 응답의 server_now 로 offset).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
@@ -59,7 +59,7 @@ export default function ApprovalsPage() {
   const [pending, setPending] = useState<ListState>(EMPTY_LIST)
   const [history, setHistory] = useState<ListState>(EMPTY_LIST)
   const [offset, setOffset] = useState(0)
-  const [extra, setExtra] = useState<ApprovalRequest | null>(null) // ?id= 가 목록에 없을 때 따로 불러온 것
+  const [extra, setExtra] = useState<ApprovalRequest | null>(null) // ?id= 가 목록에 없을 때 별도로 조회한 요청
   const [extraError, setExtraError] = useState(false)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -78,7 +78,7 @@ export default function ApprovalsPage() {
         ...s,
         items: more
           ? [...s.items, ...r.items.filter(n => !s.items.some(o => o.id === n.id))]
-          // 조용한 새로 고침: 방금 이 화면에서 처리한 것은 배지와 함께 남긴다(처리 뒤에도 목록에 상태 배지)
+          // 백그라운드 갱신: 방금 이 화면에서 처리한 항목은 배지와 함께 유지한다(처리 후에도 목록에 상태 배지 표시)
           : quiet && view === 'pending'
             ? [...r.items, ...s.items.filter(o => o.status !== 'pending' && !r.items.some(n => n.id === o.id))]
             : r.items,
@@ -93,7 +93,7 @@ export default function ApprovalsPage() {
   useEffect(() => { void loadList('pending') }, [])
   useEffect(() => { if (tab === 'history' && !history.loaded && !history.loading) void loadList('history') }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 대기 건수가 바뀌면(새 요청·다른 곳에서 처리) 대기 목록을 조용히 다시 받는다
+  // 대기 건수가 변경되면(새 요청·다른 곳에서 처리) 대기 목록을 백그라운드로 재조회한다
   const seq = useApprovalsSeq()
   const seqSeen = useRef(seq)
   useEffect(() => {
@@ -102,13 +102,13 @@ export default function ApprovalsPage() {
     if (listRef.current.pending.loaded) void loadList('pending', false, true)
   }, [seq])
 
-  /** 요청 하나 반영(목록·따로 불러온 것 모두) */
+  /** 요청 1건 반영(목록·별도 조회분 모두) */
   function patchReq(next: ApprovalRequest) {
     const upd = (s: ListState) => (s.items.some(i => i.id === next.id) ? { ...s, items: s.items.map(i => (i.id === next.id ? next : i)) } : s)
     setPending(upd)
     setHistory(s => {
       const u = upd(s)
-      // 대기에서 처리된 것은 처리 기록 맨 위에(이미 받아 둔 경우)
+      // 대기에서 처리된 항목은 처리 기록 맨 위에 추가(이미 수신해 둔 경우)
       return u === s && s.loaded && next.status !== 'pending' ? { ...s, items: [next, ...s.items] } : u
     })
     setExtra(x => (x && x.id === next.id ? next : x))
@@ -121,11 +121,11 @@ export default function ApprovalsPage() {
     return () => window.removeEventListener(APPROVAL_UPDATED_EVENT, onUpd)
   }, [])
 
-  // 고른 요청: ?id= → 없으면(데스크톱) 첫 대기 요청
+  // 선택된 요청: ?id= → 없으면(데스크톱) 첫 대기 요청
   const inLists = (id: string | null) => (id ? pending.items.find(i => i.id === id) || history.items.find(i => i.id === id) || null : null)
-  // 주소에 고른 것이 없을 때(데스크톱)의 선택은 한 번 정하면 그대로 둔다. 예전엔 늘 "목록 첫 줄"이라
-  // 읽는 중에 새 요청이 오거나(맨 위에 붙는다) 방금 것을 처리하면 상세가 다른 요청으로 바뀌었고,
-  // [승인]이 같은 자리에 있어 안 읽은 요청을 승인할 수 있었다. 고른 것이 목록에서 빠졌을 때만 다시 첫 줄로.
+  // 주소에 선택 항목이 없을 때(데스크톱)의 선택은 한 번 정해지면 유지한다. 기존에는 항상 "목록 첫 줄"이어서
+  // 읽는 중에 새 요청이 도착하거나(맨 위에 추가된다) 직전 요청을 처리하면 상세가 다른 요청으로 전환됐고,
+  // [승인]이 동일 위치에 있어 읽지 않은 요청을 승인할 수 있었다. 선택 항목이 목록에서 제외된 경우에만 첫 줄로 재설정한다.
   const [autoId, setAutoId] = useState<string | null>(null)
   useEffect(() => {
     if (autoId && pending.items.some(i => i.id === autoId)) return
@@ -135,7 +135,7 @@ export default function ApprovalsPage() {
   const selectedId = queryId || (!isMobile && tab === 'pending' ? autoId : null)
   const selected = inLists(selectedId) || (extra && extra.id === selectedId ? extra : null)
 
-  // ?id= 가 목록에 없으면 따로 불러온다(이미 처리됐거나 만료된 것)
+  // ?id= 가 목록에 없으면 별도로 조회한다(이미 처리됐거나 만료된 요청)
   useEffect(() => {
     setExtraError(false)
     if (!queryId || !pending.loaded || inLists(queryId) || (extra && extra.id === queryId)) return
@@ -146,12 +146,12 @@ export default function ApprovalsPage() {
     return () => { alive = false }
   }, [queryId, pending.loaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 다른 요청을 고르면 거부 사유를 비운다
+  // 다른 요청을 선택하면 거부 사유를 초기화한다
   useEffect(() => { setReason('') }, [selectedId])
 
   function select(id: string | null) {
     const to = id ? `/approvals?id=${encodeURIComponent(id)}` : '/approvals'
-    // 모바일은 목록 → 상세가 한 단계(뒤로 가기로 목록), 데스크톱은 같은 화면 안 선택이라 기록을 쌓지 않는다
+    // 모바일은 목록 → 상세가 한 단계(뒤로 가기로 목록 복귀), 데스크톱은 동일 화면 내 선택이므로 기록을 추가하지 않는다
     void navigate(to, { replace: !isMobile || !id })
   }
 
@@ -164,7 +164,7 @@ export default function ApprovalsPage() {
         : kind === 'reject' ? await approvalsApi.reject(req.id, reason)
           : await approvalsApi.undo(req.id)
       patchReq(next)
-      setExtra(next) // 목록이 새로 고쳐져 빠져도 상세는 남는다
+      setExtra(next) // 목록 갱신으로 제외돼도 상세는 유지된다
       announceApprovalUpdate(next)
       setReason('')
       if (kind === 'approve') addToast(next.status === 'executed' ? 'success' : 'error', next.status === 'executed' ? t('approvals.toast.approved') : t('approvals.toast.failed', { msg: next.error || '' }))

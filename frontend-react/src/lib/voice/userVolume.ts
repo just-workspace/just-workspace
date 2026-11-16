@@ -1,16 +1,16 @@
 /**
- * 사람별 음량 — 개인 설정 chatUserVolumes(%)·chatUserMuted 를 음성 접속자에게 실제로 적용한다.
- *  · 값은 사용자 id 기준으로 저장한다(identity 는 세션마다 바뀐다). identity → user_id 는 chatStore.voiceStates 의 participants.
+ * 사용자별 음량 — 개인 설정 chatUserVolumes(%)·chatUserMuted 를 음성 접속자에게 실제로 적용한다.
+ *  · 값은 사용자 id 기준으로 저장한다(identity 는 세션마다 변경된다). identity → user_id 는 chatStore.voiceStates 의 participants.
  *  · 적용: 전송의 setParticipantGain(identity, 0..2). 나만 음소거면 0. 100% 는 1(기본).
- *  · 접속자·설정·음성 상태가 바뀔 때마다 다시 맞춘다(같은 값이면 다시 부르지 않는다).
- * 화면(ChatUserVolume)·사이드바 접속자 줄 표시는 아래 순수 함수(userVolumeOf · volumeBadge)를 쓴다.
+ *  · 접속자·설정·음성 상태가 변경될 때마다 재적용한다(동일 값이면 재호출하지 않는다).
+ * 화면(ChatUserVolume)·사이드바 접속자 줄 표시는 아래 순수 함수(userVolumeOf · volumeBadge)를 사용한다.
  */
 import type { StoreApi } from 'zustand'
 import { USER_VOLUME, userPrefsStore, type Prefs } from '~/composables/useUserPrefs'
 import { chatStore } from '~/composables/useChat'
 import type { VoicePeer } from '~/lib/voice/transport'
 
-/** 그 사람의 음량(%) — 저장 안 했으면 100 */
+/** 해당 사용자의 음량(%) — 저장값이 없으면 100 */
 export function userVolumeOf(userId: string, prefs: Pick<Prefs, 'chatUserVolumes'>): number {
   const v = prefs.chatUserVolumes?.[userId]
   return typeof v === 'number' ? v : USER_VOLUME.def
@@ -18,17 +18,17 @@ export function userVolumeOf(userId: string, prefs: Pick<Prefs, 'chatUserVolumes
 export function userMutedOf(userId: string, prefs: Pick<Prefs, 'chatUserMuted'>): boolean {
   return !!prefs.chatUserMuted?.[userId]
 }
-/** 전송에 줄 값(0..2) */
+/** 전송에 전달할 값(0..2) */
 export function gainFor(userId: string, prefs: Pick<Prefs, 'chatUserVolumes' | 'chatUserMuted'>): number {
   if (userMutedOf(userId, prefs)) return 0
   return userVolumeOf(userId, prefs) / 100
 }
-/** 접속자 줄 꼬리표 — 100 이 아니면 "120%", 아니면 '' (SIDEBAR 가 mono primary 로 그린다) */
+/** 접속자 줄 꼬리표 — 100 이 아니면 "120%", 아니면 '' (SIDEBAR 가 mono primary 로 렌더링한다) */
 export function volumeBadge(userId: string, prefs: Pick<Prefs, 'chatUserVolumes'>): string {
   const v = userVolumeOf(userId, prefs)
   return v === USER_VOLUME.def ? '' : `${v}%`
 }
-/** 5% 단계로 맞추고 0–200 안으로 */
+/** 5% 단위로 맞추고 0–200 범위로 제한 */
 export function snapVolume(pct: number): number {
   const v = Math.max(USER_VOLUME.min, Math.min(USER_VOLUME.max, pct))
   return Math.round(v / USER_VOLUME.step) * USER_VOLUME.step
@@ -47,7 +47,7 @@ interface VoiceLike { channelId: string | null; peers: VoicePeer[] }
 interface Deps { voiceStore: StoreApi<VoiceLike>; setPeerGain: (identity: string, gain: number) => void }
 
 let _installed = false
-/** useVoice 가 store 를 만든 뒤 한 번 부른다 */
+/** useVoice 가 store 생성 후 1회 호출한다 */
 export function installUserVolumeSync({ voiceStore, setPeerGain }: Deps) {
   if (_installed) return
   _installed = true

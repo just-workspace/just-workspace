@@ -24,7 +24,7 @@ describe('MailComposeEditor', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '밑줄' })) })
     expect(screen.getByRole('button', { name: '굵게 (Ctrl B)' }).getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByRole('button', { name: '밑줄' }).getAttribute('aria-pressed')).toBe('true')
-    // 저장된 HTML 안에 포함된 링크(v2 와 같은 꼴)는 그대로 읽힌다
+    // 저장된 HTML 안에 포함된 링크(v2 와 동일 형태)는 그대로 판독됨
     await act(async () => { handle.setContent('<p><a href="https://example.com">링크</a> <u>밑줄</u></p>') })
     expect(onHtml).toHaveBeenLastCalledWith(expect.stringContaining('href="https://example.com"'))
     expect(onHtml).toHaveBeenLastCalledWith(expect.stringContaining('<u>밑줄</u>'))

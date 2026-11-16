@@ -33,7 +33,7 @@ export function ChatInviteModal() {
   async function search() {
     setResults(await searchUsers(queryRef.current.trim()))
   }
-  // watch(query) 250ms 디바운스(첫 값은 onMounted 의 search 가)
+  // watch(query) 250ms 디바운스(첫 값은 onMounted 의 search 가 처리)
   const first = useRef(true)
   useEffect(() => {
     if (first.current) { first.current = false; return }

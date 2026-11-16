@@ -1,10 +1,10 @@
 /**
  * DOM hook 모음.
  *
- * - useClickOutside(ref, handler)  ← 바깥 클릭 감지(
- *   마운트 다음 프레임부터 document click 을 듣고, 요소 밖 클릭이면 handler)
- * - useEventListener(target, type, handler)  ← 마운트·언마운트 짝으로 붙이는 리스너
- * - useMounted()  ← 마운트 이후 true (클라이언트에서만 그려야 하는 드문 경우)
+ * - useClickOutside(ref, handler)  ← 외부 클릭 감지(
+ *   마운트 다음 프레임부터 document click 을 수신하고, 요소 외부 클릭이면 handler 호출)
+ * - useEventListener(target, type, handler)  ← 마운트·언마운트에 맞춰 등록·해제하는 리스너
+ * - useMounted()  ← 마운트 이후 true (클라이언트에서만 렌더링해야 하는 드문 경우)
  */
 import { useEffect, useRef, useState, type RefObject } from 'react'
 
@@ -21,7 +21,7 @@ export function useClickOutside<T extends HTMLElement>(
       const el = ref.current
       if (el && !el.contains(e.target as Node)) h.current(e)
     }
-    // 마운트를 일으킨 같은 클릭을 잡지 않게 한 프레임 늦춘다
+    // 마운트를 유발한 동일 클릭을 수신하지 않도록 1프레임 지연한다
     const raf = requestAnimationFrame(() => document.addEventListener('click', onClick))
     return () => {
       cancelAnimationFrame(raf)

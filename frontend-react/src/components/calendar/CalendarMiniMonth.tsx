@@ -13,15 +13,15 @@ import { calendarZone, zDate, zNow, zp } from '~/utils/calTz'
 import { UiIcon } from '~/components/ui/Icon'
 
 export interface CalendarMiniMonthProps {
-  /** 선택한 날짜(이 달을 연다) */
+  /** 선택한 날짜(해당 월을 표시) */
   selectedDate: Date
-  /** 날짜를 눌렀을 때 */
+  /** 날짜 클릭 시 */
   onSelect?: (date: Date) => void
 }
 
 interface Cell { date: Date; inMonth: boolean; today: boolean; inWeek: boolean; selected: boolean }
 
-// 컴포넌트가 처음 만들어진 시점의 오늘을 쓴다
+// 컴포넌트 최초 생성 시점의 오늘을 사용한다
 const mountedToday = () => zNow()
 
 /** 사이드바 미니 달력 */
@@ -59,10 +59,10 @@ export function CalendarMiniMonth({ selectedDate, onSelect }: CalendarMiniMonthP
       out.push({ date, inMonth, today: isToday, inWeek, selected })
     }
     return out
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- zone: 캘린더 시간대가 바뀌면 다시
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- zone: 캘린더 시간대 변경 시 재계산
   }, [viewDate, weekStart, viewMode, wStart, wEnd, selectedDate, today, zone])
 
-  // 그달 1일로 옮긴다(31일에서 달을 넘기면 다음다음 달로 튀던 것 방지)
+  // 해당 월 1일로 이동한다(31일에서 월을 넘기면 다음다음 달로 넘어가던 문제 방지)
   function prevMonth() { setViewDate(zDate(vp.year, vp.month - 1, 1)) }
   function nextMonth() { setViewDate(zDate(vp.year, vp.month + 1, 1)) }
 

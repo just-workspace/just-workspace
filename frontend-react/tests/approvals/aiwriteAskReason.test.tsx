@@ -1,4 +1,4 @@
-// 승인 카드 경고 — 자동 수락·허용 규칙인데도 묻는 까닭 한 줄(서버 ask_reason = 남에게 보이는 쓰기 관문).
+// 승인 카드 경고 — 자동 수락·허용 규칙임에도 확인을 요청하는 사유 한 줄(서버 ask_reason = 타인에게 노출되는 쓰기 관문).
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import type { ApprovalRequest } from '~/utils/approvals'

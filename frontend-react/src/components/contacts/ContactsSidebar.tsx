@@ -3,11 +3,11 @@
  * 236 bg-card, [+ 새 연락처] 40 primary,
  * 범위 행 34(선택 = primary/13 + 600, 개수 mono 12) — 모든 연락처 · 즐겨찾기 · 워크스페이스 사용자 /
  * 주소록(섹션 11/600 트래킹) / 그룹(점 8 + 이름) / "가져오기 · 내보내기 (vCard)".
- * 1024 미만에서는 페이지가 이 사이드바를 그리지 않고 FAB + ⋯ 시트(ContactsMobileMenu)를 쓴다.
+ * 1024 미만에서는 페이지가 본 사이드바를 렌더링하지 않고 FAB + ⋯ 시트(ContactsMobileMenu)를 사용한다.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결한다(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거한다)
 import { clsx as cx } from 'clsx'
 import { useContacts } from '~/composables/useContacts'
 import { addToast } from '~/composables/useToast'
@@ -122,7 +122,7 @@ export function ContactsSidebar() {
         </div>
       )}
 
-      {/* 그룹(연락처 편집 폼에서 붙인 이름) */}
+      {/* 그룹(연락처 편집 폼에서 지정한 이름) */}
       {groups.length > 0 && (
         <>
           <h3 className="px-2.5 pb-1 pt-3.5 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground">{t('contacts.sidebar.groups')}</h3>

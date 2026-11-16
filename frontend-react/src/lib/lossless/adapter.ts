@@ -1,14 +1,14 @@
 /**
  * LosslessVoiceTransport — lib/voice/transport.ts 의 `VoiceTransport` 구현(단계 'lossless').
  *
- * 구성(합성): LiveKit 전송 위에 자체 릴레이 세션을 얹는다.
- *  · LiveKit 방에는 그대로 들어간다 → presence(사이드바·/voice/state 흐름)가 그대로이고, 음성·음악 단계
- *    참가자도 나를 듣는다(Opus 호환 스트림 = 음악 레시피 publish). 그들의 Opus 도 그대로 들린다.
- *  · 릴레이 세션(WebTransport 기본 · WebSocket 폴백)으로 PCM 24/48 을 보내고 받는다. 릴레이 피어로 들어온 사람의
- *    LiveKit 트랙은 꺼서(setParticipantAudioMuted) 같은 소리가 두 번 나지 않게 한다 — 짝은 토큰의 LiveKit identity.
- *  · 릴레이에 못 붙으면(503·네트워크) 음악 단계로 강등(effectiveTier='music'), LiveKit 쪽은 그대로 — 끊기지 않는다.
+ * 구성(합성): LiveKit 전송 위에 자체 릴레이 세션을 결합한다.
+ *  · LiveKit 방에는 그대로 입장한다 → presence(사이드바·/voice/state 흐름)가 유지되며, 음성·음악 단계
+ *    참가자도 본인의 음성을 수신한다(Opus 호환 스트림 = 음악 레시피 publish). 해당 참가자의 Opus 도 그대로 수신된다.
+ *  · 릴레이 세션(WebTransport 기본 · WebSocket 폴백)으로 PCM 24/48 을 송수신한다. 릴레이 피어로 입장한 참가자의
+ *    LiveKit 트랙은 음소거하여(setParticipantAudioMuted) 동일 음성의 중복 재생을 방지한다 — 대응 기준은 토큰의 LiveKit identity.
+ *  · 릴레이 접속 실패 시(503·네트워크) 음악 단계로 강등(effectiveTier='music'), LiveKit 측은 유지 — 단절되지 않는다.
  *
- * 통계(getStats)는 VoiceStats 에 릴레이 실측(전송·폴백 이유·포맷·버퍼·복구·비트퍼펙트)을 덧붙인다.
+ * 통계(getStats)는 VoiceStats 에 릴레이 실측(전송·폴백 이유·포맷·버퍼·복구·비트퍼펙트)을 추가한다.
  */
 import { LiveKitVoiceTransport } from '~/lib/voice/transports/livekit'
 import { rmsToDb } from '~/lib/voice/stats'
@@ -19,7 +19,7 @@ import { requestRelayGrant, RelayUnavailable } from './relayToken'
 import { LosslessSession, type LosslessSessionOptions } from './session'
 import type { BufferPreset, LosslessEvent, LosslessFormat } from './types'
 
-/** VoiceSendConfig 의 고급값 → 세션 옵션 조각. 값이 없으면 세션 기본(요청 96k·24bit·auto) 그대로 */
+/** VoiceSendConfig 의 고급값 → 세션 옵션 조각. 값이 없으면 세션 기본값(요청 96k·24bit·auto) 유지 */
 export function advancedOf(cfg: VoiceSendConfig | null): { format: Partial<Pick<LosslessFormat, 'sampleRate' | 'bits' | 'codec'>>; bufferPreset?: BufferPreset } {
   const format: Partial<Pick<LosslessFormat, 'sampleRate' | 'bits' | 'codec'>> = {}
   if (cfg?.sampleRate) format.sampleRate = cfg.sampleRate
@@ -49,7 +49,7 @@ export class LosslessVoiceTransport implements VoiceTransport {
   private deafened = false
   private relayUp = false
   private lastRelayError: string | null = null
-  /** 릴레이 피어 번호 → LiveKit identity(그 사람의 Opus 트랙을 꺼 둔다) */
+  /** 릴레이 피어 번호 → LiveKit identity(해당 참가자의 Opus 트랙을 음소거 상태로 유지) */
   private relayPeers = new Map<number, string>()
   private offs: (() => void)[] = []
   private listeners = { state: new Set<VoiceTransportEvents['state']>(), peers: new Set<VoiceTransportEvents['peers']>(), ended: new Set<VoiceTransportEvents['ended']>() }
@@ -74,7 +74,7 @@ export class LosslessVoiceTransport implements VoiceTransport {
     return this.relayUp && this.session?.currentState === 'connected' ? 'lossless' : 'music'
   }
 
-  /** 릴레이에 못 붙은 이유(강등 안내용). 붙어 있으면 null */
+  /** 릴레이 접속 실패 사유(강등 안내용). 접속 상태이면 null */
   get relayError(): string | null {
     return this.relayUp ? null : this.lastRelayError
   }
@@ -87,7 +87,7 @@ export class LosslessVoiceTransport implements VoiceTransport {
     this.channelId = params.channelId ?? channelIdFromLiveKitToken(params.token)
     // Opus 호환 스트림은 음악 레시피(처리 off·스테레오) — 무손실 캡처와 같은 조건
     await this.inner.join({ ...params, send: { ...params.send, tier: 'music' } })
-    // 'lossless' 로 들어올 때만 릴레이. 하이레조 어댑터(lib/hires)는 'music' 으로 들어와 presence 만 쓰고, 독점 실패 때 setSend('lossless') 로 릴레이를 켠다
+    // 'lossless' 로 입장할 때만 릴레이 사용. 하이레조 어댑터(lib/hires)는 'music' 으로 입장하여 presence 만 사용하고, 독점 실패 시 setSend('lossless') 로 릴레이를 활성화한다
     if (params.send.tier === 'lossless') await this.joinRelay()
   }
 
@@ -96,7 +96,7 @@ export class LosslessVoiceTransport implements VoiceTransport {
       this.lastRelayError = 'channel id unknown'
       return
     }
-    // 음질 패널 "고급" — 샘플레이트 요청·비트심도·버퍼 목표는 송신 설정(VoiceSendConfig)에서 온다
+    // 음질 패널 "고급" — 샘플레이트 요청·비트심도·버퍼 목표는 송신 설정(VoiceSendConfig)에서 전달된다
     const adv = advancedOf(this.cfg)
     const session = new LosslessSession({
       ...this.options,
@@ -112,8 +112,8 @@ export class LosslessVoiceTransport implements VoiceTransport {
     this.session = session
     try {
       const grant = await requestRelayGrant(this.channelId, this.identity ?? undefined)
-      // 기다리는 사이 나갔거나(leave) 다른 세션으로 바뀌었으면 이 세션은 올리지 않는다 —
-      // 안 그러면 나간 뒤에도 마이크 캡처·중계 연결이 살아 소리가 방으로 나간다
+      // 대기 중 퇴장했거나(leave) 다른 세션으로 교체된 경우 이 세션은 기동하지 않는다 —
+      // 생략 시 퇴장 후에도 마이크 캡처·중계 연결이 유지되어 음성이 방으로 송신된다
       if (this.session !== session) { try { await session.leave() } catch { /* noop */ } return }
       await session.join(grant)
       if (this.session !== session) { try { await session.leave() } catch { /* noop */ } return }
@@ -149,11 +149,11 @@ export class LosslessVoiceTransport implements VoiceTransport {
       }
       case 'state':
         if (ev.state === 'failed' || ev.state === 'closed') {
-          // 릴레이가 죽었다 — Opus 호환 트랙으로 되돌린다(강등). LiveKit 은 그대로
+          // 릴레이 중단 — Opus 호환 트랙으로 복원한다(강등). LiveKit 은 유지
           this.relayUp = false
           for (const id of new Set(this.relayPeers.values())) this.inner.setParticipantAudioMuted(id, false)
           this.relayPeers.clear()
-          // 죽은 세션은 내려놓는다 — 남겨 두면 [무손실 다시 시도](setSend)가 "세션 있음" 분기로 빠져 아무 일도 안 하고, 마이크 캡처도 계속 돈다
+          // 중단된 세션은 해제한다 — 유지 시 [무손실 다시 시도](setSend)가 "세션 있음" 분기로 진입하여 no-op 이 되고, 마이크 캡처도 계속 동작한다
           if (ev.state === 'failed' && this.session) {
             const dead = this.session
             this.session = null
@@ -176,7 +176,7 @@ export class LosslessVoiceTransport implements VoiceTransport {
     }
   }
 
-  /** 릴레이 피어와 LiveKit 참가자를 짝지어 그 사람의 Opus 트랙을 끈다 */
+  /** 릴레이 피어와 LiveKit 참가자를 대응시켜 해당 참가자의 Opus 트랙을 음소거한다 */
   private pair(peer: number, identity?: string): void {
     if (!identity) return
     this.relayPeers.set(peer, identity)
@@ -200,7 +200,7 @@ export class LosslessVoiceTransport implements VoiceTransport {
     this.cfg = cfg
     await this.inner.setSend({ ...cfg, tier: 'music' })
     if (cfg.tier !== 'lossless') {
-      // 다른 단계로 — 릴레이만 내려놓는다(useVoice 는 tiers 가 다르면 전송을 통째로 갈아탄다)
+      // 다른 단계로 전환 — 릴레이만 해제한다(useVoice 는 tiers 가 상이하면 전송 전체를 교체한다)
       const s = this.session
       this.session = null
       this.relayUp = false
@@ -208,7 +208,7 @@ export class LosslessVoiceTransport implements VoiceTransport {
       return
     }
     if (prev && (prev.micDeviceId !== cfg.micDeviceId || prev.sampleRate !== cfg.sampleRate) && this.session) {
-      // 장치·샘플레이트 요청이 바뀌면 캡처를 다시 올린다(레이트는 AudioContext 생성 때 정해진다)
+      // 장치·샘플레이트 요청이 변경되면 캡처를 재기동한다(레이트는 AudioContext 생성 시 결정된다)
       const s = this.session
       this.session = null
       try { await s.leave() } catch { /* noop */ }
@@ -216,7 +216,7 @@ export class LosslessVoiceTransport implements VoiceTransport {
     } else if (!this.session && this.channelId) {
       await this.joinRelay()
     } else if (this.session) {
-      // 비트심도·버퍼 목표는 세션을 유지한 채 바꾼다
+      // 비트심도·버퍼 목표는 세션을 유지한 채 변경한다
       const adv = advancedOf(cfg)
       if (prev?.bitDepth !== cfg.bitDepth && adv.format.bits) this.session.setFormat({ codec: adv.format.codec, bits: adv.format.bits })
       if (prev?.bufferTarget !== cfg.bufferTarget && adv.bufferPreset) this.session.setBufferPreset(adv.bufferPreset)
@@ -239,9 +239,9 @@ export class LosslessVoiceTransport implements VoiceTransport {
     return this.inner.setScreenAudio(on)
   }
 
-  /** 마이크 권한 — Opus 호환 트랙(inner)의 상태를 그대로 알린다. 없으면 "듣기만" 띠 대신 "중계 실패"로 잘못 보였다 */
+  /** 마이크 권한 — Opus 호환 트랙(inner)의 상태를 그대로 전달한다. 미구현 시 "듣기만" 띠 대신 "중계 실패"로 잘못 표시되었다 */
   micState(): 'ok' | 'denied' { return this.inner.micState() }
-  /** 사람별 음량·공유 음량 — Opus 로 듣는 상대에게 적용된다(중계로 듣는 상대의 PCM 재생에는 아직 닿지 않는다) */
+  /** 참가자별 음량·공유 음량 — Opus 로 수신하는 상대에게 적용된다(중계로 수신하는 상대의 PCM 재생에는 아직 미적용) */
   setParticipantVolume(identity: string, volume: number): void { this.inner.setParticipantVolume(identity, volume) }
   setParticipantGain(identity: string, gain: number): void { this.inner.setParticipantGain(identity, gain) }
 
@@ -292,7 +292,7 @@ export class LosslessVoiceTransport implements VoiceTransport {
       codec,
       channels: f?.channels ?? base.channels,
       sampleRate: f?.sampleRate ?? base.sampleRate,
-      // 송신은 릴레이(PCM) + LiveKit(Opus 호환) 둘 다 나간다 — 패널엔 PCM 쪽을, Opus 는 raw 에서
+      // 송신은 릴레이(PCM) + LiveKit(Opus 호환) 양쪽으로 수행된다 — 패널에는 PCM 측을 표시하고, Opus 는 raw 에서 확인
       sendBitrate: s.bitrateOutBps,
       recvBitrate: recvBps + (base.recvBitrate ?? 0),
       rttMs: s.rttMs || base.rttMs,

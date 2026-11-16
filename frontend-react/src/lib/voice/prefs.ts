@@ -1,6 +1,6 @@
 /**
- * 음성 채널 송신 설정의 로컬 저장(localStorage `voice.quality`). 사람마다(내가 보내는 소리) 고르는 값이라 기기 설정.
- * 서버 prefs(useUserPrefs)에 올리지 않는다 — 장치 id 는 기기마다 다르고, 음질 단계도 기기 성능에 따른다.
+ * 음성 채널 송신 설정의 로컬 저장(localStorage `voice.quality`). 사용자별(본인이 송신하는 소리)로 선택하는 값이므로 기기 설정으로 취급한다.
+ * 서버 prefs(useUserPrefs)에는 저장하지 않는다 — 장치 id 는 기기마다 상이하고, 음질 단계도 기기 성능에 좌우된다.
  */
 import { clampMusicBitrate, MUSIC_BITRATE_DEFAULT } from './opus'
 import {
@@ -11,11 +11,11 @@ import {
 export const VOICE_PREFS_KEY = 'voice.quality'
 
 export interface VoicePrefs extends VoiceSendConfig {
-  /** 음악 단계 이어폰 경고를 봤다(다시 보이지 않게) */
+  /** 음악 단계 이어폰 경고 확인 여부(재표시 방지) */
   earphoneAck: boolean
   /** 스피커(출력) 장치 */
   speakerDeviceId?: string
-  /** 접속 바의 "증명" 패널을 펼쳐 둔 채로 */
+  /** 접속 바의 "증명" 패널 펼침 상태 유지 */
   statsOpen: boolean
   /** 고급 — 무손실·하이레조 송신 샘플레이트 요청 */
   sampleRate: VoiceSampleRate
@@ -76,5 +76,5 @@ export function loadVoicePrefs(): VoicePrefs {
 }
 
 export function saveVoicePrefs(p: VoicePrefs) {
-  try { localStorage.setItem(VOICE_PREFS_KEY, JSON.stringify(p)) } catch { /* 저장소 막힘 */ }
+  try { localStorage.setItem(VOICE_PREFS_KEY, JSON.stringify(p)) } catch { /* 저장소 접근 불가 */ }
 }

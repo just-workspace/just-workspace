@@ -1,10 +1,10 @@
 /**
- * 채팅 설정 — "내 설정" 묶음: 프로필 · 메시지 표시 · 알림(음성은 VoiceSection).
- * 프로필: 소개(190자) · 시간대(프로필 팝아웃의 현지 시각) → updateMyChatProfile, 저장 안 된 변경 띠.
+ * 채팅 설정 — "내 설정" 그룹: 프로필 · 메시지 표시 · 알림(음성은 VoiceSection).
+ * 프로필: 소개(190자) · 시간대(프로필 팝아웃의 현지 시각) → updateMyChatProfile, 미저장 변경 바.
  *   표시 이름·아바타는 계정 설정(/settings/account) 링크.
- * 메시지 표시: cozy / compact(UiRadioCard row) + 묶음 간격 0/4/8/16/24(UiSegment) — useUserPrefs, 바로 저장.
- *   아래에 기존 설정 › 채팅의 ① 입력 카드(Enter 키 · 링크 미리보기 · 미디어 펼치기)를 그대로 재사용.
- * 알림: 기존 설정 › 채팅의 ② 알림 카드(키워드 · 방해 금지 시간)를 그대로 재사용.
+ * 메시지 표시: cozy / compact(UiRadioCard row) + 그룹 간격 0/4/8/16/24(UiSegment) — useUserPrefs, 즉시 저장.
+ *   아래에 기존 설정 › 채팅의 ① 입력 카드(Enter 키 · 링크 미리보기 · 미디어 펼치기)를 그대로 재사용한다.
+ * 알림: 기존 설정 › 채팅의 ② 알림 카드(키워드 · 방해 금지 시간)를 그대로 재사용한다.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from 'zustand'
@@ -33,7 +33,7 @@ export const BIO_MAX = 190
 
 function timezones(): string[] {
   const f = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf
-  try { const v = f?.('timeZone'); if (v?.length) return v } catch { /* 옛 브라우저 */ }
+  try { const v = f?.('timeZone'); if (v?.length) return v } catch { /* 구버전 브라우저 */ }
   return ['Asia/Seoul', 'Asia/Tokyo', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'UTC']
 }
 

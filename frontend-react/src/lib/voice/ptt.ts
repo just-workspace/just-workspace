@@ -1,11 +1,11 @@
 /**
  * 눌러서 말하기(PTT) — 개인 설정 chatVoiceMode='ptt' · chatPttKey(KeyboardEvent.code) · chatPttReleaseMs.
- *  · 음성 채널에 접속해 있고 PTT 모드면, 그 키를 누르고 있는 동안만 마이크를 연다(LiveKit setMuted). 떼면 releaseMs 뒤 닫는다.
- *  · 음소거(사용자 버튼)·듣기 끔이면 키를 눌러도 열지 않는다(디스코드와 같다). 표시용 "말하는 중"은 talking.
- *  · 키는 이 창에 포커스가 있을 때만 받는다 — 데스크톱 앱 전역 단축키는 범위 밖.
- *  · 글 입력 칸(input·textarea·contenteditable)에 포커스가 있으면 글자 키는 PTT 로 쓰지 않는다(` 를 쳐야 할 때 막히지 않게).
- *    수정 키·기능 키(F1… · 마우스 아님)는 입력 칸에서도 받는다.
- *  · 창이 포커스를 잃으면 뗀 것으로 본다(키업을 못 받아 마이크가 열린 채 남지 않게).
+ *  · 음성 채널에 접속한 상태이고 PTT 모드이면, 해당 키를 누르고 있는 동안에만 마이크를 활성화한다(LiveKit setMuted). 키를 떼면 releaseMs 후 비활성화한다.
+ *  · 음소거(사용자 버튼)·듣기 끔 상태에서는 키를 눌러도 활성화하지 않는다(디스코드와 동일). 표시용 "말하는 중"은 talking.
+ *  · 키는 본 창에 포커스가 있을 때만 수신한다 — 데스크톱 앱 전역 단축키는 범위 밖.
+ *  · 텍스트 입력란(input·textarea·contenteditable)에 포커스가 있으면 문자 키는 PTT 로 사용하지 않는다(` 입력이 차단되지 않도록).
+ *    수정 키·기능 키(F1… · 마우스 아님)는 입력란에서도 수신한다.
+ *  · 창이 포커스를 잃으면 키를 뗀 것으로 간주한다(키업 미수신으로 마이크가 활성 상태로 남는 것을 방지).
  * 화면: usePushToTalk() → { enabled, talking, keyLabel }.
  */
 import { createStore, useStore, type StoreApi } from 'zustand'
@@ -13,14 +13,14 @@ import { useShallow } from 'zustand/react/shallow'
 import { userPrefsStore } from '~/composables/useUserPrefs'
 
 interface PttState {
-  /** PTT 모드이고 음성 채널에 접속해 있다 */
+  /** PTT 모드이며 음성 채널에 접속한 상태 */
   enabled: boolean
-  /** 키를 누르고 있다(떼고 releaseMs 동안도 true) */
+  /** 키를 누르고 있는 상태(뗀 후 releaseMs 동안에도 true) */
   held: boolean
 }
 export const pttStore = createStore<PttState>()(() => ({ enabled: false, held: false }))
 
-/** KeyboardEvent.code → 화면 글자. Backquote → `, KeyV → V, Digit1 → 1, Space → Space */
+/** KeyboardEvent.code → 화면 표시 문자. Backquote → `, KeyV → V, Digit1 → 1, Space → Space */
 export function pttKeyLabel(code: string): string {
   if (!code) return ''
   if (code === 'Backquote') return '`'
@@ -35,7 +35,7 @@ export function pttKeyLabel(code: string): string {
   return map[code] ?? code
 }
 
-/** 글자를 넣는 키인가(입력 칸에서는 PTT 로 쓰지 않는다) */
+/** 문자 입력 키 여부(입력란에서는 PTT 로 사용하지 않는다) */
 export function isCharacterKey(code: string): boolean {
   return /^(Key[A-Z]|Digit\d|Numpad\d|Backquote|Minus|Equal|BracketLeft|BracketRight|Backslash|Semicolon|Quote|Comma|Period|Slash|Space)$/.test(code)
 }
@@ -53,7 +53,7 @@ function isEditable(t: EventTarget | null): boolean {
   return false
 }
 
-/** 지금 마이크 문을 열어도 되나 — PTT 가 아니면 늘 열림 */
+/** 현재 마이크 게이트 개방 가능 여부 — PTT 가 아니면 항상 개방 */
 export function pttGateOpen(s: PttState = pttStore.getState()): boolean {
   return !s.enabled || s.held
 }
@@ -104,7 +104,7 @@ export function installPushToTalk({ voiceStore, setVoiceMicGate }: Deps) {
   window.addEventListener('blur', () => { if (pttStore.getState().held) { if (releaseTimer) clearTimeout(releaseTimer); releaseTimer = null; set({ held: false }) } })
 }
 
-/** 화면용 — PTT 켬 · 말하는 중 · 키 글자 */
+/** 화면용 — PTT 활성 · 말하는 중 · 키 표시 문자 */
 export function usePushToTalk(): { enabled: boolean; talking: boolean; keyLabel: string } {
   const s = useStore(pttStore, useShallow((x: PttState) => x))
   const code = useStore(userPrefsStore, x => x.prefs.chatPttKey)

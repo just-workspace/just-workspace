@@ -1,8 +1,8 @@
 /**
  * 위키 왼쪽 트리 패널(트리 화면).
- *  데스크톱 — 스페이스 전환(▾) / 페이지 찾기 + 새 페이지(현재 페이지 아래) / 고정 / 페이지 트리 / 바닥 "스페이스 설정 · 멤버 N".
+ *  데스크톱 — 스페이스 전환(▾) / 페이지 찾기 + 새 페이지(현재 페이지 아래) / 고정 / 페이지 트리 / 하단 "스페이스 설정 · 멤버 N".
  *  모바일   — 56 헤더(스페이스명 ▾ 18/600 + "위키 · 페이지 N") + 검색 44, 트리 행 48, FAB 새 페이지.
- * 상태(인라인 새 페이지·이름 바꾸기)는 호스트(pages/wiki)가 들고, 여기는 그리기와 이벤트만.
+ * 상태(인라인 새 페이지·이름 변경)는 호스트(pages/wiki)가 보유하며, 본 컴포넌트는 렌더링과 이벤트만 담당한다.
  */
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -21,7 +21,7 @@ export interface WikiSidebarProps {
   pages: WikiPageNode[]
   selectedId: string | undefined
   canWrite: boolean
-  /** 인라인 새 페이지 행 위치 — undefined: 없음, null: 최상위, id: 그 페이지 아래 */
+  /** 인라인 새 페이지 행 위치 — undefined: 없음, null: 최상위, id: 해당 페이지 아래 */
   draftParentId: string | null | undefined
   renamingId: string | null
   memberCount: number | null
@@ -54,10 +54,10 @@ export function WikiSidebar(props: WikiSidebarProps) {
   const { t } = useI18n()
 
   const [query, setQuery] = useState('')
-  const [searchOpen, setSearchOpen] = useState(false)   // 모바일: 헤더 검색 아이콘으로 입력 행을 연다
+  const [searchOpen, setSearchOpen] = useState(false)   // 모바일: 헤더 검색 아이콘으로 입력 행 표시
   const searchInput = useRef<HTMLInputElement | null>(null)
   const onSearchRef = useRef(onSearch); onSearchRef.current = onSearch
-  // watch(query) — 첫 값은 건너뛴다
+  // watch(query) — 첫 값은 생략
   const firstQuery = useRef(true)
   useEffect(() => {
     if (firstQuery.current) { firstQuery.current = false; return }
@@ -181,7 +181,7 @@ export function WikiSidebar(props: WikiSidebarProps) {
                 </div>
               )}
               {tree.map(node => <WikiPageTreeNode key={node.id} node={node} {...nodeBindings} />)}
-              {/* 스페이스가 없으면 데스크톱과 같은 상태("스페이스가 없습니다 · 스페이스 만들기") */}
+              {/* 스페이스가 없으면 데스크톱과 동일한 상태("스페이스가 없습니다 · 스페이스 만들기") */}
               {!space ? (
                 <UiEmptyState
                   variant="panel"

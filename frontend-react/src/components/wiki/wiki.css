@@ -9,7 +9,7 @@
   min-height: 240px;
   outline: none;
 }
-/* 빈 문단 자리표시 글은 루트의 --wiki-collab-placeholder(따옴표 붙은 문자열) */
+/* 빈 문단 자리표시 문구는 루트의 --wiki-collab-placeholder(따옴표로 감싼 문자열) */
 .wiki-collab-editor .ProseMirror p.is-editor-empty:first-child::before {
   content: var(--wiki-collab-placeholder);
   float: left;
@@ -21,7 +21,7 @@
 .wiki-collab-editor .ProseMirror td, .wiki-collab-editor .ProseMirror th { border: 1px solid hsl(var(--border)); padding: 4px 8px; }
 .wiki-collab-editor .ProseMirror th { background: hsl(var(--muted)); }
 .wiki-collab-editor .ProseMirror .selectedCell { background: hsl(var(--primary) / 0.13); }
-/* 함께 편집 중인 사람의 커서: 2px 세로선 + 위에 이름표 10/600.
+/* 공동 편집 중인 사용자의 커서: 2px 세로선 + 상단 이름표 10/600.
    TipTap v3 CollaborationCaret 클래스(collaboration-carets__*). 선택 영역은 y-tiptap 기본 ProseMirror-yjs-selection */
 .wiki-collab-editor .collaboration-carets__caret {
   position: relative;

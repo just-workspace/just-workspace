@@ -1,7 +1,7 @@
 /**
- * 셸 사이드바 — wide 하나로 rail(64) ↔ 확장(236) 두 모습을 만든다.
- * 폭·덮기/밀기 판단은 layouts/default(spacer+panel)와 useSidebar 가 한다.
- * 겉모습은 키트 UiAppRail — 이 파일은 스토어(네비·채팅 멘션·통화·내 상태·고정)를 항목 데이터로 잇기만 한다.
+ * 셸 사이드바 — wide 하나로 rail(64) ↔ 확장(236) 두 형태를 구성한다.
+ * 폭·덮기/밀기 판단은 layouts/default(spacer+panel)와 useSidebar 가 수행한다.
+ * 외형은 키트 UiAppRail — 본 파일은 스토어(네비·채팅 멘션·통화·내 상태·고정)를 항목 데이터로 연결만 한다.
  */
 import type { ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -26,12 +26,12 @@ import { useStore } from 'zustand'
 import { chatUiStore, toggleListCollapsed } from '~/composables/useChatUi'
 
 export interface LayoutSidebarProps {
-  /** 넓게(236) 그릴지 — false 면 레일(64) */
+  /** 넓게(236) 렌더링할지 여부 — false 면 레일(64) */
   wide?: boolean
-  /** 항목을 눌러 이동할 때 */
+  /** 항목 클릭으로 이동 시 호출 */
   onNavigate?: () => void
   className?: string
-  /** 아바타 줄 위 끼움(음성채널 접속 바 — layouts/default 가 준다) */
+  /** 아바타 줄 위 삽입 영역(음성채널 접속 바 — layouts/default 가 전달한다) */
   footerSlot?: ReactNode
 }
 
@@ -40,38 +40,38 @@ export function LayoutSidebar({ wide, onNavigate, className, footerSlot }: Layou
   const route = useRoute()
   const { appName, brandLogo, config } = useSiteConfig()
   const { user } = useAuth()
-  // 레일은 rail:false(연락처 등 하위 모듈)를 뺀 묶음
+  // 레일은 rail:false(연락처 등 하위 모듈)를 제외한 묶음
   const { home, railGroups: groups } = useNav()
   const { pinned, togglePin } = useSidebar()
-  // '도구' 묶음(격리 브라우저·네트워크 랩 — 바깥 출처 새 탭). 없으면 null
+  // '도구' 묶음(격리 브라우저·네트워크 랩 — 외부 출처 새 탭). 없으면 null
   const tools = useRailTools()
-  // 채팅 항목 배지 = 나를 부른 것(멘션 + DM) — 채팅 시안 레일 규칙. 회의 항목 = 통화 중이면 초록 점.
+  // 채팅 항목 배지 = 본인이 언급된 건(멘션 + DM) — 채팅 시안 레일 규칙. 회의 항목 = 통화 중이면 초록 점.
   const { totalMentions: chatMentions, callStates } = useChat()
   // 아바타 상태점 — 서버 상태 기준(오프라인으로 표시 중이면 offline)
   const { dot: presence } = useMyStatus()
-  // 내가 통화 중이어도(미니 통화 창으로 내려 둔 통화 포함) 켠다
+  // 본인이 통화 중인 경우에도(미니 통화 창으로 최소화한 통화 포함) 활성화한다
   const { inCall: meInCall } = useMeetingCall()
   const liveCall = meInCall || Object.values(callStates).some(c => c.count > 0)
-  // 승인 대기함 — 대기 건이 있을 때만 배지와 함께(사용자 결정)
+  // 승인 대기함 — 대기 건이 있을 때만 배지와 함께 표시(사용자 결정)
   const approvalsPending = useApprovalsCount() ?? 0
-  // 내장 AI 가 답변을 만드는 중(다른 화면에 있어도 — 서버가 끝까지 만든다, useAiStreams)
+  // 내장 AI 가 답변 생성 중(다른 화면에 있어도 — 서버가 끝까지 생성한다, useAiStreams)
   const aiGenerating = useAiGenerating()
 
   const displayName = user?.display_name ?? user?.username ?? ''
   const initial = (displayName || 'U').charAt(0).toUpperCase()
-  // 태그라인은 로그인 화면과 같은 설정값(brand.tagline) — 하드코딩 제거
+  // 태그라인은 로그인 화면과 동일한 설정값(brand.tagline) — 하드코딩 제거
   const tagline = (config?.['brand.tagline'] ?? '').trim() || 'self-hosted workspace'
   const emit = () => onNavigate?.()
-  // 사이드바 하단에 내 계정 패널이 있는 화면(채팅)은 레일 아바타를 뺀다. 채널 목록을 접으면 다시 레일에.
+  // 사이드바 하단에 내 계정 패널이 있는 화면(채팅)은 레일 아바타를 제외한다. 채널 목록을 접으면 다시 레일에 표시한다.
   const chatListCollapsed = useStore(chatUiStore, s => s.listCollapsed)
   const pageHasAccount = !!route.meta.sidebarAccount && !(route.path === '/chat' && chatListCollapsed)
-  // 채팅 화면에서 레일의 채팅 아이콘을 다시 누르면 채널 목록을 접고 편다
+  // 채팅 화면에서 레일의 채팅 아이콘을 다시 누르면 채널 목록을 접거나 펼친다
   function onRailNavigate(item: UiAppRailItem | null, e: { preventDefault: () => void }) {
     if (item?.to === '/chat' && route.path === '/chat') { e.preventDefault(); toggleListCollapsed() }
     emit()
   }
 
-  // 표시는 키트(UiAppRail) — 여기서는 현재 경로·배지·통화 상태만 항목으로 바꾼다
+  // 표시는 키트(UiAppRail)가 담당 — 여기서는 현재 경로·배지·통화 상태만 항목으로 변환한다
   const toItem = (it: NavItem): UiAppRailItem => {
     const isChat = it.route === '/chat'
     return {

@@ -1,7 +1,7 @@
 // 단축키 도움말의 모듈별 묶음 등록.
-// 테스트에서 쓰는 길:
+// 테스트에서 사용하는 경로:
 //  · 등록/해제: registerPageShortcuts(컴포넌트 밖) + 페이지 hook usePageShortcuts(renderHook)
-//  · 읽기: usePageShortcutGroups(renderHook) / getPageShortcutGroups(getter 를 지금 읽음)
+//  · 조회: usePageShortcutGroups(renderHook) / getPageShortcutGroups(getter 를 즉시 조회)
 import { describe, it, expect } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { registerPageShortcuts, getPageShortcutGroups, usePageShortcutGroups, usePageShortcuts, type ShortcutItem } from '~/composables/useShortcuts'

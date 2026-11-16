@@ -159,7 +159,7 @@ describe('번들 가드', () => {
 
   it('CSS 가 훑는 소스 목록 = installer.css 의 @source, 목록 밖의 모듈은 걸린다', () => {
     const installerCss = readFileSync(resolve(__dirname, '../../src/installer-app/installer.css'), 'utf8')
-    // installer.css 는 src/installer-app/ 에 있다 — @source 의 상대 경로를 frontend-react 기준으로 푼다
+    // installer.css 는 src/installer-app/ 에 위치 — @source 의 상대 경로를 frontend-react 기준으로 해석
     const fromCss = [...installerCss.matchAll(/^@source '([^']+)';\r?$/gm)].map((m) => {
       const parts = ['src', 'installer-app']
       for (const seg of m[1].split('/')) {

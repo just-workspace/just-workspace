@@ -62,7 +62,7 @@ export function packPcm(planar: Float32Array[], codec: LosslessCodec, channels: 
           break
         }
         case 'pcm_s32': {
-          // float32 가수(24-bit) 한계 — 브라우저 송신은 s32 를 정확히 못 만든다(수신 전용 코덱). 받은 걸 되돌릴 때만 쓴다
+          // float32 가수(24-bit) 한계 — 브라우저 송신은 s32 를 정확히 생성할 수 없다(수신 전용 코덱). 수신 데이터를 역변환할 때만 사용한다
           let v = Math.round(x * 2147483648)
           if (v > 2147483647) v = 2147483647
           else if (v < -2147483648) v = -2147483648
@@ -79,7 +79,7 @@ export function packPcm(planar: Float32Array[], codec: LosslessCodec, channels: 
   return buf
 }
 
-/** interleaved bytes → planar Float32Array[channels]. 길이가 안 맞으면 null */
+/** interleaved bytes → planar Float32Array[channels]. 길이 불일치 시 null */
 export function unpackPcm(bytes: Uint8Array, codec: LosslessCodec, channels: number): Float32Array[] | null {
   const bps = bytesPerSample(codec, bitsFor(codec))
   if (channels < 1 || bytes.byteLength % (bps * channels) !== 0) return null
@@ -103,7 +103,7 @@ export function unpackPcm(bytes: Uint8Array, codec: LosslessCodec, channels: num
           break
         }
         case 'pcm_s32':
-          // 재생용 — Float32 로 내려오며 하위 8비트는 버려진다(Web Audio 는 float32)
+          // 재생용 — Float32 로 변환되며 하위 8비트는 손실된다(Web Audio 는 float32)
           out[c][i] = dv.getInt32(o, true) / 2147483648
           o += 4
           break
@@ -116,7 +116,7 @@ export function unpackPcm(bytes: Uint8Array, codec: LosslessCodec, channels: num
   return out
 }
 
-/** planar 배열을 하나의 ArrayBuffer 로 이어 붙인다(워크릿 ↔ 메인 전송용, transfer 가능) */
+/** planar 배열을 하나의 ArrayBuffer 로 연결한다(워크릿 ↔ 메인 전송용, transfer 가능) */
 export function planarToBuffer(planar: Float32Array[]): ArrayBuffer {
   const n = planar[0]?.length ?? 0
   const out = new Float32Array(n * planar.length)

@@ -1,4 +1,4 @@
-// 메일 계정이 없는 사용자 — 셸 안 읽음 점 폴러가 /api/mail/mailboxes(404)를 부르지 않는다(화면마다 콘솔 404 회귀)
+// 메일 계정이 없는 사용자 — 셸 안 읽음 점 폴러가 /api/mail/mailboxes(404)를 호출하지 않음(화면마다 콘솔 404 발생 회귀)
 import { describe, it, expect, vi } from 'vitest'
 
 const calls: string[] = []

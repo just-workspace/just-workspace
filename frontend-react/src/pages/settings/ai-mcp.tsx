@@ -1,8 +1,8 @@
 // 설정 › AI 연동(MCP) — 기본 화면 · 토큰 만들기·한 번 보기·연결 해제 확인·관리자 쓰기 막음·빈·실패·모바일 390.
-//  ① 커넥터 주소: 읽기 전용(먼저 이걸 연결) · 쓰기 포함(따로 추가 연결, 관리자가 막으면 "조직에서 막음").
-//     주소는 서버가 주는 값 그대로(전용 포트 https://mcp.<도메인>:8443/… — CP 통제, 3차 결정).
-//  ② 연결된 앱: OAuth(claude.ai 등) + 쓰인 개인 토큰. [연결 해제] → 그 앱의 대기 쓰기 요청은 '연결 해제됨' 사유로 거부.
-//  ③ 개인 토큰(wsmcp_…): 이름 · 만료(30일·90일·1년, 무기한 없음) · 쓰기 권한(관리자 허용 시). 만든 직후 한 번만 보임.
+//  ① 커넥터 주소: 읽기 전용(우선 연결 대상) · 쓰기 포함(별도 추가 연결, 관리자가 차단하면 "조직에서 막음").
+//     주소는 서버가 반환한 값 그대로(전용 포트 https://mcp.<도메인>:8443/… — CP 통제, 3차 결정).
+//  ② 연결된 앱: OAuth(claude.ai 등) + 사용된 개인 토큰. [연결 해제] → 해당 앱의 대기 쓰기 요청은 '연결 해제됨' 사유로 거부.
+//  ③ 개인 토큰(wsmcp_…): 이름 · 만료(30일·90일·1년, 무기한 없음) · 쓰기 권한(관리자 허용 시). 생성 직후 1회만 표시.
 // API: /api/ai-connect/info · /apps · DELETE /apps/{key} · /tokens(GET·POST) · DELETE /tokens/{id}.
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -288,7 +288,7 @@ export default function Page() {
         </UiModal>
       )}
 
-      {/* 만든 직후 한 번 */}
+      {/* 생성 직후 1회 */}
       {issued && (
         <UiModal title={t('settings.mcp.issuedTitle')} size="480" persistent onClose={() => setIssued(null)}
           footer={<UiButton size="sm" onClick={() => setIssued(null)}>{t('settings.mcp.copiedDone')}</UiButton>}>

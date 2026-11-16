@@ -1,8 +1,8 @@
 /**
- * 마법사 뼈대 — 왼쪽 단계 목록 + 가운데 본문(최대 720). 좁은 화면에서는 단계 목록이 위쪽 한 줄 진행 표시로 접힌다.
- * 단계 목록은 저장된 답변으로 정하되, 화면에서 아직 저장하지 않은 선택(preview)을 주면 그것을 먼저 반영한다
- * (고르는 즉시 목록이 바뀐다).
- * 높이는 dvh — 모바일 주소창이 접히고 펴져도 아래가 가려지지 않는다.
+ * 마법사 골격 — 왼쪽 단계 목록 + 가운데 본문(최대 720). 좁은 화면에서는 단계 목록이 상단 한 줄 진행 표시로 접힌다.
+ * 단계 목록은 저장된 답변으로 결정하되, 화면에서 아직 저장하지 않은 선택(preview)이 전달되면 이를 우선 반영한다
+ * (선택 즉시 목록이 변경된다).
+ * 높이는 dvh — 모바일 주소창이 접히고 펴져도 하단이 가려지지 않는다.
  */
 import { useEffect, useRef, type ReactNode } from 'react'
 import { UiStepList, type UiStep } from '~/components/ui/StepList'
@@ -13,9 +13,9 @@ import { effectiveZones, useWizard } from '../store'
 import { ShellTools } from './ShellTools'
 
 export interface WizardShellProps {
-  /** 지금 화면의 단계 */
+  /** 현재 화면의 단계 */
   step: StepId
-  /** 아직 저장하지 않은 선택 — 단계 목록에 바로 반영한다 */
+  /** 아직 저장하지 않은 선택 — 단계 목록에 즉시 반영 */
   preview?: Partial<FlowInput>
   children: ReactNode
 }
@@ -40,7 +40,7 @@ export function WizardShell({ step, preview, children }: WizardShellProps) {
   const labels = { done: t('stepState.done'), current: t('stepState.current'), todo: t('stepState.todo'), skipped: t('stepState.skipped') }
   const main = useRef<HTMLElement>(null)
 
-  // 화면이 바뀌면 본문 맨 위로 — 키보드 사용자가 새 화면의 제목부터 읽게 포커스도 옮긴다
+  // 화면 전환 시 본문 최상단으로 이동 — 키보드 사용자가 새 화면의 제목부터 읽도록 포커스도 이동
   useEffect(() => {
     window.scrollTo(0, 0)
     main.current?.focus({ preventScroll: true })

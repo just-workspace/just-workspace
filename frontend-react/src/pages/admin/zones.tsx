@@ -1,14 +1,14 @@
 /**
- * 관리 › 구역 — 설치 뒤에 구역(메일·채팅·회의…)과 선택 애드온을 켜고 끈다.
+ * 관리 › 구역 — 설치 후 구역(메일·채팅·회의…)과 선택 애드온을 활성화·비활성화한다.
  *
- *  · 맨 위: 권장 메모리 합계(켜진 구역과 애드온 기준) / 서버 메모리.
- *  · 구역 카드 · 선택 애드온 카드: 행마다 상태와 스위치. 켜기는 창(설정 → 메모리·포트 확인)을 거치고,
- *    창이 닫히면 받기·설정·연결 진행이 그 행 안에서 이어진다. 끄기는 확인 창을 거친다.
- *  · 진행은 작업을 1.5초마다 다시 읽는다. 화면을 떠나면 멈추고, 돌아오면 목록이 알려 준 진행 중 작업을 이어 받는다.
- *  · 구역이 바뀌면 서버가 다시 뜬다 — 그동안 읽기가 실패하면 "다시 연결 중"으로 두고, 돌아오면 모듈 목록과
- *    설치된 구역을 새로 받아 메뉴에 반영한다.
- *  · 켜져 있지만 로그인 연동이 보류된 구역은 "연결 보류"로 보이고, [다시 연결]로 그 연결만 다시 건다.
- *  · 설치 관리자 없이 구성한 설치는 지금 켜진 구역만 읽기 전용으로 보여 준다.
+ *  · 맨 위: 권장 메모리 합계(활성화된 구역과 애드온 기준) / 서버 메모리.
+ *  · 구역 카드 · 선택 애드온 카드: 행마다 상태와 스위치. 활성화는 대화상자(설정 → 메모리·포트 확인)를 거치고,
+ *    대화상자가 닫히면 받기·설정·연결 진행이 해당 행 안에서 계속된다. 비활성화는 확인 대화상자를 거친다.
+ *  · 진행 상태는 작업을 1.5초마다 재조회한다. 화면 이탈 시 중지하고, 복귀 시 목록이 반환한 진행 중 작업을 이어서 추적한다.
+ *  · 구역이 변경되면 서버가 재기동된다 — 그동안 조회가 실패하면 "다시 연결 중"으로 표시하고, 복구되면 모듈 목록과
+ *    설치된 구역을 다시 수신하여 메뉴에 반영한다.
+ *  · 활성화돼 있으나 로그인 연동이 보류된 구역은 "연결 보류"로 표시되고, [다시 연결]로 해당 연결만 재시도한다.
+ *  · 설치 관리자 없이 구성한 설치에서는 현재 활성화된 구역만 읽기 전용으로 표시한다.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -33,7 +33,7 @@ import { UiProgress } from '~/components/ui/Progress'
 import { UiErrorTile } from '~/components/ui/ErrorTile'
 import { UiSkeleton } from '~/components/ui/Skeleton'
 
-/** 진행을 다시 읽는 간격 */
+/** 진행 상태 재조회 간격 */
 export const zonesTiming = { pollMs: 1500 }
 
 export default function AdminZonesPage() {
@@ -81,7 +81,7 @@ export default function AdminZonesPage() {
     })
   }, [])
 
-  // 진행 중인 작업을 다시 읽는다 — 화면을 떠나면(언마운트) 멈춘다
+  // 진행 중인 작업을 재조회한다 — 화면 이탈(언마운트) 시 중지한다
   useEffect(() => {
     if (!activeIds) return
     const pairs = activeIds.split(',').map(x => x.split(':') as [string, string])
@@ -99,12 +99,12 @@ export default function AdminZonesPage() {
           setJob(zoneId, job)
           if (!isActive(job)) finished = true
         } catch {
-          if (!stopped) setReconnecting(true)      // 서버가 다시 뜨는 중일 수 있다 — 계속 읽는다
+          if (!stopped) setReconnecting(true)      // 서버 재기동 중일 수 있음 — 조회 계속
         }
       }
       running = false
       if (finished && !stopped) {
-        // 켜진 구역이 바뀌었다 — 목록, 모듈, 설치된 구역을 새로 받아 메뉴에 반영한다
+        // 활성화된 구역 변경 시 목록, 모듈, 설치된 구역을 다시 수신하여 메뉴에 반영한다
         await load()
         void fetchModules()
         void refetchAppConfig()
@@ -129,7 +129,7 @@ export default function AdminZonesPage() {
       setJob(zone.id, await zonesApi.reconnect(zone.id))
     } catch (e: any) {
       const code = errorCode(e)
-      if (code === 'not_pending') { await load(); return }      // 그사이 연결됐다 — 목록만 새로
+      if (code === 'not_pending') { await load(); return }      // 그사이 연결 완료 — 목록만 갱신
       addToast('error', code === 'busy' ? t('admin.zones.dialog.busy') : e?.data?.detail || t('admin.zones.dialog.failed'))
     }
   }
@@ -139,7 +139,7 @@ export default function AdminZonesPage() {
     if (kind === 'reconnect') { await reconnect(zone); return }
     if (kind === 'disable') { setOffAsk(zone); return }
     if (kind === 'update') { setDialog({ zone, mode: 'settings' }); return }
-    // 방금 넣은 설정이 남아 있으면 그대로 다시, 없으면(화면을 다시 연 뒤) 창부터
+    // 직전에 입력한 설정이 남아 있으면 그대로 재시도, 없으면(화면을 다시 연 경우) 대화상자부터 표시
     if (zone.has_settings && !(zone.id in lastSettings.current)) { setDialog({ zone, mode: 'enable' }); return }
     try {
       setJob(zone.id, await zonesApi.enable(zone.id, lastSettings.current[zone.id] ?? null))
@@ -151,7 +151,7 @@ export default function AdminZonesPage() {
 
   async function dismiss(zone: ZoneRow) {
     setJob(zone.id, null)
-    try { await zonesApi.dismissJob(zone.id) } catch { /* 다음 목록에서 다시 보인다 */ }
+    try { await zonesApi.dismissJob(zone.id) } catch { /* 다음 목록 조회 시 다시 표시됨 */ }
   }
 
   if (!user?.is_admin) return null

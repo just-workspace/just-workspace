@@ -1,15 +1,15 @@
 /**
- * 내 상태(사용자 메뉴) — 상단바 아바타 점·사용자 메뉴·Ctrl+K 명령이 같은 값을 본다.
+ * 내 상태(사용자 메뉴) — 상단바 아바타 점·사용자 메뉴·Ctrl+K 명령이 동일한 값을 참조한다.
  *
- * 기준은 서버(GET/PUT /api/chat/me/status — useChat 이 앱 시작 때 받아 둔다).
+ * 기준은 서버(GET/PUT /api/chat/me/status — useChat 이 앱 시작 시 조회해 보관한다).
  *  - 상태 3칸: 온라인(auto) · 자리 비움(away) · 방해 금지(dnd)
- *  - 오프라인으로 표시: mode=invisible(남에게 offline)
- *  - 방해 금지 시간: dnd_until(지금부터 N분). 반복 일정은 설정 › 알림(dnd-schedule)
+ *  - 오프라인으로 표시: mode=invisible(타 사용자에게 offline)
+ *  - 방해 금지 시간: dnd_until(현재부터 N분). 반복 일정은 설정 › 알림(dnd-schedule)
  *  - 상태 메시지: custom_text/emoji/expires_at
- * 채팅 모듈이 꺼져 있거나 아직 못 받았으면 예전처럼 기기 저장(useUserPrefs)으로 동작한다.
+ * 채팅 모듈이 비활성화되어 있거나 아직 조회하지 못한 경우 기존과 같이 기기 저장(useUserPrefs)으로 동작한다.
  *
  * React: const { server, presence, dot, invisible, dndUntil, message, setPresence, ... } = useMyStatus()
- * 컴포넌트 밖: myStatusSnapshot() 으로 같은 계산 값, set* 함수는 그대로 import
+ * 컴포넌트 외부: myStatusSnapshot() 으로 동일 계산 값, set* 함수는 그대로 import
  */
 import { createStore, useStore } from 'zustand'
 import { platformStore, isModuleEnabled, moduleEnabledIn } from '~/composables/usePlatform'
@@ -19,7 +19,7 @@ import type { Presence } from '~/composables/useUserPrefs'
 import type { MyStatus } from '~/lib/chatEvents'
 import { menuPresence } from '~/utils/myStatus'
 
-// 만료(상태 메시지·방해 금지 기한)를 화면에서 넘기도록 30초마다 갱신하는 공용 시계
+// 만료(상태 메시지·방해 금지 기한)를 화면에 반영하도록 30초마다 갱신하는 공용 시계
 const statusClockStore = createStore<{ now: number }>()(() => ({ now: Date.now() }))
 let nowTimer: ReturnType<typeof setInterval> | null = null
 function statusClock() {
@@ -37,18 +37,18 @@ export interface MyStatusView {
   message: MyStatusMessage
 }
 
-/** 파생 값들을 한 번에 — 입력(채팅 모듈 켜짐·내 상태·기기 설정·시계)이 같으면 같은 결과 */
+/** 파생 값 일괄 계산 — 입력(채팅 모듈 활성 여부·내 상태·기기 설정·시계)이 동일하면 동일 결과 */
 function computeView(chatEnabled: boolean, myStatus: MyStatus | null, prefsPresence: Presence, prefsMessage: string, now: number): MyStatusView {
   const server = chatEnabled && !!myStatus
   const invisible = server && myStatus!.mode === 'invisible'
-  /** dnd_until 이 미래면 그 시각 */
+  /** dnd_until 이 미래이면 해당 시각 */
   let dndUntil: Date | null = null
   const u = server ? myStatus!.dnd_until : null
   if (u) {
     const d = new Date(u)
     dndUntil = d.getTime() > now ? d : null
   }
-  /** 상태 3칸에서 고른 값. 오프라인 표시 중이면 null(아무 칸도 안 켜짐) */
+  /** 상태 3칸에서 선택한 값. 오프라인 표시 중이면 null(어느 칸도 활성화되지 않음) */
   const presence: Presence | null = !server ? prefsPresence : menuPresence(myStatus!, now)
   /** 아바타 점 — 오프라인 표시 중이면 offline */
   const dot = presence ?? 'offline'
@@ -67,7 +67,7 @@ function computeView(chatEnabled: boolean, myStatus: MyStatus | null, prefsPrese
 
 const chatEnabledNow = () => isModuleEnabled('chat')
 
-/** 컴포넌트 밖에서 지금 값 */
+/** 컴포넌트 외부에서 현재 값 조회 */
 export function myStatusSnapshot(): MyStatusView {
   ensureUserPrefs()
   const p = userPrefsStore.getState().prefs
@@ -80,7 +80,7 @@ const myStatusNow = () => chatStore.getState().myStatus!
 export async function setPresence(p: Presence) {
   ensureUserPrefs()
   if (!isServer()) { setPrefsPresence(p); return }
-  // 칸을 바꾸면 기한 있는 방해 금지·오프라인 표시도 같이 풀린다
+  // 칸 변경 시 기한이 있는 방해 금지·오프라인 표시도 함께 해제된다
   await updateMyStatus({ mode: p === 'online' ? 'auto' : p, dnd_until: null })
   setPrefsPresence(p)
 }
@@ -90,7 +90,7 @@ export async function setInvisible(on: boolean) {
   await updateMyStatus({ mode: on ? 'invisible' : 'auto' })
 }
 
-/** 지금부터 minutes 분 방해 금지. null 이면 끈다 */
+/** 현재부터 minutes 분간 방해 금지. null 이면 해제한다 */
 export async function setDndFor(minutes: number | null) {
   ensureUserPrefs()
   if (!isServer()) { setPrefsPresence(minutes === null ? 'online' : 'dnd'); return }
@@ -108,7 +108,7 @@ export async function setMessage(text: string) {
   await updateMyStatus({ custom_text: text || null })
 }
 
-/** 상태 메시지 펼침 패널 [저장] — 문구·이모지·지울 시각(null = 지우지 않음)을 한 번에 */
+/** 상태 메시지 펼침 패널 [저장] — 문구·이모지·삭제 시각(null = 삭제하지 않음)을 일괄 저장 */
 export async function saveMessage(text: string, emoji: string | null, expiresAt: Date | null) {
   ensureUserPrefs()
   if (!isServer()) { setPrefsStatusMessage(text); return }

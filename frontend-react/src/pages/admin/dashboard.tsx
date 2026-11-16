@@ -1,8 +1,8 @@
 /**
  * 관리 › 개요 —
  * 헤더형 + 기간 세그먼트(24시간·7일·30일),
- * 운영 요약 4칸(승인 대기 · 마지막 백업 · SSL D-n · 서비스, 칸마다 바로 가는 행동) — GET /api/admin/ops-summary 한 번(useAdminOps)
- * → 일별 활동(1.6fr) + 서비스 상태(1fr) → 나머지 분석. 접근 로그는 시스템 › 접근 로그(/admin/logs)로 옮겼다.
+ * 운영 요약 4칸(승인 대기 · 마지막 백업 · SSL D-n · 서비스, 칸별 바로 가기 동작) — GET /api/admin/ops-summary 1회 호출(useAdminOps)
+ * → 일별 활동(1.6fr) + 서비스 상태(1fr) → 나머지 분석. 접근 로그는 시스템 › 접근 로그(/admin/logs)로 이전함.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -53,7 +53,7 @@ export default function AdminDashboardPage() {
 
   async function load(p: Period = period) {
     await fetchAll(p)
-    // 일별 막대는 기간과 같은 일수로(24시간이면 최근 7일을 그대로 보여 준다)
+    // 일별 막대는 기간과 동일한 일수로 조회(24시간이면 최근 7일을 그대로 표시)
     const days = PERIODS.find(x => x.value === p)?.days ?? 7
     await fetchDailyVisits(Math.max(days, 7))
   }

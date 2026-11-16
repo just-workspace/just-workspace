@@ -1,5 +1,5 @@
 // 비밀번호 찾기: 아이디 1필드 → 재설정 링크.
-// 성공은 같은 자리 결과 화면(아이콘 타일 40 + 제목 + 서버 안내) — 서버는 아이디 존재 여부를 숨기려 항상 같은 문구를 준다.
+// 성공은 동일 위치의 결과 화면(아이콘 타일 40 + 제목 + 서버 안내) — 서버는 아이디 존재 여부를 숨기기 위해 항상 동일한 문구를 반환한다.
 import { useState, type FormEvent } from 'react'
 import { navigateTo } from '~/lib/router'
 import { useHead } from '~/lib/head'

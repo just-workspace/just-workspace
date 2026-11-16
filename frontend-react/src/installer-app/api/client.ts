@@ -1,17 +1,17 @@
 /**
- * 설치 관리자 API 클라이언트 — 같은 출처의 `/api/*` 를 부른다. 세션은 서버가 준 쿠키로만 간다
- * (토큰을 저장하거나 요청마다 싣지 않는다).
+ * 설치 관리자 API 클라이언트 — 동일 출처의 `/api/*` 를 호출한다. 세션은 서버가 발급한 쿠키로만 유지한다
+ * (토큰을 저장하거나 요청마다 포함하지 않는다).
  *
- * 서버 응답을 화면이 쓰는 꼴(types.ts)로 맞추는 일도 여기서 한다 — 경로·본문·응답 모양이 서버와 달라지면 이 파일만 고친다.
- *  - `GET /api/state`: 세션이 없으면 401 → `session: 'none'` 인 상태로 바꾼다. 잠긴 뒤에는 `{phase, locked, url, info.commands}` 만 온다.
- *    서버 터미널에서 치는 명령(`info.commands`)은 서버가 준 글자를 그대로 보여 준다 — 세션이 없을 때는 명령을 모른다(그 줄을 숨긴다).
+ * 서버 응답을 화면이 사용하는 형태(types.ts)로 변환하는 작업도 여기서 수행한다 — 경로·본문·응답 형태가 서버와 달라지면 이 파일만 수정한다.
+ *  - `GET /api/state`: 세션이 없으면 401 → `session: 'none'` 인 상태로 변환한다. 잠긴 이후에는 `{phase, locked, url, info.commands}` 만 수신한다.
+ *    서버 터미널에서 입력하는 명령(`info.commands`)은 서버가 전달한 문자열을 그대로 표시한다 — 세션이 없으면 명령을 알 수 없다(해당 줄을 숨긴다).
  *  - `POST /api/session`: 성공은 `{ok}`, 실패는 401(token_wrong · token_expired) · 429(token_locked) → `SessionResponse`.
- *  - `POST /api/apply` · `/retry`: `{started}` 만 온다 → 바로 상태를 읽어 돌려준다.
- *  - `GET /api/summary`: 구역이 `{id, name}` 목록으로 온다 → id 목록으로.
- *  - `POST /api/probe/cert`: 파일이 아니라 파일의 글자(PEM)를 JSON 으로 보낸다.
- *  - 상태 흐름(SSE)은 `status` · `end` 이름의 이벤트로 온다.
- *  - 복원(`/api/restore/*`): 복원이 없는 옛 서버(501, 읽기 요청은 404·405)는 전부 "지원하지 않음"으로 알린다.
- *    올리기는 다 올라간 뒤에도 서버가 파일을 확인하는 동안 응답이 오지 않는다 — 진행률 100 을 알린 뒤 기다린다.
+ *  - `POST /api/apply` · `/retry`: `{started}` 만 수신한다 → 즉시 상태를 조회하여 반환한다.
+ *  - `GET /api/summary`: 구역이 `{id, name}` 목록으로 수신된다 → id 목록으로 변환한다.
+ *  - `POST /api/probe/cert`: 파일이 아닌 파일의 내용(PEM)을 JSON 으로 송신한다.
+ *  - 상태 흐름(SSE)은 `status` · `end` 이름의 이벤트로 수신된다.
+ *  - 복원(`/api/restore/*`): 복원 기능이 없는 구버전 서버(501, 읽기 요청은 404·405)는 전부 "지원하지 않음"으로 통지한다.
+ *    업로드는 전송 완료 이후에도 서버가 파일을 확인하는 동안 응답이 오지 않는다 — 진행률 100 을 통지한 뒤 대기한다.
  */
 import {
   ApiError,
@@ -45,7 +45,7 @@ function errorVars(body: unknown): Record<string, unknown> {
   return v && typeof v === 'object' ? (v as Record<string, unknown>) : {}
 }
 
-/** 서버의 상태 응답 → 화면이 쓰는 상태 */
+/** 서버의 상태 응답 → 화면이 사용하는 상태 */
 export function normalizeState(raw: Record<string, unknown> | null, session: StateResponse['session']): StateResponse {
   const r = raw ?? {}
   const phase = (r.phase === 'applying' || r.phase === 'installed' ? r.phase : 'wizard') as StateResponse['phase']
@@ -85,7 +85,7 @@ export function createHttpApi(base = ''): InstallerApi {
     return data as T
   }
 
-  /** 복원 요청 — 서버에 아직 없는 길(404 · 405)도 "지원하지 않음"(501)으로 맞춘다 */
+  /** 복원 요청 — 서버에 아직 없는 경로(404 · 405)도 "지원하지 않음"(501)으로 통일 */
   async function restore<T>(method: string, path: string, body?: unknown): Promise<T> {
     try {
       return await call<T>(method, path, body)
@@ -95,7 +95,7 @@ export function createHttpApi(base = ''): InstallerApi {
     }
   }
 
-  /** 상태 흐름(SSE) — 열 수 없거나 끊기면 주기적으로 읽는 것으로 바꾼다. 끝 상태(done · failed)를 받으면 멈춘다 */
+  /** 상태 흐름(SSE) — 연결 불가 또는 단절 시 주기적 조회로 전환한다. 최종 상태(done · failed)를 수신하면 중지한다 */
   function stream(path: string, read: () => Promise<ApplyState>, onState: (s: ApplyState) => void): () => void {
     let closed = false
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -116,7 +116,7 @@ export function createHttpApi(base = ''): InstallerApi {
         if (s.status === 'done') stop()
       }).catch(e => {
         if (closed || !(e instanceof ApiError)) return
-        // 잠겼다(423) = 마지막 단계까지 끝났다. 끝 상태를 읽기 전에 잠겼으면 마지막으로 본 상태를 "완료"로 마무리한다
+        // 잠김(423) = 마지막 단계까지 완료. 최종 상태 조회 전에 잠긴 경우 마지막으로 확인한 상태를 "완료"로 처리
         if (e.status === 423 && last && last.status === 'running') {
           onState({ ...last, status: 'done', current: null, steps: last.steps.map(st => ({ ...st, status: 'done' as const })) })
         }
@@ -129,7 +129,7 @@ export function createHttpApi(base = ''): InstallerApi {
     else {
       source = new EventSource(base + path, { withCredentials: true })
       const take = (e: MessageEvent) => {
-        try { give(JSON.parse(e.data) as ApplyState) } catch { /* 깨진 조각은 버린다 */ }
+        try { give(JSON.parse(e.data) as ApplyState) } catch { /* 손상된 조각은 폐기 */ }
       }
       source.addEventListener('status', take as EventListener)
       source.onmessage = take
@@ -193,7 +193,7 @@ export function createHttpApi(base = ''): InstallerApi {
       try {
         await call('POST', '/api/apply')
       } catch (e) {
-        // 이미 돌고 있으면 그 진행을 그대로 보여 준다
+        // 이미 실행 중이면 해당 진행 상태를 그대로 표시
         if (!(e instanceof ApiError && e.code === 'apply_running')) throw e
       }
       return api.getApply()
@@ -211,13 +211,13 @@ export function createHttpApi(base = ''): InstallerApi {
     getApplyLog: (step, tail) => call<ApplyLog>('GET', `/api/apply/log?step=${encodeURIComponent(step)}${tail ? `&tail=${tail}` : ''}`),
 
     restoreUpload: (file, onProgress, signal) => new Promise<RestoreFileInfo>((resolve, reject) => {
-      // 올리는 진행률은 fetch 로 알 수 없어 XMLHttpRequest 를 쓴다
+      // 업로드 진행률은 fetch 로 확인할 수 없어 XMLHttpRequest 를 사용
       const xhr = new XMLHttpRequest()
       xhr.open('POST', base + '/api/restore/upload')
       xhr.withCredentials = true
       xhr.responseType = 'text'
       xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)) }
-      // 다 올라갔다 — 이제부터는 서버가 형식과 해시를 확인하는 시간이다
+      // 업로드 완료 — 이후는 서버가 형식과 해시를 확인하는 시간
       xhr.upload.onload = () => onProgress(100)
       xhr.onload = () => {
         let data: unknown
@@ -241,7 +241,7 @@ export function createHttpApi(base = ''): InstallerApi {
       try {
         await restore('POST', '/api/restore/apply', target)
       } catch (e) {
-        // 이미 돌고 있으면 그 진행을 그대로 보여 준다
+        // 이미 실행 중이면 해당 진행 상태를 그대로 표시
         if (!(e instanceof ApiError && e.code === 'apply_running')) throw e
       }
       return api.restoreGetApply()

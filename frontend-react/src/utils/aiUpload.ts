@@ -1,5 +1,5 @@
-// 첨부 올리기 — XHR 로 올린다(업로드 진행을 알아야 "올리는 중 → 변환 중"을 나눌 수 있다. fetch 는 업로드 진행 이벤트가 없다).
-// 바이트를 다 보내면 onStage('converting'), 서버가 변환을 끝내 응답하면 결과(성공·실패 코드)를 돌려준다.
+// 첨부 업로드 — XHR 사용(업로드 진행 상황을 알아야 "올리는 중 → 변환 중"을 구분할 수 있다. fetch 는 업로드 진행 이벤트 미지원).
+// 바이트 전송 완료 시 onStage('converting') 호출, 서버가 변환을 마치고 응답하면 결과(성공·실패 코드)를 반환한다.
 import { apiUrl, bundledAuthHeaders } from '~/lib/runtimeConfig'
 import type { AiAttachment } from '~/utils/aiAssist'
 

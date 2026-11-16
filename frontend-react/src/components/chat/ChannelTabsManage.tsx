@@ -2,20 +2,20 @@
  * 탭 관리.
  * UiModal 480 "#채널 탭 관리":
  *  안내 13 muted → 목록(rounded-md border, 행 min-h-12):
- *    메시지 = lock 고정(옮기기·끄기 없음) · 나머지 = 끌기 손잡이(UiIconButton grip) + 아이콘 + 이름·설명 + UiSwitch.
- *    꺼진 모듈 = 흐리게 + 스위치 비활성 + 이유("{모듈} 모듈 꺼짐 — 관리자에게 요청").
- *    위키 = 연결된 스페이스 이름 · [바꾸기] — 스페이스를 고르기 전에는 켤 수 없다.
- *  → 아래 안내 12 muted. 바닥 [취소][저장] — 순서·끄기는 저장을 눌러야 채널 멤버 모두에게 적용된다.
- * 순서 바꾸기: 손잡이를 끌어 놓기(마우스) 또는 손잡이에서 ↑↓(키보드).
- * [바꾸기]·[폴더 연결]은 같은 창 안 하위 화면으로 들어가고, 거기서 연결하면 바로 저장된다(기존 동작).
+ *    메시지 = lock 고정(이동·비활성화 불가) · 나머지 = 드래그 핸들(UiIconButton grip) + 아이콘 + 이름·설명 + UiSwitch.
+ *    비활성화된 모듈 = 흐리게 + 스위치 비활성 + 사유("{모듈} 모듈 꺼짐 — 관리자에게 요청").
+ *    위키 = 연결된 스페이스 이름 · [바꾸기] — 스페이스 선택 전에는 활성화 불가.
+ *  → 하단 안내 12 muted. 푸터 [취소][저장] — 순서·비활성화는 저장 시점에 채널 멤버 전원에게 적용.
+ * 순서 변경: 핸들 드래그 앤 드롭(마우스) 또는 핸들에서 ↑↓(키보드).
+ * [바꾸기]·[폴더 연결]은 동일 창 내 하위 화면으로 진입하며, 하위 화면에서 연결하면 즉시 저장(기존 동작).
  * 하위 화면: 제목 자리 = ‹(탭 관리로) + 제목(titleSlot).
- *  위키: UiInput 검색 → 스페이스 행 h-14(book-open · 이름 13 · "페이지 n · 공개범위|소유자" 12 muted), 고른 것 = primary 틴트 + 600 + ✓ →
+ *  위키: UiInput 검색 → 스페이스 행 h-14(book-open · 이름 13 · "페이지 n · 공개범위|소유자" 12 muted), 선택 항목 = primary 틴트 + 600 + ✓ →
  *        안내 12 muted "지금: …". 푸터 [뒤로][이 스페이스로].
- *  폴더: 경로 한 줄(13, 앞 칸 muted · › · 지금 칸 600) → 폴더 행 h-11(행 = 고르기, › = 들어가기; 더블클릭도 들어가기) → 안내.
- *        푸터 [뒤로]["이름" 연결] — 고른 행이 없으면 지금 들어와 있는 폴더.
- *  연결 해제 = 푸터 왼쪽 danger 글자 버튼, 누르면 확인형 모달(UiModal confirm sm) 뒤 해제.
- *  폴더 행의 "파일 n" 수와 "권한 없는 멤버 경고" 줄은 그리지 않는다 — 목록 API 에 하위 개수가 없고,
- *  폴더 연결은 채널 공유(FileShare.shared_with_channel_id)를 만들어 멤버 전원이 늘 읽을 수 있어 경고 대상이 생기지 않는다.
+ *  폴더: 경로 한 줄(13, 앞 칸 muted · › · 현재 칸 600) → 폴더 행 h-11(행 = 선택, › = 진입; 더블클릭도 진입) → 안내.
+ *        푸터 [뒤로]["이름" 연결] — 선택한 행이 없으면 현재 진입한 폴더.
+ *  연결 해제 = 푸터 왼쪽 danger 텍스트 버튼, 클릭 시 확인형 모달(UiModal confirm sm)을 거쳐 해제.
+ *  폴더 행의 "파일 n" 수와 "권한 없는 멤버 경고" 줄은 표시하지 않음 — 목록 API 에 하위 개수가 없고,
+ *  폴더 연결은 채널 공유(FileShare.shared_with_channel_id)를 생성하여 멤버 전원이 항상 읽기 가능하므로 경고 대상이 발생하지 않음.
  */
 import { Fragment, useEffect, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { clsx as cn } from 'clsx'
@@ -39,10 +39,10 @@ export interface ChatChannelTabsManageProps {
   channelId: string
   /** 채널 이름(제목 "#이름 탭 관리") */
   channelName?: string
-  /** 지금 탭 요약 */
+  /** 현재 탭 요약 */
   summary: ChannelTabsSummary | null
   onClose?: () => void
-  /** 저장됨 — 새 요약 */
+  /** 저장 완료 — 새 요약 */
   onSaved?: (summary: ChannelTabsSummary) => void
 }
 
@@ -59,14 +59,14 @@ const TAB_ICON: Record<ChannelTabMovable | 'messages', string> = {
   messages: 'chat', files: 'folder', wiki: 'book-open', meetings: 'video', tasks: 'check-square',
 }
 
-/** 탭 관리 모달(순서·끄기 + 위키 스페이스·폴더 연결) */
+/** 탭 관리 모달(순서·비활성화 + 위키 스페이스·폴더 연결) */
 export function ChatChannelTabsManage({ channelId, channelName, summary, onClose, onSaved }: ChatChannelTabsManageProps) {
   const { t } = useI18n()
   const { isModuleEnabled } = usePlatform()
   const [view, setView] = useState<View>('tabs')
   const [busy, setBusy] = useState(false)
 
-  // ── 순서·끄기(저장 전 초안) ──
+  // ── 순서·비활성화(저장 전 초안) ──
   const [rows, setRows] = useState(() => orderedTabs(summary))
   const hasWiki = !!(summary?.wiki_space || summary?.wiki)
   const moduleOff = (k: ChannelTabMovable) => !isModuleEnabled(TAB_MODULE[k])
@@ -99,7 +99,7 @@ export function ChatChannelTabsManage({ channelId, channelName, summary, onClose
     e.preventDefault()
     const j = i + (e.key === 'ArrowUp' ? -1 : 1)
     move(i, j)
-    // 옮긴 행의 손잡이에 포커스를 남긴다
+    // 이동한 행의 핸들에 포커스 유지
     requestAnimationFrame(() => {
       document.querySelector<HTMLElement>(`[data-tab-handle="${rows[i].key}"]`)?.focus()
     })
@@ -119,7 +119,7 @@ export function ChatChannelTabsManage({ channelId, channelName, summary, onClose
     } finally { setBusy(false) }
   }
 
-  // ── 하위 화면: 연결(바로 저장) ──
+  // ── 하위 화면: 연결(즉시 저장) ──
   async function link(body: Parameters<typeof updateTabs>[1], msg: string) {
     setBusy(true)
     try {
@@ -157,7 +157,7 @@ export function ChatChannelTabsManage({ channelId, channelName, summary, onClose
   const [dir, setDir] = useState('my')
   const [folders, setFolders] = useState<FileItem[]>([])
   const [loadingDir, setLoadingDir] = useState(false)
-  /** 행 클릭으로 고른 폴더(없으면 지금 들어와 있는 폴더를 연결) */
+  /** 행 클릭으로 선택한 폴더(없으면 현재 진입한 폴더를 연결) */
   const [picked, setPicked] = useState<string | null>(null)
   async function loadDir(p: string) {
     setLoadingDir(true)
@@ -202,11 +202,11 @@ export function ChatChannelTabsManage({ channelId, channelName, summary, onClose
     return t(k === 'meetings' ? 'chat.tabs.descMeetings' : 'chat.tabs.descTasks')
   }
 
-  // 폴더 화면: 연결할 대상 = 고른 행, 없으면 지금 들어와 있는 폴더(내 파일 맨 위는 연결 못 함)
+  // 폴더 화면: 연결 대상 = 선택한 행, 없으면 현재 진입한 폴더(내 파일 최상위는 연결 불가)
   const folderTarget = picked ?? (dir !== 'my' ? dir : null)
   const folderTargetName = folderTarget ? folderTarget.split('/').filter(Boolean).pop() ?? '' : ''
 
-  // 연결 해제 — 푸터 왼쪽 danger 글자 버튼 → 확인형 모달(sm) → 해제
+  // 연결 해제 — 푸터 왼쪽 danger 텍스트 버튼 → 확인형 모달(sm) → 해제
   async function confirmUnlink(body: Parameters<typeof updateTabs>[1], msg: string, kind: 'wiki' | 'folder') {
     const ok = await confirmBox(t(kind === 'wiki' ? 'chat.tabs.unlinkWikiBody' : 'chat.tabs.unlinkFolderBody'), {
       title: t('chat.tabs.unlinkTitle'),

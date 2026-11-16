@@ -1,8 +1,8 @@
 /**
- * Git. 화면은 라우트가 정한다(utils/gitRoute):
+ * Git. 화면은 라우트가 결정한다(utils/gitRoute):
  *  /code → 저장소 목록 · /code/:owner/:repo/(tree|blob|issues|pulls|commits) → 저장소 안(제목 줄 + 밑줄 탭).
  *  이슈·PR 은 목록 560 + 상세(1024↑ 2단). 1024 미만은 목록 → 상세 전환(모바일 상세는 탭바 숨김 + 뒤로 막대).
- * ⚠ nginx 가 /git/ 를 Gitea 로 넘기므로, 이 주소를 새로고침하거나 바깥에서 열면 Gitea 의 같은 화면이 뜬다.
+ * 주의: nginx 가 /git/ 를 Gitea 로 전달하므로, 이 주소를 새로고침하거나 외부에서 열면 Gitea 의 동일 화면이 표시된다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -51,7 +51,7 @@ export default function Page() {
 
   const [showCreateIssue, setShowCreateIssue] = useState(false)
 
-  // 라우트 → 데이터. 같은 키면 다시 받지 않는다(이슈 목록 ↔ 상세 이동 때 목록을 지킨다)
+  // 라우트 → 데이터. 동일 키면 재조회하지 않는다(이슈 목록 ↔ 상세 이동 시 목록 유지)
   const lastKey = useRef({ repos: false, list: '', detail: '' })
   const refQ = (route.query.ref as string) || null
   const slugRef = useRef(route.params.slug)
@@ -114,7 +114,7 @@ export default function Page() {
 
   const listPath = repoRoute ? gitPath({ owner: repoRoute.owner, repo: repoRoute.repo, tab: repoRoute.tab }) : '/code'
   const hasDetail = !!repoRoute?.number
-  // 파일 보기(blob): 모바일 머리 = 파일 이름 + 저장소, 뒤로 = 그 파일이 든 폴더
+  // 파일 보기(blob): 모바일 머리 = 파일 이름 + 저장소, 뒤로 = 해당 파일이 속한 폴더
   const isBlob = repoRoute?.tab === 'code' && repoRoute.kind === 'blob'
   const blobName = (repoRoute?.path || '').split('/').pop() || ''
   const blobParent = (() => {
@@ -162,7 +162,7 @@ export default function Page() {
           />
         ) : selectedRepo ? (
           <>
-            {/* 머리(모바일 상세·파일 보기에선 뒤로 막대로 바뀐다 — 공용 상단바 + 저장소 머리 이중 방지) */}
+            {/* 머리(모바일 상세·파일 보기에서는 뒤로 막대로 대체된다 — 공용 상단바 + 저장소 머리 이중 표시 방지) */}
             {isMobile && isBlob ? (
               <LayoutMobileDetailBar
                 title={blobName}

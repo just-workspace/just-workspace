@@ -1,8 +1,8 @@
 /**
- * 채팅 백엔드 API — 얇은 fetch 함수와 응답 타입(한 곳).
+ * 채팅 백엔드 API — 얇은 fetch 함수와 응답 타입(단일 위치).
  * 계약: 답장·점프·스레드(혼합형)·커스텀 이모지·검색(오른쪽 자리)·음소거 기간·프로필 팝아웃·포럼·여러 첨부.
- * 역할·권한·카테고리는 useChatRoles.ts · useChatLayout.ts 가 부른다.
- * 상태(zustand)는 각 화면의 composable 이 갖는다 — 여기는 네트워크만.
+ * 역할·권한·카테고리는 useChatRoles.ts · useChatLayout.ts 가 호출한다.
+ * 상태(zustand)는 각 화면의 composable 이 보유한다 — 본 모듈은 네트워크만 담당한다.
  */
 import { $fetch } from '~/lib/api'
 import type { ChatMessage, MessageSender, ThreadMeta, ThreadParticipant } from '~/composables/useChat'
@@ -11,11 +11,11 @@ const B = '/api/chat'
 
 // ─── 점프(원문으로) ───
 export interface AroundPage { messages: ChatMessage[]; has_more: boolean; has_more_after: boolean; thread_root_id?: string | null }
-/** 원문 위치를 중심으로 위아래 반씩(원문 포함). 스레드 안 원문이면 messages 는 비고 thread_root_id */
+/** 원문 위치를 중심으로 위아래 절반씩(원문 포함). 스레드 내 원문이면 messages 는 비어 있고 thread_root_id 가 설정됨 */
 export function fetchMessagesAround(channelId: string, messageId: string, limit = 50) {
   return $fetch<AroundPage>(`${B}/channels/${channelId}/messages`, { query: { around: messageId, limit } })
 }
-/** 점프한 곳에서 아래(최근) 방향 페이지 */
+/** 점프한 위치에서 아래(최근) 방향 페이지 */
 export function fetchMessagesAfter(channelId: string, afterSeq: number, limit = 50) {
   return $fetch<AroundPage>(`${B}/channels/${channelId}/messages`, { query: { after_seq: afterSeq, limit } })
 }
@@ -32,7 +32,7 @@ export function postMessage(channelId: string, content: string, extra: SendExtra
   return $fetch<ChatMessage>(`${B}/channels/${channelId}/messages`, { method: 'POST', body: { content, ...extra } })
 }
 
-/** 여러 첨부를 메시지 하나로(최대 10). spoilers = 스포일러로 가릴 파일 인덱스, alts = 인덱스별 대체 텍스트 */
+/** 여러 첨부를 메시지 하나로 전송(최대 10). spoilers = 스포일러로 가릴 파일 인덱스, alts = 인덱스별 대체 텍스트 */
 export interface AttachmentUpload { file: File; spoiler?: boolean; alt?: string | null }
 export function postAttachments(
   channelId: string,
@@ -47,7 +47,7 @@ export function postAttachments(
   if (opts.content) fd.append('content', opts.content)
   for (const k of ['reply_to_id', 'parent_id'] as const) if (opts[k]) fd.append(k, String(opts[k]))
   for (const k of ['reply_ping', 'silent', 'also_to_channel'] as const) if (opts[k] != null) fd.append(k, String(!!opts[k]))
-  // 진행 막대가 필요해 XHR(ofetch 는 업로드 진행을 주지 않는다). 같은 출처 쿠키 세션.
+  // 진행 막대가 필요하여 XHR 사용(ofetch 는 업로드 진행률을 제공하지 않는다). 동일 출처 쿠키 세션.
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `${B}/channels/${channelId}/attachments`)
@@ -114,7 +114,7 @@ export function renameCustomEmoji(id: string, name: string) {
   return $fetch<CustomEmoji>(`${B}/emojis/${id}`, { method: 'PATCH', body: { name } })
 }
 export function deleteCustomEmoji(id: string) { return $fetch(`${B}/emojis/${id}`, { method: 'DELETE' }) }
-/** 서버 오류 → 이모지 오류 코드(detail.code). 모르면 null */
+/** 서버 오류 → 이모지 오류 코드(detail.code). 미지의 오류는 null */
 export function emojiErrorCode(e: unknown): EmojiErrorCode | null {
   const d = (e as { data?: { detail?: unknown } })?.data?.detail
   const code = d && typeof d === 'object' ? (d as { code?: string }).code : undefined
@@ -185,7 +185,7 @@ export function createForumChannel(name: string, type: 'public' | 'private', opt
 // ─── 채팅 서버 설정(개요 · 알림 기본값) ───
 export type ChatNotifyLevel = 'all' | 'mentions' | 'none'
 export interface ChatServerSettings {
-  /** 채팅 이름(사이드바 머리). 비면 사이트 이름 */
+  /** 채팅 이름(사이드바 머리). 비어 있으면 사이트 이름 사용 */
   name: string | null
   description: string | null
   /** 새 멤버·새 채널의 알림 기본값 */

@@ -11,7 +11,7 @@
  *     └─ *  → 404(AuthErrorScreen)
  *
  * 페이지 파일은 src/pages/<file> 에서 지연 로드(import.meta.glob).
- * admin/settings 레이아웃이 기본 셸 안에 중첩돼 있어, 셸 사이를 오갈 때 사이드바가 다시 마운트되지 않는다.
+ * admin/settings 레이아웃이 기본 셸 안에 중첩되어 있어, 셸 간 이동 시 사이드바가 재마운트되지 않는다.
  */
 import type { ComponentType } from 'react'
 import { isChunkLoadError, isReloading, reloadOnce } from '~/lib/chunkReload'
@@ -42,20 +42,20 @@ function pageRoute(def: AppRouteDef): RouteObject {
     handle,
     lazy: async () => ({ Component: (await load()).default }),
   }
-  // redirect 메타: 쿼리 없이 그 주소로
+  // redirect 메타: 쿼리 없이 해당 주소로 리다이렉트
   if (def.redirect) r.loader = () => redirect(def.redirect!)
   return r
 }
 
 function NotFound() {
-  // 라우트 없음 오류의 url 은 비워 둔다 — 화면이 현재 경로(route.fullPath)를 보여 준다
+  // 라우트 없음 오류의 url 은 공란으로 둔다 — 화면이 현재 경로(route.fullPath)를 표시한다
   return <AuthErrorScreen error={{ statusCode: 404 }} />
 }
 
 /** 라우터 오류(로더 실패·렌더 실패) 화면 */
 function RouteError() {
   const err = useRouteError()
-  // 재배포 뒤 옛 화면 조각을 못 불러온 것 — 오류 화면 대신 새로고침(30초 안 되풀이면 오류 화면)
+  // 재배포 후 이전 화면 조각 로드 실패 — 오류 화면 대신 새로고침(30초 이내 반복 시 오류 화면)
   if (isReloading() || (isChunkLoadError(err) && reloadOnce())) return null
   let statusCode = 500
   let message: string | undefined
@@ -89,7 +89,7 @@ export function buildRoutes(defs: AppRouteDef[] = ROUTES): RouteObject[] {
       Component: App,
       errorElement: <RouteError />,
       HydrateFallback: () => null,
-      // 전역 가드(auth → module-guard → setup)는 매 이동마다
+      // 전역 가드(auth → module-guard → setup)는 이동마다 실행
       shouldRevalidate: () => true,
       loader: async ({ request }) => {
         const url = new URL(request.url)

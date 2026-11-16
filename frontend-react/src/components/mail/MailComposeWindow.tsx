@@ -1,11 +1,11 @@
 /**
- * 떠 있는 작성 창 하나: 580×640, 위 모서리 12, 아래 테두리 없음, 그림자 0 -8 40 scrim/55.
- * 제목 줄 44(secondary): 제목 · 최소화(—) · 크게 보기 · 닫기(임시보관함에 저장). 최소화하면 제목 줄만.
- * 최소화해도 작성기는 살아 있다(MailComposer show=false).
+ * 플로팅 작성 창 1개: 580×640, 위 모서리 12, 아래 테두리 없음, 그림자 0 -8 40 scrim/55.
+ * 제목 줄 44(secondary): 제목 · 최소화(—) · 크게 보기 · 닫기(임시보관함에 저장). 최소화 시 제목 줄만 표시.
+ * 최소화 상태에서도 작성기는 유지됨(MailComposer show=false).
  */
 import { useRef, type KeyboardEvent } from 'react'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거함)
 import { clsx as cx } from 'clsx'
 import { closeCompose, setComposeMinimized, toggleComposeMaximized, setComposeTitle, type ComposeWindow } from '~/composables/useMailCompose'
 import { UiIconButton } from '~/components/ui/IconButton'
@@ -15,20 +15,20 @@ import { MailComposer, type MailComposerHandle } from '~/components/mail/MailCom
 export interface MailComposeWindowProps {
   /** 창 상태(useMailCompose windows 의 한 항목) */
   win: ComposeWindow
-  /** 화면 오른쪽에서 떨어진 거리 px */
+  /** 화면 오른쪽 끝으로부터의 거리 px */
   right: number
   /** 창 폭 px(최소화 280 · 펼침 580) */
   width: number
 }
 
-/** 데스크톱 떠 있는 작성 창 */
+/** 데스크톱 플로팅 작성 창 */
 export function MailComposeWindow({ win, right, width }: MailComposeWindowProps) {
   const { t } = useI18n()
   const composer = useRef<MailComposerHandle | null>(null)
 
   function onTitleBarClick() { if (win.minimized) setComposeMinimized(win.id, false) }
   async function requestClose() {
-    // 최소화돼 있어도 컴포저는 살아 있다(v-show) — 저장 후 닫는다
+    // 최소화 상태에서도 컴포저는 유지됨(v-show) — 저장 후 닫음
     if (composer.current) await composer.current.close()
     else closeCompose(win.id)
   }

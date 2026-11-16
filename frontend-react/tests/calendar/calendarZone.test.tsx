@@ -1,4 +1,4 @@
-// 캘린더 화면이 설정 시간대로 그려지는지 — 주 보기 칸 위치(서머타임 날 포함)·현재 시각 선·월 보기 종일·
+// 캘린더 화면이 설정 시간대로 렌더링되는지 검증 — 주 보기 칸 위치(서머타임 날 포함)·현재 시각 선·월 보기 종일·
 // 일정 폼(편집·새 일정·저장 값)·이동·대시보드 "오늘". 기기 시간대와 무관하게 _setCalendarZone 으로 고정.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
@@ -72,7 +72,7 @@ describe('주·일 보기', () => {
     const early = screen.getByTitle(/^새벽 · /)
     expect(early.title).toBe('새벽 · 01:00–03:30')
     expect(early.style.top).toBe(`${48 + 1}px`)
-    // 벽시계로 01:00 → 03:30 = 2.5칸(경과 1.5시간이 아니라)
+    // 벽시계 기준 01:00 → 03:30 = 2.5칸(경과 1.5시간이 아님)
     expect(early.style.height).toBe(`${2.5 * 48 - 3}px`)
   })
 

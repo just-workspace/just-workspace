@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const appName = env.APP_NAME || env.VITE_APP_NAME || 'Workspace'
   const brandColor = env.BRAND_COLOR || env.VITE_BRAND_COLOR || '#3B82F6'
-  // 번들 SPA 앱(apiBase 설정)에선 SW 끔(옛 SW 가 구번들을 영구 precache 하는 사고 방지)
+  // 번들 SPA 앱(apiBase 설정)에서는 SW 비활성화(구 SW 가 구번들을 영구 precache 하는 사고 방지)
   const apiBase = env.VITE_API_BASE || env.NUXT_PUBLIC_API_BASE || ''
   const backend = env.DEV_BACKEND || 'http://localhost:8000'
 
@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_APP_NAME': JSON.stringify(appName),
       'import.meta.env.VITE_BRAND_COLOR': JSON.stringify(brandColor),
       'import.meta.env.VITE_API_BASE': JSON.stringify(apiBase),
-      // v1(Vue) 플러그인용 지연 로드 Vue 런타임의 기능 플래그 — Nuxt 기본값과 같게(옵션 API 켬, 운영 devtools 끔)
+      // v1(Vue) 플러그인용 지연 로드 Vue 런타임의 기능 플래그 — Nuxt 기본값과 동일(옵션 API 활성, 운영 devtools 비활성)
       __VUE_OPTIONS_API__: 'true',
       __VUE_PROD_DEVTOOLS__: 'false',
       __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
@@ -53,14 +53,14 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           navigateFallback: '/',
-          // /api·/oauth·/ws·/git 등 서버 경로는 SPA 로 떨어지면 안 된다
+          // /api·/oauth·/ws·/git 등 서버 경로는 SPA 로 fallback 되어서는 안 됨
           navigateFallbackDenylist: [/^\/api\//, /^\/oauth\//, /^\/ws\//, /^\/git\//, /^\/dav\//, /^\/sso\//, /^\/onlyoffice\//, /^\/livekit\//, /^\/audiorelay\//, /^\/\.well-known\//],
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
           maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
-          // 웹푸시 표시(push · notificationclick) — generateSW 는 push 처리기를 만들지 않는다. public/push-sw.js
+          // 웹푸시 표시(push · notificationclick) — generateSW 는 push 처리기를 생성하지 않음. public/push-sw.js
           importScripts: ['/push-sw.js'],
-          // /api/** 런타임 캐시는 두지 않는다 — 캐시 키가 주소뿐이라 사용자 구분이 없고(로그아웃 뒤에도 남아 다음 사용자에게
-          // 이전 사용자 응답이 나갈 수 있다) 파일 내려받기까지 통째로 복제됐다.
+          // /api/** 런타임 캐시는 사용하지 않는다 — 캐시 키가 주소뿐이어서 사용자 구분이 없고(로그아웃 후에도 남아 다음 사용자에게
+          // 이전 사용자 응답이 전달될 수 있다) 파일 다운로드까지 전체 복제되었다.
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/.*\/assets\/.*/i,

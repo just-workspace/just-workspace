@@ -1,15 +1,15 @@
 /**
  * Chat — WebSocket 클라이언트 + 상태 관리(모듈 싱글턴).
  *
- * 상태 반영 규칙(이벤트 → 상태)은 lib/chatEvents.ts 의 순수 함수에 있다. 여기는 네트워크·타이머·상태만.
+ * 상태 반영 규칙(이벤트 → 상태)은 lib/chatEvents.ts 의 순수 함수에 정의한다. 본 모듈은 네트워크·타이머·상태만 담당한다.
  *
  * React: const { channels, messages, selectChannel, sendMessage, ... } = useChat()
- *   - 값은 렌더 시점 값. 읽은 필드만 구독한다(useTrackedStore).
- *   - 바깥에서 바꾸는 상태는 setter: setShowMemberPanel · setShowPinsPanel · setShowSearchPanel ·
+ *   - 값은 렌더 시점 값이다. 읽은 필드만 구독한다(useTrackedStore).
+ *   - 외부에서 변경하는 상태는 setter 를 사용한다: setShowMemberPanel · setShowPinsPanel · setShowSearchPanel ·
  *     setSearchQuery · setShowNotifyBanner
- * 컴포넌트 밖: chatStore.getState() / 아래 export 함수들(initChat, selectChannel, sendMessage …)
- *   이벤트 처리기 안에서 "지금" 값이 필요하면 chatStore.getState().messages 처럼 store 를 직접 읽는다.
- * 셸 진입점: initChat() · cleanupChat()(로그아웃 때 useAuth 가 자동으로 부른다)
+ * 컴포넌트 외부: chatStore.getState() / 아래 export 함수(initChat, selectChannel, sendMessage …)
+ *   이벤트 처리기 내부에서 현재 시점 값이 필요한 경우 chatStore.getState().messages 와 같이 store 를 직접 조회한다.
+ * 셸 진입점: initChat() · cleanupChat()(로그아웃 시 useAuth 가 자동 호출한다)
  */
 import { createStore } from 'zustand'
 import { $fetch } from '~/lib/api'
@@ -60,7 +60,7 @@ import type {
   UserPresence,
 } from '~/lib/chatEvents'
 
-// UI 가 한 곳에서 가져가게 다시 내보낸다
+// UI 가 단일 위치에서 가져오도록 재노출(re-export)
 export type {
   ChannelDevicePrefs,
   ChannelPrefs,
@@ -91,7 +91,7 @@ export interface Channel {
   description: string | null
   created_by: string
   is_archived: boolean
-  /** 음성 채널 — 종류는 그대로, LiveKit 방 voice-<id> 가 붙는다 */
+  /** 음성 채널 — 종류는 유지하고 LiveKit 방 voice-<id> 가 연결됨 */
   is_voice?: boolean
   created_at: string
   updated_at: string
@@ -102,19 +102,19 @@ export interface Channel {
   last_read_seq?: number | null
   last_message_seq?: number | null
   last_message?: ChannelLastMessage | null
-  /** 채널별 알림 수준 — 서버가 기본값(DM all, 그 외 mentions)을 풀어서 내려준다 */
+  /** 채널별 알림 수준 — 서버가 기본값(DM all, 그 외 mentions)을 적용한 값을 전달 */
   notify_level?: NotifyLevel
-  /** 뮤트 — 굵게(미읽음) 표시만 빠지고 멘션 숫자는 그대로(백엔드 규칙) */
+  /** 뮤트 — 굵게(미읽음) 표시만 제외되고 멘션 숫자는 유지(백엔드 규칙) */
   muted?: boolean
-  /** 음소거 기간 — 이 시각까지. null = 내가 끌 때까지 */
+  /** 음소거 기간 — 이 시각까지 적용. null = 사용자가 해제할 때까지 */
   muted_until?: string | null
   /** 카테고리(chat_categories) — null = 분류 없음 */
   category_id?: string | null
-  /** 카테고리 안 순서(작을수록 위) */
+  /** 카테고리 내 순서(작을수록 상단) */
   position?: number | null
-  /** 포럼 채널 = 이 게시판의 채팅 쪽 보기 */
+  /** 포럼 채널 = 이 게시판의 채팅 측 보기 */
   forum_board_id?: string | null
-  /** 이 채널 새 스레드 자동 보관(분) */
+  /** 이 채널의 신규 스레드 자동 보관(분) */
   default_thread_auto_archive_minutes?: number | null
 }
 
@@ -155,38 +155,38 @@ export interface ChatMessage {
   read_by?: ReadByUser[]
   reactions?: ReactionGroup[]
   seq?: number
-  /** 답글인데 "채널에도 보내기" 한 것 — parent_id 가 있어도 메인 타임라인에 보인다 */
+  /** "채널에도 보내기" 를 적용한 답글 — parent_id 가 있어도 메인 타임라인에 표시 */
   thread_broadcast?: boolean
   pinned_at?: string | null
   pinned_by?: string | null
-  /** GET /channels/{id}/pins 항목에만 붙는다 */
+  /** GET /channels/{id}/pins 항목에만 포함 */
   pinned_by_name?: string | null
-  /** 내가 저장했는지(목록·스레드 응답에 붙는다. 실시간 이벤트에는 없을 수 있다) */
+  /** 본인 저장 여부(목록·스레드 응답에 포함. 실시간 이벤트에는 누락 가능) */
   is_saved?: boolean
   /** 답글이 있는 루트에만 — 최근 답글 순 최대 5명 */
   thread_participants?: ThreadParticipant[]
   /** 답글이 있는 루트에만 — 마지막 답글 시각(ISO) */
   last_reply_at?: string | null
-  /** 링크 미리보기 카드 — 서버가 첫 외부 링크를 비동기로 읽어 채운다(WS link_preview). 없거나 지웠으면 null */
+  /** 링크 미리보기 카드 — 서버가 첫 외부 링크를 비동기로 조회해 기록(WS link_preview). 없거나 삭제된 경우 null */
   link_preview?: LinkPreview | null
   // ── 답장·조용히 보내기 등 ──
   /** 인라인 답장 대상 */
   reply_to_id?: string | null
-  /** 답장 대상에게 알림(@ 켬) */
+  /** 답장 대상에게 알림(@ 활성화) */
   reply_ping?: boolean
-  /** 답장 원문 요약(서버가 붙인다) */
+  /** 답장 원문 요약(서버가 첨부) */
   reply_to?: ReplyRef | null
-  /** @silent 로 보냄 — 알림 없음 */
+  /** @silent 로 전송 — 알림 없음 */
   silent?: boolean
-  /** 첨부(file_meta 를 서버가 풀어 준 것 — 옛 단일 첨부도 1개짜리) */
+  /** 첨부(서버가 file_meta 를 변환한 값 — 구 단일 첨부도 1개 항목으로 전달) */
   attachments?: ChatAttachment[]
   /** 스레드가 시작된 루트에만 */
   thread?: ThreadMeta | null
-  /** (로컬 전용) 첨부 묶음 보내기 중인 낙관적 줄 — id 'local-up-…'. 동작은 useChatAttachments retryUpload/discardUpload(localId) */
+  /** (로컬 전용) 첨부 묶음 전송 중인 낙관적 줄 — id 'local-up-…'. 동작은 useChatAttachments retryUpload/discardUpload(localId) */
   _upload?: { localId: string; state: 'uploading' | 'failed' | 'too_large'; progress: number; error?: string | null }
 }
 
-/** 보내기 옵션 — 인라인 답장 · @silent. 소켓 send_message · REST · 대기함 모두 실린다 */
+/** 전송 옵션 — 인라인 답장 · @silent. 소켓 send_message · REST · 대기함 모두에 포함 */
 export interface SendOptions { reply_to_id?: string | null; reply_ping?: boolean; silent?: boolean }
 
 /** 답장 원문 상태: ok · 삭제됨 · 불러올 수 없음 · 권한 없음 */
@@ -195,7 +195,7 @@ export interface ReplyRef {
   id: string
   state: ReplyState
   sender: MessageSender | null
-  /** 요약(최대 200자, 마크다운 원문). 첨부만이면 '' */
+  /** 요약(최대 200자, 마크다운 원문). 첨부만 있는 경우 '' */
   content: string
   message_type: 'text' | 'file' | 'system'
   has_attachment: boolean
@@ -263,7 +263,7 @@ export interface WorkspaceUser {
   avatar_url: string | null
 }
 
-// 채널 통화 상태 — 채널 id → 지금 통화에 있는 사람(백엔드 app/meetings/calls.py 가 LiveKit 웹훅으로 유지)
+// 채널 통화 상태 — 채널 id → 현재 통화 참여자(백엔드 app/meetings/calls.py 가 LiveKit 웹훅으로 유지)
 export interface CallState { count: number; names: string[]; since: number | null }
 
 /** 음성 채널 접속자 한 명(서버 presence — app/chat/voice.py) */
@@ -279,18 +279,18 @@ export interface VoicePresence {
 }
 export interface VoiceChannelState { participants: VoicePresence[]; since: number | null }
 
-// 전송 대기함 — 끊긴 동안 보낸 메시지. 연결되면 순서대로 보낸다. 새로고침해도 남게 localStorage 에 둔다.
+// 전송 대기함 — 연결 단절 중 전송한 메시지. 연결 복구 시 순서대로 전송한다. 새로고침 후에도 유지되도록 localStorage 에 저장한다.
 export interface OutboxItem {
   localId: string; channelId: string; content: string; createdAt: string
-  /** 답장 · @silent(재전송 때 유지) */
+  /** 답장 · @silent(재전송 시 유지) */
   opts?: SendOptions
-  /** 서버가 거절했다(4xx — 채널을 나갔거나 권한이 없어짐). 줄에 "보내지 못했습니다 · 다시 보내기 · 삭제" */
+  /** 서버 거부(4xx — 채널 탈퇴 또는 권한 상실). 해당 줄에 "보내지 못했습니다 · 다시 보내기 · 삭제" 표시 */
   failed?: boolean
 }
 
 export interface ChatState {
   channels: Channel[]
-  /** 채널 목록 불러오기 실패 — "불러오기 실패" 타일(원인 한 줄 + 다시 시도)을 그리려면 실패를 삼키지 말아야 한다 */
+  /** 채널 목록 조회 실패 — "불러오기 실패" 타일(원인 한 줄 + 다시 시도)을 표시하려면 실패를 무시하지 않아야 함 */
   channelsError: string | null
   selectedChannelId: string | null
   messages: ChatMessage[]
@@ -314,9 +314,9 @@ export interface ChatState {
   threadMessages: ChatMessage[]
   threadParent: ChatMessage | null
   loadingThread: boolean
-  /** 열어 둔 스레드의 내 팔로우 상태(GET /messages/{id}/thread 가 replies 와 함께 준다) */
+  /** 열린 스레드의 본인 팔로우 상태(GET /messages/{id}/thread 가 replies 와 함께 반환) */
   activeThreadState: ThreadFollowState | null
-  /** 내가 팔로우하는 스레드 목록(GET /api/chat/threads) — 셸의 "스레드" 모아보기. 열 때만 읽는다. */
+  /** 본인이 팔로우하는 스레드 목록(GET /api/chat/threads) — 셸의 "스레드" 모아보기. 열 때만 조회한다. */
   threads: ThreadSummary[]
   loadingThreads: boolean
   /** 셸 배지 — 미읽음 답글이 있는 스레드 수·답글 총수(GET /api/chat/threads/unread-count) */
@@ -333,37 +333,37 @@ export interface ChatState {
   /** 내 상태 설정(GET/PUT /api/chat/me/status) */
   myStatus: MyStatus | null
 
-  /** 핀 — 열어 둔 채널의 핀 목록(GET /channels/{id}/pins). 채널을 바꾸면 비운다. */
+  /** 핀 — 열린 채널의 핀 목록(GET /channels/{id}/pins). 채널 변경 시 초기화한다. */
   pins: ChatMessage[]
   loadingPins: boolean
   showPinsPanel: boolean
 
   /**
    * 저장한 메시지(POST/DELETE /messages/{id}/save · GET /saved) — 사이드바 고정 항목 "저장한 메시지"와 액션 바 "저장".
-   * 저장 여부는 메시지 응답의 is_saved 가 기준이다. 이 기기에서 방금 누른 것은 savedOverride 가 앞선다
-   * (목록(/saved)은 최근 일부만 오므로 오래된 저장 메시지는 is_saved 로만 알 수 있다).
+   * 저장 여부는 메시지 응답의 is_saved 를 기준으로 한다. 이 기기에서 방금 조작한 항목은 savedOverride 가 우선한다
+   * (목록(/saved)은 최근 일부만 반환되므로 오래된 저장 메시지는 is_saved 로만 확인 가능하다).
    */
   savedMessages: ChatMessage[]
   savedOverride: Record<string, boolean>
   loadingSaved: boolean
 
-  /** 임시글 — draftKey(채널, 루트) → 서버 저장본. 입력은 디바운스로 PUT, 전송하면 서버가 지운다. */
+  /** 임시글 — draftKey(채널, 루트) → 서버 저장본. 입력은 디바운스 후 PUT 하고, 전송 시 서버가 삭제한다. */
   drafts: Record<string, ChatDraft>
 
   /**
-   * 읽음 처리 — "봤다"는 건 창이 보이고 포커스가 있고 목록 맨 아래가 화면에 있을 때뿐이다.
-   * 그 조건이 안 되면 읽음을 미뤘다가 조건이 맞는 순간 보낸다.
+   * 읽음 처리 — 열람으로 간주하는 조건은 창이 표시되고 포커스가 있으며 목록 최하단이 화면에 있는 경우뿐이다.
+   * 조건 미충족 시 읽음 처리를 보류하고, 조건이 충족되는 시점에 전송한다.
    */
   viewAtBottom: boolean
-  /** 위로 스크롤해 있는 동안 아래에 쌓인 새 메시지 수("새 메시지 N") */
+  /** 위로 스크롤한 동안 하단에 누적된 신규 메시지 수("새 메시지 N") */
   newBelowCount: number
 
-  /** 연결 상태 — 끊긴 시각과 다음 재시도 시각. 배너는 3초 넘게 끊겼을 때만 띄운다. */
+  /** 연결 상태 — 단절 시각과 다음 재시도 시각. 배너는 단절이 3초를 초과한 경우에만 표시한다. */
   disconnectedAt: number | null
   reconnectAt: number | null
 
   outbox: OutboxItem[]
-  /** 점프로 옛 위치를 보는 중 — 아래(최근)에 더 있다. 이 동안 새 메시지는 붙이지 않고 "새 메시지 N" 만 센다 */
+  /** 점프로 이전 위치를 열람 중 — 하단(최근)에 추가 메시지 존재. 이 동안 신규 메시지는 추가하지 않고 "새 메시지 N" 만 집계 */
   hasMoreAfter: boolean
 }
 
@@ -419,7 +419,7 @@ const S = () => chatStore.getState()
 const set = (p: Partial<ChatState>) => chatStore.setState(p)
 const me = () => authStore.getState().user
 
-/** 채널 하나를 고친 새 배열(ch.unread_count 등 — 제자리에서 고치지 않는다) */
+/** 채널 하나를 수정한 새 배열(ch.unread_count 등 — 원본을 직접 수정하지 않음) */
 function patchChannel(id: string, fn: (c: Channel) => Channel) {
   const list = S().channels
   if (!list.some(c => c.id === id)) return
@@ -431,14 +431,14 @@ let _savedLoaded = false
 
 const DRAFT_DEBOUNCE_MS = 1000
 const _draftTimers = new Map<string, ReturnType<typeof setTimeout>>()
-const _draftPending = new Map<string, string>()   // 아직 PUT 안 된 이 기기의 입력값
+const _draftPending = new Map<string, string>()   // 이 기기에서 PUT 미완료인 입력값
 let _draftsMigrated = false
 
 let _ws: WebSocket | null = null
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let _reconnectDelay = 1000
 let _pingInterval: ReturnType<typeof setInterval> | null = null
-let _everConnected = false   // 첫 연결 이후의 연결은 재접속이다(끊긴 동안 놓친 것을 다시 읽는다)
+let _everConnected = false   // 첫 연결 이후의 연결은 재접속으로 간주(단절 중 누락분 재조회)
 let _typingThrottleTimer: ReturnType<typeof setTimeout> | null = null
 let _initialized = false
 let _pendingRead: { channelId: string; messageId: string } | null = null
@@ -446,12 +446,12 @@ let _visibilityHooked = false
 
 let _lastPong = 0
 
-// 대기함은 사용자별로 — 같은 브라우저에서 다른 사람이 로그인했을 때 앞사람의 대기 글이 그 사람 이름으로 나가지 않게
+// 대기함은 사용자별로 분리 — 동일 브라우저에서 다른 사용자가 로그인했을 때 이전 사용자의 대기 글이 해당 사용자 이름으로 전송되는 것을 방지
 const OUTBOX_KEY_LEGACY = 'jw-chat-outbox'
 const outboxKey = () => `jw-chat-outbox:${me()?.id ?? 'anon'}`
-/** 최근에 처리한 new_message id — 중복 이벤트 걸러내기용(크기 제한) */
+/** 최근 처리한 new_message id — 중복 이벤트 제외용(크기 제한) */
 const _seenMsgIds = new Set<string>()
-/** seq 순서를 지켜 끼워 넣는다. 보통은 맨 뒤 — 재접속 보충분이 실시간 메시지보다 늦게 도착했을 때만 앞에 들어간다 */
+/** seq 순서를 유지해 삽입한다. 통상 맨 뒤이며, 재접속 보충분이 실시간 메시지보다 늦게 도착한 경우에만 앞쪽에 삽입된다 */
 function insertBySeq(list: ChatMessage[], msg: ChatMessage): ChatMessage[] {
   const last = list[list.length - 1]
   if (!msg.seq || !last?.seq || last.seq < msg.seq) return [...list, msg]
@@ -462,10 +462,10 @@ function insertBySeq(list: ChatMessage[], msg: ChatMessage): ChatMessage[] {
 let _outboxLoaded = false
 let _flushingOutbox = false
 
-// 재접속 복구 커서 — 받은 메시지 중 가장 큰 seq. 끊긴 동안 생긴 것만 /api/chat/changes 로 받는다
+// 재접속 복구 커서 — 수신한 메시지 중 최대 seq. 단절 중 생성된 항목만 /api/chat/changes 로 수신
 let _lastSeq = 0
 
-// ─── 바깥에서 바꾸는 상태 ───
+// ─── 외부에서 변경하는 상태 ───
 
 export const setShowMemberPanel = (v: boolean) => set({ showMemberPanel: v })
 export const setShowPinsPanel = (v: boolean) => set({ showPinsPanel: v })
@@ -473,32 +473,32 @@ export const setShowSearchPanel = (v: boolean) => set({ showSearchPanel: v })
 export const setSearchQuery = (v: string) => set({ searchQuery: v })
 export const setShowNotifyBanner = (v: boolean) => set({ showNotifyBanner: v })
 
-// ─── 계산 값 — 컴포넌트 밖에서도 쓰게 state 를 받는 함수로 ───
+// ─── 계산 값 — 컴포넌트 외부에서도 사용하도록 state 를 받는 함수로 정의 ───
 
 export function selectSelectedChannel(s: ChatState = S()): Channel | null {
   return s.channels.find(c => c.id === s.selectedChannelId) || null
 }
 export function selectSortedChannels(s: ChatState = S()): { channels: Channel[]; dms: Channel[]; voice: Channel[] } {
-  // 음성 채널은 따로 묶는다(사이드바 별도 "음성" 구역)
+  // 음성 채널은 별도로 분류(사이드바 별도 "음성" 구역)
   const pub = s.channels.filter(c => c.type !== 'dm' && !c.is_voice)
   const dms = s.channels.filter(c => c.type === 'dm')
   const voice = s.channels.filter(c => c.type !== 'dm' && !!c.is_voice)
   return { channels: pub, dms, voice }
 }
-// 뮤트 규칙은 lib/chatEvents.summarizeUnread 에 — 뮤트 채널은 굵게(미읽음)에서 빠지고 멘션 숫자는 남는다
+// 뮤트 규칙은 lib/chatEvents.summarizeUnread 에 정의 — 뮤트 채널은 굵게(미읽음)에서 제외되고 멘션 숫자는 유지
 const _summaryCache = new WeakMap<Channel[], UnreadSummary>()
 export function selectUnreadSummary(s: ChatState = S()): UnreadSummary {
   let v = _summaryCache.get(s.channels)
   if (!v) { v = summarizeUnread(s.channels); _summaryCache.set(s.channels, v) }
   return v
 }
-/** 열어 둔 스레드의 임시글(스레드 입력창용) */
+/** 열린 스레드의 임시글(스레드 입력창용) */
 export function selectActiveThreadDraft(s: ChatState = S()): string {
   return (s.selectedChannelId && s.activeThreadId)
     ? s.drafts[draftKey(s.selectedChannelId, s.activeThreadId)]?.content || ''
     : ''
 }
-/** 열어 둔 채널의 임시글(채널 입력창용) */
+/** 열린 채널의 임시글(채널 입력창용) */
 export function selectSelectedChannelDraft(s: ChatState = S()): string {
   return s.selectedChannelId ? s.drafts[draftKey(s.selectedChannelId)]?.content || '' : ''
 }
@@ -518,7 +518,7 @@ export async function fetchChannels() {
   }
 }
 
-/** 대화를 닫고 목록만 남긴다(모바일 ‹ 뒤로). 열린 패널·핀·스레드도 함께 비운다 — 안 보는 채널을 읽음 처리하지 않게. */
+/** 대화를 닫고 목록만 유지한다(모바일 ‹ 뒤로). 열린 패널·핀·스레드도 함께 초기화한다 — 열람하지 않는 채널의 읽음 처리를 방지한다. */
 export function deselectChannel() {
   _pendingRead = null
   set({
@@ -539,8 +539,8 @@ export function deselectChannel() {
 }
 
 /**
- * 채널에 들어온 순간의 안 읽음 수. 목록을 다 불러오면 곧바로 읽음 처리돼 unread_count 가 0 이 되므로,
- * "새 메시지" 구분선은 이 값을 쓴다(예전엔 0 이 된 뒤에 읽어 구분선이 거의 안 떴다). 한 번 쓰면 비운다.
+ * 채널 진입 시점의 미읽음 수. 목록 조회가 완료되면 즉시 읽음 처리되어 unread_count 가 0 이 되므로,
+ * "새 메시지" 구분선은 이 값을 사용한다(이전에는 0 이 된 뒤에 조회하여 구분선이 거의 표시되지 않았다). 1회 사용 후 초기화한다.
  */
 let _entryUnread: { channelId: string; count: number } | null = null
 export function takeEntryUnread(channelId: string | null | undefined): number | null {
@@ -565,15 +565,15 @@ export async function selectChannel(id: string) {
     threadParent: null,
     activeThreadState: null,
     showSearchPanel: false,
-    // 핀은 채널 단위 — 비우고, 패널이 열려 있으면 새 채널 것을 읽는다
+    // 핀은 채널 단위 — 초기화하고, 패널이 열려 있으면 새 채널의 핀을 조회
     pins: [],
   })
   await Promise.all([fetchMessages(), fetchMembers(), S().showPinsPanel ? fetchPins(id) : Promise.resolve()])
 }
 
 export async function fetchMessages(before?: string) {
-  // 요청한 채널을 잡아 둔다 — 응답이 오기 전에 다른 채널로 옮겼으면 버린다
-  // (예전엔 A 의 늦은 응답이 B 화면에 그려지고, 이어서 B 를 읽음 처리해 배지까지 지웠다)
+  // 요청한 채널을 보관 — 응답 수신 전에 다른 채널로 이동한 경우 폐기
+  // (이전에는 A 의 지연 응답이 B 화면에 표시되고, 이어서 B 를 읽음 처리해 배지까지 제거됨)
   const chId = S().selectedChannelId
   if (!chId) return
   if (before) {
@@ -599,7 +599,7 @@ export async function fetchMessages(before?: string) {
     set({ hasMoreMessages: data.has_more })
     if (!before) set({ hasMoreAfter: false })
 
-    // 진입 직후 맨 아래를 보고 있으면 읽음 — 창이 안 보이면 보일 때까지 미룬다
+    // 진입 직후 최하단을 열람 중이면 읽음 처리 — 창이 표시되지 않으면 표시될 때까지 보류
     if (!before && data.messages.length > 0) {
       const last = data.messages[data.messages.length - 1]
       set({ newBelowCount: 0 })
@@ -619,7 +619,7 @@ export async function fetchMembers() {
     const data = await $fetch<ChannelMember[]>(
       `/api/chat/channels/${chId}/members`,
     )
-    if (S().selectedChannelId !== chId) return   // 그새 다른 채널로 옮겼다
+    if (S().selectedChannelId !== chId) return   // 그사이 다른 채널로 이동함
     // Merge online status
     const online = S().onlineUsers
     set({ members: data.map(m => ({ ...m, is_online: online.has(m.user_id) })) })
@@ -658,7 +658,7 @@ export async function leaveChannel(channelId: string) {
   if (S().selectedChannelId === channelId) deselectChannel()
 }
 
-/** 채널 삭제(소유자) — 서버가 메시지·스레드까지 지우고 멤버들에게 목록 갱신을 알린다 */
+/** 채널 삭제(소유자) — 서버가 메시지·스레드까지 삭제하고 멤버에게 목록 갱신을 통지한다 */
 export async function deleteChannel(channelId: string) {
   await $fetch(`/api/chat/channels/${channelId}`, { method: 'DELETE' })
   set({ channels: S().channels.filter(c => c.id !== channelId) })
@@ -691,7 +691,7 @@ async function sendMessageREST(channelId: string, content: string, messageType =
     },
   )
 }
-/** 보내기 옵션 → 요청 필드(값이 있는 것만 — 옛 서버는 모르는 필드를 무시) */
+/** 전송 옵션 → 요청 필드(값이 있는 항목만 — 구 서버는 미지원 필드를 무시) */
 function sendExtra(opts?: SendOptions): Record<string, unknown> {
   const o: Record<string, unknown> = {}
   if (opts?.reply_to_id) { o.reply_to_id = opts.reply_to_id; o.reply_ping = opts.reply_ping !== false }
@@ -704,7 +704,7 @@ export async function editMessage(messageId: string, content: string) {
     method: 'PATCH',
     body: { content },
   })
-  // 응답을 바로 반영 — 다른 사람·다른 기기는 서버의 message_update 이벤트로 바뀐다
+  // 응답을 즉시 반영 — 다른 사용자·다른 기기는 서버의 message_update 이벤트로 갱신
   if (msg?.id) applyMessageUpdate(msg)
 }
 
@@ -715,12 +715,12 @@ export async function deleteMessage(messageId: string) {
   applyMessageDelete(messageId)
 }
 
-/** 지운 메시지를 모든 목록에서 뺀다(내가 지웠을 때 · WS message_delete). 스레드 답글이면 원문의 답글 수도 줄인다. */
+/** 삭제된 메시지를 모든 목록에서 제거한다(본인 삭제 · WS message_delete). 스레드 답글이면 원문의 답글 수도 감소시킨다. */
 function applyMessageDelete(messageId: string, parentId?: string | null) {
   const s = S()
   const gone = s.messages.find(m => m.id === messageId) || s.threadMessages.find(m => m.id === messageId)
   const pid = parentId ?? gone?.parent_id ?? null
-  const wasCounted = !!gone || !!parentId   // 이 화면이 그 답글을 세고 있었을 때만 줄인다
+  const wasCounted = !!gone || !!parentId   // 이 화면이 해당 답글을 집계하고 있던 경우에만 감소
   const dec = <M extends ChatMessage>(m: M): M => (pid && wasCounted && m.id === pid ? { ...m, reply_count: Math.max(0, (m.reply_count || 0) - 1) } : m)
   set({
     messages: s.messages.filter(m => m.id !== messageId).map(dec),
@@ -729,7 +729,7 @@ function applyMessageDelete(messageId: string, parentId?: string | null) {
     savedMessages: s.savedMessages.filter(m => m.id !== messageId),
     ...(s.threadParent ? { threadParent: dec(s.threadParent) } : {}),
   })
-  // 열어 둔 스레드의 원문이 지워졌으면 패널을 닫는다
+  // 열린 스레드의 원문이 삭제된 경우 패널을 닫음
   if (S().activeThreadId === messageId) closeThread()
 }
 
@@ -749,7 +749,7 @@ export async function fetchPresence() {
 
 // ─── 프레즌스 · 내 상태 ───
 
-/** 사용자 1명의 실효 상태. 모르는 사람은 offline. (hook 의 presenceOf 는 렌더 시점 값으로 구독한다) */
+/** 사용자 1명의 실효 상태. 정보가 없는 사용자는 offline. (hook 의 presenceOf 는 렌더 시점 값으로 구독한다) */
 export function presenceOf(userId: string, s: ChatState = S()): UserPresence {
   return s.presences[userId] || (s.onlineUsers.has(userId) ? { state: 'online', emoji: null, text: null } : OFFLINE)
 }
@@ -763,8 +763,8 @@ export async function fetchMyStatus() {
 }
 
 /**
- * 내 상태 바꾸기 — 보낸 필드만 바뀐다(null 명시 = 비우기). 서버가 전원에게 presence 를 쏘므로
- * 내 presences 항목은 그 이벤트로 맞춰진다. 응답은 저장된 설정 전체.
+ * 본인 상태 변경 — 전송한 필드만 변경된다(null 명시 = 값 제거). 서버가 전원에게 presence 를 송신하므로
+ * 본인의 presences 항목은 해당 이벤트로 갱신된다. 응답은 저장된 설정 전체이다.
  */
 export async function updateMyStatus(patch: MyStatusUpdate) {
   const res = await $fetch<MyStatus>('/api/chat/me/status', { method: 'PUT', body: patch })
@@ -772,14 +772,14 @@ export async function updateMyStatus(patch: MyStatusUpdate) {
   return res
 }
 
-/** 모드만(auto|away|dnd|invisible). dnd 는 dnd_until 로 기한을 둘 수 있다. */
+/** 모드만 변경(auto|away|dnd|invisible). dnd 는 dnd_until 로 기한 지정 가능. */
 export function setStatusMode(mode: MyStatus['mode'], dndUntil?: string | null) {
   const patch: MyStatusUpdate = { mode }
   if (dndUntil !== undefined) patch.dnd_until = dndUntil
   return updateMyStatus(patch)
 }
 
-/** 커스텀 상태(이모지+문구, 만료 시각). 문구를 비우면 서버가 이모지·만료도 함께 비운다. */
+/** 커스텀 상태(이모지+문구, 만료 시각). 문구를 비우면 서버가 이모지·만료도 함께 제거한다. */
 export function setCustomStatus(text: string | null, emoji?: string | null, expiresAt?: string | null) {
   const patch: MyStatusUpdate = { custom_text: text || null }
   if (emoji !== undefined) patch.custom_emoji = emoji
@@ -791,11 +791,11 @@ export function clearCustomStatus() {
   return updateMyStatus({ custom_text: null, custom_emoji: null, custom_expires_at: null })
 }
 
-// ─── 안 읽음 · 채널 알림 설정 ───
+// ─── 미읽음 · 채널 알림 설정 ───
 
 /**
- * "여기부터 안 읽음" — 읽음 포인터를 그 메시지 바로 앞으로 되감는다. 응답의 배지를 그대로 반영하고,
- * 미뤄 둔 자동 읽음을 버려서 바로 다시 읽음 처리되는 일을 막는다(다음 새 메시지가 오면 다시 읽는다).
+ * "여기부터 안 읽음" — 읽음 포인터를 해당 메시지 직전으로 되돌린다. 응답의 배지를 그대로 반영하고,
+ * 보류 중인 자동 읽음을 폐기해 즉시 재읽음 처리되는 것을 방지한다(다음 신규 메시지 수신 시 다시 읽음 처리한다).
  */
 export async function markUnread(channelId: string, messageId: string) {
   const res = await $fetch<{ ok: boolean; channel_id: string; last_read_seq: number; unread_count: number; mention_count: number; group_mention: boolean }>(
@@ -806,7 +806,7 @@ export async function markUnread(channelId: string, messageId: string) {
   return res
 }
 
-/** 사이드바 채널 메뉴 "읽음으로 표시" — 마지막 메시지까지 읽음(WS mark_read) */
+/** 사이드바 채널 메뉴 "읽음으로 표시" — 마지막 메시지까지 읽음 처리(WS mark_read) */
 export async function markChannelRead(channelId: string) {
   const r = await $fetch<{ messages: ChatMessage[] }>(`/api/chat/channels/${channelId}/messages`, { params: { limit: 1 } })
   const last = r?.messages?.[r.messages.length - 1]
@@ -814,7 +814,7 @@ export async function markChannelRead(channelId: string) {
   else patchChannel(channelId, c => ({ ...c, unread_count: 0, mention_count: 0, group_mention: false }))
 }
 
-/** 채널별 알림 수준·뮤트(PATCH /channels/{id}/prefs). 내 멤버행만 바뀐다. */
+/** 채널별 알림 수준·뮤트(PATCH /channels/{id}/prefs). 본인 멤버 행만 변경된다. */
 export async function fetchChannelPrefs(channelId: string) {
   return await $fetch<ChannelPrefs>(`/api/chat/channels/${channelId}/prefs`)
 }
@@ -842,7 +842,7 @@ export async function fetchPins(channelId?: string) {
   set({ loadingPins: true })
   try {
     const data = await $fetch<{ items: ChatMessage[] }>(`/api/chat/channels/${id}/pins`)
-    if (id === S().selectedChannelId) set({ pins: data.items })   // 그새 다른 채널로 옮겼으면 버린다
+    if (id === S().selectedChannelId) set({ pins: data.items })   // 그사이 다른 채널로 이동한 경우 폐기
   } catch (e: any) {
     console.error('fetchPins error:', e)
   } finally {
@@ -850,7 +850,7 @@ export async function fetchPins(channelId?: string) {
   }
 }
 
-/** 서버가 message_update 로 전원에게 알리므로 응답은 확인용 — 바로 반영해 둔다(내 화면이 먼저 바뀌게). */
+/** 서버가 message_update 로 전원에게 통지하므로 응답은 확인용 — 본인 화면에 먼저 반영되도록 즉시 적용한다. */
 export async function pinMessage(messageId: string) {
   const msg = await $fetch<ChatMessage>(`/api/chat/messages/${messageId}/pin`, { method: 'POST' })
   applyMessageUpdate(msg)
@@ -868,7 +868,7 @@ export function togglePin(messageId: string) {
   return m?.pinned_at ? unpinMessage(messageId) : pinMessage(messageId)
 }
 
-/** WS message_update(핀·편집) — 같은 id 를 모든 목록에서 갈아 끼운다. */
+/** WS message_update(핀·편집) — 동일 id 를 모든 목록에서 교체한다. */
 function applyMessageUpdate(msg: ChatMessage) {
   const s = S()
   set({
@@ -880,7 +880,7 @@ function applyMessageUpdate(msg: ChatMessage) {
   })
 }
 
-/** WS link_preview — 카드가 생겼거나(값) 지워졌다(null). 메시지의 그 필드만 바꾼다. */
+/** WS link_preview — 카드 생성(값) 또는 삭제(null). 메시지의 해당 필드만 변경한다. */
 function applyLinkPreview(messageId: string, preview: LinkPreview | null) {
   const s = S()
   const patch = { id: messageId, link_preview: preview }
@@ -892,7 +892,7 @@ function applyLinkPreview(messageId: string, preview: LinkPreview | null) {
   })
 }
 
-/** 링크 미리보기 지우기(보낸 사람만 — 서버가 403 으로 막는다). 내 화면은 바로, 다른 사람은 이벤트로. */
+/** 링크 미리보기 삭제(발신자 전용 — 서버가 403 으로 차단). 본인 화면은 즉시, 다른 사용자는 이벤트로 반영. */
 export async function dismissLinkPreview(messageId: string) {
   await $fetch(`/api/chat/messages/${messageId}/link-preview`, { method: 'DELETE' })
   applyLinkPreview(messageId, null)
@@ -913,7 +913,7 @@ export async function fetchSaved() {
   }
 }
 
-/** 저장했나. (hook 의 isSaved 는 렌더 시점 값으로 구독한다) */
+/** 저장 여부. (hook 의 isSaved 는 렌더 시점 값으로 구독한다) */
 export function isSaved(messageId: string, s: ChatState = S()): boolean {
   const o = s.savedOverride[messageId]
   if (o !== undefined) return o
@@ -929,7 +929,7 @@ function _setSavedOverride(messageId: string, v: boolean) {
   set({ savedOverride: { ...S().savedOverride, [messageId]: v } })
 }
 
-/** 저장 — 목록 맨 앞에 바로 넣는다(서버는 최근 저장 순). 아직 목록을 안 읽었으면 읽어 둔다. */
+/** 저장 — 목록 맨 앞에 즉시 추가한다(서버는 최근 저장 순). 목록 미조회 상태이면 조회한다. */
 export async function saveMessage(messageId: string) {
   const local = S().messages.find(m => m.id === messageId)
     || S().threadMessages.find(m => m.id === messageId)
@@ -955,7 +955,7 @@ export function toggleSave(messageId: string) {
 export async function fetchDrafts() {
   try {
     const data = await $fetch<{ items: ChatDraft[] }>('/api/chat/drafts')
-    // 아직 PUT 안 된 이 기기 입력값은 서버본보다 새롭다 — 덮어쓰지 않는다
+    // 이 기기에서 PUT 미완료인 입력값은 서버본보다 최신 — 덮어쓰지 않음
     const next = draftsFromList(data.items)
     for (const [key, content] of _draftPending) {
       if (!content) { delete next[key]; continue }
@@ -969,8 +969,8 @@ export async function fetchDrafts() {
 }
 
 /**
- * 저장된 임시글 본문(없으면 ''). 입력창을 채울 때 쓴다.
- * 이 기기에서 아직 PUT 안 된 값(_draftPending)이 먼저다 — 그 값은 store 밖이라 이 함수는 호출 시점 값을 돌려준다.
+ * 저장된 임시글 본문(없으면 ''). 입력창 초기값 설정에 사용한다.
+ * 이 기기에서 PUT 미완료인 값(_draftPending)이 우선한다 — 해당 값은 store 외부에 있으므로 본 함수는 호출 시점 값을 반환한다.
  */
 export function draftFor(channelId: string, parentId?: string | null): string {
   const key = draftKey(channelId, parentId)
@@ -978,14 +978,14 @@ export function draftFor(channelId: string, parentId?: string | null): string {
 }
 
 /**
- * 입력이 바뀔 때마다 부른다 — 매 키마다 PUT 하지 않고 약 1초 디바운스. 빈 문자열은 삭제와 같다.
- * 로컬 상태는 즉시 바꿔서(다른 입력창·탭 전환이 바로 보게), 서버는 잠잠해진 뒤 한 번만.
+ * 입력 변경 시마다 호출한다 — 키 입력마다 PUT 하지 않고 약 1초 디바운스를 적용한다. 빈 문자열은 삭제와 동일하다.
+ * 로컬 상태는 즉시 변경하고(다른 입력창·탭 전환에 즉시 반영), 서버에는 입력이 멈춘 뒤 1회만 기록한다.
  */
 export function setDraft(channelId: string, parentId: string | null | undefined, content: string) {
   const key = draftKey(channelId, parentId)
   const pid = parentId || null
   const drafts = S().drafts
-  // 비어 있는데 저장된 것도 대기 중인 것도 없으면 할 일이 없다(입력창 마운트 때의 빈 호출)
+  // 값이 비어 있고 저장본·대기 항목도 없으면 처리 불필요(입력창 마운트 시의 빈 호출)
   if (!content && !drafts[key] && !_draftPending.has(key)) return
   if (content) {
     set({ drafts: { ...drafts, [key]: { channel_id: channelId, parent_id: pid, content, updated_at: drafts[key]?.updated_at ?? null } } })
@@ -999,7 +999,7 @@ export function setDraft(channelId: string, parentId: string | null | undefined,
   _draftTimers.set(key, setTimeout(() => flushDraft(channelId, pid), DRAFT_DEBOUNCE_MS))
 }
 
-/** 디바운스를 기다리지 않고 지금 서버에 쓴다(탭을 떠날 때 등). */
+/** 디바운스를 대기하지 않고 즉시 서버에 기록한다(탭 이탈 시 등). */
 export async function flushDraft(channelId: string, parentId?: string | null) {
   const key = draftKey(channelId, parentId)
   const t = _draftTimers.get(key)
@@ -1010,18 +1010,18 @@ export async function flushDraft(channelId: string, parentId?: string | null) {
     const res = await $fetch<Omit<ChatDraft, 'content'> & { content: string | null }>('/api/chat/drafts', {
       method: 'PUT', body: { channel_id: channelId, parent_id: parentId || null, content },
     })
-    // 보낸 뒤 또 바뀌었으면 그건 다음 flush 가 처리한다
+    // 전송 후 다시 변경된 값은 다음 flush 에서 처리
     if (_draftPending.get(key) === content) {
       _draftPending.delete(key)
       if (res.content) set({ drafts: { ...S().drafts, [key]: { ...res, content: res.content } } })
     }
   } catch (e: any) {
-    // 끊긴 상태 등 — 로컬 값은 남아 있으니 다음 입력·재접속 때 다시 쓴다
+    // 연결 단절 등 — 로컬 값이 유지되므로 다음 입력·재접속 시 재기록
     console.error('flushDraft error:', e)
   }
 }
 
-/** 임시글 삭제(전송 직후 등). 서버가 전송 때 자동 삭제하지만, 대기 중인 PUT 이 되살리지 않게 먼저 끊는다. */
+/** 임시글 삭제(전송 직후 등). 서버가 전송 시 자동 삭제하나, 대기 중인 PUT 이 복원하지 않도록 먼저 취소한다. */
 export function clearDraft(channelId: string, parentId?: string | null, { remote = true } = {}) {
   const key = draftKey(channelId, parentId)
   const t = _draftTimers.get(key)
@@ -1035,12 +1035,12 @@ export function clearDraft(channelId: string, parentId?: string | null, { remote
   if (!remote) return Promise.resolve()
   const params: Record<string, string> = { channel_id: channelId }
   if (parentId) params.parent_id = parentId
-  return $fetch('/api/chat/drafts', { method: 'DELETE', params }).catch(() => { /* 이미 없으면 그만 */ })
+  return $fetch('/api/chat/drafts', { method: 'DELETE', params }).catch(() => { /* 이미 없으면 무시 */ })
 }
 
 /**
- * 예전 ChatInput 이 localStorage(`chat-draft-<채널id>`)에 남긴 임시글을 서버로 옮긴다 — 한 번만.
- * 내 채널 목록에 있는 것만(아니면 403), 서버에 이미 있는 자리는 서버본을 우선한다. 옮긴 키는 지운다.
+ * 이전 ChatInput 이 localStorage(`chat-draft-<채널id>`)에 남긴 임시글을 서버로 이전한다 — 1회만 수행한다.
+ * 본인 채널 목록에 있는 항목만 대상이며(그 외 403), 서버에 이미 존재하는 위치는 서버본을 우선한다. 이전한 키는 삭제한다.
  */
 async function migrateLocalDrafts() {
   if (_draftsMigrated) return
@@ -1059,7 +1059,7 @@ async function migrateLocalDrafts() {
       }
       localStorage.removeItem(d.key)
     } catch (e: any) {
-      console.error('migrateLocalDrafts error:', e)   // 다음 로드에 다시 시도된다(_draftsMigrated 는 메모리뿐)
+      console.error('migrateLocalDrafts error:', e)   // 다음 로드 시 재시도(_draftsMigrated 는 메모리에만 존재)
     }
   }
 }
@@ -1076,8 +1076,8 @@ export async function fetchAllUsers() {
 // ─── Threads ───
 
 /**
- * 스레드 열기. 원 메시지는 타임라인·핀 목록에서 찾고, 없으면(스레드 모아보기에서 들어온 경우)
- * 요약으로 임시 parent 를 만든다. 열었으니 보고 있는 중이면 읽음 처리한다.
+ * 스레드 열기. 원 메시지는 타임라인·핀 목록에서 조회하고, 없으면(스레드 모아보기에서 진입한 경우)
+ * 요약으로 임시 parent 를 생성한다. 연 시점에 열람 중이면 읽음 처리한다.
  */
 export async function openThread(messageId: string) {
   const s = S()
@@ -1114,9 +1114,9 @@ export async function fetchThreadReplies(parentId: string) {
     const data = await $fetch<{ replies: ChatMessage[]; parent?: ChatMessage | null } & Partial<ThreadFollowState>>(
       `/api/chat/messages/${parentId}/thread`,
     )
-    if (S().activeThreadId !== parentId) return   // 그새 다른 스레드로 옮겼다
+    if (S().activeThreadId !== parentId) return   // 그사이 다른 스레드로 이동함
     set({
-      // 딥 링크·검색으로 들어와 원문이 화면 목록에 없을 때 — 서버가 준 원문으로 채운다(있던 값의 리액션 등은 지킨다)
+      // 딥 링크·검색으로 진입해 원문이 화면 목록에 없는 경우 — 서버가 반환한 원문으로 설정(기존 값의 리액션 등은 유지)
       ...(data.parent ? { threadParent: { ...data.parent, ...(S().threadParent?.id === parentId ? S().threadParent : {}) } as ChatMessage } : {}),
       threadMessages: data.replies,
       activeThreadState: {
@@ -1132,12 +1132,12 @@ export async function fetchThreadReplies(parentId: string) {
   }
 }
 
-/** 답글 전송. alsoToChannel 이면 채널 타임라인에도 보인다("채널에도 보내기"). */
+/** 답글 전송. alsoToChannel 이면 채널 타임라인에도 표시된다("채널에도 보내기"). */
 export function sendThreadReply(content: string, parentId: string, alsoToChannel = false, opts?: SendOptions) {
   const channelId = S().selectedChannelId
   if (!channelId) return
-  clearDraft(channelId, parentId, { remote: false })   // 서버가 전송 때 지운다 — 대기 PUT 만 끊는다
-  // 서버는 답글을 쓴 사람을 자동으로 팔로우한다(_auto_follow_on_reply) — 알약이 "따라가기"로 남지 않게 바로 맞춘다
+  clearDraft(channelId, parentId, { remote: false })   // 서버가 전송 시 삭제 — 대기 PUT 만 취소
+  // 서버는 답글 작성자를 자동 팔로우 처리한다(_auto_follow_on_reply) — 알약이 "따라가기"로 남지 않도록 즉시 동기화한다
   const st = S().activeThreadState
   if (S().activeThreadId === parentId && st && !st.followed) set({ activeThreadState: { ...st, followed: true } })
   if (_ws?.readyState === WebSocket.OPEN) {
@@ -1165,7 +1165,7 @@ export function sendThreadReply(content: string, parentId: string, alsoToChannel
   }
 }
 
-/** REST 로 만든 답글(스레드 첨부 업로드 응답) — 실시간 이벤트보다 먼저 오거나 WS 가 끊겼을 때 패널에 넣는다 */
+/** REST 로 생성한 답글(스레드 첨부 업로드 응답) — 실시간 이벤트보다 먼저 도착하거나 WS 단절 시 패널에 추가한다 */
 export function ingestThreadReply(msg: ChatMessage) {
   if (!msg?.parent_id || msg.parent_id !== S().activeThreadId) return
   if (!S().threadMessages.find(m => m.id === msg.id)) set({ threadMessages: [...S().threadMessages, msg] })
@@ -1173,7 +1173,7 @@ export function ingestThreadReply(msg: ChatMessage) {
 
 // ─── 스레드 팔로우 · 읽음 · 모아보기 ───
 
-/** 스레드 패널을 사람이 보고 있나 — 창이 보이고 포커스가 있다(스크롤 위치는 패널이 짧아 보지 않는다). */
+/** 사용자의 스레드 패널 열람 여부 — 창이 표시되고 포커스가 있는 상태(패널이 짧아 스크롤 위치는 확인하지 않음). */
 function canSeeThread(): boolean {
   return document.visibilityState === 'visible' && document.hasFocus()
 }
@@ -1195,7 +1195,7 @@ export function toggleThreadFollow(rootId: string) {
   return setThreadFollow(rootId, !cur)
 }
 
-/** 스레드 읽음 — seq 를 비우면 마지막 답글까지. */
+/** 스레드 읽음 — seq 생략 시 마지막 답글까지. */
 export async function markThreadRead(rootId: string, seq?: number) {
   const res = await $fetch<{ ok: boolean; root_id: string; last_read_seq: number | null }>(
     `/api/chat/threads/${rootId}/read`, { method: 'POST', body: seq !== undefined ? { seq } : {} },
@@ -1229,7 +1229,7 @@ function applyThreadFollowEvent(evt: { root_id: string; channel_id: string; foll
   const before = S().threads
   const after = applyThreadFollow(before, evt)
   set({ threads: after })
-  // 켰는데 목록에 없다 — 목록을 열어 봤던 사람만 다시 읽는다
+  // 팔로우가 활성화됐으나 목록에 없음 — 목록을 연 적이 있는 경우에만 재조회
   if (evt.followed && _threadsLoaded && after === before && !before.some(t => t.id === evt.root_id)) void fetchThreads()
   const s = S()
   if (s.activeThreadId === evt.root_id && s.activeThreadState) {
@@ -1313,17 +1313,17 @@ export async function searchMessages(query: string, channelId?: string) {
 export async function fetchCallStates() {
   try {
     set({ callStates: await $fetch<Record<string, CallState>>('/api/meetings/channel-calls') })
-  } catch { /* 회의 기능이 꺼진 설치면 404 — 표시만 안 한다 */ }
+  } catch { /* 회의 기능이 비활성화된 설치에서는 404 — 표시만 생략 */ }
 }
 
-/** 음성 채널 접속자 전부(처음·재접속·내가 나간 뒤) */
+/** 음성 채널 접속자 전체(최초·재접속·본인 퇴장 후) */
 export async function fetchVoiceStates() {
   try {
     set({ voiceStates: await $fetch<Record<string, VoiceChannelState>>('/api/chat/voice/states') })
-  } catch { /* 옛 백엔드면 404 — 표시만 안 한다 */ }
+  } catch { /* 구 백엔드에서는 404 — 표시만 생략 */ }
 }
 
-/** 한 채널의 접속 상태를 바로 반영(POST …/voice/state 응답 — 소켓 이벤트를 기다리지 않는다) */
+/** 한 채널의 접속 상태를 즉시 반영(POST …/voice/state 응답 — 소켓 이벤트를 대기하지 않음) */
 export function applyVoiceState(channelId: string, state: VoiceChannelState | null) {
   const next = { ...S().voiceStates }
   if (state && state.participants?.length) next[channelId] = state
@@ -1332,20 +1332,20 @@ export function applyVoiceState(channelId: string, state: VoiceChannelState | nu
 }
 
 /**
- * 재접속 직후: 끊긴 동안 놓친 것을 다시 불러온다. WS 는 연결 중일 때 온 이벤트만 주므로
- * 이걸 안 하면 그 사이 메시지·채널 변화가 화면에 영영 안 나타난다.
- * 열린 채널은 마지막으로 가진 메시지 뒤(after)만 받아 붙이고, 너무 많이 밀렸으면 통째로 다시 읽는다.
+ * 재접속 직후: 단절 중 누락분을 재조회한다. WS 는 연결 중 발생한 이벤트만 전달하므로
+ * 생략 시 그사이의 메시지·채널 변경이 화면에 반영되지 않는다.
+ * 열린 채널은 마지막 보유 메시지 이후(after)만 수신해 추가하고, 누락분이 과다하면 전체를 재조회한다.
  */
 async function resyncAfterReconnect() {
-  if (isModuleEnabled('meetings')) void fetchCallStates()   // 끊긴 동안 열리고 닫힌 통화
-  if (!chatOn()) return   // 아래는 모두 채팅 것 — 채팅이 없으면 소켓은 알림·배지 전달만 한다
-  if (isModuleEnabled('meetings')) void fetchVoiceStates()  // 끊긴 동안 드나든 음성 채널
-  // 끊긴 동안의 상태 변화·스레드 답글·다른 기기의 임시글 — seq 커서에 안 잡히는 것들
+  if (isModuleEnabled('meetings')) void fetchCallStates()   // 단절 중 시작·종료된 통화
+  if (!chatOn()) return   // 이하는 모두 채팅 관련 — 채팅이 없으면 소켓은 알림·배지 전달만 수행
+  if (isModuleEnabled('meetings')) void fetchVoiceStates()  // 단절 중 입퇴장이 있었던 음성 채널
+  // 단절 중의 상태 변경·스레드 답글·다른 기기의 임시글 — seq 커서로 수신되지 않는 항목
   void fetchPresence()
   void fetchThreadUnreadCount()
   if (_threadsLoaded) void fetchThreads()
   if (S().showPinsPanel && S().selectedChannelId) void fetchPins(S().selectedChannelId!)
-  // 1) seq 커서가 있으면 내 모든 채널의 빠진 메시지만 받아 실시간 이벤트처럼 흘려 넣는다
+  // 1) seq 커서가 있으면 본인 전체 채널의 누락 메시지만 수신해 실시간 이벤트와 동일하게 처리
   if (_lastSeq > 0) {
     try {
       const ch = await $fetch<{ messages: ChatMessage[]; too_many: boolean; latest_seq: number }>(
@@ -1354,17 +1354,17 @@ async function resyncAfterReconnect() {
       if (!ch.too_many) {
         for (const m of ch.messages) handleWSMessage({ type: 'new_message', message: m })
         _lastSeq = Math.max(_lastSeq, ch.latest_seq || 0)
-        try { await fetchChannels() } catch { /* 배지는 다음 기회에 */ }
+        try { await fetchChannels() } catch { /* 배지는 다음 갱신 시 반영 */ }
         if (S().activeThreadId) {
           try { await fetchThreadReplies(S().activeThreadId!) } catch { /* noop */ }
         }
         return
       }
-      _lastSeq = ch.latest_seq || _lastSeq   // 너무 많이 밀림 → 아래 풀 리프레시
-    } catch { /* 구버전 서버 등 — 아래 방식으로 */ }
+      _lastSeq = ch.latest_seq || _lastSeq   // 누락분 과다 → 아래 전체 재조회
+    } catch { /* 구버전 서버 등 — 아래 방식으로 처리 */ }
   }
-  // 2) 커서가 없거나 너무 많이 밀렸으면 채널 목록과 열린 채널을 다시 읽는다
-  try { await fetchChannels() } catch { /* 목록은 다음 기회에 */ }
+  // 2) 커서가 없거나 누락분이 과다하면 채널 목록과 열린 채널을 재조회
+  try { await fetchChannels() } catch { /* 목록은 다음 갱신 시 반영 */ }
   const chId = S().selectedChannelId
   if (chId) {
     const msgs = S().messages
@@ -1377,9 +1377,9 @@ async function resyncAfterReconnect() {
           `/api/chat/channels/${chId}/messages`,
           { params: { after: last.id, limit: 100 } },
         )
-        if (S().selectedChannelId !== chId) return   // 그새 다른 채널로 옮겼다
+        if (S().selectedChannelId !== chId) return   // 그사이 다른 채널로 이동함
         if (data.has_more) {
-          await fetchMessages()   // 100개 넘게 밀림 → 이어 붙이기보다 새로 읽는 게 정확하다
+          await fetchMessages()   // 100개 초과 누락 → 이어 붙이기보다 재조회가 정확함
         } else if (data.messages.length) {
           const have = new Set(S().messages.map(m => m.id))
           const fresh = data.messages.filter(m => !have.has(m.id))
@@ -1398,13 +1398,13 @@ async function resyncAfterReconnect() {
   }
 }
 
-/** 채팅 모듈이 켜져 있는가(설치되지 않았으면 꺼진 것) */
+/** 채팅 모듈 활성화 여부(미설치는 비활성화로 간주) */
 const chatOn = () => isModuleEnabled('chat')
 
 export function connectWS() {
   if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) return
 
-  // 웹은 현재 창 주소 기준. 번들 앱은 apiBase 호스트 + 인증 하위 프로토콜(토큰은 쿼리에 싣지 않는다)
+  // 웹은 현재 창 주소 기준. 번들 앱은 apiBase 호스트 + 인증 하위 프로토콜(토큰은 쿼리에 포함하지 않음)
   const url = wsUrl('/ws/chat')
 
   _ws = new WebSocket(url, wsProtocols())
@@ -1415,13 +1415,13 @@ export function connectWS() {
     _lastPong = Date.now()
     if (_everConnected) void resyncAfterReconnect()
     _everConnected = true
-    // 대기함을 다 보낸 뒤 임시글을 다시 받는다 — 끊기기 전 서버에 저장된 옛 임시글("hel")이, 대기함으로 이미 보낸 글 뒤에 입력창에 되살아났다
+    // 대기함 전송 완료 후 임시글을 재수신 — 단절 전 서버에 저장된 이전 임시글("hel")이, 대기함으로 이미 전송한 글 뒤에 입력창에 복원되는 문제가 있었음
     if (chatOn()) {
       void flushOutbox().then(() => fetchDrafts())
       flushPendingRead()
     }
-    // 핑 — 첫 회는 0~10초 지터(서버 재시작 뒤 수백 명이 같은 박자로 치지 않게), 이후 30초.
-    // 90초 동안 pong 이 없으면 반쯤 죽은 연결(NAT 만료·절전 복귀)로 보고 끊는다 → onclose 의 백오프 재접속.
+    // 핑 — 첫 회는 0~10초 지터(서버 재시작 후 수백 명이 동일 주기로 요청하는 것을 방지), 이후 30초.
+    // 90초 동안 pong 이 없으면 반쯤 끊긴 연결(NAT 만료·절전 복귀)로 판단해 종료 → onclose 의 백오프 재접속.
     const ws = _ws
     const tick = () => {
       if (!ws || ws !== _ws || ws.readyState !== WebSocket.OPEN) return
@@ -1464,7 +1464,7 @@ export function connectWS() {
   }
 }
 
-/** 배너의 "다시 시도" — 기다리지 않고 바로 붙는다. */
+/** 배너의 "다시 시도" — 대기 없이 즉시 연결한다. */
 export function retryNow() {
   if (_reconnectTimer) {
     clearTimeout(_reconnectTimer)
@@ -1495,23 +1495,23 @@ export function disconnectWS() {
 }
 
 const _wsListeners = new Set<(data: any) => void>()
-/** 소켓 이벤트 구독(새 화면 composable 용 — useChat 을 키우지 않으려고). 해제 함수를 돌려준다 */
+/** 소켓 이벤트 구독(신규 화면 composable 용 — useChat 비대화 방지 목적). 해제 함수를 반환한다 */
 export function onChatEvent(fn: (data: any) => void): () => void {
   _wsListeners.add(fn)
   return () => { _wsListeners.delete(fn) }
 }
 
-/** 테스트에서 이벤트 반영을 확인하려고 내보낸다(앱 코드는 소켓 onmessage 만 부른다) */
+/** 테스트에서 이벤트 반영을 확인하기 위해 export 한다(앱 코드는 소켓 onmessage 만 호출) */
 export function handleWSMessage(data: any) {
   // 역할·카테고리 변경(관리 화면) · 다른 모듈 구독자(스레드 목록 등)
   if (data?.type === 'chat_roles_changed' || data?.type === 'chat_member_roles_changed') void import('~/composables/useChatRoles').then(m => m.handleRolesEvent(data))
   if (data?.type === 'chat_layout_changed') void import('~/composables/useChatLayout').then(m => m.handleLayoutEvent(data))
-  for (const fn of _wsListeners) { try { fn(data) } catch { /* 구독자 오류는 소켓을 막지 않는다 */ } }
+  for (const fn of _wsListeners) { try { fn(data) } catch { /* 구독자 오류는 소켓 처리를 중단시키지 않음 */ } }
   switch (data.type) {
     case 'new_message': {
       const msg = data.message as ChatMessage
       if (msg.seq && msg.seq > _lastSeq) _lastSeq = msg.seq
-      // 같은 메시지가 두 번 올 수 있다(재접속 보충 /changes 와 그 사이 도착한 실시간 이벤트) — 안 읽음 수·답글 수를 두 번 올리지 않는다
+      // 동일 메시지가 2회 수신될 수 있다(재접속 보충 /changes 와 그사이 도착한 실시간 이벤트) — 미읽음 수·답글 수를 중복 증가시키지 않는다
       if (_seenMsgIds.has(msg.id)) break
       _seenMsgIds.add(msg.id)
       if (_seenMsgIds.size > 600) { let n = 0; for (const id of _seenMsgIds) { if (n++ >= 200) break; _seenMsgIds.delete(id) } }
@@ -1529,16 +1529,16 @@ export function handleWSMessage(data: any) {
         if (tp?.id === msg.parent_id) {
           set({ threadParent: bumpThreadMeta(tp, msg) })
         }
-        // "채널에도 보내기" 한 답글은 메인 타임라인에도 넣고 채널 미읽음으로 센다(서버 main_timeline_filter 와 같은 선)
+        // "채널에도 보내기" 를 적용한 답글은 메인 타임라인에도 추가하고 채널 미읽음으로 집계(서버 main_timeline_filter 와 동일 기준)
         if (!isMainTimelineMessage(msg)) break
       }
       // Main timeline message
       if (msg.channel_id === S().selectedChannelId) {
-        // Avoid duplicates · 옛 위치를 보는 중(점프)이면 붙이지 않는다 — 끝에 닿으면 이어 읽는다(useChatJump)
+        // Avoid duplicates · 이전 위치를 열람 중(점프)이면 추가하지 않음 — 끝에 도달하면 이어서 조회(useChatJump)
         if (!S().hasMoreAfter && !S().messages.find(m => m.id === msg.id)) {
           set({ messages: insertBySeq(S().messages, msg) })
         }
-        // 보고 있을 때만 읽음. 위로 스크롤해 있으면 "새 메시지 N" 을 띄운다
+        // 열람 중일 때만 읽음 처리. 위로 스크롤한 상태이면 "새 메시지 N" 을 표시
         const mine = msg.sender?.id === me()?.id
         if (!mine && !S().viewAtBottom) set({ newBelowCount: S().newBelowCount + 1 })
         if (mine) markRead(msg.channel_id, msg.id)
@@ -1587,7 +1587,7 @@ export function handleWSMessage(data: any) {
     }
 
     case 'presence': {
-      // 신서버는 state(online|away|dnd|offline)·emoji·text, 구서버는 status(online|offline)만 — 둘 다 받는다
+      // 신서버는 state(online|away|dnd|offline)·emoji·text, 구서버는 status(online|offline)만 전달 — 양쪽 모두 수신
       const evt = data as PresenceEvent
       const uid = evt.user_id
       const presences = applyPresence(S().presences, evt)
@@ -1603,14 +1603,14 @@ export function handleWSMessage(data: any) {
         ? S().members.map(m => (m.user_id === uid ? { ...m, is_online: online } : m))
         : S().members
       set({ presences, onlineUsers, members })
-      // 내 상태가 다른 기기에서 바뀌었으면 설정도 다시 읽는다(실효 상태만 이벤트에 오므로)
+      // 본인 상태가 다른 기기에서 변경된 경우 설정도 재조회(이벤트에는 실효 상태만 포함되므로)
       const ms = S().myStatus
       if (uid === me()?.id && ms && ms.state !== presences[uid]?.state) void fetchMyStatus()
       break
     }
 
     case 'channel_unread': {
-      // 내 다른 기기에서 "여기부터 안 읽음" — 되감은 배지를 그대로 받는다
+      // 본인의 다른 기기에서 "여기부터 안 읽음" 수행 — 되돌린 배지를 그대로 반영
       set({ channels: applyChannelUnread(S().channels, data) })
       if (_pendingRead?.channelId === data.channel_id) _pendingRead = null
       break
@@ -1625,17 +1625,17 @@ export function handleWSMessage(data: any) {
       break
 
     case 'message_update':
-      // 핀·편집 — 메시지를 통째로 갈아 끼운다
+      // 핀·편집 — 메시지 전체를 교체
       if (data.message) applyMessageUpdate(data.message as ChatMessage)
       break
 
     case 'link_preview':
-      // 링크 미리보기 카드가 생김/지워짐
+      // 링크 미리보기 카드 생성/삭제
       if (typeof data.message_id === 'string') applyLinkPreview(data.message_id, (data.link_preview ?? null) as LinkPreview | null)
       break
 
     case 'thread_update': {
-      // 팔로우하는 스레드에 답글 — 목록·배지·열린 패널을 맞춘다(답글 자체는 new_message 로도 온다)
+      // 팔로우하는 스레드에 답글 — 목록·배지·열린 패널을 동기화(답글 자체는 new_message 로도 수신)
       const before = S().threads
       const after = applyThreadUpdate(before, data)
       set({ threads: after })
@@ -1647,7 +1647,7 @@ export function handleWSMessage(data: any) {
         }
         const ats = S().activeThreadState
         if (ats) set({ activeThreadState: { ...ats, unread_replies: data.unread_replies } })
-        // 패널을 보고 있으면 바로 읽음 — 아니면 미읽음으로 남겨 돌아왔을 때 표시한다
+        // 패널을 열람 중이면 즉시 읽음 처리 — 아니면 미읽음으로 유지해 복귀 시 표시
         if (canSeeThread()) { markThreadRead(data.root_id).catch(() => {}); break }
       }
       void fetchThreadUnreadCount()
@@ -1663,8 +1663,8 @@ export function handleWSMessage(data: any) {
       break
 
     case 'draft_update': {
-      // 발신 기기도 받는다 — 이 기기가 지금 쓰고 있는 자리(PUT 대기 중)면 내 입력이 더 새로우니 통째로 무시하고,
-      // 아니면 내용이 같을 때 리듀서가 같은 참조를 돌려줘 입력창을 건드리지 않는다
+      // 발신 기기도 수신한다 — 이 기기가 현재 입력 중인 위치(PUT 대기 중)이면 본인 입력이 더 최신이므로 전체를 무시하고,
+      // 그 외에는 내용이 동일할 때 리듀서가 동일 참조를 반환해 입력창에 영향을 주지 않는다
       const key = draftKey(data.channel_id, data.parent_id)
       if (_draftPending.has(key)) break
       set({ drafts: applyDraftUpdate(S().drafts, data) })
@@ -1720,7 +1720,7 @@ export function handleWSMessage(data: any) {
       break
 
     case 'channel_read': {
-      // 내 다른 기기·탭에서 읽었다 — 이 기기의 배지도 끈다
+      // 본인의 다른 기기·탭에서 읽음 처리됨 — 이 기기의 배지도 제거
       patchChannel(data.channel_id, c => ({
         ...c,
         unread_count: 0,
@@ -1733,7 +1733,7 @@ export function handleWSMessage(data: any) {
 
     case 'mention_count': {
       const ch = S().channels.find(c => c.id === data.channel_id)
-      // 열어 둔 채널이라도 지금 안 보고 있으면(다른 창·위로 스크롤) 배지를 살린다
+      // 열린 채널이라도 현재 열람 중이 아니면(다른 창·위로 스크롤) 배지를 표시
       if (ch && !(data.channel_id === S().selectedChannelId && canSeeLatest())) {
         patchChannel(ch.id, c => ({ ...c, mention_count: data.count, group_mention: !!data.group }))
       }
@@ -1765,7 +1765,7 @@ export function handleWSMessage(data: any) {
 
     case 'error':
       console.error('WS error:', data.detail)
-      // 소켓 전송은 확인 응답이 없다 — 서버가 거절하면(권한 없음·답장 원문 삭제 등) 이 이벤트가 유일한 신호다
+      // 소켓 전송에는 확인 응답이 없다 — 서버 거부(권한 없음·답장 원문 삭제 등) 시 이 이벤트가 유일한 신호이다
       addToast('error', typeof data.detail === 'string' && data.detail ? data.detail : '메시지를 보내지 못했습니다')
       break
   }
@@ -1775,9 +1775,9 @@ export function sendMessage(content: string, messageType = 'text', fileMeta?: st
   const channelId = S().selectedChannelId
   if (!channelId) return
   afterFirstSend()
-  // 보냈으니 그 자리 임시글은 끝 — 서버가 지우고 draft_update 를 보내지만, 대기 중인 PUT 이 되살리지 않게 먼저 끊는다
+  // 전송 완료로 해당 위치의 임시글은 종료 — 서버가 삭제하고 draft_update 를 송신하나, 대기 중인 PUT 이 복원하지 않도록 먼저 취소
   if (messageType === 'text') clearDraft(channelId, null, { remote: false })
-  // 끊긴 동안의 텍스트는 대기함에 — 연결되면 순서대로 보낸다(파일은 업로드가 이미 끝난 것이라 REST 로 바로)
+  // 단절 중의 텍스트는 대기함에 저장 — 연결 복구 시 순서대로 전송(파일은 업로드가 이미 완료된 상태이므로 REST 로 즉시 전송)
   if (_ws?.readyState !== WebSocket.OPEN && messageType === 'text' && (S().disconnectedAt !== null || S().outbox.length)) {
     enqueueOutbox(channelId, content, opts)
     return
@@ -1801,7 +1801,7 @@ export function sendMessage(content: string, messageType = 'text', fileMeta?: st
       })
       .catch((e) => {
         console.error('sendMessage REST fallback error:', e)
-        // 보낸 채널로 대기시킨다 — 예전엔 이 시점의 선택 채널을 다시 읽어, 그새 채널을 옮겼으면 다른 채널로 나갔다
+        // 전송 시점의 채널로 대기 등록 — 이전에는 이 시점의 선택 채널을 재조회하여, 그사이 채널을 이동한 경우 다른 채널로 전송됨
         if (messageType === 'text') enqueueOutbox(channelId, content, opts)
         else addToast('error', '메시지를 보내지 못했습니다')
       })
@@ -1814,14 +1814,14 @@ function loadOutbox() {
   if (_outboxLoaded) return
   _outboxLoaded = true
   try {
-    // 예전(사용자 구분 없는) 키에 남은 것은 한 번만 지금 사용자 것으로 옮긴다
+    // 이전(사용자 구분 없는) 키의 잔여 항목은 1회에 한해 현재 사용자 키로 이전
     const legacy = localStorage.getItem(OUTBOX_KEY_LEGACY)
     if (legacy) { if (!localStorage.getItem(outboxKey())) localStorage.setItem(outboxKey(), legacy); localStorage.removeItem(OUTBOX_KEY_LEGACY) }
     set({ outbox: JSON.parse(localStorage.getItem(outboxKey()) || '[]') })
   } catch { set({ outbox: [] }) }
 }
 function saveOutbox() {
-  try { localStorage.setItem(outboxKey(), JSON.stringify(S().outbox)) } catch { /* 저장 못 해도 메모리엔 있다 */ }
+  try { localStorage.setItem(outboxKey(), JSON.stringify(S().outbox)) } catch { /* 저장 실패 시에도 메모리에는 유지 */ }
 }
 function enqueueOutbox(channelId: string, content: string, opts?: SendOptions) {
   loadOutbox()
@@ -1837,13 +1837,13 @@ export function discardOutbox(localId: string) {
   set({ outbox: S().outbox.filter(o => o.localId !== localId) })
   saveOutbox()
 }
-/** 보내지 못한 메시지 다시 보내기 */
+/** 전송 실패 메시지 재전송 */
 export function retryOutbox(localId: string) {
   set({ outbox: S().outbox.map(o => (o.localId === localId ? { ...o, failed: false } : o)) })
   saveOutbox()
   void flushOutbox()
 }
-/** 연결되면 대기 메시지를 순서대로 REST 로 보낸다(응답으로 확인 — 실패하면 그 자리에서 멈춘다). */
+/** 연결 복구 시 대기 메시지를 순서대로 REST 로 전송한다(응답으로 확인 — 실패 시 해당 위치에서 중단한다). */
 async function flushOutbox() {
   loadOutbox()
   if (_flushingOutbox || !S().outbox.length) return
@@ -1860,12 +1860,12 @@ async function flushOutbox() {
       } catch (e: any) {
         const status = e?.response?.status || e?.statusCode
         if (status && status >= 400 && status < 500) {
-          // 채널에서 나갔거나 권한이 없어진 것 — 그 줄에 "보내지 못했습니다"로 남긴다(다시 보내기 · 삭제는 사용자가)
+          // 채널 탈퇴 또는 권한 상실 — 해당 줄에 "보내지 못했습니다"로 유지(다시 보내기 · 삭제는 사용자가 수행)
           set({ outbox: S().outbox.map(o => (o.localId === item.localId ? { ...o, failed: true } : o)) })
           saveOutbox()
           continue
         } else {
-          break   // 아직 네트워크가 안 됨 — 다음 연결 때
+          break   // 네트워크 미복구 — 다음 연결 시 재시도
         }
       }
       set({ outbox: S().outbox.filter(o => o.localId !== item.localId) })
@@ -1876,7 +1876,7 @@ async function flushOutbox() {
   }
 }
 
-// ─── 알림 권한 — 첫 메시지를 보낸 뒤에야 묻는다(배너, 사용자가 누를 때만 브라우저 프롬프트) ───
+// ─── 알림 권한 — 첫 메시지 전송 후에만 요청(배너, 사용자가 누를 때만 브라우저 프롬프트 표시) ───
 
 function afterFirstSend() {
   if (!('Notification' in window)) return
@@ -1920,16 +1920,16 @@ function markRead(channelId: string, messageId: string) {
       message_id: messageId,
     }))
   } else {
-    _pendingRead = { channelId, messageId }   // 연결되면 보낸다
+    _pendingRead = { channelId, messageId }   // 연결 시 전송
   }
 }
 
-/** 지금 이 채널의 맨 아래를 사람이 보고 있나 — 창이 보이고, 포커스가 있고, 맨 아래까지 내려와 있다. */
+/** 사용자가 현재 이 채널의 최하단을 열람 중인지 여부 — 창이 표시되고, 포커스가 있으며, 최하단까지 스크롤된 상태. */
 function canSeeLatest(): boolean {
   return document.visibilityState === 'visible' && document.hasFocus() && S().viewAtBottom
 }
 
-/** 볼 수 있을 때만 읽음. 아니면 미뤄 두고, 보이게 되는 순간(flushPendingRead) 보낸다. */
+/** 열람 가능할 때만 읽음 처리한다. 아니면 보류하고, 표시되는 시점(flushPendingRead)에 전송한다. */
 function requestRead(channelId: string, messageId: string) {
   if (canSeeLatest()) {
     _pendingRead = null
@@ -1937,7 +1937,7 @@ function requestRead(channelId: string, messageId: string) {
     return
   }
   _pendingRead = { channelId, messageId }
-  // 열어 둔 채널이어도 못 보고 있으면 미읽음으로 센다(탭 제목·레일 숫자가 맞게)
+  // 열린 채널이라도 열람 중이 아니면 미읽음으로 집계(탭 제목·레일 숫자 일치 목적)
   if (channelId === S().selectedChannelId) patchChannel(channelId, c => ({ ...c, unread_count: (c.unread_count || 0) + 1 }))
 }
 
@@ -1949,7 +1949,7 @@ function flushPendingRead() {
   markRead(channelId, messageId)
 }
 
-/** ChatMessageList 가 스크롤할 때 알려 준다. 맨 아래에 닿으면 미뤄 둔 읽음을 보낸다. */
+/** ChatMessageList 가 스크롤 시 통지한다. 최하단 도달 시 보류한 읽음을 전송한다. */
 export function setViewAtBottom(atBottom: boolean) {
   set({ viewAtBottom: atBottom })
   if (atBottom) {
@@ -1968,8 +1968,8 @@ function hookVisibility() {
 }
 
 /**
- * 절전 복귀·와이파이 전환 직후엔 소켓이 OPEN 으로 보여도 실제로는 죽어 있을 수 있다. 그 상태로 보낸 글은 조용히 사라진다
- * (정기 핑은 90초 뒤에야 알아챈다). 돌아온 즉시 핑을 보내 5초 안에 답이 없으면 끊고 다시 붙는다.
+ * 절전 복귀·와이파이 전환 직후에는 소켓이 OPEN 으로 표시되어도 실제로는 끊겨 있을 수 있다. 이 상태에서 전송한 글은 통지 없이 유실된다
+ * (정기 핑은 90초 후에야 감지한다). 복귀 즉시 핑을 전송해 5초 내 응답이 없으면 연결을 종료하고 재접속한다.
  */
 function probeConnection() {
   const ws = _ws
@@ -1979,11 +1979,11 @@ function probeConnection() {
   setTimeout(() => { if (ws === _ws && ws.readyState === WebSocket.OPEN && _lastPong < sentAt) ws.close() }, 5000)
 }
 
-/** 점프: 원문 주변 창으로 목록을 바꾼다. hasMoreAfter = 아래(최근)에 더 있음 */
+/** 점프: 원문 주변 창으로 목록을 교체한다. hasMoreAfter = 하단(최근)에 추가 메시지 존재 */
 export function replaceMessagesWindow(list: ChatMessage[], hasMore: boolean, hasMoreAfter: boolean) {
   set({ messages: list, hasMoreMessages: hasMore, hasMoreAfter, newBelowCount: hasMoreAfter ? S().newBelowCount : 0 })
 }
-/** 점프한 창 아래로 이어 붙인다(겹치는 것은 뺀다). 다 따라잡으면 hasMoreAfter = false → 실시간 메시지가 다시 붙는다 */
+/** 점프한 창 아래로 이어 붙인다(중복 항목 제외). 최신까지 도달하면 hasMoreAfter = false → 실시간 메시지 추가가 재개된다 */
 export function appendMessagesAfter(list: ChatMessage[], hasMoreAfter: boolean) {
   const have = new Set(S().messages.map(m => m.id))
   set({ messages: [...S().messages, ...list.filter(m => !have.has(m.id))], hasMoreAfter })
@@ -2010,15 +2010,15 @@ export function getDMDisplayName(channel: Channel, s: ChatState = S()): string {
 
 // ─── Init ───
 
-/** 앱 전체 실시간 연결 시작. 이미 시작했으면 아무것도 안 한다. */
+/** 앱 전체 실시간 연결 시작. 이미 시작된 경우 no-op. */
 export async function initChat() {
   if (_initialized) return
   _initialized = true
   hookVisibility()
   loadOutbox()
   ensurePushSubscription()
-  // 소켓은 채팅 모듈과 무관하게 연다(알림·승인 배지·통화 상태가 이 소켓으로 온다).
-  // 채팅·회의 쪽 불러오기는 그 모듈이 켜져 있을 때만 — 꺼졌거나 설치되지 않았으면 그 API 는 없다.
+  // 소켓은 채팅 모듈과 무관하게 연결한다(알림·승인 배지·통화 상태가 이 소켓으로 수신된다).
+  // 채팅·회의 관련 조회는 해당 모듈이 활성화된 경우에만 수행한다 — 비활성화 또는 미설치 시 해당 API 가 없다.
   const chat = chatOn()
   const meetings = isModuleEnabled('meetings')
   await Promise.all([
@@ -2032,10 +2032,10 @@ export async function initChat() {
     ] : []),
   ])
   connectWS()
-  if (chat) void migrateLocalDrafts()   // 채널 목록·서버 임시글을 받은 뒤에(멤버 아닌 채널은 403, 서버본 우선)
+  if (chat) void migrateLocalDrafts()   // 채널 목록·서버 임시글 수신 후 수행(멤버가 아닌 채널은 403, 서버본 우선)
 }
 
-/** 연결 끊고 사용자별 상태 비우기 — 로그아웃 직전에 useAuth 가 부른다 */
+/** 연결 종료 및 사용자별 상태 초기화 — 로그아웃 직전에 useAuth 가 호출 */
 export function cleanupChat() {
   _initialized = false
   _lastSeq = 0
@@ -2069,13 +2069,13 @@ export function cleanupChat() {
   })
 }
 
-// 로그아웃 직전에 정리한다 — 다음 사용자에게 이전 사용자의 이벤트가 가지 않게
+// 로그아웃 직전에 정리 — 다음 사용자에게 이전 사용자의 이벤트가 전달되는 것을 방지
 onBeforeLogout(cleanupChat)
 
 export function useChat() {
   const { state: s, track } = useTrackedStore(chatStore)
   return {
-    // State (읽기 전용 — 바꾸는 건 아래 함수·setter 로)
+    // State (읽기 전용 — 변경은 아래 함수·setter 사용)
     get channels() { return track('channels') },
     get channelsError() { return track('channelsError') },
     get selectedChannelId() { return track('selectedChannelId') },
@@ -2209,7 +2209,7 @@ export function useChat() {
     toggleSave,
     // Drafts
     fetchDrafts,
-    /** 임시글 본문 — 렌더 중 호출하면 drafts 를 구독한다(아직 PUT 안 된 입력값이 먼저) */
+    /** 임시글 본문 — 렌더 중 호출하면 drafts 를 구독한다(PUT 미완료 입력값 우선) */
     draftFor: (channelId: string, parentId?: string | null) => { track('drafts'); return draftFor(channelId, parentId) },
     setDraft,
     flushDraft,

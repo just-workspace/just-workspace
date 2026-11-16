@@ -23,7 +23,7 @@ import {
   type ThreadSummary,
 } from '~/lib/chatEvents'
 
-// 채팅 WS 이벤트 → 상태 리듀서. 백엔드 이벤트 모양은 backend/tests/test_chat_prereq.py 와 맞춘다.
+// 채팅 WS 이벤트 → 상태 리듀서. 백엔드 이벤트 형태는 backend/tests/test_chat_prereq.py 와 일치시킨다.
 
 function ch(id: string, over: Partial<ChannelLike> = {}): ChannelLike {
   return { id, type: 'public', unread_count: 0, mention_count: 0, group_mention: false, last_read_seq: 0, notify_level: 'mentions', muted: false, ...over }
@@ -130,9 +130,9 @@ describe('스레드', () => {
     expect(out[0].id).toBe('t1')
     expect(out[0]).toMatchObject({ reply_count: 2, unread_replies: 1 })
     expect(out[0].last_reply).toMatchObject({ id: 'r2', seq: 60, sender_name: 'Carol' })
-    // 같은 답글이 두 번 와도(new_message 와 thread_update) 답글 수는 한 번만 오른다
+    // 동일 답글이 2회 수신되어도(new_message 와 thread_update) 답글 수는 1회만 증가
     expect(applyThreadUpdate(out, { root_id: 't1', channel_id: 'c1', unread_replies: 1, reply: out[0].last_reply! as any })[0].reply_count).toBe(2)
-    // 목록에 없는 스레드면 그대로(호출 쪽이 다시 읽는다)
+    // 목록에 없는 스레드면 그대로 반환(호출자가 재조회)
     expect(applyThreadUpdate(before, { root_id: 'new', channel_id: 'c1', unread_replies: 1, reply: { id: 'r', channel_id: 'c1', parent_id: 'new', content: '', created_at: 't' } })).toBe(before)
   })
 
@@ -167,9 +167,9 @@ describe('임시글', () => {
   it('draft_update — 내용이 같으면(발신 기기 에코) 같은 참조를 돌려준다', () => {
     const before = draftsFromList([{ channel_id: 'c1', parent_id: null, content: '쓰는 중', updated_at: 't0' }])
     expect(applyDraftUpdate(before, { channel_id: 'c1', parent_id: null, content: '쓰는 중', updated_at: 't1' })).toBe(before)
-    // 아직 PUT 안 된 이 기기 입력값과 같은 것도 무시
+    // 아직 PUT 되지 않은 본 기기 입력값과 동일한 것도 무시
     expect(applyDraftUpdate(before, { channel_id: 'c1', parent_id: null, content: '쓰는 중...', updated_at: 't1' }, '쓰는 중...')).toBe(before)
-    // 다른 기기가 바꾼 것은 받는다
+    // 다른 기기의 변경은 수용
     const out = applyDraftUpdate(before, { channel_id: 'c1', parent_id: null, content: '다른 기기', updated_at: 't2' })
     expect(out.c1.content).toBe('다른 기기')
   })
@@ -182,7 +182,7 @@ describe('임시글', () => {
     const out = applyDraftUpdate(before, { channel_id: 'c1', parent_id: null, content: null, updated_at: null })
     expect(Object.keys(out)).toEqual(['c1:root'])
     expect(applyDraftUpdate(out, { channel_id: 'c1', parent_id: null, content: null, updated_at: null })).toBe(out)
-    // 이 기기가 이미 비웠으면(전송 직후) 손댈 것 없음
+    // 본 기기가 이미 비웠으면(전송 직후) 처리 불필요
     expect(applyDraftUpdate(before, { channel_id: 'c1', parent_id: null, content: null, updated_at: null }, '')).toBe(before)
   })
 

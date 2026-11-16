@@ -2,18 +2,18 @@
  * 컴포저.
  * 디스코드식 한 줄 카드.
  *
- * 데스크톱: 한 줄 카드 56(입력 16/22, 위아래 17) · 좌우 인셋 8 · radius 8 · 1px · 최대 50vh 후 스크롤.
+ * 데스크톱: 한 줄 카드 56(입력 16/22, 위아래 17) · 좌우 인셋 8 · radius 8 · 1px · 최대 50vh 초과 시 스크롤.
  *   왼쪽 ⊕(첨부 메뉴) · 오른쪽 버튼 32 간격 8(Aa · 이모지) · 전송 버튼 없음(Enter).
- *   카드 위 띠 32(답장 · 수정 · @everyone 확인 — ChatComposerBars)가 붙으면 카드는 아래 모서리만 둥글다.
- *   카드 안 위쪽: 첨부 줄(스포일러 · ALT · ✕) → Aa 서식줄(ChatFormatBar). 아래 24 = 입력 중 표시 예약 자리(typing prop).
- * 모바일: ⊕ 44 + 둥근 입력 44(이모지 안쪽) + 글을 쓰면 전송 버튼 44.
- * 자동완성 `:`(2글자부터) · `@`(사람 · 역할 · @here/@everyone) — ChatAutocomplete. 이모지 피커 — ChatEmojiPicker(Ctrl+E).
- * @silent: 입력 앞 `@silent ` 는 접두 칩(muted 600)으로 바뀌고 오른쪽에 "알림 없이 보냅니다". 보낼 때 silent=true, 본문에서 뗀다.
- * @everyone/@here: 권한이 있으면 첫 Enter 는 확인 띠만, 두 번째 Enter 에 보낸다. 권한이 없으면 아래 info 한 줄(글자로만 감).
- * 답장: useChatUi.replyTo(같은 채널·같은 스레드) → 보낼 때 reply_to_id/reply_ping. @ 스위치 값은 사람마다 기억(setChatReplyPing).
- * 수정: useChatUi.editRequest(행 "수정" · 빈 입력 ↑)를 이 컴포저가 받아 띠 + 본문을 채운다. Enter 저장 · Esc 취소.
- * 첨부: 트레이(useChatAttachments)에 모았다가 보내기 = 메시지 하나(chatApi22.postAttachments, 최대 10). 붙여넣기·끌어 놓기 유지.
- * 스레드 패널도 같은 컴포저(mode="thread"): 임시글은 (채널, 루트) 단위.
+ *   카드 위 띠 32(답장 · 수정 · @everyone 확인 — ChatComposerBars)가 붙으면 카드는 아래 모서리만 둥글게 처리.
+ *   카드 내부 위쪽: 첨부 줄(스포일러 · ALT · ✕) → Aa 서식줄(ChatFormatBar). 아래 24 = 입력 중 표시 예약 자리(typing prop).
+ * 모바일: ⊕ 44 + 둥근 입력 44(이모지 안쪽) + 입력 시 전송 버튼 44.
+ * 자동완성 `:`(2글자부터) · `@`(사용자 · 역할 · @here/@everyone) — ChatAutocomplete. 이모지 피커 — ChatEmojiPicker(Ctrl+E).
+ * @silent: 입력 앞 `@silent ` 는 접두 칩(muted 600)으로 변환되고 오른쪽에 "알림 없이 보냅니다" 표시. 전송 시 silent=true, 본문에서 제거.
+ * @everyone/@here: 권한이 있으면 첫 Enter 는 확인 띠만 표시, 두 번째 Enter 에 전송. 권한이 없으면 아래 info 한 줄(텍스트로만 전송됨).
+ * 답장: useChatUi.replyTo(같은 채널·같은 스레드) → 전송 시 reply_to_id/reply_ping. @ 스위치 값은 사용자별 보존(setChatReplyPing).
+ * 수정: useChatUi.editRequest(행 "수정" · 빈 입력 ↑)를 본 컴포저가 수신하여 띠 + 본문을 채움. Enter 저장 · Esc 취소.
+ * 첨부: 트레이(useChatAttachments)에 모은 뒤 전송 = 메시지 하나(chatApi22.postAttachments, 최대 10). 붙여넣기·드래그 앤 드롭 유지.
+ * 스레드 패널도 동일 컴포저(mode="thread"): 임시글은 (채널, 루트) 단위.
  */
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useStore } from 'zustand'
@@ -46,40 +46,40 @@ export interface ChatInputProps {
   mode?: 'channel' | 'thread'
   /** 스레드 루트 id(mode=thread) */
   parentId?: string | null
-  /** 자리표시 글자. 없으면 "#채널에 메시지 보내기" */
+  /** 자리표시 텍스트. 없으면 "#채널에 메시지 보내기" */
   placeholder?: string
-  /** 스레드: "채널에도 보내기" — 첨부 답글에도 같은 값을 쓴다 */
+  /** 스레드: "채널에도 보내기" — 첨부 답글에도 동일 값 적용 */
   alsoToChannel?: boolean
-  /** 보내기(본문, 종류, 파일 메타, 옵션 — 답장·@silent) */
+  /** 전송(본문, 종류, 파일 메타, 옵션 — 답장·@silent) */
   onSend?: (content: string, messageType?: string, fileMeta?: string | null, opts?: SendOptions) => void
   /** 입력 중(채널 컴포저만) */
   onTyping?: () => void
-  /** 스레드 첨부를 보냈다(부모가 "채널에도 보내기"를 되돌리게) */
+  /** 스레드 첨부 전송 완료(부모가 "채널에도 보내기"를 원래 값으로 복원하도록 통지) */
   onFilesSent?: () => void
   /** 아래 24 예약 자리(입력 중 표시) — 데스크톱 채널 컴포저 */
   typing?: ReactNode
 }
 
-// ─── 순수 도우미(테스트 대상) ───
+// ─── 순수 헬퍼(테스트 대상) ───
 
 const SILENT_RE = /^@silent(?:\s+|$)/
 /** 입력 앞 @silent → { silent, body } */
 export function splitSilent(text: string): { silent: boolean; body: string } {
   return SILENT_RE.test(text) ? { silent: true, body: text.replace(SILENT_RE, '') } : { silent: false, body: text }
 }
-/** 본문의 @everyone / @here(코드 안은 빼고). 둘 다면 everyone */
+/** 본문의 @everyone / @here(코드 내부는 제외). 둘 다 있으면 everyone */
 export function detectEveryone(text: string): 'everyone' | 'here' | null {
   const plain = text.replace(/```[\s\S]*?```/g, ' ').replace(/`[^`\n]*`/g, ' ')
   if (/(^|[^\w@])@everyone\b/.test(plain)) return 'everyone'
   if (/(^|[^\w@])@here\b/.test(plain)) return 'here'
   return null
 }
-/** Enter 를 눌렀을 때: 'arm' = 확인 띠만 · 'send' = 보내기 */
+/** Enter 입력 시: 'arm' = 확인 띠만 표시 · 'send' = 전송 */
 export function enterAction(o: { text: string; silent: boolean; canEveryone: boolean; armed: boolean }): 'arm' | 'send' {
   if (o.silent || !o.canEveryone || o.armed) return 'send'
   return detectEveryone(o.text) ? 'arm' : 'send'
 }
-/** 보내기 옵션 */
+/** 전송 옵션 */
 export function buildSendOptions(o: { silent: boolean; reply: { messageId: string; ping: boolean } | null }): SendOptions {
   const out: SendOptions = {}
   if (o.reply) { out.reply_to_id = o.reply.messageId; out.reply_ping = o.reply.ping }
@@ -128,7 +128,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
   const [altText, setAltText] = useState('')
   const pickerOpen = useStore(chatUiStore, s => s.emojiPicker?.mode === 'compose')
 
-  // 다음 렌더가 DOM 에 반영된 뒤 실행할 일
+  // 다음 렌더가 DOM 에 반영된 후 실행할 작업
   const afterRender = useRef<Array<() => void>>([])
   const [, bump] = useState(0)
   function nextTick(fn: () => void) { afterRender.current.push(fn); bump(n => n + 1) }
@@ -146,7 +146,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
     return t('chat.input.placeholderIn', { channel: ch.type === 'dm' ? chat.getDMDisplayName(ch) : `#${ch.name}` })
   })()
 
-  // 권한(@everyone) — 채널 권한을 읽어 둔다(어댑터, 실패하면 기본값)
+  // 권한(@everyone) — 채널 권한을 미리 조회(어댑터, 실패 시 기본값)
   const myPerms = useStore(chatRolesStore, s => (selectedChannelId ? s.myChannelPerms[selectedChannelId] : undefined))
   const roles = useStore(chatRolesStore, s => s.roles)
   useStore(chatRolesStore, s => s.catalog)
@@ -158,12 +158,12 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
   const memberCount = members.length
   const onlineCount = members.filter(m => m.is_online).length
 
-  // 답장(이 컴포저 자리만)
+  // 답장(본 컴포저 자리만 해당)
   const replyRaw = useStore(chatUiStore, s => s.replyTo)
   const reply = replyRaw && replyRaw.channelId === selectedChannelId && (replyRaw.parentId || null) === (parent || null) ? replyRaw : null
   useEffect(() => { if (reply) textareaRef.current?.focus() }, [reply?.messageId])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 자동 높이(최대 50vh — 넘으면 스크롤)
+  // 자동 높이(최대 50vh — 초과 시 스크롤)
   function autoGrow() {
     const el = textareaRef.current
     if (!el) return
@@ -172,7 +172,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
     el.style.height = Math.min(el.scrollHeight, max) + 'px'
   }
 
-  /** @silent 접두를 칩으로 */
+  /** @silent 접두를 칩으로 변환 */
   function applyText(v: string) {
     const s = splitSilent(v)
     if (s.silent && !silentRef.current) { setSilent(true); setContent(s.body); return true }
@@ -215,14 +215,14 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
   const firstContent = useRef(true)
   useEffect(() => {
     if (firstContent.current) { firstContent.current = false; return }
-    if (editingRef.current) return   // 수정 중인 글은 임시글이 아니다
+    if (editingRef.current) return   // 수정 중인 글은 임시글 대상 아님
     const [id, pid] = scopeRef.current
     if (!scopeReady(id, pid) || fullText === draftFor(id!, pid)) return
     setDraft(id!, pid, fullText)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullText])
 
-  // 자리 바뀜 — 떠나는 곳은 바로 저장, 새 자리의 임시글로 채운다
+  // 자리 변경 — 이전 자리는 즉시 저장, 새 자리의 임시글로 채움
   const prevScope = useRef<[string | null, string | null] | null>(null)
   useEffect(() => {
     const prev = prevScope.current
@@ -236,7 +236,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChannelId, parent])
 
-  // 임시글 목록이 늦게 도착하거나 다른 기기에서 바뀐 경우 — 지금 입력 중인 글은 덮지 않는다
+  // 임시글 목록이 지연 도착하거나 다른 기기에서 변경된 경우 — 현재 입력 중인 글은 덮어쓰지 않음
   useStore(chatStore, s => s.drafts)
   const scopeDraft = scopeReady(selectedChannelId, parent) ? draftFor(selectedChannelId!, parent) : ''
   const firstScopeDraft = useRef(true)
@@ -254,14 +254,14 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePickerTick])
 
-  // 수정 요청 — 이 컴포저 자리의 메시지면 받는다(스레드 안 메시지는 스레드 컴포저)
+  // 수정 요청 — 본 컴포저 자리의 메시지이면 수신(스레드 내 메시지는 스레드 컴포저가 처리)
   const editRequest = useStore(chatUiStore, s => s.editRequest)
   useEffect(() => {
     if (!editRequest) return
     const st = chatStore.getState()
     const inThread = st.threadMessages.find(m => m.id === editRequest)
     const msg = isThread ? inThread : (inThread ? null : st.messages.find(m => m.id === editRequest))
-    // 스레드 안 메시지는 스레드 컴포저 몫 — 그 밖에 못 찾은 요청은 지운다(안 지우면 같은 메시지를 다시 "수정"해도 반응이 없다)
+    // 스레드 내 메시지는 스레드 컴포저 담당 — 그 외 대상을 찾지 못한 요청은 제거(제거하지 않으면 동일 메시지를 다시 "수정"해도 반응 없음)
     if (!isThread && inThread) return
     if (!msg || msg.sender?.id !== myId) { setEditRequest(null); return }
     setEditRequest(null)
@@ -288,7 +288,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
     const text = contentRef.current.trim()
     const orig = chatStore.getState().messages.find(m => m.id === e.id) || chatStore.getState().threadMessages.find(m => m.id === e.id)
     if (!text || text === (orig?.content || '').trim()) { endEdit(); return }
-    // 성공한 뒤에 닫는다 — 먼저 닫으면 실패했을 때 고친 글이 사라진다
+    // 성공 후 닫음 — 먼저 닫으면 실패 시 수정한 글이 소실됨
     try { await editMessage(e.id, text); if (editingRef.current?.id === e.id) endEdit() } catch (err) {
       console.error('editMessage error:', err)
       addToast('error', t('chat.compose.edit.failed'))
@@ -336,7 +336,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
     nextTick(() => { const el = textareaRef.current; if (el) { const p = before.length + ins.length; el.selectionStart = el.selectionEnd = p; el.focus() } autoGrow() })
   }
 
-  // ─── 보내기 ───
+  // ─── 전송 ───
   const enterMode = useStore(userPrefsStore, s => s.prefs.chatEnterKey)
   const canSend = !editing && (content.trim().length > 0 || tray.length > 0) && !hasTooLarge && tray.length <= MAX_ATTACHMENTS
   const detected = !silent ? detectEveryone(content) : null
@@ -366,7 +366,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
   }
 
   function onKeydown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    // 한글 조합 중의 키는 IME 것 — 여기서 Enter 를 보내기로 처리하면 마지막 글자가 남거나 한 번 더 전송된다
+    // 한글 조합 중의 키는 IME 소관 — 여기서 Enter 를 전송으로 처리하면 마지막 글자가 남거나 중복 전송됨
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
     // 자동완성(↑↓ · Enter/Tab · Esc)
     if (ac.onKeyDown(e)) return
@@ -386,7 +386,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
       return
     }
 
-    // @silent 칩 지우기 — 맨 앞에서 Backspace 면 글자로 되돌린다
+    // @silent 칩 삭제 — 맨 앞에서 Backspace 입력 시 텍스트로 복원
     if (e.key === 'Backspace' && silentRef.current) {
       const el = e.currentTarget
       if (el.selectionStart === 0 && el.selectionEnd === 0) {
@@ -406,7 +406,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
       return
     }
 
-    // Enter: send = Enter 보내기·Shift+Enter 줄바꿈, newline = Enter 줄바꿈·Ctrl(⌘)+Enter 보내기. 터치 키보드는 줄바꿈(보내기는 버튼).
+    // Enter: send = Enter 전송·Shift+Enter 줄바꿈, newline = Enter 줄바꿈·Ctrl(⌘)+Enter 전송. 터치 키보드는 줄바꿈(전송은 버튼).
     if (e.key === 'Enter' && !e.shiftKey) {
       const touch = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
       const mod = e.ctrlKey || e.metaKey
@@ -440,7 +440,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
     target.value = ''
   }
 
-  // 붙여넣기 — 클립보드에 파일(스크린샷 등)이 있으면 텍스트 대신 첨부로
+  // 붙여넣기 — 클립보드에 파일(스크린샷 등)이 있으면 텍스트 대신 첨부로 처리
   function onPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
     const files = e.clipboardData?.files
     if (!files || files.length === 0) return
@@ -448,7 +448,7 @@ export function ChatInput({ mode = 'channel', parentId = null, placeholder, also
     addToTray(files, true)
   }
 
-  // 컴포저 자체 드롭(대화 영역 오버레이가 먼저 받지만, 단독 사용 대비)
+  // 컴포저 자체 드롭(대화 영역 오버레이가 먼저 수신하나, 단독 사용 대비)
   const [dragOverComposer, setDragOverComposer] = useState(false)
   function onDragOver(e: DragEvent) {
     if (!hasFiles(e)) return

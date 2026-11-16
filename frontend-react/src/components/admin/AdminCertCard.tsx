@@ -1,17 +1,17 @@
 /**
- * 관리 › 보안 — 인증서 카드. 접속 주소에 쓰는 인증서의 상태와 바꾸는 길.
+ * 관리 › 보안 — 인증서 카드. 접속 주소에 사용하는 인증서의 상태와 교체 수단.
  *
- *  · 상태: 종류(자동 발급 / 올린 인증서 / 임시) · 접속 주소 · 만료일과 남은 일수 · 발급자 · 인증서에 든 이름.
- *    임시(자체 서명) 인증서면 경고와 함께 보류된 구역 연결이 몇 건인지 알린다.
- *  · [다시 발급](Let's Encrypt) · [인증서 올리기](인증서·개인 키 파일 두 개 + 사설 CA 일 때의 CA 인증서) ·
- *    [CA 인증서 올리기](올린 인증서를 쓰는 설치에서 발급 CA 만 더한다 — 인증서를 한 장만 올려 코드 저장소의
- *    로그인 연동이 보류로 남았을 때 그 사실과 함께 안내한다). 모두 작업으로 돈다 —
- *    발급 → 다시 읽히기 → 구역 다시 연결. 진행은 1.5초마다 다시 읽고, 실패하면 쓰던 인증서가 그대로 남는다.
- *    올린 인증서가 검증을 통과하지 못하면 통과하지 못한 항목을 창 안에 보여 준다.
- *  · 화면을 새로 열어도 진행 중인 작업과 방금 끝난(또는 하루 안에 실패한) 작업이 보인다.
- *  · 앞단 프록시가 인증서를 맡는 설치는 안내만 보여 준다.
- *  · 설치 관리자 없이 구성한 설치(또는 인증서 경로가 없는 예전 설치 관리자)는 안내 한 줄만 — 이때 `onLegacy(true)` 로
- *    알려 호출한 화면이 예전 방식의 인증서 카드를 대신 보여 주게 한다.
+ *  · 상태: 종류(자동 발급 / 올린 인증서 / 임시) · 접속 주소 · 만료일과 잔여 일수 · 발급자 · 인증서에 포함된 이름.
+ *    임시(자체 서명) 인증서인 경우 경고와 함께 보류된 구역 연결 건수를 표시한다.
+ *  · [다시 발급](Let's Encrypt) · [인증서 올리기](인증서·개인 키 파일 2개 + 사설 CA 인 경우의 CA 인증서) ·
+ *    [CA 인증서 올리기](업로드한 인증서를 사용하는 설치에서 발급 CA 만 추가한다 — 인증서를 1개만 업로드하여 코드 저장소의
+ *    로그인 연동이 보류로 남은 경우 해당 사실과 함께 안내한다). 모두 작업으로 실행된다 —
+ *    발급 → 재로드 → 구역 재연결. 진행 상태는 1.5초마다 재조회하며, 실패 시 사용 중이던 인증서가 유지된다.
+ *    업로드한 인증서가 검증을 통과하지 못하면 미통과 항목을 창 내부에 표시한다.
+ *  · 화면을 다시 열어도 진행 중인 작업과 직전에 종료된(또는 하루 이내에 실패한) 작업이 표시된다.
+ *  · 프런트 프록시가 인증서를 담당하는 설치에서는 안내만 표시한다.
+ *  · 설치 관리자 없이 구성한 설치(또는 인증서 경로가 없는 이전 버전 설치 관리자)는 안내 한 줄만 표시한다 — 이 경우 `onLegacy(true)` 로
+ *    통지하여 호출 화면이 기존 방식의 인증서 카드를 대신 표시하도록 한다.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -30,17 +30,17 @@ import { UiModal } from '~/components/ui/Modal'
 import { UiProgress } from '~/components/ui/Progress'
 import { UiSkeleton } from '~/components/ui/Skeleton'
 
-/** 진행을 다시 읽는 간격 */
+/** 진행 상태 재조회 간격 */
 export const certTiming = { pollMs: 1500 }
 
-/** 이 코드로 실패하면 설치 관리자가 인증서를 맡지 않는 설치다 */
+/** 본 코드로 실패하면 설치 관리자가 인증서를 담당하지 않는 설치이다 */
 const LEGACY_CODES = ['installer_unavailable', 'installer_unsupported']
 const REQUEST_ERRORS = ['busy', 'cert_managed_by_proxy', 'not_installed', 'cert_auto_needs_domain', 'file_too_large', 'cert_invalid', 'cert_ca_needs_upload']
 const FAIL_CAUSES = ['cert_issue_failed', 'cert_dir_managed', 'cert_invalid']
 const STAGES = ['issue', 'reload', 'reconnect']
 
 export interface AdminCertCardProps {
-  /** true = 설치 관리자가 인증서를 맡지 않는 설치(예전 방식 카드를 쓴다) · false = 이 카드가 맡는다 */
+  /** true = 설치 관리자가 인증서를 담당하지 않는 설치(기존 방식 카드 사용) · false = 본 카드가 담당 */
   onLegacy?: (legacy: boolean) => void
   className?: string
 }
@@ -80,7 +80,7 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
   const [actionError, setActionError] = useState('')
   const [reconnecting, setReconnecting] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
-  const [caOnly, setCaOnly] = useState(false)         // 올리기 창이 "CA 인증서만" 모드인가
+  const [caOnly, setCaOnly] = useState(false)         // 업로드 창의 "CA 인증서만" 모드 여부
   const [certFile, setCertFile] = useState<File | null>(null)
   const [keyFile, setKeyFile] = useState<File | null>(null)
   const [caFile, setCaFile] = useState<File | null>(null)
@@ -105,7 +105,7 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
       if (!alive.current) return
       setCert(c); setErrCode(''); setReconnecting(false)
       legacyCb.current?.(false)
-      // 진행 중인 작업이 먼저, 없으면 가장 최근 인증서 작업(방금 끝났거나 하루 안에 실패한 것)
+      // 진행 중인 작업 우선, 없으면 가장 최근 인증서 작업(직전에 종료되었거나 하루 이내에 실패한 작업)
       const last = shownCertJob(c?.job) ?? (recent ? shownCertJob(recent.find(j => j?.kind === 'cert')) : undefined)
       if (last !== undefined) setJob(last)
     } catch (e) {
@@ -122,7 +122,7 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
     return () => { alive.current = false }
   }, [load])
 
-  // 진행 중인 작업을 다시 읽는다. 인증서를 다시 읽히는 동안 연결이 잠깐 끊길 수 있다 — 계속 읽는다
+  // 진행 중인 작업을 재조회한다. 인증서 재로드 중 연결이 일시적으로 끊길 수 있으므로 조회를 계속한다
   const activeId = isActive(job) ? job.id : ''
   useEffect(() => {
     if (!activeId) return
@@ -175,7 +175,7 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
     } finally { setBusy(false) }
   }
 
-  // ── 설치 관리자가 맡지 않는 설치 · 불러오기 실패 ──
+  // ── 설치 관리자가 담당하지 않는 설치 · 조회 실패 ──
   if (errCode && !cert) {
     if (LEGACY_CODES.includes(errCode)) {
       const ns = errCode === 'installer_unavailable' ? 'noInstaller' : 'unsupported'
@@ -191,7 +191,7 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
     return <SettingsCard title={t('admin.certCard.title')} flush className={className}><UiSkeleton preset="list" rows={3} /></SettingsCard>
   }
 
-  // ── 앞단 프록시가 맡는 설치 ──
+  // ── 프런트 프록시가 담당하는 설치 ──
   if (cert.managed !== true) {
     return (
       <SettingsCard title={t('admin.certCard.title')} className={className} data-testid="cert-card" data-state="proxy">
@@ -227,7 +227,7 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
   const cause = shownJob?.error?.cause || ''
   const failVars = { domain: cert.domain || '', ...(shownJob?.error?.vars as Record<string, unknown> | undefined) }
   const warnings = (shownJob?.warnings ?? []).filter(w => w && typeof w.key === 'string')
-  // 올린 인증서인데 발급 CA 를 모르고, 그 때문에 구역 연결이 보류로 남았다 — CA 인증서를 올리면 풀린다
+  // 업로드한 인증서이나 발급 CA 가 미확인이고, 이로 인해 구역 연결이 보류 상태로 남음 — CA 인증서를 업로드하면 해소된다
   const caNeeded = cert.mode === 'upload' && !!cert.ca_uploadable && !cert.site_ca && cert.pending.length > 0
 
   return (
@@ -287,7 +287,7 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
             </div>
           )}
 
-          {/* 끝난 직후 */}
+          {/* 종료 직후 */}
           {shownJob && shownJob.status === 'done' && (
             <UiCallout tone="success" role="status" title={t('admin.certCard.job.done')} data-testid="cert-done"
               actions={<UiIconButton label={t('common.close')} icon="close" size="sm" onClick={() => setHidden(shownJob.id)} />}>

@@ -1,15 +1,15 @@
 /**
  * 스레드 패널.
  * 데스크톱 400(넓게 = 대화 영역의 50% 까지, 대화 폭 480 보장), 모바일 전체 화면.
- * 머리: [따라가는 중] 알약 토글 · 넓게 · 새 창 · 닫기(Esc). 모바일: ‹ #채널로 돌아가기 · 알약 · ⋯.
- * 컴포저는 본 컴포저와 같은 도구 + "#채널에도 보내기"(기본 꺼짐, 보낸 뒤 다시 꺼짐).
- * 혼합형: 머리 = threads 20 · 스레드 이름 15/600(없으면 “원문 첫 40자” 기울임) + 채널 11
- *   · 이름 바꾸기(edit-2 → 그 자리 입력, Enter 저장 · Esc 취소) · 보관/보관 해제(archive, aria-pressed) — 루트 작성자 또는 MANAGE_THREADS.
- *   머리 48+1(디스코드 49). 보관된 스레드는 컴포저 위 안내 한 줄. 스레드 안 인라인 답장은 컴포저(ChatInput mode=thread · parentId)가 받는다.
+ * 헤더: [따라가는 중] 알약 토글 · 넓게 · 새 창 · 닫기(Esc). 모바일: ‹ #채널로 돌아가기 · 알약 · ⋯.
+ * 컴포저는 본 컴포저와 동일한 도구 + "#채널에도 보내기"(기본 비활성, 전송 후 다시 비활성).
+ * 혼합형: 헤더 = threads 20 · 스레드 이름 15/600(없으면 “원문 첫 40자” 기울임) + 채널 11
+ *   · 이름 바꾸기(edit-2 → 제자리 입력, Enter 저장 · Esc 취소) · 보관/보관 해제(archive, aria-pressed) — 루트 작성자 또는 MANAGE_THREADS.
+ *   헤더 48+1(디스코드 49). 보관된 스레드는 컴포저 위 안내 한 행. 스레드 안 인라인 답장은 컴포저(ChatInput mode=thread · parentId)가 처리한다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
-// class 를 이어 붙이기만 한다(tailwind-merge 없이 — 뒤에 온 클래스를 지우지 않는다)
+// class 를 단순 연결한다(tailwind-merge 미사용 — 뒤에 온 클래스를 제거하지 않음)
 import { clsx as cn } from 'clsx'
 import { useI18n } from '~/i18n'
 import { authStore } from '~/composables/useAuth'
@@ -51,8 +51,8 @@ export function ChatThreadPanel() {
     setAlsoToChannel(false)
   }, [activeThreadId])
 
-  // 본문 스크롤 — 열면 최근 답글(맨 아래)로, 새 답글은 맨 아래 근처를 보고 있거나 내가 쓴 것일 때 따라 내려간다
-  // (예전엔 처리가 없어 원문 자리에 멈춰 있고, 새 답글이 화면 밖에 쌓였다)
+  // 본문 스크롤 — 열면 최근 답글(맨 아래)로 이동하고, 새 답글은 맨 아래 근처를 보고 있거나 본인이 작성한 경우에만 따라 내려간다
+  // (이전에는 처리가 없어 원문 위치에 머물고 새 답글이 화면 밖에 누적되었다)
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const nearBottom = useRef(true)
   const threadLen = threadMessages.length
@@ -71,16 +71,16 @@ export function ChatThreadPanel() {
     setAlsoToChannel(false)
   }
 
-  // 스레드 첨부 답글 — 실시간 이벤트가 끊겨 있어도 응답 메시지로 패널에 바로 보이게
+  // 스레드 첨부 답글 — 실시간 이벤트가 끊긴 상태에서도 응답 메시지로 패널에 즉시 표시
   useEffect(() => onThreadFileSent((msg: ChatMessageT) => ingestThreadReply(msg)), [])
 
   // ── 스레드 이름 · 보관(혼합형) ──
-  // 메타는 원문 메시지(thread)에서, 이 패널에서 바꾼 값은 스레드별로 덮어 둔다
+  // 메타는 원문 메시지(thread)에서 조회하고, 본 패널에서 변경한 값은 스레드별로 덮어쓴다
   const [metaOverride, setMetaOverride] = useState<Record<string, ThreadMeta>>({})
   const meta: ThreadMeta | null = (activeThreadId && metaOverride[activeThreadId]) || threadParent?.thread || null
   const title = threadParent || meta ? threadTitle(meta, threadParent) : { text: t('chat.thread.title'), unnamed: false }
   const archived = !!meta?.archived
-  // 권한: 루트 작성자 또는 MANAGE_THREADS(채널 권한을 아직 못 읽었으면 읽는다)
+  // 권한: 루트 작성자 또는 MANAGE_THREADS(채널 권한 미조회 상태이면 조회)
   const channelId = selectedChannel?.id ?? null
   const canManageThreads = useChatRoles(s => canInChannel(channelId, PERM.MANAGE_THREADS, s))
   const isRootAuthor = !!threadParent?.sender && threadParent.sender.id === user?.id
@@ -113,7 +113,7 @@ export function ChatThreadPanel() {
     if (name === (meta?.name || null)) { setRenaming(false); return }
     setSavingMeta(true)
     try {
-      // 아직 스레드가 시작되지 않은 메시지(답글 없음)면 이름 붙여 시작
+      // 스레드가 아직 시작되지 않은 메시지(답글 없음)이면 이름을 지정해 시작
       const m = meta ? await patchThread(activeThreadId, { name }) : await startThread(activeThreadId, name)
       keepMeta(activeThreadId, m)
       setRenaming(false)
@@ -125,7 +125,7 @@ export function ChatThreadPanel() {
     try { keepMeta(activeThreadId, await patchThread(activeThreadId, { archived: !archived })) }
     catch (e) { metaError(e) } finally { setSavingMeta(false) }
   }
-  // 보관된 스레드에 답글이 오면 서버가 보관을 푼다 — 패널도 맞춘다
+  // 보관된 스레드에 답글이 오면 서버가 보관을 해제하므로 패널도 동기화
   const lastReplyId = threadMessages[threadMessages.length - 1]?.id
   useEffect(() => {
     if (!activeThreadId || !archived || !lastReplyId) return
@@ -175,10 +175,10 @@ export function ChatThreadPanel() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // 넓게: 400 ↔ 대화 영역의 50%(대화 폭 480 이상 보장). 부모 flex 행 기준 % 라 대화 영역이 곧 기준이다.
+  // 넓게: 400 ↔ 대화 영역의 50%(대화 폭 480 이상 보장). 부모 flex 행 기준 % 이므로 대화 영역이 기준이 된다.
   const widthStyle = threadWide ? { width: 'max(400px, min(50%, calc(100% - 480px)))' } : undefined
 
-  // 스레드 이름(없으면 “원문 첫 40자” 기울임) — 이름 바꾸는 중이면 입력칸
+  // 스레드 이름(없으면 “원문 첫 40자” 기울임) — 이름 변경 중이면 입력란
   const titleEl = (cls: string) => (renaming
     ? (
       <input
@@ -233,7 +233,7 @@ export function ChatThreadPanel() {
       className="flex h-full w-full shrink-0 flex-col bg-background md:w-[400px] md:border-l md:border-border md:bg-card"
       style={widthStyle}
     >
-      {/* 머리 — 모바일 */}
+      {/* 헤더 — 모바일 */}
       <header className="flex h-14 shrink-0 items-center gap-0.5 border-b border-border px-1 md:hidden">
         <UiIconButton
           label={t('chat.thread.backTo', { channel: channelLabel })}
@@ -251,7 +251,7 @@ export function ChatThreadPanel() {
         <UiMenu items={menuItems} label={t('chat.thread.menu')} triggerSize="lg" onSelect={(k) => { void onMenu(k) }} />
       </header>
 
-      {/* 머리 — 데스크톱 */}
+      {/* 헤더 — 데스크톱 */}
       <header className="hidden h-[49px] shrink-0 items-center gap-0.5 border-b border-border pl-4 pr-2 md:flex">
         <UiIcon name="threads" className="mr-2 h-5 w-5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
@@ -308,7 +308,7 @@ export function ChatThreadPanel() {
               : <ChatMessage key={msg.id} message={msg} grouped={false} isOwn={msg.sender?.id === user?.id} inThread />))}
       </div>
 
-      {/* 보관된 스레드 — 답글을 쓰면 다시 활성(서버) */}
+      {/* 보관된 스레드 — 답글 작성 시 다시 활성화(서버) */}
       {archived && (
         <p className="flex shrink-0 items-center gap-1.5 border-t border-border px-4 py-2 text-[12px] text-muted-foreground">
           <UiIcon name="archive" className="h-3.5 w-3.5 shrink-0" />{t('chat.right.thread.archivedBanner')}

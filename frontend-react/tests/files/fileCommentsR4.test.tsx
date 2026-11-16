@@ -56,7 +56,7 @@ describe('FilesFileCommentsPanel', () => {
     expect(screen.getByText('내 권한')).toBeTruthy()
     expect(screen.getByText('공동 소유')).toBeTruthy()
     expect(screen.getAllByText('해결됨')).toHaveLength(1)
-    // 해결된 댓글엔 "해결" 대신 "다시 열기"
+    // 해결된 댓글에는 "해결" 대신 "다시 열기"
     expect(screen.getAllByRole('button', { name: '해결' })).toHaveLength(1)
 
     fireEvent.click(screen.getByRole('button', { name: '해결' }))

@@ -38,7 +38,7 @@ describe('adminUsers', () => {
     expect(userMenuItems({ ...base, status: 'active' }, 'other', t).map(i => i.key)).toEqual(['role', 'sessions', 'logout', 'reset', 'suspend', 'delete'])
     expect(userMenuItems({ ...base, status: 'active' }, 'u1', t).map(i => i.key)).toEqual(['sessions', 'logout', 'reset'])
     expect(userMenuItems({ ...base, status: 'suspended' }, 'other', t).map(i => i.key)).toEqual(['reset', 'approve', 'delete'])
-    // 2단계 인증을 켠 사용자에게만 초기화 메뉴(승인 대기는 제외)
+    // 2단계 인증을 활성화한 사용자에게만 초기화 메뉴 표시(승인 대기는 제외)
     expect(userMenuItems({ ...base, status: 'active', has_2fa: true }, 'other', t).map(i => i.key)).toEqual(['role', 'sessions', 'logout', 'reset', 'reset2fa', 'suspend', 'delete'])
     expect(userMenuItems({ ...base, status: 'pending', has_2fa: true }, 'me', t).map(i => i.key)).not.toContain('reset2fa')
   })

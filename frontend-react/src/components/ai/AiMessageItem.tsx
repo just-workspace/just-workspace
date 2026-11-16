@@ -1,17 +1,17 @@
 /**
  * AI 메시지 한 줄.
  *  왼쪽 정렬 · 아바타 타일 28(사용자 = 원형 primary/20 이니셜, 어시스턴트 = r8 secondary + 반짝임) · 간격 12(모바일 10).
- *  머리: 이름 13/600 + mono 11 muted(시각, 어시스턴트는 "모델 · 시각") — 모바일은 이름만.
+ *  머리: 이름 13/600 + mono 11 muted(시각, 어시스턴트는 "모델 · 시각") — 모바일은 이름만 표시.
  *  도구 칩 26(r6, 12/600): 완료 muted + ✓ success · 진행 warning/15 + 회전 · 실패 danger/15 "… 실패".
  *  본문 15px foreground(줄 1.75, 모바일 1.65~1.7) · 스트리밍 커서 8×16 foreground/70.
  *  오류·도구 실패 = warning 띠(role=alert) + "다시 시도"(primary 600).
  *
  * 진행 단계 카드(도구 칩 대신) · 본문 [n] 출처 표식 + 출처 칩·미리보기 · 수식(KaTeX) ·
- *  행동 줄(복사 · 👍 · 👎 · 다시 만들기 … AI 생성 · 모델 · 확인 안내) · 끊김/멈춤 = "이어서 받기" 타일 ·
- *  받는 중 [멈추기].
+ *  행동 줄(복사 · 추천 · 비추천 · 다시 만들기 … AI 생성 · 모델 · 확인 안내) · 연결 끊김/멈춤 = "이어서 받기" 타일 ·
+ *  수신 중 [멈추기].
  *
- * 사용자 메시지 아래 [질문 수정] [◀ n/N ▶](버전이 2개 이상일 때) · 수정 칸(보내기 = 새 버전) ·
- *  첨부 칩 · 답변 중 메모리에 저장했으면 "메모리에 저장함 — “…” 보기 · 취소" 줄.
+ * 사용자 메시지 아래 [질문 수정] [◀ n/N ▶](버전이 2개 이상인 경우) · 수정 칸(보내기 = 새 버전) ·
+ *  첨부 칩 · 답변 중 메모리에 저장한 경우 "메모리에 저장함 — “…” 보기 · 취소" 줄.
  */
 import { Fragment, useCallback, useId, useState } from 'react'
 import { NuxtLink } from '~/components/NuxtLink'
@@ -49,32 +49,32 @@ export interface AiMessageItemProps {
   userAvatar?: string | null
   /** 마지막 어시스턴트 응답(다시 생성·다시 시도 가능) */
   last?: boolean
-  /** 응답 받는 중(다시 생성 숨김) */
+  /** 응답 수신 중(다시 생성 숨김) */
   busy?: boolean
   /** 복사 — 본문 */
   onCopy?: (text: string) => void
   /** 다시 생성 · 다시 시도 */
   onRegenerate?: () => void
-  /** 끊기거나 멈춘 답변 이어서 받기 */
+  /** 연결이 끊기거나 멈춘 답변의 이어서 받기 */
   onContinue?: () => void
-  /** 받는 중 멈추기 */
+  /** 수신 중 멈추기 */
   onStop?: () => void
-  /** 피드백이 바뀜 */
+  /** 피드백 변경 */
   onFeedback?: (fb: AiFeedback | null) => void
-  /** 사용자 메시지 고치기 — 본문을 입력 칸으로 */
+  /** 사용자 메시지 수정 — 본문을 입력 칸으로 전달 */
   onEdit?: (text: string) => void
-  /** 승인 카드의 요청이 바뀜(실행·취소·수정 등) */
+  /** 승인 카드의 요청 변경(실행·취소·수정 등) */
   onWriteChange?: (req: ApprovalRequest) => void
-  /** AI 질문 카드에 답함(ask_user · plan_exit) */
+  /** AI 질문 카드 응답(ask_user · plan_exit) */
   onQuestionChange?: (q: AiQuestion) => void
-  /** 승인 카드 "대화로 고치기"·"다시 제안" — 입력 칸에 넣을 문장 */
+  /** 승인 카드 "대화로 고치기"·"다시 제안" — 입력 칸에 삽입할 문장 */
   onWriteCompose?: (text: string) => void
-  /** 질문 수정 보내기(새 버전). 있으면 "편집"이 입력칸 대신 제자리 수정 칸을 연다.
-   *  keepIds = 원래 첨부 중 이번 버전에 넣을 것(첨부가 없으면 undefined) */
+  /** 질문 수정 전송(새 버전). 지정 시 "편집"이 입력 칸 대신 제자리 수정 칸을 연다.
+   *  keepIds = 원래 첨부 중 이번 버전에 포함할 항목(첨부가 없으면 undefined) */
   onEditSubmit?: (text: string, keepIds?: string[]) => void
-  /** 지금 모델이 이미지를 읽는지 — 수정 때 이미지를 유지하면 보내기 막힘 */
+  /** 현재 모델의 이미지 판독 지원 여부 — 수정 시 이미지를 유지하면 전송 차단 */
   vision?: boolean
-  /** 버전 넘기기(1부터) */
+  /** 버전 전환(1부터) */
   onSwitchVersion?: (n: number) => void
   /** 메모리 저장 취소 */
   onMemoryUndo?: (m: AiMemorySaved) => void
@@ -82,7 +82,7 @@ export interface AiMessageItemProps {
 
 export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, onRegenerate, onContinue, onStop, onFeedback, onEdit, onWriteChange, onQuestionChange, onWriteCompose, onEditSubmit, onSwitchVersion, onMemoryUndo, vision = true }: AiMessageItemProps) {
   const { t, locale } = useI18n()
-  // 묶음 처리(선택식) — 대기 low 카드가 2개 이상이면 체크박스 + [선택 실행][선택 취소]. 기본은 전부 선택
+  // 일괄 처리(선택식) — 대기 중인 low 카드가 2개 이상이면 체크박스 + [선택 실행][선택 취소] 표시. 기본값은 전체 선택
   const pendingLow = (msg.writes || []).filter(w => w.status === 'pending' && w.risk === 'low')
   const batchOn = pendingLow.length >= 2
   const [unpicked, setUnpicked] = useState<Set<string>>(() => new Set())
@@ -107,7 +107,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
   const [openCite, setOpenCite] = useState<number | null>(null)
   const onOpenCite = useCallback((n: number | null) => setOpenCite(n), [])
   const [editing, setEditing] = useState<string | null>(null)
-  // 질문 수정 때 뺄 첨부 id(기본은 모두 유지)
+  // 질문 수정 시 제외할 첨부 id(기본값은 전체 유지)
   const [dropped, setDropped] = useState<string[]>([])
   const editAtts = (msg.attachments ?? []).filter(a => a.id)
   const editBlocked = !vision && editAtts.some(a => a.kind === 'image' && !dropped.includes(a.id as string))
@@ -115,7 +115,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
   const versionN = msg.active_version ?? versionTotal
 
   const isUser = msg.role === 'user'
-  // 스트림·기록의 결과물 카드 — 승인 카드로 실행한 결과(같은 작업 id)는 빼고(그 승인 카드 안에 보인다)
+  // 스트림·기록의 결과물 카드 — 승인 카드로 실행한 결과(동일 작업 id)는 제외(해당 승인 카드 내부에 표시)
   const writeJobIds = new Set(aiArtifactsFromWrites(msg.writes).map(p => (p.type === 'file' ? undefined : p.job?.id)).filter(Boolean) as string[])
   const standaloneArtifacts = aiMergeArtifacts(msg.artifacts ?? []).filter(p => !(p.type !== 'file' && p.job?.id && writeJobIds.has(p.job.id)))
   const initial = (userName || '?').trim().slice(0, 1).toUpperCase()
@@ -136,7 +136,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
   const partial = !isUser && !msg.streaming && !!msg.content && (msg.status === 'interrupted' || msg.status === 'stopped' || !!msg.stopped)
   const stoppedByUser = msg.status === 'stopped' || !!msg.stopped
   const failedTools = steps.length ? [] : (msg.tools ?? []).filter(x => x.ok === false)
-  /** 오류 띠 문구 — 스트림 오류가 먼저, 없으면 도구 실패. 받은 부분이 있는 끊김은 "이어서 받기" 타일이 대신한다 */
+  /** 오류 띠 문구 — 스트림 오류 우선, 없으면 도구 실패. 수신한 부분이 있는 연결 끊김은 "이어서 받기" 타일로 대체 */
   const alertText = (() => {
     if (msg.streaming || partial) return ''
     if (msg.error) return msg.error
@@ -169,7 +169,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
           {meta && <span className="hidden font-mono text-[11px] font-normal text-muted-foreground md:inline">{meta}</span>}
         </div>
 
-        {/* 진행 단계 — 없으면(옛 기록·단계 이벤트 없는 서버) 도구 칩 */}
+        {/* 진행 단계 — 없으면(이전 기록·단계 이벤트 미지원 서버) 도구 칩 표시 */}
         {!isUser && !!steps.length && (
           <AiSteps steps={steps} streaming={msg.streaming} startedAt={msg.started_at} endedAt={msg.ended_at} className="my-1.5 md:my-2" />
         )}
@@ -243,7 +243,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
           </div>
         ) : isUser ? (
           <>
-            {/* 보낸 첨부 — 누르면 원본 미리보기·내려받기 */}
+            {/* 전송한 첨부 — 클릭 시 원본 미리보기·다운로드 */}
             {!!msg.attachments?.length && <AiSentAttachments items={msg.attachments} className="mb-1.5 mt-1" />}
             {!!msg.content && <div className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-[1.65] text-foreground md:leading-[1.7]">{msg.content}</div>}
           </>
@@ -261,7 +261,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
           </div>
         )}
 
-        {/* 받는 중 멈추기 */}
+        {/* 수신 중 멈추기 */}
         {!isUser && msg.streaming && onStop && (
           <div className="mt-2">
             <UiButton variant="outline" size="sm" icon="square" onClick={() => onStop()}>{t('ai.message.stop')}</UiButton>
@@ -274,7 +274,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
         )}
 
         {/* 결과물 카드 — 스트림·기록 + 승인 카드로 실행한 파일 압축 */}
-        {/* 승인 카드로 실행한 결과(files_zip 묶음)는 그 승인 카드 안에 보인다 — 따로 카드를 띄우면 이중으로 보인다 */}
+        {/* 승인 카드로 실행한 결과(files_zip 묶음)는 해당 승인 카드 내부에 표시한다 — 별도 카드를 표시하면 중복 노출된다 */}
         {!isUser && !!standaloneArtifacts.length && (
           <AiArtifacts items={standaloneArtifacts} className="mt-3" />
         )}
@@ -341,7 +341,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
           </div>
         )}
 
-        {/* 끊김·멈춤 — 받은 부분은 저장됨, 이어서 받기 */}
+        {/* 연결 끊김·멈춤 — 수신한 부분은 저장됨, 이어서 받기 */}
         {partial && (
           <UiErrorTile
             className="mt-2.5"
@@ -387,7 +387,7 @@ export function AiMessageItem({ msg, userName, userAvatar, last, busy, onCopy, o
             </span>
           </div>
         ) : isUser && editing === null ? (
-          // 질문 수정 · 버전 넘기기 — 버전이 여럿이면 늘 보이고, 아니면 hover·포커스 때
+          // 질문 수정 · 버전 전환 — 버전이 복수이면 항상 표시, 그 외에는 hover·포커스 시 표시
           <div className={'mt-1 flex items-center gap-0.5 text-xs text-muted-foreground transition-opacity ' + (versionTotal > 1 ? '' : 'md:opacity-0 md:focus-within:opacity-100 md:group-hover:opacity-100')}>
             {onEditSubmit && msg.id ? (
               <UiIconButton label={t('ai.versions.editQuestion')} icon="edit" size="sm" disabled={busy} onClick={() => { setDropped([]); setEditing(msg.content) }} />

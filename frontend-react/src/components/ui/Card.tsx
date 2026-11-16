@@ -1,5 +1,5 @@
 /**
- * 카드 틀: rounded-lg · border · bg-card. 안에 UiCardHeader / UiCardTitle / UiCardContent.
+ * 카드 틀: rounded-lg · border · bg-card. 내부에 UiCardHeader / UiCardTitle / UiCardContent 배치.
  */
 import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from '~/lib/utils'

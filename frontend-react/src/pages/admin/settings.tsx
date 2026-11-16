@@ -3,7 +3,7 @@
  *  ① 로그인 방식(순서·사용 여부) + LDAP 연결 = AdminLoginMethods
  *  ② 대시보드 문구·공지(공지 한 계통 + "보이는 곳": 상단 띠 = general.announcement / 대시보드 = appcfg dash.notice_banner)
  *  ③ 가입·세션·파일 보관
- * 예전 딥링크 /admin/settings#ai 는 /admin/ai 로 보낸다.
+ * 구 딥링크 /admin/settings#ai 는 /admin/ai 로 리다이렉트한다.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -58,7 +58,7 @@ export default function AdminSettingsPage() {
   const route = useRoute()
   useEffect(() => { if (user && !user.is_admin) void navigateTo('/') }, [user])
 
-  // 예전 딥링크(/admin/settings#ai — AI 화면의 "설정")는 AI 항목으로 보낸다
+  // 구 딥링크(/admin/settings#ai — AI 화면의 "설정")는 AI 항목으로 리다이렉트한다
   useEffect(() => { if (route.hash === '#ai') void navigateTo('/admin/ai', { replace: true }) }, [route.hash])
 
   function flash(set: (v: boolean) => void) { set(true); setTimeout(() => { set(false) }, 2000) }

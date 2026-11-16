@@ -1,11 +1,11 @@
 /**
  * "또는" 구분선: 12px muted, 양쪽 1px border.
- * 아래에 outline 44 보조 진입 버튼이 세로로 쌓인다.
+ * 하단에 outline 44 보조 진입 버튼이 세로로 배치된다.
  */
 import { useI18n } from '~/i18n'
 
 export interface AuthDividerProps {
-  /** 기본 authScreens.login.or("또는") */
+  /** 기본값 authScreens.login.or("또는") */
   label?: string
 }
 

@@ -1,5 +1,5 @@
-// "다운로드 막음(미리보기만)" 과 미리보기 안 되는 형식 — 링크 만들기 창은 그 옵션을 비활성 + 이유, 손님 화면은 죽은 링크에 안내.
-// 미리보기 가능 여부는 서버 판정(GET /share/preview-kind · info.can_preview · unlock.can_preview · list 의 preview). $fetch 는 가짜.
+// "다운로드 막음(미리보기만)" 과 미리보기 미지원 형식 — 링크 만들기 창은 해당 옵션을 비활성 + 사유 표시, 손님 화면은 동작하지 않는 링크에 안내 표시.
+// 미리보기 가능 여부는 서버 판정(GET /share/preview-kind · info.can_preview · unlock.can_preview · list 의 preview). $fetch 는 모의(mock).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -39,7 +39,7 @@ function mountGuest() {
   const router = createMemoryRouter([{ path: '/s/:token', element: <Page /> }], { initialEntries: ['/s/tk'] })
   return render(<RouterProvider router={router} />)
 }
-/** 새 링크 카드의 권한 선택(첫 번째 권한 select)을 열어 "다운로드 막음" 옵션을 찾는다 */
+/** 새 링크 카드의 권한 선택(첫 번째 권한 select)을 열어 "다운로드 막음" 옵션을 조회한다 */
 async function nodlOption(index = 0) {
   const boxes = await screen.findAllByRole('combobox', { name: t('files.shareModal.permission') })
   const box = boxes[index]
@@ -123,7 +123,7 @@ describe('링크 만들기 — 미리보기 안 되는 파일', () => {
     fireEvent.click(await screen.findByRole('button', { name: t('files.shareModal.linkMenu') }))
     fireEvent.click(await screen.findByRole('menuitem', { name: t('files.shareModal.editLinkMenu') }))
     await waitFor(() => expect(screen.getAllByRole('combobox', { name: t('files.shareModal.permission') }).length).toBe(2))
-    expect(isDisabled(await nodlOption(0))).toBe(false)        // 이미 막힌 값은 고른 채로 둔다(되돌릴 수 있게)
+    expect(isDisabled(await nodlOption(0))).toBe(false)        // 이미 차단된 값은 선택 상태로 유지(되돌릴 수 있도록)
   })
 })
 
@@ -195,7 +195,7 @@ describe('손님 화면 — 내려받기 막힘 + 미리보기 안 되는 형식
     expect(txt.textContent).not.toContain('미리보기 불가')
     r.unmount()
 
-    // 내려받기 허용 링크면 안내 없음(받으면 되니까)
+    // 다운로드 허용 링크면 안내 없음(다운로드가 가능하므로)
     api.handler = (url) => {
       if (url === '/api/wopi/shared/tk/info') return { ...F, allow_download: true }
       if (url.startsWith('/api/files/shared/tk/list')) return { name: 'docs', sub: '', allow_download: true, truncated: false, items: [row('app.zip', null)] }

@@ -1,8 +1,8 @@
 /**
- * Caps Lock 감지: 비밀번호 입력의 onKeyDown/onKeyUp 에 onKey 를 붙이면 켜짐 여부를 돌려준다.
- * 포커스가 빠지면(blur) reset 으로 힌트를 내린다 — 다른 입력에서 Caps Lock 을 켜 둔 채 돌아와도 다음 키 입력에 다시 판단.
+ * Caps Lock 감지: 비밀번호 입력의 onKeyDown/onKeyUp 에 onKey 를 연결하면 활성 여부를 반환한다.
+ * 포커스 이탈 시(blur) reset 으로 힌트를 해제한다 — 다른 입력에서 Caps Lock 을 활성화한 채 복귀해도 다음 키 입력에서 재판정한다.
  *
- * 싱글턴이 아니다 — 부를 때마다 따로인 지역 상태(store 없이 hook 하나).
+ * 싱글턴이 아니다 — 호출마다 독립된 지역 상태(store 없이 hook 하나).
  * React: const { capsLock, onKey, reset } = useCapsLock()   (capsLock 은 boolean)
  */
 import { useCallback, useState } from 'react'
@@ -10,7 +10,7 @@ import { useCallback, useState } from 'react'
 export function useCapsLock() {
   const [capsLock, setCapsLock] = useState(false)
 
-  /** DOM KeyboardEvent 와 React 합성 키 이벤트 둘 다 받는다 */
+  /** DOM KeyboardEvent 와 React 합성 키 이벤트를 모두 수용한다 */
   const onKey = useCallback((e: { getModifierState?: (key: 'CapsLock') => boolean }) => {
     if (typeof e.getModifierState !== 'function') return
     setCapsLock(e.getModifierState('CapsLock'))

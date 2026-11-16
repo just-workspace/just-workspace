@@ -1,10 +1,10 @@
 /**
  * 게시판 글 목록.
  *  커맨드 바 44: 게시판명 600 + 설명 muted | 검색(이 게시판) + 글쓰기
- *  카테고리 밑줄 탭 40 + "최신순 ▾" → 글 행 56(아바타 28 · 필독 솔리드 · 고정 틴트 · 안 읽음 굵게) → 숫자 페이지네이션 48
+ *  카테고리 밑줄 탭 40 + "최신순 ▾" → 글 행 56(아바타 28 · 필독 솔리드 · 고정 틴트 · 읽지 않음 굵게) → 숫자 페이지네이션 48
  *  모바일: 상단 바(‹ 게시판 목록 · 이름 / 설명 · 필독 N · 검색 44) + 행 + FAB 글쓰기(탭바 유지).
- *  "모두 읽음"(POST /boards/{id}/read-all): 안 읽은 글이 있을 때만, 활동 패널 머리의 "모두 읽음" 글자 버튼 규격(primary 600).
- * 경로 매개변수가 바뀌면 화면을 새로 만든다 — boardId 를 key 로 다시 마운트한다.
+ *  "모두 읽음"(POST /boards/{id}/read-all): 읽지 않은 글이 있을 때만, 활동 패널 머리의 "모두 읽음" 글자 버튼 규격(primary 600).
+ * 경로 매개변수가 변경되면 화면을 재생성한다 — boardId 를 key 로 재마운트한다.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -201,7 +201,7 @@ function BoardListPage({ boardId }: { boardId: string }) {
         {loadingPosts && !posts.length && !pinnedPosts.length ? (
           <UiSkeleton preset="list" rows={8} />
         ) : loadError || (postsError && !posts.length && !pinnedPosts.length) ? (
-          /* 목록을 못 받은 것을 "아직 글이 없습니다"로 보이지 않게 */
+          /* 목록 수신 실패가 "아직 글이 없습니다"로 표시되지 않도록 함 */
           <UiErrorTile placement="panel" title={t('board.loadError')} onRetry={() => { void load() }} />
         ) : !posts.length && !pinnedPosts.length ? (
           <UiEmptyState

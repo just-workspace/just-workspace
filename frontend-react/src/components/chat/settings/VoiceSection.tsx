@@ -1,9 +1,9 @@
 /**
  * 음성 · 눌러서 말하기 — 개인 설정(useUserPrefs, 계정에 저장).
- * 입력 모드(UiRadioCard row: 음성 감지 / 눌러서 말하기) · 단축키 기록(누르면 "키를 누르세요…" + 지금 키캡, Esc = 취소) ·
- * 놓기 지연 UiSlider 0–2000 ms(10 단계, 값 mono) · 브라우저 안내 한 줄 · 다른 단축키(Ctrl+Shift+M 음소거 · Ctrl+Shift+D 듣기 끔 — 계정 패널).
- * 아래에 음질·장치(VoiceQualityContent) — 접속 줄 팝오버와 같은 설정.
- * PTT 강제(#voice-forced): 이 워크스페이스에서 내 '음성 감지 사용'(USE_VAD) 권한이 없으면 음성 감지 잠김 + warn banner.
+ * 입력 모드(UiRadioCard row: 음성 감지 / 눌러서 말하기) · 단축키 기록(누르면 "키를 누르세요…" + 현재 키캡, Esc = 취소) ·
+ * 놓기 지연 UiSlider 0–2000 ms(10 단계, 값 mono) · 브라우저 안내 한 행 · 다른 단축키(Ctrl+Shift+M 음소거 · Ctrl+Shift+D 듣기 끔 — 계정 패널).
+ * 아래에 음질·장치(VoiceQualityContent) — 접속 행 팝오버와 동일한 설정.
+ * PTT 강제(#voice-forced): 본 워크스페이스에서 본인의 '음성 감지 사용'(USE_VAD) 권한이 없으면 음성 감지 잠금 + warn banner.
  */
 import { useEffect, useState } from 'react'
 import { useStore } from 'zustand'
@@ -124,7 +124,7 @@ export function VoiceSection() {
           </div>
         ))}
       </div>
-      {/* 음질·장치 — 접속 줄 팝오버(VoiceQualityPanel)와 같은 내용. 접속 안 해도 여기서 미리 고른다(디스코드 음성·비디오 설정) */}
+      {/* 음질·장치 — 접속 행 팝오버(VoiceQualityPanel)와 동일한 내용. 미접속 상태에서도 여기서 사전 선택 가능(디스코드 음성·비디오 설정) */}
       <div className="flex flex-col gap-3 border-t border-border pt-5">
         <VoiceQualityContent mobile={mobile} />
       </div>

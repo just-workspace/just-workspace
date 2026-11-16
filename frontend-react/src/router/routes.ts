@@ -1,5 +1,5 @@
-// 손으로 관리한다.
-// 화면을 바꿀 때 이 표는 건드리지 않는다. src/pages/<file> 만 바꾼다.
+// 수동 관리 대상.
+// 화면 변경 시 이 표는 수정하지 않는다. src/pages/<file> 만 변경한다.
 // layout('default' 기본, false = 셸 없음) · ownMobileHeader · redirect.
 import type { RouteMeta } from '~/lib/router'
 
@@ -10,14 +10,14 @@ export interface AppRouteDef {
   file: string
   layout: Exclude<RouteMeta['layout'], undefined>
   ownMobileHeader?: boolean
-  /** 데스크톱에서 공용 상단바를 그리지 않는다 — 페이지 머리가 그 자리를 맡는다(채팅) */
+  /** 데스크톱에서 공용 상단바 미표시 — 페이지 머리가 해당 영역을 대체(채팅) */
   noDesktopTopbar?: boolean
-  /** 페이지 사이드바 하단에 내 계정 패널이 있다 — 레일 맨 아래 아바타를 뺀다 */
+  /** 페이지 사이드바 하단에 내 계정 패널이 있음 — 레일 최하단 아바타 제외 */
   sidebarAccount?: boolean
   redirect?: string
   /** catch-all([...slug]) 파라미터 이름 — useRoute().params[slug] 가 string[] */
   catchAll?: string
-  /** 나중에 더한 화면 — 기존 주소 수 검사(tests/router)에서 따로 센다 */
+  /** 이후 추가된 화면 — 기존 주소 수 검사(tests/router)에서 별도 집계 */
   reactOnly?: boolean
 }
 

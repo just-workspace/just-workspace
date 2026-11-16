@@ -1,5 +1,5 @@
 // 관리자 › AI 운영 › 쓰기 현황 — 위험도별 실행·되돌림·거부·만료·실패 + 외부 내용 뒤 low 안내.
-// low 에는 거부가 없고(카드 [취소]는 거부가 아님), high 에는 되돌리기가 없어 '—'.
+// low 에는 거부가 없으며(카드 [취소]는 거부가 아님), high 에는 되돌리기가 없어 '—' 로 표시.
 import { useI18n } from '~/i18n'
 import { UiBadge } from '~/components/ui/Badge'
 import { UiSkeleton } from '~/components/ui/Skeleton'

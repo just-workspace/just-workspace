@@ -1,6 +1,6 @@
-// 이슈 담당자 고르기 — GitLabelPicker 와 같은 겉모습(점선 ghost 칩 트리거 + 212 드롭다운, 체크 행 34).
+// 이슈 담당자 선택 — GitLabelPicker 와 동일한 외형(점선 ghost 칩 트리거 + 212 드롭다운, 체크 행 34).
 // 후보는 워크스페이스 사용자 검색(GET /api/chat/users?q=) — Gitea 로그인 이름 = 워크스페이스 아이디.
-// 닫을 때 한 번만 commit 한다(체크마다 요청하지 않는다).
+// 닫을 때 1회만 commit 한다(체크마다 요청하지 않는다).
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useI18n } from '~/i18n'
 import { cn } from '~/lib/utils'
@@ -9,15 +9,15 @@ import { UiIcon } from '~/components/ui/Icon'
 import { UiAvatar } from '~/components/ui/Avatar'
 
 export interface GitAssigneePickerProps {
-  /** 지금 담당자(Gitea 로그인 이름) */
+  /** 현재 담당자(Gitea 로그인 이름) */
   modelValue: string[]
-  /** 닫을 때 값이 바뀌었으면 한 번 */
+  /** 닫을 때 값이 변경된 경우 1회 호출 */
   onCommit?: (v: string[]) => void
 }
 
 interface Candidate { id: string; username: string; display_name: string | null; avatar_url: string | null }
 
-/** 담당자 고르기(드롭다운) */
+/** 담당자 선택(드롭다운) */
 export function GitAssigneePicker({ modelValue, onCommit }: GitAssigneePickerProps) {
   const { t } = useI18n()
 
@@ -42,7 +42,7 @@ export function GitAssigneePicker({ modelValue, onCommit }: GitAssigneePickerPro
       if (my === seq.current) setLoading(false)
     }
   }
-  // watch(q) — 입력 200ms 뒤 검색(처음 마운트는 건너뜀)
+  // watch(q) — 입력 200ms 후 검색(최초 마운트는 제외)
   const firstQ = useRef(true)
   useEffect(() => {
     if (firstQ.current) { firstQ.current = false; return }
@@ -50,7 +50,7 @@ export function GitAssigneePicker({ modelValue, onCommit }: GitAssigneePickerPro
     timer.current = setTimeout(() => { void search(q) }, 200)
      
   }, [q])
-  // watch(open) — 열 때 현재 값으로 draft, 검색어 비우고 바로 검색
+  // watch(open) — 열 때 현재 값으로 draft 설정, 검색어 초기화 후 즉시 검색
   useEffect(() => {
     if (!open) return
     setDraft([...modelValue])
@@ -59,7 +59,7 @@ export function GitAssigneePicker({ modelValue, onCommit }: GitAssigneePickerPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  // 이미 담당인데 후보 목록(검색 결과)에 없는 사람도 맨 위에 보인다 — 해제할 수 있게
+  // 이미 담당자이지만 후보 목록(검색 결과)에 없는 사용자도 최상단에 표시한다 — 해제 가능하도록
   const names = new Set(candidates.map(c => c.username))
   const extra: Candidate[] = draft.filter(n => !names.has(n)).map(n => ({ id: `login:${n}`, username: n, display_name: null, avatar_url: null }))
   const rows = [...extra, ...candidates]

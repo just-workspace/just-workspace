@@ -1,10 +1,10 @@
 /**
  * 서비스 상태.
- * GET /api/services/status 로 각 서비스의 상태(ok/down/checking)·응답 ms 를 받는다. 실패하면 이전 값을 유지.
- * 앱 전역에서 함께 쓰는 값이라 store 하나에 둔다.
+ * GET /api/services/status 로 각 서비스의 상태(ok/down/checking)·응답 ms 를 조회한다. 실패 시 이전 값을 유지한다.
+ * 앱 전역에서 공유하는 값이므로 단일 store 에 저장한다.
  *
  * React: const { services, loading, fetchServices } = useServices()
- * 컴포넌트 밖: servicesStore.getState().services · fetchServices()
+ * 컴포넌트 외부: servicesStore.getState().services · fetchServices()
  */
 import { createStore, useStore } from 'zustand'
 import { $fetch } from '~/lib/api'

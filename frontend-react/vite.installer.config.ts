@@ -1,12 +1,12 @@
 /**
  * 설치 마법사 빌드 — `npm run build:installer` → dist-installer/(installer.html · assets/ · icon.svg).
- * 워크스페이스 앱(vite.config.ts → dist/)과 따로 빌드한다. 설치 관리자 이미지가 이 폴더를 통째로 가져가 내준다.
+ * 워크스페이스 앱(vite.config.ts → dist/)과 별도로 빌드한다. 설치 관리자 이미지가 이 폴더 전체를 포함하여 제공한다.
  *
- *  - Tailwind 는 마법사가 쓰는 소스만 훑는다(src/installer-app/installer.css 의 @source). 목록 밖의 모듈이 번들에 들어오면 빌드를 멈춘다.
- *  - 들어가면 안 되는 것(워크스페이스 화면·셸·라우터·API 클라이언트·무거운 라이브러리)이 섞이면 빌드를 멈춘다(jw-installer-isolation).
- *  - 앱 번역 파일에서는 UI 키트가 읽는 common·ui 만 싣는다(jw-installer-locale-subset). 마법사 문구는 전용 파일(src/installer-app/i18n).
- *  - 자산 주소는 상대 경로(base './') — 설치 관리자가 어느 경로로 내줘도 된다.
- *  - 가짜 서버(src/installer-app/api/mock.ts)는 개발 서버와 `INSTALLER_MOCK=1` 빌드에만 실린다.
+ *  - Tailwind 는 마법사가 사용하는 소스만 스캔한다(src/installer-app/installer.css 의 @source). 목록 밖의 모듈이 번들에 포함되면 빌드를 중단한다.
+ *  - 포함되어서는 안 되는 항목(워크스페이스 화면·셸·라우터·API 클라이언트·무거운 라이브러리)이 섞이면 빌드를 중단한다(jw-installer-isolation).
+ *  - 앱 번역 파일에서는 UI 키트가 참조하는 common·ui 만 포함한다(jw-installer-locale-subset). 마법사 문구는 전용 파일(src/installer-app/i18n).
+ *  - 자산 주소는 상대 경로(base './') — 설치 관리자가 어느 경로로 제공해도 동작한다.
+ *  - 모의 서버(src/installer-app/api/mock.ts)는 개발 서버와 `INSTALLER_MOCK=1` 빌드에만 포함된다.
  *    `INSTALLER_MOCK=1 npx vite build -c vite.installer.config.ts` → dist-installer-mock/ (화면 확인용, 배포하지 않는다)
  *  - PWA·서비스워커 없음, public/ 복사 없음(icon.svg 하나만).
  */
@@ -58,7 +58,7 @@ function icon(): Plugin {
   }
 }
 
-/** 개발 서버에서 / 와 /installer 를 installer.html 로 */
+/** 개발 서버에서 / 와 /installer 를 installer.html 로 연결 */
 function devEntry(): Plugin {
   return {
     name: 'jw-installer-dev-entry',
@@ -87,9 +87,9 @@ export default defineConfig(({ command }) => {
       outDir: mock ? 'dist-installer-mock' : 'dist-installer',
       emptyOutDir: true,
       chunkSizeWarningLimit: 1024,
-      // 인라인 스크립트를 막는 CSP 아래에서 돈다 — 모듈 프리로드 폴리필(인라인)을 넣지 않는다
+      // 인라인 스크립트를 차단하는 CSP 하에서 동작 — 모듈 프리로드 폴리필(인라인)을 포함하지 않음
       modulePreload: { polyfill: false },
-      // 글꼴·이미지를 data: 로 CSS 에 넣지 않는다 — 전부 assets/ 파일로
+      // 글꼴·이미지를 data: 로 CSS 에 인라인하지 않음 — 전부 assets/ 파일로 출력
       assetsInlineLimit: 0,
       rollupOptions: { input: { installer: fileURLToPath(new URL('./installer.html', import.meta.url)) } },
     },

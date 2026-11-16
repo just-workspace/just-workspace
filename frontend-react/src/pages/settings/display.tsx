@@ -1,7 +1,7 @@
 // 설정 › 표시: 목록 밀도 라디오 카드 3(편안 56 / 기본 48 / 조밀 40, 터치 기기 조밀 불가) + 테마·언어·주 시작·시간대 행(선택 200).
-// 즉시 저장 + "저장됨 ✓". 값은 useUserPrefs 가 이 기기에 바로 쓰고 서버(/api/me/prefs)와 동기화한다 — 다른 기기에서도 같은 설정.
-// 화면 크기: UiSegment 자동·100·125·150·200·300% + hint "자동: 이 화면에서 N% (W×H)". 이 기기만(localStorage) — 계정 동기화 안 함.
-// 모바일(<768)엔 배율을 쓰지 않으므로 그리지 않는다.
+// 즉시 저장 + "저장됨 ✓". 값은 useUserPrefs 가 이 기기에 즉시 기록하고 서버(/api/me/prefs)와 동기화한다 — 다른 기기에서도 동일 설정.
+// 화면 크기: UiSegment 자동·100·125·150·200·300% + hint "자동: 이 화면에서 N% (W×H)". 이 기기 한정(localStorage) — 계정 동기화 미수행.
+// 모바일(<768)에서는 배율을 사용하지 않으므로 렌더하지 않는다.
 import { useMemo, useState } from 'react'
 import { useI18n } from '~/i18n'
 import { useHead } from '~/lib/head'
@@ -28,7 +28,7 @@ export default function SettingsDisplayPage() {
   const colorMode = useColorMode()
   const isMobile = useIsMobile()
   const vp = useViewport()
-  // 실효 폭 1280 미만이 되는 값은 비활성 + 툴팁. 자동은 늘 가능
+  // 실효 폭이 1280 미만이 되는 값은 비활성 + 툴팁. 자동은 항상 선택 가능
   const SCALE = UI_SCALE_CHOICES.map((v) => {
     const ok = uiScaleAllowed(v, vp.rawWidth)
     return { value: v, label: v === 'auto' ? t('settings.display.uiScaleAuto') : `${v}%`, disabled: !ok, tooltip: ok ? undefined : t('settings.display.uiScaleTooBig') }

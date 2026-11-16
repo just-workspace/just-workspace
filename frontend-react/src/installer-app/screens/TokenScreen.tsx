@@ -1,6 +1,6 @@
 /**
- * 설치 토큰 — 주소에 토큰 없이 들어왔거나, 토큰이 틀렸거나 만료됐을 때의 관문.
- * 입력한 토큰은 세션을 만드는 요청에만 쓰고 어디에도 저장하지 않는다.
+ * 설치 토큰 — 주소에 토큰 없이 진입했거나, 토큰이 불일치 또는 만료된 경우의 관문.
+ * 입력한 토큰은 세션 생성 요청에만 사용하며 어디에도 저장하지 않는다.
  */
 import { useState, type FormEvent } from 'react'
 import { UiButton } from '~/components/ui/Button'
@@ -20,7 +20,7 @@ export function TokenScreen() {
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
   const [networkFailed, setNetworkFailed] = useState(false)
-  // 입력을 고치기 시작하면 앞선 오류는 지운다
+  // 입력 수정을 시작하면 이전 오류는 제거
   const [dirty, setDirty] = useState(false)
 
   const errorOf = (s: SessionStatus): string | undefined => {

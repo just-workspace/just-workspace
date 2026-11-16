@@ -1,6 +1,6 @@
 /**
- * 아바타 — 사진 또는 이니셜. 크기는 바깥 className(h-/w-, 기본 40)으로, 이니셜 글자 크기는 textSize 로 준다.
- * (바깥 className 의 text-* 는 안쪽 이니셜 칸의 기본 text-sm 에 가려 듣지 않는다 — textSize 를 쓸 것.)
+ * 아바타 — 사진 또는 이니셜. 크기는 외부 className(h-/w-, 기본 40)으로, 이니셜 글자 크기는 textSize 로 지정한다.
+ * (외부 className 의 text-* 는 안쪽 이니셜 칸의 기본 text-sm 에 가려 적용되지 않는다 — textSize 사용 필수.)
  */
 import type { HTMLAttributes } from 'react'
 import { cn } from '~/lib/utils'

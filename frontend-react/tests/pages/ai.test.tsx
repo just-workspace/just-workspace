@@ -1,5 +1,5 @@
-// AI 화면(pages/ai.tsx) 핵심 동작: 상태 → 대화 목록 → 첫 대화 자동 선택(데스크톱), SSE 스트리밍(조각난 이벤트·도구 칩·완료 후 목록 재조회),
-// 모바일은 목록부터(자동 선택 없음). $fetch 와 fetch(스트림)는 가짜.
+// AI 화면(pages/ai.tsx) 핵심 동작: 상태 → 대화 목록 → 첫 대화 자동 선택(데스크톱), SSE 스트리밍(분할된 이벤트·도구 칩·완료 후 목록 재조회),
+// 모바일은 목록부터(자동 선택 없음). $fetch 와 fetch(스트림)는 모의(mock).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -35,7 +35,7 @@ function renderPage() {
   return render(<RouterProvider router={router} />)
 }
 
-/** 주어진 조각들을 차례로 내보내는 SSE 응답 */
+/** 주어진 청크를 순차적으로 전송하는 SSE 응답 */
 function sseResponse(chunks: string[]) {
   const enc = new TextEncoder()
   let i = 0
@@ -63,7 +63,7 @@ describe('AI 화면', () => {
     await waitFor(() => expect(api.calls.some(c => c.url === '/api/ai/conversations/c1/messages')).toBe(true))
     expect(await screen.findByRole('complementary')).toBeTruthy()
     expect(screen.getAllByText('첫 대화').length).toBeGreaterThan(0)
-    // 도구 켜진 대화 → 머리의 도구 수 = 묶음 2개
+    // 도구가 활성화된 대화 → 머리의 도구 수 = 묶음 2개
     const toolsBtn = screen.getByText((_, el) => el?.tagName === 'BUTTON' && /\s2$/.test(el.textContent || '') && !!el.querySelector('.font-mono'))
     expect(toolsBtn).toBeTruthy()
   })
@@ -87,7 +87,7 @@ describe('AI 화면', () => {
     await waitFor(() => expect(screen.getByText('테스트')).toBeTruthy())
     await waitFor(() => expect(document.querySelector('.ai-md')?.textContent).toContain('안녕하세요'), { timeout: 3000 })
     expect(fetchMock).toHaveBeenCalledWith('/api/ai/conversations/c1/chat', expect.objectContaining({ method: 'POST', body: JSON.stringify({ content: '테스트' }) }))
-    // 완료 후 대화 목록 다시 받음
+    // 완료 후 대화 목록 재조회
     await waitFor(() => expect(api.calls.filter(c => c.url === '/api/ai/conversations').length).toBeGreaterThan(listCallsBefore))
     // 도구 칩(완료) — 이름표 또는 식별자
     expect(document.body.textContent).toMatch(/mail_search|메일/)

@@ -90,7 +90,7 @@ describe('useMail', () => {
     mail.setSelectedAccountId('a1')
     mailStore.setState({ selectedMailboxId: 'Work', messages: [row('1'), row('2'), row('3')] as any, totalMessages: 3 })
     mail.setSelectedIds(new Set(['1', '3']))
-    // 지운 뒤 목록을 다시 받아 채운다(감사 8번) — 서버가 남은 한 통을 돌려준다
+    // 삭제 후 목록을 재조회하여 채움(감사 8번) — 서버가 남은 1통을 반환
     api.handler = (url) => (url === '/api/mail/mailboxes' ? { mailboxes: [] } : url === '/api/mail/messages' ? { messages: [row('2')], total: 1 } : {})
     const ok = await mail.bulkAction('delete')
     expect(ok).toBe(true)

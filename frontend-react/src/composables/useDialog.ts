@@ -3,7 +3,7 @@
  * Promise 기반 싱글톤(useToast 패턴). UiDialogHost 가 렌더링.
  *
  * React: const { alertBox, confirmBox, promptBox, choose } = useDialog()
- * 컴포넌트 밖에서도 같은 함수를 import 해 쓴다.
+ * 컴포넌트 외부에서도 동일 함수를 import 해 사용한다.
  */
 import { createStore, useStore } from 'zustand'
 import { i18n } from '~/i18n'
@@ -50,14 +50,14 @@ const getCurrent = () => dialogStore.getState().current
 const setCurrent = (v: DialogState | null) => dialogStore.setState({ current: v })
 
 function _open(kind: DialogKind, message: string, opts: Opts = {}): Promise<boolean | string | null> {
-  // 기본 버튼 이름(확인·취소) — 다이얼로그를 여는 순간의 로캘로 정한다
+  // 기본 버튼 이름(확인·취소) — 다이얼로그를 여는 시점의 로캘로 결정
   const { t } = i18n
   return new Promise((resolve) => {
-    // 이전 다이얼로그가 떠있으면 취소 처리
+    // 이전 다이얼로그가 열려 있으면 취소 처리
     const prev = getCurrent()
     if (prev) prev.resolve(kind === 'prompt' ? null : false)
     const id = ++idCounter
-    // resolve 를 감싸서 호출 시 다이얼로그를 직접 닫는다.
+    // resolve 를 래핑하여 호출 시 다이얼로그를 직접 닫는다.
     const wrappedResolve = (value: boolean | string | null) => {
       resolve(value)
       const cur = getCurrent()

@@ -1,6 +1,6 @@
 /**
- * 접속 주소 확인 결과 한 줄 — 확인 중 · 일치 · 불일치(어디를 가리키는지) · 확인 불가.
- * 접속 주소가 바뀌면 잠깐 기다렸다가 다시 확인한다(글자를 칠 때마다 묻지 않는다).
+ * 접속 주소 확인 결과 한 줄 — 확인 중 · 일치 · 불일치(가리키는 대상) · 확인 불가.
+ * 접속 주소가 변경되면 잠시 대기한 뒤 재확인한다(입력마다 조회하지 않는다).
  */
 import { useEffect } from 'react'
 import { UiButton } from '~/components/ui/Button'
@@ -14,7 +14,7 @@ const DEBOUNCE_MS = 600
 
 export type DnsView = 'idle' | 'invalid' | 'checking' | 'match' | 'mismatch' | 'unknown'
 
-/** 지금 입력값에 대한 확인 결과 — 다른 값을 확인한 결과는 쓰지 않는다 */
+/** 현재 입력값에 대한 확인 결과 — 다른 값을 확인한 결과는 사용하지 않음 */
 export function dnsView(domain: string, probe: Probe<DnsProbe>): DnsView {
   const d = domain.trim()
   if (!d) return 'idle'
@@ -24,7 +24,7 @@ export function dnsView(domain: string, probe: Probe<DnsProbe>): DnsView {
   return probe.result.status
 }
 
-/** 접속 주소가 바뀌면 다시 확인한다 */
+/** 접속 주소 변경 시 재확인 */
 export function useDnsCheck(domain: string): DnsView {
   const probe = useWizard(s => s.dns)
   const checkDns = useWizard(s => s.checkDns)

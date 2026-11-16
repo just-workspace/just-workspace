@@ -1,10 +1,10 @@
 /**
- * 설치 마법사 번들(vite.installer.config.ts)에 섞이면 안 되는 모듈.
- * 설치 마법사는 워크스페이스 서버가 없을 때 뜨는 독립 화면이라 워크스페이스 앱의 화면·셸·라우터·API 클라이언트·
- * 로그인 상태·무거운 라이브러리가 딸려 오면 안 된다. 같이 쓰는 것은 UI 키트 · 토큰 CSS · 아이콘 · i18n 엔진 · 작은 도구까지.
- * 빌드가 generateBundle 에서 이 목록으로 검사해 걸리면 멈춘다. 순수 함수(시험: tests/installer-app/bundleGuard.test.ts).
+ * 설치 마법사 번들(vite.installer.config.ts)에 포함 금지인 모듈.
+ * 설치 마법사는 워크스페이스 서버 부재 시 표시되는 독립 화면이므로 워크스페이스 앱의 화면·셸·라우터·API 클라이언트·
+ * 로그인 상태·대용량 라이브러리가 포함되어서는 안 된다. 공용 범위는 UI 키트 · 토큰 CSS · 아이콘 · i18n 엔진 · 소형 유틸리티로 한정한다.
+ * 빌드는 generateBundle 에서 본 목록으로 검사하며 위반 시 중단한다. 순수 함수(테스트: tests/installer-app/bundleGuard.test.ts).
  */
-/** 들어오면 안 되는 모듈 경로(정규식, / 구분) */
+/** 포함 금지 모듈 경로(정규식, / 구분) */
 export const FORBIDDEN = [
   /\/src\/(pages|layouts|router|plugins|rbi-app)\//,
   /\/src\/App\.tsx$/,
@@ -22,10 +22,10 @@ export function installerForbiddenModules(ids: string[]): string[] {
 }
 
 /**
- * 설치 마법사 CSS 가 Tailwind 클래스를 찾으려고 훑는 소스(frontend-react 기준 경로, `/` 로 끝나면 폴더).
- * src/installer-app/installer.css 의 @source 와 같아야 한다(시험이 대조한다). 워크스페이스 앱 전체를 훑으면
- * 마법사가 쓰지 않는 화면의 클래스까지 CSS 에 실린다.
- * 마법사가 새 공용 모듈을 가져다 쓰면 빌드가 멈춘다(아래 installerUnscannedModules) — 여기와 installer.css 에 함께 더한다.
+ * 설치 마법사 CSS 가 Tailwind 클래스 탐색을 위해 스캔하는 소스(frontend-react 기준 경로, `/` 로 끝나면 폴더).
+ * src/installer-app/installer.css 의 @source 와 동일해야 한다(테스트에서 대조). 워크스페이스 앱 전체를 스캔하면
+ * 마법사가 사용하지 않는 화면의 클래스까지 CSS 에 포함된다.
+ * 마법사가 신규 공용 모듈을 사용하면 빌드가 중단된다(아래 installerUnscannedModules) — 본 목록과 installer.css 에 함께 추가한다.
  */
 export const INSTALLER_TAILWIND_SOURCES = [
   'installer.html',
@@ -41,7 +41,7 @@ export const INSTALLER_TAILWIND_SOURCES = [
   'src/utils/icons.ts',
 ]
 
-/** 번들에 든 src 의 코드 모듈(.ts·.tsx) 가운데 위 목록이 덮지 않는 것 — 그 파일의 클래스는 CSS 에 실리지 않는다 */
+/** 번들에 포함된 src 코드 모듈(.ts·.tsx) 중 위 목록에 해당하지 않는 항목 — 해당 파일의 클래스는 CSS 에 포함되지 않는다 */
 export function installerUnscannedModules(ids: string[]): string[] {
   const out: string[] = []
   for (const raw of ids) {

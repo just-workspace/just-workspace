@@ -1,8 +1,8 @@
 /**
- * 음성채널에 붙은 글 채팅 — 본문 오른쪽 340 패널, 머리 "채팅 · 이 음성채널 안에서만". 접속 중일 때만 보인다.
- * 메시지는 그 음성 채널 자체의 메시지(음성 채널도 채널이라 chatStore 의 선택 채널 메시지 = 이 채널 것) — 저장·API 모두 텍스트 채널과 같다.
- * 줄: 아바타 32 · 이름(13/600) + 시각(mono 11) · 본문(14). 위로 스크롤하면 이전 메시지(loadMore). 작성 상자는 공용 ChatInput(멘션·첨부·이모지 그대로).
- * 모바일: 머리 오른쾽 채팅 아이콘으로 전체 화면으로 연다(VoiceChannelView 가 onBack 을 준다).
+ * 음성 채널에 부속된 글 채팅 — 본문 오른쪽 340 패널, 머리 "채팅 · 이 음성채널 안에서만". 접속 중에만 표시한다.
+ * 메시지는 해당 음성 채널 자체의 메시지이다(음성 채널도 채널이므로 chatStore 의 선택 채널 메시지 = 이 채널의 메시지) — 저장·API 모두 텍스트 채널과 동일하다.
+ * 줄: 아바타 32 · 이름(13/600) + 시각(mono 11) · 본문(14). 위로 스크롤 시 이전 메시지를 로드한다(loadMore). 작성 상자는 공용 ChatInput 을 사용한다(멘션·첨부·이모지 동일 지원).
+ * 모바일: 머리 오른쪽 채팅 아이콘으로 전체 화면 표시한다(VoiceChannelView 가 onBack 을 전달한다).
  */
 import { useEffect, useRef } from 'react'
 import { useStore } from 'zustand'
@@ -18,7 +18,7 @@ import { ChatInput } from '~/components/chat/ChatInput'
 
 export interface VoiceChatPanelProps {
   channelName: string
-  /** 모바일 전체 화면일 때 — 뒤로 */
+  /** 모바일 전체 화면 시 뒤로 가기 */
   onBack?: () => void
   className?: string
 }
@@ -26,14 +26,14 @@ export interface VoiceChatPanelProps {
 export function VoiceChatPanel({ channelName, onBack, className }: VoiceChatPanelProps) {
   const { t } = useI18n()
   const { messages, hasMoreMessages, loadingMore, outbox, selectedChannelId } = useChat()
-  // 끊긴 동안 보낸 글(전송 대기) — 이 채널 것만 맨 아래에 흐리게
+  // 연결 단절 중 전송한 글(전송 대기) — 이 채널의 항목만 최하단에 흐리게 표시
   const pending = outbox.filter(o => o.channelId === selectedChannelId)
   const me = useStore(authStore, s => s.user)
   const myName = me?.display_name || me?.username || ''
   const listRef = useRef<HTMLDivElement | null>(null)
   const stick = useRef(true)
 
-  // 새 메시지 — 바닥에 붙어 있었으면 따라 내려간다
+  // 새 메시지 — 스크롤이 최하단이었으면 최하단 유지
   useEffect(() => {
     const el = listRef.current
     if (el && stick.current) el.scrollTop = el.scrollHeight

@@ -1,7 +1,7 @@
 // 회의 화면 감사 수정 회귀(컴포넌트):
-//  - 장치 확인 화면이 내려간 뒤 도착한 카메라·마이크 스트림은 바로 끈다(표시등이 켜진 채 남지 않게)
-//  - 채팅 탭으로 바로 열어도, 열어 둔 동안 새 글이 와도 안 읽음 배지가 지워진다
-//  - 초대 입력: 한글 조합 중 Enter 는 칩을 넣거나 폼을 제출하지 않는다
+//  - 장치 확인 화면이 언마운트된 뒤 도착한 카메라·마이크 스트림은 즉시 중지(표시등이 켜진 채 남지 않도록)
+//  - 채팅 탭으로 바로 열어도, 열려 있는 동안 새 글이 수신되어도 안 읽음 배지가 제거됨
+//  - 초대 입력: 한글 조합 중 Enter 는 칩을 추가하거나 폼을 제출하지 않음
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import { i18n } from '~/i18n'
@@ -53,7 +53,7 @@ describe('MeetingsDeviceSetup — 떠난 뒤 도착한 스트림', () => {
     })
     const { unmount } = renderInRouter(<MeetingsDeviceSetup roomName="방" />)
     expect(getUserMedia).toHaveBeenCalledTimes(1)
-    unmount()   // [참여하기]·[취소]로 화면이 내려감
+    unmount()   // [참여하기]·[취소]로 화면 언마운트
     const stream = fakeStream()
     await act(async () => { release(stream); await Promise.resolve(); await Promise.resolve() })
     for (const tr of stream.getTracks()) expect(tr.stop).toHaveBeenCalled()

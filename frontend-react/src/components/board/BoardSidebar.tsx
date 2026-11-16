@@ -1,10 +1,10 @@
 /**
  * 게시판 왼쪽 패널 236.
  *  필독 콜아웃(warning 틴트 · "필독 N" + 제목 12.5/600) → 전체 게시판 + 게시판 행 34(선택 primary/13 600 · 안 읽음 600 · 읽음 muted)
- *  → 바닥 "내 북마크 N".
- * 안 읽음 굵게 = 안 읽은 글이 있는 게시판(GET /unread-counts). 숫자 배지는 쓰지 않는다(나를 부른 게 아니므로).
- * 집계를 아직 못 읽었으면 안 읽은 필독이 있는 게시판만 굵게.
- * 바닥: 내 북마크 N · 내가 쓴 글(GET /my-posts → /board?view=mine).
+ *  → 하단 "내 북마크 N".
+ * 안 읽음 굵게 = 안 읽은 글이 있는 게시판(GET /unread-counts). 숫자 배지는 사용하지 않는다(사용자를 호출한 것이 아니므로).
+ * 집계를 아직 조회하지 못한 경우 안 읽은 필독이 있는 게시판만 굵게 표시한다.
+ * 하단: 내 북마크 N · 내가 쓴 글(GET /my-posts → /board?view=mine).
  */
 import { useEffect } from 'react'
 import { cn } from '~/lib/utils'
@@ -19,7 +19,7 @@ import { UiIcon } from '~/components/ui/Icon'
 
 export interface BoardSidebarProps {
   className?: string
-  /** 링크를 눌렀을 때 */
+  /** 링크 클릭 시 */
   onNavigate?: () => void
 }
 
@@ -38,7 +38,7 @@ export function BoardSidebar({ className, onNavigate }: BoardSidebarProps) {
     return set
   })()
 
-  // 북마크 수 — 페이지마다 다시 세지 않게 공유 상태로
+  // 북마크 수 — 페이지마다 재집계하지 않도록 공유 상태로 유지
   const [bookmarkCount, setBookmarkCount] = useSharedState<number | null>('board-bookmark-count', () => null)
   useEffect(() => {
     fetchBookmarks(1).then(d => { setBookmarkCount(d.total) }).catch(() => {})

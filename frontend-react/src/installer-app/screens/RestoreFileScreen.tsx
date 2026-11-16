@@ -1,9 +1,9 @@
 /**
- * 백업 파일 올리기 — 복원 흐름의 첫 화면. 파일을 올리거나(끌어다 놓기 · 고르기), 서버에 이미 있는 파일의 경로를 알려 준다.
- *  - 다 올라간 뒤에도 서버가 파일을 확인(형식 · 해시)하는 동안은 응답이 오지 않는다 — 그동안 "확인 중"을 보인다.
- *  - 올려 둔 백업은 서버가 기억한다. 화면에 다시 들어오면(이어 하기 · 뒤로 가기) 서버에 물어 그 상태를 그대로 보인다.
- *  - 설정이 암호로 보호된 백업이면 암호를 받아 다시 확인한다.
- *  - 서버가 복원을 지원하지 않으면(501) 그 사실을 알리고 시작 방식으로 돌아가게 한다.
+ * 백업 파일 올리기 — 복원 흐름의 첫 화면. 파일을 업로드하거나(끌어다 놓기 · 선택), 서버에 이미 있는 파일의 경로를 지정한다.
+ *  - 업로드 완료 이후에도 서버가 파일을 확인(형식 · 해시)하는 동안은 응답이 오지 않는다 — 그동안 "확인 중"을 표시한다.
+ *  - 등록된 백업은 서버가 기억한다. 화면에 재진입하면(이어 하기 · 뒤로 가기) 서버에 조회하여 해당 상태를 그대로 표시한다.
+ *  - 설정이 암호로 보호된 백업이면 암호를 입력받아 재확인한다.
+ *  - 서버가 복원을 지원하지 않으면(501) 해당 사실을 안내하고 시작 방식으로 복귀시킨다.
  */
 import { useEffect, useRef, useState } from 'react'
 import { UiButton } from '~/components/ui/Button'
@@ -23,7 +23,7 @@ import { useWizard } from '../store'
 
 const RECHECK_MS = 2000
 
-/** 복원을 아직 지원하지 않는 서버에서 보이는 안내 */
+/** 복원 미지원 서버에서 표시하는 안내 */
 export function RestoreUnsupported() {
   const t = useT()
   return (
@@ -39,12 +39,12 @@ export function RestoreUnsupported() {
 }
 
 type Way = 'upload' | 'path'
-/** 서버가 확인을 마친 백업 하나 — 어느 방법으로 준 것인지와 같이 둔다 */
+/** 서버가 확인을 완료한 백업 하나 — 어느 방법으로 제공됐는지와 함께 보관 */
 interface Shown { way: Way; path: string; info: RestoreFileInfo }
-/** 요청 자체가 실패했다(파일 상태가 아니라 HTTP 오류) */
+/** 요청 자체가 실패함(파일 상태가 아닌 HTTP 오류) */
 interface Failure { way: Way; code: string; vars: Record<string, unknown> }
 
-/** 서버가 아직 올리는 중이거나 확인하는 중인가 */
+/** 서버가 아직 업로드 중이거나 확인 중인지 여부 */
 const working = (info: RestoreFileInfo) => info.state === 'uploading' || info.state === 'checking'
 const needsPassword = (info: RestoreFileInfo | null | undefined) => info?.status === 'password_required' || info?.status === 'password_wrong'
 
@@ -56,7 +56,7 @@ export function RestoreFileScreen() {
   const [way, setWay] = useState<Way>('upload')
   const [shown, setShown] = useState<Shown | null>(null)
   const [upload, setUpload] = useState<{ name: string; percent: number } | null>(null)
-  /** 다른 창에서 올렸거나 새로 고친 뒤 — 서버가 아직 확인하는 중 */
+  /** 다른 창에서 업로드했거나 새로 고침한 이후 — 서버가 아직 확인 중 */
   const [serverBusy, setServerBusy] = useState(false)
   const [path, setPath] = useState('')
   const [pathChecking, setPathChecking] = useState(false)
@@ -65,13 +65,13 @@ export function RestoreFileScreen() {
   const [failure, setFailure] = useState<Failure | null>(null)
   const [unsupported, setUnsupported] = useState(false)
   const abort = useRef<AbortController | null>(null)
-  /** 이 화면에서 무언가를 시작했다 — 그 뒤에 도착한 "들어올 때의 상태"는 버린다 */
+  /** 이 화면에서 작업을 시작함 — 이후 도착한 "들어올 때의 상태"는 폐기 */
   const touched = useRef(false)
   const { goNext } = useGoNext('file')
 
   useEffect(() => () => abort.current?.abort(), [])
 
-  // 들어올 때: 서버가 이미 가지고 있는 백업의 상태를 그대로 보인다
+  // 진입 시: 서버가 이미 보유한 백업의 상태를 그대로 표시
   useEffect(() => {
     let alive = true
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -160,12 +160,12 @@ export function RestoreFileScreen() {
 
   async function discard() {
     begin()
-    try { await api.restoreDiscard() } catch { /* 새 파일을 올리면 서버가 어차피 바꾼다 */ }
+    try { await api.restoreDiscard() } catch { /* 새 파일 업로드 시 서버가 교체함 */ }
     setShown(null)
     setPassword('')
   }
 
-  // 지금 보고 있는 방법으로 준 백업만 그 자리에 보인다(경로는 확인한 그 경로일 때만)
+  // 현재 선택된 방법으로 제공한 백업만 해당 위치에 표시(경로는 확인한 경로와 동일할 때만)
   const cur = shown && shown.way === way && (way === 'upload' || shown.path === path.trim()) ? shown.info : null
   const failed = failure && failure.way === way && !unsupported ? failure : null
   const good = cur?.status === 'ok'

@@ -1,11 +1,11 @@
 /**
  * vCard 가져오기·내보내기 + 연동 계정 주소록 가져오기.
  * 사이드바 링크·모바일 ⋯ 시트 공용. 항목 36(모바일 48).
- * 가져오기/내보내기 대상은 지금 고른 주소록(없으면 첫 주소록).
+ * 가져오기/내보내기 대상은 현재 선택한 주소록(없으면 첫 주소록).
  */
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결한다(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거한다)
 import { clsx as cx } from 'clsx'
 import { useContacts, type ExternalAccount } from '~/composables/useContacts'
 import { addToast } from '~/composables/useToast'
@@ -14,7 +14,7 @@ import { UiIcon } from '~/components/ui/Icon'
 export interface ContactsTransferPanelProps {
   /** 터치 크기(모바일 시트 — 항목 48, 글자 15) */
   touch?: boolean
-  /** 루트에 덧붙일 클래스 */
+  /** 루트에 추가할 클래스 */
   className?: string
 }
 
@@ -60,7 +60,7 @@ export function ContactsTransferPanel({ touch = false, className }: ContactsTran
       const r = await syncExternalAccount(acc)
       addToast('success', t('contacts.import.synced', { name: r.address_book, created: r.created, updated: r.updated }))
     } catch (err: any) {
-      // 스코프 재동의가 필요한 경우가 대부분이라 서버 문구를 그대로 보여준다
+      // 대부분 스코프 재동의가 필요한 경우이므로 서버 문구를 그대로 표시
       addToast('error', err?.data?.detail || t('contacts.import.syncFailed'))
     } finally { setSyncing('') }
   }

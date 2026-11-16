@@ -63,7 +63,7 @@ describe('링크 미리보기 카드', () => {
     const img = card.querySelector('img')!
     expect(img.getAttribute('src')).toBe(PREVIEW.image)   // 외부 주소가 아니라 서버 경로
     expect(img.parentElement!.className).toContain('w-28')
-    // 남의 메시지 — ✕ 없음
+    // 타인의 메시지 — ✕ 없음
     expect(screen.queryByRole('button', { name: t('chat.message.removePreview') })).toBeNull()
   })
 
@@ -103,19 +103,19 @@ describe('링크 미리보기 카드', () => {
     }
     const labels = (d: HTMLElement) => [...d.querySelectorAll('button')].map(b => b.textContent)
 
-    // 남의 메시지 — 없음
+    // 타인의 메시지 — 없음
     const other = renderInRouter(<ChatMessage message={msg() as any} grouped={false} isOwn={false} />)
     let sheet = await longPress(document.querySelector(".chat-body")!)
     expect(labels(sheet)).not.toContain(t('chat.message.removePreview'))
     other.unmount()
 
-    // 내 메시지인데 미리보기 없음 — 없음
+    // 본인 메시지이나 미리보기 없음 — 없음
     const noPrev = renderInRouter(<ChatMessage message={{ ...own, link_preview: null } as any} grouped={false} isOwn />)
     sheet = await longPress(document.querySelector(".chat-body")!)
     expect(labels(sheet)).not.toContain(t('chat.message.removePreview'))
     noPrev.unmount()
 
-    // 내 메시지 + 미리보기 — "수정" 바로 아래
+    // 본인 메시지 + 미리보기 — "수정" 바로 아래
     renderInRouter(<ChatMessage message={chatStore.getState().messages[0]} grouped={false} isOwn />)
     sheet = await longPress(document.querySelector(".chat-body")!)
     const ls = labels(sheet)

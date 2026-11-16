@@ -112,7 +112,7 @@ describe('사용량', () => {
     expect(screen.getByText('75.7%').className).toContain('text-warning') // 성공률 90% 미만
     expect(screen.getByText(t('aiOps.usage.quotaNext'))).toBeTruthy()
     expect(screen.getByRole('tab', { name: t('aiOps.tabs.quota') }).hasAttribute('disabled') || screen.getByRole('tab', { name: t('aiOps.tabs.quota') }).getAttribute('aria-disabled') === 'true').toBe(true)
-    // 기간 바꾸면 다시 부른다
+    // 기간 변경 시 재호출
     fireEvent.click(screen.getByRole('radio', { name: t('aiOps.days', { n: 7 }) }))
     await waitFor(() => expect(callsTo('/api/admin/ai/usage').map(c => c.opts.query.days)).toEqual([30, 7]))
   })
@@ -188,7 +188,7 @@ describe('정책', () => {
     renderAt('/admin/ai-ops/policy')
     const sel = await screen.findByText(t('aiOps.policy.retention'))
     expect(sel).toBeTruthy()
-    expect(screen.queryByRole('radiogroup', { name: t('aiOps.period') })).toBeNull() // 정책엔 기간 없음
+    expect(screen.queryByRole('radiogroup', { name: t('aiOps.period') })).toBeNull() // 정책에는 기간 없음
     const save = screen.getByRole('button', { name: t('aiOps.policy.save') })
     expect((save as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(screen.getByRole('switch', { name: new RegExp(t('aiOps.policy.localOnly')) }))

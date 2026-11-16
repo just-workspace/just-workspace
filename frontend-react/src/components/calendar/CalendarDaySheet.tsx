@@ -1,7 +1,7 @@
 /**
- * 모바일 월 보기 날짜 시트: 페이지 아래에 붙는 372 시트, 핸들 36×4,
+ * 모바일 월 보기 날짜 시트: 페이지 하단에 붙는 372 시트, 핸들 36×4,
  * 머리 "10월 15일 목요일 오늘" 17/600 + [+ 새 일정] 36, 행은 CalendarAgendaRow. 빈 날은 "일정 없음 + 새 일정".
- * 탭바는 그대로(목록 화면이라 숨기지 않음).
+ * 탭바는 유지(목록 화면이므로 숨기지 않음).
  */
 import { useI18n } from '~/i18n'
 import { useCalendar } from '~/composables/useCalendar'
@@ -12,7 +12,7 @@ import { UiIcon } from '~/components/ui/Icon'
 import { UiEmptyState } from '~/components/ui/EmptyState'
 import { CalendarAgendaRow } from './CalendarAgendaRow'
 
-/** 모바일 월 보기 날짜 시트(sheetDate 가 있을 때 페이지가 그린다) */
+/** 모바일 월 보기 날짜 시트(sheetDate 가 있을 때 페이지가 렌더링한다) */
 export function CalendarDaySheet() {
   const { t, tm, rt } = useI18n()
   const { sheetDate, eventsOnDay, openPopover, openCreateModal, closeDaySheet } = useCalendar()

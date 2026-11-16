@@ -1,20 +1,20 @@
 /**
  * 채팅 화면.
  * 데스크톱(22 셸, 디스코드식 4열): 레일 64(셸) · 채널 목록(기본 298, 드래그 199–367 · 더블클릭 298, 레일 채팅 아이콘을 다시 누르면 접힘)
- *   · 대화 1fr · 오른쪽 자리 하나(멤버 264 / 스레드 400 / 스레드 목록 400 / 검색 결과 400 / 고정 400 / 음성 글 채팅 340 — 서로 배타,
- *   새로 연 것이 바꿔 낀다, utils/chatRightColumn). 실효 폭 1180 미만이면 오른쪽 자리는 대화 위 덮개.
- *   채팅 화면엔 데스크톱 전역 상단바가 없다(routes.ts noDesktopTopbar) — 위쪽 크롬 = 채널 머리 49.
- *   세로 화면(실효 높이 > 폭): 채널 목록을 접고 머리 왼쪽 ☰ 로 여는 서랍(260), 채널을 고르기 전에는 260 으로 붙여 둔다.
+ *   · 대화 1fr · 오른쪽 자리 하나(멤버 264 / 스레드 400 / 스레드 목록 400 / 검색 결과 400 / 고정 400 / 음성 글 채팅 340 — 상호 배타,
+ *   새로 연 패널이 기존 패널을 대체한다, utils/chatRightColumn). 실효 폭 1180 미만이면 오른쪽 자리는 대화 위 덮개.
+ *   채팅 화면에는 데스크톱 전역 상단바가 없다(routes.ts noDesktopTopbar) — 위쪽 크롬 = 채널 머리 49.
+ *   세로 화면(실효 높이 > 폭): 채널 목록을 접고 머리 왼쪽 ☰ 로 여는 서랍(260), 채널 선택 전에는 260 으로 고정 표시한다.
  *   채팅 설정(useChatUi.settings)이 열리면 대화 영역 위 전체(레일 제외)를 덮는다 — ChatSettingsScreen(SETTINGS 담당, lazy).
- * 모바일(390): 한 번에 한 화면 — 목록 → 대화 → (스레드 · 스레드 목록 · 검색 · 멤버 · 고정 전체 화면). 대화 이상에서는 탭바를 숨긴다.
- *   목록으로 돌아가기: 상단 ‹(44) 또는 화면 왼쪽 가장자리에서 밀기. 단계는 주소에 싣는다(utils/chatStage).
- * 떠 있는 것: 프로필 팝아웃 · 사람별 음량 · 이모지 피커(COMPOSER).
- * 소켓은 앱 전체가 쓴다(layouts/default). 화면을 떠난다고 끊지 않는다 — 끊는 건 로그아웃.
+ * 모바일(390): 한 번에 한 화면 — 목록 → 대화 → (스레드 · 스레드 목록 · 검색 · 멤버 · 고정 전체 화면). 대화 이상 단계에서는 탭바를 숨긴다.
+ *   목록으로 복귀: 상단 ‹(44) 또는 화면 왼쪽 가장자리 스와이프. 단계는 주소에 반영한다(utils/chatStage).
+ * 부동 요소: 프로필 팝아웃 · 사람별 음량 · 이모지 피커(COMPOSER).
+ * 소켓은 앱 전체가 공유한다(layouts/default). 화면 이탈로는 연결을 종료하지 않는다 — 종료 시점은 로그아웃.
  */
 import { lazy, Suspense, useEffect, useRef, useState, type ComponentType, type TouchEvent } from 'react'
 import { useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
-// class 를 이어 붙이기만 한다(tailwind-merge 없이 — 뒤에 온 클래스를 지우지 않는다)
+// class 를 단순 연결만 수행한다(tailwind-merge 미사용 — 뒤에 오는 클래스를 제거하지 않는다)
 import { clsx as cn } from 'clsx'
 import { useI18n } from '~/i18n'
 import { useHead } from '~/lib/head'
@@ -55,7 +55,7 @@ import { ChatProfilePopoutHost } from '~/components/chat/ChatProfilePopout'
 import { ChatUserVolumeHost } from '~/components/chat/ChatUserVolume'
 import { VoiceChannelView } from '~/components/voice/VoiceChannelView'
 
-// 채팅 설정 전체 화면(SETTINGS 담당) — 파일이 생기면 glob 이 잡아 lazy 로 붙인다(없으면 자리만)
+// 채팅 설정 전체 화면(SETTINGS 담당) — 파일이 생성되면 glob 이 탐지해 lazy 로 연결한다(없으면 자리만 유지)
 const settingsMods = import.meta.glob<{ ChatSettingsScreen?: ComponentType<{ onClose?: () => void }>; default?: ComponentType<{ onClose?: () => void }> }>(
   '../components/chat/settings/ChatSettingsScreen.tsx',
 )
@@ -86,7 +86,7 @@ export default function ChatPage() {
   const { appName } = useSiteConfig()
   useHead({ title: `${t('nav.chat')} | ${appName}` })
 
-  // 렌더에 쓰는 값만 구독
+  // 렌더링에 사용하는 값만 구독
   const selectedChannelId = useStore(chatStore, s => s.selectedChannelId)
   const selectedChannel = useStore(chatStore, s => selectSelectedChannel(s))
   useStore(chatStore, s => s.allUsers)   // DM 이름(경로 표시)
@@ -101,7 +101,7 @@ export default function ChatPage() {
   const { collection, notifySheetChannelId, inviteOpen } = ui
   const panel = panelOf(panelState, ui.threadListOpen)
   const voiceChannelId = useStore(voiceStore, s => s.channelId)
-  // 옛 데스크톱 셸(0.3.0 이하)에는 네이티브 대화 목록이 있다. 그때만 숨긴다(두 벌 방지). 0.3.1+ 셸은 이 목록을 그대로 쓴다.
+  // 구 데스크톱 셸(0.3.0 이하)에는 네이티브 대화 목록이 있다. 이 경우에만 숨긴다(중복 표시 방지). 0.3.1+ 셸은 이 목록을 그대로 사용한다.
   const { shellDrawsLists } = useDesktopShell()
   const isMobile = useIsMobile()
   const route = useRoute()
@@ -116,7 +116,7 @@ export default function ChatPage() {
   const [previewW, setPreviewW] = useState<number | null>(null)
   const listW = previewW ?? savedListW
   const [drawerOpen, setDrawerOpen] = useState(false)
-  // 채널을 고르면 서랍은 닫는다
+  // 채널을 선택하면 서랍을 닫는다
   useEffect(() => { setDrawerOpen(false) }, [selectedChannelId])
 
   // 오른쪽 자리(하나) — 데스크톱
@@ -130,10 +130,10 @@ export default function ChatPage() {
   })
   const docked = rightColumnDocked(col, vw)
 
-  // 3단 경로: 워크스페이스 / 채팅 / #채널 (모아보기면 그 이름)
+  // 3단 경로: 워크스페이스 / 채팅 / #채널 (모아보기인 경우 해당 이름)
   const location = (() => {
     const ch = selectedChannel
-    // 비공개 채널은 '#' 을 붙이지 않는다(헤더는 자물쇠 — 경로는 글자뿐이라 이름만)
+    // 비공개 채널은 '#' 을 붙이지 않는다(헤더는 자물쇠 표시 — 경로는 텍스트뿐이므로 이름만 표시)
     if (ch) return ch.type === 'dm' ? getDMDisplayName(ch) : ch.type === 'private' ? ch.name : `#${ch.name}`
     if (collection) return { threads: t('chat.sidebar.threads'), drafts: t('chat.sidebar.drafts'), saved: t('chat.sidebar.saved') }[collection]
     return ''
@@ -146,7 +146,7 @@ export default function ChatPage() {
     if (firstSel.current) { firstSel.current = false; return }
     if (selectedChannelId) setCollection(null)
   }, [selectedChannelId])
-  // 채널을 바꾸면 스레드 목록은 닫는다(그 채널의 목록이라)
+  // 채널을 전환하면 스레드 목록을 닫는다(해당 채널의 목록이므로)
   const firstSelT = useRef(true)
   useEffect(() => {
     if (firstSelT.current) { firstSelT.current = false; return }
@@ -156,13 +156,13 @@ export default function ChatPage() {
   // 모바일 화면 단계
   const hasDetail = !!selectedChannelId || !!collection
 
-  // 모바일에서 대화 이상이 열려 있으면 하단 탭바를 숨긴다(목록에선 유지)
+  // 모바일에서 대화 이상 단계가 열려 있으면 하단 탭바를 숨긴다(목록에서는 유지)
   useEffect(() => { setSharedState('mobile-detail-open', !!(isMobile && (hasDetail || panel))) }, [hasDetail, panel, isMobile])
   useEffect(() => () => { setSharedState('mobile-detail-open', false) }, [])
-  // 모바일은 단계마다 채팅 자체 머리가 있다 — 공용 상단바를 숨겨 제목이 두 번 보이지 않게
+  // 모바일은 단계마다 채팅 자체 머리가 있다 — 제목 중복 표시를 막기 위해 공용 상단바를 숨긴다
   useOwnMobileHeader(true)
 
-  // 모바일 뒤로 — 열린 가장 위 화면부터 닫는다
+  // 모바일 뒤로 — 열려 있는 최상위 화면부터 닫는다
   function mobileBack() {
     const p = panelOf(chatStore.getState())
     if (p === 'thread') closeThread()
@@ -209,7 +209,7 @@ export default function ChatPage() {
     void (async () => {
       try {
         const S = () => chatStore.getState()
-        // 위 단계부터 닫는다
+        // 상위 단계부터 닫는다
         if (!q.thread && S().activeThreadId) closeThread()
         if (q.panel !== 'search' && S().showSearchPanel) setShowSearchPanel(false)
         if (q.panel !== 'threads' && chatUiStore.getState().threadListOpen) setThreadListOpen(false)
@@ -225,14 +225,14 @@ export default function ChatPage() {
         if (q.panel === 'members') setShowMemberPanel(true)
         if (q.panel === 'pins') setShowPinsPanel(true)
       } finally {
-        // 이번 변경으로 다시 그린 뒤(상태 → 주소 effect 가 돈 뒤)에 푼다
+        // 이번 변경에 따른 재렌더링 이후(상태 → 주소 effect 실행 후)에 해제한다
         await new Promise(res => setTimeout(res, 0))
         applyingRoute.current = false
       }
     })()
   }, [route.fullPath])
 
-  // 왼쪽 가장자리에서 밀어 뒤로
+  // 왼쪽 가장자리 스와이프로 뒤로 이동
   const edgeX = useRef<number | null>(null)
   const edgeY = useRef(0)
   function onTouchStart(e: TouchEvent) {
@@ -247,7 +247,7 @@ export default function ChatPage() {
     edgeX.current = null
   }
 
-  // 모바일 목록 "검색" — 채널을 안 골라도 전체 메시지 검색 패널을 연다
+  // 모바일 목록 "검색" — 채널 미선택 상태에서도 전체 메시지 검색 패널을 연다
   function openSearch() {
     closeThread()
     setShowMemberPanel(false)
@@ -257,7 +257,7 @@ export default function ChatPage() {
   }
 
   // ─── 단축키(실제 키는 여기 정의) ───
-  // Alt+↑↓ 이전/다음 채널 · Alt+Shift+↑↓ 안 읽은 채널로 · Ctrl+Shift+T 전체 스레드 · Esc 패널 닫기
+  // Alt+↑↓ 이전/다음 채널 · Alt+Shift+↑↓ 읽지 않은 채널로 이동 · Ctrl+Shift+T 전체 스레드 · Esc 패널 닫기
   useEffect(() => {
     function moveChannel(dir: 1 | -1, unreadOnly: boolean) {
       const sorted = selectSortedChannels(chatStore.getState())
@@ -302,7 +302,7 @@ export default function ChatPage() {
       if (channelId) {
         await selectChannel(channelId)
         if (threadId) void openThread(threadId)
-        // "링크 복사"가 만드는 &message= — 그 메시지로 간다(예전엔 아무도 안 읽어 채널 맨 아래만 열렸다)
+        // "링크 복사"가 생성하는 &message= — 해당 메시지로 이동한다(기존에는 이 값을 읽는 코드가 없어 채널 맨 아래만 열렸다)
         else if (typeof q.message === 'string' && q.message) jumpTo(channelId, q.message)
       }
       // 딥 링크: ?settings=roles|emoji|voice|policy|channel-perm|category-perm(&target=id) — 관리자 페이지 "채팅 설정 열기"(SETTINGS)
@@ -312,13 +312,13 @@ export default function ChatPage() {
   }, [])
 
   const sidebar = <ChatSidebar onCreateChannel={() => setShowCreateModal(true)} onSearch={openSearch} />
-  // 데스크톱 오른쪽 자리(음성 글 채팅은 VoiceChannelView 가 직접 그린다)
+  // 데스크톱 오른쪽 자리(음성 글 채팅은 VoiceChannelView 가 직접 렌더링한다)
   const deskRight = desktop && col && col !== 'voiceText' ? col : null
   const mobilePanel = isMobile && panel ? panel : null
 
   return (
     <div className="relative flex h-full overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-      {/* 채널 목록 — 옛 데스크톱 셸(0.3.0 이하)에서는 네이티브 목록이 이미 있다 */}
+      {/* 채널 목록 — 구 데스크톱 셸(0.3.0 이하)에서는 네이티브 목록이 이미 존재한다 */}
       {!shellDrawsLists && (portraitDesk && hasDetail
         // 세로 화면: 접힌 서랍(☰)
         ? drawerOpen && (
@@ -357,13 +357,13 @@ export default function ChatPage() {
           {collection && !selectedChannelId
             ? <ChatCollectionView key={collection} kind={collection} onBack={backToList} />
             : selectedChannel?.is_voice
-              // 음성 채널 — 글 대신 참가자 목록·들어가기. 다른 패널이 오른쪽 자리를 쓰면 글 채팅은 숨긴다
+              // 음성 채널 — 글 대신 참가자 목록·들어가기 표시. 다른 패널이 오른쪽 자리를 사용하면 글 채팅은 숨긴다
               ? <VoiceChannelView onBack={backToList} onOpenChannels={portraitDesk ? () => setDrawerOpen(true) : undefined} chatHidden={!!deskRight} />
               : <ChatConversation onBack={backToList} onOpenChannels={portraitDesk ? () => setDrawerOpen(true) : undefined} />}
         </section>
 
         {deskRight && (
-          // 1180 이상이면 대화 옆에 붙고, 아니면 대화 위 덮개
+          // 1180 이상이면 대화 옆에 배치, 미만이면 대화 위 덮개
           <div
             data-testid="chat-right-column"
             data-col={deskRight}
@@ -383,7 +383,7 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* 채팅 설정 전체 화면(레일 제외 — 이 화면 전체를 덮는다). Esc 닫기는 설정 화면 쪽 */}
+      {/* 채팅 설정 전체 화면(레일 제외 — 이 화면 전체를 덮는다). Esc 닫기는 설정 화면에서 처리 */}
       {ui.settings && (
         <div className="absolute inset-0 z-drawer flex bg-background" data-testid="chat-settings-slot">
           {LazySettings
@@ -400,7 +400,7 @@ export default function ChatPage() {
       {showCreateModal && <ChatCreateModal onClose={() => setShowCreateModal(false)} />}
       {notifySheetChannelId && <ChatNotifySheet />}
       {inviteOpen && selectedChannel && <ChatInviteModal />}
-      {/* 이모지 피커 — useChatUi.emojiPicker 로 스스로 뜬다(컴포저 · 리액션) */}
+      {/* 이모지 피커 — useChatUi.emojiPicker 에 따라 자체 표시된다(컴포저 · 리액션) */}
       <ChatEmojiPicker />
       {/* 프로필 팝아웃 · 사람별 음량 */}
       <ChatProfilePopoutHost />

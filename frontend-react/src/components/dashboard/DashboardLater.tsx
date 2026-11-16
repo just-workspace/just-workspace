@@ -1,7 +1,7 @@
 /**
  * 나중에 볼 것: 범위 [저장|스레드], 두 줄 행 56 = bookmark/threads 아이콘 + 메시지 앞부분 /
- * "#채널 · 보낸 사람"(스레드는 "· 안 읽은 답글 n") + 시각. 머리 개수 = 저장 수(스레드 탭은 안 읽은 스레드 수), "저장 보기 ›".
- * 서버: GET /api/chat/saved · GET /api/chat/threads (둘 다 내 것만). 둘 다 비면 빈 카드.
+ * "#채널 · 보낸 사람"(스레드는 "· 안 읽은 답글 n") + 시각. 헤더 개수 = 저장 수(스레드 탭은 안 읽은 스레드 수), "저장 보기 ›".
+ * 서버: GET /api/chat/saved · GET /api/chat/threads (모두 본인 항목만). 둘 다 비어 있으면 빈 카드.
  */
 import { useEffect, useState } from 'react'
 import { $fetch } from '~/lib/api'

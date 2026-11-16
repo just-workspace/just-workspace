@@ -1,14 +1,14 @@
 /**
  * 문서 메타(현재 호출처 없음).
- * React: const { meta, bind, patch } = useDocMeta()  — meta 는 렌더 시점 값(바뀌면 다시 그린다).
+ * React: const { meta, bind, patch } = useDocMeta()  — meta 는 렌더 시점 값(변경 시 재렌더).
  *
  * 문서의 페이지 설정 — 용지·여백·단·테마·워터마크.
  *
- * 이 값들은 문서에 속하므로 Yjs 문서 안의 `meta` 맵에 넣는다. 그래야 같이 보는 사람에게도
- * 같은 종이 위에 보이고, 저장·버전 기록에도 본문과 함께 실려 간다.
+ * 해당 값은 문서에 속하므로 Yjs 문서 내 `meta` 맵에 저장한다. 이에 따라 공동 열람자에게도
+ * 동일한 용지 설정으로 표시되며, 저장·버전 기록에도 본문과 함께 포함된다.
  *
- * 반대로 확대율·보기 모드·마지막에 고른 색 같은 건 **보는 사람 것**이라 동기화하면 안 된다.
- * 남이 웹 모양으로 바꿨다고 내 화면까지 바뀌면 곤란하다. LOCAL_KEYS 가 그 경계다.
+ * 반면 확대율·보기 모드·마지막 선택 색상 등은 **열람자별 설정**이므로 동기화 대상이 아니다.
+ * 타 사용자가 웹 보기로 전환해도 본인 화면은 변경되지 않아야 한다. LOCAL_KEYS 가 그 경계이다.
  */
 import { useMemo, useRef, useState } from 'react'
 import type * as Y from 'yjs'
@@ -29,15 +29,15 @@ export interface PageMeta {
   pageColor: string
   watermark: string
   pageBorder: boolean
-  /** 머리글·바닥글. 페이지가 하나로 이어져 있으므로 종이 위아래에 한 번씩 그린다. */
+  /** 머리글·바닥글. 페이지가 단일 연속 구조이므로 용지 상단·하단에 1회씩 렌더링한다. */
   header: string
   footer: string
 
-  // ── 아래는 보는 사람 것(동기화하지 않음) ──
+  // ── 이하 열람자별 설정(동기화 제외) ──
   view: 'print' | 'web'
   lastColor: string
   lastHighlight: string
-  /** 브라우저 맞춤법 검사(빨간 물결). 사람마다 언어 설정이 달라 문서에 묶지 않는다. */
+  /** 브라우저 맞춤법 검사(빨간 물결). 사용자별 언어 설정이 상이하므로 문서에 귀속하지 않는다. */
   spellcheck: boolean
 }
 
@@ -78,7 +78,7 @@ export function useDocMeta() {
       setMeta(metaRef.current)
     }
 
-    /** Y.Doc 이 준비된 뒤 한 번 부른다. */
+    /** Y.Doc 준비 완료 후 1회 호출한다. */
     function bind(doc: Y.Doc) {
       const ym = doc.getMap('meta')
       ymeta.current = ym
@@ -94,8 +94,8 @@ export function useDocMeta() {
     }
 
     /**
-     * 테마를 고르면 글꼴·크기·줄간격이 한 벌로 따라온다. Word 의 "문서 서식" 갤러리와 같다.
-     * 개별 항목을 따로 바꾸면 그 항목만 덮어쓴다.
+     * 테마 선택 시 글꼴·크기·줄간격이 일괄 적용된다. Word 의 "문서 서식" 갤러리와 동일하다.
+     * 개별 항목 변경 시 해당 항목만 덮어쓴다.
      */
     function patch(p: Partial<PageMeta>) {
       let next: Record<string, any> = { ...p }
@@ -113,7 +113,7 @@ export function useDocMeta() {
         if (LOCAL_KEYS.has(k) || !ymeta.current) {
           assign(k, v)
         } else {
-          ymeta.current.set(k, v)      // observe 가 meta 에 반영한다
+          ymeta.current.set(k, v)      // observe 가 meta 에 반영
         }
       }
     }

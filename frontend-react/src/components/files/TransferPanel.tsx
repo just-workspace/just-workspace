@@ -1,12 +1,12 @@
 /**
- * 전송 패널 — 업로드·다운로드 진행 표시는 여기 한 곳.
+ * 전송 패널 — 업로드·다운로드 진행 표시는 본 패널로 단일화.
  *  데스크톱: 왼쪽 아래(레일 64 + 24, 아래 24) 폭 380, rounded 12, 그림자.
- *    머리 48 "올리는 중 3 / 5 · 약 40초 남음" + [모두 취소] + 접기 → 전체 진행 3px(가로 꽉) →
+ *    머리 48 "올리는 중 3 / 5 · 약 40초 남음" + [모두 취소] + 접기 → 전체 진행 3px(가로 전체) →
  *    파일 행 52: 이름 13 + 아래 줄(진행 중 = 4px 막대 + mono 11 "64% · 1.4 / 2.2 MB" / 실패 = danger 12 사유 /
  *    완료 = "완료 · 2.1 MB" / 대기 = "대기 중") · 오른쪽(완료 ✓ "폴더에서 보기" success · 실패 [다시 시도] · 진행·대기 ✕ "취소")
  *    → 안내 12 "창을 닫아도 계속 올립니다 · 탭을 닫으면 멈춤".
- *  모바일: 탭바 위 8(선택 바가 떠 있으면 그 위) · 좌우 12 · rounded 14 · 머리 52 · 행 48.
- * 기존 디스크 기록 진행률(서버가 실제로 쓴 바이트, NFS)은 진행 중 행의 mono 줄 끝에 "· 디스크 80%"로 붙인다(데스크톱).
+ *  모바일: 탭바 위 8(선택 바 표시 중이면 그 위) · 좌우 12 · rounded 14 · 머리 52 · 행 48.
+ * 기존 디스크 기록 진행률(서버가 실제로 기록한 바이트, NFS)은 진행 중 행의 mono 줄 끝에 "· 디스크 80%"로 덧붙여 표시한다(데스크톱).
  */
 import { useState, type CSSProperties } from 'react'
 import { clsx } from 'clsx'
@@ -19,7 +19,7 @@ import { UiIcon } from '~/components/ui/Icon'
 import { UiIconButton } from '~/components/ui/IconButton'
 
 export interface FilesTransferPanelProps {
-  /** 모바일 선택 바가 떠 있으면 그 위로(64 더) */
+  /** 모바일 선택 바 표시 중이면 그 위로 배치(64 추가) */
   raised?: boolean
 }
 
@@ -39,7 +39,7 @@ export function FilesTransferPanel({ raised = false }: FilesTransferPanelProps) 
   const { transfers, cancelTransfer, cancelAll, removeTransfer, clearFinished, activeCount } = useTransfers()
   const [collapsed, setCollapsed] = useState(false)
   const { t } = useI18n()
-  // 주메뉴를 고정(236)하면 그 오른쪽으로 — 고정 주메뉴(z-sidebar)가 이 패널(z-drawer)을 덮어 왼쪽이 잘렸다(토스트와 같은 규칙)
+  // 주메뉴를 고정(236)하면 그 오른쪽으로 이동 — 고정 주메뉴(z-sidebar)가 본 패널(z-drawer)을 덮어 왼쪽이 잘리던 문제(토스트와 동일한 규칙)
   const { pushes } = useSidebar()
 
   const ups = transfers.filter(x => x.dir === 'up')
@@ -59,7 +59,7 @@ export function FilesTransferPanel({ raised = false }: FilesTransferPanelProps) 
     return { verb: t('files.transfer.done'), count: '' }
   })()
 
-  // 전체 진행률·남은 시간(취소 뺀 전부 합산 — 대기 중은 0 으로 들어간다)
+  // 전체 진행률·남은 시간(취소 제외 전체 합산 — 대기 중은 0 으로 포함)
   const activeList = transfers.filter(x => x.status === 'active')
   const overall = (() => {
     const all = transfers.filter(x => x.status !== 'canceled')

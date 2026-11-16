@@ -1,8 +1,8 @@
 /**
  * 링크 미리보기 카드. 메시지 본문 아래, 최대 520 · 왼쪽 4px 띠(primary) · radius 4 · 첫 링크 1개만.
- * 사이트(12 muted) → 제목(primary 16/600, 2줄 자름) → 설명(13 muted, 2줄) → 오른쪽 112 썸네일(없으면 칸째 없음).
- * ✕(미리보기 지우기)는 보낸 사람에게만, 카드에 호버(또는 키보드 포커스)했을 때. 표시 여부는 받는 쪽 설정(설정 › 채팅 "링크 미리보기").
- * 썸네일은 서버 프록시 경로(/api/chat/link-preview/images/…) — 받는 쪽 브라우저가 외부로 직접 요청하지 않는다.
+ * 사이트(12 muted) → 제목(primary 16/600, 2줄 자름) → 설명(13 muted, 2줄) → 오른쪽 112 썸네일(없으면 칸 자체를 제외).
+ * ✕(미리보기 지우기)는 보낸 사람에게만, 카드 호버(또는 키보드 포커스) 시 표시. 표시 여부는 수신 측 설정(설정 › 채팅 "링크 미리보기").
+ * 썸네일은 서버 프록시 경로(/api/chat/link-preview/images/…) 사용 — 수신 측 브라우저가 외부로 직접 요청하지 않음.
  */
 import { useState } from 'react'
 import { clsx as cn } from 'clsx'
@@ -14,10 +14,10 @@ import { UiIcon } from '~/components/ui/Icon'
 import { UiIconButton } from '~/components/ui/IconButton'
 
 export interface ChatLinkPreviewProps {
-  /** 메시지 id(지우기용) */
+  /** 메시지 id(제거용) */
   messageId: string
   preview: LinkPreview
-  /** 내가 보낸 메시지 — ✕ 를 보인다 */
+  /** 본인이 보낸 메시지 — ✕ 표시 */
   canDismiss?: boolean
   className?: string
 }
@@ -26,7 +26,7 @@ const clamp2 = { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'v
 
 export function ChatLinkPreview({ messageId, preview, canDismiss = false, className }: ChatLinkPreviewProps) {
   const { t } = useI18n()
-  // 썸네일을 못 받으면(만료·404) 칸째 뺀다
+  // 썸네일 수신 실패(만료·404) 시 칸 자체를 제외
   const [imgFailed, setImgFailed] = useState(false)
   const showImage = !!preview.image && !imgFailed
 

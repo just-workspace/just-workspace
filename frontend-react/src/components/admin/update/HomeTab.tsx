@@ -1,7 +1,7 @@
 /**
- * 업데이트 › 현황 — 현재 버전·채널·적용 방식·마지막 확인, "지금 확인", 받을 수 있는 버전.
- * 상태: 최신 / 새 버전 / 확인 중 / 확인 실패 + 대기(안정판 복귀) · 막힘(경로 없음).
- * 맨 위에는 밤사이 자동 업데이트의 결과 띠(성공 · 실패 뒤 멈춤 → "다시 켜기")와 진행 중인 작업의 안내가 온다.
+ * 업데이트 › 현황 — 현재 버전·채널·적용 방식·마지막 확인, "지금 확인", 수신 가능한 버전.
+ * 상태: 최신 / 새 버전 / 확인 중 / 확인 실패 + 대기(안정판 복귀) · 차단(경로 없음).
+ * 최상단에는 야간 자동 업데이트의 결과 띠(성공 · 실패 후 중지 → "다시 켜기")와 진행 중인 작업의 안내를 표시한다.
  */
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -20,9 +20,9 @@ import { UiTrans } from '~/components/ui/Trans'
 
 const DISMISS_PREFIX = 'jw.update.autoResult.'
 const dismissed = (job: string) => { try { return localStorage.getItem(DISMISS_PREFIX + job) === '1' } catch { return false } }
-const dismiss = (job: string) => { try { localStorage.setItem(DISMISS_PREFIX + job, '1') } catch { /* 저장 못 해도 이번 화면에서는 닫힌다 */ } }
+const dismiss = (job: string) => { try { localStorage.setItem(DISMISS_PREFIX + job, '1') } catch { /* 저장에 실패해도 현재 화면에서는 닫힌다 */ } }
 
-/** 밤사이 자동 업데이트의 결과 — 성공 / 실패 뒤 되돌림(자동 업데이트 멈춤) / 다시 켠 직후 */
+/** 야간 자동 업데이트의 결과 — 성공 / 실패 후 롤백(자동 업데이트 중지) / 재활성화 직후 */
 export function AutoResultBand({ status, onChanged }: { status: UpdateStatus; onChanged: () => void }) {
   const { t } = useI18n()
   const navigate = useNavigate()

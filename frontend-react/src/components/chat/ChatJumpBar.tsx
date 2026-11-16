@@ -1,15 +1,15 @@
 /**
- * 아래 떠 있는 "최근으로" 바(디스코드 "현재로 이동").
- * 높이 36 · inset 16 · radius 8 · 1px · 그림자. 왼쪽 글 13 muted("이전 메시지를 보고 있습니다" / 점프한 창이면 "9월 3일 메시지를 보고 있습니다"),
- * 아래에 새 메시지가 쌓였으면 개수 꼬리표, 오른쪽 "최근으로 ↓"(primary 600).
+ * 하단 플로팅 "최근으로" 바(디스코드 "현재로 이동").
+ * 높이 36 · inset 16 · radius 8 · 1px · 그림자. 왼쪽 텍스트 13 muted("이전 메시지를 보고 있습니다" / 점프한 창이면 "9월 3일 메시지를 보고 있습니다"),
+ * 아래에 새 메시지가 누적되면 개수 라벨, 오른쪽 "최근으로 ↓"(primary 600).
  */
 import { useI18n } from '~/i18n'
 import { UiIcon } from '~/components/ui/Icon'
 
 export interface ChatJumpBarProps {
-  /** 점프해서 옛 창을 보는 중이면 그 창 날짜(ISO) */
+  /** 점프하여 과거 창을 보는 중이면 해당 창 날짜(ISO) */
   viewingDate?: string | null
-  /** 아래에 쌓인 새 메시지 수 */
+  /** 아래에 누적된 새 메시지 수 */
   newCount?: number
   onPresent: () => void
 }

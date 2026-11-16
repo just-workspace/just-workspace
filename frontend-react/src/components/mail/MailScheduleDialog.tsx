@@ -1,8 +1,8 @@
 /**
- * 예약 보내기 시각 고르기.
- * 작성 창 "보내기 ▾ › 예약 보내기"와 예약함 "시각 변경"이 같이 쓴다.
- * 시안엔 이 대화상자 그림이 없어 기존 폼 규격(UiModal sm + 라벨 위 입력 40 + [취소][확인])으로 구성했다.
- * 서버 규칙: 지금+30초 이내면 바로 보냄, 1년 넘으면 400 — 여기서 미리 막는다.
+ * 예약 보내기 시각 선택.
+ * 작성 창 "보내기 ▾ › 예약 보내기"와 예약함 "시각 변경"이 공용으로 사용한다.
+ * 시안에 본 대화상자가 없어 기존 폼 규격(UiModal sm + 라벨 위 입력 40 + [취소][확인])으로 구성했다.
+ * 서버 규칙: 현재 시각+30초 이내면 즉시 발송, 1년 초과 시 400 — 여기서 사전 차단한다.
  */
 import { useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -16,17 +16,17 @@ export interface MailScheduleDialogProps {
   title: string
   /** 확인 버튼 문구 */
   confirmLabel: string
-  /** 처음 보일 시각(ISO). 없으면 다음 날 오전 8시 */
+  /** 초기 표시 시각(ISO). 없으면 다음 날 오전 8시 */
   initial?: string | null
   /** 처리 중(확인 비활성) */
   busy?: boolean
   /** 닫기 */
   onClose?: () => void
-  /** 확인 — 고른 시각 ISO */
+  /** 확인 — 선택한 시각 ISO */
   onConfirm?: (iso: string) => void
 }
 
-/** 예약 시각 고르기 */
+/** 예약 시각 선택 */
 export function MailScheduleDialog({ title, confirmLabel, initial = null, busy = false, onClose, onConfirm }: MailScheduleDialogProps) {
   const { t } = useI18n()
   const [value, setValue] = useState(() => toLocalInput(initial ? new Date(initial) : defaultScheduleTime()))

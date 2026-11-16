@@ -161,7 +161,7 @@ describe('스레드 목록', () => {
     const s = threadListStore.getState()
     expect(s.items[0].root.id).toBe('b')
     expect(s.items[0].last_reply?.content).toBe('새 답글')
-    // 같은 답글이 thread_update 로 또 와도 한 번만 센다
+    // 동일 답글이 thread_update 로 중복 수신되어도 1회만 집계
     handleThreadListEvent({ type: 'thread_update', root_id: 'b', channel_id: 'c1', reply: msg({ id: 'x', parent_id: 'b', content: '새 답글', created_at: '2026-10-23T00:00:00Z' }) })
     expect(threadListStore.getState().items[0].thread.reply_count).toBe(2)
   })

@@ -1,9 +1,9 @@
 /**
- * 여러 줄 입력: 패딩 10/12, 테두리·포커스·오류 규격은 UiInput 과 같다.
- * className 은 바깥 묶음에, 나머지 속성(name·maxLength·onKeyDown 등)은 안쪽 <textarea> 에 붙는다. ref 는 <textarea>.
+ * 여러 줄 입력: 패딩 10/12, 테두리·포커스·오류 규격은 UiInput 과 동일하다.
+ * className 은 외부 래퍼에, 나머지 속성(name·maxLength·onKeyDown 등)은 내부 <textarea> 에 적용된다. ref 는 <textarea>.
  *
- * autoGrow(프롬프트 입력): 높이 = 내용 높이(1~maxRows줄, 기본 6), 포커스와 무관 — 포커스만으로 펼치지 않는다.
- * 비면 1줄(높이 44), 줄이 늘면 maxRows 까지 자라고 그보다 길면 안에서 스크롤. rows·resizable 은 쓰지 않는다.
+ * autoGrow(프롬프트 입력): 높이 = 내용 높이(1~maxRows줄, 기본 6), 포커스와 무관 — 포커스만으로는 확장되지 않는다.
+ * 비어 있으면 1줄(높이 44), 줄이 늘면 maxRows 까지 확장되고 이를 초과하면 내부 스크롤. rows·resizable 은 사용하지 않는다.
  */
 import { useLayoutEffect, useRef, type ChangeEvent, type Ref, type TextareaHTMLAttributes } from 'react'
 import { cn } from '~/lib/utils'
@@ -12,19 +12,19 @@ import { mergeRefs, useModel, useUid } from './internal'
 
 /** 접힌 높이(1줄) */
 const COLLAPSED_H = 44
-/** 계산값을 못 읽을 때(테스트 환경 등) 쓰는 기본 — text-sm 줄 20 · 위아래 패딩 11 · 테두리 1 */
+/** 계산값을 읽을 수 없을 때(테스트 환경 등) 사용하는 기본값 — text-sm 줄 20 · 위아래 패딩 11 · 테두리 1 */
 const num = (v: string, d: number) => { const n = parseFloat(v); return Number.isFinite(n) ? n : d }
 
 export interface UiTextareaProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'defaultValue' | 'placeholder' | 'rows' | 'disabled' | 'readOnly' | 'required'> {
-  /** 값. 안 주면 스스로 값을 가진다 */
+  /** 값. 미지정 시 내부에서 값을 보유 */
   modelValue?: string
-  /** 값 바뀜 */
+  /** 값 변경 */
   onUpdateModelValue?: (v: string) => void
-  /** textarea id(라벨 for). 없으면 자동 */
+  /** textarea id(라벨 for). 미지정 시 자동 생성 */
   id?: string
-  /** 위 라벨 */
+  /** 상단 라벨 */
   label?: string
-  /** 아래 도움말(오류가 없을 때) */
+  /** 하단 도움말(오류가 없을 때) */
   hint?: string
   /** 오류 문구 */
   error?: string
@@ -40,9 +40,9 @@ export interface UiTextareaProps extends Omit<TextareaHTMLAttributes<HTMLTextAre
   mono?: boolean
   /** 세로 크기 조절 허용 */
   resizable?: boolean
-  /** 높이 = 내용(1줄 44 ~ maxRows 줄, 프롬프트 입력). 포커스와 무관, 비면 1줄 */
+  /** 높이 = 내용(1줄 44 ~ maxRows 줄, 프롬프트 입력). 포커스와 무관, 비어 있으면 1줄 */
   autoGrow?: boolean
-  /** autoGrow 최대 줄 수(기본 6) — 넘으면 안에서 스크롤 */
+  /** autoGrow 최대 줄 수(기본 6) — 초과 시 내부 스크롤 */
   maxRows?: number
   /** 안쪽 <textarea> */
   ref?: Ref<HTMLTextAreaElement>
@@ -63,7 +63,7 @@ export function UiTextarea({
   const describedBy = (error || hint) ? `${inputId}-desc` : undefined
 
   const inner = useRef<HTMLTextAreaElement | null>(null)
-  // autoGrow 높이 = 내용 높이(1~maxRows 줄) · 비면 1줄 · 포커스와 무관. 넘치면 안에서 스크롤
+  // autoGrow 높이 = 내용 높이(1~maxRows 줄) · 비어 있으면 1줄 · 포커스와 무관. 초과 시 내부 스크롤
   useLayoutEffect(() => {
     const el = inner.current
     if (!autoGrow || !el) return
@@ -77,7 +77,7 @@ export function UiTextarea({
     const h = model ? Math.min(Math.max(COLLAPSED_H, contentH), maxH) : COLLAPSED_H
     el.style.height = `${h}px`
     el.style.overflowY = model && contentH > maxH ? 'auto' : 'hidden'
-    // 1줄보다 커졌는가(스타일 훅용)
+    // 1줄 초과 여부(스타일 훅용)
     el.dataset.expanded = h > COLLAPSED_H ? 'true' : 'false'
   }, [autoGrow, maxRows, model, mono])
   return (

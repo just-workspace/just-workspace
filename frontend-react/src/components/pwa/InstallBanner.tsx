@@ -1,5 +1,5 @@
 /**
- * PWA 설치 안내 — 설치 가능하고 아직 설치 전이면 오른쪽 아래 카드.
+ * PWA 설치 안내 — 설치 가능하며 미설치 상태이면 오른쪽 아래에 카드 표시.
  */
 import { useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -13,11 +13,11 @@ function readDismissed(): boolean {
 export function PwaInstallBanner() {
   const { canInstall, isInstalled, promptInstall } = usePwa()
   const { t } = useI18n()
-  // 닫음은 이 기기에 기억한다 — 예전엔 새로 불러올 때마다 다시 떴다
+  // 닫음 상태는 이 기기에 저장한다 — 과거에는 새로 불러올 때마다 다시 표시되었다
   const [dismissed, setDismissed] = useState(readDismissed)
   function dismiss() {
     setDismissed(true)
-    try { localStorage.setItem(DISMISS_KEY, '1') } catch { /* 이번 화면만 */ }
+    try { localStorage.setItem(DISMISS_KEY, '1') } catch { /* 현재 화면에만 적용 */ }
   }
 
   async function handleInstall() {
@@ -28,7 +28,7 @@ export function PwaInstallBanner() {
 
   return (
     <div
-      // 모바일은 하단 탭바(64 + safe-area) 위로 — 바닥 16 에 두면 탭바를 통째로 덮었다. 겹침은 토큰(z-drawer)으로.
+      // 모바일은 하단 탭바(64 + safe-area) 위에 배치 — 바닥 16 에 두면 탭바 전체를 가렸다. 겹침 순서는 토큰(z-drawer)으로 지정.
       className="fixed bottom-[calc(72px+env(safe-area-inset-bottom))] left-4 right-4 sm:bottom-4 sm:left-auto sm:right-4 sm:w-80 z-drawer bg-card border rounded-lg shadow-lg p-4 flex items-start gap-3"
     >
       <div className="shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">

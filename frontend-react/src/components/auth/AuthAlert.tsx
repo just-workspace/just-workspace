@@ -1,18 +1,18 @@
 /**
  * 인증 폼 상단 타일:
- * 서버 오류 = danger(무엇 + 다음에 일어날 일), 성공 = success, 경고 = warning.
- * 아이콘 16 + 13px/1.5, 제목 600 + 설명 muted. 형식 오류는 여기가 아니라 입력 아래(UiInput error).
+ * 서버 오류 = danger(발생 내용 + 이후 진행 사항), 성공 = success, 경고 = warning.
+ * 아이콘 16 + 13px/1.5, 제목 600 + 설명 muted. 형식 오류는 본 타일이 아닌 입력 하단(UiInput error)에 표시.
  */
 import type { ReactNode } from 'react'
 import { cn } from '~/lib/utils'
 import { UiIcon } from '~/components/ui/Icon'
 
 export interface AuthAlertProps {
-  /** 기본 danger */
+  /** 기본값 danger */
   tone?: 'danger' | 'success' | 'warning' | 'info'
   title?: string
   description?: string
-  /** 설명 자리 — description 대신 */
+  /** 설명 영역 — description 대체 */
   children?: ReactNode
   /** 설명 뒤 행동 */
   action?: ReactNode

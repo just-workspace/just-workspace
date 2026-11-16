@@ -2,13 +2,13 @@
 // 코드영역을 먼저 추출(placeholder) → 나머지 포맷 적용 → 복원. 최종 DOMPurify 새니타이즈.
 import DOMPurify from 'dompurify'
 
-// 채널 전원을 부르는 말. 백엔드 app/chat/service.py GROUP_MENTIONS 와 같아야 한다.
+// 채널 전원 호출 키워드. 백엔드 app/chat/service.py GROUP_MENTIONS 와 일치 필수.
 export const GROUP_MENTIONS = new Set(['channel', 'all', 'here', 'everyone', '채널', '전체', '모두'])
 
-/** 이 본문이 나(username)·채널 전원·내 역할(roleKeys = 내 역할의 mention 키)을 불렀나 — 메시지 행 강조. */
+/** 이 본문이 본인(username)·채널 전원·본인 역할(roleKeys = 본인 역할의 mention 키)을 멘션했는지 여부 — 메시지 행 강조. */
 export function mentionsMe(raw: string, me?: string | null, roleKeys?: readonly string[] | null): boolean {
   if (!raw) return false
-  const re = /(^|\s)@([\p{L}\p{N}_](?:[\p{L}\p{N}_.-]*[\p{L}\p{N}_])?)/gu   // 서버 MENTION_RE 와 같게: 한글 이름 + 사이의 . - (first-last), 끝의 . - 는 문장부호
+  const re = /(^|\s)@([\p{L}\p{N}_](?:[\p{L}\p{N}_.-]*[\p{L}\p{N}_])?)/gu   // 서버 MENTION_RE 와 동일: 한글 이름 + 중간의 . - (first-last), 끝의 . - 는 문장부호로 처리
   let m: RegExpExecArray | null
   while ((m = re.exec(raw))) {
     const name = m[2]
@@ -49,7 +49,7 @@ export function renderChatMarkdown(raw: string, opts: { me?: string | null } = {
   // 7) 기울임 *..* / _.._
   text = text.replace(/(^|[^*\w])\*([^\s*][^*\n]*?)\*(?!\*)/g, '$1<em>$2</em>')
   text = text.replace(/(^|[^_\w])_([^\s_][^_\n]*?)_(?![_\w])/g, '$1<em>$2</em>')
-  // 8) @멘션 — 나·채널 전원은 강조 칩, 다른 사람은 일반(채팅 시안)
+  // 8) @멘션 — 본인·채널 전원은 강조 칩, 타 사용자는 일반(채팅 시안)
   text = text.replace(/(^|\s)@([\p{L}\p{N}_](?:[\p{L}\p{N}_.-]*[\p{L}\p{N}_])?)/gu, (_m, pre: string, name: string) => {
     const cls = GROUP_MENTIONS.has(name.toLowerCase())
       ? 'chat-mention chat-mention-group'
@@ -74,9 +74,9 @@ export function renderChatMarkdown(raw: string, opts: { me?: string | null } = {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
-// 마크다운 — 구조 파서(AST). 그리기는 components/chat/ChatMarkdown.tsx(React 가 글자를 이스케이프 →
-// innerHTML 을 쓰지 않으니 XSS 경로가 없다. 링크 주소는 http(s) 만). renderChatMarkdown(HTML 문자열)은 다른 화면(고정 목록 ·
-// 모아보기 · 음성 글 채팅)이 그대로 쓰므로 남겨 둔다.
+// 마크다운 — 구조 파서(AST). 렌더링은 components/chat/ChatMarkdown.tsx(React 가 문자를 이스케이프 →
+// innerHTML 을 사용하지 않으므로 XSS 경로가 없다. 링크 주소는 http(s) 만). renderChatMarkdown(HTML 문자열)은 다른 화면(고정 목록 ·
+// 모아보기 · 음성 글 채팅)이 그대로 사용하므로 유지한다.
 //  블록: # h1 · ## h2 · ### h3 · -# 작은 글 · - / * / 1. 목록(앞 공백 2칸 = 한 단계) · > 인용 · >>> 여러 줄 인용 · ```lang 코드```
 //  글줄: ***굵은 기울임*** · **굵게** · __밑줄__ · *기울임* / _기울임_ · ~~취소~~ · `코드` · ||스포일러|| · [글](주소) ·
 //        주소 자동 링크 · <주소>(미리보기 없는 링크) · @멘션 · #채널 / <#채널id> · :커스텀_이모지: · \ 이스케이프
@@ -88,11 +88,11 @@ export type MdInline =
   | { t: 'b' | 'i' | 'u' | 's' | 'spoiler'; c: MdInline[] }
   | { t: 'code'; v: string }
   | { t: 'link'; href: string; c: MdInline[]; masked: boolean }
-  /** @이름 — group = @here/@everyone 등. 사람/역할 구분은 그릴 때(역할 목록) */
+  /** @이름 — group = @here/@everyone 등. 사람/역할 구분은 렌더링 시(역할 목록) 수행 */
   | { t: 'at'; name: string; group: boolean }
-  /** #이름(byId=false) · <#id>(byId=true) — 그릴 때 채널 목록으로 푼다(이름이 없으면 글자 그대로) */
+  /** #이름(byId=false) · <#id>(byId=true) — 렌더링 시 채널 목록으로 해석한다(이름이 없으면 문자 그대로) */
   | { t: 'channel'; ref: string; byId: boolean }
-  /** :이름: — 그릴 때 커스텀 이모지 목록으로 푼다(없으면 글자 그대로) */
+  /** :이름: — 렌더링 시 커스텀 이모지 목록으로 해석한다(없으면 문자 그대로) */
   | { t: 'emoji'; name: string }
 
 export interface MdListItem { depth: number; ordered: boolean; n: number; c: MdInline[] }
@@ -104,7 +104,7 @@ export type MdBlock =
   | { t: 'quote'; c: MdBlock[] }
   | { t: 'code'; lang: string; code: string }
 
-/** 코드 블록이 이 줄 수를 넘으면 접는다("20줄 넘으면 접힘") */
+/** 코드 블록이 이 줄 수를 초과하면 접는다("20줄 넘으면 접힘") */
 export const CODE_FOLD_LINES = 20
 
 const NAME_RE = /[\p{L}\p{N}_](?:[\p{L}\p{N}_.-]*[\p{L}\p{N}_])?/uy
@@ -116,7 +116,7 @@ function at(re: RegExp, s: string, i: number): RegExpExecArray | null {
   re.lastIndex = i
   return re.exec(s)
 }
-/** 주소 끝의 문장부호는 떼어 낸다(괄호는 짝이 맞을 때만 남김) */
+/** 주소 끝의 문장부호는 제거한다(괄호는 짝이 맞을 때만 유지) */
 function trimUrl(u: string): string {
   let url = u
   for (;;) {
@@ -131,7 +131,7 @@ export function isSafeHref(href: string): boolean {
   return /^https?:\/\//i.test(href)
 }
 
-// 짝 맞는 강조 — [여는 기호, 정규식(y), 종류]. 앞에 있을수록 먼저 본다(*** > ** > __ > * > _ > ~~ > ||)
+// 짝이 맞는 강조 — [여는 기호, 정규식(y), 종류]. 앞에 위치할수록 우선 검사한다(*** > ** > __ > * > _ > ~~ > ||)
 const EMPH: [string, RegExp, 'bi' | 'b' | 'u' | 'i' | 's' | 'spoiler'][] = [
   ['***', /\*\*\*(?!\s)([\s\S]+?)\*\*\*/y, 'bi'],
   ['**', /\*\*(?!\s)([\s\S]+?)\*\*(?!\*)/y, 'b'],
@@ -142,7 +142,7 @@ const EMPH: [string, RegExp, 'bi' | 'b' | 'u' | 'i' | 's' | 'spoiler'][] = [
   ['||', /\|\|([\s\S]+?)\|\|/y, 'spoiler'],
 ]
 
-/** 한 덩어리 글을 글줄 노드로(줄바꿈은 br) */
+/** 텍스트 한 단위를 글줄 노드로 변환(줄바꿈은 br) */
 export function parseInline(src: string, opts: { links?: boolean } = {}): MdInline[] {
   const links = opts.links !== false
   const out: MdInline[] = []
@@ -156,7 +156,7 @@ export function parseInline(src: string, opts: { links?: boolean } = {}): MdInli
     // 이스케이프
     if (ch === '\\' && i + 1 < src.length && ESCAPABLE.has(src[i + 1])) { buf += src[i + 1]; i += 2; continue }
     if (ch === '\n') { push({ t: 'br' }); i++; continue }
-    // 인라인 코드(`` `` 두 겹도)
+    // 인라인 코드(`` `` 이중 백틱 포함)
     if (ch === '`') {
       const m = at(/(`{1,2})([^`]|[^`][\s\S]*?[^`])\1(?!`)/y, src, i)
       if (m) { push({ t: 'code', v: m[2] }); i += m[0].length; continue }
@@ -186,7 +186,7 @@ export function parseInline(src: string, opts: { links?: boolean } = {}): MdInli
       let hit = false
       for (const [open, re, kind] of EMPH) {
         if (!src.startsWith(open, i)) continue
-        if (open === '_' && i > 0 && /[\p{L}\p{N}]/u.test(src[i - 1])) continue   // snake_case 안의 _ 는 글자
+        if (open === '_' && i > 0 && /[\p{L}\p{N}]/u.test(src[i - 1])) continue   // snake_case 내부의 _ 는 일반 문자로 처리
         const m = at(re, src, i)
         if (!m) continue
         const inner = parseInline(m[1], { links })
@@ -203,7 +203,7 @@ export function parseInline(src: string, opts: { links?: boolean } = {}): MdInli
       const m = at(NAME_RE, src, i + 1)
       if (m) { push({ t: 'at', name: m[0], group: GROUP_MENTIONS.has(m[0].toLowerCase()) }); i += 1 + m[0].length; continue }
     }
-    // #채널(앞이 공백·줄 처음, 숫자만은 이슈 번호라 글자)
+    // #채널(앞이 공백·줄 처음, 숫자만이면 이슈 번호이므로 일반 문자로 처리)
     if (ch === '#' && prevIsBoundary(i)) {
       const m = at(CHANNEL_NAME_RE, src, i + 1)
       if (m && !/^\d+$/.test(m[0])) { push({ t: 'channel', ref: m[0], byId: false }); i += 1 + m[0].length; continue }
@@ -295,7 +295,7 @@ export function parseChatMarkdown(raw: string | null | undefined): MdBlock[] {
   return out
 }
 
-/** 글줄 노드 → 맨 글자(답장 요약 · 알림). 스포일러는 가린다 */
+/** 글줄 노드 → 일반 텍스트(답장 요약 · 알림). 스포일러는 마스킹한다 */
 export function inlineToText(c: MdInline[], spoilerMask = '▮▮▮'): string {
   return c.map((n) => {
     switch (n.t) {
@@ -313,7 +313,7 @@ export function inlineToText(c: MdInline[], spoilerMask = '▮▮▮'): string {
   }).join('')
 }
 
-/** 마크다운을 벗긴 한 줄 요약(답장 미리보기 — 14 muted 말줄임) */
+/** 마크다운을 제거한 한 줄 요약(답장 미리보기 — 14 muted 말줄임) */
 export function stripChatMarkdown(raw: string | null | undefined): string {
   const parts: string[] = []
   const walk = (bs: MdBlock[]) => {
@@ -334,8 +334,8 @@ const EMOJI_UNIT = /(?:\p{Extended_Pictographic}(?:️|[\u{1F3FB}-\u{1F3FF}])?(?
 export const JUMBO_MAX = 27
 
 /**
- * 본문이 이모지만인가(공백 제외) → 이모지를 48 로 크게(디스코드 jumbo). isCustom = 그릴 수 있는 커스텀 이모지 이름인지.
- * 커스텀 :이름: 이 목록에 없으면 글자라서 jumbo 가 아니다.
+ * 본문이 이모지로만 구성되었는지 여부(공백 제외) → 이모지를 48 크기로 표시(디스코드 jumbo). isCustom = 렌더링 가능한 커스텀 이모지 이름인지 여부.
+ * 커스텀 :이름: 이 목록에 없으면 일반 문자이므로 jumbo 가 아니다.
  */
 export function isEmojiOnly(blocks: MdBlock[], isCustom: (name: string) => boolean): boolean {
   if (blocks.length !== 1 || blocks[0].t !== 'p') return false

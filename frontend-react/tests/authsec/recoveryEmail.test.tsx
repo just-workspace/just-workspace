@@ -1,5 +1,5 @@
-// 복구 이메일 변경 절차 — 설정 › 계정 폼(본인 확인 칸 · "확인 메일을 보냈습니다" · 요청 취소)과 확인 링크 착지(/verify-email?change=…).
-// 서버는 세션만으로 복구 이메일을 바꿔 주지 않는다(PATCH /api/auth/profile 은 400) — 화면도 그 경로로 보내면 안 된다.
+// 복구 이메일 변경 절차 — 설정 › 계정 폼(본인 확인 칸 · "확인 메일을 보냈습니다" · 요청 취소)과 확인 링크 도착 화면(/verify-email?change=…).
+// 서버는 세션만으로 복구 이메일을 변경하지 않는다(PATCH /api/auth/profile 은 400) — 화면도 해당 경로로 전송해서는 안 된다.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -21,7 +21,7 @@ vi.mock('~/lib/api', async (orig) => {
   const $fetch = Object.assign(fake, { raw: fake, native: fetch, create: () => fake })
   return { ...real, $fetch }
 })
-// 아래 카드(로그인된 기기)는 이 테스트의 대상이 아니다
+// 아래 카드(로그인된 기기)는 본 테스트의 대상이 아님
 vi.mock('~/components/settings/SettingsDevices', () => ({ SettingsDevices: () => null }))
 
 const { default: AccountPage } = await import('~/pages/settings/account')
@@ -80,9 +80,9 @@ describe('설정 › 계정 — 복구 이메일 변경', () => {
     const sent = callsTo('/api/auth/recovery-email/request', 'POST')
     expect(sent).toHaveLength(1)
     expect(sent[0].opts?.body).toEqual({ recovery_email: 'new@ex.com', current_password: 'Correct-Horse-9' })
-    // 프로필 저장 경로로는 복구 이메일을 보내지 않는다(이름을 안 고쳤으니 호출 자체가 없다)
+    // 프로필 저장 경로로는 복구 이메일을 전송하지 않음(이름을 수정하지 않았으므로 호출 자체가 없음)
     expect(callsTo('/api/auth/profile')).toHaveLength(0)
-    // 폼은 지금 주소로 돌아가고 비밀번호 칸은 사라진다
+    // 폼은 현재 주소로 복원되고 비밀번호 칸은 제거됨
     expect(emailInput().value).toBe('old@ex.com')
     expect(screen.queryByLabelText(/현재 비밀번호/)).toBeNull()
   })
@@ -144,7 +144,7 @@ describe('설정 › 계정 — 복구 이메일 변경', () => {
 describe('설정 › 계정 — 복구 이메일 비우기', () => {
   it('주소를 지우고 본인 확인을 하면 바로 비워진다(확인 메일 대기 없음)', async () => {
     api.routes[REQUEST] = () => {
-      authStore.setState({ user: { ...ME, recovery_email: null } as any })   // 서버가 비웠다 → 다음 /me 가 빈 값
+      authStore.setState({ user: { ...ME, recovery_email: null } as any })   // 서버가 값을 비움 → 다음 /me 가 빈 값
       return { message: 'ok', cleared: true, pending_email: null, expires_in: 0 }
     }
     renderAt(AccountPage, '/settings/account')
@@ -169,14 +169,14 @@ describe('확인 링크 착지 — /verify-email?change=…', () => {
     renderAt(VerifyPage, '/verify-email?change=tok-123')
     const button = await screen.findByRole('button', { name: '복구 이메일 변경 확인' })
     expect(callsTo('/api/auth/recovery-email/check', 'POST')[0].opts?.body).toEqual({ token: 'tok-123' })
-    expect(callsTo('/api/auth/recovery-email/confirm')).toHaveLength(0)      // 메일 보안 장비의 자동 열람은 여기까지
+    expect(callsTo('/api/auth/recovery-email/confirm')).toHaveLength(0)      // 메일 보안 장비의 자동 열람은 이 단계까지만 도달
     fireEvent.click(button)
     expect(await screen.findByText('복구 이메일을 바꿨습니다')).toBeTruthy()
     expect(screen.getByText('복구 이메일이 변경되었습니다.')).toBeTruthy()
     const sent = callsTo('/api/auth/recovery-email/confirm', 'POST')
     expect(sent).toHaveLength(1)
     expect(sent[0].opts?.body).toEqual({ token: 'tok-123' })
-    // 가입 인증 API 는 부르지 않는다, 로그인돼 있으니 내 정보를 다시 읽는다
+    // 가입 인증 API 는 호출하지 않음. 로그인 상태이므로 내 정보를 재조회
     expect(callsTo('/api/auth/verify-email')).toHaveLength(0)
     expect(callsTo('/api/auth/me').length).toBeGreaterThan(0)
     expect(screen.getByRole('link', { name: '계정 설정으로' }).getAttribute('href')).toBe('/settings/account')

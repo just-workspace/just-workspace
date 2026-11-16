@@ -1,7 +1,7 @@
 /**
  * /admin —
- * 데스크톱은 개요(/admin/dashboard)로, 모바일은 관리 메뉴 목록(그룹 카드 52 행 + 보조 글자 + ›).
- * 모바일 머리는 이 페이지 header(제목 + "관리자 · 이름") — 공용 상단바는 쓰지 않는다(routes.ts ownMobileHeader).
+ * 데스크톱은 개요(/admin/dashboard)로 이동, 모바일은 관리 메뉴 목록(그룹 카드 52 행 + 보조 글자 + ›) 표시.
+ * 모바일 머리는 이 페이지 header(제목 + "관리자 · 이름") — 공용 상단바 미사용(routes.ts ownMobileHeader).
  */
 import { Fragment, useEffect } from 'react'
 import { useI18n } from '~/i18n'
@@ -23,7 +23,7 @@ export default function AdminIndexPage() {
   const { user } = useAuth()
   const { groups } = useSettingsNav('admin')
 
-  // watch(isMobile, immediate) — 데스크톱이면 개요로
+  // watch(isMobile, immediate) — 데스크톱이면 개요로 이동
   useEffect(() => { if (!isMobile) void navigateTo('/admin/dashboard', { replace: true }) }, [isMobile])
 
   return (

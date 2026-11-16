@@ -1,6 +1,6 @@
 // 비밀번호 재설정("재설정 성공"): 새 비밀번호 1필드(확인 칸 대신 보기 토글) + 규칙 체크.
-// 성공 = 결과 화면(success 타일 40 + "비밀번호를 바꿨습니다" + 로그인하기). 백엔드는 재설정 시 전 세션을 끊는다.
-// 토큰 없음 = 같은 결과 화면 틀의 warning(링크가 올바르지 않습니다).
+// 성공 = 결과 화면(success 타일 40 + "비밀번호를 바꿨습니다" + 로그인하기). 백엔드는 재설정 시 전체 세션을 종료한다.
+// 토큰 없음 = 동일 결과 화면 틀의 warning(링크가 올바르지 않습니다).
 import { useState, type FormEvent } from 'react'
 import { $fetch } from '~/lib/api'
 import { navigateTo, useRoute } from '~/lib/router'
@@ -31,7 +31,7 @@ export default function Page() {
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
 
-  // 링크만으로는 아이디를 모른다 → "아이디와 다름" 규칙은 서버가 판정(실패 시 상단 타일)
+  // 링크만으로는 아이디를 확인할 수 없다 → "아이디와 다름" 규칙은 서버가 판정(실패 시 상단 타일)
   const rules = checkPasswordRules(newPassword).filter(r => r.key !== 'distinct')
   const canSubmit = passwordRulesPass(rules) && !submitting
 

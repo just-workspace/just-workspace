@@ -1,17 +1,17 @@
 /**
- * 캘린더 시간대("일정은 ○○ 기준으로 보입니다"가 사실이 되게).
+ * 캘린더 시간대("일정은 ○○ 기준으로 보입니다" 문구와 실제 동작의 일치를 보장).
  *
  * 캘린더 화면 전체(주·일·월·목록·상세·편집·오늘 표시·현재 시각 선·대시보드 "오늘")는 **설정 시간대**
- * (설정 › 캘린더/표시 timezone, 빈 값 = 기기 시간대)의 벽시계로 그린다. 기기 시간대(Date 의 getHours 등)는 쓰지 않는다.
+ * (설정 › 캘린더/표시 timezone, 빈 값 = 기기 시간대)의 벽시계 기준으로 표시한다. 기기 시간대(Date 의 getHours 등)는 사용하지 않는다.
  *
  * 규칙
- *  - 값은 계속 Date(= 순간)다. "그날"·"그 시각"을 읽고 만들 때만 이 파일의 함수를 거친다.
- *    읽기: zp(d).year·month(0~11)·date·day(요일 0=일)·hours·minutes  /  만들기: zDate(y, m, d, h, mi)
- *  - 날짜 이동은 벽시계 기준(zAddDays: 서머타임 날도 "다음날 같은 시각", 24시간 더하기가 아님).
- *  - 종일 일정은 날짜만 뜻한다 → 시간대 변환 없이 날짜를 그대로(allDayYmd · eventRange).
- *    서버 규약(.ics/CalDAV)은 그 날짜의 UTC 00:00. 예전 웹 화면이 기기 자정으로 저장한 행(예: 서울 = 전날 15:00Z)도
- *    가장 가까운 UTC 자정으로 읽어 같은 날짜가 된다(UTC−12~+12 에서 정확).
- *  - 오프셋 계산은 Intl(IANA tz) — 15분 단위로 캐시해 주·월 보기에서 수천 번 불려도 가볍다.
+ *  - 값은 항상 Date(= 순간)이다. "그날"·"그 시각"을 읽거나 생성할 때만 본 파일의 함수를 경유한다.
+ *    읽기: zp(d).year·month(0~11)·date·day(요일 0=일)·hours·minutes  /  생성: zDate(y, m, d, h, mi)
+ *  - 날짜 이동은 벽시계 기준(zAddDays: 서머타임 전환일에도 "다음날 같은 시각", 24시간 가산이 아님).
+ *  - 종일 일정은 날짜만 의미한다 → 시간대 변환 없이 날짜를 그대로 사용(allDayYmd · eventRange).
+ *    서버 규약(.ics/CalDAV)은 해당 날짜의 UTC 00:00. 이전 웹 화면이 기기 자정으로 저장한 행(예: 서울 = 전날 15:00Z)도
+ *    가장 가까운 UTC 자정으로 읽어 동일한 날짜가 된다(UTC−12~+12 에서 정확).
+ *  - 오프셋 계산은 Intl(IANA tz) — 15분 단위로 캐시하므로 주·월 보기에서 수천 회 호출되어도 부하가 작다.
  */
 import { userPrefsStore } from '~/composables/useUserPrefs'
 
@@ -36,7 +36,7 @@ function validZone(tz: string): boolean {
 
 let deviceZone: string | null = null
 
-/** 지금 캘린더가 쓰는 시간대 — 설정 시간대, 비었거나 잘못됐으면 기기 시간대 */
+/** 현재 캘린더가 사용하는 시간대 — 설정 시간대, 비어 있거나 유효하지 않으면 기기 시간대 */
 export function calendarZone(): string {
   if (override) return override
   const pref = userPrefsStore.getState().prefs.timezone
@@ -44,7 +44,7 @@ export function calendarZone(): string {
   return deviceZone ?? (deviceZone = deviceTimeZone())
 }
 
-/** 테스트용 — 캘린더 시간대를 강제로(null 이면 해제) */
+/** 테스트용 — 캘린더 시간대 강제 지정(null 이면 해제) */
 export function _setCalendarZone(tz: string | null) { override = tz }
 
 // ── 오프셋 ──
@@ -80,7 +80,7 @@ export function zoneOffsetMs(ms: number, tz = calendarZone()): number {
   const b = Math.floor(ms / BUCKET)
   let off = byTz.get(b)
   if (off === undefined) {
-    // 버킷 시작 기준으로 잰다(같은 버킷은 같은 값 — 전환은 15분 경계에서만 일어난다)
+    // 버킷 시작 기준으로 계산한다(동일 버킷은 동일 값 — 전환은 15분 경계에서만 발생)
     off = computeOffset(b * BUCKET, tz)
     if (byTz.size > 50_000) byTz.clear()
     byTz.set(b, off)
@@ -119,20 +119,20 @@ export function zDayNumber(d: Date | number, tz = calendarZone()): number {
   return Math.floor(Date.UTC(p.year, p.month, p.date) / DAY_MS)
 }
 
-/** 자정부터 지난 벽시계 분(0~1439) */
+/** 자정 이후 경과한 벽시계 분(0~1439) */
 export function zMinutesOfDay(d: Date | number, tz = calendarZone()): number {
   const p = zp(d, tz)
   return p.hours * 60 + p.minutes
 }
 
-/** 지금(순간). 화면의 "오늘"·현재 시각 선은 이것을 zp 로 읽는다 */
+/** 현재(순간). 화면의 "오늘"·현재 시각 선은 이 값을 zp 로 읽는다 */
 export function zNow(): Date { return new Date() }
 
-// ── 만들기 ──
+// ── 생성 ──
 
 /**
- * 캘린더 시간대 벽시계 → 순간. 넘친 값은 Date 처럼 정리(월 12 → 다음해 1월, 일 0 → 전달 말일).
- * 서머타임으로 없는 시각(봄 02:30)은 앞으로 밀고(03:30), 두 번 있는 시각(가을 01:30)은 앞의 것.
+ * 캘린더 시간대 벽시계 → 순간. 범위를 벗어난 값은 Date 와 동일하게 정규화(월 12 → 다음해 1월, 일 0 → 전달 말일).
+ * 서머타임으로 존재하지 않는 시각(봄 02:30)은 이후 시각으로 이동하고(03:30), 중복되는 시각(가을 01:30)은 앞선 쪽을 선택한다.
  */
 export function zDate(year: number, month: number, date = 1, hours = 0, minutes = 0, seconds = 0, tz = calendarZone()): Date {
   const local = Date.UTC(year, month, date, hours, minutes, seconds)
@@ -140,7 +140,7 @@ export function zDate(year: number, month: number, date = 1, hours = 0, minutes 
   const after = zoneOffsetMs(local + DAY_MS, tz)
   const cands = before === after ? [local - before] : [local - before, local - after].sort((a, b) => a - b)
   for (const c of cands) if (c + zoneOffsetMs(c, tz) === local) return new Date(c)
-  // 없는 시각(봄 전환) — 전환 전 오프셋으로 계산하면 벽시계가 앞으로 밀린다
+  // 존재하지 않는 시각(봄 전환) — 전환 전 오프셋으로 계산하면 벽시계가 이후 시각으로 이동한다
   return new Date(local - before)
 }
 
@@ -150,13 +150,13 @@ export function zStartOfDay(d: Date, tz = calendarZone()): Date {
   return zDate(p.year, p.month, p.date, 0, 0, 0, tz)
 }
 
-/** n일 뒤 같은 벽시계 시각(서머타임 날도) */
+/** n일 뒤 같은 벽시계 시각(서머타임 전환일 포함) */
 export function zAddDays(d: Date, n: number, tz = calendarZone()): Date {
   const p = zp(d, tz)
   return zDate(p.year, p.month, p.date + n, p.hours, p.minutes, p.seconds, tz)
 }
 
-/** n달 뒤 같은 날·시각(Date.setMonth 처럼 넘치면 다음달로) */
+/** n개월 뒤 같은 날·시각(Date.setMonth 와 같이 초과 시 다음달로 이월) */
 export function zAddMonths(d: Date, n: number, tz = calendarZone()): Date {
   const p = zp(d, tz)
   return zDate(p.year, p.month + n, p.date, p.hours, p.minutes, p.seconds, tz)
@@ -187,7 +187,7 @@ export function zDateInput(d: Date, tz = calendarZone()): string {
   return `${p.year}-${pad(p.month + 1)}-${pad(p.date)}`
 }
 
-/** 'YYYY-MM-DD' + 'HH:MM' → 순간. 형식이 틀리면 null */
+/** 'YYYY-MM-DD' + 'HH:MM' → 순간. 형식 불일치 시 null */
 export function zFromInputs(date: string, time = '00:00', tz = calendarZone()): Date | null {
   const dm = date.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   const tm = time.match(/^(\d{2}):(\d{2})$/)
@@ -211,7 +211,7 @@ export function allDayIso(y: number, m: number, d: number): string {
   return new Date(Date.UTC(y, m, d)).toISOString()
 }
 
-/** 'YYYY-MM-DD' → 종일 저장 값. 형식이 틀리면 null */
+/** 'YYYY-MM-DD' → 종일 저장 값. 형식 불일치 시 null */
 export function allDayIsoFromInput(date: string, addDays = 0): string | null {
   const dm = date.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (!dm) return null
@@ -221,8 +221,8 @@ export function allDayIsoFromInput(date: string, addDays = 0): string | null {
 const rangeMemo = new WeakMap<object, { zone: string; start: string; end: string; allDay: boolean; r: { start: Date; end: Date } }>()
 
 /**
- * 화면 배치용 [시작, 끝) 순간. 시각 일정은 그대로, 종일 일정은 그 날짜들을 캘린더 시간대의 자정으로 옮긴다
- * (서울에서도 LA 에서도 같은 날짜 칸에 앉는다).
+ * 화면 배치용 [시작, 끝) 순간. 시각 일정은 그대로 두고, 종일 일정은 해당 날짜들을 캘린더 시간대의 자정으로 변환한다
+ * (서울과 LA 어디에서도 동일한 날짜 칸에 배치된다).
  */
 export function eventRange(ev: { start: string; end: string; all_day?: boolean }): { start: Date; end: Date } {
   const zone = calendarZone()

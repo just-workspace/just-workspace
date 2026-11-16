@@ -1,8 +1,8 @@
-// 연락처·작업 구역 전수조사 수정 고정($fetch 는 가짜):
-//  - 검색·범위를 빠르게 바꿔도 늦게 온 이전 응답이 목록을 덮지 않는다
-//  - 연락처 삭제 실패는 토스트로 알린다(예전: console 만)
-//  - 편집에서 소속·메모·성·이름을 비우면 "" 로 보낸다(지움)
-//  - 작업 빠른 입력: 한글 조합 중 Enter 는 제출하지 않는다
+// 연락처·작업 구역 전수조사 수정 고정($fetch 는 모의(mock)):
+//  - 검색·범위를 빠르게 변경해도 지연 도착한 이전 응답이 목록을 덮어쓰지 않음
+//  - 연락처 삭제 실패는 토스트로 알림(기존: console 만)
+//  - 편집에서 소속·메모·성·이름을 비우면 "" 로 전송(삭제)
+//  - 작업 빠른 입력: 한글 조합 중 Enter 는 제출하지 않음
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'

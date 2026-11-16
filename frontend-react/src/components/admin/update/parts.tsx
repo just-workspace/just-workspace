@@ -1,6 +1,6 @@
 /**
- * 관리 › 업데이트 화면들이 함께 쓰는 조각 — 요약 표의 줄, 단계 목록, 기록 보기, 불러오기 훅.
- * 상태는 색만으로 구분하지 않는다: 아이콘 + 글자(배지)를 같이 그린다.
+ * 관리 › 업데이트 화면들의 공용 컴포넌트 — 요약 표의 줄, 단계 목록, 기록 보기, 조회 훅.
+ * 상태는 색만으로 구분하지 않는다: 아이콘 + 글자(배지)를 함께 렌더링한다.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -13,10 +13,10 @@ import { UiButton } from '~/components/ui/Button'
 import { UiProgress } from '~/components/ui/Progress'
 import { UiCallout } from '~/components/ui/Callout'
 
-/** 진행을 다시 읽는 간격 */
+/** 진행 상태 재조회 간격 */
 export const updateTiming = { pollMs: 1500 }
 
-/** 요약 표(dl)의 한 줄 — 값이 없으면 줄을 그리지 않는다 */
+/** 요약 표(dl)의 한 줄 — 값이 없으면 줄을 렌더링하지 않는다 */
 export function Row({ label, children, action, first = false }: { label: string; children?: ReactNode; action?: ReactNode; first?: boolean }) {
   if (children == null || children === false || children === '') return null
   return (
@@ -39,7 +39,7 @@ const STEP_LOOK: Record<StepStatus, { icon: string; color: string; tone: 'succes
 
 export interface StepRowData { id: string; label: string; status: StepStatus; note?: string | null; images?: PullImage[]; percent?: number | null }
 
-/** 단계 목록 — 단계마다 아이콘·이름·상태 배지. 진행 중인 단계는 이미지별 진행을, 실패한 단계는 children(실패 카드)을 안에 그린다 */
+/** 단계 목록 — 단계별 아이콘·이름·상태 배지. 진행 중인 단계는 이미지별 진행 상태를, 실패한 단계는 children(실패 카드)을 내부에 렌더링한다 */
 export function StepRows({ steps, label, failure }: { steps: StepRowData[]; label: string; failure?: ReactNode }) {
   const { t } = useI18n()
   return (
@@ -109,7 +109,7 @@ export function LogButtons({ jobId }: { jobId: string }) {
   )
 }
 
-/** 설치 관리자가 없거나 업데이트를 모르는 설치의 안내 */
+/** 설치 관리자가 없거나 업데이트를 지원하지 않는 설치의 안내 */
 export function Unavailable({ reason }: { reason: 'no_installer' | 'unsupported' }) {
   const { t } = useI18n()
   return (
@@ -121,7 +121,7 @@ export function Unavailable({ reason }: { reason: 'no_installer' | 'unsupported'
 
 export interface Loaded<T> { data: T | null; error: unknown; unavailable: 'no_installer' | 'unsupported' | null; loading: boolean; reload: () => Promise<T | null>; set: (v: T) => void }
 
-/** 한 번 불러오고 다시 부를 수 있는 값. 화면을 떠난 뒤의 응답은 버린다 */
+/** 1회 조회 후 재조회 가능한 값. 화면 이탈 후 도착한 응답은 폐기한다 */
 export function useLoad<T>(fetcher: () => Promise<T>, deps: unknown[] = []): Loaded<T> {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -153,7 +153,7 @@ export function useLoad<T>(fetcher: () => Promise<T>, deps: unknown[] = []): Loa
   return { data, error, unavailable: error ? unavailableReason(error) : null, loading, reload, set: setData }
 }
 
-/** 조건이 참인 동안 일정 간격으로 다시 부른다(겹쳐 부르지 않는다) */
+/** 조건이 참인 동안 일정 간격으로 재호출한다(중복 호출 없음) */
 export function usePoll(active: boolean, fn: () => Promise<unknown>) {
   const ref = useRef(fn)
   ref.current = fn

@@ -2,10 +2,10 @@
  * 일정 읽기 팝오버: 폭 340, rounded-lg, shadow-xl,
  * 머리 40(색 10 + 캘린더 이름 12 muted, 편집(E)·삭제·닫기 32),
  * 본문 p-14 gap-12: 제목 16/600 · 날짜 13 muted(시각 mono · 반복 요약) · 화상 회의 줄([참여] 30 primary).
- * 데스크톱은 일정 옆(왼쪽 우선, 자리가 없으면 오른쪽)에 붙고, 모바일은 바텀시트로 같은 내용을 보여 준다.
- * 참석자 줄: 이니셜 24 겹침(-6, 최대 4) + "참석자 N · 수락 a · 미정 b · 거절 c". 내가 참석자면 "내 응답" 세그먼트(수락·미정·거절).
- * 초대받은 일정(is_invited)은 내 캘린더가 아니므로 편집·삭제 없이 응답만 한다.
- * 키보드: E = 편집, Delete = 삭제, Esc = 닫기. 더블클릭 = 편집은 그리드 쪽.
+ * 데스크톱은 일정 옆(왼쪽 우선, 공간이 없으면 오른쪽)에 배치되고, 모바일은 바텀시트로 동일한 내용을 표시한다.
+ * 참석자 줄: 이니셜 24 겹침(-6, 최대 4) + "참석자 N · 수락 a · 미정 b · 거절 c". 본인이 참석자이면 "내 응답" 세그먼트(수락·미정·거절).
+ * 초대받은 일정(is_invited)은 본인 캘린더가 아니므로 편집·삭제 없이 응답만 가능하다.
+ * 키보드: E = 편집, Delete = 삭제, Esc = 닫기. 더블클릭 = 편집은 그리드 측에서 처리.
  */
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -29,7 +29,7 @@ import { CalendarScopeModal } from './CalendarScopeModal'
 const W = 340
 const GAP = 12
 
-/** 일정 읽기 팝오버(데스크톱) · 바텀시트(모바일). popoverEvent 가 있을 때만 보인다 */
+/** 일정 읽기 팝오버(데스크톱) · 바텀시트(모바일). popoverEvent 가 있을 때에만 표시 */
 export function CalendarEventPopover() {
   const { t, tm, rt } = useI18n()
   const { user } = useAuth()
@@ -62,7 +62,7 @@ export function CalendarEventPopover() {
   const rsvpItems = (['accepted', 'tentative', 'declined'] as const).map(v => ({
     value: v,
     label: t(`calendar.rsvp.${v}`),
-    // 수락한 칸은 ✓ 글리프 대신 check 아이콘
+    // 수락한 칸은 ✓ 글리프 대신 check 아이콘 사용
     icon: ev?.my_response === v && v === 'accepted' ? 'check' : undefined,
     disabled: rsvpBusy,
   }))
@@ -85,7 +85,7 @@ export function CalendarEventPopover() {
     return t('calendar.popover.day', { m: p.month + 1, d: p.date, w: SHORT[p.day] })
   }
 
-  // 종일은 날짜 그대로(시간대 변환 없음) — 화면 배치용 범위
+  // 종일은 날짜 그대로 사용(시간대 변환 없음) — 화면 배치용 범위
   const range = ev ? eventRange(ev) : null
   const start = range ? range.start : new Date()
   const end = range ? range.end : new Date()
@@ -116,7 +116,7 @@ export function CalendarEventPopover() {
     return n > 1 ? t(`calendar.popover.everyN.${key}`, { n }) : t(`calendar.popover.${key}`)
   })()
 
-  // 화상 회의: meeting_url 우선. 예전 회의 → 캘린더 연동은 location 에 참여 URL 을 넣었다(meetings/invite.py)
+  // 화상 회의: meeting_url 우선. 이전의 회의 → 캘린더 연동은 location 에 참여 URL 을 저장했다(meetings/invite.py)
   const loc = ev?.location?.trim() || ''
   const locationUrl = /^https?:\/\//i.test(loc) ? loc : ''
   const m = ev?.meeting_url?.trim() || ''
@@ -130,10 +130,10 @@ export function CalendarEventPopover() {
   function join() { if (meetingUrl) window.open(meetingUrl, '_blank', 'noopener') }
 
   const [scopeOpen, setScopeOpen] = useState(false)
-  // 확인 대화 상자가 떠 있는 동안 바깥 클릭으로 팝오버가 닫히지 않게
+  // 확인 대화 상자가 표시된 동안 바깥 클릭으로 팝오버가 닫히지 않도록 함
   const [confirming, setConfirming] = useState(false)
 
-  // 리스너에서 "지금" 값을 읽는다
+  // 리스너에서 현재 값을 참조한다
   const live = useRef({ canWrite, scopeOpen, confirming, isMobile })
   live.current = { canWrite, scopeOpen, confirming, isMobile }
 
@@ -145,8 +145,8 @@ export function CalendarEventPopover() {
   async function remove() {
     const target = calendarStore.getState().popoverEvent
     if (!target || !live.current.canWrite) return
-    // "이 일정만" 수정된 회차(예외 행)도 반복의 한 회차다 — 범위를 묻는다. 예전엔 단일 일정처럼 확인만 받고
-    // scope=all 로 보내 시리즈 전체가 지워졌다.
+    // "이 일정만" 수정된 회차(예외 행)도 반복의 한 회차이므로 범위를 확인한다. 이전에는 단일 일정처럼 확인만 받고
+    // scope=all 로 전송하여 시리즈 전체가 삭제되었다.
     if (target.is_recurring || target.is_occurrence || target.is_exception) { setScopeOpen(true); live.current.scopeOpen = true; return }
     setConfirming(true)
     live.current.confirming = true
@@ -175,7 +175,7 @@ export function CalendarEventPopover() {
   const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 })
 
   function place() {
-    // 화면 배율(루트 zoom): 기준 사각형은 화면 좌표 → style 에 넣을 CSS px 로
+    // 화면 배율(루트 zoom): 기준 사각형은 화면 좌표 → style 에 지정할 CSS px 로 변환
     const raw = calendarStore.getState().popoverAnchor
     const z = getUiZoom()
     const a = raw && { x: raw.x / z, y: raw.y / z, w: raw.w / z, h: raw.h / z }
@@ -213,7 +213,7 @@ export function CalendarEventPopover() {
     const onResize = () => fns.current.place()
     window.addEventListener('keydown', onKey)
     window.addEventListener('resize', onResize)
-    // 일정 칩 클릭이 먼저 처리되도록 캡처 단계가 아닌 버블 단계에서 바깥 클릭을 본다
+    // 일정 칩 클릭이 먼저 처리되도록 캡처 단계가 아닌 버블 단계에서 바깥 클릭을 감지한다
     document.addEventListener('mousedown', onOutside)
     return () => {
       window.removeEventListener('keydown', onKey)
@@ -302,8 +302,8 @@ export function CalendarEventPopover() {
               ref={panel}
               role="dialog"
               aria-label={ev.title}
-              // z-overlay: body 포털이라 z-dropdown(100)이면 셸 주메뉴(z-sidebar 250) 밑으로 들어갔다.
-              // 확인·범위 대화 상자(z-modal 300)가 떠 있는 동안은 그 위로 올라오지 않게 숨긴다.
+              // z-overlay: body 포털이므로 z-dropdown(100)이면 셸 주메뉴(z-sidebar 250) 아래에 가려졌다.
+              // 확인·범위 대화 상자(z-modal 300)가 표시된 동안은 그 위로 올라오지 않도록 숨긴다.
               className={cn('fixed z-overlay overflow-hidden rounded-lg border border-border bg-card shadow-xl', scopeOpen || confirming ? 'invisible' : '')}
               style={{ left: `${pos.left}px`, top: `${pos.top}px`, width: `${W}px` }}
             >

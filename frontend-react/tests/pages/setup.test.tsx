@@ -1,5 +1,5 @@
-// 최초 설정(/setup) — 첫 관리자 만들기: 설정 토큰 칸·안내, 12자 하한, 토큰을 본문에 실어 보냄, 오류 문구,
-// 설치 관리자가 꾸린 서버(setup_mode = installer)에서는 폼 없이 안내만.
+// 최초 설정(/setup) — 첫 관리자 생성: 설정 토큰 칸·안내, 12자 하한, 토큰을 본문에 포함하여 전송, 오류 문구,
+// 설치 관리자가 구성한 서버(setup_mode = installer)에서는 폼 없이 안내만 표시.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'

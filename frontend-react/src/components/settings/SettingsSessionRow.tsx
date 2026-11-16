@@ -1,7 +1,7 @@
 /**
  * "내 세션" 표의 한 행(min 52).
  * 데스크톱 4열(1.6fr 1fr 1fr 110): 기기(타일 30 + 이름 600 + 종류 12) / 접속 주소(역방향 DNS 호스트 이름, 없으면 IP — mono) / 최근 활동 / 행동.
- * 모바일은 기기 아래 한 줄(종류 · IP · 최근 활동)로 접고 위치·최근 열은 숨긴다.
+ * 모바일은 기기 아래 한 줄(종류 · IP · 최근 활동)로 축약하고 위치·최근 열은 숨긴다.
  * 행동: 현재 기기 = "이 기기" success 틴트 배지, 나머지 = [로그아웃](32 테두리, danger 글자).
  *
  * @example <SettingsSessionRow icon="monitor" name="Chrome on macOS" kind="웹" ip="1.2.3.4" recentShort="3분 전" recent="3분 전" />
@@ -25,7 +25,7 @@ export interface SettingsSessionRowProps {
   recentShort: string
   /** 데스크톱 "최근 활동" 열 문구(현재 기기는 "지금") */
   recent: string
-  /** 지금 이 기기 */
+  /** 현재 기기 */
   current?: boolean
   /** 로그아웃 버튼 비활성 */
   disabled?: boolean
@@ -33,7 +33,7 @@ export interface SettingsSessionRowProps {
   onRevoke?: () => void
 }
 
-/** 접속 주소 칸 — 역방향 DNS 호스트 이름, 없으면 IP. 지역 이름은 쓰지 않는다 */
+/** 접속 주소 칸 — 역방향 DNS 호스트 이름, 없으면 IP. 지역 이름은 사용하지 않는다 */
 export function sessionAddress(hostname: string | null | undefined, ip: string | null | undefined): string {
   return hostname || ip || '—'
 }

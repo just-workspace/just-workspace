@@ -1,10 +1,10 @@
 /**
  * 관리 › 설정 › 브랜딩. 폼 720, 카드 2장.
  *  ① 기본(맨 위) — 워크스페이스 이름 · 태그라인 · 기본 테마 UiSegment(카드 푸터 저장) /
- *     로고 · 파비콘(이미지 칸 64, 고르는 즉시 올림, 지우기 = 칸의 ✕ 아이콘 버튼).
+ *     로고 · 파비콘(이미지 칸 64, 선택 즉시 업로드, 삭제 = 칸의 ✕ 아이콘 버튼).
  *  ② 강조 색 — 색 라디오 32 원 5개 + 직접 입력(#hex)·대비 표시. 푸터 저장.
- *     로그인 배경 = 타일 그리드(4장까지) + "+ 추가" 타일, 타일마다 ✕, 끌어서(또는 Alt+←/→) 순서 — 바로 저장.
- *  강조 색은 본문 바탕 대비 4.5:1 미만(두 테마 모두)이면 고를 수 없다(저장 막음).
+ *     로그인 배경 = 타일 그리드(최대 4장) + "+ 추가" 타일, 타일마다 ✕, 드래그(또는 Alt+←/→)로 순서 변경 — 즉시 저장.
+ *  강조 색은 본문 배경 대비 4.5:1 미만(두 테마 모두)이면 선택 불가(저장 차단).
  */
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode, type RefObject } from 'react'
 import { useI18n } from '~/i18n'
@@ -35,8 +35,8 @@ const B_DEFAULT: Branding = { site_name: '', primary_color: '#3B82F6', default_t
 function fileName(url: string) { return url ? decodeURIComponent(url.split('?')[0].split('/').pop() || '') : '' }
 
 /**
- * 이미지 칸(점선 64) — 미리보기 44 + 파일 이름 + ✕ 아이콘 버튼(있을 때) + [바꾸기/올리기] + 숨은 파일 입력.
- * 브랜딩 페이지 안에서만 쓴다(로고·파비콘·로그인 배경).
+ * 이미지 칸(점선 64) — 미리보기 44 + 파일 이름 + ✕ 아이콘 버튼(있을 때) + [바꾸기/올리기] + 숨김 파일 입력.
+ * 브랜딩 페이지 내에서만 사용한다(로고·파비콘·로그인 배경).
  */
 function BrandingImageField({ preview, name, removable, removeLabel, busy, actionLabel, accept, inputRef, onRemove, onPick }: {
   /** 미리보기 칸 전체(44 상자) */
@@ -47,7 +47,7 @@ function BrandingImageField({ preview, name, removable, removeLabel, busy, actio
   removable: boolean
   /** ✕ 버튼 이름(aria-label·툴팁) */
   removeLabel: string
-  /** 올리기·삭제 진행 중 */
+  /** 업로드·삭제 진행 중 */
   busy: boolean
   /** 오른쪽 버튼 글자 */
   actionLabel: string
@@ -156,7 +156,7 @@ export default function AdminBrandingPage() {
     finally { setSaving(false) }
   }
 
-  // ── 이미지(즉시 올림) ──
+  // ── 이미지(즉시 업로드) ──
   const logoInput = useRef<HTMLInputElement | null>(null)
   const favInput = useRef<HTMLInputElement | null>(null)
   const wpInput = useRef<HTMLInputElement | null>(null)
@@ -205,7 +205,7 @@ export default function AdminBrandingPage() {
     finally { setBusy(null) }
   }
 
-  /** 끌어 놓기 · Alt+←/→ — 순서를 바로 저장(파일 이름 번호 재부여) */
+  /** 드래그 앤 드롭 · Alt+←/→ — 순서를 즉시 저장(파일 이름 번호 재부여) */
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   async function reorder(from: number, to: number) {
     const next = moveItem(wallpapers, from, to)
@@ -322,7 +322,7 @@ export default function AdminBrandingPage() {
                       <span className={cn('pb-2.5 font-mono text-xs', contrastBlocked ? 'text-danger' : 'text-muted-foreground')}>{t('admin.branding.contrastBoth', { l: contrast.light, d: contrast.dark })}</span>
                     )}
                   </div>
-                  {/* 자동 조정된 테마는 실제로 쓰는 값을 보여 준다 */}
+                  {/* 자동 조정된 테마는 실제 사용 값을 표시한다 */}
                   {contrast?.lightAdjusted && <UiTrans k="admin.branding.adjustedLight" className="text-xs text-muted-foreground" slots={{ hex: <span className="font-mono">{contrast.lightAdjusted}</span> }} />}
                   {contrast?.darkAdjusted && <UiTrans k="admin.branding.adjustedDark" className="text-xs text-muted-foreground" slots={{ hex: <span className="font-mono">{contrast.darkAdjusted}</span> }} />}
                 </div>

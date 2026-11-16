@@ -1,5 +1,5 @@
 /**
- * 관리 › 사용자 화면의 순수 로직(화면 조각과 테스트가 같이 쓴다).
+ * 관리 › 사용자 화면의 순수 로직(화면 컴포넌트와 테스트 공용).
  */
 import type { UiMenuItem } from '~/components/ui/Menu'
 
@@ -21,7 +21,7 @@ export interface AdminUser {
   status?: UserStatus
   groups?: { id: string; name: string }[]
   avatar_url?: string | null
-  /** 2단계 인증을 켠 사용자 — "2단계 인증 초기화" 메뉴를 이때만 보인다 */
+  /** 2단계 인증을 활성화한 사용자 — "2단계 인증 초기화" 메뉴는 이 경우에만 표시한다 */
   has_2fa?: boolean
 }
 
@@ -42,7 +42,7 @@ export function statusMeta(t: T): Record<UserStatus, { label: string; tone: 'suc
   }
 }
 
-/** 서버 status 가 기준. 예전 서버(필드 없음)면 로그인 이력으로 가른다. */
+/** 서버 status 기준. 이전 버전 서버(필드 없음)는 로그인 이력으로 판별한다. */
 export function statusOf(u: AdminUser): UserStatus {
   return u.status ?? (u.is_active ? 'active' : u.last_login_at ? 'suspended' : 'pending')
 }
@@ -68,13 +68,13 @@ export function userListParams(f: UserFilters, sort: string, page: number): Reco
   return p
 }
 
-/** 열 머리를 누르면: 같은 열이면 방향 뒤집기, 다른 열이면 그 열로(마지막 접속은 내림차순부터) */
+/** 열 헤더 클릭 시: 동일 열이면 방향 반전, 다른 열이면 해당 열로 전환(마지막 접속은 내림차순부터) */
 export function nextSort(cur: { key: UserSortKey; dir: 1 | -1 }, k: UserSortKey): { key: UserSortKey; dir: 1 | -1 } {
   if (cur.key === k) return { key: k, dir: cur.dir === 1 ? -1 : 1 }
   return { key: k, dir: k === 'last' ? -1 : 1 }
 }
 
-/** 행 ⋮ 메뉴 — 상태·본인 여부·이메일 확인 여부에 따라 */
+/** 행 ⋮ 메뉴 — 상태·본인 여부·이메일 확인 여부에 따라 구성 */
 export function userMenuItems(u: AdminUser, meId: string | undefined, t: T): UiMenuItem[] {
   const st = statusOf(u)
   const me = u.id === meId
@@ -89,7 +89,7 @@ export function userMenuItems(u: AdminUser, meId: string | undefined, t: T): UiM
     items.push({ key: 'sessions', label: t('admin.users.viewSessions'), icon: 'monitor' }, { key: 'logout', label: t('admin.users.logoutEverywhere'), icon: 'log-out' })
   }
   items.push({ key: 'reset', label: t('admin.users.resetLink'), icon: 'link' })
-  // 인증 앱도 복구 코드도 잃어버린 사람을 구제하는 길(본인은 코드가 있어야만 끌 수 있다)
+  // 인증 앱과 복구 코드를 모두 분실한 사용자의 복구 수단(본인은 코드가 있어야만 비활성화 가능)
   if (u.has_2fa) items.push({ key: 'reset2fa', label: t('admin.users.reset2fa', '2단계 인증 초기화'), icon: 'shield' })
   if (u.email_verified === false) items.push({ key: 'resend', label: t('admin.users.resendVerification'), icon: 'send' })
   if (st === 'active' && !me) items.push({ key: 'suspend', label: t('admin.users.statusSuspended'), icon: 'lock', danger: true })
@@ -107,7 +107,7 @@ export function deviceHint(ua: string, t: T): string {
   return os ? `${name} on ${os}` : name
 }
 
-/** 마지막 접속: 2분 안 "방금" · 오늘 HH:mm · 어제 · MM/DD · 없으면 — */
+/** 마지막 접속: 2분 이내 "방금" · 오늘 HH:mm · 어제 · MM/DD · 없으면 — */
 export function fmtLast(iso: string | null | undefined, t: T, now = new Date()): string {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -125,7 +125,7 @@ export function fmtTs(ts: number): string {
   return new Date(ts * 1000).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-/** 페이지 범위 글자 "1–50 / 1,234" (0이면 '0') */
+/** 페이지 범위 문자열 "1–50 / 1,234" (0이면 '0') */
 export function rangeText(page: number, total: number): string {
   return total
     ? `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, total)} / ${total.toLocaleString()}`

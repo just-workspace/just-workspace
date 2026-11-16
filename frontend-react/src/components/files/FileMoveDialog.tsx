@@ -2,10 +2,10 @@
  * 이동·복사: UiModal "N개 항목 이동",
  * 폴더 찾기(36) + 트리(300, 행 34, 들여쓰기 18, ▾/▸ 12, 폴더 아이콘 warning 15, 선택 primary/13 + 600) +
  * 푸터 "+ 새 폴더" · [복사] · ["폴더명"로 이동].
- * 루트: 내 파일 · 공유 파일. 하위 폴더는 펼칠 때 불러온다. 모바일은 UiModal 전체 화면 시트(mobile="full"), 데스크톱 480.
- * roots 를 주면 그 루트만(공동 소유자가 공유받은 항목을 옮길 때 = 그 공유 폴더 안).
+ * 루트: 내 파일 · 공유 파일. 하위 폴더는 펼칠 때 조회한다. 모바일은 UiModal 전체 화면 시트(mobile="full"), 데스크톱 480.
+ * roots 를 전달하면 해당 루트만 표시한다(공동 소유자가 공유받은 항목을 이동할 때 = 해당 공유 폴더 내).
  *
- * 트리 노드는 객체를 제자리에서 고치고(open·loaded·children) 다시 그리기만 알린다(bump).
+ * 트리 노드는 객체를 제자리에서 변경하고(open·loaded·children) 재렌더링만 통지한다(bump).
  */
 import { Fragment, useEffect, useReducer, useRef, useState, type KeyboardEvent } from 'react'
 import { clsx } from 'clsx'
@@ -19,12 +19,12 @@ import { UiButton } from '~/components/ui/Button'
 import { FilesFileTypeIcon } from './FileTypeIcon'
 
 export interface FilesFileMoveDialogProps {
-  /** 옮길 경로들 */
+  /** 이동할 경로 목록 */
   paths: string[]
   /** 루트 제한(공유받은 항목 = 그 공유 폴더) */
   roots?: { path: string; name: string }[]
   onClose?: () => void
-  /** 이동·복사를 마쳤다(실패가 있어도) */
+  /** 이동·복사 완료(일부 실패 포함) */
   onDone?: () => void
 }
 
@@ -65,12 +65,12 @@ export function FilesFileMoveDialog({ paths, roots: rootsProp, onClose, onDone }
     if (n.open) await load(n)
   }
 
-  // 현재 폴더까지 미리 펼친다
+  // 현재 폴더까지 미리 펼침
   useEffect(() => {
     void (async () => {
-      // 루트를 따로 받았으면 옮길 항목의 상위 폴더까지, 아니면 현재 폴더까지
+      // 루트를 별도로 전달받은 경우 이동 대상 항목의 상위 폴더까지, 아니면 현재 폴더까지
       const start = rootsProp?.length ? (paths[0] || '').split('/').slice(0, -1).join('/') : (currentPath || 'my')
-      // 루트 경로가 여러 조각(shared-with-me/<id>)일 수 있어 루트부터 한 단계씩 앞부분을 만든다
+      // 루트 경로가 여러 조각(shared-with-me/<id>)일 수 있으므로 루트부터 한 단계씩 접두 경로를 구성한다
       const base = roots.current.find(r => start === r.path || start.startsWith(`${r.path}/`))?.path ?? start.split('/')[0]
       const rest = start.slice(base.length).split('/').filter(Boolean)
       const prefixes = [base, ...rest.map((_, i) => `${base}/${rest.slice(0, i + 1).join('/')}`)]
@@ -101,7 +101,7 @@ export function FilesFileMoveDialog({ paths, roots: rootsProp, onClose, onDone }
   function allowed(p: string) { return canMoveInto(paths, p) }
   const selectedName = !selected ? '' : (visible.find(n => n.path === selected)?.name ?? selected.split('/').pop() ?? '')
 
-  // "+ 새 폴더" — 고른 폴더(없으면 내 파일) 아래 인라인 입력 행
+  // "+ 새 폴더" — 선택한 폴더(없으면 내 파일) 아래 인라인 입력 행
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState(t('files.commandBar.newFolder'))
   const newInput = useRef<HTMLInputElement | null>(null)
@@ -131,7 +131,7 @@ export function FilesFileMoveDialog({ paths, roots: rootsProp, onClose, onDone }
   })
   const committingNew = useRef(false)
   async function commitNew() {
-    // Enter 뒤 입력이 사라지며 blur 가 한 번 더 올 수 있다
+    // Enter 이후 입력이 제거되면서 blur 가 한 번 더 발생할 수 있음
     if (committingNew.current || !creating) return
     committingNew.current = true
     const name = newName.trim()
@@ -241,7 +241,7 @@ export function FilesFileMoveDialog({ paths, roots: rootsProp, onClose, onDone }
                 <span className="truncate">{n.name}</span>
                 {n.loading && <span className="text-[11px] text-muted-foreground">…</span>}
               </div>
-              {/* 새 폴더 입력 행(고른 폴더 바로 아래) */}
+              {/* 새 폴더 입력 행(선택한 폴더 바로 아래) */}
               {creating && n.path === newParent && (
                 <div className="flex h-[34px] items-center gap-2 px-2.5" style={{ paddingLeft: `${10 + (n.depth + 1) * 18 + 20}px` }}>
                   <FilesFileTypeIcon kind="folder" className="h-[15px] w-[15px]" />

@@ -1,8 +1,8 @@
 /**
- * 보조 영역 작은 카드들: 최근 게시글 · 공지 · 자주 쓰는 채널 · 내 저장 공간 · 진행 중 회의 · 둘러볼 채널.
- * 모두 카드 문법(DashCard · DashRow)으로. 비면 대시보드가 맨 아래 "비어 있는 카드" 묶음으로 옮긴다.
+ * 보조 영역 소형 카드: 최근 게시글 · 공지 · 자주 쓰는 채널 · 내 저장 공간 · 진행 중 회의 · 둘러볼 채널.
+ * 모두 카드 규격(DashCard · DashRow)을 따른다. 비어 있으면 대시보드가 맨 아래 "비어 있는 카드" 그룹으로 이동시킨다.
  *
- * 데이터(권한 = 내가 볼 수 있는 것만):
+ * 데이터(권한 = 본인이 열람 가능한 항목만):
  *  - 최근 게시글   GET /api/board/recent-posts?limit=n        (게시판 · 댓글 n)
  *  - 공지          GET /api/board/notices?limit=n             (필독은 warning 아이콘 + semibold) — 기본 관리자 고정
  *  - 자주 쓰는 채널 GET /api/dashboard/frequent-channels      + 채널 목록의 미읽음(오른쪽 값)
@@ -21,14 +21,14 @@ import { meetingJoinPath } from '~/components/meetings/prejoin'
 import { UiErrorTile } from '~/components/ui/ErrorTile'
 import { DashCard, DashRow, DashRows, DashRowsSkeleton, shortTime, useCardStatus, useDash } from './DashCard'
 
-/** 한 번 불러오기 + 다시 시도 */
+/** 1회 로드 + 재시도 */
 function useLoad<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState(false)
   const load = useCallback(async () => {
     setError(false)
     try { setData(await fn()) } catch { setError(true) }
-    // fn 은 카드마다 고정된 요청(deps 로 행 수만 바뀐다)
+    // fn 은 카드별 고정 요청(deps 로 행 수만 변경)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
   useEffect(() => { void load() }, [load])
@@ -39,7 +39,7 @@ export function bytes(n: number) {
   if (!n) return '0 GB'
   const u = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']; let i = 0; let v = n
   while (v >= 1024 && i < u.length - 1) { v /= 1024; i++ }
-  // 바이트·KB 는 소수점이 의미 없다("2.0 B" 대신 "2 B").
+  // 바이트·KB 는 소수점이 무의미하다("2.0 B" 대신 "2 B").
   if (i <= 1) return `${Math.round(v)} ${u[i]}`
   return `${v >= 100 ? Math.round(v) : v.toFixed(1)} ${u[i]}`
 }
@@ -113,7 +113,7 @@ export function DashboardFrequentChannels() {
   const { maxRows } = useDash()
   const limit = Math.max(3, maxRows - 2)
   const { data, error, reload } = useLoad(() => $fetch<{ items: FreqChannel[] }>('/api/dashboard/frequent-channels', { params: { limit } }), [limit])
-  // 미읽음은 앱이 이미 가진 채널 목록(실시간 갱신)에서
+  // 미읽음은 앱이 이미 보유한 채널 목록(실시간 갱신)에서 조회
   const channels = useStore(chatStore, s => s.channels)
   const items = data?.items ?? []
   useCardStatus('chans', error ? 'error' : data == null ? 'loading' : items.length ? 'ready' : 'empty')

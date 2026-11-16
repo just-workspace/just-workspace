@@ -17,7 +17,7 @@ describe('useDesktopShell — 셸 버전으로 목록 칸 소유 판별', () => 
   it('옛 셸(0.3.0 이하)은 자체 목록 칸이 있어 웹이 숨긴다', () => {
     expect(shellDrawsListsFor(`${BASE} JustWorkspaceDesktop/0.3.0`)).toBe(true)
     expect(shellDrawsListsFor(`${BASE} JustWorkspaceDesktop/0.2.9`)).toBe(true)
-    // 버전을 못 읽는 셸도 옛 셸로 본다(두 벌 방지가 안전한 쪽)
+    // 버전을 판독할 수 없는 셸도 구 셸로 간주(이중 표시 방지가 안전한 쪽)
     expect(shellDrawsListsFor(`${BASE} JustWorkspaceDesktop`)).toBe(true)
   })
 

@@ -1,8 +1,8 @@
-// 캘린더 구역 전수조사 수정 고정($fetch 는 가짜):
-//  - 예외 회차(이 일정만 수정한 행) 삭제는 범위를 묻고 scope=this 로 간다(예전: 확인만 받고 scope=all → 시리즈 전체 삭제)
-//  - "이 일정과 이후" 수정: 요청 하나(PATCH ?scope=following) — 나누기·예외 회차·EXDATE 옮기기는 서버가 한 번에 한다
-//  - 빠른 이동: 늦게 온 이전 응답이 지금 일정을 덮지 않는다
-//  - 수정에서 설명·장소를 비우면 "" 로 보낸다, 참석자 칸 Enter 는 폼을 제출하지 않는다(한글 조합 중 Enter 는 무시)
+// 캘린더 구역 전수조사 수정 고정($fetch 는 모의(mock)):
+//  - 예외 회차(이 일정만 수정한 행) 삭제는 범위를 확인한 뒤 scope=this 로 전송(기존: 확인만 받고 scope=all → 시리즈 전체 삭제)
+//  - "이 일정과 이후" 수정: 요청 1건(PATCH ?scope=following) — 분할·예외 회차·EXDATE 이동은 서버가 일괄 처리
+//  - 빠른 이동: 지연 도착한 이전 응답이 현재 일정을 덮어쓰지 않음
+//  - 수정에서 설명·장소를 비우면 "" 로 전송. 참석자 칸 Enter 는 폼을 제출하지 않음(한글 조합 중 Enter 는 무시)
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'
@@ -65,7 +65,7 @@ describe('예외 회차 삭제', () => {
     fireEvent.click(dlg.querySelector(`button[aria-label="${t('common.delete')}"]`)!)
     const alert = await screen.findByRole('alertdialog')
     expect(alert.querySelector('[role="radio"][aria-checked="true"]')!.textContent).toContain(t('calendar.scope.this'))
-    // 범위 대화 상자가 떠 있는 동안 팝오버(z-overlay)는 숨는다
+    // 범위 대화 상자가 표시된 동안 팝오버(z-overlay)는 숨김 처리됨
     expect(dlg.className).toContain('z-overlay')
     expect(dlg.className).toContain('invisible')
     const del = [...alert.querySelectorAll('button')].find(b => b.textContent === t('common.delete'))!
@@ -84,8 +84,8 @@ describe('"이 일정과 이후" 수정', () => {
   })
   const data = { calendar_id: 'c1', title: '새 제목', start: '2026-10-15T07:00:00Z', end: '2026-10-15T08:00:00Z', recurrence_rule: rule }
 
-  // 나누기(끊기·새 시리즈·예외 회차·EXDATE 옮기기)는 서버가 한 트랜잭션으로 한다(backend/tests/calsplit_following.py).
-  // 프런트는 요청 하나만 보낸다 — 예전처럼 끊기 PATCH·POST·DELETE 를 따로 보내면 중간 실패 때 반쯤 된 상태가 남는다.
+  // 분할(절단·새 시리즈·예외 회차·EXDATE 이동)은 서버가 단일 트랜잭션으로 수행한다(backend/tests/calsplit_following.py).
+  // 프런트는 요청 1건만 전송한다 — 기존처럼 절단 PATCH·POST·DELETE 를 개별 전송하면 중간 실패 시 부분 적용 상태가 남는다.
   it('실패하면 오류를 올리고 다른 쓰기 요청(되돌리기·뒷정리)은 보내지 않는다', async () => {
     api.handler = (url, opts) => {
       if (url === '/api/calendar/events/m' && opts.method === 'PATCH') throw Object.assign(new Error('boom'), { data: { detail: '실패' } })
@@ -153,7 +153,7 @@ describe('일정 폼', () => {
     await openEdit()
     const input = screen.getByRole('combobox', { name: t('calendar.form.attendees') })
     fireEvent.change(input, { target: { value: '홍길' } })
-    // 목록이 뜨기 전 Enter — 기본 동작(폼 제출)을 막는다
+    // 목록 표시 전 Enter — 기본 동작(폼 제출) 차단
     expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(false)
     expect(api.calls.some(isPatch)).toBe(false)
 
@@ -161,7 +161,7 @@ describe('일정 폼', () => {
     const list = opt.closest('[role="listbox"]') as HTMLElement
     expect(list.className).toContain('z-overlay')
     expect(list.parentElement).toBe(document.body)
-    // 조합 중 Enter 는 고르기로 넘기지 않는다
+    // 조합 중 Enter 는 선택으로 처리하지 않음
     fireEvent.keyDown(input, { key: 'Enter', isComposing: true, keyCode: 229 })
     expect(screen.queryByTitle('hong@x.test')).toBeNull()
     fireEvent.keyDown(input, { key: 'Enter' })

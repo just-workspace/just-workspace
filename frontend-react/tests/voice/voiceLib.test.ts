@@ -1,4 +1,4 @@
-// 음성 채널: Opus 레시피 · SDP 손질 · 통계 요약 · 로컬 설정 · 전송 레지스트리 — 순수 함수
+// 음성 채널: Opus 레시피 · SDP 가공 · 통계 요약 · 로컬 설정 · 전송 레지스트리 — 순수 함수
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   captureFor, publishFor, fmtpFor, clampMusicBitrate, tierBadge, formatBitrate, isDegraded, screenAudioConfig,
@@ -33,9 +33,9 @@ describe('Opus 레시피(음성·음악)', () => {
     expect(captureFor(cfg)).toEqual({ echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2, sampleRate: 48_000, deviceId: 'mic1' })
     expect(publishFor(cfg)).toEqual({ audioPreset: { maxBitrate: 510_000 }, dtx: false, red: false, forceStereo: true, preConnectBuffer: false })
     expect(fmtpFor(cfg)).toEqual({ maxaveragebitrate: 510_000, stereo: 1, cbr: 1, usedtx: 0, useinbandfec: 0 })
-    // 화면 공유 소리는 늘 음악 레시피, 장치는 빼고
+    // 화면 공유 오디오는 항상 음악 레시피, 장치는 제외
     expect(screenAudioConfig({ tier: 'voice', musicBitrate: 320_000, micDeviceId: 'x' })).toEqual({ tier: 'music', musicBitrate: 320_000, micDeviceId: undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false })
-    // 음악 공유는 마이크 처리 설정과 상관없이 늘 스테레오·처리 끔
+    // 음악 공유는 마이크 처리 설정과 무관하게 항상 스테레오·처리 비활성
     expect(fmtpFor(screenAudioConfig({ tier: 'voice', musicBitrate: 320_000, echoCancellation: true }))).toMatchObject({ stereo: 1 })
   })
   it('비트레이트 범위·2k 단위·표기', () => {
@@ -77,9 +77,9 @@ describe('SDP 손질(answer opus fmtp)', () => {
       const p = parseFmtpLine(f.replace('a=fmtp:111 ', ''))!
       expect(p).toMatchObject({ maxaveragebitrate: '510000', stereo: '1', 'sprop-stereo': '1', cbr: '1', usedtx: '0', useinbandfec: '0' })
     }
-    // 원래 있던 값(minptime)은 남긴다
+    // 기존 값(minptime)은 유지
     expect(parseFmtpLine(fmtps[0].replace('a=fmtp:111 ', ''))!.minptime).toBe('10')
-    // 두 번째 구간(fmtp 없음)은 rtpmap 뒤에 새로 들어갔다
+    // 두 번째 구간(fmtp 없음)은 rtpmap 뒤에 신규 삽입됨
     expect(out).toMatch(/a=mid:2\r\na=rtpmap:111 opus\/48000\/2\r\na=fmtp:111 /)
     expect(out).toContain('a=fmtp:96 profile-id=0')
     expect(out).toContain('a=rtpmap:63 red/48000/2')

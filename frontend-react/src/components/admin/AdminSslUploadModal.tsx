@@ -1,9 +1,9 @@
 /**
- * SSL 인증서 올리기 — 관리 › 보안·SSL 카드 머리 [인증서 올리기].
- * UiModal 520: 인증서 · 개인 키 두 칸(고른 파일 행 h-48 / 점선 놓기 칸 h-80).
- * 파일을 고르면 서버가 바로 읽어(POST /api/admin/settings/ssl/inspect) 도메인·발급·만료를 회색 상자에.
- * 둘 다 있고 짝이 맞고 도메인이 맞을 때만 [올리고 적용]. 짝 불일치·도메인 불일치는 그 칸 error.
- * 올리기는 기존 POST /api/admin/settings/ssl(서버도 같은 검사를 다시 한다).
+ * SSL 인증서 올리기 — 관리 › 보안·SSL 카드 헤더 [인증서 올리기].
+ * UiModal 520: 인증서 · 개인 키 두 칸(선택한 파일 행 h-48 / 점선 드롭 영역 h-80).
+ * 파일 선택 시 서버가 즉시 판독하여(POST /api/admin/settings/ssl/inspect) 도메인·발급·만료를 회색 상자에 표시.
+ * 둘 다 존재하고 쌍이 일치하며 도메인이 일치할 때만 [올리고 적용] 활성화. 쌍 불일치·도메인 불일치는 해당 칸 error.
+ * 업로드는 기존 POST /api/admin/settings/ssl 사용(서버도 동일한 검사를 재수행).
  */
 import { useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -28,13 +28,13 @@ export interface SslInspect {
   ok: boolean
 }
 
-/** 서버 이유 코드 → 칸 오류 문구 키 */
+/** 서버 사유 코드 → 칸 오류 문구 키 */
 export function sslErrorKey(code: string): string {
   const known = ['cert_invalid', 'domain_mismatch', 'key_invalid', 'key_encrypted', 'key_mismatch']
   return `admin.sslUpload.error.${known.includes(code) ? code : 'read_failed'}`
 }
 
-/** 올리기 실패 응답 → 어느 칸 오류인지 */
+/** 업로드 실패 응답 → 오류 대상 칸 */
 export function uploadErrorField(code: string): 'cert' | 'key' {
   return code.startsWith('key_') ? 'key' : 'cert'
 }
@@ -48,11 +48,11 @@ function ymd(iso: string): string {
 }
 
 export interface AdminSslUploadModalProps {
-  /** 올리기 성공 */
+  /** 업로드 성공 */
   onUploaded?: () => void
   /** 닫기 */
   onClose: () => void
-  /** 모달 본문 끝에 덧붙일 것(기존 "인증서 삭제" 줄 등) */
+  /** 모달 본문 끝에 추가할 요소(기존 "인증서 삭제" 줄 등) */
   extra?: ReactNode
 }
 
@@ -66,7 +66,7 @@ interface FieldProps {
   onPick: (f: File | null) => void
 }
 
-/** 파일 칸 — 고른 파일 행 또는 점선 놓기 칸 + 그 칸 오류 */
+/** 파일 칸 — 선택한 파일 행 또는 점선 드롭 영역 + 해당 칸 오류 */
 function SslFileField({ label, hint, file, error, accept, note, onPick }: FieldProps) {
   const { t } = useI18n()
   const input = useRef<HTMLInputElement | null>(null)

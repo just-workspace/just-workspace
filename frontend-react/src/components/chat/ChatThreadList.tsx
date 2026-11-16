@@ -1,15 +1,15 @@
 /**
- * 채널 스레드 목록 — 오른쪽 자리 400.
- * 모바일은 전체 화면. 여는 곳: 헤더 스레드 버튼 → useChatUi.setThreadListOpen(true) (자리 배치는 SHELL).
+ * 채널 스레드 목록 — 오른쪽 영역 400.
+ * 모바일은 전체 화면. 진입: 헤더 스레드 버튼 → useChatUi.setThreadListOpen(true) (영역 배치는 SHELL).
  *
- * 머리 48+1: (모바일 ‹ 44) threads 20 · "스레드 · #채널" 16/600 · 닫기 32.
- * 세그먼트 줄: 활성 N / 보관됨(grow) + "최근 활동순" 12 muted.
- * 행 카드(rounded-lg 1px bg-card p-3, 호버 bg-overlay-hover): 안 읽음 점 8 danger · 이름 15(안 읽음 600 / 아니면 500, 이름 없으면 “원문 첫 40자” 기울임)
- *   · 보관됨 배지 11 · 팔로우 bell(누르면 토글 — 팔로우 중 primary, 아니면 호버·포커스 때만 muted, 터치는 늘)
- *   → 마지막 답글 한 줄 13 muted → 참여 아바타 20 겹침(-6, ring 2 card) · "답글 N개"(600 foreground) · 시각 12.
- * 아래 줄 44: clock 14 · "활동이 없으면 자동 보관" · UiSelect sm(1시간·24시간·3일·1주) — MANAGE_THREADS 없으면 잠김(툴팁 이유).
- * 보관 탭: 목록 아래 안내 한 줄(archive 14). 빈 상태 = 아이콘 원 48 + 15/600 + 13 설명. 불러오는 중 = 스켈레톤 4.
- * 행 누르기 = 기존 openThread(원문은 목록 응답의 root 로 채운다). 카드 전체가 버튼이고 bell 은 그 위에 따로(겹친 버튼 없음).
+ * 헤더 48+1: (모바일 ‹ 44) threads 20 · "스레드 · #채널" 16/600 · 닫기 32.
+ * 세그먼트 행: 활성 N / 보관됨(grow) + "최근 활동순" 12 muted.
+ * 행 카드(rounded-lg 1px bg-card p-3, 호버 bg-overlay-hover): 안 읽음 점 8 danger · 이름 15(안 읽음 600 / 그 외 500, 이름 없으면 “원문 첫 40자” 기울임)
+ *   · 보관됨 배지 11 · 팔로우 bell(누르면 토글 — 팔로우 중 primary, 그 외 호버·포커스 시에만 muted, 터치는 항상 표시)
+ *   → 마지막 답글 한 행 13 muted → 참여 아바타 20 겹침(-6, ring 2 card) · "답글 N개"(600 foreground) · 시각 12.
+ * 아래 행 44: clock 14 · "활동이 없으면 자동 보관" · UiSelect sm(1시간·24시간·3일·1주) — MANAGE_THREADS 없으면 잠금(툴팁에 사유).
+ * 보관 탭: 목록 아래 안내 한 행(archive 14). 빈 상태 = 아이콘 원 48 + 15/600 + 13 설명. 로딩 중 = 스켈레톤 4.
+ * 행 누르기 = 기존 openThread(원문은 목록 응답의 root 로 채운다). 카드 전체가 버튼이며 bell 은 그 위에 별도 배치한다(중첩 버튼 없음).
  */
 import { useEffect } from 'react'
 import { useStore } from 'zustand'
@@ -32,7 +32,7 @@ import { UiSelect } from '~/components/ui/Select'
 import { UiAvatar } from '~/components/ui/Avatar'
 import { UiTooltip } from '~/components/ui/Tooltip'
 
-/** 채널 이름 표시(#이름 · 비공개는 이름 · DM 은 상대) */
+/** 채널 이름 표시(#이름 · 비공개는 이름 · DM 은 상대방) */
 function useChannelLabel(): { id: string | null; label: string } {
   const ch = useStore(chatStore, s => selectSelectedChannel(s))
   useStore(chatStore, s => s.allUsers)
@@ -62,7 +62,7 @@ export function ChatThreadRow({ item, archivedTab, mobile, onOpen, onToggleFollo
   const followLabel = item.followed ? t('chat.right.threads.unfollow') : t('chat.right.threads.follow')
   return (
     <li className="group relative flex flex-col gap-1 rounded-lg border border-border bg-card p-3 hover:bg-overlay-hover">
-      {/* 카드 전체 = 열기 버튼(아래 bell 은 그 위에 따로) */}
+      {/* 카드 전체 = 열기 버튼(아래 bell 은 그 위에 별도 배치) */}
       <button
         type="button"
         aria-label={t('chat.right.threads.open', { name: title.text })}
@@ -107,13 +107,13 @@ export function ChatThreadRow({ item, archivedTab, mobile, onOpen, onToggleFollo
   )
 }
 
-/** 스레드 목록(오른쪽 자리 400 / 모바일 전체 화면) */
+/** 스레드 목록(오른쪽 영역 400 / 모바일 전체 화면) */
 export function ChatThreadList() {
   const { t } = useI18n()
   const mobile = useIsMobile()
   const { id: channelId, label } = useChannelLabel()
   const { tab, items, hasMore, loading, loadingMore, error, activeCount, autoArchive, channelId: listCh } = useThreadList()
-  // 권한: MANAGE_THREADS — 채널 권한을 아직 못 읽었으면 읽는다
+  // 권한: MANAGE_THREADS — 채널 권한 미조회 상태이면 조회
   const canManage = useChatRoles(s => canInChannel(channelId, PERM.MANAGE_THREADS, s))
   useEffect(() => { if (channelId) void loadMyChannelPerms(channelId) }, [channelId])
 
@@ -135,7 +135,7 @@ export function ChatThreadList() {
   async function onOpen(it: ThreadListItem) {
     close()
     const p = openThread(it.root.id)
-    // 타임라인에 없는 오래된 원문 — 목록 응답의 root 로 패널 위 원문을 채운다
+    // 타임라인에 없는 오래된 원문 — 목록 응답의 root 로 패널 상단 원문을 채움
     if (!chatStore.getState().threadParent) chatStore.setState({ threadParent: { ...it.root, thread: it.thread } })
     await p
   }
@@ -154,7 +154,7 @@ export function ChatThreadList() {
   const shown = listCh === channelId ? items : []
   const period = t(`chat.right.threads.opt.${AUTO_ARCHIVE_LABEL[autoArchive]}`)
   const tabs = [
-    // 개수는 활성 탭을 읽었을 때 정해진다(더 있으면 "25+")
+    // 개수는 활성 탭 조회 시 확정(추가 항목이 있으면 "25+")
     { value: 'active', label: activeCount == null ? t('chat.right.threads.active') : t('chat.right.threads.activeN', { n: hasMore && !archivedTab ? `${activeCount}+` : activeCount }) },
     { value: 'archived', label: t('chat.right.threads.archived') },
   ]

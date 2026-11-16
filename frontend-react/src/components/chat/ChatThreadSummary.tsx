@@ -1,7 +1,7 @@
 // 메시지 아래 스레드 칩: 32 높이 rounded-lg 1px bg-card px-10 · 13 —
 //   threads 16 muted · 스레드 이름(primary 600, 이름 없으면 “원문 첫 40자” 기울임) · "답글 N개 · 10분 전"(muted)
 //   · 참여자 아바타 18 겹침(있으면, 이름 앞) · 보관됨이면 archive 아이콘.
-// 메타(이름·보관·답글 수·마지막 시각)는 서버가 루트 메시지에 붙인 thread(ThreadMeta), 옛 서버면 reply_count·last_reply_at.
+// 메타(이름·보관·답글 수·마지막 시각)는 서버가 루트 메시지에 첨부한 thread(ThreadMeta), 구버전 서버이면 reply_count·last_reply_at.
 import { clsx as cn } from 'clsx'
 import { useI18n } from '~/i18n'
 import type { ChatMessage } from '~/composables/useChat'
@@ -12,7 +12,7 @@ import { UiIcon } from '~/components/ui/Icon'
 export interface ChatThreadSummaryProps {
   /** 스레드가 시작된(답글이 있는) 루트 메시지 */
   message: ChatMessage
-  /** 눌러서 스레드 열기 */
+  /** 누를 때 스레드 열기 */
   onOpen?: () => void
 }
 

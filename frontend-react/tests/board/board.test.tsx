@@ -1,4 +1,4 @@
-// 게시판 컴포넌트 — 댓글 @멘션 자동완성, 페이지 번호, 글 행, 게시판 만들기 slug, 편집기 값 내보내기
+// 게시판 컴포넌트 — 댓글 @멘션 자동완성, 페이지 번호, 글 행, 게시판 생성 slug, 편집기 값 내보내기
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, act } from '@testing-library/react'
 import { renderInRouter } from '../ui/helpers'
@@ -89,7 +89,7 @@ describe('BoardCreateModal', () => {
     fireEvent.change(name, { target: { value: 'D' } })
     fireEvent.change(name, { target: { value: 'De' } })
     fireEvent.change(name, { target: { value: 'Dev Notes' } })
-    // 한 글자씩이 아니라 한 번에 바뀌면 "한 글자 전" 비교가 어긋나 멈춘다
+    // 한 글자씩이 아닌 일괄 변경 시 "한 글자 전" 비교가 불일치하여 중단됨
     expect(slug.value).toBe('de')
     fireEvent.change(name, { target: { value: 'Dev Notes!' } })
     expect(slug.value).toBe('de')
@@ -119,7 +119,7 @@ describe('RichEditor', () => {
     await act(async () => { handle.editor.chain().insertContent('<p>link-me</p>').run() })
     await act(async () => { handle.editor.chain().selectAll().setLink({ href: 'https://example.com/x' }).run() })
     expect(onHtml).toHaveBeenLastCalledWith(expect.stringContaining('href="https://example.com/x"'))
-    // 확장이 한 번씩만 등록됐는지(StarterKit v3 의 밑줄·링크를 따로 또 넣으면 둘이 된다)
+    // 확장이 1회씩만 등록됐는지 확인(StarterKit v3 의 밑줄·링크를 별도로 추가하면 중복 등록됨)
     const names = handle.editor.extensionManager.extensions.map((e: any) => e.name) as string[]
     for (const n of ['link', 'underline', 'placeholder', 'table', 'tableCell']) expect(names.filter(x => x === n), n).toHaveLength(1)
   })

@@ -142,7 +142,7 @@ describe('UiToast', () => {
     expect(alert.textContent).toContain('2회')
     fireEvent.click(screen.getByRole('button', { name: '닫기' }))
     expect(toastStore.getState().toasts.length).toBe(0)
-    // leave 애니메이션(150ms) 뒤 사라진다
+    // leave 애니메이션(150ms) 후 제거됨
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
   })
 
@@ -206,7 +206,7 @@ describe('UiTabs', () => {
     fireEvent.click(tabs[1])
     expect(onUpdate).toHaveBeenLastCalledWith('mine')
     fireEvent.keyDown(tabs[0], { key: 'ArrowLeft' })
-    // 꺼진 탭은 건너뛴다 → 'mine'
+    // 비활성 탭은 건너뜀 → 'mine'
     expect(onUpdate).toHaveBeenLastCalledWith('mine')
   })
 

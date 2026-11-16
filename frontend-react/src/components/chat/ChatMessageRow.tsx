@@ -1,12 +1,12 @@
 /**
  * 메시지 행 틀(디스코드 수치) — ChatMessage 공용.
  *  cozy   : 본문 16/22 · 이름 16/22·500·역할 색 · 시간 12 mono "오전 10:02" · 아바타 40(left 16) · 들여쓰기 72 · 그룹 첫 줄 최소 44 ·
- *           연속 줄 패딩 2 · 연속 줄 시간 = 거터 56 오른쪽 정렬 11 mono(호버·포커스 때만) · 그룹 시작 margin-top = groupGap + 1(투명 1px 위 테두리)
+ *           연속 줄 패딩 2 · 연속 줄 시간 = 거터 56 오른쪽 정렬 11 mono(호버·포커스 시에만) · 그룹 시작 margin-top = groupGap + 1(투명 1px 위 테두리)
  *  compact: 패딩 2 · 시간 칸 68(24시간 표기면 50) · 들여쓰기 80 · 이름은 본문 앞 인라인 · 그룹 시작 4 + 1
  *  mobile : 16/22 · 아바타 36(left 12) · 들여쓰기 60 · 그룹 시작 12 + 1
- * 덧칠(유틸): 호버·포커스 bg-overlay-hover · 선택(스레드 열림·수정 중·시트) bg-overlay-selected · 나를 부른 줄 bg-overlay-mention ·
- *            점프 강조 bg-overlay-jump(2초 유지 후 1초 사라짐, reduce-motion 이면 2초 뒤 바로 — useChatJump).
- * 포커스 표시는 outline(덧칠 유틸이 box-shadow 를 쓰므로 ring 과 섞지 않는다). 이름·아바타 누르면 프로필 팝아웃.
+ * 오버레이 색(유틸): 호버·포커스 bg-overlay-hover · 선택(스레드 열림·수정 중·시트) bg-overlay-selected · 본인을 멘션한 줄 bg-overlay-mention ·
+ *            점프 강조 bg-overlay-jump(2초 유지 후 1초간 사라짐, reduce-motion 이면 2초 뒤 즉시 — useChatJump).
+ * 포커스 표시는 outline 사용(오버레이 색 유틸이 box-shadow 를 사용하므로 ring 과 혼용하지 않음). 이름·아바타 클릭 시 프로필 팝아웃.
  * 답장 메시지는 본문 위에 답장 미리보기 한 줄(ChatReplyPreview). @silent 로 보낸 줄은 시간 뒤 bell-off.
  */
 import { forwardRef, type ReactNode, type HTMLAttributes, type MouseEvent } from 'react'
@@ -25,32 +25,32 @@ export type ChatRowDisplay = 'cozy' | 'compact' | 'mobile'
 
 /** compact 시간 칸 — 12시간(오전/오후) 68 · 24시간 50 */
 export function compactTimeWidth(hour12: boolean): number { return hour12 ? 68 : 50 }
-/** 그룹 시작 위 여백(px, 투명 테두리 1 은 따로) */
+/** 그룹 시작 위 여백(px, 투명 테두리 1 은 별도) */
 export function groupStartGap(display: ChatRowDisplay, gap: number): number {
   return display === 'compact' ? 4 : display === 'mobile' ? 12 : gap
 }
 
 export interface ChatMessageRowProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
   message: ChatMessage
-  /** 묶음의 이어지는 줄 */
+  /** 그룹의 연속 줄 */
   grouped: boolean
   isOwn: boolean
   display: ChatRowDisplay
-  /** 묶음 첫 줄 위 간격(px, cozy) — 설정 0/4/8/16/24 */
+  /** 그룹 첫 줄 위 간격(px, cozy) — 설정 0/4/8/16/24 */
   gap?: number
-  /** 나·내 역할·채널 전원을 부른 줄 · 나에게 온 답장(@ 켬) */
+  /** 본인·본인 역할·채널 전원을 멘션한 줄 · 본인에게 온 답장(@ 켬) */
   mention?: boolean
   /** 선택(스레드 열림·수정 중·시트 열림) */
   selected?: boolean
   /** 호버·포커스 중(거터 시간·호버 바) */
   lit?: boolean
-  /** 전송 대기 같은 가짜 행 — 시간 숨김 */
+  /** 전송 대기 등 가상 행 — 시간 숨김 */
   pending?: boolean
-  /** 본문. lead = compact 에서 본문 첫 줄 앞에 붙일 이름(다른 모양에서는 null) */
+  /** 본문. lead = compact 에서 본문 첫 줄 앞에 추가할 이름(다른 표시 방식에서는 null) */
   body: (lead: ReactNode | null) => ReactNode
   /** 본문 아래(첨부·링크 카드·리액션·스레드 칩·실패 줄) */
   extra?: ReactNode
-  /** 행 위에 뜨는 것(호버 바·읽음 표시) */
+  /** 행 위에 표시되는 요소(호버 바·읽음 표시) */
   overlay?: ReactNode
   /** 스레드 패널 맨 위 원문 등 — 답장 미리보기 숨김 */
   hideReply?: boolean

@@ -1,4 +1,4 @@
-// 허용·거부 규칙 창(Claude Code /permissions) — 이 대화 허용·항상 허용·거부를 보고 빼고 더한다.
+// 허용·거부 규칙 창(Claude Code /permissions) — 이 대화 허용·항상 허용·거부를 조회·제거·추가한다.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 

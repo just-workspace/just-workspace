@@ -1,6 +1,6 @@
 /**
- * 화면 안 AI 공용 조각 — 버튼(숨김·비활성+이유)·진행·오류·외부 AI 안내·AI 생성 꼬리표.
- *  - 진행·오류·외부 AI 안내는 디자인에 그림이 없어 기존 패널 관례(스켈레톤·ErrorTile 줄·12 muted 안내)로 정했다.
+ * 화면 내 AI 공용 구성 요소 — 버튼(숨김·비활성+이유)·진행·오류·외부 AI 안내·AI 생성 꼬리표.
+ *  - 진행·오류·외부 AI 안내는 디자인 시안이 없어 기존 패널 관례(스켈레톤·ErrorTile 줄·12 muted 안내)에 따라 정했다.
  *  - "AI 생성" 표시는 AI 기본법(2026-01-22) — 결과마다 꼬리표 한 줄.
  */
 import type { ReactNode } from 'react'
@@ -15,12 +15,12 @@ import { buttonState } from '~/composables/useAiInline'
 
 export interface AiInlineButtonProps extends UiButtonProps {
   status: AiInlineStatus | null
-  /** 진행 중(누를 수 없음) */
+  /** 진행 중(클릭 불가) */
   busy?: boolean
   children?: ReactNode
 }
 
-/** AI 진입 버튼 — 모듈 꺼짐이면 그리지 않고, 쓸 수 없으면 비활성 + 이유 툴팁 */
+/** AI 진입 버튼 — 모듈 비활성화 시 렌더링하지 않으며, 사용 불가 시 비활성 + 이유 툴팁 표시 */
 export function AiInlineButton({ status, busy, disabled, children, ...rest }: AiInlineButtonProps) {
   const { t } = useI18n()
   const st = buttonState(status)
@@ -60,7 +60,7 @@ export function AiInlineErrorLine({ message, onRetry, className }: { message: st
   )
 }
 
-/** 외부 AI 안내 — 외부 제공자일 때만. 가리기가 켜져 있으면 무엇을 가리는지 */
+/** 외부 AI 안내 — 외부 제공자인 경우에만 표시. 가리기가 활성화되어 있으면 가리는 대상을 안내 */
 export function AiInlinePrivacy({ status, className }: { status: AiInlineStatus | null; className?: string }) {
   const { t } = useI18n()
   if (!status?.external) return null

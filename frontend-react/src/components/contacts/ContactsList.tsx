@@ -2,13 +2,13 @@
  * 연락처 목록.
  * 데스크톱: 커맨드 바 44 bg-card(검색 32 "이름·회사·이메일" + "이름순 ▾"), 초성 헤더 28(sticky, 11/700 muted, bg-background),
  *   행 56(이니셜 36 · 이름 14/600 · 보조 12 muted), 선택 = primary/13.
- * 모바일: 범위 줄(주소록 ▾ · 개수 mono · 검색 · ⋯), 헤더 28 bg-card 12/700, 행 60(이니셜 40 · 15/600 · 13), 오른쪽 초성 색인 바.
- *   색인 글자 시각 24×22 유지, 터치는 바 전체를 끌어 고르는 방식 + 폭 40 히트 영역.
- * 사진(있으면 이미지, 없으면 이니셜) · 즐겨찾기 별(warning 14). 즐겨찾기는 맨 위 "★" 묶음으로 모은다(색인 바 ★ 포함).
+ * 모바일: 범위 행(주소록 ▾ · 개수 mono · 검색 · ⋯), 헤더 28 bg-card 12/700, 행 60(이니셜 40 · 15/600 · 13), 오른쪽 초성 색인 바.
+ *   색인 글자 시각 크기 24×22 유지, 터치는 바 전체를 드래그하여 선택하는 방식 + 폭 40 히트 영역.
+ * 사진(있으면 이미지, 없으면 이니셜) · 즐겨찾기 별(warning 14). 즐겨찾기는 최상단 별표 그룹으로 모은다(색인 바의 별표 항목 포함).
  */
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결한다(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거한다)
 import { clsx as cx } from 'clsx'
 import { useIsMobile } from '~/composables/useIsMobile'
 import { useContacts, type Contact } from '~/composables/useContacts'
@@ -21,8 +21,8 @@ import { UiSkeleton } from '~/components/ui/Skeleton'
 import { UiEmptyState } from '~/components/ui/EmptyState'
 import { getUiZoom } from '~/composables/useViewport'
 
-const FAV_KEY = '★' // 내부 묶음 키(화면에는 UiIcon star 로 그린다)
-// ── 모바일 초성 색인 바(★ ㄱ…ㅎ A #) ──
+const FAV_KEY = '★' // 내부 그룹 키(화면에는 UiIcon star 로 렌더링)
+// ── 모바일 초성 색인 바(별표 ㄱ…ㅎ A #) ──
 const INDEX = [FAV_KEY, ...HANGUL_KEYS, 'A', OTHER_KEY]
 
 function subline(c: Contact) {
@@ -42,7 +42,7 @@ export function ContactsList() {
   } = useContacts()
 
   const [localSearch, setLocalSearch] = useState(searchQuery)
-  // localSearch 가 바뀔 때 — 첫 실행은 건너뛴다
+  // localSearch 변경 시 실행 — 최초 실행은 생략
   const firstSearch = useRef(true)
   useEffect(() => {
     if (firstSearch.current) { firstSearch.current = false; return }
@@ -69,7 +69,7 @@ export function ContactsList() {
     const all = contacts
     const nameOf = (c: Contact) => c.name || c.first_name || ''
     const orgOf = (c: Contact) => c.organization || ''
-    // 즐겨찾기 범위에서는 따로 묶지 않는다(전부 즐겨찾기)
+    // 즐겨찾기 범위에서는 별도 그룹으로 분리하지 않는다(전부 즐겨찾기)
     if (scope.kind === 'favorite') return groupByIndex(all, nameOf, orgOf, sortBy)
     const favs = all.filter(c => c.is_favorite)
     const rest = all.filter(c => !c.is_favorite)
@@ -93,13 +93,13 @@ export function ContactsList() {
   function jumpTo(key: string) {
     activeRef.current = key
     setActiveKey(key)
-    // 'A' 는 라틴 전체를 대표
+    // 'A' 는 라틴 문자 전체를 대표
     const order = groups.map(g => g.key)
     const isLatin = (k: string) => /^[A-Z]$/.test(k)
     const want = key === 'A' ? order.find(isLatin) : key
     let target = want && order.includes(want) ? want : undefined
     if (!target) {
-      // 그 초성이 없으면 다음 초성으로
+      // 해당 초성이 없으면 다음 초성으로 이동
       const all = [FAV_KEY, ...HANGUL_KEYS, ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''), OTHER_KEY]
       const from = all.indexOf(key)
       target = order.find(k => all.indexOf(k) >= from)
@@ -151,8 +151,8 @@ export function ContactsList() {
         </label>
       </div>
 
-      {/* 1024 미만 범위 줄: 주소록 ▾ · 개수 · 검색(모바일) · ⋯ — 사이드바 대신.
-          모바일(<768)에선 이 줄이 화면 머리(56, 제목 "연락처" 18/600 + 아래 범위 줄) — 공용 상단바는 숨긴다. */}
+      {/* 1024 미만 범위 행: 주소록 ▾ · 개수 · 검색(모바일) · ⋯ — 사이드바 대체.
+          모바일(<768)에서는 본 행이 화면 헤더(56, 제목 "연락처" 18/600 + 아래 범위 행) — 공용 상단바는 숨긴다. */}
       <div className="flex h-14 shrink-0 items-center gap-0.5 border-b border-border pl-4 pr-1 md:h-12 lg:hidden">
         <div className="flex min-w-0 flex-1 flex-col">
           <h1 className="truncate text-lg font-semibold leading-6 text-foreground md:hidden">{t('nav.contacts')}</h1>
@@ -240,7 +240,7 @@ export function ContactsList() {
                       </section>
                     ))}
 
-                    {/* 페이지 넘김(서버 50개 단위) */}
+                    {/* 페이지 이동(서버 50개 단위) */}
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between px-2 py-2 text-xs">
                         <UiButton variant="ghost" size="xs" disabled={!hasPrevPage} onClick={prevPage}>{t('common.pagination.prev')}</UiButton>

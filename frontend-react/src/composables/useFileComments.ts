@@ -1,11 +1,11 @@
 /**
  * 파일 댓글. GET/POST /api/files/comments, PATCH/DELETE /api/files/comments/{id}.
- * 파일은 내 경로(my/..)든 공유받은 경로(shared-with-me/..)든 같은 댓글을 본다(서버가 소유자 경로로 묶는다).
- * 쓰기는 댓글 권한 이상(서버가 can_comment 로 알려 준다), 수정·삭제는 쓴 사람만(is_mine).
+ * 파일은 본인 경로(my/..)와 공유받은 경로(shared-with-me/..) 모두 동일한 댓글을 조회한다(서버가 소유자 경로로 통합).
+ * 작성은 댓글 권한 이상 필요(서버가 can_comment 로 전달), 수정·삭제는 작성자만 가능(is_mine).
  *
- * 싱글턴이 아니다 — 컴포넌트 지역 상태 hook.
+ * 싱글턴 아님 — 컴포넌트 지역 상태 hook.
  * React: const { items, canComment, role, owner, isOriginalOwner, loading, error, load, add, edit, remove, resolve, mentionable, requestAccess } = useFileComments(path)
- *   path 는 렌더 시점 문자열 — load·add 는 부를 때의 최신 path 를 쓴다.
+ *   path 는 렌더 시점 문자열 — load·add 는 호출 시점의 최신 path 를 사용한다.
  * 답글(add 의 parentId) · 위치 조각(anchor) · 해결(resolve) · "@" 후보(mentionable — 그 파일 권한 표시) ·
  *   보기 권한의 "권한 요청"(requestAccess — 원 소유자에게 알림).
  */
@@ -30,7 +30,7 @@ export interface FileComment {
   updated_at: string | null
 }
 
-/** "@" 후보 — role 이 null 이면 그 파일을 볼 수 없다(언급해도 알림 없음) */
+/** "@" 후보 — role 이 null 이면 해당 파일 조회 불가(언급 시에도 알림 미발송) */
 export interface FileMentionCandidate {
   id: string
   username: string
@@ -89,7 +89,7 @@ export function useFileComments(path: string) {
 
   const remove = useCallback(async (id: string) => {
     await $fetch(`/api/files/comments/${id}`, { method: 'DELETE' })
-    // 최상위를 지우면 서버가 답글도 지운다
+    // 최상위 댓글 삭제 시 서버가 답글도 삭제
     put(itemsRef.current.filter(x => x.id !== id && x.parent_id !== id))
   }, [put])
 
@@ -99,7 +99,7 @@ export function useFileComments(path: string) {
     put(itemsRef.current.map(x => (x.id === id ? c : x)))
   }, [put])
 
-  /** "@" 후보(그 파일 권한 포함) */
+  /** "@" 후보(해당 파일 권한 포함) */
   const mentionable = useCallback(async (q: string) => {
     return (await $fetch<{ items: FileMentionCandidate[] }>('/api/files/comments/mentionable', { params: { path: p.current, q } })).items
   }, [])

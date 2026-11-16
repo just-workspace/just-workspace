@@ -1,5 +1,5 @@
-// 업데이트 예고 띠(일반/관리자)와 점검 화면 — 소켓 이벤트·처음 조회·API 실패 감지로 들어오는 상태,
-// 카운트다운이 끝나면 점검으로, 점검이 끝나면 스스로 다시 연결, 관리자의 진행 화면은 덮지 않기, 정적 점검 페이지의 문구.
+// 업데이트 사전 공지 띠(일반/관리자)와 점검 화면 — 소켓 이벤트·최초 조회·API 실패 감지로 수신되는 상태,
+// 카운트다운 종료 시 점검으로 전환, 점검 종료 시 자동 재연결, 관리자의 진행 화면은 덮지 않음, 정적 점검 페이지의 문구.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
@@ -41,7 +41,7 @@ const at = (ms: number) => new Date(Date.now() + ms).toISOString()
 const emit = (d: any) => act(() => { for (const fn of chat.listeners) fn(d) })
 const NONE = { state: 'none', job: null, kind: null, ends_at: null, started_at: null, expected_seconds: null, contact: null }
 
-/** 공개 점검 상태(/maintenance/status)와 /api/health 를 흉내 낸다 */
+/** 공개 점검 상태(/maintenance/status)와 /api/health 를 모의한다 */
 const net = { status: null as any, health: true, hits: [] as string[] }
 function stubFetch() {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
@@ -109,9 +109,9 @@ describe('예고 띠', () => {
     const before = text(live)
     const clock0 = text(screen.getByTestId('update-countdown-clock'))
     act(() => { vi.advanceTimersByTime(3000) })
-    expect(text(screen.getByTestId('update-countdown-clock'))).not.toBe(clock0)     // 숫자는 매초 바뀌고
-    expect(text(live)).toBe(before)                                                  // 문장은 그대로다
-    act(() => { vi.advanceTimersByTime(12_000) })                                    // 4분대로 넘어가면
+    expect(text(screen.getByTestId('update-countdown-clock'))).not.toBe(clock0)     // 숫자는 매초 변경되고
+    expect(text(live)).toBe(before)                                                  // 문장은 유지됨
+    act(() => { vi.advanceTimersByTime(12_000) })                                    // 4분대로 진입하면
     expect(text(live)).toBe('4분 뒤 업데이트를 시작합니다. 하던 일을 저장하세요.')
   })
 
@@ -135,7 +135,7 @@ describe('예고 띠', () => {
     emit({ type: 'system.update_countdown', job: 'j1', kind: 'update', ends_at: at(252_000), expected_seconds: 240 })
     fireEvent.click(screen.getByRole('button', { name: '지금 바로 시작' }))
     await waitFor(() => expect(api.calls.find(c => c.url.endsWith('/jobs/j1/action'))?.body).toEqual({ action: 'start_now' }))
-    expect(band()).toBeTruthy()                 // 시작됐다는 것은 서버의 알림으로 안다
+    expect(band()).toBeTruthy()                 // 시작 여부는 서버의 알림으로 확인
 
     fireEvent.click(screen.getByRole('button', { name: '취소' }))
     await waitFor(() => expect(band()).toBeNull())
@@ -195,7 +195,7 @@ describe('점검 화면', () => {
     expect(text(late)).toContain('계속 이 화면이면 관리자에게 알려 주세요.')
     expect(screen.queryByTestId('maintenance-contact')).toBeNull()
 
-    // 다음 조회에서 연락처가 오면 붙는다
+    // 다음 조회에서 연락처가 수신되면 표시됨
     net.status = { ...net.status, contact: '내선 1234' }
     expect(text(await screen.findByTestId('maintenance-contact'))).toBe('내선 1234')
   })
@@ -210,7 +210,7 @@ describe('점검 화면', () => {
   })
 
   it('카운트다운이 끝나면 점검 화면으로 바뀐다 — 서버에 물을 수 없어도', async () => {
-    api.notice = null            // 서버가 이미 내려갔다
+    api.notice = null            // 서버가 이미 중지됨
     net.status = null
     await renderShell()
     emit({ type: 'system.update_countdown', job: 'j1', kind: 'update', ends_at: at(300), expected_seconds: 240 })
@@ -309,7 +309,7 @@ describe('점검 화면', () => {
     emit({ type: 'system.maintenance', active: true, kind: 'update', started_at: at(0), expected_seconds: 240 })
     expect(maint()).toBeNull()
     expect(screen.getByTestId('progress')).toBeTruthy()
-    // 그 화면을 떠나면 점검 화면이 보인다
+    // 해당 화면을 떠나면 점검 화면 표시
     view.rerender(<Shell />)
     await waitFor(() => expect(maint()).toBeTruthy())
   })

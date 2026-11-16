@@ -156,7 +156,7 @@ describe('첨부 그리드 배치', () => {
       const L = gridLayout(n)
       expect(L.cells.length).toBe(Math.min(n, 10))
       expect(L.more).toBe(Math.max(0, n - 10))
-      // 줄마다 6칸이 꽉 찬다(3장 = 큰 칸이 두 줄)
+      // 행마다 6칸이 전부 채워짐(3장 = 큰 칸이 두 줄)
       if (n !== 3) expect(L.cells.reduce((a, c) => a + c.span, 0) % 6).toBe(0)
     }
     expect(gridLayout(13).more).toBe(3)
@@ -237,7 +237,7 @@ describe('실시간 수정·삭제 · 순서 · 중복', () => {
     handleWSMessage({ type: 'message_delete', message_id: 'x1', channel_id: 'c1', parent_id: null })
     expect(chatStore.getState().messages.map(m => m.id)).toEqual(['root'])
     expect(chatStore.getState().pins).toEqual([])
-    // 열어 둔 스레드의 원문이 지워지면 패널이 닫힌다
+    // 열려 있는 스레드의 원문이 삭제되면 패널이 닫힘
     handleWSMessage({ type: 'message_delete', message_id: 'root', channel_id: 'c1', parent_id: null })
     expect(chatStore.getState().activeThreadId).toBeNull()
   })

@@ -1,8 +1,8 @@
 /* ── Tailwind 4 (CSS-first 설정) — 워크스페이스 앱의 진입 CSS ──
-   예전 tailwind.config.ts 의 content 가 여기(@source)이고, darkMode·theme.extend·plugins 는 theme.css 다.
-   폰트(@fontsource)는 fonts.css — 이 파일은 폰트 없이 import 할 수 있다.
-   @source 경로는 이 파일 기준: ../../ = src, ../../../index.html. 자동 탐색(source(none) 해제)은 쓰지 않는다 —
-   tests·docs 의 클래스가 섞여 들어가지 않게. 플러그인 번들은 여전히 이 글롭 밖이다(docs/plugin-frontend.md). */
+   기존 tailwind.config.ts 의 content 는 본 파일(@source)에, darkMode·theme.extend·plugins 는 theme.css 에 해당한다.
+   폰트(@fontsource)는 fonts.css 에 둔다 — 본 파일은 폰트 없이 import 가능하다.
+   @source 경로는 본 파일 기준: ../../ = src, ../../../index.html. 자동 탐색(source(none) 해제)은 사용하지 않는다 —
+   tests·docs 의 클래스 혼입 방지 목적. 플러그인 번들은 여전히 본 글롭 범위 밖이다(docs/plugin-frontend.md). */
 @import 'tailwindcss' source(none);
 @source '../../../index.html';
 @source '../../';

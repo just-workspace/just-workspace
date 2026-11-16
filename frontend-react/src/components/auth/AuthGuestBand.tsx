@@ -12,7 +12,7 @@ export interface AuthGuestBandProps {
   guestName: string
   /** 공유자·만료(sm 이상에서만) */
   meta?: string
-  /** 기본 authScreens.guest.leave */
+  /** 기본값 authScreens.guest.leave */
   leaveLabel?: string
   onLeave?: () => void
 }

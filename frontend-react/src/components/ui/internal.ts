@@ -1,19 +1,19 @@
 /**
- * UI 키트 내부 도우미 — 키트 부품들이 같이 쓰는 것(앱 화면에서는 쓰지 않는다).
+ * UI 키트 내부 도우미 — 키트 컴포넌트가 공용으로 사용한다(앱 화면에서는 사용하지 않는다).
  *
- * - useModel      ← modelValue 를 주면 제어형, 안 주면(undefined) 부품이 값을 가진다
- * - useUid        ← `ui-xxx-${Math.random()…}` 한 번만 만드는 id
- * - useTransition ← <Transition> enter/leave 단계(같은 Tailwind 클래스를 단계별로 붙인다)
- * - mergeRefs     ← 안쪽 ref 와 바깥 ref 를 같이 쓸 때
- * - FOCUSABLE     ← 모달·시트 포커스 트랩이 쓰는 선택자
- * - menuItemRole · menuKeepsOpen ← UiMenu·UiActionSheet 항목 역할과 고른 뒤 닫힘 규칙
+ * - useModel      ← modelValue 지정 시 제어형, 미지정(undefined) 시 컴포넌트가 값을 보유
+ * - useUid        ← `ui-xxx-${Math.random()…}` 1회만 생성하는 id
+ * - useTransition ← <Transition> enter/leave 단계(동일한 Tailwind 클래스를 단계별로 적용)
+ * - mergeRefs     ← 내부 ref 와 외부 ref 를 함께 사용할 때
+ * - FOCUSABLE     ← 모달·시트 포커스 트랩이 사용하는 선택자
+ * - menuItemRole · menuKeepsOpen ← UiMenu·UiActionSheet 항목 역할과 선택 후 닫힘 규칙
  */
 import { useCallback, useEffect, useRef, useState, type Ref, type RefCallback } from 'react'
 import type { UiMenuItem } from './Menu'
 
 export const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
 
-/** defineModel 대응: [현재 값, 값 바꾸기(onUpdate 호출 포함)] */
+/** defineModel 대응: [현재 값, 값 변경 함수(onUpdate 호출 포함)] */
 export function useModel<T>(value: T | undefined, defaultValue: T, onUpdate?: (v: T) => void): [T, (v: T) => void] {
   const controlled = value !== undefined
   const [local, setLocal] = useState<T>(controlled ? (value as T) : defaultValue)
@@ -26,7 +26,7 @@ export function useModel<T>(value: T | undefined, defaultValue: T, onUpdate?: (v
   return [controlled ? (value as T) : local, set]
 }
 
-/** 렌더 사이에 바뀌지 않는 무작위 id(`${prefix}-xxxxxx`) */
+/** 렌더 간 변경되지 않는 무작위 id(`${prefix}-xxxxxx`) */
 export function useUid(prefix: string): string {
   const [id] = useState(() => `${prefix}-${Math.random().toString(36).slice(2, 8)}`)
   return id
@@ -46,7 +46,7 @@ export function mergeRefs<T>(...refs: Array<Ref<T> | undefined | null>): RefCall
  * <Transition> 단계.
  *  enter-from → (두 프레임 뒤) enter-to → (enterMs 뒤) idle
  *  leave-from → (두 프레임 뒤) leave-to → (leaveMs 뒤) hidden(언마운트)
- * appear=false 면 처음부터 보이는 경우 애니메이션 없이 idle.
+ * appear=false 이면 처음부터 표시된 경우 애니메이션 없이 idle.
  */
 export type TransitionPhase = 'enter-from' | 'enter-to' | 'idle' | 'leave-from' | 'leave-to' | 'hidden'
 
@@ -99,7 +99,7 @@ export function menuItemRole(it: UiMenuItem): 'menuitem' | 'menuitemcheckbox' | 
   return it.radio ? 'menuitemradio' : 'menuitemcheckbox'
 }
 
-/** 고른 뒤 메뉴를 열어 둘지 — 링크 < 항목 keepOpen < 메뉴 closeOnSelect < 기본(다중 토글만 열린 채) */
+/** 선택 후 메뉴 열림 유지 여부 — 링크 < 항목 keepOpen < 메뉴 closeOnSelect < 기본(다중 토글만 열림 유지) */
 export function menuKeepsOpen(it: UiMenuItem, closeOnSelect?: boolean): boolean {
   if (it.to) return false
   if (it.keepOpen !== undefined) return it.keepOpen

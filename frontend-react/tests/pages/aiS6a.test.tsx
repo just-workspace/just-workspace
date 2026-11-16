@@ -1,5 +1,5 @@
 // AI 대화 기본기: 진행 단계(펼침/접힘·실패), 출처 칩 + 본문 [n], 피드백(대화 첨부 기본 꺼짐), 이어서 받기,
-// 수식(KaTeX)이 코드블록을 건드리지 않음. $fetch 와 fetch(스트림)는 가짜.
+// 수식(KaTeX)이 코드블록을 변경하지 않음. $fetch 와 fetch(스트림)는 모의(mock).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -205,7 +205,7 @@ describe('피드백', () => {
     expect(fbCalls()[2].opts.body).toMatchObject({ rating: 'down', reasons: ['inaccurate'], include_conversation: false })
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '어떤 점이 아쉬웠나요?' })).toBeNull())
 
-    // 다시 👎(취소) → 다시 👎 → 첨부 켜고 보내기
+    // 다시 싫어요(취소) → 다시 싫어요 → 첨부 켜고 보내기
     await act(async () => { fireEvent.click(down) })
     await waitFor(() => expect(fbCalls()[3].opts.body).toMatchObject({ rating: null }))
     await act(async () => { fireEvent.click(down) })
@@ -233,7 +233,7 @@ describe('이어서 받기', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/ai/conversations/c1/continue', expect.objectContaining({ method: 'POST' }))
     await waitFor(() => expect(document.querySelector('.ai-md')?.textContent).toContain('원인은 IKE 재협상 주기 불일치입니다.'))
     await waitFor(() => expect(screen.queryByRole('button', { name: '이어서 받기' })).toBeNull())
-    expect(document.querySelectorAll('.ai-md').length).toBe(1) // 새 메시지가 아니라 같은 메시지
+    expect(document.querySelectorAll('.ai-md').length).toBe(1) // 새 메시지가 아닌 동일 메시지
     vi.unstubAllGlobals()
   })
 
@@ -300,7 +300,7 @@ describe('수식·출처 표식 렌더(markdown-it 플러그인)', () => {
       '`$y$` 와 $5, $10 은 그대로',
     ].join('\n'))
     const div = document.createElement('div')
-    div.innerHTML = DOMPurify.sanitize(html) // AiMessage 와 같이 정화한 뒤에도 남아야 한다
+    div.innerHTML = DOMPurify.sanitize(html) // AiMessage 와 동일하게 정화한 뒤에도 유지되어야 함
     expect(div.querySelectorAll('.katex').length).toBe(2)
     expect(div.querySelector('.katex-html')).toBeTruthy()
     expect(div.querySelector('.katex-mathml math')).toBeTruthy()

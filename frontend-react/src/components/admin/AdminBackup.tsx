@@ -1,9 +1,9 @@
 /**
  * 백업 카드 — 관리 › 저장소·백업.
- * 맨 위 행 = "자동 백업" + "매일 HH:MM · 대상" · 시각(이 브라우저의 시간대로 고르고 UTC 시로 저장) · 스위치,
+ * 최상단 행 = "자동 백업" + "매일 HH:MM · 대상" · 시각(본 브라우저의 시간대로 선택하고 UTC 시로 저장) · 스위치,
  * 그 아래 2열 칸: 대상(서버 경로, 읽기 전용 mono) · 보관(선택).
  * 기록 행(min 52: 시각 600 + "결과 · 크기" 12 muted, 오른쪽 상태 틴트 배지 + ⋮ 받기·삭제), 최근 10개.
- * 푸터 = [지금 백업](확인 모달 → POST /api/admin/backup/run, 3초 간격 최대 6번 다시 읽기) [되돌리기] [저장].
+ * 푸터 = [지금 백업](확인 모달 → POST /api/admin/backup/run, 3초 간격 최대 6회 재조회) [되돌리기] [저장].
  * 스위치·시각·보관은 카드 저장([되돌리기][저장])으로 반영.
  *
  * @example <AdminBackup id="backup" className="scroll-mt-4" />
@@ -28,7 +28,7 @@ import { UiButton } from '~/components/ui/Button'
 interface Backup { id: string; created_at: string; status: string; kind: string; components: Record<string, string>; size_bytes: number; error: string }
 interface Sched { enabled: boolean; hour_utc: number | string; retention_days: number | string; target?: string }
 
-/** 바이트 → "1.5 MB"(0 이면 빈 글자) */
+/** 바이트 → "1.5 MB"(0 이면 빈 문자열) */
 export function fmtBackupSize(n: number) {
   if (!n) return ''
   const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; let v = n
@@ -36,15 +36,15 @@ export function fmtBackupSize(n: number) {
   return `${v.toFixed(1)} ${u[i]}`
 }
 /**
- * UTC 시(0~23) → 이 브라우저 시간대의 "HH:MM".
- * 서버는 UTC 의 "시"만 저장하고 그 시각에 돈다. 30분·45분 단위 시간대에서는 분이 00 이 아니다.
- * `offsetMin` 은 `Date#getTimezoneOffset()` 과 같은 뜻(UTC − 현지, 분) — 테스트가 넣는다.
+ * UTC 시(0~23) → 본 브라우저 시간대의 "HH:MM".
+ * 서버는 UTC 의 "시"만 저장하고 해당 시각에 실행한다. 30분·45분 단위 시간대에서는 분이 00 이 아니다.
+ * `offsetMin` 은 `Date#getTimezoneOffset()` 과 동일한 의미(UTC − 현지, 분) — 테스트에서 주입한다.
  */
 export function localTimeFromUtcHour(hourUtc: number | string, offsetMin: number = new Date().getTimezoneOffset()) {
   const m = ((((Number(hourUtc) || 0) * 60 - offsetMin) % 1440) + 1440) % 1440
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
 }
-/** 시각 선택지 — 값은 UTC 시, 글자는 현지 시각. 현지 시각 순서로 늘어놓는다 */
+/** 시각 선택지 — 값은 UTC 시, 표시 문자열은 현지 시각. 현지 시각 순으로 정렬한다 */
 export function backupHourOptions(offsetMin: number = new Date().getTimezoneOffset()) {
   return Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: localTimeFromUtcHour(h, offsetMin) }))
     .sort((a, b) => a.label.localeCompare(b.label))
@@ -56,7 +56,7 @@ const hourOptions = backupHourOptions()
 export interface AdminBackupProps {
   /** 루트 카드 id(딥링크 #backup) */
   id?: string
-  /** 루트 카드에 더할 클래스 */
+  /** 루트 카드에 추가할 클래스 */
   className?: string
 }
 
@@ -89,7 +89,7 @@ export function AdminBackup({ id, className }: AdminBackupProps) {
     return parts.join(' · ')
   }
 
-  /** 읽은 기록 목록을 돌려준다(지금 백업 폴링이 "지금" 값을 봐야 해서) */
+  /** 조회한 기록 목록을 반환한다(지금 백업 폴링이 최신 값을 참조해야 하므로) */
   async function load(): Promise<Backup[]> {
     setLoading(true); setLoadError(false)
     try {
@@ -150,7 +150,7 @@ export function AdminBackup({ id, className }: AdminBackupProps) {
     finally { setSchedSaving(false) }
   }
 
-  // 선택지의 값이 UTC 시라서 그대로 저장한다 — 보이는 글자만 이 브라우저의 시간대
+  // 선택지의 값이 UTC 시이므로 그대로 저장한다 — 표시 문자열만 본 브라우저의 시간대 기준
   const hourUtc = String(Number(sched.hour_utc) || 0)
   const retention = [7, 14, 30, 60, 90, 180, 365].map(d => ({ value: String(d), label: t('adminParts.backup.keepDays', { n: d }) }))
   if (!retention.some(o => o.value === String(sched.retention_days))) retention.push({ value: String(sched.retention_days), label: t('adminParts.backup.keepDays', { n: sched.retention_days }) })
@@ -172,7 +172,7 @@ export function AdminBackup({ id, className }: AdminBackupProps) {
         <UiErrorTile placement="card" title={t('adminParts.backup.loadError')} className="mx-5 mb-4" onRetry={load} />
       ) : (
         <>
-          {/* 맨 위 행 — 자동 백업 스위치 · 시각 */}
+          {/* 최상단 행 — 자동 백업 스위치 · 시각 */}
           <div className="flex min-h-[52px] flex-wrap items-center gap-3 border-t border-border px-5 py-2 text-[13px]">
             <span className="min-w-0 flex-1">
               <b className="block font-semibold text-foreground">{t('adminParts.backup.title')}</b>

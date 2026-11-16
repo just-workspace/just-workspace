@@ -1,7 +1,7 @@
 /**
- * 요약 — 입력한 값을 전부 다시 보여 주고 항목마다 "고치기"를 둔다. 앞 단계에서 넘긴 주의를 한곳에 모은다.
- * "설치"를 누르기 전에는 서버에 바뀌는 것이 없다. 서버가 이대로는 설치할 수 없다고 하면(오류) 이유와 고칠 곳을 보인다.
- * 빠른 설치에서는 묻지 않은 항목(연결 · 저장 위치 · 구역)을 "기본값"으로 보여 주고 고치기를 두지 않는다.
+ * 요약 — 입력한 값을 전부 다시 표시하고 항목마다 "고치기"를 둔다. 이전 단계에서 전달된 주의를 한곳에 모은다.
+ * "설치"를 누르기 전에는 서버에 변경이 발생하지 않는다. 서버가 현재 상태로는 설치할 수 없다고 응답하면(오류) 사유와 수정 위치를 표시한다.
+ * 빠른 설치에서는 묻지 않은 항목(연결 · 저장 위치 · 구역)을 "기본값"으로 표시하고 고치기를 두지 않는다.
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import { UiButton } from '~/components/ui/Button'
@@ -17,10 +17,10 @@ import { Heading, WizardShell } from '../shell/WizardShell'
 import { effectiveZones, flowOf, QUICK_PRESET, quickLowered, useWizard, useWizardStore } from '../store'
 import { recordsPending } from './MailScreen'
 
-/** 사전 점검의 주의 가운데 요약에 다시 모아 보여 줄 것(해결 방법 키) */
+/** 사전 점검의 주의 중 요약에 다시 모아 표시할 항목(해결 방법 키) */
 const PREFLIGHT_CAUTIONS = ['port_25_in_use', 'disk_low', 'time_not_synchronized', 'internet_unreachable', 'registry_unreachable']
 
-/** 주의 사항 → 보러 갈 화면과 그 이름 */
+/** 주의 사항 → 확인하러 이동할 화면과 그 이름 */
 function cautionLink(key: string): { to: RouteId; label: string } | null {
   if (PREFLIGHT_CAUTIONS.includes(key)) return { to: 'check', label: 'summary.seeCheck' }
   if (key.startsWith('mail_records')) return { to: 'mail', label: 'summary.seeMail' }
@@ -61,8 +61,8 @@ export function SummaryScreen() {
   const [starting, setStarting] = useState(false)
   const [startFailed, setStartFailed] = useState(false)
 
-  // 요약은 사전 점검 결과에 기대므로(설치할 수 있는가 · 넘어온 주의), 이 창에서 점검한 적이 없으면 먼저 돌린다.
-  // 내장 메일을 쓰면 레코드 상태도 확인해 둔다(주의 목록과 완료 화면의 할 일에 쓰인다).
+  // 요약은 사전 점검 결과에 의존하므로(설치 가능 여부 · 전달된 주의), 이 창에서 점검한 이력이 없으면 먼저 실행한다.
+  // 내장 메일 사용 시 레코드 상태도 확인해 둔다(주의 목록과 완료 화면의 할 일에 사용).
   useEffect(() => {
     const s = store.getState()
     if (!s.preflight && !s.preflightBusy) void s.runPreflight()
@@ -90,7 +90,7 @@ export function SummaryScreen() {
   const mailBuiltin = isOn('mail') && answers.mail.kind === 'builtin'
   const pending = mailBuiltin && records.status === 'done' && records.key === answers.mail.mail_domain && records.result ? recordsPending(records.result.records) : null
   const cautions: Caution[] = [
-    // 사전 점검에서 넘긴 주의(메일 포트는 내장 메일을 쓸 때만)
+    // 사전 점검에서 전달된 주의(메일 포트는 내장 메일 사용 시에만)
     ...(preflight?.items ?? [])
       .filter(i => i.status === 'warn' && i.fix && PREFLIGHT_CAUTIONS.includes(i.fix.key) && (i.fix.key !== 'port_25_in_use' || mailBuiltin))
       .map(i => ({ key: i.fix!.key, vars: i.fix!.vars })),
@@ -115,7 +115,7 @@ export function SummaryScreen() {
     return has(`summary.caution.${key}`) ? <M k={`summary.caution.${key}`} v={vars} /> : t('summary.caution.other', { key: c.key })
   }
   const errorText = (e: FieldError) => {
-    // 목록 항목의 오류('zones.0')는 목록 이름으로 보인다
+    // 목록 항목의 오류('zones.0')는 목록 이름으로 표시
     const path = e.field.replace(/\.\d+$/, '')
     const named = t(`summary.fields.${path}`)
     const field = named.startsWith('installer.') ? e.field : named

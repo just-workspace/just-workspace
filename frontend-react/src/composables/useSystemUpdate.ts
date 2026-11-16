@@ -1,6 +1,6 @@
 /**
- * 관리 › 업데이트 — 서버(/api/admin/system/update) 호출과 화면이 함께 쓰는 형(型)·순수 계산.
- * 업데이트는 설치 관리자가 한다. 여기 값은 전부 서버가 준 것이다(버전·용량·시간·구역을 화면에 적어 두지 않는다).
+ * 관리 › 업데이트 — 서버(/api/admin/system/update) 호출과 화면이 공유하는 형(型)·순수 계산.
+ * 업데이트는 설치 관리자가 수행한다. 본 모듈의 값은 전부 서버가 제공한 것이다(버전·용량·시간·구역을 화면에 하드코딩하지 않는다).
  * 계약: docs/update-api.md
  */
 import { $fetch, apiRawFetch } from '~/lib/api'
@@ -163,11 +163,11 @@ export interface ReleaseNotes {
 }
 
 export const UPDATE_BASE = '/admin/update'
-/** 되돌림이 멈췄을 때 볼 문서(백업·복원 절차) */
+/** 롤백이 중단되었을 때 참조할 문서(백업·복원 절차) */
 export const UPDATE_DOCS_URL = 'https://github.com/just-workspace/just-workspace/blob/main/docs/data-safety.md'
 const API = '/api/admin/system/update'
 
-/** 파일을 본문 그대로 올린다(진행률을 받으려고 XHR). 실패하면 `{status, data}` 를 가진 오류 */
+/** 파일을 본문 그대로 업로드한다(진행률 수신을 위해 XHR 사용). 실패 시 `{status, data}` 를 가진 오류 */
 export function uploadFile(path: string, file: File, onProgress?: (percent: number) => void, signal?: AbortSignal): Promise<any> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
@@ -219,10 +219,10 @@ export const updateApi = {
   saveContact: (contact: string | null) => $fetch<{ contact: string | null; synced: boolean }>(`${API}/contact`, { method: 'PUT', body: { contact } }),
 }
 
-/** 올리기 구현 — 테스트가 바꿔 끼운다 */
+/** 업로드 구현 — 테스트에서 교체한다 */
 export const updateUpload = { send: uploadFile }
 
-/** 기록을 파일로 내려받는다 */
+/** 기록을 파일로 다운로드한다 */
 export async function downloadJobLog(id: string): Promise<void> {
   const r = await apiRawFetch(updateApi.jobLogUrl(id), { credentials: 'include' })
   if (!r.ok) throw new Error(String(r.status))
@@ -252,7 +252,7 @@ export function localized(text: Localized | undefined | null, locale: string): s
   return text?.[locale] ?? text?.ko ?? text?.en ?? ''
 }
 
-/** 1288490188 → "1.2 GB" (모르면 '') */
+/** 1288490188 → "1.2 GB" (값 미상이면 '') */
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return ''
   if (bytes < 1024) return `${bytes} B`
@@ -263,7 +263,7 @@ export function formatBytes(bytes: number | null | undefined): string {
   return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`
 }
 
-/** 초 → {m, s} — 문구는 화면이 고른다(1분 미만이면 m = 0) */
+/** 초 → {m, s} — 문구는 화면이 선택한다(1분 미만이면 m = 0) */
 export function splitDuration(seconds: number | null | undefined): { m: number; s: number } | null {
   if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null
   const total = Math.round(seconds)
@@ -276,7 +276,7 @@ export function clock(seconds: number): string {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
-/** ISO 시각 → 브라우저 시간대의 "2026-01-12 10:35" (못 읽으면 '') */
+/** ISO 시각 → 브라우저 시간대의 "2026-01-12 10:35" (파싱 실패 시 '') */
 export function formatTime(iso: string | null | undefined): string {
   if (!iso) return ''
   const d = new Date(iso)
@@ -285,20 +285,20 @@ export function formatTime(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
-/** 변경 내용(마크다운) → 줄 목록. 글머리(-, *)와 제목(#) 표시는 뗀다 */
+/** 변경 내용(마크다운) → 줄 목록. 글머리(-, *)와 제목(#) 표시는 제거한다 */
 export function changelogLines(text: string | null | undefined): string[] {
   return (text ?? '').split(/\r?\n/).map(l => l.replace(/^\s*(?:[-*+]|#{1,6}|\d+\.)\s+/, '').trim()).filter(Boolean)
 }
 
 export const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`)
 
-/** 끝나지 않은 작업인가(예고·진행 중, 또는 관리자의 선택을 기다리는 실패) */
+/** 종료되지 않은 작업인지 여부(사전 공지·진행 중, 또는 관리자의 선택을 대기 중인 실패) */
 export function isLive(job: UpdateJob | null | undefined): job is UpdateJob {
   if (!job) return false
   return job.status === 'countdown' || job.status === 'running' || (job.status === 'failed' && job.choices.length > 0)
 }
 
-/** 작업의 진행 화면 경로 — 업데이트는 적용 화면, 되돌림·복원은 되돌림 탭 */
+/** 작업의 진행 화면 경로 — 업데이트는 적용 화면, 롤백·복원은 롤백 탭 */
 export function jobPath(job: Pick<UpdateJob, 'id' | 'kind'>): string {
   return job.kind === 'update' ? `${UPDATE_BASE}/apply/${job.id}` : `${UPDATE_BASE}/rollback/${job.id}`
 }
@@ -314,7 +314,7 @@ export function viewFromPath(path: string): { view: UpdateView; arg: string | nu
   return { view, arg: view !== 'home' && arg ? decodeURIComponent(arg) : null }
 }
 
-/** 오프라인: 적용을 막는 이유(i18n 키의 끝 조각). 막지 않으면 null */
+/** 오프라인: 적용을 차단하는 사유(i18n 키의 마지막 조각). 차단하지 않으면 null */
 export function offlineBlock(state: OfflineState | null, uploading: boolean): string | null {
   if (uploading) return 'uploading'
   const b = state?.bundle

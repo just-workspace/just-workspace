@@ -12,17 +12,17 @@ export interface MeetingsParticipantProps {
   name: string
   /** LiveKit 카메라 트랙(없으면 아바타) */
   videoTrack: any | null
-  /** LiveKit 마이크 트랙(원격만 <audio> 에 붙인다) */
+  /** LiveKit 마이크 트랙(원격만 <audio> 에 연결) */
   audioTrack: any | null
-  /** 화면 공유 트랙 — 있으면 타일 위를 덮는다(object-contain) */
+  /** 화면 공유 트랙 — 존재 시 타일 위에 오버레이(object-contain) */
   screenTrack: any | null
   isMuted: boolean
   isLocal: boolean
-  /** 말하는 중 — 음소거 아니면 primary 테두리 */
+  /** 발화 중 — 음소거가 아니면 primary 테두리 */
   isSpeaking?: boolean
   /** excellent | good | poor | lost | unknown — poor/lost 만 표시 */
   connectionQuality?: string
-  /** 그리드 셀을 꽉 채움(aspect-video 대신 부모 높이를 따름) */
+  /** 그리드 셀 전체를 채움(aspect-video 대신 부모 높이 적용) */
   fill?: boolean
   className?: string
 }
@@ -43,7 +43,7 @@ export function MeetingsParticipant({
   const screenEl = useRef<HTMLVideoElement | null>(null)
   const audioEl = useRef<HTMLAudioElement | null>(null)
 
-  // videoTrack 이 바뀌면 옛 트랙을 떼고 새 트랙을 붙인다(처음에도). 언마운트 때 뗀다.
+  // videoTrack 변경 시 이전 트랙을 분리하고 새 트랙을 연결한다(최초 포함). 언마운트 시 분리한다.
   useEffect(() => {
     const el = videoEl.current
     attachTrack(videoTrack, el)
@@ -56,7 +56,7 @@ export function MeetingsParticipant({
     return () => detachTrack(screenTrack, el)
   }, [screenTrack])
 
-  // 원격만 붙인다.
+  // 원격만 연결한다.
   useEffect(() => {
     const el = audioEl.current
     if (!isLocal) attachTrack(audioTrack, el)
@@ -93,7 +93,7 @@ export function MeetingsParticipant({
         className={cn('absolute inset-0 w-full h-full object-cover', !videoTrack && 'hidden')}
       />
 
-      {/* 비디오 없을 때 아바타 */}
+      {/* 비디오 부재 시 아바타 */}
       {!videoTrack && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center text-2xl font-bold text-primary">

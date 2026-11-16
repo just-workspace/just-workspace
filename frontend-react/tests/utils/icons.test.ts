@@ -11,7 +11,7 @@ describe('아이콘 세트', () => {
   it('lucide 별칭은 같은 뜻 그림으로', () => {
     expect(iconPaths('pencil')).toBe(ICON_PATHS['edit-3'])
     expect(iconPaths('film')).toBe(ICON_PATHS.clapperboard)
-    // 마술봉은 자기 그림(예전엔 sparkles 로 대체)
+    // 마술봉은 전용 아이콘 사용(기존에는 sparkles 로 대체)
     expect(iconPaths('wand')).toBe(ICON_PATHS.wand)
     expect(iconPaths('wand-2')).toBe(ICON_PATHS.wand)
     expect(ICON_PATHS.wand).not.toBe(ICON_PATHS.sparkles)

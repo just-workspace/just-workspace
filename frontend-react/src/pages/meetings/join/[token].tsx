@@ -1,17 +1,17 @@
 /**
  * 초대 링크 입장.
  *  setup   — 참가 전 화면(MeetingsDeviceSetup): 왼쪽 미리보기 + 장치 바, 오른쪽 방 정보 · 표시 이름(기억) · 비밀번호(보기 토글) → [참가 신청]
- *            버튼은 이름이 비었을 때만 잠기고(guestJoinLock) 이유를 버튼 아래에 쓴다.
- *  waiting — [참가 신청] 자리의 primary 띠(스피너 · 경과 · 취소 — 설정 화면이 그린다). 미리보기·장치는 살아 있다(승인 즉시 그대로 입장).
- *  room    — 통화(기존 그대로 — LiveKit 통화 중 기능은 손대지 않는다)
+ *            버튼은 이름이 비어 있을 때만 비활성화하며(guestJoinLock) 사유를 버튼 아래에 표시한다.
+ *  waiting — [참가 신청] 자리의 primary 띠(스피너 · 경과 · 취소 — 설정 화면이 렌더한다). 미리보기·장치는 유지된다(승인 즉시 그대로 입장).
+ *  room    — 통화(기존과 동일 — LiveKit 통화 중 기능은 변경하지 않는다)
  *  invalid · denied · error · ended · wrongpw — 결과 화면 1틀(MeetingsResultScreen = 모바일 회의 머리 틀 · 데스크톱 왼쪽 패널)
  *    invalid  링크 만료(서버 410 이면 "'회의'는 10월 15일 16:00에 끝났습니다") + [호스트에게 알리기][로그인]
  *    denied   "박민지 님이 이번 입장 요청을 받지 않았습니다" + [다시 요청][닫기]
  *    ended    "'회의' · 58분 · 참가 6명 · 파일·채팅은 #채널에" + [회의 목록으로][다시 참여]
- *             손님(로그인 안 함)은 버튼 대신 "이 창을 닫아도 됩니다". 데스크톱 오른쪽 stage = "이번 회의" 요약
+ *             손님(비로그인)은 버튼 대신 "이 창을 닫아도 됩니다". 데스크톱 오른쪽 stage = "이번 회의" 요약
  *             (손님은 참가·시각만 — MeetingsEndSummary guest)
  *    wrongpw  제목 = 회의 이름, 비밀번호 입력 + 아래 오류 "비밀번호가 맞지 않습니다 · 2번 남음" + [다시 시도]
- *  비밀번호 틀림 화면으로 넘어갈 때 장치 선택을 받아 두고 미리보기를 끈다(다시 시도로 맞히면 그 선택으로 입장).
+ *  비밀번호 틀림 화면으로 전환할 때 장치 선택을 보존하고 미리보기를 중지한다(다시 시도로 통과하면 해당 선택으로 입장).
  */
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useI18n } from '~/i18n'
@@ -51,7 +51,7 @@ interface RoomInfo {
   scheduled_at?: string | null; duration_minutes?: number | null; channel_name?: string | null
 }
 
-// 표시 이름은 이 브라우저에 기억(문서 공유 /s/ 손님 화면과 같게)
+// 표시 이름은 이 브라우저에 저장(문서 공유 /s/ 손님 화면과 동일)
 const NICK_KEY = 'jw.meetings.nickname'
 
 function remainingFrom(e: any): number | null {
@@ -61,11 +61,11 @@ function remainingFrom(e: any): number | null {
   } catch { return null }
 }
 
-/** 초대 링크 입장. 매개변수가 바뀌면 화면을 새로 만든다 — 토큰으로 key. */
+/** 초대 링크 입장. 매개변수가 변경되면 화면을 재생성한다 — 토큰으로 key. */
 export default function MeetingJoinPage() {
   const route = useRoute()
-  // 회의 화면 진입 때 livekit-client 청크를 미리 받아 둔다(메인 번들에서 뺀 것 — 입장 버튼 대기 줄이기)
-  useEffect(() => { void loadLivekit().catch(() => { /* 입장 때 다시 시도 */ }) }, [])
+  // 회의 화면 진입 시 livekit-client 청크를 사전 로드한다(메인 번들에서 분리한 청크 — 입장 버튼 대기 단축)
+  useEffect(() => { void loadLivekit().catch(() => { /* 입장 시 재시도 */ }) }, [])
   return <MeetingJoin key={String(route.params.token)} />
 }
 
@@ -87,9 +87,9 @@ function MeetingJoin() {
   const [roomInfo, setRoomInfoState] = useState<RoomInfo | null>(null)
   const roomInfoRef = useRef<RoomInfo | null>(null)
   const setRoomInfo = (r: RoomInfo | null) => { roomInfoRef.current = r; setRoomInfoState(r) }
-  // 끝난 회의의 링크(서버 410) — 결과 화면 설명에 회의 이름·끝난 시각
+  // 종료된 회의의 링크(서버 410) — 결과 화면 설명에 회의 이름·종료 시각 표시
   const [endedInfo, setEndedInfo] = useState<{ name: string; host_name?: string; ended_at?: string | null } | null>(null)
-  // 비밀번호 틀림 화면으로 넘어가기 전에 받아 둔 장치 선택
+  // 비밀번호 틀림 화면으로 전환하기 전에 보존한 장치 선택
   const lastSelection = useRef<MeetingDeviceSelection | null>(null)
   const stats = useMeetingSessionStats(() => participants.length)
   const [nickname, setNickname] = useState('')
@@ -105,7 +105,7 @@ function MeetingJoin() {
     try { localStorage.setItem(NICK_KEY, nickname.trim()) } catch { /* noop */ }
   }
 
-  // 장치 설정 컴포넌트 — 승인 시점에 선택값을 그대로 읽어 간다
+  // 장치 설정 컴포넌트 — 승인 시점에 선택값을 그대로 조회한다
   const setupRef = useRef<MeetingsDeviceSetupHandle | null>(null)
 
   // 사이드바 / 장치 메뉴
@@ -113,7 +113,7 @@ function MeetingJoin() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarTab, setSidebarTab] = useState<MeetingsSidebarTab>('participants')
 
-  // Safari 는 사용자 제스처 없이 붙으면 원격 오디오를 막는다 → 탭 한 번으로 풀 수 있게
+  // Safari 는 사용자 제스처 없이 접속하면 원격 오디오를 차단한다 → 탭 1회로 해제 가능하도록 처리
   const [audioBlocked, setAudioBlocked] = useState(false)
 
   // 방 정보 한 줄: 호스트 · 시각 · 인원(숫자는 mono)
@@ -211,7 +211,7 @@ function MeetingJoin() {
   })()
   function closeTab() {
     window.close()
-    // 스크립트로 연 창이 아니면 닫히지 않는다 → 홈으로
+    // 스크립트로 연 창이 아니면 닫히지 않는다 → 홈으로 이동
     setTimeout(() => { if (!window.closed) void navigateTo(authStore.getState().user ? '/meetings' : '/login') }, 150)
   }
 
@@ -227,7 +227,7 @@ function MeetingJoin() {
         { method: 'POST', body: { nickname: nickname.trim(), password: password || null } },
       )
       requestId.current = data.request_id
-      // 비밀번호가 맞으면 여기서 이미 승인 — 대기를 건너뛴다
+      // 비밀번호가 일치하면 이 시점에 이미 승인 — 대기를 생략한다
       if (data.status === 'approved' && data.token && data.livekit_url) {
         await enterRoom(data.livekit_url, data.token)
         return
@@ -258,12 +258,12 @@ function MeetingJoin() {
     }
   }
 
-  // 3. 승인 상태 폴링 — 1초. 승인되면 사람 손 없이 바로 들어간다.
+  // 3. 승인 상태 폴링 — 1초. 승인되면 사용자 조작 없이 즉시 입장한다.
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null)
-  // 경과 시간은 설정 화면(waitingSince)이 그린다
+  // 경과 시간은 설정 화면(waitingSince)이 표시한다
   const [waitingSince, setWaitingSince] = useState(0)
 
-  // 조회가 1초보다 느리면 겹친다 — 겹친 응답 둘이 각각 입장하지 않게 한 번에 하나만
+  // 조회가 1초보다 지연되면 중첩된다 — 중첩된 응답 둘이 각각 입장하지 않도록 동시 1건으로 제한
   const polling = useRef(false)
   function startPolling() {
     setWaitingSince(Date.now())
@@ -276,7 +276,7 @@ function MeetingJoin() {
         const data = await $fetch<{ status: string; token?: string; livekit_url?: string }>(
           `/api/meetings/join/${token}/request/${rid}/status`,
         )
-        // 기다리는 사이 취소했거나 다시 신청했으면 이 응답은 버린다(취소했는데 입장되는 일이 없게)
+        // 대기 중 취소했거나 재신청한 경우 이 응답은 폐기한다(취소 후 입장되는 상황 방지)
         if (requestId.current !== rid) return
         if (data.status === 'approved' && data.token && data.livekit_url) {
           stopPolling()
@@ -289,8 +289,8 @@ function MeetingJoin() {
       } catch (e: any) {
         if (requestId.current !== rid) return
         const status = e?.status ?? e?.statusCode
-        // 신청·링크가 없어졌다(호스트가 회의를 종료·삭제) — 예전엔 이것도 삼켜 "승인 대기 중"이 끝없이 돌았다.
-        // 방 정보를 다시 물어 끝난 회의면 만료 화면으로, 방이 살아 있으면 입장 화면으로 돌려 다시 신청하게 한다.
+        // 신청·링크가 소멸했다(호스트가 회의를 종료·삭제) — 이전에는 이 경우도 무시되어 "승인 대기 중"이 무한 반복되었다.
+        // 방 정보를 재조회하여 종료된 회의면 만료 화면으로, 방이 유지 중이면 입장 화면으로 복귀시켜 재신청하도록 한다.
         if (status === 404 || status === 410) {
           stopPolling()
           requestId.current = null
@@ -300,7 +300,7 @@ function MeetingJoin() {
             addToast('info', t('meetings.join.requestLost', '입장 요청이 만료되었습니다. 다시 신청해 주세요'))
           }
         }
-        /* 그 밖(네트워크 오류)은 다음 번에 다시 */
+        /* 그 외(네트워크 오류)는 다음 주기에 재시도 */
       } finally {
         polling.current = false
       }
@@ -311,8 +311,8 @@ function MeetingJoin() {
     if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null }
   }
 
-  /** 승인되면 사람 손 없이 바로 접속. 장치 선택값은 설정 화면에서 그대로 가져온다. */
-  // 이 화면이 접속 중·접속한 통화인가 — 떠날 때 "이 화면의 통화"만 정리한다
+  /** 승인되면 사용자 조작 없이 즉시 접속. 장치 선택값은 설정 화면에서 그대로 조회한다. */
+  // 이 화면이 접속 중이거나 접속한 통화인지 여부 — 이탈 시 "이 화면의 통화"만 정리한다
   const entering = useRef(false)
   const entered = useRef(false)
   const alive = useRef(true)
@@ -329,7 +329,7 @@ function MeetingJoin() {
       stats.start()
       watchAudioPlayback()
     } catch (e: any) {
-      // 취소(화면 이탈)는 실패가 아니다
+      // 취소(화면 이탈)는 실패로 취급하지 않는다
       if (isJoinCancelled(e) || !alive.current) return
       setErrorMsg(e?.data?.detail || t('meetings.join.joinFail'))
       setStep('error')
@@ -338,7 +338,7 @@ function MeetingJoin() {
     }
   }
 
-  /** 제스처 없이 붙었으므로 Safari 가 오디오를 막을 수 있다. */
+  /** 제스처 없이 접속했으므로 Safari 가 오디오를 차단할 수 있다. */
   function watchAudioPlayback() {
     const room = meetingsStore.getState().currentRoom as any
     if (!room) return
@@ -355,7 +355,7 @@ function MeetingJoin() {
     } catch { /* noop */ }
   }
 
-  // 표시 이름 불러오기 + 회의실 정보 조회(onMounted 순서 그대로) · 떠날 때 정리
+  // 표시 이름 로드 + 회의실 정보 조회(onMounted 순서 유지) · 이탈 시 정리
   useEffect(() => {
     try { setNickname(localStorage.getItem(NICK_KEY) || '') } catch { /* 사생활 보호 모드 */ }
     void loadInfo()
@@ -363,11 +363,11 @@ function MeetingJoin() {
       alive.current = false
       stopPolling()
       requestId.current = null
-      // 아직 접속 중이면 그 입장을 접는다 — 떠난 뒤에 접속이 완료돼 화면 없는 통화가 남지 않게
+      // 아직 접속 중이면 해당 입장을 취소한다 — 이탈 후 접속이 완료되어 화면 없는 통화가 남는 상황 방지
       if (entering.current) cancelPendingJoin()
-      // 손님 화면은 셸·미니 창이 없다 — 떠나면 퇴장. 재입장 대기 중(connected=false)이어도 세션을 끝낸다.
-      // 이 화면에서 들어간 통화만 끊는다: 미니 창에 내려 둔 다른 통화가 있는 채로 초대 링크를 열었다가
-      // 그냥 돌아가면 그 통화가 말없이 끊겼다.
+      // 손님 화면은 셸·미니 창이 없다 — 이탈 시 퇴장. 재입장 대기 중(connected=false)이어도 세션을 종료한다.
+      // 이 화면에서 입장한 통화만 종료한다: 미니 창으로 내려 둔 다른 통화가 있는 상태에서 초대 링크를 열었다가
+      // 그대로 복귀하면 해당 통화가 안내 없이 종료되었다.
       const s = meetingsStore.getState()
       if (entered.current && (s.connected || s.inCall)) void leaveRoom()
     }
@@ -379,7 +379,7 @@ function MeetingJoin() {
     const rid = requestId.current
     requestId.current = null
     setStep('setup')
-    // 호스트 대기실에 유령 신청이 남지 않게 서버에도 알린다(실패해도 화면은 그대로 — 신청은 24시간 뒤 사라진다)
+    // 호스트 대기실에 유령 신청이 남지 않도록 서버에도 통지한다(실패해도 화면은 유지 — 신청은 24시간 후 삭제된다)
     if (rid) void $fetch(`/api/meetings/join/${token}/request/${rid}/cancel`, { method: 'POST' }).catch(() => {})
   }
 
@@ -391,14 +391,14 @@ function MeetingJoin() {
     requestId.current = null
     setStep('ended')
   }
-  // 저쪽에서 끝났으면(호스트가 회의 종료·내보냄) 끊김 오버레이가 아니라 종료 화면으로
+  // 상대 측에서 종료된 경우(호스트가 회의 종료·내보냄) 끊김 오버레이가 아닌 종료 화면으로 전환
   const handleLeaveRef = useRef(handleLeave)
   handleLeaveRef.current = handleLeave
   useEffect(() => {
     if (remoteEnded && step === 'room') void handleLeaveRef.current()
   }, [remoteEnded, step])
 
-  /** 거절·실패·종료 → 다시 입장 화면(이름은 그대로) */
+  /** 거절·실패·종료 → 입장 화면으로 복귀(이름은 유지) */
   function backToSetup() {
     requestId.current = null
     setPasswordError('')
@@ -426,7 +426,7 @@ function MeetingJoin() {
       </div>
     )
   } else if (step === 'setup' || step === 'waiting') {
-    /* 입장(장치 + 이름·비밀번호) — 대기 중에도 미리보기를 살려 둔다. 참가 버튼이 잠기는 건 이름이 비었을 때만(이유는 버튼 아래) */
+    /* 입장(장치 + 이름·비밀번호) — 대기 중에도 미리보기를 유지한다. 참가 버튼은 이름이 비어 있을 때만 비활성화(사유는 버튼 아래) */
     const lock = guestJoinLock(true, nickname)
     body = (
       <MeetingsDeviceSetup
@@ -472,7 +472,7 @@ function MeetingJoin() {
       </MeetingsDeviceSetup>
     )
   } else if (step === 'room') {
-    /* 회의 참여 중 — 끊겨도 화면을 유지하고 오버레이만 띄운다 */
+    /* 회의 참여 중 — 연결이 끊겨도 화면을 유지하고 오버레이만 표시한다 */
     body = (
       <div className="flex flex-col h-screen supports-[height:100dvh]:h-dvh relative">
         {/* 연결 상태 오버레이 */}
@@ -646,7 +646,7 @@ function MeetingJoin() {
       </MeetingsResultScreen>
     )
   } else {
-    /* 그 밖의 실패(정보 조회·신청·입장) */
+    /* 그 외 실패(정보 조회·신청·입장) */
     body = (
       <MeetingsResultScreen icon="alert-triangle" tone="danger" title={t('meetings.join.enterFail')} description={errorMsg}>
         <UiButton size="lg" className="h-12 w-full rounded-lg text-[15px] font-semibold" onClick={() => { if (roomInfo) backToSetup(); else void loadInfo() }}>{t('common.retry')}</UiButton>

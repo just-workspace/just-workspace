@@ -1,5 +1,5 @@
 /* 코드 뷰어(GitFileViewer.tsx) 스타일.
-   구문 색 = 디자인 토큰. shiki css-variables 테마가 이 변수 이름으로 색을 낸다. */
+   구문 색 = 디자인 토큰. shiki css-variables 테마가 이 변수 이름으로 색을 적용한다. */
 .git-code {
   --shiki-foreground: hsl(var(--foreground));
   --shiki-background: transparent;

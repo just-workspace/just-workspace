@@ -1,4 +1,4 @@
-// 홈 대시보드 배치 규칙 — 주 줄 · 행 수 상한 · row span · 개인/관리자 배치 합치기.
+// 홈 대시보드 배치 규칙 — 주 줄 · 행 수 상한 · row span · 개인/관리자 배치 병합.
 import { describe, it, expect } from 'vitest'
 import {
   PRIMARY, PRIMARY_NEW, REST, REST_NEW, CARD_KEYS, maxRowsFor, rowSpanFor, planTier, drawOrder, resolveLayout, mergeOrder,
@@ -51,9 +51,9 @@ describe('높이', () => {
     const h = { inbox: 92, today: 92, ai: 210, cont: 400 }
     const filled = (k: CardKey) => k === 'cont' || k === 'inbox'
     expect(tierHeights(['inbox', 'today', 'ai', 'cont'], { ...h, inbox: 300 }, filled)).toEqual({ inbox: 400, today: 92, ai: 210, cont: 400 })
-    // 다 비면 각자 내용 높이
+    // 전부 비면 각자 내용 높이
     expect(tierHeights(['today', 'ai'], h, () => false)).toEqual({ today: 92, ai: 210 })
-    // 높이를 아직 모르면 fallback
+    // 높이 미확정 시 fallback
     expect(tierHeights(['today'], {}, () => true, 240)).toEqual({ today: 240 })
   })
   it('행 수 상한 = 실효 높이 <1000 5 · <1300 6 · 그 이상 7', () => {

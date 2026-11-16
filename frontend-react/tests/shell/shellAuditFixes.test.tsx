@@ -37,7 +37,7 @@ describe('UiSelect — 닫히면 콤보박스 버튼으로 포커스가 돌아�
     expect(screen.queryByRole('listbox')).toBeNull()
     expect(onClose).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(btn)
-    // 포커스가 모달 안에 있으니 Esc 가 이제 모달을 닫는다
+    // 포커스가 모달 안에 있으므로 Esc 가 모달을 닫음
     fireEvent.keyDown(btn, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
   })
@@ -74,7 +74,7 @@ describe('AppErrorBoundary', () => {
     renderInRouter(<AppErrorBoundary scope="layout"><Page /></AppErrorBoundary>)
     expect(screen.queryByText('본문')).toBeNull()
     const retry = screen.getAllByRole('button')[0]
-    // 사용자에게는 원문(영어) 오류가 아니라 우리 문구
+    // 사용자에게는 원문(영어) 오류가 아닌 본 프로젝트의 안내 문구 표시
     expect(toastStore.getState().toasts.some(t => t.message.includes('Cannot read'))).toBe(false)
     broken = false
     fireEvent.click(retry)

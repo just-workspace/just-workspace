@@ -1,8 +1,8 @@
 // 설정 › 메일: 탭 계정 · 필터(n) · 서명 · 보관·전달.
-//  계정: GET/PATCH/DELETE /api/mail/accounts, POST …/test. 추가·상세 편집은 기존 /mail/accounts 화면(IMAP/SMTP·OAuth 폼)으로.
+//  계정: GET/PATCH/DELETE /api/mail/accounts, POST …/test. 추가·상세 편집은 기존 /mail/accounts 화면(IMAP/SMTP·OAuth 폼)에서 수행.
 //  필터: MailFilterRules(메일 모듈) · 서명: /api/mail/signatures
 //  보관: 외부 메일 .eml 아카이브(archive_enabled · archive/backfill · archive/status)
-//  전달·자동 응답: 서버 API 가 없어 비활성으로 보여 준다.
+//  전달·자동 응답: 서버 API 가 없어 비활성 상태로 표시한다.
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 import { useI18n } from '~/i18n'
@@ -58,7 +58,7 @@ export default function SettingsMailPage() {
   async function loadAccounts() {
     setAccountsLoading(true)
     setAccountsError('')
-    await fetchAccounts() // 실패를 삼키는 공용 조회 — 비어 있으면 한 번 더 물어 오류인지 확인한다
+    await fetchAccounts() // 실패를 무시하는 공용 조회 — 결과가 비어 있으면 1회 재조회하여 오류 여부를 확인한다
     if (!mailStore.getState().accounts.length) {
       try { await $fetch('/api/mail/accounts') } catch (e) { setAccountsError(detailOf(e) || t('settings.mail.accountsLoadError')) }
     }
@@ -183,7 +183,7 @@ export default function SettingsMailPage() {
     if (!await confirmBox(t('mail.archive.backfillConfirm'), { title: t('settings.mail.backfill'), confirmLabel: t('settings.mail.backfillStart') })) return
     setArchiving(a.id)
     try {
-      // 요청 안에서 끝나지 않는 일(nginx 120초) — 시작만 시키고 상태를 폴링한다(기존 /mail/accounts 와 같은 방식)
+      // 요청 내에 완료되지 않는 작업(nginx 120초) — 시작만 요청하고 상태를 폴링한다(기존 /mail/accounts 와 동일 방식)
       await $fetch(`/api/mail/accounts/${a.id}/archive/backfill?limit=200`, { method: 'POST' })
       addToast('info', t('mail.archive.backfillStarted'))
       void pollBackfill(a)

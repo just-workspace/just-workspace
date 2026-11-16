@@ -5,7 +5,7 @@ export type AiOpsTab = 'usage' | 'writes' | 'audit' | 'policy' | 'feedback'
 export const AI_OPS_TABS: AiOpsTab[] = ['usage', 'writes', 'audit', 'policy', 'feedback']
 export const AI_OPS_BASE = '/admin/ai-ops'
 
-/** 경로 → 탭(/admin/ai-ops = 사용량, 모르는 하위 경로도 사용량) */
+/** 경로 → 탭(/admin/ai-ops = 사용량, 알 수 없는 하위 경로도 사용량) */
 export function tabFromPath(path: string): AiOpsTab {
   const rest = path.startsWith(AI_OPS_BASE) ? path.slice(AI_OPS_BASE.length).replace(/^\/+|\/+$/g, '') : ''
   return (AI_OPS_TABS as string[]).includes(rest) ? (rest as AiOpsTab) : 'usage'

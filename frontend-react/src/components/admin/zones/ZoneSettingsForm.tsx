@@ -1,10 +1,10 @@
 /**
- * 구역 설정 폼 — 켜기 창의 1단계와, 켜진 구역의 "설정"이 같이 쓴다.
+ * 구역 설정 폼 — 켜기 창의 1단계와 켜진 구역의 "설정"이 공용으로 사용한다.
  *  · 메일: 내장(메일 도메인 + 등록할 레코드 확인) / 외부 발신 서버(주소·포트·보안 방식·계정·비밀번호 + 연결 확인)
  *  · 회의: 공인 주소(감지값, 없으면 직접 입력) · 중계 서버 · 무손실 오디오
  *  · AI 도우미: 지금 연결(제공자·키 + 연결 확인) / 나중에
- *  · 코드 저장소: 검증된 버전(몇 버전인지 옆에 적는다) / 최신 / 직접 지정
- * 연결 확인이 필요한 값(외부 발신 서버, AI 키)을 바꾸면 확인 상태는 처음으로 돌아간다.
+ *  · 코드 저장소: 검증된 버전(해당 버전 번호를 옆에 표기) / 최신 / 직접 지정
+ * 연결 확인이 필요한 값(외부 발신 서버, AI 키)을 변경하면 확인 상태가 초기화된다.
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -28,17 +28,17 @@ export interface VerifyState { state: 'idle' | 'running' | 'ok' | 'failed'; code
 export interface ZoneSettingsFormProps {
   zoneId: string
   form: ZoneSettings
-  /** 값 바꾸기 — resetVerify 면 연결 확인 상태도 처음으로 */
+  /** 값 변경 — resetVerify 이면 연결 확인 상태도 초기화 */
   onChange: (patch: ZoneSettings, resetVerify?: boolean) => void
   verify: VerifyState
   onVerify: () => void
-  /** 설치 때 감지해 둔 공인 주소 */
+  /** 설치 시 감지한 공인 주소 */
   detectedIp: string | null
   onRedetectIp: () => void
   redetecting: boolean
-  /** 켜진 구역의 설정을 다시 연 것인가(메일 레코드를 열자마자 확인한다) */
+  /** 켜진 구역의 설정을 다시 연 경우인지 여부(메일 레코드를 여는 즉시 확인한다) */
   reopened: boolean
-  /** 코드 저장소의 "검증된 버전"이 몇 버전인지 — 알 때만 선택지 옆에 적는다 */
+  /** 코드 저장소 "검증된 버전"의 버전 번호 — 값이 있을 때만 선택지 옆에 표기한다 */
   verifiedVersion?: string | null
 }
 

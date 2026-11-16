@@ -1,4 +1,4 @@
-// UI 키트 33개 렌더 스모크 — 필수 props 만 채워 크래시 없이 그려지는지
+// UI 키트 33개 렌더 스모크 — 필수 props 만 지정하여 크래시 없이 렌더링되는지 검증
 import { describe, it, expect } from 'vitest'
 import type { ReactElement } from 'react'
 import { screen } from '@testing-library/react'

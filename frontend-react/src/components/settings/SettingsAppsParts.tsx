@@ -2,9 +2,9 @@
  * 설정 › 연결된 앱 화면 조각.
  *  · SettingsConnectedAppRow — 연결된 앱 행(min 64): 글자 타일 36 + 이름 14/600 + 권한 + "연결 · 마지막 사용" + [연결 끊기]
  *  · SettingsAppPasswordRow — 앱 비밀번호 행(min 52): 이름 600 + "메일 · 캘린더 · 만든 날" + "삭제"
- *  · SettingsPatRow — 개인 액세스 토큰 행(min 48): 이름(+ 폐기됨 배지) + 만든·쓴 시각 + "폐기"
+ *  · SettingsPatRow — 개인 액세스 토큰 행(min 48): 이름(+ 폐기됨 배지) + 생성·사용 시각 + "폐기"
  *  · SettingsAppPasswordNewModal — 새 앱 비밀번호(이름 + 범위 체크 2) → [만들기]
- *  · SettingsAppPasswordIssuedModal — 발급된 비밀번호 한 번만 보여 주기 → [완료]
+ *  · SettingsAppPasswordIssuedModal — 발급된 비밀번호 1회 표시 → [완료]
  */
 import type { FormEvent, ReactNode } from 'react'
 import { useI18n } from '~/i18n'
@@ -19,9 +19,9 @@ import { SettingsTextAction } from './SettingsTextAction'
 export interface SettingsConnectedAppRowProps {
   /** 앱 이름(첫 글자가 타일) */
   name: string
-  /** 권한 이름들(없으면 줄 생략) */
+  /** 권한 이름 목록(없으면 줄 생략) */
   scopeLabels: string[]
-  /** "연결 {since} · 마지막 사용 {last}" 줄(UiTrans 로 만든 노드) */
+  /** "연결 {since} · 마지막 사용 {last}" 줄(UiTrans 로 생성한 노드) */
   since: ReactNode
   /** 버튼 비활성 */
   disabled?: boolean
@@ -75,9 +75,9 @@ export function SettingsAppPasswordRow({ name, meta, lastUsed, disabled = false,
 export interface SettingsPatRowProps {
   /** 토큰 이름 */
   name: string
-  /** 폐기됨(흐리게 + 배지, 폐기 버튼 없음) */
+  /** 폐기됨(흐림 처리 + 배지, 폐기 버튼 없음) */
   revoked: boolean
-  /** 만든 시각 */
+  /** 생성 시각 */
   created: string
   /** 마지막 사용 시각 */
   used: string
@@ -109,7 +109,7 @@ export interface AppPasswordDraft { name: string; mail: boolean; dav: boolean; e
 export interface SettingsAppPasswordNewModalProps {
   /** 입력 상태 */
   draft: AppPasswordDraft
-  /** 일부 바꾸기 */
+  /** 부분 변경 */
   onChange: (patch: Partial<AppPasswordDraft>) => void
   /** [만들기] · Enter */
   onCreate: () => void
@@ -152,7 +152,7 @@ export function SettingsAppPasswordNewModal({ draft, onChange, onCreate, onClose
   )
 }
 
-/** 발급된 앱 비밀번호(한 번만) 모달(440, 바깥 클릭으로 안 닫힘) */
+/** 발급된 앱 비밀번호(1회 표시) 모달(440, 바깥 클릭으로 닫히지 않음) */
 export function SettingsAppPasswordIssuedModal({ name, password, onClose }: {
   /** 앱 비밀번호 이름(제목) */
   name: string

@@ -1,6 +1,6 @@
 /**
  * 번들 SPA 앱(VITE_API_BASE) 주소·인증 분기 — 웹은 상대 주소, 번들 앱은 apiBase + Bearer.
- * apiBase 를 타야 하는 곳(WS /ws/chat·플러그인 번들·파일 업/다운로드·메일 첨부)의 회귀 테스트.
+ * apiBase 를 경유해야 하는 곳(WS /ws/chat·플러그인 번들·파일 업/다운로드·메일 첨부)의 회귀 테스트.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runtimeConfig, apiUrl, wsUrl, wsProtocols, bundledAuthHeaders, isBundledApp } from '~/lib/runtimeConfig'
@@ -104,7 +104,7 @@ describe('번들 앱(apiBase 있음)', () => {
   it('파일 내려받기(downloadFile)가 apiBase + Bearer 로 요청한다', async () => {
     const fetchMock = vi.fn(async () => okResponse('hello'))
     vi.stubGlobal('fetch', fetchMock)
-    // 브라우저 저장 단계(blob URL·<a>.click)는 happy-dom 에서 흉내만
+    // 브라우저 저장 단계(blob URL·<a>.click)는 happy-dom 에서 모의 처리만 수행
     vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:x', revokeObjectURL: () => {} }))
     await downloadFile('docs/a.txt')
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]

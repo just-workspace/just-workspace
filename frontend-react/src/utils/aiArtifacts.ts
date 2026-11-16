@@ -1,7 +1,7 @@
 /**
- * 결과물(AI 가 만든 문서·묶음·파일 압축) — 타입·API·표시 도우미.
+ * 결과물(AI 가 생성한 문서·묶음·파일 압축) — 타입·API·표시 도우미.
  * 서버: app/ai/artifacts.py · artifacts_router.py(/api/ai/artifacts). 채팅 SSE `artifact` 이벤트와
- * 메시지 기록(messages[].artifacts)이 같은 모양 {type:'file', artifact} | {type:'bundle', job} 이다.
+ * 메시지 기록(messages[].artifacts)은 동일한 형태 {type:'file', artifact} | {type:'bundle', job} 이다.
  */
 import { $fetch } from '~/lib/api'
 import type { ApprovalRequest } from '~/utils/approvals'
@@ -102,12 +102,12 @@ export const aiArtifactsApi = {
   retryItem: (id: string, index: number) => $fetch<AiArtifactJob>(`${base}/jobs/${encodeURIComponent(id)}/items/${index}/retry`, { method: 'POST' }),
   rebuildJob: (id: string) => $fetch<AiArtifactJob>(`${base}/jobs/${encodeURIComponent(id)}/rebuild`, { method: 'POST' }),
   saveJob: (id: string) => $fetch<AiArtifactSaveResult>(`${base}/jobs/${encodeURIComponent(id)}/save`, { method: 'POST' }),
-  /** 파일 화면 [압축해서 내려받기] — files_zip 과 같은 작업 */
+  /** 파일 화면 [압축해서 내려받기] — files_zip 과 동일한 작업 */
   zip: (body: { paths?: string[]; folder?: string; query?: string; path?: string; zip_name?: string }) =>
     $fetch<AiArtifactJob>(`${base}/zip`, { method: 'POST', body }),
 }
 
-/** 남은 시간(시간, 올림). 지났으면 0 */
+/** 남은 시간(시간 단위, 올림). 경과 시 0 */
 export function aiHoursLeft(expiresAt: string | null | undefined, now: number = Date.now()): number {
   const t = Date.parse(expiresAt || '')
   if (Number.isNaN(t)) return 0
@@ -147,7 +147,7 @@ export function aiArtifactError(e: any): { code: string; message: string; room?:
   return { code: status === 413 ? 'quota' : 'failed', message: typeof d === 'string' ? d : (e?.message || '') }
 }
 
-/** 실행된 files_zip 쓰기(내장 AI 승인 카드로 실행)도 묶음 카드로 보인다 */
+/** 실행된 files_zip 쓰기(내장 AI 승인 카드로 실행)도 묶음 카드로 표시한다 */
 export function aiArtifactsFromWrites(writes: ApprovalRequest[] | undefined): AiArtifactPayload[] {
   const out: AiArtifactPayload[] = []
   for (const w of writes ?? []) {
@@ -157,7 +157,7 @@ export function aiArtifactsFromWrites(writes: ApprovalRequest[] | undefined): Ai
   return out
 }
 
-/** 같은 대상(파일 id·작업 id)은 하나로 — 나중 것이 이긴다 */
+/** 동일 대상(파일 id·작업 id)은 하나로 병합 — 나중 항목 우선 */
 export function aiMergeArtifacts(list: AiArtifactPayload[]): AiArtifactPayload[] {
   const seen = new Map<string, AiArtifactPayload>()
   for (const p of list) {
@@ -169,8 +169,8 @@ export function aiMergeArtifacts(list: AiArtifactPayload[]): AiArtifactPayload[]
 }
 
 /**
- * 파일 화면 [압축해서 내려받기] — 서버 압축 작업(files_zip 과 같은 API)을 시작하고, 전송 패널에 진행률을 보이다가
- * 끝나면 zip 을 내려받는다. zip 은 내 파일 › AI 결과물 에도 남는다. 결과 작업을 돌려준다(실패 시 throw).
+ * 파일 화면 [압축해서 내려받기] — 서버 압축 작업(files_zip 과 동일한 API)을 시작하고, 전송 패널에 진행률을 표시한 뒤
+ * 완료 시 zip 을 내려받는다. zip 은 내 파일 › AI 결과물 에도 보존된다. 결과 작업을 반환한다(실패 시 throw).
  */
 export async function aiZipAndDownload(
   body: { paths?: string[]; query?: string; path?: string; zip_name?: string },

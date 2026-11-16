@@ -1,14 +1,14 @@
 /**
  * 컴포저 자동완성 `:` `@`.
- * 컴포저 위 목록(키트 UiMentionList — 행 36 · 앞 24 · 이름 · 설명 muted · 꼬리표 · 비활성 60% + 이유), 최대 8개,
- * 아래 aria-live 결과 수 + 키 안내. Tab/Enter 고르기 · ↑↓ · Esc(입력의 onKeyDown 에서 useUiMentionList 가 처리).
+ * 컴포저 위 목록(키트 UiMentionList — 행 36 · 앞 24 · 이름 · 설명 muted · 라벨 · 비활성 60% + 사유), 최대 8개,
+ * 아래 aria-live 결과 수 + 키 안내. Tab/Enter 선택 · ↑↓ · Esc(입력의 onKeyDown 에서 useUiMentionList 가 처리).
  *
  * 순수 함수(테스트 대상):
  * - findTrigger(text, cursor) → { kind: 'emoji' | 'mention', start, end, query } | null
- *     `:` 는 2글자부터(공백·줄 처음 뒤), `@` 는 바로부터. 이미 닫힌 `:fire:` 는 아님.
- * - mentionCandidates(query, ctx) → AcItem[] — 역할(멘션할 수 없는 역할은 MENTION_EVERYONE 없으면 비활성 + 이유)
- *     → 사람(채널 멤버 먼저, 그다음 워크스페이스 사람) → @here · @everyone. 최대 8.
- * - emojiCandidates(query, skin) → AcItem[] — 유니코드 + 커스텀(꼬리표 "커스텀"), 최대 8.
+ *     `:` 는 2글자부터(공백·줄 시작 뒤), `@` 는 즉시. 이미 닫힌 `:fire:` 는 제외.
+ * - mentionCandidates(query, ctx) → AcItem[] — 역할(멘션 불가 역할은 MENTION_EVERYONE 이 없으면 비활성 + 사유)
+ *     → 사용자(채널 멤버 우선, 다음 워크스페이스 사용자) → @here · @everyone. 최대 8.
+ * - emojiCandidates(query, skin) → AcItem[] — 유니코드 + 커스텀(라벨 "커스텀"), 최대 8.
  */
 import type { ReactNode } from 'react'
 import { useI18n } from '~/i18n'
@@ -40,18 +40,18 @@ export type AcLeading =
 
 export interface AcItem {
   id: string
-  /** 입력에 넣을 글(뒤에 공백 하나는 넣는 쪽이 붙인다) */
+  /** 입력에 삽입할 텍스트(뒤 공백 하나는 삽입하는 쪽에서 추가) */
   insert: string
   label: string
   secondary?: string
-  /** 꼬리표(역할 · 커스텀) */
+  /** 라벨(역할 · 커스텀) */
   tag?: string
   leading: AcLeading
   disabled?: boolean
   disabledReason?: string
   /** 이름 글자 색(역할 색 text-role-N) */
   nameClass?: string
-  /** 이모지 고른 것 — 최근에 올린다(유니코드 기본 글리프 또는 ':name:') */
+  /** 선택한 이모지 — 최근 목록에 추가(유니코드 기본 글리프 또는 ':name:') */
   recentKey?: string
 }
 
@@ -64,9 +64,9 @@ export interface MentionContext {
   memberCount: number
   onlineCount: number
   myId?: string | null
-  /** 사람 → 대표 역할 이름(설명 줄) */
+  /** 사용자 → 대표 역할 이름(설명 줄) */
   roleNameOf?: (userId: string) => string | null
-  /** 사람 → 이름 색 토큰 키(색이 있는 최고 역할) */
+  /** 사용자 → 이름 색 토큰 키(색이 있는 최고 역할) */
   roleColorOf?: (userId: string) => string | null
   /** 문구(i18n t) */
   t: (k: string, p?: Record<string, unknown>) => string
@@ -133,7 +133,7 @@ export function mentionCandidates(query: string, ctx: MentionContext): AcItem[] 
       disabledReason: ctx.canEveryone ? undefined : t('chat.compose.ac.everyoneNo'),
     }))
 
-  // 아무것도 안 쳤으면 사람이 먼저 보이게 역할은 둘만
+  // 입력이 없으면 사용자가 먼저 표시되도록 역할은 2개로 제한
   const roleList = q ? roles : roles.slice(0, 2)
   return [...roleList, ...people.map(({ r: _r, m: _m, ...it }) => it), ...special].slice(0, AC_MAX)
 }

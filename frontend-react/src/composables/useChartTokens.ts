@@ -1,10 +1,10 @@
 /**
  * 차트 색.
  * CSS 변수(primary·success·warning·danger)를 Chart.js 에 주입. 축 글자 = muted-foreground, 격자 = border.
- * 브랜드 primary 를 바꾸거나 테마를 바꾸면 따라 바뀐다. hex 하드코딩 금지.
- * 범주 색은 --cat-1…8 순서대로 — 계열 1부터, 9개 이상이면 다시 1부터(범례·툴팁의 이름으로 구분).
+ * 브랜드 primary 또는 테마를 변경하면 연동되어 변경된다. hex 하드코딩 금지.
+ * 범주 색은 --cat-1…8 순서 — 계열 1부터, 9개 이상이면 다시 1부터(범례·툴팁의 이름으로 구분).
  *
- * React: const { tokens } = useChartTokens()   — 컴포넌트마다 따로
+ * React: const { tokens } = useChartTokens()   — 컴포넌트별 독립
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useColorMode } from '~/composables/useColorMode'
@@ -12,9 +12,9 @@ import { useSiteConfig } from '~/composables/useSiteConfig'
 import { Chart as ChartJS } from 'chart.js'
 import { getUiZoom } from '~/composables/useViewport'
 
-// 화면 배율(루트 zoom) 아래에서 캔버스가 흐려지지 않게 — 그림 해상도를 배율만큼 올린다
-// (마우스 위치는 Chart.js 가 사각형 폭으로 나눠 계산하므로 그대로 맞는다)
-// 타입은 number 지만 Chart.js 기본값 자체가 (context) => number 함수다(core.defaults) — 차트를 그릴 때마다 읽힌다
+// 화면 배율(루트 zoom) 적용 시 캔버스가 흐려지지 않도록 렌더링 해상도를 배율만큼 높인다
+// (마우스 위치는 Chart.js 가 사각형 폭으로 나눠 계산하므로 그대로 일치한다)
+// 타입은 number 이나 Chart.js 기본값 자체가 (context) => number 함수이다(core.defaults) — 차트 렌더링 시마다 평가된다
 ;(ChartJS.defaults as unknown as { devicePixelRatio: () => number }).devicePixelRatio = () => (typeof window === 'undefined' ? 1 : window.devicePixelRatio) * getUiZoom()
 
 export interface ChartTokens {
@@ -56,7 +56,7 @@ export function useChartTokens() {
   const { config } = useSiteConfig()
   const [tick, setTick] = useState(0)
 
-  // onMounted(tick++) + watch([colorMode.value, config]) — 테마 클래스·브랜드 색이 DOM 에 반영된 뒤 다시 읽는다
+  // onMounted(tick++) + watch([colorMode.value, config]) — 테마 클래스·브랜드 색이 DOM 에 반영된 후 재조회한다
   const first = useRef(true)
   useEffect(() => {
     if (first.current) { first.current = false; setTick(n => n + 1); return }
@@ -64,7 +64,7 @@ export function useChartTokens() {
     return () => clearTimeout(id)
   }, [colorMode.value, config])
 
-  // tick 이 바뀔 때마다 CSS 변수를 다시 읽는다
+  // tick 변경 시마다 CSS 변수를 재조회한다
   const tokens = useMemo(() => { void tick; return readTokens() }, [tick])
   return { tokens }
 }

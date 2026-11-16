@@ -16,7 +16,7 @@ describe('UiSegment tooltip + disabled', () => {
     expect((big as HTMLButtonElement).disabled).toBe(false)
     fireEvent.click(big)
     expect(on).not.toHaveBeenCalled()
-    // 툴팁 없는 비활성은 예전처럼 disabled
+    // 툴팁 없는 비활성은 기존처럼 disabled
     expect((screen.getByRole('radio', { name: '100%' }) as HTMLButtonElement).disabled).toBe(true)
   })
 })

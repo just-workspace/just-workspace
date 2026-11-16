@@ -1,20 +1,20 @@
 /**
- * SDP 손질 — 원격 SDP(answer) 의 opus fmtp 에 cbr·useinbandfec·stereo·maxaveragebitrate·usedtx 를 강제한다.
+ * SDP 수정 — 원격 SDP(answer) 의 opus fmtp 에 cbr·useinbandfec·stereo·maxaveragebitrate·usedtx 를 강제한다.
  *
- * 크롬 인코더는 이 값들을 **원격** description 의 fmtp 에서 읽는다(RFC 7587 — 받는 쪽이 원하는 것을 보내는 쪽에 알림).
- * livekit-client 는 maxaveragebitrate(audioPreset)와 usedtx(서버 answer)는 다루지만 cbr·useinbandfec 는 두지 않아
- * 음악 단계의 "CBR · FEC 끔" 이 빠진다. 그래서 RTCPeerConnection.prototype.setRemoteDescription 을 한 번 감싸고,
- * 세션이 setActiveOpusFmtp() 로 값을 두면 answer 를 지나가며 고친다(null 이면 통과).
+ * 크롬 인코더는 이 값들을 **원격** description 의 fmtp 에서 읽는다(RFC 7587 — 수신 측이 원하는 값을 송신 측에 통지).
+ * livekit-client 는 maxaveragebitrate(audioPreset)와 usedtx(서버 answer)는 처리하지만 cbr·useinbandfec 는 설정하지 않아
+ * 음악 단계의 "CBR · FEC 끔" 이 누락된다. 따라서 RTCPeerConnection.prototype.setRemoteDescription 을 1회 래핑하고,
+ * 세션이 setActiveOpusFmtp() 로 값을 설정하면 answer 통과 시 수정한다(null 이면 통과).
  *
- * BUNDLE 안에서 같은 payload type 은 모든 m= 구간에서 fmtp 가 같아야 하므로(libwebrtc "payload type collision")
- * 오디오 m= 구간 전부에 같은 값을 쓴다. 순수 함수 mungeOpusAnswer 는 단위 테스트 대상.
+ * BUNDLE 안에서 동일 payload type 은 모든 m= 구간에서 fmtp 가 동일해야 하므로(libwebrtc "payload type collision")
+ * 오디오 m= 구간 전부에 동일한 값을 기록한다. 순수 함수 mungeOpusAnswer 는 단위 테스트 대상.
  */
 import type { OpusFmtp } from './opus'
 
-// `$`(m 플래그)는 \r 앞에서도 맞으므로 [ \t]* 로 — \s* 는 \r 을 먹어 줄 끝에 \r 이 두 번 남는다
+// `$`(m 플래그)는 \r 앞에서도 일치하므로 [ \t]* 를 사용한다 — \s* 는 \r 을 소비해 줄 끝에 \r 이 2회 남는다
 const OPUS_RE = /^a=rtpmap:(\d+) opus\/48000(?:\/2)?[ \t]*$/im
 
-/** 한 SDP 문자열의 모든 오디오 m= 구간에서 opus fmtp 를 고친다. 없으면 만든다. */
+/** 한 SDP 문자열의 모든 오디오 m= 구간에서 opus fmtp 를 수정한다. 없으면 생성한다. */
 export function mungeOpusAnswer(sdp: string, want: OpusFmtp): string {
   const sections = sdp.split(/(?=^m=)/m)
   return sections.map((sec) => {
@@ -40,7 +40,7 @@ export function mungeOpusAnswer(sdp: string, want: OpusFmtp): string {
     }
     const hit = sec.match(fmtpRe)
     if (hit) return sec.replace(fmtpRe, `a=fmtp:${pt} ${apply(hit[1])}`)
-    // fmtp 줄이 없으면 rtpmap 바로 뒤에 넣는다
+    // fmtp 줄이 없으면 rtpmap 바로 뒤에 삽입
     return sec.replace(OPUS_RE, (line) => `${line}${eol}a=fmtp:${pt} ${apply('')}`)
   }).join('')
 }
@@ -48,11 +48,11 @@ export function mungeOpusAnswer(sdp: string, want: OpusFmtp): string {
 let active: OpusFmtp | null = null
 let installed = false
 
-/** 세션이 켠다/끈다(null). 접속 중에 바꾸면 다음 재협상(트랙 교체) answer 에 적용된다 */
+/** 세션이 활성화/비활성화(null)한다. 접속 중 변경 시 다음 재협상(트랙 교체) answer 에 적용된다 */
 export function setActiveOpusFmtp(v: OpusFmtp | null) { active = v }
 export function getActiveOpusFmtp(): OpusFmtp | null { return active }
 
-/** 프로토타입 래핑(한 번). 브라우저 밖(테스트)에서는 아무것도 안 한다 */
+/** 프로토타입 래핑(1회). 브라우저 밖(테스트)에서는 no-op */
 export function installSdpMunger() {
   if (installed || typeof RTCPeerConnection === 'undefined') return
   installed = true
@@ -63,7 +63,7 @@ export function installSdpMunger() {
       if (active && desc && desc.type === 'answer' && typeof desc.sdp === 'string' && /m=audio /.test(desc.sdp)) {
         desc = { type: desc.type, sdp: mungeOpusAnswer(desc.sdp, active) }
       }
-    } catch { /* 손질 실패 — 원본 그대로 */ }
+    } catch { /* 수정 실패 — 원본 그대로 사용 */ }
     return (orig as (d?: RTCSessionDescriptionInit) => Promise<void>).call(this, desc)
   } as typeof proto.setRemoteDescription
 }

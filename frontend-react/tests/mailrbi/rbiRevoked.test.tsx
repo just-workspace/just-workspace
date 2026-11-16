@@ -1,5 +1,5 @@
-// 격리 브라우저 단독 앱 — 관리자가 접근을 끝냈을 때(강제 종료·권한 회수·대상 끄기/삭제 = end_reason "admin"):
-// 화면이 대상 고르기로 돌아가며 "관리자가 접근을 종료했습니다" 를 알린다. 미러는 연결이 끊기는 즉시 상태를 다시 읽는다.
+// 격리 브라우저 단독 앱 — 관리자가 접근을 종료한 경우(강제 종료·권한 회수·대상 끄기/삭제 = end_reason "admin"):
+// 화면이 대상 선택으로 복귀하며 "관리자가 접근을 종료했습니다" 를 안내한다. 미러는 연결이 끊기는 즉시 상태를 재조회한다.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 
@@ -77,13 +77,13 @@ describe('격리 브라우저 — 관리자가 접근을 끝냈을 때', () => {
   it('미러 연결이 끊기면 핑 주기를 기다리지 않고 상태를 읽어, 끝났으면 대상 고르기 + 안내', async () => {
     await openMirror()
     expect(statusFetches()).toBe(0)
-    // 서버가 세션을 끝냈다(권한 회수) — 컨테이너가 지워져 미러 연결이 끊긴다
+    // 서버가 세션을 종료함(권한 회수) — 컨테이너가 삭제되어 미러 연결이 끊김
     api.current = ended('admin'); api.sessions = []; api.recent = [ended('admin')]
     await act(async () => { fake.last.opt.onConnection(false, 'closed') })
     await waitFor(() => expect(statusFetches()).toBe(1))
     await waitFor(() => expect(screen.queryByTitle('Portal — 미러')).toBeNull())
     expect(toasts()).toContain('관리자가 접근을 종료했습니다')
-    // 대상 고르기로 돌아오고 최근 목록에 사유
+    // 대상 선택으로 복귀하고 최근 목록에 사유 표시
     const list = await screen.findByTestId('rbi-recent')
     await waitFor(() => expect(list.textContent).toContain('관리자 종료'))
   })

@@ -1,4 +1,4 @@
-// 문서 제목 쌓임 — 첫 마운트(직접 진입·새로고침)에도 페이지 제목이 App 의 앱 이름을 이겨야 한다.
+// 문서 제목 스택 — 첫 마운트(직접 진입·새로고침)에도 페이지 제목이 App 의 앱 이름보다 우선해야 한다.
 import { describe, it, expect, beforeEach } from 'vitest'
 import { render, act } from '@testing-library/react'
 import { useState, type ReactNode } from 'react'
@@ -9,7 +9,7 @@ function App({ children }: { children?: ReactNode }) {
   return <>{children}</>
 }
 function Layout({ children }: { children?: ReactNode }) {
-  useHead({}) // 제목 없이 link 만 쓰는 호출(예: 배지 파비콘) — 제목을 가리지 않아야 함
+  useHead({}) // 제목 없이 link 만 사용하는 호출(예: 배지 파비콘) — 제목을 가리지 않아야 함
   return <>{children}</>
 }
 function Page({ title }: { title: string }) {

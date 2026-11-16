@@ -1,10 +1,10 @@
 /**
  * 역할 섹션(모바일 #m-roles #m-role-edit).
- * 왼쪽 목록 240: "역할 — N" 12/600 + [역할 만들기] · 행 40(손잡이는 호버 때만 · 색 점 12 · 이름 15 · 잠금/그룹 배지 · 인원 mono 12) ·
- *   @everyone 은 구분선 아래 고정 · 끌어 정렬(#role-drag — 자리 선 UiDropLine, 끄는 행 40%, aria-live) + 키보드 ↑↓(손잡이).
- *   내 최고 역할 이상(useChatRoles.myTopPosition)은 잠금 아이콘(#role-locked) — 편집은 보기만.
- * 오른쪽: RoleEditor. 저장 안 된 변경(#role-dirty) = 아래 띠 + 되돌리기 · 저장, 다른 역할·섹션으로 가려 하면 띠 흔들기.
- * 실시간: 다른 사람이 같은 역할을 바꾸면(chat_roles_changed → store 다시 읽음) 변경 중이면 덮어쓰지 않고 "새로 고침" 안내.
+ * 왼쪽 목록 240: "역할 — N" 12/600 + [역할 만들기] · 행 40(손잡이는 호버 시에만 · 색 점 12 · 이름 15 · 잠금/그룹 배지 · 인원 mono 12) ·
+ *   @everyone 은 구분선 아래 고정 · 드래그 정렬(#role-drag — 위치 표시선 UiDropLine, 드래그 중인 행 40%, aria-live) + 키보드 ↑↓(손잡이).
+ *   본인 최고 역할 이상(useChatRoles.myTopPosition)은 잠금 아이콘(#role-locked) — 편집 화면은 읽기 전용.
+ * 오른쪽: RoleEditor. 미저장 변경(#role-dirty) = 아래 바 + 되돌리기 · 저장, 다른 역할·섹션으로 이동 시도 시 바 흔들기.
+ * 실시간: 타 사용자가 동일 역할을 변경하면(chat_roles_changed → store 재조회) 변경 중인 경우 덮어쓰지 않고 "새로 고침" 안내를 표시한다.
  * 모바일: 목록 → 편집 한 화면씩.
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
@@ -65,7 +65,7 @@ export function RolesSection() {
   useEffect(() => { setSettingsDirty(dirty) }, [dirty])
   useEffect(() => () => setSettingsDirty(false), [])
 
-  // 처음: 맨 위 역할(데스크톱) — 모바일은 목록부터
+  // 초기: 맨 위 역할 선택(데스크톱) — 모바일은 목록부터
   useEffect(() => {
     if (!roles.length) return
     if (!selId || !roles.some(r => r.id === selId)) {
@@ -74,7 +74,7 @@ export function RolesSection() {
     }
   }, [roles]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // store 가 다시 읽히면(저장 뒤 · 다른 사람 변경) — 변경 없으면 따라가고, 변경 중이면 안내만
+  // store 재조회 시(저장 후 · 타 사용자 변경) — 변경이 없으면 반영하고, 변경 중이면 안내만 표시
   const savingRef = useRef(false)
   useEffect(() => {
     if (!sel) return
@@ -124,7 +124,7 @@ export function RolesSection() {
     } catch (e) { addToast('error', errorText(e, t('chat.settings.roles.deleteFail'))) }
   }
 
-  // ─── 그룹 — 그룹 목록은 관리자 그룹 API(전역 관리자만 읽힌다) ───
+  // ─── 그룹 — 그룹 목록은 관리자 그룹 API(전역 관리자만 조회 가능) ───
   const [groups, setGroups] = useState<GroupOption[] | null>(null)
   const [groupsLoading, setGroupsLoading] = useState(false)
   useEffect(() => {
@@ -140,7 +140,7 @@ export function RolesSection() {
     try { await syncGroupRoles(); addToast('success', t('chat.settings.roles.syncDone')) } catch (e) { addToast('error', errorText(e, t('chat.settings.roles.syncFail'))) }
   }
 
-  // ─── 끌어 정렬 ───
+  // ─── 드래그 정렬 ───
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropIdx, setDropIdx] = useState<number | null>(null)
   const [live, setLive] = useState('')
@@ -168,7 +168,7 @@ export function RolesSection() {
   }
   function endDrag() { setDragId(null); setDropIdx(null) }
 
-  // ─── 그리기 ───
+  // ─── 렌더링 ───
   const selLocked = sel ? lockedOf(sel) : true
   const banner = (() => {
     if (loadErr) return <SettingsBanner tone="danger" icon="alert-circle">{t('chat.settings.roles.loadFail')}</SettingsBanner>

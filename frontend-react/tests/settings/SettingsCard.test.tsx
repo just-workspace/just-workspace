@@ -1,4 +1,4 @@
-// SettingsCard(토대 공용 — 설정·관리·AI·메일 설정이 같이 씀) 렌더·저장 모델
+// SettingsCard(토대 공용 — 설정·관리·AI·메일 설정이 공용으로 사용) 렌더·저장 모델
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { SettingsCard } from '~/components/settings/SettingsCard'

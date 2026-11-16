@@ -1,9 +1,9 @@
 // 설정 › 채팅.
 //  ① 입력 카드: Enter 키 세그먼트(보내기 / 줄바꿈 — Ctrl+Enter 보내기) + 링크 미리보기 · 이미지·영상 자동 펼치기 스위치.
-//  ② 알림 카드: 알림 키워드(제거 가능한 UiChip 이 든 입력, 최대 20개, Enter 로 추가) + 방해 금지 시간 스위치 + 시작·끝(mono).
-//  모두 바로 저장 + "저장됨 ✓". 입력·키워드는 useUserPrefs → /api/me/prefs(chat.*), 키워드 판정은 서버(app/chat/keywords.py).
-//  방해 금지 시간은 설정 › 알림의 방해 금지 일정(GET/PUT /api/notifications/dnd-schedule)과 같은 값 — 켜기·시간만 여기서 바꾸고
-//  요일은 그대로 둔다(일정이 아직 없으면 매일).
+//  ② 알림 카드: 알림 키워드(제거 가능한 UiChip 을 포함한 입력, 최대 20개, Enter 로 추가) + 방해 금지 시간 스위치 + 시작·끝(mono).
+//  전 항목 즉시 저장 + "저장됨 ✓". 입력·키워드는 useUserPrefs → /api/me/prefs(chat.*), 키워드 판정은 서버(app/chat/keywords.py).
+//  방해 금지 시간은 설정 › 알림의 방해 금지 일정(GET/PUT /api/notifications/dnd-schedule)과 동일한 값 — 활성화·시간만 여기서 변경하고
+//  요일은 유지한다(일정이 아직 없으면 매일).
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useI18n } from '~/i18n'
 import { useHead } from '~/lib/head'

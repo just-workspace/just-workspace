@@ -1,12 +1,12 @@
 /**
  * 채널 스레드 목록.
- * GET /api/chat/channels/{id}/threads?archived= (chatApi22.fetchChannelThreads) — 정렬 = 최근 활동순(서버), 받은 뒤에도 같은 선으로 다시 줄 세운다.
+ * GET /api/chat/channels/{id}/threads?archived= (chatApi22.fetchChannelThreads) — 정렬 = 최근 활동순(서버), 수신 후에도 동일 기준으로 재정렬한다.
  *
  * 실시간: useChat.onChatEvent 구독 —
- *   · new_message(parent_id 있음) · thread_update(root_id + reply) → 그 행의 마지막 답글·답글 수·시각·참여자 갱신, 맨 위로.
- *     보관 탭에 있던 행은 빼고(서버: 보관된 스레드에 답글 = 보관 해제), 활성 탭에 없는 스레드면 다시 읽는다(디바운스).
+ *   · new_message(parent_id 있음) · thread_update(root_id + reply) → 해당 행의 마지막 답글·답글 수·시각·참여자 갱신, 맨 위로 이동.
+ *     보관 탭에 있던 행은 제거하고(서버: 보관된 스레드에 답글 = 보관 해제), 활성 탭에 없는 스레드면 재조회한다(디바운스).
  *   · thread_follow → 팔로우 bell.
- * 이름 없는 스레드: 원문 첫 40자를 따옴표 안 기울임 — threadTitle().
+ * 이름 없는 스레드: 원문 첫 40자를 따옴표 안 기울임으로 표시 — threadTitle().
  * 자동 보관: 1시간 · 24시간 · 3일 · 1주(THREAD_AUTO_ARCHIVE 분) → PATCH /channels/{id} default_thread_auto_archive_minutes.
  */
 import { createStore, useStore } from 'zustand'
@@ -28,7 +28,7 @@ export const DEFAULT_AUTO_ARCHIVE: ThreadAutoArchive = 4320
 /** 이름 없는 스레드 제목에 쓰는 원문 길이 */
 export const UNNAMED_CHARS = 40
 
-/** 마크다운 기호를 걷어 한 줄 요약으로(원문 첫 40자·마지막 답글 줄) */
+/** 마크다운 기호를 제거해 한 줄 요약으로 변환(원문 첫 40자·마지막 답글 줄) */
 export function plainLine(s: string | null | undefined): string {
   return (s || '')
     .replace(/```[\s\S]*?```/g, ' ')
@@ -42,8 +42,8 @@ export function plainLine(s: string | null | undefined): string {
 }
 
 /**
- * 스레드 제목. 이름이 있으면 그대로, 없으면 원문 첫 40자(코드 포인트 기준, 넘치면 …)를 “ ” 안에 — unnamed=true 면 기울임.
- * 원문이 비면(첨부만) 서버 display_name.
+ * 스레드 제목. 이름이 있으면 그대로, 없으면 원문 첫 40자(코드 포인트 기준, 초과 시 …)를 “ ” 안에 표시 — unnamed=true 면 기울임.
+ * 원문이 비어 있으면(첨부만) 서버 display_name.
  */
 export function threadTitle(meta: Pick<ThreadMeta, 'name' | 'display_name'> | null | undefined, root: Pick<ChatMessage, 'content'> | null | undefined): { text: string; unnamed: boolean } {
   const name = meta?.name?.trim()
@@ -60,11 +60,11 @@ export function lastActivity(it: ThreadListItem): number {
   const n = iso ? new Date(iso).getTime() : 0
   return Number.isNaN(n) ? 0 : n
 }
-/** 최근 활동순(같으면 원문 id 로 고정) */
+/** 최근 활동순(동일하면 원문 id 로 고정) */
 export function sortThreads(items: ThreadListItem[]): ThreadListItem[] {
   return [...items].sort((a, b) => lastActivity(b) - lastActivity(a) || (a.root.id < b.root.id ? -1 : 1))
 }
-/** 보관됨으로 보이나 — 명시 보관 또는 (마지막 활동 + 자동 보관) 지남 */
+/** 보관 표시 여부 — 명시 보관 또는 (마지막 활동 + 자동 보관) 경과 */
 export function isThreadArchived(it: ThreadListItem, now = Date.now()): boolean {
   if (it.thread?.archived) return true
   const mins = it.thread?.auto_archive_minutes
@@ -90,7 +90,7 @@ export function threadAgo(iso: string | null | undefined, now = new Date()): str
   return d.toLocaleDateString(lang, d.getFullYear() === now.getFullYear() ? { month: 'long', day: 'numeric' } : { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-/** 서버 기본값 → 옵션 값(모르는 값이면 3일) */
+/** 서버 기본값 → 옵션 값(미확인 값이면 3일) */
 export function normalizeAutoArchive(n: number | null | undefined): ThreadAutoArchive {
   return (THREAD_AUTO_ARCHIVE as readonly number[]).includes(n as number) ? n as ThreadAutoArchive : DEFAULT_AUTO_ARCHIVE
 }
@@ -118,7 +118,7 @@ interface ThreadListState {
   loading: boolean
   loadingMore: boolean
   error: string | null
-  /** 활성 탭 개수(세그먼트 "활성 N") — 활성 탭을 읽었을 때 정해진다 */
+  /** 활성 탭 개수(세그먼트 "활성 N") — 활성 탭 조회 시 결정된다 */
   activeCount: number | null
   autoArchive: ThreadAutoArchive
 }
@@ -136,7 +136,7 @@ function errText(e: any): string {
   return (typeof d === 'string' ? d : d?.message) || i18n.t('chat.right.threads.loadError')
 }
 
-/** 채널·탭 목록 읽기(처음부터) */
+/** 채널·탭 목록 조회(처음부터) */
 export async function loadThreads(channelId: string, tab: ThreadTab = S().channelId === channelId ? S().tab : 'active') {
   const my = ++_seq
   const sameCh = S().channelId === channelId
@@ -185,7 +185,7 @@ export function setThreadTab(tab: ThreadTab) {
   void loadThreads(ch, tab)
 }
 
-/** 자동 보관 기간 바꾸기(낙관적, 실패하면 되돌림) */
+/** 자동 보관 기간 변경(낙관적, 실패 시 롤백) */
 export async function changeAutoArchive(minutes: ThreadAutoArchive) {
   const ch = S().channelId
   if (!ch) return
@@ -214,12 +214,12 @@ export async function toggleThreadRowFollow(rootId: string) {
   }
 }
 
-/** 스레드 메타가 바뀜(이름·보관 — 스레드 패널이 부른다). 보관 상태가 탭과 안 맞으면 뺀다 */
+/** 스레드 메타 변경(이름·보관 — 스레드 패널이 호출). 보관 상태가 탭과 불일치하면 제거한다 */
 export function applyThreadMeta(rootId: string, meta: ThreadMeta) {
   const { tab } = S()
   const it = S().items.find(i => i.root.id === rootId)
   if (!it) {
-    // 지금 탭에 들어가야 하는 스레드면 다시 읽는다
+    // 현재 탭에 포함되어야 하는 스레드면 재조회
     if (S().channelId && (meta.archived ? tab === 'archived' : tab === 'active')) scheduleReload()
     return
   }
@@ -246,7 +246,7 @@ function scheduleReload() {
   }, 400)
 }
 
-/** 소켓 이벤트 반영(테스트에서도 부른다) */
+/** 소켓 이벤트 반영(테스트에서도 호출) */
 export function handleThreadListEvent(data: any) {
   const { channelId, tab, items } = S()
   if (!channelId || !data) return
@@ -262,10 +262,10 @@ export function handleThreadListEvent(data: any) {
   if (ch !== channelId || !rootId) return
   const row = items.find(i => i.root.id === rootId)
   if (!row) { if (tab === 'active') scheduleReload(); return }
-  // 같은 답글이 두 이벤트(new_message · thread_update)로 올 수 있다 — 마지막 답글 시각이 같으면 한 번만
+  // 동일 답글이 두 이벤트(new_message · thread_update)로 수신될 수 있음 — 마지막 답글 시각이 동일하면 1회만 반영
   if (reply && row.last_reply?.created_at === reply.created_at && row.last_reply?.content === reply.content) return
   if (tab === 'archived') {
-    // 보관된 스레드에 답글 = 보관 해제 → 보관 탭에서 빠진다
+    // 보관된 스레드에 답글 = 보관 해제 → 보관 탭에서 제거
     set({ items: items.filter(i => i.root.id !== rootId) })
     return
   }
@@ -275,7 +275,7 @@ export function handleThreadListEvent(data: any) {
 }
 
 let _unsub: (() => void) | null = null
-/** 구독은 한 번만(목록을 처음 열 때) */
+/** 구독은 1회만 수행(목록 최초 열람 시) */
 export function ensureThreadListSubscribed() {
   if (!_unsub) _unsub = onChatEvent(handleThreadListEvent)
 }

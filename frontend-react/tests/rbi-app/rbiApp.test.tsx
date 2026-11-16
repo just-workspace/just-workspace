@@ -1,5 +1,5 @@
-// 격리 브라우저 단독 앱(src/rbi-app — rbi 전용 출처): 홉 시작·홉 오류·대상 고르기(딥 링크)·픽셀/미러 화면·신뢰 상단 줄·
-// 단축키(상단 줄로/격리 화면으로)·방식 전환·끝내기·로그아웃. $fetch 와 MirrorClient 는 가짜.
+// 격리 브라우저 단독 앱(src/rbi-app — rbi 전용 출처): 홉 시작·홉 오류·대상 선택(딥 링크)·픽셀/미러 화면·신뢰 상단 줄·
+// 단축키(상단 줄로/격리 화면으로)·방식 전환·끝내기·로그아웃. $fetch 와 MirrorClient 는 모의(mock).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 
@@ -86,7 +86,7 @@ describe('격리 브라우저 단독 앱 — 로그인', () => {
     render(<RbiApp />)
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/auth/login?return=%2F%3Ftarget%3Dportal'))
     expect(await screen.findByText('워크스페이스 로그인으로 이동하는 중…')).toBeTruthy()
-    // 워크스페이스 API 는 부르지 않는다(rbi 출처의 API 만)
+    // 워크스페이스 API 는 호출하지 않음(rbi 출처의 API 만)
     expect(api.calls.every(c => c.url.startsWith('/api/rbi/'))).toBe(true)
   })
 
@@ -169,7 +169,7 @@ describe('격리 브라우저 단독 앱 — 세션 화면', () => {
     await screen.findByTitle('Portal — 미러')
     await waitFor(() => expect(fake.focused).toBeGreaterThan(0))
     const remote = vi.fn()
-    // 미러의 숨은 입력칸 자리(원격으로 키를 보내는 쪽) — 단축키는 여기까지 오면 안 된다
+    // 미러의 숨은 입력칸 위치(원격으로 키를 전송하는 쪽) — 단축키는 여기까지 도달해서는 안 됨
     const ime = document.createElement('input')
     ime.addEventListener('keydown', remote)
     document.body.appendChild(ime)
@@ -181,7 +181,7 @@ describe('격리 브라우저 단독 앱 — 세션 화면', () => {
     const before = fake.focused
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
     expect(fake.focused).toBe(before + 1)
-    // 다른 키는 그대로 원격으로
+    // 다른 키는 그대로 원격으로 전달
     fireEvent.keyDown(ime, { key: 'b', code: 'KeyB', ctrlKey: true })
     expect(remote).toHaveBeenCalledTimes(1)
     ime.remove()

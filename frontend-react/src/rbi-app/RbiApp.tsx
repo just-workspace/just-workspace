@@ -1,14 +1,14 @@
 /**
- * 격리 브라우저 단독 앱(rbi 전용 출처) — 화면 전체를 쓰는 격리 브라우저. 워크스페이스 셸·모듈은 이 번들에 없다(vite.rbi.config.ts 가 검사).
+ * 격리 브라우저 단독 앱(rbi 전용 출처) — 화면 전체를 사용하는 격리 브라우저. 워크스페이스 셸·모듈은 이 번들에 포함되지 않는다(vite.rbi.config.ts 가 검사).
  *
  * 흐름
- *  1. GET /api/rbi/site/me — 401 이면 SSO 홉(/auth/login?return=…)으로 바로 넘어간다.
- *     홉이 실패해 ?sso_error= 로 돌아왔거나 방금 로그아웃했으면 자동으로 넘어가지 않고 [다시 로그인] 을 보인다(고리 방지).
- *  2. 대상·내 세션을 읽는다. 진행 중인 세션이 있으면 그 화면으로(새로고침해도 이어진다), 없으면 대상 고르기 + 최근 세션.
- *  3. 세션 화면 = 신뢰 상단 줄(RbiTrustedBar) + 나머지 전체 격리 화면(RbiStage). 60초마다 핑 — 서버에서 거둬지면 화면도 따라간다.
- *     관리자가 끝냈으면(강제 종료 · 권한 회수 · 대상 끄기/삭제 — end_reason=admin) 대상 고르기로 돌아가며 그 사실을 알린다.
- *     미러는 연결이 끊기는 순간 바로 상태를 다시 읽는다(핑 주기를 기다리지 않는다).
- * 키보드: 세션이 열리면 포커스는 격리 화면. Ctrl+Alt+B = 상단 줄로(격리 화면으로는 보내지 않는다), 상단 줄에서 Esc = 격리 화면으로.
+ *  1. GET /api/rbi/site/me — 401 이면 SSO 홉(/auth/login?return=…)으로 즉시 이동한다.
+ *     홉이 실패하여 ?sso_error= 로 복귀했거나 직전에 로그아웃한 경우 자동 이동하지 않고 [다시 로그인] 을 표시한다(루프 방지).
+ *  2. 대상·내 세션을 조회한다. 진행 중인 세션이 있으면 해당 화면으로(새로고침 후에도 유지), 없으면 대상 고르기 + 최근 세션.
+ *  3. 세션 화면 = 신뢰 상단 줄(RbiTrustedBar) + 나머지 전체 격리 화면(RbiStage). 60초마다 핑 — 서버에서 회수되면 화면도 이에 따른다.
+ *     관리자가 종료한 경우(강제 종료 · 권한 회수 · 대상 끄기/삭제 — end_reason=admin) 대상 고르기로 복귀하며 해당 사실을 안내한다.
+ *     미러는 연결이 끊기는 즉시 상태를 재조회한다(핑 주기를 대기하지 않는다).
+ * 키보드: 세션이 열리면 포커스는 격리 화면. Ctrl+Alt+B = 상단 줄로 이동(격리 화면으로는 전달하지 않는다), 상단 줄에서 Esc = 격리 화면으로 이동.
  * 높이는 dvh(모바일 하단 가려짐 — h-screen 금지).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -64,7 +64,7 @@ export function RbiApp() {
 
   useHead({ title: isActive(session) ? `${session.target_name} · ${t('rbi.title')}` : t('rbi.title') })
 
-  // 홉 결과 쿼리는 주소창에서 지운다(새로고침해도 오류가 다시 뜨지 않게)
+  // 홉 결과 쿼리는 주소창에서 제거한다(새로고침 시 오류가 재표시되지 않도록 함)
   useEffect(() => {
     if (!ssoError) return
     const u = new URL(window.location.href)
@@ -115,7 +115,7 @@ export function RbiApp() {
     return () => clearInterval(timer)
   }, [session])
 
-  // 미러 연결이 끊겼다 — 서버가 세션을 끝낸 것(권한 회수 등)일 수 있으니 핑 주기(60초)를 기다리지 않고 바로 상태를 읽는다
+  // 미러 연결 끊김 — 서버가 세션을 종료한 경우(권한 회수 등)일 수 있으므로 핑 주기(60초)를 대기하지 않고 즉시 상태를 조회한다
   const connLost = conn?.connected === false
   useEffect(() => {
     if (!connLost || !isActive(session)) return
@@ -124,20 +124,20 @@ export function RbiApp() {
     return () => { alive = false }
   }, [connLost]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 세션이 끝나면 대상 고르기로(최근 목록 새로)
+  // 세션이 종료되면 대상 고르기로 복귀(최근 목록 재조회)
   const sid = session?.id
   const sStatus = session?.status
   const sReason = session?.end_reason
   useEffect(() => {
     if (sid && sStatus && !isActive(session)) {
-      // 내가 끝낸 게 아니라 관리자가 끝냈다 — 화면이 말없이 대상 고르기로 바뀌지 않게 알린다
+      // 본인이 아닌 관리자가 종료한 경우 — 화면이 안내 없이 대상 고르기로 전환되지 않도록 알린다
       if (sReason === 'admin') addToast('warning', t('rbi.app.endedByAdmin', '관리자가 접근을 종료했습니다'))
       setSession(null)
       void fetchRbiRecent().then(r => setRecent(r.sessions)).catch(() => {})
     }
   }, [sid, sStatus]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 세션 바뀌면 화면 상태 초기화 + 포커스는 격리 화면으로
+  // 세션 변경 시 화면 상태 초기화 + 포커스는 격리 화면으로 이동
   useEffect(() => {
     setDocUrl(''); setAgentPol(null); setConn(null)
     if (session?.status === 'running') {
@@ -152,7 +152,7 @@ export function RbiApp() {
   }, [])
   const focusStage = useCallback(() => stageRef.current?.focus(), [])
 
-  // 단축키 — 앱 문서(미러: 숨은 입력칸이 여기 있다)와 픽셀 iframe 창(같은 출처) 둘 다, 잡는 단계(capture)에서 먼저
+  // 단축키 — 앱 문서(미러: 숨은 입력칸이 여기에 위치)와 픽셀 iframe 창(동일 출처) 양쪽에서 캡처 단계(capture)에 선처리
   const onShortcut = useCallback((e: KeyboardEvent) => {
     if (!isBarShortcut(e)) return
     e.preventDefault()
@@ -168,7 +168,7 @@ export function RbiApp() {
   const onFrameWindow = useCallback((w: Window | null) => {
     try { frameWin.current?.removeEventListener('keydown', onShortcut, true) } catch { /* 닫힘 */ }
     frameWin.current = w
-    try { w?.addEventListener('keydown', onShortcut, true) } catch { /* 다른 출처 — 없어야 정상 */ }
+    try { w?.addEventListener('keydown', onShortcut, true) } catch { /* 다른 출처 — 발생하지 않아야 정상 */ }
   }, [onShortcut])
   useEffect(() => () => { try { frameWin.current?.removeEventListener('keydown', onShortcut, true) } catch { /* */ } }, [onShortcut])
 
@@ -200,9 +200,9 @@ export function RbiApp() {
   async function logout() {
     const live = isActive(session)
     if (!(await confirmBox(t(live ? 'rbi.app.logoutConfirmLive' : 'rbi.app.logoutConfirm'), { title: t('rbi.app.logout'), confirmLabel: t('rbi.app.logout'), danger: live }))) return
-    // 열린 세션은 먼저 끝낸다(로그아웃한 화면 뒤에 컨테이너가 유휴 시간까지 남지 않게)
-    if (live && session) { try { await endRbiSession(session.id) } catch { /* 거두기가 끝낸다 */ } }
-    try { await rbiSiteLogout() } catch { /* 쿠키는 서버가 지운다 — 실패해도 화면은 로그아웃 */ }
+    // 열린 세션은 먼저 종료한다(로그아웃한 화면 뒤에 컨테이너가 유휴 시간까지 잔류하지 않도록 함)
+    if (live && session) { try { await endRbiSession(session.id) } catch { /* 회수 처리가 종료한다 */ } }
+    try { await rbiSiteLogout() } catch { /* 쿠키는 서버가 삭제한다 — 실패해도 화면은 로그아웃 처리 */ }
     setSession(null); setMe(null); setTargets([]); setRecent([])
     setPhase('loggedout')
   }

@@ -1,7 +1,7 @@
 /**
- * 허용·거부 규칙 — Claude Code 의 /permissions(allow·deny) 자리.
- * 이 대화에서 허용(카드 "예, 이 대화에서는 다시 묻지 않기") · 항상 허용 · 거부를 보고 빼거나 더한다.
- * 거부가 허용보다 먼저다. 내장 AI 대화에만 적용(외부 커넥터는 승인 대기함 규칙 그대로).
+ * 허용·거부 규칙 — Claude Code 의 /permissions(allow·deny) 에 해당.
+ * 이 대화에서 허용(카드 "예, 이 대화에서는 다시 묻지 않기") · 항상 허용 · 거부 규칙을 조회하고 제거하거나 추가한다.
+ * 거부가 허용보다 우선한다. 내장 AI 대화에만 적용(외부 커넥터는 승인 대기함 규칙 유지).
  */
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'

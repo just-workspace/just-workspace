@@ -3,8 +3,8 @@
  *  full  — 페이지·목록 영역: 카드 틀, 아이콘 타일 40, 제목 15/600, 설명 13, 1차 버튼 36
  *  panel — 카드·사이드 패널 안: 테두리 없음, 타일 32, 제목 13/600, 텍스트 버튼
  *  inline— 트리·하위 목록·댓글 한 줄: 32 행, muted 글자 + primary 텍스트 버튼
- * 행동은 actionTo(링크) 또는 onAction(클릭) 둘 다 받는다. 기능 아이콘은 icon(이름) 또는 iconSlot(그림).
- * 아이콘 타일 반지름: 시안의 11px/9px 는 사용 중지한 값 → 10px/8px 로 둠.
+ * 행동은 actionTo(링크) 또는 onAction(클릭) 모두 허용한다. 기능 아이콘은 icon(이름) 또는 iconSlot(그림).
+ * 아이콘 타일 반지름: 시안의 11px/9px 는 사용 중지한 값 → 10px/8px 로 적용.
  */
 import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -16,7 +16,7 @@ export interface UiEmptyStateProps extends Omit<HTMLAttributes<HTMLDivElement>, 
   title: string
   /** 설명(panel·full) */
   description?: string
-  /** 행동 문구. 없으면 행동 없음 */
+  /** 행동을 링크로 렌더링(앱 내부 경로). 없으면 버튼 → onAction */
   actionLabel?: string
   /** 행동을 링크로(앱 안 경로). 없으면 버튼 → onAction */
   actionTo?: string
@@ -24,11 +24,11 @@ export interface UiEmptyStateProps extends Omit<HTMLAttributes<HTMLDivElement>, 
   icon?: string
   /** full(기본) · panel · inline */
   variant?: 'full' | 'panel' | 'inline'
-  /** inline 을 카드 행(px-5) 줄에 맞춘다 — 카드 안 빈 행의 글자가 다른 행과 같은 세로선에 */
+  /** inline 을 카드 행(px-5) 기준에 정렬한다 — 카드 안 빈 행의 글자를 다른 행과 동일한 세로선에 배치 */
   inset?: boolean
   /** 행동 버튼 클릭(actionTo 가 없을 때) */
   onAction?: () => void
-  /** 아이콘 타일 자리 통째 바꾸기 — panel·full */
+  /** 아이콘 타일 영역 전체 대체 — panel·full */
   iconSlot?: ReactNode
   /** 카드 안 맨 아래 추가 내용 — full 전용 */
   extra?: ReactNode

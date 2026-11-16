@@ -1,13 +1,13 @@
 /**
- * 채널 알림 설정 — 데스크톱 Modal md 448, 모바일 바텀시트. UiModal 이 sm 미만에서 시트로 바뀐다.
+ * 채널 알림 설정 — 데스크톱 Modal md 448, 모바일 바텀시트. UiModal 이 sm 미만에서 시트로 전환된다.
  * 라디오 카드 3개: 모든 새 메시지 / 멘션만(기본) / 끄기(음소거 — notify_level none + muted).
  * "기기별 세부 설정"(데스크톱·모바일 푸시·이메일·따라가는 스레드 답글) — GET/PATCH /channels/{id}/prefs 의 기기 필드.
- * 데스크톱·모바일 푸시: 위 설정 따름 / 끄기. 이메일은 서버가 값만 저장하고 아직 보내지 않아 현재 값만 보인다(바꿀 수 없음).
- * 데스크톱은 접힘(펼치기), 모바일은 다음 화면(시트 안에서 화면 전환, ‹ 로 돌아옴).
+ * 데스크톱·모바일 푸시: 위 설정 따름 / 끄기. 이메일은 서버가 값만 저장하고 아직 발송하지 않으므로 현재 값만 표시한다(변경 불가).
+ * 데스크톱은 접힘(펼치기), 모바일은 다음 화면(시트 내 화면 전환, ‹ 로 복귀).
  */
 import { useEffect, useState, type KeyboardEvent } from 'react'
 import { useStore } from 'zustand'
-// class 를 이어 붙이기만 한다(tailwind-merge 없이 — 뒤에 온 클래스를 지우지 않는다)
+// class 연결만 수행(tailwind-merge 미사용 — 뒤에 오는 클래스를 제거하지 않음)
 import { clsx as cn } from 'clsx'
 import { useI18n } from '~/i18n'
 import { addToast } from '~/composables/useToast'
@@ -42,7 +42,7 @@ export function ChatNotifySheet() {
   const [mobileDevices, setMobileDevices] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // 기기 세부 — 시트를 열 때 서버에서 읽는다. 읽기 전·실패면 저장에 넣지 않는다(서버 값 보존).
+  // 기기 세부 — 시트를 열 때 서버에서 조회. 조회 전·실패 시에는 저장 대상에 포함하지 않음(서버 값 보존).
   const [devices, setDevices] = useState<Required<ChannelDevicePrefs>>({ ...DEVICE_DEFAULT })
   const [devicesLoaded, setDevicesLoaded] = useState<Required<ChannelDevicePrefs> | null>(null)
   async function loadDevices(id: string | null) {
@@ -83,7 +83,7 @@ export function ChatNotifySheet() {
   const threadReplies = devices.thread_replies
   const setThreadReplies = (v: boolean) => setDevices({ ...devices, thread_replies: v })
   const emailLabel = devices.email ? t('chat.notify.emailDefault') : t('chat.notify.off')
-  /** 모바일 행 오른쪽 요약 — 데스크톱·푸시·스레드 답글이 다 켜져 있으면 "위 설정 따름" */
+  /** 모바일 행 오른쪽 요약 — 데스크톱·푸시·스레드 답글이 모두 켜져 있으면 "위 설정 따름" */
   const devicesSummary = devices.desktop && devices.push && devices.thread_replies ? t('chat.notify.follows') : t('chat.notify.custom')
 
   const OPTIONS: { value: NotifyLevel; title: string; desc: string; descShort: string; isDefault?: boolean }[] = [
@@ -102,7 +102,7 @@ export function ChatNotifySheet() {
       const patch: Parameters<typeof updateChannelPrefs>[1] = { notify_level: level, muted: level === 'none' }
       const base = devicesLoaded
       if (base) {
-        // 바뀐 기기 필드만 보낸다(이메일은 화면에서 바꾸지 않는다)
+        // 변경된 기기 필드만 전송(이메일은 화면에서 변경하지 않음)
         if (devices.desktop !== base.desktop) patch.desktop = devices.desktop
         if (devices.push !== base.push) patch.push = devices.push
         if (devices.thread_replies !== base.thread_replies) patch.thread_replies = devices.thread_replies
@@ -153,7 +153,7 @@ export function ChatNotifySheet() {
         </>
       )}
     >
-      {/* 모바일: 기기별 세부 화면(‹ 로 돌아옴) */}
+      {/* 모바일: 기기별 세부 화면(‹ 로 복귀) */}
       {mobileDevices && (
         <div className="flex flex-col gap-1 sm:hidden">
           <button type="button" className="flex min-h-10 items-center gap-1 px-1 text-left text-[13px] font-semibold text-muted-foreground" onClick={() => setMobileDevices(false)}>
@@ -208,7 +208,7 @@ export function ChatNotifySheet() {
                   {o.title}
                   {o.isDefault && <>{' '}<span className="text-xs font-medium text-muted-foreground">{t('chat.notify.default')}</span></>}
                 </span>
-                {/* 데스크톱은 셋 다 설명, 모바일은 선택된 "멘션만"의 짧은 설명만 */}
+                {/* 데스크톱은 세 항목 모두 설명 표시, 모바일은 선택된 "멘션만"의 짧은 설명만 표시 */}
                 <span className="hidden text-[13px] text-muted-foreground sm:block">{o.desc}</span>
                 {o.descShort && level === o.value && <span className="block text-[13px] text-muted-foreground sm:hidden">{o.descShort}</span>}
               </span>

@@ -1,10 +1,10 @@
 /**
- * 격리 화면 자리(단독 앱) — 상단 신뢰 줄 아래 나머지 전체를 채운다.
- *  · 픽셀: 세션 컨테이너의 KasmVNC 클라이언트를 같은 출처(rbi) iframe 으로(/rbi/<sid>/?autoconnect…)
+ * 격리 화면 영역(단독 앱) — 상단 신뢰 줄 아래의 나머지 영역 전체를 차지한다.
+ *  · 픽셀: 세션 컨테이너의 KasmVNC 클라이언트를 동일 출처(rbi) iframe 으로 표시(/rbi/<sid>/?autoconnect…)
  *  · 미러: components/rbi/RbiMirrorView(스크립트 없는 iframe + 부모가 조립)
- *  · 시작 중: 안내 글
- * focus() 로 키보드 포커스를 격리 화면에 준다(앱이 세션이 열리면 기본으로 부른다).
- * onFrameWindow: 픽셀 iframe 의 창(같은 출처) — 앱이 단축키(상단 줄로 가기)를 그 창에도 건다(키가 iframe 안에서 먼저 소비되므로).
+ *  · 시작 중: 안내 문구
+ * focus() 는 키보드 포커스를 격리 화면으로 이동한다(세션이 열리면 앱이 기본으로 호출).
+ * onFrameWindow: 픽셀 iframe 의 창(동일 출처) — 앱이 단축키(상단 줄로 이동)를 해당 창에도 등록한다(키가 iframe 내부에서 먼저 소비되기 때문).
  */
 import { useImperativeHandle, useRef, type Ref } from 'react'
 import { useI18n } from '~/i18n'
@@ -37,7 +37,7 @@ export function RbiStage({ session, onDoc, onPolicy, onConn, onSuggestPixel, onF
       const f = pixelRef.current
       if (!f) return
       f.focus()
-      try { f.contentWindow?.focus() } catch { /* 아직 로드 전 */ }
+      try { f.contentWindow?.focus() } catch { /* 로드 전 상태 */ }
     },
   }), [mode])
 
@@ -65,7 +65,7 @@ export function RbiStage({ session, onDoc, onPolicy, onConn, onSuggestPixel, onF
         let w: Window | null
         try { w = pixelRef.current?.contentWindow ?? null } catch { w = null }
         onFrameWindow?.(w)
-        // 로드되면 키보드를 격리 화면으로(앱 첫 포커스 규칙)
+        // 로드 완료 시 키보드 포커스를 격리 화면으로 이동(앱 첫 포커스 규칙)
         try { pixelRef.current?.focus(); w?.focus() } catch { /* 무시 */ }
       }}
     />

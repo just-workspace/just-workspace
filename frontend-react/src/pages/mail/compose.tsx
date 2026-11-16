@@ -1,5 +1,5 @@
 // 메일 쓰기 전체 화면(메일 1 "모바일은 전체 화면 페이지"). 레이아웃 없음(routes.ts layout:false).
-// 데스크톱에서 이 주소로 들어오면(대시보드 링크·예전 팝업 북마크) 메일 화면의 떠 있는 작성 창으로 넘긴다.
+// 데스크톱에서 이 주소로 진입하면(대시보드 링크·구 팝업 북마크) 메일 화면의 부동 작성 창으로 전환한다.
 import { useEffect, useState } from 'react'
 import { useI18n } from '~/i18n'
 import { useHead } from '~/lib/head'
@@ -21,12 +21,12 @@ export default function MailComposePage() {
   const mode = (queryString(route.query.mode) as ComposeMode) || 'new'
   const msgId = queryString(route.query.msgId) || null
   const draftId = queryString(route.query.draftId) || null
-  /** 받는 사람 미리 채우기(새 메일만) */
+  /** 받는 사람 사전 입력(새 메일만) */
   const to = (mode === 'new' && queryString(route.query.to)) || null
-  /** 화면 안 AI 답장 초안 — 메일 읽기에서 맡겨 둔 것을 한 번 꺼낸다 */
+  /** 화면 안 AI 답장 초안 — 메일 읽기에서 보관해 둔 초안을 1회 꺼낸다 */
   const [aiDraft] = useState(() => (queryString(route.query.ai) ? takeAiDraft(msgId) : undefined))
 
-  // 데스크톱이면 첫 그리기 전에 넘긴다(작성기가 잠깐 마운트되지 않게)
+  // 데스크톱이면 첫 렌더링 전에 전환한다(작성기가 일시적으로 마운트되지 않도록)
   const [redirecting] = useState(() => !isMobileNow())
   useEffect(() => {
     if (!redirecting) return

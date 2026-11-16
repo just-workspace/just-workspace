@@ -1,20 +1,20 @@
 // AI(코어 일반 AI 화면).
 //  데스크톱: 사이드바 236(접기) + 대화 머리 44(제목 · 모델 피커 · 도구 N · 지침 · ⋯) + 본문 680 + 입력.
 //  모바일: 대화 목록(자체 머리 + FAB) → 대화(LayoutMobileDetailBar ‹ · 제목/모델·도구 · ⋯, 탭바 숨김).
-// 모델·도구 이름은 서버(/api/ai/status) 응답만 보인다.
+// 모델·도구 이름은 서버(/api/ai/status) 응답만 표시한다.
 //
-// 스트리밍 중인 어시스턴트 메시지는 같은 객체를
-// 고친 뒤 새 객체로 바꿔 넣는다(_uid 로 찾음 — 목록이 비워졌으면 아무 일 없음).
-// 비동기 처리기는 "지금" 값이 필요해 상태마다 ref 를 같이 둔다(useLive).
+// 스트리밍 중인 어시스턴트 메시지는 동일 객체를
+// 수정한 뒤 새 객체로 교체한다(_uid 로 탐색 — 목록이 비워진 경우 no-op).
+// 비동기 처리기는 "현재" 값이 필요하므로 상태마다 ref 를 함께 둔다(useLive).
 //
 // 질문 수정 → 답변 버전(◀ n/N ▶, POST /messages/{id}/edit · /versions/{n}) ·
-//  임시 대화(입력창 스위치 · 배너 · 사이드바 "임시 대화" · 나가거나 창을 닫으면 DELETE) · 프로젝트(카드·지침·지식 파일·공유) ·
-//  메모리 저장 알림 [취소] · 첨부(끌어다 놓기·붙여넣기·고르기, 올리는 중 → 변환 중 → 완료/실패 코드) · 서버 대화 검색.
+//  임시 대화(입력창 스위치 · 배너 · 사이드바 "임시 대화" · 화면 이탈 또는 창 종료 시 DELETE) · 프로젝트(카드·지침·지식 파일·공유) ·
+//  메모리 저장 알림 [취소] · 첨부(끌어다 놓기·붙여넣기·선택, 업로드 중 → 변환 중 → 완료/실패 코드) · 서버 대화 검색.
 //
-// 프로젝트 편집 창(지식 파일 연결·피커 20개) · 여러 그룹 공유(못 읽는 파일 경고) ·
-//  구성원 머리 · 답변에서 빠진 지식 파일 줄 · 공유가 끊긴 프로젝트 · 모바일 목록 묶음 · 이미지 썸네일 ·
-//  이미지 못 읽는 모델이면 보내기 막힘 + [이미지 읽는 모델로 바꾸기](설정 › AI 기본 모델) · 보낸 첨부 미리보기 ·
-//  질문 수정 때 첨부 유지/빼기 · context_trimmed → 대화 맨 위 "앞부분 N개 메시지는 … 쓰지 않았습니다"(빠진 메시지 흐리게).
+// 프로젝트 편집 창(지식 파일 연결·피커 20개) · 여러 그룹 공유(읽기 불가 파일 경고) ·
+//  구성원 머리 · 답변에서 제외된 지식 파일 줄 · 공유가 해제된 프로젝트 · 모바일 목록 묶음 · 이미지 썸네일 ·
+//  이미지 미지원 모델이면 전송 차단 + [이미지 읽는 모델로 바꾸기](설정 › AI 기본 모델) · 전송한 첨부 미리보기 ·
+//  질문 수정 시 첨부 유지/제외 · context_trimmed → 대화 맨 위 "앞부분 N개 메시지는 … 쓰지 않았습니다"(제외된 메시지는 흐리게 표시).
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent } from 'react'
 import { cn } from '~/lib/utils'
 import { useI18n } from '~/i18n'
@@ -61,7 +61,7 @@ import { AI_OPEN_CONVERSATION_EVENT } from '~/composables/useAiArtifacts'
 
 function errMsg(e: any) { return e?.data?.detail || e?.message || String(e) }
 
-/** 상태 + 그 "지금" 값 ref(설정 즉시 ref 도 바뀐다) */
+/** 상태 + 해당 "현재" 값 ref(설정 즉시 ref 도 갱신된다) */
 function useLive<T>(init: T | (() => T)) {
   const [value, setValue] = useState<T>(init)
   const ref = useRef<T>(value)
@@ -83,7 +83,7 @@ function providerLabel(kind: string) { return PROVIDERS.find(p => p.kind === kin
 
 // ─────────────────────────── 위저드 (admin · 미설정) ───────────────────────────
 // 로컬 LLM 후보 — 자체 호스팅 서버를 순서대로 탐지한다.
-// 엔진에 종속되지 않게: llama.cpp(llama-server, OpenAI 호환) → Ollama 순.
+// 특정 엔진에 종속되지 않도록 llama.cpp(llama-server, OpenAI 호환) → Ollama 순으로 탐지한다.
 const LOCAL_CANDIDATES = [
   { kind: 'compatible', base_url: 'http://host.docker.internal:8080' },
   { kind: 'ollama', base_url: '' },
@@ -99,7 +99,7 @@ interface Wiz {
 type Msg = AiMsg & { _uid?: number }
 let uidSeq = 0
 
-// 데스크톱 사이드바 접기(이 브라우저에 기억)
+// 데스크톱 사이드바 접기(이 브라우저에 저장)
 const SIDEBAR_KEY = 'ai-sidebar-collapsed'
 
 export default function Page() {
@@ -125,12 +125,12 @@ export default function Page() {
     }
   }
 
-  /** 화면을 로딩으로 바꾸지 않고 상태만 다시 읽는다(모델 바꾼 뒤) */
+  /** 화면을 로딩 상태로 전환하지 않고 상태만 재조회한다(모델 변경 후) */
   async function refreshStatus() {
-    try { setStatus(await $fetch<AiStatus>('/api/ai/status', { credentials: 'include' })) } catch { /* 그대로 */ }
+    try { setStatus(await $fetch<AiStatus>('/api/ai/status', { credentials: 'include' })) } catch { /* 기존 상태 유지 */ }
   }
 
-  // 고를 수 있는 모델 중 이미지를 읽는 것(설정 › AI 기본 모델과 같은 선택지)
+  // 선택 가능한 모델 중 이미지 입력 지원 모델(설정 › AI 기본 모델과 동일한 선택지)
   const [modelChoices, setModelChoices] = useState<AiModelChoice[]>([])
   async function loadModelChoices() {
     try {
@@ -206,8 +206,8 @@ export default function Page() {
   const kindSeen = useRef(false)
   useEffect(() => {
     if (!kindSeen.current) { kindSeen.current = true; return }
-    // 로컬은 initWizard 가 이미 탐지해 둔 결과가 있다. 그대로 비우면 다른
-    // 제공자를 눌렀다 돌아왔을 때 사용자가 다시 '모델 불러오기' 를 눌러야 한다.
+    // 로컬은 initWizard 가 이미 탐지한 결과가 있다. 그대로 초기화하면 다른
+    // 제공자를 선택했다가 복귀했을 때 사용자가 '모델 불러오기' 를 다시 눌러야 한다.
     if (wiz.kind === 'local' && wizRef.current.localDetected) { void probeModels(); return }
     patchWiz({ models: [], model: '' })
   }, [wiz.kind]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -234,7 +234,7 @@ export default function Page() {
   }
 
   function enableModule() {
-    // 모듈 활성화는 '모듈 관리'로 일원화 — 여기선 이동만
+    // 모듈 활성화는 '모듈 관리'로 일원화 — 여기서는 이동만 수행
     void navigateTo('/admin/modules')
   }
 
@@ -252,9 +252,9 @@ export default function Page() {
   const [tempMode, setTempMode, tempModeRef] = useLive(false)
   const [attachments, setAttachments, attachmentsRef] = useLive<AiAttachment[]>([])
   const [projectModal, setProjectModal] = useState<null | 'create' | 'edit' | 'share' | 'files'>(null)
-  // 공유가 끊긴 프로젝트(구성원 쪽, 그 프로젝트 id)
+  // 공유가 해제된 프로젝트(구성원 측, 해당 프로젝트 id)
   const [projectGone, setProjectGone] = useState<string | null>(null)
-  // 이번 답에서 길이 때문에 뺀 앞부분(대화 id 별)
+  // 이번 답변에서 길이 제한으로 제외한 앞부분(대화 id 별)
   const [trimmed, setTrimmed] = useState<{ convId: string; dropped: number; window: number } | null>(null)
   const [activeId, setActiveId, activeIdRef] = useLive<string | null>(null)
   const [messages, setMessages, messagesRef] = useLive<Msg[]>([])
@@ -279,40 +279,40 @@ export default function Page() {
 
   // 상단바 3단 경로: 워크스페이스 / AI / 대화 제목
   useBreadcrumb(view === 'chat' ? (activeId ? (activeConv?.title || t('ai.untitled')) : isTemp ? t('ai.temp.crumb') : (project?.name || '')) : '')
-  // 모바일 대화 목록은 자체 머리 — 대화 화면은 LayoutMobileDetailBar 가 스스로 선언한다
+  // 모바일 대화 목록은 자체 머리 사용 — 대화 화면은 LayoutMobileDetailBar 가 직접 선언한다
   useOwnMobileHeader(view === 'chat' && isMobile && !activeId && !project)
 
   const [collapsed, setCollapsedState] = useState(false)
-  useEffect(() => { try { setCollapsedState(localStorage.getItem(SIDEBAR_KEY) === '1') } catch { /* 저장소 막힘 */ } }, [])
+  useEffect(() => { try { setCollapsedState(localStorage.getItem(SIDEBAR_KEY) === '1') } catch { /* 저장소 접근 불가 */ } }, [])
   function setCollapsed(v: boolean) {
     setCollapsedState(v)
-    try { localStorage.setItem(SIDEBAR_KEY, v ? '1' : '0') } catch { /* 저장소 막힘 */ }
+    try { localStorage.setItem(SIDEBAR_KEY, v ? '1' : '0') } catch { /* 저장소 접근 불가 */ }
   }
 
-  // nextTick 대응 — 다음 커밋 뒤 포커스·스크롤
+  // nextTick 대응 — 다음 커밋 후 포커스·스크롤 수행
   const pendingFocus = useRef(false)
   const pendingScroll = useRef(false)
   const [, setTick] = useState(0)
   function focusComposerSoon() { pendingFocus.current = true; setTick(x => x + 1) }
 
-  // 주소의 ?c=<id>(결과물 토스트 [대화로 가기])는 들어왔을 때 한 번만 따른다 — 목록을 다시 읽을 때마다
-  // 따르면 다른 대화에서 답변이 끝날 때마다 그 대화로 끌려갔다.
+  // 주소의 ?c=<id>(결과물 토스트 [대화로 가기])는 진입 시 1회만 적용한다 — 목록을 재조회할 때마다
+  // 적용하면 다른 대화에서 답변이 완료될 때마다 해당 대화로 전환되는 문제가 있었다.
   const urlOpenTaken = useRef(false)
-  /** auto=false: 목록만 새로 읽는다(답변이 끝난 뒤 제목·순서 갱신) — 보고 있던 화면을 바꾸지 않는다 */
+  /** auto=false: 목록만 재조회한다(답변 완료 후 제목·순서 갱신) — 표시 중인 화면을 변경하지 않는다 */
   async function loadConversations(auto = true) {
     try {
       const r = await $fetch<{ conversations: AiConv[]; temporary?: AiConv[] }>('/api/ai/conversations', { credentials: 'include' })
       setConversations(r.conversations || [])
       setTempConvs(r.temporary || [])
       void loadProjects()
-      // 모바일에선 첫 대화를 자동 선택하지 않는다 — 목록 상태(하단 탭바 노출)로 진입해
-      // 다른 모듈로 이동할 수 있어야 한다. 데스크톱은 편의상 자동 선택.
+      // 모바일에서는 첫 대화를 자동 선택하지 않는다 — 목록 상태(하단 탭바 노출)로 진입해
+      // 다른 모듈로 이동할 수 있어야 한다. 데스크톱은 편의상 자동 선택한다.
       // 토스트 [대화로 가기] — 저장소 대기값(스트림 완료) 또는 /ai?c=<id>(결과물 완료)
       const fromUrl = !urlOpenTaken.current && typeof location !== 'undefined' ? new URLSearchParams(location.search).get('c') : null
       urlOpenTaken.current = true
       const want = takeAiPendingOpen() || fromUrl
       if (want && convsRef.current.some(c => c.id === want)) void selectConv(want)
-      // 새 대화 화면에서 입력하는 중에 다른 대화의 답변이 끝나도 첫 대화로 끌려가지 않게 — 자동 선택은 처음 들어올 때만
+      // 새 대화 화면에서 입력 중 다른 대화의 답변이 완료돼도 첫 대화로 전환되지 않도록 자동 선택은 최초 진입 시에만 수행
       else if (auto && !activeIdRef.current && !projectRef.current && !tempModeRef.current && convsRef.current.length && !isMobileRef.current) {
         void selectConv(convsRef.current[0].id)
       }
@@ -323,10 +323,10 @@ export default function Page() {
     try {
       const r = await $fetch<{ projects: AiProject[] }>('/api/ai/projects', { credentials: 'include' })
       setProjects(r?.projects || [])
-    } catch { /* 프로젝트 없이도 대화는 된다 */ }
+    } catch { /* 프로젝트 없이도 대화 가능 */ }
   }
 
-  /** 임시 대화를 떠나면 지운다(시안 "창 닫으면 삭제") */
+  /** 임시 대화에서 이탈하면 삭제한다(시안 "창 닫으면 삭제") */
   function leaveTemp(nextId: string | null) {
     const cur = activeIdRef.current
     const c = tempConvsRef.current.find(x => x.id === cur)
@@ -342,8 +342,8 @@ export default function Page() {
     const pid = conv?.project_id || null
     if (pid !== (projectRef.current?.id ?? null)) setProject(pid ? (projects.find(p => p.id === pid) || null) : null)
     if (pid) void refreshProject(pid)
-    // 새 대화의 메시지가 오기 전까지 이전 대화 메시지가 남아 있으면, 그 사이 누른 [다시 만들기]·[이어서 받기]가
-    // 새 대화(activeId)에 걸린다 — 먼저 비운다
+    // 새 대화의 메시지 수신 전까지 이전 대화 메시지가 남아 있으면, 그 사이 누른 [다시 만들기]·[이어서 받기]가
+    // 새 대화(activeId)에 적용된다 — 먼저 초기화한다
     if (activeIdRef.current !== id) setMessages([])
     setActiveId(id)
     setShowSystemPrompt(false)
@@ -353,7 +353,7 @@ export default function Page() {
       if (activeIdRef.current !== id) return
       setMessages(aiMergeRuns(resumeStreaming(id, r.messages || []), aiStreamStore.getState().runs))
       scrollDown(true)
-      // 이 대화에서 나온 승인 카드 복원(실패해도 대화는 그대로 보인다)
+      // 이 대화에서 발생한 승인 카드 복원(실패해도 대화는 그대로 표시)
       approvalsApi.byConversation(id).then((res) => {
         if (activeIdRef.current !== id || !res?.items?.length) return
         setMessages(list => attachWritesToMessages(list, res.items))
@@ -368,18 +368,18 @@ export default function Page() {
     return () => window.removeEventListener(AI_OPEN_CONVERSATION_EVENT, on)
   })
 
-  /** 모바일 ‹ — 목록으로 */
+  /** 모바일 ‹ — 목록으로 이동 */
   function closeConv() {
     leaveTemp(null)
     setTempMode(false)
-    if (!activeIdRef.current) setProject(null)  // 프로젝트 화면에서 ‹ = 목록으로
+    if (!activeIdRef.current) setProject(null)  // 프로젝트 화면에서 ‹ = 목록으로 이동
     setProjectGone(null)
     setActiveId(null)
     setMessages([])
     setPickerOpen(false)
   }
 
-  /** 새 대화 화면(서버 대화는 첫 질문을 보낼 때 만든다 — 빈 대화가 쌓이지 않게) */
+  /** 새 대화 화면(서버 대화는 첫 질문 전송 시 생성 — 빈 대화 누적 방지) */
   function startNewChat(opts: { temporary?: boolean; keepProject?: boolean } = {}) {
     leaveTemp(null)
     setTempMode(!!opts.temporary)
@@ -469,13 +469,13 @@ export default function Page() {
       await writeClipboard(text)
       addToast('success', t('ai.toast.copied'))
     } catch {
-      // http 같은 비보안 컨텍스트에서는 clipboard API 가 막힌다. 조용히 넘기면
-      // 눌렀는데 아무 일도 안 일어난 것처럼 보인다.
+      // http 등 비보안 컨텍스트에서는 clipboard API 가 차단된다. 무시하면
+      // 클릭해도 동작하지 않은 것으로 보인다.
       addToast('error', t('ai.toast.copyFailed'))
     }
   }
 
-  /** 대화 내보내기(마크다운 파일) — 브라우저에서 만든다 */
+  /** 대화 내보내기(마크다운 파일) — 브라우저에서 생성한다 */
   function exportConversation() {
     const c = activeConv; if (!c) return
     const md = aiExportMarkdown(c.title || t('ai.untitled'), messagesRef.current, { user: t('ai.you'), assistant: t('ai.assistant') })
@@ -530,7 +530,7 @@ export default function Page() {
     pendingScroll.current = true
     setTick(x => x + 1)
   }
-  // nextTick 뒤 일(스크롤·포커스) — 매 커밋 뒤 확인
+  // nextTick 이후 작업(스크롤·포커스) — 매 커밋 후 확인
   useLayoutEffect(() => {
     if (pendingScroll.current) {
       pendingScroll.current = false
@@ -542,14 +542,14 @@ export default function Page() {
     }
   })
 
-  /** [멈춤] — 이 대화에서 받는 중인 답변만(서버 작업도 멈춘다). 페이지를 떠나는 것으로는 멈추지 않는다 */
+  /** [멈춤] — 이 대화에서 수신 중인 답변만 대상으로 한다(서버 작업도 중지). 페이지 이탈만으로는 중지되지 않는다 */
   function stop() {
     const run = aiActiveRunFor(activeIdRef.current)
     if (run) stopAiRun(run.key)
   }
 
-  // 답변 스트림은 전역 저장소(useAiStreams)가 든다 — 다른 화면으로 가도 계속 받고, 돌아오면 이어 보인다.
-  // 여기서는 저장소의 최신 답변을 화면 목록에 덮기만 한다.
+  // 답변 스트림은 전역 저장소(useAiStreams)가 보유한다 — 다른 화면으로 이동해도 수신을 계속하고, 복귀 시 이어서 표시한다.
+  // 여기서는 저장소의 최신 답변을 화면 목록에 덮어쓰기만 한다.
   const runs = useAiRuns()
   const convBusy = Object.values(runs).some(r => r.active && r.convId === activeId)
   const busy = sending || convBusy
@@ -560,13 +560,13 @@ export default function Page() {
     setMessages(list => aiMergeRuns(list, st.runs))
     scrollDown()
   }), []) // eslint-disable-line react-hooks/exhaustive-deps
-  // 받는 중인 답변이 context_trimmed 를 받으면(저장소가 msg.trimmed 로 남김) 대화 맨 위 안내
+  // 수신 중인 답변이 context_trimmed 를 받으면(저장소가 msg.trimmed 로 기록) 대화 맨 위에 안내 표시
   useEffect(() => {
     const last = [...messages].reverse().find(m => m.role === 'assistant' && (m as any).trimmed)
     const tr = last ? (last as any).trimmed as { dropped: number; window: number } : null
     if (tr && activeIdRef.current) setTrimmed({ convId: activeIdRef.current, dropped: tr.dropped, window: tr.window })
   }, [messages])
-  // 보고 있는 대화(완료 토스트는 다른 곳에 있을 때만) · [대화로 가기]
+  // 표시 중인 대화(완료 토스트는 다른 화면에 있을 때만 표시) · [대화로 가기]
   useEffect(() => { setAiView(true, activeId) }, [activeId])
   useEffect(() => () => setAiView(false, null), [])
   useEffect(() => aiStreamStore.subscribe((st, prev) => {
@@ -576,20 +576,20 @@ export default function Page() {
     }
   }), []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** 저장된 목록에서 생성 중인 답변 → 이어 받기(이미 받고 있으면 그 내용) */
+  /** 저장된 목록에서 생성 중인 답변 → 이어 받기(이미 수신 중이면 해당 내용 사용) */
   function resumeStreaming(convId: string, list: AiMsg[]): Msg[] {
     return list.map(m => (m.role === 'assistant' && m.id && (m as any).status === 'streaming' ? resumeAiRun(convId, m) : m))
   }
 
-  // SSE 스트림 — send/regenerate/continue/edit 공용. 응답 상태 코드를 돌려준다(이어 받기 409 처리용)
+  // SSE 스트림 — send/regenerate/continue/edit 공용. 응답 상태 코드를 반환한다(이어 받기 409 처리용)
   async function streamRequest(url: string, body: any | null, asst: Msg, userUid?: number): Promise<number> {
     const convId = activeIdRef.current || ''
     const p = startAiRun({
       convId, url, body, msg: asst,
-      // 방금 보낸 질문에 서버 id 를 단다(수정·버전 단추)
+      // 직전에 전송한 질문에 서버 id 를 부여한다(수정·버전 버튼용)
       onParentId: pid => setMessages(list => list.map(m => (m._uid === userUid && !m.id ? { ...m, id: pid } : m))),
     })
-    // 저장소에 올라간 순간부터 "받는 중"은 저장소가 안다 — 다른 대화로 옮겨도 막히지 않게 바로 푼다
+    // 저장소 등록 시점부터 "받는 중" 상태는 저장소가 관리한다 — 다른 대화로 전환해도 차단되지 않도록 즉시 해제한다
     setSending(false)
     try {
       const code = await p
@@ -610,7 +610,7 @@ export default function Page() {
   }
 
   async function send(preset?: string) {
-    // onClick={send} 처럼 쓰면 이벤트가 첫 인자로 온다 — 문자열일 때만 프리셋으로 본다.
+    // onClick={send} 형태로 사용하면 이벤트가 첫 인자로 전달된다 — 문자열일 때만 프리셋으로 간주한다.
     const raw = typeof preset === 'string' ? preset : inputRef.current
     const text = (raw ?? '').trim()
     const atts = typeof preset === 'string' ? [] : attachmentsRef.current
@@ -625,7 +625,7 @@ export default function Page() {
     await postQuestion(convId, text, ready)
   }
 
-  /** 질문 한 개를 화면에 올리고 /chat 으로 보낸다(보내기 · 저장 전에 실패한 질문 다시 보내기 공용) */
+  /** 질문 1건을 화면에 추가하고 /chat 으로 전송한다(보내기 · 저장 전 실패한 질문 재전송 공용) */
   async function postQuestion(convId: string, text: string, ready: AiAttachment[]) {
     setSending(true)
     const asst = newAssistant()
@@ -635,7 +635,7 @@ export default function Page() {
     await streamRequest(`/api/ai/conversations/${convId}/chat`, ready.length ? { content: text, attachment_ids: ready.map(a => a.id) } : { content: text }, asst, userUid)
   }
 
-  /** 첨부 받기 — 한도 넘으면 바로 실패 칩, 아니면 올리는 중 → 변환 중 → 완료/실패 */
+  /** 첨부 수신 — 한도 초과 시 즉시 실패 칩, 그 외에는 업로드 중 → 변환 중 → 완료/실패 */
   function addFiles(files: File[]) {
     const max = statusRef.current?.attachment_max_bytes || AI_ATTACH_MAX
     const room = 10 - attachmentsRef.current.length
@@ -669,11 +669,11 @@ export default function Page() {
   function dragHasFiles(e: DragEvent) {
     return Array.from(e.dataTransfer?.types || []).includes('Files')
   }
-  /** 파일 끌기는 화면 어디서든 브라우저 기본 동작(그 파일 열기)을 막는다 */
+  /** 파일 드래그는 화면 전 영역에서 브라우저 기본 동작(해당 파일 열기)을 차단한다 */
   function onStrayDrag(e: DragEvent) {
     if (dragHasFiles(e)) e.preventDefault()
   }
-  /** 대화 영역(메시지 쪽)에 놓아도 첨부로 받는다 — 입력창이 이미 받았거나(defaultPrevented) 창(포털) 안이면 그대로 둔다 */
+  /** 대화 영역(메시지 쪽)에 놓아도 첨부로 수신한다 — 입력창이 이미 처리했거나(defaultPrevented) 창(포털) 내부이면 처리하지 않는다 */
   function onChatDrop(e: DragEvent) {
     if (!dragHasFiles(e) || e.defaultPrevented || !e.currentTarget.contains(e.target as Node)) return
     e.preventDefault()
@@ -681,12 +681,12 @@ export default function Page() {
     if (files.length) addFiles(files)
   }
 
-  /** [이미지 빼기] — 첨부한 이미지 모두 */
+  /** [이미지 빼기] — 첨부한 이미지 전체 제거 */
   function removeImages() {
     for (const a of attachmentsRef.current.filter(x => x.kind === 'image')) removeAttachment(a)
   }
 
-  /** [이미지 읽는 모델로 바꾸기] — 설정 › AI 기본 모델을 vision 지원 선택지로 */
+  /** [이미지 읽는 모델로 바꾸기] — 설정 › AI 기본 모델을 vision 지원 선택지로 변경 */
   async function switchToVisionModel() {
     const c = visionChoice
     if (!c) return
@@ -698,7 +698,7 @@ export default function Page() {
     } catch (e: any) { addToast('error', tRef.current('ai.errors.setting', { msg: errMsg(e) })) }
   }
 
-  /** 서버 기록으로 다시 맞춘다 — 화면에만 있는 승인 카드·메모리 알림은 답변 id 로 옮겨 붙인다 */
+  /** 서버 기록 기준으로 재동기화한다 — 화면에만 존재하는 승인 카드·메모리 알림은 답변 id 기준으로 이전한다 */
   async function syncMessages(convId: string) {
     try {
       const r = await $fetch<{ messages: AiMsg[] }>(`/api/ai/conversations/${convId}/messages`, { credentials: 'include' })
@@ -708,17 +708,17 @@ export default function Page() {
         const old = prev.get(m.id || '')
         return old ? { ...m, writes: old.writes, memories: old.memories } : m
       }))
-    } catch { /* 화면 그대로 */ }
+    } catch { /* 화면 상태 유지 */ }
   }
 
-  /** 질문 수정 → 새 버전. 그 뒤 메시지는 옛 가지로 숨고 새 답을 받는다 */
+  /** 질문 수정 → 새 버전. 이후 메시지는 이전 분기로 숨겨지고 새 답변을 수신한다 */
   async function editQuestion(msg: Msg, text: string, keepIds?: string[]) {
     const convId = activeIdRef.current
     if (!convId || !msg.id || busyRef.current) return
     const list = messagesRef.current
     const idx = list.findIndex(m => m.id === msg.id)
     if (idx < 0) return
-    // 새 파일은 입력창의 파일 첨부로 올린 것
+    // 새 파일은 입력창의 파일 첨부로 업로드한 것
     const staged = attachmentsRef.current
     if (staged.some(a => a.status === 'uploading' || a.status === 'converting')) { addToast('info', tRef.current('ai.attach.waiting')); return }
     const fresh = staged.filter(a => a.status === 'ready' && a.id)
@@ -740,7 +740,7 @@ export default function Page() {
     await syncMessages(convId)
   }
 
-  /** ◀ ▶ 버전 넘기기 */
+  /** ◀ ▶ 버전 전환 */
   async function switchVersion(msg: Msg, n: number) {
     const convId = activeIdRef.current
     if (!convId || !msg.id || busyRef.current) return
@@ -750,7 +750,7 @@ export default function Page() {
     } catch (e: any) { addToast('error', tRef.current('ai.versions.switchFailed', { msg: errMsg(e) })) }
   }
 
-  /** 메모리 저장 취소 = 그 항목 지우기 */
+  /** 메모리 저장 취소 = 해당 항목 삭제 */
   async function undoMemory(asstUid: number | undefined, m: AiMemorySaved) {
     try {
       await $fetch(`/api/ai/memory/${encodeURIComponent(m.id)}`, { method: 'DELETE', credentials: 'include' })
@@ -768,7 +768,7 @@ export default function Page() {
   const isTempRef = useRef(isTemp)
   isTempRef.current = isTemp
 
-  // 창을 닫거나 다른 화면으로 가면 임시 대화를 지운다(서버도 24시간 뒤 정리)
+  // 창을 닫거나 다른 화면으로 이동하면 임시 대화를 삭제한다(서버도 24시간 후 정리)
   useEffect(() => {
     function onHide() {
       const c = tempConvsRef.current.find(x => x.id === activeIdRef.current)
@@ -786,7 +786,7 @@ export default function Page() {
       setProjects(list => list.map(x => (x.id === id ? { ...x, ...p } : x)))
       setProjectGone(g => (g === id ? null : g))
     } catch (e: any) {
-      // 공유받은 프로젝트가 더는 안 보임 = 공유가 끊김. 서버는 내 대화를 '최근 대화'로 옮겨 둔다
+      // 공유받은 프로젝트가 더 이상 조회되지 않음 = 공유 해제. 서버는 사용자의 대화를 '최근 대화'로 이동해 둔다
       const wasMember = (projectRef.current?.id === id && projectRef.current.role === 'member')
       if (wasMember && (e?.status === 404 || e?.statusCode === 404 || e?.response?.status === 404 || /404|찾을 수 없/.test(String(e?.data?.detail || e?.message || '')))) {
         setProjectGone(id)
@@ -825,7 +825,7 @@ export default function Page() {
     setProject(made)
   }
 
-  /** 편집 창 저장 — 이름·지침, 뺀 파일, 새로 연결한 파일을 차례로 */
+  /** 편집 창 저장 — 이름·지침, 제외한 파일, 새로 연결한 파일 순으로 처리 */
   async function saveProjectForm(v: AiProjectFormValue) {
     const cur = projectRef.current; if (!cur) return
     let last: AiProject | undefined
@@ -883,7 +883,7 @@ export default function Page() {
     setProject(null)
   }
 
-  /** 추천 카드: 끝이 열린 문장(공백으로 끝남)은 입력에 넣고, 아니면 바로 보낸다 */
+  /** 추천 카드: 끝이 열린 문장(공백으로 종료)은 입력에 삽입하고, 그 외에는 즉시 전송한다 */
   function pickSuggestion(prompt: string) {
     if (/\s$/.test(prompt)) { setInput(prompt); focusComposerSoon(); return }
     void send(prompt)
@@ -898,9 +898,9 @@ export default function Page() {
     while (list.length && list[list.length - 1].role === 'assistant') list.pop()
     setMessages(list)
     if (!list.some(m => m.role === 'user')) return
-    // 마지막 질문에 서버 id 가 없다 = 보내기가 저장 전에 실패했을 수 있다(한도 429·첨부 만료·이미지 못 읽는 모델·네트워크).
-    // 그 상태로 /regenerate 를 부르면 서버는 그 질문을 모르니 "이전 질문의 답"을 지우고 다시 만든다 — 이전 답변이 사라지고
-    // 이 질문 아래 엉뚱한 답이 붙었다. 서버 기록에 이 질문이 없으면 같은 질문을 다시 보낸다.
+    // 마지막 질문에 서버 id 가 없으면 전송이 저장 전에 실패했을 수 있다(한도 429·첨부 만료·이미지 미지원 모델·네트워크).
+    // 이 상태로 /regenerate 를 호출하면 서버는 해당 질문을 알지 못하므로 "이전 질문의 답"을 삭제하고 재생성한다 — 이전 답변이 소실되고
+    // 이 질문 아래 무관한 답변이 붙는 문제가 있었다. 서버 기록에 이 질문이 없으면 동일 질문을 재전송한다.
     const lastQ = list[list.length - 1]
     if (lastQ.role === 'user' && !lastQ.id) {
       setSending(true)
@@ -910,7 +910,7 @@ export default function Page() {
         const users = (l: { role: string }[]) => l.filter(m => m.role === 'user').length
         saved = users(r.messages || []) >= users(list)
       } catch (e: any) {
-        // 기록을 못 읽으면 어느 쪽인지 모른다 — 이전 답변을 지울 수 있는 /regenerate 는 부르지 않는다
+        // 기록 조회 실패 시 어느 경우인지 판별 불가 — 이전 답변을 삭제할 수 있는 /regenerate 는 호출하지 않는다
         setSending(false)
         if (activeIdRef.current === convId) setMessages(before)
         addToast('error', tRef.current('ai.errors.load', { msg: errMsg(e) }))
@@ -932,7 +932,7 @@ export default function Page() {
     await streamRequest(`/api/ai/conversations/${convId}/regenerate`, null, asst)
   }
 
-  /** 끊기거나 멈춘 마지막 답변 이어서 받기 — 같은 메시지 뒤에 붙는다 */
+  /** 중단되거나 멈춘 마지막 답변 이어서 받기 — 동일 메시지 뒤에 이어진다 */
   async function continueAnswer() {
     const convId = activeIdRef.current
     if (busyRef.current || !convId) return
@@ -945,13 +945,13 @@ export default function Page() {
     setMessages(l => l.map((m, i) => (i === idx ? asst : m)))
     scrollDown(true)
     const code = await streamRequest(`/api/ai/conversations/${convId}/continue`, null, asst)
-    // 이미 끝났거나 이어 받을 게 없음 — 서버 기록으로 다시 맞춘다
+    // 이미 완료됐거나 이어 받을 내용 없음 — 서버 기록 기준으로 재동기화한다
     if (code === 409 && activeIdRef.current === convId) {
       try {
         const r = await $fetch<{ messages: AiMsg[] }>(`/api/ai/conversations/${convId}/messages`, { credentials: 'include' })
-        // 받는 사이 다른 대화로 옮겼으면 덮지 않는다
+        // 수신 중 다른 대화로 전환한 경우 덮어쓰지 않는다
         if (activeIdRef.current === convId) setMessages(resumeStreaming(convId, r.messages || []))
-      } catch { /* 화면 그대로 */ }
+      } catch { /* 화면 상태 유지 */ }
     }
   }
 
@@ -961,7 +961,7 @@ export default function Page() {
     setMessages(list => list.map(m => (m.id === id ? { ...m, feedback: fb } : m)))
   }
 
-  /** 승인 카드가 바뀐 요청을 알려 옴 — 메시지 안 사본도 맞춘다(다시 그려도 상태 유지) */
+  /** 승인 카드가 변경된 요청을 통지함 — 메시지 내 사본도 동기화한다(재렌더링 시에도 상태 유지) */
   function updateWrite(req: ApprovalRequest) {
     aiPatchRunWrite(req)
     setMessages(list => list.map(m => (m.writes?.some(w => w.id === req.id)
@@ -969,7 +969,7 @@ export default function Page() {
       : m)))
   }
 
-  /** AI 질문 카드에 답함 — 메시지 안 사본과 받는 중인 run 사본을 같이 맞춘다 */
+  /** AI 질문 카드에 응답함 — 메시지 내 사본과 수신 중인 run 사본을 함께 동기화한다 */
   function updateQuestion(q: AiQuestion) {
     aiPatchRunQuestion(q)
     setMessages(list => list.map(m => (m.questions?.some(x => x.id === q.id)
@@ -977,13 +977,13 @@ export default function Page() {
       : m)))
   }
 
-  /** 대화로 고치기·다시 제안 — 문장을 입력 칸에 넣는다(보내기는 사용자가) */
+  /** 대화로 고치기·다시 제안 — 문장을 입력 칸에 삽입한다(전송은 사용자가 수행) */
   function composeFromCard(text: string) {
     setInput(text)
     focusComposerSoon()
   }
 
-  function editUser(text: string) {  // 서버 id 가 없는 질문(받는 중) — 입력칸으로
+  function editUser(text: string) {  // 서버 id 가 없는 질문(수신 중) — 입력 칸으로 이동
     setInput(text)
     focusComposerSoon()
   }
@@ -1001,7 +1001,7 @@ export default function Page() {
 
   // onMounted(loadStatus)
   useEffect(() => { void loadStatus() }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  // 모델 선택지(이미지 읽는 모델로 바꾸기) — 채팅 화면이 열리면 한 번
+  // 모델 선택지(이미지 읽는 모델로 바꾸기) — 채팅 화면 진입 시 1회 조회
   useEffect(() => { if (view === 'chat') void loadModelChoices() }, [view]) // eslint-disable-line react-hooks/exhaustive-deps
   // watch(view, v => v === 'chat' && !conversations.length && loadConversations())
   const viewSeen = useRef(false)
@@ -1102,7 +1102,7 @@ export default function Page() {
         </div>
       ) : (
         // ───────── 채팅 ─────────
-        // 파일을 입력창 밖(대화 목록·빈 곳)에 놓으면 브라우저가 그 파일을 열어 화면을 떠났다 — 기본 동작을 막는다
+        // 파일을 입력창 밖(대화 목록·빈 영역)에 놓으면 브라우저가 해당 파일을 열어 화면을 이탈하는 문제가 있었다 — 기본 동작을 차단한다
         <div className="relative flex h-full overflow-hidden" onDragOver={onStrayDrag} onDrop={onStrayDrag}>
           {isMobile && !activeId && !project ? (
             // 모바일 대화 목록
@@ -1272,7 +1272,7 @@ export default function Page() {
                     ) : (
                       <div className="mx-auto flex max-w-[680px] flex-col gap-[18px] p-4 md:gap-[22px] md:px-6 md:pb-6 md:pt-6">
                         {trimInfo && (
-                          // 대화 맨 위 고정 한 줄. 빠진 메시지는 흐리게(숨기지 않음)
+                          // 대화 맨 위 고정 한 줄. 제외된 메시지는 흐리게 표시(숨기지 않음)
                           <div role="status" className="sticky top-0 z-10 -mt-1 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-secondary px-3 py-2 text-[12.5px] text-foreground">
                             <UiIcon name="info" className="h-3.5 w-3.5 shrink-0" />
                             <span className="min-w-0 flex-[1_1_320px]">

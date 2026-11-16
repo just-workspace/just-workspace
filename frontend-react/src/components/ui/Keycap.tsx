@@ -8,7 +8,7 @@ import { cn } from '~/lib/utils'
 export interface UiKeycapProps extends HTMLAttributes<HTMLElement> {
   /** 20(기본, 어디서나) · 18(툴팁 안, 반전색) */
   size?: 20 | 18
-  /** 툴팁 등 반전색 바탕 위에 올릴 때 — 테두리형 */
+  /** 툴팁 등 반전색 바탕 위에 배치할 때 — 테두리형 */
   inverted?: boolean
   /** 키 글자(예: 'Ctrl' · 'K' · 'Esc') */
   children?: ReactNode

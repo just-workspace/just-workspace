@@ -1,5 +1,5 @@
 // 워크스페이스 /rbi — 격리 브라우저 런처: rbi 전용 출처를 새 탭(noopener)으로 연다 · 대상 딥 링크 · 설정 없음 · 모듈 꺼짐.
-// + 내비게이션(레일·탭·팔레트)에 격리 브라우저가 없다 · 사용자 메뉴 링크 조건 · 주소 도우미 · 단독 번들 격리 목록.
+// + 내비게이션(레일·탭·팔레트)에 격리 브라우저 없음 · 사용자 메뉴 링크 조건 · 주소 헬퍼 · 단독 번들 격리 목록.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, renderHook, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -51,7 +51,7 @@ describe('워크스페이스 /rbi 런처', () => {
     expect(open).toHaveBeenCalledWith('https://rbi.example/', '_blank', 'noopener,noreferrer')
     fireEvent.click(screen.getByRole('button', { name: 'Portal 바로 열기' }))
     expect(open).toHaveBeenLastCalledWith('https://rbi.example/?target=portal', '_blank', 'noopener,noreferrer')
-    // 세션 화면(iframe)은 워크스페이스 출처에 없다
+    // 세션 화면(iframe)은 워크스페이스 출처에 없음
     expect(document.querySelector('iframe')).toBeNull()
     expect(api.calls.every(c => c === '/api/rbi/targets')).toBe(true)
     open.mockRestore()

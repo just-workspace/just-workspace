@@ -3,8 +3,8 @@
  *  제목 줄: ‹(저장소 목록으로) · 소유자 / 이름 18/700 · 공개 칩 20 · ★ 스타 n · Gitea에서 열기 ↗
  *  탭 줄 40: 코드 · 이슈 n · PR · 커밋 — 라우트로 이동(/code/o/r/(issues|pulls|commits)).
  *  1024 미만: 제목 아래 한 줄 메타(설명 2줄 + 언어 · ★ · 브랜치) + "정보 더보기" 시트. 모바일 탭 44.
- * ★ 스타 = 내 스타 토글(PUT/DELETE /star). Gitea 계정이 없으면(409) 누를 때 안내 토스트, 이후 개수만.
- * 탭 숫자: 이슈 = 열린 이슈(저장소 값), PR = 열린 PR, 커밋 = 기본 브랜치 총수(GET /stats, 못 얻으면 생략).
+ * ★ 스타 = 내 스타 토글(PUT/DELETE /star). Gitea 계정이 없으면(409) 클릭 시 안내 토스트를 표시하고, 이후에는 개수만 표시한다.
+ * 탭 숫자: 이슈 = 열린 이슈(저장소 값), PR = 열린 PR, 커밋 = 기본 브랜치 총수(GET /stats, 조회 실패 시 생략).
  */
 import { useState } from 'react'
 import { useI18n } from '~/i18n'
@@ -22,7 +22,7 @@ import { GitRepoAbout } from './GitRepoAbout'
 import { writeClipboard } from '~/lib/clipboard'
 
 export interface GitRepoHeaderProps {
-  /** 지금 탭 */
+  /** 현재 탭 */
   tab: GitTab
 }
 
@@ -32,8 +32,8 @@ export function GitRepoHeader({ tab }: GitRepoHeaderProps) {
   const { t } = useI18n()
   const [showAbout, setShowAbout] = useState(false)
 
-  // 탭 = 라우터 링크(UiTabs to). 브랜치는 ?ref= 로 따라간다.
-  // 코드 탭 경로(/code/o/r)는 다른 탭의 앞부분이라 정확 일치 + 폴더·파일 보기(/tree·/blob)에서도 선택.
+  // 탭 = 라우터 링크(UiTabs to). 브랜치는 ?ref= 로 유지된다.
+  // 코드 탭 경로(/code/o/r)는 다른 탭의 접두 경로이므로 정확 일치 + 폴더·파일 보기(/tree·/blob)에서도 선택 처리한다.
   const tabs: TabItem[] = (() => {
     const r = selectedRepo
     if (!r) return []

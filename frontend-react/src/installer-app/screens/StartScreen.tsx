@@ -1,6 +1,6 @@
 /**
- * 시작 방식 — 새로 설치 · 빠른 설치 · 백업에서 복원. 고르는 즉시 단계 목록이 바뀐다.
- * 아래에 답변 파일로 설치하는 방법을 접어 둔다(예시와 명령은 서버가 알려 준 것만 보인다).
+ * 시작 방식 — 새로 설치 · 빠른 설치 · 백업에서 복원. 선택 즉시 단계 목록이 변경된다.
+ * 하단에 응답 파일로 설치하는 방법을 접은 상태로 둔다(예시와 명령은 서버가 전달한 것만 표시한다).
  */
 import { useState } from 'react'
 import { UiButton } from '~/components/ui/Button'
@@ -32,7 +32,7 @@ export function StartScreen() {
       </div>
       <StepNav
         step="start"
-        // 빠른 설치는 구역을 묻지 않는다 — 전에 직접 고른 구역이 남아 있으면 지운다
+        // 빠른 설치는 구역을 묻지 않음 — 이전에 직접 선택한 구역이 남아 있으면 제거
         onNext={() => goNext(pick === 'quick' ? { mode: pick, zones: null, preset: null, addons: [] } : { mode: pick })}
       />
       <UiDisclosure title={t('start.answersTitle')} description={t('start.answersDesc')}>

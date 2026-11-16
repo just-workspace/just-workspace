@@ -1,37 +1,37 @@
 /**
  * 메일 본문 렌더. 3경로 + 종이.
- *  A 텍스트        : 종이 위에 그대로 + 인용문 접기
+ *  A 텍스트        : 종이 위에 원문 그대로 표시 + 인용문 접기
  *  B 단순 HTML     : 서식 태그만 → prose
  *  C 서식 HTML     : 표·이미지·색 → 샌드박스 iframe(발신자 레이아웃 보존)
- * 종이 색은 전역 토큰 --paper / --paper-foreground(두 테마 같은 흰 종이). MailBody.css 의 --mail-paper* 가 그 토큰을 받는다.
- * "어둡게 보기"(dark) 는 A·B 는 앱 색으로, C 는 iframe 을 색 반전(이미지는 되돌림)한다.
+ * 종이 색은 전역 토큰 --paper / --paper-foreground(두 테마 모두 동일한 흰 종이). MailBody.css 의 --mail-paper* 가 해당 토큰을 참조한다.
+ * "어둡게 보기"(dark) 는 A·B 에는 앱 색을 적용하고, C 에는 iframe 색 반전(이미지는 재반전으로 원복)을 적용한다.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거함)
 import { clsx as cx } from 'clsx'
 import { UiIcon } from '~/components/ui/Icon'
 import './MailBody.css'
 
-// 흰 종이가 필요한 신호 — 하나라도 있으면 iframe(C)
+// 흰 종이가 필요한 신호 — 하나라도 해당하면 iframe(C)
 const RICH_RE = /<(table|img|style|font)\b|bgcolor=|style\s*=\s*["'][^"']*(background|color|width|font-)/i
-// A — 텍스트에서 인용문을 분리해 접는다(한국 업무 메일은 회신이 겹쳐 원문이 묻힌다)
+// A — 텍스트에서 인용문을 분리해 접음(한국 업무 메일은 회신이 중첩되어 원문 식별이 어려움)
 const QUOTE_RE = /^(&gt;|>|-{2,}\s*(Original|원본)|보낸 사람:|From:|20\d{2}년.*(작성|씀))/
 
-// 바깥 서버에서 받아 오는 것(추적 픽셀·배경 이미지) — 있으면 "이미지 표시" 버튼을 보인다
+// 외부 서버에서 수신하는 리소스(추적 픽셀·배경 이미지) — 존재 시 "이미지 표시" 버튼 표시
 const REMOTE_RE = /<(img|source|video|audio|input)\b[^>]*\b(src|srcset|poster)\s*=\s*["']?\s*(https?:)?\/\/|\bbackground\s*=\s*["']?\s*(https?:)?\/\/|url\(\s*["']?\s*(https?:)?\/\//i
 
 /**
- * 본문 iframe 의 CSP. 기본은 바깥 리소스 전부 차단(이미지는 data: 만 — 서버가 cid: 인라인 이미지를 data: 로 바꿔 준다).
- * 메일을 여는 것만으로 발신자에게 열람 사실·IP 가 넘어가지 않게 한다. images=true("이미지 표시")면 http(s) 이미지만 푼다.
- * 스크립트는 높이 알림용 인라인 한 개뿐(본문은 DOMPurify 가 script 를 지운다).
+ * 본문 iframe 의 CSP. 기본값은 외부 리소스 전체 차단(이미지는 data: 만 허용 — 서버가 cid: 인라인 이미지를 data: 로 변환한다).
+ * 메일 열람만으로 발신자에게 열람 사실·IP 가 전달되지 않도록 한다. images=true("이미지 표시")이면 http(s) 이미지만 허용한다.
+ * 스크립트는 높이 통지용 인라인 1개뿐이다(본문의 script 는 DOMPurify 가 제거한다).
  */
 export function mailFrameCsp(images: boolean): string {
   return `default-src 'none'; img-src data:${images ? ' https: http:' : ''}; style-src 'unsafe-inline'; script-src 'unsafe-inline'`
 }
 
-/** 단순 HTML 본문의 링크는 새 탭으로 — 같은 탭에서 열리면 앱이 통째로 떠나 쓰던 작성 창이 사라진다 */
+/** 단순 HTML 본문의 링크는 새 탭에서 연다 — 같은 탭에서 열리면 앱 전체가 이탈하여 작성 중이던 작성 창이 소실된다 */
 export function linksToNewTab(html: string): string {
   if (!html) return html
   const tpl = document.createElement('template')
@@ -46,11 +46,11 @@ export function linksToNewTab(html: string): string {
 type BodyMode = 'text' | 'plain-html' | 'rich-html'
 
 export interface MailBodyProps {
-  /** 메일 상세(MessageDetail — id·subject·text_body·html_body 를 쓴다) */
+  /** 메일 상세(MessageDetail — id·subject·text_body·html_body 사용) */
   message: any
   /** 어둡게 보기 */
   dark?: boolean
-  /** 루트에 덧붙일 클래스 */
+  /** 루트에 추가할 클래스 */
   className?: string
 }
 
@@ -59,9 +59,9 @@ export function MailBody({ message, dark = false, className }: MailBodyProps) {
   const { t } = useI18n()
   const [forcePlain, setForcePlain] = useState(false) // "텍스트로 보기"
   const [quoteOpen, setQuoteOpen] = useState(false)
-  // "이미지 표시" — 이 메일만(다른 메일을 열면 다시 막는다)
+  // "이미지 표시" — 해당 메일에만 적용(다른 메일을 열면 다시 차단)
   const [showImages, setShowImages] = useState(false)
-  // watch(message.id) — 다른 메일이면 되돌린다
+  // watch(message.id) — 다른 메일이면 초기화
   const [seenId, setSeenId] = useState(message?.id)
   if (message?.id !== seenId) {
     setSeenId(message?.id)
@@ -81,7 +81,7 @@ export function MailBody({ message, dark = false, className }: MailBodyProps) {
     return 'plain-html'
   })()
 
-  // B — 서식 없는 HTML. 레이아웃 태그(style/color/width)는 전부 버린다.
+  // B — 서식 없는 HTML. 레이아웃 태그(style/color/width)는 전부 제거.
   const plainHtml = useMemo(() => {
     if (bodyMode !== 'plain-html') return ''
     return linksToNewTab(DOMPurify.sanitize(message.html_body, {
@@ -112,11 +112,11 @@ export function MailBody({ message, dark = false, className }: MailBodyProps) {
   }, [bodyMode, message?.html_body])
   const hasRemote = !!sanitizedHtml && REMOTE_RE.test(sanitizedHtml)
 
-  // iframe(origin null)은 부모 CSS 변수를 못 읽는다 → 마운트 때 계산값을 읽어 srcdoc 에 넣는다(값의 출처는 여전히 MailBody.css 한 곳).
+  // iframe(origin null)은 부모 CSS 변수를 읽을 수 없음 → 마운트 시 계산값을 읽어 srcdoc 에 삽입(값의 출처는 MailBody.css 한 곳으로 유지).
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [paper, setPaper] = useState({ bg: 'hsl(0 0% 100%)', fg: 'hsl(216 28% 14%)', link: 'hsl(218 78% 48%)', rule: 'hsl(215 18% 87%)', muted: 'hsl(215 12% 42%)' })
 
-  // 폰트 주입 안 함 — 샌드박스 srcdoc iframe(origin null)은 앱 번들의 *.woff2 를 CORS 로 못 불러온다.
+  // 폰트 미주입 — 샌드박스 srcdoc iframe(origin null)은 앱 번들의 *.woff2 를 CORS 제약으로 로드할 수 없음.
   const iframeSrcdoc = useMemo(() => {
     if (!sanitizedHtml) return ''
     const p = paper

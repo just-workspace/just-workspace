@@ -10,11 +10,11 @@ export interface BoardCommentListProps {
   comments: ReadonlyArray<CommentInfo>
   postId: string
   loading: boolean
-  /** 답글을 달 수 있나(댓글을 끈 게시판·관리자만 댓글인 게시판에서는 false). 기본 true */
+  /** 답글 작성 가능 여부(댓글을 비활성화한 게시판·관리자만 댓글 가능한 게시판에서는 false). 기본값 true */
   canReply?: boolean
 }
 
-/** 댓글 목록(불러오는 중 · 없음 · 목록) */
+/** 댓글 목록(로딩 중 · 없음 · 목록) */
 export function BoardCommentList({ comments, postId, loading, canReply = true }: BoardCommentListProps) {
   const { t } = useI18n()
   return (

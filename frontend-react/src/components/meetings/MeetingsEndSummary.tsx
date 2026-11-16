@@ -1,10 +1,10 @@
 /**
  * 회의 결과 데스크톱 오른쪽 stage 의 "이번 회의" 요약 카드. 폭 440.
  *  로그인 사용자: 호스트 · 참가(n명 · 손님 n) · 채팅(n개 메시지) · 아바타 줄 · [회의 채팅 보기 outline][캘린더 일정 ghost].
- *  손님:        참가 · 시각 · 아바타 줄만(버튼 없음).
- * 값이 없는 줄·버튼은 그리지 않는다(채팅 채널이 없는 회의면 [회의 채팅 보기] 없음 — 회의 안 채팅은 나가면 사라진다).
- * 참가·채팅 수는 이 화면이 본 값(useMeetingSessionStats), 호스트·채널·캘린더는 /api/meetings/rooms/{name}/summary.
- *   ※ 시안의 "파일 2" 는 회의 채팅에 파일이 없어 뺐다.
+ *  손님:        참가 · 시각 · 아바타 줄만 표시(버튼 없음).
+ * 값이 없는 줄·버튼은 표시하지 않는다(채팅 채널이 없는 회의는 [회의 채팅 보기] 없음 — 회의 내 채팅은 퇴장 시 소멸한다).
+ * 참가·채팅 수는 본 화면이 관측한 값(useMeetingSessionStats), 호스트·채널·캘린더는 /api/meetings/rooms/{name}/summary 에서 조회한다.
+ *   참고: 시안의 "파일 2" 는 회의 채팅에 파일이 없어 제외하였다.
  */
 import type { ReactNode } from 'react'
 import { useI18n } from '~/i18n'
@@ -18,23 +18,23 @@ import { UiTrans } from '~/components/ui/Trans'
 import type { MeetingSessionPerson } from '~/composables/useMeetingSessionStats'
 
 export interface MeetingsEndSummaryProps {
-  /** 손님 모양(참가·시각만, 버튼 없음) */
+  /** 손님 형태(참가·시각만 표시, 버튼 없음) */
   guest?: boolean
   /** 호스트 이름 */
   hostName?: string
-  /** 참가 인원(나 포함) */
+  /** 참가 인원(본인 포함) */
   participants?: number
-  /** 본 사람(아바타 줄 · 손님 수) */
+  /** 관측된 참가자(아바타 줄 · 손님 수) */
   people?: MeetingSessionPerson[]
   /** 회의 채팅 메시지 수 */
   chats?: number
   /** 시각 "15:00–15:58"(손님 줄) */
   timeRange?: string
-  /** [회의 채팅 보기] — 없으면 버튼 없음 */
+  /** [회의 채팅 보기] — 미지정 시 버튼 미표시 */
   onOpenChat?: () => void
-  /** [캘린더 일정] — 없으면 버튼 없음 */
+  /** [캘린더 일정] — 미지정 시 버튼 미표시 */
   onOpenCalendar?: () => void
-  /** [녹화 파일] — 이번 회의에서 녹화했을 때만 */
+  /** [녹화 파일] — 해당 회의에서 녹화한 경우에만 표시 */
   onOpenRecordings?: () => void
 }
 

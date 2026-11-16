@@ -1,11 +1,11 @@
 /**
- * 업데이트 › 진행 — 업데이트(여섯 단계)와 되돌림·복원(다섯 단계)의 진행·실패·완료.
+ * 업데이트 › 진행 — 업데이트(6단계)와 롤백·복원(5단계)의 진행·실패·완료.
  *
- *  · 1.5초마다 작업을 다시 읽는다. 서버가 바뀌는 동안 읽기가 실패하면 마지막으로 본 상태를 둔 채
- *    "다시 연결 중"으로 견디고, 돌아오면 같은 작업 id 로 이어 읽는다(docs/update-api.md 7절).
- *  · 실패했을 때 무엇을 할 수 있는지는 서버가 준 `choices` 가 정한다 — 단계 이름으로 짐작하지 않는다.
- *    둘 다 있으면 "이 단계부터 다시" / "되돌리기", 없고 되돌림 작업이 붙어 있으면 자동 되돌림 안내.
- *  · 이 화면이 떠 있는 동안에는 점검 화면이 덮지 않는다(관리자는 진행을 봐야 한다).
+ *  · 1.5초마다 작업을 재조회한다. 서버 교체 중 조회가 실패하면 마지막으로 확인한 상태를 유지한 채
+ *    "다시 연결 중"으로 표시하고, 복귀하면 동일한 작업 id 로 조회를 재개한다(docs/update-api.md 7절).
+ *  · 실패 시 가능한 조치는 서버가 반환한 `choices` 로 결정한다 — 단계 이름으로 추정하지 않는다.
+ *    둘 다 있으면 "이 단계부터 다시" / "되돌리기", 없고 롤백 작업이 연결되어 있으면 자동 롤백 안내.
+ *  · 본 화면이 표시되는 동안에는 점검 화면이 덮지 않는다(관리자는 진행 상황을 확인해야 한다).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -28,7 +28,7 @@ import { UiErrorTile } from '~/components/ui/ErrorTile'
 import { UiSkeleton } from '~/components/ui/Skeleton'
 import { UiTrans } from '~/components/ui/Trans'
 
-/** 되돌림·복원 작업의 문구 묶음: 자동 되돌림 / 관리자가 고른 복원 / 시험판 이전 상태로 */
+/** 롤백·복원 작업의 문구 세트: 자동 롤백 / 관리자가 선택한 복원 / 시험판 이전 상태로 */
 function flavor(job: UpdateJob): 'auto' | 'manual' | 'beta' {
   if (job.kind === 'rollback') return 'auto'
   return job.restore?.reason === 'beta' ? 'beta' : 'manual'
@@ -51,13 +51,13 @@ export function JobView({ jobId, onFinished }: { jobId: string; onFinished?: () 
     const my = gen.current
     try {
       const j = await updateApi.job(jobId)
-      // 그 사이 제어(다시·취소…)의 응답이 왔으면 그쪽이 더 새것이다 — 먼저 떠난 조회의 답은 버린다
+      // 그사이 제어(다시·취소…) 응답이 도착했으면 해당 응답이 더 최신이다 — 먼저 출발한 조회의 응답은 폐기한다
       if (!alive.current || my !== gen.current) return
       seen.current = true
       setJob(j); setError(null); setReconnecting(false)
     } catch (e) {
       if (!alive.current) return
-      // 처음부터 못 읽었으면 오류로, 읽던 중이면 서버가 다시 뜨는 중일 수 있다 — 계속 읽는다
+      // 최초 조회부터 실패하면 오류로 처리하고, 조회 중이었으면 서버 재기동 중일 수 있으므로 조회를 계속한다
       if (seen.current) setReconnecting(true)
       else setError(e)
     }
@@ -229,7 +229,7 @@ export function JobView({ jobId, onFinished }: { jobId: string; onFinished?: () 
   )
 }
 
-/** 작업 id 없이 들어왔을 때 — 진행 중인 것이 있으면 그리로 보낸다 */
+/** 작업 id 없이 진입한 경우 — 진행 중인 작업이 있으면 해당 화면으로 이동한다 */
 export function JobRedirect({ job, fallback }: { job: UpdateJob | null; fallback: string }) {
   const navigate = useNavigate()
   useEffect(() => { navigate(job ? jobPath(job) : fallback, { replace: true }) }, [job, fallback, navigate])

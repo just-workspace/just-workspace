@@ -1,12 +1,12 @@
 /**
  * 일정 폼: UiModal(데스크톱 중앙 520 · 모바일 바텀시트).
  * 기본 5 — 제목(44, 16/600) · 시간(날짜 + 시작–끝 mono + 길이 + 종일 스위치) · 캘린더 / 화상 회의 · 참석자
- * + "자세히 ▾"(장소 · 반복 · 알림 · 설명 · 시간대). 푸터 [삭제(편집일 때, 왼쪽)] … [취소][저장].
- * 화상 회의: "링크 자동 생성" 을 켜고 저장하면 예약 회의(/api/meetings/rooms)를 만들어 그 참여 링크를 meeting_url 로 넣는다.
- *   다른 서비스 링크는 "자세히 › 회의 링크" 에 붙여 넣는다(있으면 칸에 링크가 보이고 ✕ 로 지운다).
- * 참석자: 워크스페이스 사용자 자동완성 + 외부 이메일. 시간·참석자가 바뀌면 free/busy 로 겹침을 칩·경고 줄로 알린다.
- * 시간대: 고른 시간대의 벽시계로 시각을 읽어 저장한다(기본 = 캘린더 시간대 = 설정 시간대, 일정에 저장된 값이 있으면 그것).
- * 종일 일정은 날짜만 — 시간대 변환 없이 그 날짜의 UTC 00:00 으로 저장한다(utils/calTz 규약, .ics/CalDAV 와 같음).
+ * + "자세히 ▾"(장소 · 반복 · 알림 · 설명 · 시간대). 푸터 [삭제(편집 시, 왼쪽)] … [취소][저장].
+ * 화상 회의: "링크 자동 생성" 을 활성화하고 저장하면 예약 회의(/api/meetings/rooms)를 생성하여 해당 참여 링크를 meeting_url 에 저장한다.
+ *   타 서비스 링크는 "자세히 › 회의 링크" 에 붙여 넣는다(값이 있으면 칸에 링크가 표시되며 ✕ 로 삭제한다).
+ * 참석자: 워크스페이스 사용자 자동완성 + 외부 이메일. 시간·참석자 변경 시 free/busy 로 겹침을 칩·경고 줄로 표시한다.
+ * 시간대: 선택한 시간대의 벽시계 기준으로 시각을 해석하여 저장한다(기본 = 캘린더 시간대 = 설정 시간대, 일정에 저장된 값이 있으면 해당 값).
+ * 종일 일정은 날짜만 사용 — 시간대 변환 없이 해당 날짜의 UTC 00:00 으로 저장한다(utils/calTz 규약, .ics/CalDAV 와 동일).
  * 반복 일정 저장·삭제는 범위 확인(CalendarScopeModal)을 거친다.
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
@@ -103,7 +103,7 @@ function buildRRule(form: EventForm): string | null {
   return parts.join(';')
 }
 
-/** 'YYYY-MM-DD' 에 n일(순수 날짜 계산 — 시간대·서머타임 무관) */
+/** 'YYYY-MM-DD' 에 n일 가산(순수 날짜 계산 — 시간대·서머타임 무관) */
 export function ymdAdd(date: string, n: number): string {
   const m = date.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (!m) return date
@@ -111,13 +111,13 @@ export function ymdAdd(date: string, n: number): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
 }
 
-/** 두 'YYYY-MM-DD' 사이 날짜 수 */
+/** 두 'YYYY-MM-DD' 간 일수 */
 export function ymdDiff(a: string, b: string): number {
   const p = (x: string) => { const m = x.match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN }
   return Math.round((p(b) - p(a)) / 86400000)
 }
 
-/** 반복 끝 날짜의 마지막 순간 — 시각 일정은 그 일정 시간대의 23:59:59, 종일은 그 날짜(UTC) 23:59:59 */
+/** 반복 종료 날짜의 마지막 시점 — 시각 일정은 해당 일정 시간대의 23:59:59, 종일은 해당 날짜(UTC) 23:59:59 */
 function untilInstant(form: EventForm): Date | null {
   const e = form.recurrence_end_date
   if (!e) return null
@@ -133,14 +133,14 @@ function untilOf(form: EventForm): string {
   return d ? toRRuleUtc(d) : `${form.recurrence_end_date.replace(/-/g, '')}T235959Z`
 }
 
-/** RRULE UNTIL(YYYYMMDD 또는 YYYYMMDDTHHMMSSZ) → 그 순간. 없으면 null */
+/** RRULE UNTIL(YYYYMMDD 또는 YYYYMMDDTHHMMSSZ) → 해당 시점. 없으면 null */
 export function rruleUntilInstant(rrule: string | null | undefined): Date | null {
   const m = /(?:^|;)UNTIL=(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})Z?)?/.exec((rrule || '').replace(/^RRULE:/, ''))
   if (!m) return null
   return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], m[4] ? +m[4] : 23, m[5] ? +m[5] : 59, m[6] ? +m[6] : 59))
 }
 
-/** 순간 → 그 시간대의 'YYYY-MM-DD' */
+/** 시점 → 해당 시간대의 'YYYY-MM-DD' */
 function ymdInZone(d: Date, tz: string): string {
   try {
     return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
@@ -175,7 +175,7 @@ export function parseRRuleToForm(rrule: string | null, tz?: string): Pick<EventF
   const until = params.get('UNTIL')
   if (until) {
     out.recurrence_end_type = 'date'
-    // UTC 순간이면 일정 시간대의 날짜로(서버가 "직전 1초"로 끊은 UNTIL 이 UTC 날짜로 하루 어긋나지 않게)
+    // UTC 시점이면 일정 시간대의 날짜로 변환(서버가 "직전 1초"로 종료한 UNTIL 이 UTC 날짜 기준으로 하루 어긋나지 않도록)
     const at = /T\d{6}Z$/.test(until) ? rruleUntilInstant(`UNTIL=${until}`) : null
     out.recurrence_end_date = at && tz ? ymdInZone(at, tz) : `${until.slice(0, 4)}-${until.slice(4, 6)}-${until.slice(6, 8)}`
   }
@@ -184,16 +184,16 @@ export function parseRRuleToForm(rrule: string | null, tz?: string): Pick<EventF
 
 const ymdText = (y: { year: number; month: number; date: number }) => `${y.year}-${String(y.month + 1).padStart(2, '0')}-${String(y.date).padStart(2, '0')}`
 
-/** 시각 입력 칸 묶음 — tz 기준 벽시계로 채운다. 종일은 저장된 날짜 그대로(시간대 변환 없음) */
+/** 시각 입력 칸 묶음 — tz 기준 벽시계로 채운다. 종일은 저장된 날짜 그대로 사용(시간대 변환 없음) */
 function rangeToFields(s: Date, e: Date, allDay: boolean, tz: string): Pick<EventForm, 'all_day' | 'date' | 'endDate' | 'startTime' | 'endTime'> {
   if (allDay) {
-    // 종일은 끝이 "다음날 00:00"(배타) — 폼에는 마지막 날을 보여 준다
+    // 종일은 종료가 "다음날 00:00"(배타) — 폼에는 마지막 날을 표시한다
     const date = ymdText(allDayYmd(s))
     const endExcl = ymdText(allDayYmd(e))
     const last = ymdAdd(endExcl, -1)
     return { all_day: true, date, endDate: last < date ? date : last, startTime: '09:00', endTime: '10:00' }
   }
-  // 시각 일정은 고른 시간대의 벽시계로 보여 준다
+  // 시각 일정은 선택한 시간대의 벽시계로 표시한다
   const a = dateToZoned(s, tz), b = dateToZoned(e, tz)
   return { all_day: false, date: a.date, startTime: a.time, endDate: b.date < a.date ? a.date : b.date, endTime: b.time }
 }
@@ -208,7 +208,7 @@ function rangeOf(form: EventForm): { start: Date; end: Date } | null {
   const s = zonedToDate(form.date, form.startTime, form.timezone)
   let e = zonedToDate(form.endDate || form.date, form.endTime, form.timezone)
   if (!s || !e) return null
-  // 같은 날 끝 시각이 시작보다 이르면 다음날로 넘어가는 일정으로 본다(23:00–01:00)
+  // 같은 날 종료 시각이 시작보다 이르면 다음날로 이어지는 일정으로 간주한다(23:00–01:00)
   if (form.endDate === form.date && e <= s) e = zonedToDate(ymdAdd(form.date, 1), form.endTime, form.timezone) ?? e
   return { start: s, end: e }
 }
@@ -218,7 +218,7 @@ function is409(e: any) { return e?.statusCode === 409 || e?.status === 409 || e?
 const fieldLabel = 'text-xs font-semibold text-muted-foreground'
 const boxInput = 'h-10 rounded-md border border-input bg-background px-3 text-[13px] text-foreground outline-hidden transition-[box-shadow,border-color] focus:border-ring focus:ring-2 focus:ring-ring/35'
 
-/** 일정 만들기·고치기 폼(showEventModal 일 때 열린다) */
+/** 일정 생성·수정 폼(showEventModal 일 때 열린다) */
 export function CalendarEventModal() {
   const {
     calendars, showEventModal, editingEvent,
@@ -258,12 +258,12 @@ export function CalendarEventModal() {
     { value: 'date', label: t('calendar.recurrence.endOnDate') },
     { value: 'count', label: t('calendar.recurrence.endAfterCount') },
   ]
-  // UiSelect 는 null 을 "선택 안 함"으로 쓰므로 알림 없음은 '' 로 주고받는다
+  // UiSelect 는 null 을 "선택 안 함"으로 사용하므로 알림 없음은 '' 로 송수신한다
   const reminderOptions = [
     { value: '', label: t('calendar.reminder.none') },
     { value: 0, label: t('calendar.reminder.atStart') },
     { value: 5, label: t('calendar.reminder.minutesBefore', { n: 5 }) },
-    // 설정 › 캘린더 "기본 알림"의 10분 전도 고를 수 있게
+    // 설정 › 캘린더 "기본 알림"의 10분 전도 선택 가능하도록 포함
     { value: 10, label: t('calendar.reminder.minutesBefore', { n: 10 }) },
     { value: 15, label: t('calendar.reminder.minutesBefore', { n: 15 }) },
     { value: 30, label: t('calendar.reminder.minutesBefore', { n: 30 }) },
@@ -273,14 +273,14 @@ export function CalendarEventModal() {
   const reminderModel = form.reminder_minutes ?? ''
   function setReminder(v: string | number | null) { upd({ reminder_minutes: v === '' || v === null ? null : Number(v) }) }
 
-  // 설정 › 표시와 같은 목록 · 같은 찾기 규칙. 모바일은 UiSelect 가 OS 선택기로 그린다(찾기 칸 없음)
+  // 설정 › 표시와 동일한 목록 · 동일한 검색 규칙. 모바일은 UiSelect 가 OS 선택기로 렌더링한다(검색 칸 없음)
   const tzOptions = useMemo(() => {
     return tzZoneNames(form.timezone).map(z => ({ value: z, label: `${z.replace(/_/g, ' ')} (${tzGmtLabel(z)})` }))
   }, [form.timezone])
   const tzSearch = useMemo(() => tzSelectSearch(t), [t])
   function setTz(v: string | number | null) { if (v) upd({ timezone: String(v) }) }
 
-  // 편집 중인 일정의 원래 반복 규칙과, 그 규칙을 폼으로 옮겼다 다시 만든 값
+  // 편집 중인 일정의 원래 반복 규칙과, 해당 규칙을 폼으로 변환한 뒤 재생성한 값
   const origRecur = useRef<{ rule: string; built: string | null } | null>(null)
 
   // watch(showEventModal) — 열릴 때 폼을 채운다(immediate 아님)
@@ -309,8 +309,8 @@ export function CalendarEventModal() {
         reminder_minutes: e.reminder_minutes,
         ...parseRRuleToForm(e.recurrence_rule, tz),
       }))
-      // 반복 칸을 건드리지 않고 저장하면 원래 규칙 문자열을 그대로 보낸다 — 폼(날짜 단위)으로 다시 만들면
-      // 서버가 "이후 모두 삭제"로 끊은 UNTIL(직전 1초)이 그날 23:59:59 로 늘어나 지운 회차가 되살아났다.
+      // 반복 칸을 변경하지 않고 저장하면 원래 규칙 문자열을 그대로 전송한다 — 폼(날짜 단위)으로 재생성하면
+      // 서버가 "이후 모두 삭제"로 종료한 UNTIL(직전 1초)이 해당 날짜 23:59:59 로 연장되어 삭제한 회차가 복원되는 문제가 있었다.
       {
         const filled: EventForm = { ...initialForm(), ...rangeToFields(new Date(e.start), new Date(e.end), e.all_day, tz), timezone: tz, ...parseRRuleToForm(e.recurrence_rule, tz) }
         origRecur.current = e.recurrence_rule ? { rule: e.recurrence_rule, built: buildRRule(filled) } : null
@@ -318,19 +318,19 @@ export function CalendarEventModal() {
       setShowMore(!!(e.location || e.description || e.recurrence_rule || e.reminder_minutes != null
         || (e.timezone && e.timezone !== calendarZone())))
     } else {
-      // 캘린더 시간대 기준 — 고른 날의 00:00 이면 09:00 으로
+      // 캘린더 시간대 기준 — 선택한 날의 00:00 이면 09:00 으로 설정
       const sel = new Date(st.selectedDate)
       const sp = zp(sel)
-      // 분 단위가 남아 있으면(사이드바 [새 일정] = 페이지를 연 시각) 다음 30분으로 올린다
+      // 분 단위가 남아 있으면(사이드바 [새 일정] = 페이지를 연 시각) 다음 30분 단위로 올림
       const start = sp.hours === 0 && sp.minutes === 0
         ? zAtTime(sel, 9)
         : (sp.minutes % 30 || sp.seconds) ? zDate(sp.year, sp.month, sp.date, sp.hours, Math.ceil((sp.minutes + (sp.seconds ? 1 : 0)) / 30) * 30) : sel
       const p = zp(start)
       const end = zDate(p.year, p.month, p.date, p.hours + 1, p.minutes)
       const writable = st.calendars.filter(c => c.can_write !== false)
-      // 연락처 "일정 잡기"가 그 사람을 참석자로 넘긴다
+      // 연락처 "일정 잡기"가 해당 사용자를 참석자로 전달한다
       const pe = st.eventPreset?.attendeeEmail?.trim().toLowerCase()
-      // 설정 › 캘린더: 시간대(= 캘린더 시간대, 비우면 기기) · 기본 알림
+      // 설정 › 캘린더: 시간대(= 캘린더 시간대, 비어 있으면 기기) · 기본 알림
       const { calendarDefaultReminder } = userPrefsStore.getState().prefs
       const tz = calendarZone()
       setForm(f => ({
@@ -352,9 +352,9 @@ export function CalendarEventModal() {
     }
   }, [showEventModal])
 
-  // 시작 날짜를 바꾸면 끝 날짜도 같이 민다(끝이 시작보다 앞서지 않게).
-  // 사용자가 시작 날짜 칸을 바꿀 때만 — 모달을 열며 폼을 채울 때(다른 일정·새 일정)는 밀지 않는다.
-  // (예전엔 form.date 변화를 effect 로 봐서, 직전에 연 일정과의 날짜 차이만큼 끝 날짜가 밀려 저장됐다.)
+  // 시작 날짜를 변경하면 종료 날짜도 함께 이동한다(종료가 시작보다 앞서지 않도록).
+  // 사용자가 시작 날짜 칸을 변경할 때에만 적용 — 모달을 열며 폼을 채울 때(다른 일정·새 일정)는 이동하지 않는다.
+  // (이전에는 form.date 변화를 effect 로 감지하여, 직전에 연 일정과의 날짜 차이만큼 종료 날짜가 이동된 채 저장되었다.)
   function setStartDate(d: string) {
     setForm((f) => {
       const prev = f.date
@@ -388,7 +388,7 @@ export function CalendarEventModal() {
     if (!showEventModal) return
     const r = rStart !== undefined && rEnd !== undefined ? { start: new Date(rStart), end: new Date(rEnd) } : null
     const emails = formRef.current.attendees.map(a => a.email.toLowerCase())
-    // 서버 조회 한도 62일 — 그보다 긴 일정은 겹침을 보지 않는다
+    // 서버 조회 한도 62일 — 이를 초과하는 일정은 겹침을 확인하지 않는다
     if (!r || !emails.length || r.end <= r.start || r.end.getTime() - r.start.getTime() > 60 * 86400000) { setConflicts({}); return }
     fbTimer.current = setTimeout(async () => {
       const my = ++fbSeq.current
@@ -396,7 +396,7 @@ export function CalendarEventModal() {
         const res = await $fetch<{ users: { email: string; known: boolean; busy: BusyInterval[]; tentative: BusyInterval[] }[] }>(
           '/api/calendar/freebusy', { params: { emails: emails.join(','), start: r.start.toISOString(), end: r.end.toISOString() } })
         if (my !== fbSeq.current) return
-        /** 수정 중인 이 일정 자신(참석자 바쁜 구간에 섞여 있다) — 겹침에서 뺀다 */
+        /** 수정 중인 해당 일정 자체(참석자 바쁜 구간에 포함되어 있음) — 겹침에서 제외한다 */
         const ed = calendarStore.getState().editingEvent
         const ownRange = ed ? { start: new Date(ed.start), end: new Date(ed.end) } : null
         const out: Record<string, { start: Date; end: Date } | null> = {}
@@ -422,7 +422,7 @@ export function CalendarEventModal() {
       : t('calendar.form.conflictOne', { name, s, e })
   })()
 
-  /** 새로 초대하는 사람이 있으면 저장 버튼이 "저장하고 초대 보내기" */
+  /** 신규 초대 대상이 있으면 저장 버튼을 "저장하고 초대 보내기" 로 표시 */
   const hasNewInvitees = (() => {
     const before = new Set((editingEvent?.attendees || []).map(a => a.email.toLowerCase()))
     return form.attendees.some(a => !before.has(a.email.toLowerCase()))
@@ -435,7 +435,7 @@ export function CalendarEventModal() {
     try { const x = new URL(u); return x.pathname.split('/').filter(Boolean).pop() || x.host } catch { return u }
   })()
 
-  /** "링크 자동 생성" — 예약 회의를 만들고 참여 링크를 돌려준다. 같은 이름의 회의가 있으면 날짜를 붙여 한 번 더 */
+  /** "링크 자동 생성" — 예약 회의를 생성하고 참여 링크를 반환한다. 동일 이름의 회의가 있으면 날짜를 붙여 1회 재시도 */
   async function createMeetingLink(f: EventForm, r: { start: Date; end: Date }): Promise<string> {
     const minutes = Math.max(15, Math.min(24 * 60, Math.round((r.end.getTime() - r.start.getTime()) / 60000)))
     const base = f.title.trim().slice(0, 80)
@@ -451,7 +451,7 @@ export function CalendarEventModal() {
             scheduled_at: f.all_day ? null : r.start.toISOString(),
             duration_minutes: f.all_day ? 60 : minutes,
             description: f.description.trim() || null,
-            // 일정은 이 폼이 만든다 — 회의 쪽에서 캘린더 일정을 또 만들지 않게
+            // 일정은 본 폼이 생성한다 — 회의 측에서 캘린더 일정을 중복 생성하지 않도록 설정
             add_to_calendar: false,
             invitees: [],
           },
@@ -460,7 +460,7 @@ export function CalendarEventModal() {
           try {
             const d = await $fetch<{ join_url: string }>(`/api/meetings/by-id/${room.meeting_id}`)
             if (d.join_url) return d.join_url
-          } catch { /* 아래 기본 주소 */ }
+          } catch { /* 아래 기본 주소 사용 */ }
         }
         return `${window.location.origin}/meetings/join/${room.share_token}`
       } catch (e: any) {
@@ -490,7 +490,7 @@ export function CalendarEventModal() {
     return {
       calendar_id: f.calendar_id,
       title: f.title.trim(),
-      // 비운 값도 보낸다("" = 지움) — undefined 로 빼면 수정에서 설명·장소가 지워지지 않았다
+      // 비운 값도 전송한다("" = 삭제) — undefined 로 제외하면 수정 시 설명·장소가 삭제되지 않았다
       description: f.description.trim(),
       location: f.location.trim(),
       start: r.start.toISOString(),
@@ -539,7 +539,7 @@ export function CalendarEventModal() {
       const ed = calendarStore.getState().editingEvent
       if (ed) await updateEventScoped(ed, body, scope)
       else {
-        // 새 일정: 빈 값은 보내지 않는다
+        // 새 일정: 빈 값은 전송하지 않는다
         const { meeting_url, attendees, ...rest } = body
         await createEvent({ ...rest, ...(meeting_url ? { meeting_url } : {}), ...(attendees.length ? { attendees } : {}) })
       }
@@ -562,7 +562,7 @@ export function CalendarEventModal() {
   async function handleDelete() {
     const ev = calendarStore.getState().editingEvent
     if (!ev) return
-    // 예외 회차(이 일정만 수정한 행)도 범위를 묻는다 — 확인만 받고 지우면 시리즈 전체가 지워졌다
+    // 예외 회차(이 일정만 수정한 행)도 범위를 확인한다 — 확인만 받고 삭제하면 시리즈 전체가 삭제되었다
     if (ev.is_recurring || ev.is_occurrence || ev.is_exception) { setScopeFor('delete'); return }
     if (!await confirmBox(t('calendar.event.deleteConfirm'), { danger: true, confirmLabel: t('common.delete') })) return
     await doDelete('all')
@@ -741,7 +741,7 @@ export function CalendarEventModal() {
                               <input
                                 value={Number.isNaN(form.recurrence_count) ? '' : form.recurrence_count}
                                 onChange={(e) => {
-                                  // v-model.number: 숫자로 읽히면 숫자, 아니면 글자 그대로(빈 칸 = '')
+                                  // v-model.number: 숫자로 해석되면 숫자, 아니면 문자열 그대로(빈 칸 = '')
                                   const n = parseFloat(e.target.value)
                                   upd({ recurrence_count: Number.isNaN(n) ? (e.target.value as unknown as number) : n })
                                 }}
@@ -762,7 +762,7 @@ export function CalendarEventModal() {
                 <UiSelect modelValue={reminderModel} onUpdateModelValue={setReminder} options={reminderOptions} label={t('calendar.reminder.label')} />
                 <UiTextarea modelValue={form.description} onUpdateModelValue={v => upd({ description: v })} rows={3} label={t('calendar.event.descriptionLabel')} placeholder={t('calendar.event.descriptionPlaceholder')} />
 
-                {/* 시간대: 위 시각을 이 시간대의 시각으로 읽어 저장 */}
+                {/* 시간대: 위 시각을 해당 시간대의 시각으로 해석하여 저장 */}
                 <UiSelect
                   modelValue={form.timezone}
                   onUpdateModelValue={setTz}

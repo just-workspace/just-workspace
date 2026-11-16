@@ -12,7 +12,7 @@ export const MOBILE_QUERY = '(max-width: 767px)'
 export const isMobileStore = createStore<{ isMobile: boolean }>()(() => ({ isMobile: false }))
 
 let _installed = false
-/** main.tsx 가 첫 렌더 전에 부른다(ssr:false 와 같이 첫 렌더부터 맞는 값) */
+/** main.tsx 가 첫 렌더 전에 호출한다(ssr:false 와 마찬가지로 첫 렌더부터 올바른 값) */
 export function installMobileListener() {
   if (_installed || typeof window === 'undefined' || !window.matchMedia) return
   _installed = true

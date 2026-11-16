@@ -1,9 +1,9 @@
 /**
- * 컴포저 Aa 서식줄. Aa 토글 하나로 펴고 접는다(10-4 원칙).
+ * 컴포저 Aa 서식줄. Aa 토글 하나로 펼치고 접는다(10-4 원칙).
  * 순서: 굵게 · 기울임 · 밑줄 · 취소 · 링크 | 헤더(H) · 목록 · 번호 목록 · 인용 | 인라인 코드 · 코드 블록 · 스포일러.
  * 모양: 높이 36, 아래 1px, 버튼 28(radius 4) 아이콘 16, 묶음 사이 1×20 구분선.
  * 동작은 순수 함수 applyFormat(종류, 글, 선택 시작, 끝) → { text, start, end } — 선택 영역을 마크다운 기호로 감싸고
- *   이미 감싸져 있으면 벗긴다. 줄 단위(헤더·목록·번호·인용)는 선택이 걸친 줄 전부. 헤더는 # → ## → ### → 없음 순환.
+ *   이미 감싸져 있으면 제거한다. 줄 단위(헤더·목록·번호·인용)는 선택이 걸친 줄 전체에 적용한다. 헤더는 # → ## → ### → 없음 순환.
  */
 import { useI18n } from '~/i18n'
 import { UiIcon } from '~/components/ui/Icon'
@@ -24,13 +24,13 @@ const WRAP: Partial<Record<FormatKind, [string, string]>> = {
 
 function wrap(text: string, start: number, end: number, open: string, close: string): FormatResult {
   const sel = text.slice(start, end)
-  // 선택 바깥이 이미 같은 기호면 벗긴다
+  // 선택 영역 바깥이 이미 동일 기호이면 제거
   if (text.slice(start - open.length, start) === open && text.slice(end, end + close.length) === close
-    // 굵게(**) 안의 기울임(*) 오판 방지: 기울임은 바깥 글자가 * 가 아닐 때만
+    // 굵게(**) 내부의 기울임(*) 오판 방지: 기울임은 바깥 글자가 * 가 아닌 경우에만 처리
     && !(open === '*' && (text[start - 2] === '*' || text[end + 1] === '*'))) {
     return { text: text.slice(0, start - open.length) + sel + text.slice(end + close.length), start: start - open.length, end: end - open.length }
   }
-  // 선택 자체가 기호로 감싸져 있으면 벗긴다
+  // 선택 영역 자체가 기호로 감싸져 있으면 제거
   if (sel.length >= open.length + close.length && sel.startsWith(open) && sel.endsWith(close)) {
     const inner = sel.slice(open.length, sel.length - close.length)
     return { text: text.slice(0, start) + inner + text.slice(end), start, end: start + inner.length }
@@ -51,7 +51,7 @@ function mapLines(text: string, start: number, end: number, fn: (lines: string[]
   const block = text.slice(ls, le)
   const next = fn(block.split('\n')).join('\n')
   const out = text.slice(0, ls) + next + text.slice(le)
-  // 커서: 한 줄이고 선택이 없으면 줄 끝, 아니면 바뀐 블록 전체 선택
+  // 커서: 한 줄이고 선택이 없으면 줄 끝, 그 외에는 변경된 블록 전체 선택
   if (start === end && !block.includes('\n')) { const p = ls + next.length; return { text: out, start: p, end: p } }
   return { text: out, start: ls, end: ls + next.length }
 }
@@ -63,7 +63,7 @@ export function applyFormat(kind: FormatKind, text: string, start: number, end: 
     const sel = text.slice(start, end)
     const label = sel || 'text'
     const out = text.slice(0, start) + `[${label}](url)` + text.slice(end)
-    const us = start + label.length + 3   // "[label](" 다음 — url 을 선택해 바로 바꿔 쓰게
+    const us = start + label.length + 3   // "[label](" 다음 — url 을 선택 상태로 두어 즉시 교체 입력 가능
     return { text: out, start: us, end: us + 3 }
   }
   if (kind === 'heading') {
@@ -114,7 +114,7 @@ export interface ChatFormatBarProps {
   onFormat: (kind: FormatKind) => void
 }
 
-/** 서식줄(role=toolbar). 버튼을 눌러도 입력칸 포커스·선택이 그대로 남게 mousedown 기본 동작을 막는다 */
+/** 서식줄(role=toolbar). 버튼 클릭 시에도 입력칸 포커스·선택이 유지되도록 mousedown 기본 동작을 차단한다 */
 export function ChatFormatBar({ onFormat }: ChatFormatBarProps) {
   const { t } = useI18n()
   return (

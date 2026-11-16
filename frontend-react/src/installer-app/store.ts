@@ -1,10 +1,10 @@
 /**
- * 마법사 상태 — 서버에서 읽은 것(상태·답변·구역 목록·점검 결과)과 화면에서만 들고 있는 것(비밀번호·키, 확인 결과).
+ * 마법사 상태 — 서버에서 조회한 것(상태·답변·구역 목록·점검 결과)과 화면에서만 보유하는 것(비밀번호·키, 확인 결과).
  *
- * - 답변은 단계마다 서버에 저장한다(`save`). 서버가 돌려준 답변이 원본이다.
- * - 비밀번호와 키는 여기(메모리)에만 둔다 — 브라우저 저장소에 쓰지 않는다. 저장이 필요한 순간에만 서버로 보낸다.
- * - 확인(probe) 결과는 "무엇을 확인한 결과인지"(key)와 같이 둔다 — 입력이 바뀌면 그 결과는 쓸 수 없다.
- * 화면마다 새 저장소를 만든다(전역 하나가 아니다) — 테스트가 서로 섞이지 않는다.
+ * - 답변은 단계마다 서버에 저장한다(`save`). 서버가 반환한 답변이 원본이다.
+ * - 비밀번호와 키는 여기(메모리)에만 보관한다 — 브라우저 저장소에 기록하지 않는다. 저장이 필요한 시점에만 서버로 송신한다.
+ * - 확인(probe) 결과는 "무엇을 확인한 결과인지"(key)와 함께 보관한다 — 입력이 변경되면 해당 결과는 사용할 수 없다.
+ * 화면마다 새 저장소를 생성한다(전역 단일 저장소가 아니다) — 테스트 간 상태가 혼입되지 않는다.
  */
 import { createContext, useContext } from 'react'
 import { createStore, useStore, type StoreApi } from 'zustand'
@@ -21,7 +21,7 @@ const PREFLIGHT_POLL_MS = 1500
 
 export interface Probe<T> {
   status: 'idle' | 'checking' | 'done' | 'error'
-  /** 무엇을 확인했는가(입력값을 이은 글자) */
+  /** 확인 대상(입력값을 연결한 문자열) */
   key: string
   result: T | null
 }
@@ -32,7 +32,7 @@ export interface WizardState {
   boot: 'loading' | 'ready' | 'error'
   server: StateResponse | null
   answers: Answers
-  /** 서버가 이미 가지고 있는 비밀 */
+  /** 서버가 이미 보유한 비밀 */
   secretsOnServer: Record<string, boolean>
   fieldErrors: FieldError[]
   catalog: ZonesResponse | null
@@ -54,13 +54,13 @@ export interface WizardState {
   certFiles: { cert: string | null; key: string | null; ca: string | null }
 
   apply: ApplyState | null
-  /** 적용을 시작하거나 다시 시킨 횟수 — 바뀌면 상태 흐름을 새로 듣는다 */
+  /** 적용을 시작하거나 재실행한 횟수 — 변경 시 상태 흐름을 새로 구독 */
   applyEpoch: number
-  /** 시작을 눌렀지만 서버가 아직 새 상태를 쓰기 전 — 이때 오는 옛 상태(이 시각의 것 · idle)는 버린다 */
+  /** 시작을 눌렀으나 서버가 아직 새 상태를 기록하기 전 — 이때 수신되는 이전 상태(이 시각의 것 · idle)는 폐기 */
   applyStale: string | null
   saving: boolean
   saveFailed: boolean
-  /** 이 창에서 설치를 끝냈다 — 잠긴 뒤에도 완료 화면을 보여 준다 */
+  /** 이 창에서 설치를 완료함 — 잠긴 이후에도 완료 화면을 표시 */
   finishedHere: boolean
 
   init(token?: string | null, tokenStatus?: { status: 'wrong' | 'expired' | 'locked'; retry_after?: number } | null): Promise<void>
@@ -79,9 +79,9 @@ export interface WizardState {
   checkCert(cert: File, key: File, ca?: File | null): Promise<void>
   clearCert(): void
   setApply(state: ApplyState | null): void
-  /** 적용을 시작했거나 다시 시켰다 — 서버가 새 상태를 쓸 때까지 "진행 중"으로 보인다 */
+  /** 적용을 시작했거나 재실행함 — 서버가 새 상태를 기록할 때까지 "진행 중"으로 표시 */
   kickApply(returned: ApplyState): void
-  /** 상태 흐름에서 온 상태 */
+  /** 상태 흐름에서 수신한 상태 */
   receiveApply(state: ApplyState): void
   markFinished(): void
 }
@@ -99,12 +99,12 @@ function deepMerge<T>(base: T, patch: unknown): T {
   return out as T
 }
 
-/** 서버가 준 답변에 빠진 항목을 기본값으로 채운다 */
+/** 서버가 전달한 답변의 누락 항목을 기본값으로 채움 */
 export function normalizeAnswers(a: Partial<Answers> | null | undefined): Answers {
   return deepMerge(emptyAnswers(), a ?? {})
 }
 
-/** 저장하기 전에 "이 조각을 얹으면 답변이 어떻게 되는지" 미리 본다(다음 단계를 정하는 데 쓴다) */
+/** 저장 전에 "이 조각을 얹으면 답변이 어떻게 되는지" 미리 계산(다음 단계 결정에 사용) */
 export function applyPatch(answers: Answers, patch: AnswersPatch): Answers {
   return deepMerge(answers, patch)
 }
@@ -121,7 +121,7 @@ export function nfsKey(server: string, exportPath: string): string {
 
 export function createWizardStore(api: InstallerApi): WizardStore {
   return createStore<WizardState>()((set, get) => {
-    /** 확인 하나를 돌린다 — 도는 사이 입력이 바뀌어 다른 확인이 시작됐으면 늦게 온 결과는 버린다 */
+    /** 확인 하나를 실행 — 실행 중 입력이 변경되어 다른 확인이 시작된 경우 지연 도착한 결과는 폐기 */
     async function probe<K extends 'dns' | 'records' | 'smtp' | 'ai' | 'nfs' | 'localPath' | 'cert', T>(
       name: K, key: string, run: () => Promise<T>,
     ): Promise<void> {
@@ -137,16 +137,16 @@ export function createWizardStore(api: InstallerApi): WizardStore {
       }
     }
 
-    /** 공인 주소 — 처음에는 밖에 물어보느라 몇 초 걸릴 수 있어 화면을 막지 않고 뒤에서 읽는다 */
+    /** 공인 주소 — 최초에는 외부 조회로 수 초가 소요될 수 있어 화면을 차단하지 않고 백그라운드에서 조회 */
     async function loadPublicIp() {
       try {
         const got = await api.probePublicIp()
         const server = get().server
         if (!server || !got.ip) return
-        // 서버의 네트워크 카드가 공인 주소를 직접 가지고 있으면 직접 연결이다. 그 밖의 형태는 구분하지 못한다
+        // 서버의 네트워크 인터페이스가 공인 주소를 직접 보유하면 직접 연결이다. 그 외 형태는 구분할 수 없다
         const detected = got.source === 'interface' ? 'direct' as const : server.facts.detected_network
         set({ server: { ...server, facts: { ...server.facts, public_ip: server.facts.public_ip ?? got.ip, detected_network: detected ?? null } } })
-      } catch { /* 모르면 화면이 직접 입력받는다 */ }
+      } catch { /* 알 수 없으면 화면에서 직접 입력받음 */ }
     }
 
     async function loadWizard(server: StateResponse) {
@@ -160,7 +160,7 @@ export function createWizardStore(api: InstallerApi): WizardStore {
       })
       if (server.phase === 'applying') {
         const mode = normalizeAnswers(answers.answers).mode
-        try { set({ apply: mode === 'restore' ? await api.restoreGetApply() : await api.getApply() }) } catch { /* 적용 화면이 다시 읽는다 */ }
+        try { set({ apply: mode === 'restore' ? await api.restoreGetApply() : await api.getApply() }) } catch { /* 적용 화면이 재조회 */ }
       }
     }
 
@@ -197,13 +197,13 @@ export function createWizardStore(api: InstallerApi): WizardStore {
         set({ boot: 'loading' })
         try {
           let server = await api.getState()
-          // 주소에 토큰이 실려 왔는데 아직 세션이 없으면 그 토큰으로 세션을 만든다(토큰은 여기서 쓰고 버린다)
+          // 주소에 토큰이 포함되어 있으나 아직 세션이 없으면 해당 토큰으로 세션을 생성한다(토큰은 여기서 사용 후 폐기)
           if (token && server.session !== 'ok' && !server.locked) {
             const made = await api.createSession(token)
             server = await api.getState()
             if (server.session !== 'ok') server = { ...server, session: made.status, retry_after: made.retry_after }
           }
-          // 서버가 주소의 토큰을 이미 확인했는데 맞지 않았다 — 그 사유를 토큰 화면에 알린다
+          // 서버가 주소의 토큰을 이미 확인했으나 유효하지 않음 — 해당 사유를 토큰 화면에 전달
           if (tokenStatus && server.session !== 'ok' && !server.locked) {
             server = { ...server, session: tokenStatus.status, retry_after: tokenStatus.retry_after }
           }
@@ -219,7 +219,7 @@ export function createWizardStore(api: InstallerApi): WizardStore {
         try {
           const server = await api.getState()
           set({ server })
-        } catch { /* 다음 요청에서 다시 드러난다 */ }
+        } catch { /* 다음 요청에서 재확인됨 */ }
       },
 
       async submitToken(token) {
@@ -269,9 +269,9 @@ export function createWizardStore(api: InstallerApi): WizardStore {
             await new Promise(r => setTimeout(r, PREFLIGHT_POLL_MS))
           }
           set({ preflightBusy: false })
-          // 점검이 서버 메모리를 알아냈으면 구역 목록의 판정도 달라진다
+          // 점검에서 서버 메모리가 확인되면 구역 목록의 판정도 달라짐
           void get().reloadZones()
-          // 감지값(나가는 주소 · 연결 형태 · 여유 공간)도 점검 뒤에야 채워진다
+          // 감지값(나가는 주소 · 연결 형태 · 여유 공간)도 점검 이후에 채워짐
           void get().refreshState()
         } catch (e) {
           set({ preflightBusy: false, preflightFailed: true })
@@ -280,7 +280,7 @@ export function createWizardStore(api: InstallerApi): WizardStore {
       },
 
       async reloadZones() {
-        try { set({ catalog: await api.getZones() }) } catch { /* 전에 읽은 목록을 그대로 쓴다 */ }
+        try { set({ catalog: await api.getZones() }) } catch { /* 이전에 조회한 목록을 그대로 사용 */ }
       },
 
       checkDns: domain => probe('dns', domain.trim(), () => api.probeDns(domain.trim())),
@@ -299,8 +299,8 @@ export function createWizardStore(api: InstallerApi): WizardStore {
       setApply(state) { set({ apply: state }) },
       kickApply(returned) {
         const before = get().apply
-        // 서버는 답변 검증과 사전 점검을 다시 한 뒤에야 새 상태를 쓴다 — 그때까지 읽히는 것은 옛 상태다:
-        // 처음 시작이면 idle, 다시 시킨 것이면 방금 그 실패 상태(쓴 시각이 같다)
+        // 서버는 답변 검증과 사전 점검을 재수행한 뒤에야 새 상태를 기록한다 — 그때까지 조회되는 것은 이전 상태이다:
+        // 최초 시작이면 idle, 재실행이면 직전의 실패 상태(기록 시각 동일)
         const sameAsBefore = !!before && before.status === 'failed' && returned.status === 'failed'
           && (returned.updated_at ?? '') === (before.updated_at ?? '')
         const fresh = returned.status !== 'idle' && !sameAsBefore
@@ -328,9 +328,9 @@ export function createWizardStore(api: InstallerApi): WizardStore {
   })
 }
 
-// ─── 답변에서 끌어내는 값 ───
+// ─── 답변에서 도출하는 값 ───
 
-/** 켤 구역(애드온 제외). 빠른 설치는 서버 메모리에 맞는 묶음 */
+/** 활성화할 구역(애드온 제외). 빠른 설치는 서버 메모리에 맞는 프리셋 */
 export function effectiveZones(answers: Answers, catalog: ZonesResponse | null): string[] {
   if (!catalog) return answers.zones ?? []
   const fits = (name: string) => catalog.preset_fits?.[name] !== false
@@ -340,7 +340,7 @@ export function effectiveZones(answers: Answers, catalog: ZonesResponse | null):
   return catalog.presets[answers.preset ?? fallback] ?? []
 }
 
-/** 빠른 설치에서 메모리가 모자라 최소 묶음으로 내려갔는가 */
+/** 빠른 설치에서 메모리 부족으로 최소 프리셋으로 하향됐는지 여부 */
 export function quickLowered(catalog: ZonesResponse | null): boolean {
   return catalog?.preset_fits?.[QUICK_PRESET] === false
 }
@@ -354,19 +354,19 @@ export function flowOf(answers: Answers, catalog: ZonesResponse | null): FlowSte
   })
 }
 
-/** 구역이 켜져 있는가 */
+/** 구역 활성화 여부 */
 export function zoneOn(answers: Answers, catalog: ZonesResponse | null, id: string): boolean {
   return effectiveZones(answers, catalog).includes(id)
 }
 
-/** 이 서버의 내부 주소(공유기·프록시가 넘겨줄 곳). 모르면 null */
+/** 이 서버의 내부 주소(공유기·프록시의 전달 대상). 알 수 없으면 null */
 export function lanIp(s: Pick<WizardState, 'server' | 'preflight'>): string | null {
   return s.server?.facts.lan_ip ?? s.preflight?.facts?.outbound_address ?? null
 }
 
 /**
- * 이어서 할 단계 — 서버가 기억해 준 것이 있으면 그것, 없으면 답변에서 짐작한다:
- * 값이 채워진 마지막 단계의 바로 다음(값이 없는 안내 단계는 건너뛴 것으로 본다). 채워진 것이 없으면 null.
+ * 이어서 진행할 단계 — 서버가 기억한 값이 있으면 그 값, 없으면 답변에서 추정한다:
+ * 값이 채워진 마지막 단계의 바로 다음(값이 없는 안내 단계는 건너뛴 것으로 간주한다). 채워진 것이 없으면 null.
  */
 export function resumeStep(answers: Answers, catalog: ZonesResponse | null, serverStep?: string | null): StepId | null {
   const live = liveSteps(flowOf(answers, catalog))
@@ -390,7 +390,7 @@ export function resumeStep(answers: Answers, catalog: ZonesResponse | null, serv
   return live[Math.min(last + 1, live.length - 1)] === 'apply' ? 'summary' : live[last + 1]
 }
 
-/** 서버의 명목 메모리(MiB). 모르면 null */
+/** 서버의 명목 메모리(MiB). 알 수 없으면 null */
 export function serverMemoryMb(s: Pick<WizardState, 'catalog' | 'server' | 'preflight'>): number | null {
   return s.catalog?.memory?.nominal_mb ?? s.preflight?.facts?.memory_mb ?? s.server?.facts.memory_mb ?? null
 }

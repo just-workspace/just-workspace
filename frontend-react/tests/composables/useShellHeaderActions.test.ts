@@ -3,7 +3,7 @@ import {
   setHeaderActions, clearHeaderActions, clearAllHeaderActions, getHeaderActions, wsShellApi, MAX_ACTIONS,
 } from '~/composables/useShellHeaderActions'
 
-// useShellHeaderActions 는 hook 이라, 테스트는 같은 상태를 직접 읽는다.
+// useShellHeaderActions 는 hook 이므로 테스트는 동일 상태를 직접 조회한다.
 const useShellHeaderActions = () => ({ actions: { get value() { return getHeaderActions() } } })
 
 describe('상단바 확장 자리', () => {
@@ -13,7 +13,7 @@ describe('상단바 확장 자리', () => {
     const { actions } = useShellHeaderActions()
     const off = setHeaderActions([{ id: 'a', label: '패널', icon: 'sliders', pressed: false }])
     expect(actions.value.map(a => a.id)).toEqual(['a'])
-    // 같은 owner 로 다시 set 하면 통째로 바뀐다
+    // 동일 owner 로 다시 set 하면 전체가 교체됨
     setHeaderActions([{ id: 'a', label: '패널', icon: 'sliders', pressed: true }, { id: 'b', label: '실행', text: '실행' }])
     expect(actions.value.length).toBe(2)
     expect(actions.value[0].pressed).toBe(true)

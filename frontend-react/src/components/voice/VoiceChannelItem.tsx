@@ -1,9 +1,9 @@
 /**
  * 사이드바 "음성" 구역의 채널 한 줄 + 접속자 줄.
- *  · 항목(높이 32): 스피커 아이콘(volume-2) · 이름 · 인원(mono 12). 내가 들어간 채널 = bg-accent + 굵게, 본문에 열어 둔 채널 = bg-accent/60.
+ *  · 항목(높이 32): 스피커 아이콘(volume-2) · 이름 · 인원(mono 12). 본인이 입장한 채널 = bg-accent + 굵게, 본문에 열어 둔 채널 = bg-accent/60.
  *  · 접속자 줄(높이 32, 들여쓰기 pl-8): 아바타 24 · 이름 · 음소거 아이콘(danger) · 음질 단계 짧은 글자(mono 11).
- *    말하는 중 = 아바타 success 링 + 이름 success. 내 줄은 굵게.
- * 누르면 바로 들어간다(벨 없음) — 본문도 그 채널로. 접속자는 서버 presence(chatStore.voiceStates), 말하는 중은 내가 그 방에 있을 때만(useVoice.peers).
+ *    발화 중 = 아바타 success 링 + 이름 success. 본인 줄은 굵게.
+ * 클릭 시 즉시 입장한다(벨 없음) — 본문도 해당 채널로 전환. 접속자는 서버 presence(chatStore.voiceStates), 발화 중 여부는 본인이 해당 방에 있을 때만 확인 가능(useVoice.peers).
  */
 import { memo } from 'react'
 import { useStore } from 'zustand'
@@ -19,7 +19,7 @@ export interface VoiceChannelItemProps {
   channel: Channel
   /** 본문에 열어 둔 채널 */
   selected: boolean
-  /** 누름 → 들어가기 + 본문 열기 */
+  /** 클릭 → 입장 + 본문 열기 */
   onClick: () => void
   /** 모바일 목록(행 44 · 글자 15) */
   mobile?: boolean
@@ -52,7 +52,7 @@ export const VoiceChannelItem = memo(function VoiceChannelItem({ channel, select
   const myChannel = useStore(voiceStore, s => s.channelId === channel.id)
   const myIdentity = useStore(voiceStore, s => s.identity)
   const conn = useStore(voiceStore, s => (s.channelId === channel.id ? s.connectionState : 'disconnected'))
-  // 말하는 중은 내가 그 방에 있을 때만 안다
+  // 발화 중 여부는 본인이 해당 방에 있을 때만 확인 가능
   const speakingIds = useStore(voiceStore, s => (s.channelId === channel.id ? s.peers.filter(p => p.isSpeaking).map(p => p.identity).join(',') : ''))
   const speaking = new Set(speakingIds ? speakingIds.split(',') : [])
   const parts = state?.participants ?? []

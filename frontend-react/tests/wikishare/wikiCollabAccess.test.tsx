@@ -1,4 +1,4 @@
-// 위키 공동 편집 — 붙어 있는 동안 권한이 바뀌었을 때: 강등은 읽기 전용 + 안내, 회수(4003)는 재접속 중단
+// 위키 공동 편집 — 접속 중 권한이 변경된 경우: 강등은 읽기 전용 + 안내, 회수(4003)는 재접속 중단
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, act, cleanup } from '@testing-library/react'
 

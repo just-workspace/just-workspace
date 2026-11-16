@@ -44,7 +44,7 @@ describe('useMailCompose', () => {
   it('펼친 창은 2개까지 — 넘치면 오래된 것부터 최소화', () => {
     openCompose('new'); openCompose('new'); openCompose('new')
     expect(wins().map(w => w.minimized)).toEqual([true, false, false])
-    // 최소화된 첫 창을 펼치면 다른 하나(가장 오래된 펼친 창)가 접힌다
+    // 최소화된 첫 창을 펼치면 다른 창 하나(가장 오래된 펼친 창)가 접힘
     setComposeMinimized('compose-1', false)
     expect(wins().map(w => w.minimized)).toEqual([false, true, false])
   })
@@ -79,7 +79,7 @@ describe('useMailCompose', () => {
     authStore.setState({ user: { id: 'u1' } as any })
     openCompose('new'); openCompose('new')
     expect(wins()).toHaveLength(2)
-    authStore.setState({ loading: false }) // user 그대로면 안 지운다
+    authStore.setState({ loading: false }) // user 가 동일하면 삭제하지 않음
     expect(wins()).toHaveLength(2)
     authStore.setState({ user: null })
     expect(wins()).toHaveLength(0)

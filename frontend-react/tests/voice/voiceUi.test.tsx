@@ -10,7 +10,7 @@ vi.mock('~/lib/api', async (orig) => {
   const fake = async (url: string, opts?: any) => { api.calls.push({ url, opts }); return api.handler(url, opts) }
   return { ...real, $fetch: Object.assign(fake, { raw: fake, native: fetch, create: () => fake }) }
 })
-// LiveKit 은 브라우저 전용 — 전송은 가짜로 갈아 끼운다
+// LiveKit 은 브라우저 전용 — 전송은 모의 구현으로 교체
 const fakeTransport = vi.hoisted(() => ({
   join: vi.fn(async () => {}), leave: vi.fn(async () => {}), setSend: vi.fn(async () => {}), setMuted: vi.fn(async () => {}),
   setDeafened: vi.fn(), setScreenAudio: vi.fn(async () => true), attachRemoteAudio: vi.fn(), getStats: vi.fn(async () => ({})),
@@ -70,7 +70,7 @@ beforeEach(() => {
 })
 
 describe('사이드바 "음성" 구역', () => {
-  // 음성 채널은 별도 구역 없이 카테고리에 섞인다(카테고리 없으면 "분류 없음")
+  // 음성 채널은 별도 구역 없이 카테고리에 포함됨(카테고리가 없으면 "분류 없음")
   it('음성 채널 행(아이콘·이름·인원 mono) · 접속자 줄(음소거·듣기 끔·단계 짧은 글자)', () => {
     renderInRouter(<ChatSidebar />)
     expect(screen.queryByTestId('voice-section')).toBeNull()
@@ -82,9 +82,9 @@ describe('사이드바 "음성" 구역', () => {
     expect(within(list).getByRole('img', { name: t('chat.voice.muted') })).toBeTruthy()
     expect(within(list).getByRole('img', { name: t('chat.voice.sidebar.deafened') })).toBeTruthy()
     expect(list.textContent).toContain(t('chat.voice.tier.music.short'))
-    // 텍스트 채널 목록엔 안 들어간다
+    // 텍스트 채널 목록에는 포함되지 않음
     expect(screen.queryByRole('button', { name: /^라운지$/ })).toBeNull()
-    // 들어가기 전엔 접속 바 없음
+    // 입장 전에는 접속 바 없음
     expect(screen.queryByTestId('voice-bar')).toBeNull()
   })
   it('누르면 토큰을 받아 바로 들어간다(벨 없음) — 전송 join · 상태 보고 · 내 채널 = 선택 덧칠 굵게 · 사이드바 하단에 접속 바', async () => {
@@ -150,7 +150,7 @@ describe('접속 바 · 본문 · 음질 패널(접속 중)', () => {
     fireEvent.click(deafen)
     expect(fakeTransport.setDeafened).toHaveBeenCalledWith(true)
     expect(within(bar).getByRole('button', { name: t('chat.voice.undeafen') }).getAttribute('aria-pressed')).toBe('true')
-    // 음소거 해제 → 듣기도 켠다
+    // 음소거 해제 → 듣기도 활성화
     fireEvent.click(within(bar).getByRole('button', { name: t('chat.voice.unmute') }))
     await waitFor(() => expect(voiceStore.getState().muted).toBe(false))
     expect(voiceStore.getState().deafened).toBe(false)
@@ -210,7 +210,7 @@ describe('접속 바 · 본문 · 음질 패널(접속 중)', () => {
     expect(screen.queryByTestId('voice-earnote')).toBeNull()
     fireEvent.click(screen.getByRole('radio', { name: new RegExp(t('chat.voice.tier.music.name')) }))
     await waitFor(() => expect(voiceStore.getState().prefs.tier).toBe('music'))
-    // 음성 처리 기본 켬 → 이어폰 경고 없음, 모노 안내. 에코 제거를 끄면 이어폰 경고
+    // 음성 처리 기본 활성 → 이어폰 경고 없음, 모노 안내. 에코 제거를 끄면 이어폰 경고 표시
     expect(screen.queryByTestId('voice-earnote')).toBeNull()
     expect(screen.getByTestId('voice-processing').textContent).toContain(t('chat.voice.quality.proc.musicMonoNote'))
     fireEvent.click(screen.getByRole('switch', { name: new RegExp(t('chat.voice.quality.proc.aec')) }))
@@ -223,7 +223,7 @@ describe('접속 바 · 본문 · 음질 패널(접속 중)', () => {
     await waitFor(() => expect(voiceStore.getState().prefs.musicBitrate).toBe(510_000))
     await waitFor(() => expect(fakeTransport.setSend).toHaveBeenCalled())
     expect((fakeTransport.setSend.mock.calls as unknown as any[][]).at(-1)![0]).toMatchObject({ tier: 'music', musicBitrate: 510_000, bufferTarget: 'auto' })
-    // 샘플레이트 96 은 웹에서 흐림 · 버퍼 목표 120
+    // 샘플레이트 96 은 웹에서 비활성 표시 · 버퍼 목표 120
     const sr = screen.getByRole('radiogroup', { name: t('chat.voice.quality.sampleRate') })
     expect(within(sr).getByRole('radio', { name: '96' }).getAttribute('aria-disabled')).toBe('true')
     const buf = screen.getByRole('radiogroup', { name: t('chat.voice.quality.buffer') })

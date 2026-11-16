@@ -1,7 +1,7 @@
 /**
  * 작업 태그 줄("태그" + primary 점 7 + 글자 12 · 점선 "+" 칩).
- *  "+" → 같은 높이 입력(자동완성 = GET /api/tasks/facets 의 tags, 네이티브 datalist). Enter/쉼표 = 추가, Esc = 닫기.
- *  칩의 ✕ = 빼기(누를 수 있는 영역 40). 바꿀 때마다 태그 목록 전체를 onCommit 한다.
+ *  "+" → 동일 높이 입력(자동완성 = GET /api/tasks/facets 의 tags, 네이티브 datalist). Enter/쉼표 = 추가, Esc = 닫기.
+ *  칩의 ✕ = 제거(클릭 가능 영역 40). 변경 시마다 태그 목록 전체를 onCommit 으로 전달한다.
  */
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { cn } from '~/lib/utils'
@@ -16,7 +16,7 @@ export interface TasksTagEditorProps {
   /** 모바일 속성 카드 안(글자 13) */
   size?: 'md' | 'lg'
   className?: string
-  /** 바뀐 태그 목록 전체 */
+  /** 변경된 태그 목록 전체 */
   onCommit?: (tags: string[]) => void
 }
 
@@ -46,7 +46,7 @@ export function TasksTagEditor({ tags, suggestions, size = 'md', className, onCo
     onCommit?.([...tags, v])
   }
   function onKey(e: KeyboardEvent<HTMLInputElement>) {
-    // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 넘기면 마지막 글자가 남거나 두 번 들어간다
+    // 한글 조합 중 Enter 는 글자 확정이다(macOS 는 조합 중에도 key='Enter') — 그대로 처리하면 마지막 글자가 남거나 중복 입력된다
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add() }
     else if (e.key === 'Escape') { e.preventDefault(); setDraftV(''); setAdding(false) }

@@ -1,7 +1,7 @@
 /**
  * 첨부 미리보기 모달("PDF 는 미리보기 모달").
  * 공용 UiModal 넓은 판(wide 960 × 90dvh, 모바일 전체 화면) + 본문 여백 없음.
- * 서버는 이미지·PDF 만 inline 으로 내준다(http_utils.INLINE_SAFE_TYPES) — 나머지는 이 모달을 열지 않는다.
+ * 서버는 이미지·PDF 만 inline 으로 제공한다(http_utils.INLINE_SAFE_TYPES). 그 외 형식에는 본 모달을 열지 않는다.
  */
 import { useI18n } from '~/i18n'
 import { formatBytes } from '~/utils/mailQuery'

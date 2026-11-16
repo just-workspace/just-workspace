@@ -7,7 +7,7 @@ import { gitPath } from '~/utils/gitRoute'
 import { NuxtLink } from '~/components/NuxtLink'
 
 export interface GitPathCrumbsProps {
-  /** 저장소 안 경로(빈 문자열 = 루트 — 그리지 않는다) */
+  /** 저장소 내 경로(빈 문자열 = 루트 — 렌더링하지 않음) */
   path: string
   className?: string
 }

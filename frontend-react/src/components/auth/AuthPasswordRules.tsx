@@ -1,7 +1,7 @@
 /**
  * 비밀번호 규칙 체크 목록:
  * 12px, 통과 = success 600 + ✓, 미통과 = muted + 빈 원 10px. 강도 미터 없음.
- * 규칙 판정은 utils/passwordRules.ts(백엔드 정책과 동일). aria-live 로 변화를 읽어 준다.
+ * 규칙 판정은 utils/passwordRules.ts(백엔드 정책과 동일). aria-live 로 변경 사항을 낭독한다.
  */
 import { cn } from '~/lib/utils'
 import { useI18n } from '~/i18n'
@@ -10,9 +10,9 @@ import { UiIcon } from '~/components/ui/Icon'
 
 export interface AuthPasswordRulesProps {
   results: PasswordRuleResult[]
-  /** distinct 규칙 문구에 쓸 대상(아이디 / 이메일) */
+  /** distinct 규칙 문구에 사용할 대상(아이디 / 이메일) */
   contextLabel?: string
-  /** length 규칙 문구의 하한(기본 PASSWORD_MIN) — checkPasswordRules 에 준 값과 같게 */
+  /** length 규칙 문구의 하한(기본값 PASSWORD_MIN) — checkPasswordRules 에 전달한 값과 동일해야 함 */
   min?: number
 }
 

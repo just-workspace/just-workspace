@@ -1,9 +1,9 @@
 /**
- * 대화 영역(머리 · 연결 끊김 띠 · 메시지 목록 · 컴포저 · 드롭 오버레이).
- * 채널을 안 골랐으면(데스크톱) 빈 상태.
- * 채널 탭(메시지·파일·회의·작업)은 머리 안 세그먼트 sm 로 옮겼다(탭 줄 없음, 탭 관리는 머리 채널 메뉴).
- *   포럼 채널(forum_board_id)은 탭 대신 글 목록/갤러리 전환 — 본문은 ChatForumView(RIGHT 담당, 파일이 생기면 자동으로 붙는다).
- *   연결 끊김(#offline)은 머리 바로 아래 전체 폭 띠 40. 대화 열은 전체 폭.
+ * 대화 영역(헤더 · 연결 끊김 띠 · 메시지 목록 · 컴포저 · 드롭 오버레이).
+ * 채널 미선택 시(데스크톱) 빈 상태.
+ * 채널 탭(메시지·파일·회의·작업)은 헤더 내 세그먼트 sm 로 이동했다(탭 줄 없음, 탭 관리는 헤더 채널 메뉴).
+ *   포럼 채널(forum_board_id)은 탭 대신 글 목록/갤러리 전환 — 본문은 ChatForumView(RIGHT 담당, 파일이 생성되면 자동 연결).
+ *   연결 끊김(#offline)은 헤더 바로 아래 전체 폭 띠 40. 대화 열은 전체 폭.
  */
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ComponentType, type DragEvent } from 'react'
 import { useI18n } from '~/i18n'
@@ -29,7 +29,7 @@ import { ChatChannelTabsManage } from './ChannelTabsManage'
 import { UiTrans } from '~/components/ui/Trans'
 import type { SegmentItem } from '~/components/ui/Segment'
 
-// 포럼 보기(RIGHT 담당 ChatForumView) — 파일이 아직 없으면 자리표시. 생기면 glob 이 잡아 붙인다.
+// 포럼 보기(RIGHT 담당 ChatForumView) — 파일이 아직 없으면 자리표시자 사용. 파일 생성 시 glob 으로 탐지하여 연결.
 const forumMods = import.meta.glob<{ ChatForumView?: ComponentType<{ channel: NonNullable<ReturnType<typeof useChat>['selectedChannel']>; view: ForumView }> }>('./ChatForumView.tsx')
 const forumLoader = forumMods['./ChatForumView.tsx']
 const LazyForumView = forumLoader
@@ -39,7 +39,7 @@ const LazyForumView = forumLoader
 export interface ChatConversationProps {
   /** 모바일 ‹ 뒤로(목록으로) */
   onBack?: () => void
-  /** 세로 화면: 머리 ☰ 로 채널 목록 서랍 열기(ChatHeader 로 넘김) */
+  /** 세로 화면: 헤더 ☰ 로 채널 목록 서랍 열기(ChatHeader 로 전달) */
   onOpenChannels?: () => void
 }
 
@@ -62,11 +62,11 @@ export function ChatConversation({ onBack, onOpenChannels }: ChatConversationPro
   const { messages, loadingMessages, hasMoreMessages, loadingMore, typingUsers } = chat
 
   // ─── 채널 탭: 메시지 + 채널 설정 순서의 파일 · 위키 · 회의 · 작업 + 톱니(탭 관리) ───
-  // 1:1 대화(DM)에는 탭이 없다. 채널을 바꾸면 메시지 탭으로 돌아간다.
+  // 1:1 대화(DM)에는 탭 없음. 채널 변경 시 메시지 탭으로 복귀.
   const [tab, setTab] = useState<ChannelTabKey>('messages')
   const [tabsSummary, setTabsSummary] = useState<ChannelTabsSummary | null>(null)
   const [manageOpen, setManageOpen] = useState(false)
-  // 포럼 보기(글 목록/갤러리) — 사람마다 기억(useChatForum · 헤더의 ForumViewToggle 과 같은 값)
+  // 포럼 보기(글 목록/갤러리) — 사용자별 보존(useChatForum · 헤더의 ForumViewToggle 과 동일 값)
   const forumView: ForumView = useForumView()
   const tabsOn = !!selectedChannel && selectedChannel.type !== 'dm'
   const chRef = useRef(selectedChannel)
@@ -78,13 +78,13 @@ export function ChatConversation({ onBack, onOpenChannels }: ChatConversationPro
   }, [])
   const chId = selectedChannel?.id
   useEffect(() => { setTab('messages'); setManageOpen(false); void loadTabs() }, [chId, loadTabs])
-  // 파일 탭 숫자는 새 첨부가 오면 달라진다 — 탭을 다시 열 때 갱신
+  // 파일 탭 숫자는 새 첨부 수신 시 변경됨 — 탭을 다시 열 때 갱신
   const firstTab = useRef(true)
   useEffect(() => {
     if (firstTab.current) { firstTab.current = false; return }
     if (tab !== 'messages') void loadTabs()
   }, [tab, loadTabs])
-  // 고른 탭이 꺼지거나(탭 관리·모듈) 위키 연결이 풀리면 메시지로
+  // 선택한 탭이 비활성화되거나(탭 관리·모듈) 위키 연결이 해제되면 메시지 탭으로 전환
   const { isModuleEnabled } = usePlatform()
   const shown = visibleChannelTabs(tabsSummary, isModuleEnabled)
   const isForum = !!selectedChannel?.forum_board_id
@@ -105,7 +105,7 @@ export function ChatConversation({ onBack, onOpenChannels }: ChatConversationPro
   }, [tab, tabsSummary, shown])
 
   // ─── 대화 영역 전체 드롭 오버레이 ───
-  // 드래그가 대화 영역에 들어오면 표시, 놓으면 ChatInput 의 첨부 트레이로 들어간다(즉시 전송 아님).
+  // 드래그가 대화 영역에 진입하면 표시, 드롭 시 ChatInput 의 첨부 트레이에 추가(즉시 전송 아님).
   const depth = useRef(0)
   const [dragDepth, setDragDepthState] = useState(0)
   const setDragDepth = (v: number) => { depth.current = v; setDragDepthState(v) }
@@ -140,7 +140,7 @@ export function ChatConversation({ onBack, onOpenChannels }: ChatConversationPro
     const files = e.dataTransfer?.files
     if (files && files.length && selectedChannel) addFiles(selectedChannel.id, files)
   }
-  // 창 밖으로 드래그가 나가 dragleave 가 안 맞는 경우 대비
+  // 드래그가 창 밖으로 벗어나 dragleave 횟수가 맞지 않는 경우 대비
   useEffect(() => {
     const resetDrag = () => { depth.current = 0; setDragDepthState(0); setDragFileCount(0) }
     window.addEventListener('dragend', resetDrag)
@@ -149,7 +149,7 @@ export function ChatConversation({ onBack, onOpenChannels }: ChatConversationPro
   }, [])
 
   if (!selectedChannel) {
-    // 아무 대화도 안 고른 상태(데스크톱)
+    // 대화 미선택 상태(데스크톱)
     return (
       <UiEmptyState
         icon="chat"

@@ -3,11 +3,11 @@
  * 데스크톱 행 32: 아이콘 20 · 간격 8 · radius 8 · 왼쪽 8 · 글자 16.
  *   기본 muted-foreground / 안 읽음 600 + 왼쪽 알약 4×8 / 멘션 danger 숫자 / 음소거 bell-off(+ "오후 3:00까지 알림 끔" 툴팁) /
  *   선택 bg-overlay-selected / 호버 bg-overlay-hover + 초대·설정 아이콘 / 비공개 lock / 포럼 messages-square / DM 아바타 24 + 상태 점.
- *   음성 채널은 아래 접속자 줄(아바타 24 · 이름 14 · PTT · 사람별 음량 · 음소거 · 음질) 최대 4줄 + "+N명", 말하는 중 초록 링.
- *   접힌 카테고리(sectionCollapsed)면 접속자 줄 없이 오른쪽 인원 수만.
+ *   음성 채널은 아래 접속자 줄(아바타 24 · 이름 14 · PTT · 사용자별 음량 · 음소거 · 음질) 최대 4줄 + "+N명", 말하는 중 초록 링.
+ *   접힌 카테고리(sectionCollapsed)면 접속자 줄 없이 오른쪽 인원 수만 표시.
  * 모바일 행 44: 아이콘 20 · 글자 16 · 간격 12, 음성은 접속자 아바타 겹침(최대 3), 길게 누르기 = 채널 메뉴.
- * 음소거는 디스코드의 50% 투명 대신 bell-off 아이콘(접근성 — 4.5:1 유지, CONTRACT).
- * 호버 아이콘(초대·설정)은 행 버튼 안에 넣지 않고(버튼 중첩 금지) 형제 버튼으로 오른쪽 위에 겹친다.
+ * 음소거는 디스코드의 50% 투명 대신 bell-off 아이콘 사용(접근성 — 4.5:1 유지, CONTRACT).
+ * 호버 아이콘(초대·설정)은 행 버튼 내부에 두지 않고(버튼 중첩 금지) 형제 버튼으로 오른쪽 위에 겹쳐 배치.
  */
 import { memo, useRef, type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { useStore } from 'zustand'
@@ -26,36 +26,36 @@ import { UiIcon } from '~/components/ui/Icon'
 
 export interface ChatChannelItemProps {
   channel: Channel
-  /** 지금 연 채널 */
+  /** 현재 열린 채널 */
   selected: boolean
   /** DM 표시 이름(없으면 채널 이름) */
   dmName?: string
   /** 모바일 목록 행(44) */
   mobile?: boolean
-  /** 접힌 카테고리 안 — 음성 접속자 줄을 숨기고 인원 수만 */
+  /** 접힌 카테고리 내부 — 음성 접속자 줄을 숨기고 인원 수만 표시 */
   sectionCollapsed?: boolean
-  /** 끄는 중인 원래 행(40%) */
+  /** 드래그 중인 원래 행(40%) */
   ghosted?: boolean
   /** 채널 관리 권한 — 설정 아이콘 */
   canManage?: boolean
   onClick?: () => void
   /** 우클릭 · 길게 누르기 → 채널 메뉴 */
   onMenu?: (anchor: DOMRect) => void
-  /** Alt+Shift+↑↓ 한 칸 옮기기(권한 있을 때만 넘긴다) */
+  /** Alt+Shift+↑↓ 한 칸 이동(권한 보유 시에만 전달) */
   onKeyMove?: (delta: -1 | 1) => void
   /** 호버 초대 아이콘 */
   onInvite?: () => void
   /** 호버 설정 아이콘 */
   onSettings?: () => void
-  /** 접속자 줄 우클릭·길게 → 사람별 음량 */
+  /** 접속자 줄 우클릭·길게 누르기 → 사용자별 음량 */
   onOccupantMenu?: (p: VoicePresence, anchor: DOMRect) => void
-  /** HTML5 끌기(권한 있을 때만) */
+  /** HTML5 드래그(권한 보유 시에만) */
   draggable?: boolean
   onDragStart?: (e: DragEvent<HTMLElement>) => void
   onDragEnd?: (e: DragEvent<HTMLElement>) => void
   onDragOver?: (e: DragEvent<HTMLElement>) => void
   onDrop?: (e: DragEvent<HTMLElement>) => void
-  /** 행 버튼 id(포커스 되돌리기) */
+  /** 행 버튼 id(포커스 복원용) */
   rowId?: string
 }
 
@@ -132,7 +132,7 @@ export const ChatChannelItem = memo(function ChatChannelItem({
   const myVoice = useStore(voiceStore, s => s.channelId === channel.id)
   const myIdentity = useStore(voiceStore, s => s.identity)
   const conn = useStore(voiceStore, s => (s.channelId === channel.id ? s.connectionState : 'disconnected'))
-  // 말하는 중은 내가 그 방에 있을 때만 안다(문자열로 골라 무한 갱신 방지)
+  // 말하는 중 여부는 본인이 해당 방에 접속한 경우에만 확인 가능(문자열로 선택해 무한 갱신 방지)
   const speakingIds = useStore(voiceStore, s => (s.channelId === channel.id ? s.peers.filter(p => p.isSpeaking).map(p => p.identity).join(',') : ''))
   const pttMode = useStore(userPrefsStore, s => s.prefs.chatVoiceMode === 'ptt')
   const volumes = useStore(userPrefsStore, s => s.prefs.chatUserVolumes)
@@ -210,7 +210,7 @@ export const ChatChannelItem = memo(function ChatChannelItem({
           showHoverIcons ? 'group-hover/row:pr-14 group-focus-within/row:pr-14' : '',
         )}
       >
-        {/* 안 읽음 알약 4×8 — 목록 안쪽 여백(8) 끝에 붙는다 */}
+        {/* 안 읽음 알약 4×8 — 목록 안쪽 여백(8) 끝에 배치 */}
         {unread && !active && <span aria-hidden="true" className="absolute -left-2 top-1/2 h-2 w-1 -translate-y-1/2 rounded-r-full bg-foreground" />}
 
         {isDm
@@ -258,7 +258,7 @@ export const ChatChannelItem = memo(function ChatChannelItem({
             )
             : <span className="shrink-0 font-mono text-[12px] font-normal text-muted-foreground" aria-hidden="true">{people.length}</span>)}
 
-        {/* 음소거 — 툴팁에 끝나는 시각 */}
+        {/* 음소거 — 툴팁에 종료 시각 표시 */}
         {muted && badgeCount === 0 && (
           <span role="img" aria-label={muteL} title={muteL} className="inline-flex shrink-0 text-muted-foreground">
             <UiIcon name="bell-off" className={mobile ? 'h-[18px] w-[18px]' : 'h-4 w-4'} />

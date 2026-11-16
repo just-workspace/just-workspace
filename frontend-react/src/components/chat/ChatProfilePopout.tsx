@@ -1,12 +1,12 @@
 /**
  * 프로필 팝아웃.
- *  배너 64(첫 역할 색 /30, 없으면 muted) → 아바타 80 + 상태 점 12(ring-4 popover) [관리면 ⋯] → 이름 20/700 · 아이디 13 muted
- *  → 커스텀 상태 14 → 카드(bg-card p-3: 직함 · 소개 · 역할 칩 + [+] · 현지 시각과 차이) → DM 입력(Enter 로 보냄) / 내 것이면 상태 바꾸기 · 프로필 편집
+ *  배너 64(첫 역할 색 /30, 없으면 muted) → 아바타 80 + 상태 점 12(ring-4 popover) [관리 권한이 있으면 ⋯] → 이름 20/700 · 아이디 13 muted
+ *  → 커스텀 상태 14 → 카드(bg-card p-3: 직함 · 소개 · 역할 칩 + [+] · 현지 시각과 차이) → DM 입력(Enter 로 전송) / 본인이면 상태 바꾸기 · 프로필 편집
  *  → "전체 프로필 보기".
  *  ⋯ 메뉴(MANAGE_ROLES 또는 KICK_MEMBERS): 역할 관리 · 멘션 복사 · (구분선) 채널에서 내보내기(danger, 확인).
- *  [+]: 붙일 수 있는 역할 목록 — 내 최고 역할 이상(계층 위)·그룹 연결 역할은 잠금(자물쇠 + 이유).
- * 데이터: chatApi22.fetchChatProfile(옛 서버면 chatStore 의 사용자·멤버로 대신) · useChatRoles(rolesOfUser · setUserRoles).
- * 열기: useChatUi.setProfilePopout({ userId, anchor }) — 메시지 이름·아바타(MESSAGES), 멤버 행, 음성 접속자 줄.
+ *  [+]: 부여 가능한 역할 목록 — 본인 최고 역할 이상(계층 상위)·그룹 연결 역할은 잠금(자물쇠 + 사유).
+ * 데이터: chatApi22.fetchChatProfile(구버전 서버이면 chatStore 의 사용자·멤버로 대체) · useChatRoles(rolesOfUser · setUserRoles).
+ * 열기: useChatUi.setProfilePopout({ userId, anchor }) — 메시지 이름·아바타(MESSAGES), 멤버 행, 음성 접속자 행.
  */
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { useStore } from 'zustand'
@@ -35,7 +35,7 @@ import { UiMenu, type UiMenuItem } from '~/components/ui/Menu'
 import { ChatFloating } from './ChatFloating'
 import { openAccountMenu } from './ChatAccountPanel'
 
-/** pages/chat 이 한 번 그린다 */
+/** pages/chat 에서 1회 렌더링 */
 export function ChatProfilePopoutHost() {
   const pop = useStore(chatUiStore, s => s.profilePopout)
   if (!pop) return null
@@ -60,7 +60,7 @@ export function ChatProfilePopout({ userId, anchor, onClose }: ChatProfilePopout
   const roles = useStore(chatRolesStore, useShallow(s => rolesOfUser(userId, s)))
   const allRoles = useStore(chatRolesStore, s => s.roles)
   const myTz = useStore(userPrefsStore, s => myTimeZone(s.prefs.timezone))
-  // 권한(역할 store 가 바뀌면 다시 계산)
+  // 권한(역할 store 변경 시 재계산)
   useStore(chatRolesStore, s => s.myWorkspacePerms)
   useStore(chatRolesStore, s => s.myChannelPerms)
 
@@ -70,7 +70,7 @@ export function ChatProfilePopout({ userId, anchor, onClose }: ChatProfilePopout
 
   useEffect(() => {
     let alive = true
-    fetchChatProfile(userId).then((p) => { if (alive) setProfile(p) }, () => { /* 옛 서버 — 아래 대체값 */ })
+    fetchChatProfile(userId).then((p) => { if (alive) setProfile(p) }, () => { /* 구버전 서버 — 아래 대체값 사용 */ })
     void loadRoles()
     void loadUserRoles(userId)
     const id = setInterval(() => setNow(new Date()), 30_000)

@@ -1,10 +1,10 @@
 /**
- * 기본 버튼(shadcn 계열). 변형 variant × 크기 size. `as` 로 다른 태그(예: 'a')로 그린다.
- * 빨강은 danger 하나. destructive 는 기존 호출처 호환용 별칭 — 새 코드는 danger.
+ * 기본 버튼(shadcn 계열). 변형 variant × 크기 size. `as` 로 다른 태그(예: 'a')로 렌더링한다.
+ * 빨강은 danger 하나. destructive 는 기존 호출처 호환용 별칭 — 신규 코드는 danger 를 사용한다.
  * 커맨드 바·필터 바 안 컨트롤은 전부 32 = size="xs".
- * type 기본값이 없다 — 폼 안에서 제출 버튼이 아니면 type="button" 을 줄 것.
+ * type 기본값은 없다 — 폼 안에서 제출 버튼이 아니면 type="button" 지정 필수.
  * 아이콘은 `icon`(글자 왼쪽) · `iconRight`(글자 오른쪽, ▾·외부 링크) — 아이콘 16, 글자와 간격 6.
- * 버튼 안에 UiIcon 을 직접 넣지 말 것.
+ * 버튼 안에 UiIcon 을 직접 배치하지 않는다.
  */
 import type { AllHTMLAttributes, ElementType, ReactNode, Ref } from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
@@ -17,7 +17,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs hover:shadow-md',
-        // 빨강은 danger 하나. destructive 는 기존 호출처 호환용 별칭 — 새 코드는 danger.
+        // 빨강은 danger 하나. destructive 는 기존 호출처 호환용 별칭 — 신규 코드는 danger 사용.
         danger: 'bg-danger text-danger-foreground hover:bg-danger/90',
         destructive: 'bg-danger text-danger-foreground hover:bg-danger/90',
         outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
@@ -50,13 +50,13 @@ export interface UiButtonProps extends Omit<AllHTMLAttributes<HTMLElement>, 'siz
   variant?: NonNullable<ButtonVariants['variant']>
   /** default 40 · sm 36 · xs 32(커맨드·필터 바) · lg 44 · icon 40×40 */
   size?: NonNullable<ButtonVariants['size']>
-  /** 그릴 태그(기본 'button'). 링크 모양 버튼은 as="a" href=… */
+  /** 렌더링할 태그(기본 'button'). 링크 모양 버튼은 as="a" href=… */
   as?: string
   /** 글자 왼쪽 아이콘 이름(UiIcon, 16). 예: 'plus' · 'refresh' · 'upload' */
   icon?: string
   /** 글자 오른쪽 아이콘 이름(UiIcon, 16). 예: 'chevron-down' · 'external-link' */
   iconRight?: string
-  /** 그려지는 요소 */
+  /** 렌더링되는 요소 */
   ref?: Ref<HTMLElement>
   children?: ReactNode
 }

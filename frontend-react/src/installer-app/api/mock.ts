@@ -1,8 +1,8 @@
 /**
- * 가짜 설치 관리자 — 서버 없이 화면의 모든 상태를 띄워 보기 위한 것(개발 서버와 테스트에서만 쓴다).
- * 실제 클라이언트와 같은 `InstallerApi` 를 구현하고, 답변·적용 상태를 메모리에 들고 있다.
+ * 가짜 설치 관리자 — 서버 없이 화면의 모든 상태를 재현하기 위한 모듈(개발 서버와 테스트에서만 사용한다).
+ * 실제 클라이언트와 동일한 `InstallerApi` 를 구현하며, 답변·적용 상태를 메모리에 보관한다.
  *
- * 시나리오는 이름을 쉼표로 이어 여러 개를 같이 켠다. 예: `?mock=router,nfs-permission`
+ * 시나리오는 이름을 쉼표로 연결하여 여러 개를 동시에 활성화한다. 예: `?mock=router,nfs-permission`
  *
  * | 묶음 | 이름 |
  * |---|---|
@@ -28,9 +28,9 @@ import {
 } from './types'
 
 export interface MockOptions {
-  /** 응답을 늦추는 시간(ms). 테스트는 0 */
+  /** 응답 지연 시간(ms). 테스트는 0 */
   delay?: number
-  /** 적용 한 단계에 걸리는 시간(ms). 0 이면 시작하자마자 끝 상태가 된다 */
+  /** 적용 한 단계의 소요 시간(ms). 0 이면 시작 즉시 최종 상태로 전환 */
   stepMs?: number
 }
 
@@ -218,14 +218,14 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
       alternatives: failed && fail?.alt ? [{ key: fail.alt }] : [],
       started_at: startedAt,
       finished_at: done || failed ? new Date().toISOString() : null,
-      // 쓸 때마다 달라지는 표식(실제 서버는 쓴 시각)
+      // 기록 시마다 변경되는 표식(실제 서버는 기록 시각)
       updated_at: `write-${++writes}`,
       ...(restoreMode() ? { restore: restoreOutcome() } : {}),
     }
     if (done) phase = 'installed'
     else phase = 'applying'
   }
-  /** 멈출 자리(실패·붙잡아 둔 단계) 또는 끝까지의 단계 수 */
+  /** 중단 위치(실패·보류된 단계) 또는 끝까지의 단계 수 */
   function terminalIndex(): number {
     const ids = stepIds()
     const fail = failAt()
@@ -319,7 +319,7 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
       return { id, status: id === 'space' && has('nfs-lowspace') ? 'warn' : 'pass', value: values[i] }
     })
     if (failIndex >= 0 || !restoreMode()) return { ok: failIndex < 0, cause, steps }
-    // 복원: 다섯 검사를 통과해도 이 공유가 백업의 그 저장소가 아니면 쓸 수 없다
+    // 복원: 다섯 검사를 통과해도 이 공유가 백업의 해당 저장소가 아니면 사용 불가
     const marker = has('restore-nfs-marker') ? 'missing' as const : (has('restore-nfs-other') ? 'mismatch' as const : 'match' as const)
     return { ok: marker === 'match', cause: marker === 'missing' ? 'marker_missing' : (marker === 'mismatch' ? 'other_install' : null), steps, marker: { status: marker } }
   }
@@ -334,7 +334,7 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
       has('cert-domain') ? c('domain_covered', 'fail', ['other.example.com'], 'cert_domain_missing') : c('domain_covered', 'pass', domain),
       has('cert-expired') ? c('validity', 'fail', '2025-01-31T00:00:00Z', 'cert_expired') : c('validity', 'pass', '2027-06-30T00:00:00Z'),
       c('issuer', 'pass', 'CN=Example CA'),
-      // 서버 인증서 한 장뿐이면 발급 CA 를 모른다 — CA 인증서를 따로 올리면 풀린다
+      // 서버 인증서 한 장뿐이면 발급 CA 를 알 수 없음 — CA 인증서를 별도로 업로드하면 해소
       has('cert-leaf') && !withCa ? c('chain', 'warn', null, 'cert_chain_missing') : c('chain', 'pass', 1),
       ...(withCa ? [c('ca_readable', 'pass', 1), c('ca_is_ca', 'pass', null),
         has('cert-ca-bad') ? c('ca_issues_cert', 'fail', 'CN=Example CA', 'ca_not_issuer') : c('ca_issues_cert', 'pass', 'CN=Example CA')] : []),
@@ -432,7 +432,7 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
       session: sessionNow,
       phase,
       locked: phase === 'installed',
-      // 실제 서버처럼 이어 할 단계는 기억해 주지 않는다 — 화면이 답변에서 짐작한다
+      // 실제 서버와 동일하게 이어 할 단계는 기억하지 않음 — 화면이 답변에서 추정
       step: null,
       facts: {
         memory_mb: memoryKnown ? memoryMb : null,
@@ -521,7 +521,7 @@ export function createMockApi(scenario: string | Set<string> = '', options: Mock
       const hang = () => new Promise<RestoreFileInfo>((_, reject) => signal?.addEventListener('abort', () => reject(new ApiError(0, 'aborted', null))))
       if (has('restore-uploading')) { onProgress(62); return hang() }
       onProgress(100)
-      // 다 올라간 뒤 서버가 파일을 확인하는 동안
+      // 업로드 완료 후 서버가 파일을 확인하는 동안
       if (has('restore-checking')) return hang()
       if (has('restore-nospace')) return Promise.reject(new ApiError(507, 'no_space', { code: 'no_space', vars: { need_bytes: 4_812_000_000, free_bytes: 1_200_000_000 } }))
       uploaded = fileInfo('upload', file.name, file.size || 4_812_000_000)

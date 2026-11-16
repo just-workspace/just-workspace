@@ -36,8 +36,8 @@ export function initialOf(name: string): string {
 }
 
 /**
- * 안 읽음 = 굵게. 서버의 is_read 가 오면 그것을, 없으면 "아직 안 읽은 필독"만 안다(/must-read).
- * 그 밖의 글은 읽음으로 그린다 — 게시판별 읽음 기록이 서버에 없다(백엔드 갭).
+ * 읽지 않음 = 굵게 표시. 서버의 is_read 가 있으면 그 값을 사용하고, 없으면 "아직 안 읽은 필독"만 판별 가능하다(/must-read).
+ * 그 밖의 글은 읽음으로 표시한다 — 게시판별 읽음 기록이 서버에 없다(백엔드 갭).
  */
 export function isUnreadPost(post: { id: string; is_read?: boolean }, unreadMustRead: ReadonlySet<string>): boolean {
   if (post.is_read === false) return true
@@ -55,7 +55,7 @@ export function fileKind(name: string): { label: string; tone: 'danger' | 'prima
   return { label: (ext || 'FILE').toUpperCase().slice(0, 4), tone: 'muted' }
 }
 
-/** 댓글 본문을 텍스트·@언급 조각으로(@김서연 = accent 바탕 칩) */
+/** 댓글 본문을 텍스트·@언급 조각으로 분할(@김서연 = accent 바탕 칩) */
 export function splitMentions(text: string): Array<{ mention: boolean; text: string }> {
   const out: Array<{ mention: boolean; text: string }> = []
   const re = /(^|[\s(])(@[^\s@,.!?;:()]+)/g
@@ -71,12 +71,12 @@ export function splitMentions(text: string): Array<{ mention: boolean; text: str
   return out
 }
 
-/** 칩 조각 — 서버가 해석한 사용자면 user 가 붙는다 */
+/** 칩 조각 — 서버가 해석한 사용자이면 user 포함 */
 export interface MentionPart { mention: boolean; text: string; user?: { id: string; username: string; display_name: string | null } }
 
 /**
- * 댓글 본문 조각내기 — 서버가 해석한 mentions[] 가 있으면 그 사람의 @username 만 칩으로(백엔드 정규식과 같은 선:
- * 공백·줄 처음 뒤 @[\w.-]+, 끝의 . - 는 뗀다). mentions 가 비었으면(예전 댓글) 글자 그대로의 @언급을 칩으로(splitMentions).
+ * 댓글 본문 분할 — 서버가 해석한 mentions[] 가 있으면 해당 사용자의 @username 만 칩으로 처리한다(백엔드 정규식과 동일 기준:
+ * 공백·줄 처음 뒤 @[\w.-]+, 끝의 . - 는 제외). mentions 가 비어 있으면(이전 댓글) 문자 그대로의 @언급을 칩으로 처리한다(splitMentions).
  */
 export function splitResolvedMentions(
   text: string,
@@ -101,7 +101,7 @@ export function splitResolvedMentions(
   return out
 }
 
-/** 입력 중인 @멘션 — 커서 바로 앞이 "@검색어"(공백·줄 처음·괄호 뒤)면 그 시작 위치와 검색어 */
+/** 입력 중인 @멘션 — 커서 바로 앞이 "@검색어"(공백·줄 처음·괄호 뒤)이면 그 시작 위치와 검색어 반환 */
 export function mentionQueryAt(text: string, caret: number): { start: number; query: string } | null {
   const before = text.slice(0, caret)
   const m = /(^|[\s(])@([^\s@]{0,40})$/.exec(before)

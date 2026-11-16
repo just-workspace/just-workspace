@@ -1,4 +1,4 @@
-// Git store — 요청 주소·매개변수, 늦게 온 응답 버리기, 이슈 수정 시 목록·상세·열린 수 맞추기
+// Git store — 요청 주소·매개변수, 지연 도착 응답 폐기, 이슈 수정 시 목록·상세·열린 수 동기화
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 

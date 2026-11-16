@@ -1,20 +1,20 @@
 /**
  * 메일 목록 (모바일 목록).
- *  - 거터 체크박스 상시. 하나라도 고르면 위 줄(44)이 선택 바로 바뀐다: 개수·보관·읽음·이동·삭제·Esc.
+ *  - 거터 체크박스 상시 표시. 1개 이상 선택 시 위 줄(44)이 선택 바로 전환: 개수·보관·읽음·이동·삭제·Esc.
  *  - 위 줄(선택 없음): 전체 선택 체크 · 커맨드 바 검색(현재 폴더, `from: is:unread` 구문) · 새로고침.
  *  - 빠른 칩 줄 44: 안 읽음(개수)·별표·첨부 + 정렬(최근 순/보낸 사람 순, 광고 숨기기).
  *  - 행: 2줄 56(밀도 조밀이면 한 줄 40). 안 읽음 = 두 줄 굵게(6px 점 폐지). 대화 수(thread_count ≥ 2)는 보낸 사람 옆 mono 숫자.
- *  - 빠른 칩·사이드바 라벨은 서버 필터(unread·flagged·has_attachment·label) — 페이지·전체 개수도 거른 결과 기준.
- *  - 사이드바 "예약함"을 고르면 이 자리에 예약 목록(MailScheduledList)이 뜬다.
+ *  - 빠른 칩·사이드바 라벨은 서버 필터(unread·flagged·has_attachment·label) — 페이지·전체 개수도 필터 적용 결과 기준.
+ *  - 사이드바 "예약함" 선택 시 이 위치에 예약 목록(MailScheduledList) 표시.
  *  - 모바일: 상단 56(≡ 폴더 · 폴더 이름/안 읽음 수 · 검색) · 칩 36 · 행 3줄(미리보기) · 스와이프(왼쪽 보관 / 오른쪽 읽음 전환)
  *    · 길게 누르기 = 선택 모드 · FAB "새 메일". 행에 ⋮ 없음(메일 4).
- * 데스크톱 hover 빠른 행동(읽음·별표·삭제)은 예전 기능이라 남겼다(시안엔 그림 없음).
+ * 데스크톱 hover 빠른 동작(읽음·별표·삭제)은 기존 기능이므로 유지(시안에 없음).
  *
  * ref: { bulk(action), focusSearch() }
  */
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref, type TouchEvent as RTouchEvent } from 'react'
 import { useI18n } from '~/i18n'
-// class 를 그냥 잇는다(tailwind-merge 를 쓰는 cn 은 leading-[1.35]+text-xl 같은 짝을 지운다)
+// class 를 단순 연결(tailwind-merge 를 사용하는 cn 은 leading-[1.35]+text-xl 같은 조합을 제거함)
 import { clsx as cx } from 'clsx'
 import { $fetch } from '~/lib/api'
 import { navigateTo } from '~/lib/router'
@@ -43,7 +43,7 @@ import { MailScheduledList } from '~/components/mail/MailScheduledList'
 export type MailBulkAction = 'archive' | 'read' | 'unread' | 'delete' | 'spam'
 
 export interface MailListHandle {
-  /** 선택(또는 주어진 id)에 일괄 동작 */
+  /** 선택 항목(또는 지정한 id)에 일괄 동작 수행 */
   bulk: (action: MailBulkAction, ids?: string[]) => Promise<void>
   /** 검색 칸 포커스(단축키 /) */
   focusSearch: () => void
@@ -56,7 +56,7 @@ export interface MailListProps {
   ref?: Ref<MailListHandle | null>
 }
 
-// ─── 정렬·광고 숨기기(예전 기능 유지) ───
+// ─── 정렬·광고 숨기기(기존 기능 유지) ───
 const AD_RE = /^\s*[([]\s*(광고|advertisement|ad)\s*[)\]]\s*/i
 
 type Row = MessageSummary & { isAd: boolean; cleanSubject: string }
@@ -76,19 +76,19 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
   const { density } = useUserPrefs()
 
   // ─── 폴더 이름·안 읽음 ───
-  // 메일함을 아직(또는 못) 불러왔으면 모듈 이름 — 상단바 3단에서는 위치를 비워 "메일 / 메일" 중복을 막는다
+  // 메일함을 아직 조회하지 못했거나 조회에 실패한 경우 모듈 이름 사용 — 상단바 3단에서는 위치를 비워 "메일 / 메일" 중복을 방지
   const folderLabel = !selectedMailbox
     ? t('nav.mail')
     : selectedMailbox.role && MAILBOX_ROLE_KEYS[selectedMailbox.role] ? t(MAILBOX_ROLE_KEYS[selectedMailbox.role]) : selectedMailbox.name
   const unreadCount = selectedMailbox?.unread_count ?? 0
   useBreadcrumb(scheduledView ? t('mail.scheduled.title') : selectedMailbox ? folderLabel : '')
-  // 메일함 불러오기 실패 → 다시 시도(메일함 → 목록)
+  // 메일함 조회 실패 → 재시도(메일함 → 목록)
   async function retryMailboxes() {
     await fetchMailboxes()
     if (!mailStore.getState().mailboxesError) await fetchMessages()
   }
 
-  // 조밀(데스크톱 전용, 터치는 셸이 막음) = 한 줄 40
+  // 조밀(데스크톱 전용, 터치는 셸이 차단) = 한 줄 40
   const oneLine = density === 'compact' && !isMobile
 
   // ─── 검색(커맨드 바) ───
@@ -97,7 +97,7 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
   const fromRef = useRef('')
   fromRef.current = fromFilter
   const [mobileSearch, setMobileSearch] = useState(false)
-  // watch(searchQuery) — 비워지면(폴더 전환 등) 입력도 비운다
+  // watch(searchQuery) — 값이 비면(폴더 전환 등) 입력도 초기화
   const firstQ = useRef(true)
   useEffect(() => {
     if (firstQ.current) { firstQ.current = false; return }
@@ -170,7 +170,7 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, sortBy])
-  // 보낸 사람 순일 때만 연속 같은 보낸 사람 3개+ 를 머리로 접는다(스레드 아님)
+  // 보낸 사람 순일 때만 연속된 동일 보낸 사람 3개 이상을 머리 행으로 접음(스레드 아님)
   const displayItems = useMemo<{ head?: string; count?: number; msg?: Row; grouped?: boolean }[]>(() => {
     const list = sorted
     if (sortBy !== 'sender') return list.map(msg => ({ msg }))
@@ -195,13 +195,13 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
     fromRef.current = ''
     if (mailStore.getState().labelFilter) void setLabelFilter(null)
   }
-  // 칩을 누르면 서버에서 다시 받는다(같은 조합이면 applyFilters 가 건너뛴다)
+  // 칩 선택 시 서버에서 재조회(동일 조합이면 applyFilters 가 생략)
   const firstQf = useRef(true)
   useEffect(() => {
     if (firstQf.current) { firstQf.current = false; return }
     void applyFilters()
   }, [quickFilters.unread, quickFilters.starred, quickFilters.attachment, applyFilters])
-  // 폴더가 바뀌면 칩은 끈다(현재 폴더 범위)
+  // 폴더 변경 시 칩 해제(현재 폴더 범위)
   const firstMb = useRef(true)
   useEffect(() => {
     if (firstMb.current) { firstMb.current = false; return }
@@ -217,7 +217,7 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
   const someSelected = hasSelection && !allSelected
   function setMaster(v: boolean) { setSelectedIds(v ? new Set(visibleIds) : new Set()) }
   const lastToggled = useRef<string | null>(null)
-  /** Shift+클릭 범위 선택 — 체크박스는 label 안 input 이라 클릭 이벤트가 두 번 온다. 누를 때 Shift 만 기억해 둔다 */
+  /** Shift+클릭 범위 선택 — 체크박스는 label 내부 input 이므로 클릭 이벤트가 2회 발생한다. 누르는 시점의 Shift 상태만 기록한다 */
   const shiftHeld = useRef(false)
   function onCheck(id: string) {
     const shift = shiftHeld.current
@@ -239,7 +239,7 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
 
   async function bulk(action: MailBulkAction, ids = Array.from(mailStore.getState().selectedIds)) {
     if (!ids.length) return
-    // POP3 는 서버 폴더가 없다 — 버튼은 숨겼고, 단축키(E)·스와이프로 들어와도 아무 일도 하지 않는다
+    // POP3 는 서버 폴더가 없음 — 버튼은 숨김 처리했으며, 단축키(E)·스와이프로 진입해도 no-op
     if ((action === 'archive' || action === 'spam') && mailIsPop3()) return
     if (action === 'archive') {
       if (!mailStore.getState().mailboxes.find(m => m.role === 'archive')) { addToast('warning', t('mail.list.noArchive')); return }
@@ -274,18 +274,18 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
     void openMessage(id)
   }
 
-  // hover 빠른 행동(데스크톱)
+  // hover 빠른 동작(데스크톱)
   async function quickDelete(id: string) {
     if (await deleteMessage(id)) addToast('info', t('mail.list.trashedOne'))
     else addToast('error', t('mail.list.actionFailed'))
   }
-  // 읽음·별표 전환이 실패하면 알린다(예전엔 아무 반응이 없었다)
+  // 읽음·별표 전환 실패 시 안내(기존에는 무반응)
   async function flip(run: Promise<boolean>) {
     if (!await run) addToast('error', t('mail.list.actionFailed'))
   }
 
   // ─── 모바일 스와이프 · 길게 누르기 ───
-  // 처리기는 swipeRef 로 판단하고, 화면(행 위치·드러난 칸)은 swipe 상태로 그린다
+  // 처리기는 swipeRef 로 판정하고, 화면(행 위치·노출된 칸)은 swipe 상태로 렌더링
   const swipeRef = useRef({ id: '', x0: 0, y0: 0, dx: 0, axis: '' as '' | 'x' | 'y' })
   const [swipe, setSwipe] = useState({ id: '', dx: 0 })
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -300,7 +300,7 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
       if (swipeRef.current.axis) return
       suppressClick.current = true
       if (!mailStore.getState().selectedIds.has(id)) toggleSelect(id)
-      try { navigator.vibrate?.(15) } catch { /* 지원 안 함 */ }
+      try { navigator.vibrate?.(15) } catch { /* 미지원 */ }
     }, 500)
   }
   function onTouchMove(e: RTouchEvent) {
@@ -311,9 +311,9 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
       sw.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
       if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null }
     }
-    // 선택 모드에선 스와이프 행동을 끈다
+    // 선택 모드에서는 스와이프 동작 비활성화
     if (sw.axis === 'x' && mailStore.getState().selectedIds.size === 0) {
-      // POP3 는 보관(왼쪽으로 밀기)이 없다 — 행이 왼쪽으로 끌려가지도 않게 막는다
+      // POP3 는 보관(왼쪽으로 밀기) 미지원 — 행이 왼쪽으로 이동하지 않도록 차단
       sw.dx = Math.max(mailIsPop3() ? 0 : -SWIPE_REVEAL * 1.4, Math.min(SWIPE_REVEAL * 1.4, dx))
       setSwipe({ id: sw.id, dx: sw.dx })
     }
@@ -335,10 +335,10 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
     open(id)
   }
 
-  // ─── 임시보관함: 이 앱에서 쓰다 닫은 초안(DB) — 예전엔 목록 UI 가 없어 닫으면 찾을 길이 없었다 ───
+  // ─── 임시보관함: 본 앱에서 작성 중 닫은 초안(DB) — 기존에는 목록 UI 가 없어 닫은 후 조회 수단이 없었음 ───
   const [appDrafts, setAppDrafts] = useState<DraftRow[]>([])
   const role = selectedMailbox?.role
-  // 작성기가 초안을 저장·삭제·발송하면 다시 받는다
+  // 작성기가 초안을 저장·삭제·발송하면 재조회
   const draftsRev = useStore(mailDraftsStore, s => s.rev)
   useEffect(() => {
     let alive = true
@@ -361,7 +361,7 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      {/* 모바일 상단 56 (선택 모드가 아니면) */}
+      {/* 모바일 상단 56 (선택 모드가 아닐 때) */}
       {!hasSelection && (
         <header className="flex h-14 shrink-0 items-center border-b border-border px-1 md:hidden">
           <UiIconButton label={t('mail.list.foldersSwipe')} icon="menu" size="lg" className="text-foreground" onClick={() => onOpenFolders?.()} />
@@ -455,7 +455,7 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
 
       {/* 본문: 로딩 · 오류 · 빈 상태 · 목록 */}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" role="region" aria-label={t('mail.list.regionLabel', { folder: folderLabel })}>
-        {/* 이 앱에서 쓰다 닫은 초안 */}
+        {/* 본 앱에서 작성 중 닫은 초안 */}
         {appDrafts.length > 0 && (
           <section aria-label={t('mail.list.appDrafts')}>
             <div className="border-b border-border bg-muted/40 px-3 py-1 text-[11px] font-semibold tracking-[0.06em] text-muted-foreground">{`${t('mail.list.appDraftsHead')} `}<span className="font-mono">{appDrafts.length}</span></div>
@@ -532,7 +532,7 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
                         const threadCount = m.thread_count ?? 0
                         return (
                           <div key={m.id} role="listitem" className="relative overflow-hidden border-b border-border">
-                            {/* 스와이프로 드러나는 행동 칸(모바일) */}
+                            {/* 스와이프로 노출되는 동작 칸(모바일) */}
                             {swiping && (
                               <div className="absolute inset-0 flex md:hidden" aria-hidden="true">
                                 {swipe.dx > 0 && (
@@ -578,7 +578,7 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
                                 onUpdateModelValue={() => onCheck(m.id)}
                               />
 
-                              {/* 행 본문 = 버튼(행 전체가 눌림) */}
+                              {/* 행 본문 = 버튼(행 전체가 클릭 영역) */}
                               <button
                                 type="button"
                                 className="min-w-0 flex-1 text-left outline-hidden after:absolute after:inset-0 after:content-[''] focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
@@ -620,7 +620,7 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
                                 {m.has_attachment && <UiIcon name="paperclip" aria-label={t('mail.list.hasAttachment')} className="h-3.5 w-3.5" />}
                               </span>
 
-                              {/* hover 빠른 행동(데스크톱, 예전 기능) */}
+                              {/* hover 빠른 동작(데스크톱, 기존 기능) */}
                               <div className="absolute right-2 top-1.5 z-10 hidden items-center gap-0.5 rounded-md border border-border bg-card p-0.5 shadow-md md:group-hover:flex md:group-focus-within:flex">
                                 <UiIconButton label={m.is_unread ? t('mail.bulk.markRead') : t('mail.bulk.markUnread')} className="h-7 w-7" onClick={(e) => { e.stopPropagation(); void flip(toggleRead(m.id)) }}><UiIcon name={m.is_unread ? 'mail-read' : 'mail-unread'} /></UiIconButton>
                                 <UiIconButton label={m.is_flagged ? t('mail.message.unstar') : t('mail.message.star')} pressed={m.is_flagged} className={cx('h-7 w-7', m.is_flagged ? 'text-warning hover:text-warning' : '')} onClick={(e) => { e.stopPropagation(); void flip(toggleStar(m.id)) }}><UiIcon name="star" filled={m.is_flagged} /></UiIconButton>
@@ -652,8 +652,8 @@ export function MailList({ onOpenFolders, ref }: MailListProps) {
         </div>
       )}
 
-      {/* FAB "새 메일"(56 · 좌우 20 · 16 둥글기 · 펜 아이콘 + 글자). 목록 판 안 오른쪽 아래.
-          1024 미만은 사이드바가 드로어라 "새 메일" 버튼이 안 보여서 태블릿(768~1023)까지 띄운다. */}
+      {/* FAB "새 메일"(56 · 좌우 20 · 16 둥글기 · 펜 아이콘 + 글자). 목록 판 내부 오른쪽 아래.
+          1024 미만은 사이드바가 드로어여서 "새 메일" 버튼이 보이지 않으므로 태블릿(768~1023)까지 표시한다. */}
       {!hasSelection && <UiFab label={t('mail.compose.new')} icon="pen" extended contained until="lg" onClick={() => openCompose('new')} />}
     </div>
   )

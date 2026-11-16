@@ -12,7 +12,7 @@ export default defineConfig({
     globals: true,
     include: ['tests/**/*.test.{ts,tsx}'],
     setupFiles: ['tests/setup.ts'],
-    // findBy 상한(5초, tests/setup.ts)보다 테스트 상한이 커야 기다림이 끝까지 돈다
+    // findBy 상한(5초, tests/setup.ts)보다 테스트 상한이 커야 대기가 끝까지 수행됨
     testTimeout: 15000,
   },
 })

@@ -1,7 +1,7 @@
 /**
- * 채팅 설정 공용 조각 — 섹션 머리(데스크톱 제목 20/600 + 설명 14 + 닫기 ESC), 모바일 머리(뒤로 44 · 17/600 · +),
- * 안내 띠(banner: warn · info · danger), 설정 화면 맥락(모바일 여부 · 닫기 · 모바일 뒤로).
- * 머리·banner·모바일 header 는 디자인 그대로.
+ * 채팅 설정 공용 구성 요소 — 섹션 헤더(데스크톱 제목 20/600 + 설명 14 + 닫기 ESC), 모바일 헤더(뒤로 44 · 17/600 · +),
+ * 안내 배너(banner: warn · info · danger), 설정 화면 컨텍스트(모바일 여부 · 닫기 · 모바일 뒤로).
+ * 헤더·banner·모바일 header 는 디자인 시안과 동일.
  */
 import { createContext, useContext, type ReactNode } from 'react'
 import { cn } from '~/lib/utils'
@@ -21,7 +21,7 @@ export interface SettingsCtxValue {
 export const SettingsCtx = createContext<SettingsCtxValue>({ mobile: false, close: () => {}, backToMenu: () => {} })
 export const useSettingsCtx = () => useContext(SettingsCtx)
 
-/** 데스크톱 섹션 머리 — 제목 · 설명 · 닫기(ESC) */
+/** 데스크톱 섹션 헤더 — 제목 · 설명 · 닫기(ESC) */
 export function SettingsHeader({ title, sub }: { title: string; sub?: string }) {
   const { t } = useI18n()
   const { close } = useSettingsCtx()
@@ -46,7 +46,7 @@ export function SettingsHeader({ title, sub }: { title: string; sub?: string }) 
   )
 }
 
-/** 모바일 머리 56 — 뒤로 44 · 제목 17/600 · 오른쪽 + (선택) */
+/** 모바일 헤더 56 — 뒤로 44 · 제목 17/600 · 오른쪽 + (선택) */
 export function MobileHeader({ title, onBack, addLabel, onAdd }: { title: string; onBack: () => void; addLabel?: string; onAdd?: () => void }) {
   const { t } = useI18n()
   return (
@@ -64,7 +64,7 @@ const TONE: Record<BannerTone, string> = {
   info: 'border-border bg-card',
   danger: 'border-danger/60 bg-danger/10',
 }
-/** 안내 띠 — 아이콘 16 · 글 13 · 오른쪽 버튼(xs outline) */
+/** 안내 배너 — 아이콘 16 · 텍스트 13 · 오른쪽 버튼(xs outline) */
 export function SettingsBanner({ tone, icon, children, action, onAction, className }: {
   tone: BannerTone; icon: string; children: ReactNode; action?: string; onAction?: () => void; className?: string
 }) {
@@ -84,7 +84,7 @@ export function RoleDot({ index, className }: { index: number; className?: strin
 const ROLE_DOT = ['bg-role-1', 'bg-role-2', 'bg-role-3', 'bg-role-4', 'bg-role-5', 'bg-role-6', 'bg-role-7', 'bg-role-8']
 export const ROLE_TEXT = ['text-role-1', 'text-role-2', 'text-role-3', 'text-role-4', 'text-role-5', 'text-role-6', 'text-role-7', 'text-role-8']
 
-/** 서버 오류 → 사람이 읽을 문구(detail 문자열 또는 {message}) */
+/** 서버 오류 → 사용자 표시용 문구(detail 문자열 또는 {message}) */
 export function errorText(e: unknown, fallback: string): string {
   const d = (e as { data?: { detail?: unknown } })?.data?.detail
   if (typeof d === 'string' && d) return d

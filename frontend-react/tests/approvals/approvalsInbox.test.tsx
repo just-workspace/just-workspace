@@ -1,5 +1,5 @@
 // 승인 대기함: 목록 → 첫 요청 상세(데스크톱 자동 선택), ?id= 딥 링크, 승인·거부(사유) 호출,
-// 외부 내용 경고, 빈 상태 · 오류 상태, 목록에 없는 ?id= 는 따로 불러온다(만료 상세), 모바일 목록 → 상세.
+// 외부 내용 경고, 빈 상태 · 오류 상태, 목록에 없는 ?id= 는 별도 조회(만료 상세), 모바일 목록 → 상세.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'

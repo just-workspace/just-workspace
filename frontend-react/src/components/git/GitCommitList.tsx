@@ -1,7 +1,7 @@
 /**
  * 커밋: 날짜 머리 32(sticky · 12/600 muted) + 카드(rounded-12) 안 행 56.
  *  행: 아바타 28(이니셜) · 메시지 13.5/600 · "작성자 · 시각(mono)" · SHA 칩 + 복사 상시 · ↗ Gitea 커밋(32, 히트 40)
- * 커밋 상세·diff 는 범위 밖(↗ 로 Gitea). "더 보기" = 다음 페이지 이어 붙이기.
+ * 커밋 상세·diff 는 범위 외(↗ 로 Gitea). "더 보기" = 다음 페이지를 이어서 추가.
  */
 import { useI18n } from '~/i18n'
 import { useGit, type CommitEntry } from '~/composables/useGit'

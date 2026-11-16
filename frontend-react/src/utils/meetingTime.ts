@@ -1,10 +1,10 @@
 /**
- * 회의 목록 묶기: 진행 중(Live n명) · 예정(날짜별) · 지난.
- * 서버 방 목록 = LiveKit 에 살아 있는 방 + DB 에 저장된 내 회의(예정·최근 30일 지난). 행마다 status(live/scheduled/ended/cancelled).
- *  진행 중 = 참가자 1명 이상(status=live 라도 빈 방은 예약 시각으로 판단 — 예약 직후 LiveKit 이 빈 방을 잠시 유지한다)
- *  예정    = 참가자 0 이고 끝나지 않음(예약 없이 만든 방은 만든 시각을 시작으로 본다)
- *  지난    = status ended/cancelled, 또는 예약 끝 시각이 지났고 참가자 0
- * "참여"는 진행 중이거나 시작 10분 전부터 끝날 때까지("시작 10분 전부터 입장").
+ * 회의 목록 분류: 진행 중(Live n명) · 예정(날짜별) · 지난.
+ * 서버 방 목록 = LiveKit 에 존재하는 방 + DB 에 저장된 본인 회의(예정·최근 30일 내 종료). 행마다 status(live/scheduled/ended/cancelled) 보유.
+ *  진행 중 = 참가자 1명 이상(status=live 라도 빈 방은 예약 시각으로 판단 — 예약 직후 LiveKit 이 빈 방을 일시 유지함)
+ *  예정    = 참가자 0 이고 미종료(예약 없이 생성한 방은 생성 시각을 시작 시각으로 간주)
+ *  지난    = status ended/cancelled, 또는 예약 종료 시각 경과 및 참가자 0
+ * "참여"는 진행 중이거나 시작 10분 전부터 종료 시까지 가능("시작 10분 전부터 입장").
  */
 import { i18n } from '~/i18n'
 
@@ -14,14 +14,14 @@ export interface MeetingLike {
   creation_time: number
   scheduled_at?: string | null
   duration_minutes?: number | null
-  /** live | scheduled | ended | cancelled (예전 Redis 전용 방은 없을 수 있다) */
+  /** live | scheduled | ended | cancelled (구 Redis 전용 방은 값이 없을 수 있음) */
   status?: string | null
 }
 
 export interface MeetingView<T> {
   room: T
   live: boolean
-  /** 끝났거나 취소된 회의(status) — 지난 묶음, 참여 불가 */
+  /** 종료 또는 취소된 회의(status) — 지난 묶음, 참여 불가 */
   ended: boolean
   start: Date
   end: Date | null
@@ -38,7 +38,7 @@ export interface MeetingGroup<T> { key: string; label: string; items: MeetingVie
 
 const JOIN_EARLY_MS = 10 * 60 * 1000
 
-/** 번역 함수 — 기본은 앱의 i18n, 앱 밖(단위 테스트)에서는 한국어 원문으로 떨어진다. */
+/** 번역 함수 — 기본값은 앱의 i18n, 앱 외부(단위 테스트)에서는 한국어 원문으로 fallback 한다. */
 type Tr = (key: string, params?: Record<string, unknown>) => string
 const KO_FALLBACK: Record<string, string> = {
   'meetings.time.dow.sun': '일',
@@ -68,7 +68,7 @@ const koFallback: Tr = (key, params) => {
   const raw = KO_FALLBACK[key] ?? key
   return raw.replace(/\{(\w+)\}/g, (_, k: string) => String(params?.[k] ?? ''))
 }
-// 전역 i18n 을 쓴다. 메시지가 아직 안 실렸으면(키가 그대로 돌아오면) 한국어 원문으로.
+// 전역 i18n 사용. 메시지 미로드 시(키가 그대로 반환되는 경우) 한국어 원문 사용.
 const defaultT: Tr = (key, params) => {
   try {
     const out = String(i18n.t(key, (params ?? {}) as Record<string, unknown>))
@@ -130,7 +130,7 @@ export function groupMeetings<T extends MeetingLike>(rooms: readonly T[], now: D
   if (live.length) out.push({ key: 'live', label: t('meetings.time.groupLive'), items: live })
   const byDay = new Map<string, MeetingView<T>[]>()
   for (const v of upcoming) {
-    // 이미 시작 시각이 지났는데 아무도 없는 방(예약 없이 만든 방 포함)은 "오늘"로
+    // 시작 시각이 경과했으나 참가자가 없는 방(예약 없이 생성한 방 포함)은 "오늘"로 분류
     const d = v.start < now ? now : v.start
     const off = dayOffset(d, now)
     const label = off === 0 ? t('meetings.time.groupToday') : off === 1 ? t('meetings.time.groupTomorrow') : t('meetings.time.groupDate', { m: d.getMonth() + 1, d: d.getDate() })

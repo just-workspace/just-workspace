@@ -1,5 +1,5 @@
-// 캘린더 시간대 헬퍼(utils/calTz) + 그것을 거치는 calendarLayout — 자정·서머타임 전환일·주 경계.
-// 테스트 기기 시간대와 상관없이 캘린더 시간대만 보게 _setCalendarZone 으로 고정한다.
+// 캘린더 시간대 헬퍼(utils/calTz) + 이를 경유하는 calendarLayout — 자정·서머타임 전환일·주 경계.
+// 테스트 기기 시간대와 무관하게 캘린더 시간대만 참조하도록 _setCalendarZone 으로 고정한다.
 import { describe, it, expect, afterEach } from 'vitest'
 import {
   _setCalendarZone, allDayIso, allDayIsoFromInput, allDayYmd, eventRange, zAddDays, zAddMonths, zDate, zDayNumber,
@@ -47,7 +47,7 @@ describe('자정', () => {
     expect(toDateInput(before)).toBe('2026-10-16')
     expect(toDateInput(after)).toBe('2026-10-17')
     expect(fmtTime(after)).toBe('00:00')
-    // 그날 [00:00, 다음날 00:00) 과 겹침 — 끝이 자정이면 다음날과는 안 겹친다
+    // 해당 일 [00:00, 익일 00:00) 과 겹침 — 종료가 자정이면 익일과는 겹치지 않음
     const day = fromInputs('2026-10-17')!
     expect(overlapsDay(new Date('2026-10-16T13:00:00Z'), after, day)).toBe(false)
     expect(overlapsDay(new Date('2026-10-16T13:00:00Z'), new Date('2026-10-16T15:00:01Z'), day)).toBe(true)
@@ -84,7 +84,7 @@ describe('서머타임 전환일(LA)', () => {
     const dup = zDate(2026, 10, 1, 1, 30, 0, LA)
     expect(iso(dup)).toBe('2026-11-01T08:30:00.000Z')
     expect(iso(zFromInputs('2026-11-01', '01:30', LA)!)).toBe('2026-11-01T08:30:00.000Z')
-    // 일정 폼(일정별 시간대)도 같은 계산
+    // 일정 폼(일정별 시간대)도 동일 계산
     expect(iso(zonedToDate('2026-03-08', '02:30', LA)!)).toBe('2026-03-08T10:30:00.000Z')
     expect(dateToZoned(new Date('2026-11-01T09:30:00Z'), LA)).toEqual({ date: '2026-11-01', time: '01:30' })
   })

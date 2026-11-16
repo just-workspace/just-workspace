@@ -1,7 +1,7 @@
 // 설정 › 연결된 앱.
 //  ① 연결된 앱 — OAuth 동의로 내 계정에 접근하는 앱(GET /api/auth/me/apps).
-//  ② 앱 비밀번호 — 메일 앱·CalDAV 처럼 로그인 화면이 없는 프로그램용(GET/POST/DELETE /api/auth/me/app-passwords).
-//  ③ AI 커넥터(MCP) URL·개인 액세스 토큰 — 설정 › AI 연동(MCP)(pages/settings/ai-mcp.tsx)으로 옮기고 여기엔 바로가기만.
+//  ② 앱 비밀번호 — 메일 앱·CalDAV 등 로그인 화면이 없는 프로그램용(GET/POST/DELETE /api/auth/me/app-passwords).
+//  ③ AI 커넥터(MCP) URL·개인 액세스 토큰 — 설정 › AI 연동(MCP)(pages/settings/ai-mcp.tsx)으로 이전하고 여기에는 바로가기만 유지.
 import { useEffect, useRef, useState } from 'react'
 import { navigateTo } from '~/lib/router'
 import { useI18n } from '~/i18n'
@@ -168,7 +168,7 @@ export default function SettingsAppsPage() {
               ))}
       </SettingsCard>
 
-      {/* ③ AI 커넥터(MCP)는 설정 › AI 연동(MCP)으로 옮겼다 */}
+      {/* ③ AI 커넥터(MCP)는 설정 › AI 연동(MCP)으로 이전 */}
       <SettingsCard title={t('settings.apps.mcpTitle')} description={t('settings.apps.mcpMoved')}
         header={<UiButton variant="outline" size="xs" className="shrink-0" onClick={() => void navigateTo('/settings/ai/mcp')}>{t('settings.apps.mcpOpen')}</UiButton>} />
 
@@ -182,7 +182,7 @@ export default function SettingsAppsPage() {
         />
       )}
 
-      {/* 발급된 앱 비밀번호(한 번만) */}
+      {/* 발급된 앱 비밀번호(1회만 표시) */}
       {issued && <SettingsAppPasswordIssuedModal name={issued.name} password={issued.password} onClose={() => setIssued(null)} />}
     </>
   )

@@ -1,7 +1,7 @@
 /**
- * 점검 항목 목록 — 사전 점검과 네트워크 저장소 연결 확인이 같이 쓰는 카드.
- * 항목마다 상태 아이콘 + 이름·값 + 상태 배지. 해결 방법(detail)이 있는 항목은 펼칠 수 있고, 주의·실패는 처음부터 펼쳐 둔다.
- * 머리 오른쪽에 "통과 5 · 주의 1" 같은 합계를 보인다.
+ * 점검 항목 목록 — 사전 점검과 네트워크 저장소 연결 확인이 공용하는 카드.
+ * 항목마다 상태 아이콘 + 이름·값 + 상태 배지. 해결 방법(detail)이 있는 항목은 펼칠 수 있으며, 주의·실패는 초기부터 펼친 상태로 둔다.
+ * 머리 오른쪽에 "통과 5 · 주의 1" 같은 합계를 표시한다.
  */
 import type { ReactNode } from 'react'
 import { UiBadge, type UiBadgeTone } from '~/components/ui/Badge'
@@ -20,7 +20,7 @@ export interface CheckRow {
   /** 이름 아래 mono 한 줄(버전·용량·주소) */
   value?: string
   state: CheckState
-  /** 펼쳤을 때 보일 해결 방법·설명 */
+  /** 펼쳤을 때 표시할 해결 방법·설명 */
   detail?: ReactNode
 }
 
@@ -60,7 +60,7 @@ export function CheckList({ title, rows, headerExtra }: { title: string; rows: C
           return (
             <li key={r.id} data-state={r.state} className={cn('border-t border-border', look.bg)}>
               <UiDisclosure
-                // 상태가 바뀌면 펼침 기본값을 다시 정한다(통과 → 실패로 바뀐 항목은 펼쳐 보인다)
+                // 상태 변경 시 펼침 기본값을 재결정한다(통과 → 실패로 바뀐 항목은 펼쳐서 표시)
                 key={`${r.state}:${r.detail ? 1 : 0}`}
                 variant="row"
                 strong={alert}

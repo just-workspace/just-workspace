@@ -1,7 +1,7 @@
 /**
- * 업데이트 › 새 버전 안내 — 버전(거칠 버전 포함), 받을 용량, 예상 중단 시간, 영향받는 구역, 변경 내용,
- * 호환이 확인되지 않은 플러그인 경고, 중간 버전 안내. "업데이트 시작"이 한 번의 확인이다(5분 예고부터).
- * 값이 없는 줄은 그리지 않는다.
+ * 업데이트 › 새 버전 안내 — 버전(경유 버전 포함), 다운로드 용량, 예상 중단 시간, 영향받는 구역, 변경 내용,
+ * 호환이 확인되지 않은 플러그인 경고, 중간 버전 안내. "업데이트 시작"이 단일 확인 절차이다(5분 사전 공지부터 시작).
+ * 값이 없는 줄은 렌더링하지 않는다.
  */
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -16,7 +16,7 @@ import { UiCallout } from '~/components/ui/Callout'
 import { UiEmptyState } from '~/components/ui/EmptyState'
 import { UiTrans } from '~/components/ui/Trans'
 
-/** 변경 내용 카드 — 적힌 것이 없으면 그리지 않는다 */
+/** 변경 내용 카드 — 내용이 없으면 렌더링하지 않는다 */
 export function ChangelogCard({ text }: { text: string | null | undefined }) {
   const { t } = useI18n()
   const lines = changelogLines(text)

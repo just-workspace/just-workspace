@@ -1,6 +1,6 @@
 /**
  * 관리 › 사용자 데스크톱 표(표).
- * 선택이 있으면 표 머리에 일괄 바(AdminUsersBulkBar)가 붙고 표 위 모서리가 펴진다.
+ * 선택 항목이 있으면 표 헤더에 일괄 바(AdminUsersBulkBar)가 부착되고 표 상단 모서리의 둥글림이 제거된다.
  * th 36 11/600 · 행 48 · 이름/마지막 접속 ▲▼ 정렬 · 체크 40 · ⋮ 40. 상태 = 틴트 배지(+ 관리자 배지).
  */
 import type { ReactNode } from 'react'
@@ -14,7 +14,7 @@ import { UiMenu, type UiMenuItem } from '~/components/ui/Menu'
 import { fmtLast, groupNames, initialOf, nameOf, statusMeta, statusOf, type AdminUser, type UserSortKey } from './adminUsers'
 
 export interface AdminUsersTableProps {
-  /** 이번 쪽 사용자 */
+  /** 현재 페이지의 사용자 */
   users: AdminUser[]
   /** 선택된 id 집합 */
   selected: Set<string>
@@ -23,15 +23,15 @@ export interface AdminUsersTableProps {
   sortDir: 1 | -1
   /** 행 ⋮ 메뉴 항목(userMenuItems — 상태·본인 여부에 따라) */
   menuItems: (u: AdminUser) => UiMenuItem[]
-  /** 표 머리에 붙는 일괄 바(선택 있을 때만 넘김) */
+  /** 표 헤더에 부착되는 일괄 바(선택 항목이 있을 때만 전달) */
   bulkBar?: ReactNode
-  /** 열 머리 정렬 누름 */
+  /** 열 헤더 정렬 클릭 */
   onSort?: (k: UserSortKey) => void
   /** 전체 선택(보이는 행) */
   onToggleAll?: (v: boolean) => void
-  /** 한 행 선택 */
+  /** 행 1개 선택 */
   onToggleOne?: (id: string, v: boolean) => void
-  /** ⋮ 메뉴 항목 고름 */
+  /** ⋮ 메뉴 항목 선택 */
   onMenu?: (u: AdminUser, key: string) => void
 }
 
@@ -44,7 +44,7 @@ export function AdminUsersTable({ users, selected, sortKey, sortDir, menuItems, 
 
   return (
     <div className="hidden md:block">
-      {/* 일괄 바(선택 시 표 머리에 붙는다) */}
+      {/* 일괄 바(선택 시 표 헤더에 부착) */}
       {selected.size > 0 && bulkBar}
 
       <div className={cn('overflow-hidden border border-border', selected.size ? 'rounded-b-lg' : 'rounded-lg')}>

@@ -1,58 +1,58 @@
 # 업데이트 내부 API — 계약
 
-설치된 서버의 업데이트는 **설치 관리자**가 한다(설치 뒤에도 컨테이너로 남아 내부 API 8444 를 연다 — [installer.md](installer.md) 5·6절).
-이 문서는 그 업데이트 엔진이 열 내부 API(`/internal/update/*`)와, backend·nginx·화면이 그것과 맞물리는 자리를 정한다.
+설치된 서버의 업데이트는 **설치 관리자**가 수행한다(설치 완료 후에도 컨테이너로 상주하며 내부 API 8444 를 제공한다 — [installer.md](installer.md) 5·6절).
+본 문서는 해당 업데이트 엔진이 제공하는 내부 API(`/internal/update/*`)와, backend·nginx·화면이 이와 연동되는 접점을 규정한다.
 
-> **상태.** 엔진(`installer/app/update_*.py`, 경로는 `installer/app/api_update.py`), backend 의 대신 부르기(`backend/app/system/update_router.py`), 관리 › 업데이트 화면, nginx 설정(7절)이 모두 이 계약대로 들어 있다. 엔진의 구조(자기 교체, 번들, 복원 지점 보관)는 [installer.md](installer.md) 16절, 실서버에서 확인한 것은 같은 문서 13절.
+> **구현 상태.** 엔진(`installer/app/update_*.py`, 경로는 `installer/app/api_update.py`), backend 의 중계 API(`backend/app/system/update_router.py`), 관리 › 업데이트 화면, nginx 설정(7절)이 모두 본 계약에 따라 구현되어 있다. 엔진의 구조(자기 교체, 번들, 복원 지점 보관)는 [installer.md](installer.md) 16절, 실서버 검증 범위는 동 문서 13절에 기술한다.
 
 관련 문서: 채널·릴리스 목록의 형식과 검증([releases.md](releases.md)), 스키마 버전·백업·복원([data-safety.md](data-safety.md)).
 
 ## 1. 확정된 동작
 
-- 제품 전체가 한 버전이다. 채널은 `stable` / `beta`. Beta 채널은 Stable 릴리스도 받는다.
-- 적용 방식은 수동(기본) / 자동. 자동은 적용 시간대(기본 03:00~05:00, 서버 시간) 안에서, **나온 지 3일 지난 릴리스만** 적용한다.
-- 적용 순서(단계 id 는 고정): `preflight`(사전 점검) → `backup`(자동 백업) → `pull`(이미지 받기) → `migrate`(DB 변경) → `switch`(구역 교체) → `verify`(상태 확인).
-  단계 상태는 `pending` / `running` / `done` / `failed` 넷뿐이다.
-- 자동 백업은 `pre-update` 종류다 — DB + 설정 + 암호화 키. **파일은 백업하지 않고 되돌리지도 않는다.**
-- 실패했을 때
-  - `migrate` **이전** 단계(`preflight`·`backup`·`pull`)에서 실패: 작업이 멈추고 관리자가 "이 단계부터 다시"(`retry`)와 "되돌리기"(`rollback`) 중 고른다.
-  - `migrate` 부터(`migrate`·`switch`·`verify`) 실패: 선택 없이 자동 되돌림 — 이전 이미지로 + DB 는 직전 백업 복원.
-  - **자동 업데이트**는 어느 단계든 자동 되돌림. 그 뒤 자동 업데이트는 멈추고(`auto.paused`), 관리자가 "다시 켜기"를 눌러야 다음 시간대부터 다시 시도한다.
-- 중간 버전: 목표까지 거쳐야 하는 버전이 있으면 한 번의 확인으로 이어서 진행한다. 버전마다 백업하고 버전마다 여섯 단계를 처음부터 돈다.
-- Stable 로 돌아오기: 채널만 바꾸면 Stable 의 최신이 현재 버전 이상이 될 때까지 기다린다(`available.state = "wait"`). "시험판 이전 상태로 복원"(Beta 로 올리기 직전에 따로 보관한 백업)도 된다.
-- 호환이 확인되지 않은 플러그인은 업데이트 뒤 꺼진 채로 시작한다.
-- 사전 예고: 수동 업데이트·수동 복원을 시작하면 5분 카운트다운 뒤에 시작한다. 관리자는 "지금 바로 시작"·"취소"를 할 수 있다. 자동 업데이트도 시작 5분 전에 카운트다운을 연다. 카운트가 끝나면 점검 상태다.
-- 오프라인: 묶음 파일을 올리거나 서버에 있는 경로를 지정 → 서명·버전 검증 → 추가로 필요한 이미지를 모두 갖춤 → 적용.
-- 기록은 1년 보관한다.
+- 제품 전체가 단일 버전을 가진다. 채널은 `stable` / `beta`. Beta 채널은 Stable 릴리스도 수신한다.
+- 적용 방식은 수동(기본) / 자동. 자동은 적용 시간대(기본 03:00~05:00, 서버 시간) 내에서 **공개 후 3일이 경과한 릴리스만** 적용한다.
+- 적용 순서(단계 id 는 고정): `preflight`(사전 점검) → `backup`(자동 백업) → `pull`(이미지 pull) → `migrate`(DB 변경) → `switch`(구역 교체) → `verify`(상태 확인).
+  단계 상태는 `pending` / `running` / `done` / `failed` 의 네 가지로 한정한다.
+- 자동 백업의 종류는 `pre-update` 다 — DB + 설정 + 암호화 키. **파일은 백업 대상도 롤백 대상도 아니다.**
+- 실패 시 동작
+  - `migrate` **이전** 단계(`preflight`·`backup`·`pull`)에서 실패: 작업이 중단되며 관리자가 "이 단계부터 다시"(`retry`)와 "되돌리기"(`rollback`) 중 하나를 선택한다.
+  - `migrate` 이후(`migrate`·`switch`·`verify`) 실패: 선택 절차 없이 자동 롤백 — 이전 이미지로 교체 + DB 는 직전 백업으로 복원.
+  - **자동 업데이트**는 단계와 무관하게 자동 롤백한다. 이후 자동 업데이트는 중지되며(`auto.paused`), 관리자가 "다시 켜기"를 선택하여야 다음 적용 시간대부터 재시도한다.
+- 중간 버전: 목표 버전까지 경유 버전이 존재하면 1회의 확인으로 연속 진행한다. 버전마다 백업을 생성하고 버전마다 6개 단계를 처음부터 수행한다.
+- Stable 채널 복귀: 채널만 변경하는 경우 Stable 의 최신 버전이 현재 버전 이상이 될 때까지 대기한다(`available.state = "wait"`). "시험판 이전 상태로 복원"(Beta 전환 직전에 별도 보관한 백업)도 가능하다.
+- 호환성이 확인되지 않은 플러그인은 업데이트 이후 비활성화된 상태로 시작한다.
+- 사전 공지: 수동 업데이트·수동 복원은 5분의 카운트다운 이후에 시작된다. 관리자는 "지금 바로 시작"·"취소"를 선택할 수 있다. 자동 업데이트도 시작 5분 전에 카운트다운을 개시한다. 카운트다운이 종료되면 점검 모드로 전환된다.
+- 오프라인: 오프라인 번들을 업로드하거나 서버 내 경로를 지정 → 서명·버전 검증 → 추가로 필요한 이미지를 전부 확보 → 적용.
+- 이력은 1년간 보관한다.
 
-## 2. 공통
+## 2. 공통 사항
 
-- 주소: `http://jw-installer:8444`. 워크스페이스 내부망에서만 닿는다(호스트에 게시하지 않는다).
-- 인증: 기존 내부 API 와 같다 — 공유 키(`X-JW-Installer-Key`) **그리고** 내부 대역의 출발지. 아니면 `404`. 예외는 키 없이 열리는 `GET /internal/update/maintenance` 하나다(7절).
-- 오류 응답: `{"code": "…", "vars": {…}}`. 화면은 `code` 로 문구를 고른다.
-- 시각: UTC, `YYYY-MM-DDTHH:MM:SSZ`. 화면이 브라우저 시간대로 바꿔 보인다. 적용 시간대(`window`)만 서버 시간의 `HH:MM` 이다.
+- 주소: `http://jw-installer:8444`. 워크스페이스 내부망에서만 접근할 수 있다(호스트에 게시하지 않는다).
+- 인증: 기존 내부 API 와 동일하다 — 공유 키(`X-JW-Installer-Key`) **및** 내부 대역의 출발지. 충족하지 않으면 `404`. 예외는 키 없이 접근 가능한 `GET /internal/update/maintenance` 하나다(7절).
+- 오류 응답: `{"code": "…", "vars": {…}}`. 화면은 `code` 로 문구를 선택한다.
+- 시각: UTC, `YYYY-MM-DDTHH:MM:SSZ`. 화면이 브라우저 시간대로 변환하여 표시한다. 적용 시간대(`window`)만 서버 시간의 `HH:MM` 이다.
 - 용량은 바이트(정수), 시간은 초(정수).
-- 바꾸는 요청은 본문에 `actor` 를 실어 보낸다: `{"id": "<사용자 id>", "name": "<표시 이름>"}`. 엔진은 기록의 "누가"에 쓴다. 자동 업데이트의 `actor` 는 `null`.
-- 한 번에 한 작업만 돈다. 구역 작업(켜기·끄기)과도 겹치지 않는다 — 겹치면 `409 busy`.
-- 엔진의 상태(설정, 작업, 기록, 오프라인 준비물)는 설치 관리자의 상태 폴더에 남아 설치 관리자·backend 가 다시 떠도 이어진다.
+- 변경 요청은 본문에 `actor` 를 포함한다: `{"id": "<사용자 id>", "name": "<표시 이름>"}`. 엔진은 이를 이력의 수행자 항목에 기록한다. 자동 업데이트의 `actor` 는 `null`.
+- 동시에 하나의 작업만 실행된다. 구역 작업(활성화·비활성화)과도 병행되지 않는다 — 중복 시 `409 busy`.
+- 엔진의 상태(설정, 작업, 이력, 오프라인 준비물)는 설치 관리자의 상태 폴더에 보존되어 설치 관리자·backend 가 재기동되어도 유지된다.
 
 공통 오류 코드:
 
-| 상태 | code | 뜻 |
+| 상태 | code | 의미 |
 |---|---|---|
-| 404 | `not_found` | 키가 다르거나 내부 대역 밖(이유를 숨긴다) |
-| 404 | `job_unknown` · `restore_point_unknown` · `history_unknown` · `image_unknown` | 없는 대상 |
-| 409 | `busy` | 다른 작업이 진행 중. `vars.job` = 그 작업 id |
-| 409 | `action_not_allowed` | 지금 상태에서 할 수 없는 제어. `vars.status`, `vars.allowed[]` |
-| 409 | `not_available` | 받을 버전이 없다(또는 대기·막힘 상태) |
-| 409 | `target_stale` | 화면이 본 목표와 지금의 목표가 다르다. `vars.target` = 지금의 목표 |
-| 409 | `offline_incomplete` | 묶음이 검증되지 않았거나 필요한 이미지가 빠졌다. `vars.blockers[]` |
+| 404 | `not_found` | 키 불일치 또는 내부 대역 외부(사유를 노출하지 않는다) |
+| 404 | `job_unknown` · `restore_point_unknown` · `history_unknown` · `image_unknown` | 존재하지 않는 대상 |
+| 409 | `busy` | 다른 작업이 진행 중. `vars.job` = 해당 작업 id |
+| 409 | `action_not_allowed` | 현재 상태에서 허용되지 않는 제어. `vars.status`, `vars.allowed[]` |
+| 409 | `not_available` | 적용 가능한 버전이 없다(또는 대기·차단 상태) |
+| 409 | `target_stale` | 화면이 확인한 목표와 현재의 목표가 상이하다. `vars.target` = 현재의 목표 |
+| 409 | `offline_incomplete` | 번들이 검증되지 않았거나 필요한 이미지가 누락되었다. `vars.blockers[]` |
 | 409 | `restore_point_missing` | 시험판 이전 백업이 없다 |
-| 409 | `not_installed` | 설치가 끝나지 않은 설치 관리자 |
-| 413 | `too_large` | 올린 파일이 상한을 넘는다. `vars.limit` |
+| 409 | `not_installed` | 설치가 완료되지 않은 설치 관리자 |
+| 413 | `too_large` | 업로드한 파일이 상한을 초과한다. `vars.limit` |
 | 422 | `settings_invalid` | `vars.errors[] = {"field", "code"}` |
-| 422 | `invalid` | 본문 형식이 틀렸다. `vars.field` |
-| 507 | `no_space` | 받을 자리가 모자란다. `vars.need`, `vars.free` |
+| 422 | `invalid` | 본문 형식 오류. `vars.field` |
+| 507 | `no_space` | 저장 공간 부족. `vars.need`, `vars.free` |
 
 ## 3. 상태·확인·설정
 
@@ -71,25 +71,25 @@
 }
 ```
 
-| 항목 | 뜻 |
+| 항목 | 정의 |
 |---|---|
-| `current.channel` | 지금 설치된 버전이 속한 채널(버전 글자에 `-beta.N` 이 있으면 `beta`) |
-| `current.previous_version` | 바로 전 버전(없으면 `null`) |
-| `settings` | 4절의 설정과 같은 값 |
+| `current.channel` | 현재 설치된 버전이 속한 채널(버전 문자열에 `-beta.N` 이 포함되면 `beta`) |
+| `current.previous_version` | 직전 버전(없으면 `null`) |
+| `settings` | 4절의 설정과 동일한 값 |
 | `check.state` | `idle` / `checking` |
-| `check.ok` · `check.error` | 마지막 확인의 성패. 실패면 `error = {"code", "detail"}` — code: `unconfigured`(서명을 확인할 공개 키가 없다 — 채널을 받지 않는다. `detail` 은 빈 글자), `channel_unreachable`(연결 실패), `channel_invalid`(서명·형식·만료·순번 — releases.md 의 `VerifyError` 종류), `manifest_invalid`. 뒤의 둘에는 `kind` 가 붙는다: `signature` / `expired` / `rollback`(순번 역행) / `hash` / `content` |
-| `available` | 받을 수 있는 버전(아래) — 마지막으로 **성공한** 확인의 결과다. 확인이 실패해도 지우지 않는다 |
-| `job` | 진행 중이거나 관리자의 선택을 기다리는 작업(5절의 작업 모양 그대로). 없으면 `null` |
-| `auto.paused` | 자동 업데이트가 실패 뒤 멈춰 있는가. `reason = {"job", "step", "version"}` |
-| `last_auto` | 마지막 자동 업데이트의 결과: `{"job", "result", "version", "from_version", "finished_at", "downtime_seconds", "failed_step"}`. `result` 는 6절 기록의 값. 없으면 `null` |
+| `check.ok` · `check.error` | 최종 확인의 성공 여부. 실패 시 `error = {"code", "detail"}` — code: `unconfigured`(서명을 검증할 공개 키가 없다 — 채널을 수신하지 않는다. `detail` 은 빈 문자열), `channel_unreachable`(연결 실패), `channel_invalid`(서명·형식·만료·순번 — releases.md 의 `VerifyError` 유형), `manifest_invalid`. 후자의 둘에는 `kind` 가 추가된다: `signature` / `expired` / `rollback`(순번 역행) / `hash` / `content` |
+| `available` | 적용 가능한 버전(아래) — 최종적으로 **성공한** 확인의 결과다. 확인이 실패하더라도 삭제하지 않는다 |
+| `job` | 진행 중이거나 관리자의 선택을 대기 중인 작업(5절의 작업 형식과 동일). 없으면 `null` |
+| `auto.paused` | 자동 업데이트가 실패 이후 중지된 상태인지 여부. `reason = {"job", "step", "version"}` |
+| `last_auto` | 최종 자동 업데이트의 결과: `{"job", "result", "version", "from_version", "finished_at", "downtime_seconds", "failed_step"}`. `result` 는 6절 이력의 값. 없으면 `null` |
 
-`available` 은 `verify.plan_update()` 의 결과와 일대일이다:
+`available` 은 `verify.plan_update()` 의 결과와 일대일로 대응한다:
 
 | `state` | `plan_update` | 내용 |
 |---|---|---|
-| `none` | `current` | 최신이다 |
+| `none` | `current` | 최신 버전이다 |
 | `update` | `update` | 아래 표 |
-| `wait` | `wait` | `{"state": "wait", "channel_latest": "1.1.4", "resume_from": "1.2.0"}` — 채널의 최신이 현재보다 낮다. `resume_from` 은 다시 받기 시작하는 가장 낮은 버전(현재가 `X.Y.Z-beta.N` 이면 `X.Y.Z`) |
+| `wait` | `wait` | `{"state": "wait", "channel_latest": "1.1.4", "resume_from": "1.2.0"}` — 채널의 최신 버전이 현재 버전보다 하위다. `resume_from` 은 수신이 재개되는 최저 버전(현재가 `X.Y.Z-beta.N` 이면 `X.Y.Z`) |
 | `blocked` | `blocked` | `{"state": "blocked", "version": "2.0.0", "reason": {"code": "no_upgrade_path", "vars": {"min_upgrade_from": "1.5.0"}}}` |
 
 `state = "update"`:
@@ -111,19 +111,19 @@
 }
 ```
 
-| 항목 | 뜻 |
+| 항목 | 정의 |
 |---|---|
-| `path` | 차례로 설치할 버전(마지막이 `version`). 길이 1 이면 한 번에 간다 |
-| `download_bytes` | 경로의 manifest 에 적힌 `download_bytes` 의 합 — 그 릴리스의 이미지를 전부 새로 받을 때의 크기다(꺼진 구역의 것도 들어 있고 이미 있는 계층을 빼지 않으므로, 실제로 받는 양은 이보다 적다). manifest 에 값이 없으면 `null` |
-| `downtime_seconds` | 예상 중단 시간(경로 전체) — 이 서버의 지난 업데이트 실측 × 거칠 버전 수, 실측이 없으면 버전마다 240초 |
-| `zones` | 이미지가 바뀌는 구역 중 **켜진** 것. 이름은 `zones.json` 의 것 |
-| `plugin_warnings` | 새 버전과 맞는지 확인되지 않은 플러그인 — 업데이트 뒤 꺼진 채로 시작한다 |
-| `changelog` | manifest 의 변경 내용(마크다운). 경로에 중간 버전이 있어도 목표 버전의 것 |
-| `auto_eligible_at` | 자동 적용이 받기 시작하는 때(`published` + `min_age_days`) |
+| `path` | 순차적으로 설치할 버전(마지막 요소가 `version`). 길이가 1 이면 직접 업데이트한다 |
+| `download_bytes` | 경로상 manifest 에 기록된 `download_bytes` 의 합 — 해당 릴리스의 이미지를 전부 신규로 pull 하는 경우의 크기다(비활성화된 구역의 이미지도 포함되며 기존 계층을 차감하지 않으므로, 실제 수신량은 이보다 적다). manifest 에 값이 없으면 `null` |
+| `downtime_seconds` | 예상 중단 시간(경로 전체) — 해당 서버의 직전 업데이트 실측값 × 경유 버전 수, 실측값이 없으면 버전당 240초 |
+| `zones` | 이미지가 변경되는 구역 중 **활성화된** 구역. 이름은 `zones.json` 의 값 |
+| `plugin_warnings` | 신규 버전과의 호환성이 확인되지 않은 플러그인 — 업데이트 이후 비활성화된 상태로 시작한다 |
+| `changelog` | manifest 의 변경 내용(마크다운). 경로에 중간 버전이 존재하더라도 목표 버전의 내용 |
+| `auto_eligible_at` | 자동 적용의 대상이 되는 시각(`published` + `min_age_days`) |
 
 ### `POST /internal/update/check`
 
-지금 채널을 받아 확인한다. `202` + 위 상태(`check.state = "checking"`). 끝나면 `check`·`available` 이 바뀐다 — 화면은 상태를 다시 읽는다. 작업이 도는 중이면 `409 busy`.
+채널을 즉시 수신하여 확인한다. `202` + 위 상태(`check.state = "checking"`). 완료되면 `check`·`available` 이 갱신된다 — 화면은 상태를 재조회한다. 작업이 실행 중이면 `409 busy`.
 
 ### 적용된 버전의 변경 내용 — `GET /internal/update/releases/<버전>`
 
@@ -132,7 +132,7 @@
  "downtime_seconds": 212, "previous_version": "0.9.4", "disabled_plugins": [{"id": "sample-plugin", "name": "Sample"}]}
 ```
 
-지금 설치된 버전과 기록에 남은 버전만 답한다(그 밖은 `404 history_unknown`). `applied_at` 이하는 그 버전을 적용한 기록이 있을 때만.
+현재 설치된 버전과 이력에 존재하는 버전에 대해서만 응답한다(그 외는 `404 history_unknown`). `applied_at` 이하의 항목은 해당 버전의 적용 이력이 존재하는 경우에만 포함된다.
 
 ## 4. 설정
 
@@ -148,7 +148,7 @@
 }
 ```
 
-`beta.since` 는 Beta 채널로 바꾼 시각, `beta.restore_point` 는 그 직전에 보관한 백업(`{"id", "version", "created_at", "size_bytes"}`). Beta 를 쓴 적이 없거나 그 백업이 없으면 `null`.
+`beta.since` 는 Beta 채널로 전환한 시각, `beta.restore_point` 는 그 직전에 보관한 백업(`{"id", "version", "created_at", "size_bytes"}`)이다. Beta 사용 이력이 없거나 해당 백업이 없으면 `null`.
 `min_age_days` 는 읽기 전용이다(3).
 
 ### `PUT /internal/update/settings`
@@ -157,13 +157,13 @@
 {"mode": "auto", "window": {"start": "03:00", "end": "05:00"}, "channel": "beta", "stable_return": null, "actor": {"id": "…", "name": "…"}}
 ```
 
-- 보낸 항목만 바뀐다. `window` 는 `HH:00` 꼴의 정시, `start ≠ end`. `start > end` 면 자정을 넘는 시간대다.
-- `channel: "beta"` 로 바꾸면 **다음 확인부터** Beta 릴리스를 받는다. 그 뒤 Beta 버전으로 처음 올릴 때 엔진은 그 직전 백업을 "시험판 이전 백업"으로 따로 보관한다(보관 기한 없음 — Stable 로 돌아와 Stable 이 현재 버전 이상이 되면 지운다).
-- `channel: "stable"` 로 돌아올 때 `stable_return` 을 같이 보낸다.
-  - `"wait"`(기본): 채널만 바꾼다. 응답의 `effect.wait` 에 대기 내용이 온다.
-  - `"restore"`: 시험판 이전 백업으로 복원하는 작업을 시작한다(카운트다운부터 — 본문에 `"start": "now"` 를 실으면 예고 없이). 채널은 복원이 끝날 때 `stable` 이 된다. 백업이 없으면 `409 restore_point_missing`.
+- 요청에 포함된 항목만 변경된다. `window` 는 `HH:00` 형식의 정시, `start ≠ end`. `start > end` 이면 자정을 경과하는 시간대다.
+- `channel: "beta"` 로 변경하면 **다음 확인부터** Beta 릴리스를 수신한다. 이후 Beta 버전으로 최초 업데이트할 때 엔진은 그 직전 백업을 "시험판 이전 백업"으로 별도 보관한다(보관 기한 없음 — Stable 로 복귀하여 Stable 이 현재 버전 이상이 되면 삭제한다).
+- `channel: "stable"` 로 복귀하는 경우 `stable_return` 을 함께 전송한다.
+  - `"wait"`(기본): 채널만 변경한다. 응답의 `effect.wait` 에 대기 내용이 포함된다.
+  - `"restore"`: 시험판 이전 백업으로 복원하는 작업을 시작한다(카운트다운부터 진행 — 본문에 `"start": "now"` 를 포함하면 사전 공지 없이 진행). 채널은 복원 완료 시점에 `stable` 로 변경된다. 백업이 없으면 `409 restore_point_missing`.
 
-응답 `200`(복원을 시작했으면 `202`):
+응답 `200`(복원을 시작한 경우 `202`):
 
 ```json
 {
@@ -173,9 +173,9 @@
 }
 ```
 
-`effect.channel`: `null`(채널 그대로) / `to_beta` / `to_stable_wait` / `to_stable_restore`(이때 `effect.job` 에 복원 작업). 오류: `422 settings_invalid`, `409 busy`, `409 restore_point_missing`.
+`effect.channel`: `null`(채널 변경 없음) / `to_beta` / `to_stable_wait` / `to_stable_restore`(이 경우 `effect.job` 에 복원 작업이 포함된다). 오류: `422 settings_invalid`, `409 busy`, `409 restore_point_missing`.
 
-## 5. 적용과 작업
+## 5. 적용 및 작업
 
 ### `POST /internal/update/apply`
 
@@ -183,8 +183,8 @@
 {"target": "1.2.0", "start": "countdown", "actor": {"id": "…", "name": "…"}}
 ```
 
-- `target` 은 화면이 본 `available.version`. 지금의 것과 다르면 `409 target_stale`.
-- `start`: `countdown`(기본 — 5분 예고 뒤 시작) / `now`(예고 없이).
+- `target` 은 화면이 확인한 `available.version`. 현재 값과 상이하면 `409 target_stale`.
+- `start`: `countdown`(기본 — 5분의 사전 공지 이후 시작) / `now`(사전 공지 없이 시작).
 - `202` + 작업. 오류: `409 busy` · `not_available` · `target_stale`.
 
 ### 작업
@@ -223,49 +223,49 @@
 }
 ```
 
-| 항목 | 뜻 |
+| 항목 | 정의 |
 |---|---|
-| `kind` | `update` / `rollback`(실패한 업데이트를 되돌리는 작업) / `restore`(관리자가 고른 복원) |
+| `kind` | `update` / `rollback`(실패한 업데이트의 롤백 작업) / `restore`(관리자가 선택한 복원) |
 | `trigger` | `manual` / `auto` / `offline` |
-| `status` | `countdown`(예고 중) → `running` → `done`. 그 밖에 `failed`, `cancelled`(예고 중 취소) |
-| `path` · `version_index` | 거칠 버전과 지금 몇 번째(0 부터)인가. `steps` 는 **지금 버전**의 단계다 — 다음 버전으로 넘어가면 전부 `pending` 으로 돌아간다 |
-| `countdown` | `status = "countdown"` 일 때 `{"ends_at": "…", "seconds": 300}`. 그 밖엔 `null` |
-| `steps[].detail.images` | `pull` 단계의 이미지별 진행. `status`: `pending`/`pulling`/`done`/`failed`, `percent` 0~100 |
-| `steps[].detail.percent` | 그 밖의 단계가 진행률을 알 때(0~100). 모르면 싣지 않는다 |
-| `steps[].detail` 의 그 밖 | `preflight`: `schema {current, target, changes}`·`plugin_warnings`·`free_bytes`, `backup`: `point`(복원 지점 id)·`path`·`size_bytes`, `switch`: `disabled_plugins`, `verify`: `version`·`schema_version`. 되돌림에서 할 일이 없어 지나간 단계는 `skipped: true`. 설치 관리자가 다시 시작해 다시 돈 단계에는 단계 자체에 `interrupted: true` 가 붙는다 |
-| `error` | 실패했을 때 `{"step", "cause", "detail", "vars"}`. `cause` 는 문구 키, `detail` 은 원문 한 줄 |
-| `choices` | 지금 관리자가 고를 수 있는 제어: `retry`, `rollback`. 자동 되돌림이면 빈 배열 |
-| `rollback_job` | 이 업데이트를 되돌리는 작업의 id(되돌림이 시작됐을 때) |
+| `status` | `countdown`(사전 공지 중) → `running` → `done`. 그 외 `failed`, `cancelled`(사전 공지 중 취소) |
+| `path` · `version_index` | 경유 버전 목록과 현재 진행 중인 버전의 인덱스(0 부터). `steps` 는 **현재 버전**의 단계다 — 다음 버전으로 진행하면 전부 `pending` 으로 초기화된다 |
+| `countdown` | `status = "countdown"` 일 때 `{"ends_at": "…", "seconds": 300}`. 그 외에는 `null` |
+| `steps[].detail.images` | `pull` 단계의 이미지별 진행 상태. `status`: `pending`/`pulling`/`done`/`failed`, `percent` 0~100 |
+| `steps[].detail.percent` | 그 외 단계의 진행률을 산정할 수 있는 경우(0~100). 산정할 수 없으면 포함하지 않는다 |
+| `steps[].detail` 의 그 외 항목 | `preflight`: `schema {current, target, changes}`·`plugin_warnings`·`free_bytes`, `backup`: `point`(복원 지점 id)·`path`·`size_bytes`, `switch`: `disabled_plugins`, `verify`: `version`·`schema_version`. 롤백에서 수행할 작업이 없어 생략된 단계는 `skipped: true`. 설치 관리자의 재기동으로 재수행된 단계에는 단계 자체에 `interrupted: true` 가 추가된다 |
+| `error` | 실패 시 `{"step", "cause", "detail", "vars"}`. `cause` 는 문구 키, `detail` 은 원문 한 줄 |
+| `choices` | 현재 관리자가 선택할 수 있는 제어: `retry`, `rollback`. 자동 롤백인 경우 빈 배열 |
+| `rollback_job` | 해당 업데이트의 롤백 작업 id(롤백이 시작된 경우) |
 | `restore` | `kind = "restore"` 일 때 `{"point": "<복원 지점 id>", "version": "1.0.0", "reason": "manual"}`. `reason`: `manual` / `beta`(시험판 이전 상태로) |
 | `expected_seconds` | 예상 중단 시간 |
-| `maintenance_started_at` | 점검이 시작된 시각(카운트다운이 끝난 때). 아직이면 `null` |
+| `maintenance_started_at` | 점검 모드가 시작된 시각(카운트다운 종료 시점). 시작 전이면 `null` |
 
-`kind` 가 `rollback`·`restore` 인 작업의 단계(id 고정): `stop`(구역 멈추기) → `images`(이전 이미지로 바꾸기) → `restore_db`(백업에서 DB 되돌리기) → `start`(구역 시작) → `verify`(상태 확인). `rollback` 은 `from_version` 이 실패한 목표 버전, `target_version` 이 돌아갈 버전이고 `parent_job` 에 되돌리는 업데이트 작업의 id 가 온다. `rollback`·`restore` 가 실패하면 `choices = ["retry"]` 뿐이다(워크스페이스는 멈춘 상태로 남는다). `error.vars.backup_location` 에 백업 파일의 위치(backend 컨테이너 안의 경로)를, `error.vars.manual` 에 손으로 할 일의 문구 키(`restore_manually`)를 싣는다.
+`kind` 가 `rollback`·`restore` 인 작업의 단계(id 고정): `stop`(구역 중지) → `images`(이전 이미지로 교체) → `restore_db`(백업으로 DB 복원) → `start`(구역 기동) → `verify`(상태 확인). `rollback` 은 `from_version` 이 실패한 목표 버전, `target_version` 이 복귀 대상 버전이며 `parent_job` 에 롤백 대상 업데이트 작업의 id 가 포함된다. `rollback`·`restore` 가 실패하면 `choices = ["retry"]` 만 제공된다(워크스페이스는 중지된 상태로 유지된다). `error.vars.backup_location` 에 백업 파일의 위치(backend 컨테이너 내 경로)를, `error.vars.manual` 에 수동 조치 사항의 문구 키(`restore_manually`)를 포함한다.
 
 `error.cause` 의 값:
 
 | 단계 | cause |
 |---|---|
-| `preflight` | `manifest_missing` · `manifest_invalid` · `manifest_incomplete`(설치 관리자·backend 이미지가 목록에 없다) · `other_job_running` · `backend_not_running` · `no_space`(`vars.need`·`free`) · `schema_downgrade`(`vars.current`·`target`) |
+| `preflight` | `manifest_missing` · `manifest_invalid` · `manifest_incomplete`(설치 관리자·backend 이미지가 목록에 없음) · `other_job_running` · `backend_not_running` · `no_space`(`vars.need`·`free`) · `schema_downgrade`(`vars.current`·`target`) |
 | `backup` | `backup_failed` |
 | `pull` | `image_pull_failed`(`vars.image`) · `image_tag_failed` · `bundle_extract_failed` · 오프라인: `bundle_invalid` · `image_load_failed` · `image_missing` |
 | `migrate` | `database_migrate_failed`(`vars.exit_code`) |
 | `switch` · `start` | `stack_render_failed` · `compose_invalid` · `service_start_failed` · `service_not_ready`(`vars.container`) · `installer_replace_failed` · `previous_image_missing` |
 | `verify` | `service_not_ready` · `backend_image_mismatch` · `version_mismatch` · `health_check_failed` · `schema_mismatch` · `installer_version_mismatch` |
 | `stop` · `images` · `restore_db` | `service_stop_failed` · `restore_point_missing` · `previous_image_missing` · `restore_point_schema_mismatch` · `db_restore_failed` |
-| 어디서나 | `unexpected_error`(`vars.type`) |
+| 전 단계 공통 | `unexpected_error`(`vars.type`) |
 
-실패 규칙(1절)과 작업 값의 대응:
+실패 규칙(1절)과 작업 값의 대응 관계:
 
-| 경우 | 업데이트 작업 | 그 뒤 |
+| 경우 | 업데이트 작업 | 후속 동작 |
 |---|---|---|
-| 수동·오프라인, `migrate` 전 실패 | `status: "failed"`, `choices: ["retry", "rollback"]` | 관리자의 선택을 기다린다. 점검 상태는 유지 |
-| 수동·오프라인, `migrate` 부터 실패 | `status: "failed"`, `choices: []`, `rollback_job` 채움 | 되돌림 작업이 바로 시작된다 |
-| 자동, 어느 단계든 | 위와 같다 | 되돌림이 끝나면 `auto.paused = true` |
+| 수동·오프라인, `migrate` 이전 실패 | `status: "failed"`, `choices: ["retry", "rollback"]` | 관리자의 선택을 대기한다. 점검 모드는 유지 |
+| 수동·오프라인, `migrate` 이후 실패 | `status: "failed"`, `choices: []`, `rollback_job` 설정 | 롤백 작업이 즉시 시작된다 |
+| 자동, 전 단계 | 위와 동일 | 롤백이 완료되면 `auto.paused = true` |
 
 ### `GET /internal/update/jobs/<id>`
 
-위 작업. 끝난 작업도 기록 보관 기간 동안 같은 id 로 읽힌다.
+위 작업 형식으로 응답한다. 완료된 작업도 이력 보관 기간 동안 동일 id 로 조회할 수 있다.
 
 ### `POST /internal/update/jobs/<id>/action`
 
@@ -273,22 +273,22 @@
 {"action": "retry", "actor": {"id": "…", "name": "…"}}
 ```
 
-| `action` | 할 수 있을 때 | 하는 일 |
+| `action` | 허용 조건 | 동작 |
 |---|---|---|
-| `start_now` | `status = "countdown"` | 예고를 끝내고 바로 시작 |
-| `cancel` | `status = "countdown"` | 취소 — `status: "cancelled"`. 자동 업데이트의 예고를 취소하면 그 시간대는 건너뛴다(멈춤은 아니다) |
-| `retry` | `choices` 에 있을 때 | 실패한 단계부터 다시. 같은 작업이 `running` 으로 돌아간다 |
-| `rollback` | `choices` 에 있을 때 | 되돌림 작업을 만든다. 응답은 **업데이트 작업**(`rollback_job` 채움) |
+| `start_now` | `status = "countdown"` | 사전 공지를 종료하고 즉시 시작 |
+| `cancel` | `status = "countdown"` | 취소 — `status: "cancelled"`. 자동 업데이트의 사전 공지를 취소하면 해당 시간대는 건너뛴다(중지 상태로 전환되지는 않는다) |
+| `retry` | `choices` 에 포함된 경우 | 실패한 단계부터 재수행. 동일 작업이 `running` 으로 전환된다 |
+| `rollback` | `choices` 에 포함된 경우 | 롤백 작업을 생성한다. 응답은 **업데이트 작업**(`rollback_job` 설정) |
 
-할 수 없는 제어는 `409 action_not_allowed`.
+허용되지 않는 제어는 `409 action_not_allowed`.
 
 ### `GET /internal/update/jobs/<id>/log[?tail=N][&format=text]`
 
-`{"lines": ["[pull] 시작", "…"]}`. `format=text` 면 `text/plain` 전체(내려받기용). 비밀값은 가린다.
+`{"lines": ["[pull] 시작", "…"]}`. `format=text` 이면 `text/plain` 전체(다운로드용). 비밀값은 마스킹한다.
 
 ### `POST /internal/update/auto/resume`
 
-멈춘 자동 업데이트를 다시 켠다. `200` + `{"auto": {"paused": false, …}, "window": {"start": "03:00", "end": "05:00"}}`. 멈춰 있지 않아도 성공한다.
+중지된 자동 업데이트를 재개한다. `200` + `{"auto": {"paused": false, …}, "window": {"start": "03:00", "end": "05:00"}}`. 중지 상태가 아니더라도 성공으로 응답한다.
 
 ### 복원 지점
 
@@ -298,7 +298,7 @@
 {"points": [{"id": "rp-20260110", "kind": "pre-update", "version": "1.0.0", "created_at": "2026-01-10T18:00:02Z", "size_bytes": 73400320}]}
 ```
 
-새것부터. `kind`: `pre-update` / `pre-beta`. `version` 은 그 백업을 만들 때 설치돼 있던 버전(= 복원하면 돌아가는 버전).
+최신순으로 정렬한다. `kind`: `pre-update` / `pre-beta`. `version` 은 해당 백업의 생성 시점에 설치되어 있던 버전(= 복원 시 복귀하는 버전).
 
 `POST /internal/update/restore` `{"point": "rp-20260110", "start": "countdown", "actor": {…}}` → `202` + 작업(`kind: "restore"`). 오류: `404 restore_point_unknown`, `409 busy`.
 
@@ -334,30 +334,30 @@
 | 항목 | 값 |
 |---|---|
 | `bundle` | 없으면 `null` |
-| `bundle.state` | `uploading`(올리는 중) / `verifying`(검증 중) / `verified` / `signature_mismatch` / `version_too_low` / `file_missing`(경로에 없거나 읽을 수 없다) / `invalid`(묶음이 아니거나 색인·해시가 어긋난다) |
-| `bundle.percent` | `uploading`·`verifying` 의 진행(모르면 `null`) |
-| `bundle.version` | 서명이 확인된 뒤에만(그 전엔 `null`) |
-| `images[]` | 묶음에 들어 있지 않은 남의 구성 요소. 묶음이 `verified` 가 된 뒤에만 채운다(그 전엔 빈 배열) |
-| `images[].reason` | `always`(데이터베이스·캐시·웹 서버) / `zone`(그 구역의 구성 요소) |
-| `images[].state` | `present`(있음) / `missing`(없음) / `verifying`(검증 중) / `hash_mismatch`(해시 불일치) / `not_needed`(꺼진 구역의 것) |
-| `images[].command` | 인터넷이 되는 PC 에서 그 이미지를 파일로 받는 명령 |
-| `download_url` | 묶음 파일을 받는 주소(설정값 — 없으면 `null`) |
-| `ready` | 적용할 수 있는가: 묶음이 `verified` 이고 `not_needed` 가 아닌 이미지가 전부 `present` |
+| `bundle.state` | `uploading`(업로드 중) / `verifying`(검증 중) / `verified` / `signature_mismatch` / `version_too_low` / `file_missing`(경로에 존재하지 않거나 읽을 수 없음) / `invalid`(번들 형식이 아니거나 색인·해시 불일치) |
+| `bundle.percent` | `uploading`·`verifying` 의 진행률(산정할 수 없으면 `null`) |
+| `bundle.version` | 서명 검증 이후에만 설정(그 이전에는 `null`) |
+| `images[]` | 번들에 포함되지 않은 외부 이미지. 번들이 `verified` 가 된 이후에만 설정한다(그 이전에는 빈 배열) |
+| `images[].reason` | `always`(데이터베이스·캐시·웹 서버) / `zone`(해당 구역의 구성 요소) |
+| `images[].state` | `present`(있음) / `missing`(없음) / `verifying`(검증 중) / `hash_mismatch`(해시 불일치) / `not_needed`(비활성화된 구역의 이미지) |
+| `images[].command` | 인터넷에 연결된 PC 에서 해당 이미지를 파일로 저장하는 명령 |
+| `download_url` | 오프라인 번들의 다운로드 주소(설정값 — 없으면 `null`) |
+| `ready` | 적용 가능 여부: 번들이 `verified` 이고 `not_needed` 가 아닌 이미지가 전부 `present` |
 | `blockers` | `bundle_missing` / `bundle_not_verified` / `bundle_rejected` / `images_missing` / `images_verifying` / `images_mismatch` |
 
-검증 순서는 [releases.md](releases.md) 의 오프라인 묶음 절과 같다(묶음 서명 → manifest → 파일별 해시). 버전은 `plan_update` 와 같은 기준으로 본다 — 현재보다 높지 않으면 `version_too_low`, 한 번에 갈 수 없으면 `invalid` + `error.code = "no_upgrade_path"`.
+검증 순서는 [releases.md](releases.md) 의 "오프라인 번들" 절과 동일하다(번들 서명 → manifest → 파일별 해시). 버전은 `plan_update` 와 동일한 기준으로 판정한다 — 현재 버전보다 상위가 아니면 `version_too_low`, 직접 업데이트할 수 없으면 `invalid` + `error.code = "no_upgrade_path"`.
 
-| 메서드·경로 | 하는 일 |
+| 메서드·경로 | 동작 |
 |---|---|
-| `POST /internal/update/offline/bundle` | 묶음 올리기. 본문은 파일 그대로(`application/octet-stream`), 파일 이름은 `X-JW-Filename`(URL 인코딩). 다 받으면 `202` + 위 상태(`verifying`) — 검증은 뒤에서 돈다. 받는 동안 다른 조회에는 `uploading` 으로 보인다 |
-| `POST /internal/update/offline/bundle-path` `{"path"}` | 서버에 있는 파일 지정. 설치 관리자 컨테이너에서 보이는 경로여야 한다(3절 [installer.md](installer.md) — 호스트의 설치 폴더가 `/data` 로 붙는다). `202` + 상태(`verifying`). 없거나 못 읽으면 `200` + `bundle.state = "file_missing"` |
-| `DELETE /internal/update/offline/bundle` | 준비물을 비운다(올리는 중이면 중단) |
-| `POST /internal/update/offline/images/<id>` | 이미지 파일 올리기(본문은 파일 그대로). `202` + 상태(그 줄이 `verifying`) |
-| `POST /internal/update/offline/apply` `{"start", "actor"}` | 적용 시작 → `202` + 작업(`trigger: "offline"`). `ready` 가 아니면 `409 offline_incomplete` |
+| `POST /internal/update/offline/bundle` | 번들 업로드. 본문은 파일 원본(`application/octet-stream`), 파일 이름은 `X-JW-Filename`(URL 인코딩). 수신이 완료되면 `202` + 위 상태(`verifying`) — 검증은 백그라운드로 수행된다. 수신 중에는 다른 조회에 `uploading` 으로 표시된다 |
+| `POST /internal/update/offline/bundle-path` `{"path"}` | 서버 내 파일 지정. 설치 관리자 컨테이너에서 접근 가능한 경로여야 한다([installer.md](installer.md) 3절 — 호스트의 설치 폴더가 `/data` 로 마운트된다). `202` + 상태(`verifying`). 파일이 없거나 읽을 수 없으면 `200` + `bundle.state = "file_missing"` |
+| `DELETE /internal/update/offline/bundle` | 준비물을 삭제한다(업로드 중이면 중단) |
+| `POST /internal/update/offline/images/<id>` | 이미지 파일 업로드(본문은 파일 원본). `202` + 상태(해당 항목이 `verifying`) |
+| `POST /internal/update/offline/apply` `{"start", "actor"}` | 적용 시작 → `202` + 작업(`trigger: "offline"`). `ready` 상태가 아니면 `409 offline_incomplete` |
 
-오프라인 적용의 `pull` 단계는 내려받는 대신 묶음과 올린 파일을 `docker load` 한다(단계 id 는 같다).
+오프라인 적용의 `pull` 단계는 다운로드 대신 번들과 업로드된 파일을 `docker load` 한다(단계 id 는 동일하다).
 
-### 기록
+### 이력
 
 `GET /internal/update/history[?limit=50][&before=<id>]`
 
@@ -368,9 +368,9 @@
  "retention_days": 365, "more": false}
 ```
 
-`result`: `success` / `rolled_back`(실패 뒤 되돌림 성공) / `rollback_failed`(되돌림도 실패) / `restored`(복원) / `restore_failed` / `cancelled`. 되돌림 작업은 따로 줄을 만들지 않고 그 업데이트의 줄에 붙는다. `actor` 가 `null` 이면 자동.
+`result`: `success` / `rolled_back`(실패 후 롤백 성공) / `rollback_failed`(롤백 실패) / `restored`(복원) / `restore_failed` / `cancelled`. 롤백 작업은 별도 항목으로 생성하지 않고 해당 업데이트 항목에 포함한다. `actor` 가 `null` 이면 자동 업데이트다.
 
-`GET /internal/update/history/<id>` — 그 줄 + 단계별 기록:
+`GET /internal/update/history/<id>` — 해당 항목 + 단계별 기록:
 
 ```json
 {"id": "…", "…": "…",
@@ -381,7 +381,7 @@
  "rollback": {"result": "done", "steps": [{"id": "stop", "status": "done", "duration_seconds": 6, "note": null}]}}
 ```
 
-기록 내려받기는 `GET /internal/update/jobs/<id>/log?format=text`.
+로그 다운로드는 `GET /internal/update/jobs/<id>/log?format=text` 를 사용한다.
 
 ### 앱
 
@@ -392,24 +392,24 @@
  "apps": [{"kind": "windows-desktop", "version": "1.0.0", "filename": "JustWorkspace-Setup-1.0.0.exe", "size_bytes": 98566144, "url": "/downloads/JustWorkspace-Setup-1.0.0.exe"}]}
 ```
 
-manifest 의 `apps[]` 에 실린 것만 온다 — **빈 배열일 수 있다.** `kind`: `windows-desktop` / `android`. `url` 은 로그인한 브라우저가 열 수 있는 주소(같은 출처의 경로 또는 전체 주소). `download_page` 는 사용자에게 알릴 화면 경로(없으면 `null`).
+manifest 의 `apps[]` 에 포함된 항목만 반환한다 — **빈 배열일 수 있다.** `kind`: `windows-desktop` / `android`. `url` 은 인증된 브라우저가 접근할 수 있는 주소(동일 출처의 경로 또는 전체 주소). `download_page` 는 사용자에게 안내할 화면 경로(없으면 `null`).
 
-## 7. backend 가 내려가 있는 동안
+## 7. backend 중지 구간의 처리
 
-`switch` 단계는 backend 컨테이너를 바꾼다. 그동안 backend 의 대신 부르기는 답하지 못한다. 진행 화면과 점검 화면을 어떻게 살릴지의 선택지:
+`switch` 단계는 backend 컨테이너를 교체한다. 해당 구간에는 backend 의 중계 API 가 응답하지 못한다. 진행 화면과 점검 화면을 유지하기 위한 대안은 다음과 같다:
 
 | | 방식 | 장점 | 단점 |
 |---|---|---|---|
-| A | nginx 가 진행 조회 전체를 설치 관리자로 넘긴다(읽기 전용) | 관리자가 끊김 없이 단계를 본다 | 인증 없이 열리는 조회에 버전·단계·오류가 실린다. 관리자만 보게 하려면 backend 없이 세션을 확인할 방법이 필요하다 |
-| B | backend 를 맨 마지막에 바꾸고, 끊긴 사이는 "다시 연결 중" | 새로 여는 것이 없다 | 일반 사용자의 점검 화면이 뜰 근거가 없다(무엇이 진행 중인지 물을 곳이 없다) |
-| **C(권장)** | B + **공개 점검 상태 하나**만 nginx 가 설치 관리자로 넘긴다 | 여는 것은 "점검 중인가"뿐. 일반 사용자의 점검 화면과 관리자의 재연결이 같은 조회를 쓴다 | 관리자는 backend 가 내려간 1~2분 동안 단계 진행을 못 본다(마지막으로 본 상태 + "다시 연결 중") |
+| A | nginx 가 진행 조회 전체를 설치 관리자로 전달한다(읽기 전용) | 관리자가 중단 없이 단계를 확인할 수 있다 | 인증 없이 접근 가능한 조회에 버전·단계·오류가 노출된다. 관리자에게만 제공하려면 backend 없이 세션을 검증하는 수단이 필요하다 |
+| B | backend 를 최후에 교체하고, 중단 구간은 "다시 연결 중"으로 표시 | 신규로 노출되는 경로가 없다 | 일반 사용자의 점검 화면을 표시할 근거가 없다(진행 상태를 조회할 경로가 없다) |
+| **C(권장)** | B + **공개 점검 상태 하나**만 nginx 가 설치 관리자로 전달한다 | 노출되는 정보는 점검 여부에 한정된다. 일반 사용자의 점검 화면과 관리자의 재연결이 동일한 조회를 사용한다 | 관리자는 backend 가 중지된 1~2분간 단계 진행을 확인할 수 없다(최종 확인 상태 + "다시 연결 중") |
 
-**권장안 C 를 계약으로 한다.**
+**권장안 C 를 계약으로 채택한다.**
 
-1. 엔진은 `switch` 에서 **backend 를 맨 마지막에** 바꾼다. 작업 상태는 설치 관리자가 갖고 있으므로 backend 가 다시 뜨면 같은 작업 id 로 이어 읽힌다.
-2. 관리자의 진행 화면은 1.5초마다 `GET /api/admin/system/update/jobs/<id>` 를 읽고, 실패하면 마지막으로 본 단계를 둔 채 "다시 연결 중"으로 계속 읽는다. backend 가 돌아오면 같은 작업 id 로 이어진다. 이 화면이 떠 있는 동안에는 점검 화면이 덮지 않는다.
-3. 일반 사용자의 화면은 API 호출이 실패하면(연결 실패·502·503·504) 공개 점검 상태를 물어, `active` 이면 점검 화면으로 바뀐다. `active: false` 가 되고 `/api/health` 가 답하면 화면을 새로 연다.
-4. 새로 접속한 브라우저에는 nginx 가 정적 점검 페이지를 내준다(아래).
+1. 엔진은 `switch` 에서 **backend 를 최후에** 교체한다. 작업 상태는 설치 관리자가 보유하므로 backend 가 재기동되면 동일 작업 id 로 조회가 재개된다.
+2. 관리자의 진행 화면은 1.5초 주기로 `GET /api/admin/system/update/jobs/<id>` 를 조회하며, 실패 시 최종 확인 단계를 유지한 상태에서 "다시 연결 중"을 표시하고 조회를 지속한다. backend 가 복귀하면 동일 작업 id 로 재개된다. 해당 화면이 표시되는 동안에는 점검 화면으로 대체되지 않는다.
+3. 일반 사용자의 화면은 API 호출이 실패하면(연결 실패·502·503·504) 공개 점검 상태를 조회하여, `active` 이면 점검 화면으로 전환한다. `active: false` 가 되고 `/api/health` 가 응답하면 화면을 새로 고친다.
+4. 신규 접속한 브라우저에는 nginx 가 정적 점검 페이지를 제공한다(아래).
 
 ### 공개 점검 상태 — `GET /internal/update/maintenance` (키 없음)
 
@@ -420,19 +420,19 @@ manifest 의 `apps[]` 에 실린 것만 온다 — **빈 배열일 수 있다.**
 
 | 항목 | 값 |
 |---|---|
-| `active` | 점검 중인가 — 카운트다운이 끝난 때부터 작업이 끝날 때까지(관리자의 선택을 기다리는 `failed` 와 되돌림 포함) |
+| `active` | 점검 모드 여부 — 카운트다운 종료 시점부터 작업 종료 시점까지(관리자의 선택을 대기 중인 `failed` 와 롤백 포함) |
 | `phase` | `idle` / `countdown` / `running` |
 | `kind` | `update` / `rollback` / `restore`. `idle` 이면 `null` |
-| `started_at` | 점검이 시작된 시각 |
-| `expected_seconds` | 예상 시간. 모르면 `null` |
-| `countdown_ends_at` | `phase = "countdown"` 일 때 |
-| `contact` | 관리자가 넣어 둔 연락처 한 줄. 없으면 `null` |
+| `started_at` | 점검 모드가 시작된 시각 |
+| `expected_seconds` | 예상 소요 시간. 산정할 수 없으면 `null` |
+| `countdown_ends_at` | `phase = "countdown"` 인 경우에 설정 |
+| `contact` | 관리자가 등록한 연락처 한 줄. 없으면 `null` |
 
-**버전·단계·오류·사용자 이름은 싣지 않는다.** 응답은 `Cache-Control: no-store`. 이 경로는 키를 요구하지 않지만 내부 대역 검사는 그대로다(바깥에서는 nginx 를 거쳐서만 닿는다).
+**버전·단계·오류·사용자 이름은 포함하지 않는다.** 응답은 `Cache-Control: no-store`. 본 경로는 키를 요구하지 않으나 내부 대역 검사는 동일하게 적용된다(외부에서는 nginx 를 경유하여야만 접근할 수 있다).
 
-연락처는 backend 가 관리자의 설정을 받아 `PUT /internal/update/maintenance/contact` `{"contact": "…" | null}`(키 필요, 200자 이하 한 줄)로 넘긴다.
+연락처는 backend 가 관리자의 설정을 수신하여 `PUT /internal/update/maintenance/contact` `{"contact": "…" | null}`(키 필요, 200자 이하 한 줄)로 전달한다.
 
-### nginx 설정(`nginx/nginx.conf` 에 들어 있다)
+### nginx 설정(`nginx/nginx.conf` 에 포함)
 
 ```nginx
 # 공개 점검 상태 — 이 경로 하나만, GET 만. 설치 관리자가 없는 설치에서도 nginx 가 뜨도록 런타임 resolve.
@@ -468,63 +468,63 @@ if ($uri ~ "^/api/(auth/|admin/system/update/|system/update-notice$|health$)") {
 if ($jw_maintenance = "on:guarded") { rewrite ^ /__jw_maintenance last; }      # → 503 {"code":"maintenance"} + Retry-After: 30
 ```
 
-- **정적 점검 페이지.** `frontend-react/public/maintenance.html` 을 nginx 컨테이너가 직접 붙인다(compose 의 `./frontend-react/public/maintenance.html:/etc/nginx/static/maintenance.html:ro`). 소스로 띄운 설치에서는 리포의 그 파일이고, 설치 관리자로 설치한 서버에서는 번들에 실려 와 스택 폴더의 같은 경로에 놓인다(설치의 렌더링 단계가 놓고, 업데이트의 `switch` 가 새 버전 것으로 바꾼다). 페이지는 `/maintenance/status` 를 5초마다 묻고, 점검이 끝나고 `/api/health` 가 답하면 같은 주소를 다시 연다. 스크립트가 막혀도 30초마다 새로 고친다.
-- **묶음 올리기**는 크다. `/api/admin/system/update/offline/bundle` 과 `…/offline/images/` 는 본문 상한 없이, 디스크에 쌓지 않고 흘려 넘긴다(`client_max_body_size 0; proxy_request_buffering off;`, 읽기·쓰기 3600초). 앞단 프록시가 있으면 거기의 상한도 풀어야 한다 — 아니면 413 이고, 그런 설치는 "서버에 있는 파일 경로" 방식을 쓴다.
-- **점검 중 쓰기 차단 — nginx 점검 모드.** 백업을 뜬 뒤의 변경은 되돌림 때 사라진다. 그래서 점검이 시작되면(예고가 끝난 때, `backup` 전에) 엔진이 표식 파일(`stack/nginx/state/maintenance.on` → 컨테이너의 `/etc/nginx/state/maintenance.on`)을 놓고, 작업이 끝나면 지운다. nginx 는 요청마다 그 파일을 보므로 다시 읽힐 필요가 없다. 표식이 있는 동안:
-  - 지나가는 것: `/api/auth/`, `/api/admin/system/update/`, `/api/system/update-notice`, `/api/health`, `/maintenance/status`, 그리고 화면(정적 파일).
-  - 막히는 것: 그 밖의 `/api/`, `/ws/`, `/dav/`, `/oauth/`, `/sso/`, `/git/`, `/onlyoffice/`, `/livekit/`, `/audiorelay/` → `503 {"code": "maintenance", "detail": "…"}` + `Retry-After: 30`.
-  - 화면 요청을 점검 페이지로 바꾸지는 않는다. nginx 는 요청한 사람이 관리자인지 알 수 없고, 관리자는 진행 화면을 새로 열 수 있어야 한다. 일반 사용자의 화면은 API 의 503 을 보고 공개 점검 상태를 물어 스스로 점검 화면으로 바뀐다(위 3번).
-  - 설치 관리자 없이 구성한 설치에서는 표식이 생기지 않는다(빈 폴더가 붙을 뿐이다).
+- **정적 점검 페이지.** `frontend-react/public/maintenance.html` 을 nginx 컨테이너가 직접 마운트한다(compose 의 `./frontend-react/public/maintenance.html:/etc/nginx/static/maintenance.html:ro`). 소스 빌드로 구성한 설치에서는 리포의 해당 파일이며, 설치 관리자로 설치한 서버에서는 번들에 포함되어 스택 폴더의 동일 경로에 배치된다(설치의 렌더링 단계가 배치하고, 업데이트의 `switch` 가 신규 버전의 파일로 교체한다). 페이지는 `/maintenance/status` 를 5초 주기로 조회하며, 점검이 종료되고 `/api/health` 가 응답하면 동일 주소를 다시 연다. 스크립트가 차단된 경우에도 30초 주기로 새로 고친다.
+- **번들 업로드**는 대용량이다. `/api/admin/system/update/offline/bundle` 과 `…/offline/images/` 는 본문 상한 없이, 디스크에 버퍼링하지 않고 스트리밍으로 전달한다(`client_max_body_size 0; proxy_request_buffering off;`, 읽기·쓰기 3600초). 프런트 프록시가 존재하는 경우 해당 프록시의 상한도 해제하여야 한다 — 해제하지 않으면 413 이 반환되며, 그러한 설치에서는 "서버에 있는 파일 경로" 방식을 사용한다.
+- **점검 중 쓰기 차단 — nginx 점검 모드.** 백업 생성 이후의 변경은 롤백 시 소실된다. 따라서 점검 모드가 시작되면(사전 공지 종료 시점, `backup` 이전) 엔진이 마커 파일(`stack/nginx/state/maintenance.on` → 컨테이너의 `/etc/nginx/state/maintenance.on`)을 생성하고, 작업이 종료되면 삭제한다. nginx 는 요청마다 해당 파일을 확인하므로 설정 리로드가 필요하지 않다. 마커가 존재하는 동안:
+  - 허용 경로: `/api/auth/`, `/api/admin/system/update/`, `/api/system/update-notice`, `/api/health`, `/maintenance/status` 및 화면(정적 파일).
+  - 차단 경로: 그 외의 `/api/`, `/ws/`, `/dav/`, `/oauth/`, `/sso/`, `/git/`, `/onlyoffice/`, `/livekit/`, `/audiorelay/` → `503 {"code": "maintenance", "detail": "…"}` + `Retry-After: 30`.
+  - 화면 요청을 점검 페이지로 대체하지는 않는다. nginx 는 요청자가 관리자인지 식별할 수 없으며, 관리자는 진행 화면을 새로 열 수 있어야 한다. 일반 사용자의 화면은 API 의 503 응답을 근거로 공개 점검 상태를 조회하여 자체적으로 점검 화면으로 전환한다(위 3번).
+  - 설치 관리자 없이 구성한 설치에서는 마커가 생성되지 않는다(빈 폴더가 마운트될 뿐이다).
 
-## 8. backend 쪽 — 이미 있는 것
+## 8. backend 측 구현 사항
 
-### 관리자용 대신 부르기 `/api/admin/system/update/*`
+### 관리자용 중계 API `/api/admin/system/update/*`
 
-관리자만. 경로는 내부 API 에서 `/internal/update` 를 `/api/admin/system/update` 로 바꾼 것과 같고, 본문에 `actor` 를 채워 넘긴다.
+관리자 전용이다. 경로는 내부 API 의 `/internal/update` 를 `/api/admin/system/update` 로 치환한 것과 동일하며, 본문에 `actor` 를 설정하여 전달한다.
 
 | backend | 내부 API | 감사 로그 |
 |---|---|---|
 | `GET /status` | `GET /status` | |
 | `POST /check` | `POST /check` | |
-| `GET /releases/<버전>` | 같음 | |
-| `GET /settings` · `PUT /settings` | 같음 | `system.update.settings` |
-| `POST /apply` | 같음 | `system.update.apply` |
-| `GET /jobs/<id>` · `GET /jobs/<id>/log` | 같음 | |
+| `GET /releases/<버전>` | 동일 | |
+| `GET /settings` · `PUT /settings` | 동일 | `system.update.settings` |
+| `POST /apply` | 동일 | `system.update.apply` |
+| `GET /jobs/<id>` · `GET /jobs/<id>/log` | 동일 | |
 | `GET /jobs/<id>/log/download` | `GET /jobs/<id>/log?format=text` | |
-| `POST /jobs/<id>/action` | 같음 | `system.update.start_now` · `.cancel` · `.retry` · `.rollback` |
-| `POST /auto/resume` | 같음 | `system.update.auto_resume` |
-| `GET /restore-points` · `POST /restore` | 같음 | `system.update.restore` |
-| `GET /offline` · `POST /offline/bundle` · `POST /offline/bundle-path` · `DELETE /offline/bundle` · `POST /offline/images/<id>` · `POST /offline/apply` | 같음 | `system.update.offline_bundle` · `.offline_image` · `.offline_clear` · `.offline_apply` |
-| `GET /history` · `GET /history/<id>` | 같음 | |
-| `GET /apps` | 같음 | |
+| `POST /jobs/<id>/action` | 동일 | `system.update.start_now` · `.cancel` · `.retry` · `.rollback` |
+| `POST /auto/resume` | 동일 | `system.update.auto_resume` |
+| `GET /restore-points` · `POST /restore` | 동일 | `system.update.restore` |
+| `GET /offline` · `POST /offline/bundle` · `POST /offline/bundle-path` · `DELETE /offline/bundle` · `POST /offline/images/<id>` · `POST /offline/apply` | 동일 | `system.update.offline_bundle` · `.offline_image` · `.offline_clear` · `.offline_apply` |
+| `GET /history` · `GET /history/<id>` | 동일 | |
+| `GET /apps` | 동일 | |
 | `GET /contact` · `PUT /contact` | (DB 설정) + `PUT /maintenance/contact` | `system.update.contact` |
 
-오류는 `{"code", "vars", "detail"}`. 설치 관리자의 오류 코드는 그대로 내려간다. 덧붙는 것:
+오류는 `{"code", "vars", "detail"}`. 설치 관리자의 오류 코드는 그대로 전달된다. 추가되는 오류 코드:
 
-| 상태 | code | 때 |
+| 상태 | code | 발생 조건 |
 |---|---|---|
 | 503 | `update_unavailable` · `vars.reason = "no_installer"` | 설치 관리자 없이 구성한 설치 |
-| 501 | `update_unavailable` · `vars.reason = "unsupported"` | 설치 관리자가 이 경로를 모른다(404·405·501) |
-| 503 · 504 · 502 | `installer_unreachable` · `installer_timeout` · `installer_rejected` · `installer_error` | 기존과 같다 |
+| 501 | `update_unavailable` · `vars.reason = "unsupported"` | 설치 관리자가 해당 경로를 지원하지 않는다(404·405·501) |
+| 503 · 504 · 502 | `installer_unreachable` · `installer_timeout` · `installer_rejected` · `installer_error` | 기존과 동일 |
 
 ### 설치 관리자 → backend 알림 `POST /api/internal/system/update-event`
 
-카운트다운과 점검을 전 사용자의 화면에 알리려면 backend 의 실시간 소켓이 필요하다. 엔진은 상태가 바뀔 때 backend 에 알린다.
+카운트다운과 점검 모드를 전체 사용자 화면에 통지하려면 backend 의 실시간 소켓이 필요하다. 엔진은 상태 변경 시 backend 에 통지한다.
 
-- 보호: 기존 `/api/internal/*` 와 같은 두 겹 — nginx 가 바깥에 `404`, backend 가 키를 상수 시간 비교. 키는 설치 관리자와 backend 가 이미 나눠 가진 `JW_INSTALLER_KEY`(헤더 `X-JW-Installer-Key`)다. 키가 비어 있으면 `404`, 다르면 `401`.
+- 보호: 기존 `/api/internal/*` 와 동일한 이중 보호 — nginx 가 외부 요청에 `404`, backend 가 키를 상수 시간으로 비교. 키는 설치 관리자와 backend 가 공유하는 `JW_INSTALLER_KEY`(헤더 `X-JW-Installer-Key`)다. 키가 비어 있으면 `404`, 불일치하면 `401`.
 - 본문:
 
-| `type` | 그 밖의 항목 | backend 가 하는 일 |
+| `type` | 그 외 항목 | backend 의 동작 |
 |---|---|---|
-| `countdown` | `job`, `kind`, `trigger`, `ends_at`, `expected_seconds` | 예고를 기억하고 전 사용자에게 `system.update_countdown` |
-| `cancelled` | `job` | 예고를 지우고 `system.update_cancelled` |
-| `maintenance` | `job`, `kind`, `started_at`, `expected_seconds` | 점검을 기억하고 `system.maintenance`(`active: true`) |
-| `finished` | `job`, `kind`, `trigger`, `result`, `version`, `from_version`, `failed_step`, `downtime_seconds` | 지우고 `system.maintenance`(`active: false`, `result`). `trigger = "auto"` 면 관리자 전원에게 알림 한 건 |
+| `countdown` | `job`, `kind`, `trigger`, `ends_at`, `expected_seconds` | 사전 공지를 저장하고 전체 사용자에게 `system.update_countdown` |
+| `cancelled` | `job` | 사전 공지를 삭제하고 `system.update_cancelled` |
+| `maintenance` | `job`, `kind`, `started_at`, `expected_seconds` | 점검 모드를 저장하고 `system.maintenance`(`active: true`) |
+| `finished` | `job`, `kind`, `trigger`, `result`, `version`, `from_version`, `failed_step`, `downtime_seconds` | 삭제하고 `system.maintenance`(`active: false`, `result`). `trigger = "auto"` 이면 관리자 전원에게 알림 1건 |
 
-- 응답 `200 {"ok": true}`. 엔진은 실패하면 몇 번 다시 보내되(backend 가 다시 뜨는 중일 수 있다) 작업을 멈추지는 않는다. `maintenance` 는 backend 를 내리기 **전에**, `finished` 는 `verify` 가 끝난 **뒤에** 보낸다.
-- 알림이 유실돼도 화면이 갇히지 않게, backend 는 기억해 둔 예고·점검을 내줄 때 설치 관리자의 공개 점검 상태와 대조해 끝났으면 지운다.
+- 응답 `200 {"ok": true}`. 엔진은 실패 시 수회 재전송하되(backend 가 재기동 중일 수 있다) 작업을 중단하지는 않는다. `maintenance` 는 backend 중지 **이전에**, `finished` 는 `verify` 완료 **이후에** 전송한다.
+- 알림이 유실되더라도 화면이 점검 상태에 고착되지 않도록, backend 는 저장된 사전 공지·점검 모드를 응답할 때 설치 관리자의 공개 점검 상태와 대조하여 종료된 경우 삭제한다.
 
-실시간 이벤트(소켓 `/ws/chat`, 전 사용자):
+실시간 이벤트(소켓 `/ws/chat`, 전체 사용자):
 
 ```json
 {"type": "system.update_countdown", "job": "…", "kind": "update", "ends_at": "…", "expected_seconds": 240}
@@ -533,56 +533,56 @@ if ($jw_maintenance = "on:guarded") { rewrite ^ /__jw_maintenance last; }      #
 {"type": "system.maintenance", "active": false, "result": "success"}
 ```
 
-### `GET /api/system/update-notice` (로그인한 누구나)
+### `GET /api/system/update-notice` (인증된 모든 사용자)
 
-새로 접속한 화면이 지금의 예고·점검을 아는 길.
+신규 접속한 화면이 현재의 사전 공지·점검 모드를 확인하는 경로다.
 
 ```json
 {"state": "countdown", "job": "…", "kind": "update", "ends_at": "…", "started_at": null, "expected_seconds": 240, "contact": null}
 ```
 
-`state`: `none` / `countdown` / `maintenance`. 작업 id 말고는 버전·단계를 싣지 않는다.
+`state`: `none` / `countdown` / `maintenance`. 작업 id 외에 버전·단계는 포함하지 않는다.
 
 ### 화면
 
-| 무엇 | 어디 |
+| 대상 | 위치 |
 |---|---|
 | 관리 › 업데이트(`/admin/update` 와 탭) | `frontend-react/src/pages/admin/update.tsx`, `src/components/admin/update/` |
-| 호출과 형(型) | `src/composables/useSystemUpdate.ts` |
-| 예고 띠 · 점검 화면 | `src/components/layout/UpdateCountdownBanner.tsx` · `MaintenanceScreen.tsx`, 상태는 `src/composables/useUpdateNotice.ts` |
+| 호출 및 타입 정의 | `src/composables/useSystemUpdate.ts` |
+| 사전 공지 배너 · 점검 화면 | `src/components/layout/UpdateCountdownBanner.tsx` · `MaintenanceScreen.tsx`, 상태는 `src/composables/useUpdateNotice.ts` |
 | 정적 점검 페이지 | `frontend-react/public/maintenance.html` |
-| 계약대로 만든 가짜 응답 묶음 | `src/components/admin/update/fixtures.ts` — 화면의 모든 상태가 하나씩 있다. 엔진이 이 모양으로 답하면 화면이 그대로 붙는다 |
+| 계약에 따른 모의 응답(fixture) 집합 | `src/components/admin/update/fixtures.ts` — 화면의 모든 상태를 하나씩 포함한다. 엔진이 동일 형식으로 응답하면 화면이 수정 없이 연동된다 |
 
-화면이 계약에서 기대는 것: 실패했을 때의 버튼은 `choices` 로, 자동 되돌림으로 넘어가는 길은 `rollback_job` 으로, 되돌림·복원의 문구는 `kind` 와 `restore.reason` 으로 고른다. 값이 `null` 인 항목(`download_bytes`, `downtime_seconds`, `expected_seconds`, `contact`, `download_url`, `download_page` …)은 그 줄을 그리지 않는다.
+화면이 계약에 의존하는 사항: 실패 시의 버튼은 `choices` 로, 자동 롤백으로의 전환은 `rollback_job` 으로, 롤백·복원의 문구는 `kind` 와 `restore.reason` 으로 결정한다. 값이 `null` 인 항목(`download_bytes`, `downtime_seconds`, `expected_seconds`, `contact`, `download_url`, `download_page` …)은 해당 줄을 표시하지 않는다.
 
-## 9. 엔진 구현자가 지킬 것
+## 9. 엔진 구현 준수 사항
 
-1. 단계 id(`preflight`·`backup`·`pull`·`migrate`·`switch`·`verify`, 되돌림 `stop`·`images`·`restore_db`·`start`·`verify`)와 상태 넷은 바꾸지 않는다. 화면이 이 값으로 문구를 고른다.
-2. `choices` 가 실패 규칙의 단일 출처다. 화면은 `choices` 에 있는 버튼만 그린다 — 단계 이름으로 추측하지 않는다.
-3. 자동 되돌림은 실패한 작업의 응답에 `rollback_job` 이 **이미 채워진 채로** 나와야 한다(화면이 그 id 로 넘어간다).
-4. `switch` 는 backend 를 맨 마지막에 바꾼다. `maintenance` 알림은 backend 를 내리기 전에 보낸다.
-5. 작업·기록의 id 는 같다. 끝난 작업을 `GET /jobs/<id>` 로 읽을 수 있어야 한다(진행 화면을 다시 열었을 때).
-6. 공개 점검 상태에는 버전·단계·오류를 싣지 않는다.
-7. 채널 검증은 `release/jwrelease/verify.py` 의 함수를 그대로 쓴다(이미지 빌드가 `/app/jwrelease` 로 복사한다). 검증을 통과한 `sequence` 를 저장해 다음 검증에 넘긴다. `available` 은 `plan_update` 의 결과에서만 만든다.
-8. 자동 적용은 `published + 3일 ≤ 지금` 이고 서버 시간이 `window` 안일 때만 카운트다운을 연다. 실패하면 `auto.paused` 를 켜고, `POST /auto/resume` 전에는 다시 시도하지 않는다.
-9. 중간 버전을 거칠 때 버전마다 `pre-update` 백업을 뜬다. 중간에 실패하면 **그 버전의 직전**으로 되돌린다(이미 끝낸 앞 버전은 그대로 둔다) — 기록의 `version` 은 실제로 도달한 버전이다.
-10. 백업·복원은 [data-safety.md](data-safety.md) 의 명령을 부른다(`backup create --kind pre-update --json`, 이전 이미지의 일회용 컨테이너에서 `restore`). 복원 지점의 `version` 과 백업의 스키마 버전이 어긋나면 복원을 시작하지 않는다.
-11. 호환이 확인되지 않은 플러그인을 끄는 것은 `switch` 에서 한다. 끈 목록은 `GET /releases/<버전>` 의 `disabled_plugins` 로 남긴다(판정 규칙이 정해지기 전까지는 늘 빈 배열 — 10절).
-12. 기록은 365일 지난 것을 지운다. 로그에 비밀값을 남기지 않는다.
+1. 단계 id(`preflight`·`backup`·`pull`·`migrate`·`switch`·`verify`, 롤백 `stop`·`images`·`restore_db`·`start`·`verify`)와 네 가지 상태는 변경하지 않는다. 화면이 해당 값으로 문구를 선택한다.
+2. `choices` 가 실패 규칙의 단일 출처다. 화면은 `choices` 에 포함된 버튼만 표시한다 — 단계 이름으로 추정하지 않는다.
+3. 자동 롤백의 경우 실패한 작업의 응답에 `rollback_job` 이 **설정된 상태로** 반환되어야 한다(화면이 해당 id 로 전환한다).
+4. `switch` 는 backend 를 최후에 교체한다. `maintenance` 알림은 backend 중지 이전에 전송한다.
+5. 작업과 이력의 id 는 동일하다. 완료된 작업을 `GET /jobs/<id>` 로 조회할 수 있어야 한다(진행 화면을 다시 여는 경우).
+6. 공개 점검 상태에는 버전·단계·오류를 포함하지 않는다.
+7. 채널 검증은 `release/jwrelease/verify.py` 의 함수를 그대로 사용한다(이미지 빌드가 `/app/jwrelease` 로 복사한다). 검증을 통과한 `sequence` 를 저장하여 다음 검증에 전달한다. `available` 은 `plan_update` 의 결과로만 생성한다.
+8. 자동 적용은 `published + 3일 ≤ 현재 시각` 이고 서버 시간이 `window` 내인 경우에만 카운트다운을 개시한다. 실패 시 `auto.paused` 를 설정하고, `POST /auto/resume` 이전에는 재시도하지 않는다.
+9. 중간 버전을 경유하는 경우 버전마다 `pre-update` 백업을 생성한다. 도중에 실패하면 **해당 버전의 직전 상태**로 롤백한다(완료된 선행 버전은 유지한다) — 이력의 `version` 은 실제로 도달한 버전이다.
+10. 백업·복원은 [data-safety.md](data-safety.md) 의 명령을 호출한다(`backup create --kind pre-update --json`, 이전 이미지의 일회용 컨테이너에서 `restore`). 복원 지점의 `version` 과 백업의 스키마 버전이 불일치하면 복원을 시작하지 않는다.
+11. 호환성이 확인되지 않은 플러그인의 비활성화는 `switch` 에서 수행한다. 비활성화한 목록은 `GET /releases/<버전>` 의 `disabled_plugins` 로 기록한다(판정 규칙이 확정되기 전까지는 항상 빈 배열 — 10절).
+12. 365일이 경과한 이력은 삭제한다. 로그에 비밀값을 기록하지 않는다.
 
-## 10. 정해지지 않은 것
+## 10. 미확정 사항
 
-정한 것:
+확정 사항:
 
-- 점검 중 쓰기 차단은 nginx 점검 모드로 한다(7절).
-- 정적 점검 페이지는 번들에 실어 설치의 렌더링 단계가 놓고 업데이트의 `switch` 가 바꾼다(7절).
+- 점검 중 쓰기 차단은 nginx 점검 모드로 수행한다(7절).
+- 정적 점검 페이지는 번들에 포함하며, 설치의 렌더링 단계가 배치하고 업데이트의 `switch` 가 교체한다(7절).
 - `download_bytes` 는 manifest 의 선택 항목(`make-manifest --resolve-sizes`), `downtime_seconds` 는 엔진의 실측 기반 추정(3절).
-- 플러그인 호환: manifest 의 `plugin_api` 가 비어 있으면 판정하지 않는다(`plugin_warnings` 는 빈 배열).
-- 앱 설치 파일은 첫 릴리스에 싣지 않는다(`GET /apps` 의 `apps` 는 빈 배열, `download_page` 는 `null`). 서버에서 내주는 경로는 없다 — manifest 의 `apps[].url` 을 그대로 준다.
-- 올리는 파일의 상한은 64GB(설치 관리자의 `JW_UPDATE_UPLOAD_MAX`).
+- 플러그인 호환성: manifest 의 `plugin_api` 가 비어 있으면 판정하지 않는다(`plugin_warnings` 는 빈 배열).
+- 앱 설치 파일은 최초 릴리스에 포함하지 않는다(`GET /apps` 의 `apps` 는 빈 배열, `download_page` 는 `null`). 서버가 제공하는 경로는 없다 — manifest 의 `apps[].url` 을 그대로 반환한다.
+- 업로드 파일의 상한은 64GB(설치 관리자의 `JW_UPDATE_UPLOAD_MAX`).
 
-남은 것:
+잔여 과제:
 
-- 플러그인 호환 판정의 실제 규칙 — manifest 의 `plugin_api` 형식이 정해지면 채운다. 지금 엔진에는 `plugin_api.version` 과 플러그인 `manifest.json` 의 `plugin_api` 를 글자로 견주는 자리만 있고, `switch` 에서 플러그인을 끄는 동작은 없다(`disabled_plugins` 는 늘 빈 배열).
-- 올리다 끊긴 파일의 이어 올리기(없다 — 큰 파일은 경로 방식).
-- 예고 시간(5분)은 고정이다.
+- 플러그인 호환성 판정의 실제 규칙 — manifest 의 `plugin_api` 형식이 확정되면 구현한다. 현재 엔진에는 `plugin_api.version` 과 플러그인 `manifest.json` 의 `plugin_api` 를 문자열로 비교하는 예약 구현만 존재하며, `switch` 에서 플러그인을 비활성화하는 동작은 없다(`disabled_plugins` 는 항상 빈 배열).
+- 중단된 업로드의 이어 올리기(미지원 — 대용량 파일은 경로 지정 방식을 사용한다).
+- 사전 공지 시간(5분)은 고정값이다.

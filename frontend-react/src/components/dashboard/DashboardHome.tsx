@@ -10,7 +10,7 @@
  *   변경 시마다 /api/me/prefs `dash.layout` 에 즉시 저장(기기 간 동기화). "기본값으로 복원" = 개인 배치를 삭제하여 관리자 기본 배치로 복원.
  * mode="admin"(관리 › 설정 › 대시보드): 항상 편집 상태, 저장 대상은 관리자 기본 배치(appcfg dash.layout), 패널에서 카드 잠금(관리자 고정).
  */
-import { useZoneInstalled } from '~/composables/useSiteConfig'
+import { useZoneConfirmed } from '~/composables/useSiteConfig'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useI18n } from '~/i18n'
 import { navigateTo } from '~/lib/router'
@@ -108,7 +108,9 @@ export function DashboardHome({ mode = 'user' }: { mode?: 'user' | 'admin' }) {
 
   // ── 카드 정의 ──
   const has = (m: string) => isModuleEnabled(m)
-  const aiZone = useZoneInstalled('ai')   // AI 브리핑 카드는 AI 구역 소속(모듈 활성화 전에도 표시되므로 구역으로 판정)
+  // AI 브리핑 카드는 AI 구역 소속(모듈 활성화 전에도 표시되므로 구역으로 판정). 카드가 마운트 즉시 /api/dashboard/briefing 을
+  // 호출하므로, 구역 목록을 수신하기 전에는 표시하지 않는다(AI 구역이 없는 서버에서 404 방지)
+  const aiZone = useZoneConfirmed('ai')
   // 네트워크 랩 — NETLAB_URL(https)이 있을 때만 사용 가능한 카드(기본 표시, 다른 카드와 같이 이동·숨기기 가능)
   const netlabUrl = useNetLabUrl()
   const defs = useMemo<Record<CardKey, CardDef>>(() => ({

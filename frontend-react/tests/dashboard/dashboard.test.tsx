@@ -58,7 +58,7 @@ beforeEach(() => {
   api.routes = {}
   authStore.setState({ user: { id: 'u1', username: 'qa', display_name: 'QA', is_admin: false } as any, loading: false })
   dashSummaryStore.setState({ summary: null, loading: false, error: false })
-  siteConfigStore.setState({ netlabUrl: '' })
+  siteConfigStore.setState({ netlabUrl: '', zones: null })
 })
 
 describe('내 작업', () => {
@@ -334,6 +334,36 @@ describe('판 조립', () => {
     expect(await within(today).findByRole('button', { name: '일정 만들기' })).toBeTruthy()
   })
 
+  it('AI 브리핑 카드는 구역 목록에 AI 가 확인된 경우에만 브리핑을 조회한다(미수신·미설치 시 호출 없음)', async () => {
+    const base = () => {
+      api.routes['/api/me/prefs'] = () => ({ prefs: {} })
+      api.routes['/api/dashboard/summary'] = () => ({ unread_notifications: 0, mail_unread: 0, mentions_unread: 0, tasks_due_today: 0, tasks_overdue: 0, today_events: 0, next_meeting: null, admin: null })
+      api.routes['/api/dashboard/checklist'] = () => ({ items: [], done_count: 0, total: 0, completed: true, dismissed: true })
+      api.routes['/api/notifications/'] = () => ({ notifications: [] })
+      api.routes['/api/calendar/events'] = () => ({ events: [] })
+      api.routes['/api/dashboard/briefing'] = () => ({ available: false, reason: 'module_off', enabled: false, status: 'off', items: [], regen_left: 0, regen_max: 3, prep: null })
+    }
+    const briefed = () => api.calls.some(c => c.url === '/api/dashboard/briefing')
+    try {
+      for (const zones of [null, ['core', 'chat']]) {
+        base()
+        api.calls.length = 0
+        siteConfigStore.setState({ zones })
+        const r = renderIn(<DashboardHome />)
+        await screen.findByRole('region', { name: '오늘' })
+        expect(briefed()).toBe(false)
+        r.unmount()
+      }
+      base()
+      api.calls.length = 0
+      siteConfigStore.setState({ zones: ['core', 'ai'] })
+      renderIn(<DashboardHome />)
+      await waitFor(() => expect(briefed()).toBe(true))
+    } finally {
+      siteConfigStore.setState({ zones: null })
+    }
+  })
+
   it('카드 판 오른쪽 여백이 지워지지 않는다(축약형 padding + paddingRight:undefined 회귀)', async () => {
     api.routes['/api/me/prefs'] = () => ({ prefs: {} })
     api.routes['/api/dashboard/summary'] = () => ({ unread_notifications: 0, mail_unread: 0, mentions_unread: 0, tasks_due_today: 0, tasks_overdue: 0, today_events: 0, next_meeting: null, admin: null })
@@ -389,6 +419,7 @@ describe('판 조립', () => {
     api.routes['/api/dashboard/checklist'] = () => ({ items: [], done_count: 0, total: 0, completed: true, dismissed: true })
     api.routes['/api/notifications/'] = () => ({ notifications: [] })
     api.routes['/api/dashboard/briefing'] = () => ({ available: true, reason: null, enabled: false, status: 'off', items: [], regen_left: 3, regen_max: 3, prep: null })
+    siteConfigStore.setState({ zones: ['core', 'ai'] })      // AI 브리핑 카드는 구역 목록에서 AI 가 확인된 경우에만 판에 포함된다
     renderIn(<DashboardHome />)
     fireEvent.click((await screen.findAllByRole('button', { name: '대시보드 편집' }))[0])
     const panel = await screen.findByRole('complementary', { name: '카드' })

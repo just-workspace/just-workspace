@@ -74,6 +74,14 @@ export function useZoneInstalled(id: string): boolean {
   return useStore(siteConfigStore, s => zoneInstalledIn(s.zones, id))
 }
 
+/**
+ * 구역 목록을 수신하였고 해당 구역이 포함된 경우에만 true — 마운트 즉시 해당 구역의 API 를 호출하는 화면에 사용한다.
+ * useZoneInstalled 는 목록 수신 전에 true 이므로, 그 사이에 구역이 없는 서버의 API(404)를 호출하게 된다.
+ */
+export function useZoneConfirmed(id: string): boolean {
+  return useStore(siteConfigStore, s => s.zones !== null && s.zones.includes(id))
+}
+
 export async function fetchAppConfig() {
   if (siteConfigStore.getState().loaded) return
   try {

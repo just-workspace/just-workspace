@@ -92,14 +92,15 @@ for i in $(seq 1 20); do
   sleep 3
 done
 expect "갱신 컨테이너의 최초 확인 결과" ok "$(cert_api | json_get 'd["renewal"]["last_result"]')"
-dry="$(docker exec ws-certbot certbot renew --webroot -w /var/www/certbot --dry-run 2>&1)"
+# --dry-run 은 서버를 명시하지 않으면 Let's Encrypt 의 시험 서버로 요청한다 — 본 검수에서는 ACME 시험 서버를 명시한다
+dry="$(docker exec ws-certbot certbot renew --webroot -w /var/www/certbot --dry-run --no-random-sleep-on-renew --server https://pebble:14000/dir 2>&1)"
 contains "certbot renew --dry-run" "all simulated renewals succeeded" "$dry"
 contains "jw status 의 자동 갱신 줄" "자동 갱신: 동작 중" "$(jw status 2>&1)"
 
 say "갱신 → 설치 관리자가 nginx 를 reload"
 FP_ISSUED="$(served_fp)"
 check "임시 인증서와 다른 인증서" test "$FP_ISSUED" != "$FP_TEMP"
-out="$(docker exec ws-certbot certbot renew --webroot -w /var/www/certbot --force-renewal 2>&1)"
+out="$(docker exec ws-certbot certbot renew --webroot -w /var/www/certbot --force-renewal --no-random-sleep-on-renew 2>&1)"
 contains "강제 갱신" "all renewals succeeded" "$out"
 for i in $(seq 1 40); do
   [ "$(served_fp)" != "$FP_ISSUED" ] && break

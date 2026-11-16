@@ -1,9 +1,9 @@
 /**
  * 오른쪽 클릭 메뉴 — 잘라내기·복사·붙여넣기·모두 선택·링크 주소 복사.
  *
- * Electron 은 기본 컨텍스트 메뉴가 없다. 브라우저에서 되던 "오른쪽 클릭 → 복사/붙여넣기"가 앱 안에서는
- * 아무 반응이 없어 "복붙이 안 된다"로 보였다(지원 프로그램의 접속 코드·서버 주소, 본문 웹 전체).
- * 페이지가 자기 메뉴를 그리면(채팅 메시지 메뉴 등 contextmenu preventDefault) 이 이벤트는 오지 않는다.
+ * Electron 에는 기본 컨텍스트 메뉴가 없다. 브라우저에서 동작하던 "오른쪽 클릭 → 복사/붙여넣기"가 앱 내부에서는
+ * 반응하지 않아 복사·붙여넣기 불가로 인식되었다(지원 프로그램의 접속 코드·서버 주소, 본문 웹 전체).
+ * 페이지가 자체 메뉴를 표시하는 경우(채팅 메시지 메뉴 등 contextmenu preventDefault) 이 이벤트는 발생하지 않는다.
  */
 import { app, clipboard, Menu, type MenuItemConstructorOptions, type WebContents } from 'electron';
 
@@ -35,7 +35,7 @@ function build(wc: WebContents, p: Electron.ContextMenuParams): MenuItemConstruc
   return items;
 }
 
-/** 앱의 모든 창(본문 웹뷰·설정·지원 창…)에 붙인다. whenReady 전에 한 번 부른다. */
+/** 앱의 모든 창(본문 웹뷰·설정·지원 창…)에 적용한다. whenReady 전에 1회 호출한다. */
 export function installContextMenu(): void {
   app.on('web-contents-created', (_e, wc) => {
     wc.on('context-menu', (_ev, params) => {

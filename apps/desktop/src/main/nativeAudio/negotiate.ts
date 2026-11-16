@@ -1,10 +1,10 @@
 /**
  * 포맷 협상 로직(순수 함수 — tests/negotiate.test.mjs).
  *
- *  · 요청(레이트·비트·채널) → exclusive 로 시도할 후보 순서. 같은 레이트에서 비트를 내리고(32→24→16), 그다음 같은 계열의 낮은 레이트
- *    (192→96→48 · 176.4→88.2→44.1), 마지막에 48k 계열로 건너간다. probe 결과가 있으면 지원 포맷만 남긴다(없으면 전부 시도).
- *  · 열기 실패 코드 → 이유 분류 + "다음 후보를 시도할지"(포맷 문제면 계속, 장치 점유·정책·권한이면 중단).
- *  · 장치를 쓰는 세션 목록 → 가로막은 앱 이름 고르기.
+ *  · 요청(레이트·비트·채널) → exclusive 로 시도할 후보 순서. 동일 레이트에서 비트를 낮추고(32→24→16), 다음으로 동일 계열의 낮은 레이트
+ *    (192→96→48 · 176.4→88.2→44.1), 마지막에 48k 계열로 전환한다. probe 결과가 있으면 지원 포맷만 유지한다(없으면 전부 시도).
+ *  · 열기 실패 코드 → 사유 분류 + "다음 후보 시도 여부"(포맷 문제이면 계속, 장치 점유·정책·권한 문제이면 중단).
+ *  · 장치를 사용 중인 세션 목록 → 차단 원인 앱 이름 선택.
  */
 import type { ExclusiveFormat, SampleFormat, SessionInfo } from '../../../native';
 
@@ -27,7 +27,7 @@ function rateFamily(rate: number): number[] {
 export function candidateFormats(req: FormatRequest, supported?: ExclusiveFormat[] | null): Candidate[] {
   const bitsOrder = ([32, 24, 16] as const).filter((b) => b <= req.bits);
   const fam = rateFamily(req.rate).filter((r) => r <= req.rate);
-  // 44.1 계열이면 마지막에 48k 로 건너간다(48k 계열은 그대로)
+  // 44.1 계열이면 마지막에 48k 로 전환한다(48k 계열은 그대로)
   const other = rateFamily(req.rate)[0] === 352800 ? [48000] : [];
   const rates = [...fam, ...other];
   const out: Candidate[] = [];
@@ -38,13 +38,13 @@ export function candidateFormats(req: FormatRequest, supported?: ExclusiveFormat
     (c.bits === 24 && (s.bits === 24 || (s.bits === 32 && s.validBits === 24))) ||
     (c.bits === 32 && s.bits === 32 && s.validBits === 32)
   )));
-  // probe 가 전부 거부해도 첫 후보는 한 번 시도한다(probe 와 실제 Initialize 가 다를 수 있다 — 이유를 사용자에게 보여 주기 위해)
+  // probe 가 전부 거부해도 첫 후보는 1회 시도한다(probe 와 실제 Initialize 결과가 상이할 수 있다 — 사유를 사용자에게 표시하기 위함)
   return ok.length ? ok : [out[0]];
 }
 
 export type FailReason = 'device_in_use' | 'exclusive_not_allowed' | 'unsupported_format' | 'no_device' | 'access_denied' | 'unknown';
 
-/** 애드온 OpenError.code → 이유 + 다음 포맷 후보를 계속 시도할지 */
+/** 애드온 OpenError.code → 사유 + 다음 포맷 후보의 계속 시도 여부 */
 export function classifyOpenError(code: string | undefined): { reason: FailReason; retryNextFormat: boolean } {
   switch (code) {
     case 'device_in_use': return { reason: 'device_in_use', retryNextFormat: false };
@@ -61,7 +61,7 @@ export function classifyOpenError(code: string | undefined): { reason: FailReaso
   }
 }
 
-/** 장치를 쓰는 다른 프로세스 — 활성 세션 우선, 시스템 소리 세션은 뺀다 */
+/** 장치를 사용 중인 다른 프로세스 — 활성 세션 우선, 시스템 소리 세션은 제외한다 */
 export function pickBlockingApp(sessions: SessionInfo[]): string | null {
   const cands = sessions.filter((s) => !s.systemSounds && s.process && s.process !== 'System');
   const active = cands.find((s) => s.state === 'active');
@@ -70,7 +70,7 @@ export function pickBlockingApp(sessions: SessionInfo[]): string | null {
   return pick ? pick.process.replace(/\.exe$/i, '') : null;
 }
 
-/** 'PCM 32/192' — UI 와 같은 표기(레이트는 kHz 반올림, 44.1 은 44.1) */
+/** 'PCM 32/192' — UI 와 동일한 표기(레이트는 kHz 반올림, 44.1 은 44.1) */
 export function describeFormat(f: { bits: number; rate: number }): string {
   const k = f.rate / 1000;
   const khz = Number.isInteger(k) ? String(k) : k.toFixed(1);

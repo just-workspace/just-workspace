@@ -1,19 +1,19 @@
 /**
  * RBI DOM 미러 — 닫힌 어휘(closed vocabulary), 프로토콜 v1.
  *
- * 세션 컨테이너의 mirror-agent 가 원격 Chromium 의 DOM 을 읽어 **이 파일에 열거된 것만** 내보내고,
- * 클라이언트(우리 React 앱)는 이것만 받아 스크립트 없는 iframe 에 DOM 을 조립한다.
- * 작성자 HTML·CSS·URL 은 한 바이트도 여기 들어오지 않는다 — 들어오는 것은
+ * 세션 컨테이너의 mirror-agent 가 원격 Chromium 의 DOM 을 읽어 **이 파일에 열거된 것만** 송신하고,
+ * 클라이언트(본 프로젝트의 React 앱)는 이것만 수신하여 스크립트 없는 iframe 에 DOM 을 조립한다.
+ * 작성자 HTML·CSS·URL 은 1바이트도 포함되지 않는다 — 포함되는 것은
  *   계산된(해석된) 스타일 값 · 레이아웃 좌표 · 텍스트 런 · 재인코딩 자산의 sha256 · SVG 기하 숫자 · 그라디언트 숫자 · 고정 폰트 키
- * 뿐이다. 값은 양쪽에서 같은 검증기로 다시 본다(심층 방어):
- *   - 에이전트: 송신 전 validateNode(lenient) — 문법에 안 맞는 필드는 떨어뜨린다(원격은 적대적이라 가정).
- *   - 클라이언트: 적용 전 validateServerMsg(strict) — **모르는 메시지·모르는 필드·잘못된 값이 하나라도 있으면 그 메시지(또는 노드)를 거부**한다.
+ * 뿐이다. 값은 양측에서 동일한 검증기로 재검증한다(심층 방어):
+ *   - 에이전트: 송신 전 validateNode(lenient) — 문법에 맞지 않는 필드는 제거한다(원격은 적대적이라고 가정).
+ *   - 클라이언트: 적용 전 validateServerMsg(strict) — **미정의 메시지·미정의 필드·잘못된 값이 하나라도 있으면 해당 메시지(또는 노드)를 거부**한다.
  *
- * 좌표(v1): 노드의 x,y 는 **부모 기준 지역 좌표**다 — 부모 노드의 padding box(스크롤 컨테이너면 스크롤 콘텐츠) 왼쪽 위가 원점,
- *   w,h 는 변환 전 크기, m 은 부모 기준 지역 변환(상자 중심). 부모가 움직여도 자식은 다시 오지 않는다.
- *   뿌리(p=0)의 자식은 문서 좌표(모든 스크롤 0 기준 = 스크롤 불변), position:fixed 뿌리(fx)는 뷰포트 좌표.
- *   문서·컨테이너 스크롤은 노드 갱신을 만들지 않는다.
- * 노드 id: 수집기(원격 페이지의 격리 world)가 붙인 일련번호 — 문서가 바뀌기 전까지 안정적.
+ * 좌표(v1): 노드의 x,y 는 **부모 기준 지역 좌표**이다 — 부모 노드의 padding box(스크롤 컨테이너면 스크롤 콘텐츠) 좌상단이 원점,
+ *   w,h 는 변환 전 크기, m 은 부모 기준 지역 변환(상자 중심). 부모가 이동해도 자식은 재전송되지 않는다.
+ *   루트(p=0)의 자식은 문서 좌표(모든 스크롤 0 기준 = 스크롤 불변), position:fixed 루트(fx)는 뷰포트 좌표.
+ *   문서·컨테이너 스크롤은 노드 갱신을 발생시키지 않는다.
+ * 노드 id: 수집기(원격 페이지의 격리 world)가 부여한 일련번호 — 문서가 변경되기 전까지 안정적.
  */
 
 export const PROTOCOL_VERSION = 1
@@ -23,7 +23,7 @@ export type NodeKind = 'box' | 'text' | 'img' | 'svg' | 'widget' | 'inset'
 
 export type WidgetKind = 'text' | 'password' | 'checkbox' | 'radio' | 'select' | 'textarea' | 'button' | 'range'
 
-/** 텍스트 한 줄박스(원격이 이미 줄바꿈·셰이핑을 끝낸 결과) */
+/** 텍스트 줄 상자 하나(원격이 줄바꿈·셰이핑을 완료한 결과) */
 export interface TextRun {
   x: number
   y: number
@@ -34,8 +34,8 @@ export interface TextRun {
 }
 
 /**
- * 고정 폰트 묶음(세션 이미지에 들어 있고 클라이언트도 같은 파일을 WOFF2 로 받는다).
- * 원격 Chromium 이 실제로 쓴 폰트(CSS.getPlatformFontsForNode)를 이 키로 바꿔 보낸다. 작성자 폰트 이름은 클라이언트로 가지 않는다.
+ * 고정 폰트 묶음(세션 이미지에 포함되며 클라이언트도 동일 파일을 WOFF2 로 수신한다).
+ * 원격 Chromium 이 실제로 사용한 폰트(CSS.getPlatformFontsForNode)를 이 키로 변환하여 송신한다. 작성자 폰트 이름은 클라이언트로 전달되지 않는다.
  * 클라이언트의 font-family 는 `"jw-<key>"` 목록이다(@font-face 는 /rbi/<sid>/view 문서에 있다).
  */
 export const FONT_KEYS = ['lsans', 'lserif', 'lmono', 'dsans', 'dserif', 'dmono', 'cjks', 'cjkm', 'cjkr'] as const
@@ -60,7 +60,7 @@ export type Gradient =
 export type BgSize = 'cover' | 'contain' | [number, LenUnit | 'auto', number, LenUnit | 'auto']
 export type BgRepeat = 'repeat' | 'no-repeat' | 'repeat-x' | 'repeat-y' | 'space' | 'round'
 
-/** 배경 한 겹 — 이미지(재인코딩 자산 sha) 또는 그라디언트(숫자). url() 원문은 어디에도 없다 */
+/** 배경 레이어 하나 — 이미지(재인코딩 자산 sha) 또는 그라디언트(숫자). url() 원문은 어디에도 포함되지 않는다 */
 export interface BgLayer {
   i?: string
   g?: Gradient
@@ -69,15 +69,15 @@ export interface BgLayer {
   rp?: BgRepeat
 }
 
-/** 허용된 계산 스타일 — 키는 짧게, 값은 아래 validateStyle 이 통과시킨 것만 */
+/** 허용된 계산 스타일 — 키는 짧게, 값은 아래 validateStyle 을 통과한 것만 */
 export interface StyleRec {
   /** background-color rgb()/rgba() */
   bg?: string
-  /** background 레이어(위가 먼저, 최대 4) */
+  /** background 레이어(상위 레이어 우선, 최대 4) */
   bgl?: BgLayer[]
   /** color */
   c?: string
-  /** 고정 폰트 키 목록(원격이 실제로 쓴 순서) */
+  /** 고정 폰트 키 목록(원격이 실제로 사용한 순서) */
   pf?: FontKey[]
   /** font-size px */
   fs?: number
@@ -111,15 +111,15 @@ export interface StyleRec {
   cur?: string
   /** visibility hidden */
   hid?: boolean
-  /** overflow 가 hidden/clip/auto/scroll 이면 true → 자식 잘라냄 */
+  /** overflow 가 hidden/clip/auto/scroll 이면 true → 자식 클리핑 */
   clip?: boolean
   /** text-align (위젯 안 텍스트에만 사용) */
   ta?: 'left' | 'right' | 'center'
-  /** pointer-events:none — 미러에서도 클릭이 아래로 지나간다 */
+  /** pointer-events:none — 미러에서도 클릭이 하위 요소로 통과한다 */
   pe?: true
-  /** user-select:none — 미러에서도 선택(=복사) 안 됨 */
+  /** user-select:none — 미러에서도 선택(=복사) 불가 */
   nosel?: true
-  /** padding [top,right,bottom,left] px — 위젯 안 글자 자리에만 쓴다 */
+  /** padding [top,right,bottom,left] px — 위젯 내 글자 배치에만 사용 */
   pd?: [number, number, number, number]
 }
 
@@ -164,13 +164,13 @@ export interface VNode {
   w: number
   h: number
   /**
-   * 형제 사이 순서 키 = 칠하기 층(0: 정적 흐름, 1: position 이 있는 요소) × 1e6 + 문서 순서.
-   * 클라이언트는 이 키로 형제를 정렬한다 — CSS 칠하기 순서(정적 블록 → 위치 요소)를 한 단계 근사.
+   * 형제 간 순서 키 = 페인트 층(0: 정적 흐름, 1: position 이 있는 요소) × 1e6 + 문서 순서.
+   * 클라이언트는 이 키로 형제를 정렬한다 — CSS 페인트 순서(정적 블록 → 위치 요소)의 1단계 근사.
    */
   o?: number
-  /** z-index(위치 요소이고 auto 가 아닐 때만) — 쌓임 맥락을 만든다(원격과 같게) */
+  /** z-index(위치 요소이고 auto 가 아닐 때만) — 쌓임 맥락을 생성한다(원격과 동일하게) */
   zi?: number
-  /** position:fixed 의 뿌리 — x,y 는 뷰포트 좌표, 클라이언트도 fixed 로 둔다 */
+  /** position:fixed 의 루트 — x,y 는 뷰포트 좌표, 클라이언트도 fixed 로 배치한다 */
   fx?: true
   s?: StyleRec
   /** text */
@@ -182,7 +182,7 @@ export interface VNode {
   g?: SvgGeom[]
   /** widget */
   wk?: WidgetKind
-  /** 위젯이 표시하는 값(password 는 마스킹 문자만). 클라이언트가 텍스트 노드로만 그린다 — 속성 선택자가 닿을 수 없다 */
+  /** 위젯이 표시하는 값(password 는 마스킹 문자만). 클라이언트는 텍스트 노드로만 표시한다 — 속성 선택자로 접근 불가 */
   wv?: string
   wph?: string
   wc?: boolean
@@ -193,9 +193,9 @@ export interface VNode {
   wr?: number
   /** scroll container: scrollWidth, scrollHeight, scrollLeft, scrollTop */
   sc?: [number, number, number, number]
-  /** 부모 기준 지역 선형 변환(CSS matrix 의 a,b,c,d, 상자 중심 기준) — 단위행렬이면 없다(줌 scale·라벨 rotate) */
+  /** 부모 기준 지역 선형 변환(CSS matrix 의 a,b,c,d, 상자 중심 기준) — 단위행렬이면 생략(줌 scale·라벨 rotate) */
   m?: [number, number, number, number]
-  /** inset: 픽셀로만 보내는 영역(canvas/video/iframe/embed, 아이콘 글리프 래스터는 img) — 프레임은 바이너리로 따로 온다 */
+  /** inset: 픽셀로만 전송하는 영역(canvas/video/iframe/embed, 아이콘 글리프 래스터는 img) — 프레임은 바이너리로 별도 전송된다 */
   ik?: 'canvas' | 'video' | 'iframe' | 'embed' | 'other'
 }
 
@@ -210,16 +210,16 @@ export interface DocInfo {
   /** 원격 문서 스크롤 */
   sx: number
   sy: number
-  /** 표시용 URL — 신뢰 크롬(미러 밖)에 텍스트로만 보인다. 링크로 쓰지 않는다 */
+  /** 표시용 URL — 신뢰 크롬(미러 밖)에 텍스트로만 표시된다. 링크로 사용하지 않는다 */
   url: string
   title: string
   bg?: string
 }
 
 export interface PolicyInfo {
-  /** clipboard in: 내 PC → 격리 브라우저(붙여넣기) */
+  /** clipboard in: 사용자 PC → 격리 브라우저(붙여넣기) */
   ci: boolean
-  /** clipboard out: 격리 브라우저 → 내 PC(복사) */
+  /** clipboard out: 격리 브라우저 → 사용자 PC(복사) */
   co: boolean
   dl: boolean
   ul: boolean
@@ -234,24 +234,24 @@ export type ServerMsg =
   | { t: 'snapshot'; seq: number; iseq: number; doc: DocInfo; nodes: VNode[]; ms: number }
   | { t: 'patch'; seq: number; iseq: number; doc?: DocInfo; add: VNode[]; upd: VNode[]; del: number[]; ms: number }
   | { t: 'tick'; seq: number; iseq: number; ms: number }
-  /** 원격 포커스 — 위젯이면 그 id, 아니면 0 */
+  /** 원격 포커스 — 위젯이면 해당 id, 아니면 0 */
   | { t: 'focus'; id: number }
-  /** 로컬 에코 대조 — 포커스된 위젯의 값 해시(fnv1a32)·길이·선택. v 는 password 가 아닐 때만(표시값과 같다) */
+  /** 로컬 에코 대조 — 포커스된 위젯의 값 해시(fnv1a32)·길이·선택. v 는 password 가 아닐 때만 포함(표시값과 동일) */
   | { t: 'val'; id: number; iseq: number; vh: number; n: number; ss: number; se: number; v?: string }
   /** 원격 선택 텍스트(복사 정책이 허용할 때만) */
   | { t: 'clip'; seq: number; text: string }
   | { t: 'notice'; k: NoticeKind; id?: string; name?: string; size?: number; detail?: string; multi?: boolean }
-  /** 원격 페이지의 alert/confirm/prompt/beforeunload — 신뢰 크롬이 자기 UI 로 묻고 dialog 로 답한다 */
+  /** 원격 페이지의 alert/confirm/prompt/beforeunload — 신뢰 크롬이 자체 UI 로 확인하고 dialog 로 응답한다 */
   | { t: 'dialog'; id: number; k: 'alert' | 'confirm' | 'prompt' | 'beforeunload'; msg: string; def?: string }
   | { t: 'pong'; ts: number }
   | { t: 'error'; msg: string }
 
-export type Mods = number // 1=Alt 2=Ctrl 4=Meta 8=Shift (CDP 와 같은 비트)
+export type Mods = number // 1=Alt 2=Ctrl 4=Meta 8=Shift (CDP 와 동일한 비트)
 
 export type ClientMsg =
   /**
-   * an(chored): 버튼을 누른 채 움직이는 동안은 rx,ry 가 **누를 때의** 그 노드 상자 기준이다(양쪽이 누를 때 사각형을 기억).
-   * 원격 노드가 끌려 움직여도 기준이 따라 움직이지 않아 드래그가 과주행하지 않는다.
+   * an(chored): 버튼을 누른 채 이동하는 동안 rx,ry 는 **누름 시점의** 해당 노드 상자 기준이다(양측이 누름 시점 사각형을 유지).
+   * 원격 노드가 드래그로 이동해도 기준이 함께 이동하지 않으므로 드래그 과주행이 발생하지 않는다.
    */
   | { t: 'mouse'; type: 'down' | 'up' | 'move' | 'wheel'; id: number; rx: number; ry: number; button?: 'left' | 'right' | 'middle' | 'none'; buttons?: number; clicks?: number; mods?: Mods; dx?: number; dy?: number; an?: boolean; seq: number }
   | { t: 'key'; type: 'down' | 'up'; key: string; code: string; vk: number; text?: string; mods?: Mods; rep?: boolean; seq: number }
@@ -263,15 +263,15 @@ export type ClientMsg =
   | { t: 'resize'; w: number; h: number }
   | { t: 'resync' }
   | { t: 'ping'; ts: number }
-  /** 원격의 현재 선택 텍스트를 달라(복사 — 로컬 선택이 없을 때) */
+  /** 원격의 현재 선택 텍스트 요청(복사 — 로컬 선택이 없을 때) */
   | { t: 'getsel'; seq: number }
   | { t: 'dialog'; id: number; ok: boolean; text?: string }
   /** 파일 선택 대화상자 취소(업로드는 HTTP POST /upload/<id>) */
   | { t: 'chooser'; id: string; cancel: true }
 
 /**
- * 바이너리 프레임(서버→클라) 머리: [0x01][u32 nodeId][u32 seq][u16 w][u16 h][i16 dx][i16 dy] + webp
- * dx,dy: 찍힌 조각이 노드 상자 안에서 놓이는 자리(뷰포트에 일부만 보일 때). 클라이언트는 머리를 검사하고 WebP 바이트만 blob 으로 쓴다.
+ * 바이너리 프레임(서버→클라) 헤더: [0x01][u32 nodeId][u32 seq][u16 w][u16 h][i16 dx][i16 dy] + webp
+ * dx,dy: 캡처된 조각이 노드 상자 내에서 배치되는 위치(뷰포트에 일부만 보일 때). 클라이언트는 헤더를 검사하고 WebP 바이트만 blob 으로 사용한다.
  */
 export const INSET_FRAME_TAG = 0x01
 export const INSET_HEADER_BYTES = 1 + 4 + 4 + 2 + 2 + 2 + 2
@@ -280,7 +280,7 @@ export const MAX_INSET_FRAME_BYTES = 4 * 1024 * 1024
 
 // ── 상한(양쪽 공통) ──
 export const LIMITS = {
-  /** 한 문서의 노드 수 — 넘으면 에이전트는 'degraded' 알림(픽셀 모드 권고)과 함께 잘라 보낸다 */
+  /** 문서당 노드 수 — 초과 시 에이전트는 'degraded' 알림(픽셀 모드 권고)과 함께 절단하여 송신한다 */
   maxNodes: 40000,
   maxRunsPerText: 2000,
   maxTextLen: 10000,
@@ -292,17 +292,17 @@ export const LIMITS = {
   /** 클라→서버 메시지 속도(토큰 버킷) */
   clientMsgsPerSec: 400,
   clientMsgBurst: 1200,
-  /** 서버→클라 초당 메시지(인셋 프레임 포함) — 클라이언트가 넘는 것은 버린다 */
+  /** 서버→클라 초당 메시지(인셋 프레임 포함) — 초과분은 클라이언트가 폐기한다 */
   serverMsgsPerSec: 240,
-  /** 붙여넣기 메시지 한 개(글자) — 한글 UTF-8 3바이트 × 16000 = 48KB < 메시지 상한 64KB. 긴 붙여넣기는 클라이언트가 나눠 보낸다 */
+  /** 붙여넣기 메시지 한 개(글자) — 한글 UTF-8 3바이트 × 16000 = 48KB < 메시지 상한 64KB. 긴 붙여넣기는 클라이언트가 분할 송신한다 */
   maxPasteChars: 16000,
-  /** 붙여넣기 한 번 전체(나눈 조각 합) */
+  /** 붙여넣기 1회 전체(분할 조각 합) */
   maxPasteTotal: 200000,
   /** 업로드 한 파일 */
   maxUploadBytes: 50 * 1024 * 1024,
 } as const
 
-// ── 검증 기본기 ──
+// ── 검증 기본 요소 ──
 const COLOR_RE = /^rgba?\(\d{1,3}, \d{1,3}, \d{1,3}(?:, (?:0|1|0?\.\d{1,6}))?\)$/
 const SHA_RE = /^[0-9a-f]{64}$/
 const HEX32_RE = /^[0-9a-f]{32}$/
@@ -336,15 +336,15 @@ export function cleanTransform(v: unknown): string | undefined {
   return typeof v === 'string' && v.length <= 300 && TRANSFORM_RE.test(v) ? v.trim() : undefined
 }
 
-/** 제어·보이지 않는 문자 제거(Trojan Source·zero-width) — 표시 문자열만 */
-// 소스에 보이지 않는 문자를 두지 않으려고 모두 \u 이스케이프로 적는다(그 자체가 Trojan Source 표면)
+/** 제어·비가시 문자 제거(Trojan Source·zero-width) — 표시 문자열만 */
+// 소스에 비가시 문자를 두지 않기 위해 모두 \u 이스케이프로 표기한다(비가시 문자 자체가 Trojan Source 표면)
 // eslint-disable-next-line no-control-regex
 const CTRL_RE = new RegExp('[\u200B-\u200F\u2028-\u202E\u2066-\u2069\uFEFF\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]', 'g')
 export function cleanText(t: string): string {
   return t.replace(CTRL_RE, '')
 }
 
-/** FNV-1a 32비트 — 로컬 에코 대조(값 해시). 양쪽이 같은 함수 */
+/** FNV-1a 32비트 — 로컬 에코 대조(값 해시). 양측이 동일 함수 사용 */
 export function fnv1a(s: string): number {
   let h = 0x811c9dc5
   for (let i = 0; i < s.length; i++) {
@@ -359,11 +359,11 @@ function quad<T>(a: unknown, ok: (x: unknown) => x is T): [T, T, T, T] | undefin
   return a.every(ok) ? (a as [T, T, T, T]) : undefined
 }
 
-/** 엄격 모드 보고기 — 엄격 검증에서 무엇이 왜 떨어졌는지(클라이언트 통계·테스트용) */
+/** 엄격 모드 보고기 — 엄격 검증에서 거부된 항목과 사유(클라이언트 통계·테스트용) */
 export interface Strict { strict: boolean; why?: string }
 const LENIENT: Strict = { strict: false }
 function bad(sx: Strict, why: string): undefined { if (sx.strict && !sx.why) sx.why = why; return undefined }
-/** 엄격 모드에서 허용 키 밖이 있으면 거부 */
+/** 엄격 모드에서 허용 키 외의 키가 있으면 거부 */
 function keysOk(o: Record<string, unknown>, allowed: ReadonlySet<string>, sx: Strict, what: string): boolean {
   if (!sx.strict) return true
   for (const k of Object.keys(o)) if (!allowed.has(k)) { bad(sx, `${what}: 모르는 필드 ${k}`); return false }
@@ -436,7 +436,7 @@ export function validateBgLayer(l: unknown, sx: Strict = LENIENT): BgLayer | und
   return out
 }
 
-/** 검증된 그라디언트 → CSS 문자열(클라이언트가 setProperty 로만 쓴다). 숫자·rgb()·키워드만 이어 붙이므로 url() 이 생길 수 없다 */
+/** 검증된 그라디언트 → CSS 문자열(클라이언트는 setProperty 로만 사용). 숫자·rgb()·키워드만 연결하므로 url() 이 생성될 수 없다 */
 export function gradientCss(g: Gradient): string {
   const stops = g.st.map(s => (s.length === 3 ? `${s[0]} ${s[1]}${s[2]}` : s[0])).join(', ')
   const SIDE: Record<SideKw, string> = { t: 'to top', r: 'to right', b: 'to bottom', l: 'to left', tr: 'to top right', tl: 'to top left', br: 'to bottom right', bl: 'to bottom left' }
@@ -453,8 +453,8 @@ const STYLE_KEYS = new Set(['bg', 'bgl', 'c', 'pf', 'fs', 'fw', 'fi', 'td', 'tdc
 
 /**
  * 스타일 레코드 검증.
- * lenient(에이전트): 모르는 키는 버리고, 값이 문법에 안 맞으면 그 키만 버린다.
- * strict(클라이언트): 모르는 키·틀린 값이 하나라도 있으면 undefined(노드 거부).
+ * lenient(에이전트): 미정의 키는 제거하고, 값이 문법에 맞지 않으면 해당 키만 제거한다.
+ * strict(클라이언트): 미정의 키·잘못된 값이 하나라도 있으면 undefined(노드 거부).
  */
 export function validateStyle(s: unknown, sx: Strict = LENIENT): StyleRec | undefined {
   const out: StyleRec = {}
@@ -579,8 +579,8 @@ const NODE_KEYS = new Set(['id', 'p', 'k', 'x', 'y', 'w', 'h', 'o', 'zi', 'fx', 
 const RUN_KEYS = new Set(['x', 'y', 'w', 'h', 't'])
 
 /**
- * 노드 하나를 검증해 어휘 밖 필드가 하나도 남지 않은 사본을 돌려준다. 못 쓰면 undefined.
- * strict: 모르는 필드·틀린 값·제어문자가 섞인 텍스트가 하나라도 있으면 거부(클라이언트).
+ * 노드 하나를 검증하여 어휘 밖 필드가 모두 제거된 사본을 반환한다. 사용 불가 시 undefined.
+ * strict: 미정의 필드·잘못된 값·제어문자가 포함된 텍스트가 하나라도 있으면 거부(클라이언트).
  */
 export function validateNode(n: unknown, sx: Strict = LENIENT): VNode | undefined {
   if (!n || typeof n !== 'object' || Array.isArray(n)) return bad(sx, 'node')
@@ -671,7 +671,7 @@ export interface MsgReject { why: string; rejectedNodes: number }
 
 /**
  * 서버 메시지 엄격 검증 — 클라이언트는 이 결과만 적용한다.
- * 모르는 메시지 종류·모르는 최상위 필드 → 메시지 전체 거부. 노드는 하나씩 엄격 검증해 틀린 노드만 빼고 rej 에 센다.
+ * 미정의 메시지 종류·미정의 최상위 필드 → 메시지 전체 거부. 노드는 개별로 엄격 검증하여 잘못된 노드만 제외하고 rej 에 집계한다.
  */
 export function validateServerMsg(m: unknown, rej?: MsgReject): ServerMsg | undefined {
   const sx: Strict = { strict: true }
@@ -754,7 +754,7 @@ export function validateServerMsg(m: unknown, rej?: MsgReject): ServerMsg | unde
   }
 }
 
-// ── 클라이언트 메시지 검증(에이전트: 엄격 — 모르는 것은 버린다) ──
+// ── 클라이언트 메시지 검증(에이전트: 엄격 — 미정의 항목은 폐기) ──
 const CMSG_KEYS: Record<string, ReadonlySet<string>> = {
   mouse: new Set(['t', 'type', 'id', 'rx', 'ry', 'button', 'buttons', 'clicks', 'mods', 'dx', 'dy', 'an', 'seq']),
   key: new Set(['t', 'type', 'key', 'code', 'vk', 'text', 'mods', 'rep', 'seq']),
@@ -811,19 +811,19 @@ export function validateClientMsg(m: unknown): ClientMsg | undefined {
   }
 }
 
-/** 고정 폰트 키 → 클라이언트 CSS font-family(키는 열거형이라 따옴표 안이 항상 [a-z]) */
+/** 고정 폰트 키 → 클라이언트 CSS font-family(키는 열거형이므로 따옴표 내부가 항상 [a-z]) */
 export function fontFamilyCss(pf: readonly FontKey[] | undefined): string {
   const keys = pf && pf.length ? pf : (['lsans', 'cjks'] as const)
   const list = keys.map(k => `"jw-${k}"`)
-  // 마지막 대비책도 우리 묶음 안에서(DejaVu 는 기호·그리스·키릴 범위가 넓다)
+  // 최종 fallback 도 본 프로젝트 폰트 묶음 내에서 선택(DejaVu 는 기호·그리스·키릴 범위가 넓다)
   if (!keys.includes('dsans')) list.push('"jw-dsans"')
   if (!keys.includes('cjks')) list.push('"jw-cjks"')
   return list.join(', ')
 }
 
 /**
- * 에이전트가 원격에서 읽는 계산 스타일 목록 — 여기 없는 속성은 읽지도 않는다.
- * 순서가 곧 수집기(collector)가 돌려주는 배열의 인덱스다.
+ * 에이전트가 원격에서 읽는 계산 스타일 목록 — 여기에 없는 속성은 읽지 않는다.
+ * 순서가 곧 수집기(collector)가 반환하는 배열의 인덱스이다.
  */
 export const COMPUTED_STYLE_ALLOWLIST = [
   'display', 'visibility', 'opacity', 'overflow-x', 'overflow-y', 'position', 'z-index',
@@ -835,7 +835,7 @@ export const COMPUTED_STYLE_ALLOWLIST = [
   'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
   'border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius',
   'box-shadow', 'cursor', 'outline-width', 'outline-style', 'outline-color', 'pointer-events', 'user-select',
-  // 에이전트 안에서 좌표 계산에만 쓴다(값 그대로 내보내지 않음 — 숫자 행렬로 바뀌어 m 이 된다)
+  // 에이전트 내부에서 좌표 계산에만 사용(값을 그대로 송신하지 않음 — 숫자 행렬로 변환되어 m 이 된다)
   'transform',
   // SVG paint
   'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'fill-opacity', 'stroke-opacity', 'text-anchor',

@@ -1,16 +1,16 @@
 /**
- * 배경 — 계산된 background-image(+size/position/repeat) 문자열을 어휘(BgLayer[])로 바꾼다.
+ * 배경 — 계산된 background-image(+size/position/repeat) 문자열을 어휘(BgLayer[])로 변환한다.
  *
- * Chromium 의 계산값은 정규화돼 있다: 색은 rgb()/rgba(), 길이는 px, 위치는 % 또는 px, url() 은 절대 URL.
+ * Chromium 의 계산값은 정규화되어 있다: 색은 rgb()/rgba(), 길이는 px, 위치는 % 또는 px, url() 은 절대 URL.
  *   linear-gradient(rgb(238, 238, 238) 1px, rgba(0, 0, 0, 0) 1px)
  *   linear-gradient(90deg, rgb(255, 0, 0), rgb(0, 0, 255))   ·   linear-gradient(to right, …)
  *   radial-gradient(circle at 50% 30%, rgb(…) 0%, rgb(…) 70%)  ·  radial-gradient(150px 80px at 10px 20px, …)
- * 여기서 숫자·색·키워드로만 다시 쓴 것을 어휘로 보내고, url() 레이어는 재인코딩 자산 sha 로 바꾼다(원문 URL 은 보내지 않는다).
- * 못 읽는 레이어(conic·calc()·color() 같은 새 색 공간)는 버린다 — 버린 그라디언트는 첫 정지점 색을 배경색 대신으로 돌려준다.
+ * 여기서 숫자·색·키워드만으로 재작성한 결과를 어휘로 전송하고, url() 레이어는 재인코딩 자산 sha 로 치환한다(원문 URL 은 전송하지 않는다).
+ * 해석 불가 레이어(conic·calc()·color() 등의 새 색 공간)는 폐기한다 — 폐기한 그라디언트는 첫 정지점 색을 배경색 대체값으로 반환한다.
  */
 import { type BgLayer, type BgRepeat, type BgSize, type GradStop, type Gradient, type LenUnit, type SideKw, isColor, validateBgLayer } from '../../protocol/vocab.ts'
 
-/** 최상위 쉼표로 자르기(괄호·따옴표 안은 그대로) */
+/** 최상위 쉼표로 분할(괄호·따옴표 내부는 유지) */
 export function splitTop(s: string, sep = ','): string[] {
   const out: string[] = []
   let depth = 0, cur = '', q: string | null = null
@@ -27,7 +27,7 @@ export function splitTop(s: string, sep = ','): string[] {
   return out
 }
 
-/** 공백으로 자르기(괄호 안은 그대로) */
+/** 공백으로 분할(괄호 내부는 유지) */
 function words(s: string): string[] {
   const out: string[] = []
   let depth = 0, cur = ''
@@ -64,7 +64,7 @@ const SIDES: Record<string, SideKw> = {
   'to bottom right': 'br', 'to right bottom': 'br', 'to bottom left': 'bl', 'to left bottom': 'bl',
 }
 
-/** 정지점 "rgb(…) 10% 20%" → 정지점 1~2개. 색 힌트(위치만)는 버린다 */
+/** 정지점 "rgb(…) 10% 20%" → 정지점 1~2개. 색 힌트(위치만)는 폐기한다 */
 function stops(parts: string[]): GradStop[] | undefined {
   const out: GradStop[] = []
   for (const p of parts) {
@@ -97,7 +97,7 @@ function position(ws: string[]): [number, LenUnit, number, LenUnit] | undefined 
     const a = v(x), b = v(y)
     return a && b ? [a[0], a[1], b[0], b[1]] : undefined
   }
-  return undefined // 4값(가장자리 오프셋) 표기는 계산값에 잘 안 나온다 — 버린다
+  return undefined // 4값(가장자리 오프셋) 표기는 계산값에 거의 나타나지 않음 — 폐기
 }
 
 export function parseGradient(s: string): Gradient | undefined {
@@ -169,14 +169,14 @@ function bgRepeat(s: string | undefined): BgRepeat | undefined {
 
 export interface BgParse {
   layers: BgLayer[]
-  /** url() 레이어의 절대 URL(자산 요청용 — 에이전트 안에서만) */
+  /** url() 레이어의 절대 URL(자산 요청용 — 에이전트 내부 전용) */
   urls: string[]
-  /** 버린 그라디언트가 있었으면 그 첫 색(배경색이 없을 때 대신) */
+  /** 폐기한 그라디언트가 있으면 그 첫 색(배경색이 없을 때의 대체값) */
   fallbackColor?: string
 }
 
 /**
- * 계산값 → 레이어. shaFor(url) 이 아직 없으면(자산 준비 중) 그 레이어는 이번엔 빠진다(준비되면 다시 변환된다).
+ * 계산값 → 레이어. shaFor(url) 이 아직 없으면(자산 준비 중) 해당 레이어는 이번 변환에서 제외된다(준비되면 재변환된다).
  * 레이어 수는 최대 4.
  */
 export function parseBackground(
@@ -203,7 +203,7 @@ export function parseBackground(
     } else {
       const g = parseGradient(s)
       if (!g) {
-        // 못 읽는 그라디언트 — 첫 rgb() 를 대신 색으로
+        // 해석 불가 그라디언트 — 첫 rgb() 를 대체 색으로 사용
         const c = /rgba?\([^)]*\)/.exec(s)
         if (c && isColor(c[0]) && !res.fallbackColor) res.fallbackColor = c[0]
         continue

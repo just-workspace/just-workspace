@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 로그인 토큰이 기기 백업으로 빠져나가지 않게 백업을 끈다 -->
+    <!-- 로그인 토큰이 기기 백업으로 유출되지 않도록 백업을 비활성화한다 -->
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -41,7 +41,7 @@
             android:exported="false"
             android:foregroundServiceType="microphone|camera|dataSync" />
 
-        <!-- 회의를 OS 통화로 등록 — 전화가 오면 보류/복귀 (MeetingConnectionService.java) -->
+        <!-- 회의를 OS 통화로 등록 — 전화 수신 시 보류/복귀 (MeetingConnectionService.java) -->
         <service
             android:name=".MeetingConnectionService"
             android:exported="true"
@@ -56,7 +56,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- 회의: 웹뷰의 getUserMedia 가 런타임 권한을 요청하려면 여기 선언돼 있어야 한다 -->
+    <!-- 회의: 웹뷰의 getUserMedia 가 런타임 권한을 요청하려면 이 위치에 선언 필요 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />

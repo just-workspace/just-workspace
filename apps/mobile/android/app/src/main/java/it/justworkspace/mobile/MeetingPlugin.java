@@ -7,7 +7,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
- * 웹(useNativeMeeting.ts)이 부르는 회의 플러그인.
+ * 웹(useNativeMeeting.ts)이 호출하는 회의 플러그인.
  *   start({ title, video })  회의 입장 직후
  *   stop()                   회의 퇴장 시
  * 이벤트 "meeting": { type: hold|unhold|disconnect|leave|audioRoute|telecomFailed|serviceFailed, detail }
@@ -31,7 +31,7 @@ public class MeetingPlugin extends Plugin {
         boolean video = Boolean.TRUE.equals(call.getBoolean("video", false));
         MeetingCall.title = title;
         MeetingService.start(getContext(), title, video);
-        // 이미 OS 통화로 등록돼 있으면(재입장) 다시 걸지 않는다
+        // 이미 OS 통화로 등록되어 있으면(재입장) 다시 발신하지 않는다
         boolean telecom = MeetingCall.getConnection() != null || MeetingCall.placeCall(getContext(), title);
         JSObject ret = new JSObject();
         ret.put("telecom", telecom);

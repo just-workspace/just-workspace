@@ -1,11 +1,11 @@
 /**
- * 입력 — 클라이언트 메시지를 CDP Input.* 으로 바꾼다. 메시지는 이미 validateClientMsg(엄격)를 통과했다.
+ * 입력 — 클라이언트 메시지를 CDP Input.* 으로 변환한다. 메시지는 이미 validateClientMsg(엄격)를 통과한 상태다.
  *
- * 좌표는 노드 id + 노드 안 상대좌표다. 원격의 **지금** 위치는 수집기 pt(id) 가 getBoundingClientRect 로 알려 준다
- * (마지막 스냅샷 좌표를 쓰지 않는다 — 미러가 늦어도 "그 노드" 를 가리키고, 원격이 움직였어도 정확하다).
+ * 좌표는 노드 id + 노드 내 상대좌표다. 원격의 **현재** 위치는 수집기 pt(id) 가 getBoundingClientRect 로 제공한다
+ * (마지막 스냅샷 좌표를 사용하지 않는다 — 미러가 지연되어도 "그 노드" 를 가리키며, 원격이 이동했어도 정확하다).
  * id 0 은 원격 뷰포트 좌표 그대로.
- * 한글 IME: 조합 중 텍스트는 Input.imeSetComposition, 확정은 Input.insertText. 조합 중 ⌫·자모 분해는 사용자 PC 의 IME 가 끝내고 결과만 온다.
- * 정책: 붙여넣기(paste)는 ci, 원격 선택 복사(getsel)는 co — 막히면 원격에 아무것도 하지 않고 'blocked-*' 알림만.
+ * 한글 IME: 조합 중 텍스트는 Input.imeSetComposition, 확정은 Input.insertText. 조합 중 ⌫·자모 분해는 사용자 PC 의 IME 가 처리하고 결과만 수신한다.
+ * 정책: 붙여넣기(paste)는 ci, 원격 선택 복사(getsel)는 co — 차단 시 원격에 아무 동작도 수행하지 않고 'blocked-*' 알림만 전송한다.
  */
 import type { Protocol } from 'cdp-protocol'
 import { LIMITS, type ClientMsg, type PolicyInfo, type ServerMsg } from '../../protocol/vocab.ts'
@@ -18,24 +18,24 @@ const BUTTONS: Record<string, Protocol.Input.MouseButton> = { left: 'left', righ
 const BIT: Record<string, number> = { left: 1, right: 2, middle: 4, none: 0 }
 
 export class InputBridge {
-  /** 마지막으로 원격에 적용을 끝낸 클라이언트 seq */
+  /** 원격에 적용을 완료한 마지막 클라이언트 seq */
   appliedSeq = 0
   private buttonsDown = 0
   private pendingScroll = new Map<number, Extract<ClientMsg, { t: 'scroll' }>>()
   private scrolling = false
-  /** 다음 틱에 수집기에 알릴 포인터 위치(:hover)·눌림(:active) */
+  /** 다음 틱에 수집기에 전달할 포인터 위치(:hover)·눌림(:active) */
   pointer: [number, number] | null = null
   pressed = false
-  /** 값이 바뀌었을 수 있다 — 다음 틱에 val(로컬 에코 대조)을 보낸다 */
+  /** 값 변경 가능성 있음 — 다음 틱에 val(로컬 에코 대조)을 전송한다 */
   valDirty = false
-  /** 원격 마우스 이동 합치기: 처리 중이면 마지막 것만 */
+  /** 원격 마우스 이동 병합: 처리 중이면 마지막 것만 유지 */
   private moveBusy = false
   private moveNext: Extract<ClientMsg, { t: 'mouse' }> | null = null
   stats = { mouse: 0, keys: 0, text: 0, comp: 0, paste: 0, blocked: 0, missed: 0 }
 
   constructor(private send: Sender, private world: WorldCall, private pol: PolicyInfo, private notify: (m: ServerMsg) => void) {}
 
-  /** 누를 때의 기준(노드 id·그때의 원격 사각형 왼쪽 위) — 드래그 중 이동·떼기는 이것을 쓴다 */
+  /** 누를 때의 기준(노드 id·당시 원격 사각형의 좌상단) — 드래그 중 이동·떼기는 이 기준을 사용한다 */
   private anchor: { id: number; x: number; y: number } | null = null
 
   private async toViewport(id: number, rx: number, ry: number, anchored = false): Promise<{ x: number; y: number } | undefined> {
@@ -52,7 +52,7 @@ export class InputBridge {
     switch (m.t) {
       case 'mouse': {
         if (m.type === 'move') {
-          // 이동은 합친다 — 앞 이동을 처리하는 동안 온 것은 마지막 하나만
+          // 이동은 병합한다 — 앞 이동을 처리하는 동안 수신한 것은 마지막 하나만 유지
           if (this.moveBusy) { this.moveNext = m; return false }
           this.moveBusy = true
           try {
@@ -61,7 +61,7 @@ export class InputBridge {
           } finally { this.moveBusy = false }
           return true
         }
-        // 누르기·떼기 전에 밀린 이동을 먼저(드래그 마지막 구간 누락 방지)
+        // 누르기·떼기 전에 대기 중인 이동을 먼저 처리(드래그 마지막 구간 누락 방지)
         if (this.moveNext) { const mv = this.moveNext; this.moveNext = null; await this.mouse(mv) }
         return this.mouse(m)
       }
@@ -73,7 +73,7 @@ export class InputBridge {
           autoRepeat: !!m.rep,
         }
         if (hasText && m.type === 'down') { p.text = m.text; p.unmodifiedText = m.text }
-        // 편집 단축키는 Chromium 이 텍스트 입력 명령으로 처리하도록 알려 준다(Ctrl+A·Z·Y 등)
+        // 편집 단축키는 Chromium 이 텍스트 입력 명령으로 처리하도록 명령을 지정한다(Ctrl+A·Z·Y 등)
         const cmd = m.type === 'down' ? editCommand(m.key, m.mods || 0) : undefined
         if (cmd) p.commands = [cmd]
         await this.send('Input.dispatchKeyEvent', p)
@@ -102,7 +102,7 @@ export class InputBridge {
         this.mark(m.seq)
         return true
       case 'compend':
-        // 확정: insertText 가 조합을 끝내며 문자열을 넣는다. 취소(빈 문자열)는 빈 조합으로 지운다.
+        // 확정: insertText 가 조합을 종료하며 문자열을 삽입한다. 취소(빈 문자열)는 빈 조합으로 삭제한다.
         if (m.text) await this.send('Input.insertText', { text: m.text })
         else await this.send('Input.imeSetComposition', { text: '', selectionStart: 0, selectionEnd: 0 })
         this.valDirty = true
@@ -115,7 +115,7 @@ export class InputBridge {
         return false
       }
       case 'scroll': {
-        // 로컬 스크롤이 진실 → 원격은 **절대값**(휠 델타로 보내면 과주행한다). 연속 스크롤은 합친다.
+        // 로컬 스크롤이 기준 → 원격에는 **절대값**을 전송한다(휠 델타로 전송하면 과주행한다). 연속 스크롤은 병합한다.
         this.pendingScroll.set(m.id, m)
         if (this.scrolling) return false
         this.scrolling = true
@@ -164,7 +164,7 @@ export class InputBridge {
 
 function firstButton(bits: number): Protocol.Input.MouseButton { return bits & 1 ? 'left' : bits & 2 ? 'right' : bits & 4 ? 'middle' : 'none' }
 
-/** Ctrl(Meta)+키 → Chromium 편집 명령(원격이 macOS 가 아니라 Ctrl 기준) */
+/** Ctrl(Meta)+키 → Chromium 편집 명령(원격이 macOS 가 아니므로 Ctrl 기준) */
 function editCommand(key: string, mods: number): string | undefined {
   const ctrl = (mods & 2) !== 0 || (mods & 4) !== 0
   const shift = (mods & 8) !== 0

@@ -1,15 +1,15 @@
 /**
  * 변환 — 수집기의 원시 레코드(RawRec: 계산 스타일 문자열·속성·위젯 상태) → 닫힌 어휘(VNode).
  *
- * 여기서 하는 일(전부 에이전트 안에서 — 원시 문자열은 사용자 PC 로 가지 않는다):
- *  - 계산값 → 숫자·rgb()·키워드(validateStyle 이 다시 본다).
- *  - background-image: url() → 재인코딩 자산 sha, 그라디언트 → 숫자 어휘(background.ts). url 원문은 버린다.
- *  - 폰트: 원격이 실제로 쓴 폰트 → 고정 키(fonts.ts). 작성자 폰트 이름은 버린다.
- *  - 아이콘 폰트 글리프(사용자 영역 문자, ::before 의 \f04b 따위) → 그 상자를 래스터 자산으로(raster.ts).
- *  - 입력 위젯: 값은 표시 문자열로만(password 는 마스킹 문자 — 수집기가 길이만 준다).
- *  - svg: 기하 허용목록·숫자 속성·계산된 칠하기만(href·filter·use·image·foreignObject·animate 는 수집기가 애초에 안 읽는다).
+ * 수행 내용(전부 에이전트 내부에서 수행 — 원시 문자열은 사용자 PC 로 전송되지 않는다):
+ *  - 계산값 → 숫자·rgb()·키워드(validateStyle 이 재검증한다).
+ *  - background-image: url() → 재인코딩 자산 sha, 그라디언트 → 숫자 어휘(background.ts). url 원문은 폐기한다.
+ *  - 폰트: 원격이 실제로 사용한 폰트 → 고정 키(fonts.ts). 작성자 폰트 이름은 폐기한다.
+ *  - 아이콘 폰트 글리프(사용자 영역 문자, ::before 의 \f04b 등) → 해당 상자를 래스터 자산으로 변환(raster.ts).
+ *  - 입력 위젯: 값은 표시 문자열로만 전달(password 는 마스킹 문자 — 수집기가 길이만 제공한다).
+ *  - svg: 기하 허용목록·숫자 속성·계산된 칠하기만(href·filter·use·image·foreignObject·animate 는 수집기가 처음부터 읽지 않는다).
  *  - canvas·video·iframe·embed·object·shadow host → inset(픽셀).
- * 마지막에 validateNode(lenient) 를 한 번 더 — 어휘 밖 필드는 남지 않는다.
+ * 마지막에 validateNode(lenient) 를 1회 더 수행한다 — 어휘 밖 필드는 남지 않는다.
  */
 import {
   COMPUTED_STYLE_ALLOWLIST, type ComputedKey, type FontKey, type StyleRec, type SvgGeom, type SvgPaint, type VNode, type WidgetKind,
@@ -23,19 +23,19 @@ const IX: Record<string, number> = {}
 COMPUTED_STYLE_ALLOWLIST.forEach((k, i) => { IX[k] = i })
 const TRANSPARENT = 'rgba(0, 0, 0, 0)'
 const INSET_TAGS: Record<string, VNode['ik']> = { canvas: 'canvas', video: 'video', iframe: 'iframe', frame: 'iframe', embed: 'embed', object: 'embed', audio: 'other' }
-/** 합성 노드(의사 요소 텍스트) id — 수집기 id(1부터 증가)와 겹치지 않게 위쪽 대역 */
+/** 합성 노드(의사 요소 텍스트) id — 수집기 id(1부터 증가)와 충돌하지 않도록 상위 대역 사용 */
 export const SYNTH_BASE = 2 ** 30
 export function synthId(hostId: number, which: 'b' | 'a'): number { return SYNTH_BASE + ((hostId * 2 + (which === 'a' ? 1 : 0)) % (2 ** 30 - 1)) }
 
 export interface ConvertDeps {
-  /** 자산 sha(없으면 요청만 걸고 undefined) — url 은 노드 id 와 묶어 둔다(준비되면 다시 변환) */
+  /** 자산 sha(없으면 요청만 등록하고 undefined) — url 은 노드 id 와 연결해 둔다(준비되면 재변환) */
   shaFor(url: string, nodeId: number): string | undefined
   font(nodeId: number, refId: number, ff: string, fw: string, fi: string, text: string): FontInfo
-  /** 아이콘 래스터 sha(없으면 요청만) */
+  /** 아이콘 래스터 sha(없으면 요청만 등록) */
   raster(nodeId: number, key: string): string | undefined
-  /** 다른 노드의 원시 레코드(텍스트의 스타일 출처·배경 찾기) */
+  /** 다른 노드의 원시 레코드(텍스트의 스타일 출처·배경 탐색) */
   raw(id: number): RawRec | undefined
-  /** 아이콘 폰트 글자를 품은 요소인가(set 이면 표시하고 그 요소를 다시 변환) — 텍스트 자식이 아이콘이면 부모를 래스터로 */
+  /** 아이콘 폰트 글자를 포함한 요소인지 여부(set 이면 표시하고 해당 요소를 재변환) — 텍스트 자식이 아이콘이면 부모를 래스터로 처리 */
   iconHost(id: number, set?: string): string | undefined
 }
 
@@ -86,7 +86,7 @@ export function boxStyle(rec: RawRec, deps: ConvertDeps, id: number): StyleRec {
   return s
 }
 
-/** 글자 스타일(텍스트 노드는 부모 계산값, 위젯은 자기 것) */
+/** 글자 스타일(텍스트 노드는 부모 계산값, 위젯은 자체 값) */
 export function textStyle(src: RawRec | undefined, fontKeys: FontKey[]): StyleRec {
   const s: StyleRec = {}
   if (!src) { s.pf = fontKeys; return s }
@@ -105,7 +105,7 @@ export function textStyle(src: RawRec | undefined, fontKeys: FontKey[]): StyleRe
   return s
 }
 
-/** 가장 가까운 불투명 배경(래스터 키에 넣는다 — 같은 아이콘이라도 뒤 배경이 다르면 다른 래스터) */
+/** 가장 가까운 불투명 배경(래스터 키에 포함한다 — 동일 아이콘이라도 뒤 배경이 다르면 다른 래스터) */
 function effectiveBg(rec: RawRec, deps: ConvertDeps): string {
   let r: RawRec | undefined = rec
   for (let i = 0; r && i < 64; i++) {
@@ -166,7 +166,7 @@ function svgGeoms(gs: RawGeom[] | undefined, depth = 0): SvgGeom[] {
 
 export interface Converted { node?: VNode; extra: VNode[] }
 
-/** 레코드 하나 → VNode(+의사 요소 합성 텍스트). 못 쓰면 node 없음 */
+/** 레코드 하나 → VNode(+의사 요소 합성 텍스트). 사용 불가 시 node 없음 */
 export function convert(rec: RawRec, deps: ConvertDeps): Converted {
   const [x, y, w, h] = rec.r
   const base: VNode = { id: rec.i, p: rec.p, k: 'box', x, y, w, h, o: rec.o }
@@ -176,7 +176,7 @@ export function convert(rec: RawRec, deps: ConvertDeps): Converted {
     const src = rec.ps ? deps.raw(rec.ps) : undefined
     const text = (rec.tx || []).map(t => t[4]).join(' ')
     const fi = deps.font(rec.i, rec.ps || 0, cs(src, 'font-family'), cs(src, 'font-weight'), cs(src, 'font-style'), text)
-    // 아이콘 폰트로 그린 글자(사용자 영역) — 부모 상자를 래스터로(아래 요소 쪽에서 처리). 텍스트 자체는 보내지 않는다
+    // 아이콘 폰트로 그린 글자(사용자 영역) — 부모 상자를 래스터로 처리(아래 요소 측에서 처리). 텍스트 자체는 전송하지 않는다
     if (fi.icon && src && rec.ps) { deps.iconHost(rec.ps, text); return { extra } }
     base.k = 'text'
     base.runs = (rec.tx || []).map(t => ({ x: t[0], y: t[1], w: t[2], h: t[3], t: cleanText(t[4]) }))
@@ -237,8 +237,8 @@ export function convert(rec: RawRec, deps: ConvertDeps): Converted {
   // 일반 상자
   base.s = boxStyle(rec, deps, rec.i)
   if (rec.sc) base.sc = rec.sc
-  // 의사 요소: 아이콘(사용자 영역 글리프) → 이 상자를 래스터 img 로 · 보통 글자 → 합성 텍스트 자식
-  // 아이콘: 사용자 영역 글리프이거나 아이콘 폰트 이름(Glyphicons 는 '+' 를 아이콘으로 쓴다)
+  // 의사 요소: 아이콘(사용자 영역 글리프) → 이 상자를 래스터 img 로 · 일반 글자 → 합성 텍스트 자식
+  // 아이콘: 사용자 영역 글리프이거나 아이콘 폰트 이름(Glyphicons 는 '+' 를 아이콘으로 사용한다)
   const icon = [rec.pb, rec.pa].find(pp => pp && (hasPua(pp[0]) || ICON_FAMILY.test(pp[1])))
   const hostText = deps.iconHost(rec.i)
   if (icon || hostText !== undefined) {

@@ -1,5 +1,5 @@
-// WASAPI 직접 호출 — miniaudio 가 안 해 주는 세 가지: exclusive 포맷 매트릭스, 장치를 쓰는 프로세스, 장치 기본 형식/주기.
-// 모든 함수는 호출 스레드에서 COM 을 (이미 초기화돼 있지 않으면) 멀티스레드 아파트먼트로 초기화하고, 자기가 초기화했으면 되돌린다.
+// WASAPI 직접 호출 — miniaudio 가 제공하지 않는 세 가지: exclusive 포맷 매트릭스, 장치를 사용 중인 프로세스, 장치 기본 형식/주기.
+// 모든 함수는 호출 스레드에서 COM 을 (초기화되어 있지 않은 경우) 멀티스레드 아파트먼트로 초기화하고, 직접 초기화한 경우 해제한다.
 #include "wasapi_probe.h"
 
 #include <windows.h>
@@ -22,7 +22,7 @@ struct ComScope {
   bool uninit = false;
   ComScope() {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-    uninit = SUCCEEDED(hr);  // S_OK 또는 S_FALSE(이미 초기화) → 짝을 맞춰 Uninitialize. RPC_E_CHANGED_MODE 면 건드리지 않는다
+    uninit = SUCCEEDED(hr);  // S_OK 또는 S_FALSE(이미 초기화) → 대응하는 Uninitialize 호출. RPC_E_CHANGED_MODE 이면 호출하지 않는다
     if (hr == RPC_E_CHANGED_MODE) uninit = false;
   }
   ~ComScope() {

@@ -11,18 +11,18 @@ import android.telecom.TelecomManager;
 import android.util.Log;
 
 /**
- * 진행 중인 회의 하나의 네이티브 쪽 상태.
+ * 진행 중인 회의 하나의 네이티브 측 상태.
  *
- * 회의 자체(WebRTC)는 웹뷰 안의 LiveKit 이 돌린다. 여기서는 OS 가 그 회의를 "통화"로 알게 해서
- *  - 일반 전화가 오면 회의를 보류(hold)로 돌리고 끝나면 되살리고(Telecom self-managed 통화),
- *  - 화면이 꺼지거나 앱을 내려도 프로세스·마이크가 살아 있게 한다(MeetingService 포그라운드 서비스).
- * 플러그인·서비스·ConnectionService 가 서로 다른 객체라 상태를 여기 한 곳에 둔다.
+ * 회의 자체(WebRTC)는 웹뷰 안의 LiveKit 이 처리한다. 여기서는 OS 가 해당 회의를 "통화"로 인식하도록 하여
+ *  - 일반 전화 수신 시 회의를 보류(hold)로 전환하고 종료 후 복원하며(Telecom self-managed 통화),
+ *  - 화면이 꺼지거나 앱이 백그라운드로 전환되어도 프로세스·마이크를 유지한다(MeetingService 포그라운드 서비스).
+ * 플러그인·서비스·ConnectionService 가 서로 다른 객체이므로 상태를 여기 한 곳에 둔다.
  */
 final class MeetingCall {
     private static final String TAG = "JwMeeting";
     static final String ACCOUNT_ID = "jw-meeting";
 
-    /** 웹으로 올려 보낼 이벤트 (hold / unhold / disconnect / audioRoute / leave) */
+    /** 웹으로 전달할 이벤트 (hold / unhold / disconnect / audioRoute / leave) */
     interface Listener {
         void onEvent(String type, String detail);
     }
@@ -52,7 +52,7 @@ final class MeetingCall {
         return new PhoneAccountHandle(new ComponentName(ctx, MeetingConnectionService.class), ACCOUNT_ID);
     }
 
-    /** 회의를 OS 통화로 등록한다. 실패해도 회의는 계속된다(포그라운드 서비스만으로 돈다). */
+    /** 회의를 OS 통화로 등록한다. 실패해도 회의는 계속된다(포그라운드 서비스만으로 동작). */
     static boolean placeCall(Context ctx, String roomTitle) {
         if (!telecomSupported()) return false;
         try {
@@ -63,7 +63,7 @@ final class MeetingCall {
                 .build();
             tm.registerPhoneAccount(account);
             if (!tm.isOutgoingCallPermitted(handle)) {
-                // 이미 다른 통화 중 등 — OS 가 지금은 새 통화를 허락하지 않는다
+                // 이미 다른 통화 중인 경우 등 — OS 가 현재 새 통화를 허용하지 않는다
                 Log.w(TAG, "outgoing call not permitted now");
                 return false;
             }

@@ -1,9 +1,9 @@
 /**
- * 1회성 원격 지원(포터블 지원 프로그램) — 계정 없이 접속 코드를 받아 보여 주고, 지원자(회원)가 코드를 넣으면 동의를 받아 연다.
- * 화면 순서: ① 코드 대기 → ② 요청 도착(동의 창은 따로 맨 위) → ③ 연결됨 → ④ 종료.
- *  - 코드는 5분·1회. 만료되면 [새 코드 받기]. 창을 닫으면 코드·세션 모두 무효(서버에 종료 알림).
- *  - 세션이 한 번 끝나면(거부 포함) 새 코드를 주지 않는다 — 다시 받으려면 프로그램을 새로 실행한다.
- *  - 무인 재접속 없음: 이 프로그램이 떠 있고 사람이 [허용]했을 때만 열린다.
+ * 1회성 원격 지원(포터블 지원 프로그램) — 계정 없이 접속 코드를 발급받아 표시하고, 지원자(회원)가 코드를 입력하면 동의를 받아 연다.
+ * 화면 순서: ① 코드 대기 → ② 요청 도착(동의 창은 별도로 최상위) → ③ 연결됨 → ④ 종료.
+ *  - 코드는 5분·1회. 만료되면 [새 코드 받기]. 창을 닫으면 코드·세션 모두 무효(서버에 종료 통지).
+ *  - 세션이 한 번 종료되면(거부 포함) 새 코드를 발급하지 않는다 — 재발급하려면 프로그램을 다시 실행한다.
+ *  - 무인 재접속 없음: 본 프로그램이 실행 중이고 사용자가 [허용]한 경우에만 열린다.
  */
 import { BrowserWindow, clipboard, ipcMain } from 'electron';
 import path from 'node:path';
@@ -111,14 +111,14 @@ export class SupportController {
           await new Promise(res => setTimeout(res, 3000));
           continue;
         }
-        if (cred !== this.cred) break; // 새 코드로 바뀜
+        if (cred !== this.cred) break; // 새 코드로 변경됨
         since = r.session.status;
         if (r.session.status === 'pending') {
           const who = {
             requester: r.session.requester_name, email: r.session.requester_email ?? '',
             org: r.org_name ?? this.org, domain: r.org_domain ?? this.domain,
           };
-          // 코드를 쓴 순간 서버가 폐기했다 — 이 뒤로는 어떻게 끝나든 새 코드를 주지 않는다
+          // 코드가 사용된 시점에 서버가 폐기했다 — 이후에는 종료 방식과 무관하게 새 코드를 발급하지 않는다
           this.finished = true;
           this.setView({ phase: 'pending', code: this.code, ...who, timeoutS: 30 });
           const allow = await askConsent({ ...who, kind: 'support', timeoutS: 30 });
@@ -128,7 +128,7 @@ export class SupportController {
             const startedAt = Date.now();
             this.session = new HostSession({
               sessionId: cred.kind === 'support' ? cred.sessionId : '', requester: who.requester, livekit: d.livekit, addon: this.addon,
-              // 사유를 실은 보고가 막혀도(웹 방화벽 등) 세션은 끝나야 한다 — 실패하면 사유 없이 다시
+              // 사유를 포함한 보고가 차단되어도(웹 방화벽 등) 세션은 종료되어야 한다 — 실패 시 사유 없이 재시도
               notifyEnd: async (why) => { await api.supportEnd(cred, why).catch(() => api.supportEnd(cred)).catch(() => {}); },
               onClosed: (reason) => {
                 this.session = null;
@@ -155,7 +155,7 @@ export class SupportController {
     }
   }
 
-  /** 지금 코드·세션을 서버에서 무효로 */
+  /** 현재 코드·세션을 서버에서 무효화 */
   private async release(): Promise<void> {
     const cred = this.cred;
     this.cred = null;

@@ -50,7 +50,7 @@
 </div>
 <div id="status">ready</div>
 <script>
-// jsPlumb 흉내 — div+img 노드, SVG path 링크, CSS transform 줌, mousedown/move/up 드래그
+// jsPlumb 모사 —div+img 노드, SVG path 링크, CSS transform 줌, mousedown/move/up 드래그
 const canvas = document.getElementById('canvas'), links = document.getElementById('links'), status = document.getElementById('status')
 const icon = (hue) => 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect x="4" y="12" width="40" height="24" rx="4" fill="hsl(${hue} 60% 50%)"/><circle cx="14" cy="24" r="3" fill="#fff"/><circle cx="24" cy="24" r="3" fill="#fff"/><circle cx="34" cy="24" r="3" fill="#fff"/></svg>`)
 const nodes = [], edges = []

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""고정 폰트 묶음 — 세션 이미지의 원격 Chromium 이 쓰는 **바로 그 폰트 파일**을 사용자 PC 용 WOFF2 로 바꾼다.
+"""고정 폰트 묶음 — 세션 이미지의 원격 Chromium 이 사용하는 **동일한 폰트 파일**을 사용자 PC 용 WOFF2 로 변환한다.
 
-원격과 사용자 PC 가 같은 글리프 폭을 쓰게 하려는 것(글꼴이 다르면 글리프 폭이 12 % 까지 어긋난다).
-원격 페이지가 내려보낸 폰트(@font-face)는 여기 없다 — 이건 이미지에 구운 데비안 패키지 폰트뿐이다.
+원격과 사용자 PC 가 동일한 글리프 폭을 사용하도록 하기 위함이다(글꼴이 다르면 글리프 폭이 12 % 까지 어긋난다).
+원격 페이지가 전송한 폰트(@font-face)는 여기에 포함되지 않는다 — 이미지에 포함된 데비안 패키지 폰트만 대상이다.
 
 입력(데비안 bookworm 패키지, Dockerfile 이 버전 고정):
   fonts-liberation2  — Liberation Sans/Serif/Mono (Arial·Times New Roman·Courier New 와 폭 호환, OFL-1.1)
   fonts-dejavu-core  — DejaVu Sans/Serif/Sans Mono (데비안 기본 sans/serif/monospace, Bitstream Vera 계열 자유 라이선스)
-  fonts-noto-cjk     — Noto Sans CJK / Noto Serif CJK (KR 면만 꺼냄, OFL-1.1)
+  fonts-noto-cjk     — Noto Sans CJK / Noto Serif CJK (KR 면만 추출, OFL-1.1)
 출력: <out>/<key>-<w><s>[-<n>].woff2 + <out>/fonts.json  [{key, file, weight, style, range}]
-  라틴 폰트는 통째로(한 면 100~400KB). CJK 는 unicode-range 조각으로 나눠 쓰는 글자의 조각만 받게 한다:
-  KS X 1001 한글 2,350자(자주 쓰는 글자) → 4조각, 나머지 한글 8,822자 → 12조각, 자모·기호·전각, KS X 1001 한자 4,888자 → 7조각, 라틴·숫자.
-  (KS X 1001 밖 한자는 넣지 않는다 — 한국어 UI 에 거의 없다. 나오면 사용자 PC 의 시스템 폰트로 그려진다: 알려진 한계)
+  라틴 폰트는 전체 포함(한 면 100~400KB). CJK 는 unicode-range 조각으로 분할하여 사용되는 글자의 조각만 수신하게 한다:
+  KS X 1001 한글 2,350자(상용 글자) → 4조각, 나머지 한글 8,822자 → 12조각, 자모·기호·전각, KS X 1001 한자 4,888자 → 7조각, 라틴·숫자.
+  (KS X 1001 밖 한자는 포함하지 않는다 — 한국어 UI 에 거의 없다. 출현 시 사용자 PC 의 시스템 폰트로 표시된다: 알려진 한계)
 
 python3 build_fonts.py <out-dir>   (fontTools + brotli 필요)
 """
@@ -48,7 +48,7 @@ LATIN = [
     ('dmono', f'{DJV}/DejaVuSansMono.ttf', 400, 'normal'),
     ('dmono', f'{DJV}/DejaVuSansMono-Bold.ttf', 700, 'normal'),
 ]
-# key, TTC, weight, 면 이름(TTC 하나에 Sans·Sans Mono 의 JP/KR/SC/TC/HK 가 다 들어 있다 — KR 면을 이름으로 고른다)
+# key, TTC, weight, 면 이름(TTC 하나에 Sans·Sans Mono 의 JP/KR/SC/TC/HK 가 모두 포함됨 — KR 면을 이름으로 선택)
 CJK = [
     ('cjks', f'{NOTO}/NotoSansCJK-Regular.ttc', 400, 'Noto Sans CJK KR'),
     ('cjks', f'{NOTO}/NotoSansCJK-Bold.ttc', 700, 'Noto Sans CJK KR'),
@@ -60,7 +60,7 @@ CJK = [
 
 
 def ksx1001(cp: int) -> bool:
-    """KS X 1001 완성형(2바이트)인가 — 파이썬 euc-kr 은 나머지 한글을 8바이트 조합형으로도 인코딩하므로 길이로 가른다"""
+    """KS X 1001 완성형(2바이트) 여부 — 파이썬 euc-kr 은 나머지 한글을 8바이트 조합형으로도 인코딩하므로 길이로 판별한다"""
     try:
         return len(chr(cp).encode('euc-kr')) == 2
     except UnicodeEncodeError:
@@ -106,7 +106,7 @@ def unicode_range(cps):
 
 
 def kr_face(path, want):
-    """TTC 에서 이름이 정확히 want 인 면을 고른다(없으면 실패 — 엉뚱한 면으로 구우면 폭이 어긋난다)"""
+    """TTC 에서 이름이 정확히 want 인 면을 선택한다(없으면 실패 — 다른 면으로 생성하면 폭이 어긋난다)"""
     col = TTCollection(path, lazy=True)
     for i, f in enumerate(col.fonts):
         if (f['name'].getDebugName(1) or '') == want:

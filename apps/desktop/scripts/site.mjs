@@ -1,14 +1,14 @@
 /**
- * 사이트 설정을 dist/site.json 으로 굽는다.
+ * 사이트 설정을 dist/site.json 으로 생성한다.
  *
- * 데스크톱 앱은 워크스페이스 하나에 묶인다. 어느 서버에 붙을지는 빌드할 때 정하고
- * (JW_SERVER_URL), 앱 ID·이름도 사이트마다 달라야 같은 PC 에 둘이 나란히 설치된다.
+ * 데스크톱 앱은 워크스페이스 하나에 종속된다. 접속할 서버는 빌드 시 결정하며
+ * (JW_SERVER_URL), 앱 ID·이름도 사이트별로 상이해야 동일 PC 에 두 앱을 병행 설치할 수 있다.
  * 런타임(src/main/config.ts)과 패키징(electron-builder.config.cjs)이 이 파일 하나를 읽는다.
  *
  *   JW_SERVER_URL    워크스페이스 주소 (https://ws.example.com). --require 면 필수
- *   JW_APP_ID        기본: 호스트를 뒤집고 .just-workspace (ws.example.com → com.example.ws.just-workspace)
- *   JW_PRODUCT_NAME  기본: just-workspace. 설치 폴더·바로가기 이름. 주면 사용자 데이터 폴더도
- *                    이 이름으로 갈린다(한 PC 에 두 사이트 앱을 둘 때 필요)
+ *   JW_APP_ID        기본: 호스트를 역순으로 배열하고 .just-workspace 를 덧붙인다 (ws.example.com → com.example.ws.just-workspace)
+ *   JW_PRODUCT_NAME  기본: just-workspace. 설치 폴더·바로가기 이름. 지정하면 사용자 데이터 폴더도
+ *                    이 이름으로 분리된다(한 PC 에 두 사이트 앱을 설치할 때 필요)
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';

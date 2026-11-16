@@ -1,10 +1,10 @@
 /**
- * 미러 세션 — Chromium 하나(Playwright, --remote-debugging-pipe, 포트 없음)를 소유하고 뷰어 하나에게 어휘를 흘린다.
+ * 미러 세션 — Chromium 하나(Playwright, --remote-debugging-pipe, 포트 없음)를 소유하고 뷰어 하나에 어휘를 전송한다.
  *
- * 틱: (격리 world 의) 수집기 tick() → 바뀐 원시 레코드만 → convert → VNode JSON 비교 → patch. 문서가 바뀌면(이동) 전체 → snapshot.
- * 틱을 부르는 신호: 32px 스크린캐스트 프레임(무언가 칠해졌다) · 입력 · 자산/폰트/래스터 준비 · 이동. 신호가 없으면 느린 유휴 틱.
- * 틱 간격은 직전 틱 비용의 2배 이상(최소 33ms) — 큰 페이지가 CPU 를 다 먹지 않게.
- * 정책(클립보드·다운로드·업로드)은 여기서 강제한다 — 클라이언트가 무엇을 보내든 막힌 방향은 원격에 닿지 않는다.
+ * 틱: (격리 world 의) 수집기 tick() → 변경된 원시 레코드만 → convert → VNode JSON 비교 → patch. 문서 변경(이동) 시 전체 → snapshot.
+ * 틱 호출 신호: 32px 스크린캐스트 프레임(화면 갱신 발생) · 입력 · 자산/폰트/래스터 준비 · 이동. 신호가 없으면 저속 유휴 틱을 수행한다.
+ * 틱 간격은 직전 틱 비용의 2배 이상(최소 33ms) — 대형 페이지의 CPU 독점 방지.
+ * 정책(클립보드·다운로드·업로드)은 여기서 강제한다 — 클라이언트의 송신 내용과 무관하게 차단된 방향은 원격에 도달하지 않는다.
  */
 import fs from 'node:fs'
 import os from 'node:os'
@@ -36,9 +36,9 @@ export interface MirrorConfig {
   vh: number
   chromium?: string
   policy: PolicyInfo
-  /** Chromium URLAllowlist 와 같은 호스트 목록(host[:port]) — 신뢰 크롬 알림용(차단 자체는 Chromium 정책이 한다) */
+  /** Chromium URLAllowlist 와 동일한 호스트 목록(host[:port]) — 신뢰 크롬 알림용(차단 자체는 Chromium 정책이 수행) */
   allowHosts: string[]
-  /** 뷰어 없음/입력 없음 자동 종료(초). 0 이면 끔 */
+  /** 뷰어 부재/입력 부재 시 자동 종료(초). 0 이면 비활성화 */
   idleSec: number
   maxUploadBytes: number
   trace: boolean
@@ -74,7 +74,7 @@ export class MirrorSession {
   private nodes = new Map<number, VNode>()
   private json = new Map<number, string>()
   private synthOf = new Map<number, Set<number>>()
-  /** 스타일 출처 요소 → 그 글자 노드들(텍스트 스타일은 부모 계산값이라, 부모가 바뀌면 글자 레코드가 같아도 다시 변환해야 한다) */
+  /** 스타일 출처 요소 → 해당 글자 노드 집합(텍스트 스타일은 부모 계산값이므로, 부모 변경 시 글자 레코드가 동일해도 재변환 필요) */
   private textsOf = new Map<number, Set<number>>()
   private urlUsers = new Map<string, Set<number>>()
   private iconHosts = new Map<number, string>()
@@ -115,7 +115,7 @@ export class MirrorSession {
 
   async start(): Promise<void> {
     const exe = this.cfg.chromium || (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)
-    // 기본(영구) 컨텍스트 — 관리 정책 IncognitoModeAvailability=1 이 newContext(=시크릿)를 막는다
+    // 기본(영구) 컨텍스트 — 관리 정책 IncognitoModeAvailability=1 이 newContext(=시크릿)를 차단함
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'mirror-profile-'))
     this.ctx = await chromium.launchPersistentContext(profile, {
       executablePath: exe, headless: true,
@@ -152,7 +152,7 @@ export class MirrorSession {
     this.cdp.on('Page.loadEventFired', () => { this.queue.resumeAfterNav(); this.markDirty() })
     this.cdp.on('Page.frameStoppedLoading', ev => { if (ev.frameId === this.mainFrame) { this.queue.resumeAfterNav(); this.markDirty() } })
     this.cdp.on('DOM.documentUpdated', () => { void this.send('DOM.getDocument', { depth: 0 }).catch(() => undefined) })
-    // 시각 변화 감지기 — 32px 스크린캐스트. 프레임이 오면 "무언가 칠해졌다"(변이 없는 :hover·애니메이션 포함)
+    // 시각 변화 감지기 — 32px 스크린캐스트. 프레임 수신은 화면 갱신 발생을 의미(변이 없는 :hover·애니메이션 포함)
     this.cdp.on('Page.screencastFrame', ev => { this.painted = true; this.markDirty(); void this.send('Page.screencastFrameAck', { sessionId: ev.sessionId }).catch(() => {}) })
     await this.send('Page.startScreencast', { format: 'jpeg', quality: 1, maxWidth: 32, maxHeight: 32, everyNthFrame: 1 })
     const tree = await this.send('Page.getFrameTree')
@@ -192,7 +192,7 @@ export class MirrorSession {
     return this.installing
   }
 
-  /** 수집기 호출(값). 문맥이 사라졌으면 null 로 — 다음 틱에 다시 심는다 */
+  /** 수집기 호출(값). 문맥 소실 시 null 로 처리 — 다음 틱에 재설치 */
   async call<T>(expr: string): Promise<T | undefined> {
     if (this.worldId === null) return undefined
     const ctxId = this.worldId
@@ -218,7 +218,7 @@ export class MirrorSession {
     if (!oid) return undefined
     try {
       const n = await this.send('DOM.requestNode', { objectId: oid })
-      // 텍스트 노드면 부모 요소로(getPlatformFontsForNode 는 요소의 자식 텍스트를 본다)
+      // 텍스트 노드이면 부모 요소로 대체(getPlatformFontsForNode 는 요소의 자식 텍스트를 대상으로 함)
       let nodeId = n.nodeId
       const d = await this.send('DOM.describeNode', { nodeId })
       if (d.node.nodeType === 3 && d.node.parentId) nodeId = d.node.parentId
@@ -269,7 +269,7 @@ export class MirrorSession {
     this.dirty = false
     try {
       if (!this.ws) return
-      if (this.dialogs.size) return // JS 대화상자가 열려 있으면 렌더러가 멈춰 있다
+      if (this.dialogs.size) return // JS 대화상자가 열려 있으면 렌더러가 정지 상태임
       if (this.worldId === null) { await this.install(); if (this.worldId === null) { this.dirty = true; return } }
       if (!wasDirty && performance.now() - this.lastTickAt < IDLE_TICK_MS && !this.needFull) return
       let pre = ''
@@ -278,7 +278,7 @@ export class MirrorSession {
       const opts = { full: this.needFull, paint: this.painted }
       this.needFull = false
       this.painted = false
-      // 입력 적용과 겹치지 않게 읽는다 — 그래야 iseq(여기까지 적용됨)가 읽은 상태와 정확히 맞는다(로컬 에코 대조)
+      // 입력 적용과 겹치지 않도록 읽는다 — iseq(여기까지 적용됨)가 읽은 상태와 정확히 일치해야 한다(로컬 에코 대조)
       let iseq = 0
       const t0 = performance.now()
       const out = await this.lock.run(() => { iseq = this.input.appliedSeq; return this.call<string>(`${pre}__jwm.tick(${JSON.stringify(opts)})`) })
@@ -324,7 +324,7 @@ export class MirrorSession {
   private apply(res: TickResult, iseq: number): void {
     const add: VNode[] = [], upd: VNode[] = [], del: number[] = []
     if (res.full) {
-      // 새 문서(또는 다시 읽기) — 상태를 비우고 스냅샷으로
+      // 새 문서(또는 재읽기) — 상태를 초기화하고 스냅샷으로 전환
       this.raw.clear(); this.nodes.clear(); this.json.clear(); this.synthOf.clear(); this.textsOf.clear(); this.urlUsers.clear(); this.iconHosts.clear(); this.reconvert.clear()
       this.raster.reset()
       this.needSnapshot = true
@@ -337,7 +337,7 @@ export class MirrorSession {
       this.raw.set(r.i, r); todo.add(r.i)
       if (r.t === 'x' && r.ps) { let set = this.textsOf.get(r.ps); if (!set) { set = new Set(); this.textsOf.set(r.ps, set) } set.add(r.i) }
     }
-    // 요소의 계산값이 바뀌었다 → 그 요소를 스타일 출처로 쓰는 글자들도 다시(수집기는 같은 글자 레코드를 다시 보내지 않는다)
+    // 요소의 계산값 변경 → 해당 요소를 스타일 출처로 사용하는 글자도 재변환(수집기는 동일한 글자 레코드를 재전송하지 않음)
     for (const r of res.recs) if (r.t === 'e') { const ts = this.textsOf.get(r.i); if (ts) for (const t of ts) if (this.raw.has(t)) todo.add(t) }
     for (const id of this.reconvert) if (this.raw.has(id)) todo.add(id)
     this.reconvert.clear()
@@ -400,7 +400,7 @@ export class MirrorSession {
     if (syn) { for (const s of syn) { if (this.json.delete(s)) del.push(s); this.nodes.delete(s) } this.synthOf.delete(id) }
   }
 
-  /** 자산·폰트·래스터가 준비됐다 → 그 노드들을 다시 변환 */
+  /** 자산·폰트·래스터 준비 완료 → 해당 노드 재변환 */
   private requeue(ids: Iterable<number>): void { for (const id of ids) if (id < SYNTH_BASE) this.reconvert.add(id); this.markDirty() }
   private onAsset(url: string): void { const s = this.urlUsers.get(url); if (s) this.requeue(s) }
 
@@ -423,7 +423,7 @@ export class MirrorSession {
     if (key !== this.lastVal || this.input.valDirty) { this.lastVal = key; this.input.valDirty = false; this.sendMsg(msg) }
   }
 
-  // ── 보내기 ──
+  // ── 송신 ──
   private sendSnapshot(iseq: number, ms: number): void {
     const all = [...this.nodes.values()]
     this.stats.snapshots++
@@ -434,7 +434,7 @@ export class MirrorSession {
   }
   private sendPatch(iseq: number, ms: number, add: VNode[], upd: VNode[], del: number[], doc?: DocInfo): void {
     this.stats.patches++
-    // 아주 큰 패치는 나눠서(한 메시지 상한) — 같은 iseq, del·doc 은 첫 조각에
+    // 대형 패치는 분할 전송(메시지당 상한) — 동일 iseq, del·doc 은 첫 조각에 포함
     const items: [0 | 1, VNode][] = [...add.map(n => [0, n] as [0, VNode]), ...upd.map(n => [1, n] as [1, VNode])]
     for (let i = 0; i === 0 || i < items.length; i += SNAPSHOT_CHUNK) {
       const part = items.slice(i, i + SNAPSHOT_CHUNK)
@@ -453,12 +453,12 @@ export class MirrorSession {
     this.bytesOut += s.length
     if (m.t === 'patch' || m.t === 'snapshot') this.stats.bytesPatch += s.length
     this.ws.send(s)
-    // 클라이언트가 너무 느리다 — 메모리를 지키려 끊는다(다시 붙으면 스냅샷)
+    // 클라이언트 처리 지연 과다 — 메모리 보호를 위해 연결 종료(재연결 시 스냅샷)
     if (this.ws.bufferedAmount > 96 * 1024 * 1024) { this.cfg.log('viewer too slow, closing'); this.ws.close(1013, 'slow') }
   }
   sendBinary(buf: Buffer): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
-    if (this.ws.bufferedAmount > 8 * 1024 * 1024) return // 밀리면 인셋 프레임부터 버린다
+    if (this.ws.bufferedAmount > 8 * 1024 * 1024) return // 적체 시 인셋 프레임부터 폐기
     this.bytesOut += buf.length
     this.ws.send(buf)
   }
@@ -476,8 +476,8 @@ export class MirrorSession {
       void this.onClient(data.toString())
     })
     ws.on('close', () => { if (this.ws === ws) { this.ws = null; this.insets.stop(); this.lastViewerAt = Date.now() } })
-    // 상한(64KB)을 넘는 프레임·깨진 프레임은 ws 가 'error' 를 낸다 — 듣는 쪽이 없으면 프로세스가 죽는다(70KB 붙여넣기 한 번에 세션이 끝난다).
-    // 그 연결만 끊는다(1009 등). 세션·Chromium 은 그대로 — 다시 붙으면 스냅샷.
+    // 상한(64KB)을 초과하는 프레임·손상된 프레임에 대해 ws 가 'error' 를 발생시킨다 — 리스너가 없으면 프로세스가 종료된다(70KB 붙여넣기 1회로 세션 종료).
+    // 해당 연결만 종료한다(1009 등). 세션·Chromium 은 유지 — 재연결 시 스냅샷.
     ws.on('error', e => { this.cfg.log('viewer socket error', String((e as Error & { code?: string }).code || e).slice(0, 80)); try { ws.terminate() } catch { /* */ } })
     this.insets.start()
     this.markDirty()
@@ -503,7 +503,7 @@ export class MirrorSession {
     }
   }
 
-  /** 스크롤 빠른 길 — 수집 없이 문서 오프셋만 먼저(노드는 스크롤 불변이라 따로 갈 것이 없다) */
+  /** 스크롤 고속 경로 — 수집 없이 문서 오프셋만 선행 전송(노드는 스크롤 불변이므로 별도 전송 대상 없음) */
   private async quickScroll(): Promise<void> {
     const r = await this.call<[number, number]>('[window.scrollX, window.scrollY]')
     if (!r) return
@@ -521,7 +521,7 @@ export class MirrorSession {
     if (k === 'prompt') msg.def = cleanText(d.defaultValue()).slice(0, 4000)
     if (!this.ws) { this.dialogs.delete(id); void d.dismiss().catch(() => {}); return }
     this.sendMsg(msg)
-    // 답이 없으면 60초 뒤 닫는다(렌더러가 멈춰 있다)
+    // 응답이 없으면 60초 후 닫는다(렌더러 정지 상태)
     setTimeout(() => { if (this.dialogs.get(id) === d) { this.dialogs.delete(id); void d.dismiss().catch(() => {}); this.markDirty() } }, 60000).unref()
   }
   private answerDialog(m: Extract<ClientMsg, { t: 'dialog' }>): void {
@@ -556,14 +556,14 @@ export class MirrorSession {
     setTimeout(() => this.choosers.delete(id), 10 * 60 * 1000).unref()
   }
 
-  /** POST /upload/<id> — 한 파일씩. last 면 원격 file input 에 넣는다 */
+  /** POST /upload/<id> — 파일 단위 전송. last 이면 원격 file input 에 설정 */
   async upload(id: string, name: string, body: Buffer, last: boolean): Promise<number> {
     if (!this.cfg.policy.ul) return 403
     const c = this.choosers.get(id)
     if (!c) return 404
     if (body.length > this.cfg.maxUploadBytes || c.bytes + body.length > this.cfg.maxUploadBytes * 4) return 413
     if (!c.multi && c.files.length >= 1) return 409
-    // 파일마다 폴더 하나 — 원격 페이지가 보는 이름이 사용자가 고른 이름 그대로가 되게
+    // 파일마다 폴더 하나 — 원격 페이지에 노출되는 이름을 사용자가 선택한 이름과 동일하게 유지
     const dir = path.join(this.tmp, 'up-' + id, String(c.files.length))
     fs.mkdirSync(dir, { recursive: true })
     const file = path.join(dir, safeName(name))
@@ -581,7 +581,7 @@ export class MirrorSession {
 
   private async onPopup(p: Page): Promise<void> {
     if (p === this.page) return
-    // 새 창은 열지 않는다 — 주소가 허용 호스트면 지금 탭에서 연다
+    // 새 창은 열지 않는다 — 주소가 허용 호스트이면 현재 탭에서 연다
     let url = p.url()
     if (!url || url === 'about:blank') { await p.waitForEvent('framenavigated', { timeout: 3000 }).catch(() => null); url = p.url() }
     await p.close().catch(() => {})
@@ -645,7 +645,7 @@ export function hostAllowed(u: URL, allow: string[]): boolean {
   return false
 }
 
-/** 내려받기·올리기 파일 이름 — 경로·제어문자·따옴표 제거, 255자 */
+/** 다운로드·업로드 파일 이름 — 경로·제어문자·따옴표 제거, 255자 */
 export function safeName(n: string): string {
   const s = cleanText(n || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '_').trim().slice(0, 200)
   return s || 'download'

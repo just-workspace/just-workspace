@@ -13,7 +13,7 @@ describe('remote protocol (viewer)', () => {
     const ox = (1000 - w) / 2
     expect(pointerToRatio(ox, 0, box, v)).toEqual({ x: 0, y: 0 })
     expect(pointerToRatio(ox + w, 500, box, v)).toEqual({ x: 1, y: 1 })
-    expect(pointerToRatio(ox - 5, 250, box, v)).toBeNull() // 여백 클릭은 보내지 않음
+    expect(pointerToRatio(ox - 5, 250, box, v)).toBeNull() // 여백 클릭은 전송하지 않음
     expect(pointerToRatio(10, 10, { left: 0, top: 0, width: 0, height: 0 }, v)).toBeNull()
   })
 
@@ -54,11 +54,11 @@ describe('remote protocol (viewer)', () => {
     expect(cleanCodeInput('482 913 057')).toBe('482 913 057')
     expect(cleanCodeInput('12a3-4x')).toBe('123 4')
     expect(cleanCodeInput('482-913-057')).toBe('482 913 057')
-    // 문장째·줄바꿈째 붙여넣기(예전엔 13자 자르기에 숫자가 잘렸다)
+    // 문장·줄바꿈 포함 붙여넣기(이전에는 13자 절단으로 숫자가 절단되었다)
     expect(cleanCodeInput('원격 지원 접속 코드: 482 913 057\n')).toBe('482 913 057')
     expect(cleanCodeInput('482\u00a0913\u00a0057')).toBe('482 913 057')
     expect(codeFormatOk(cleanCodeInput('원격 지원 접속 코드: 482 913 057'))).toBe(true)
-    // 넘치면 자르지 않고 형식 오류로 남긴다
+    // 초과 시 절단하지 않고 형식 오류로 처리한다
     expect(codeFormatOk(cleanCodeInput('482 913 0571'))).toBe(false)
     expect(codeFormatOk('482 913 057')).toBe(true)
     expect(codeFormatOk('482-913-057')).toBe(true)

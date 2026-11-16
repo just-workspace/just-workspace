@@ -1,20 +1,20 @@
 /**
- * 원격 데스크톱 데이터 채널 프로토콜(뷰어 쪽) — LiveKit publishData(topic 'rd') 위 JSON 한 줄.
- * 호스트 쪽 검증은 apps/desktop/src/main/remote/protocol.ts(같은 모양, 범위·형식·속도 검사). 문서: plugins/remote-desktop/README.md
+ * 원격 데스크톱 데이터 채널 프로토콜(뷰어 측) — LiveKit publishData(topic 'rd') 위 JSON 한 줄.
+ * 호스트 측 검증은 apps/desktop/src/main/remote/protocol.ts(동일 형식, 범위·형식·속도 검사). 문서: plugins/remote-desktop/README.md
  *
  * 뷰어 → 호스트
- *   {t:'mm', x, y}            마우스 이동 — x·y 는 화면 크기에 대한 0..1 비율(lossy 로 보낸다)
+ *   {t:'mm', x, y}            마우스 이동 — x·y 는 화면 크기에 대한 0..1 비율(lossy 로 전송한다)
  *   {t:'md'|'mu', b, x, y}    버튼 누름/뗌 — b 0=왼쪽 1=가운데 2=오른쪽(reliable)
- *   {t:'wh', dx, dy}          휠(픽셀 단위, ±1200 으로 자른다)
- *   {t:'kd'|'ku', c}          키 — KeyboardEvent.code(물리 키). 문자 입력이 아니라 키 위치라 IME 와 무관
- *   {t:'sk', k}               특수 조합 — 'cad'(Ctrl+Alt+Del: 1단계는 무인 모드 전용이라 뷰어에서 비활성) | 'win' | 'alt-tab' | 'esc-all'
+ *   {t:'wh', dx, dy}          휠(픽셀 단위, ±1200 으로 제한한다)
+ *   {t:'kd'|'ku', c}          키 — KeyboardEvent.code(물리 키). 문자 입력이 아닌 키 위치이므로 IME 와 무관
+ *   {t:'sk', k}               특수 조합 — 'cad'(Ctrl+Alt+Del: 1단계는 무인 모드 전용이므로 뷰어에서 비활성) | 'win' | 'alt-tab' | 'esc-all'
  *                             | 'ctrl-shift-esc' | 'win-d' | 'win-r' | 'printscreen'
- *   {t:'clipreq'}             호스트 클립보드 요청([클립보드 받기]) — 호스트는 요청이 있을 때만 보낸다
- *   {t:'clip', text}          클립보드 텍스트를 호스트에 넣기(최대 100k 자)
- *   {t:'mon', i}              보낼 모니터 바꾸기
- *   {t:'q', m, vw, vh}        화질 모드 'auto'|'sharp'|'smooth' + 보는 창 크기(물리 픽셀, 0 = 줄이지 않음)
+ *   {t:'clipreq'}             호스트 클립보드 요청([클립보드 받기]) — 호스트는 요청이 있을 때만 전송한다
+ *   {t:'clip', text}          클립보드 텍스트를 호스트에 설정(최대 100k 자)
+ *   {t:'mon', i}              송출 모니터 변경
+ *   {t:'q', m, vw, vh}        화질 모드 'auto'|'sharp'|'smooth' + 표시 창 크기(물리 픽셀, 0 = 축소하지 않음)
  * 호스트 → 뷰어
- *   {t:'info', w, h, mons, cur, q?}   캡처 크기·모니터 목록·지금 화질(q 가 없으면 화질 모드를 모르는 옛 호스트)
+ *   {t:'info', w, h, mons, cur, q?}   캡처 크기·모니터 목록·현재 화질(q 가 없으면 화질 모드를 지원하지 않는 구버전 호스트)
  *   {t:'q', m}                    화질 모드 적용 확인
  *   {t:'clip', text}              호스트 클립보드(사용자가 [받기] 할 때)
  *   {t:'state', s, msg?}          'ok' | 'secure_desktop'(UAC 등 보안 화면 — 조작 불가) | 'paused'
@@ -49,7 +49,7 @@ export type HostMsg =
 const clamp01 = (v: number) => Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0))
 const round4 = (v: number) => Math.round(v * 10000) / 10000
 
-/** 표시 요소 안 포인터 위치 → 비율. 영상이 레터박스(object-contain)로 들어간 경우 실제 그림 영역 기준 */
+/** 표시 요소 내 포인터 위치 → 비율. 영상이 레터박스(object-contain)로 표시된 경우 실제 영상 영역 기준 */
 export function pointerToRatio(
   clientX: number, clientY: number,
   box: { left: number; top: number; width: number; height: number },
@@ -77,7 +77,7 @@ export function wheel(dx: number, dy: number, deltaMode: number): { t: 'wh'; dx:
   return { t: 'wh', dx: c(dx), dy: c(dy) }
 }
 
-/** 보낼 수 있는 키 코드(KeyboardEvent.code) — 호스트도 같은 목록으로 거른다 */
+/** 전송 가능한 키 코드(KeyboardEvent.code) — 호스트도 동일 목록으로 필터링한다 */
 export const KEY_CODES: ReadonlySet<string> = new Set([
   ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(c => `Key${c}`),
   ...'0123456789'.split('').map(c => `Digit${c}`),
@@ -101,7 +101,7 @@ export function encode(msg: ViewerMsg): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode(JSON.stringify(msg))
 }
 
-/** 호스트 메시지 해석 — 모양이 다르면 null(무시) */
+/** 호스트 메시지 해석 — 형식이 다르면 null(무시) */
 export function decodeHost(payload: Uint8Array): HostMsg | null {
   let m: unknown
   try { m = JSON.parse(new TextDecoder().decode(payload)) } catch { return null }
@@ -124,25 +124,25 @@ export function decodeHost(payload: Uint8Array): HostMsg | null {
   }
 }
 
-/** 마우스 이동만 lossy(늦게 와도 다음 값이 덮는다), 나머지는 순서·도착 보장 */
+/** 마우스 이동만 lossy(지연 도착해도 다음 값이 대체한다), 나머지는 순서·도착 보장 */
 export function isLossy(msg: ViewerMsg): boolean {
   return msg.t === 'mm'
 }
 
-/** 연결 품질 — 왕복 지연 200ms 넘거나 15fps 아래면 느림 */
+/** 연결 품질 — 왕복 지연이 200ms 를 초과하거나 15fps 미만이면 느림 */
 export function qualityOf(rttMs: number | null, fps: number | null): 'ok' | 'slow' {
   if ((rttMs != null && rttMs > 200) || (fps != null && fps > 0 && fps < 15)) return 'slow'
   return 'ok'
 }
 
-/** Ctrl+Alt+Shift 를 함께 누르면 키보드 잡기를 푼다 */
+/** Ctrl+Alt+Shift 를 동시에 누르면 키보드 캡처를 해제한다 */
 export function isReleaseCombo(e: { ctrlKey: boolean; altKey: boolean; shiftKey: boolean }): boolean {
   return e.ctrlKey && e.altKey && e.shiftKey
 }
 
 /**
- * 받는 영상 통계(2초마다 getStats) → 화면에 보일 숫자. prev 는 직전 표본(비트레이트·손실률은 차이로 낸다).
- * path: 'udp' 직접 · 'tcp' 직접(UDP 막힘) · 'relay-udp'/'relay-tcp'/'relay-tls' TURN 중계 — 중계면 지연·대역이 손해다.
+ * 수신 영상 통계(2초마다 getStats) → 화면 표시용 수치. prev 는 직전 표본(비트레이트·손실률은 차이로 산출한다).
+ * path: 'udp' 직접 · 'tcp' 직접(UDP 차단) · 'relay-udp'/'relay-tcp'/'relay-tls' TURN 중계 — 중계 시 지연·대역에서 불리하다.
  */
 export interface StreamStats {
   at: number

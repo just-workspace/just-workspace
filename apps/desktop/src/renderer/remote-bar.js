@@ -1,4 +1,4 @@
-// 원격 접속 중 막대 — 접속 내내 화면 위 가장자리에 남는다. [끊기]는 즉시 세션을 끝낸다. 왼쪽 손잡이로 옮길 수 있다.
+// 원격 접속 중 막대 — 접속 중 계속 화면 위 가장자리에 유지된다. [끊기]는 세션을 즉시 종료한다. 왼쪽 손잡이로 이동할 수 있다.
 (async () => {
   const info = await window.rd.bar.info();
   if (info) document.getElementById('who').textContent = info.requester || '알 수 없는 요청자';

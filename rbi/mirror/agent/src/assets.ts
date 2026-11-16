@@ -1,11 +1,11 @@
 /**
- * 자산 — 원격 페이지가 받은 이미지 바이트를 **디코드→재인코딩(WebP)** 해 sha256 으로 보관한다.
+ * 자산 — 원격 페이지가 수신한 이미지 바이트를 **디코드→재인코딩(WebP)** 하여 sha256 으로 보관한다.
  *
- * 원본 바이트는 클라이언트로 가지 않는다. 가는 것은 sharp(libvips) 가 새로 만든 WebP 한 종류뿐이고,
- * 메타데이터(EXIF/ICC/XMP)는 기본 제거, 치수 상한 4096, 입력 픽셀 상한. SVG 이미지도 여기서 래스터가 된다(librsvg, 버퍼 입력 — 외부 참조 안 따라감).
- * 바이트 출처: Network.getResponseBody(요청 id 를 responseReceived 에서 기억) → 실패하면 Page.getResourceContent → data: URL 직접 디코드.
- * 에이전트는 **원격이 이미 받은 것만** 쓴다 — 새로 내려받지 않는다(네트워크 격리는 netfilter 가, 이건 원격 캐시를 읽을 뿐).
- * 상한: 세션당 자산 개수·총 바이트(넘으면 새 자산을 만들지 않고 'limit' 알림).
+ * 원본 바이트는 클라이언트로 전송하지 않는다. 전송 대상은 sharp(libvips) 가 새로 생성한 WebP 한 종류뿐이며,
+ * 메타데이터(EXIF/ICC/XMP)는 기본 제거, 치수 상한 4096, 입력 픽셀 상한 적용. SVG 이미지도 여기서 래스터로 변환된다(librsvg, 버퍼 입력 — 외부 참조 미추적).
+ * 바이트 출처: Network.getResponseBody(요청 id 를 responseReceived 에서 기록) → 실패 시 Page.getResourceContent → data: URL 직접 디코드.
+ * 에이전트는 **원격이 이미 수신한 것만** 사용한다 — 새로 다운로드하지 않는다(네트워크 격리는 netfilter 가 담당하며, 본 모듈은 원격 캐시만 읽는다).
+ * 상한: 세션당 자산 개수·총 바이트(초과 시 새 자산을 생성하지 않고 'limit' 알림).
  */
 import { createHash } from 'node:crypto'
 import sharp from 'sharp'
@@ -32,7 +32,7 @@ export class AssetStore {
 
   constructor(private send: Sender, private onReady: (url: string) => void, private limits: AssetLimits = { maxCount: 4000, maxBytes: 256 * 1024 * 1024 }, private onLimit?: () => void) {}
 
-  /** Network 이벤트에서 요청 id 기억(이미지만) */
+  /** Network 이벤트에서 요청 id 기록(이미지만) */
   onResponse(ev: Protocol.Network.responseReceivedPayload): void {
     const mime = ev.response.mimeType || ''
     if (ev.type === 'Image' || mime.startsWith('image/')) {
@@ -44,7 +44,7 @@ export class AssetStore {
 
   get(sha: string): Asset | undefined { return this.bySha.get(sha) }
 
-  /** URL 의 재인코딩 자산 sha. 아직 없으면 undefined(요청만 걸어 둔다 — 준비되면 onReady(url)) */
+  /** URL 의 재인코딩 자산 sha. 아직 없으면 undefined(요청만 등록한다 — 준비되면 onReady(url)) */
   shaFor(url: string): string | undefined {
     const e = this.byUrl.get(url)
     if (e) return e.sha
@@ -57,7 +57,7 @@ export class AssetStore {
     return undefined
   }
 
-  /** 우리가 찍은 픽셀(아이콘 래스터) → 재인코딩 WebP(무손실) 자산 */
+  /** 에이전트가 캡처한 픽셀(아이콘 래스터) → 재인코딩 WebP(무손실) 자산 */
   async putRaster(png: Buffer): Promise<string | undefined> {
     if (this.full()) return undefined
     try {
@@ -94,7 +94,7 @@ export class AssetStore {
       try {
         const r = await this.send('Network.getResponseBody', { requestId: rid })
         return Buffer.from(r.body, r.base64Encoded ? 'base64' : 'utf8')
-      } catch { /* 버퍼에서 밀렸을 수 있다 */ }
+      } catch { /* 버퍼에서 제거되었을 수 있음 */ }
     }
     if (this.frameId) {
       try {

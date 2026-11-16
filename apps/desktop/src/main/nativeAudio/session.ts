@@ -1,8 +1,8 @@
 /**
- * HiresSession — 데스크톱 하이레조 세션 하나(장치 두 개 + 릴레이 연결). Electron 메인(또는 Node 하네스)에서 돈다. 렌더러는 IPC 로만 본다.
+ * HiresSession — 데스크톱 하이레조 세션 하나(장치 두 개 + 릴레이 연결). Electron 메인(또는 Node 하네스)에서 실행된다. 렌더러는 IPC 로만 접근한다.
  *
  * 송신: 캡처 장치(exclusive, 요청 포맷) → 링 → 프레임(frameMs) → 와이어 코덱(장치 포맷 그대로: s16/s24/s32/f32) → XOR 패리티 4:1
- *       → 릴레이(WebTransport 데이터그램 기본, WebSocket 폴백). 브라우저 무손실 피어와 같은 프로토콜이라 서로 들린다.
+ *       → 릴레이(WebTransport 데이터그램 기본, WebSocket 폴백). 브라우저 무손실 피어와 동일한 프로토콜이므로 상호 수신이 가능하다.
  * 수신: 패킷 → 재조립 → FEC/NACK → 피어별 지터버퍼(바이트 프레임) → (단일 피어·포맷 일치면 바이트 그대로 / 아니면 Float64 믹스·리샘플)
  *       → 재생 링 → 재생 장치(exclusive). 재생 레이트 ≠ 스트림 레이트이면 speex 리샘플 + bitPerfect=false.
  * 비트퍼펙트 = 캡처 exclusive·변환 없음(24-in-32 >>8 허용) && 재생 exclusive·단일 피어·무손실 변환만.
@@ -35,7 +35,7 @@ export interface HiresOpenOptions {
   bits: 16 | 24 | 32;
   channels: 1 | 2;
   frameMs?: number;
-  /** exclusive 가 안 되면 shared 로라도 연다(기본 false — 호출자가 무손실 24/48 로 내려간다) */
+  /** exclusive 실패 시 shared 로 대체하여 연다(기본 false — 호출자가 무손실 24/48 로 하향한다) */
   allowShared?: boolean;
   fec?: boolean;
   bufferPreset?: BufferPreset;
@@ -173,7 +173,7 @@ interface PeerRx {
 const DEFAULT_FRAME_MS = 10;
 
 export interface HiresSessionHooks {
-  /** 토큰 만료·재접속 때 새 grant. 없으면 'needGrant' 이벤트 뒤 setGrant() 를 기다린다 */
+  /** 토큰 만료·재접속 시 새 grant. 없으면 'needGrant' 이벤트 후 setGrant() 를 대기한다 */
   refreshGrant?: () => Promise<RelayGrant>;
   /** 테스트 계측 */
   onFrameSent?: (seq: number, payload: Uint8Array) => void;
@@ -242,8 +242,8 @@ export class HiresSession extends EventEmitter {
   }
 
   /**
-   * 장치를 연다(릴레이는 connect 에서). exclusive 가 안 되고 allowShared 가 아니면 ok=false 로 돌려주고 장치를 닫는다 —
-   * 호출자(렌더러 어댑터)가 danger 띠 + 무손실 24/48 로 내려간다.
+   * 장치를 연다(릴레이는 connect 에서). exclusive 가 불가하고 allowShared 가 아니면 ok=false 를 반환하고 장치를 닫는다 —
+   * 호출자(렌더러 어댑터)가 danger 띠 + 무손실 24/48 로 하향한다.
    */
   open(o: HiresOpenOptions): HiresOpenResult {
     if (this.cap || this.pb) this.closeDevices();
@@ -269,7 +269,7 @@ export class HiresSession extends EventEmitter {
       return this.fail({ ok: false, exclusive: false, bitPerfect: false, capture: null, playback: null, wire: null, formatLabel: null, nominalBps: 0, reason: err.reason ?? 'unknown', code: err.code, app: err.blockingApp ?? null, device: capDev.name, attempts: err.attempts ?? [] });
     }
     this.cap = cap;
-    // null 백엔드(테스트)엔 exclusive 개념이 없다 — 변환 없이 열렸으면 exclusive·비트퍼펙트로 친다
+    // null 백엔드(테스트)에는 exclusive 개념이 없다 — 변환 없이 열렸으면 exclusive·비트퍼펙트로 간주한다
     const exclusiveOk = cap.exclusive || backend === 'null';
     if (!exclusiveOk && !o.allowShared) {
       const r = this.fail({ ok: false, exclusive: false, bitPerfect: false, capture: this.sideInfo(cap), playback: null, wire: null, formatLabel: null, nominalBps: 0, reason: cap.failReason ?? 'unknown', code: cap.failCode ?? undefined, app: cap.blockingApp, device: capDev.name, attempts: cap.attempts });
@@ -284,7 +284,7 @@ export class HiresSession extends EventEmitter {
     this.wire = { codec, rate: ci.sampleRate, bits: ci.bits as 16 | 24 | 32, channels: ci.channels, frameMs: this.opts.frameMs!, frameSamples: fs, fec: this.opts.fec! && codec !== 'pcm_f32' ? true : this.opts.fec! };
     this.capFrameBuf = new Uint8Array(fs * ci.channels * bytesPerSample(ci.format));
 
-    // 재생: 캡처와 같은 포맷으로 시도(수신 스트림이 보통 같은 레이트) — 안 되면 후보 하향, 그래도 안 되면 shared
+    // 재생: 캡처와 동일한 포맷으로 시도(수신 스트림이 통상 동일 레이트) — 실패 시 후보 하향, 그래도 실패하면 shared
     let pb: OpenedDevice | null = null;
     if (!o.noPlayback && pbDev) {
       try {
@@ -374,7 +374,7 @@ export class HiresSession extends EventEmitter {
     const seq = this.seq;
     const ts = this.ts;
     this.ts = (this.ts + w.frameSamples) >>> 0;
-    if (!tr || this.state !== 'connected') return;  // 접속 전엔 버린다(seq 도 안 올린다)
+    if (!tr || this.state !== 'connected') return;  // 접속 전에는 폐기한다(seq 도 증가시키지 않는다)
     this.seq = (this.seq + 1) >>> 0;
     this.framesSent++;
     const h: Partial<Header> & { type: number } = {
@@ -432,7 +432,7 @@ export class HiresSession extends EventEmitter {
 
   private async freshGrant(): Promise<RelayGrant> {
     if (this.hooks.refreshGrant) return this.hooks.refreshGrant();
-    // 렌더러에 부탁하고 10 s 기다린다
+    // 렌더러에 요청하고 10 s 대기한다
     return new Promise<RelayGrant>((resolve, reject) => {
       const t = setTimeout(() => { this.grantWaiters = this.grantWaiters.filter((w) => w !== resolve); reject(new Error('grant refresh timed out')); }, 10_000);
       this.grantWaiters.push((g) => { clearTimeout(t); resolve(g); });
@@ -479,7 +479,7 @@ export class HiresSession extends EventEmitter {
       };
       tr.onClose = (reason) => { clearTimeout(t); reject(new Error(reason)); this.onTransportClosed(tr, reason); };
     });
-    welcome.catch(() => { /* connect 실패가 먼저면 의미 없음 */ });
+    welcome.catch(() => { /* connect 실패가 선행하면 무의미 */ });
     await tr.connect(timeout);
     await welcome;
   }
@@ -584,7 +584,7 @@ export class HiresSession extends EventEmitter {
     if (h.rate === 0 || h.channels === 0 || h.frame === 0) return;
     const name = codecName(h.codec);
     const sf = name === 'unknown' ? null : formatForCodec(name);
-    if (!sf) return;  // flac/opus 는 아직 디코더 없음 — 버린다
+    if (!sf) return;  // flac/opus 는 디코더 미구현 — 폐기한다
     let r = this.rx.get(h.src);
     if (r && (r.rate !== h.rate || r.channels !== h.channels || r.bits !== h.bits || r.frameSamples !== h.frame || r.streamFormat !== sf)) {
       r.resampler?.destroy();
@@ -718,7 +718,7 @@ export class HiresSession extends EventEmitter {
     }, period);
   }
 
-  /** 모든 피어에서 프레임 하나씩 꺼내 장치 프레임 하나를 만든다. 단일 피어·포맷 일치면 바이트 그대로 */
+  /** 모든 피어에서 프레임을 하나씩 읽어 장치 프레임 하나를 생성한다. 단일 피어·포맷 일치면 바이트 그대로 */
   private mixOnce(devFrames: number, devBytes: number, devFormat: SampleFormat, devCh: number, devRate: number): Uint8Array {
     const active: PeerRx[] = [];
     for (const r of this.rx.values()) active.push(r);
@@ -729,7 +729,7 @@ export class HiresSession extends EventEmitter {
       const p = r.jitter.pull();
       pulls.push({ r, bytes: p.bytes, real: p.kind === 'ok' });
     }
-    // 빠른 길: 피어 하나, 레이트·채널 같음, 무손실 변환
+    // 고속 경로: 피어 하나, 레이트·채널 동일, 무손실 변환
     if (pulls.length === 1) {
       const { r, bytes, real } = pulls[0];
       if (r.rate === devRate && r.channels === devCh && losslessConversion(r.streamFormat, devFormat)) {
@@ -740,7 +740,7 @@ export class HiresSession extends EventEmitter {
         return out;
       }
     }
-    // 일반 길: Float64 로 풀어 (리샘플) 믹스
+    // 일반 경로: Float64 로 변환하여 (리샘플) 믹스
     this.playbackBitExact = false;
     const inputs: Float64Array[] = [];
     let anyResample = false;
@@ -758,7 +758,7 @@ export class HiresSession extends EventEmitter {
         const have = Math.min(need, r.fifo.length);
         for (let k = 0; k < have; k++) take[k] = r.fifo[k];
         r.fifo.splice(0, have);
-        if (r.fifo.length > need * 8) r.fifo.splice(0, r.fifo.length - need * 4);  // 드리프트로 쌓이면 자른다
+        if (r.fifo.length > need * 8) r.fifo.splice(0, r.fifo.length - need * 4);  // 드리프트로 누적되면 절단한다
         x = take;
       }
       inputs.push(x);

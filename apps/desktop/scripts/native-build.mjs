@@ -6,7 +6,7 @@
 //
 // 필요한 도구(Windows): Visual Studio Build Tools 2022 "C++ 데스크톱 개발" 워크로드(MSVC v143 + Windows 11 SDK), Python 3.
 //   winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-// node-gyp 는 devDependency(13.x). Electron 헤더는 https://electronjs.org/headers 에서 node-gyp 가 내려받아 ~/.cache/node-gyp 에 둔다.
+// node-gyp 는 devDependency(13.x). Electron 헤더는 https://electronjs.org/headers 에서 node-gyp 가 내려받아 ~/.cache/node-gyp 에 저장한다.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';

@@ -1,8 +1,8 @@
 /**
- * 원격 데스크톱 플러그인 API 클라이언트(호스트 쪽) — /api/plugins/remote-desktop/*.
+ * 원격 데스크톱 플러그인 API 클라이언트(호스트 측) — /api/plugins/remote-desktop/*.
  *  - 내 기기: 등록·설정은 로그인 Bearer, 롱폴링·동의·종료는 X-Remote-Host(<기기 id>:<호스트 비밀>)
  *  - 1회성 지원(포터블): 계정 없음 — 코드 발급 후 X-Remote-Support(<세션 id>:<비밀>)
- * 플러그인이 서버에 없거나 꺼져 있으면(404·403) 호출부가 기능을 숨긴다.
+ * 플러그인이 서버에 없거나 비활성 상태이면(404·403) 호출부가 기능을 숨긴다.
  */
 export const PLUGIN_ID = 'remote-desktop';
 export const PREFIX = `/api/plugins/${PLUGIN_ID}`;
@@ -61,11 +61,11 @@ export class RemoteApi {
   patchDevice(token: () => Promise<string>, id: string, body: { allow_remote?: boolean; unattended?: boolean; name?: string }) {
     return this.req<{ device: { name: string; allow_remote: boolean; unattended: boolean } }>(`/devices/${id}`, { kind: 'bearer', token }, { method: 'PATCH', body });
   }
-  /** 이 기기에 들어온 접속 기록(최근 순, 소유자만) */
+  /** 이 기기로 수신된 접속 기록(최근 순, 소유자만) */
   deviceSessions(token: () => Promise<string>, id: string, limit = 3) {
     return this.req<{ sessions: SessionOut[] }>(`/devices/${id}/sessions?limit=${limit}`, { kind: 'bearer', token });
   }
-  /** 등록 해지 — 서버가 키를 폐기하고 진행 중 세션을 끝낸다 */
+  /** 등록 해지 — 서버가 키를 폐기하고 진행 중인 세션을 종료한다 */
   deleteDevice(token: () => Promise<string>, id: string) {
     return this.req<unknown>(`/devices/${id}`, { kind: 'bearer', token }, { method: 'DELETE' });
   }
@@ -76,7 +76,7 @@ export class RemoteApi {
   hostDecision(cred: Cred, sessionId: string, allow: boolean) {
     return this.req<{ session: SessionOut; livekit?: LivekitInfo }>(`/host/sessions/${sessionId}/decision`, cred, { method: 'POST', body: { allow } });
   }
-  /** why = 스스로 끝낸 사유(진단용, 서버 감사 기록에 남는다) */
+  /** why = 호스트가 자체 종료한 사유(진단용, 서버 감사 기록에 남는다) */
   hostEnd(cred: Cred, sessionId: string, why?: EndWhy) {
     return this.req<{ session: SessionOut }>(`/host/sessions/${sessionId}/end`, cred, { method: 'POST', ...(why ? { body: why } : {}) });
   }
@@ -96,10 +96,10 @@ export class RemoteApi {
   }
 }
 
-/** 호스트가 스스로 끝낸 사유 — reason 은 소문자·밑줄(room_closed·runner_failed…), detail 은 오류 문구(300자) */
+/** 호스트가 자체 종료한 사유 — reason 은 소문자·밑줄(room_closed·runner_failed…), detail 은 오류 문구(300자) */
 export interface EndWhy { reason: string; detail?: string }
 
-/** 서버에 원격 데스크톱 플러그인이 켜져 있는가 — 모듈 목록(로그인 사용자 기준)에서 본다 */
+/** 서버에 원격 데스크톱 플러그인이 활성화되어 있는지 여부 — 모듈 목록(로그인 사용자 기준)으로 확인한다 */
 export async function pluginEnabled(serverUrl: string, token: () => Promise<string>, fetchImpl: typeof fetch = fetch): Promise<boolean> {
   try {
     const res = await fetchImpl(`${serverUrl}/api/platform/modules`, { headers: { Authorization: `Bearer ${await token()}`, Accept: 'application/json' } });

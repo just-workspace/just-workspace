@@ -1,17 +1,17 @@
-"""원격 데스크톱 플러그인 API — /api/plugins/remote-desktop/*(로더가 manifest api_prefix 로 붙인다).
+"""원격 데스크톱 플러그인 API — /api/plugins/remote-desktop/*(로더가 manifest api_prefix 로 등록한다).
 
-인증 세 가지:
+인증 방식 세 가지:
 - 회원(세션 쿠키 또는 데스크톱 앱 OAuth Bearer) — 기기 관리·접속 요청·코드 입력·뷰어 토큰
 - 호스트(X-Remote-Host: <기기 id>:<호스트 비밀>) — 내 기기 앱의 롱폴링·동의·종료
 - 지원 프로그램(X-Remote-Support: <세션 id>:<호스트 비밀>) — 포터블 1회성 지원(계정 없음)
 
-규칙(다른 원격 도구 사고에서 온 것 — plugins/remote-desktop/README.md):
-- 단말은 포트를 열지 않는다. 비밀번호가 아니라 회원 권한·호스트 비밀·1회용 코드로만 들어온다.
-- 모든 접속은 화면 앞 사람의 동의를 거친다(내 기기의 "무인 접속"은 소유자 본인 요청 + 앱·서버 양쪽 동의일 때만 자동).
-- 접속 코드는 HMAC 만 저장, 5분·1회. 발급·입력 모두 레이트리밋.
-- 모든 단계를 remote_audit 에 남긴다.
+규칙(타 원격 도구의 사고 사례에서 도출 — plugins/remote-desktop/README.md):
+- 단말은 포트를 개방하지 않는다. 비밀번호가 아닌 회원 권한·호스트 비밀·1회용 코드로만 접속한다.
+- 모든 접속은 화면 앞 사용자의 동의를 거친다(내 기기의 "무인 접속"은 소유자 본인 요청 + 앱·서버 양쪽 동의일 때만 자동).
+- 접속 코드는 HMAC 만 저장하며 5분·1회로 제한한다. 발급·입력 모두 레이트리밋을 적용한다.
+- 모든 단계를 remote_audit 에 기록한다.
 """
-# ※ from __future__ import annotations 를 넣지 말 것 — FastAPI 가 Pydantic 본문 모델을 쿼리로 오인한다.
+# 주의: from __future__ import annotations 를 추가하지 않는다 — FastAPI 가 Pydantic 본문 모델을 쿼리로 오인한다.
 import asyncio
 import hmac
 import importlib.util
@@ -38,7 +38,7 @@ from app.rate_limit import limiter
 
 
 def _load_sibling(mod_name: str, file_name: str):
-    """플러그인 로더는 router.py 를 경로로 읽는다(패키지 아님) → 옆 파일도 경로로 읽는다."""
+    """플러그인 로더는 router.py 를 경로로 로드한다(패키지 아님) → 인접 파일도 경로로 로드한다."""
     if mod_name in sys.modules:
         return sys.modules[mod_name]
     spec = importlib.util.spec_from_file_location(mod_name, Path(__file__).with_name(file_name))
@@ -48,7 +48,7 @@ def _load_sibling(mod_name: str, file_name: str):
     return mod
 
 
-_models = _load_sibling("plugin_remote-desktop_models", "models.py")  # 로더가 이미 읽었으면 그것
+_models = _load_sibling("plugin_remote-desktop_models", "models.py")  # 로더가 이미 로드했으면 해당 모듈 사용
 svc = _load_sibling("plugin_remote-desktop_service", "service.py")
 PluginBase = _models.PluginBase
 RemoteAudit, RemoteDevice, RemoteSession = _models.RemoteAudit, _models.RemoteDevice, _models.RemoteSession
@@ -60,7 +60,7 @@ _tables_ready = False
 
 
 async def _ensure_tables() -> None:
-    """플러그인 테이블은 코어 init_db 가 모른다 — 첫 요청 때 한 번 만든다(sample-notes 와 같은 방식)."""
+    """플러그인 테이블은 코어 init_db 의 대상이 아니다 — 첫 요청 시 1회 생성한다(sample-notes 와 동일한 방식)."""
     global _tables_ready
     if not _tables_ready:
         async with engine.begin() as conn:
@@ -69,9 +69,9 @@ async def _ensure_tables() -> None:
 
 
 router = APIRouter(dependencies=[Depends(_ensure_tables)])
-POLL_MAX = 25          # 롱폴링 최대 대기(초) — nginx proxy_read_timeout 60s 보다 짧게
+POLL_MAX = 25          # 롱폴링 최대 대기(초) — nginx proxy_read_timeout 60s 보다 짧게 설정
 POLL_STEP = 1.0
-JOIN_FAIL_LIMIT = 10   # 회원 한 명이 10분 안에 틀린 코드를 이만큼 넣으면 잠깐 막는다
+JOIN_FAIL_LIMIT = 10   # 회원 1명이 10분 내에 오류 코드를 이 횟수만큼 입력하면 일시 차단
 JOIN_FAIL_WINDOW = timedelta(minutes=10)
 
 
@@ -90,7 +90,7 @@ async def _audit(db: AsyncSession, request: Request | None, action: str, *, sess
 
 
 async def _module_on(db: AsyncSession) -> None:
-    """익명·호스트 엔드포인트용 모듈 검사(require_module 은 kwargs 의 db 를 본다)."""
+    """익명·호스트 엔드포인트용 모듈 검사(require_module 은 kwargs 의 db 를 참조한다)."""
     @require_module(MODULE)
     async def _check(db=None):  # noqa: ARG001
         return True
@@ -126,7 +126,7 @@ def _split_cred(raw: str | None) -> tuple[str, str]:
 async def _host_device(db: AsyncSession, cred: str | None) -> RemoteDevice:
     did, secret = _split_cred(cred)
     dev = await db.get(RemoteDevice, did)
-    # 기기가 없을 때도 비교를 한 번 해서 응답 시간 차이로 존재 여부가 새지 않게
+    # 기기가 없을 때도 비교를 1회 수행해 응답 시간 차이로 존재 여부가 노출되지 않도록 함
     ok = svc.secret_matches(secret, dev.host_secret_hash if dev else svc.sha256("x"))
     if not dev or not ok or dev.revoked_at is not None:
         raise HTTPException(401, "기기 인증 실패")
@@ -143,7 +143,7 @@ async def _support_session(db: AsyncSession, cred: str | None) -> RemoteSession:
 
 
 async def _expire_if_due(db: AsyncSession, s: RemoteSession, request: Request | None = None) -> None:
-    """상태별 마감을 지난 세션을 정리한다(롤링 리퍼 없이 읽을 때마다)."""
+    """상태별 만료 시각을 경과한 세션을 정리한다(주기적 리퍼 없이 조회 시마다 수행)."""
     if s.status in ("ended", "denied", "expired"):
         return
     if svc.expired(s.expires_at):
@@ -158,7 +158,7 @@ async def _expire_if_due(db: AsyncSession, s: RemoteSession, request: Request | 
 
 
 class EndBody(BaseModel):
-    """호스트(데스크톱 앱·지원 프로그램)가 스스로 끝낼 때의 사유 — 진단용(감사 기록 detail). 없어도 된다."""
+    """호스트(데스크톱 앱·지원 프로그램)가 자체 종료할 때의 사유 — 진단용(감사 기록 detail). 선택 항목."""
     reason: str | None = Field(None, max_length=40, pattern=r"^[a-z_]+$")
     detail: str | None = Field(None, max_length=300)
 
@@ -184,8 +184,8 @@ async def _end(db: AsyncSession, s: RemoteSession, reason: str, request: Request
     await _audit(db, request, "session.ended", session=s, actor_kind=actor_kind, actor_id=actor_id, reason=reason, **detail)
     if s.room and lk.is_configured():
         try:
-            await lk.delete_room(s.room)  # 방을 닫아 남은 토큰으로 다시 붙어도 상대가 없게
-        except Exception as e:  # noqa: BLE001 — 종료 자체는 DB 가 권위
+            await lk.delete_room(s.room)  # 방을 닫아 잔여 토큰으로 재접속해도 상대가 없도록 함
+        except Exception as e:  # noqa: BLE001 — 종료 여부의 기준은 DB
             logger.warning("remote: LiveKit 방 닫기 실패 %s: %s", s.room, e)
 
 
@@ -229,7 +229,7 @@ def _device_out(d: RemoteDevice, owner_name: str = "") -> dict:
 
 
 def _issue(s: RemoteSession, *, host: bool, name: str) -> dict:
-    """세션당 LiveKit 토큰. 방 이름은 활성화 때 정한 무작위 값, 정체성은 세션에 묶인다."""
+    """세션당 LiveKit 토큰. 방 이름은 활성화 시 결정한 무작위 값이며, 정체성은 세션에 귀속된다."""
     assert s.room
     if host:
         tok = svc.make_token(svc.host_identity(s.id), name, svc.host_grants(s.room), {"role": "host", "session": s.id})
@@ -238,7 +238,7 @@ def _issue(s: RemoteSession, *, host: bool, name: str) -> dict:
     s.tokens_issued = (s.tokens_issued or 0) + 1
     return {
         "ws_url": lk.get_ws_url(), "token": tok, "room": s.room,
-        # 상대 정체성 — 데이터 채널 메시지는 이 정체성에서 온 것만 받는다
+        # 상대 정체성 — 데이터 채널 메시지는 이 정체성에서 송신된 것만 수신한다
         "peer_identity": svc.viewer_identity(s.id) if host else svc.host_identity(s.id),
     }
 
@@ -251,7 +251,7 @@ async def _activate(db: AsyncSession, s: RemoteSession) -> None:
     if lk.is_configured():
         try:
             await lk.create_room(s.room, empty_timeout=60, max_participants=2)
-        except Exception as e:  # noqa: BLE001 — auto_create 서버면 입장 시 생긴다
+        except Exception as e:  # noqa: BLE001 — auto_create 서버에서는 입장 시 생성됨
             logger.warning("remote: LiveKit 방 만들기 실패 %s: %s", s.room, e)
 
 
@@ -267,7 +267,7 @@ async def remote_status(user: User = Depends(get_current_user), db: AsyncSession
         "org_domain": _org_domain(),
         "support_download": SUPPORT_DOWNLOAD,
         "support_available": exe.is_file(),
-        # 웹 "지원 프로그램 받기" 옆 안내 — 실제 파일 크기와 요구 사항(파일이 없으면 버튼을 숨긴다)
+        # 웹 "지원 프로그램 받기" 옆 안내 — 실제 파일 크기와 요구 사항(파일이 없으면 버튼 숨김)
         "support_size": exe.stat().st_size if exe.is_file() else None,
         "support_requirements": SUPPORT_REQUIREMENTS,
         "desktop_download": "/api/apps/desktop",
@@ -276,7 +276,7 @@ async def remote_status(user: User = Depends(get_current_user), db: AsyncSession
     }
 
 
-# ─── 1회성 지원 프로그램 내려받기(익명 — 도움받을 사람은 계정이 없다) ───
+# ─── 1회성 지원 프로그램 다운로드(익명 — 피지원자는 계정이 없음) ───
 
 SUPPORT_FILE = "remote-support.exe"
 SUPPORT_REQUIREMENTS = "Windows 10 이상"
@@ -284,7 +284,7 @@ SUPPORT_DOWNLOAD = "/api/plugins/remote-desktop/support/download"
 
 
 def _support_exe() -> Path:
-    """apps/desktop `npm run dist:support` 산출물을 관리자가 여기에 둔다(데스크톱 설치본과 같은 apps 폴더)."""
+    """apps/desktop `npm run dist:support` 산출물을 관리자가 이 위치에 배치한다(데스크톱 설치본과 동일한 apps 폴더)."""
     return Path(settings.storage_root) / "apps" / SUPPORT_FILE
 
 
@@ -332,7 +332,7 @@ async def list_devices(all: bool = Query(False), user: User = Depends(get_curren
 @require_module(MODULE)
 async def register_device(request: Request, body: DeviceRegister, user: User = Depends(get_current_user),
                           db: AsyncSession = Depends(get_db)):
-    """데스크톱 앱이 자기를 등록한다. 호스트 비밀은 이 응답에서 한 번만 준다(재등록 = 비밀 교체)."""
+    """데스크톱 앱이 자신을 등록한다. 호스트 비밀은 이 응답에서 1회만 반환한다(재등록 = 비밀 교체)."""
     secret = svc.new_secret()
     existing = (await db.execute(select(RemoteDevice).where(
         RemoteDevice.owner_id == user.id, RemoteDevice.name == body.name,
@@ -368,7 +368,7 @@ async def _my_device(db: AsyncSession, device_id: str, user: User, *, admin_ok: 
 @require_module(MODULE)
 async def patch_device(request: Request, device_id: str, body: DevicePatch, user: User = Depends(get_current_user),
                        db: AsyncSession = Depends(get_db)):
-    dev = await _my_device(db, device_id, user, admin_ok=False)  # 설정은 소유자만
+    dev = await _my_device(db, device_id, user, admin_ok=False)  # 설정 변경은 소유자만 가능
     changes = {}
     if body.name is not None:
         dev.name = body.name
@@ -404,7 +404,7 @@ async def revoke_device(request: Request, device_id: str, user: User = Depends(g
 @require_module(MODULE)
 async def device_sessions(device_id: str, limit: int = Query(3, ge=1, le=50), user: User = Depends(get_current_user),
                           db: AsyncSession = Depends(get_db)):
-    """이 기기에 들어온 접속 기록(최근 순) — 소유자만. 관리자 감사는 /audit."""
+    """이 기기의 접속 수신 기록(최근 순) — 소유자 전용. 관리자 감사는 /audit."""
     dev = await _my_device(db, device_id, user, admin_ok=False)
     rows = (await db.execute(select(RemoteSession).where(RemoteSession.device_id == dev.id)
                              .order_by(RemoteSession.created_at.desc()).limit(limit))).scalars().all()
@@ -416,7 +416,7 @@ async def device_sessions(device_id: str, limit: int = Query(3, ge=1, le=50), us
 @limiter.limit("20/minute")
 async def connect_device(request: Request, device_id: str, user: User = Depends(get_current_user),
                          db: AsyncSession = Depends(get_db)):
-    """접속 요청 — 소유자 또는 관리자. 호스트(화면 앞 사람)가 동의해야 열린다."""
+    """접속 요청 — 소유자 또는 관리자. 호스트(화면 앞 사용자)가 동의해야 연결된다."""
     dev = await _my_device(db, device_id, user, admin_ok=True)
     if not dev.allow_remote:
         raise HTTPException(409, "이 기기는 원격 접속을 허용하지 않습니다")
@@ -451,7 +451,7 @@ async def _viewer_session(db: AsyncSession, session_id: str, user: User) -> Remo
 @require_module(MODULE)
 async def get_session(request: Request, session_id: str, token: bool = Query(False),
                       user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """뷰어 상태 확인. active 이고 token=1 이면 뷰어 LiveKit 토큰을 준다(요청자 본인만)."""
+    """뷰어 상태 확인. active 이고 token=1 이면 뷰어 LiveKit 토큰을 반환한다(요청자 본인만)."""
     s = await _viewer_session(db, session_id, user)
     await _expire_if_due(db, s, request)
     out: dict = {"session": _session_out(s)}
@@ -514,7 +514,7 @@ async def support_join(request: Request, body: JoinBody, user: User = Depends(ge
             "expired": "만료된 코드입니다. 상대방에게 지원 프로그램에서 새 코드를 받으세요.",
         }[reason]
         raise HTTPException(422 if reason == "format" else 404, {"code": reason, "message": msg})
-    # 1회성: 코드를 쓰는 순간 소모(해시 지움) — 같은 코드로 두 번 못 들어온다
+    # 1회성: 코드 사용 시점에 소모(해시 삭제) — 동일 코드로 재접속 불가
     s.code_hash = None
     s.status = "pending"
     s.requester_id = user.id
@@ -527,9 +527,9 @@ async def support_join(request: Request, body: JoinBody, user: User = Depends(ge
 
 
 async def _count_near_miss(db: AsyncSession, request: Request, code: str | None) -> int:
-    """틀린 코드가 한 자리만 다른 살아 있는 코드를 노린 것이면 그 코드의 실패 횟수를 올리고,
-    MAX_CODE_ATTEMPTS 에 닿으면 그 코드를 바로 폐기한다(오타 몇 번은 괜찮고, 근접 대입은 막는다).
-    폐기한 코드 수를 돌려준다."""
+    """오류 코드가 한 자리만 다른 유효 코드를 대상으로 한 것이면 해당 코드의 실패 횟수를 증가시키고,
+    MAX_CODE_ATTEMPTS 에 도달하면 해당 코드를 즉시 폐기한다(소수의 오타는 허용하고, 근접 대입은 차단한다).
+    폐기한 코드 수를 반환한다."""
     if not code:
         return 0
     hashes = [svc.code_hash(c) for c in svc.neighbor_codes(code)]
@@ -554,7 +554,7 @@ async def _count_near_miss(db: AsyncSession, request: Request, code: str | None)
 @router.post("/support/code", status_code=201)
 @limiter.limit("10/hour")
 async def support_code(request: Request, db: AsyncSession = Depends(get_db)):
-    """지원 프로그램이 접속 코드를 받는다. 계정 없음 — IP 당 발급 한도로 막는다."""
+    """지원 프로그램이 접속 코드를 발급받는다. 계정 없음 — IP 당 발급 한도로 제한한다."""
     await _module_on(db)
     _livekit_ready()
     code = svc.new_code()
@@ -570,14 +570,14 @@ async def support_code(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 async def _wait(db: AsyncSession, check, wait: int):
-    """롱폴링 — check() 가 값을 주거나 시간이 다 될 때까지 1초 간격으로 다시 본다."""
+    """롱폴링 — check() 가 값을 반환하거나 시간이 만료될 때까지 1초 간격으로 재확인한다."""
     loop = asyncio.get_running_loop()
     deadline = loop.time() + max(0, min(wait, POLL_MAX))
     while True:
         res = await check()
         if res is not None or loop.time() >= deadline:
             return res
-        await db.commit()       # 트랜잭션을 닫아야 다음 조회가 다른 워커의 갱신을 본다
+        await db.commit()       # 트랜잭션을 종료해야 다음 조회에서 다른 워커의 갱신이 반영된다
         db.expire_all()
         await asyncio.sleep(POLL_STEP)
 
@@ -585,7 +585,7 @@ async def _wait(db: AsyncSession, check, wait: int):
 @router.get("/support/poll")
 async def support_poll(request: Request, wait: int = Query(0, ge=0, le=POLL_MAX), since: str = Query(""),
                        x_remote_support: str | None = Header(None), db: AsyncSession = Depends(get_db)):
-    """지원 프로그램 상태 롱폴링. since(이전 상태)와 달라지면 바로 돌아온다. active 중엔 하트비트."""
+    """지원 프로그램 상태 롱폴링. since(이전 상태)와 달라지면 즉시 반환한다. active 중에는 하트비트로 동작한다."""
     await _module_on(db)
     s = await _support_session(db, x_remote_support)
 
@@ -638,7 +638,7 @@ async def support_decision(request: Request, body: Decision, x_remote_support: s
 @router.post("/support/end")
 async def support_end(request: Request, x_remote_support: str | None = Header(None),
                       body: EndBody | None = Body(None), db: AsyncSession = Depends(get_db)):
-    """지원 프로그램을 닫거나 [끊기] — 코드·세션 모두 무효."""
+    """지원 프로그램 종료 또는 [끊기] — 코드·세션 모두 무효화."""
     await _module_on(db)
     s = await _support_session(db, x_remote_support)
     if s.status in ("waiting_code", "pending"):
@@ -658,9 +658,9 @@ async def support_end(request: Request, x_remote_support: str | None = Header(No
 @router.get("/host/poll")
 async def host_poll(request: Request, wait: int = Query(0, ge=0, le=POLL_MAX), known: str = Query(""),
                     x_remote_host: str | None = Header(None), db: AsyncSession = Depends(get_db)):
-    """호스트 롱폴링 — 동의 대기 요청과 진행 중 세션. known(쉼표로 이은 "id:status")와 달라지면 바로 돌아온다.
+    """호스트 롱폴링 — 동의 대기 요청과 진행 중 세션. known(쉼표로 연결한 "id:status")와 달라지면 즉시 반환한다.
 
-    부를 때마다 기기의 last_seen 과 active 세션 하트비트를 갱신한다.
+    호출 시마다 기기의 last_seen 과 active 세션 하트비트를 갱신한다.
     """
     await _module_on(db)
     dev = await _host_device(db, x_remote_host)
@@ -692,7 +692,7 @@ async def host_poll(request: Request, wait: int = Query(0, ge=0, le=POLL_MAX), k
     sessions = []
     for s in live:
         d = _session_out(s)
-        # 무인 접속: 소유자 본인 요청 + 서버 설정(unattended) — 앱도 자기 설정을 한 번 더 본다
+        # 무인 접속: 소유자 본인 요청 + 서버 설정(unattended) — 앱도 자체 설정을 재확인한다
         d["auto_allow"] = bool(s.status == "pending" and s.requester_id == dev.owner_id and bool(dev.unattended))
         d["requester_is_owner"] = s.requester_id == dev.owner_id
         sessions.append(d)

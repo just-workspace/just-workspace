@@ -1,6 +1,6 @@
 apply plugin: 'com.android.application'
 
-// 사이트별 빌드 값(builder-build.sh 가 -P 로 넘긴다). 없으면 개발용 기본값.
+// 사이트별 빌드 값(builder-build.sh 가 -P 로 전달한다). 없으면 개발용 기본값.
 def jwAppId = project.findProperty('jwAppId') ?: 'it.justworkspace.mobile'
 def jwVersionCode = (project.findProperty('jwVersionCode') ?: '1') as int
 def jwVersionName = project.findProperty('jwVersionName') ?: '1.0'
@@ -23,7 +23,7 @@ android {
         }
     }
     signingConfigs {
-        // 사이트마다 한 번 만든 키로 계속 서명해야 앱 갱신 설치가 된다(키가 바뀌면 지우고 다시 설치해야 함).
+        // 사이트마다 1회 생성한 키로 계속 서명해야 앱 갱신 설치가 가능하다(키가 변경되면 삭제 후 재설치 필요).
         if (jwKeystore) {
             release {
                 storeFile file(jwKeystore)

@@ -1,4 +1,4 @@
-// 플러그인 고유 문구(ko = 확정 시안 그대로 / en = 번역). 호스트 i18n 은 호스트 locales 기준이라 여기 문구를 모른다(frontend-react/docs/plugin-v2.md 3절).
+// 플러그인 고유 문구(ko = 확정 시안 그대로 / en = 번역). 호스트 i18n 은 호스트 locales 기준이므로 이 문구를 포함하지 않는다(frontend-react/docs/plugin-v2.md 3절).
 const KO = {
   // 홈
   title: '원격 데스크톱',

@@ -1,5 +1,5 @@
-// 수집기 통합 시험 — 진짜 Chromium(로컬 Chrome 또는 /usr/bin/chromium)에 격리 world 로 심고 증분 동작을 본다.
-// 브라우저가 없으면 건너뛴다(CI 에서는 세션 이미지 안에서 돈다). MIRROR_TEST_CHROME 로 경로 지정.
+// 수집기 통합 시험 — 실제 Chromium(로컬 Chrome 또는 /usr/bin/chromium)에 격리 world 로 주입하여 증분 동작을 확인한다.
+// 브라우저가 없으면 건너뛴다(CI 에서는 세션 이미지 내에서 실행). MIRROR_TEST_CHROME 로 경로 지정.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -64,7 +64,7 @@ test('전체 수집: 지역 좌표(부모 padding box 기준)·fixed·의사 요
   const child = r.recs.find(x => x.n === 'div' && x.cs![BG] === 'rgb(255, 0, 0)')!
   const frame = r.recs.find(x => x.i === child.p)!
   assert.equal(frame.r[2], 416, '400 + padding 3×2 + border 5×2')
-  // left:10px top:7px — padding box 기준(테두리 5px 는 빼고)
+  // left:10px top:7px — padding box 기준(테두리 5px 제외)
   assert.deepEqual(child.r.slice(0, 2), [10, 7])
   const fixed = r.recs.find(x => x.fr)!
   assert.ok(fixed && fixed.sc, 'fixed 상자 + 스크롤 컨테이너')
@@ -83,13 +83,13 @@ test('증분: absolute 드래그는 그 노드 하나, 문서 스크롤은 0, �
   assert.equal(r.work.geomAll, false)
   const ids = r.recs.map(x => x.n)
   assert.deepEqual(ids, ['div'], `드래그 레코드 ${JSON.stringify(r.recs.map(x => [x.n, x.r]))}`)
-  // 부모(body) 기준 지역 좌표 — 정확히 +50,+20 움직였다(body 는 첫 자식의 margin 이 겹쳐 y=20 에서 시작)
+  // 부모(body) 기준 지역 좌표 — 정확히 +50,+20 이동(body 는 첫 자식의 margin 병합으로 y=20 에서 시작)
   assert.deepEqual([r.recs[0].r[0] - before.r[0], r.recs[0].r[1] - before.r[1]], [50, 20])
   await page.evaluate(() => window.scrollTo(0, 500))
   r = await tick()
   assert.equal(r.recs.length, 0); assert.equal(r.doc.sy, 500)
   await page.evaluate(() => { document.getElementById('box')!.scrollTop = 120 })
-  // scroll 이벤트는 다음 프레임에 온다(에이전트의 scrollNode 는 바로 표시한다)
+  // scroll 이벤트는 다음 프레임에 도착한다(에이전트의 scrollNode 는 즉시 표시)
   await page.evaluate(() => new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res))))
   r = await tick()
   assert.equal(r.recs.length, 1, JSON.stringify(r.work)); assert.equal(r.recs[0].sc![3], 120)
@@ -130,7 +130,7 @@ test('여러 줄 텍스트는 줄마다 런', { skip }, async () => {
   const r = await load('<div style="width:120px;font:16px Arial">하나 둘 셋 넷 다섯 여섯 일곱 여덟 아홉 열</div>')
   const t = r.recs.find(x => x.t === 'x')!
   assert.ok(t.tx!.length >= 3)
-  // Chromium 은 한글을 음절 사이에서도 줄바꿈한다(word-break: normal) — 공백을 빼고 비교
+  // Chromium 은 한글을 음절 사이에서도 줄바꿈한다(word-break: normal) — 공백을 제외하고 비교
   assert.equal(t.tx!.map(x => x[4]).join('').replace(/ /g, ''), '하나둘셋넷다섯여섯일곱여덟아홉열')
 })
 

@@ -1,9 +1,9 @@
 /**
  * 원격 데스크톱 플러그인(v2 React) — /p/remote-desktop. 상태: 기기 없음 · 설치 안내 · 오프라인 · 코드 오류.
- *  · 내 기기: 데스크톱 앱에서 "이 PC 원격 접속 허용"을 켠 내 PC. 화면 앞 사람이 30초 안에 허용해야 열린다.
- *  · 1회성 지원: 도움받는 사람이 지원 프로그램(포터블)에 띄운 9자리 코드를 입력 → 상대가 [허용]해야 열린다.
- *  · 요청하면 곧바로 RemoteViewer 가 화면 전체 위층으로 뜨고(승인 대기부터), 닫으면 세션이 끝난다.
- * 플러그인 제약: 호스트 Tailwind 글롭 밖이라 반응형 variant 를 쓰지 않는다(matchMedia·인라인 style). 부품은 호스트 키트(@jw/ui).
+ *  · 내 기기: 데스크톱 앱에서 "이 PC 원격 접속 허용"을 활성화한 사용자 PC. 화면 앞 사용자가 30초 안에 허용해야 연결된다.
+ *  · 1회성 지원: 피지원자의 지원 프로그램(포터블)에 표시된 9자리 코드를 입력 → 상대가 [허용]해야 연결된다.
+ *  · 요청 즉시 RemoteViewer 가 화면 전체 오버레이로 표시되며(승인 대기부터), 닫으면 세션이 종료된다.
+ * 플러그인 제약: 호스트 Tailwind 글롭 밖이므로 반응형 variant 를 사용하지 않는다(matchMedia·인라인 style). 부품은 호스트 키트(@jw/ui).
  * 설계·보안: plugins/remote-desktop/README.md
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
@@ -96,7 +96,7 @@ export default function RemoteDesktopPage({ pluginApi }: { pluginApi: PluginApiV
   }, [api, open, showAll, user])
 
   async function joinCode() {
-    // 형식은 여기서 먼저 본다(공백·하이픈·붙여 쓰기 모두 허용) — 서버도 같은 판정을 한다
+    // 형식은 여기서 먼저 검사한다(공백·하이픈·붙여 쓰기 모두 허용) — 서버도 동일한 판정을 수행한다
     if (!codeFormatOk(code)) { setCodeError('format'); return }
     setJoining(true)
     try {
@@ -221,7 +221,7 @@ export default function RemoteDesktopPage({ pluginApi }: { pluginApi: PluginApiV
                   )
                   const rowStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, padding: '8px 20px', borderBottom: '1px solid hsl(var(--border))', boxSizing: 'border-box' }
                   if (!d.online) {
-                    // C: 오프라인 행을 누르면 왜 안 되는지 펼친다
+                    // C: 오프라인 행 선택 시 연결 불가 사유를 펼쳐 표시한다
                     const selected = offlineSel === d.id
                     return (
                       <div key={d.id} role="listitem">

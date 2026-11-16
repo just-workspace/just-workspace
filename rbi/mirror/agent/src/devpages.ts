@@ -1,6 +1,6 @@
 /**
- * 스파이크 전용 — 세션 컨테이너 안 127.0.0.1:7100 에서 테스트 페이지(jsPlumb 미믹·악성 페이지·캔버스 콘솔)를 낸다.
- * 운영 이미지에서는 MIRROR_DEV 가 없으니 뜨지 않는다. 바깥에서 닿을 수 없다(loopback 바인드).
+ * 스파이크 전용 — 세션 컨테이너 내부 127.0.0.1:7100 에서 테스트 페이지(jsPlumb 미믹·악성 페이지·캔버스 콘솔)를 제공한다.
+ * 운영 이미지에서는 MIRROR_DEV 가 없으므로 기동하지 않는다. 외부에서 접근할 수 없다(loopback 바인드).
  */
 import http from 'node:http'
 import fs from 'node:fs'
@@ -14,7 +14,7 @@ export function startDevPages(port: number, dir: string): Promise<void> {
     let rel = decodeURIComponent(url.pathname)
     if (rel === '/' || rel === '') rel = '/index.html'
     if (rel.includes('..')) { res.writeHead(400); res.end(); return }
-    // 추출 시도 기록용 — 악성 페이지가 어떤 요청을 유발하는지 센다
+    // 추출 시도 기록용 — 악성 페이지가 유발하는 요청을 집계한다
     if (rel.startsWith('/exfil')) { console.log('[devpages] EXFIL HIT (remote side, expected)', req.url); res.writeHead(204); res.end(); return }
     const file = path.join(dir, rel)
     if (!fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); res.end('not found'); return }

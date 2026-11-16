@@ -1,21 +1,21 @@
 /**
  * 파일 동기화 엔진.
  *
- * 설계 결정 세 가지는 미리 못 박아 둔 것이고, 코드도 그대로 따른다.
+ * 아래 세 가지 설계 결정은 사전에 확정된 것이며, 코드도 이를 그대로 따른다.
  *
  *   1. **선택한 폴더만** 동기화한다. 전체 동기화 옵션은 없다.
- *   2. **충돌은 병합하지 않는다.** 양쪽 사본을 모두 남기고 사용자에게 알린다.
- *   3. **삭제 전파는 v2 로 미룬다.** 한쪽에서 지워도 반대쪽은 유지된다.
+ *   2. **충돌은 병합하지 않는다.** 양쪽 사본을 모두 보존하고 사용자에게 알린다.
+ *   3. **삭제 전파는 v2 로 연기한다.** 한쪽에서 삭제해도 반대쪽은 유지된다.
  *
- * ★ 3번이 이 엔진을 훨씬 단순하게 만든다.
- * 삭제를 전파하려면 "사라진 파일" 이 삭제인지 아직 못 본 것인지 구분해야 하고,
- * 그러려면 마지막으로 성공한 동기화의 스냅샷을 신뢰할 수 있어야 한다. 스냅샷이
- * 틀리면 **파일이 조용히 사라진다** — 동기화 도구에서 제일 나쁜 실패다. 지우지
- * 않기로 하면 스냅샷이 틀려도 최악이 "옛 파일이 되살아난다" 로 끝난다.
+ * 중요: 3번에 의해 본 엔진의 구조가 크게 단순해진다.
+ * 삭제를 전파하려면 "사라진 파일" 이 삭제된 것인지 아직 관측하지 못한 것인지 구분해야 하며,
+ * 이를 위해서는 마지막으로 성공한 동기화의 스냅샷을 신뢰할 수 있어야 한다. 스냅샷이
+ * 부정확하면 **파일이 통지 없이 삭제된다** — 동기화 도구에서 가장 심각한 실패이다. 삭제하지
+ * 않기로 하면 스냅샷이 부정확해도 최악의 결과가 "옛 파일이 되살아난다" 에 그친다.
  *
- * 그래서 상태 파일(state.json)은 성능을 위한 캐시일 뿐이고, 없어도 정확도가
- * 떨어지지 않는다 — 다시 만들면 모든 파일이 "양쪽에 있고 다르다" 로 보여
- * 충돌 처리를 타고, 사본이 하나 더 생길 뿐 잃지 않는다.
+ * 따라서 상태 파일(state.json)은 성능을 위한 캐시에 불과하며, 없어도 정확도가
+ * 저하되지 않는다 — 재생성 시 모든 파일이 "양쪽에 있고 다르다" 로 판정되어
+ * 충돌 처리를 거치며, 사본이 하나 추가될 뿐 유실은 없다.
  */
 import { app } from 'electron';
 import { createHash } from 'node:crypto';
@@ -28,7 +28,7 @@ import { loadSync, saveSync, type FolderState, type SyncFolder } from './config'
 export interface SyncProgress {
   folderId: string;
   state: FolderState;
-  /** 지금 처리 중인 파일 이름. 없으면 유휴. */
+  /** 현재 처리 중인 파일 이름. 없으면 유휴 상태. */
   current?: string;
   done: number;
   total: number;
@@ -38,27 +38,27 @@ export interface SyncProgress {
 
 export interface EngineHandlers {
   onProgress(p: SyncProgress): void;
-  /** 충돌이 났다. 토스트로 알린다. */
+  /** 충돌 발생. 토스트로 알린다. */
   onConflict(folderName: string, fileName: string, copyName: string): void;
 }
 
-/** 한 파일에 대해 마지막으로 동기화가 끝났을 때의 모습. */
+/** 파일 하나에 대해 마지막 동기화 완료 시점의 상태. */
 interface FileSnapshot {
-  /** 로컬 mtime(ms) 과 크기 — 로컬이 바뀌었는지 판정한다. */
+  /** 로컬 mtime(ms) 과 크기 — 로컬 변경 여부를 판정한다. */
   localMtime: number;
   localSize: number;
-  /** 서버 mtime(ms) 과 크기 — 원격이 바뀌었는지 판정한다. */
+  /** 서버 mtime(ms) 과 크기 — 원격 변경 여부를 판정한다. */
   remoteMtime: number;
   remoteSize: number;
 }
 
 type Snapshot = Record<string, FileSnapshot>;
 
-/** 폴더별 스냅샷 파일. userData 에 둔다 — 동기화 폴더 안에 두면 자기가 자기를 동기화한다. */
+/** 폴더별 스냅샷 파일. userData 에 저장한다 — 동기화 폴더 안에 두면 스냅샷 자체가 동기화 대상이 된다. */
 const STATE_DIR = () => path.join(app.getPath('userData'), 'sync-state');
 const statePath = (folderId: string) => path.join(STATE_DIR(), `${folderId}.json`);
 
-/** 동기화에서 제외한다. 편집기·OS 가 만드는 잡파일과 우리 충돌 사본. */
+/** 동기화 제외 대상. 편집기·OS 가 생성하는 임시 파일과 본 엔진의 충돌 사본. */
 const IGNORE = [
   /(^|[\\/])\./,          // 숨김 파일
   /(^|[\\/])~\$/,          // Office 임시 파일
@@ -95,7 +95,7 @@ async function loadSnapshot(folderId: string): Promise<Snapshot> {
   try {
     return JSON.parse(await fs.readFile(statePath(folderId), 'utf8')) as Snapshot;
   } catch {
-    // 없거나 깨졌다. 캐시일 뿐이라 빈 채로 시작해도 파일을 잃지 않는다.
+    // 파일이 없거나 손상된 경우. 캐시에 불과하므로 빈 상태로 시작해도 파일이 유실되지 않는다.
     return {};
   }
 }
@@ -163,7 +163,7 @@ async function walkRemote(remoteRoot: string, base = ''): Promise<Entry[]> {
 async function ensureRemoteDir(remoteRoot: string, rel: string): Promise<void> {
   const dir = path.posix.dirname(rel);
   if (dir === '.' || dir === '') return;
-  // mkdir 은 이미 있으면 에러를 내지만 그건 우리가 원하는 상태다. 조용히 넘긴다.
+  // mkdir 은 대상이 이미 존재하면 오류를 반환하나, 이는 의도한 상태이므로 무시한다.
   const parts = dir.split('/');
   let acc = remoteRoot;
   for (const p of parts) {
@@ -176,15 +176,15 @@ async function ensureRemoteDir(remoteRoot: string, rel: string): Promise<void> {
   }
 }
 
-/** 이 크기를 넘는 파일은 청크 세션으로 올린다. 그 아래는 단일 POST 가 더 싸다. */
+/** 이 크기를 초과하는 파일은 청크 세션으로 업로드한다. 그 이하는 단일 POST 가 비용이 낮다. */
 const CHUNK_THRESHOLD = 8 * 1024 * 1024;
 const CHUNK_MIN = 1024 * 1024;
 const CHUNK_MAX = 64 * 1024 * 1024;
 const CHUNK_RETRIES = 3;
 
 /**
- * 서버가 청크 세션 API(`/api/files/upload/sessions`)를 아는지. 모르면(404/405) 한 번만
- * 확인하고 그 뒤로는 단일 업로드만 쓴다 — 구버전 서버에 붙어도 동기화는 돌아야 한다.
+ * 서버의 청크 세션 API(`/api/files/upload/sessions`) 지원 여부. 미지원(404/405)이면 1회만
+ * 확인하고 이후에는 단일 업로드만 사용한다 — 구버전 서버에 연결해도 동기화는 동작해야 한다.
  */
 let chunkedSupported: boolean | null = null;
 
@@ -208,7 +208,7 @@ async function upload(localRoot: string, remoteRoot: string, rel: string): Promi
   return uploadSingle(abs, target, path.posix.basename(rel), st.size, mtime);
 }
 
-/** 단일 multipart POST. 작은 파일용(큰 파일을 통째로 메모리에 올린다). */
+/** 단일 multipart POST. 소형 파일용(대형 파일은 전체가 메모리에 적재된다). */
 async function uploadSingle(
   abs: string,
   target: string,
@@ -219,8 +219,8 @@ async function uploadSingle(
   const buf = await fs.readFile(abs);
   const form = new FormData();
   form.append('file', new Blob([buf]), name);
-  // mtime 을 함께 보내 서버가 보존한다 — 안 그러면 서버 mtime=업로드 시각이 되어
-  // 다음 바퀴에 "서버에서 바뀜" 으로 보인다.
+  // mtime 을 함께 전송해 서버가 보존하도록 한다 — 생략 시 서버 mtime=업로드 시각이 되어
+  // 다음 주기에 "서버에서 바뀜" 으로 판정된다.
   const res = await api(
     `/api/files/upload?path=${encodeURIComponent(target)}&size=${size}&mtime=${mtime}`,
     { method: 'POST', body: form },
@@ -230,8 +230,8 @@ async function uploadSingle(
 
 /**
  * 청크 세션: POST sessions → PUT {id}/{n} × N → POST commit.
- * 파일을 조각 단위로만 읽어 메모리가 청크 하나 크기에 머문다. 청크 실패는 몇 번
- * 재시도하고, 그래도 안 되면 세션을 지우고 false. 서버가 API 를 모르면 'unsupported'.
+ * 파일을 조각 단위로만 읽으므로 메모리 사용량이 청크 하나 크기로 유지된다. 청크 실패 시 수 회
+ * 재시도하고, 계속 실패하면 세션을 삭제하고 false 를 반환한다. 서버가 API 를 지원하지 않으면 'unsupported'.
  */
 async function uploadChunked(
   abs: string,
@@ -269,7 +269,7 @@ async function uploadChunked(
             body,
           });
           ok = res.ok;
-          // 4xx 는 다시 보내도 같다(크기 상한·세션 만료). 바로 포기.
+          // 4xx 는 재전송해도 결과가 동일하다(크기 상한·세션 만료). 즉시 중단.
           if (!ok && res.status >= 400 && res.status < 500) break;
         } catch {
           ok = false;
@@ -319,7 +319,7 @@ async function syncFolder(folder: SyncFolder, who: string): Promise<{
   bytes: number;
 }> {
   const localRoot = folder.localPath;
-  // 서버 가상 경로는 my/… 또는 shared/… 다. 앞의 슬래시만 떼고 그대로 쓴다.
+  // 서버 가상 경로는 my/… 또는 shared/… 이다. 선행 슬래시만 제거하고 그대로 사용한다.
   const remoteRoot = folder.remotePath.replace(/^\/+/, '') || `my/${folder.name}`;
   const snap = await loadSnapshot(folder.id);
 
@@ -353,15 +353,15 @@ async function syncFolder(folder: SyncFolder, who: string): Promise<{
     });
     done += 1;
 
-    // 크기·mtime 이 스냅샷과 같으면 안 바뀐 것으로 본다. 해시를 매번 뜨면
-    // 큰 폴더에서 디스크를 갈아버린다.
+    // 크기·mtime 이 스냅샷과 동일하면 변경 없음으로 판정한다. 매번 해시를 계산하면
+    // 대형 폴더에서 디스크 I/O 부하가 과도해진다.
     const localChanged = !!l && (!s || l.mtime !== s.localMtime || l.size !== s.localSize);
     const remoteChanged = !!r && (!s || r.mtime !== s.remoteMtime || r.size !== s.remoteSize);
 
     try {
       if (l && !r) {
-        // 로컬에만 있다. 새 파일이거나, 서버에서 지워진 파일이다.
-        // 삭제 전파는 v2 라 후자도 올린다 — 지우지 않는다.
+        // 로컬에만 존재한다. 신규 파일이거나 서버에서 삭제된 파일이다.
+        // 삭제 전파는 v2 대상이므로 후자도 업로드한다 — 삭제하지 않는다.
         if (await upload(localRoot, remoteRoot, rel)) {
           const st = await fs.stat(path.join(localRoot, rel));
           snap[rel] = {
@@ -373,7 +373,7 @@ async function syncFolder(folder: SyncFolder, who: string): Promise<{
           bytes += st.size;
         }
       } else if (!l && r) {
-        // 서버에만 있다. 마찬가지로 로컬에서 지워진 것일 수 있지만 내려받는다.
+        // 서버에만 존재한다. 마찬가지로 로컬에서 삭제된 파일일 수 있으나 다운로드한다.
         if (await download(localRoot, remoteRoot, rel)) {
           const st = await fs.stat(path.join(localRoot, rel));
           snap[rel] = {
@@ -387,9 +387,9 @@ async function syncFolder(folder: SyncFolder, who: string): Promise<{
       } else if (l && r) {
         if (localChanged && remoteChanged) {
           /*
-           * 양쪽이 다 바뀌었다 — 합치지 않는다.
-           * 서버 것을 원래 이름으로 내려받고, 내 것은 이름을 바꿔 남긴 뒤 올린다.
-           * 그러면 어느 쪽도 사라지지 않고, 두 사본이 양쪽에 다 있게 된다.
+           * 양쪽 모두 변경됨 — 병합하지 않는다.
+           * 서버 사본을 원래 이름으로 다운로드하고, 로컬 사본은 이름을 변경해 보존한 뒤 업로드한다.
+           * 이로써 어느 쪽도 유실되지 않으며, 두 사본이 양쪽에 모두 존재하게 된다.
            */
           const copy = conflictName(rel, who);
           await fs.rename(path.join(localRoot, rel), path.join(localRoot, copy));
@@ -421,7 +421,7 @@ async function syncFolder(folder: SyncFolder, who: string): Promise<{
             bytes += r.size;
           }
         } else if (!s) {
-          // 스냅샷이 없는데 양쪽 크기가 같다 — 이미 같은 파일로 보고 기록만 한다.
+          // 스냅샷이 없으나 양쪽 크기가 동일한 경우 — 동일 파일로 간주하고 기록만 수행한다.
           snap[rel] = {
             localMtime: l.mtime,
             localSize: l.size,
@@ -445,7 +445,7 @@ async function syncFolder(folder: SyncFolder, who: string): Promise<{
 
 /* ── 루프 ─────────────────────────────────────────────── */
 
-/** 지금 한 바퀴 돈다. 이미 돌고 있으면 아무것도 하지 않는다. */
+/** 동기화를 1회 즉시 수행한다. 이미 수행 중이면 no-op. */
 export async function syncNow(who: string): Promise<void> {
   if (running) return;
   running = true;

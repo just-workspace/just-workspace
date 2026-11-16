@@ -38,7 +38,7 @@
     flex-grow: 1; padding: 20px 24px; min-width: 0;
     display: flex; flex-direction: column; overflow-y: auto;
   }
-  /* 패널이 남는 높이를 다 먹어야 "폴더 추가" 줄이 아래에 붙는다(margin-top:auto). */
+  /* 패널이 잔여 높이를 모두 차지해야 "폴더 추가" 줄이 하단에 배치된다(margin-top:auto). */
   .content > section { flex-grow: 1; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
 
   .card {
@@ -62,7 +62,7 @@
     font-size: 12px; font-weight: 500; color: var(--text-2); cursor: default; flex-shrink: 0;
   }
   .card .syncnow:disabled { opacity: .55; }
-  /* 진행률이 보이면 그 옆에 붙는다. */
+  /* 진행률 표시 시 그 옆에 배치된다. */
   .card .syncnow + .quota { margin-left: 14px; }
 
   .quota { margin-left: auto; display: flex; flex-direction: column; gap: 5px; width: 240px; flex-shrink: 0; }
@@ -279,7 +279,7 @@
       </div>
     </section>
 
-    <!-- 원격 접속(내 기기) — 서버에 원격 데스크톱 플러그인이 있을 때만 보인다 -->
+    <!-- 원격 접속(내 기기) — 서버에 원격 데스크톱 플러그인이 있는 경우에만 표시 -->
     <section id="panel-remote" hidden>
       <div class="rd-head">
         <h1>원격 접속</h1>
@@ -331,7 +331,7 @@
       </div>
     </section>
 
-    <!-- 아직 없는 영역 -->
+    <!-- 미구현 영역 -->
     <section id="panel-soon" hidden>
       <p class="soon" id="soon-text"></p>
     </section>

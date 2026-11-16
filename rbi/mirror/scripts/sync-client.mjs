@@ -2,10 +2,10 @@
 /**
  * 미러 클라이언트 동기화 — rbi/mirror 의 원본(protocol/vocab.ts · client/src/*.ts)을 frontend-react/src/lib/rbiMirror/ 로 복사한다.
  *
- * 왜 복사인가: frontend-react 이미지는 자기 폴더만 빌드 문맥으로 쓴다(Dockerfile COPY . .). 원본은 여기 하나, 사본은 생성물.
- * 사본 맨 위에 "생성됨" 머리말이 붙고, import 경로만 바뀐다('../../protocol/vocab' → './vocab').
- * 원본을 고쳤으면: node rbi/mirror/scripts/sync-client.mjs  (어긋나면 rbi/mirror 의 test/sync.test.ts 와 frontend vitest 가 실패한다)
- *   --check 이면 쓰지 않고 다르면 종료 코드 1.
+ * 복사 방식의 이유: frontend-react 이미지는 자체 폴더만 빌드 문맥으로 사용한다(Dockerfile COPY . .). 원본은 여기 하나이며 사본은 생성물이다.
+ * 사본 최상단에 "생성됨" 머리말이 추가되고, import 경로만 변경된다('../../protocol/vocab' → './vocab').
+ * 원본 수정 시: node rbi/mirror/scripts/sync-client.mjs  (불일치 시 rbi/mirror 의 test/sync.test.ts 와 frontend vitest 가 실패한다)
+ *   --check 이면 기록하지 않고 상이하면 종료 코드 1.
  */
 import fs from 'node:fs'
 import path from 'node:path'

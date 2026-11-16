@@ -10,8 +10,8 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="tokens.css">
 <style>
-  /* 토스트 스택. 창 하나에 여러 장을 쌓는다 — 장마다 창을 띄우면 z 순서와
-     위치를 OS 와 다투게 된다. */
+  /* 토스트 스택. 창 하나에 여러 장을 적층한다 — 장마다 창을 생성하면 z 순서와
+     위치에서 OS 와 경합이 발생한다. */
   html, body { height: 100%; background: transparent; overflow: hidden; }
   body { padding: 16px; display: flex; flex-direction: column; justify-content: flex-end; }
 

@@ -1,4 +1,4 @@
-// 프로토콜 — 브라우저 tests/lib/lossless/protocol.test.ts 와 같은 벡터(Go 레이아웃). `npm run build` 뒤 실행(dist 를 본다).
+// 프로토콜 — 브라우저 tests/lib/lossless/protocol.test.ts 와 동일한 벡터(Go 레이아웃). `npm run build` 후 실행(dist 를 참조한다).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -45,7 +45,7 @@ test('fragmentation + reassembly (192k s32 10 ms frame = 15,360 B over 1215 B da
   assert.ok(frags.length >= 13 && frags.length <= 14, `got ${frags.length}`);
   for (const f of frags) assert.ok(f.byteLength <= 1215);
   const ra = new Reassembler();
-  // 순서를 섞어 넣는다
+  // 순서를 무작위로 섞어 입력한다
   const order = frags.map((_, i) => i).sort(() => Math.random() - 0.5);
   let done = null;
   for (const i of order) {

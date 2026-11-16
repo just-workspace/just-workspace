@@ -1,6 +1,6 @@
 /**
- * 네이티브 엔진 래퍼 — 애드온 로드, 장치 목록(+exclusive 포맷 매트릭스), 협상 열기(exclusive 후보 순회 → 실패 이유 → shared 폴백).
- * 네트워크는 여기 없다(session.ts). 애드온이 없으면(빌드 안 됨·다른 OS) available=false 로 조용히 비활성.
+ * 네이티브 엔진 래퍼 — 애드온 로드, 장치 목록(+exclusive 포맷 매트릭스), 협상 열기(exclusive 후보 순회 → 실패 사유 → shared 폴백).
+ * 네트워크 처리는 포함하지 않는다(session.ts). 애드온이 없으면(미빌드·다른 OS) available=false 로 통지 없이 비활성화한다.
  */
 import type { Backend, Device, DeviceKind, ExclusiveFormat, NativeAudioAddon, OpenError, OpenInfo, SampleFormat, TestSignal } from '../../../native';
 import { candidateFormats, classifyOpenError, pickBlockingApp, type Candidate, type FailReason, type FormatRequest } from './negotiate';
@@ -25,10 +25,10 @@ export interface OpenedDevice {
   info: OpenInfo;
   exclusive: boolean;
   attempts: OpenAttempt[];
-  /** exclusive 가 안 됐을 때 이유 */
+  /** exclusive 실패 시 사유 */
   failReason: FailReason | null;
   failCode: string | null;
-  /** 장치를 쓰는 다른 앱(Windows 세션 열거로 보이면) */
+  /** 장치를 사용 중인 다른 앱(Windows 세션 열거로 확인되는 경우) */
   blockingApp: string | null;
 }
 
@@ -37,7 +37,7 @@ export interface OpenRequest extends FormatRequest {
   backend: Backend;
   testSignal?: TestSignal;
   seed?: number;
-  /** exclusive 실패 시 shared 로라도 연다 */
+  /** exclusive 실패 시 shared 로 대체하여 연다 */
   allowShared: boolean;
   /** 링버퍼 용량(ms) */
   ringMs?: number;
@@ -70,7 +70,7 @@ export function listHiresDevices(backend: Backend = 'wasapi'): { capture: HiresD
         const f = n.deviceFormat(d.id, kind);
         if (f.ok) defaultFormat = { rate: f.rate, bits: f.bits, validBits: f.validBits, channels: f.channels, isFloat: f.isFloat };
         exclusiveFormats = n.probeExclusive(d.id, kind);
-      } catch { /* 장치가 사라졌을 수 있다 */ }
+      } catch { /* 장치가 제거되었을 수 있다 */ }
     }
     const shared = d.nativeFormats.find((f) => !f.exclusive && f.format !== 'unknown');
     return {
@@ -87,8 +87,8 @@ function describeErr(e: unknown): { code: string; hr: string } {
 }
 
 /**
- * exclusive 후보를 순서대로 열어 본다. 포맷 문제면 다음 후보, 장치 점유·정책·권한이면 중단.
- * 전부 실패하고 allowShared 면 장치 믹스 포맷(f32)로 shared 열기. 그것도 실패면 throw(마지막 오류).
+ * exclusive 후보를 순서대로 연다. 포맷 문제이면 다음 후보로 진행, 장치 점유·정책·권한 문제이면 중단.
+ * 전부 실패하고 allowShared 이면 장치 믹스 포맷(f32)으로 shared 열기. 이것도 실패하면 throw(마지막 오류).
  */
 export function openNegotiated(kind: DeviceKind, deviceId: string | null, req: OpenRequest, supported?: ExclusiveFormat[] | null): OpenedDevice {
   const n = nativeAudio();

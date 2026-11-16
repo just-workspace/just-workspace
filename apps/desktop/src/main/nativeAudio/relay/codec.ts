@@ -2,9 +2,9 @@
  * PCM 바이트 ↔ 수치 변환, 포맷 간 무손실 판정, 믹싱, 바이트 단위 PLC.
  *
  * 하이레조 경로는 "바이트 그대로" 가 원칙이다 — 장치 네이티브 포맷(s16/s24/s32/f32)의 프레임을 와이어(pcm_s16/s24/s32/f32)에
- * 그대로 싣고, 받는 쪽도 스트림 포맷 == 장치 포맷이면 바이트를 그대로 재생 링에 넣는다(비트퍼펙트).
- * 변환이 끼는 경우(레이트·비트·채널 다름, 피어 둘 이상 믹싱)만 여기 함수들을 거친다. float32 는 24-bit 가수라 s32 를 정확히 못 담으므로
- * 변환은 전부 Float64 로 한다(s16/s24/s32 정수 ≤ 2^53 — 정확).
+ * 그대로 적재하고, 수신 측도 스트림 포맷 == 장치 포맷이면 바이트를 그대로 재생 링에 기록한다(비트퍼펙트).
+ * 변환이 개입하는 경우(레이트·비트·채널 상이, 피어 둘 이상 믹싱)에만 본 파일의 함수를 거친다. float32 는 24-bit 가수이므로 s32 를 정확히 표현할 수 없어
+ * 변환은 전부 Float64 로 수행한다(s16/s24/s32 정수 ≤ 2^53 — 정확).
  */
 import type { SampleFormat } from '../../../../native';
 import type { WireCodec } from './protocol';
@@ -48,7 +48,7 @@ export function frameSamples(sampleRate: number, frameMs: number): number {
   return Math.round((sampleRate * frameMs) / 1000);
 }
 
-/** 포맷 A 의 샘플을 포맷 B 로 옮길 때 정보가 보존되는가(정수 상향·동일 포맷만 true) */
+/** 포맷 A 의 샘플을 포맷 B 로 변환할 때 정보가 보존되는지 여부(정수 상향·동일 포맷만 true) */
 export function losslessConversion(from: SampleFormat, to: SampleFormat): boolean {
   if (from === to) return true;
   const rank: Record<string, number> = { s16: 16, s24: 24, s32: 32 };
@@ -58,7 +58,7 @@ export function losslessConversion(from: SampleFormat, to: SampleFormat): boolea
   return false;
 }
 
-/** interleaved 바이트 → Float64Array(interleaved, -1..1 스케일). 길이가 안 맞으면 null */
+/** interleaved 바이트 → Float64Array(interleaved, -1..1 스케일). 길이가 맞지 않으면 null */
 export function toFloat64(bytes: Uint8Array, f: SampleFormat): Float64Array | null {
   const bps = bytesPerSample(f);
   if (bytes.byteLength % bps !== 0) return null;
@@ -96,8 +96,8 @@ export function fromFloat64(samples: ArrayLike<number>, f: SampleFormat, out?: U
 }
 
 /**
- * 정수 포맷 간 직접 변환(시프트) — 상향은 무손실, 하향은 하위 비트 절단. Float64 를 거치지 않아 비트퍼펙트가 보존된다.
- * 채널 수는 같다고 가정한다.
+ * 정수 포맷 간 직접 변환(시프트) — 상향은 무손실, 하향은 하위 비트 절단. Float64 를 거치지 않으므로 비트퍼펙트가 보존된다.
+ * 채널 수는 동일하다고 가정한다.
  */
 export function convertInt(bytes: Uint8Array, from: SampleFormat, to: SampleFormat): Uint8Array {
   if (from === to) return bytes;
@@ -106,7 +106,7 @@ export function convertInt(bytes: Uint8Array, from: SampleFormat, to: SampleForm
   const inDv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const outDv = new DataView(out.buffer);
   for (let i = 0; i < n; i++) {
-    // 32-bit 정수 중간값으로 올린 뒤 내린다(시프트)
+    // 32-bit 정수 중간값으로 상향한 뒤 하향한다(시프트)
     let v32: number;
     switch (from) {
       case 's16': v32 = inDv.getInt16(i * 2, true) << 16; break;
@@ -124,7 +124,7 @@ export function convertInt(bytes: Uint8Array, from: SampleFormat, to: SampleForm
   return out;
 }
 
-/** 채널 수 맞추기(interleaved Float64): 모노→스테레오 복제, 많으면 앞 채널만 */
+/** 채널 수 정합(interleaved Float64): 모노→스테레오 복제, 초과 시 앞 채널만 사용 */
 export function remapChannels(x: Float64Array, from: number, to: number): Float64Array {
   if (from === to) return x;
   const frames = x.length / from;
@@ -143,7 +143,7 @@ export function mix(inputs: Float64Array[], length: number): Float64Array {
   return out;
 }
 
-// ─── PLC(바이트 단위) — 브라우저 lib/lossless/plc.ts 와 같은 규칙 ───
+// ─── PLC(바이트 단위) — 브라우저 lib/lossless/plc.ts 와 동일한 규칙 ───
 export const PLC_MAX_REPEAT = 4;
 export function gainAfter(k: number): number {
   return k <= 0 ? 1 : k >= PLC_MAX_REPEAT ? 0 : Math.pow(0.5, k);

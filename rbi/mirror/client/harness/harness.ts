@@ -1,7 +1,7 @@
 /**
- * 하네스 — 에이전트 /dev/ 에서 서빙되는 부모 문서(개발 이미지 전용). React 없이 MirrorClient 를 띄우고
+ * 하네스 — 에이전트 /dev/ 에서 서빙되는 부모 문서(개발 이미지 전용). React 없이 MirrorClient 를 기동하고
  * window.__mirror 로 측정값(지연 샘플·바이트·노드 수·글리프 폭)을 Playwright 벤치에 노출한다.
- * 운영 뷰어는 frontend-react 의 pages/rbi.tsx(같은 클라이언트 코드의 동기화 사본)다.
+ * 운영 뷰어는 frontend-react 의 pages/rbi.tsx(동일 클라이언트 코드의 동기화 사본)이다.
  */
 import { MirrorClient, type LatencySample, type MirrorNotice, type MirrorStats } from '../src/mirror-client'
 
@@ -15,7 +15,7 @@ const samples: LatencySample[] = []
 const notices: MirrorNotice[] = []
 const dialogs: { k: string; msg: string }[] = []
 let stats: MirrorStats | null = null
-/** 벤치가 대화상자 답·올릴 파일을 미리 정해 둔다 */
+/** 벤치가 대화상자 응답·업로드 파일을 사전 지정 */
 let dialogAnswer: { ok: boolean; text?: string } = { ok: true }
 let uploadFile: File | null = null
 

@@ -2,10 +2,10 @@
  * 트레이 메뉴 — OS 기본 메뉴 대신 직접 그리는 팝업 창.
  *
  * Electron 의 `Menu` 는 OS 가 그린다. 아바타·동기화 상태·안 읽음 뱃지를 넣을 수
- * 없고 폭·반경도 우리가 정하지 못한다. 디자인은 그 셋을 다 요구하므로
- * 프레임리스 창으로 만든다.
+ * 없고 폭·반경도 지정할 수 없다. 디자인은 이 셋을 모두 요구하므로
+ * 프레임리스 창으로 구현한다.
  *
- * 대신 OS 메뉴가 공짜로 주던 것을 직접 해야 한다:
+ * 대신 OS 메뉴가 기본 제공하던 동작을 직접 구현해야 한다:
  *   · 바깥을 누르면 닫기      → blur
  *   · 트레이 아이콘 옆에 배치  → tray.getBounds() + 작업 영역으로 클램프
  *   · Esc 로 닫기            → 렌더러에서 keydown
@@ -16,11 +16,11 @@ import path from 'node:path';
 export interface TrayMenuState {
   displayName: string;
   host: string;
-  /** 동기화 상태. 렌더러가 라벨로 바꾼다. */
+  /** 동기화 상태. 렌더러가 라벨로 변환한다. */
   sync: 'idle' | 'syncing' | 'up_to_date' | 'error';
   /** 참가 가능한 회의 수. 0 이면 항목 자체를 숨긴다. */
   meetingCount: number;
-  /** 알림 일시중지 만료 시각(epoch ms). null 이면 꺼져 있다. */
+  /** 알림 일시중지 만료 시각(epoch ms). null 이면 비활성 상태. */
   dndUntil: number | null;
 }
 
@@ -55,7 +55,7 @@ function create(): BrowserWindow {
   });
 
   w.loadFile(path.join(__dirname, '../../renderer/tray-menu.html'));
-  // 포커스를 잃으면 닫는다 — OS 메뉴와 같은 감각이어야 한다.
+  // 포커스를 잃으면 닫는다 — OS 메뉴와 동일한 동작이어야 한다.
   w.on('blur', () => hideTrayMenu());
   w.on('closed', () => {
     win = null;
@@ -63,7 +63,7 @@ function create(): BrowserWindow {
   return w;
 }
 
-/** 트레이 아이콘 근처에 놓되 화면 밖으로 나가지 않게 클램프한다. */
+/** 트레이 아이콘 근처에 배치하되 화면 밖으로 벗어나지 않도록 클램프한다. */
 function place(tray: Tray): void {
   if (!win) return;
   const icon = tray.getBounds();
@@ -107,13 +107,13 @@ export function destroyTrayMenu(): void {
   if (w && !w.isDestroyed()) w.destroy();
 }
 
-/** 현재 상태를 렌더러로 보낸다. 상태가 바뀔 때마다 호출해도 된다. */
+/** 현재 상태를 렌더러로 전송한다. 상태 변경 시마다 호출해도 무방하다. */
 export function push(): void {
   if (!win || win.isDestroyed() || !getState) return;
   win.webContents.send('tray:state', getState());
 }
 
-/** 렌더러가 잰 크기로 창을 맞춘다. 투명 영역이 넓으면 클릭을 가로챈다. */
+/** 렌더러가 측정한 크기로 창을 맞춘다. 투명 영역이 넓으면 클릭을 가로챈다. */
 export function fitTrayMenu(
   tray: Tray | null,
   size: { width: number; height: number },

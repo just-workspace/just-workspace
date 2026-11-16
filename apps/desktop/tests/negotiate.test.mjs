@@ -1,4 +1,4 @@
-// 포맷 협상(negotiate.ts) — 후보 순서, probe 필터, 실패 분류, 가로막은 앱 고르기, 표기·비트레이트
+// 포맷 협상(negotiate.ts) — 후보 순서, probe 필터, 실패 분류, 차단 앱 선택, 표기·비트레이트
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';

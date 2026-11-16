@@ -1,8 +1,8 @@
 /**
  * audiorelay 전송 프로토콜 v1 — 24 B 헤더, 단편화/재조립, NACK·CTRL·PING, 스트림 프레이밍.
  * 정본: audiorelay/PROTOCOL.md · Go audiorelay/internal/proto/proto.go · 브라우저 frontend-react/src/lib/lossless/protocol.ts.
- * 이 파일은 브라우저 구현을 Node(CJS, Electron 메인)용으로 옮긴 것이다 — 바이트 레이아웃은 세 구현이 같아야 한다(tests/protocol.test.mjs 가 벡터로 대조).
- * 데스크톱 하이레조가 더한 것: codec 5 = pcm_s32(32-bit 정수 LE). 모르는 codec 은 기존 클라이언트가 무시한다(PROTOCOL.md §9).
+ * 본 파일은 브라우저 구현을 Node(CJS, Electron 메인)용으로 이식한 것이다 — 바이트 레이아웃은 세 구현이 동일해야 한다(tests/protocol.test.mjs 가 벡터로 대조).
+ * 데스크톱 하이레조에서 추가한 항목: codec 5 = pcm_s32(32-bit 정수 LE). 미지의 codec 은 기존 클라이언트가 무시한다(PROTOCOL.md §9).
  */
 
 export const VERSION = 1;
@@ -76,7 +76,7 @@ export function payloadOf(pkt: Uint8Array): Uint8Array {
   return pkt.subarray(HEADER_SIZE);
 }
 
-/** 데이터그램 한도에 맞춰 프레임을 단편으로 나눈다(WebSocket 은 maxBytes=Infinity → 1개) */
+/** 데이터그램 한도에 맞춰 프레임을 단편으로 분할한다(WebSocket 은 maxBytes=Infinity → 1개) */
 export function fragment(h: Partial<Header> & { type: number }, payload: Uint8Array, maxBytes: number): Uint8Array[] {
   const room = Math.max(1, Math.floor(maxBytes) - HEADER_SIZE);
   if (!Number.isFinite(maxBytes) || payload.byteLength <= room) return [encode({ ...h, fragIdx: 0, fragCnt: 1 }, payload)];
@@ -92,7 +92,7 @@ export function fragment(h: Partial<Header> & { type: number }, payload: Uint8Ar
 
 export interface Reassembled { header: Header; payload: Uint8Array }
 
-/** (src, type, seq) 별로 단편을 모아 프레임을 완성한다. 미완성은 64개까지, 오래된 것부터 버린다 */
+/** (src, type, seq) 별로 단편을 수집하여 프레임을 완성한다. 미완성은 64개까지 유지하며 오래된 것부터 폐기한다 */
 export class Reassembler {
   private pending = new Map<string, { header: Header; parts: (Uint8Array | null)[]; got: number }>();
   private order: string[] = [];

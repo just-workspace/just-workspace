@@ -10,13 +10,13 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap">
 <link rel="stylesheet" href="tokens.css">
 <style>
-  /* 창 자체는 투명하다. 그래야 카드의 그림자가 잘리지 않는다.
-     아트보드의 바탕(데스크톱)은 목업이라 그리지 않는다. */
+  /* 창 자체는 투명하다. 불투명 시 카드의 그림자가 잘린다.
+     아트보드의 바탕(데스크톱)은 목업이므로 렌더링하지 않는다. */
   html, body { height: 100%; background: transparent; }
   body {
     display: flex; align-items: center; justify-content: center;
     padding: 22px; overflow: hidden;
-    -webkit-app-region: drag;      /* 프레임리스라 카드 밖도 잡아 끌 수 있게 */
+    -webkit-app-region: drag;      /* 프레임리스 창이므로 카드 밖 영역도 드래그 허용 */
   }
 
   .modal {
@@ -69,8 +69,8 @@
     height: 108px; background: #1c2226; position: relative;
     display: flex; align-items: center; justify-content: center;
   }
-  /* cover: 16:9 썸네일을 2.3:1 카드에 넣으면 contain 은 위아래 검은 띠가 생긴다.
-     목업처럼 꽉 차게 보이려면 잘라서 채운다. */
+  /* cover: 16:9 썸네일을 2.3:1 카드에 배치하면 contain 은 상하에 검은 띠가 발생한다.
+     목업과 동일하게 카드를 채우기 위해 잘라서 채운다. */
   .card .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .card .check {
     position: absolute; top: 8px; right: 8px;

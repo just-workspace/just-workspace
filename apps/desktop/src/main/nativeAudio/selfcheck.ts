@@ -32,14 +32,14 @@ export function nativeAudioSelfCheck(): SelfCheckResult {
     const dev = new n.Device({ kind: 'capture', backend: 'null', format: 's32', channels: 2, sampleRate: 192000, periodFrames: 1920, exclusive: false, testSignal: 'sweep' });
     dev.start();
     const t0 = Date.now();
-    while (Date.now() - t0 < 120) { /* 콜백 몇 번 돌 때까지 바쁘게 기다린다(동기 점검) */ }
+    while (Date.now() - t0 < 120) { /* 콜백이 수 회 실행될 때까지 busy-wait 한다(동기 점검) */ }
     const buf = new Uint8Array(1920 * 2 * 4);
     let bytes = 0;
     for (;;) { const k = dev.read(buf); if (!k) break; bytes += k; }
     r.nullRoundTrip = { bytes, callbacks: dev.stats().callbacks };
     dev.stop();
     dev.close();
-    // ESM 전용 패키지라 require.resolve 가 안 된다 — 프리빌드 바이너리 파일 존재로 본다(asar 안 경로도 fs 패치로 보인다)
+    // ESM 전용 패키지이므로 require.resolve 를 사용할 수 없다 — 프리빌드 바이너리 파일 존재 여부로 판정한다(asar 내부 경로도 fs 패치로 조회된다)
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require('node:path') as typeof import('node:path');
     // eslint-disable-next-line @typescript-eslint/no-require-imports

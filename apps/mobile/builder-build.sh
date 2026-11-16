@@ -1,17 +1,17 @@
 #!/bin/sh
-# 사이트 전용 APK 빌드 — /src(apps/mobile, ro 마운트)를 복사해 사이트 값을 넣고 서명된 release APK 를 만든다.
+# 사이트 전용 APK 빌드 — /src(apps/mobile, ro 마운트)를 복사해 사이트 값을 주입하고 서명된 release APK 를 생성한다.
 # 산출물: /out/apps/workspace-android.apk  (out = 워크스페이스 storage 볼륨)
 #
 # 환경:
 #   WS_URL     대상 워크스페이스 주소 (필수, https://ws.example.com)
-#   APP_ID     기본: 호스트를 뒤집고 .workspace (ws.example.com → com.example.ws.workspace).
-#              한 번 배포하면 바꾸지 말 것 — 바꾸면 다른 앱이 된다.
-#   APP_NAME   기본: Just Workspace (런처에 보이는 이름)
-#   JW_WEB_BUNDLE  1 이면 웹 화면을 앱 안에 넣는다(번들 모드). frontend-react 소스를
+#   APP_ID     기본: 호스트를 역순으로 하고 .workspace 를 덧붙임 (ws.example.com → com.example.ws.workspace).
+#              배포 후에는 변경 금지 — 변경 시 별개의 앱으로 취급된다.
+#   APP_NAME   기본: Just Workspace (런처에 표시되는 이름)
+#   JW_WEB_BUNDLE  1 이면 웹 화면을 앱에 포함한다(번들 모드). frontend-react 소스를
 #              /web 에 ro 마운트해야 한다(-v <repo>/frontend-react:/web:ro). 기본은 원격 모드(서버 웹을 그대로 연다).
 #
-# 서명 키는 처음 빌드 때 /signing(별도 볼륨 jw-android-signing)에 만들고 계속 쓴다. 키가 바뀌면 설치된 앱이
-# 갱신 설치를 거부하므로 그 볼륨은 백업 대상이다.
+# 서명 키는 최초 빌드 시 /signing(별도 볼륨 jw-android-signing)에 생성하고 이후 계속 사용한다. 키가 변경되면 설치된 앱이
+# 갱신 설치를 거부하므로 해당 볼륨은 백업 대상이다.
 set -e
 export ANDROID_SDK_ROOT=/opt/android-sdk
 
@@ -24,7 +24,7 @@ if [ -z "$APP_ID" ]; then
     | awk -F. '{for(i=NF;i>0;i--) printf "%s%s", $i, (i>1?".":"")}').workspace"
 fi
 APP_NAME=${APP_NAME:-Just Workspace}
-VERSION_CODE=$(( $(date +%s) / 60 ))          # 빌드할 때마다 올라가야 갱신 설치가 된다
+VERSION_CODE=$(( $(date +%s) / 60 ))          # 빌드마다 증가해야 갱신 설치가 가능하다
 VERSION_NAME=$(date -u +%Y.%m.%d.%H%M)
 export WS_URL APP_ID APP_NAME JW_WEB_BUNDLE
 echo "[site] $WS_URL  id=$APP_ID  name=$APP_NAME${JW_WEB_BUNDLE:+  bundle=$JW_WEB_BUNDLE}  v$VERSION_NAME ($VERSION_CODE)"
@@ -37,7 +37,7 @@ echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
 echo "[npm] install..."
 npm install --no-audit --no-fund 2>&1 | tail -3
 
-# 번들 모드: 웹 화면을 이 주소로 빌드해 www-react/ 에 두고 그걸 webDir 로 sync 한다
+# 번들 모드: 웹 화면을 이 주소로 빌드해 www-react/ 에 두고 이를 webDir 로 sync 한다
 if [ "$JW_WEB_BUNDLE" = "1" ]; then
   [ -f /web/package.json ] || { echo "JW_WEB_BUNDLE=1 인데 /web(frontend-react) 마운트가 없다" >&2; exit 1; }
   rm -rf /work-web && mkdir -p /work-web

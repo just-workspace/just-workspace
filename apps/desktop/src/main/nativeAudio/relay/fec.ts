@@ -1,4 +1,4 @@
-/** XOR 패리티 4:1 (PROTOCOL.md §3.1) — 브라우저 lib/lossless/fec.ts 와 같은 알고리즘. 고정 길이 PCM 전용 */
+/** XOR 패리티 4:1 (PROTOCOL.md §3.1) — 브라우저 lib/lossless/fec.ts 와 동일한 알고리즘. 고정 길이 PCM 전용 */
 import { PARITY_GROUP, groupBase } from './protocol';
 
 export function xorInto(dst: Uint8Array, src: Uint8Array): void {

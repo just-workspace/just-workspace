@@ -1,4 +1,4 @@
-/* 트레이 메뉴. 상태는 메인이 넘겨주고 클릭만 되돌려 보낸다. */
+/* 트레이 메뉴. 상태는 메인이 전달하며 클릭만 메인으로 반환한다. */
 'use strict';
 
 const $ = (id) => document.getElementById(id);
@@ -57,7 +57,7 @@ function render(state) {
   $('me-host').textContent = state.host;
 
   $('sync-state').textContent = SYNC_LABEL[state.sync] ?? '—';
-  // 오류일 때만 색을 바꾼다. 나머지는 성공색 그대로가 디자인이다.
+  // 오류일 때만 색을 변경한다. 그 외에는 성공색을 유지하는 것이 디자인이다.
   $('sync-state').style.color =
     state.sync === 'error' ? 'var(--warn)' : 'var(--ok)';
 
@@ -84,7 +84,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') window.jw.tray.action('close');
 });
 
-/** 메뉴 높이는 항목 수에 따라 달라진다. 창을 내용에 맞춰야 투명 영역이 클릭을 먹지 않는다. */
+/** 메뉴 높이는 항목 수에 따라 달라진다. 창을 내용에 맞춰야 투명 영역이 클릭을 가로채지 않는다. */
 function reportSize() {
   const r = document.querySelector('.menu').getBoundingClientRect();
   window.jw.tray.resize({

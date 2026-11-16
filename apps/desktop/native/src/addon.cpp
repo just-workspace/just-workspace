@@ -1,12 +1,12 @@
 // jw_native_audio — Node-API 애드온(Electron 44 / Node 24, N-API 8).
 //
 //  · miniaudio(WASAPI exclusive/shared, null 백엔드) 로 캡처·재생 장치를 요청 포맷(s16/s24/s32/f32 × 레이트 × 채널)으로 연다.
-//  · 오디오 스레드 ↔ JS 는 SPSC 락프리 링버퍼(ring_buffer.h)로만 만난다. 캡처는 "데이터 있음" 신호를 TSFN(큐 1, 비차단)으로
-//    합쳐서 깨우고 JS 가 read() 로 꺼낸다. 재생은 JS 가 write() 로 밀어 넣고 콜백이 꺼낸다(부족하면 0 채움 + underrun 집계).
-//  · exclusive 실패 이유는 패치된 miniaudio 가 남긴 HRESULT(ma_jw_wasapi_last_hr) 로 가른다. 장치를 쓰는 다른 프로세스는
-//    wasapi_probe.cpp 의 세션 열거로 찍는다.
-//  · 테스트: null 백엔드 + 결정적 신호 생성기(testSignal) 로 실제 장치 없이 전체 경로를 돈다.
-//  · speexdsp 리샘플러(BSD) 는 수신 스트림 레이트 != 재생 장치 레이트일 때만 JS 가 쓴다.
+//  · 오디오 스레드 ↔ JS 간 데이터 교환은 SPSC 락프리 링버퍼(ring_buffer.h)로만 수행한다. 캡처는 "데이터 있음" 신호를 TSFN(큐 1, 비차단)으로
+//    병합하여 통지하고 JS 가 read() 로 읽는다. 재생은 JS 가 write() 로 기록하고 콜백이 읽는다(부족하면 0 채움 + underrun 집계).
+//  · exclusive 실패 사유는 패치된 miniaudio 가 기록한 HRESULT(ma_jw_wasapi_last_hr) 로 구분한다. 장치를 사용 중인 다른 프로세스는
+//    wasapi_probe.cpp 의 세션 열거로 식별한다.
+//  · 테스트: null 백엔드 + 결정적 신호 생성기(testSignal) 로 실제 장치 없이 전체 경로를 실행한다.
+//  · speexdsp 리샘플러(BSD) 는 수신 스트림 레이트 != 재생 장치 레이트일 때만 JS 가 사용한다.
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <windows.h>
@@ -72,7 +72,7 @@ ma_format formatFrom(const std::string& s) {
   return ma_format_unknown;
 }
 
-// 백엔드별 컨텍스트(지연 생성). WASAPI 와 null 을 따로 둬서 테스트가 실제 장치를 건드리지 않게 한다.
+// 백엔드별 컨텍스트(지연 생성). WASAPI 와 null 을 분리하여 테스트가 실제 장치에 접근하지 않도록 한다.
 struct Ctx {
   ma_context ctx{};
   bool inited = false;
@@ -238,7 +238,7 @@ class Device : public Napi::ObjectWrap<Device> {
     cfg.performanceProfile = ma_performance_profile_low_latency;
     cfg.noPreSilencedOutputBuffer = MA_TRUE;
     cfg.noClip = MA_TRUE;
-    cfg.noFixedSizedCallback = MA_FALSE;  // 콜백마다 periodSizeInFrames 로 고정 — 프레임 경계가 일정하다
+    cfg.noFixedSizedCallback = MA_FALSE;  // 콜백마다 periodSizeInFrames 로 고정 — 프레임 경계 일정
     cfg.wasapi.noAutoConvertSRC = MA_TRUE;
     cfg.wasapi.noDefaultQualitySRC = MA_TRUE;
     cfg.wasapi.noHardwareOffloading = MA_TRUE;
@@ -387,7 +387,7 @@ class Device : public Napi::ObjectWrap<Device> {
   }
   void CloseInternal() {
     if (opened_) {
-      ma_device_uninit(&dev_);  // 콜백 스레드가 멈춘 뒤 돌아온다
+      ma_device_uninit(&dev_);  // 콜백 스레드 정지 후 반환된다
       opened_ = false;
     }
     if (tsfn_) {
@@ -407,7 +407,7 @@ class Device : public Napi::ObjectWrap<Device> {
     o.Set("internalSampleRate", s.internalSampleRate);
     o.Set("internalPeriodFrames", s.internalPeriodSizeInFrames);
     o.Set("internalPeriods", s.internalPeriods);
-    // 미니오디오 변환기가 끼어 있나 — 24-in-32(s32→s24, >>8) 는 무손실이라 bitPerfect 판정에서 따로 본다
+    // miniaudio 변환기 개입 여부 — 24-in-32(s32→s24, >>8) 는 무손실이므로 bitPerfect 판정에서 별도로 처리한다
     const bool sameRate = s.internalSampleRate == sampleRate_;
     const bool sameCh = s.internalChannels == channels_;
     const bool sameFmt = s.internalFormat == format_;
@@ -491,8 +491,8 @@ class Device : public Napi::ObjectWrap<Device> {
     return Napi::Number::New(ci.Env(), static_cast<double>(ring_ ? ring_->capacity() : 0));
   }
 
-  // 캡처 "데이터 있음" 알림. 사용자 콜백은 인자 없이 불린다 — JS 가 read()/available() 로 꺼낸다.
-  // pending_ 은 콜백 직전에 내린다: 콜백 도중 들어온 새 데이터가 다음 알림을 만들 수 있게.
+  // 캡처 "데이터 있음" 알림. 사용자 콜백은 인자 없이 호출된다 — JS 가 read()/available() 로 읽는다.
+  // pending_ 은 콜백 직전에 해제한다: 콜백 도중 수신된 새 데이터가 다음 알림을 생성할 수 있도록 하기 위함.
   Napi::Value SetDataCallback(const Napi::CallbackInfo& ci) {
     Napi::Env env = ci.Env();
     if (tsfn_) { tsfn_.Release(); tsfn_ = Napi::ThreadSafeFunction(); }
@@ -504,7 +504,7 @@ class Device : public Napi::ObjectWrap<Device> {
         if (!userFn_.IsEmpty()) userFn_.Call({});
       });
       tsfn_ = Napi::ThreadSafeFunction::New(env, wrapper, "jw-native-audio-data", 1, 1);
-      tsfn_.Unref(env);  // 장치가 열려 있어도 프로세스 종료를 막지 않는다
+      tsfn_.Unref(env);  // 장치가 열려 있어도 프로세스 종료를 차단하지 않는다
     }
     return env.Undefined();
   }
@@ -571,7 +571,7 @@ class Resampler : public Napi::ObjectWrap<Resampler> {
     Napi::Float32Array out = Napi::Float32Array::New(env, static_cast<size_t>(outCap) * channels_);
     spx_uint32_t outFrames = outCap;
     speex_resampler_process_interleaved_float(st_, in.Data(), &inFrames, out.Data(), &outFrames);
-    // 실제 길이로 잘라 돌려준다
+    // 실제 길이로 잘라 반환한다
     return Napi::Float32Array::New(env, static_cast<size_t>(outFrames) * channels_, out.ArrayBuffer(), 0);
   }
   Napi::Value Latency(const Napi::CallbackInfo& ci) {

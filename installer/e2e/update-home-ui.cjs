@@ -42,11 +42,14 @@ const expect = (n, c, d) => { if (c) { pass++; console.log('  PASS ' + n) } else
   expect('관리자 로그인', login === 200, String(login))
   await page.goto(base + '/admin/update')
   const until = Date.now() + Number(opt.timeout) * 1000
+  const anyState = '[data-testid=update-available], [data-testid=update-checking], [data-testid=update-latest], [data-testid=update-check-failed]'
   let shown = ''
   while (Date.now() < until) {
+    await page.locator(anyState).first().waitFor({ timeout: 20000 }).catch(() => {})
     const card = page.locator('[data-testid=update-available]')
     if (await card.count()) { shown = (await card.innerText()).replace(/\s+/g, ' '); if (shown.includes(opt.expect)) break }
-    await sleep(2000)
+    // 확인 중이면 화면이 스스로 재조회한다. 그 밖의 상태(최신·실패)는 잠시 후 다시 연다
+    await sleep(3000)
     if (!(await page.locator('[data-testid=update-checking]').count())) await page.reload()
   }
   expect(`현황에 새 버전 ${opt.expect} 이 표시된다("지금 확인" 없이)`, shown.includes(opt.expect), shown.slice(0, 200) || '새 버전 카드 없음')

@@ -15,6 +15,9 @@ CHANNEL_URL="http://$CHANNEL_ADDR"
 REL="$E2E_WORK/release"                 # keys/ channel/ manifests/ src-<버전>/
 OUR_IMAGES=(backend frontend-react mailserver sso ldap audiorelay docconv sandbox rbi-netfilter)
 UPD=/api/admin/system/update
+# 가짜 릴리스 환경에서 처음 설치하는 버전. 리포의 VERSION(지금 개발 중인 버전)과 무관하다 — 이 환경의 릴리스 번호(1.0.0, 1.0.1 …)는
+# 검수 스크립트가 정한 것이고, 리포의 VERSION 이 그보다 낮거나 높아도 같은 결과가 나와야 한다.
+BASE_VERSION=1.0.0
 TOOL_IMAGE="${E2E_TOOL_IMAGE:-just-workspace-installer:$E2E_VERSION}"     # python + cryptography 가 든 이미지
 # 리포의 DB 스키마 버전(S0)과, 검수용 변경 단계를 하나(S1)·둘(S2) 더한 버전
 S0="$(sed -n 's/^SCHEMA_VERSION = \([0-9][0-9]*\).*/\1/p' "$E2E_REPO/backend/app/db/schema_version.py")"
@@ -114,11 +117,15 @@ PY
   local base
   for n in "${OUR_IMAGES[@]}"; do
     [ "$n" = backend ] && continue
-    # 처음 빌드한 이미지에서 태그만 붙인다. 서버의 `localhost/…:<처음 버전>` 태그는 업데이트가 복원 지점과 함께 치우므로
-    # (가리키는 복원 지점이 없어진 옛 버전), 레지스트리 이름으로 남겨 둔 것을 먼저 쓴다.
-    base="$REG/just-workspace-$n:$E2E_VERSION"
-    docker image inspect "$base" >/dev/null 2>&1 || docker pull -q "$base" >/dev/null 2>&1 || base="localhost/just-workspace-$n:$E2E_VERSION"
-    docker image inspect "$base" >/dev/null 2>&1 || base="localhost/just-workspace-$n:$(env_value JW_VERSION)"
+    # 태그만 붙인다. 바탕은 — 처음 버전을 낼 때는 소스에서 빌드해 둔 이미지(`localhost/…:<리포의 VERSION>`), 그 뒤로는
+    # 레지스트리에 올려 둔 처음 버전. 서버의 `localhost/…` 태그는 업데이트가 치우므로(어느 복원 지점도 가리키지 않는
+    # 버전의 태그 — 소스에서 빌드해 둔 것도, 켜지 않은 구역의 것도) 처음 버전을 낸 뒤에는 거기에 기대지 않는다.
+    base="localhost/just-workspace-$n:$E2E_VERSION"
+    if [ "$ver" != "$BASE_VERSION" ]; then
+      base="$REG/just-workspace-$n:$BASE_VERSION"
+      docker image inspect "$base" >/dev/null 2>&1 || docker pull -q "$base" >/dev/null 2>&1 || base="localhost/just-workspace-$n:$E2E_VERSION"
+    fi
+    docker image inspect "$base" >/dev/null 2>&1 || { echo "바탕 이미지가 없다: $base — build-images.sh 로 먼저 빌드한다" >&2; return 1; }
     [ "$base" = "$REG/just-workspace-$n:$ver" ] || docker tag "$base" "$REG/just-workspace-$n:$ver" || return 1
   done
   docker tag alpine:latest "$REG/just-workspace-rbi-mirror:$ver"       # 검수 서버에서는 빌드하지 않는 이미지 — 자리만
@@ -137,6 +144,16 @@ PY
     printf '}}\n'
   } > "$REL/digests-$ver.json" || return 1
   echo "$variant" > "$REL/variant-$ver"
+}
+
+# rel_local <버전> — 그 버전의 릴리스 이미지를 이 서버의 이미지 이름으로도 붙인다(소스에서 빌드해 둔 서버에 설치하는 꼴:
+# 우리 이미지는 `localhost/just-workspace-<이름>:<버전>`, 설치 관리자는 `just-workspace-installer:<버전>`).
+rel_local() {
+  local ver="$1" n
+  for n in "${OUR_IMAGES[@]}"; do
+    docker tag "$REG/just-workspace-$n:$ver" "localhost/just-workspace-$n:$ver" || return 1
+  done
+  docker tag "$REG/just-workspace-installer:$ver" "just-workspace-installer:$ver"
 }
 
 # rel_manifest <버전> <스키마 버전> [make-manifest 에 더할 인자…]

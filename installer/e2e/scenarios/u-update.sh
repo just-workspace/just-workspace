@@ -40,8 +40,13 @@ stage_setup() {
   check "채널 검증(공개 키)" rel_verify
   note "받을 용량(manifest): $(json_get 'd.get("download_bytes")' < "$REL/manifests/1.0.1-beta.1.json")"
 
+  # 처음 설치는 이 환경의 릴리스(1.0.0)로 한다 — 리포의 VERSION 으로 빌드해 둔 이미지가 아니라.
+  # (그 이미지로 설치하면 설치된 버전이 리포의 VERSION 이 되어, 채널의 1.0.0 과 견준 결과가 VERSION 에 따라 달라진다)
+  check "$BASE_VERSION 릴리스를 이 서버의 이미지 이름으로" rel_local "$BASE_VERSION"
+  E2E_INSTALLER_IMAGE="just-workspace-installer:$BASE_VERSION"
   check "설치 관리자 기동(채널 주소 지정)" installer_start -e "JW_UPDATE_CHANNEL_URL=$CHANNEL_URL"
   install file "$E2E_ROOT/answers/collab.json" || finish
+  expect "설치된 버전 = 이 환경의 처음 버전" "$BASE_VERSION" "$(env_value JW_VERSION)"
   check_core
   check "메일 서버 준비" wait_ready ws-mailserver 240
   ws_login

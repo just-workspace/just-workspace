@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "mode": "new",
+  "access": { "domain": "ws.e2e.example", "network": "direct", "cert": "temporary" },
+  "storage": { "kind": "local" },
+  "preset": null,
+  "zones": ["meetings"],
+  "addons": ["rbi"],
+  "meetings": { "public_ip": "__E2E_ADDR__", "turn": false, "lossless_audio": false },
+  "admin": { "name": "관리자", "username": "admin" }
+}

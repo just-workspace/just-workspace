@@ -132,7 +132,7 @@ def run_preflight(svc: Services) -> dict:
     answers = svc.store.load_answers()
     report = preflight.run(svc.docker, answers, svc.catalog, registry=svc.registry, **svc.preflight_kwargs)
     svc.store.write("preflight.json", {**report, "checked_at": now_iso()})
-    known = {k: val for k, val in report["facts"].items() if val and k in ("memory_mb", "cpus")}
+    known = preflight.preflight_facts(report)
     if known:
         svc.store.update_facts(**known)
     return report

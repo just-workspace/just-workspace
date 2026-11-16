@@ -139,9 +139,26 @@ class Context:
         self.docker.compose("stop", *services, timeout=300, on_line=self.log)
         self.docker.compose("rm", "-f", *services, timeout=120, on_line=self.log)
 
+    def detect_host_addresses(self) -> None:
+        """격리 브라우저를 쓰는데 이 서버의 주소를 아직 모르면 지금 알아본다(`RBI_PROTECTED` 에 들어간다).
+
+        새 설치는 사전 점검이 이미 감지해 둔다. 여기는 사전 점검을 거치지 않는 길(백업에서 복원, 나중에 구역 켜기)용이다.
+        알아내지 못하면 그대로 둔다 — 값이 비어도 출구 규칙을 거는 쪽이 자기 주소를 따로 막는다.
+        """
+        if self.facts.host_address or "rbi" not in ans.selected_zones(self.answers, self.catalog):
+            return
+        try:
+            probe = helper_json(self.docker.helper(["host-probe", "--ports", ""], network="host", timeout=60))
+        except Exception:  # noqa: BLE001
+            return
+        found = {k: val for k, val in (("host_address", probe.get("outbound_address")), ("gateway", probe.get("gateway"))) if val}
+        if found:
+            self.facts = self.store.update_facts(**found)
+
     def write_stack(self) -> render.Plan:
         """답변과 지금의 비밀값으로 스택 파일을 다시 쓴다."""
         env_secrets = dict(self.store.env_secrets())
+        self.detect_host_addresses()
         self.plan = render.derive(self.answers, self.facts, self.catalog)
         if self.plan.mail_builtin:
             env_secrets["DKIM_PRIVATE_KEY"] = dkim.ensure(self.store, self.plan.mail_domain)["private_key"]
@@ -680,7 +697,7 @@ class Engine:
         """사전 점검 — fail 이 하나라도 있으면 시작하지 않는다. 메모리·CPU 감지값도 여기서 갱신한다."""
         report = preflight.run(self.docker, answers, self.catalog, registry=self.registry, **self.preflight_kwargs)
         self.store.write("preflight.json", {**report, "checked_at": now_iso()})
-        facts = {k: val for k, val in report["facts"].items() if val and k in ("memory_mb", "cpus")}
+        facts = preflight.preflight_facts(report)
         if facts:
             self.store.update_facts(**facts)
         failed = [i["id"] for i in report["items"] if i["status"] == "fail"]

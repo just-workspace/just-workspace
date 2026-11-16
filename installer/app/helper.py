@@ -6,7 +6,7 @@
 
 | 명령 | 띄우는 방법 | 하는 일 |
 |---|---|---|
-| `host-probe --ports 80,443,25` | `--network host` | 포트 점유(bind 시도), 호스트 경로표, 나가는 주소 |
+| `host-probe --ports 80,443,25` | `--network host` | 포트 점유(bind 시도), 호스트 경로표, 나가는 주소, 기본 게이트웨이 |
 | `disk <경로>` | 볼륨/폴더를 붙여서 | 여유 공간 |
 | `path-test <경로>` | `--mount type=bind`, uid 1000 | 쓰기·읽기·지우기 |
 | `nfs-test <경로>` | NFS 볼륨, uid 1000 | 쓰기·읽기·지우기, 파일 잠금, 여유 공간 |
@@ -75,6 +75,26 @@ def parse_routes(text: str) -> list[dict]:
     return routes
 
 
+def parse_default_gateway(text: str) -> str:
+    """/proc/net/route → 기본 경로의 게이트웨이 주소(없으면 빈 문자열). 여럿이면 metric 이 가장 낮은 것."""
+    best: tuple[int, str] | None = None
+    for line in text.splitlines()[1:]:
+        parts = line.split()
+        if len(parts) < 8:
+            continue
+        try:
+            dest, gateway, flags, metric, mask = (int(parts[1], 16), int(parts[2], 16), int(parts[3], 16),
+                                                  int(parts[6]), int(parts[7], 16))
+        except ValueError:
+            continue
+        if dest != 0 or mask != 0 or not flags & 0x2 or not gateway:   # 0x2 = RTF_GATEWAY
+            continue
+        address = socket.inet_ntoa(struct.pack("<L", gateway))
+        if best is None or metric < best[0]:
+            best = (metric, address)
+    return best[1] if best else ""
+
+
 def outbound_address() -> str:
     """밖으로 나갈 때 쓰는 호스트 주소(패킷은 보내지 않는다)."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -91,16 +111,18 @@ def cmd_host_probe(args) -> int:
     ports = {str(p): port_state(int(p)) for p in args.ports.split(",") if p.strip()}
     try:
         with open("/proc/net/route", encoding="ascii") as f:
-            routes = parse_routes(f.read())
+            table = f.read()
     except OSError:
-        routes = []
+        table = ""
+    routes = parse_routes(table)
     selinux = ""
     try:
         with open("/sys/fs/selinux/enforce", encoding="ascii") as f:
             selinux = "enforcing" if f.read().strip() == "1" else "permissive"
     except OSError:
         pass
-    return _out({"ports": ports, "routes": routes, "outbound_address": outbound_address(), "selinux": selinux})
+    return _out({"ports": ports, "routes": routes, "outbound_address": outbound_address(),
+                 "gateway": parse_default_gateway(table), "selinux": selinux})
 
 
 # ─── disk / path / nfs ───

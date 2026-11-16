@@ -399,3 +399,45 @@ def test_database_step_fails_when_migrate_fails(tmp_path):
     assert svc.engine.retry()
     svc.engine._thread.join(30)
     assert svc.engine.status()["status"] == "done"
+
+
+# ─── 격리 브라우저: 서버 주소 ───
+
+
+def test_rbi_install_writes_this_servers_addresses(tmp_path):
+    """사전 점검이 감지한 서버 주소·게이트웨이가 .env 의 RBI_PROTECTED 로 간다."""
+    host = Host(tmp_path)
+    host.services += ["rbi-netfilter"]
+    svc = host.install(addons=["rbi"])
+    state = svc.engine.run()
+    assert state["status"] == "done", state["error"]
+    env = envfile.parse((host.paths.stack / ".env").read_text(encoding="utf-8"))
+    assert env["RBI_PROTECTED"] == "192.168.10.20,192.168.10.1"
+    facts = svc.store.facts()
+    assert (facts.host_address, facts.gateway) == ("192.168.10.20", "192.168.10.1")
+
+
+def test_host_addresses_are_detected_when_preflight_did_not_run(tmp_path):
+    """사전 점검을 거치지 않는 길(복원·나중에 구역 켜기) — 스택 파일을 쓸 때 알아본다. 격리 브라우저가 없으면 묻지 않는다."""
+    host = Host(tmp_path)
+    svc = host.install()
+    ctx = svc.engine._context("config", svc.store.load_answers(), svc.store.facts())
+    ctx.detect_host_addresses()
+    assert not host.runner.find("app.helper", "host-probe") and svc.store.facts().host_address is None
+
+    svc.store.save_answers(make_answers(addons=["rbi"]))
+    ctx = svc.engine._context("config", svc.store.load_answers(), svc.store.facts())
+    ctx.detect_host_addresses()
+    assert len(host.runner.find("app.helper", "host-probe")) == 1
+    assert ctx.facts.host_address == "192.168.10.20" and svc.store.facts().gateway == "192.168.10.1"
+    ctx.detect_host_addresses()          # 이미 알면 다시 묻지 않는다
+    assert len(host.runner.find("app.helper", "host-probe")) == 1
+
+
+def test_host_address_detection_failure_is_not_fatal(tmp_path):
+    host = Host(tmp_path)
+    svc = host.install(addons=["rbi"])
+    host.runner.on("app.helper", "host-probe", rc=1, err="boom")
+    ctx = svc.engine._context("config", svc.store.load_answers(), svc.store.facts())
+    ctx.detect_host_addresses()
+    assert ctx.facts.host_address is None

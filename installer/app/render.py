@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import ipaddress
 import json
 from dataclasses import dataclass, field
 
@@ -216,6 +217,28 @@ def backend_workers(facts: Facts) -> str:
     return str(workers)
 
 
+# 격리 브라우저의 대상이 될 수 있는 대역(backend 의 RBI_ALLOW_CEILING 기본값과 같다)
+_RBI_PRIVATE = tuple(ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
+
+
+def rbi_protected(facts: Facts) -> str:
+    """`RBI_PROTECTED` — 이 서버의 주소와 기본 게이트웨이(감지한 것만, 사설 주소만).
+
+    backend 는 컨테이너 안이라 서버의 주소를 모른다. 이 값이 비어 있으면 backend 는 서버 자신을 가리키는 대상을
+    받아 주고, 출구 규칙을 거는 사이드카가 뒤늦게 거부한다(대상은 저장됐는데 세션이 열리지 않는다).
+    공인 주소는 어차피 대상이 될 수 없어(허용 상한 밖) 적지 않는다.
+    """
+    out: list[str] = []
+    for value in (facts.host_address, facts.gateway, facts.proxy_lan_ip):
+        try:
+            address = ipaddress.ip_address((value or "").strip())
+        except ValueError:
+            continue
+        if address.version == 4 and any(address in net for net in _RBI_PRIVATE) and str(address) not in out:
+            out.append(str(address))
+    return ",".join(out)
+
+
 def env_sections(answers: Answers, secrets: dict, facts: Facts, plan: Plan,
                  *, version: str, registry: str, gitea_image: str, app_version: str = "") -> list[tuple[str, list[tuple[str, str]]]]:
     s = lambda name: secrets.get(name, "")  # noqa: E731
@@ -316,6 +339,8 @@ def env_sections(answers: Answers, secrets: dict, facts: Facts, plan: Plan,
         sections.append(("격리 브라우저", [
             ("RBI_PUBLIC_ORIGIN", f"https://rbi.{plan.domain}"),
             ("RBI_PUBLISH_IP", f"{plan.net_prefix}.1"),
+            # 워크스페이스 자신의 주소 — 격리 브라우저의 대상으로 받지 않는다(관리자가 강제로 저장할 때만 연다)
+            ("RBI_PROTECTED", rbi_protected(facts)),
         ]))
     else:
         sections.append(("격리 브라우저", [("RBI_PUBLISH_IP", f"{plan.net_prefix}.1")]))

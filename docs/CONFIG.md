@@ -118,7 +118,7 @@ Just Workspace 의 환경별 값은 스택의 `.env` 파일에 있다. 소스에
 | `LDAP_PLAIN_BIND` | `127.0.0.1` | LDAP 컨테이너의 평문 389 를 게시할 주소. 밖으로는 LDAPS(636)만 연다. 평문만 되는 장비가 내부망에 있을 때만 그 망의 서버 주소(예 `192.168.10.20`)를 적는다 | 고정 |
 | `LDAP_SERVICE_USER` / `LDAP_SERVICE_PASSWORD` | (비움) | LDAP 디렉터리를 읽어 가는 서비스 계정(LDAP 컨테이너가 읽는다) | 수동 |
 
-격리 브라우저(`RBI_*`)는 변수가 많아 [rbi.md](rbi.md)에 따로 있다. 설치 관리자는 `RBI_PUBLIC_ORIGIN`(`https://rbi.<접속 주소>`)과 `RBI_PUBLISH_IP`(내부 대역의 `.1`)만 채우고 나머지는 기본값을 쓴다.
+격리 브라우저(`RBI_*`)는 변수가 많아 [rbi.md](rbi.md)에 따로 있다. 설치 관리자는 `RBI_PUBLIC_ORIGIN`(`https://rbi.<접속 주소>`), `RBI_PUBLISH_IP`(내부 대역의 `.1`), `RBI_PROTECTED`(감지한 이 서버의 주소와 기본 게이트웨이)를 채우고 나머지는 기본값을 쓴다.
 
 ### 인증·연동
 

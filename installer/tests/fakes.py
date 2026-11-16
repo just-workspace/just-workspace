@@ -95,7 +95,7 @@ def healthy_host(runner: FakeRunner, *, info: dict | None = None, ports: dict | 
         "ports": ports or {"80": "free", "443": "free", "25": "free"},
         "routes": routes if routes is not None else [{"dest": "192.168.10.0/24", "iface": "eth0"},
                                                     {"dest": "172.17.0.0/16", "iface": "docker0"}],
-        "outbound_address": "192.168.10.20", "selinux": "",
+        "outbound_address": "192.168.10.20", "gateway": "192.168.10.1", "selinux": "",
     }) + "\n")
     nets = networks if networks is not None else {"bridge": ["172.17.0.0/16"], "host": [], "none": []}
     runner.on("network", "ls", out="\n".join(nets) + "\n")

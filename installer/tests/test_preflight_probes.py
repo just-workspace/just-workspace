@@ -35,7 +35,10 @@ def test_preflight_all_pass(tmp_path, catalog):
     assert [i["id"] for i in report["items"]] == [
         "docker_engine", "docker_compose", "cpu", "memory", "arch", "disk", "time_sync",
         "port_80", "port_443", "port_25", "subnet", "internet", "registry", "selinux"]
-    assert report["facts"] == {"memory_mb": 16384, "cpus": 4, "outbound_address": "192.168.10.20"}
+    assert report["facts"] == {"memory_mb": 16384, "cpus": 4, "outbound_address": "192.168.10.20", "gateway": "192.168.10.1"}
+    # 그 가운데 facts 로 남기는 것 — 서버의 주소와 게이트웨이는 격리 브라우저의 RBI_PROTECTED 에 쓰인다
+    assert preflight.preflight_facts(report) == {"memory_mb": 16384, "cpus": 4, "host_address": "192.168.10.20", "gateway": "192.168.10.1"}
+    assert preflight.preflight_facts({"facts": {"memory_mb": 8, "cpus": None, "outbound_address": None}}) == {"memory_mb": 8}
     # 호스트 네트워크로 띄운 보조 컨테이너에서 포트를 본다 — 인자는 배열로 나간다
     probe = runner.find("app.helper", "host-probe")[0]
     assert probe[:4] == ["run", "--rm", "--network", "host"] and "sha256:selfimage" in probe
@@ -123,6 +126,20 @@ def test_parse_routes():
             "docker0\t000011AC\t00000000\t0001\t0\t0\t0\t0000FFFF\t0\t0\t0\n")
     assert helper.parse_routes(text) == [{"dest": "192.168.10.0/24", "iface": "eth0"},
                                          {"dest": "172.17.0.0/16", "iface": "docker0"}]
+
+
+def test_parse_default_gateway():
+    head = "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n"
+    lan = "eth0\t000AA8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0\n"
+    assert helper.parse_default_gateway(head + "eth0\t00000000\t010AA8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0\n" + lan) == "192.168.10.1"
+    # 기본 경로가 둘이면 metric 이 낮은 쪽
+    two = (head + "wlan0\t00000000\tFE0AA8C0\t0003\t0\t0\t600\t00000000\t0\t0\t0\n"
+           + "eth0\t00000000\t010AA8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0\n")
+    assert helper.parse_default_gateway(two) == "192.168.10.1"
+    # 기본 경로가 없거나(게이트웨이 표시 없음) 표가 비면 빈 문자열
+    assert helper.parse_default_gateway(head + lan) == ""
+    assert helper.parse_default_gateway(head + "eth0\t00000000\t00000000\t0001\t0\t0\t0\t00000000\t0\t0\t0\n") == ""
+    assert helper.parse_default_gateway("") == "" and helper.parse_default_gateway("garbage\nx y z\n") == ""
 
 
 def test_version_parsing():

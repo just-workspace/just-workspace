@@ -286,8 +286,20 @@ def run(docker: Docker, answers: ans.Answers, catalog: Catalog, *, registry: str
         "ok": not any(i["status"] == "fail" for i in items),
         "items": items,
         "facts": {"memory_mb": memory_mb or None, "cpus": cpus or None,
-                  "outbound_address": probe.get("outbound_address") or None},
+                  "outbound_address": probe.get("outbound_address") or None,
+                  "gateway": probe.get("gateway") or None},
     }
+
+
+
+# 사전 점검이 감지한 값 가운데 facts 로 남기는 것 — {사전 점검의 이름: facts 의 이름}
+PREFLIGHT_FACTS = {"memory_mb": "memory_mb", "cpus": "cpus", "outbound_address": "host_address", "gateway": "gateway"}
+
+
+def preflight_facts(report: dict) -> dict:
+    """사전 점검 결과에서 facts 로 옮길 값(감지하지 못한 것은 뺀다 — 예전에 감지한 값을 지우지 않는다)."""
+    got = report.get("facts") or {}
+    return {PREFLIGHT_FACTS[k]: val for k, val in got.items() if val and k in PREFLIGHT_FACTS}
 
 
 def _reach(url: str) -> bool:

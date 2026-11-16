@@ -400,7 +400,7 @@ compose 는 저장소 볼륨(`ws-storage-data`)을 `external` 로 쓴다. 설치
 | `SECRET_KEY`, `INTERNAL_API_KEY`, `DB_PASSWORD` | 생성 | |
 | `BACKEND_WORKERS` | 파생 | `min(8, max(2, CPU 수))`, 메모리 6GB 미만이면 2 |
 | `BACKEND_CPUS`, `DATABASE_URL`, `DOMAIN_ALIAS`, `MCP_PUBLIC_URL` | 고정 | 빈 값 |
-| `ALLOW_NATIVE_APP_ORIGINS`, `BRAND_*`, `OAUTH_DYNAMIC_CLIENTS_MAX`, `MCP_INTERNAL_TOOLS_ENABLED`, `MCP_API_KEY`, `GPU_HOST_IP`, `DESKTOP_*`, `RBI_ALLOW*`, `RBI_PROTECTED`, `RBI_IMAGE`, `RBI_NETWORK`, `RBI_SUBNET`, `RBI_IP_RANGE`, `RBI_BRIDGE`, `RBI_MAX_SESSIONS`, `RBI_REQUIRE_GUARD`, `AUDIORELAY_WT_SELF_SIGNED_HOSTS`, `SANDBOX_*`·`DOCCONV_*` 상한 | — | |
+| `ALLOW_NATIVE_APP_ORIGINS`, `BRAND_*`, `OAUTH_DYNAMIC_CLIENTS_MAX`, `MCP_INTERNAL_TOOLS_ENABLED`, `MCP_API_KEY`, `GPU_HOST_IP`, `DESKTOP_*`, `RBI_ALLOW*`, `RBI_IMAGE`, `RBI_NETWORK`, `RBI_SUBNET`, `RBI_IP_RANGE`, `RBI_BRIDGE`, `RBI_MAX_SESSIONS`, `RBI_REQUIRE_GUARD`, `AUDIORELAY_WT_SELF_SIGNED_HOSTS`, `SANDBOX_*`·`DOCCONV_*` 상한 | — | |
 | `DB_NAME`, `DB_USER` | 고정 | `workspace` |
 | `FEATURE_BUILTIN_MAILSERVER` | 파생 | 메일 구역 + `builtin` 일 때만 `true` |
 | `DOVECOT_MASTER_USER` / `…_PASSWORD` | 고정 / 생성 | 내장 메일일 때 `portal` |
@@ -419,6 +419,7 @@ compose 는 저장소 볼륨(`ws-storage-data`)을 `external` 로 쓴다. 설치
 | `AUDIORELAY_WT_PORT` / `…_CERT` / `…_KEY` | 고정 / 파생 | 4433 / `live/<접속 주소>/…` |
 | `RBI_PUBLIC_ORIGIN` | 파생 | 격리 브라우저일 때 `https://rbi.<접속 주소>` |
 | `RBI_PUBLISH_IP` | 파생 | 내부 대역의 `.1` |
+| `RBI_PROTECTED` | 감지 | 격리 브라우저일 때 이 서버의 주소와 기본 게이트웨이(사전 점검이 감지한 것, 사설 주소만), 앞단 프록시의 내부 주소를 알면 그것도. 감지하지 못하면 빈 값 |
 | `LDAP_PLAIN_BIND` | 고정 | `127.0.0.1` |
 | `LETSENCRYPT_EMAIL` | 답변/파생 | `access.acme_email` 또는 `admin@DOMAIN` |
 | `ACME_DOMAINS` | 파생 | 인증서에 들어갈 이름(첫 이름 = 접속 주소) |

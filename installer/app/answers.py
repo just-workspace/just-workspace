@@ -225,6 +225,8 @@ class Facts:
     upload_cert_ok: bool = False           # 올린 인증서 파일이 검증을 통과했다
     site_ca: bool = False                  # 올린 인증서에 발급 CA(체인)가 함께 왔다 — 코드 저장소가 그것을 믿게 한다
     proxy_lan_ip: str | None = None
+    host_address: str | None = None        # 이 서버가 밖으로 나갈 때 쓰는 주소(사전 점검이 감지)
+    gateway: str | None = None             # 이 서버의 기본 게이트웨이(사전 점검이 감지)
 
     def as_dict(self) -> dict:
         return dict(self.__dict__)

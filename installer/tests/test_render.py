@@ -137,6 +137,7 @@ def test_full_properties(bundle, secrets, facts):
     assert env["ACME_DOMAINS"] == "ws.example.com,mail.example.com,turn.ws.example.com,rbi.ws.example.com"
     assert env["GITEA_IMAGE"] == bundle.gitea_verified_image
     assert env["RBI_PUBLIC_ORIGIN"] == "https://rbi.ws.example.com"
+    assert env["RBI_PROTECTED"] == ""          # 서버 주소를 감지하지 못했으면 비운다(지어내지 않는다)
     lk = files["livekit/livekit.yaml"]
     assert "node_ip: 203.0.113.10" in lk and "domain: turn.ws.example.com" in lk
     assert f"api_key: {secrets['LIVEKIT_API_KEY']}" in lk
@@ -248,3 +249,27 @@ def test_bundle_compose_uses_the_variables_render_writes(bundle):
     for inc in ("site.d/http.conf", "site.d/listen-main.conf", "site.d/listen-rbi.conf"):
         assert f"include /etc/nginx/{inc};" in nginx
     assert "include /etc/nginx/site.d/headers.conf;" in bundle.read("nginx/security-headers.conf")
+
+
+# ─── 격리 브라우저: 워크스페이스 자신의 주소 ───
+
+
+@pytest.mark.parametrize("known,expected", [
+    (dict(host_address="192.168.10.20", gateway="192.168.10.1"), "192.168.10.20,192.168.10.1"),
+    (dict(host_address="192.168.10.20"), "192.168.10.20"),
+    (dict(host_address="192.168.10.20", gateway="192.168.10.1", proxy_lan_ip="192.168.10.5"), "192.168.10.20,192.168.10.1,192.168.10.5"),
+    (dict(host_address="192.168.10.20", gateway="192.168.10.20"), "192.168.10.20"),      # 같은 주소는 한 번만
+    (dict(host_address="203.0.113.10", gateway="203.0.113.1"), ""),                    # 공인 주소는 대상이 될 수 없어 적지 않는다
+    (dict(host_address="not-an-ip", gateway="127.0.0.1"), ""),
+    (dict(), ""),
+])
+def test_rbi_protected_lists_this_servers_private_addresses(known, expected):
+    assert render.rbi_protected(ans.Facts(**known)) == expected
+
+
+def test_rbi_protected_is_written_only_with_the_rbi_zone(bundle, secrets, facts):
+    facts.host_address, facts.gateway = "192.168.10.20", "192.168.10.1"
+    env = env_of(render.render(make_answers(**CASES["full"]), {**secrets, "DKIM_PRIVATE_KEY": DKIM_KEY}, facts, bundle))
+    assert env["RBI_PROTECTED"] == "192.168.10.20,192.168.10.1"
+    env = env_of(render.render(make_answers(**CASES["minimal"]), secrets, facts, bundle))
+    assert "RBI_PROTECTED" not in env

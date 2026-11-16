@@ -49,6 +49,7 @@ class Access(_Model):
     # 답변 파일로 무인 설치할 때의 인증서 파일(컨테이너 안 /data 아래 경로). 화면에서는 올린 파일을 쓴다.
     cert_path: str | None = None
     key_path: str | None = None
+    ca_path: str | None = None            # (선택) 사설 CA 가 내준 인증서일 때 그 CA 인증서 — 인증서 파일에 체인이 없을 때만 필요하다
 
 
 class Storage(_Model):
@@ -299,7 +300,7 @@ def validate(answers: Answers, catalog: Catalog, facts: Facts | None = None, *, 
             errors.append(FieldError("access.cert", "cert_upload_missing"))
     if a.acme_email:
         _check(errors, "access.acme_email", v.email, a.acme_email, required=False)
-    for name in ("cert_path", "key_path"):
+    for name in ("cert_path", "key_path", "ca_path"):
         value = getattr(a, name)
         if value and not (value.startswith("/data/") and ".." not in value.split("/")):
             errors.append(FieldError(f"access.{name}", "path_outside_data"))

@@ -17,6 +17,10 @@ export interface CertState {
   days_left: number | null
   issuer: string | null
   self_signed: boolean
+  /** 이 서버의 컨테이너(코드 저장소 등)가 믿게 한 발급 CA 가 있다 — 인증서 파일에 체인이 함께 왔거나 CA 인증서를 따로 올렸다 */
+  site_ca?: boolean
+  /** 발급 CA 인증서를 따로 올릴 수 있는 설치(올린 인증서를 쓰고, 자체 서명이 아니다) */
+  ca_uploadable?: boolean
   /** 인증서 때문에 연결이 보류된 구역 */
   pending: string[]
   /** 진행 중인 인증서 작업 */
@@ -30,14 +34,18 @@ const BASE = '/api/admin/system'
 export const certApi = {
   get: () => $fetch<CertState>(`${BASE}/cert`),
   reissueAuto: () => $fetch<ZoneJob>(`${BASE}/cert/reissue`, { method: 'POST', body: { mode: 'auto' } }),
-  reissueUpload: (cert: string, key: string) => $fetch<ZoneJob>(`${BASE}/cert/reissue`, { method: 'POST', body: { mode: 'upload', cert, key } }),
+  reissueUpload: (cert: string, key: string, ca = '') =>
+    $fetch<ZoneJob>(`${BASE}/cert/reissue`, { method: 'POST', body: { mode: 'upload', cert, key, ...(ca.trim() ? { ca } : {}) } }),
+  /** 발급 CA 인증서만 더한다(인증서·개인 키는 그대로) — 사설 CA 가 내준 인증서를 한 장만 올린 설치 */
+  uploadCa: (ca: string) => $fetch<ZoneJob>(`${BASE}/cert/ca`, { method: 'POST', body: { ca } }),
 }
 
 /** 올릴 수 있는 파일 크기(각각) — 서버와 같은 상한 */
 export const CERT_FILE_MAX = 1024 * 1024
 
 /** 화면이 문구를 가진 검증 실패 사유 — 그 밖은 `other` */
-export const CERT_FIX_KEYS = ['cert_domain_missing', 'key_mismatch', 'cert_expired', 'cert_not_pem', 'key_not_pem', 'key_encrypted', 'cert_not_yet_valid'] as const
+export const CERT_FIX_KEYS = ['cert_domain_missing', 'key_mismatch', 'cert_expired', 'cert_not_pem', 'key_not_pem', 'key_encrypted', 'cert_not_yet_valid',
+  'ca_not_pem', 'ca_is_private_key', 'ca_not_a_ca', 'ca_not_issuer'] as const
 
 /** 422 cert_invalid 의 vars.checks 에서 통과하지 못한 줄만 */
 export function failedChecks(e: unknown): CertCheck[] {

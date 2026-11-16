@@ -474,17 +474,23 @@ def create_wizard_app(svc: Services) -> FastAPI:
     def probe_cert(body: dict = Body(...)):
         answers = svc.store.load_answers()
         domain = v.address(body.get("domain") or answers.access.domain)
-        cert, key = str(body.get("cert", "")), str(body.get("key", ""))
-        if len(cert) > 200_000 or len(key) > 50_000:
+        cert, key, ca = str(body.get("cert", "")), str(body.get("key", "")), str(body.get("ca") or "")
+        if len(cert) > 200_000 or len(key) > 50_000 or len(ca) > 200_000:
             raise ApiError(413, "file_too_large")
         chosen = ans.selected_zones(answers, svc.catalog)
         mail_host = None
         if "mail" in chosen and answers.mail.kind == "builtin":
             mail_host = f"mail.{answers.mail.mail_domain or domain}"
-        report = certs.inspect(cert, key, domain, mail_host=mail_host)
+        report = certs.inspect(cert, key, domain, mail_host=mail_host, ca_pem=ca)
         if report["ok"]:
             write_private(svc.store.dir / "upload" / "cert.pem", cert)
             write_private(svc.store.dir / "upload" / "key.pem", key)
+            # (선택) 사설 CA 의 인증서 — 없이 다시 확인했으면 앞서 받아 둔 것도 치운다
+            ca_file = svc.store.dir / "upload" / "ca.pem"
+            if ca.strip():
+                write_private(ca_file, ca, 0o644)
+            else:
+                ca_file.unlink(missing_ok=True)
         svc.store.update_facts(upload_cert_ok=bool(report["ok"]))
         return report
 

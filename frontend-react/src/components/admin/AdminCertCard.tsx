@@ -3,7 +3,9 @@
  *
  *  · 상태: 종류(자동 발급 / 올린 인증서 / 임시) · 접속 주소 · 만료일과 남은 일수 · 발급자 · 인증서에 든 이름.
  *    임시(자체 서명) 인증서면 경고와 함께 보류된 구역 연결이 몇 건인지 알린다.
- *  · [다시 발급](Let's Encrypt) · [인증서 올리기](인증서·개인 키 파일 두 개). 둘 다 작업으로 돈다 —
+ *  · [다시 발급](Let's Encrypt) · [인증서 올리기](인증서·개인 키 파일 두 개 + 사설 CA 일 때의 CA 인증서) ·
+ *    [CA 인증서 올리기](올린 인증서를 쓰는 설치에서 발급 CA 만 더한다 — 인증서를 한 장만 올려 코드 저장소의
+ *    로그인 연동이 보류로 남았을 때 그 사실과 함께 안내한다). 모두 작업으로 돈다 —
  *    발급 → 다시 읽히기 → 구역 다시 연결. 진행은 1.5초마다 다시 읽고, 실패하면 쓰던 인증서가 그대로 남는다.
  *    올린 인증서가 검증을 통과하지 못하면 통과하지 못한 항목을 창 안에 보여 준다.
  *  · 화면을 새로 열어도 진행 중인 작업과 방금 끝난(또는 하루 안에 실패한) 작업이 보인다.
@@ -33,7 +35,7 @@ export const certTiming = { pollMs: 1500 }
 
 /** 이 코드로 실패하면 설치 관리자가 인증서를 맡지 않는 설치다 */
 const LEGACY_CODES = ['installer_unavailable', 'installer_unsupported']
-const REQUEST_ERRORS = ['busy', 'cert_managed_by_proxy', 'not_installed', 'cert_auto_needs_domain', 'file_too_large', 'cert_invalid']
+const REQUEST_ERRORS = ['busy', 'cert_managed_by_proxy', 'not_installed', 'cert_auto_needs_domain', 'file_too_large', 'cert_invalid', 'cert_ca_needs_upload']
 const FAIL_CAUSES = ['cert_issue_failed', 'cert_dir_managed', 'cert_invalid']
 const STAGES = ['issue', 'reload', 'reconnect']
 
@@ -78,8 +80,10 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
   const [actionError, setActionError] = useState('')
   const [reconnecting, setReconnecting] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [caOnly, setCaOnly] = useState(false)         // 올리기 창이 "CA 인증서만" 모드인가
   const [certFile, setCertFile] = useState<File | null>(null)
   const [keyFile, setKeyFile] = useState<File | null>(null)
+  const [caFile, setCaFile] = useState<File | null>(null)
   const [uploadError, setUploadError] = useState('')
   const [checks, setChecks] = useState<CertCheck[]>([])
   const alive = useRef(true)
@@ -146,27 +150,28 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
     try { setJob(await certApi.reissueAuto()); setHidden('') } catch (e) { setActionError(requestError(e)) } finally { setBusy(false) }
   }
 
-  function openUpload() {
-    setCertFile(null); setKeyFile(null); setUploadError(''); setChecks([]); setUploadOpen(true)
+  function openUpload(onlyCa = false) {
+    setCertFile(null); setKeyFile(null); setCaFile(null); setUploadError(''); setChecks([]); setCaOnly(onlyCa); setUploadOpen(true)
   }
-  function pick(which: 'cert' | 'key', f: File | null) {
-    if (which === 'cert') setCertFile(f); else setKeyFile(f)
+  function pick(which: 'cert' | 'key' | 'ca', f: File | null) {
+    if (which === 'cert') setCertFile(f); else if (which === 'key') setKeyFile(f); else setCaFile(f)
     setUploadError(''); setChecks([])
   }
+  const ready = caOnly ? !!caFile : !!certFile && !!keyFile
   async function upload() {
-    if (!certFile || !keyFile) return
-    if (certFile.size > CERT_FILE_MAX || keyFile.size > CERT_FILE_MAX) { setUploadError(t('admin.certCard.error.file_too_large')); return }
+    if (!ready) return
+    const files = caOnly ? [caFile] : [certFile, keyFile, caFile]
+    if (files.some(f => f && f.size > CERT_FILE_MAX)) { setUploadError(t('admin.certCard.error.file_too_large')); return }
     setBusy(true); setUploadError(''); setChecks([])
     try {
-      let certText = ''
-      let keyText = ''
-      try { [certText, keyText] = await Promise.all([certFile.text(), keyFile.text()]) } catch { setUploadError(t('admin.certCard.modal.readError')); return }
-      setJob(await certApi.reissueUpload(certText, keyText))
+      let texts: string[] = []
+      try { texts = await Promise.all(files.map(f => (f ? f.text() : Promise.resolve('')))) } catch { setUploadError(t('admin.certCard.modal.readError')); return }
+      setJob(caOnly ? await certApi.uploadCa(texts[0]) : await certApi.reissueUpload(texts[0], texts[1], texts[2]))
       setHidden(''); setActionError(''); setUploadOpen(false)
     } catch (e) {
       const failed = failedChecks(e)
       setChecks(failed)
-      setUploadError(failed.length ? t('admin.certCard.modal.checksTitle') : requestError(e))
+      setUploadError(failed.length ? t(caOnly ? 'admin.certCard.modal.caChecksTitle' : 'admin.certCard.modal.checksTitle') : requestError(e))
     } finally { setBusy(false) }
   }
 
@@ -222,6 +227,8 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
   const cause = shownJob?.error?.cause || ''
   const failVars = { domain: cert.domain || '', ...(shownJob?.error?.vars as Record<string, unknown> | undefined) }
   const warnings = (shownJob?.warnings ?? []).filter(w => w && typeof w.key === 'string')
+  // 올린 인증서인데 발급 CA 를 모르고, 그 때문에 구역 연결이 보류로 남았다 — CA 인증서를 올리면 풀린다
+  const caNeeded = cert.mode === 'upload' && !!cert.ca_uploadable && !cert.site_ca && cert.pending.length > 0
 
   return (
     <>
@@ -240,6 +247,7 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
           <Row label={t('admin.certCard.row.expiry')}><span className={cn('font-medium', expiry.tone)} data-testid="cert-expiry">{expiry.text}</span></Row>
           {cert.issuer && <Row label={t('admin.certCard.row.issuer')}><span className="break-words">{cert.issuer}{cert.self_signed && !cert.temporary ? ` · ${t('admin.certCard.badge.selfSigned')}` : ''}</span></Row>}
           {cert.names.length > 0 && <Row label={t('admin.certCard.row.names')}><span className="break-all font-mono" data-testid="cert-names">{cert.names.join(', ')}</span></Row>}
+          {cert.ca_uploadable && <Row label={t('admin.certCard.row.ca')}><span data-testid="cert-ca" className={cert.site_ca ? '' : 'text-muted-foreground'}>{t(cert.site_ca ? 'admin.certCard.ca.trusted' : 'admin.certCard.ca.none')}</span></Row>}
         </dl>
 
         <div className="flex flex-col gap-3 border-t border-border px-5 py-4 text-[13px]">
@@ -249,6 +257,13 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
                 {t('admin.certCard.temporary.body')}
                 {cert.pending.length > 0 && <>{' '}{t('admin.certCard.temporary.pending', { n: cert.pending.length })}</>}
               </span>
+            </UiCallout>
+          )}
+
+          {caNeeded && !active && (
+            <UiCallout tone="warning" role="status" title={t('admin.certCard.caNeeded.title')} data-testid="cert-ca-needed"
+              actions={<UiButton size="xs" variant="outline" icon="upload" disabled={busy} onClick={() => openUpload(true)}>{t('admin.certCard.uploadCa')}</UiButton>}>
+              <span className="text-muted-foreground">{t('admin.certCard.caNeeded.body')}</span>
             </UiCallout>
           )}
 
@@ -298,7 +313,8 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
 
           <div className="flex flex-wrap items-center gap-2">
             <UiButton size="sm" icon="refresh" disabled={busy || active} onClick={() => { void reissue() }}>{t('admin.certCard.reissue')}</UiButton>
-            <UiButton size="sm" variant="outline" icon="upload" disabled={busy || active} onClick={openUpload}>{t('admin.certCard.upload')}</UiButton>
+            <UiButton size="sm" variant="outline" icon="upload" disabled={busy || active} onClick={() => openUpload()}>{t('admin.certCard.upload')}</UiButton>
+            {cert.ca_uploadable && !caNeeded && <UiButton size="sm" variant="ghost" disabled={busy || active} onClick={() => openUpload(true)} data-testid="cert-upload-ca">{t('admin.certCard.uploadCa')}</UiButton>}
           </div>
         </div>
       </SettingsCard>
@@ -306,20 +322,22 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
       {uploadOpen && (
         <UiModal
           size="480"
-          title={t('admin.certCard.modal.title')}
+          title={t(caOnly ? 'admin.certCard.modal.caTitle' : 'admin.certCard.modal.title')}
           onClose={() => { if (!busy) setUploadOpen(false) }}
           footer={
             <>
-              {(!certFile || !keyFile) && <span className="mr-auto min-w-0 text-[13px] text-muted-foreground">{t('admin.certCard.modal.needBoth')}</span>}
+              {!ready && <span className="mr-auto min-w-0 text-[13px] text-muted-foreground">{t(caOnly ? 'admin.certCard.modal.needCa' : 'admin.certCard.modal.needBoth')}</span>}
               <UiButton variant="outline" size="sm" disabled={busy} onClick={() => setUploadOpen(false)}>{t('common.cancel')}</UiButton>
-              <UiButton size="sm" disabled={busy || !certFile || !keyFile} onClick={() => { void upload() }}>{busy ? t('admin.certCard.modal.submitting') : t('admin.certCard.modal.submit')}</UiButton>
+              <UiButton size="sm" disabled={busy || !ready} onClick={() => { void upload() }}>{busy ? t('admin.certCard.modal.submitting') : t(caOnly ? 'admin.certCard.modal.caSubmit' : 'admin.certCard.modal.submit')}</UiButton>
             </>
           }
         >
           <div className="flex flex-col gap-4 text-[13.5px]">
-            <p className="m-0 text-muted-foreground">{t('admin.certCard.modal.lead')}</p>
-            <FilePick label={t('admin.certCard.modal.certSlot')} hint={t('admin.certCard.modal.certHint')} file={certFile} onPick={f => pick('cert', f)} />
-            <FilePick label={t('admin.certCard.modal.keySlot')} hint={t('admin.certCard.modal.keyHint')} file={keyFile} onPick={f => pick('key', f)} />
+            <p className="m-0 text-muted-foreground">{t(caOnly ? 'admin.certCard.modal.caLead' : 'admin.certCard.modal.lead')}</p>
+            {!caOnly && <FilePick label={t('admin.certCard.modal.certSlot')} hint={t('admin.certCard.modal.certHint')} file={certFile} onPick={f => pick('cert', f)} />}
+            {!caOnly && <FilePick label={t('admin.certCard.modal.keySlot')} hint={t('admin.certCard.modal.keyHint')} file={keyFile} onPick={f => pick('key', f)} />}
+            <FilePick label={t('admin.certCard.modal.caSlot')} hint={t(caOnly ? 'admin.certCard.modal.caOnlyHint' : 'admin.certCard.modal.caHint')} file={caFile} onPick={f => pick('ca', f)} />
+            {!caOnly && <p className="m-0 -mt-2 text-xs leading-[18px] text-muted-foreground" data-testid="cert-ca-note">{t('admin.certCard.modal.caNote')}</p>}
             {uploadError && (
               <UiCallout tone="danger" role="alert" title={uploadError} data-testid="cert-upload-error">
                 {checks.length > 0 && (
@@ -337,7 +355,7 @@ export function AdminCertCard({ onLegacy, className }: AdminCertCardProps) {
                 )}
               </UiCallout>
             )}
-            <p className="m-0 text-xs leading-[18px] text-muted-foreground">{t('admin.certCard.modal.footnote')}</p>
+            {!caOnly && <p className="m-0 text-xs leading-[18px] text-muted-foreground">{t('admin.certCard.modal.footnote')}</p>}
           </div>
         </UiModal>
       )}

@@ -105,6 +105,9 @@ describe('답변 · 요약 · 확인', () => {
     replies['POST /api/probe/cert'] = { body: { ok: true, checks: [] } }
     await createHttpApi().probeCert(new File(['CERT PEM'], 'fullchain.pem'), new File(['KEY PEM'], 'privkey.pem'), 'workspace.example.com')
     expect(calls[0].body).toEqual({ cert: 'CERT PEM', key: 'KEY PEM', domain: 'workspace.example.com' })
+    // CA 인증서(선택)를 함께 올리면 그 글자도 보낸다 — 없으면 항목 자체를 싣지 않는다
+    await createHttpApi().probeCert(new File(['CERT PEM'], 'server.crt'), new File(['KEY PEM'], 'server.key'), undefined, new File(['CA PEM'], 'ca.crt'))
+    expect(calls[1].body).toEqual({ cert: 'CERT PEM', key: 'KEY PEM', ca: 'CA PEM' })
   })
 
   it('적용 시작 · 다시 하기는 시작만 알리므로 이어서 상태를 읽는다', async () => {

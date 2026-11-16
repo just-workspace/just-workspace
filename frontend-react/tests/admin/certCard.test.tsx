@@ -324,6 +324,87 @@ describe('인증서 카드 — 인증서 올리기', () => {
     await waitFor(() => expect(screen.getByTestId('cert-upload-error').textContent).toContain('다른 작업이 진행 중입니다.'))
   })
 
+  it('CA 인증서(선택)를 함께 고르면 그 글자도 보내고, 안 고르면 보내지 않는다', async () => {
+    api.routes[`POST ${B}/cert/reissue`] = () => job({ id: 'cert6' })
+    api.routes[`GET ${B}/jobs/cert6`] = () => job({ id: 'cert6' })
+    render(<AdminCertCard />)
+    fireEvent.click(await screen.findByRole('button', { name: '인증서 올리기' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.textContent).toContain('CA 인증서 (선택)')
+    expect(screen.getByTestId('cert-ca-note').textContent).toContain('공개 인증 기관이 내준 인증서면 비워 둡니다.')
+    expect(screen.getByTestId('cert-ca-note').textContent).toContain('코드 저장소의 로그인 연동')
+    pick('인증서', file('server.crt', 'LEAF'))
+    pick('개인 키', file('server.key', 'KEY'))
+    pick('CA 인증서 (선택)', file('ca.crt', 'CA-PEM'))
+    fireEvent.click(screen.getByRole('button', { name: '올리고 바꾸기' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(called('POST', `${B}/cert/reissue`)[0].body).toEqual({ mode: 'upload', cert: 'LEAF', key: 'KEY', ca: 'CA-PEM' })
+  })
+
+  it('올린 인증서에 발급 CA 가 없어 연결이 보류면 그 사실을 알리고, CA 인증서만 따로 올릴 수 있다', async () => {
+    const uploaded = (o: Record<string, unknown> = {}) => issued({ mode: 'upload', issuer: 'Example Private CA', site_ca: false, ca_uploadable: true, pending: ['git'], ...o })
+    api.routes[`GET ${B}/cert`] = () => uploaded()
+    api.routes[`POST ${B}/cert/ca`] = () => job({ id: 'ca1' })
+    api.routes[`GET ${B}/jobs/ca1`] = () => job({ id: 'ca1' })
+    render(<AdminCertCard />)
+    const notice = await screen.findByTestId('cert-ca-needed')
+    expect(notice.textContent).toContain('코드 저장소의 로그인 연동이 보류돼 있습니다.')
+    expect(notice.textContent).toContain('사설 CA 가 내준 인증서라면 그 CA 인증서를 올리세요')
+    expect(notice.textContent).toContain('공개 인증 기관의 인증서라면 중간 인증서까지 이어 붙인 파일로')
+    expect(screen.getByTestId('cert-ca').textContent).toBe('올리지 않았습니다')
+    fireEvent.click(within(notice).getByRole('button', { name: 'CA 인증서 올리기' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.textContent).toContain('인증서와 개인 키는 그대로 둡니다.')
+    expect(screen.queryByLabelText('개인 키')).toBeNull()                       // CA 만 받는다
+    const submit = screen.getByRole('button', { name: '올리기' }) as HTMLButtonElement
+    expect(submit.disabled).toBe(true)
+    expect(dialog.textContent).toContain('CA 인증서 파일을 골라야 올릴 수 있습니다.')
+    pick('CA 인증서 (선택)', file('ca.pem', 'ROOT-CA'))
+    fireEvent.click(submit)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(called('POST', `${B}/cert/ca`)[0].body).toEqual({ ca: 'ROOT-CA' })
+    expect(called('POST', `${B}/cert/reissue`)).toHaveLength(0)
+    expect(await screen.findByTestId('cert-job')).toBeTruthy()
+  })
+
+  it('CA 인증서만 올릴 때의 거부: 내준 CA 가 아니면 이유를 창 안에, 믿게 한 뒤에는 안내가 사라진다', async () => {
+    let trusted = false
+    api.routes[`GET ${B}/cert`] = () => issued({ mode: 'upload', issuer: 'Example Private CA', site_ca: trusted, ca_uploadable: true, pending: trusted ? [] : ['git'] })
+    api.routes[`POST ${B}/cert/ca`] = () => {
+      throw fail(422, 'cert_invalid', { checks: [
+        { id: 'ca_readable', status: 'pass', value: 1, fix: null },
+        { id: 'ca_issues_cert', status: 'fail', value: 'CN=Example Private CA', fix: { key: 'ca_not_issuer', vars: {} } },
+      ] })
+    }
+    const view = render(<AdminCertCard />)
+    fireEvent.click(within(await screen.findByTestId('cert-ca-needed')).getByRole('button', { name: 'CA 인증서 올리기' }))
+    pick('CA 인증서 (선택)', file('other.pem', 'OTHER'))
+    fireEvent.click(screen.getByRole('button', { name: '올리기' }))
+    const box = await screen.findByTestId('cert-upload-error')
+    expect(box.textContent).toContain('이 파일은 쓸 수 없습니다. 바뀐 것은 없습니다.')
+    expect(box.textContent).toContain('이 CA 는 지금 인증서를 내준 CA 가 아닙니다.')
+    view.unmount()
+
+    trusted = true
+    render(<AdminCertCard />)
+    expect((await screen.findByTestId('cert-ca')).textContent).toContain('이 서버의 코드 저장소가 이 인증서를 믿습니다.')
+    expect(screen.queryByTestId('cert-ca-needed')).toBeNull()
+    expect(screen.getByTestId('cert-upload-ca')).toBeTruthy()                  // 바꿔 올릴 수는 있다
+  })
+
+  it('자동 발급·임시 인증서에는 CA 를 올리는 자리가 없다', async () => {
+    api.routes[`GET ${B}/cert`] = () => issued()
+    const view = render(<AdminCertCard />)
+    await screen.findByTestId('cert-card')
+    expect(screen.queryByTestId('cert-ca')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'CA 인증서 올리기' })).toBeNull()
+    view.unmount()
+    api.routes[`GET ${B}/cert`] = () => cert()                                  // 임시 인증서 + 보류 — 안내는 임시 인증서 쪽이 한다
+    render(<AdminCertCard />)
+    await screen.findByTestId('cert-temporary')
+    expect(screen.queryByTestId('cert-ca-needed')).toBeNull()
+  })
+
   it('검증 실패 사유와 실패 원인마다 한국어·영어 문구가 있다', async () => {
     const { default: ko } = await import('~/i18n/locales/ko.json')
     const { default: en } = await import('~/i18n/locales/en.json')
@@ -331,7 +412,9 @@ describe('인증서 카드 — 인증서 올리기', () => {
       const c = m.admin.certCard
       for (const key of [...certLib.CERT_FIX_KEYS, 'other']) expect(c.msg[key].title && c.msg[key].body, key).toBeTruthy()
       for (const key of ['cert_issue_failed', 'cert_dir_managed', 'cert_invalid', 'other']) expect(c.fail[key], key).toBeTruthy()
-      for (const key of ['busy', 'cert_managed_by_proxy', 'not_installed', 'cert_auto_needs_domain', 'file_too_large', 'cert_invalid', 'generic']) expect(c.error[key], key).toBeTruthy()
+      for (const key of ['busy', 'cert_managed_by_proxy', 'not_installed', 'cert_auto_needs_domain', 'file_too_large', 'cert_invalid', 'cert_ca_needs_upload', 'generic']) expect(c.error[key], key).toBeTruthy()
+      for (const key of ['caSlot', 'caHint', 'caNote', 'caTitle', 'caLead', 'caOnlyHint', 'caSubmit', 'needCa', 'caChecksTitle']) expect(c.modal[key], key).toBeTruthy()
+      expect(c.row.ca && c.ca.trusted && c.ca.none && c.caNeeded.title && c.caNeeded.body && c.uploadCa).toBeTruthy()
       for (const key of ['issue', 'reload', 'reconnect']) expect(c.stage[key], key).toBeTruthy()
     }
     expect(certLib.failedChecks({ data: { vars: { checks: 'nope' } } })).toEqual([])

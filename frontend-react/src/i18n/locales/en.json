@@ -1727,6 +1727,7 @@
         "domain": "Address",
         "expiry": "Expires",
         "issuer": "Issuer",
+        "ca": "Issuing CA",
         "names": "Names in the certificate"
       },
       "mode": {
@@ -1752,6 +1753,15 @@
         "body": "If the address points to this server and port 80 is reachable from outside, use Issue again to get a certificate. You can also upload one you already have.",
         "pending": "Once the certificate is trusted, {n} zone links on hold are tried again."
       },
+      "ca": {
+        "trusted": "Uploaded — the code repository on this server trusts this certificate.",
+        "none": "Not uploaded"
+      },
+      "caNeeded": {
+        "title": "The code repository sign-in integration is pending.",
+        "body": "The uploaded certificate does not include its issuing CA, so the code repository cannot trust the certificate of the access address. If a private CA (such as a company CA) issued it, upload that CA certificate — the certificate and private key stay as they are. If it came from a public certificate authority, upload the certificate again as a file with the intermediate certificates appended."
+      },
+      "uploadCa": "Upload CA certificate",
       "reissue": "Issue again",
       "upload": "Upload certificate",
       "job": {
@@ -1784,6 +1794,7 @@
         "cert_auto_needs_domain": "Automatic certificate issuance needs a domain name.",
         "file_too_large": "The file is too large. The certificate and the private key must each be 1 MB or less.",
         "cert_invalid": "The uploaded certificate cannot be used.",
+        "cert_ca_needs_upload": "A CA certificate can only be added to an install that uses an uploaded certificate.",
         "generic": "The request could not be processed. Try again."
       },
       "modal": {
@@ -1793,6 +1804,15 @@
         "certHint": "One file including the intermediate certificates",
         "keySlot": "Private key",
         "keyHint": "A key file without a passphrase",
+        "caSlot": "CA certificate (optional)",
+        "caHint": "Only for a certificate issued by a private CA",
+        "caNote": "Leave this empty for a certificate from a public certificate authority. If a private CA issued it, upload that CA certificate so the code repository sign-in integration can work. You can also leave it empty if the CA certificate is already appended to the certificate file.",
+        "caTitle": "Upload CA certificate",
+        "caLead": "Upload the certificate of the CA that issued the certificate in use. The certificate and private key stay as they are. After the upload the code repository on this server trusts that CA, and pending zone connections are retried.",
+        "caOnlyHint": "A PEM CA certificate (with any intermediate CA)",
+        "caSubmit": "Upload",
+        "needCa": "Choose a CA certificate file to upload.",
+        "caChecksTitle": "This file cannot be used. Nothing was changed.",
         "choose": "Choose file",
         "replace": "Replace",
         "none": "No file chosen",
@@ -1823,6 +1843,22 @@
         "key_not_pem": {
           "title": "The private key file cannot be read.",
           "body": "Check that it is a PEM key file and upload it again."
+        },
+        "ca_not_pem": {
+          "title": "The CA certificate file cannot be read.",
+          "body": "Check that it is a PEM certificate file and upload it again."
+        },
+        "ca_is_private_key": {
+          "title": "The CA certificate slot contains a private key.",
+          "body": "Upload only the CA's certificate (public information). Never upload the CA's private key."
+        },
+        "ca_not_a_ca": {
+          "title": "This file is not a CA certificate.",
+          "body": "Upload the certificate of the CA that issued your certificate, not the server certificate."
+        },
+        "ca_not_issuer": {
+          "title": "This CA did not issue the certificate in use.",
+          "body": "Upload the certificate of the CA named as the issuer. If an intermediate CA issued it, include the intermediate CA certificate as well."
         },
         "key_encrypted": {
           "title": "The private key is protected by a passphrase.",

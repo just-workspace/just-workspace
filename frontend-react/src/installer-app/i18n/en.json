@@ -248,6 +248,14 @@
     "certEmpty": "One file including the intermediate certificates",
     "keySlot": "Private key",
     "keyEmpty": "A key file without a passphrase",
+    "caSlot": "CA certificate (optional)",
+    "caEmpty": "Only for a certificate issued by a private CA",
+    "caNote": "Leave this empty for a certificate from a public certificate authority. If a private CA (such as a company CA) issued it, upload that CA certificate so the code repository sign-in integration can work. You can also leave it empty if the CA certificate is already appended to the certificate file.",
+    "caRemove": "Remove the CA certificate",
+    "rowCa": "Issuing CA",
+    "caOk": "Included",
+    "caMissing": "Not included",
+    "caBad": "Not the CA that issued this certificate",
     "choose": "Choose file",
     "replace": "Replace",
     "checking": "Checking the uploaded files.",
@@ -310,6 +318,26 @@
       "cert_self_signed": {
         "title": "This is a self-signed certificate.",
         "body": "You can continue, but browsers will show a warning."
+      },
+      "cert_chain_missing": {
+        "title": "The certificate file does not include its issuing CA.",
+        "body": "You can continue. For a certificate from a public certificate authority, it is better to upload a file with the intermediate certificates appended. If a private CA issued it, upload that CA certificate in the CA certificate slot above — otherwise the code repository sign-in integration stays pending (you can upload just the CA certificate later from the admin screen)."
+      },
+      "ca_not_pem": {
+        "title": "The CA certificate file cannot be read.",
+        "body": "Check that it is a PEM certificate file and upload it again."
+      },
+      "ca_is_private_key": {
+        "title": "The CA certificate slot contains a private key.",
+        "body": "Upload only the CA's certificate (public information) here. Never upload the CA's private key."
+      },
+      "ca_not_a_ca": {
+        "title": "The file in the CA certificate slot is not a CA certificate.",
+        "body": "Upload the certificate of the CA that issued your certificate, not the server certificate."
+      },
+      "ca_not_issuer": {
+        "title": "This CA did not issue the uploaded certificate.",
+        "body": "Upload the certificate of the CA named as the issuer. If an intermediate CA issued it, include the intermediate CA certificate as well."
       },
       "other": {
         "title": "These files cannot be used.",

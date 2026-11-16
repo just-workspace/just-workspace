@@ -359,11 +359,21 @@ def _place(ctx: Context, name: str, aliases: list[str], cert: str | None = None,
         raise StepError("cert_place_failed", "see_log", detail=r.text[-300:])
 
 
+def uploaded_ca(ctx: Context) -> str:
+    """따로 올린 CA 인증서(없으면 빈 글자) — 답변 파일의 `access.ca_path`, 아니면 화면·내부 API 가 받아 둔 파일."""
+    path = ctx.answers.access.ca_path or str(ctx.paths.state / "upload" / "ca.pem")
+    try:
+        return open(path, encoding="utf-8").read()
+    except OSError:
+        return ""
+
+
 def set_site_ca(ctx: Context, chain: str) -> None:
-    """올린 인증서에 함께 온 발급 CA(체인)를 코드 저장소 컨테이너가 믿게 한다 — 없으면 걷어 낸다.
+    """올린 인증서의 발급 CA 를 이 서버의 컨테이너(코드 저장소·backend)가 믿게 한다 — 없으면 걷어 낸다.
 
     사설 CA 가 내준 인증서를 올리면 코드 저장소(Gitea)는 접속 주소의 인증서를 믿지 못해 로그인 연동이 보류로 남는다.
-    체인이 함께 왔으면 그것을 스택 폴더에 두고 사이트 조각이 컨테이너의 신뢰 폴더에 붙인다(app/render.py 의 site_compose).
+    발급 CA 를 알면(인증서 파일에 체인이 함께 왔거나 CA 인증서를 따로 올렸다 — certs.trust_pem) 그것을 스택 폴더에 두고
+    사이트 조각이 컨테이너의 신뢰 폴더에 붙인다(app/render.py 의 site_compose).
     서버 인증서 한 장만 올렸으면 믿게 할 CA 를 알 수 없으므로 아무것도 하지 않는다.
     """
     target = ctx.paths.stack / render.SITE_CA_FILE
@@ -376,7 +386,7 @@ def set_site_ca(ctx: Context, chain: str) -> None:
         ctx.facts.site_ca = have
         ctx.store.update_facts(site_ca=have)
         ctx.write_stack()                               # 사이트 조각에 붙이는 줄이 생기거나 사라진다
-        ctx.log("올린 인증서의 발급 CA 를 코드 저장소가 믿게 합니다" if have else "코드 저장소에 따로 믿게 한 CA 를 걷어 냅니다")
+        ctx.log("올린 인증서의 발급 CA 를 코드 저장소와 backend 가 믿게 합니다" if have else "따로 믿게 한 CA 를 걷어 냅니다")
 
 
 def read_cert(ctx: Context, name: str) -> str | None:
@@ -429,14 +439,15 @@ def step_cert(ctx: Context) -> None:
             key = open(key_path, encoding="utf-8").read()
         except OSError:
             raise StepError("cert_upload_missing", "cert_upload_again") from None
-        report = certs.inspect(cert, key, plan.domain)
+        ca = uploaded_ca(ctx)
+        report = certs.inspect(cert, key, plan.domain, ca_pem=ca)
         if not report["ok"]:
             failed = [c["fix"]["key"] for c in report["checks"] if c["status"] == "fail" and c["fix"]]
             raise StepError("cert_invalid", "cert_upload_again", problems=failed)
         _place(ctx, name, aliases, cert, key)
         remember(cert, "upload")
         ctx.log("올린 인증서를 놓았습니다")
-        set_site_ca(ctx, certs.chain_pem(cert))
+        set_site_ca(ctx, certs.trust_pem(cert, ca))
         return
 
     # auto — Let's Encrypt

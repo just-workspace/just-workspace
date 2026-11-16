@@ -179,9 +179,9 @@ export function createHttpApi(base = ''): InstallerApi {
     probePublicIp: () => call<PublicIpProbe>('GET', '/api/probe/public-ip'),
     probeDns: domain => call<DnsProbe>('POST', '/api/probe/dns', { domain }),
     probeMailRecords: mailDomain => call<MailRecordsProbe>('POST', '/api/probe/mail-records', { mail_domain: mailDomain }),
-    async probeCert(cert, key, domain) {
-      const [certPem, keyPem] = await Promise.all([cert.text(), key.text()])
-      return call<CertProbe>('POST', '/api/probe/cert', { cert: certPem, key: keyPem, ...(domain ? { domain } : {}) })
+    async probeCert(cert, key, domain, ca) {
+      const [certPem, keyPem, caPem] = await Promise.all([cert.text(), key.text(), ca ? ca.text() : Promise.resolve('')])
+      return call<CertProbe>('POST', '/api/probe/cert', { cert: certPem, key: keyPem, ...(caPem ? { ca: caPem } : {}), ...(domain ? { domain } : {}) })
     },
     probeSmtp: (req: SmtpProbeRequest) => call<SmtpProbe>('POST', '/api/probe/smtp', req),
     probeAi: (req: AiProbeRequest) => call<AiProbe>('POST', '/api/probe/ai', req),

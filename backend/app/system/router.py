@@ -64,6 +64,7 @@ MESSAGES = {
     "cert_managed_by_proxy": "이 설치의 인증서는 앞단 프록시가 맡습니다.",
     "cert_invalid": "올린 인증서를 쓸 수 없습니다.",
     "cert_auto_needs_domain": "인증서 자동 발급은 접속 주소가 도메인일 때만 됩니다.",
+    "cert_ca_needs_upload": "CA 인증서는 올린 인증서를 쓰는 설치에서만 더할 수 있습니다.",
     "file_too_large": "파일이 너무 큽니다.",
 }
 
@@ -410,13 +411,18 @@ async def probe_public_ip(refresh: bool = False, admin: User = Depends(require_a
 # ─── 인증서 ───
 
 CERT_FIELDS = ("managed", "mode", "temporary", "domain", "names", "not_after", "days_left", "issuer", "self_signed",
-               "pending")
+               "site_ca", "ca_uploadable", "pending")
 
 
 class CertReissueBody(BaseModel):
     mode: Literal["auto", "upload"]
     cert: str | None = None      # PEM 글자(mode = upload)
     key: str | None = None
+    ca: str | None = None        # (선택) 사설 CA 가 내준 인증서일 때 그 CA 인증서 — 인증서 파일에 체인이 없을 때만 필요하다
+
+
+class CertCaBody(BaseModel):
+    ca: str = ""                 # PEM 글자. 빈 값이면 따로 올린 CA 인증서를 걷어 낸다
 
 
 def _cert_view(data: Any) -> dict:
@@ -424,6 +430,8 @@ def _cert_view(data: Any) -> dict:
     out = {k: data.get(k) for k in CERT_FIELDS}
     for key in ("names", "pending"):
         out[key] = [str(x) for x in out[key]] if isinstance(out[key], list) else []
+    for key in ("site_ca", "ca_uploadable"):          # 옛 설치 관리자는 이 값을 주지 않는다
+        out[key] = bool(out[key])
     job = data.get("job")
     out["job"] = _job_view(job) if isinstance(job, dict) else None
     return out
@@ -441,14 +449,29 @@ async def reissue_cert(body: CertReissueBody, request: Request, admin: User = De
     """다시 발급(auto) 또는 올린 인증서로 바꾸기(upload). 실패하면 쓰던 인증서가 그대로 남는다."""
     payload: dict[str, Any] = {"mode": body.mode}
     if body.mode == "upload":
-        cert, key = body.cert or "", body.key or ""
-        if len(cert) > CERT_PEM_MAX or len(key) > CERT_PEM_MAX:
+        cert, key, ca = body.cert or "", body.key or "", body.ca or ""
+        if len(cert) > CERT_PEM_MAX or len(key) > CERT_PEM_MAX or len(ca) > CERT_PEM_MAX:
             raise InstallerError(413, "file_too_large", {"max_bytes": CERT_PEM_MAX})
         payload.update(cert=cert, key=key)
+        if ca.strip():
+            payload["ca"] = ca
     job = _job_view(await installer.request("POST", "/internal/cert/reissue", json=payload))
     # 누가 언제 바꿨는지만 남긴다(인증서·개인 키 내용은 남기지 않는다)
     await audit.log_action(db, admin.id, "system.cert.reissue", "cert", None,
                            {"job": job.get("id"), "mode": body.mode}, _client_ip(request))
+    return job
+
+
+@router.post("/cert/ca", status_code=202)
+async def set_cert_ca(body: CertCaBody, request: Request, admin: User = Depends(require_admin),
+                      db: AsyncSession = Depends(get_db)):
+    """올린 인증서의 발급 CA 인증서만 더한다(빈 값이면 걷어 낸다) — 사설 CA 가 내준 인증서를 한 장만 올려
+    코드 저장소의 로그인 연동이 보류로 남았을 때. 인증서·개인 키는 그대로 둔다."""
+    if len(body.ca) > CERT_PEM_MAX:
+        raise InstallerError(413, "file_too_large", {"max_bytes": CERT_PEM_MAX})
+    job = _job_view(await installer.request("POST", "/internal/cert/ca", json={"ca": body.ca}))
+    await audit.log_action(db, admin.id, "system.cert.ca", "cert", None,
+                           {"job": job.get("id"), "removed": not body.ca.strip()}, _client_ip(request))
     return job
 
 

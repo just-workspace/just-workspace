@@ -18,6 +18,21 @@ fi
 # 격리 브라우저 동적 허용 목록(rbi-allow 볼륨) — 백엔드만 쓴다. 이미 있던 볼륨이 루트 소유여도 쓸 수 있게(사이드카는 읽기 전용)
 if [ -d /run/rbi-allow ]; then chown appuser /run/rbi-allow 2>/dev/null || true; fi
 
+# 사이트 CA — 접속 주소의 인증서를 사설 CA 가 내준 설치에서, 그 CA 인증서(PEM)를 이 자리에 붙여 두면 backend 가 내보내는
+# HTTPS 요청(httpx·ssl 기본 설정)이 그것도 믿는다. 공개 CA 묶음에 **더한다** — SSL_CERT_FILE 은 묶음을 통째로 바꾸므로
+# 시스템 묶음과 합친 파일을 만들어 가리킨다. 설치 관리자는 올린 인증서의 발급 CA 를 여기에 붙인다(docs/installer.md 15절).
+JW_SITE_CA="${JW_SITE_CA_FILE:-/etc/ssl/certs/jw-site-ca.pem}"
+if [ -z "${SSL_CERT_FILE:-}" ] && [ -s "$JW_SITE_CA" ] && [ -r /etc/ssl/certs/ca-certificates.crt ]; then
+    BUNDLE=/tmp/jw-ca-bundle.pem
+    if cat /etc/ssl/certs/ca-certificates.crt "$JW_SITE_CA" > "$BUNDLE.$$" 2>/dev/null && mv "$BUNDLE.$$" "$BUNDLE"; then
+        chmod 644 "$BUNDLE"
+        export SSL_CERT_FILE="$BUNDLE"
+    else
+        rm -f "$BUNDLE.$$"
+        echo "[entrypoint] 사이트 CA 를 묶음에 더하지 못했습니다 — 공개 CA 만 믿습니다" >&2
+    fi
+fi
+
 # 앱 서버를 띄울 때만: 비밀값 검사 → 워커 수 결정
 if [ "$1" = "uvicorn" ]; then
     # 약한·기본 비밀값이면 여기서 멈춘다(워커가 뜨기 전에 한 번만, 변수마다 사유 한 줄 — app/security_defaults.py).

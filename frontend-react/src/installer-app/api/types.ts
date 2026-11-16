@@ -160,7 +160,11 @@ export type RecordStatus = 'ok' | 'missing' | 'different' | 'unknown'
 export interface MailRecord { id: string; name: string; type: string; expected: string; current: string[]; status: RecordStatus }
 export interface MailRecordsProbe { mail_domain: string; records: MailRecord[]; ok: boolean }
 export interface CertCheck { id: string; status: 'pass' | 'warn' | 'fail'; value: unknown; fix: Fix | null }
-export interface CertProbe { ok: boolean; checks: CertCheck[]; names?: string[]; not_after?: string | null; issuer?: string | null }
+export interface CertProbe {
+  ok: boolean; checks: CertCheck[]; names?: string[]; not_after?: string | null; issuer?: string | null
+  /** 이 서버의 다른 컨테이너가 이 인증서를 믿게 할 발급 CA 를 아는가 — included(체인이 함께 왔거나 CA 를 따로 올림) · none · self_signed */
+  trust?: 'included' | 'none' | 'self_signed'
+}
 export interface SmtpProbe { status: 'ok' | 'unreachable' | 'tls_failed' | 'auth_failed' | 'error'; detail?: string | null }
 export interface AiProbe { status: 'ok' | 'auth_failed' | 'unreachable' | 'error'; http_status?: number | null; models?: string[] }
 /**
@@ -317,7 +321,7 @@ export interface InstallerApi {
   probeMailRecords(mailDomain: string): Promise<MailRecordsProbe>
   probePublicIp(): Promise<PublicIpProbe>
   /** domain 은 아직 저장하지 않은 접속 주소로 검사할 때 */
-  probeCert(cert: File, key: File, domain?: string): Promise<CertProbe>
+  probeCert(cert: File, key: File, domain?: string, ca?: File | null): Promise<CertProbe>
   probeSmtp(req: SmtpProbeRequest): Promise<SmtpProbe>
   probeAi(req: AiProbeRequest): Promise<AiProbe>
   probeNfs(server: string, exportPath: string): Promise<NfsProbe>

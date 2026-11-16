@@ -60,6 +60,74 @@ def chain_pem(cert_pem: str) -> str:
     return "".join(c.public_bytes(serialization.Encoding.PEM).decode() for c in chain[1:])
 
 
+def _load_all(pem: str) -> list[x509.Certificate]:
+    try:
+        return list(x509.load_pem_x509_certificates(pem.encode()))
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _is_ca(cert: x509.Certificate) -> bool:
+    try:
+        return bool(cert.extensions.get_extension_for_class(x509.BasicConstraints).value.ca)
+    except x509.ExtensionNotFound:
+        return False
+
+
+def _issued_by(cert: x509.Certificate, issuer: x509.Certificate) -> bool:
+    """`issuer` 가 `cert` 를 직접 서명했는가(이름·서명 둘 다)."""
+    try:
+        cert.verify_directly_issued_by(issuer)
+        return True
+    except Exception:  # noqa: BLE001 — 이름이 다르거나 서명이 안 맞거나 모르는 알고리즘
+        return False
+
+
+def trust_pem(cert_pem: str, ca_pem: str | None = None) -> str:
+    """컨테이너가 믿게 할 CA 묶음 — 올린 인증서 파일에 함께 온 발급 CA(첫 장 뒤)와 따로 올린 CA 인증서를 겹치지 않게 합친다.
+
+    둘 다 없으면 빈 글자(믿게 할 CA 를 알 수 없다 — 공개 CA 가 내준 인증서면 필요 없다).
+    """
+    seen: set[bytes] = set()
+    out: list[str] = []
+    for cert in [*_load_all(cert_pem)[1:], *_load_all(ca_pem or "")]:
+        mark = cert.fingerprint(hashes.SHA256())
+        if mark not in seen:
+            seen.add(mark)
+            out.append(cert.public_bytes(serialization.Encoding.PEM).decode())
+    return "".join(out)
+
+
+def inspect_ca(ca_pem: str, cert_pem: str) -> list[dict]:
+    """따로 올린 CA 인증서 검증 — 검사 줄 목록(`inspect` 의 checks 와 같은 꼴).
+
+    읽을 수 있는가(`ca_not_pem`) · 전부 CA 인증서인가(`ca_not_a_ca` — 서버 인증서를 잘못 올린 경우) ·
+    서버 인증서(또는 함께 온 체인의 끝)를 내준 CA 가 그 안에 있는가(`ca_not_issuer`).
+    """
+    def line(check_id: str, status: str, value=None, fix: str | None = None) -> dict:
+        return {"id": check_id, "status": status, "value": value, "fix": {"key": fix, "vars": {}} if fix else None}
+
+    if "PRIVATE KEY" in ca_pem:
+        return [line("ca_readable", "fail", fix="ca_is_private_key")]
+    cas = _load_all(ca_pem)
+    if not cas:
+        return [line("ca_readable", "fail", fix="ca_not_pem")]
+    checks = [line("ca_readable", "pass", len(cas))]
+    if not all(_is_ca(c) for c in cas):
+        checks.append(line("ca_is_ca", "fail", fix="ca_not_a_ca"))
+        return checks
+    checks.append(line("ca_is_ca", "pass"))
+    chain = _load_all(cert_pem)
+    if not chain:
+        return checks                                   # 서버 인증서를 읽지 못했다 — 그쪽 검사가 알린다
+    # 체인의 어느 한 장이라도 올린 CA 가 내준 것이면 이어진다(서버 인증서 → 중간 → 올린 루트)
+    if any(_issued_by(c, ca) for c in chain for ca in cas):
+        checks.append(line("ca_issues_cert", "pass", cas[0].subject.rfc4514_string()))
+    else:
+        checks.append(line("ca_issues_cert", "fail", chain[0].issuer.rfc4514_string(), fix="ca_not_issuer"))
+    return checks
+
+
 def fingerprint_sha256(cert_pem: str) -> str:
     """`AB:CD:…` 꼴의 SHA-256 지문(첫 인증서)."""
     cert = x509.load_pem_x509_certificates(cert_pem.encode())[0]
@@ -88,11 +156,16 @@ def name_covered(name: str, patterns: list[str]) -> bool:
 
 
 def inspect(cert_pem: str, key_pem: str, domain: str, *, mail_host: str | None = None,
-            now: dt.datetime | None = None) -> dict:
-    """올린 인증서·키 검증.
+            ca_pem: str | None = None, now: dt.datetime | None = None) -> dict:
+    """올린 인증서·키(와 따로 올린 CA 인증서) 검증.
 
     돌려주는 값: {"ok", "checks": [{"id", "status": pass|warn|fail, "value", "fix"}], "names", "not_after",
-    "issuer", "fingerprint"}. 검사: 읽을 수 있는가 · 도메인 포함 · 키 짝 · 만료일 · 발급자 · 메일 호스트 이름(warn).
+    "issuer", "fingerprint", "trust": included|none|self_signed}. 검사: 읽을 수 있는가 · 도메인 포함 · 키 짝 · 만료일 ·
+    발급자 · 발급 CA 유무(warn) · 메일 호스트 이름(warn) · CA 인증서(`inspect_ca`).
+
+    `trust` — 이 서버의 다른 컨테이너(코드 저장소 등)가 이 인증서를 믿게 할 CA 를 아는가: `included`(파일에 체인이
+    함께 왔거나 CA 인증서를 따로 올렸다) · `none`(서버 인증서 한 장뿐 — 공개 CA 면 문제없고, 사설 CA 면 CA 인증서가 필요하다) ·
+    `self_signed`.
     """
     now = now or _utcnow()
     checks: list[dict] = []
@@ -153,8 +226,18 @@ def inspect(cert_pem: str, key_pem: str, domain: str, *, mail_host: str | None =
     issuer = cert.issuer.rfc4514_string()
     if cert.issuer == cert.subject:
         add("issuer", "warn", issuer, fix="cert_self_signed")
+        trust = "self_signed"
     else:
         add("issuer", "pass", issuer)
+        trust = "included" if (len(chain) > 1 or (ca_pem or "").strip()) else "none"
+        if trust == "none":
+            # 서버 인증서 한 장뿐 — 브라우저도 중간 인증서가 없으면 경고할 수 있고, 사설 CA 면 코드 저장소의 로그인 연동이 보류된다
+            add("chain", "warn", fix="cert_chain_missing")
+        else:
+            add("chain", "pass", len(chain) - 1 + len(_load_all(ca_pem or "")))
+
+    if (ca_pem or "").strip():
+        checks.extend(inspect_ca(ca_pem, cert_pem))
 
     if mail_host:
         if name_covered(mail_host, names):
@@ -163,7 +246,7 @@ def inspect(cert_pem: str, key_pem: str, domain: str, *, mail_host: str | None =
             add("mail_host_covered", "warn", mail_host, fix="cert_mail_host_missing", name=mail_host)
 
     return result({"names": names, "not_after": not_after.isoformat(), "days_left": days_left,
-                   "issuer": issuer, "fingerprint": fingerprint_sha256(cert_pem)})
+                   "issuer": issuer, "fingerprint": fingerprint_sha256(cert_pem), "trust": trust})
 
 
 def covers(cert_pem: str, names: list[str], *, min_days: int = 30, now: dt.datetime | None = None) -> bool:

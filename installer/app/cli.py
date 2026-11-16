@@ -163,7 +163,7 @@ def prepare_restore(svc: api.Services, answers: ans.Answers, env: dict | None = 
           f" · 파일 {'포함' if review['files_included'] else '미포함'}")
     a = answers.access
     target = {"domain": a.domain or None, "network": a.network, "proxy_addresses": a.proxy_addresses, "cert": a.cert,
-              "cert_path": a.cert_path, "key_path": a.key_path, "storage": answers.storage.model_dump(mode="json"),
+              "cert_path": a.cert_path, "key_path": a.key_path, "ca_path": a.ca_path, "storage": answers.storage.model_dump(mode="json"),
               "subnet": answers.advanced.subnet, "restore": answers.restore.model_dump(mode="json")}
     built, secrets, errors = mgr.prepare(target)
     if errors:

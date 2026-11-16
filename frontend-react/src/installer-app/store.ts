@@ -51,7 +51,7 @@ export interface WizardState {
   nfs: Probe<NfsProbe>
   localPath: Probe<LocalPathProbe>
   cert: Probe<CertProbe>
-  certFiles: { cert: string | null; key: string | null }
+  certFiles: { cert: string | null; key: string | null; ca: string | null }
 
   apply: ApplyState | null
   /** 적용을 시작하거나 다시 시킨 횟수 — 바뀌면 상태 흐름을 새로 듣는다 */
@@ -76,7 +76,7 @@ export interface WizardState {
   checkAi(req: AiProbeRequest): Promise<void>
   checkNfs(server: string, exportPath: string): Promise<void>
   checkLocalPath(path: string): Promise<void>
-  checkCert(cert: File, key: File): Promise<void>
+  checkCert(cert: File, key: File, ca?: File | null): Promise<void>
   clearCert(): void
   setApply(state: ApplyState | null): void
   /** 적용을 시작했거나 다시 시켰다 — 서버가 새 상태를 쓸 때까지 "진행 중"으로 보인다 */
@@ -185,7 +185,7 @@ export function createWizardStore(api: InstallerApi): WizardStore {
       nfs: idle(),
       localPath: idle(),
       cert: idle(),
-      certFiles: { cert: null, key: null },
+      certFiles: { cert: null, key: null, ca: null },
       apply: null,
       applyEpoch: 0,
       applyStale: null,
@@ -289,11 +289,12 @@ export function createWizardStore(api: InstallerApi): WizardStore {
       checkAi: req => probe('ai', aiKeyOf(req), () => api.probeAi(req)),
       checkNfs: (server, exportPath) => probe('nfs', nfsKey(server, exportPath), () => api.probeNfs(server.trim(), exportPath.trim())),
       checkLocalPath: path => probe('localPath', path.trim(), () => api.probeLocalPath(path.trim())),
-      checkCert: (cert, key) => {
-        set({ certFiles: { cert: cert.name, key: key.name } })
-        return probe('cert', `${cert.name}\n${cert.size}\n${key.name}\n${key.size}`, () => api.probeCert(cert, key, get().answers.access.domain || undefined))
+      checkCert: (cert, key, ca) => {
+        set({ certFiles: { cert: cert.name, key: key.name, ca: ca?.name ?? null } })
+        return probe('cert', `${cert.name}\n${cert.size}\n${key.name}\n${key.size}\n${ca ? `${ca.name}\n${ca.size}` : ''}`,
+          () => api.probeCert(cert, key, get().answers.access.domain || undefined, ca))
       },
-      clearCert() { set({ cert: idle(), certFiles: { cert: null, key: null } }) },
+      clearCert() { set({ cert: idle(), certFiles: { cert: null, key: null, ca: null } }) },
 
       setApply(state) { set({ apply: state }) },
       kickApply(returned) {

@@ -3,7 +3,8 @@
 #   · 시작 로그의 버전 알림(JW_INSTALLER_VERSION 없이 띄웠을 때)
 #   · jw update-key / jw update-channel — 공개 키가 없어 "구성되지 않음"이던 업데이트 확인이 채널을 받으러 간다
 #   · jw restore — 전체 백업을 같은 서버에 되돌린다(목록, 내용만 보기, 되돌리기, 거부)
-#   · 사설 CA 인증서 — 서버 인증서만 올리면 코드 저장소 연결이 보류로 남고, 발급 CA 를 함께 올리면 이어진다
+#   · 사설 CA 인증서 — 서버 인증서만 올리면 코드 저장소 연결이 보류로 남고, 발급 CA 를 올리면(나중에 CA 만 · 인증서와 함께 따로 · 이어 붙여) 이어진다.
+#     backend 도 같은 CA 를 믿는다
 # 사용: s9-operate.sh
 . "$(dirname "$0")/../lib.sh"
 OP="$E2E_WORK/operate"
@@ -112,7 +113,7 @@ check "컨테이너 ws-gitea 준비(되돌린 뒤)" wait_ready ws-gitea 180
 sudo rm -f "$E2E_HOST_DIR/e2e-packed.jwbak" "$OP/e2e-packed.jwbak"
 
 # ─── 사설 CA 인증서 ───
-say "사설 CA 가 내준 인증서 — 발급 CA 를 함께 올리면 코드 저장소 연결이 이어진다"
+say "사설 CA 가 내준 인증서 — 서버 인증서만 올리면 보류"
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 30 -subj "/CN=E2E Private CA" \
   -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
   -keyout "$OP/ca.key" -out "$OP/ca.pem" 2>/dev/null
@@ -123,30 +124,90 @@ openssl x509 -req -in "$OP/leaf.csr" -CA "$OP/ca.pem" -CAkey "$OP/ca.key" -CAcre
   -extfile "$OP/leaf.ext" -out "$OP/leaf.pem" 2>/dev/null
 check "검수용 CA 와 서버 인증서" openssl verify -CAfile "$OP/ca.pem" "$OP/leaf.pem"
 
-reissue() {   # reissue <인증서 파일…>  → 작업이 끝난 상태(done|failed)
+reissue() {   # reissue <인증서 파일…> [--ca <CA 파일>]  → 작업이 끝난 상태(done|failed)
   local body reply id
-  body="$(python3 -c 'import json,sys; print(json.dumps({"mode":"upload","cert":"".join(open(p).read() for p in sys.argv[2:]),"key":open(sys.argv[1]).read()}))' "$OP/leaf.key" "$@")"
+  body="$(python3 -c 'import json,sys
+a = sys.argv[2:]; ca = ""
+if "--ca" in a: ca = open(a[a.index("--ca") + 1]).read(); a = a[:a.index("--ca")]
+d = {"mode": "upload", "cert": "".join(open(p).read() for p in a), "key": open(sys.argv[1]).read()}
+if ca: d["ca"] = ca
+print(json.dumps(d))' "$OP/leaf.key" "$@")"
   reply="$(internal_api POST /internal/cert/reissue "$body")"
   id="$(printf '%s' "$reply" | cut -d' ' -f2- | json_get 'd["id"]')"
   [ -n "$id" ] || { printf 'rejected:%s' "$(printf '%s' "$reply" | head -c 200)"; return; }
   wait_job "$id" 600
   job_field "$id" '["status"]'
 }
+set_ca() {    # set_ca <CA 파일|-(걷어 내기)>  → 작업이 끝난 상태, 거부되면 "<상태 코드> <코드>"
+  local body reply id
+  if [ "$1" = - ]; then body='{"ca":""}'; else body="$(python3 -c 'import json,sys; print(json.dumps({"ca": open(sys.argv[1]).read()}))' "$1")"; fi
+  reply="$(internal_api POST /internal/cert/ca "$body")"
+  id="$(printf '%s' "$reply" | cut -d' ' -f2- | json_get 'd["id"]')"
+  [ -n "$id" ] && [ "$id" != None ] || { printf '%s %s' "${reply%% *}" "$(printf '%s' "$reply" | cut -d' ' -f2- | json_get 'd["code"]')"; return; }
+  wait_job "$id" 600
+  job_field "$id" '["status"]'
+}
+cert_field() { internal_api GET /internal/cert | cut -d' ' -f2- | json_get "d[\"$1\"]"; }
+fp() { openssl x509 -noout -fingerprint -sha256 2>/dev/null; }
+gitea_ca() { docker exec ws-gitea cat /etc/ssl/certs/jw-site-ca.pem 2>/dev/null | fp; }
+# backend 가 접속 주소의 인증서를 믿는가 — backend 프로세스(PID 1)가 받은 CA 묶음(SSL_CERT_FILE)으로 nginx 에 TLS 를 맺어 본다.
+# 프로세스의 환경은 같은 사용자(appuser)만 읽을 수 있다
+backend_trusts() {
+  docker exec -i -u appuser -e E2E_HOST="$E2E_DOMAIN" ws-backend sh -c 'f="$(tr "\0" "\n" < /proc/1/environ | sed -n "s/^SSL_CERT_FILE=//p")"; [ -n "$f" ] && export SSL_CERT_FILE="$f"; exec python -' <<'PY'
+import os, socket, ssl
+ctx = ssl.create_default_context()
+host = os.environ["E2E_HOST"]
+try:
+    with socket.create_connection(("nginx", 443), timeout=10) as raw, ctx.wrap_socket(raw, server_hostname=host):
+        print("trusted", "public-cas=%s" % (ctx.cert_store_stats()["x509_ca"] > 50))
+except ssl.SSLCertVerificationError as e:
+    print("untrusted", e.verify_message)
+except Exception as e:  # noqa: BLE001
+    print("error", type(e).__name__)
+PY
+}
 
 st="$(reissue "$OP/leaf.pem")"
 note "서버 인증서만 올린 작업: $st"
 expect "서버 인증서만 올리면 연결은 보류로 남는다" True "$(zone_pending)"
 check "코드 저장소 컨테이너에 따로 믿게 한 CA 가 없다" bash -c "! docker exec ws-gitea test -e /etc/ssl/certs/jw-site-ca.pem"
+expect "상태: 믿게 한 발급 CA 없음" False "$(cert_field site_ca)"
+expect "상태: CA 인증서를 따로 올릴 수 있다" True "$(cert_field ca_uploadable)"
+expect "backend 도 그 인증서를 믿지 못한다" untrusted "$(backend_trusts | cut -d" " -f1)"
 
-expect "발급 CA 를 함께 올린 작업" done "$(reissue "$OP/leaf.pem" "$OP/ca.pem")"
+say "CA 인증서만 나중에 올리기"
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 30 -subj "/CN=E2E Other CA" \
+  -addext "basicConstraints=critical,CA:TRUE" -keyout "$OP/other.key" -out "$OP/other.pem" 2>/dev/null
+expect "그 인증서를 내주지 않은 CA 는 거부" "422 cert_invalid" "$(set_ca "$OP/other.pem")"
+expect "서버 인증서를 CA 로 올리면 거부" "422 cert_invalid" "$(set_ca "$OP/leaf.pem")"
+expect "발급 CA 만 올린 작업" done "$(set_ca "$OP/ca.pem")"
 check "컨테이너 ws-gitea 준비(다시 만든 뒤)" wait_ready ws-gitea 180
-fp() { openssl x509 -noout -fingerprint -sha256 2>/dev/null; }
-expect "코드 저장소 컨테이너에 그 CA 가 붙었다" "$(fp < "$OP/ca.pem")" "$(docker exec ws-gitea cat /etc/ssl/certs/jw-site-ca.pem 2>/dev/null | fp)"
+check "컨테이너 ws-backend 준비(다시 만든 뒤)" wait_ready ws-backend 180
+expect "코드 저장소 컨테이너에 그 CA 가 붙었다" "$(fp < "$OP/ca.pem")" "$(gitea_ca)"
 expect "보류됐던 로그인 연동이 이어졌다" False "$(zone_pending)"
 contains "코드 저장소에 로그인 원본이 등록됐다" workspace "$(docker exec -u git ws-gitea gitea admin auth list 2>/dev/null)"
+expect "상태: 믿게 한 발급 CA 있음" True "$(cert_field site_ca)"
+expect "backend 가 접속 주소의 인증서를 믿고, 공개 CA 묶음도 그대로다" "trusted public-cas=True" "$(backend_trusts)"
 check "nginx 가 올린 인증서를 낸다" bash -c "echo | openssl s_client -connect '$E2E_ADDR:443' -servername '$E2E_DOMAIN' -CAfile '$OP/ca.pem' 2>/dev/null | grep -q 'Verify return code: 0'"
 expect "공개 CA 에 대한 신뢰는 그대로(컨테이너의 CA 묶음이 남아 있다)" 0 "$(docker exec ws-gitea sh -c 'test -s /etc/ssl/certs/ca-certificates.crt; echo $?')"
-rm -f "$OP"/ca.key "$OP"/leaf.key "$OP"/leaf.csr "$OP"/leaf.ext "$OP"/*.srl
+ws_login
+expect "관리 화면의 인증서 상태에도 보인다" "True True" "$(ws_api GET /api/admin/system/cert | json_get '"%s %s" % (d["site_ca"], d["ca_uploadable"])')"
+
+say "CA 걷어 내기 · 인증서와 함께 올리기"
+expect "따로 올린 CA 를 걷어 낸 작업" done "$(set_ca -)"
+check "컨테이너 ws-gitea 준비" wait_ready ws-gitea 180
+check "코드 저장소 컨테이너에서 CA 가 사라졌다" bash -c "! docker exec ws-gitea test -e /etc/ssl/certs/jw-site-ca.pem"
+check "컨테이너 ws-backend 준비" wait_ready ws-backend 180
+expect "backend 도 다시 믿지 못한다" untrusted "$(backend_trusts | cut -d" " -f1)"
+expect "인증서와 CA 인증서를 따로(칸 둘) 올린 작업" done "$(reissue "$OP/leaf.pem" --ca "$OP/ca.pem")"
+check "컨테이너 ws-gitea 준비" wait_ready ws-gitea 180
+expect "CA 가 다시 붙었다" "$(fp < "$OP/ca.pem")" "$(gitea_ca)"
+expect "인증서 파일에 CA 를 이어 붙여 올린 작업(예전 방식)" done "$(reissue "$OP/leaf.pem" "$OP/ca.pem")"
+check "컨테이너 ws-gitea 준비" wait_ready ws-gitea 180
+expect "CA 는 한 번만 실린다" 1 "$(docker exec ws-gitea grep -c 'BEGIN CERTIFICATE' /etc/ssl/certs/jw-site-ca.pem)"
+check "컨테이너 ws-backend 준비" wait_ready ws-backend 180
+expect "backend 가 믿는다" trusted "$(backend_trusts | cut -d" " -f1)"
+rm -f "$OP"/ca.key "$OP"/other.key "$OP"/leaf.key "$OP"/leaf.csr "$OP"/leaf.ext "$OP"/*.srl
 
 report_usage
 finish

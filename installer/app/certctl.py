@@ -3,7 +3,8 @@
 임시(자체 서명) 인증서로 설치한 서버를 신뢰되는 인증서로 바꾸는 길이다.
 
     reissue(auto)    Let's Encrypt 에 다시 요청한다(접속 주소가 이 서버를 가리키고 80 이 밖에서 닿아야 한다)
-    reissue(upload)  가진 인증서·개인 키를 올린다(검증은 마법사의 인증서 확인과 같다)
+    reissue(upload)  가진 인증서·개인 키를 올린다(검증은 마법사의 인증서 확인과 같다). 사설 CA 가 내준 인증서면 CA 인증서도 함께
+    set_ca           올린 인증서를 쓰는 설치에 발급 CA 인증서만 더하거나 걷어 낸다(인증서·키는 그대로)
 
 성공하면 nginx 와 회의 서버가 새 인증서를 읽게 하고, **인증서 때문에 보류된 구역 연결**(코드 저장소의 로그인 연동)을
 다시 시도한다. 실패하면 답변·설정을 되돌리고 쓰던 인증서를 다시 놓는다.
@@ -77,6 +78,10 @@ class CertManager:
             "days_left": info["days_left"],
             "issuer": info["issuer"],
             "self_signed": info["self_signed"],
+            # 이 서버의 컨테이너(코드 저장소·backend)가 믿게 한 발급 CA 가 있는가 — 올린 인증서에 체인이 함께 왔거나 CA 를 따로 올렸다
+            "site_ca": bool(plan.tls and mode == "upload" and self.store.facts().site_ca),
+            # 발급 CA 를 따로 올릴 수 있는 설치인가(올린 인증서를 쓰고, 그것이 자체 서명이 아니다)
+            "ca_uploadable": bool(plan.tls and mode == "upload" and not info["self_signed"]),
             "pending": sorted(zones.pending(self.store)),
             "job": running,
         }
@@ -92,32 +97,126 @@ class CertManager:
             raise ZoneRequestError(409, "cert_managed_by_proxy")
         data = old.model_dump(mode="json")
         data["access"]["cert"] = mode
-        data["access"]["cert_path"] = data["access"]["key_path"] = None
+        data["access"]["cert_path"] = data["access"]["key_path"] = data["access"]["ca_path"] = None
         new = ans.load(data)
         domain = new.access.domain
-        cert = key = None
+        cert = key = ca = None
         if mode == "auto":
             from app import validators as v
 
             if v.is_ip(domain):
                 raise ZoneRequestError(422, "cert_auto_needs_domain")
         else:
-            cert, key = str(body.get("cert") or ""), str(body.get("key") or "")
-            if len(cert) > MAX_CERT or len(key) > MAX_KEY:
+            cert, key, ca = str(body.get("cert") or ""), str(body.get("key") or ""), str(body.get("ca") or "")
+            if len(cert) > MAX_CERT or len(key) > MAX_KEY or len(ca) > MAX_CERT:
                 raise ZoneRequestError(413, "file_too_large")
             plan = render.derive(old, self.store.facts(), self.engine.catalog)
             mail_host = f"mail.{plan.mail_domain}" if plan.mail_builtin else None
-            report = certs.inspect(cert, key, domain, mail_host=mail_host)
+            report = certs.inspect(cert, key, domain, mail_host=mail_host, ca_pem=ca)
             if not report["ok"]:
                 raise ZoneRequestError(422, "cert_invalid", checks=report["checks"])
-        return self.zones._start("cert", None, STAGES, self._run, old, new, cert, key)
+        return self.zones._start("cert", None, STAGES, self._run, old, new, cert, key, ca)
 
-    def _run(self, job: dict, old: ans.Answers, new: ans.Answers, cert: str | None, key: str | None) -> None:
+    def set_ca(self, body: dict) -> dict:
+        """올린 인증서를 쓰는 설치에 발급 CA 인증서만 더한다(빈 값이면 따로 올린 것을 걷어 낸다) — 인증서·키는 그대로.
+
+        서버 인증서 한 장만 올려 코드 저장소의 로그인 연동이 보류로 남았을 때, 인증서를 다시 올리지 않고 CA 만 알려 주는 길이다.
+        """
+        if not self.store.locked:
+            raise ZoneRequestError(409, "not_installed")
+        answers = self.store.load_answers()
+        if answers.access.network == "proxy":
+            raise ZoneRequestError(409, "cert_managed_by_proxy")
+        if answers.access.cert != "upload":
+            raise ZoneRequestError(409, "cert_ca_needs_upload", mode=answers.access.cert)
+        ca = str(body.get("ca") or "")
+        if len(ca) > MAX_CERT:
+            raise ZoneRequestError(413, "file_too_large")
+        ctx = self._ctx(answers)
+        current = eng.read_cert(ctx, ctx.plan.cert_dir) or ""
+        if ca.strip():
+            checks = certs.inspect_ca(ca, current)
+            if any(c["status"] == "fail" for c in checks):
+                raise ZoneRequestError(422, "cert_invalid", checks=checks)
+        return self.zones._start("cert", None, STAGES, self._run_ca, answers, current, ca)
+
+    def _ca_file(self):
+        return self.store.dir / "upload" / "ca.pem"
+
+    def _put_ca(self, ca: str | None) -> None:
+        if (ca or "").strip():
+            write_private(self._ca_file(), ca, 0o644)
+        else:
+            self._ca_file().unlink(missing_ok=True)
+
+    def _run_ca(self, job: dict, answers: ans.Answers, current: str, ca: str) -> None:
+        zm = self.zones
+        before = self._ca_file().read_text(encoding="utf-8") if self._ca_file().exists() else ""
+        if answers.access.ca_path:                       # 답변 파일로 준 경로보다 방금 올린 것이 우선한다
+            data = answers.model_dump(mode="json")
+            data["access"]["ca_path"] = None
+            self.store.save_answers(ans.load(data))
+        ctx = self._ctx()
+        ctx.log("── 발급 CA 인증서 " + ("올리기" if ca.strip() else "걷어 내기") + " ──")
+
+        def issue() -> None:
+            zm._stage(job, "issue", "running")
+            self._put_ca(ca)
+            eng.set_site_ca(ctx, certs.trust_pem(current, ca))
+            r = ctx.docker.compose("config", "-q", timeout=120)
+            if not r.ok:
+                raise eng.StepError("compose_invalid", "see_log", detail=r.err[-300:])
+            zm._stage(job, "issue", "done")
+
+        error = zm._guard(issue, job, ctx)
+        if error is not None:
+            self.store.save_answers(answers)
+            self._put_ca(before)
+            back = self._ctx()
+            zm._guard(lambda: eng.set_site_ca(back, certs.trust_pem(current, before)), job, back)
+            zm._finish(job, ctx, error)
+            return
+        error = zm._guard(lambda: self._reload(job, ctx), job, ctx) or zm._guard(lambda: self._reconnect(job, ctx), job, ctx)
+        zm._finish(job, ctx, error)
+
+    def _reload(self, job: dict, ctx: eng.Context) -> None:
+        zm = self.zones
+        zm._stage(job, "reload", "running")
+        active = ctx.active_services()
+        if "certbot" in active:
+            ctx.up(["certbot"])                       # 자동 발급으로 바뀌었으면 갱신 컨테이너가 필요하다
+        ctx.docker.run(["restart", "ws-nginx"], timeout=120)
+        ctx.wait_ready("ws-nginx", 120)
+        if ctx.plan.turn and ctx.docker.container_status("ws-livekit")["running"]:
+            ctx.docker.run(["restart", "ws-livekit"], timeout=120)
+        if "gitea" in active and ctx.docker.container_status("ws-gitea")["running"]:
+            # 믿게 할 발급 CA 가 생기거나 사라졌으면 여기서 컨테이너가 다시 만들어진다(바뀐 것이 없으면 그대로다)
+            ctx.up(["gitea"])
+            ctx.wait_ready("ws-gitea")
+        ctx.up(["backend"])                           # `.env` 의 인증서에 딸린 값이나 믿게 할 CA 가 바뀌었으면 다시 만들어진다
+        ctx.wait_ready("ws-backend")
+        zm._stage(job, "reload", "done")
+
+    def _reconnect(self, job: dict, ctx: eng.Context) -> None:
+        zm = self.zones
+        zm._stage(job, "reconnect", "running")
+        for zone_id in sorted(zones.pending(self.store)):
+            if zone_id in zm.enabled():
+                ctx.log(f"{zone_id}: 보류된 연결을 다시 시도합니다")
+                zones.get(zone_id).connect(ctx, zone_id)
+        if ctx.env_dirty:
+            zm._restart_backend(ctx)
+        zm._stage(job, "reconnect", "done")
+
+    def _run(self, job: dict, old: ans.Answers, new: ans.Answers, cert: str | None, key: str | None,
+             ca: str | None = None) -> None:
         old_facts = self.store.facts()
+        old_ca = self._ca_file().read_text(encoding="utf-8") if self._ca_file().exists() else ""
         self.store.save_answers(new)
         if cert is not None:
             write_private(self.store.dir / "upload" / "cert.pem", cert)
             write_private(self.store.dir / "upload" / "key.pem", key or "")
+            self._put_ca(ca)
             self.store.update_facts(upload_cert_ok=True)
         ctx = self._ctx()
         mode = new.access.cert
@@ -137,37 +236,12 @@ class CertManager:
             eng.step_cert(ctx)
             zm._stage(job, "issue", "done")
 
-        def reload() -> None:
-            zm._stage(job, "reload", "running")
-            active = ctx.active_services()
-            if "certbot" in active:
-                ctx.up(["certbot"])                       # 자동 발급으로 바뀌었으면 갱신 컨테이너가 필요하다
-            ctx.docker.run(["restart", "ws-nginx"], timeout=120)
-            ctx.wait_ready("ws-nginx", 120)
-            if ctx.plan.turn and ctx.docker.container_status("ws-livekit")["running"]:
-                ctx.docker.run(["restart", "ws-livekit"], timeout=120)
-            if "gitea" in active and ctx.docker.container_status("ws-gitea")["running"]:
-                # 믿게 할 발급 CA 가 생기거나 사라졌으면 여기서 컨테이너가 다시 만들어진다(바뀐 것이 없으면 그대로다)
-                ctx.up(["gitea"])
-                ctx.wait_ready("ws-gitea")
-            ctx.up(["backend"])                           # `.env` 의 인증서에 딸린 값이 바뀌었으면 다시 만들어진다
-            ctx.wait_ready("ws-backend")
-            zm._stage(job, "reload", "done")
-
-        def reconnect() -> None:
-            zm._stage(job, "reconnect", "running")
-            for zone_id in sorted(zones.pending(self.store)):
-                if zone_id in zm.enabled():
-                    ctx.log(f"{zone_id}: 보류된 연결을 다시 시도합니다")
-                    zones.get(zone_id).connect(ctx, zone_id)
-            if ctx.env_dirty:
-                zm._restart_backend(ctx)
-            zm._stage(job, "reconnect", "done")
-
         error = zm._guard(issue, job, ctx)
         if error is not None:
             # 되돌린다 — 답변·감지값·설정 파일, 그리고 쓰던 인증서(자동 발급을 시도하며 임시 인증서의 링크를 뗐을 수 있다)
             self.store.save_answers(old)
+            if cert is not None:
+                self._put_ca(old_ca)                      # 쓰던 CA 인증서도 되돌린다(아래 step_cert 가 다시 읽는다)
             self.store.update_facts(cert_issue_failed=old_facts.cert_issue_failed, upload_cert_ok=old_facts.upload_cert_ok)
             if old.access.cert == "temporary":
                 self.store.update_facts(cert_issue_failed=True)
@@ -183,5 +257,5 @@ class CertManager:
             zm._finish(job, ctx, error)
             return
         self.store.update_facts(cert_issue_failed=False)
-        error = zm._guard(reload, job, ctx) or zm._guard(reconnect, job, ctx)
+        error = zm._guard(lambda: self._reload(job, ctx), job, ctx) or zm._guard(lambda: self._reconnect(job, ctx), job, ctx)
         zm._finish(job, ctx, error)

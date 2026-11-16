@@ -698,3 +698,56 @@ async def test_public_ip_falls_back_to_detected_value(env):
     fake.on("GET", "/internal/probe/public-ip", {"status": "detected", "ip": "198.51.100.7", "source": "probe"})
     r = await client.get("/api/admin/system/probe/public-ip", params={"refresh": "true"})
     assert r.json()["ip"] == "198.51.100.7" and fake.last("/internal/probe/public-ip")["query"] == {"refresh": "true"}
+
+
+@pytest.mark.asyncio
+async def test_cert_ca_is_passed_with_the_upload_and_on_its_own(env):
+    """사설 CA 의 인증서 — 인증서와 함께 올리거나, 나중에 CA 만 올린다(인증서·개인 키는 그대로)."""
+    client, fake, state = env
+    ca_pem = "-----BEGIN CERTIFICATE-----\nca-body\n-----END CERTIFICATE-----\n"
+    fake.on("POST", "/internal/cert/reissue", (202, cert_job()))
+    r = await client.post("/api/admin/system/cert/reissue", json={"mode": "upload", "cert": CERT_PEM, "key": KEY_PEM, "ca": ca_pem})
+    assert r.status_code == 202
+    assert fake.last("/internal/cert/reissue")["body"] == {"mode": "upload", "cert": CERT_PEM, "key": KEY_PEM, "ca": ca_pem}
+    # 비어 있으면 항목을 싣지 않는다(CA 를 모르는 예전 설치 관리자에도 같은 요청이 간다)
+    await client.post("/api/admin/system/cert/reissue", json={"mode": "upload", "cert": CERT_PEM, "key": KEY_PEM, "ca": "  "})
+    assert "ca" not in fake.last("/internal/cert/reissue")["body"]
+
+    fake.on("POST", "/internal/cert/ca", (202, cert_job(id="cert0003")))
+    r = await client.post("/api/admin/system/cert/ca", json={"ca": ca_pem})
+    assert r.status_code == 202 and r.json()["id"] == "cert0003" and r.json()["kind"] == "cert"
+    assert fake.last("/internal/cert/ca")["body"] == {"ca": ca_pem} and fake.last("/internal/cert/ca")["key"] == KEY
+    r = await client.post("/api/admin/system/cert/ca", json={"ca": ""})            # 걷어 내기
+    assert r.status_code == 202 and fake.last("/internal/cert/ca")["body"] == {"ca": ""}
+    logs = [a for a in await _audit(state) if a.action == "system.cert.ca"]
+    assert [json.loads(a.details) for a in logs] == [{"job": "cert0003", "removed": False}, {"job": "cert0003", "removed": True}]
+    assert all("ca-body" not in a.details for a in logs)
+
+    # 거부는 그대로 전한다
+    checks = [{"id": "ca_issues_cert", "status": "fail", "value": "CN=Other", "fix": {"key": "ca_not_issuer", "vars": {}}}]
+    for response, status, code in (((409, {"code": "cert_ca_needs_upload", "vars": {"mode": "auto"}}), 409, "cert_ca_needs_upload"),
+                                   ((422, {"code": "cert_invalid", "vars": {"checks": checks}}), 422, "cert_invalid"),
+                                   ((409, {"code": "busy", "vars": {}}), 409, "busy")):
+        fake.on("POST", "/internal/cert/ca", response)
+        r = await client.post("/api/admin/system/cert/ca", json={"ca": ca_pem})
+        assert r.status_code == status and r.json()["code"] == code and r.json()["detail"] != code, code
+    assert r.json()["code"] == "busy"
+    before = len(fake.calls)
+    r = await client.post("/api/admin/system/cert/ca", json={"ca": "A" * (system_router.CERT_PEM_MAX + 1)})
+    assert r.status_code == 413 and len(fake.calls) == before                        # 설치 관리자까지 가지 않는다
+
+    state.user = "alice"
+    assert (await client.post("/api/admin/system/cert/ca", json={"ca": ca_pem})).status_code == 403
+    state.user = "root"
+
+
+@pytest.mark.asyncio
+async def test_cert_state_tells_whether_the_issuing_ca_is_known(env):
+    client, fake, _ = env
+    fake.on("GET", "/internal/cert", cert_state(mode="upload", temporary=False, self_signed=False, site_ca=False, ca_uploadable=True))
+    data = (await client.get("/api/admin/system/cert")).json()
+    assert data["site_ca"] is False and data["ca_uploadable"] is True and data["pending"] == ["git"]
+    # 이 값을 주지 않는 예전 설치 관리자 — 화면이 CA 자리를 보이지 않게 false 로 채운다
+    fake.on("GET", "/internal/cert", {k: v for k, v in cert_state().items() if k not in ("site_ca", "ca_uploadable")})
+    data = (await client.get("/api/admin/system/cert")).json()
+    assert data["site_ca"] is False and data["ca_uploadable"] is False

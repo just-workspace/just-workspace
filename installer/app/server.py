@@ -96,8 +96,9 @@ async def cert_watch(svc: api.Services) -> None:
         await asyncio.sleep(delay)
         delay = interval
         try:
-            if svc.engine.running or api_update.manager(svc).running:
-                continue                    # 적용·업데이트 진행 중에는 컨테이너를 조작하지 않는다
+            zone_job = getattr(svc.zones, "_thread", None)
+            if svc.engine.running or api_update.manager(svc).running or (zone_job is not None and zone_job.is_alive()):
+                continue                    # 적용·업데이트·구역 작업 진행 중에는 컨테이너를 조작하지 않는다
             started = await asyncio.to_thread(engine.ensure_renewal, svc.engine)
             if started in ("started", "failed"):
                 print(f"[certwatch] 갱신 컨테이너 기동: {started}", flush=True)
